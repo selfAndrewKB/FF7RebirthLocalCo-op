@@ -13,6 +13,7 @@
 #include <Windows.h>
 #include <intrin.h>
 
+#include <algorithm>
 #include <cstdint>
 
 namespace lss::renderer {
@@ -71,13 +72,55 @@ void LogFamilyOnChange(const std::byte* viewFamily) noexcept
 //
 // One line every 10 s: the mean interval between the game viewport's submissions, and the view
 // count. Comparing one player with two gives the cost of rendering each view as its own family.
+// Under it, one line per family: how long the game thread spent inside the engine's submission
+// of that family. A frame time much longer than those means the time goes elsewhere (render
+// thread or GPU); a family whose submission alone takes most of the frame means the engine
+// waits inside it.
 
-constexpr double kFrameTimeReportSeconds = 10.0;
+constexpr double      kFrameTimeReportSeconds = 10.0;
+constexpr std::size_t kTimedFamilies          = 4;  // later families share the last slot
 
 LARGE_INTEGER g_frequency{};
 LARGE_INTEGER g_lastSubmit{};
 LARGE_INTEGER g_windowStart{};
 std::uint32_t g_framesInWindow = 0;
+
+std::size_t   g_familyInFrame = 0;  // which family of this frame the next submission is
+std::int64_t  g_submitTicks[kTimedFamilies]{};
+std::uint32_t g_submitCalls[kTimedFamilies]{};
+
+double TicksToMilliseconds(std::int64_t ticks) noexcept
+{
+    return 1000.0 * static_cast<double>(ticks) / static_cast<double>(g_frequency.QuadPart);
+}
+
+/// The engine's submission of one family, timed on the game thread.
+void TimedEngineSubmit(void* rendererModule, void* canvas, std::byte* viewFamily)
+{
+    LARGE_INTEGER start{};
+    LARGE_INTEGER end{};
+    QueryPerformanceCounter(&start);
+    g_engineSubmit(rendererModule, canvas, viewFamily);
+    QueryPerformanceCounter(&end);
+
+    const auto slot = (std::min)(g_familyInFrame++, kTimedFamilies - 1);  // parenthesised: Windows.h's min macro
+    g_submitTicks[slot] += end.QuadPart - start.QuadPart;
+    ++g_submitCalls[slot];
+}
+
+void ReportSubmissionTimes() noexcept
+{
+    for (std::size_t k = 0; k < kTimedFamilies; ++k)
+    {
+        if (g_submitCalls[k] != 0)
+        {
+            platform::Log(L"  family {}: {:.2f} ms per frame on the game thread inside the engine's submission",
+                          k + 1, TicksToMilliseconds(g_submitTicks[k]) / g_submitCalls[k]);
+        }
+        g_submitTicks[k] = 0;
+        g_submitCalls[k] = 0;
+    }
+}
 
 void RecordFrameTime(std::int32_t viewCount) noexcept
 {
@@ -99,6 +142,7 @@ void RecordFrameTime(std::int32_t viewCount) noexcept
     }
     platform::Log(L"frame time {:.2f} ms average over {} frames, {} view(s)",
                   1000.0 * windowSeconds / g_framesInWindow, g_framesInWindow, viewCount);
+    ReportSubmissionTimes();
     g_windowStart    = now;
     g_framesInWindow = 0;
 }
@@ -120,7 +164,8 @@ __declspec(noinline) void SubmitViewFamily(void* rendererModule, void* canvas, s
 
     LogFamilyOnChange(viewFamily);
     RecordFrameTime(g_loggedViewCount);
-    SubmitOneFamilyPerView(rendererModule, canvas, viewFamily, g_engineSubmit);
+    g_familyInFrame = 0;
+    SubmitOneFamilyPerView(rendererModule, canvas, viewFamily, &TimedEngineSubmit);
 }
 
 }  // namespace

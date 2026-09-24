@@ -26,6 +26,7 @@ add_subdirectory("${UE4SS_ROOT}" "${CMAKE_BINARY_DIR}/RE-UE4SS")
 add_library(LocalSplitScreen SHARED
     src/mod.cpp
 
+    src/platform/code_redirect.cpp
     src/platform/image.cpp
     src/platform/log.cpp
     src/platform/vtable_entry.cpp
@@ -35,6 +36,7 @@ add_library(LocalSplitScreen SHARED
     src/players/shared_camera.cpp
     src/players/unreal_access.cpp
 
+    src/renderer/additional_family_output.cpp
     src/renderer/one_family_per_view.cpp
     src/renderer/view_family_submission.cpp
 )
@@ -64,3 +66,11 @@ add_executable(SharedCameraTests
 target_include_directories(SharedCameraTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(SharedCameraTests PRIVATE cxx_std_20)
 add_test(NAME shared_camera COMMAND SharedCameraTests)
+
+add_executable(OutputLoadActionTests
+    tests/output_load_action_test.cpp
+    src/platform/code_redirect.cpp
+)
+target_include_directories(OutputLoadActionTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(OutputLoadActionTests PRIVATE cxx_std_20)
+add_test(NAME output_load_action COMMAND OutputLoadActionTests)

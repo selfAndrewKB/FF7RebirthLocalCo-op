@@ -14,6 +14,7 @@
 #include "platform/log.h"
 #include "players/join_keys.h"
 #include "players/local_players.h"
+#include "renderer/additional_family_output.h"
 #include "renderer/view_family_submission.h"
 
 #include <cstdint>
@@ -24,7 +25,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.1.0-slice1";
+constexpr const wchar_t* kVersion = L"0.1.1-slice1";
 
 /// Checks every engine fact against the running game and logs each one that fails.
 /// Returns the live address of RemoveLocalPlayer when all hold.
@@ -63,7 +64,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.1.0-slice1");
+        ModVersion     = STR("0.1.1-slice1");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -87,7 +88,11 @@ public:
             Log(L"unloading with player 2 still in: the per-player rendering stays installed");
             return;
         }
-        lss::renderer::RemoveViewFamilySubmission();
+        if (rendererInstalled_)
+        {
+            lss::renderer::RemoveViewFamilySubmission();
+            lss::renderer::RemoveAdditionalFamilyOutput();
+        }
     }
 
     auto on_unreal_init() -> void override
@@ -96,7 +101,7 @@ public:
 
         const auto image = lss::platform::GameImage::Locate();
         const auto removeLocalPlayer = image ? VerifyEngine(*image) : std::nullopt;
-        if (!removeLocalPlayer || !lss::renderer::InstallViewFamilySubmission(*image))
+        if (!removeLocalPlayer || !InstallRenderer(*image))
         {
             Log(L"standing aside: nothing installed, the game runs unmodified");
             return;
@@ -133,6 +138,26 @@ public:
     }
 
 private:
+    /// The two renderer changes, both or neither. The output rule goes first: with it alone, one
+    /// player renders exactly as before (the game's single family is never marked additional), so
+    /// there is never a moment when families are split but a later one still clears the screen.
+    bool InstallRenderer(const lss::platform::GameImage& image) noexcept
+    {
+        if (!lss::renderer::InstallAdditionalFamilyOutput(image))
+        {
+            Log(L"could not install the final output's load-action rule");
+            return false;
+        }
+        if (!lss::renderer::InstallViewFamilySubmission(image))
+        {
+            lss::renderer::RemoveAdditionalFamilyOutput();
+            return false;
+        }
+        rendererInstalled_ = true;
+        Log(L"renderer: one view family per player; later families keep the screen (stock output rule restored)");
+        return true;
+    }
+
     /// Runs on the game thread before each engine tick, outside Draw.
     void OnEngineTick() noexcept
     {
@@ -153,6 +178,7 @@ private:
     std::optional<lss::players::LocalPlayers> players_;
     lss::players::JoinKeys                    keys_;
     bool                                      tickSeen_        = false;
+    bool                                      rendererInstalled_ = false;
     Hook::GlobalCallbackId                    tickCallback_    = Hook::ERROR_ID;
     Hook::GlobalCallbackId                    loadMapCallback_ = Hook::ERROR_ID;
 };

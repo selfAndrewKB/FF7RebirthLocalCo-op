@@ -22,8 +22,10 @@ inline constexpr std::size_t kViewsCount = 0x08;
 inline constexpr std::size_t kSkipFrameNumberIncrement = 0x70;
 
 /// `bool bAdditionalViewFamily` (a whole byte). When set, the final output loads the render
-/// target instead of clearing it (stock ScreenPass.inl:87), so an earlier family's output in
-/// another part of the screen survives. [CONFIRMED position: engine::kAdditionalFamilyStore]
+/// target instead of clearing it, so an earlier family's output in another part of the screen
+/// survives. The shipped game never reads it; renderer/additional_family_output.h restores the
+/// stock reader (ScreenPass.inl:87), which reads the scene renderer's copy (copied at 0x140BEE082).
+/// [CONFIRMED position: engine::kAdditionalFamilyStore; RE-additional-view-family-reader.md]
 inline constexpr std::size_t kAdditionalViewFamily = 0x74;
 
 }  // namespace lss::renderer::family

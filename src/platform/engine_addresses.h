@@ -8,8 +8,9 @@
 // differs (a game patch, another mod), the mod installs nothing (philosophy §4.4).
 //
 // Research: Rebirth/Documentation/research/RE-onefamily-feasibility.md (the view-family
-// submission) and RE-remove-local-player.md (player removal). Engine source for comparison:
-// FF7RebirthEngineV4 (stock UE4).
+// submission), RE-additional-view-family-reader.md (the final output's load action) and
+// RE-remove-local-player.md (player removal). Engine source for comparison: FF7RebirthEngineV4
+// (stock UE4; it differs from the shipped game at the load action).
 
 #include <cstdint>
 #include <span>
@@ -41,11 +42,41 @@ inline constexpr std::uintptr_t kFrameNumberGate        = 0x140BEE266;
 inline constexpr std::uint8_t   kFrameNumberGateBytes[] = {0x44, 0x39, 0x63, 0x70};
 
 /// The FSceneViewFamily constructor (0x140CC42D0) storing bAdditionalViewFamily to family+0x74:
-/// `mov al,[rbx+68h]; and al,cl; mov [rdi+74h],al` (cl = 1). The field's reader in the final
-/// output pass was not located statically; the spike's RenderDoc capture proves it
-/// (SPLITSCREEN-ARCHITECTURE.md §5).
+/// `mov al,[rbx+68h]; and al,cl; mov [rdi+74h],al` (cl = 1). The shipped game never reads the
+/// field; the mod restores its stock reader below.
 inline constexpr std::uintptr_t kAdditionalFamilyStore        = 0x140CC4353;
 inline constexpr std::uint8_t   kAdditionalFamilyStoreBytes[] = {0x8A, 0x43, 0x68, 0x22, 0xC1, 0x88, 0x47, 0x74};
+
+// ---------------------------------------------------------------------------------------------
+// The final output's load action (RE-additional-view-family-reader.md §Q1)
+// ---------------------------------------------------------------------------------------------
+
+/// Inside AddPostProcessingPasses (0x14111A238), the inlined CreateViewFamilyOutput, from
+/// `mov rcx,[r12]` (rcx = View->Family, the scene renderer's copy) through the store of the load
+/// action to [rsp+610h]. Checked whole, so nothing between the family load and the decision can
+/// have changed rcx: 0x14111A301 mov rcx,[r12] ... 0x14111A363 mov rax,[rcx];
+/// cmp [rax],r12 (Views[0] == View); vmovdqu; setz al; add al,1; mov [rsp+610h],al.
+inline constexpr std::uintptr_t kOutputLoadActionSequence        = 0x14111A301;
+inline constexpr std::uint8_t   kOutputLoadActionSequenceBytes[] = {
+    0x49, 0x8B, 0x0C, 0x24, 0x74, 0x08, 0x49, 0x8D, 0x9C, 0x24, 0x38, 0x02,
+    0x00, 0x00, 0xC5, 0xF8, 0x10, 0x03, 0x48, 0x89, 0x84, 0x24, 0xF8, 0x05,
+    0x00, 0x00, 0x49, 0x8B, 0xD5, 0x41, 0x8B, 0x84, 0x24, 0x38, 0x02, 0x00,
+    0x00, 0xC5, 0xFA, 0x7F, 0x84, 0x24, 0x00, 0x06, 0x00, 0x00, 0x89, 0x84,
+    0x24, 0x00, 0x06, 0x00, 0x00, 0x41, 0x8B, 0x84, 0x24, 0x3C, 0x02, 0x00,
+    0x00, 0x89, 0x84, 0x24, 0x04, 0x06, 0x00, 0x00, 0x41, 0x8B, 0x84, 0x24,
+    0x40, 0x02, 0x00, 0x00, 0x89, 0x84, 0x24, 0x08, 0x06, 0x00, 0x00, 0x41,
+    0x8B, 0x84, 0x24, 0x44, 0x02, 0x00, 0x00, 0x89, 0x84, 0x24, 0x0C, 0x06,
+    0x00, 0x00, 0x48, 0x8B, 0x01, 0x4C, 0x39, 0x20, 0xC5, 0xFA, 0x7F, 0xBC,
+    0x24, 0xC8, 0x01, 0x00, 0x00, 0x0F, 0x94, 0xC0, 0x04, 0x01, 0x88, 0x84,
+    0x24, 0x10, 0x06, 0x00, 0x00};
+
+/// The store of the computed load action (al = 2 clear if first in the family, 1 load otherwise),
+/// `mov [rsp+610h], al`, which the mod replaces; and the instruction after it, where execution
+/// resumes. A single instruction is replaced so that no thread can be stopped inside the replaced
+/// bytes. The flags and al are dead after the store (0x14111A37E reloads rax; a call follows).
+inline constexpr std::uintptr_t kOutputLoadActionStore        = 0x14111A377;
+inline constexpr std::uint8_t   kOutputLoadActionStoreBytes[] = {0x88, 0x84, 0x24, 0x10, 0x06, 0x00, 0x00};
+inline constexpr std::uintptr_t kOutputLoadActionResume       = 0x14111A37E;
 
 // ---------------------------------------------------------------------------------------------
 // Removing a local player (RE-remove-local-player.md §Q1)
@@ -88,6 +119,7 @@ inline constexpr VerifiedCode kVerifiedCode[] = {
     {L"Draw's view-family submission call", kDrawSubmitCall, kDrawSubmitCallBytes},
     {L"the frame-number gate on family+0x70", kFrameNumberGate, kFrameNumberGateBytes},
     {L"the bAdditionalViewFamily store to family+0x74", kAdditionalFamilyStore, kAdditionalFamilyStoreBytes},
+    {L"the final output's load-action decision", kOutputLoadActionSequence, kOutputLoadActionSequenceBytes},
     {L"RemoveLocalPlayer's prologue", kRemoveLocalPlayer, kRemoveLocalPlayerPrologue},
     {L"RemoveLocalPlayer's null-controller skip", kRemoveLocalPlayerControllerTest,
      kRemoveLocalPlayerControllerTestBytes},
