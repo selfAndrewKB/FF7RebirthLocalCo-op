@@ -2,9 +2,13 @@
 
 #include "platform/engine_addresses.h"
 
+#include <Unreal/Core/Containers/FString.hpp>
 #include <Unreal/CoreUObject/UObject/Class.hpp>
+#include <Unreal/CoreUObject/UObject/UnrealType.hpp>
 #include <Unreal/UFunction.hpp>
 #include <Unreal/UObjectGlobals.hpp>
+
+#include <new>
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -123,6 +127,111 @@ bool CreatePlayerWithoutController(UObject* worldContext, std::int32_t controlle
     params.ControllerId           = controllerId;
     params.bSpawnPlayerController = false;
     return GuardedProcessEvent(defaultObject, function, &params);
+}
+
+namespace {
+
+/// A reflected UKismetSystemLibrary function and the class default object to call it on.
+struct KismetCall
+{
+    UFunction* function      = nullptr;
+    UObject*   defaultObject = nullptr;
+};
+
+KismetCall FindKismet(const wchar_t* path) noexcept
+{
+    auto* function = UObjectGlobals::StaticFindObject<UFunction*>(nullptr, nullptr, path);
+    auto* library  = UObjectGlobals::StaticFindObject<UClass*>(nullptr, nullptr, STR("/Script/Engine.KismetSystemLibrary"));
+    if (function == nullptr || library == nullptr)
+    {
+        return {};
+    }
+    return {function, library->GetClassDefaultObject()};
+}
+
+/// The offset of a parameter in `function`'s frame, if it exists and fits.
+std::optional<std::int32_t> ParamOffset(UFunction* function, const wchar_t* name, std::int32_t size) noexcept
+{
+    auto* property = function->FindProperty(RC::Unreal::FName(name, RC::Unreal::FNAME_Find));
+    if (property == nullptr)
+    {
+        return std::nullopt;
+    }
+    const std::int32_t offset = property->GetOffset_Internal();
+    if (property->GetSize() != size || offset < 0 || offset + size > function->GetParmsSize())
+    {
+        return std::nullopt;
+    }
+    return offset;
+}
+
+/// Calls `call` with a zeroed parameter frame in which `text` is placed as an FString at
+/// `stringOffset` and `fill` writes the other inputs; `read` then sees the frame before the
+/// string is released.
+template <class Fill, class Read>
+bool CallWithString(const KismetCall& call, std::int32_t stringOffset, const wchar_t* text, Fill&& fill,
+                    Read&& read) noexcept
+{
+    constexpr std::int32_t kMaxFrame = 64;
+    if (call.defaultObject == nullptr || call.function->GetParmsSize() > kMaxFrame)
+    {
+        return false;
+    }
+    alignas(16) std::uint8_t frame[kMaxFrame]{};
+    auto* string = new (frame + stringOffset) RC::Unreal::FString(text);
+    fill(frame);
+    const bool called = GuardedProcessEvent(call.defaultObject, call.function, frame);
+    if (called)
+    {
+        read(frame);
+    }
+    string->~FString();
+    return called;
+}
+
+void NoInputs(std::uint8_t*) noexcept {}
+void NoOutputs(const std::uint8_t*) noexcept {}
+
+}  // namespace
+
+std::optional<std::int32_t> ConsoleVariableInt(const wchar_t* variable) noexcept
+{
+    const auto call = FindKismet(STR("/Script/Engine.KismetSystemLibrary:GetConsoleVariableIntValue"));
+    if (call.function == nullptr)
+    {
+        return std::nullopt;
+    }
+    const auto name   = ParamOffset(call.function, STR("VariableName"), sizeof(RC::Unreal::FString));
+    const auto result = ParamOffset(call.function, STR("ReturnValue"), sizeof(std::int32_t));
+    if (!name || !result)
+    {
+        return std::nullopt;
+    }
+    std::optional<std::int32_t> value;
+    CallWithString(call, *name, variable, NoInputs, [&](const std::uint8_t* frame) {
+        value = *reinterpret_cast<const std::int32_t*>(frame + *result);
+    });
+    return value;
+}
+
+bool ExecuteConsoleCommand(const wchar_t* command) noexcept
+{
+    const auto call = FindKismet(STR("/Script/Engine.KismetSystemLibrary:ExecuteConsoleCommand"));
+    UObject*   world = GameInstance();  // the world context; the engine picks player 1's controller
+    if (call.function == nullptr || world == nullptr)
+    {
+        return false;
+    }
+    const auto context = ParamOffset(call.function, STR("WorldContextObject"), sizeof(UObject*));
+    const auto text    = ParamOffset(call.function, STR("Command"), sizeof(RC::Unreal::FString));
+    if (!context || !text)
+    {
+        return false;
+    }
+    // SpecificPlayer stays null: the engine then uses player 1's controller, as the console does.
+    return CallWithString(
+        call, *text, command,
+        [&](std::uint8_t* frame) { *reinterpret_cast<UObject**>(frame + *context) = world; }, NoOutputs);
 }
 
 bool RemoveLocalPlayer(UObject* gameInstance, UObject* localPlayer, std::uintptr_t removeLocalPlayer) noexcept

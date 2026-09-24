@@ -13,6 +13,7 @@
 #include <Unreal/UObject.hpp>
 
 #include <cstdint>
+#include <optional>
 
 namespace lss::players::unreal {
 
@@ -38,5 +39,14 @@ bool CreatePlayerWithoutController(UObject* worldContext, std::int32_t controlle
 /// that the entry holds the function at `removeLocalPlayer` (a live address). Returns false,
 /// calling nothing, if it does not, or if the call raised an exception.
 bool RemoveLocalPlayer(UObject* gameInstance, UObject* localPlayer, std::uintptr_t removeLocalPlayer) noexcept;
+
+/// UKismetSystemLibrary::GetConsoleVariableIntValue: a console variable's current value, or empty
+/// if the function cannot be found or raised an exception.
+std::optional<std::int32_t> ConsoleVariableInt(const wchar_t* variable) noexcept;
+
+/// UKismetSystemLibrary::ExecuteConsoleCommand, through the first player's controller: the same
+/// path as a command typed into the game's console. Returns false if it could not be called; the
+/// engine reports no result, so callers read back what they changed.
+bool ExecuteConsoleCommand(const wchar_t* command) noexcept;
 
 }  // namespace lss::players::unreal

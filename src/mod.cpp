@@ -14,6 +14,8 @@
 #include "platform/log.h"
 #include "players/join_keys.h"
 #include "players/local_players.h"
+#include "players/split_screen_settings.h"
+#include "players/unreal_access.h"
 #include "renderer/additional_family_output.h"
 #include "renderer/view_family_submission.h"
 
@@ -25,7 +27,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.1.1-slice1";
+constexpr const wchar_t* kVersion = L"0.1.2-slice1";
 
 /// Checks every engine fact against the running game and logs each one that fails.
 /// Returns the live address of RemoveLocalPlayer when all hold.
@@ -64,7 +66,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.1.1-slice1");
+        ModVersion     = STR("0.1.2-slice1");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -173,10 +175,33 @@ private:
             case lss::players::PlayerIntent::None:  break;
         }
         players_->Tick();
+        LogSettingsChange(settings_.Update(players_->HasPlayerTwo()));
+    }
+
+    static void LogSettingsChange(const lss::players::SettingsChange& change) noexcept
+    {
+        using Kind = lss::players::SettingsChange::Kind;
+        constexpr auto name = lss::players::SplitScreenSettings::kResizeMethod;
+        switch (change.kind)
+        {
+            case Kind::None: break;
+            case Kind::Applied: Log(L"split screen: {} {} -> 2 while player 2 is in", name, change.value); break;
+            case Kind::AlreadySet: Log(L"split screen: {} is already 2; left as it is", name); break;
+            case Kind::ApplyFailed:
+                Log(L"split screen: could not set {} to 2; rendering stays correct but slow", name);
+                break;
+            case Kind::Restored: Log(L"player 2 is out: {} restored to {}", name, change.value); break;
+            case Kind::LeftAlone:
+                Log(L"player 2 is out: {} was changed to {} meanwhile; left as it is", name, change.value);
+                break;
+            case Kind::RestoreFailed: Log(L"player 2 is out: could not restore {} to {}", name, change.value); break;
+        }
     }
 
     std::optional<lss::players::LocalPlayers> players_;
     lss::players::JoinKeys                    keys_;
+    lss::players::SplitScreenSettings         settings_{
+        {&lss::players::unreal::ConsoleVariableInt, &lss::players::unreal::ExecuteConsoleCommand}};
     bool                                      tickSeen_        = false;
     bool                                      rendererInstalled_ = false;
     Hook::GlobalCallbackId                    tickCallback_    = Hook::ERROR_ID;

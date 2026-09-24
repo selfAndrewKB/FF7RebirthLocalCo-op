@@ -34,6 +34,7 @@ add_library(LocalSplitScreen SHARED
     src/players/join_keys.cpp
     src/players/local_players.cpp
     src/players/shared_camera.cpp
+    src/players/split_screen_settings.cpp
     src/players/unreal_access.cpp
 
     src/renderer/additional_family_output.cpp
@@ -74,3 +75,11 @@ add_executable(OutputLoadActionTests
 target_include_directories(OutputLoadActionTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(OutputLoadActionTests PRIVATE cxx_std_20)
 add_test(NAME output_load_action COMMAND OutputLoadActionTests)
+
+add_executable(SplitScreenSettingsTests
+    tests/split_screen_settings_test.cpp
+    src/players/split_screen_settings.cpp
+)
+target_include_directories(SplitScreenSettingsTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(SplitScreenSettingsTests PRIVATE cxx_std_20)
+add_test(NAME split_screen_settings COMMAND SplitScreenSettingsTests)
