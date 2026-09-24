@@ -85,18 +85,27 @@ bool LocalPlayers::Leave() noexcept
         return true;
     }
 
-    // Order matters: RemoveLocalPlayer destroys the controller in the player's field. While the
-    // loan is in place that is player 1's controller (RE-remove-local-player.md §Q1).
-    camera_.Detach();
-
-    auto* players = unreal::LocalPlayers(gameInstance_);
-    if (players == nullptr || !Contains(*players, playerTwo_))
+    if (!StillListed())
     {
-        // Nothing to remove: the engine already dropped player 2 (for example on a level change).
         platform::Log(L"player 2 is no longer in the engine's list; nothing to remove");
-        Forget();
         return true;
     }
+
+    // RemoveLocalPlayer destroys whatever controller is in the player's field (RE-remove-local-
+    // player.md §Q1). Player 2 never owns one, so anything there is borrowed: player 1's, or a
+    // stale loan. The field must be empty before the call, whether or not the loan was attached
+    // (a failed join removes player 2 without one), and a field that cannot be found cannot be
+    // shown empty, so the removal is refused.
+    camera_.Detach();
+    unreal::UObject** twoController = unreal::ControllerField(playerTwo_);
+    if (twoController == nullptr)
+    {
+        platform::Log(L"leave refused: player 2's controller field cannot be found, so it cannot be emptied first");
+        return false;
+    }
+    *twoController = nullptr;
+
+    auto* players = unreal::LocalPlayers(gameInstance_);
 
     // RemoveLocalPlayer reports success even for a player it did not hold, so membership before
     // (checked above) and after (below) is the evidence.
@@ -111,8 +120,31 @@ bool LocalPlayers::Leave() noexcept
     return true;
 }
 
+bool LocalPlayers::StillListed() noexcept
+{
+    // Reads only the engine's list, never player 2's object: if the engine removed player 2 on
+    // its own, the object may already have been freed.
+    auto* players = unreal::LocalPlayers(gameInstance_);
+    if (players != nullptr && Contains(*players, playerTwo_))
+    {
+        return true;
+    }
+    camera_.Abandon();
+    Forget();
+    return false;
+}
+
 void LocalPlayers::Tick() noexcept
 {
+    if (!HasPlayerTwo())
+    {
+        return;
+    }
+    if (!StillListed())
+    {
+        platform::Log(L"player 2 was removed by the game; this mod has let go of it");
+        return;
+    }
     if (camera_.Refresh())
     {
         platform::Log(L"shared camera re-attached to player 1's current controller");

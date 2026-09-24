@@ -36,6 +36,9 @@ public:
     bool HasPlayerTwo() const noexcept { return playerTwo_ != nullptr; }
 
 private:
+    /// True if the engine still lists player 2. If not, lets go of it without touching its object.
+    bool StillListed() noexcept;
+
     /// Drops this mod's references to player 2 once the engine no longer lists it.
     void Forget() noexcept;
 

@@ -2,8 +2,9 @@
 //
 // The two PlayerController fields are plain pointers here, and the "controllers" are distinct
 // objects of a test-only UObject. The cases are the lifecycle events the loan must survive:
-// player 1's controller changing, the engine emptying player 2's field, the engine giving player 2
-// a controller of its own, and removal while the loan is a tick behind.
+// player 1's controller changing, the engine emptying player 2's field, an unrecognised controller
+// appearing in player 2's field, removal while the loan is a tick behind, and letting go of a
+// player 2 the engine may already have freed.
 
 #include "players/shared_camera.h"
 
@@ -109,7 +110,7 @@ void TestRefreshLeavesPlayerTwosOwnController()
 
 void TestDetachNeverLeavesPlayerOnesController()
 {
-    std::puts("detach: player 2's field never keeps player 1's controller");
+    std::puts("detach: player 2's field is always left empty");
     {
         Players      p;  // the ordinary case
         SharedCamera camera;
@@ -136,13 +137,26 @@ void TestDetachNeverLeavesPlayerOnesController()
         EXPECT(p.two == nullptr);
     }
     {
-        Players      p;  // player 2 has a controller of its own: removal may destroy it
+        Players      p;  // an unrecognised (possibly stale) controller: removal would destroy it
         SharedCamera camera;
         camera.Attach(&p.one, &p.two);
         p.two = &p.playerTwosOwn;
         camera.Detach();
-        EXPECT(p.two == &p.playerTwosOwn);
+        EXPECT(p.two == nullptr);
     }
+}
+
+void TestAbandonWritesNothing()
+{
+    std::puts("abandon: lets go without touching either field (player 2 may be freed)");
+    Players      p;
+    SharedCamera camera;
+    camera.Attach(&p.one, &p.two);
+    camera.Abandon();
+    EXPECT(!camera.IsAttached());
+    EXPECT(p.two == &p.controllerA);
+    EXPECT(p.one == &p.controllerA);
+    EXPECT(!camera.Refresh());  // no longer attached: must not write through the old addresses
 }
 
 }  // namespace
@@ -155,6 +169,7 @@ int main()
     TestRefreshRestoresAnEmptiedField();
     TestRefreshLeavesPlayerTwosOwnController();
     TestDetachNeverLeavesPlayerOnesController();
+    TestAbandonWritesNothing();
 
     std::printf(g_failures == 0 ? "all tests passed\n" : "%d check(s) failed\n", g_failures);
     return g_failures == 0 ? 0 : 1;

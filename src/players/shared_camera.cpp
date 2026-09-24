@@ -52,14 +52,15 @@ void SharedCamera::Detach() noexcept
     {
         return;
     }
-    // Clear the field if it holds our loan or player 1's current controller (the loan may be a
-    // tick behind a controller change). Afterwards it cannot hold player 1's controller. A
-    // controller of player 2's own may stay: removing player 2 destroys it, which is correct for a
-    // controller that belongs to player 2.
-    if (*twoField_ == lent_ || *twoField_ == *oneField_)
-    {
-        *twoField_ = nullptr;
-    }
+    // Always empty the field. Player 2 never has a controller of its own in this design (it is
+    // created without one), so whatever the field holds is borrowed, possibly a stale loan, and
+    // RemoveLocalPlayer would destroy it.
+    *twoField_ = nullptr;
+    Abandon();
+}
+
+void SharedCamera::Abandon() noexcept
+{
     oneField_ = twoField_ = nullptr;
     lent_     = nullptr;
 }

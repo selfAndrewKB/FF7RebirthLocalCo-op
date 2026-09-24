@@ -37,9 +37,11 @@ public:
     /// Returns true if it changed player 2's field.
     bool Refresh() noexcept;
 
-    /// Clears the loan from player 2's field. Afterwards the field never holds player 1's
-    /// controller, which is the condition for removing player 2 safely.
+    /// Ends the loan and empties player 2's field, whatever it holds.
     void Detach() noexcept;
+
+    /// Ends the loan without touching either field, for when player 2's object may already be gone.
+    void Abandon() noexcept;
 
     bool IsAttached() const noexcept { return twoField_ != nullptr; }
 
