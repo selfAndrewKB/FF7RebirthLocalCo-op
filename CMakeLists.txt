@@ -56,3 +56,11 @@ add_executable(LocalSplitScreenTests
 target_include_directories(LocalSplitScreenTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(LocalSplitScreenTests PRIVATE cxx_std_20)
 add_test(NAME one_family_per_view COMMAND LocalSplitScreenTests)
+
+add_executable(SharedCameraTests
+    tests/shared_camera_test.cpp
+    src/players/shared_camera.cpp
+)
+target_include_directories(SharedCameraTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(SharedCameraTests PRIVATE cxx_std_20)
+add_test(NAME shared_camera COMMAND SharedCameraTests)

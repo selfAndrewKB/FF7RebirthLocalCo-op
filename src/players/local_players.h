@@ -31,15 +31,17 @@ public:
     bool Leave() noexcept;
 
     /// Per-tick upkeep while player 2 is in: keeps the shared camera on player 1's controller.
-    void Tick() noexcept { camera_.Refresh(); }
+    void Tick() noexcept;
 
     bool HasPlayerTwo() const noexcept { return playerTwo_ != nullptr; }
 
 private:
-    bool RemoveFromEngine(unreal::UObject* gameInstance, unreal::UObject* localPlayer) noexcept;
+    /// Drops this mod's references to player 2 once the engine no longer lists it.
+    void Forget() noexcept;
 
     std::uintptr_t   removeLocalPlayer_;
-    unreal::UObject* playerTwo_ = nullptr;  // only ever a player this mod created
+    unreal::UObject* playerTwo_    = nullptr;  // only ever a player this mod created
+    unreal::UObject* gameInstance_ = nullptr;  // the game instance whose list player 2 was added to
     SharedCamera     camera_;
 };
 

@@ -12,32 +12,41 @@
 // The loan is one pointer in player 2's `PlayerController` field. It is kept in step with player
 // 1 every tick, and cleared before player 2 is removed: RemoveLocalPlayer destroys whatever
 // controller that field holds, which would otherwise be player 1's (RE-remove-local-player.md).
+//
+// This class works only on the two fields' addresses, which the caller finds by reflection, so it
+// has no engine or UE4SS dependency and is tested on the host (tests/shared_camera_test.cpp).
 
-#include "players/unreal_access.h"
+namespace RC::Unreal {
+class UObject;
+}
 
 namespace lss::players {
 
 class SharedCamera
 {
 public:
-    /// Lends player 1's controller to player 2. Refuses (returns false, writing nothing) if either
-    /// field cannot be found, player 1 has no controller, or player 2's field is already in use.
-    bool Attach(unreal::UObject* playerOne, unreal::UObject* playerTwo) noexcept;
+    using UObject = RC::Unreal::UObject;
 
-    /// Keeps the loan pointing at player 1's current controller (it changes on some transitions).
-    /// Call once per tick while attached.
-    void Refresh() noexcept;
+    /// Lends player 1's controller to player 2, given the addresses of both players'
+    /// PlayerController fields. Refuses (returns false, writing nothing) if either address is
+    /// missing, player 1 has no controller, or player 2's field is already in use.
+    bool Attach(UObject** playerOneController, UObject** playerTwoController) noexcept;
 
-    /// Clears player 2's field if it still holds our loan. Returns true when the field is empty
-    /// afterwards, which is the condition for removing player 2 safely.
-    bool Detach() noexcept;
+    /// Keeps the loan pointing at player 1's current controller (it changes on some transitions),
+    /// and restores it if the engine empties player 2's field. Call once per tick while attached.
+    /// Returns true if it changed player 2's field.
+    bool Refresh() noexcept;
+
+    /// Clears the loan from player 2's field. Afterwards the field never holds player 1's
+    /// controller, which is the condition for removing player 2 safely.
+    void Detach() noexcept;
 
     bool IsAttached() const noexcept { return twoField_ != nullptr; }
 
 private:
-    unreal::UObject** oneField_ = nullptr;  // player 1's PlayerController field
-    unreal::UObject** twoField_ = nullptr;  // player 2's PlayerController field
-    unreal::UObject*  lent_     = nullptr;  // the controller currently lent to player 2
+    UObject** oneField_ = nullptr;  // player 1's PlayerController field
+    UObject** twoField_ = nullptr;  // player 2's PlayerController field
+    UObject*  lent_     = nullptr;  // the controller currently lent to player 2
 };
 
 }  // namespace lss::players

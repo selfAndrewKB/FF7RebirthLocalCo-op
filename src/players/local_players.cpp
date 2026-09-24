@@ -8,6 +8,18 @@ namespace {
 
 constexpr std::int32_t kPlayerTwoControllerId = 1;
 
+bool Contains(RC::Unreal::TArray<unreal::UObject*>& players, unreal::UObject* player) noexcept
+{
+    for (std::int32_t i = 0; i < players.Num(); ++i)
+    {
+        if (players[i] == player)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 }  // namespace
 
 void LocalPlayers::Join() noexcept
@@ -26,39 +38,43 @@ void LocalPlayers::Join() noexcept
                       players == nullptr ? -1 : players->Num());
         return;
     }
-    unreal::UObject*  playerOne      = (*players)[0];
-    unreal::UObject** oneController  = unreal::ControllerField(playerOne);
+    unreal::UObject*  playerOne     = (*players)[0];
+    unreal::UObject** oneController = unreal::ControllerField(playerOne);
     if (oneController == nullptr || *oneController == nullptr)
     {
         platform::Log(L"join refused: player 1 has no controller yet");
         return;
     }
 
-    // The engine appends the new local player to the same array.
-    if (!unreal::CreatePlayerWithoutController(*oneController, kPlayerTwoControllerId) || players->Num() != 2)
+    const bool called = unreal::CreatePlayerWithoutController(*oneController, kPlayerTwoControllerId);
+
+    // The engine's list decides what happened, not the call: an exception can be raised after the
+    // engine already added the player. Any player that now exists must be tracked, because an
+    // untracked controller-less player would reach the engine's map-load login, which faults.
+    if (players->Num() != 2)
     {
-        platform::Log(L"join failed: the engine did not add a local player (count now {})", players->Num());
+        platform::Log(L"join failed: the engine did not add a local player ({}; count now {})",
+                      called ? L"the call returned" : L"the call raised an exception", players->Num());
         return;
     }
-    unreal::UObject* playerTwo = (*players)[1];
-
-    if (!camera_.Attach(playerOne, playerTwo))
+    playerTwo_    = (*players)[1];  // the engine appends the new player
+    gameInstance_ = gameInstance;
+    if (!called)
     {
-        // Without a controller player 2 has no view, and its half would stay black. Take it
-        // back out; with an empty controller field that removal touches no controller.
+        platform::Log(L"CreatePlayer raised an exception but player 2 was added; continuing with it");
+    }
+
+    if (!camera_.Attach(oneController, unreal::ControllerField(playerTwo_)))
+    {
+        // Without a controller player 2 has no view, and its half would stay black. Take it back
+        // out; with an empty controller field the removal touches no controller.
         platform::Log(L"join failed: player 2 could not share player 1's camera; removing it again");
-        if (!RemoveFromEngine(gameInstance, playerTwo))
+        if (!Leave())
         {
-            // Keep tracking it, so Leave (and the leave before every map load) retries the
-            // removal. An untracked, controller-less player would reach the engine's map-load
-            // path, which runs the faulting login for it.
-            playerTwo_ = playerTwo;
             platform::Log(L"player 2 could not be removed again; Ctrl+F8 retries, and it is retried before any map load");
         }
         return;
     }
-
-    playerTwo_ = playerTwo;
     platform::Log(L"player 2 joined (sharing player 1's camera for now)");
 }
 
@@ -69,43 +85,45 @@ bool LocalPlayers::Leave() noexcept
         return true;
     }
 
-    // Order matters: RemoveLocalPlayer destroys the controller in the player's field. Until the
-    // loan is cleared, that is player 1's controller (RE-remove-local-player.md §Q1).
-    if (!camera_.Detach())
+    // Order matters: RemoveLocalPlayer destroys the controller in the player's field. While the
+    // loan is in place that is player 1's controller (RE-remove-local-player.md §Q1).
+    camera_.Detach();
+
+    auto* players = unreal::LocalPlayers(gameInstance_);
+    if (players == nullptr || !Contains(*players, playerTwo_))
     {
-        platform::Log(L"leave refused: player 2 holds a controller this mod did not lend; removing "
-                      L"player 2 would destroy it");
-        return false;
+        // Nothing to remove: the engine already dropped player 2 (for example on a level change).
+        platform::Log(L"player 2 is no longer in the engine's list; nothing to remove");
+        Forget();
+        return true;
     }
 
-    if (!RemoveFromEngine(unreal::GameInstance(), playerTwo_))
+    // RemoveLocalPlayer reports success even for a player it did not hold, so membership before
+    // (checked above) and after (below) is the evidence.
+    if (!unreal::RemoveLocalPlayer(gameInstance_, playerTwo_, removeLocalPlayer_) || Contains(*players, playerTwo_))
     {
         // Player 2 stays, without a camera (its half is black). Leaving can be tried again.
         platform::Log(L"leave failed: the engine did not remove player 2");
         return false;
     }
-    playerTwo_ = nullptr;  // the engine's garbage collector frees it; this mod must not touch it again
+    Forget();
     platform::Log(L"player 2 left");
     return true;
 }
 
-bool LocalPlayers::RemoveFromEngine(unreal::UObject* gameInstance, unreal::UObject* localPlayer) noexcept
+void LocalPlayers::Tick() noexcept
 {
-    auto* players = unreal::LocalPlayers(gameInstance);
-    if (players == nullptr || !unreal::RemoveLocalPlayer(gameInstance, localPlayer, removeLocalPlayer_))
+    if (camera_.Refresh())
     {
-        return false;
+        platform::Log(L"shared camera re-attached to player 1's current controller");
     }
-    // RemoveLocalPlayer reports success even when the player was not in the list, so the list
-    // itself is the evidence.
-    for (std::int32_t i = 0; i < players->Num(); ++i)
-    {
-        if ((*players)[i] == localPlayer)
-        {
-            return false;
-        }
-    }
-    return true;
+}
+
+void LocalPlayers::Forget() noexcept
+{
+    // The engine's garbage collector frees the player; this mod must not touch it again.
+    playerTwo_    = nullptr;
+    gameInstance_ = nullptr;
 }
 
 }  // namespace lss::players
