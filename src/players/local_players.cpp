@@ -75,6 +75,7 @@ void LocalPlayers::Join() noexcept
         }
         return;
     }
+    ++joins_;
     platform::Log(L"player 2 joined (sharing player 1's camera for now)");
 }
 

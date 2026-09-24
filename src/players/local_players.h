@@ -35,6 +35,13 @@ public:
 
     bool HasPlayerTwo() const noexcept { return playerTwo_ != nullptr; }
 
+    /// Player 2's ULocalPlayer, or null. Only compared by address outside this class.
+    const unreal::UObject* PlayerTwo() const noexcept { return playerTwo_; }
+
+    /// Counts successful joins. A new player 2 can be allocated at the address of the one that
+    /// left, so observers tell joins apart by this, not by the address alone.
+    std::uint32_t JoinCount() const noexcept { return joins_; }
+
 private:
     /// True if the engine still lists player 2. If not, lets go of it without touching its object.
     bool StillListed() noexcept;
@@ -46,6 +53,7 @@ private:
     unreal::UObject* playerTwo_    = nullptr;  // only ever a player this mod created
     unreal::UObject* gameInstance_ = nullptr;  // the game instance whose list player 2 was added to
     SharedCamera     camera_;
+    std::uint32_t    joins_ = 0;
 };
 
 }  // namespace lss::players

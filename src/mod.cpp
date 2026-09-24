@@ -7,6 +7,7 @@
 // Design: Rebirth/Documentation/SPLITSCREEN-ARCHITECTURE.md
 
 #include <Mod/CppUserModBase.hpp>
+#include <Unreal/CoreUObject/UObject/Class.hpp>
 #include <Unreal/Hooks/Hooks.hpp>
 
 #include "platform/engine_addresses.h"
@@ -18,6 +19,7 @@
 #include "players/unreal_access.h"
 #include "renderer/additional_family_output.h"
 #include "renderer/view_family_submission.h"
+#include "views/player_view_point.h"
 
 #include <cstdint>
 #include <optional>
@@ -27,7 +29,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.1.2-slice1";
+constexpr const wchar_t* kVersion = L"0.2.0-slice2";
 
 /// Checks every engine fact against the running game and logs each one that fails.
 /// Returns the live address of RemoveLocalPlayer when all hold.
@@ -52,6 +54,9 @@ std::optional<std::uintptr_t> VerifyEngine(const lss::platform::GameImage& image
         allHold = false;
     }
 
+    // The GetViewPoint entry is not checked here: it serves only the optional test turn, and its
+    // install is itself a compare-and-swap against the expected function (views/player_view_point).
+
     const auto removeLocalPlayer = image.Rebase(lss::engine::kRemoveLocalPlayer);
     if (!allHold || !removeLocalPlayer)
     {
@@ -66,7 +71,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.1.2-slice1");
+        ModVersion     = STR("0.2.0-slice2");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -90,6 +95,10 @@ public:
             Log(L"unloading with player 2 still in: the per-player rendering stays installed");
             return;
         }
+        if (viewPointInstalled_)
+        {
+            lss::views::RemovePlayerViewPoint();
+        }
         if (rendererInstalled_)
         {
             lss::renderer::RemoveViewFamilySubmission();
@@ -110,6 +119,14 @@ public:
         }
         players_.emplace(*removeLocalPlayer);
 
+        // The view-point entry only serves the crash-test turn (SPLITSCREEN-ARCHITECTURE.md §9), so
+        // the split screen runs without it; the turn key then reports that it is unavailable.
+        viewPointInstalled_ = lss::views::InstallPlayerViewPoint(*image);
+        if (!viewPointInstalled_)
+        {
+            Log(L"ULocalPlayer::GetViewPoint's entry does not hold the engine's function; the test turn is unavailable");
+        }
+
         const Hook::FCallbackOptions tickOptions{false, false, STR("LocalSplitScreen"), STR("player intent")};
         tickCallback_ = Hook::RegisterEngineTickPreCallback(
             [this](Hook::TCallbackIterationData<void>&, RC::Unreal::UEngine*, float, bool) { OnEngineTick(); },
@@ -124,7 +141,9 @@ public:
                 {
                     return;
                 }
-                if (players_->Leave())
+                const bool left = players_->Leave();
+                FollowPlayerTwo();  // now, not at the next tick: the view module must not keep the old player 2
+                if (left)
                 {
                     Log(L"a map is loading: player 2 left (press Ctrl+F7 to rejoin afterwards)");
                 }
@@ -136,7 +155,7 @@ public:
             },
             loadOptions);
 
-        Log(L"ready: every engine check passed. Ctrl+F7 adds player 2, Ctrl+F8 removes player 2");
+        Log(L"ready: every engine check passed. Ctrl+F7 adds player 2, Ctrl+F8 removes player 2, Ctrl+F6 turns player 2's view (test)");
     }
 
 private:
@@ -172,10 +191,64 @@ private:
         {
             case lss::players::PlayerIntent::Join:  players_->Join(); break;
             case lss::players::PlayerIntent::Leave: players_->Leave(); break;  // logs its own outcome
+            case lss::players::PlayerIntent::ToggleTestTurn: ToggleTestTurn(); break;
             case lss::players::PlayerIntent::None:  break;
         }
         players_->Tick();
+        FollowPlayerTwo();
         LogSettingsChange(settings_.Update(players_->HasPlayerTwo()));
+    }
+
+    /// Keeps the view-point module's idea of player 2 current, and describes the local players
+    /// when player 2 appears (a subclass with its own vtable would bypass the test turn).
+    void FollowPlayerTwo() noexcept
+    {
+        const void*         playerTwo = players_->PlayerTwo();
+        const std::uint32_t joins     = players_->JoinCount();
+        if (playerTwo == followedPlayerTwo_ && joins == followedJoins_)
+        {
+            return;
+        }
+        followedPlayerTwo_ = playerTwo;
+        followedJoins_     = joins;
+        // Through null first: a new player 2 at the old one's address must still start fresh
+        // (turn off, first view point described).
+        lss::views::SetPlayerTwo(nullptr);
+        lss::views::SetPlayerTwo(playerTwo);
+        if (playerTwo == nullptr || !viewPointInstalled_)
+        {
+            return;
+        }
+        auto* players = lss::players::unreal::LocalPlayers(lss::players::unreal::GameInstance());
+        for (std::int32_t i = 0; players != nullptr && i < players->Num(); ++i)
+        {
+            auto* player = (*players)[i];
+            Log(L"local player {}: class {}, view point {}", i + 1, player->GetClassPrivate()->GetName(),
+                lss::views::UsesEngineViewPoint(player) ? L"through the engine's ULocalPlayer entry"
+                                                         : L"through ANOTHER vtable (the test turn cannot reach it)");
+        }
+    }
+
+    void ToggleTestTurn() noexcept
+    {
+        if (!viewPointInstalled_)
+        {
+            Log(L"test turn unavailable (the view-point entry is not installed)");
+            return;
+        }
+        if (!players_->HasPlayerTwo())
+        {
+            Log(L"test turn: no player 2 (Ctrl+F7 adds one)");
+            return;
+        }
+        if (lss::views::ToggleTestTurn())
+        {
+            Log(L"TEST: player 2's view turned {:.0f} degrees away from player 1's", lss::views::kTestTurnDegrees);
+        }
+        else
+        {
+            Log(L"TEST: player 2's view back on player 1's camera (turn off)");
+        }
     }
 
     static void LogSettingsChange(const lss::players::SettingsChange& change) noexcept
@@ -204,6 +277,9 @@ private:
         {&lss::players::unreal::ConsoleVariableInt, &lss::players::unreal::ExecuteConsoleCommand}};
     bool                                      tickSeen_        = false;
     bool                                      rendererInstalled_ = false;
+    bool                                      viewPointInstalled_ = false;
+    const void*                               followedPlayerTwo_  = nullptr;
+    std::uint32_t                             followedJoins_      = 0;
     Hook::GlobalCallbackId                    tickCallback_    = Hook::ERROR_ID;
     Hook::GlobalCallbackId                    loadMapCallback_ = Hook::ERROR_ID;
 };

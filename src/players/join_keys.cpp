@@ -36,7 +36,12 @@ PlayerIntent JoinKeys::Poll() noexcept
     const bool active = GameHasFocus() && IsDown(VK_CONTROL);
     const bool join   = Pressed(active && IsDown(VK_F7), joinWasDown_);
     const bool leave  = Pressed(active && IsDown(VK_F8), leaveWasDown_);
+    const bool turn   = Pressed(active && IsDown(VK_F6), turnWasDown_);
 
+    if (turn && !join && !leave)
+    {
+        return PlayerIntent::ToggleTestTurn;
+    }
     if (join && !leave)
     {
         return PlayerIntent::Join;

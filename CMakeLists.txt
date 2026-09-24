@@ -40,6 +40,9 @@ add_library(LocalSplitScreen SHARED
     src/renderer/additional_family_output.cpp
     src/renderer/one_family_per_view.cpp
     src/renderer/view_family_submission.cpp
+
+    src/views/player_view_point.cpp
+    src/views/view_turn.cpp
 )
 
 # Includes are rooted at src/ so every #include names its module ("platform/log.h").
@@ -83,3 +86,11 @@ add_executable(SplitScreenSettingsTests
 target_include_directories(SplitScreenSettingsTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(SplitScreenSettingsTests PRIVATE cxx_std_20)
 add_test(NAME split_screen_settings COMMAND SplitScreenSettingsTests)
+
+add_executable(ViewTurnTests
+    tests/view_turn_test.cpp
+    src/views/view_turn.cpp
+)
+target_include_directories(ViewTurnTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(ViewTurnTests PRIVATE cxx_std_20)
+add_test(NAME view_turn COMMAND ViewTurnTests)

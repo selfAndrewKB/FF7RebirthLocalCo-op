@@ -79,6 +79,24 @@ inline constexpr std::uint8_t   kOutputLoadActionStoreBytes[] = {0x88, 0x84, 0x2
 inline constexpr std::uintptr_t kOutputLoadActionResume       = 0x14111A37E;
 
 // ---------------------------------------------------------------------------------------------
+// A local player's view point (RE-local-player-viewpoint.md)
+// ---------------------------------------------------------------------------------------------
+
+/// ULocalPlayer::GetViewPoint(FMinimalViewInfo& Out, EStereoscopicPass): where each player's view
+/// is. Stock: the controller's camera-manager cache, so a player with a borrowed controller gets
+/// the lender's view. Called only virtually, twice per player per frame (for the view matrix and
+/// for CalcSceneView's location/rotation), through the ULocalPlayer vtable (0x146BB33D8) entry
+/// at +0x278. No native subclass overrides it.
+inline constexpr std::uintptr_t kLocalPlayerVTable = 0x146BB33D8;
+inline constexpr std::uintptr_t kGetViewPointEntry = 0x146BB3650;
+inline constexpr std::uintptr_t kGetViewPoint      = 0x140BF1270;
+
+/// Its prologue, up to the stack-probe call whose target is relative.
+inline constexpr std::uint8_t kGetViewPointPrologue[] = {
+    0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41,
+    0x57, 0x48, 0x8D, 0xAC, 0x24, 0xC0, 0xF9, 0xFF, 0xFF, 0xB8, 0x40, 0x07, 0x00, 0x00, 0xE8};
+
+// ---------------------------------------------------------------------------------------------
 // Removing a local player (RE-remove-local-player.md §Q1)
 // ---------------------------------------------------------------------------------------------
 
@@ -120,6 +138,7 @@ inline constexpr VerifiedCode kVerifiedCode[] = {
     {L"the frame-number gate on family+0x70", kFrameNumberGate, kFrameNumberGateBytes},
     {L"the bAdditionalViewFamily store to family+0x74", kAdditionalFamilyStore, kAdditionalFamilyStoreBytes},
     {L"the final output's load-action decision", kOutputLoadActionSequence, kOutputLoadActionSequenceBytes},
+    {L"ULocalPlayer::GetViewPoint's prologue", kGetViewPoint, kGetViewPointPrologue},
     {L"RemoveLocalPlayer's prologue", kRemoveLocalPlayer, kRemoveLocalPlayerPrologue},
     {L"RemoveLocalPlayer's null-controller skip", kRemoveLocalPlayerControllerTest,
      kRemoveLocalPlayerControllerTestBytes},
