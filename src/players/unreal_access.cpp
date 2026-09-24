@@ -70,7 +70,7 @@ bool GuardedRemove(RemoveLocalPlayerFn remove, UObject* gameInstance, UObject* l
 {
     __try
     {
-        remove(gameInstance, localPlayer);  // its bool result is always true (RE doc §Q1)
+        remove(gameInstance, localPlayer);  // its bool result is always true, so it is not read
         return true;
     }
     __except (GuardFilter(GetExceptionCode()))
@@ -104,6 +104,62 @@ UObject** ControllerField(UObject* localPlayer) noexcept
     auto* field = localPlayer->GetValuePtrByPropertyNameInChain<UObject*>(STR("PlayerController"));
     const auto offset = reinterpret_cast<std::uintptr_t>(field) - reinterpret_cast<std::uintptr_t>(localPlayer);
     return field != nullptr && offset == engine::kLocalPlayerControllerOffset ? field : nullptr;
+}
+
+namespace {
+
+UObject* ClassDefaultObject(const wchar_t* classPath) noexcept
+{
+    auto* type = UObjectGlobals::StaticFindObject<UClass*>(nullptr, nullptr, classPath);
+    return type == nullptr ? nullptr : type->GetClassDefaultObject();
+}
+
+/// The offset of `object`'s property `name`, if reflection finds it as one byte at `expected`.
+std::optional<std::uint32_t> ByteOffset(UObject* object, const wchar_t* name, std::uint32_t expected) noexcept
+{
+    if (object == nullptr)
+    {
+        return std::nullopt;
+    }
+    auto* property = object->GetPropertyByNameInChain(name);
+    if (property == nullptr || property->GetSize() != 1 ||
+        property->GetOffset_Internal() != static_cast<std::int32_t>(expected))
+    {
+        return std::nullopt;
+    }
+    return expected;
+}
+
+std::uint8_t* TwoPlayerSplitscreenLayoutField() noexcept
+{
+    UObject*   settings = ClassDefaultObject(STR("/Script/EngineSettings.GameMapsSettings"));
+    const auto offset   = ByteOffset(settings, STR("TwoPlayerSplitscreenLayout"), engine::kTwoPlayerSplitscreenLayoutOffset);
+    return offset ? reinterpret_cast<std::uint8_t*>(settings) + *offset : nullptr;
+}
+
+}  // namespace
+
+std::optional<std::uint8_t> ReadTwoPlayerSplitscreenLayout() noexcept
+{
+    const auto* field = TwoPlayerSplitscreenLayoutField();
+    return field == nullptr ? std::nullopt : std::optional<std::uint8_t>(*field);
+}
+
+bool WriteTwoPlayerSplitscreenLayout(std::uint8_t value) noexcept
+{
+    auto* field = TwoPlayerSplitscreenLayoutField();
+    if (field == nullptr)
+    {
+        return false;
+    }
+    *field = value;  // game thread; the engine reads it on the same thread, in the next redraw
+    return true;
+}
+
+std::optional<std::uint32_t> AspectRatioAxisConstraintOffset() noexcept
+{
+    return ByteOffset(ClassDefaultObject(STR("/Script/Engine.LocalPlayer")), STR("AspectRatioAxisConstraint"),
+                      engine::kAspectRatioAxisConstraintOffset);
 }
 
 bool CreatePlayerWithoutController(UObject* worldContext, std::int32_t controllerId) noexcept

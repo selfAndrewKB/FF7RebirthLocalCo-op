@@ -1,8 +1,7 @@
 #pragma once
 
-// STAND-IN, to be replaced when players get their own controllers (philosophy §4.7):
-// player 2 views the world through player 1's PlayerController, so both halves show player 1's
-// camera.
+// STAND-IN, to be replaced when players get their own controllers: player 2 views the world
+// through player 1's PlayerController, so both halves show player 1's camera.
 //
 // Why it exists: the engine only builds a view for a local player that has a PlayerController
 // (ULocalPlayer::GetProjectionData refuses otherwise), and spawning a real controller for

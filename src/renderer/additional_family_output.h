@@ -8,7 +8,7 @@
 // With one view per family (one_family_per_view.h), families after the first are marked
 // additional, so restoring the stock rule is what lets them share the screen. One player is
 // unaffected: the engine never marks the game viewport's single family additional.
-// RE-additional-view-family-reader.md; SPLITSCREEN-ARCHITECTURE.md §8.
+// Evidence: RE-additional-view-family-reader.md.
 
 namespace lss::platform {
 class GameImage;

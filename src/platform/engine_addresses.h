@@ -5,7 +5,7 @@
 // Addresses are written as IDA shows them (image base 0x140000000) so they can be looked up in
 // the research documents directly; platform::GameImage rebases them. Before anything is
 // installed, the mod checks every fact in kVerifiedCode against the running game. If any
-// differs (a game patch, another mod), the mod installs nothing (philosophy §4.4).
+// differs (a game patch, another mod), the mod installs nothing.
 //
 // Research: Rebirth/Documentation/research/RE-onefamily-feasibility.md (the view-family
 // submission), RE-additional-view-family-reader.md (the final output's load action) and
@@ -121,6 +121,22 @@ inline constexpr std::uint8_t   kRemoveLocalPlayerControllerTestBytes[] = {
 /// ULocalPlayer::PlayerController, as RemoveLocalPlayer reads it. The shared camera writes this
 /// field through reflection and refuses if reflection reports any other offset.
 inline constexpr std::uint32_t kLocalPlayerControllerOffset = 0x30;
+
+// ---------------------------------------------------------------------------------------------
+// The split layout and each half's field of view (RE-vertical-split-and-fill.md §Q1, §Q3)
+// ---------------------------------------------------------------------------------------------
+//
+// Both are set through reflection by name. The offsets are what the engine's own code reads, so a
+// reflected offset that differs means reflection and the code disagree, and the mod refuses.
+
+/// UGameMapsSettings::TwoPlayerSplitscreenLayout (a byte; 0 top/bottom, 1 side by side), read
+/// from the class default object on every call by UpdateActiveSplitscreenType (0x1410A1340).
+/// Reflection data 0x1463E88E8.
+inline constexpr std::uint32_t kTwoPlayerSplitscreenLayoutOffset = 0x51;
+
+/// ULocalPlayer::AspectRatioAxisConstraint (a byte), read by GetProjectionData after GetViewPoint:
+/// `mov dl,[r14+94h]` at 0x140CC0B1D. Reflection data 0x1464B6818.
+inline constexpr std::uint32_t kAspectRatioAxisConstraintOffset = 0x94;
 
 // ---------------------------------------------------------------------------------------------
 // The startup check list

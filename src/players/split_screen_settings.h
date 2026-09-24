@@ -4,11 +4,11 @@
 //
 // r.SceneRenderTargetResizeMethod (a stock engine setting): each player's family asks for scene
 // textures sized to its own part of the screen, and at the default (0, "resize to match requested
-// render size") the engine re-creates them for every family, twice a frame. Measured: split frames
-// 69-84 ms at 0, 14.8-16.4 ms at 2 ("expands to encompass the largest requested render
-// dimension"), back to the stall at 0 again (endstate §11.124). With one player the largest request
-// is the full screen the game already uses, so 2 costs no memory there; it is still only set while
-// player 2 is in, so one-player play keeps the game's own value.
+// render size") the engine re-creates them for every family, twice a frame, which stalls the
+// frame (roughly 70-85 ms against 15 ms). At 2 ("expands to encompass the largest requested render
+// dimension") they are created once and shared. With one player the largest request is the full
+// screen the game already uses, so 2 costs no memory there; it is still only set while player 2 is
+// in, so one-player play keeps the game's own value.
 //
 // The engine is reached through ConsoleAccess, so this policy has no UE4SS dependency and is
 // tested on the host.

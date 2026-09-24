@@ -37,10 +37,25 @@ PlayerIntent JoinKeys::Poll() noexcept
     const bool join   = Pressed(active && IsDown(VK_F7), joinWasDown_);
     const bool leave  = Pressed(active && IsDown(VK_F8), leaveWasDown_);
     const bool turn   = Pressed(active && IsDown(VK_F6), turnWasDown_);
+    const bool layout = Pressed(active && IsDown(VK_F5), layoutWasDown_);
+    const bool fill   = Pressed(active && IsDown(VK_F4), fillWasDown_);
 
-    if (turn && !join && !leave)
+    // Joining and leaving win over everything else pressed on the same tick; of the switches,
+    // one per tick (the others are reported on their own presses).
+    if (!join && !leave)
     {
-        return PlayerIntent::ToggleTestTurn;
+        if (turn)
+        {
+            return PlayerIntent::ToggleTestTurn;
+        }
+        if (layout)
+        {
+            return PlayerIntent::ToggleLayout;
+        }
+        if (fill)
+        {
+            return PlayerIntent::ToggleFill;
+        }
     }
     if (join && !leave)
     {

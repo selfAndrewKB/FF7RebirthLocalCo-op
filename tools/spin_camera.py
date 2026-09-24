@@ -1,9 +1,7 @@
 """Spin the camera in a LocalSplitScreen session and watch for the game's crash dialog.
 
-The crash test (SPLITSCREEN-ARCHITECTURE.md §9): with player 2 in and player 2's view turned
-(Ctrl+F6), spin the camera at the old baseline rate and record whether, and when, the game crashes.
-The old mod's unrepaired runs crashed 8/8 within 43 s under this input; its repaired build ran
-360 s clean.
+A crash test for two different views: with player 2 in and player 2's view turned (Ctrl+F6),
+spin the camera at a steady rate and record whether, and when, the game crashes.
 
     Check:  python spin_camera.py --pid PID
     Run:    python spin_camera.py --pid PID --run --output NEW_DIR --seconds 360

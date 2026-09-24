@@ -14,7 +14,9 @@
 #include <intrin.h>
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
+#include <cstring>
 
 namespace lss::renderer {
 
@@ -31,12 +33,19 @@ std::uintptr_t        g_drawReturn   = 0;
 // What the log records about the game viewport's submissions
 // ---------------------------------------------------------------------------------------------
 //
-// Each time the number of views changes (a player joins or leaves), one block: the view count,
-// the value the engine itself put in +0x70 (the spike's first question: SPLITSCREEN-ARCHITECTURE
-// §5), and each view's output rectangle, which confirms view k belongs to player k (player 1 on
-// top). Nothing is logged on frames where nothing changed.
+// Each time the number of views or any view's output rectangle changes (a player joins or
+// leaves, the resolution or the split layout changes), one block: the view count, the values the
+// engine itself put in +0x70 and +0x74 (before the mod sets them per family), and each view's
+// output rectangle, which confirms view k belongs to player k. Nothing is logged on frames where
+// nothing changed. The rectangles are compared too, because the first frame after startup can
+// still have the pre-display-mode size.
+
+constexpr std::int32_t kRectLoggedViews = 4;  // views beyond these are logged but not compared
+
+using ViewRect = std::array<std::int32_t, 4>;  // Min.X, Min.Y, Max.X, Max.Y
 
 std::int32_t g_loggedViewCount = -1;
+ViewRect     g_loggedRects[kRectLoggedViews]{};
 
 /// The family's view list: an array of `const FSceneView*`.
 const std::byte* const* Views(const std::byte* viewFamily) noexcept
@@ -44,10 +53,30 @@ const std::byte* const* Views(const std::byte* viewFamily) noexcept
     return *reinterpret_cast<const std::byte* const* const*>(viewFamily + family::kViewsData);
 }
 
+ViewRect RectOf(const std::byte* sceneView) noexcept
+{
+    ViewRect rect{};
+    std::memcpy(rect.data(), sceneView + view::kUnscaledViewRect, sizeof(rect));
+    return rect;
+}
+
+bool RectsUnchanged(const std::byte* const* views, std::int32_t count) noexcept
+{
+    for (std::int32_t k = 0; views != nullptr && k < (std::min)(count, kRectLoggedViews); ++k)
+    {
+        if (RectOf(views[k]) != g_loggedRects[k])
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 void LogFamilyOnChange(const std::byte* viewFamily) noexcept
 {
     const auto count = *reinterpret_cast<const std::int32_t*>(viewFamily + family::kViewsCount);
-    if (count == g_loggedViewCount)
+    const auto views = Views(viewFamily);
+    if (count == g_loggedViewCount && RectsUnchanged(views, count))
     {
         return;
     }
@@ -58,16 +87,20 @@ void LogFamilyOnChange(const std::byte* viewFamily) noexcept
     platform::Log(L"game viewport submits {} view(s){}; as built by the engine: +0x70={} +0x74={}", count,
                   count > 1 ? L", rendered as one family each" : L"", engineSkip, engineAdd);
 
-    const auto views = Views(viewFamily);
     for (std::int32_t k = 0; views != nullptr && k < count; ++k)
     {
-        const auto rect = reinterpret_cast<const std::int32_t*>(views[k] + view::kUnscaledViewRect);
-        platform::Log(L"  view {}: output rect ({},{})-({},{})", k, rect[0], rect[1], rect[2], rect[3]);
+        const auto rect = RectOf(views[k]);
+        if (k < kRectLoggedViews)
+        {
+            g_loggedRects[k] = rect;
+        }
+        platform::Log(L"  view {}: output rect ({},{})-({},{}), {}x{}", k, rect[0], rect[1], rect[2], rect[3],
+                      rect[2] - rect[0], rect[3] - rect[1]);
     }
 }
 
 // ---------------------------------------------------------------------------------------------
-// Frame time, for the spike's cost measurement (SPLITSCREEN-ARCHITECTURE §5)
+// Frame time: what rendering each view as its own family costs
 // ---------------------------------------------------------------------------------------------
 //
 // One line every 10 s: the mean interval between the game viewport's submissions, and the view

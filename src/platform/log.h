@@ -3,7 +3,7 @@
 // The mod's log: one line per event, written to UE4SS.log with a "[LocalSplitScreen]" prefix.
 //
 // The product logs what it verified at startup, when players join or leave, and anything that
-// made it stand aside (philosophy §4.8). Nothing is logged per frame.
+// made it stand aside. Nothing is logged per frame.
 //
 // Formatting uses std::format, so the format string is checked at compile time:
 //     platform::Log(L"player {} joined", index);

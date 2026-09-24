@@ -34,6 +34,7 @@ add_library(LocalSplitScreen SHARED
     src/players/join_keys.cpp
     src/players/local_players.cpp
     src/players/shared_camera.cpp
+    src/players/split_layout.cpp
     src/players/split_screen_settings.cpp
     src/players/unreal_access.cpp
 
@@ -42,6 +43,7 @@ add_library(LocalSplitScreen SHARED
     src/renderer/view_family_submission.cpp
 
     src/views/player_view_point.cpp
+    src/views/view_shape.cpp
     src/views/view_turn.cpp
 )
 
@@ -94,3 +96,19 @@ add_executable(ViewTurnTests
 target_include_directories(ViewTurnTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(ViewTurnTests PRIVATE cxx_std_20)
 add_test(NAME view_turn COMMAND ViewTurnTests)
+
+add_executable(ViewShapeTests
+    tests/view_shape_test.cpp
+    src/views/view_shape.cpp
+)
+target_include_directories(ViewShapeTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(ViewShapeTests PRIVATE cxx_std_20)
+add_test(NAME view_shape COMMAND ViewShapeTests)
+
+add_executable(SplitLayoutTests
+    tests/split_layout_test.cpp
+    src/players/split_layout.cpp
+)
+target_include_directories(SplitLayoutTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(SplitLayoutTests PRIVATE cxx_std_20)
+add_test(NAME split_layout COMMAND SplitLayoutTests)

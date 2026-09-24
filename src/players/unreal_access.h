@@ -29,6 +29,18 @@ RC::Unreal::TArray<UObject*>* LocalPlayers(UObject* gameInstance) noexcept;
 /// it or finds it anywhere other than engine::kLocalPlayerControllerOffset.
 UObject** ControllerField(UObject* localPlayer) noexcept;
 
+/// UGameMapsSettings::TwoPlayerSplitscreenLayout on the class default object (the value the
+/// engine reads every frame), or empty if reflection cannot find it where the engine reads it
+/// (engine::kTwoPlayerSplitscreenLayoutOffset, one byte).
+std::optional<std::uint8_t> ReadTwoPlayerSplitscreenLayout() noexcept;
+
+/// Writes it; false (writing nothing) under the same conditions.
+bool WriteTwoPlayerSplitscreenLayout(std::uint8_t value) noexcept;
+
+/// The offset of ULocalPlayer::AspectRatioAxisConstraint as reflection reports it, if it is the
+/// one-byte field the engine reads (engine::kAspectRatioAxisConstraintOffset).
+std::optional<std::uint32_t> AspectRatioAxisConstraintOffset() noexcept;
+
 /// UGameplayStatics::CreatePlayer(worldContext, controllerId, bSpawnPlayerController = false).
 /// No controller is spawned: spawning one runs the GameMode login path, which faults in FF7R.
 /// Returns false if the function could not be found, its parameters do not match, or the call

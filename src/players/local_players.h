@@ -7,7 +7,7 @@
 // Leaving removes that ULocalPlayer with the engine's RemoveLocalPlayer.
 //
 // Every call here must run on the game thread, outside Draw: the mod calls them from UE4SS's
-// engine-tick and map-load callbacks (SPLITSCREEN-ARCHITECTURE.md §2.3).
+// engine-tick and map-load callbacks.
 
 #include "players/shared_camera.h"
 #include "players/unreal_access.h"

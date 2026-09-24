@@ -15,6 +15,7 @@
 #include "platform/log.h"
 #include "players/join_keys.h"
 #include "players/local_players.h"
+#include "players/split_layout.h"
 #include "players/split_screen_settings.h"
 #include "players/unreal_access.h"
 #include "renderer/additional_family_output.h"
@@ -29,7 +30,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.2.0-slice2";
+constexpr const wchar_t* kVersion = L"0.3.1-layout";
 
 /// Checks every engine fact against the running game and logs each one that fails.
 /// Returns the live address of RemoveLocalPlayer when all hold.
@@ -54,8 +55,9 @@ std::optional<std::uintptr_t> VerifyEngine(const lss::platform::GameImage& image
         allHold = false;
     }
 
-    // The GetViewPoint entry is not checked here: it serves only the optional test turn, and its
-    // install is itself a compare-and-swap against the expected function (views/player_view_point).
+    // The GetViewPoint entry is not checked here: the split screen works without it (with bars),
+    // and its install is itself a compare-and-swap against the expected function
+    // (views/player_view_point).
 
     const auto removeLocalPlayer = image.Rebase(lss::engine::kRemoveLocalPlayer);
     if (!allHold || !removeLocalPlayer)
@@ -71,7 +73,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.2.0-slice2");
+        ModVersion     = STR("0.3.1-layout");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -119,12 +121,13 @@ public:
         }
         players_.emplace(*removeLocalPlayer);
 
-        // The view-point entry only serves the crash-test turn (SPLITSCREEN-ARCHITECTURE.md §9), so
-        // the split screen runs without it; the turn key then reports that it is unavailable.
+        // The view-point entry serves the filled halves and the test turn. The split screen runs
+        // without it (halves kept 16:9 with bars); those keys then report that they are unavailable.
         viewPointInstalled_ = lss::views::InstallPlayerViewPoint(*image);
         if (!viewPointInstalled_)
         {
-            Log(L"ULocalPlayer::GetViewPoint's entry does not hold the engine's function; the test turn is unavailable");
+            Log(L"ULocalPlayer::GetViewPoint's entry does not hold the engine's function; filled halves and the test "
+                L"turn are unavailable");
         }
 
         const Hook::FCallbackOptions tickOptions{false, false, STR("LocalSplitScreen"), STR("player intent")};
@@ -155,7 +158,9 @@ public:
             },
             loadOptions);
 
-        Log(L"ready: every engine check passed. Ctrl+F7 adds player 2, Ctrl+F8 removes player 2, Ctrl+F6 turns player 2's view (test)");
+        Log(L"ready: every engine check passed. Ctrl+F7 adds player 2, Ctrl+F8 removes player 2, Ctrl+F5 switches "
+            L"top/bottom and side by side, Ctrl+F4 switches filled halves and 16:9 halves with bars, Ctrl+F6 turns "
+            L"player 2's view (test)");
     }
 
 private:
@@ -192,11 +197,64 @@ private:
             case lss::players::PlayerIntent::Join:  players_->Join(); break;
             case lss::players::PlayerIntent::Leave: players_->Leave(); break;  // logs its own outcome
             case lss::players::PlayerIntent::ToggleTestTurn: ToggleTestTurn(); break;
+            case lss::players::PlayerIntent::ToggleLayout: LogLayoutChange(layout_.Toggle()); break;
+            case lss::players::PlayerIntent::ToggleFill: ToggleFill(); break;
             case lss::players::PlayerIntent::None:  break;
         }
         players_->Tick();
         FollowPlayerTwo();
         LogSettingsChange(settings_.Update(players_->HasPlayerTwo()));
+        LogLayoutChange(layout_.Update(players_->HasPlayerTwo()));
+    }
+
+    void ToggleFill() noexcept
+    {
+        if (!viewPointInstalled_)
+        {
+            Log(L"filled halves unavailable (the view-point entry is not installed)");
+            return;
+        }
+        if (lss::views::ToggleFill())
+        {
+            Log(L"split halves fill the screen (no bars)");
+        }
+        else
+        {
+            Log(L"split halves kept 16:9 with bars (the game's own shape)");
+        }
+    }
+
+    static void LogLayoutChange(const lss::players::LayoutChange& change) noexcept
+    {
+        using Kind = lss::players::LayoutChange::Kind;
+        const auto name = [](std::uint8_t value) {
+            return value == static_cast<std::uint8_t>(lss::players::SplitLayoutKind::SideBySide) ? L"side by side"
+                   : value == static_cast<std::uint8_t>(lss::players::SplitLayoutKind::TopBottom) ? L"top/bottom"
+                                                                                                   : L"another value";
+        };
+        switch (change.kind)
+        {
+            case Kind::None: break;
+            case Kind::Chosen: Log(L"split layout: {} from the next join", name(change.value)); break;
+            case Kind::Unreadable:
+                Log(L"split layout: TwoPlayerSplitscreenLayout cannot be read, so the switch did nothing");
+                break;
+            case Kind::Applied:
+                Log(L"split layout: TwoPlayerSplitscreenLayout = {} ({})", change.value, name(change.value));
+                break;
+            case Kind::ApplyFailed:
+                Log(L"split layout: could not set TwoPlayerSplitscreenLayout to {}; the game's layout stays", change.value);
+                break;
+            case Kind::Restored:
+                Log(L"player 2 is out: TwoPlayerSplitscreenLayout restored to {} ({})", change.value, name(change.value));
+                break;
+            case Kind::LeftAlone:
+                Log(L"player 2 is out: TwoPlayerSplitscreenLayout was changed to {} meanwhile; left as it is", change.value);
+                break;
+            case Kind::RestoreFailed:
+                Log(L"player 2 is out: could not restore TwoPlayerSplitscreenLayout to {}", change.value);
+                break;
+        }
     }
 
     /// Keeps the view-point module's idea of player 2 current, and describes the local players
@@ -211,6 +269,17 @@ private:
         }
         followedPlayerTwo_ = playerTwo;
         followedJoins_     = joins;
+        // The FOV rule's offset, confirmed by reflection before the first split frame uses it.
+        if (playerTwo != nullptr)
+        {
+            const auto axisOffset = lss::players::unreal::AspectRatioAxisConstraintOffset();
+            lss::views::SetAxisConstraintOffset(axisOffset.value_or(0));
+            if (!axisOffset)
+            {
+                Log(L"ULocalPlayer::AspectRatioAxisConstraint not found where the engine reads it; split views keep "
+                    L"the game's FOV rule");
+            }
+        }
         // Through null first: a new player 2 at the old one's address must still start fresh
         // (turn off, first view point described).
         lss::views::SetPlayerTwo(nullptr);
@@ -275,13 +344,15 @@ private:
     lss::players::JoinKeys                    keys_;
     lss::players::SplitScreenSettings         settings_{
         {&lss::players::unreal::ConsoleVariableInt, &lss::players::unreal::ExecuteConsoleCommand}};
-    bool                                      tickSeen_        = false;
-    bool                                      rendererInstalled_ = false;
+    lss::players::SplitLayout                 layout_{{&lss::players::unreal::ReadTwoPlayerSplitscreenLayout,
+                                                       &lss::players::unreal::WriteTwoPlayerSplitscreenLayout}};
+    bool                                      tickSeen_           = false;
+    bool                                      rendererInstalled_  = false;
     bool                                      viewPointInstalled_ = false;
     const void*                               followedPlayerTwo_  = nullptr;
     std::uint32_t                             followedJoins_      = 0;
-    Hook::GlobalCallbackId                    tickCallback_    = Hook::ERROR_ID;
-    Hook::GlobalCallbackId                    loadMapCallback_ = Hook::ERROR_ID;
+    Hook::GlobalCallbackId                    tickCallback_       = Hook::ERROR_ID;
+    Hook::GlobalCallbackId                    loadMapCallback_    = Hook::ERROR_ID;
 };
 
 }  // namespace

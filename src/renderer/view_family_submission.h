@@ -6,7 +6,6 @@
 // reaches the renderer through that entry; only the game viewport's Draw (identified by its
 // return address) is split, and only when its family holds more than one view. Every other
 // submission, and every submission with one player, goes to the engine unchanged.
-// SPLITSCREEN-ARCHITECTURE.md §2.1–§2.2.
 
 namespace lss::platform {
 class GameImage;

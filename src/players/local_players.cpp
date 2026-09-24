@@ -92,11 +92,11 @@ bool LocalPlayers::Leave() noexcept
         return true;
     }
 
-    // RemoveLocalPlayer destroys whatever controller is in the player's field (RE-remove-local-
-    // player.md §Q1). Player 2 never owns one, so anything there is borrowed: player 1's, or a
-    // stale loan. The field must be empty before the call, whether or not the loan was attached
-    // (a failed join removes player 2 without one), and a field that cannot be found cannot be
-    // shown empty, so the removal is refused.
+    // RemoveLocalPlayer destroys whatever controller is in the player's field
+    // (engine::kRemoveLocalPlayerControllerTest). Player 2 never owns one, so anything there is
+    // borrowed: player 1's, or a stale loan. The field must be empty before the call, whether or
+    // not the loan was attached (a failed join removes player 2 without one), and a field that
+    // cannot be found cannot be shown empty, so the removal is refused.
     camera_.Detach();
     unreal::UObject** twoController = unreal::ControllerField(playerTwo_);
     if (twoController == nullptr)

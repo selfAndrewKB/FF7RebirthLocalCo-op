@@ -4,10 +4,9 @@
 //
 // Why: the FF7R "ME" meshlet renderer was written for one view per family. When a family holds
 // two views, the second view's work is not bounded to its own rectangle (its tile builder
-// scans the first view's rows, the source of the A04B GPU crash), and the views share scratch
-// state inside one render pass. With one view per family the engine places every view at the
-// origin of the scene targets and renders it alone, so all of that is correct in stock code.
-// SPLITSCREEN-REBUILD-PHILOSOPHY.md §9, SPLITSCREEN-ARCHITECTURE.md §2.1.
+// scans the first view's rows, which can crash the GPU), and the views share scratch state
+// inside one render pass. With one view per family the engine places every view at the origin
+// of the scene targets and renders it alone, so all of that is correct in stock code.
 //
 // This file is pure logic over the family's memory, with no engine or UE4SS dependency, so it
 // is tested on the host (tests/one_family_per_view_test.cpp).
