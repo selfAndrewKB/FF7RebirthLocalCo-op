@@ -1,5 +1,5 @@
 param(
-    [Parameter(Mandatory)] [string[]]$Keys,   # e.g. Enter, Escape, Up, Down, Left, Right, Space
+    [Parameter(Mandatory)] [string[]]$Keys,   # e.g. Enter, Escape, Up, Down, Left, Right, Space, Ctrl+F7
     [int]$HoldMs = 120,
     [int]$GapMs = 600,
     [string]$Title = "FINAL FANTASY VII REBIRTH"
@@ -36,7 +36,10 @@ public static class LssKeys {
 "@
 $scan = @{ Enter = @(0x1C, $false); Escape = @(0x01, $false); Space = @(0x39, $false); Tab = @(0x0F, $false)
            Up = @(0x48, $true); Down = @(0x50, $true); Left = @(0x4B, $true); Right = @(0x4D, $true)
-           C = @(0x2E, $false); Q = @(0x10, $false); E = @(0x12, $false) }  # C: commands menu; Q/E: its party switch
+           C = @(0x2E, $false); Q = @(0x10, $false); E = @(0x12, $false)   # C: commands menu; Q/E: its party switch
+           F4 = @(0x3E, $false); F5 = @(0x3F, $false); F6 = @(0x40, $false); F7 = @(0x41, $false); F8 = @(0x42, $false)
+           F9 = @(0x43, $false) }
+$ctrl = @(0x1D, $false)  # left Ctrl; "Ctrl+<key>" holds it around the key (the mod's switches are Ctrl+F4..F9)
 $game = Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -eq $Title } | Select-Object -First 1
 if (-not $game) { throw "no window titled '$Title'" }
 $hwnd = $game.MainWindowHandle
@@ -45,11 +48,24 @@ $hwnd = $game.MainWindowHandle
 Start-Sleep -Milliseconds 300
 if ([LssKeys]::GetForegroundWindow() -ne $hwnd) { throw "the game window is not in the foreground; no key sent" }
 foreach ($k in $Keys) {
-    if (-not $scan.ContainsKey($k)) { throw "unknown key $k" }
-    $code, $ext = $scan[$k]
-    if ([LssKeys]::Key($code, $ext, $false) -ne 1) { throw "SendInput failed for $k" }
+    $withCtrl = $k.StartsWith('Ctrl+')
+    $name = if ($withCtrl) { $k.Substring(5) } else { $k }
+    if (-not $scan.ContainsKey($name)) { throw "unknown key $k" }
+    $code, $ext = $scan[$name]
+    if ($withCtrl) {
+        if ([LssKeys]::Key($ctrl[0], $ctrl[1], $false) -ne 1) { throw "SendInput failed for Ctrl" }
+        Start-Sleep -Milliseconds 50
+    }
+    if ([LssKeys]::Key($code, $ext, $false) -ne 1) {
+        if ($withCtrl) { [void][LssKeys]::Key($ctrl[0], $ctrl[1], $true) }
+        throw "SendInput failed for $k"
+    }
     Start-Sleep -Milliseconds $HoldMs
     [void][LssKeys]::Key($code, $ext, $true)
+    if ($withCtrl) {
+        Start-Sleep -Milliseconds 50
+        [void][LssKeys]::Key($ctrl[0], $ctrl[1], $true)
+    }
     "pressed $k"
     Start-Sleep -Milliseconds $GapMs
 }

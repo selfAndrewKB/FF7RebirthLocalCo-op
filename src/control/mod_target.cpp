@@ -127,7 +127,8 @@ Outcome ModTarget::SetHudBand(bool on)
     }
     hud::SetBandEnabled(on);
     // What it sets is logged by the HUD module at the overlay's next render while split.
-    return {true, on ? L"HUD laid out in each half's visible band" : L"HUD full-image layout (values logged only)"};
+    return {true, on ? L"HUD laid out in each half's visible band (the default)"
+                     : L"HUD full-image layout until `hud-band on` (values logged only)"};
 }
 
 Outcome ModTarget::SetHudProbe(bool on)

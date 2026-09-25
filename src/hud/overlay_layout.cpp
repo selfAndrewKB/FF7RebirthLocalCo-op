@@ -30,7 +30,7 @@ std::uintptr_t         g_overlaySingleton = 0;  // live 0x1491D1948
 bool                   g_installed        = false;
 
 std::atomic<bool> g_splitActive{false};
-std::atomic<bool> g_bandEnabled{false};
+std::atomic<bool> g_bandEnabled{true};  // `hud-band off` turns it off for diagnosis
 
 /// What the rect call decided for this frame's render, for the entry call a few instructions later
 /// in the same function. Both run on the game thread; the entry call acts only on the thread that
@@ -260,7 +260,7 @@ bool InstallOverlayLayout(const platform::GameImage& image) noexcept
         return false;
     }
     g_installed = true;
-    platform::Log(L"HUD layout: installed (hud-band off)");
+    platform::Log(L"HUD layout: installed (hud-band {})", BandEnabled() ? L"on" : L"off");
     return true;
 }
 
