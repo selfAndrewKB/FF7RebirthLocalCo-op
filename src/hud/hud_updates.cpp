@@ -1,5 +1,6 @@
 #include "hud/hud_updates.h"
 
+#include "hud/marker_timers.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 
@@ -35,6 +36,8 @@ constexpr std::uint8_t kTick170[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0
                                      0x18, 0x55, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8D, 0x68, 0xA1, 0xB8, 0xA0, 0x00, 0x00, 0x00};
 constexpr std::uint8_t kTick180[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x48, 0x89, 0x7C,
                                      0x24, 0x20, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0xB8, 0xB0, 0x01, 0x00, 0x00};
+
+constexpr std::uint32_t kMarkerListMember = 0x150;  // the off-screen enemy arrows among them (hud/marker_timers.h)
 
 // In MasterHUD_Tick's order (pass 9, P9.1).
 const std::array<SubTick, 6> kSubTicks{{
@@ -145,13 +148,27 @@ void* Member(std::uint32_t member) noexcept
     return object;
 }
 
-bool RunLists() noexcept
+/// The marker list with player 2's own arrow timers and the real time step (hud/marker_timers.h).
+bool RunMarkerListOwnTimers(ObjectFn tick, void* list, const OwnArrowTimers& arrows) noexcept
+{
+    const float still = 0.0f;
+    marker_timers::SwapIn();
+    platform::WriteGuarded(arrows.timeStep, &arrows.realStep, sizeof(float));
+    const bool ran = CallGuarded(tick, list);
+    platform::WriteGuarded(arrows.timeStep, &still, sizeof(float));
+    marker_timers::SwapOut();
+    return ran;
+}
+
+bool RunLists(const OwnArrowTimers* arrows) noexcept
 {
     for (std::size_t i = 0; i < kSubTicks.size(); ++i)
     {
         const double start  = Now();
         void*        object = Member(kSubTicks[i].member);
-        if (object != nullptr && !CallGuarded(g_subTicks[i], object))
+        const bool   own    = arrows != nullptr && arrows->timeStep != nullptr && kSubTicks[i].member == kMarkerListMember;
+        if (object != nullptr &&
+            !(own ? RunMarkerListOwnTimers(g_subTicks[i], object, *arrows) : CallGuarded(g_subTicks[i], object)))
         {
             return false;
         }
@@ -217,9 +234,9 @@ bool Install(const platform::GameImage& image) noexcept
     return true;
 }
 
-bool Run(bool lists, bool compass) noexcept
+bool Run(bool lists, bool compass, const OwnArrowTimers* arrows) noexcept
 {
-    return (!lists || (RunLists() && RunLeaderTarget())) && (!compass || RunCompass());
+    return (!lists || (RunLists(arrows) && RunLeaderTarget())) && (!compass || RunCompass());
 }
 
 std::wstring TakeTimings(unsigned frames)

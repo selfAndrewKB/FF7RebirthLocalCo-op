@@ -2,6 +2,7 @@
 
 #include "control/command_channel.h"
 #include "control/mod_target.h"
+#include "dev/terrain_watch.h"
 #include "hud/hud_trace.h"
 #include "hud/position_probe.h"
 
@@ -22,6 +23,7 @@ void Install(const platform::GameImage& image, player_two::Session& session, pla
 {
     hud::InstallPositionProbe(image);  // logging only, off until the hud-probe command
     hud::InstallHudTrace(image);       // logging only, idle until the hud-trace command
+    terrain_watch::Install(image);     // logging only, while player 2 is in
     InstallControl(session, layout, viewPointInstalled);
 }
 
@@ -44,6 +46,7 @@ void TickBeforeSession() noexcept
     {
         g_channel.Tick(*g_target);
     }
+    terrain_watch::Tick();
 }
 
 void TickAfterSession() noexcept

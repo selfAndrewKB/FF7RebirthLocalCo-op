@@ -4,10 +4,12 @@
 #define RC_UNREAL_DISABLE_CLASS_DEPRECATION_WARNINGS
 #include <Unreal/UObject.hpp>
 
+#include "hud/enemy_bars.h"
 #include "hud/first_player_code.h"
 #include "hud/hud_addresses.h"
 #include "hud/hud_roots.h"
 #include "hud/hud_updates.h"
+#include "hud/marker_timers.h"
 #include "hud/user_widgets.h"
 #include "platform/code_redirect.h"
 #include "platform/frame_watch.h"
@@ -65,6 +67,8 @@ enum Lever : unsigned
     kLeverRect        = 8,
     kLeverUpdates     = 16,
     kLeverCompass     = 32,
+    kLeverArrows      = 64,   // the off-screen arrows' own timers in player 2's view (hud/marker_timers.h)
+    kLeverBars        = 128,  // the enemy bars placed again per view (hud/enemy_bars.h)
 };
 
 // Installed once, then read.
@@ -87,7 +91,7 @@ std::array<float, 4>                                 g_playerOneRect{};
 std::array<float, 4>                                 g_playerTwoRect{};
 bool                                                 g_playerTwoRectKnown = false;
 bool                                                 g_loggedEnter        = false;
-unsigned                                             g_mask               = 63;  // SetPlayerTwoLeversMask
+unsigned                                             g_mask               = 255;  // SetPlayerTwoLeversMask
 std::array<double, kParts>                           g_partSeconds{};
 std::uint32_t                                        g_timedFrames     = 0;
 double                                               g_secondsPerCount = 0.0;
@@ -125,9 +129,17 @@ void Refuse(const wchar_t* why)
     platform::Log(L"HUD levers: {}; player 2's content stays off", why);
 }
 
-bool RunUpdates() noexcept
+/// The updates for the view whose levers are set; player 2's run gives the arrows their own timers.
+bool RunUpdates(bool playerTwo) noexcept
 {
-    return hud_updates::Run(Acts(kLeverUpdates), Acts(kLeverCompass));
+    const hud_updates::OwnArrowTimers arrows{g_timeStep, g_savedTimeStep};
+    const bool ran = hud_updates::Run(Acts(kLeverUpdates), Acts(kLeverCompass),
+                                      playerTwo && Acts(kLeverArrows) && g_timeStep != nullptr ? &arrows : nullptr);
+    if (Acts(kLeverBars))
+    {
+        enemy_bars::Replay();
+    }
+    return ran;
 }
 
 void LogTiming()
@@ -279,7 +291,8 @@ bool ContextsToPlayerTwo()
 
 bool InstallPlayerTwoPass(const platform::GameImage& image) noexcept
 {
-    const bool parts   = hud_roots::Install(image) && hud_updates::Install(image);
+    const bool parts   = hud_roots::Install(image) && hud_updates::Install(image) && marker_timers::Install(image);
+    enemy_bars::Install(image);  // optional: without it the bars keep player 1's placement in both halves
     const auto mode    = image.Rebase(kGameMode, sizeof(void*));
     const auto overlay = image.Rebase(engine::kRootOverlaySingleton, sizeof(void*));
     const auto entry   = image.Rebase(kFirstGamePlayer, sizeof(kFirstPlayerEntryBytes));
@@ -309,6 +322,7 @@ void RemovePlayerTwoPass() noexcept
 {
     g_on.store(false, std::memory_order_relaxed);
     g_firstPlayerAnswer = 0;
+    enemy_bars::Remove();
     if (g_firstPlayerCode.IsInstalled() && !g_firstPlayerCode.Restore())
     {
         platform::Log(L"HUD levers: the first-player entry was changed after us; left in place (it answers as the game "
@@ -334,9 +348,10 @@ void SetPlayerTwoContent(bool on) noexcept
 void SetPlayerTwoLeversMask(unsigned mask) noexcept
 {
     g_mask = mask;
-    platform::Log(L"HUD levers: mask {} (contexts {}, first player {}, primary {}, rect {}, updates {}, compass {})", mask,
-                  Acts(kLeverContexts), Acts(kLeverFirstPlayer), Acts(kLeverPrimary), Acts(kLeverRect), Acts(kLeverUpdates),
-                  Acts(kLeverCompass));
+    platform::Log(L"HUD levers: mask {} (contexts {}, first player {}, primary {}, rect {}, updates {}, compass {}, arrows {}, "
+                  L"bars {})",
+                  mask, Acts(kLeverContexts), Acts(kLeverFirstPlayer), Acts(kLeverPrimary), Acts(kLeverRect),
+                  Acts(kLeverUpdates), Acts(kLeverCompass), Acts(kLeverArrows), Acts(kLeverBars));
 }
 
 bool PlayerTwoContentOn() noexcept
@@ -367,7 +382,7 @@ bool EnterPlayerTwo() noexcept
             WriteRect(g_playerTwoRect);  // what player 2's render computed last frame (via L2)
         }
         const double start = Now();
-        const bool   runs  = RunUpdates();
+        const bool   runs  = RunUpdates(true);
         Charge(kTicksTwo, start);
         if (!runs)
         {
@@ -402,7 +417,7 @@ void LeavePlayerTwo() noexcept
     g_primary.reset();  // SwapWindow's close: a no-op unless it opened
     WriteRect(g_playerOneRect);
     mark             = Now();
-    const bool ticks = RunUpdates();  // player 1's positions again, before player 1's render
+    const bool ticks = RunUpdates(false);  // player 1's positions again, before player 1's render
     Charge(kTicksOne, mark);
     RestoreTimeStep();
     try

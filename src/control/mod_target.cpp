@@ -1,5 +1,6 @@
 #include "control/mod_target.h"
 
+#include "hud/area_icons_two.h"
 #include "hud/hud_players_dump.h"
 #include "hud/hud_trace.h"
 #include "hud/overlay_layout.h"
@@ -210,6 +211,12 @@ Outcome ModTarget::SetButtonsMask(std::uint32_t mask)
 {
     player_two::pad_buttons::SetMask(mask);
     return {true, L"buttons mask set (see the log)"};
+}
+
+Outcome ModTarget::SetIconsMask(std::uint32_t mask)
+{
+    hud::area_icons_two::SetMask(mask);
+    return {true, L"icons mask set (see the log)"};
 }
 
 Outcome ModTarget::SetPerfLog(bool on)

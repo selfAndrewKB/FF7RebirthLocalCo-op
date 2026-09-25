@@ -46,6 +46,7 @@ public:
     Outcome SetSticksMask(std::uint32_t mask) override;
     Outcome SetLeakFixes(std::uint32_t mask) override;
     Outcome SetButtonsMask(std::uint32_t mask) override;
+    Outcome SetIconsMask(std::uint32_t mask) override;
     Outcome SetPerfLog(bool on) override;
     Outcome Dump(const std::wstring& topic) override;
     Outcome HoldSticks(std::int32_t player, const float (&axes)[4]) override;

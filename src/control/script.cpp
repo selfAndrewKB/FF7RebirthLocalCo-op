@@ -270,10 +270,11 @@ ParsedLine ParseLine(std::wstring_view line)
     if (name == L"hud-trace") return ParseHudTrace(words);
     if (name == L"hud-image") return ParseSwitch(CommandKind::HudImage, words, L"on", L"off");
     if (name == L"hud-levers") return ParseSwitch(CommandKind::HudLevers, words, L"on", L"off");
-    if (name == L"hud-levers-mask") return ParseMask(words, CommandKind::HudLeversMask, 63);
+    if (name == L"hud-levers-mask") return ParseMask(words, CommandKind::HudLeversMask, 255);
     if (name == L"sticks-mask") return ParseMask(words, CommandKind::SticksMask, 7);
     if (name == L"leak-fixes") return ParseMask(words, CommandKind::LeakFixes, 7);
     if (name == L"buttons-mask") return ParseMask(words, CommandKind::ButtonsMask, 3);
+    if (name == L"icons-mask") return ParseMask(words, CommandKind::IconsMask, 7);
     if (name == L"perf-log") return ParseSwitch(CommandKind::PerfLog, words, L"on", L"off");
     if (name == L"dump") return ParseDump(words);
     if (name == L"stick") return ParseStick(words);
@@ -305,6 +306,7 @@ std::wstring Describe(const Command& command)
         case CommandKind::SticksMask: return std::format(L"sticks-mask {}", command.ticks);
         case CommandKind::LeakFixes: return std::format(L"leak-fixes {}", command.ticks);
         case CommandKind::ButtonsMask: return std::format(L"buttons-mask {}", command.ticks);
+        case CommandKind::IconsMask: return std::format(L"icons-mask {}", command.ticks);
         case CommandKind::PerfLog: return command.on ? L"perf-log on" : L"perf-log off";
         case CommandKind::Dump: return L"dump " + command.text;
         case CommandKind::SplitFov:

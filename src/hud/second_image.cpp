@@ -4,6 +4,7 @@
 #define RC_UNREAL_DISABLE_CLASS_DEPRECATION_WARNINGS
 #include <Unreal/NameTypes.hpp>
 
+#include "hud/area_icons_two.h"
 #include "hud/entry_filter_code.h"
 #include "hud/hud_addresses.h"
 #include "hud/player_two_pass.h"
@@ -437,6 +438,11 @@ void BeginOverlayRender(bool playerTwoIn) noexcept
         g_pass              = Pass::PlayerTwo;
         prompt_rows::ShowOnly(1);                 // player 2's prompt rows only (hud/prompt_rows.h)
         const bool content  = EnterPlayerTwo();  // player 2's levers and updates (hud/player_two_pass.h)
+        if (content)
+        {
+            area_icons_two::Tick(static_cast<float>(deltaTime));  // under player 2's view rect (hud/area_icons_two.h)
+        }
+        area_icons_two::ShowOnly(1);
         const double start  = Now();
         g_renderToLayer(reinterpret_cast<void*>(overlay));
         g_playerTwoSeconds += Now() - start;
@@ -444,6 +450,7 @@ void BeginOverlayRender(bool playerTwoIn) noexcept
         {
             LeavePlayerTwo();
         }
+        area_icons_two::ShowOnly(0);
         prompt_rows::ShowOnly(0);  // player 1's rows for player 1's pass
         std::memcpy(reinterpret_cast<void*>(g_deltaTime), &deltaTime, sizeof(deltaTime));
     }

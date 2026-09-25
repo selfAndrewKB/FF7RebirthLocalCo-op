@@ -1,7 +1,10 @@
 #include "hud/root_overlay_render.h"
 
 #include "dev/dev_tools.h"
+#include "hud/area_icons_two.h"
+#include "hud/enemy_bars.h"
 #include "hud/hud_placement.h"
+#include "hud/marker_timers.h"
 #include "hud/prompt_rows.h"
 #include "hud/second_image.h"
 #include "platform/call_redirect.h"
@@ -46,6 +49,8 @@ void RenderRootOverlay(void* application) noexcept
         else if (promptRowsKnown)
         {
             prompt_rows::Forget();
+            area_icons_two::PlayerTwoOut();
+            marker_timers::Forget();
             promptRowsKnown = false;
         }
         FollowHudPlacementBeforeRender();  // after the rows' layout, which can set a row's point
@@ -55,6 +60,7 @@ void RenderRootOverlay(void* application) noexcept
     if (gameThread)
     {
         EndOverlayRender();
+        enemy_bars::EndFrame();  // the bars' record, emptied for the next tick
         prompt_rows::Restore();  // every prompt row back to its own visibility
         dev::AfterOverlayRender();
     }

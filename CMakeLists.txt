@@ -33,6 +33,9 @@ add_library(LocalSplitScreen SHARED
     src/hud/second_image.cpp
     src/hud/player_two_pass.cpp
     src/hud/prompt_rows.cpp
+    src/hud/area_icons_two.cpp
+    src/hud/enemy_bars.cpp
+    src/hud/marker_timers.cpp
     src/hud/user_widgets.cpp
     src/hud/overlay_band.cpp
     src/hud/overlay_layout.cpp
@@ -97,6 +100,7 @@ option(LSS_DEV_TOOLS "Build the development tools into the mod" ON)
 if(LSS_DEV_TOOLS)
     target_sources(LocalSplitScreen PRIVATE
         src/dev/dev_tools.cpp
+        src/dev/terrain_watch.cpp
         src/control/command_channel.cpp
         src/control/mod_target.cpp
         src/control/runner.cpp
@@ -247,6 +251,16 @@ add_executable(FirstPlayerCodeTests
 target_include_directories(FirstPlayerCodeTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(FirstPlayerCodeTests PRIVATE cxx_std_20)
 add_test(NAME first_player_code COMMAND FirstPlayerCodeTests)
+
+add_executable(EnemyBarsCodeTests
+    tests/enemy_bars_code_test.cpp
+    src/platform/code_redirect.cpp
+    src/platform/near_code.cpp
+)
+target_include_directories(EnemyBarsCodeTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(EnemyBarsCodeTests PRIVATE cxx_std_20)
+add_test(NAME enemy_bars_code COMMAND EnemyBarsCodeTests)
+
 add_executable(ButtonViewTests
     tests/button_view_test.cpp
 )
