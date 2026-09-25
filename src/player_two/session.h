@@ -124,6 +124,7 @@ private:
         bool viewTarget     = false;
         bool memberMovement = false;
         bool scopeLeaks     = false;
+        bool padButtons     = false;
     } installed_;
 };
 

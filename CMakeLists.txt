@@ -60,6 +60,7 @@ add_library(LocalSplitScreen SHARED
     src/player_two/primary_controller.cpp
     src/player_two/scope_leaks.cpp
     src/player_two/move_state.cpp
+    src/player_two/pad_buttons.cpp
     src/player_two/pad_sticks.cpp
     src/player_two/session.cpp
     src/player_two/session_join.cpp

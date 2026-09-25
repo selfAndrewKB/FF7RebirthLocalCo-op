@@ -11,6 +11,7 @@
 #include "player_two/member_movement.h"
 #include "player_two/move_state.h"
 #include "player_two/object_fields.h"
+#include "player_two/pad_buttons.h"
 #include "player_two/pad_sticks.h"
 #include "player_two/primary_controller.h"
 #include "player_two/scope_leaks.h"
@@ -342,6 +343,7 @@ void Session::LogStatus() noexcept
         YesNo(view_target::OnOwnCamera(playerTwoController_)), viewTargetResets_, member.acted, member.passed,
         member.refused, member_movement::TakeLeaderAnswers());
     scope_leaks::LogStatus();
+    pad_buttons::LogStatus();
     move_state::LogCensus();
 }
 
