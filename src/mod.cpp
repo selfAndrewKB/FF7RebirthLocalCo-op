@@ -10,6 +10,8 @@
 #include <Unreal/CoreUObject/UObject/Class.hpp>
 #include <Unreal/Hooks/Hooks.hpp>
 
+#include "control/command_channel.h"
+#include "control/mod_target.h"
 #include "platform/engine_addresses.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -35,7 +37,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.5.0-own-camera-move";
+constexpr const wchar_t* kVersion = L"0.6.0-control-channel";
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -81,7 +83,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.5.0-own-camera-move");
+        ModVersion     = STR("0.6.0-control-channel");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -144,6 +146,10 @@ public:
             Log(L"ULocalPlayer::GetViewPoint's entry does not hold the engine's function; filled halves and the "
                 L"camera choice are unavailable");
         }
+
+        // Control scripts drive the same actions as the keys, from files (control/command_channel.h).
+        controlTarget_.emplace(*session_, viewPointInstalled_);
+        control_.Open();
 
         const Hook::FCallbackOptions tickOptions{false, false, STR("LocalSplitScreen"), STR("player intent")};
         tickCallback_ = Hook::RegisterEngineTickPreCallback(
@@ -217,7 +223,9 @@ private:
             case lss::players::PlayerIntent::TogglePadSticks: session_->TogglePadSticks(); break;
             case lss::players::PlayerIntent::None: break;
         }
+        control_.Tick(*controlTarget_);
         session_->Tick();
+        controlTarget_->DropEndedHolds();
         FollowPlayerTwo();
         LogSettingsChange(settings_.Update(session_->HasPlayerTwo()));
         LogLayoutChange(layout_.Update(session_->HasPlayerTwo()));
@@ -368,6 +376,8 @@ private:
     }
 
     std::optional<lss::player_two::Session>   session_;
+    std::optional<lss::control::ModTarget>    controlTarget_;
+    lss::control::CommandChannel              control_;
     lss::players::JoinKeys                    keys_;
     ULONGLONG                                 nextStatus_ = 0;
     lss::players::SplitScreenSettings         settings_{

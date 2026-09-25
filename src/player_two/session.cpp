@@ -284,6 +284,11 @@ void Session::Teardown() noexcept
     }
 }
 
+bool Session::PlaysMember() const noexcept
+{
+    return HasPlayerTwo() && phase_ == Phase::Playing && generation::Member() != nullptr;
+}
+
 bool Session::HoldsMember() const noexcept
 {
     return member_ != nullptr || ReadPointer(playerTwoController_, facts::kControllerLeader) != nullptr;

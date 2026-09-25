@@ -64,6 +64,9 @@ public:
 
     bool HasPlayerTwo() const noexcept { return players_.HasPlayerTwo(); }
 
+    /// Player 2 is in, past the take, and drives a party member.
+    bool PlaysMember() const noexcept;
+
     /// Player 2's and player 1's ULocalPlayer (null when player 2 is out).
     const void* PlayerTwo() const noexcept { return players_.PlayerTwo(); }
     const void* PlayerOne() const noexcept { return playerOne_; }

@@ -277,6 +277,11 @@ bool ToggleOwnCamera() noexcept
     return own;
 }
 
+bool ShowsOwnCamera() noexcept
+{
+    return g_ownCamera.load(std::memory_order_relaxed);
+}
+
 bool ToggleFill() noexcept
 {
     const bool on = !g_fillOn.load(std::memory_order_relaxed);

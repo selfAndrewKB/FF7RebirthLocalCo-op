@@ -40,6 +40,9 @@ void SetAxisConstraintOffset(std::uint32_t offset) noexcept;
 /// now shows player 2's own (false, and player 1's, when there is no player 2).
 bool ToggleOwnCamera() noexcept;
 
+/// True while player 2's half shows player 2's own camera.
+bool ShowsOwnCamera() noexcept;
+
 /// Switches whether split views fill their halves (on at start); returns the new state.
 bool ToggleFill() noexcept;
 

@@ -1,0 +1,139 @@
+// Host-side tests for control::ParseLine, run without the game.
+
+#include "control/script.h"
+
+#include <cstdio>
+#include <initializer_list>
+
+namespace {
+
+using lss::control::CommandKind;
+using lss::control::ParseLine;
+using lss::control::WaitCondition;
+
+int g_failures = 0;
+
+#define EXPECT(condition)                                                                \
+    do                                                                                   \
+    {                                                                                    \
+        if (!(condition))                                                                \
+        {                                                                                \
+            std::printf("  FAILED line %d: %s\n", __LINE__, #condition);                 \
+            ++g_failures;                                                                \
+        }                                                                                \
+    } while (false)
+
+bool Rejected(const wchar_t* line)
+{
+    const auto parsed = ParseLine(line);
+    return !parsed.command && !parsed.error.empty();
+}
+
+void TestSkippedLines()
+{
+    std::puts("script: blank lines and comments are skipped without an error");
+    for (const wchar_t* line : {L"", L"   ", L"# a comment", L"  # indented comment", L"\r"})
+    {
+        const auto parsed = ParseLine(line);
+        EXPECT(!parsed.command && parsed.error.empty());
+    }
+}
+
+void TestSimpleCommands()
+{
+    std::puts("script: commands without arguments, surrounding space and a CR ignored");
+    EXPECT(ParseLine(L"join").command->kind == CommandKind::Join);
+    EXPECT(ParseLine(L"  leave  ").command->kind == CommandKind::Leave);
+    EXPECT(ParseLine(L"quit\r").command->kind == CommandKind::Quit);
+    EXPECT(ParseLine(L"status").command->kind == CommandKind::Status);
+    EXPECT(Rejected(L"join now"));
+    EXPECT(Rejected(L"JOIN"));
+    EXPECT(Rejected(L"dance"));
+}
+
+void TestSwitches()
+{
+    std::puts("script: own-camera and sticks take exactly one of their two words");
+    const auto own = ParseLine(L"own-camera on");
+    EXPECT(own.command && own.command->kind == CommandKind::OwnCamera && own.command->on);
+    EXPECT(!ParseLine(L"own-camera off").command->on);
+    EXPECT(ParseLine(L"sticks per-pad").command->on);
+    EXPECT(!ParseLine(L"sticks merged").command->on);
+    EXPECT(Rejected(L"own-camera"));
+    EXPECT(Rejected(L"own-camera yes"));
+    EXPECT(Rejected(L"sticks per-pad extra"));
+}
+
+void TestStick()
+{
+    std::puts("script: stick <player> <lx> <ly> <rx> <ry> <ticks>, axes within -1..1");
+    const auto parsed = ParseLine(L"stick 2 0 1 -0.5 0.25 120");
+    EXPECT(parsed.command && parsed.command->kind == CommandKind::Stick);
+    if (parsed.command)
+    {
+        EXPECT(parsed.command->player == 2);
+        EXPECT(parsed.command->axes[0] == 0.0f && parsed.command->axes[1] == 1.0f);
+        EXPECT(parsed.command->axes[2] == -0.5f && parsed.command->axes[3] == 0.25f);
+        EXPECT(parsed.command->ticks == 120);
+    }
+    EXPECT(Rejected(L"stick 3 0 1 0 0 10"));    // no player 3
+    EXPECT(Rejected(L"stick 1 0 1.5 0 0 10"));  // axis out of range
+    EXPECT(Rejected(L"stick 1 0 1 0 0 0"));     // zero ticks
+    EXPECT(Rejected(L"stick 1 0 1 0 0"));       // missing ticks
+    EXPECT(Rejected(L"stick 1 0 x 0 0 10"));    // not a number
+    EXPECT(Rejected(L"stick 1 0 1 0 0 36001")); // over the limit
+}
+
+void TestWaits()
+{
+    std::puts("script: wait <ticks>; wait-until playing|out [<ticks>] with a default timeout");
+    EXPECT(ParseLine(L"wait 30").command->ticks == 30);
+    EXPECT(Rejected(L"wait"));
+    EXPECT(Rejected(L"wait -5"));
+    EXPECT(Rejected(L"wait 0"));
+    const auto until = ParseLine(L"wait-until out");
+    EXPECT(until.command && until.command->condition == WaitCondition::Out);
+    EXPECT(until.command && until.command->ticks == lss::control::kDefaultWaitUntilTicks);
+    const auto timed = ParseLine(L"wait-until playing 900");
+    EXPECT(timed.command && timed.command->condition == WaitCondition::Playing && timed.command->ticks == 900);
+    EXPECT(Rejected(L"wait-until dancing"));
+}
+
+void TestTextCommands()
+{
+    std::puts("script: console and note keep the rest of the line, and need some");
+    const auto console = ParseLine(L"console r.AllowOcclusionQueries 0");
+    EXPECT(console.command && console.command->kind == CommandKind::Console);
+    EXPECT(console.command && console.command->text == L"r.AllowOcclusionQueries 0");
+    const auto note = ParseLine(L"note  walking north  ");
+    EXPECT(note.command && note.command->text == L"walking north");
+    EXPECT(Rejected(L"console"));
+    EXPECT(Rejected(L"note   "));
+}
+
+void TestDescribeRoundTrips()
+{
+    std::puts("script: Describe writes a line that parses back to the same command");
+    for (const wchar_t* line : {L"join", L"own-camera off", L"sticks per-pad", L"stick 1 0 1 0 0 60", L"wait 5",
+                                L"wait-until playing 600", L"console stat fps", L"note hello"})
+    {
+        const auto parsed = ParseLine(line);
+        EXPECT(parsed.command && lss::control::Describe(*parsed.command) == line);
+    }
+}
+
+}  // namespace
+
+int main()
+{
+    TestSkippedLines();
+    TestSimpleCommands();
+    TestSwitches();
+    TestStick();
+    TestWaits();
+    TestTextCommands();
+    TestDescribeRoundTrips();
+
+    std::printf(g_failures == 0 ? "all tests passed\n" : "%d check(s) failed\n", g_failures);
+    return g_failures == 0 ? 0 : 1;
+}

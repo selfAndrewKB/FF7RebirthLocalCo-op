@@ -13,6 +13,7 @@
 #include <array>
 #include <atomic>
 #include <cstring>
+#include <optional>
 
 namespace lss::player_two::pad_sticks {
 
@@ -29,6 +30,10 @@ const std::uint8_t*       g_directInputOnly    = nullptr;  // nonzero: the game 
 
 std::atomic<bool>  g_enabled{false};
 bool               g_scopeOpen = false;  // game thread only
+
+// Per controller id, set by control scripts; game thread only.
+constexpr std::int32_t kOverridePads = 4;
+std::array<std::optional<Sticks>, kOverridePads> g_overrides;
 
 StageCounters g_inputCounters;
 StageCounters g_moveCounters;
@@ -126,6 +131,16 @@ std::int32_t ControllerIdOf(const void* controller) noexcept
     return localPlayer == nullptr ? -1 : ReadField<std::int32_t>(localPlayer, facts::kLocalPlayerControllerId);
 }
 
+void SetStickOverride(std::int32_t controllerId, const Sticks* sticks) noexcept
+{
+    if (controllerId < 0 || controllerId >= kOverridePads)
+    {
+        return;
+    }
+    auto& slot = g_overrides[static_cast<std::size_t>(controllerId)];
+    slot       = sticks == nullptr ? std::nullopt : std::optional<Sticks>(*sticks);
+}
+
 StickScope::StickScope(std::int32_t controllerId) noexcept
 {
     std::byte* input = InputObject();
@@ -134,10 +149,18 @@ StickScope::StickScope(std::int32_t controllerId) noexcept
         return;
     }
     std::memcpy(saved_, input + facts::kInputMergedSticks, sizeof(saved_));
-    std::size_t count = 0;
-    const auto  banks = MergedBanks(input, count);
-    const Sticks merged{saved_[0], saved_[1], saved_[2], saved_[3]};
-    const Sticks own = SelectPadSticks(std::span<const StickBank>(banks.data(), count), controllerId, merged);
+    Sticks own{};
+    if (controllerId < kOverridePads && g_overrides[static_cast<std::size_t>(controllerId)])
+    {
+        own = *g_overrides[static_cast<std::size_t>(controllerId)];
+    }
+    else
+    {
+        std::size_t count = 0;
+        const auto  banks = MergedBanks(input, count);
+        const Sticks merged{saved_[0], saved_[1], saved_[2], saved_[3]};
+        own = SelectPadSticks(std::span<const StickBank>(banks.data(), count), controllerId, merged);
+    }
     std::memcpy(input + facts::kInputMergedSticks, own.data(), sizeof(saved_));
     g_scopeOpen = true;
     held_       = true;

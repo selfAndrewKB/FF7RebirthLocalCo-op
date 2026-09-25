@@ -26,6 +26,11 @@ add_subdirectory("${UE4SS_ROOT}" "${CMAKE_BINARY_DIR}/RE-UE4SS")
 add_library(LocalSplitScreen SHARED
     src/mod.cpp
 
+    src/control/command_channel.cpp
+    src/control/mod_target.cpp
+    src/control/runner.cpp
+    src/control/script.cpp
+
     src/platform/code_redirect.cpp
     src/platform/image.cpp
     src/platform/log.cpp
@@ -138,6 +143,23 @@ add_executable(LeaveSequenceTests
 target_include_directories(LeaveSequenceTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(LeaveSequenceTests PRIVATE cxx_std_20)
 add_test(NAME leave_sequence COMMAND LeaveSequenceTests)
+
+add_executable(ControlScriptTests
+    tests/control_script_test.cpp
+    src/control/script.cpp
+)
+target_include_directories(ControlScriptTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(ControlScriptTests PRIVATE cxx_std_20)
+add_test(NAME control_script COMMAND ControlScriptTests)
+
+add_executable(ControlRunnerTests
+    tests/control_runner_test.cpp
+    src/control/runner.cpp
+    src/control/script.cpp
+)
+target_include_directories(ControlRunnerTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(ControlRunnerTests PRIVATE cxx_std_20)
+add_test(NAME control_runner COMMAND ControlRunnerTests)
 
 add_executable(StickSelectTests
     tests/stick_select_test.cpp

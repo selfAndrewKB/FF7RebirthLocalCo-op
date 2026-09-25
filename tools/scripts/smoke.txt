@@ -1,0 +1,13 @@
+# Smoke test: player 2 joins, takes a member, walks forward on their own camera, and leaves.
+# Start from a loaded save, in the field, with player 2 out.
+note smoke: start
+join
+wait-until playing 900
+own-camera on
+sticks per-pad
+stick 2 0 1 0 0 120
+wait 120
+status
+leave
+wait-until out 900
+note smoke: done

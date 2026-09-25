@@ -22,6 +22,7 @@
 // Both act only on the game thread (player_two/generation.h); a call on any other thread is left alone.
 
 #include "player_two/stage_counters.h"
+#include "player_two/stick_select.h"
 
 #include <cstdint>
 
@@ -45,6 +46,11 @@ bool Enabled() noexcept;
 
 /// The controller id of the local player a controller belongs to, or -1.
 std::int32_t ControllerIdOf(const void* controller) noexcept;
+
+/// Replaces pad `controllerId`'s sticks with `sticks` in every StickScope for that pad, whatever the
+/// pad itself reports and whether or not the game window has focus; null puts the pad back. Used by
+/// control scripts (control/command_channel.h). Game thread only.
+void SetStickOverride(std::int32_t controllerId, const Sticks* sticks) noexcept;
 
 class StickScope
 {
