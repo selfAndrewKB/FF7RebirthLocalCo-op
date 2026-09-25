@@ -1,11 +1,11 @@
 #include "player_two/member_movement.h"
 
+#include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
 #include "player_two/engine_facts.h"
-#include "player_two/engine_guard.h"
 #include "player_two/generation.h"
 #include "player_two/move_state.h"
 #include "player_two/object_fields.h"
@@ -77,7 +77,7 @@ int MemberType(const void* member) noexcept
     return type ? *type : kNoType;
 }
 
-/// The engine's tick inside a structured-exception guard (player_two/engine_guard.h).
+/// The engine's tick inside a structured-exception guard (platform/guarded.h).
 bool GuardedTick(void* state, float deltaTime) noexcept
 {
     __try
@@ -85,7 +85,7 @@ bool GuardedTick(void* state, float deltaTime) noexcept
         g_tickForCharacter(state, deltaTime);
         return true;
     }
-    __except (EngineGuardFilter(GetExceptionCode()))
+    __except (platform::GuardFilter(GetExceptionCode()))
     {
         return false;
     }
@@ -99,7 +99,7 @@ bool GuardedClear(void* handle) noexcept
         g_handleClear(handle);
         return true;
     }
-    __except (EngineGuardFilter(GetExceptionCode()))
+    __except (platform::GuardFilter(GetExceptionCode()))
     {
         return false;
     }

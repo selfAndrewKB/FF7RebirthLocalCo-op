@@ -9,6 +9,7 @@
 #include "hud/player_two_pass.h"
 #include "platform/call_redirect.h"
 #include "platform/code_redirect.h"
+#include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/module_pin.h"
@@ -154,23 +155,7 @@ double Now() noexcept
     return static_cast<double>(counter.QuadPart) * g_secondsPerCount;
 }
 
-int GuardFilter(unsigned long code) noexcept
-{
-    return code == EXCEPTION_STACK_OVERFLOW ? EXCEPTION_CONTINUE_SEARCH : EXCEPTION_EXECUTE_HANDLER;
-}
-
-bool CopyGuarded(void* out, const void* from, std::size_t length) noexcept
-{
-    __try
-    {
-        std::memcpy(out, from, length);
-        return true;
-    }
-    __except (GuardFilter(GetExceptionCode()))
-    {
-        return false;
-    }
-}
+using platform::CopyGuarded;
 
 /// An FName as the engine stores it: {ComparisonIndex, Number}.
 std::uint64_t EngineNameValue(const wchar_t* text, RC::Unreal::EFindName find)

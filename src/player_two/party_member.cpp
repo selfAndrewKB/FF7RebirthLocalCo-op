@@ -1,10 +1,10 @@
 #include "player_two/party_member.h"
 
+#include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "player_two/engine_facts.h"
-#include "player_two/engine_guard.h"
 #include "player_two/object_fields.h"
 #include "player_two/primary_controller.h"
 
@@ -48,7 +48,7 @@ const void* const* g_fieldState  = nullptr;  // the gate functions dereference t
 const void* const* g_battleState = nullptr;
 
 // The two engine calls that change game state run inside structured-exception guards
-// (player_two/engine_guard.h).
+// (platform/guarded.h).
 
 bool GuardedEnsureTrigger(void* controller) noexcept
 {
@@ -57,7 +57,7 @@ bool GuardedEnsureTrigger(void* controller) noexcept
         g_fn.ensureTrigger(controller);
         return true;
     }
-    __except (EngineGuardFilter(GetExceptionCode()))
+    __except (platform::GuardFilter(GetExceptionCode()))
     {
         return false;
     }
@@ -70,7 +70,7 @@ bool GuardedSwitchLeader(void* controller, void* character) noexcept
         g_fn.switchLeader(controller, character, false, false);
         return true;
     }
-    __except (EngineGuardFilter(GetExceptionCode()))
+    __except (platform::GuardFilter(GetExceptionCode()))
     {
         return false;
     }

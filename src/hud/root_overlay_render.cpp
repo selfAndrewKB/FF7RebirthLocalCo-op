@@ -1,7 +1,7 @@
 #include "hud/root_overlay_render.h"
 
+#include "dev/dev_tools.h"
 #include "hud/hud_placement.h"
-#include "hud/hud_trace.h"
 #include "hud/second_image.h"
 #include "platform/call_redirect.h"
 #include "platform/image.h"
@@ -32,7 +32,7 @@ void RenderRootOverlay(void* application) noexcept
     const bool gameThread = player_two::generation::OnGameThread();
     if (gameThread)
     {
-        TraceBeforeRender();
+        dev::BeforeOverlayRender();  // the HUD trace, in a build with the development tools
         FollowHudPlacementBeforeRender();
         BeginOverlayRender(player_two::generation::Active());  // player 2's image first, if on
     }
@@ -40,7 +40,7 @@ void RenderRootOverlay(void* application) noexcept
     if (gameThread)
     {
         EndOverlayRender();
-        TraceAfterRender();
+        dev::AfterOverlayRender();
     }
 }
 

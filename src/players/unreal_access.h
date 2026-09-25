@@ -15,9 +15,17 @@
 #include <cstdint>
 #include <optional>
 
+namespace RC::Unreal {
+class UFunction;
+}
+
 namespace lss::players::unreal {
 
 using RC::Unreal::UObject;
+
+/// UObject::ProcessEvent inside a structured-exception guard (platform/guarded.h): false if the
+/// engine raised an exception.
+bool GuardedProcessEvent(UObject* target, RC::Unreal::UFunction* function, void* params) noexcept;
 
 /// The running game instance (FF7R's UEndGameInstance), or null before the game has one.
 UObject* GameInstance() noexcept;

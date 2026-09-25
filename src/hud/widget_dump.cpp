@@ -10,7 +10,9 @@
 #include <Unreal/UObjectGlobals.hpp>
 
 #include "hud/hud_addresses.h"
+#include "platform/guarded.h"
 #include "platform/log.h"
+#include "players/unreal_access.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -36,23 +38,7 @@ namespace UObjectGlobals = RC::Unreal::UObjectGlobals;
 constexpr int         kMaxLines = 60;
 constexpr std::size_t kFrame    = 256;  // parameter frame; every function used here needs far less
 
-int GuardFilter(unsigned long code) noexcept
-{
-    return code == EXCEPTION_STACK_OVERFLOW ? EXCEPTION_CONTINUE_SEARCH : EXCEPTION_EXECUTE_HANDLER;
-}
-
-bool GuardedProcessEvent(UObject* target, UFunction* function, void* params) noexcept
-{
-    __try
-    {
-        target->ProcessEvent(function, params);
-        return true;
-    }
-    __except (GuardFilter(GetExceptionCode()))
-    {
-        return false;
-    }
-}
+using players::unreal::GuardedProcessEvent;
 
 /// A reflected UWidget function with no inputs, and where its return value sits in the frame.
 struct Getter

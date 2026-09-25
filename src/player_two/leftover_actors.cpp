@@ -1,6 +1,8 @@
 #include "player_two/leftover_actors.h"
 
+#include "platform/guarded.h"
 #include "platform/log.h"
+#include "players/unreal_access.h"
 #include "player_two/engine_facts.h"
 #include "player_two/object_fields.h"
 
@@ -27,23 +29,7 @@ using RC::Unreal::UFunction;
 using RC::Unreal::UObject;
 namespace UObjectGlobals = RC::Unreal::UObjectGlobals;
 
-int GuardFilter(unsigned long code) noexcept
-{
-    return code == EXCEPTION_STACK_OVERFLOW ? EXCEPTION_CONTINUE_SEARCH : EXCEPTION_EXECUTE_HANDLER;
-}
-
-bool GuardedProcessEvent(UObject* target, UFunction* function, void* params) noexcept
-{
-    __try
-    {
-        target->ProcessEvent(function, params);
-        return true;
-    }
-    __except (GuardFilter(GetExceptionCode()))
-    {
-        return false;
-    }
-}
+using players::unreal::GuardedProcessEvent;
 
 /// `object` if it is an actor, else null.
 void* AsActor(void* object) noexcept

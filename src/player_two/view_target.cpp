@@ -1,10 +1,10 @@
 #include "player_two/view_target.h"
 
+#include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "player_two/engine_facts.h"
-#include "player_two/engine_guard.h"
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
 
@@ -23,7 +23,7 @@ std::uintptr_t  g_cameraManagerVTable = 0;
 // Game thread only: set once the engine raised an exception inside SetViewTarget.
 bool g_stopped = false;
 
-/// The engine's SetViewTarget inside a structured-exception guard (player_two/engine_guard.h).
+/// The engine's SetViewTarget inside a structured-exception guard (platform/guarded.h).
 bool GuardedSetViewTarget(void* cameraManager, void* cameraActor) noexcept
 {
     static constexpr facts::ViewTargetTransition kParams;
@@ -32,7 +32,7 @@ bool GuardedSetViewTarget(void* cameraManager, void* cameraActor) noexcept
         g_setViewTarget(cameraManager, cameraActor, &kParams);
         return true;
     }
-    __except (EngineGuardFilter(GetExceptionCode()))
+    __except (platform::GuardFilter(GetExceptionCode()))
     {
         return false;
     }

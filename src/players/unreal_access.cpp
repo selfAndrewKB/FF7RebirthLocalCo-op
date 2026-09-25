@@ -1,6 +1,7 @@
 #include "players/unreal_access.h"
 
 #include "platform/engine_addresses.h"
+#include "platform/guarded.h"
 
 #include <Unreal/Core/Containers/FString.hpp>
 #include <Unreal/CoreUObject/UObject/Class.hpp>
@@ -21,6 +22,19 @@ namespace lss::players::unreal {
 using RC::Unreal::UClass;
 using RC::Unreal::UFunction;
 namespace UObjectGlobals = RC::Unreal::UObjectGlobals;
+
+bool GuardedProcessEvent(UObject* target, UFunction* function, void* params) noexcept
+{
+    __try
+    {
+        target->ProcessEvent(function, params);
+        return true;
+    }
+    __except (platform::GuardFilter(GetExceptionCode()))
+    {
+        return false;
+    }
+}
 
 namespace {
 
@@ -46,26 +60,9 @@ using RemoveLocalPlayerFn = bool (*)(UObject* gameInstance, UObject* localPlayer
 // is never caught: the stack is unusable until the guard page is re-armed, so continuing would
 // only fault again somewhere less diagnosable.
 //
-// MSVC allows __try only in functions with no objects that need unwinding, hence these small
-// separate functions.
+// (platform/guarded.h has the rules for these guards.)
 
-int GuardFilter(unsigned long code) noexcept
-{
-    return code == EXCEPTION_STACK_OVERFLOW ? EXCEPTION_CONTINUE_SEARCH : EXCEPTION_EXECUTE_HANDLER;
-}
-
-bool GuardedProcessEvent(UObject* target, UFunction* function, void* params) noexcept
-{
-    __try
-    {
-        target->ProcessEvent(function, params);
-        return true;
-    }
-    __except (GuardFilter(GetExceptionCode()))
-    {
-        return false;
-    }
-}
+using platform::GuardFilter;
 
 bool GuardedRemove(RemoveLocalPlayerFn remove, UObject* gameInstance, UObject* localPlayer) noexcept
 {

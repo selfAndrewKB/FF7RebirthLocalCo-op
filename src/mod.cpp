@@ -10,12 +10,9 @@
 #include <Unreal/CoreUObject/UObject/Class.hpp>
 #include <Unreal/Hooks/Hooks.hpp>
 
-#include "control/command_channel.h"
-#include "control/mod_target.h"
+#include "dev/dev_tools.h"
 #include "hud/hud_placement.h"
-#include "hud/hud_trace.h"
 #include "hud/overlay_layout.h"
-#include "hud/position_probe.h"
 #include "hud/root_overlay_render.h"
 #include "hud/player_two_pass.h"
 #include "hud/second_image.h"
@@ -47,7 +44,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.11.2-field-rows";
+constexpr const wchar_t* kVersion = L"0.11.3-tidy";
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -96,7 +93,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.11.2-field-rows");
+        ModVersion     = STR("0.11.3-tidy");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -133,8 +130,7 @@ public:
         lss::hud::user_widgets::Remove();
         lss::hud::RemoveSecondImage();
         lss::hud::RemovePlayerTwoPass();
-        lss::hud::RemovePositionProbe();
-        lss::hud::RemoveHudTrace();
+        lss::dev::Remove();
         lss::hud::RemoveLayoutScale();
         lss::hud::RemoveOverlayLayout();
         if (rendererInstalled_)
@@ -174,16 +170,12 @@ public:
         {
             lss::hud::InstallLayoutScale(*image);  // the contain rule; unchanged for 16:9
         }
-        lss::hud::InstallPositionProbe(*image);  // logging only, off until the hud-probe command
-        lss::hud::InstallHudTrace(*image);       // logging only, idle until the hud-trace command
         lss::hud::user_widgets::Install();          // HUD widgets as the engine constructs them
         lss::hud::InstallSecondImage(*image);        // player 2's HUD image, on (the hud-image command switches it)
         lss::hud::InstallPlayerTwoPass(*image);      // player 2's HUD content, on (the hud-levers command switches it)
         lss::hud::InstallRootOverlayRender(*image);  // before the overlay renders: placement follow, trace
 
-        // Control scripts drive the same actions as the keys, from files (control/command_channel.h).
-        controlTarget_.emplace(*session_, layout_, viewPointInstalled_);
-        control_.Open();
+        lss::dev::Install(*image, *session_, layout_, viewPointInstalled_);  // built with LSS_DEV_TOOLS only
 
         const Hook::FCallbackOptions tickOptions{false, false, STR("LocalSplitScreen"), STR("player intent")};
         tickCallback_ = Hook::RegisterEngineTickPreCallback(
@@ -257,9 +249,9 @@ private:
             case lss::players::PlayerIntent::TogglePadSticks: session_->TogglePadSticks(); break;
             case lss::players::PlayerIntent::None: break;
         }
-        control_.Tick(*controlTarget_);
+        lss::dev::TickBeforeSession();
         session_->Tick();
-        controlTarget_->DropEndedHolds();
+        lss::dev::TickAfterSession();
         FollowPlayerTwo();
         LogSettingsChange(settings_.Update(session_->HasPlayerTwo()));
         LogLayoutChange(layout_.Update(session_->HasPlayerTwo()));
@@ -452,8 +444,6 @@ private:
     }
 
     std::optional<lss::player_two::Session>   session_;
-    std::optional<lss::control::ModTarget>    controlTarget_;
-    lss::control::CommandChannel              control_;
     lss::players::JoinKeys                    keys_;
     ULONGLONG                                 nextStatus_ = 0;
     lss::players::SplitScreenSettings         settings_{

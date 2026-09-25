@@ -9,6 +9,7 @@
 #include <Unreal/UObjectGlobals.hpp>
 
 #include "platform/call_redirect.h"
+#include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "player_two/generation.h"
@@ -233,22 +234,9 @@ bool Redirect(const platform::GameImage& image, platform::CallRedirect& call, co
     return live && target && call.Install(*live, *target, replacement);
 }
 
-int GuardFilter(unsigned long code) noexcept
-{
-    return code == EXCEPTION_STACK_OVERFLOW ? EXCEPTION_CONTINUE_SEARCH : EXCEPTION_EXECUTE_HANDLER;
-}
-
 bool CopyGuarded(void* out, std::uintptr_t from, std::size_t length) noexcept
 {
-    __try
-    {
-        std::memcpy(out, reinterpret_cast<const void*>(from), length);
-        return true;
-    }
-    __except (GuardFilter(GetExceptionCode()))
-    {
-        return false;
-    }
+    return platform::CopyGuarded(out, reinterpret_cast<const void*>(from), length);
 }
 
 std::optional<std::uintptr_t> ReadPointer(std::uintptr_t address) noexcept
@@ -270,7 +258,7 @@ bool CallGeometry(GeometryFn function, void* layerManager, void* out, void* loca
         function(layerManager, out, localPlayer);
         return true;
     }
-    __except (GuardFilter(GetExceptionCode()))
+    __except (platform::GuardFilter(GetExceptionCode()))
     {
         return false;
     }

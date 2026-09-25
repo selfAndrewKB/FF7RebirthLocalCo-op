@@ -53,6 +53,14 @@ ctest --test-dir build -C Game__Shipping__Win64 --output-on-failure
 
 The first build compiles UE4SS and takes a while; later builds only compile this mod.
 
+The development tools are built in by default: control scripts, the HUD trace, the position probe
+and the dump commands (`src/dev/dev_tools.h`). A player's build leaves them out:
+
+```
+cmake -S . -B build-release -G "Visual Studio 17 2022" -DLSS_DEV_TOOLS=OFF
+cmake --build build-release --config Game__Shipping__Win64 --target LocalSplitScreen
+```
+
 ## Installing
 
 Copy `build/Game__Shipping__Win64/LocalSplitScreen.dll` to

@@ -26,14 +26,9 @@ add_subdirectory("${UE4SS_ROOT}" "${CMAKE_BINARY_DIR}/RE-UE4SS")
 add_library(LocalSplitScreen SHARED
     src/mod.cpp
 
-    src/control/command_channel.cpp
-    src/control/mod_target.cpp
-    src/control/runner.cpp
-    src/control/script.cpp
-
     src/hud/hud_placement.cpp
-    src/hud/hud_players_dump.cpp
-    src/hud/hud_trace.cpp
+    src/hud/hud_roots.cpp
+    src/hud/hud_updates.cpp
     src/hud/root_overlay_render.cpp
     src/hud/second_image.cpp
     src/hud/player_two_pass.cpp
@@ -41,12 +36,11 @@ add_library(LocalSplitScreen SHARED
     src/hud/overlay_band.cpp
     src/hud/overlay_layout.cpp
     src/hud/viewport_placement.cpp
-    src/hud/position_probe.cpp
-    src/hud/widget_dump.cpp
     src/hud/layout_scale.cpp
 
     src/platform/call_redirect.cpp
     src/platform/code_redirect.cpp
+    src/platform/guarded.cpp
     src/platform/image.cpp
     src/platform/log.cpp
     src/platform/module_pin.cpp
@@ -91,6 +85,26 @@ add_library(LocalSplitScreen SHARED
 target_include_directories(LocalSplitScreen PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(LocalSplitScreen PRIVATE cxx_std_20)
 target_link_libraries(LocalSplitScreen PUBLIC UE4SS)
+
+# Development tools (src/dev/dev_tools.h): the control-script channel, the HUD trace, the position
+# probe and the dump commands. Off for a player's build: -DLSS_DEV_TOOLS=OFF.
+option(LSS_DEV_TOOLS "Build the development tools into the mod" ON)
+if(LSS_DEV_TOOLS)
+    target_sources(LocalSplitScreen PRIVATE
+        src/dev/dev_tools.cpp
+        src/control/command_channel.cpp
+        src/control/mod_target.cpp
+        src/control/runner.cpp
+        src/control/script.cpp
+        src/hud/hud_players_dump.cpp
+        src/hud/hud_trace.cpp
+        src/hud/position_probe.cpp
+        src/hud/widget_dump.cpp
+    )
+    target_compile_definitions(LocalSplitScreen PRIVATE LSS_DEV_TOOLS=1)
+else()
+    target_compile_definitions(LocalSplitScreen PRIVATE LSS_DEV_TOOLS=0)
+endif()
 
 # ------------------------------------------------------------------------------------------------
 # Host-side tests: the logic that needs neither the game nor UE4SS

@@ -12,7 +12,9 @@
 #include "hud/hud_addresses.h"
 #include "hud/user_widgets.h"
 #include "hud/viewport_placement.h"
+#include "platform/guarded.h"
 #include "platform/log.h"
+#include "players/unreal_access.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -78,23 +80,7 @@ bool                g_active       = false;
 bool                g_failedLogged = false;
 bool                g_renderFollows = false;  // set once the before-render follow has run
 
-int GuardFilter(unsigned long code) noexcept
-{
-    return code == EXCEPTION_STACK_OVERFLOW ? EXCEPTION_CONTINUE_SEARCH : EXCEPTION_EXECUTE_HANDLER;
-}
-
-bool GuardedProcessEvent(UObject* target, UFunction* function, void* params) noexcept
-{
-    __try
-    {
-        target->ProcessEvent(function, params);
-        return true;
-    }
-    __except (GuardFilter(GetExceptionCode()))
-    {
-        return false;
-    }
-}
+using players::unreal::GuardedProcessEvent;
 
 /// A reflected UUserWidget setter and where its struct parameter sits in its frame.
 struct Setter
@@ -167,18 +153,7 @@ bool Apply(UObject* widget, const Setters& set, const ViewportLayout& layout) no
            Call(widget, set.alignment, layout.alignment, 2) && Call(widget, set.anchors, layout.anchors, 4);
 }
 
-bool CopyGuarded(void* out, const void* from, std::size_t length) noexcept
-{
-    __try
-    {
-        std::memcpy(out, from, length);
-        return true;
-    }
-    __except (GuardFilter(GetExceptionCode()))
-    {
-        return false;
-    }
-}
+using platform::CopyGuarded;
 
 /// The widget's viewport layout, or nullopt if its memory cannot be read.
 std::optional<ViewportLayout> ReadLayout(const UObject* widget) noexcept

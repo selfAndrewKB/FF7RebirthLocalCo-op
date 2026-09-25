@@ -13,6 +13,7 @@
 #include <Unreal/UObjectGlobals.hpp>
 
 #include "hud/hud_trace.h"
+#include "platform/guarded.h"
 #include "platform/log.h"
 #include "player_two/generation.h"
 #include "player_two/primary_controller.h"
@@ -48,36 +49,8 @@ constexpr int         kMaxRootLines    = 60;
 constexpr int         kMaxSettingLines = 400;
 constexpr int         kMaxControllers  = 4;
 
-int GuardFilter(unsigned long code) noexcept
-{
-    return code == EXCEPTION_STACK_OVERFLOW ? EXCEPTION_CONTINUE_SEARCH : EXCEPTION_EXECUTE_HANDLER;
-}
-
-bool GuardedProcessEvent(UObject* target, UFunction* function, void* params) noexcept
-{
-    __try
-    {
-        target->ProcessEvent(function, params);
-        return true;
-    }
-    __except (GuardFilter(GetExceptionCode()))
-    {
-        return false;
-    }
-}
-
-bool CopyGuarded(void* out, const void* from, std::size_t length) noexcept
-{
-    __try
-    {
-        std::memcpy(out, from, length);
-        return true;
-    }
-    __except (GuardFilter(GetExceptionCode()))
-    {
-        return false;
-    }
-}
+using players::unreal::GuardedProcessEvent;
+using platform::CopyGuarded;
 
 /// The offset of a parameter in `function`'s frame, if it exists with this size and fits.
 std::optional<std::int32_t> ParamOffset(UFunction* function, const wchar_t* name, std::int32_t size) noexcept
