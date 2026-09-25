@@ -44,6 +44,7 @@ public:
     Outcome SetHudLevers(bool on) override;
     Outcome SetHudLeversMask(std::uint32_t mask) override;
     Outcome SetSticksMask(std::uint32_t mask) override;
+    Outcome SetLeakFixes(std::uint32_t mask) override;
     Outcome Dump(const std::wstring& topic) override;
     Outcome HoldSticks(std::int32_t player, const float (&axes)[4]) override;
     void    ReleaseSticks(std::int32_t player) override;

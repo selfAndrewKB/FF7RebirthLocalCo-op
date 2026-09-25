@@ -64,6 +64,7 @@ void TestSwitches()
     EXPECT(Rejected(L"sticks per-pad extra"));
     EXPECT(ParseLine(L"sticks-mask 4").command->ticks == 4);
     EXPECT(Rejected(L"sticks-mask 8"));
+    EXPECT(Rejected(L"leak-fixes 8"));
     EXPECT(Rejected(L"sticks-mask -1"));
     EXPECT(Rejected(L"sticks-mask"));
     EXPECT(Rejected(L"hud-levers-mask 64"));
@@ -152,7 +153,7 @@ void TestDescribeRoundTrips()
     std::puts("script: Describe writes a line that parses back to the same command");
     for (const wchar_t* line : {L"join", L"own-camera off", L"sticks per-pad", L"layout side-by-side",
                                 L"layout top-bottom", L"bars on", L"bars off", L"split-fov 0.5",
-                                L"split-fov native", L"hud-band on", L"hud-band off", L"hud-probe on", L"hud-probe off", L"dump widgets", L"dump slots Command_C", L"dump hud-players", L"hud-trace 5", L"hud-image on", L"hud-image off", L"hud-levers on", L"hud-levers off", L"hud-levers-mask 0", L"hud-levers-mask 63", L"sticks-mask 0", L"sticks-mask 7", L"stick 1 0 1 0 0 60",
+                                L"split-fov native", L"hud-band on", L"hud-band off", L"hud-probe on", L"hud-probe off", L"dump widgets", L"dump slots Command_C", L"dump hud-players", L"hud-trace 5", L"hud-image on", L"hud-image off", L"hud-levers on", L"hud-levers off", L"hud-levers-mask 0", L"hud-levers-mask 63", L"sticks-mask 0", L"sticks-mask 7", L"leak-fixes 0", L"leak-fixes 5", L"stick 1 0 1 0 0 60",
                                 L"wait 5",
                                 L"wait-until playing 600", L"console stat fps", L"note hello"})
     {

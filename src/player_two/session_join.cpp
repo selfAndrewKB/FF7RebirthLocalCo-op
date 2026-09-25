@@ -13,6 +13,7 @@
 #include "player_two/own_controller.h"
 #include "player_two/pad_sticks.h"
 #include "player_two/primary_controller.h"
+#include "player_two/scope_leaks.h"
 #include "player_two/tag_counts.h"
 #include "player_two/view_target.h"
 
@@ -99,6 +100,7 @@ void Session::InstallStages(const platform::GameImage& image) noexcept
     installed_.moveCensus    = move_state::Install(image);
     installed_.tagCounts     = tag_counts::Install(image);
     installed_.viewTarget    = view_target::Install(image);
+    installed_.scopeLeaks    = scope_leaks::Install(image);
     installed_.memberMovement = installed_.member && installed_.padSticks && installed_.moveCensus &&
                                 member_movement::Install(image);
     LogStage(L"own controller", installed_.ownController);
@@ -111,11 +113,13 @@ void Session::InstallStages(const platform::GameImage& image) noexcept
     LogStage(L"member movement (with per-pad sticks)", installed_.memberMovement);
     LogStage(L"movement census", installed_.moveCensus);
     LogStage(L"tag counts (log only)", installed_.tagCounts);
+    LogStage(L"scope leaks put back", installed_.scopeLeaks);
 }
 
 void Session::RemoveStages() noexcept
 {
     member_movement::Remove();
+    scope_leaks::Remove();
     move_state::Remove();
     pad_sticks::Remove();
     field_camera::Remove();

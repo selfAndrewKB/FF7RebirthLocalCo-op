@@ -272,6 +272,7 @@ ParsedLine ParseLine(std::wstring_view line)
     if (name == L"hud-levers") return ParseSwitch(CommandKind::HudLevers, words, L"on", L"off");
     if (name == L"hud-levers-mask") return ParseMask(words, CommandKind::HudLeversMask, 63);
     if (name == L"sticks-mask") return ParseMask(words, CommandKind::SticksMask, 7);
+    if (name == L"leak-fixes") return ParseMask(words, CommandKind::LeakFixes, 7);
     if (name == L"dump") return ParseDump(words);
     if (name == L"stick") return ParseStick(words);
     if (name == L"wait") return ParseWait(words);
@@ -300,6 +301,7 @@ std::wstring Describe(const Command& command)
         case CommandKind::HudLevers: return command.on ? L"hud-levers on" : L"hud-levers off";
         case CommandKind::HudLeversMask: return std::format(L"hud-levers-mask {}", command.ticks);
         case CommandKind::SticksMask: return std::format(L"sticks-mask {}", command.ticks);
+        case CommandKind::LeakFixes: return std::format(L"leak-fixes {}", command.ticks);
         case CommandKind::Dump: return L"dump " + command.text;
         case CommandKind::SplitFov:
             return command.blend < 0.0f ? std::wstring(L"split-fov native") : L"split-fov " + AxisText(command.blend);

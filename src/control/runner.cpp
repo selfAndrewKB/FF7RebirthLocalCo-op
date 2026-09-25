@@ -30,6 +30,7 @@ Outcome Run(Target& target, const Command& command)
         case CommandKind::HudLevers: return target.SetHudLevers(command.on);
         case CommandKind::HudLeversMask: return target.SetHudLeversMask(command.ticks);
         case CommandKind::SticksMask: return target.SetSticksMask(command.ticks);
+        case CommandKind::LeakFixes: return target.SetLeakFixes(command.ticks);
         case CommandKind::Dump: return target.Dump(command.text);
         case CommandKind::Stick: return target.HoldSticks(command.player, command.axes);
         case CommandKind::Console: return target.Console(command.text);

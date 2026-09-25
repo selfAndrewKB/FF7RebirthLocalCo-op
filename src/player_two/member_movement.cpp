@@ -12,6 +12,7 @@
 #include "player_two/pad_sticks.h"
 #include "player_two/party_member.h"
 #include "player_two/primary_controller.h"
+#include "player_two/scope_leaks.h"
 
 #include <atomic>
 #include <cstddef>
@@ -138,8 +139,9 @@ void TickInScopes(void* playerTwoController, void* state, int type, float deltaT
         g_counters.Refuse();
         return;
     }
-    const LeaderAnswer        leader(type);
-    const move_state::OwnTick own;
+    const LeaderAnswer               leader(type);
+    const move_state::OwnTick        own;
+    const scope_leaks::MemberTickScope leaks(state, playerTwoController, deltaTime);
     g_counters.Act();
     if (!GuardedTick(state, deltaTime))
     {

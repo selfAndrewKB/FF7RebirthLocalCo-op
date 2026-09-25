@@ -11,6 +11,7 @@
 #include "platform/log.h"
 #include "player_two/generation.h"
 #include "player_two/pad_sticks.h"
+#include "player_two/scope_leaks.h"
 #include "player_two/session.h"
 #include "players/split_layout.h"
 #include "players/unreal_access.h"
@@ -195,6 +196,12 @@ Outcome ModTarget::SetSticksMask(std::uint32_t mask)
 {
     player_two::pad_sticks::SetMask(mask);
     return {true, L"sticks mask set (see the log)"};
+}
+
+Outcome ModTarget::SetLeakFixes(std::uint32_t mask)
+{
+    player_two::scope_leaks::SetMask(mask);
+    return {true, L"leak fixes set (see the log)"};
 }
 
 Outcome ModTarget::Dump(const std::wstring& topic)

@@ -123,6 +123,7 @@ private:
         bool tagCounts      = false;
         bool viewTarget     = false;
         bool memberMovement = false;
+        bool scopeLeaks     = false;
     } installed_;
 };
 

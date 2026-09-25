@@ -13,6 +13,7 @@
 #include "player_two/object_fields.h"
 #include "player_two/pad_sticks.h"
 #include "player_two/primary_controller.h"
+#include "player_two/scope_leaks.h"
 #include "player_two/tag_counts.h"
 #include "player_two/view_target.h"
 
@@ -340,6 +341,7 @@ void Session::LogStatus() noexcept
         L"refused {}, leader test answered yes {} time(s)",
         YesNo(view_target::OnOwnCamera(playerTwoController_)), viewTargetResets_, member.acted, member.passed,
         member.refused, member_movement::TakeLeaderAnswers());
+    scope_leaks::LogStatus();
     move_state::LogCensus();
 }
 

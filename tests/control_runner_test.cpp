@@ -53,6 +53,7 @@ public:
     Outcome SetHudLevers(bool on) override { return Record(on ? L"hud-levers on" : L"hud-levers off"); }
     Outcome SetHudLeversMask(std::uint32_t mask) override { return Record(L"hud-levers-mask " + std::to_wstring(mask)); }
     Outcome SetSticksMask(std::uint32_t mask) override { return Record(L"sticks-mask " + std::to_wstring(mask)); }
+    Outcome SetLeakFixes(std::uint32_t mask) override { return Record(L"leak-fixes " + std::to_wstring(mask)); }
     Outcome Dump(const std::wstring& topic) override { return Record(L"dump " + topic); }
     Outcome HoldSticks(std::int32_t player, const float (&axes)[4]) override
     {

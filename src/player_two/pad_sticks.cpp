@@ -8,6 +8,7 @@
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
 #include "player_two/primary_controller.h"
+#include "player_two/scope_leaks.h"
 #include "player_two/stick_select.h"
 
 #include <array>
@@ -64,6 +65,7 @@ void ProcessPlayerInput(void* controller, float deltaTime, bool gamePaused)
 {
     const bool isOne = controller == generation::PlayerOneController();
     const bool isTwo = controller == generation::PlayerTwoController();
+    const scope_leaks::InputScope leaks(isTwo);  // player 2's input writes the leader transform; put back after
     if (!g_enabled.load(std::memory_order_relaxed) || !generation::Active() || (!isOne && !isTwo) ||
         (isTwo && !PartActs(kPartPlayerTwoInput)) || !generation::OnGameThread())
     {
