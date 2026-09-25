@@ -3,6 +3,7 @@
 #include "hud/hud_players_dump.h"
 #include "hud/hud_trace.h"
 #include "hud/overlay_layout.h"
+#include "hud/root_overlay_render.h"
 #include "hud/position_probe.h"
 #include "hud/widget_dump.h"
 #include "platform/log.h"
@@ -145,9 +146,9 @@ Outcome ModTarget::SetHudProbe(bool on)
 
 Outcome ModTarget::TraceHud(std::int32_t frames)
 {
-    if (!hud::HudTraceInstalled())
+    if (!hud::HudTraceInstalled() || !hud::RootOverlayRenderInstalled())
     {
-        return Failed(L"the HUD trace is not installed (see the startup log)");
+        return Failed(L"the HUD trace or the overlay render hook is not installed (see the startup log)");
     }
     hud::StartHudTrace(frames);
     return {true, L"tracing (one log line per frame)"};

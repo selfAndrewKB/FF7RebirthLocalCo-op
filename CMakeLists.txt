@@ -34,6 +34,7 @@ add_library(LocalSplitScreen SHARED
     src/hud/hud_placement.cpp
     src/hud/hud_players_dump.cpp
     src/hud/hud_trace.cpp
+    src/hud/root_overlay_render.cpp
     src/hud/overlay_band.cpp
     src/hud/overlay_layout.cpp
     src/hud/viewport_placement.cpp

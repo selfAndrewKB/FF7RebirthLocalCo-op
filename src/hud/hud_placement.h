@@ -23,12 +23,18 @@
 // (anchors (0,0)): the field action prompt ("Call Chocobo") at (70,957). Such a point keeps its
 // distance from the frame's nearest corner or edge: anchored there, offset by the same amount. The
 // game may set the point again at any time (which resets the anchors), so every placed widget is
-// compared each tick with what was set, and placed again from the game's new layout.
+// compared each frame, just before the overlay renders, with what was set, and placed again from the
+// game's new layout.
 
 namespace lss::hud {
 
 /// Game thread, every tick: whether the HUD is laid out in split halves (player 2 in and the band
 /// on). Places new instances of the widgets while active, and restores every placed one when not.
 void UpdateHudPlacement(bool splitLayout) noexcept;
+
+/// Game thread, each frame just before the HUD overlay renders (hud/root_overlay_render.h): places
+/// again any widget the game set during this frame's world tick, so the frame draws it placed. Once
+/// this has run, UpdateHudPlacement leaves following the game's re-sets to it.
+void FollowHudPlacementBeforeRender() noexcept;
 
 }  // namespace lss::hud

@@ -75,6 +75,7 @@ std::vector<Placed> g_placed;  // game thread only
 std::uint32_t       g_ticks        = 0;
 bool                g_active       = false;
 bool                g_failedLogged = false;
+bool                g_renderFollows = false;  // set once the before-render follow has run
 
 int GuardFilter(unsigned long code) noexcept
 {
@@ -132,6 +133,8 @@ struct Setters
     Setter alignment;
     Setter anchors;
 };
+
+std::optional<Setters> g_setters;  // found once UMG's reflection is complete; game thread only
 
 std::optional<Setters> FindSetters()
 {
@@ -373,12 +376,11 @@ void UpdateHudPlacement(bool splitLayout) noexcept
         {
             return;
         }
-        static std::optional<Setters> setters;
-        if (!setters && g_ticks++ % kScanTicks == 0)
+        if (!g_setters && g_ticks++ % kScanTicks == 0)
         {
-            setters = FindSetters();  // retried: UMG's reflection might not be complete yet
+            g_setters = FindSetters();  // retried: UMG's reflection might not be complete yet
         }
-        if (!setters)
+        if (!g_setters)
         {
             if (!g_failedLogged)
             {
@@ -391,19 +393,38 @@ void UpdateHudPlacement(bool splitLayout) noexcept
         if (!splitLayout)
         {
             g_active = false;
-            RestoreAll(*setters);
+            RestoreAll(*g_setters);
             return;
         }
         g_active = true;
         if (g_ticks++ % kScanTicks == 0)
         {
-            ScanForNew(*setters);
+            ScanForNew(*g_setters);
         }
-        FollowGameChanges(*setters);
+        if (!g_renderFollows)
+        {
+            FollowGameChanges(*g_setters);  // no render hook: a moved widget is placed a frame late
+        }
     }
     catch (...)
     {
         platform::Log(L"HUD placement: failed (an exception); left as it is");
+    }
+}
+
+void FollowHudPlacementBeforeRender() noexcept
+{
+    try
+    {
+        g_renderFollows = true;
+        if (g_active && g_setters)
+        {
+            FollowGameChanges(*g_setters);
+        }
+    }
+    catch (...)
+    {
+        platform::Log(L"HUD placement: failed before the render (an exception); left as it is");
     }
 }
 

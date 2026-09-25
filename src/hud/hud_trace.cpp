@@ -44,9 +44,6 @@ constexpr std::uintptr_t kMasterHudTick = 0x140F37E08;  // void (EndUISystem*, f
 constexpr std::uint8_t   kMasterHudTickPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x30, 0x00, 0x00, 0x00};
 constexpr Site           kMasterHudTickSite{0x1423EF4A1, kMasterHudTick};  // AEndGameMode__Tick530_Body
 
-constexpr std::uintptr_t kRenderRootOverlay = 0x141627E98;  // void (FSlateApplication*)
-constexpr std::uint8_t   kRenderRootOverlayPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
-constexpr Site           kRenderRootOverlaySite{0x1410A0156, kRenderRootOverlay};  // UGameEngine__Tick
 
 // bool (APlayerController*, UUserWidget* marker, const FVector*, float* inout)
 constexpr std::uintptr_t kPlaceMarker = 0x140A59A30;
@@ -91,13 +88,11 @@ constexpr std::size_t    kGeometryBytes                  = 0x38;  // Size +0, Sc
 
 
 using HudTickFn  = void (*)(void* system, float deltaTime);
-using RenderFn   = void (*)(void* application);
 using MarkerFn   = bool (*)(void* controller, void* marker, const void* location, float* inout);
 using ProjectFn  = bool (*)(void* controller, const void* location, void* out);
 using GeometryFn = void* (*)(void* layerManager, void* out, void* localPlayer);
 
 platform::CallRedirect                 g_tickCall;
-platform::CallRedirect                 g_renderCall;
 platform::CallRedirect                 g_markerCall;
 std::array<platform::CallRedirect, 4>  g_projectCalls;
 bool                                   g_installed        = false;
@@ -228,19 +223,7 @@ bool TracedProject(void* controller, const void* location, void* out) noexcept
     return reinterpret_cast<ProjectFn>(g_projectCalls[0].Original())(controller, location, out);
 }
 
-void TracedRender(void* application) noexcept
-{
-    const bool tracing = Tracing();
-    if (tracing)
-    {
-        Note(L'R');
-    }
-    reinterpret_cast<RenderFn>(g_renderCall.Original())(application);
-    if (tracing)
-    {
-        LogFrame();
-    }
-}
+
 
 bool Redirect(const platform::GameImage& image, platform::CallRedirect& call, const Site& site,
               std::uintptr_t replacement) noexcept
@@ -370,7 +353,7 @@ int LogPlayerLayers()
 bool InstallHudTrace(const platform::GameImage& image) noexcept
 {
     const bool prologues = image.BytesMatch(kMasterHudTick, kMasterHudTickPrologue) &&
-                           image.BytesMatch(kRenderRootOverlay, kRenderRootOverlayPrologue) &&
+
                            image.BytesMatch(kPlaceMarker, kPlaceMarkerPrologue) &&
                            image.BytesMatch(kProject, kProjectPrologue);
     const auto frame  = image.Rebase(kFrameNumber, sizeof(std::uint32_t));
@@ -388,7 +371,7 @@ bool InstallHudTrace(const platform::GameImage& image) noexcept
     }
 
     bool installed = Redirect(image, g_tickCall, kMasterHudTickSite, reinterpret_cast<std::uintptr_t>(&TracedHudTick)) &&
-                     Redirect(image, g_renderCall, kRenderRootOverlaySite, reinterpret_cast<std::uintptr_t>(&TracedRender)) &&
+
                      Redirect(image, g_markerCall, kPlaceMarkerSite, reinterpret_cast<std::uintptr_t>(&TracedMarker));
     for (std::size_t i = 0; installed && i < kProjectSites.size(); ++i)
     {
@@ -415,7 +398,6 @@ void RemoveHudTrace() noexcept
         }
     };
     restore(g_tickCall);
-    restore(g_renderCall);
     restore(g_markerCall);
     for (auto& call : g_projectCalls)
     {
@@ -431,6 +413,23 @@ void RemoveHudTrace() noexcept
 bool HudTraceInstalled() noexcept
 {
     return g_installed;
+}
+
+void TraceBeforeRender() noexcept
+{
+    if (Tracing())
+    {
+        Note(L'R');
+    }
+}
+
+void TraceAfterRender() noexcept
+{
+    // A frame is logged at its render; the trace is only started once the render hook is in.
+    if (Tracing() && g_frame.run > 0)
+    {
+        LogFrame();
+    }
 }
 
 void StartHudTrace(std::int32_t frames) noexcept
