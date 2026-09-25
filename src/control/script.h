@@ -13,8 +13,14 @@
 //                                         0.5 at start); native = the stock MajorAxisFOV rule
 //   hud-band on|off                       lay the HUD out in the part of its image each half shows
 //                                         (hud/overlay_layout.h); off logs the values only
+//   hud-trace <frames>                    log the order of the HUD's tick, marker placements, icon
+//                                         projections and render for 1-30 frames, and which player
+//                                         each placement and projection used (hud/hud_trace.h)
 //   dump widgets                          log each visible HUD widget's desired size and geometry
-//                                         (hud/position_probe.h)
+//                                         (hud/widget_dump.h)
+//   dump slots <Class>                    log a widget class's viewport layout and inner slots
+//   dump hud-players                      log which player the HUD roots and its global player
+//                                         reads name (hud/hud_players_dump.h)
 //   stick <player> <lx> <ly> <rx> <ry> <ticks>
 //                                         hold a player's sticks (-1..1) for a number of ticks;
 //                                         needs per-pad sticks, and wins over the pad itself
@@ -27,6 +33,8 @@
 //   note <text>                           write a marker line to the log
 //
 // Parsing is pure, so it is tested on the host (tests/control_script_test.cpp).
+
+#include "hud/hud_trace.h"
 
 #include <cstdint>
 #include <optional>
@@ -46,6 +54,7 @@ enum class CommandKind
     SplitFov,
     HudBand,
     HudProbe,
+    HudTrace,
     Dump,
     Stick,
     Wait,
@@ -69,13 +78,16 @@ struct Command
     std::int32_t  player    = 0;                       // stick: 1 or 2
     float         axes[4]   = {};                      // stick: LX, LY, RX, RY
     float         blend     = -1.0f;                   // split-fov: 0..1, or negative for native
-    std::uint32_t ticks     = 0;                       // stick, wait, wait-until
+    std::uint32_t ticks     = 0;                       // stick, wait, wait-until; hud-trace: frames
     WaitCondition condition = WaitCondition::Playing;  // wait-until
     std::wstring  text;                                // console, note
 };
 
 /// The longest a stick hold, wait or wait-until may last: 10 minutes at 60 ticks per second.
 inline constexpr std::uint32_t kMaxTicks = 36'000;
+
+/// The most frames one hud-trace logs.
+inline constexpr std::uint32_t kMaxTraceFrames = static_cast<std::uint32_t>(hud::kMaxHudTraceFrames);
 
 /// A wait-until's timeout when the script gives none.
 inline constexpr std::uint32_t kDefaultWaitUntilTicks = 600;

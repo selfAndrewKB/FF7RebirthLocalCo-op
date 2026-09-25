@@ -1,5 +1,7 @@
 #include "control/mod_target.h"
 
+#include "hud/hud_players_dump.h"
+#include "hud/hud_trace.h"
 #include "hud/overlay_layout.h"
 #include "hud/position_probe.h"
 #include "hud/widget_dump.h"
@@ -141,12 +143,26 @@ Outcome ModTarget::SetHudProbe(bool on)
     return {};
 }
 
+Outcome ModTarget::TraceHud(std::int32_t frames)
+{
+    if (!hud::HudTraceInstalled())
+    {
+        return Failed(L"the HUD trace is not installed (see the startup log)");
+    }
+    hud::StartHudTrace(frames);
+    return {true, L"tracing (one log line per frame)"};
+}
+
 Outcome ModTarget::Dump(const std::wstring& topic)
 {
-    // "widgets" or "slots <class>" (control/script.cpp).
+    // "widgets", "hud-players" or "slots <class>" (control/script.cpp).
     const bool slots  = topic.starts_with(L"slots ");
-    const int  listed = slots ? hud::DumpSlots(topic.substr(6)) : topic == L"widgets" ? hud::DumpWidgets() : -1;
-    return listed >= 0 ? Outcome{true, std::to_wstring(listed) + (slots ? L" slots" : L" widgets") + L" listed in the log"}
+    const int  listed = slots                     ? hud::DumpSlots(topic.substr(6))
+                        : topic == L"widgets"     ? hud::DumpWidgets()
+                        : topic == L"hud-players" ? hud::DumpHudPlayers()
+                                                  : -1;
+    const wchar_t* what = slots ? L" slots" : topic == L"widgets" ? L" widgets" : L" lines";
+    return listed >= 0 ? Outcome{true, std::to_wstring(listed) + what + L" listed in the log"}
                        : Failed(L"nothing dumped (see the log)");
 }
 

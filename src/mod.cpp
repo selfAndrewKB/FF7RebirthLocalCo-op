@@ -13,6 +13,7 @@
 #include "control/command_channel.h"
 #include "control/mod_target.h"
 #include "hud/hud_placement.h"
+#include "hud/hud_trace.h"
 #include "hud/overlay_layout.h"
 #include "hud/position_probe.h"
 #include "hud/layout_scale.h"
@@ -42,7 +43,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.9.4-hud-default-on";
+constexpr const wchar_t* kVersion = L"0.9.5-hud-trace";
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -91,7 +92,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.9.4-hud-default-on");
+        ModVersion     = STR("0.9.5-hud-trace");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -125,6 +126,7 @@ public:
             lss::views::RemovePlayerViewPoint();
         }
         lss::hud::RemovePositionProbe();
+        lss::hud::RemoveHudTrace();
         lss::hud::RemoveLayoutScale();
         lss::hud::RemoveOverlayLayout();
         if (rendererInstalled_)
@@ -165,6 +167,7 @@ public:
             lss::hud::InstallLayoutScale(*image);  // the contain rule; unchanged for 16:9
         }
         lss::hud::InstallPositionProbe(*image);  // logging only, off until the hud-probe command
+        lss::hud::InstallHudTrace(*image);       // logging only, idle until the hud-trace command
 
         // Control scripts drive the same actions as the keys, from files (control/command_channel.h).
         controlTarget_.emplace(*session_, layout_, viewPointInstalled_);

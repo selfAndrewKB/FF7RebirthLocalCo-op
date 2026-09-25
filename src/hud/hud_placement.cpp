@@ -62,10 +62,13 @@ struct Placed
     bool              managed = false;   // false: left alone (an unexpected layout), only remembered
     std::uint32_t     lastPlacedTick = 0;
     std::uint32_t     streak         = 0;  // re-placements on (nearly) consecutive ticks
+    std::uint32_t     followed       = 0;  // game re-sets placed again (reported when the split ends)
 };
 
-// A widget whose layout the game sets again on this many ticks in a row is left to the game: the
-// two would otherwise take turns every frame.
+// An area root whose layout the game sets again on this many ticks in a row is left to the game:
+// the two would otherwise take turns every frame. Point roots have no such limit: each point the
+// game writes is placed, and the game moves them often (the field-action icons slide for 8-17
+// frames whenever their list is re-sorted; RE-p2-hud-roots.md §3).
 constexpr std::uint32_t kMaxStreak = 5;
 
 std::vector<Placed> g_placed;  // game thread only
@@ -236,8 +239,9 @@ void LeaveAlone(Placed& placed, const std::optional<ViewportLayout>& now) noexce
 }
 
 /// Places `placed.widget` from its current layout, which is the game's own: this runs for a new
-/// widget, and for one the game has set again since the last placement. Records what was set.
-void Place(Placed& placed, const Setters& set)
+/// widget, and for one the game has set again since the last placement. Records what was set, and
+/// logs it if `log`.
+void Place(Placed& placed, const Setters& set, bool log = true)
 {
     const auto own = ReadLayout(placed.widget);
     const Placement& placement = *placed.placement;
@@ -267,7 +271,10 @@ void Place(Placed& placed, const Setters& set)
     }
     placed.applied = *stored;
     placed.managed = true;
-    LogPlaced(placed);
+    if (log)
+    {
+        LogPlaced(placed);
+    }
 }
 
 /// Every tick: a placed widget whose layout the game has set again is placed from that layout.
@@ -284,7 +291,8 @@ void FollowGameChanges(const Setters& set)
         {
             continue;
         }
-        placed.streak         = g_ticks - placed.lastPlacedTick <= 2 ? placed.streak + 1 : 0;
+        const bool isPoint    = placed.placement->kind == PlacementKind::Point;
+        placed.streak         = !isPoint && g_ticks - placed.lastPlacedTick <= 2 ? placed.streak + 1 : 0;
         placed.lastPlacedTick = g_ticks;
         if (placed.streak >= kMaxStreak)
         {
@@ -293,7 +301,8 @@ void FollowGameChanges(const Setters& set)
                           placed.placement->className);
             continue;
         }
-        Place(placed, set);
+        ++placed.followed;
+        Place(placed, set, !isPoint);  // a point's moves are counted, not logged one by one
     }
 }
 
@@ -325,6 +334,11 @@ void RestoreAll(const Setters& set)
     int restored = 0;
     for (const auto& placed : g_placed)
     {
+        if (placed.followed > 0)
+        {
+            platform::Log(L"HUD placement: {} was set by the game {} time(s) during the split; each placed again",
+                          placed.placement->className, placed.followed);
+        }
         if (!placed.managed || placed.applied == placed.original || !Alive(placed))
         {
             continue;  // never changed, or gone

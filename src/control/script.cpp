@@ -122,15 +122,15 @@ ParsedLine ParseStick(const std::vector<std::wstring_view>& words)
 
 ParsedLine ParseDump(const std::vector<std::wstring_view>& words)
 {
-    const bool widgets = words.size() == 2 && words[1] == L"widgets";
-    const bool slots   = words.size() == 3 && words[1] == L"slots";
-    if (!widgets && !slots)
+    const bool single = words.size() == 2 && (words[1] == L"widgets" || words[1] == L"hud-players");
+    const bool slots  = words.size() == 3 && words[1] == L"slots";
+    if (!single && !slots)
     {
-        return Error(L"dump takes widgets, or slots <widget class>");
+        return Error(L"dump takes widgets, hud-players, or slots <widget class>");
     }
     Command command;
     command.kind = CommandKind::Dump;
-    command.text = widgets ? std::wstring(words[1]) : std::wstring(words[1]) + L" " + std::wstring(words[2]);
+    command.text = single ? std::wstring(words[1]) : std::wstring(words[1]) + L" " + std::wstring(words[2]);
     return Parsed(std::move(command));
 }
 
@@ -148,6 +148,19 @@ ParsedLine ParseSplitFov(const std::vector<std::wstring_view>& words)
         return Error(L"split-fov takes a blend from 0 to 1, or native");
     }
     command.blend = *blend;
+    return Parsed(std::move(command));
+}
+
+ParsedLine ParseHudTrace(const std::vector<std::wstring_view>& words)
+{
+    const auto frames = words.size() == 2 ? ParseTicks(words[1]) : std::nullopt;
+    if (!frames || *frames > kMaxTraceFrames)
+    {
+        return Error(std::format(L"hud-trace takes a whole number of frames from 1 to {}", kMaxTraceFrames));
+    }
+    Command command;
+    command.kind  = CommandKind::HudTrace;
+    command.ticks = *frames;
     return Parsed(std::move(command));
 }
 
@@ -238,6 +251,7 @@ ParsedLine ParseLine(std::wstring_view line)
     if (name == L"split-fov") return ParseSplitFov(words);
     if (name == L"hud-band") return ParseSwitch(CommandKind::HudBand, words, L"on", L"off");
     if (name == L"hud-probe") return ParseSwitch(CommandKind::HudProbe, words, L"on", L"off");
+    if (name == L"hud-trace") return ParseHudTrace(words);
     if (name == L"dump") return ParseDump(words);
     if (name == L"stick") return ParseStick(words);
     if (name == L"wait") return ParseWait(words);
@@ -261,6 +275,7 @@ std::wstring Describe(const Command& command)
         case CommandKind::Bars: return command.on ? L"bars on" : L"bars off";
         case CommandKind::HudBand: return command.on ? L"hud-band on" : L"hud-band off";
         case CommandKind::HudProbe: return command.on ? L"hud-probe on" : L"hud-probe off";
+        case CommandKind::HudTrace: return std::format(L"hud-trace {}", command.ticks);
         case CommandKind::Dump: return L"dump " + command.text;
         case CommandKind::SplitFov:
             return command.blend < 0.0f ? std::wstring(L"split-fov native") : L"split-fov " + AxisText(command.blend);
