@@ -43,7 +43,10 @@ void Refresh() noexcept;
 /// Before an overlay pass: only `player`'s rows (0 = player 1, 1 = player 2) stay shown.
 void ShowOnly(int player) noexcept;
 
-/// After the passes: every row hidden here gets its own visibility back.
+/// After the passes: every row made transparent here gets its own opacity back.
 void Restore() noexcept;
+
+/// Player 2 is out: forgets every row and owner (widgets are remembered by address).
+void Forget() noexcept;
 
 }  // namespace lss::hud::prompt_rows

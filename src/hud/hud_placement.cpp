@@ -418,4 +418,38 @@ void FollowHudPlacementBeforeRender() noexcept
     }
 }
 
+void PlaceNewHudWidget(UObject* widget) noexcept
+{
+    try
+    {
+        if (!g_active || !g_setters || widget == nullptr)
+        {
+            return;
+        }
+        // An entry at this address may be a collected widget whose memory the new one reuses.
+        const auto known = std::find_if(g_placed.begin(), g_placed.end(),
+                                        [widget](const Placed& placed) { return placed.widget == widget; });
+        if (known != g_placed.end())
+        {
+            if (Alive(*known))
+            {
+                return;
+            }
+            g_placed.erase(known);
+        }
+        const Placement* placement = PlacementOf(widget);
+        if (placement == nullptr)
+        {
+            return;
+        }
+        Placed placed{widget, static_cast<std::int32_t>(widget->GetInternalIndex()), widget->GetClassPrivate(), placement};
+        Place(placed, *g_setters, false);  // prompt rows come and go often: not logged one by one
+        g_placed.push_back(placed);
+    }
+    catch (...)
+    {
+        platform::Log(L"HUD placement: failed placing a new widget (an exception); the next scan places it");
+    }
+}
+
 }  // namespace lss::hud

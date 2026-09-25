@@ -26,6 +26,10 @@
 // compared each frame, just before the overlay renders, with what was set, and placed again from the
 // game's new layout.
 
+namespace RC::Unreal {
+class UObject;
+}
+
 namespace lss::hud {
 
 /// Game thread, every tick: whether the HUD is laid out in split halves (player 2 in and the band
@@ -36,5 +40,10 @@ void UpdateHudPlacement(bool splitLayout) noexcept;
 /// again any widget the game set during this frame's world tick, so the frame draws it placed. Once
 /// this has run, UpdateHudPlacement leaves following the game's re-sets to it.
 void FollowHudPlacementBeforeRender() noexcept;
+
+/// Game thread, before the overlay renders: places `widget` now if it is one of the kinds placed
+/// here and not followed yet. For widgets the game creates between scans that are known at once (a
+/// new prompt row), which would otherwise be drawn at the game's own point until the next scan.
+void PlaceNewHudWidget(RC::Unreal::UObject* widget) noexcept;
 
 }  // namespace lss::hud

@@ -26,6 +26,7 @@ constexpr std::uint8_t   kRenderRootOverlayPrologue[] = {0x48, 0x89, 0x5C, 0x24,
 using RenderFn = void (*)(void* application);
 
 platform::CallRedirect g_call;
+bool                   promptRowsKnown = false;  // game thread: player 2's prompt rows are being followed
 bool                   g_installed = false;
 
 /// Replaces the call (entered from the game's code through a bare jump: nothing here may throw).
@@ -37,11 +38,17 @@ void RenderRootOverlay(void* application) noexcept
     if (gameThread)
     {
         dev::BeforeOverlayRender();  // the HUD trace, in a build with the development tools
-        FollowHudPlacementBeforeRender();
         if (player_two::generation::Active())
         {
             prompt_rows::Refresh();  // whose each prompt row is; each player's laid out on their own
+            promptRowsKnown = true;
         }
+        else if (promptRowsKnown)
+        {
+            prompt_rows::Forget();
+            promptRowsKnown = false;
+        }
+        FollowHudPlacementBeforeRender();  // after the rows' layout, which can set a row's point
         BeginOverlayRender(player_two::generation::Active());  // player 2's image first, if on
     }
     reinterpret_cast<RenderFn>(g_call.Original())(application);
