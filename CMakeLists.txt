@@ -31,8 +31,10 @@ add_library(LocalSplitScreen SHARED
     src/control/runner.cpp
     src/control/script.cpp
 
+    src/hud/hud_placement.cpp
     src/hud/overlay_band.cpp
     src/hud/overlay_layout.cpp
+    src/hud/viewport_placement.cpp
     src/hud/position_probe.cpp
     src/hud/widget_dump.cpp
     src/hud/layout_scale.cpp
@@ -196,3 +198,11 @@ add_executable(OverlayBandTests
 target_include_directories(OverlayBandTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(OverlayBandTests PRIVATE cxx_std_20)
 add_test(NAME overlay_band COMMAND OverlayBandTests)
+
+add_executable(ViewportPlacementTests
+    tests/viewport_placement_test.cpp
+    src/hud/viewport_placement.cpp
+)
+target_include_directories(ViewportPlacementTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(ViewportPlacementTests PRIVATE cxx_std_20)
+add_test(NAME viewport_placement COMMAND ViewportPlacementTests)

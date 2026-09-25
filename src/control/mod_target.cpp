@@ -142,9 +142,10 @@ Outcome ModTarget::SetHudProbe(bool on)
 
 Outcome ModTarget::Dump(const std::wstring& topic)
 {
-    // Only "widgets" parses (control/script.cpp).
-    const int listed = topic == L"widgets" ? hud::DumpWidgets() : -1;
-    return listed >= 0 ? Outcome{true, std::to_wstring(listed) + L" widgets listed in the log"}
+    // "widgets" or "slots <class>" (control/script.cpp).
+    const bool slots  = topic.starts_with(L"slots ");
+    const int  listed = slots ? hud::DumpSlots(topic.substr(6)) : topic == L"widgets" ? hud::DumpWidgets() : -1;
+    return listed >= 0 ? Outcome{true, std::to_wstring(listed) + (slots ? L" slots" : L" widgets") + L" listed in the log"}
                        : Failed(L"nothing dumped (see the log)");
 }
 

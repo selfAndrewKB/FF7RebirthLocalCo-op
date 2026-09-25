@@ -62,4 +62,12 @@ inline constexpr std::uint32_t  kOverlayViewWidth     = 0x328;
 inline constexpr std::uint32_t  kOverlayViewHeight    = 0x32C;
 inline constexpr std::uint32_t  kOverlayHostScale     = 0x330;
 
+// UUserWidget's viewport layout (the stock ViewportAnchors, ViewportOffsets, ViewportAlignment),
+// bound to each HUD root's SEndCanvas (RE-p2-hud.md P6.1; read live in pass 7). Read only: changes
+// go through the reflected Set*InViewport setters.
+inline constexpr std::uint32_t kUserWidgetViewportAnchors   = 0x210;  // FAnchors, 16 bytes
+inline constexpr std::uint32_t kUserWidgetViewportOffsets   = 0x220;  // FMargin, 16 bytes
+inline constexpr std::uint32_t kUserWidgetViewportAlignment = 0x230;  // FVector2D, 8 bytes
+inline constexpr std::uint32_t kUserWidgetViewportLayoutEnd = 0x238;
+
 }  // namespace lss::hud::engine

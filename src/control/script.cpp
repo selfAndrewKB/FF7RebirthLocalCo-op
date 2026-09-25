@@ -122,13 +122,15 @@ ParsedLine ParseStick(const std::vector<std::wstring_view>& words)
 
 ParsedLine ParseDump(const std::vector<std::wstring_view>& words)
 {
-    if (words.size() != 2 || words[1] != L"widgets")
+    const bool widgets = words.size() == 2 && words[1] == L"widgets";
+    const bool slots   = words.size() == 3 && words[1] == L"slots";
+    if (!widgets && !slots)
     {
-        return Error(L"dump takes widgets");
+        return Error(L"dump takes widgets, or slots <widget class>");
     }
     Command command;
     command.kind = CommandKind::Dump;
-    command.text = std::wstring(words[1]);
+    command.text = widgets ? std::wstring(words[1]) : std::wstring(words[1]) + L" " + std::wstring(words[2]);
     return Parsed(std::move(command));
 }
 
