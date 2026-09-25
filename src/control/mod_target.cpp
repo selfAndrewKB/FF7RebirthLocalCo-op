@@ -2,6 +2,7 @@
 
 #include "hud/overlay_layout.h"
 #include "hud/position_probe.h"
+#include "hud/widget_dump.h"
 #include "platform/log.h"
 #include "player_two/generation.h"
 #include "player_two/pad_sticks.h"
@@ -137,6 +138,14 @@ Outcome ModTarget::SetHudProbe(bool on)
     }
     hud::SetPositionProbe(on);
     return {};
+}
+
+Outcome ModTarget::Dump(const std::wstring& topic)
+{
+    // Only "widgets" parses (control/script.cpp).
+    const int listed = topic == L"widgets" ? hud::DumpWidgets() : -1;
+    return listed >= 0 ? Outcome{true, std::to_wstring(listed) + L" widgets listed in the log"}
+                       : Failed(L"nothing dumped (see the log)");
 }
 
 Outcome ModTarget::SetSplitFov(float blend)

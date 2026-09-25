@@ -13,7 +13,7 @@
 //                                         0.5 at start); native = the stock MajorAxisFOV rule
 //   hud-band on|off                       lay the HUD out in the part of its image each half shows
 //                                         (hud/overlay_layout.h); off logs the values only
-//   hud-probe on|off                      log how HUD widgets place themselves from Blueprints
+//   dump widgets                          log each visible HUD widget's desired size and geometry
 //                                         (hud/position_probe.h)
 //   stick <player> <lx> <ly> <rx> <ry> <ticks>
 //                                         hold a player's sticks (-1..1) for a number of ticks;
@@ -46,6 +46,7 @@ enum class CommandKind
     SplitFov,
     HudBand,
     HudProbe,
+    Dump,
     Stick,
     Wait,
     WaitUntil,

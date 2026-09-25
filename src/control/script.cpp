@@ -120,6 +120,18 @@ ParsedLine ParseStick(const std::vector<std::wstring_view>& words)
     return Parsed(std::move(command));
 }
 
+ParsedLine ParseDump(const std::vector<std::wstring_view>& words)
+{
+    if (words.size() != 2 || words[1] != L"widgets")
+    {
+        return Error(L"dump takes widgets");
+    }
+    Command command;
+    command.kind = CommandKind::Dump;
+    command.text = std::wstring(words[1]);
+    return Parsed(std::move(command));
+}
+
 ParsedLine ParseSplitFov(const std::vector<std::wstring_view>& words)
 {
     Command command;
@@ -224,6 +236,7 @@ ParsedLine ParseLine(std::wstring_view line)
     if (name == L"split-fov") return ParseSplitFov(words);
     if (name == L"hud-band") return ParseSwitch(CommandKind::HudBand, words, L"on", L"off");
     if (name == L"hud-probe") return ParseSwitch(CommandKind::HudProbe, words, L"on", L"off");
+    if (name == L"dump") return ParseDump(words);
     if (name == L"stick") return ParseStick(words);
     if (name == L"wait") return ParseWait(words);
     if (name == L"wait-until") return ParseWaitUntil(words);
@@ -246,6 +259,7 @@ std::wstring Describe(const Command& command)
         case CommandKind::Bars: return command.on ? L"bars on" : L"bars off";
         case CommandKind::HudBand: return command.on ? L"hud-band on" : L"hud-band off";
         case CommandKind::HudProbe: return command.on ? L"hud-probe on" : L"hud-probe off";
+        case CommandKind::Dump: return L"dump " + command.text;
         case CommandKind::SplitFov:
             return command.blend < 0.0f ? std::wstring(L"split-fov native") : L"split-fov " + AxisText(command.blend);
         case CommandKind::Stick:
