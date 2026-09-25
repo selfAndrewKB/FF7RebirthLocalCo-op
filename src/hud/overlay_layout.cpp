@@ -29,6 +29,7 @@ bool                   g_installed        = false;
 
 std::atomic<bool> g_splitActive{false};
 std::atomic<bool> g_bandEnabled{false};
+std::atomic<std::uint64_t> g_bandPacked{0};  // CurrentBandPacked
 
 /// What the rect call decided for this frame's render, for the entry call a few instructions later
 /// in the same function. Both run on the game thread; the entry call acts only on the thread that
@@ -90,6 +91,7 @@ IntRect* OverlayLayoutRect(IntRect* out)
 {
     IntRect* result  = reinterpret_cast<GetCompositeLayerRectFn>(g_rectCall.Original())(out);
     g_pending.active = false;
+    g_bandPacked.store(0, std::memory_order_relaxed);
     if (!g_splitActive.load(std::memory_order_relaxed) || out == nullptr || out->minX != 0 || out->minY != 0)
     {
         return result;  // one player (or an unexpected rect): exactly the engine's result
@@ -113,6 +115,10 @@ IntRect* OverlayLayoutRect(IntRect* out)
     {
         *out      = band;
         g_pending = {true, GetCurrentThreadId(), overlay, place, host};
+        const float   size[2] = {static_cast<float>(band.Width()), static_cast<float>(band.Height())};
+        std::uint64_t packed  = 0;
+        std::memcpy(&packed, size, sizeof(packed));
+        g_bandPacked.store(packed, std::memory_order_relaxed);
     }
     return result;
 }
@@ -194,6 +200,7 @@ void RemoveOverlayLayout() noexcept
     g_bandEnabled.store(false, std::memory_order_relaxed);
     g_splitActive.store(false, std::memory_order_relaxed);
     g_pending.active = false;
+    g_bandPacked.store(0, std::memory_order_relaxed);
 
     const bool rect  = g_rectCall.Restore();
     const bool entry = g_entryCall.Restore();
@@ -226,6 +233,11 @@ void SetBandEnabled(bool enabled) noexcept
 bool BandEnabled() noexcept
 {
     return g_bandEnabled.load(std::memory_order_relaxed);
+}
+
+std::uint64_t CurrentBandPacked() noexcept
+{
+    return g_bandPacked.load(std::memory_order_relaxed);
 }
 
 }  // namespace lss::hud

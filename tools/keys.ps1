@@ -34,8 +34,9 @@ public static class LssKeys {
     }
 }
 "@
-$scan = @{ Enter = @(0x1C, $false); Escape = @(0x01, $false); Space = @(0x39, $false)
-           Up = @(0x48, $true); Down = @(0x50, $true); Left = @(0x4B, $true); Right = @(0x4D, $true) }
+$scan = @{ Enter = @(0x1C, $false); Escape = @(0x01, $false); Space = @(0x39, $false); Tab = @(0x0F, $false)
+           Up = @(0x48, $true); Down = @(0x50, $true); Left = @(0x4B, $true); Right = @(0x4D, $true)
+           C = @(0x2E, $false); Q = @(0x10, $false); E = @(0x12, $false) }  # C: commands menu; Q/E: its party switch
 $game = Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -eq $Title } | Select-Object -First 1
 if (-not $game) { throw "no window titled '$Title'" }
 $hwnd = $game.MainWindowHandle

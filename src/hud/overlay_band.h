@@ -37,11 +37,20 @@ struct IntRect
 /// empty rect for unusable sizes.
 IntRect VisibleBand(std::int32_t imageWidth, std::int32_t imageHeight, float viewWidth, float viewHeight) noexcept;
 
-/// EndUI__ContainScaleFor1920x1080 (0x1409F52B0): the scale of a UI rect relative to 1920x1080.
+/// EndUI__ContainScaleFor1920x1080 (0x1409F52B0): the scale of a UI rect relative to 1920x1080,
+/// reproduced instruction for instruction (RE-p2-hud.md pass 4): 1 for a size within 1e-8 of zero;
+/// width/1920 when width/height is below 16/9 or unordered; otherwise height/1080; at least 0.01.
 float ContainScaleFor1920x1080(float width, float height) noexcept;
 
+/// The UI scale the overlay's widgets need: the one above, except for a band narrower than 16:9,
+/// where it is the overlay's layout scale height/1080. The game lays the overlay out at height/1080
+/// whatever its shape and converts UI pixels to layout units with this scale; natively its image is
+/// always 16:9, where the two agree. `isBand` says the size is the laid-out band.
+float OverlayUIScale(float width, float height, bool isBand) noexcept;
+
 /// The host scale that puts markers on their objects when the overlay is laid out in `band` of the
-/// image and the image is cover-fitted to the view; 0 for unusable sizes.
+/// image and the image is cover-fitted to the view: OverlayUIScale(band) * coverScale (the marker
+/// factor is UIScale / host); 0 for unusable sizes.
 float MarkerHostScale(const IntRect& band, std::int32_t imageWidth, std::int32_t imageHeight, float viewWidth,
                       float viewHeight) noexcept;
 

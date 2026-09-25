@@ -1,6 +1,7 @@
 #include "control/mod_target.h"
 
 #include "hud/overlay_layout.h"
+#include "hud/position_probe.h"
 #include "platform/log.h"
 #include "player_two/generation.h"
 #include "player_two/pad_sticks.h"
@@ -126,6 +127,16 @@ Outcome ModTarget::SetHudBand(bool on)
     hud::SetBandEnabled(on);
     // What it sets is logged by the HUD module at the overlay's next render while split.
     return {true, on ? L"HUD laid out in each half's visible band" : L"HUD full-image layout (values logged only)"};
+}
+
+Outcome ModTarget::SetHudProbe(bool on)
+{
+    if (!hud::PositionProbeInstalled())
+    {
+        return Failed(L"the HUD position probe is not installed (see the startup log)");
+    }
+    hud::SetPositionProbe(on);
+    return {};
 }
 
 Outcome ModTarget::SetSplitFov(float blend)

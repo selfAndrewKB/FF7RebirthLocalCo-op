@@ -24,6 +24,7 @@ Outcome Run(Target& target, const Command& command)
         case CommandKind::Bars: return target.SetBars(command.on);
         case CommandKind::SplitFov: return target.SetSplitFov(command.blend);
         case CommandKind::HudBand: return target.SetHudBand(command.on);
+        case CommandKind::HudProbe: return target.SetHudProbe(command.on);
         case CommandKind::Stick: return target.HoldSticks(command.player, command.axes);
         case CommandKind::Console: return target.Console(command.text);
         case CommandKind::Quit: return target.Quit();

@@ -51,8 +51,8 @@ void TestHostScales()
     EXPECT(Near(MarkerHostScale(bars, 3840, 2160, 1280.0f, 720.0f), 720.0f / 1080.0f));
     const auto topBottom = VisibleBand(3840, 2160, 2560.0f, 720.0f);
     EXPECT(Near(MarkerHostScale(topBottom, 3840, 2160, 2560.0f, 720.0f), 2.0f / 3.0f));
-    const auto sideBySide = VisibleBand(3840, 2160, 1280.0f, 1440.0f);
-    EXPECT(Near(MarkerHostScale(sideBySide, 3840, 2160, 1280.0f, 1440.0f), 2.0f / 3.0f));
+    const auto sideBySide = VisibleBand(3840, 2160, 1280.0f, 1440.0f);  // tall: UI scale 2 (layout), not 1
+    EXPECT(Near(MarkerHostScale(sideBySide, 3840, 2160, 1280.0f, 1440.0f), 4.0f / 3.0f));
     // The image size does not change the answer for the same view: 1920x1080 gives the same scale.
     const auto small = VisibleBand(1920, 1080, 2560.0f, 720.0f);
     EXPECT(Near(MarkerHostScale(small, 1920, 1080, 2560.0f, 720.0f), 2.0f / 3.0f));
@@ -66,8 +66,8 @@ void TestMarkerFactorIsOne()
     {
         const auto  band = VisibleBand(3840, 2160, view[0], view[1]);
         const float host = MarkerHostScale(band, 3840, 2160, view[0], view[1]);
-        const float k    = lss::hud::ContainScaleFor1920x1080(static_cast<float>(band.Width()),
-                                                              static_cast<float>(band.Height())) / host;
+        const float k    = lss::hud::OverlayUIScale(static_cast<float>(band.Width()), static_cast<float>(band.Height()),
+                                                    true) / host;
         const float fit  = std::fmax(view[0] / 3840.0f, view[1] / 2160.0f);
         EXPECT(Near(k * fit, 1.0f));
     }
@@ -97,6 +97,28 @@ void TestPlacement()
     EXPECT(none.scaleX == 0.0f && none.scaleY == 0.0f);
 }
 
+void TestContainScaleMatchesTheGame()
+{
+    std::puts("UI scale: the game's contain scale, and the overlay's scale in bands");
+    using lss::hud::ContainScaleFor1920x1080;
+    using lss::hud::OverlayUIScale;
+    EXPECT(Near(ContainScaleFor1920x1080(3840.0f, 2160.0f), 2.0f));
+    EXPECT(Near(ContainScaleFor1920x1080(1920.0f, 1080.0f), 1.0f));
+    EXPECT(Near(ContainScaleFor1920x1080(3840.0f, 1080.0f), 1.0f));   // wider: height
+    EXPECT(Near(ContainScaleFor1920x1080(1920.0f, 2160.0f), 1.0f));   // narrower: width
+    EXPECT(ContainScaleFor1920x1080(0.0f, 1080.0f) == 1.0f);          // degenerate: 1
+    EXPECT(ContainScaleFor1920x1080(5e-9f, 1080.0f) == 1.0f);
+    EXPECT(Near(ContainScaleFor1920x1080(1.0f, 1000.0f), 0.01f));     // floor
+    EXPECT(ContainScaleFor1920x1080(std::nanf(""), 1080.0f) == 1.0f);  // NaN: unordered against epsilon -> jbe -> 1
+
+    // Bands: the layout scale height/1080. The same as the game's for 16:9 and wider.
+    EXPECT(Near(OverlayUIScale(1920.0f, 2160.0f, true), 2.0f));       // side-by-side band
+    EXPECT(Near(OverlayUIScale(3840.0f, 1080.0f, true), ContainScaleFor1920x1080(3840.0f, 1080.0f)));
+    EXPECT(Near(OverlayUIScale(3840.0f, 2160.0f, true), ContainScaleFor1920x1080(3840.0f, 2160.0f)));
+    EXPECT(OverlayUIScale(1920.0f, 2160.0f, false) == ContainScaleFor1920x1080(1920.0f, 2160.0f));
+    EXPECT(OverlayUIScale(0.0f, 2160.0f, true) == 1.0f);
+}
+
 void TestUnusable()
 {
     std::puts("band and host scale: unusable sizes give empty results");
@@ -114,6 +136,7 @@ int main()
     TestHostScales();
     TestMarkerFactorIsOne();
     TestPlacement();
+    TestContainScaleMatchesTheGame();
     TestUnusable();
 
     std::printf(g_failures == 0 ? "all tests passed\n" : "%d check(s) failed\n", g_failures);

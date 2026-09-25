@@ -38,6 +38,7 @@ public:
     Outcome SetBars(bool on) override;
     Outcome SetSplitFov(float blend) override;
     Outcome SetHudBand(bool on) override;
+    Outcome SetHudProbe(bool on) override;
     Outcome HoldSticks(std::int32_t player, const float (&axes)[4]) override;
     void    ReleaseSticks(std::int32_t player) override;
     Outcome Console(const std::wstring& command) override;

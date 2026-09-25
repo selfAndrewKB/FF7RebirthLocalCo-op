@@ -16,6 +16,8 @@
 // With the band switched off the redirects still run and log what they would set, so the values
 // can be checked in the log before anything changes on screen.
 
+#include <cstdint>
+
 namespace lss::platform {
 class GameImage;
 }
@@ -36,5 +38,9 @@ void SetSplitActive(bool active) noexcept;
 /// The `hud-band` switch: lay the HUD out in the visible band while split (off at start).
 void SetBandEnabled(bool enabled) noexcept;
 bool BandEnabled() noexcept;
+
+/// The band the overlay was last laid out in, as the FVector2D (width, height) the game stores at
+/// overlay+0x320 and passes by value (packed in one 64-bit register); 0 while no band applies.
+std::uint64_t CurrentBandPacked() noexcept;
 
 }  // namespace lss::hud

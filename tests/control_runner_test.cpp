@@ -47,6 +47,7 @@ public:
     Outcome SetBars(bool on) override { return Record(on ? L"bars on" : L"bars off"); }
     Outcome SetSplitFov(float blend) override { return Record(L"split-fov " + std::to_wstring(blend)); }
     Outcome SetHudBand(bool on) override { return Record(on ? L"hud-band on" : L"hud-band off"); }
+    Outcome SetHudProbe(bool on) override { return Record(on ? L"hud-probe on" : L"hud-probe off"); }
     Outcome HoldSticks(std::int32_t player, const float (&axes)[4]) override
     {
         if (!perPad)

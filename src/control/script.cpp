@@ -223,6 +223,7 @@ ParsedLine ParseLine(std::wstring_view line)
     if (name == L"bars") return ParseSwitch(CommandKind::Bars, words, L"on", L"off");
     if (name == L"split-fov") return ParseSplitFov(words);
     if (name == L"hud-band") return ParseSwitch(CommandKind::HudBand, words, L"on", L"off");
+    if (name == L"hud-probe") return ParseSwitch(CommandKind::HudProbe, words, L"on", L"off");
     if (name == L"stick") return ParseStick(words);
     if (name == L"wait") return ParseWait(words);
     if (name == L"wait-until") return ParseWaitUntil(words);
@@ -244,6 +245,7 @@ std::wstring Describe(const Command& command)
         case CommandKind::Layout: return command.on ? L"layout side-by-side" : L"layout top-bottom";
         case CommandKind::Bars: return command.on ? L"bars on" : L"bars off";
         case CommandKind::HudBand: return command.on ? L"hud-band on" : L"hud-band off";
+        case CommandKind::HudProbe: return command.on ? L"hud-probe on" : L"hud-probe off";
         case CommandKind::SplitFov:
             return command.blend < 0.0f ? std::wstring(L"split-fov native") : L"split-fov " + AxisText(command.blend);
         case CommandKind::Stick:

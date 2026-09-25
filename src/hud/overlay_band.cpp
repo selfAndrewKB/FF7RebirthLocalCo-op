@@ -35,15 +35,43 @@ IntRect VisibleBand(std::int32_t imageWidth, std::int32_t imageHeight, float vie
     return {x, y, x + bandW, y + bandH};
 }
 
+namespace {
+
+// The constants the game's function reads, as stored (0x1460A2684, 0x1460A2A20, 0x14656D540,
+// 0x1460A3B30, 0x1460A2660, 0x1460A26F4).
+constexpr float kContainEpsilon = 1e-8f;
+constexpr float kSixteenNinths  = 1.7777778f;
+constexpr float kInv1920        = 1.0f / 1920.0f;
+constexpr float kInv1080        = 1.0f / 1080.0f;
+constexpr float kMinScale       = 0.01f;
+
+/// vmaxss x, x, 0.01: the second operand when the first is not greater (NaN included).
+float AtLeastMin(float scale) noexcept
+{
+    return scale > kMinScale ? scale : kMinScale;
+}
+
+}  // namespace
+
 float ContainScaleFor1920x1080(float width, float height) noexcept
 {
-    constexpr float kEpsilon = 1e-8f;
-    if (std::fabs(width) <= kEpsilon || std::fabs(height) <= kEpsilon)
+    // vcomiss + jbe: "not above" includes unordered.
+    if (!(std::fabs(width) > kContainEpsilon) || !(std::fabs(height) > kContainEpsilon))
     {
         return 1.0f;
     }
-    const float scale = width / height < 16.0f / 9.0f ? width / 1920.0f : height / 1080.0f;
-    return std::max(scale, 0.01f);
+    // vcomiss + jb: "below" includes unordered, so a NaN ratio takes the width branch.
+    const float ratio = width / height;
+    return AtLeastMin(!(ratio >= kSixteenNinths) ? width * kInv1920 : height * kInv1080);
+}
+
+float OverlayUIScale(float width, float height, bool isBand) noexcept
+{
+    if (!isBand || !(std::fabs(width) > kContainEpsilon) || !(std::fabs(height) > kContainEpsilon))
+    {
+        return ContainScaleFor1920x1080(width, height);
+    }
+    return AtLeastMin(height * kInv1080);
 }
 
 float MarkerHostScale(const IntRect& band, std::int32_t imageWidth, std::int32_t imageHeight, float viewWidth,
@@ -53,7 +81,7 @@ float MarkerHostScale(const IntRect& band, std::int32_t imageWidth, std::int32_t
     {
         return 0.0f;
     }
-    return ContainScaleFor1920x1080(static_cast<float>(band.Width()), static_cast<float>(band.Height())) *
+    return OverlayUIScale(static_cast<float>(band.Width()), static_cast<float>(band.Height()), true) *
            CoverScale(imageWidth, imageHeight, viewWidth, viewHeight);
 }
 
