@@ -323,7 +323,7 @@ void Session::Forget() noexcept
 
 void Session::LogStatus() noexcept
 {
-    platform::frame_watch::Note(L"status line");
+    const platform::frame_watch::Job job(L"status line");
     if (!HasPlayerTwo())
     {
         return;

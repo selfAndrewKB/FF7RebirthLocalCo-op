@@ -22,6 +22,7 @@
 #include <cstring>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #ifndef WIN32_LEAN_AND_MEAN
@@ -185,17 +186,29 @@ bool Alive(const Placed& placed) noexcept
            !item->IsPendingKill() && placed.widget->GetClassPrivate() == placed.cls;
 }
 
+/// Each widget class's placement (or none), found once per class: comparing class names for every
+/// widget at every scan costs far more than the scan itself.
+std::unordered_map<const void*, const Placement*> g_placementOfClass;
+
 const Placement* PlacementOf(UObject* widget)
 {
+    const void* cls = widget->GetClassPrivate();
+    if (const auto found = g_placementOfClass.find(cls); found != g_placementOfClass.end())
+    {
+        return found->second;
+    }
     const std::wstring name(widget->GetClassPrivate()->GetName());
+    const Placement*   match = nullptr;
     for (const auto& placement : kPlacements)
     {
         if (name == placement.className)
         {
-            return &placement;
+            match = &placement;
+            break;
         }
     }
-    return nullptr;
+    g_placementOfClass.emplace(cls, match);
+    return match;
 }
 
 void LogPlaced(const Placed& placed)
@@ -375,7 +388,7 @@ void UpdateHudPlacement(bool splitLayout) noexcept
         g_active = true;
         if (g_ticks++ % kScanTicks == 0)
         {
-            platform::frame_watch::Note(L"HUD placement scan");
+            const platform::frame_watch::Job job(L"HUD placement scan");
             ScanForNew(*g_setters);
         }
         if (!g_renderFollows)

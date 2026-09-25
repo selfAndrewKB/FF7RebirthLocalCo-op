@@ -33,8 +33,9 @@ bool LocalPlayers(RC::Unreal::UObject*& one, RC::Unreal::UObject*& two);
 /// Refreshes the root list and both players' contexts. False if a context cannot be built yet.
 bool Scan(RC::Unreal::UObject* playerOne, RC::Unreal::UObject* playerTwo);
 
-/// Gives every live root player 1's (0) or player 2's (1) context. False if the engine raised an
-/// exception inside SetPlayerContext.
+/// Gives player 2's context (1) to every live root shown this frame, or player 1's (0) back to
+/// exactly the roots given player 2's. False if the engine raised an exception inside
+/// SetPlayerContext.
 bool SetContexts(int player) noexcept;
 
 /// How many roots the last scan found.

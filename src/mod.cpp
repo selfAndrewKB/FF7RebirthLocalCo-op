@@ -48,7 +48,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.11.9-hitch-watch";
+constexpr const wchar_t* kVersion = L"0.12.0-lean";
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -97,7 +97,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.11.9-hitch-watch");
+        ModVersion     = STR("0.12.0-lean");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -290,7 +290,7 @@ private:
         lss::hud::UpdateHudPlacement(session_->HasPlayerTwo() && lss::hud::BandEnabled());
 
         const ULONGLONG now = GetTickCount64();
-        if (!session_->HasPlayerTwo())
+        if (!session_->HasPlayerTwo() || !lss::platform::frame_watch::Detailed())  // perf-log: the periodic status
         {
             nextStatus_ = now + kStatusIntervalMs;
         }
@@ -316,7 +316,7 @@ private:
         {
             return;
         }
-        lss::platform::frame_watch::Note(L"half shape read");
+        const lss::platform::frame_watch::Job job(L"half shape read");
         auto*      playerOne  = static_cast<RC::Unreal::UObject*>(const_cast<void*>(session_->PlayerOne()));
         auto**     controller = lss::players::unreal::ControllerField(playerOne);
         const auto size   = controller != nullptr ? lss::players::unreal::ViewportSizeOf(*controller) : std::nullopt;

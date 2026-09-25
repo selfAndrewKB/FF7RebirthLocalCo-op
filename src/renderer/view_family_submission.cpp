@@ -174,10 +174,18 @@ void RecordFrameTime(std::int32_t viewCount) noexcept
     {
         return;
     }
-    platform::frame_watch::Note(L"frame-time log");
-    platform::Log(L"frame time {:.2f} ms average over {} frames, {} view(s)",
-                  1000.0 * windowSeconds / g_framesInWindow, g_framesInWindow, viewCount);
-    ReportSubmissionTimes();
+    if (platform::frame_watch::Detailed())  // the perf-log switch
+    {
+        const platform::frame_watch::Job job(L"frame-time log");
+        platform::Log(L"frame time {:.2f} ms average over {} frames, {} view(s)",
+                      1000.0 * windowSeconds / g_framesInWindow, g_framesInWindow, viewCount);
+        ReportSubmissionTimes();
+    }
+    else
+    {
+        std::fill(std::begin(g_submitTicks), std::end(g_submitTicks), 0);
+        std::fill(std::begin(g_submitCalls), std::end(g_submitCalls), 0u);
+    }
     g_windowStart    = now;
     g_framesInWindow = 0;
 }

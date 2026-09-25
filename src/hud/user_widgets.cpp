@@ -34,6 +34,22 @@ Widget Record(UObject* object) noexcept
     return {object, static_cast<std::int32_t>(object->GetInternalIndex()), object->GetClassPrivate()};
 }
 
+bool g_sorted = true;  // g_live is sorted by index with no duplicates
+
+void Seed()
+{
+    g_seeded = true;
+    const platform::frame_watch::Job job(L"UObject walk (user widgets)");
+    std::vector<UObject*> found;
+    RC::Unreal::UObjectGlobals::FindAllOf(STR("UserWidget"), found);
+    g_live.clear();
+    for (UObject* object : found)
+    {
+        g_live.push_back(Record(object));
+    }
+    g_sorted = false;
+}
+
 }  // namespace
 
 bool Install() noexcept
@@ -57,7 +73,14 @@ bool Install() noexcept
                 }
             },
             options);
-        return g_callback != Hook::ERROR_ID;
+        if (g_callback == Hook::ERROR_ID)
+        {
+            return false;
+        }
+        // The widgets made before the callback: one walk now, while the game loads, not at the
+        // first join (it costs ~40 ms in play).
+        Seed();
+        return true;
     }
     catch (...)
     {
@@ -88,28 +111,27 @@ const std::vector<Widget>& Live() noexcept
     {
         if (!g_seeded || g_callback == Hook::ERROR_ID)
         {
-            // Once (or every time, without the callback): the widgets constructed before.
-            g_seeded = true;
-            platform::frame_watch::Note(L"UObject walk (user widgets)");
-            std::vector<UObject*> found;
-            RC::Unreal::UObjectGlobals::FindAllOf(STR("UserWidget"), found);
-            g_live.clear();
-            for (UObject* object : found)
-            {
-                g_live.push_back(Record(object));
-            }
+            Seed();  // once (or every time, without the callback): the widgets constructed before
         }
         {
             const std::lock_guard lock(g_lock);
-            g_live.insert(g_live.end(), g_constructed.begin(), g_constructed.end());
-            g_constructed.clear();
+            if (!g_constructed.empty())
+            {
+                g_live.insert(g_live.end(), g_constructed.begin(), g_constructed.end());
+                g_constructed.clear();
+                g_sorted = false;
+            }
         }
         std::erase_if(g_live, [](const Widget& widget) { return !Alive(widget); });
-        // A widget recorded both by the walk and by the callback appears once.
-        std::sort(g_live.begin(), g_live.end(), [](const Widget& a, const Widget& b) { return a.index < b.index; });
-        g_live.erase(std::unique(g_live.begin(), g_live.end(),
-                                 [](const Widget& a, const Widget& b) { return a.object == b.object; }),
-                     g_live.end());
+        if (!g_sorted)
+        {
+            // A widget recorded both by the walk and by the callback appears once.
+            std::sort(g_live.begin(), g_live.end(), [](const Widget& a, const Widget& b) { return a.index < b.index; });
+            g_live.erase(std::unique(g_live.begin(), g_live.end(),
+                                     [](const Widget& a, const Widget& b) { return a.object == b.object; }),
+                         g_live.end());
+            g_sorted = true;
+        }
     }
     catch (...)
     {

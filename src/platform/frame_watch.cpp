@@ -24,6 +24,7 @@ constexpr double      kHitchRatio      = 1.6;   // a hitch is this much over the
 constexpr double      kHitchMarginMs   = 5.0;   // ...and at least this many ms over it
 constexpr double      kSummarySeconds  = 10.0;
 constexpr unsigned    kLinesPerSummary = 25;
+constexpr unsigned    kNewNormalRun    = 30;    // this many hitch frames in a row reset the average
 constexpr std::size_t kMaxNotes        = 6;
 constexpr std::size_t kParts           = static_cast<std::size_t>(Part::Count);
 constexpr const wchar_t* kPartNames[kParts] = {L"engine tick", L"overlay render", L"input", L"member tick"};
@@ -55,10 +56,51 @@ unsigned                                   g_hitches      = 0;
 unsigned                                   g_hitchLines   = 0;
 double                                     g_worstMs      = 0.0;
 unsigned                                   g_frames       = 0;
+unsigned                                   g_hitchRun     = 0;  // hitch frames in a row
+std::atomic<bool>                          g_detailed{false};
+
+struct JobTime
+{
+    const wchar_t* name  = nullptr;
+    unsigned       count = 0;
+    double         total = 0.0;
+    double         worst = 0.0;
+};
+constexpr std::size_t          kMaxJobs = 12;
+std::array<JobTime, kMaxJobs> g_jobs{};
+
+void AddJobTime(const wchar_t* name, double seconds) noexcept
+{
+    for (JobTime& job : g_jobs)
+    {
+        if (job.name == nullptr || job.name == name)
+        {
+            job.name = name;
+            ++job.count;
+            job.total += seconds;
+            job.worst = seconds > job.worst ? seconds : job.worst;
+            return;
+        }
+    }
+}
+
+std::wstring JobSummary()
+{
+    std::wstring text;
+    for (const JobTime& job : g_jobs)
+    {
+        if (job.name != nullptr && job.count > 0)
+        {
+            text += std::format(L"{}{} x{} avg {:.2f} worst {:.2f} ms", text.empty() ? L"" : L"; ", job.name, job.count,
+                                job.total * 1000.0 / job.count, job.worst * 1000.0);
+        }
+    }
+    return text.empty() ? L"none" : text;
+}
 
 void LogHitch(double frameMs, unsigned logLines)
 {
-    if (g_hitchLines >= kLinesPerSummary)
+    if (!g_detailed.load(std::memory_order_relaxed) || g_hitchLines >= kLinesPerSummary)
     {
         return;
     }
@@ -81,6 +123,16 @@ void LogHitch(double frameMs, unsigned logLines)
 
 Charge::Charge(Part part) noexcept : part_(part), start_(Now()) {}
 
+Job::Job(const wchar_t* name) noexcept : name_(name), start_(Now())
+{
+    Note(name);
+}
+
+Job::~Job()
+{
+    AddJobTime(name_, Now() - start_);
+}
+
 Charge::~Charge()
 {
     g_partSeconds[static_cast<std::size_t>(part_)] += Now() - start_;
@@ -101,6 +153,17 @@ void Note(const wchar_t* job) noexcept
     }
 }
 
+void SetDetailed(bool on) noexcept
+{
+    g_detailed.store(on, std::memory_order_relaxed);
+    Log(L"perf log {}: hitch lines and the periodic timing lines", on ? L"on" : L"off");
+}
+
+bool Detailed() noexcept
+{
+    return g_detailed.load(std::memory_order_relaxed);
+}
+
 void CountLogLine() noexcept
 {
     g_logLines.fetch_add(1, std::memory_order_relaxed);
@@ -118,7 +181,8 @@ void OnFrameStart() noexcept
         {
             g_averageMs = frameMs;
         }
-        else if (frameMs > g_averageMs * kHitchRatio && frameMs > g_averageMs + kHitchMarginMs)
+        else if (frameMs > g_averageMs * kHitchRatio && frameMs > g_averageMs + kHitchMarginMs &&
+                 ++g_hitchRun <= kNewNormalRun)
         {
             ++g_hitches;
             g_worstMs = frameMs > g_worstMs ? frameMs : g_worstMs;
@@ -131,8 +195,14 @@ void OnFrameStart() noexcept
             }
             // A hitch does not move the average (it would hide the next one).
         }
+        else if (g_hitchRun > kNewNormalRun)
+        {
+            g_averageMs = frameMs;  // long "hitches" are the new normal (a load screen ended, say)
+            g_hitchRun  = 0;
+        }
         else
         {
+            g_hitchRun = 0;
             g_averageMs += (frameMs - g_averageMs) * kAverageWeight;
         }
     }
@@ -146,8 +216,15 @@ void OnFrameStart() noexcept
     }
     else if (now - g_summaryStart >= kSummarySeconds)
     {
-        Log(L"hitches: {} in the last {:.0f} s ({} frames, average {:.1f} ms), worst {:.1f} ms", g_hitches,
-            now - g_summaryStart, g_frames, g_averageMs, g_worstMs);
+        try
+        {
+            Log(L"hitches: {} in the last {:.0f} s ({} frames, average {:.1f} ms), worst {:.1f} ms; the mod's periodic jobs: {}",
+                g_hitches, now - g_summaryStart, g_frames, g_averageMs, g_worstMs, JobSummary());
+        }
+        catch (...)
+        {
+        }
+        g_jobs = {};
         g_summaryStart = now;
         g_hitches = g_hitchLines = g_frames = 0;
         g_worstMs = 0.0;

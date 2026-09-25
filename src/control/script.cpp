@@ -274,6 +274,7 @@ ParsedLine ParseLine(std::wstring_view line)
     if (name == L"sticks-mask") return ParseMask(words, CommandKind::SticksMask, 7);
     if (name == L"leak-fixes") return ParseMask(words, CommandKind::LeakFixes, 7);
     if (name == L"buttons-mask") return ParseMask(words, CommandKind::ButtonsMask, 3);
+    if (name == L"perf-log") return ParseSwitch(CommandKind::PerfLog, words, L"on", L"off");
     if (name == L"dump") return ParseDump(words);
     if (name == L"stick") return ParseStick(words);
     if (name == L"wait") return ParseWait(words);
@@ -304,6 +305,7 @@ std::wstring Describe(const Command& command)
         case CommandKind::SticksMask: return std::format(L"sticks-mask {}", command.ticks);
         case CommandKind::LeakFixes: return std::format(L"leak-fixes {}", command.ticks);
         case CommandKind::ButtonsMask: return std::format(L"buttons-mask {}", command.ticks);
+        case CommandKind::PerfLog: return command.on ? L"perf-log on" : L"perf-log off";
         case CommandKind::Dump: return L"dump " + command.text;
         case CommandKind::SplitFov:
             return command.blend < 0.0f ? std::wstring(L"split-fov native") : L"split-fov " + AxisText(command.blend);

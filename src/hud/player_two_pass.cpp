@@ -136,7 +136,14 @@ void LogTiming()
     {
         return;
     }
-    platform::frame_watch::Note(L"HUD levers timing log");
+    if (!platform::frame_watch::Detailed())  // the perf-log switch: counts start afresh, unlogged
+    {
+        g_partSeconds.fill(0.0);
+        hud_updates::TakeTimings(g_timedFrames);
+        g_timedFrames = 0;
+        return;
+    }
+    const platform::frame_watch::Job job(L"HUD levers timing log");
     const double perFrame = 1000.0 / g_timedFrames;
     std::wstring parts;
     for (std::size_t i = 0; i < kParts; ++i)
@@ -218,7 +225,7 @@ bool KeepRootsCurrent(UObject* playerOne, UObject* playerTwo)
 {
     if (g_framesToScan == 0)
     {
-        platform::frame_watch::Note(L"HUD root scan");
+        const platform::frame_watch::Job job(L"HUD root scan");
         const double start   = Now();
         const bool   scanned = hud_roots::Scan(playerOne, playerTwo);
         Charge(kScan, start);

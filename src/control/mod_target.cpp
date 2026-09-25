@@ -8,6 +8,7 @@
 #include "hud/second_image.h"
 #include "hud/position_probe.h"
 #include "hud/widget_dump.h"
+#include "platform/frame_watch.h"
 #include "platform/log.h"
 #include "player_two/generation.h"
 #include "player_two/pad_buttons.h"
@@ -209,6 +210,12 @@ Outcome ModTarget::SetButtonsMask(std::uint32_t mask)
 {
     player_two::pad_buttons::SetMask(mask);
     return {true, L"buttons mask set (see the log)"};
+}
+
+Outcome ModTarget::SetPerfLog(bool on)
+{
+    platform::frame_watch::SetDetailed(on);
+    return {true, on ? L"perf log on" : L"perf log off"};
 }
 
 Outcome ModTarget::Dump(const std::wstring& topic)

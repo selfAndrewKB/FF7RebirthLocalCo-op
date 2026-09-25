@@ -15,6 +15,7 @@
 
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace lss::hud::hud_roots {
@@ -42,10 +43,19 @@ using Root = user_widgets::Widget;  // an object followed by pointer, GUObjectAr
 
 SetPlayerContextFn g_setContext = nullptr;  // set once at install
 
+// ESlateVisibility: Collapsed and Hidden widgets are neither ticked nor painted.
+constexpr std::uint8_t kCollapsed = 1;
+constexpr std::uint8_t kHidden    = 2;
+constexpr std::int32_t kNoOffset  = -1;
+
 // Game thread.
 std::vector<Root> g_roots;
+std::vector<char> g_swapped;  // per root: given player 2's context this frame (put back after)
 PlayerContext     g_contexts[2];
 Root              g_gameInstance;  // found once: FindFirstOf walks every UObject
+std::int32_t      g_slotOffset       = kNoOffset;  // UWidget::Slot and UWidget::Visibility, found once
+std::int32_t      g_visibilityOffset = kNoOffset;
+std::unordered_map<const void*, bool> g_ownedByGameInstance;  // per outer class
 
 bool SetContextGuarded(void* widget, const PlayerContext& context) noexcept
 {
@@ -60,21 +70,58 @@ bool SetContextGuarded(void* widget, const PlayerContext& context) noexcept
     }
 }
 
-/// A HUD root: a UUserWidget on the overlay itself (no slot), owned by the game instance.
-bool IsViewportRoot(UObject* widget)
+/// UWidget's `Slot` (a pointer) and `Visibility` (one byte) offsets, read by reflection once.
+bool FindOffsets(UObject* widget)
 {
-    auto* slot = widget->GetPropertyByNameInChain(STR("Slot"));
-    if (slot == nullptr || slot->GetSize() != static_cast<std::int32_t>(sizeof(UObject*)))
+    if (g_slotOffset != kNoOffset)
+    {
+        return true;
+    }
+    auto* slot       = widget->GetPropertyByNameInChain(STR("Slot"));
+    auto* visibility = widget->GetPropertyByNameInChain(STR("Visibility"));
+    if (slot == nullptr || slot->GetSize() != static_cast<std::int32_t>(sizeof(UObject*)) || visibility == nullptr ||
+        visibility->GetSize() != 1)
     {
         return false;
     }
-    UObject** value = widget->GetValuePtrByPropertyNameInChain<UObject*>(STR("Slot"));
-    if (value == nullptr || *value != nullptr)
+    g_slotOffset       = slot->GetOffset_Internal();
+    g_visibilityOffset = visibility->GetOffset_Internal();
+    return true;
+}
+
+/// A HUD root: a UUserWidget on the overlay itself (no slot), owned by the game instance.
+bool IsViewportRoot(UObject* widget)
+{
+    UObject* slot = nullptr;
+    if (!FindOffsets(widget) ||
+        !platform::CopyGuarded(&slot, reinterpret_cast<const std::uint8_t*>(widget) + g_slotOffset, sizeof(slot)) ||
+        slot != nullptr)
     {
         return false;
     }
     UObject* outer = widget->GetOuterPrivate();
-    return outer != nullptr && std::wstring(outer->GetClassPrivate()->GetName()).find(L"GameInstance") != std::wstring::npos;
+    if (outer == nullptr)
+    {
+        return false;
+    }
+    const void* outerClass = outer->GetClassPrivate();
+    if (const auto found = g_ownedByGameInstance.find(outerClass); found != g_ownedByGameInstance.end())
+    {
+        return found->second;
+    }
+    const bool owned = std::wstring(outer->GetClassPrivate()->GetName()).find(L"GameInstance") != std::wstring::npos;
+    g_ownedByGameInstance.emplace(outerClass, owned);
+    return owned;
+}
+
+/// Whether the root is ticked and painted (not Collapsed or Hidden). Unknown counts as shown.
+bool Shown(const Root& root) noexcept
+{
+    std::uint8_t visibility = 0;
+    return g_visibilityOffset == kNoOffset ||
+           !platform::CopyGuarded(&visibility, reinterpret_cast<const std::uint8_t*>(root.object) + g_visibilityOffset,
+                                  sizeof(visibility)) ||
+           (visibility != kCollapsed && visibility != kHidden);
 }
 
 }  // namespace
@@ -111,6 +158,8 @@ bool LocalPlayers(UObject*& one, UObject*& two)
 
 bool Scan(UObject* playerOne, UObject* playerTwo)
 {
+    // Every root is back to player 1's context between frames, so nothing is lost by forgetting
+    // which were swapped.
     g_roots.clear();
     for (const auto& live : user_widgets::Live())
     {
@@ -131,6 +180,7 @@ bool Scan(UObject* playerOne, UObject* playerTwo)
             break;
         }
     }
+    g_swapped.assign(g_roots.size(), 0);
     g_contexts[0] = {player_two::primary_controller::WeakValueOf(playerOne), world};
     g_contexts[1] = {player_two::primary_controller::WeakValueOf(playerTwo), world};
     return world != 0 && g_contexts[0].localPlayer != 0 && g_contexts[1].localPlayer != 0;
@@ -138,15 +188,29 @@ bool Scan(UObject* playerOne, UObject* playerTwo)
 
 bool SetContexts(int player) noexcept
 {
-    const PlayerContext& context = g_contexts[player == 0 ? 0 : 1];
-    for (const Root& root : g_roots)
+    // Player 2's context goes only to roots that are shown this frame (a hidden root is neither
+    // ticked nor painted); player 1's goes back to exactly those.
+    const bool           toTwo   = player != 0;
+    const PlayerContext& context = g_contexts[toTwo ? 1 : 0];
+    bool                 all     = true;
+    for (std::size_t i = 0; i < g_roots.size() && i < g_swapped.size(); ++i)
     {
+        const Root& root = g_roots[i];
+        if (toTwo ? !Shown(root) : g_swapped[i] == 0)
+        {
+            continue;
+        }
+        g_swapped[i] = toTwo ? 1 : 0;
         if (user_widgets::Alive(root) && !SetContextGuarded(root.object, context))
         {
-            return false;
+            all = false;
+            if (toTwo)
+            {
+                return false;  // the caller puts player 1's back on every root swapped so far
+            }
         }
     }
-    return true;
+    return all;
 }
 
 std::size_t Count() noexcept

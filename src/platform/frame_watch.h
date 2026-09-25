@@ -37,6 +37,26 @@ private:
 /// A periodic job ran this frame. `job` must be a string literal. Game thread.
 void Note(const wchar_t* job) noexcept;
 
+/// A periodic job, noted and timed from construction to destruction. The summary lists each job's
+/// count, average and worst time. `name` must be a string literal. Game thread.
+class Job
+{
+public:
+    explicit Job(const wchar_t* name) noexcept;
+    ~Job();
+    Job(const Job&)            = delete;
+    Job& operator=(const Job&) = delete;
+
+private:
+    const wchar_t* name_;
+    double         start_;
+};
+
+/// The `perf-log` switch (off at start): each hitch's own line, the modules' periodic timing lines
+/// and player 2's 10 s status block. The 10 s hitch summary is written either way.
+void SetDetailed(bool on) noexcept;
+bool Detailed() noexcept;
+
 /// A log line was written (any thread).
 void CountLogLine() noexcept;
 

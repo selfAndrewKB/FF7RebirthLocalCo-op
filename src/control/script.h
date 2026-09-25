@@ -28,6 +28,8 @@
 //                                         player_two/scope_leaks.h); all at start
 //   buttons-mask <0..3>                  diagnosis: which parts of per-pad buttons act (1 the split views,
 //                                         2 pad 2 kept from menus and prompts); both at start
+//   perf-log on|off                      each hitch's own line and the periodic timing lines (off at
+//                                         start; the 10 s hitch summary is always written)
 //   hud-trace <frames>                  log the order of the HUD's tick, marker placements, icon
 //                                         projections and render for 1-30 frames, and which player
 //                                         each placement and projection used (hud/hud_trace.h)
@@ -76,6 +78,7 @@ enum class CommandKind
     SticksMask,
     LeakFixes,
     ButtonsMask,
+    PerfLog,
     Dump,
     Stick,
     Wait,
