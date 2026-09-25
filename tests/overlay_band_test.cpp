@@ -51,8 +51,8 @@ void TestHostScales()
     EXPECT(Near(MarkerHostScale(bars, 3840, 2160, 1280.0f, 720.0f), 720.0f / 1080.0f));
     const auto topBottom = VisibleBand(3840, 2160, 2560.0f, 720.0f);
     EXPECT(Near(MarkerHostScale(topBottom, 3840, 2160, 2560.0f, 720.0f), 2.0f / 3.0f));
-    const auto sideBySide = VisibleBand(3840, 2160, 1280.0f, 1440.0f);  // tall: UI scale 2 (layout), not 1
-    EXPECT(Near(MarkerHostScale(sideBySide, 3840, 2160, 1280.0f, 1440.0f), 4.0f / 3.0f));
+    const auto sideBySide = VisibleBand(3840, 2160, 1280.0f, 1440.0f);  // tall: UI scale = layout scale = 1
+    EXPECT(Near(MarkerHostScale(sideBySide, 3840, 2160, 1280.0f, 1440.0f), 2.0f / 3.0f));
     // The image size does not change the answer for the same view: 1920x1080 gives the same scale.
     const auto small = VisibleBand(1920, 1080, 2560.0f, 720.0f);
     EXPECT(Near(MarkerHostScale(small, 1920, 1080, 2560.0f, 720.0f), 2.0f / 3.0f));
@@ -66,8 +66,8 @@ void TestMarkerFactorIsOne()
     {
         const auto  band = VisibleBand(3840, 2160, view[0], view[1]);
         const float host = MarkerHostScale(band, 3840, 2160, view[0], view[1]);
-        const float k    = lss::hud::OverlayUIScale(static_cast<float>(band.Width()), static_cast<float>(band.Height()),
-                                                    true) / host;
+        const float k    = lss::hud::ContainScaleFor1920x1080(static_cast<float>(band.Width()),
+                                                              static_cast<float>(band.Height())) / host;
         const float fit  = std::fmax(view[0] / 3840.0f, view[1] / 2160.0f);
         EXPECT(Near(k * fit, 1.0f));
     }
@@ -101,7 +101,6 @@ void TestContainScaleMatchesTheGame()
 {
     std::puts("UI scale: the game's contain scale, and the overlay's scale in bands");
     using lss::hud::ContainScaleFor1920x1080;
-    using lss::hud::OverlayUIScale;
     EXPECT(Near(ContainScaleFor1920x1080(3840.0f, 2160.0f), 2.0f));
     EXPECT(Near(ContainScaleFor1920x1080(1920.0f, 1080.0f), 1.0f));
     EXPECT(Near(ContainScaleFor1920x1080(3840.0f, 1080.0f), 1.0f));   // wider: height
@@ -111,16 +110,42 @@ void TestContainScaleMatchesTheGame()
     EXPECT(Near(ContainScaleFor1920x1080(1.0f, 1000.0f), 0.01f));     // floor
     EXPECT(ContainScaleFor1920x1080(std::nanf(""), 1080.0f) == 1.0f);  // NaN: unordered against epsilon -> jbe -> 1
 
-    // Bands: the layout scale height/1080. The same as the game's for 16:9 and wider.
-    EXPECT(Near(OverlayUIScale(1920.0f, 2160.0f, true), 2.0f));       // side-by-side band
-    EXPECT(Near(OverlayUIScale(3840.0f, 1080.0f, true), ContainScaleFor1920x1080(3840.0f, 1080.0f)));
-    EXPECT(Near(OverlayUIScale(3840.0f, 2160.0f, true), ContainScaleFor1920x1080(3840.0f, 2160.0f)));
-    EXPECT(OverlayUIScale(1920.0f, 2160.0f, false) == ContainScaleFor1920x1080(1920.0f, 2160.0f));
-    EXPECT(OverlayUIScale(0.0f, 2160.0f, true) == 1.0f);
+    // The layout scale with the contain rule: bit-identical to the game's height/1080 for the 16:9
+    // images it makes, and equal to its UI scale for bands of any shape.
+    using lss::hud::OverlayLayoutScale;
+    EXPECT(OverlayLayoutScale(3840, 2160) == 2160.0f * (1.0f / 1080.0f));
+    EXPECT(OverlayLayoutScale(1920, 1080) == 1080.0f * (1.0f / 1080.0f));
+    EXPECT(OverlayLayoutScale(3840, 2160) == 2.0f && OverlayLayoutScale(1920, 1080) == 1.0f);
+    EXPECT(Near(OverlayLayoutScale(3840, 1080), ContainScaleFor1920x1080(3840.0f, 1080.0f), 1e-6f));  // top/bottom
+    EXPECT(Near(OverlayLayoutScale(1920, 2160), ContainScaleFor1920x1080(1920.0f, 2160.0f), 1e-6f));  // side by side
+    EXPECT(Near(OverlayLayoutScale(1920, 2160), 1.0f));
 }
 
-void TestUnusable()
+void TestClipMapMatchesPlacement()
 {
+    std::puts("clip map: moving the game's whole-rect matrix onto a band gives the placement terms");
+    using lss::hud::ApplyClipMap;
+    using lss::hud::BandClipMap;
+    using lss::hud::PlaceInBand;
+    const IntRect bands[] = {{0, 540, 3840, 1620}, {960, 0, 2880, 2160}, {0, 0, 3840, 2160}};
+    for (const auto& band : bands)
+    {
+        // The game's matrix for a rect of the band's size (x/y terms; z column arbitrary, w column 0,0,0,1).
+        float m[16] = {2.0f / band.Width(), 0, 0.3f, 0,  0, -2.0f / band.Height(), 0.1f, 0,
+                       0, 0, -0.005f, 0,             -1, 1, 0.5f, 1};
+        ApplyClipMap(m, BandClipMap(band, 3840, 2160));
+        const auto place = PlaceInBand(band, 3840, 2160);
+        EXPECT(Near(m[0], place.scaleX, 1e-9f) && Near(m[5], place.scaleY, 1e-9f));
+        EXPECT(Near(m[12], place.translateX, 1e-6f) && Near(m[13], place.translateY, 1e-6f));
+        EXPECT(m[2] == 0.3f && m[6] == 0.1f && m[10] == -0.005f && m[14] == 0.5f);  // z column untouched
+    }
+    // A perspective matrix (w from z): the band map uses clip w, so points keep their place in the band.
+    float p[16] = {1, 0, 0, 0,  0, 1, 0, 0,  0, 0, 0, 1,  0, 0, 0.1f, 0};
+    ApplyClipMap(p, BandClipMap(IntRect{0, 540, 3840, 1620}, 3840, 2160));
+    EXPECT(p[0] == 1.0f && Near(p[5], 0.5f) && p[8] == 0.0f && p[9] == 0.0f);
+}
+
+void TestUnusable(){
     std::puts("band and host scale: unusable sizes give empty results");
     EXPECT((VisibleBand(0, 2160, 2560.0f, 720.0f) == IntRect{}));
     EXPECT((VisibleBand(3840, 2160, 0.0f, 720.0f) == IntRect{}));
@@ -137,6 +162,7 @@ int main()
     TestMarkerFactorIsOne();
     TestPlacement();
     TestContainScaleMatchesTheGame();
+    TestClipMapMatchesPlacement();
     TestUnusable();
 
     std::printf(g_failures == 0 ? "all tests passed\n" : "%d check(s) failed\n", g_failures);

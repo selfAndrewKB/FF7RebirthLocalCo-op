@@ -34,7 +34,7 @@ add_library(LocalSplitScreen SHARED
     src/hud/overlay_band.cpp
     src/hud/overlay_layout.cpp
     src/hud/position_probe.cpp
-    src/hud/ui_scale.cpp
+    src/hud/layout_scale.cpp
 
     src/platform/call_redirect.cpp
     src/platform/code_redirect.cpp

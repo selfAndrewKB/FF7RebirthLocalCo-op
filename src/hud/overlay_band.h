@@ -42,15 +42,29 @@ IntRect VisibleBand(std::int32_t imageWidth, std::int32_t imageHeight, float vie
 /// width/1920 when width/height is below 16/9 or unordered; otherwise height/1080; at least 0.01.
 float ContainScaleFor1920x1080(float width, float height) noexcept;
 
-/// The UI scale the overlay's widgets need: the one above, except for a band narrower than 16:9,
-/// where it is the overlay's layout scale height/1080. The game lays the overlay out at height/1080
-/// whatever its shape and converts UI pixels to layout units with this scale; natively its image is
-/// always 16:9, where the two agree. `isBand` says the size is the laid-out band.
-float OverlayUIScale(float width, float height, bool isBand) noexcept;
+/// The overlay's layout scale with the mod's layout-scale change (hud/layout_scale.h): the contain
+/// rule min(height/1080, width/1920), computed as the redirected instructions compute it. For the
+/// 16:9 images the game makes this is exactly its own height/1080.
+float OverlayLayoutScale(std::int32_t width, std::int32_t height) noexcept;
+
+/// The clip-space map that moves a draw covering the whole target onto `band` of it, unstretched:
+/// x' = scaleX * x + translateX * w, y' = scaleY * y + translateY * w (w the clip w).
+struct ClipMap
+{
+    float scaleX     = 1.0f;
+    float scaleY     = 1.0f;
+    float translateX = 0.0f;
+    float translateY = 0.0f;
+};
+ClipMap BandClipMap(const IntRect& band, std::int32_t imageWidth, std::int32_t imageHeight) noexcept;
+
+/// Applies `map` to a row-major FMatrix (clip = v * M; column 3 is clip w), in place.
+void ApplyClipMap(float (&matrix)[16], const ClipMap& map) noexcept;
 
 /// The host scale that puts markers on their objects when the overlay is laid out in `band` of the
-/// image and the image is cover-fitted to the view: OverlayUIScale(band) * coverScale (the marker
-/// factor is UIScale / host); 0 for unusable sizes.
+/// image and the image is cover-fitted to the view: UIScale(band) * coverScale (the marker factor
+/// is UIScale / host; UIScale is the game's contain scale, which the layout scale now equals);
+/// 0 for unusable sizes.
 float MarkerHostScale(const IntRect& band, std::int32_t imageWidth, std::int32_t imageHeight, float viewWidth,
                       float viewHeight) noexcept;
 

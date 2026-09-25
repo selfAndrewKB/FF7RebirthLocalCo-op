@@ -14,7 +14,7 @@
 #include "control/mod_target.h"
 #include "hud/overlay_layout.h"
 #include "hud/position_probe.h"
-#include "hud/ui_scale.h"
+#include "hud/layout_scale.h"
 #include "platform/engine_addresses.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -41,7 +41,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.8.1-hud-tall-bands";
+constexpr const wchar_t* kVersion = L"0.9.0-hud-native-bands";
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -90,7 +90,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.8.1-hud-tall-bands");
+        ModVersion     = STR("0.9.0-hud-native-bands");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -124,7 +124,7 @@ public:
             lss::views::RemovePlayerViewPoint();
         }
         lss::hud::RemovePositionProbe();
-        lss::hud::RemoveOverlayUIScale();
+        lss::hud::RemoveLayoutScale();
         lss::hud::RemoveOverlayLayout();
         if (rendererInstalled_)
         {
@@ -161,7 +161,7 @@ public:
         // it the HUD keeps the game's full-screen layout, cropped to each half.
         if (lss::hud::InstallOverlayLayout(*image))
         {
-            lss::hud::InstallOverlayUIScale(*image);  // only meaningful with the band layout
+            lss::hud::InstallLayoutScale(*image);  // the contain rule; unchanged for 16:9
         }
         lss::hud::InstallPositionProbe(*image);  // logging only, off until the hud-probe command
 

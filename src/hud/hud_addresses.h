@@ -35,6 +35,25 @@ inline constexpr std::uint32_t kEntryMatrixScaleY     = 0x64;  // row 1 y
 inline constexpr std::uint32_t kEntryMatrixTranslateX = 0x80;  // row 3 x
 inline constexpr std::uint32_t kEntryMatrixTranslateY = 0x84;  // row 3 y
 
+// The entry's list of per-child view-projections (pass 5): widgets SEndCanvas paints in 3D push a
+// matrix each (FEndElementList__PushViewProjection 0x142B36284), and their elements are drawn with
+// it instead of the entry matrix. A TArray<FMatrix>: data at +224, count at +232. It is emptied as
+// the entry is reused each frame (0x140FC9120) and copied to the render batch when the slot is
+// submitted (0x140FC87B1), so it is placed once per frame just before that.
+inline constexpr std::uint32_t kEntryMatrixData     = 224;
+inline constexpr std::uint32_t kEntryMatrixCount    = 232;
+inline constexpr std::int32_t  kEntryMatrixMaxCount = 4096;  // a sanity bound; the HUD pushes a handful
+
+// The render ends by submitting the slot: `mov r8, rsi (slot) ; mov dl, 2 (pool) ; mov rcx, rdi ;
+// call FEndMenuRenderer__SubmitLayerSlot` at 0x140C96258 (8 bytes into its block).
+inline constexpr std::uintptr_t kSubmitCall                 = 0x140C96258;
+inline constexpr std::uintptr_t kSubmitLayerSlot            = 0x140FC873C;
+inline constexpr std::uint8_t   kSubmitLayerSlotPrologue[]  = {
+    0x48, 0x8B, 0xC4,               // mov rax, rsp
+    0x48, 0x89, 0x58, 0x10,         // mov [rax+10h], rbx
+    0x48, 0x89, 0x70, 0x18,         // mov [rax+18h], rsi
+    0x48, 0x89, 0x78, 0x20, 0x55};  // mov [rax+20h], rdi ; push rbp
+
 // The overlay singleton (SEndRootOverlay__GetOrCreate 0x1410EAB8C): the player-0 view size it
 // caches before asking for the rect (written at 0x140C95F3C), and the host scale the marker
 // helpers read (EndUI__ProjectWorldToRootOverlay and its twin are its only readers found).

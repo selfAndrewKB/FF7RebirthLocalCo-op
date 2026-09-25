@@ -20,16 +20,17 @@ namespace {
 
 using GetCompositeLayerRectFn = IntRect* (*)(IntRect* out);
 using FindOrAddEntryFn        = void* (*)(void* slot, std::uintptr_t name, IntRect* rect, std::uintptr_t unused);
+using SubmitLayerSlotFn       = void (*)(void* renderer, std::uintptr_t pool, void* slot, std::uintptr_t unused);
 
 // Set once at install, then only read.
 platform::CallRedirect g_rectCall;
 platform::CallRedirect g_entryCall;
+platform::CallRedirect g_submitCall;
 std::uintptr_t         g_overlaySingleton = 0;  // live 0x1491D1948
 bool                   g_installed        = false;
 
 std::atomic<bool> g_splitActive{false};
 std::atomic<bool> g_bandEnabled{false};
-std::atomic<std::uint64_t> g_bandPacked{0};  // CurrentBandPacked
 
 /// What the rect call decided for this frame's render, for the entry call a few instructions later
 /// in the same function. Both run on the game thread; the entry call acts only on the thread that
@@ -41,8 +42,21 @@ struct Pending
     std::uintptr_t overlay   = 0;
     EntryPlacement placement{};
     float          hostScale = 0.0f;
+    ClipMap        clip{};
 };
 Pending g_pending;
+
+/// The entry the layer-entry call placed this frame, for the submit call at the end of the same
+/// render: its per-child matrices are complete only then.
+struct Submit
+{
+    bool           active = false;
+    DWORD          thread = 0;
+    std::uintptr_t entry  = 0;
+    ClipMap        clip{};
+};
+Submit g_submit;
+std::int32_t g_loggedMatrixCount = -1;
 
 // What the log last reported, so each change is logged once.
 IntRect g_loggedImage{};
@@ -91,7 +105,6 @@ IntRect* OverlayLayoutRect(IntRect* out)
 {
     IntRect* result  = reinterpret_cast<GetCompositeLayerRectFn>(g_rectCall.Original())(out);
     g_pending.active = false;
-    g_bandPacked.store(0, std::memory_order_relaxed);
     if (!g_splitActive.load(std::memory_order_relaxed) || out == nullptr || out->minX != 0 || out->minY != 0)
     {
         return result;  // one player (or an unexpected rect): exactly the engine's result
@@ -114,11 +127,7 @@ IntRect* OverlayLayoutRect(IntRect* out)
     if (applied)
     {
         *out      = band;
-        g_pending = {true, GetCurrentThreadId(), overlay, place, host};
-        const float   size[2] = {static_cast<float>(band.Width()), static_cast<float>(band.Height())};
-        std::uint64_t packed  = 0;
-        std::memcpy(&packed, size, sizeof(packed));
-        g_bandPacked.store(packed, std::memory_order_relaxed);
+        g_pending = {true, GetCurrentThreadId(), overlay, place, host, BandClipMap(band, image.Width(), image.Height())};
     }
     return result;
 }
@@ -151,7 +160,61 @@ void* OverlayLayerEntry(void* slot, std::uintptr_t name, IntRect* rect, std::uin
     WriteFloat(e + engine::kEntryMatrixTranslateX, g_pending.placement.translateX);
     WriteFloat(e + engine::kEntryMatrixTranslateY, g_pending.placement.translateY);
     WriteFloat(g_pending.overlay + engine::kOverlayHostScale, g_pending.hostScale);
+    g_submit = {true, g_pending.thread, e, g_pending.clip};
     return entry;
+}
+
+/// Moves the per-child view-projections the entry collected this frame onto the band. Widgets
+/// painted in 3D (SEndCanvas's perspective path: the field command menu, the Members panel) draw
+/// with these instead of the entry matrix, and they map the layout onto the whole target.
+void PlaceEntryMatrices(const Submit& submit) noexcept
+{
+    const auto count = *reinterpret_cast<const std::int32_t*>(submit.entry + engine::kEntryMatrixCount);
+    auto*      data  = *reinterpret_cast<float* const*>(submit.entry + engine::kEntryMatrixData);
+    if (count < 0 || count > engine::kEntryMatrixMaxCount || (count > 0 && data == nullptr))
+    {
+        if (g_loggedMatrixCount != -2)
+        {
+            g_loggedMatrixCount = -2;
+            platform::Log(L"HUD layout: the entry's matrix list does not look like one (count {}); left alone", count);
+        }
+        return;
+    }
+    float first[16] = {};
+    if (count > 0)
+    {
+        std::memcpy(first, data, sizeof(first));
+    }
+    for (std::int32_t i = 0; i < count; ++i)
+    {
+        ApplyClipMap(*reinterpret_cast<float(*)[16]>(data + static_cast<std::ptrdiff_t>(i) * 16), submit.clip);
+    }
+    if (count != g_loggedMatrixCount)
+    {
+        g_loggedMatrixCount = count;
+        if (count > 0)
+        {
+            platform::Log(L"HUD layout: {} per-child matrices placed in the band; the first x/y/w columns ({:.4f} {:.4f} "
+                          L"{:.4f} | {:.4f} {:.4f} {:.4f} | {:.4f} {:.4f} {:.4f}) -> x/y ({:.4f} {:.4f} | {:.4f} {:.4f})",
+                          count, first[0], first[4], first[12], first[1], first[5], first[13], first[3], first[7],
+                          first[15], data[0], data[12], data[5], data[13]);
+        }
+        else
+        {
+            platform::Log(L"HUD layout: no per-child matrices this frame");
+        }
+    }
+}
+
+/// Replaces the overlay's call to FEndMenuRenderer__SubmitLayerSlot (same register arguments).
+void OverlaySubmit(void* renderer, std::uintptr_t pool, void* slot, std::uintptr_t unused)
+{
+    if (g_submit.active && g_submit.thread == GetCurrentThreadId())
+    {
+        g_submit.active = false;
+        PlaceEntryMatrices(g_submit);
+    }
+    reinterpret_cast<SubmitLayerSlotFn>(g_submitCall.Original())(renderer, pool, slot, unused);
 }
 
 }  // namespace
@@ -164,24 +227,35 @@ bool InstallOverlayLayout(const platform::GameImage& image) noexcept
     const auto rectCall  = image.Rebase(engine::kOverlayRectCall, 5);
     const auto rectFn    = image.Rebase(engine::kGetCompositeLayerRect);
     const auto entryCall = image.Rebase(engine::kEntryCall, 5);
-    const auto entryFn   = image.Rebase(engine::kFindOrAddNamedLayerEntry);
-    const auto singleton = image.Rebase(engine::kRootOverlaySingleton, sizeof(void*));
-    if (!bytesHold || !rectCall || !rectFn || !entryCall || !entryFn || !singleton)
+    const auto entryFn    = image.Rebase(engine::kFindOrAddNamedLayerEntry);
+    const auto submitCall = image.Rebase(engine::kSubmitCall, 5);
+    const auto submitFn   = image.Rebase(engine::kSubmitLayerSlot);
+    const auto singleton  = image.Rebase(engine::kRootOverlaySingleton, sizeof(void*));
+    const bool submitHolds = image.BytesMatch(engine::kSubmitLayerSlot, engine::kSubmitLayerSlotPrologue);
+    if (!bytesHold || !submitHolds || !rectCall || !rectFn || !entryCall || !entryFn || !submitCall || !submitFn ||
+        !singleton)
     {
         platform::Log(L"HUD layout: the overlay's code is not what the research read; the HUD keeps the game's layout");
         return false;
     }
     g_overlaySingleton = *singleton;
 
-    // The entry call first: it changes nothing until the rect call has decided on a band.
+    // The later calls first: they change nothing until the rect call has decided on a band.
+    if (!g_submitCall.Install(*submitCall, *submitFn, reinterpret_cast<std::uintptr_t>(&OverlaySubmit)))
+    {
+        platform::Log(L"HUD layout: the overlay's submit call could not be redirected; not installed");
+        return false;
+    }
     if (!g_entryCall.Install(*entryCall, *entryFn, reinterpret_cast<std::uintptr_t>(&OverlayLayerEntry)))
     {
+        g_submitCall.Restore();
         platform::Log(L"HUD layout: the overlay's layer-entry call could not be redirected; not installed");
         return false;
     }
     if (!g_rectCall.Install(*rectCall, *rectFn, reinterpret_cast<std::uintptr_t>(&OverlayLayoutRect)))
     {
         g_entryCall.Restore();
+        g_submitCall.Restore();
         platform::Log(L"HUD layout: the overlay's rect call could not be redirected; not installed");
         return false;
     }
@@ -200,19 +274,18 @@ void RemoveOverlayLayout() noexcept
     g_bandEnabled.store(false, std::memory_order_relaxed);
     g_splitActive.store(false, std::memory_order_relaxed);
     g_pending.active = false;
-    g_bandPacked.store(0, std::memory_order_relaxed);
+    g_submit.active  = false;
 
-    const bool rect  = g_rectCall.Restore();
-    const bool entry = g_entryCall.Restore();
-    if (!rect || !entry)
+    const bool rect   = g_rectCall.Restore();
+    const bool entry  = g_entryCall.Restore();
+    const bool submit = g_submitCall.Restore();
+    if (!rect || !entry || !submit)
     {
         platform::Log(L"HUD layout: could not restore {} (changed after us); left in place, passing the engine's values "
                       L"through",
-                      !rect && !entry ? L"either redirected call"
-                      : !rect         ? L"the rect call"
-                                      : L"the layer-entry call");
+                      !rect ? L"the rect call" : !entry ? L"the layer-entry call" : L"the submit call");
     }
-    g_installed = !(rect && entry);
+    g_installed = !(rect && entry && submit);
 }
 
 bool OverlayLayoutInstalled() noexcept
@@ -233,11 +306,6 @@ void SetBandEnabled(bool enabled) noexcept
 bool BandEnabled() noexcept
 {
     return g_bandEnabled.load(std::memory_order_relaxed);
-}
-
-std::uint64_t CurrentBandPacked() noexcept
-{
-    return g_bandPacked.load(std::memory_order_relaxed);
 }
 
 }  // namespace lss::hud

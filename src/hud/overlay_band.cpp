@@ -65,13 +65,35 @@ float ContainScaleFor1920x1080(float width, float height) noexcept
     return AtLeastMin(!(ratio >= kSixteenNinths) ? width * kInv1920 : height * kInv1080);
 }
 
-float OverlayUIScale(float width, float height, bool isBand) noexcept
+float OverlayLayoutScale(std::int32_t width, std::int32_t height) noexcept
 {
-    if (!isBand || !(std::fabs(width) > kContainEpsilon) || !(std::fabs(height) > kContainEpsilon))
+    const float byHeight = static_cast<float>(height) * kInv1080;
+    const float byWidth  = static_cast<float>(width) * kInv1920;
+    return byHeight < byWidth ? byHeight : byWidth;  // vminss xmm0, xmm0, xmm1: the second when not less
+}
+
+ClipMap BandClipMap(const IntRect& band, std::int32_t imageWidth, std::int32_t imageHeight) noexcept
+{
+    if (imageWidth <= 0 || imageHeight <= 0 || band.Width() <= 0 || band.Height() <= 0)
     {
-        return ContainScaleFor1920x1080(width, height);
+        return {};
     }
-    return AtLeastMin(height * kInv1080);
+    const float w = static_cast<float>(imageWidth);
+    const float h = static_cast<float>(imageHeight);
+    const float bw = static_cast<float>(band.Width());
+    const float bh = static_cast<float>(band.Height());
+    return {bw / w, bh / h, (2.0f * static_cast<float>(band.minX) + bw) / w - 1.0f,
+            1.0f - (2.0f * static_cast<float>(band.minY) + bh) / h};
+}
+
+void ApplyClipMap(float (&matrix)[16], const ClipMap& map) noexcept
+{
+    for (int row = 0; row < 4; ++row)
+    {
+        float* m = matrix + row * 4;
+        m[0]     = map.scaleX * m[0] + map.translateX * m[3];
+        m[1]     = map.scaleY * m[1] + map.translateY * m[3];
+    }
 }
 
 float MarkerHostScale(const IntRect& band, std::int32_t imageWidth, std::int32_t imageHeight, float viewWidth,
@@ -81,7 +103,7 @@ float MarkerHostScale(const IntRect& band, std::int32_t imageWidth, std::int32_t
     {
         return 0.0f;
     }
-    return OverlayUIScale(static_cast<float>(band.Width()), static_cast<float>(band.Height()), true) *
+    return ContainScaleFor1920x1080(static_cast<float>(band.Width()), static_cast<float>(band.Height())) *
            CoverScale(imageWidth, imageHeight, viewWidth, viewHeight);
 }
 

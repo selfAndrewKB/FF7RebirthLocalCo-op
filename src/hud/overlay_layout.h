@@ -3,8 +3,8 @@
 // Lays Square's HUD out inside the part of its UI image a split view shows, so each half shows the
 // whole HUD with its world markers on their objects (hud/overlay_band.h has the arithmetic).
 //
-// Two calls of the overlay's own per-frame render (SEndRootOverlay__RenderToCompositeLayer, game
-// thread) are redirected (platform/call_redirect.h); both are inert unless player 2 is in and the
+// Three calls of the overlay's own per-frame render (SEndRootOverlay__RenderToCompositeLayer, game
+// thread) are redirected (platform/call_redirect.h); all are inert unless player 2 is in and the
 // band is switched on:
 //   - EndUI__GetCompositeLayerRect returns the visible band instead of the whole image, so the
 //     widget tree lays itself out at the band's size and anchors (a native 32:9 or 8:9 screen);
@@ -12,6 +12,9 @@
 //     band unstretched (the game's matrix ignores the rect's position), and the overlay's host
 //     scale (+0x330) becomes the one that keeps markers on their objects. Both are written after
 //     the game's own writes and before any widget runs, every frame the band applies.
+//   - SubmitLayerSlot: just before the entry goes to the renderer, the per-child view-projections
+//     widgets painted in 3D pushed into it (the command menu, the Members panel) get the same move
+//     onto the band, as one clip-space map, the equivalent of a viewport the draw lacks.
 //
 // With the band switched off the redirects still run and log what they would set, so the values
 // can be checked in the log before anything changes on screen.
@@ -38,9 +41,5 @@ void SetSplitActive(bool active) noexcept;
 /// The `hud-band` switch: lay the HUD out in the visible band while split (off at start).
 void SetBandEnabled(bool enabled) noexcept;
 bool BandEnabled() noexcept;
-
-/// The band the overlay was last laid out in, as the FVector2D (width, height) the game stores at
-/// overlay+0x320 and passes by value (packed in one 64-bit register); 0 while no band applies.
-std::uint64_t CurrentBandPacked() noexcept;
 
 }  // namespace lss::hud
