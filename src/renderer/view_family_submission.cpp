@@ -1,6 +1,7 @@
 #include "renderer/view_family_submission.h"
 
 #include "platform/engine_addresses.h"
+#include "platform/frame_watch.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/vtable_entry.h"
@@ -173,6 +174,7 @@ void RecordFrameTime(std::int32_t viewCount) noexcept
     {
         return;
     }
+    platform::frame_watch::Note(L"frame-time log");
     platform::Log(L"frame time {:.2f} ms average over {} frames, {} view(s)",
                   1000.0 * windowSeconds / g_framesInWindow, g_framesInWindow, viewCount);
     ReportSubmissionTimes();

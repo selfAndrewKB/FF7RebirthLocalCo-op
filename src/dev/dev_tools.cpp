@@ -22,7 +22,11 @@ void Install(const platform::GameImage& image, player_two::Session& session, pla
 {
     hud::InstallPositionProbe(image);  // logging only, off until the hud-probe command
     hud::InstallHudTrace(image);       // logging only, idle until the hud-trace command
+    InstallControl(session, layout, viewPointInstalled);
+}
 
+void InstallControl(player_two::Session& session, players::SplitLayout& layout, bool viewPointInstalled) noexcept
+{
     // Control scripts drive the same actions as the keys, from files (control/command_channel.h).
     g_target.emplace(session, layout, viewPointInstalled);
     g_channel.Open();

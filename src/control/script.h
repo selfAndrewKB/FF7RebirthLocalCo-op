@@ -26,6 +26,8 @@
 //   leak-fixes <0..7>                    diagnosis: which put-backs of player 2's scope leaks act (1 the
 //                                         input clock, 2 the leader transform, 4 field summons skipped;
 //                                         player_two/scope_leaks.h); all at start
+//   buttons-mask <0..3>                  diagnosis: which parts of per-pad buttons act (1 the split views,
+//                                         2 pad 2 kept from menus and prompts); both at start
 //   hud-trace <frames>                  log the order of the HUD's tick, marker placements, icon
 //                                         projections and render for 1-30 frames, and which player
 //                                         each placement and projection used (hud/hud_trace.h)
@@ -73,6 +75,7 @@ enum class CommandKind
     HudLeversMask,
     SticksMask,
     LeakFixes,
+    ButtonsMask,
     Dump,
     Stick,
     Wait,

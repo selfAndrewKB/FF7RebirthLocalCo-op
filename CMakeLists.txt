@@ -41,8 +41,10 @@ add_library(LocalSplitScreen SHARED
     src/platform/call_redirect.cpp
     src/platform/code_redirect.cpp
     src/platform/guarded.cpp
+    src/platform/frame_watch.cpp
     src/platform/image.cpp
     src/platform/log.cpp
+    src/platform/module_folder.cpp
     src/platform/module_pin.cpp
     src/platform/near_code.cpp
     src/platform/verified_code.cpp
@@ -244,3 +246,9 @@ add_executable(FirstPlayerCodeTests
 target_include_directories(FirstPlayerCodeTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(FirstPlayerCodeTests PRIVATE cxx_std_20)
 add_test(NAME first_player_code COMMAND FirstPlayerCodeTests)
+add_executable(ButtonViewTests
+    tests/button_view_test.cpp
+)
+target_include_directories(ButtonViewTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(ButtonViewTests PRIVATE cxx_std_20)
+add_test(NAME button_view COMMAND ButtonViewTests)

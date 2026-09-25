@@ -9,6 +9,7 @@
 #include "hud/player_two_pass.h"
 #include "platform/call_redirect.h"
 #include "platform/code_redirect.h"
+#include "platform/frame_watch.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -455,6 +456,7 @@ void EndOverlayRender() noexcept
         g_playerOneSeconds += Now() - g_playerOneStart;
         if (++g_renderTimedFrames >= kRenderTimingFrames)
         {
+            platform::frame_watch::Note(L"HUD image timing log");
             const double perFrame = 1000.0 / g_renderTimedFrames;
             platform::Log(L"HUD image: overlay render ms per frame over {} frames: player 2's pass {:.3f}, player 1's pass {:.3f}",
                           g_renderTimedFrames, g_playerTwoSeconds * perFrame, g_playerOneSeconds * perFrame);

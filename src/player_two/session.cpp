@@ -2,6 +2,7 @@
 
 #include "player_two/session.h"
 
+#include "platform/frame_watch.h"
 #include "platform/log.h"
 #include "player_two/describe.h"
 #include "player_two/engine_facts.h"
@@ -322,6 +323,7 @@ void Session::Forget() noexcept
 
 void Session::LogStatus() noexcept
 {
+    platform::frame_watch::Note(L"status line");
     if (!HasPlayerTwo())
     {
         return;

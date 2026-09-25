@@ -8,6 +8,7 @@
 #include <Unreal/UObjectArray.hpp>
 #include <Unreal/UObjectGlobals.hpp>
 
+#include "platform/frame_watch.h"
 #include "platform/log.h"
 
 #include <algorithm>
@@ -89,6 +90,7 @@ const std::vector<Widget>& Live() noexcept
         {
             // Once (or every time, without the callback): the widgets constructed before.
             g_seeded = true;
+            platform::frame_watch::Note(L"UObject walk (user widgets)");
             std::vector<UObject*> found;
             RC::Unreal::UObjectGlobals::FindAllOf(STR("UserWidget"), found);
             g_live.clear();

@@ -10,6 +10,7 @@
 #include "hud/hud_updates.h"
 #include "hud/user_widgets.h"
 #include "platform/code_redirect.h"
+#include "platform/frame_watch.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -135,6 +136,7 @@ void LogTiming()
     {
         return;
     }
+    platform::frame_watch::Note(L"HUD levers timing log");
     const double perFrame = 1000.0 / g_timedFrames;
     std::wstring parts;
     for (std::size_t i = 0; i < kParts; ++i)
@@ -216,6 +218,7 @@ bool KeepRootsCurrent(UObject* playerOne, UObject* playerTwo)
 {
     if (g_framesToScan == 0)
     {
+        platform::frame_watch::Note(L"HUD root scan");
         const double start   = Now();
         const bool   scanned = hud_roots::Scan(playerOne, playerTwo);
         Charge(kScan, start);

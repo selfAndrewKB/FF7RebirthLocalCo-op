@@ -1,19 +1,31 @@
 #pragma once
 
-// Each pad's buttons for its own player (RE-p2-per-pad-buttons.md). Step 1: logging only.
+// Each pad's buttons for its own player (RE-p2-per-pad-buttons.md).
 //
 // Square's input object (the one that holds the sticks, player_two/pad_sticks.h) keeps every
 // gameplay action in a table at +0xF8, with a UI-filtered twin at +0x148. Each 40-byte element is
 // an FName key and, at +0x18, the merged state: previous-held, held, repeat, a changed-this-frame
-// latch, and a 32-bit mask of the sources holding it (XInput pad N sets bit min(N, 3), DirectInput
-// pad N bit 21 + N). The game reads "pressed" as previous == 0 and held == 1, so the edges come
-// from the merged state. The key handlers write the tables while the devices are polled, and the
-// input processor's Tick advances previous = held once per frame, all before the world ticks.
+// latch, and a 32-bit mask of the sources holding it (confirmed live: pad 1 sets bit 0, pad 2 bit
+// 1, the keyboard bit 17). The game reads "pressed" as previous == 0 and held == 1, so its edges
+// come from the merged state. The key handlers write the tables while the devices are polled, and
+// the input processor's Tick advances previous = held once per frame, all before the world ticks.
 //
-// This step replaces the Tick's slot (IInputProcessor vtable, slot 1) with one that calls the
-// game's Tick and then logs, while player 2 is in, every element whose held state or source mask
-// changed since the last frame, by name. It writes nothing. It is there to confirm live that pad 2
-// sets its own bit before the per-pad view is built on it.
+// With per-pad input on (player_two/pad_sticks.h) and player 2 in:
+//   - after the game's Tick (its slot in the IInputProcessor vtable is replaced), every element's
+//     previous/held bytes are rewritten to player 1's view: pad 1, keyboard and the game's own
+//     synthetic keys, never pad 2 (player_two/button_view.h). Everything that reads buttons outside
+//     player 2's calls (player 1's input, the leader's move state, the menus, battle) sees player 1.
+//   - pad 2's action-downs reach the tables (for player 2's polling) but are passed to the game's
+//     dispatcher as already handled, its own flag, so pad 2 never opens a menu or runs a field prompt;
+//   - a ButtonScope, opened around player 2's calls (their controller input and their member's
+//     tick, next to the stick scope), writes player 2's view and puts player 1's back after.
+// The repeat, latch and source bytes are never written. The game's own writers keep working on
+// top: its press update (previous = held, held = 1) and release (when the mask empties) produce the
+// same bytes a one-pad game would hold, and the next Tick rewrites both views.
+//
+// Changes to held state or sources are also logged while player 2 is in (capped per status line).
+
+#include <cstdint>
 
 namespace lss::platform {
 class GameImage;
@@ -25,7 +37,29 @@ namespace lss::player_two::pad_buttons {
 bool Install(const platform::GameImage& image) noexcept;
 void Remove() noexcept;
 
-/// The status line: changes logged and dropped since the last call, and the tables' sizes.
+/// Player 2's view of the buttons for the length of one engine call. Game thread, player 2 in and
+/// per-pad input on; does not nest.
+class ButtonScope
+{
+public:
+    ButtonScope() noexcept;
+    ~ButtonScope();
+    ButtonScope(const ButtonScope&)            = delete;
+    ButtonScope& operator=(const ButtonScope&) = delete;
+
+    bool Held() const noexcept { return held_; }
+
+private:
+    bool held_ = false;
+};
+
+/// Diagnosis: which parts act (bits: 1 the split views, player 1's after the Tick and player 2's in
+/// their calls; 2 pad 2's presses kept from menus and prompts). Both at start. Logged.
+inline constexpr unsigned kPartViews  = 1;
+inline constexpr unsigned kPartEvents = 2;
+void SetMask(unsigned mask) noexcept;
+
+/// The status line: views written, scopes held, changes logged and dropped since the last call.
 void LogStatus() noexcept;
 
 }  // namespace lss::player_two::pad_buttons

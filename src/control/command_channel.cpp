@@ -1,6 +1,7 @@
 #include "control/command_channel.h"
 
 #include "platform/log.h"
+#include "platform/module_folder.h"
 
 #include <format>
 #include <fstream>
@@ -19,36 +20,11 @@ namespace lss::control {
 namespace {
 
 namespace fs = std::filesystem;
+using platform::DllFolder;
 using platform::Log;
 
 /// How often an idle channel looks in its inbox (about four times a second at 60 ticks per second).
 constexpr std::uint64_t kScanTicks = 15;
-
-/// The folder the loaded DLL sits in (Mods/LocalSplitScreen/dlls), or empty.
-fs::path DllFolder()
-{
-    HMODULE module = nullptr;
-    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                            reinterpret_cast<LPCWSTR>(&DllFolder), &module))
-    {
-        return {};
-    }
-    std::wstring path(MAX_PATH, L'\0');
-    for (;;)
-    {
-        const DWORD length = GetModuleFileNameW(module, path.data(), static_cast<DWORD>(path.size()));
-        if (length == 0)
-        {
-            return {};
-        }
-        if (length < path.size())
-        {
-            path.resize(length);
-            return fs::path(path).parent_path();
-        }
-        path.resize(path.size() * 2);
-    }
-}
 
 std::wstring FromUtf8(const std::string& bytes)
 {

@@ -4,6 +4,7 @@
 #include "hud/hud_placement.h"
 #include "hud/second_image.h"
 #include "platform/call_redirect.h"
+#include "platform/frame_watch.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "player_two/generation.h"
@@ -30,6 +31,8 @@ bool                   g_installed = false;
 void RenderRootOverlay(void* application) noexcept
 {
     const bool gameThread = player_two::generation::OnGameThread();
+    // The whole call: the game's overlay render, player 2's pass in it, and the mod's work around it.
+    const platform::frame_watch::Charge charge(platform::frame_watch::Part::OverlayRender);
     if (gameThread)
     {
         dev::BeforeOverlayRender();  // the HUD trace, in a build with the development tools

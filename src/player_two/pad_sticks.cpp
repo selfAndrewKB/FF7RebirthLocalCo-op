@@ -7,6 +7,7 @@
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
+#include "player_two/pad_buttons.h"
 #include "player_two/primary_controller.h"
 #include "player_two/scope_leaks.h"
 #include "player_two/stick_select.h"
@@ -82,6 +83,7 @@ void ProcessPlayerInput(void* controller, float deltaTime, bool gamePaused)
     }
     // Player 2's input also sends camera events to "the primary" camera manager.
     const primary_controller::Scope primary;
+    const pad_buttons::ButtonScope  buttons;  // player 2's own buttons (ResetCamera)
     sticks.Held() && primary.Held() ? g_inputCounters.Act() : g_inputCounters.Refuse();
     g_engineProcessInput(controller, deltaTime, gamePaused);
 }

@@ -28,6 +28,9 @@ void Install(const platform::GameImage& image, player_two::Session& session, pla
              bool viewPointInstalled) noexcept;
 void Remove() noexcept;
 
+/// Opens the control channel alone: no engine redirects (the watch-only start uses it to be quit).
+void InstallControl(player_two::Session& session, players::SplitLayout& layout, bool viewPointInstalled) noexcept;
+
 /// Game thread, once per engine tick: a control script's next step, before the session's tick.
 void TickBeforeSession() noexcept;
 
@@ -42,6 +45,7 @@ void AfterOverlayRender() noexcept;
 
 inline void Install(const platform::GameImage&, player_two::Session&, players::SplitLayout&, bool) noexcept {}
 inline void Remove() noexcept {}
+inline void InstallControl(player_two::Session&, players::SplitLayout&, bool) noexcept {}
 inline void TickBeforeSession() noexcept {}
 inline void TickAfterSession() noexcept {}
 inline void BeforeOverlayRender() noexcept {}

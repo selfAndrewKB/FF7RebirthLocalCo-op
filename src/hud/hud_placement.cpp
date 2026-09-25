@@ -12,6 +12,7 @@
 #include "hud/hud_addresses.h"
 #include "hud/user_widgets.h"
 #include "hud/viewport_placement.h"
+#include "platform/frame_watch.h"
 #include "platform/guarded.h"
 #include "platform/log.h"
 #include "players/unreal_access.h"
@@ -374,6 +375,7 @@ void UpdateHudPlacement(bool splitLayout) noexcept
         g_active = true;
         if (g_ticks++ % kScanTicks == 0)
         {
+            platform::frame_watch::Note(L"HUD placement scan");
             ScanForNew(*g_setters);
         }
         if (!g_renderFollows)

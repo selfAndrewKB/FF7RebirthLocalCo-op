@@ -1,5 +1,6 @@
 #include "player_two/member_movement.h"
 
+#include "platform/frame_watch.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -9,6 +10,7 @@
 #include "player_two/generation.h"
 #include "player_two/move_state.h"
 #include "player_two/object_fields.h"
+#include "player_two/pad_buttons.h"
 #include "player_two/pad_sticks.h"
 #include "player_two/party_member.h"
 #include "player_two/primary_controller.h"
@@ -139,6 +141,7 @@ void TickInScopes(void* playerTwoController, void* state, int type, float deltaT
         g_counters.Refuse();
         return;
     }
+    const pad_buttons::ButtonScope   buttons;  // player 2's own buttons (sprint, dodge, field actions)
     const LeaderAnswer               leader(type);
     const move_state::OwnTick        own;
     const scope_leaks::MemberTickScope leaks(state, playerTwoController, deltaTime);
@@ -201,6 +204,7 @@ void Remove() noexcept
 
 void Tick(void* playerTwoController, void* member) noexcept
 {
+    const platform::frame_watch::Charge charge(platform::frame_watch::Part::MemberTick);
     if (!generation::OnGameThread())
     {
         return;

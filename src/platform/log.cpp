@@ -1,5 +1,7 @@
 #include "platform/log.h"
 
+#include "platform/frame_watch.h"
+
 #include <DynamicOutput/DynamicOutput.hpp>
 
 namespace lss::platform {
@@ -13,6 +15,7 @@ void WriteLine(std::wstring_view line) noexcept
     // exception would end the game over a log line; a lost line is the lesser failure.
     try
     {
+        frame_watch::CountLogLine();
         RC::Output::send<RC::LogLevel::Warning>(STR("[LocalSplitScreen] {}\n"), line);
     }
     catch (...)

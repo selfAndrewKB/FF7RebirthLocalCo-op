@@ -12,15 +12,17 @@
 
 #include "dev/dev_tools.h"
 #include "hud/hud_placement.h"
+#include "hud/layout_scale.h"
 #include "hud/overlay_layout.h"
-#include "hud/root_overlay_render.h"
 #include "hud/player_two_pass.h"
+#include "hud/root_overlay_render.h"
 #include "hud/second_image.h"
 #include "hud/user_widgets.h"
-#include "hud/layout_scale.h"
 #include "platform/engine_addresses.h"
+#include "platform/frame_watch.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/module_folder.h"
 #include "player_two/session.h"
 #include "players/join_keys.h"
 #include "players/split_layout.h"
@@ -32,6 +34,8 @@
 #include "views/view_shape.h"
 
 #include <cstdint>
+#include <filesystem>
+#include <system_error>
 #include <optional>
 
 #ifndef WIN32_LEAN_AND_MEAN
@@ -44,7 +48,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.11.6-button-log";
+constexpr const wchar_t* kVersion = L"0.11.9-hitch-watch";
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -93,7 +97,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.11.6-button-log");
+        ModVersion     = STR("0.11.9-hitch-watch");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -143,6 +147,29 @@ public:
     auto on_unreal_init() -> void override
     {
         Log(L"v{} starting", kVersion);
+
+        // A measuring control: with `watch_only.txt` in the mod's folder, nothing is installed but the
+        // frame-hitch watch, so the game's own frame times can be compared with the mod's.
+        std::error_code missing;
+        if (std::filesystem::exists(lss::platform::ModFolder() / L"watch_only.txt", missing))
+        {
+            Log(L"watch only (watch_only.txt): nothing installed except the frame-hitch watch; the game runs unmodified");
+            // The control channel alone (no engine redirects), so a script can still quit the game.
+            const auto image = lss::platform::GameImage::Locate();
+            if (const auto removeLocalPlayer = image ? VerifyEngine(*image) : std::nullopt)
+            {
+                session_.emplace(*removeLocalPlayer);
+                lss::dev::InstallControl(*session_, layout_, false);
+            }
+            const Hook::FCallbackOptions watchOptions{false, false, STR("LocalSplitScreen"), STR("frame watch")};
+            tickCallback_ = Hook::RegisterEngineTickPreCallback(
+                [](Hook::TCallbackIterationData<void>&, RC::Unreal::UEngine*, float, bool) {
+                    lss::platform::frame_watch::OnFrameStart();
+                    lss::dev::TickBeforeSession();
+                },
+                watchOptions);
+            return;
+        }
 
         const auto image = lss::platform::GameImage::Locate();
         const auto removeLocalPlayer = image ? VerifyEngine(*image) : std::nullopt;
@@ -235,6 +262,8 @@ private:
     /// Runs on the game thread before each engine tick, outside Draw.
     void OnEngineTick() noexcept
     {
+        lss::platform::frame_watch::OnFrameStart();
+        const lss::platform::frame_watch::Charge charge(lss::platform::frame_watch::Part::EngineTick);
         if (!tickSeen_)
         {
             tickSeen_ = true;
@@ -287,6 +316,7 @@ private:
         {
             return;
         }
+        lss::platform::frame_watch::Note(L"half shape read");
         auto*      playerOne  = static_cast<RC::Unreal::UObject*>(const_cast<void*>(session_->PlayerOne()));
         auto**     controller = lss::players::unreal::ControllerField(playerOne);
         const auto size   = controller != nullptr ? lss::players::unreal::ViewportSizeOf(*controller) : std::nullopt;
