@@ -164,6 +164,22 @@ ParsedLine ParseHudTrace(const std::vector<std::wstring_view>& words)
     return Parsed(std::move(command));
 }
 
+ParsedLine ParseLeversMask(const std::vector<std::wstring_view>& words)
+{
+    constexpr unsigned long kMaxMask = 63;
+    const std::wstring      text     = words.size() == 2 ? std::wstring(words[1]) : std::wstring();
+    wchar_t*                end      = nullptr;
+    const auto              value    = std::wcstoul(text.c_str(), &end, 10);
+    if (text.empty() || text[0] == L'-' || end != text.c_str() + text.size() || value > kMaxMask)
+    {
+        return Error(std::format(L"hud-levers-mask takes a whole number from 0 to {}", kMaxMask));
+    }
+    Command command;
+    command.kind  = CommandKind::HudLeversMask;
+    command.ticks = static_cast<std::uint32_t>(value);
+    return Parsed(std::move(command));
+}
+
 ParsedLine ParseWait(const std::vector<std::wstring_view>& words)
 {
     const auto ticks = words.size() == 2 ? ParseTicks(words[1]) : std::nullopt;
@@ -253,6 +269,8 @@ ParsedLine ParseLine(std::wstring_view line)
     if (name == L"hud-probe") return ParseSwitch(CommandKind::HudProbe, words, L"on", L"off");
     if (name == L"hud-trace") return ParseHudTrace(words);
     if (name == L"hud-image") return ParseSwitch(CommandKind::HudImage, words, L"on", L"off");
+    if (name == L"hud-levers") return ParseSwitch(CommandKind::HudLevers, words, L"on", L"off");
+    if (name == L"hud-levers-mask") return ParseLeversMask(words);
     if (name == L"dump") return ParseDump(words);
     if (name == L"stick") return ParseStick(words);
     if (name == L"wait") return ParseWait(words);
@@ -278,6 +296,8 @@ std::wstring Describe(const Command& command)
         case CommandKind::HudProbe: return command.on ? L"hud-probe on" : L"hud-probe off";
         case CommandKind::HudTrace: return std::format(L"hud-trace {}", command.ticks);
         case CommandKind::HudImage: return command.on ? L"hud-image on" : L"hud-image off";
+        case CommandKind::HudLevers: return command.on ? L"hud-levers on" : L"hud-levers off";
+        case CommandKind::HudLeversMask: return std::format(L"hud-levers-mask {}", command.ticks);
         case CommandKind::Dump: return L"dump " + command.text;
         case CommandKind::SplitFov:
             return command.blend < 0.0f ? std::wstring(L"split-fov native") : L"split-fov " + AxisText(command.blend);

@@ -7,6 +7,11 @@
 
 #include <atomic>
 
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <Windows.h>
+
 namespace lss::player_two::primary_controller {
 
 namespace {
@@ -77,6 +82,35 @@ void Unbind() noexcept
     g_playerOne     = nullptr;
     g_playerTwo     = nullptr;
     g_playerTwoWeak = 0;
+}
+
+namespace {
+
+/// FWeakObjectPtr::operator= then Get, inside a structured-exception guard (MSVC allows __try
+/// only in a function with no objects to unwind).
+bool AssignAndCheckGuarded(std::uint64_t* weak, void* object) noexcept
+{
+    __try
+    {
+        g_weakAssign(weak, object);
+        return g_weakGet(weak) == object;
+    }
+    __except (GetExceptionCode() == EXCEPTION_STACK_OVERFLOW ? EXCEPTION_CONTINUE_SEARCH : EXCEPTION_EXECUTE_HANDLER)
+    {
+        return false;
+    }
+}
+
+}  // namespace
+
+std::uint64_t WeakValueOf(void* object) noexcept
+{
+    if (!Installed() || object == nullptr)
+    {
+        return 0;
+    }
+    std::uint64_t weak = 0;
+    return AssignAndCheckGuarded(&weak, object) ? weak : 0;
 }
 
 bool Is(const void* controller) noexcept

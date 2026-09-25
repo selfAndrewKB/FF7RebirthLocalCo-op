@@ -6,6 +6,7 @@
 
 #include "hud/entry_filter_code.h"
 #include "hud/hud_addresses.h"
+#include "hud/player_two_pass.h"
 #include "platform/call_redirect.h"
 #include "platform/code_redirect.h"
 #include "platform/image.h"
@@ -131,6 +132,27 @@ bool              g_buffersReady  = false;
 bool              g_refused       = false;    // a check failed: the image stays off until restart
 
 std::atomic<int> g_familyLogLines{0};
+
+// Render cost, logged every kRenderTimingFrames frames while player 2's image is on.
+constexpr std::uint32_t kRenderTimingFrames = 240;
+double        g_secondsPerCount    = 0.0;
+double        g_playerTwoSeconds   = 0.0;
+double        g_playerOneSeconds   = 0.0;
+double        g_playerOneStart     = 0.0;
+std::uint32_t g_renderTimedFrames  = 0;
+
+double Now() noexcept
+{
+    LARGE_INTEGER counter{};
+    QueryPerformanceCounter(&counter);
+    if (g_secondsPerCount == 0.0)
+    {
+        LARGE_INTEGER frequency{};
+        QueryPerformanceFrequency(&frequency);
+        g_secondsPerCount = 1.0 / static_cast<double>(frequency.QuadPart);
+    }
+    return static_cast<double>(counter.QuadPart) * g_secondsPerCount;
+}
 
 int GuardFilter(unsigned long code) noexcept
 {
@@ -424,16 +446,37 @@ void BeginOverlayRender(bool playerTwoIn) noexcept
         std::memcpy(&deltaTime, reinterpret_cast<const void*>(g_deltaTime), sizeof(deltaTime));
         const double still = 0.0;
         std::memcpy(reinterpret_cast<void*>(g_deltaTime), &still, sizeof(still));
-        g_pass = Pass::PlayerTwo;
+        g_pass              = Pass::PlayerTwo;
+        const bool content  = EnterPlayerTwo();  // player 2's levers and updates (hud/player_two_pass.h)
+        const double start  = Now();
         g_renderToLayer(reinterpret_cast<void*>(overlay));
+        g_playerTwoSeconds += Now() - start;
+        if (content)
+        {
+            LeavePlayerTwo();
+        }
         std::memcpy(reinterpret_cast<void*>(g_deltaTime), &deltaTime, sizeof(deltaTime));
     }
     g_imageThisFrame.store(g_slot != nullptr, std::memory_order_relaxed);
-    g_pass = Pass::PlayerOne;
+    g_pass           = Pass::PlayerOne;
+    g_playerOneStart = Now();
 }
 
 void EndOverlayRender() noexcept
 {
+    if (g_imageThisFrame.load(std::memory_order_relaxed))
+    {
+        g_playerOneSeconds += Now() - g_playerOneStart;
+        if (++g_renderTimedFrames >= kRenderTimingFrames)
+        {
+            const double perFrame = 1000.0 / g_renderTimedFrames;
+            platform::Log(L"HUD image: overlay render ms per frame over {} frames: player 2's pass {:.3f}, player 1's pass {:.3f}",
+                          g_renderTimedFrames, g_playerTwoSeconds * perFrame, g_playerOneSeconds * perFrame);
+            g_playerTwoSeconds  = 0.0;
+            g_playerOneSeconds  = 0.0;
+            g_renderTimedFrames = 0;
+        }
+    }
     if (g_slot != nullptr)
     {
         // Player 1's pass did not take the slot (its render returned early). The acquire has

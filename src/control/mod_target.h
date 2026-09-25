@@ -41,6 +41,8 @@ public:
     Outcome SetHudProbe(bool on) override;
     Outcome TraceHud(std::int32_t frames) override;
     Outcome SetHudImage(bool on) override;
+    Outcome SetHudLevers(bool on) override;
+    Outcome SetHudLeversMask(std::uint32_t mask) override;
     Outcome Dump(const std::wstring& topic) override;
     Outcome HoldSticks(std::int32_t player, const float (&axes)[4]) override;
     void    ReleaseSticks(std::int32_t player) override;

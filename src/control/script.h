@@ -15,6 +15,11 @@
 //                                         (hud/overlay_layout.h); off logs the values only
 //   hud-image on|off                     player 2's HUD image: the overlay rendered a second time
 //                                         and drawn only in player 2's half (hud/second_image.h)
+//   hud-levers on|off                    player 2's image shows player 2's content: the game's
+//                                         player levers switched around player 2's pass
+//                                         (hud/player_two_pass.h)
+//   hud-levers-mask <0..63>              diagnosis: which levers act (1 contexts, 2 first player,
+//                                         4 primary controller, 8 view rect, 16 updates, 32 compass)
 //   hud-trace <frames>                    log the order of the HUD's tick, marker placements, icon
 //                                         projections and render for 1-30 frames, and which player
 //                                         each placement and projection used (hud/hud_trace.h)
@@ -58,6 +63,8 @@ enum class CommandKind
     HudProbe,
     HudTrace,
     HudImage,
+    HudLevers,
+    HudLeversMask,
     Dump,
     Stick,
     Wait,
@@ -81,7 +88,7 @@ struct Command
     std::int32_t  player    = 0;                       // stick: 1 or 2
     float         axes[4]   = {};                      // stick: LX, LY, RX, RY
     float         blend     = -1.0f;                   // split-fov: 0..1, or negative for native
-    std::uint32_t ticks     = 0;                       // stick, wait, wait-until; hud-trace: frames
+    std::uint32_t ticks     = 0;                       // stick, wait, wait-until; hud-trace: frames; hud-levers-mask: mask
     WaitCondition condition = WaitCondition::Playing;  // wait-until
     std::wstring  text;                                // console, note
 };

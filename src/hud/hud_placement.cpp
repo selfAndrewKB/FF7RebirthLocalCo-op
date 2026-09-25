@@ -10,6 +10,7 @@
 #include <Unreal/UObjectGlobals.hpp>
 
 #include "hud/hud_addresses.h"
+#include "hud/user_widgets.h"
 #include "hud/viewport_placement.h"
 #include "platform/log.h"
 
@@ -314,10 +315,9 @@ void FollowGameChanges(const Setters& set)
 void ScanForNew(const Setters& set)
 {
     std::erase_if(g_placed, [](const Placed& placed) { return !Alive(placed); });
-    std::vector<UObject*> widgets;
-    UObjectGlobals::FindAllOf(STR("UserWidget"), widgets);
-    for (UObject* widget : widgets)
+    for (const auto& live : user_widgets::Live())  // hud/user_widgets.h: no walk of every UObject
     {
+        UObject* widget = live.object;
         const Placement* placement = PlacementOf(widget);
         const bool known = std::any_of(g_placed.begin(), g_placed.end(),
                                        [widget](const Placed& placed) { return placed.widget == widget; });

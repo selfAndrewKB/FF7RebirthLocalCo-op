@@ -4,6 +4,7 @@
 #include "hud/hud_trace.h"
 #include "hud/overlay_layout.h"
 #include "hud/root_overlay_render.h"
+#include "hud/player_two_pass.h"
 #include "hud/second_image.h"
 #include "hud/position_probe.h"
 #include "hud/widget_dump.h"
@@ -167,6 +168,27 @@ Outcome ModTarget::SetHudImage(bool on)
         return Failed(L"player 2's HUD image refused a check (see the log)");
     }
     return {true, on ? L"player 2's HUD image on" : L"player 2's HUD image off"};
+}
+
+Outcome ModTarget::SetHudLevers(bool on)
+{
+    if (!hud::PlayerTwoPassInstalled())
+    {
+        return Failed(L"player 2's HUD levers are not installed (see the startup log)");
+    }
+    hud::SetPlayerTwoContent(on);
+    if (on && !hud::PlayerTwoContentOn())
+    {
+        return Failed(L"player 2's HUD levers refused a check (see the log)");
+    }
+    return {true, on ? (hud::SecondImageOn() ? L"player 2's content on" : L"player 2's content on (needs hud-image on)")
+                     : L"player 2's content off"};
+}
+
+Outcome ModTarget::SetHudLeversMask(std::uint32_t mask)
+{
+    hud::SetPlayerTwoLeversMask(mask);
+    return {true, L"levers mask set (see the log)"};
 }
 
 Outcome ModTarget::Dump(const std::wstring& topic)

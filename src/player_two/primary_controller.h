@@ -34,6 +34,11 @@ bool Bind(void* playerOneController, void* playerTwoController) noexcept;
 
 void Unbind() noexcept;
 
+/// The engine's FWeakObjectPtr value {ObjectIndex, SerialNumber} for `object`, made by the game's
+/// own FWeakObjectPtr::operator= (which gives the object a serial number if it has none), and
+/// checked to resolve back to it. 0 if not installed or it does not resolve.
+std::uint64_t WeakValueOf(void* object) noexcept;
+
 /// True if the party manager's primary controller is `controller` right now.
 bool Is(const void* controller) noexcept;
 
