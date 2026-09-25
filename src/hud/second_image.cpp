@@ -7,6 +7,7 @@
 #include "hud/entry_filter_code.h"
 #include "hud/hud_addresses.h"
 #include "hud/player_two_pass.h"
+#include "hud/prompt_rows.h"
 #include "platform/call_redirect.h"
 #include "platform/code_redirect.h"
 #include "platform/frame_watch.h"
@@ -434,6 +435,7 @@ void BeginOverlayRender(bool playerTwoIn) noexcept
         const double still = 0.0;
         std::memcpy(reinterpret_cast<void*>(g_deltaTime), &still, sizeof(still));
         g_pass              = Pass::PlayerTwo;
+        prompt_rows::ShowOnly(1);                 // player 2's prompt rows only (hud/prompt_rows.h)
         const bool content  = EnterPlayerTwo();  // player 2's levers and updates (hud/player_two_pass.h)
         const double start  = Now();
         g_renderToLayer(reinterpret_cast<void*>(overlay));
@@ -442,6 +444,7 @@ void BeginOverlayRender(bool playerTwoIn) noexcept
         {
             LeavePlayerTwo();
         }
+        prompt_rows::ShowOnly(0);  // player 1's rows for player 1's pass
         std::memcpy(reinterpret_cast<void*>(g_deltaTime), &deltaTime, sizeof(deltaTime));
     }
     g_imageThisFrame.store(g_slot != nullptr, std::memory_order_relaxed);

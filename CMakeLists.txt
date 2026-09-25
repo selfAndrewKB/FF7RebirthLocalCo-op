@@ -32,6 +32,7 @@ add_library(LocalSplitScreen SHARED
     src/hud/root_overlay_render.cpp
     src/hud/second_image.cpp
     src/hud/player_two_pass.cpp
+    src/hud/prompt_rows.cpp
     src/hud/user_widgets.cpp
     src/hud/overlay_band.cpp
     src/hud/overlay_layout.cpp

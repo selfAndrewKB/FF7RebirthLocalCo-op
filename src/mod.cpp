@@ -15,6 +15,7 @@
 #include "hud/layout_scale.h"
 #include "hud/overlay_layout.h"
 #include "hud/player_two_pass.h"
+#include "hud/prompt_rows.h"
 #include "hud/root_overlay_render.h"
 #include "hud/second_image.h"
 #include "hud/user_widgets.h"
@@ -48,7 +49,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.12.1-party-rule";
+constexpr const wchar_t* kVersion = L"0.12.3-prompt-rows";
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -97,7 +98,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.12.1-party-rule");
+        ModVersion     = STR("0.12.3-prompt-rows");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -201,6 +202,7 @@ public:
         lss::hud::InstallSecondImage(*image);        // player 2's HUD image, on (the hud-image command switches it)
         lss::hud::InstallPlayerTwoPass(*image);      // player 2's HUD content, on (the hud-levers command switches it)
         lss::hud::InstallRootOverlayRender(*image);  // before the overlay renders: placement follow, trace
+        lss::hud::prompt_rows::Install(*image);      // each player's field prompt rows in their own half
 
         lss::dev::Install(*image, *session_, layout_, viewPointInstalled_);  // built with LSS_DEV_TOOLS only
 

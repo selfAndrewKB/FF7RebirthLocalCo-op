@@ -2,6 +2,7 @@
 
 #include "dev/dev_tools.h"
 #include "hud/hud_placement.h"
+#include "hud/prompt_rows.h"
 #include "hud/second_image.h"
 #include "platform/call_redirect.h"
 #include "platform/frame_watch.h"
@@ -37,12 +38,17 @@ void RenderRootOverlay(void* application) noexcept
     {
         dev::BeforeOverlayRender();  // the HUD trace, in a build with the development tools
         FollowHudPlacementBeforeRender();
+        if (player_two::generation::Active())
+        {
+            prompt_rows::Refresh();  // whose each prompt row is; each player's laid out on their own
+        }
         BeginOverlayRender(player_two::generation::Active());  // player 2's image first, if on
     }
     reinterpret_cast<RenderFn>(g_call.Original())(application);
     if (gameThread)
     {
         EndOverlayRender();
+        prompt_rows::Restore();  // every prompt row back to its own visibility
         dev::AfterOverlayRender();
     }
 }
