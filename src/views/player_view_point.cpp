@@ -8,6 +8,7 @@
 #include "views/view_shape.h"
 
 #include <atomic>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -33,6 +34,9 @@ std::atomic<bool>          g_ownCamera{false};
 std::atomic<bool>          g_describePending{false};
 std::atomic<bool>          g_fillOn{true};
 std::atomic<std::uint32_t> g_axisOffset{0};  // 0 until reflection has confirmed it
+std::atomic<float>         g_fovWeight{kDefaultSplitFovWeight};  // 0..1; negative: the MajorAxisFOV rule
+std::atomic<float>         g_halfAspect{0.0f};       // the split halves' width/height; 0 until known
+std::atomic<float>         g_halfHeightRatio{0.0f};  // their height as a fraction of the screen's
 
 /// Player 2's view point, the first time it is computed from a given camera.
 void DescribeViewPoint(const std::byte* viewInfo, bool ownCamera) noexcept
@@ -108,25 +112,29 @@ AxisRecord            g_axisRecords[kAxisRecords]{};  // game thread only
 bool                  g_refusalLogged = false;
 bool                  g_fillLogged    = false;
 
-void ApplyAxisRule(void* localPlayer) noexcept
+/// The rule the mod last wrote for any player, so the restore recognises its own value.
+bool IsModRule(std::uint8_t value) noexcept
+{
+    return value == kMajorAxisFov || value == kMaintainXFov;
+}
+
+/// Returns true if `localPlayer` now has `rule` (false when the offset is unconfirmed or there is
+/// no room to remember the original, in which case nothing was changed).
+bool ApplyAxisRule(void* localPlayer, std::uint8_t rule) noexcept
 {
     const auto offset = g_axisOffset.load(std::memory_order_relaxed);
     if (offset == 0)
     {
-        return;  // not confirmed by reflection: the engine's rule stays
+        return false;  // not confirmed by reflection: the engine's rule stays
     }
-    auto* field = static_cast<std::uint8_t*>(localPlayer) + offset;
-    if (*field == kMajorAxisFov)
-    {
-        return;
-    }
-    AxisRecord* free = nullptr;
+    auto*       field = static_cast<std::uint8_t*>(localPlayer) + offset;
+    AxisRecord* free  = nullptr;
     for (auto& record : g_axisRecords)
     {
         if (record.player == localPlayer)
         {
-            *field = kMajorAxisFov;  // the original is already kept (e.g. a camera cut rewrote it)
-            return;
+            *field = rule;  // the original is already kept (e.g. a camera cut rewrote it)
+            return true;
         }
         if (record.player == nullptr && free == nullptr)
         {
@@ -135,10 +143,51 @@ void ApplyAxisRule(void* localPlayer) noexcept
     }
     if (free == nullptr)
     {
-        return;  // no room to remember the original, so it is not changed
+        return false;  // no room to remember the original, so it is not changed
     }
     *free  = {localPlayer, *field};
-    *field = kMajorAxisFov;
+    *field = rule;
+    return true;
+}
+
+// The split FOV, logged once for each (weight, half shape, camera FOV) it is applied with.
+float g_loggedWeight = -2.0f;
+float g_loggedAspect = 0.0f;
+float g_loggedFov    = 0.0f;
+
+/// With a weight chosen and the halves' shape known, writes the split FOV (views/view_shape.h,
+/// SplitFov) under the MaintainXFOV rule; otherwise leaves the FOV to the MajorAxisFOV rule.
+void ApplySplitFov(void* localPlayer, std::byte* viewInfo) noexcept
+{
+    const float     weight = g_fovWeight.load(std::memory_order_relaxed);
+    const HalfShape half{g_halfAspect.load(std::memory_order_relaxed), g_halfHeightRatio.load(std::memory_order_relaxed)};
+    if (weight < 0.0f || half.aspect <= 0.0f || half.heightRatio <= 0.0f)
+    {
+        ApplyAxisRule(localPlayer, kMajorAxisFov);
+        return;
+    }
+    if (!ApplyAxisRule(localPlayer, kMaintainXFov))
+    {
+        return;  // the rule could not be set, so a written FOV would be read under the wrong rule
+    }
+    float fov         = 0.0f;
+    float cameraRatio = 0.0f;
+    std::memcpy(&fov, viewInfo + view_info::kFov, sizeof(fov));
+    std::memcpy(&cameraRatio, viewInfo + view_info::kAspectRatio, sizeof(cameraRatio));
+    const float split = SplitFov(fov, cameraRatio, half, weight);
+    std::memcpy(viewInfo + view_info::kFov, &split, sizeof(split));
+
+    if (weight != g_loggedWeight || half.aspect != g_loggedAspect || fov != g_loggedFov)
+    {
+        g_loggedWeight = weight;
+        g_loggedAspect = half.aspect;
+        g_loggedFov    = fov;
+        constexpr float kHalfRadians = 3.14159265f / 360.0f;
+        const float vertical = std::atan(std::tan(split * kHalfRadians) / half.aspect) / kHalfRadians;
+        platform::Log(L"split FOV: weight {:.2f}, half aspect {:.3f} (height {:.2f} of the screen): camera {:.1f} deg "
+                      L"wide at {:.3f} -> {:.1f} deg wide, {:.1f} deg tall",
+                      weight, half.aspect, half.heightRatio, fov, cameraRatio, split, vertical);
+    }
 }
 
 void ShapeSplitView(void* localPlayer, std::byte* viewInfo) noexcept
@@ -154,7 +203,7 @@ void ShapeSplitView(void* localPlayer, std::byte* viewInfo) noexcept
         return;
     }
     const bool hadBars = FillHalf(viewInfo);
-    ApplyAxisRule(localPlayer);
+    ApplySplitFov(localPlayer, viewInfo);
     if (hadBars && !g_fillLogged)
     {
         g_fillLogged = true;
@@ -175,7 +224,7 @@ void RestoreAxisRules(const void* removedPlayer) noexcept
         if (record.player != nullptr && record.player != removedPlayer && offset != 0)
         {
             auto* field = static_cast<std::uint8_t*>(const_cast<void*>(record.player)) + offset;
-            if (*field == kMajorAxisFov)
+            if (IsModRule(*field))
             {
                 *field = record.original;
                 platform::Log(L"a player's FOV rule restored to {}", static_cast<unsigned>(record.original));
@@ -288,6 +337,28 @@ bool ToggleFill() noexcept
     g_fillOn.store(on, std::memory_order_relaxed);
     g_fillLogged = false;
     return on;
+}
+
+bool FillsHalves() noexcept
+{
+    return g_fillOn.load(std::memory_order_relaxed);
+}
+
+void SetSplitFovWeight(float weight) noexcept
+{
+    g_fovWeight.store(weight >= 0.0f && weight <= 1.0f ? weight : -1.0f, std::memory_order_relaxed);
+}
+
+float SplitFovWeight() noexcept
+{
+    return g_fovWeight.load(std::memory_order_relaxed);
+}
+
+void SetHalfShape(const HalfShape& half) noexcept
+{
+    const bool known = half.aspect > 0.0f && half.heightRatio > 0.0f;
+    g_halfAspect.store(known ? half.aspect : 0.0f, std::memory_order_relaxed);
+    g_halfHeightRatio.store(known ? half.heightRatio : 0.0f, std::memory_order_relaxed);
 }
 
 bool UsesEngineViewPoint(const void* localPlayer) noexcept

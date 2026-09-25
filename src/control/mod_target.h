@@ -13,13 +13,17 @@ namespace lss::player_two {
 class Session;
 }
 
+namespace lss::players {
+class SplitLayout;
+}
+
 namespace lss::control {
 
 class ModTarget final : public Target
 {
 public:
-    ModTarget(player_two::Session& session, bool viewPointInstalled) noexcept
-        : session_(session), viewPointInstalled_(viewPointInstalled)
+    ModTarget(player_two::Session& session, players::SplitLayout& layout, bool viewPointInstalled) noexcept
+        : session_(session), layout_(layout), viewPointInstalled_(viewPointInstalled)
     {
     }
 
@@ -30,6 +34,10 @@ public:
     Outcome Leave() override;
     Outcome SetOwnCamera(bool on) override;
     Outcome SetPerPadSticks(bool on) override;
+    Outcome SetLayout(bool sideBySide) override;
+    Outcome SetBars(bool on) override;
+    Outcome SetSplitFov(float blend) override;
+    Outcome SetHudBand(bool on) override;
     Outcome HoldSticks(std::int32_t player, const float (&axes)[4]) override;
     void    ReleaseSticks(std::int32_t player) override;
     Outcome Console(const std::wstring& command) override;
@@ -44,7 +52,8 @@ public:
 
 private:
     player_two::Session&         session_;
-    bool                         viewPointInstalled_;
+    players::SplitLayout&        layout_;
+    bool                        viewPointInstalled_;
     std::array<std::int32_t, 2>  heldIds_{-1, -1};  // per player: the controller id its stick hold is on
     std::array<std::uint32_t, 2> heldJoins_{};      // per player: the join its stick hold was made in
 };

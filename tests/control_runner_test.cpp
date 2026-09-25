@@ -43,6 +43,10 @@ public:
     Outcome Leave() override { return Record(L"leave"); }
     Outcome SetOwnCamera(bool on) override { return Record(on ? L"own-camera on" : L"own-camera off"); }
     Outcome SetPerPadSticks(bool on) override { return Record(on ? L"sticks per-pad" : L"sticks merged"); }
+    Outcome SetLayout(bool sideBySide) override { return Record(sideBySide ? L"side-by-side" : L"top-bottom"); }
+    Outcome SetBars(bool on) override { return Record(on ? L"bars on" : L"bars off"); }
+    Outcome SetSplitFov(float blend) override { return Record(L"split-fov " + std::to_wstring(blend)); }
+    Outcome SetHudBand(bool on) override { return Record(on ? L"hud-band on" : L"hud-band off"); }
     Outcome HoldSticks(std::int32_t player, const float (&axes)[4]) override
     {
         if (!perPad)

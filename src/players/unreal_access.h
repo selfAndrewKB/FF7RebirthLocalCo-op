@@ -59,6 +59,15 @@ std::size_t CountObjects(const wchar_t* className) noexcept;
 /// calling nothing, if it does not, or if the call raised an exception.
 bool RemoveLocalPlayer(UObject* gameInstance, UObject* localPlayer, std::uintptr_t removeLocalPlayer) noexcept;
 
+/// APlayerController::GetViewportSize: the size in pixels of the whole game viewport (every
+/// player's part together), or empty if the function cannot be found or raised an exception.
+struct ViewportSize
+{
+    std::int32_t width  = 0;
+    std::int32_t height = 0;
+};
+std::optional<ViewportSize> ViewportSizeOf(UObject* playerController) noexcept;
+
 /// UKismetSystemLibrary::GetConsoleVariableIntValue: a console variable's current value, or empty
 /// if the function cannot be found or raised an exception.
 std::optional<std::int32_t> ConsoleVariableInt(const wchar_t* variable) noexcept;

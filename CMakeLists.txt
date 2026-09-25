@@ -31,9 +31,15 @@ add_library(LocalSplitScreen SHARED
     src/control/runner.cpp
     src/control/script.cpp
 
+    src/hud/overlay_band.cpp
+    src/hud/overlay_layout.cpp
+
+    src/platform/call_redirect.cpp
     src/platform/code_redirect.cpp
     src/platform/image.cpp
     src/platform/log.cpp
+    src/platform/module_pin.cpp
+    src/platform/near_code.cpp
     src/platform/verified_code.cpp
     src/platform/vtable_entry.cpp
 
@@ -91,6 +97,7 @@ add_test(NAME one_family_per_view COMMAND LocalSplitScreenTests)
 add_executable(OutputLoadActionTests
     tests/output_load_action_test.cpp
     src/platform/code_redirect.cpp
+    src/platform/near_code.cpp
 )
 target_include_directories(OutputLoadActionTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(OutputLoadActionTests PRIVATE cxx_std_20)
@@ -168,3 +175,21 @@ add_executable(StickSelectTests
 target_include_directories(StickSelectTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(StickSelectTests PRIVATE cxx_std_20)
 add_test(NAME stick_select COMMAND StickSelectTests)
+
+add_executable(CallRedirectTests
+    tests/call_redirect_test.cpp
+    src/platform/call_redirect.cpp
+    src/platform/module_pin.cpp
+    src/platform/near_code.cpp
+)
+target_include_directories(CallRedirectTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(CallRedirectTests PRIVATE cxx_std_20)
+add_test(NAME call_redirect COMMAND CallRedirectTests)
+
+add_executable(OverlayBandTests
+    tests/overlay_band_test.cpp
+    src/hud/overlay_band.cpp
+)
+target_include_directories(OverlayBandTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(OverlayBandTests PRIVATE cxx_std_20)
+add_test(NAME overlay_band COMMAND OverlayBandTests)

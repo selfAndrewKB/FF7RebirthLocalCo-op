@@ -306,6 +306,30 @@ bool ExecuteConsoleCommand(const wchar_t* command) noexcept
         [&](std::uint8_t* frame) { *reinterpret_cast<UObject**>(frame + *context) = world; }, NoOutputs);
 }
 
+std::optional<ViewportSize> ViewportSizeOf(UObject* playerController) noexcept
+{
+    auto* function = UObjectGlobals::StaticFindObject<UFunction*>(
+        nullptr, nullptr, STR("/Script/Engine.PlayerController:GetViewportSize"));
+    if (function == nullptr || playerController == nullptr)
+    {
+        return std::nullopt;
+    }
+    const auto sizeX = ParamOffset(function, STR("SizeX"), sizeof(std::int32_t));
+    const auto sizeY = ParamOffset(function, STR("SizeY"), sizeof(std::int32_t));
+    constexpr std::int32_t kMaxFrame = 16;
+    if (!sizeX || !sizeY || function->GetParmsSize() > kMaxFrame)
+    {
+        return std::nullopt;
+    }
+    alignas(16) std::uint8_t frame[kMaxFrame]{};
+    if (!GuardedProcessEvent(playerController, function, frame))
+    {
+        return std::nullopt;
+    }
+    return ViewportSize{*reinterpret_cast<const std::int32_t*>(frame + *sizeX),
+                        *reinterpret_cast<const std::int32_t*>(frame + *sizeY)};
+}
+
 bool RemoveLocalPlayer(UObject* gameInstance, UObject* localPlayer, std::uintptr_t removeLocalPlayer) noexcept
 {
     if (gameInstance == nullptr || localPlayer == nullptr)

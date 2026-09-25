@@ -58,6 +58,9 @@ public:
     /// Switches to the other layout: now if player 2 is in, otherwise at the next join.
     LayoutChange Toggle() noexcept;
 
+    /// Chooses a layout (a SplitLayoutKind value): now if player 2 is in, otherwise at the next join.
+    LayoutChange Choose(std::uint8_t value) noexcept;
+
 private:
     LayoutChange Apply(std::uint8_t value) noexcept;
     LayoutChange Restore() noexcept;

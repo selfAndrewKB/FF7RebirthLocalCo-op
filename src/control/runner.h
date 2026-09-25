@@ -39,6 +39,10 @@ public:
     virtual Outcome Leave()                                    = 0;
     virtual Outcome SetOwnCamera(bool on)                      = 0;
     virtual Outcome SetPerPadSticks(bool on)                   = 0;
+    virtual Outcome SetLayout(bool sideBySide)                 = 0;
+    virtual Outcome SetBars(bool on)                           = 0;
+    virtual Outcome SetSplitFov(float blend)                   = 0;  // negative: native
+    virtual Outcome SetHudBand(bool on)                        = 0;
     virtual Outcome HoldSticks(std::int32_t player, const float (&axes)[4]) = 0;
     virtual void    ReleaseSticks(std::int32_t player)         = 0;
     virtual Outcome Console(const std::wstring& command)       = 0;

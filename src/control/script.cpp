@@ -120,6 +120,23 @@ ParsedLine ParseStick(const std::vector<std::wstring_view>& words)
     return Parsed(std::move(command));
 }
 
+ParsedLine ParseSplitFov(const std::vector<std::wstring_view>& words)
+{
+    Command command;
+    command.kind = CommandKind::SplitFov;
+    if (words.size() == 2 && words[1] == L"native")
+    {
+        return Parsed(std::move(command));
+    }
+    const auto blend = words.size() == 2 ? ParseAxis(words[1]) : std::nullopt;
+    if (!blend || *blend < 0.0f)
+    {
+        return Error(L"split-fov takes a blend from 0 to 1, or native");
+    }
+    command.blend = *blend;
+    return Parsed(std::move(command));
+}
+
 ParsedLine ParseWait(const std::vector<std::wstring_view>& words)
 {
     const auto ticks = words.size() == 2 ? ParseTicks(words[1]) : std::nullopt;
@@ -202,6 +219,10 @@ ParsedLine ParseLine(std::wstring_view line)
     if (name == L"status") return ParseBare(CommandKind::Status, words);
     if (name == L"own-camera") return ParseSwitch(CommandKind::OwnCamera, words, L"on", L"off");
     if (name == L"sticks") return ParseSwitch(CommandKind::Sticks, words, L"per-pad", L"merged");
+    if (name == L"layout") return ParseSwitch(CommandKind::Layout, words, L"side-by-side", L"top-bottom");
+    if (name == L"bars") return ParseSwitch(CommandKind::Bars, words, L"on", L"off");
+    if (name == L"split-fov") return ParseSplitFov(words);
+    if (name == L"hud-band") return ParseSwitch(CommandKind::HudBand, words, L"on", L"off");
     if (name == L"stick") return ParseStick(words);
     if (name == L"wait") return ParseWait(words);
     if (name == L"wait-until") return ParseWaitUntil(words);
@@ -220,6 +241,11 @@ std::wstring Describe(const Command& command)
         case CommandKind::Status: return L"status";
         case CommandKind::OwnCamera: return command.on ? L"own-camera on" : L"own-camera off";
         case CommandKind::Sticks: return command.on ? L"sticks per-pad" : L"sticks merged";
+        case CommandKind::Layout: return command.on ? L"layout side-by-side" : L"layout top-bottom";
+        case CommandKind::Bars: return command.on ? L"bars on" : L"bars off";
+        case CommandKind::HudBand: return command.on ? L"hud-band on" : L"hud-band off";
+        case CommandKind::SplitFov:
+            return command.blend < 0.0f ? std::wstring(L"split-fov native") : L"split-fov " + AxisText(command.blend);
         case CommandKind::Stick:
             return std::format(L"stick {} {} {} {} {} {}", command.player, AxisText(command.axes[0]),
                                AxisText(command.axes[1]), AxisText(command.axes[2]), AxisText(command.axes[3]),

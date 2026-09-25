@@ -27,11 +27,19 @@ def submit(control: pathlib.Path, name: str, text: str) -> pathlib.Path:
     inbox = control / "inbox"
     if not inbox.is_dir():
         sys.exit(f"no inbox at {inbox} (has the mod run with the command channel yet?)")
-    stem = f"{time.strftime('%Y%m%d-%H%M%S')}-{name}"
+    # Unique and sortable: the mod runs the lowest name first, and a reused name would overwrite an
+    # earlier script's result in done/ (and this tool would read the earlier one as its own).
+    done = control / "done"
+    while True:
+        now = time.time()
+        stem = f"{time.strftime('%Y%m%d-%H%M%S', time.localtime(now))}-{int(now * 1000) % 1000:03d}-{name}"
+        if not any(p.exists() for p in (inbox / f"{stem}.txt", done / f"{stem}.txt", done / f"{stem}.result.txt")):
+            break
+        time.sleep(0.002)
     temporary = inbox / f"{stem}.tmp"
     temporary.write_text(text if text.endswith("\n") else text + "\n", encoding="utf-8")
     os.replace(temporary, inbox / f"{stem}.txt")
-    return control / "done" / f"{stem}.result.txt"
+    return done / f"{stem}.result.txt"
 
 
 def wait(result: pathlib.Path, timeout: float) -> int:

@@ -108,6 +108,26 @@ void TestSwitchWithPlayerTwoIn()
     EXPECT(g_setting.writes == writes);
 }
 
+void TestChooseAsksForAState()
+{
+    std::puts("layout: Choose sets a layout whatever is on screen; choosing it again changes nothing");
+    auto layout = Fresh(kTopBottom);
+    const auto chosen = layout.Choose(kSideBySide);
+    EXPECT(chosen.kind == Kind::Chosen && chosen.value == kSideBySide);
+    EXPECT(g_setting.writes == 0);
+
+    EXPECT(layout.Update(true).kind == Kind::Applied);
+    EXPECT(g_setting.value == kSideBySide);
+    const int writes = g_setting.writes;
+    const auto again = layout.Choose(kSideBySide);
+    EXPECT(again.kind == Kind::Applied && again.value == kSideBySide);
+    EXPECT(g_setting.writes == writes);  // already in place: not written again
+
+    EXPECT(layout.Choose(kTopBottom).kind == Kind::Applied);
+    EXPECT(g_setting.value == kTopBottom);
+    EXPECT(layout.Update(false).kind == Kind::None);  // the game's own value is in place
+}
+
 void TestGameAlreadySideBySide()
 {
     std::puts("layout: the switch starts from the game's value when nothing is chosen");
@@ -185,6 +205,7 @@ int main()
     TestGameLayoutUntilChosen();
     TestChoiceAppliedAtJoinAndRestored();
     TestSwitchWithPlayerTwoIn();
+    TestChooseAsksForAState();
     TestGameAlreadySideBySide();
     TestSomeoneElseChangedIt();
     TestFailuresReported();

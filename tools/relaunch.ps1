@@ -1,0 +1,67 @@
+<#
+.SYNOPSIS
+    Quits the game through the mod, optionally deploys a new build, and launches the game again.
+
+.DESCRIPTION
+    1. If the game is running: player 2 leaves (if in), then the mod's `quit` command, and the game
+       is waited on until it exits by itself. It is never killed.
+    2. With -Deploy: the installed main.dll is kept as main.dll.bak-<Label> and the build is copied
+       in; both hashes are printed and must match.
+    3. The game is launched through Steam, and this returns once the mod has logged its ready line
+       for this launch (or reports that it did not).
+    Title and load menus are left to keys.ps1 and shot.ps1, so each one is checked on screen first.
+
+.EXAMPLE
+    .\tools\relaunch.ps1 -Deploy -Label v0.6.3
+#>
+param(
+    [switch]$Deploy,
+    [string]$Label = '',
+    [string]$Build = "$PSScriptRoot\..\build\Game__Shipping__Win64\LocalSplitScreen.dll",
+    [int]$ReadyTimeoutSeconds = 150
+)
+
+$ErrorActionPreference = 'Stop'
+$gameDir = 'G:\_SSD Games\SteamLibrary\steamapps\common\FINAL FANTASY VII REBIRTH\End\Binaries\Win64'
+$modDir  = "$gameDir\ue4ss\Mods\LocalSplitScreen"
+$log     = "$gameDir\ue4ss\UE4SS.log"
+$control = "$PSScriptRoot\control.py"
+
+$game = Get-Process ff7rebirth_ -ErrorAction SilentlyContinue
+if ($game) {
+    $status = python $control -c 'status' --timeout 20
+    if ($status -match 'player 2 is not in') {
+        'player 2 is out'
+    } else {
+        python $control -c 'leave' -c 'wait-until out 900' --timeout 60 | Select-Object -Last 1
+    }
+    python $control -c 'quit' --timeout 30 | Select-Object -Last 1
+    if (-not $game.WaitForExit(120000)) { throw 'the game did not exit within 2 minutes; not deploying' }
+    'game exited'
+}
+
+if ($Deploy) {
+    if (-not $Label) { throw '-Deploy needs -Label for the backup name' }
+    if (Get-Process ff7rebirth_ -ErrorAction SilentlyContinue) { throw 'the game is still running' }
+    $dll = "$modDir\dlls\main.dll"
+    Copy-Item $dll "$dll.bak-$Label"
+    Copy-Item $Build $dll
+    $installed = (Get-FileHash $dll).Hash
+    $built     = (Get-FileHash $Build).Hash
+    "installed $installed (backup main.dll.bak-$Label)"
+    if ($installed -ne $built) { throw "the installed DLL does not match the build ($built)" }
+}
+
+$start = Get-Date
+Start-Process 'c:/program files (x86)/steam/steam.exe' -ArgumentList '-applaunch', '2909400'
+for ($i = 0; $i -lt $ReadyTimeoutSeconds; $i++) {
+    Start-Sleep 1
+    if ((Test-Path $log) -and (Get-Item $log).LastWriteTime -gt $start -and
+        (Select-String -Path $log -Pattern 'ready: every engine check passed' -SimpleMatch -Quiet)) {
+        Select-String -Path $log -Pattern 'LocalSplitScreen\] (v\d|check failed|standing aside|HUD layout)' |
+            ForEach-Object { $_.Line.Substring([Math]::Min(29, $_.Line.Length)) }
+        return
+    }
+}
+"no ready line within $ReadyTimeoutSeconds s; last lines:"
+Get-Content $log -Tail 5

@@ -1,9 +1,11 @@
 #include "control/mod_target.h"
 
+#include "hud/overlay_layout.h"
 #include "platform/log.h"
 #include "player_two/generation.h"
 #include "player_two/pad_sticks.h"
 #include "player_two/session.h"
+#include "players/split_layout.h"
 #include "players/unreal_access.h"
 #include "views/player_view_point.h"
 
@@ -84,6 +86,57 @@ Outcome ModTarget::SetPerPadSticks(bool on)
         session_.TogglePadSticks();  // logs the new state
     }
     return player_two::pad_sticks::Enabled() == on ? Outcome{} : Failed(L"the switch did not take");
+}
+
+Outcome ModTarget::SetLayout(bool sideBySide)
+{
+    using Kind         = players::LayoutChange::Kind;
+    const auto value   = static_cast<std::uint8_t>(sideBySide ? players::SplitLayoutKind::SideBySide
+                                                              : players::SplitLayoutKind::TopBottom);
+    const auto change  = layout_.Choose(value);
+    const wchar_t* name = sideBySide ? L"side by side" : L"top/bottom";
+    switch (change.kind)
+    {
+        case Kind::Applied: return {true, name};
+        case Kind::Chosen: return {true, std::wstring(name) + L" from the next join"};
+        case Kind::ApplyFailed: return Failed(L"TwoPlayerSplitscreenLayout could not be read or set");
+        default: return Failed(L"unexpected layout outcome");
+    }
+}
+
+Outcome ModTarget::SetBars(bool on)
+{
+    if (!viewPointInstalled_)
+    {
+        return Failed(L"the view-point entry is not installed");
+    }
+    if (views::FillsHalves() == on)  // bars on means the halves do not fill
+    {
+        views::ToggleFill();
+    }
+    return {true, views::FillsHalves() ? L"halves filled" : L"16:9 halves with bars"};
+}
+
+Outcome ModTarget::SetHudBand(bool on)
+{
+    if (!hud::OverlayLayoutInstalled())
+    {
+        return Failed(L"the HUD layout is not installed (see the startup log)");
+    }
+    hud::SetBandEnabled(on);
+    // What it sets is logged by the HUD module at the overlay's next render while split.
+    return {true, on ? L"HUD laid out in each half's visible band" : L"HUD full-image layout (values logged only)"};
+}
+
+Outcome ModTarget::SetSplitFov(float blend)
+{
+    if (!viewPointInstalled_)
+    {
+        return Failed(L"the view-point entry is not installed");
+    }
+    views::SetSplitFovWeight(blend);
+    // The resulting FOV is logged by the views module when a filled split view first uses it.
+    return {true, blend < 0.0f ? L"stock MajorAxisFOV rule" : L"weight set; applies to filled halves"};
 }
 
 Outcome ModTarget::HoldSticks(std::int32_t player, const float (&axes)[4])

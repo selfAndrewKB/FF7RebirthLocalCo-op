@@ -6,11 +6,15 @@
 // The mod replaces the ULocalPlayer vtable entry for GetViewPoint (engine_addresses.h) and calls
 // the engine's function. With one player the result is exactly the engine's. While player 2 is in:
 //   - every player's view fills its half: the game's 16:9 constraint is cleared and the FOV rule
-//     becomes MajorAxisFOV (views/view_shape.h); Ctrl+F4 switches this off to compare with bars.
+//     becomes MaintainXFOV with the split FOV written in (views/view_shape.h, SplitFov), or the
+//     stock MajorAxisFOV when the split FOV is switched off; Ctrl+F4 switches the fill off to
+//     compare with bars.
 //     Each player's own FOV rule is put back when player 2 leaves.
 //   - player 2's half shows player 1's camera until Ctrl+F6 switches it to player 2's own camera
 //     (and back). Starting on player 1's means a player-2 camera that is not set up yet (it sits
 //     at the world origin until it has a character) is never on screen by default.
+
+#include "views/view_shape.h"
 
 #include <cstdint>
 
@@ -45,6 +49,21 @@ bool ShowsOwnCamera() noexcept;
 
 /// Switches whether split views fill their halves (on at start); returns the new state.
 bool ToggleFill() noexcept;
+
+/// True while split views fill their halves; false while they keep 16:9 with bars.
+bool FillsHalves() noexcept;
+
+/// The FOV of filled halves (views/view_shape.h, SplitFov): the weight from 0 (keep the
+/// single-player framing) to 1 (keep the single-player scale); kDefaultSplitFovWeight at start.
+/// Anything outside 0..1 selects the stock MajorAxisFOV rule instead.
+void SetSplitFovWeight(float weight) noexcept;
+
+/// The weight in use, or a negative value for the MajorAxisFOV rule.
+float SplitFovWeight() noexcept;
+
+/// The halves' shape (views::HalfOf), kept current by the game thread while player 2 is in. The
+/// split FOV is applied only once this is known; until then the MajorAxisFOV rule is used.
+void SetHalfShape(const HalfShape& half) noexcept;
 
 /// True if `localPlayer`'s vtable is the engine's ULocalPlayer vtable, i.e. its view point goes
 /// through the installed entry. A different vtable (a subclass) would bypass the camera choice.

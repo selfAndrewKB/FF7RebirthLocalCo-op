@@ -6,6 +6,13 @@
 //   join | leave                          add or remove player 2 (as Ctrl+F7 / Ctrl+F8)
 //   own-camera on|off                     player 2's half shows their own camera, or player 1's
 //   sticks per-pad|merged                 each pad drives only its own player, or the game's merge
+//   layout top-bottom|side-by-side        how the screen is split (now, or from the next join)
+//   bars on|off                           split views keep 16:9 with bars, or fill their halves
+//   split-fov <weight>|native             filled halves' FOV: 0 keeps the single-player framing,
+//                                         1 its on-screen scale (views/view_shape.h, SplitFov;
+//                                         0.5 at start); native = the stock MajorAxisFOV rule
+//   hud-band on|off                       lay the HUD out in the part of its image each half shows
+//                                         (hud/overlay_layout.h); off logs the values only
 //   stick <player> <lx> <ly> <rx> <ry> <ticks>
 //                                         hold a player's sticks (-1..1) for a number of ticks;
 //                                         needs per-pad sticks, and wins over the pad itself
@@ -32,6 +39,10 @@ enum class CommandKind
     Leave,
     OwnCamera,
     Sticks,
+    Layout,
+    Bars,
+    SplitFov,
+    HudBand,
     Stick,
     Wait,
     WaitUntil,
@@ -50,9 +61,10 @@ enum class WaitCondition
 struct Command
 {
     CommandKind   kind      = CommandKind::Note;
-    bool          on        = false;                   // own-camera on / sticks per-pad
+    bool          on        = false;                   // own-camera on / sticks per-pad / layout side-by-side / bars on
     std::int32_t  player    = 0;                       // stick: 1 or 2
     float         axes[4]   = {};                      // stick: LX, LY, RX, RY
+    float         blend     = -1.0f;                   // split-fov: 0..1, or negative for native
     std::uint32_t ticks     = 0;                       // stick, wait, wait-until
     WaitCondition condition = WaitCondition::Playing;  // wait-until
     std::wstring  text;                                // console, note

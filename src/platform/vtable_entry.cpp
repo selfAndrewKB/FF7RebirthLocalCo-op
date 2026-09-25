@@ -1,5 +1,7 @@
 #include "platform/vtable_entry.h"
 
+#include "platform/module_pin.h"
+
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -32,17 +34,6 @@ bool SwapPointer(std::uintptr_t entry, std::uintptr_t expected, std::uintptr_t d
     DWORD ignored = 0;
     VirtualProtect(slot, sizeof(void*), oldProtect, &ignored);
     return previous == reinterpret_cast<void*>(expected);
-}
-
-/// Keeps this DLL loaded until the process exits. Once an engine vtable points into our code,
-/// unloading the DLL would leave the engine calling freed memory the next frame. A restore can
-/// fail (another mod may have hooked the entry on top of ours and now calls through to us), so
-/// "restore, then unload" is not safe; staying loaded is.
-bool PinThisModule() noexcept
-{
-    HMODULE self = nullptr;
-    return GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
-                              reinterpret_cast<LPCWSTR>(&PinThisModule), &self) != FALSE;
 }
 
 }  // namespace

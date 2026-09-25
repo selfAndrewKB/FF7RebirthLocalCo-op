@@ -12,6 +12,7 @@
 
 #include "control/command_channel.h"
 #include "control/mod_target.h"
+#include "hud/overlay_layout.h"
 #include "platform/engine_addresses.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -23,6 +24,7 @@
 #include "renderer/additional_family_output.h"
 #include "renderer/view_family_submission.h"
 #include "views/player_view_point.h"
+#include "views/view_shape.h"
 
 #include <cstdint>
 #include <optional>
@@ -37,10 +39,13 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.6.0-control-channel";
+constexpr const wchar_t* kVersion = L"0.8.0-hud-band-placed";
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
+
+/// How often, in engine ticks, the split halves' shape is read while player 2 is in.
+constexpr std::uint32_t kHalfShapeIntervalTicks = 30;
 
 /// Checks every engine fact against the running game and logs each one that fails.
 /// Returns the live address of RemoveLocalPlayer when all hold.
@@ -83,7 +88,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.6.0-control-channel");
+        ModVersion     = STR("0.8.0-hud-band-placed");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -116,6 +121,7 @@ public:
         {
             lss::views::RemovePlayerViewPoint();
         }
+        lss::hud::RemoveOverlayLayout();
         if (rendererInstalled_)
         {
             lss::renderer::RemoveViewFamilySubmission();
@@ -147,8 +153,12 @@ public:
                 L"camera choice are unavailable");
         }
 
+        // The HUD's layout in split views (hud/overlay_layout.h). Optional like the view point: without
+        // it the HUD keeps the game's full-screen layout, cropped to each half.
+        lss::hud::InstallOverlayLayout(*image);
+
         // Control scripts drive the same actions as the keys, from files (control/command_channel.h).
-        controlTarget_.emplace(*session_, viewPointInstalled_);
+        controlTarget_.emplace(*session_, layout_, viewPointInstalled_);
         control_.Open();
 
         const Hook::FCallbackOptions tickOptions{false, false, STR("LocalSplitScreen"), STR("player intent")};
@@ -229,6 +239,8 @@ private:
         FollowPlayerTwo();
         LogSettingsChange(settings_.Update(session_->HasPlayerTwo()));
         LogLayoutChange(layout_.Update(session_->HasPlayerTwo()));
+        UpdateHalfShape();
+        lss::hud::SetSplitActive(session_->HasPlayerTwo());
 
         const ULONGLONG now = GetTickCount64();
         if (!session_->HasPlayerTwo())
@@ -239,6 +251,45 @@ private:
         {
             nextStatus_ = now + kStatusIntervalMs;
             session_->LogStatus();
+        }
+    }
+
+    /// Keeps the views module's idea of the halves' shape current while player 2 is in: the
+    /// viewport size (it changes with the window) and the layout (it changes by key or script).
+    /// Read twice a second; until the first reading the split FOV leaves the stock rule in place.
+    void UpdateHalfShape() noexcept
+    {
+        if (!session_->HasPlayerTwo())
+        {
+            halfShapeTicks_ = 0;
+            lss::views::SetHalfShape({});
+            return;
+        }
+        if (halfShapeTicks_++ % kHalfShapeIntervalTicks != 0)
+        {
+            return;
+        }
+        auto*      playerOne  = static_cast<RC::Unreal::UObject*>(const_cast<void*>(session_->PlayerOne()));
+        auto**     controller = lss::players::unreal::ControllerField(playerOne);
+        const auto size   = controller != nullptr ? lss::players::unreal::ViewportSizeOf(*controller) : std::nullopt;
+        const auto layout = lss::players::unreal::ReadTwoPlayerSplitscreenLayout();
+        const auto half   = size && layout ? lss::views::HalfOf(size->width, size->height,
+                                                                *layout == static_cast<std::uint8_t>(
+                                                                               lss::players::SplitLayoutKind::SideBySide))
+                                           : lss::views::HalfShape{};
+        lss::views::SetHalfShape(half);
+        if (half.aspect != loggedHalfAspect_)
+        {
+            loggedHalfAspect_ = half.aspect;
+            if (half.aspect > 0.0f)
+            {
+                Log(L"split halves: viewport {}x{}, layout {}, half aspect {:.3f}, height {:.2f} of the screen",
+                    size->width, size->height, *layout, half.aspect, half.heightRatio);
+            }
+            else
+            {
+                Log(L"split halves: the viewport size or layout cannot be read; the split FOV waits (stock rule meanwhile)");
+            }
         }
     }
 
@@ -384,6 +435,8 @@ private:
         {&lss::players::unreal::ConsoleVariableInt, &lss::players::unreal::ExecuteConsoleCommand}};
     lss::players::SplitLayout                 layout_{{&lss::players::unreal::ReadTwoPlayerSplitscreenLayout,
                                                        &lss::players::unreal::WriteTwoPlayerSplitscreenLayout}};
+    std::uint32_t                             halfShapeTicks_     = 0;
+    float                                     loggedHalfAspect_   = -1.0f;
     bool                                      tickSeen_           = false;
     bool                                      rendererInstalled_  = false;
     bool                                      viewPointInstalled_ = false;

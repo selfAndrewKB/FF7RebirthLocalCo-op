@@ -64,6 +64,37 @@ void TestSwitches()
     EXPECT(Rejected(L"sticks per-pad extra"));
 }
 
+void TestLayoutAndBars()
+{
+    std::puts("script: layout top-bottom|side-by-side and bars on|off");
+    const auto side = ParseLine(L"layout side-by-side");
+    EXPECT(side.command && side.command->kind == CommandKind::Layout && side.command->on);
+    const auto top = ParseLine(L"layout top-bottom");
+    EXPECT(top.command && top.command->kind == CommandKind::Layout && !top.command->on);
+    const auto bars = ParseLine(L"bars on");
+    EXPECT(bars.command && bars.command->kind == CommandKind::Bars && bars.command->on);
+    EXPECT(!ParseLine(L"bars off").command->on);
+    EXPECT(Rejected(L"layout"));
+    EXPECT(Rejected(L"layout vertical"));
+    EXPECT(Rejected(L"bars"));
+    EXPECT(Rejected(L"bars yes"));
+}
+
+void TestSplitFov()
+{
+    std::puts("script: split-fov <blend 0..1>|native");
+    const auto half = ParseLine(L"split-fov 0.5");
+    EXPECT(half.command && half.command->kind == CommandKind::SplitFov && half.command->blend == 0.5f);
+    const auto native = ParseLine(L"split-fov native");
+    EXPECT(native.command && native.command->kind == CommandKind::SplitFov && native.command->blend < 0.0f);
+    EXPECT(ParseLine(L"split-fov 0").command->blend == 0.0f);
+    EXPECT(ParseLine(L"split-fov 1").command->blend == 1.0f);
+    EXPECT(Rejected(L"split-fov"));
+    EXPECT(Rejected(L"split-fov -0.5"));
+    EXPECT(Rejected(L"split-fov 1.5"));
+    EXPECT(Rejected(L"split-fov wide"));
+}
+
 void TestStick()
 {
     std::puts("script: stick <player> <lx> <ly> <rx> <ry> <ticks>, axes within -1..1");
@@ -114,7 +145,10 @@ void TestTextCommands()
 void TestDescribeRoundTrips()
 {
     std::puts("script: Describe writes a line that parses back to the same command");
-    for (const wchar_t* line : {L"join", L"own-camera off", L"sticks per-pad", L"stick 1 0 1 0 0 60", L"wait 5",
+    for (const wchar_t* line : {L"join", L"own-camera off", L"sticks per-pad", L"layout side-by-side",
+                                L"layout top-bottom", L"bars on", L"bars off", L"split-fov 0.5",
+                                L"split-fov native", L"hud-band on", L"hud-band off", L"stick 1 0 1 0 0 60",
+                                L"wait 5",
                                 L"wait-until playing 600", L"console stat fps", L"note hello"})
     {
         const auto parsed = ParseLine(line);
@@ -129,6 +163,8 @@ int main()
     TestSkippedLines();
     TestSimpleCommands();
     TestSwitches();
+    TestLayoutAndBars();
+    TestSplitFov();
     TestStick();
     TestWaits();
     TestTextCommands();

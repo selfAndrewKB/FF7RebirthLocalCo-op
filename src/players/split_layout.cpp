@@ -43,8 +43,13 @@ LayoutChange SplitLayout::Toggle() noexcept
     {
         return {LayoutChange::Kind::Unreadable, 0};  // the other layout is unknown; nothing chosen
     }
-    chosen_ = Other(from);
-    return playerTwoIn_ ? Apply(*chosen_) : LayoutChange{LayoutChange::Kind::Chosen, *chosen_};
+    return Choose(Other(from));
+}
+
+LayoutChange SplitLayout::Choose(std::uint8_t value) noexcept
+{
+    chosen_ = value;
+    return playerTwoIn_ ? Apply(value) : LayoutChange{LayoutChange::Kind::Chosen, value};
 }
 
 LayoutChange SplitLayout::Apply(std::uint8_t value) noexcept
