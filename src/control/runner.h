@@ -45,6 +45,7 @@ public:
     virtual Outcome SetHudBand(bool on)                        = 0;
     virtual Outcome SetHudProbe(bool on)                       = 0;
     virtual Outcome TraceHud(std::int32_t frames)              = 0;
+    virtual Outcome SetHudImage(bool on)                       = 0;
     virtual Outcome Dump(const std::wstring& topic)            = 0;
     virtual Outcome HoldSticks(std::int32_t player, const float (&axes)[4]) = 0;
     virtual void    ReleaseSticks(std::int32_t player)         = 0;

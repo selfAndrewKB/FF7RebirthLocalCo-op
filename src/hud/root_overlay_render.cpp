@@ -2,6 +2,7 @@
 
 #include "hud/hud_placement.h"
 #include "hud/hud_trace.h"
+#include "hud/second_image.h"
 #include "platform/call_redirect.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -33,10 +34,12 @@ void RenderRootOverlay(void* application) noexcept
     {
         TraceBeforeRender();
         FollowHudPlacementBeforeRender();
+        BeginOverlayRender(player_two::generation::Active());  // player 2's image first, if on
     }
     reinterpret_cast<RenderFn>(g_call.Original())(application);
     if (gameThread)
     {
+        EndOverlayRender();
         TraceAfterRender();
     }
 }

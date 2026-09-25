@@ -2,6 +2,7 @@
 
 #include "hud/hud_addresses.h"
 #include "hud/overlay_band.h"
+#include "hud/second_image.h"
 #include "platform/call_redirect.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -136,7 +137,8 @@ IntRect* OverlayLayoutRect(IntRect* out)
 /// arguments; the fourth is passed through unread).
 void* OverlayLayerEntry(void* slot, std::uintptr_t name, IntRect* rect, std::uintptr_t unused)
 {
-    void* entry = reinterpret_cast<FindOrAddEntryFn>(g_entryCall.Original())(slot, name, rect, unused);
+    // Player 2's pass of the overlay render names its own entry (hud/second_image.h).
+    void* entry = reinterpret_cast<FindOrAddEntryFn>(g_entryCall.Original())(slot, EntryNameForPass(name), rect, unused);
     if (!g_pending.active || g_pending.thread != GetCurrentThreadId() || entry == nullptr)
     {
         return entry;
@@ -213,6 +215,10 @@ void OverlaySubmit(void* renderer, std::uintptr_t pool, void* slot, std::uintptr
     {
         g_submit.active = false;
         PlaceEntryMatrices(g_submit);
+    }
+    if (!SubmitInThisPass())
+    {
+        return;  // player 2's pass: player 1's pass submits the slot with both entries (hud/second_image.h)
     }
     reinterpret_cast<SubmitLayerSlotFn>(g_submitCall.Original())(renderer, pool, slot, unused);
 }

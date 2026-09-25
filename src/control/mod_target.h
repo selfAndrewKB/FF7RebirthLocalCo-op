@@ -40,6 +40,7 @@ public:
     Outcome SetHudBand(bool on) override;
     Outcome SetHudProbe(bool on) override;
     Outcome TraceHud(std::int32_t frames) override;
+    Outcome SetHudImage(bool on) override;
     Outcome Dump(const std::wstring& topic) override;
     Outcome HoldSticks(std::int32_t player, const float (&axes)[4]) override;
     void    ReleaseSticks(std::int32_t player) override;

@@ -252,6 +252,7 @@ ParsedLine ParseLine(std::wstring_view line)
     if (name == L"hud-band") return ParseSwitch(CommandKind::HudBand, words, L"on", L"off");
     if (name == L"hud-probe") return ParseSwitch(CommandKind::HudProbe, words, L"on", L"off");
     if (name == L"hud-trace") return ParseHudTrace(words);
+    if (name == L"hud-image") return ParseSwitch(CommandKind::HudImage, words, L"on", L"off");
     if (name == L"dump") return ParseDump(words);
     if (name == L"stick") return ParseStick(words);
     if (name == L"wait") return ParseWait(words);
@@ -276,6 +277,7 @@ std::wstring Describe(const Command& command)
         case CommandKind::HudBand: return command.on ? L"hud-band on" : L"hud-band off";
         case CommandKind::HudProbe: return command.on ? L"hud-probe on" : L"hud-probe off";
         case CommandKind::HudTrace: return std::format(L"hud-trace {}", command.ticks);
+        case CommandKind::HudImage: return command.on ? L"hud-image on" : L"hud-image off";
         case CommandKind::Dump: return L"dump " + command.text;
         case CommandKind::SplitFov:
             return command.blend < 0.0f ? std::wstring(L"split-fov native") : L"split-fov " + AxisText(command.blend);

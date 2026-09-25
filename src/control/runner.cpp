@@ -26,6 +26,7 @@ Outcome Run(Target& target, const Command& command)
         case CommandKind::HudBand: return target.SetHudBand(command.on);
         case CommandKind::HudProbe: return target.SetHudProbe(command.on);
         case CommandKind::HudTrace: return target.TraceHud(static_cast<std::int32_t>(command.ticks));
+        case CommandKind::HudImage: return target.SetHudImage(command.on);
         case CommandKind::Dump: return target.Dump(command.text);
         case CommandKind::Stick: return target.HoldSticks(command.player, command.axes);
         case CommandKind::Console: return target.Console(command.text);

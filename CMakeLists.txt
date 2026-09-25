@@ -35,6 +35,7 @@ add_library(LocalSplitScreen SHARED
     src/hud/hud_players_dump.cpp
     src/hud/hud_trace.cpp
     src/hud/root_overlay_render.cpp
+    src/hud/second_image.cpp
     src/hud/overlay_band.cpp
     src/hud/overlay_layout.cpp
     src/hud/viewport_placement.cpp
@@ -209,3 +210,10 @@ add_executable(ViewportPlacementTests
 target_include_directories(ViewportPlacementTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(ViewportPlacementTests PRIVATE cxx_std_20)
 add_test(NAME viewport_placement COMMAND ViewportPlacementTests)
+
+add_executable(EntryFilterCodeTests
+    tests/entry_filter_code_test.cpp
+)
+target_include_directories(EntryFilterCodeTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(EntryFilterCodeTests PRIVATE cxx_std_20)
+add_test(NAME entry_filter_code COMMAND EntryFilterCodeTests)

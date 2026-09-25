@@ -49,6 +49,7 @@ public:
     Outcome SetHudBand(bool on) override { return Record(on ? L"hud-band on" : L"hud-band off"); }
     Outcome SetHudProbe(bool on) override { return Record(on ? L"hud-probe on" : L"hud-probe off"); }
     Outcome TraceHud(std::int32_t frames) override { return Record(L"hud-trace " + std::to_wstring(frames)); }
+    Outcome SetHudImage(bool on) override { return Record(on ? L"hud-image on" : L"hud-image off"); }
     Outcome Dump(const std::wstring& topic) override { return Record(L"dump " + topic); }
     Outcome HoldSticks(std::int32_t player, const float (&axes)[4]) override
     {

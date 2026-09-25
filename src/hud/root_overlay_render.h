@@ -9,7 +9,8 @@
 // the game thread:
 //   - the HUD placement places again any widget the game moved in this frame's world tick
 //     (hud/hud_placement.h), so the frame draws it placed rather than at its single-player point;
-//   - the HUD trace notes the render (hud/hud_trace.h), and after it logs the frame.
+//   - the HUD trace notes the render (hud/hud_trace.h), and after it logs the frame;
+//   - player 2's HUD image is rendered first, when on (hud/second_image.h).
 // The call itself goes through unchanged.
 
 namespace lss::platform {

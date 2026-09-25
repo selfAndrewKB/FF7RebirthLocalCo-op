@@ -13,6 +13,8 @@
 //                                         0.5 at start); native = the stock MajorAxisFOV rule
 //   hud-band on|off                       lay the HUD out in the part of its image each half shows
 //                                         (hud/overlay_layout.h); off logs the values only
+//   hud-image on|off                     player 2's HUD image: the overlay rendered a second time
+//                                         and drawn only in player 2's half (hud/second_image.h)
 //   hud-trace <frames>                    log the order of the HUD's tick, marker placements, icon
 //                                         projections and render for 1-30 frames, and which player
 //                                         each placement and projection used (hud/hud_trace.h)
@@ -55,6 +57,7 @@ enum class CommandKind
     HudBand,
     HudProbe,
     HudTrace,
+    HudImage,
     Dump,
     Stick,
     Wait,

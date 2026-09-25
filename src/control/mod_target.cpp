@@ -4,6 +4,7 @@
 #include "hud/hud_trace.h"
 #include "hud/overlay_layout.h"
 #include "hud/root_overlay_render.h"
+#include "hud/second_image.h"
 #include "hud/position_probe.h"
 #include "hud/widget_dump.h"
 #include "platform/log.h"
@@ -152,6 +153,20 @@ Outcome ModTarget::TraceHud(std::int32_t frames)
     }
     hud::StartHudTrace(frames);
     return {true, L"tracing (one log line per frame)"};
+}
+
+Outcome ModTarget::SetHudImage(bool on)
+{
+    if (!hud::SecondImageInstalled() || !hud::RootOverlayRenderInstalled())
+    {
+        return Failed(L"player 2's HUD image is not installed (see the startup log)");
+    }
+    hud::SetSecondImage(on);
+    if (on && !hud::SecondImageOn())
+    {
+        return Failed(L"player 2's HUD image refused a check (see the log)");
+    }
+    return {true, on ? L"player 2's HUD image on" : L"player 2's HUD image off"};
 }
 
 Outcome ModTarget::Dump(const std::wstring& topic)
