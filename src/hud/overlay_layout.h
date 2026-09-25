@@ -38,7 +38,7 @@ bool OverlayLayoutInstalled() noexcept;
 /// Game thread, every tick: whether the screen is split (player 2 in).
 void SetSplitActive(bool active) noexcept;
 
-/// The `hud-band` switch: lay the HUD out in the visible band while split (off at start).
+/// The `hud-band` switch: lay the HUD out in the visible band while split (on at start).
 void SetBandEnabled(bool enabled) noexcept;
 bool BandEnabled() noexcept;
 

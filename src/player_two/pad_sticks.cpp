@@ -100,8 +100,10 @@ bool Install(const platform::GameImage& image) noexcept
     g_inputOwner         = reinterpret_cast<const std::byte* const*>(*owner);
     g_directInputOnly    = reinterpret_cast<const std::uint8_t*>(*selector);
     g_engineProcessInput = reinterpret_cast<ProcessInputFn>(*engineFn);
-    return platform::ReplaceSlot(image, facts::kProcessPlayerInput,
-                                 reinterpret_cast<std::uintptr_t>(&ProcessPlayerInput), g_inputSlot);
+    const bool replaced = platform::ReplaceSlot(image, facts::kProcessPlayerInput,
+                                                reinterpret_cast<std::uintptr_t>(&ProcessPlayerInput), g_inputSlot);
+    g_enabled.store(replaced, std::memory_order_relaxed);  // on from the start; Ctrl+F9 switches it for testing
+    return replaced;
 }
 
 bool Installed() noexcept

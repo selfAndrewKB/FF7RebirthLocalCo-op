@@ -12,19 +12,20 @@ exists, the engine splits the screen by itself. This mod makes the split correct
 view is rendered by the engine as its own view family, so the game's meshlet renderer never has
 two views in one pass. With one player, the mod changes nothing.
 
-While player 2 is in, the HUD is laid out in each half as it is in single player. This needs no
-key; it follows the join and leave, whatever the switches below are set to.
+Player 2 starts on their own camera and their own pad (sticks and movement), and the HUD is laid out
+in each half as it is in single player, with player 2's half showing player 2's HUD. None of this
+needs a key.
 
 | Keys | Switch |
 |------|--------|
-| Ctrl+F6 | Player 2's own camera, or player 1's |
 | Ctrl+F5 | Top/bottom or side by side |
 | Ctrl+F4 | Halves filled, or 16:9 halves with bars |
-| Ctrl+F9 | Player 2's pad sticks on their member |
+| Ctrl+F6 | For testing: player 2's half shows player 1's camera |
+| Ctrl+F9 | For testing: every pad drives both players' sticks (the game's merge) |
 
-`tools/control.py -c "hud-band off"` turns the HUD layout off for diagnosis (the values are then
-logged only); `hud-band on` turns it back on.
-
+Control scripts (`tools/control.py`, with the development tools built in) switch the rest for
+diagnosis, e.g. `hud-band off`, `hud-image off`, `hud-levers off`, `leak-fixes 0`
+(`src/control/script.h` lists them all).
 ## How it is organised
 
 ```

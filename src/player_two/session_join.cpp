@@ -109,7 +109,7 @@ void Session::InstallStages(const platform::GameImage& image) noexcept
     LogStage(L"own camera view", installed_.viewTarget);
     LogStage(L"field camera settings", installed_.fieldSettings);
     LogStage(L"own camera update", installed_.cameraUpdate);
-    LogStage(L"per-pad sticks (off until Ctrl+F9)", installed_.padSticks);
+    LogStage(L"per-pad sticks (on; Ctrl+F9 switches)", installed_.padSticks);
     LogStage(L"member movement (with per-pad sticks)", installed_.memberMovement);
     LogStage(L"movement census", installed_.moveCensus);
     LogStage(L"tag counts (log only)", installed_.tagCounts);

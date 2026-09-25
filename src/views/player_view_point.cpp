@@ -303,7 +303,7 @@ void SetPlayers(const void* playerOne, const void* playerTwo) noexcept
     {
         RestoreAxisRules(previous);  // same thread as the replacement, so no call is in flight
     }
-    g_ownCamera.store(false, std::memory_order_relaxed);
+    g_ownCamera.store(playerTwo != nullptr, std::memory_order_relaxed);  // each new player 2 starts on their own camera
     g_describePending.store(playerTwo != nullptr, std::memory_order_relaxed);
     g_shapeLogged[1] = false;  // a new player 2's shape is logged afresh
 }

@@ -13,7 +13,8 @@
 // floats (their only writer runs before the world tick). A merged stick that is exactly zero stays
 // zero, which keeps the game's own "not focused" rule.
 //
-// Two kinds of call are scoped, while per-pad sticks are switched on (Ctrl+F9, off at start):
+// Two kinds of call are scoped while per-pad sticks are on (from install; Ctrl+F9 switches them,
+// for testing):
 //   - each player's controller input (AEndPlayerController::ProcessPlayerInput, slot 400) reads its
 //     own pad; player 2's also runs as the primary player's, so the camera events it sends reach
 //     player 2's camera manager;

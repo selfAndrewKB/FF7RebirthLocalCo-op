@@ -10,7 +10,7 @@
 //     stock MajorAxisFOV when the split FOV is switched off; Ctrl+F4 switches the fill off to
 //     compare with bars.
 //     Each player's own FOV rule is put back when player 2 leaves.
-//   - player 2's half shows player 1's camera until Ctrl+F6 switches it to player 2's own camera
+//   - player 2's half shows player 2's own camera from the join; Ctrl+F6 switches it to player 1's (for testing)
 //     (and back). Starting on player 1's means a player-2 camera that is not set up yet (it sits
 //     at the world origin until it has a character) is never on screen by default.
 

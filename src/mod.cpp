@@ -44,7 +44,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.11.4-scope-leaks";
+constexpr const wchar_t* kVersion = L"0.11.5-one-key";
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -93,7 +93,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.11.4-scope-leaks");
+        ModVersion     = STR("0.11.5-one-key");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -206,8 +206,9 @@ public:
             loadOptions);
 
         Log(L"ready: every engine check passed. Ctrl+F7 adds player 2, Ctrl+F8 removes player 2, Ctrl+F5 switches "
-            L"top/bottom and side by side, Ctrl+F4 switches filled halves and 16:9 halves with bars, Ctrl+F6 switches "
-            L"player 2's half between player 1's camera and player 2's own, Ctrl+F9 switches per-pad sticks and player 2's movement");
+            L"top/bottom and side by side, Ctrl+F4 switches filled halves and 16:9 halves with bars. Player 2 starts on "
+            L"their own camera and pad; for testing, Ctrl+F6 switches their half to player 1's camera and Ctrl+F9 "
+            L"merges the pads");
     }
 
 private:
