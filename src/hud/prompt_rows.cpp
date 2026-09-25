@@ -77,14 +77,15 @@ struct Row
 struct Hidden
 {
     std::uint64_t weak     = 0;
-    std::uint8_t  previous = 0;
+    float         previous = 1.0f;  // the row's own render opacity
 };
 
 // Set once at install.
 std::uintptr_t  g_endUISystem   = 0;
 SortAndLayoutFn g_sortAndLayout = nullptr;
-UFunction*      g_setVisibility = nullptr;
+UFunction*      g_setOpacity    = nullptr;  // UWidget::SetRenderOpacity
 std::int32_t    g_visibilityOffset = -1;
+std::int32_t    g_opacityOffset    = -1;
 
 // Game thread.
 std::vector<Row>                          g_rows;
@@ -161,28 +162,37 @@ std::uint8_t VisibilityOf(const UObject* widget) noexcept
     return visibility;
 }
 
-bool SetVisibility(UObject* widget, std::uint8_t visibility)
+float OpacityOf(const UObject* widget) noexcept
+{
+    float opacity = 1.0f;
+    Read(reinterpret_cast<std::uintptr_t>(widget) + static_cast<std::uint32_t>(g_opacityOffset), opacity);
+    return opacity;
+}
+
+bool SetOpacity(UObject* widget, float opacity)
 {
     struct
     {
-        std::uint8_t visibility;
-    } params{visibility};
-    return g_setVisibility != nullptr &&
-           players::unreal::GuardedProcessEvent(widget, g_setVisibility, &params);
+        float opacity;
+    } params{opacity};
+    return g_setOpacity != nullptr && players::unreal::GuardedProcessEvent(widget, g_setOpacity, &params);
 }
 
-bool FindVisibilityOffset(UObject* widget)
+/// UWidget's Visibility (one byte) and RenderOpacity (a float) offsets, read by reflection once.
+bool FindOffsets(UObject* widget)
 {
     if (g_visibilityOffset >= 0)
     {
         return true;
     }
-    auto* property = widget->GetPropertyByNameInChain(STR("Visibility"));
-    if (property == nullptr || property->GetSize() != 1)
+    auto* visibility = widget->GetPropertyByNameInChain(STR("Visibility"));
+    auto* opacity    = widget->GetPropertyByNameInChain(STR("RenderOpacity"));
+    if (visibility == nullptr || visibility->GetSize() != 1 || opacity == nullptr || opacity->GetSize() != sizeof(float))
     {
         return false;
     }
-    g_visibilityOffset = property->GetOffset_Internal();
+    g_visibilityOffset = visibility->GetOffset_Internal();
+    g_opacityOffset    = opacity->GetOffset_Internal();
     return true;
 }
 
@@ -229,15 +239,15 @@ bool Install(const platform::GameImage& image) noexcept
     }
     try
     {
-        g_setVisibility = RC::Unreal::UObjectGlobals::StaticFindObject<UFunction*>(nullptr, nullptr,
-                                                                                    STR("/Script/UMG.Widget:SetVisibility"));
+        g_setOpacity = RC::Unreal::UObjectGlobals::StaticFindObject<UFunction*>(nullptr, nullptr,
+                                                                                 STR("/Script/UMG.Widget:SetRenderOpacity"));
     }
     catch (...)
     {
-        g_setVisibility = nullptr;
+        g_setOpacity = nullptr;
     }
     platform::Log(L"prompt rows: per-player layout {}, per-half visibility {}", g_sortAndLayout ? L"ready" : L"UNAVAILABLE",
-                  g_setVisibility ? L"ready" : L"UNAVAILABLE");
+                  g_setOpacity ? L"ready" : L"UNAVAILABLE");
     return g_endUISystem != 0;
 }
 
@@ -308,7 +318,7 @@ void Refresh() noexcept
 void ShowOnly(int player) noexcept
 {
     Restore();
-    if (g_setVisibility == nullptr)
+    if (g_setOpacity == nullptr)
     {
         return;
     }
@@ -317,16 +327,17 @@ void ShowOnly(int player) noexcept
         for (const Row& row : g_rows)
         {
             UObject* widget = Resolve(row.weak);
-            if (widget == nullptr || row.playerTwo == (player != 0) || !FindVisibilityOffset(widget))
+            if (widget == nullptr || row.playerTwo == (player != 0) || !FindOffsets(widget))
             {
                 continue;
             }
-            const std::uint8_t previous = VisibilityOf(widget);
-            if (previous == kHidden || previous == kCollapsed)
+            const std::uint8_t visibility = VisibilityOf(widget);
+            const float        previous   = OpacityOf(widget);
+            if (visibility == kHidden || visibility == kCollapsed || previous == 0.0f)
             {
-                continue;
+                continue;  // not drawn anyway
             }
-            if (SetVisibility(widget, kHidden))
+            if (SetOpacity(widget, 0.0f))
             {
                 g_hidden.push_back({row.weak, previous});
             }
@@ -345,7 +356,7 @@ void Restore() noexcept
         {
             if (UObject* widget = Resolve(hidden.weak))
             {
-                SetVisibility(widget, hidden.previous);
+                SetOpacity(widget, hidden.previous);
             }
         }
     }

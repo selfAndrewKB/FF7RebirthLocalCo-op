@@ -21,9 +21,12 @@
 //     player's rows), so each half stacks only its own rows from the top slot; the game lays out the
 //     whole list only when a row is added or removed, and this runs after it in the same frame.
 //     Changes are logged.
-//   - Around each overlay pass, ShowOnly hides the other player's rows (UWidget::SetVisibility,
-//     Hidden) and Restore puts back each row's own visibility, so the game's show/hide animations
-//     are untouched between frames.
+//   - Around each overlay pass, ShowOnly makes the other player's rows fully transparent
+//     (UWidget::SetRenderOpacity 0) and Restore puts back each row's own opacity. Not Hidden: a
+//     UMG widget is ticked only while it is painted, and player 2's pass runs with DeltaTime 0, so a
+//     row hidden in player 1's pass would never advance its slide and fade-out timers and would
+//     never be removed (seen in v0.12.3: player 2's rows stayed on screen). A transparent row is
+//     still painted and ticked in player 1's pass, with the real DeltaTime.
 // Game thread only.
 
 namespace lss::platform {
