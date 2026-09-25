@@ -1,0 +1,110 @@
+#include "player_two/leftover_actors.h"
+
+#include "platform/log.h"
+#include "player_two/engine_facts.h"
+#include "player_two/object_fields.h"
+
+#define RC_UNREAL_DISABLE_PROPERTY_DEPRECATION_WARNINGS
+#define RC_UNREAL_DISABLE_CLASS_DEPRECATION_WARNINGS
+#include <Unreal/CoreUObject/UObject/Class.hpp>
+#include <Unreal/UFunction.hpp>
+#include <Unreal/UObject.hpp>
+#include <Unreal/UObjectGlobals.hpp>
+
+#include <initializer_list>
+
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <Windows.h>
+
+namespace lss::player_two::leftover_actors {
+
+namespace {
+
+using RC::Unreal::UClass;
+using RC::Unreal::UFunction;
+using RC::Unreal::UObject;
+namespace UObjectGlobals = RC::Unreal::UObjectGlobals;
+
+int GuardFilter(unsigned long code) noexcept
+{
+    return code == EXCEPTION_STACK_OVERFLOW ? EXCEPTION_CONTINUE_SEARCH : EXCEPTION_EXECUTE_HANDLER;
+}
+
+bool GuardedProcessEvent(UObject* target, UFunction* function, void* params) noexcept
+{
+    __try
+    {
+        target->ProcessEvent(function, params);
+        return true;
+    }
+    __except (GuardFilter(GetExceptionCode()))
+    {
+        return false;
+    }
+}
+
+/// `object` if it is an actor, else null.
+void* AsActor(void* object) noexcept
+{
+    auto* actorClass = UObjectGlobals::StaticFindObject<UClass*>(nullptr, nullptr, STR("/Script/Engine.Actor"));
+    auto* candidate  = static_cast<UObject*>(object);
+    return candidate != nullptr && actorClass != nullptr && candidate->IsA(actorClass) ? object : nullptr;
+}
+
+}  // namespace
+
+Actors Collect(void* playerTwoController) noexcept
+{
+    Actors actors;
+    if (playerTwoController == nullptr)
+    {
+        return actors;
+    }
+    void* cameraManager = ReadPointer(playerTwoController, facts::kControllerCameraManager);
+    actors.trigger      = AsActor(ReadPointer(playerTwoController, facts::kControllerTrigger));
+    actors.battleTalk   = AsActor(ReadPointer(playerTwoController, facts::kControllerBattleTalkActor));
+    actors.cameraActor  = AsActor(ReadPointer(cameraManager, facts::kCameraManagerEndCameraActor));
+
+    auto* component = static_cast<UObject*>(ReadPointer(cameraManager, facts::kCameraManagerCollisionComponent));
+    if (component != nullptr)
+    {
+        actors.collisionActor = AsActor(component->GetOuterPrivate());
+    }
+    return actors;
+}
+
+Result Destroy(const Actors& actors, void* playerTwoController) noexcept
+{
+    Result result;
+    auto*  destroy =
+        UObjectGlobals::StaticFindObject<UFunction*>(nullptr, nullptr, STR("/Script/Engine.Actor:K2_DestroyActor"));
+    if (destroy == nullptr || destroy->GetParmsSize() != 0)
+    {
+        platform::Log(L"AActor::K2_DestroyActor not found as expected; player 2's leftover actors stay");
+        return result;
+    }
+    for (void* actor : {actors.trigger, actors.battleTalk, actors.cameraActor, actors.collisionActor})
+    {
+        if (actor == nullptr)
+        {
+            continue;
+        }
+        if (GuardedProcessEvent(static_cast<UObject*>(actor), destroy, nullptr))
+        {
+            ++result.destroyed;
+        }
+        else
+        {
+            ++result.failed;
+        }
+    }
+    if (actors.trigger != nullptr && playerTwoController != nullptr)
+    {
+        WriteField<void*>(playerTwoController, facts::kControllerTrigger, nullptr);
+    }
+    return result;
+}
+
+}  // namespace lss::player_two::leftover_actors

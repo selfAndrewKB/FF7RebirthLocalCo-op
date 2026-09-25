@@ -6,7 +6,6 @@
 #include "platform/vtable_entry.h"
 #include "views/minimal_view_info.h"
 #include "views/view_shape.h"
-#include "views/view_turn.h"
 
 #include <atomic>
 #include <cstddef>
@@ -25,24 +24,24 @@ platform::VTableEntry g_entry;
 GetViewPointFn        g_engineGetViewPoint = nullptr;
 std::uintptr_t        g_localPlayerVTable  = 0;
 
-// Written on the game thread by SetPlayerTwo/ToggleTestTurn/ToggleFill, read by the replacement.
+// Written on the game thread by SetPlayers/ToggleOwnCamera/ToggleFill, read by the replacement.
 // The engine calls GetViewPoint from Draw, also on the game thread; atomics keep that true if it
 // ever changes.
+std::atomic<const void*>   g_playerOne{nullptr};
 std::atomic<const void*>   g_playerTwo{nullptr};
-std::atomic<bool>          g_turnOn{false};
+std::atomic<bool>          g_ownCamera{false};
 std::atomic<bool>          g_describePending{false};
 std::atomic<bool>          g_fillOn{true};
 std::atomic<std::uint32_t> g_axisOffset{0};  // 0 until reflection has confirmed it
 
-/// The first view point computed for a new player 2, as the engine made it (before any turn).
-void DescribeFirstViewPoint(const std::byte* viewInfo) noexcept
+/// Player 2's view point, the first time it is computed from a given camera.
+void DescribeViewPoint(const std::byte* viewInfo, bool ownCamera) noexcept
 {
     float yaw = 0.0f;
     std::memcpy(&yaw, viewInfo + view_info::kYaw, sizeof(yaw));
     const auto previousSet = static_cast<unsigned>(*(viewInfo + view_info::kPreviousViewTransformSet));
-    platform::Log(L"player 2's view point, as the engine computed it: yaw {:.1f}; PreviousViewTransform set = {} "
-                  L"(copied from player 1's camera; nonzero would reproject player 2's history from player 1's)",
-                  yaw, previousSet);
+    platform::Log(L"player 2's view point from {}: yaw {:.1f}; PreviousViewTransform set = {}",
+                  ownCamera ? L"player 2's own camera" : L"player 1's camera", yaw, previousSet);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -190,10 +189,15 @@ void RestoreAxisRules(const void* removedPlayer) noexcept
 /// Same signature as ULocalPlayer::GetViewPoint.
 void GetViewPoint(void* localPlayer, std::byte* viewInfo, std::int32_t stereoPass)
 {
-    g_engineGetViewPoint(localPlayer, viewInfo, stereoPass);
-
     const void* playerTwo   = g_playerTwo.load(std::memory_order_relaxed);
+    const void* playerOne   = g_playerOne.load(std::memory_order_relaxed);
     const bool  isPlayerTwo = playerTwo != nullptr && localPlayer == playerTwo;
+    const bool  ownCamera   = g_ownCamera.load(std::memory_order_relaxed);
+
+    // Until player 2's own camera is chosen, player 2's half shows player 1's camera.
+    void* source = isPlayerTwo && !ownCamera && playerOne != nullptr ? const_cast<void*>(playerOne) : localPlayer;
+    g_engineGetViewPoint(source, viewInfo, stereoPass);
+
     LogShapeOnChange(isPlayerTwo, viewInfo);
     if (playerTwo == nullptr)
     {
@@ -209,11 +213,7 @@ void GetViewPoint(void* localPlayer, std::byte* viewInfo, std::int32_t stereoPas
     }
     if (g_describePending.exchange(false, std::memory_order_relaxed))
     {
-        DescribeFirstViewPoint(viewInfo);
-    }
-    if (g_turnOn.load(std::memory_order_relaxed))
-    {
-        TurnIfPlayer(localPlayer, playerTwo, kTestTurnDegrees, viewInfo);
+        DescribeViewPoint(viewInfo, ownCamera);
     }
 }
 
@@ -242,10 +242,11 @@ void RemovePlayerViewPoint() noexcept
     }
 }
 
-void SetPlayerTwo(const void* localPlayer) noexcept
+void SetPlayers(const void* playerOne, const void* playerTwo) noexcept
 {
-    const void* previous = g_playerTwo.exchange(localPlayer, std::memory_order_relaxed);
-    if (previous == localPlayer)
+    g_playerOne.store(playerTwo == nullptr ? nullptr : playerOne, std::memory_order_relaxed);
+    const void* previous = g_playerTwo.exchange(playerTwo, std::memory_order_relaxed);
+    if (previous == playerTwo)
     {
         return;
     }
@@ -253,8 +254,8 @@ void SetPlayerTwo(const void* localPlayer) noexcept
     {
         RestoreAxisRules(previous);  // same thread as the replacement, so no call is in flight
     }
-    g_turnOn.store(false, std::memory_order_relaxed);
-    g_describePending.store(localPlayer != nullptr, std::memory_order_relaxed);
+    g_ownCamera.store(false, std::memory_order_relaxed);
+    g_describePending.store(playerTwo != nullptr, std::memory_order_relaxed);
     g_shapeLogged[1] = false;  // a new player 2's shape is logged afresh
 }
 
@@ -263,16 +264,17 @@ void SetAxisConstraintOffset(std::uint32_t offset) noexcept
     g_axisOffset.store(offset, std::memory_order_relaxed);
 }
 
-bool ToggleTestTurn() noexcept
+bool ToggleOwnCamera() noexcept
 {
     if (g_playerTwo.load(std::memory_order_relaxed) == nullptr)
     {
-        g_turnOn.store(false, std::memory_order_relaxed);
+        g_ownCamera.store(false, std::memory_order_relaxed);
         return false;
     }
-    const bool on = !g_turnOn.load(std::memory_order_relaxed);
-    g_turnOn.store(on, std::memory_order_relaxed);
-    return on;
+    const bool own = !g_ownCamera.load(std::memory_order_relaxed);
+    g_ownCamera.store(own, std::memory_order_relaxed);
+    g_describePending.store(true, std::memory_order_relaxed);
+    return own;
 }
 
 bool ToggleFill() noexcept

@@ -41,11 +41,18 @@ bool WriteTwoPlayerSplitscreenLayout(std::uint8_t value) noexcept;
 /// one-byte field the engine reads (engine::kAspectRatioAxisConstraintOffset).
 std::optional<std::uint32_t> AspectRatioAxisConstraintOffset() noexcept;
 
-/// UGameplayStatics::CreatePlayer(worldContext, controllerId, bSpawnPlayerController = false).
-/// No controller is spawned: spawning one runs the GameMode login path, which faults in FF7R.
-/// Returns false if the function could not be found, its parameters do not match, or the call
-/// raised an exception.
-bool CreatePlayerWithoutController(UObject* worldContext, std::int32_t controllerId) noexcept;
+/// UGameplayStatics::CreatePlayer(worldContext, controllerId, bSpawnPlayerController = true): a
+/// local player with its own PlayerController. The login path's camera-manager BeginPlay faults for
+/// a second player unless player_two/own_controller.h is installed and a join scope is open.
+struct CreatedPlayer
+{
+    bool     called     = false;  // the function was found and the call returned without an exception
+    UObject* controller = nullptr;  // the new player's controller, as the call returned it
+};
+CreatedPlayer CreatePlayerWithController(UObject* worldContext, std::int32_t controllerId) noexcept;
+
+/// How many objects of `className` (and subclasses) exist.
+std::size_t CountObjects(const wchar_t* className) noexcept;
 
 /// Calls UGameInstance::RemoveLocalPlayer through the game instance's own vtable, after checking
 /// that the entry holds the function at `removeLocalPlayer` (a live address). Returns false,

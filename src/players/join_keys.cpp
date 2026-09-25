@@ -36,17 +36,18 @@ PlayerIntent JoinKeys::Poll() noexcept
     const bool active = GameHasFocus() && IsDown(VK_CONTROL);
     const bool join   = Pressed(active && IsDown(VK_F7), joinWasDown_);
     const bool leave  = Pressed(active && IsDown(VK_F8), leaveWasDown_);
-    const bool turn   = Pressed(active && IsDown(VK_F6), turnWasDown_);
+    const bool camera = Pressed(active && IsDown(VK_F6), cameraWasDown_);
     const bool layout = Pressed(active && IsDown(VK_F5), layoutWasDown_);
     const bool fill   = Pressed(active && IsDown(VK_F4), fillWasDown_);
+    const bool sticks = Pressed(active && IsDown(VK_F9), sticksWasDown_);
 
     // Joining and leaving win over everything else pressed on the same tick; of the switches,
     // one per tick (the others are reported on their own presses).
     if (!join && !leave)
     {
-        if (turn)
+        if (camera)
         {
-            return PlayerIntent::ToggleTestTurn;
+            return PlayerIntent::ToggleOwnCamera;
         }
         if (layout)
         {
@@ -55,6 +56,10 @@ PlayerIntent JoinKeys::Poll() noexcept
         if (fill)
         {
             return PlayerIntent::ToggleFill;
+        }
+        if (sticks)
+        {
+            return PlayerIntent::TogglePadSticks;
         }
     }
     if (join && !leave)

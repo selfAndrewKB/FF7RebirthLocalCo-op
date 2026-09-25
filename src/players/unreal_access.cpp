@@ -9,6 +9,7 @@
 #include <Unreal/UObjectGlobals.hpp>
 
 #include <new>
+#include <vector>
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -162,7 +163,7 @@ std::optional<std::uint32_t> AspectRatioAxisConstraintOffset() noexcept
                       engine::kAspectRatioAxisConstraintOffset);
 }
 
-bool CreatePlayerWithoutController(UObject* worldContext, std::int32_t controllerId) noexcept
+CreatedPlayer CreatePlayerWithController(UObject* worldContext, std::int32_t controllerId) noexcept
 {
     auto* function = UObjectGlobals::StaticFindObject<UFunction*>(
         nullptr, nullptr, STR("/Script/Engine.GameplayStatics:CreatePlayer"));
@@ -170,19 +171,34 @@ bool CreatePlayerWithoutController(UObject* worldContext, std::int32_t controlle
     if (function == nullptr || statics == nullptr || worldContext == nullptr ||
         function->GetParmsSize() != sizeof(CreatePlayerParams))
     {
-        return false;
+        return {};
     }
     UObject* defaultObject = statics->GetClassDefaultObject();
     if (defaultObject == nullptr)
     {
-        return false;
+        return {};
     }
 
     CreatePlayerParams params{};
     params.WorldContextObject     = worldContext;
     params.ControllerId           = controllerId;
-    params.bSpawnPlayerController = false;
-    return GuardedProcessEvent(defaultObject, function, &params);
+    params.bSpawnPlayerController = true;
+    const bool called             = GuardedProcessEvent(defaultObject, function, &params);
+    return {called, called ? params.ReturnValue : nullptr};
+}
+
+std::size_t CountObjects(const wchar_t* className) noexcept
+{
+    try
+    {
+        std::vector<UObject*> objects;
+        UObjectGlobals::FindAllOf(className, objects);
+        return objects.size();
+    }
+    catch (...)
+    {
+        return 0;  // only an allocation failure; a count is diagnostic
+    }
 }
 
 namespace {

@@ -13,8 +13,8 @@
 #include "platform/engine_addresses.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "player_two/session.h"
 #include "players/join_keys.h"
-#include "players/local_players.h"
 #include "players/split_layout.h"
 #include "players/split_screen_settings.h"
 #include "players/unreal_access.h"
@@ -25,12 +25,20 @@
 #include <cstdint>
 #include <optional>
 
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <Windows.h>
+
 namespace {
 
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.3.1-layout";
+constexpr const wchar_t* kVersion = L"0.5.0-own-camera-move";
+
+/// How often player 2's status line is written while player 2 is in.
+constexpr ULONGLONG kStatusIntervalMs = 10'000;
 
 /// Checks every engine fact against the running game and logs each one that fails.
 /// Returns the live address of RemoveLocalPlayer when all hold.
@@ -73,7 +81,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.3.1-layout");
+        ModVersion     = STR("0.5.0-own-camera-move");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -88,14 +96,19 @@ public:
             }
         }
 
-        // With player 2 still in, the engine keeps rendering two views. Putting the engine's own
-        // submission back would render them in one family, the configuration this mod exists to
-        // avoid. Removing player 2 here is not an option: the destructor may run off the game
-        // thread. So the submission stays installed; the DLL is pinned, so it stays valid.
-        if (players_ && players_->HasPlayerTwo())
+        // With player 2 still in, the engine keeps rendering two views and calling player 2's
+        // wrappers. Putting the engine's own submission back would render them in one family, the
+        // configuration this mod exists to avoid, and player 2's camera manager depends on its
+        // wrappers. Removing player 2 here is not an option: the destructor may run off the game
+        // thread. So everything stays installed; the DLL is pinned, so it stays valid.
+        if (session_ && session_->HasPlayerTwo())
         {
-            Log(L"unloading with player 2 still in: the per-player rendering stays installed");
+            Log(L"unloading with player 2 still in: the per-player rendering and player 2's stages stay installed");
             return;
+        }
+        if (session_)
+        {
+            session_->RemoveStages();
         }
         if (viewPointInstalled_)
         {
@@ -119,15 +132,17 @@ public:
             Log(L"standing aside: nothing installed, the game runs unmodified");
             return;
         }
-        players_.emplace(*removeLocalPlayer);
+        session_.emplace(*removeLocalPlayer);
+        session_->InstallStages(*image);
 
-        // The view-point entry serves the filled halves and the test turn. The split screen runs
-        // without it (halves kept 16:9 with bars); those keys then report that they are unavailable.
+        // The view-point entry serves the filled halves and the choice of player 2's camera. The
+        // split screen runs without it (halves kept 16:9 with bars, player 2 on its own camera);
+        // those keys then report that they are unavailable.
         viewPointInstalled_ = lss::views::InstallPlayerViewPoint(*image);
         if (!viewPointInstalled_)
         {
-            Log(L"ULocalPlayer::GetViewPoint's entry does not hold the engine's function; filled halves and the test "
-                L"turn are unavailable");
+            Log(L"ULocalPlayer::GetViewPoint's entry does not hold the engine's function; filled halves and the "
+                L"camera choice are unavailable");
         }
 
         const Hook::FCallbackOptions tickOptions{false, false, STR("LocalSplitScreen"), STR("player intent")};
@@ -135,16 +150,16 @@ public:
             [this](Hook::TCallbackIterationData<void>&, RC::Unreal::UEngine*, float, bool) { OnEngineTick(); },
             tickOptions);
 
-        // Player 2 leaves before any map load, so the engine never travels with a local player
-        // it cannot give a controller of its own (it would run the faulting login path for it).
+        // Player 2 leaves before any map load: the new world would log player 2 in again, and its
+        // camera manager's fixed-name spawns would collide with player 1's outside a join.
         const Hook::FCallbackOptions loadOptions{false, false, STR("LocalSplitScreen"), STR("leave before map load")};
         loadMapCallback_ = Hook::RegisterLoadMapPreCallback(
             [this](auto&, auto&&...) {
-                if (!players_->HasPlayerTwo())
+                if (!session_->HasPlayerTwo())
                 {
                     return;
                 }
-                const bool left = players_->Leave();
+                const bool left = session_->LeaveNow();
                 FollowPlayerTwo();  // now, not at the next tick: the view module must not keep the old player 2
                 if (left)
                 {
@@ -152,15 +167,15 @@ public:
                 }
                 else
                 {
-                    Log(L"WARNING: a map is loading and player 2 could not be removed; the engine will "
-                        L"try to log player 2 in, which is known to fault in this game");
+                    Log(L"WARNING: a map is loading and player 2 could not be removed; the new world will log "
+                        L"player 2 in, and its camera manager's spawns are expected to collide with player 1's");
                 }
             },
             loadOptions);
 
         Log(L"ready: every engine check passed. Ctrl+F7 adds player 2, Ctrl+F8 removes player 2, Ctrl+F5 switches "
-            L"top/bottom and side by side, Ctrl+F4 switches filled halves and 16:9 halves with bars, Ctrl+F6 turns "
-            L"player 2's view (test)");
+            L"top/bottom and side by side, Ctrl+F4 switches filled halves and 16:9 halves with bars, Ctrl+F6 switches "
+            L"player 2's half between player 1's camera and player 2's own, Ctrl+F9 switches per-pad sticks and player 2's movement");
     }
 
 private:
@@ -194,17 +209,29 @@ private:
         }
         switch (keys_.Poll())
         {
-            case lss::players::PlayerIntent::Join:  players_->Join(); break;
-            case lss::players::PlayerIntent::Leave: players_->Leave(); break;  // logs its own outcome
-            case lss::players::PlayerIntent::ToggleTestTurn: ToggleTestTurn(); break;
+            case lss::players::PlayerIntent::Join: session_->Join(); break;
+            case lss::players::PlayerIntent::Leave: session_->Leave(); break;  // logs its own outcome
+            case lss::players::PlayerIntent::ToggleOwnCamera: ToggleOwnCamera(); break;
             case lss::players::PlayerIntent::ToggleLayout: LogLayoutChange(layout_.Toggle()); break;
             case lss::players::PlayerIntent::ToggleFill: ToggleFill(); break;
-            case lss::players::PlayerIntent::None:  break;
+            case lss::players::PlayerIntent::TogglePadSticks: session_->TogglePadSticks(); break;
+            case lss::players::PlayerIntent::None: break;
         }
-        players_->Tick();
+        session_->Tick();
         FollowPlayerTwo();
-        LogSettingsChange(settings_.Update(players_->HasPlayerTwo()));
-        LogLayoutChange(layout_.Update(players_->HasPlayerTwo()));
+        LogSettingsChange(settings_.Update(session_->HasPlayerTwo()));
+        LogLayoutChange(layout_.Update(session_->HasPlayerTwo()));
+
+        const ULONGLONG now = GetTickCount64();
+        if (!session_->HasPlayerTwo())
+        {
+            nextStatus_ = now + kStatusIntervalMs;
+        }
+        else if (now >= nextStatus_)
+        {
+            nextStatus_ = now + kStatusIntervalMs;
+            session_->LogStatus();
+        }
     }
 
     void ToggleFill() noexcept
@@ -257,12 +284,12 @@ private:
         }
     }
 
-    /// Keeps the view-point module's idea of player 2 current, and describes the local players
-    /// when player 2 appears (a subclass with its own vtable would bypass the test turn).
+    /// Keeps the view-point module's idea of the players current, and describes the local players
+    /// when player 2 appears (a subclass with its own vtable would bypass the camera choice).
     void FollowPlayerTwo() noexcept
     {
-        const void*         playerTwo = players_->PlayerTwo();
-        const std::uint32_t joins     = players_->JoinCount();
+        const void*         playerTwo = session_->PlayerTwo();
+        const std::uint32_t joins     = session_->JoinCount();
         if (playerTwo == followedPlayerTwo_ && joins == followedJoins_)
         {
             return;
@@ -281,9 +308,9 @@ private:
             }
         }
         // Through null first: a new player 2 at the old one's address must still start fresh
-        // (turn off, first view point described).
-        lss::views::SetPlayerTwo(nullptr);
-        lss::views::SetPlayerTwo(playerTwo);
+        // (on player 1's camera, first view point described).
+        lss::views::SetPlayers(nullptr, nullptr);
+        lss::views::SetPlayers(session_->PlayerOne(), playerTwo);
         if (playerTwo == nullptr || !viewPointInstalled_)
         {
             return;
@@ -294,29 +321,29 @@ private:
             auto* player = (*players)[i];
             Log(L"local player {}: class {}, view point {}", i + 1, player->GetClassPrivate()->GetName(),
                 lss::views::UsesEngineViewPoint(player) ? L"through the engine's ULocalPlayer entry"
-                                                         : L"through ANOTHER vtable (the test turn cannot reach it)");
+                                                         : L"through ANOTHER vtable (the camera choice cannot reach it)");
         }
     }
 
-    void ToggleTestTurn() noexcept
+    void ToggleOwnCamera() noexcept
     {
         if (!viewPointInstalled_)
         {
-            Log(L"test turn unavailable (the view-point entry is not installed)");
+            Log(L"camera choice unavailable (the view-point entry is not installed)");
             return;
         }
-        if (!players_->HasPlayerTwo())
+        if (!session_->HasPlayerTwo())
         {
-            Log(L"test turn: no player 2 (Ctrl+F7 adds one)");
+            Log(L"camera choice: no player 2 (Ctrl+F7 adds one)");
             return;
         }
-        if (lss::views::ToggleTestTurn())
+        if (lss::views::ToggleOwnCamera())
         {
-            Log(L"TEST: player 2's view turned {:.0f} degrees away from player 1's", lss::views::kTestTurnDegrees);
+            Log(L"player 2's half shows player 2's own camera");
         }
         else
         {
-            Log(L"TEST: player 2's view back on player 1's camera (turn off)");
+            Log(L"player 2's half shows player 1's camera");
         }
     }
 
@@ -340,8 +367,9 @@ private:
         }
     }
 
-    std::optional<lss::players::LocalPlayers> players_;
+    std::optional<lss::player_two::Session>   session_;
     lss::players::JoinKeys                    keys_;
+    ULONGLONG                                 nextStatus_ = 0;
     lss::players::SplitScreenSettings         settings_{
         {&lss::players::unreal::ConsoleVariableInt, &lss::players::unreal::ExecuteConsoleCommand}};
     lss::players::SplitLayout                 layout_{{&lss::players::unreal::ReadTwoPlayerSplitscreenLayout,

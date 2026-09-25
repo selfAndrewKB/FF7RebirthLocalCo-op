@@ -7,8 +7,8 @@ from spin_camera import session_state  # noqa: E402
 
 READY = '[t] [LocalSplitScreen] ready: every engine check passed. Ctrl+F7 adds player 2\n'
 JOIN = "[t] [LocalSplitScreen] player 2 joined (sharing player 1's camera for now)\n"
-TURN = "[t] [LocalSplitScreen] TEST: player 2's view turned 30 degrees away from player 1's\n"
-BACK = "[t] [LocalSplitScreen] TEST: player 2's view back on player 1's camera (turn off)\n"
+TURN = "[t] [LocalSplitScreen] player 2's half shows player 2's own camera\n"
+BACK = "[t] [LocalSplitScreen] player 2's half shows player 1's camera\n"
 LEFT = '[t] [LocalSplitScreen] player 2 left\n'
 LOAD = '[t] [LocalSplitScreen] a map is loading: player 2 left (press Ctrl+F7 to rejoin afterwards)\n'
 

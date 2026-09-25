@@ -1,6 +1,6 @@
 """Spin the camera in a LocalSplitScreen session and watch for the game's crash dialog.
 
-A crash test for two different views: with player 2 in and player 2's view turned (Ctrl+F6),
+A crash test for two different views: with player 2 in and player 2's half on its own camera (Ctrl+F6),
 spin the camera at a steady rate and record whether, and when, the game crashes.
 
     Check:  python spin_camera.py --pid PID
@@ -44,11 +44,11 @@ class INPUT(C.Structure):
 
 
 def session_state(log_text):
-    """What the mod's log says now: is player 2 in, and is its view turned? (pure; tested below)"""
+    """What the mod's log says now: is player 2 in, and does its half show its own camera? (pure; tested below)"""
     events = [(m.start(), kind) for kind, pattern in (
         ('joined', r'\] player 2 joined'), ('left', r'\] player 2 (left|was removed|is no longer)'),
         ('left', r'a map is loading: player 2 left'),
-        ('turn_on', r'TEST: player 2\'s view turned'), ('turn_off', r'TEST: player 2\'s view back'))
+        ('turn_on', r'player 2\'s half shows player 2\'s own camera'), ('turn_off', r'player 2\'s half shows player 1\'s camera'))
         for m in re.finditer(pattern, log_text)]
     player_two = turned = False
     for _, kind in sorted(events):
@@ -237,7 +237,7 @@ def main():
     p.add_argument('--dx', type=int, default=50, help='mouse counts per event (the old baseline: 50)')
     p.add_argument('--hz', type=int, default=1000, help='events per second requested (the old baseline: 1000)')
     p.add_argument('--observe-seconds', type=float, default=15, help='keep watching for a crash after the spin stops')
-    p.add_argument('--allow-shared-view', action='store_true', help='spin with the turn off (the same-camera control)')
+    p.add_argument('--allow-shared-view', action='store_true', help='spin with player 2 on player 1''s camera (the same-camera control)')
     args = p.parse_args()
     if not (math.isfinite(args.seconds) and args.seconds > 0 and math.isfinite(args.observe_seconds) and args.observe_seconds >= 0 and 1 <= abs(args.dx) <= 32767 and 1 <= args.hz <= 2000):
         p.error('seconds > 0; dx within +/-32767; hz 1..2000')
@@ -259,7 +259,7 @@ def main():
         if not state['player_two']:
             raise SystemExit('Player 2 is not in (Ctrl+F7): nothing sent')
         if not state['turned'] and not args.allow_shared_view:
-            raise SystemExit('Player 2\'s view is not turned (Ctrl+F6), and --allow-shared-view was not given: nothing sent')
+            raise SystemExit('Player 2\'s half is not on its own camera (Ctrl+F6), and --allow-shared-view was not given: nothing sent')
 
         args.output.mkdir(parents=True, exist_ok=False)
         started = datetime.now(timezone.utc).isoformat()

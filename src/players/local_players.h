@@ -1,15 +1,16 @@
 #pragma once
 
-// Player 2 joins and leaves through UE's own local-player path.
+// Player 2 is added to and removed from the engine's list of local players through UE's own path.
 //
-// Joining adds a ULocalPlayer with the engine's CreatePlayer. The engine then lays out the split
-// screen by itself, and the renderer module renders each player's view as its own family.
-// Leaving removes that ULocalPlayer with the engine's RemoveLocalPlayer.
+// Adding uses the engine's CreatePlayer with a PlayerController of player 2's own. The engine then
+// lays out the split screen by itself, and the renderer module renders each player's view as its
+// own family. Removing uses the engine's RemoveLocalPlayer, which also destroys player 2's
+// controller and, through it, its camera manager.
 //
-// Every call here must run on the game thread, outside Draw: the mod calls them from UE4SS's
-// engine-tick and map-load callbacks.
+// This class only keeps the engine's list and its own record of player 2 in step. What player 2
+// does while it is in is player_two/session.h's job. Every call must run on the game thread,
+// outside Draw.
 
-#include "players/shared_camera.h"
 #include "players/unreal_access.h"
 
 #include <cstdint>
@@ -23,37 +24,49 @@ public:
     /// startup against engine::kRemoveLocalPlayer's bytes.
     explicit LocalPlayers(std::uintptr_t removeLocalPlayer) noexcept : removeLocalPlayer_(removeLocalPlayer) {}
 
-    /// Adds player 2, if there is exactly one local player and it has a controller.
-    void Join() noexcept;
+    /// What an add did.
+    struct Added
+    {
+        bool             raised     = false;    // the engine raised an exception during the add
+        unreal::UObject* controller = nullptr;  // player 2's controller as the engine lists it
+    };
 
-    /// Removes player 2, if this mod added it. Returns true when player 2 is out (or was never
-    /// in), false when it is still in the engine's list.
-    bool Leave() noexcept;
+    /// Player 1's local player and controller, when there is exactly one local player and it has a
+    /// controller; otherwise both null (and the reason is logged).
+    struct PlayerOne
+    {
+        unreal::UObject* localPlayer = nullptr;
+        unreal::UObject* controller  = nullptr;
+    };
+    PlayerOne SolePlayer() const noexcept;
 
-    /// Per-tick upkeep while player 2 is in: keeps the shared camera on player 1's controller.
-    void Tick() noexcept;
+    /// Adds player 2 with its own controller. Call only with SolePlayer() valid. Any player the
+    /// engine added is tracked, even when the call raised an exception, so it is removed before a
+    /// map load.
+    Added Add(unreal::UObject* playerOneController) noexcept;
+
+    /// Removes player 2 (its controller is destroyed with it). True when player 2 is out.
+    bool Remove() noexcept;
+
+    /// True if the engine still lists player 2. If not, lets go of it without touching its object.
+    bool StillListed() noexcept;
 
     bool HasPlayerTwo() const noexcept { return playerTwo_ != nullptr; }
 
     /// Player 2's ULocalPlayer, or null. Only compared by address outside this class.
-    const unreal::UObject* PlayerTwo() const noexcept { return playerTwo_; }
+    unreal::UObject* PlayerTwo() const noexcept { return playerTwo_; }
 
-    /// Counts successful joins. A new player 2 can be allocated at the address of the one that
-    /// left, so observers tell joins apart by this, not by the address alone.
+    /// Counts adds. A new player 2 can be allocated at the address of the one that left, so
+    /// observers tell joins apart by this, not by the address alone.
     std::uint32_t JoinCount() const noexcept { return joins_; }
 
 private:
-    /// True if the engine still lists player 2. If not, lets go of it without touching its object.
-    bool StillListed() noexcept;
-
-    /// Drops this mod's references to player 2 once the engine no longer lists it.
     void Forget() noexcept;
 
     std::uintptr_t   removeLocalPlayer_;
     unreal::UObject* playerTwo_    = nullptr;  // only ever a player this mod created
     unreal::UObject* gameInstance_ = nullptr;  // the game instance whose list player 2 was added to
-    SharedCamera     camera_;
-    std::uint32_t    joins_ = 0;
+    std::uint32_t    joins_        = 0;
 };
 
 }  // namespace lss::players
