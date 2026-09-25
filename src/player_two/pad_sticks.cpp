@@ -28,8 +28,9 @@ ProcessInputFn            g_engineProcessInput = nullptr;
 const std::byte* const*   g_inputOwner         = nullptr;  // the global that holds Square's input object
 const std::uint8_t*       g_directInputOnly    = nullptr;  // nonzero: the game merges only DirectInput
 
-std::atomic<bool>  g_enabled{false};
-bool               g_scopeOpen = false;  // game thread only
+std::atomic<bool>     g_enabled{false};
+std::atomic<unsigned> g_mask{kPartPlayerTwoInput | kPartPlayerOneMove | kPartMemberTick};
+bool                  g_scopeOpen = false;  // game thread only
 
 // Per controller id, set by control scripts; game thread only.
 constexpr std::int32_t kOverridePads = 4;
@@ -63,7 +64,8 @@ void ProcessPlayerInput(void* controller, float deltaTime, bool gamePaused)
 {
     const bool isOne = controller == generation::PlayerOneController();
     const bool isTwo = controller == generation::PlayerTwoController();
-    if (!g_enabled.load(std::memory_order_relaxed) || !generation::Active() || (!isOne && !isTwo) || !generation::OnGameThread())
+    if (!g_enabled.load(std::memory_order_relaxed) || !generation::Active() || (!isOne && !isTwo) ||
+        (isTwo && !PartActs(kPartPlayerTwoInput)) || !generation::OnGameThread())
     {
         g_inputCounters.Pass();
         g_engineProcessInput(controller, deltaTime, gamePaused);
@@ -123,6 +125,19 @@ bool Toggle() noexcept
 bool Enabled() noexcept
 {
     return g_enabled.load(std::memory_order_relaxed);
+}
+
+void SetMask(unsigned mask) noexcept
+{
+    g_mask.store(mask, std::memory_order_relaxed);
+    platform::Log(L"per-pad sticks: mask {} (player 2's input as primary {}, player 1's move state on pad 1 {}, "
+                  L"player 2's member ticked {})",
+                  mask, PartActs(kPartPlayerTwoInput), PartActs(kPartPlayerOneMove), PartActs(kPartMemberTick));
+}
+
+bool PartActs(unsigned part) noexcept
+{
+    return (g_mask.load(std::memory_order_relaxed) & part) != 0;
 }
 
 std::int32_t ControllerIdOf(const void* controller) noexcept

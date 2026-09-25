@@ -191,6 +191,12 @@ Outcome ModTarget::SetHudLeversMask(std::uint32_t mask)
     return {true, L"levers mask set (see the log)"};
 }
 
+Outcome ModTarget::SetSticksMask(std::uint32_t mask)
+{
+    player_two::pad_sticks::SetMask(mask);
+    return {true, L"sticks mask set (see the log)"};
+}
+
 Outcome ModTarget::Dump(const std::wstring& topic)
 {
     // "widgets", "hud-players" or "slots <class>" (control/script.cpp).

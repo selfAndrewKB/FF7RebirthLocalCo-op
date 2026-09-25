@@ -48,6 +48,7 @@ public:
     virtual Outcome SetHudImage(bool on)                       = 0;
     virtual Outcome SetHudLevers(bool on)                      = 0;
     virtual Outcome SetHudLeversMask(std::uint32_t mask)       = 0;
+    virtual Outcome SetSticksMask(std::uint32_t mask)          = 0;
     virtual Outcome Dump(const std::wstring& topic)            = 0;
     virtual Outcome HoldSticks(std::int32_t player, const float (&axes)[4]) = 0;
     virtual void    ReleaseSticks(std::int32_t player)         = 0;

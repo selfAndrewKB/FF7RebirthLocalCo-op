@@ -33,7 +33,7 @@ bool InstallSecondImage(const platform::GameImage& image) noexcept;
 void RemoveSecondImage() noexcept;
 bool SecondImageInstalled() noexcept;
 
-/// The `hud-image` switch: player 2's HUD image on or off (off at start while it is new).
+/// The `hud-image` switch: player 2's HUD image on or off (on from a successful install).
 void SetSecondImage(bool on) noexcept;
 bool SecondImageOn() noexcept;
 

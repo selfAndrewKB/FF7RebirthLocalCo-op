@@ -86,6 +86,10 @@ inline constexpr std::uint32_t kCharacterMoveState           = 0x1750;
 inline constexpr std::uint32_t kMoveStateCharacter = 0x8;
 inline constexpr std::uint32_t kMoveStateBlocked   = 0x91;  // u8; the gate refuses when nonzero
 inline constexpr std::uint32_t kMoveStateCooldown  = 0x94;  // float; the gate refuses when > 0
+// The state's three field-action row handles (chocobo, buggy, cactus statue), 0x50 bytes each with
+// the request byte at +0x48; written by the state's tick, turned into a HUD row by the character's
+// own tick (RE-p2-field-action-row.md).
+inline constexpr std::uint32_t kMoveStateFieldActionHandles[] = {0xA0, 0xF0, 0x140};
 inline constexpr std::uint8_t  kMoveBlockingTagA   = 17;
 inline constexpr std::uint8_t  kMoveBlockingTagB   = 22;
 
@@ -232,6 +236,9 @@ inline constexpr std::uint8_t kSetViewTargetBytes[] = {
 inline constexpr std::uint8_t kMoveStateTickForCharacterBytes[] = {
     0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8,
     0x54, 0x40, 0xE5, 0x00, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x41, 0x08, 0x48};
+inline constexpr std::uint8_t kFieldActionHandleClearBytes[] = {
+    0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x4C, 0x9C, 0xEB, 0x00,
+    0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9, 0xE8, 0xE5, 0x60, 0x6F, 0x00, 0x84};
 inline constexpr std::uint8_t kIsPartyLeaderBytes[] = {
     0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x98, 0x7E, 0x8A, 0x01,
     0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x05, 0x3E, 0x4C, 0xB9, 0x08, 0x48, 0x85};
@@ -255,6 +262,11 @@ static_assert(sizeof(ViewTargetTransition) == 16);
 /// frame, for the one character its field tick selects.
 inline constexpr FunctionFact kMoveStateTickForCharacter{L"MoveState_TickForCharacter", 0x14125AECC,
                                                          kMoveStateTickForCharacterBytes};
+
+/// Removes a field-action row handle's HUD row, if it has one, and zeroes its request (rcx = the
+/// handle). The game calls it itself when the chocobo row's label changes.
+inline constexpr FunctionFact kFieldActionHandleClear{L"FieldActionIconHandle::Clear", 0x1411F52D8,
+                                                      kFieldActionHandleClearBytes};
 
 /// The battle-player component's "is the party leader" test returns (vt+0x68 player type == the
 /// party manager's leader type); the movement gate's first character clause ends in it.

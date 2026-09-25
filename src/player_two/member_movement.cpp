@@ -14,6 +14,7 @@
 #include "player_two/primary_controller.h"
 
 #include <atomic>
+#include <cstddef>
 
 namespace lss::player_two::member_movement {
 
@@ -22,6 +23,7 @@ namespace {
 using TickForCharacterFn = void (*)(void* moveState, float deltaTime);
 using LeaderTestFn       = std::uint8_t (*)(const void* component);
 using PlayerTypeFn       = std::uint8_t (*)(const void* component);
+using HandleClearFn      = void (*)(void* handle);
 
 constexpr int kNoType = -1;
 
@@ -29,6 +31,7 @@ constexpr int kNoType = -1;
 platform::VTableEntry g_leaderSlot;
 TickForCharacterFn    g_tickForCharacter = nullptr;
 LeaderTestFn          g_engineLeaderTest = nullptr;
+HandleClearFn         g_handleClear      = nullptr;  // null: player 2's field-action rows are left to show
 std::uintptr_t        g_moveStateVTable  = 0;
 
 // The player type the leader test says yes to; kNoType outside the member's tick. Written on the
@@ -88,6 +91,43 @@ bool GuardedTick(void* state, float deltaTime) noexcept
     }
 }
 
+/// The game's handle clear inside a structured-exception guard.
+bool GuardedClear(void* handle) noexcept
+{
+    __try
+    {
+        g_handleClear(handle);
+        return true;
+    }
+    __except (EngineGuardFilter(GetExceptionCode()))
+    {
+        return false;
+    }
+}
+
+/// Puts the state's field-action rows back to how the game leaves any character it did not tick.
+/// The tick asks for the party's summon rows (chocobo, buggy, cactus statue) from whichever state it
+/// runs, and the character's own tick would then add them to the one shared prompt list as rows of
+/// their own (RE-p2-field-action-row.md). The requests are used only inside the tick, so clearing
+/// them afterwards changes the rows alone.
+void ClearFieldActionRows(void* state) noexcept
+{
+    if (g_handleClear == nullptr)
+    {
+        return;
+    }
+    for (const std::uint32_t offset : facts::kMoveStateFieldActionHandles)
+    {
+        if (!GuardedClear(static_cast<std::byte*>(state) + offset))
+        {
+            g_handleClear = nullptr;
+            platform::Log(L"member movement: the engine raised an exception clearing player 2's field-action rows; "
+                          L"they are left to show this session");
+            return;
+        }
+    }
+}
+
 /// Ticks the member's state inside every scope, or not at all.
 void TickInScopes(void* playerTwoController, void* state, int type, float deltaTime) noexcept
 {
@@ -104,7 +144,9 @@ void TickInScopes(void* playerTwoController, void* state, int type, float deltaT
     if (!GuardedTick(state, deltaTime))
     {
         g_stopped = true;
+        return;
     }
+    ClearFieldActionRows(state);
 }
 
 /// The member's move state, if the member is player 2's possessed character and the tick's
@@ -136,6 +178,13 @@ bool Install(const platform::GameImage& image) noexcept
     g_tickForCharacter = reinterpret_cast<TickForCharacterFn>(*tick);
     g_engineLeaderTest = reinterpret_cast<LeaderTestFn>(*leaderTest);
     g_moveStateVTable  = *vtable;
+    const auto clear   = platform::FindFunction(image, facts::kFieldActionHandleClear);
+    g_handleClear      = clear ? reinterpret_cast<HandleClearFn>(*clear) : nullptr;
+    if (!clear)
+    {
+        platform::Log(L"member movement: the field-action handle clear differs; player 2's member will add its own "
+                      L"(dim) summon rows to the prompt list");
+    }
     return platform::ReplaceSlot(image, facts::kIsPartyLeader, reinterpret_cast<std::uintptr_t>(&LeaderTest),
                                  g_leaderSlot);
 }
@@ -155,7 +204,8 @@ void Tick(void* playerTwoController, void* member) noexcept
         return;
     }
     const auto engine = move_state::TakeEngineTicks();
-    if (!pad_sticks::Enabled() || !generation::Active() || g_tickForCharacter == nullptr || g_stopped)
+    if (!pad_sticks::Enabled() || !pad_sticks::PartActs(pad_sticks::kPartMemberTick) || !generation::Active() ||
+        g_tickForCharacter == nullptr || g_stopped)
     {
         return;
     }

@@ -35,7 +35,7 @@ bool InstallPlayerTwoPass(const platform::GameImage& image) noexcept;
 void RemovePlayerTwoPass() noexcept;
 bool PlayerTwoPassInstalled() noexcept;
 
-/// The `hud-levers` switch: player 2's image shows player 2's content (off at start while new).
+/// The `hud-levers` switch: player 2's image shows player 2's content (on from a successful install).
 void SetPlayerTwoContent(bool on) noexcept;
 bool PlayerTwoContentOn() noexcept;
 

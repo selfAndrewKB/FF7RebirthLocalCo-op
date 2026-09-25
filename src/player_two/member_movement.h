@@ -10,7 +10,10 @@
 //     (player_two/primary_controller.h);
 //   - a yes from the movement gate's party-leader test for the member's player type only
 //     (a replaced vtable slot that answers on the game thread, inside this tick, and nowhere else).
-// It runs only while per-pad sticks are on.
+// It runs only while per-pad sticks are on. Afterwards the member's field-action rows (the party's
+// summons, which the tick asks for from whichever state it runs) are cleared with the game's own
+// handle clear, as for any character the game did not tick; otherwise they would show as extra dim
+// rows in the one shared prompt list.
 //
 // Game thread only.
 

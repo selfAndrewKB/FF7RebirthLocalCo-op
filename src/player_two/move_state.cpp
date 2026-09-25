@@ -151,7 +151,8 @@ std::uintptr_t RunForOwner(TickFn engine, void* state, float deltaTime, bool via
     Count(state, character, viaTickInput);
 
     const void* owner = ReadPointer(character, facts::kCharacterEffectiveController);
-    if (!pad_sticks::Enabled() || !generation::Active() || owner == nullptr ||
+    if (!pad_sticks::Enabled() || !pad_sticks::PartActs(pad_sticks::kPartPlayerOneMove) || !generation::Active() ||
+        owner == nullptr ||
         owner != generation::PlayerOneController())
     {
         return engine(state, deltaTime);

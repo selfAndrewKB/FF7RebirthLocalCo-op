@@ -20,7 +20,10 @@
 //                                         (hud/player_two_pass.h)
 //   hud-levers-mask <0..63>              diagnosis: which levers act (1 contexts, 2 first player,
 //                                         4 primary controller, 8 view rect, 16 updates, 32 compass)
-//   hud-trace <frames>                    log the order of the HUD's tick, marker placements, icon
+//   sticks-mask <0..7>                   diagnosis: which parts of per-pad sticks act (1 player 2's
+//                                         input as the primary player's, 2 player 1's move state on
+//                                         pad 1, 4 player 2's member ticked); all at start
+//   hud-trace <frames>                  log the order of the HUD's tick, marker placements, icon
 //                                         projections and render for 1-30 frames, and which player
 //                                         each placement and projection used (hud/hud_trace.h)
 //   dump widgets                          log each visible HUD widget's desired size and geometry
@@ -65,6 +68,7 @@ enum class CommandKind
     HudImage,
     HudLevers,
     HudLeversMask,
+    SticksMask,
     Dump,
     Stick,
     Wait,
@@ -88,7 +92,7 @@ struct Command
     std::int32_t  player    = 0;                       // stick: 1 or 2
     float         axes[4]   = {};                      // stick: LX, LY, RX, RY
     float         blend     = -1.0f;                   // split-fov: 0..1, or negative for native
-    std::uint32_t ticks     = 0;                       // stick, wait, wait-until; hud-trace: frames; hud-levers-mask: mask
+    std::uint32_t ticks     = 0;                       // stick, wait, wait-until; hud-trace: frames; the masks: mask
     WaitCondition condition = WaitCondition::Playing;  // wait-until
     std::wstring  text;                                // console, note
 };

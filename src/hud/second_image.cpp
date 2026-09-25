@@ -390,6 +390,7 @@ bool InstallSecondImage(const platform::GameImage& image) noexcept
         return false;
     }
     g_installed = true;
+    g_on.store(!g_refused, std::memory_order_relaxed);  // on from the start; the hud-image command switches it
     return true;
 }
 

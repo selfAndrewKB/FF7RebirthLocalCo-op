@@ -533,6 +533,7 @@ bool InstallPlayerTwoPass(const platform::GameImage& image) noexcept
         return false;
     }
     g_installed = true;
+    g_on.store(!g_refused, std::memory_order_relaxed);  // on from the start; the hud-levers command switches it
     return true;
 }
 
