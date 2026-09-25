@@ -35,8 +35,14 @@ bool Installed() noexcept;
 /// The switch's own gate: in the field, or not in battle.
 bool FieldGateOpen() noexcept;
 
-/// The first eligible party member for player 2 (null, with the reasons logged, if none).
+/// The first eligible member of the deployed party (the battle-member list player 1's battle switch
+/// cycles), by that switch's own member test, never player 1's character or the field or default
+/// battle leader's slot (null, with the reasons logged, if none).
 void* Choose(void* playerOneController) noexcept;
+
+/// Why player 2 may no longer play `member`: not one of the deployed party any more, away from the
+/// battle party, or failing player 1's battle switch's member test. Null while it may. Game thread.
+const wchar_t* WhyNotPlayable(const void* member) noexcept;
 
 /// The party roster's player type of `character` (null if it is not on the field lane's roster).
 std::optional<std::uint8_t> PlayerTypeOf(const void* character) noexcept;

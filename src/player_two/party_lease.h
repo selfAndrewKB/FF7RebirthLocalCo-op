@@ -30,6 +30,8 @@ struct MemberSnapshot
     const void*  aiPawn            = nullptr;  // the retained AI controller's +0x258
     std::uint8_t playerControlled  = 0;        // +0x625
     bool         aiControllerValid = false;    // the switch's own gate on the AI component
+    bool         leaderSlot        = false;    // the field leader's or the default battle leader's type
+    bool         battleReady       = true;     // passes player 1's battle switch's own member test
 };
 
 enum class Eligibility
@@ -38,10 +40,12 @@ enum class Eligibility
     NoCharacter,
     NotEndCharacter,
     PlayerOnes,
+    LeaderSlot,    // the game hands this type back to player 1 (battle end, or battle start)
     Requested,     // another controller has asked for it
     NotAiOwned,    // +0x580, +0x588, +0x260 and the AI's pawn do not all agree
     PlayerDriven,  // +0x625 says a player drives it
-    AiInvalid,     // the switch would publish the leader without moving control
+    AiInvalid,         // the switch would publish the leader without moving control
+    BattleUnavailable, // player 1's battle switch would not take it either (its state 6 or state id 22)
 };
 
 Eligibility Assess(const MemberSnapshot& member) noexcept;

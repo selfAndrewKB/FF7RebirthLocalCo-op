@@ -27,6 +27,10 @@ using ObjectTestFn      = std::uint8_t (*)(const void* object);
 using ObjectToObjectFn  = void* (*)(const void* object);
 using GlobalTestFn      = std::uint8_t (*)();
 using GlobalObjectFn    = void* (*)();
+using TypeFn            = std::uint8_t (*)();                           // al only
+using TypeTestFn        = std::uint8_t (*)(std::uint8_t playerType);    // al only
+using HolderStateFn     = std::uint8_t (*)(const void* holder);         // al only
+using StateIdTestFn     = std::uint8_t (*)(const void* component, std::uint8_t id);  // al only
 
 struct Functions
 {
@@ -41,6 +45,11 @@ struct Functions
     GlobalTestFn      isNotInFieldState   = nullptr;
     GlobalTestFn      isInBattle          = nullptr;
     GlobalObjectFn    globalLeader        = nullptr;
+    HolderStateFn     holderState         = nullptr;  // player 1's battle switch's member test T
+    StateIdTestFn     hasStateId          = nullptr;
+    TypeFn            fieldLeaderType     = nullptr;
+    TypeFn            defaultBattleLeader = nullptr;
+    TypeTestFn        isBattleMember      = nullptr;
 };
 Functions         g_fn;  // set once at install
 bool              g_installed   = false;
@@ -76,6 +85,53 @@ bool GuardedSwitchLeader(void* controller, void* character) noexcept
     }
 }
 
+bool GuardedHolderState(const void* holder, std::uint8_t& state) noexcept
+{
+    __try
+    {
+        state = g_fn.holderState(holder);
+        return true;
+    }
+    __except (platform::GuardFilter(GetExceptionCode()))
+    {
+        return false;
+    }
+}
+
+bool GuardedHasStateId(const void* component, std::uint8_t id, bool& has) noexcept
+{
+    __try
+    {
+        has = g_fn.hasStateId(component, id) != 0;
+        return true;
+    }
+    __except (platform::GuardFilter(GetExceptionCode()))
+    {
+        return false;
+    }
+}
+
+/// Player 1's battle switch's own member test T (RE-p2-deployed-party.md §4.1): the member has a
+/// BattlePlayer controller component whose holder's state is not 6 and which has no state id 22.
+/// The first rule for player 2 is to be bound by it the way player 1 is.
+bool BattleReady(const void* character) noexcept
+{
+    const void* component = g_fn.validateAiController(g_fn.aiControllerOf(character));
+    const void* holder    = ReadPointer(component, facts::kComponentHolder);
+    std::uint8_t state    = 0;
+    bool         excluded = true;
+    return component != nullptr && holder != nullptr && GuardedHolderState(holder, state) &&
+           state != facts::kUnavailableState && GuardedHasStateId(component, facts::kUnavailableStateId, excluded) &&
+           !excluded;
+}
+
+/// The types the game hands back to player 1: the field leader (at every battle end) and the default
+/// battle leader (at some battle starts).
+bool LeaderSlot(std::uint8_t playerType) noexcept
+{
+    return playerType == g_fn.fieldLeaderType() || playerType == g_fn.defaultBattleLeader();
+}
+
 template <class Fn>
 bool Find(const platform::GameImage& image, const platform::FunctionFact& fact, Fn& out) noexcept
 {
@@ -84,10 +140,11 @@ bool Find(const platform::GameImage& image, const platform::FunctionFact& fact, 
     return live.has_value();
 }
 
-MemberSnapshot Snapshot(void* character, void* playerOneController) noexcept
+MemberSnapshot Snapshot(void* character, void* playerOneController, std::uint8_t playerType) noexcept
 {
     MemberSnapshot member;
     member.character = character;
+    member.leaderSlot = LeaderSlot(playerType);
     if (character == nullptr)
     {
         return member;
@@ -107,6 +164,7 @@ MemberSnapshot Snapshot(void* character, void* playerOneController) noexcept
     member.aiPawn            = ReadPointer(member.retainedAi, facts::kControllerPawn);
     member.playerControlled  = ReadField<std::uint8_t>(character, facts::kCharacterPlayerControlled);
     member.aiControllerValid = g_fn.validateAiController(g_fn.aiControllerOf(character)) != nullptr;
+    member.battleReady       = member.aiControllerValid && BattleReady(character);
     return member;
 }
 
@@ -126,6 +184,11 @@ bool Install(const platform::GameImage& image) noexcept
     found      = Find(image, facts::kIsNotInFieldState, g_fn.isNotInFieldState) && found;
     found      = Find(image, facts::kIsInBattle, g_fn.isInBattle) && found;
     found      = Find(image, facts::kResolvePartyLeader, g_fn.globalLeader) && found;
+    found      = Find(image, facts::kHolderStateByte, g_fn.holderState) && found;
+    found      = Find(image, facts::kHasStateId, g_fn.hasStateId) && found;
+    found      = Find(image, facts::kFieldLeaderType, g_fn.fieldLeaderType) && found;
+    found      = Find(image, facts::kDefaultBattleLeaderType, g_fn.defaultBattleLeader) && found;
+    found      = Find(image, facts::kIsBattleMember, g_fn.isBattleMember) && found;
     const auto fieldState  = image.Rebase(facts::kFieldStateGlobal, sizeof(void*));
     const auto battleState = image.Rebase(facts::kBattleStateGlobal, sizeof(void*));
     if (!fieldState || !battleState)
@@ -168,12 +231,34 @@ void* Choose(void* playerOneController) noexcept
             continue;
         }
         void*             character = g_fn.characterByType(facts::kFieldLane, type);
-        const Eligibility verdict   = Assess(Snapshot(character, playerOneController));
+        const Eligibility verdict   = Assess(Snapshot(character, playerOneController, type));
         platform::Log(L"party member {} (type {}): {}", ordinal, static_cast<unsigned>(type), Describe(verdict));
         if (verdict == Eligibility::Eligible)
         {
             return character;
         }
+    }
+    return nullptr;
+}
+
+const wchar_t* WhyNotPlayable(const void* member) noexcept
+{
+    if (!g_installed || member == nullptr)
+    {
+        return nullptr;
+    }
+    const auto type = PlayerTypeOf(member);  // the battle-member list: the deployed party
+    if (!type)
+    {
+        return L"no longer one of the deployed party";
+    }
+    if (g_fn.isBattleMember(*type) == 0)
+    {
+        return L"away from the battle party";
+    }
+    if (!BattleReady(member))
+    {
+        return L"unavailable to the battle switch";
     }
     return nullptr;
 }

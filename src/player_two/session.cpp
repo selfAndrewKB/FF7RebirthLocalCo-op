@@ -34,6 +34,10 @@ constexpr std::uint32_t kPlayerOneWatchTicks = 3;
 /// Ticks to wait for the switch to hand the member over before giving it back.
 constexpr std::uint32_t kTakeTicks = 120;
 
+/// How often, in ticks, player 2's member is checked against the deployed party and the battle
+/// switch's member test (every call is a read).
+constexpr std::uint32_t kPlayableCheckTicks = 30;
+
 }  // namespace
 
 void Session::TogglePadSticks() noexcept
@@ -87,11 +91,13 @@ void Session::Tick() noexcept
         case Phase::Taking: AwaitTake(); break;
         case Phase::Leaving: Carry(leave_.Next(MemberReleased())); break;
         case Phase::Playing:
-            if (installed_.memberMovement && generation::Member() != nullptr)
+            CheckMemberPlayable();
+            if (phase_ == Phase::Playing && installed_.memberMovement && generation::Member() != nullptr)
             {
                 member_movement::Tick(playerTwoController_, generation::Member());
             }
             break;
+        case Phase::Swapping: AwaitSwap(); break;
         case Phase::Out: break;
     }
     if (phase_ != Phase::Leaving && phase_ != Phase::Out && generation::Active())
@@ -206,6 +212,47 @@ void Session::AwaitTake() noexcept
     generation::Fault(L"the party member was not handed over in time");
     party_member::GiveBack(playerTwoController_);  // member_ stays recorded: the leave waits for this release
     phase_ = Phase::Playing;
+}
+
+void Session::CheckMemberPlayable() noexcept
+{
+    if (member_ == nullptr || generation::Member() != member_ || !generation::Active() ||
+        ticks_ % kPlayableCheckTicks != 0 || !party_member::FieldGateOpen())
+    {
+        return;
+    }
+    const wchar_t* why = party_member::WhyNotPlayable(member_);
+    if (why == nullptr)
+    {
+        return;
+    }
+    Log(L"player 2's {} is {}: giving it back to choose again among the deployed party", NameOf(member_), why);
+    generation::SetMember(nullptr);  // player 2's member movement and scopes stop at once
+    if (!party_member::GiveBack(playerTwoController_))
+    {
+        Log(L"player 2's {} could not be given back (no trigger actor, or the switch faulted)", NameOf(member_));
+    }
+    phase_ = Phase::Swapping;
+    ticks_ = 0;
+}
+
+void Session::AwaitSwap() noexcept
+{
+    if (MemberReleased())
+    {
+        Log(L"player 2's {} is back with its AI after {} tick(s); choosing again", NameOf(member_), ticks_);
+        member_ = nullptr;
+        phase_  = Phase::SettlingPlayerOne;
+        ticks_  = kPlayerOneWatchTicks;  // player 1 is settled already: choose on the next tick
+        return;
+    }
+    if (ticks_ >= kTakeTicks)
+    {
+        Log(L"player 2's {} did not return to its AI within {} ticks; player 2 stays without a character (Ctrl+F8 "
+            L"and Ctrl+F7 join again)",
+            NameOf(member_), kTakeTicks);
+        phase_ = Phase::Playing;  // member_ stays recorded: a leave waits for its release
+    }
 }
 
 void Session::Leave() noexcept

@@ -16,6 +16,10 @@ Eligibility Assess(const MemberSnapshot& member) noexcept
     {
         return Eligibility::PlayerOnes;
     }
+    if (member.leaderSlot)
+    {
+        return Eligibility::LeaderSlot;
+    }
     if (member.requested != nullptr)
     {
         return Eligibility::Requested;
@@ -33,6 +37,10 @@ Eligibility Assess(const MemberSnapshot& member) noexcept
     {
         return Eligibility::AiInvalid;
     }
+    if (!member.battleReady)
+    {
+        return Eligibility::BattleUnavailable;
+    }
     return Eligibility::Eligible;
 }
 
@@ -48,6 +56,8 @@ const wchar_t* Describe(Eligibility eligibility) noexcept
         case Eligibility::NotAiOwned: return L"not owned by its AI";
         case Eligibility::PlayerDriven: return L"marked player-controlled";
         case Eligibility::AiInvalid: return L"its AI controller is not valid";
+        case Eligibility::LeaderSlot: return L"the field or default battle leader's slot (player 1's)";
+        case Eligibility::BattleUnavailable: return L"unavailable to the battle switch";
     }
     return L"unknown";
 }

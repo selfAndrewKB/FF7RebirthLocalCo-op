@@ -80,6 +80,7 @@ private:
         SettlingPlayerOne,  // waiting for player 1's controller to name its pawn and leader again
         Taking,             // the switch was called; waiting for the lease to show player 2
         Playing,
+        Swapping,           // player 2's member stopped being playable: given back, then chosen again
         Leaving,
     };
 
@@ -87,6 +88,8 @@ private:
     void StartGeneration() noexcept;
     void Settle() noexcept;
     void AwaitTake() noexcept;
+    void CheckMemberPlayable() noexcept;
+    void AwaitSwap() noexcept;
     void Carry(LeaveAction action) noexcept;
     void Teardown() noexcept;
     bool HoldsMember() const noexcept;

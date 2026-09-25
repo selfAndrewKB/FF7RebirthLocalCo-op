@@ -92,6 +92,14 @@ void TestEachRuleRefuses()
     member = AiOwned();
     member.aiControllerValid = false;
     EXPECT(Assess(member) == Eligibility::AiInvalid);
+
+    member = AiOwned();
+    member.leaderSlot = true;
+    EXPECT(Assess(member) == Eligibility::LeaderSlot);
+
+    member = AiOwned();
+    member.battleReady = false;
+    EXPECT(Assess(member) == Eligibility::BattleUnavailable);
 }
 
 void TestPlayerOnesCharacterWinsOverEverything()
@@ -107,7 +115,8 @@ void TestEveryVerdictHasText()
     std::puts("eligibility: every verdict describes itself");
     for (const auto verdict : {Eligibility::Eligible, Eligibility::NoCharacter, Eligibility::NotEndCharacter,
                                Eligibility::PlayerOnes, Eligibility::Requested, Eligibility::NotAiOwned,
-                               Eligibility::PlayerDriven, Eligibility::AiInvalid})
+                               Eligibility::PlayerDriven, Eligibility::AiInvalid, Eligibility::LeaderSlot,
+                               Eligibility::BattleUnavailable})
     {
         const wchar_t* text = Describe(verdict);
         EXPECT(text != nullptr && text[0] != L'\0' && text != Describe(static_cast<Eligibility>(99)));
