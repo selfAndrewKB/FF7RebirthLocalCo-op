@@ -5,6 +5,8 @@
 #include <Unreal/NameTypes.hpp>
 
 #include "hud/area_icons_two.h"
+#include "hud/enemy_gauges.h"
+#include "hud/target_views.h"
 #include "hud/entry_filter_code.h"
 #include "hud/hud_addresses.h"
 #include "hud/player_two_pass.h"
@@ -437,6 +439,7 @@ void BeginOverlayRender(bool playerTwoIn) noexcept
         std::memcpy(reinterpret_cast<void*>(g_deltaTime), &still, sizeof(still));
         g_pass              = Pass::PlayerTwo;
         prompt_rows::ShowOnly(1);                 // player 2's prompt rows only (hud/prompt_rows.h)
+        target_views::BeforePass(1);  // player 1's cursor and gauges collapsed before player 2's updates read them
         const bool content  = EnterPlayerTwo();  // player 2's levers and updates (hud/player_two_pass.h)
         if (content)
         {
@@ -446,6 +449,8 @@ void BeginOverlayRender(bool playerTwoIn) noexcept
         const double start  = Now();
         g_renderToLayer(reinterpret_cast<void*>(overlay));
         g_playerTwoSeconds += Now() - start;
+        enemy_gauges::EndPlayerTwoPass();  // each gauge's size back to player 1's before player 1's updates
+        target_views::BeforePass(0);  // player 2's, collapsed before player 1's updates (put back after the render)
         if (content)
         {
             LeavePlayerTwo();

@@ -1,11 +1,11 @@
-// Host-side tests for the enemy bars' capture code, run without the game.
+// Host-side tests for the enemy gauges' capture code, run without the game.
 //
-// The bytes the mod writes near the game (hud/enemy_bars_code.h) are EXECUTED here, installed
+// The bytes the mod writes near the game (hud/enemy_gauges_code.h) are EXECUTED here, installed
 // through platform::CodeRedirect over a stand-in laid out like EndUI__MF8_ProjectEntryByWidget's
 // entry: its first instruction ends at a 16-byte boundary and `mov [rsp+18h], r8` starts 1 byte into
 // the next block (0x14176201C / 0x141762021 in the game).
 
-#include "hud/enemy_bars_code.h"
+#include "hud/enemy_gauges_code.h"
 #include "platform/code_redirect.h"
 
 #ifndef WIN32_LEAN_AND_MEAN
@@ -71,17 +71,17 @@ private:
 
 void TestCapture()
 {
-    std::puts("enemy bars: each call recorded with its widget and location, none while replaying, none past "
+    std::puts("enemy gauges: each call recorded with its widget and location, none while replaying, none past "
               "capacity, and restored");
     const FunctionLike function;
-    static lss::hud::BarRecord record;
+    static lss::hud::GaugeRecord record;
     const float location[3] = {1.5f, -2.25f, 300.0f};
     const auto  expected    = [&](std::uint64_t widget) { return reinterpret_cast<std::uint64_t>(location) ^ widget; };
     EXPECT(function.Call(nullptr, 0x1111, location) == expected(0x1111));
 
-    const auto code = lss::hud::BarCaptureCode(record);
+    const auto code = lss::hud::GaugeCaptureCode(record);
     lss::platform::CodeRedirect redirect;
-    EXPECT(redirect.Install(function.At(FunctionLike::kSiteOffset), lss::hud::kBarEntryBytes, code,
+    EXPECT(redirect.Install(function.At(FunctionLike::kSiteOffset), lss::hud::kGaugeEntryBytes, code,
                             function.At(FunctionLike::kResumeOffset)));
 
     record.placements[0].targeted = 7;  // the code must write 0
@@ -96,14 +96,14 @@ void TestCapture()
     EXPECT(record.count == 1);  // the mod's own call is not recorded
     record.replaying = 0;
 
-    for (std::uint32_t i = 1; i < lss::hud::kBarRecordCapacity; ++i)
+    for (std::uint32_t i = 1; i < lss::hud::kGaugeRecordCapacity; ++i)
     {
         function.Call(nullptr, 0x3000 + i, location);
     }
-    EXPECT(record.count == lss::hud::kBarRecordCapacity);
-    EXPECT(record.placements[lss::hud::kBarRecordCapacity - 1].widget == 0x3000 + lss::hud::kBarRecordCapacity - 1);
+    EXPECT(record.count == lss::hud::kGaugeRecordCapacity);
+    EXPECT(record.placements[lss::hud::kGaugeRecordCapacity - 1].widget == 0x3000 + lss::hud::kGaugeRecordCapacity - 1);
     EXPECT(function.Call(nullptr, 0x4444, location) == expected(0x4444));  // full: still the game's call
-    EXPECT(record.count == lss::hud::kBarRecordCapacity);
+    EXPECT(record.count == lss::hud::kGaugeRecordCapacity);
 
     EXPECT(redirect.Restore());
     record.count = 0;

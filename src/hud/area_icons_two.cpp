@@ -41,6 +41,13 @@ constexpr std::uintptr_t kFirstControllerCall = 0x1409F7439;
 constexpr std::uintptr_t kFirstController     = 0x140EF3078;
 constexpr std::uint8_t   kFirstControllerPrologue[] = {0xB8, 0x28, 0x00, 0x00, 0x00};
 
+// The frame function's call for the range origin, the leader character by the leader's player type
+// (RE-p2-hud-targets.md §1.1, R1): E8 rel32 at 0x1409F73E4 to Party_GetLeaderCharacterByLeaderType,
+// no arguments, inside the block at 0x1409F73E0.
+constexpr std::uintptr_t kLeaderCall = 0x1409F73E4;
+constexpr std::uintptr_t kLeader     = 0x140C81DE0;
+constexpr std::uint8_t   kLeaderPrologue[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x46, 0xD1, 0x42, 0x01};
+
 // SWidget::SetVisibility(widget, TAttribute<EVisibility>*), canvas vtable slot 59 (§8.3).
 constexpr std::uintptr_t kSetVisibility           = 0x140C27B38;
 constexpr std::uint8_t   kSetVisibilityPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x40, 0x00, 0x00, 0x00};
@@ -68,6 +75,7 @@ enum Part : unsigned
     kPartTick       = 1,
     kPartController = 2,
     kPartCanvases   = 4,
+    kPartLeader     = 8,  // player 2's icons ranged from player 2's member
 };
 
 struct VisibilityAttribute  // TAttribute<EVisibility> as the game passes it: unbound
@@ -92,10 +100,12 @@ using CtorFn          = void* (*)(void* memory);
 using FrameUpdateFn   = void (*)(void* instance, float deltaTime);
 using ClearAllFn      = void (*)(void* instance);
 using FirstControllerFn = void* (*)(void* world);
+using LeaderFn          = void* (*)();
 using SetVisibilityFn = void (*)(void* widget, VisibilityAttribute* attribute);
 
 // Set once at install.
 platform::CallRedirect g_firstControllerCall;
+platform::CallRedirect g_leaderCall;
 bool                   g_installed      = false;
 std::uintptr_t         g_instanceOne    = 0;  // the address holding the game's instance
 MallocFn               g_malloc         = nullptr;
@@ -109,9 +119,11 @@ std::uintptr_t               g_instanceTwo = 0;
 bool                         g_createFailed = false;
 bool                         g_tickFailed   = false;
 void*                        g_playerTwoController = nullptr;  // answered while player 2's tick runs
-unsigned                     g_mask   = kPartTick | kPartController | kPartCanvases;
+void*                        g_playerTwoMember     = nullptr;  // answered as the range origin while it runs
+unsigned                     g_mask   = kPartTick | kPartController | kPartCanvases | kPartLeader;
 std::array<ShownCanvas, 2>   g_hiddenOne{};
 std::uint32_t                g_answered = 0;  // first-controller calls answered with player 2's
+std::uint32_t                g_leaderAnswers = 0;  // range-origin calls answered with player 2's member
 std::array<std::uint64_t, 7> g_logged{};
 int                          g_lines = 0;
 bool                         g_boundLogged = false;
@@ -136,6 +148,17 @@ void* FirstController(void* world) noexcept
         return g_playerTwoController;
     }
     return reinterpret_cast<FirstControllerFn>(g_firstControllerCall.Original())(world);
+}
+
+/// Replaces the frame function's call for the range origin: player 2's member in player 2's tick.
+void* Leader() noexcept
+{
+    if (g_playerTwoMember != nullptr)
+    {
+        ++g_leaderAnswers;
+        return g_playerTwoMember;
+    }
+    return reinterpret_cast<LeaderFn>(g_leaderCall.Original())();
 }
 
 std::uintptr_t CreateGuarded() noexcept
@@ -323,9 +346,9 @@ void LogIfChanged(std::uintptr_t one) noexcept
     try
     {
         platform::Log(L"area icons: player 1's enabled {} icons/markers slots {}/{}; player 2's enabled {} slots {}/{} "
-                      L"canvases {:#x}/{:#x}; first-controller answers {}",
+                      L"canvases {:#x}/{:#x}; first-controller answers {}, range-origin answers {}",
                       enabled[0], slots[0][0], slots[0][1], enabled[1], slots[1][0], slots[1][1], canvases[1][0],
-                      canvases[1][1], g_answered);
+                      canvases[1][1], g_answered, g_leaderAnswers);
     }
     catch (...)
     {
@@ -355,6 +378,14 @@ bool Install(const platform::GameImage& image) noexcept
         platform::Log(L"area icons: the icon manager's code is not what the research read; no icons of player 2's own");
         return false;
     }
+    const auto leaderSite = image.Rebase(kLeaderCall, 5);
+    const auto leader     = image.Rebase(kLeader);
+    if (!leaderSite || !leader || !image.BytesMatch(kLeader, kLeaderPrologue) ||
+        !g_leaderCall.Install(*leaderSite, *leader, reinterpret_cast<std::uintptr_t>(&Leader)))
+    {
+        platform::Log(L"area icons: the range-origin call is not what the research read; player 2's icons range from "
+                      L"player 1's character");
+    }
     g_instanceOne   = *instance;
     g_malloc        = reinterpret_cast<MallocFn>(*allocate);
     g_ctor          = reinterpret_cast<CtorFn>(*ctor);
@@ -370,6 +401,11 @@ void Remove() noexcept
 {
     g_hiddenOne           = {};  // no Slate calls here: this may run off the game thread (PlayerTwoOut restored them)
     g_playerTwoController = nullptr;
+    g_playerTwoMember     = nullptr;
+    if (g_leaderCall.IsInstalled() && !g_leaderCall.Restore())
+    {
+        platform::Log(L"area icons: the range-origin call was changed after us; left in place (it passes through)");
+    }
     if (g_firstControllerCall.IsInstalled() && !g_firstControllerCall.Restore())
     {
         platform::Log(L"area icons: the first-controller call was changed after us; left in place (it passes through)");
@@ -386,8 +422,10 @@ void Tick(float deltaTime) noexcept
     }
     CopyEventState(one);
     g_playerTwoController = Acts(kPartController) ? player_two::generation::PlayerTwoController() : nullptr;
+    g_playerTwoMember     = Acts(kPartLeader) ? player_two::generation::Member() : nullptr;
     const bool ticked     = FrameUpdateGuarded(g_instanceTwo, deltaTime);
     g_playerTwoController = nullptr;
+    g_playerTwoMember     = nullptr;
     if (!ticked)
     {
         g_tickFailed = true;
@@ -457,8 +495,9 @@ void SetMask(unsigned mask) noexcept
     }
     g_mask  = mask;
     g_lines = 0;
-    platform::Log(L"area icons: mask {} (ticked {}, first controller player 2's {}, canvases per pass {})", mask,
-                  Acts(kPartTick), Acts(kPartController), Acts(kPartCanvases));
+    platform::Log(L"area icons: mask {} (ticked {}, first controller player 2's {}, canvases per pass {}, ranged from "
+                  L"player 2's member {})",
+                  mask, Acts(kPartTick), Acts(kPartController), Acts(kPartCanvases), Acts(kPartLeader));
 }
 
 }  // namespace lss::hud::area_icons_two

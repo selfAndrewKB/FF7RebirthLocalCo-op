@@ -31,4 +31,34 @@ bool CopyGuarded(void* out, const void* from, std::size_t length) noexcept;
 /// memcpy to memory that may not be writable. False if it faulted.
 bool WriteGuarded(void* to, const void* from, std::size_t length) noexcept;
 
+/// Calls an engine function, its result into `out`. False if it faulted.
+template <class R, class... P, class... A>
+bool CallGuarded(R (*fn)(P...), R& out, A... args) noexcept
+{
+    __try
+    {
+        out = fn(args...);
+        return true;
+    }
+    __except (GuardFilter(GetExceptionCode()))
+    {
+        return false;
+    }
+}
+
+/// Calls an engine function with no result. False if it faulted.
+template <class... P, class... A>
+bool CallGuarded(void (*fn)(P...), A... args) noexcept
+{
+    __try
+    {
+        fn(args...);
+        return true;
+    }
+    __except (GuardFilter(GetExceptionCode()))
+    {
+        return false;
+    }
+}
+
 }  // namespace lss::platform

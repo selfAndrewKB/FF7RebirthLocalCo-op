@@ -20,7 +20,7 @@
 //                                         (hud/player_two_pass.h)
 //   hud-levers-mask <0..511>             diagnosis: which levers act (1 contexts, 2 first player,
 //                                         4 primary controller, 8 view rect, 16 updates, 32 compass,
-//                                         64 the arrows' own timers, 128 the enemy bars per view,
+//                                         64 the arrows' own timers, 128 the enemy gauges per view,
 //                                         256 the battle popups per view)
 //   sticks-mask <0..15>                  diagnosis: which parts of per-pad sticks act (1 player 2's
 //                                         input as the primary player's, 2 player 1's move state on
@@ -31,12 +31,13 @@
 //                                         player_two/scope_leaks.h); all at start
 //   buttons-mask <0..3>                  diagnosis: which parts of per-pad buttons act (1 the split views,
 //                                         2 pad 2 kept from menus and prompts); both at start
-//   icons-mask <0..7>                    diagnosis: which parts of player 2's own map icons act (1 its
+//   icons-mask <0..15>                   diagnosis: which parts of player 2's own map icons act (1 its
 //                                         icon manager ticked, 2 its first controller player 2's, 4 each
-//                                         half shows its own canvases; hud/area_icons_two.h); all at start
-//   battle-mask <0..255>                 diagnosis: which of player 2's battle actions act (1 dodge, 2
+//                                         half shows its own canvases, 8 ranged from player 2's member;
+//                                         hud/area_icons_two.h); all at start
+//   battle-mask <0..511>                 diagnosis: which of player 2's battle actions act (1 dodge, 2
 //                                         attack and unique, 4 guard, 8 soft target, 16 attack leader
-//                                         scope, 32 lock, 64 switching, 128 lock camera;
+//                                         scope, 32 lock, 64 switching, 128 lock camera, 256 cursor;
 //                                         player_two/battle_input.h); all at start
 //   perf-log on|off                      each hitch's own line and the periodic timing lines (off at
 //                                         start; the 10 s hitch summary is always written)

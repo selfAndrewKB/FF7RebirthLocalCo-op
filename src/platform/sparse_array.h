@@ -38,18 +38,27 @@ void ForEachSparseElement(std::uintptr_t array, std::uint32_t elementSize, Visit
         return;
     }
     const std::uintptr_t bits = heapBits != 0 ? heapBits : array + kSparseInlineBits;
-    for (std::int32_t i = 0; i < numBits; ++i)
+    for (std::int32_t base = 0; base < numBits; base += 32)
     {
+        // One read per 32 slots; a word with no bit set is skipped whole.
         std::uint32_t word = 0;
-        if (!CopyGuarded(&word, reinterpret_cast<const void*>(bits + sizeof(std::uint32_t) * static_cast<std::uint32_t>(i >> 5)),
-                         sizeof(word)) ||
-            (word & (1u << (i & 31))) == 0)
+        if (!CopyGuarded(&word, reinterpret_cast<const void*>(bits + sizeof(std::uint32_t) * static_cast<std::uint32_t>(base >> 5)),
+                         sizeof(word)))
         {
-            continue;  // a free slot
+            continue;
         }
-        if (!visit(data + static_cast<std::uintptr_t>(i) * elementSize))
+        for (std::int32_t i = base; word != 0 && i < numBits && i < base + 32; ++i)
         {
-            return;
+            const std::uint32_t bit = 1u << (i & 31);
+            if ((word & bit) == 0)
+            {
+                continue;  // a free slot
+            }
+            word &= ~bit;
+            if (!visit(data + static_cast<std::uintptr_t>(i) * elementSize))
+            {
+                return;
+            }
         }
     }
 }

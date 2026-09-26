@@ -28,10 +28,10 @@
 // game's targeting tick runs its lock after the soft target.
 //
 // Each part is switched by the battle mask (1 dodge, 2 attack and unique, 4 guard, 8 soft target, 16
-// attack leader scope, 32 lock, 64 switching, 128 lock camera). All are on at start; the mask
-// switches a part off for diagnosis. Every
-// frame it also logs, on change, what it reads (the controller's gates and requests, both
-// characters' battle preconditions and move-state bytes, pad 2's actions). Game thread only.
+// attack leader scope, 32 lock, 64 switching, 128 lock camera, 256 cursor). All are on at start; the
+// mask switches a part off for diagnosis. Every frame it also logs, on change, what it reads (the
+// controller's gates and requests, both characters' battle preconditions and move-state bytes, pad
+// 2's actions). Game thread only.
 
 namespace lss::platform {
 class GameImage;

@@ -5,7 +5,7 @@
 #include <Unreal/FWeakObjectPtr.hpp>
 #include <Unreal/UObject.hpp>
 
-#include "hud/enemy_bars.h"
+#include "hud/enemy_gauges.h"
 #include "hud/first_player_code.h"
 #include "hud/hud_addresses.h"
 #include "hud/hud_roots.h"
@@ -79,7 +79,7 @@ enum Lever : unsigned
     kLeverUpdates     = 16,
     kLeverCompass     = 32,
     kLeverArrows      = 64,   // the off-screen arrows' own timers in player 2's view (hud/marker_timers.h)
-    kLeverBars        = 128,  // the enemy bars placed again per view (hud/enemy_bars.h)
+    kLeverGauges      = 128,  // the enemy gauges placed again per view (hud/enemy_gauges.h)
     kLeverPopups      = 256,  // the battle popups placed again per view (hud/popups.h)
 };
 
@@ -145,11 +145,11 @@ void Refuse(const wchar_t* why)
 /// The updates for the view whose levers are set; player 2's run gives the arrows their own timers.
 bool RunUpdates(bool playerTwo) noexcept
 {
-    // The bars first: the enemy attack names in the +0x180 list read each bar's placed point
+    // The gauges first: the enemy attack names in the +0x180 list read each gauge's placed point
     // (RE-p2-battle-popups.md §1), so they must see this view's.
-    if (Acts(kLeverBars))
+    if (Acts(kLeverGauges))
     {
-        enemy_bars::Replay();
+        enemy_gauges::Replay(playerTwo);
     }
     if (Acts(kLeverPopups))
     {
@@ -332,7 +332,7 @@ bool ContextsToPlayerTwo()
 bool InstallPlayerTwoPass(const platform::GameImage& image) noexcept
 {
     const bool parts   = hud_roots::Install(image) && hud_updates::Install(image) && marker_timers::Install(image);
-    enemy_bars::Install(image);  // optional: without it the bars keep player 1's placement in both halves
+    enemy_gauges::Install(image);  // optional: without it the gauges keep player 1's placement in both halves
     popups::Install(image);      // optional, likewise for the battle popups
     const auto mode    = image.Rebase(kGameMode, sizeof(void*));
     const auto overlay = image.Rebase(engine::kRootOverlaySingleton, sizeof(void*));
@@ -365,7 +365,7 @@ void RemovePlayerTwoPass() noexcept
 {
     g_on.store(false, std::memory_order_relaxed);
     g_firstPlayerAnswer = 0;
-    enemy_bars::Remove();
+    enemy_gauges::Remove();
     popups::Remove();
     if (g_firstPlayerCode.IsInstalled() && !g_firstPlayerCode.Restore())
     {
@@ -393,9 +393,9 @@ void SetPlayerTwoLeversMask(unsigned mask) noexcept
 {
     g_mask = mask;
     platform::Log(L"HUD levers: mask {} (contexts {}, first player {}, primary {}, rect {}, updates {}, compass {}, arrows {}, "
-                  L"bars {}, popups {})",
+                  L"gauges {}, popups {})",
                   mask, Acts(kLeverContexts), Acts(kLeverFirstPlayer), Acts(kLeverPrimary), Acts(kLeverRect),
-                  Acts(kLeverUpdates), Acts(kLeverCompass), Acts(kLeverArrows), Acts(kLeverBars), Acts(kLeverPopups));
+                  Acts(kLeverUpdates), Acts(kLeverCompass), Acts(kLeverArrows), Acts(kLeverGauges), Acts(kLeverPopups));
 }
 
 bool PlayerTwoContentOn() noexcept

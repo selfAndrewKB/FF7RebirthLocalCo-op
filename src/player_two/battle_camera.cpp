@@ -10,10 +10,16 @@
 #include "player_two/object_fields.h"
 #include "player_two/primary_controller.h"
 
+#include <array>
 #include <cstdint>
 #include <format>
 #include <optional>
 #include <string>
+
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <Windows.h>
 
 namespace lss::player_two::battle_camera {
 
@@ -56,8 +62,7 @@ std::uintptr_t        g_battleVTable        = 0;
 std::uintptr_t        g_cameraManagerVTable = 0;
 
 // Game thread.
-std::wstring g_logged;
-int          g_lines = 0;
+int g_lines = 0;
 
 struct Pair
 {
@@ -103,17 +108,30 @@ std::uint8_t Active(const void* battle) noexcept
     return battle == nullptr ? 0 : ReadField<std::uint8_t>(battle, kOperatorActive);
 }
 
+bool CallGuarded(StateFn engine, void* battle, float blendTime, bool flag) noexcept
+{
+    __try
+    {
+        engine(battle, blendTime, flag);
+        return true;
+    }
+    __except (platform::GuardFilter(GetExceptionCode()))
+    {
+        return false;
+    }
+}
+
 /// The engine's call on player 2's operator, with player 2 as the primary controller.
 void OnPlayerTwo(StateFn engine, void* battle, float blendTime, bool flag)
 {
     const primary_controller::Scope scope;
-    engine(battle, blendTime, flag);
-    if (g_lines < kMaxLines)
+    const bool                      ok = CallGuarded(engine, battle, blendTime, flag);
+    if (g_lines < kMaxLines || !ok)
     {
         ++g_lines;
-        platform::Log(L"battle camera: player 2's Battle operator {} (primary scope {}); active now {}",
+        platform::Log(L"battle camera: player 2's Battle operator {} (primary scope {}); active now {}{}",
                       engine == g_engineActivate ? L"activated" : L"deactivated", scope.Held() ? L"held" : L"REFUSED",
-                      Active(battle));
+                      Active(battle), ok ? L"" : L"; the engine call RAISED an exception");
     }
 }
 
@@ -140,47 +158,69 @@ void Deactivate(void* battle, float blendTime, bool flag)
     }
 }
 
-/// The Battle operator's modules that decide framing, each as its two active bytes (+0x44/+0x45).
-std::wstring DescribeModules(void* battle)
+/// What the watch logs of one camera manager, as raw values: compared each frame, formatted only
+/// when it changes.
+struct CameraState
+{
+    bool         present = false;
+    std::uint8_t operators[4]{};  // current / previous operator bytes
+    std::uint8_t battle[2]{};     // the Battle operator's state and active bytes
+    std::uint8_t field[2]{};      // the Field operator's
+    std::uint8_t modules[std::size(kLoggedModules)][2]{};
+    bool         moduleRead[std::size(kLoggedModules)]{};
+    bool operator==(const CameraState&) const = default;
+};
+
+CameraState StateOf(void* cameraManager) noexcept
 {
     // Every read guarded: these are the game's heap objects, and a log must never be able to crash it.
     const auto guarded = [](std::uintptr_t address, auto& out) {
         return address != 0 && platform::CopyGuarded(&out, reinterpret_cast<const void*>(address), sizeof(out));
     };
+    CameraState state;
+    if (cameraManager == nullptr)
+    {
+        return state;
+    }
+    state.present = true;
+    void* battle  = BattleOperatorOf(cameraManager);
+    void* field   = ReadPointer(cameraManager, facts::kCameraManagerFieldOperator);
+    guarded(reinterpret_cast<std::uintptr_t>(cameraManager) + kOperatorBytes, state.operators);
+    const auto battleAt = reinterpret_cast<std::uintptr_t>(battle);
+    const auto fieldAt  = reinterpret_cast<std::uintptr_t>(field);
+    guarded(battleAt != 0 ? battleAt + kOperatorState : 0, state.battle[0]);
+    guarded(battleAt != 0 ? battleAt + kOperatorActive : 0, state.battle[1]);
+    guarded(fieldAt != 0 ? fieldAt + kOperatorState : 0, state.field[0]);
+    guarded(fieldAt != 0 ? fieldAt + kOperatorActive : 0, state.field[1]);
     std::uintptr_t table = 0;
     guarded(battle != nullptr ? reinterpret_cast<std::uintptr_t>(battle) + kModules : 0, table);
-    std::wstring text;
-    for (const std::uint32_t layer : kLoggedModules)
+    for (std::size_t i = 0; i < std::size(kLoggedModules); ++i)
     {
         std::uintptr_t module = 0;
-        std::uint8_t   bytes[2]{};
-        if (!guarded(table != 0 ? table + layer * kModuleEntry : 0, module) || !guarded(module != 0 ? module + kModuleActive : 0, bytes))
-        {
-            text += std::format(L" {}:-", layer);
-            continue;
-        }
-        text += std::format(L" {}:{}{}", layer, bytes[0], bytes[1]);
+        state.moduleRead[i] = guarded(table != 0 ? table + kLoggedModules[i] * kModuleEntry : 0, module) &&
+                              guarded(module != 0 ? module + kModuleActive : 0, state.modules[i]);
     }
-    return text;
+    return state;
 }
 
-std::wstring Describe(void* cameraManager)
+std::wstring Describe(const CameraState& state)
 {
-    if (cameraManager == nullptr)
+    if (!state.present)
     {
         return L"-";
     }
-    void* battle = BattleOperatorOf(cameraManager);
-    void* field  = ReadPointer(cameraManager, facts::kCameraManagerFieldOperator);
-    return std::format(L"operators cur {} prev {} ({} {}) battle {}/{} field {}/{} modules{}",
-                       ReadField<std::uint8_t>(cameraManager, kOperatorBytes),
-                       ReadField<std::uint8_t>(cameraManager, kOperatorBytes + 1),
-                       ReadField<std::uint8_t>(cameraManager, kOperatorBytes + 2),
-                       ReadField<std::uint8_t>(cameraManager, kOperatorBytes + 3),
-                       battle != nullptr ? ReadField<std::uint8_t>(battle, kOperatorState) : 0, Active(battle),
-                       field != nullptr ? ReadField<std::uint8_t>(field, kOperatorState) : 0,
-                       field != nullptr ? ReadField<std::uint8_t>(field, kOperatorActive) : 0, DescribeModules(battle));
+    std::wstring modules;
+    for (std::size_t i = 0; i < std::size(kLoggedModules); ++i)
+    {
+        modules += state.moduleRead[i] ? std::format(L" {}:{}{}", kLoggedModules[i], state.modules[i][0], state.modules[i][1])
+                                       : std::format(L" {}:-", kLoggedModules[i]);
+    }
+    return std::format(L"operators cur {} prev {} ({} {}) battle {}/{} field {}/{} modules{}", state.operators[0],
+                       state.operators[1], state.operators[2], state.operators[3], state.battle[0], state.battle[1],
+                       state.field[0], state.field[1], modules);
 }
+
+std::array<CameraState, 2> g_logged{};  // game thread: both camera managers as last logged
 
 }  // namespace
 
@@ -253,16 +293,17 @@ void Watch() noexcept
     {
         return;
     }
+    const std::array<CameraState, 2> now{StateOf(CameraManagerOf(generation::PlayerOneController())),
+                                         StateOf(CameraManagerOf(generation::PlayerTwoController()))};
+    if (now == g_logged)
+    {
+        return;
+    }
+    g_logged = now;
+    ++g_lines;
     try
     {
-        const std::wstring line = L"P1 " + Describe(CameraManagerOf(generation::PlayerOneController())) + L" | P2 " +
-                                  Describe(CameraManagerOf(generation::PlayerTwoController()));
-        if (line != g_logged)
-        {
-            g_logged = line;
-            ++g_lines;
-            platform::Log(L"battle camera: {}", line);
-        }
+        platform::Log(L"battle camera: P1 {} | P2 {}", Describe(now[0]), Describe(now[1]));
     }
     catch (...)
     {

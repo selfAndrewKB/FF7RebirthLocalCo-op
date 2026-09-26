@@ -16,6 +16,7 @@
 #include "hud/overlay_layout.h"
 #include "hud/player_two_pass.h"
 #include "hud/area_icons_two.h"
+#include "hud/target_views.h"
 #include "hud/prompt_rows.h"
 #include "hud/root_overlay_render.h"
 #include "hud/second_image.h"
@@ -50,7 +51,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.17.0-lock-on";
+constexpr const wchar_t* kVersion = L"0.18.6-label-key";
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -99,7 +100,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.17.0-lock-on");
+        ModVersion     = STR("0.18.6-label-key");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -133,6 +134,7 @@ public:
             lss::views::RemovePlayerViewPoint();
         }
         lss::hud::RemoveRootOverlayRender();
+        lss::hud::target_views::Remove();
         lss::hud::area_icons_two::Remove();
         lss::hud::user_widgets::Remove();
         lss::hud::RemoveSecondImage();
@@ -206,6 +208,7 @@ public:
         lss::hud::InstallRootOverlayRender(*image);  // before the overlay renders: placement follow, trace
         lss::hud::prompt_rows::Install(*image);      // each player's field prompt rows in their own half
         lss::hud::area_icons_two::Install(*image);   // player 2's own map icons and markers
+        lss::hud::target_views::Install(*image);     // each half's cursor and enemy gauges follow its player's target
 
         lss::dev::Install(*image, *session_, layout_, viewPointInstalled_);  // built with LSS_DEV_TOOLS only
 

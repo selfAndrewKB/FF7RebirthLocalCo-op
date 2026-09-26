@@ -46,6 +46,7 @@ double Now() noexcept
 
 // Game thread, except the log-line counter.
 std::array<double, kParts>                 g_partSeconds{};
+std::array<double, kParts>                 g_partTotals{};  // summed over the summary's frames (the per-frame average)
 std::array<const wchar_t*, kMaxNotes>      g_notes{};
 std::size_t                                g_noteCount = 0;
 std::atomic<unsigned>                      g_logLines{0};
@@ -206,6 +207,13 @@ void OnFrameStart() noexcept
             g_averageMs += (frameMs - g_averageMs) * kAverageWeight;
         }
     }
+    if (g_frameStart != 0.0)  // the frames the summary counts
+    {
+        for (std::size_t i = 0; i < kParts; ++i)
+        {
+            g_partTotals[i] += g_partSeconds[i];
+        }
+    }
     g_frameStart = now;
     g_partSeconds.fill(0.0);
     g_noteCount = 0;
@@ -218,13 +226,21 @@ void OnFrameStart() noexcept
     {
         try
         {
-            Log(L"hitches: {} in the last {:.0f} s ({} frames, average {:.1f} ms), worst {:.1f} ms; the mod's periodic jobs: {}",
-                g_hitches, now - g_summaryStart, g_frames, g_averageMs, g_worstMs, JobSummary());
+            std::wstring perFrame;
+            for (std::size_t i = 0; i < kParts; ++i)
+            {
+                perFrame += std::format(L"{}{} {:.3f}", i == 0 ? L"" : L", ", kPartNames[i],
+                                        g_frames > 0 ? g_partTotals[i] * 1000.0 / g_frames : 0.0);
+            }
+            Log(L"hitches: {} in the last {:.0f} s ({} frames, average {:.1f} ms), worst {:.1f} ms; the mod's hooks per frame "
+                L"(ms): {}; the mod's periodic jobs: {}",
+                g_hitches, now - g_summaryStart, g_frames, g_averageMs, g_worstMs, perFrame, JobSummary());
         }
         catch (...)
         {
         }
         g_jobs = {};
+        g_partTotals.fill(0.0);
         g_summaryStart = now;
         g_hitches = g_hitchLines = g_frames = 0;
         g_worstMs = 0.0;

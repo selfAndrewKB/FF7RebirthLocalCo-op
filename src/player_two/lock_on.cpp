@@ -1,5 +1,6 @@
 #include "player_two/lock_on.h"
 
+#include "platform/call_redirect.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -8,6 +9,8 @@
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
+#include "player_two/pad_sticks.h"
+#include "player_two/target_cursor.h"
 
 #include <cstdint>
 #include <format>
@@ -65,6 +68,13 @@ constexpr platform::FunctionFact kMenuSelect{L"BattleTarget_IsMenuTargetSelectOp
 constexpr platform::FunctionFact kEntryId{L"EndUISys23_GetCurrentEntryId", 0x1408051B8, kEntryIdBytes};
 constexpr platform::FunctionFact kRelease{L"TRefCtrlTS__ReleaseWeakRef", 0x140887B00, kReleaseBytes};
 constexpr platform::FunctionFact kOptions{L"GetSystemOptionData", 0x14087F15C, kOptionsBytes};
+
+// Player 1's targeting tick (BattleTarget_TickTargeting(sys, dt): soft target, lock toggle and lock
+// camera, displayed target and switch) and its two calls in BattleSystem_Tick (§1.1). It reads the
+// right stick through the merged stick value, which is whichever pad is pushed furthest.
+constexpr std::uint8_t kTickTargetingBytes[] = {0x40, 0x53, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8, 0xF4, 0xAC, 0x74, 0x01};
+constexpr platform::FunctionFact kTickTargeting{L"BattleTarget_TickTargeting", 0x140964230, kTickTargetingBytes};
+constexpr std::uintptr_t kTickTargetingCalls[] = {0x140C91AA2, 0x140C91CC0};
 
 // The battle system (a pointer global) and its target fields (§R.1, §9).
 constexpr std::uintptr_t kBattleSystem = 0x14939BC58;
@@ -133,8 +143,10 @@ using ReleaseFn     = void (*)(std::uintptr_t controller);
 using OptionsFn     = std::uintptr_t (*)();
 using OwnerTestFn   = std::uint8_t (*)(void* component, void* object, std::uint64_t zero);
 using TargetableFn  = std::uint8_t (*)(void* object, const TargetQuery* query);
+using TickFn        = void (*)(void* system, float deltaTime);
 
 // Set once at install.
+platform::CallRedirect g_tickTargetingCalls[2];
 bool           g_installed = false;
 TestFn         g_lockPressed = nullptr;
 SwitchFn       g_switch = nullptr;
@@ -166,7 +178,6 @@ std::uint8_t g_latch = 0;
 float        g_freeTime = 0.0f;  // the lock camera's rest after a stick move (sys+0x90 for player 1)
 bool         g_held = false;
 bool         g_failed = false;
-std::wstring g_logged;
 int          g_lines = 0;
 
 template <class T>
@@ -318,6 +329,48 @@ void SetModule(bool on, const wchar_t* why)
 bool PlayerTwoBattleCamera() noexcept
 {
     return battle_camera::PlayerTwoBattleActive(ReadPointer(generation::PlayerTwoController(), facts::kControllerCameraManager));
+}
+
+/// Replaces the battle tick's calls to player 1's targeting tick: while player 2 plays, it reads
+/// pad 1's own right stick, so pad 2 neither switches player 1's locked target nor moves player 1's
+/// lock camera off it (pad_sticks.h: player 1's gameplay on pad 1).
+void PlayerOneTargeting(void* system, float deltaTime) noexcept
+{
+    const auto engine = reinterpret_cast<TickFn>(g_tickTargetingCalls[0].Original());
+    if (!generation::OnGameThread() || !generation::Active() || !pad_sticks::Enabled() ||
+        !pad_sticks::PartActs(pad_sticks::kPartPlayerOneMove))
+    {
+        return engine(system, deltaTime);
+    }
+    {
+        const pad_sticks::StickScope sticks(pad_sticks::ControllerIdOf(generation::PlayerOneController()));
+        static bool refusedLogged = false;
+        if (!sticks.Held() && !refusedLogged)
+        {
+            refusedLogged = true;  // another scope was open: this tick reads whatever stick that scope holds
+            Note(L"player 1's targeting ran without pad 1's own stick (another stick scope was open)");
+        }
+        engine(system, deltaTime);
+    }
+    // Player 1's own target and lock, on change, beside player 2's in the same log.
+    static std::uintptr_t loggedTarget = 0;
+    static std::uint8_t   loggedLock   = 0;
+    const auto            base   = reinterpret_cast<std::uintptr_t>(system);
+    const auto            target = Field<std::uintptr_t>(base + kDisplayed);
+    const auto            lock   = Field<std::uint8_t>(base + kLock);
+    if (target != loggedTarget || lock != loggedLock)
+    {
+        loggedTarget = target;
+        loggedLock   = lock;
+        try
+        {
+            Note(std::format(L"player 1's target {:#x} lock {} (player 2's {:#x} lock {})", target, lock, g_displayed.object,
+                             g_lock));
+        }
+        catch (...)
+        {
+        }
+    }
 }
 
 /// The game's toggle for player 2 (BattleTarget_ToggleLock less its Global.LockOn write).
@@ -486,10 +539,21 @@ void Follow(std::uintptr_t system, void* component)
     {
         return;
     }
-    if ((target.controller != 0 && !AddWeak(target.controller)) || !Put(system + kDisplayed, target) ||
-        (current.controller != 0 && !Call(g_release, current.controller)))
+    if (target.controller != 0 && !AddWeak(target.controller))
     {
-        Fail(L"the displayed-target hand-over");
+        return Fail(L"the displayed-target hand-over");
+    }
+    if (!Put(system + kDisplayed, target))
+    {
+        if (target.controller != 0)
+        {
+            Call(g_release, target.controller);  // the reference just taken, never handed over
+        }
+        return Fail(L"the displayed-target hand-over");
+    }
+    if (current.controller != 0 && !Call(g_release, current.controller))
+    {
+        Fail(L"the displayed-target release");
     }
 }
 
@@ -505,6 +569,7 @@ void EndOfBattle()
     {
         Fail(L"the displayed-target release");
     }
+    target_cursor::Release();
     Note(std::format(L"battle over: player 2's lock {} cleared", g_lock));
     g_displayed = {};
     g_lock      = 0;
@@ -512,16 +577,45 @@ void EndOfBattle()
     g_freeTime  = 0.0f;
 }
 
-std::wstring DescribeCamera(void* controller)
+/// A camera manager's LockOn module as the log shows it: its active bytes and cached target.
+struct LockCamera
+{
+    bool           present = false;
+    std::uint8_t   active[2]{};
+    std::uintptr_t target = 0;
+    bool operator==(const LockCamera&) const = default;
+};
+
+LockCamera LockCameraOf(void* controller) noexcept
 {
     const auto camera = reinterpret_cast<std::uintptr_t>(ReadPointer(controller, facts::kControllerCameraManager));
     const auto op     = Field<std::uintptr_t>(camera != 0 ? camera + kBattleOperator : 0);
     const auto table  = Field<std::uintptr_t>(op != 0 ? op + kModules : 0);
     const auto module = Field<std::uintptr_t>(table != 0 ? table + kLockOnLayer * kModuleEntry : 0);
-    return module == 0 ? L"-"
-                       : std::format(L"{}{} target {:#x}", Field<std::uint8_t>(module + kModuleActive),
-                                     Field<std::uint8_t>(module + kModuleActive + 1), Field<std::uintptr_t>(module + kModuleTarget));
+    if (module == 0)
+    {
+        return {};
+    }
+    return {true, {Field<std::uint8_t>(module + kModuleActive), Field<std::uint8_t>(module + kModuleActive + 1)},
+            Field<std::uintptr_t>(module + kModuleTarget)};
 }
+
+std::wstring DescribeCamera(const LockCamera& camera)
+{
+    return camera.present ? std::format(L"{}{} target {:#x}", camera.active[0], camera.active[1], camera.target) : L"-";
+}
+
+/// Everything the per-frame log shows, as raw values: compared each frame, formatted on change.
+struct Snapshot
+{
+    std::uint8_t   lock = 0, latch = 0;
+    bool           resting = false;
+    std::uintptr_t displayed = 0, memberTarget = 0;
+    LockCamera     cameras[2];
+    bool operator==(const Snapshot&) const = default;
+};
+
+Snapshot g_snapshot;  // game thread: as last logged
 
 void Log(std::uintptr_t system, void* component)
 {
@@ -529,18 +623,21 @@ void Log(std::uintptr_t system, void* component)
     {
         return;
     }
-    const std::wstring line = std::format(
-        L"P2 lock {} latch {} rest {} displayed {:#x} member target {:#x} | lock camera P1 {} P2 {}",
-        Field<std::uint8_t>(system + kLock), Field<std::uint8_t>(system + kLatch), g_freeTime > 0.0f ? 1 : 0,
-        Field<std::uintptr_t>(system + kDisplayed), Field<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(component) + kTarget),
-        DescribeCamera(generation::PlayerOneController()), DescribeCamera(generation::PlayerTwoController()));
-    if (line != g_logged)
+    const Snapshot now{Field<std::uint8_t>(system + kLock),
+                       Field<std::uint8_t>(system + kLatch),
+                       g_freeTime > 0.0f,
+                       Field<std::uintptr_t>(system + kDisplayed),
+                       Field<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(component) + kTarget),
+                       {LockCameraOf(generation::PlayerOneController()), LockCameraOf(generation::PlayerTwoController())}};
+    if (now == g_snapshot)
     {
-        g_logged = line;
-        Note(line);
+        return;
     }
+    g_snapshot = now;
+    Note(std::format(L"P2 lock {} latch {} rest {} displayed {:#x} member target {:#x} | lock camera P1 {} P2 {}", now.lock,
+                     now.latch, now.resting ? 1 : 0, now.displayed, now.memberTarget, DescribeCamera(now.cameras[0]),
+                     DescribeCamera(now.cameras[1])));
 }
-
 }  // namespace
 
 TargetScope::TargetScope() noexcept
@@ -584,7 +681,14 @@ TargetScope::~TargetScope()
     g_latch     = Field<std::uint8_t>(system_ + kLatch);
     if (const auto cursor = Field<std::uintptr_t>(system_ + kCursor); cursor != 0)
     {
-        Note(std::format(L"a target cursor {:#x} was made inside player 2's scope; player 1's is put back over it", cursor));
+        try  // a destructor: nothing may leave it
+        {
+            Note(std::format(L"a target cursor {:#x} was made inside player 2's scope; player 1's is put back over it",
+                             cursor));
+        }
+        catch (...)
+        {
+        }
     }
     Put(system_ + kCursor, cursor_);
     Put(system_ + kDisplayed, Pair{object_, controller_});
@@ -629,6 +733,26 @@ bool Install(const platform::GameImage& image) noexcept
     g_freeTimeKey  = freeTime ? *freeTime : 0;
     platform::Log(L"lock-on: {}", g_installed ? L"ready (player 2 gets their own lock, switching and lock camera)"
                                               : L"UNAVAILABLE (a check failed); player 2 has no lock-on");
+    // Both of player 1's targeting calls on pad 1, or neither.
+    const std::uintptr_t tick = find(kTickTargeting);
+    bool                 own  = tick != 0;
+    for (std::size_t i = 0; own && i < 2; ++i)
+    {
+        const auto site = image.Rebase(kTickTargetingCalls[i], 5);
+        own = site && g_tickTargetingCalls[i].Install(*site, tick, reinterpret_cast<std::uintptr_t>(&PlayerOneTargeting));
+    }
+    if (!own)
+    {
+        for (auto& call : g_tickTargetingCalls)
+        {
+            if (call.IsInstalled())
+            {
+                call.Restore();
+            }
+        }
+    }
+    platform::Log(L"lock-on: player 1's targeting {}", own ? L"reads pad 1's own right stick"
+                                                          : L"still reads the merged stick (a check failed)");
     return g_installed;
 }
 
@@ -671,10 +795,30 @@ void Tick(void* member, void* component, float deltaTime, Parts parts) noexcept
         {
             Follow(system, component);
         }
+        if (parts.cursor && !g_failed)
+        {
+            const Pair displayed = PairAt(system + kDisplayed);
+            target_cursor::Update(system, member, displayed.object, displayed.controller, Field<std::uint8_t>(system + kLock) != 0);
+        }
+        else
+        {
+            target_cursor::Release();
+        }
         Log(system, component);
     }
     catch (...)
     {
+    }
+}
+
+void Remove() noexcept
+{
+    for (auto& call : g_tickTargetingCalls)
+    {
+        if (call.IsInstalled() && !call.Restore())
+        {
+            platform::Log(L"lock-on: a targeting call was changed after us; left in place (it passes through)");
+        }
     }
 }
 
@@ -684,6 +828,7 @@ void PlayerTwoOut() noexcept
     {
         return;
     }
+    target_cursor::Release();
     if (g_displayed.controller != 0 && g_release != nullptr)
     {
         Call(g_release, g_displayed.controller);
@@ -692,6 +837,22 @@ void PlayerTwoOut() noexcept
     g_lock      = 0;
     g_latch     = 0;
     g_freeTime  = 0.0f;
+}
+
+bool Held() noexcept
+{
+    return g_held;
+}
+
+std::uintptr_t DisplayedObject() noexcept
+{
+    return g_displayed.object;
+}
+
+void Displayed(std::uintptr_t& object, std::uintptr_t& controller) noexcept
+{
+    object     = g_displayed.object;
+    controller = g_displayed.controller;
 }
 
 }  // namespace lss::player_two::lock_on

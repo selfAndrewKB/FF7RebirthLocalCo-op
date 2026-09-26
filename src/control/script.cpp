@@ -274,8 +274,8 @@ ParsedLine ParseLine(std::wstring_view line)
     if (name == L"sticks-mask") return ParseMask(words, CommandKind::SticksMask, 15);
     if (name == L"leak-fixes") return ParseMask(words, CommandKind::LeakFixes, 7);
     if (name == L"buttons-mask") return ParseMask(words, CommandKind::ButtonsMask, 3);
-    if (name == L"icons-mask") return ParseMask(words, CommandKind::IconsMask, 7);
-    if (name == L"battle-mask") return ParseMask(words, CommandKind::BattleMask, 255);
+    if (name == L"icons-mask") return ParseMask(words, CommandKind::IconsMask, 15);
+    if (name == L"battle-mask") return ParseMask(words, CommandKind::BattleMask, 511);
     if (name == L"perf-log") return ParseSwitch(CommandKind::PerfLog, words, L"on", L"off");
     if (name == L"dump") return ParseDump(words);
     if (name == L"stick") return ParseStick(words);

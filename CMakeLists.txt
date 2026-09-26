@@ -34,7 +34,9 @@ add_library(LocalSplitScreen SHARED
     src/hud/player_two_pass.cpp
     src/hud/prompt_rows.cpp
     src/hud/area_icons_two.cpp
-    src/hud/enemy_bars.cpp
+    src/hud/target_views.cpp
+    src/hud/widget_opacity.cpp
+    src/hud/enemy_gauges.cpp
     src/hud/marker_timers.cpp
     src/hud/popups.cpp
     src/hud/user_widgets.cpp
@@ -64,7 +66,9 @@ add_library(LocalSplitScreen SHARED
     src/player_two/battle_input.cpp
     src/player_two/battle_camera.cpp
     src/player_two/camera_override.cpp
+    src/player_two/leader_scope.cpp
     src/player_two/lock_on.cpp
+    src/player_two/target_cursor.cpp
     src/player_two/own_controller.cpp
     src/player_two/party_lease.cpp
     src/player_two/party_member.cpp
@@ -225,6 +229,14 @@ target_include_directories(CallRedirectTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR
 target_compile_features(CallRedirectTests PRIVATE cxx_std_20)
 add_test(NAME call_redirect COMMAND CallRedirectTests)
 
+add_executable(SparseArrayTests
+    tests/sparse_array_test.cpp
+    src/platform/guarded.cpp
+)
+target_include_directories(SparseArrayTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(SparseArrayTests PRIVATE cxx_std_20)
+add_test(NAME sparse_array COMMAND SparseArrayTests)
+
 add_executable(OverlayBandTests
     tests/overlay_band_test.cpp
     src/hud/overlay_band.cpp
@@ -257,14 +269,14 @@ target_include_directories(FirstPlayerCodeTests PRIVATE "${CMAKE_CURRENT_SOURCE_
 target_compile_features(FirstPlayerCodeTests PRIVATE cxx_std_20)
 add_test(NAME first_player_code COMMAND FirstPlayerCodeTests)
 
-add_executable(EnemyBarsCodeTests
-    tests/enemy_bars_code_test.cpp
+add_executable(EnemyGaugesCodeTests
+    tests/enemy_gauges_code_test.cpp
     src/platform/code_redirect.cpp
     src/platform/near_code.cpp
 )
-target_include_directories(EnemyBarsCodeTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(EnemyBarsCodeTests PRIVATE cxx_std_20)
-add_test(NAME enemy_bars_code COMMAND EnemyBarsCodeTests)
+target_include_directories(EnemyGaugesCodeTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(EnemyGaugesCodeTests PRIVATE cxx_std_20)
+add_test(NAME enemy_gauges_code COMMAND EnemyGaugesCodeTests)
 
 add_executable(CenteredFrameCodeTests
     tests/centered_frame_code_test.cpp

@@ -13,6 +13,9 @@
 //     rect player 2's), with the real DeltaTime, by the game's own frame function;
 //   - the frame function's one call for the first player controller answers player 2's controller
 //     while that tick runs (a redirect of that single call site; every other caller is untouched);
+//   - its one call for the range origin (the leader character by the leader's player type) answers
+//     player 2's member the same way, so player 2's icons are ranged from player 2's character
+//     (RE-p2-hud-targets.md §1, R1; the tick writes no shared state keyed on it);
 //   - player 1's instance is written only by game events (enable, clear, the flag at +0xD1 and the
 //     countdown at +0xDC), so each tick copies them into player 2's instance, and a disable is
 //     applied with the game's own clear;
@@ -21,8 +24,8 @@
 // When player 2 leaves, player 2's instance is cleared with the game's own clear and its canvases
 // are hidden.
 //
-// Still the game's shared answers: icons are ranged from the party leader, and the compass and the
-// "new marker" list are player 1's (§4 "still blocked").
+// Still the game's shared answers: the party markers follow player 1's leader type, and the compass
+// and the "new marker" list are player 1's (§4 "still blocked").
 // Game thread only.
 
 namespace lss::platform {
@@ -45,7 +48,7 @@ void ShowOnly(int player) noexcept;
 void PlayerTwoOut() noexcept;
 
 /// Diagnosis: which parts act (1 player 2's instance ticked, 2 its first controller is player 2's,
-/// 4 per-pass canvases). All at start. Logged.
+/// 4 per-pass canvases, 8 ranged from player 2's member). All at start. Logged.
 void SetMask(unsigned mask) noexcept;
 
 }  // namespace lss::hud::area_icons_two

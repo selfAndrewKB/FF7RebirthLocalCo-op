@@ -2,7 +2,8 @@
 
 #include "dev/dev_tools.h"
 #include "hud/area_icons_two.h"
-#include "hud/enemy_bars.h"
+#include "hud/enemy_gauges.h"
+#include "hud/target_views.h"
 #include "hud/hud_placement.h"
 #include "hud/marker_timers.h"
 #include "hud/popups.h"
@@ -42,6 +43,7 @@ void RenderRootOverlay(void* application) noexcept
     if (gameThread)
     {
         dev::BeforeOverlayRender();  // the HUD trace, in a build with the development tools
+        target_views::BeginFrame();  // this frame's target lookups made afresh
         if (player_two::generation::Active())
         {
             prompt_rows::Refresh();  // whose each prompt row is; each player's laid out on their own
@@ -61,9 +63,10 @@ void RenderRootOverlay(void* application) noexcept
     if (gameThread)
     {
         EndOverlayRender();
-        enemy_bars::EndFrame();  // the bars' record, emptied for the next tick
+        enemy_gauges::EndFrame();  // the gauges' record, emptied for the next tick
         popups::EndFrame();
         prompt_rows::Restore();  // every prompt row back to its own visibility
+        target_views::AfterPass();  // every mark hidden for player 1's pass back
         dev::AfterOverlayRender();
     }
 }

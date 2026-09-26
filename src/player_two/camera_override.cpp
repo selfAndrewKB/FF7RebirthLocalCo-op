@@ -9,6 +9,7 @@
 #include "player_two/object_fields.h"
 #include "player_two/primary_controller.h"
 
+#include <array>
 #include <cstdint>
 #include <cstring>
 #include <format>
@@ -77,7 +78,6 @@ ReleaseFn      g_releaseWeak   = nullptr;
 // Game thread.
 Pair         g_playerTwo;          // player 2's camera's own module (one weak reference is the mod's)
 void*        g_member = nullptr;   // the member whose delegates hold the thunks
-std::wstring g_logged;
 int          g_lines = 0;
 
 template <class T>
@@ -136,6 +136,19 @@ void RemovedThunk(void* payload, const void* id)
     }
     const GlobalScope scope;
     g_engineRemoved(payload, id);
+}
+
+/// Drops one weak reference, guarded: the controller may belong to an object the game has since
+/// freed (then the reference is dropped with it).
+void ReleaseGuarded(std::uintptr_t controller) noexcept
+{
+    __try
+    {
+        g_releaseWeak(controller);
+    }
+    __except (platform::GuardFilter(GetExceptionCode()))
+    {
+    }
 }
 
 void Write(void* member, std::uint32_t offset, std::uintptr_t value) noexcept
@@ -201,24 +214,72 @@ std::wstring DescribeCharacter(std::uintptr_t character)
                        Field<std::int32_t>(character + kHeldRequests));
 }
 
+/// The raw values the log shows, compared each frame; the text is built only when they change.
+struct Snapshot
+{
+    std::uintptr_t global    = 0;
+    std::uintptr_t playerTwo = 0;
+    std::uintptr_t cameras[2][2]{};     // each controller's battle / field layer-4 module
+    std::uintptr_t owners[2][2]{};
+    std::int32_t   requests[2][2]{};
+    std::uint16_t  active[2][2]{};
+    std::uintptr_t delegates[2][4]{};   // each character's added / removed fn and payloads
+    std::int32_t   held[2]{};
+    bool operator==(const Snapshot&) const = default;
+};
+
+Snapshot Take(void* member) noexcept
+{
+    Snapshot   now{g_global->object, g_playerTwo.object};
+    void*      controllers[2] = {generation::PlayerOneController(), generation::PlayerTwoController()};
+    const auto characters     = std::array<std::uintptr_t, 2>{
+        reinterpret_cast<std::uintptr_t>(ReadPointer(controllers[0], facts::kControllerPawn)), reinterpret_cast<std::uintptr_t>(member)};
+    for (int i = 0; i < 2; ++i)
+    {
+        const auto camera = reinterpret_cast<std::uintptr_t>(ReadPointer(controllers[i], facts::kControllerCameraManager));
+        for (int k = 0; k < 2 && camera != 0; ++k)
+        {
+            const auto oper   = Field<std::uintptr_t>(camera + (k == 0 ? kBattleOperator : kFieldOperator));
+            const auto slots  = oper != 0 ? Field<std::uintptr_t>(oper + kModules) : 0;
+            const auto module = slots != 0 ? Field<std::uintptr_t>(slots + kSlotFour) : 0;
+            now.cameras[i][k]  = module;
+            now.owners[i][k]   = module != 0 ? Field<std::uintptr_t>(module + kModuleOwner) : 0;
+            now.requests[i][k] = module != 0 ? Field<std::int32_t>(module + kModuleRequests) : 0;
+            now.active[i][k]   = module != 0 ? Field<std::uint16_t>(module + kModuleActive) : 0;
+        }
+        const std::uintptr_t character = characters[i];
+        if (character != 0)
+        {
+            now.delegates[i][0] = Field<std::uintptr_t>(character + kAddedFn);
+            now.delegates[i][1] = Field<std::uintptr_t>(character + kRemovedFn);
+            now.delegates[i][2] = Field<std::uintptr_t>(character + kAddedPayload);
+            now.delegates[i][3] = Field<std::uintptr_t>(character + kRemovedPayload);
+            now.held[i]         = Field<std::int32_t>(character + kHeldRequests);
+        }
+    }
+    return now;
+}
+
+Snapshot g_snapshot;  // game thread: as last logged
+
 void Log(void* member)
 {
     if (g_lines >= kMaxLines)
     {
         return;
     }
+    const Snapshot now = Take(member);
+    if (now == g_snapshot)
+    {
+        return;
+    }
+    g_snapshot                 = now;
     void*      playerOne = generation::PlayerOneController();
     const auto oneChar   = reinterpret_cast<std::uintptr_t>(ReadPointer(playerOne, facts::kControllerPawn));
-    const std::wstring line =
-        std::format(L"global {:#x} P2's {:#x} | P1 camera{} | P2 camera{} | P1 {} | P2 {}", g_global->object, g_playerTwo.object,
-                    DescribeCamera(playerOne), DescribeCamera(generation::PlayerTwoController()), DescribeCharacter(oneChar),
-                    DescribeCharacter(reinterpret_cast<std::uintptr_t>(member)));
-    if (line != g_logged)
-    {
-        g_logged = line;
-        ++g_lines;
-        platform::Log(L"camera override: {}", line);
-    }
+    ++g_lines;
+    platform::Log(L"camera override: global {:#x} P2's {:#x} | P1 camera{} | P2 camera{} | P1 {} | P2 {}", g_global->object,
+                  g_playerTwo.object, DescribeCamera(playerOne), DescribeCamera(generation::PlayerTwoController()),
+                  DescribeCharacter(oneChar), DescribeCharacter(reinterpret_cast<std::uintptr_t>(member)));
 }
 
 }  // namespace
@@ -253,7 +314,7 @@ void BeginPlayWithOwnModule(void (*engineBeginPlay)(void*), void* cameraManager)
     }
     if (g_playerTwo.controller != 0)
     {
-        g_releaseWeak(g_playerTwo.controller);  // a module left from an earlier join
+        ReleaseGuarded(g_playerTwo.controller);  // a module left from an earlier join
         g_playerTwo = {};
     }
     const Pair saved = *g_global;
@@ -275,7 +336,7 @@ void BeginPlayWithOwnModule(void (*engineBeginPlay)(void*), void* cameraManager)
         }
         else if (built.controller != 0)
         {
-            g_releaseWeak(built.controller);
+            ReleaseGuarded(built.controller);
         }
     }
     platform::Log(L"camera override: player 2's camera {} its own NotifyOverride module {:#x} (player 1's {:#x})",
@@ -323,7 +384,7 @@ void PlayerTwoOut() noexcept
     RestoreMember();
     if (g_playerTwo.controller != 0 && g_releaseWeak != nullptr)
     {
-        g_releaseWeak(g_playerTwo.controller);
+        ReleaseGuarded(g_playerTwo.controller);
     }
     g_playerTwo = {};
 }

@@ -280,6 +280,9 @@ bool Session::LeaveNow() noexcept
     {
         return true;
     }
+    // Player 2's hold on the old world's objects goes before it does, even if the removal below fails.
+    camera_override::PlayerTwoOut();
+    lock_on::PlayerTwoOut();
     generation::Withdraw();
     if (HoldsMember())
     {

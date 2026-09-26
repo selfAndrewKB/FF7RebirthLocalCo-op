@@ -7,7 +7,9 @@
        is waited on until it exits by itself. It is never killed.
     2. With -Deploy: the installed main.dll is kept as main.dll.bak-<Label> and the build is copied
        in; both hashes are printed and must match.
-    3. The game is launched through Steam, and this returns once the mod has logged its ready line
+    3. The last session's UE4SS.log is kept under ue4ss\logs (the newest ten), since each launch
+       starts a new one.
+    4. The game is launched through Steam, and this returns once the mod has logged its ready line
        for this launch (or reports that it did not).
     Title and load menus are left to keys.ps1 and shot.ps1, so each one is checked on screen first.
 
@@ -50,6 +52,16 @@ if ($Deploy) {
     $built     = (Get-FileHash $Build).Hash
     "installed $installed (backup main.dll.bak-$Label)"
     if ($installed -ne $built) { throw "the installed DLL does not match the build ($built)" }
+}
+
+# UE4SS starts a new log on every launch: the last session's is kept first (the newest ten).
+if (Test-Path $log) {
+    $kept = "$gameDir\ue4ss\logs"
+    New-Item -ItemType Directory -Force $kept | Out-Null
+    $stamp = (Get-Item $log).LastWriteTime.ToString('yyyyMMdd-HHmmss')
+    Move-Item $log "$kept\UE4SS-$stamp.log" -Force  # moved: the ready check below never reads the old session
+    Get-ChildItem $kept -Filter 'UE4SS-*.log' | Sort-Object Name -Descending | Select-Object -Skip 10 | Remove-Item
+    "previous log kept as logs\UE4SS-$stamp.log"
 }
 
 $start = Get-Date

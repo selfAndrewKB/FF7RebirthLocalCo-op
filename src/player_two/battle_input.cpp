@@ -8,6 +8,7 @@
 #include "player_two/camera_override.h"
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
+#include "player_two/leader_scope.h"
 #include "player_two/lock_on.h"
 #include "player_two/object_fields.h"
 
@@ -113,6 +114,7 @@ enum Part : unsigned
     kPartLock        = 32,  // the TargetLock press toggles player 2's own lock (player_two/lock_on.h)
     kPartSwitch      = 64,  // pad 2's right stick switches player 2's locked target
     kPartLockCamera  = 128, // the LockOn module on player 2's camera follows player 2's lock and target
+    kPartCursor      = 256, // player 2's own target cursor
 };
 
 using StateActionFn  = void (*)(void* state, std::uint8_t unique);
@@ -121,8 +123,6 @@ using DodgeFn        = void (*)(void* state);
 using QueryFn        = std::uint8_t (*)(const void* key);
 using OwnerFn        = void* (*)(void* aiHolder);
 using SoftTargetFn   = void (*)(void* system);
-using WeakGetFn      = void* (*)(const std::uint64_t* weak);
-using WeakAssignFn   = void (*)(std::uint64_t* weak, void* object);
 using GlobalTestFn   = std::uint8_t (*)();
 using GlobalObjectFn = void* (*)();
 
@@ -140,8 +140,6 @@ std::array<std::uintptr_t, kActions> g_keys{};
 std::uintptr_t g_endUISystem   = 0;
 std::uintptr_t g_battlePlayerVTable = 0;
 SoftTargetFn   g_softTarget    = nullptr;
-WeakGetFn      g_weakGet       = nullptr;
-WeakAssignFn   g_weakAssign    = nullptr;
 GlobalTestFn   g_isInBattle    = nullptr;
 GlobalObjectFn g_resolveLeader = nullptr;
 std::uintptr_t g_battleSystem  = 0;  // the address holding the battle system
@@ -149,11 +147,10 @@ std::uintptr_t g_partyManager  = 0;  // the address holding the party manager
 
 // Game thread.
 unsigned                 g_mask = kPartDodge | kPartAttack | kPartGuard | kPartSoftTarget | kPartAttackScope | kPartLock |
-                                  kPartSwitch | kPartLockCamera;
+                                  kPartSwitch | kPartLockCamera | kPartCursor;
 bool                     g_guarding = false;
 std::array<bool, 2>      g_holdStarted{};
 bool                     g_failed = false;
-std::wstring             g_logged;
 int                      g_lines = 0;
 
 template <class T>
@@ -258,37 +255,79 @@ Parts PartsOf(std::uintptr_t character) noexcept
     return parts;
 }
 
-std::wstring DescribeCharacter(const wchar_t* who, std::uintptr_t character, std::uintptr_t state, const Parts& parts)
+/// One character's battle preconditions and move-state bytes, as the log shows them.
+struct CharacterState
 {
-    std::wstring text = std::format(L"{} holder {} component {} handle {} mode {} state", who, parts.holder != 0 ? 1 : 0,
-                                    parts.owner != 0 ? 1 : 0, parts.handle != 0 ? 1 : 0, parts.mode);
-    for (const std::uint32_t offset : kStateBytes)
+    bool         holder = false, owner = false, handle = false;
+    std::uint8_t mode   = 0;
+    std::array<std::uint8_t, kStateBytes.size()> bytes{};
+    std::int32_t pending = 0;
+    bool operator==(const CharacterState&) const = default;
+};
+
+CharacterState CharacterOf(std::uintptr_t state, const Parts& parts) noexcept
+{
+    CharacterState character{parts.holder != 0, parts.owner != 0, parts.handle != 0, parts.mode};
+    for (std::size_t i = 0; i < kStateBytes.size(); ++i)
     {
-        text += std::format(L" {}", Field<std::uint8_t>(state + offset));
+        character.bytes[i] = Field<std::uint8_t>(state + kStateBytes[i]);
     }
-    return text + std::format(L" pending {}", state != 0 ? Field<std::int32_t>(state + kPendingAction) : 0);
+    character.pending = state != 0 ? Field<std::int32_t>(state + kPendingAction) : 0;
+    return character;
 }
 
+/// Everything the per-frame log shows, as raw values.
+struct Snapshot
+{
+    bool                                   hud = false, blocked = false, ready = false;
+    std::int32_t                           guardMode = 0;
+    std::array<std::int32_t, kLoggedRequests.size()> requests{};
+    std::array<CharacterState, 2>          characters{};
+    bool                                   targeting = false;
+    std::uint8_t                           lock = 0, latch = 0;
+    std::uintptr_t                         displayed = 0;
+    std::array<std::uintptr_t, 2>          targets{};
+    std::uint64_t                          leaderWeak = 0, memberWeak = 0;
+    std::array<bool, kActions>             pressed{}, held{};
+    bool operator==(const Snapshot&) const = default;
+};
+
+std::wstring DescribeCharacter(const wchar_t* who, const CharacterState& character)
+{
+    std::wstring text = std::format(L"{} holder {} component {} handle {} mode {} state", who, character.holder ? 1 : 0,
+                                    character.owner ? 1 : 0, character.handle ? 1 : 0, character.mode);
+    for (const std::uint8_t byte : character.bytes)
+    {
+        text += std::format(L" {}", byte);
+    }
+    return text + std::format(L" pending {}", character.pending);
+}
+
+std::wstring Describe(const Snapshot& now)
+{
+    std::wstring line = std::format(L"ctrl hud {} blocked {} ready {} guardMode {} req", now.hud ? 1 : 0, now.blocked ? 1 : 0,
+                                    now.ready ? 1 : 0, now.guardMode);
+    for (std::size_t i = 0; i < kLoggedRequests.size(); ++i)
+    {
+        line += std::format(L" {}:{}", kLoggedRequests[i], now.requests[i]);
+    }
+    line += L" | " + DescribeCharacter(L"P1", now.characters[0]);
+    line += L" | " + DescribeCharacter(L"P2", now.characters[1]);
+    line += std::format(L" | targeting {} lock {} latch {} displayed {:#x} P1 target {:#x} P2 target {:#x} leader {:#x} member {:#x}",
+                        now.targeting ? 1 : 0, now.lock, now.latch, now.displayed, now.targets[0], now.targets[1], now.leaderWeak,
+                        now.memberWeak);
+    const auto key = [&now](std::size_t action) {
+        return std::format(L"{}{}", now.pressed[action] ? L"P" : L"", now.held[action] ? L"H" : L"-");
+    };
+    return line + std::format(L" | pad2 attack {} unique {} guard {} dodge {}", key(kAttack), key(kUnique), key(kGuard),
+                              key(kDodgeAction));
+}
+
+Snapshot g_logged;  // game thread: as last logged
 void Stop(const wchar_t* what)
 {
     g_failed = true;
     platform::Log(L"battle input: {} raised an exception; player 2's battle actions are off this session", what);
-}
-
-/// The object as an FWeakObjectPtr value {index, serial}, built and checked with the game's own
-/// weak pointer functions; 0 if it cannot be (or the serial would be 0).
-std::uint64_t WeakOfGuarded(void* object) noexcept
-{
-    __try
-    {
-        std::uint64_t weak = 0;
-        g_weakAssign(&weak, object);
-        return (weak >> 32) != 0 && g_weakGet(&weak) == object ? weak : 0;
-    }
-    __except (platform::GuardFilter(GetExceptionCode()))
-    {
-        return 0;
-    }
 }
 
 bool SoftTargetGuarded(std::uintptr_t system) noexcept
@@ -333,39 +372,9 @@ std::uintptr_t BattleSystem() noexcept
     return Field<std::uintptr_t>(g_battleSystem);
 }
 
-/// While it lives, the party manager's leader names player 2's member, so the game's targeting code
-/// picks and corrects for player 2's member (RE-p2-targeting.md §5.2, §5.3; player 2's lock byte is
-/// in place through the member tick's lock_on::TargetScope). Put back when it ends. Game thread only.
-class LeaderScope
-{
-public:
-    explicit LeaderScope(std::uint64_t memberWeak) noexcept
-    {
-        const std::uintptr_t manager = Field<std::uintptr_t>(g_partyManager);
-        if (memberWeak == 0 || manager == 0 || !Read(manager + kPartyManagerLeader, savedLeader_))
-        {
-            return;
-        }
-        leader_ = manager + kPartyManagerLeader;
-        held_   = platform::WriteGuarded(reinterpret_cast<void*>(leader_), &memberWeak, sizeof(memberWeak));
-    }
-    ~LeaderScope()
-    {
-        if (leader_ != 0)
-        {
-            platform::WriteGuarded(reinterpret_cast<void*>(leader_), &savedLeader_, sizeof(savedLeader_));
-        }
-    }
-    LeaderScope(const LeaderScope&)            = delete;
-    LeaderScope& operator=(const LeaderScope&) = delete;
-
-    bool Held() const noexcept { return held_; }
-
-private:
-    std::uintptr_t leader_      = 0;
-    std::uint64_t  savedLeader_ = 0;
-    bool           held_        = false;
-};
+// The leader answering player 2's member (player_two/leader_scope.h); player 2's lock byte is in
+// place through the member tick's lock_on::TargetScope.
+using leader_scope::LeaderScope;
 
 /// Player 2's own command layer: the controller's edge logic on pad 2's view (RE-p2-battle-input.md §1.3, §2).
 void Act(void* state, const Parts& parts, std::uint64_t memberWeak, bool attackGate, bool guardGate,
@@ -447,8 +456,6 @@ bool Install(const platform::GameImage& image) noexcept
     g_isPressed     = reinterpret_cast<QueryFn>(find(kIsPressed));
     g_isHeld        = reinterpret_cast<QueryFn>(find(kIsHeld));
     g_softTarget    = reinterpret_cast<SoftTargetFn>(find(kSoftTarget));
-    g_weakGet       = reinterpret_cast<WeakGetFn>(find(facts::kWeakObjectGet));
-    g_weakAssign    = reinterpret_cast<WeakAssignFn>(find(facts::kWeakObjectAssign));
     g_isInBattle    = reinterpret_cast<GlobalTestFn>(find(facts::kIsInBattle));
     g_resolveLeader = reinterpret_cast<GlobalObjectFn>(find(facts::kResolvePartyLeader));
     const auto battleSystem = image.Rebase(kBattleSystem, sizeof(void*));
@@ -463,7 +470,7 @@ bool Install(const platform::GameImage& image) noexcept
     const auto system = image.Rebase(kEndUISystem, kController + sizeof(void*));
     const auto vtable = image.Rebase(kBattlePlayerVTable, sizeof(void*));
     g_installed = g_attackBegin && g_attackHold && g_attackRelease && g_guardHold && g_guardEnd && g_dodge && g_isPressed &&
-                  g_isHeld && g_softTarget && g_weakGet && g_weakAssign && g_isInBattle && g_resolveLeader && battleSystem &&
+                  g_isHeld && g_softTarget && leader_scope::Install(image) && g_isInBattle && g_resolveLeader && battleSystem &&
                   partyManager && keys && system && vtable;
     g_battleSystem       = battleSystem ? *battleSystem : 0;
     g_partyManager       = partyManager ? *partyManager : 0;
@@ -501,9 +508,10 @@ void InScopes(void* member, void* state, float deltaTime) noexcept
         const auto           memberAddress = reinterpret_cast<std::uintptr_t>(member);
         const Parts          two           = PartsOf(memberAddress);
         const std::uintptr_t system        = BattleSystem();
-        const std::uint64_t  memberWeak    = WeakOfGuarded(member);
+        const std::uint64_t  memberWeak    = leader_scope::WeakOf(member);
+        // In battle: the member tick's TargetScope already asked the game (lock_on::Held), else ask.
         const bool           targeting     = system != 0 && Field<std::uint8_t>(system + kSkipTargeting) == 0 &&
-                                   InBattleGuarded() != 0;
+                                   (lock_on::Held() || InBattleGuarded() != 0);
         if (two.ready && targeting && Acts(kPartSoftTarget))
         {
             // Player 2's soft target, picked by the game's own leader update for player 2's member.
@@ -520,7 +528,10 @@ void InScopes(void* member, void* state, float deltaTime) noexcept
             if (scope.Held())
             {
                 lock_on::Tick(member, reinterpret_cast<void*>(two.owner), deltaTime,
-                              {.lock = Acts(kPartLock), .switching = Acts(kPartSwitch), .camera = Acts(kPartLockCamera)});
+                              {.lock      = Acts(kPartLock),
+                               .switching = Acts(kPartSwitch),
+                               .camera    = Acts(kPartLockCamera),
+                               .cursor    = Acts(kPartCursor)});
             }
         }
         else if (!targeting)
@@ -536,9 +547,13 @@ void InScopes(void* member, void* state, float deltaTime) noexcept
         {
             return;
         }
-        // The log: player 1's controller, both characters, pad 2's actions.
-        std::wstring line = std::format(L"ctrl hud {} blocked {} ready {} guardMode {} req", battleHud ? 1 : 0, blocked ? 1 : 0,
-                                        ready ? 1 : 0, controller != 0 ? Field<std::int32_t>(controller + kGuardMode) : 0);
+        // The log: player 1's controller, both characters, pad 2's actions; raw values compared each
+        // frame, the text built only when they change.
+        Snapshot now;
+        now.hud       = battleHud;
+        now.blocked   = blocked;
+        now.ready     = ready;
+        now.guardMode = controller != 0 ? Field<std::int32_t>(controller + kGuardMode) : 0;
         std::uintptr_t requests = 0;
         std::int32_t   count    = 0;
         if (controller != 0)
@@ -546,42 +561,38 @@ void InScopes(void* member, void* state, float deltaTime) noexcept
             Read(controller + kRequests, requests);
             Read(controller + kRequests + 8, count);
         }
-        for (const std::int32_t index : kLoggedRequests)
+        for (std::size_t i = 0; i < kLoggedRequests.size(); ++i)
         {
-            line += std::format(L" {}:{}", index,
-                                requests != 0 && index < count ? Field<std::int32_t>(requests + 4 * static_cast<std::uint32_t>(index)) : -1);
+            const std::int32_t index = kLoggedRequests[i];
+            now.requests[i] = requests != 0 && index < count ? Field<std::int32_t>(requests + 4 * static_cast<std::uint32_t>(index)) : -1;
         }
-        const auto  one      = reinterpret_cast<std::uintptr_t>(ReadPointer(generation::PlayerOneController(), facts::kControllerPawn));
-        const auto  oneState = one != 0 ? reinterpret_cast<std::uintptr_t>(ReadPointer(reinterpret_cast<void*>(one),
-                                                                                         facts::kCharacterMoveState))
-                                        : 0;
-        line += L" | " + DescribeCharacter(L"P1", one, oneState, PartsOf(one));
-        line += L" | " + DescribeCharacter(L"P2", memberAddress, reinterpret_cast<std::uintptr_t>(state), two);
-        std::uint64_t leaderWeak = 0;
+        const auto one      = reinterpret_cast<std::uintptr_t>(ReadPointer(generation::PlayerOneController(), facts::kControllerPawn));
+        const auto oneState = one != 0 ? reinterpret_cast<std::uintptr_t>(ReadPointer(reinterpret_cast<void*>(one),
+                                                                                        facts::kCharacterMoveState))
+                                       : 0;
+        const Parts oneParts = PartsOf(one);
+        now.characters[0]    = CharacterOf(oneState, oneParts);
+        now.characters[1]    = CharacterOf(reinterpret_cast<std::uintptr_t>(state), two);
         if (const auto manager = Field<std::uintptr_t>(g_partyManager); manager != 0)
         {
-            Read(manager + kPartyManagerLeader, leaderWeak);
+            Read(manager + kPartyManagerLeader, now.leaderWeak);
         }
-        const Parts one_ = PartsOf(one);
-        line += std::format(L" | targeting {} lock {} latch {} displayed {:#x} P1 target {:#x} P2 target {:#x} leader {:#x} "
-                            L"member {:#x}",
-                            targeting ? 1 : 0, system != 0 ? Field<std::uint8_t>(system + kLockMode) : 0,
-                            system != 0 ? Field<std::uint8_t>(system + kSwitchLatch) : 0,
-                            system != 0 ? Field<std::uintptr_t>(system + kDisplayed) : 0,
-                            one_.owner != 0 ? Field<std::uintptr_t>(one_.owner + kTargetSlot) : 0,
-                            two.owner != 0 ? Field<std::uintptr_t>(two.owner + kTargetSlot) : 0, leaderWeak, memberWeak);
-        line += std::format(L" | pad2 attack {}{} unique {}{} guard {}{} dodge {}{}", pressed[kAttack] ? L"P" : L"",
-                            held[kAttack] ? L"H" : L"-", pressed[kUnique] ? L"P" : L"", held[kUnique] ? L"H" : L"-",
-                            pressed[kGuard] ? L"P" : L"", held[kGuard] ? L"H" : L"-", pressed[kDodgeAction] ? L"P" : L"",
-                            held[kDodgeAction] ? L"H" : L"-");
-        if (line != g_logged)
+        now.targeting  = targeting;
+        now.lock       = system != 0 ? Field<std::uint8_t>(system + kLockMode) : 0;
+        now.latch      = system != 0 ? Field<std::uint8_t>(system + kSwitchLatch) : 0;
+        now.displayed  = system != 0 ? Field<std::uintptr_t>(system + kDisplayed) : 0;
+        now.targets[0] = oneParts.owner != 0 ? Field<std::uintptr_t>(oneParts.owner + kTargetSlot) : 0;
+        now.targets[1] = two.owner != 0 ? Field<std::uintptr_t>(two.owner + kTargetSlot) : 0;
+        now.memberWeak = memberWeak;
+        now.pressed    = pressed;
+        now.held       = held;
+        if (now != g_logged)
         {
-            g_logged = line;
+            g_logged = now;
             ++g_lines;
-            platform::Log(L"battle input: {}", line);
+            platform::Log(L"battle input: {}", Describe(now));
         }
-    }
-    catch (...)
+    }    catch (...)
     {
     }
 }
@@ -593,9 +604,9 @@ void SetMask(unsigned mask) noexcept
     g_holdStarted = {};
     g_lines       = 0;
     platform::Log(L"battle input: mask {} (dodge {}, attack {}, guard {}, soft target {}, attack leader scope {}, lock {}, "
-                  L"switching {}, lock camera {})",
+                  L"switching {}, lock camera {}, cursor {})",
                   mask, Acts(kPartDodge), Acts(kPartAttack), Acts(kPartGuard), Acts(kPartSoftTarget), Acts(kPartAttackScope),
-                  Acts(kPartLock), Acts(kPartSwitch), Acts(kPartLockCamera));
+                  Acts(kPartLock), Acts(kPartSwitch), Acts(kPartLockCamera), Acts(kPartCursor));
 }
 
 }  // namespace lss::player_two::battle_input

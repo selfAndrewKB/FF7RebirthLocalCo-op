@@ -10,6 +10,7 @@
 #include <Unreal/UObjectGlobals.hpp>
 
 #include "hud/hud_placement.h"
+#include "hud/widget_opacity.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -180,8 +181,14 @@ float OpacityOf(const UObject* widget) noexcept
     return opacity;
 }
 
+/// The game's native setter (hud/widget_opacity.h), or the same function through reflection when its
+/// entry could not be checked.
 bool SetOpacity(UObject* widget, float opacity)
 {
+    if (widget_opacity::Installed())
+    {
+        return widget_opacity::Set(widget, opacity);
+    }
     struct
     {
         float opacity;
@@ -257,8 +264,9 @@ bool Install(const platform::GameImage& image) noexcept
     {
         g_setOpacity = nullptr;
     }
+    const bool native = widget_opacity::Install(image);
     platform::Log(L"prompt rows: per-player layout {}, per-half visibility {}", g_sortAndLayout ? L"ready" : L"UNAVAILABLE",
-                  g_setOpacity ? L"ready" : L"UNAVAILABLE");
+                  native ? L"ready (native setter)" : g_setOpacity ? L"ready (through reflection)" : L"UNAVAILABLE");
     return g_endUISystem != 0;
 }
 
@@ -343,7 +351,7 @@ void Forget() noexcept
 void ShowOnly(int player) noexcept
 {
     Restore();
-    if (g_setOpacity == nullptr)
+    if (g_setOpacity == nullptr && !widget_opacity::Installed())
     {
         return;
     }
