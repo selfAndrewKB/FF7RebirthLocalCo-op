@@ -38,4 +38,8 @@ void Tick(void* member) noexcept;
 /// released.
 void PlayerTwoOut() noexcept;
 
+/// Player 2's member was destroyed (a retry or checkpoint reload rebuilt the party): forgotten,
+/// with nothing written to it.
+void MemberDestroyed() noexcept;
+
 }  // namespace lss::player_two::camera_override

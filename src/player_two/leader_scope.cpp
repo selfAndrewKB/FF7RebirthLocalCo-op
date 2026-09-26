@@ -58,6 +58,13 @@ std::uint64_t WeakOf(void* object) noexcept
     return object != nullptr && g_weakAssign != nullptr ? WeakOfGuarded(object) : 0;
 }
 
+bool StillNames(std::uint64_t weak, const void* object) noexcept
+{
+    void* live = nullptr;
+    return weak != 0 && object != nullptr && g_weakGet != nullptr && platform::CallGuarded(g_weakGet, live, &weak) &&
+           live == object;
+}
+
 LeaderScope::LeaderScope(std::uint64_t memberWeak) noexcept
 {
     std::uintptr_t manager = 0;

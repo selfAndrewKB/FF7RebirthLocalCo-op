@@ -26,6 +26,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/module_folder.h"
+#include "player_two/field_exit.h"
 #include "player_two/session.h"
 #include "players/join_keys.h"
 #include "players/split_layout.h"
@@ -51,7 +52,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.19.1-party-switch";
+constexpr const wchar_t* kVersion = L"0.19.4-field-exit";
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -100,7 +101,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.19.1-party-switch");
+        ModVersion     = STR("0.19.4-field-exit");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -134,6 +135,7 @@ public:
             lss::views::RemovePlayerViewPoint();
         }
         lss::hud::RemoveRootOverlayRender();
+        lss::player_two::field_exit::Remove();
         lss::hud::target_views::Remove();
         lss::hud::area_icons_two::Remove();
         lss::hud::user_widgets::Remove();
@@ -221,24 +223,15 @@ public:
         // camera manager's fixed-name spawns would collide with player 1's outside a join.
         const Hook::FCallbackOptions loadOptions{false, false, STR("LocalSplitScreen"), STR("leave before map load")};
         loadMapCallback_ = Hook::RegisterLoadMapPreCallback(
-            [this](auto&, auto&&...) {
-                if (!session_->HasPlayerTwo())
-                {
-                    return;
-                }
-                const bool left = session_->LeaveNow();
-                FollowPlayerTwo();  // now, not at the next tick: the view module must not keep the old player 2
-                if (left)
-                {
-                    Log(L"a map is loading: player 2 left (press Ctrl+F7 to rejoin afterwards)");
-                }
-                else
-                {
-                    Log(L"WARNING: a map is loading and player 2 could not be removed; the new world will log "
-                        L"player 2 in, and its camera manager's spawns are expected to collide with player 1's");
-                }
-            },
-            loadOptions);
+            [this](auto&, auto&&...) { LeaveBeforeWorldChange(L"a map is loading"); }, loadOptions);
+        // The same before a retry, reload or load leaves the field inside this world (no map load).
+        if (!lss::player_two::field_exit::Install(
+                *image,
+                [](void* self) { static_cast<LocalSplitScreenMod*>(self)->LeaveBeforeWorldChange(L"the game leaves the field"); },
+                this))
+        {
+            Log(L"a retry, reload or load is caught only by the engine tick's check of the field running byte");
+        }
 
         Log(L"ready: every engine check passed. Ctrl+F7 adds player 2, Ctrl+F8 removes player 2, Ctrl+F5 switches "
             L"top/bottom and side by side, Ctrl+F4 switches filled halves and 16:9 halves with bars. Player 2 starts on "
@@ -267,6 +260,28 @@ private:
         return true;
     }
 
+    /// Player 2 leaves before the world changes under it (a map load, or the game leaving the field
+    /// for a retry, reload or load); the session joins again once the new field is ready.
+    void LeaveBeforeWorldChange(const wchar_t* why) noexcept
+    {
+        if (!session_->HasPlayerTwo())
+        {
+            return;
+        }
+        const bool left = session_->LeaveNow();
+        FollowPlayerTwo();  // now, not at the next tick: the view module must not keep the old player 2
+        if (left)
+        {
+            Log(L"{}: player 2 left (and joins again once the field is ready)", why);
+        }
+        else
+        {
+            Log(L"WARNING: {} and player 2 could not be removed; a new world would log player 2 in, and its camera "
+                L"manager's spawns are expected to collide with player 1's",
+                why);
+        }
+    }
+
     /// Runs on the game thread before each engine tick, outside Draw.
     void OnEngineTick() noexcept
     {
@@ -286,6 +301,11 @@ private:
             case lss::players::PlayerIntent::ToggleFill: ToggleFill(); break;
             case lss::players::PlayerIntent::TogglePadSticks: session_->TogglePadSticks(); break;
             case lss::players::PlayerIntent::None: break;
+        }
+        lss::player_two::field_exit::Watch();
+        if (session_->HasPlayerTwo() && lss::player_two::field_exit::FieldLeft())
+        {
+            LeaveBeforeWorldChange(L"the field stopped running");  // a field exit the redirected calls did not see
         }
         lss::dev::TickBeforeSession();
         session_->Tick();

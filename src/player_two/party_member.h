@@ -37,11 +37,13 @@ bool FieldGateOpen() noexcept;
 
 /// The first eligible member of the deployed party (the battle-member list player 1's battle switch
 /// cycles), by that switch's own member test, never player 1's character or the field or default
-/// battle leader's slot (null, with the reasons logged, if none).
-void* Choose(void* playerOneController) noexcept;
+/// battle leader's slot (null if none). Each member's verdict is logged when `log` is set.
+void* Choose(void* playerOneController, bool log = true) noexcept;
 
-/// Why player 2 may no longer play `member`: not one of the deployed party any more, away from the
-/// battle party, or failing player 1's battle switch's member test. Null while it may. Game thread.
+/// Why player 2 may no longer play `member`: now the party leader (a story change hands it to player
+/// 1), not one of the deployed party any more, away from the battle party, or without its battle
+/// controller component. A downed or petrified member stays playable, as player 1 stays on a downed
+/// leader. Null while it may. Game thread.
 const wchar_t* WhyNotPlayable(const void* member) noexcept;
 
 /// The party roster's player type of `character` (null if it is not on the field lane's roster).

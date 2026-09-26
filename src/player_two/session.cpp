@@ -6,15 +6,18 @@
 #include "platform/log.h"
 #include "player_two/describe.h"
 #include "player_two/engine_facts.h"
+#include "player_two/field_exit.h"
 #include "player_two/battle_camera.h"
 #include "player_two/camera_override.h"
 #include "player_two/lock_on.h"
 #include "player_two/field_camera.h"
 #include "player_two/generation.h"
+#include "player_two/leader_scope.h"
 #include "player_two/leftover_actors.h"
 #include "player_two/member_movement.h"
 #include "player_two/move_state.h"
 #include "player_two/object_fields.h"
+#include "player_two/own_controller.h"
 #include "player_two/pad_buttons.h"
 #include "player_two/pad_sticks.h"
 #include "player_two/primary_controller.h"
@@ -40,6 +43,15 @@ constexpr std::uint32_t kTakeTicks = 120;
 /// How often, in ticks, player 2's member is checked against the deployed party and the battle
 /// switch's member test (every call is a read).
 constexpr std::uint32_t kPlayableCheckTicks = 30;
+
+/// How often, in ticks, player 2 without a character looks for a free member.
+constexpr std::uint32_t kRetakeTicks = 120;
+
+/// After a map load: ticks the new map must look ready before player 2 joins again, how many joins
+/// are tried, and how long the whole wait may take, before the rejoin is left to Ctrl+F7.
+constexpr std::uint32_t kRejoinSettleTicks = 180;
+constexpr std::uint32_t kRejoinTries       = 5;
+constexpr std::uint32_t kRejoinWaitTicks   = 3600;
 
 }  // namespace
 
@@ -79,6 +91,7 @@ void Session::Tick() noexcept
     generation::SetGameThread();  // the engine-tick callback runs on the thread that ticks the world
     if (!HasPlayerTwo())
     {
+        TryRejoin();
         return;
     }
     if (!players_.StillListed())
@@ -88,12 +101,19 @@ void Session::Tick() noexcept
         return;
     }
     ++ticks_;
+    if (MemberDestroyed())  // every phase: the take, the swap and the leave read the member too
+    {
+        return;
+    }
     switch (phase_)
     {
         case Phase::SettlingPlayerOne: Settle(); break;
         case Phase::Taking: AwaitTake(); break;
         case Phase::Leaving: Carry(leave_.Next(MemberReleased())); break;
         case Phase::Playing:
+            // Before the member tick: the tick's scopes answer the party leader with player 2's member
+            // (player_two/leader_scope.h), which CheckMemberPlayable's leader test must not see.
+            RetakeWhenFree();
             CheckMemberPlayable();
             if (phase_ == Phase::Playing && installed_.memberMovement && generation::Member() != nullptr)
             {
@@ -179,6 +199,7 @@ void Session::Settle() noexcept
         phase_  = Phase::Playing;
         return;
     }
+    memberWeak_ = leader_scope::WeakOf(member_);  // watched from the take on
     Log(L"player 2 is taking {}", NameOf(member_));
     phase_ = Phase::Taking;
     ticks_ = 0;
@@ -196,6 +217,7 @@ void Session::AwaitTake() noexcept
             bytes == playerOneBytes_ ? L"unchanged" : L"CHANGED");
         LogTagCounts(L"after the take");
         generation::SetMember(member_);
+        memberWeak_ = leader_scope::WeakOf(member_);
         if (installed_.fieldSettings)
         {
             Log(L"player 2's Field camera brought to player 1's settings: {}",
@@ -217,6 +239,107 @@ void Session::AwaitTake() noexcept
     generation::Fault(L"the party member was not handed over in time");
     party_member::GiveBack(playerTwoController_);  // member_ stays recorded: the leave waits for this release
     phase_ = Phase::Playing;
+}
+
+/// Player 2's member destroyed under player 2 (a retry or checkpoint reload rebuilt the party without a
+/// map load): nothing touches it from here on, and it is not given back (the give-back would reach
+/// a destroyed object). True if that happened this tick.
+bool Session::MemberDestroyed() noexcept
+{
+    if (member_ == nullptr || memberWeak_ == 0 || leader_scope::StillNames(memberWeak_, member_))
+    {
+        return false;
+    }
+    Log(L"player 2's member was destroyed under player 2 (the party was rebuilt without a field exit being seen); "
+        L"player 2 lets go of it and joins again");
+    generation::SetMember(nullptr);  // player 2's member movement and scopes stop at once
+    camera_override::MemberDestroyed();
+    // Player 2's controller still names the destroyed character: cleared, so neither the game's
+    // give-back nor the controller's unpossess reads it (RE-p2-retry-reload.md §3.2, recipe 3).
+    for (const std::uint32_t field : {facts::kControllerLeader, facts::kControllerPawn})
+    {
+        if (ReadPointer(playerTwoController_, field) == member_)
+        {
+            WriteField<void*>(playerTwoController_, field, nullptr);
+            Log(L"player 2's controller field {:#x} named the destroyed character; cleared", field);
+        }
+    }
+    member_                 = nullptr;
+    memberWeak_             = 0;
+    const bool leaveAsked   = phase_ == Phase::Leaving;  // a leave player 1 asked for stays a leave
+    LeaveNow();  // a clean leave (nothing to give back now), and the rejoin once the field is ready
+    if (leaveAsked)
+    {
+        rejoinPending_ = false;
+    }
+    return true;
+}
+
+/// Player 2 without a character (none was free: a solo story party) takes one as soon as one is.
+void Session::RetakeWhenFree() noexcept
+{
+    // MemberReleased with no member: player 2's controller holds no pawn or leader (a give-back that
+    // never completed keeps it holding one).
+    if (member_ != nullptr || !installed_.member || !generation::Active() || ticks_ % kRetakeTicks != 0 ||
+        !party_member::FieldGateOpen() || !MemberReleased())
+    {
+        return;
+    }
+    void* free = party_member::Choose(playerOneController_, false);
+    if (free == nullptr)
+    {
+        return;
+    }
+    Log(L"a party member is free for player 2 again ({}); taking it", NameOf(free));
+    phase_ = Phase::SettlingPlayerOne;
+    ticks_ = kPlayerOneWatchTicks;  // player 1 is settled already: choose on the next tick
+}
+
+/// After a map load took player 2 out: the normal join, once the new map has been in the field state
+/// with player 1's camera ready for a few seconds.
+void Session::TryRejoin() noexcept
+{
+    if (!rejoinPending_)
+    {
+        return;
+    }
+    if (++rejoinWaited_ > kRejoinWaitTicks)
+    {
+        rejoinPending_ = false;
+        Log(L"player 2 did not rejoin: the field did not become ready within {} ticks; press Ctrl+F7 to join",
+            kRejoinWaitTicks);
+        return;
+    }
+    if (refuseJoins_)
+    {
+        rejoinPending_ = false;  // Join would refuse and say why
+        Log(L"player 2 does not rejoin after the map load: an earlier join raised an exception; restart the game to join");
+        return;
+    }
+    // The field running again (the entry steps done, the party rebuilt): a join before that would be
+    // undone by the entry's own unpossess of every non-leader (RE-p2-retry-reload.md §2.3).
+    if (!own_controller::Ready() || (installed_.member && !party_member::FieldGateOpen()) || !field_exit::FieldReady())
+    {
+        rejoinTicks_ = 0;
+        return;
+    }
+    if (++rejoinTicks_ < kRejoinSettleTicks)
+    {
+        return;
+    }
+    rejoinTicks_ = 0;
+    if (++rejoinTries_ > kRejoinTries)
+    {
+        rejoinPending_ = false;
+        Log(L"player 2 could not rejoin after the map load; press Ctrl+F7 to join");
+        return;
+    }
+    Log(L"the new map is ready: player 2 joins again (try {})", rejoinTries_);
+    Join();
+    if (HasPlayerTwo())
+    {
+        rejoinPending_ = false;
+    }
 }
 
 void Session::CheckMemberPlayable() noexcept
@@ -253,15 +376,19 @@ void Session::AwaitSwap() noexcept
     }
     if (ticks_ >= kTakeTicks)
     {
-        Log(L"player 2's {} did not return to its AI within {} ticks; player 2 stays without a character (Ctrl+F8 "
-            L"and Ctrl+F7 join again)",
+        Log(L"player 2's {} did not return to its AI within {} ticks; player 2 stays without a character until "
+            L"player 2's controller holds none, then takes a free one (a leave still waits for the release)",
             NameOf(member_), kTakeTicks);
-        phase_ = Phase::Playing;  // member_ stays recorded: a leave waits for its release
+        // Not player 2's member any more: a leave waits on player 2's controller holding nothing
+        // (MemberReleased with no member), and RetakeWhenFree waits for the same.
+        member_ = nullptr;
+        phase_  = Phase::Playing;
     }
 }
 
 void Session::Leave() noexcept
 {
+    rejoinPending_ = false;  // a leave asked for: no rejoin after a later map load
     if (!HasPlayerTwo())
     {
         return;
@@ -293,6 +420,13 @@ bool Session::LeaveNow() noexcept
             YesNo(Released(lease, member_)));
     }
     Teardown();
+    if (!HasPlayerTwo())
+    {
+        rejoinPending_ = true;  // join again once the new map is ready
+        rejoinTicks_   = 0;
+        rejoinTries_   = 0;
+        rejoinWaited_  = 0;
+    }
     return !HasPlayerTwo();
 }
 

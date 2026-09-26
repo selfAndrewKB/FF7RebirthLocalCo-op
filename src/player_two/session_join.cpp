@@ -9,6 +9,7 @@
 #include "player_two/generation.h"
 #include "player_two/battle_camera.h"
 #include "player_two/camera_override.h"
+#include "player_two/field_exit.h"
 #include "player_two/lock_on.h"
 #include "player_two/party_switch.h"
 #include "player_two/target_cursor.h"
@@ -163,6 +164,11 @@ bool Session::JoinAllowed(const players::LocalPlayers::PlayerOne& one) const noe
         Log(L"join refused: not in the field (player 2 joins in the field only)");
         return false;
     }
+    if (installed_.member && !field_exit::FieldReady())
+    {
+        Log(L"join refused: the field is still being entered (a join now would be undone by it)");
+        return false;
+    }
     if (one.controller == nullptr)
     {
         return false;  // SolePlayer logged why
@@ -206,6 +212,7 @@ void Session::Join() noexcept
     playerOneController_ = one.controller;
     playerTwoController_ = added.controller;
     phase_               = Phase::Playing;
+    rejoinPending_       = false;  // joined, by the key or by the rejoin after a map load
 
     if (added.raised)
     {

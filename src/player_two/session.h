@@ -15,6 +15,12 @@
 //            (player_two/member_movement.h).
 //   leave    the member is given back first and awaited, then the leftover actors are destroyed
 //            and player 2 removed in one step (player_two/leave_sequence.h).
+//   party    every few ticks the member is checked: now the leader (a story change), out of the
+//            deployed or battle party, or without its battle controller, it is given back and another
+//            chosen; with none free (a solo story party), player 2 waits without a character and takes
+//            one as soon as one is free. A downed member stays player 2's.
+//   map load player 2 leaves before it, and joins again once the new map is in the field state
+//            and player 1's camera is ready.
 // Each stage is installed only if its engine checks pass; a stage that is not installed is
 // skipped, and the ones before it still work.
 //
@@ -99,6 +105,9 @@ private:
     void LogTagCounts(const wchar_t* when) noexcept;
     void AimOwnCamera() noexcept;
     void KeepOwnCamera() noexcept;
+    void RetakeWhenFree() noexcept;
+    bool MemberDestroyed() noexcept;
+    void TryRejoin() noexcept;
 
     players::LocalPlayers players_;
     LeaveSequence         leave_;
@@ -107,10 +116,15 @@ private:
     void*                 playerOneController_ = nullptr;
     void*                 playerTwoController_ = nullptr;
     void*                 member_           = nullptr;  // the member player 2 took (or was taking)
+    std::uint64_t         memberWeak_       = 0;        // its FWeakObjectPtr, to see it destroyed
     std::uint32_t         ticks_            = 0;        // in the current phase
     std::uint32_t         viewTargetResets_ = 0;        // times player 2's view was found moved off its camera
     bool                  gateClosedLogged_ = false;
     bool                  refuseJoins_      = false;    // after an exception during a join
+    bool                  rejoinPending_    = false;    // a map load took player 2 out: join again when it is ready
+    std::uint32_t         rejoinTicks_      = 0;        // ticks the new map has looked ready
+    std::uint32_t         rejoinTries_      = 0;
+    std::uint32_t         rejoinWaited_     = 0;        // ticks since the rejoin was asked for
 
     party_member::PlayerOneBytes playerOneBytes_{};
 

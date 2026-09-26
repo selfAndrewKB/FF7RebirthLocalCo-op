@@ -21,6 +21,9 @@ bool Install(const platform::GameImage& image) noexcept;
 /// `object` as an FWeakObjectPtr value {index, serial}, or 0 if it cannot be (or the serial would be 0).
 std::uint64_t WeakOf(void* object) noexcept;
 
+/// Whether `weak` (from WeakOf) still resolves to `object`: false once the object is destroyed.
+bool StillNames(std::uint64_t weak, const void* object) noexcept;
+
 class LeaderScope
 {
 public:

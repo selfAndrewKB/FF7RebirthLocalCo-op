@@ -59,6 +59,7 @@ add_library(LocalSplitScreen SHARED
 
     src/player_two/describe.cpp
     src/player_two/field_camera.cpp
+    src/player_two/field_exit.cpp
     src/player_two/generation.cpp
     src/player_two/leave_sequence.cpp
     src/player_two/leftover_actors.cpp

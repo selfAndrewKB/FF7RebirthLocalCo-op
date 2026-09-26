@@ -216,7 +216,7 @@ bool FieldGateOpen() noexcept
     return g_fn.isNotInFieldState() == 0 || g_fn.isInBattle() == 0;
 }
 
-void* Choose(void* playerOneController) noexcept
+void* Choose(void* playerOneController, bool log) noexcept
 {
     if (!g_installed)
     {
@@ -232,7 +232,10 @@ void* Choose(void* playerOneController) noexcept
         }
         void*             character = g_fn.characterByType(facts::kFieldLane, type);
         const Eligibility verdict   = Assess(Snapshot(character, playerOneController, type));
-        platform::Log(L"party member {} (type {}): {}", ordinal, static_cast<unsigned>(type), Describe(verdict));
+        if (log)
+        {
+            platform::Log(L"party member {} (type {}): {}", ordinal, static_cast<unsigned>(type), Describe(verdict));
+        }
         if (verdict == Eligibility::Eligible)
         {
             return character;
@@ -247,6 +250,10 @@ const wchar_t* WhyNotPlayable(const void* member) noexcept
     {
         return nullptr;
     }
+    if (member == g_fn.globalLeader())
+    {
+        return L"now the party leader, player 1's (a story change)";
+    }
     const auto type = PlayerTypeOf(member);  // the battle-member list: the deployed party
     if (!type)
     {
@@ -256,9 +263,11 @@ const wchar_t* WhyNotPlayable(const void* member) noexcept
     {
         return L"away from the battle party";
     }
-    if (!BattleReady(member))
+    // Downed or petrified stays player 2's, as player 1 stays on a downed leader; only a member
+    // without its battle controller component is given up.
+    if (g_fn.validateAiController(g_fn.aiControllerOf(member)) == nullptr)
     {
-        return L"unavailable to the battle switch";
+        return L"without its battle controller";
     }
     return nullptr;
 }

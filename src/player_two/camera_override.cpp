@@ -379,6 +379,11 @@ void Tick(void* member) noexcept
     }
 }
 
+void MemberDestroyed() noexcept
+{
+    g_member = nullptr;
+}
+
 void PlayerTwoOut() noexcept
 {
     RestoreMember();

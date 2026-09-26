@@ -86,9 +86,23 @@ Result Destroy(const Actors& actors, void* playerTwoController) noexcept
             ++result.failed;
         }
     }
-    if (actors.trigger != nullptr && playerTwoController != nullptr)
+    // The fields that named a destroyed actor are cleared, so a teardown tried again (a leave that did
+    // not complete, retried the next tick) never hands the same, possibly collected, actor back.
+    if (playerTwoController != nullptr)
     {
-        WriteField<void*>(playerTwoController, facts::kControllerTrigger, nullptr);
+        void* cameraManager = ReadPointer(playerTwoController, facts::kControllerCameraManager);
+        if (actors.trigger != nullptr)
+        {
+            WriteField<void*>(playerTwoController, facts::kControllerTrigger, nullptr);
+        }
+        if (actors.battleTalk != nullptr)
+        {
+            WriteField<void*>(playerTwoController, facts::kControllerBattleTalkActor, nullptr);
+        }
+        if (actors.cameraActor != nullptr && cameraManager != nullptr)
+        {
+            WriteField<void*>(cameraManager, facts::kCameraManagerEndCameraActor, nullptr);
+        }
     }
     return result;
 }
