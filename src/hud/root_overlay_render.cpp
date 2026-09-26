@@ -5,6 +5,7 @@
 #include "hud/enemy_bars.h"
 #include "hud/hud_placement.h"
 #include "hud/marker_timers.h"
+#include "hud/popups.h"
 #include "hud/prompt_rows.h"
 #include "hud/second_image.h"
 #include "platform/call_redirect.h"
@@ -61,6 +62,7 @@ void RenderRootOverlay(void* application) noexcept
     {
         EndOverlayRender();
         enemy_bars::EndFrame();  // the bars' record, emptied for the next tick
+        popups::EndFrame();
         prompt_rows::Restore();  // every prompt row back to its own visibility
         dev::AfterOverlayRender();
     }

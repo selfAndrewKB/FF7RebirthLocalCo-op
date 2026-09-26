@@ -40,7 +40,8 @@ void SetPlayerTwoContent(bool on) noexcept;
 bool PlayerTwoContentOn() noexcept;
 
 /// Diagnosis: which levers act (bits: 1 contexts, 2 first player, 4 primary controller, 8 view rect,
-/// 16 updates, 32 compass, 64 the arrows' own timers, 128 the enemy bars per view). All at start.
+/// 16 updates, 32 compass, 64 the arrows' own timers, 128 the enemy bars per view, 256 the battle popups per
+/// view). All at start.
 void SetPlayerTwoLeversMask(unsigned mask) noexcept;
 
 /// Game thread, just before player 2's overlay render. True if the levers are now player 2's

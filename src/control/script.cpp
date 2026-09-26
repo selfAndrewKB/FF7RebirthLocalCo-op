@@ -270,7 +270,7 @@ ParsedLine ParseLine(std::wstring_view line)
     if (name == L"hud-trace") return ParseHudTrace(words);
     if (name == L"hud-image") return ParseSwitch(CommandKind::HudImage, words, L"on", L"off");
     if (name == L"hud-levers") return ParseSwitch(CommandKind::HudLevers, words, L"on", L"off");
-    if (name == L"hud-levers-mask") return ParseMask(words, CommandKind::HudLeversMask, 255);
+    if (name == L"hud-levers-mask") return ParseMask(words, CommandKind::HudLeversMask, 511);
     if (name == L"sticks-mask") return ParseMask(words, CommandKind::SticksMask, 15);
     if (name == L"leak-fixes") return ParseMask(words, CommandKind::LeakFixes, 7);
     if (name == L"buttons-mask") return ParseMask(words, CommandKind::ButtonsMask, 3);

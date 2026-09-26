@@ -10,6 +10,7 @@
 #include "hud/hud_roots.h"
 #include "hud/hud_updates.h"
 #include "hud/marker_timers.h"
+#include "hud/popups.h"
 #include "hud/user_widgets.h"
 #include "platform/code_redirect.h"
 #include "platform/frame_watch.h"
@@ -69,6 +70,7 @@ enum Lever : unsigned
     kLeverCompass     = 32,
     kLeverArrows      = 64,   // the off-screen arrows' own timers in player 2's view (hud/marker_timers.h)
     kLeverBars        = 128,  // the enemy bars placed again per view (hud/enemy_bars.h)
+    kLeverPopups      = 256,  // the battle popups placed again per view (hud/popups.h)
 };
 
 // Installed once, then read.
@@ -91,7 +93,7 @@ std::array<float, 4>                                 g_playerOneRect{};
 std::array<float, 4>                                 g_playerTwoRect{};
 bool                                                 g_playerTwoRectKnown = false;
 bool                                                 g_loggedEnter        = false;
-unsigned                                             g_mask               = 255;  // SetPlayerTwoLeversMask
+unsigned                                             g_mask               = 511;  // SetPlayerTwoLeversMask
 std::array<double, kParts>                           g_partSeconds{};
 std::uint32_t                                        g_timedFrames     = 0;
 double                                               g_secondsPerCount = 0.0;
@@ -137,6 +139,10 @@ bool RunUpdates(bool playerTwo) noexcept
     if (Acts(kLeverBars))
     {
         enemy_bars::Replay();
+    }
+    if (Acts(kLeverPopups))
+    {
+        popups::Replay(playerTwo);
     }
     const hud_updates::OwnArrowTimers arrows{g_timeStep, g_savedTimeStep};
     return hud_updates::Run(Acts(kLeverUpdates), Acts(kLeverCompass),
@@ -294,6 +300,7 @@ bool InstallPlayerTwoPass(const platform::GameImage& image) noexcept
 {
     const bool parts   = hud_roots::Install(image) && hud_updates::Install(image) && marker_timers::Install(image);
     enemy_bars::Install(image);  // optional: without it the bars keep player 1's placement in both halves
+    popups::Install(image);      // optional, likewise for the battle popups
     const auto mode    = image.Rebase(kGameMode, sizeof(void*));
     const auto overlay = image.Rebase(engine::kRootOverlaySingleton, sizeof(void*));
     const auto entry   = image.Rebase(kFirstGamePlayer, sizeof(kFirstPlayerEntryBytes));
@@ -324,6 +331,7 @@ void RemovePlayerTwoPass() noexcept
     g_on.store(false, std::memory_order_relaxed);
     g_firstPlayerAnswer = 0;
     enemy_bars::Remove();
+    popups::Remove();
     if (g_firstPlayerCode.IsInstalled() && !g_firstPlayerCode.Restore())
     {
         platform::Log(L"HUD levers: the first-player entry was changed after us; left in place (it answers as the game "
@@ -350,9 +358,9 @@ void SetPlayerTwoLeversMask(unsigned mask) noexcept
 {
     g_mask = mask;
     platform::Log(L"HUD levers: mask {} (contexts {}, first player {}, primary {}, rect {}, updates {}, compass {}, arrows {}, "
-                  L"bars {})",
+                  L"bars {}, popups {})",
                   mask, Acts(kLeverContexts), Acts(kLeverFirstPlayer), Acts(kLeverPrimary), Acts(kLeverRect),
-                  Acts(kLeverUpdates), Acts(kLeverCompass), Acts(kLeverArrows), Acts(kLeverBars));
+                  Acts(kLeverUpdates), Acts(kLeverCompass), Acts(kLeverArrows), Acts(kLeverBars), Acts(kLeverPopups));
 }
 
 bool PlayerTwoContentOn() noexcept

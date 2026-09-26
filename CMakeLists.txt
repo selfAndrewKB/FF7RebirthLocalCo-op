@@ -36,6 +36,7 @@ add_library(LocalSplitScreen SHARED
     src/hud/area_icons_two.cpp
     src/hud/enemy_bars.cpp
     src/hud/marker_timers.cpp
+    src/hud/popups.cpp
     src/hud/user_widgets.cpp
     src/hud/overlay_band.cpp
     src/hud/overlay_layout.cpp
@@ -269,6 +270,16 @@ add_executable(CenteredFrameCodeTests
 target_include_directories(CenteredFrameCodeTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(CenteredFrameCodeTests PRIVATE cxx_std_20)
 add_test(NAME centered_frame_code COMMAND CenteredFrameCodeTests)
+
+add_executable(PopupsCodeTests
+    tests/popups_code_test.cpp
+    src/platform/code_redirect.cpp
+    src/platform/near_code.cpp
+)
+target_include_directories(PopupsCodeTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(PopupsCodeTests PRIVATE cxx_std_20)
+add_test(NAME popups_code COMMAND PopupsCodeTests)
+
 
 
 add_executable(ButtonViewTests
