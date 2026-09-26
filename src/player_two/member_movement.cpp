@@ -7,6 +7,7 @@
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
 #include "player_two/battle_input.h"
+#include "player_two/lock_on.h"
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/move_state.h"
@@ -143,11 +144,12 @@ void TickInScopes(void* playerTwoController, void* member, void* state, int type
         return;
     }
     const pad_buttons::ButtonScope   buttons;  // player 2's own buttons (sprint, dodge, field actions)
+    const lock_on::TargetScope       targets;  // in battle, the target system's fields player 2's own
     const LeaderAnswer               leader(type);
     const move_state::OwnTick        own;
     const scope_leaks::MemberTickScope leaks(state, playerTwoController, deltaTime);
     g_counters.Act();
-    battle_input::InScopes(member, state);  // player 2's attack, guard and dodge, before the tick runs them
+    battle_input::InScopes(member, state, deltaTime);  // player 2's attack, guard and dodge, before the tick runs them
     if (!GuardedTick(state, deltaTime))
     {
         g_stopped = true;

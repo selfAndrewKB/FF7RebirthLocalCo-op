@@ -24,8 +24,12 @@
 // 2's member and the target system's lock byte player 2's, both put back after each call; the target
 // lands in the member's own BattlePlayer component, as the leader's does.
 //
+// Player 2's lock-on (player_two/lock_on.h) runs next, with the leader answering the member, as the
+// game's targeting tick runs its lock after the soft target.
+//
 // Each part is switched by the battle mask (1 dodge, 2 attack and unique, 4 guard, 8 soft target, 16
-// attack leader scope). All are on at start; the mask switches a part off for diagnosis. Every
+// attack leader scope, 32 lock, 64 switching, 128 lock camera). All are on at start; the mask
+// switches a part off for diagnosis. Every
 // frame it also logs, on change, what it reads (the controller's gates and requests, both
 // characters' battle preconditions and move-state bytes, pad 2's actions). Game thread only.
 
@@ -38,9 +42,9 @@ namespace lss::player_two::battle_input {
 bool Install(const platform::GameImage& image) noexcept;
 
 /// Inside player 2's member tick scopes, before the tick: reads, logs on change, and acts per mask.
-void InScopes(void* member, void* state) noexcept;
+void InScopes(void* member, void* state, float deltaTime) noexcept;
 
-/// Diagnosis and staging: which parts act (1 dodge, 2 attack and unique, 4 guard). Logged.
+/// Diagnosis and staging: which parts act (the bits above). Logged.
 void SetMask(unsigned mask) noexcept;
 
 }  // namespace lss::player_two::battle_input

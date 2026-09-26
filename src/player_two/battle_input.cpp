@@ -8,6 +8,7 @@
 #include "player_two/camera_override.h"
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
+#include "player_two/lock_on.h"
 #include "player_two/object_fields.h"
 
 #include <array>
@@ -109,6 +110,9 @@ enum Part : unsigned
     kPartGuard       = 4,
     kPartSoftTarget  = 8,   // the game's leader soft-target update run for player 2's member
     kPartAttackScope = 16,  // the attack calls run with the leader answering player 2's member
+    kPartLock        = 32,  // the TargetLock press toggles player 2's own lock (player_two/lock_on.h)
+    kPartSwitch      = 64,  // pad 2's right stick switches player 2's locked target
+    kPartLockCamera  = 128, // the LockOn module on player 2's camera follows player 2's lock and target
 };
 
 using StateActionFn  = void (*)(void* state, std::uint8_t unique);
@@ -144,10 +148,10 @@ std::uintptr_t g_battleSystem  = 0;  // the address holding the battle system
 std::uintptr_t g_partyManager  = 0;  // the address holding the party manager
 
 // Game thread.
-unsigned                 g_mask = kPartDodge | kPartAttack | kPartGuard | kPartSoftTarget | kPartAttackScope;
+unsigned                 g_mask = kPartDodge | kPartAttack | kPartGuard | kPartSoftTarget | kPartAttackScope | kPartLock |
+                                  kPartSwitch | kPartLockCamera;
 bool                     g_guarding = false;
 std::array<bool, 2>      g_holdStarted{};
-std::uint8_t             g_playerTwoLock = 0;  // player 2's lock mode, swapped into the system's byte
 bool                     g_failed = false;
 std::wstring             g_logged;
 int                      g_lines = 0;
@@ -329,30 +333,26 @@ std::uintptr_t BattleSystem() noexcept
     return Field<std::uintptr_t>(g_battleSystem);
 }
 
-/// While it lives, the party manager's leader names player 2's member and the battle system's lock
-/// byte is player 2's, so the game's targeting code picks and corrects for player 2's member
-/// (RE-p2-targeting.md §5.2, §5.3). Both are put back when it ends. Game thread only.
+/// While it lives, the party manager's leader names player 2's member, so the game's targeting code
+/// picks and corrects for player 2's member (RE-p2-targeting.md §5.2, §5.3; player 2's lock byte is
+/// in place through the member tick's lock_on::TargetScope). Put back when it ends. Game thread only.
 class LeaderScope
 {
 public:
-    LeaderScope(std::uint64_t memberWeak, std::uintptr_t system) noexcept
+    explicit LeaderScope(std::uint64_t memberWeak) noexcept
     {
         const std::uintptr_t manager = Field<std::uintptr_t>(g_partyManager);
-        if (memberWeak == 0 || manager == 0 || system == 0 || !Read(manager + kPartyManagerLeader, savedLeader_) ||
-            !Read(system + kLockMode, savedLock_))
+        if (memberWeak == 0 || manager == 0 || !Read(manager + kPartyManagerLeader, savedLeader_))
         {
             return;
         }
         leader_ = manager + kPartyManagerLeader;
-        lock_   = system + kLockMode;
-        held_   = platform::WriteGuarded(reinterpret_cast<void*>(leader_), &memberWeak, sizeof(memberWeak)) &&
-                platform::WriteGuarded(reinterpret_cast<void*>(lock_), &g_playerTwoLock, sizeof(g_playerTwoLock));
+        held_   = platform::WriteGuarded(reinterpret_cast<void*>(leader_), &memberWeak, sizeof(memberWeak));
     }
     ~LeaderScope()
     {
         if (leader_ != 0)
         {
-            platform::WriteGuarded(reinterpret_cast<void*>(lock_), &savedLock_, sizeof(savedLock_));
             platform::WriteGuarded(reinterpret_cast<void*>(leader_), &savedLeader_, sizeof(savedLeader_));
         }
     }
@@ -363,14 +363,12 @@ public:
 
 private:
     std::uintptr_t leader_      = 0;
-    std::uintptr_t lock_        = 0;
     std::uint64_t  savedLeader_ = 0;
-    std::uint8_t   savedLock_   = 0;
     bool           held_        = false;
 };
 
 /// Player 2's own command layer: the controller's edge logic on pad 2's view (RE-p2-battle-input.md §1.3, §2).
-void Act(void* state, const Parts& parts, std::uint64_t memberWeak, std::uintptr_t system, bool attackGate, bool guardGate,
+void Act(void* state, const Parts& parts, std::uint64_t memberWeak, bool attackGate, bool guardGate,
          const std::array<bool, kActions>& pressed, const std::array<bool, kActions>& held)
 {
     const std::uintptr_t holder = parts.holder;
@@ -388,7 +386,7 @@ void Act(void* state, const Parts& parts, std::uint64_t memberWeak, std::uintptr
         std::optional<LeaderScope> scope;
         if (Acts(kPartAttackScope))
         {
-            scope.emplace(memberWeak, system);
+            scope.emplace(memberWeak);
         }
         for (const std::uint8_t unique : {std::uint8_t{0}, std::uint8_t{1}})
         {
@@ -475,7 +473,7 @@ bool Install(const platform::GameImage& image) noexcept
     return g_installed;
 }
 
-void InScopes(void* member, void* state) noexcept
+void InScopes(void* member, void* state, float deltaTime) noexcept
 {
     battle_camera::Watch();          // both camera managers' operators, logged on change
     camera_override::Tick(member);   // the member's animation camera overrides reach player 2's camera
@@ -509,15 +507,29 @@ void InScopes(void* member, void* state) noexcept
         if (two.ready && targeting && Acts(kPartSoftTarget))
         {
             // Player 2's soft target, picked by the game's own leader update for player 2's member.
-            const LeaderScope scope(memberWeak, system);
+            const LeaderScope scope(memberWeak);
             if (scope.Held() && !SoftTargetGuarded(system))
             {
                 Stop(L"the soft-target update");
             }
         }
+        if (two.ready && targeting && !g_failed)
+        {
+            // Player 2's lock, lock camera and switching, as the game's targeting tick does them next.
+            const LeaderScope scope(memberWeak);
+            if (scope.Held())
+            {
+                lock_on::Tick(member, reinterpret_cast<void*>(two.owner), deltaTime,
+                              {.lock = Acts(kPartLock), .switching = Acts(kPartSwitch), .camera = Acts(kPartLockCamera)});
+            }
+        }
+        else if (!targeting)
+        {
+            lock_on::Tick(member, reinterpret_cast<void*>(two.owner), deltaTime, {});  // ends player 2's lock out of battle
+        }
         if (two.ready && g_mask != 0 && !g_failed)
         {
-            Act(state, two, memberWeak, system, attackGate, guardGate, pressed, held);
+            Act(state, two, memberWeak, attackGate, guardGate, pressed, held);
         }
 
         if (g_lines >= kMaxLines)
@@ -580,8 +592,10 @@ void SetMask(unsigned mask) noexcept
     g_guarding    = false;
     g_holdStarted = {};
     g_lines       = 0;
-    platform::Log(L"battle input: mask {} (dodge {}, attack {}, guard {}, soft target {}, attack leader scope {})", mask,
-                  Acts(kPartDodge), Acts(kPartAttack), Acts(kPartGuard), Acts(kPartSoftTarget), Acts(kPartAttackScope));
+    platform::Log(L"battle input: mask {} (dodge {}, attack {}, guard {}, soft target {}, attack leader scope {}, lock {}, "
+                  L"switching {}, lock camera {})",
+                  mask, Acts(kPartDodge), Acts(kPartAttack), Acts(kPartGuard), Acts(kPartSoftTarget), Acts(kPartAttackScope),
+                  Acts(kPartLock), Acts(kPartSwitch), Acts(kPartLockCamera));
 }
 
 }  // namespace lss::player_two::battle_input

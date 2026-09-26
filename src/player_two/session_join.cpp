@@ -9,6 +9,7 @@
 #include "player_two/generation.h"
 #include "player_two/battle_camera.h"
 #include "player_two/camera_override.h"
+#include "player_two/lock_on.h"
 #include "player_two/battle_input.h"
 #include "player_two/member_movement.h"
 #include "player_two/move_state.h"
@@ -111,6 +112,7 @@ void Session::InstallStages(const platform::GameImage& image) noexcept
     installed_.memberMovement = installed_.member && installed_.padSticks && installed_.moveCensus &&
                                 member_movement::Install(image);
     battle_input::Install(image);  // player 2's battle actions, inside the member tick (logged)
+    lock_on::Install(image);       // player 2's own lock, switching and lock camera (logged)
     LogStage(L"own controller", installed_.ownController);
     LogStage(L"primary-controller scope", installed_.primary);
     LogStage(L"own party member", installed_.member);

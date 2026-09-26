@@ -2,6 +2,7 @@
 
 #include "platform/image.h"
 #include "player_two/battle_camera.h"
+#include "player_two/lock_on.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
@@ -180,6 +181,7 @@ bool ActsFor(void* cameraManager) noexcept
 void RunAsPrimary(void* cameraManager, float deltaTime)
 {
     const primary_controller::Scope scope;
+    const lock_on::TargetScope      targets;  // in battle, the LockOn module reads player 2's displayed target
     if (scope.Held())
     {
         g_updateCounters.Act();
