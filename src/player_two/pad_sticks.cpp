@@ -31,7 +31,7 @@ const std::byte* const*   g_inputOwner         = nullptr;  // the global that ho
 const std::uint8_t*       g_directInputOnly    = nullptr;  // nonzero: the game merges only DirectInput
 
 std::atomic<bool>     g_enabled{false};
-std::atomic<unsigned> g_mask{kPartPlayerTwoInput | kPartPlayerOneMove | kPartMemberTick};
+std::atomic<unsigned> g_mask{kPartPlayerTwoInput | kPartPlayerOneMove | kPartMemberTick | kPartPlayerOneDetect};
 bool                  g_scopeOpen = false;  // game thread only
 
 // Per controller id, set by control scripts; game thread only.
@@ -137,8 +137,9 @@ void SetMask(unsigned mask) noexcept
 {
     g_mask.store(mask, std::memory_order_relaxed);
     platform::Log(L"per-pad sticks: mask {} (player 2's input as primary {}, player 1's move state on pad 1 {}, "
-                  L"player 2's member ticked {})",
-                  mask, PartActs(kPartPlayerTwoInput), PartActs(kPartPlayerOneMove), PartActs(kPartMemberTick));
+                  L"player 2's member ticked {}, player 1's detection on pad 1 {})",
+                  mask, PartActs(kPartPlayerTwoInput), PartActs(kPartPlayerOneMove), PartActs(kPartMemberTick),
+                  PartActs(kPartPlayerOneDetect));
 }
 
 bool PartActs(unsigned part) noexcept

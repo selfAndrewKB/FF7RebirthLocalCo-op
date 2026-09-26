@@ -1,9 +1,12 @@
 #include "hud/overlay_layout.h"
 
+#include "hud/centered_frame_code.h"
 #include "hud/hud_addresses.h"
 #include "hud/overlay_band.h"
 #include "hud/second_image.h"
 #include "platform/call_redirect.h"
+#include "platform/code_redirect.h"
+#include "platform/module_pin.h"
 #include "platform/image.h"
 #include "platform/log.h"
 
@@ -32,6 +35,12 @@ bool                   g_installed        = false;
 
 std::atomic<bool> g_splitActive{false};
 std::atomic<bool> g_bandEnabled{true};  // `hud-band off` turns it off for diagnosis
+
+// The centred 1920x1080 frame is the whole layout while this render's band applies (hud/
+// centered_frame_code.h). Set by the rect call, whose rect the overlay stores as its UI size in the
+// same render, so it always describes the UI size the frame reads. Read by that code.
+platform::CodeRedirect   g_frameCode;
+alignas(8) std::uint8_t  g_wholeLayoutFrame = 0;
 
 /// What the rect call decided for this frame's render, for the entry call a few instructions later
 /// in the same function. Both run on the game thread; the entry call acts only on the thread that
@@ -79,6 +88,18 @@ void WriteFloat(std::uintptr_t address, float value) noexcept
     std::memcpy(reinterpret_cast<void*>(address), &value, sizeof(value));
 }
 
+/// Optional: the centred 1920x1080 frame as the whole layout in a band (hud/centered_frame_code.h).
+void InstallCenteredFrame(const platform::GameImage& image) noexcept
+{
+    const auto site   = image.Rebase(kCenteredFrameSite, sizeof(kCenteredFrameStoreBytes));
+    const auto resume = image.Rebase(kCenteredFrameResume);
+    const auto code   = CenteredFrameCode(g_wholeLayoutFrame);
+    const bool held   = image.BytesMatch(kCenteredFrame, kCenteredFrameBytes) && site && resume &&
+                      platform::PinThisModule() && g_frameCode.Install(*site, kCenteredFrameStoreBytes, code, *resume);
+    platform::Log(L"HUD layout: the centred 1920x1080 frame {}", held ? L"is the whole layout in a band"
+                                                                     : L"keeps the game's 16:9 box (its code differs)");
+}
+
 void LogOnChange(const IntRect& image, float viewW, float viewH, const IntRect& band, float host, bool enabled,
                  bool applied) noexcept
 {
@@ -104,8 +125,9 @@ void LogOnChange(const IntRect& image, float viewW, float viewH, const IntRect& 
 /// Replaces the overlay's call to EndUI__GetCompositeLayerRect (same signature).
 IntRect* OverlayLayoutRect(IntRect* out)
 {
-    IntRect* result  = reinterpret_cast<GetCompositeLayerRectFn>(g_rectCall.Original())(out);
-    g_pending.active = false;
+    IntRect* result    = reinterpret_cast<GetCompositeLayerRectFn>(g_rectCall.Original())(out);
+    g_pending.active   = false;
+    g_wholeLayoutFrame = 0;
     if (!g_splitActive.load(std::memory_order_relaxed) || out == nullptr || out->minX != 0 || out->minY != 0)
     {
         return result;  // one player (or an unexpected rect): exactly the engine's result
@@ -127,8 +149,9 @@ IntRect* OverlayLayoutRect(IntRect* out)
     LogOnChange(image, viewW, viewH, band, host, enabled, applied);
     if (applied)
     {
-        *out      = band;
-        g_pending = {true, GetCurrentThreadId(), overlay, place, host, BandClipMap(band, image.Width(), image.Height())};
+        *out               = band;
+        g_pending          = {true, GetCurrentThreadId(), overlay, place, host, BandClipMap(band, image.Width(), image.Height())};
+        g_wholeLayoutFrame = 1;
     }
     return result;
 }
@@ -267,6 +290,7 @@ bool InstallOverlayLayout(const platform::GameImage& image) noexcept
     }
     g_installed = true;
     platform::Log(L"HUD layout: installed (hud-band {})", BandEnabled() ? L"on" : L"off");
+    InstallCenteredFrame(image);
     return true;
 }
 
@@ -282,9 +306,14 @@ void RemoveOverlayLayout() noexcept
     g_pending.active = false;
     g_submit.active  = false;
 
+    g_wholeLayoutFrame = 0;
     const bool rect   = g_rectCall.Restore();
     const bool entry  = g_entryCall.Restore();
     const bool submit = g_submitCall.Restore();
+    if (g_frameCode.IsInstalled() && !g_frameCode.Restore())
+    {
+        platform::Log(L"HUD layout: the centred frame's store was changed after us; left in place (it acts only in a band)");
+    }
     if (!rect || !entry || !submit)
     {
         platform::Log(L"HUD layout: could not restore {} (changed after us); left in place, passing the engine's values "

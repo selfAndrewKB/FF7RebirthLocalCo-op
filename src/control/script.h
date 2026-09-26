@@ -21,9 +21,10 @@
 //   hud-levers-mask <0..255>             diagnosis: which levers act (1 contexts, 2 first player,
 //                                         4 primary controller, 8 view rect, 16 updates, 32 compass,
 //                                         64 the arrows' own timers, 128 the enemy bars per view)
-//   sticks-mask <0..7>                   diagnosis: which parts of per-pad sticks act (1 player 2's
+//   sticks-mask <0..15>                  diagnosis: which parts of per-pad sticks act (1 player 2's
 //                                         input as the primary player's, 2 player 1's move state on
-//                                         pad 1, 4 player 2's member ticked); all at start
+//                                         pad 1, 4 player 2's member ticked, 8 player 1's input update
+//                                         and leader-action tick on pad 1); all at start
 //   leak-fixes <0..7>                    diagnosis: which put-backs of player 2's scope leaks act (1 the
 //                                         input clock, 2 the leader transform, 4 field summons skipped;
 //                                         player_two/scope_leaks.h); all at start

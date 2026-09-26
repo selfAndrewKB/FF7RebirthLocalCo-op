@@ -37,8 +37,14 @@ struct Gate
 // Set once at install.
 platform::VTableEntry g_tickSlot;
 platform::VTableEntry g_tickInputSlot;
+platform::VTableEntry g_updateInputSlot;
+platform::VTableEntry g_playerUpdateInputSlot;
+platform::VTableEntry g_leaderActionTickSlot;
 TickFn                g_engineTick      = nullptr;
 TickFn                g_engineTickInput = nullptr;
+TickFn                g_engineUpdateInput       = nullptr;  // slot 16, same shape as slot 11
+TickFn                g_enginePlayerUpdateInput = nullptr;
+TickFn                g_engineLeaderActionTick  = nullptr;  // (component, dt)
 Gate                  g_gate;
 bool                  g_gateFound = false;
 
@@ -162,6 +168,45 @@ std::uintptr_t RunForOwner(TickFn engine, void* state, float deltaTime, bool via
     return engine(state, deltaTime);
 }
 
+/// Runs ngine with player 1's pad as the only stick when owner is player 1's controller and
+/// per-pad sticks act on player 1's detection. Everything after slot 11 in player 1's tick reads the
+/// stick too: the input update's terrain detection turns its probes toward it, and the leader-action
+/// tick keeps its history (RE-p2-terrain-action-conflict.md §7). Unscoped, they read the merged stick,
+/// which is pad 2's whenever only player 2 moves. A scope already open (player 2's member, or slot 11
+/// inside slot 16) passes through.
+std::uintptr_t RunOnPlayerOnesPad(TickFn engine, void* object, float deltaTime, const void* owner) noexcept
+{
+    if (!generation::OnGameThread() || !pad_sticks::Enabled() || !pad_sticks::PartActs(pad_sticks::kPartPlayerOneDetect) ||
+        !generation::Active() || owner == nullptr || owner != generation::PlayerOneController())
+    {
+        return engine(object, deltaTime);
+    }
+    const pad_sticks::StickScope sticks(pad_sticks::ControllerIdOf(owner));
+    return engine(object, deltaTime);
+}
+
+std::uintptr_t UpdateInputFor(TickFn engine, void* state, float deltaTime) noexcept
+{
+    const void* character = generation::OnGameThread() ? ReadPointer(state, facts::kMoveStateCharacter) : nullptr;
+    return RunOnPlayerOnesPad(engine, state, deltaTime, ReadPointer(character, facts::kCharacterEffectiveController));
+}
+
+std::uintptr_t UpdateInput(void* state, float deltaTime)
+{
+    return UpdateInputFor(g_engineUpdateInput, state, deltaTime);
+}
+
+std::uintptr_t PlayerUpdateInput(void* state, float deltaTime)
+{
+    return UpdateInputFor(g_enginePlayerUpdateInput, state, deltaTime);
+}
+
+std::uintptr_t LeaderActionTick(void* component, float deltaTime)
+{
+    const void* owner = generation::OnGameThread() ? ReadPointer(component, facts::kLeaderActionOwner) : nullptr;
+    return RunOnPlayerOnesPad(g_engineLeaderActionTick, component, deltaTime, owner);
+}
+
 std::uintptr_t Tick(void* state, float deltaTime)
 {
     return RunForOwner(g_engineTick, state, deltaTime, false);
@@ -178,6 +223,33 @@ bool Find(const platform::GameImage& image, const platform::FunctionFact& fact, 
     const auto live = platform::FindFunction(image, fact);
     out             = live ? reinterpret_cast<Fn>(*live) : nullptr;
     return live.has_value();
+}
+
+/// Slot 16 of both move-state vtables and the leader-action tick (each independently; logged).
+void InstallDetectionScopes(const platform::GameImage& image) noexcept
+{
+    struct Wrap
+    {
+        const platform::SlotFact& fact;
+        TickFn&                   engine;
+        std::uintptr_t            replacement;
+        platform::VTableEntry&    slot;
+    };
+    const Wrap wraps[] = {
+        {facts::kMoveStateUpdateInput, g_engineUpdateInput, reinterpret_cast<std::uintptr_t>(&UpdateInput), g_updateInputSlot},
+        {facts::kPlayerMoveStateUpdateInput, g_enginePlayerUpdateInput, reinterpret_cast<std::uintptr_t>(&PlayerUpdateInput),
+         g_playerUpdateInputSlot},
+        {facts::kLeaderActionTick, g_engineLeaderActionTick, reinterpret_cast<std::uintptr_t>(&LeaderActionTick),
+         g_leaderActionTickSlot},
+    };
+    int installed = 0;
+    for (const Wrap& wrap : wraps)
+    {
+        const auto live = platform::FindFunction(image, wrap.fact.target);
+        wrap.engine     = live ? reinterpret_cast<TickFn>(*live) : nullptr;
+        installed += live && platform::ReplaceSlot(image, wrap.fact, wrap.replacement, wrap.slot) ? 1 : 0;
+    }
+    platform::Log(L"per-pad sticks: player 1's input update and leader-action tick on pad 1: {} of 3 slots", installed);
 }
 
 const wchar_t* RoleOf(const void* character) noexcept
@@ -209,12 +281,13 @@ bool Install(const platform::GameImage& image) noexcept
     const bool second = tickInput && platform::ReplaceSlot(image, facts::kMoveStateTickInput,
                                                            reinterpret_cast<std::uintptr_t>(&TickInput),
                                                            g_tickInputSlot);
+    InstallDetectionScopes(image);
     return first || second;
 }
 
 void Remove() noexcept
 {
-    for (auto* slot : {&g_tickSlot, &g_tickInputSlot})
+    for (auto* slot : {&g_tickSlot, &g_tickInputSlot, &g_updateInputSlot, &g_playerUpdateInputSlot, &g_leaderActionTickSlot})
     {
         if (!slot->Restore())
         {

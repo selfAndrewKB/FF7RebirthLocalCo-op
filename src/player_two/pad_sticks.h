@@ -46,11 +46,12 @@ bool Toggle() noexcept;
 bool Enabled() noexcept;
 
 /// Diagnosis: which parts of per-pad sticks act, while they are on (bits: 1 player 2's input runs
-/// as the primary player's, 2 player 1's move state reads pad 1, 4 player 2's member is ticked).
-/// All at start. Logged.
-inline constexpr unsigned kPartPlayerTwoInput = 1;
-inline constexpr unsigned kPartPlayerOneMove  = 2;
-inline constexpr unsigned kPartMemberTick     = 4;
+/// as the primary player's, 2 player 1's move state reads pad 1, 4 player 2's member is ticked, 8
+/// player 1's input update (terrain detection) and leader-action tick read pad 1). All at start. Logged.
+inline constexpr unsigned kPartPlayerTwoInput  = 1;
+inline constexpr unsigned kPartPlayerOneMove   = 2;
+inline constexpr unsigned kPartMemberTick      = 4;
+inline constexpr unsigned kPartPlayerOneDetect = 8;
 void SetMask(unsigned mask) noexcept;
 bool PartActs(unsigned part) noexcept;
 

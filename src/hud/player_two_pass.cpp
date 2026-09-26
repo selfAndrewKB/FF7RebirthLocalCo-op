@@ -132,14 +132,15 @@ void Refuse(const wchar_t* why)
 /// The updates for the view whose levers are set; player 2's run gives the arrows their own timers.
 bool RunUpdates(bool playerTwo) noexcept
 {
-    const hud_updates::OwnArrowTimers arrows{g_timeStep, g_savedTimeStep};
-    const bool ran = hud_updates::Run(Acts(kLeverUpdates), Acts(kLeverCompass),
-                                      playerTwo && Acts(kLeverArrows) && g_timeStep != nullptr ? &arrows : nullptr);
+    // The bars first: the enemy attack names in the +0x180 list read each bar's placed point
+    // (RE-p2-battle-popups.md §1), so they must see this view's.
     if (Acts(kLeverBars))
     {
         enemy_bars::Replay();
     }
-    return ran;
+    const hud_updates::OwnArrowTimers arrows{g_timeStep, g_savedTimeStep};
+    return hud_updates::Run(Acts(kLeverUpdates), Acts(kLeverCompass),
+                            playerTwo && Acts(kLeverArrows) && g_timeStep != nullptr ? &arrows : nullptr);
 }
 
 void LogTiming()

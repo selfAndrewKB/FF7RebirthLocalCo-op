@@ -261,6 +261,16 @@ target_include_directories(EnemyBarsCodeTests PRIVATE "${CMAKE_CURRENT_SOURCE_DI
 target_compile_features(EnemyBarsCodeTests PRIVATE cxx_std_20)
 add_test(NAME enemy_bars_code COMMAND EnemyBarsCodeTests)
 
+add_executable(CenteredFrameCodeTests
+    tests/centered_frame_code_test.cpp
+    src/platform/code_redirect.cpp
+    src/platform/near_code.cpp
+)
+target_include_directories(CenteredFrameCodeTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(CenteredFrameCodeTests PRIVATE cxx_std_20)
+add_test(NAME centered_frame_code COMMAND CenteredFrameCodeTests)
+
+
 add_executable(ButtonViewTests
     tests/button_view_test.cpp
 )
