@@ -1,0 +1,261 @@
+#include "player_two/battle_camera.h"
+
+#include "platform/guarded.h"
+#include "platform/image.h"
+#include "platform/log.h"
+#include "platform/verified_code.h"
+#include "platform/vtable_entry.h"
+#include "player_two/engine_facts.h"
+#include "player_two/generation.h"
+#include "player_two/object_fields.h"
+#include "player_two/primary_controller.h"
+
+#include <cstdint>
+#include <format>
+#include <optional>
+#include <string>
+
+namespace lss::player_two::battle_camera {
+
+namespace {
+
+// Facts read from the database (RE-p2-battle-camera.md; this build).
+constexpr std::uintptr_t kBattleOperatorVTable = 0x1466B4928;
+constexpr std::uint32_t  kBattleOperator       = 0x2CA8;  // operator 11
+constexpr std::uint32_t  kOperatorState        = 0xD0;    // u8 (the Field operator's active byte is at the same place)
+constexpr std::uint32_t  kOperatorActive       = 0xD1;    // u8: the update picks the lowest-numbered active operator
+constexpr std::uint32_t  kOperatorBytes        = 0x2CD0;  // current / previous operator bytes (+0x2CD0..+0x2CD3)
+
+constexpr std::uint8_t kActivateBytes[]   = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x57, 0xB8, 0x40, 0x00, 0x00, 0x00, 0xE8,
+                                             0x7C, 0xAD, 0xEA, 0x00, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x01, 0x41, 0x8A};
+constexpr std::uint8_t kDeactivateBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8,
+                                             0xA8, 0x5F, 0x00, 0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xF9, 0x41, 0x8A};
+constexpr platform::SlotFact kActivate{L"the Battle operator's Activate slot (+0x10)", 0x1466B4938,
+                                       {L"FEndBattleCameraOperator::Activate", 0x1412041A4, kActivateBytes}};
+constexpr platform::SlotFact kDeactivate{L"the Battle operator's Deactivate slot (+0x20)", 0x1466B4948,
+                                         {L"FEndBattleCameraOperator::Deactivate", 0x1410A8F78, kDeactivateBytes}};
+
+// The operator's camera modules (EEndCameraModuleLayer): 25 pointers at +0x6E0, each module's active
+// bytes at +0x44/+0x45. Logged: battle offset, length, lock-on, look-at, skill, command, leader
+// change, scan.
+constexpr std::uint32_t kModules      = 0x6E0;
+constexpr std::uint32_t kModuleActive = 0x44;
+constexpr std::uint32_t kLoggedModules[] = {5, 6, 7, 16, 20, 21, 22, 23};
+
+constexpr int kMaxLines = 600;
+
+using StateFn = void (*)(void* battleOperator, float blendTime, bool flag);
+
+// Set once at install.
+platform::VTableEntry g_activateSlot;
+platform::VTableEntry g_deactivateSlot;
+StateFn               g_engineActivate      = nullptr;
+StateFn               g_engineDeactivate    = nullptr;
+std::uintptr_t        g_battleVTable        = 0;
+std::uintptr_t        g_cameraManagerVTable = 0;
+
+// Game thread.
+std::wstring g_logged;
+int          g_lines = 0;
+
+struct Pair
+{
+    void* one;
+    void* two;
+};
+
+void* CameraManagerOf(void* controller) noexcept
+{
+    void* cameraManager = ReadPointer(controller, facts::kControllerCameraManager);
+    if (VTableOf(cameraManager) != g_cameraManagerVTable ||
+        ReadPointer(cameraManager, facts::kCameraManagerPcOwner) != controller)
+    {
+        return nullptr;
+    }
+    return cameraManager;
+}
+
+void* BattleOperatorOf(void* cameraManager) noexcept
+{
+    void* battle = ReadPointer(cameraManager, kBattleOperator);
+    return VTableOf(battle) == g_battleVTable ? battle : nullptr;
+}
+
+/// Both Battle operators, while player 2 holds a party member.
+std::optional<Pair> CurrentPair() noexcept
+{
+    if (!generation::OnGameThread() || !generation::Active() || generation::Member() == nullptr)
+    {
+        return std::nullopt;
+    }
+    void* one = BattleOperatorOf(CameraManagerOf(generation::PlayerOneController()));
+    void* two = BattleOperatorOf(CameraManagerOf(generation::PlayerTwoController()));
+    if (one == nullptr || two == nullptr || one == two)
+    {
+        return std::nullopt;
+    }
+    return Pair{one, two};
+}
+
+std::uint8_t Active(const void* battle) noexcept
+{
+    return battle == nullptr ? 0 : ReadField<std::uint8_t>(battle, kOperatorActive);
+}
+
+/// The engine's call on player 2's operator, with player 2 as the primary controller.
+void OnPlayerTwo(StateFn engine, void* battle, float blendTime, bool flag)
+{
+    const primary_controller::Scope scope;
+    engine(battle, blendTime, flag);
+    if (g_lines < kMaxLines)
+    {
+        ++g_lines;
+        platform::Log(L"battle camera: player 2's Battle operator {} (primary scope {}); active now {}",
+                      engine == g_engineActivate ? L"activated" : L"deactivated", scope.Held() ? L"held" : L"REFUSED",
+                      Active(battle));
+    }
+}
+
+// The two replacements: the engine's call first, then the same on player 2's Battle operator when
+// `battle` is player 1's.
+
+void Activate(void* battle, float blendTime, bool flag)
+{
+    g_engineActivate(battle, blendTime, flag);
+    const auto pair = CurrentPair();
+    if (pair && battle == pair->one)
+    {
+        OnPlayerTwo(g_engineActivate, pair->two, blendTime, flag);
+    }
+}
+
+void Deactivate(void* battle, float blendTime, bool flag)
+{
+    g_engineDeactivate(battle, blendTime, flag);
+    const auto pair = CurrentPair();
+    if (pair && battle == pair->one)
+    {
+        OnPlayerTwo(g_engineDeactivate, pair->two, blendTime, flag);
+    }
+}
+
+/// The Battle operator's modules that decide framing, each as its two active bytes (+0x44/+0x45).
+std::wstring DescribeModules(void* battle)
+{
+    std::wstring text;
+    for (const std::uint32_t layer : kLoggedModules)
+    {
+        void* module = battle != nullptr ? ReadPointer(battle, kModules + layer * std::uint32_t{sizeof(void*)}) : nullptr;
+        text += module == nullptr ? std::format(L" {}:-", layer)
+                                  : std::format(L" {}:{}{}", layer, ReadField<std::uint8_t>(module, kModuleActive),
+                                                ReadField<std::uint8_t>(module, kModuleActive + 1));
+    }
+    return text;
+}
+
+std::wstring Describe(void* cameraManager)
+{
+    if (cameraManager == nullptr)
+    {
+        return L"-";
+    }
+    void* battle = BattleOperatorOf(cameraManager);
+    void* field  = ReadPointer(cameraManager, facts::kCameraManagerFieldOperator);
+    return std::format(L"operators cur {} prev {} ({} {}) battle {}/{} field {}/{} modules{}",
+                       ReadField<std::uint8_t>(cameraManager, kOperatorBytes),
+                       ReadField<std::uint8_t>(cameraManager, kOperatorBytes + 1),
+                       ReadField<std::uint8_t>(cameraManager, kOperatorBytes + 2),
+                       ReadField<std::uint8_t>(cameraManager, kOperatorBytes + 3),
+                       battle != nullptr ? ReadField<std::uint8_t>(battle, kOperatorState) : 0, Active(battle),
+                       field != nullptr ? ReadField<std::uint8_t>(field, kOperatorState) : 0,
+                       field != nullptr ? ReadField<std::uint8_t>(field, kOperatorActive) : 0, DescribeModules(battle));
+}
+
+}  // namespace
+
+bool Install(const platform::GameImage& image) noexcept
+{
+    const auto activate   = platform::FindFunction(image, kActivate.target);
+    const auto deactivate = platform::FindFunction(image, kDeactivate.target);
+    const auto battle     = image.Rebase(kBattleOperatorVTable);
+    const auto camera     = image.Rebase(facts::kCameraManagerVTable);
+    if (!activate || !deactivate || !battle || !camera || !primary_controller::Installed())
+    {
+        platform::Log(L"battle camera: the Battle operator is not what the research read; player 2's camera stays on "
+                      L"the Field operator in battle");
+        return false;
+    }
+    g_engineActivate      = reinterpret_cast<StateFn>(*activate);
+    g_engineDeactivate    = reinterpret_cast<StateFn>(*deactivate);
+    g_battleVTable        = *battle;
+    g_cameraManagerVTable = *camera;
+    const bool installed =
+        platform::ReplaceSlot(image, kActivate, reinterpret_cast<std::uintptr_t>(&Activate), g_activateSlot) &&
+        platform::ReplaceSlot(image, kDeactivate, reinterpret_cast<std::uintptr_t>(&Deactivate), g_deactivateSlot);
+    if (!installed)
+    {
+        g_activateSlot.Restore();  // both or neither: an activation with no deactivation would never end
+        g_deactivateSlot.Restore();
+    }
+    platform::Log(L"battle camera: {}", installed ? L"player 2's Battle operator follows player 1's switches"
+                                                  : L"the slots could not be replaced; not installed");
+    return installed;
+}
+
+void Remove() noexcept
+{
+    for (auto* slot : {&g_deactivateSlot, &g_activateSlot})
+    {
+        if (!slot->Restore())
+        {
+            platform::Log(L"could not restore a Battle-operator slot; the replacement stays in place");
+        }
+    }
+}
+
+bool Seed() noexcept
+{
+    if (g_engineActivate == nullptr)
+    {
+        return false;
+    }
+    const auto pair = CurrentPair();
+    if (!pair)
+    {
+        return false;
+    }
+    if (Active(pair->one) != Active(pair->two))
+    {
+        OnPlayerTwo(Active(pair->one) != 0 ? g_engineActivate : g_engineDeactivate, pair->two, 0.0f, false);
+    }
+    return Active(pair->one) == Active(pair->two);
+}
+
+bool PlayerTwoBattleActive(void* cameraManager) noexcept
+{
+    return g_battleVTable != 0 && Active(BattleOperatorOf(cameraManager)) != 0;
+}
+
+void Watch() noexcept
+{
+    if (g_lines >= kMaxLines || !generation::OnGameThread() || !generation::Active())
+    {
+        return;
+    }
+    try
+    {
+        const std::wstring line = L"P1 " + Describe(CameraManagerOf(generation::PlayerOneController())) + L" | P2 " +
+                                  Describe(CameraManagerOf(generation::PlayerTwoController()));
+        if (line != g_logged)
+        {
+            g_logged = line;
+            ++g_lines;
+            platform::Log(L"battle camera: {}", line);
+        }
+    }
+    catch (...)
+    {
+    }
+}
+
+}  // namespace lss::player_two::battle_camera

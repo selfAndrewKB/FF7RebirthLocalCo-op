@@ -18,10 +18,16 @@
 // The battle phase gates are the controller's own (read only). Player 1's controller is never
 // written: player 2's "guarding" and "hold started" are kept here.
 //
-// Each part is switched by the battle mask (1 dodge, 2 attack and unique, 4 guard). Dodge and attack
-// are on at start (checked live); guard is off until it is. Every frame it also logs, on change,
-// what it reads (the controller's gates and requests, both characters' battle preconditions and
-// move-state bytes, pad 2's actions). Game thread only.
+// Player 2's soft target (RE-p2-targeting.md §5.2, §5.3): the game picks the leader's soft target in
+// one leader-only update and corrects attacks around the leader. With parts 8 and 16 the update runs
+// for player 2's member, and the attack calls run, with the party manager's leader answering player
+// 2's member and the target system's lock byte player 2's, both put back after each call; the target
+// lands in the member's own BattlePlayer component, as the leader's does.
+//
+// Each part is switched by the battle mask (1 dodge, 2 attack and unique, 4 guard, 8 soft target, 16
+// attack leader scope). All are on at start; the mask switches a part off for diagnosis. Every
+// frame it also logs, on change, what it reads (the controller's gates and requests, both
+// characters' battle preconditions and move-state bytes, pad 2's actions). Game thread only.
 
 namespace lss::platform {
 class GameImage;

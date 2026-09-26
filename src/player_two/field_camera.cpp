@@ -1,6 +1,7 @@
 #include "player_two/field_camera.h"
 
 #include "platform/image.h"
+#include "player_two/battle_camera.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
@@ -160,8 +161,9 @@ bool ActsFor(void* cameraManager) noexcept
     {
         return false;
     }
+    // Its Field operator on, or in battle its Battle operator (player_two/battle_camera.h).
     void* field = FieldOperatorOf(cameraManager);
-    if (field == nullptr || ActiveState(field) == 0)
+    if ((field == nullptr || ActiveState(field) == 0) && !battle_camera::PlayerTwoBattleActive(cameraManager))
     {
         return false;
     }

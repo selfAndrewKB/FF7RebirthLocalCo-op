@@ -6,6 +6,7 @@
 #include "platform/log.h"
 #include "player_two/describe.h"
 #include "player_two/engine_facts.h"
+#include "player_two/battle_camera.h"
 #include "player_two/field_camera.h"
 #include "player_two/generation.h"
 #include "player_two/leftover_actors.h"
@@ -198,6 +199,8 @@ void Session::AwaitTake() noexcept
             Log(L"player 2's Field camera brought to player 1's settings: {}",
                 field_camera::Seed() ? L"matches" : L"DOES NOT MATCH");
         }
+        Log(L"player 2's Battle camera brought to player 1's state: {}",
+            battle_camera::Seed() ? L"matches" : L"does not match (or not installed)");
         phase_ = Phase::Playing;
         return;
     }

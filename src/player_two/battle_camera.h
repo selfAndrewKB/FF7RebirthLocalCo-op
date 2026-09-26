@@ -1,0 +1,41 @@
+#pragma once
+
+// Player 2's battle camera (RE-p2-battle-camera.md).
+//
+// Each End camera manager owns 13 camera operators (EEndCameraOperatorType); each frame its update
+// renders the lowest-numbered active one, so the Battle operator (11, +0x2CA8) takes over from the
+// Field operator (12) while it is on. The battle state machine switches the Battle operator on at
+// battle start and off at battle end, but through "the primary camera manager": player 1's only. So
+// player 2's camera stayed on the Field operator in battle.
+//
+// As player_two/field_camera does for the Field operator, the Battle operator's Activate and
+// Deactivate (vtable +0x10 / +0x20) are replaced: after the engine's call on player 1's operator, the
+// same call runs on player 2's Battle operator, with player 2 as the primary controller (Activate
+// reads the primary camera manager's pose). The Battle operator then switches on its own modules
+// (the battle offset and length) for player 2's character, which player 2's camera already follows.
+// Seed brings player 2's operator to player 1's state when player 2 takes a member mid-battle.
+// Watch logs both camera managers' current operator and both Battle operators' state on change.
+// Game thread only.
+
+namespace lss::platform {
+class GameImage;
+}
+
+namespace lss::player_two::battle_camera {
+
+/// Replaces both Battle-operator slots, or neither. False (logged) if a check fails.
+bool Install(const platform::GameImage& image) noexcept;
+
+void Remove() noexcept;
+
+/// Player 2's Battle operator to player 1's active state. Game thread, after player 2 took a member.
+bool Seed() noexcept;
+
+/// Whether player 2's camera manager's Battle operator is on (player 2's camera update may then run
+/// as the primary player's, as it does with the Field operator on).
+bool PlayerTwoBattleActive(void* cameraManager) noexcept;
+
+/// Logs, on change, both camera managers' operators (game thread, once per frame).
+void Watch() noexcept;
+
+}  // namespace lss::player_two::battle_camera

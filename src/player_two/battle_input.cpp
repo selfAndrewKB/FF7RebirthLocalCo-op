@@ -4,11 +4,13 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "player_two/battle_camera.h"
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
 
 #include <array>
+#include <optional>
 #include <cstdint>
 #include <format>
 #include <string>
@@ -39,6 +41,9 @@ constexpr std::uint8_t kDodgeBytes[]         = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x
                                                 0x2B, 0xE0, 0x48, 0x8B, 0xD9, 0x48, 0x8B, 0x49, 0x08, 0x48, 0x8B, 0x89, 0x38,
                                                 0x06, 0x00, 0x00};
 constexpr std::uint8_t kActionQueryBytes[]   = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x40, 0x00, 0x00, 0x00, 0xE8};
+constexpr std::uint8_t kSoftTargetBytes[]    = {0x48, 0x89, 0x5C, 0x24, 0x20, 0x48, 0x89, 0x4C, 0x24, 0x08, 0x55, 0x56,
+                                                0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8D, 0x6C,
+                                                0x24, 0xE0, 0xB8, 0x20, 0x01, 0x00, 0x00, 0xE8};
 
 constexpr platform::FunctionFact kAttackBegin{L"MoveState_BattleAttackBegin", 0x140F30BD8, kAttackBeginBytes};
 constexpr platform::FunctionFact kAttackHold{L"MoveState_BattleAttackHold", 0x1409616C0, kAttackHoldBytes};
@@ -48,6 +53,19 @@ constexpr platform::FunctionFact kGuardEnd{L"CharHolder1758_BattleGuardEnd", 0x1
 constexpr platform::FunctionFact kDodge{L"MoveState_BattleDodge_QueuePending9", 0x1417B0594, kDodgeBytes};
 constexpr platform::FunctionFact kIsPressed{L"SquareInput_IsActionPressed_Global", 0x14080619C, kActionQueryBytes};
 constexpr platform::FunctionFact kIsHeld{L"SquareInput_IsActionHeld_Global", 0x1408063DC, kActionQueryBytes};
+constexpr platform::FunctionFact kSoftTarget{L"BattleTarget_UpdateLeaderSoftTarget", 0x140C8F104, kSoftTargetBytes};
+
+// The battle target system (RE-p2-targeting.md §1, §2; a pointer global): the lock byte, the switch
+// latch, the skip byte, the displayed target. The soft target itself lives in each character's
+// BattlePlayer component (+0x258 object, +0x260 its reference controller).
+constexpr std::uintptr_t kBattleSystem   = 0x14939BC58;
+constexpr std::uint32_t  kLockMode       = 0x8C;
+constexpr std::uint32_t  kSwitchLatch    = 0x8D;
+constexpr std::uint32_t  kSkipTargeting  = 0x96;
+constexpr std::uint32_t  kDisplayed      = 0x70;
+constexpr std::uint32_t  kTargetSlot     = 0x258;
+// The party manager's leader, an FWeakObjectPtr {index, serial} read by ResolvePartyLeaderWeakPtr.
+constexpr std::uint32_t  kPartyManagerLeader = 0x148;
 
 // The actions' FKeys (24 bytes each), in the order of Action.
 constexpr std::array<std::uintptr_t, 4> kActionKeys{0x1491E44D8, 0x1491E4520, 0x1491E4598, 0x1491E45E0};
@@ -81,13 +99,15 @@ constexpr std::uint32_t  kHandleMode        = 0x112;  // u8 in the handle's obje
 constexpr std::array<std::uint32_t, 4> kStateBytes{0x49, 0x4A, 0x64, 0x65};
 constexpr std::uint32_t  kPendingAction     = 0x84;   // int32
 
-constexpr int kMaxLines = 300;
+constexpr int kMaxLines = 600;
 
 enum Part : unsigned
 {
-    kPartDodge  = 1,
-    kPartAttack = 2,
-    kPartGuard  = 4,
+    kPartDodge       = 1,
+    kPartAttack      = 2,
+    kPartGuard       = 4,
+    kPartSoftTarget  = 8,   // the game's leader soft-target update run for player 2's member
+    kPartAttackScope = 16,  // the attack calls run with the leader answering player 2's member
 };
 
 using StateActionFn  = void (*)(void* state, std::uint8_t unique);
@@ -95,6 +115,11 @@ using HolderActionFn = void (*)(void* holder);
 using DodgeFn        = void (*)(void* state);
 using QueryFn        = std::uint8_t (*)(const void* key);
 using OwnerFn        = void* (*)(void* aiHolder);
+using SoftTargetFn   = void (*)(void* system);
+using WeakGetFn      = void* (*)(const std::uint64_t* weak);
+using WeakAssignFn   = void (*)(std::uint64_t* weak, void* object);
+using GlobalTestFn   = std::uint8_t (*)();
+using GlobalObjectFn = void* (*)();
 
 // Set once at install.
 bool           g_installed = false;
@@ -109,11 +134,19 @@ QueryFn        g_isHeld        = nullptr;
 std::array<std::uintptr_t, kActions> g_keys{};
 std::uintptr_t g_endUISystem   = 0;
 std::uintptr_t g_battlePlayerVTable = 0;
+SoftTargetFn   g_softTarget    = nullptr;
+WeakGetFn      g_weakGet       = nullptr;
+WeakAssignFn   g_weakAssign    = nullptr;
+GlobalTestFn   g_isInBattle    = nullptr;
+GlobalObjectFn g_resolveLeader = nullptr;
+std::uintptr_t g_battleSystem  = 0;  // the address holding the battle system
+std::uintptr_t g_partyManager  = 0;  // the address holding the party manager
 
 // Game thread.
-unsigned                 g_mask = kPartDodge | kPartAttack;  // checked live; guard not yet
+unsigned                 g_mask = kPartDodge | kPartAttack | kPartGuard | kPartSoftTarget | kPartAttackScope;
 bool                     g_guarding = false;
 std::array<bool, 2>      g_holdStarted{};
+std::uint8_t             g_playerTwoLock = 0;  // player 2's lock mode, swapped into the system's byte
 bool                     g_failed = false;
 std::wstring             g_logged;
 int                      g_lines = 0;
@@ -237,10 +270,109 @@ void Stop(const wchar_t* what)
     platform::Log(L"battle input: {} raised an exception; player 2's battle actions are off this session", what);
 }
 
-/// Player 2's own command layer: the controller's edge logic on pad 2's view (RE-p2-battle-input.md §1.3, §2).
-void Act(void* state, std::uintptr_t holder, bool attackGate, bool guardGate, const std::array<bool, kActions>& pressed,
-         const std::array<bool, kActions>& held)
+/// The object as an FWeakObjectPtr value {index, serial}, built and checked with the game's own
+/// weak pointer functions; 0 if it cannot be (or the serial would be 0).
+std::uint64_t WeakOfGuarded(void* object) noexcept
 {
+    __try
+    {
+        std::uint64_t weak = 0;
+        g_weakAssign(&weak, object);
+        return (weak >> 32) != 0 && g_weakGet(&weak) == object ? weak : 0;
+    }
+    __except (platform::GuardFilter(GetExceptionCode()))
+    {
+        return 0;
+    }
+}
+
+bool SoftTargetGuarded(std::uintptr_t system) noexcept
+{
+    __try
+    {
+        g_softTarget(reinterpret_cast<void*>(system));
+        return true;
+    }
+    __except (platform::GuardFilter(GetExceptionCode()))
+    {
+        return false;
+    }
+}
+
+std::uint8_t InBattleGuarded() noexcept
+{
+    __try
+    {
+        return g_isInBattle();
+    }
+    __except (platform::GuardFilter(GetExceptionCode()))
+    {
+        return 0;
+    }
+}
+
+void* LeaderGuarded() noexcept
+{
+    __try
+    {
+        return g_resolveLeader();
+    }
+    __except (platform::GuardFilter(GetExceptionCode()))
+    {
+        return nullptr;
+    }
+}
+
+std::uintptr_t BattleSystem() noexcept
+{
+    return Field<std::uintptr_t>(g_battleSystem);
+}
+
+/// While it lives, the party manager's leader names player 2's member and the battle system's lock
+/// byte is player 2's, so the game's targeting code picks and corrects for player 2's member
+/// (RE-p2-targeting.md §5.2, §5.3). Both are put back when it ends. Game thread only.
+class LeaderScope
+{
+public:
+    LeaderScope(std::uint64_t memberWeak, std::uintptr_t system) noexcept
+    {
+        const std::uintptr_t manager = Field<std::uintptr_t>(g_partyManager);
+        if (memberWeak == 0 || manager == 0 || system == 0 || !Read(manager + kPartyManagerLeader, savedLeader_) ||
+            !Read(system + kLockMode, savedLock_))
+        {
+            return;
+        }
+        leader_ = manager + kPartyManagerLeader;
+        lock_   = system + kLockMode;
+        held_   = platform::WriteGuarded(reinterpret_cast<void*>(leader_), &memberWeak, sizeof(memberWeak)) &&
+                platform::WriteGuarded(reinterpret_cast<void*>(lock_), &g_playerTwoLock, sizeof(g_playerTwoLock));
+    }
+    ~LeaderScope()
+    {
+        if (leader_ != 0)
+        {
+            platform::WriteGuarded(reinterpret_cast<void*>(lock_), &savedLock_, sizeof(savedLock_));
+            platform::WriteGuarded(reinterpret_cast<void*>(leader_), &savedLeader_, sizeof(savedLeader_));
+        }
+    }
+    LeaderScope(const LeaderScope&)            = delete;
+    LeaderScope& operator=(const LeaderScope&) = delete;
+
+    bool Held() const noexcept { return held_; }
+
+private:
+    std::uintptr_t leader_      = 0;
+    std::uintptr_t lock_        = 0;
+    std::uint64_t  savedLeader_ = 0;
+    std::uint8_t   savedLock_   = 0;
+    bool           held_        = false;
+};
+
+/// Player 2's own command layer: the controller's edge logic on pad 2's view (RE-p2-battle-input.md §1.3, §2).
+void Act(void* state, const Parts& parts, std::uint64_t memberWeak, std::uintptr_t system, bool attackGate, bool guardGate,
+         const std::array<bool, kActions>& pressed, const std::array<bool, kActions>& held)
+{
+    const std::uintptr_t holder = parts.holder;
     if (Acts(kPartGuard) && guardGate)
     {
         g_guarding = held[kGuard];
@@ -251,14 +383,32 @@ void Act(void* state, std::uintptr_t holder, bool attackGate, bool guardGate, co
     }
     if (Acts(kPartAttack) && attackGate)
     {
+        // The game's attack correction picks around the leader: with the scope, around player 2's member.
+        std::optional<LeaderScope> scope;
+        if (Acts(kPartAttackScope))
+        {
+            scope.emplace(memberWeak, system);
+        }
         for (const std::uint8_t unique : {std::uint8_t{0}, std::uint8_t{1}})
         {
             const Action key = unique != 0 ? kUnique : kAttack;
             bool         ok  = true;
             if (pressed[key] && !g_guarding)
             {
+                const auto before     = Field<std::uintptr_t>(parts.owner + kTargetSlot);
                 ok                    = CallGuarded(g_attackBegin, state, unique);
                 g_holdStarted[unique] = true;
+                if (g_lines < kMaxLines)
+                {
+                    ++g_lines;
+                    const bool memberLeads = reinterpret_cast<std::uintptr_t>(LeaderGuarded()) ==
+                                             Field<std::uintptr_t>(parts.holder);
+                    platform::Log(L"battle input: player 2's attack {} began; target {:#x} -> {:#x}; the game's leader during "
+                                  L"the call: {} (leader scope {})",
+                                  unique, before, Field<std::uintptr_t>(parts.owner + kTargetSlot),
+                                  memberLeads ? L"player 2's member" : L"another character",
+                                  scope && scope->Held() ? L"held" : L"off");
+                }
             }
             else if (held[key] && g_holdStarted[unique])
             {
@@ -297,6 +447,13 @@ bool Install(const platform::GameImage& image) noexcept
     g_dodge         = reinterpret_cast<DodgeFn>(find(kDodge));
     g_isPressed     = reinterpret_cast<QueryFn>(find(kIsPressed));
     g_isHeld        = reinterpret_cast<QueryFn>(find(kIsHeld));
+    g_softTarget    = reinterpret_cast<SoftTargetFn>(find(kSoftTarget));
+    g_weakGet       = reinterpret_cast<WeakGetFn>(find(facts::kWeakObjectGet));
+    g_weakAssign    = reinterpret_cast<WeakAssignFn>(find(facts::kWeakObjectAssign));
+    g_isInBattle    = reinterpret_cast<GlobalTestFn>(find(facts::kIsInBattle));
+    g_resolveLeader = reinterpret_cast<GlobalObjectFn>(find(facts::kResolvePartyLeader));
+    const auto battleSystem = image.Rebase(kBattleSystem, sizeof(void*));
+    const auto partyManager = image.Rebase(facts::kPartyManagerGlobal, sizeof(void*));
     bool keys       = true;
     for (std::size_t i = 0; i < kActions; ++i)
     {
@@ -307,7 +464,10 @@ bool Install(const platform::GameImage& image) noexcept
     const auto system = image.Rebase(kEndUISystem, kController + sizeof(void*));
     const auto vtable = image.Rebase(kBattlePlayerVTable, sizeof(void*));
     g_installed = g_attackBegin && g_attackHold && g_attackRelease && g_guardHold && g_guardEnd && g_dodge && g_isPressed &&
-                  g_isHeld && keys && system && vtable;
+                  g_isHeld && g_softTarget && g_weakGet && g_weakAssign && g_isInBattle && g_resolveLeader && battleSystem &&
+                  partyManager && keys && system && vtable;
+    g_battleSystem       = battleSystem ? *battleSystem : 0;
+    g_partyManager       = partyManager ? *partyManager : 0;
     g_endUISystem        = system ? *system : 0;
     g_battlePlayerVTable = vtable ? *vtable : 0;
     platform::Log(L"battle input: {} (acting parts mask {})", g_installed ? L"ready" : L"UNAVAILABLE (a check failed)", g_mask);
@@ -316,6 +476,7 @@ bool Install(const platform::GameImage& image) noexcept
 
 void InScopes(void* member, void* state) noexcept
 {
+    battle_camera::Watch();  // both camera managers' operators, logged on change
     if (!g_installed || g_failed || member == nullptr || state == nullptr)
     {
         return;
@@ -337,11 +498,24 @@ void InScopes(void* member, void* state) noexcept
             pressed[i] = QueryGuarded(g_isPressed, g_keys[i]) != 0;
             held[i]    = QueryGuarded(g_isHeld, g_keys[i]) != 0;
         }
-        const auto  memberAddress = reinterpret_cast<std::uintptr_t>(member);
-        const Parts two           = PartsOf(memberAddress);
-        if (two.ready && g_mask != 0)
+        const auto           memberAddress = reinterpret_cast<std::uintptr_t>(member);
+        const Parts          two           = PartsOf(memberAddress);
+        const std::uintptr_t system        = BattleSystem();
+        const std::uint64_t  memberWeak    = WeakOfGuarded(member);
+        const bool           targeting     = system != 0 && Field<std::uint8_t>(system + kSkipTargeting) == 0 &&
+                                   InBattleGuarded() != 0;
+        if (two.ready && targeting && Acts(kPartSoftTarget))
         {
-            Act(state, two.holder, attackGate, guardGate, pressed, held);
+            // Player 2's soft target, picked by the game's own leader update for player 2's member.
+            const LeaderScope scope(memberWeak, system);
+            if (scope.Held() && !SoftTargetGuarded(system))
+            {
+                Stop(L"the soft-target update");
+            }
+        }
+        if (two.ready && g_mask != 0 && !g_failed)
+        {
+            Act(state, two, memberWeak, system, attackGate, guardGate, pressed, held);
         }
 
         if (g_lines >= kMaxLines)
@@ -369,6 +543,19 @@ void InScopes(void* member, void* state) noexcept
                                         : 0;
         line += L" | " + DescribeCharacter(L"P1", one, oneState, PartsOf(one));
         line += L" | " + DescribeCharacter(L"P2", memberAddress, reinterpret_cast<std::uintptr_t>(state), two);
+        std::uint64_t leaderWeak = 0;
+        if (const auto manager = Field<std::uintptr_t>(g_partyManager); manager != 0)
+        {
+            Read(manager + kPartyManagerLeader, leaderWeak);
+        }
+        const Parts one_ = PartsOf(one);
+        line += std::format(L" | targeting {} lock {} latch {} displayed {:#x} P1 target {:#x} P2 target {:#x} leader {:#x} "
+                            L"member {:#x}",
+                            targeting ? 1 : 0, system != 0 ? Field<std::uint8_t>(system + kLockMode) : 0,
+                            system != 0 ? Field<std::uint8_t>(system + kSwitchLatch) : 0,
+                            system != 0 ? Field<std::uintptr_t>(system + kDisplayed) : 0,
+                            one_.owner != 0 ? Field<std::uintptr_t>(one_.owner + kTargetSlot) : 0,
+                            two.owner != 0 ? Field<std::uintptr_t>(two.owner + kTargetSlot) : 0, leaderWeak, memberWeak);
         line += std::format(L" | pad2 attack {}{} unique {}{} guard {}{} dodge {}{}", pressed[kAttack] ? L"P" : L"",
                             held[kAttack] ? L"H" : L"-", pressed[kUnique] ? L"P" : L"", held[kUnique] ? L"H" : L"-",
                             pressed[kGuard] ? L"P" : L"", held[kGuard] ? L"H" : L"-", pressed[kDodgeAction] ? L"P" : L"",
@@ -391,8 +578,8 @@ void SetMask(unsigned mask) noexcept
     g_guarding    = false;
     g_holdStarted = {};
     g_lines       = 0;
-    platform::Log(L"battle input: mask {} (dodge {}, attack {}, guard {})", mask, Acts(kPartDodge), Acts(kPartAttack),
-                  Acts(kPartGuard));
+    platform::Log(L"battle input: mask {} (dodge {}, attack {}, guard {}, soft target {}, attack leader scope {})", mask,
+                  Acts(kPartDodge), Acts(kPartAttack), Acts(kPartGuard), Acts(kPartSoftTarget), Acts(kPartAttackScope));
 }
 
 }  // namespace lss::player_two::battle_input
