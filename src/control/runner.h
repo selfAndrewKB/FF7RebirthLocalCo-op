@@ -52,6 +52,7 @@ public:
     virtual Outcome SetLeakFixes(std::uint32_t mask)           = 0;
     virtual Outcome SetButtonsMask(std::uint32_t mask)         = 0;
     virtual Outcome SetIconsMask(std::uint32_t mask)           = 0;
+    virtual Outcome SetBattleMask(std::uint32_t mask)          = 0;
     virtual Outcome SetPerfLog(bool on)                        = 0;
     virtual Outcome Dump(const std::wstring& topic)            = 0;
     virtual Outcome HoldSticks(std::int32_t player, const float (&axes)[4]) = 0;

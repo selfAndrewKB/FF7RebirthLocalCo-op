@@ -34,6 +34,8 @@
 //   icons-mask <0..7>                    diagnosis: which parts of player 2's own map icons act (1 its
 //                                         icon manager ticked, 2 its first controller player 2's, 4 each
 //                                         half shows its own canvases; hud/area_icons_two.h); all at start
+//   battle-mask <0..7>                   staging: which of player 2's battle actions act (1 dodge, 2
+//                                         attack and unique, 4 guard; player_two/battle_input.h); 3 at start
 //   perf-log on|off                      each hitch's own line and the periodic timing lines (off at
 //                                         start; the 10 s hitch summary is always written)
 //   hud-trace <frames>                  log the order of the HUD's tick, marker placements, icon
@@ -85,6 +87,7 @@ enum class CommandKind
     LeakFixes,
     ButtonsMask,
     IconsMask,
+    BattleMask,
     PerfLog,
     Dump,
     Stick,

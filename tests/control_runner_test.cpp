@@ -56,6 +56,7 @@ public:
     Outcome SetLeakFixes(std::uint32_t mask) override { return Record(L"leak-fixes " + std::to_wstring(mask)); }
     Outcome SetButtonsMask(std::uint32_t mask) override { return Record(L"buttons-mask " + std::to_wstring(mask)); }
     Outcome SetIconsMask(std::uint32_t mask) override { return Record(L"icons-mask " + std::to_wstring(mask)); }
+    Outcome SetBattleMask(std::uint32_t mask) override { return Record(L"battle-mask " + std::to_wstring(mask)); }
     Outcome SetPerfLog(bool on) override { return Record(on ? L"perf-log on" : L"perf-log off"); }
     Outcome Dump(const std::wstring& topic) override { return Record(L"dump " + topic); }
     Outcome HoldSticks(std::int32_t player, const float (&axes)[4]) override

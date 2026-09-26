@@ -33,6 +33,7 @@ Outcome Run(Target& target, const Command& command)
         case CommandKind::LeakFixes: return target.SetLeakFixes(command.ticks);
         case CommandKind::ButtonsMask: return target.SetButtonsMask(command.ticks);
         case CommandKind::IconsMask: return target.SetIconsMask(command.ticks);
+        case CommandKind::BattleMask: return target.SetBattleMask(command.ticks);
         case CommandKind::PerfLog: return target.SetPerfLog(command.on);
         case CommandKind::Dump: return target.Dump(command.text);
         case CommandKind::Stick: return target.HoldSticks(command.player, command.axes);

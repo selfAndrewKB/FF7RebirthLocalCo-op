@@ -6,6 +6,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
+#include "player_two/battle_input.h"
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/move_state.h"
@@ -132,7 +133,7 @@ void ClearFieldActionRows(void* state) noexcept
 }
 
 /// Ticks the member's state inside every scope, or not at all.
-void TickInScopes(void* playerTwoController, void* state, int type, float deltaTime) noexcept
+void TickInScopes(void* playerTwoController, void* member, void* state, int type, float deltaTime) noexcept
 {
     const pad_sticks::StickScope    sticks(pad_sticks::ControllerIdOf(playerTwoController));
     const primary_controller::Scope primary;
@@ -146,6 +147,7 @@ void TickInScopes(void* playerTwoController, void* state, int type, float deltaT
     const move_state::OwnTick        own;
     const scope_leaks::MemberTickScope leaks(state, playerTwoController, deltaTime);
     g_counters.Act();
+    battle_input::InScopes(member, state);  // player 2's attack, guard and dodge, before the tick runs them
     if (!GuardedTick(state, deltaTime))
     {
         g_stopped = true;
@@ -227,7 +229,7 @@ void Tick(void* playerTwoController, void* member) noexcept
         g_counters.Refuse();
         return;
     }
-    TickInScopes(playerTwoController, state, type, engine.deltaTime);
+    TickInScopes(playerTwoController, member, state, type, engine.deltaTime);
     if (g_stopped)
     {
         platform::Log(L"member movement STOPPED: the engine raised an exception inside the member's move-state tick; "

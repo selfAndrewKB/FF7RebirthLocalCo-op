@@ -11,6 +11,7 @@
 #include "hud/widget_dump.h"
 #include "platform/frame_watch.h"
 #include "platform/log.h"
+#include "player_two/battle_input.h"
 #include "player_two/generation.h"
 #include "player_two/pad_buttons.h"
 #include "player_two/pad_sticks.h"
@@ -217,6 +218,12 @@ Outcome ModTarget::SetIconsMask(std::uint32_t mask)
 {
     hud::area_icons_two::SetMask(mask);
     return {true, L"icons mask set (see the log)"};
+}
+
+Outcome ModTarget::SetBattleMask(std::uint32_t mask)
+{
+    player_two::battle_input::SetMask(mask);
+    return {true, L"battle mask set (see the log)"};
 }
 
 Outcome ModTarget::SetPerfLog(bool on)

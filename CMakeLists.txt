@@ -61,6 +61,7 @@ add_library(LocalSplitScreen SHARED
     src/player_two/leave_sequence.cpp
     src/player_two/leftover_actors.cpp
     src/player_two/member_movement.cpp
+    src/player_two/battle_input.cpp
     src/player_two/own_controller.cpp
     src/player_two/party_lease.cpp
     src/player_two/party_member.cpp

@@ -7,6 +7,7 @@
 #include "player_two/engine_facts.h"
 #include "player_two/field_camera.h"
 #include "player_two/generation.h"
+#include "player_two/battle_input.h"
 #include "player_two/member_movement.h"
 #include "player_two/move_state.h"
 #include "player_two/object_fields.h"
@@ -105,6 +106,7 @@ void Session::InstallStages(const platform::GameImage& image) noexcept
     installed_.padButtons    = pad_buttons::Install(image);
     installed_.memberMovement = installed_.member && installed_.padSticks && installed_.moveCensus &&
                                 member_movement::Install(image);
+    battle_input::Install(image);  // player 2's battle actions, inside the member tick (logged)
     LogStage(L"own controller", installed_.ownController);
     LogStage(L"primary-controller scope", installed_.primary);
     LogStage(L"own party member", installed_.member);
