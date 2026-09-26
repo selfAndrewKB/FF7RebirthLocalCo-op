@@ -13,6 +13,7 @@
 #include "player_two/primary_controller.h"
 #include "players/unreal_access.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <unordered_map>
@@ -184,6 +185,18 @@ bool Scan(UObject* playerOne, UObject* playerTwo)
     g_contexts[0] = {player_two::primary_controller::WeakValueOf(playerOne), world};
     g_contexts[1] = {player_two::primary_controller::WeakValueOf(playerTwo), world};
     return world != 0 && g_contexts[0].localPlayer != 0 && g_contexts[1].localPlayer != 0;
+}
+
+void Adopt(UObject* widget)
+{
+    if (widget == nullptr ||
+        std::any_of(g_roots.begin(), g_roots.end(), [widget](const Root& root) { return root.object == widget; }) ||
+        !IsViewportRoot(widget))
+    {
+        return;
+    }
+    g_roots.push_back({widget, static_cast<std::int32_t>(widget->GetInternalIndex()), widget->GetClassPrivate()});
+    g_swapped.push_back(0);
 }
 
 bool SetContexts(int player) noexcept

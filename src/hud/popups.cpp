@@ -6,6 +6,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/module_pin.h"
+#include "platform/sparse_array.h"
 #include "player_two/generation.h"
 
 #include <cstdint>
@@ -27,7 +28,7 @@ constexpr std::uint32_t  kManager     = 0xA0;   // the popup manager (a pointer)
 constexpr std::uint32_t  kCanvas      = 0x10;   // TSharedPtr<SEndPopupMessageCanvas> {object, controller}
 constexpr std::uint32_t  kSharedCount = 0x8;    // a reference controller's shared count (int32)
 
-// The three lists (TSparseArray: data +0, allocation bits inline +0x10 or heap +0x20, NumBits +0x28).
+// The three lists (TSparseArrays, platform/sparse_array.h).
 struct List
 {
     std::uint32_t member;   // in the manager
@@ -39,11 +40,6 @@ constexpr List kLists[] = {
     {0x70, 0xD8, false},  // SEndBattleText: Dodge, NoEffect...
     {0xC0, 0xD0, true},   // UMG popups: level-up and similar
 };
-constexpr std::uint32_t kListData       = 0x0;
-constexpr std::uint32_t kListInlineBits = 0x10;
-constexpr std::uint32_t kListHeapBits   = 0x20;
-constexpr std::uint32_t kListNumBits    = 0x28;
-constexpr std::int32_t  kMaxBits        = 4096;
 
 // The wrappers: prologues up to the stack probe, checked before their first instruction is replaced.
 constexpr std::uintptr_t kPlaceSlate           = 0x140F5F708;
@@ -135,26 +131,10 @@ bool Alive(std::uintptr_t referenceController) noexcept
 /// Places again every popup of `list` recorded this frame. Returns how many; -1 on an exception.
 int ReplayList(std::uintptr_t manager, const List& list, void* canvas, void* playerTwo) noexcept
 {
-    const std::uintptr_t base = manager + list.member;
-    std::uintptr_t       data = 0, heapBits = 0;
-    std::int32_t         numBits = 0;
-    if (!Read(base + kListData, data) || data == 0 || !Read(base + kListHeapBits, heapBits) ||
-        !Read(base + kListNumBits, numBits) || numBits <= 0 || numBits > kMaxBits)
-    {
-        return 0;
-    }
-    const std::uintptr_t bits   = heapBits != 0 ? heapBits : base + kListInlineBits;
-    int                  placed = 0;
-    for (std::int32_t i = 0; i < numBits; ++i)
-    {
-        std::uint32_t word = 0;
-        if (!Read(bits + sizeof(std::uint32_t) * static_cast<std::uint32_t>(i >> 5), word) || (word & (1u << (i & 31))) == 0)
-        {
-            continue;  // a free slot
-        }
-        const std::uintptr_t element = data + static_cast<std::uintptr_t>(i) * list.element;
-        std::uint64_t        key     = 0;
-        void*                widget  = nullptr;  // the wrapper's r9: the entry's own TSharedPtr, or the UUserWidget
+    int placed = 0;
+    platform::ForEachSparseElement(manager + list.member, list.element, [&](std::uintptr_t element) {
+        std::uint64_t key    = 0;
+        void*         widget = nullptr;  // the wrapper's r9: the entry's own TSharedPtr, or the UUserWidget
         if (list.umg)
         {
             widget = WeakGetGuarded(reinterpret_cast<const void*>(element));
@@ -165,22 +145,24 @@ int ReplayList(std::uintptr_t manager, const List& list, void* canvas, void* pla
             std::uintptr_t controller = 0;
             if (!Read(element, key) || !Read(element + 8, controller) || !Alive(controller))
             {
-                continue;
+                return true;
             }
             widget = reinterpret_cast<void*>(element);
         }
         const PopupPlacement* recorded = key != 0 ? Recorded(key) : nullptr;
         if (recorded == nullptr)
         {
-            continue;  // not placed by the game this frame
+            return true;  // not placed by the game this frame
         }
         void* controller = playerTwo != nullptr ? playerTwo : reinterpret_cast<void*>(recorded->controller);
         if (!PlaceGuarded(list.umg ? g_placeUmg : g_placeSlate, controller, canvas, widget, *recorded))
         {
-            return -1;
+            placed = -1;
+            return false;
         }
         ++placed;
-    }
+        return true;
+    });
     return placed;
 }
 

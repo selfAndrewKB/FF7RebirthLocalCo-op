@@ -2,6 +2,7 @@
 
 #define RC_UNREAL_DISABLE_PROPERTY_DEPRECATION_WARNINGS
 #define RC_UNREAL_DISABLE_CLASS_DEPRECATION_WARNINGS
+#include <Unreal/FWeakObjectPtr.hpp>
 #include <Unreal/UObject.hpp>
 
 #include "hud/enemy_bars.h"
@@ -18,10 +19,12 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/module_pin.h"
+#include "platform/sparse_array.h"
 #include "player_two/primary_controller.h"
 
 #include <array>
 #include <atomic>
+#include <cstring>
 #include <format>
 #include <optional>
 #include <string>
@@ -39,6 +42,13 @@ constexpr std::uint32_t  kGameModeHudTimeStep = 0x5D8;        // float, written 
 // GEngine__GetFirstGamePlayerForGameViewport's first instruction (hud/first_player_code.h).
 constexpr std::uintptr_t kFirstGamePlayer       = 0x140CCF8E4;
 constexpr std::uintptr_t kFirstGamePlayerResume = 0x140CCF8E9;
+
+// The enemy ability-name labels (RE-p2-battle-popups.md §2.1): a TSparseArray at *(EndUISystem+0x180),
+// 72-byte elements, the label's weak widget at +8. A new label is made for each name shown.
+constexpr std::uintptr_t kEndUISystem       = 0x1493496E0;
+constexpr std::uint32_t  kAbilityNames      = 0x180;
+constexpr std::uint32_t  kAbilityNameEntry  = 0x48;
+constexpr std::uint32_t  kAbilityNameWidget = 0x8;
 
 // The overlay's cached player view rect (RE-p2-hud.md P2.5): min x/y and size, floats.
 constexpr std::array<std::uint32_t, 4> kOverlayRectFields{0x318, 0x31C, 0x328, 0x32C};
@@ -78,6 +88,7 @@ platform::CodeRedirect g_firstPlayerCode;
 bool                   g_installed = false;
 std::uintptr_t         g_gameMode  = 0;
 std::uintptr_t         g_overlay   = 0;  // the singleton's address
+std::uintptr_t         g_endUISystem = 0;
 
 // Read by the first-player code through its address.
 alignas(8) std::uint64_t g_firstPlayerAnswer = 0;
@@ -275,6 +286,28 @@ bool HoldPrimary()
     return true;
 }
 
+/// Every enemy ability-name label becomes a root at once: each is a new widget, and the root scan
+/// runs only every kRootScanFrames, so a label would otherwise start with player 1's context.
+void AdoptAbilityNames()
+{
+    std::uintptr_t map = 0;
+    if (g_endUISystem == 0 || !platform::CopyGuarded(&map, reinterpret_cast<const void*>(g_endUISystem + kAbilityNames),
+                                                     sizeof(map)))
+    {
+        return;
+    }
+    platform::ForEachSparseElement(map, kAbilityNameEntry, [](std::uintptr_t entry) {
+        RC::Unreal::FWeakObjectPtr weak;
+        std::uint64_t              value = 0;
+        if (platform::CopyGuarded(&value, reinterpret_cast<const void*>(entry + kAbilityNameWidget), sizeof(value)) && value != 0)
+        {
+            std::memcpy(&weak, &value, sizeof(value));
+            hud_roots::Adopt(weak.Get());
+        }
+        return true;
+    });
+}
+
 /// L1 to player 2; on failure, puts player 1's contexts back and refuses.
 bool ContextsToPlayerTwo()
 {
@@ -312,6 +345,8 @@ bool InstallPlayerTwoPass(const platform::GameImage& image) noexcept
     }
     g_gameMode = *mode;
     g_overlay  = *overlay;
+    const auto system = image.Rebase(kEndUISystem, kAbilityNames + sizeof(void*));
+    g_endUISystem     = system ? *system : 0;
 
     // The first-player code reads g_firstPlayerAnswer, in this DLL: pin it before installing.
     const auto code = FirstPlayerCode(g_firstPlayerAnswer);
@@ -380,6 +415,7 @@ bool EnterPlayerTwo() noexcept
             return false;
         }
         g_firstPlayerAnswer = Acts(kLeverFirstPlayer) ? reinterpret_cast<std::uint64_t>(playerTwo) : 0;  // L2
+        AdoptAbilityNames();
         if (!ContextsToPlayerTwo())                                                                       // L1
         {
             return false;

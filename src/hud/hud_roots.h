@@ -33,6 +33,11 @@ bool LocalPlayers(RC::Unreal::UObject*& one, RC::Unreal::UObject*& two);
 /// Refreshes the root list and both players' contexts. False if a context cannot be built yet.
 bool Scan(RC::Unreal::UObject* playerOne, RC::Unreal::UObject* playerTwo);
 
+/// Adds widget to the root list at once if it is a root not listed yet (a root the game made since
+/// the last scan and that is known now, e.g. an enemy's ability-name label), so this frame's context
+/// swap reaches it. Game thread, before SetContexts(1).
+void Adopt(RC::Unreal::UObject* widget);
+
 /// Gives player 2's context (1) to every live root shown this frame, or player 1's (0) back to
 /// exactly the roots given player 2's. False if the engine raised an exception inside
 /// SetPlayerContext.

@@ -7,6 +7,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/module_pin.h"
+#include "platform/sparse_array.h"
 
 #include <cstdint>
 #include <cstring>
@@ -25,16 +26,12 @@ constexpr std::uintptr_t kEndUISystem = 0x1493496E0;  // g_EndUISystem (data)
 constexpr std::uint32_t  kManager     = 0xF8;         // the enemy-status manager (a pointer)
 constexpr std::uint32_t  kGate        = 0xC8;         // u8: the manager updates its entries only when set
 
-// The entries (§7.1): a TSet's elements at +0x10, allocation bits inline at +0x20 or on the heap at
-// +0x30 when set, NumBits at +0x38; each element 0x180 bytes: +0 source, +8 its reference
-// controller (thread-safe: +0xC weak count), +0x10 = p, whose first field is the weak widget.
-constexpr std::uint32_t kData        = 0x10;
-constexpr std::uint32_t kInlineBits  = 0x20;
-constexpr std::uint32_t kHeapBits    = 0x30;
-constexpr std::uint32_t kNumBits     = 0x38;
+// The entries (§7.1): a TSet whose element TSparseArray is at +0x10 (platform/sparse_array.h); each
+// element 0x180 bytes: +0 source, +8 its reference controller (thread-safe: +0xC weak count), +0x10 = p,
+// whose first field is the weak widget.
+constexpr std::uint32_t kEntries     = 0x10;
 constexpr std::uint32_t kElement     = 0x180;
 constexpr std::uint32_t kEntryP      = 0x10;
-constexpr std::int32_t  kMaxBits     = 4096;
 constexpr std::uint32_t kWeakCount   = 0xC;
 // p: the cached screen point, the y offset, and the flags that make the tick's final step run.
 constexpr std::uint32_t kScreenPoint = 0xB8;
@@ -261,31 +258,16 @@ void Replay() noexcept
     {
         return;
     }
-    std::uintptr_t data = 0, heapBits = 0;
-    std::int32_t   numBits = 0;
-    if (!Read(manager + kData, data) || data == 0 || !Read(manager + kHeapBits, heapBits) ||
-        !Read(manager + kNumBits, numBits) || numBits <= 0 || numBits > kMaxBits)
-    {
-        return;
-    }
-    const std::uintptr_t bits = heapBits != 0 ? heapBits : manager + kInlineBits;
-    int                  replayed = 0, targeted = 0;
-    float                firstBefore[2]{}, firstAfter[2]{};
-    g_record.replaying        = 1;
-    for (std::int32_t i = 0; i < numBits && !g_failed; ++i)
-    {
-        std::uint32_t word = 0;
-        if (!Read(bits + sizeof(std::uint32_t) * static_cast<std::uint32_t>(i >> 5), word) || (word & (1u << (i & 31))) == 0)
-        {
-            continue;  // a free slot
-        }
-        const std::uintptr_t entry  = data + static_cast<std::uintptr_t>(i) * kElement;
+    int   replayed = 0, targeted = 0;
+    float firstBefore[2]{}, firstAfter[2]{};
+    g_record.replaying = 1;
+    platform::ForEachSparseElement(manager + kEntries, kElement, [&](std::uintptr_t entry) {
         const std::uintptr_t p      = entry + kEntryP;
         void*                widget = WeakGetGuarded(reinterpret_cast<const void*>(p));
         const BarPlacement*  placed = widget != nullptr ? Recorded(widget) : nullptr;
         if (placed == nullptr)
         {
-            continue;  // not placed by the game this frame
+            return true;  // not placed by the game this frame
         }
         if (replayed == 0)
         {
@@ -295,13 +277,15 @@ void Replay() noexcept
         {
             g_failed = true;
             platform::Log(L"enemy bars: a placement raised an exception; bars are no longer placed per view");
+            return false;
         }
         if (replayed++ == 0)
         {
             Read(p + kScreenPoint, firstAfter);
         }
         targeted += placed->targeted;
-    }
+        return true;
+    });
     g_record.replaying = 0;
     if (replayed > 0 && g_lines < kMaxLines)
     {

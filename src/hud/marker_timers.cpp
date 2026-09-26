@@ -3,6 +3,7 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/sparse_array.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -13,17 +14,13 @@ namespace lss::hud::marker_timers {
 namespace {
 
 // Facts read from the database (RE-p2-enemy-markers.md §7.5; this build). The list is a TSet like
-// the enemy-status manager's: elements at +0x10, allocation bits inline at +0x20 or on the heap at
-// +0x30 when set, NumBits at +0x38; each element 0x30 bytes: +0 the weak widget, +0x14 T.
+// the enemy-status manager's: its element TSparseArray at +0x10 (platform/sparse_array.h); each
+// element 0x30 bytes: +0 the weak widget, +0x14 T.
 constexpr std::uintptr_t kEndUISystem = 0x1493496E0;
 constexpr std::uint32_t  kMarkerList  = 0x150;
-constexpr std::uint32_t  kData        = 0x10;
-constexpr std::uint32_t  kInlineBits  = 0x20;
-constexpr std::uint32_t  kHeapBits    = 0x30;
-constexpr std::uint32_t  kNumBits     = 0x38;
+constexpr std::uint32_t  kElements    = 0x10;
 constexpr std::uint32_t  kElement     = 0x30;
 constexpr std::uint32_t  kTimer       = 0x14;
-constexpr std::int32_t   kMaxBits     = 4096;
 constexpr int            kMaxLines    = 40;
 
 struct Timer
@@ -49,26 +46,19 @@ bool Read(std::uintptr_t address, T& out) noexcept
 template <class Visit>
 void ForEachElement(Visit&& visit)  // may throw what `visit` throws
 {
-    std::uintptr_t list = 0, data = 0, heapBits = 0;
-    std::int32_t   numBits = 0;
-    if (g_endUISystem == 0 || !Read(g_endUISystem + kMarkerList, list) || list == 0 || !Read(list + kData, data) ||
-        data == 0 || !Read(list + kHeapBits, heapBits) || !Read(list + kNumBits, numBits) || numBits <= 0 ||
-        numBits > kMaxBits)
+    std::uintptr_t list = 0;
+    if (g_endUISystem == 0 || !Read(g_endUISystem + kMarkerList, list) || list == 0)
     {
         return;
     }
-    const std::uintptr_t bits = heapBits != 0 ? heapBits : list + kInlineBits;
-    for (std::int32_t i = 0; i < numBits; ++i)
-    {
-        std::uint32_t word = 0;
-        std::uint64_t key  = 0;
-        const std::uintptr_t element = data + static_cast<std::uintptr_t>(i) * kElement;
-        if (Read(bits + sizeof(std::uint32_t) * static_cast<std::uint32_t>(i >> 5), word) && (word & (1u << (i & 31))) != 0 &&
-            Read(element, key))
+    platform::ForEachSparseElement(list + kElements, kElement, [&visit](std::uintptr_t element) {
+        std::uint64_t key = 0;
+        if (Read(element, key))
         {
             visit(element, key);
         }
-    }
+        return true;
+    });
 }
 
 const Timer* Find(const std::vector<Timer>& timers, std::uint64_t key) noexcept
