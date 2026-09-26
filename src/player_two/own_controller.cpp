@@ -4,6 +4,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
+#include "player_two/camera_override.h"
 #include "player_two/engine_facts.h"
 #include "player_two/object_fields.h"
 
@@ -61,7 +62,7 @@ void BeginPlayWithGeneratedNames(void* cameraManager)  // not noexcept: the exce
     {
         *g_endCameraName = facts::kNameNone;
         *g_compositeName = facts::kNameNone;
-        g_engineBeginPlay(cameraManager);
+        camera_override::BeginPlayWithOwnModule(g_engineBeginPlay, cameraManager);  // its own NotifyOverride module
     }
     __finally
     {

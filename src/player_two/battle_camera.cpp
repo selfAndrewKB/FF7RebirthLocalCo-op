@@ -35,10 +35,11 @@ constexpr platform::SlotFact kActivate{L"the Battle operator's Activate slot (+0
 constexpr platform::SlotFact kDeactivate{L"the Battle operator's Deactivate slot (+0x20)", 0x1466B4948,
                                          {L"FEndBattleCameraOperator::Deactivate", 0x1410A8F78, kDeactivateBytes}};
 
-// The operator's camera modules (EEndCameraModuleLayer): 25 pointers at +0x6E0, each module's active
-// bytes at +0x44/+0x45. Logged: battle offset, length, lock-on, look-at, skill, command, leader
-// change, scan.
+// The operator's camera modules (EEndCameraModuleLayer): +0x6E0 points at 25 TSharedPtr entries (16
+// bytes each), each module's active bytes at +0x44/+0x45. Logged: battle offset, length, lock-on,
+// look-at, skill, command, leader change, scan.
 constexpr std::uint32_t kModules      = 0x6E0;
+constexpr std::uint32_t kModuleEntry  = 16;
 constexpr std::uint32_t kModuleActive = 0x44;
 constexpr std::uint32_t kLoggedModules[] = {5, 6, 7, 16, 20, 21, 22, 23};
 
@@ -142,13 +143,23 @@ void Deactivate(void* battle, float blendTime, bool flag)
 /// The Battle operator's modules that decide framing, each as its two active bytes (+0x44/+0x45).
 std::wstring DescribeModules(void* battle)
 {
+    // Every read guarded: these are the game's heap objects, and a log must never be able to crash it.
+    const auto guarded = [](std::uintptr_t address, auto& out) {
+        return address != 0 && platform::CopyGuarded(&out, reinterpret_cast<const void*>(address), sizeof(out));
+    };
+    std::uintptr_t table = 0;
+    guarded(battle != nullptr ? reinterpret_cast<std::uintptr_t>(battle) + kModules : 0, table);
     std::wstring text;
     for (const std::uint32_t layer : kLoggedModules)
     {
-        void* module = battle != nullptr ? ReadPointer(battle, kModules + layer * std::uint32_t{sizeof(void*)}) : nullptr;
-        text += module == nullptr ? std::format(L" {}:-", layer)
-                                  : std::format(L" {}:{}{}", layer, ReadField<std::uint8_t>(module, kModuleActive),
-                                                ReadField<std::uint8_t>(module, kModuleActive + 1));
+        std::uintptr_t module = 0;
+        std::uint8_t   bytes[2]{};
+        if (!guarded(table != 0 ? table + layer * kModuleEntry : 0, module) || !guarded(module != 0 ? module + kModuleActive : 0, bytes))
+        {
+            text += std::format(L" {}:-", layer);
+            continue;
+        }
+        text += std::format(L" {}:{}{}", layer, bytes[0], bytes[1]);
     }
     return text;
 }

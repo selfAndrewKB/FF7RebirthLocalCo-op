@@ -8,6 +8,7 @@
 #include "player_two/field_camera.h"
 #include "player_two/generation.h"
 #include "player_two/battle_camera.h"
+#include "player_two/camera_override.h"
 #include "player_two/battle_input.h"
 #include "player_two/member_movement.h"
 #include "player_two/move_state.h"
@@ -99,7 +100,8 @@ void Session::InstallStages(const platform::GameImage& image) noexcept
     installed_.member        = installed_.primary && party_member::Install(image);
     installed_.fieldSettings = field_camera::InstallSettings(image);
     installed_.cameraUpdate  = installed_.primary && field_camera::InstallUpdate(image);
-    battle_camera::Install(image);  // player 2's Battle operator follows player 1's (logged)
+    battle_camera::Install(image);    // player 2's Battle operator follows player 1's (logged)
+    camera_override::Install(image);  // player 2's camera gets its own NotifyOverride module (logged)
     installed_.padSticks     = installed_.primary && pad_sticks::Install(image);
     installed_.moveCensus    = move_state::Install(image);
     installed_.tagCounts     = tag_counts::Install(image);

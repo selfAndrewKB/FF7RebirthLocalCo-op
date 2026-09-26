@@ -7,6 +7,7 @@
 #include "player_two/describe.h"
 #include "player_two/engine_facts.h"
 #include "player_two/battle_camera.h"
+#include "player_two/camera_override.h"
 #include "player_two/field_camera.h"
 #include "player_two/generation.h"
 #include "player_two/leftover_actors.h"
@@ -264,6 +265,7 @@ void Session::Leave() noexcept
     {
         return;
     }
+    camera_override::PlayerTwoOut();  // the member's camera delegates back to the engine's, while it is still held
     generation::Withdraw();  // every wrapper passes through from here on
     phase_ = Phase::Leaving;
     ticks_ = 0;
@@ -359,6 +361,7 @@ bool Session::MemberReleased() const noexcept
 
 void Session::Forget() noexcept
 {
+    camera_override::PlayerTwoOut();
     generation::Withdraw();
     primary_controller::Unbind();
     leave_.Finish();
