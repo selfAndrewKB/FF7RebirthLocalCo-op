@@ -9,6 +9,7 @@
 #include "player_two/generation.h"
 #include "player_two/battle_camera.h"
 #include "player_two/camera_override.h"
+#include "player_two/command_rules.h"
 #include "player_two/field_exit.h"
 #include "player_two/lock_on.h"
 #include "player_two/party_switch.h"
@@ -118,6 +119,7 @@ void Session::InstallStages(const platform::GameImage& image) noexcept
     lock_on::Install(image);       // player 2's own lock, switching and lock camera (logged)
     target_cursor::Install(image); // player 2's own target cursor (logged)
     party_switch::Install(image);  // player 1's switch skips player 2's member (logged)
+    command_rules::Install(image); // player 1 cannot command player 2's member (logged)
     LogStage(L"own controller", installed_.ownController);
     LogStage(L"primary-controller scope", installed_.primary);
     LogStage(L"own party member", installed_.member);
@@ -134,6 +136,7 @@ void Session::InstallStages(const platform::GameImage& image) noexcept
 
 void Session::RemoveStages() noexcept
 {
+    command_rules::Remove();
     party_switch::Remove();
     lock_on::Remove();
     member_movement::Remove();

@@ -6,6 +6,7 @@
 #include "platform/verified_code.h"
 #include "player_two/battle_camera.h"
 #include "player_two/camera_override.h"
+#include "player_two/command_rules.h"
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
@@ -483,6 +484,7 @@ bool Install(const platform::GameImage& image) noexcept
 void InScopes(void* member, void* state, float deltaTime) noexcept
 {
     battle_camera::Watch();          // both camera managers' operators, logged on change
+    command_rules::Watch();          // the command controller and the menu's time slow, logged on change
     camera_override::Tick(member);   // the member's animation camera overrides reach player 2's camera
     if (!g_installed || g_failed || member == nullptr || state == nullptr)
     {
