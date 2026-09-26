@@ -69,6 +69,22 @@ constexpr platform::FunctionFact kEntryId{L"EndUISys23_GetCurrentEntryId", 0x140
 constexpr platform::FunctionFact kRelease{L"TRefCtrlTS__ReleaseWeakRef", 0x140887B00, kReleaseBytes};
 constexpr platform::FunctionFact kOptions{L"GetSystemOptionData", 0x14087F15C, kOptionsBytes};
 
+// The target sound the game plays when its displayed target changes (§4.3; as at 0x1415A28EC):
+// Sound_ResolveAssetByKind(30, &FName UI014_Target, &scratch, 0, 0, 0), the asset's kind test, then
+// Sound_PlayAssetDefaultParams(asset, &FName). The scratch block starts with a pointer to a static
+// object (0x145793088) and is otherwise zero.
+constexpr std::uint8_t kResolveSoundBytes[] = {0x40, 0x55, 0x53, 0x56, 0x57, 0x41, 0x54, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8D,
+                                               0xAC, 0x24, 0x80, 0xFC, 0xFF, 0xFF, 0xB8, 0x80, 0x04, 0x00, 0x00, 0xE8, 0x8F,
+                                               0xB3, 0xC7, 0x00};
+constexpr std::uint8_t kSoundTestBytes[]    = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x18, 0x6D, 0xAA, 0x00};
+constexpr std::uint8_t kPlaySoundBytes[]    = {0x40, 0x55, 0x48, 0x8B, 0xEC, 0xB8, 0x70, 0x00, 0x00, 0x00, 0xE8, 0x65, 0x4E, 0x2E, 0x01};
+constexpr platform::FunctionFact kResolveSound{L"Sound_ResolveAssetByKind", 0x141433B84, kResolveSoundBytes};
+constexpr platform::FunctionFact kSoundTest{L"the sound asset test", 0x14160820C, kSoundTestBytes};
+constexpr platform::FunctionFact kPlaySound{L"Sound_PlayAssetDefaultParams", 0x140DCA0BC, kPlaySoundBytes};
+constexpr std::uintptr_t kTargetSoundName = 0x1491A1D70;  // g_FName_UI014_Target
+constexpr std::uintptr_t kSoundScratch    = 0x145793088;
+constexpr std::int32_t   kSoundKind       = 30;
+
 // Player 1's targeting tick (BattleTarget_TickTargeting(sys, dt): soft target, lock toggle and lock
 // camera, displayed target and switch) and its two calls in BattleSystem_Tick (§1.1). It reads the
 // right stick through the merged stick value, which is whichever pad is pushed furthest.
@@ -144,6 +160,16 @@ using OptionsFn     = std::uintptr_t (*)();
 using OwnerTestFn   = std::uint8_t (*)(void* component, void* object, std::uint64_t zero);
 using TargetableFn  = std::uint8_t (*)(void* object, const TargetQuery* query);
 using TickFn        = void (*)(void* system, float deltaTime);
+using ResolveSoundFn = void* (*)(std::int32_t kind, const void* name, void* scratch, void* unused, void* unused2, void* unused3);
+using SoundTestFn    = std::uint8_t (*)(void* asset);
+using PlaySoundFn    = void (*)(void* asset, const void* name);
+
+/// The scratch block the game passes the sound resolver.
+struct alignas(16) SoundScratch
+{
+    std::uintptr_t object = 0;
+    std::uint64_t  zero[3]{};
+};
 
 // Set once at install.
 platform::CallRedirect g_tickTargetingCalls[2];
@@ -169,6 +195,11 @@ std::uintptr_t g_battleSystem = 0;  // the address holding the battle system
 std::uintptr_t g_rightX = 0;
 std::uintptr_t g_rightY = 0;
 std::uintptr_t g_freeTimeKey = 0;
+ResolveSoundFn g_resolveSound = nullptr;
+SoundTestFn    g_soundTest    = nullptr;
+PlaySoundFn    g_playSound    = nullptr;
+std::uintptr_t g_soundName    = 0;
+std::uintptr_t g_soundScratch = 0;
 
 // Game thread. Player 2's copies of the battle system's fields (the displayed target owns one weak
 // reference), read back from it at the end of each TargetScope.
@@ -525,6 +556,26 @@ void Switch(std::uintptr_t system, void* member)
     }
 }
 
+/// The game's target sound (a change of player 2's displayed target, as for player 1's).
+void PlayTargetSound()
+{
+    if (g_resolveSound == nullptr)
+    {
+        return;
+    }
+    SoundScratch scratch{g_soundScratch};
+    void*        asset = nullptr;
+    std::uint8_t kind  = 0;
+    const auto   name  = reinterpret_cast<const void*>(g_soundName);
+    if (!Call(g_resolveSound, asset, kSoundKind, name, static_cast<void*>(&scratch), static_cast<void*>(nullptr),
+              static_cast<void*>(nullptr), static_cast<void*>(nullptr)) ||
+        (asset != nullptr && (!Call(g_soundTest, kind, asset) || (kind != 0 && !Call(g_playSound, asset, name)))))
+    {
+        g_resolveSound = nullptr;  // the sound only: the lock-on goes on
+        Note(L"the target sound raised an exception; player 2's target changes are silent this session");
+    }
+}
+
 /// Player 2's displayed target follows the member's own target (the game's choice for the leader,
 /// without player 1's cursor and target panel).
 void Follow(std::uintptr_t system, void* component)
@@ -553,7 +604,11 @@ void Follow(std::uintptr_t system, void* component)
     }
     if (current.controller != 0 && !Call(g_release, current.controller))
     {
-        Fail(L"the displayed-target release");
+        return Fail(L"the displayed-target release");
+    }
+    if (target.object != 0)
+    {
+        PlayTargetSound();
     }
 }
 
@@ -733,6 +788,20 @@ bool Install(const platform::GameImage& image) noexcept
     g_freeTimeKey  = freeTime ? *freeTime : 0;
     platform::Log(L"lock-on: {}", g_installed ? L"ready (player 2 gets their own lock, switching and lock camera)"
                                               : L"UNAVAILABLE (a check failed); player 2 has no lock-on");
+    // The target sound for player 2's changes (optional: without it they are silent).
+    const auto soundName    = image.Rebase(kTargetSoundName, sizeof(void*));
+    const auto soundScratch = image.Rebase(kSoundScratch, sizeof(void*));
+    const auto resolve      = find(kResolveSound);
+    const auto soundTest    = find(kSoundTest);
+    const auto playSound    = find(kPlaySound);
+    if (soundName && soundScratch && resolve && soundTest && playSound)
+    {
+        g_soundName    = *soundName;
+        g_soundScratch = *soundScratch;
+        g_soundTest    = reinterpret_cast<SoundTestFn>(soundTest);
+        g_playSound    = reinterpret_cast<PlaySoundFn>(playSound);
+        g_resolveSound = reinterpret_cast<ResolveSoundFn>(resolve);
+    }
     // Both of player 1's targeting calls on pad 1, or neither.
     const std::uintptr_t tick = find(kTickTargeting);
     bool                 own  = tick != 0;
@@ -745,9 +814,9 @@ bool Install(const platform::GameImage& image) noexcept
     {
         for (auto& call : g_tickTargetingCalls)
         {
-            if (call.IsInstalled())
+            if (call.IsInstalled() && !call.Restore())
             {
-                call.Restore();
+                platform::Log(L"lock-on: a targeting call could not be put back; it stays (it passes through)");
             }
         }
     }

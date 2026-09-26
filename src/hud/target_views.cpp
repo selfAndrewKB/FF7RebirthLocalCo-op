@@ -315,7 +315,11 @@ std::uint8_t LabelLookup(void* manager, float* point, float* scale, void* charac
     // A borrowed swap: the lookup pins the key with its own reference and releases it again.
     if (!platform::WriteGuarded(reinterpret_cast<void*>(key), &two, sizeof(two)))
     {
-        platform::WriteGuarded(reinterpret_cast<void*>(key), &theirs, sizeof(theirs));  // put back what was written
+        if (!platform::WriteGuarded(reinterpret_cast<void*>(key), &theirs, sizeof(theirs)))  // put back what was written
+        {
+            g_failed = true;
+            Note(L"putting player 1's targeted key back raised an exception; per-view marks are off this session");
+        }
         return original(manager, point, scale, character);
     }
     std::uint8_t found = 0;
@@ -406,7 +410,10 @@ bool Install(const platform::GameImage& image) noexcept
                 g_createCall.Install(*create, collect, reinterpret_cast<std::uintptr_t>(&Collect));
     if (g_unionOn && !g_syncCall.Install(*sync, collect, reinterpret_cast<std::uintptr_t>(&Collect)))
     {
-        g_createCall.Restore();
+        if (!g_createCall.Restore())
+        {
+            platform::Log(L"target views: the creating collection call could not be put back; it stays (it passes through)");
+        }
         g_unionOn = false;
     }
     platform::Log(L"target views: {}; player 2's enemy gauges {}; red ability labels {}",
