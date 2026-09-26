@@ -280,6 +280,16 @@ target_include_directories(PopupsCodeTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/
 target_compile_features(PopupsCodeTests PRIVATE cxx_std_20)
 add_test(NAME popups_code COMMAND PopupsCodeTests)
 
+add_executable(ArrowEdgeCodeTests
+    tests/arrow_edge_code_test.cpp
+    src/platform/code_redirect.cpp
+    src/platform/near_code.cpp
+)
+target_include_directories(ArrowEdgeCodeTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(ArrowEdgeCodeTests PRIVATE cxx_std_20)
+add_test(NAME arrow_edge_code COMMAND ArrowEdgeCodeTests)
+
+
 
 
 add_executable(ButtonViewTests

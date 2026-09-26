@@ -1,5 +1,6 @@
 #include "hud/overlay_layout.h"
 
+#include "hud/arrow_edge_code.h"
 #include "hud/centered_frame_code.h"
 #include "hud/hud_addresses.h"
 #include "hud/overlay_band.h"
@@ -36,11 +37,13 @@ bool                   g_installed        = false;
 std::atomic<bool> g_splitActive{false};
 std::atomic<bool> g_bandEnabled{true};  // `hud-band off` turns it off for diagnosis
 
-// The centred 1920x1080 frame is the whole layout while this render's band applies (hud/
-// centered_frame_code.h). Set by the rect call, whose rect the overlay stores as its UI size in the
-// same render, so it always describes the UI size the frame reads. Read by that code.
+// Whether this render's band applies: set by the rect call, whose rect the overlay stores as its UI
+// size in the same render, so it always describes the UI size the HUD reads until the next render.
+// Read by the centred frame's code (the frame is the whole layout, hud/centered_frame_code.h) and the
+// arrow edge code (the edge by where the ray leaves, hud/arrow_edge_code.h).
 platform::CodeRedirect   g_frameCode;
-alignas(8) std::uint8_t  g_wholeLayoutFrame = 0;
+platform::CodeRedirect   g_arrowEdgeCode;
+alignas(8) std::uint8_t  g_bandApplies = 0;
 
 /// What the rect call decided for this frame's render, for the entry call a few instructions later
 /// in the same function. Both run on the game thread; the entry call acts only on the thread that
@@ -93,11 +96,31 @@ void InstallCenteredFrame(const platform::GameImage& image) noexcept
 {
     const auto site   = image.Rebase(kCenteredFrameSite, sizeof(kCenteredFrameStoreBytes));
     const auto resume = image.Rebase(kCenteredFrameResume);
-    const auto code   = CenteredFrameCode(g_wholeLayoutFrame);
+    const auto code   = CenteredFrameCode(g_bandApplies);
     const bool held   = image.BytesMatch(kCenteredFrame, kCenteredFrameBytes) && site && resume &&
                       platform::PinThisModule() && g_frameCode.Install(*site, kCenteredFrameStoreBytes, code, *resume);
     platform::Log(L"HUD layout: the centred 1920x1080 frame {}", held ? L"is the whole layout in a band"
                                                                      : L"keeps the game's 16:9 box (its code differs)");
+}
+
+/// Optional: the off-screen arrows pick their edge by where the ray leaves a band (hud/arrow_edge_code.h).
+void InstallArrowEdge(const platform::GameImage& image) noexcept
+{
+    constexpr std::uint8_t kTopBottomFirst[] = {0xC5, 0xFA, 0x10, 0x05, 0x4F, 0x8D, 0x64, 0x05};
+    const auto site      = image.Rebase(kArrowEdgeSite, sizeof(kArrowEdgeFmaBytes));
+    const auto side      = image.Rebase(kArrowEdgeSide);
+    const auto topBottom = image.Rebase(kArrowEdgeTopBottom, sizeof(kTopBottomFirst));
+    const auto sixty     = image.Rebase(kArrowEdgeSixty, sizeof(float));
+    const auto oneTwenty = image.Rebase(kArrowEdgeOneTwenty, sizeof(float));
+    bool held = site && side && topBottom && sixty && oneTwenty && image.BytesMatch(kArrowEdgeCheckStart, kArrowEdgeBytes) &&
+                image.BytesMatch(kArrowEdgeTopBottom, kTopBottomFirst) && platform::PinThisModule();
+    if (held)
+    {
+        const auto code = ArrowEdgeCode(g_bandApplies, *side, *topBottom, *sixty, *oneTwenty);
+        held = g_arrowEdgeCode.Install(*site, kArrowEdgeFmaBytes, code, *site + sizeof(kArrowEdgeFmaBytes));
+    }
+    platform::Log(L"HUD layout: the off-screen arrows {}", held ? L"pick their edge by where the ray leaves a band"
+                                                                : L"keep the game's 16:9 edge split (its code differs)");
 }
 
 void LogOnChange(const IntRect& image, float viewW, float viewH, const IntRect& band, float host, bool enabled,
@@ -127,7 +150,7 @@ IntRect* OverlayLayoutRect(IntRect* out)
 {
     IntRect* result    = reinterpret_cast<GetCompositeLayerRectFn>(g_rectCall.Original())(out);
     g_pending.active   = false;
-    g_wholeLayoutFrame = 0;
+    g_bandApplies = 0;
     if (!g_splitActive.load(std::memory_order_relaxed) || out == nullptr || out->minX != 0 || out->minY != 0)
     {
         return result;  // one player (or an unexpected rect): exactly the engine's result
@@ -151,7 +174,7 @@ IntRect* OverlayLayoutRect(IntRect* out)
     {
         *out               = band;
         g_pending          = {true, GetCurrentThreadId(), overlay, place, host, BandClipMap(band, image.Width(), image.Height())};
-        g_wholeLayoutFrame = 1;
+        g_bandApplies = 1;
     }
     return result;
 }
@@ -291,6 +314,7 @@ bool InstallOverlayLayout(const platform::GameImage& image) noexcept
     g_installed = true;
     platform::Log(L"HUD layout: installed (hud-band {})", BandEnabled() ? L"on" : L"off");
     InstallCenteredFrame(image);
+    InstallArrowEdge(image);
     return true;
 }
 
@@ -306,10 +330,14 @@ void RemoveOverlayLayout() noexcept
     g_pending.active = false;
     g_submit.active  = false;
 
-    g_wholeLayoutFrame = 0;
+    g_bandApplies = 0;
     const bool rect   = g_rectCall.Restore();
     const bool entry  = g_entryCall.Restore();
     const bool submit = g_submitCall.Restore();
+    if (g_arrowEdgeCode.IsInstalled() && !g_arrowEdgeCode.Restore())
+    {
+        platform::Log(L"HUD layout: the arrow edge code was changed after us; left in place (it acts only in a band)");
+    }
     if (g_frameCode.IsInstalled() && !g_frameCode.Restore())
     {
         platform::Log(L"HUD layout: the centred frame's store was changed after us; left in place (it acts only in a band)");
