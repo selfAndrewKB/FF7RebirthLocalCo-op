@@ -68,6 +68,7 @@ add_library(LocalSplitScreen SHARED
     src/player_two/battle_camera.cpp
     src/player_two/camera_override.cpp
     src/player_two/command_rules.cpp
+    src/player_two/menu_focus.cpp
     src/player_two/leader_scope.cpp
     src/player_two/lock_on.cpp
     src/player_two/target_cursor.cpp

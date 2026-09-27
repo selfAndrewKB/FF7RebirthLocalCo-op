@@ -10,6 +10,7 @@
 #include "player_two/battle_camera.h"
 #include "player_two/camera_override.h"
 #include "player_two/command_rules.h"
+#include "player_two/menu_focus.h"
 #include "player_two/lock_on.h"
 #include "player_two/field_camera.h"
 #include "player_two/generation.h"
@@ -103,6 +104,7 @@ void Session::Tick() noexcept
         return;
     }
     ++ticks_;
+    menu_focus::Watch();  // player 1's UI focus, logged on change (read-only)
     if (MemberDestroyed())  // every phase: the take, the swap and the leave read the member too
     {
         return;
