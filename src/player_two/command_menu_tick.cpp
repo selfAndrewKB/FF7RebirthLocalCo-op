@@ -120,10 +120,33 @@ constexpr std::uint32_t kCategoryCount   = 0x2E0;
 constexpr std::int32_t  kMaxCategories   = 32;
 constexpr int            kLoggedLayerTries = 5;
 constexpr std::uint64_t  kLayerRetryGap    = 30;  // passes between re-pushes while player 2's path stays short
-// Pad queries, answered on pad 2's view inside a ButtonScope; the action keys (FKeys).
-constexpr std::uint8_t kQueryBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x40, 0x00, 0x00, 0x00, 0xE8};
-constexpr platform::FunctionFact kIsPressed{L"SquareInput_IsActionPressed_Global", 0x14080619C, kQueryBytes};
-constexpr platform::FunctionFact kIsHeld{L"SquareInput_IsActionHeld_Global", 0x1408063DC, kQueryBytes};
+// The tactical-mode tint (UI filter type 0) and the wait-mode sound, shared by both controllers' menus
+// (RE-p2-command-menu-tint.md). EnableType/DisableType are a latch over a real reference count, so two
+// owners cancel each other; the game's other menus share a filter through the count itself
+// (EndUIFilter_RefInc/RefDec on EndUISystem[41], keeping their own "holds it" byte). Player 2's menu does
+// the same; player 1's keeps the latch. The wait sound's off is one mode slot: it is skipped while the
+// other menu is still in wait mode.
+constexpr std::uint8_t kFilterOnBytes[]  = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xE8, 0xD3, 0xEB, 0x00};
+constexpr std::uint8_t kFilterOffBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xF0, 0xDA, 0xEB, 0x00};
+constexpr std::uint8_t kMenuSoundBytes[] = {0x40, 0x53, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8, 0xE8, 0x50, 0x51, 0x01};
+constexpr std::uint8_t kRefIncBytes[]    = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20,
+                                            0x00, 0x00, 0x00, 0xE8, 0xAC, 0xD3, 0xEB, 0x00};
+constexpr std::uint8_t kRefDecBytes[]    = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20,
+                                            0x00, 0x00, 0x00, 0xE8, 0x74, 0xDA, 0xEB, 0x00};
+constexpr platform::FunctionFact kFilterOn{L"EndUIFilter_EnableType", 0x1411F1B3C, kFilterOnBytes};
+constexpr platform::FunctionFact kFilterOff{L"EndUIFilter_DisableType", 0x1411F1434, kFilterOffBytes};
+constexpr platform::FunctionFact kMenuSound{L"EndSound_PostMenuEventIdx", 0x140B99E3C, kMenuSoundBytes};
+constexpr platform::FunctionFact kRefInc{L"EndUIFilter_RefInc", 0x1411F1B74, kRefIncBytes};
+constexpr platform::FunctionFact kRefDec{L"EndUIFilter_RefDec", 0x1411F14AC, kRefDecBytes};
+constexpr std::uintptr_t kFilterOnCall  = 0x140963943;  // wait mode 0 -> 1
+constexpr std::uintptr_t kFilterOffCall = 0x140963839;  // 5 -> 4
+constexpr std::uintptr_t kSoundOffCall  = 0x14096384B;  // 4 -> 0 (event 13, the audio mode cleared)
+constexpr std::uint32_t  kFilterManager = 0x148;        // EndUISystem[41]
+constexpr std::uint32_t  kFilterLatch   = 0x1C;         // u8 per type
+constexpr std::uint32_t  kFilterCount   = 0x2C;         // i32 per type
+constexpr std::uint8_t   kTintType      = 0;
+
+// The action keys (FKeys) the route and its log compare an event's key name with.
 enum Action : std::size_t
 {
     kAttack,
@@ -192,10 +215,13 @@ using GuideShowFn = std::uint8_t (*)(void* guide, std::uint8_t mode);
 using GuideMode8Fn = void (*)();
 using HudModeFn   = void (*)(void* controller, std::uint8_t mode);
 using ResumeHudInputFn = void (*)(void* controller, std::uint8_t kind);
+using FilterOnFn       = void (*)(void* world, std::uint8_t type);
+using FilterOffFn      = void (*)(std::uint8_t type);
+using MenuSoundFn      = void (*)(std::uint8_t index);
+using FilterCountFn    = void (*)(void* manager, std::uint8_t type);
 using SuspendHudInputFn = void (*)(std::uint8_t kind, std::uint8_t reset);
 using PartyListInputFn = void (*)(void* partyList, std::uint8_t on, std::uint8_t applyVisibility);
 using LeaderFn         = void* (*)();
-using QueryFn     = std::uint8_t (*)(const void* key);
 using SetMenuLayerFn = void (*)(void* controller, std::uint8_t on);
 using SetVisibilityFn = void (*)(void* widget, std::uint8_t visibility);
 using WeakGetFn       = void* (*)(const std::uint64_t* weak);
@@ -204,14 +230,14 @@ using UpRouteFn       = std::uint8_t (*)(void* owner, void* event);
 
 // Set once at install.
 platform::CallRedirect g_tickCall, g_slotCall, g_snapshotCall, g_guideShowCall, g_guideMode8Call, g_upRouteCall;
+platform::CallRedirect g_filterOnCall, g_filterOffCall, g_soundOffCall;
+FilterCountFn          g_refInc = nullptr, g_refDec = nullptr;
 platform::VTableEntry  g_keyUpSlot;
 HudModeFn      g_hudMode   = nullptr;
 ResumeHudInputFn  g_resumeHudInput  = nullptr;
 SuspendHudInputFn g_suspendHudInput = nullptr;
 PartyListInputFn g_partyListInput = nullptr;
 LeaderFn         g_resolveLeader  = nullptr;
-QueryFn        g_isPressed = nullptr;
-QueryFn        g_isHeld    = nullptr;
 std::array<std::uintptr_t, kActions> g_keys{};
 std::uintptr_t g_endUISystem  = 0;
 std::uintptr_t g_partyManager = 0;  // the address holding the party manager
@@ -238,6 +264,8 @@ int          g_layerTries  = 0;  // this battle
 unsigned     g_routed      = 0;  // pad 2's presses dispatched in player 2's focus context
 std::array<unsigned, 5> g_routedKnown{};  // per action the log counts on its own (KnownAction)
 bool         g_routeFailed = false;
+bool         g_twoHoldsTint = false;  // player 2's menu holds one count of the tint (the game's own owner-byte pattern)
+int          g_tintLines    = 0;
 unsigned     g_upRouted    = 0;   // pad 2's releases routed to player 2's menu
 std::int32_t g_upPad       = -1;  // the pad of the release being handled (key-up handler), or -1
 
@@ -612,6 +640,8 @@ void Refused(const wchar_t* why) noexcept
     }
 }
 
+void ReleaseTint(const wchar_t* why) noexcept;  // below, with the tint's thunks
+
 /// Player 2's controller's tick, inside player 2's scopes (§13.2).
 void PlayerTwoPass(float deltaTime) noexcept
 {
@@ -621,6 +651,7 @@ void PlayerTwoPass(float deltaTime) noexcept
     if (two == 0 || one == 0 || one == two || member == nullptr ||
         (Field<std::uint8_t>(one + kHudMode) == 0 && Field<std::uint8_t>(two + kHudMode) == 0))
     {
+        ReleaseTint(L"released: player 2's menu is not ticked (out of battle)");
         return;  // out of battle: player 2's controller has nothing to do yet
     }
     const auto memberType = party_member::PlayerTypeOf(member);
@@ -657,6 +688,10 @@ void PlayerTwoPass(float deltaTime) noexcept
         const command_rules::PlayerTwoRules rules(leaderType);
         g_pass = 2;
         ++g_passes;
+        // Shielded from here: the mirrors call the game's setters on player 2's controller too.
+        const auto     slot50 = Field<std::uintptr_t>(g_endUISystem + kSlot50);
+        const auto     input  = Field<std::uintptr_t>(g_endUISystem + kInput);
+        const Shielded saved  = ReadShielded(slot50, input);
         MirrorHudMode(two, one, *memberType);
         MirrorVisibility(two, one);
         MirrorPartyListInput(two, one);
@@ -664,17 +699,19 @@ void PlayerTwoPass(float deltaTime) noexcept
         CopyCommandLocks(two, one);
         WriteRequests(two, one);
         Put(two + kHudSoundMode, Field<std::uint8_t>(two + kHudMode));  // no second battle-HUD sound
-        const auto     slot50 = Field<std::uintptr_t>(g_endUISystem + kSlot50);
-        const auto     input  = Field<std::uintptr_t>(g_endUISystem + kInput);
-        const Shielded saved  = ReadShielded(slot50, input);
         const bool     ticked = platform::CallGuarded(reinterpret_cast<TickFn>(g_tickCall.Original()),
                                                       reinterpret_cast<void*>(two), deltaTime);
         RestoreShielded(slot50, input, saved);
         g_pass   = 0;
         g_passed = ticked;
+        if (g_twoHoldsTint && Field<std::int32_t>(two + kWaitFilter) == 0)
+        {
+            ReleaseTint(L"WARNING: player 2's menu is idle but held a count; released");
+        }
         if (!ticked)
         {
             focus.Abandon();
+            ReleaseTint(L"released: player 2's tick faulted");
             g_installed = false;
             Line(L"FAILED: player 2's controller's tick faulted; player 2's command controller stops (the direct actions "
                  L"come back)");
@@ -885,6 +922,88 @@ std::uint8_t UpRoute(void* owner, void* event) noexcept
     }
     return result;
 }
+/// The tint's filter manager and, for the log, its latch and count for the tint type.
+std::uintptr_t FilterManager() noexcept
+{
+    return Field<std::uintptr_t>(g_endUISystem + kFilterManager);
+}
+
+void TintLine(const wchar_t* what) noexcept
+{
+    if (++g_tintLines > 60)
+    {
+        return;
+    }
+    const auto fm  = FilterManager();
+    const auto one = Field<std::uintptr_t>(g_endUISystem + kController);
+    const auto two = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller());
+    platform::Log(L"command menu tick: tint {} (pass {}; wait P1 {} P2 {}; latch {} count {}; P2 holds {})", what, g_pass,
+                  one != 0 ? Field<std::int32_t>(one + kWaitFilter) : -1, two != 0 ? Field<std::int32_t>(two + kWaitFilter) : -1,
+                  Field<std::uint8_t>(fm + kFilterLatch + kTintType), Field<std::int32_t>(fm + kFilterCount + 4 * kTintType),
+                  g_twoHoldsTint ? 1 : 0);
+}
+
+/// Player 2's count of the tint given back (its menu closed, or it stops holding for another reason).
+void ReleaseTint(const wchar_t* why) noexcept
+{
+    if (!g_twoHoldsTint)
+    {
+        return;
+    }
+    const auto fm = FilterManager();
+    if (fm != 0)
+    {
+        platform::CallGuarded(g_refDec, reinterpret_cast<void*>(fm), kTintType);
+    }
+    g_twoHoldsTint = false;
+    TintLine(why);
+}
+
+/// Replaces the wait mode's filter on: player 1's menu takes the latch as the game does; player 2's
+/// takes a count of its own.
+void TintOn(void* world, std::uint8_t type) noexcept
+{
+    if (g_pass != 2)
+    {
+        reinterpret_cast<FilterOnFn>(g_filterOnCall.Original())(world, type);
+        return;
+    }
+    const auto fm = FilterManager();
+    if (!g_twoHoldsTint && fm != 0 && platform::CallGuarded(g_refInc, reinterpret_cast<void*>(fm), type))
+    {
+        g_twoHoldsTint = true;
+    }
+    TintLine(L"on for player 2's menu (a count)");
+}
+
+/// Replaces the wait mode's filter off: player 2's gives back its count; player 1's drops the latch.
+void TintOff(std::uint8_t type) noexcept
+{
+    if (g_pass != 2)
+    {
+        reinterpret_cast<FilterOffFn>(g_filterOffCall.Original())(type);
+        TintLine(L"off for player 1's menu (the latch)");
+        return;
+    }
+    ReleaseTint(L"off for player 2's menu (its count)");
+}
+
+/// Replaces the wait mode's sound off (event 13 and the audio mode cleared): skipped while the other
+/// menu is still in wait mode. Player 1's ticks first, so if both close in one frame player 2's plays it.
+void WaitSoundOff(std::uint8_t index) noexcept
+{
+    const auto one  = Field<std::uintptr_t>(g_endUISystem + kController);
+    const auto two  = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller());
+    const auto wait = [](std::uintptr_t ctrl) { return ctrl != 0 ? Field<std::int32_t>(ctrl + kWaitFilter) : 0; };
+    const auto s1 = wait(one), s2 = wait(two);
+    if ((g_pass == 1 && (s2 == 1 || s2 == 5 || s2 == 4)) || (g_pass == 2 && (s1 == 1 || s1 == 5)))
+    {
+        TintLine(L"wait sound off skipped (the other menu is still in wait mode)");
+        return;
+    }
+    reinterpret_cast<MenuSoundFn>(g_soundOffCall.Original())(index);
+}
+
 /// Replaces the game's controller tick call: the game's controller, then player 2's.
 void Tick(void* controller, float deltaTime) noexcept
 {
@@ -896,6 +1015,10 @@ void Tick(void* controller, float deltaTime) noexcept
     if (g_installed && generation::OnGameThread() && generation::Active())
     {
         PlayerTwoPass(deltaTime);
+    }
+    else
+    {
+        ReleaseTint(L"released: player 2's menu is not ticked (player 2 is out)");
     }
 }
 
@@ -941,7 +1064,9 @@ void CommandSnapshot(void* queue, const std::uint64_t* commands, const std::uint
 
 std::uint8_t GuideShow(void* guide, std::uint8_t mode) noexcept
 {
-    if (g_pass == 2)
+    // With player 2's own key guide in the slot (player_two/focus_scope), player 2's controller drives it
+    // natively; without one, player 2's pass leaves the shared guide alone.
+    if (g_pass == 2 && command_menu_two::KeyGuide() == nullptr)
     {
         ++g_guideSkips;
         Line(std::format(L"player 2's key-guide mode {} not shown ({} time(s))", mode, g_guideSkips));
@@ -952,7 +1077,7 @@ std::uint8_t GuideShow(void* guide, std::uint8_t mode) noexcept
 
 void GuideMode8() noexcept
 {
-    if (g_pass == 2)
+    if (g_pass == 2 && command_menu_two::KeyGuide() == nullptr)
     {
         ++g_guideSkips;
         Line(std::format(L"player 2's key-guide mode 8 not set ({} time(s))", g_guideSkips));
@@ -987,14 +1112,14 @@ bool Install(const platform::GameImage& image) noexcept
     const auto find = [&image](const platform::FunctionFact& fact) { return platform::FindFunction(image, fact); };
     const auto tick = find(kTick), slot = find(kSlot), snapshot = find(kSnapshot), show = find(kGuideShow),
                mode8 = find(kGuideMode8), hud = find(kSetHudMode), resume = find(kResumeHudInput), suspend = find(kSuspendHudInput), listInput = find(kSetPartyListInput),
-               leader = find(facts::kResolvePartyLeader), pressed = find(kIsPressed),
-               held = find(kIsHeld), layer = find(kSetMenuLayer), visibility = find(kSetVisibility),
-               weakGet = find(facts::kWeakObjectGet);
+               leader = find(facts::kResolvePartyLeader), layer = find(kSetMenuLayer), visibility = find(kSetVisibility),
+               weakGet = find(facts::kWeakObjectGet), filterOn = find(kFilterOn), filterOff = find(kFilterOff),
+               menuSound = find(kMenuSound), refInc = find(kRefInc), refDec = find(kRefDec);
     const auto prevTarget = image.Rebase(kPrevTargetKey, 24), nextTarget = image.Rebase(kNextTargetKey, 24),
                commandMenu = image.Rebase(kCommandMenuKey, 24);
     const auto system  = image.Rebase(kEndUISystem, kSlot50 + sizeof(void*));
     const auto manager = image.Rebase(facts::kPartyManagerGlobal, sizeof(void*));
-    bool       ok      = tick && slot && snapshot && show && mode8 && hud && resume && suspend && listInput && leader && pressed && held && layer && visibility && weakGet && prevTarget &&
+    bool       ok      = tick && slot && snapshot && show && mode8 && hud && resume && suspend && listInput && leader && layer && visibility && weakGet && filterOn && filterOff && menuSound && refInc && refDec && prevTarget &&
                   nextTarget && commandMenu && system && manager;
     for (std::size_t i = 0; ok && i < kActions; ++i)
     {
@@ -1009,13 +1134,13 @@ bool Install(const platform::GameImage& image) noexcept
         g_suspendHudInput = reinterpret_cast<SuspendHudInputFn>(*suspend);
         g_partyListInput = reinterpret_cast<PartyListInputFn>(*listInput);
         g_resolveLeader  = reinterpret_cast<LeaderFn>(*leader);
-        g_isPressed    = reinterpret_cast<QueryFn>(*pressed);
-        g_isHeld       = reinterpret_cast<QueryFn>(*held);
         g_endUISystem  = *system;
         g_partyManager = *manager;
         g_setMenuLayer   = reinterpret_cast<SetMenuLayerFn>(*layer);
         g_setVisibility  = reinterpret_cast<SetVisibilityFn>(*visibility);
         g_weakGet        = reinterpret_cast<WeakGetFn>(*weakGet);
+        g_refInc         = reinterpret_cast<FilterCountFn>(*refInc);
+        g_refDec         = reinterpret_cast<FilterCountFn>(*refDec);
         g_prevTargetKey  = *prevTarget;
         g_nextTargetKey  = *nextTarget;
         g_commandMenuKey = *commandMenu;
@@ -1025,6 +1150,9 @@ bool Install(const platform::GameImage& image) noexcept
         const auto live = image.Rebase(site, 5);
         return live && call.Install(*live, target, reinterpret_cast<std::uintptr_t>(with));
     };
+    ok = ok && redirect(g_filterOnCall, kFilterOnCall, *filterOn, &TintOn) &&
+         redirect(g_filterOffCall, kFilterOffCall, *filterOff, &TintOff) &&
+         redirect(g_soundOffCall, kSoundOffCall, *menuSound, &WaitSoundOff);
     ok = ok && redirect(g_slotCall, kSlotCall, *slot, &Slot) && redirect(g_snapshotCall, kSnapshotCall, *snapshot, &CommandSnapshot) &&
          redirect(g_guideShowCall, kGuideShowCall, *show, &GuideShow) &&
          redirect(g_guideMode8Call, kGuideMode8Call, *mode8, &GuideMode8) &&
@@ -1048,12 +1176,14 @@ bool Install(const platform::GameImage& image) noexcept
 void Remove() noexcept
 {
     pad_buttons::SetPlayerTwoRoute(nullptr);
+    ReleaseTint(L"released: the stage is removed");
     g_installed = false;
     if (g_keyUpSlot.Original() != 0 && !g_keyUpSlot.Restore())
     {
         platform::Log(L"command menu tick: the key-up slot was changed after us; left in place (it passes through)");
     }
-    for (auto* call : {&g_tickCall, &g_guideMode8Call, &g_guideShowCall, &g_snapshotCall, &g_slotCall, &g_upRouteCall})
+    for (auto* call : {&g_tickCall, &g_guideMode8Call, &g_guideShowCall, &g_snapshotCall, &g_slotCall, &g_upRouteCall,
+                       &g_filterOnCall, &g_filterOffCall, &g_soundOffCall})
     {
         if (call->IsInstalled() && !call->Restore())
         {

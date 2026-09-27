@@ -42,6 +42,15 @@ constexpr std::uint8_t kSetupBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x20, 0x48, 0x89
 constexpr platform::FunctionFact kSetup{L"FieldCommandCtrl__SetupMenuWidgets", 0x14158B0F4, kSetupBytes};
 
 constexpr std::size_t kControllerSize = 0x798;
+// The key guide (EndUISystem[53]): the game builds its one with FMemory_Malloc(0x38) and KeyGuide53__Ctor
+// (EndUISystem__Ctor); player 2's is built the same way (RE-p2-command-menu-views.md §10.4). Its widget
+// (FWeakObjectPtr at +4) is created by the game's own ShowMode the first time player 2's controller drives it.
+constexpr std::uint8_t kKeyGuideCtorBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xE0,
+                                               0x0F, 0x69, 0xFE, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9};
+constexpr platform::FunctionFact kKeyGuideCtor{L"KeyGuide53__Ctor", 0x143A1DF44, kKeyGuideCtorBytes};
+constexpr std::size_t   kKeyGuideSize   = 0x38;
+constexpr std::uint32_t kKeyGuideSlot   = 0x1A8;  // EndUISystem[53]
+constexpr std::uint32_t kKeyGuideWidget = 0x04;
 // The UI system's command controller slot (EndUISystem[23]: the game's controller).
 constexpr std::uintptr_t kEndUISystem = 0x1493496E0;
 constexpr std::uint32_t  kGameController = 0xB8;
@@ -73,17 +82,20 @@ constexpr int kMaxLines   = 200;
 using MallocFn = void* (*)(std::size_t size, std::uint32_t alignment);
 using CtorFn   = void* (*)(void* controller);
 using SetupFn  = std::uint8_t (*)(void* controller, void* world);
+using KeyGuideCtorFn = void* (*)(void* keyGuide);
 using WeakGetFn = void* (*)(const std::uint64_t* weak);
 
 // Set once at install.
 MallocFn  g_malloc  = nullptr;
 CtorFn    g_ctor    = nullptr;
 SetupFn   g_setup   = nullptr;
+KeyGuideCtorFn g_keyGuideCtor = nullptr;
 WeakGetFn g_weakGet = nullptr;
 std::uintptr_t g_worldClass = 0;  // UWorld's class
 
 // Game thread. The controller outlives the mod's stages, like the game's.
 void*         g_controller = nullptr;
+void*         g_keyGuide   = nullptr;  // player 2's key guide (built after the controller; kept like it)
 bool          g_installed  = false;
 bool          g_failed     = false;
 std::uint64_t g_worldWeak  = 0;        // the world the controller was set up for (0: none)
@@ -129,7 +141,7 @@ struct Saved
     std::uint64_t weak    = 0;
     float         opacity = 1.0F;
 };
-std::array<Saved, kParts.size()> g_oneSaved{};
+std::array<Saved, kParts.size() + 1> g_oneSaved{};  // the parts, then the key guide's widget
 bool                             g_swapped = false;
 
 template <class T>
@@ -279,6 +291,20 @@ bool Build() noexcept
     }
     g_controller = memory;
     Line(std::format(L"built player 2's controller at {:#x}", reinterpret_cast<std::uintptr_t>(memory)));
+    // Player 2's key guide, as EndUISystem__Ctor builds the game's. Optional: without it player 2's controller
+    // leaves the shared one alone (player_two/command_menu_tick skips its key-guide writes).
+    void* guide = nullptr;
+    if (platform::CallGuarded(g_malloc, guide, kKeyGuideSize, std::uint32_t{0}) && guide != nullptr)
+    {
+        std::memset(guide, 0, kKeyGuideSize);
+        void* built2 = nullptr;
+        if (platform::CallGuarded(g_keyGuideCtor, built2, guide))
+        {
+            g_keyGuide = guide;
+            focus_scope::SetKeyGuide(guide);
+        }
+    }
+    Line(std::format(L"player 2's key guide {}", g_keyGuide != nullptr ? L"built" : L"NOT built (the shared one stays)"));
     return true;
 }
 
@@ -330,6 +356,8 @@ bool Install(const platform::GameImage& image) noexcept
     const auto ctor   = platform::FindFunction(image, kCtor);
     const auto setup  = platform::FindFunction(image, kSetup);
     const auto get    = platform::FindFunction(image, facts::kWeakObjectGet);
+    const auto guide  = platform::FindFunction(image, kKeyGuideCtor);
+    g_keyGuideCtor    = guide ? reinterpret_cast<KeyGuideCtorFn>(*guide) : nullptr;
     try
     {
         g_worldClass = reinterpret_cast<std::uintptr_t>(
@@ -339,7 +367,7 @@ bool Install(const platform::GameImage& image) noexcept
     {
         g_worldClass = 0;
     }
-    const auto system = image.Rebase(kEndUISystem, kGameController + sizeof(void*));
+    const auto system = image.Rebase(kEndUISystem, kKeyGuideSlot + sizeof(void*));
     g_endUISystem     = system ? *system : 0;
     g_installed       = malloc && ctor && setup && get && g_worldClass != 0 && system && focus_scope::Install(image);
     if (g_installed)
@@ -366,6 +394,11 @@ void Remove() noexcept
 void* Controller() noexcept
 {
     return g_controller;
+}
+
+void* KeyGuide() noexcept
+{
+    return g_keyGuide;
 }
 
 namespace {
@@ -405,19 +438,25 @@ void ShowOnly(int player) noexcept
     {
         return Restore();
     }
-    for (std::size_t i = 0; i < kParts.size(); ++i)
+    for (std::size_t i = 0; i <= kParts.size(); ++i)
     {
-        void* oneWidget = WidgetOf(one, kParts[i].offset);
-        void* twoWidget = WidgetOf(two, kParts[i].offset);
+        // The last entry is the key guide: the game's (EndUISystem[53]) and player 2's, each widget at +4.
+        const bool guide     = i == kParts.size();
+        const auto oneOwner  = guide ? Field<std::uintptr_t>(g_endUISystem + kKeyGuideSlot) : one;
+        const auto twoOwner  = guide ? reinterpret_cast<std::uintptr_t>(g_keyGuide) : two;
+        const auto offset    = guide ? kKeyGuideWidget : kParts[i].offset;
+        const bool borrow    = guide || kParts[i].borrowOpacity;
+        void*      oneWidget = WidgetOf(oneOwner, offset);
+        void*      twoWidget = WidgetOf(twoOwner, offset);
         if (oneWidget == nullptr || twoWidget == nullptr)
         {
             continue;
         }
         if (!g_swapped)
         {
-            g_oneSaved[i] = {Field<std::uint64_t>(one + kParts[i].offset), hud::widget_opacity::Get(oneWidget)};
+            g_oneSaved[i] = {Field<std::uint64_t>(oneOwner + offset), hud::widget_opacity::Get(oneWidget)};
         }
-        SetOpacity(twoWidget, kParts[i].borrowOpacity ? g_oneSaved[i].opacity : 1.0F);
+        SetOpacity(twoWidget, borrow ? g_oneSaved[i].opacity : 1.0F);
         SetOpacity(oneWidget, 0.0F);
     }
     g_swapped = true;
@@ -447,6 +486,7 @@ void Restore() noexcept
     {
         SetOpacity(WidgetOf(reinterpret_cast<std::uintptr_t>(g_controller), part.offset), 0.0F);
     }
+    SetOpacity(WidgetOf(reinterpret_cast<std::uintptr_t>(g_keyGuide), kKeyGuideWidget), 0.0F);
 }
 
 void KeepHidden() noexcept
@@ -456,9 +496,10 @@ void KeepHidden() noexcept
     {
         return;
     }
-    for (const Part& part : kParts)
+    for (const Part& part : std::array<Part, kParts.size() + 1>{kParts[0], kParts[1], kParts[2], Part{kKeyGuideWidget, true}})
     {
-        void* widget = WidgetOf(reinterpret_cast<std::uintptr_t>(g_controller), part.offset);
+        const bool guide  = part.offset == kKeyGuideWidget;
+        void*      widget = WidgetOf(reinterpret_cast<std::uintptr_t>(guide ? g_keyGuide : g_controller), part.offset);
         if (widget == nullptr || hud::widget_opacity::Get(widget) == 0.0F)
         {
             continue;

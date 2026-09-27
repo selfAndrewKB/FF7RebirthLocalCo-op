@@ -24,6 +24,10 @@ namespace lss::player_two::focus_scope {
 
 bool Install(const platform::GameImage& image) noexcept;
 
+/// Player 2's key guide (a second KeyGuide53 built with the game's constructor), or null: while set, a scope
+/// also names it in the UI system's key guide slot (EndUISystem[53]), so player 2's controller drives its own.
+void SetKeyGuide(void* keyGuide) noexcept;
+
 /// Player 2's saved context: its path length and layer count (for the log).
 struct Summary
 {
@@ -63,6 +67,7 @@ private:
     const wchar_t*                         refusal_ = nullptr;
     std::uintptr_t                         input_   = 0;
     std::uintptr_t                         savedController_ = 0;
+    std::uintptr_t                         savedKeyGuide_   = 0;
     std::array<std::uint8_t, kContextSize>  savedContext_{};   // player 1's
     std::array<std::uint8_t, kDelegateSize> savedDelegate_{};
 };

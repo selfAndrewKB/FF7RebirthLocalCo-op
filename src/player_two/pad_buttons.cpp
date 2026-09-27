@@ -384,6 +384,7 @@ bool Install(const platform::GameImage& image) noexcept
 
 void Remove() noexcept
 {
+    g_playerTwoRoute = nullptr;  // no route outlives the buttons' redirects
     if (!g_tickSlot.Restore())
     {
         platform::Log(L"buttons: the input Tick slot was changed after us; left in place (it passes the call through)");

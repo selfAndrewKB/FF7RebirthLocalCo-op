@@ -39,6 +39,9 @@ void ShowOnly(int player) noexcept;
 /// After the frame's passes: player 1's menu back to its own opacity, player 2's hidden.
 void Restore() noexcept;
 
+/// Player 2's key guide (a second KeyGuide53), or null if it could not be built.
+void* KeyGuide() noexcept;
+
 /// Player 2's controller, or null before it is built.
 void* Controller() noexcept;
 
