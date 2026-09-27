@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 // Who may issue commands to whom in the battle command menu (RE-p2-command-menu.md §4, pass S-CMD1).
 //
 // The leader commands an ally through the command menu's ally mode (LT/RT, the shortcut palette):
@@ -33,5 +35,19 @@ void Update() noexcept;
 
 /// Once per frame while player 2 plays: the command controller logged on change.
 void Watch() noexcept;
+
+/// While alive (player 2's command controller ticks): the rules turned around, so the member that may
+/// not be commanded is player 1's leader (type `leaderType`), not player 2's member.
+class PlayerTwoRules
+{
+public:
+    explicit PlayerTwoRules(std::uint8_t leaderType) noexcept;
+    ~PlayerTwoRules();
+    PlayerTwoRules(const PlayerTwoRules&)            = delete;
+    PlayerTwoRules& operator=(const PlayerTwoRules&) = delete;
+
+private:
+    std::int32_t savedGate_ = -1, savedType_ = -1;
+};
 
 }  // namespace lss::player_two::command_rules

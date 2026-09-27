@@ -230,6 +230,18 @@ void Update() noexcept
     SetGate(ordinal);
 }
 
+PlayerTwoRules::PlayerTwoRules(std::uint8_t leaderType) noexcept : savedGate_(Gate()), savedType_(g_forbiddenType)
+{
+    g_forbiddenType = leaderType;
+    SetGate(OrdinalOf(leaderType));
+}
+
+PlayerTwoRules::~PlayerTwoRules()
+{
+    g_forbiddenType = savedType_;
+    SetGate(savedGate_);
+}
+
 void Watch() noexcept
 {
     if (g_lines >= kMaxLines || g_endUISystem == 0 || !generation::OnGameThread())

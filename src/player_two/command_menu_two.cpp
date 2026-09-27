@@ -8,6 +8,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "hud/widget_opacity.h"
 #include "player_two/describe.h"
 #include "player_two/engine_facts.h"
 #include "player_two/focus_scope.h"
@@ -89,6 +90,7 @@ struct Snapshot
 };
 Snapshot g_logged{};
 bool     g_loggedOnce = false;
+int      g_hides      = 0;  // times the menu widget was found shown and hidden again
 
 template <class T>
 T Field(std::uintptr_t address) noexcept
@@ -241,6 +243,28 @@ void Remove() noexcept
 void* Controller() noexcept
 {
     return g_controller;
+}
+
+void KeepHidden() noexcept
+{
+    if (g_controller == nullptr || g_weakGet == nullptr || !hud::widget_opacity::Installed() ||
+        !generation::OnGameThread())
+    {
+        return;
+    }
+    const auto weak   = Field<std::uint64_t>(reinterpret_cast<std::uintptr_t>(g_controller) + kMenuWidget);
+    void*      widget = nullptr;
+    if (weak == 0 || !platform::CallGuarded(g_weakGet, widget, &weak) || widget == nullptr ||
+        hud::widget_opacity::Get(widget) == 0.0F)
+    {
+        return;
+    }
+    const bool hidden = hud::widget_opacity::Set(widget, 0.0F);
+    if (++g_hides <= 5 || g_hides % 100 == 0)
+    {
+        Line(std::format(L"menu widget {} (render opacity 0; {} time(s))", hidden ? L"hidden" : L"could NOT be hidden",
+                         g_hides));
+    }
 }
 
 void Tick() noexcept

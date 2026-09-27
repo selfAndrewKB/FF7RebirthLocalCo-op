@@ -6,6 +6,7 @@
 #include "platform/verified_code.h"
 #include "player_two/battle_camera.h"
 #include "player_two/camera_override.h"
+#include "player_two/command_menu_tick.h"
 #include "player_two/command_rules.h"
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
@@ -540,7 +541,8 @@ void InScopes(void* member, void* state, float deltaTime) noexcept
         {
             lock_on::Tick(member, reinterpret_cast<void*>(two.owner), deltaTime, {});  // ends player 2's lock out of battle
         }
-        if (two.ready && g_mask != 0 && !g_failed)
+        // Player 2's command controller takes the actions when it ticks (player_two/command_menu_tick.h).
+        if (two.ready && g_mask != 0 && !g_failed && !command_menu_tick::DrivesActions())
         {
             Act(state, two, memberWeak, attackGate, guardGate, pressed, held);
         }

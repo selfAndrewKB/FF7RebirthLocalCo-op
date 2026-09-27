@@ -93,6 +93,7 @@ void Session::Tick() noexcept
 {
     generation::SetGameThread();  // the engine-tick callback runs on the thread that ticks the world
     command_rules::Update();      // which member player 1 may not command (none without player 2)
+    command_menu_two::KeepHidden();  // player 2's menu widget stays out of both halves
     if (!HasPlayerTwo())
     {
         TryRejoin();
