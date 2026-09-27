@@ -90,6 +90,7 @@ add_library(LocalSplitScreen SHARED
     src/player_two/swap_window.cpp
     src/player_two/tag_counts.cpp
     src/player_two/view_target.cpp
+    src/player_two/widget_owner.cpp
 
     src/players/join_keys.cpp
     src/players/local_players.cpp

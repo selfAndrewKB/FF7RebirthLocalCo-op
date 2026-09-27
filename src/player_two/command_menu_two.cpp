@@ -441,11 +441,13 @@ void ShowOnly(int player) noexcept
     for (std::size_t i = 0; i <= kParts.size(); ++i)
     {
         // The last entry is the key guide: the game's (EndUISystem[53]) and player 2's, each widget at +4.
+        // Player 2's shows at full opacity: its own tick (player_two/widget_owner) sets its visibility and
+        // plays its show and hide animations.
         const bool guide     = i == kParts.size();
         const auto oneOwner  = guide ? Field<std::uintptr_t>(g_endUISystem + kKeyGuideSlot) : one;
         const auto twoOwner  = guide ? reinterpret_cast<std::uintptr_t>(g_keyGuide) : two;
         const auto offset    = guide ? kKeyGuideWidget : kParts[i].offset;
-        const bool borrow    = guide || kParts[i].borrowOpacity;
+        const bool borrow    = !guide && kParts[i].borrowOpacity;
         void*      oneWidget = WidgetOf(oneOwner, offset);
         void*      twoWidget = WidgetOf(twoOwner, offset);
         if (oneWidget == nullptr || twoWidget == nullptr)
@@ -496,7 +498,7 @@ void KeepHidden() noexcept
     {
         return;
     }
-    for (const Part& part : std::array<Part, kParts.size() + 1>{kParts[0], kParts[1], kParts[2], Part{kKeyGuideWidget, true}})
+    for (const Part& part : std::array<Part, kParts.size() + 1>{kParts[0], kParts[1], kParts[2], Part{kKeyGuideWidget, false}})
     {
         const bool guide  = part.offset == kKeyGuideWidget;
         void*      widget = WidgetOf(reinterpret_cast<std::uintptr_t>(guide ? g_keyGuide : g_controller), part.offset);

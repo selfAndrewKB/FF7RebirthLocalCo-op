@@ -28,6 +28,7 @@
 #include "player_two/scope_leaks.h"
 #include "player_two/tag_counts.h"
 #include "player_two/view_target.h"
+#include "player_two/widget_owner.h"
 
 #include <Unreal/CoreUObject/UObject/Class.hpp>
 
@@ -126,6 +127,7 @@ void Session::InstallStages(const platform::GameImage& image) noexcept
     menu_focus::Install(image);    // player 1's UI focus logged on change (read-only)
     command_menu_two::Install(image); // player 2's command controller, built (logged)
     command_menu_tick::Install(image); // ticked in battle; player 2's attack, guard and dodge through it (logged)
+    widget_owner::Install(image);      // player 2's party-list cells and key guide tick in player 2's view (logged)
     LogStage(L"own controller", installed_.ownController);
     LogStage(L"primary-controller scope", installed_.primary);
     LogStage(L"own party member", installed_.member);
@@ -142,6 +144,7 @@ void Session::InstallStages(const platform::GameImage& image) noexcept
 
 void Session::RemoveStages() noexcept
 {
+    widget_owner::Remove();
     command_menu_tick::Remove();
     command_menu_two::Remove();
     menu_focus::Remove();
