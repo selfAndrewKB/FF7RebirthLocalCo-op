@@ -466,11 +466,17 @@ void Session::Teardown() noexcept
         LogTagCounts(L"after the give-back");
     }
     const auto actors = leftover_actors::Collect(playerTwoController_);
-    const auto result = leftover_actors::Destroy(actors, playerTwoController_);
     const bool out    = players_.Remove();
     leave_.Finish();
-    Log(L"leave: {} leftover actor(s) destroyed ({} failed); player 2 {}", result.destroyed, result.failed,
-        out ? L"left" : L"could NOT be removed");
+    if (out)
+    {
+        const auto result = leftover_actors::Destroy(actors);
+        Log(L"leave: player 2 left; {} leftover actor(s) destroyed ({} failed)", result.destroyed, result.failed);
+    }
+    else
+    {
+        Log(L"leave: player 2 could NOT be removed; their actors are kept");
+    }
     if (member_ != nullptr)
     {
         LogTagCounts(L"after the teardown");

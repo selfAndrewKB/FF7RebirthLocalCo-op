@@ -119,7 +119,7 @@ void Session::InstallStages(const platform::GameImage& image) noexcept
     installed_.padButtons    = pad_buttons::Install(image);
     installed_.memberMovement = installed_.member && installed_.padSticks && installed_.moveCensus &&
                                 member_movement::Install(image);
-    battle_input::Install(image);  // player 2's battle actions, inside the member tick (logged)
+    battle_input::Install(image);  // player 2's battle targeting, inside the member tick (logged)
     lock_on::Install(image);       // player 2's own lock, switching and lock camera (logged)
     target_cursor::Install(image); // player 2's own target cursor (logged)
     party_switch::Install(image);  // player 1's switch skips player 2's member (logged)

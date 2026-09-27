@@ -250,12 +250,9 @@ inline constexpr std::uint8_t kMoveStateTickForCharacterBytes[] = {
 inline constexpr std::uint8_t kFieldActionHandleClearBytes[] = {
     0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x4C, 0x9C, 0xEB, 0x00,
     0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9, 0xE8, 0xE5, 0x60, 0x6F, 0x00, 0x84};
-inline constexpr std::uint8_t kHolderStateByteBytes[] = {
-    0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C, 0x24, 0x10, 0x48, 0x89,
-    0x74, 0x24, 0x18, 0x57, 0x41, 0x56, 0x41, 0x57, 0xB8, 0x20, 0x00, 0x00};
-inline constexpr std::uint8_t kHasStateIdBytes[] = {
-    0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x30, 0xEC, 0x66, 0x01,
-    0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x01, 0x8A, 0xDA, 0xFF, 0x90, 0x20, 0x05};
+inline constexpr std::uint8_t kIsBattleActiveBytes[] = {
+    0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x68, 0xED, 0x66, 0x01,
+    0x48, 0x2B, 0xE0, 0x4C, 0x8B, 0xC1, 0x48, 0x85, 0xC9, 0x0F, 0x84, 0xA1};
 inline constexpr std::uint8_t kFieldLeaderTypeBytes[] = {
     0x48, 0x8B, 0x05, 0x9D, 0x3F, 0x7C, 0x08, 0x48, 0x85, 0xC0, 0x74, 0x1A,
     0x48, 0x8B, 0x48, 0x48, 0x48, 0x85, 0xC9, 0x75, 0x0D, 0x48, 0x8B, 0x48};
@@ -309,20 +306,16 @@ inline constexpr FunctionFact kSwitchLeaderInternal{L"AEndPlayerController::Swit
                                                     kSwitchLeaderInternalBytes};
 inline constexpr FunctionFact kRosterCount{L"the party roster count", 0x140A3F614, kRosterCountBytes};
 
-// Player 1's battle switch's member test T (RE-p2-deployed-party.md §4.1, §5a): the member's
-// BattlePlayer controller component (ValidateAIController of its AI component), whose holder
-// (component +0x8) has a resolved state byte other than 6, and which has no state id 22. And the two
-// leader types the game hands back to player 1, and the deployed test itself.
-inline constexpr FunctionFact kHolderStateByte{L"CharCtrlHolder_GetResolvedStateByte68", 0x1409F0FBC,
-                                               kHolderStateByteBytes};
-inline constexpr FunctionFact kHasStateId{L"ControllerComponent_HasStateId", 0x140A402F4, kHasStateIdBytes};
+// Player 1's battle switch's member test T (RE-p2-deployed-party.md §4.1, RE-p2-party-switch.md §1.2)
+// as the game's own function (al only; 167 callers, so called, never hooked): the character is live,
+// has its battle controller component, is not in the dead state (6) and is not petrified (id 22).
+// And the two leader types the game hands back to player 1, and the deployed test itself.
+inline constexpr FunctionFact kIsBattleActive{L"Character_IsBattleActive_NotDeadNotPetrified", 0x140A401BC,
+                                              kIsBattleActiveBytes};
 inline constexpr FunctionFact kFieldLeaderType{L"PartyData_GetFieldLeaderType", 0x140A61654, kFieldLeaderTypeBytes};
 inline constexpr FunctionFact kDefaultBattleLeaderType{L"PartyData_GetDefaultBattleLeaderType", 0x141504270,
                                                        kDefaultBattleLeaderTypeBytes};
 inline constexpr FunctionFact kIsBattleMember{L"UEndPartyAPI_IsBattleMember", 0x14132407C, kIsBattleMemberBytes};
-inline constexpr std::uint32_t kComponentHolder     = 0x8;
-inline constexpr std::uint8_t  kUnavailableState    = 6;
-inline constexpr std::uint8_t  kUnavailableStateId  = 22;
 inline constexpr FunctionFact kRosterPlayerType{L"the party roster's player type", 0x140A3F508, kRosterPlayerTypeBytes};
 inline constexpr FunctionFact kCharacterByPlayerType{L"PartyManager::GetCharacterByPlayerType", 0x140A31634,
                                                      kCharacterByPlayerTypeBytes};

@@ -32,7 +32,7 @@ bool InstallPlayerViewPoint(const platform::GameImage& image) noexcept;
 void RemovePlayerViewPoint() noexcept;
 
 /// Player 1's and player 2's ULocalPlayer (player 2 null when there is none). Game thread. A new
-/// player 2 starts on player 1's camera, the FOV rule of every remaining player the mod changed is
+/// player 2 starts on their own camera, the FOV rule of every remaining player the mod changed is
 /// put back, and the next view point of the new player 2 is described in the log.
 void SetPlayers(const void* playerOne, const void* playerTwo) noexcept;
 

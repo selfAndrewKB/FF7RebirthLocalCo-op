@@ -86,7 +86,8 @@ constexpr std::uintptr_t kCommandMenuKey = 0x1491E44F0;
 constexpr std::uint32_t  kEventKey       = 0x18;
 // UEndUserWidget's SetVisibility (vt+0x280: the setter, then its listeners) and UWidget::Visibility
 // (ESlateVisibility, u8 at +0xC3). Setup makes a menu Visible only when the controller's battle input
-// is live (+0x25C), which player 2's never is; a Collapsed menu is cut from every focus path.
+// is live (+0x25C), which player 2's is not when it is built out of battle; a Collapsed menu is cut
+// from every focus path.
 constexpr std::uint8_t kSetVisibilityBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C, 0x24, 0x18, 0x48, 0x89, 0x74,
                                                 0x24, 0x20, 0x57, 0x41, 0x56, 0x41, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
 constexpr platform::FunctionFact kSetVisibility{L"UEndUserWidget_Vt280_SetVisibility_Notify", 0x140C27914,
@@ -118,8 +119,6 @@ constexpr std::uint32_t kCommandsLocked  = 0x5E3;
 constexpr std::uint32_t kCategoryLocks   = 0x2D8;
 constexpr std::uint32_t kCategoryCount   = 0x2E0;
 constexpr std::int32_t  kMaxCategories   = 32;
-constexpr int            kLoggedLayerTries = 5;
-constexpr std::uint64_t  kLayerRetryGap    = 30;  // passes between re-pushes while player 2's path stays short
 // The tactical-mode tint (UI filter type 0) and the wait-mode sound, shared by both controllers' menus
 // (RE-p2-command-menu-tint.md). EnableType/DisableType are a latch over a real reference count, so two
 // owners cancel each other; the game's other menus share a filter through the count itself
@@ -260,7 +259,6 @@ int          g_watchLines = 0;
 unsigned     g_visibilitySets = 0;  // visibility copies made (the tick can undo them every frame)
 unsigned     g_refusals  = 0, g_shieldHits = 0, g_guideSkips = 0, g_snapshotEntries = 0;
 std::uint64_t g_passes     = 0;  // player 2's passes run
-int          g_layerTries  = 0;  // this battle
 unsigned     g_routed      = 0;  // pad 2's presses dispatched in player 2's focus context
 std::array<unsigned, 5> g_routedKnown{};  // per action the log counts on its own (KnownAction)
 bool         g_routeFailed = false;
@@ -377,7 +375,6 @@ void MirrorHudMode(std::uintptr_t two, std::uintptr_t one, std::uint8_t memberTy
         if (mode != 0)
         {
             Put(two + kStoredLeaderType, memberType);  // no leader-change handler on player 1's leader
-            g_layerTries = 0;
         }
         // The game's battle start and end call only this setter (RE-p2-command-menu-lifecycle.md §4.1); a
         // full reset would also clear "setup done" (+0x777), which only Setup puts back.
@@ -513,33 +510,17 @@ void CopyCommandLocks(std::uintptr_t two, std::uintptr_t one) noexcept
 }
 
 /// Player 2's menu keeps the same bottom focus layer as player 1's (a battle event or help menu pops
-/// player 1's: player 2's follows). If player 2's path stays short (the menu was not visible when the
-/// layer was pushed), it is pushed again a few times.
+/// player 1's: player 2's follows), through the controller's own setter. The mirrored Resume/Suspend
+/// (MirrorBattleInput) already keep it in step, so this acts only on a change they did not carry.
 void MirrorMenuLayer(std::uintptr_t two, std::uintptr_t one) noexcept
 {
-    const auto want      = Field<std::uint8_t>(one + kMenuLayer);
-    const auto have      = Field<std::uint8_t>(two + kMenuLayer);
-    const bool shortPath = want != 0 && have != 0 && focus_scope::LivePathCount() <= 1;
-    if (want == have && !shortPath)
+    const auto want = Field<std::uint8_t>(one + kMenuLayer);
+    if (want == Field<std::uint8_t>(two + kMenuLayer))
     {
         return;
-    }
-    if (shortPath)
-    {
-        if (g_passes % kLayerRetryGap != 0)
-        {
-            return;
-        }
-        ++g_layerTries;
-        platform::CallGuarded(g_setMenuLayer, reinterpret_cast<void*>(two), std::uint8_t{0});
     }
     const bool set = platform::CallGuarded(g_setMenuLayer, reinterpret_cast<void*>(two), want);
-    if (shortPath && g_layerTries > kLoggedLayerTries)
-    {
-        return;
-    }
-    Line(std::format(L"player 2's menu focus layer -> {}{}{}", want, shortPath ? L" (again: player 2's path was short)" : L"",
-                     set ? L"" : L" (FAULTED)"));
+    Line(std::format(L"player 2's menu focus layer -> {}{}", want, set ? L"" : L" (FAULTED)"));
 }
 
 /// What the log shows of player 2's controller, as raw values.
@@ -713,8 +694,8 @@ void PlayerTwoPass(float deltaTime) noexcept
             focus.Abandon();
             ReleaseTint(L"released: player 2's tick faulted");
             g_installed = false;
-            Line(L"FAILED: player 2's controller's tick faulted; player 2's command controller stops (the direct actions "
-                 L"come back)");
+            Line(L"FAILED: player 2's controller's tick faulted; player 2's command controller stops, and with it "
+                 L"player 2's attack, guard and dodge");
         }
         Watch(two, one);
     }
@@ -1169,7 +1150,7 @@ bool Install(const platform::GameImage& image) noexcept
     }
     platform::Log(L"command menu tick: {}", ok ? L"player 2's command controller ticks in battle and takes player 2's "
                                                  L"attack, guard and dodge; pad 2's presses reach player 2's menu in battle (logged)"
-                                               : L"UNAVAILABLE (a check failed): player 2's actions stay direct");
+                                               : L"UNAVAILABLE (a check failed): player 2 has no attack, guard or dodge");
     return ok;
 }
 
@@ -1190,14 +1171,6 @@ void Remove() noexcept
             platform::Log(L"command menu tick: a call was changed after us; left in place (it passes through)");
         }
     }
-}
-
-// A frame whose pass is refused (a prompt holds player 1's capture map, a scope cannot be held) leaves
-// player 2's actions paused rather than switching drivers mid-action: the direct calls and the
-// controller's requests keep different hold state (logged as refusals).
-bool DrivesActions() noexcept
-{
-    return g_installed && command_menu_two::Controller() != nullptr;
 }
 
 }  // namespace lss::player_two::command_menu_tick

@@ -1,8 +1,10 @@
 #pragma once
 
-// Player 2's HUD image (Stage B, step B1): the game's own overlay rendered a second time each
-// frame, into a second layer entry of the same pool-2 slot, and each view family drawing only its
-// own player's entry (RE-p2-hud-second-image.md; the mechanism is §5 there).
+// Player 2's HUD image: the game's own overlay rendered a second time each frame, into a second
+// layer entry of the same pool-2 slot, and each view family drawing only its own player's entry
+// (RE-p2-hud-second-image.md; the mechanism is §5 there). The engine keeps one image per slot, so
+// no game path makes a second one: the slot reuse, the skipped submit and the draw filter are the
+// mod's, around the game's own render.
 //
 // Game thread, from the overlay render call (hud/root_overlay_render.h), each frame while player 2
 // is in and the image is on:
@@ -18,8 +20,7 @@
 // call that adds the composite passes, 0x140FDE3C1); the consume loop then gives player 2's entry
 // its own vertex/index buffers and draws only the family's own entry (hud/entry_filter_code.h).
 //
-// In step B1 both passes show the same content (player 1's). Player 2's own content comes from
-// the levers of RE-p2-hud.md P8.6 in step B2.
+// Player 2's own content in their pass comes from the levers of RE-p2-hud.md P8.6 (hud/player_two_pass.h).
 
 #include <cstdint>
 

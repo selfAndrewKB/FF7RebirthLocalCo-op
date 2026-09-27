@@ -76,7 +76,10 @@ constexpr std::array<std::uint32_t, 6> kBytes{0x25C, 0x258, 0x777, 0x783, 0x5E1,
 // UObjectBase: the class and the outer.
 constexpr std::uint32_t kObjectClass = 0x10;
 constexpr std::uint32_t kObjectOuter = 0x20;
-constexpr int kSetupTries = 5;  // per world; a refused focus scope is tried again next tick
+// A refused Setup (player 2's focus scope could not be entered) is a wait, never a give-up: the first
+// kSetupTries tries run on consecutive ticks, later ones every kRepairGap ticks, until one runs. Setups
+// that run are capped at kSetupTries per window (a second Setup must not pile up widgets).
+constexpr int kSetupTries = 5;
 constexpr int kMaxLines   = 200;
 
 using MallocFn = void* (*)(std::size_t size, std::uint32_t alignment);
@@ -100,7 +103,8 @@ bool          g_installed  = false;
 bool          g_failed     = false;
 std::uint64_t g_worldWeak  = 0;        // the world the controller was set up for (0: none)
 void*         g_world      = nullptr;  // that world, and the one the tries count for
-int           g_tries      = 0;
+int           g_tries      = 0;        // Setup tries for g_world, refusals included
+unsigned      g_waitTicks  = 0;        // ticks counted between the paced tries
 int           g_lines      = 0;
 
 struct Snapshot
@@ -120,7 +124,8 @@ struct Snapshot
 Snapshot g_logged{};
 bool     g_loggedOnce = false;
 int      g_hides      = 0;  // times the menu widget was found shown and hidden again
-int      g_repairTries = 0;   // Setup repairs tried since player 2's "setup done" was last 1
+int      g_repairRuns  = 0;   // Setup repairs run since player 2's "setup done" was last 1
+int      g_repairWaits = 0;   // repairs refused in that window
 unsigned g_repairTicks = 0;
 std::array<std::uint8_t, 3> g_loggedLifecycle{0xFF, 0xFF, 0xFF};  // P1 setup done, deferred, P2 setup done
 std::uintptr_t g_endUISystem = 0;
@@ -247,30 +252,40 @@ void RepairSetup(void* world) noexcept
     }
     if (lifecycle[2] != 0)
     {
-        g_repairTries = 0;
+        g_repairRuns  = 0;
+        g_repairWaits = 0;
         return;
     }
-    if (one == 0 || lifecycle[0] == 0 || Field<std::uint8_t>(one + kSetupPending) != 0 || g_repairTries >= kSetupTries ||
+    if (one == 0 || lifecycle[0] == 0 || Field<std::uint8_t>(one + kSetupPending) != 0 || g_repairRuns >= kSetupTries ||
         g_repairTicks++ % kRepairGap != 0)
     {
         return;
     }
-    ++g_repairTries;
     std::uint8_t   set     = 0;
     const wchar_t* refusal = nullptr;
     switch (RunSetup(world, set, refusal))
     {
         case SetupResult::Refused:
-            Line(std::format(L"setup repair waits: {} (try {} of {})", refusal, g_repairTries, kSetupTries));
+            ++g_repairWaits;
+            if (g_repairWaits <= kSetupTries || g_repairWaits % 20 == 0)
+            {
+                Line(std::format(L"setup repair waits: {} ({} time(s))", refusal, g_repairWaits));
+            }
             break;
         case SetupResult::Faulted:
             g_failed = true;
-            Line(L"FAILED: the setup repair faulted; player 2's menu stays off");
+            Line(L"FAILED: the setup repair faulted; player 2's menu, attack, guard and dodge stay off");
             break;
         case SetupResult::Ran:
-            Line(std::format(L"setup repaired (returned {}): 777={} 776={} 778={} 783={}", set,
-                             Field<std::uint8_t>(two + kSetupDone), Field<std::uint8_t>(two + kSelecterSet),
+            ++g_repairRuns;
+            Line(std::format(L"setup repaired (run {} of {}, returned {}): 777={} 776={} 778={} 783={}", g_repairRuns,
+                             kSetupTries, set, Field<std::uint8_t>(two + kSetupDone), Field<std::uint8_t>(two + kSelecterSet),
                              Field<std::uint8_t>(two + kSetupOther), Field<std::uint8_t>(two + kMenuLayer)));
+            if (g_repairRuns >= kSetupTries && Field<std::uint8_t>(two + kSetupDone) == 0)
+            {
+                Line(L"FAILED: player 2's menu is still not set up after every repair; player 2's menu, attack, guard "
+                     L"and dodge stay off until the next map");
+            }
             break;
     }
 }
@@ -531,6 +546,7 @@ void Tick() noexcept
         g_world     = world;
         g_worldWeak = 0;
         g_tries     = 0;
+        g_waitTicks = 0;
     }
     if (g_worldWeak != 0 && leader_scope::StillNames(g_worldWeak, world))
     {
@@ -541,14 +557,14 @@ void Tick() noexcept
         }
         return;
     }
-    if (g_tries >= kSetupTries)
+    if (g_tries >= kSetupTries && ++g_waitTicks % kRepairGap != 0)
     {
-        return;
+        return;  // refused so far: paced tries, never given up
     }
     if (g_controller == nullptr && !Build())
     {
         g_failed = true;
-        Line(L"FAILED to build player 2's controller; player 2's menu stays off");
+        Line(L"FAILED to build player 2's controller; player 2's menu, attack, guard and dodge stay off");
         return;
     }
     ++g_tries;
@@ -557,20 +573,23 @@ void Tick() noexcept
     const auto     setup   = RunSetup(world, set, refusal);
     if (setup == SetupResult::Refused)
     {
-        Line(std::format(L"setup waits: {} (try {} of {})", refusal, g_tries, kSetupTries));
+        if (g_tries <= kSetupTries || g_tries % 20 == 0)
+        {
+            Line(std::format(L"setup waits: {} (try {})", refusal, g_tries));
+        }
         return;
     }
     if (setup == SetupResult::Faulted)
     {
         g_failed = true;
-        Line(L"FAILED: the setup faulted; player 2's menu stays off");
+        Line(L"FAILED: the setup faulted; player 2's menu, attack, guard and dodge stay off");
         return;
     }
     g_worldWeak  = leader_scope::WeakOf(world);
     if (g_worldWeak == 0)
     {
         g_failed = true;  // without it a new world could not be told apart from this one
-        Line(L"FAILED: the world could not be named; player 2's menu stays off");
+        Line(L"FAILED: the world could not be named; player 2's menu, attack, guard and dodge stay off");
         return;
     }
     g_loggedOnce = false;

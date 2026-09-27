@@ -149,7 +149,7 @@ void TickInScopes(void* playerTwoController, void* member, void* state, int type
     const move_state::OwnTick        own;
     const scope_leaks::MemberTickScope leaks(state, playerTwoController, deltaTime);
     g_counters.Act();
-    battle_input::InScopes(member, state, deltaTime);  // player 2's attack, guard and dodge, before the tick runs them
+    battle_input::InScopes(member, state, deltaTime);  // player 2's soft target and lock-on, before the tick
     if (!GuardedTick(state, deltaTime))
     {
         g_stopped = true;

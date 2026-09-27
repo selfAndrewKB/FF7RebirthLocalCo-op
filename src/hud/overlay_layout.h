@@ -27,7 +27,8 @@ class GameImage;
 
 namespace lss::hud {
 
-/// Checks every fact in hud/hud_addresses.h and installs both redirects, or neither.
+/// Checks every fact in hud/hud_addresses.h and installs the three redirects and the code patches
+/// (hud/centered_frame_code.h, hud/arrow_edge_code.h), or none.
 bool InstallOverlayLayout(const platform::GameImage& image) noexcept;
 
 /// Puts the engine's calls back (at mod uninstall, with player 2 out).

@@ -29,8 +29,6 @@ using GlobalTestFn      = std::uint8_t (*)();
 using GlobalObjectFn    = void* (*)();
 using TypeFn            = std::uint8_t (*)();                           // al only
 using TypeTestFn        = std::uint8_t (*)(std::uint8_t playerType);    // al only
-using HolderStateFn     = std::uint8_t (*)(const void* holder);         // al only
-using StateIdTestFn     = std::uint8_t (*)(const void* component, std::uint8_t id);  // al only
 
 struct Functions
 {
@@ -45,8 +43,7 @@ struct Functions
     GlobalTestFn      isNotInFieldState   = nullptr;
     GlobalTestFn      isInBattle          = nullptr;
     GlobalObjectFn    globalLeader        = nullptr;
-    HolderStateFn     holderState         = nullptr;  // player 1's battle switch's member test T
-    StateIdTestFn     hasStateId          = nullptr;
+    ObjectTestFn      isBattleActive      = nullptr;  // player 1's battle switch's member test T
     TypeFn            fieldLeaderType     = nullptr;
     TypeFn            defaultBattleLeader = nullptr;
     TypeTestFn        isBattleMember      = nullptr;
@@ -85,44 +82,19 @@ bool GuardedSwitchLeader(void* controller, void* character) noexcept
     }
 }
 
-bool GuardedHolderState(const void* holder, std::uint8_t& state) noexcept
-{
-    __try
-    {
-        state = g_fn.holderState(holder);
-        return true;
-    }
-    __except (platform::GuardFilter(GetExceptionCode()))
-    {
-        return false;
-    }
-}
-
-bool GuardedHasStateId(const void* component, std::uint8_t id, bool& has) noexcept
-{
-    __try
-    {
-        has = g_fn.hasStateId(component, id) != 0;
-        return true;
-    }
-    __except (platform::GuardFilter(GetExceptionCode()))
-    {
-        return false;
-    }
-}
-
-/// Player 1's battle switch's own member test T (RE-p2-deployed-party.md §4.1): the member has a
-/// BattlePlayer controller component whose holder's state is not 6 and which has no state id 22.
-/// The first rule for player 2 is to be bound by it the way player 1 is.
+/// Player 1's battle switch's own member test T, the game's function (RE-p2-party-switch.md §1.2): the
+/// member is live, has its battle controller component, and is neither dead nor petrified. The first
+/// rule for player 2 is to be bound by it the way player 1 is.
 bool BattleReady(const void* character) noexcept
 {
-    const void* component = g_fn.validateAiController(g_fn.aiControllerOf(character));
-    const void* holder    = ReadPointer(component, facts::kComponentHolder);
-    std::uint8_t state    = 0;
-    bool         excluded = true;
-    return component != nullptr && holder != nullptr && GuardedHolderState(holder, state) &&
-           state != facts::kUnavailableState && GuardedHasStateId(component, facts::kUnavailableStateId, excluded) &&
-           !excluded;
+    __try
+    {
+        return g_fn.isBattleActive(character) != 0;
+    }
+    __except (platform::GuardFilter(GetExceptionCode()))
+    {
+        return false;
+    }
 }
 
 /// The types the game hands back to player 1: the field leader (at every battle end) and the default
@@ -184,8 +156,7 @@ bool Install(const platform::GameImage& image) noexcept
     found      = Find(image, facts::kIsNotInFieldState, g_fn.isNotInFieldState) && found;
     found      = Find(image, facts::kIsInBattle, g_fn.isInBattle) && found;
     found      = Find(image, facts::kResolvePartyLeader, g_fn.globalLeader) && found;
-    found      = Find(image, facts::kHolderStateByte, g_fn.holderState) && found;
-    found      = Find(image, facts::kHasStateId, g_fn.hasStateId) && found;
+    found      = Find(image, facts::kIsBattleActive, g_fn.isBattleActive) && found;
     found      = Find(image, facts::kFieldLeaderType, g_fn.fieldLeaderType) && found;
     found      = Find(image, facts::kDefaultBattleLeaderType, g_fn.defaultBattleLeader) && found;
     found      = Find(image, facts::kIsBattleMember, g_fn.isBattleMember) && found;

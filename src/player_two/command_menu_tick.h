@@ -10,8 +10,8 @@
 // (weak pointer and type) answering player 2's member, player 2's target fields, and pad 2's sticks
 // and buttons. The controller's own sub-ticks then call the game's per-character attack, guard and
 // dodge functions on player 2's member, so player 2's Attack, Unique, Guard and Dodge are written
-// into its request array from pad 2 (levels, as the game's input handler and up route leave them)
-// and the direct calls in player_two/battle_input are retired while this holds.
+// into its request array from pad 2 (levels, as the game's input handler and up route leave them).
+// This is the only path for player 2's actions; if it cannot run, the log says why.
 //
 // What a second tick would change for player 1 is shielded:
 //   - the world slow (slot 0, written by every tick): either menu slows the world (policy A, the
@@ -31,9 +31,5 @@ namespace lss::player_two::command_menu_tick {
 
 bool Install(const platform::GameImage& image) noexcept;
 void Remove() noexcept;
-
-/// Player 2's attack, guard and dodge go through player 2's command controller (the direct calls
-/// in player_two/battle_input must not run as well).
-bool DrivesActions() noexcept;
 
 }  // namespace lss::player_two::command_menu_tick
