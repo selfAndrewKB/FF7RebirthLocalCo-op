@@ -10,7 +10,7 @@
     3. The last session's UE4SS.log is kept under ue4ss\logs (the newest ten), since each launch
        starts a new one.
     4. The game is launched through Steam, and this returns once the mod has logged its ready line
-       for this launch (or reports that it did not).
+       for this launch (or reports that it did not). With -NoLaunch it is left closed.
     Title and load menus are left to keys.ps1 and shot.ps1, so each one is checked on screen first.
 
 .EXAMPLE
@@ -18,6 +18,7 @@
 #>
 param(
     [switch]$Deploy,
+    [switch]$NoLaunch,  # quit, deploy and keep the log, but leave the game closed
     [string]$Label = '',
     [string]$Build = "$PSScriptRoot\..\build\Game__Shipping__Win64\LocalSplitScreen.dll",
     [int]$ReadyTimeoutSeconds = 150
@@ -63,6 +64,8 @@ if (Test-Path $log) {
     Get-ChildItem $kept -Filter 'UE4SS-*.log' | Sort-Object Name -Descending | Select-Object -Skip 10 | Remove-Item
     "previous log kept as logs\UE4SS-$stamp.log"
 }
+
+if ($NoLaunch) { 'not launched (-NoLaunch)'; return }
 
 $start = Get-Date
 Start-Process 'c:/program files (x86)/steam/steam.exe' -ArgumentList '-applaunch', '2909400'

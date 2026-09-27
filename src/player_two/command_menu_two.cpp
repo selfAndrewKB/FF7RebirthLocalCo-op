@@ -14,11 +14,13 @@
 #include "player_two/focus_scope.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
+#include "player_two/party_member.h"
 
 #include <array>
 #include <cstdint>
 #include <cstring>
 #include <format>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -40,6 +42,21 @@ constexpr std::uint8_t kSetupBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x20, 0x48, 0x89
 constexpr platform::FunctionFact kSetup{L"FieldCommandCtrl__SetupMenuWidgets", 0x14158B0F4, kSetupBytes};
 
 constexpr std::size_t kControllerSize = 0x798;
+// The UI system's command controller slot (EndUISystem[23]: the game's controller).
+constexpr std::uintptr_t kEndUISystem = 0x1493496E0;
+constexpr std::uint32_t  kGameController = 0xB8;
+constexpr std::uint32_t  kHudMode        = 0x540;  // u8: the battle HUD mode
+// The controller's lifecycle (RE-p2-command-menu-lifecycle.md §2, §3.1): "setup done" (+0x777: Setup sets
+// it, only ResetAll clears it; while 0 no menu state can be pushed) and "setup pending" (+0x775). The
+// game resets and sets up its own controller again when it restarts the field (a retry); the UI
+// system's +0x2D1 marks a Setup deferred behind a fade.
+constexpr std::uint32_t kSetupDone     = 0x777;
+constexpr std::uint32_t kSetupPending  = 0x775;
+constexpr std::uint32_t kSetupDeferred = 0x2D1;  // in the UI system
+constexpr std::uint32_t kSelecterSet   = 0x776;  // u8, set by Setup (logged)
+constexpr std::uint32_t kSetupOther    = 0x778;  // u8, set by Setup (logged)
+constexpr std::uint32_t kMenuLayer     = 0x783;  // u8 (logged)
+constexpr int           kRepairGap     = 30;     // engine ticks between repair tries
 // What the log reads of a controller: the members (leader, ally, shortcut target, ally pick), the
 // menu widget (FWeakObjectPtr) and its back pointer to the controller, and the focus bytes (§11 of
 // RE-p2-command-menu-input.md: battle input, switching layer, +0x777, menu focus layer, ready, HUD mode).
@@ -91,6 +108,29 @@ struct Snapshot
 Snapshot g_logged{};
 bool     g_loggedOnce = false;
 int      g_hides      = 0;  // times the menu widget was found shown and hidden again
+int      g_repairTries = 0;   // Setup repairs tried since player 2's "setup done" was last 1
+unsigned g_repairTicks = 0;
+std::array<std::uint8_t, 3> g_loggedLifecycle{0xFF, 0xFF, 0xFF};  // P1 setup done, deferred, P2 setup done
+std::uintptr_t g_endUISystem = 0;
+// A controller's widgets shown per half (RE-p2-command-menu-views.md §10.3, §10.5): the command
+// menu, the field menu (the party list) and the wait-mode filter (the tactical-mode tint), each an
+// FWeakObjectPtr in the controller. In player 2's pass, player 2's command and field menus take player
+// 1's own opacity (their fades), the filter its full opacity (its own content decides).
+struct Part
+{
+    std::uint32_t offset;
+    bool          borrowOpacity;
+};
+constexpr std::array<Part, 3> kParts{{{kMenuWidget, true}, {0x4E8, true}, {0x62C, false}}};
+// Render (game thread): player 1's widgets (FWeakObjectPtr, resolved again at each use: the game can
+// rebuild them) and their own opacity while player 2's pass shows player 2's.
+struct Saved
+{
+    std::uint64_t weak    = 0;
+    float         opacity = 1.0F;
+};
+std::array<Saved, kParts.size()> g_oneSaved{};
+bool                             g_swapped = false;
 
 template <class T>
 T Field(std::uintptr_t address) noexcept
@@ -139,6 +179,87 @@ std::size_t CountMenus() noexcept
     catch (...)
     {
         return 0;
+    }
+}
+
+enum class SetupResult
+{
+    Ran,
+    Refused,
+    Faulted
+};
+
+/// Setup on player 2's controller in player 2's focus context and, when player 2's member is known, with
+/// the party leader answering player 2's member (Setup stores the leader's type in the controller).
+SetupResult RunSetup(void* world, std::uint8_t& result, const wchar_t*& refusal) noexcept
+{
+    void*      member     = generation::Member();
+    const auto memberType = member != nullptr ? party_member::PlayerTypeOf(member) : std::nullopt;
+    const auto memberWeak = member != nullptr ? leader_scope::WeakOf(member) : 0;
+    focus_scope::FocusScope scope(g_controller);
+    if (!scope.Entered())
+    {
+        refusal = scope.Refusal();
+        return SetupResult::Refused;
+    }
+    std::optional<leader_scope::LeaderScope>     leader;
+    std::optional<leader_scope::LeaderTypeScope> type;
+    if (memberType && memberWeak != 0)
+    {
+        leader.emplace(memberWeak);
+        type.emplace(*memberType);
+    }
+    if (!platform::CallGuarded(g_setup, result, g_controller, world))
+    {
+        scope.Abandon();
+        return SetupResult::Faulted;
+    }
+    return SetupResult::Ran;
+}
+
+/// Player 2's controller follows the game's lifecycle: when the game has set its own up again (after a
+/// retry resets it) and player 2's is not set up, Setup runs on player 2's (as the game's restart runs
+/// Setup on its own). Also logs the "setup done" window on change.
+void RepairSetup(void* world) noexcept
+{
+    const auto one = Field<std::uintptr_t>(g_endUISystem + kGameController);
+    const auto two = reinterpret_cast<std::uintptr_t>(g_controller);
+    const std::array<std::uint8_t, 3> lifecycle{Field<std::uint8_t>(one + kSetupDone),
+                                                Field<std::uint8_t>(g_endUISystem + kSetupDeferred),
+                                                Field<std::uint8_t>(two + kSetupDone)};
+    if (lifecycle != g_loggedLifecycle)
+    {
+        g_loggedLifecycle = lifecycle;
+        Line(std::format(L"setup done: player 1 {} (a setup deferred: {}), player 2 {}", lifecycle[0], lifecycle[1],
+                         lifecycle[2]));
+    }
+    if (lifecycle[2] != 0)
+    {
+        g_repairTries = 0;
+        return;
+    }
+    if (one == 0 || lifecycle[0] == 0 || Field<std::uint8_t>(one + kSetupPending) != 0 || g_repairTries >= kSetupTries ||
+        g_repairTicks++ % kRepairGap != 0)
+    {
+        return;
+    }
+    ++g_repairTries;
+    std::uint8_t   set     = 0;
+    const wchar_t* refusal = nullptr;
+    switch (RunSetup(world, set, refusal))
+    {
+        case SetupResult::Refused:
+            Line(std::format(L"setup repair waits: {} (try {} of {})", refusal, g_repairTries, kSetupTries));
+            break;
+        case SetupResult::Faulted:
+            g_failed = true;
+            Line(L"FAILED: the setup repair faulted; player 2's menu stays off");
+            break;
+        case SetupResult::Ran:
+            Line(std::format(L"setup repaired (returned {}): 777={} 776={} 778={} 783={}", set,
+                             Field<std::uint8_t>(two + kSetupDone), Field<std::uint8_t>(two + kSelecterSet),
+                             Field<std::uint8_t>(two + kSetupOther), Field<std::uint8_t>(two + kMenuLayer)));
+            break;
     }
 }
 
@@ -218,7 +339,9 @@ bool Install(const platform::GameImage& image) noexcept
     {
         g_worldClass = 0;
     }
-    g_installed       = malloc && ctor && setup && get && g_worldClass != 0 && focus_scope::Install(image);
+    const auto system = image.Rebase(kEndUISystem, kGameController + sizeof(void*));
+    g_endUISystem     = system ? *system : 0;
+    g_installed       = malloc && ctor && setup && get && g_worldClass != 0 && system && focus_scope::Install(image);
     if (g_installed)
     {
         g_malloc  = reinterpret_cast<MallocFn>(*malloc);
@@ -245,6 +368,87 @@ void* Controller() noexcept
     return g_controller;
 }
 
+namespace {
+
+/// The object a FWeakObjectPtr names, or null.
+void* Resolve(std::uint64_t weak) noexcept
+{
+    void* object = nullptr;
+    return weak != 0 && g_weakGet != nullptr && platform::CallGuarded(g_weakGet, object, &weak) ? object : nullptr;
+}
+
+/// A controller's widget (its FWeakObjectPtr at `offset`), or null.
+void* WidgetOf(std::uintptr_t controller, std::uint32_t offset) noexcept
+{
+    return controller != 0 ? Resolve(Field<std::uint64_t>(controller + offset)) : nullptr;
+}
+
+void SetOpacity(void* widget, float opacity) noexcept
+{
+    if (widget != nullptr && hud::widget_opacity::Get(widget) != opacity)
+    {
+        hud::widget_opacity::Set(widget, opacity);
+    }
+}
+
+}  // namespace
+
+void ShowOnly(int player) noexcept
+{
+    if (g_controller == nullptr || g_endUISystem == 0 || !hud::widget_opacity::Installed() || !generation::OnGameThread())
+    {
+        return;
+    }
+    const auto two = reinterpret_cast<std::uintptr_t>(g_controller);
+    const auto one = Field<std::uintptr_t>(g_endUISystem + kGameController);
+    if (player != 1 || Field<std::uint8_t>(two + kHudMode) == 0 || one == 0)
+    {
+        return Restore();
+    }
+    for (std::size_t i = 0; i < kParts.size(); ++i)
+    {
+        void* oneWidget = WidgetOf(one, kParts[i].offset);
+        void* twoWidget = WidgetOf(two, kParts[i].offset);
+        if (oneWidget == nullptr || twoWidget == nullptr)
+        {
+            continue;
+        }
+        if (!g_swapped)
+        {
+            g_oneSaved[i] = {Field<std::uint64_t>(one + kParts[i].offset), hud::widget_opacity::Get(oneWidget)};
+        }
+        SetOpacity(twoWidget, kParts[i].borrowOpacity ? g_oneSaved[i].opacity : 1.0F);
+        SetOpacity(oneWidget, 0.0F);
+    }
+    g_swapped = true;
+}
+
+
+void Restore() noexcept
+{
+    if (!generation::OnGameThread())
+    {
+        return;
+    }
+    if (!hud::widget_opacity::Installed())
+    {
+        return;
+    }
+    if (g_swapped)
+    {
+        for (auto& saved : g_oneSaved)
+        {
+            SetOpacity(Resolve(saved.weak), saved.opacity);  // null (skipped) if the game rebuilt it
+            saved = {};
+        }
+        g_swapped = false;
+    }
+    for (const Part& part : kParts)
+    {
+        SetOpacity(WidgetOf(reinterpret_cast<std::uintptr_t>(g_controller), part.offset), 0.0F);
+    }
+}
+
 void KeepHidden() noexcept
 {
     if (g_controller == nullptr || g_weakGet == nullptr || !hud::widget_opacity::Installed() ||
@@ -252,18 +456,19 @@ void KeepHidden() noexcept
     {
         return;
     }
-    const auto weak   = Field<std::uint64_t>(reinterpret_cast<std::uintptr_t>(g_controller) + kMenuWidget);
-    void*      widget = nullptr;
-    if (weak == 0 || !platform::CallGuarded(g_weakGet, widget, &weak) || widget == nullptr ||
-        hud::widget_opacity::Get(widget) == 0.0F)
+    for (const Part& part : kParts)
     {
-        return;
-    }
-    const bool hidden = hud::widget_opacity::Set(widget, 0.0F);
-    if (++g_hides <= 5 || g_hides % 100 == 0)
-    {
-        Line(std::format(L"menu widget {} (render opacity 0; {} time(s))", hidden ? L"hidden" : L"could NOT be hidden",
-                         g_hides));
+        void* widget = WidgetOf(reinterpret_cast<std::uintptr_t>(g_controller), part.offset);
+        if (widget == nullptr || hud::widget_opacity::Get(widget) == 0.0F)
+        {
+            continue;
+        }
+        const bool hidden = hud::widget_opacity::Set(widget, 0.0F);
+        if (++g_hides <= 5 || g_hides % 100 == 0)
+        {
+            Line(std::format(L"widget +{:#x} {} (render opacity 0; {} time(s))", part.offset,
+                             hidden ? L"hidden" : L"could NOT be hidden", g_hides));
+        }
     }
 }
 
@@ -288,6 +493,7 @@ void Tick() noexcept
     {
         if (g_controller != nullptr)
         {
+            RepairSetup(world);
             Watch();
         }
         return;
@@ -303,22 +509,15 @@ void Tick() noexcept
         return;
     }
     ++g_tries;
-    std::uint8_t set = 0;
-    bool         ran = false;
+    std::uint8_t   set     = 0;
+    const wchar_t* refusal = nullptr;
+    const auto     setup   = RunSetup(world, set, refusal);
+    if (setup == SetupResult::Refused)
     {
-        focus_scope::FocusScope scope(g_controller);
-        if (!scope.Entered())
-        {
-            Line(std::format(L"setup waits: {} (try {} of {})", scope.Refusal(), g_tries, kSetupTries));
-            return;
-        }
-        ran = platform::CallGuarded(g_setup, set, g_controller, world);
-        if (!ran)
-        {
-            scope.Abandon();
-        }
+        Line(std::format(L"setup waits: {} (try {} of {})", refusal, g_tries, kSetupTries));
+        return;
     }
-    if (!ran)
+    if (setup == SetupResult::Faulted)
     {
         g_failed = true;
         Line(L"FAILED: the setup faulted; player 2's menu stays off");

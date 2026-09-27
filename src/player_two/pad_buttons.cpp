@@ -47,8 +47,7 @@ constexpr std::uint8_t   kActionDownBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x5
                                                0x41, 0x56, 0x41, 0x57, 0xB8, 0x00, 0x01, 0x00, 0x00, 0xE8, 0x6A, 0xB1};
 constexpr std::array<std::uintptr_t, 3> kActionDownCalls{0x140E745A0, 0x140E74141, 0x140E74312};
 
-/// (owner, unused, source bit, the action event, alreadyHandled): 1 when the UI stack consumed it.
-using ActionDownFn = char (*)(void* owner, void* unused, std::uint32_t sourceBit, void* event, std::uint8_t alreadyHandled);
+// ActionDownFn: pad_buttons.h.
 
 // A TSet<element> in the input object, stock TSparseArray layout (§1.1): data, ArrayNum, the
 // allocation bits (4 inline dwords, a heap pointer, NumBits, MaxBits).
@@ -105,6 +104,7 @@ struct Table
 // Set once at install.
 std::array<platform::CallRedirect, kActionDownCalls.size()> g_actionDownCalls;
 ActionDownFn            g_actionDown = nullptr;
+PlayerTwoRouteFn        g_playerTwoRoute = nullptr;  // game thread
 platform::VTableEntry   g_tickSlot;
 TickFn                  g_engineTick = nullptr;
 const std::byte* const* g_inputOwner = nullptr;
@@ -334,12 +334,23 @@ char ActionDown(void* owner, void* unused, std::uint32_t sourceBit, void* event,
         generation::OnGameThread())
     {
         ++g_padTwoDowns;
+        char result = 0;
+        if (g_playerTwoRoute != nullptr &&
+            g_playerTwoRoute(g_actionDown, owner, unused, sourceBit, event, alreadyHandled, result))
+        {
+            return result;  // player 2's own UI took it
+        }
         alreadyHandled = 1;
     }
     return g_actionDown(owner, unused, sourceBit, event, alreadyHandled);
 }
 
 }  // namespace
+
+void SetPlayerTwoRoute(PlayerTwoRouteFn route) noexcept
+{
+    g_playerTwoRoute = route;
+}
 
 bool Install(const platform::GameImage& image) noexcept
 {

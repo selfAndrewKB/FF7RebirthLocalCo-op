@@ -5,6 +5,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "platform/vtable_entry.h"
 #include "player_two/command_menu_two.h"
 #include "player_two/command_rules.h"
 #include "player_two/engine_facts.h"
@@ -51,10 +52,74 @@ constexpr std::uintptr_t         kGuideMode8Call = 0x140A64E1B;
 constexpr std::uint8_t kHudModeBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x57,
                                           0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x3B, 0x6E, 0x00, 0x01};
 constexpr platform::FunctionFact kSetHudMode{L"FieldCommandCtrl_SetBattleHudMode540", 0x1410A80E0, kHudModeBytes};
-constexpr std::uint8_t kResetAllBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x68, 0x10,
-                                           0x48, 0x89, 0x70, 0x18, 0x48, 0x89, 0x78, 0x20, 0x41, 0x56, 0xB8,
-                                           0x20, 0x00, 0x00, 0x00, 0xE8, 0x11, 0xD2, 0x15, 0x01};
-constexpr platform::FunctionFact kResetAll{L"FieldCommandCtrl_ResetAll", 0x140F51D00, kResetAllBytes};
+// The party list's input flag (ctrl+0x4A0 = party list +0x140): while 0 its show timer collapses the field
+// menu every tick. The game sets it through EndUI23_ResumeHudInput(1) / SuspendHudInput(1), which act on
+// its own controller only (RE-p2-command-menu-lifecycle.md §1).
+constexpr std::uint8_t kResumeHudInputBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C, 0x24, 0x10, 0x48,
+                                                 0x89, 0x74, 0x24, 0x18, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8,
+                                                 0xE6, 0x82, 0x42, 0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xF9};
+constexpr platform::FunctionFact kResumeHudInput{L"FieldCommandCtrl_ResumeHudInput", 0x140C86C30, kResumeHudInputBytes};
+// EndUI23_SuspendHudInput(u8 kind, u8 reset): acts on the UI system's controller slot.
+constexpr std::uint8_t kSuspendHudInputBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10,
+                                                  0x57, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x57, 0x81, 0x42,
+                                                  0x01, 0x48, 0x2B, 0xE0, 0x40, 0x8A, 0xF2, 0x0F, 0xB6, 0xD9};
+constexpr platform::FunctionFact kSuspendHudInput{L"EndUI23_SuspendHudInput", 0x140C86DC4, kSuspendHudInputBytes};
+constexpr std::uint8_t kPartyListInputBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C, 0x24, 0x18, 0x48,
+                                                 0x89, 0x74, 0x24, 0x20, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56,
+                                                 0x41, 0x57, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8, 0x6E, 0x7F};
+constexpr platform::FunctionFact kSetPartyListInput{L"PartyList360_SetInputEnabled140", 0x140C86FA0, kPartyListInputBytes};
+constexpr std::uint32_t kPartyList      = 0x360;  // the controller's party list object
+constexpr std::uint32_t kPartyListInput = 0x4A0;  // u8
+constexpr std::uint32_t kSetupPending   = 0x775;  // u8: the tick re-runs Setup
+// FieldCommandCtrl_SetMenuFocusLayer783(ctrl, on): the menu's bottom focus layer (priority -1000),
+// pushed and focused, or popped (RE-p2-command-menu-input.md §2).
+constexpr std::uint8_t kSetMenuLayerBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x18,
+                                               0x57, 0xB8, 0x40, 0x00, 0x00, 0x00, 0xE8, 0x73, 0x80, 0x42,
+                                               0x01, 0x48, 0x2B, 0xE0, 0x8A, 0x81, 0x83, 0x07, 0x00, 0x00};
+constexpr platform::FunctionFact kSetMenuLayer{L"FieldCommandCtrl_SetMenuFocusLayer783", 0x140C86EA8, kSetMenuLayerBytes};
+// Action keys the route keeps away from player 2's menu: target switching (the menu's handler would
+// switch the battle system's target; player_two/lock_on already switches player 2's). An action
+// event's key name is at +0x18 (the handler compares it with the FKeys' first eight bytes).
+constexpr std::uintptr_t kPrevTargetKey  = 0x1491E46B8;
+constexpr std::uintptr_t kNextTargetKey  = 0x1491E46D0;
+constexpr std::uintptr_t kCommandMenuKey = 0x1491E44F0;
+constexpr std::uint32_t  kEventKey       = 0x18;
+// UEndUserWidget's SetVisibility (vt+0x280: the setter, then its listeners) and UWidget::Visibility
+// (ESlateVisibility, u8 at +0xC3). Setup makes a menu Visible only when the controller's battle input
+// is live (+0x25C), which player 2's never is; a Collapsed menu is cut from every focus path.
+constexpr std::uint8_t kSetVisibilityBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C, 0x24, 0x18, 0x48, 0x89, 0x74,
+                                                0x24, 0x20, 0x57, 0x41, 0x56, 0x41, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
+constexpr platform::FunctionFact kSetVisibility{L"UEndUserWidget_Vt280_SetVisibility_Notify", 0x140C27914,
+                                                kSetVisibilityBytes};
+// The input processor's key-up handler (IInputProcessor slot 3; FKeyEvent in r8, its UserIndex, the
+// pad's controller id, at +0x0C) and the up route's call in ActionUp_UpdateTables (bool(owner, event)):
+// RE-p2-command-menu-input.md §3.3, §10 Stage 3d.
+// The handler's first instruction (mov [rsp+8], rbx) is often patched by another hook (UE4SS's input
+// handling puts a jump there, live), so the slot is checked to still name the handler and the bytes
+// are checked after that instruction.
+constexpr std::uintptr_t kKeyUpEntry     = 0x145D40598;  // the vtable entry
+constexpr std::uintptr_t kKeyUp          = 0x140E65D18;  // SquareInput__HandleKeyUpEvent
+constexpr std::uintptr_t kKeyUpAfterFirst = 0x140E65D1D;
+constexpr std::uint8_t   kKeyUpRestBytes[] = {0x48, 0x89, 0x6C, 0x24, 0x10, 0x56, 0x57, 0x41,
+                                              0x56, 0xB8, 0x60, 0x00, 0x00, 0x00, 0xE8};
+constexpr std::uint32_t kKeyEventUser = 0x0C;
+constexpr std::uint8_t  kUpRouteBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55,
+                                           0x41, 0x56, 0x41, 0x57, 0x48, 0x8D, 0xAC, 0x24, 0x60, 0xFE, 0xFF, 0xFF};
+constexpr platform::FunctionFact kUpRoute{L"SquareInput__RouteActionUpToUIHandlerStack", 0x140E66A14, kUpRouteBytes};
+constexpr std::uintptr_t kUpRouteCall = 0x140E66914;
+constexpr std::uint32_t kVisibility = 0xC3;
+constexpr std::uint32_t kMenuWidget = 0x4F0;  // the controller's menu (FWeakObjectPtr)
+constexpr std::uint32_t kFieldMenu  = 0x4E8;  // its field menu, which holds the party list (FWeakObjectPtr)
+// The battle system's command locks, written into the game's controller only (EndUISystem[23]):
+// commands enabled (+0x5E2: every row is greyed while 0), commands locked (+0x5E3), and the event and
+// tutorial locks per command category (u8 array at +0x2D8, count at +0x2E0) (RE-p2-command-menu-views.md §10.2).
+constexpr std::uint32_t kCommandsEnabled = 0x5E2;
+constexpr std::uint32_t kCommandsLocked  = 0x5E3;
+constexpr std::uint32_t kCategoryLocks   = 0x2D8;
+constexpr std::uint32_t kCategoryCount   = 0x2E0;
+constexpr std::int32_t  kMaxCategories   = 32;
+constexpr int            kLoggedLayerTries = 5;
+constexpr std::uint64_t  kLayerRetryGap    = 30;  // passes between re-pushes while player 2's path stays short
 // Pad queries, answered on pad 2's view inside a ButtonScope; the action keys (FKeys).
 constexpr std::uint8_t kQueryBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x40, 0x00, 0x00, 0x00, 0xE8};
 constexpr platform::FunctionFact kIsPressed{L"SquareInput_IsActionPressed_Global", 0x14080619C, kQueryBytes};
@@ -107,6 +172,7 @@ enum Request : std::int32_t
     kReqUnique  = 13,
     kReqGuardDodge = 32,
     kReqGuard   = 37,
+    kReqSynergyPane = 27,  // set on Guard's press (the synergy pane at top level); the up route clears it
 };
 constexpr std::array<std::int32_t, 11> kLoggedRequests{0, 1, 5, 6, 12, 13, 25, 32, 37, 38, 39};
 constexpr std::int32_t kDodgePress    = 3;  // req[32]: a dodge press
@@ -114,7 +180,10 @@ constexpr std::int32_t kDodgeGuarding = 4;  // req[32]: a dodge press while guar
 constexpr std::int32_t kGuardHeld     = 1;  // req[32]: guard held
 
 constexpr std::size_t kSnapshotTypes = 15;
-constexpr int         kMaxLines      = 400;
+constexpr int         kMaxLines      = 400;  // events
+constexpr int         kMaxWatchLines = 800;  // player 2's controller's state, on change
+constexpr std::uint32_t kOpenPending = 0x5D0;  // i32: a menu open requested (>= 0), pushed 0.125 s later
+constexpr std::uint32_t kGate777     = 0x777;  // u8: [UNKNOWN] 1 on the game's controller; 0 on player 2's after a reset
 
 using TickFn      = void (*)(void* controller, float deltaTime);
 using SlotFn      = void (*)(std::uint8_t slot, float value);
@@ -122,18 +191,34 @@ using SnapshotFn  = void (*)(void* queue, const std::uint64_t* commands, const s
 using GuideShowFn = std::uint8_t (*)(void* guide, std::uint8_t mode);
 using GuideMode8Fn = void (*)();
 using HudModeFn   = void (*)(void* controller, std::uint8_t mode);
-using ResetAllFn  = void (*)(void* controller);
+using ResumeHudInputFn = void (*)(void* controller, std::uint8_t kind);
+using SuspendHudInputFn = void (*)(std::uint8_t kind, std::uint8_t reset);
+using PartyListInputFn = void (*)(void* partyList, std::uint8_t on, std::uint8_t applyVisibility);
+using LeaderFn         = void* (*)();
 using QueryFn     = std::uint8_t (*)(const void* key);
+using SetMenuLayerFn = void (*)(void* controller, std::uint8_t on);
+using SetVisibilityFn = void (*)(void* widget, std::uint8_t visibility);
+using WeakGetFn       = void* (*)(const std::uint64_t* weak);
+using KeyUpFn         = std::uint8_t (*)(void* self, void* application, const void* keyEvent);
+using UpRouteFn       = std::uint8_t (*)(void* owner, void* event);
 
 // Set once at install.
-platform::CallRedirect g_tickCall, g_slotCall, g_snapshotCall, g_guideShowCall, g_guideMode8Call;
+platform::CallRedirect g_tickCall, g_slotCall, g_snapshotCall, g_guideShowCall, g_guideMode8Call, g_upRouteCall;
+platform::VTableEntry  g_keyUpSlot;
 HudModeFn      g_hudMode   = nullptr;
-ResetAllFn     g_resetAll  = nullptr;
+ResumeHudInputFn  g_resumeHudInput  = nullptr;
+SuspendHudInputFn g_suspendHudInput = nullptr;
+PartyListInputFn g_partyListInput = nullptr;
+LeaderFn         g_resolveLeader  = nullptr;
 QueryFn        g_isPressed = nullptr;
 QueryFn        g_isHeld    = nullptr;
 std::array<std::uintptr_t, kActions> g_keys{};
 std::uintptr_t g_endUISystem  = 0;
 std::uintptr_t g_partyManager = 0;  // the address holding the party manager
+SetMenuLayerFn g_setMenuLayer = nullptr;
+SetVisibilityFn g_setVisibility = nullptr;
+WeakGetFn      g_weakGet = nullptr;
+std::uintptr_t g_prevTargetKey = 0, g_nextTargetKey = 0, g_commandMenuKey = 0;
 
 // Game thread.
 bool         g_installed = false;
@@ -145,7 +230,16 @@ float        g_twoSlot   = 1.0F;
 float        g_written   = 1.0F;
 bool         g_passed    = false;  // player 2's controller ticked this frame
 int          g_lines     = 0;
+int          g_watchLines = 0;
+unsigned     g_visibilitySets = 0;  // visibility copies made (the tick can undo them every frame)
 unsigned     g_refusals  = 0, g_shieldHits = 0, g_guideSkips = 0, g_snapshotEntries = 0;
+std::uint64_t g_passes     = 0;  // player 2's passes run
+int          g_layerTries  = 0;  // this battle
+unsigned     g_routed      = 0;  // pad 2's presses dispatched in player 2's focus context
+std::array<unsigned, 5> g_routedKnown{};  // per action the log counts on its own (KnownAction)
+bool         g_routeFailed = false;
+unsigned     g_upRouted    = 0;   // pad 2's releases routed to player 2's menu
+std::int32_t g_upPad       = -1;  // the pad of the release being handled (key-up handler), or -1
 
 template <class T>
 T Field(std::uintptr_t address) noexcept
@@ -164,6 +258,15 @@ bool Put(std::uintptr_t address, T value) noexcept
     return address != 0 && platform::WriteGuarded(reinterpret_cast<void*>(address), &value, sizeof(T));
 }
 
+void WatchLine(const std::wstring& text) noexcept
+{
+    if (g_watchLines < kMaxWatchLines)
+    {
+        ++g_watchLines;
+        platform::Log(L"command menu tick: {}", text);
+    }
+}
+
 void Line(const std::wstring& text) noexcept
 {
     if (g_lines < kMaxLines)
@@ -171,12 +274,6 @@ void Line(const std::wstring& text) noexcept
         ++g_lines;
         platform::Log(L"command menu tick: {}", text);
     }
-}
-
-std::uint8_t Query(QueryFn query, std::size_t action) noexcept
-{
-    std::uint8_t answer = 0;
-    return platform::CallGuarded(query, answer, reinterpret_cast<const void*>(g_keys[action])) ? answer : 0;
 }
 
 std::int32_t RequestOf(std::uintptr_t controller, std::int32_t index) noexcept
@@ -196,49 +293,51 @@ void SetRequest(std::uintptr_t controller, std::int32_t index, std::int32_t valu
     }
 }
 
-/// The party manager's leader type answering player 2's member while alive (the leader's weak
-/// pointer is player_two/leader_scope's).
-class LeaderTypeScope
+/// The held action requests (Attack, Unique, Guard with its dodge slot and the synergy pane) of player 2's
+/// controller cleared, as the game's up handler clears them on the matching release.
+void ClearHeld(std::uintptr_t two) noexcept
 {
-public:
-    LeaderTypeScope(std::uintptr_t manager, std::uint8_t type) noexcept
-        : address_(manager != 0 ? manager + kLeaderType : 0), saved_(Field<std::uint8_t>(address_))
+    for (const std::int32_t request : {kReqAttack, kReqUnique, kReqGuard, kReqGuardDodge, kReqSynergyPane})
     {
-        held_ = Put(address_, type);
+        SetRequest(two, request, 0);
     }
-    ~LeaderTypeScope()
-    {
-        if (held_)
-        {
-            Put(address_, saved_);
-        }
-    }
-    LeaderTypeScope(const LeaderTypeScope&)            = delete;
-    LeaderTypeScope& operator=(const LeaderTypeScope&) = delete;
-    bool Held() const noexcept { return held_; }
+}
 
-private:
-    std::uintptr_t address_ = 0;
-    std::uint8_t   saved_   = 0;
-    bool           held_    = false;
-};
-
-/// Pad 2's four actions written into player 2's controller, as the game's input handler and up route
-/// leave them (RE-p2-command-menu-tick.md §2, §8, §13.2 step 3).
+/// Before player 2's tick. Pad 2's actions reach player 2's controller through the game's own input
+/// handler (pad 2's presses and releases dispatched in player 2's UI): the press sets the request and
+/// the release clears it, as for player 1. Here only: the leader-switch requests cleared (player 2's d-pad
+/// never switches the party leader), and the held requests cleared while player 1's battle input is
+/// suspended (a battle event or help menu stops player 1's the same way, by taking the menu's events).
 void WriteRequests(std::uintptr_t two, std::uintptr_t one) noexcept
 {
-    SetRequest(two, kPrevMember, 0);  // player 2's d-pad never switches the party leader
+    SetRequest(two, kPrevMember, 0);
     SetRequest(two, kNextMember, 0);
     const bool live = Field<std::uint8_t>(one + kBattleInput) != 0 && Field<std::uint8_t>(one + kMenuLayer) != 0 &&
                       Field<std::uint8_t>(two + kHudMode) != 0;
-    const bool guard  = live && Query(g_isHeld, kGuard) != 0;
-    const bool attack = live && Query(g_isHeld, kAttack) != 0;
-    const bool unique = live && Query(g_isHeld, kUnique) != 0;
-    const bool dodge  = live && Query(g_isPressed, kDodge) != 0 && Field<std::uint8_t>(two + kSwitchingLayer) == 0;
-    SetRequest(two, kReqGuard, guard ? 1 : 0);
-    SetRequest(two, kReqAttack, attack && !guard ? 1 : 0);
-    SetRequest(two, kReqUnique, unique && !guard ? 1 : 0);
-    SetRequest(two, kReqGuardDodge, dodge ? (guard ? kDodgeGuarding : kDodgePress) : (guard ? kGuardHeld : 0));
+    if (!live)
+    {
+        ClearHeld(two);
+    }
+}
+
+/// Battle input live (+0x25C = the member selecter's input flag, ctrl+0xF0+0x16C): the game turns it on and
+/// off with EndUI23_ResumeHudInput(0) / SuspendHudInput(0, 0), on its own controller only; the same calls are
+/// made for player 2's (the suspend inside player 2's UI, where the UI system's controller slot names player
+/// 2's). Without it the input handler drops Attack, Unique and Guard, and the tick clears every request
+/// (RE-p2-command-menu-actions.md; RE-p2-command-menu-lifecycle.md §3.3).
+void MirrorBattleInput(std::uintptr_t two, std::uintptr_t one) noexcept
+{
+    const auto want = Field<std::uint8_t>(one + kBattleInput);
+    const auto have = Field<std::uint8_t>(two + kBattleInput);
+    if (want == have)
+    {
+        return;
+    }
+    const bool set = want != 0 ? platform::CallGuarded(g_resumeHudInput, reinterpret_cast<void*>(two), std::uint8_t{0})
+                               : platform::CallGuarded(g_suspendHudInput, std::uint8_t{0}, std::uint8_t{0});
+    Line(std::format(L"player 2's battle input {} -> {} ({}){}: now {}", have, want,
+                     want != 0 ? L"ResumeHudInput(0)" : L"SuspendHudInput(0, 0)", set ? L"" : L" FAULTED",
+                     Field<std::uint8_t>(two + kBattleInput)));
 }
 
 /// Player 2's controller follows the game's battle HUD mode through its own setter (§4.2, §7).
@@ -250,13 +349,15 @@ void MirrorHudMode(std::uintptr_t two, std::uintptr_t one, std::uint8_t memberTy
         if (mode != 0)
         {
             Put(two + kStoredLeaderType, memberType);  // no leader-change handler on player 1's leader
+            g_layerTries = 0;
         }
-        const bool set   = platform::CallGuarded(g_hudMode, reinterpret_cast<void*>(two), mode);
-        const bool reset = mode != 0 || platform::CallGuarded(g_resetAll, reinterpret_cast<void*>(two));
-        Line(std::format(L"player 2's controller battle HUD mode -> {}{}{}", mode, set ? L"" : L" (the setter FAULTED)",
-                         mode != 0 ? L"" : (reset ? L"; reset" : L"; the reset FAULTED")));
+        // The game's battle start and end call only this setter (RE-p2-command-menu-lifecycle.md §4.1); a
+        // full reset would also clear "setup done" (+0x777), which only Setup puts back.
+        const bool set = platform::CallGuarded(g_hudMode, reinterpret_cast<void*>(two), mode);
+        Line(std::format(L"player 2's controller battle HUD mode -> {}{}", mode, set ? L"" : L" (the setter FAULTED)"));
     }
     Put(two + kReadyB, Field<std::uint8_t>(one + kReadyB));  // every pass: the battle readiness stays live
+    MirrorBattleInput(two, one);
 }
 
 struct Shielded
@@ -288,6 +389,131 @@ void RestoreShielded(std::uintptr_t slot50, std::uintptr_t input, const Shielded
     }
 }
 
+/// A controller's menu widget, or null.
+void* MenuOf(std::uintptr_t controller) noexcept
+{
+    const auto weak   = Field<std::uint64_t>(controller + kMenuWidget);
+    void*      widget = nullptr;
+    return weak != 0 && platform::CallGuarded(g_weakGet, widget, &weak) ? widget : nullptr;
+}
+
+/// Player 2's command menu takes player 1's visibility through the game's setter (in battle; Setup
+/// shows it only while a controller's battle input is live at Setup time). The field menu (party list)
+/// is shown by the controller's own show timer once its input flag is on (MirrorPartyListInput).
+void MirrorVisibility(std::uintptr_t two, std::uintptr_t one) noexcept
+{
+    for (const std::uint32_t offset : {kMenuWidget})
+    {
+        const auto oneWidget = reinterpret_cast<std::uintptr_t>(MenuOf(one + offset - kMenuWidget));
+        const auto twoWidget = reinterpret_cast<std::uintptr_t>(MenuOf(two + offset - kMenuWidget));
+        if (oneWidget == 0 || twoWidget == 0)
+        {
+            continue;
+        }
+        const auto want = Field<std::uint8_t>(oneWidget + kVisibility);
+        const auto have = Field<std::uint8_t>(twoWidget + kVisibility);
+        if (want != have)
+        {
+            const bool set = platform::CallGuarded(g_setVisibility, reinterpret_cast<void*>(twoWidget), want);
+            if (++g_visibilitySets > 3 && g_visibilitySets % 600 != 0 && set)
+            {
+                continue;
+            }
+            Line(std::format(L"({} copies so far) ", g_visibilitySets) + std::format(L"player 2's {} visibility {} -> {}{}", offset == kMenuWidget ? L"command menu" : L"field menu",
+                             have, want, set ? L"" : L" (FAULTED)"));
+        }
+    }
+}
+
+/// Player 2's party list input flag follows player 1's, through the game's own calls (§10.2 R1).
+void MirrorPartyListInput(std::uintptr_t two, std::uintptr_t one) noexcept
+{
+    const auto want = Field<std::uint8_t>(one + kPartyListInput);
+    const auto have = Field<std::uint8_t>(two + kPartyListInput);
+    if (want == have)
+    {
+        return;
+    }
+    const bool set = want != 0 ? platform::CallGuarded(g_resumeHudInput, reinterpret_cast<void*>(two), std::uint8_t{1})
+                               : platform::CallGuarded(g_partyListInput, reinterpret_cast<void*>(two + kPartyList),
+                                                       std::uint8_t{0}, std::uint8_t{1});
+    Line(std::format(L"player 2's party list input {} -> {} ({}){}", have, want,
+                     want != 0 ? L"ResumeHudInput(1)" : L"SetInputEnabled(0)", set ? L"" : L" FAULTED"));
+}
+
+/// The battle system's command locks copied onto player 2's controller: it writes them into the
+/// game's only (§10.2), and player 2's rows are all greyed while "commands enabled" is 0.
+void CopyCommandLocks(std::uintptr_t two, std::uintptr_t one) noexcept
+{
+    static bool loggedFirst = false;
+    if (!loggedFirst)
+    {
+        loggedFirst = true;
+        Line(std::format(L"player 2's controller before the first lock copy: commands enabled {}, locked {}",
+                         Field<std::uint8_t>(two + kCommandsEnabled), Field<std::uint8_t>(two + kCommandsLocked)));
+    }
+    for (const std::uint32_t offset : {kCommandsEnabled, kCommandsLocked})
+    {
+        const auto value = Field<std::uint8_t>(one + offset);
+        if (Field<std::uint8_t>(two + offset) != value)
+        {
+            Put(two + offset, value);
+            Line(std::format(L"player 2's commands {} -> {}", offset == kCommandsEnabled ? L"enabled" : L"locked", value));
+        }
+    }
+    const auto oneLocks = Field<std::uintptr_t>(one + kCategoryLocks);
+    const auto twoLocks = Field<std::uintptr_t>(two + kCategoryLocks);
+    const auto count = std::min({Field<std::int32_t>(one + kCategoryCount), Field<std::int32_t>(two + kCategoryCount),
+                                 kMaxCategories});
+    if (oneLocks == 0 || twoLocks == 0 || count <= 0)
+    {
+        return;
+    }
+    std::array<std::uint8_t, kMaxCategories> from{}, to{};
+    if (platform::CopyGuarded(from.data(), reinterpret_cast<const void*>(oneLocks), static_cast<std::size_t>(count)) &&
+        platform::CopyGuarded(to.data(), reinterpret_cast<const void*>(twoLocks), static_cast<std::size_t>(count)) &&
+        from != to)
+    {
+        platform::WriteGuarded(reinterpret_cast<void*>(twoLocks), from.data(), static_cast<std::size_t>(count));
+        std::wstring bytes;
+        for (std::int32_t i = 0; i < count; ++i)
+        {
+            bytes += std::format(L" {}", from[static_cast<std::size_t>(i)]);
+        }
+        Line(std::format(L"player 2's command category locks ->{}", bytes));
+    }
+}
+
+/// Player 2's menu keeps the same bottom focus layer as player 1's (a battle event or help menu pops
+/// player 1's: player 2's follows). If player 2's path stays short (the menu was not visible when the
+/// layer was pushed), it is pushed again a few times.
+void MirrorMenuLayer(std::uintptr_t two, std::uintptr_t one) noexcept
+{
+    const auto want      = Field<std::uint8_t>(one + kMenuLayer);
+    const auto have      = Field<std::uint8_t>(two + kMenuLayer);
+    const bool shortPath = want != 0 && have != 0 && focus_scope::LivePathCount() <= 1;
+    if (want == have && !shortPath)
+    {
+        return;
+    }
+    if (shortPath)
+    {
+        if (g_passes % kLayerRetryGap != 0)
+        {
+            return;
+        }
+        ++g_layerTries;
+        platform::CallGuarded(g_setMenuLayer, reinterpret_cast<void*>(two), std::uint8_t{0});
+    }
+    const bool set = platform::CallGuarded(g_setMenuLayer, reinterpret_cast<void*>(two), want);
+    if (shortPath && g_layerTries > kLoggedLayerTries)
+    {
+        return;
+    }
+    Line(std::format(L"player 2's menu focus layer -> {}{}{}", want, shortPath ? L" (again: player 2's path was short)" : L"",
+                     set ? L"" : L" (FAULTED)"));
+}
+
 /// What the log shows of player 2's controller, as raw values.
 struct Snapshot
 {
@@ -297,18 +523,42 @@ struct Snapshot
     std::int32_t guardLatch = 0, waitFilter = 0;
     std::uint8_t storedType = 0, pinch = 0;
     std::array<std::int32_t, 2> members{};
+    // Beside player 1's: 777, 541, 25C, 783, 258, 5E1 (u8) and the pending open (i32), each [0] player 1, [1] player 2.
+    std::array<std::array<std::uint8_t, 8>, 2> compared{};
+    std::uint8_t                               fieldMenuVisibility = 0xFF;  // player 2's (0 Visible, 1 Collapsed)
+    bool                                       leaderIsMember = false;       // inside the pass
+    std::array<std::int32_t, 2>                openPending{};
+    std::int32_t                               path = 0;  // player 2's live focus path length (inside the pass)
     bool operator==(const Snapshot&) const = default;
 };
 Snapshot g_logged{};
 bool     g_loggedOnce = false;
 
-void Watch(std::uintptr_t two) noexcept
+void Watch(std::uintptr_t two, std::uintptr_t one) noexcept
 {
-    if (g_lines >= kMaxLines)
+    if (g_watchLines >= kMaxWatchLines)
     {
         return;
     }
     Snapshot now;
+    constexpr std::array<std::uint32_t, 8> kCompared{kGate777, kBlocked, kBattleInput, kMenuLayer, kSwitchingLayer, kReady,
+                                                     kPartyListInput, kSetupPending};
+    for (std::size_t side = 0; side < 2; ++side)
+    {
+        const auto ctrl = side == 0 ? one : two;
+        for (std::size_t i = 0; i < kCompared.size(); ++i)
+        {
+            now.compared[side][i] = Field<std::uint8_t>(ctrl + kCompared[i]);
+        }
+        now.openPending[side] = Field<std::int32_t>(ctrl + kOpenPending);
+    }
+    now.path = focus_scope::LivePathCount();
+    if (const auto fieldMenu = reinterpret_cast<std::uintptr_t>(MenuOf(two + kFieldMenu - kMenuWidget)); fieldMenu != 0)
+    {
+        now.fieldMenuVisibility = Field<std::uint8_t>(fieldMenu + kVisibility);
+    }
+    void* leader = nullptr;
+    now.leaderIsMember = platform::CallGuarded(g_resolveLeader, leader) && leader != nullptr && leader == generation::Member();
     for (std::size_t i = 0; i < kLoggedRequests.size(); ++i)
     {
         now.requests[i] = RequestOf(two, kLoggedRequests[i]);
@@ -341,7 +591,12 @@ void Watch(std::uintptr_t two) noexcept
     }
     const auto& b = now.bytes;
     const auto& g = now.gates;
-    Line(std::format(L"player 2's controller: req{} | guard latch {} | 540={} 541={} 5E1={} 782={} 25C={} 258={} 774={} | "
+    const auto  side = [&now](std::size_t i) { return std::format(L"{}/{}", now.compared[0][i], now.compared[1][i]); };
+    WatchLine(std::format(L"P1/P2: 777 {} 541 {} 25C {} 783 {} 258 {} 5E1 {} 4A0 {} 775 {} open {}/{} | P2 path {}, field "
+                          L"menu visibility {}, leader is P2's member {}",
+                          side(0), side(1), side(2), side(3), side(4), side(5), side(6), side(7), now.openPending[0],
+                          now.openPending[1], now.path, now.fieldMenuVisibility, now.leaderIsMember ? 1 : 0));
+    WatchLine(std::format(L"player 2's controller: req{} | guard latch {} | 540={} 541={} 5E1={} 782={} 25C={} 258={} 774={} | "
                      L"type {} leader {} ally {} | wait {} pinch {} | 776={} 77C={} 77F={} 787={} | slot 0: P1 {:.3f} "
                      L"P2 {:.3f} written {:.3f}",
                      requests, now.guardLatch, b[0], b[1], b[2], b[3], b[4], b[5], b[6], now.storedType, now.members[0],
@@ -394,14 +649,19 @@ void PlayerTwoPass(float deltaTime) noexcept
         const pad_buttons::ButtonScope   buttons;
         const lock_on::TargetScope       targets;
         const leader_scope::LeaderScope  leader(memberWeak);
-        const LeaderTypeScope            type(manager, *memberType);
+        const leader_scope::LeaderTypeScope type(*memberType);
         if (!buttons.Held() || !leader.Held() || !type.Held())
         {
             return Refused(L"pad 2's buttons or the party leader");
         }
         const command_rules::PlayerTwoRules rules(leaderType);
         g_pass = 2;
+        ++g_passes;
         MirrorHudMode(two, one, *memberType);
+        MirrorVisibility(two, one);
+        MirrorPartyListInput(two, one);
+        MirrorMenuLayer(two, one);
+        CopyCommandLocks(two, one);
         WriteRequests(two, one);
         Put(two + kHudSoundMode, Field<std::uint8_t>(two + kHudMode));  // no second battle-HUD sound
         const auto     slot50 = Field<std::uintptr_t>(g_endUISystem + kSlot50);
@@ -419,7 +679,7 @@ void PlayerTwoPass(float deltaTime) noexcept
             Line(L"FAILED: player 2's controller's tick faulted; player 2's command controller stops (the direct actions "
                  L"come back)");
         }
-        Watch(two);
+        Watch(two, one);
     }
     const auto after = std::array<std::uint64_t, 3>{Field<std::uint64_t>(manager + kPrimary),
                                                     Field<std::uint64_t>(manager + kLeaderWeak),
@@ -430,6 +690,201 @@ void PlayerTwoPass(float deltaTime) noexcept
     }
 }
 
+/// Which of the actions the log counts on its own a key is (0 CommandMenu, 1 Attack, 2 Unique, 3 Guard,
+/// 4 Dodge), or -1.
+int KnownAction(std::uint64_t key) noexcept
+{
+    const std::array<std::uintptr_t, 5> keys{g_commandMenuKey, g_keys[kAttack], g_keys[kUnique], g_keys[kGuard],
+                                             g_keys[kDodge]};
+    for (std::size_t i = 0; i < keys.size(); ++i)
+    {
+        if (keys[i] != 0 && Field<std::uint64_t>(keys[i]) == key)
+        {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
+}
+
+/// A name for the log: the action keys it knows, else the raw key name.
+std::wstring KeyText(std::uint64_t key)
+{
+    const std::array<std::pair<std::uintptr_t, const wchar_t*>, 5> known{
+        {{g_commandMenuKey, L"CommandMenu"}, {g_keys[kAttack], L"Attack"}, {g_keys[kUnique], L"UniqueAbility"},
+         {g_keys[kGuard], L"Guard"}, {g_keys[kDodge], L"Dodge"}}};
+    for (const auto& [address, name] : known)
+    {
+        if (address != 0 && Field<std::uint64_t>(address) == key)
+        {
+            return name;
+        }
+    }
+    return std::format(L"key {:#x}", key);
+}
+
+/// Runs `call` (a guarded game call, true when it did not fault) in player 2's UI: player 2's focus
+/// context and scopes, in battle, with player 2's menu layer in place and player 1's top layer the
+/// command menu's own (a pause menu or popup keeps pad 2 out of both menus). False, running nothing,
+/// when those do not hold; true once it ran (a fault stops the route for the session).
+template <class Call>
+bool InPlayerTwoUi(const wchar_t* what, Call&& call) noexcept
+{
+    if (!g_installed || g_routeFailed || g_pass != 0 || !generation::OnGameThread() || !generation::Active())
+    {
+        return false;
+    }
+    const auto two    = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller());
+    const auto one    = Field<std::uintptr_t>(g_endUISystem + kController);
+    void*      member = generation::Member();
+    if (two == 0 || one == 0 || one == two || member == nullptr || Field<std::uint8_t>(two + kHudMode) == 0 ||
+        Field<std::uint8_t>(two + kMenuLayer) == 0 || Field<std::uint8_t>(one + kBattleInput) == 0 ||
+        Field<std::uint8_t>(one + kMenuLayer) == 0 || !focus_scope::PlayerOneTopIsCommandMenu())
+    {
+        return false;
+    }
+    const auto memberType = party_member::PlayerTypeOf(member);
+    const auto memberWeak = leader_scope::WeakOf(member);
+    const auto manager    = Field<std::uintptr_t>(g_partyManager);
+    if (!memberType || memberWeak == 0 || manager == 0)
+    {
+        return false;
+    }
+    const auto leaderType = Field<std::uint8_t>(manager + kLeaderType);
+    focus_scope::FocusScope focus(reinterpret_cast<void*>(two));
+    if (!focus.Entered())
+    {
+        return false;
+    }
+    const primary_controller::Scope primary;
+    if (!primary.Held())
+    {
+        return false;
+    }
+    const lock_on::TargetScope      targets;
+    const leader_scope::LeaderScope leader(memberWeak);
+    const leader_scope::LeaderTypeScope type(*memberType);
+    if (!leader.Held() || !type.Held())
+    {
+        return false;
+    }
+    const command_rules::PlayerTwoRules rules(leaderType);
+    g_pass         = 3;
+    const bool ran = call();
+    g_pass         = 0;
+    if (!ran)
+    {
+        focus.Abandon();
+        g_routeFailed = true;
+        Line(std::format(L"FAILED: pad 2's {} faulted in player 2's menu; pad 2 stays out of the menus", what));
+    }
+    return true;
+}
+
+/// For the route log: player 2's battle input, its action requests, and player 1's capture map's count.
+std::wstring RouteState(std::uintptr_t two)
+{
+    const auto input = Field<std::uintptr_t>(g_endUISystem + kInput);
+    return std::format(L"25C {} req 6:{} 12:{} 13:{} 26:{} 32:{} 37:{} | captures {}", Field<std::uint8_t>(two + kBattleInput),
+                       RequestOf(two, 6), RequestOf(two, kReqAttack), RequestOf(two, kReqUnique), RequestOf(two, 26),
+                       RequestOf(two, kReqGuardDodge), RequestOf(two, kReqGuard),
+                       Field<std::int32_t>(input + 0xB0) - Field<std::int32_t>(input + 0xDC));
+}
+
+/// Pad 2's press through the game's own dispatcher in player 2's UI, so its route, list and
+/// command-menu handler act on player 2's menu (RE-p2-command-menu-input.md §3.3, §10 Stage 3d).
+/// Target switching stays with player_two/lock_on.
+bool RoutePadTwo(pad_buttons::ActionDownFn dispatch, void* owner, void* unused, std::uint32_t sourceBit, void* event,
+                 std::uint8_t alreadyHandled, char& result) noexcept
+{
+    const auto key = Field<std::uint64_t>(reinterpret_cast<std::uintptr_t>(event) + kEventKey);
+    if (key == 0 || key == Field<std::uint64_t>(g_prevTargetKey) || key == Field<std::uint64_t>(g_nextTargetKey))
+    {
+        return false;
+    }
+    char taken = 1;  // after a fault: not dispatched again in player 1's context
+    const int  action = KnownAction(key);
+    const auto two    = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller());
+    std::wstring before;
+    const bool routed = InPlayerTwoUi(L"press", [&] {
+        const bool logIt = action > 0 && g_routedKnown[static_cast<std::size_t>(action)] < 10;
+        if (logIt)
+        {
+            before = RouteState(two);
+        }
+        const bool ran = platform::CallGuarded(dispatch, taken, owner, unused, sourceBit, event, alreadyHandled);
+        if (logIt)
+        {
+            Line(std::format(L"pad 2's {} in player 2's UI: before [{}] after [{}]", KeyText(key), before, RouteState(two)));
+        }
+        return ran;
+    });
+    if (!routed)
+    {
+        return false;
+    }
+    result = taken;
+    if (action >= 0 ? ++g_routedKnown[static_cast<std::size_t>(action)] <= 10 : (++g_routed <= 20 || g_routed % 500 == 0))
+    {
+        Line(std::format(L"pad 2's {} went to player 2's menu (taken: {}; {} press(es))", KeyText(key), taken != 0 ? 1 : 0,
+                         g_routed));
+    }
+    return true;
+}
+
+/// A pad-2 release that did not go through player 2's UI (player 1's pause menu or a popup was up):
+/// its action's held request on player 2's controller cleared anyway, as the up handler would.
+void ClearHeldForRelease(std::uint64_t key) noexcept
+{
+    const auto two = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller());
+    if (two == 0 || key == 0)
+    {
+        return;
+    }
+    if (key == Field<std::uint64_t>(g_keys[kGuard]))
+    {
+        SetRequest(two, kReqGuard, 0);
+        SetRequest(two, kReqGuardDodge, 0);
+        SetRequest(two, kReqSynergyPane, 0);
+    }
+    else if (key == Field<std::uint64_t>(g_keys[kAttack]))
+    {
+        SetRequest(two, kReqAttack, 0);
+    }
+    else if (key == Field<std::uint64_t>(g_keys[kUnique]))
+    {
+        SetRequest(two, kReqUnique, 0);
+    }
+}
+
+/// Replaces the input processor's key-up handler: notes which pad the release came from.
+std::uint8_t KeyUp(void* self, void* application, const void* keyEvent) noexcept
+{
+    const std::int32_t previous = g_upPad;
+    g_upPad = Field<std::int32_t>(reinterpret_cast<std::uintptr_t>(keyEvent) + kKeyEventUser);
+    const auto answer = reinterpret_cast<KeyUpFn>(g_keyUpSlot.Original())(self, application, keyEvent);
+    g_upPad = previous;
+    return answer;
+}
+
+/// Replaces the up route's call: pad 2's releases walk player 2's focus path, so its menu clears its
+/// own held requests (Guard, Attack, the synergy pane) as the game's up handler does.
+std::uint8_t UpRoute(void* owner, void* event) noexcept
+{
+    const auto original = reinterpret_cast<UpRouteFn>(g_upRouteCall.Original());
+    std::uint8_t answer = 0;
+    if (g_upPad >= 0 && g_upPad == pad_sticks::ControllerIdOf(generation::PlayerTwoController()) &&
+        InPlayerTwoUi(L"release", [&] { return platform::CallGuarded(original, answer, owner, event); }))
+    {
+        ++g_upRouted;
+        return answer;
+    }
+    const std::uint8_t result = original(owner, event);
+    if (g_upPad >= 0 && g_upPad == pad_sticks::ControllerIdOf(generation::PlayerTwoController()))
+    {
+        ClearHeldForRelease(Field<std::uint64_t>(reinterpret_cast<std::uintptr_t>(event) + kEventKey));
+    }
+    return result;
+}
 /// Replaces the game's controller tick call: the game's controller, then player 2's.
 void Tick(void* controller, float deltaTime) noexcept
 {
@@ -508,15 +963,39 @@ void GuideMode8() noexcept
 
 }  // namespace
 
+/// Pad 2's releases to player 2's menu: the key-up slot wrapped (the pad of each release noted) and the
+/// up route's call redirected. Optional: without it pad 2's releases keep running player 1's up route.
+void InstallReleases(const platform::GameImage& image) noexcept
+{
+    const auto upRoute = platform::FindFunction(image, kUpRoute);
+    const auto entry   = image.Rebase(kKeyUpEntry, sizeof(void*));
+    const auto keyUp   = image.Rebase(kKeyUp);
+    const auto site    = image.Rebase(kUpRouteCall, 5);
+    const bool ok      = upRoute && entry && keyUp && site && image.BytesMatch(kKeyUpAfterFirst, kKeyUpRestBytes) &&
+                    g_keyUpSlot.Replace(*entry, *keyUp, reinterpret_cast<std::uintptr_t>(&KeyUp)) &&
+                    g_upRouteCall.Install(*site, *upRoute, reinterpret_cast<std::uintptr_t>(&UpRoute));
+    if (!ok && g_keyUpSlot.Original() != 0)
+    {
+        g_keyUpSlot.Restore();
+    }
+    platform::Log(L"command menu tick: pad 2's releases {}", ok ? L"reach player 2's menu in battle"
+                                                                 : L"UNAVAILABLE (a check failed): they keep player 1's up route");
+}
+
 bool Install(const platform::GameImage& image) noexcept
 {
     const auto find = [&image](const platform::FunctionFact& fact) { return platform::FindFunction(image, fact); };
     const auto tick = find(kTick), slot = find(kSlot), snapshot = find(kSnapshot), show = find(kGuideShow),
-               mode8 = find(kGuideMode8), hud = find(kSetHudMode), reset = find(kResetAll), pressed = find(kIsPressed),
-               held = find(kIsHeld);
+               mode8 = find(kGuideMode8), hud = find(kSetHudMode), resume = find(kResumeHudInput), suspend = find(kSuspendHudInput), listInput = find(kSetPartyListInput),
+               leader = find(facts::kResolvePartyLeader), pressed = find(kIsPressed),
+               held = find(kIsHeld), layer = find(kSetMenuLayer), visibility = find(kSetVisibility),
+               weakGet = find(facts::kWeakObjectGet);
+    const auto prevTarget = image.Rebase(kPrevTargetKey, 24), nextTarget = image.Rebase(kNextTargetKey, 24),
+               commandMenu = image.Rebase(kCommandMenuKey, 24);
     const auto system  = image.Rebase(kEndUISystem, kSlot50 + sizeof(void*));
     const auto manager = image.Rebase(facts::kPartyManagerGlobal, sizeof(void*));
-    bool       ok      = tick && slot && snapshot && show && mode8 && hud && reset && pressed && held && system && manager;
+    bool       ok      = tick && slot && snapshot && show && mode8 && hud && resume && suspend && listInput && leader && pressed && held && layer && visibility && weakGet && prevTarget &&
+                  nextTarget && commandMenu && system && manager;
     for (std::size_t i = 0; ok && i < kActions; ++i)
     {
         const auto key = image.Rebase(kActionKeys[i], 24);
@@ -526,11 +1005,20 @@ bool Install(const platform::GameImage& image) noexcept
     if (ok)
     {
         g_hudMode      = reinterpret_cast<HudModeFn>(*hud);
-        g_resetAll     = reinterpret_cast<ResetAllFn>(*reset);
+        g_resumeHudInput  = reinterpret_cast<ResumeHudInputFn>(*resume);
+        g_suspendHudInput = reinterpret_cast<SuspendHudInputFn>(*suspend);
+        g_partyListInput = reinterpret_cast<PartyListInputFn>(*listInput);
+        g_resolveLeader  = reinterpret_cast<LeaderFn>(*leader);
         g_isPressed    = reinterpret_cast<QueryFn>(*pressed);
         g_isHeld       = reinterpret_cast<QueryFn>(*held);
         g_endUISystem  = *system;
         g_partyManager = *manager;
+        g_setMenuLayer   = reinterpret_cast<SetMenuLayerFn>(*layer);
+        g_setVisibility  = reinterpret_cast<SetVisibilityFn>(*visibility);
+        g_weakGet        = reinterpret_cast<WeakGetFn>(*weakGet);
+        g_prevTargetKey  = *prevTarget;
+        g_nextTargetKey  = *nextTarget;
+        g_commandMenuKey = *commandMenu;
     }
     // The shields first, the tick last: no pass runs before its shields are in place.
     const auto redirect = [&image](platform::CallRedirect& call, std::uintptr_t site, std::uintptr_t target, auto* with) {
@@ -546,16 +1034,26 @@ bool Install(const platform::GameImage& image) noexcept
     {
         Remove();
     }
+    else
+    {
+        pad_buttons::SetPlayerTwoRoute(&RoutePadTwo);  // pad 2's presses to player 2's menu in battle
+        InstallReleases(image);                        // optional: pad 2's releases to player 2's menu
+    }
     platform::Log(L"command menu tick: {}", ok ? L"player 2's command controller ticks in battle and takes player 2's "
-                                                 L"attack, guard and dodge (logged)"
+                                                 L"attack, guard and dodge; pad 2's presses reach player 2's menu in battle (logged)"
                                                : L"UNAVAILABLE (a check failed): player 2's actions stay direct");
     return ok;
 }
 
 void Remove() noexcept
 {
+    pad_buttons::SetPlayerTwoRoute(nullptr);
     g_installed = false;
-    for (auto* call : {&g_tickCall, &g_guideMode8Call, &g_guideShowCall, &g_snapshotCall, &g_slotCall})
+    if (g_keyUpSlot.Original() != 0 && !g_keyUpSlot.Restore())
+    {
+        platform::Log(L"command menu tick: the key-up slot was changed after us; left in place (it passes through)");
+    }
+    for (auto* call : {&g_tickCall, &g_guideMode8Call, &g_guideShowCall, &g_snapshotCall, &g_slotCall, &g_upRouteCall})
     {
         if (call->IsInstalled() && !call->Restore())
         {

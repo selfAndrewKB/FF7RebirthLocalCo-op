@@ -19,6 +19,7 @@
 #include "platform/log.h"
 #include "platform/module_pin.h"
 #include "player_two/generation.h"
+#include "player_two/command_menu_two.h"
 
 #include <atomic>
 #include <cstring>
@@ -439,6 +440,7 @@ void BeginOverlayRender(bool playerTwoIn) noexcept
         std::memcpy(reinterpret_cast<void*>(g_deltaTime), &still, sizeof(still));
         g_pass              = Pass::PlayerTwo;
         prompt_rows::ShowOnly(1);                 // player 2's prompt rows only (hud/prompt_rows.h)
+        player_two::command_menu_two::ShowOnly(1);  // in battle, player 2's command menu in player 2's image
         target_views::BeforePass(1);  // player 1's cursor and gauges collapsed before player 2's updates read them
         const bool content  = EnterPlayerTwo();  // player 2's levers and updates (hud/player_two_pass.h)
         if (content)
@@ -457,6 +459,7 @@ void BeginOverlayRender(bool playerTwoIn) noexcept
         }
         area_icons_two::ShowOnly(0);
         prompt_rows::ShowOnly(0);  // player 1's rows for player 1's pass
+        player_two::command_menu_two::ShowOnly(0);  // and player 1's command menu
         std::memcpy(reinterpret_cast<void*>(g_deltaTime), &deltaTime, sizeof(deltaTime));
     }
     g_imageThisFrame.store(g_slot != nullptr, std::memory_order_relaxed);

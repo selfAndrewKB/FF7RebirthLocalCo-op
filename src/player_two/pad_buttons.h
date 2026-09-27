@@ -53,6 +53,17 @@ private:
     bool held_ = false;
 };
 
+/// The game's action-down dispatcher: (owner, unused, source bit, the action event, alreadyHandled),
+/// 1 when the UI consumed the action.
+using ActionDownFn = char (*)(void* owner, void* unused, std::uint32_t sourceBit, void* event, std::uint8_t alreadyHandled);
+
+/// A route for pad 2's presses to player 2's own UI (player_two/command_menu_tick.h): true when it
+/// took the press (its dispatch result in `result`); false leaves the press kept from the menus.
+using PlayerTwoRouteFn = bool (*)(ActionDownFn dispatch, void* owner, void* unused, std::uint32_t sourceBit, void* event,
+                                  std::uint8_t alreadyHandled, char& result);
+/// Sets the route (null: none). Game thread.
+void SetPlayerTwoRoute(PlayerTwoRouteFn route) noexcept;
+
 /// Diagnosis: which parts act (bits: 1 the split views, player 1's after the Tick and player 2's in
 /// their calls; 2 pad 2's presses kept from menus and prompts). Both at start. Logged.
 inline constexpr unsigned kPartViews  = 1;

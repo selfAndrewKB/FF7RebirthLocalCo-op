@@ -31,6 +31,14 @@ void Tick() noexcept;
 /// battle something outside the controller shows every command widget; RE-p2-command-menu-input.md §12).
 void KeepHidden() noexcept;
 
+/// Before a pass of the overlay render (0 player 1, 1 player 2): in battle, player 2's pass shows player
+/// 2's command menu (at player 1's menu's render opacity) instead of player 1's; player 1's pass shows
+/// player 1's only. Out of battle player 2's stays hidden. Render thread = game thread.
+void ShowOnly(int player) noexcept;
+
+/// After the frame's passes: player 1's menu back to its own opacity, player 2's hidden.
+void Restore() noexcept;
+
 /// Player 2's controller, or null before it is built.
 void* Controller() noexcept;
 

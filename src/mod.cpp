@@ -52,7 +52,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.22.0-menu-two-ticks";
+constexpr const wchar_t* kVersion = L"0.23.6-menu-two-captures";
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -101,7 +101,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.22.0-menu-two-ticks");
+        ModVersion     = STR("0.23.6-menu-two-captures");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }

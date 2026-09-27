@@ -18,22 +18,37 @@ constexpr std::uintptr_t kEndUISystem = 0x1493496E0;
 constexpr std::uint32_t  kInput       = 0x10;  // EndUISystem[2]: Square's input object
 constexpr std::uint32_t  kController  = 0xB8;  // EndUISystem[23]: the command controller
 // The input object's focus context, as {offset, size} copied in this order: the focus path
-// (FWeakWidgetPath), the focus layers (TArray), the last focus cause.
+// (FWeakWidgetPath), the focus layers (TArray), the last focus cause, and the capture map (a TSet
+// keyed by action: the widget that took a held action's press gets its release; the command menu
+// adds one for each held Attack, Unique or Guard, so it is per-player state like the path).
 struct Region
 {
     std::uint32_t offset, size;
 };
-constexpr std::array<Region, 3> kContext{{{0x08, 32}, {0x40, 16}, {0x78, 1}}};
+constexpr std::array<Region, 4> kContext{{{0x08, 32}, {0x40, 16}, {0x78, 1}, {0xA8, 0x50}}};
 constexpr std::uint32_t kDelegate = 0x1A0;  // the menu-core delegate, run when no widget takes an action
-// The capture map (a TSet keyed by action): empty when these two counts are equal.
-constexpr std::uint32_t kCaptureCount = 0xB0;
-constexpr std::uint32_t kCaptureFree  = 0xDC;
 
-constexpr std::size_t kContextSize = 49;
+constexpr std::size_t kContextSize = 32 + 16 + 1 + 0x50;
+constexpr std::size_t kCaptureAt   = 32 + 16 + 1;  // the capture map's place in the copy
+// An empty TSet as the game constructs one: all zero but its sparse array's FirstFreeIndex (+0x30), -1.
+constexpr std::size_t kCaptureFirstFree = 0x30;
+
+std::array<std::uint8_t, kContextSize> EmptyContext() noexcept
+{
+    std::array<std::uint8_t, kContextSize> context{};
+    const std::int32_t none = -1;
+    std::memcpy(&context[kCaptureAt + kCaptureFirstFree], &none, sizeof(none));
+    return context;
+}
+// The focus layers (TArray of 40 bytes, sorted by priority; int32 priority at +0x20). The command
+// menu's own layers sit at -1000 (RE-p2-command-menu-input.md §11).
+constexpr std::uint32_t kLayerSize         = 40;
+constexpr std::uint32_t kLayerPriority     = 0x20;
+constexpr std::int32_t  kCommandMenuLayer  = -1000;
 
 // Game thread.
 std::uintptr_t                         g_endUISystem = 0;
-std::array<std::uint8_t, kContextSize> g_playerTwo{};  // player 2's context between scopes (zero at first)
+std::array<std::uint8_t, kContextSize> g_playerTwo = EmptyContext();  // player 2's context between scopes
 bool                                   g_inside      = false;
 
 template <class T>
@@ -72,7 +87,7 @@ bool WriteContext(std::uintptr_t input, const std::uint8_t* from) noexcept
 
 }  // namespace
 
-static_assert(kContextSize == 32 + 16 + 1);
+
 
 bool Install(const platform::GameImage& image) noexcept
 {
@@ -89,9 +104,28 @@ Summary PlayerTwoContext() noexcept
     return summary;
 }
 
+std::int32_t LivePathCount() noexcept
+{
+    std::uintptr_t input = 0;
+    std::int32_t   count = 0;
+    return g_endUISystem != 0 && Read(g_endUISystem + kInput, input) && input != 0 &&
+                   Read(input + kContext[0].offset + 8, count)
+               ? count
+               : 0;
+}
+
+bool PlayerOneTopIsCommandMenu() noexcept
+{
+    std::uintptr_t input = 0, layers = 0;
+    std::int32_t   count = 0, priority = 0;
+    return !g_inside && Read(g_endUISystem + kInput, input) && input != 0 && Read(input + kContext[1].offset, layers) &&
+           Read(input + kContext[1].offset + 8, count) && layers != 0 && count > 0 &&
+           Read(layers + static_cast<std::uintptr_t>(count - 1) * kLayerSize + kLayerPriority, priority) &&
+           priority == kCommandMenuLayer;
+}
+
 FocusScope::FocusScope(void* controller) noexcept
 {
-    std::int32_t captures = 0, free = 0;
     if (g_inside || !generation::OnGameThread())
     {
         refusal_ = L"inside another focus scope, or off the game thread";
@@ -99,10 +133,6 @@ FocusScope::FocusScope(void* controller) noexcept
     else if (g_endUISystem == 0 || !Read(g_endUISystem + kInput, input_) || input_ == 0)
     {
         refusal_ = L"no input object";
-    }
-    else if (!Read(input_ + kCaptureCount, captures) || !Read(input_ + kCaptureFree, free) || captures != free)
-    {
-        refusal_ = L"player 1's capture map holds a prompt";
     }
     else if (!CopyContext(input_, savedContext_.data()) ||
              !platform::CopyGuarded(savedDelegate_.data(), reinterpret_cast<const void*>(input_ + kDelegate),
@@ -144,7 +174,7 @@ FocusScope::~FocusScope()
     bool kept = true;
     if (abandon_)
     {
-        g_playerTwo.fill(0);
+        g_playerTwo = EmptyContext();
         platform::Log(L"focus scope: player 2's context abandoned after a fault (reset to empty)");
     }
     else

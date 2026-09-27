@@ -5,12 +5,13 @@
 // UI actions reach one focus path only, kept by Square's input object (EndUISystem[2]) with a stack of
 // focus layers; the game has one such context. Player 2's command menu (a second FieldCommandCtrl)
 // calls the same focus functions as player 1's when it is built, opens and closes, so for the length
-// of those calls player 2's context is swapped in: the focus path, the layers and the cause byte are
-// exchanged with player 2's saved copy (all zero at first: an empty path and no layers), the input
+// of those calls player 2's context is swapped in: the focus path, the layers, the cause byte and the
+// capture map (the held actions' capturers: each player's own, as the command menu captures every held
+// Attack, Unique and Guard) are exchanged with player 2's saved copy (empty at first), the input
 // object's menu-core delegate is unbound (player 2 never runs player 1's cinema handler), and the UI
 // system's command controller slot names player 2's. Weak-pointer counts travel with the bytes, so
-// nothing is added or released. The scope is refused while player 1's capture map holds a prompt,
-// inside another scope, or without the input object. Game thread only.
+// nothing is added or released. The scope is refused inside another scope or without the input
+// object. Game thread only.
 
 #include <array>
 #include <cstdint>
@@ -30,6 +31,13 @@ struct Summary
 };
 Summary PlayerTwoContext() noexcept;
 
+/// The focus path length in the input object now (inside a scope: player 2's live one).
+std::int32_t LivePathCount() noexcept;
+
+/// Player 1's top focus layer is the command menu's own (priority -1000): no pause menu, popup or
+/// other modal layer above it. Outside a scope.
+bool PlayerOneTopIsCommandMenu() noexcept;
+
 class FocusScope
 {
 public:
@@ -47,7 +55,7 @@ public:
     void Abandon() noexcept { abandon_ = true; }
 
 private:
-    static constexpr std::size_t kContextSize  = 49;  // path 32, layers 16, cause 1
+    static constexpr std::size_t kContextSize  = 32 + 16 + 1 + 0x50;  // path, layers, cause, capture map
     static constexpr std::size_t kDelegateSize = 16;
 
     bool                                   entered_ = false;

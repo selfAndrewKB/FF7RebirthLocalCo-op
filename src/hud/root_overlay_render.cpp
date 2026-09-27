@@ -14,6 +14,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "player_two/generation.h"
+#include "player_two/command_menu_two.h"
 
 #include <cstdint>
 
@@ -66,6 +67,7 @@ void RenderRootOverlay(void* application) noexcept
         enemy_gauges::EndFrame();  // the gauges' record, emptied for the next tick
         popups::EndFrame();
         prompt_rows::Restore();  // every prompt row back to its own visibility
+        player_two::command_menu_two::Restore();  // player 1's command menu back, player 2's hidden
         target_views::AfterPass();  // every mark hidden for player 1's pass back
         dev::AfterOverlayRender();
     }

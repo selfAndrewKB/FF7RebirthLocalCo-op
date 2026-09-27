@@ -41,4 +41,23 @@ private:
     bool           held_        = false;
 };
 
+/// The party manager's leader type (u8 at +0x150, read by code that wants the leader's type rather
+/// than the leader itself, e.g. the command controller's leader ordinal and Setup) answering `type`
+/// while alive; player 1's put back when it ends. Pair it with a LeaderScope.
+class LeaderTypeScope
+{
+public:
+    explicit LeaderTypeScope(std::uint8_t type) noexcept;
+    ~LeaderTypeScope();
+    LeaderTypeScope(const LeaderTypeScope&)            = delete;
+    LeaderTypeScope& operator=(const LeaderTypeScope&) = delete;
+
+    bool Held() const noexcept { return held_; }
+
+private:
+    std::uintptr_t address_ = 0;
+    std::uint8_t   saved_   = 0;
+    bool           held_    = false;
+};
+
 }  // namespace lss::player_two::leader_scope
