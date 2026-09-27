@@ -1,0 +1,32 @@
+#pragma once
+
+// Player 2's own battle command menu: a second FieldCommandCtrl (RE-p2-command-menu.md §5.1, §10;
+// RE-p2-command-menu-input.md §4.1, §10 Stage 3a; passes S-CMD1, S-CMD2).
+//
+// The game owns one command controller (EndUISystem[23]) and builds it with three plain calls:
+// FMemory_Malloc(0x798), FieldCommandCtrl__Ctor, FieldCommandCtrl__SetupMenuWidgets(ctrl, world). The
+// ctor registers the controller with the game's GC-referenced list and Setup creates its own widgets,
+// states and request arrays. Player 2's controller is built the same way, once, and set up again for
+// each world (as MasterHUD_Tick re-runs Setup for the game's). Like the game's, it is never freed.
+// Setup makes focus calls (a list selection; a layer push when battle input is live), so it runs
+// inside player 2's focus scope (player_two/focus_scope.h) and never touches player 1's focus.
+//
+// Stage 3a: built and logged only; not ticked, opened or fed input yet. Game thread only.
+
+namespace lss::platform {
+class GameImage;
+}
+
+namespace lss::player_two::command_menu_two {
+
+bool Install(const platform::GameImage& image) noexcept;
+void Remove() noexcept;
+
+/// Each engine tick while player 2 plays: builds or sets up player 2's controller for this world, and
+/// logs its bytes on change.
+void Tick() noexcept;
+
+/// Player 2's controller, or null before it is built.
+void* Controller() noexcept;
+
+}  // namespace lss::player_two::command_menu_two

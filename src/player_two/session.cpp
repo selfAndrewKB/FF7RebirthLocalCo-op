@@ -9,6 +9,7 @@
 #include "player_two/field_exit.h"
 #include "player_two/battle_camera.h"
 #include "player_two/camera_override.h"
+#include "player_two/command_menu_two.h"
 #include "player_two/command_rules.h"
 #include "player_two/menu_focus.h"
 #include "player_two/lock_on.h"
@@ -119,6 +120,7 @@ void Session::Tick() noexcept
             // (player_two/leader_scope.h), which CheckMemberPlayable's leader test must not see.
             RetakeWhenFree();
             CheckMemberPlayable();
+            command_menu_two::Tick();  // player 2's command controller, built and set up per world
             if (phase_ == Phase::Playing && installed_.memberMovement && generation::Member() != nullptr)
             {
                 member_movement::Tick(playerTwoController_, generation::Member());
