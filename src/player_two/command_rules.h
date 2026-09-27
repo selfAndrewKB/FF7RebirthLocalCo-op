@@ -10,8 +10,9 @@
 // for that member as for a knocked-out ally: the chooser's HP call reads 0, and the command test
 // reads "no". The greyed portrait (player_two/party_switch.h) then means what it shows.
 //
-// One of the command test's five calls (0x1428F450E) straddles a code block and is not redirected;
-// the chooser's HP lever still keeps that member out of ally mode's switching.
+// The command test is gated at its own first instruction (player_two/command_rules_code.h), which
+// covers all five of its callers. The member's type and menu ordinal are read once per engine tick
+// (Update), with guarded calls, not inside the menu's own tick.
 //
 // Also logged each frame while player 2 plays, on change: the command controller's members,
 // battle-HUD and menu bytes, its menu requests, and the world's battle-command speed slot (the
@@ -25,6 +26,10 @@ namespace lss::player_two::command_rules {
 
 bool Install(const platform::GameImage& image) noexcept;
 void Remove() noexcept;
+
+/// Once per engine tick: player 2's member's type and command-menu ordinal read, or cleared when player
+/// 2 has none.
+void Update() noexcept;
 
 /// Once per frame while player 2 plays: the command controller logged on change.
 void Watch() noexcept;

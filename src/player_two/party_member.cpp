@@ -272,22 +272,39 @@ const wchar_t* WhyNotPlayable(const void* member) noexcept
     return nullptr;
 }
 
+namespace {
+
+/// The roster walk, guarded: its callers include the command menu's tick. 0xFF if not found (or faulted).
+std::uint8_t PlayerTypeGuarded(const void* character) noexcept
+{
+    __try
+    {
+        const std::int32_t count = g_fn.rosterCount();
+        for (std::int32_t ordinal = 0; ordinal < count && ordinal < facts::kMaxRosterEntries; ++ordinal)
+        {
+            const std::uint8_t type = g_fn.rosterType(ordinal);
+            if (type < facts::kNoPlayerType && g_fn.characterByType(facts::kFieldLane, type) == character)
+            {
+                return type;
+            }
+        }
+    }
+    __except (platform::GuardFilter(GetExceptionCode()))
+    {
+    }
+    return 0xFF;
+}
+
+}  // namespace
+
 std::optional<std::uint8_t> PlayerTypeOf(const void* character) noexcept
 {
     if (!g_installed || character == nullptr)
     {
         return std::nullopt;
     }
-    const std::int32_t count = g_fn.rosterCount();
-    for (std::int32_t ordinal = 0; ordinal < count && ordinal < facts::kMaxRosterEntries; ++ordinal)
-    {
-        const std::uint8_t type = g_fn.rosterType(ordinal);
-        if (type < facts::kNoPlayerType && g_fn.characterByType(facts::kFieldLane, type) == character)
-        {
-            return type;
-        }
-    }
-    return std::nullopt;
+    const std::uint8_t type = PlayerTypeGuarded(character);
+    return type < facts::kNoPlayerType ? std::optional<std::uint8_t>(type) : std::nullopt;
 }
 
 bool Take(void* playerTwoController, void* member) noexcept

@@ -281,6 +281,15 @@ target_include_directories(EnemyGaugesCodeTests PRIVATE "${CMAKE_CURRENT_SOURCE_
 target_compile_features(EnemyGaugesCodeTests PRIVATE cxx_std_20)
 add_test(NAME enemy_gauges_code COMMAND EnemyGaugesCodeTests)
 
+add_executable(CommandRulesCodeTests
+    tests/command_rules_code_test.cpp
+    src/platform/code_redirect.cpp
+    src/platform/near_code.cpp
+)
+target_include_directories(CommandRulesCodeTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(CommandRulesCodeTests PRIVATE cxx_std_20)
+add_test(NAME command_rules_code COMMAND CommandRulesCodeTests)
+
 add_executable(CenteredFrameCodeTests
     tests/centered_frame_code_test.cpp
     src/platform/code_redirect.cpp

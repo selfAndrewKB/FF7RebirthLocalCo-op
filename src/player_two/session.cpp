@@ -9,6 +9,7 @@
 #include "player_two/field_exit.h"
 #include "player_two/battle_camera.h"
 #include "player_two/camera_override.h"
+#include "player_two/command_rules.h"
 #include "player_two/lock_on.h"
 #include "player_two/field_camera.h"
 #include "player_two/generation.h"
@@ -89,6 +90,7 @@ void Session::LogTagCounts(const wchar_t* when) noexcept
 void Session::Tick() noexcept
 {
     generation::SetGameThread();  // the engine-tick callback runs on the thread that ticks the world
+    command_rules::Update();      // which member player 1 may not command (none without player 2)
     if (!HasPlayerTwo())
     {
         TryRejoin();
