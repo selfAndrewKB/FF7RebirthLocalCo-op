@@ -55,7 +55,9 @@ bool Hearable(const wchar_t* what) noexcept
     }
     if (g_lines.fetch_add(1) < kMaxLines)
     {
-        platform::Log(L"party events: {} made off the game thread; the session did not hear it", what);
+        platform::Log(L"party events: {} made {}; the session did not hear it", what,
+                      generation::GameThreadKnown() ? L"off the game thread"
+                                                    : L"before the first engine tick (the game thread is not known yet)");
     }
     return false;
 }

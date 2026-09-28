@@ -66,6 +66,15 @@ std::optional<std::uintptr_t> GameImage::Rebase(std::uintptr_t idaAddress, std::
     return base_ + offset;
 }
 
+std::optional<std::uintptr_t> GameImage::IdaAddressOf(std::uintptr_t live) const noexcept
+{
+    if (live < base_ || live - base_ >= size_)
+    {
+        return std::nullopt;
+    }
+    return live - base_ + kIdaImageBase;
+}
+
 bool GameImage::BytesMatch(std::uintptr_t idaAddress, std::span<const std::uint8_t> expected) const noexcept
 {
     const auto live = Rebase(idaAddress, expected.size());

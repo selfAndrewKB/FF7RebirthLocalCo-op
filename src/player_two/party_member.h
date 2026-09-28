@@ -8,12 +8,8 @@
 // controller, so it runs with the primary controller scoped to player 2
 // (player_two/primary_controller.h); otherwise player 1's controller would take those writes.
 // The switch hands control over asynchronously, so success is read from the lease fields over the
-// following ticks (player_two/party_lease.h), never from the call.
-//
-// The switch only moves control while the field/battle gate it checks internally is open; with it
-// closed it would still publish the leader, a half state. So taking happens only in the field. A
-// give-back the game's party changes need in battle is completed by the game's own battle rule
-// (ReturnToAi).
+// following ticks (player_two/party_lease.h), never from the call. It moves control in the field and
+// in battle alike, as it does for player 1's battle leader switch.
 //
 // Game thread only, outside Draw.
 
@@ -33,8 +29,9 @@ bool Install(const platform::GameImage& image) noexcept;
 
 bool Installed() noexcept;
 
-/// The switch's own gate: in the field, or not in battle.
-bool FieldGateOpen() noexcept;
+/// The game has started: its battle system and its option data exist (false at the title and early in
+/// a load, when the party's objects cannot be relied on).
+bool GameReady() noexcept;
 
 /// The first eligible member of the deployed party (the battle-member list player 1's battle switch
 /// cycles), by that switch's own member test, never player 1's character or the field or default
@@ -64,15 +61,8 @@ std::optional<std::uint8_t> PlayerTypeOf(const void* character) noexcept;
 /// the engine raised an exception; the caller then waits for nothing.
 bool Take(void* playerTwoController, void* member) noexcept;
 
-/// Hands player 2's party member back to its AI. The trigger actor must still exist. With the gate
-/// closed (in battle) the switch publishes the release but moves no control; ReturnToAi does that.
+/// Hands player 2's party member back to its AI. The trigger actor must still exist.
 bool GiveBack(void* playerTwoController) noexcept;
-
-/// The game's own battle rule, no player controller possesses a member in battle
-/// (RE-p2-battle-handover.md §4.2): AEndCharacter::SwitchAIControl_Async(member, 1, nullptr), as the
-/// battle start does for the field leader. Player 2's controller is unpossessed and the member's
-/// saved AI controller possesses it. False (nothing called) if the member has no saved AI controller.
-bool ReturnToAi(void* member) noexcept;
 
 /// The lease fields for `member` and player 2's controller.
 LeaseState ReadLease(const void* member, const void* playerTwoController) noexcept;

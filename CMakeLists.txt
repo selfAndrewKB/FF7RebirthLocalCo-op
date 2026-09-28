@@ -102,6 +102,7 @@ add_library(LocalSplitScreen SHARED
     src/players/unreal_access.cpp
 
     src/renderer/additional_family_output.cpp
+    src/renderer/null_view_probe.cpp
     src/renderer/one_family_per_view.cpp
     src/renderer/view_family_submission.cpp
 
@@ -346,6 +347,15 @@ add_test(NAME arrow_edge_code COMMAND ArrowEdgeCodeTests)
 
 
 
+
+add_executable(NullViewProbeCodeTests
+    tests/null_view_probe_code_test.cpp
+    src/platform/code_redirect.cpp
+    src/platform/near_code.cpp
+)
+target_include_directories(NullViewProbeCodeTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(NullViewProbeCodeTests PRIVATE cxx_std_20)
+add_test(NAME null_view_probe_code COMMAND NullViewProbeCodeTests)
 
 add_executable(ButtonViewTests
     tests/button_view_test.cpp

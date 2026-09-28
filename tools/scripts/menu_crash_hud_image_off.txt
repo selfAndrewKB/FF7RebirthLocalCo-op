@@ -1,0 +1,7 @@
+# Main-menu crash A/B (RE-p2-main-menu-crash.md): player 2 in, player 2's HUD image off.
+# Then open the pause menu, close it and open it again (keys or pads).
+note menu crash A/B: hud-image off
+hud-image off
+join
+wait-until playing
+status

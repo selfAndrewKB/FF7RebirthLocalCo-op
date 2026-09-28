@@ -120,10 +120,12 @@ inline bool NameGuardInitialised(const void* guard) noexcept
     return value != 0 && value != -1;
 }
 
-/// Globals the field/battle gate functions dereference without checking.
-inline constexpr std::uintptr_t kFieldStateGlobal       = 0x14939BD58;  // IsNotInFieldState reads [it]+0x100
-inline constexpr std::uint32_t  kFieldStateInner        = 0x100;
-inline constexpr std::uintptr_t kBattleStateGlobal      = 0x14939BC58;  // IsInBattle reads [it]
+/// Two game objects that exist once the game has started and are missing at the title and early in
+/// a load: the holder of the system option data ([it]+0x100, RE-p2-classic-autoplay.md) and the
+/// battle system (IsInBattle reads [it]).
+inline constexpr std::uintptr_t kOptionHolderGlobal     = 0x14939BD58;
+inline constexpr std::uint32_t  kOptionHolderData       = 0x100;
+inline constexpr std::uintptr_t kBattleStateGlobal      = 0x14939BC58;
 
 /// Square's input object (its stick fields and per-pad banks), and the byte that makes the merge
 /// read DirectInput alone.
@@ -200,9 +202,6 @@ inline constexpr std::uint8_t kEnsureEndPlayerTriggerBytes[] = {
 inline constexpr std::uint8_t kSwitchLeaderInternalBytes[] = {
     0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 0x56, 0x57, 0x41, 0x56, 0x41, 0x57,
     0xB8, 0x40, 0x00, 0x00, 0x00, 0xE8, 0x66, 0x9D, 0xEA, 0x00, 0x48, 0x2B};
-inline constexpr std::uint8_t kSwitchAIControlAsyncBytes[] = {
-    0x40, 0x55, 0x48, 0x8D, 0x6C, 0x24, 0xA9, 0xB8, 0x90, 0x00, 0x00, 0x00,
-    0xE8, 0x23, 0x93, 0x5B, 0x01, 0x48, 0x2B, 0xE0};
 inline constexpr std::uint8_t kRosterCountBytes[] = {
     0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x10, 0xF9, 0x66, 0x01,
     0x48, 0x2B, 0xE0, 0x4C, 0x8B, 0x05, 0xCE, 0x5F, 0x7E, 0x08, 0x45, 0x33};
@@ -221,9 +220,6 @@ inline constexpr std::uint8_t kAiControllerComponentBytes[] = {
 inline constexpr std::uint8_t kValidateAiControllerBytes[] = {
     0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xA8, 0xEF, 0x6B, 0x01,
     0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9, 0x48, 0x85, 0xC9, 0x74, 0x1B, 0x48};
-inline constexpr std::uint8_t kIsNotInFieldStateBytes[] = {
-    0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xBE, 0xBB, 0x74, 0x01, 0x48, 0x2B,
-    0xE0, 0x48, 0x8B, 0x05, 0xDC, 0x89, 0xA3, 0x08, 0x48, 0x8B, 0x88, 0x00};
 inline constexpr std::uint8_t kIsInBattleBytes[] = {
     0x48, 0x8B, 0x05, 0x25, 0x98, 0xAB, 0x08, 0x33, 0xC9, 0x38, 0x88, 0x00,
     0x03, 0x00, 0x00, 0x75, 0x2A, 0x48, 0x8B, 0x05, 0xA4, 0xC9, 0x81, 0x08};
@@ -307,10 +303,6 @@ inline constexpr FunctionFact kEnsureEndPlayerTrigger{L"AEndPlayerController::En
                                                       kEnsureEndPlayerTriggerBytes};
 inline constexpr FunctionFact kSwitchLeaderInternal{L"AEndPlayerController::SwitchLeaderInternal", 0x1412051B4,
                                                     kSwitchLeaderInternalBytes};
-// (character, mode 1 = to its AI, controller): the game's battle-start drop of the field leader
-// (0x141104D84) and player 2's in-battle give-back (RE-p2-battle-handover.md §4.2).
-inline constexpr FunctionFact kSwitchAIControlAsync{L"AEndCharacter::SwitchAIControl_Async", 0x140AF5BFC,
-                                                    kSwitchAIControlAsyncBytes};
 inline constexpr FunctionFact kRosterCount{L"the party roster count", 0x140A3F614, kRosterCountBytes};
 
 // Player 1's battle switch's member test T (RE-p2-deployed-party.md §4.1, RE-p2-party-switch.md §1.2)
@@ -331,8 +323,6 @@ inline constexpr FunctionFact kAiControllerComponent{L"EndCharacter::GetAIContro
                                                      kAiControllerComponentBytes};
 inline constexpr FunctionFact kValidateAiController{L"EndCharacter::ValidateAIController", 0x1409EFF7C,
                                                     kValidateAiControllerBytes};
-inline constexpr FunctionFact kIsNotInFieldState{L"EndGameMode::IsNotInFieldState", 0x140963368,
-                                                 kIsNotInFieldStateBytes};
 inline constexpr FunctionFact kIsInBattle{L"UEndBattleAPI::IsInBattle", 0x1408E242C, kIsInBattleBytes};
 inline constexpr FunctionFact kResolvePartyLeader{L"the party leader resolver", 0x140A61210, kResolvePartyLeaderBytes};
 

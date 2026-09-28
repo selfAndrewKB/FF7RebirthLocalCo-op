@@ -63,6 +63,11 @@ bool OnGameThread() noexcept
     return GetCurrentThreadId() == g_gameThread.load(std::memory_order_relaxed);
 }
 
+bool GameThreadKnown() noexcept
+{
+    return g_gameThread.load(std::memory_order_relaxed) != 0;
+}
+
 bool Active() noexcept
 {
     return g_active.load();

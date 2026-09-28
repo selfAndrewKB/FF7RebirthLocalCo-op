@@ -25,11 +25,9 @@ using RosterTypeFn      = std::uint8_t (*)(std::int32_t ordinal);
 using CharacterByTypeFn = void* (*)(std::uint8_t lane, std::uint8_t playerType);
 using ObjectTestFn      = std::uint8_t (*)(const void* object);
 using ObjectToObjectFn  = void* (*)(const void* object);
-using GlobalTestFn      = std::uint8_t (*)();
 using GlobalObjectFn    = void* (*)();
 using TypeFn            = std::uint8_t (*)();                           // al only
 using TypeTestFn        = std::uint8_t (*)(std::uint8_t playerType);    // al only
-using SwitchAIControlFn = void (*)(void* character, std::uint8_t mode, void* controller);
 
 struct Functions
 {
@@ -41,19 +39,16 @@ struct Functions
     ObjectTestFn      isEndCharacter      = nullptr;
     ObjectToObjectFn  aiControllerOf      = nullptr;
     ObjectToObjectFn  validateAiController = nullptr;
-    GlobalTestFn      isNotInFieldState   = nullptr;
-    GlobalTestFn      isInBattle          = nullptr;
     GlobalObjectFn    globalLeader        = nullptr;
     ObjectTestFn      isBattleActive      = nullptr;  // player 1's battle switch's member test T
     TypeFn            fieldLeaderType     = nullptr;
     TypeFn            defaultBattleLeader = nullptr;
     TypeTestFn        isBattleMember      = nullptr;
-    SwitchAIControlFn switchAIControl     = nullptr;
 };
 Functions         g_fn;  // set once at install
-bool              g_installed   = false;
-const void* const* g_fieldState  = nullptr;  // the gate functions dereference these unchecked
-const void* const* g_battleState = nullptr;
+bool              g_installed    = false;
+const void* const* g_optionHolder = nullptr;  // engine_facts.h: kOptionHolderGlobal
+const void* const* g_battleState  = nullptr;  // engine_facts.h: kBattleStateGlobal
 
 // The two engine calls that change game state run inside structured-exception guards
 // (platform/guarded.h).
@@ -155,22 +150,19 @@ bool Install(const platform::GameImage& image) noexcept
     found      = Find(image, facts::kIsEndCharacter, g_fn.isEndCharacter) && found;
     found      = Find(image, facts::kAiControllerComponent, g_fn.aiControllerOf) && found;
     found      = Find(image, facts::kValidateAiController, g_fn.validateAiController) && found;
-    found      = Find(image, facts::kIsNotInFieldState, g_fn.isNotInFieldState) && found;
-    found      = Find(image, facts::kIsInBattle, g_fn.isInBattle) && found;
     found      = Find(image, facts::kResolvePartyLeader, g_fn.globalLeader) && found;
     found      = Find(image, facts::kIsBattleActive, g_fn.isBattleActive) && found;
     found      = Find(image, facts::kFieldLeaderType, g_fn.fieldLeaderType) && found;
     found      = Find(image, facts::kDefaultBattleLeaderType, g_fn.defaultBattleLeader) && found;
     found      = Find(image, facts::kIsBattleMember, g_fn.isBattleMember) && found;
-    found      = Find(image, facts::kSwitchAIControlAsync, g_fn.switchAIControl) && found;
-    const auto fieldState  = image.Rebase(facts::kFieldStateGlobal, sizeof(void*));
-    const auto battleState = image.Rebase(facts::kBattleStateGlobal, sizeof(void*));
-    if (!fieldState || !battleState)
+    const auto optionHolder = image.Rebase(facts::kOptionHolderGlobal, sizeof(void*));
+    const auto battleState  = image.Rebase(facts::kBattleStateGlobal, sizeof(void*));
+    if (!optionHolder || !battleState)
     {
         return false;
     }
-    g_fieldState  = reinterpret_cast<const void* const*>(*fieldState);
-    g_battleState = reinterpret_cast<const void* const*>(*battleState);
+    g_optionHolder = reinterpret_cast<const void* const*>(*optionHolder);
+    g_battleState  = reinterpret_cast<const void* const*>(*battleState);
     g_installed   = found && primary_controller::Installed();
     return g_installed;
 }
@@ -180,14 +172,10 @@ bool Installed() noexcept
     return g_installed;
 }
 
-bool FieldGateOpen() noexcept
+bool GameReady() noexcept
 {
-    if (!g_installed || *g_battleState == nullptr || *g_fieldState == nullptr ||
-        ReadPointer(*g_fieldState, facts::kFieldStateInner) == nullptr)
-    {
-        return false;  // the game's state objects do not exist yet (a load, a menu)
-    }
-    return g_fn.isNotInFieldState() == 0 || g_fn.isInBattle() == 0;
+    return g_installed && *g_battleState != nullptr && *g_optionHolder != nullptr &&
+           ReadPointer(*g_optionHolder, facts::kOptionHolderData) != nullptr;
 }
 
 void* Choose(void* playerOneController, bool log) noexcept
@@ -375,39 +363,6 @@ bool GiveBack(void* playerTwoController) noexcept
     if (!GuardedSwitchLeader(playerTwoController, nullptr))
     {
         platform::Log(L"give-back failed: the switch raised an exception");
-        return false;
-    }
-    return true;
-}
-
-namespace {
-
-bool GuardedReturnToAi(void* member) noexcept
-{
-    __try
-    {
-        g_fn.switchAIControl(member, 1, nullptr);
-        return true;
-    }
-    __except (platform::GuardFilter(GetExceptionCode()))
-    {
-        return false;
-    }
-}
-
-}  // namespace
-
-bool ReturnToAi(void* member) noexcept
-{
-    // Mode 1 with no controller hands the member to its saved AI controller; without one it would be
-    // left with no controller at all.
-    if (!g_installed || member == nullptr || ReadPointer(member, facts::kCharacterRetainedAi) == nullptr)
-    {
-        return false;
-    }
-    if (!GuardedReturnToAi(member))
-    {
-        platform::Log(L"return to AI failed: the game's call raised an exception");
         return false;
     }
     return true;

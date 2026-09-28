@@ -33,6 +33,7 @@
 #include "players/split_screen_settings.h"
 #include "players/unreal_access.h"
 #include "renderer/additional_family_output.h"
+#include "renderer/null_view_probe.h"
 #include "renderer/view_family_submission.h"
 #include "views/player_view_point.h"
 #include "views/view_shape.h"
@@ -52,7 +53,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.28.3-synergy-pane";
+constexpr const wchar_t* kVersion = L"0.28.5-game-ready-gate";
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -101,7 +102,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.28.3-synergy-pane");
+        ModVersion     = STR("0.28.5-game-ready-gate");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -144,6 +145,7 @@ public:
         lss::dev::Remove();
         lss::hud::RemoveLayoutScale();
         lss::hud::RemoveOverlayLayout();
+        lss::renderer::RemoveNullViewProbe();
         if (rendererInstalled_)
         {
             lss::renderer::RemoveViewFamilySubmission();
@@ -185,6 +187,7 @@ public:
             Log(L"standing aside: nothing installed, the game runs unmodified");
             return;
         }
+        lss::renderer::InstallNullViewProbe(*image);  // diagnosis of the main-menu crash; logs its own outcome
         session_.emplace(*removeLocalPlayer);
         session_->InstallStages(*image);
 
@@ -302,6 +305,7 @@ private:
             case lss::players::PlayerIntent::TogglePadSticks: session_->TogglePadSticks(); break;
             case lss::players::PlayerIntent::None: break;
         }
+        lss::renderer::PollNullViewProbe(session_->HasPlayerTwo());
         lss::player_two::field_exit::Watch();
         if (session_->HasPlayerTwo() && lss::player_two::field_exit::FieldLeft())
         {

@@ -31,6 +31,9 @@ const wchar_t* FaultReason() noexcept;
 /// Records the calling thread as the one the engine ticks the world on. Call from the engine tick.
 void SetGameThread() noexcept;
 
+/// The engine tick has recorded the game thread (before its first tick, OnGameThread is false everywhere).
+bool GameThreadKnown() noexcept;
+
 /// True on the thread recorded by SetGameThread. Every player-2 wrapper acts only there; a call
 /// on any other thread passes straight through.
 bool OnGameThread() noexcept;

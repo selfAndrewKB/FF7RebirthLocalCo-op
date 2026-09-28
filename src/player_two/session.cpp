@@ -201,12 +201,12 @@ void Session::Settle() noexcept
         phase_ = Phase::Playing;
         return;
     }
-    if (!party_member::FieldGateOpen())
+    if (!party_member::GameReady())
     {
         if (!gateClosedLogged_)
         {
             gateClosedLogged_ = true;
-            Log(L"player 2 waits for the field to take a party member");
+            Log(L"player 2 waits for the game to be ready (a load) to take a party member");
         }
         return;
     }
@@ -311,14 +311,14 @@ std::uint32_t Session::BackstopTicks() const noexcept
 void Session::RetakeWhenFree() noexcept
 {
     const bool looking = retakeLooks_ > 0;
-    if (looking && party_member::FieldGateOpen())
+    if (looking && party_member::GameReady())
     {
-        --retakeLooks_;  // the window runs in the field only: no member is taken in battle
+        --retakeLooks_;  // the window runs only while the game is ready: no member is taken during a load
     }
     // MemberReleased with no member: player 2's controller holds no pawn or leader (a give-back that
     // never completed keeps it holding one).
     if (member_ != nullptr || !installed_.member || !generation::Active() || (!looking && ticks_ % BackstopTicks() != 0) ||
-        !party_member::FieldGateOpen() || !MemberReleased())
+        !party_member::GameReady() || !MemberReleased())
     {
         return;
     }
@@ -336,32 +336,17 @@ void Session::RetakeWhenFree() noexcept
     ticks_ = kPlayerOneWatchTicks;  // player 1 is settled already: choose on the next tick
 }
 
-/// Player 2 gives its member back through the game's release and chooses again once it is released
-/// (in battle, once the field gate opens again: no member is taken in battle).
+/// Player 2 gives its member back through the game's release and chooses again once it is released.
 void Session::Yield(const wchar_t* why) noexcept
 {
-    const bool inBattle = !party_member::FieldGateOpen();
-    Log(L"player 2's {} is {}: giving it back to choose again among the deployed party{}", NameOf(member_), why,
-        inBattle ? L" (in battle: the release, then the game's battle rule hands it to its AI)" : L"");
+    Log(L"player 2's {} is {}: giving it back to choose again among the deployed party", NameOf(member_), why);
     generation::SetMember(nullptr);  // player 2's member movement and scopes stop at once
     phase_ = Phase::Swapping;        // before the game's switch runs: a party event inside it sees the swap
     ticks_ = 0;
     if (!party_member::GiveBack(playerTwoController_))
     {
         Log(L"player 2's {} could not be given back (no trigger actor, or the switch faulted)", NameOf(member_));
-        return;
     }
-    if (!inBattle)
-    {
-        return;
-    }
-    // In battle the switch publishes the release but moves no control; the game's own battle rule
-    // (no player controller possesses a member in battle, RE-p2-battle-handover.md §4.2) does.
-    const bool returned = party_member::ReturnToAi(member_);
-    const auto lease    = party_member::ReadLease(member_, playerTwoController_);
-    Log(L"in battle: {} {} to its AI; it is driven by {} (its AI {}), player 2's pawn {}, leader {}", NameOf(member_),
-        returned ? L"handed" : L"NOT handed (no saved AI controller, or the call faulted)", NameOf(lease.memberEffective),
-        NameOf(lease.memberRetainedAi), NameOf(lease.playerTwoPawn), NameOf(lease.playerTwoLeader));
 }
 
 bool Session::MemberHeld() const noexcept
@@ -474,7 +459,7 @@ void Session::TryRejoin() noexcept
     }
     // The field running again (the entry steps done, the party rebuilt): a join before that would be
     // undone by the entry's own unpossess of every non-leader (RE-p2-retry-reload.md §2.3).
-    if (!own_controller::Ready() || (installed_.member && !party_member::FieldGateOpen()) || !field_exit::FieldReady())
+    if (!own_controller::Ready() || (installed_.member && !party_member::GameReady()) || !field_exit::FieldReady())
     {
         rejoinTicks_ = 0;
         return;
@@ -502,7 +487,7 @@ void Session::TryRejoin() noexcept
 /// battle controller check, which no game event reports.
 void Session::CheckMemberPlayable() noexcept
 {
-    if (member_ == nullptr || generation::Member() != member_ || !generation::Active() || !party_member::FieldGateOpen())
+    if (member_ == nullptr || generation::Member() != member_ || !generation::Active() || !party_member::GameReady())
     {
         return;
     }

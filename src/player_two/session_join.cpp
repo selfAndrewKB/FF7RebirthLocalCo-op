@@ -191,9 +191,9 @@ bool Session::JoinAllowed(const players::LocalPlayers::PlayerOne& one) const noe
             installed_.ownController ? L"player 1's camera names are not set yet" : L"its stage is not installed");
         return false;
     }
-    if (installed_.member && !party_member::FieldGateOpen())
+    if (installed_.member && !party_member::GameReady())
     {
-        Log(L"join refused: not in the field (player 2 joins in the field only)");
+        Log(L"join refused: the game has not started yet (the title, or early in a load)");
         return false;
     }
     if (installed_.member && !field_exit::FieldReady())
