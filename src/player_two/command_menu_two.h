@@ -6,13 +6,17 @@
 // The game owns one command controller (EndUISystem[23]) and builds it with three plain calls:
 // FMemory_Malloc(0x798), FieldCommandCtrl__Ctor, FieldCommandCtrl__SetupMenuWidgets(ctrl, world). The
 // ctor registers the controller with the game's GC-referenced list and Setup creates its own widgets,
-// states and request arrays. Player 2's controller is built the same way, once, and set up again for
-// each world (as MasterHUD_Tick re-runs Setup for the game's). Like the game's, it is never freed.
-// Setup makes focus calls (a list selection; a layer push when battle input is live), so it runs
-// inside player 2's focus scope (player_two/focus_scope.h) and never touches player 1's focus.
+// states and request arrays. Player 2's controller is built the same way, once. Like the game's, it is
+// never freed. It follows the game's lifecycle at the game's own calls (RE-p2-command-menu-levers.md §2):
+// the one call of ResetAll and the one call of Setup on the game's controller, which every path reaches
+// (field entry and exit, the fade-deferred Setup, the Blueprint thunks, the menu-close re-Setup), are
+// redirected; each is made again on player 2's controller while player 2 plays. When player 2 joins, or
+// was out at the game's Setup, a join Setup runs once the game's controller is set up.
+// Setup makes focus calls (a list selection; a layer push when battle input is live), so every call on
+// player 2's controller runs inside player 2's focus scope (player_two/focus_scope.h) and never touches
+// player 1's focus.
 //
-// Its menu widget stays at render opacity 0 until it is shown in player 2's pass only. Stage 3a: built
-// and logged only; not ticked, opened or fed input yet. Game thread only.
+// Its menu widget stays at render opacity 0 until it is shown in player 2's pass only. Game thread only.
 
 namespace lss::platform {
 class GameImage;
@@ -23,8 +27,8 @@ namespace lss::player_two::command_menu_two {
 bool Install(const platform::GameImage& image) noexcept;
 void Remove() noexcept;
 
-/// Each engine tick while player 2 plays: builds or sets up player 2's controller for this world, and
-/// logs its bytes on change.
+/// Each engine tick while player 2 plays: builds player 2's controller, runs the join Setup when it does
+/// not follow the game's current setup, and logs its bytes on change.
 void Tick() noexcept;
 
 /// Each engine tick, with or without player 2: player 2's menu widget kept at render opacity 0 (in

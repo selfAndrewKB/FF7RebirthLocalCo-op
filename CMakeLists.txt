@@ -47,6 +47,7 @@ add_library(LocalSplitScreen SHARED
 
     src/platform/call_redirect.cpp
     src/platform/code_redirect.cpp
+    src/platform/entry_redirect.cpp
     src/platform/guarded.cpp
     src/platform/frame_watch.cpp
     src/platform/image.cpp
@@ -68,6 +69,7 @@ add_library(LocalSplitScreen SHARED
     src/player_two/battle_camera.cpp
     src/player_two/camera_override.cpp
     src/player_two/camera_distance.cpp
+    src/player_two/command_locks.cpp
     src/player_two/command_rules.cpp
     src/player_two/menu_focus.cpp
     src/player_two/focus_scope.cpp
@@ -236,6 +238,16 @@ add_executable(CallRedirectTests
 target_include_directories(CallRedirectTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(CallRedirectTests PRIVATE cxx_std_20)
 add_test(NAME call_redirect COMMAND CallRedirectTests)
+
+add_executable(EntryRedirectTests
+    tests/entry_redirect_test.cpp
+    src/platform/entry_redirect.cpp
+    src/platform/module_pin.cpp
+    src/platform/near_code.cpp
+)
+target_include_directories(EntryRedirectTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(EntryRedirectTests PRIVATE cxx_std_20)
+add_test(NAME entry_redirect COMMAND EntryRedirectTests)
 
 add_executable(SparseArrayTests
     tests/sparse_array_test.cpp

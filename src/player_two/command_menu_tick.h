@@ -13,14 +13,17 @@
 // into its request array from pad 2 (levels, as the game's input handler and up route leave them).
 // This is the only path for player 2's actions; if it cannot run, the log says why.
 //
-// What a second tick would change for player 1 is shielded:
+// What a second tick would change for player 1 is handled:
 //   - the world slow (slot 0, written by every tick): either menu slows the world (policy A, the
 //     smaller of the two values is written);
-//   - the per-type command snapshot and the shared key guide: player 2's pass does not write them;
-//   - two shared UI values it writes each tick: saved and restored around it;
-//   - the leader-switch requests: cleared before each tick (player 2's d-pad never switches);
-//   - the battle HUD mode is mirrored with the controller's own setter, never the global one;
+//   - the per-type command snapshot: player 2's pass does not write it (its one reader cancels a
+//     pending command on the game's controller); the key guide is player 2's own inside the scope;
+//   - the leader-switch requests: cleared before each tick (a written exception: player 2's d-pad
+//     never switches player 1's leader);
+//   - the battle HUD mode, battle input and party-list input follow player 1's through the game's
+//     own setters on player 2's controller, never the global ones;
 //   - the command rules are turned around for the pass: player 2 may not command player 1's leader.
+// Pad 2's presses reach player 2's menu in battle; a release follows its press (the capture map's rule).
 // Game thread only.
 
 namespace lss::platform {

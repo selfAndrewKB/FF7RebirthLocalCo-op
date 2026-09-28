@@ -5,9 +5,10 @@
 // UI actions reach one focus path only, kept by Square's input object (EndUISystem[2]) with a stack of
 // focus layers; the game has one such context. Player 2's command menu (a second FieldCommandCtrl)
 // calls the same focus functions as player 1's when it is built, opens and closes, so for the length
-// of those calls player 2's context is swapped in: the focus path, the layers, the cause byte and the
+// of those calls player 2's context is swapped in: the focus path, the layers, the cause byte, the
 // capture map (the held actions' capturers: each player's own, as the command menu captures every held
-// Attack, Unique and Guard) are exchanged with player 2's saved copy (empty at first), the input
+// Attack, Unique and Guard) and the menu owner byte (+0x64, per-pad input state the member selecter
+// writes) are exchanged with player 2's saved copy (empty at first), the input
 // object's menu-core delegate is unbound (player 2 never runs player 1's cinema handler), and the UI
 // system's command controller slot names player 2's. Weak-pointer counts travel with the bytes, so
 // nothing is added or released. The scope is refused inside another scope or without the input
@@ -59,7 +60,7 @@ public:
     void Abandon() noexcept { abandon_ = true; }
 
 private:
-    static constexpr std::size_t kContextSize  = 32 + 16 + 1 + 0x50;  // path, layers, cause, capture map
+    static constexpr std::size_t kContextSize  = 32 + 16 + 1 + 0x50 + 1;  // path, layers, cause, capture map, owner byte
     static constexpr std::size_t kDelegateSize = 16;
 
     bool                                   entered_ = false;

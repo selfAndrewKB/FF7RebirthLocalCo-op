@@ -21,15 +21,18 @@ constexpr std::uint32_t  kKeyGuide    = 0x1A8; // EndUISystem[53]: the key guide
 // The input object's focus context, as {offset, size} copied in this order: the focus path
 // (FWeakWidgetPath), the focus layers (TArray), the last focus cause, and the capture map (a TSet
 // keyed by action: the widget that took a held action's press gets its release; the command menu
-// adds one for each held Attack, Unique or Guard, so it is per-player state like the path).
+// adds one for each held Attack, Unique or Guard, so it is per-player state like the path), then the
+// menu owner byte (+0x64: written by the member selecter's tick in the field top states, read by
+// SquareInput_Owner64Gate 0x143A1D738 in the key-down mapper; per-pad input state tied to that player's
+// menu, RE-p2-command-menu-levers.md §5.2).
 struct Region
 {
     std::uint32_t offset, size;
 };
-constexpr std::array<Region, 4> kContext{{{0x08, 32}, {0x40, 16}, {0x78, 1}, {0xA8, 0x50}}};
+constexpr std::array<Region, 5> kContext{{{0x08, 32}, {0x40, 16}, {0x78, 1}, {0xA8, 0x50}, {0x64, 1}}};
 constexpr std::uint32_t kDelegate = 0x1A0;  // the menu-core delegate, run when no widget takes an action
 
-constexpr std::size_t kContextSize = 32 + 16 + 1 + 0x50;
+constexpr std::size_t kContextSize = 32 + 16 + 1 + 0x50 + 1;
 constexpr std::size_t kCaptureAt   = 32 + 16 + 1;  // the capture map's place in the copy
 // An empty TSet as the game constructs one: all zero but its sparse array's FirstFreeIndex (+0x30), -1.
 constexpr std::size_t kCaptureFirstFree = 0x30;
