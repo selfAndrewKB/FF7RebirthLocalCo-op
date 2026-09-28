@@ -40,12 +40,23 @@ using TickFn = void (*)(void* self, float deltaTime, void* application, void* cu
 // The action-down dispatcher (§9): updates the tables and, unless its alreadyHandled byte is set,
 // hands the action to the UI handler stack and the menu core's delegate (menus, field prompts,
 // battle commands). Its callers that can carry pad 2's presses and whose call fits one aligned
-// block: the XInput main loop (every bound action) and two DirectInput loops. The two XInput
-// extra-key calls and two DirectInput single calls straddle a block and are left as the game's.
+// block: the XInput main loop (every bound action) and two DirectInput loops.
 constexpr std::uintptr_t kActionDown = 0x1407C3DAC;
 constexpr std::uint8_t   kActionDownBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55,
                                                0x41, 0x56, 0x41, 0x57, 0xB8, 0x00, 0x01, 0x00, 0x00, 0xE8, 0x6A, 0xB1};
 constexpr std::array<std::uintptr_t, 3> kActionDownCalls{0x140E745A0, 0x140E74141, 0x140E74312};
+
+// The XInput loop's two extra-key calls (§9.2): per-button extra keys (0x140E7468D) and the extra-key
+// list (0x140E7477E, SquareInput_CollectShortcutSecondKeys: the Shortcut1..5_Second keys a face button
+// sends while the shortcut modifier is held; RE-p2-command-menu-input.md §3.1). Their alreadyHandled
+// is the loop's result so far. Both calls cross a 16-byte block, so they are changed only from the
+// game thread, in the input Tick after the game's (outside KeyDown_MapKeyToActions, the only function
+// that runs them, which runs on the game thread: from Slate's key-down, the Tick and the analog
+// handler [ASSUMPTION from §9.2]). The DirectInput-only single calls (0x140E741CE, 0x140E7424F) stay
+// the game's.
+constexpr std::array<std::uintptr_t, 2> kExtraKeyCalls{0x140E7468D, 0x140E7477E};
+constexpr unsigned                      kExtraKeyLines = 40;
+constexpr std::size_t                   kActionEventKey = 0x18;  // the action event's key (FName)
 
 // ActionDownFn: pad_buttons.h.
 
@@ -103,6 +114,10 @@ struct Table
 
 // Set once at install.
 std::array<platform::CallRedirect, kActionDownCalls.size()> g_actionDownCalls;
+std::array<platform::CallRedirect, kExtraKeyCalls.size()>   g_extraKeyCalls;   // installed by the first Tick
+std::array<std::uintptr_t, kExtraKeyCalls.size()>           g_extraKeySites{};  // live addresses, 0 if not verified
+bool                    g_extraKeysTried = false;  // game thread
+unsigned                g_extraKeyLines  = 0;      // game thread
 ActionDownFn            g_actionDown = nullptr;
 PlayerTwoRouteFn        g_playerTwoRoute = nullptr;  // game thread
 platform::VTableEntry   g_tickSlot;
@@ -291,10 +306,16 @@ void GiveBack() noexcept
     g_tables = {};
 }
 
+void InstallExtraKeyCalls() noexcept;
+
 void Tick(void* self, float deltaTime, void* application, void* cursor)
 {
     g_engineTick(self, deltaTime, application, cursor);
     const platform::frame_watch::Charge charge(platform::frame_watch::Part::InputTick);
+    if (!g_extraKeysTried && g_actionDown != nullptr && generation::OnGameThread())
+    {
+        InstallExtraKeyCalls();
+    }
     if (!ViewsWanted() || g_inputOwner == nullptr)
     {
         if (g_active && generation::OnGameThread())
@@ -345,6 +366,50 @@ char ActionDown(void* owner, void* unused, std::uint32_t sourceBit, void* event,
     return g_actionDown(owner, unused, sourceBit, event, alreadyHandled);
 }
 
+/// The extra-key calls: the same as the main loop's (ActionDown), with each key logged by name (the
+/// first few, both pads), since which keys come this way is not otherwise known.
+char ExtraKeyDown(void* owner, void* unused, std::uint32_t sourceBit, void* event, std::uint8_t alreadyHandled)
+{
+    // The call sites were changed on the understanding that only the game thread runs them; a call from
+    // another thread would mean a swap could have torn them (call_redirect.h).
+    static std::atomic<unsigned> offThread{0};
+    if (!generation::OnGameThread() && offThread.fetch_add(1, std::memory_order_relaxed) < 5)
+    {
+        platform::Log(L"WARNING: an extra-key call ran off the game thread; its call site was changed on the understanding "
+                      L"that only the game thread runs it");
+    }
+    const char result = ActionDown(owner, unused, sourceBit, event, alreadyHandled);
+    if (g_extraKeyLines < kExtraKeyLines && event != nullptr)
+    {
+        ++g_extraKeyLines;
+        std::uint64_t key = 0;
+        platform::CopyGuarded(&key, static_cast<const std::byte*>(event) + kActionEventKey, sizeof(key));
+        const bool padTwo = ((button_view::PadBits(1) >> (sourceBit & 31)) & 1) != 0;
+        platform::Log(L"buttons: extra key {} from {} (source bit {}, already handled {}) -> {}",
+                      RC::Unreal::FName(static_cast<std::int64_t>(key)).ToString(), padTwo ? L"pad 2" : L"pad 1 or another device",
+                      sourceBit, alreadyHandled, static_cast<int>(result));
+    }
+    return result;
+}
+
+/// Once, from the input Tick after the game's (game thread, outside the only function that runs
+/// them): the two extra-key calls.
+void InstallExtraKeyCalls() noexcept
+{
+    g_extraKeysTried = true;
+    unsigned calls   = 0;
+    for (std::size_t i = 0; i < g_extraKeyCalls.size(); ++i)
+    {
+        calls += g_extraKeySites[i] != 0 &&
+                         g_extraKeyCalls[i].InstallFromOwnThread(g_extraKeySites[i], reinterpret_cast<std::uintptr_t>(g_actionDown),
+                                                                 reinterpret_cast<std::uintptr_t>(&ExtraKeyDown))
+                     ? 1
+                     : 0;
+    }
+    platform::Log(L"buttons: pad 2's extra keys (the shortcut keys) take the same route at {} of {} extra-key calls",
+                  calls, g_extraKeyCalls.size());
+}
+
 }  // namespace
 
 void SetPlayerTwoRoute(PlayerTwoRouteFn route) noexcept
@@ -376,6 +441,11 @@ bool Install(const platform::GameImage& image) noexcept
             const auto site = image.Rebase(kActionDownCalls[i], 5);
             calls += site && g_actionDownCalls[i].Install(*site, *target, reinterpret_cast<std::uintptr_t>(&ActionDown)) ? 1 : 0;
         }
+        for (std::size_t i = 0; i < kExtraKeyCalls.size(); ++i)
+        {
+            const auto site     = image.Rebase(kExtraKeyCalls[i], 5);
+            g_extraKeySites[i] = site ? *site : 0;
+        }
     }
     platform::Log(L"buttons: pad 2's presses kept from menus and prompts at {} of {} dispatch calls", calls,
                   kActionDownCalls.size());
@@ -394,6 +464,17 @@ void Remove() noexcept
         if (call.IsInstalled() && !call.Restore())
         {
             platform::Log(L"buttons: a dispatch call was changed after us; left in place (it passes pad 1 through)");
+        }
+    }
+    // The extra-key calls cross a block: restored only from the game thread (call_redirect.h). Off it,
+    // they stay ours; the DLL is pinned, and with player 2 out they pass every press through.
+    const bool gameThread = generation::OnGameThread();
+    for (auto& call : g_extraKeyCalls)
+    {
+        if (call.IsInstalled() && (!gameThread || !call.Restore()))
+        {
+            platform::Log(L"buttons: an extra-key call left in place ({}); it passes presses through with player 2 out",
+                          gameThread ? L"changed after us" : L"removed off the game thread");
         }
     }
 }

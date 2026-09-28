@@ -35,4 +35,14 @@ namespace lss::player_two::command_menu_tick {
 bool Install(const platform::GameImage& image) noexcept;
 void Remove() noexcept;
 
+/// The game's own calls that give the controller's command menu the UI focus of the focus context that is
+/// open (call it inside player 2's): FieldCommandCtrl_SetMenuFocusLayer783(controller, 0) while its layer
+/// byte (+0x783) still says the menu layer is up, then FieldCommandCtrl_ResumeHudInput(controller, 0),
+/// which turns battle input on and puts the layer back (its layer setter returns early while the byte is
+/// set). False if the stage is not installed or a call faulted.
+bool RefocusMenu(void* controller) noexcept;
+
+/// The controller's battle input flag (+0x25C) is on.
+bool BattleInputOn(const void* controller) noexcept;
+
 }  // namespace lss::player_two::command_menu_tick

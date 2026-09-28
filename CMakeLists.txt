@@ -78,6 +78,7 @@ add_library(LocalSplitScreen SHARED
     src/player_two/leader_scope.cpp
     src/player_two/lock_on.cpp
     src/player_two/own_controller.cpp
+    src/player_two/party_events.cpp
     src/player_two/party_lease.cpp
     src/player_two/party_member.cpp
     src/player_two/party_switch.cpp

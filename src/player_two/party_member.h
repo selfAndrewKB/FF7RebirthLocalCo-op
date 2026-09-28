@@ -11,8 +11,9 @@
 // following ticks (player_two/party_lease.h), never from the call.
 //
 // The switch only moves control while the field/battle gate it checks internally is open; with it
-// closed it would still publish the leader, a half state. So both taking and giving back happen
-// only in the field.
+// closed it would still publish the leader, a half state. So taking happens only in the field. A
+// give-back the game's party changes need in battle is completed by the game's own battle rule
+// (ReturnToAi).
 //
 // Game thread only, outside Draw.
 
@@ -40,10 +41,19 @@ bool FieldGateOpen() noexcept;
 /// battle leader's slot (null if none). Each member's verdict is logged when `log` is set.
 void* Choose(void* playerOneController, bool log = true) noexcept;
 
-/// Why player 2 may no longer play `member`: now the party leader (a story change hands it to player
-/// 1), not one of the deployed party any more, away from the battle party, or without its battle
-/// controller component. A downed or petrified member stays playable, as player 1 stays on a downed
-/// leader. Null while it may. Game thread.
+/// Why `member` is no longer in player 2's reach in the party: now the party leader (a story change
+/// hands it to player 1), not one of the deployed party any more, or away from the battle party.
+/// Null while it is. Game thread.
+const wchar_t* WhyNotInParty(const void* member) noexcept;
+
+/// `member` still has its battle controller component (true when it cannot be read). Game thread.
+bool HasBattleController(const void* member) noexcept;
+
+inline constexpr const wchar_t* kWithoutBattleController = L"without its battle controller";
+
+/// Why player 2 may no longer play `member`: WhyNotInParty, or without its battle controller
+/// component. A downed or petrified member stays playable, as player 1 stays on a downed leader.
+/// Null while it may. Game thread.
 const wchar_t* WhyNotPlayable(const void* member) noexcept;
 
 /// The party roster's player type of `character` (null if it is not on the field lane's roster).
@@ -54,8 +64,15 @@ std::optional<std::uint8_t> PlayerTypeOf(const void* character) noexcept;
 /// the engine raised an exception; the caller then waits for nothing.
 bool Take(void* playerTwoController, void* member) noexcept;
 
-/// Hands player 2's party member back to its AI. The trigger actor must still exist.
+/// Hands player 2's party member back to its AI. The trigger actor must still exist. With the gate
+/// closed (in battle) the switch publishes the release but moves no control; ReturnToAi does that.
 bool GiveBack(void* playerTwoController) noexcept;
+
+/// The game's own battle rule, no player controller possesses a member in battle
+/// (RE-p2-battle-handover.md §4.2): AEndCharacter::SwitchAIControl_Async(member, 1, nullptr), as the
+/// battle start does for the field leader. Player 2's controller is unpossessed and the member's
+/// saved AI controller possesses it. False (nothing called) if the member has no saved AI controller.
+bool ReturnToAi(void* member) noexcept;
 
 /// The lease fields for `member` and player 2's controller.
 LeaseState ReadLease(const void* member, const void* playerTwoController) noexcept;

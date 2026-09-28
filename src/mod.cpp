@@ -52,7 +52,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.27.3-release-after-battle";
+constexpr const wchar_t* kVersion = L"0.28.3-synergy-pane";
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -101,7 +101,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.27.3-release-after-battle");
+        ModVersion     = STR("0.28.3-synergy-pane");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -305,7 +305,7 @@ private:
         lss::player_two::field_exit::Watch();
         if (session_->HasPlayerTwo() && lss::player_two::field_exit::FieldLeft())
         {
-            LeaveBeforeWorldChange(L"the field stopped running");  // a field exit the redirected calls did not see
+            LeaveBeforeWorldChange(L"the field stopped running (a field exit the redirected entry did not see)");
         }
         lss::dev::TickBeforeSession();
         session_->Tick();

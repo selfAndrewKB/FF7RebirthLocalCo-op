@@ -12,6 +12,7 @@
 #include "platform/verified_code.h"
 #include "hud/widget_opacity.h"
 #include "player_two/command_locks.h"
+#include "player_two/command_menu_tick.h"
 #include "player_two/describe.h"
 #include "player_two/engine_facts.h"
 #include "player_two/focus_scope.h"
@@ -675,6 +676,44 @@ void Restore() noexcept
     SetOpacity(WidgetOf(reinterpret_cast<std::uintptr_t>(g_keyGuide), kKeyGuideWidget), 0.0F);
 }
 
+namespace {
+
+/// After the join Setup: player 2's command menu gets player 2's UI focus again through the game's own
+/// calls, in player 2's scopes, when the game's controller has battle input on. The game's
+/// ResumeHudInput(0) as its field starts keeps battle input on, with its menu's focus layer up, through the
+/// field and every battle. Player 2 missed it while out, and its controller outlives the leave with its
+/// flag and layer byte (+0x783) still set, while the layer itself went with the focus of the player who
+/// left. The battle-input mirror follows only a change, and the game's layer setter returns early while
+/// the byte is set, so player 2's focus would stay off its menu: pad 2's Attack, Unique and Guard would
+/// reach nothing (the user's retry tests, v0.28.0). The layer setter's off call, then ResumeHudInput(0)
+/// (command_menu_tick::RefocusMenu). A written exception, as the lock sync: missed game calls made once at
+/// the join.
+void RefocusAtJoin(std::uintptr_t one) noexcept
+{
+    if (!command_menu_tick::BattleInputOn(reinterpret_cast<const void*>(one)))
+    {
+        return;
+    }
+    const auto     layer   = Field<std::uint8_t>(reinterpret_cast<std::uintptr_t>(g_controller) + kMenuLayer);
+    const wchar_t* refusal = nullptr;
+    switch (InPlayerTwoScopes(refusal, [] { return command_menu_tick::RefocusMenu(g_controller); }))
+    {
+        case SetupResult::Ran:
+            Line(std::format(L"join: player 2's menu focus layer {}put up again through the game's calls (layer byte "
+                             L"was {}); battle input on",
+                             layer != 0 ? L"taken down and " : L"", layer));
+            break;
+        case SetupResult::Refused:
+            Line(std::format(L"join: player 2's menu focus NOT restored: {}", refusal));
+            break;
+        case SetupResult::Faulted:
+            Line(L"join: restoring player 2's menu focus FAULTED");
+            break;
+    }
+}
+
+}  // namespace
+
 void KeepHidden() noexcept
 {
     if (g_controller == nullptr || g_weakGet == nullptr || !hud::widget_opacity::Installed() ||
@@ -760,6 +799,7 @@ void Tick() noexcept
     // missed it (player 2 was out), so it runs now, in the game's order.
     RefreshPlayerTwo(L"after the join Setup, as field step 9 follows the game's");
     command_locks::Sync(g_controller);
+    RefocusAtJoin(one);
     // Only at a join (an object walk is slow): a second Setup must not leave extra menus behind.
     Line(std::format(L"join setup for world '{}' (returned {}); command menu widgets now: {}", NameOf(world), set,
                      CountMenus()));

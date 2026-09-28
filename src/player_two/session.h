@@ -16,10 +16,13 @@
 //            (player_two/member_movement.h).
 //   leave    the member is given back first and awaited, then the leftover actors are destroyed
 //            and player 2 removed in one step (player_two/leave_sequence.h).
-//   party    every few ticks the member is checked: now the leader (a story change), out of the
-//            deployed or battle party, or without its battle controller, it is given back and another
-//            chosen; with none free (a solo story party), player 2 waits without a character and takes
-//            one as soon as one is free. A downed member stays player 2's.
+//   party    the game's party funnels are heard (player_two/party_events.h): before the game makes
+//            player 2's member player 1's leader, player 2 gives it back; after a status change, a
+//            member out of the deployed or battle party is given back and another chosen. With none
+//            free (a solo story party), player 2 waits without a character and takes one after the
+//            next party change frees one. A slow check backs both up (story override party data
+//            passes neither funnel), and the battle controller component is checked every few
+//            ticks. A downed member stays player 2's.
 //   map load player 2 leaves before it, and joins again once the new map is in the field state
 //            and player 1's camera is ready.
 // Each stage is installed only if its engine checks pass; a stage that is not installed is
@@ -31,7 +34,9 @@
 #include "player_two/party_member.h"
 #include "players/local_players.h"
 
+#include <chrono>
 #include <cstdint>
+#include <string>
 
 namespace lss::platform {
 class GameImage;
@@ -109,6 +114,14 @@ private:
     void RetakeWhenFree() noexcept;
     bool MemberDestroyed() noexcept;
     void TryRejoin() noexcept;
+    std::uint32_t BackstopTicks() const noexcept;
+    void Yield(const wchar_t* why) noexcept;
+    bool MemberHeld() const noexcept;  // taking or playing a member
+    void EventLine(const std::wstring& text) noexcept;
+    void OnLeaderChanging(void* controller, void* character) noexcept;
+    void OnStatusChanged(std::uint8_t playerType, std::uint8_t before, std::uint8_t after) noexcept;
+    void OnPartyApplied() noexcept;
+    void CheckAfterPartyChange() noexcept;
 
     players::LocalPlayers players_;
     LeaveSequence         leave_;
@@ -119,6 +132,8 @@ private:
     void*                 member_           = nullptr;  // the member player 2 took (or was taking)
     std::uint64_t         memberWeak_       = 0;        // its FWeakObjectPtr, to see it destroyed
     std::uint32_t         ticks_            = 0;        // in the current phase
+    std::uint32_t         retakeLooks_      = 0;        // ticks left to look for a free member after a party change
+    std::uint32_t         eventLines_       = 0;        // party-event lines logged
     std::uint32_t         viewTargetResets_ = 0;        // times player 2's view was found moved off its camera
     bool                  viewOnOwnCamera_  = true;     // as last seen (a move is logged once per move)
     bool                  gateClosedLogged_ = false;
@@ -126,7 +141,7 @@ private:
     bool                  rejoinPending_    = false;    // a map load took player 2 out: join again when it is ready
     std::uint32_t         rejoinTicks_      = 0;        // ticks the new map has looked ready
     std::uint32_t         rejoinTries_      = 0;
-    std::uint32_t         rejoinWaited_     = 0;        // ticks since the rejoin was asked for
+    std::chrono::steady_clock::time_point rejoinAsked_{};  // when the map load asked for the rejoin
 
     party_member::PlayerOneBytes playerOneBytes_{};
 
@@ -144,6 +159,7 @@ private:
         bool memberMovement = false;
         bool scopeLeaks     = false;
         bool padButtons     = false;
+        bool partyEvents    = false;
     } installed_;
 };
 

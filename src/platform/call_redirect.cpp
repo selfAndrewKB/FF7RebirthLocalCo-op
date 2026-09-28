@@ -1,7 +1,9 @@
 #include "platform/call_redirect.h"
 
+#include "platform/log.h"
 #include "platform/module_pin.h"
 
+#include <array>
 #include <cstring>
 #include <limits>
 #include <optional>
@@ -50,17 +52,29 @@ std::uintptr_t BuildThunk(std::uintptr_t site, std::uintptr_t replacement) noexc
 
 bool CallRedirect::Install(std::uintptr_t site, std::uintptr_t target, std::uintptr_t replacement) noexcept
 {
-    const std::uintptr_t block = site & ~(kCodeBlockSize - 1);
-    const std::size_t    at    = site - block;
+    return Place(site, target, replacement, false);
+}
+
+bool CallRedirect::InstallFromOwnThread(std::uintptr_t site, std::uintptr_t target, std::uintptr_t replacement) noexcept
+{
+    return Place(site, target, replacement, true);
+}
+
+bool CallRedirect::Place(std::uintptr_t site, std::uintptr_t target, std::uintptr_t replacement, bool crossingAllowed) noexcept
+{
+    const std::uintptr_t block   = site & ~(kCodeBlockSize - 1);
+    const std::size_t    at      = site - block;
+    const bool           crosses = at + kCallLength > kCodeBlockSize;
     // The thunk jumps into our compiled code, so the DLL must outlive any chance of the call being
     // taken (platform/module_pin.h).
-    if (block_ != 0 || replacement == 0 || at + kCallLength > kCodeBlockSize || !PinThisModule())
+    if (block_ != 0 || replacement == 0 || (crosses && !crossingAllowed) || !PinThisModule())
     {
         return false;
     }
 
-    CodeBlock current{};
-    std::memcpy(current.data(), reinterpret_cast<const void*>(block), current.size());
+    // The call's bytes, read as one run over both blocks when it crosses.
+    std::array<std::uint8_t, 2 * kCodeBlockSize> current{};
+    std::memcpy(current.data(), reinterpret_cast<const void*>(block), crosses ? current.size() : kCodeBlockSize);
     if (current[at] != kCallOpcode || CallTarget(site, current.data() + at) != target)
     {
         return false;
@@ -73,17 +87,38 @@ bool CallRedirect::Install(std::uintptr_t site, std::uintptr_t target, std::uint
         return false;  // a built thunk is left allocated and unused: never reached, never freed
     }
 
-    CodeBlock redirected = current;
+    auto redirected = current;
     std::memcpy(redirected.data() + at + 1, &*rel, sizeof(*rel));
+    CodeBlock first{}, firstRedirected{}, second{}, secondRedirected{};
+    std::memcpy(first.data(), current.data(), kCodeBlockSize);
+    std::memcpy(firstRedirected.data(), redirected.data(), kCodeBlockSize);
+    std::memcpy(second.data(), current.data() + kCodeBlockSize, kCodeBlockSize);
+    std::memcpy(secondRedirected.data(), redirected.data() + kCodeBlockSize, kCodeBlockSize);
+
     target_ = target;  // before the swap: the replacement may run the moment the call reaches it
-    if (!SwapCodeBlock(block, current, redirected))
+    if (!SwapCodeBlock(block, first, firstRedirected))
     {
         target_ = 0;
         return false;
     }
-    block_      = block;
-    original_   = current;
-    redirected_ = redirected;
+    if (crosses && !SwapCodeBlock(block + kCodeBlockSize, second, secondRedirected))
+    {
+        // Back to the game's bytes. This can fail only if another writer changed the first block since
+        // our swap on this thread; the call is then torn, and the log says so.
+        if (!SwapCodeBlock(block, firstRedirected, first))
+        {
+            Log(L"FAILED: a redirected call at {:#x} could not be put back after its second block refused; the call is torn",
+                site);
+        }
+        target_ = 0;
+        return false;
+    }
+    block_          = block;
+    original_       = first;
+    redirected_     = firstRedirected;
+    crosses_        = crosses;
+    nextOriginal_   = second;
+    nextRedirected_ = secondRedirected;
     return true;
 }
 
@@ -97,7 +132,18 @@ bool CallRedirect::Restore() noexcept
     {
         return false;
     }
-    block_ = 0;
+    if (crosses_ && !SwapCodeBlock(block_ + kCodeBlockSize, nextRedirected_, nextOriginal_))
+    {
+        // Keep the call whole: ours, as it was (fails only if another writer changed the first block).
+        if (!SwapCodeBlock(block_, original_, redirected_))
+        {
+            Log(L"FAILED: a redirected call in the block at {:#x} is torn: its second block was changed after us",
+                block_);
+        }
+        return false;
+    }
+    block_   = 0;
+    crosses_ = false;
     return true;
 }
 

@@ -200,6 +200,9 @@ inline constexpr std::uint8_t kEnsureEndPlayerTriggerBytes[] = {
 inline constexpr std::uint8_t kSwitchLeaderInternalBytes[] = {
     0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 0x56, 0x57, 0x41, 0x56, 0x41, 0x57,
     0xB8, 0x40, 0x00, 0x00, 0x00, 0xE8, 0x66, 0x9D, 0xEA, 0x00, 0x48, 0x2B};
+inline constexpr std::uint8_t kSwitchAIControlAsyncBytes[] = {
+    0x40, 0x55, 0x48, 0x8D, 0x6C, 0x24, 0xA9, 0xB8, 0x90, 0x00, 0x00, 0x00,
+    0xE8, 0x23, 0x93, 0x5B, 0x01, 0x48, 0x2B, 0xE0};
 inline constexpr std::uint8_t kRosterCountBytes[] = {
     0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x10, 0xF9, 0x66, 0x01,
     0x48, 0x2B, 0xE0, 0x4C, 0x8B, 0x05, 0xCE, 0x5F, 0x7E, 0x08, 0x45, 0x33};
@@ -304,6 +307,10 @@ inline constexpr FunctionFact kEnsureEndPlayerTrigger{L"AEndPlayerController::En
                                                       kEnsureEndPlayerTriggerBytes};
 inline constexpr FunctionFact kSwitchLeaderInternal{L"AEndPlayerController::SwitchLeaderInternal", 0x1412051B4,
                                                     kSwitchLeaderInternalBytes};
+// (character, mode 1 = to its AI, controller): the game's battle-start drop of the field leader
+// (0x141104D84) and player 2's in-battle give-back (RE-p2-battle-handover.md §4.2).
+inline constexpr FunctionFact kSwitchAIControlAsync{L"AEndCharacter::SwitchAIControl_Async", 0x140AF5BFC,
+                                                    kSwitchAIControlAsyncBytes};
 inline constexpr FunctionFact kRosterCount{L"the party roster count", 0x140A3F614, kRosterCountBytes};
 
 // Player 1's battle switch's member test T (RE-p2-deployed-party.md §4.1, RE-p2-party-switch.md §1.2)

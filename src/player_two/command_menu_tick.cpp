@@ -1,5 +1,9 @@
 #include "player_two/command_menu_tick.h"
 
+#define RC_UNREAL_DISABLE_PROPERTY_DEPRECATION_WARNINGS
+#define RC_UNREAL_DISABLE_CLASS_DEPRECATION_WARNINGS
+#include <Unreal/NameTypes.hpp>
+
 #include "platform/call_redirect.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -155,7 +159,7 @@ constexpr std::uint32_t kLeaderWeak = 0x148;
 
 // The controller (RE-p2-command-menu-tick.md §1, §2, §7).
 constexpr std::uint32_t kStoredLeaderType = 0x30;   // u8
-constexpr std::uint32_t kMembers          = 0x34;   // i32 x2: leader ordinal, ally
+constexpr std::uint32_t kMembers          = 0x34;   // i32 x3: leader ordinal, ally, shortcut target (RE-p2-command-menu.md §1)
 constexpr std::uint32_t kBattleInput      = 0x25C;  // u8
 constexpr std::uint32_t kSwitchingLayer   = 0x258;  // u8
 constexpr std::uint32_t kRequests         = 0x570;  // TArray<int32> {data, num}
@@ -179,7 +183,10 @@ enum Request : std::int32_t
     kReqGuard   = 37,
     kReqSynergyPane = 27,  // set on Guard's press (the synergy pane at top level); the up route clears it
 };
-constexpr std::array<std::int32_t, 11> kLoggedRequests{0, 1, 5, 6, 12, 13, 25, 32, 37, 38, 39};
+// Also the shortcut commands [14..18] (the Shortcut*_Second keys), the synergy requests [20..23], and what
+// keeps the shortcut modifier [6] through a release: [7], [41], [42] (RE-p2-shortcut-modifier.md).
+constexpr std::array<std::int32_t, 23> kLoggedRequests{0,  1,  5,  6,  7,  12, 13, 14, 15, 16, 17, 18,
+                                                       20, 21, 22, 23, 25, 32, 37, 38, 39, 41, 42};
 constexpr std::int32_t kDodgePress    = 3;  // req[32]: a dodge press
 constexpr std::int32_t kDodgeGuarding = 4;  // req[32]: a dodge press while guarding
 constexpr std::int32_t kGuardHeld     = 1;  // req[32]: guard held
@@ -614,7 +621,7 @@ std::wstring KeyText(std::uint64_t key)
             return name;
         }
     }
-    return std::format(L"key {:#x}", key);
+    return RC::Unreal::FName(static_cast<std::int64_t>(key)).ToString();
 }
 
 /// What InPlayerTwoUi runs: a press (gated as below) or the release of a press that went to player 2's
@@ -698,9 +705,11 @@ bool InPlayerTwoUi(Route route, const wchar_t* what, Call&& call) noexcept
 std::wstring RouteState(std::uintptr_t two)
 {
     const auto input = Field<std::uintptr_t>(g_endUISystem + kInput);
-    return std::format(L"25C {} req 6:{} 12:{} 13:{} 26:{} 32:{} 37:{} | captures {}", Field<std::uint8_t>(two + kBattleInput),
-                       RequestOf(two, 6), RequestOf(two, kReqAttack), RequestOf(two, kReqUnique), RequestOf(two, 26),
-                       RequestOf(two, kReqGuardDodge), RequestOf(two, kReqGuard),
+    return std::format(L"25C {} req 6:{} 7:{} 12:{} 13:{} 26:{} 32:{} 37:{} | members {} {} {} | captures {}",
+                       Field<std::uint8_t>(two + kBattleInput), RequestOf(two, 6), RequestOf(two, 7),
+                       RequestOf(two, kReqAttack), RequestOf(two, kReqUnique), RequestOf(two, 26),
+                       RequestOf(two, kReqGuardDodge), RequestOf(two, kReqGuard), Field<std::int32_t>(two + kMembers),
+                       Field<std::int32_t>(two + kMembers + 4), Field<std::int32_t>(two + kMembers + 8),
                        Field<std::int32_t>(input + 0xB0) - Field<std::int32_t>(input + 0xDC));
 }
 
@@ -748,7 +757,7 @@ bool RoutePadTwo(pad_buttons::ActionDownFn dispatch, void* owner, void* unused, 
     const auto two    = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller());
     std::wstring before;
     const bool routed = InPlayerTwoUi(Route::kPress, L"press", [&] {
-        const bool logIt = action > 0 && g_routedKnown[static_cast<std::size_t>(action)] < 10;
+        const bool logIt = action >= 0 && g_routedKnown[static_cast<std::size_t>(action)] < 10;
         if (logIt)
         {
             before = RouteState(two);
@@ -1059,6 +1068,25 @@ bool Install(const platform::GameImage& image) noexcept
                                                  L"attack, guard and dodge; pad 2's presses reach player 2's menu in battle (logged)"
                                                : L"UNAVAILABLE (a check failed): player 2 has no attack, guard or dodge");
     return ok;
+}
+
+bool RefocusMenu(void* controller) noexcept
+{
+    if (g_resumeHudInput == nullptr || g_setMenuLayer == nullptr || controller == nullptr)
+    {
+        return false;
+    }
+    const auto layer = Field<std::uint8_t>(reinterpret_cast<std::uintptr_t>(controller) + kMenuLayer);
+    if (layer != 0 && !platform::CallGuarded(g_setMenuLayer, controller, std::uint8_t{0}))
+    {
+        return false;
+    }
+    return platform::CallGuarded(g_resumeHudInput, controller, std::uint8_t{0});
+}
+
+bool BattleInputOn(const void* controller) noexcept
+{
+    return controller != nullptr && Field<std::uint8_t>(reinterpret_cast<std::uintptr_t>(controller) + kBattleInput) != 0;
 }
 
 void Remove() noexcept

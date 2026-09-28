@@ -9,7 +9,8 @@
 // small as a redirect can be:
 //   - the site must hold `E8 rel32` resolving to the research's target before anything is written;
 //   - only the 4-byte displacement changes, inside one aligned 16-byte block swapped atomically, so
-//     a thread executing the call reaches either the old target or the new one;
+//     a thread executing the call reaches either the old target or the new one (a call crossing two
+//     blocks is changed only from the one thread that runs it: InstallFromOwnThread);
 //   - the displacement points at a thunk in memory allocated near the game image, which is a single
 //     `jmp [rip+0]` to the replacement. The thunk never touches the stack, so the call arrives in
 //     the replacement exactly as it would in the target, return address included, and the
@@ -39,6 +40,13 @@ public:
     /// nothing, if any condition fails or this object already holds a redirect.
     bool Install(std::uintptr_t site, std::uintptr_t target, std::uintptr_t replacement) noexcept;
 
+    /// The same for a call whose five bytes cross into the next aligned block. The two blocks are
+    /// swapped one after the other, each atomically, so a thread running the call between the two
+    /// swaps would take a mixed displacement. Call it only from the one thread that can run the site,
+    /// from outside the function that holds it (so that thread is not at the call); Restore must then
+    /// be called under the same condition. A site inside one block is installed as by Install.
+    bool InstallFromOwnThread(std::uintptr_t site, std::uintptr_t target, std::uintptr_t replacement) noexcept;
+
     /// Puts the original displacement back, if this object changed it and it is still ours.
     /// Returns false if it was changed after us (it is then left alone).
     bool Restore() noexcept;
@@ -49,10 +57,15 @@ public:
     std::uintptr_t Original() const noexcept { return target_; }
 
 private:
-    std::uintptr_t block_  = 0;  // the aligned 16-byte block holding the call
+    bool Place(std::uintptr_t site, std::uintptr_t target, std::uintptr_t replacement, bool crossingAllowed) noexcept;
+
+    std::uintptr_t block_  = 0;  // the aligned 16-byte block holding the call (its first byte)
     std::uintptr_t target_ = 0;
     CodeBlock      original_{};
     CodeBlock      redirected_{};
+    bool           crosses_ = false;  // the call's last bytes are in the next block
+    CodeBlock      nextOriginal_{};
+    CodeBlock      nextRedirected_{};
 };
 
 }  // namespace lss::platform

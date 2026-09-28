@@ -16,7 +16,10 @@
 //     synthetic keys, never pad 2 (player_two/button_view.h). Everything that reads buttons outside
 //     player 2's calls (player 1's input, the leader's move state, the menus, battle) sees player 1.
 //   - pad 2's action-downs reach the tables (for player 2's polling) but are passed to the game's
-//     dispatcher as already handled, its own flag, so pad 2 never opens a menu or runs a field prompt;
+//     dispatcher as already handled, its own flag, so pad 2 never opens a menu or runs a field prompt
+//     (or they go to player 2's own UI through the route below). This covers the XInput main loop,
+//     two DirectInput loops and, from the first input Tick, the XInput extra-key calls (the shortcut
+//     keys), whose call sites cross a code block and are changed from the game thread only;
 //   - a ButtonScope, opened around player 2's calls (their controller input and their member's
 //     tick, next to the stick scope), writes player 2's view and puts player 1's back after.
 // The repeat, latch and source bytes are never written. The game's own writers keep working on

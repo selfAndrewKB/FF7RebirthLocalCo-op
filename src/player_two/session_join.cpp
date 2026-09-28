@@ -16,6 +16,7 @@
 #include "player_two/menu_focus.h"
 #include "player_two/field_exit.h"
 #include "player_two/lock_on.h"
+#include "player_two/party_events.h"
 #include "player_two/party_switch.h"
 #include "player_two/battle_input.h"
 #include "player_two/camera_distance.h"
@@ -121,6 +122,16 @@ void Session::InstallStages(const platform::GameImage& image) noexcept
     installed_.padButtons    = pad_buttons::Install(image);
     installed_.memberMovement = installed_.member && installed_.padSticks && installed_.moveCensus &&
                                 member_movement::Install(image);
+    installed_.partyEvents =
+        installed_.member &&
+        party_events::Install(image, {[](void* self, void* controller, void* character) noexcept {
+                                          static_cast<Session*>(self)->OnLeaderChanging(controller, character);
+                                      },
+                                      [](void* self, std::uint8_t type, std::uint8_t before, std::uint8_t after) noexcept {
+                                          static_cast<Session*>(self)->OnStatusChanged(type, before, after);
+                                      },
+                                      [](void* self) noexcept { static_cast<Session*>(self)->OnPartyApplied(); },
+                                      this});
     battle_input::Install(image);  // player 2's battle targeting, inside the member tick (logged)
     lock_on::Install(image);       // player 2's targeting: the game's tick run again for player 2 (logged)
     party_switch::Install(image);  // player 1's switch skips player 2's member (logged)
@@ -142,10 +153,12 @@ void Session::InstallStages(const platform::GameImage& image) noexcept
     LogStage(L"tag counts (log only)", installed_.tagCounts);
     LogStage(L"scope leaks put back", installed_.scopeLeaks);
     LogStage(L"per-pad buttons (logging only)", installed_.padButtons);
+    LogStage(L"party events (the game's leader and status changes)", installed_.partyEvents);
 }
 
 void Session::RemoveStages() noexcept
 {
+    party_events::Remove();
     widget_owner::Remove();
     command_menu_tick::Remove();
     command_locks::Remove();

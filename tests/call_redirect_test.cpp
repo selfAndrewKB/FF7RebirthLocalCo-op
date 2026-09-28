@@ -15,6 +15,15 @@
 
 #include <cstdio>
 #include <cstring>
+#include <string>
+#include <string_view>
+
+namespace lss::platform {
+void WriteLine(std::wstring_view line) noexcept  // the mod's log, to the console here
+{
+    std::printf("  log: %ls\n", std::wstring(line).c_str());
+}
+}  // namespace lss::platform
 
 namespace {
 
@@ -117,12 +126,75 @@ void TestRedirectRefusesWhatItDoesNotRecognise()
     EXPECT(game.Run() == 1);
 }
 
+/// page+0x00: sub rsp, 28h ; nop x9 ; call target (at +0x0D, crossing into the block at +0x10) ;
+/// add rsp, 28h ; ret.  page+0x40: target: mov eax, 1 ; ret. As the input dispatcher's extra-key calls
+/// sit (0x140E7468D, 0x140E7477E).
+class CrossingCode
+{
+public:
+    static constexpr std::size_t kCallOffset   = 0x0D;
+    static constexpr std::size_t kReturnOffset = 0x12;
+    static constexpr std::size_t kTargetOffset = 0x40;
+
+    CrossingCode()
+    {
+        memory_ = static_cast<std::uint8_t*>(VirtualAlloc(nullptr, 0x1000, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
+        const std::uint8_t caller[] = {0x48, 0x83, 0xEC, 0x28,                                // sub rsp, 28h
+                                       0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90,  // nop x9
+                                       0xE8, 0x00, 0x00, 0x00, 0x00,                          // call target
+                                       0x48, 0x83, 0xC4, 0x28,                                // add rsp, 28h
+                                       0xC3};                                                 // ret
+        const std::uint8_t target[] = {0xB8, 0x01, 0x00, 0x00, 0x00, 0xC3};
+        std::memcpy(memory_, caller, sizeof(caller));
+        const std::int32_t rel = static_cast<std::int32_t>(kTargetOffset - (kCallOffset + 5));
+        std::memcpy(memory_ + kCallOffset + 1, &rel, sizeof(rel));
+        std::memcpy(memory_ + kTargetOffset, target, sizeof(target));
+        DWORD previous = 0;
+        VirtualProtect(memory_, 0x1000, PAGE_EXECUTE_READ, &previous);
+        FlushInstructionCache(GetCurrentProcess(), memory_, 0x1000);
+    }
+    ~CrossingCode() { VirtualFree(memory_, 0, MEM_RELEASE); }
+
+    std::uintptr_t At(std::size_t offset) const { return reinterpret_cast<std::uintptr_t>(memory_) + offset; }
+    int            Run() const { return reinterpret_cast<IntFn>(memory_)(); }
+
+private:
+    std::uint8_t* memory_ = nullptr;
+};
+
+void TestCrossingCallFromOwnThread()
+{
+    std::puts("call redirect: a call crossing two blocks is redirected only from its own thread, runs, and is restored");
+    const CrossingCode game;
+    EXPECT(game.Run() == 1);
+    const auto replacement = reinterpret_cast<std::uintptr_t>(&Replacement);
+
+    lss::platform::CallRedirect refused;
+    EXPECT(!refused.Install(game.At(CrossingCode::kCallOffset), game.At(CrossingCode::kTargetOffset), replacement));
+    EXPECT(!refused.InstallFromOwnThread(game.At(CrossingCode::kCallOffset), game.At(0x50), replacement));  // other target
+    EXPECT(game.Run() == 1);
+
+    lss::platform::CallRedirect redirect;
+    g_redirect = &redirect;
+    EXPECT(redirect.InstallFromOwnThread(game.At(CrossingCode::kCallOffset), game.At(CrossingCode::kTargetOffset),
+                                         replacement));
+    EXPECT(redirect.IsInstalled());
+    EXPECT(redirect.Original() == game.At(CrossingCode::kTargetOffset));
+    EXPECT(game.Run() == 3);
+    EXPECT(g_returnAddress == game.At(CrossingCode::kReturnOffset));
+
+    EXPECT(redirect.Restore());
+    EXPECT(!redirect.IsInstalled());
+    EXPECT(game.Run() == 1);
+}
+
 }  // namespace
 
 int main()
 {
     TestRedirectRunsAndRestores();
     TestRedirectRefusesWhatItDoesNotRecognise();
+    TestCrossingCallFromOwnThread();
 
     std::printf(g_failures == 0 ? "all tests passed\n" : "%d check(s) failed\n", g_failures);
     return g_failures == 0 ? 0 : 1;

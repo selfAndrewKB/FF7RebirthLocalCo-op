@@ -31,6 +31,15 @@ constexpr std::uint8_t kGuideTickBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 
                                             0x6E, 0x17, 0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9};
 constexpr platform::FunctionFact kGuideTick{L"EndUI__M1A8_Tick", 0x140F38078, kGuideTickBytes};
 constexpr std::uintptr_t         kGuideTickCall = 0x140F37F48;  // in MasterHUD_Tick, with EndUISystem[53]
+// The synergy pane (UEndCmdLinkupPane, one in each controller's command menu; RE-p2-synergy-pane.md): its
+// NativeTick rebuilds its rows whenever the party leader's type (PM+0x150) differs from the character it
+// shows (+0x3D0). Its owner is recorded at menu setup (+0x3C8, the controller).
+constexpr std::uint8_t kPaneTickBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xBC,
+                                           0x04, 0x08, 0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9};
+constexpr platform::SlotFact kPaneTick{L"the synergy pane's NativeTick slot (102)", 0x146725260,
+                                       {L"UEndCmdLinkupPane_NativeTick_RebuildOnPM150", 0x14102EA68, kPaneTickBytes}};
+constexpr std::uint32_t      kPaneOwner = 0x3C8;
+constexpr std::uint32_t      kPaneType  = 0x3D0;  // u8: the character whose synergy skills it lists
 
 // A cell's owner: its party list (written for every cell by PartyList360_Bind), whose +0x20 is the command
 // controller. Logged for player 2's cells: slot, look (0 field, 1 battle, 2 battle with the menu open),
@@ -64,6 +73,7 @@ using WeakGetFn   = void* (*)(const std::uint64_t* weak);
 
 // Set once at install.
 platform::VTableEntry  g_cellSlot;
+platform::VTableEntry  g_paneSlot;
 platform::CallRedirect g_guideCall;
 WeakGetFn              g_weakGet     = nullptr;
 std::uintptr_t         g_endUISystem = 0;
@@ -71,8 +81,9 @@ std::uintptr_t         g_endUISystem = 0;
 // Game thread.
 bool          g_cellsOn  = false;
 bool          g_guidesOn = false;
+bool          g_panesOn  = false;
 int           g_lines    = 0;
-std::uint64_t g_cellTicks = 0, g_guideTicks = 0, g_refusals = 0;
+std::uint64_t g_cellTicks = 0, g_guideTicks = 0, g_paneTicks = 0, g_refusals = 0;
 
 template <class T>
 T Field(std::uintptr_t address) noexcept
@@ -251,6 +262,48 @@ void CellTick(void* cell, const void* geometry, float deltaTime) noexcept
     WatchCell(reinterpret_cast<std::uintptr_t>(cell), two);
 }
 
+/// Replaces the synergy pane's NativeTick: player 2's pane ticks in player 2's view, so its leader-type
+/// check answers player 2's member and the pane keeps player 2's synergy skills.
+void PaneTick(void* pane, const void* geometry, float deltaTime) noexcept
+{
+    const auto original = reinterpret_cast<CellTickFn>(g_paneSlot.Original());
+    const auto two      = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller());
+    const auto at       = reinterpret_cast<std::uintptr_t>(pane);
+    if (!g_panesOn || two == 0 || !generation::OnGameThread() || !generation::Active() ||
+        Field<std::uintptr_t>(at + kPaneOwner) != two)
+    {
+        return original(pane, geometry, deltaTime);
+    }
+    std::optional<OwnerView> view(std::in_place, two, 0);
+    if (!view->Held())
+    {
+        view.reset();
+        Refused(L"player 2's synergy pane");
+        return original(pane, geometry, deltaTime);
+    }
+    if (view->TypeRefused())
+    {
+        TypeRefused();
+    }
+    const bool ran = platform::CallGuarded(original, pane, geometry, deltaTime);
+    view.reset();
+    if (!ran)
+    {
+        g_panesOn = false;
+        Line(L"FAILED: player 2's synergy pane faulted in its owner's view; it ticks in the shared view from now on");
+        return;
+    }
+    static std::uint8_t shown = 0xFF;
+    const auto          type  = Field<std::uint8_t>(at + kPaneType);
+    if (PowerOfTen(++g_paneTicks) || type != shown)
+    {
+        shown = type;
+        Line(std::format(L"player 2's synergy pane ticked in player 2's view ({} time(s)); it lists type {} (player 2's "
+                         L"controller's leader type {})",
+                         g_paneTicks, type, Field<std::uint8_t>(two + kStoredLeaderType)));
+    }
+}
+
 void* Resolve(std::uint64_t weak) noexcept
 {
     void* object = nullptr;
@@ -342,19 +395,26 @@ bool Install(const platform::GameImage& image) noexcept
     g_weakGet     = weakGet ? reinterpret_cast<WeakGetFn>(*weakGet) : nullptr;  // the key-guide log only
     g_cellsOn     = platform::ReplaceSlot(image, kCellTick, reinterpret_cast<std::uintptr_t>(&CellTick), g_cellSlot);
     g_guidesOn    = guide && site && g_guideCall.Install(*site, *guide, reinterpret_cast<std::uintptr_t>(&GuideTick));
-    platform::Log(L"widget owner: player 2's party-list cells {}; player 2's key guide {}",
+    g_panesOn     = platform::ReplaceSlot(image, kPaneTick, reinterpret_cast<std::uintptr_t>(&PaneTick), g_paneSlot);
+    platform::Log(L"widget owner: player 2's party-list cells {}; player 2's key guide {}; player 2's synergy pane {}",
                   g_cellsOn ? L"tick in player 2's view" : L"UNAVAILABLE (a check failed; they tick in the shared view)",
-                  g_guidesOn ? L"is ticked in player 2's view" : L"UNAVAILABLE (a check failed; it is not ticked)");
-    return g_cellsOn || g_guidesOn;
+                  g_guidesOn ? L"is ticked in player 2's view" : L"UNAVAILABLE (a check failed; it is not ticked)",
+                  g_panesOn ? L"ticks in player 2's view" : L"UNAVAILABLE (a check failed; it ticks in the shared view)");
+    return g_cellsOn || g_guidesOn || g_panesOn;
 }
 
 void Remove() noexcept
 {
     g_cellsOn  = false;
     g_guidesOn = false;
+    g_panesOn  = false;
     if (g_cellSlot.Original() != 0 && !g_cellSlot.Restore())
     {
         platform::Log(L"widget owner: the cell tick slot was changed after us; left in place (it passes through)");
+    }
+    if (g_paneSlot.Original() != 0 && !g_paneSlot.Restore())
+    {
+        platform::Log(L"widget owner: the synergy pane's tick slot was changed after us; left in place (it passes through)");
     }
     if (g_guideCall.IsInstalled() && !g_guideCall.Restore())
     {

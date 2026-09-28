@@ -28,6 +28,8 @@
 #include "player_two/tag_counts.h"
 #include "player_two/view_target.h"
 
+#include <chrono>
+#include <format>
 #include <optional>
 #include <string>
 
@@ -43,18 +45,30 @@ constexpr std::uint32_t kPlayerOneWatchTicks = 3;
 /// Ticks to wait for the switch to hand the member over before giving it back.
 constexpr std::uint32_t kTakeTicks = 120;
 
-/// How often, in ticks, player 2's member is checked against the deployed party and the battle
-/// switch's member test (every call is a read).
-constexpr std::uint32_t kPlayableCheckTicks = 30;
+/// How often, in ticks, player 2's member is checked for its battle controller component: character
+/// state that no party funnel reports (RE-p2-session-levers.md §3.2).
+constexpr std::uint32_t kControllerCheckTicks = 30;
 
-/// How often, in ticks, player 2 without a character looks for a free member.
-constexpr std::uint32_t kRetakeTicks = 120;
+/// The game's party funnels (player_two/party_events.h) drive the party checks. These slow checks
+/// are the backstop for a party change that passes neither funnel (story override party data); a
+/// change found by them is logged as such. Without the funnels, the checks keep the earlier rate.
+constexpr std::uint32_t kBackstopTicks        = 600;
+constexpr std::uint32_t kBackstopTicksNoEvents = 30;
+
+/// After a game party change while player 2 has no character: ticks during which player 2 looks for
+/// a free member every tick (the game spawns a member that joins on a later tick than its status).
+constexpr std::uint32_t kRetakeLookTicks = 600;
+
+/// Lines logged for the game's party changes heard (a yield or a retake is always logged).
+constexpr std::uint32_t kEventLines = 200;
 
 /// After a map load: ticks the new map must look ready before player 2 joins again, how many joins
-/// are tried, and how long the whole wait may take, before the rejoin is left to Ctrl+F7.
-constexpr std::uint32_t kRejoinSettleTicks = 180;
-constexpr std::uint32_t kRejoinTries       = 5;
-constexpr std::uint32_t kRejoinWaitTicks   = 3600;
+/// are tried, and how long the whole wait may take, before the rejoin is left to Ctrl+F7. The wait is
+/// timed, not counted in ticks: a load runs uncapped (a few hundred ticks a second), so a tick count
+/// would give a long load less time than a short one.
+constexpr std::uint32_t        kRejoinSettleTicks = 180;
+constexpr std::uint32_t        kRejoinTries       = 5;
+constexpr std::chrono::seconds kRejoinWait{120};
 
 }  // namespace
 
@@ -287,12 +301,23 @@ bool Session::MemberDestroyed() noexcept
     return true;
 }
 
-/// Player 2 without a character (none was free: a solo story party) takes one as soon as one is.
+std::uint32_t Session::BackstopTicks() const noexcept
+{
+    return installed_.partyEvents ? kBackstopTicks : kBackstopTicksNoEvents;
+}
+
+/// Player 2 without a character (none was free: a solo story party) takes one as soon as one is:
+/// looked for after each game party change, and by the slow backstop.
 void Session::RetakeWhenFree() noexcept
 {
+    const bool looking = retakeLooks_ > 0;
+    if (looking && party_member::FieldGateOpen())
+    {
+        --retakeLooks_;  // the window runs in the field only: no member is taken in battle
+    }
     // MemberReleased with no member: player 2's controller holds no pawn or leader (a give-back that
     // never completed keeps it holding one).
-    if (member_ != nullptr || !installed_.member || !generation::Active() || ticks_ % kRetakeTicks != 0 ||
+    if (member_ != nullptr || !installed_.member || !generation::Active() || (!looking && ticks_ % BackstopTicks() != 0) ||
         !party_member::FieldGateOpen() || !MemberReleased())
     {
         return;
@@ -302,9 +327,128 @@ void Session::RetakeWhenFree() noexcept
     {
         return;
     }
-    Log(L"a party member is free for player 2 again ({}); taking it", NameOf(free));
+    retakeLooks_ = 0;
+    Log(L"a party member is free for player 2 again ({}; {}); taking it", NameOf(free),
+        looking                   ? L"after the game's party change"
+        : installed_.partyEvents  ? L"found by the slow check: no game party change was heard for it"
+                                  : L"found by the party check");
     phase_ = Phase::SettlingPlayerOne;
     ticks_ = kPlayerOneWatchTicks;  // player 1 is settled already: choose on the next tick
+}
+
+/// Player 2 gives its member back through the game's release and chooses again once it is released
+/// (in battle, once the field gate opens again: no member is taken in battle).
+void Session::Yield(const wchar_t* why) noexcept
+{
+    const bool inBattle = !party_member::FieldGateOpen();
+    Log(L"player 2's {} is {}: giving it back to choose again among the deployed party{}", NameOf(member_), why,
+        inBattle ? L" (in battle: the release, then the game's battle rule hands it to its AI)" : L"");
+    generation::SetMember(nullptr);  // player 2's member movement and scopes stop at once
+    phase_ = Phase::Swapping;        // before the game's switch runs: a party event inside it sees the swap
+    ticks_ = 0;
+    if (!party_member::GiveBack(playerTwoController_))
+    {
+        Log(L"player 2's {} could not be given back (no trigger actor, or the switch faulted)", NameOf(member_));
+        return;
+    }
+    if (!inBattle)
+    {
+        return;
+    }
+    // In battle the switch publishes the release but moves no control; the game's own battle rule
+    // (no player controller possesses a member in battle, RE-p2-battle-handover.md §4.2) does.
+    const bool returned = party_member::ReturnToAi(member_);
+    const auto lease    = party_member::ReadLease(member_, playerTwoController_);
+    Log(L"in battle: {} {} to its AI; it is driven by {} (its AI {}), player 2's pawn {}, leader {}", NameOf(member_),
+        returned ? L"handed" : L"NOT handed (no saved AI controller, or the call faulted)", NameOf(lease.memberEffective),
+        NameOf(lease.memberRetainedAi), NameOf(lease.playerTwoPawn), NameOf(lease.playerTwoLeader));
+}
+
+bool Session::MemberHeld() const noexcept
+{
+    return member_ != nullptr && (phase_ == Phase::Playing || phase_ == Phase::Taking);
+}
+
+void Session::EventLine(const std::wstring& text) noexcept
+{
+    if (eventLines_ < kEventLines)
+    {
+        ++eventLines_;
+        Log(L"party event: {}", text);
+    }
+}
+
+/// The game is about to make `character` the leader of `controller` (player_two/party_events.h). If it
+/// is player 2's member and player 1's controller, player 2 lets go first, so the two controllers never
+/// both claim it; the game's switch then seats player 1 on it.
+void Session::OnLeaderChanging(void* controller, void* character) noexcept
+{
+    if (!HasPlayerTwo())
+    {
+        return;
+    }
+    const void* before = ReadPointer(controller, facts::kControllerLeader);
+    if (controller == playerTwoController_)
+    {
+        Log(L"WARNING: party event: the game makes {} the leader of player 2's controller (was {}); a game leader change "
+            L"ran inside a player-2 scope. Not acted on",
+            NameOf(character), NameOf(before));
+        return;
+    }
+    const bool playerOnes = controller == playerOneController_;
+    EventLine(std::format(L"the game makes {} the leader of {} (was {})", NameOf(character),
+                          playerOnes ? L"player 1's controller" : L"a controller that is not player 1's", NameOf(before)));
+    if (playerOnes && character != nullptr && character == member_ && MemberHeld())
+    {
+        Yield(L"about to become player 1's leader (the game's leader change)");
+    }
+    else if (member_ == nullptr)
+    {
+        retakeLooks_ = kRetakeLookTicks;  // the member the game moved off may be free
+    }
+}
+
+/// The game changed a party member's status (player_two/party_events.h): player 2's member is checked
+/// against the deployed party at once, or, without one, player 2 looks for a free member.
+void Session::OnStatusChanged(std::uint8_t playerType, std::uint8_t before, std::uint8_t after) noexcept
+{
+    if (!HasPlayerTwo())
+    {
+        return;
+    }
+    EventLine(std::format(L"the game changed party member type {}'s status {} -> {}", playerType, before, after));
+    CheckAfterPartyChange();
+}
+
+/// The game finished applying new party data (player_two/party_events.h): a squad or formation
+/// change, a load, a script, an equipment or costume change. Every character it needed exists now.
+void Session::OnPartyApplied() noexcept
+{
+    if (!HasPlayerTwo())
+    {
+        return;
+    }
+    EventLine(L"the game applied the party data (its party stream finished)");
+    CheckAfterPartyChange();
+}
+
+/// After a game party change: player 2's member is checked against the deployed party at once, or,
+/// without one, player 2 looks for a free member.
+void Session::CheckAfterPartyChange() noexcept
+{
+    if (member_ == nullptr)
+    {
+        retakeLooks_ = kRetakeLookTicks;  // used once player 2 plays without a character
+        return;
+    }
+    if (!MemberHeld() || !generation::Active())
+    {
+        return;
+    }
+    if (const wchar_t* why = party_member::WhyNotPlayable(member_))
+    {
+        Yield(why);
+    }
 }
 
 /// After a map load took player 2 out: the normal join, once the new map has been in the field state
@@ -315,11 +459,11 @@ void Session::TryRejoin() noexcept
     {
         return;
     }
-    if (++rejoinWaited_ > kRejoinWaitTicks)
+    if (std::chrono::steady_clock::now() - rejoinAsked_ > kRejoinWait)
     {
         rejoinPending_ = false;
-        Log(L"player 2 did not rejoin: the field did not become ready within {} ticks; press Ctrl+F7 to join",
-            kRejoinWaitTicks);
+        Log(L"player 2 did not rejoin: the field did not become ready within {} s; press Ctrl+F7 to join",
+            kRejoinWait.count());
         return;
     }
     if (refuseJoins_)
@@ -354,26 +498,27 @@ void Session::TryRejoin() noexcept
     }
 }
 
+/// The slow backstop of the party checks (the game's party changes are heard as they happen), and the
+/// battle controller check, which no game event reports.
 void Session::CheckMemberPlayable() noexcept
 {
-    if (member_ == nullptr || generation::Member() != member_ || !generation::Active() ||
-        ticks_ % kPlayableCheckTicks != 0 || !party_member::FieldGateOpen())
+    if (member_ == nullptr || generation::Member() != member_ || !generation::Active() || !party_member::FieldGateOpen())
     {
         return;
     }
-    const wchar_t* why = party_member::WhyNotPlayable(member_);
-    if (why == nullptr)
+    const wchar_t* why = ticks_ % BackstopTicks() == 0 ? party_member::WhyNotInParty(member_) : nullptr;
+    if (why != nullptr && installed_.partyEvents)
     {
-        return;
+        Log(L"the slow party check found player 2's {} {}: no game party change was heard for it", NameOf(member_), why);
     }
-    Log(L"player 2's {} is {}: giving it back to choose again among the deployed party", NameOf(member_), why);
-    generation::SetMember(nullptr);  // player 2's member movement and scopes stop at once
-    if (!party_member::GiveBack(playerTwoController_))
+    if (why == nullptr && ticks_ % kControllerCheckTicks == 0 && !party_member::HasBattleController(member_))
     {
-        Log(L"player 2's {} could not be given back (no trigger actor, or the switch faulted)", NameOf(member_));
+        why = party_member::kWithoutBattleController;
     }
-    phase_ = Phase::Swapping;
-    ticks_ = 0;
+    if (why != nullptr)
+    {
+        Yield(why);
+    }
 }
 
 void Session::AwaitSwap() noexcept
@@ -384,6 +529,17 @@ void Session::AwaitSwap() noexcept
         member_ = nullptr;
         phase_  = Phase::SettlingPlayerOne;
         ticks_  = kPlayerOneWatchTicks;  // player 1 is settled already: choose on the next tick
+        return;
+    }
+    // Given back as the game made it player 1's leader: it never returns to its AI.
+    const auto lease = party_member::ReadLease(member_, playerTwoController_);
+    if (lease.memberEffective == playerOneController_ && lease.playerTwoPawn == nullptr && lease.playerTwoLeader == nullptr)
+    {
+        Log(L"player 2's {} is player 1's after {} tick(s), and player 2's controller holds nothing; choosing again",
+            NameOf(member_), ticks_);
+        member_ = nullptr;
+        phase_  = Phase::SettlingPlayerOne;
+        ticks_  = kPlayerOneWatchTicks;
         return;
     }
     if (ticks_ >= kTakeTicks)
@@ -437,7 +593,7 @@ bool Session::LeaveNow() noexcept
         rejoinPending_ = true;  // join again once the new map is ready
         rejoinTicks_   = 0;
         rejoinTries_   = 0;
-        rejoinWaited_  = 0;
+        rejoinAsked_   = std::chrono::steady_clock::now();
     }
     return !HasPlayerTwo();
 }
@@ -529,6 +685,7 @@ void Session::Forget() noexcept
     playerTwoController_ = nullptr;
     member_              = nullptr;
     ticks_               = 0;
+    retakeLooks_         = 0;
     viewTargetResets_    = 0;
     viewOnOwnCamera_     = true;
 }

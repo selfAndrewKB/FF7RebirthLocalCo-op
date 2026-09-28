@@ -29,6 +29,7 @@ using GlobalTestFn      = std::uint8_t (*)();
 using GlobalObjectFn    = void* (*)();
 using TypeFn            = std::uint8_t (*)();                           // al only
 using TypeTestFn        = std::uint8_t (*)(std::uint8_t playerType);    // al only
+using SwitchAIControlFn = void (*)(void* character, std::uint8_t mode, void* controller);
 
 struct Functions
 {
@@ -47,6 +48,7 @@ struct Functions
     TypeFn            fieldLeaderType     = nullptr;
     TypeFn            defaultBattleLeader = nullptr;
     TypeTestFn        isBattleMember      = nullptr;
+    SwitchAIControlFn switchAIControl     = nullptr;
 };
 Functions         g_fn;  // set once at install
 bool              g_installed   = false;
@@ -160,6 +162,7 @@ bool Install(const platform::GameImage& image) noexcept
     found      = Find(image, facts::kFieldLeaderType, g_fn.fieldLeaderType) && found;
     found      = Find(image, facts::kDefaultBattleLeaderType, g_fn.defaultBattleLeader) && found;
     found      = Find(image, facts::kIsBattleMember, g_fn.isBattleMember) && found;
+    found      = Find(image, facts::kSwitchAIControlAsync, g_fn.switchAIControl) && found;
     const auto fieldState  = image.Rebase(facts::kFieldStateGlobal, sizeof(void*));
     const auto battleState = image.Rebase(facts::kBattleStateGlobal, sizeof(void*));
     if (!fieldState || !battleState)
@@ -215,13 +218,43 @@ void* Choose(void* playerOneController, bool log) noexcept
     return nullptr;
 }
 
-const wchar_t* WhyNotPlayable(const void* member) noexcept
+namespace {
+
+// The party reads, guarded: they also run inside the game's status commit (player_two/party_events.h).
+
+bool IsLeaderGuarded(const void* member) noexcept
+{
+    __try
+    {
+        return member == g_fn.globalLeader();
+    }
+    __except (platform::GuardFilter(GetExceptionCode()))
+    {
+        return false;
+    }
+}
+
+bool IsBattleMemberGuarded(std::uint8_t playerType) noexcept
+{
+    __try
+    {
+        return g_fn.isBattleMember(playerType) != 0;
+    }
+    __except (platform::GuardFilter(GetExceptionCode()))
+    {
+        return true;  // unread: not given up for it
+    }
+}
+
+}  // namespace
+
+const wchar_t* WhyNotInParty(const void* member) noexcept
 {
     if (!g_installed || member == nullptr)
     {
         return nullptr;
     }
-    if (member == g_fn.globalLeader())
+    if (IsLeaderGuarded(member))
     {
         return L"now the party leader, player 1's (a story change)";
     }
@@ -230,17 +263,38 @@ const wchar_t* WhyNotPlayable(const void* member) noexcept
     {
         return L"no longer one of the deployed party";
     }
-    if (g_fn.isBattleMember(*type) == 0)
+    if (!IsBattleMemberGuarded(*type))
     {
         return L"away from the battle party";
     }
+    return nullptr;
+}
+
+bool HasBattleController(const void* member) noexcept
+{
+    if (!g_installed || member == nullptr)
+    {
+        return true;
+    }
+    __try
+    {
+        return g_fn.validateAiController(g_fn.aiControllerOf(member)) != nullptr;
+    }
+    __except (platform::GuardFilter(GetExceptionCode()))
+    {
+        return true;  // unread: not given up for it
+    }
+}
+
+const wchar_t* WhyNotPlayable(const void* member) noexcept
+{
+    if (const wchar_t* why = WhyNotInParty(member))
+    {
+        return why;
+    }
     // Downed or petrified stays player 2's, as player 1 stays on a downed leader; only a member
     // without its battle controller component is given up.
-    if (g_fn.validateAiController(g_fn.aiControllerOf(member)) == nullptr)
-    {
-        return L"without its battle controller";
-    }
-    return nullptr;
+    return HasBattleController(member) ? nullptr : kWithoutBattleController;
 }
 
 namespace {
@@ -321,6 +375,39 @@ bool GiveBack(void* playerTwoController) noexcept
     if (!GuardedSwitchLeader(playerTwoController, nullptr))
     {
         platform::Log(L"give-back failed: the switch raised an exception");
+        return false;
+    }
+    return true;
+}
+
+namespace {
+
+bool GuardedReturnToAi(void* member) noexcept
+{
+    __try
+    {
+        g_fn.switchAIControl(member, 1, nullptr);
+        return true;
+    }
+    __except (platform::GuardFilter(GetExceptionCode()))
+    {
+        return false;
+    }
+}
+
+}  // namespace
+
+bool ReturnToAi(void* member) noexcept
+{
+    // Mode 1 with no controller hands the member to its saved AI controller; without one it would be
+    // left with no controller at all.
+    if (!g_installed || member == nullptr || ReadPointer(member, facts::kCharacterRetainedAi) == nullptr)
+    {
+        return false;
+    }
+    if (!GuardedReturnToAi(member))
+    {
+        platform::Log(L"return to AI failed: the game's call raised an exception");
         return false;
     }
     return true;
