@@ -677,12 +677,54 @@ void Remove() noexcept
     }
 }
 
+namespace {
+
+/// Player 2's replay inputs and result, as the log shows them (on change).
+struct PassState
+{
+    std::uint8_t gate = 0;
+    std::int32_t recorded = 0, replayed = 0, targeted = 0;
+    bool         list = false;
+    bool operator==(const PassState&) const = default;
+};
+PassState     g_loggedPass{0xFF};
+std::uint32_t g_listOpenings = 0;  // player 2's target list openings seen: each starts a fresh budget
+
+void LogPlayerTwoPass(const PassState& now) noexcept
+{
+    if (const auto openings = player_two::lock_on::TargetListOpenings(); openings != g_listOpenings)
+    {
+        g_listOpenings = openings;
+        g_targetLines  = 0;
+        g_loggedPass   = PassState{0xFF};
+    }
+    if (now == g_loggedPass)
+    {
+        return;
+    }
+    g_loggedPass = now;
+    try
+    {
+        Note(std::format(L"player 2's pass: gate {} recorded {} placed {} ({} targeted){}", now.gate, now.recorded, now.replayed,
+                         now.targeted, now.list ? L" | player 2's target list open" : L""));
+    }
+    catch (...)
+    {
+    }
+}
+
+}  // namespace
+
 void Replay(bool playerTwo) noexcept
 {
     std::uintptr_t manager = 0;
     std::uint8_t   gate    = 0;
-    if (!g_installed || g_failed || g_record.count == 0 || !Read(g_endUISystem + kManager, manager) || manager == 0 ||
-        !Read(manager + kGate, gate) || gate == 0)
+    const bool     read    = Read(g_endUISystem + kManager, manager) && manager != 0 && Read(manager + kGate, gate);
+    if (playerTwo && g_installed && !g_failed && (!read || gate == 0 || g_record.count == 0))
+    {
+        LogPlayerTwoPass({gate, static_cast<std::int32_t>(g_record.count), 0, 0, player_two::lock_on::TargetListOpen()});
+    }
+    if (!g_installed || g_failed || g_record.count == 0 || !read || gate == 0)
     {
         return;
     }
@@ -702,6 +744,10 @@ void Replay(bool playerTwo) noexcept
         g_failed = true;
         platform::Log(L"enemy gauges: a placement raised an exception; gauges are no longer placed per view");
         return;
+    }
+    if (playerTwo)
+    {
+        LogPlayerTwoPass({gate, static_cast<std::int32_t>(g_record.count), replayed, targeted, player_two::lock_on::TargetListOpen()});
     }
     if (replayed > 0 && g_lines < kMaxLines)
     {

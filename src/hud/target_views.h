@@ -15,7 +15,7 @@
 // own opacity back after that pass. Still painted, so UMG keeps ticking them (fades and animations
 // advance; a Hidden or Collapsed widget would never tick, as player 2's pass runs with DeltaTime 0):
 //   - player 2's pass: player 1's cursor, and gauges only player 1's displayed target brought in;
-//   - player 1's pass: player 2's cursor (player_two/target_cursor.h), and gauges only player 2's
+//   - player 1's pass: player 2's cursor (player_two/lock_on.h, Cursor), and gauges only player 2's
 //     displayed target brought in.
 // The red ability label rises above an enemy's name and gauge only when that enemy is the locked-on
 // target: its lookup considers only the gauge of the bar manager's targeted key, player 1's. Its one

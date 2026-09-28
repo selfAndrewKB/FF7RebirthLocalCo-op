@@ -77,11 +77,10 @@ constexpr std::uint8_t kSetMenuLayerBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x4
                                                0x57, 0xB8, 0x40, 0x00, 0x00, 0x00, 0xE8, 0x73, 0x80, 0x42,
                                                0x01, 0x48, 0x2B, 0xE0, 0x8A, 0x81, 0x83, 0x07, 0x00, 0x00};
 constexpr platform::FunctionFact kSetMenuLayer{L"FieldCommandCtrl_SetMenuFocusLayer783", 0x140C86EA8, kSetMenuLayerBytes};
-// Action keys the route keeps away from player 2's menu: target switching (the menu's handler would
-// switch the battle system's target; player_two/lock_on already switches player 2's). An action
-// event's key name is at +0x18 (the handler compares it with the FKeys' first eight bytes).
-constexpr std::uintptr_t kPrevTargetKey  = 0x1491E46B8;
-constexpr std::uintptr_t kNextTargetKey  = 0x1491E46D0;
+// The CommandMenu action's key (logged). An action event's key name is at +0x18 (the handler compares
+// it with the FKeys' first eight bytes). Target switching (Prev/NextTarget) goes to player 2's menu
+// like every other action: its handler switches the target fields a TargetScope holds as player 2's
+// (RE-p2-targeting-scoped-tick.md §7).
 constexpr std::uintptr_t kCommandMenuKey = 0x1491E44F0;
 constexpr std::uint32_t  kEventKey       = 0x18;
 // UEndUserWidget's SetVisibility (vt+0x280: the setter, then its listeners) and UWidget::Visibility
@@ -243,7 +242,7 @@ std::uintptr_t g_partyManager = 0;  // the address holding the party manager
 SetMenuLayerFn g_setMenuLayer = nullptr;
 SetVisibilityFn g_setVisibility = nullptr;
 WeakGetFn      g_weakGet = nullptr;
-std::uintptr_t g_prevTargetKey = 0, g_nextTargetKey = 0, g_commandMenuKey = 0;
+std::uintptr_t g_commandMenuKey = 0;
 
 // Game thread.
 bool         g_installed = false;
@@ -778,10 +777,10 @@ bool InPlayerTwoUi(const wchar_t* what, Call&& call) noexcept
     {
         return false;
     }
-    const lock_on::TargetScope      targets;
+    const lock_on::TargetScope      targets;  // the menu's handler switches targets: player 2's fields, or no route
     const leader_scope::LeaderScope leader(memberWeak);
     const leader_scope::LeaderTypeScope type(*memberType);
-    if (!leader.Held() || !type.Held())
+    if (!targets.Held() || !leader.Held() || !type.Held())
     {
         return false;
     }
@@ -810,12 +809,11 @@ std::wstring RouteState(std::uintptr_t two)
 
 /// Pad 2's press through the game's own dispatcher in player 2's UI, so its route, list and
 /// command-menu handler act on player 2's menu (RE-p2-command-menu-input.md §3.3, §10 Stage 3d).
-/// Target switching stays with player_two/lock_on.
 bool RoutePadTwo(pad_buttons::ActionDownFn dispatch, void* owner, void* unused, std::uint32_t sourceBit, void* event,
                  std::uint8_t alreadyHandled, char& result) noexcept
 {
     const auto key = Field<std::uint64_t>(reinterpret_cast<std::uintptr_t>(event) + kEventKey);
-    if (key == 0 || key == Field<std::uint64_t>(g_prevTargetKey) || key == Field<std::uint64_t>(g_nextTargetKey))
+    if (key == 0)
     {
         return false;
     }
@@ -1096,12 +1094,11 @@ bool Install(const platform::GameImage& image) noexcept
                leader = find(facts::kResolvePartyLeader), layer = find(kSetMenuLayer), visibility = find(kSetVisibility),
                weakGet = find(facts::kWeakObjectGet), filterOn = find(kFilterOn), filterOff = find(kFilterOff),
                menuSound = find(kMenuSound), refInc = find(kRefInc), refDec = find(kRefDec);
-    const auto prevTarget = image.Rebase(kPrevTargetKey, 24), nextTarget = image.Rebase(kNextTargetKey, 24),
-               commandMenu = image.Rebase(kCommandMenuKey, 24);
+    const auto commandMenu = image.Rebase(kCommandMenuKey, 24);
     const auto system  = image.Rebase(kEndUISystem, kSlot50 + sizeof(void*));
     const auto manager = image.Rebase(facts::kPartyManagerGlobal, sizeof(void*));
-    bool       ok      = tick && slot && snapshot && show && mode8 && hud && resume && suspend && listInput && leader && layer && visibility && weakGet && filterOn && filterOff && menuSound && refInc && refDec && prevTarget &&
-                  nextTarget && commandMenu && system && manager;
+    bool       ok      = tick && slot && snapshot && show && mode8 && hud && resume && suspend && listInput && leader && layer && visibility && weakGet && filterOn && filterOff && menuSound && refInc && refDec &&
+                  commandMenu && system && manager;
     for (std::size_t i = 0; ok && i < kActions; ++i)
     {
         const auto key = image.Rebase(kActionKeys[i], 24);
@@ -1122,8 +1119,6 @@ bool Install(const platform::GameImage& image) noexcept
         g_weakGet        = reinterpret_cast<WeakGetFn>(*weakGet);
         g_refInc         = reinterpret_cast<FilterCountFn>(*refInc);
         g_refDec         = reinterpret_cast<FilterCountFn>(*refDec);
-        g_prevTargetKey  = *prevTarget;
-        g_nextTargetKey  = *nextTarget;
         g_commandMenuKey = *commandMenu;
     }
     // The shields first, the tick last: no pass runs before its shields are in place.

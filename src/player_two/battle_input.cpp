@@ -27,14 +27,6 @@ namespace lss::player_two::battle_input {
 
 namespace {
 
-// Facts read from the database (RE-p2-battle-input.md §1 to §5; this build). Each function's first
-// bytes, through its stack probe, are checked before it is called.
-constexpr std::uint8_t kSoftTargetBytes[]    = {0x48, 0x89, 0x5C, 0x24, 0x20, 0x48, 0x89, 0x4C, 0x24, 0x08, 0x55, 0x56,
-                                                0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8D, 0x6C,
-                                                0x24, 0xE0, 0xB8, 0x20, 0x01, 0x00, 0x00, 0xE8};
-
-constexpr platform::FunctionFact kSoftTarget{L"BattleTarget_UpdateLeaderSoftTarget", 0x140C8F104, kSoftTargetBytes};
-
 // The battle target system (RE-p2-targeting.md §1, §2; a pointer global): the lock byte, the switch
 // latch, the skip byte, the displayed target. The soft target itself lives in each character's
 // BattlePlayer component (+0x258 object, +0x260 its reference controller).
@@ -70,33 +62,23 @@ constexpr std::uint32_t  kPendingAction     = 0x84;   // int32
 
 constexpr int kMaxLines = 600;
 
-// Bits 1, 2, 4 and 16 were the direct attack, guard and dodge calls, retired: player 2's command
-// controller takes those actions through the game's own handler (player_two/command_menu_tick.h).
-enum Part : unsigned
-{
-    kPartSoftTarget  = 8,   // the game's leader soft-target update run for player 2's member
-    kPartLock        = 32,  // the TargetLock press toggles player 2's own lock (player_two/lock_on.h)
-    kPartSwitch      = 64,  // pad 2's right stick switches player 2's locked target
-    kPartLockCamera  = 128, // the LockOn module on player 2's camera follows player 2's lock and target
-    kPartCursor      = 256, // player 2's own target cursor
-};
+// The battle mask's one live bit: player 2's targeting run (player_two/lock_on.h). The other bits
+// (1, 2, 4, 16: the direct actions; 32, 64, 128, 256: the mod's own lock, switching, lock camera and
+// cursor) are retired: the game's own handler and targeting tick do those for player 2.
+constexpr unsigned kPartTargeting = 8;
 
 using OwnerFn        = void* (*)(void* aiHolder);
-using SoftTargetFn   = void (*)(void* system);
 using GlobalTestFn   = std::uint8_t (*)();
 
 // Set once at install.
 bool           g_installed = false;
 std::uintptr_t g_endUISystem   = 0;
 std::uintptr_t g_battlePlayerVTable = 0;
-SoftTargetFn   g_softTarget    = nullptr;
 GlobalTestFn   g_isInBattle    = nullptr;
 std::uintptr_t g_battleSystem  = 0;  // the address holding the battle system
 std::uintptr_t g_partyManager  = 0;  // the address holding the party manager
 
 // Game thread.
-unsigned                 g_mask = kPartSoftTarget | kPartLock | kPartSwitch | kPartLockCamera | kPartCursor;
-bool                     g_failed = false;
 int                      g_lines = 0;
 
 template <class T>
@@ -111,11 +93,6 @@ T Field(std::uintptr_t address) noexcept
     T value{};
     Read(address, value);
     return value;
-}
-
-bool Acts(Part part) noexcept
-{
-    return (g_mask & part) != 0;
 }
 
 void* OwnerGuarded(std::uintptr_t aiHolder) noexcept
@@ -226,24 +203,6 @@ std::wstring Describe(const Snapshot& now)
 }
 
 Snapshot g_logged;  // game thread: as last logged
-void Stop(const wchar_t* what)
-{
-    g_failed = true;
-    platform::Log(L"battle input: {} raised an exception; player 2's battle targeting is off this session", what);
-}
-
-bool SoftTargetGuarded(std::uintptr_t system) noexcept
-{
-    __try
-    {
-        g_softTarget(reinterpret_cast<void*>(system));
-        return true;
-    }
-    __except (platform::GuardFilter(GetExceptionCode()))
-    {
-        return false;
-    }
-}
 
 std::uint8_t InBattleGuarded() noexcept
 {
@@ -262,10 +221,6 @@ std::uintptr_t BattleSystem() noexcept
     return Field<std::uintptr_t>(g_battleSystem);
 }
 
-// The leader answering player 2's member (player_two/leader_scope.h); player 2's lock byte is in
-// place through the member tick's lock_on::TargetScope.
-using leader_scope::LeaderScope;
-
 }  // namespace
 
 bool Install(const platform::GameImage& image) noexcept
@@ -274,19 +229,17 @@ bool Install(const platform::GameImage& image) noexcept
         const auto live = platform::FindFunction(image, fact);
         return live ? *live : std::uintptr_t{0};
     };
-    g_softTarget    = reinterpret_cast<SoftTargetFn>(find(kSoftTarget));
     g_isInBattle    = reinterpret_cast<GlobalTestFn>(find(facts::kIsInBattle));
     const auto battleSystem = image.Rebase(kBattleSystem, sizeof(void*));
     const auto partyManager = image.Rebase(facts::kPartyManagerGlobal, sizeof(void*));
     const auto system = image.Rebase(kEndUISystem, kController + sizeof(void*));
     const auto vtable = image.Rebase(kBattlePlayerVTable, sizeof(void*));
-    g_installed = g_softTarget && leader_scope::Install(image) && g_isInBattle && battleSystem && partyManager && system &&
-                  vtable;
+    g_installed = leader_scope::Install(image) && g_isInBattle && battleSystem && partyManager && system && vtable;
     g_battleSystem       = battleSystem ? *battleSystem : 0;
     g_partyManager       = partyManager ? *partyManager : 0;
     g_endUISystem        = system ? *system : 0;
     g_battlePlayerVTable = vtable ? *vtable : 0;
-    platform::Log(L"battle input: {} (acting parts mask {})", g_installed ? L"ready" : L"UNAVAILABLE (a check failed)", g_mask);
+    platform::Log(L"battle input: {}", g_installed ? L"ready (logs player 2's battle state)" : L"UNAVAILABLE (a check failed)");
     return g_installed;
 }
 
@@ -295,7 +248,8 @@ void InScopes(void* member, void* state, float deltaTime) noexcept
     battle_camera::Watch();          // both camera managers' operators, logged on change
     command_rules::Watch();          // the command controller and the menu's time slow, logged on change
     camera_override::Tick(member);   // the member's animation camera overrides reach player 2's camera
-    if (!g_installed || g_failed || member == nullptr || state == nullptr)
+    lock_on::AfterBattle();          // out of battle, player 2's lock ends (player 2's camera manager is primary here)
+    if (!g_installed || member == nullptr || state == nullptr)
     {
         return;
     }
@@ -314,33 +268,9 @@ void InScopes(void* member, void* state, float deltaTime) noexcept
         // In battle: the member tick's TargetScope already asked the game (lock_on::Held), else ask.
         const bool           targeting     = system != 0 && Field<std::uint8_t>(system + kSkipTargeting) == 0 &&
                                    (lock_on::Held() || InBattleGuarded() != 0);
-        if (two.ready && targeting && Acts(kPartSoftTarget))
-        {
-            // Player 2's soft target, picked by the game's own leader update for player 2's member.
-            const LeaderScope scope(memberWeak);
-            if (scope.Held() && !SoftTargetGuarded(system))
-            {
-                Stop(L"the soft-target update");
-            }
-        }
-        if (two.ready && targeting && !g_failed)
-        {
-            // Player 2's lock, lock camera and switching, as the game's targeting tick does them next.
-            const LeaderScope scope(memberWeak);
-            if (scope.Held())
-            {
-                lock_on::Tick(member, reinterpret_cast<void*>(two.owner), deltaTime,
-                              {.lock      = Acts(kPartLock),
-                               .switching = Acts(kPartSwitch),
-                               .camera    = Acts(kPartLockCamera),
-                               .cursor    = Acts(kPartCursor)});
-            }
-        }
-        else if (!targeting)
-        {
-            lock_on::Tick(member, reinterpret_cast<void*>(two.owner), deltaTime, {});  // ends player 2's lock out of battle
-        }
-        // Attack, unique, guard and dodge: player 2's command controller (player_two/command_menu_tick.h).
+        // Player 2's soft target, lock, lock camera, switching and cursor: the game's targeting tick run
+        // for player 2 (player_two/lock_on.h). Attack, unique, guard and dodge: player 2's command
+        // controller (player_two/command_menu_tick.h).
 
         if (g_lines >= kMaxLines)
         {
@@ -396,10 +326,8 @@ void InScopes(void* member, void* state, float deltaTime) noexcept
 
 void SetMask(unsigned mask) noexcept
 {
-    g_mask  = mask;
     g_lines = 0;
-    platform::Log(L"battle input: mask {} (soft target {}, lock {}, switching {}, lock camera {}, cursor {})", mask,
-                  Acts(kPartSoftTarget), Acts(kPartLock), Acts(kPartSwitch), Acts(kPartLockCamera), Acts(kPartCursor));
+    lock_on::SetEnabled((mask & kPartTargeting) != 0);
 }
 
 }  // namespace lss::player_two::battle_input

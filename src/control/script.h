@@ -35,9 +35,9 @@
 //                                         icon manager ticked, 2 its first controller player 2's, 4 each
 //                                         half shows its own canvases, 8 ranged from player 2's member;
 //                                         hud/area_icons_two.h); all at start
-//   battle-mask <0..511>                 diagnosis: which of player 2's targeting parts act (8 soft
-//                                         target, 32 lock, 64 switching, 128 lock camera, 256 cursor;
-//                                         1, 2, 4, 16 retired; player_two/battle_input.h); all at start
+//   battle-mask <0..511>                 diagnosis: bit 8 runs player 2's targeting (the game's
+//                                         targeting tick for player 2; player_two/lock_on.h); the other
+//                                         bits are retired and ignored; on at start
 //   perf-log on|off                      each hitch's own line and the periodic timing lines (off at
 //                                         start; the 10 s hitch summary is always written)
 //   hud-trace <frames>                  log the order of the HUD's tick, marker placements, icon

@@ -2,7 +2,11 @@
 
 #include "platform/image.h"
 #include "player_two/battle_camera.h"
+#include "player_two/command_menu_two.h"
+#include "player_two/focus_scope.h"
+#include "player_two/leader_scope.h"
 #include "player_two/lock_on.h"
+#include "player_two/party_member.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
@@ -37,6 +41,9 @@ CopyFn                g_engineCopy          = nullptr;
 UpdateFn              g_engineUpdate        = nullptr;
 std::uintptr_t        g_fieldVTable         = 0;
 std::uintptr_t        g_cameraManagerVTable = 0;
+// Player 2's command controller's battle HUD mode (u8; 0 out of battle).
+constexpr std::uint32_t kHudMode = 0x540;
+std::atomic<unsigned> g_uiRefusals{0};  // battle updates that ran without player 2's UI context
 
 StageCounters              g_settingsCounters;
 StageCounters              g_updateCounters;
@@ -175,13 +182,49 @@ bool ActsFor(void* cameraManager) noexcept
            ReadPointer(cameraManager, facts::kCameraManagerOperators + current * std::uint32_t{sizeof(void*)}) != nullptr;
 }
 
-/// When the scope cannot be opened, player 2's update still runs, as the engine would run it: with
+/// When a scope cannot be opened, player 2's update still runs, as the engine would run it: with
 /// player 1 as the primary player, so for that frame player 2's camera reads player 1's input.
 /// Skipping the update instead would freeze player 2's camera. The refusal is counted.
+///
+/// In battle the update also runs in player 2's UI context: the Command camera module (21), which
+/// player 2's command controller turns on for player 2's camera while its target list is open,
+/// frames the command menu's selected target (EndUISystem[23]'s provider, which reads the selected
+/// row from the focus path) and the party leader (RE-p2-target-select-views.md §6, §9). Without it,
+/// player 1's target list would move player 2's camera.
 void RunAsPrimary(void* cameraManager, float deltaTime)
 {
+    void*      controller = command_menu_two::Controller();
+    void*      member     = generation::Member();
+    const bool battle     = controller != nullptr && member != nullptr && ReadField<std::uint8_t>(controller, kHudMode) != 0;
+    std::optional<focus_scope::FocusScope> focus;
+    if (battle)
+    {
+        focus.emplace(controller);
+        if (!focus->Entered())
+        {
+            const unsigned refusals = g_uiRefusals.fetch_add(1, std::memory_order_relaxed) + 1;
+            if (refusals <= 5 || refusals % 600 == 0)
+            {
+                platform::Log(L"player 2's camera update ran without player 2's UI context: {} ({} time(s))",
+                              focus->Refusal() != nullptr ? focus->Refusal() : L"refused", refusals);
+            }
+            focus.reset();
+        }
+    }
     const primary_controller::Scope scope;
     const lock_on::TargetScope      targets;  // in battle, the LockOn module reads player 2's displayed target
+    std::optional<leader_scope::LeaderScope>     leader;
+    std::optional<leader_scope::LeaderTypeScope> type;
+    if (focus)
+    {
+        const auto memberType = party_member::PlayerTypeOf(member);
+        const auto memberWeak = leader_scope::WeakOf(member);
+        if (memberType && memberWeak != 0)
+        {
+            leader.emplace(memberWeak);
+            type.emplace(*memberType);
+        }
+    }
     if (scope.Held())
     {
         g_updateCounters.Act();

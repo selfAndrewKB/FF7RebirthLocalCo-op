@@ -8,7 +8,8 @@
 //            member nobody plays (player_two/party_member.h), and success is read from the lease
 //            fields over the following ticks.
 //   camera   right after the join, player 2's camera manager is pointed at its own camera actor
-//            (player_two/view_target.h), and kept there. When the member is taken, player 2's
+//            (player_two/view_target.h), as the game's own spawn aimed it; a later move is logged,
+//            never re-aimed (no game code moves it). When the member is taken, player 2's
 //            Field camera is brought to player 1's settings and player 2's camera update starts
 //            running as the primary player's (player_two/field_camera.h).
 //   movement with per-pad sticks on, the member's move state is ticked with player 2's pad
@@ -104,7 +105,7 @@ private:
     void LogPlayerOneAfterJoin() noexcept;
     void LogTagCounts(const wchar_t* when) noexcept;
     void AimOwnCamera() noexcept;
-    void KeepOwnCamera() noexcept;
+    void WatchOwnCamera() noexcept;
     void RetakeWhenFree() noexcept;
     bool MemberDestroyed() noexcept;
     void TryRejoin() noexcept;
@@ -119,6 +120,7 @@ private:
     std::uint64_t         memberWeak_       = 0;        // its FWeakObjectPtr, to see it destroyed
     std::uint32_t         ticks_            = 0;        // in the current phase
     std::uint32_t         viewTargetResets_ = 0;        // times player 2's view was found moved off its camera
+    bool                  viewOnOwnCamera_  = true;     // as last seen (a move is logged once per move)
     bool                  gateClosedLogged_ = false;
     bool                  refuseJoins_      = false;    // after an exception during a join
     bool                  rejoinPending_    = false;    // a map load took player 2 out: join again when it is ready

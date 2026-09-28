@@ -67,6 +67,7 @@ add_library(LocalSplitScreen SHARED
     src/player_two/battle_input.cpp
     src/player_two/battle_camera.cpp
     src/player_two/camera_override.cpp
+    src/player_two/camera_distance.cpp
     src/player_two/command_rules.cpp
     src/player_two/menu_focus.cpp
     src/player_two/focus_scope.cpp
@@ -74,7 +75,6 @@ add_library(LocalSplitScreen SHARED
     src/player_two/command_menu_tick.cpp
     src/player_two/leader_scope.cpp
     src/player_two/lock_on.cpp
-    src/player_two/target_cursor.cpp
     src/player_two/own_controller.cpp
     src/player_two/party_lease.cpp
     src/player_two/party_member.cpp
@@ -294,6 +294,15 @@ add_executable(CommandRulesCodeTests
 target_include_directories(CommandRulesCodeTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(CommandRulesCodeTests PRIVATE cxx_std_20)
 add_test(NAME command_rules_code COMMAND CommandRulesCodeTests)
+
+add_executable(PanelGateCodeTests
+    tests/panel_gate_code_test.cpp
+    src/platform/code_redirect.cpp
+    src/platform/near_code.cpp
+)
+target_include_directories(PanelGateCodeTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(PanelGateCodeTests PRIVATE cxx_std_20)
+add_test(NAME panel_gate_code COMMAND PanelGateCodeTests)
 
 add_executable(CenteredFrameCodeTests
     tests/centered_frame_code_test.cpp

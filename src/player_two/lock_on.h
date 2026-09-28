@@ -1,31 +1,34 @@
 #pragma once
 
-// Player 2's hard lock-on, right-stick target switching and lock-on camera (RE-p2-lock-on.md, pass
-// S-TGT2).
+// Player 2's targeting: the game's own targeting tick run a second time, for player 2
+// (RE-p2-targeting-scoped-tick.md, pass S-TGT5; the fields in RE-p2-lock-on.md, S-TGT2).
 //
-// The game keeps one set of target fields in the battle system: the displayed target (+0x70/+0x78, a
-// TWeakPtr), the lock byte (+0x8C), the switch latch (+0x8D) and the target cursor (+0x68). Its
-// lock-camera tick reads the TargetLock press, toggles the lock (which also writes the game-wide
-// parameter Global.LockOn), then keeps the LockOn camera module (layer 7) on or off on the primary
-// camera manager. The camera module caches the displayed target when it activates and reads it again
-// every frame.
+// The game keeps one set of target fields in the battle system: the target cursor (+0x68), the
+// displayed target (+0x70/+0x78, a TWeakPtr), the trace handle (+0x80), the lock byte (+0x8C), the
+// switch latch (+0x8D) and the lock camera's rest timer (+0x90). Its targeting tick (soft target,
+// lock toggle and lock camera, displayed target, stick switching, cursor) runs from two calls in the
+// battle tick, each behind the game's own gates (in battle; time stopped only for the menu's target
+// select; the suspend byte +0x96 inside).
 //
 // Player 2 gets their own copy of those fields. A TargetScope puts player 2's into the battle system
 // for as long as it lives and takes them back out at its end (the displayed target's weak reference
-// moves with it), with player 1's put back. It is held around player 2's member tick (so the game's
-// own post-action refocus and stick-start code there use player 2's target and lock, and never touch
-// player 1's cursor) and around player 2's camera update (so the LockOn module frames player 2's
-// target). Inside the member tick, Tick then does what the game's tick does, with player 2's pad,
-// member and camera manager: the TargetLock press flips player 2's lock (the game's toggle less the
-// Global.LockOn write), the lock camera follows the game's rules through the primary-camera wrappers
-// (player 2's camera manager there), the game's own switch runs on pad 2's right stick, and player
-// 2's displayed target follows the member's own target. Player 2's lock ends with the battle, as
-// the game's does. Every state change is logged.
+// moves with it), with player 1's put back; if player 2's lock changed inside, player 1's is put back
+// through the game's own lock setter, which also sets the game-wide Global.LockOn parameter back to
+// player 1's. It is held around player 2's member tick, player 2's menu input, player 2's camera
+// update and player 2's HUD collection.
 //
-// Player 1's side: the game's targeting tick reads the right stick through the merged stick value
-// (whichever pad is pushed furthest), so its two calls run on pad 1's own stick while player 2
-// plays; otherwise pad 2 would switch player 1's locked target and move player 1's lock camera.
-// Game thread only.
+// Both targeting calls are redirected: the game's call runs for player 1 (on pad 1's own right stick
+// while player 2 plays; the merged stick is whichever pad is pushed furthest), then the same call runs
+// again for player 2 inside player 2's scopes: player 2's UI context (player_two/focus_scope.h: the
+// command controller slot answers player 2's command controller, and the focus path is player 2's, from
+// which an open target list answers its selected row), pad 2's sticks and buttons, player 2 as the primary controller (so the lock
+// camera is player 2's camera manager's), the party leader and its type answering player 2's member,
+// a TargetScope, and the bar manager's targeted key (EndUISystem[31] +0x140) as player 2's. Three
+// writes of the tick have one copy for both players and are skipped in player 2's run: the two
+// requests for player 1's target panel (their weak reference released as the request would) and the
+// marker list's target owner name. Player 2's run pauses while player 1 picks a target in the menu
+// (the menu's target select is player 1's widgets). Player 2's lock ends with the battle, as the
+// game's teardown ends player 1's. Every state change is logged. Game thread only.
 
 #include <cstdint>
 
@@ -37,7 +40,7 @@ namespace lss::player_two::lock_on {
 
 bool Install(const platform::GameImage& image) noexcept;
 
-/// Player 1's targeting calls back to the game's.
+/// Player 1's targeting calls and the skipped writes back to the game's.
 void Remove() noexcept;
 
 /// In battle, player 2's target fields in the battle system while it lives (nested scopes do
@@ -52,29 +55,29 @@ public:
 
     bool Held() const noexcept { return system_ != 0; }
 
+    /// Player 1's target cursor, saved while player 2's is in the battle system (for the log).
+    std::uintptr_t OtherCursor() const noexcept { return cursor_; }
+
 private:
-    std::uintptr_t system_ = 0;
-    std::uintptr_t cursor_ = 0;
-    std::uintptr_t object_ = 0;
+    std::uintptr_t system_     = 0;
+    std::uintptr_t cursor_     = 0;
+    std::uintptr_t object_     = 0;
     std::uintptr_t controller_ = 0;
-    std::uint8_t   lock_ = 0;
-    std::uint8_t   latch_ = 0;
+    std::uint64_t  trace_      = 0;
+    std::uint32_t  freeTime_   = 0;  // a float, moved as its bits
+    std::uint8_t   lock_       = 0;
+    std::uint8_t   latch_      = 0;
+    std::uint8_t   twoLock_    = 0;  // player 2's lock as the scope began
 };
 
-/// Which parts act.
-struct Parts
-{
-    bool lock      = true;  // the TargetLock press toggles player 2's lock
-    bool switching = true;  // pad 2's right stick switches player 2's locked target
-    bool camera    = true;  // the LockOn module on player 2's camera follows player 2's lock and target
-    bool cursor    = true;  // player 2's own target cursor (player_two/target_cursor.h)
-};
+/// Inside player 2's member tick scopes, every tick: out of battle, player 2's lock, displayed
+/// target and cursor end, as the game's battle teardown ends player 1's.
+void AfterBattle() noexcept;
 
-/// Inside player 2's member tick scopes and a TargetScope, with the party leader answering the
-/// member, after the soft target: the press, the lock camera, switching, the displayed target.
-void Tick(void* member, void* component, float deltaTime, Parts parts) noexcept;
+/// Diagnosis: player 2's targeting run on or off (on at start).
+void SetEnabled(bool on) noexcept;
 
-/// Player 2 is leaving: their displayed target and cursor released, their lock cleared.
+/// Player 2 is leaving: their displayed target, targeted key and cursor released, their lock cleared.
 void PlayerTwoOut() noexcept;
 
 /// Whether a TargetScope holds now (then the game is in battle).
@@ -85,5 +88,13 @@ std::uintptr_t DisplayedObject() noexcept;
 
 /// Player 2's displayed target as a TWeakPtr {object, reference controller} (outside a TargetScope).
 void Displayed(std::uintptr_t& object, std::uintptr_t& controller) noexcept;
+
+/// Player 2's target cursor widget (outside a TargetScope), or null.
+void* Cursor() noexcept;
+
+/// For the log: whether player 2's command target list was open at player 2's last targeting run,
+/// and how many times it has opened (a HUD module starts a fresh log budget when this changes).
+bool          TargetListOpen() noexcept;
+std::uint32_t TargetListOpenings() noexcept;
 
 }  // namespace lss::player_two::lock_on

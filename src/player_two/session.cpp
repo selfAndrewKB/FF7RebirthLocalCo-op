@@ -132,24 +132,29 @@ void Session::Tick() noexcept
     }
     if (phase_ != Phase::Leaving && phase_ != Phase::Out && generation::Active())
     {
-        KeepOwnCamera();
+        WatchOwnCamera();
     }
 }
 
-void Session::KeepOwnCamera() noexcept
+void Session::WatchOwnCamera() noexcept
 {
-    // Resets logged one by one; later ones only counted on the status line.
-    constexpr std::uint32_t kLoggedResets = 3;
-    if (!installed_.viewTarget || view_target::OnOwnCamera(playerTwoController_))
+    // Watch only (RE-p2-session-levers.md §2): the game writes player 2's view target once, at spawn
+    // (InitializeFor; the join repeats that aim once), and no game code retargets a second player's
+    // controller afterwards, so nothing re-aims it here. A move off its camera actor is logged, one
+    // line per move for the first few; later ones are only counted on the status line.
+    constexpr std::uint32_t kLoggedMoves = 3;
+    const bool              own          = !installed_.viewTarget || view_target::OnOwnCamera(playerTwoController_);
+    if (own || !viewOnOwnCamera_)
     {
+        viewOnOwnCamera_ = own;
         return;
     }
+    viewOnOwnCamera_ = false;
     ++viewTargetResets_;
-    void*      moved = view_target::Current(playerTwoController_);
-    const bool aimed = view_target::Aim(playerTwoController_);
-    if (viewTargetResets_ <= kLoggedResets)
+    if (viewTargetResets_ <= kLoggedMoves)
     {
-        Log(L"player 2's camera manager was viewing {}; aimed back at its camera actor: {}", NameOf(moved), YesNo(aimed));
+        Log(L"WARNING: player 2's camera manager now views {}, not its camera actor (the game moved it; not re-aimed)",
+            NameOf(view_target::Current(playerTwoController_)));
     }
 }
 
@@ -525,6 +530,7 @@ void Session::Forget() noexcept
     member_              = nullptr;
     ticks_               = 0;
     viewTargetResets_    = 0;
+    viewOnOwnCamera_     = true;
 }
 
 void Session::LogStatus() noexcept

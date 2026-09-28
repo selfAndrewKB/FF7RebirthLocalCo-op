@@ -10,7 +10,6 @@
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/lock_on.h"
-#include "player_two/target_cursor.h"
 
 #include <array>
 #include <cstdint>
@@ -127,8 +126,12 @@ struct LabelLog
 /// What a pass took out, for the log.
 struct PassHides
 {
-    bool         cursor = false;
-    std::int32_t gauges = 0;
+    bool           cursor = false;
+    std::int32_t   gauges = 0;
+    std::uintptr_t hiddenCursor = 0;  // the cursor this pass takes out (the other player's)
+    std::uintptr_t ownCursor    = 0;  // this pass's own player's cursor
+    std::int32_t   entries      = 0;  // the bar manager's gauges this frame
+    bool           list         = false;  // player 2's command target list open
     bool operator==(const PassHides&) const = default;
 };
 
@@ -145,6 +148,8 @@ std::array<PassHides, 2>    g_loggedHides{};
 LabelLog                    g_loggedLabel{};
 std::array<std::int32_t, 2> g_loggedUnion{-1, -1};
 int                         g_lines = 0;
+std::uint32_t               g_listOpenings = 0;  // player 2's target list openings seen: each starts a fresh budget
+std::int32_t                g_entryCount   = 0;  // the bar manager's gauges, counted by this frame's walk (the log)
 
 template <class T>
 T Field(std::uintptr_t address) noexcept
@@ -351,6 +356,7 @@ std::uint8_t LabelLookup(void* manager, float* point, float* scale, void* charac
 void FindOtherGauges(std::uintptr_t system)
 {
     g_gaugesFound = true;
+    g_entryCount  = 0;
     g_otherGauges[0].clear();
     g_otherGauges[1].clear();
     const std::uintptr_t manager = Field<std::uintptr_t>(g_endUISystem + kManager);
@@ -367,6 +373,7 @@ void FindOtherGauges(std::uintptr_t system)
         return;
     }
     platform::ForEachSparseElement(manager + kEntries, kElement, [&](std::uintptr_t entry) {
+        ++g_entryCount;
         const auto source   = Field<std::uintptr_t>(entry);
         const bool onlyOne  = Contains(one, source) && !Contains(mine, source);
         const bool onlyTwo  = Contains(mine, source) && !Contains(one, source);
@@ -452,14 +459,25 @@ void BeforePass(int player) noexcept
     }
     try
     {
-        const std::uintptr_t system = Field<std::uintptr_t>(g_battleSystem);
+        if (const auto openings = player_two::lock_on::TargetListOpenings(); openings != g_listOpenings)
+        {
+            g_listOpenings = openings;  // player 2's target list opened: a fresh budget to see what each pass does
+            g_lines        = 0;
+            g_loggedHides  = {};
+        }
+        const std::uintptr_t system  = Field<std::uintptr_t>(g_battleSystem);
+        const auto           oneCur  = Field<std::uintptr_t>(system != 0 ? system + kCursor : 0);
+        const auto           twoCur  = reinterpret_cast<std::uintptr_t>(player_two::lock_on::Cursor());
         PassHides            hides;
-        hides.cursor = Hide(player != 0 ? reinterpret_cast<void*>(Field<std::uintptr_t>(system != 0 ? system + kCursor : 0))
-                                        : player_two::target_cursor::Widget());
+        hides.hiddenCursor = player != 0 ? oneCur : twoCur;
+        hides.ownCursor    = player != 0 ? twoCur : oneCur;
+        hides.list         = player_two::lock_on::TargetListOpen();
+        hides.cursor       = Hide(reinterpret_cast<void*>(hides.hiddenCursor));
         if (!g_gaugesFound)
         {
             FindOtherGauges(system);
         }
+        hides.entries = g_entryCount;
         for (const std::uint64_t weak : g_otherGauges[player != 0 ? 1 : 0])
         {
             hides.gauges += Hide(WidgetOf(weak)) ? 1 : 0;
@@ -469,9 +487,10 @@ void BeforePass(int player) noexcept
         if (hides != g_loggedHides[pass])
         {
             g_loggedHides[pass] = hides;
-            Note(std::format(L"{}'s pass takes out {} and {} gauge(s) of the other player's target", player != 0 ? L"player 2"
-                                                                                                                   : L"player 1",
-                             hides.cursor ? L"the other player's cursor" : L"no cursor", hides.gauges));
+            Note(std::format(L"{}'s pass takes out {} ({:#x}; its own {:#x}) and {} of {} gauge(s){}",
+                             player != 0 ? L"player 2" : L"player 1",
+                             hides.cursor ? L"the other player's cursor" : L"no cursor", hides.hiddenCursor, hides.ownCursor,
+                             hides.gauges, hides.entries, hides.list ? L" | player 2's target list open" : L""));
         }
     }
     catch (...)

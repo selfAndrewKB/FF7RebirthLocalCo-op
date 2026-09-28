@@ -16,8 +16,8 @@
 #include "player_two/field_exit.h"
 #include "player_two/lock_on.h"
 #include "player_two/party_switch.h"
-#include "player_two/target_cursor.h"
 #include "player_two/battle_input.h"
+#include "player_two/camera_distance.h"
 #include "player_two/member_movement.h"
 #include "player_two/move_state.h"
 #include "player_two/object_fields.h"
@@ -111,6 +111,7 @@ void Session::InstallStages(const platform::GameImage& image) noexcept
     installed_.cameraUpdate  = installed_.primary && field_camera::InstallUpdate(image);
     battle_camera::Install(image);    // player 2's Battle operator follows player 1's (logged)
     camera_override::Install(image);  // player 2's camera gets its own NotifyOverride module (logged)
+    camera_distance::Install(image);  // the Options camera distance reaches player 2's camera too (logged)
     installed_.padSticks     = installed_.primary && pad_sticks::Install(image);
     installed_.moveCensus    = move_state::Install(image);
     installed_.tagCounts     = tag_counts::Install(image);
@@ -120,8 +121,7 @@ void Session::InstallStages(const platform::GameImage& image) noexcept
     installed_.memberMovement = installed_.member && installed_.padSticks && installed_.moveCensus &&
                                 member_movement::Install(image);
     battle_input::Install(image);  // player 2's battle targeting, inside the member tick (logged)
-    lock_on::Install(image);       // player 2's own lock, switching and lock camera (logged)
-    target_cursor::Install(image); // player 2's own target cursor (logged)
+    lock_on::Install(image);       // player 2's targeting: the game's tick run again for player 2 (logged)
     party_switch::Install(image);  // player 1's switch skips player 2's member (logged)
     command_rules::Install(image); // player 1 cannot command player 2's member (logged)
     menu_focus::Install(image);    // player 1's UI focus logged on change (read-only)
@@ -156,6 +156,7 @@ void Session::RemoveStages() noexcept
     pad_buttons::Remove();
     move_state::Remove();
     pad_sticks::Remove();
+    camera_distance::Remove();
     battle_camera::Remove();
     field_camera::Remove();
     own_controller::Remove();
