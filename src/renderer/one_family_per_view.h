@@ -18,6 +18,9 @@ namespace lss::renderer {
 /// The engine's BeginRenderingViewFamily(this, FCanvas*, FSceneViewFamily*).
 using SubmitViewFamilyFn = void (*)(void* rendererModule, void* canvas, std::byte* viewFamily);
 
+/// Runs on the game thread after one submission returns and before the next starts.
+using BetweenFamiliesFn = void (*)();
+
 /// Submits `viewFamily` once per view, each time presenting it with only that view.
 ///
 /// - One view (or none): a single ordinary submission; nothing is changed.
@@ -25,6 +28,8 @@ using SubmitViewFamilyFn = void (*)(void* rendererModule, void* canvas, std::byt
 ///   Submissions after the first also set the frame-number skip (+0x70) and
 ///   bAdditionalViewFamily (+0x74), so the frame number steps once per frame and each
 ///   submission keeps the output of the ones before it.
+///
+/// `betweenFamilies`, if given, runs between each two submissions (never around a single one).
 ///
 /// The family is restored exactly before returning: the same view order, count and flags.
 /// Draw deletes its views afterwards through this list, so an unrestored family would corrupt
@@ -35,6 +40,6 @@ using SubmitViewFamilyFn = void (*)(void* rendererModule, void* canvas, std::byt
 /// their own array, never replaced by another buffer, so even an engine that grew the array
 /// during a submission would reallocate memory it owns.
 void SubmitOneFamilyPerView(void* rendererModule, void* canvas, std::byte* viewFamily,
-                            SubmitViewFamilyFn engineSubmit) noexcept;
+                            SubmitViewFamilyFn engineSubmit, BetweenFamiliesFn betweenFamilies = nullptr) noexcept;
 
 }  // namespace lss::renderer

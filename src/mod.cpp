@@ -33,7 +33,7 @@
 #include "players/split_screen_settings.h"
 #include "players/unreal_access.h"
 #include "renderer/additional_family_output.h"
-#include "renderer/null_view_probe.h"
+#include "renderer/family_boundary.h"
 #include "renderer/view_family_submission.h"
 #include "views/player_view_point.h"
 #include "views/view_shape.h"
@@ -53,7 +53,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.28.5-game-ready-gate";
+constexpr const wchar_t* kVersion = L"0.29.1-family-boundary";
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -102,7 +102,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.28.5-game-ready-gate");
+        ModVersion     = STR("0.29.1-family-boundary");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -145,7 +145,6 @@ public:
         lss::dev::Remove();
         lss::hud::RemoveLayoutScale();
         lss::hud::RemoveOverlayLayout();
-        lss::renderer::RemoveNullViewProbe();
         if (rendererInstalled_)
         {
             lss::renderer::RemoveViewFamilySubmission();
@@ -182,12 +181,17 @@ public:
 
         const auto image = lss::platform::GameImage::Locate();
         const auto removeLocalPlayer = image ? VerifyEngine(*image) : std::nullopt;
+        if (removeLocalPlayer)
+        {
+            // The game's end-of-frame state reset between two families (the main-menu crash's fix),
+            // before the submission that asks for it; logs its own outcome.
+            lss::renderer::InstallFamilyBoundary(*image);
+        }
         if (!removeLocalPlayer || !InstallRenderer(*image))
         {
             Log(L"standing aside: nothing installed, the game runs unmodified");
             return;
         }
-        lss::renderer::InstallNullViewProbe(*image);  // diagnosis of the main-menu crash; logs its own outcome
         session_.emplace(*removeLocalPlayer);
         session_->InstallStages(*image);
 
@@ -305,7 +309,7 @@ private:
             case lss::players::PlayerIntent::TogglePadSticks: session_->TogglePadSticks(); break;
             case lss::players::PlayerIntent::None: break;
         }
-        lss::renderer::PollNullViewProbe(session_->HasPlayerTwo());
+        lss::renderer::PollFamilyBoundary();
         lss::player_two::field_exit::Watch();
         if (session_->HasPlayerTwo() && lss::player_two::field_exit::FieldLeft())
         {

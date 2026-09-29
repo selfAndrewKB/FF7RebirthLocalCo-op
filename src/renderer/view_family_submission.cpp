@@ -5,6 +5,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/vtable_entry.h"
+#include "renderer/family_boundary.h"
 #include "renderer/one_family_per_view.h"
 #include "renderer/scene_view_family.h"
 
@@ -208,7 +209,8 @@ __declspec(noinline) void SubmitViewFamily(void* rendererModule, void* canvas, s
     LogFamilyOnChange(viewFamily);
     RecordFrameTime(g_loggedViewCount);
     g_familyInFrame = 0;
-    SubmitOneFamilyPerView(rendererModule, canvas, viewFamily, &TimedEngineSubmit);
+    // Between two families: the game's end-of-frame state reset, in stream order (family_boundary.h).
+    SubmitOneFamilyPerView(rendererModule, canvas, viewFamily, &TimedEngineSubmit, &QueueFamilyBoundary);
 }
 
 }  // namespace

@@ -22,10 +22,6 @@ public:
     /// The live address of an IDA address, or empty if it falls outside the image.
     std::optional<std::uintptr_t> Rebase(std::uintptr_t idaAddress, std::size_t length = 1) const noexcept;
 
-    /// The IDA address of a live address, or empty if it falls outside the image (for logs that name
-    /// what a pointer is, e.g. a vtable).
-    std::optional<std::uintptr_t> IdaAddressOf(std::uintptr_t live) const noexcept;
-
     /// True if the bytes at an IDA address are exactly `expected`. This is how the mod confirms
     /// that the game build is the one the research was done on before relying on any address.
     bool BytesMatch(std::uintptr_t idaAddress, std::span<const std::uint8_t> expected) const noexcept;

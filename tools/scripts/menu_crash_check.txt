@@ -1,0 +1,7 @@
+# Main-menu crash check (RE-p2-main-menu-crash.md, "The fix"): player 2 in, then open and close the
+# pause menu several times (keys or pads). Without the family boundary this crashed on the RHI
+# thread; with it the log's "family boundary" line counts one reset per frame and nothing crashes.
+note main-menu crash check: join, then pause-menu opens
+join
+wait-until playing
+status

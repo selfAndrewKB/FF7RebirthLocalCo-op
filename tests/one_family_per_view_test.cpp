@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <string>
 #include <vector>
 
 namespace {
@@ -40,9 +41,16 @@ struct Seen
 };
 
 std::vector<Seen> g_seen;
+std::string       g_order;  // 'S' per submission, 'B' per between-families call
+
+void Between()
+{
+    g_order += 'B';
+}
 
 void RecordingSubmit(void*, void*, std::byte* viewFamily)
 {
+    g_order += 'S';
     Seen seen{};
     std::memcpy(&seen.viewCount, viewFamily + family::kViewsCount, sizeof(seen.viewCount));
     std::memcpy(&seen.skipFrame, viewFamily + family::kSkipFrameNumberIncrement, sizeof(seen.skipFrame));
@@ -153,6 +161,31 @@ void TestNoViewsIsPassedThrough()
     EXPECT(fake.memory == before);
 }
 
+void TestBetweenFamiliesRunsBetweenSubmissions()
+{
+    std::puts("between families: called once between each two submissions, never around a single one");
+    int                      a = 0, b = 0, c = 0;
+    std::vector<const void*> one{&a};
+    std::vector<const void*> two{&a, &b};
+    std::vector<const void*> three{&a, &b, &c};
+    FakeFamily               fakeOne(one, 0, 0);
+    FakeFamily               fakeTwo(two, 0, 0);
+    FakeFamily               fakeThree(three, 0, 0);
+
+    g_order.clear();
+    SubmitOneFamilyPerView(nullptr, nullptr, fakeOne.memory.data(), &RecordingSubmit, &Between);
+    EXPECT(g_order == "S");
+    g_order.clear();
+    SubmitOneFamilyPerView(nullptr, nullptr, fakeTwo.memory.data(), &RecordingSubmit, &Between);
+    EXPECT(g_order == "SBS");
+    g_order.clear();
+    SubmitOneFamilyPerView(nullptr, nullptr, fakeThree.memory.data(), &RecordingSubmit, &Between);
+    EXPECT(g_order == "SBSBS");
+    g_order.clear();
+    SubmitOneFamilyPerView(nullptr, nullptr, fakeTwo.memory.data(), &RecordingSubmit);  // none given
+    EXPECT(g_order == "SS");
+}
+
 }  // namespace
 
 int main()
@@ -162,6 +195,7 @@ int main()
     TestThreeViewsKeepOrder();
     TestEngineFlagValuesAreRestored();
     TestNoViewsIsPassedThrough();
+    TestBetweenFamiliesRunsBetweenSubmissions();
 
     std::printf(g_failures == 0 ? "all tests passed\n" : "%d check(s) failed\n", g_failures);
     return g_failures == 0 ? 0 : 1;

@@ -19,7 +19,7 @@ T& Field(std::byte* viewFamily, std::size_t offset) noexcept
 }  // namespace
 
 void SubmitOneFamilyPerView(void* rendererModule, void* canvas, std::byte* viewFamily,
-                            SubmitViewFamilyFn engineSubmit) noexcept
+                            SubmitViewFamilyFn engineSubmit, BetweenFamiliesFn betweenFamilies) noexcept
 {
     auto& views      = Field<const void**>(viewFamily, family::kViewsData);
     auto& viewCount  = Field<std::int32_t>(viewFamily, family::kViewsCount);
@@ -38,6 +38,10 @@ void SubmitOneFamilyPerView(void* rendererModule, void* canvas, std::byte* viewF
 
     for (std::int32_t k = 0; k < totalViews; ++k)
     {
+        if (k > 0 && betweenFamilies != nullptr)
+        {
+            betweenFamilies();
+        }
         std::swap(views[0], views[k]);  // view k into slot 0; a no-op for k == 0
         viewCount = 1;
         if (k > 0)
