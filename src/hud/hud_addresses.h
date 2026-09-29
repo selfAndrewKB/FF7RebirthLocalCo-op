@@ -54,6 +54,16 @@ inline constexpr std::uint8_t   kSubmitLayerSlotPrologue[]  = {
     0x48, 0x89, 0x70, 0x18,         // mov [rax+18h], rsi
     0x48, 0x89, 0x78, 0x20, 0x55};  // mov [rax+20h], rdi ; push rbp
 
+// EndUI__ContainScaleFor1920x1080: the UI scale of a rect relative to 1920x1080 (RE-p2-hud-view-levers.md
+// §2). float(FVector2D) with the size packed in rcx (X low, Y high), the result in xmm0; a leaf that
+// reads only its argument and .rdata constants, so any thread may call it.
+inline constexpr std::uintptr_t kContainScale        = 0x1409F52B0;
+inline constexpr std::uint8_t   kContainScaleBytes[] = {
+    0xC5, 0xFA, 0x6F, 0x1D, 0x48, 0xD4, 0x6A, 0x05,  // vmovdqu xmm3, [abs mask]
+    0xC5, 0xFA, 0x10, 0x25, 0xC4, 0xD3, 0x6A, 0x05,  // vmovss xmm4, [1e-8]
+    0x48, 0x89, 0x4C, 0x24, 0x10,                    // mov [rsp+10h], rcx
+    0xC5, 0xFA, 0x10, 0x54, 0x24, 0x10};             // vmovss xmm2, [rsp+10h]
+
 // The overlay singleton (SEndRootOverlay__GetOrCreate 0x1410EAB8C): the player-0 view size it
 // caches before asking for the rect (written at 0x140C95F3C), and the host scale the marker
 // helpers read (EndUI__ProjectWorldToRootOverlay and its twin are its only readers found).

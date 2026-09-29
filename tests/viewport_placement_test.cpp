@@ -1,4 +1,4 @@
-// Host-side tests for hud::SplitLayoutFor, run without the game.
+// Host-side tests for hud::SplitLayoutFor and the field-action icons' base rule, run without the game.
 
 #include "hud/viewport_placement.h"
 
@@ -10,7 +10,9 @@
 namespace {
 
 using lss::hud::NearestAnchor;
-using lss::hud::PlacementKind;
+using lss::hud::AnchorOf;
+using lss::hud::KeepDistanceFromAnchor;
+using lss::hud::LayoutPoint;
 using lss::hud::Plausible;
 using lss::hud::SplitLayoutFor;
 using lss::hud::ViewportLayout;
@@ -32,15 +34,6 @@ ViewportLayout Stretch()
 {
     ViewportLayout layout;
     layout.anchors[2] = layout.anchors[3] = 1.0f;
-    return layout;
-}
-
-/// A root the game placed at (x, y) with SetPositionInViewport.
-ViewportLayout PointAt(float x, float y)
-{
-    ViewportLayout layout;
-    layout.offsets[0] = x;
-    layout.offsets[1] = y;
     return layout;
 }
 
@@ -68,7 +61,7 @@ void TestNearestAnchor()
 void TestAreaCorners()
 {
     std::puts("placement: an area root gets a 1920x1080 area at its corner of the half");
-    const auto bottomRight = SplitLayoutFor(PlacementKind::Area, 1.0f, 1.0f, Stretch());
+    const auto bottomRight = SplitLayoutFor(1.0f, 1.0f, Stretch());
     EXPECT(bottomRight.has_value());
     float x = 0.0f, y = 0.0f;
     TopLeft(*bottomRight, 3840.0f, 1080.0f, 0.0f, 0.0f, x, y);  // top/bottom half's layout
@@ -76,7 +69,7 @@ void TestAreaCorners()
     TopLeft(*bottomRight, 1920.0f, 2160.0f, 0.0f, 0.0f, x, y);  // side by side half's layout
     EXPECT(x == 0.0f && y == 1080.0f);
 
-    const auto topCentre = SplitLayoutFor(PlacementKind::Area, 0.5f, 0.0f, Stretch());
+    const auto topCentre = SplitLayoutFor(0.5f, 0.0f, Stretch());
     TopLeft(*topCentre, 3840.0f, 1080.0f, 0.0f, 0.0f, x, y);
     EXPECT(x == 960.0f && y == 0.0f);
 }
@@ -89,54 +82,56 @@ void TestSoloUnchanged()
         for (const float ay : {0.0f, 1.0f})
         {
             float x = 1.0f, y = 1.0f;
-            TopLeft(*SplitLayoutFor(PlacementKind::Area, ax, ay, Stretch()), 1920.0f, 1080.0f, 0.0f, 0.0f, x, y);
+            TopLeft(*SplitLayoutFor(ax, ay, Stretch()), 1920.0f, 1080.0f, 0.0f, 0.0f, x, y);
             EXPECT(x == 0.0f && y == 0.0f);
         }
     }
     for (const auto& [px, py] : {std::pair{70.0f, 957.0f}, std::pair{960.0f, 40.0f}, std::pair{1800.0f, 500.0f}})
     {
-        float x = 0.0f, y = 0.0f;
-        TopLeft(*SplitLayoutFor(PlacementKind::Point, 0.0f, 0.0f, PointAt(px, py)), 1920.0f, 1080.0f, 381.0f, 41.0f,
-                x, y);
-        EXPECT(x == px && y == py);
+        const LayoutPoint point{px, py};
+        EXPECT(KeepDistanceFromAnchor(point, AnchorOf(point), 1920.0f, 1080.0f) == point);
     }
 }
 
-void TestPointKeepsCornerDistance()
+void TestIconBaseKeepsCornerDistance()
 {
-    std::puts("placement: a point keeps its distance from the frame's nearest corner");
-    const auto action = SplitLayoutFor(PlacementKind::Point, 0.0f, 0.0f, PointAt(70.0f, 957.0f));
-    EXPECT(action.has_value());
-    EXPECT(action->anchors[0] == 0.0f && action->anchors[1] == 1.0f);
-    EXPECT(action->offsets[0] == 70.0f && action->offsets[1] == -123.0f);
-    float x = 0.0f, y = 0.0f;
-    TopLeft(*action, 1920.0f, 2160.0f, 381.0f, 41.0f, x, y);  // side by side
-    EXPECT(x == 70.0f && y == 2037.0f);
+    std::puts("icon base: the field-action icons' base keeps its distance from the frame's nearest corner");
+    const LayoutPoint base{70.0f, 957.0f};  // the Blueprint default of FieldAction_Command_C (slot 0)
+    const LayoutPoint anchor = AnchorOf(base);
+    EXPECT(anchor == (LayoutPoint{0.0f, 1.0f}));  // bottom left
+    EXPECT(KeepDistanceFromAnchor(base, anchor, 1920.0f, 2160.0f) == (LayoutPoint{70.0f, 2037.0f}));  // side by side
+    EXPECT(KeepDistanceFromAnchor(base, anchor, 3840.0f, 1080.0f) == base);  // top/bottom: same height, left edge
 
-    // Top right: 120 from the right edge, 40 from the top, in a 3840x1080 top/bottom layout.
-    const auto topRight = SplitLayoutFor(PlacementKind::Point, 0.0f, 0.0f, PointAt(1800.0f, 40.0f));
-    EXPECT(topRight->anchors[0] == 1.0f && topRight->anchors[1] == 0.0f);
-    TopLeft(*topRight, 3840.0f, 1080.0f, 100.0f, 30.0f, x, y);
-    EXPECT(x == 3720.0f && y == 40.0f);
+    // Other corners and the centre, for any icon class whose default sits there.
+    EXPECT(AnchorOf(LayoutPoint{1800.0f, 40.0f}) == (LayoutPoint{1.0f, 0.0f}));
+    EXPECT(KeepDistanceFromAnchor(LayoutPoint{1800.0f, 40.0f}, LayoutPoint{1.0f, 0.0f}, 3840.0f, 1080.0f) ==
+           (LayoutPoint{3720.0f, 40.0f}));
+    EXPECT(AnchorOf(LayoutPoint{900.0f, 500.0f}) == (LayoutPoint{0.5f, 0.5f}));
+    EXPECT(KeepDistanceFromAnchor(LayoutPoint{900.0f, 500.0f}, LayoutPoint{0.5f, 0.5f}, 1920.0f, 2160.0f) ==
+           (LayoutPoint{900.0f, 1040.0f}));
 
-    // Centre: a point in the middle third keeps its offset from the centre.
-    const auto centre = SplitLayoutFor(PlacementKind::Point, 0.0f, 0.0f, PointAt(900.0f, 500.0f));
-    EXPECT(centre->anchors[0] == 0.5f && centre->anchors[1] == 0.5f);
-    TopLeft(*centre, 1920.0f, 2160.0f, 100.0f, 30.0f, x, y);
-    EXPECT(x == 900.0f && y == 1040.0f);
+    // A row left at its side-by-side place is outside the solo layout (not painted, so never ticked).
+    EXPECT(lss::hud::OutsideLayout(LayoutPoint{70.0f, 2037.0f}, 1920.0f, 1080.0f));
+    EXPECT(!lss::hud::OutsideLayout(LayoutPoint{70.0f, 957.0f}, 1920.0f, 1080.0f));
+    EXPECT(!lss::hud::OutsideLayout(LayoutPoint{70.0f, 957.0f}, 1920.0f, 2160.0f));
+    EXPECT(lss::hud::OutsideLayout(LayoutPoint{-5.0f, 957.0f}, 1920.0f, 1080.0f));
+    EXPECT(lss::hud::OutsideLayout(LayoutPoint{std::numeric_limits<float>::quiet_NaN(), 0.0f}, 1920.0f, 1080.0f));
+    EXPECT(!lss::hud::OutsideLayout(LayoutPoint{70.0f, 2037.0f}, 0.0f, 0.0f));  // unknown layout
+
+    // An unknown layout leaves the base as it is.
+    EXPECT(KeepDistanceFromAnchor(base, anchor, 0.0f, 0.0f) == base);
+    EXPECT(KeepDistanceFromAnchor(base, anchor, std::numeric_limits<float>::quiet_NaN(), 1080.0f) == base);
 }
-
 void TestRejected()
 {
-    std::puts("placement: a point not anchored at (0,0), or an implausible layout, is left alone");
-    EXPECT(!SplitLayoutFor(PlacementKind::Point, 0.0f, 0.0f, Stretch()).has_value());
+    std::puts("placement: an implausible layout is left alone");
     ViewportLayout broken = Stretch();
     broken.offsets[0]     = std::numeric_limits<float>::quiet_NaN();
     EXPECT(!Plausible(broken));
-    EXPECT(!SplitLayoutFor(PlacementKind::Area, 0.0f, 1.0f, broken).has_value());
+    EXPECT(!SplitLayoutFor(0.0f, 1.0f, broken).has_value());
     ViewportLayout wild = Stretch();
     wild.anchors[1]     = 3.0f;
-    EXPECT(!SplitLayoutFor(PlacementKind::Area, 0.0f, 1.0f, wild).has_value());
+    EXPECT(!SplitLayoutFor(0.0f, 1.0f, wild).has_value());
 }
 
 }  // namespace
@@ -146,7 +141,7 @@ int main()
     TestNearestAnchor();
     TestAreaCorners();
     TestSoloUnchanged();
-    TestPointKeepsCornerDistance();
+    TestIconBaseKeepsCornerDistance();
     TestRejected();
 
     std::printf(g_failures == 0 ? "all tests passed\n" : "%d check(s) failed\n", g_failures);

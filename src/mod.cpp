@@ -11,6 +11,7 @@
 #include <Unreal/Hooks/Hooks.hpp>
 
 #include "dev/dev_tools.h"
+#include "hud/action_icon_base.h"
 #include "hud/hud_placement.h"
 #include "hud/layout_scale.h"
 #include "hud/overlay_layout.h"
@@ -27,6 +28,8 @@
 #include "platform/log.h"
 #include "platform/module_folder.h"
 #include "player_two/field_exit.h"
+#include "player_two/generation.h"
+#include "player_two/main_camera_shape.h"
 #include "player_two/session.h"
 #include "players/join_keys.h"
 #include "players/split_layout.h"
@@ -53,7 +56,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.29.1-family-boundary";
+constexpr const wchar_t* kVersion = L"0.30.0-hud-levers";
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -102,7 +105,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.29.1-family-boundary");
+        ModVersion     = STR("0.30.0-hud-levers");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -204,6 +207,7 @@ public:
             Log(L"ULocalPlayer::GetViewPoint's entry does not hold the engine's function; filled halves and the "
                 L"camera choice are unavailable");
         }
+        mainCameraShape_ = viewPointInstalled_ && lss::player_two::main_camera_shape::Install(*image);
 
         // The HUD's layout in split views (hud/overlay_layout.h). Optional like the view point: without
         // it the HUD keeps the game's full-screen layout, cropped to each half.
@@ -216,6 +220,7 @@ public:
         lss::hud::InstallPlayerTwoPass(*image);      // player 2's HUD content, on (the hud-levers command switches it)
         lss::hud::InstallRootOverlayRender(*image);  // before the overlay renders: placement follow, trace
         lss::hud::prompt_rows::Install(*image);      // each player's field prompt rows in their own half
+        lss::hud::action_icon_base::Install(*image); // the prompt rows keep their corner by their own base
         lss::hud::area_icons_two::Install(*image);   // player 2's own map icons and markers
         lss::hud::target_views::Install(*image);     // each half's cursor and enemy gauges follow its player's target
 
@@ -319,6 +324,11 @@ private:
         session_->Tick();
         lss::dev::TickAfterSession();
         FollowPlayerTwo();
+        if (mainCameraShape_)
+        {
+            // Filled halves: each main camera's own 16:9 constraint, cleared once by the game's setter.
+            lss::player_two::main_camera_shape::Update(lss::player_two::generation::Active() && lss::views::FillsHalves());
+        }
         LogSettingsChange(settings_.Update(session_->HasPlayerTwo()));
         LogLayoutChange(layout_.Update(session_->HasPlayerTwo()));
         UpdateHalfShape();
@@ -522,6 +532,7 @@ private:
     bool                                      tickSeen_           = false;
     bool                                      rendererInstalled_  = false;
     bool                                      viewPointInstalled_ = false;
+    bool                                      mainCameraShape_    = false;
     const void*                               followedPlayerTwo_  = nullptr;
     std::uint32_t                             followedJoins_      = 0;
     Hook::GlobalCallbackId                    tickCallback_       = Hook::ERROR_ID;

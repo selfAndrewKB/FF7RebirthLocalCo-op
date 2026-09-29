@@ -37,39 +37,27 @@ IntRect VisibleBand(std::int32_t imageWidth, std::int32_t imageHeight, float vie
 
 namespace {
 
-// The constants the game's function reads, as stored (0x1460A2684, 0x1460A2A20, 0x14656D540,
-// 0x1460A3B30, 0x1460A2660, 0x1460A26F4).
-constexpr float kContainEpsilon = 1e-8f;
-constexpr float kSixteenNinths  = 1.7777778f;
-constexpr float kInv1920        = 1.0f / 1920.0f;
-constexpr float kInv1080        = 1.0f / 1080.0f;
-constexpr float kMinScale       = 0.01f;
-
-/// vmaxss x, x, 0.01: the second operand when the first is not greater (NaN included).
-float AtLeastMin(float scale) noexcept
-{
-    return scale > kMinScale ? scale : kMinScale;
-}
+// The game's constants the redirected layout-scale instructions read (0x14656D540, 0x1460A3B30).
+constexpr float kInv1920 = 1.0f / 1920.0f;
+constexpr float kInv1080 = 1.0f / 1080.0f;
 
 }  // namespace
-
-float ContainScaleFor1920x1080(float width, float height) noexcept
-{
-    // vcomiss + jbe: "not above" includes unordered.
-    if (!(std::fabs(width) > kContainEpsilon) || !(std::fabs(height) > kContainEpsilon))
-    {
-        return 1.0f;
-    }
-    // vcomiss + jb: "below" includes unordered, so a NaN ratio takes the width branch.
-    const float ratio = width / height;
-    return AtLeastMin(!(ratio >= kSixteenNinths) ? width * kInv1920 : height * kInv1080);
-}
 
 float OverlayLayoutScale(std::int32_t width, std::int32_t height) noexcept
 {
     const float byHeight = static_cast<float>(height) * kInv1080;
     const float byWidth  = static_cast<float>(width) * kInv1920;
     return byHeight < byWidth ? byHeight : byWidth;  // vminss xmm0, xmm0, xmm1: the second when not less
+}
+
+LayoutSize LayoutSizeOf(const IntRect& rect) noexcept
+{
+    const float scale = OverlayLayoutScale(rect.Width(), rect.Height());
+    if (rect.Width() <= 0 || rect.Height() <= 0 || !(scale > 0.0f))
+    {
+        return {};
+    }
+    return {static_cast<float>(rect.Width()) / scale, static_cast<float>(rect.Height()) / scale};
 }
 
 ClipMap BandClipMap(const IntRect& band, std::int32_t imageWidth, std::int32_t imageHeight) noexcept
@@ -96,15 +84,15 @@ void ApplyClipMap(float (&matrix)[16], const ClipMap& map) noexcept
     }
 }
 
-float MarkerHostScale(const IntRect& band, std::int32_t imageWidth, std::int32_t imageHeight, float viewWidth,
-                      float viewHeight) noexcept
+float MarkerHostScale(const IntRect& band, float bandUiScale, std::int32_t imageWidth, std::int32_t imageHeight,
+                      float viewWidth, float viewHeight) noexcept
 {
-    if (!Usable(imageWidth, imageHeight, viewWidth, viewHeight) || band.Width() <= 0 || band.Height() <= 0)
+    if (!Usable(imageWidth, imageHeight, viewWidth, viewHeight) || band.Width() <= 0 || band.Height() <= 0 ||
+        !std::isfinite(bandUiScale) || bandUiScale <= 0.0f)
     {
         return 0.0f;
     }
-    return ContainScaleFor1920x1080(static_cast<float>(band.Width()), static_cast<float>(band.Height())) *
-           CoverScale(imageWidth, imageHeight, viewWidth, viewHeight);
+    return bandUiScale * CoverScale(imageWidth, imageHeight, viewWidth, viewHeight);
 }
 
 EntryPlacement PlaceInBand(const IntRect& band, std::int32_t imageWidth, std::int32_t imageHeight) noexcept

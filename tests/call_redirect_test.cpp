@@ -188,6 +188,66 @@ void TestCrossingCallFromOwnThread()
     EXPECT(game.Run() == 1);
 }
 
+/// page+0x00: caller: sub rsp, 28h ; call middle (at +0x04) ; add rsp, 28h ; ret
+/// page+0x20: middle: sub rsp, 28h ; add rsp, 28h ; jmp target (at +0x28, a tail call)
+/// page+0x40: target: mov eax, 1 ; ret
+/// As EndUI__AreaMapIcon_EnableOrHideByCount tail-jumps to its events (0x143544CB0, 0x143544CB9).
+class TailJumpCode
+{
+public:
+    static constexpr std::size_t kCallOffset   = 0x04;
+    static constexpr std::size_t kReturnOffset = 0x09;  // where the caller's call returns
+    static constexpr std::size_t kMiddleOffset = 0x20;
+    static constexpr std::size_t kJumpOffset   = 0x28;
+    static constexpr std::size_t kTargetOffset = 0x40;
+
+    TailJumpCode()
+    {
+        memory_ = static_cast<std::uint8_t*>(VirtualAlloc(nullptr, 0x1000, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
+        const std::uint8_t caller[] = {0x48, 0x83, 0xEC, 0x28, 0xE8, 0x00, 0x00, 0x00, 0x00, 0x48, 0x83, 0xC4, 0x28, 0xC3};
+        const std::uint8_t middle[] = {0x48, 0x83, 0xEC, 0x28, 0x48, 0x83, 0xC4, 0x28, 0xE9, 0x00, 0x00, 0x00, 0x00};
+        const std::uint8_t target[] = {0xB8, 0x01, 0x00, 0x00, 0x00, 0xC3};
+        std::memcpy(memory_, caller, sizeof(caller));
+        std::memcpy(memory_ + kMiddleOffset, middle, sizeof(middle));
+        std::memcpy(memory_ + kTargetOffset, target, sizeof(target));
+        const std::int32_t toMiddle = static_cast<std::int32_t>(kMiddleOffset - (kCallOffset + 5));
+        const std::int32_t toTarget = static_cast<std::int32_t>(kTargetOffset - (kJumpOffset + 5));
+        std::memcpy(memory_ + kCallOffset + 1, &toMiddle, sizeof(toMiddle));
+        std::memcpy(memory_ + kJumpOffset + 1, &toTarget, sizeof(toTarget));
+        DWORD previous = 0;
+        VirtualProtect(memory_, 0x1000, PAGE_EXECUTE_READ, &previous);
+        FlushInstructionCache(GetCurrentProcess(), memory_, 0x1000);
+    }
+    ~TailJumpCode() { VirtualFree(memory_, 0, MEM_RELEASE); }
+
+    std::uintptr_t At(std::size_t offset) const { return reinterpret_cast<std::uintptr_t>(memory_) + offset; }
+    int            Run() const { return reinterpret_cast<IntFn>(memory_)(); }
+
+private:
+    std::uint8_t* memory_ = nullptr;
+};
+
+void TestTailJump()
+{
+    std::puts("call redirect: a tail jump's replacement returns to the caller's caller, calls the original, and is removed");
+    const TailJumpCode game;
+    EXPECT(game.Run() == 1);
+    const auto replacement = reinterpret_cast<std::uintptr_t>(&Replacement);
+
+    lss::platform::CallRedirect refused;
+    EXPECT(!refused.Install(game.At(TailJumpCode::kJumpOffset), game.At(TailJumpCode::kTargetOffset), replacement));
+    EXPECT(!refused.InstallTailJump(game.At(TailJumpCode::kCallOffset), game.At(TailJumpCode::kMiddleOffset), replacement));
+    EXPECT(game.Run() == 1);
+
+    lss::platform::CallRedirect redirect;
+    g_redirect = &redirect;
+    EXPECT(redirect.InstallTailJump(game.At(TailJumpCode::kJumpOffset), game.At(TailJumpCode::kTargetOffset), replacement));
+    EXPECT(game.Run() == 3);
+    EXPECT(g_returnAddress == game.At(TailJumpCode::kReturnOffset));
+
+    EXPECT(redirect.Restore());
+    EXPECT(game.Run() == 1);
+}
 }  // namespace
 
 int main()
@@ -195,6 +255,7 @@ int main()
     TestRedirectRunsAndRestores();
     TestRedirectRefusesWhatItDoesNotRecognise();
     TestCrossingCallFromOwnThread();
+    TestTailJump();
 
     std::printf(g_failures == 0 ? "all tests passed\n" : "%d check(s) failed\n", g_failures);
     return g_failures == 0 ? 0 : 1;

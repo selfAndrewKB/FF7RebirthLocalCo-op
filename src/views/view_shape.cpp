@@ -70,15 +70,4 @@ float SplitFov(float fovDegrees, float cameraAspect, const HalfShape& half, floa
     return result > kMinFov && result < kMaxFov ? result : fovDegrees;
 }
 
-bool FillHalf(std::byte* viewInfo) noexcept
-{
-    if (viewInfo == nullptr)
-    {
-        return false;
-    }
-    const auto flags = static_cast<unsigned char>(viewInfo[view_info::kFlags]);
-    viewInfo[view_info::kFlags] = static_cast<std::byte>(flags & ~view_info::kConstrainAspectRatioBit);
-    return (flags & view_info::kConstrainAspectRatioBit) != 0;
-}
-
 }  // namespace lss::views

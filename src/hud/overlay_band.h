@@ -14,6 +14,8 @@
 // k = UIScale(layout rect) / hostScale, where UIScale is EndUI__ContainScaleFor1920x1080 of the
 // layout rect. A marker lands on its object when k * fitScale = 1, so the host scale must be
 // UIScale(band) * fitScale. With the whole image in a solo view this is the engine's own value.
+// UIScale itself is the game's function, called by hud/overlay_layout.cpp; the host tests use a
+// model of it.
 
 #include <cstdint>
 
@@ -37,15 +39,22 @@ struct IntRect
 /// empty rect for unusable sizes.
 IntRect VisibleBand(std::int32_t imageWidth, std::int32_t imageHeight, float viewWidth, float viewHeight) noexcept;
 
-/// EndUI__ContainScaleFor1920x1080 (0x1409F52B0): the scale of a UI rect relative to 1920x1080,
-/// reproduced instruction for instruction (RE-p2-hud.md pass 4): 1 for a size within 1e-8 of zero;
-/// width/1920 when width/height is below 16/9 or unordered; otherwise height/1080; at least 0.01.
-float ContainScaleFor1920x1080(float width, float height) noexcept;
-
 /// The overlay's layout scale with the mod's layout-scale change (hud/layout_scale.h): the contain
 /// rule min(height/1080, width/1920), computed as the redirected instructions compute it. For the
 /// 16:9 images the game makes this is exactly its own height/1080.
 float OverlayLayoutScale(std::int32_t width, std::int32_t height) noexcept;
+
+/// The overlay's layout size in UI units: what widgets placed at absolute layout positions see as
+/// the whole screen. A rect laid out at scale s spans rect / s units (1920x1080 for the 16:9 images
+/// the game makes; e.g. 3840x1080 for a top/bottom band). Zero for an empty rect.
+struct LayoutSize
+{
+    float width  = 0.0f;
+    float height = 0.0f;
+    bool  operator==(const LayoutSize&) const = default;
+};
+inline constexpr LayoutSize kSoloLayout{1920.0f, 1080.0f};
+LayoutSize LayoutSizeOf(const IntRect& rect) noexcept;
 
 /// The clip-space map that moves a draw covering the whole target onto `band` of it, unstretched:
 /// x' = scaleX * x + translateX * w, y' = scaleY * y + translateY * w (w the clip w).
@@ -62,11 +71,12 @@ ClipMap BandClipMap(const IntRect& band, std::int32_t imageWidth, std::int32_t i
 void ApplyClipMap(float (&matrix)[16], const ClipMap& map) noexcept;
 
 /// The host scale that puts markers on their objects when the overlay is laid out in `band` of the
-/// image and the image is cover-fitted to the view: UIScale(band) * coverScale (the marker factor
-/// is UIScale / host; UIScale is the game's contain scale, which the layout scale now equals);
-/// 0 for unusable sizes.
-float MarkerHostScale(const IntRect& band, std::int32_t imageWidth, std::int32_t imageHeight, float viewWidth,
-                      float viewHeight) noexcept;
+/// image and the image is cover-fitted to the view: bandUiScale * coverScale. The marker factor is
+/// UIScale / host, and `bandUiScale` is the game's own UIScale of the band: its contain scale,
+/// EndUI__ContainScaleFor1920x1080 (0x1409F52B0), which the caller calls (the layout scale now
+/// equals it). 0 for unusable sizes.
+float MarkerHostScale(const IntRect& band, float bandUiScale, std::int32_t imageWidth, std::int32_t imageHeight,
+                      float viewWidth, float viewHeight) noexcept;
 
 /// The x/y terms of the overlay entry's projection matrix (FEndMenuLayerEntry+0x50..+0x8F) that
 /// draw a layout of `band`'s size unstretched into `band` of an `imageWidth` x `imageHeight`

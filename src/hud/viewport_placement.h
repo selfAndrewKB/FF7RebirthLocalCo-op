@@ -1,8 +1,8 @@
 #pragma once
 
-// Where a HUD root's viewport layout goes in a split half (pure; no game access). The rule behind
-// hud/hud_placement.h: every HUD root is designed for a 1920x1080 frame, and in a split half keeps
-// its single-player distance from the corner or edge it belongs to.
+// Where a HUD root goes in a split half (pure; no game access). The rule behind hud/hud_placement.h
+// and hud/action_icon_base.h: every HUD root is designed for a 1920x1080 frame, and in a split half
+// keeps its single-player distance from the corner or edge it belongs to.
 
 #include <optional>
 
@@ -19,13 +19,6 @@ struct ViewportLayout
     bool operator==(const ViewportLayout&) const = default;
 };
 
-/// How a HUD root lays itself out in its 1920x1080 frame.
-enum class PlacementKind
-{
-    Area,   // fills the layout; its contents sit at their design positions inside it
-    Point,  // the game places it at a point of the frame (anchors (0,0), offsets = the point)
-};
-
 inline constexpr float kHudFrameWidth  = 1920.0f;
 inline constexpr float kHudFrameHeight = 1080.0f;
 
@@ -36,13 +29,34 @@ float NearestAnchor(float position, float frame) noexcept;
 /// -1..2, offsets within +-100000.
 bool Plausible(const ViewportLayout& layout) noexcept;
 
-/// The layout for a split half, from the game's own `own`:
-///   Area: a 1920x1080 area at (anchorX, anchorY) of the half, aligned by its matching corner or edge;
-///   Point: the same point, anchored to the frame's nearest corner or edge and offset from it by the
-///          same distance (nullopt if `own` is not anchored at (0,0)).
-/// In a 1920x1080 layout both land exactly where the game's own layout does. Nullopt for an
-/// implausible `own`.
-std::optional<ViewportLayout> SplitLayoutFor(PlacementKind kind, float anchorX, float anchorY,
-                                             const ViewportLayout& own) noexcept;
+/// The layout for a split half, from the game's own `own`: a 1920x1080 area at (anchorX, anchorY)
+/// of the half, aligned by its matching corner or edge. Its contents keep their design positions
+/// inside it. In a 1920x1080 layout this lands exactly where the game's own layout does. Nullopt
+/// for an implausible `own`.
+std::optional<ViewportLayout> SplitLayoutFor(float anchorX, float anchorY, const ViewportLayout& own) noexcept;
+
+/// A point in layout units (an FVector2D).
+struct LayoutPoint
+{
+    float x = 0.0f;
+    float y = 0.0f;
+
+    bool operator==(const LayoutPoint&) const = default;
+};
+
+/// The corner or edge of the 1920x1080 frame a point belongs to, by thirds on each axis (the
+/// field-action icons' slot-0 base (70, 957) belongs to the bottom left: (0, 1)).
+LayoutPoint AnchorOf(const LayoutPoint& point) noexcept;
+
+/// `original`, a position in the 1920x1080 frame, moved so it keeps its distance from `anchor` in a
+/// layout of `width` x `height` units: original + anchor * (layout - 1920x1080). Unchanged in a
+/// 1920x1080 layout, and for a zero layout (unknown).
+LayoutPoint KeepDistanceFromAnchor(const LayoutPoint& original, const LayoutPoint& anchor, float width,
+                                   float height) noexcept;
+
+/// Whether a widget placed at `position` (its top-left, in layout units) starts outside a layout of
+/// `width` x `height` units, where it is not painted (and so not ticked). False for an unknown
+/// (zero) layout.
+bool OutsideLayout(const LayoutPoint& position, float width, float height) noexcept;
 
 }  // namespace lss::hud

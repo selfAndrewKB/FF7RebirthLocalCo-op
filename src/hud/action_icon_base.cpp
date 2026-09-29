@@ -1,0 +1,369 @@
+#include "hud/action_icon_base.h"
+
+#define RC_UNREAL_DISABLE_PROPERTY_DEPRECATION_WARNINGS
+#define RC_UNREAL_DISABLE_CLASS_DEPRECATION_WARNINGS
+#include <Unreal/CoreUObject/UObject/Class.hpp>
+#include <Unreal/CoreUObject/UObject/UnrealType.hpp>
+#include <Unreal/FWeakObjectPtr.hpp>
+#include <Unreal/UObject.hpp>
+#include <Unreal/UObjectArray.hpp>
+
+#include "hud/prompt_rows.h"
+#include "hud/user_widgets.h"
+#include "hud/viewport_placement.h"
+#include "platform/guarded.h"
+#include "platform/image.h"
+#include "platform/log.h"
+#include "player_two/generation.h"
+#include "players/tracked_object.h"
+
+#include <algorithm>
+#include <cstdint>
+#include <cstring>
+#include <unordered_map>
+#include <vector>
+
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <Windows.h>
+
+namespace lss::hud::action_icon_base {
+
+namespace {
+
+using RC::Unreal::UClass;
+using RC::Unreal::UObject;
+
+// RE-p2-hud-view-levers.md §1 and RE-p2-field-prompts.md §4 (this build).
+constexpr std::uintptr_t kEndUISystem = 0x1493496E0;  // g_EndUISystem (data)
+constexpr std::uint32_t  kRowList     = 0x208;        // -> the icon list, a TArray<FWeakObjectPtr>
+constexpr std::int32_t   kBasePos     = 0x3C8;        // UEndFieldActionIcon._BasePosY, an FVector2D
+constexpr std::uint32_t  kViewportPosition = 0x220;   // UUserWidget viewport offsets Left, Top (hud_addresses.h)
+constexpr std::int32_t   kMaxRows     = 64;
+
+// FieldActionIconList__SortAndLayout(TArray<FWeakObjectPtr>* list, UObject* placeNow).
+constexpr std::uintptr_t kSortAndLayout        = 0x1414A9B14;
+constexpr std::uint8_t   kSortAndLayoutBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x20, 0x48, 0x89, 0x54, 0x24, 0x10, 0x55, 0x56,
+                                                  0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0xB8, 0x20, 0x00};
+using SortAndLayoutFn = void (*)(void* list, void* placeNow);
+
+constexpr int kMaxOwnBaseLines = 20;
+
+using Tracked = players::TrackedObject;
+
+
+/// A widget class: whether it is a field-action icon class, and if so its default's base.
+struct IconClass
+{
+    bool        icon = false;
+    Tracked     defaultObject;
+    LayoutPoint original;  // the class default's base, as the game has it
+    LayoutPoint anchor;    // the corner of the 1920x1080 frame it belongs to
+};
+
+// Set once at install.
+std::uintptr_t  g_endUISystem   = 0;
+SortAndLayoutFn g_sortAndLayout = nullptr;
+
+// Game thread.
+std::unordered_map<const void*, IconClass> g_classes;
+LayoutSize                                 g_applied = kSoloLayout;  // the layout the bases are for
+std::vector<const UObject*>                g_ownBaseLogged;
+int                                        g_ownBaseLines = 0;
+
+template <class T>
+bool Read(std::uintptr_t address, T& out) noexcept
+{
+    return platform::CopyGuarded(&out, reinterpret_cast<const void*>(address), sizeof(T));
+}
+
+bool ReadBase(const UObject* object, LayoutPoint& base) noexcept
+{
+    return Read(reinterpret_cast<std::uintptr_t>(object) + kBasePos, base);
+}
+
+bool WriteBase(UObject* object, const LayoutPoint& base) noexcept
+{
+    return platform::WriteGuarded(reinterpret_cast<std::uint8_t*>(object) + kBasePos, &base, sizeof(base));
+}
+
+LayoutPoint BaseFor(const IconClass& type, const LayoutSize& layout) noexcept
+{
+    return KeepDistanceFromAnchor(type.original, type.anchor, layout.width, layout.height);
+}
+
+bool LayoutGuarded(void* list, void* placeNow) noexcept
+{
+    __try
+    {
+        g_sortAndLayout(list, placeNow);
+        return true;
+    }
+    __except (platform::GuardFilter(GetExceptionCode()))
+    {
+        return false;
+    }
+}
+
+/// Moves `object`'s base from where `type`'s rule puts it for `from` to where it puts it for `to`.
+/// A base that is not the rule's for `from` is the object's own: left alone, false.
+bool Shift(UObject* object, const IconClass& type, const LayoutSize& from, const LayoutSize& to) noexcept
+{
+    LayoutPoint now;
+    return ReadBase(object, now) && now == BaseFor(type, from) && WriteBase(object, BaseFor(type, to));
+}
+
+void LogOwnBase(const UObject* object, const LayoutPoint& now, const LayoutPoint& expected) noexcept
+{
+    if (g_ownBaseLines >= kMaxOwnBaseLines ||
+        std::find(g_ownBaseLogged.begin(), g_ownBaseLogged.end(), object) != g_ownBaseLogged.end())
+    {
+        return;
+    }
+    ++g_ownBaseLines;
+    g_ownBaseLogged.push_back(object);
+    platform::Log(L"field-action icons: an icon's base is ({:.0f},{:.0f}), not its class's ({:.0f},{:.0f}) for this "
+                  L"layout; set by something else (a Blueprint?), left alone",
+                  now.x, now.y, expected.x, expected.y);
+}
+
+struct ShiftCount
+{
+    int icons    = 0;
+    int defaults = 0;
+    int own      = 0;  // live icons with a base of their own, left alone
+};
+
+/// Moves the bases of every live icon of the classes `only` selects, and of their class defaults.
+template <class Select>
+ShiftCount ShiftAll(const LayoutSize& from, const LayoutSize& to, Select&& only) noexcept
+{
+    ShiftCount count;
+    for (const auto& live : user_widgets::Live())
+    {
+        const auto found = g_classes.find(live.cls);
+        if (found == g_classes.end() || !found->second.icon || !only(found->first) || !user_widgets::Alive(live))
+        {
+            continue;
+        }
+        if (Shift(live.object, found->second, from, to))
+        {
+            ++count.icons;
+        }
+        else
+        {
+            ++count.own;
+        }
+    }
+    for (auto& [cls, type] : g_classes)
+    {
+        if (type.icon && only(cls) && type.defaultObject.Alive() && Shift(type.defaultObject.object, type, from, to))
+        {
+            ++count.defaults;
+        }
+    }
+    return count;
+}
+
+/// The widget's class, looked up once: an icon class has `_BasePosY` where the research read it.
+IconClass* ClassOf(UObject* widget)
+{
+    const void* cls = widget->GetClassPrivate();
+    if (const auto found = g_classes.find(cls); found != g_classes.end())
+    {
+        return &found->second;
+    }
+    IconClass type;
+    auto* property = widget->GetPropertyByNameInChain(STR("_BasePosY"));
+    UObject* defaultObject = widget->GetClassPrivate()->GetClassDefaultObject();
+    if (property != nullptr && property->GetSize() == sizeof(LayoutPoint) && property->GetOffset_Internal() == kBasePos &&
+        defaultObject != nullptr && ReadBase(defaultObject, type.original))
+    {
+        type.icon          = true;
+        type.defaultObject = Tracked::Of(defaultObject);
+        type.anchor        = AnchorOf(type.original);
+        platform::Log(L"field-action icons: class {} has its base at ({:.0f},{:.0f}), the frame's corner ({:.1f},{:.1f})",
+                      widget->GetClassPrivate()->GetName(), type.original.x, type.original.y, type.anchor.x,
+                      type.anchor.y);
+    }
+    return &g_classes.emplace(cls, type).first->second;
+}
+
+/// The game's list header, if readable.
+std::uintptr_t ListOf() noexcept
+{
+    std::uintptr_t list = 0;
+    return g_endUISystem != 0 && Read(g_endUISystem + kRowList, list) ? list : 0;
+}
+
+/// The list's rows, resolved.
+std::vector<UObject*> RowsOf(std::uintptr_t list)
+{
+    std::vector<UObject*> rows;
+    std::uintptr_t        data = 0;
+    std::int32_t          num  = 0;
+    if (list == 0 || !Read(list, data) || !Read(list + sizeof(void*), num) || num < 0 || num > kMaxRows)
+    {
+        return rows;
+    }
+    for (std::int32_t i = 0; i < num; ++i)
+    {
+        std::uint64_t weakValue = 0;
+        if (!Read(data + sizeof(std::uint64_t) * static_cast<std::size_t>(i), weakValue))
+        {
+            continue;
+        }
+        RC::Unreal::FWeakObjectPtr weak;
+        std::memcpy(&weak, &weakValue, sizeof(weakValue));
+        if (UObject* row = weak.Get())
+        {
+            rows.push_back(row);
+        }
+    }
+    return rows;
+}
+
+/// The row's viewport position (UUserWidget's viewport offsets Left, Top: what the game's slide sets).
+LayoutPoint PositionOf(const UObject* row) noexcept
+{
+    LayoutPoint position;
+    Read(reinterpret_cast<std::uintptr_t>(row) + kViewportPosition, position);
+    return position;
+}
+
+/// The rows laid out again by the game's layout for `layout`: each player's through prompt_rows
+/// while player 2 is in, the whole list otherwise. The rows slide to their new slots as the game
+/// slides them. A row whose current place is outside the new layout is not painted there, so it is
+/// not ticked and would never slide: it is named in a layout call of its own, which places it at
+/// once, as the game places a row it adds (the sort and the slots come out the same each call).
+void LayOutAgain(const LayoutSize& layout)
+{
+    if (player_two::generation::Active())
+    {
+        prompt_rows::LayOutAgain(layout.width, layout.height);
+        return;
+    }
+    const std::uintptr_t list  = ListOf();
+    bool                 named = false;
+    bool                 ok    = true;
+    for (UObject* row : RowsOf(list))
+    {
+        if (g_sortAndLayout != nullptr && OutsideLayout(PositionOf(row), layout.width, layout.height))
+        {
+            named = true;
+            ok    = ok && LayoutGuarded(reinterpret_cast<void*>(list), row);
+        }
+    }
+    if (!named && list != 0 && g_sortAndLayout != nullptr)
+    {
+        ok = LayoutGuarded(reinterpret_cast<void*>(list), nullptr);
+    }
+    if (!ok)
+    {
+        g_sortAndLayout = nullptr;
+        platform::Log(L"field-action icons: the game's layout raised an exception; the rows keep their places until the "
+                      L"game lays them out");
+    }
+}
+
+/// During a split, each row in the list: a class seen for the first time gets its bases moved for
+/// the current layout; a row whose base is not the rule's is logged.
+void CheckRows()
+{
+    bool newClass = false;
+    for (UObject* row : RowsOf(ListOf()))
+    {
+        const bool      known = g_classes.contains(row->GetClassPrivate());
+        const IconClass* type = ClassOf(row);
+        if (!type->icon)
+        {
+            continue;
+        }
+        if (!known)  // runs during a split only
+        {
+            const void* cls   = row->GetClassPrivate();
+            const auto  count = ShiftAll(kSoloLayout, g_applied, [cls](const void* c) { return c == cls; });
+            platform::Log(L"field-action icons: a new icon class during the split: {} icon(s) and {} class default(s) "
+                          L"moved to this layout's base",
+                          count.icons, count.defaults);
+            newClass = true;
+        }
+        LayoutPoint now;
+        const LayoutPoint expected = BaseFor(*type, g_applied);
+        if (ReadBase(row, now) && !(now == expected))
+        {
+            LogOwnBase(row, now, expected);
+        }
+    }
+    if (newClass)
+    {
+        LayOutAgain(g_applied);
+    }
+}
+
+}  // namespace
+
+bool Install(const platform::GameImage& image) noexcept
+{
+    const auto system = image.Rebase(kEndUISystem, kRowList + sizeof(void*));
+    const auto layout = image.Rebase(kSortAndLayout);
+    g_endUISystem     = system ? *system : 0;
+    if (layout && image.BytesMatch(kSortAndLayout, kSortAndLayoutBytes))
+    {
+        g_sortAndLayout = reinterpret_cast<SortAndLayoutFn>(*layout);
+    }
+    const bool ready = g_endUISystem != 0 && g_sortAndLayout != nullptr;
+    platform::Log(L"field-action icons: {}", ready ? L"their base follows the split layout (the game's layout places them)"
+                                                   : L"the list or the game's layout is not what the research read; the "
+                                                     L"icons keep the game's base");
+    if (!ready)
+    {
+        g_endUISystem = 0;
+    }
+    return ready;
+}
+
+void Update(LayoutSize layout) noexcept
+{
+    if (g_endUISystem == 0)
+    {
+        return;
+    }
+    try
+    {
+        if (!(layout.width > 0.0f) || !(layout.height > 0.0f))
+        {
+            layout = kSoloLayout;
+        }
+        // The classes of the rows the game shows now, before any move, so a first split moves them.
+        if (!(layout == g_applied))
+        {
+            for (const auto& live : user_widgets::Live())
+            {
+                if (!g_classes.contains(live.cls) && user_widgets::Alive(live))
+                {
+                    ClassOf(live.object);
+                }
+            }
+            const auto count = ShiftAll(g_applied, layout, [](const void*) { return true; });
+            platform::Log(L"field-action icons: layout {:.0f}x{:.0f} -> {:.0f}x{:.0f}: {} icon(s) and {} class default(s) "
+                          L"moved to keep their corner{}; laid out again by the game",
+                          g_applied.width, g_applied.height, layout.width, layout.height, count.icons, count.defaults,
+                          count.own > 0 ? L" (some with a base of their own left alone)" : L"");
+            g_applied = layout;
+            g_ownBaseLogged.clear();
+            LayOutAgain(layout);
+        }
+        if (!(g_applied == kSoloLayout))
+        {
+            CheckRows();  // the rows of a split; nothing to check at the game's own bases
+        }
+    }
+    catch (...)
+    {
+        platform::Log(L"field-action icons: failed (an exception); the bases stay as they are");
+    }
+}
+
+}  // namespace lss::hud::action_icon_base

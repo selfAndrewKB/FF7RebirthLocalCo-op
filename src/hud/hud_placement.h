@@ -19,16 +19,10 @@
 // layout every such area is the whole layout, so single player is unchanged. The original viewport
 // layout is read first and set back through the same setters when the split ends.
 //
-// Some roots the game places itself at a point of the 1920x1080 frame, with SetPositionInViewport
-// (anchors (0,0)): the field action prompt ("Call Chocobo") at (70,957). Such a point keeps its
-// distance from the frame's nearest corner or edge: anchored there, offset by the same amount. The
-// game may set the point again at any time (which resets the anchors), so every placed widget is
-// compared each frame, just before the overlay renders, with what was set, and placed again from the
-// game's new layout.
-
-namespace RC::Unreal {
-class UObject;
-}
+// The game rarely sets these layouts again; when it does, the widget is placed again from the
+// game's new layout (compared each frame just before the overlay renders). The field-action icons
+// ("Call Chocobo"), which the game places itself at points of the frame, keep their corner through
+// their own base instead (hud/action_icon_base.h).
 
 namespace lss::hud {
 
@@ -40,10 +34,5 @@ void UpdateHudPlacement(bool splitLayout) noexcept;
 /// again any widget the game set during this frame's world tick, so the frame draws it placed. Once
 /// this has run, UpdateHudPlacement leaves following the game's re-sets to it.
 void FollowHudPlacementBeforeRender() noexcept;
-
-/// Game thread, before the overlay renders: places `widget` now if it is one of the kinds placed
-/// here and not followed yet. For widgets the game creates between scans that are known at once (a
-/// new prompt row), which would otherwise be drawn at the game's own point until the next scan.
-void PlaceNewHudWidget(RC::Unreal::UObject* widget) noexcept;
 
 }  // namespace lss::hud

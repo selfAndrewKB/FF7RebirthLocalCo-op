@@ -16,9 +16,12 @@
 //   - its one call for the range origin (the leader character by the leader's player type) answers
 //     player 2's member the same way, so player 2's icons are ranged from player 2's character
 //     (RE-p2-hud-targets.md §1, R1; the tick writes no shared state keyed on it);
-//   - player 1's instance is written only by game events (enable, clear, the flag at +0xD1 and the
-//     countdown at +0xDC), so each tick copies them into player 2's instance, and a disable is
-//     applied with the game's own clear;
+//   - player 1's instance is written only by three game events (Enable, HideAndClear, SetFlagD1;
+//     RE-p2-hud-view-levers.md §6, S-HUD31), from seven call sites. Each site is redirected to call
+//     the event as before, then apply the event's instance effect to player 2's instance: +0xD0 = 1,
+//     the game's own ClearAllAndDisable, +0xD1 = the flag. The events are not run twice (two of them
+//     also animate one shared widget). Player 2's instance takes player 1's state once per join;
+//     the countdown at +0xDC has no positive writer, so it is left to player 2's own tick;
 //   - each pass shows only its player's canvases (SWidget::SetVisibility: Hidden or the canvas's own
 //     visibility), since both instances' canvases sit in the one overlay.
 // When player 2 leaves, player 2's instance is cleared with the game's own clear and its canvases

@@ -13,6 +13,7 @@ namespace lss::platform {
 namespace {
 
 constexpr std::uint8_t kCallOpcode = 0xE8;
+constexpr std::uint8_t kJumpOpcode = 0xE9;  // jmp rel32: same length and displacement rule as the call
 constexpr std::size_t  kCallLength = 5;
 
 /// jmp qword ptr [rip+0] ; dq <address>
@@ -52,15 +53,21 @@ std::uintptr_t BuildThunk(std::uintptr_t site, std::uintptr_t replacement) noexc
 
 bool CallRedirect::Install(std::uintptr_t site, std::uintptr_t target, std::uintptr_t replacement) noexcept
 {
-    return Place(site, target, replacement, false);
+    return Place(site, target, replacement, false, kCallOpcode);
+}
+
+bool CallRedirect::InstallTailJump(std::uintptr_t site, std::uintptr_t target, std::uintptr_t replacement) noexcept
+{
+    return Place(site, target, replacement, false, kJumpOpcode);
 }
 
 bool CallRedirect::InstallFromOwnThread(std::uintptr_t site, std::uintptr_t target, std::uintptr_t replacement) noexcept
 {
-    return Place(site, target, replacement, true);
+    return Place(site, target, replacement, true, kCallOpcode);
 }
 
-bool CallRedirect::Place(std::uintptr_t site, std::uintptr_t target, std::uintptr_t replacement, bool crossingAllowed) noexcept
+bool CallRedirect::Place(std::uintptr_t site, std::uintptr_t target, std::uintptr_t replacement, bool crossingAllowed,
+                         std::uint8_t opcode) noexcept
 {
     const std::uintptr_t block   = site & ~(kCodeBlockSize - 1);
     const std::size_t    at      = site - block;
@@ -75,7 +82,7 @@ bool CallRedirect::Place(std::uintptr_t site, std::uintptr_t target, std::uintpt
     // The call's bytes, read as one run over both blocks when it crosses.
     std::array<std::uint8_t, 2 * kCodeBlockSize> current{};
     std::memcpy(current.data(), reinterpret_cast<const void*>(block), crosses ? current.size() : kCodeBlockSize);
-    if (current[at] != kCallOpcode || CallTarget(site, current.data() + at) != target)
+    if (current[at] != opcode || CallTarget(site, current.data() + at) != target)
     {
         return false;
     }

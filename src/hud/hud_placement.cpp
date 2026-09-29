@@ -41,18 +41,16 @@ namespace UObjectGlobals = RC::Unreal::UObjectGlobals;
 struct Placement
 {
     const wchar_t* className;
-    PlacementKind  kind;
-    float          anchorX;  // Area: the corner or edge of the half its 1920x1080 area goes to
+    float          anchorX;  // the corner or edge of the half its 1920x1080 area goes to
     float          anchorY;
 };
-// A Point entry takes its anchor from the game's point (the nearest corner), so its anchorX/anchorY
-// are unused and left 0.
+// The field-action icons ("Call Chocobo") are not here: the game places them at points it computes
+// from each icon's own base, so they keep their corner through that base (hud/action_icon_base.h).
 constexpr Placement kPlacements[] = {
-    {L"Compass_C", PlacementKind::Area, 0.5f, 0.0f},              // top centre
-    {L"Command_C", PlacementKind::Area, 0.0f, 1.0f},              // bottom left: command menu and its prompt
-    {L"BasicGuide_C", PlacementKind::Area, 0.0f, 1.0f},           // bottom left: button prompts
-    {L"Status_C", PlacementKind::Area, 1.0f, 1.0f},               // bottom right: the Members panel
-    {L"FieldAction_Command_C", PlacementKind::Point, 0.0f, 0.0f}, // field actions ("Call Chocobo")
+    {L"Compass_C", 0.5f, 0.0f},     // top centre
+    {L"Command_C", 0.0f, 1.0f},     // bottom left: command menu and its prompt
+    {L"BasicGuide_C", 0.0f, 1.0f},  // bottom left: button prompts
+    {L"Status_C", 1.0f, 1.0f},      // bottom right: the Members panel
 };
 constexpr std::uint32_t kScanTicks = 30;
 
@@ -70,10 +68,8 @@ struct Placed
     std::uint32_t     followed       = 0;  // game re-sets placed again (reported when the split ends)
 };
 
-// An area root whose layout the game sets again on this many ticks in a row is left to the game:
-// the two would otherwise take turns every frame. Point roots have no such limit: each point the
-// game writes is placed, and the game moves them often (the field-action icons slide for 8-17
-// frames whenever their list is re-sorted; RE-p2-hud-roots.md §3).
+// A root whose layout the game sets again on this many ticks in a row is left to the game: the two
+// would otherwise take turns every frame.
 constexpr std::uint32_t kMaxStreak = 5;
 
 std::vector<Placed> g_placed;  // game thread only
@@ -238,7 +234,7 @@ void Place(Placed& placed, const Setters& set, bool log = true)
 {
     const auto own = ReadLayout(placed.widget);
     const Placement& placement = *placed.placement;
-    const auto split = own ? SplitLayoutFor(placement.kind, placement.anchorX, placement.anchorY, *own) : std::nullopt;
+    const auto split = own ? SplitLayoutFor(placement.anchorX, placement.anchorY, *own) : std::nullopt;
     if (!split)
     {
         LeaveAlone(placed, own);
@@ -284,8 +280,7 @@ void FollowGameChanges(const Setters& set)
         {
             continue;
         }
-        const bool isPoint    = placed.placement->kind == PlacementKind::Point;
-        placed.streak         = !isPoint && g_ticks - placed.lastPlacedTick <= 2 ? placed.streak + 1 : 0;
+        placed.streak         = g_ticks - placed.lastPlacedTick <= 2 ? placed.streak + 1 : 0;
         placed.lastPlacedTick = g_ticks;
         if (placed.streak >= kMaxStreak)
         {
@@ -295,7 +290,7 @@ void FollowGameChanges(const Setters& set)
             continue;
         }
         ++placed.followed;
-        Place(placed, set, !isPoint);  // a point's moves are counted, not logged one by one
+        Place(placed, set);
     }
 }
 
@@ -415,40 +410,6 @@ void FollowHudPlacementBeforeRender() noexcept
     catch (...)
     {
         platform::Log(L"HUD placement: failed before the render (an exception); left as it is");
-    }
-}
-
-void PlaceNewHudWidget(UObject* widget) noexcept
-{
-    try
-    {
-        if (!g_active || !g_setters || widget == nullptr)
-        {
-            return;
-        }
-        // An entry at this address may be a collected widget whose memory the new one reuses.
-        const auto known = std::find_if(g_placed.begin(), g_placed.end(),
-                                        [widget](const Placed& placed) { return placed.widget == widget; });
-        if (known != g_placed.end())
-        {
-            if (Alive(*known))
-            {
-                return;
-            }
-            g_placed.erase(known);
-        }
-        const Placement* placement = PlacementOf(widget);
-        if (placement == nullptr)
-        {
-            return;
-        }
-        Placed placed{widget, static_cast<std::int32_t>(widget->GetInternalIndex()), widget->GetClassPrivate(), placement};
-        Place(placed, *g_setters, false);  // prompt rows come and go often: not logged one by one
-        g_placed.push_back(placed);
-    }
-    catch (...)
-    {
-        platform::Log(L"HUD placement: failed placing a new widget (an exception); the next scan places it");
     }
 }
 

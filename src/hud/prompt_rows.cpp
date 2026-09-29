@@ -9,7 +9,7 @@
 #include <Unreal/UObject.hpp>
 #include <Unreal/UObjectGlobals.hpp>
 
-#include "hud/hud_placement.h"
+#include "hud/viewport_placement.h"
 #include "hud/widget_opacity.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -43,6 +43,7 @@ constexpr std::uint32_t  kRowStride         = 12;
 constexpr std::size_t    kComponentRows     = 14;
 constexpr std::uint32_t  kWidgetPriority    = 0x400;
 constexpr std::uint32_t  kWidgetRemoveState = 0x418;
+constexpr std::uint32_t  kWidgetViewportPosition = 0x220;  // UUserWidget viewport offsets (hud/hud_addresses.h)
 constexpr std::int32_t   kMaxRows           = 64;
 constexpr int            kMaxLines          = 200;
 
@@ -96,6 +97,9 @@ std::array<std::uint8_t, kComponentRows>  g_loggedBytes{};
 std::vector<const UObject*>               g_playerTwoWidgets;  // player 2's until they leave the list
 std::vector<std::pair<const UObject*, bool>> g_laidOut;        // the list as last laid out per player
 std::vector<Hidden>                       g_hidden;
+bool                                      g_layOutAgain = false;  // LayOutAgain: rows outside the layout placed at once
+float                                     g_againWidth  = 0.0f;
+float                                     g_againHeight = 0.0f;
 std::vector<const UObject*>               g_stillTwo;  // scratch, reused
 std::vector<std::pair<const UObject*, bool>> g_layoutNow;  // scratch, reused
 int                                       g_lines = 0;
@@ -126,6 +130,14 @@ bool LayoutGuarded(ListHeader* list, void* placeNow) noexcept
     }
 }
 
+/// The row's viewport position (UUserWidget's viewport offsets Left, Top: what the game's slide sets).
+LayoutPoint PositionOf(const UObject* widget) noexcept
+{
+    LayoutPoint position;
+    Read(reinterpret_cast<std::uintptr_t>(widget) + kWidgetViewportPosition, position);
+    return position;
+}
+
 bool LaidOutBefore(const UObject* widget) noexcept
 {
     return std::any_of(g_laidOut.begin(), g_laidOut.end(), [widget](const auto& entry) { return entry.first == widget; });
@@ -144,20 +156,41 @@ void LayOutPerPlayer()
     {
         return;
     }
+    const bool again = g_layOutAgain;
+    g_layOutAgain    = false;
     for (const bool playerTwo : {false, true})
     {
-        std::vector<std::uint64_t> weaks;
-        const UObject*             placeNow = nullptr;
+        std::vector<std::uint64_t>  weaks;
+        std::vector<const UObject*> widgets;
+        const UObject*              placeNow = nullptr;
         for (const Row& row : g_rows)
         {
             if (row.playerTwo == playerTwo)
             {
                 weaks.push_back(row.weak);
+                widgets.push_back(row.widget);
                 placeNow = placeNow == nullptr && row.remove == 0 && !LaidOutBefore(row.widget) ? row.widget : placeNow;
             }
         }
         ListHeader list{weaks.data(), static_cast<std::int32_t>(weaks.size()), static_cast<std::int32_t>(weaks.size())};
-        if (!weaks.empty() && !LayoutGuarded(&list, const_cast<UObject*>(placeNow)))
+        // Each call places the row it names at once and gives the others their slide target (the
+        // sort and the slots come out the same each time). After a base change, each row stranded
+        // outside the layout is named in a call of its own; the others slide.
+        bool laidOut = true;
+        bool named   = false;
+        for (const UObject* widget : again ? widgets : std::vector<const UObject*>{})
+        {
+            if (OutsideLayout(PositionOf(widget), g_againWidth, g_againHeight))
+            {
+                named   = true;
+                laidOut = laidOut && LayoutGuarded(&list, const_cast<UObject*>(widget));
+            }
+        }
+        if (!named && !weaks.empty())
+        {
+            laidOut = LayoutGuarded(&list, const_cast<UObject*>(placeNow));
+        }
+        if (!laidOut)
         {
             g_sortAndLayout = nullptr;
             platform::Log(L"prompt rows: the game's layout raised an exception; rows keep the shared layout");
@@ -326,10 +359,6 @@ void Refresh() noexcept
         }
         g_playerTwoWidgets.swap(g_stillTwo);
         LayOutPerPlayer();
-        for (const Row& row : g_rows)
-        {
-            PlaceNewHudWidget(const_cast<UObject*>(row.widget));  // a new row: into its half now, not at the next scan
-        }
         LogIfChanged(bytes);
     }
     catch (...)
@@ -346,6 +375,14 @@ void Forget() noexcept
     g_laidOut.clear();
     g_logged.clear();
     g_loggedBytes = {};
+}
+
+void LayOutAgain(float width, float height) noexcept
+{
+    g_laidOut.clear();
+    g_layOutAgain = true;
+    g_againWidth  = width;
+    g_againHeight = height;
 }
 
 void ShowOnly(int player) noexcept

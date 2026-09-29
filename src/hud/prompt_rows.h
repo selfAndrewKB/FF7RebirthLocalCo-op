@@ -49,4 +49,11 @@ void Restore() noexcept;
 /// Player 2 is out: forgets every row and owner (widgets are remembered by address).
 void Forget() noexcept;
 
+/// The next Refresh lays each player's rows out again with the game's layout, even if the list did
+/// not change (the rows' base changed: hud/action_icon_base.h), for a layout of `width` x `height`
+/// units. Rows slide to their new slots as the game slides them, except a row whose current place
+/// is outside that layout: it is not painted there, so it is not ticked and would never slide, and
+/// is placed at once instead (as the game places a row it adds).
+void LayOutAgain(float width, float height) noexcept;
+
 }  // namespace lss::hud::prompt_rows

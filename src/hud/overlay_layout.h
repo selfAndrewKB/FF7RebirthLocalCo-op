@@ -19,6 +19,8 @@
 // With the band switched off the redirects still run and log what they would set, so the values
 // can be checked in the log before anything changes on screen.
 
+#include "hud/overlay_band.h"
+
 #include <cstdint>
 
 namespace lss::platform {
@@ -26,6 +28,10 @@ class GameImage;
 }
 
 namespace lss::hud {
+
+/// Game thread: the layout size of the overlay's last render, in UI units: the band's while the
+/// band applies, 1920x1080 otherwise.
+LayoutSize LastLayoutSize() noexcept;
 
 /// Checks every fact in hud/hud_addresses.h and installs the three redirects and the code patches
 /// (hud/centered_frame_code.h, hud/arrow_edge_code.h), or none.

@@ -33,6 +33,7 @@ add_library(LocalSplitScreen SHARED
     src/hud/second_image.cpp
     src/hud/player_two_pass.cpp
     src/hud/prompt_rows.cpp
+    src/hud/action_icon_base.cpp
     src/hud/area_icons_two.cpp
     src/hud/target_views.cpp
     src/hud/widget_opacity.cpp
@@ -69,6 +70,7 @@ add_library(LocalSplitScreen SHARED
     src/player_two/battle_camera.cpp
     src/player_two/camera_override.cpp
     src/player_two/camera_distance.cpp
+    src/player_two/main_camera_shape.cpp
     src/player_two/command_locks.cpp
     src/player_two/command_rules.cpp
     src/player_two/menu_focus.cpp

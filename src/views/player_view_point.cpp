@@ -93,19 +93,28 @@ void LogShapeOnChange(bool isPlayerTwo, const std::byte* viewInfo) noexcept
 // Split players fill their half
 // ---------------------------------------------------------------------------------------------
 //
-// While player 2 is in, every player's view drops the 16:9 constraint and takes the FOV rule
-// MajorAxisFOV. Both are read by GetProjectionData after this function returns, from the same
-// struct and the same player (0x140CC0B1D), so setting them here on every call also outlasts a
-// level-sequence camera cut, which rewrites player 1's FOV rule during the world tick.
+// While player 2 is in, every player's view takes the mod's FOV rule
+// (ULocalPlayer::AspectRatioAxisConstraint), read by GetProjectionData after this function returns
+// (0x140CC0B1D) for a view without the 16:9 constraint. The constraint itself is the main camera's
+// own setting, cleared once per camera through the game's setter (player_two/main_camera_shape.h).
+//
+// The FOV rule is written once per player, at the player's first split frame (and again only if
+// the mod's own FOV mode changes), then left alone: the game's only writer, the level-sequence
+// camera cut, saves the value before it writes its own and puts that value back when the cut ends
+// (RE-p2-hud-view-levers.md §4), so the mod's value comes back by the game's own restore. A value
+// the game holds meanwhile is logged, not overwritten.
 //
 // The FOV rule is only read for a view without the constraint, so with the fill switched off
 // (bars) the value left in place makes no difference until it is restored at the leave.
 
-/// A player whose FOV rule the mod changed, and the value to put back.
+/// A player whose FOV rule the mod changed, the value to put back, the rule the mod wrote, and the
+/// value last seen in the field (so each change the game makes is logged once).
 struct AxisRecord
 {
     const void*  player   = nullptr;
     std::uint8_t original = 0;
+    std::uint8_t applied  = 0;
+    std::uint8_t seen     = 0;
 };
 constexpr std::size_t kAxisRecords = 4;  // one per local player the engine allows (4 in stock UE)
 AxisRecord            g_axisRecords[kAxisRecords]{};  // game thread only
@@ -118,8 +127,28 @@ bool IsModRule(std::uint8_t value) noexcept
     return value == kMajorAxisFov || value == kMaintainXFov;
 }
 
-/// Returns true if `localPlayer` now has `rule` (false when the offset is unconfirmed or there is
-/// no room to remember the original, in which case nothing was changed).
+/// A value the game wrote over the mod's rule (a camera cut's), logged once per change.
+void NoteGameRule(AxisRecord& record, std::uint8_t now) noexcept
+{
+    if (now == record.seen)
+    {
+        return;
+    }
+    record.seen = now;
+    if (now == record.applied)
+    {
+        platform::Log(L"a player's FOV rule is the mod's {} again (the game put it back)", static_cast<unsigned>(now));
+    }
+    else
+    {
+        platform::Log(L"a player's FOV rule is {} (the game's, e.g. a camera cut); left to the game",
+                      static_cast<unsigned>(now));
+    }
+}
+
+/// Gives `localPlayer` the FOV rule `rule` once: at its first split frame, or when the mod's rule
+/// changes. Returns true if the mod's rule was written for this player (false when the offset is
+/// unconfirmed or there is no room to remember the original, in which case nothing was changed).
 bool ApplyAxisRule(void* localPlayer, std::uint8_t rule) noexcept
 {
     const auto offset = g_axisOffset.load(std::memory_order_relaxed);
@@ -133,7 +162,12 @@ bool ApplyAxisRule(void* localPlayer, std::uint8_t rule) noexcept
     {
         if (record.player == localPlayer)
         {
-            *field = rule;  // the original is already kept (e.g. a camera cut rewrote it)
+            if (record.applied != rule)  // the mod's own FOV mode changed
+            {
+                record.applied = record.seen = *field = rule;
+                return true;
+            }
+            NoteGameRule(record, *field);
             return true;
         }
         if (record.player == nullptr && free == nullptr)
@@ -145,19 +179,24 @@ bool ApplyAxisRule(void* localPlayer, std::uint8_t rule) noexcept
     {
         return false;  // no room to remember the original, so it is not changed
     }
-    *free  = {localPlayer, *field};
+    *free  = {localPlayer, *field, rule, rule};
     *field = rule;
     return true;
 }
 
-// The split FOV, logged once for each (weight, half shape, camera FOV) it is applied with.
-float g_loggedWeight = -2.0f;
-float g_loggedAspect = 0.0f;
-float g_loggedFov    = 0.0f;
+/// The split FOV, logged once for each (weight, half shape, camera FOV) it is applied with, per
+/// player (index 1: player 2), so two cameras with different FOVs do not log every frame.
+struct LoggedFov
+{
+    float weight = -2.0f;
+    float aspect = 0.0f;
+    float fov    = 0.0f;
+};
+LoggedFov g_loggedFov[2]{};
 
 /// With a weight chosen and the halves' shape known, writes the split FOV (views/view_shape.h,
 /// SplitFov) under the MaintainXFOV rule; otherwise leaves the FOV to the MajorAxisFOV rule.
-void ApplySplitFov(void* localPlayer, std::byte* viewInfo) noexcept
+void ApplySplitFov(void* localPlayer, std::byte* viewInfo, bool isPlayerTwo) noexcept
 {
     const float     weight = g_fovWeight.load(std::memory_order_relaxed);
     const HalfShape half{g_halfAspect.load(std::memory_order_relaxed), g_halfHeightRatio.load(std::memory_order_relaxed)};
@@ -177,20 +216,20 @@ void ApplySplitFov(void* localPlayer, std::byte* viewInfo) noexcept
     const float split = SplitFov(fov, cameraRatio, half, weight);
     std::memcpy(viewInfo + view_info::kFov, &split, sizeof(split));
 
-    if (weight != g_loggedWeight || half.aspect != g_loggedAspect || fov != g_loggedFov)
+    LoggedFov& logged = g_loggedFov[isPlayerTwo ? 1 : 0];
+    if (weight != logged.weight || half.aspect != logged.aspect || fov != logged.fov)
     {
-        g_loggedWeight = weight;
-        g_loggedAspect = half.aspect;
-        g_loggedFov    = fov;
+        logged = {weight, half.aspect, fov};
         constexpr float kHalfRadians = 3.14159265f / 360.0f;
         const float vertical = std::atan(std::tan(split * kHalfRadians) / half.aspect) / kHalfRadians;
-        platform::Log(L"split FOV: weight {:.2f}, half aspect {:.3f} (height {:.2f} of the screen): camera {:.1f} deg "
-                      L"wide at {:.3f} -> {:.1f} deg wide, {:.1f} deg tall",
-                      weight, half.aspect, half.heightRatio, fov, cameraRatio, split, vertical);
+        platform::Log(L"split FOV ({}): weight {:.2f}, half aspect {:.3f} (height {:.2f} of the screen): camera {:.1f} "
+                      L"deg wide at {:.3f} -> {:.1f} deg wide, {:.1f} deg tall",
+                      isPlayerTwo ? L"player 2" : L"player 1", weight, half.aspect, half.heightRatio, fov, cameraRatio,
+                      split, vertical);
     }
 }
 
-void ShapeSplitView(void* localPlayer, std::byte* viewInfo) noexcept
+void ShapeSplitView(void* localPlayer, std::byte* viewInfo, bool isPlayerTwo) noexcept
 {
     if (!LooksLikeViewInfo(viewInfo))
     {
@@ -202,13 +241,13 @@ void ShapeSplitView(void* localPlayer, std::byte* viewInfo) noexcept
         }
         return;
     }
-    const bool hadBars = FillHalf(viewInfo);
-    ApplySplitFov(localPlayer, viewInfo);
-    if (hadBars && !g_fillLogged)
+    ApplySplitFov(localPlayer, viewInfo, isPlayerTwo);
+    if (!g_fillLogged)
     {
         g_fillLogged = true;
-        platform::Log(L"split views fill their halves (constrain flag cleared, FOV rule MajorAxisFOV{})",
-                      g_axisOffset.load(std::memory_order_relaxed) == 0 ? L" NOT applied: offset unconfirmed" : L"");
+        platform::Log(L"split views: the FOV rule is the mod's{} (the halves fill by each main camera's own constraint "
+                      L"setting, player_two/main_camera_shape)",
+                      g_axisOffset.load(std::memory_order_relaxed) == 0 ? L" NOT: offset unconfirmed" : L"");
     }
 }
 
@@ -254,7 +293,7 @@ void GetViewPoint(void* localPlayer, std::byte* viewInfo, std::int32_t stereoPas
     }
     if (g_fillOn.load(std::memory_order_relaxed))
     {
-        ShapeSplitView(localPlayer, viewInfo);
+        ShapeSplitView(localPlayer, viewInfo, isPlayerTwo);
     }
     if (!isPlayerTwo)
     {

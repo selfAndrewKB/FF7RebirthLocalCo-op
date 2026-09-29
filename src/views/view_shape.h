@@ -4,9 +4,10 @@
 // (views/minimal_view_info.h), kept apart from the engine so it is tested on the host.
 //
 // The game's cameras ask for 16:9 with bConstrainAspectRatio set, so the engine keeps each split
-// half 16:9 and fills the rest with bars. Clearing the flag lets the view take its whole half; the
-// field of view then follows ULocalPlayer::AspectRatioAxisConstraint, which the mod sets to
-// MajorAxisFOV (keep the FOV of the half's longer side). RE-vertical-split-and-fill.md.
+// half 16:9 and fills the rest with bars. With the flag cleared on each main camera (through the
+// game's setter, player_two/main_camera_shape.h) the view takes its whole half; the field of view
+// then follows ULocalPlayer::AspectRatioAxisConstraint, which the mod sets (MajorAxisFOV, or
+// MaintainXFOV with the split FOV below). RE-vertical-split-and-fill.md.
 
 #include <cstddef>
 #include <cstdint>
@@ -48,9 +49,5 @@ float SplitFov(float fovDegrees, float cameraAspect, const HalfShape& half, floa
 /// True if the struct holds an aspect ratio and a FOV a real camera could have, as this build's
 /// FMinimalViewInfo does at those offsets. A struct that fails is not written.
 bool LooksLikeViewInfo(const std::byte* viewInfo) noexcept;
-
-/// Clears bConstrainAspectRatio so the view fills its part of the screen. The aspect ratio itself
-/// is kept: the FOV rule reads it. Returns true if the flag was set.
-bool FillHalf(std::byte* viewInfo) noexcept;
 
 }  // namespace lss::views

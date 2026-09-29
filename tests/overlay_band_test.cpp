@@ -32,6 +32,27 @@ bool Near(float value, float expected, float tolerance = 0.001f)
     return std::fabs(value - expected) <= tolerance;
 }
 
+/// A model of the game's EndUI__ContainScaleFor1920x1080 (0x1409F52B0), instruction for instruction,
+/// for the host only (the mod calls the game's function): 1 for a size within 1e-8 of zero;
+/// width/1920 when width/height is below 16/9 or unordered; otherwise height/1080; at least 0.01.
+float ContainScaleFor1920x1080(float width, float height)
+{
+    if (!(std::fabs(width) > 1e-8f) || !(std::fabs(height) > 1e-8f))  // vcomiss + jbe: unordered too
+    {
+        return 1.0f;
+    }
+    const float ratio = width / height;  // vcomiss + jb: a NaN ratio takes the width branch
+    const float scale = !(ratio >= 1.7777778f) ? width * (1.0f / 1920.0f) : height * (1.0f / 1080.0f);
+    return scale > 0.01f ? scale : 0.01f;  // vmaxss: the second operand when the first is not greater
+}
+
+/// MarkerHostScale with the band's UI scale from the model, as overlay_layout.cpp passes the game's.
+float HostScale(const IntRect& band, std::int32_t imageW, std::int32_t imageH, float viewW, float viewH)
+{
+    const float ui = ContainScaleFor1920x1080(static_cast<float>(band.Width()), static_cast<float>(band.Height()));
+    return MarkerHostScale(band, ui, imageW, imageH, viewW, viewH);
+}
+
 void TestBands()
 {
     std::puts("band: the part of a 16:9 image each view shape shows under the cover fit");
@@ -46,16 +67,16 @@ void TestHostScales()
 {
     std::puts("host scale: solo is the engine's own; each split shape gets the value that keeps markers on objects");
     const auto solo = VisibleBand(3840, 2160, 2560.0f, 1440.0f);
-    EXPECT(Near(MarkerHostScale(solo, 3840, 2160, 2560.0f, 1440.0f), 1440.0f / 1080.0f));
+    EXPECT(Near(HostScale(solo, 3840, 2160, 2560.0f, 1440.0f), 1440.0f / 1080.0f));
     const auto bars = VisibleBand(3840, 2160, 1280.0f, 720.0f);
-    EXPECT(Near(MarkerHostScale(bars, 3840, 2160, 1280.0f, 720.0f), 720.0f / 1080.0f));
+    EXPECT(Near(HostScale(bars, 3840, 2160, 1280.0f, 720.0f), 720.0f / 1080.0f));
     const auto topBottom = VisibleBand(3840, 2160, 2560.0f, 720.0f);
-    EXPECT(Near(MarkerHostScale(topBottom, 3840, 2160, 2560.0f, 720.0f), 2.0f / 3.0f));
+    EXPECT(Near(HostScale(topBottom, 3840, 2160, 2560.0f, 720.0f), 2.0f / 3.0f));
     const auto sideBySide = VisibleBand(3840, 2160, 1280.0f, 1440.0f);  // tall: UI scale = layout scale = 1
-    EXPECT(Near(MarkerHostScale(sideBySide, 3840, 2160, 1280.0f, 1440.0f), 2.0f / 3.0f));
+    EXPECT(Near(HostScale(sideBySide, 3840, 2160, 1280.0f, 1440.0f), 2.0f / 3.0f));
     // The image size does not change the answer for the same view: 1920x1080 gives the same scale.
     const auto small = VisibleBand(1920, 1080, 2560.0f, 720.0f);
-    EXPECT(Near(MarkerHostScale(small, 1920, 1080, 2560.0f, 720.0f), 2.0f / 3.0f));
+    EXPECT(Near(HostScale(small, 1920, 1080, 2560.0f, 720.0f), 2.0f / 3.0f));
 }
 
 void TestMarkerFactorIsOne()
@@ -65,8 +86,8 @@ void TestMarkerFactorIsOne()
     for (const auto& view : views)
     {
         const auto  band = VisibleBand(3840, 2160, view[0], view[1]);
-        const float host = MarkerHostScale(band, 3840, 2160, view[0], view[1]);
-        const float k    = lss::hud::ContainScaleFor1920x1080(static_cast<float>(band.Width()),
+        const float host = HostScale(band, 3840, 2160, view[0], view[1]);
+        const float k    = ContainScaleFor1920x1080(static_cast<float>(band.Width()),
                                                               static_cast<float>(band.Height())) / host;
         const float fit  = std::fmax(view[0] / 3840.0f, view[1] / 2160.0f);
         EXPECT(Near(k * fit, 1.0f));
@@ -99,8 +120,7 @@ void TestPlacement()
 
 void TestContainScaleMatchesTheGame()
 {
-    std::puts("UI scale: the game's contain scale, and the overlay's scale in bands");
-    using lss::hud::ContainScaleFor1920x1080;
+    std::puts("UI scale: the model of the game's contain scale, and the overlay's scale in bands");
     EXPECT(Near(ContainScaleFor1920x1080(3840.0f, 2160.0f), 2.0f));
     EXPECT(Near(ContainScaleFor1920x1080(1920.0f, 1080.0f), 1.0f));
     EXPECT(Near(ContainScaleFor1920x1080(3840.0f, 1080.0f), 1.0f));   // wider: height
@@ -150,9 +170,22 @@ void TestUnusable(){
     EXPECT((VisibleBand(0, 2160, 2560.0f, 720.0f) == IntRect{}));
     EXPECT((VisibleBand(3840, 2160, 0.0f, 720.0f) == IntRect{}));
     EXPECT((VisibleBand(3840, 2160, std::nanf(""), 720.0f) == IntRect{}));
-    EXPECT(MarkerHostScale(IntRect{}, 3840, 2160, 2560.0f, 720.0f) == 0.0f);
+    EXPECT(MarkerHostScale(IntRect{}, 1.0f, 3840, 2160, 2560.0f, 720.0f) == 0.0f);
+    EXPECT(MarkerHostScale(IntRect{0, 540, 3840, 1620}, 0.0f, 3840, 2160, 2560.0f, 720.0f) == 0.0f);  // no UI scale
+    EXPECT(MarkerHostScale(IntRect{0, 540, 3840, 1620}, std::nanf(""), 3840, 2160, 2560.0f, 720.0f) == 0.0f);
 }
 
+void TestLayoutSize()
+{
+    std::puts("layout size: the whole image is the 1920x1080 frame; a band is larger on its long axis");
+    using lss::hud::LayoutSize;
+    using lss::hud::LayoutSizeOf;
+    EXPECT((LayoutSizeOf(IntRect{0, 0, 3840, 2160}) == LayoutSize{1920.0f, 1080.0f}));    // solo, 4K image
+    EXPECT((LayoutSizeOf(IntRect{0, 0, 1920, 1080}) == lss::hud::kSoloLayout));           // solo, 1080p image
+    EXPECT((LayoutSizeOf(IntRect{0, 540, 3840, 1620}) == LayoutSize{3840.0f, 1080.0f}));  // top/bottom band
+    EXPECT((LayoutSizeOf(IntRect{960, 0, 2880, 2160}) == LayoutSize{1920.0f, 2160.0f}));  // side-by-side band
+    EXPECT((LayoutSizeOf(IntRect{}) == LayoutSize{}));
+}
 }  // namespace
 
 int main()
@@ -164,6 +197,7 @@ int main()
     TestContainScaleMatchesTheGame();
     TestClipMapMatchesPlacement();
     TestUnusable();
+    TestLayoutSize();
 
     std::printf(g_failures == 0 ? "all tests passed\n" : "%d check(s) failed\n", g_failures);
     return g_failures == 0 ? 0 : 1;

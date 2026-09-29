@@ -1,11 +1,13 @@
 #include "hud/root_overlay_render.h"
 
 #include "dev/dev_tools.h"
+#include "hud/action_icon_base.h"
 #include "hud/area_icons_two.h"
 #include "hud/enemy_gauges.h"
 #include "hud/target_views.h"
 #include "hud/hud_placement.h"
 #include "hud/marker_timers.h"
+#include "hud/overlay_layout.h"
 #include "hud/popups.h"
 #include "hud/prompt_rows.h"
 #include "hud/second_image.h"
@@ -45,6 +47,9 @@ void RenderRootOverlay(void* application) noexcept
     {
         dev::BeforeOverlayRender();  // the HUD trace, in a build with the development tools
         target_views::BeginFrame();  // this frame's target lookups made afresh
+        // The field-action icons' base for the split's layout (or the game's own), before the rows'
+        // layout below, which then reads it.
+        action_icon_base::Update(player_two::generation::Active() ? LastLayoutSize() : kSoloLayout);
         if (player_two::generation::Active())
         {
             prompt_rows::Refresh();  // whose each prompt row is; each player's laid out on their own

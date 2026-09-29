@@ -1,9 +1,8 @@
-// Host-side tests for views::LooksLikeViewInfo and FillHalf, run without the game.
+// Host-side tests for views::LooksLikeViewInfo and the split FOV, run without the game.
 //
 // The view info is a zeroed 0x6A0-byte block (FMinimalViewInfo's size in this build) given the
-// shape the game's cameras produce: 16:9, bars on. The fill may clear only the constrain bit;
-// every other bit and byte, the aspect ratio included, stays as it was. A block with implausible
-// numbers is not recognised, so it is never written.
+// shape the game's cameras produce: 16:9, bars on. A block with implausible numbers is not
+// recognised, so it is never written.
 
 #include "views/minimal_view_info.h"
 #include "views/view_shape.h"
@@ -16,7 +15,6 @@
 
 namespace {
 
-using lss::views::FillHalf;
 using lss::views::LooksLikeViewInfo;
 namespace view_info = lss::views::view_info;
 
@@ -43,7 +41,6 @@ struct ViewInfo
         bytes[view_info::kFlags] = static_cast<std::byte>(flags);
     }
     void Set(std::size_t offset, float value) { std::memcpy(bytes.data() + offset, &value, sizeof(value)); }
-    unsigned char Flags() const { return static_cast<unsigned char>(bytes[view_info::kFlags]); }
 };
 
 constexpr float kSixteenByNine = 16.0f / 9.0f;
@@ -68,26 +65,6 @@ void TestUnknownShapesAreRefused()
     EXPECT(!LooksLikeViewInfo(ViewInfo(kSixteenByNine, 0x01, 180.0f).bytes.data()));
     EXPECT(!LooksLikeViewInfo(ViewInfo(kSixteenByNine, 0x01, std::numeric_limits<float>::infinity()).bytes.data()));
     EXPECT(!LooksLikeViewInfo(nullptr));
-}
-
-void TestFillClearsOnlyTheConstrainBit()
-{
-    std::puts("fill: clears only the constrain bit; the ratio, the LOD bit and every other byte are kept");
-    ViewInfo view(kSixteenByNine, 0x03, 90.0f);
-    auto expected = view.bytes;
-    expected[view_info::kFlags] = static_cast<std::byte>(0x02);
-
-    EXPECT(FillHalf(view.bytes.data()));
-    EXPECT(view.Flags() == 0x02);
-    EXPECT(view.bytes == expected);
-
-    EXPECT(!FillHalf(view.bytes.data()));  // already filled: reports it, changes nothing
-    EXPECT(view.bytes == expected);
-    EXPECT(!FillHalf(nullptr));
-
-    ViewInfo leftovers(kSixteenByNine, 0xA3, 60.0f);
-    EXPECT(FillHalf(leftovers.bytes.data()));
-    EXPECT(leftovers.Flags() == 0xA2);  // the unused bits are left as they were
 }
 
 bool Near(float value, float expected, float tolerance = 0.05f)
@@ -160,7 +137,6 @@ int main()
 {
     TestGameCameraIsRecognised();
     TestUnknownShapesAreRefused();
-    TestFillClearsOnlyTheConstrainBit();
     TestHalfShape();
     TestSplitFovEnds();
     TestSplitFovDefault();

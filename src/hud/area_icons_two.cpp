@@ -48,6 +48,41 @@ constexpr std::uintptr_t kLeaderCall = 0x1409F73E4;
 constexpr std::uintptr_t kLeader     = 0x140C81DE0;
 constexpr std::uint8_t   kLeaderPrologue[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x46, 0xD1, 0x42, 0x01};
 
+// The three game events that write player 1's instance, and their seven call sites
+// (RE-p2-hud-view-levers.md §6 and S-HUD31). None takes the instance: each reads EndUISystem+0x1A0.
+// Each site keeps calling the event, then the event's instance effect is applied to player 2's
+// instance directly. The events themselves are not run again: Enable and HideAndClear also play
+// the in/out animation of one shared widget (EndUISystem+0x60), which a second run would restart.
+constexpr std::uintptr_t kEnable              = 0x141816F1C;  // void(): +0xD0 = 1, and the shared widget's "in"
+constexpr std::uint8_t   kEnablePrologue[]    = {0xB8, 0x28, 0x00, 0x00, 0x00};
+constexpr std::uintptr_t kHideAndClear        = 0x141816EE0;  // void(): ClearAllAndDisable, and the widget's "out"
+constexpr std::uint8_t   kHideAndClearPrologue[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00};
+constexpr std::uintptr_t kSetFlagD1           = 0x1439D1CEC;  // void(char): +0xD1 = cl
+constexpr std::uint8_t   kSetFlagD1Prologue[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00};
+
+enum class Event : std::uint8_t
+{
+    Enable,
+    HideAndClear,
+    SetFlagD1,
+};
+
+struct EventSite
+{
+    std::uintptr_t site;
+    Event          event;
+    bool           tailJump;  // E9: EndUI__AreaMapIcon_EnableOrHideByCount's tail calls
+};
+constexpr EventSite kEventSites[] = {
+    {0x1410340A7, Event::HideAndClear, false},  // EventCmd_Dispatch_BattleModeCase87
+    {0x1410340B1, Event::Enable, false},        // the same event command
+    {0x143544CB0, Event::Enable, true},         // EndUI__AreaMapIcon_EnableOrHideByCount, count > 0
+    {0x143544CB9, Event::HideAndClear, true},   // the same, count <= 0
+    {0x14356050B, Event::SetFlagD1, false},     // a state's enter (cl = 0)
+    {0x143561FD5, Event::SetFlagD1, false},     // that state's exit (cl = 1)
+    {0x1435680F4, Event::SetFlagD1, false},     // a stop/cleanup (cl = 1)
+};
+
 // SWidget::SetVisibility(widget, TAttribute<EVisibility>*), canvas vtable slot 59 (§8.3).
 constexpr std::uintptr_t kSetVisibility           = 0x140C27B38;
 constexpr std::uint8_t   kSetVisibilityPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x40, 0x00, 0x00, 0x00};
@@ -59,7 +94,6 @@ constexpr std::array<std::uint32_t, 2> kCanvases{0x10, 0x70};
 constexpr std::array<std::uint32_t, 2> kMaps{0x20, 0x80};
 constexpr std::uint32_t kEnabled   = 0xD0;  // u8
 constexpr std::uint32_t kFlagD1    = 0xD1;  // u8
-constexpr std::uint32_t kCountdown = 0xDC;  // 4 bytes
 constexpr std::uint32_t kSharedCount = 0x8;  // the weak pointer's reference controller: its shared count (int32)
 
 // The canvas's Visibility attribute (§8.3): +0 value, +1 set, +8 getter delegate, +0x10 its size.
@@ -102,6 +136,8 @@ using ClearAllFn      = void (*)(void* instance);
 using FirstControllerFn = void* (*)(void* world);
 using LeaderFn          = void* (*)();
 using SetVisibilityFn = void (*)(void* widget, VisibilityAttribute* attribute);
+using EventFn         = void (*)();
+using SetFlagFn       = void (*)(char flag);
 
 // Set once at install.
 platform::CallRedirect g_firstControllerCall;
@@ -113,6 +149,11 @@ CtorFn                 g_ctor           = nullptr;
 FrameUpdateFn          g_frameUpdate    = nullptr;
 ClearAllFn             g_clearAll       = nullptr;
 SetVisibilityFn        g_setVisibility  = nullptr;
+EventFn                g_enable         = nullptr;
+EventFn                g_hideAndClear   = nullptr;
+SetFlagFn              g_setFlagD1      = nullptr;
+std::array<platform::CallRedirect, std::size(kEventSites)> g_eventCalls;
+bool                   g_eventsFollowed = false;
 
 // Game thread.
 std::uintptr_t               g_instanceTwo = 0;
@@ -127,6 +168,11 @@ std::uint32_t                g_leaderAnswers = 0;  // range-origin calls answere
 std::array<std::uint64_t, 7> g_logged{};
 int                          g_lines = 0;
 bool                         g_boundLogged = false;
+bool                         g_seeded      = false;  // player 2's instance has player 1's event state
+bool                         g_offThreadLogged = false;
+std::uint32_t                g_replays     = 0;
+int                          g_replayLines = 0;
+constexpr int                kMaxReplayLines = 40;
 
 bool Acts(Part part) noexcept
 {
@@ -289,19 +335,16 @@ bool EnsureInstanceTwo() noexcept
     return g_instanceTwo != 0;
 }
 
-/// The event-written fields of player 1's instance, copied into player 2's; a disable goes through
-/// the game's own clear, as the game's hide event does.
-void CopyEventState(std::uintptr_t one) noexcept
+/// Player 1's event state given to player 2's instance once, when player 2's ticks begin (at each
+/// join): events from before are not replayed. From then on the replays keep it (FollowEvent).
+void SeedEventState(std::uintptr_t one) noexcept
 {
-    std::uint8_t  enabledOne = 0, enabledTwo = 0, flag = 0;
-    std::uint32_t countdown = 0;
-    if (!Read(one + kEnabled, enabledOne) || !Read(g_instanceTwo + kEnabled, enabledTwo) || !Read(one + kFlagD1, flag) ||
-        !Read(one + kCountdown, countdown))
+    std::uint8_t enabledOne = 0, enabledTwo = 0, flag = 0;
+    if (!Read(one + kEnabled, enabledOne) || !Read(g_instanceTwo + kEnabled, enabledTwo) || !Read(one + kFlagD1, flag))
     {
         return;
     }
     platform::WriteGuarded(reinterpret_cast<void*>(g_instanceTwo + kFlagD1), &flag, sizeof(flag));
-    platform::WriteGuarded(reinterpret_cast<void*>(g_instanceTwo + kCountdown), &countdown, sizeof(countdown));
     if (enabledOne != 0 && enabledTwo == 0)
     {
         const std::uint8_t on = 1;
@@ -311,8 +354,121 @@ void CopyEventState(std::uintptr_t one) noexcept
     {
         ClearAllGuarded(g_instanceTwo);
     }
+    g_seeded = true;
+    platform::Log(L"area icons: player 2's icon manager starts with player 1's event state (enabled {}, flag {}); the "
+                  L"game's events are followed from here{}",
+                  enabledOne, flag, g_eventsFollowed ? L"" : L" (NOT: their call sites are not redirected)");
 }
 
+/// After the game ran `event` on player 1's instance: its instance effect on player 2's, with the
+/// game's own clear for a hide. Game thread only (the clear's counts are not atomic).
+void FollowEvent(Event event, char flag) noexcept
+{
+    if (!player_two::generation::OnGameThread())
+    {
+        if (!g_offThreadLogged)
+        {
+            g_offThreadLogged = true;
+            platform::Log(L"area icons: a map-icon event ran off the game thread; not followed for player 2 (logged once)");
+        }
+        return;
+    }
+    if (g_instanceTwo == 0)
+    {
+        return;  // made at player 2's first tick, then seeded from player 1's
+    }
+    const std::uint8_t on = 1;
+    switch (event)
+    {
+        case Event::Enable:
+            platform::WriteGuarded(reinterpret_cast<void*>(g_instanceTwo + kEnabled), &on, sizeof(on));
+            break;
+        case Event::HideAndClear: ClearAllGuarded(g_instanceTwo); break;
+        case Event::SetFlagD1:
+            platform::WriteGuarded(reinterpret_cast<void*>(g_instanceTwo + kFlagD1), &flag, sizeof(flag));
+            break;
+    }
+    ++g_replays;
+    if (g_replayLines < kMaxReplayLines)
+    {
+        ++g_replayLines;
+        platform::Log(L"area icons: the game's {} followed on player 2's icon manager ({} so far)",
+                      event == Event::Enable         ? L"Enable"
+                      : event == Event::HideAndClear ? L"HideAndClear"
+                                                     : (flag != 0 ? L"SetFlagD1(1)" : L"SetFlagD1(0)"),
+                      g_replays);
+    }
+}
+
+// Each replaces the event at its call sites (a call, or a tail jump whose `ret` goes on to the
+// caller's caller, as the event's would). Entered from the game's code: nothing here may throw.
+void EnableSite() noexcept
+{
+    g_enable();
+    FollowEvent(Event::Enable, 0);
+}
+
+void HideAndClearSite() noexcept
+{
+    g_hideAndClear();
+    FollowEvent(Event::HideAndClear, 0);
+}
+
+void SetFlagD1Site(char flag) noexcept
+{
+    g_setFlagD1(flag);
+    FollowEvent(Event::SetFlagD1, flag);
+}
+
+/// Puts the event sites back, the last installed first: two of them share one 16-byte block
+/// (0x143544CB0, 0x143544CB9), and each redirect restores the block exactly as it found it, so only
+/// the reverse of the install order finds each block as its redirect left it.
+void RestoreEventSites() noexcept
+{
+    for (auto call = g_eventCalls.rbegin(); call != g_eventCalls.rend(); ++call)
+    {
+        if (call->IsInstalled() && !call->Restore())
+        {
+            platform::Log(L"area icons: a map-icon event site was changed after us; left in place (it still calls the "
+                          L"event)");
+        }
+    }
+}
+
+/// Redirects all seven sites, or none.
+bool FollowEvents(const platform::GameImage& image) noexcept
+{
+    const auto enable = image.Rebase(kEnable);
+    const auto hide   = image.Rebase(kHideAndClear);
+    const auto flag   = image.Rebase(kSetFlagD1);
+    if (!enable || !hide || !flag || !image.BytesMatch(kEnable, kEnablePrologue) ||
+        !image.BytesMatch(kHideAndClear, kHideAndClearPrologue) || !image.BytesMatch(kSetFlagD1, kSetFlagD1Prologue))
+    {
+        return false;
+    }
+    g_enable       = reinterpret_cast<EventFn>(*enable);
+    g_hideAndClear = reinterpret_cast<EventFn>(*hide);
+    g_setFlagD1    = reinterpret_cast<SetFlagFn>(*flag);
+    for (std::size_t i = 0; i < std::size(kEventSites); ++i)
+    {
+        const EventSite& site = kEventSites[i];
+        const auto       live = image.Rebase(site.site, 5);
+        const std::uintptr_t target = site.event == Event::Enable ? *enable : site.event == Event::HideAndClear ? *hide : *flag;
+        const std::uintptr_t with =
+            site.event == Event::Enable         ? reinterpret_cast<std::uintptr_t>(&EnableSite)
+            : site.event == Event::HideAndClear ? reinterpret_cast<std::uintptr_t>(&HideAndClearSite)
+                                                : reinterpret_cast<std::uintptr_t>(&SetFlagD1Site);
+        const bool placed = live && (site.tailJump ? g_eventCalls[i].InstallTailJump(*live, target, with)
+                                                   : g_eventCalls[i].Install(*live, target, with));
+        if (!placed)
+        {
+            platform::Log(L"area icons: the map-icon event site at 0x{:X} is not what the research read", site.site);
+            RestoreEventSites();
+            return false;
+        }
+    }
+    return true;
+}
 /// One line whenever either instance's enable flag, canvases or map sizes change.
 void LogIfChanged(std::uintptr_t one) noexcept
 {
@@ -393,7 +549,11 @@ bool Install(const platform::GameImage& image) noexcept
     g_clearAll      = reinterpret_cast<ClearAllFn>(*clear);
     g_setVisibility = reinterpret_cast<SetVisibilityFn>(*visibility);
     g_installed     = true;
-    platform::Log(L"area icons: ready (player 2's icon manager is made when player 2 first plays)");
+    g_eventsFollowed = FollowEvents(image);
+    platform::Log(L"area icons: ready (player 2's icon manager is made when player 2 first plays); the game's map-icon "
+                  L"events {}",
+                  g_eventsFollowed ? L"are followed at their seven call sites"
+                                   : L"are NOT followed (player 2's manager keeps the state it started with)");
     return true;
 }
 
@@ -402,6 +562,7 @@ void Remove() noexcept
     g_hiddenOne           = {};  // no Slate calls here: this may run off the game thread (PlayerTwoOut restored them)
     g_playerTwoController = nullptr;
     g_playerTwoMember     = nullptr;
+    RestoreEventSites();
     if (g_leaderCall.IsInstalled() && !g_leaderCall.Restore())
     {
         platform::Log(L"area icons: the range-origin call was changed after us; left in place (it passes through)");
@@ -420,7 +581,10 @@ void Tick(float deltaTime) noexcept
     {
         return;
     }
-    CopyEventState(one);
+    if (!g_seeded)
+    {
+        SeedEventState(one);
+    }
     g_playerTwoController = Acts(kPartController) ? player_two::generation::PlayerTwoController() : nullptr;
     g_playerTwoMember     = Acts(kPartLeader) ? player_two::generation::Member() : nullptr;
     const bool ticked     = FrameUpdateGuarded(g_instanceTwo, deltaTime);
@@ -476,11 +640,12 @@ void PlayerTwoOut() noexcept
         return;
     }
     ClearAllGuarded(g_instanceTwo);
+    g_seeded = false;  // the next join starts from player 1's state again
     for (const std::uint32_t offset : kCanvases)
     {
         SetCanvas(Canvas(g_instanceTwo, offset), kHidden);
     }
-    platform::Log(L"area icons: player 2 is out; player 2's icon manager cleared");
+    platform::Log(L"area icons: player 2 is out; player 2's icon manager cleared ({} game events followed)", g_replays);
 }
 
 void SetMask(unsigned mask) noexcept

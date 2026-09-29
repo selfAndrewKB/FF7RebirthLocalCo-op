@@ -1,7 +1,7 @@
 #pragma once
 
-// Sends one `call rel32` in the game's code to a function of ours instead of its usual target,
-// and puts it back. Every other caller of that target is untouched.
+// Sends one `call rel32` (or one tail call, `jmp rel32`) in the game's code to a function of ours
+// instead of its usual target, and puts it back. Every other caller of that target is untouched.
 //
 // This is for a decision the game makes by calling a function directly, where the mod must
 // change the result for one caller only. The replacement is an ordinary compiled function with
@@ -40,6 +40,12 @@ public:
     /// nothing, if any condition fails or this object already holds a redirect.
     bool Install(std::uintptr_t site, std::uintptr_t target, std::uintptr_t replacement) noexcept;
 
+    /// The same for a tail call, `jmp rel32` (E9) to `target`, the caller's frame already torn down.
+    /// The replacement is an ordinary function with the target's signature: its `ret` goes to the
+    /// caller's caller, exactly where the target's would. (It must not tail-jump to the target itself
+    /// if it has work to do after it.)
+    bool InstallTailJump(std::uintptr_t site, std::uintptr_t target, std::uintptr_t replacement) noexcept;
+
     /// The same for a call whose five bytes cross into the next aligned block. The two blocks are
     /// swapped one after the other, each atomically, so a thread running the call between the two
     /// swaps would take a mixed displacement. Call it only from the one thread that can run the site,
@@ -57,7 +63,8 @@ public:
     std::uintptr_t Original() const noexcept { return target_; }
 
 private:
-    bool Place(std::uintptr_t site, std::uintptr_t target, std::uintptr_t replacement, bool crossingAllowed) noexcept;
+    bool Place(std::uintptr_t site, std::uintptr_t target, std::uintptr_t replacement, bool crossingAllowed,
+               std::uint8_t opcode) noexcept;
 
     std::uintptr_t block_  = 0;  // the aligned 16-byte block holding the call (its first byte)
     std::uintptr_t target_ = 0;

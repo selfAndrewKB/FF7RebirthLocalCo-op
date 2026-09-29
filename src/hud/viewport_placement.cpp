@@ -19,12 +19,6 @@ bool AllWithin(const float* values, std::size_t count, float low, float high) no
     return true;
 }
 
-bool AnchoredTopLeft(const ViewportLayout& layout) noexcept
-{
-    return layout.anchors[0] == 0.0f && layout.anchors[1] == 0.0f && layout.anchors[2] == 0.0f &&
-           layout.anchors[3] == 0.0f;
-}
-
 void SetPointAnchor(ViewportLayout& layout, float x, float y) noexcept
 {
     layout.anchors[0] = layout.anchors[2] = x;
@@ -44,35 +38,45 @@ bool Plausible(const ViewportLayout& layout) noexcept
            AllWithin(layout.offsets, 4, -100000.0f, 100000.0f);
 }
 
-std::optional<ViewportLayout> SplitLayoutFor(PlacementKind kind, float anchorX, float anchorY,
-                                             const ViewportLayout& own) noexcept
+std::optional<ViewportLayout> SplitLayoutFor(float anchorX, float anchorY, const ViewportLayout& own) noexcept
 {
     if (!Plausible(own))
     {
         return std::nullopt;
     }
     ViewportLayout layout = own;
-    if (kind == PlacementKind::Area)
-    {
-        SetPointAnchor(layout, anchorX, anchorY);
-        layout.alignment[0] = anchorX;
-        layout.alignment[1] = anchorY;
-        layout.offsets[0]   = 0.0f;
-        layout.offsets[1]   = 0.0f;
-        layout.offsets[2]   = kHudFrameWidth;
-        layout.offsets[3]   = kHudFrameHeight;
-        return layout;
-    }
-    if (!AnchoredTopLeft(own))
-    {
-        return std::nullopt;
-    }
-    const float ax = NearestAnchor(own.offsets[0], kHudFrameWidth);
-    const float ay = NearestAnchor(own.offsets[1], kHudFrameHeight);
-    SetPointAnchor(layout, ax, ay);
-    layout.offsets[0] = own.offsets[0] - ax * kHudFrameWidth;
-    layout.offsets[1] = own.offsets[1] - ay * kHudFrameHeight;
+    SetPointAnchor(layout, anchorX, anchorY);
+    layout.alignment[0] = anchorX;
+    layout.alignment[1] = anchorY;
+    layout.offsets[0]   = 0.0f;
+    layout.offsets[1]   = 0.0f;
+    layout.offsets[2]   = kHudFrameWidth;
+    layout.offsets[3]   = kHudFrameHeight;
     return layout;
+}
+
+LayoutPoint AnchorOf(const LayoutPoint& point) noexcept
+{
+    return {NearestAnchor(point.x, kHudFrameWidth), NearestAnchor(point.y, kHudFrameHeight)};
+}
+
+LayoutPoint KeepDistanceFromAnchor(const LayoutPoint& original, const LayoutPoint& anchor, float width,
+                                   float height) noexcept
+{
+    if (!(width > 0.0f) || !(height > 0.0f) || !std::isfinite(width) || !std::isfinite(height))
+    {
+        return original;
+    }
+    return {original.x + anchor.x * (width - kHudFrameWidth), original.y + anchor.y * (height - kHudFrameHeight)};
+}
+
+bool OutsideLayout(const LayoutPoint& position, float width, float height) noexcept
+{
+    if (!(width > 0.0f) || !(height > 0.0f))
+    {
+        return false;
+    }
+    return !(position.x >= 0.0f && position.x < width && position.y >= 0.0f && position.y < height);
 }
 
 }  // namespace lss::hud

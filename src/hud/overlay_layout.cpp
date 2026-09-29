@@ -27,10 +27,20 @@ using GetCompositeLayerRectFn = IntRect* (*)(IntRect* out);
 using FindOrAddEntryFn        = void* (*)(void* slot, std::uintptr_t name, IntRect* rect, std::uintptr_t unused);
 using SubmitLayerSlotFn       = void (*)(void* renderer, std::uintptr_t pool, void* slot, std::uintptr_t unused);
 
+/// FVector2D by value: 8 bytes, so the x64 convention passes it packed in rcx, as the game's callers do.
+struct Size2D
+{
+    float x = 0.0f;
+    float y = 0.0f;
+};
+static_assert(sizeof(Size2D) == 8);
+using ContainScaleFn = float (*)(Size2D size);
+
 // Set once at install, then only read.
 platform::CallRedirect g_rectCall;
 platform::CallRedirect g_entryCall;
 platform::CallRedirect g_submitCall;
+ContainScaleFn         g_containScale     = nullptr;  // the game's UI scale of a rect (hud_addresses.h)
 std::uintptr_t         g_overlaySingleton = 0;  // live 0x1491D1948
 bool                   g_installed        = false;
 
@@ -44,6 +54,7 @@ std::atomic<bool> g_bandEnabled{true};  // `hud-band off` turns it off for diagn
 platform::CodeRedirect   g_frameCode;
 platform::CodeRedirect   g_arrowEdgeCode;
 alignas(8) std::uint8_t  g_bandApplies = 0;
+LayoutSize               g_lastLayout  = kSoloLayout;  // game thread
 
 /// What the rect call decided for this frame's render, for the entry call a few instructions later
 /// in the same function. Both run on the game thread; the entry call acts only on the thread that
@@ -151,6 +162,7 @@ IntRect* OverlayLayoutRect(IntRect* out)
     IntRect* result    = reinterpret_cast<GetCompositeLayerRectFn>(g_rectCall.Original())(out);
     g_pending.active   = false;
     g_bandApplies = 0;
+    g_lastLayout  = kSoloLayout;
     if (!g_splitActive.load(std::memory_order_relaxed) || out == nullptr || out->minX != 0 || out->minY != 0)
     {
         return result;  // one player (or an unexpected rect): exactly the engine's result
@@ -165,7 +177,8 @@ IntRect* OverlayLayoutRect(IntRect* out)
     const float   viewH   = ReadFloat(overlay + engine::kOverlayViewHeight);
     const IntRect image   = *out;
     const IntRect band    = VisibleBand(image.Width(), image.Height(), viewW, viewH);
-    const float   host    = MarkerHostScale(band, image.Width(), image.Height(), viewW, viewH);
+    const float   uiScale = g_containScale({static_cast<float>(band.Width()), static_cast<float>(band.Height())});
+    const float   host    = MarkerHostScale(band, uiScale, image.Width(), image.Height(), viewW, viewH);
     const auto    place   = PlaceInBand(band, image.Width(), image.Height());
     const bool    enabled = g_bandEnabled.load(std::memory_order_relaxed);
     const bool    applied = enabled && host > 0.0f && place.scaleX != 0.0f;
@@ -175,6 +188,7 @@ IntRect* OverlayLayoutRect(IntRect* out)
         *out               = band;
         g_pending          = {true, GetCurrentThreadId(), overlay, place, host, BandClipMap(band, image.Width(), image.Height())};
         g_bandApplies = 1;
+        g_lastLayout  = LayoutSizeOf(band);
     }
     return result;
 }
@@ -284,13 +298,16 @@ bool InstallOverlayLayout(const platform::GameImage& image) noexcept
     const auto submitFn   = image.Rebase(engine::kSubmitLayerSlot);
     const auto singleton  = image.Rebase(engine::kRootOverlaySingleton, sizeof(void*));
     const bool submitHolds = image.BytesMatch(engine::kSubmitLayerSlot, engine::kSubmitLayerSlotPrologue);
-    if (!bytesHold || !submitHolds || !rectCall || !rectFn || !entryCall || !entryFn || !submitCall || !submitFn ||
-        !singleton)
+    const auto contain     = image.Rebase(engine::kContainScale);
+    const bool containHolds = contain && image.BytesMatch(engine::kContainScale, engine::kContainScaleBytes);
+    if (!bytesHold || !submitHolds || !containHolds || !rectCall || !rectFn || !entryCall || !entryFn || !submitCall ||
+        !submitFn || !singleton)
     {
         platform::Log(L"HUD layout: the overlay's code is not what the research read; the HUD keeps the game's layout");
         return false;
     }
     g_overlaySingleton = *singleton;
+    g_containScale     = reinterpret_cast<ContainScaleFn>(*contain);
 
     // The later calls first: they change nothing until the rect call has decided on a band.
     if (!g_submitCall.Install(*submitCall, *submitFn, reinterpret_cast<std::uintptr_t>(&OverlaySubmit)))
@@ -349,6 +366,11 @@ void RemoveOverlayLayout() noexcept
                       !rect ? L"the rect call" : !entry ? L"the layer-entry call" : L"the submit call");
     }
     g_installed = !(rect && entry && submit);
+}
+
+LayoutSize LastLayoutSize() noexcept
+{
+    return g_lastLayout;
 }
 
 bool OverlayLayoutInstalled() noexcept
