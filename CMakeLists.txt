@@ -66,6 +66,9 @@ add_library(LocalSplitScreen SHARED
     src/player_two/leave_sequence.cpp
     src/player_two/leftover_actors.cpp
     src/player_two/member_movement.cpp
+    src/player_two/nav_strand.cpp
+    src/player_two/party_warp.cpp
+    src/player_two/strand_watch.cpp
     src/player_two/battle_input.cpp
     src/player_two/battle_camera.cpp
     src/player_two/camera_override.cpp
@@ -99,6 +102,7 @@ add_library(LocalSplitScreen SHARED
 
     src/players/join_keys.cpp
     src/players/local_players.cpp
+    src/players/single_view.cpp
     src/players/split_layout.cpp
     src/players/split_screen_settings.cpp
     src/players/unreal_access.cpp
@@ -109,7 +113,11 @@ add_library(LocalSplitScreen SHARED
     src/renderer/view_family_submission.cpp
 
     src/views/player_view_point.cpp
+    src/views/stream_view_math.cpp
+    src/views/stream_views.cpp
     src/views/view_shape.cpp
+    src/views/whole_screen.cpp
+    src/views/whole_screen_reason.cpp
 )
 
 # Includes are rooted at src/ so every #include names its module ("platform/log.h").
@@ -183,6 +191,38 @@ add_executable(SplitLayoutTests
 target_include_directories(SplitLayoutTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(SplitLayoutTests PRIVATE cxx_std_20)
 add_test(NAME split_layout COMMAND SplitLayoutTests)
+
+add_executable(SingleViewTests
+    tests/single_view_test.cpp
+    src/players/single_view.cpp
+)
+target_include_directories(SingleViewTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(SingleViewTests PRIVATE cxx_std_20)
+add_test(NAME single_view COMMAND SingleViewTests)
+
+add_executable(WholeScreenTests
+    tests/whole_screen_test.cpp
+    src/views/whole_screen_reason.cpp
+)
+target_include_directories(WholeScreenTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(WholeScreenTests PRIVATE cxx_std_20)
+add_test(NAME whole_screen COMMAND WholeScreenTests)
+
+add_executable(StreamViewMathTests
+    tests/stream_view_math_test.cpp
+    src/views/stream_view_math.cpp
+)
+target_include_directories(StreamViewMathTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(StreamViewMathTests PRIVATE cxx_std_20)
+add_test(NAME stream_view_math COMMAND StreamViewMathTests)
+
+add_executable(StrandWatchTests
+    tests/strand_watch_test.cpp
+    src/player_two/strand_watch.cpp
+)
+target_include_directories(StrandWatchTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(StrandWatchTests PRIVATE cxx_std_20)
+add_test(NAME strand_watch COMMAND StrandWatchTests)
 
 add_executable(SwapWindowTests
     tests/swap_window_test.cpp

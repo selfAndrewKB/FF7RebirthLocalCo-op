@@ -30,16 +30,22 @@
 #include "player_two/field_exit.h"
 #include "player_two/generation.h"
 #include "player_two/main_camera_shape.h"
+#include "player_two/nav_strand.h"
+#include "player_two/party_warp.h"
 #include "player_two/session.h"
 #include "players/join_keys.h"
+#include "players/single_view.h"
 #include "players/split_layout.h"
 #include "players/split_screen_settings.h"
+#include "players/tracked_object.h"
 #include "players/unreal_access.h"
 #include "renderer/additional_family_output.h"
 #include "renderer/family_boundary.h"
 #include "renderer/view_family_submission.h"
 #include "views/player_view_point.h"
+#include "views/stream_views.h"
 #include "views/view_shape.h"
+#include "views/whole_screen.h"
 
 #include <cstdint>
 #include <filesystem>
@@ -56,7 +62,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.30.0-hud-levers";
+constexpr const wchar_t* kVersion = L"0.34.3-screen-signals";
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -99,13 +105,30 @@ std::optional<std::uintptr_t> VerifyEngine(const lss::platform::GameImage& image
     return removeLocalPlayer;
 }
 
+/// Player 1's controller while it is a live object: the world context for the viewport's split switch.
+RC::Unreal::UObject* PlayerOneWorldContext() noexcept
+{
+    auto* controller = static_cast<RC::Unreal::UObject*>(lss::player_two::generation::PlayerOneController());
+    return lss::players::IsLiveObject(controller) ? controller : nullptr;
+}
+
+std::optional<bool> ReadSplitSwitch() noexcept
+{
+    return lss::players::unreal::SplitscreenForceDisabled(PlayerOneWorldContext());
+}
+
+bool WriteSplitSwitch(bool disabled) noexcept
+{
+    return lss::players::unreal::SetForceDisableSplitscreen(PlayerOneWorldContext(), disabled);
+}
+
 class LocalSplitScreenMod final : public RC::CppUserModBase
 {
 public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.30.0-hud-levers");
+        ModVersion     = STR("0.34.3-screen-signals");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -140,6 +163,7 @@ public:
         }
         lss::hud::RemoveRootOverlayRender();
         lss::player_two::field_exit::Remove();
+        lss::player_two::nav_strand::Remove();
         lss::hud::target_views::Remove();
         lss::hud::area_icons_two::Remove();
         lss::hud::user_widgets::Remove();
@@ -165,12 +189,13 @@ public:
         if (std::filesystem::exists(lss::platform::ModFolder() / L"watch_only.txt", missing))
         {
             Log(L"watch only (watch_only.txt): nothing installed except the frame-hitch watch; the game runs unmodified");
+            lss::platform::frame_watch::SetDetailed(true);  // the hitch summary is this control's whole output
             // The control channel alone (no engine redirects), so a script can still quit the game.
             const auto image = lss::platform::GameImage::Locate();
             if (const auto removeLocalPlayer = image ? VerifyEngine(*image) : std::nullopt)
             {
                 session_.emplace(*removeLocalPlayer);
-                lss::dev::InstallControl(*session_, layout_, false);
+                lss::dev::InstallControl(*session_, layout_, singleView_, false);
             }
             const Hook::FCallbackOptions watchOptions{false, false, STR("LocalSplitScreen"), STR("frame watch")};
             tickCallback_ = Hook::RegisterEngineTickPreCallback(
@@ -208,6 +233,10 @@ public:
                 L"camera choice are unavailable");
         }
         mainCameraShape_ = viewPointInstalled_ && lss::player_two::main_camera_shape::Install(*image);
+        wholeScreen_     = lss::views::InstallWholeScreen(*image);  // menus, the map, cutscenes: player 1's single view
+        lss::views::InstallStreamViews(*image, viewPointInstalled_);  // each player's camera streams scenery detail
+        lss::player_two::party_warp::Install(*image);  // the game's follow warp, for a stranded player 2
+        lss::player_two::nav_strand::Install(*image);  // player 2's member stranded off the loaded navmesh
 
         // The HUD's layout in split views (hud/overlay_layout.h). Optional like the view point: without
         // it the HUD keeps the game's full-screen layout, cropped to each half.
@@ -224,7 +253,7 @@ public:
         lss::hud::area_icons_two::Install(*image);   // player 2's own map icons and markers
         lss::hud::target_views::Install(*image);     // each half's cursor and enemy gauges follow its player's target
 
-        lss::dev::Install(*image, *session_, layout_, viewPointInstalled_);  // built with LSS_DEV_TOOLS only
+        lss::dev::Install(*image, *session_, layout_, singleView_, viewPointInstalled_);  // built with LSS_DEV_TOOLS only
 
         const Hook::FCallbackOptions tickOptions{false, false, STR("LocalSplitScreen"), STR("player intent")};
         tickCallback_ = Hook::RegisterEngineTickPreCallback(
@@ -282,6 +311,10 @@ private:
         }
         const bool left = session_->LeaveNow();
         FollowPlayerTwo();  // now, not at the next tick: the view module must not keep the old player 2
+        // The viewport outlives the world: its split switch is cleared while player 1's controller
+        // is still this world's.
+        LogSingleViewChange(singleView_.Update(false, false));
+        lss::views::SetSplitShown(false);
         if (left)
         {
             Log(L"{}: player 2 left (and joins again once the field is ready)", why);
@@ -324,16 +357,29 @@ private:
         session_->Tick();
         lss::dev::TickAfterSession();
         FollowPlayerTwo();
+
+        // Player 1's single view for the game's whole-screen states (players/single_view.h): while it
+        // holds, player 2 stays in but the split's presentation is off, as with one player.
+        const bool playerTwoIn = session_->HasPlayerTwo();
+        LogSingleViewChange(singleView_.Update(playerTwoIn, WholeScreenShown(playerTwoIn)));
+        const bool splitShown = playerTwoIn && !singleView_.Single();
+        lss::views::SetSplitShown(splitShown);
+        lss::player_two::nav_strand::Tick(splitShown);  // a stranded player 2 is warped back to the party
+        if (wholeScreen_)
+        {
+            lss::views::UpdateStreamViews(splitShown);  // needs the game-state check whole_screen verified
+        }
         if (mainCameraShape_)
         {
             // Filled halves: each main camera's own 16:9 constraint, cleared once by the game's setter.
-            lss::player_two::main_camera_shape::Update(lss::player_two::generation::Active() && lss::views::FillsHalves());
+            lss::player_two::main_camera_shape::Update(lss::player_two::generation::Active() && splitShown &&
+                                                       lss::views::FillsHalves());
         }
-        LogSettingsChange(settings_.Update(session_->HasPlayerTwo()));
-        LogLayoutChange(layout_.Update(session_->HasPlayerTwo()));
-        UpdateHalfShape();
-        lss::hud::SetSplitActive(session_->HasPlayerTwo());
-        lss::hud::UpdateHudPlacement(session_->HasPlayerTwo() && lss::hud::BandEnabled());
+        LogSettingsChange(settings_.Update(playerTwoIn));
+        LogLayoutChange(layout_.Update(playerTwoIn));
+        UpdateHalfShape(splitShown);
+        lss::hud::SetSplitActive(splitShown);
+        lss::hud::UpdateHudPlacement(splitShown && lss::hud::BandEnabled());
 
         const ULONGLONG now = GetTickCount64();
         if (!session_->HasPlayerTwo() || !lss::platform::frame_watch::Detailed())  // perf-log: the periodic status
@@ -350,9 +396,9 @@ private:
     /// Keeps the views module's idea of the halves' shape current while player 2 is in: the
     /// viewport size (it changes with the window) and the layout (it changes by key or script).
     /// Read twice a second; until the first reading the split FOV leaves the stock rule in place.
-    void UpdateHalfShape() noexcept
+    void UpdateHalfShape(bool splitShown) noexcept
     {
-        if (!session_->HasPlayerTwo())
+        if (!splitShown)
         {
             halfShapeTicks_ = 0;
             lss::views::SetHalfShape({});
@@ -500,6 +546,40 @@ private:
         }
     }
 
+    /// Whether the game shows something that takes the whole screen (a full-screen menu, the map
+    /// screen, a cutscene), from the game's own state (views/whole_screen.h). Read only while player 2
+    /// is in and the automatic choice is on; each change is logged there.
+    bool WholeScreenShown(bool playerTwoIn) const noexcept
+    {
+        return playerTwoIn && wholeScreen_ && singleView_.Mode() == lss::players::SingleViewMode::Auto &&
+               lss::views::ReasonOf(lss::views::ReadScreenSignals()) != lss::views::WholeScreenReason::None;
+    }
+
+    static void LogSingleViewChange(const lss::players::SingleViewChange& change) noexcept
+    {
+        using Kind = lss::players::SingleViewChange::Kind;
+        switch (change.kind)
+        {
+            case Kind::None: break;
+            case Kind::Single:
+                Log(L"single view: player 1's view alone (SetForceDisableSplitscreen(true)); player 2 stays in");
+                break;
+            case Kind::AlreadySingle:
+                Log(L"single view: the split was already force-disabled by someone else; used, and not cleared by the mod");
+                break;
+            case Kind::SingleFailed:
+                Log(L"single view: the split switch could not be read or set; the split stays");
+                break;
+            case Kind::Split: Log(L"single view: over, the split is back (SetForceDisableSplitscreen(false))"); break;
+            case Kind::LeftAlone:
+                Log(L"single view: over; the split switch is not the mod's (or was cleared meanwhile), left as it is");
+                break;
+            case Kind::SplitFailed:
+                Log(L"single view: the split switch could not be read or cleared; the screen stays single");
+                break;
+        }
+    }
+
     static void LogSettingsChange(const lss::players::SettingsChange& change) noexcept
     {
         using Kind = lss::players::SettingsChange::Kind;
@@ -527,12 +607,14 @@ private:
         {&lss::players::unreal::ConsoleVariableInt, &lss::players::unreal::ExecuteConsoleCommand}};
     lss::players::SplitLayout                 layout_{{&lss::players::unreal::ReadTwoPlayerSplitscreenLayout,
                                                        &lss::players::unreal::WriteTwoPlayerSplitscreenLayout}};
+    lss::players::SingleView                  singleView_{{&ReadSplitSwitch, &WriteSplitSwitch}};
     std::uint32_t                             halfShapeTicks_     = 0;
     float                                     loggedHalfAspect_   = -1.0f;
     bool                                      tickSeen_           = false;
     bool                                      rendererInstalled_  = false;
     bool                                      viewPointInstalled_ = false;
     bool                                      mainCameraShape_    = false;
+    bool                                      wholeScreen_        = false;
     const void*                               followedPlayerTwo_  = nullptr;
     std::uint32_t                             followedJoins_      = 0;
     Hook::GlobalCallbackId                    tickCallback_       = Hook::ERROR_ID;
