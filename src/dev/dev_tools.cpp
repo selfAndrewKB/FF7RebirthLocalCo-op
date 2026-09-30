@@ -19,18 +19,19 @@ control::CommandChannel           g_channel;
 }  // namespace
 
 void Install(const platform::GameImage& image, player_two::Session& session, players::SplitLayout& layout,
-             bool viewPointInstalled) noexcept
+             players::SingleView& singleView, bool viewPointInstalled) noexcept
 {
     hud::InstallPositionProbe(image);  // logging only, off until the hud-probe command
     hud::InstallHudTrace(image);       // logging only, idle until the hud-trace command
     terrain_watch::Install(image);     // logging only, while player 2 is in
-    InstallControl(session, layout, viewPointInstalled);
+    InstallControl(session, layout, singleView, viewPointInstalled);
 }
 
-void InstallControl(player_two::Session& session, players::SplitLayout& layout, bool viewPointInstalled) noexcept
+void InstallControl(player_two::Session& session, players::SplitLayout& layout, players::SingleView& singleView,
+                    bool viewPointInstalled) noexcept
 {
     // Control scripts drive the same actions as the keys, from files (control/command_channel.h).
-    g_target.emplace(session, layout, viewPointInstalled);
+    g_target.emplace(session, layout, singleView, viewPointInstalled);
     g_channel.Open();
 }
 

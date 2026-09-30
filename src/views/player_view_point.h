@@ -14,6 +14,7 @@
 //     (and back). Starting on player 1's means a player-2 camera that is not set up yet (it sits
 //     at the world origin until it has a character) is never on screen by default.
 
+#include "views/stream_view_math.h"
 #include "views/view_shape.h"
 
 #include <cstdint>
@@ -46,6 +47,19 @@ bool ToggleOwnCamera() noexcept;
 
 /// True while player 2's half shows player 2's own camera.
 bool ShowsOwnCamera() noexcept;
+
+/// Game thread: player 1's or player 2's camera as it was last drawn while player 2 is in (empty before
+/// the first split frame, after a change of players, or if the view info was unusable).
+std::optional<StreamCamera> RenderedCamera(bool playerTwo) noexcept;
+
+/// The split halves' width/height (views::HalfOf), or 0 until known.
+float HalfAspect() noexcept;
+
+/// Game thread, each tick: whether the split is on screen: player 2 is in and the screen is not player
+/// 1's view alone (players/single_view.h). While it is not, player 1's view point is exactly the
+/// engine's (the camera choice for player 2's own view still applies).
+void SetSplitShown(bool shown) noexcept;
+bool SplitShown() noexcept;
 
 /// Switches whether split views fill their halves (on at start); returns the new state.
 bool ToggleFill() noexcept;

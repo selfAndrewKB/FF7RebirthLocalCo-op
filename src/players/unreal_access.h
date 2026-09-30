@@ -76,6 +76,14 @@ struct ViewportSize
 };
 std::optional<ViewportSize> ViewportSizeOf(UObject* playerController) noexcept;
 
+/// UGameplayStatics::IsSplitscreenForceDisabled: whether the game viewport's stock
+/// bDisableSplitScreenOverride is set (players/single_view.h), or empty if the call failed.
+std::optional<bool> SplitscreenForceDisabled(UObject* worldContext) noexcept;
+
+/// UGameplayStatics::SetForceDisableSplitscreen: sets or clears that switch; the engine lays the
+/// players out again in the same call. False if it could not be called.
+bool SetForceDisableSplitscreen(UObject* worldContext, bool disable) noexcept;
+
 /// UKismetSystemLibrary::GetConsoleVariableIntValue: a console variable's current value, or empty
 /// if the function cannot be found or raised an exception.
 std::optional<std::int32_t> ConsoleVariableInt(const wchar_t* variable) noexcept;

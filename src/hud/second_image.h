@@ -38,9 +38,10 @@ bool SecondImageInstalled() noexcept;
 void SetSecondImage(bool on) noexcept;
 bool SecondImageOn() noexcept;
 
-/// Game thread, from the overlay render call: renders player 2's image first (if on and player 2
-/// is in), then marks the game's own call that follows as player 1's pass.
-void BeginOverlayRender(bool playerTwoIn) noexcept;
+/// Game thread, from the overlay render call: renders player 2's image first (if on and the split
+/// is on screen: player 2 in, and not player 1's single view), then marks the game's own call that
+/// follows as player 1's pass.
+void BeginOverlayRender(bool splitShown) noexcept;
 
 /// Game thread, after the game's own call.
 void EndOverlayRender() noexcept;

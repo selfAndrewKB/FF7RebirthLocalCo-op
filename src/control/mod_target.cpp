@@ -17,9 +17,11 @@
 #include "player_two/pad_sticks.h"
 #include "player_two/scope_leaks.h"
 #include "player_two/session.h"
+#include "players/single_view.h"
 #include "players/split_layout.h"
 #include "players/unreal_access.h"
 #include "views/player_view_point.h"
+#include "views/stream_views.h"
 
 namespace lss::control {
 
@@ -230,6 +232,38 @@ Outcome ModTarget::SetPerfLog(bool on)
 {
     platform::frame_watch::SetDetailed(on);
     return {true, on ? L"perf log on" : L"perf log off"};
+}
+
+Outcome ModTarget::SetSingleView(std::uint32_t mode)
+{
+    constexpr players::SingleViewMode kModes[] = {players::SingleViewMode::Auto, players::SingleViewMode::Single,
+                                                  players::SingleViewMode::Split};
+    constexpr const wchar_t* kNames[] = {L"single view for the game's whole-screen states (auto)",
+                                         L"player 1's single view while player 2 is in", L"always split"};
+    if (mode >= std::size(kModes))
+    {
+        return Failed(L"unknown single-view mode");
+    }
+    singleView_.SetMode(kModes[mode]);  // applied at the next tick, which logs the change
+    return {true, kNames[mode]};
+}
+
+Outcome ModTarget::SetStreamViews(std::uint32_t mode)
+{
+    constexpr views::StreamViewsMode kModes[] = {views::StreamViewsMode::Off, views::StreamViewsMode::PlayerTwo,
+                                                 views::StreamViewsMode::Both};
+    constexpr const wchar_t* kNames[] = {L"no streaming views (the game's own only)", L"player 2's camera",
+                                         L"both players' cameras"};
+    if (mode >= std::size(kModes))
+    {
+        return Failed(L"unknown stream-views mode");
+    }
+    if (!views::StreamViewsInstalled())
+    {
+        return Failed(L"streaming views are not installed (see the install log)");
+    }
+    views::SetStreamViewsMode(kModes[mode]);  // applied at the next tick, which logs it
+    return {true, kNames[mode]};
 }
 
 Outcome ModTarget::Dump(const std::wstring& topic)

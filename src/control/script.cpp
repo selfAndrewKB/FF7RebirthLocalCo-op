@@ -228,6 +228,38 @@ ParsedLine ParseText(CommandKind kind, std::wstring_view name, std::wstring_view
     return Parsed(std::move(command));
 }
 
+ParsedLine ParseSingleView(const std::vector<std::wstring_view>& words)
+{
+    constexpr std::wstring_view kModes[] = {L"auto", L"on", L"off"};
+    for (std::uint32_t mode = 0; words.size() == 2 && mode < std::size(kModes); ++mode)
+    {
+        if (words[1] == kModes[mode])
+        {
+            Command command;
+            command.kind  = CommandKind::SingleView;
+            command.ticks = mode;
+            return Parsed(std::move(command));
+        }
+    }
+    return Error(L"single-view takes auto, on or off");
+}
+
+ParsedLine ParseStreamViews(const std::vector<std::wstring_view>& words)
+{
+    constexpr std::wstring_view kModes[] = {L"off", L"p2", L"both"};
+    for (std::uint32_t mode = 0; words.size() == 2 && mode < std::size(kModes); ++mode)
+    {
+        if (words[1] == kModes[mode])
+        {
+            Command command;
+            command.kind  = CommandKind::StreamViews;
+            command.ticks = mode;
+            return Parsed(std::move(command));
+        }
+    }
+    return Error(L"stream-views takes off, p2 or both");
+}
+
 ParsedLine ParseBare(CommandKind kind, const std::vector<std::wstring_view>& words)
 {
     if (words.size() != 1)
@@ -277,6 +309,8 @@ ParsedLine ParseLine(std::wstring_view line)
     if (name == L"icons-mask") return ParseMask(words, CommandKind::IconsMask, 15);
     if (name == L"battle-mask") return ParseMask(words, CommandKind::BattleMask, 511);
     if (name == L"perf-log") return ParseSwitch(CommandKind::PerfLog, words, L"on", L"off");
+    if (name == L"single-view") return ParseSingleView(words);
+    if (name == L"stream-views") return ParseStreamViews(words);
     if (name == L"dump") return ParseDump(words);
     if (name == L"stick") return ParseStick(words);
     if (name == L"wait") return ParseWait(words);
@@ -310,6 +344,10 @@ std::wstring Describe(const Command& command)
         case CommandKind::IconsMask: return std::format(L"icons-mask {}", command.ticks);
         case CommandKind::BattleMask: return std::format(L"battle-mask {}", command.ticks);
         case CommandKind::PerfLog: return command.on ? L"perf-log on" : L"perf-log off";
+        case CommandKind::SingleView:
+            return command.ticks == 1 ? L"single-view on" : command.ticks == 2 ? L"single-view off" : L"single-view auto";
+        case CommandKind::StreamViews:
+            return command.ticks == 1 ? L"stream-views p2" : command.ticks == 2 ? L"stream-views both" : L"stream-views off";
         case CommandKind::Dump: return L"dump " + command.text;
         case CommandKind::SplitFov:
             return command.blend < 0.0f ? std::wstring(L"split-fov native") : L"split-fov " + AxisText(command.blend);

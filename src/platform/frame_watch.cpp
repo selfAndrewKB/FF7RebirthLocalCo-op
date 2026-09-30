@@ -157,7 +157,7 @@ void Note(const wchar_t* job) noexcept
 void SetDetailed(bool on) noexcept
 {
     g_detailed.store(on, std::memory_order_relaxed);
-    Log(L"perf log {}: hitch lines and the periodic timing lines", on ? L"on" : L"off");
+    Log(L"perf log {}: the 10 s hitch summary, hitch lines and the periodic timing lines", on ? L"on" : L"off");
 }
 
 bool Detailed() noexcept
@@ -226,15 +226,18 @@ void OnFrameStart() noexcept
     {
         try
         {
-            std::wstring perFrame;
-            for (std::size_t i = 0; i < kParts; ++i)
+            if (Detailed())  // counted either way; written only with the perf log on
             {
-                perFrame += std::format(L"{}{} {:.3f}", i == 0 ? L"" : L", ", kPartNames[i],
-                                        g_frames > 0 ? g_partTotals[i] * 1000.0 / g_frames : 0.0);
+                std::wstring perFrame;
+                for (std::size_t i = 0; i < kParts; ++i)
+                {
+                    perFrame += std::format(L"{}{} {:.3f}", i == 0 ? L"" : L", ", kPartNames[i],
+                                            g_frames > 0 ? g_partTotals[i] * 1000.0 / g_frames : 0.0);
+                }
+                Log(L"hitches: {} in the last {:.0f} s ({} frames, average {:.1f} ms), worst {:.1f} ms; the mod's hooks per "
+                    L"frame (ms): {}; the mod's periodic jobs: {}",
+                    g_hitches, now - g_summaryStart, g_frames, g_averageMs, g_worstMs, perFrame, JobSummary());
             }
-            Log(L"hitches: {} in the last {:.0f} s ({} frames, average {:.1f} ms), worst {:.1f} ms; the mod's hooks per frame "
-                L"(ms): {}; the mod's periodic jobs: {}",
-                g_hitches, now - g_summaryStart, g_frames, g_averageMs, g_worstMs, perFrame, JobSummary());
         }
         catch (...)
         {

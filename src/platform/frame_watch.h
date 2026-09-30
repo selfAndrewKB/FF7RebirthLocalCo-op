@@ -6,7 +6,8 @@
 // compared with a running average. A frame well over it is a hitch: it is logged with the mod's own
 // time in that frame, by hook, the log lines written, and the periodic jobs that ran (a HUD root
 // scan, a timing log, the status line...). So a hitch the mod causes names its cause, and one it
-// does not shows the mod idle. Every 10 s a summary line gives the hitch count and the worst.
+// does not shows the mod idle. Every 10 s a summary line gives the hitch count and the worst (with the
+// perf log on).
 // Solo and split are both watched, so they can be compared.
 
 namespace lss::platform::frame_watch {
@@ -52,8 +53,9 @@ private:
     double         start_;
 };
 
-/// The `perf-log` switch (off at start): each hitch's own line, the modules' periodic timing lines
-/// and player 2's 10 s status block. The 10 s hitch summary is written either way.
+/// The `perf-log` switch (off at start, on in the watch-only control): the 10 s hitch summary, each
+/// hitch's own line, the modules' periodic timing lines and player 2's 10 s status block. Hitches
+/// are counted either way.
 void SetDetailed(bool on) noexcept;
 bool Detailed() noexcept;
 

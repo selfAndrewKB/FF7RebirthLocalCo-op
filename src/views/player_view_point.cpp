@@ -5,6 +5,7 @@
 #include "platform/log.h"
 #include "platform/vtable_entry.h"
 #include "views/minimal_view_info.h"
+#include "views/stream_view_math.h"
 #include "views/view_shape.h"
 
 #include <atomic>
@@ -12,6 +13,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <optional>
 
 namespace lss::views {
 
@@ -33,6 +35,7 @@ std::atomic<const void*>   g_playerTwo{nullptr};
 std::atomic<bool>          g_ownCamera{false};
 std::atomic<bool>          g_describePending{false};
 std::atomic<bool>          g_fillOn{true};
+std::atomic<bool>          g_splitShown{false};  // player 2 in and the screen split (not player 1's alone)
 std::atomic<std::uint32_t> g_axisOffset{0};  // 0 until reflection has confirmed it
 std::atomic<float>         g_fovWeight{kDefaultSplitFovWeight};  // 0..1; negative: the MajorAxisFOV rule
 std::atomic<float>         g_halfAspect{0.0f};       // the split halves' width/height; 0 until known
@@ -274,8 +277,8 @@ void RestoreAxisRules(const void* removedPlayer) noexcept
     g_fillLogged = false;
 }
 
-/// Same signature as ULocalPlayer::GetViewPoint.
-void GetViewPoint(void* localPlayer, std::byte* viewInfo, std::int32_t stereoPass)
+/// The engine's view point, then the camera choice and the split's shape.
+void GetViewPointShaped(void* localPlayer, std::byte* viewInfo, std::int32_t stereoPass)
 {
     const void* playerTwo   = g_playerTwo.load(std::memory_order_relaxed);
     const void* playerOne   = g_playerOne.load(std::memory_order_relaxed);
@@ -287,9 +290,9 @@ void GetViewPoint(void* localPlayer, std::byte* viewInfo, std::int32_t stereoPas
     g_engineGetViewPoint(source, viewInfo, stereoPass);
 
     LogShapeOnChange(isPlayerTwo, viewInfo);
-    if (playerTwo == nullptr)
+    if (playerTwo == nullptr || !g_splitShown.load(std::memory_order_relaxed))
     {
-        return;  // one player: exactly the engine's result
+        return;  // one player, or player 1's single view: exactly the engine's result
     }
     if (g_fillOn.load(std::memory_order_relaxed))
     {
@@ -302,6 +305,21 @@ void GetViewPoint(void* localPlayer, std::byte* viewInfo, std::int32_t stereoPas
     if (g_describePending.exchange(false, std::memory_order_relaxed))
     {
         DescribeViewPoint(viewInfo, ownCamera);
+    }
+}
+
+// Each split player's camera as it was last drawn (index 1: player 2), for the streaming views
+// (views/stream_views.h). Game thread (Draw).
+std::optional<StreamCamera> g_rendered[2];
+
+/// Same signature as ULocalPlayer::GetViewPoint.
+void GetViewPoint(void* localPlayer, std::byte* viewInfo, std::int32_t stereoPass)
+{
+    GetViewPointShaped(localPlayer, viewInfo, stereoPass);
+    const void* playerTwo = g_playerTwo.load(std::memory_order_relaxed);
+    if (playerTwo != nullptr && (localPlayer == playerTwo || localPlayer == g_playerOne.load(std::memory_order_relaxed)))
+    {
+        g_rendered[localPlayer == playerTwo ? 1 : 0] = CameraOf(viewInfo);
     }
 }
 
@@ -345,6 +363,8 @@ void SetPlayers(const void* playerOne, const void* playerTwo) noexcept
     g_ownCamera.store(playerTwo != nullptr, std::memory_order_relaxed);  // each new player 2 starts on their own camera
     g_describePending.store(playerTwo != nullptr, std::memory_order_relaxed);
     g_shapeLogged[1] = false;  // a new player 2's shape is logged afresh
+    g_rendered[0].reset();
+    g_rendered[1].reset();
 }
 
 void SetAxisConstraintOffset(std::uint32_t offset) noexcept
@@ -376,6 +396,26 @@ bool ToggleFill() noexcept
     g_fillOn.store(on, std::memory_order_relaxed);
     g_fillLogged = false;
     return on;
+}
+
+float HalfAspect() noexcept
+{
+    return g_halfAspect.load(std::memory_order_relaxed);
+}
+
+std::optional<StreamCamera> RenderedCamera(bool playerTwo) noexcept
+{
+    return g_rendered[playerTwo ? 1 : 0];
+}
+
+void SetSplitShown(bool shown) noexcept
+{
+    g_splitShown.store(shown, std::memory_order_relaxed);
+}
+
+bool SplitShown() noexcept
+{
+    return g_splitShown.load(std::memory_order_relaxed);
 }
 
 bool FillsHalves() noexcept

@@ -327,6 +327,69 @@ std::optional<ViewportSize> ViewportSizeOf(UObject* playerController) noexcept
                         *reinterpret_cast<const std::int32_t*>(frame + *sizeY)};
 }
 
+namespace {
+
+/// A reflected UGameplayStatics function and its class default object, if its world-context
+/// parameter and `name` (of `size` bytes) sit where they fit in a frame of at most kMaxFrame bytes.
+struct StaticsCall
+{
+    static constexpr std::int32_t kMaxFrame = 16;
+
+    UFunction*   function      = nullptr;
+    UObject*     defaultObject = nullptr;
+    std::int32_t context       = -1;
+    std::int32_t value         = -1;
+};
+
+StaticsCall FindStatics(const wchar_t* path, const wchar_t* name, std::int32_t size) noexcept
+{
+    auto* function = UObjectGlobals::StaticFindObject<UFunction*>(nullptr, nullptr, path);
+    auto* statics  = UObjectGlobals::StaticFindObject<UClass*>(nullptr, nullptr, STR("/Script/Engine.GameplayStatics"));
+    if (function == nullptr || statics == nullptr || function->GetParmsSize() > StaticsCall::kMaxFrame)
+    {
+        return {};
+    }
+    const auto context = ParamOffset(function, STR("WorldContextObject"), sizeof(UObject*));
+    const auto value   = ParamOffset(function, name, size);
+    UObject*   object  = statics->GetClassDefaultObject();
+    if (!context || !value || object == nullptr)
+    {
+        return {};
+    }
+    return {function, object, *context, *value};
+}
+
+}  // namespace
+
+std::optional<bool> SplitscreenForceDisabled(UObject* worldContext) noexcept
+{
+    const auto call = FindStatics(STR("/Script/Engine.GameplayStatics:IsSplitscreenForceDisabled"), STR("ReturnValue"), 1);
+    if (call.function == nullptr || worldContext == nullptr)
+    {
+        return std::nullopt;
+    }
+    alignas(16) std::uint8_t frame[StaticsCall::kMaxFrame]{};
+    *reinterpret_cast<UObject**>(frame + call.context) = worldContext;
+    if (!GuardedProcessEvent(call.defaultObject, call.function, frame))
+    {
+        return std::nullopt;
+    }
+    return frame[call.value] != 0;
+}
+
+bool SetForceDisableSplitscreen(UObject* worldContext, bool disable) noexcept
+{
+    const auto call = FindStatics(STR("/Script/Engine.GameplayStatics:SetForceDisableSplitscreen"), STR("bDisable"), 1);
+    if (call.function == nullptr || worldContext == nullptr)
+    {
+        return false;
+    }
+    alignas(16) std::uint8_t frame[StaticsCall::kMaxFrame]{};
+    *reinterpret_cast<UObject**>(frame + call.context) = worldContext;
+    frame[call.value] = disable ? 1 : 0;
+    return GuardedProcessEvent(call.defaultObject, call.function, frame);
+}
+
 bool RemoveLocalPlayer(UObject* gameInstance, UObject* localPlayer, std::uintptr_t removeLocalPlayer) noexcept
 {
     if (gameInstance == nullptr || localPlayer == nullptr)

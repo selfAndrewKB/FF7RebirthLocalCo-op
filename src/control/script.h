@@ -38,8 +38,13 @@
 //   battle-mask <0..511>                 diagnosis: bit 8 runs player 2's targeting (the game's
 //                                         targeting tick for player 2; player_two/lock_on.h); the other
 //                                         bits are retired and ignored; on at start
-//   perf-log on|off                      each hitch's own line and the periodic timing lines (off at
-//                                         start; the 10 s hitch summary is always written)
+//   perf-log on|off                      each hitch's own line, the 10 s hitch summary and the periodic
+//                                         timing lines (off at start)
+//   stream-views off|p2|both             which split players' cameras are registered with the game's own
+//                                         scenery streaming (views/stream_views.h); both at start
+//   single-view auto|on|off              player 1's single view while player 2 is in: for the game's
+//                                         whole-screen states (auto, the default), always, or never
+//                                         (players/single_view.h)
 //   hud-trace <frames>                  log the order of the HUD's tick, marker placements, icon
 //                                         projections and render for 1-30 frames, and which player
 //                                         each placement and projection used (hud/hud_trace.h)
@@ -91,6 +96,8 @@ enum class CommandKind
     IconsMask,
     BattleMask,
     PerfLog,
+    SingleView,
+    StreamViews,
     Dump,
     Stick,
     Wait,
@@ -114,7 +121,9 @@ struct Command
     std::int32_t  player    = 0;                       // stick: 1 or 2
     float         axes[4]   = {};                      // stick: LX, LY, RX, RY
     float         blend     = -1.0f;                   // split-fov: 0..1, or negative for native
-    std::uint32_t ticks     = 0;                       // stick, wait, wait-until; hud-trace: frames; the masks: mask
+    std::uint32_t ticks     = 0;                       // stick, wait, wait-until; hud-trace: frames; the masks: mask;
+                                                       // single-view: 0 auto, 1 on, 2 off;
+                                                       // stream-views: 0 off, 1 p2, 2 both
     WaitCondition condition = WaitCondition::Playing;  // wait-until
     std::wstring  text;                                // console, note
 };

@@ -424,11 +424,11 @@ bool SecondImageOn() noexcept
     return g_on.load(std::memory_order_relaxed);
 }
 
-void BeginOverlayRender(bool playerTwoIn) noexcept
+void BeginOverlayRender(bool splitShown) noexcept
 {
     g_pass = Pass::None;
     g_slot = nullptr;
-    const bool image = playerTwoIn && SecondImageOn() && g_stockName.load(std::memory_order_relaxed) != 0 && BuffersUsable();
+    const bool image = splitShown && SecondImageOn() && g_stockName.load(std::memory_order_relaxed) != 0 && BuffersUsable();
     std::uintptr_t overlay = 0;
     std::uintptr_t window  = 0;
     if (image && CopyGuarded(&overlay, reinterpret_cast<const void*>(g_overlaySingleton), sizeof(overlay)) && overlay != 0 &&

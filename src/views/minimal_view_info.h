@@ -8,7 +8,9 @@
 
 namespace lss::views::view_info {
 
-inline constexpr std::size_t kYaw = 0x10;  // FRotator::Yaw, degrees (Pitch +0x0C, Roll +0x14)
+inline constexpr std::size_t kLocation = 0x00;  // FVector, three floats
+inline constexpr std::size_t kPitch    = 0x0C;  // FRotator::Pitch, degrees
+inline constexpr std::size_t kYaw      = 0x10;  // FRotator::Yaw, degrees (Roll +0x14)
 inline constexpr std::size_t kFov = 0x18;  // float, horizontal degrees; the constructor sets 90
 
 /// float: the shape the view is held to when kConstrainAspectRatioBit is set (constructor: 4:3).

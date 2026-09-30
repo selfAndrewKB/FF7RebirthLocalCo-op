@@ -58,6 +58,8 @@ public:
     Outcome SetIconsMask(std::uint32_t mask) override { return Record(L"icons-mask " + std::to_wstring(mask)); }
     Outcome SetBattleMask(std::uint32_t mask) override { return Record(L"battle-mask " + std::to_wstring(mask)); }
     Outcome SetPerfLog(bool on) override { return Record(on ? L"perf-log on" : L"perf-log off"); }
+    Outcome SetSingleView(std::uint32_t mode) override { return Record(L"single-view " + std::to_wstring(mode)); }
+    Outcome SetStreamViews(std::uint32_t mode) override { return Record(L"stream-views " + std::to_wstring(mode)); }
     Outcome Dump(const std::wstring& topic) override { return Record(L"dump " + topic); }
     Outcome HoldSticks(std::int32_t player, const float (&axes)[4]) override
     {
