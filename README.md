@@ -48,11 +48,12 @@ This is its own CMake root. It builds RE-UE4SS from the existing checkout at
 
 ```
 cmake -S . -B build -G "Visual Studio 17 2022"
-cmake --build build --config Game__Shipping__Win64 --target LocalSplitScreen LocalSplitScreenTests
+cmake --build build --config Game__Shipping__Win64
 ctest --test-dir build -C Game__Shipping__Win64 --output-on-failure
 ```
 
-The first build compiles UE4SS and takes a while; later builds only compile this mod.
+The first build compiles UE4SS and takes a while; later builds only compile this mod. Build every
+target before `ctest`: each test is its own executable, and ctest runs whatever was built last.
 
 The development tools are built in by default: control scripts, the HUD trace, the position probe
 and the dump commands (`src/dev/dev_tools.h`). A player's build leaves them out:

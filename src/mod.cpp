@@ -24,6 +24,7 @@
 #include "hud/user_widgets.h"
 #include "platform/engine_addresses.h"
 #include "platform/frame_watch.h"
+#include "platform/memory_watch.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/module_folder.h"
@@ -62,7 +63,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.34.3-screen-signals";
+constexpr const wchar_t* kVersion = L"0.34.7-pool-watch";
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -128,7 +129,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.34.3-screen-signals");
+        ModVersion     = STR("0.34.7-pool-watch");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -182,6 +183,7 @@ public:
     auto on_unreal_init() -> void override
     {
         Log(L"v{} starting", kVersion);
+        lss::platform::memory_watch::Start();  // its own thread, from launch to exit
 
         // A measuring control: with `watch_only.txt` in the mod's folder, nothing is installed but the
         // frame-hitch watch, so the game's own frame times can be compared with the mod's.

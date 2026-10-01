@@ -53,6 +53,9 @@ add_library(LocalSplitScreen SHARED
     src/platform/frame_watch.cpp
     src/platform/image.cpp
     src/platform/log.cpp
+    src/platform/memory_watch.cpp
+    src/platform/binned_pools.cpp
+    src/platform/pool_bits.cpp
     src/platform/module_folder.cpp
     src/platform/module_pin.cpp
     src/platform/near_code.cpp
@@ -215,6 +218,14 @@ add_executable(StreamViewMathTests
 target_include_directories(StreamViewMathTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(StreamViewMathTests PRIVATE cxx_std_20)
 add_test(NAME stream_view_math COMMAND StreamViewMathTests)
+
+add_executable(PoolBitsTests
+    tests/pool_bits_test.cpp
+    src/platform/pool_bits.cpp
+)
+target_include_directories(PoolBitsTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(PoolBitsTests PRIVATE cxx_std_20)
+add_test(NAME pool_bits COMMAND PoolBitsTests)
 
 add_executable(StrandWatchTests
     tests/strand_watch_test.cpp
