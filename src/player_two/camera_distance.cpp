@@ -8,10 +8,18 @@
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
+#include "players/unreal_access.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <format>
 #include <string>
+#include <utility>
+
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <Windows.h>
 
 namespace lss::player_two::camera_distance {
 
@@ -29,6 +37,22 @@ constexpr std::uintptr_t kSetterCall  = 0x142ADCBCA;  // in the option setter: t
 constexpr std::uintptr_t kConfirmCall = 0x14180A4D6;  // in the confirm-key handler: the per-camera-manager apply
 constexpr int            kMaxLines    = 50;
 
+// Split framing (RE-p2-framing.md §1.4, §3, §6.1; RE-p2-battle-camera.md §6).
+// GetSystemOptionData(): the global option struct (pure read: [[[g]+0x100]+0x28]+0x10).
+constexpr std::uint8_t kOptionDataBytes[] = {0x48, 0x8B, 0x05, 0xF5, 0xCB, 0xB1, 0x08, 0x48, 0x85, 0xC0, 0x74, 0x10,
+                                             0x48, 0x8B, 0x80, 0x00, 0x01, 0x00, 0x00};
+constexpr platform::FunctionFact kOptionData{L"GetSystemOptionData", 0x14087F15C, kOptionDataBytes};
+constexpr std::uint32_t kOptionFieldLevel  = 0x36;  // Camera Distance: Out of Battle
+constexpr std::uint32_t kOptionBattleLevel = 0x37;  // Camera Distance: In Battle
+constexpr std::uint32_t kOpInitialized     = 0xD2;  // the operator's lazy init ran (it seeds the level from the option)
+constexpr std::uint32_t kOpLevel           = 0x738;
+constexpr std::int32_t  kMinOffset = -2, kMaxOffset = 5;
+constexpr std::int32_t  kMinLevel  = 1, kMaxLevel = 10;  // the factor is linear; the menu's own range is not read
+constexpr ULONGLONG     kLayoutReadMs = 1000;
+constexpr int           kMaxFramingLines = 200;
+
+using OptionDataFn = const std::uint8_t* (*)();
+
 using PrimaryApplyFn = void (*)(std::uint8_t field, std::uint8_t battle);
 using ManagerApplyFn = void (*)(void* cameraManager, std::uint8_t field, std::uint8_t battle);
 
@@ -40,6 +64,14 @@ std::uintptr_t         g_cameraManagerVTable = 0;
 
 // Game thread.
 int g_lines = 0;
+
+// Split framing, game thread.
+OptionDataFn  g_optionData     = nullptr;
+std::int32_t  g_offsets[2]     = {0, 0};  // top/bottom, side by side: the Options level unless asked
+std::uint8_t  g_layout         = 0;       // players::SplitLayoutKind, read once a second while player 2 is in
+ULONGLONG     g_layoutReadAt   = 0;
+bool          g_wasIn          = false;
+int           g_framingLines   = 0;
 
 void Line(const std::wstring& text) noexcept
 {
@@ -94,7 +126,98 @@ void ManagerApply(void* cameraManager, std::uint8_t field, std::uint8_t battle) 
     ApplyToPlayerTwo(cameraManager, field, battle);
 }
 
+template <class... Args>
+void FramingLine(std::wformat_string<Args...> text, Args&&... args) noexcept
+{
+    if (g_framingLines < kMaxFramingLines)
+    {
+        ++g_framingLines;
+        try
+        {
+            platform::Log(L"framing: {}", std::format(text, std::forward<Args>(args)...));
+        }
+        catch (...)
+        {
+        }
+    }
+}
+
+/// The options' field and battle levels, if the option data can be read.
+bool OptionLevels(std::uint8_t& field, std::uint8_t& battle) noexcept
+{
+    const std::uint8_t* options = nullptr;
+    return g_optionData != nullptr && platform::CallGuarded(g_optionData, options) && options != nullptr &&
+           platform::CopyGuarded(&field, options + kOptionFieldLevel, 1) &&
+           platform::CopyGuarded(&battle, options + kOptionBattleLevel, 1);
+}
+
+/// Drives one camera manager's field operator to level through the game's per-camera-manager setter,
+/// if the operator is initialised and holds another level.
+void DriveTo(void* cameraManager, int player, std::uint8_t level, std::uint8_t battle) noexcept
+{
+    void* op = ReadPointer(cameraManager, facts::kCameraManagerFieldOperator);
+    std::uint8_t initialized = 0, now = 0;
+    if (op == nullptr || !platform::CopyGuarded(&initialized, static_cast<std::uint8_t*>(op) + kOpInitialized, 1) ||
+        initialized == 0 || !platform::CopyGuarded(&now, static_cast<std::uint8_t*>(op) + kOpLevel, 1) || now == level)
+    {
+        return;
+    }
+    const bool ok = platform::CallGuarded(g_managerApply, cameraManager, level, battle);
+    FramingLine(L"player {}'s field camera distance level {} -> {} (battle {}){}", player, now, level, battle,
+                ok ? L"" : L" (FAULTED)");
+}
+
 }  // namespace
+
+bool FramingAvailable() noexcept
+{
+    return g_managerApply != nullptr && g_optionData != nullptr && g_cameraManagerVTable != 0;
+}
+
+void SetLayoutOffsets(std::int32_t topBottom, std::int32_t sideBySide) noexcept
+{
+    g_offsets[0] = std::clamp(topBottom, kMinOffset, kMaxOffset);
+    g_offsets[1] = std::clamp(sideBySide, kMinOffset, kMaxOffset);
+    FramingLine(L"layout offsets: top/bottom {:+}, side by side {:+} steps of the Options level", g_offsets[0], g_offsets[1]);
+}
+
+void TickFraming(bool playerTwoIn) noexcept
+{
+    if (!FramingAvailable() || !generation::OnGameThread())
+    {
+        return;
+    }
+    const bool in = playerTwoIn && generation::Active();
+    if (!in && !g_wasIn)
+    {
+        return;
+    }
+    std::uint8_t field = 0, battle = 0;
+    if (!OptionLevels(field, battle))
+    {
+        return;
+    }
+    if (!in)
+    {
+        g_wasIn = false;  // player 2 left: player 1's camera back to the Options level
+        DriveTo(CameraManagerOf(generation::PlayerOneController()), 1, field, battle);
+        return;
+    }
+    const ULONGLONG now = GetTickCount64();
+    if (!g_wasIn || now - g_layoutReadAt >= kLayoutReadMs)
+    {
+        g_layoutReadAt = now;
+        if (const auto layout = players::unreal::ReadTwoPlayerSplitscreenLayout(); layout && *layout <= 1)
+        {
+            g_layout = *layout;
+        }
+    }
+    g_wasIn = true;
+    const std::int32_t  target = std::clamp(static_cast<std::int32_t>(field) + g_offsets[g_layout], kMinLevel, kMaxLevel);
+    const std::uint8_t  level  = static_cast<std::uint8_t>(target);
+    DriveTo(CameraManagerOf(generation::PlayerOneController()), 1, level, battle);
+    DriveTo(CameraManagerOf(generation::PlayerTwoController()), 2, level, battle);
+}
 
 bool Install(const platform::GameImage& image) noexcept
 {
@@ -108,6 +231,8 @@ bool Install(const platform::GameImage& image) noexcept
         return false;
     }
     g_managerApply        = reinterpret_cast<ManagerApplyFn>(*manager);
+    const auto options    = platform::FindFunction(image, kOptionData);
+    g_optionData          = options ? reinterpret_cast<OptionDataFn>(*options) : nullptr;
     g_cameraManagerVTable = *vtable;
     const auto redirect = [&image](platform::CallRedirect& call, std::uintptr_t site, std::uintptr_t target, auto* with) {
         const auto live = image.Rebase(site, 5);
@@ -118,6 +243,8 @@ bool Install(const platform::GameImage& image) noexcept
     platform::Log(L"camera distance: the Options distance reaches player 2's camera from the option setter {} and the "
                   L"confirm key {}",
                   setter ? L"yes" : L"NO (check failed)", confirm ? L"yes" : L"NO (check failed)");
+    platform::Log(L"framing: split framing through the per-camera-manager distance setter {} (top/bottom {:+}, side by side {:+} steps)",
+                  FramingAvailable() ? L"available" : L"UNAVAILABLE (the option data check failed)", g_offsets[0], g_offsets[1]);
     return setter || confirm;
 }
 

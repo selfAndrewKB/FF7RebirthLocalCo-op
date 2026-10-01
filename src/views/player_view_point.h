@@ -75,6 +75,10 @@ void SetSplitFovWeight(float weight) noexcept;
 /// The weight in use, or a negative value for the MajorAxisFOV rule.
 float SplitFovWeight() noexcept;
 
+/// A player's half width against the game camera's own, as tan(half's horizontal FOV / 2) / tan(camera's / 2) from
+/// the last view drawn (1 when no split FOV is written). Any thread.
+float SplitWidthRatio(bool isPlayerTwo) noexcept;
+
 /// The halves' shape (views::HalfOf), kept current by the game thread while player 2 is in. The
 /// split FOV is applied only once this is known; until then the MajorAxisFOV rule is used.
 void SetHalfShape(const HalfShape& half) noexcept;

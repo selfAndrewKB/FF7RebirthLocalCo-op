@@ -13,6 +13,8 @@
 #include "platform/frame_watch.h"
 #include "platform/log.h"
 #include "player_two/battle_input.h"
+#include "player_two/camera_distance.h"
+#include "player_two/shoulder_scale.h"
 #include "player_two/generation.h"
 #include "player_two/pad_buttons.h"
 #include "player_two/pad_sticks.h"
@@ -299,6 +301,36 @@ Outcome ModTarget::SetMinimapOnce(bool on)
     hud::SetMinimapOnce(on);
     return {true, on ? L"the minimap's map rendered once per frame, by player 1's pass"
                      : L"the minimap's map rendered in both players' passes"};
+}
+
+Outcome ModTarget::SetFramingOffsets(std::int32_t topBottom, std::int32_t sideBySide)
+{
+    if (!player_two::camera_distance::FramingAvailable())
+    {
+        return Failed(L"split framing is not available (see the install log)");
+    }
+    player_two::camera_distance::SetLayoutOffsets(topBottom, sideBySide);
+    return {true, L"each player's field camera follows the Options distance plus the layout's steps while player 2 is in"};
+}
+
+Outcome ModTarget::SetShoulderScale(bool on)
+{
+    if (!player_two::shoulder_scale::Installed())
+    {
+        return Failed(L"the shoulder scale is not installed (see the install log)");
+    }
+    player_two::shoulder_scale::SetOn(on);
+    return {true, on ? L"each half's camera shoulder offset scaled to its width" : L"the game's shoulder offset as it is"};
+}
+
+Outcome ModTarget::SetShoulderScaleMinimum(float minimum)
+{
+    if (!player_two::shoulder_scale::Installed())
+    {
+        return Failed(L"the shoulder scale is not installed (see the install log)");
+    }
+    player_two::shoulder_scale::SetMinimum(minimum);
+    return {true, L"the narrowest half's shoulder offset is softened no further than this"};
 }
 
 Outcome ModTarget::Dump(const std::wstring& topic)

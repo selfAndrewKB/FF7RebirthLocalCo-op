@@ -151,6 +151,44 @@ ParsedLine ParseSplitFov(const std::vector<std::wstring_view>& words)
     return Parsed(std::move(command));
 }
 
+ParsedLine ParseFramingOffset(const std::vector<std::wstring_view>& words)
+{
+    Command command;
+    command.kind = CommandKind::FramingOffset;
+    auto step    = [](std::wstring_view word) -> std::optional<std::int32_t> {
+        const bool negative = word.size() == 2 && word[0] == L'-';
+        const auto digits   = negative ? word.substr(1) : word;
+        if (digits.size() != 1 || digits[0] < L'0' || digits[0] > L'9')
+        {
+            return std::nullopt;
+        }
+        const std::int32_t value = negative ? -(digits[0] - L'0') : digits[0] - L'0';
+        return value >= -2 && value <= 5 ? std::optional<std::int32_t>(value) : std::nullopt;
+    };
+    const auto topBottom  = words.size() == 3 ? step(words[1]) : std::nullopt;
+    const auto sideBySide = words.size() == 3 ? step(words[2]) : std::nullopt;
+    if (!topBottom || !sideBySide)
+    {
+        return Error(L"framing-offset takes two whole steps from -2 to 5: top/bottom, then side by side");
+    }
+    command.offsets[0] = *topBottom;
+    command.offsets[1] = *sideBySide;
+    return Parsed(std::move(command));
+}
+
+ParsedLine ParseShoulderMinimum(const std::vector<std::wstring_view>& words)
+{
+    const auto minimum = words.size() == 2 ? ParseAxis(words[1]) : std::nullopt;
+    if (!minimum || *minimum < 0.25f)
+    {
+        return Error(L"shoulder-scale-min takes a factor from 0.25 to 1");
+    }
+    Command command;
+    command.kind  = CommandKind::ShoulderScaleMin;
+    command.blend = *minimum;
+    return Parsed(std::move(command));
+}
+
 ParsedLine ParseHudTrace(const std::vector<std::wstring_view>& words)
 {
     const auto frames = words.size() == 2 ? ParseTicks(words[1]) : std::nullopt;
@@ -334,6 +372,9 @@ ParsedLine ParseLine(std::wstring_view line)
     if (name == L"stream-fov-p1") return ParseStreamFov(words);
     if (name == L"stream-feedback") return ParseSwitch(CommandKind::StreamFeedback, words, L"p1", L"each");
     if (name == L"minimap-once") return ParseSwitch(CommandKind::MinimapOnce, words, L"on", L"off");
+    if (name == L"framing-offset") return ParseFramingOffset(words);
+    if (name == L"shoulder-scale") return ParseSwitch(CommandKind::ShoulderScale, words, L"on", L"off");
+    if (name == L"shoulder-scale-min") return ParseShoulderMinimum(words);
     if (name == L"dump") return ParseDump(words);
     if (name == L"stick") return ParseStick(words);
     if (name == L"wait") return ParseWait(words);
@@ -375,6 +416,10 @@ std::wstring Describe(const Command& command)
             return command.ticks == 0 ? std::wstring(L"stream-fov-p1 auto") : std::format(L"stream-fov-p1 {}", command.ticks);
         case CommandKind::StreamFeedback: return command.on ? L"stream-feedback p1" : L"stream-feedback each";
         case CommandKind::MinimapOnce: return command.on ? L"minimap-once on" : L"minimap-once off";
+        case CommandKind::ShoulderScale: return command.on ? L"shoulder-scale on" : L"shoulder-scale off";
+        case CommandKind::ShoulderScaleMin: return L"shoulder-scale-min " + AxisText(command.blend);
+        case CommandKind::FramingOffset:
+            return std::format(L"framing-offset {} {}", command.offsets[0], command.offsets[1]);
         case CommandKind::Dump: return L"dump " + command.text;
         case CommandKind::SplitFov:
             return command.blend < 0.0f ? std::wstring(L"split-fov native") : L"split-fov " + AxisText(command.blend);

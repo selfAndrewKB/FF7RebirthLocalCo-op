@@ -197,6 +197,10 @@ struct LoggedFov
 };
 LoggedFov g_loggedFov[2]{};
 
+/// Each player's half width against the camera's own (tan of the half-angles; 1 without a split FOV), for the
+/// camera code that places things across the view (player_two/shoulder_scale.h).
+std::atomic<float> g_widthRatio[2] = {1.0f, 1.0f};
+
 /// With a weight chosen and the halves' shape known, writes the split FOV (views/view_shape.h,
 /// SplitFov) under the MaintainXFOV rule; otherwise leaves the FOV to the MajorAxisFOV rule.
 void ApplySplitFov(void* localPlayer, std::byte* viewInfo, bool isPlayerTwo) noexcept
@@ -206,6 +210,7 @@ void ApplySplitFov(void* localPlayer, std::byte* viewInfo, bool isPlayerTwo) noe
     if (weight < 0.0f || half.aspect <= 0.0f || half.heightRatio <= 0.0f)
     {
         ApplyAxisRule(localPlayer, kMajorAxisFov);
+        g_widthRatio[isPlayerTwo ? 1 : 0].store(1.0f, std::memory_order_relaxed);
         return;
     }
     if (!ApplyAxisRule(localPlayer, kMaintainXFov))
@@ -218,6 +223,11 @@ void ApplySplitFov(void* localPlayer, std::byte* viewInfo, bool isPlayerTwo) noe
     std::memcpy(&cameraRatio, viewInfo + view_info::kAspectRatio, sizeof(cameraRatio));
     const float split = SplitFov(fov, cameraRatio, half, weight);
     std::memcpy(viewInfo + view_info::kFov, &split, sizeof(split));
+    {
+        constexpr float kHalfAngle = 3.14159265f / 360.0f;
+        const float     ratio      = std::tan(split * kHalfAngle) / std::tan(fov * kHalfAngle);
+        g_widthRatio[isPlayerTwo ? 1 : 0].store(std::isfinite(ratio) && ratio > 0.0f ? ratio : 1.0f, std::memory_order_relaxed);
+    }
 
     LoggedFov& logged = g_loggedFov[isPlayerTwo ? 1 : 0];
     if (weight != logged.weight || half.aspect != logged.aspect || fov != logged.fov)
@@ -431,6 +441,11 @@ void SetSplitFovWeight(float weight) noexcept
 float SplitFovWeight() noexcept
 {
     return g_fovWeight.load(std::memory_order_relaxed);
+}
+
+float SplitWidthRatio(bool isPlayerTwo) noexcept
+{
+    return g_widthRatio[isPlayerTwo ? 1 : 0].load(std::memory_order_relaxed);
 }
 
 void SetHalfShape(const HalfShape& half) noexcept

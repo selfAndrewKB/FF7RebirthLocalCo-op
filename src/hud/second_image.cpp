@@ -505,7 +505,7 @@ std::uintptr_t EntryNameForPass(std::uintptr_t stockName) noexcept
 {
     if (g_pass != Pass::PlayerTwo)
     {
-        if (g_stockName.load(std::memory_order_relaxed) == 0 && stockName != 0)
+        if (g_stockName.load(std::memory_order_relaxed) == 0 && stockName != 0 && !g_refused)  // once, not per frame
         {
             // First sight of the game's name: check that names built here match the engine's.
             try
@@ -518,6 +518,7 @@ std::uintptr_t EntryNameForPass(std::uintptr_t stockName) noexcept
                 }
                 else
                 {
+                    g_fields.stockName = stockName;  // before any family name can be set from g_stockName
                     g_stockName.store(stockName, std::memory_order_release);
                 }
             }

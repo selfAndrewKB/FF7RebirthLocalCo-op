@@ -69,6 +69,12 @@ public:
         return Record(playerOneOnly ? L"stream-feedback p1" : L"stream-feedback each");
     }
     Outcome SetMinimapOnce(bool on) override { return Record(on ? L"minimap-once on" : L"minimap-once off"); }
+    Outcome SetShoulderScaleMinimum(float) override { return Record(L"shoulder-scale-min"); }
+    Outcome SetShoulderScale(bool on) override { return Record(on ? L"shoulder-scale on" : L"shoulder-scale off"); }
+    Outcome SetFramingOffsets(std::int32_t topBottom, std::int32_t sideBySide) override
+    {
+        return Record(L"framing-offset " + std::to_wstring(topBottom) + L" " + std::to_wstring(sideBySide));
+    }
     Outcome Dump(const std::wstring& topic) override { return Record(L"dump " + topic); }
     Outcome HoldSticks(std::int32_t player, const float (&axes)[4]) override
     {

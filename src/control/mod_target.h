@@ -56,6 +56,9 @@ public:
     Outcome SetPlayerOneStreamFov(std::uint32_t degrees) override;
     Outcome SetStreamFeedbackOnce(bool playerOneOnly) override;
     Outcome SetMinimapOnce(bool on) override;
+    Outcome SetFramingOffsets(std::int32_t topBottom, std::int32_t sideBySide) override;
+    Outcome SetShoulderScale(bool on) override;
+    Outcome SetShoulderScaleMinimum(float minimum) override;
     Outcome Dump(const std::wstring& topic) override;
     Outcome HoldSticks(std::int32_t player, const float (&axes)[4]) override;
     void    ReleaseSticks(std::int32_t player) override;

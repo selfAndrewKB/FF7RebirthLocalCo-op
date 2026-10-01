@@ -72,6 +72,10 @@ add_library(LocalSplitScreen SHARED
     src/player_two/member_movement.cpp
     src/player_two/nav_strand.cpp
     src/player_two/warp_camera_watch.cpp
+    src/player_two/framing_watch.cpp
+    src/player_two/location_rows.cpp
+    src/player_two/shoulder_scale.cpp
+    src/hud/navimap_watch.cpp
     src/player_two/party_warp.cpp
     src/player_two/strand_watch.cpp
     src/player_two/battle_input.cpp

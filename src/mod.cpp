@@ -15,6 +15,7 @@
 #include "hud/hud_placement.h"
 #include "hud/layout_scale.h"
 #include "hud/minimap_once.h"
+#include "hud/navimap_watch.h"
 #include "hud/overlay_layout.h"
 #include "hud/player_two_pass.h"
 #include "hud/area_icons_two.h"
@@ -32,6 +33,10 @@
 #include "player_two/field_exit.h"
 #include "player_two/generation.h"
 #include "player_two/main_camera_shape.h"
+#include "player_two/camera_distance.h"
+#include "player_two/framing_watch.h"
+#include "player_two/location_rows.h"
+#include "player_two/shoulder_scale.h"
 #include "player_two/nav_strand.h"
 #include "player_two/party_warp.h"
 #include "player_two/session.h"
@@ -65,7 +70,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.35.0-feedback-once";
+constexpr const wchar_t* kVersion = L"0.35.10-review-fixes";
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -131,7 +136,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.35.0-feedback-once");
+        ModVersion     = STR("0.35.10-review-fixes");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -171,6 +176,8 @@ public:
         lss::hud::area_icons_two::Remove();
         lss::hud::user_widgets::Remove();
         lss::hud::RemoveMinimapOnce();
+        lss::player_two::location_rows::Remove();
+        lss::player_two::shoulder_scale::Remove();
         lss::hud::RemoveSecondImage();
         lss::hud::RemovePlayerTwoPass();
         lss::dev::Remove();
@@ -254,6 +261,10 @@ public:
         lss::hud::user_widgets::Install();          // HUD widgets as the engine constructs them
         lss::hud::InstallSecondImage(*image);        // player 2's HUD image, on (the hud-image command switches it)
         lss::hud::InstallMinimapOnce(*image);        // the minimap's map rendered by player 1's pass only
+        lss::hud::navimap_watch::Install(*image);    // the minimap's objects, logged (read-only)
+        lss::player_two::framing_watch::Install(*image);  // each player's field-camera framing, logged (read-only)
+        lss::player_two::location_rows::Install(*image);  // each camera's location rows from its own player
+        lss::player_two::shoulder_scale::Install(*image);  // each half's shoulder offset scaled to its width
         lss::hud::InstallPlayerTwoPass(*image);      // player 2's HUD content, on (the hud-levers command switches it)
         lss::hud::InstallRootOverlayRender(*image);  // before the overlay renders: placement follow, trace
         lss::hud::prompt_rows::Install(*image);      // each player's field prompt rows in their own half
@@ -358,6 +369,8 @@ private:
         lss::renderer::PollFamilyBoundary();
         lss::renderer::PollMeFeedbackOnce();
         lss::hud::PollMinimapOnce();
+        lss::player_two::location_rows::Poll();
+        lss::player_two::location_rows::Tick();
         lss::player_two::field_exit::Watch();
         if (session_->HasPlayerTwo() && lss::player_two::field_exit::FieldLeft())
         {
@@ -375,6 +388,10 @@ private:
         const bool splitShown = playerTwoIn && !singleView_.Single();
         lss::views::SetSplitShown(splitShown);
         lss::player_two::nav_strand::Tick(splitShown);  // a stranded player 2 is warped back to the party
+        lss::player_two::camera_distance::TickFraming(playerTwoIn);  // per-layout distance steps (roadmap 2b)
+        lss::player_two::shoulder_scale::Poll(splitShown);
+        lss::player_two::framing_watch::Tick(splitShown);
+        lss::hud::navimap_watch::Tick(splitShown);
         if (wholeScreen_)
         {
             lss::views::UpdateStreamViews(splitShown);  // needs the game-state check whole_screen verified

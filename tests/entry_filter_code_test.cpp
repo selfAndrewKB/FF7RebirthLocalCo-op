@@ -140,7 +140,8 @@ int RunGate(void* page, std::uint64_t entryName, std::int32_t batchCount)
 }
 
 constexpr std::uint64_t kStockName     = 0x0000000000001234;
-constexpr std::uint64_t kPlayerTwoName = 0x0000000100001234;  // same text index, another number
+constexpr std::uint64_t kPlayerTwoName = 0x0000000100001234;  // any other value: only equality is compared
+constexpr std::uint64_t kMinimapName   = 0x0000000000005678;  // an entry of another pool ("SEndNaviMapCircle")
 
 void TestBuffers()
 {
@@ -165,11 +166,14 @@ void TestBuffers()
 
 void TestDrawGate()
 {
-    std::puts("draw gate: a family draws only its own entry; with no family set, the game's gate alone");
+    std::puts("draw gate: a family skips only the other player's overlay entry; other entries, the game's gate alone");
     EntryFilterFields fields;
+    fields.stockName     = kStockName;
+    fields.playerTwoName = kPlayerTwoName;
     WithPage(fields, GateHarnessCode, [](void* page) {
-        EXPECT(RunGate(page, kStockName, 3) == 1);      // no filter: drawn
+        EXPECT(RunGate(page, kStockName, 3) == 1);      // no family set: drawn
         EXPECT(RunGate(page, kPlayerTwoName, 3) == 1);
+        EXPECT(RunGate(page, kMinimapName, 3) == 1);
         EXPECT(RunGate(page, kStockName, 0) == 0);      // the game's own gate still applies
     });
 
@@ -178,12 +182,15 @@ void TestDrawGate()
         EXPECT(RunGate(page, kStockName, 3) == 1);
         EXPECT(RunGate(page, kPlayerTwoName, 3) == 0);  // player 2's entry skipped
         EXPECT(RunGate(page, kStockName, 0) == 0);
+        EXPECT(RunGate(page, kMinimapName, 3) == 1);    // another pool's entry: drawn
+        EXPECT(RunGate(page, kMinimapName, 0) == 0);
     });
 
     fields.familyName = kPlayerTwoName;  // player 2's family
     WithPage(fields, GateHarnessCode, [](void* page) {
         EXPECT(RunGate(page, kPlayerTwoName, 3) == 1);
         EXPECT(RunGate(page, kStockName, 3) == 0);
+        EXPECT(RunGate(page, kMinimapName, 3) == 1);
     });
 }
 

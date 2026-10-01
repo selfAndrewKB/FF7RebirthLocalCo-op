@@ -17,9 +17,12 @@
 // after it reads the flags before the call.
 //
 // Draw gate (0x140FC8E05, `cmp dword [r9+8],0` before `jle` past the draw; rbx = the entry): when a
-// family entry name is set and this entry's name differs, ZF is forced so the stock jle skips the
-// draw. The entry has already uploaded, so a later re-use by the other family still finds its
-// geometry. rax is dead at this point on both paths.
+// family entry name is set and this entry is the OTHER player's overlay entry, ZF is forced so the
+// stock jle skips the draw. The entry has already uploaded, so a later re-use by the other family
+// still finds its geometry. rax is dead at this point on both paths.
+// The gate is in DrawLayerEntry, which every pool's consume calls (pool 0's at 0x140FC7C9D draws the
+// minimap's map into its own target, before the frame's families), so only the two overlay entries
+// are ever filtered; every other entry is drawn as the game draws it.
 //
 // The values are read through absolute addresses of 8-byte fields that the mod owns (patched in by
 // the builders below), so they can change while the code is installed. Kept apart from the
@@ -40,10 +43,11 @@ struct EntryFilterFields
     alignas(8) std::uint64_t indexBuffer   = 0;
     alignas(8) std::uint64_t srmSlot       = 0;
     alignas(8) std::uint64_t familyName    = 0;  // the entry this family draws; 0 draws every entry
+    alignas(8) std::uint64_t stockName     = 0;  // player 1's (the game's) overlay entry FName
 };
 
 inline constexpr std::size_t kEntryBuffersCodeSize = 81;
-inline constexpr std::size_t kEntryDrawGateCodeSize = 32;
+inline constexpr std::size_t kEntryDrawGateCodeSize = 68;
 
 /// The instruction each site replaces, as the research read it.
 inline constexpr std::uint8_t kLoadVertexBufferBytes[] = {0x48, 0x8B, 0x87, 0x90, 0x00, 0x00, 0x00};  // mov rax,[rdi+90h]
@@ -90,14 +94,24 @@ inline std::array<std::uint8_t, kEntryDrawGateCodeSize> EntryDrawGateCode(const 
         0x48, 0xB8, 0, 0, 0, 0, 0, 0, 0, 0,  //  0: mov  rax, &familyName
         0x48, 0x8B, 0x00,                    // 10: mov  rax, [rax]
         0x48, 0x85, 0xC0,                    // 13: test rax, rax
-        0x74, 0x09,                          // 16: jz   stock          no filter: draw as the game does
+        0x74, 0x2D,                          // 16: jz   stock          no filter: draw as the game does
         0x48, 0x3B, 0x03,                    // 18: cmp  rax, [rbx]     this entry's FName
-        0x74, 0x04,                          // 21: je   stock          this family's entry
-        0x31, 0xC0,                          // 23: xor  eax, eax       ZF=1, SF=OF=0: the stock jle skips the draw
-        0xEB, 0x05,                          // 25: jmp  done
-        0x41, 0x83, 0x79, 0x08, 0x00,        // 27: stock: cmp dword [r9+8], 0 (the replaced instruction)
-    };                                       // 32: done (the jump back is appended here)
+        0x74, 0x28,                          // 21: je   stock          this family's entry
+        0x48, 0xB8, 0, 0, 0, 0, 0, 0, 0, 0,  // 23: mov  rax, &playerTwoName
+        0x48, 0x8B, 0x00,                    // 33: mov  rax, [rax]
+        0x48, 0x3B, 0x03,                    // 36: cmp  rax, [rbx]
+        0x74, 0x12,                          // 39: je   skip           player 2's entry, player 1's family
+        0x48, 0xB8, 0, 0, 0, 0, 0, 0, 0, 0,  // 41: mov  rax, &stockName
+        0x48, 0x8B, 0x00,                    // 51: mov  rax, [rax]
+        0x48, 0x3B, 0x03,                    // 54: cmp  rax, [rbx]
+        0x75, 0x04,                          // 57: jne  stock          not an overlay entry (the minimap's map, ...)
+        0x31, 0xC0,                          // 59: skip: xor eax, eax  ZF=1, SF=OF=0: the stock jle skips the draw
+        0xEB, 0x05,                          // 61: jmp  done
+        0x41, 0x83, 0x79, 0x08, 0x00,        // 63: stock: cmp dword [r9+8], 0 (the replaced instruction)
+    };                                       // 68: done (the jump back is appended here)
     detail::PutAddress(&code[2], &fields.familyName);
+    detail::PutAddress(&code[25], &fields.playerTwoName);
+    detail::PutAddress(&code[43], &fields.stockName);
     return code;
 }
 

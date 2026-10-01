@@ -49,6 +49,13 @@
 //                                         each family (renderer/me_feedback_once.h)
 //   minimap-once on|off                  the minimap's map is rendered once per frame, by player 1's HUD
 //                                         pass (on, at start), or again in player 2's (hud/minimap_once.h)
+//   shoulder-scale on|off                 each half's camera shoulder offset scaled to its width (on at start;
+//                                         player_two/shoulder_scale.h)
+//   shoulder-scale-min <0.25..1>          the smallest shoulder factor (0.7 at start; side by side's width alone
+//                                         gives 0.5)
+//   framing-offset <tb> <sbs>            field-camera distance steps added to the Options level while player 2
+//                                         is in, per layout (-2..5 each; 0 and 0 at start;
+//                                         player_two/camera_distance.h)
 //   single-view auto|on|off              player 1's single view while player 2 is in: for the game's
 //                                         whole-screen states (auto, the default), always, or never
 //                                         (players/single_view.h)
@@ -108,6 +115,9 @@ enum class CommandKind
     StreamFovPlayerOne,
     StreamFeedback,
     MinimapOnce,
+    FramingOffset,
+    ShoulderScale,
+    ShoulderScaleMin,
     Dump,
     Stick,
     Wait,
@@ -130,11 +140,12 @@ struct Command
     bool          on        = false;                   // own-camera on / sticks per-pad / layout side-by-side / bars on
     std::int32_t  player    = 0;                       // stick: 1 or 2
     float         axes[4]   = {};                      // stick: LX, LY, RX, RY
-    float         blend     = -1.0f;                   // split-fov: 0..1, or negative for native
+    float         blend     = -1.0f;                   // split-fov: 0..1, or negative for native; shoulder-scale-min
     std::uint32_t ticks     = 0;                       // stick, wait, wait-until; hud-trace: frames; the masks: mask;
                                                        // single-view: 0 auto, 1 on, 2 off;
                                                        // stream-views: 0 off, 1 p2, 2 both;
                                                        // stream-fov-p1: degrees, 0 auto
+    std::int32_t  offsets[2] = {};                     // framing-offset: top/bottom, side by side
     WaitCondition condition = WaitCondition::Playing;  // wait-until
     std::wstring  text;                                // console, note
 };
