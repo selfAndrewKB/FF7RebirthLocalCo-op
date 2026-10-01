@@ -75,6 +75,7 @@ add_library(LocalSplitScreen SHARED
     src/player_two/framing_watch.cpp
     src/player_two/location_rows.cpp
     src/player_two/shoulder_scale.cpp
+    src/player_two/walk_limits.cpp
     src/hud/navimap_watch.cpp
     src/player_two/party_warp.cpp
     src/player_two/strand_watch.cpp
@@ -141,7 +142,6 @@ option(LSS_DEV_TOOLS "Build the development tools into the mod" ON)
 if(LSS_DEV_TOOLS)
     target_sources(LocalSplitScreen PRIVATE
         src/dev/dev_tools.cpp
-        src/dev/terrain_watch.cpp
         src/control/command_channel.cpp
         src/control/mod_target.cpp
         src/control/runner.cpp
