@@ -56,28 +56,37 @@ struct Arguments
 /// void harness(const void* entry /*rcx*/, const void* renderer /*rdx*/, Arguments* out /*r8*/)
 using BuffersHarness = void (*)(const void* entry, const void* renderer, Arguments* out);
 
+/// Pool 2's site has the renderer in rdi (its vertex buffer at +0x90); pool 0's in r13 (at +0x80).
+template <bool PoolZero>
 std::vector<std::uint8_t> BuffersHarnessCode(std::uintptr_t base, const EntryFilterFields& fields)
 {
-    const std::uint8_t prologue[] = {
-        0x57,                                            // push rdi
+    const std::uint8_t save[]    = {0x57};              // push rdi
+    const std::uint8_t saveR13[] = {0x41, 0x55};        // push r13
+    const std::uint8_t body[] = {
         0x48, 0x83, 0xEC, 0x40,                          // sub  rsp, 40h
         0x48, 0xC7, 0x44, 0x24, 0x28, 0x11, 0, 0, 0,     // mov  qword [rsp+28h], 11h   stock index buffer
         0x48, 0xC7, 0x44, 0x24, 0x30, 0x22, 0, 0, 0,     // mov  qword [rsp+30h], 22h   stock SRM slot
-        0x49, 0x89, 0xC9,                                // mov  r9, rcx                the entry
-        0x48, 0x89, 0xD7};                               // mov  rdi, rdx               the renderer
+        0x49, 0x89, 0xC9};                               // mov  r9, rcx                the entry
+    const std::uint8_t renderer[]    = {0x48, 0x89, 0xD7};  // mov rdi, rdx   the renderer
+    const std::uint8_t rendererR13[] = {0x49, 0x89, 0xD5};  // mov r13, rdx
     const std::uint8_t epilogue[] = {
         0x49, 0x89, 0x00,                                // mov  [r8], rax              the vertex buffer
         0x48, 0x8B, 0x44, 0x24, 0x28,                    // mov  rax, [rsp+28h]
         0x49, 0x89, 0x40, 0x08,                          // mov  [r8+8], rax
         0x48, 0x8B, 0x44, 0x24, 0x30,                    // mov  rax, [rsp+30h]
         0x49, 0x89, 0x40, 0x10,                          // mov  [r8+10h], rax
-        0x48, 0x83, 0xC4, 0x40,                          // add  rsp, 40h
-        0x5F,                                            // pop  rdi
-        0xC3};                                           // ret
-    std::vector<std::uint8_t> code(std::begin(prologue), std::end(prologue));
-    const auto site = EntryBuffersCode(fields);
+        0x48, 0x83, 0xC4, 0x40};                         // add  rsp, 40h
+    const std::uint8_t restore[]    = {0x5F, 0xC3};        // pop rdi ; ret
+    const std::uint8_t restoreR13[] = {0x41, 0x5D, 0xC3};  // pop r13 ; ret
+    std::vector<std::uint8_t> code;
+    auto append = [&code](const auto& bytes) { code.insert(code.end(), std::begin(bytes), std::end(bytes)); };
+    PoolZero ? append(saveR13) : append(save);
+    append(body);
+    PoolZero ? append(rendererR13) : append(renderer);
+    const auto site = PoolZero ? EntryBuffersCode(fields, lss::hud::kLoadPoolZeroVertexBufferBytes) : EntryBuffersCode(fields);
     AppendWithJumpBack(code, base, site.data(), site.size());
-    code.insert(code.end(), std::begin(epilogue), std::end(epilogue));
+    append(epilogue);
+    PoolZero ? append(restoreR13) : append(restore);
     return code;
 }
 
@@ -124,7 +133,8 @@ Arguments RunBuffers(void* page, std::uint64_t entryName)
     std::memcpy(entry, &entryName, sizeof(entryName));
     std::uint8_t renderer[0x100]{};
     const std::uint64_t stockVertexBuffer = 0x33;
-    std::memcpy(renderer + 0x90, &stockVertexBuffer, sizeof(stockVertexBuffer));
+    std::memcpy(renderer + 0x90, &stockVertexBuffer, sizeof(stockVertexBuffer));  // pool 2's
+    std::memcpy(renderer + 0x80, &stockVertexBuffer, sizeof(stockVertexBuffer));  // pool 0's
     Arguments out;
     reinterpret_cast<BuffersHarness>(page)(entry, renderer, &out);
     return out;
@@ -143,11 +153,13 @@ constexpr std::uint64_t kStockName     = 0x0000000000001234;
 constexpr std::uint64_t kPlayerTwoName = 0x0000000100001234;  // any other value: only equality is compared
 constexpr std::uint64_t kMinimapName   = 0x0000000000005678;  // an entry of another pool ("SEndNaviMapCircle")
 
+template <bool PoolZero>
 void TestBuffers()
 {
-    std::puts("entry buffers: player 2's entry gets player 2's buffer set, every other entry the pool's");
+    std::puts(PoolZero ? "entry buffers (pool 0, the minimap's map): player 2's entry gets player 2's buffer set"
+                       : "entry buffers: player 2's entry gets player 2's buffer set, every other entry the pool's");
     EntryFilterFields fields;
-    WithPage(fields, BuffersHarnessCode, [](void* page) {
+    WithPage(fields, BuffersHarnessCode<PoolZero>, [](void* page) {
         const auto stock = RunBuffers(page, kPlayerTwoName);  // no player-2 name set yet
         EXPECT(stock.vertexBuffer == 0x33 && stock.indexBuffer == 0x11 && stock.srmSlot == 0x22);
     });
@@ -156,7 +168,7 @@ void TestBuffers()
     fields.indexBuffer   = 0xBB;
     fields.srmSlot       = 0xCC;
     fields.playerTwoName = kPlayerTwoName;
-    WithPage(fields, BuffersHarnessCode, [](void* page) {
+    WithPage(fields, BuffersHarnessCode<PoolZero>, [](void* page) {
         const auto own = RunBuffers(page, kPlayerTwoName);
         EXPECT(own.vertexBuffer == 0xAA && own.indexBuffer == 0xBB && own.srmSlot == 0xCC);
         const auto stock = RunBuffers(page, kStockName);
@@ -210,7 +222,8 @@ void TestSizes()
 
 int main()
 {
-    TestBuffers();
+    TestBuffers<false>();
+    TestBuffers<true>();
     TestDrawGate();
     TestSizes();
 

@@ -11,6 +11,7 @@
 #include "hud/hud_roots.h"
 #include "hud/hud_updates.h"
 #include "hud/marker_timers.h"
+#include "hud/minimap.h"
 #include "hud/popups.h"
 #include "hud/user_widgets.h"
 #include "platform/code_redirect.h"
@@ -156,8 +157,10 @@ bool RunUpdates(bool playerTwo) noexcept
         popups::Replay(playerTwo);
     }
     const hud_updates::OwnArrowTimers arrows{g_timeStep, g_savedTimeStep};
-    return hud_updates::Run(Acts(kLeverUpdates), Acts(kLeverCompass),
-                            playerTwo && Acts(kLeverArrows) && g_timeStep != nullptr ? &arrows : nullptr);
+    const bool ran = hud_updates::Run(Acts(kLeverUpdates), Acts(kLeverCompass),
+                                      playerTwo && Acts(kLeverArrows) && g_timeStep != nullptr ? &arrows : nullptr);
+    minimap::RunHolder(playerTwo);  // the minimap's content for this view, while player 2's minimap is on
+    return ran;
 }
 
 void LogTiming()

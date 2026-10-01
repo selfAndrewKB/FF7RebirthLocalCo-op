@@ -1,6 +1,6 @@
 #pragma once
 
-// Logs the minimap's objects as the game holds them (read-only; groundwork for player 2's own minimap).
+// Logs the minimap's objects as the game holds them (read-only; groundwork for player 2's minimap, hud/minimap.h).
 //
 // The area-map manager (EndUISystem +0x108) holds the navimap holder (+0x340); its interface (+0x20) is the
 // UEndNaviMapCircle/Octagon widget's native interface (UObject +0x108), whose Slate widget (+0x138) paints the

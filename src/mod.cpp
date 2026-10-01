@@ -16,6 +16,7 @@
 #include "hud/layout_scale.h"
 #include "hud/minimap_once.h"
 #include "hud/navimap_watch.h"
+#include "hud/minimap.h"
 #include "hud/overlay_layout.h"
 #include "hud/player_two_pass.h"
 #include "hud/area_icons_two.h"
@@ -71,7 +72,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.36.1-quiet-logs";
+constexpr const wchar_t* kVersion = L"0.37.1-minimap";
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -137,7 +138,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.36.1-quiet-logs");
+        ModVersion     = STR("0.37.1-minimap");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -176,6 +177,7 @@ public:
         lss::hud::target_views::Remove();
         lss::hud::area_icons_two::Remove();
         lss::hud::user_widgets::Remove();
+        lss::hud::minimap::Remove();
         lss::hud::RemoveMinimapOnce();
         lss::player_two::location_rows::Remove();
         lss::player_two::shoulder_scale::Remove();
@@ -263,6 +265,7 @@ public:
         lss::hud::InstallSecondImage(*image);        // player 2's HUD image, on (the hud-image command switches it)
         lss::hud::InstallMinimapOnce(*image);        // the minimap's map rendered by player 1's pass only
         lss::hud::navimap_watch::Install(*image);    // the minimap's objects, logged (read-only)
+        lss::hud::minimap::Install(*image);      // player 2's minimap in player 2's half
         lss::player_two::framing_watch::Install(*image);  // each player's field-camera framing, logged (read-only)
         lss::player_two::location_rows::Install(*image);  // each camera's location rows from its own player
         lss::player_two::shoulder_scale::Install(*image);  // each half's shoulder offset scaled to its width
@@ -395,6 +398,7 @@ private:
         lss::player_two::shoulder_scale::Poll(splitShown);
         lss::player_two::framing_watch::Tick(splitShown);
         lss::hud::navimap_watch::Tick(splitShown);
+        lss::hud::minimap::Tick(splitShown);  // outside the overlay render, before it
         if (wholeScreen_)
         {
             lss::views::UpdateStreamViews(splitShown);  // needs the game-state check whole_screen verified

@@ -51,6 +51,10 @@ inline constexpr std::size_t kEntryDrawGateCodeSize = 68;
 
 /// The instruction each site replaces, as the research read it.
 inline constexpr std::uint8_t kLoadVertexBufferBytes[] = {0x48, 0x8B, 0x87, 0x90, 0x00, 0x00, 0x00};  // mov rax,[rdi+90h]
+// The same load in pool 0's consume (0x140FC7C91, FEndMenuRenderer__OnRenderToTexture_ConsumePool0; r13 = the
+// renderer, r9 = the entry, the index buffer and SRM slot already at [rsp+28h]/[rsp+30h]; RE-p2-own-minimap.md §8):
+// the minimap's map entries, so player 2's minimap entry gets its own buffers the same way.
+inline constexpr std::uint8_t kLoadPoolZeroVertexBufferBytes[] = {0x49, 0x8B, 0x85, 0x80, 0x00, 0x00, 0x00};  // mov rax,[r13+80h]
 inline constexpr std::uint8_t kDrawGateBytes[]         = {0x41, 0x83, 0x79, 0x08, 0x00};              // cmp dword [r9+8],0
 
 namespace detail {
@@ -61,7 +65,9 @@ inline void PutAddress(std::uint8_t* at, const void* field) noexcept
 }
 }  // namespace detail
 
-inline std::array<std::uint8_t, kEntryBuffersCodeSize> EntryBuffersCode(const EntryFilterFields& fields) noexcept
+/// `stockLoad` is the site's own 7-byte vertex-buffer load, run for every other entry.
+inline std::array<std::uint8_t, kEntryBuffersCodeSize> EntryBuffersCode(
+    const EntryFilterFields& fields, const std::uint8_t (&stockLoad)[7] = kLoadVertexBufferBytes) noexcept
 {
     std::array<std::uint8_t, kEntryBuffersCodeSize> code = {
         0x48, 0xB8, 0, 0, 0, 0, 0, 0, 0, 0,        //  0: mov  rax, &playerTwoName
@@ -85,6 +91,7 @@ inline std::array<std::uint8_t, kEntryBuffersCodeSize> EntryBuffersCode(const En
     detail::PutAddress(&code[25], &fields.indexBuffer);
     detail::PutAddress(&code[43], &fields.srmSlot);
     detail::PutAddress(&code[61], &fields.vertexBuffer);
+    std::memcpy(&code[74], stockLoad, sizeof(stockLoad));
     return code;
 }
 

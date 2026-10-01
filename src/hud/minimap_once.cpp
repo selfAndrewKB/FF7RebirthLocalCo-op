@@ -69,7 +69,7 @@ constexpr std::uint32_t kBatchIndexArrays   = 56;
 constexpr int           kMaxSlots           = 4;
 constexpr int           kMaxEntriesLogged   = 4;
 
-constexpr ULONGLONG kLogPeriodMs = 10'000;
+constexpr ULONGLONG kLogPeriodMs = 60'000;  // the 32 KB leak's watch (v0.35.0); its fix is confirmed, so once a minute
 
 MinimapOnceFields      g_fields;  // read and counted into by the installed code, through its address
 platform::CodeRedirect g_circleCode;
@@ -242,10 +242,10 @@ bool MinimapOnceOn() noexcept
     return g_on;
 }
 
-void BeginMinimapPlayerTwoPass() noexcept
+void BeginMinimapPlayerTwoPass(bool playerTwoMinimap) noexcept
 {
     ++g_playerTwoPasses;
-    reinterpret_cast<volatile std::uint64_t&>(g_fields.skip) = g_on ? 1 : 0;
+    reinterpret_cast<volatile std::uint64_t&>(g_fields.skip) = g_on && !playerTwoMinimap ? 1 : 0;
 }
 
 void EndMinimapPlayerTwoPass() noexcept

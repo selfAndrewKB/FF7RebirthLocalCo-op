@@ -9,7 +9,9 @@
 #include "hud/target_views.h"
 #include "hud/entry_filter_code.h"
 #include "hud/hud_addresses.h"
+#include "hud/menu_buffers.h"
 #include "hud/minimap_once.h"
+#include "hud/minimap.h"
 #include "hud/player_two_pass.h"
 #include "hud/prompt_rows.h"
 #include "platform/call_redirect.h"
@@ -67,18 +69,13 @@ constexpr std::uintptr_t kLoadVertexBufferResume = 0x140FC8508;
 constexpr std::uintptr_t kDrawGateSite           = 0x140FC8E05;
 constexpr std::uintptr_t kDrawGateResume         = 0x140FC8E0A;
 
-// FEndMenuRenderer__Ctor's per-pool buffers (pool 2's are passed to the consume): the vertex
-// buffer object at renderer+0x90, a 0x20-byte FRenderResource with vtable vt_FEndMenuVertexBuffer.
-// The ctor fills +8 = -1 (dword), +0xC = 2 (word), +0xE = 0 (byte), +0x10 = 0 (qword) and the
-// capacity at +0x18 (dword: 0x400 vertices, 0x600 indices), then initialises it through
-// BeginInitResource_OrDirectIfRenderThread (render thread: vt+0x28 directly). The SRM slot is a
-// zeroed 0x20-byte allocation with no vtable.
+// FEndMenuRenderer__Ctor's per-pool buffers (pool 2's are passed to the consume): the vertex buffer object at
+// renderer+0x90, the index buffer at +0xA8 (hud/menu_buffers.h), initialised through
+// BeginInitResource_OrDirectIfRenderThread (render thread: vt+0x28 directly).
 constexpr std::uint32_t  kPoolTwoVertexBuffer = 0x90;
 constexpr std::uint32_t  kPoolTwoIndexBuffer  = 0xA8;
 constexpr std::uintptr_t kVertexBufferVtable  = 0x146621CF8;
 constexpr std::uintptr_t kIndexBufferVtable   = 0x146621D50;
-constexpr std::uint32_t  kVertexCapacity      = 0x400;
-constexpr std::uint32_t  kIndexCapacity       = 0x600;
 constexpr std::uintptr_t kBeginInitResource   = 0x1409E7EF8;  // void (FRenderResource*)
 constexpr std::uint8_t   kBeginInitResourcePrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x48,
                                                          0x89, 0x7C, 0x24, 0x18, 0x41, 0x56, 0xB8, 0x90, 0x00, 0x00, 0x00};
@@ -90,16 +87,9 @@ constexpr int            kFamilyLogLines     = 6;
 using RenderToCompositeLayerFn = void (*)(void* overlay);
 using AcquireFn                = void* (*)(void* renderer, std::uintptr_t pool);
 using AddCompositePassesFn     = void* (*)(void* module, void* builder, const void* views, void* texture, void* context);
-using BeginInitResourceFn      = void (*)(void* resource);
 using SubmitLayerSlotFn        = void (*)(void* renderer, std::uintptr_t pool, void* slot, std::uintptr_t unused);
 
 constexpr std::uintptr_t kPoolTwo = 2;  // the root overlay's pool (the dl argument at 0x140C960A2 and 0x140C96258)
-
-/// A render resource of the menu renderer's buffer kind, laid out as its ctor lays it out.
-struct alignas(16) MenuBuffer
-{
-    std::uint8_t bytes[0x20] = {};
-};
 
 enum class Pass
 {
@@ -124,9 +114,7 @@ std::uintptr_t         g_indexBufferVtable  = 0;
 
 // Read by the render-thread code (hud/entry_filter_code.h) through their addresses.
 EntryFilterFields g_fields;
-MenuBuffer        g_vertexBuffer;  // never freed: the renderer may hold them until the process ends
-MenuBuffer        g_indexBuffer;
-MenuBuffer        g_srmSlot;
+MenuBufferSet     g_buffers;  // player 2's (hud/menu_buffers.h)
 
 // Game thread.
 std::atomic<bool> g_on{false};
@@ -164,15 +152,6 @@ double Now() noexcept
 
 using platform::CopyGuarded;
 
-/// An FName as the engine stores it: {ComparisonIndex, Number}.
-std::uint64_t EngineNameValue(const wchar_t* text, RC::Unreal::EFindName find)
-{
-    const RC::Unreal::FName name(text, find);
-    const std::uint64_t index  = name.GetComparisonIndex().ToUnstableInt();
-    const std::uint64_t number = static_cast<std::uint32_t>(name.GetNumber());
-    return index | (number << 32);
-}
-
 void Refuse(const wchar_t* why)
 {
     g_refused = true;
@@ -188,57 +167,21 @@ void QueueBuffers() noexcept
     {
         return;
     }
-    std::uintptr_t poolBuffers[2] = {};
-    std::uintptr_t vtables[2]     = {};
-    const auto     renderer       = reinterpret_cast<const std::uint8_t*>(g_renderer);
-    if (!CopyGuarded(&poolBuffers[0], renderer + kPoolTwoVertexBuffer, sizeof(std::uintptr_t)) ||
-        !CopyGuarded(&poolBuffers[1], renderer + kPoolTwoIndexBuffer, sizeof(std::uintptr_t)) || poolBuffers[0] == 0 ||
-        poolBuffers[1] == 0 || !CopyGuarded(&vtables[0], reinterpret_cast<const void*>(poolBuffers[0]), sizeof(std::uintptr_t)) ||
-        !CopyGuarded(&vtables[1], reinterpret_cast<const void*>(poolBuffers[1]), sizeof(std::uintptr_t)) ||
-        vtables[0] != g_vertexBufferVtable || vtables[1] != g_indexBufferVtable)
+    if (!BuildMenuBuffers(g_renderer, kPoolTwoVertexBuffer, kPoolTwoIndexBuffer, g_vertexBufferVtable,
+                          g_indexBufferVtable, g_beginInitResource, g_buffers))
     {
         Refuse(L"pool 2's buffers are not the renderer's buffer kind the research read");
         return;
     }
-    auto build = [](MenuBuffer& buffer, std::uintptr_t vtable, std::uint32_t capacity) {
-        const std::int32_t  unlisted = -1;
-        const std::uint16_t two      = 2;
-        std::memcpy(buffer.bytes + 0x00, &vtable, sizeof(vtable));
-        std::memcpy(buffer.bytes + 0x08, &unlisted, sizeof(unlisted));
-        std::memcpy(buffer.bytes + 0x0C, &two, sizeof(two));
-        std::memcpy(buffer.bytes + 0x18, &capacity, sizeof(capacity));
-    };
-    build(g_vertexBuffer, g_vertexBufferVtable, kVertexCapacity);
-    build(g_indexBuffer, g_indexBufferVtable, kIndexCapacity);
-    g_beginInitResource(&g_vertexBuffer);  // enqueued: runs on the render thread after the commands already queued
-    g_beginInitResource(&g_indexBuffer);
     g_buffersReady = true;
     platform::Log(L"HUD image: player 2's vertex and index buffers created (capacity {} / {}); waiting for the render "
-                  L"thread to initialise them", kVertexCapacity, kIndexCapacity);
+                  L"thread to initialise them", kMenuVertexCapacity, kMenuIndexCapacity);
 }
 
-/// True once the render thread has initialised both buffers: InitResource has listed them (+8 is
-/// no longer -1; the function checks it first) and each holds its RHI buffer (+0x10). The render
-/// thread runs up to a frame behind, so a slot holding player 2's entry must not be submitted before
-/// then: an earlier-queued consume would draw it with an uninitialised buffer (seen: "Tried to call
-/// DrawIndexedPrimitive with null IndexBuffer!").
-bool BuffersInitialised() noexcept
-{
-    for (const MenuBuffer* buffer : {&g_vertexBuffer, &g_indexBuffer})
-    {
-        std::int32_t  listIndex = -1;
-        std::uint64_t rhi       = 0;
-        std::memcpy(&listIndex, buffer->bytes + 0x08, sizeof(listIndex));
-        std::memcpy(&rhi, buffer->bytes + 0x10, sizeof(rhi));
-        if (listIndex == -1 || rhi == 0)
-        {
-            return false;
-        }
-    }
-    return true;
-}
-
-/// Player 2's buffers exist and are initialised; publishes them to the render-thread code once.
+/// Player 2's buffers exist and are initialised; publishes them to the render-thread code once. The render thread
+/// runs up to a frame behind, so a slot holding player 2's entry must not be submitted before then: an
+/// earlier-queued consume would draw it with an uninitialised buffer (seen: "Tried to call DrawIndexedPrimitive
+/// with null IndexBuffer!").
 bool BuffersUsable() noexcept
 {
     if (!g_buffersReady)
@@ -246,9 +189,7 @@ bool BuffersUsable() noexcept
         QueueBuffers();
         return false;
     }
-    // Checked every frame, not once: the engine releases and re-creates every listed render
-    // resource on an RHI device reset, and a frame drawn in between would find no buffer.
-    if (!BuffersInitialised())
+    if (!MenuBuffersInitialised(g_buffers))  // every frame (hud/menu_buffers.h)
     {
         return false;
     }
@@ -256,9 +197,9 @@ bool BuffersUsable() noexcept
     {
         return true;
     }
-    g_fields.vertexBuffer = reinterpret_cast<std::uint64_t>(&g_vertexBuffer);
-    g_fields.indexBuffer  = reinterpret_cast<std::uint64_t>(&g_indexBuffer);
-    g_fields.srmSlot      = reinterpret_cast<std::uint64_t>(&g_srmSlot);
+    g_fields.vertexBuffer = reinterpret_cast<std::uint64_t>(&g_buffers.vertex);
+    g_fields.indexBuffer  = reinterpret_cast<std::uint64_t>(&g_buffers.index);
+    g_fields.srmSlot      = reinterpret_cast<std::uint64_t>(&g_buffers.srm);
     std::atomic_thread_fence(std::memory_order_release);
     g_fields.playerTwoName = g_playerTwoName;  // last: the buffers code switches on this
     platform::Log(L"HUD image: player 2's buffers are initialised; rendering player 2's image");
@@ -450,9 +391,18 @@ void BeginOverlayRender(bool splitShown) noexcept
         }
         area_icons_two::ShowOnly(1);
         const double start  = Now();
-        BeginMinimapPlayerTwoPass();  // the minimap's map is rendered by player 1's pass only (hud/minimap_once.h)
-        g_renderToLayer(reinterpret_cast<void*>(overlay));
+        // Player 2's minimap (hud/minimap.h); without it, player 1's pass alone renders the minimap's map
+        // (hud/minimap_once.h).
+        BeginMinimapPlayerTwoPass(minimap::BeginPlayerTwoPaint());
+        // Guarded like every other engine call the mod makes: on a fault the minimap's target field and held slot
+        // are still put back below (a held pool-0 slot would hang its next acquire), and player 2's image stops.
+        const bool rendered = platform::CallGuarded(g_renderToLayer, reinterpret_cast<void*>(overlay));
         EndMinimapPlayerTwoPass();
+        minimap::EndPlayerTwoPaint();
+        if (!rendered)
+        {
+            Refuse(L"player 2's overlay render raised an exception");
+        }
         g_playerTwoSeconds += Now() - start;
         enemy_gauges::EndPlayerTwoPass();  // each gauge's size back to player 1's before player 1's updates
         target_views::BeforePass(0);  // player 2's, collapsed before player 1's updates (put back after the render)
@@ -498,6 +448,7 @@ void EndOverlayRender() noexcept
         platform::Log(L"HUD image: player 1's pass did not render this frame; player 2's slot submitted on its own");
         g_slot = nullptr;
     }
+    minimap::EndOverlayRender();  // the minimap's held pool-0 slot, if player 1's pass did not take it
     g_pass = Pass::None;
 }
 
