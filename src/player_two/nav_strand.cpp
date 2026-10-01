@@ -14,6 +14,7 @@
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/party_warp.h"
+#include "player_two/warp_camera_watch.h"
 #include "player_two/strand_watch.h"
 
 #include <algorithm>
@@ -482,6 +483,7 @@ void Tick(bool splitShown) noexcept
     if (member == nullptr)
     {
         party_warp::Tick(nullptr, splitShown, 0.0f);  // lets a warp in progress go
+        warp_camera_watch::Tick(nullptr, 0.0f);
         return;
     }
     g_memberRoot.store(RootOf(member), std::memory_order_release);
@@ -518,8 +520,11 @@ void Tick(bool splitShown) noexcept
                  g_watch.Held(), g_strand.refusals + refusals, g_strand.falls + falls, g_strand.parkChecks + parkChecks,
                  std::max(g_strand.longestMove, longest), MovedSinceStart(), Places());
             ProbeAi(L"at the warp", true);
-            party_warp::Start(member, PointerAt(RootOf(member), kComponentAttachParent) != nullptr,
-                              splitShown);  // logs its own outcome
+            if (party_warp::Start(member, PointerAt(RootOf(member), kComponentAttachParent) != nullptr,
+                                  splitShown))  // logs its own outcome
+            {
+                warp_camera_watch::Arm(member);
+            }
             break;
         case StrandEvent::Ended:
             EndStrand(L"no refusal for a moment: stick let go, the world is back, or she was brought back");
@@ -527,6 +532,7 @@ void Tick(bool splitShown) noexcept
         case StrandEvent::None: ProbeAi(L"changed", false); break;
     }
     party_warp::Tick(member, splitShown, seconds);
+    warp_camera_watch::Tick(member, seconds);
     if (g_watch.Stranded())
     {
         g_strand.refusals += refusals;

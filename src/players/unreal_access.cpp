@@ -114,6 +114,48 @@ UObject* GameInstance() noexcept
     return found;
 }
 
+namespace {
+
+/// AActor::RootComponent's offset through `actor`'s class, or -1.
+std::int32_t RootComponentOffset(UObject* actor) noexcept
+{
+    try
+    {
+        auto* property = actor->GetPropertyByNameInChain(STR("RootComponent"));
+        return property != nullptr && property->GetSize() == sizeof(void*) ? property->GetOffset_Internal() : -1;
+    }
+    catch (...)
+    {
+        return -1;
+    }
+}
+
+}  // namespace
+
+bool ActorLocation(const void* actor, float (&out)[3]) noexcept
+{
+    constexpr std::uint32_t kComponentWorldLocation = 0x1D0;  // USceneComponent's world transform translation
+    static std::int32_t     rootOffset              = -1;     // AActor::RootComponent, the same for every actor
+    if (actor == nullptr)
+    {
+        return false;
+    }
+    // Looked up once; guarded against a structured exception too (a stale actor's class read faults, not throws).
+    std::int32_t found = -1;
+    if (rootOffset < 0 &&
+        (!platform::CallGuarded(&RootComponentOffset, found, static_cast<UObject*>(const_cast<void*>(actor))) || found < 0))
+    {
+        return false;
+    }
+    if (rootOffset < 0)
+    {
+        rootOffset = found;
+    }
+    const std::byte* root = nullptr;
+    return platform::CopyGuarded(&root, static_cast<const std::byte*>(actor) + rootOffset, sizeof(root)) && root != nullptr &&
+           platform::CopyGuarded(out, root + kComponentWorldLocation, sizeof(out));
+}
+
 RC::Unreal::TArray<UObject*>* LocalPlayers(UObject* gameInstance) noexcept
 {
     if (gameInstance == nullptr)
@@ -309,6 +351,26 @@ std::optional<std::int32_t> ConsoleVariableInt(const wchar_t* variable) noexcept
     std::optional<std::int32_t> value;
     CallWithString(call, *name, variable, NoInputs, [&](const std::uint8_t* frame) {
         value = *reinterpret_cast<const std::int32_t*>(frame + *result);
+    });
+    return value;
+}
+
+std::optional<float> ConsoleVariableFloat(const wchar_t* variable) noexcept
+{
+    const auto call = FindKismet(STR("/Script/Engine.KismetSystemLibrary:GetConsoleVariableFloatValue"));
+    if (call.function == nullptr)
+    {
+        return std::nullopt;
+    }
+    const auto name   = ParamOffset(call.function, STR("VariableName"), sizeof(RC::Unreal::FString));
+    const auto result = ParamOffset(call.function, STR("ReturnValue"), sizeof(float));
+    if (!name || !result)
+    {
+        return std::nullopt;
+    }
+    std::optional<float> value;
+    CallWithString(call, *name, variable, NoInputs, [&](const std::uint8_t* frame) {
+        value = *reinterpret_cast<const float*>(frame + *result);
     });
     return value;
 }

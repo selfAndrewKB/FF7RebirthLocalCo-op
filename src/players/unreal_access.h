@@ -31,6 +31,10 @@ bool GuardedProcessEvent(UObject* target, RC::Unreal::UFunction* function, void*
 /// The running game instance (FF7R's UEndGameInstance), or null before the game has one.
 UObject* GameInstance() noexcept;
 
+/// An actor's world location: its RootComponent's world translation (the reflected AActor offset,
+/// found once). False if the actor, its root or the field cannot be read. Game thread.
+bool ActorLocation(const void* actor, float (&out)[3]) noexcept;
+
 /// The game instance's `LocalPlayers` array: the engine's own list of local players.
 RC::Unreal::TArray<UObject*>* LocalPlayers(UObject* gameInstance) noexcept;
 
@@ -88,6 +92,9 @@ bool SetForceDisableSplitscreen(UObject* worldContext, bool disable) noexcept;
 /// UKismetSystemLibrary::GetConsoleVariableIntValue: a console variable's current value, or empty
 /// if the function cannot be found or raised an exception.
 std::optional<std::int32_t> ConsoleVariableInt(const wchar_t* variable) noexcept;
+
+/// UKismetSystemLibrary::GetConsoleVariableFloatValue, as ConsoleVariableInt.
+std::optional<float> ConsoleVariableFloat(const wchar_t* variable) noexcept;
 
 /// UKismetSystemLibrary::ExecuteConsoleCommand, through the first player's controller: the same
 /// path as a command typed into the game's console. Returns false if it could not be called; the

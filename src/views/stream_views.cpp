@@ -3,12 +3,15 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "players/unreal_access.h"
 #include "views/player_view_point.h"
 #include "views/stream_view_math.h"
 #include "views/whole_screen.h"
 
 #include <cstdint>
+#include <format>
 #include <initializer_list>
+#include <string>
 
 namespace lss::views {
 
@@ -26,6 +29,7 @@ constexpr float kRadiansPerDegree = 3.14159265358979f / 180.0f;
 // 0 keeps r.MassiveEnvironment.FrustumScaleForMainPass as the game set it. A positive value is written to that cvar
 // every tick (EndGameState tick 0x140C94690), so 1.0 would halve the game's off-screen margin (2 on Windows) for good.
 constexpr float kMainPassScale    = 0.0f;
+constexpr const wchar_t* kMainPassMarginVariable = L"r.MassiveEnvironment.FrustumScaleForMainPass";
 constexpr bool  kSkipSlaveFrusta  = false;  // true would switch the slave frustums off until the game restarts
 constexpr float kSlaveFar         = 0.0f;   // unbounded, as the rail camera
 constexpr float kShadowFar        = 0.0f;   // no static-shadow streaming around the camera
@@ -112,17 +116,29 @@ void UpdateStreamViews(bool splitShown) noexcept
     {
         g_loggedMode = wanted ? g_mode : StreamViewsMode::Off;
         g_loggedFov  = g_playerOneFov;
+        // The mod never writes the margin (kMainPassScale 0), so this is the game's own value at every line.
+        const auto   margin = players::unreal::ConsoleVariableFloat(kMainPassMarginVariable);
+        std::wstring marginText;
+        try
+        {
+            marginText = margin ? std::format(L"{:.2f}", *margin) : std::wstring(L"unread");
+        }
+        catch (...)
+        {
+        }
         if (!wanted)
         {
-            platform::Log(L"streaming views: none registered (the game's own views only)");
+            platform::Log(L"streaming views: none registered (the game's own views only); the game's off-screen margin {}",
+                          marginText);
         }
         else if (g_mode == StreamViewsMode::Both && g_playerOneFov > 0.0f)
         {
-            platform::Log(L"streaming views: {}; player 1's registered {:.0f} degrees wide", NameOf(g_mode), g_playerOneFov);
+            platform::Log(L"streaming views: {}; player 1's registered {:.0f} degrees wide; the game's off-screen margin {}",
+                          NameOf(g_mode), g_playerOneFov, marginText);
         }
         else
         {
-            platform::Log(L"streaming views: {}", NameOf(g_mode));
+            platform::Log(L"streaming views: {}; the game's off-screen margin {}", NameOf(g_mode), marginText);
         }
     }
     g_active = wanted;
