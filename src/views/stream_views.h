@@ -13,7 +13,7 @@
 //
 // Arguments as the game's callers pass them (research doc, "Slave-location call facts"): location,
 // unit forward, the horizontal FOV in radians (widened to cover a view narrower than the 16:9 the
-// slave frustum assumes), main-pass scale 1 (no change), 0 for the flag that would switch the slave
+// slave frustum assumes), main-pass scale 0 (the game's own), 0 for the flag that would switch the slave
 // frustums off for good, far 0 (unbounded, as the rail camera), static-shadow far 0 (off).
 
 #include <cstdint>
@@ -39,6 +39,11 @@ bool StreamViewsInstalled() noexcept;
 /// Development: which cameras are registered (logged at the next update).
 void SetStreamViewsMode(StreamViewsMode mode) noexcept;
 StreamViewsMode GetStreamViewsMode() noexcept;
+
+/// Development: the horizontal FOV (degrees, capped) player 1's camera is registered with in `Both`, or 0
+/// for the FOV its half covers. A wider camera also asks for the scenery just outside player 1's view,
+/// such as the casters of the shadows it shows (logged at the next update).
+void SetPlayerOneStreamFov(float degrees) noexcept;
 
 /// Game thread, every engine tick before the world ticks: registers the cameras while the split is
 /// on screen and the game state exists (the game's function needs it).

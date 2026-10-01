@@ -54,6 +54,14 @@ void TestSimpleCommands()
     EXPECT(Rejected(L"stream-views"));
     EXPECT(Rejected(L"stream-views maybe"));
     EXPECT(Rejected(L"stream-views off now"));
+    EXPECT(Rejected(L"stream-fov-p1"));
+    EXPECT(Rejected(L"stream-fov-p1 0"));
+    EXPECT(Rejected(L"stream-fov-p1 171"));
+    EXPECT(Rejected(L"stream-fov-p1 -90"));
+    EXPECT(Rejected(L"stream-fov-p1 90.5"));
+    EXPECT(Rejected(L"stream-fov-p1 90 now"));
+    EXPECT(ParseLine(L"stream-fov-p1 170").command->ticks == 170);
+    EXPECT(ParseLine(L"stream-fov-p1 auto").command->ticks == 0);
     EXPECT(Rejected(L"dance"));
 }
 
@@ -163,7 +171,7 @@ void TestDescribeRoundTrips()
     for (const wchar_t* line : {L"join", L"own-camera off", L"sticks per-pad", L"layout side-by-side",
                                 L"layout top-bottom", L"bars on", L"bars off", L"split-fov 0.5",
                                 L"split-fov native", L"hud-band on", L"hud-band off", L"hud-probe on", L"hud-probe off", L"dump widgets", L"dump slots Command_C", L"dump hud-players", L"hud-trace 5", L"hud-image on", L"hud-image off", L"hud-levers on", L"hud-levers off", L"hud-levers-mask 0", L"hud-levers-mask 63", L"hud-levers-mask 255", L"hud-levers-mask 511", L"sticks-mask 0", L"sticks-mask 7", L"sticks-mask 15", L"leak-fixes 0", L"leak-fixes 5", L"buttons-mask 0", L"buttons-mask 3", L"icons-mask 0", L"icons-mask 7", L"battle-mask 0", L"battle-mask 7", L"battle-mask 511", L"perf-log on", L"perf-log off", L"stick 1 0 1 0 0 60",
-                                L"single-view auto", L"single-view on", L"single-view off", L"stream-views off", L"stream-views p2", L"stream-views both", L"wait 5",
+                                L"single-view auto", L"single-view on", L"single-view off", L"stream-views off", L"stream-views p2", L"stream-views both", L"stream-fov-p1 auto", L"stream-fov-p1 150", L"wait 5",
                                 L"wait-until playing 600", L"console stat fps", L"note hello"})
     {
         const auto parsed = ParseLine(line);

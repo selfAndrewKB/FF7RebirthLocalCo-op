@@ -266,6 +266,17 @@ Outcome ModTarget::SetStreamViews(std::uint32_t mode)
     return {true, kNames[mode]};
 }
 
+Outcome ModTarget::SetPlayerOneStreamFov(std::uint32_t degrees)
+{
+    if (!views::StreamViewsInstalled())
+    {
+        return Failed(L"streaming views are not installed (see the install log)");
+    }
+    views::SetPlayerOneStreamFov(static_cast<float>(degrees));  // applied at the next tick, which logs it
+    return {true, degrees == 0 ? std::wstring(L"player 1's camera as its half covers")
+                               : std::format(L"player 1's camera {} degrees wide", degrees)};
+}
+
 Outcome ModTarget::Dump(const std::wstring& topic)
 {
     // "widgets", "hud-players" or "slots <class>" (control/script.cpp).

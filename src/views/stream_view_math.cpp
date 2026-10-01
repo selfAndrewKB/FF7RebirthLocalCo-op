@@ -46,6 +46,15 @@ float CoveringFov16x9(float hfov, float aspect) noexcept
     return needed > hfov ? needed : hfov;
 }
 
+float StreamFov(float covering, float wanted) noexcept
+{
+    if (!(wanted > 0.0f) || !std::isfinite(wanted))
+    {
+        return covering;
+    }
+    return wanted < kMaxStreamFov ? wanted : kMaxStreamFov;
+}
+
 std::optional<StreamCamera> CameraOf(const std::byte* viewInfo) noexcept
 {
     if (viewInfo == nullptr)

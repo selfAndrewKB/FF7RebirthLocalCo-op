@@ -23,7 +23,9 @@ using AddViewSlaveLocationFn = char (*)(const float* location, const float* dire
                                         float mainPassScale, bool skipSlaveFrusta, float slaveFar, float shadowFar);
 
 constexpr float kRadiansPerDegree = 3.14159265358979f / 180.0f;
-constexpr float kMainPassScale    = 1.0f;   // no change to the main pass's frustum scale
+// 0 keeps r.MassiveEnvironment.FrustumScaleForMainPass as the game set it. A positive value is written to that cvar
+// every tick (EndGameState tick 0x140C94690), so 1.0 would halve the game's off-screen margin (2 on Windows) for good.
+constexpr float kMainPassScale    = 0.0f;
 constexpr bool  kSkipSlaveFrusta  = false;  // true would switch the slave frustums off until the game restarts
 constexpr float kSlaveFar         = 0.0f;   // unbounded, as the rail camera
 constexpr float kShadowFar        = 0.0f;   // no static-shadow streaming around the camera
@@ -37,6 +39,8 @@ StreamViewsMode g_mode       = StreamViewsMode::Both;
 StreamViewsMode g_loggedMode  = StreamViewsMode::Off;
 bool            g_active      = false;  // cameras were registered on the last update
 bool            g_failed      = false;  // the game's function raised an exception: never called again
+float           g_playerOneFov = 0.0f;  // degrees player 1's camera is registered with; 0 = what its half covers
+float           g_loggedFov    = -1.0f;
 
 const wchar_t* NameOf(StreamViewsMode mode) noexcept
 {
@@ -50,9 +54,9 @@ const wchar_t* NameOf(StreamViewsMode mode) noexcept
 }
 
 /// Registers one camera; false if the game's function raised an exception.
-bool Register(const StreamCamera& camera, float aspect) noexcept
+bool Register(const StreamCamera& camera, float aspect, float wantedFov) noexcept
 {
-    const float fov = CoveringFov16x9(camera.fov, aspect) * kRadiansPerDegree;
+    const float fov = StreamFov(CoveringFov16x9(camera.fov, aspect), wantedFov) * kRadiansPerDegree;
     char        result = 0;  // whether the game added the camera (it merges one it already has); not needed here
     return platform::CallGuarded(g_add, result, camera.location, camera.direction, fov, kMainPassScale,
                                  kSkipSlaveFrusta, kSlaveFar, kShadowFar);
@@ -95,14 +99,31 @@ StreamViewsMode GetStreamViewsMode() noexcept
     return g_mode;
 }
 
+void SetPlayerOneStreamFov(float degrees) noexcept
+{
+    g_playerOneFov = StreamFov(0.0f, degrees);
+}
+
 void UpdateStreamViews(bool splitShown) noexcept
 {
     const bool wanted = g_installed && !g_failed && splitShown && g_mode != StreamViewsMode::Off && GameStatePresent();
-    if (wanted != g_active || (wanted && g_mode != g_loggedMode))
+    const bool fovChanged = g_mode == StreamViewsMode::Both && g_playerOneFov != g_loggedFov;  // it applies under both only
+    if (wanted != g_active || (wanted && (g_mode != g_loggedMode || fovChanged)))
     {
         g_loggedMode = wanted ? g_mode : StreamViewsMode::Off;
-        platform::Log(L"streaming views: {}", wanted ? NameOf(g_mode)
-                                                     : L"none registered (the game's own views only)");
+        g_loggedFov  = g_playerOneFov;
+        if (!wanted)
+        {
+            platform::Log(L"streaming views: none registered (the game's own views only)");
+        }
+        else if (g_mode == StreamViewsMode::Both && g_playerOneFov > 0.0f)
+        {
+            platform::Log(L"streaming views: {}; player 1's registered {:.0f} degrees wide", NameOf(g_mode), g_playerOneFov);
+        }
+        else
+        {
+            platform::Log(L"streaming views: {}", NameOf(g_mode));
+        }
     }
     g_active = wanted;
     if (!wanted)
@@ -117,7 +138,7 @@ void UpdateStreamViews(bool splitShown) noexcept
             continue;
         }
         const auto camera = RenderedCamera(playerTwo);
-        if (camera && !Register(*camera, aspect))
+        if (camera && !Register(*camera, aspect, playerTwo ? 0.0f : g_playerOneFov))
         {
             g_failed = true;
             g_active = false;

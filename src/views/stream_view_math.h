@@ -25,6 +25,13 @@ void ForwardOf(float pitch, float yaw, float (&out)[3]) noexcept;
 /// for unusable inputs.
 float CoveringFov16x9(float hfov, float aspect) noexcept;
 
+/// The widest horizontal FOV a registered camera may take (the frustum's tangent stays finite).
+inline constexpr float kMaxStreamFov = 170.0f;
+
+/// The FOV to register: `wanted` degrees when set (above 0, capped at kMaxStreamFov), else `covering`.
+/// A wider camera covers what the view does not show but still needs, such as the casters of its shadows.
+float StreamFov(float covering, float wanted) noexcept;
+
 /// The camera of a filled FMinimalViewInfo (views/minimal_view_info.h): Location +0x00, Rotation
 /// (pitch, yaw, roll) +0x0C, FOV +0x18. Empty if a value is not finite or the FOV is not in (0, 180).
 std::optional<StreamCamera> CameraOf(const std::byte* viewInfo) noexcept;

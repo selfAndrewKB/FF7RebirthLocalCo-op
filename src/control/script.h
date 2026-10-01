@@ -42,6 +42,8 @@
 //                                         timing lines (off at start)
 //   stream-views off|p2|both             which split players' cameras are registered with the game's own
 //                                         scenery streaming (views/stream_views.h); both at start
+//   stream-fov-p1 auto|<degrees>         the horizontal FOV (1-170) player 1's camera is registered with
+//                                         under both, or auto for what its half covers (at start)
 //   single-view auto|on|off              player 1's single view while player 2 is in: for the game's
 //                                         whole-screen states (auto, the default), always, or never
 //                                         (players/single_view.h)
@@ -98,6 +100,7 @@ enum class CommandKind
     PerfLog,
     SingleView,
     StreamViews,
+    StreamFovPlayerOne,
     Dump,
     Stick,
     Wait,
@@ -123,7 +126,8 @@ struct Command
     float         blend     = -1.0f;                   // split-fov: 0..1, or negative for native
     std::uint32_t ticks     = 0;                       // stick, wait, wait-until; hud-trace: frames; the masks: mask;
                                                        // single-view: 0 auto, 1 on, 2 off;
-                                                       // stream-views: 0 off, 1 p2, 2 both
+                                                       // stream-views: 0 off, 1 p2, 2 both;
+                                                       // stream-fov-p1: degrees, 0 auto
     WaitCondition condition = WaitCondition::Playing;  // wait-until
     std::wstring  text;                                // console, note
 };

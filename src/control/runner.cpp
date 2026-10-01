@@ -37,6 +37,7 @@ Outcome Run(Target& target, const Command& command)
         case CommandKind::PerfLog: return target.SetPerfLog(command.on);
         case CommandKind::SingleView: return target.SetSingleView(command.ticks);
         case CommandKind::StreamViews: return target.SetStreamViews(command.ticks);
+        case CommandKind::StreamFovPlayerOne: return target.SetPlayerOneStreamFov(command.ticks);
         case CommandKind::Dump: return target.Dump(command.text);
         case CommandKind::Stick: return target.HoldSticks(command.player, command.axes);
         case CommandKind::Console: return target.Console(command.text);

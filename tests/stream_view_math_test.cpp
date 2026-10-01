@@ -1,4 +1,4 @@
-// Host-side tests for views::ForwardOf and views::CameraOf, run without the game.
+// Host-side tests for views::ForwardOf, CoveringFov16x9, StreamFov and CameraOf, run without the game.
 
 #include "views/stream_view_math.h"
 
@@ -54,6 +54,19 @@ void TestCoveringFov()
     EXPECT(Near(CoveringFov16x9(90.0f, 0.0f), 90.0f));
 }
 
+void TestStreamFov()
+{
+    std::puts("stream view: a wanted FOV replaces the covering one, capped; none keeps it");
+    using lss::views::kMaxStreamFov;
+    using lss::views::StreamFov;
+    EXPECT(Near(StreamFov(78.5f, 0.0f), 78.5f));
+    EXPECT(Near(StreamFov(78.5f, -5.0f), 78.5f));
+    EXPECT(Near(StreamFov(78.5f, std::nanf("")), 78.5f));
+    EXPECT(Near(StreamFov(78.5f, 150.0f), 150.0f));
+    EXPECT(Near(StreamFov(78.5f, 60.0f), 60.0f));
+    EXPECT(Near(StreamFov(78.5f, 179.0f), kMaxStreamFov));
+}
+
 void Put(unsigned char* view, std::size_t offset, float value)
 {
     std::memcpy(view + offset, &value, sizeof(value));
@@ -86,6 +99,7 @@ int main()
 {
     TestForward();
     TestCoveringFov();
+    TestStreamFov();
     TestCameraOf();
     std::printf(g_failures == 0 ? "all tests passed\n" : "%d check(s) failed\n", g_failures);
     return g_failures == 0 ? 0 : 1;

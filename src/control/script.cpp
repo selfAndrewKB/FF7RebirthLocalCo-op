@@ -260,6 +260,26 @@ ParsedLine ParseStreamViews(const std::vector<std::wstring_view>& words)
     return Error(L"stream-views takes off, p2 or both");
 }
 
+ParsedLine ParseStreamFov(const std::vector<std::wstring_view>& words)
+{
+    constexpr unsigned long kMaxDegrees = 170;  // views::kMaxStreamFov
+    Command command;
+    command.kind = CommandKind::StreamFovPlayerOne;
+    if (words.size() == 2 && words[1] == L"auto")
+    {
+        return Parsed(std::move(command));
+    }
+    const std::wstring text  = words.size() == 2 ? std::wstring(words[1]) : std::wstring();
+    wchar_t*           end   = nullptr;
+    const auto         value = std::wcstoul(text.c_str(), &end, 10);
+    if (text.empty() || text[0] == L'-' || end != text.c_str() + text.size() || value < 1 || value > kMaxDegrees)
+    {
+        return Error(std::format(L"stream-fov-p1 takes auto or whole degrees from 1 to {}", kMaxDegrees));
+    }
+    command.ticks = static_cast<std::uint32_t>(value);
+    return Parsed(std::move(command));
+}
+
 ParsedLine ParseBare(CommandKind kind, const std::vector<std::wstring_view>& words)
 {
     if (words.size() != 1)
@@ -311,6 +331,7 @@ ParsedLine ParseLine(std::wstring_view line)
     if (name == L"perf-log") return ParseSwitch(CommandKind::PerfLog, words, L"on", L"off");
     if (name == L"single-view") return ParseSingleView(words);
     if (name == L"stream-views") return ParseStreamViews(words);
+    if (name == L"stream-fov-p1") return ParseStreamFov(words);
     if (name == L"dump") return ParseDump(words);
     if (name == L"stick") return ParseStick(words);
     if (name == L"wait") return ParseWait(words);
@@ -348,6 +369,8 @@ std::wstring Describe(const Command& command)
             return command.ticks == 1 ? L"single-view on" : command.ticks == 2 ? L"single-view off" : L"single-view auto";
         case CommandKind::StreamViews:
             return command.ticks == 1 ? L"stream-views p2" : command.ticks == 2 ? L"stream-views both" : L"stream-views off";
+        case CommandKind::StreamFovPlayerOne:
+            return command.ticks == 0 ? std::wstring(L"stream-fov-p1 auto") : std::format(L"stream-fov-p1 {}", command.ticks);
         case CommandKind::Dump: return L"dump " + command.text;
         case CommandKind::SplitFov:
             return command.blend < 0.0f ? std::wstring(L"split-fov native") : L"split-fov " + AxisText(command.blend);

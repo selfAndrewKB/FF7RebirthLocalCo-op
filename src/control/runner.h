@@ -56,6 +56,7 @@ public:
     virtual Outcome SetPerfLog(bool on)                        = 0;
     virtual Outcome SetSingleView(std::uint32_t mode)          = 0;  // 0 auto, 1 on, 2 off
     virtual Outcome SetStreamViews(std::uint32_t mode)         = 0;  // 0 off, 1 p2, 2 both
+    virtual Outcome SetPlayerOneStreamFov(std::uint32_t degrees) = 0;  // 0 auto
     virtual Outcome Dump(const std::wstring& topic)            = 0;
     virtual Outcome HoldSticks(std::int32_t player, const float (&axes)[4]) = 0;
     virtual void    ReleaseSticks(std::int32_t player)         = 0;
