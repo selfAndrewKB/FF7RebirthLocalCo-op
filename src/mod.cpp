@@ -14,6 +14,7 @@
 #include "hud/action_icon_base.h"
 #include "hud/hud_placement.h"
 #include "hud/layout_scale.h"
+#include "hud/minimap_once.h"
 #include "hud/overlay_layout.h"
 #include "hud/player_two_pass.h"
 #include "hud/area_icons_two.h"
@@ -42,6 +43,7 @@
 #include "players/unreal_access.h"
 #include "renderer/additional_family_output.h"
 #include "renderer/family_boundary.h"
+#include "renderer/me_feedback_once.h"
 #include "renderer/view_family_submission.h"
 #include "views/player_view_point.h"
 #include "views/stream_views.h"
@@ -63,7 +65,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.34.9-warp-camera";
+constexpr const wchar_t* kVersion = L"0.35.0-feedback-once";
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -129,7 +131,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.34.9-warp-camera");
+        ModVersion     = STR("0.35.0-feedback-once");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -168,11 +170,13 @@ public:
         lss::hud::target_views::Remove();
         lss::hud::area_icons_two::Remove();
         lss::hud::user_widgets::Remove();
+        lss::hud::RemoveMinimapOnce();
         lss::hud::RemoveSecondImage();
         lss::hud::RemovePlayerTwoPass();
         lss::dev::Remove();
         lss::hud::RemoveLayoutScale();
         lss::hud::RemoveOverlayLayout();
+        lss::renderer::RemoveMeFeedbackOnce();
         if (rendererInstalled_)
         {
             lss::renderer::RemoveViewFamilySubmission();
@@ -224,6 +228,7 @@ public:
         }
         session_.emplace(*removeLocalPlayer);
         session_->InstallStages(*image);
+        lss::renderer::InstallMeFeedbackOnce(*image);  // one scenery-streaming hand-in per frame, player 1's family's
 
         // The view-point entry serves the filled halves and the choice of player 2's camera. The
         // split screen runs without it (halves kept 16:9 with bars, player 2 on its own camera);
@@ -248,6 +253,7 @@ public:
         }
         lss::hud::user_widgets::Install();          // HUD widgets as the engine constructs them
         lss::hud::InstallSecondImage(*image);        // player 2's HUD image, on (the hud-image command switches it)
+        lss::hud::InstallMinimapOnce(*image);        // the minimap's map rendered by player 1's pass only
         lss::hud::InstallPlayerTwoPass(*image);      // player 2's HUD content, on (the hud-levers command switches it)
         lss::hud::InstallRootOverlayRender(*image);  // before the overlay renders: placement follow, trace
         lss::hud::prompt_rows::Install(*image);      // each player's field prompt rows in their own half
@@ -350,6 +356,8 @@ private:
             case lss::players::PlayerIntent::None: break;
         }
         lss::renderer::PollFamilyBoundary();
+        lss::renderer::PollMeFeedbackOnce();
+        lss::hud::PollMinimapOnce();
         lss::player_two::field_exit::Watch();
         if (session_->HasPlayerTwo() && lss::player_two::field_exit::FieldLeft())
         {

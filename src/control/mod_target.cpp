@@ -3,6 +3,7 @@
 #include "hud/area_icons_two.h"
 #include "hud/hud_players_dump.h"
 #include "hud/hud_trace.h"
+#include "hud/minimap_once.h"
 #include "hud/overlay_layout.h"
 #include "hud/root_overlay_render.h"
 #include "hud/player_two_pass.h"
@@ -20,6 +21,7 @@
 #include "players/single_view.h"
 #include "players/split_layout.h"
 #include "players/unreal_access.h"
+#include "renderer/me_feedback_once.h"
 #include "views/player_view_point.h"
 #include "views/stream_views.h"
 
@@ -275,6 +277,28 @@ Outcome ModTarget::SetPlayerOneStreamFov(std::uint32_t degrees)
     views::SetPlayerOneStreamFov(static_cast<float>(degrees));  // applied at the next tick, which logs it
     return {true, degrees == 0 ? std::wstring(L"player 1's camera as its half covers")
                                : std::format(L"player 1's camera {} degrees wide", degrees)};
+}
+
+Outcome ModTarget::SetStreamFeedbackOnce(bool playerOneOnly)
+{
+    if (!renderer::MeFeedbackOnceInstalled())
+    {
+        return Failed(L"the one-copy streaming feedback is not installed (see the install log)");
+    }
+    renderer::SetMeFeedbackOnce(playerOneOnly);
+    return {true, playerOneOnly ? L"player 1's family alone hands in streaming requests"
+                                : L"each family hands in streaming requests (the game's code as it runs per family)"};
+}
+
+Outcome ModTarget::SetMinimapOnce(bool on)
+{
+    if (!hud::MinimapOnceInstalled())
+    {
+        return Failed(L"the minimap's single render is not installed (see the install log)");
+    }
+    hud::SetMinimapOnce(on);
+    return {true, on ? L"the minimap's map rendered once per frame, by player 1's pass"
+                     : L"the minimap's map rendered in both players' passes"};
 }
 
 Outcome ModTarget::Dump(const std::wstring& topic)

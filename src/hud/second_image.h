@@ -54,4 +54,7 @@ std::uintptr_t EntryNameForPass(std::uintptr_t stockName) noexcept;
 /// player 1's pass).
 bool SubmitInThisPass() noexcept;
 
+/// The menu renderer (FEndMenuRenderer*) from the overlay's last slot acquire, or null before one. Game thread.
+void* MenuRenderer() noexcept;
+
 }  // namespace lss::hud

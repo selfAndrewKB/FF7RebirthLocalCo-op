@@ -9,6 +9,7 @@
 #include "hud/target_views.h"
 #include "hud/entry_filter_code.h"
 #include "hud/hud_addresses.h"
+#include "hud/minimap_once.h"
 #include "hud/player_two_pass.h"
 #include "hud/prompt_rows.h"
 #include "platform/call_redirect.h"
@@ -449,7 +450,9 @@ void BeginOverlayRender(bool splitShown) noexcept
         }
         area_icons_two::ShowOnly(1);
         const double start  = Now();
+        BeginMinimapPlayerTwoPass();  // the minimap's map is rendered by player 1's pass only (hud/minimap_once.h)
         g_renderToLayer(reinterpret_cast<void*>(overlay));
+        EndMinimapPlayerTwoPass();
         g_playerTwoSeconds += Now() - start;
         enemy_gauges::EndPlayerTwoPass();  // each gauge's size back to player 1's before player 1's updates
         target_views::BeforePass(0);  // player 2's, collapsed before player 1's updates (put back after the render)
@@ -531,6 +534,11 @@ std::uintptr_t EntryNameForPass(std::uintptr_t stockName) noexcept
 bool SubmitInThisPass() noexcept
 {
     return g_pass != Pass::PlayerTwo;
+}
+
+void* MenuRenderer() noexcept
+{
+    return g_renderer;
 }
 
 }  // namespace lss::hud

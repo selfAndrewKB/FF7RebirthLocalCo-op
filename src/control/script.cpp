@@ -332,6 +332,8 @@ ParsedLine ParseLine(std::wstring_view line)
     if (name == L"single-view") return ParseSingleView(words);
     if (name == L"stream-views") return ParseStreamViews(words);
     if (name == L"stream-fov-p1") return ParseStreamFov(words);
+    if (name == L"stream-feedback") return ParseSwitch(CommandKind::StreamFeedback, words, L"p1", L"each");
+    if (name == L"minimap-once") return ParseSwitch(CommandKind::MinimapOnce, words, L"on", L"off");
     if (name == L"dump") return ParseDump(words);
     if (name == L"stick") return ParseStick(words);
     if (name == L"wait") return ParseWait(words);
@@ -371,6 +373,8 @@ std::wstring Describe(const Command& command)
             return command.ticks == 1 ? L"stream-views p2" : command.ticks == 2 ? L"stream-views both" : L"stream-views off";
         case CommandKind::StreamFovPlayerOne:
             return command.ticks == 0 ? std::wstring(L"stream-fov-p1 auto") : std::format(L"stream-fov-p1 {}", command.ticks);
+        case CommandKind::StreamFeedback: return command.on ? L"stream-feedback p1" : L"stream-feedback each";
+        case CommandKind::MinimapOnce: return command.on ? L"minimap-once on" : L"minimap-once off";
         case CommandKind::Dump: return L"dump " + command.text;
         case CommandKind::SplitFov:
             return command.blend < 0.0f ? std::wstring(L"split-fov native") : L"split-fov " + AxisText(command.blend);

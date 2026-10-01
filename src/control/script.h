@@ -44,6 +44,11 @@
 //                                         scenery streaming (views/stream_views.h); both at start
 //   stream-fov-p1 auto|<degrees>         the horizontal FOV (1-170) player 1's camera is registered with
 //                                         under both, or auto for what its half covers (at start)
+//   stream-feedback p1|each              which view families hand the game's scenery streaming their detail
+//                                         requests: player 1's only, as with one player (p1, at start), or
+//                                         each family (renderer/me_feedback_once.h)
+//   minimap-once on|off                  the minimap's map is rendered once per frame, by player 1's HUD
+//                                         pass (on, at start), or again in player 2's (hud/minimap_once.h)
 //   single-view auto|on|off              player 1's single view while player 2 is in: for the game's
 //                                         whole-screen states (auto, the default), always, or never
 //                                         (players/single_view.h)
@@ -101,6 +106,8 @@ enum class CommandKind
     SingleView,
     StreamViews,
     StreamFovPlayerOne,
+    StreamFeedback,
+    MinimapOnce,
     Dump,
     Stick,
     Wait,

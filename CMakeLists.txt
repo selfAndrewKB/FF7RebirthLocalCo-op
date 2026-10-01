@@ -31,6 +31,7 @@ add_library(LocalSplitScreen SHARED
     src/hud/hud_updates.cpp
     src/hud/root_overlay_render.cpp
     src/hud/second_image.cpp
+    src/hud/minimap_once.cpp
     src/hud/player_two_pass.cpp
     src/hud/prompt_rows.cpp
     src/hud/action_icon_base.cpp
@@ -113,6 +114,7 @@ add_library(LocalSplitScreen SHARED
 
     src/renderer/additional_family_output.cpp
     src/renderer/family_boundary.cpp
+    src/renderer/me_feedback_once.cpp
     src/renderer/one_family_per_view.cpp
     src/renderer/view_family_submission.cpp
 
@@ -335,6 +337,13 @@ add_executable(EntryFilterCodeTests
 target_include_directories(EntryFilterCodeTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(EntryFilterCodeTests PRIVATE cxx_std_20)
 add_test(NAME entry_filter_code COMMAND EntryFilterCodeTests)
+
+add_executable(MinimapOnceCodeTests
+    tests/minimap_once_code_test.cpp
+)
+target_include_directories(MinimapOnceCodeTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(MinimapOnceCodeTests PRIVATE cxx_std_20)
+add_test(NAME minimap_once_code COMMAND MinimapOnceCodeTests)
 
 add_executable(FirstPlayerCodeTests
     tests/first_player_code_test.cpp

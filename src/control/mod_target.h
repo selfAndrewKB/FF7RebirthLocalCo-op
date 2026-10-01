@@ -54,6 +54,8 @@ public:
     Outcome SetSingleView(std::uint32_t mode) override;
     Outcome SetStreamViews(std::uint32_t mode) override;
     Outcome SetPlayerOneStreamFov(std::uint32_t degrees) override;
+    Outcome SetStreamFeedbackOnce(bool playerOneOnly) override;
+    Outcome SetMinimapOnce(bool on) override;
     Outcome Dump(const std::wstring& topic) override;
     Outcome HoldSticks(std::int32_t player, const float (&axes)[4]) override;
     void    ReleaseSticks(std::int32_t player) override;

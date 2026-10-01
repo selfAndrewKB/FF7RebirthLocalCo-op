@@ -64,6 +64,11 @@ public:
     {
         return Record(L"stream-fov-p1 " + std::to_wstring(degrees));
     }
+    Outcome SetStreamFeedbackOnce(bool playerOneOnly) override
+    {
+        return Record(playerOneOnly ? L"stream-feedback p1" : L"stream-feedback each");
+    }
+    Outcome SetMinimapOnce(bool on) override { return Record(on ? L"minimap-once on" : L"minimap-once off"); }
     Outcome Dump(const std::wstring& topic) override { return Record(L"dump " + topic); }
     Outcome HoldSticks(std::int32_t player, const float (&axes)[4]) override
     {
