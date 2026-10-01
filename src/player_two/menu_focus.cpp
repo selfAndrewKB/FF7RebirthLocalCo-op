@@ -1,17 +1,15 @@
 #include "player_two/menu_focus.h"
 
-#include <Unreal/NameTypes.hpp>
-
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "player_two/generation.h"
+#include "players/unreal_access.h"
 
 #include <algorithm>
 #include <array>
 #include <cstdint>
 #include <format>
-#include <iterator>
 #include <string>
 
 namespace lss::player_two::menu_focus {
@@ -88,47 +86,16 @@ std::uintptr_t LiveWeak(std::uintptr_t address) noexcept
     return object != 0 && controller != 0 && Field<std::int32_t>(controller + 8) > 0 ? object : 0;
 }
 
-/// The name's text into `out` (truncated). Kept out of line: NameGuarded's __try cannot share a
-/// function with the string it builds.
-__declspec(noinline) void NameCopy(const RC::Unreal::FName* name, wchar_t* out, std::size_t capacity)
-{
-    const std::wstring text = name->ToString();
-    const std::size_t  size = std::min(text.size(), capacity - 1);
-    std::copy_n(text.data(), size, out);
-    out[size] = L'\0';
-}
-
-/// NameCopy, guarded: a name read from a freed object can index past the name pool.
-bool NameGuarded(const RC::Unreal::FName* name, wchar_t* out, std::size_t capacity) noexcept
-{
-    __try
-    {
-        NameCopy(name, out, capacity);
-        return true;
-    }
-    __except (platform::GuardFilter(GetExceptionCode()))
-    {
-        return false;
-    }
-}
-
+/// The FName at `address` (a name read from a freed object can index past the name pool; both the read
+/// and the lookup are guarded).
 std::wstring NameText(std::uintptr_t address) noexcept
 {
-    alignas(RC::Unreal::FName) std::uint8_t name[sizeof(RC::Unreal::FName)] = {};
-    wchar_t                                 text[128] = {};
-    if (address == 0 || !platform::CopyGuarded(name, reinterpret_cast<const void*>(address), sizeof(name)) ||
-        !NameGuarded(reinterpret_cast<const RC::Unreal::FName*>(name), text, std::size(text)))
+    std::uint64_t name = 0;
+    if (address == 0 || !platform::CopyGuarded(&name, reinterpret_cast<const void*>(address), sizeof(name)))
     {
         return L"?";
     }
-    try
-    {
-        return text;
-    }
-    catch (...)
-    {
-        return L"?";
-    }
+    return players::unreal::NameText(name);
 }
 
 /// A widget's Slate type, a UMG host's user-widget class in brackets (a raw pointer: its name is read

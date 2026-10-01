@@ -1,9 +1,5 @@
 #include "player_two/command_menu_tick.h"
 
-#define RC_UNREAL_DISABLE_PROPERTY_DEPRECATION_WARNINGS
-#define RC_UNREAL_DISABLE_CLASS_DEPRECATION_WARNINGS
-#include <Unreal/NameTypes.hpp>
-
 #include "platform/call_redirect.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -21,6 +17,7 @@
 #include "player_two/pad_sticks.h"
 #include "player_two/party_member.h"
 #include "player_two/primary_controller.h"
+#include "players/unreal_access.h"
 
 #include <algorithm>
 #include <array>
@@ -621,7 +618,7 @@ std::wstring KeyText(std::uint64_t key)
             return name;
         }
     }
-    return RC::Unreal::FName(static_cast<std::int64_t>(key)).ToString();
+    return players::unreal::NameText(key);
 }
 
 /// What InPlayerTwoUi runs: a press (gated as below) or the release of a press that went to player 2's

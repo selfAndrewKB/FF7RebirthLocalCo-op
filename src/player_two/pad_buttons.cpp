@@ -1,9 +1,5 @@
 #include "player_two/pad_buttons.h"
 
-#define RC_UNREAL_DISABLE_PROPERTY_DEPRECATION_WARNINGS
-#define RC_UNREAL_DISABLE_CLASS_DEPRECATION_WARNINGS
-#include <Unreal/NameTypes.hpp>
-
 #include "platform/call_redirect.h"
 #include "platform/frame_watch.h"
 #include "platform/guarded.h"
@@ -15,6 +11,7 @@
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/pad_sticks.h"
+#include "players/unreal_access.h"
 
 #include <algorithm>
 #include <array>
@@ -234,7 +231,7 @@ void LogChange(const wchar_t* table, const Element& element, std::uint8_t wasHel
     }
     ++g_lines;
     platform::Log(L"buttons ({}): {} held {}->{} sources 0x{:08X}->0x{:08X}; player 1 sees {}, player 2 sees {}", table,
-                  RC::Unreal::FName(static_cast<std::int64_t>(element.name)).ToString(), wasHeld, views.gameHeld, wasSources,
+                  players::unreal::NameText(element.name), wasHeld, views.gameHeld, wasSources,
                   element.sources, views.now[0] ? 1 : 0, views.now[1] ? 1 : 0);
 }
 
@@ -386,7 +383,7 @@ char ExtraKeyDown(void* owner, void* unused, std::uint32_t sourceBit, void* even
         platform::CopyGuarded(&key, static_cast<const std::byte*>(event) + kActionEventKey, sizeof(key));
         const bool padTwo = ((button_view::PadBits(1) >> (sourceBit & 31)) & 1) != 0;
         platform::Log(L"buttons: extra key {} from {} (source bit {}, already handled {}) -> {}",
-                      RC::Unreal::FName(static_cast<std::int64_t>(key)).ToString(), padTwo ? L"pad 2" : L"pad 1 or another device",
+                      players::unreal::NameText(key), padTwo ? L"pad 2" : L"pad 1 or another device",
                       sourceBit, alreadyHandled, static_cast<int>(result));
     }
     return result;

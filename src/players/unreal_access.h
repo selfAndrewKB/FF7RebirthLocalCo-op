@@ -14,6 +14,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
 
 namespace RC::Unreal {
 class UFunction;
@@ -92,5 +93,10 @@ std::optional<std::int32_t> ConsoleVariableInt(const wchar_t* variable) noexcept
 /// path as a command typed into the game's console. Returns false if it could not be called; the
 /// engine reports no result, so callers read back what they changed.
 bool ExecuteConsoleCommand(const wchar_t* command) noexcept;
+
+/// An FName's text (8 bytes as the engine stores it: comparison index, then number), truncated to 127
+/// characters. A name read from game memory can index past the name pool, so the lookup runs under
+/// a structured-exception guard; "?" if it faulted.
+std::wstring NameText(std::uint64_t name) noexcept;
 
 }  // namespace lss::players::unreal

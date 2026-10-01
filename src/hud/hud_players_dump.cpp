@@ -309,14 +309,14 @@ int LogMenuSettings()
             continue;
         }
         // FSoftClassPath begins with its FName AssetPathName (the package.class path).
-        alignas(FName) std::uint8_t name[sizeof(FName)] = {};
-        if (!CopyGuarded(name, reinterpret_cast<const std::uint8_t*>(defaults) + property->GetOffset_Internal(),
+        std::uint64_t name = 0;
+        if (!CopyGuarded(&name, reinterpret_cast<const std::uint8_t*>(defaults) + property->GetOffset_Internal(),
                          sizeof(name)))
         {
             continue;
         }
-        const std::wstring text = reinterpret_cast<const FName*>(name)->ToString();
-        if (text.empty() || text == L"None")
+        const std::wstring text = players::unreal::NameText(name);  // guarded: "?" if the name pool faulted
+        if (text.empty() || text == L"None" || text == L"?")
         {
             continue;
         }

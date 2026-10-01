@@ -9,6 +9,10 @@
 #include <Unreal/UFunction.hpp>
 #include <Unreal/UObjectGlobals.hpp>
 
+#include <Unreal/NameTypes.hpp>
+
+#include <algorithm>
+#include <iterator>
 #include <new>
 #include <vector>
 
@@ -405,6 +409,47 @@ bool RemoveLocalPlayer(UObject* gameInstance, UObject* localPlayer, std::uintptr
         return false;
     }
     return GuardedRemove(reinterpret_cast<RemoveLocalPlayerFn>(entry), gameInstance, localPlayer);
+}
+
+namespace {
+
+/// The name's text into `out` (truncated). Kept out of line: NameGuarded's __try cannot share a
+/// function with the string it builds.
+__declspec(noinline) void NameCopy(std::uint64_t name, wchar_t* out, std::size_t capacity)
+{
+    const std::wstring text = RC::Unreal::FName(static_cast<std::int64_t>(name)).ToString();
+    const std::size_t  size = std::min(text.size(), capacity - 1);
+    std::copy_n(text.data(), size, out);
+    out[size] = L'\0';
+}
+
+bool NameGuarded(std::uint64_t name, wchar_t* out, std::size_t capacity) noexcept
+{
+    __try
+    {
+        NameCopy(name, out, capacity);
+        return true;
+    }
+    __except (platform::GuardFilter(GetExceptionCode()))
+    {
+        return false;
+    }
+}
+
+}  // namespace
+
+std::wstring NameText(std::uint64_t name) noexcept
+{
+    wchar_t    text[128] = {};
+    const bool read      = NameGuarded(name, text, std::size(text));
+    try
+    {
+        return read ? std::wstring(text) : std::wstring(L"?");
+    }
+    catch (...)
+    {
+        return {};
+    }
 }
 
 }  // namespace lss::players::unreal

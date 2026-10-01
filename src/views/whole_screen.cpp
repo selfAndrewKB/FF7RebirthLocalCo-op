@@ -1,18 +1,12 @@
 #include "views/whole_screen.h"
 
-#define RC_UNREAL_DISABLE_PROPERTY_DEPRECATION_WARNINGS
-#define RC_UNREAL_DISABLE_CLASS_DEPRECATION_WARNINGS
-#include <Unreal/NameTypes.hpp>
-
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "players/unreal_access.h"
 
-#include <algorithm>
 #include <array>
 #include <cstdint>
-#include <cwchar>
-#include <iterator>
 #include <string>
 
 namespace lss::views {
@@ -132,41 +126,17 @@ bool JobBoardOpen() noexcept
     return valid;
 }
 
-/// The name's text into `out` (truncated). Kept out of line: NameGuarded's __try cannot share a
-/// function with the string it builds.
-__declspec(noinline) void NameCopy(std::uint64_t name, wchar_t* out, std::size_t capacity)
-{
-    const std::wstring text = RC::Unreal::FName(static_cast<std::int64_t>(name)).ToString();
-    const std::size_t  size = std::min(text.size(), capacity - 1);
-    std::copy_n(text.data(), size, out);
-    out[size] = L'\0';
-}
-
-/// NameCopy, guarded: a name read from game memory can index past the name pool.
-bool NameGuarded(std::uint64_t name, wchar_t* out, std::size_t capacity) noexcept
-{
-    __try
-    {
-        NameCopy(name, out, capacity);
-        return true;
-    }
-    __except (platform::GuardFilter(GetExceptionCode()))
-    {
-        return false;
-    }
-}
-
 /// Logs the new location (a location jump; rare) and says whether it is the title.
 bool IsTitleName(std::uint64_t name) noexcept
 {
-    wchar_t text[64] = {};
-    if (!NameGuarded(name, text, std::size(text)))
+    const std::wstring text = players::unreal::NameText(name);  // guarded: "?" if the name pool faulted
+    if (text == L"?")
     {
         platform::Log(L"whole screen: the location name {:#x} could not be read; not taken as the title", name);
         return false;
     }
     platform::Log(L"whole screen: location {}", text);
-    return std::wcscmp(text, kTitleName) == 0;
+    return text == kTitleName;
 }
 
 /// Whether the game state's current location is the title; the name is turned into text only when it changes.
