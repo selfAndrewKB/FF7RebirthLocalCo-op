@@ -226,6 +226,13 @@ void Session::Join() noexcept
     {
         return;
     }
+    // Player 2 exists only with a character to play: with none free, the game stays as with one player.
+    if (installed_.member && FreeMember(one.controller) == nullptr)
+    {
+        party_member::Choose(one.controller);  // each member's verdict, for the log
+        AwaitMember(L"no party member is free for player 2");
+        return;
+    }
 
     const auto                   before = JoinWitness::Take(one.localPlayer);
     players::LocalPlayers::Added added;
@@ -244,7 +251,8 @@ void Session::Join() noexcept
     playerOneController_ = one.controller;
     playerTwoController_ = added.controller;
     phase_               = Phase::Playing;
-    rejoinPending_       = false;  // joined, by the key or by the rejoin after a map load
+    rejoinPending_       = false;  // joined, by the key, the rejoin after a map load, or a member freed
+    awaitingMember_      = false;
 
     if (added.raised)
     {

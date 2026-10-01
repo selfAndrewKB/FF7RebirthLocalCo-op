@@ -32,13 +32,13 @@ public:
     };
 
     /// Player 1's local player and controller, when there is exactly one local player and it has a
-    /// controller; otherwise both null (and the reason is logged).
+    /// controller; otherwise both null (and the reason is logged when `log` is set).
     struct PlayerOne
     {
         unreal::UObject* localPlayer = nullptr;
         unreal::UObject* controller  = nullptr;
     };
-    PlayerOne SolePlayer() const noexcept;
+    PlayerOne SolePlayer(bool log = true) const noexcept;
 
     /// Adds player 2 with its own controller. Call only with SolePlayer() valid. Any player the
     /// engine added is tracked, even when the call raised an exception, so it is removed before a

@@ -70,6 +70,11 @@ constexpr std::uint32_t        kRejoinSettleTicks = 180;
 constexpr std::uint32_t        kRejoinTries       = 5;
 constexpr std::chrono::seconds kRejoinWait{120};
 
+/// While player 2 waits outside the game for a free party member: ticks between the slow checks. The
+/// member test is a few roster reads, and a story party change may pass neither funnel, so this is
+/// much quicker than the in-game backstop.
+constexpr std::uint32_t kAwaitCheckTicks = 30;
+
 }  // namespace
 
 void Session::TogglePadSticks() noexcept
@@ -111,6 +116,7 @@ void Session::Tick() noexcept
     if (!HasPlayerTwo())
     {
         TryRejoin();
+        JoinWhenMemberFree();
         return;
     }
     if (!players_.StillListed())
@@ -134,6 +140,10 @@ void Session::Tick() noexcept
             // Before the member tick: the tick's scopes answer the party leader with player 2's member
             // (player_two/leader_scope.h), which CheckMemberPlayable's leader test must not see.
             RetakeWhenFree();
+            if (!HasPlayerTwo())
+            {
+                break;  // left to wait for a free member
+            }
             CheckMemberPlayable();
             command_menu_two::Tick();  // player 2's command controller, built and set up per world
             if (phase_ == Phase::Playing && installed_.memberMovement && generation::Member() != nullptr)
@@ -213,8 +223,7 @@ void Session::Settle() noexcept
     member_ = party_member::Choose(playerOneController_);
     if (member_ == nullptr)
     {
-        Log(L"no party member is free for player 2; player 2 stays on its own controller without a character");
-        phase_ = Phase::Playing;
+        LeaveToAwait(L"no party member is free for player 2 any more");
         return;
     }
     playerOneBytes_ = party_member::ReadPlayerOneBytes(playerOneController_);
@@ -243,7 +252,8 @@ void Session::AwaitTake() noexcept
             bytes == playerOneBytes_ ? L"unchanged" : L"CHANGED");
         LogTagCounts(L"after the take");
         generation::SetMember(member_);
-        memberWeak_ = leader_scope::WeakOf(member_);
+        memberWeak_  = leader_scope::WeakOf(member_);
+        retakeLooks_ = 0;  // a look window armed before the take would drain for nothing
         if (installed_.fieldSettings)
         {
             Log(L"player 2's Field camera brought to player 1's settings: {}",
@@ -306,8 +316,9 @@ std::uint32_t Session::BackstopTicks() const noexcept
     return installed_.partyEvents ? kBackstopTicks : kBackstopTicksNoEvents;
 }
 
-/// Player 2 without a character (none was free: a solo story party) takes one as soon as one is:
-/// looked for after each game party change, and by the slow backstop.
+/// Player 2 in without a character (its give-back ran out of time, or the take failed) takes a member
+/// as soon as one is free: looked for after each game party change, and by the slow backstop. When
+/// the backstop finds none, player 2 leaves and waits outside the game.
 void Session::RetakeWhenFree() noexcept
 {
     const bool looking = retakeLooks_ > 0;
@@ -325,6 +336,10 @@ void Session::RetakeWhenFree() noexcept
     void* free = party_member::Choose(playerOneController_, false);
     if (free == nullptr)
     {
+        if (!looking)  // a member the game spawns joins a few ticks after its party change: not given up then
+        {
+            LeaveToAwait(L"no party member is free for player 2");
+        }
         return;
     }
     retakeLooks_ = 0;
@@ -370,6 +385,10 @@ void Session::OnLeaderChanging(void* controller, void* character) noexcept
 {
     if (!HasPlayerTwo())
     {
+        if (awaitingMember_)
+        {
+            retakeLooks_ = kRetakeLookTicks;  // the member the game moved off may be free
+        }
         return;
     }
     const void* before = ReadPointer(controller, facts::kControllerLeader);
@@ -397,7 +416,7 @@ void Session::OnLeaderChanging(void* controller, void* character) noexcept
 /// against the deployed party at once, or, without one, player 2 looks for a free member.
 void Session::OnStatusChanged(std::uint8_t playerType, std::uint8_t before, std::uint8_t after) noexcept
 {
-    if (!HasPlayerTwo())
+    if (!HasPlayerTwo() && !awaitingMember_)
     {
         return;
     }
@@ -409,7 +428,7 @@ void Session::OnStatusChanged(std::uint8_t playerType, std::uint8_t before, std:
 /// change, a load, a script, an equipment or costume change. Every character it needed exists now.
 void Session::OnPartyApplied() noexcept
 {
-    if (!HasPlayerTwo())
+    if (!HasPlayerTwo() && !awaitingMember_)
     {
         return;
     }
@@ -418,12 +437,12 @@ void Session::OnPartyApplied() noexcept
 }
 
 /// After a game party change: player 2's member is checked against the deployed party at once, or,
-/// without one, player 2 looks for a free member.
+/// without one (or waiting outside the game), player 2 looks for a free member.
 void Session::CheckAfterPartyChange() noexcept
 {
     if (member_ == nullptr)
     {
-        retakeLooks_ = kRetakeLookTicks;  // used once player 2 plays without a character
+        retakeLooks_ = kRetakeLookTicks;  // used by RetakeWhenFree, or JoinWhenMemberFree while player 2 is out
         return;
     }
     if (!MemberHeld() || !generation::Active())
@@ -480,6 +499,103 @@ void Session::TryRejoin() noexcept
     if (HasPlayerTwo())
     {
         rejoinPending_ = false;
+    }
+}
+
+/// A party member player 2 could take, by the game's own member test (null if none). Quiet.
+void* Session::FreeMember(void* playerOneController) const noexcept
+{
+    return party_member::GameReady() ? party_member::Choose(playerOneController, false) : nullptr;
+}
+
+/// Player 2 is out, and waits for a party member to be free before it joins.
+void Session::AwaitMember(const wchar_t* why) noexcept
+{
+    if (refuseJoins_)
+    {
+        Log(L"{}: player 2 stays out and does not wait (an earlier join raised an exception; restart the game to join)",
+            why);
+        return;
+    }
+    if (awaitingMember_)
+    {
+        Log(L"player 2 still waits for a free party member ({})", why);
+        return;
+    }
+    awaitingMember_  = true;
+    rejoinPending_   = false;  // the wait replaces a map load's rejoin, and has no time limit
+    awaitReadyTicks_ = 0;
+    awaitTicks_      = 0;
+    awaitJoinTries_  = 0;
+    retakeLooks_     = 0;
+    Log(L"{}: player 2 stays out (the game runs as with one player) and joins once a party member is free "
+        L"(Ctrl+F8 stops the wait)",
+        why);
+}
+
+/// Player 2 is in without a member and none is free: it leaves at once (nothing of player 2's is held
+/// by the party), and waits outside the game for one.
+void Session::LeaveToAwait(const wchar_t* why) noexcept
+{
+    if (LeaveNow())
+    {
+        AwaitMember(why);
+    }
+}
+
+/// While player 2 waits outside the game: once the field has been ready for a few seconds, a free
+/// member is looked for every tick after a game party change and by a slow check otherwise, and player
+/// 2 joins when there is one.
+void Session::JoinWhenMemberFree() noexcept
+{
+    if (!awaitingMember_)
+    {
+        return;
+    }
+    if (refuseJoins_)
+    {
+        awaitingMember_ = false;
+        Log(L"player 2 stops waiting for a party member: an earlier join raised an exception; restart the game to join");
+        return;
+    }
+    // The same readiness as the rejoin after a map load (a join before the field runs is undone by it).
+    if (!own_controller::Ready() || !party_member::GameReady() || !field_exit::FieldReady())
+    {
+        awaitReadyTicks_ = 0;
+        return;
+    }
+    if (awaitReadyTicks_ < kRejoinSettleTicks)
+    {
+        ++awaitReadyTicks_;
+        return;
+    }
+    const bool looking = retakeLooks_ > 0;
+    if (looking)
+    {
+        --retakeLooks_;
+    }
+    else if (++awaitTicks_ % kAwaitCheckTicks != 0)
+    {
+        return;
+    }
+    // Player 1 on a controller of another class for a moment is not ready either (the join would refuse).
+    const auto one = players_.SolePlayer(false);
+    if (one.controller == nullptr || !own_controller::UsesNativeClasses(one.controller) ||
+        FreeMember(one.controller) == nullptr)
+    {
+        return;
+    }
+    Log(L"a party member is free for player 2 ({}): player 2 joins",
+        looking ? L"after the game's party change" : L"found by the slow check");
+    Join();  // ends the wait once player 2 is in; a refused or failed join leaves it, and is counted
+    if (HasPlayerTwo() || !awaitingMember_)
+    {
+        return;
+    }
+    if (++awaitJoinTries_ >= kRejoinTries)
+    {
+        awaitingMember_ = false;
+        Log(L"player 2 could not join in {} tries (see above); press Ctrl+F7 to try again", kRejoinTries);
     }
 }
 
@@ -542,6 +658,11 @@ void Session::AwaitSwap() noexcept
 void Session::Leave() noexcept
 {
     rejoinPending_ = false;  // a leave asked for: no rejoin after a later map load
+    if (awaitingMember_)
+    {
+        awaitingMember_ = false;
+        Log(L"player 2 no longer waits for a free party member");
+    }
     if (!HasPlayerTwo())
     {
         return;

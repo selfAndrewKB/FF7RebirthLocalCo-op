@@ -18,11 +18,13 @@
 //            and player 2 removed in one step (player_two/leave_sequence.h).
 //   party    the game's party funnels are heard (player_two/party_events.h): before the game makes
 //            player 2's member player 1's leader, player 2 gives it back; after a status change, a
-//            member out of the deployed or battle party is given back and another chosen. With none
-//            free (a solo story party), player 2 waits without a character and takes one after the
-//            next party change frees one. A slow check backs both up (story override party data
-//            passes neither funnel), and the battle controller component is checked every few
-//            ticks. A downed member stays player 2's.
+//            member out of the deployed or battle party is given back and another chosen. A slow
+//            check backs both up (story override party data passes neither funnel), and the battle
+//            controller component is checked every few ticks. A downed member stays player 2's.
+//   no member with none free (player 1's character alone in a story party), player 2 does not exist:
+//            a join creates nothing, and a player 2 whose member went leaves. The mod is then as
+//            with one player, and player 2 joins once the game's party changes free a member (a
+//            slow check backs the funnels up). Ctrl+F8 stops the wait.
 //   map load player 2 leaves before it, and joins again once the new map is in the field state
 //            and player 1's camera is ready.
 // Each stage is installed only if its engine checks pass; a stage that is not installed is
@@ -55,10 +57,14 @@ public:
     /// Puts every replaced slot back (at mod uninstall, with player 2 out).
     void RemoveStages() noexcept;
 
+    /// Adds player 2, or, with no party member free for it, waits outside the game for one.
     void Join() noexcept;
 
-    /// Starts a leave; it completes over the following ticks.
+    /// Starts a leave; it completes over the following ticks. Also stops a wait for a party member.
     void Leave() noexcept;
+
+    /// Player 2 was asked for but is out until a party member is free for it.
+    bool AwaitingMember() const noexcept { return awaitingMember_; }
 
     /// A map is about to load: player 2 leaves now, without waiting for the member's release.
     /// Returns true if player 2 is out.
@@ -114,6 +120,10 @@ private:
     void RetakeWhenFree() noexcept;
     bool MemberDestroyed() noexcept;
     void TryRejoin() noexcept;
+    void* FreeMember(void* playerOneController) const noexcept;
+    void AwaitMember(const wchar_t* why) noexcept;
+    void LeaveToAwait(const wchar_t* why) noexcept;
+    void JoinWhenMemberFree() noexcept;
     std::uint32_t BackstopTicks() const noexcept;
     void Yield(const wchar_t* why) noexcept;
     bool MemberHeld() const noexcept;  // taking or playing a member
@@ -142,6 +152,10 @@ private:
     std::uint32_t         rejoinTicks_      = 0;        // ticks the new map has looked ready
     std::uint32_t         rejoinTries_      = 0;
     std::chrono::steady_clock::time_point rejoinAsked_{};  // when the map load asked for the rejoin
+    bool                  awaitingMember_   = false;    // asked for, but out until a party member is free
+    std::uint32_t         awaitReadyTicks_  = 0;        // ticks the field has looked ready during the wait
+    std::uint32_t         awaitTicks_       = 0;        // ticks of the wait's slow check
+    std::uint32_t         awaitJoinTries_   = 0;        // joins the wait tried that did not add player 2
 
     party_member::PlayerOneBytes playerOneBytes_{};
 

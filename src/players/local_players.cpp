@@ -22,19 +22,25 @@ bool Contains(RC::Unreal::TArray<unreal::UObject*>& players, unreal::UObject* pl
 
 }  // namespace
 
-LocalPlayers::PlayerOne LocalPlayers::SolePlayer() const noexcept
+LocalPlayers::PlayerOne LocalPlayers::SolePlayer(bool log) const noexcept
 {
     auto* players = unreal::LocalPlayers(unreal::GameInstance());
     if (players == nullptr || players->Num() != 1)
     {
-        platform::Log(L"join refused: expected exactly one local player, found {}", players == nullptr ? -1 : players->Num());
+        if (log)
+        {
+            platform::Log(L"join refused: expected exactly one local player, found {}", players == nullptr ? -1 : players->Num());
+        }
         return {};
     }
     unreal::UObject*  localPlayer = (*players)[0];
     unreal::UObject** controller  = unreal::ControllerField(localPlayer);
     if (controller == nullptr || *controller == nullptr)
     {
-        platform::Log(L"join refused: player 1 has no controller yet");
+        if (log)
+        {
+            platform::Log(L"join refused: player 1 has no controller yet");
+        }
         return {};
     }
     return {localPlayer, *controller};

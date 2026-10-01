@@ -7,6 +7,7 @@
 #include <Unreal/CoreUObject/UObject/Class.hpp>
 #include <Unreal/CoreUObject/UObject/UnrealType.hpp>
 #include <Unreal/UFunction.hpp>
+#include <Unreal/UObjectArray.hpp>
 #include <Unreal/UObjectGlobals.hpp>
 
 #include <Unreal/NameTypes.hpp>
@@ -85,7 +86,32 @@ bool GuardedRemove(RemoveLocalPlayerFn remove, UObject* gameInstance, UObject* l
 
 UObject* GameInstance() noexcept
 {
-    return UObjectGlobals::FindFirstOf(STR("GameInstance"));  // subclasses match too
+    // FindFirstOf walks every object (≈20–25 ms in this game), so the result is kept: the engine
+    // creates the game instance once at start-up and keeps it until exit, across map loads. The kept
+    // one is checked alive (its object-array slot still holds it, reachable, same class) before use.
+    // Game thread.
+    static UObject*     kept      = nullptr;
+    static std::int32_t keptIndex = -1;
+    static UClass*      keptClass = nullptr;
+    if (kept != nullptr)
+    {
+        auto* item = RC::Unreal::UObjectArray::IndexToObject(keptIndex);
+        // `kept` is read (its class) only after its slot shows it live: keep that order if copied.
+        if (item != nullptr && item->GetUObject() == kept && !item->IsUnreachable() && !item->IsPendingKill() &&
+            kept->GetClassPrivate() == keptClass)
+        {
+            return kept;
+        }
+        kept = nullptr;
+    }
+    UObject* found = UObjectGlobals::FindFirstOf(STR("GameInstance"));  // subclasses match too
+    if (found != nullptr)
+    {
+        kept      = found;
+        keptIndex = static_cast<std::int32_t>(found->GetInternalIndex());
+        keptClass = found->GetClassPrivate();
+    }
+    return found;
 }
 
 RC::Unreal::TArray<UObject*>* LocalPlayers(UObject* gameInstance) noexcept

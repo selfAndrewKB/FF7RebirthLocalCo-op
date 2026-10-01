@@ -52,7 +52,8 @@ StageCounters g_counters;
 int PlayerTypeOfComponent(const void* component) noexcept
 {
     const auto vtable = reinterpret_cast<const void*>(VTableOf(component));
-    return vtable == nullptr ? kNoType : ReadField<PlayerTypeFn>(vtable, facts::kPlayerTypeSlotOffset)(component);
+    const auto fn     = vtable == nullptr ? nullptr : ReadField<PlayerTypeFn>(vtable, facts::kPlayerTypeSlotOffset);
+    return fn == nullptr ? kNoType : fn(component);  // an unreadable slot reads null
 }
 
 std::uint8_t LeaderTest(const void* component)

@@ -64,11 +64,11 @@ Outcome ModTarget::Join()
 
 Outcome ModTarget::Leave()
 {
-    if (!session_.HasPlayerTwo())
+    if (!session_.HasPlayerTwo() && !session_.AwaitingMember())
     {
         return Failed(L"player 2 is not in");
     }
-    session_.Leave();  // completes over the following ticks; `wait-until out` confirms it
+    session_.Leave();  // completes over the following ticks (or stops a wait); `wait-until out` confirms it
     return {};
 }
 

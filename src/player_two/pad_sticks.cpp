@@ -150,7 +150,14 @@ bool PartActs(unsigned part) noexcept
 std::int32_t ControllerIdOf(const void* controller) noexcept
 {
     const void* localPlayer = ReadPointer(controller, facts::kControllerPlayer);
-    return localPlayer == nullptr ? -1 : ReadField<std::int32_t>(localPlayer, facts::kLocalPlayerControllerId);
+    // Read directly, not through ReadField: 0 is player 1's id, so an unreadable field must give -1.
+    std::int32_t id = -1;
+    if (localPlayer == nullptr ||
+        !platform::CopyGuarded(&id, static_cast<const std::byte*>(localPlayer) + facts::kLocalPlayerControllerId, sizeof(id)))
+    {
+        return -1;
+    }
+    return id;
 }
 
 void SetStickOverride(std::int32_t controllerId, const Sticks* sticks) noexcept
