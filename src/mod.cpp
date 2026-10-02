@@ -39,6 +39,7 @@
 #include "player_two/location_rows.h"
 #include "player_two/shoulder_scale.h"
 #include "player_two/walk_limits.h"
+#include "player_two/handover_watch.h"
 #include "player_two/nav_strand.h"
 #include "player_two/party_warp.h"
 #include "player_two/session.h"
@@ -72,7 +73,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.37.1-minimap";
+constexpr const wchar_t* kVersion = L"0.38.0-party-slot";
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -138,7 +139,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.37.1-minimap");
+        ModVersion     = STR("0.38.0-party-slot");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -270,6 +271,7 @@ public:
         lss::player_two::location_rows::Install(*image);  // each camera's location rows from its own player
         lss::player_two::shoulder_scale::Install(*image);  // each half's shoulder offset scaled to its width
         lss::player_two::walk_limits::Install(*image);     // player 2's walk limits from player 2's own surroundings
+        lss::player_two::handover_watch::Install(*image);  // the party order and the members' AI at hand-overs, logged
         lss::hud::InstallPlayerTwoPass(*image);      // player 2's HUD content, on (the hud-levers command switches it)
         lss::hud::InstallRootOverlayRender(*image);  // before the overlay renders: placement follow, trace
         lss::hud::prompt_rows::Install(*image);      // each player's field prompt rows in their own half
@@ -386,6 +388,7 @@ private:
         lss::dev::TickAfterSession();
         FollowPlayerTwo();
         lss::player_two::walk_limits::Tick();  // after the session's tick: a take's copy is overwritten this frame
+        lss::player_two::handover_watch::Tick();
 
         // Player 1's single view for the game's whole-screen states (players/single_view.h): while it
         // holds, player 2 stays in but the split's presentation is off, as with one player.

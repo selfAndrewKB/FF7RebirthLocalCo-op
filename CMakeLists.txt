@@ -76,6 +76,7 @@ add_library(LocalSplitScreen SHARED
     src/player_two/location_rows.cpp
     src/player_two/shoulder_scale.cpp
     src/player_two/walk_limits.cpp
+    src/player_two/handover_watch.cpp
     src/hud/navimap_watch.cpp
     src/hud/minimap.cpp
     src/player_two/party_warp.cpp

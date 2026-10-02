@@ -15,6 +15,7 @@
 #include "player_two/lock_on.h"
 #include "player_two/field_camera.h"
 #include "player_two/generation.h"
+#include "player_two/handover_watch.h"
 #include "player_two/leader_scope.h"
 #include "player_two/leftover_actors.h"
 #include "player_two/member_movement.h"
@@ -74,6 +75,15 @@ constexpr std::chrono::seconds kRejoinWait{120};
 /// member test is a few roster reads, and a story party change may pass neither funnel, so this is
 /// much quicker than the in-game backstop.
 constexpr std::uint32_t kAwaitCheckTicks = 30;
+
+/// Player 2 in, waiting on the 2nd slot's member (its AI held by a story script, or not free yet):
+/// ticks between checks. A script lets go without an event; the check is a few reads.
+constexpr std::uint32_t kSlotWaitTicks = 10;
+
+/// While player 2 plays a member: ticks between checks of its AI (a story script putting it into
+/// LEAD gets it back) and of the 2nd slot (a reorder no party apply reported).
+constexpr std::uint32_t kHeldAiTicks    = 6;
+constexpr std::uint32_t kSlotCheckTicks = 60;
 
 }  // namespace
 
@@ -220,20 +230,32 @@ void Session::Settle() noexcept
         }
         return;
     }
-    member_ = party_member::Choose(playerOneController_);
-    if (member_ == nullptr)
+    handover_watch::PartyOrder(L"choosing player 2's member", nullptr);
+    const auto choice = party_member::ChooseSlot(playerOneController_);
+    member_           = choice.member;
+    if (choice.wait == party_member::SlotWait::NoSlot)
     {
-        LeaveToAwait(L"no party member is free for player 2 any more");
+        LeaveToAwait(L"the party has no member for player 2 any more");
         return;
     }
+    if (member_ == nullptr)
+    {
+        WaitForSlot(choice);
+        phase_ = Phase::Playing;
+        return;
+    }
+    waitingForSlot_ = false;
+    slotWaitLogged_ = 0;
     playerOneBytes_ = party_member::ReadPlayerOneBytes(playerOneController_);
     LogTagCounts(L"before the take");
+    handover_watch::Snapshot(L"before the take", member_);
     if (!party_member::Take(playerTwoController_, member_))
     {
         member_ = nullptr;
         phase_  = Phase::Playing;
         return;
     }
+    handover_watch::Snapshot(L"just after the take's switch", member_);
     memberWeak_ = leader_scope::WeakOf(member_);  // watched from the take on
     Log(L"player 2 is taking {}", NameOf(member_));
     phase_ = Phase::Taking;
@@ -327,26 +349,34 @@ void Session::RetakeWhenFree() noexcept
         --retakeLooks_;  // the window runs only while the game is ready: no member is taken during a load
     }
     // MemberReleased with no member: player 2's controller holds no pawn or leader (a give-back that
-    // never completed keeps it holding one).
-    if (member_ != nullptr || !installed_.member || !generation::Active() || (!looking && ticks_ % BackstopTicks() != 0) ||
-        !party_member::GameReady() || !MemberReleased())
+    // never completed keeps it holding one). A wait on the 2nd slot is checked every few ticks: the
+    // game frees it without an event (its script lets go of the member's AI).
+    const bool due = looking || ticks_ % (waitingForSlot_ ? kSlotWaitTicks : BackstopTicks()) == 0;
+    if (member_ != nullptr || !installed_.member || !generation::Active() || !due || !party_member::GameReady() ||
+        !MemberReleased())
     {
         return;
     }
-    void* free = party_member::Choose(playerOneController_, false);
+    const auto choice = party_member::ChooseSlot(playerOneController_, false);
+    void*      free   = choice.member;
     if (free == nullptr)
     {
-        if (!looking)  // a member the game spawns joins a few ticks after its party change: not given up then
+        if (choice.wait != party_member::SlotWait::NoSlot)
         {
-            LeaveToAwait(L"no party member is free for player 2");
+            WaitForSlot(choice);
+        }
+        else if (!looking)  // a member the game spawns joins a few ticks after its party change: not given up then
+        {
+            LeaveToAwait(L"the party has no member for player 2");
         }
         return;
     }
     retakeLooks_ = 0;
     Log(L"a party member is free for player 2 again ({}; {}); taking it", NameOf(free),
-        looking                   ? L"after the game's party change"
-        : installed_.partyEvents  ? L"found by the slow check: no game party change was heard for it"
-                                  : L"found by the party check");
+        waitingForSlot_          ? L"the 2nd slot's member is free now"
+        : looking                ? L"after the game's party change"
+        : installed_.partyEvents ? L"found by the slow check: no game party change was heard for it"
+                                 : L"found by the party check");
     phase_ = Phase::SettlingPlayerOne;
     ticks_ = kPlayerOneWatchTicks;  // player 1 is settled already: choose on the next tick
 }
@@ -355,6 +385,7 @@ void Session::RetakeWhenFree() noexcept
 void Session::Yield(const wchar_t* why) noexcept
 {
     Log(L"player 2's {} is {}: giving it back to choose again among the deployed party", NameOf(member_), why);
+    handover_watch::Snapshot(L"the give-back", member_);
     generation::SetMember(nullptr);  // player 2's member movement and scopes stop at once
     phase_ = Phase::Swapping;        // before the game's switch runs: a party event inside it sees the swap
     ticks_ = 0;
@@ -421,7 +452,10 @@ void Session::OnStatusChanged(std::uint8_t playerType, std::uint8_t before, std:
         return;
     }
     EventLine(std::format(L"the game changed party member type {}'s status {} -> {}", playerType, before, after));
-    CheckAfterPartyChange();
+    handover_watch::PartyOrder(L"after a party status change", MemberHeld() ? member_ : nullptr);
+    // Not the slot: a squad change commits its statuses one by one and orders the list afterwards
+    // (the chapter 7 log), so the order is final only at the party apply.
+    CheckAfterPartyChange(false);
 }
 
 /// The game finished applying new party data (player_two/party_events.h): a squad or formation
@@ -433,12 +467,14 @@ void Session::OnPartyApplied() noexcept
         return;
     }
     EventLine(L"the game applied the party data (its party stream finished)");
-    CheckAfterPartyChange();
+    handover_watch::PartyOrder(L"after the game's party apply", MemberHeld() ? member_ : nullptr);
+    CheckAfterPartyChange(true);
 }
 
-/// After a game party change: player 2's member is checked against the deployed party at once, or,
-/// without one (or waiting outside the game), player 2 looks for a free member.
-void Session::CheckAfterPartyChange() noexcept
+/// After a game party change: player 2's member is checked against the deployed party at once (and,
+/// with `followSlot`, against the 2nd slot), or, without one (or waiting outside the game), player 2
+/// looks for a free member.
+void Session::CheckAfterPartyChange(bool followSlot) noexcept
 {
     if (member_ == nullptr)
     {
@@ -453,6 +489,61 @@ void Session::CheckAfterPartyChange() noexcept
     {
         Yield(why);
     }
+    else if (followSlot)
+    {
+        FollowSlot(L"after the game's party apply");
+    }
+}
+
+/// Player 2 plays the 2nd slot: when it names another member, player 2's is given back and the slot's
+/// is taken (or waited on), even though player 2's is still in the party.
+void Session::FollowSlot(const wchar_t* when) noexcept
+{
+    if (phase_ != Phase::Playing || member_ == nullptr || generation::Member() != member_ || !party_member::GameReady())
+    {
+        return;
+    }
+    const auto choice = party_member::ChooseSlot(playerOneController_, false);
+    const auto held   = party_member::PlayerTypeOf(member_);
+    if (choice.wait == party_member::SlotWait::NoSlot || !held || choice.type == *held)
+    {
+        return;  // no slot: the party checks give player 2's member up if it left
+    }
+    Log(L"the 2nd slot of the party order is now type {} ({}), not player 2's {} (type {})", choice.type, when,
+        NameOf(member_), *held);
+    Yield(L"no longer in the 2nd slot of the party order");
+}
+
+/// Player 2 stays in without a member while the 2nd slot's is not free; the reason is logged when it
+/// changes.
+void Session::WaitForSlot(const party_member::SlotChoice& choice) noexcept
+{
+    waitingForSlot_  = true;
+    const auto key   = static_cast<std::uint32_t>(choice.type) | static_cast<std::uint32_t>(choice.wait) << 8 |
+                     static_cast<std::uint32_t>(choice.verdict) << 12 | static_cast<std::uint32_t>(choice.ai.state) << 16 |
+                     static_cast<std::uint32_t>(choice.ai.brainIndex) << 24;
+    if (key == slotWaitLogged_)
+    {
+        return;
+    }
+    slotWaitLogged_ = key;
+    Log(L"player 2 waits for party member type {} (the 2nd slot, ordinal {}): {} (AI brain {} state {}); the game's "
+        L"party order chooses player 2's member, so a menu reorder ends the wait",
+        choice.type, choice.ordinal,
+        choice.wait == party_member::SlotWait::NotEligible ? Describe(choice.verdict)
+        : choice.wait == party_member::SlotWait::Unread    ? L"the party could not be read"
+                                                           : Describe(AssessAi(choice.ai)),
+        choice.ai.brainIndex, choice.ai.state);
+}
+
+/// A story script that puts player 2's member into LEAD gets it back: the LEAD runs only under its AI.
+void Session::CheckHeldAi() noexcept
+{
+    if (ticks_ % kHeldAiTicks != 0 || !AiTakesBack(party_member::ReadAi(member_)))
+    {
+        return;
+    }
+    Yield(L"put into LEAD by a story script (given back so the script can run; player 2 waits for it to follow again)");
 }
 
 /// After a map load took player 2 out: the normal join, once the new map has been in the field state
@@ -505,7 +596,7 @@ void Session::TryRejoin() noexcept
 /// A party member player 2 could take, by the game's own member test (null if none). Quiet.
 void* Session::FreeMember(void* playerOneController) const noexcept
 {
-    return party_member::GameReady() ? party_member::Choose(playerOneController, false) : nullptr;
+    return party_member::GameReady() ? party_member::ChooseSlot(playerOneController, false).member : nullptr;
 }
 
 /// Player 2 is out, and waits for a party member to be free before it joins.
@@ -619,6 +710,12 @@ void Session::CheckMemberPlayable() noexcept
     if (why != nullptr)
     {
         Yield(why);
+        return;
+    }
+    CheckHeldAi();
+    if (phase_ == Phase::Playing && ticks_ % kSlotCheckTicks == 0)
+    {
+        FollowSlot(L"found by the slow slot check");
     }
 }
 
@@ -710,6 +807,7 @@ void Session::Carry(LeaveAction action) noexcept
     {
         case LeaveAction::None: break;
         case LeaveAction::Release:
+            handover_watch::Snapshot(L"the leave's give-back", member_);
             if (!party_member::GiveBack(playerTwoController_))
             {
                 Log(L"leave: {} could not be given back (no trigger actor, or the switch faulted)", NameOf(member_));
@@ -792,6 +890,8 @@ void Session::Forget() noexcept
     member_              = nullptr;
     ticks_               = 0;
     retakeLooks_         = 0;
+    waitingForSlot_      = false;
+    slotWaitLogged_      = 0;
     viewTargetResets_    = 0;
     viewOnOwnCamera_     = true;
 }

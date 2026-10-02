@@ -229,8 +229,8 @@ void Session::Join() noexcept
     // Player 2 exists only with a character to play: with none free, the game stays as with one player.
     if (installed_.member && FreeMember(one.controller) == nullptr)
     {
-        party_member::Choose(one.controller);  // each member's verdict, for the log
-        AwaitMember(L"no party member is free for player 2");
+        party_member::ChooseSlot(one.controller);  // the 2nd slot's verdict, for the log
+        AwaitMember(L"the party's 2nd slot has no member free for player 2");
         return;
     }
 

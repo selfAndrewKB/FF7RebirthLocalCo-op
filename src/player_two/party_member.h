@@ -33,10 +33,35 @@ bool Installed() noexcept;
 /// a load, when the party's objects cannot be relied on).
 bool GameReady() noexcept;
 
-/// The first eligible member of the deployed party (the battle-member list player 1's battle switch
-/// cycles), by that switch's own member test, never player 1's character or the field or default
-/// battle leader's slot (null if none). Each member's verdict is logged when `log` is set.
-void* Choose(void* playerOneController, bool log = true) noexcept;
+/// Why player 2 has no member to take now.
+enum class SlotWait
+{
+    None,         // `member` is the one to take
+    NoSlot,       // the party has no member but player 1's (a solo story party): nothing to wait on here
+    NotEligible,  // the 2nd slot's member is not free by the switch's own member test (yet)
+    AiNotReady,   // the 2nd slot's member is held by a story script, or not following the party
+    Unread,       // the party reads faulted (objects torn down under them, as in a reload)
+};
+
+struct SlotChoice
+{
+    void*        member  = nullptr;  // the member to take; null while waiting
+    SlotWait     wait    = SlotWait::NoSlot;
+    std::uint8_t type    = 0xFF;     // the 2nd slot's player type (0xFF with no slot)
+    std::int32_t ordinal = -1;
+    Eligibility  verdict = Eligibility::NoCharacter;
+    AiSnapshot   ai{};
+};
+
+/// The member player 2 plays: the 2nd slot of the game's party order, the row after the field leader
+/// in the battle-member list the party panel shows and player 1's battle switch cycles, stepping past
+/// player 1's character as that cycle does (RE-p2-party-order.md §5). It is taken only when free by the
+/// battle switch's own member test and its AI is in the state the game hands players (FOLLOW, BATTLE);
+/// otherwise player 2 waits on it and never falls through to the 3rd slot. Logged when `log` is set.
+SlotChoice ChooseSlot(void* playerOneController, bool log = true) noexcept;
+
+/// `member`'s AI: its active brain and that brain's state. Game thread.
+AiSnapshot ReadAi(const void* member) noexcept;
 
 /// Why `member` is no longer in player 2's reach in the party: now the party leader (a story change
 /// hands it to player 1), not one of the deployed party any more, or away from the battle party.

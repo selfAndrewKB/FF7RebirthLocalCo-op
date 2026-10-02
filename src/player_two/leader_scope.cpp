@@ -66,6 +66,16 @@ bool StillNames(std::uint64_t weak, const void* object) noexcept
            live == object;
 }
 
+void* ObjectAt(const void* field) noexcept
+{
+    std::uint64_t weak = 0;
+    void*         live = nullptr;
+    return field != nullptr && g_weakGet != nullptr && platform::CopyGuarded(&weak, field, sizeof(weak)) &&
+                   (weak >> 32) != 0 && platform::CallGuarded(g_weakGet, live, &weak)
+               ? live
+               : nullptr;
+}
+
 LeaderScope::LeaderScope(std::uint64_t memberWeak) noexcept
 {
     std::uintptr_t manager = 0;

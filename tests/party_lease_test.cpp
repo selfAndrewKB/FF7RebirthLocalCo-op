@@ -167,8 +167,45 @@ void TestReleased()
 
 }  // namespace
 
+void TestSecondSlot()
+{
+    std::puts("slot: the 2nd slot is the row after the field leader, wrapping");
+    const std::uint8_t squad[] = {0, 5, 3};  // Cloud, Yuffie, Aerith (the chapter 7 log)
+    EXPECT(LeaderOrdinal(squad, 3, 0) == 0);
+    EXPECT(OrdinalAfter(LeaderOrdinal(squad, 3, 0), 1, 3) == 1);
+    EXPECT(LeaderOrdinal(squad, 3, 5) == 1);  // a story leader: the anchor moves with it
+    EXPECT(OrdinalAfter(LeaderOrdinal(squad, 3, 5), 1, 3) == 2);
+    EXPECT(OrdinalAfter(LeaderOrdinal(squad, 3, 3), 1, 3) == 0);  // wraps
+    EXPECT(LeaderOrdinal(squad, 3, 7) == 0);                      // the leader not listed: the top row
+    EXPECT(LeaderOrdinal(nullptr, 0, 0) == 0);
+}
+
+void TestAiReadiness()
+{
+    std::puts("ai: only the base brain's FOLLOW (or BATTLE) is taken; LEAD is given back");
+    EXPECT(AssessAi({true, 0, kAiStateFollow}) == AiReadiness::Ready);
+    EXPECT(AssessAi({true, 0, kAiStateBattle}) == AiReadiness::Ready);
+    EXPECT(AssessAi({true, 2, kAiStateBattle}) == AiReadiness::Ready);
+    EXPECT(AssessAi({true, 17, 1}) == AiReadiness::ScriptBrain);              // a scene's DO_NOTHING
+    EXPECT(AssessAi({true, 3, kAiStateFollow}) == AiReadiness::ScriptBrain);  // a script's FollowActor
+    EXPECT(AssessAi({true, 0, kAiStateLead}) == AiReadiness::NotFollow);
+    EXPECT(AssessAi({}) == AiReadiness::Unread);
+    EXPECT(AiTakesBack({true, 4, kAiStateLead}));
+    EXPECT(AiTakesBack({true, 0, kAiStateLead}));
+    EXPECT(!AiTakesBack({true, 10, 1}));  // a scene's park is not acted on
+    EXPECT(!AiTakesBack({true, 0, kAiStateFollow}));
+    EXPECT(!AiTakesBack({}));
+    for (const auto readiness :
+         {AiReadiness::Ready, AiReadiness::Unread, AiReadiness::ScriptBrain, AiReadiness::NotFollow})
+    {
+        EXPECT(Describe(readiness) != nullptr);
+    }
+}
+
 int main()
 {
+    TestSecondSlot();
+    TestAiReadiness();
     TestAiOwnedMemberIsEligible();
     TestEachRuleRefuses();
     TestPlayerOnesCharacterWinsOverEverything();

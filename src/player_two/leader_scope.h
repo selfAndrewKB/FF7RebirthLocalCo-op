@@ -24,6 +24,10 @@ std::uint64_t WeakOf(void* object) noexcept;
 /// Whether `weak` (from WeakOf) still resolves to `object`: false once the object is destroyed.
 bool StillNames(std::uint64_t weak, const void* object) noexcept;
 
+/// The object an FWeakObjectPtr stored at `field` names now, by the game's own resolve (null if none,
+/// stale, or unreadable).
+void* ObjectAt(const void* field) noexcept;
+
 class LeaderScope
 {
 public:

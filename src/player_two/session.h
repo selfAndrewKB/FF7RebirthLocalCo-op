@@ -4,9 +4,11 @@
 //
 //   join     CreatePlayer with player 2's own controller (player_two/own_controller.h makes its
 //            camera manager's BeginPlay safe).
-//   member   once player 1's controller has settled after the join, player 2 takes the first party
-//            member nobody plays (player_two/party_member.h), and success is read from the lease
-//            fields over the following ticks.
+//   member   once player 1's controller has settled after the join, player 2 takes the member in the
+//            2nd slot of the game's party order (player_two/party_member.h ChooseSlot), and success is
+//            read from the lease fields over the following ticks. While that member is not free (a story
+//            script holds its AI, or it is not following the party), player 2 stays in and waits on it;
+//            a menu reorder changes the slot. A script putting player 2's member into LEAD gets it back.
 //   camera   right after the join, player 2's camera manager is pointed at its own camera actor
 //            (player_two/view_target.h), as the game's own spawn aimed it; a later move is logged,
 //            never re-aimed (no game code moves it). When the member is taken, player 2's
@@ -18,7 +20,8 @@
 //            and player 2 removed in one step (player_two/leave_sequence.h).
 //   party    the game's party funnels are heard (player_two/party_events.h): before the game makes
 //            player 2's member player 1's leader, player 2 gives it back; after a status change, a
-//            member out of the deployed or battle party is given back and another chosen. A slow
+//            member out of the deployed or battle party is given back and another chosen; after a party
+//            apply, a member no longer in the 2nd slot is given back and the slot's taken. A slow
 //            check backs both up (story override party data passes neither funnel), and the battle
 //            controller component is checked every few ticks. A downed member stays player 2's.
 //   no member with none free (player 1's character alone in a story party), player 2 does not exist:
@@ -131,7 +134,10 @@ private:
     void OnLeaderChanging(void* controller, void* character) noexcept;
     void OnStatusChanged(std::uint8_t playerType, std::uint8_t before, std::uint8_t after) noexcept;
     void OnPartyApplied() noexcept;
-    void CheckAfterPartyChange() noexcept;
+    void CheckAfterPartyChange(bool followSlot) noexcept;
+    void FollowSlot(const wchar_t* when) noexcept;
+    void WaitForSlot(const party_member::SlotChoice& choice) noexcept;
+    void CheckHeldAi() noexcept;
 
     players::LocalPlayers players_;
     LeaveSequence         leave_;
@@ -156,6 +162,8 @@ private:
     std::uint32_t         awaitReadyTicks_  = 0;        // ticks the field has looked ready during the wait
     std::uint32_t         awaitTicks_       = 0;        // ticks of the wait's slow check
     std::uint32_t         awaitJoinTries_   = 0;        // joins the wait tried that did not add player 2
+    bool                  waitingForSlot_   = false;    // in, without a member: the 2nd slot's is not free yet
+    std::uint32_t         slotWaitLogged_   = 0;        // the wait's reason as last logged (logged on change)
 
     party_member::PlayerOneBytes playerOneBytes_{};
 

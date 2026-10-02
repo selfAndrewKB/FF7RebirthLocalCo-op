@@ -82,6 +82,12 @@ inline constexpr std::uint32_t kCharacterRetainedAi          = 0x588;
 inline constexpr std::uint32_t kCharacterPlayerControlled    = 0x625;
 inline constexpr std::uint32_t kCharacterMoveState           = 0x1750;
 
+// The AI controller's active brain and its state (RE-p2-member-handover.md §3.3)
+inline constexpr std::uint32_t kAiActiveBrain = 0x518;
+inline constexpr std::uint32_t kBrainIndex    = 0x19;  // u8; 0 is the base brain
+inline constexpr std::uint32_t kBrainState    = 0x20;
+inline constexpr std::uint32_t kAiStateType   = 0x18;  // u8, EEndAIState
+
 // Player move state
 inline constexpr std::uint32_t kMoveStateCharacter = 0x8;
 inline constexpr std::uint32_t kMoveStateBlocked   = 0x91;  // u8; the gate refuses when nonzero

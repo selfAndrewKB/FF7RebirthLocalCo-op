@@ -62,6 +62,52 @@ const wchar_t* Describe(Eligibility eligibility) noexcept
     return L"unknown";
 }
 
+std::int32_t LeaderOrdinal(const std::uint8_t* types, std::int32_t count, std::uint8_t fieldLeader) noexcept
+{
+    for (std::int32_t ordinal = 0; types != nullptr && ordinal < count; ++ordinal)
+    {
+        if (types[ordinal] == fieldLeader)
+        {
+            return ordinal;
+        }
+    }
+    return 0;
+}
+
+AiReadiness AssessAi(const AiSnapshot& ai) noexcept
+{
+    if (!ai.read)
+    {
+        return AiReadiness::Unread;
+    }
+    if (ai.state == kAiStateBattle)
+    {
+        return AiReadiness::Ready;  // the game's own battle switch hands members over in it
+    }
+    if (ai.brainIndex != 0)
+    {
+        return AiReadiness::ScriptBrain;
+    }
+    return ai.state == kAiStateFollow ? AiReadiness::Ready : AiReadiness::NotFollow;
+}
+
+const wchar_t* Describe(AiReadiness readiness) noexcept
+{
+    switch (readiness)
+    {
+        case AiReadiness::Ready: return L"ready";
+        case AiReadiness::Unread: return L"its AI could not be read";
+        case AiReadiness::ScriptBrain: return L"a story script holds its AI";
+        case AiReadiness::NotFollow: return L"its AI is not following the party";
+    }
+    return L"unknown";
+}
+
+bool AiTakesBack(const AiSnapshot& ai) noexcept
+{
+    return ai.read && ai.state == kAiStateLead;
+}
+
 bool Acquired(const LeaseState& state, const void* member, const void* playerTwoController) noexcept
 {
     return member != nullptr && playerTwoController != nullptr && state.memberEffective == playerTwoController &&

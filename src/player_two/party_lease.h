@@ -52,6 +52,51 @@ Eligibility Assess(const MemberSnapshot& member) noexcept;
 
 const wchar_t* Describe(Eligibility eligibility) noexcept;
 
+// ---- the member player 2 plays: the 2nd slot of the party order (RE-p2-party-order.md §5) ----
+
+/// The field leader's ordinal in the battle-member list, the party panel's top row (0 if absent).
+std::int32_t LeaderOrdinal(const std::uint8_t* types, std::int32_t count, std::uint8_t fieldLeader) noexcept;
+
+/// The ordinal `step` rows below `anchor` (step from 1), wrapping as the panel and the battle switch's
+/// cycle do. `count` must be positive.
+constexpr std::int32_t OrdinalAfter(std::int32_t anchor, std::int32_t step, std::int32_t count) noexcept
+{
+    return (anchor + step) % count;
+}
+
+// ---- the member's AI at the hand-over (RE-p2-member-handover.md §3) ----
+
+inline constexpr std::uint8_t kAiStateBattle = 3;
+inline constexpr std::uint8_t kAiStateLead   = 6;
+inline constexpr std::uint8_t kAiStateFollow = 7;
+
+/// A member's AI as the hand-over needs it: its active brain (0 is the base brain; a story script
+/// pushes others) and that brain's state (EEndAIState).
+struct AiSnapshot
+{
+    bool         read       = false;
+    std::uint8_t brainIndex = 0xFF;
+    std::uint8_t state      = 0xFF;
+};
+
+enum class AiReadiness
+{
+    Ready,        // the base brain's FOLLOW, or BATTLE: the states the game hands a player
+    Unread,
+    ScriptBrain,  // a story script's brain holds the member (a scene, a guide, a wait)
+    NotFollow,    // the base brain, in another state
+};
+
+/// Whether player 2 may take a member whose AI is `ai`. Only FOLLOW's hand-over cleanup removes the
+/// AI's catch-up modifiers, so nothing else is taken.
+AiReadiness AssessAi(const AiSnapshot& ai) noexcept;
+
+const wchar_t* Describe(AiReadiness readiness) noexcept;
+
+/// A held member whose AI a story script puts into LEAD is given back: LEAD walks a route the story
+/// waits on, and does not run while a player holds the member.
+bool AiTakesBack(const AiSnapshot& ai) noexcept;
+
 /// The fields that show whether player 2's controller holds the member.
 struct LeaseState
 {

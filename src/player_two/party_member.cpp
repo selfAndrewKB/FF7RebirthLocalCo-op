@@ -13,6 +13,8 @@
 #endif
 #include <Windows.h>
 
+#include <algorithm>
+
 namespace lss::player_two::party_member {
 
 namespace {
@@ -178,32 +180,144 @@ bool GameReady() noexcept
            ReadPointer(*g_optionHolder, facts::kOptionHolderData) != nullptr;
 }
 
-void* Choose(void* playerOneController, bool log) noexcept
+AiSnapshot ReadAi(const void* member) noexcept
 {
-    if (!g_installed)
+    AiSnapshot ai;
+    const void* brain = ReadPointer(ReadPointer(member, facts::kCharacterRetainedAi), facts::kAiActiveBrain);
+    const void* state = ReadPointer(brain, facts::kBrainState);
+    if (state == nullptr)
     {
-        return nullptr;
+        return ai;
     }
-    const std::int32_t count = g_fn.rosterCount();
-    for (std::int32_t ordinal = 0; ordinal < count && ordinal < facts::kMaxRosterEntries; ++ordinal)
+    ai.brainIndex = ReadField<std::uint8_t>(brain, facts::kBrainIndex);
+    ai.state      = ReadField<std::uint8_t>(state, facts::kAiStateType);
+    ai.read       = true;
+    return ai;
+}
+
+namespace {
+
+/// What ChooseSlot reads from the game (plain values, so the read can run inside an SEH guard).
+struct SlotRead
+{
+    std::int32_t   count       = 0;
+    std::uint8_t   fieldLeader = 0xFF;
+    std::int32_t   anchor      = 0;
+    std::int32_t   ordinal     = -1;  // -1: no slot (fewer than two members, or all player 1's)
+    std::uint8_t   type        = 0xFF;
+    void*          character   = nullptr;
+    MemberSnapshot member{};
+    AiSnapshot     ai{};
+};
+
+void ReadSlot(void* playerOneController, SlotRead& out) noexcept
+{
+    std::uint8_t types[facts::kMaxRosterEntries]{};
+    out.count = std::min(g_fn.rosterCount(), facts::kMaxRosterEntries);
+    for (std::int32_t ordinal = 0; ordinal < out.count; ++ordinal)
     {
-        const std::uint8_t type = g_fn.rosterType(ordinal);
+        types[ordinal] = g_fn.rosterType(ordinal);
+    }
+    if (out.count < 2)
+    {
+        return;
+    }
+    out.fieldLeader = g_fn.fieldLeaderType();
+    out.anchor      = LeaderOrdinal(types, out.count, out.fieldLeader);
+    for (std::int32_t step = 1; step <= out.count; ++step)
+    {
+        const std::int32_t ordinal = OrdinalAfter(out.anchor, step, out.count);
+        const std::uint8_t type    = types[ordinal];
         if (type >= facts::kNoPlayerType)
         {
             continue;
         }
-        void*             character = g_fn.characterByType(facts::kFieldLane, type);
-        const Eligibility verdict   = Assess(Snapshot(character, playerOneController, type));
+        void*                character = g_fn.characterByType(facts::kFieldLane, type);
+        const MemberSnapshot member    = Snapshot(character, playerOneController, type);
+        if (member.isPlayerOnes)
+        {
+            continue;  // stepped past, as player 1's battle switch steps past its own leader
+        }
+        out.ordinal   = ordinal;
+        out.type      = type;
+        out.character = character;
+        out.member    = member;
+        out.ai        = ReadAi(character);
+        return;
+    }
+}
+
+/// The party reads, guarded: during a reload the party's objects may be torn down under them. False
+/// (no slot this time) if they faulted.
+bool ReadSlotGuarded(void* playerOneController, SlotRead& out) noexcept
+{
+    __try
+    {
+        ReadSlot(playerOneController, out);
+        return true;
+    }
+    __except (platform::GuardFilter(GetExceptionCode()))
+    {
+        return false;
+    }
+}
+
+}  // namespace
+
+SlotChoice ChooseSlot(void* playerOneController, bool log) noexcept
+{
+    SlotChoice choice;
+    SlotRead   read;
+    if (!g_installed)
+    {
+        return choice;
+    }
+    if (!ReadSlotGuarded(playerOneController, read))
+    {
         if (log)
         {
-            platform::Log(L"party member {} (type {}): {}", ordinal, static_cast<unsigned>(type), Describe(verdict));
+            platform::Log(L"party slot: the party could not be read (a fault, as in a reload); waiting");
         }
-        if (verdict == Eligibility::Eligible)
-        {
-            return character;
-        }
+        choice.wait = SlotWait::Unread;
+        return choice;
     }
-    return nullptr;
+    if (read.ordinal < 0)
+    {
+        if (log)
+        {
+            platform::Log(L"party slot: the party has {} member(s), none of them free of player 1; no 2nd slot for "
+                          L"player 2",
+                          read.count);
+        }
+        return choice;
+    }
+    choice.type    = read.type;
+    choice.ordinal = read.ordinal;
+    choice.verdict = Assess(read.member);
+    choice.ai      = read.ai;
+    const AiReadiness readiness = AssessAi(choice.ai);
+    if (choice.verdict != Eligibility::Eligible)
+    {
+        choice.wait = SlotWait::NotEligible;
+    }
+    else if (readiness != AiReadiness::Ready)
+    {
+        choice.wait = SlotWait::AiNotReady;
+    }
+    else
+    {
+        choice.wait   = SlotWait::None;
+        choice.member = read.character;
+    }
+    if (log)
+    {
+        platform::Log(L"party slot: field leader type {} at ordinal {}; the 2nd slot is ordinal {} (type {}): {}; its AI "
+                      L"brain {} state {}: {}",
+                      static_cast<unsigned>(read.fieldLeader), read.anchor, read.ordinal, static_cast<unsigned>(read.type),
+                      Describe(choice.verdict), static_cast<unsigned>(choice.ai.brainIndex),
+                      static_cast<unsigned>(choice.ai.state), Describe(readiness));
+    }
+    return choice;
 }
 
 namespace {
