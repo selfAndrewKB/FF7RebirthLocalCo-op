@@ -88,6 +88,13 @@ public:
     /// Player 2 is in, past the take, and drives a party member.
     bool PlaysMember() const noexcept;
 
+    /// Player 2 is in without a member, waiting on the 2nd slot's (a story script holds it, or it is not
+    /// free yet). Only player 1 plays meanwhile, so the screen shows player 1's single view.
+    bool WaitsForMember() const noexcept
+    {
+        return HasPlayerTwo() && phase_ == Phase::Playing && member_ == nullptr && waitingForSlot_;
+    }
+
     /// Player 2's and player 1's ULocalPlayer (null when player 2 is out).
     const void* PlayerTwo() const noexcept { return players_.PlayerTwo(); }
     const void* PlayerOne() const noexcept { return playerOne_; }

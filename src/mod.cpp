@@ -73,7 +73,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.38.0-party-slot";
+constexpr const wchar_t* kVersion = L"0.38.1-wait-single-view";
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -139,7 +139,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.38.0-party-slot");
+        ModVersion     = STR("0.38.1-wait-single-view");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -390,10 +390,12 @@ private:
         lss::player_two::walk_limits::Tick();  // after the session's tick: a take's copy is overwritten this frame
         lss::player_two::handover_watch::Tick();
 
-        // Player 1's single view for the game's whole-screen states (players/single_view.h): while it
-        // holds, player 2 stays in but the split's presentation is off, as with one player.
+        // Player 1's single view for the game's whole-screen states (players/single_view.h), and while
+        // player 2 waits for a member (only player 1 plays then; the user's decision, 2026-10-01): while
+        // it holds, player 2 stays in but the split's presentation is off, as with one player.
         const bool playerTwoIn = session_->HasPlayerTwo();
-        LogSingleViewChange(singleView_.Update(playerTwoIn, WholeScreenShown(playerTwoIn)));
+        const bool waits       = PlayerTwoWaits();
+        LogSingleViewChange(singleView_.Update(playerTwoIn, WholeScreenShown(playerTwoIn) || waits));
         const bool splitShown = playerTwoIn && !singleView_.Single();
         lss::views::SetSplitShown(splitShown);
         lss::player_two::nav_strand::Tick(splitShown);  // a stranded player 2 is warped back to the party
@@ -592,6 +594,20 @@ private:
                lss::views::ReasonOf(lss::views::ReadScreenSignals()) != lss::views::WholeScreenReason::None;
     }
 
+    /// Player 2 is in without a member, waiting on the 2nd slot's (player_two/session.h), with the
+    /// automatic choice on. Each change is logged.
+    bool PlayerTwoWaits() noexcept
+    {
+        const bool waits = session_->WaitsForMember() && singleView_.Mode() == lss::players::SingleViewMode::Auto;
+        if (waits != playerTwoWaited_)
+        {
+            playerTwoWaited_ = waits;
+            Log(L"{}", waits ? L"player 2 waits for a party member: player 1's single view until player 2 takes one"
+                             : L"player 2 no longer waits for a party member");
+        }
+        return waits;
+    }
+
     static void LogSingleViewChange(const lss::players::SingleViewChange& change) noexcept
     {
         using Kind = lss::players::SingleViewChange::Kind;
@@ -645,6 +661,7 @@ private:
     lss::players::SplitLayout                 layout_{{&lss::players::unreal::ReadTwoPlayerSplitscreenLayout,
                                                        &lss::players::unreal::WriteTwoPlayerSplitscreenLayout}};
     lss::players::SingleView                  singleView_{{&ReadSplitSwitch, &WriteSplitSwitch}};
+    bool                                      playerTwoWaited_ = false;  // as last logged
     std::uint32_t                             halfShapeTicks_     = 0;
     float                                     loggedHalfAspect_   = -1.0f;
     bool                                      tickSeen_           = false;
