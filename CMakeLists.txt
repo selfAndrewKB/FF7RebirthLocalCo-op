@@ -77,6 +77,7 @@ add_library(LocalSplitScreen SHARED
     src/player_two/shoulder_scale.cpp
     src/player_two/walk_limits.cpp
     src/player_two/handover_watch.cpp
+    src/player_two/interact_watch.cpp
     src/player_two/charapop_watch.cpp
     src/player_two/charapop_facts.cpp
     src/player_two/charapop_near.cpp

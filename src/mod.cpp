@@ -40,6 +40,7 @@
 #include "player_two/shoulder_scale.h"
 #include "player_two/walk_limits.h"
 #include "player_two/handover_watch.h"
+#include "player_two/interact_watch.h"
 #include "player_two/charapop_watch.h"
 #include "player_two/charapop_near.h"
 #include "player_two/charapop_centre.h"
@@ -79,7 +80,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.47.0-label-states";
+constexpr const wchar_t* kVersion = L"0.48.0-interact-log";
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -145,7 +146,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.47.0-label-states");
+        ModVersion     = STR("0.48.0-interact-log");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -288,6 +289,7 @@ public:
         lss::player_two::ride_watch::Install(*image);      // chocobo and buggy rides, logged (read-only)
         lss::player_two::chocobo_ride::Install(*image);    // player 2 drives their own chocobo while the party rides
         lss::player_two::ride_probe::Install(*image);      // player 2's ride: sprint and homing, logged (read-only)
+        lss::player_two::interact_watch::Install(*image);  // field interactions (pickups) per player, logged (read-only)
         lss::hud::InstallPlayerTwoPass(*image);      // player 2's HUD content, on (the hud-levers command switches it)
         lss::hud::InstallRootOverlayRender(*image);  // before the overlay renders: placement follow, trace
         lss::hud::prompt_rows::Install(*image);      // each player's field prompt rows in their own half
