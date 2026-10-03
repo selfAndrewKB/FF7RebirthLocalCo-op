@@ -86,6 +86,8 @@ add_library(LocalSplitScreen SHARED
     src/player_two/ride_probe.cpp
     src/hud/navimap_watch.cpp
     src/hud/minimap.cpp
+    src/hud/minimap_labels.cpp
+    src/hud/label_states.cpp
     src/player_two/party_warp.cpp
     src/player_two/strand_watch.cpp
     src/player_two/battle_input.cpp
@@ -448,3 +450,11 @@ add_executable(CharaPopRuleTests
 target_include_directories(CharaPopRuleTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(CharaPopRuleTests PRIVATE cxx_std_20)
 add_test(NAME charapop_rule COMMAND CharaPopRuleTests)
+
+add_executable(LabelStatesTests
+    tests/label_states_test.cpp
+    src/hud/label_states.cpp
+)
+target_include_directories(LabelStatesTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(LabelStatesTests PRIVATE cxx_std_20)
+add_test(NAME label_states COMMAND LabelStatesTests)

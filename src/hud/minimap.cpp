@@ -8,6 +8,7 @@
 #include "hud/entry_filter_code.h"
 #include "hud/hud_addresses.h"
 #include "hud/menu_buffers.h"
+#include "hud/minimap_labels.h"
 #include "platform/call_redirect.h"
 #include "platform/code_redirect.h"
 #include "platform/guarded.h"
@@ -677,11 +678,13 @@ bool Install(const platform::GameImage& image) noexcept
         platform::Log(L"minimap: the map pieces' unload test is not what the research read; each run drops the other's "
                       L"pieces (the maps flicker when the players are apart)");
     }
+    minimap_labels::Install(image);  // optional: without it, each pass lays the labels out again (logged)
     return true;
 }
 
 void Remove() noexcept
 {
+    minimap_labels::Remove();  // player 1's label states back first (on the game thread)
     g_frameActive          = false;
     g_fields.playerTwoName = 0;
     bool all = true;
@@ -736,6 +739,7 @@ void Tick(bool splitShown) noexcept
     {
         g_pieceCentreKnown[0] = g_pieceCentreKnown[1] = false;  // a later split starts from fresh centres
     }
+    minimap_labels::Tick(g_frameActive);  // with player 2's minimap off, every label keeps player 1's state only
     if (why != g_lastWhy)
     {
         g_lastWhy = why;
@@ -747,6 +751,10 @@ void Tick(bool splitShown) noexcept
 
 void RunHolder(bool playerTwo) noexcept
 {
+    if (!playerTwo)
+    {
+        minimap_labels::SwapBack();  // normally done after player 2's paint already (EndPlayerTwoPaint)
+    }
     if (!g_frameActive)
     {
         g_ranForTwo = false;
@@ -766,7 +774,9 @@ void RunHolder(bool playerTwo) noexcept
             return;
         }
         g_answerType = *type;
+        minimap_labels::BeginPlayerTwoRun();  // its label texts set into player 2's own label states
         g_ranForTwo  = platform::CallGuarded(g_holderUpdate, holder, 0.0f);
+        minimap_labels::EndPlayerTwoRun();
         g_answerType = -1;
         ++g_counts.runsTwo;
         if (!g_ranForTwo)
@@ -814,6 +824,7 @@ bool BeginPlayerTwoPaint() noexcept
 
 void EndPlayerTwoPaint() noexcept
 {
+    minimap_labels::SwapBack();  // player 2's paint is done: every label holds player 1's state again
     const bool painted = g_pass == Pass::PlayerTwo;
     if (g_swappedSlate != nullptr)
     {
