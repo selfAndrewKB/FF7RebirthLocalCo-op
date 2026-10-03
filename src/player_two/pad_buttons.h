@@ -28,6 +28,7 @@
 //
 // Changes to held state or sources are also logged while player 2 is in (capped per status line).
 
+#include <cstddef>
 #include <cstdint>
 
 namespace lss::platform {
@@ -41,11 +42,12 @@ bool Install(const platform::GameImage& image) noexcept;
 void Remove() noexcept;
 
 /// Player 2's view of the buttons for the length of one engine call. Game thread, player 2 in and
-/// per-pad input on; does not nest.
+/// per-pad input on; does not nest. `withoutKey` (an FName, 0 for none): an action player 2's view
+/// shows as not held for this call (player 2's ride keeps the getoff button out: player 1 owns mounting).
 class ButtonScope
 {
 public:
-    ButtonScope() noexcept;
+    explicit ButtonScope(std::uint64_t withoutKey = 0) noexcept;
     ~ButtonScope();
     ButtonScope(const ButtonScope&)            = delete;
     ButtonScope& operator=(const ButtonScope&) = delete;
@@ -55,6 +57,10 @@ public:
 private:
     bool held_ = false;
 };
+
+/// Logging (RE-p2-chocobo-input.md §6): the held byte the game reads now in the raw table for the chocobo's Accel (0)
+/// or Dash (1) action, as the current view shows it (player 2's inside a ButtonScope); -1 when unread. Game thread.
+std::int32_t TracedHeldNow(std::size_t action) noexcept;
 
 /// The game's action-down dispatcher: (owner, unused, source bit, the action event, alreadyHandled),
 /// 1 when the UI consumed the action.

@@ -11,7 +11,9 @@
 #include "player_two/generation.h"
 #include "player_two/lock_on.h"
 
+#include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <format>
 #include <string>
@@ -145,7 +147,8 @@ std::array<std::vector<std::uint64_t>, 2> g_otherGauges;  // per pass (0 player 
 int                         g_currentPass = -1;  // the view whose HUD updates and render run (0, 1), else -1
 bool                        g_failed = false;
 std::array<PassHides, 2>    g_loggedHides{};
-LabelLog                    g_loggedLabel{};
+std::array<LabelLog, 8>     g_loggedLabels{};  // per character, as last logged
+std::uint32_t               g_nextLabel = 0;   // the slot a newly seen character takes
 std::array<std::int32_t, 2> g_loggedUnion{-1, -1};
 int                         g_lines = 0;
 std::uint32_t               g_listOpenings = 0;  // player 2's target list openings seen: each starts a fresh budget
@@ -335,10 +338,18 @@ std::uint8_t LabelLookup(void* manager, float* point, float* scale, void* charac
         g_failed = true;  // the per-view marks stop; the game rewrites its key next frame
         Note(L"putting player 1's targeted key back raised an exception; per-view marks are off this session");
     }
+    // Each character's label is logged on its own change: one lookup runs per label each frame.
     const LabelLog now{reinterpret_cast<std::uintptr_t>(character), two.object, found != 0, ok};
-    if (!(now == g_loggedLabel))
+    auto logged = std::find_if(g_loggedLabels.begin(), g_loggedLabels.end(),
+                               [&now](const LabelLog& label) { return label.character == now.character; });
+    if (logged == g_loggedLabels.end())
     {
-        g_loggedLabel = now;
+        logged = g_loggedLabels.begin() + static_cast<std::ptrdiff_t>(g_nextLabel++ % g_loggedLabels.size());
+        *logged = {};
+    }
+    if (!(now == *logged))
+    {
+        *logged = now;
         try
         {
             Note(std::format(L"player 2's view: a red label for {:#x} {} player 2's locked-on gauge ({:#x}){}", now.character,

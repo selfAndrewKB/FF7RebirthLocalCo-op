@@ -3,6 +3,7 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/settled_log.h"
 #include "platform/verified_code.h"
 #include "player_two/battle_camera.h"
 #include "player_two/camera_override.h"
@@ -202,7 +203,9 @@ std::wstring Describe(const Snapshot& now)
                               now.leaderWeak, now.memberWeak);
 }
 
-Snapshot g_logged;  // game thread: as last logged
+constexpr std::uint32_t kStillFrames = 30;
+using Requests = std::array<std::int32_t, kLoggedRequests.size()>;
+platform::SettledLog<Snapshot, Requests> g_log(kStillFrames);  // game thread
 
 std::uint8_t InBattleGuarded() noexcept
 {
@@ -313,9 +316,10 @@ void InScopes(void* member, void* state, float deltaTime) noexcept
         now.targets[0] = oneParts.owner != 0 ? Field<std::uintptr_t>(oneParts.owner + kTargetSlot) : 0;
         now.targets[1] = two.owner != 0 ? Field<std::uintptr_t>(two.owner + kTargetSlot) : 0;
         now.memberWeak = memberWeak;
-        if (now != g_logged)
+        Snapshot steady = now;
+        steady.requests = {};  // the action requests flip with each press: logged once they hold
+        if (g_log.Offer(steady, now.requests))
         {
-            g_logged = now;
             ++g_lines;
             platform::Log(L"battle input: {}", Describe(now));
         }

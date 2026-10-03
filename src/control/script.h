@@ -56,6 +56,12 @@
 //   framing-offset <tb> <sbs>            field-camera distance steps added to the Options level while player 2
 //                                         is in, per layout (-2..5 each; 0 and 0 at start;
 //                                         player_two/camera_distance.h)
+//   npc-centre on|off                    the NPC population follows both players while split (on at start),
+//                                         or the leader as the game alone does (player_two/charapop_centre.h)
+//   npc-detail full|reduced|off          characters near player 2 that player 1's camera does not keep get full
+//                                         detail within the game's distances from player 2's camera (full, at
+//                                         start; on means full), within half of them (reduced), or only what
+//                                         player 1's camera gives them (off; player_two/charapop_near.h)
 //   single-view auto|on|off              player 1's single view while player 2 is in: for the game's
 //                                         whole-screen states (auto, the default), always, or never
 //                                         (players/single_view.h)
@@ -118,6 +124,8 @@ enum class CommandKind
     FramingOffset,
     ShoulderScale,
     ShoulderScaleMin,
+    NpcCentre,
+    NpcDetail,
     Dump,
     Stick,
     Wait,
@@ -144,6 +152,7 @@ struct Command
     std::uint32_t ticks     = 0;                       // stick, wait, wait-until; hud-trace: frames; the masks: mask;
                                                        // single-view: 0 auto, 1 on, 2 off;
                                                        // stream-views: 0 off, 1 p2, 2 both;
+                                                       // npc-detail: 0 off, 1 reduced, 2 full;
                                                        // stream-fov-p1: degrees, 0 auto
     std::int32_t  offsets[2] = {};                     // framing-offset: top/bottom, side by side
     WaitCondition condition = WaitCondition::Playing;  // wait-until

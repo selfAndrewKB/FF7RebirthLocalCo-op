@@ -11,6 +11,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "player_two/chocobo_ride.h"
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/party_warp.h"
@@ -26,6 +27,7 @@
 #include <cstring>
 #include <format>
 #include <string>
+#include <utility>
 
 namespace lss::player_two::nav_strand {
 
@@ -126,6 +128,12 @@ std::atomic<std::uint32_t> g_tickRefusals{0};        // refused moves since the 
 std::atomic<float>         g_tickLongestMove{0.0f};  // the longest refused move since the last tick, cm
 std::atomic<std::uint32_t> g_tickFallRefusals{0};    // of those, refused falls (she hangs in the air)
 std::atomic<std::uint32_t> g_tickUnsafeChecks{0};    // safe-transform checks that found her spot not ready
+// The chocobo player 2 rides (RE-p2-chocobo-warp.md §1): its moves go through the same three calls. Taken each tick
+// by MountedTick (its own strand watch; the warp is the chocobo's follow warp).
+std::atomic<const std::byte*> g_chocoboRoot{nullptr};
+std::atomic<std::uint32_t> g_chocoboRefusals{0};
+std::atomic<std::uint32_t> g_chocoboFalls{0};
+std::atomic<std::uint32_t> g_chocoboUnsafe{0};
 // For the whole session (logged as they grow):
 std::atomic<std::uint32_t> g_readyNoNavmesh{0};  // moves that found no navmesh where the world was ready (not refused)
 std::atomic<std::uint32_t> g_offThread{0};       // answers for the member that came off the game thread
@@ -193,12 +201,27 @@ const void* PointerAt(const void* object, std::uint32_t offset) noexcept
 /// True when `location` is player 2's member's. The call sites pass no component, only a copy of its
 /// world location, so the member is recognised by an exact match with her root's; another character
 /// would have to stand on the very same floats.
-bool IsMember(const float* location) noexcept
+bool IsAt(const std::atomic<const std::byte*>& rootOf, const float* location) noexcept
 {
-    const std::byte* root = g_memberRoot.load(std::memory_order_acquire);
+    const std::byte* root = rootOf.load(std::memory_order_acquire);
     float            at[3]{};
     return root != nullptr && platform::CopyGuarded(at, root + kComponentWorldLocation, sizeof(at)) &&
            std::memcmp(at, location, sizeof(at)) == 0;
+}
+
+bool IsMember(const float* location) noexcept
+{
+    return IsAt(g_memberRoot, location);
+}
+
+/// Counts a "not ready" answer for the chocobo player 2 rides in `counter` (refused moves, refused falls, or failed
+/// safe-transform checks).
+void CountChocobo(const float* location, bool ready, std::atomic<std::uint32_t>& counter) noexcept
+{
+    if (!ready && IsAt(g_chocoboRoot, location))
+    {
+        counter.fetch_add(1, std::memory_order_relaxed);
+    }
 }
 
 void NoteThread() noexcept
@@ -226,6 +249,7 @@ bool Count(bool ready) noexcept
 bool ReadyAt(void* reason, const float* location, bool flag) noexcept
 {
     const bool ready = reinterpret_cast<ReadyAtFn>(g_readyCall.Original())(reason, location, flag);
+    CountChocobo(location, ready, g_chocoboRefusals);
     if (!IsMember(location) || !Count(ready))
     {
         return ready;
@@ -248,6 +272,7 @@ bool ReadyAt(void* reason, const float* location, bool flag) noexcept
 bool FallReadyAt(void* reason, const float* location, bool flag) noexcept
 {
     const bool ready = reinterpret_cast<ReadyAtFn>(g_fallCall.Original())(reason, location, flag);
+    CountChocobo(location, ready, g_chocoboFalls);
     if (IsMember(location) && Count(ready))
     {
         g_tickFallRefusals.fetch_add(1, std::memory_order_relaxed);
@@ -260,6 +285,7 @@ bool FallReadyAt(void* reason, const float* location, bool flag) noexcept
 bool SafeCheckReadyAt(void* reason, const float* location, bool flag) noexcept
 {
     const bool ready = reinterpret_cast<ReadyAtFn>(g_parkCall.Original())(reason, location, flag);
+    CountChocobo(location, ready, g_chocoboUnsafe);
     if (!ready && IsMember(location))
     {
         NoteThread();
@@ -378,6 +404,154 @@ void ProbeAi(const wchar_t* when, bool always) noexcept
          follow ? range : 0.0f, follow ? warping : std::uint8_t{0});
 }
 
+std::chrono::steady_clock::time_point g_lastMounted{};
+bool                                  g_mountedQuiet = true;  // the last mounted line had nothing to report
+// The chocobo player 2 rides, stranded (RE-p2-chocobo-warp.md §4): its own watch, as the member's on foot.
+StrandWatch   g_rideWatch{StrandRules{.holdSeconds = kHoldSeconds}};
+Strand        g_rideStrand;
+const void*   g_rideChocobo = nullptr;
+// The counts since the last mounted line (game thread).
+std::uint32_t g_secondRefusals = 0;
+std::uint32_t g_secondFalls    = 0;
+std::uint32_t g_secondUnsafe   = 0;
+
+float ChocoboMovedSinceStart(const void* chocobo) noexcept
+{
+    float now[3]{};
+    return g_rideStrand.started && LocationOf(chocobo, now)
+               ? std::hypot(now[0] - g_rideStrand.start[0], now[1] - g_rideStrand.start[1])
+               : -1.0f;
+}
+
+std::wstring ChocoboAt(const void* chocobo)
+{
+    float at[3]{};
+    return LocationOf(chocobo, at) ? std::format(L"({:.0f}, {:.0f}, {:.0f})", at[0], at[1], at[2]) : std::wstring(L"?");
+}
+
+void EndRideStrand(const void* chocobo, const wchar_t* why) noexcept
+{
+    try
+    {
+        Line(L"mounted strand ended ({}) after {:.2f} s: {} refused move(s), {} refused fall(s), {} failed check(s) while "
+             L"parked; the chocobo moved {:.0f} cm since it began, now at {}, parked {}; {}",
+             why, g_rideWatch.Held(), g_rideStrand.refusals, g_rideStrand.falls, g_rideStrand.parkChecks,
+             ChocoboMovedSinceStart(chocobo), ChocoboAt(chocobo), Parked(chocobo) ? L"yes" : L"no", Places());
+    }
+    catch (...)
+    {
+    }
+}
+
+/// While player 2 rides seated (`ridden`): the game's refusals of their chocobo's moves and falls and its failed safe
+/// checks while the game holds it parked make a strand; held kHoldSeconds, the chocobo's own follow warp brings it
+/// back with player 2 seated (party_warp, Subject::Chocobo). Once a second while anything is nonzero, a "mounted:"
+/// line with the counts and the chocobo AI's state. `chocobo`: also while getting off (counted, never warped).
+void MountedTick(void* member, const void* chocobo, const void* ridden, bool splitShown, float seconds) noexcept
+{
+    g_chocoboRoot.store(chocobo == nullptr ? nullptr : RootOf(const_cast<void*>(chocobo)), std::memory_order_release);
+    const std::uint32_t refusals = g_chocoboRefusals.exchange(0, std::memory_order_relaxed);
+    const std::uint32_t falls    = g_chocoboFalls.exchange(0, std::memory_order_relaxed);
+    const std::uint32_t unsafe   = g_chocoboUnsafe.exchange(0, std::memory_order_relaxed);
+    if (ridden != g_rideChocobo)
+    {
+        if (g_rideWatch.Stranded())
+        {
+            EndRideStrand(g_rideChocobo, ridden == nullptr ? L"player 2 is no longer seated on it" : L"another chocobo");
+        }
+        g_rideWatch.Reset();
+        g_rideStrand  = {};
+        g_rideChocobo = ridden;
+    }
+    if (chocobo == nullptr)
+    {
+        g_secondRefusals = g_secondFalls = g_secondUnsafe = 0;
+        return;
+    }
+    g_secondRefusals += refusals;
+    g_secondFalls += falls;
+    g_secondUnsafe += unsafe;
+    if (ridden != nullptr)
+    {
+        // As on foot: a failed check alone may still end in the game's own return-warp to the safe spot; it strands the
+        // chocobo only once the game has parked it.
+        const std::uint32_t parkChecks = unsafe > 0 && Parked(ridden) ? unsafe : 0;
+        switch (g_rideWatch.Step(refusals > 0 || parkChecks > 0, seconds))
+        {
+            case StrandEvent::Began:
+                g_rideStrand         = {};
+                g_rideStrand.started = LocationOf(ridden, g_rideStrand.start);
+                try
+                {
+                    Line(L"mounted strand began: the game {} player 2's chocobo at {} (the world under it is not loaded); {}",
+                         refusals == 0 ? L"parked" : falls > 0 ? L"refused the fall of" : L"refused the move of",
+                         ChocoboAt(ridden), Places());
+                }
+                catch (...)
+                {
+                }
+                break;
+            case StrandEvent::Warp:
+                Line(L"mounted strand held {:.2f} s: {} refused move(s), {} refused fall(s), {} failed check(s) while "
+                     L"parked; warping the chocobo with player 2 seated",
+                     g_rideWatch.Held(), g_rideStrand.refusals + refusals, g_rideStrand.falls + falls,
+                     g_rideStrand.parkChecks + parkChecks);
+                if (party_warp::Start(const_cast<void*>(ridden), party_warp::Subject::Chocobo, false, splitShown))
+                {
+                    warp_camera_watch::Arm(member);  // she is carried with it: the same camera follow question
+                }
+                break;
+            case StrandEvent::Ended:
+                EndRideStrand(ridden, L"no refusal for a moment: stick let go, the world is back, or it was brought back");
+                break;
+            case StrandEvent::None: break;
+        }
+        if (g_rideWatch.Stranded())
+        {
+            g_rideStrand.refusals += refusals;
+            g_rideStrand.falls += falls;
+            g_rideStrand.parkChecks += parkChecks;
+        }
+    }
+    const auto now = std::chrono::steady_clock::now();
+    if (now - g_lastMounted < std::chrono::seconds(1))
+    {
+        return;
+    }
+    g_lastMounted = now;
+    const std::uint32_t secondRefusals = std::exchange(g_secondRefusals, 0);
+    const std::uint32_t secondFalls    = std::exchange(g_secondFalls, 0);
+    const std::uint32_t secondUnsafe   = std::exchange(g_secondUnsafe, 0);
+    const bool          parked         = Parked(chocobo);
+    const bool          quiet          = secondRefusals == 0 && secondFalls == 0 && secondUnsafe == 0 && !parked;
+    if (quiet && g_mountedQuiet)
+    {
+        return;
+    }
+    g_mountedQuiet      = quiet;
+    const void*  ai     = PointerAt(chocobo, facts::kCharacterRetainedAi);
+    const void*  state  = PointerAt(PointerAt(ai, kAiBrain), kBrainState);
+    std::uint8_t type   = 0xFF, warping = 0;
+    std::uint32_t pause = 0;
+    float        range  = 0.0f;
+    Read(At(state, kStateType), type);
+    Read(At(state, kStateTeleporting), warping);
+    Read(At(state, kStateTeleportRange), range);
+    Read(At(ai, kAiPauseMask), pause);
+    float at[3]{};
+    const bool read = LocationOf(chocobo, at);
+    try
+    {
+        Line(L"mounted: player 2's chocobo in the last second: {} refused move(s), {} refused fall(s), {} failed safe "
+             L"check(s); parked {}; its AI pause mask {:#x}, state type {}, teleport range {:.0f}, warping {}; chocobo at {}; {}",
+             secondRefusals, secondFalls, secondUnsafe, parked ? L"yes" : L"no", pause, type, range, warping,
+             read ? std::format(L"({:.0f}, {:.0f}, {:.0f})", at[0], at[1], at[2]) : std::wstring(L"?"), Places());
+    }
+    catch (...)
+    {
+    }
+}
+
 void EndStrand(const wchar_t* why) noexcept
 {
     Line(L"ended ({}) after {:.2f} s: {} refused move(s) ({} of them falls), {} failed check(s) while parked, longest "
@@ -410,6 +584,9 @@ void Forget() noexcept
     g_loggedState = nullptr;
     g_loggedType  = 0xFF;
     g_ticked      = false;
+    g_rideWatch.Reset();
+    g_rideStrand  = {};
+    g_rideChocobo = nullptr;
 }
 
 }  // namespace
@@ -454,6 +631,7 @@ void Remove() noexcept
 {
     g_installed = false;
     g_memberRoot.store(nullptr, std::memory_order_release);
+    g_chocoboRoot.store(nullptr, std::memory_order_release);
     for (auto* call : {&g_readyCall, &g_fallCall, &g_parkCall})
     {
         if (call->IsInstalled() && !call->Restore())
@@ -482,7 +660,8 @@ void Tick(bool splitShown) noexcept
     }
     if (member == nullptr)
     {
-        party_warp::Tick(nullptr, splitShown, 0.0f);  // lets a warp in progress go
+        MountedTick(nullptr, nullptr, nullptr, splitShown, 0.0f);
+        party_warp::Tick(nullptr, nullptr, splitShown, 0.0f);  // lets a warp in progress go
         warp_camera_watch::Tick(nullptr, 0.0f);
         return;
     }
@@ -493,6 +672,8 @@ void Tick(bool splitShown) noexcept
                                    : 0.0f;
     g_lastTick = now;
     g_ticked   = true;
+    const void* ridden = chocobo_ride::RiddenChocobo();
+    MountedTick(member, chocobo_ride::DrivenChocobo(), ridden, splitShown, seconds);
 
     const std::uint32_t refusals = g_tickRefusals.exchange(0, std::memory_order_relaxed);
     const float         longest  = g_tickLongestMove.exchange(0.0f, std::memory_order_relaxed);
@@ -520,7 +701,8 @@ void Tick(bool splitShown) noexcept
                  g_watch.Held(), g_strand.refusals + refusals, g_strand.falls + falls, g_strand.parkChecks + parkChecks,
                  std::max(g_strand.longestMove, longest), MovedSinceStart(), Places());
             ProbeAi(L"at the warp", true);
-            if (party_warp::Start(member, PointerAt(RootOf(member), kComponentAttachParent) != nullptr,
+            if (party_warp::Start(member, party_warp::Subject::Member,
+                                  PointerAt(RootOf(member), kComponentAttachParent) != nullptr,
                                   splitShown))  // logs its own outcome
             {
                 warp_camera_watch::Arm(member);
@@ -531,7 +713,7 @@ void Tick(bool splitShown) noexcept
             break;
         case StrandEvent::None: ProbeAi(L"changed", false); break;
     }
-    party_warp::Tick(member, splitShown, seconds);
+    party_warp::Tick(member, ridden, splitShown, seconds);
     warp_camera_watch::Tick(member, seconds);
     if (g_watch.Stranded())
     {

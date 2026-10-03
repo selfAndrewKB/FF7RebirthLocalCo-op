@@ -36,6 +36,11 @@ struct EngineTicks
     std::uint32_t count        = 0;
     float         deltaTime    = 0.0f;   // the last one's
     bool          memberTicked = false;  // one of them was player 2's member
+    // The game's field ticker ran player 1's ridden chocobo instead (its move state is not counted above, so a frame
+    // where player 1 rides has count 0); with that tick's delta time. Player 2's ride (player_two/chocobo_ride.h)
+    // ticks on it.
+    bool          rideTicked   = false;
+    float         rideDeltaTime = 0.0f;
 };
 EngineTicks TakeEngineTicks() noexcept;
 

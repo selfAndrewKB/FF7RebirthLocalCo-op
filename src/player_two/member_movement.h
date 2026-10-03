@@ -19,6 +19,8 @@
 
 #include "player_two/stage_counters.h"
 
+#include <cstdint>
+
 namespace lss::platform {
 class GameImage;
 }
@@ -41,5 +43,54 @@ StageCounters& Counters() noexcept;
 
 /// Times the leader test answered yes for the member since the last call.
 unsigned TakeLeaderAnswers() noexcept;
+
+/// Logging (RE-p2-chocobo-ride.md §7.2 item 2): the game's IsUCPC_Core(`character`) as player 2's chocobo swap
+/// would see it, inside the primary-controller scope and the member's leader answer, and the primary
+/// controller seen there. Calls nothing else. -1 when a scope could not be held or the test is unavailable.
+/// Game thread.
+struct CoreAsPlayerTwo
+{
+    std::int32_t answer  = -1;
+    const void*  primary = nullptr;
+};
+CoreAsPlayerTwo PlayerCoreAsPlayerTwo(const void* character, const void* member) noexcept;
+
+/// Runs `call(context)` inside the primary-controller scope and the member's leader answer (player_two/chocobo_ride
+/// runs the game's ride swap there). False, calling nothing, when the scope could not be held. Game thread.
+bool InPrimaryScope(const void* member, void (*call)(void* context), void* context) noexcept;
+
+/// Removes the rows of player 2's ridden chocobo's own prompt handles with the game's handle clear (as the chocobo
+/// state's own deactivate does), at the end of player 2's ride. Game thread.
+void ClearRideRows(void* chocoboState) noexcept;
+
+/// Ticks player 2's ridden chocobo's move state with the game's per-character tick, inside every scope of the
+/// member's tick (pad 2, primary, buttons, the mod's own tick, the scope-leak put-backs), the leader answer also
+/// saying yes for `component` (the chocobo's input component), and player 2's buttons without `withoutKey` (an FName;
+/// 0 for none). Game thread.
+enum class RideTick
+{
+    Ticked,
+    Refused,  // a scope could not be held
+    Faulted,  // the engine raised an exception inside the tick
+};
+RideTick TickRide(void* playerTwoController, void* member, void* state, const void* component, float deltaTime,
+                  std::uint64_t withoutKey) noexcept;
+
+/// Runs `engine`, the game's slot 1 of player 2's ridden chocobo's move state (called by the chocobo's own actor tick:
+/// its handles and the anim sync), inside the primary-controller scope and the leader answer for the member's type and
+/// `component`: the context the game gives the chocobo player 1 rides (RE-p2-chocobo-run-refresh.md §4, lever 1).
+/// Refused calls nothing (the caller runs `engine` as the game would). With `sample`, `ridden` gets the game's
+/// ridden-vehicle test (IsActiveRiddenVehicle) for `chocobo` outside and inside the scope (-1: not evaluated).
+/// Game thread.
+using HandlesFn = std::uintptr_t (*)(void* state, float deltaTime);
+struct HandlesTick
+{
+    RideTick       result        = RideTick::Refused;
+    std::uintptr_t returned      = 0;  // the engine's rax, passed through
+    std::int32_t   riddenOutside = -1;
+    std::int32_t   riddenInside  = -1;
+};
+HandlesTick TickRideHandles(const void* member, void* state, const void* chocobo, const void* component, float deltaTime,
+                            HandlesFn engine, bool sample) noexcept;
 
 }  // namespace lss::player_two::member_movement

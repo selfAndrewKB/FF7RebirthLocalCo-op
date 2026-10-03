@@ -6,6 +6,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/module_pin.h"
+#include "platform/settled_log.h"
 #include "platform/verified_code.h"
 #include "player_two/generation.h"
 #include "player_two/command_rules_code.h"
@@ -87,8 +88,14 @@ std::int32_t g_gate = -1;
 bool          g_installed     = false;
 std::int32_t  g_forbiddenType = -1;  // player 2's member's type, or -1
 std::uint32_t g_refusals      = 0;
-Snapshot      g_logged{};
-bool          g_loggedOnce = false;
+struct Moving
+{
+    std::array<std::int32_t, kLoggedRequests.size()> requests{};
+    std::int32_t                                     speed = 0;
+    bool operator==(const Moving&) const = default;
+};
+constexpr std::uint32_t kStillFrames = 30;
+platform::SettledLog<Snapshot, Moving> g_log(kStillFrames);  // game thread
 int           g_lines = 0;
 
 template <class T>
@@ -267,12 +274,14 @@ void Watch() noexcept
     }
     const auto gameState = Field<std::uintptr_t>(Field<std::uintptr_t>(g_gameMode) + kGameState);
     now.speed = static_cast<std::int32_t>(Field<float>(gameState != 0 ? gameState + kSpeedSlots : 0) * 1000.0f);
-    if (g_loggedOnce && now == g_logged)
+    // The requests flip with each press and the speed eases through a time slow: both are logged once they hold.
+    Snapshot steady = now;
+    steady.requests = {};
+    steady.speed    = 0;
+    if (!g_log.Offer(steady, Moving{now.requests, now.speed}))
     {
         return;
     }
-    g_loggedOnce = true;
-    g_logged     = now;
     ++g_lines;
     try
     {

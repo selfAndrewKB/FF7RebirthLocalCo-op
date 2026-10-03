@@ -137,7 +137,7 @@ void SetMask(unsigned mask) noexcept
 {
     g_mask.store(mask, std::memory_order_relaxed);
     platform::Log(L"per-pad sticks: mask {} (player 2's input as primary {}, player 1's move state on pad 1 {}, "
-                  L"player 2's member ticked {}, player 1's detection on pad 1 {})",
+                  L"player 2's member ticked {}, player 1's detection and ridden chocobo on pad 1 {})",
                   mask, PartActs(kPartPlayerTwoInput), PartActs(kPartPlayerOneMove), PartActs(kPartMemberTick),
                   PartActs(kPartPlayerOneDetect));
 }

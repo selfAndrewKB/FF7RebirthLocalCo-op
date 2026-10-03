@@ -82,13 +82,19 @@ struct Submit
 Submit g_submit;
 std::int32_t g_loggedMatrixCount = -1;
 
-// What the log last reported, so each change is logged once.
-IntRect g_loggedImage{};
-IntRect g_loggedBand{};
-float   g_loggedViewW   = 0.0f;
-float   g_loggedViewH   = 0.0f;
-int     g_loggedApplied = -1;
-bool    g_entryLogged   = false;
+// What the log last reported for each pass ([0] player 1's, [1] player 2's: the overlay renders once
+// for each player while the split is shown, and their views can differ), so each change is logged once.
+struct LoggedLayout
+{
+    IntRect image{};
+    IntRect band{};
+    float   viewW   = 0.0f;
+    float   viewH   = 0.0f;
+    int     applied = -1;
+    bool    entry   = false;
+};
+LoggedLayout g_logged[2];
+int          g_loggedPass = 0;  // the pass the rect call logged for, for the entry call that follows
 
 float ReadFloat(std::uintptr_t address) noexcept
 {
@@ -137,20 +143,18 @@ void InstallArrowEdge(const platform::GameImage& image) noexcept
 void LogOnChange(const IntRect& image, float viewW, float viewH, const IntRect& band, float host, bool enabled,
                  bool applied) noexcept
 {
-    if (image == g_loggedImage && viewW == g_loggedViewW && viewH == g_loggedViewH && band == g_loggedBand &&
-        static_cast<int>(applied) == g_loggedApplied)
+    g_loggedPass         = SubmitInThisPass() ? 0 : 1;
+    LoggedLayout& logged = g_logged[g_loggedPass];
+    if (image == logged.image && viewW == logged.viewW && viewH == logged.viewH && band == logged.band &&
+        static_cast<int>(applied) == logged.applied)
     {
         return;
     }
-    g_loggedImage   = image;
-    g_loggedViewW   = viewW;
-    g_loggedViewH   = viewH;
-    g_loggedBand    = band;
-    g_loggedApplied = applied ? 1 : 0;
-    g_entryLogged   = false;
-    platform::Log(L"HUD layout: UI image {}x{}, player 1's view {:.0f}x{:.0f}; visible band ({},{})-({},{}), marker host "
-                  L"scale {:.4f}: {}",
-                  image.Width(), image.Height(), viewW, viewH, band.minX, band.minY, band.maxX, band.maxY, host,
+    logged = {image, band, viewW, viewH, applied ? 1 : 0, false};
+    platform::Log(L"HUD layout ({}'s pass): UI image {}x{}, view {:.0f}x{:.0f}; visible band ({},{})-({},{}), marker "
+                  L"host scale {:.4f}: {}",
+                  g_loggedPass == 0 ? L"player 1" : L"player 2", image.Width(), image.Height(), viewW, viewH, band.minX,
+                  band.minY, band.maxX, band.maxY, host,
                   applied   ? L"applied"
                   : enabled ? L"NOT applied (unusable band or scale)"
                             : L"not applied (hud-band off)");
@@ -206,9 +210,9 @@ void* OverlayLayerEntry(void* slot, std::uintptr_t name, IntRect* rect, std::uin
     g_pending.active = false;
 
     const auto e = reinterpret_cast<std::uintptr_t>(entry);
-    if (!g_entryLogged)
+    if (!g_logged[g_loggedPass].entry)
     {
-        g_entryLogged = true;
+        g_logged[g_loggedPass].entry = true;
         platform::Log(L"HUD layout: entry matrix x/y ({:.6f}, {:.6f}, {:.3f}, {:.3f}) -> ({:.6f}, {:.6f}, {:.3f}, {:.3f}); "
                       L"host scale {:.4f} -> {:.4f}",
                       ReadFloat(e + engine::kEntryMatrixScaleX), ReadFloat(e + engine::kEntryMatrixScaleY),

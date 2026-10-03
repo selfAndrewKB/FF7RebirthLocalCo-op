@@ -24,6 +24,8 @@ Outcome Run(Target& target, const Command& command)
         case CommandKind::Bars: return target.SetBars(command.on);
         case CommandKind::SplitFov: return target.SetSplitFov(command.blend);
         case CommandKind::HudBand: return target.SetHudBand(command.on);
+        case CommandKind::NpcCentre: return target.SetNpcCentre(command.on);
+        case CommandKind::NpcDetail: return target.SetNpcDetail(command.ticks);
         case CommandKind::HudProbe: return target.SetHudProbe(command.on);
         case CommandKind::HudTrace: return target.TraceHud(static_cast<std::int32_t>(command.ticks));
         case CommandKind::HudImage: return target.SetHudImage(command.on);

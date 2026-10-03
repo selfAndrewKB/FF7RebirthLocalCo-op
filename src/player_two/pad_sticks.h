@@ -18,8 +18,9 @@
 //   - each player's controller input (AEndPlayerController::ProcessPlayerInput, slot 400) reads its
 //     own pad; player 2's also runs as the primary player's, so the camera events it sends reach
 //     player 2's camera manager;
-//   - player 1's character's move state reads player 1's pad (player_two/move_state.h), and player
-//     2's member is ticked with player 2's pad (player_two/member_movement.h).
+//   - player 1's character's move state reads player 1's pad (player_two/move_state.h), so does the
+//     chocobo player 1 rides, and player 2's member is ticked with player 2's pad
+//     (player_two/member_movement.h).
 // Both act only on the game thread (player_two/generation.h); a call on any other thread is left alone.
 
 #include "player_two/stage_counters.h"
@@ -47,7 +48,8 @@ bool Enabled() noexcept;
 
 /// Diagnosis: which parts of per-pad sticks act, while they are on (bits: 1 player 2's input runs
 /// as the primary player's, 2 player 1's move state reads pad 1, 4 player 2's member is ticked, 8
-/// player 1's input update (terrain detection) and leader-action tick read pad 1). All at start. Logged.
+/// player 1's input update (terrain detection), leader-action tick and ridden chocobo read pad 1). All at
+/// start. Logged.
 inline constexpr unsigned kPartPlayerTwoInput  = 1;
 inline constexpr unsigned kPartPlayerOneMove   = 2;
 inline constexpr unsigned kPartMemberTick      = 4;

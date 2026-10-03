@@ -77,6 +77,7 @@ constexpr std::uint32_t kMapElement          = 16;
 constexpr std::int32_t  kMapShown            = 32;
 
 constexpr std::uint8_t kStateDoNothing = 1;
+constexpr std::uint8_t kStateBattle    = 3;
 constexpr std::uint8_t kStateStay      = 4;
 constexpr std::uint8_t kStateLead      = 6;
 constexpr std::uint8_t kStateFollow    = 7;
@@ -596,8 +597,8 @@ void WatchMember(std::uint8_t type, const Clock::time_point now)
         std::copy(std::begin(at), std::end(at), seen.lastStillAt);
         return;
     }
-    // A member out of FOLLOW: does anything move it (a script) while the AI does not?
-    if (ai.state == kStateFollow || !placed || !seen.placed || now - seen.lastStill < kStillThereEvery)
+    // A member out of FOLLOW: does anything move it (a script) while the AI does not? (BATTLE moves on its own.)
+    if (ai.state == kStateFollow || ai.state == kStateBattle || !placed || !seen.placed || now - seen.lastStill < kStillThereEvery)
     {
         return;
     }

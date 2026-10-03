@@ -3,6 +3,7 @@
 #include "platform/engine_addresses.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/settled_log.h"
 #include "platform/vtable_entry.h"
 #include "views/minimal_view_info.h"
 #include "views/stream_view_math.h"
@@ -187,15 +188,20 @@ bool ApplyAxisRule(void* localPlayer, std::uint8_t rule) noexcept
     return true;
 }
 
-/// The split FOV, logged once for each (weight, half shape, camera FOV) it is applied with, per
-/// player (index 1: player 2), so two cameras with different FOVs do not log every frame.
-struct LoggedFov
+/// The split FOV's log, per player (index 1: player 2): at once for a new weight, half shape or camera
+/// aspect ratio; for a new camera FOV once it has held still (to 0.1 degree) for about half a second, so
+/// a zoom or a framing blend logs where it ends instead of every frame.
+struct FovSteady
 {
     float weight = -2.0f;
     float aspect = 0.0f;
-    float fov    = 0.0f;
+    float height = 0.0f;
+    float cameraRatio = 0.0f;
+    bool operator==(const FovSteady&) const = default;
 };
-LoggedFov g_loggedFov[2]{};
+constexpr std::uint32_t kFovStillFrames = 30;
+platform::SettledLog<FovSteady, int> g_fovLog[2] = {platform::SettledLog<FovSteady, int>(kFovStillFrames),
+                                                    platform::SettledLog<FovSteady, int>(kFovStillFrames)};
 
 /// Each player's half width against the camera's own (tan of the half-angles; 1 without a split FOV), for the
 /// camera code that places things across the view (player_two/shoulder_scale.h).
@@ -229,10 +235,9 @@ void ApplySplitFov(void* localPlayer, std::byte* viewInfo, bool isPlayerTwo) noe
         g_widthRatio[isPlayerTwo ? 1 : 0].store(std::isfinite(ratio) && ratio > 0.0f ? ratio : 1.0f, std::memory_order_relaxed);
     }
 
-    LoggedFov& logged = g_loggedFov[isPlayerTwo ? 1 : 0];
-    if (weight != logged.weight || half.aspect != logged.aspect || fov != logged.fov)
+    const FovSteady steady{weight, half.aspect, half.heightRatio, cameraRatio};
+    if (g_fovLog[isPlayerTwo ? 1 : 0].Offer(steady, static_cast<int>(std::lround(fov * 10.0f))))
     {
-        logged = {weight, half.aspect, fov};
         constexpr float kHalfRadians = 3.14159265f / 360.0f;
         const float vertical = std::atan(std::tan(split * kHalfRadians) / half.aspect) / kHalfRadians;
         platform::Log(L"split FOV ({}): weight {:.2f}, half aspect {:.3f} (height {:.2f} of the screen): camera {:.1f} "

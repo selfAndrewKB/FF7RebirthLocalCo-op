@@ -40,6 +40,8 @@ PlayerIntent JoinKeys::Poll() noexcept
     const bool layout = Pressed(active && IsDown(VK_F5), layoutWasDown_);
     const bool fill   = Pressed(active && IsDown(VK_F4), fillWasDown_);
     const bool sticks = Pressed(active && IsDown(VK_F9), sticksWasDown_);
+    const bool centre = Pressed(active && IsDown(VK_F10), centreWasDown_);
+    const bool detail = Pressed(active && IsDown(VK_F11), detailWasDown_);
 
     // Joining and leaving win over everything else pressed on the same tick; of the switches,
     // one per tick (the others are reported on their own presses).
@@ -60,6 +62,14 @@ PlayerIntent JoinKeys::Poll() noexcept
         if (sticks)
         {
             return PlayerIntent::TogglePadSticks;
+        }
+        if (centre)
+        {
+            return PlayerIntent::ToggleNpcCentre;
+        }
+        if (detail)
+        {
+            return PlayerIntent::ToggleNpcDetail;
         }
     }
     if (join && !leave)

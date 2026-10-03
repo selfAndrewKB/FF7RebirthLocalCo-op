@@ -7,6 +7,7 @@
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
 #include "player_two/battle_input.h"
+#include "player_two/chocobo_ride.h"
 #include "player_two/lock_on.h"
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
@@ -16,6 +17,7 @@
 #include "player_two/pad_sticks.h"
 #include "player_two/party_member.h"
 #include "player_two/primary_controller.h"
+#include "player_two/ride_probe.h"
 #include "player_two/scope_leaks.h"
 
 #include <atomic>
@@ -37,11 +39,16 @@ platform::VTableEntry g_leaderSlot;
 TickForCharacterFn    g_tickForCharacter = nullptr;
 LeaderTestFn          g_engineLeaderTest = nullptr;
 HandleClearFn         g_handleClear      = nullptr;  // null: player 2's field-action rows are left to show
+LeaderTestFn          g_isPlayerCore     = nullptr;  // IsUCPC_Core(character), for the ride logging only
+LeaderTestFn          g_isRiddenVehicle  = nullptr;  // IsActiveRiddenVehicle(character), for the ride logging only
 std::uintptr_t        g_moveStateVTable  = 0;
 
 // The player type the leader test says yes to; kNoType outside the member's tick. Written on the
 // game thread; the leader test is also called on other threads, which read kNoType.
 std::atomic<int>      g_leaderType{kNoType};
+// A second yes, by pointer: player 2's ridden chocobo's input component (every chocobo's has player type 16, player
+// 1's included, so it cannot be answered by type; RE-p2-chocobo-ride.md §7.0 item 2). Null outside the ride's tick.
+std::atomic<const void*> g_leaderComponent{nullptr};
 std::atomic<unsigned> g_leaderAnswers{0};
 
 // Game thread only: set once the engine raised an exception inside the member's tick.
@@ -58,8 +65,10 @@ int PlayerTypeOfComponent(const void* component) noexcept
 
 std::uint8_t LeaderTest(const void* component)
 {
-    const int type = g_leaderType.load(std::memory_order_relaxed);
-    if (type != kNoType && generation::OnGameThread() && PlayerTypeOfComponent(component) == type)
+    const int   type   = g_leaderType.load(std::memory_order_relaxed);
+    const void* extra  = g_leaderComponent.load(std::memory_order_relaxed);
+    if ((type != kNoType || extra != nullptr) && generation::OnGameThread() &&
+        ((extra != nullptr && component == extra) || (type != kNoType && PlayerTypeOfComponent(component) == type)))
     {
         g_leaderAnswers.fetch_add(1, std::memory_order_relaxed);
         return 1;
@@ -67,14 +76,26 @@ std::uint8_t LeaderTest(const void* component)
     return g_engineLeaderTest(component);
 }
 
-/// Answers yes to the leader test for one player type while it lives.
+/// Answers yes to the leader test for one player type (and one component, if given) while it lives.
 class LeaderAnswer
 {
 public:
-    explicit LeaderAnswer(int type) noexcept { g_leaderType.store(type, std::memory_order_relaxed); }
-    ~LeaderAnswer() { g_leaderType.store(kNoType, std::memory_order_relaxed); }
+    explicit LeaderAnswer(int type, const void* component = nullptr) noexcept
+        : savedType_(g_leaderType.exchange(type, std::memory_order_relaxed)),
+          savedComponent_(g_leaderComponent.exchange(component, std::memory_order_relaxed))
+    {
+    }
+    ~LeaderAnswer()  // what was answered before (none outside a scope): nesting keeps the outer answer
+    {
+        g_leaderType.store(savedType_, std::memory_order_relaxed);
+        g_leaderComponent.store(savedComponent_, std::memory_order_relaxed);
+    }
     LeaderAnswer(const LeaderAnswer&)            = delete;
     LeaderAnswer& operator=(const LeaderAnswer&) = delete;
+
+private:
+    int         savedType_;
+    const void* savedComponent_;
 };
 
 int MemberType(const void* member) noexcept
@@ -91,10 +112,31 @@ bool GuardedTick(void* state, float deltaTime) noexcept
         g_tickForCharacter(state, deltaTime);
         return true;
     }
-    __except (platform::GuardFilter(GetExceptionCode()))
+    __except (platform::GuardFilterRecording(GetExceptionInformation()))
     {
         return false;
     }
+}
+
+/// The game's chocobo slot 1 inside a structured-exception guard.
+bool GuardedHandles(HandlesFn engine, void* state, float deltaTime, std::uintptr_t& returned) noexcept
+{
+    __try
+    {
+        returned = engine(state, deltaTime);
+        return true;
+    }
+    __except (platform::GuardFilterRecording(GetExceptionInformation()))
+    {
+        return false;
+    }
+}
+
+/// The game's ridden-vehicle test for `chocobo` in the current context: 1, 0, or -1 when unavailable or it faulted.
+std::int32_t RiddenTest(const void* chocobo) noexcept
+{
+    std::uint8_t answer = 0;
+    return g_isRiddenVehicle != nullptr && platform::CallGuarded(g_isRiddenVehicle, answer, chocobo) ? answer : -1;
 }
 
 /// The game's handle clear inside a structured-exception guard.
@@ -105,7 +147,7 @@ bool GuardedClear(void* handle) noexcept
         g_handleClear(handle);
         return true;
     }
-    __except (platform::GuardFilter(GetExceptionCode()))
+    __except (platform::GuardFilterRecording(GetExceptionInformation()))
     {
         return false;
     }
@@ -188,6 +230,10 @@ bool Install(const platform::GameImage& image) noexcept
     g_tickForCharacter = reinterpret_cast<TickForCharacterFn>(*tick);
     g_engineLeaderTest = reinterpret_cast<LeaderTestFn>(*leaderTest);
     g_moveStateVTable  = *vtable;
+    const auto core    = platform::FindFunction(image, facts::kIsPlayerCore);
+    g_isPlayerCore     = core ? reinterpret_cast<LeaderTestFn>(*core) : nullptr;
+    const auto ridden  = platform::FindFunction(image, facts::kIsPrimaryCharacter);
+    g_isRiddenVehicle  = ridden ? reinterpret_cast<LeaderTestFn>(*ridden) : nullptr;
     const auto clear   = platform::FindFunction(image, facts::kFieldActionHandleClear);
     g_handleClear      = clear ? reinterpret_cast<HandleClearFn>(*clear) : nullptr;
     if (!clear)
@@ -218,7 +264,13 @@ void Tick(void* playerTwoController, void* member) noexcept
     if (!pad_sticks::Enabled() || !pad_sticks::PartActs(pad_sticks::kPartMemberTick) || !generation::Active() ||
         g_tickForCharacter == nullptr || g_stopped)
     {
+        // A ride left un-ticked would hold player 2's controller on a chocobo nobody steers or ends: given back.
+        chocobo_ride::Release(L"the member's tick stopped (per-pad sticks switched off, or the tick stopped)");
         return;
+    }
+    if (chocobo_ride::Tick(playerTwoController, member, engine))
+    {
+        return;  // player 2 drives their chocobo: its move state was ticked instead of the member's
     }
     if (engine.count == 0 || engine.memberTicked)
     {
@@ -248,6 +300,122 @@ StageCounters& Counters() noexcept
 unsigned TakeLeaderAnswers() noexcept
 {
     return g_leaderAnswers.exchange(0, std::memory_order_relaxed);
+}
+
+bool InPrimaryScope(const void* member, void (*call)(void* context), void* context) noexcept
+{
+    const int type = MemberType(member);
+    if (!generation::OnGameThread() || type == kNoType)
+    {
+        return false;
+    }
+    const primary_controller::Scope primary;
+    if (!primary.Held())
+    {
+        return false;
+    }
+    const LeaderAnswer leader(type);
+    call(context);
+    return true;
+}
+
+void ClearRideRows(void* chocoboState) noexcept
+{
+    if (g_handleClear == nullptr || chocoboState == nullptr || !generation::OnGameThread())
+    {
+        return;
+    }
+    for (const std::uint32_t offset : facts::kChocoboMoveStateRowHandles)
+    {
+        if (!GuardedClear(static_cast<std::byte*>(chocoboState) + offset))
+        {
+            g_handleClear = nullptr;
+            platform::Log(L"member movement: the engine raised an exception clearing player 2's chocobo rows; rows are left "
+                          L"to show this session");
+            return;
+        }
+    }
+}
+
+RideTick TickRide(void* playerTwoController, void* member, void* state, const void* component, float deltaTime,
+                  std::uint64_t withoutKey) noexcept
+{
+    const int type = MemberType(member);
+    if (!generation::OnGameThread() || g_tickForCharacter == nullptr || type == kNoType ||
+        ReadPointer(playerTwoController, facts::kControllerLeaderActions) == nullptr)
+    {
+        return RideTick::Refused;
+    }
+    const pad_sticks::StickScope    sticks(pad_sticks::ControllerIdOf(playerTwoController));
+    const primary_controller::Scope primary;
+    if (!sticks.Held() || !primary.Held())
+    {
+        g_counters.Refuse();
+        return RideTick::Refused;
+    }
+    const pad_buttons::ButtonScope     buttons(withoutKey);
+    const LeaderAnswer                 leader(type, component);
+    const move_state::OwnTick          own;
+    const scope_leaks::MemberTickScope leaks(state, playerTwoController, deltaTime);
+    g_counters.Act();
+    ride_probe::Slot11(state, false);
+    const bool ticked = GuardedTick(state, deltaTime);
+    ride_probe::Slot11(state, true);
+    return ticked ? RideTick::Ticked : RideTick::Faulted;
+}
+
+HandlesTick TickRideHandles(const void* member, void* state, const void* chocobo, const void* component, float deltaTime,
+                            HandlesFn engine, bool sample) noexcept
+{
+    HandlesTick tick;
+    const int   type = MemberType(member);
+    if (!generation::OnGameThread() || engine == nullptr || type == kNoType)
+    {
+        return tick;
+    }
+    if (sample)
+    {
+        tick.riddenOutside = RiddenTest(chocobo);
+    }
+    const primary_controller::Scope primary;
+    if (!primary.Held())
+    {
+        return tick;  // counted by the ride (player_two/chocobo_ride), not as a member tick
+    }
+    const LeaderAnswer leader(type, component);
+    if (sample)
+    {
+        tick.riddenInside = RiddenTest(chocobo);
+    }
+    tick.result = GuardedHandles(engine, state, deltaTime, tick.returned) ? RideTick::Ticked : RideTick::Faulted;
+    return tick;
+}
+
+CoreAsPlayerTwo PlayerCoreAsPlayerTwo(const void* character, const void* member) noexcept
+{
+    CoreAsPlayerTwo result;
+    const int       type = MemberType(member);
+    if (!generation::OnGameThread() || g_isPlayerCore == nullptr || character == nullptr || type == kNoType)
+    {
+        return result;
+    }
+    const primary_controller::Scope primary;
+    if (!primary.Held())
+    {
+        return result;
+    }
+    const unsigned     before = g_leaderAnswers.load(std::memory_order_relaxed);
+    const LeaderAnswer leader(type);
+    result.primary      = primary_controller::Current();
+    std::uint8_t answer = 0;
+    if (platform::CallGuarded(g_isPlayerCore, answer, character))
+    {
+        result.answer = answer;
+    }
+    // The answers counted here are not a tick's (game thread only, so nothing else counted meanwhile).
+    const unsigned after = g_leaderAnswers.load(std::memory_order_relaxed);
+    g_leaderAnswers.fetch_sub(after > before ? after - before : 0u, std::memory_order_relaxed);
+    return result;
 }
 
 }  // namespace lss::player_two::member_movement

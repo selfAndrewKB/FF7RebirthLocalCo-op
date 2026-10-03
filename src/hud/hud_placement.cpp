@@ -20,6 +20,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <format>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -185,6 +186,7 @@ bool Alive(const Placed& placed) noexcept
 /// Each widget class's placement (or none), found once per class: comparing class names for every
 /// widget at every scan costs far more than the scan itself.
 std::unordered_map<const void*, const Placement*> g_placementOfClass;
+std::unordered_map<const Placement*, std::wstring> g_loggedPlacements;  // each class's placement as last logged
 
 const Placement* PlacementOf(UObject* widget)
 {
@@ -207,16 +209,25 @@ const Placement* PlacementOf(UObject* widget)
     return match;
 }
 
+/// Logs a placement when it differs from the one last logged for its class: each split places every
+/// instance again with the same values.
 void LogPlaced(const Placed& placed)
 {
     const auto& o = placed.original;
     const auto& a = placed.applied;
-    platform::Log(L"HUD placement: {} anchors ({:.1f},{:.1f}) offsets ({:.0f},{:.0f},{:.0f},{:.0f}) alignment "
-                  L"({:.1f},{:.1f}); the game's own: anchors ({:.2f},{:.2f})-({:.2f},{:.2f}) offsets "
-                  L"({:.0f},{:.0f},{:.0f},{:.0f}) alignment ({:.2f},{:.2f})",
-                  placed.placement->className, a.anchors[0], a.anchors[1], a.offsets[0], a.offsets[1], a.offsets[2],
-                  a.offsets[3], a.alignment[0], a.alignment[1], o.anchors[0], o.anchors[1], o.anchors[2], o.anchors[3],
-                  o.offsets[0], o.offsets[1], o.offsets[2], o.offsets[3], o.alignment[0], o.alignment[1]);
+    std::wstring text = std::format(L"{} anchors ({:.1f},{:.1f}) offsets ({:.0f},{:.0f},{:.0f},{:.0f}) alignment "
+                                    L"({:.1f},{:.1f}); the game's own: anchors ({:.2f},{:.2f})-({:.2f},{:.2f}) offsets "
+                                    L"({:.0f},{:.0f},{:.0f},{:.0f}) alignment ({:.2f},{:.2f})",
+                                    placed.placement->className, a.anchors[0], a.anchors[1], a.offsets[0], a.offsets[1],
+                                    a.offsets[2], a.offsets[3], a.alignment[0], a.alignment[1], o.anchors[0], o.anchors[1],
+                                    o.anchors[2], o.anchors[3], o.offsets[0], o.offsets[1], o.offsets[2], o.offsets[3],
+                                    o.alignment[0], o.alignment[1]);
+    std::wstring& logged = g_loggedPlacements[placed.placement];
+    if (text != logged)
+    {
+        platform::Log(L"HUD placement: {}", text);
+        logged = std::move(text);
+    }
 }
 
 /// Stops following `placed`: its layout is left as the game (or a failed placement) has it.

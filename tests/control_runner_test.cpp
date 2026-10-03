@@ -3,6 +3,7 @@
 #include "control/runner.h"
 
 #include <cstdio>
+#include <format>
 #include <string>
 #include <vector>
 
@@ -47,6 +48,8 @@ public:
     Outcome SetBars(bool on) override { return Record(on ? L"bars on" : L"bars off"); }
     Outcome SetSplitFov(float blend) override { return Record(L"split-fov " + std::to_wstring(blend)); }
     Outcome SetHudBand(bool on) override { return Record(on ? L"hud-band on" : L"hud-band off"); }
+    Outcome SetNpcCentre(bool on) override { return Record(on ? L"npc-centre on" : L"npc-centre off"); }
+    Outcome SetNpcDetail(std::uint32_t level) override { return Record(std::format(L"npc-detail {}", level)); }
     Outcome SetHudProbe(bool on) override { return Record(on ? L"hud-probe on" : L"hud-probe off"); }
     Outcome TraceHud(std::int32_t frames) override { return Record(L"hud-trace " + std::to_wstring(frames)); }
     Outcome SetHudImage(bool on) override { return Record(on ? L"hud-image on" : L"hud-image off"); }

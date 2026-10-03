@@ -96,6 +96,9 @@ inline constexpr std::uint32_t kMoveStateCooldown  = 0x94;  // float; the gate r
 // the request byte at +0x48; written by the state's tick, turned into a HUD row by the character's
 // own tick (RE-p2-field-action-row.md).
 inline constexpr std::uint32_t kMoveStateFieldActionHandles[] = {0xA0, 0xF0, 0x140};
+// The chocobo move state's own prompt handles (FieldActionIconHandle, 0x50 bytes: +0 the row's weak widget, +0x48 the
+// request byte): Dash, Dismount, Jet, Scent, Scour (RE-p2-chocobo-rows.md §2).
+inline constexpr std::uint32_t kChocoboMoveStateRowHandles[] = {0x200, 0x250, 0x2A0, 0x2F0, 0x340};
 inline constexpr std::uint8_t  kMoveBlockingTagA   = 17;
 inline constexpr std::uint8_t  kMoveBlockingTagB   = 22;
 
@@ -189,6 +192,19 @@ inline constexpr std::uint8_t kMoveStateUpdateInputBytes[] = {
 inline constexpr std::uint8_t kPlayerMoveStateUpdateInputBytes[] = {
     0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C, 0x24, 0x18, 0x48, 0x89,
     0x74, 0x24, 0x20, 0x57, 0xB8, 0x50, 0x00, 0x00, 0x00, 0xE8, 0x66, 0xEC};
+// The chocobo move state's slots 11 and 16 (vtable 0x1466B9E18; RE-p2-chocobo-ride.md §1.1, §1.2): the field
+// tick runs the ridden chocobo's slot 16 after player 1's leader-action tick. Entry bytes read from the image.
+inline constexpr std::uint8_t kChocoboMoveStateTickBytes[] = {
+    0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55,
+    0x41, 0x56, 0x41, 0x57, 0x48, 0x8D, 0xAC, 0x24, 0x70, 0xFF, 0xFF, 0xFF};
+inline constexpr std::uint8_t kChocoboMoveStateUpdateInputBytes[] = {
+    0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x70, 0x10, 0x48,
+    0x89, 0x78, 0x18, 0x4C, 0x89, 0x70, 0x20, 0x55, 0x48, 0x8B, 0xEC, 0xB8};
+// Its slot 1 (RE-p2-chocobo-run-refresh.md §2.1, §4.1): the chocobo's own actor tick runs it each frame, game context;
+// it holds the anim sync that rewrites the gait, speed and run timer of any chocobo not the primary PC's ridden one.
+inline constexpr std::uint8_t kChocoboMoveStateHandlesBytes[] = {
+    0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x57, 0xB8,
+    0x40, 0x00, 0x00, 0x00, 0xE8, 0x03, 0xFD, 0xC5, 0xFE, 0x48, 0x2B, 0xE0};
 inline constexpr std::uint8_t kLeaderActionTickBytes[] = {
     0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x7C, 0x24, 0x10, 0x55, 0x48,
     0x8D, 0x6C, 0x24, 0xA9, 0xB8, 0xB0, 0x00, 0x00, 0x00, 0xE8, 0xAA, 0x2D};
@@ -382,6 +398,15 @@ inline constexpr SlotFact kMoveStateUpdateInput{
 inline constexpr SlotFact kPlayerMoveStateUpdateInput{
     L"the player move state's input-update slot (16)", 0x1457C5930,
     {L"PlayerMoveState_Slot16_UpdateInput", 0x1434502B0, kPlayerMoveStateUpdateInputBytes}};
+inline constexpr SlotFact kChocoboMoveStateTick{
+    L"the chocobo move state's tick slot (11)", 0x1466B9E70,
+    {L"ChocoboMoveState_Slot11", 0x143451320, kChocoboMoveStateTickBytes}};
+inline constexpr SlotFact kChocoboMoveStateUpdateInput{
+    L"the chocobo move state's input-update slot (16)", 0x1466B9E98,
+    {L"ChocoboMoveState_UpdateInput_Slot16", 0x143450444, kChocoboMoveStateUpdateInputBytes}};
+inline constexpr SlotFact kChocoboMoveStateHandles{
+    L"the chocobo move state's handle tick slot (1)", 0x1466B9E20,
+    {L"ChocoboMoveState_Slot1_TickHandles", 0x14344F218, kChocoboMoveStateHandlesBytes}};
 inline constexpr SlotFact kLeaderActionTick{
     L"the leader-action component's tick slot (+0x428)", 0x145D6C490,
     {L"EndPlayerLeaderActionParamComponent::Tick_Vt428", 0x14125C16C, kLeaderActionTickBytes}};

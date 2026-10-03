@@ -298,6 +298,22 @@ ParsedLine ParseStreamViews(const std::vector<std::wstring_view>& words)
     return Error(L"stream-views takes off, p2 or both");
 }
 
+ParsedLine ParseNpcDetail(const std::vector<std::wstring_view>& words)
+{
+    constexpr std::wstring_view kModes[] = {L"off", L"reduced", L"full"};
+    for (std::uint32_t mode = 0; words.size() == 2 && mode < std::size(kModes); ++mode)
+    {
+        if (words[1] == kModes[mode] || (mode == 2 && words[1] == L"on"))
+        {
+            Command command;
+            command.kind  = CommandKind::NpcDetail;
+            command.ticks = mode;
+            return Parsed(std::move(command));
+        }
+    }
+    return Error(L"npc-detail takes full, reduced or off (on means full)");
+}
+
 ParsedLine ParseStreamFov(const std::vector<std::wstring_view>& words)
 {
     constexpr unsigned long kMaxDegrees = 170;  // views::kMaxStreamFov
@@ -356,6 +372,8 @@ ParsedLine ParseLine(std::wstring_view line)
     if (name == L"bars") return ParseSwitch(CommandKind::Bars, words, L"on", L"off");
     if (name == L"split-fov") return ParseSplitFov(words);
     if (name == L"hud-band") return ParseSwitch(CommandKind::HudBand, words, L"on", L"off");
+    if (name == L"npc-centre") return ParseSwitch(CommandKind::NpcCentre, words, L"on", L"off");
+    if (name == L"npc-detail") return ParseNpcDetail(words);
     if (name == L"hud-probe") return ParseSwitch(CommandKind::HudProbe, words, L"on", L"off");
     if (name == L"hud-trace") return ParseHudTrace(words);
     if (name == L"hud-image") return ParseSwitch(CommandKind::HudImage, words, L"on", L"off");
@@ -397,6 +415,9 @@ std::wstring Describe(const Command& command)
         case CommandKind::Layout: return command.on ? L"layout side-by-side" : L"layout top-bottom";
         case CommandKind::Bars: return command.on ? L"bars on" : L"bars off";
         case CommandKind::HudBand: return command.on ? L"hud-band on" : L"hud-band off";
+        case CommandKind::NpcCentre: return command.on ? L"npc-centre on" : L"npc-centre off";
+        case CommandKind::NpcDetail:
+            return command.ticks == 2 ? L"npc-detail full" : command.ticks == 1 ? L"npc-detail reduced" : L"npc-detail off";
         case CommandKind::HudProbe: return command.on ? L"hud-probe on" : L"hud-probe off";
         case CommandKind::HudTrace: return std::format(L"hud-trace {}", command.ticks);
         case CommandKind::HudImage: return command.on ? L"hud-image on" : L"hud-image off";

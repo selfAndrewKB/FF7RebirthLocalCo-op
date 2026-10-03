@@ -40,6 +40,12 @@
 #include "player_two/shoulder_scale.h"
 #include "player_two/walk_limits.h"
 #include "player_two/handover_watch.h"
+#include "player_two/charapop_watch.h"
+#include "player_two/charapop_near.h"
+#include "player_two/charapop_centre.h"
+#include "player_two/ride_probe.h"
+#include "player_two/ride_watch.h"
+#include "player_two/chocobo_ride.h"
 #include "player_two/nav_strand.h"
 #include "player_two/party_warp.h"
 #include "player_two/session.h"
@@ -73,7 +79,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.38.1-wait-single-view";
+constexpr const wchar_t* kVersion = L"0.46.0-p2-ride-warp";
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -139,7 +145,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.38.1-wait-single-view");
+        ModVersion     = STR("0.46.0-p2-ride-warp");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -158,7 +164,11 @@ public:
         // wrappers. Putting the engine's own submission back would render them in one family, the
         // configuration this mod exists to avoid, and player 2's camera manager depends on its
         // wrappers. Removing player 2 here is not an option: the destructor may run off the game
-        // thread. So everything stays installed; the DLL is pinned, so it stays valid.
+        // thread. So everything stays installed; the DLL is pinned, so it stays valid. The characters
+        // raised for player 2's view are given back either way (that setter runs from any thread), and the NPC
+        // centre when this runs on the game thread.
+        lss::player_two::charapop_near::Release();
+        lss::player_two::charapop_centre::Release();
         if (session_ && session_->HasPlayerTwo())
         {
             Log(L"unloading with player 2 still in: the per-player rendering and player 2's stages stay installed");
@@ -272,6 +282,12 @@ public:
         lss::player_two::shoulder_scale::Install(*image);  // each half's shoulder offset scaled to its width
         lss::player_two::walk_limits::Install(*image);     // player 2's walk limits from player 2's own surroundings
         lss::player_two::handover_watch::Install(*image);  // the party order and the members' AI at hand-overs, logged
+        lss::player_two::charapop_watch::Install(*image);  // the character detail near player 2, logged (read-only)
+        lss::player_two::charapop_near::Install(*image);   // characters near player 2 keep the detail player 2's view gives them
+        lss::player_two::charapop_centre::Install(*image); // the NPC population follows both players (Ctrl+F10 compares)
+        lss::player_two::ride_watch::Install(*image);      // chocobo and buggy rides, logged (read-only)
+        lss::player_two::chocobo_ride::Install(*image);    // player 2 drives their own chocobo while the party rides
+        lss::player_two::ride_probe::Install(*image);      // player 2's ride: sprint and homing, logged (read-only)
         lss::hud::InstallPlayerTwoPass(*image);      // player 2's HUD content, on (the hud-levers command switches it)
         lss::hud::InstallRootOverlayRender(*image);  // before the overlay renders: placement follow, trace
         lss::hud::prompt_rows::Install(*image);      // each player's field prompt rows in their own half
@@ -371,6 +387,19 @@ private:
             case lss::players::PlayerIntent::ToggleLayout: LogLayoutChange(layout_.Toggle()); break;
             case lss::players::PlayerIntent::ToggleFill: ToggleFill(); break;
             case lss::players::PlayerIntent::TogglePadSticks: session_->TogglePadSticks(); break;
+            case lss::players::PlayerIntent::ToggleNpcDetail:
+                if (lss::player_two::charapop_near::Installed())
+                {
+                    lss::player_two::charapop_near::SetDetail(
+                        lss::player_two::charapop_near::NextDetail(lss::player_two::charapop_near::CurrentDetail()));
+                }
+                break;
+            case lss::players::PlayerIntent::ToggleNpcCentre:
+                if (lss::player_two::charapop_centre::Installed())
+                {
+                    lss::player_two::charapop_centre::SetEnabled(!lss::player_two::charapop_centre::Enabled());
+                }
+                break;
             case lss::players::PlayerIntent::None: break;
         }
         lss::renderer::PollFamilyBoundary();
@@ -402,6 +431,11 @@ private:
         lss::player_two::camera_distance::TickFraming(playerTwoIn);  // per-layout distance steps (roadmap 2b)
         lss::player_two::shoulder_scale::Poll(splitShown);
         lss::player_two::framing_watch::Tick(splitShown);
+        lss::player_two::charapop_watch::Tick(splitShown);
+        lss::player_two::charapop_near::Tick(splitShown, session_->PlaysMember());
+        lss::player_two::charapop_centre::Tick(splitShown, session_->PlaysMember());
+        lss::player_two::ride_watch::Tick();
+        lss::player_two::ride_probe::Tick();
         lss::hud::navimap_watch::Tick(splitShown);
         lss::hud::minimap::Tick(splitShown);  // outside the overlay render, before it
         if (wholeScreen_)

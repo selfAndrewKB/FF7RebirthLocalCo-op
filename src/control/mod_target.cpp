@@ -14,6 +14,8 @@
 #include "platform/log.h"
 #include "player_two/battle_input.h"
 #include "player_two/camera_distance.h"
+#include "player_two/charapop_centre.h"
+#include "player_two/charapop_near.h"
 #include "player_two/shoulder_scale.h"
 #include "player_two/generation.h"
 #include "player_two/pad_buttons.h"
@@ -145,6 +147,31 @@ Outcome ModTarget::SetHudBand(bool on)
     // What it sets is logged by the HUD module at the overlay's next render while split.
     return {true, on ? L"HUD laid out in each half's visible band (the default)"
                      : L"HUD full-image layout until `hud-band on` (values logged only)"};
+}
+
+Outcome ModTarget::SetNpcCentre(bool on)
+{
+    if (!player_two::charapop_centre::Installed())
+    {
+        return Failed(L"the NPC centre is not installed (see the startup log)");
+    }
+    player_two::charapop_centre::SetEnabled(on);  // logs the new state
+    return {true, on ? L"the NPC population follows both players while split (the default)"
+                     : L"the NPC population follows the leader, as the game alone does"};
+}
+
+Outcome ModTarget::SetNpcDetail(std::uint32_t level)
+{
+    using player_two::charapop_near::Detail;
+    if (!player_two::charapop_near::Installed())
+    {
+        return Failed(L"the NPC detail lever is not installed (see the startup log)");
+    }
+    const Detail detail = level >= 2 ? Detail::Full : level == 1 ? Detail::Reduced : Detail::Off;
+    player_two::charapop_near::SetDetail(detail);  // logs the new state
+    return {true, detail == Detail::Full    ? L"characters near player 2 keep full detail where player 1's camera does not (the default)"
+                  : detail == Detail::Reduced ? L"characters near player 2 keep full detail within half the game's distances"
+                                              : L"characters near player 2 get only what player 1's camera gives them"};
 }
 
 Outcome ModTarget::SetHudProbe(bool on)

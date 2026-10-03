@@ -15,17 +15,33 @@ namespace lss::player_two::party_warp {
 
 namespace {
 
-// RE-p2-party-warp.md §1 and §7 (this build). The three slots are checked at install to hold the
-// functions the research read, and a state is driven only if its vtable is this one.
-constexpr std::uintptr_t kFollowStatePlayerVTable = 0x14580C8F8;
-constexpr std::uint32_t  kTeleportQuerySlot       = 0x58;
-constexpr std::uint32_t  kForceTeleportSlot       = 0x270;
-constexpr std::uint32_t  kFinishNowSlot           = 0x278;
-constexpr std::uint32_t  kUpdateTeleportSlot      = 0x298;
-constexpr std::uintptr_t kTeleportQuery           = 0x140CB9618;  // FollowState_TickTeleportEQS_Vt58
-constexpr std::uintptr_t kForceTeleport           = 0x14183BD94;  // FollowState_ForceTeleport_Vt270
-constexpr std::uintptr_t kFinishNow               = 0x1431CF7D4;  // FollowState_FinishForcedTeleportNow_Vt278
-constexpr std::uintptr_t kUpdateTeleport          = 0x140B1975C;  // FollowStatePlayer_UpdateTeleport_Vt298_UnlessCtrlAD8
+// The follow-state variants whose four warp slots hold the functions the research read (RE-p2-party-warp.md §1 and
+// §7 for PLAYER; RE-p2-chocobo-warp.md §2.1 for the chocobo sub-types). Each is checked at install, and a state is
+// driven only if its vtable is a checked one of its subject's kind.
+constexpr std::uint32_t kTeleportQuerySlot = 0x58;
+constexpr std::uint32_t kForceTeleportSlot = 0x270;
+constexpr std::uint32_t kFinishNowSlot     = 0x278;
+constexpr std::uint32_t kUpdateTeleportSlot = 0x298;
+
+struct VariantFact
+{
+    const wchar_t* name;
+    Subject        subject;
+    std::uintptr_t vtable;
+    std::uintptr_t query;   // +0x58  FollowState_TickTeleportEQS_Vt58 (or its wrapper)
+    std::uintptr_t force;   // +0x270 FollowState_ForceTeleport_Vt270
+    std::uintptr_t finish;  // +0x278 FollowState_FinishForcedTeleportNow_Vt278
+    std::uintptr_t update;  // +0x298 the sub-type's teleport update
+    bool           skipGate;  // the update returns at once while the AI's +0xAD8 is set (PLAYER only)
+};
+
+constexpr VariantFact kVariants[] = {
+    {L"PLAYER", Subject::Member, 0x14580C8F8, 0x140CB9618, 0x14183BD94, 0x1431CF7D4, 0x140B1975C, true},
+    {L"CHOCOBO_MEMBER", Subject::Chocobo, 0x145CB2C00, 0x140CB9618, 0x14183BD94, 0x1431CF7D4, 0x1431D851C, false},
+    {L"CHOCOBO_SUB", Subject::Chocobo, 0x145CB1650, 0x140CB9618, 0x14183BD94, 0x1431CF7D4, 0x1431D851C, false},
+    {L"CHOCOBO", Subject::Chocobo, 0x145CB2918, 0x1431C9638, 0x14183BD94, 0x1431CF7D4, 0x1431D84F4, false},
+};
+constexpr std::size_t kVariantCount = sizeof(kVariants) / sizeof(kVariants[0]);
 
 // PartyManager_IsIdle (bool()), the guard PartyFollow_ForceTeleportAll uses before it forces anyone.
 constexpr std::uint8_t kPartyIdleBytes[] = {0x48, 0x8B, 0x05, 0x99, 0x11, 0x88, 0x08, 0x48, 0x85, 0xC0, 0x74, 0x07,
@@ -42,6 +58,7 @@ constexpr std::uint8_t  kStateFollow      = 7;
 // The teleport query runner (RE-p2-party-warp.md §10): the result pointer and its status (1 = done).
 constexpr std::uint32_t kStateQueryResult = 0x540;
 constexpr std::uint32_t kQueryStatus      = 0x28;
+constexpr std::uintptr_t kIdaImageBase    = 0x140000000;
 
 /// A forced request left unfinished this long is completed by the game's own "finish now". The game's
 /// fast-travel wait allows 20 s; a stranded player should not wait that long, and the EQS, the 0.2 s fade
@@ -68,21 +85,30 @@ using UpdateFn = void (*)(void* state, float seconds);  // also the query slot's
 using FinishFn = void (*)(void* state);
 using TestFn   = bool (*)();
 
+struct Variant
+{
+    const VariantFact* fact   = nullptr;
+    std::uintptr_t     vtable = 0;  // live; 0 when its check failed
+    ForceFn            force  = nullptr;
+    UpdateFn           update = nullptr;
+    UpdateFn           query  = nullptr;
+    FinishFn           finish = nullptr;
+};
+
 // Set once at install.
-std::uintptr_t g_vtable    = 0;
-ForceFn        g_force     = nullptr;
-UpdateFn       g_update    = nullptr;
-UpdateFn       g_query     = nullptr;
-FinishFn       g_finish    = nullptr;
+Variant        g_variants[kVariantCount];
 TestFn         g_partyIdle = nullptr;
 TestFn         g_inBattle  = nullptr;
+std::uintptr_t g_imageBase = 0;
 bool           g_installed = false;
 
 // Game thread.
-void*  g_state   = nullptr;  // the follow state being driven
-void*  g_member  = nullptr;
-float  g_elapsed = 0.0f;
-int    g_updates = 0;
+void*          g_state   = nullptr;  // the follow state being driven
+const Variant* g_variant = nullptr;  // its variant
+const void*    g_pawn    = nullptr;  // whose state it is (the member, or the chocobo)
+Subject        g_subject = Subject::Member;
+float          g_elapsed = 0.0f;
+int            g_updates = 0;
 
 template <class T>
 bool Read(const void* object, std::uint32_t offset, T& out) noexcept
@@ -103,17 +129,52 @@ std::uint8_t ByteAt(const void* object, std::uint32_t offset) noexcept
     return value;
 }
 
-/// The member's retained AI's current state, if it is the PLAYER follow state.
-void* FollowStateOf(void* member, const void** aiOut = nullptr) noexcept
+const wchar_t* Who(Subject subject) noexcept
 {
-    void* ai    = PointerAt(member, facts::kCharacterRetainedAi);
+    return subject == Subject::Member ? L"player 2's member" : L"player 2's chocobo";
+}
+
+/// The checked variant `state`'s vtable is, for `subject`; null if none.
+const Variant* VariantOf(const void* state, Subject subject) noexcept
+{
+    std::uintptr_t vtable = 0;
+    if (!Read(state, 0, vtable) || vtable == 0)
+    {
+        return nullptr;
+    }
+    for (const Variant& variant : g_variants)
+    {
+        if (variant.vtable == vtable && variant.fact->subject == subject)
+        {
+            return &variant;
+        }
+    }
+    return nullptr;
+}
+
+/// The pawn's retained AI's current state and its variant, if it is a checked follow state for `subject`.
+void* FollowStateOf(const void* pawn, Subject subject, const Variant** variantOut = nullptr,
+                    const void** aiOut = nullptr) noexcept
+{
+    void* ai    = PointerAt(pawn, facts::kCharacterRetainedAi);
     void* state = PointerAt(PointerAt(ai, kAiBrain), kBrainState);
     if (aiOut != nullptr)
     {
         *aiOut = ai;
     }
+    const Variant* variant = ByteAt(state, kStateType) == kStateFollow ? VariantOf(state, subject) : nullptr;
+    if (variantOut != nullptr)
+    {
+        *variantOut = variant;
+    }
+    return variant != nullptr ? state : nullptr;
+}
+
+/// A live vtable as its IDA address, for a log line (0 when unreadable).
+std::uintptr_t IdaVtableOf(const void* object) noexcept
+{
     std::uintptr_t vtable = 0;
-    return Read(state, 0, vtable) && vtable == g_vtable && ByteAt(state, kStateType) == kStateFollow ? state : nullptr;
+    return Read(object, 0, vtable) && vtable >= g_imageBase ? vtable - g_imageBase + kIdaImageBase : 0;
 }
 
 bool Test(TestFn fn, bool& out) noexcept
@@ -124,7 +185,8 @@ bool Test(TestFn fn, bool& out) noexcept
 void Stop() noexcept
 {
     g_state   = nullptr;
-    g_member  = nullptr;
+    g_variant = nullptr;
+    g_pawn    = nullptr;
     g_elapsed = 0.0f;
     g_updates = 0;
 }
@@ -141,9 +203,9 @@ int QueryStatus() noexcept
 void FinishNow(const wchar_t* why) noexcept
 {
     const int  query = QueryStatus();
-    const bool ok    = platform::CallGuarded(g_finish, g_state);
-    platform::Log(L"party warp: {} after {:.2f} s ({} update(s), query status {}); the game's finish-now called{}", why,
-                  g_elapsed, g_updates, query, ok ? L"" : L" and FAULTED");
+    const bool ok    = platform::CallGuarded(g_variant->finish, g_state);
+    platform::Log(L"party warp: {} ({}) {} after {:.2f} s ({} update(s), query status {}); the game's finish-now called{}",
+                  Who(g_subject), g_variant->fact->name, why, g_elapsed, g_updates, query, ok ? L"" : L" and FAULTED");
     Stop();
 }
 
@@ -151,111 +213,147 @@ void FinishNow(const wchar_t* why) noexcept
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto vtable    = image.Rebase(kFollowStatePlayerVTable);
-    const auto slot      = [&image](std::uint32_t offset) { return image.ReadPointer(kFollowStatePlayerVTable + offset); };
-    const auto force     = slot(kForceTeleportSlot);
-    const auto finish    = slot(kFinishNowSlot);
-    const auto update    = slot(kUpdateTeleportSlot);
-    const auto query     = slot(kTeleportQuerySlot);
-    const auto partyIdle = platform::FindFunction(image, kPartyIdle);
-    const auto inBattle  = platform::FindFunction(image, facts::kIsInBattle);
-    const auto is        = [&image](const std::optional<std::uintptr_t>& live, std::uintptr_t ida) {
+    const auto is = [&image](const std::optional<std::uintptr_t>& live, std::uintptr_t ida) {
         const auto expected = image.Rebase(ida);
         return live && expected && *live == *expected;
     };
-    if (!vtable || !is(force, kForceTeleport) || !is(finish, kFinishNow) || !is(update, kUpdateTeleport) || !is(query, kTeleportQuery) || !partyIdle ||
-        !inBattle)
+    int chocoboVariants = 0;
+    for (std::size_t i = 0; i < kVariantCount; ++i)
+    {
+        const VariantFact& fact = kVariants[i];
+        const auto slot   = [&image, &fact](std::uint32_t offset) { return image.ReadPointer(fact.vtable + offset); };
+        const auto vtable = image.Rebase(fact.vtable);
+        const auto force  = slot(kForceTeleportSlot);
+        const auto finish = slot(kFinishNowSlot);
+        const auto update = slot(kUpdateTeleportSlot);
+        const auto query  = slot(kTeleportQuerySlot);
+        g_variants[i].fact = &fact;
+        if (!vtable || !is(force, fact.force) || !is(finish, fact.finish) || !is(update, fact.update) ||
+            !is(query, fact.query))
+        {
+            platform::Log(L"party warp: the {} follow variant's slots do not check out; not driven", fact.name);
+            continue;
+        }
+        g_variants[i].vtable = *vtable;
+        g_variants[i].force  = reinterpret_cast<ForceFn>(*force);
+        g_variants[i].finish = reinterpret_cast<FinishFn>(*finish);
+        g_variants[i].update = reinterpret_cast<UpdateFn>(*update);
+        g_variants[i].query  = reinterpret_cast<UpdateFn>(*query);
+        chocoboVariants += fact.subject == Subject::Chocobo ? 1 : 0;
+    }
+    const auto partyIdle = platform::FindFunction(image, kPartyIdle);
+    const auto inBattle  = platform::FindFunction(image, facts::kIsInBattle);
+    if (g_variants[0].vtable == 0 || !partyIdle || !inBattle)
     {
         platform::Log(L"party warp: UNAVAILABLE (a check failed); a stranded player 2 is not brought back");
         return false;
     }
-    g_vtable    = *vtable;
-    g_force     = reinterpret_cast<ForceFn>(*force);
-    g_finish    = reinterpret_cast<FinishFn>(*finish);
-    g_update    = reinterpret_cast<UpdateFn>(*update);
-    g_query     = reinterpret_cast<UpdateFn>(*query);
     g_partyIdle = reinterpret_cast<TestFn>(*partyIdle);
     g_inBattle  = reinterpret_cast<TestFn>(*inBattle);
+    g_imageBase = image.Base();
     g_installed = true;
-    platform::Log(L"party warp: a stranded player 2 is brought back by the game's follow warp");
+    platform::Log(L"party warp: a stranded player 2 is brought back by the game's follow warp (on foot; riding: {} of 3 "
+                  L"chocobo follow variants checked)",
+                  chocoboVariants);
     return true;
 }
 
-bool Start(void* member, bool attached, bool splitShown) noexcept
+bool Busy() noexcept
 {
-    if (!g_installed || g_state != nullptr || member == nullptr || !generation::OnGameThread())
+    return g_state != nullptr;
+}
+
+bool Start(void* pawn, Subject subject, bool attached, bool splitShown) noexcept
+{
+    if (!g_installed || pawn == nullptr || !generation::OnGameThread())
     {
         return false;
     }
-    const void* ai    = nullptr;
-    void*       state = FollowStateOf(member, &ai);
-    bool        idle = false, battle = true;
+    if (g_state != nullptr)
+    {
+        platform::Log(L"party warp: {} not started (a warp of {} is being driven)", Who(subject), Who(g_subject));
+        return false;
+    }
+    const void*    ai      = nullptr;
+    const Variant* variant = nullptr;
+    void*          state   = FollowStateOf(pawn, subject, &variant, &ai);
+    bool           idle = false, battle = true;
     // A forced request skips the state's own can-teleport checks, so the game's other conditions for a party
-    // warp are checked here. Riding: the game warps a rider's ride body, not the rider (RE-p2-party-warp.md §4).
-    const wchar_t* refused = !splitShown                                ? L"the split is not on screen"
-                             : attached                                 ? L"she is attached to something (riding?)"
-                             : state == nullptr                         ? L"her AI is not in its follow state"
-                             : ByteAt(state, kStateForced) != 0         ? L"a forced warp is already pending"
-                             : ByteAt(ai, kAiSkipsUpdate) != 0          ? L"her AI skips the teleport update"
-                             : ByteAt(member, kCharacterWarping) != 0   ? L"a warp is already queued on her"
-                             : !Test(g_inBattle, battle)                ? L"the battle test FAULTED"
-                             : battle                                   ? L"in battle"
-                             : !Test(g_partyIdle, idle)                 ? L"the party test FAULTED"
-                             : !idle                                    ? L"the party manager is busy"
-                                                                        : nullptr;
+    // warp are checked here. Riding: the game warps a rider's ride body, not the rider (RE-p2-party-warp.md §4), so a
+    // member on a ride is refused and her chocobo is warped instead.
+    const wchar_t* refused = !splitShown                                      ? L"the split is not on screen"
+                             : subject == Subject::Member && attached         ? L"she is attached to something (riding?)"
+                             : state == nullptr                               ? L"its AI is not in a checked follow state"
+                             : ByteAt(state, kStateForced) != 0               ? L"a forced warp is already pending"
+                             : variant->fact->skipGate && ByteAt(ai, kAiSkipsUpdate) != 0
+                                 ? L"its AI skips the teleport update"
+                             : ByteAt(pawn, kCharacterWarping) != 0           ? L"a warp is already queued on it"
+                             : !Test(g_inBattle, battle)                      ? L"the battle test FAULTED"
+                             : battle                                         ? L"in battle"
+                             : !Test(g_partyIdle, idle)                       ? L"the party test FAULTED"
+                             : !idle                                          ? L"the party manager is busy"
+                                                                              : nullptr;
     if (refused != nullptr)
     {
-        platform::Log(L"party warp: not started ({})", refused);
+        const void* current = PointerAt(PointerAt(ai, kAiBrain), kBrainState);
+        platform::Log(L"party warp: {} not started ({}); its AI {} state vtable {:#x} type {}", Who(subject), refused, ai,
+                      IdaVtableOf(current), ByteAt(current, kStateType));
         return false;
     }
     const FollowTeleportParams params{};
-    if (!platform::CallGuarded(g_force, state, &params))
+    if (!platform::CallGuarded(variant->force, state, &params))
     {
-        platform::Log(L"party warp: the forced request FAULTED; not driven");
+        platform::Log(L"party warp: {}'s forced request FAULTED; not driven", Who(subject));
         return false;
     }
     g_state   = state;
-    g_member  = member;
+    g_variant = variant;
+    g_pawn    = pawn;
+    g_subject = subject;
     g_elapsed = 0.0f;
     g_updates = 0;
-    platform::Log(L"party warp: forced follow warp requested (mode 0, fade), pending {}", ByteAt(state, kStateForced));
+    platform::Log(L"party warp: forced follow warp requested for {} ({} follow state, mode 0, fade), pending {}; its AI "
+                  L"skip flag {}",
+                  Who(subject), variant->fact->name, ByteAt(state, kStateForced), ByteAt(ai, kAiSkipsUpdate));
     return true;
 }
 
-void Tick(void* member, bool splitShown, float seconds) noexcept
+void Tick(void* member, const void* chocobo, bool splitShown, float seconds) noexcept
 {
     if (g_state == nullptr || !generation::OnGameThread())
     {
         return;
     }
-    if (member != g_member)
+    const void* pawn = g_subject == Subject::Member ? member : chocobo;
+    if (pawn != g_pawn || member == nullptr)
     {
-        // Player 2 left or changed members: her AI takes her back and its own tick finishes the request.
-        platform::Log(L"party warp: player 2's member changed mid-warp after {:.2f} s; left to her AI", g_elapsed);
+        // Player 2 left, changed members or got off: the AI takes the pawn back and its own tick finishes the request.
+        platform::Log(L"party warp: {} changed mid-warp after {:.2f} s ({}); left to its AI", Who(g_subject), g_elapsed,
+                      g_subject == Subject::Chocobo && member != nullptr ? L"player 2 got off" : L"member changed or left");
         Stop();
         return;
     }
-    if (FollowStateOf(member) != g_state)
+    if (FollowStateOf(pawn, g_subject) != g_state)
     {
-        // Her AI moved to another state under the same player. The follow state object stays in the brain
-        // (it is the same one when she returns to following), so the game's finish-now still applies to it
-        // and fades her back in, as long as it still is that state with the request pending.
-        std::uintptr_t vtable = 0;
-        if (Read(g_state, 0, vtable) && vtable == g_vtable && ByteAt(g_state, kStateForced) != 0)
+        // The AI moved to another state under the same player. The follow state object stays in the brain
+        // (it is the same one when it returns to following), so the game's finish-now still applies to it
+        // and fades it back in, as long as it still is that state with the request pending.
+        if (VariantOf(g_state, g_subject) == g_variant && ByteAt(g_state, kStateForced) != 0)
         {
-            FinishNow(L"her AI left its follow state mid-warp");
+            FinishNow(L"its AI left its follow state mid-warp");
         }
         else
         {
-            platform::Log(L"party warp: her AI left its follow state mid-warp after {:.2f} s; nothing pending", g_elapsed);
+            platform::Log(L"party warp: {}'s AI left its follow state mid-warp after {:.2f} s; nothing pending",
+                          Who(g_subject), g_elapsed);
             Stop();
         }
         return;
     }
     if (ByteAt(g_state, kStateForced) == 0)
     {
-        platform::Log(L"party warp: done after {:.2f} s ({} update(s)), warp queued {}", g_elapsed, g_updates,
-                      ByteAt(member, kCharacterWarping));
+        platform::Log(L"party warp: {} done after {:.2f} s ({} update(s)), warp queued {}", Who(g_subject), g_elapsed,
+                      g_updates, ByteAt(pawn, kCharacterWarping));
         Stop();
         return;
     }
@@ -273,11 +371,13 @@ void Tick(void* member, bool splitShown, float seconds) noexcept
         FinishNow(L"not finished by the update");
         return;
     }
-    // The two per-tick calls the gated AI would make: the query tick starts the follow EQS (with her as
+    // The two per-tick calls the gated AI would make: the query tick starts the follow EQS (with the pawn as
     // the requester) once the update has armed it; the update takes its result, fades, warps and commits.
-    if (!platform::CallGuarded(g_query, g_state, seconds) || !platform::CallGuarded(g_update, g_state, seconds))
+    if (!platform::CallGuarded(g_variant->query, g_state, seconds) ||
+        !platform::CallGuarded(g_variant->update, g_state, seconds))
     {
-        platform::Log(L"party warp: the teleport update FAULTED; finishing");
+        platform::Log(L"party warp: {}'s teleport update FAULTED ({}); finishing", Who(g_subject),
+                      platform::DescribeFault(platform::LastFault()).text);
         FinishNow(L"update fault");
         return;
     }

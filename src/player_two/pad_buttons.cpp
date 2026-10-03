@@ -18,6 +18,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <format>
 #include <string>
 #include <vector>
 
@@ -65,6 +66,11 @@ struct TableFields
     const wchar_t* name;
 };
 constexpr std::array<TableFields, 2> kTables{{{0xF8, L"raw"}, {0x148, L"UI"}}};
+// The chocobo's Accel (R2) and Dash actions (RE-p2-chocobo-input.md §2.4): FName globals, traced frame by frame.
+constexpr std::uintptr_t kAccelKeyName = 0x1491E4550;
+constexpr std::uintptr_t kDashKeyName  = 0x1491E4580;
+constexpr unsigned       kTraceLines   = 3000;
+
 constexpr std::uint32_t kTableNum        = 0x08;
 constexpr std::uint32_t kTableInlineBits = 0x10;
 constexpr std::uint32_t kTableHeapBits   = 0x20;
@@ -133,6 +139,44 @@ unsigned g_lines       = 0;
 unsigned g_dropped     = 0;
 unsigned g_padTwoDowns = 0;  // pad 2's action-downs kept from the UI and the menu core
 std::atomic<unsigned> g_mask{kPartViews | kPartEvents};  // SetMask
+const std::uint64_t*  g_traceKeys[2] = {};  // Accel, Dash (live addresses of the FName globals)
+std::array<std::array<std::uint64_t, 2>, 2> g_traceLast{};  // per table, per key: the last traced bytes
+unsigned              g_traceLines = 0;
+
+/// The FName in a traced key's global, or 0.
+std::uint64_t TraceKey(std::size_t i) noexcept
+{
+    std::uint64_t key = 0;
+    return g_traceKeys[i] != nullptr && platform::CopyGuarded(&key, g_traceKeys[i], sizeof(key)) ? key : 0;
+}
+
+/// Accel and Dash: every change of the bytes the game left this frame and of the views, uncapped by the status lines.
+void Trace(std::size_t which, const Element& element, const button_view::Views& views)
+{
+    for (std::size_t k = 0; k < 2; ++k)
+    {
+        const std::uint64_t key = TraceKey(k);
+        if (key == 0 || element.name != key)
+        {
+            continue;
+        }
+        const std::uint64_t packed = std::uint64_t{element.previous} | std::uint64_t{element.held} << 8 |
+                                     std::uint64_t{element.repeat} << 16 | std::uint64_t{element.latch} << 24 |
+                                     std::uint64_t{element.sources & 0x00FFFFFFu} << 32 | std::uint64_t{views.gameHeld} << 56 |
+                                     std::uint64_t{views.now[0]} << 60 | std::uint64_t{views.now[1]} << 61 | 1ull << 63;
+        if (packed == g_traceLast[which][k] || g_traceLines >= kTraceLines)
+        {
+            return;
+        }
+        g_traceLast[which][k] = packed;
+        ++g_traceLines;
+        platform::Log(L"buttons trace ({}): {} as the game left it: previous {} held {} repeat {} latch {} sources 0x{:08X}; "
+                      L"game held {}; player 1 sees {}, player 2 sees {}",
+                      kTables[which].name, k == 0 ? L"Accel" : L"Dash", element.previous, element.held, element.repeat,
+                      element.latch, element.sources, views.gameHeld, views.now[0] ? 1 : 0, views.now[1] ? 1 : 0);
+        return;
+    }
+}
 
 bool Acts(unsigned part) noexcept
 {
@@ -266,6 +310,7 @@ void SplitTable(const std::byte* owner, std::size_t which)
             table.views[i] = {};
         }
         table.views[i].Advance(element.held, element.sources);
+        Trace(which, element, table.views[i]);
         if (table.views[i].gameHeld != table.loggedHeld[i] || element.sources != table.loggedSources[i])
         {
             LogChange(kTables[which].name, element, table.loggedHeld[i], table.loggedSources[i], table.views[i]);
@@ -424,6 +469,10 @@ bool Install(const platform::GameImage& image) noexcept
     }
     g_inputOwner = reinterpret_cast<const std::byte* const*>(*owner);
     g_engineTick = reinterpret_cast<TickFn>(*engine);
+    const auto accel = image.Rebase(kAccelKeyName, sizeof(std::uint64_t));
+    const auto dash  = image.Rebase(kDashKeyName, sizeof(std::uint64_t));
+    g_traceKeys[0]   = accel ? reinterpret_cast<const std::uint64_t*>(*accel) : nullptr;
+    g_traceKeys[1]   = dash ? reinterpret_cast<const std::uint64_t*>(*dash) : nullptr;
     if (!platform::ReplaceSlot(image, kInputTick, reinterpret_cast<std::uintptr_t>(&Tick), g_tickSlot))
     {
         return false;
@@ -476,7 +525,7 @@ void Remove() noexcept
     }
 }
 
-ButtonScope::ButtonScope() noexcept
+ButtonScope::ButtonScope(std::uint64_t withoutKey) noexcept
 {
     if (g_scopeOpen || !g_active || !ViewsWanted())
     {
@@ -494,6 +543,13 @@ ButtonScope::ButtonScope() noexcept
     {
         ViewBytes(table, 0, table.ones);  // what the Tick wrote: player 1's view
         ViewBytes(table, 1, table.twos);
+        for (std::size_t i = 0; withoutKey != 0 && i < table.twos.size() && i < table.names.size(); ++i)
+        {
+            if (table.names[i] == withoutKey)
+            {
+                table.twos[i] = {0, 0};  // not held, no edge
+            }
+        }
         if (!WriteHeld(table.data, table.twos.data(), table.allocated.data(), table.twos.size()))
         {
             ++g_writeFaults;
@@ -524,6 +580,25 @@ ButtonScope::~ButtonScope()
         }
     }
     g_scopeOpen = false;
+}
+
+std::int32_t TracedHeldNow(std::size_t action) noexcept
+{
+    const std::uint64_t key   = action < 2 ? TraceKey(action) : 0;
+    const Table&        table = g_tables[0];
+    if (key == 0 || !generation::OnGameThread() || !Fresh(table, kTables[0].offset))
+    {
+        return -1;
+    }
+    for (std::size_t i = 0; i < table.names.size() && i < table.allocated.size(); ++i)
+    {
+        if (table.allocated[i] != 0 && table.names[i] == key)
+        {
+            std::uint8_t held = 0;
+            return platform::CopyGuarded(&held, table.data + i * sizeof(Element) + offsetof(Element, held), 1) ? held : -1;
+        }
+    }
+    return -1;
 }
 
 void SetMask(unsigned mask) noexcept

@@ -40,6 +40,8 @@ public:
     Outcome SetBars(bool on) override;
     Outcome SetSplitFov(float blend) override;
     Outcome SetHudBand(bool on) override;
+    Outcome SetNpcCentre(bool on) override;
+    Outcome SetNpcDetail(std::uint32_t level) override;
     Outcome SetHudProbe(bool on) override;
     Outcome TraceHud(std::int32_t frames) override;
     Outcome SetHudImage(bool on) override;

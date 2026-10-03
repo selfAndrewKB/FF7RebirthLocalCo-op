@@ -9,6 +9,7 @@
 #include "player_two/field_exit.h"
 #include "player_two/battle_camera.h"
 #include "player_two/camera_override.h"
+#include "player_two/chocobo_ride.h"
 #include "player_two/command_menu_two.h"
 #include "player_two/command_rules.h"
 #include "player_two/menu_focus.h"
@@ -311,12 +312,15 @@ bool Session::MemberDestroyed() noexcept
     Log(L"player 2's member was destroyed under player 2 (the party was rebuilt without a field exit being seen); "
         L"player 2 lets go of it and joins again");
     generation::SetMember(nullptr);  // player 2's member movement and scopes stop at once
+    // Riding, player 2's controller possessed the member's chocobo: its pawn field names that instead.
+    const void* ridden = chocobo_ride::Forget();
     camera_override::MemberDestroyed();
     // Player 2's controller still names the destroyed character: cleared, so neither the game's
     // give-back nor the controller's unpossess reads it (RE-p2-retry-reload.md §3.2, recipe 3).
     for (const std::uint32_t field : {facts::kControllerLeader, facts::kControllerPawn})
     {
-        if (ReadPointer(playerTwoController_, field) == member_)
+        const void* named = ReadPointer(playerTwoController_, field);
+        if (named == member_ || (ridden != nullptr && field == facts::kControllerPawn && named == ridden))
         {
             WriteField<void*>(playerTwoController_, field, nullptr);
             Log(L"player 2's controller field {:#x} named the destroyed character; cleared", field);
@@ -384,6 +388,7 @@ void Session::RetakeWhenFree() noexcept
 /// Player 2 gives its member back through the game's release and chooses again once it is released.
 void Session::Yield(const wchar_t* why) noexcept
 {
+    chocobo_ride::Release(L"player 2 gives the member back");  // while player 2's scopes still hold
     Log(L"player 2's {} is {}: giving it back to choose again among the deployed party", NameOf(member_), why);
     handover_watch::Snapshot(L"the give-back", member_);
     generation::SetMember(nullptr);  // player 2's member movement and scopes stop at once
@@ -539,7 +544,8 @@ void Session::WaitForSlot(const party_member::SlotChoice& choice) noexcept
 /// A story script that puts player 2's member into LEAD gets it back: the LEAD runs only under its AI.
 void Session::CheckHeldAi() noexcept
 {
-    if (ticks_ % kHeldAiTicks != 0 || !AiTakesBack(party_member::ReadAi(member_)))
+    // While player 2 drives their chocobo the member is her AI's for the ride (player_two/chocobo_ride.h).
+    if (chocobo_ride::Driving() || ticks_ % kHeldAiTicks != 0 || !AiTakesBack(party_member::ReadAi(member_)))
     {
         return;
     }
@@ -764,6 +770,7 @@ void Session::Leave() noexcept
     {
         return;
     }
+    chocobo_ride::Release(L"player 2 leaves");  // before the withdraw: the swap back needs player 2's scopes
     camera_override::PlayerTwoOut();  // the member's camera delegates back to the engine's, while it is still held
     lock_on::PlayerTwoOut();
     generation::Withdraw();  // every wrapper passes through from here on
@@ -779,6 +786,7 @@ bool Session::LeaveNow() noexcept
         return true;
     }
     // Player 2's hold on the old world's objects goes before it does, even if the removal below fails.
+    chocobo_ride::Release(L"a map load takes player 2 out");
     camera_override::PlayerTwoOut();
     lock_on::PlayerTwoOut();
     generation::Withdraw();

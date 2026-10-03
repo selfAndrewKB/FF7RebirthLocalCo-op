@@ -14,6 +14,9 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/settled_log.h"
+#include "player_two/chocobo_ride.h"
+#include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "players/unreal_access.h"
 
@@ -71,6 +74,7 @@ struct Row
     const UObject* widget    = nullptr;
     std::uint64_t  weak      = 0;  // the list's FWeakObjectPtr, as stored
     int            p2Row     = -1; // player 2's component row naming it now, or -1
+    int            p2Ride    = -1; // the handle of player 2's driven chocobo naming it now, or -1
     bool           playerTwo = false;
     std::int32_t   priority  = 0;
     std::int32_t   remove    = 0;
@@ -92,8 +96,16 @@ std::int32_t    g_opacityOffset    = -1;
 
 // Game thread.
 std::vector<Row>                          g_rows;
-std::vector<Row>                          g_logged;
-std::array<std::uint8_t, kComponentRows>  g_loggedBytes{};
+struct RowsSteady
+{
+    std::array<Row, kMaxRows>                rows{};  // the first `count`, each remove state 0
+    std::size_t                              count = 0;
+    std::array<std::uint8_t, kComponentRows> bytes{};
+    bool operator==(const RowsSteady&) const = default;
+};
+using RowRemoves = std::array<std::int32_t, kMaxRows>;
+constexpr std::uint32_t kRowStillFrames = 30;
+platform::SettledLog<RowsSteady, RowRemoves> g_rowLog(kRowStillFrames);
 std::vector<const UObject*>               g_playerTwoWidgets;  // player 2's until they leave the list
 std::vector<std::pair<const UObject*, bool>> g_laidOut;        // the list as last laid out per player
 std::vector<Hidden>                       g_hidden;
@@ -252,8 +264,9 @@ std::wstring Describe(const std::vector<Row>& rows)
     std::wstring text;
     for (const Row& row : rows)
     {
-        const std::wstring owner = row.p2Row >= 0   ? std::format(L"player 2 row {}", row.p2Row)
-                                   : row.playerTwo ? std::wstring(L"player 2 (leaving)")
+        const std::wstring owner = row.p2Row >= 0    ? std::format(L"player 2 row {}", row.p2Row)
+                                   : row.p2Ride >= 0 ? std::format(L"player 2's chocobo row {}", row.p2Ride)
+                                   : row.playerTwo   ? std::wstring(L"player 2 (leaving)")
                                                    : std::wstring(L"player 1");
         text += std::format(L"{}[{} prio {} remove {}]", text.empty() ? L"" : L" ", owner, row.priority, row.remove);
     }
@@ -262,7 +275,27 @@ std::wstring Describe(const std::vector<Row>& rows)
 
 void LogIfChanged(const std::array<std::uint8_t, kComponentRows>& bytes)
 {
-    if (g_lines >= kMaxLines || (g_rows == g_logged && bytes == g_loggedBytes))
+    if (g_lines >= kMaxLines)
+    {
+        return;
+    }
+    // Which rows, whose, and player 2's requests log at once; a row's remove state steps through its fade
+    // over a few frames, so it logs once it holds.
+    RowsSteady steady;
+    RowRemoves removes{};
+    steady.bytes = bytes;
+    for (const Row& row : g_rows)
+    {
+        if (steady.count == steady.rows.size())
+        {
+            break;  // the read stops at kMaxRows
+        }
+        removes[steady.count] = row.remove;
+        Row& kept             = steady.rows[steady.count++];
+        kept                  = row;
+        kept.remove           = 0;
+    }
+    if (!g_rowLog.Offer(steady, removes))
     {
         return;
     }
@@ -273,8 +306,6 @@ void LogIfChanged(const std::array<std::uint8_t, kComponentRows>& bytes)
     }
     ++g_lines;
     platform::Log(L"prompt rows: {}; player 2's requests:{}", Describe(g_rows), requests.empty() ? L" none" : requests);
-    g_logged      = g_rows;
-    g_loggedBytes = bytes;
 }
 
 }  // namespace
@@ -323,6 +354,16 @@ void Refresh() noexcept
             Read(component + kComponentRowBytes + kRowStride * i, bytes[i]);
             named[i] = Read(component + kComponentRowWeak + kRowStride * i, weak) ? Resolve(weak) : nullptr;
         }
+        // Player 2's driven chocobo's own handles (Dash, Dismount, Jet, Scent, Scour): its tick makes their rows in the
+        // one shared list, so they are player 2's the same way (RE-p2-chocobo-rows.md §4).
+        constexpr std::size_t kRideRows = std::size(player_two::facts::kChocoboMoveStateRowHandles);
+        std::array<const UObject*, kRideRows> rideNamed{};
+        const auto ride = reinterpret_cast<std::uintptr_t>(player_two::chocobo_ride::DrivenMoveState());
+        for (std::size_t i = 0; ride != 0 && i < kRideRows; ++i)
+        {
+            std::uint64_t weak = 0;
+            rideNamed[i] = Read(ride + player_two::facts::kChocoboMoveStateRowHandles[i], weak) ? Resolve(weak) : nullptr;
+        }
 
         std::uintptr_t list = 0;
         std::uintptr_t data = 0;
@@ -346,7 +387,11 @@ void Refresh() noexcept
             {
                 row.p2Row = named[r] == row.widget ? static_cast<int>(r) : row.p2Row;
             }
-            row.playerTwo = row.p2Row >= 0 || std::find(g_playerTwoWidgets.begin(), g_playerTwoWidgets.end(),
+            for (std::size_t r = 0; r < kRideRows; ++r)
+            {
+                row.p2Ride = rideNamed[r] != nullptr && rideNamed[r] == row.widget ? static_cast<int>(r) : row.p2Ride;
+            }
+            row.playerTwo = row.p2Row >= 0 || row.p2Ride >= 0 || std::find(g_playerTwoWidgets.begin(), g_playerTwoWidgets.end(),
                                                         row.widget) != g_playerTwoWidgets.end();
             if (row.playerTwo)
             {
@@ -373,8 +418,7 @@ void Forget() noexcept
     g_rows.clear();
     g_playerTwoWidgets.clear();  // a later row at a reused address must not count as player 2's
     g_laidOut.clear();
-    g_logged.clear();
-    g_loggedBytes = {};
+    g_rowLog.Reset();
 }
 
 void LayOutAgain(float width, float height) noexcept

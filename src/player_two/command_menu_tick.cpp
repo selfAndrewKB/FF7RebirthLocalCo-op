@@ -4,6 +4,7 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/settled_log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
 #include "player_two/command_menu_two.h"
@@ -425,7 +426,26 @@ struct Snapshot
     std::array<std::int32_t, 2>                openPending{};
     std::int32_t                               path = 0;  // player 2's live focus path length (inside the pass)
     bool operator==(const Snapshot&) const = default;
+
+    /// The parts the P1/P2 line shows.
+    bool SameSidesAs(const Snapshot& other) const noexcept
+    {
+        return compared == other.compared && openPending == other.openPending && menuVisibility == other.menuVisibility &&
+               path == other.path && fieldMenuVisibility == other.fieldMenuVisibility && leaderIsMember == other.leaderIsMember;
+    }
+
+    /// The parts player 2's controller line shows.
+    bool SameControllerAs(const Snapshot& other) const noexcept
+    {
+        return requests == other.requests && bytes == other.bytes && gates == other.gates && guardLatch == other.guardLatch &&
+               waitFilter == other.waitFilter && storedType == other.storedType && pinch == other.pinch &&
+               members == other.members;
+    }
 };
+// The action requests flip with each press: they are logged once they hold (platform/settled_log.h).
+constexpr std::uint32_t kWatchStillFrames = 30;
+using Requests = std::array<std::int32_t, kLoggedRequests.size()>;
+platform::SettledLog<Snapshot, Requests> g_watchLog(kWatchStillFrames);
 Snapshot g_logged{};
 bool     g_loggedOnce = false;
 
@@ -471,30 +491,47 @@ void Watch(std::uintptr_t two, std::uintptr_t one) noexcept
     now.storedType = Field<std::uint8_t>(two + kStoredLeaderType);
     now.pinch      = Field<std::uint8_t>(two + kPinch);
     now.members    = {Field<std::int32_t>(two + kMembers), Field<std::int32_t>(two + kMembers + 4)};
-    if (g_loggedOnce && now == g_logged)
+    Snapshot steady = now;
+    steady.requests = {};
+    if (!g_watchLog.Offer(steady, now.requests))
     {
         return;
     }
+    const bool sidesChanged      = !g_loggedOnce || !now.SameSidesAs(g_logged);
+    const bool controllerChanged = !g_loggedOnce || !now.SameControllerAs(g_logged);
     g_logged     = now;
     g_loggedOnce = true;
-    std::wstring requests;
-    for (std::size_t i = 0; i < kLoggedRequests.size(); ++i)
+    try
     {
-        requests += std::format(L" {}:{}", kLoggedRequests[i], now.requests[i]);
+        std::wstring requests;
+        for (std::size_t i = 0; i < kLoggedRequests.size(); ++i)
+        {
+            requests += std::format(L" {}:{}", kLoggedRequests[i], now.requests[i]);
+        }
+        const auto& b = now.bytes;
+        const auto& g = now.gates;
+        const auto  side = [&now](std::size_t i) { return std::format(L"{}/{}", now.compared[0][i], now.compared[1][i]); };
+        if (sidesChanged)
+        {
+            WatchLine(std::format(L"P1/P2: 777 {} 541 {} 25C {} 783 {} 258 {} 5E1 {} 4A0 {} 775 {} open {}/{} command "
+                                  L"menu visibility {}/{} | P2 path {}, field menu visibility {}, leader is P2's member {}",
+                                  side(0), side(1), side(2), side(3), side(4), side(5), side(6), side(7), now.openPending[0],
+                                  now.openPending[1], now.menuVisibility[0], now.menuVisibility[1], now.path,
+                                  now.fieldMenuVisibility, now.leaderIsMember ? 1 : 0));
+        }
+        if (controllerChanged)
+        {
+            WatchLine(std::format(L"player 2's controller: req{} | guard latch {} | 540={} 541={} 5E1={} 782={} 25C={} "
+                                  L"258={} 774={} | type {} leader {} ally {} | wait {} pinch {} | 776={} 77C={} 77F={} "
+                                  L"787={} | slot 0: P1 {:.3f} P2 {:.3f} written {:.3f}",
+                                  requests, now.guardLatch, b[0], b[1], b[2], b[3], b[4], b[5], b[6], now.storedType,
+                                  now.members[0], now.members[1], now.waitFilter, now.pinch, g[0], g[1], g[2], g[3],
+                                  g_oneSlot, g_twoSlot, g_written));
+        }
     }
-    const auto& b = now.bytes;
-    const auto& g = now.gates;
-    const auto  side = [&now](std::size_t i) { return std::format(L"{}/{}", now.compared[0][i], now.compared[1][i]); };
-    WatchLine(std::format(L"P1/P2: 777 {} 541 {} 25C {} 783 {} 258 {} 5E1 {} 4A0 {} 775 {} open {}/{} command menu "
-                          L"visibility {}/{} | P2 path {}, field menu visibility {}, leader is P2's member {}",
-                          side(0), side(1), side(2), side(3), side(4), side(5), side(6), side(7), now.openPending[0],
-                          now.openPending[1], now.menuVisibility[0], now.menuVisibility[1], now.path,
-                          now.fieldMenuVisibility, now.leaderIsMember ? 1 : 0));
-    WatchLine(std::format(L"player 2's controller: req{} | guard latch {} | 540={} 541={} 5E1={} 782={} 25C={} 258={} 774={} | "
-                     L"type {} leader {} ally {} | wait {} pinch {} | 776={} 77C={} 77F={} 787={} | slot 0: P1 {:.3f} "
-                     L"P2 {:.3f} written {:.3f}",
-                     requests, now.guardLatch, b[0], b[1], b[2], b[3], b[4], b[5], b[6], now.storedType, now.members[0],
-                     now.members[1], now.waitFilter, now.pinch, g[0], g[1], g[2], g[3], g_oneSlot, g_twoSlot, g_written));
+    catch (...)
+    {
+    }
 }
 
 void Refused(const wchar_t* why) noexcept

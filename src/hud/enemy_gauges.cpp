@@ -8,6 +8,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/module_pin.h"
+#include "platform/settled_log.h"
 #include "platform/sparse_array.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
@@ -187,9 +188,15 @@ struct TargetGauge
 };
 using TargetGauges = std::array<TargetGauge, 2>;
 
-TargetGauges g_loggedTargets{};
+struct TargetSteady
+{
+    std::int32_t count = -1;
+    TargetGauges gauges{};
+    bool operator==(const TargetSteady&) const = default;
+};
+constexpr std::uint32_t kTargetStillFrames = 30;
+platform::SettledLog<TargetSteady, TargetGauges> g_targetLog(kTargetStillFrames);
 std::int32_t g_loggedMismatches = -1;
-std::int32_t g_loggedTargetCount = -1;
 
 std::int32_t Tenths(float value) noexcept
 {
@@ -581,10 +588,15 @@ bool ReplayPlayerTwo(std::uintptr_t manager, int& replayed, int& targeted)
     {
         std::erase_if(g_offsets, [](const PlayerTwoOffset& offset) { return !offset.seen; });
     }
-    if (targets != g_loggedTargets || targetCount != g_loggedTargetCount)
+    // Which gauges, whose, and whether player 1's offset was kept log at once; the heights and sizes ease
+    // every frame, so they log once they hold.
+    TargetSteady steady{targetCount, targets};
+    for (TargetGauge& gauge : steady.gauges)
     {
-        g_loggedTargets     = targets;
-        g_loggedTargetCount = targetCount;
+        gauge.before = gauge.after = gauge.theirs = gauge.scale = gauge.theirScale = 0;
+    }
+    if (g_targetLog.Offer(steady, targets))
+    {
         std::wstring detail;
         for (std::int32_t i = 0; i < targetCount; ++i)
         {

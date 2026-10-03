@@ -77,6 +77,13 @@ add_library(LocalSplitScreen SHARED
     src/player_two/shoulder_scale.cpp
     src/player_two/walk_limits.cpp
     src/player_two/handover_watch.cpp
+    src/player_two/charapop_watch.cpp
+    src/player_two/charapop_facts.cpp
+    src/player_two/charapop_near.cpp
+    src/player_two/charapop_centre.cpp
+    src/player_two/ride_watch.cpp
+    src/player_two/chocobo_ride.cpp
+    src/player_two/ride_probe.cpp
     src/hud/navimap_watch.cpp
     src/hud/minimap.cpp
     src/player_two/party_warp.cpp
@@ -427,3 +434,17 @@ add_executable(ButtonViewTests
 target_include_directories(ButtonViewTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(ButtonViewTests PRIVATE cxx_std_20)
 add_test(NAME button_view COMMAND ButtonViewTests)
+
+add_executable(SettledLogTests
+    tests/settled_log_test.cpp
+)
+target_include_directories(SettledLogTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(SettledLogTests PRIVATE cxx_std_20)
+add_test(NAME settled_log COMMAND SettledLogTests)
+
+add_executable(CharaPopRuleTests
+    tests/charapop_rule_test.cpp
+)
+target_include_directories(CharaPopRuleTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(CharaPopRuleTests PRIVATE cxx_std_20)
+add_test(NAME charapop_rule COMMAND CharaPopRuleTests)

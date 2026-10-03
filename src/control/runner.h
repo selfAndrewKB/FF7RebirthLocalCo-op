@@ -43,6 +43,8 @@ public:
     virtual Outcome SetBars(bool on)                           = 0;
     virtual Outcome SetSplitFov(float blend)                   = 0;  // negative: native
     virtual Outcome SetHudBand(bool on)                        = 0;
+    virtual Outcome SetNpcCentre(bool on)                      = 0;
+    virtual Outcome SetNpcDetail(std::uint32_t level)          = 0;  // 0 off, 1 reduced, 2 full
     virtual Outcome SetHudProbe(bool on)                       = 0;
     virtual Outcome TraceHud(std::int32_t frames)              = 0;
     virtual Outcome SetHudImage(bool on)                       = 0;

@@ -9,6 +9,7 @@
 // frame cannot recover it.
 
 #include <cstddef>
+#include <cstdint>
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -25,6 +26,29 @@ inline int GuardFilter(unsigned long code) noexcept
     return code == EXCEPTION_STACK_OVERFLOW ? EXCEPTION_CONTINUE_SEARCH : EXCEPTION_EXECUTE_HANDLER;
 }
 
+/// The last exception a CallGuarded on this thread caught.
+struct Fault
+{
+    unsigned long  code   = 0;  // 0: none caught yet
+    std::uintptr_t at     = 0;  // the faulting instruction
+    std::uintptr_t access = 0;  // access violations: 0 read, 1 write, 8 execute
+    std::uintptr_t target = 0;  // access violations: the address touched
+};
+
+/// GuardFilter that first records the exception for LastFault().
+int GuardFilterRecording(const EXCEPTION_POINTERS* info) noexcept;
+
+/// The last exception a CallGuarded on this thread caught (code 0 if none).
+Fault LastFault() noexcept;
+
+/// `fault` for the log: its code, the instruction as an IDA address when it is in the game's image (else its
+/// module and offset) and, for an access violation, the address read, written or executed.
+struct FaultText
+{
+    wchar_t text[192] = {};
+};
+FaultText DescribeFault(const Fault& fault) noexcept;
+
 /// memcpy from memory that may not be readable. False if it faulted.
 bool CopyGuarded(void* out, const void* from, std::size_t length) noexcept;
 
@@ -40,7 +64,7 @@ bool CallGuarded(R (*fn)(P...), R& out, A... args) noexcept
         out = fn(args...);
         return true;
     }
-    __except (GuardFilter(GetExceptionCode()))
+    __except (GuardFilterRecording(GetExceptionInformation()))
     {
         return false;
     }
@@ -55,7 +79,7 @@ bool CallGuarded(void (*fn)(P...), A... args) noexcept
         fn(args...);
         return true;
     }
-    __except (GuardFilter(GetExceptionCode()))
+    __except (GuardFilterRecording(GetExceptionInformation()))
     {
         return false;
     }
