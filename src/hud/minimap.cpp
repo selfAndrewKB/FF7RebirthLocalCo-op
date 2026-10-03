@@ -65,6 +65,17 @@ constexpr std::uintptr_t kLeaderType        = 0x1408070C4;
 constexpr std::uint8_t   kLeaderTypeBytes[] = {0x48, 0x8B, 0x05, 0x15, 0x4C, 0xB9, 0x08, 0x48, 0x85, 0xC0, 0x74,
                                                0x07, 0x8A, 0x80, 0x50, 0x01, 0x00, 0x00, 0xC3, 0xB0, 0x10, 0xC3};
 
+// The holder update's map pieces (RE-p2-minimap-tiles.md §2, §4): a piece in state 2 (shown) is dropped when the run's
+// centre is out of its rectangle + margin + 5 m, asked at 0x140844905 (`lea rdx,[rsp+90h]` = the centre; `mov rcx,rbx`
+// = the piece; only al is read after). The pieces' states are shared, so with one centre per run each player's run
+// dropped the other's pieces (CONFIRMED live: ~17 load/drop cycles a second, the flicker).
+constexpr std::uintptr_t kPieceUnloadCall      = 0x140844905;
+constexpr std::uintptr_t kPieceShouldUnload    = 0x141513F24;  // NaviMapPiece__ShouldUnload_CentreOutOfRectPlus500
+constexpr std::uintptr_t kPieceUnloadArgs      = 0x1408448FA;
+constexpr std::uint8_t   kPieceUnloadArgsBytes[] = {0x48, 0x8D, 0x94, 0x24, 0x90, 0x00, 0x00, 0x00, 0x48, 0x8B, 0xCB};
+constexpr std::uintptr_t kPieceUnloadAfter     = 0x14084490A;
+constexpr std::uint8_t   kPieceUnloadAfterBytes[] = {0x84, 0xC0};
+
 // SEndNaviMapCircle__OnPaint_Pool0's pool-0 block (§8.1): the acquire (rcx renderer, dl 0; its call crosses a
 // 16-byte block, so it is installed from the game thread while that thread is outside the paint), FindOrAdd (rcx
 // slot, rdx the FName value from the static below, r8 rect), and the submit (rcx renderer, dl 0, r8 slot).
@@ -128,6 +139,7 @@ using NewTargetFn    = void* (*)(void* outer);
 using InitFormatFn   = void (*)(void* target, std::uint32_t sizeX, std::uint32_t sizeY, std::uint8_t format,
                               std::uint8_t forceLinearGamma);
 using UpdateNowFn    = void (*)(void* target, std::uint8_t clear);
+using ShouldUnloadFn = bool (*)(const void* piece, const float* centre);
 
 enum class Pass
 {
@@ -146,6 +158,7 @@ platform::CallRedirect g_acquireCall;
 platform::CallRedirect g_findCall;
 platform::CallRedirect g_submitCall;
 platform::CallRedirect g_leaderCall;
+platform::CallRedirect g_unloadCall;  // optional: without it, the pieces thrash as before
 platform::CodeRedirect g_consumeCode;
 bool                   g_installed          = false;
 std::uintptr_t         g_system             = 0;
@@ -190,6 +203,18 @@ int           g_lines         = 0;
 std::atomic<std::uint64_t> g_offThread{0};
 std::uint64_t g_loggedOffThread = 0;
 bool          g_sizeDiffers     = false;
+
+// The map pieces' unload test (game thread): each player's last centre as the holder update passed it (12 bytes from
+// its rdx), so a run can also ask about the other player's. Valid only while player 2's minimap is on.
+struct PieceCounts
+{
+    std::uint64_t asked = 0, dropped = 0, keptForOther = 0;
+};
+float         g_pieceCentre[2][3] = {};  // [0] player 1's (the game's tick and player 1's run), [1] player 2's
+bool          g_pieceCentreKnown[2] = {};
+PieceCounts   g_pieces[2], g_loggedPieces[2];  // by the run asking: [0] player 1's centre, [1] player 2's
+ULONGLONG     g_piecesAt        = 0;
+bool          g_loggedFirstKeep = false;
 
 template <class... A>
 void Line(std::wformat_string<A...> format, A&&... args) noexcept
@@ -261,6 +286,66 @@ std::uint8_t LeaderType() noexcept
         return static_cast<std::uint8_t>(g_answerType);
     }
     return reinterpret_cast<LeaderTypeFn>(g_leaderCall.Original())();
+}
+
+/// The holder update's unload test for a shown map piece: the game's own test, asked for this run's centre and, while
+/// player 2's minimap is on, for the other player's last centre too. A piece is dropped only when it is out of range
+/// of both, so neither player's run drops the pieces the other's map shows. Any other time: the game's answer.
+bool ShouldUnload(const void* piece, const float* centre) noexcept
+{
+    const auto original = reinterpret_cast<ShouldUnloadFn>(g_unloadCall.Original());
+    const bool drop     = original(piece, centre);
+    if (!g_frameActive || centre == nullptr || !generation::OnGameThread())
+    {
+        return drop;
+    }
+    const int run   = g_answerType >= 0 ? 1 : 0;  // the leader answer is set only inside player 2's run
+    const int other = 1 - run;
+    std::memcpy(g_pieceCentre[run], centre, sizeof(g_pieceCentre[run]));
+    g_pieceCentreKnown[run] = true;
+    ++g_pieces[run].asked;
+    if (!drop || !g_pieceCentreKnown[other])
+    {
+        g_pieces[run].dropped += drop ? 1 : 0;
+        return drop;
+    }
+    if (!original(piece, g_pieceCentre[other]))
+    {
+        ++g_pieces[run].keptForOther;
+        if (!g_loggedFirstKeep)
+        {
+            g_loggedFirstKeep = true;
+            Line(L"map pieces: {}'s run kept a piece the other player's map shows ({}; their centre ({:.0f}, {:.0f}))",
+                 run == 1 ? L"player 2" : L"player 1", piece, g_pieceCentre[other][0], g_pieceCentre[other][1]);
+        }
+        return false;
+    }
+    ++g_pieces[run].dropped;
+    return true;
+}
+
+void LogPieces() noexcept
+{
+    const ULONGLONG now = GetTickCount64();
+    if (!g_unloadCall.IsInstalled() || now < g_piecesAt)
+    {
+        return;
+    }
+    g_piecesAt = now + kCountsPeriodMs;
+    PieceCounts d[2];
+    for (int i = 0; i < 2; ++i)
+    {
+        d[i] = {g_pieces[i].asked - g_loggedPieces[i].asked, g_pieces[i].dropped - g_loggedPieces[i].dropped,
+                g_pieces[i].keptForOther - g_loggedPieces[i].keptForOther};
+        g_loggedPieces[i] = g_pieces[i];
+    }
+    if (d[0].asked == 0 && d[1].asked == 0)
+    {
+        return;
+    }
+    Line(L"map pieces since the last line: player 1's centre asked {} times, dropped {}, kept for player 2 {}; player 2's "
+         L"run asked {}, dropped {}, kept for player 1 {}",
+         d[0].asked, d[0].dropped, d[0].keptForOther, d[1].asked, d[1].dropped, d[1].keptForOther);
 }
 
 /// The circle's AcquireLayerSlot: player 2's pass holds its slot; player 1's pass gets it back instead of a second.
@@ -577,6 +662,21 @@ bool Install(const platform::GameImage& image) noexcept
     }
     g_installed = true;
     platform::Log(L"minimap: installed (the acquire redirect follows on the game thread)");
+
+    const auto unloadAt = image.Rebase(kPieceUnloadCall, 5);
+    const auto unload   = image.Rebase(kPieceShouldUnload);
+    const bool pieces   = unloadAt && unload && image.BytesMatch(kPieceUnloadArgs, kPieceUnloadArgsBytes) &&
+                        image.BytesMatch(kPieceUnloadAfter, kPieceUnloadAfterBytes) &&
+                        g_unloadCall.Install(*unloadAt, *unload, reinterpret_cast<std::uintptr_t>(&ShouldUnload));
+    if (pieces)
+    {
+        platform::Log(L"minimap: map pieces are dropped only when out of range of both players' centres");
+    }
+    else
+    {
+        platform::Log(L"minimap: the map pieces' unload test is not what the research read; each run drops the other's "
+                      L"pieces (the maps flicker when the players are apart)");
+    }
     return true;
 }
 
@@ -585,7 +685,7 @@ void Remove() noexcept
     g_frameActive          = false;
     g_fields.playerTwoName = 0;
     bool all = true;
-    for (platform::CallRedirect* call : {&g_leaderCall, &g_findCall, &g_submitCall})
+    for (platform::CallRedirect* call : {&g_leaderCall, &g_findCall, &g_submitCall, &g_unloadCall})
     {
         all = (!call->IsInstalled() || call->Restore()) && all;
     }
@@ -632,12 +732,17 @@ void Tick(bool splitShown) noexcept
     }
     const wchar_t* why = WhyNot(splitShown, slate);
     g_frameActive      = why == nullptr;
+    if (!g_frameActive)
+    {
+        g_pieceCentreKnown[0] = g_pieceCentreKnown[1] = false;  // a later split starts from fresh centres
+    }
     if (why != g_lastWhy)
     {
         g_lastWhy = why;
         Line(L"{}", why == nullptr ? L"on" : why);
     }
     LogCounts();
+    LogPieces();
 }
 
 void RunHolder(bool playerTwo) noexcept
