@@ -19,13 +19,17 @@
 //     buffers, the latch, the press/execute tick), then the selection update;
 //   - with player 2's controller first in the world's controller list for each visibility request the pass
 //     makes: the request's screen test projects the point through "the first local player" (§12.13), so the
-//     offer follows player 2's own screen, not player 1's.
+//     offer follows player 2's own screen, not player 1's;
+//   - with each point's marker widget (+0x78) swapped too, on every live point, player 2's kept by point key
+//     (§12.15): the game's own marker code makes, drives and sweeps player 2's own widget in the pass, so the
+//     two players no longer write one widget's state in turn. Player 2's widgets the game would not destroy
+//     (point gone between passes, field exit, player 2 leaving) go through its own destroy call.
 // Selection, traces, rows, markers, the look-at, the press and the grant are all the game's. The one global
 // byte the press tick writes (root+0x210 -> +8) is put back after. The game's field enter/exit resets run
 // on player 2's copy too, and its field-exit clear runs on it when player 2 leaves.
 //
-// Logged: the scopes or gates that stopped a pass (counted), player 2's slot targets on change, a status
-// line once a minute. Game thread only.
+// Logged: the scopes or gates that stopped a pass (counted), player 2's slot targets and marker widgets on
+// change, each widget the mod destroys, a status line once a minute. Game thread only.
 
 #include <array>
 #include <cstdint>
@@ -57,5 +61,10 @@ void NoteMarked(std::uint64_t key) noexcept;
 /// controller as the primary one, so the item-get rumble plays on pad 2 (the only player read in the grant,
 /// RE-p2-field-interact.md §12.12 item 5).
 bool TakeMarked(std::uint64_t key) noexcept;
+
+/// Whose point marker widget is (a UFieldTargetWidget at a point's +0x78), as of player 2's last pass: 0
+/// player 1's, 1 player 2's, -1 neither (another owner's marker, or player 2 has no copy). For
+/// hud/field_markers, which shows each half only its own player's.
+int MarkerOwner(const void* widget) noexcept;
 
 }  // namespace lss::player_two::field_pickup

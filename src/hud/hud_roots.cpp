@@ -52,6 +52,8 @@ constexpr std::int32_t kNoOffset  = -1;
 // Game thread.
 std::vector<Root> g_roots;
 std::vector<char> g_swapped;  // per root: given player 2's context this frame (put back after)
+std::vector<char> g_selfPlacing;  // per root: shows or collapses itself in each run (marked per frame)
+std::size_t       g_hiddenSwapped = 0;  // self-placing roots given player 2's context while collapsed, this frame
 PlayerContext     g_contexts[2];
 Root              g_gameInstance;  // found once: FindFirstOf walks every UObject
 std::int32_t      g_slotOffset       = kNoOffset;  // UWidget::Slot and UWidget::Visibility, found once
@@ -182,6 +184,7 @@ bool Scan(UObject* playerOne, UObject* playerTwo)
         }
     }
     g_swapped.assign(g_roots.size(), 0);
+    g_selfPlacing.assign(g_roots.size(), 0);
     g_contexts[0] = {player_two::primary_controller::WeakValueOf(playerOne), world};
     g_contexts[1] = {player_two::primary_controller::WeakValueOf(playerTwo), world};
     return world != 0 && g_contexts[0].localPlayer != 0 && g_contexts[1].localPlayer != 0;
@@ -197,22 +200,44 @@ void Adopt(UObject* widget)
     }
     g_roots.push_back({widget, static_cast<std::int32_t>(widget->GetInternalIndex()), widget->GetClassPrivate()});
     g_swapped.push_back(0);
+    g_selfPlacing.push_back(0);
+}
+
+bool AdoptSelfPlacing(UObject* widget)
+{
+    Adopt(widget);
+    for (std::size_t i = 0; widget != nullptr && i < g_roots.size() && i < g_selfPlacing.size(); ++i)
+    {
+        if (g_roots[i].object == widget)
+        {
+            g_selfPlacing[i] = 1;
+            return true;
+        }
+    }
+    return false;
 }
 
 bool SetContexts(int player) noexcept
 {
     // Player 2's context goes only to roots that are shown this frame (a hidden root is neither
-    // ticked nor painted); player 1's goes back to exactly those.
+    // ticked nor painted), and to the self-placing ones whatever their visibility (their run shows
+    // or collapses them from the context's own projection); player 1's goes back to exactly those.
     const bool           toTwo   = player != 0;
     const PlayerContext& context = g_contexts[toTwo ? 1 : 0];
     bool                 all     = true;
-    for (std::size_t i = 0; i < g_roots.size() && i < g_swapped.size(); ++i)
+    if (toTwo)
     {
-        const Root& root = g_roots[i];
-        if (toTwo ? !Shown(root) : g_swapped[i] == 0)
+        g_hiddenSwapped = 0;
+    }
+    for (std::size_t i = 0; i < g_roots.size() && i < g_swapped.size() && i < g_selfPlacing.size(); ++i)
+    {
+        const Root& root  = g_roots[i];
+        const bool  shown = !toTwo || Shown(root);
+        if (toTwo ? !shown && g_selfPlacing[i] == 0 : g_swapped[i] == 0)
         {
             continue;
         }
+        g_hiddenSwapped += toTwo && !shown ? 1 : 0;
         g_swapped[i] = toTwo ? 1 : 0;
         if (user_widgets::Alive(root) && !SetContextGuarded(root.object, context))
         {
@@ -223,12 +248,21 @@ bool SetContexts(int player) noexcept
             }
         }
     }
+    if (!toTwo)
+    {
+        std::fill(g_selfPlacing.begin(), g_selfPlacing.end(), char{0});  // marked again each frame
+    }
     return all;
 }
 
 std::size_t Count() noexcept
 {
     return g_roots.size();
+}
+
+std::size_t HiddenSwapped() noexcept
+{
+    return g_hiddenSwapped;
 }
 
 }  // namespace lss::hud::hud_roots

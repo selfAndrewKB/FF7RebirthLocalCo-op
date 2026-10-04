@@ -13,6 +13,7 @@
 #include "hud/minimap_once.h"
 #include "hud/minimap.h"
 #include "hud/player_two_pass.h"
+#include "hud/field_markers.h"
 #include "hud/prompt_rows.h"
 #include "platform/call_redirect.h"
 #include "platform/code_redirect.h"
@@ -382,6 +383,7 @@ void BeginOverlayRender(bool splitShown) noexcept
         std::memcpy(reinterpret_cast<void*>(g_deltaTime), &still, sizeof(still));
         g_pass              = Pass::PlayerTwo;
         prompt_rows::ShowOnly(1);                 // player 2's prompt rows only (hud/prompt_rows.h)
+        field_markers::ShowOnly(1);               // and player 2's point markers (hud/field_markers.h)
         player_two::command_menu_two::ShowOnly(1);  // in battle, player 2's command menu in player 2's image
         target_views::BeforePass(1);  // player 1's cursor and gauges collapsed before player 2's updates read them
         const bool content  = EnterPlayerTwo();  // player 2's levers and updates (hud/player_two_pass.h)
@@ -412,6 +414,7 @@ void BeginOverlayRender(bool splitShown) noexcept
         }
         area_icons_two::ShowOnly(0);
         prompt_rows::ShowOnly(0);  // player 1's rows for player 1's pass
+        field_markers::ShowOnly(0);  // and player 1's point markers
         player_two::command_menu_two::ShowOnly(0);  // and player 1's command menu
         std::memcpy(reinterpret_cast<void*>(g_deltaTime), &deltaTime, sizeof(deltaTime));
     }

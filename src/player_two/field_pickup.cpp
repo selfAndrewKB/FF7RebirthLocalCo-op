@@ -5,6 +5,7 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/sparse_array.h"
 #include "platform/verified_code.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
@@ -106,6 +107,7 @@ constexpr std::uint32_t kPointKey       = 0x0C;   // FName
 constexpr std::uint32_t kPointFlags     = 0x104;  // u8
 constexpr std::uint8_t  kTargetBits     = 0x06;   // bit 1 slot target, bit 2 runner-up: carried per player (§12.3)
 constexpr std::uint8_t  kDisabledBit    = 0x10;   // the game's "point disabled": the candidate query skips it
+constexpr std::uint32_t kPointMarker    = 0x78;   // UFieldTargetWidget*, the point's marker: carried per player (§12.15)
 
 // WorldItemMgr's map of items (§10.5): a stock TMap, 0xD0-byte elements, the key FName at +0.
 constexpr std::uint32_t kItemElements   = 0x90;
@@ -173,6 +175,14 @@ constexpr std::size_t    kRequestFirst   = 5;
 constexpr std::uint32_t  kObjectOuter      = 0x20;
 constexpr std::uint32_t  kWorldControllers = 0x1F0;
 constexpr std::uint32_t  kWorldControllerCount = 0x1F8;
+// The marker list (§12.14): EndUISystem+0x98 points to a TSparseArray of 140-byte elements, the marker's weak widget
+// at +0x00. The game's destroy (§12.15), the call RemovePointByKey makes: it finds the element by the widget, releases
+// its parts, pools the Slate widget and removes the element, at once. Entry: push rbx; mov eax,20h; call (stack probe).
+constexpr std::uint32_t kMarkerList     = 0x98;
+constexpr std::uint32_t kMarkerEntry    = 140;
+constexpr std::uint8_t  kDestroyBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8,
+                                           0x28, 0xFD, 0xEE, 0x00, 0x48, 0x2B, 0xE0, 0x48};
+constexpr platform::FunctionFact kDestroy{L"FieldTargetMarker_Destroy", 0x1411BF1FC, kDestroyBytes};
 
 using TestFlagFn  = std::uint8_t (*)(std::uint8_t bit);
 using ModeClassFn = std::uint8_t (*)();
@@ -183,6 +193,7 @@ using PollFn      = void (*)(void* mgr, std::uint8_t* held, std::uint8_t* presse
 using TickFn      = void (*)(void* mgr, float dt);
 using ResetFn     = void (*)(void* mgr);
 using RequestFn   = std::uint64_t (*)(void* system, void* record);  // the handle in eax
+using DestroyFn   = void (*)(void* widget);
 
 constexpr auto kStatusEvery = std::chrono::seconds(60);
 
@@ -192,6 +203,27 @@ enum Skip : int
     kSkipScopes,  // a scope did not hold
     kSkipMember,  // player 2's member or its type could not be read
     kSkipCount
+};
+
+/// Why the mod hands a marker widget to the game's destroy (logged with it).
+enum Why : int
+{
+    kWhyPointLeft,      // player 2's: its point left the live list between passes
+    kWhyRemovedInPass,  // player 1's: its point was removed during player 2's pass (the removal destroyed player 2's)
+    kWhySecond,         // player 2's: a second widget for one key
+    kWhyNoWeak,         // player 2's: no weak value could be made for it, so it could not be kept
+    kWhyFieldExit,      // player 2's: the field-exit reset
+    kWhyLeft,           // player 2's: player 2 left (or a new manager)
+    kWhyStopped,        // player 2's: player 2's pass stopped
+};
+constexpr const wchar_t* kWhyText[] = {
+    L"player 2's, its point left",
+    L"player 1's, its point was removed during player 2's pass",
+    L"player 2's, a second widget for one point",
+    L"player 2's, no weak value could be made for it",
+    L"player 2's, field exit",
+    L"player 2's, player 2 left",
+    L"player 2's, player 2's pass stopped",
 };
 
 std::uintptr_t g_root        = 0;  // live address of the root global
@@ -209,6 +241,7 @@ TickFn         g_tickSlots   = nullptr;
 TickFn         g_update      = nullptr;
 ResetFn        g_fieldEnter  = nullptr;
 ResetFn        g_fieldExit   = nullptr;
+DestroyFn      g_destroy     = nullptr;  // null: the markers stay shared (no per-player widgets)
 platform::CallRedirect g_enterCall;
 platform::CallRedirect g_exitCall;
 platform::EntryRedirect g_request;
@@ -226,10 +259,34 @@ struct Saved
     std::uint64_t key;       // the point's key then: a pool node reused during the pass is another point
     std::uint8_t  oneBits;   // player 1's target bits
     bool          disabled;  // the pass set the disabled bit
+    std::uintptr_t oneMarker;  // player 1's marker widget
+    bool          matched;   // found again after the pass (same node, same key)
+};
+struct TwoMarker
+{
+    std::uintptr_t widget;
+    std::uint64_t  weak;    // its FWeakObjectPtr value: put back in only while it still names the widget
+    bool           placed;  // put back in a point this pass
+};
+struct Doomed
+{
+    std::uintptr_t widget;
+    std::uint64_t  weak;  // 0: not checked: a widget read from a point in this pass and held only by the mod since,
+                          // so nothing can have freed and reused its address before DestroyDoomed (same frame)
+    std::uint64_t  key;
+    Why            why;
 };
 std::vector<Saved>                                  g_saved;    // reserved: nothing allocates under the game's lock
 std::vector<std::pair<std::uint64_t, std::uint8_t>> g_twoNow;   // scratch, reserved
 std::vector<std::uint64_t>                          g_marked;   // WorldItem keys player 2's pass marked, until granted
+std::unordered_map<std::uint64_t, TwoMarker>        g_twoMarkers;      // player 2's marker widgets, by point key
+std::unordered_map<std::uint64_t, TwoMarker>        g_twoMarkersNext;  // scratch: the map After builds
+std::vector<std::pair<std::uint64_t, std::uintptr_t>> g_twoMarkersNow; // scratch, reserved
+std::vector<Doomed>                                 g_doomed;          // for the game's destroy after the walk, reserved
+std::vector<std::uintptr_t>                         g_oneMarkers;      // sorted: player 1's point markers after the pass
+std::vector<std::uintptr_t>                         g_twoShown;        // sorted: player 2's
+std::vector<std::uint64_t>                          g_markerKeys;      // scratch: player 2's marker keys, sorted
+std::vector<std::uint64_t>                          g_markerKeysLogged;
 std::array<std::uint64_t, kSlots>                   g_targetsLogged{};
 int                                                 g_hashChecked    = 0;
 int                                                 g_hashMismatches = 0;
@@ -240,6 +297,7 @@ struct Counts
 {
     std::uint32_t passes = 0, polled = 0, filtered = 0, worldItems = 0, executed = 0, fieldResets = 0;
     std::uint32_t requests = 0, requestsAsTwo = 0;  // visibility requests in the pass; those with player 2 first
+    std::uint32_t markersMade = 0, markersGone = 0, markersDestroyed = 0;  // player 2's made; gone by the game; the mod's
     std::array<std::uint32_t, kSkipCount> skips{};
     bool operator==(const Counts&) const = default;
 };
@@ -417,17 +475,26 @@ std::uint64_t RequestVisibility(void* system, void* record) noexcept
     return original(system, record);
 }
 
-/// Runs a game function on player 2's copy: swapped in, the shared field-enter flag showing `flagSeen` (the value
-/// the game's own call saw) and put back after. False if it faulted.
+void Before(void* mgr, const std::uint8_t* items, bool filter) noexcept;
+void After(void* mgr) noexcept;
+void DestroyDoomed() noexcept;
+void DestroyAllTwo(Why why) noexcept;
+
+/// Runs a game function on player 2's copy: swapped in with each point's carried bits and marker widget (the resets
+/// read the candidates' widgets, §12.15), the shared field-enter flag showing `flagSeen` (the value the game's own call
+/// saw), and all put back after. False if it faulted.
 bool OnCopy(void* mgr, ResetFn reset, std::uint8_t flagSeen) noexcept
 {
     auto* flag = static_cast<std::uint8_t*>(mgr) + kFieldEnterFlag;
     const std::uint8_t after = *flag;
     Exchange(mgr);
+    Before(mgr, nullptr, false);
     *flag         = flagSeen;
     const bool ok = platform::CallGuarded(reset, mgr);
     *flag         = after;
+    After(mgr);
     Exchange(mgr);
+    DestroyDoomed();
     return ok;
 }
 
@@ -443,6 +510,8 @@ void Break(const wchar_t* what) noexcept
     catch (...)
     {
     }
+    DestroyAllTwo(kWhyStopped);
+    g_oneMarkers.clear();  // the halves show every marker again
 }
 
 /// Player 2's copy as the game's constructor and field-enter reset leave a block.
@@ -460,6 +529,9 @@ void FreshCopy(void* mgr) noexcept
     g_twoBits.clear();
     g_marked.clear();
     g_targetsLogged.fill(0);
+    g_twoMarkers.clear();  // none: the last copy's went with it (DropCopy)
+    g_twoShown.clear();
+    g_oneMarkers.clear();
     // The reset writes the default slot locations itself (its source vector is not constant).
     if (!OnCopy(mgr, g_fieldEnter, 0))
     {
@@ -467,16 +539,19 @@ void FreshCopy(void* mgr) noexcept
     }
 }
 
-/// Drops player 2's copy; its rows go the game's way (the field-exit clear) when `clear`.
+/// Drops player 2's copy; its rows go the game's way (the field-exit clear) when `clear`, and its marker widgets
+/// through the game's destroy (only those still in the marker list: after a new manager, the old points are gone).
 void DropCopy(bool clear) noexcept
 {
     if (g_copyOf != nullptr && clear && !g_broken && !OnCopy(g_copyOf, g_fieldExit, Read<std::uint8_t>(g_copyOf, kFieldEnterFlag)))
     {
         Break(L"the field-exit clear of player 2's copy");
     }
+    DestroyAllTwo(kWhyLeft);
     g_copyOf = nullptr;
     g_twoBits.clear();
     g_marked.clear();
+    g_oneMarkers.clear();
 }
 
 /// Whether `key` is in WorldItemMgr's map, by the map's own hash (§10.5). The first lookups are also checked
@@ -553,36 +628,167 @@ bool IsWorldItem(const std::uint8_t* items, std::uint64_t key) noexcept
     return found;
 }
 
-/// Before the calls: each point's target bits become player 2's, and every point that is not a WorldItem gets the
-/// disabled bit (only where it is clear). Player 1's bits are kept for After.
-void Before(void* mgr, const std::uint8_t* items) noexcept
+/// Whether `widget` is a marker in the game's marker list now (an element's weak +0x00 names it).
+bool InMarkerList(std::uintptr_t widget) noexcept
 {
-    g_saved.clear();
-    const SharedLock lock(mgr);
-    const auto*      node = PointerAt(mgr, kPointList);
-    for (int n = 0; node != nullptr && n < kMaxPoints; ++n, node = PointerAt(node, kNodeNext))
+    const auto list  = reinterpret_cast<std::uintptr_t>(PointerAt(reinterpret_cast<const void*>(g_uiSystem), kMarkerList));
+    bool       found = false;
+    platform::ForEachSparseElement(list, kMarkerEntry, [widget, &found](std::uintptr_t entry) noexcept {
+        found = reinterpret_cast<std::uintptr_t>(leader_scope::ObjectAt(reinterpret_cast<const void*>(entry))) == widget;
+        return !found;
+    });
+    return found;
+}
+
+void Doom(std::uintptr_t widget, std::uint64_t weak, std::uint64_t key, Why why) noexcept
+{
+    try
     {
-        auto*          point = const_cast<std::uint8_t*>(node) + kNodePoint;
-        const auto     key   = Read<std::uint64_t>(point, kPointKey);
-        std::uint8_t   flags = point[kPointFlags];
-        const auto     two   = g_twoBits.find(key);
-        const bool     worldItem = IsWorldItem(items, key);
-        const bool     disable   = !worldItem && (flags & kDisabledBit) == 0;
-        g_saved.push_back({point, key, static_cast<std::uint8_t>(flags & kTargetBits), disable});
-        g_counts.worldItems += worldItem ? 1 : 0;
-        g_counts.filtered += disable ? 1 : 0;
-        flags = static_cast<std::uint8_t>((flags & ~kTargetBits) | (two != g_twoBits.end() ? two->second : 0) |
-                                          (disable ? kDisabledBit : 0));
-        point[kPointFlags] = flags;
+        g_doomed.push_back({widget, weak, key, why});
+    }
+    catch (...)
+    {
     }
 }
 
-/// After the calls: player 2's target bits are kept by key, player 1's put back, and the disabled bits the pass set
-/// cleared. A point registered during the pass gets no target bits for player 1.
+/// The game's own destroy for each doomed widget still in the marker list (so never one the game destroyed already)
+/// and, when its weak value is known, still that object. Each logged. Outside the point lock.
+void DestroyDoomed() noexcept
+{
+    for (const Doomed& doomed : g_doomed)
+    {
+        const bool live = (doomed.weak == 0 || leader_scope::StillNames(doomed.weak, reinterpret_cast<const void*>(doomed.widget))) &&
+                          InMarkerList(doomed.widget);
+        const bool done = live && platform::CallGuarded(g_destroy, reinterpret_cast<void*>(doomed.widget));
+        g_counts.markersDestroyed += done ? 1 : 0;
+        try
+        {
+            platform::Log(L"field pickup: the marker widget of {} ({}) {}", Name(doomed.key), kWhyText[doomed.why],
+                          done   ? L"destroyed by the game's own call"
+                          : live ? L"NOT destroyed: the game's call raised an exception"
+                                 : L"was gone already");
+        }
+        catch (...)
+        {
+        }
+    }
+    g_doomed.clear();
+}
+
+/// Player 2's marker widgets as the pass left them in the points, kept by key (with a weak value, made once per
+/// widget); made and game-destroyed ones counted. May throw (the map); the caller then drops them all.
+void KeepTwoMarkers()
+{
+    g_twoMarkersNext.clear();
+    for (const auto& [key, widget] : g_twoMarkersNow)
+    {
+        const auto before = g_twoMarkers.find(key);
+        const bool same   = before != g_twoMarkers.end() && before->second.widget == widget;
+        const auto weak   = same ? before->second.weak : leader_scope::WeakOf(reinterpret_cast<void*>(widget));
+        if (weak == 0)
+        {
+            Doom(widget, 0, key, kWhyNoWeak);
+            continue;
+        }
+        const auto [at, added] = g_twoMarkersNext.try_emplace(key, TwoMarker{widget, weak, false});
+        if (!added)
+        {
+            if (at->second.widget != widget)
+            {
+                Doom(widget, weak, key, kWhySecond);
+            }
+            continue;
+        }
+        g_counts.markersMade += same ? 0 : 1;
+    }
+    for (const auto& [key, marker] : g_twoMarkers)
+    {
+        // A widget that left its point inside the pass is the game's to account for: the sweep or a removal destroyed it.
+        const auto now = g_twoMarkersNext.find(key);
+        g_counts.markersGone += marker.placed && (now == g_twoMarkersNext.end() || now->second.widget != marker.widget) ? 1 : 0;
+    }
+    g_twoMarkers.swap(g_twoMarkersNext);
+    g_twoShown.clear();
+    for (const auto& [key, marker] : g_twoMarkers)
+    {
+        g_twoShown.push_back(marker.widget);
+    }
+    std::sort(g_twoShown.begin(), g_twoShown.end());
+}
+
+/// Every one of player 2's marker widgets to the game's destroy (none of the game's code would destroy them).
+void DestroyAllTwo(Why why) noexcept
+{
+    for (const auto& [key, marker] : g_twoMarkers)
+    {
+        Doom(marker.widget, marker.weak, key, why);
+    }
+    g_twoMarkers.clear();
+    g_twoShown.clear();
+    DestroyDoomed();
+}
+
+/// Before the calls: each point's target bits and marker widget become player 2's (on every live point: the far-marker
+/// sweep walks them all, §12.15). With `filter`, every point that is not a WorldItem gets the disabled bit (only where
+/// it is clear). Player 1's are kept for After. Player 2's widgets whose point left since are doomed.
+void Before(void* mgr, const std::uint8_t* items, bool filter) noexcept
+{
+    g_saved.clear();
+    for (auto& [key, marker] : g_twoMarkers)
+    {
+        marker.placed = false;
+    }
+    {
+        const SharedLock lock(mgr);
+        const auto*      node = PointerAt(mgr, kPointList);
+        for (int n = 0; node != nullptr && n < kMaxPoints; ++n, node = PointerAt(node, kNodeNext))
+        {
+            auto*          point = const_cast<std::uint8_t*>(node) + kNodePoint;
+            const auto     key   = Read<std::uint64_t>(point, kPointKey);
+            std::uint8_t   flags = point[kPointFlags];
+            const auto     two   = g_twoBits.find(key);
+            const bool     worldItem = filter && IsWorldItem(items, key);
+            const bool     disable   = filter && !worldItem && (flags & kDisabledBit) == 0;
+            std::uintptr_t oneMarker = 0;
+            std::uintptr_t twoMarker = 0;
+            if (g_destroy != nullptr)
+            {
+                std::memcpy(&oneMarker, point + kPointMarker, sizeof(oneMarker));
+                if (const auto mine = g_twoMarkers.find(key); mine != g_twoMarkers.end() && !mine->second.placed)
+                {
+                    mine->second.placed = true;
+                    twoMarker = leader_scope::StillNames(mine->second.weak, reinterpret_cast<const void*>(mine->second.widget))
+                                    ? mine->second.widget
+                                    : 0;
+                }
+                std::memcpy(point + kPointMarker, &twoMarker, sizeof(twoMarker));
+            }
+            g_saved.push_back({point, key, static_cast<std::uint8_t>(flags & kTargetBits), disable, oneMarker, false});
+            g_counts.worldItems += worldItem ? 1 : 0;
+            g_counts.filtered += disable ? 1 : 0;
+            flags = static_cast<std::uint8_t>((flags & ~kTargetBits) | (two != g_twoBits.end() ? two->second : 0) |
+                                              (disable ? kDisabledBit : 0));
+            point[kPointFlags] = flags;
+        }
+    }
+    for (const auto& [key, marker] : g_twoMarkers)
+    {
+        if (!marker.placed)
+        {
+            Doom(marker.widget, marker.weak, key, kWhyPointLeft);
+        }
+    }
+}
+
+/// After the calls: player 2's target bits and marker widgets are kept by key, player 1's put back, and the disabled
+/// bits the pass set cleared. A point registered during the pass gets no target bits and no marker for player 1; player
+/// 1's widget of a point removed during the pass is doomed (the removal destroyed the widget in place, player 2's).
 void After(void* mgr) noexcept
 {
     std::sort(g_saved.begin(), g_saved.end(), [](const Saved& a, const Saved& b) { return a.point < b.point; });
     g_twoNow.clear();
+    g_twoMarkersNow.clear();
+    g_oneMarkers.clear();
     {
         const SharedLock lock(mgr);
         const auto*      node = PointerAt(mgr, kPointList);
@@ -604,8 +810,35 @@ void After(void* mgr) noexcept
                 flags = static_cast<std::uint8_t>(flags & ~kDisabledBit);
             }
             point[kPointFlags] = flags;
+            if (known)
+            {
+                saved->matched = true;
+            }
+            if (g_destroy != nullptr)
+            {
+                std::uintptr_t twoMarker = 0;
+                std::memcpy(&twoMarker, point + kPointMarker, sizeof(twoMarker));
+                if (twoMarker != 0)
+                {
+                    g_twoMarkersNow.emplace_back(key, twoMarker);
+                }
+                const std::uintptr_t oneMarker = known ? saved->oneMarker : 0;
+                std::memcpy(point + kPointMarker, &oneMarker, sizeof(oneMarker));
+                if (oneMarker != 0)
+                {
+                    g_oneMarkers.push_back(oneMarker);
+                }
+            }
         }
     }
+    for (const Saved& saved : g_saved)
+    {
+        if (!saved.matched && saved.oneMarker != 0)
+        {
+            Doom(saved.oneMarker, 0, saved.key, kWhyRemovedInPass);
+        }
+    }
+    std::sort(g_oneMarkers.begin(), g_oneMarkers.end());
     try
     {
         g_twoBits.clear();
@@ -617,6 +850,47 @@ void After(void* mgr) noexcept
     catch (...)
     {
         g_twoBits.clear();  // player 2's carried targets start over; the game is left as it was
+    }
+    try
+    {
+        KeepTwoMarkers();
+    }
+    catch (...)
+    {
+        // Player 2's widgets as the pass left them, all to the game's destroy: none is lost in the list.
+        for (const auto& [key, widget] : g_twoMarkersNow)
+        {
+            Doom(widget, 0, key, kWhyStopped);
+        }
+        g_twoMarkers.clear();
+        g_twoShown.clear();
+    }
+}
+
+void LogMarkers() noexcept
+{
+    try
+    {
+        g_markerKeys.clear();
+        for (const auto& [key, marker] : g_twoMarkers)
+        {
+            g_markerKeys.push_back(key);
+        }
+        std::sort(g_markerKeys.begin(), g_markerKeys.end());
+        if (g_markerKeys == g_markerKeysLogged)
+        {
+            return;
+        }
+        g_markerKeysLogged = g_markerKeys;
+        std::wstring names;
+        for (const std::uint64_t key : g_markerKeys)
+        {
+            names += std::format(L"{}{}", names.empty() ? L"" : L", ", Name(key));
+        }
+        platform::Log(L"field pickup: player 2's own marker widgets: {}", names.empty() ? L"none" : names);
+    }
+    catch (...)
+    {
     }
 }
 
@@ -753,13 +1027,16 @@ void LogStatus() noexcept
         platform::Log(L"field pickup (60 s): {} pass(es) (poll open in {}), {} pickup(s) by player 2, {} field reset(s) "
                       L"of player 2's copy; {} visibility request(s), {} with player 2 as the first local player; per "
                       L"pass on average {} WorldItem point(s) left open, {} other point(s) disabled for the pass; "
-                      L"skipped: scopes {}, member {}; WorldItem lookup by {} ({} checked, {} mismatch(es))",
+                      L"skipped: scopes {}, member {}; WorldItem lookup by {} ({} checked, {} mismatch(es)); player 2's "
+                      L"marker widgets: {} now, {} made and {} destroyed by the game's own code, {} by the mod's call of "
+                      L"its destroy; player 1's point markers now {}",
                       g_counts.passes, g_counts.polled, g_counts.executed, g_counts.fieldResets, g_counts.requests,
                       g_counts.requestsAsTwo,
                       g_counts.passes != 0 ? g_counts.worldItems / g_counts.passes : 0,
                       g_counts.passes != 0 ? g_counts.filtered / g_counts.passes : 0, g_counts.skips[kSkipScopes],
                       g_counts.skips[kSkipMember], g_hashTrusted ? L"the map's hash" : L"a walk of the map", g_hashChecked,
-                      g_hashMismatches);
+                      g_hashMismatches, g_twoMarkers.size(), g_counts.markersMade, g_counts.markersGone,
+                      g_counts.markersDestroyed, g_oneMarkers.size());
     }
     catch (...)
     {
@@ -798,18 +1075,20 @@ void Pass(void* mgr, float dt) noexcept
     ++g_counts.passes;
     g_inPass = true;
     Exchange(mgr);
-    Before(mgr, items);
+    Before(mgr, items, true);
     const bool input  = InputStep(mgr, root, dt);
     const bool update = input && platform::CallGuarded(g_update, mgr, dt);
     After(mgr);
     Exchange(mgr);
     g_inPass = false;
+    DestroyDoomed();
     if (!input || !update)
     {
         Break(input ? L"player 2's selection update" : L"player 2's prompt input step");
         return;
     }
     LogTargets();
+    LogMarkers();
 }
 
 /// The game's field enter/exit reset ran on the live block: the same on player 2's copy, then its latches zeroed
@@ -833,6 +1112,11 @@ void AfterFieldReset(void* mgr, ResetFn reset, std::uint8_t flagSeen) noexcept
     PutInCopy<std::uint8_t>(kReExecuted, 0);
     g_twoBits.clear();
     g_marked.clear();
+    if (reset == g_fieldExit)
+    {
+        // The field's points are removed by their owners, whose removal destroys only the widget in place (player 1's).
+        DestroyAllTwo(kWhyFieldExit);
+    }
     ++g_counts.fieldResets;
 }
 
@@ -873,6 +1157,7 @@ void Install(const platform::GameImage& image) noexcept
     g_update     = reinterpret_cast<TickFn>(find(kUpdate));
     g_fieldEnter = reinterpret_cast<ResetFn>(find(kFieldEnter));
     g_fieldExit  = reinterpret_cast<ResetFn>(find(kFieldExit));
+    g_destroy    = reinterpret_cast<DestroyFn>(find(kDestroy));  // optional: without it the markers stay shared
     const bool functions = g_testFlag && g_modeClass && g_uiEntry && g_isHeld && g_copyKey && g_pollSlot0 && g_poll8 &&
                            g_latch && g_tickSlots && g_update && g_fieldEnter && g_fieldExit;
     const auto call = [&image](platform::CallRedirect& redirect, std::uintptr_t site, const platform::FunctionFact& target,
@@ -889,6 +1174,9 @@ void Install(const platform::GameImage& image) noexcept
         g_pauseKey = *pause;
         g_saved.reserve(kMaxPoints);
         g_twoNow.reserve(kMaxPoints);
+        g_twoMarkersNow.reserve(kMaxPoints);
+        g_oneMarkers.reserve(kMaxPoints);
+        g_doomed.reserve(3 * kMaxPoints);  // Before's, After's and KeepTwoMarkers' each at most one per point
         resets = call(g_enterCall, kFieldEnterCall, kFieldEnter, reinterpret_cast<std::uintptr_t>(&FieldEnter)) &&
                  call(g_exitCall, kFieldExitCall, kFieldExit, reinterpret_cast<std::uintptr_t>(&FieldExit));
         if (!resets)
@@ -905,13 +1193,16 @@ void Install(const platform::GameImage& image) noexcept
                  g_request.Install(*at, std::span<const std::uint8_t>(kRequestBytes).first(kRequestFirst),
                                    reinterpret_cast<std::uintptr_t>(&RequestVisibility));
     }
-    platform::Log(L"field pickup: {}; the screen test {}",
+    platform::Log(L"field pickup: {}; the screen test {}; marker widgets {}",
                   g_ready ? L"ready (player 2 picks up collectibles and materials through the game's own field prompts, a "
                             L"second pass of its selection and press)"
                           : L"UNAVAILABLE (a check failed: the root, the UI system, a function or a field reset's call site)",
                   screen ? L"sees player 2's view in player 2's pass"
                          : L"is NOT redirected (the request's entry is not what the research read): player 2's offers follow "
-                           L"player 1's screen");
+                           L"player 1's screen",
+                  g_destroy != nullptr ? L"per player (each point's widget swapped too; player 2's destroyed by the game's own call)"
+                                       : L"SHARED (the game's destroy is not what the research read): both players write one "
+                                         L"widget per point");
 }
 
 void AfterUpdate(void* mgr, float dt) noexcept
@@ -975,6 +1266,18 @@ void NoteMarked(std::uint64_t key) noexcept
     catch (...)
     {
     }
+}
+
+int MarkerOwner(const void* widget) noexcept
+{
+    const auto at = reinterpret_cast<std::uintptr_t>(widget);
+    if (g_copyOf == nullptr || at == 0)
+    {
+        return -1;
+    }
+    return std::binary_search(g_twoShown.begin(), g_twoShown.end(), at)       ? 1
+           : std::binary_search(g_oneMarkers.begin(), g_oneMarkers.end(), at) ? 0
+                                                                              : -1;
 }
 
 bool TakeMarked(std::uint64_t key) noexcept

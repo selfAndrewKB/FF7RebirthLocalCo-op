@@ -34,6 +34,7 @@ add_library(LocalSplitScreen SHARED
     src/hud/minimap_once.cpp
     src/hud/player_two_pass.cpp
     src/hud/prompt_rows.cpp
+    src/hud/field_markers.cpp
     src/hud/action_icon_base.cpp
     src/hud/area_icons_two.cpp
     src/hud/target_views.cpp

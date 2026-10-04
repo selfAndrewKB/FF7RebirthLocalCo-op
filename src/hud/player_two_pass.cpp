@@ -50,6 +50,11 @@ constexpr std::uintptr_t kEndUISystem       = 0x1493496E0;
 constexpr std::uint32_t  kAbilityNames      = 0x180;
 constexpr std::uint32_t  kAbilityNameEntry  = 0x48;
 constexpr std::uint32_t  kAbilityNameWidget = 0x8;
+// The field-target markers (RE-p2-field-interact.md §12.14): EndUISystem+0x98 points to a TSparseArray of 140-byte
+// elements; weak widgets at +0x00 (projected), +0x28 (placed at the point), +0x30 (animated).
+constexpr std::uint32_t  kFieldTargets      = 0x98;
+constexpr std::uint32_t  kFieldTargetEntry  = 140;
+constexpr std::uint32_t  kFieldTargetWidgets[] = {0x00, 0x28, 0x30};
 
 // The overlay's cached player view rect (RE-p2-hud.md P2.5): min x/y and size, floats.
 constexpr std::array<std::uint32_t, 4> kOverlayRectFields{0x318, 0x31C, 0x328, 0x32C};
@@ -105,6 +110,13 @@ std::array<float, 4>                                 g_playerOneRect{};
 std::array<float, 4>                                 g_playerTwoRect{};
 bool                                                 g_playerTwoRectKnown = false;
 bool                                                 g_loggedEnter        = false;
+struct FieldTargets
+{
+    std::size_t entries = 0, roots = 0, hiddenSwapped = 0;
+    bool operator==(const FieldTargets&) const = default;
+};
+FieldTargets                                         g_fieldTargets;        // this frame's walk (hiddenSwapped unused)
+FieldTargets                                         g_fieldTargetsLogged{static_cast<std::size_t>(-1)};
 unsigned                                             g_mask               = 511;  // SetPlayerTwoLeversMask
 std::array<double, kParts>                           g_partSeconds{};
 std::uint32_t                                        g_timedFrames     = 0;
@@ -311,6 +323,52 @@ void AdoptAbilityNames()
     });
 }
 
+/// The field-target markers (EndUISystem+0x98; one per field-action point, RE-p2-field-interact.md §12.14) are
+/// self-placing roots: their tick projects each through its own context and collapses it when that fails, so one
+/// collapsed by player 1's projection (an item off player 1's screen) must still get player 2's context in player
+/// 2's run, which shows it again from player 2's camera; player 1's re-run collapses it again for player 1's half.
+/// The widget at +0x00 is the one projected; +0x28 and +0x30 are placed and animated from it. Logged on change.
+void AdoptFieldTargets()
+{
+    std::uintptr_t list = 0;
+    if (g_endUISystem == 0 || !platform::CopyGuarded(&list, reinterpret_cast<const void*>(g_endUISystem + kFieldTargets),
+                                                     sizeof(list)))
+    {
+        return;
+    }
+    std::size_t entries = 0, roots = 0;
+    platform::ForEachSparseElement(list, kFieldTargetEntry, [&entries, &roots](std::uintptr_t entry) {
+        ++entries;
+        for (const std::uint32_t at : kFieldTargetWidgets)
+        {
+            RC::Unreal::FWeakObjectPtr weak;
+            std::uint64_t              value = 0;
+            if (platform::CopyGuarded(&value, reinterpret_cast<const void*>(entry + at), sizeof(value)) && value != 0)
+            {
+                std::memcpy(&weak, &value, sizeof(value));
+                roots += hud_roots::AdoptSelfPlacing(weak.Get()) && at == kFieldTargetWidgets[0] ? 1 : 0;
+            }
+        }
+        return true;
+    });
+    g_fieldTargets = {entries, roots};
+}
+
+/// The field-target markers' line: how many there are, how many are roots (a marker that is not one never gets
+/// player 2's context), and how many player 2's context reached while collapsed. On change.
+void LogFieldTargets()
+{
+    const FieldTargets now{g_fieldTargets.entries, g_fieldTargets.roots, hud_roots::HiddenSwapped()};
+    if (now == g_fieldTargetsLogged)
+    {
+        return;
+    }
+    g_fieldTargetsLogged = now;
+    platform::Log(L"HUD levers: field-target markers: {} in the list, {} of them roots; {} collapsed root(s) given player 2's "
+                  L"context (shown again if player 2's camera sees them)",
+                  now.entries, now.roots, now.hiddenSwapped);
+}
+
 /// L1 to player 2; on failure, puts player 1's contexts back and refuses.
 bool ContextsToPlayerTwo()
 {
@@ -419,10 +477,12 @@ bool EnterPlayerTwo() noexcept
         }
         g_firstPlayerAnswer = Acts(kLeverFirstPlayer) ? reinterpret_cast<std::uint64_t>(playerTwo) : 0;  // L2
         AdoptAbilityNames();
+        AdoptFieldTargets();
         if (!ContextsToPlayerTwo())                                                                       // L1
         {
             return false;
         }
+        LogFieldTargets();
         HoldTimeStep();  // L6
         ReadRect(g_playerOneRect);
         if (g_playerTwoRectKnown && Acts(kLeverRect))
