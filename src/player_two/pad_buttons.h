@@ -70,6 +70,12 @@ using ActionDownFn = char (*)(void* owner, void* unused, std::uint32_t sourceBit
 /// took the press (its dispatch result in `result`); false leaves the press kept from the menus.
 using PlayerTwoRouteFn = bool (*)(ActionDownFn dispatch, void* owner, void* unused, std::uint32_t sourceBit, void* event,
                                   std::uint8_t alreadyHandled, char& result);
+/// Which player's pad drives the menus (0 player 1, the default; 1 player 2, while a shop player 2 opened is up,
+/// player_two/vending): that player's view is the one the tables show outside player 2's calls, and the other pad's
+/// presses are passed to the game's dispatcher as handled. Stick navigation (the game's synthetic d-pad from the merged
+/// stick) is not split. Logged on change. Game thread.
+void SetMenuPlayer(int player) noexcept;
+
 /// Sets the route (null: none). Game thread.
 void SetPlayerTwoRoute(PlayerTwoRouteFn route) noexcept;
 

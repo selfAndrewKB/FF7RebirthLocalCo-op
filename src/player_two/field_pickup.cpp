@@ -13,6 +13,7 @@
 #include "player_two/pad_sticks.h"
 #include "player_two/party_member.h"
 #include "player_two/primary_controller.h"
+#include "player_two/vending.h"
 #include "players/unreal_access.h"
 
 #include <algorithm>
@@ -104,6 +105,7 @@ constexpr int           kMaxPoints       = 1024;     // the pool's size
 
 // A point.
 constexpr std::uint32_t kPointKey       = 0x0C;   // FName
+constexpr std::uint32_t kPointPreset    = 0x44;   // FName: the point-side range preset (§10.4; rpaVendingMachine for vending)
 constexpr std::uint32_t kPointFlags     = 0x104;  // u8
 constexpr std::uint8_t  kTargetBits     = 0x06;   // bit 1 slot target, bit 2 runner-up: carried per player (§12.3)
 constexpr std::uint8_t  kDisabledBit    = 0x10;   // the game's "point disabled": the candidate query skips it
@@ -120,6 +122,8 @@ struct MapShape
 };
 constexpr MapShape      kWorldItemMap{0x90, 0xD0, 0xC0};
 constexpr MapShape      kChestMap{0x10, 0x70, 0x60};
+// TreasurePointMgr's second map, CharaPop key -> treasure key (24-byte elements; §14, the spawn handler's own lookup).
+constexpr MapShape      kChestByPopKeyMap{0x60, 0x18, 0x10};
 constexpr std::uint32_t kRootChests      = 0x298;  // TreasurePointMgr (not TreasureManager +0x280, the opened state)
 constexpr std::uint32_t kMapCount        = 0x08;  // i32 ArrayNum
 constexpr std::uint32_t kMapBitsInline   = 0x10;
@@ -303,7 +307,7 @@ bool                                                g_hashTrusted    = true;
 // The status line's counts since the last line.
 struct Counts
 {
-    std::uint32_t passes = 0, polled = 0, filtered = 0, worldItems = 0, chests = 0, executed = 0, fieldResets = 0;
+    std::uint32_t passes = 0, polled = 0, filtered = 0, worldItems = 0, chests = 0, vending = 0, executed = 0, fieldResets = 0;
     std::uint32_t requests = 0, requestsAsTwo = 0;  // visibility requests in the pass; those with player 2 first
     std::uint32_t markersMade = 0, markersGone = 0, markersDestroyed = 0;  // player 2's made; gone by the game; the mod's
     std::array<std::uint32_t, kSkipCount> skips{};
@@ -759,7 +763,8 @@ void Before(void* mgr, const std::uint8_t* items, const std::uint8_t* chests, bo
             const auto     two   = g_twoBits.find(key);
             const bool     worldItem = filter && InMap(items, kWorldItemMap, key);
             const bool     chest     = filter && !worldItem && InMap(chests, kChestMap, key);
-            const bool     disable   = filter && !worldItem && !chest && (flags & kDisabledBit) == 0;
+            const bool     machine   = filter && !worldItem && !chest && vending::Admits(Read<std::uint64_t>(point, kPointPreset));
+            const bool     disable   = filter && !worldItem && !chest && !machine && (flags & kDisabledBit) == 0;
             std::uintptr_t oneMarker = 0;
             std::uintptr_t twoMarker = 0;
             if (g_destroy != nullptr)
@@ -777,6 +782,7 @@ void Before(void* mgr, const std::uint8_t* items, const std::uint8_t* chests, bo
             g_saved.push_back({point, key, static_cast<std::uint8_t>(flags & kTargetBits), disable, oneMarker, false});
             g_counts.worldItems += worldItem ? 1 : 0;
             g_counts.chests += chest ? 1 : 0;
+            g_counts.vending += machine ? 1 : 0;
             g_counts.filtered += disable ? 1 : 0;
             flags = static_cast<std::uint8_t>((flags & ~kTargetBits) | (two != g_twoBits.end() ? two->second : 0) |
                                               (disable ? kDisabledBit : 0));
@@ -1046,7 +1052,7 @@ void LogStatus() noexcept
     {
         platform::LogDebug(L"field pickup (60 s): {} pass(es) (poll open in {}), {} pickup(s) by player 2, {} field reset(s) "
                       L"of player 2's copy; {} visibility request(s), {} with player 2 as the first local player; per "
-                      L"pass on average {} WorldItem point(s) and {} chest point(s) left open, {} other point(s) disabled for the pass; "
+                      L"pass on average {} WorldItem point(s), {} chest point(s) and {} vending machine(s) left open, {} other point(s) disabled for the pass; "
                       L"skipped: scopes {}, member {}; WorldItem and chest lookups by {} ({} checked, {} mismatch(es)); player 2's "
                       L"marker widgets: {} now, {} made and {} destroyed by the game's own code, {} by the mod's call of "
                       L"its destroy; player 1's point markers now {}",
@@ -1054,6 +1060,7 @@ void LogStatus() noexcept
                       g_counts.requestsAsTwo,
                       g_counts.passes != 0 ? g_counts.worldItems / g_counts.passes : 0,
                       g_counts.passes != 0 ? g_counts.chests / g_counts.passes : 0,
+                      g_counts.passes != 0 ? g_counts.vending / g_counts.passes : 0,
                       g_counts.passes != 0 ? g_counts.filtered / g_counts.passes : 0, g_counts.skips[kSkipScopes],
                       g_counts.skips[kSkipMember], g_hashTrusted ? L"the map's hash" : L"a walk of the map", g_hashChecked,
                       g_hashMismatches, g_twoMarkers.size(), g_counts.markersMade, g_counts.markersGone,
@@ -1216,7 +1223,7 @@ void Install(const platform::GameImage& image) noexcept
                                    reinterpret_cast<std::uintptr_t>(&RequestVisibility));
     }
     platform::Log(L"field pickup: {}; the screen test {}; marker widgets {}",
-                  g_ready ? L"ready (player 2 picks up collectibles and materials and opens chests through the game's own field prompts, a "
+                  g_ready ? L"ready (player 2 picks up collectibles and materials, opens chests and uses vending machines through the game's own field prompts, a "
                             L"second pass of its selection and press)"
                           : L"UNAVAILABLE (a check failed: the root, the UI system, a function or a field reset's call site)",
                   screen ? L"sees player 2's view in player 2's pass"
@@ -1273,6 +1280,11 @@ void RowWeaks(Weaks& out) noexcept
 bool InPass() noexcept
 {
     return g_inPass;
+}
+
+bool IsChestEntry(std::uint64_t popKey) noexcept
+{
+    return InMap(PointerAt(Root(), kRootChests), kChestByPopKeyMap, popKey);
 }
 
 void NoteMarked(std::uint64_t key) noexcept

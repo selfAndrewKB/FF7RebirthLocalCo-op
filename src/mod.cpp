@@ -46,10 +46,12 @@
 #include "player_two/pad_rumble.h"
 #include "player_two/combat_rumble.h"
 #include "player_two/chest_watch.h"
+#include "player_two/vending.h"
 #include "player_two/interact_watch.h"
 #include "player_two/charapop_watch.h"
 #include "player_two/charapop_near.h"
 #include "player_two/charapop_centre.h"
+#include "player_two/streaming_centre.h"
 #include "player_two/ride_probe.h"
 #include "player_two/ride_watch.h"
 #include "player_two/chocobo_ride.h"
@@ -86,7 +88,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.53.0";
+constexpr const wchar_t* kVersion = L"0.54.0";
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -152,7 +154,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.53.0");
+        ModVersion     = STR("0.54.0");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -176,6 +178,7 @@ public:
         // centre when this runs on the game thread.
         lss::player_two::charapop_near::Release();
         lss::player_two::charapop_centre::Release();
+        lss::player_two::streaming_centre::Release();
         if (session_ && session_->HasPlayerTwo())
         {
             Log(L"unloading with player 2 still in: the per-player rendering and player 2's stages stay installed");
@@ -292,6 +295,7 @@ public:
         lss::player_two::charapop_watch::Install(*image);  // the character detail near player 2, logged (read-only)
         lss::player_two::charapop_near::Install(*image);   // characters near player 2 keep the detail player 2's view gives them
         lss::player_two::charapop_centre::Install(*image); // the NPC population follows both players (Ctrl+F10 compares)
+        lss::player_two::streaming_centre::Install(*image);  // the grid level streaming too (the same switch)
         lss::player_two::ride_watch::Install(*image);      // chocobo and buggy rides, logged (read-only)
         lss::player_two::chocobo_ride::Install(*image);    // player 2 drives their own chocobo while the party rides
         lss::player_two::ride_probe::Install(*image);      // player 2's ride: sprint and homing, logged (read-only)
@@ -299,7 +303,8 @@ public:
         lss::player_two::rumble_watch::Install(*image);    // logging only: each controller's rumble, pad by pad
         lss::player_two::pad_rumble::Install(*image);      // each player's rumble on their own pad
         lss::player_two::combat_rumble::Install(*image);   // player 2's combat rumble (hits, montage notifies) on player 2's pad
-        lss::player_two::chest_watch::Install(*image);     // chests and vending machines, logged (read-only)
+        lss::player_two::chest_watch::Install(*image);     // chests, logged (read-only): presses, opens, grants, spawns
+        lss::player_two::vending::Install(*image);         // player 2's vending machines: the shop's camera and pad
         lss::player_two::interact_watch::Install(*image);  // field interactions (pickups) per player, logged (read-only)
         lss::hud::InstallPlayerTwoPass(*image);      // player 2's HUD content, on (the hud-levers command switches it)
         lss::hud::InstallRootOverlayRender(*image);  // before the overlay renders: placement follow, trace
@@ -390,7 +395,8 @@ private:
         const lss::platform::frame_watch::Charge charge(lss::platform::frame_watch::Part::EngineTick);
         lss::player_two::pad_rumble::BeforeTick();  // before the world tick: player 2's controller ordered after player 1's
         lss::player_two::combat_rumble::BeforeTick();  // outside every notify: their call sites; the status line
-        lss::player_two::chest_watch::Tick();          // an open followed from its press to its grant (logged)
+        lss::player_two::chest_watch::Tick();          // an open followed from its press to its grant; chest spawns (logged)
+        lss::player_two::vending::Tick();              // a press that opened no shop; player 2 leaving with their shop up
         if (!tickSeen_)
         {
             tickSeen_ = true;
@@ -451,6 +457,7 @@ private:
         lss::player_two::charapop_watch::Tick(splitShown);
         lss::player_two::charapop_near::Tick(splitShown, session_->PlaysMember());
         lss::player_two::charapop_centre::Tick(splitShown, session_->PlaysMember());
+        lss::player_two::streaming_centre::Tick(session_->PlaysMember());
         lss::player_two::ride_watch::Tick();
         lss::player_two::ride_probe::Tick();
         lss::hud::navimap_watch::Tick(splitShown);

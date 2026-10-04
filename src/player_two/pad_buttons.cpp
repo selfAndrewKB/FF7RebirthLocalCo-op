@@ -138,6 +138,9 @@ unsigned g_writeFaults = 0;
 unsigned g_lines       = 0;
 unsigned g_dropped     = 0;
 unsigned g_padTwoDowns = 0;  // pad 2's action-downs kept from the UI and the menu core
+unsigned g_padOneDowns = 0;  // pad 1's action-downs kept from the UI while player 2 holds the menus
+int      g_menuPlayer  = 0;  // whose view the tables show outside player 2's calls, and whose presses reach the UI
+                             // (1 while player 2's shop is up: SetMenuPlayer)
 std::atomic<unsigned> g_mask{kPartViews | kPartEvents};  // SetMask
 const std::uint64_t*  g_traceKeys[2] = {};  // Accel, Dash (live addresses of the FName globals)
 std::array<std::array<std::uint64_t, 2>, 2> g_traceLast{};  // per table, per key: the last traced bytes
@@ -297,7 +300,8 @@ void ViewBytes(const Table& table, int player, std::vector<HeldBytes>& bytes) no
     }
 }
 
-/// Once per frame after the game's Tick: advances each view and writes player 1's.
+/// Once per frame after the game's Tick: advances each view and writes the menu player's (player 1's, or player 2's
+/// while their shop is up).
 void SplitTable(const std::byte* owner, std::size_t which)
 {
     Table& table = g_tables[which];
@@ -326,7 +330,7 @@ void SplitTable(const std::byte* owner, std::size_t which)
             table.loggedSources[i] = element.sources;
         }
     }
-    ViewBytes(table, 0, table.ones);
+    ViewBytes(table, g_menuPlayer, table.ones);
     if (!WriteHeld(table.data, table.ones.data(), table.allocated.data(), table.ones.size()))
     {
         ++g_writeFaults;
@@ -353,7 +357,8 @@ void GiveBack() noexcept
             ++g_writeFaults;
         }
     }
-    g_tables = {};
+    g_tables     = {};
+    g_menuPlayer = 0;  // the game's merge: the one pad again
 }
 
 void InstallExtraKeyCalls() noexcept;
@@ -401,8 +406,20 @@ void Tick(void* self, float deltaTime, void* application, void* cursor)
 char ActionDown(void* owner, void* unused, std::uint32_t sourceBit, void* event, std::uint8_t alreadyHandled)
 {
     const bool padTwo = ((button_view::PadBits(1) >> (sourceBit & 31)) & 1) != 0;
-    if (padTwo && alreadyHandled == 0 && Acts(kPartEvents) && pad_sticks::Enabled() && generation::Active() &&
-        generation::OnGameThread())
+    const bool split  = alreadyHandled == 0 && Acts(kPartEvents) && pad_sticks::Enabled() && generation::Active() &&
+                       generation::OnGameThread();
+    if (split && g_menuPlayer == 1)
+    {
+        // Player 2's shop is up: pad 2 is the menu pad, as the one pad is in single player; pad 1's presses update the
+        // tables but are passed as handled.
+        if (((button_view::PadBits(0) >> (sourceBit & 31)) & 1) != 0)
+        {
+            ++g_padOneDowns;
+            alreadyHandled = 1;
+        }
+        return g_actionDown(owner, unused, sourceBit, event, alreadyHandled);
+    }
+    if (padTwo && split)
     {
         ++g_padTwoDowns;
         char result = 0;
@@ -461,6 +478,27 @@ void InstallExtraKeyCalls() noexcept
 }
 
 }  // namespace
+
+void SetMenuPlayer(int player) noexcept
+{
+    const int menu = player == 1 ? 1 : 0;
+    if (menu == g_menuPlayer)
+    {
+        return;
+    }
+    g_menuPlayer = menu;
+    if (menu == 1)
+    {
+        platform::Log(L"buttons: pad 2 drives the menus now (player 2's view in the action tables, pad 1's presses kept from "
+                      L"the UI)");
+    }
+    else
+    {
+        platform::Log(L"buttons: pad 1 drives the menus again ({} of pad 1's presses were kept from the UI meanwhile)",
+                      g_padOneDowns);
+    }
+    g_padOneDowns = 0;
+}
 
 void SetPlayerTwoRoute(PlayerTwoRouteFn route) noexcept
 {
@@ -549,7 +587,7 @@ ButtonScope::ButtonScope(std::uint64_t withoutKey) noexcept
     }
     for (Table& table : g_tables)
     {
-        ViewBytes(table, 0, table.ones);  // what the Tick wrote: player 1's view
+        ViewBytes(table, g_menuPlayer, table.ones);  // what the Tick wrote: the menu player's view
         ViewBytes(table, 1, table.twos);
         for (std::size_t i = 0; withoutKey != 0 && i < table.twos.size() && i < table.names.size(); ++i)
         {
