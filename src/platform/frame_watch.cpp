@@ -59,6 +59,7 @@ double                                     g_worstMs      = 0.0;
 unsigned                                   g_frames       = 0;
 unsigned                                   g_hitchRun     = 0;  // hitch frames in a row
 std::atomic<bool>                          g_detailed{false};
+std::uint64_t                              g_frameIndex = 0;  // frames started since the mod loaded (never reset)
 
 struct JobTime
 {
@@ -165,6 +166,11 @@ bool Detailed() noexcept
     return g_detailed.load(std::memory_order_relaxed);
 }
 
+std::uint64_t FrameIndex() noexcept
+{
+    return g_frameIndex;
+}
+
 void CountLogLine() noexcept
 {
     g_logLines.fetch_add(1, std::memory_order_relaxed);
@@ -172,6 +178,7 @@ void CountLogLine() noexcept
 
 void OnFrameStart() noexcept
 {
+    ++g_frameIndex;
     const double now      = Now();
     const unsigned lines  = g_logLines.exchange(0, std::memory_order_relaxed);
     if (g_frameStart != 0.0)

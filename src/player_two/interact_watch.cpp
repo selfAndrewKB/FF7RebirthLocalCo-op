@@ -8,6 +8,7 @@
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 #include "player_two/primary_controller.h"
+#include "player_two/rumble_watch.h"
 #include "players/unreal_access.h"
 
 #include <algorithm>
@@ -413,6 +414,12 @@ void Acquire(void* items, void* entry) noexcept
     // (the item-get rumble, RE-p2-field-interact.md §12.12 item 5).
     const bool playerTwo = generation::OnGameThread() && field_pickup::TakeMarked(key);
     std::wstring rumble;
+    // Each controller's active force-feedback effects around the grant (RE-p2-rumble.md §6 item 4: expect +1 on the
+    // primary one).
+    void* const        one         = generation::PlayerOneController();
+    void* const        two         = generation::PlayerTwoController();
+    const std::int32_t oneBefore   = rumble_watch::EffectCount(one);
+    const std::int32_t twoBefore   = rumble_watch::EffectCount(two);
     {
         std::optional<primary_controller::Scope> primary;
         if (playerTwo)
@@ -432,8 +439,10 @@ void Acquire(void* items, void* entry) noexcept
     {
         try
         {
-            platform::Log(L"interact: WorldItem grant {}{} (the item-get rumble goes to the primary controller: {})",
-                          Name(key), playerTwo ? L" (player 2's pickup)" : L"", rumble);
+            platform::Log(L"interact: WorldItem grant {}{} (the item-get rumble goes to the primary controller: {}; "
+                          L"force-feedback effects: player 1's controller {} -> {}, player 2's {} -> {})",
+                          Name(key), playerTwo ? L" (player 2's pickup)" : L"", rumble, oneBefore,
+                          rumble_watch::EffectCount(one), twoBefore, rumble_watch::EffectCount(two));
         }
         catch (...)
         {

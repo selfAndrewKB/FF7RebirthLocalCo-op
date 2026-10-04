@@ -10,6 +10,8 @@
 // perf log on).
 // Solo and split are both watched, so they can be compared.
 
+#include <cstdint>
+
 namespace lss::platform::frame_watch {
 
 enum class Part
@@ -65,5 +67,8 @@ void CountLogLine() noexcept;
 /// Once per frame, at the start of the engine tick (game thread): ends the last frame, logs it if it
 /// was a hitch, and every 10 s the summary.
 void OnFrameStart() noexcept;
+
+/// Frames started since the mod loaded (OnFrameStart's count; game thread).
+std::uint64_t FrameIndex() noexcept;
 
 }  // namespace lss::platform::frame_watch
