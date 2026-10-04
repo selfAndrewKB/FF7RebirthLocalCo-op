@@ -52,6 +52,7 @@
 #include "player_two/charapop_near.h"
 #include "player_two/charapop_centre.h"
 #include "player_two/streaming_centre.h"
+#include "player_two/world_actor_reach.h"
 #include "player_two/ride_probe.h"
 #include "player_two/ride_watch.h"
 #include "player_two/chocobo_ride.h"
@@ -88,7 +89,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.54.0";
+constexpr const wchar_t* kVersion = L"0.55.0";
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -154,7 +155,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.54.0");
+        ModVersion     = STR("0.55.0");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -179,6 +180,7 @@ public:
         lss::player_two::charapop_near::Release();
         lss::player_two::charapop_centre::Release();
         lss::player_two::streaming_centre::Release();
+        lss::player_two::world_actor_reach::Release();
         if (session_ && session_->HasPlayerTwo())
         {
             Log(L"unloading with player 2 still in: the per-player rendering and player 2's stages stay installed");
@@ -296,6 +298,7 @@ public:
         lss::player_two::charapop_near::Install(*image);   // characters near player 2 keep the detail player 2's view gives them
         lss::player_two::charapop_centre::Install(*image); // the NPC population follows both players (Ctrl+F10 compares)
         lss::player_two::streaming_centre::Install(*image);  // the grid level streaming too (the same switch)
+        lss::player_two::world_actor_reach::Install(*image); // world actors such as chests pop around player 2 too
         lss::player_two::ride_watch::Install(*image);      // chocobo and buggy rides, logged (read-only)
         lss::player_two::chocobo_ride::Install(*image);    // player 2 drives their own chocobo while the party rides
         lss::player_two::ride_probe::Install(*image);      // player 2's ride: sprint and homing, logged (read-only)
@@ -458,6 +461,7 @@ private:
         lss::player_two::charapop_near::Tick(splitShown, session_->PlaysMember());
         lss::player_two::charapop_centre::Tick(splitShown, session_->PlaysMember());
         lss::player_two::streaming_centre::Tick(session_->PlaysMember());
+        lss::player_two::world_actor_reach::Tick(session_->PlaysMember());
         lss::player_two::ride_watch::Tick();
         lss::player_two::ride_probe::Tick();
         lss::hud::navimap_watch::Tick(splitShown);
