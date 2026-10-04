@@ -165,13 +165,20 @@ T Field(std::uintptr_t address) noexcept
     return value;
 }
 
-void Note(const std::wstring& text)
+/// One line of `level`, within the budget (a line whose level is off takes none of it). Callers of Debug and
+/// Trace lines check platform::Enabled before building `text`.
+void Note(platform::Level level, const std::wstring& text)
 {
-    if (g_lines < kMaxLines)
+    if (g_lines < kMaxLines && platform::Enabled(level))
     {
         ++g_lines;
-        platform::Log(L"target views: {}", text);
+        platform::LogAt(level, L"target views: {}", text);
     }
+}
+
+void Note(const std::wstring& text)
+{
+    Note(platform::Level::Info, text);
 }
 
 std::int32_t Count(const void* list) noexcept
@@ -197,14 +204,14 @@ void Collect(void* out) noexcept
     }
     original(out);
     const std::int32_t after = Count(out);
-    if (before == g_loggedUnion[0] && after == g_loggedUnion[1])
+    if (!platform::Enabled(platform::Level::Debug) || (before == g_loggedUnion[0] && after == g_loggedUnion[1]))
     {
         return;
     }
     g_loggedUnion = {before, after};
     try
     {
-        Note(std::format(L"collected {} for player 1, {} with player 2's target", before, after));
+        Note(platform::Level::Debug, std::format(L"collected {} for player 1, {} with player 2's target", before, after));
     }
     catch (...)
     {
@@ -338,7 +345,13 @@ std::uint8_t LabelLookup(void* manager, float* point, float* scale, void* charac
         g_failed = true;  // the per-view marks stop; the game rewrites its key next frame
         Note(L"putting player 1's targeted key back raised an exception; per-view marks are off this session");
     }
-    // Each character's label is logged on its own change: one lookup runs per label each frame.
+    // Each character's label is logged on its own change: one lookup runs per label each frame. A Debug line; one
+    // whose lookup raised an exception is Info.
+    const platform::Level level = ok ? platform::Level::Debug : platform::Level::Info;
+    if (!platform::Enabled(level))
+    {
+        return found;
+    }
     const LabelLog now{reinterpret_cast<std::uintptr_t>(character), two.object, found != 0, ok};
     auto logged = std::find_if(g_loggedLabels.begin(), g_loggedLabels.end(),
                                [&now](const LabelLog& label) { return label.character == now.character; });
@@ -352,8 +365,8 @@ std::uint8_t LabelLookup(void* manager, float* point, float* scale, void* charac
         *logged = now;
         try
         {
-            Note(std::format(L"player 2's view: a red label for {:#x} {} player 2's locked-on gauge ({:#x}){}", now.character,
-                             now.found ? L"makes way for" : L"has no", now.key, now.ok ? L"" : L"; the lookup RAISED an exception"));
+            Note(level, std::format(L"player 2's view: a red label for {:#x} {} player 2's locked-on gauge ({:#x}){}", now.character,
+                                    now.found ? L"makes way for" : L"has no", now.key, now.ok ? L"" : L"; the lookup RAISED an exception"));
         }
         catch (...)
         {
@@ -495,10 +508,10 @@ void BeforePass(int player) noexcept
         }
         g_currentPass = player != 0 ? 1 : 0;  // the label lookup in this view's updates skips those gauges
         const std::size_t pass = player != 0 ? 1 : 0;
-        if (hides != g_loggedHides[pass])
+        if (hides != g_loggedHides[pass] && platform::Enabled(platform::Level::Trace))
         {
             g_loggedHides[pass] = hides;
-            Note(std::format(L"{}'s pass takes out {} ({:#x}; its own {:#x}) and {} of {} gauge(s){}",
+            Note(platform::Level::Trace, std::format(L"{}'s pass takes out {} ({:#x}; its own {:#x}) and {} of {} gauge(s){}",
                              player != 0 ? L"player 2" : L"player 1",
                              hides.cursor ? L"the other player's cursor" : L"no cursor", hides.hiddenCursor, hides.ownCursor,
                              hides.gauges, hides.entries, hides.list ? L" | player 2's target list open" : L""));

@@ -213,6 +213,10 @@ const Placement* PlacementOf(UObject* widget)
 /// instance again with the same values.
 void LogPlaced(const Placed& placed)
 {
+    if (!platform::Enabled(platform::Level::Debug))
+    {
+        return;
+    }
     const auto& o = placed.original;
     const auto& a = placed.applied;
     std::wstring text = std::format(L"{} anchors ({:.1f},{:.1f}) offsets ({:.0f},{:.0f},{:.0f},{:.0f}) alignment "
@@ -225,7 +229,7 @@ void LogPlaced(const Placed& placed)
     std::wstring& logged = g_loggedPlacements[placed.placement];
     if (text != logged)
     {
-        platform::Log(L"HUD placement: {}", text);
+        platform::LogDebug(L"HUD placement: {}", text);
         logged = std::move(text);
     }
 }

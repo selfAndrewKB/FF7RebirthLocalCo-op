@@ -183,9 +183,12 @@ IconClass* ClassOf(UObject* widget)
         type.icon          = true;
         type.defaultObject = Tracked::Of(defaultObject);
         type.anchor        = AnchorOf(type.original);
-        platform::Log(L"field-action icons: class {} has its base at ({:.0f},{:.0f}), the frame's corner ({:.1f},{:.1f})",
-                      widget->GetClassPrivate()->GetName(), type.original.x, type.original.y, type.anchor.x,
-                      type.anchor.y);
+        if (platform::Enabled(platform::Level::Debug))
+        {
+            platform::LogDebug(
+                L"field-action icons: class {} has its base at ({:.0f},{:.0f}), the frame's corner ({:.1f},{:.1f})",
+                widget->GetClassPrivate()->GetName(), type.original.x, type.original.y, type.anchor.x, type.anchor.y);
+        }
     }
     return &g_classes.emplace(cls, type).first->second;
 }

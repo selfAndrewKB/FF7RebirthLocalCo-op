@@ -389,10 +389,10 @@ void FollowEvent(Event event, char flag) noexcept
             break;
     }
     ++g_replays;
-    if (g_replayLines < kMaxReplayLines)
+    if (g_replayLines < kMaxReplayLines && platform::Enabled(platform::Level::Debug))
     {
         ++g_replayLines;
-        platform::Log(L"area icons: the game's {} followed on player 2's icon manager ({} so far)",
+        platform::LogDebug(L"area icons: the game's {} followed on player 2's icon manager ({} so far)",
                       event == Event::Enable         ? L"Enable"
                       : event == Event::HideAndClear ? L"HideAndClear"
                                                      : (flag != 0 ? L"SetFlagD1(1)" : L"SetFlagD1(0)"),
@@ -472,7 +472,7 @@ bool FollowEvents(const platform::GameImage& image) noexcept
 /// One line whenever either instance's enable flag, canvases or map sizes change.
 void LogIfChanged(std::uintptr_t one) noexcept
 {
-    if (g_lines >= kMaxLines)
+    if (g_lines >= kMaxLines || !platform::Enabled(platform::Level::Debug))
     {
         return;
     }
@@ -501,7 +501,7 @@ void LogIfChanged(std::uintptr_t one) noexcept
     ++g_lines;
     try
     {
-        platform::Log(L"area icons: player 1's enabled {} icons/markers slots {}/{}; player 2's enabled {} slots {}/{} "
+        platform::LogDebug(L"area icons: player 1's enabled {} icons/markers slots {}/{}; player 2's enabled {} slots {}/{} "
                       L"canvases {:#x}/{:#x}; first-controller answers {}, range-origin answers {}",
                       enabled[0], slots[0][0], slots[0][1], enabled[1], slots[1][0], slots[1][1], canvases[1][0],
                       canvases[1][1], g_answered, g_leaderAnswers);

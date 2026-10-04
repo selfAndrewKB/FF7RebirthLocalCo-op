@@ -291,7 +291,7 @@ void PollFamilyBoundary() noexcept
         return;  // nothing new (one family per frame)
     }
     const int compute = g_counts.computeIsContext.load(std::memory_order_relaxed);
-    platform::Log(L"family boundary: {} queued, {} reset in stream order (+{} / +{} in the last period); {} appended, "
+    platform::LogDebug(L"family boundary: {} queued, {} reset in stream order (+{} / +{} in the last period); {} appended, "
                   L"{} run inline, {} skipped (not the default direct context); list compute context {}",
                   queued, reset, queued - g_loggedQueued, reset - g_loggedReset,
                   g_counts.appended.load(std::memory_order_relaxed), g_counts.inlined.load(std::memory_order_relaxed),

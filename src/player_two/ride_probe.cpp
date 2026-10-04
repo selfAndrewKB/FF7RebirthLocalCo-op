@@ -89,9 +89,15 @@ float             g_lastAt[3]{};
 bool              g_lastAtValid = false;
 std::wstring      g_lastHomingKey, g_lastSprintKey;
 
+/// A report of `level` (Debug or Trace, platform/log.h), within the probe's line budget. The boarding lines are
+/// Debug; sprint, homing and slot 11 follow the buttons and sticks frame by frame: Trace.
 template <class... A>
-void Line(std::wformat_string<A...> format, A&&... args) noexcept
+void LineAt(platform::Level level, std::wformat_string<A...> format, A&&... args) noexcept
 {
+    if (!platform::Enabled(level))
+    {
+        return;
+    }
     if (g_lines >= kMaxLines)
     {
         return;
@@ -99,15 +105,29 @@ void Line(std::wformat_string<A...> format, A&&... args) noexcept
     ++g_lines;
     try
     {
-        platform::WriteLine(L"ride probe: " + std::format(format, std::forward<A>(args)...));
+        platform::WriteLine(std::format(L"[{}] ride probe: ", platform::LevelName(level)) +
+                            std::format(format, std::forward<A>(args)...));
     }
     catch (...)
     {
     }
     if (g_lines == kMaxLines)
     {
-        platform::WriteLine(L"ride probe: line limit reached");
+        platform::WriteLine(level == platform::Level::Trace ? L"[trace] ride probe: line limit reached"
+                                                            : L"[debug] ride probe: line limit reached");
     }
+}
+
+template <class... A>
+void Line(std::wformat_string<A...> format, A&&... args) noexcept
+{
+    LineAt(platform::Level::Debug, format, std::forward<A>(args)...);
+}
+
+template <class... A>
+void TraceLine(std::wformat_string<A...> format, A&&... args) noexcept
+{
+    LineAt(platform::Level::Trace, format, std::forward<A>(args)...);
 }
 
 const std::byte* At(const void* object, std::uint32_t offset) noexcept
@@ -238,9 +258,9 @@ void Sprint(const void* twoChocobo, Clock::time_point now)
     }
     g_lastSprintKey    = std::move(changed);
     g_lastSprintLogged = now;
-    Line(L"sprint: player 1's chocobo {}", ChocoboText(oneChocobo));
-    Line(L"sprint: player 2's chocobo {}", ChocoboText(twoChocobo));
-    Line(L"sprint: move-type layers (move/dash/flag per layer) PC1 [{}]; PC2 [{}]; game mode {}", LayersText(playerOne),
+    TraceLine(L"sprint: player 1's chocobo {}", ChocoboText(oneChocobo));
+    TraceLine(L"sprint: player 2's chocobo {}", ChocoboText(twoChocobo));
+    TraceLine(L"sprint: move-type layers (move/dash/flag per layer) PC1 [{}]; PC2 [{}]; game mode {}", LayersText(playerOne),
          LayersText(playerTwo), mode);
 }
 
@@ -333,7 +353,7 @@ void Homing(const void* chocobo, Clock::time_point now)
     g_lastHomingLogged = now;
     try
     {
-        Line(L"homing{}: player 2's chocobo {:.1f} m/s, {:.1f} m from player 1's, step toward player 1's {:+.2f}; pad 2 stick "
+        TraceLine(L"homing{}: player 2's chocobo {:.1f} m/s, {:.1f} m from player 1's, step toward player 1's {:+.2f}; pad 2 stick "
              L"({:.2f}, {:.2f}){}; move request ({:.2f}, {:.2f}, {:.2f}) normalised ({:.2f}, {:.2f}, {:.2f}); controller {}; {}",
              tracing ? L" (start)" : L"", speed, gap, toward, stick[0], stick[1], hasStick ? L"" : L" (unread)", request[0],
              request[1], request[2], request[3], request[4], request[5],
@@ -368,9 +388,9 @@ Clock::time_point g_lastSlot11{};
 
 void Slot11(const void* state, bool after) noexcept
 {
-    if (!g_installed || state == nullptr)
+    if (!g_installed || state == nullptr || !platform::Enabled(platform::Level::Trace))
     {
-        return;
+        return;  // a per-frame report (Trace): nothing is read below that level
     }
     const void* chocobo = ReadPointer(state, facts::kMoveStateCharacter);
     Slot11Before now;
@@ -401,7 +421,7 @@ void Slot11(const void* state, bool after) noexcept
         g_lastSlot11    = clock;
         float stick[2]{};
         platform::CopyGuarded(stick, At(state, kStStick), sizeof(stick));
-        Line(L"slot 11: Accel held {} Dash held {} (as the tick reads them); edge memory Accel {} -> {}, Dash {} -> {}; dash "
+        TraceLine(L"slot 11: Accel held {} Dash held {} (as the tick reads them); edge memory Accel {} -> {}, Dash {} -> {}; dash "
              L"latch {} -> {}; run timer {:.2f} -> {:.2f}; gait {} -> {}; raise hold {:.2f} skip {}; skip timer {:.2f}; "
              L"stored stick ({:.2f}, {:.2f}); speed {:.0f}",
              g_before.accel, g_before.dash, g_before.accelPrev, now.accelPrev, g_before.dashPrev, now.dashPrev,
@@ -428,7 +448,7 @@ bool Install(const platform::GameImage& image) noexcept
 
 void Boarding(const wchar_t* step, const void* chocobo) noexcept
 {
-    if (!g_installed || chocobo == nullptr || !generation::OnGameThread())
+    if (!g_installed || chocobo == nullptr || !generation::OnGameThread() || !platform::Enabled(platform::Level::Debug))
     {
         return;
     }
@@ -463,8 +483,9 @@ void Tick() noexcept
             Boarding(L"first tick driven", chocobo);
         }
     }
-    if (chocobo == nullptr)
+    if (chocobo == nullptr || !platform::Enabled(platform::Level::Trace))
     {
+        g_lastAtValid = false;  // homing and sprint are Trace; the homing speed restarts when traced again
         return;
     }
     try

@@ -38,6 +38,10 @@
 //   battle-mask <0..511>                 diagnosis: bit 8 runs player 2's targeting (the game's
 //                                         targeting tick for player 2; player_two/lock_on.h); the other
 //                                         bits are retired and ignored; on at start
+//   log-level error|warning|info|debug|trace
+//                                         the most detailed log level written (platform/log.h); info at
+//                                         start, debug adds per-event diagnostics, trace per-frame and
+//                                         per-input reports
 //   perf-log on|off                      each hitch's own line, the 10 s hitch summary and the periodic
 //                                         timing lines (off at start)
 //   stream-views off|p2|both             which split players' cameras are registered with the game's own
@@ -116,6 +120,7 @@ enum class CommandKind
     IconsMask,
     BattleMask,
     PerfLog,
+    LogLevel,
     SingleView,
     StreamViews,
     StreamFovPlayerOne,
@@ -153,7 +158,8 @@ struct Command
                                                        // single-view: 0 auto, 1 on, 2 off;
                                                        // stream-views: 0 off, 1 p2, 2 both;
                                                        // npc-detail: 0 off, 1 reduced, 2 full;
-                                                       // stream-fov-p1: degrees, 0 auto
+                                                       // stream-fov-p1: degrees, 0 auto;
+                                                       // log-level: 0 error .. 4 trace
     std::int32_t  offsets[2] = {};                     // framing-offset: top/bottom, side by side
     WaitCondition condition = WaitCondition::Playing;  // wait-until
     std::wstring  text;                                // console, note

@@ -289,7 +289,8 @@ bool PlayerTwoBattleActive(void* cameraManager) noexcept
 
 void Watch() noexcept
 {
-    if (g_lines >= kMaxLines || !generation::OnGameThread() || !generation::Active())
+    if (g_lines >= kMaxLines || !platform::Enabled(platform::Level::Debug) || !generation::OnGameThread() ||
+        !generation::Active())
     {
         return;
     }
@@ -303,7 +304,7 @@ void Watch() noexcept
     ++g_lines;
     try
     {
-        platform::Log(L"battle camera: P1 {} | P2 {}", Describe(now[0]), Describe(now[1]));
+        platform::LogDebug(L"battle camera: P1 {} | P2 {}", Describe(now[0]), Describe(now[1]));
     }
     catch (...)
     {

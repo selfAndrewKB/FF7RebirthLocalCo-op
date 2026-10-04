@@ -210,16 +210,16 @@ void* OverlayLayerEntry(void* slot, std::uintptr_t name, IntRect* rect, std::uin
     g_pending.active = false;
 
     const auto e = reinterpret_cast<std::uintptr_t>(entry);
-    if (!g_logged[g_loggedPass].entry)
+    if (!g_logged[g_loggedPass].entry && platform::Enabled(platform::Level::Debug))
     {
         g_logged[g_loggedPass].entry = true;
-        platform::Log(L"HUD layout: entry matrix x/y ({:.6f}, {:.6f}, {:.3f}, {:.3f}) -> ({:.6f}, {:.6f}, {:.3f}, {:.3f}); "
-                      L"host scale {:.4f} -> {:.4f}",
-                      ReadFloat(e + engine::kEntryMatrixScaleX), ReadFloat(e + engine::kEntryMatrixScaleY),
-                      ReadFloat(e + engine::kEntryMatrixTranslateX), ReadFloat(e + engine::kEntryMatrixTranslateY),
-                      g_pending.placement.scaleX, g_pending.placement.scaleY, g_pending.placement.translateX,
-                      g_pending.placement.translateY, ReadFloat(g_pending.overlay + engine::kOverlayHostScale),
-                      g_pending.hostScale);
+        platform::LogDebug(L"HUD layout: entry matrix x/y ({:.6f}, {:.6f}, {:.3f}, {:.3f}) -> ({:.6f}, {:.6f}, {:.3f}, "
+                           L"{:.3f}); host scale {:.4f} -> {:.4f}",
+                           ReadFloat(e + engine::kEntryMatrixScaleX), ReadFloat(e + engine::kEntryMatrixScaleY),
+                           ReadFloat(e + engine::kEntryMatrixTranslateX), ReadFloat(e + engine::kEntryMatrixTranslateY),
+                           g_pending.placement.scaleX, g_pending.placement.scaleY, g_pending.placement.translateX,
+                           g_pending.placement.translateY, ReadFloat(g_pending.overlay + engine::kOverlayHostScale),
+                           g_pending.hostScale);
     }
     WriteFloat(e + engine::kEntryMatrixScaleX, g_pending.placement.scaleX);
     WriteFloat(e + engine::kEntryMatrixScaleY, g_pending.placement.scaleY);
@@ -260,14 +260,15 @@ void PlaceEntryMatrices(const Submit& submit) noexcept
         g_loggedMatrixCount = count;
         if (count > 0)
         {
-            platform::Log(L"HUD layout: {} per-child matrices placed in the band; the first x/y/w columns ({:.4f} {:.4f} "
-                          L"{:.4f} | {:.4f} {:.4f} {:.4f} | {:.4f} {:.4f} {:.4f}) -> x/y ({:.4f} {:.4f} | {:.4f} {:.4f})",
-                          count, first[0], first[4], first[12], first[1], first[5], first[13], first[3], first[7],
-                          first[15], data[0], data[12], data[5], data[13]);
+            platform::LogDebug(L"HUD layout: {} per-child matrices placed in the band; the first x/y/w columns ({:.4f} "
+                               L"{:.4f} {:.4f} | {:.4f} {:.4f} {:.4f} | {:.4f} {:.4f} {:.4f}) -> x/y ({:.4f} {:.4f} | "
+                               L"{:.4f} {:.4f})",
+                               count, first[0], first[4], first[12], first[1], first[5], first[13], first[3], first[7],
+                               first[15], data[0], data[12], data[5], data[13]);
         }
         else
         {
-            platform::Log(L"HUD layout: no per-child matrices this frame");
+            platform::LogDebug(L"HUD layout: no per-child matrices this frame");
         }
     }
 }

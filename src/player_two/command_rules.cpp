@@ -251,7 +251,13 @@ PlayerTwoRules::~PlayerTwoRules()
 
 void Watch() noexcept
 {
-    if (g_lines >= kMaxLines || g_endUISystem == 0 || !generation::OnGameThread())
+    if (!platform::Enabled(platform::Level::Debug))
+    {
+        g_log.Reset();  // off: the next line starts fresh
+        return;
+    }
+    if (g_lines >= kMaxLines || g_endUISystem == 0 ||
+        !generation::OnGameThread())
     {
         return;
     }
@@ -293,7 +299,7 @@ void Watch() noexcept
         {
             text += std::format(L" {}:{}", kLoggedRequests[i], now.requests[i]);
         }
-        platform::Log(L"{} | battle command speed {:.3f}", text, now.speed / 1000.0);
+        platform::LogDebug(L"{} | battle command speed {:.3f}", text, now.speed / 1000.0);
     }
     catch (...)
     {

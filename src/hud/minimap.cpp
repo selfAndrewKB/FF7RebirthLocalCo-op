@@ -217,21 +217,28 @@ PieceCounts   g_pieces[2], g_loggedPieces[2];  // by the run asking: [0] player 
 ULONGLONG     g_piecesAt        = 0;
 bool          g_loggedFirstKeep = false;
 
+/// One "minimap:" line of `level`, within the line budget (a line whose level is off takes none of it).
 template <class... A>
-void Line(std::wformat_string<A...> format, A&&... args) noexcept
+void LineAt(platform::Level level, std::wformat_string<A...> format, A&&... args) noexcept
 {
-    if (g_lines >= kMaxLines)
+    if (g_lines >= kMaxLines || !platform::Enabled(level))
     {
         return;
     }
     try
     {
         ++g_lines;
-        platform::Log(L"minimap: {}", std::format(format, std::forward<A>(args)...));
+        platform::LogAt(level, L"minimap: {}", std::format(format, std::forward<A>(args)...));
     }
     catch (...)
     {
     }
+}
+
+template <class... A>
+void Line(std::wformat_string<A...> format, A&&... args) noexcept
+{
+    LineAt(platform::Level::Info, format, std::forward<A>(args)...);
 }
 
 template <class T>
@@ -316,8 +323,9 @@ bool ShouldUnload(const void* piece, const float* centre) noexcept
         if (!g_loggedFirstKeep)
         {
             g_loggedFirstKeep = true;
-            Line(L"map pieces: {}'s run kept a piece the other player's map shows ({}; their centre ({:.0f}, {:.0f}))",
-                 run == 1 ? L"player 2" : L"player 1", piece, g_pieceCentre[other][0], g_pieceCentre[other][1]);
+            LineAt(platform::Level::Debug,
+                   L"map pieces: {}'s run kept a piece the other player's map shows ({}; their centre ({:.0f}, {:.0f}))",
+                   run == 1 ? L"player 2" : L"player 1", piece, g_pieceCentre[other][0], g_pieceCentre[other][1]);
         }
         return false;
     }
@@ -344,9 +352,10 @@ void LogPieces() noexcept
     {
         return;
     }
-    Line(L"map pieces since the last line: player 1's centre asked {} times, dropped {}, kept for player 2 {}; player 2's "
-         L"run asked {}, dropped {}, kept for player 1 {}",
-         d[0].asked, d[0].dropped, d[0].keptForOther, d[1].asked, d[1].dropped, d[1].keptForOther);
+    LineAt(platform::Level::Debug,
+           L"map pieces since the last line: player 1's centre asked {} times, dropped {}, kept for player 2 {}; player "
+           L"2's run asked {}, dropped {}, kept for player 1 {}",
+           d[0].asked, d[0].dropped, d[0].keptForOther, d[1].asked, d[1].dropped, d[1].keptForOther);
 }
 
 /// The circle's AcquireLayerSlot: player 2's pass holds its slot; player 1's pass gets it back instead of a second.
@@ -587,11 +596,13 @@ void LogCounts() noexcept
                       g_counts.safetySubmits - g_loggedCounts.safetySubmits, g_counts.runsTwo - g_loggedCounts.runsTwo,
                       g_counts.runsOne - g_loggedCounts.runsOne};
     g_loggedCounts = g_counts;
-    Line(L"since the last line: holder runs {} for player 2, {} for player 1; slots held {}, taken back by player 1's "
-         L"pass {}, submitted alone {}; player 2's entries named {}, submits left to player 1 {}; acquires off the game "
-         L"thread {}",
-         d.runsTwo, d.runsOne, d.held, d.takenBack, d.safetySubmits, d.named, d.submitSkipped,
-         g_offThread.load(std::memory_order_relaxed));
+    // The steady hand-over is a periodic status line (Debug); a safety submit or an acquire off the game thread is Info.
+    LineAt(urgent ? platform::Level::Info : platform::Level::Debug,
+           L"since the last line: holder runs {} for player 2, {} for player 1; slots held {}, taken back by player 1's "
+           L"pass {}, submitted alone {}; player 2's entries named {}, submits left to player 1 {}; acquires off the game "
+           L"thread {}",
+           d.runsTwo, d.runsOne, d.held, d.takenBack, d.safetySubmits, d.named, d.submitSkipped,
+           g_offThread.load(std::memory_order_relaxed));
 }
 
 }  // namespace
@@ -797,8 +808,8 @@ void RunHolder(bool playerTwo) noexcept
     if (now >= g_centreAt && CentreOf(CircleSlate(), centreOne))
     {
         g_centreAt = now + kCentrePeriodMs;
-        Line(L"map centres: player 2's run ({:.0f}, {:.0f}), player 1's run ({:.0f}, {:.0f})", g_centreTwo[0],
-             g_centreTwo[1], centreOne[0], centreOne[1]);
+        LineAt(platform::Level::Debug, L"map centres: player 2's run ({:.0f}, {:.0f}), player 1's run ({:.0f}, {:.0f})",
+               g_centreTwo[0], g_centreTwo[1], centreOne[0], centreOne[1]);
     }
 }
 

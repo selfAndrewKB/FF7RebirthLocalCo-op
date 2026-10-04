@@ -279,16 +279,17 @@ void WatchLine(const std::wstring& text) noexcept
     if (g_watchLines < kMaxWatchLines)
     {
         ++g_watchLines;
-        platform::Log(L"command menu tick: {}", text);
+        platform::LogTrace(L"command menu tick: {}", text);
     }
 }
 
-void Line(const std::wstring& text) noexcept
+/// An event line; a line above the current level uses none of the budget.
+void Line(const std::wstring& text, platform::Level level = platform::Level::Info) noexcept
 {
-    if (g_lines < kMaxLines)
+    if (g_lines < kMaxLines && platform::Enabled(level))
     {
         ++g_lines;
-        platform::Log(L"command menu tick: {}", text);
+        platform::LogAt(level, L"command menu tick: {}", text);
     }
 }
 
@@ -451,6 +452,11 @@ bool     g_loggedOnce = false;
 
 void Watch(std::uintptr_t two, std::uintptr_t one) noexcept
 {
+    if (!platform::Enabled(platform::Level::Trace))
+    {
+        g_watchLog.Reset();  // off: the next line starts fresh
+        return;
+    }
     if (g_watchLines >= kMaxWatchLines)
     {
         return;
@@ -791,7 +797,8 @@ bool RoutePadTwo(pad_buttons::ActionDownFn dispatch, void* owner, void* unused, 
     const auto two    = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller());
     std::wstring before;
     const bool routed = InPlayerTwoUi(Route::kPress, L"press", [&] {
-        const bool logIt = action >= 0 && g_routedKnown[static_cast<std::size_t>(action)] < 10;
+        const bool logIt = platform::Enabled(platform::Level::Trace) && action >= 0 &&
+                           g_routedKnown[static_cast<std::size_t>(action)] < 10;
         if (logIt)
         {
             before = RouteState(two);
@@ -799,7 +806,8 @@ bool RoutePadTwo(pad_buttons::ActionDownFn dispatch, void* owner, void* unused, 
         const bool ran = platform::CallGuarded(dispatch, taken, owner, unused, sourceBit, event, alreadyHandled);
         if (logIt)
         {
-            Line(std::format(L"pad 2's {} in player 2's UI: before [{}] after [{}]", KeyText(key), before, RouteState(two)));
+            Line(std::format(L"pad 2's {} in player 2's UI: before [{}] after [{}]", KeyText(key), before, RouteState(two)),
+                 platform::Level::Trace);
         }
         return ran;
     });
@@ -809,10 +817,12 @@ bool RoutePadTwo(pad_buttons::ActionDownFn dispatch, void* owner, void* unused, 
     }
     NoteTaken(key);
     result = taken;
-    if (action >= 0 ? ++g_routedKnown[static_cast<std::size_t>(action)] <= 10 : (++g_routed <= 20 || g_routed % 500 == 0))
+    if (platform::Enabled(platform::Level::Trace) &&
+        (action >= 0 ? ++g_routedKnown[static_cast<std::size_t>(action)] <= 10 : (++g_routed <= 20 || g_routed % 500 == 0)))
     {
         Line(std::format(L"pad 2's {} went to player 2's menu (taken: {}; {} press(es))", KeyText(key), taken != 0 ? 1 : 0,
-                         g_routed));
+                         g_routed),
+             platform::Level::Trace);
     }
     return true;
 }
@@ -864,14 +874,14 @@ std::uintptr_t FilterManager() noexcept
 
 void TintLine(const wchar_t* what) noexcept
 {
-    if (++g_tintLines > 60)
+    if (!platform::Enabled(platform::Level::Debug) || ++g_tintLines > 60)
     {
         return;
     }
     const auto fm  = FilterManager();
     const auto one = Field<std::uintptr_t>(g_endUISystem + kController);
     const auto two = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller());
-    platform::Log(L"command menu tick: tint {} (pass {}; wait P1 {} P2 {}; latch {} count {}; P2 holds {})", what, g_pass,
+    platform::LogDebug(L"command menu tick: tint {} (pass {}; wait P1 {} P2 {}; latch {} count {}; P2 holds {})", what, g_pass,
                   one != 0 ? Field<std::int32_t>(one + kWaitFilter) : -1, two != 0 ? Field<std::int32_t>(two + kWaitFilter) : -1,
                   Field<std::uint8_t>(fm + kFilterLatch + kTintType), Field<std::int32_t>(fm + kFilterCount + 4 * kTintType),
                   g_twoHoldsTint ? 1 : 0);
@@ -992,7 +1002,8 @@ void CommandSnapshot(void* queue, const std::uint64_t* commands, const std::uint
     if (used != g_snapshotEntries)
     {
         g_snapshotEntries = used;
-        Line(std::format(L"player 2's command snapshot (not written): {} type(s) with a command", used));
+        Line(std::format(L"player 2's command snapshot (not written): {} type(s) with a command", used),
+             platform::Level::Debug);
     }
 }
 
@@ -1003,7 +1014,11 @@ std::uint8_t GuideShow(void* guide, std::uint8_t mode) noexcept
     if (g_pass == 2 && command_menu_two::KeyGuide() == nullptr)
     {
         ++g_guideSkips;
-        Line(std::format(L"player 2's key-guide mode {} not shown ({} time(s))", mode, g_guideSkips));
+        if (platform::Enabled(platform::Level::Debug))
+        {
+            Line(std::format(L"player 2's key-guide mode {} not shown ({} time(s))", mode, g_guideSkips),
+                 platform::Level::Debug);
+        }
         return 0;
     }
     return reinterpret_cast<GuideShowFn>(g_guideShowCall.Original())(guide, mode);
@@ -1014,7 +1029,10 @@ void GuideMode8() noexcept
     if (g_pass == 2 && command_menu_two::KeyGuide() == nullptr)
     {
         ++g_guideSkips;
-        Line(std::format(L"player 2's key-guide mode 8 not set ({} time(s))", g_guideSkips));
+        if (platform::Enabled(platform::Level::Debug))
+        {
+            Line(std::format(L"player 2's key-guide mode 8 not set ({} time(s))", g_guideSkips), platform::Level::Debug);
+        }
         return;
     }
     reinterpret_cast<GuideMode8Fn>(g_guideMode8Call.Original())();

@@ -199,6 +199,14 @@ DWORD WINAPI Run(void*) noexcept
         loggedOver           = over;
         loggedPool           = pool ? pool->committed : 0;
         loggedPoolKnown      = pool.has_value();
+        // The first line and the alarms are Info; the once-a-minute line with nothing to report is a periodic status
+        // line (Debug). The baselines above move either way.
+        const Level level = first || alarm ? Level::Info : Level::Debug;
+        if (!Enabled(level))
+        {
+            lastLogPeriodic = now;  // this was the periodic line
+            continue;
+        }
         try
         {
             const std::wstring poolText =
@@ -212,15 +220,16 @@ DWORD WINAPI Run(void*) noexcept
             {
                 lastLogPeriodic = now;
             }
-            Log(L"memory: game commit {:.2f} GB ({:+.2f} in {:.1f} s, peak {:.2f}), working set {:.2f} GB; card {:.2f} of "
-                L"{:.2f} GB budget ({:+.2f}); system commit {:.1f} of {:.1f} GB used, {:.1f} GB free; {}{}{}{}{}{}",
-                commit, change, seconds, Gb(process.PeakPagefileUsage), Gb(process.WorkingSetSize), card.used,
-                card.budget, cardChange, Gb(system.ullTotalPageFile - system.ullAvailPageFile),
-                Gb(system.ullTotalPageFile), freeCommit, poolText,
-                periodic && pools ? L"; fullest others: " + FullestPools(*pools) : std::wstring(),
-                jump ? L" (JUMP)" : L"", over ? L" (CARD OVER BUDGET)" : L"",
-                low ? L" (LOW: the engine ends the game when commit runs out)" : L"",
-                poolHigh ? L" (POOL HIGH: the engine ends the game when a pool fills)" : L"");
+            LogAt(level,
+                  L"memory: game commit {:.2f} GB ({:+.2f} in {:.1f} s, peak {:.2f}), working set {:.2f} GB; card {:.2f} of "
+                  L"{:.2f} GB budget ({:+.2f}); system commit {:.1f} of {:.1f} GB used, {:.1f} GB free; {}{}{}{}{}{}",
+                  commit, change, seconds, Gb(process.PeakPagefileUsage), Gb(process.WorkingSetSize), card.used,
+                  card.budget, cardChange, Gb(system.ullTotalPageFile - system.ullAvailPageFile),
+                  Gb(system.ullTotalPageFile), freeCommit, poolText,
+                  periodic && pools ? L"; fullest others: " + FullestPools(*pools) : std::wstring(),
+                  jump ? L" (JUMP)" : L"", over ? L" (CARD OVER BUDGET)" : L"",
+                  low ? L" (LOW: the engine ends the game when commit runs out)" : L"",
+                  poolHigh ? L" (POOL HIGH: the engine ends the game when a pool fills)" : L"");
         }
         catch (...)
         {

@@ -183,7 +183,8 @@ void Remove() noexcept
 
 void Watch() noexcept
 {
-    if (g_endUISystem == 0 || !generation::OnGameThread() || g_lines >= kMaxLines)
+    if (g_endUISystem == 0 || !platform::Enabled(platform::Level::Trace) || !generation::OnGameThread() ||
+        g_lines >= kMaxLines)
     {
         return;
     }
@@ -196,14 +197,14 @@ void Watch() noexcept
     g_loggedOnce = true;
     try
     {
-        platform::Log(L"{}", Format(now));
+        platform::LogTrace(L"{}", Format(now));
     }
     catch (...)
     {
     }
     if (++g_lines == kMaxLines)
     {
-        platform::Log(L"menu focus: {} lines logged; the log stops here", kMaxLines);
+        platform::LogTrace(L"menu focus: {} lines logged; the log stops here", kMaxLines);
     }
 }
 

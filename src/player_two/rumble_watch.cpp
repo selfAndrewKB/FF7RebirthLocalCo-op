@@ -182,24 +182,24 @@ void Flush() noexcept
     ++g_counts.frames;
     const bool nonZero = g_frame.NonZero();
     g_counts.nonZeroFrames += nonZero ? 1 : 0;
-    if ((nonZero || !g_frame.SameShape(g_logged)) && g_lines < kMaxLines)
+    if (platform::Enabled(platform::Level::Trace) && (nonZero || !g_frame.SameShape(g_logged)) && g_lines < kMaxLines)
     {
         ++g_lines;
         g_logged = g_frame;
         try
         {
-            platform::Log(L"rumble: frame {}: {}", g_frame.index, Describe(g_frame));
+            platform::LogTrace(L"rumble: frame {}: {}", g_frame.index, Describe(g_frame));
         }
         catch (...)
         {
         }
     }
-    else if (g_lines >= kMaxLines && !g_budgetSaid)
+    else if (platform::Enabled(platform::Level::Trace) && g_lines >= kMaxLines && !g_budgetSaid)
     {
         g_budgetSaid = true;
         try
         {
-            platform::Log(L"rumble: {} frame lines written; only the status line from here on", kMaxLines);
+            platform::LogTrace(L"rumble: {} frame lines written; only the status line from here on", kMaxLines);
         }
         catch (...)
         {
@@ -212,7 +212,7 @@ void Flush() noexcept
 void LogStatus() noexcept
 {
     const auto now = Clock::now();
-    if (now - g_statusAt < kStatusEvery || !generation::Active())
+    if (now - g_statusAt < kStatusEvery || !generation::Active() || !platform::Enabled(platform::Level::Debug))
     {
         return;
     }
@@ -223,7 +223,7 @@ void LogStatus() noexcept
     const auto* app = reinterpret_cast<const std::uint8_t*>(Read<std::uintptr_t>(reinterpret_cast<const void*>(g_app), 0));
     try
     {
-        platform::Log(L"rumble (10 s): {} frame(s), {} with a non-zero value; sends PC1 {}, PC2 {}, other {}; {} pad write(s)"
+        platform::LogDebug(L"rumble (10 s): {} frame(s), {} with a non-zero value; sends PC1 {}, PC2 {}, other {}; {} pad write(s)"
                       L"{}; device code now {}; PC1 feedback {} scale {:.2f} effects {}; PC2 feedback {} scale {:.2f} "
                       L"effects {}, PlayerInput {}",
                       g_counts.frames, g_counts.nonZeroFrames, g_counts.sendsOne, g_counts.sendsTwo, g_counts.sendsOther,

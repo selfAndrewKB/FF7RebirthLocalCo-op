@@ -244,10 +244,11 @@ void* AddCompositePasses(void* module, void* builder, const void* views, void* t
         {
             const bool playerTwo = rect[0] > 0 || rect[1] > 0;  // player 1's half starts at the origin
             family               = playerTwo ? g_fields.playerTwoName : stockName;
-            if (g_familyLogLines.fetch_add(1, std::memory_order_relaxed) < kFamilyLogLines)
+            if (platform::Enabled(platform::Level::Debug) &&
+                g_familyLogLines.fetch_add(1, std::memory_order_relaxed) < kFamilyLogLines)
             {
-                platform::Log(L"HUD image: a family with view ({},{})-({},{}) draws player {}'s entry", rect[0], rect[1],
-                              rect[2], rect[3], playerTwo ? 2 : 1);
+                platform::LogDebug(L"HUD image: a family with view ({},{})-({},{}) draws player {}'s entry", rect[0],
+                                   rect[1], rect[2], rect[3], playerTwo ? 2 : 1);
             }
         }
     }
@@ -448,7 +449,11 @@ void EndOverlayRender() noexcept
         // already advanced the ring, so the slot is submitted as the game's own pass would have,
         // holding player 2's entry alone.
         g_submitLayerSlot(g_renderer, kPoolTwo, g_slot, 0);
-        platform::Log(L"HUD image: player 1's pass did not render this frame; player 2's slot submitted on its own");
+        // Info the first time (an unusual path), Debug after: a state that lasts (a cutscene) would repeat it per frame.
+        static bool s_said = false;
+        platform::LogAt(s_said ? platform::Level::Debug : platform::Level::Info,
+                        L"HUD image: player 1's pass did not render this frame; player 2's slot submitted on its own");
+        s_said = true;
         g_slot = nullptr;
     }
     minimap::EndOverlayRender();  // the minimap's held pool-0 slot, if player 1's pass did not take it

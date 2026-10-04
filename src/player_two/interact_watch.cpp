@@ -242,7 +242,7 @@ bool Spend(int lines = 1) noexcept
     }
     if (droppedLastPeriod != 0)
     {
-        platform::Log(L"interact: {} line(s) over the budget were not written in the last period", droppedLastPeriod);
+        platform::LogDebug(L"interact: {} line(s) over the budget were not written in the last period", droppedLastPeriod);
     }
     return spent;
 }
@@ -318,6 +318,10 @@ void AddPoint(void* mgr, std::uint8_t talk, const std::uint64_t* key, const std:
     const auto registrar = Ida(reinterpret_cast<std::uintptr_t>(_ReturnAddress()));
     reinterpret_cast<AddPointFn>(g_addPoint.Original())(mgr, talk, key, owner, extra, location, rotation, preset,
                                                        presetPlayer, hold, kind, flagA, flagB, preset2, presetPlayer2);
+    if (!platform::Enabled(platform::Level::Debug))
+    {
+        return;  // the registration lines and the per-registrar counts are Debug
+    }
     bool inFull = false;
     try
     {
@@ -340,7 +344,7 @@ void AddPoint(void* mgr, std::uint8_t talk, const std::uint64_t* key, const std:
         {
             platform::CopyGuarded(at, location, sizeof(at));
         }
-        platform::Log(L"interact: add {} (owner {}, talk {}, kind {}, presets {} / {}{}{}, at {:.0f},{:.0f},{:.0f}) by "
+        platform::LogDebug(L"interact: add {} (owner {}, talk {}, kind {}, presets {} / {}{}{}, at {:.0f},{:.0f},{:.0f}) by "
                       L"0x{:X}, leader type {}",
                       Name(Read<std::uint64_t>(key, 0)), Name(Read<std::uint64_t>(owner, 0)), talk, kind,
                       Name(Read<std::uint64_t>(preset, 0)), Name(Read<std::uint64_t>(presetPlayer, 0)),
@@ -363,13 +367,13 @@ void ExecuteSlot(void* mgr, std::uint8_t slot) noexcept
     reinterpret_cast<ExecuteSlotFn>(g_executeSlot.Original())(mgr, slot);
     const int marks  = t_marksInExecute;
     t_marksInExecute = outer;
-    if (!Spend())
+    if (!platform::Enabled(platform::Level::Debug) || !Spend())
     {
         return;
     }
     try
     {
-        platform::Log(L"interact: execute slot {} key {} (owner {}): leader {}, primary {}; executed {}, pending {}, "
+        platform::LogDebug(L"interact: execute slot {} key {} (owner {}): leader {}, primary {}; executed {}, pending {}, "
                       L"WorldItem marks {}",
                       slot, Name(key), Name(owner), LeaderText(), PrimaryText(),
                       Read<std::uint8_t>(mgr, kSlotExecuted + (slot & 7)), Read<std::uint8_t>(mgr, kPending), marks);
@@ -392,11 +396,11 @@ std::uint8_t MarkByKey(void* items, std::uint64_t key) noexcept
     {
         field_pickup::NoteMarked(key);
     }
-    if (Spend())
+    if (platform::Enabled(platform::Level::Debug) && Spend())
     {
         try
         {
-            platform::Log(L"interact: WorldItem mark {} -> {} ({}, from 0x{:X}){}", Name(key), taken,
+            platform::LogDebug(L"interact: WorldItem mark {} -> {} ({}, from 0x{:X}){}", Name(key), taken,
                           caller == kMarkFromListener ? L"the key listener" : L"another caller", caller,
                           playerTwo ? L", in player 2's pass" : L"");
         }
@@ -413,13 +417,15 @@ void Acquire(void* items, void* entry) noexcept
     // An item player 2 picked: the grant runs with player 2's controller as the primary one, its only player read
     // (the item-get rumble, RE-p2-field-interact.md §12.12 item 5).
     const bool playerTwo = generation::OnGameThread() && field_pickup::TakeMarked(key);
+    // The grant's line is Debug: its reads are made only when it is written.
+    const bool         logged      = platform::Enabled(platform::Level::Debug);
     std::wstring rumble;
     // Each controller's active force-feedback effects around the grant (RE-p2-rumble.md §6 item 4: expect +1 on the
     // primary one).
-    void* const        one         = generation::PlayerOneController();
-    void* const        two         = generation::PlayerTwoController();
-    const std::int32_t oneBefore   = rumble_watch::EffectCount(one);
-    const std::int32_t twoBefore   = rumble_watch::EffectCount(two);
+    void* const        one         = logged ? generation::PlayerOneController() : nullptr;
+    void* const        two         = logged ? generation::PlayerTwoController() : nullptr;
+    const std::int32_t oneBefore   = logged ? rumble_watch::EffectCount(one) : 0;
+    const std::int32_t twoBefore   = logged ? rumble_watch::EffectCount(two) : 0;
     {
         std::optional<primary_controller::Scope> primary;
         if (playerTwo)
@@ -429,17 +435,20 @@ void Acquire(void* items, void* entry) noexcept
         reinterpret_cast<AcquireFn>(g_acquire.Original())(items, entry);
         try
         {
-            rumble = PrimaryText();  // read inside the scope: who the rumble went to
+            if (logged)
+            {
+                rumble = PrimaryText();  // read inside the scope: who the rumble went to
+            }
         }
         catch (...)
         {
         }
     }
-    if (Spend())
+    if (logged && Spend())
     {
         try
         {
-            platform::Log(L"interact: WorldItem grant {}{} (the item-get rumble goes to the primary controller: {}; "
+            platform::LogDebug(L"interact: WorldItem grant {}{} (the item-get rumble goes to the primary controller: {}; "
                           L"force-feedback effects: player 1's controller {} -> {}, player 2's {} -> {})",
                           Name(key), playerTwo ? L" (player 2's pickup)" : L"", rumble, oneBefore,
                           rumble_watch::EffectCount(one), twoBefore, rumble_watch::EffectCount(two));
@@ -455,6 +464,10 @@ void Acquire(void* items, void* entry) noexcept
 /// The slot block, logged when it changes.
 void LogSlots(const std::uint8_t* mgr)
 {
+    if (!platform::Enabled(platform::Level::Trace))
+    {
+        return;  // the slots flip with each held or pressed button: a per-input report
+    }
     std::array<std::uint8_t, sizeof(g_slotSeen)> now{};
     std::size_t                                  at = 0;
     platform::CopyGuarded(now.data() + at, mgr + kSlotTargets, 8 * kSlots);
@@ -487,7 +500,7 @@ void LogSlots(const std::uint8_t* mgr)
                              row != 0 ? L", row" : L"", held != 0 ? L", held" : L"", press != 0 ? L", pressed" : L"",
                              done != 0 ? L", executed" : L"");
     }
-    platform::Log(L"interact: slots {} (candidates {}, pending {}, leader {})", slots.empty() ? L"none" : slots,
+    platform::LogTrace(L"interact: slots {} (candidates {}, pending {}, leader {})", slots.empty() ? L"none" : slots,
                   Read<std::int32_t>(mgr, kCandidateCount), now[at], LeaderText());
 }
 
@@ -568,7 +581,7 @@ void Census(const std::uint8_t* mgr, const std::unordered_set<std::uint64_t>& it
     if (const ULONGLONG now = GetTickCount64(); now >= g_censusSummaryAt && Spend())
     {
         g_censusSummaryAt = now + kRegistrarPeriodMs;
-        platform::Log(L"interact: census: {} point(s) registered, {} within 20 m of a player; nearest to player 1 {} at "
+        platform::LogDebug(L"interact: census: {} point(s) registered, {} within 20 m of a player; nearest to player 1 {} at "
                       L"{:.1f} m, to player 2 {} at {:.1f} m",
                       walked, nearby.size(), Name(nearestOneKey), nearestOne / 100.0f, Name(nearestTwoKey),
                       nearestTwo / 100.0f);
@@ -590,7 +603,7 @@ void Census(const std::uint8_t* mgr, const std::unordered_set<std::uint64_t>& it
         g_points[n.key] = n.seen;
         if (first)
         {
-            platform::Log(L"interact: near {} (owner {}, {}, talk {}, presets {} / {} / {}, slot {}, kind {}, variant {}, "
+            platform::LogDebug(L"interact: near {} (owner {}, {}, talk {}, presets {} / {} / {}, slot {}, kind {}, variant {}, "
                           L"flags 0x{:08X}): {:.1f} m from player 1, {:.1f} m from player 2",
                           Name(n.key), Name(Read<std::uint64_t>(n.point, kPointOwner)),
                           items.contains(n.key) ? L"WorldItem" : L"not a WorldItem", n.seen.talk,
@@ -602,7 +615,7 @@ void Census(const std::uint8_t* mgr, const std::unordered_set<std::uint64_t>& it
         }
         else
         {
-            platform::Log(L"interact: {} now slot {}, flags 0x{:08X}{}: {:.1f} m from player 1, {:.1f} m from player 2",
+            platform::LogDebug(L"interact: {} now slot {}, flags 0x{:08X}{}: {:.1f} m from player 1, {:.1f} m from player 2",
                           Name(n.key), n.seen.slot, n.seen.flags,
                           (n.seen.flags & 2) != 0 ? L" (player 1's slot target)" : L"", n.d1 / 100.0f, n.d2 / 100.0f);
         }
@@ -619,7 +632,7 @@ void Census(const std::uint8_t* mgr, const std::unordered_set<std::uint64_t>& it
             ++it;  // retried at the next census
             continue;
         }
-        platform::Log(L"interact: {} is no longer near either player (or was removed)", Name(it->first));
+        platform::LogDebug(L"interact: {} is no longer near either player (or was removed)", Name(it->first));
         it = g_points.erase(it);
     }
 }
@@ -666,7 +679,7 @@ void DryRun(const std::uint8_t* mgr, const std::unordered_set<std::uint64_t>& it
                             items.contains(key) ? L"WorldItem" : Name(Read<std::uint64_t>(point, kPointPreset)),
                             Distance(at, two) / 100.0f);
     }
-    platform::Log(L"interact: dry run around player 2's member: {} candidate(s){}{}", count, count != 0 ? L": " : L"",
+    platform::LogDebug(L"interact: dry run around player 2's member: {} candidate(s){}{}", count, count != 0 ? L": " : L"",
                   line);
 }
 
@@ -695,13 +708,17 @@ void LogRegistrars()
     {
         line += std::format(L"{}0x{:X} {}", line.empty() ? L"" : L", ", registrar, count);
     }
-    platform::Log(L"interact: registrations in the last period by registrar (return address): {}", line);
+    platform::LogDebug(L"interact: registrations in the last period by registrar (return address): {}", line);
 }
 
 void AfterUpdate(const std::uint8_t* mgr)
 {
     LogSlots(mgr);
-    LogRegistrars();
+    const bool debug = platform::Enabled(platform::Level::Debug);  // the registrars, census and dry run are Debug
+    if (debug)
+    {
+        LogRegistrars();
+    }
     const bool in = generation::Active() && generation::Member() != nullptr;
     if (in != g_wasIn)
     {
@@ -710,7 +727,7 @@ void AfterUpdate(const std::uint8_t* mgr)
         g_dryRunSeen.clear();
     }
     const ULONGLONG now = GetTickCount64();
-    if (!in || now < g_censusAt)
+    if (!debug || !in || now < g_censusAt)
     {
         return;
     }

@@ -196,9 +196,9 @@ void Install(const platform::GameImage& image) noexcept
 
 void Tick(bool splitShown) noexcept
 {
-    if (!g_installed || g_lines >= kMaxLines)
+    if (!g_installed || g_lines >= kMaxLines || !platform::Enabled(platform::Level::Debug))
     {
-        return;
+        return;  // a read-only watch: nothing to read when its lines are not written
     }
     const State now     = Take();
     const bool  changed = !g_seen || !now.SameAs(g_last);
@@ -216,21 +216,21 @@ void Tick(bool splitShown) noexcept
     {
         if (now.holder == nullptr)
         {
-            platform::Log(L"minimap watch: no navimap holder");
+            platform::LogDebug(L"minimap watch: no navimap holder");
         }
         else if (now.slate == nullptr)
         {
-            platform::Log(L"minimap watch: holder {:#x}, no minimap widget registered (compass areas)",
+            platform::LogDebug(L"minimap watch: holder {:#x}, no minimap widget registered (compass areas)",
                           reinterpret_cast<std::uintptr_t>(now.holder));
         }
         else if (changed)
         {
-            platform::Log(L"minimap watch: {} widget {}, Slate {:#x}; {}; {}", now.kind, ObjectText(now.object),
+            platform::LogDebug(L"minimap watch: {} widget {}, Slate {:#x}; {}; {}", now.kind, ObjectText(now.object),
                           reinterpret_cast<std::uintptr_t>(now.slate), TargetText(now), ContentText(now));
         }
         else
         {
-            platform::Log(L"minimap watch: {}", ContentText(now));
+            platform::LogDebug(L"minimap watch: {}", ContentText(now));
         }
     }
     catch (...)

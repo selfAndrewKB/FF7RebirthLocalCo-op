@@ -90,6 +90,10 @@ float ReachOf(Detail detail) noexcept
 template <class... A>
 void Line(std::wformat_string<A...> format, A&&... args) noexcept
 {
+    if (!platform::Enabled(platform::Level::Debug))
+    {
+        return;  // a Debug report (platform/log.h)
+    }
     if (g_lines >= kMaxLines)
     {
         return;
@@ -97,14 +101,14 @@ void Line(std::wformat_string<A...> format, A&&... args) noexcept
     ++g_lines;
     try
     {
-        platform::WriteLine(L"charapop near: " + std::format(format, std::forward<A>(args)...));
+        platform::WriteLine(L"[debug] charapop near: " + std::format(format, std::forward<A>(args)...));
     }
     catch (...)
     {
     }
     if (g_lines == kMaxLines)
     {
-        platform::WriteLine(L"charapop near: line limit reached; raising and clearing go on unlogged");
+        platform::WriteLine(L"[debug] charapop near: line limit reached; raising and clearing go on unlogged");
     }
 }
 
@@ -197,7 +201,8 @@ void ClearAll(const wchar_t* why) noexcept
             Drop(g_raisedCount - 1);
         }
     }
-    Line(L"{} {} raised entr{} ({})", samePop ? L"cleared" : L"forgot (a new map)", count, count == 1 ? L"y" : L"ies", why);
+    // A real state change (switched off, the split closed, a new map, unloading): Info.
+    platform::Log(L"charapop near: {} {} raised entr{} ({})", samePop ? L"cleared" : L"forgot (a new map)", count, count == 1 ? L"y" : L"ies", why);
 }
 
 int Find(const void* entry) noexcept
@@ -281,8 +286,11 @@ void HandleRaised(int index, const Sighting& s, float reach, PassCounts& counts)
         return;
     }
     const bool covered = hold == Hold::PlayerOneCovers;
-    Line(L"cleared {} ({}; player 2: {}, player 1: {})", NameOf(s.actor),
-         covered ? L"player 1's camera keeps it" : L"out of player 2's reach", Where(&s.two), Where(s.fromOne));
+    if (platform::Enabled(platform::Level::Debug))
+    {
+        Line(L"cleared {} ({}; player 2: {}, player 1: {})", NameOf(s.actor),
+             covered ? L"player 1's camera keeps it" : L"out of player 2's reach", Where(&s.two), Where(s.fromOne));
+    }
     if (Clear(index))
     {
         ++(covered ? g_coveredTotal : g_outOfReachTotal);
@@ -303,7 +311,7 @@ void HandleCandidate(const Sighting& s, float reach, Detail detail, PassCounts& 
     {
         ++counts.covered;
         // Each entry once (the same few were logged several times a second, live 2026-10-03).
-        if (logged == g_leftLogged.end() && g_skipSamples < kSkipSamples)
+        if (platform::Enabled(platform::Level::Debug) && logged == g_leftLogged.end() && g_skipSamples < kSkipSamples)
         {
             ++g_skipSamples;
             g_leftLogged[g_leftNext++ % g_leftLogged.size()] = s.entry;
@@ -321,7 +329,9 @@ void HandleCandidate(const Sighting& s, float reach, Detail detail, PassCounts& 
         if (!g_fullLogged)
         {
             g_fullLogged = true;
-            Line(L"{} entries raised, the most kept: further entries near player 2 are left as the game has them", kMaxRaised);
+            platform::Log(L"charapop near: {} entries raised, the most kept: further entries near player 2 are left as "
+                          L"the game has them",
+                          kMaxRaised);
         }
         return;
     }
@@ -332,8 +342,11 @@ void HandleCandidate(const Sighting& s, float reach, Detail detail, PassCounts& 
     }
     g_raised[static_cast<std::size_t>(g_raisedCount++)] = {key, s.entry, s.level, 0, true};
     ++g_raisedTotal;
-    Line(L"raised {} ({}, level {}; player 2: {}, player 1: {}, which does not keep it)", NameOf(s.actor),
-         DetailName(detail), s.level, Where(&s.two), Where(s.fromOne));
+    if (platform::Enabled(platform::Level::Debug))
+    {
+        Line(L"raised {} ({}, level {}; player 2: {}, player 1: {}, which does not keep it)", NameOf(s.actor),
+             DetailName(detail), s.level, Where(&s.two), Where(s.fromOne));
+    }
 }
 
 void Pass(Detail detail)

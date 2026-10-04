@@ -334,6 +334,22 @@ ParsedLine ParseStreamFov(const std::vector<std::wstring_view>& words)
     return Parsed(std::move(command));
 }
 
+ParsedLine ParseLogLevel(const std::vector<std::wstring_view>& words)
+{
+    constexpr std::wstring_view kLevels[] = {L"error", L"warning", L"info", L"debug", L"trace"};
+    for (std::uint32_t level = 0; words.size() == 2 && level < std::size(kLevels); ++level)
+    {
+        if (words[1] == kLevels[level])
+        {
+            Command command;
+            command.kind  = CommandKind::LogLevel;
+            command.ticks = level;
+            return Parsed(std::move(command));
+        }
+    }
+    return Error(L"log-level takes error, warning, info, debug or trace");
+}
+
 ParsedLine ParseBare(CommandKind kind, const std::vector<std::wstring_view>& words)
 {
     if (words.size() != 1)
@@ -385,6 +401,7 @@ ParsedLine ParseLine(std::wstring_view line)
     if (name == L"icons-mask") return ParseMask(words, CommandKind::IconsMask, 15);
     if (name == L"battle-mask") return ParseMask(words, CommandKind::BattleMask, 511);
     if (name == L"perf-log") return ParseSwitch(CommandKind::PerfLog, words, L"on", L"off");
+    if (name == L"log-level") return ParseLogLevel(words);
     if (name == L"single-view") return ParseSingleView(words);
     if (name == L"stream-views") return ParseStreamViews(words);
     if (name == L"stream-fov-p1") return ParseStreamFov(words);
@@ -429,6 +446,11 @@ std::wstring Describe(const Command& command)
         case CommandKind::IconsMask: return std::format(L"icons-mask {}", command.ticks);
         case CommandKind::BattleMask: return std::format(L"battle-mask {}", command.ticks);
         case CommandKind::PerfLog: return command.on ? L"perf-log on" : L"perf-log off";
+        case CommandKind::LogLevel:
+        {
+            constexpr const wchar_t* kLevels[] = {L"error", L"warning", L"info", L"debug", L"trace"};
+            return std::wstring(L"log-level ") + kLevels[command.ticks < std::size(kLevels) ? command.ticks : 2];
+        }
         case CommandKind::SingleView:
             return command.ticks == 1 ? L"single-view on" : command.ticks == 2 ? L"single-view off" : L"single-view auto";
         case CommandKind::StreamViews:

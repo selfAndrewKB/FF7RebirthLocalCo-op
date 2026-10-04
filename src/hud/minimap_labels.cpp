@@ -275,11 +275,11 @@ void LogCounts() noexcept
     {
         return;
     }
-    platform::Log(L"minimap labels (2 min): swaps in {} / out {}; labels {} (new {}, font resets {}, died in player 2's "
-                  L"pass {}, died aside {}, released {}); refused {}, table full {}, faults {}",
-                  c.swapsIn - l.swapsIn, c.swapsOut - l.swapsOut, g_book.Count(), c.created - l.created,
-                  c.fontResets - l.fontResets, c.diedInside - l.diedInside, c.diedAside - l.diedAside,
-                  c.released - l.released, c.refused - l.refused, c.full - l.full, c.faults - l.faults);
+    platform::LogDebug(L"minimap labels (2 min): swaps in {} / out {}; labels {} (new {}, font resets {}, died in player "
+                       L"2's pass {}, died aside {}, released {}); refused {}, table full {}, faults {}",
+                       c.swapsIn - l.swapsIn, c.swapsOut - l.swapsOut, g_book.Count(), c.created - l.created,
+                       c.fontResets - l.fontResets, c.diedInside - l.diedInside, c.diedAside - l.diedAside,
+                       c.released - l.released, c.refused - l.refused, c.full - l.full, c.faults - l.faults);
     g_loggedCounts = c;
 }
 

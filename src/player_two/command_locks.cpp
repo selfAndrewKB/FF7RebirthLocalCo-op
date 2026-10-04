@@ -87,13 +87,20 @@ bool Put(std::uintptr_t address, T value) noexcept
     return address != 0 && platform::WriteGuarded(reinterpret_cast<void*>(address), &value, sizeof(T));
 }
 
-void Line(const std::wstring& text) noexcept
+/// A line; a line above the current level uses none of the budget.
+void Line(const std::wstring& text, platform::Level level = platform::Level::Info) noexcept
 {
-    if (g_lines < kMaxLines)
+    if (g_lines < kMaxLines && platform::Enabled(level))
     {
         ++g_lines;
-        platform::Log(L"command locks: {}", text);
+        platform::LogAt(level, L"command locks: {}", text);
     }
+}
+
+/// Debug for a follow that worked, Info for one that faulted or failed.
+platform::Level FollowLevel(bool ok) noexcept
+{
+    return ok ? platform::Level::Debug : platform::Level::Info;
 }
 
 /// Player 2's controller if a game call may be followed on it now: it exists, we are on the game thread,
@@ -152,7 +159,8 @@ void Follow(const platform::CallRedirect& redirect, const wchar_t* what, std::ui
     }
     const bool ran = WithSlot(two, [&] { return platform::CallGuarded(original, value); });
     Line(std::format(L"{} {} -> player 2's controller too{} (now {})", what, value, ran ? L"" : L" (FAULTED)",
-                     Field<std::uint8_t>(two + offset)));
+                     Field<std::uint8_t>(two + offset)),
+         FollowLevel(ran));
 }
 
 void CommandsEnabled(std::uint8_t value) noexcept
@@ -178,7 +186,8 @@ void CategoryEnabled(std::uint8_t category, std::uint8_t enabled) noexcept
     }
     const bool ran = WithSlot(two, [&] { return platform::CallGuarded(original, category, enabled); });
     Line(std::format(L"command category {} enabled {} -> player 2's controller too{}", category, enabled,
-                     ran ? L"" : L" (FAULTED)"));
+                     ran ? L"" : L" (FAULTED)"),
+         FollowLevel(ran));
 }
 
 /// Replaces the on/off table dispatcher's entry: it runs once (it consumes its queue and drives music,
@@ -207,7 +216,8 @@ void Dispatch(void* fieldSystem, std::int32_t mode) noexcept
         }
         const bool stored = Put(two + kTableBytes[i], after);
         Line(std::format(L"on/off table: +{:#x} {} -> {} on the game's controller; player 2's {}", kTableBytes[i],
-                         before[i], after, stored ? L"too" : L"NOT (write failed)"));
+                         before[i], after, stored ? L"too" : L"NOT (write failed)"),
+             FollowLevel(stored));
     }
 }
 

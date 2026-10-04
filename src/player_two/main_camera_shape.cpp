@@ -198,7 +198,8 @@ void ShapeMainCamera(void* controller, const wchar_t* who) noexcept
     const bool original = g_reflection.constrain->GetPropertyValueInContainer(component);
     *slot = {Tracked::Of(camera), Tracked::Of(component), original};
     const bool set = !original || SetConstraint(component, false);
-    platform::Log(L"main cameras: {}'s main camera {} (constrain aspect ratio was {})", who,
+    platform::LogAt(set ? platform::Level::Debug : platform::Level::Info,  // each camera Debug; a failure Info
+                    L"main cameras: {}'s main camera {} (constrain aspect ratio was {})", who,
                   !original ? L"already unconstrained; left as it is"
                   : set     ? L"unconstrained with the game's SetConstraintAspectRatio(false): the half fills"
                             : L"setter RAISED AN EXCEPTION; the half keeps the game's 16:9 bars",
@@ -224,7 +225,7 @@ void RestoreAll() noexcept
     }
     if (restored > 0)
     {
-        platform::Log(L"main cameras: {} main camera(s) constrained to 16:9 again (the game's own setting)", restored);
+        platform::LogDebug(L"main cameras: {} main camera(s) constrained to 16:9 again (the game's own setting)", restored);
     }
 }
 

@@ -275,6 +275,11 @@ void InScopes(void* member, void* state, float deltaTime) noexcept
         // for player 2 (player_two/lock_on.h). Attack, unique, guard and dodge: player 2's command
         // controller (player_two/command_menu_tick.h).
 
+        if (!platform::Enabled(platform::Level::Trace))
+        {
+            g_log.Reset();  // off: the next line starts fresh
+            return;
+        }
         if (g_lines >= kMaxLines)
         {
             return;
@@ -321,7 +326,7 @@ void InScopes(void* member, void* state, float deltaTime) noexcept
         if (g_log.Offer(steady, now.requests))
         {
             ++g_lines;
-            platform::Log(L"battle input: {}", Describe(now));
+            platform::LogTrace(L"battle input: {}", Describe(now));
         }
     }    catch (...)
     {

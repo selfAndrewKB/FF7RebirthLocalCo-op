@@ -159,6 +159,10 @@ bool AtTitle(std::uintptr_t gameState) noexcept
 /// Each change of the signals, logged once (the edges the single view follows).
 void LogOnChange(const ScreenSignals& now) noexcept
 {
+    if (!platform::Enabled(platform::Level::Debug))
+    {
+        return;
+    }
     if (now.readable == g_logged.readable && now.gameState == g_logged.gameState && now.menuKind == g_logged.menuKind &&
         now.scriptMenu == g_logged.scriptMenu && now.jobBoard == g_logged.jobBoard && now.cutscene == g_logged.cutscene &&
         now.skippable == g_logged.skippable && now.skipping == g_logged.skipping && now.title == g_logged.title)
@@ -166,10 +170,10 @@ void LogOnChange(const ScreenSignals& now) noexcept
         return;
     }
     g_logged = now;
-    platform::Log(L"whole screen: {}game state {} (menu kind {}), script menu {}, job board {}, cutscene {}, skippable "
-                  L"scene {}, skip {}, title {} -> {}",
-                  now.readable ? L"" : L"(no game state) ", now.gameState, now.menuKind, now.scriptMenu, now.jobBoard,
-                  now.cutscene, now.skippable, now.skipping, now.title, NameOf(ReasonOf(now)));
+    platform::LogDebug(L"whole screen: {}game state {} (menu kind {}), script menu {}, job board {}, cutscene {}, "
+                       L"skippable scene {}, skip {}, title {} -> {}",
+                       now.readable ? L"" : L"(no game state) ", now.gameState, now.menuKind, now.scriptMenu,
+                       now.jobBoard, now.cutscene, now.skippable, now.skipping, now.title, NameOf(ReasonOf(now)));
 }
 
 }  // namespace

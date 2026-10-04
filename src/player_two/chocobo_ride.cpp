@@ -586,6 +586,11 @@ const wchar_t* EndReason(const Ride& ride, bool& getOff) noexcept
 
 void LogRows(Ride& ride, void* state) noexcept
 {
+    if (!platform::Enabled(platform::Level::Debug))
+    {
+        ride.rows = ~0u;  // each change of the rows asked for: Debug; off, the next line starts fresh
+        return;
+    }
     std::uint32_t values = 0;  // two bits per request: its value (0..3)
     for (std::size_t i = 0; i < std::size(kRowRequests); ++i)
     {
@@ -607,7 +612,7 @@ void LogRows(Ride& ride, void* state) noexcept
                 text += std::format(L" {:X}:{}", kRowRequests[i], value);
             }
         }
-        platform::Log(L"chocobo ride: player 2's chocobo asks for rows at{}", text.empty() ? L" none" : text.c_str());
+        platform::LogDebug(L"chocobo ride: player 2's chocobo asks for rows at{}", text.empty() ? L" none" : text.c_str());
     }
     catch (...)
     {
@@ -616,6 +621,10 @@ void LogRows(Ride& ride, void* state) noexcept
 
 void LogSummary(const Ride& ride) noexcept
 {
+    if (!platform::Enabled(platform::Level::Debug))
+    {
+        return;  // a periodic status line: Debug
+    }
     const auto now = Clock::now();
     if (now - g_lastSummary < kSummaryEvery)
     {
@@ -627,7 +636,7 @@ void LogSummary(const Ride& ride) noexcept
     const bool  read    = charapop::ActorLocation(ride.chocobo, two) && charapop::ActorLocation(const_cast<void*>(oneBody), one);
     try
     {
-        platform::Log(L"chocobo ride: driving, {} ticks ({} refused); its own slot 1 in player 2's scope {} times ({} refused); "
+        platform::LogDebug(L"chocobo ride: driving, {} ticks ({} refused); its own slot 1 in player 2's scope {} times ({} refused); "
                       L"{:.0f} m from player 1's ride body; {}",
                       ride.ticks, ride.refused, ride.handles, ride.handlesRefused,
                       read ? charapop::Distance(one, two) / 100.0f : -1.0f, LeaseText(ride));
@@ -813,7 +822,7 @@ bool TickHandles(void* state, float deltaTime, std::uintptr_t (*engine)(void* st
             g_ride.loggedInside  = g_ride.riddenInside;
             try
             {
-                platform::Log(L"chocobo ride: the game's ridden-vehicle test for player 2's chocobo: {} outside player 2's "
+                platform::LogDebug(L"chocobo ride: the game's ridden-vehicle test for player 2's chocobo: {} outside player 2's "
                               L"scope, {} inside (1 = the primary player's ridden chocobo: the game's anim sync leaves it "
                               L"to the input)",
                               g_ride.riddenOutside, g_ride.riddenInside);

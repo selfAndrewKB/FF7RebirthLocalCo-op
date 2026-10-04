@@ -205,6 +205,10 @@ std::uint32_t             g_nextMeshClass = 0;
 template <class... A>
 void Line(std::wformat_string<A...> format, A&&... args) noexcept
 {
+    if (!platform::Enabled(platform::Level::Debug))
+    {
+        return;  // a Debug report (platform/log.h)
+    }
     if (g_lines >= kMaxLines)
     {
         return;
@@ -212,14 +216,14 @@ void Line(std::wformat_string<A...> format, A&&... args) noexcept
     ++g_lines;
     try
     {
-        platform::WriteLine(L"charapop: " + std::format(format, std::forward<A>(args)...));
+        platform::WriteLine(L"[debug] charapop: " + std::format(format, std::forward<A>(args)...));
     }
     catch (...)
     {
     }
     if (g_lines == kMaxLines)
     {
-        platform::WriteLine(L"charapop: line limit reached; the watch is quiet from here on");
+        platform::WriteLine(L"[debug] charapop: line limit reached; the watch is quiet from here on");
     }
 }
 
@@ -568,7 +572,9 @@ bool Install(const platform::GameImage& image) noexcept
 
 void Tick(bool splitShown) noexcept
 {
-    if (!g_installed || !splitShown || !generation::OnGameThread() || !generation::Active() || g_lines >= kMaxLines)
+    // The watch only logs, and its lines are Debug: nothing is sampled below that level.
+    if (!g_installed || !splitShown || !platform::Enabled(platform::Level::Debug) || !generation::OnGameThread() ||
+        !generation::Active() || g_lines >= kMaxLines)
     {
         g_wasShown = false;
         return;

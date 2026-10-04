@@ -277,15 +277,15 @@ void PollMeFeedbackOnce() noexcept
         }
     }
     familyTwo = delta[Renders][TwoPassed] + delta[Renders][TwoSkipped] != 0;
-    if (!familyTwo)
+    if (!familyTwo || !platform::Enabled(platform::Level::Debug))
     {
-        return;  // one family per frame: nothing to report
+        return;  // one family per frame: nothing to report (or the periodic Debug line is not written)
     }
     auto line = [&](Stage stage) {
         return std::format(L"{} / {} passed / {} skipped", delta[stage][PlayerOne], delta[stage][TwoPassed],
                            delta[stage][TwoSkipped]);
     };
-    platform::Log(L"stream feedback ({}): in the last period, player 1's family / player 2's: renders {}; readback "
+    platform::LogDebug(L"stream feedback ({}): in the last period, player 1's family / player 2's: renders {}; readback "
                   L"processing {}; main-pass copies {}; hidden-component passes {}; budget state {}",
                   MeFeedbackOnceOn() ? L"p1" : L"each", line(Renders), line(Processes), line(Copies), line(Hidden),
                   BudgetState());

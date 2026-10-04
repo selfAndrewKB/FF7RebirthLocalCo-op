@@ -44,6 +44,7 @@
 #include "player_two/field_pickup.h"
 #include "player_two/rumble_watch.h"
 #include "player_two/pad_rumble.h"
+#include "player_two/combat_rumble.h"
 #include "player_two/interact_watch.h"
 #include "player_two/charapop_watch.h"
 #include "player_two/charapop_near.h"
@@ -84,7 +85,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.51.0";
+constexpr const wchar_t* kVersion = L"0.52.0";
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -150,7 +151,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.51.0");
+        ModVersion     = STR("0.52.0");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -296,6 +297,7 @@ public:
         lss::player_two::field_pickup::Install(*image);    // player 2's pickups: a second pass of the game's prompts
         lss::player_two::rumble_watch::Install(*image);    // logging only: each controller's rumble, pad by pad
         lss::player_two::pad_rumble::Install(*image);      // each player's rumble on their own pad
+        lss::player_two::combat_rumble::Install(*image);   // player 2's combat rumble (hits, montage notifies) on player 2's pad
         lss::player_two::interact_watch::Install(*image);  // field interactions (pickups) per player, logged (read-only)
         lss::hud::InstallPlayerTwoPass(*image);      // player 2's HUD content, on (the hud-levers command switches it)
         lss::hud::InstallRootOverlayRender(*image);  // before the overlay renders: placement follow, trace
@@ -385,6 +387,7 @@ private:
         lss::platform::frame_watch::OnFrameStart();
         const lss::platform::frame_watch::Charge charge(lss::platform::frame_watch::Part::EngineTick);
         lss::player_two::pad_rumble::BeforeTick();  // before the world tick: player 2's controller ordered after player 1's
+        lss::player_two::combat_rumble::BeforeTick();  // outside every notify: their call sites; the status line
         if (!tickSeen_)
         {
             tickSeen_ = true;
@@ -473,7 +476,10 @@ private:
         else if (now >= nextStatus_)
         {
             nextStatus_ = now + kStatusIntervalMs;
-            session_->LogStatus();
+            if (lss::platform::Enabled(lss::platform::Level::Debug))  // periodic: a Debug report (the status command writes it at any level)
+            {
+                session_->LogStatus();
+            }
         }
     }
 

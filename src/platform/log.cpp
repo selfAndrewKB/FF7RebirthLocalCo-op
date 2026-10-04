@@ -5,6 +5,7 @@
 #include <DynamicOutput/DynamicOutput.hpp>
 
 #include <atomic>
+#include <cstdint>
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -50,6 +51,32 @@ void SendLocked(std::wstring_view line)  // not noexcept: the sink's exceptions 
 
 }  // namespace
 
+namespace detail {
+std::atomic<std::uint8_t> g_level{static_cast<std::uint8_t>(Level::Info)};
+}
+
+void SetLevel(Level level) noexcept
+{
+    detail::g_level.store(static_cast<std::uint8_t>(level), std::memory_order_relaxed);
+}
+
+Level CurrentLevel() noexcept
+{
+    return static_cast<Level>(detail::g_level.load(std::memory_order_relaxed));
+}
+
+const wchar_t* LevelName(Level level) noexcept
+{
+    switch (level)
+    {
+        case Level::Error: return L"error";
+        case Level::Warning: return L"warning";
+        case Level::Info: return L"info";
+        case Level::Debug: return L"debug";
+        case Level::Trace: return L"trace";
+    }
+    return L"?";
+}
 void WriteLine(std::wstring_view line) noexcept
 {
     // UE4SS formats with "{}" placeholders, so the text is passed as an argument, never as the

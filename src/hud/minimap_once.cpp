@@ -273,10 +273,13 @@ void PollMinimapOnce() noexcept
     {
         return;  // no minimap on screen this period (the open world shows a compass)
     }
-    platform::Log(L"minimap once ({}): in the last period the circle's map rendered {} and skipped {} times, the "
-                  L"octagon's rendered {} and skipped {}; player 2's HUD passes {}; {}",
-                  g_on ? L"on" : L"off", counts[0] - g_logged[0], counts[1] - g_logged[1], counts[2] - g_logged[2],
-                  counts[3] - g_logged[3], counts[4] - g_logged[4], PoolZeroReading());
+    if (platform::Enabled(platform::Level::Debug))
+    {
+        platform::LogDebug(L"minimap once ({}): in the last period the circle's map rendered {} and skipped {} times, the "
+                           L"octagon's rendered {} and skipped {}; player 2's HUD passes {}; {}",
+                           g_on ? L"on" : L"off", counts[0] - g_logged[0], counts[1] - g_logged[1],
+                           counts[2] - g_logged[2], counts[3] - g_logged[3], counts[4] - g_logged[4], PoolZeroReading());
+    }
     for (int i = 0; i < 5; ++i)
     {
         g_logged[i] = counts[i];

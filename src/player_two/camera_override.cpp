@@ -264,6 +264,11 @@ Snapshot g_snapshot;  // game thread: as last logged
 
 void Log(void* member)
 {
+    if (!platform::Enabled(platform::Level::Debug))
+    {
+        g_snapshot = Snapshot{};  // off: the next line starts fresh (as at start)
+        return;
+    }
     if (g_lines >= kMaxLines)
     {
         return;
@@ -277,7 +282,7 @@ void Log(void* member)
     void*      playerOne = generation::PlayerOneController();
     const auto oneChar   = reinterpret_cast<std::uintptr_t>(ReadPointer(playerOne, facts::kControllerPawn));
     ++g_lines;
-    platform::Log(L"camera override: global {:#x} P2's {:#x} | P1 camera{} | P2 camera{} | P1 {} | P2 {}", g_global->object,
+    platform::LogDebug(L"camera override: global {:#x} P2's {:#x} | P1 camera{} | P2 camera{} | P1 {} | P2 {}", g_global->object,
                   g_playerTwo.object, DescribeCamera(playerOne), DescribeCamera(generation::PlayerTwoController()),
                   DescribeCharacter(oneChar), DescribeCharacter(reinterpret_cast<std::uintptr_t>(member)));
 }

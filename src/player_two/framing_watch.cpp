@@ -244,6 +244,11 @@ void Tick(bool splitShown) noexcept
     {
         LogScales();
     }
+    if (!platform::Enabled(platform::Level::Debug))
+    {
+        g_wasShown = false;  // the watch's lines are Debug: read nothing; a raised level starts with a full line
+        return;
+    }
     void* const controllers[2] = {generation::PlayerOneController(), generation::PlayerTwoController()};
     Framing     now[2];
     const bool  wasShown = g_wasShown;
@@ -271,7 +276,7 @@ void Tick(bool splitShown) noexcept
                 continue;  // a change line for the player whose framing changed; the heartbeat has both
             }
             ++g_lines;
-            platform::Log(L"framing: player {} {}: {}", p + 1, changed ? L"changed" : L"now", Describe(now[p]));
+            platform::LogDebug(L"framing: player {} {}: {}", p + 1, changed ? L"changed" : L"now", Describe(now[p]));
             g_last[p] = now[p];
         }
     }

@@ -358,15 +358,19 @@ void AdoptFieldTargets()
 /// player 2's context), and how many player 2's context reached while collapsed. On change.
 void LogFieldTargets()
 {
+    if (!platform::Enabled(platform::Level::Debug))
+    {
+        return;
+    }
     const FieldTargets now{g_fieldTargets.entries, g_fieldTargets.roots, hud_roots::HiddenSwapped()};
     if (now == g_fieldTargetsLogged)
     {
         return;
     }
     g_fieldTargetsLogged = now;
-    platform::Log(L"HUD levers: field-target markers: {} in the list, {} of them roots; {} collapsed root(s) given player 2's "
-                  L"context (shown again if player 2's camera sees them)",
-                  now.entries, now.roots, now.hiddenSwapped);
+    platform::LogDebug(L"HUD levers: field-target markers: {} in the list, {} of them roots; {} collapsed root(s) given "
+                       L"player 2's context (shown again if player 2's camera sees them)",
+                       now.entries, now.roots, now.hiddenSwapped);
 }
 
 /// L1 to player 2; on failure, puts player 1's contexts back and refuses.

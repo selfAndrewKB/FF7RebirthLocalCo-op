@@ -259,6 +259,17 @@ Outcome ModTarget::SetBattleMask(std::uint32_t mask)
     return {true, L"battle mask set (see the log)"};
 }
 
+Outcome ModTarget::SetLogLevel(std::uint32_t level)
+{
+    if (level > static_cast<std::uint32_t>(platform::Level::Trace))
+    {
+        return {false, L"no such log level"};
+    }
+    platform::SetLevel(static_cast<platform::Level>(level));
+    platform::Log(L"log level: {} (lines up to it are written)", platform::LevelName(platform::CurrentLevel()));
+    return {true, std::wstring(L"log level ") + platform::LevelName(platform::CurrentLevel())};
+}
+
 Outcome ModTarget::SetPerfLog(bool on)
 {
     platform::frame_watch::SetDetailed(on);

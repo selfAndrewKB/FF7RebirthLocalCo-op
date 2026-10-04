@@ -158,7 +158,7 @@ void LogDevice() noexcept
             g_statusAt = now;
             if (g_skips != 0 || g_passes != 0)
             {
-                platform::Log(L"pad rumble (60 s): {} input event(s) from player 2's pad (pad {}) kept out of player 1's "
+                platform::LogDebug(L"pad rumble (60 s): {} input event(s) from player 2's pad (pad {}) kept out of player 1's "
                               L"last device, {} passed",
                               g_skips, g_twoPad, g_passes);
             }

@@ -51,7 +51,7 @@ void* Resolve(const void* weakField) noexcept
 
 void LogIfChanged(int player, const Half& now) noexcept
 {
-    if (now == g_logged[player] || g_lines >= kMaxLines)
+    if (!platform::Enabled(platform::Level::Debug) || now == g_logged[player] || g_lines >= kMaxLines)
     {
         return;
     }
@@ -59,7 +59,7 @@ void LogIfChanged(int player, const Half& now) noexcept
     ++g_lines;
     try
     {
-        platform::Log(L"field markers: player {}'s half hides {} of player {}'s point marker(s) ({} widget(s))", player + 1,
+        platform::LogDebug(L"field markers: player {}'s half hides {} of player {}'s point marker(s) ({} widget(s))", player + 1,
                       now.markers, 2 - player, now.widgets);
     }
     catch (...)

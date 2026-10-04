@@ -48,8 +48,8 @@ void DescribeViewPoint(const std::byte* viewInfo, bool ownCamera) noexcept
     float yaw = 0.0f;
     std::memcpy(&yaw, viewInfo + view_info::kYaw, sizeof(yaw));
     const auto previousSet = static_cast<unsigned>(*(viewInfo + view_info::kPreviousViewTransformSet));
-    platform::Log(L"player 2's view point from {}: yaw {:.1f}; PreviousViewTransform set = {}",
-                  ownCamera ? L"player 2's own camera" : L"player 1's camera", yaw, previousSet);
+    platform::LogDebug(L"player 2's view point from {}: yaw {:.1f}; PreviousViewTransform set = {}",
+                       ownCamera ? L"player 2's own camera" : L"player 1's camera", yaw, previousSet);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -73,6 +73,10 @@ bool      g_shapeLogged[2]{};
 /// FOV is logged with it but does not trigger a line, since the game's camera changes it often.
 void LogShapeOnChange(bool isPlayerTwo, const std::byte* viewInfo) noexcept
 {
+    if (!platform::Enabled(platform::Level::Debug))
+    {
+        return;
+    }
     ViewShape shape{};
     std::memcpy(&shape.aspectRatio, viewInfo + view_info::kAspectRatio, sizeof(shape.aspectRatio));
     shape.flags = static_cast<unsigned char>(*(viewInfo + view_info::kFlags)) & view_info::kKnownFlagBits;
@@ -87,10 +91,10 @@ void LogShapeOnChange(bool isPlayerTwo, const std::byte* viewInfo) noexcept
 
     float fov = 0.0f;
     std::memcpy(&fov, viewInfo + view_info::kFov, sizeof(fov));
-    platform::Log(L"{}'s view shape (engine): constrain aspect ratio = {} (flag bits 0x{:X}), aspect ratio {:.4f}, "
-                  L"FOV {:.1f}",
-                  isPlayerTwo ? L"player 2" : L"player 1", (shape.flags & view_info::kConstrainAspectRatioBit) != 0,
-                  static_cast<unsigned>(shape.flags), shape.aspectRatio, fov);
+    platform::LogDebug(L"{}'s view shape (engine): constrain aspect ratio = {} (flag bits 0x{:X}), aspect ratio {:.4f}, "
+                       L"FOV {:.1f}",
+                       isPlayerTwo ? L"player 2" : L"player 1", (shape.flags & view_info::kConstrainAspectRatioBit) != 0,
+                       static_cast<unsigned>(shape.flags), shape.aspectRatio, fov);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -236,14 +240,18 @@ void ApplySplitFov(void* localPlayer, std::byte* viewInfo, bool isPlayerTwo) noe
     }
 
     const FovSteady steady{weight, half.aspect, half.heightRatio, cameraRatio};
-    if (g_fovLog[isPlayerTwo ? 1 : 0].Offer(steady, static_cast<int>(std::lround(fov * 10.0f))))
+    if (!platform::Enabled(platform::Level::Debug))
+    {
+        g_fovLog[isPlayerTwo ? 1 : 0].Reset();  // off: the next line starts fresh
+    }
+    else if (g_fovLog[isPlayerTwo ? 1 : 0].Offer(steady, static_cast<int>(std::lround(fov * 10.0f))))
     {
         constexpr float kHalfRadians = 3.14159265f / 360.0f;
         const float vertical = std::atan(std::tan(split * kHalfRadians) / half.aspect) / kHalfRadians;
-        platform::Log(L"split FOV ({}): weight {:.2f}, half aspect {:.3f} (height {:.2f} of the screen): camera {:.1f} "
-                      L"deg wide at {:.3f} -> {:.1f} deg wide, {:.1f} deg tall",
-                      isPlayerTwo ? L"player 2" : L"player 1", weight, half.aspect, half.heightRatio, fov, cameraRatio,
-                      split, vertical);
+        platform::LogDebug(L"split FOV ({}): weight {:.2f}, half aspect {:.3f} (height {:.2f} of the screen): camera "
+                           L"{:.1f} deg wide at {:.3f} -> {:.1f} deg wide, {:.1f} deg tall",
+                           isPlayerTwo ? L"player 2" : L"player 1", weight, half.aspect, half.heightRatio, fov,
+                           cameraRatio, split, vertical);
     }
 }
 

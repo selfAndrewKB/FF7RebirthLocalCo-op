@@ -183,12 +183,13 @@ bool Put(std::uintptr_t address, const T& value) noexcept
     return platform::WriteGuarded(reinterpret_cast<void*>(address), &value, sizeof(T));
 }
 
-void Note(const std::wstring& text) noexcept
+/// A line; a line above the current level uses none of the budget.
+void Note(const std::wstring& text, platform::Level level = platform::Level::Info) noexcept
 {
-    if (g_lines < kMaxLines)
+    if (g_lines < kMaxLines && platform::Enabled(level))
     {
         ++g_lines;
-        platform::Log(L"lock-on: {}", text);
+        platform::LogAt(level, L"lock-on: {}", text);
     }
 }
 
@@ -354,6 +355,11 @@ Snapshot g_snapshot;
 
 void LogPlayerTwo() noexcept
 {
+    if (!platform::Enabled(platform::Level::Debug))
+    {
+        g_snapshot = Snapshot{};  // off: the next line starts fresh (as at start)
+        return;
+    }
     if (g_lines >= kMaxLines)
     {
         return;
@@ -378,7 +384,8 @@ void LogPlayerTwo() noexcept
                          L"(runs {}, skipped {}, paused for the menu {}, panel requests skipped {})",
                          now.lock, now.latch, now.resting ? 1 : 0, now.displayed, now.targeted, now.cursor,
                          DescribeCamera(now.cameras[0]), DescribeCamera(now.cameras[1]), g_runs, g_refusals, g_menuPauses,
-                         g_panelSkips + g_panelGate.skipped));
+                         g_panelSkips + g_panelGate.skipped),
+             platform::Level::Debug);
     }
     catch (...)
     {
@@ -470,9 +477,15 @@ void PlayerTwoTargeting(TickFn engine, void* system, float deltaTime) noexcept
         }
         try
         {
-            Note(std::format(L"player 2's command target list {} (displayed {:#x}, cursor {:#x}; player 1's cursor {:#x})",
-                             g_listOpen ? L"OPENED" : L"closed", Field<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(system) + kDisplayed),
-                             Field<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(system) + kCursor), targets.OtherCursor()));
+            if (platform::Enabled(platform::Level::Debug))
+            {
+                Note(std::format(L"player 2's command target list {} (displayed {:#x}, cursor {:#x}; player 1's cursor {:#x})",
+                                 g_listOpen ? L"OPENED" : L"closed",
+                                 Field<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(system) + kDisplayed),
+                                 Field<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(system) + kCursor),
+                                 targets.OtherCursor()),
+                     platform::Level::Debug);
+            }
         }
         catch (...)
         {
@@ -512,19 +525,22 @@ void Targeting(void* system, float deltaTime) noexcept
     // Player 1's own target and lock, on change, beside player 2's in the same log.
     static std::uintptr_t loggedTarget = 0;
     static std::uint8_t   loggedLock   = 0;
-    const auto            base   = reinterpret_cast<std::uintptr_t>(system);
-    const auto            target = Field<std::uintptr_t>(base + kDisplayed);
-    const auto            lock   = Field<std::uint8_t>(base + kLock);
-    if (target != loggedTarget || lock != loggedLock)
+    if (platform::Enabled(platform::Level::Debug))
     {
-        loggedTarget = target;
-        loggedLock   = lock;
-        try
+        const auto base   = reinterpret_cast<std::uintptr_t>(system);
+        const auto target = Field<std::uintptr_t>(base + kDisplayed);
+        const auto lock   = Field<std::uint8_t>(base + kLock);
+        if (target != loggedTarget || lock != loggedLock)
         {
-            Note(std::format(L"player 1's target {:#x} lock {}", target, lock));
-        }
-        catch (...)
-        {
+            loggedTarget = target;
+            loggedLock   = lock;
+            try
+            {
+                Note(std::format(L"player 1's target {:#x} lock {}", target, lock), platform::Level::Debug);
+            }
+            catch (...)
+            {
+            }
         }
     }
     PlayerTwoTargeting(engine, system, deltaTime);

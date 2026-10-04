@@ -81,6 +81,7 @@ add_library(LocalSplitScreen SHARED
     src/player_two/field_pickup.cpp
     src/player_two/rumble_watch.cpp
     src/player_two/pad_rumble.cpp
+    src/player_two/combat_rumble.cpp
     src/player_two/interact_watch.cpp
     src/player_two/charapop_watch.cpp
     src/player_two/charapop_facts.cpp

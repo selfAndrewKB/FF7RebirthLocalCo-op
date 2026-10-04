@@ -117,10 +117,10 @@ void SwapOut() noexcept
             }
         });
         g_playerTwo.swap(g_seen);  // player 2's own; arrows no longer in the list are dropped
-        if (pinned > 0 && g_lines < kMaxLines)
+        if (pinned > 0 && g_lines < kMaxLines && platform::Enabled(platform::Level::Debug))
         {
             ++g_lines;
-            platform::Log(L"marker timers: {} of {} arrows have their own timer in player 2's view", pinned,
+            platform::LogDebug(L"marker timers: {} of {} arrows have their own timer in player 2's view", pinned,
                           g_playerTwo.size());
         }
     }

@@ -86,7 +86,8 @@ void LogFamilyOnChange(const std::byte* viewFamily) noexcept
 
     const auto engineSkip = *reinterpret_cast<const std::int32_t*>(viewFamily + family::kSkipFrameNumberIncrement);
     const auto engineAdd  = *reinterpret_cast<const std::uint8_t*>(viewFamily + family::kAdditionalViewFamily);
-    platform::Log(L"game viewport submits {} view(s){}; as built by the engine: +0x70={} +0x74={}", count,
+    // Logged on each change of the view list (Debug): the split's own lines say when it opens and closes.
+    platform::LogDebug(L"game viewport submits {} view(s){}; as built by the engine: +0x70={} +0x74={}", count,
                   count > 1 ? L", rendered as one family each" : L"", engineSkip, engineAdd);
 
     for (std::int32_t k = 0; views != nullptr && k < count; ++k)
@@ -96,7 +97,7 @@ void LogFamilyOnChange(const std::byte* viewFamily) noexcept
         {
             g_loggedRects[k] = rect;
         }
-        platform::Log(L"  view {}: output rect ({},{})-({},{}), {}x{}", k, rect[0], rect[1], rect[2], rect[3],
+        platform::LogDebug(L"  view {}: output rect ({},{})-({},{}), {}x{}", k, rect[0], rect[1], rect[2], rect[3],
                       rect[2] - rect[0], rect[3] - rect[1]);
     }
 }

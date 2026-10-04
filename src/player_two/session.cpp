@@ -107,15 +107,15 @@ void Session::TogglePadSticks() noexcept
 
 void Session::LogTagCounts(const wchar_t* when) noexcept
 {
-    if (!installed_.tagCounts)
+    if (!installed_.tagCounts || !platform::Enabled(platform::Level::Debug))
     {
-        return;
+        return;  // a snapshot (Debug): nothing is read below that level
     }
     const auto counts = tag_counts::Read(member_);
     const auto text   = [](const std::optional<std::int32_t>& count) {
         return count ? std::to_wstring(*count) : std::wstring(L"?");
     };
-    Log(L"tag counts {}: {}'s first tag {}, trigger tag {}", when, NameOf(member_), text(counts.member),
+    platform::LogDebug(L"tag counts {}: {}'s first tag {}, trigger tag {}", when, NameOf(member_), text(counts.member),
         text(counts.trigger));
 }
 
@@ -195,7 +195,7 @@ void Session::WatchOwnCamera() noexcept
 
 void Session::LogPlayerOneAfterJoin() noexcept
 {
-    Log(L"after the join, tick {}: player 1's pawn {} and leader {}", ticks_,
+    platform::LogDebug(L"after the join, tick {}: player 1's pawn {} and leader {}", ticks_,
         NameOf(ReadPointer(playerOneController_, facts::kControllerPawn)),
         NameOf(ReadPointer(playerOneController_, facts::kControllerLeader)));
 }

@@ -153,6 +153,10 @@ std::uint64_t TraceKey(std::size_t i) noexcept
 /// Accel and Dash: every change of the bytes the game left this frame and of the views, uncapped by the status lines.
 void Trace(std::size_t which, const Element& element, const button_view::Views& views)
 {
+    if (!platform::Enabled(platform::Level::Trace))
+    {
+        return;
+    }
     for (std::size_t k = 0; k < 2; ++k)
     {
         const std::uint64_t key = TraceKey(k);
@@ -170,7 +174,7 @@ void Trace(std::size_t which, const Element& element, const button_view::Views& 
         }
         g_traceLast[which][k] = packed;
         ++g_traceLines;
-        platform::Log(L"buttons trace ({}): {} as the game left it: previous {} held {} repeat {} latch {} sources 0x{:08X}; "
+        platform::LogTrace(L"buttons trace ({}): {} as the game left it: previous {} held {} repeat {} latch {} sources 0x{:08X}; "
                       L"game held {}; player 1 sees {}, player 2 sees {}",
                       kTables[which].name, k == 0 ? L"Accel" : L"Dash", element.previous, element.held, element.repeat,
                       element.latch, element.sources, views.gameHeld, views.now[0] ? 1 : 0, views.now[1] ? 1 : 0);
@@ -268,13 +272,17 @@ bool Load(const std::byte* owner, Table& table, std::uint32_t offset)
 void LogChange(const wchar_t* table, const Element& element, std::uint8_t wasHeld, std::uint32_t wasSources,
                const button_view::Views& views)
 {
+    if (!platform::Enabled(platform::Level::Trace))
+    {
+        return;
+    }
     if (g_lines >= kLinesPerStatus)
     {
         ++g_dropped;
         return;
     }
     ++g_lines;
-    platform::Log(L"buttons ({}): {} held {}->{} sources 0x{:08X}->0x{:08X}; player 1 sees {}, player 2 sees {}", table,
+    platform::LogTrace(L"buttons ({}): {} held {}->{} sources 0x{:08X}->0x{:08X}; player 1 sees {}, player 2 sees {}", table,
                   players::unreal::NameText(element.name), wasHeld, views.gameHeld, wasSources,
                   element.sources, views.now[0] ? 1 : 0, views.now[1] ? 1 : 0);
 }
@@ -421,13 +429,13 @@ char ExtraKeyDown(void* owner, void* unused, std::uint32_t sourceBit, void* even
                       L"that only the game thread runs it");
     }
     const char result = ActionDown(owner, unused, sourceBit, event, alreadyHandled);
-    if (g_extraKeyLines < kExtraKeyLines && event != nullptr)
+    if (platform::Enabled(platform::Level::Trace) && g_extraKeyLines < kExtraKeyLines && event != nullptr)
     {
         ++g_extraKeyLines;
         std::uint64_t key = 0;
         platform::CopyGuarded(&key, static_cast<const std::byte*>(event) + kActionEventKey, sizeof(key));
         const bool padTwo = ((button_view::PadBits(1) >> (sourceBit & 31)) & 1) != 0;
-        platform::Log(L"buttons: extra key {} from {} (source bit {}, already handled {}) -> {}",
+        platform::LogTrace(L"buttons: extra key {} from {} (source bit {}, already handled {}) -> {}",
                       players::unreal::NameText(key), padTwo ? L"pad 2" : L"pad 1 or another device",
                       sourceBit, alreadyHandled, static_cast<int>(result));
     }

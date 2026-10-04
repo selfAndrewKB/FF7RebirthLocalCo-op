@@ -297,10 +297,10 @@ void WatchLifecycle() noexcept
 
 void ReplayLine(const std::wstring& text) noexcept
 {
-    if (g_replayLines < kMaxReplayLines)
+    if (g_replayLines < kMaxReplayLines && platform::Enabled(platform::Level::Debug))
     {
         ++g_replayLines;
-        platform::Log(L"command menu two: {}", text);
+        platform::LogDebug(L"command menu two: {}", text);
     }
 }
 
@@ -486,6 +486,10 @@ Snapshot Read() noexcept
 
 void Watch() noexcept
 {
+    if (!platform::Enabled(platform::Level::Debug) || g_lines >= kMaxLines)
+    {
+        return;
+    }
     const Snapshot now = Read();
     if (g_loggedOnce && now == g_logged)
     {
@@ -494,7 +498,8 @@ void Watch() noexcept
     g_logged     = now;
     g_loggedOnce = true;
     const auto& b = now.bytes;
-    Line(std::format(L"members {} {} {} {} | menu {} (names this controller: {}) | 25C={} 258={} 777={} 783={} 5E1={} "
+    ++g_lines;
+    platform::LogDebug(L"command menu two: {}", std::format(L"members {} {} {} {} | menu {} (names this controller: {}) | 25C={} 258={} 777={} 783={} 5E1={} "
                      L"540={} | player 2's focus: path {}, layers {}",
                      now.members[0], now.members[1], now.members[2], now.members[3], NameOf(now.widget),
                      YesNo(now.widgetNamesUs), b[0], b[1], b[2], b[3], b[4], b[5], now.context.pathCount,

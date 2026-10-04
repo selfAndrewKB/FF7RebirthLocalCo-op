@@ -96,13 +96,19 @@ T Field(std::uintptr_t address) noexcept
     return value;
 }
 
-void Line(const std::wstring& text) noexcept
+/// A line; a line above the current level uses none of the budget.
+void Line(const std::wstring& text, platform::Level level = platform::Level::Info) noexcept
 {
-    if (g_lines < kMaxLines)
+    if (g_lines < kMaxLines && platform::Enabled(level))
     {
         ++g_lines;
-        platform::Log(L"widget owner: {}", text);
+        platform::LogAt(level, L"widget owner: {}", text);
     }
+}
+
+bool DebugOn() noexcept
+{
+    return platform::Enabled(platform::Level::Debug);
 }
 
 /// True at 1, 10, 100, ...: counters logged without a budget of their own.
@@ -205,6 +211,10 @@ void WatchCell(std::uintptr_t cell, std::uintptr_t two) noexcept
         bool operator==(const Seen&) const = default;
     };
     static std::array<Seen, kLoggedCells> seen{};
+    if (!DebugOn())
+    {
+        return;
+    }
     const auto slot = Field<std::int32_t>(cell + kCellSlot);
     if (slot < 0 || slot >= static_cast<std::int32_t>(kLoggedCells))
     {
@@ -223,7 +233,8 @@ void WatchCell(std::uintptr_t cell, std::uintptr_t two) noexcept
                      L"answered {} (player 1's controller's {}) | P2 battle HUD {}",
                      cell, slot, now.type, now.leader, now.look, Field<float>(cell + kCellPosition),
                      Field<float>(cell + kCellPosition + 4), now.answered, Field<std::uint8_t>(one + kStoredLeaderType),
-                     Field<std::uint8_t>(two + kHudMode)));
+                     Field<std::uint8_t>(two + kHudMode)),
+         platform::Level::Debug);
 }
 
 /// Replaces the party-list cell's NativeTick: a cell of player 2's controller ticks in that controller's view.
@@ -255,9 +266,10 @@ void CellTick(void* cell, const void* geometry, float deltaTime) noexcept
              L"from now on");
         return;
     }
-    if (PowerOfTen(++g_cellTicks))
+    if (PowerOfTen(++g_cellTicks) && DebugOn())
     {
-        Line(std::format(L"{} tick(s) of player 2's party-list cells in player 2's view", g_cellTicks));
+        Line(std::format(L"{} tick(s) of player 2's party-list cells in player 2's view", g_cellTicks),
+             platform::Level::Debug);
     }
     WatchCell(reinterpret_cast<std::uintptr_t>(cell), two);
 }
@@ -295,12 +307,13 @@ void PaneTick(void* pane, const void* geometry, float deltaTime) noexcept
     }
     static std::uint8_t shown = 0xFF;
     const auto          type  = Field<std::uint8_t>(at + kPaneType);
-    if (PowerOfTen(++g_paneTicks) || type != shown)
+    if ((PowerOfTen(++g_paneTicks) || type != shown) && DebugOn())
     {
         shown = type;
         Line(std::format(L"player 2's synergy pane ticked in player 2's view ({} time(s)); it lists type {} (player 2's "
                          L"controller's leader type {})",
-                         g_paneTicks, type, Field<std::uint8_t>(two + kStoredLeaderType)));
+                         g_paneTicks, type, Field<std::uint8_t>(two + kStoredLeaderType)),
+             platform::Level::Debug);
     }
 }
 
@@ -317,6 +330,10 @@ void WatchGuides(std::uintptr_t one, std::uintptr_t two) noexcept
     using State = std::array<std::uint8_t, 6>;
     static std::array<State, 2> seen{};
     static std::array<float, 2> seenOpacity{-1.0F, -1.0F};
+    if (!DebugOn())
+    {
+        return;
+    }
     std::array<State, 2> now{};
     std::array<float, 2> opacity{};
     for (std::size_t i = 0; i < 2; ++i)
@@ -339,7 +356,7 @@ void WatchGuides(std::uintptr_t one, std::uintptr_t two) noexcept
         return std::format(L"active {} option {} shown {} mode {} widget {} visibility {} opacity {:.2f}", now[i][0],
                            now[i][1], now[i][2], now[i][3], now[i][4], now[i][5], opacity[i]);
     };
-    Line(std::format(L"key guides: P1 [{}] | P2 [{}]", side(0), side(1)));
+    Line(std::format(L"key guides: P1 [{}] | P2 [{}]", side(0), side(1)), platform::Level::Debug);
 }
 
 /// Replaces MasterHUD_Tick's key-guide tick: the game's key guide, then player 2's in player 2's view.
@@ -371,9 +388,9 @@ void GuideTick(void* keyGuide) noexcept
             return;
         }
     }
-    if (PowerOfTen(++g_guideTicks))
+    if (PowerOfTen(++g_guideTicks) && DebugOn())
     {
-        Line(std::format(L"{} tick(s) of player 2's key guide", g_guideTicks));
+        Line(std::format(L"{} tick(s) of player 2's key guide", g_guideTicks), platform::Level::Debug);
     }
     WatchGuides(one, guide);
 }

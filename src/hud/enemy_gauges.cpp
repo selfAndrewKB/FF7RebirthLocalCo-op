@@ -220,12 +220,14 @@ T Field(std::uintptr_t address) noexcept
     return value;
 }
 
-void Note(const std::wstring& text)
+/// One line of player 2's target gauges at `level` (Debug or Trace), within the target-list budget. Callers
+/// check platform::Enabled(level) before building `text`.
+void Note(platform::Level level, const std::wstring& text)
 {
-    if (g_targetLines < kMaxTargetLines)
+    if (g_targetLines < kMaxTargetLines && platform::Enabled(level))
     {
         ++g_targetLines;
-        platform::Log(L"enemy gauges: {}", text);
+        platform::LogAt(level, L"enemy gauges: {}", text);
     }
 }
 
@@ -500,7 +502,7 @@ bool ReplayPlayerOne(std::uintptr_t manager, int& replayed, int& targeted)
     if (mismatches != g_loggedMismatches)
     {
         g_loggedMismatches = mismatches;
-        Note(std::format(L"player 1's view: the targeted rule disagrees with the tick on {} gauge(s)", mismatches));
+        Note(platform::Level::Info, std::format(L"player 1's view: the targeted rule disagrees with the tick on {} gauge(s)", mismatches));
     }
     return ok;
 }
@@ -595,7 +597,11 @@ bool ReplayPlayerTwo(std::uintptr_t manager, int& replayed, int& targeted)
     {
         gauge.before = gauge.after = gauge.theirs = gauge.scale = gauge.theirScale = 0;
     }
-    if (g_targetLog.Offer(steady, targets))
+    if (!platform::Enabled(platform::Level::Debug))
+    {
+        g_targetLog.Reset();  // off: the next line starts fresh
+    }
+    else if (g_targetLog.Offer(steady, targets))
     {
         std::wstring detail;
         for (std::int32_t i = 0; i < targetCount; ++i)
@@ -607,7 +613,7 @@ bool ReplayPlayerTwo(std::uintptr_t manager, int& replayed, int& targeted)
                                   gauge.half / 10, gauge.before / 10.0, gauge.after / 10.0, gauge.theirs / 10.0,
                                   gauge.kept ? L", kept" : L", CHANGED", gauge.scale / 100.0, gauge.theirScale / 100.0);
         }
-        Note(std::format(L"player 2's view:{}", detail.empty() ? L" no gauge of player 2's target" : detail));
+        Note(platform::Level::Debug, std::format(L"player 2's view:{}", detail.empty() ? L" no gauge of player 2's target" : detail));
     }
     return ok;
 }
@@ -710,14 +716,14 @@ void LogPlayerTwoPass(const PassState& now) noexcept
         g_targetLines  = 0;
         g_loggedPass   = PassState{0xFF};
     }
-    if (now == g_loggedPass)
+    if (!platform::Enabled(platform::Level::Trace) || now == g_loggedPass)
     {
         return;
     }
     g_loggedPass = now;
     try
     {
-        Note(std::format(L"player 2's pass: gate {} recorded {} placed {} ({} targeted){}", now.gate, now.recorded, now.replayed,
+        Note(platform::Level::Trace, std::format(L"player 2's pass: gate {} recorded {} placed {} ({} targeted){}", now.gate, now.recorded, now.replayed,
                          now.targeted, now.list ? L" | player 2's target list open" : L""));
     }
     catch (...)
@@ -761,10 +767,10 @@ void Replay(bool playerTwo) noexcept
     {
         LogPlayerTwoPass({gate, static_cast<std::int32_t>(g_record.count), replayed, targeted, player_two::lock_on::TargetListOpen()});
     }
-    if (replayed > 0 && g_lines < kMaxLines)
+    if (replayed > 0 && g_lines < kMaxLines && platform::Enabled(platform::Level::Debug))
     {
         ++g_lines;
-        platform::Log(L"enemy gauges: {} placed again for player {}'s view ({} targeted) of {} recorded", replayed,
+        platform::LogDebug(L"enemy gauges: {} placed again for player {}'s view ({} targeted) of {} recorded", replayed,
                       playerTwo ? 2 : 1, targeted, g_record.count);
     }
 }

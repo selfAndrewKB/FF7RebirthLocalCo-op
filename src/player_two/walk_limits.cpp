@@ -120,21 +120,28 @@ int       g_lines      = 0;
 bool      g_overflowed = false;
 std::wstring g_lastState, g_lastCall;
 
+/// A line of `level`; a line above the current level uses none of the budget.
 template <class... A>
-void Line(std::wformat_string<A...> format, A&&... args) noexcept
+void LineAt(platform::Level level, std::wformat_string<A...> format, A&&... args) noexcept
 {
-    if (g_lines >= kMaxLines)
+    if (g_lines >= kMaxLines || !platform::Enabled(level))
     {
         return;
     }
     try
     {
         ++g_lines;
-        platform::Log(L"walk limits: {}", std::format(format, std::forward<A>(args)...));
+        platform::LogAt(level, L"walk limits: {}", std::format(format, std::forward<A>(args)...));
     }
     catch (...)
     {
     }
+}
+
+template <class... A>
+void Line(std::wformat_string<A...> format, A&&... args) noexcept
+{
+    LineAt(platform::Level::Info, format, std::forward<A>(args)...);
 }
 
 template <class T>
@@ -493,7 +500,7 @@ void Tick() noexcept
     }
 
     const ULONGLONG now = GetTickCount64();
-    if (now >= g_nextState)
+    if (now >= g_nextState && platform::Enabled(platform::Level::Debug))
     {
         g_nextState = now + kStateMs;
         try
@@ -506,7 +513,7 @@ void Tick() noexcept
             if (state != g_lastState)
             {
                 g_lastState = state;
-                Line(L"{}", state);
+                LineAt(platform::Level::Debug, L"{}", state);
             }
         }
         catch (...)

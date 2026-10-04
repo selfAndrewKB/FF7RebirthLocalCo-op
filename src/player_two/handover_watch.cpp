@@ -182,6 +182,10 @@ int                                        g_lines      = 0;
 template <class... A>
 void Line(std::wformat_string<A...> format, A&&... args) noexcept
 {
+    if (!platform::Enabled(platform::Level::Debug))
+    {
+        return;  // a Debug report (platform/log.h)
+    }
     if (g_lines >= kMaxLines)
     {
         return;
@@ -189,14 +193,14 @@ void Line(std::wformat_string<A...> format, A&&... args) noexcept
     ++g_lines;
     try
     {
-        platform::WriteLine(L"handover: " + std::format(format, std::forward<A>(args)...));
+        platform::WriteLine(L"[debug] handover: " + std::format(format, std::forward<A>(args)...));
     }
     catch (...)
     {
     }
     if (g_lines == kMaxLines)
     {
-        platform::WriteLine(L"handover: line limit reached; the watch is quiet from here on");
+        platform::WriteLine(L"[debug] handover: line limit reached; the watch is quiet from here on");
     }
 }
 
@@ -303,13 +307,15 @@ void LogOrder(const wchar_t* why, const Order& order, const void* playerTwoMembe
     const std::int32_t slot = SlotRule(order, playerOnes, anchor);
     const std::optional<std::uint8_t> ruled =
         slot < 0 ? std::nullopt : std::optional<std::uint8_t>(order.types[static_cast<std::size_t>(slot)]);
-    Line(L"party order ({}): {}, field leader {}, default battle leader {}, player 1 plays {}; the 2nd-slot rule (anchor "
-         L"{}) gives {}{}; player 2 holds {}{}",
-         why, OrderText(order), order.fieldLeader, order.defaultLeader, TypeText(playerOnes), anchor,
-         slot < 0 ? std::wstring(L"nobody") : std::format(L"ordinal {} = ", slot), slot < 0 ? std::wstring() : TypeText(ruled),
-         TypeText(playerTwos), playerTwoMember == nullptr ? L""
-                               : ruled == playerTwos     ? L" (same)"
-                                                         : L" (DIFFERENT)");
+    // A party order change is rare and real (a reorder, a join, a hand-over): Info, not the watch's Debug lines.
+    platform::Log(L"handover: party order ({}): {}, field leader {}, default battle leader {}, player 1 plays {}; the "
+                  L"2nd-slot rule (anchor {}) gives {}{}; player 2 holds {}{}",
+                  why, OrderText(order), order.fieldLeader, order.defaultLeader, TypeText(playerOnes), anchor,
+                  slot < 0 ? std::wstring(L"nobody") : std::format(L"ordinal {} = ", slot),
+                  slot < 0 ? std::wstring() : TypeText(ruled), TypeText(playerTwos),
+                  playerTwoMember == nullptr ? L""
+                  : ruled == playerTwos      ? L" (same)"
+                                             : L" (DIFFERENT)");
 }
 
 // ---- one member --------------------------------------------------------------------------------
@@ -540,6 +546,10 @@ std::wstring NameOf(const void* character)
 
 void LogSnapshot(const wchar_t* when, const void* character)
 {
+    if (!platform::Enabled(platform::Level::Debug))
+    {
+        return;  // snapshots are Debug: nothing is read below that level
+    }
     const Ai ai = ReadAi(character);
     Line(L"{}: {}'s {}", when, NameOf(character), AiText(ai));
     Line(L"  {}; {}", ModifiersText(character), StateFieldsText(ai));
@@ -732,9 +742,9 @@ void PartyOrder(const wchar_t* why, const void* playerTwoMember) noexcept
 
 void Snapshot(const wchar_t* when, void* member) noexcept
 {
-    if (!g_installed || member == nullptr)
+    if (!g_installed || member == nullptr || !platform::Enabled(platform::Level::Debug))
     {
-        return;
+        return;  // the snapshot and the one 1 s later are Debug
     }
     try
     {
@@ -766,10 +776,21 @@ void Tick() noexcept
         return;
     }
     const auto now = Clock::now();
+    // The members' AI, the held member and the pending snapshots are Debug; the party order's line is Info.
+    const bool debug = platform::Enabled(platform::Level::Debug);
+    if (!debug)
+    {
+        g_members = {};
+        g_held    = {};
+        g_pending = {};
+    }
     try
     {
-        RunPending(now);
-        WatchHeld(now);
+        if (debug)
+        {
+            RunPending(now);
+            WatchHeld(now);
+        }
         if (now - g_lastWatch < kWatchEvery)
         {
             return;
@@ -781,7 +802,7 @@ void Tick() noexcept
             g_lastOrder = order;
             LogOrder(L"the watch saw it change", order, generation::Member());
         }
-        for (std::int32_t ordinal = 0; ordinal < order.count; ++ordinal)
+        for (std::int32_t ordinal = 0; debug && ordinal < order.count; ++ordinal)
         {
             const std::uint8_t type = order.types[static_cast<std::size_t>(ordinal)];
             if (type < facts::kNoPlayerType)

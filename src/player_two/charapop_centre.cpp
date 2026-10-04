@@ -127,6 +127,10 @@ bool CharacterAt(const void* character, float (&out)[3]) noexcept
 
 void LogSummary(const std::byte* manager, const float (&centre)[3], float apart) noexcept
 {
+    if (!platform::Enabled(platform::Level::Debug))
+    {
+        return;  // a periodic status line: Debug
+    }
     const auto now = Clock::now();
     if (now - g_lastSummary < kSummaryEvery)
     {
@@ -136,7 +140,7 @@ void LogSummary(const std::byte* manager, const float (&centre)[3], float apart)
     float leader[3]{};
     platform::CopyGuarded(leader, manager + kLeaderCentre, sizeof(leader));
     const void* select = ReadPointer(manager, kManagerSelect);
-    platform::Log(L"npc centre: midpoint ({:.0f}, {:.0f}, {:.0f}), players {:.0f} m apart, {:.0f} m from the leader; distances "
+    platform::LogDebug(L"npc centre: midpoint ({:.0f}, {:.0f}, {:.0f}), players {:.0f} m apart, {:.0f} m from the leader; distances "
                   L"{:.0f} -> {:.0f}, hard limit {:.0f} -> {:.0f}; threshold {}, spawn max {}",
                   centre[0], centre[1], centre[2], apart / 100.0f, charapop::Distance(centre, leader) / 100.0f,
                   g_distanceMax.loaded, g_distanceMax.written, g_hardLimit.loaded, g_hardLimit.written,

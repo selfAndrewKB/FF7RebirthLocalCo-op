@@ -37,6 +37,7 @@ Outcome Run(Target& target, const Command& command)
         case CommandKind::IconsMask: return target.SetIconsMask(command.ticks);
         case CommandKind::BattleMask: return target.SetBattleMask(command.ticks);
         case CommandKind::PerfLog: return target.SetPerfLog(command.on);
+        case CommandKind::LogLevel: return target.SetLogLevel(command.ticks);
         case CommandKind::SingleView: return target.SetSingleView(command.ticks);
         case CommandKind::StreamViews: return target.SetStreamViews(command.ticks);
         case CommandKind::StreamFovPlayerOne: return target.SetPlayerOneStreamFov(command.ticks);

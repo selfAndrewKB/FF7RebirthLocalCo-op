@@ -6,6 +6,7 @@
 // to call the original, and the original must come back after Restore.
 
 #include "platform/call_redirect.h"
+#include "platform/log.h"
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -13,6 +14,7 @@
 #include <Windows.h>
 #include <intrin.h>
 
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -22,6 +24,13 @@ namespace lss::platform {
 void WriteLine(std::wstring_view line) noexcept  // the mod's log, to the console here
 {
     std::printf("  log: %ls\n", std::wstring(line).c_str());
+}
+namespace detail {
+std::atomic<std::uint8_t> g_level{static_cast<std::uint8_t>(Level::Trace)};  // every level, to the console
+}
+const wchar_t* LevelName(Level) noexcept
+{
+    return L"level";
 }
 }  // namespace lss::platform
 

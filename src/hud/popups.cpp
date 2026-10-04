@@ -240,11 +240,12 @@ void Replay(bool playerTwo) noexcept
     {
         platform::Log(L"popups: a placement raised an exception; popups are no longer placed per view");
     }
-    else if (playerTwo && counts[0] + counts[1] + counts[2] > 0 && g_lines < kMaxLines)
+    else if (playerTwo && counts[0] + counts[1] + counts[2] > 0 && g_lines < kMaxLines &&
+             platform::Enabled(platform::Level::Debug))
     {
         ++g_lines;
-        platform::Log(L"popups: placed again in player 2's view: {} numbers, {} texts, {} UMG ({} recorded)", counts[0],
-                      counts[1], counts[2], g_record.count);
+        platform::LogDebug(L"popups: placed again in player 2's view: {} numbers, {} texts, {} UMG ({} recorded)",
+                           counts[0], counts[1], counts[2], g_record.count);
     }
 }
 

@@ -53,6 +53,7 @@ public:
     Outcome SetIconsMask(std::uint32_t mask) override;
     Outcome SetBattleMask(std::uint32_t mask) override;
     Outcome SetPerfLog(bool on) override;
+    Outcome SetLogLevel(std::uint32_t level) override;
     Outcome SetSingleView(std::uint32_t mode) override;
     Outcome SetStreamViews(std::uint32_t mode) override;
     Outcome SetPlayerOneStreamFov(std::uint32_t degrees) override;

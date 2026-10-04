@@ -278,6 +278,11 @@ std::wstring Describe(const std::vector<Row>& rows)
 
 void LogIfChanged(const std::array<std::uint8_t, kComponentRows>& bytes)
 {
+    if (!platform::Enabled(platform::Level::Debug))
+    {
+        g_rowLog.Reset();  // off: the next line starts fresh
+        return;
+    }
     if (g_lines >= kMaxLines)
     {
         return;
@@ -308,7 +313,7 @@ void LogIfChanged(const std::array<std::uint8_t, kComponentRows>& bytes)
         requests += bytes[i] != 0 ? std::format(L" {}:{:#04x}", i, bytes[i]) : L"";
     }
     ++g_lines;
-    platform::Log(L"prompt rows: {}; player 2's requests:{}", Describe(g_rows), requests.empty() ? L" none" : requests);
+    platform::LogDebug(L"prompt rows: {}; player 2's requests:{}", Describe(g_rows), requests.empty() ? L" none" : requests);
 }
 
 }  // namespace
