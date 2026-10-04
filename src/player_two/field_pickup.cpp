@@ -109,18 +109,26 @@ constexpr std::uint8_t  kTargetBits     = 0x06;   // bit 1 slot target, bit 2 ru
 constexpr std::uint8_t  kDisabledBit    = 0x10;   // the game's "point disabled": the candidate query skips it
 constexpr std::uint32_t kPointMarker    = 0x78;   // UFieldTargetWidget*, the point's marker: carried per player (§12.15)
 
-// WorldItemMgr's map of items (§10.5): a stock TMap, 0xD0-byte elements, the key FName at +0.
-constexpr std::uint32_t kItemElements   = 0x90;
-constexpr std::uint32_t kItemCount      = 0x98;  // i32 ArrayNum
-constexpr std::uint32_t kItemBitsInline = 0xA0;
-constexpr std::uint32_t kItemBitsHeap   = 0xB0;
-constexpr std::uint32_t kItemFreeCount  = 0xC4;  // i32 NumFreeIndices
-constexpr std::uint32_t kItemHashInline = 0xC8;
-constexpr std::uint32_t kItemHashHeap   = 0xD0;
-constexpr std::uint32_t kItemHashSize   = 0xD8;  // i32
-constexpr std::uint32_t kItemStride     = 0xD0;
-constexpr std::uint32_t kItemHashNext   = 0xC0;  // i32
-constexpr std::int32_t  kMaxItems       = 16384;
+// The two maps whose points player 2's pass admits, both a stock TMap keyed by the point's FName at element +0:
+// WorldItemMgr's items (§10.5, collectibles and materials) and TreasurePointMgr's chests (§13.1, the chest listener's
+// own test). Offsets of the map's fields, from its element array.
+struct MapShape
+{
+    std::uint32_t elements;  // from the owner object
+    std::uint32_t stride;
+    std::uint32_t hashNext;  // i32, in an element
+};
+constexpr MapShape      kWorldItemMap{0x90, 0xD0, 0xC0};
+constexpr MapShape      kChestMap{0x10, 0x70, 0x60};
+constexpr std::uint32_t kRootChests      = 0x298;  // TreasurePointMgr (not TreasureManager +0x280, the opened state)
+constexpr std::uint32_t kMapCount        = 0x08;  // i32 ArrayNum
+constexpr std::uint32_t kMapBitsInline   = 0x10;
+constexpr std::uint32_t kMapBitsHeap     = 0x20;
+constexpr std::uint32_t kMapFreeCount    = 0x34;  // i32 NumFreeIndices
+constexpr std::uint32_t kMapHashInline   = 0x38;
+constexpr std::uint32_t kMapHashHeap     = 0x40;
+constexpr std::uint32_t kMapHashSize     = 0x48;  // i32
+constexpr std::int32_t  kMaxItems        = 16384;
 constexpr int           kHashChecks     = 2000;  // lookups also checked against a walk of the map, then trusted
 
 // The game's functions (§12.12), each checked by its first bytes.
@@ -295,7 +303,7 @@ bool                                                g_hashTrusted    = true;
 // The status line's counts since the last line.
 struct Counts
 {
-    std::uint32_t passes = 0, polled = 0, filtered = 0, worldItems = 0, executed = 0, fieldResets = 0;
+    std::uint32_t passes = 0, polled = 0, filtered = 0, worldItems = 0, chests = 0, executed = 0, fieldResets = 0;
     std::uint32_t requests = 0, requestsAsTwo = 0;  // visibility requests in the pass; those with player 2 first
     std::uint32_t markersMade = 0, markersGone = 0, markersDestroyed = 0;  // player 2's made; gone by the game; the mod's
     std::array<std::uint32_t, kSkipCount> skips{};
@@ -475,7 +483,7 @@ std::uint64_t RequestVisibility(void* system, void* record) noexcept
     return original(system, record);
 }
 
-void Before(void* mgr, const std::uint8_t* items, bool filter) noexcept;
+void Before(void* mgr, const std::uint8_t* items, const std::uint8_t* chests, bool filter) noexcept;
 void After(void* mgr) noexcept;
 void DestroyDoomed() noexcept;
 void DestroyAllTwo(Why why) noexcept;
@@ -488,7 +496,7 @@ bool OnCopy(void* mgr, ResetFn reset, std::uint8_t flagSeen) noexcept
     auto* flag = static_cast<std::uint8_t*>(mgr) + kFieldEnterFlag;
     const std::uint8_t after = *flag;
     Exchange(mgr);
-    Before(mgr, nullptr, false);
+    Before(mgr, nullptr, nullptr, false);
     *flag         = flagSeen;
     const bool ok = platform::CallGuarded(reset, mgr);
     *flag         = after;
@@ -554,18 +562,19 @@ void DropCopy(bool clear) noexcept
     g_oneMarkers.clear();
 }
 
-/// Whether `key` is in WorldItemMgr's map, by the map's own hash (§10.5). The first lookups are also checked
-/// against a walk of the map; a mismatch switches to the walk for good (logged).
-bool HashFind(const std::uint8_t* items, std::uint64_t key) noexcept
+/// Whether `key` is in the map of `owner` (shaped as `shape`), by the map's own hash (§10.5). The first lookups are also
+/// checked against a walk of the map; a mismatch switches to the walk for good (logged).
+bool HashFind(const std::uint8_t* owner, const MapShape& shape, std::uint64_t key) noexcept
 {
-    if (Read<std::int32_t>(items, kItemCount) == Read<std::int32_t>(items, kItemFreeCount))
+    const std::uint8_t* map = owner + shape.elements;
+    if (Read<std::int32_t>(map, kMapCount) == Read<std::int32_t>(map, kMapFreeCount))
     {
         return false;
     }
-    const auto* elements = PointerAt(items, kItemElements);
-    const auto  size     = Read<std::int32_t>(items, kItemHashSize);
-    const auto* heap     = PointerAt(items, kItemHashHeap);
-    const auto* buckets  = heap != nullptr ? heap : items + kItemHashInline;
+    const auto* elements = PointerAt(map, 0);
+    const auto  size     = Read<std::int32_t>(map, kMapHashSize);
+    const auto* heap     = PointerAt(map, kMapHashHeap);
+    const auto* buckets  = heap != nullptr ? heap : map + kMapHashInline;
     if (elements == nullptr || size <= 0 || (size & (size - 1)) != 0)
     {
         return false;
@@ -577,26 +586,27 @@ bool HashFind(const std::uint8_t* items, std::uint64_t key) noexcept
     auto       i     = Read<std::int32_t>(buckets, 4 * (hash & static_cast<std::uint32_t>(size - 1)));
     for (int steps = 0; i >= 0 && i < kMaxItems && steps < kMaxItems; ++steps)
     {
-        const auto* element = elements + static_cast<std::size_t>(i) * kItemStride;
+        const auto* element = elements + static_cast<std::size_t>(i) * shape.stride;
         if (Read<std::uint64_t>(element, 0) == key)
         {
             return true;
         }
-        i = Read<std::int32_t>(element, kItemHashNext);
+        i = Read<std::int32_t>(element, shape.hashNext);
     }
     return false;
 }
 
-bool WalkFind(const std::uint8_t* items, std::uint64_t key) noexcept
+bool WalkFind(const std::uint8_t* owner, const MapShape& shape, std::uint64_t key) noexcept
 {
-    const auto* elements = PointerAt(items, kItemElements);
-    const auto  count    = std::clamp(Read<std::int32_t>(items, kItemCount), 0, kMaxItems);
-    const auto* heapBits = PointerAt(items, kItemBitsHeap);
-    const auto* bits     = heapBits != nullptr ? heapBits : items + kItemBitsInline;
+    const std::uint8_t* map      = owner + shape.elements;
+    const auto*         elements = PointerAt(map, 0);
+    const auto          count    = std::clamp(Read<std::int32_t>(map, kMapCount), 0, kMaxItems);
+    const auto*         heapBits = PointerAt(map, kMapBitsHeap);
+    const auto*         bits     = heapBits != nullptr ? heapBits : map + kMapBitsInline;
     for (std::int32_t i = 0; elements != nullptr && i < count; ++i)
     {
         if ((Read<std::uint32_t>(bits, static_cast<std::size_t>(i / 32) * 4) >> (i % 32) & 1) != 0 &&
-            Read<std::uint64_t>(elements, static_cast<std::size_t>(i) * kItemStride) == key)
+            Read<std::uint64_t>(elements, static_cast<std::size_t>(i) * shape.stride) == key)
         {
             return true;
         }
@@ -604,21 +614,22 @@ bool WalkFind(const std::uint8_t* items, std::uint64_t key) noexcept
     return false;
 }
 
-bool IsWorldItem(const std::uint8_t* items, std::uint64_t key) noexcept
+/// Whether `key` is in the map (both maps share the hash, so they share the trust in it).
+bool InMap(const std::uint8_t* owner, const MapShape& shape, std::uint64_t key) noexcept
 {
-    if (items == nullptr || key == 0)
+    if (owner == nullptr || key == 0)
     {
         return false;
     }
     if (!g_hashTrusted)
     {
-        return WalkFind(items, key);
+        return WalkFind(owner, shape, key);
     }
-    const bool found = HashFind(items, key);
+    const bool found = HashFind(owner, shape, key);
     if (g_hashChecked < kHashChecks)
     {
         ++g_hashChecked;
-        if (WalkFind(items, key) != found)
+        if (WalkFind(owner, shape, key) != found)
         {
             ++g_hashMismatches;
             g_hashTrusted = false;
@@ -627,7 +638,6 @@ bool IsWorldItem(const std::uint8_t* items, std::uint64_t key) noexcept
     }
     return found;
 }
-
 /// Whether `widget` is a marker in the game's marker list now (an element's weak +0x00 names it).
 bool InMarkerList(std::uintptr_t widget) noexcept
 {
@@ -663,7 +673,7 @@ void DestroyDoomed() noexcept
         g_counts.markersDestroyed += done ? 1 : 0;
         try
         {
-            platform::Log(L"field pickup: the marker widget of {} ({}) {}", Name(doomed.key), kWhyText[doomed.why],
+            platform::LogDebug(L"field pickup: the marker widget of {} ({}) {}", Name(doomed.key), kWhyText[doomed.why],
                           done   ? L"destroyed by the game's own call"
                           : live ? L"NOT destroyed: the game's call raised an exception"
                                  : L"was gone already");
@@ -729,9 +739,9 @@ void DestroyAllTwo(Why why) noexcept
 }
 
 /// Before the calls: each point's target bits and marker widget become player 2's (on every live point: the far-marker
-/// sweep walks them all, §12.15). With `filter`, every point that is not a WorldItem gets the disabled bit (only where
-/// it is clear). Player 1's are kept for After. Player 2's widgets whose point left since are doomed.
-void Before(void* mgr, const std::uint8_t* items, bool filter) noexcept
+/// sweep walks them all, §12.15). With `filter`, every point that is neither a WorldItem nor a chest (§13) gets the disabled
+/// bit (only where it is clear). Player 1's are kept for After. Player 2's widgets whose point left since are doomed.
+void Before(void* mgr, const std::uint8_t* items, const std::uint8_t* chests, bool filter) noexcept
 {
     g_saved.clear();
     for (auto& [key, marker] : g_twoMarkers)
@@ -747,8 +757,9 @@ void Before(void* mgr, const std::uint8_t* items, bool filter) noexcept
             const auto     key   = Read<std::uint64_t>(point, kPointKey);
             std::uint8_t   flags = point[kPointFlags];
             const auto     two   = g_twoBits.find(key);
-            const bool     worldItem = filter && IsWorldItem(items, key);
-            const bool     disable   = filter && !worldItem && (flags & kDisabledBit) == 0;
+            const bool     worldItem = filter && InMap(items, kWorldItemMap, key);
+            const bool     chest     = filter && !worldItem && InMap(chests, kChestMap, key);
+            const bool     disable   = filter && !worldItem && !chest && (flags & kDisabledBit) == 0;
             std::uintptr_t oneMarker = 0;
             std::uintptr_t twoMarker = 0;
             if (g_destroy != nullptr)
@@ -765,6 +776,7 @@ void Before(void* mgr, const std::uint8_t* items, bool filter) noexcept
             }
             g_saved.push_back({point, key, static_cast<std::uint8_t>(flags & kTargetBits), disable, oneMarker, false});
             g_counts.worldItems += worldItem ? 1 : 0;
+            g_counts.chests += chest ? 1 : 0;
             g_counts.filtered += disable ? 1 : 0;
             flags = static_cast<std::uint8_t>((flags & ~kTargetBits) | (two != g_twoBits.end() ? two->second : 0) |
                                               (disable ? kDisabledBit : 0));
@@ -869,6 +881,10 @@ void After(void* mgr) noexcept
 
 void LogMarkers() noexcept
 {
+    if (!platform::Enabled(platform::Level::Debug))
+    {
+        return;  // each change of player 2's markers: Debug
+    }
     try
     {
         g_markerKeys.clear();
@@ -887,7 +903,7 @@ void LogMarkers() noexcept
         {
             names += std::format(L"{}{}", names.empty() ? L"" : L", ", Name(key));
         }
-        platform::Log(L"field pickup: player 2's own marker widgets: {}", names.empty() ? L"none" : names);
+        platform::LogDebug(L"field pickup: player 2's own marker widgets: {}", names.empty() ? L"none" : names);
     }
     catch (...)
     {
@@ -987,6 +1003,10 @@ bool InputStep(void* mgr, const std::uint8_t* root, float dt) noexcept
 
 void LogTargets() noexcept
 {
+    if (!platform::Enabled(platform::Level::Debug))
+    {
+        return;  // each prompt change: Debug
+    }
     std::array<std::uint64_t, kSlots> now{};
     for (int i = 0; i < kSlots; ++i)
     {
@@ -1007,7 +1027,7 @@ void LogTargets() noexcept
                 slots += std::format(L"{}slot {} {}", slots.empty() ? L"" : L", ", i, Name(now[i]));
             }
         }
-        platform::Log(L"field pickup: player 2's prompts: {}", slots.empty() ? L"none" : slots);
+        platform::LogDebug(L"field pickup: player 2's prompts: {}", slots.empty() ? L"none" : slots);
     }
     catch (...)
     {
@@ -1024,15 +1044,16 @@ void LogStatus() noexcept
     g_statusAt = now;
     try
     {
-        platform::Log(L"field pickup (60 s): {} pass(es) (poll open in {}), {} pickup(s) by player 2, {} field reset(s) "
+        platform::LogDebug(L"field pickup (60 s): {} pass(es) (poll open in {}), {} pickup(s) by player 2, {} field reset(s) "
                       L"of player 2's copy; {} visibility request(s), {} with player 2 as the first local player; per "
-                      L"pass on average {} WorldItem point(s) left open, {} other point(s) disabled for the pass; "
-                      L"skipped: scopes {}, member {}; WorldItem lookup by {} ({} checked, {} mismatch(es)); player 2's "
+                      L"pass on average {} WorldItem point(s) and {} chest point(s) left open, {} other point(s) disabled for the pass; "
+                      L"skipped: scopes {}, member {}; WorldItem and chest lookups by {} ({} checked, {} mismatch(es)); player 2's "
                       L"marker widgets: {} now, {} made and {} destroyed by the game's own code, {} by the mod's call of "
                       L"its destroy; player 1's point markers now {}",
                       g_counts.passes, g_counts.polled, g_counts.executed, g_counts.fieldResets, g_counts.requests,
                       g_counts.requestsAsTwo,
                       g_counts.passes != 0 ? g_counts.worldItems / g_counts.passes : 0,
+                      g_counts.passes != 0 ? g_counts.chests / g_counts.passes : 0,
                       g_counts.passes != 0 ? g_counts.filtered / g_counts.passes : 0, g_counts.skips[kSkipScopes],
                       g_counts.skips[kSkipMember], g_hashTrusted ? L"the map's hash" : L"a walk of the map", g_hashChecked,
                       g_hashMismatches, g_twoMarkers.size(), g_counts.markersMade, g_counts.markersGone,
@@ -1071,11 +1092,12 @@ void Pass(void* mgr, float dt) noexcept
         return;
     }
     const auto* root  = Root();
-    const auto* items = PointerAt(root, kRootWorldItems);
+    const auto* items  = PointerAt(root, kRootWorldItems);
+    const auto* chests = PointerAt(root, kRootChests);
     ++g_counts.passes;
     g_inPass = true;
     Exchange(mgr);
-    Before(mgr, items, true);
+    Before(mgr, items, chests, true);
     const bool input  = InputStep(mgr, root, dt);
     const bool update = input && platform::CallGuarded(g_update, mgr, dt);
     After(mgr);
@@ -1194,7 +1216,7 @@ void Install(const platform::GameImage& image) noexcept
                                    reinterpret_cast<std::uintptr_t>(&RequestVisibility));
     }
     platform::Log(L"field pickup: {}; the screen test {}; marker widgets {}",
-                  g_ready ? L"ready (player 2 picks up collectibles and materials through the game's own field prompts, a "
+                  g_ready ? L"ready (player 2 picks up collectibles and materials and opens chests through the game's own field prompts, a "
                             L"second pass of its selection and press)"
                           : L"UNAVAILABLE (a check failed: the root, the UI system, a function or a field reset's call site)",
                   screen ? L"sees player 2's view in player 2's pass"

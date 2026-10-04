@@ -45,6 +45,7 @@
 #include "player_two/rumble_watch.h"
 #include "player_two/pad_rumble.h"
 #include "player_two/combat_rumble.h"
+#include "player_two/chest_watch.h"
 #include "player_two/interact_watch.h"
 #include "player_two/charapop_watch.h"
 #include "player_two/charapop_near.h"
@@ -85,7 +86,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.52.0";
+constexpr const wchar_t* kVersion = L"0.53.0";
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -151,7 +152,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.52.0");
+        ModVersion     = STR("0.53.0");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -298,6 +299,7 @@ public:
         lss::player_two::rumble_watch::Install(*image);    // logging only: each controller's rumble, pad by pad
         lss::player_two::pad_rumble::Install(*image);      // each player's rumble on their own pad
         lss::player_two::combat_rumble::Install(*image);   // player 2's combat rumble (hits, montage notifies) on player 2's pad
+        lss::player_two::chest_watch::Install(*image);     // chests and vending machines, logged (read-only)
         lss::player_two::interact_watch::Install(*image);  // field interactions (pickups) per player, logged (read-only)
         lss::hud::InstallPlayerTwoPass(*image);      // player 2's HUD content, on (the hud-levers command switches it)
         lss::hud::InstallRootOverlayRender(*image);  // before the overlay renders: placement follow, trace
@@ -388,6 +390,7 @@ private:
         const lss::platform::frame_watch::Charge charge(lss::platform::frame_watch::Part::EngineTick);
         lss::player_two::pad_rumble::BeforeTick();  // before the world tick: player 2's controller ordered after player 1's
         lss::player_two::combat_rumble::BeforeTick();  // outside every notify: their call sites; the status line
+        lss::player_two::chest_watch::Tick();          // an open followed from its press to its grant (logged)
         if (!tickSeen_)
         {
             tickSeen_ = true;

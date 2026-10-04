@@ -202,9 +202,19 @@ Clock::time_point g_lastTrace{};
 float             g_traceAt[3]{};
 float             g_traceGap = -1.0f;  // metres to player 1's ride body at the last trace line
 
+// The vehicle kind player 1 rides and its coordinator's state, for the Info line on a change (game thread).
+Kind         g_kind      = Kind::None;
+std::int32_t g_state     = -1;
+bool         g_kindKnown = false;
+
+/// A report of `level` (Debug or Trace, platform/log.h), within the watch's line budget.
 template <class... A>
-void Line(std::wformat_string<A...> format, A&&... args) noexcept
+void LineAt(platform::Level level, std::wformat_string<A...> format, A&&... args) noexcept
 {
+    if (!platform::Enabled(level))
+    {
+        return;
+    }
     if (g_lines >= kMaxLines)
     {
         return;
@@ -212,15 +222,22 @@ void Line(std::wformat_string<A...> format, A&&... args) noexcept
     ++g_lines;
     try
     {
-        platform::WriteLine(L"ride watch: " + std::format(format, std::forward<A>(args)...));
+        platform::WriteLine(std::format(L"[{}] ride watch: ", platform::LevelName(level)) +
+                            std::format(format, std::forward<A>(args)...));
     }
     catch (...)
     {
     }
     if (g_lines == kMaxLines)
     {
-        platform::WriteLine(L"ride watch: line limit reached");
+        platform::WriteLine(L"[debug] ride watch: line limit reached");
     }
+}
+
+template <class... A>
+void Line(std::wformat_string<A...> format, A&&... args) noexcept
+{
+    LineAt(platform::Level::Debug, format, std::forward<A>(args)...);
 }
 
 Kind KindOf(const void* coordinator) noexcept
@@ -429,6 +446,13 @@ void LogSample(const Sample& s, const void* playerOne, const void* playerTwo)
 /// While a ride is on: the merged sticks and player 1's ride body's speed, once a second (test 3).
 void LogSnapshot(const Sample& s, const void* member, const void* playerTwo)
 {
+    if (!platform::Enabled(platform::Level::Trace))
+    {
+        // The riding line follows the sticks: a per-input report (Trace). Nothing is read or dry-run below it.
+        g_oneAtValid = false;
+        g_twoAtValid = false;
+        return;
+    }
     const auto now = Clock::now();
     if (now - g_lastSnapshot < kSnapshotEvery)
     {
@@ -485,7 +509,7 @@ void LogSnapshot(const Sample& s, const void* member, const void* playerTwo)
     }
     g_lastShown   = shown;
     g_lastShownAt = now;
-    Line(L"riding ({} state {}): merged sticks L ({:.2f}, {:.2f}) R ({:.2f}, {:.2f}); player 1's ride body {:.1f} m/s "
+    LineAt(platform::Level::Trace, L"riding ({} state {}): merged sticks L ({:.2f}, {:.2f}) R ({:.2f}, {:.2f}); player 1's ride body {:.1f} m/s "
          L"(player-core test {}); player 2's chocobo {:.1f} m/s, {:.0f} m from player 1's, ridden {}, AI state {}, "
          L"player-core test {}; player 2's member's AI state {}; dry run as player 2 (primary {}): member {}, chocobo {}; "
          L"player 1's ride rows {}",
@@ -532,16 +556,33 @@ void LogStartTrace(const Sample& s, const void* playerOne, const void* playerTwo
 void Run()
 {
     void* playerOne = generation::PlayerOneController();
+    // Mounting and dismounting are rare, real changes: Info, read cheaply whatever the level.
+    // The state too (the buggy's 3 boarding, 4 riding, 5 getting off; the single-view signal, plan "Buggy: single view").
+    const void*        coordinator = ReadPointer(playerOne, kActiveVehicle);
+    const Kind         kind        = KindOf(coordinator);
+    const std::int32_t state       = kind == Kind::None ? -1 : StateOf(coordinator, kind);
+    if (g_kindKnown && (kind != g_kind || state != g_state))
+    {
+        platform::Log(L"ride watch: player 1's vehicle: {} (state {}) -> {} (state {})", KindName(g_kind), g_state,
+                      KindName(kind), state);
+    }
+    g_kind      = kind;
+    g_state     = state;
+    g_kindKnown = true;
+    if (!platform::Enabled(platform::Level::Debug))
+    {
+        // The rest is Debug (and Trace): nothing is sampled below that level.
+        g_logged     = false;
+        g_oneAtValid = false;
+        g_twoAtValid = false;
+        return;
+    }
     void* playerTwo = generation::PlayerTwoController();
     void* member    = generation::Member();
     const Sample s  = Read(playerOne, playerTwo, member);
     LogStartTrace(s, playerOne, playerTwo);  // before g_last moves on: it starts on the ridden edge
     if (!g_logged || !(Steady(s) == Steady(g_last)))
     {
-        if (g_logged && s.kind != g_last.kind)
-        {
-            Line(L"player 1's vehicle: {} -> {}", KindName(g_last.kind), KindName(s.kind));
-        }
         LogSample(s, playerOne, playerTwo);
         g_last   = s;
         g_logged = true;
@@ -599,6 +640,7 @@ void Tick() noexcept
     }
     if (!generation::Active())
     {
+        g_kindKnown  = false;
         g_logged     = false;
         g_oneAtValid = false;
         g_twoAtValid = false;

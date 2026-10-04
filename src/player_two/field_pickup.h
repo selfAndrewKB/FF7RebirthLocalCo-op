@@ -13,8 +13,10 @@
 //   - with player 2's copy of the manager's per-player ranges swapped in (§12.9; player 1's put back after),
 //     and of each point's carried target bits (+0x104 bits 1 and 2), kept by point key;
 //   - with the game's own "point disabled" bit (+0x104 bit 4, which the candidate query skips) set on every
-//     point that is not one of WorldItemMgr's items, and cleared again after: player 2 is offered collectibles
-//     and materials only; talk, doors, scripts and menus stay player 1's;
+//     point that is neither one of WorldItemMgr's items nor one of TreasurePointMgr's chests (§13; the chest
+//     listener's own test), and cleared again after: player 2 is offered collectibles, materials and chests only;
+//     talk, doors, vending machines, scripts and menus stay player 1's. A chest opened by player 2 runs the game's
+//     treasure state on player 2's member (the listener asks for the leader, which the scope makes player 2's);
 //   - the input step's FieldAction part in the game's order (its gate, the slot poll into the mod's own
 //     buffers, the latch, the press/execute tick), then the selection update;
 //   - with player 2's controller first in the world's controller list for each visibility request the pass
