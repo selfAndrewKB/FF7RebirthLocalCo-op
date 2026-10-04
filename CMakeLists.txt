@@ -89,7 +89,6 @@ add_library(LocalSplitScreen SHARED
     src/player_two/charapop_facts.cpp
     src/player_two/charapop_near.cpp
     src/player_two/charapop_centre.cpp
-    src/player_two/streaming_centre.cpp
     src/player_two/world_actor_reach.cpp
     src/player_two/ride_watch.cpp
     src/player_two/chocobo_ride.cpp

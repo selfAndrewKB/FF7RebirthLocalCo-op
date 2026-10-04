@@ -57,6 +57,7 @@ constexpr float          kStepCm          = 1000.0f;  // the widening moves in 1
 constexpr float          kCentreSlackCm   = 500.0f;   // the leader's bounding-box centre is not its root
 constexpr float          kLeaveSlackCm    = 500.0f;   // player 2 leaves an item 5 m past its radius
 constexpr std::uint32_t  kEvery           = 10;       // ticks between passes
+constexpr float          kChestLogCm      = 15000.0f; // Debug: chests within 150 m of either player log their state
 constexpr auto           kSummaryEvery    = std::chrono::seconds(60);
 
 using OctreeFn = void (*)(void* octree, void* item);
@@ -77,6 +78,7 @@ struct Widened
     float writtenExtent = 0.0f;
 };
 std::unordered_map<std::uint64_t, Widened> g_items;
+std::unordered_map<std::uint64_t, std::int32_t> g_chestStates;  // Debug: each chest's last logged state
 bool              g_on           = false;
 bool              g_vtableWarned = false;
 std::uint32_t     g_ticks        = 0;
@@ -196,12 +198,56 @@ void LogItem(std::uint64_t key, const wchar_t* what, float radius, float extent,
     }
 }
 
+const wchar_t* StateText(std::int32_t state) noexcept
+{
+    switch (state)
+    {
+    case 6:  return L"armed";
+    case 0:  return L"spawn requested";
+    case 1:  return L"spawned";
+    case 4:  return L"despawned by CharaPop while requested";
+    case 2:  return L"removal requested";
+    case 3:  return L"disabled";
+    case 5:  return L"waiting for the field octree";
+    default: return L"another state";
+    }
+}
+
+/// Debug: a chest item's state as the game's tick moves it (armed, requested, spawned, removal), within 150 m of
+/// either player, when it changes.
+void LogChestState(std::uint64_t key, std::int32_t state, float toOne, float toTwo) noexcept
+{
+    if ((toOne > kChestLogCm && toTwo > kChestLogCm) || !field_pickup::IsChestEntry(key))
+    {
+        return;
+    }
+    const auto known = g_chestStates.find(key);
+    if (known != g_chestStates.end() && known->second == state)
+    {
+        return;
+    }
+    g_chestStates[key] = state;
+    try
+    {
+        platform::LogDebug(L"world actor reach: chest {}: {} (state {}); player 1 {:.1f} m, player 2 {:.1f} m",
+                           players::unreal::NameText(key), StateText(state), state, toOne / 100.0f, toTwo / 100.0f);
+    }
+    catch (...)
+    {
+    }
+}
+
 /// One pass over the live items. `by` < 0 puts every widened item back. Returns the number widened now.
 std::size_t Apply(const std::byte* manager, const float (&one)[3], const float (&two)[3], float by) noexcept
 {
     auto*       data    = static_cast<std::byte*>(const_cast<void*>(ReadPointer(manager, kItemsData)));
     const auto  num     = std::clamp(ReadField<std::int32_t>(manager, kItemsNum), 0, kMaxItems);
-    std::size_t widened = 0;
+    std::size_t widened   = 0;
+    const bool  logChests = by >= 0.0f && platform::Enabled(platform::Level::Debug);
+    if (!logChests)
+    {
+        g_chestStates.clear();  // the next Debug pass logs every chest near afresh
+    }
     for (std::int32_t i = 0; data != nullptr && i < num; ++i)
     {
         if (!Allocated(manager + kItemsBits, i))
@@ -245,6 +291,10 @@ std::size_t Apply(const std::byte* manager, const float (&one)[3], const float (
             continue;
         }
         const float toTwo = charapop::Distance(at, two);
+        if (logChests)
+        {
+            LogChestState(logKey, state, charapop::Distance(at, one), toTwo);
+        }
         const bool  close = state != kStateDisabled && state != kStatePending &&
                             toTwo <= baseRadius + (widenedNow ? kLeaveSlackCm : 0.0f);
         if (close)
