@@ -9,6 +9,7 @@
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -43,8 +44,8 @@ constexpr float         kReducedReach   = 0.5f;  // Detail::Reduced: half the ga
 constexpr int           kMaxRaised      = 128;
 constexpr int           kMaxLines       = 1500;
 constexpr int           kSkipSamples    = 3;     // "left to player 1" examples logged per summary period
-constexpr auto          kSummaryEvery   = std::chrono::seconds(10);
-constexpr auto          kSummaryMinGap  = std::chrono::seconds(2);  // the shortest gap between summaries
+constexpr int           kLeftRemembered = 32;    // entries already logged as left to player 1 (not logged again)
+constexpr auto          kSummaryEvery   = std::chrono::seconds(60);
 
 struct Raised
 {
@@ -76,8 +77,9 @@ int                            g_lines       = 0;
 std::uint32_t                  g_raisedTotal = 0, g_takenBack = 0;
 std::uint32_t                  g_outOfReachTotal = 0, g_coveredTotal = 0, g_goneTotal = 0;  // releases, by reason
 Clock::time_point              g_lastSummary{};
-int                            g_summaryCount = -1;
 int                            g_skipSamples  = 0;
+std::array<const void*, kLeftRemembered> g_leftLogged{};  // ring; an entry leaves it when raised
+std::uint32_t                  g_leftNext     = 0;
 bool                           g_fullLogged   = false;
 
 float ReachOf(Detail detail) noexcept
@@ -212,14 +214,12 @@ int Find(const void* entry) noexcept
 
 void LogSummary(const charapop::Camera& one, const charapop::Camera& two, const PassCounts& counts, Detail detail)
 {
-    // On a change at most every few seconds, and a heartbeat every 10 s: busy scenes change the count each pass.
-    const auto now     = Clock::now();
-    const auto elapsed = now - g_lastSummary;
-    if (elapsed < kSummaryMinGap || (g_raisedCount == g_summaryCount && elapsed < kSummaryEvery))
+    // Once a minute: each raise and clear has its own line, and busy scenes change the count each pass.
+    const auto now = Clock::now();
+    if (now - g_lastSummary < kSummaryEvery)
     {
         return;
     }
-    g_summaryCount = g_raisedCount;
     g_lastSummary  = now;
     g_skipSamples  = 0;
     Line(L"{}: {} raised now (cameras {:.0f} m apart); this pass player 2's view needed {}, player 1's camera already "
@@ -298,16 +298,23 @@ void HandleCandidate(const Sighting& s, float reach, Detail detail, PassCounts& 
         return;
     }
     ++counts.needed;
+    const auto logged = std::find(g_leftLogged.begin(), g_leftLogged.end(), s.entry);
     if (!ShouldRaise(s.lod, s.two, s.fromOne, reach))
     {
         ++counts.covered;
-        if (g_skipSamples < kSkipSamples)
+        // Each entry once (the same few were logged several times a second, live 2026-10-03).
+        if (logged == g_leftLogged.end() && g_skipSamples < kSkipSamples)
         {
             ++g_skipSamples;
+            g_leftLogged[g_leftNext++ % g_leftLogged.size()] = s.entry;
             Line(L"left to player 1's camera: {} (level {}; player 2: {}, player 1: {})", NameOf(s.actor), s.level,
                  Where(&s.two), Where(s.fromOne));
         }
         return;
+    }
+    if (logged != g_leftLogged.end())
+    {
+        *logged = nullptr;  // raised now: a later "left" is a change again
     }
     if (g_raisedCount == kMaxRaised)
     {

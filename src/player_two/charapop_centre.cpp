@@ -40,7 +40,7 @@ constexpr std::uintptr_t kHardLimit      = 0x146FCE860;
 constexpr std::uintptr_t kSpawnMaxNum    = 0x146FCE850;
 
 constexpr std::uint32_t kEvery        = 10;  // ticks between passes
-constexpr auto          kSummaryEvery = std::chrono::seconds(10);
+constexpr auto          kSummaryEvery = std::chrono::seconds(60);
 
 /// A parameter the mod widens: the game's loaded value and what the mod last wrote.
 struct Param

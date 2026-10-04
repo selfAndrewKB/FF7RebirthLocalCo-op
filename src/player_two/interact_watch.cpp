@@ -4,8 +4,10 @@
 #include "platform/entry_redirect.h"
 #include "platform/guarded.h"
 #include "platform/log.h"
+#include "player_two/field_pickup.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
+#include "player_two/primary_controller.h"
 #include "players/unreal_access.h"
 
 #include <algorithm>
@@ -15,6 +17,7 @@
 #include <cstdint>
 #include <cstring>
 #include <format>
+#include <optional>
 #include <span>
 #include <string>
 #include <unordered_map>
@@ -383,12 +386,18 @@ std::uint8_t MarkByKey(void* items, std::uint64_t key) noexcept
     {
         ++t_marksInExecute;
     }
+    const bool playerTwo = taken != 0 && generation::OnGameThread() && field_pickup::InPass();
+    if (playerTwo)
+    {
+        field_pickup::NoteMarked(key);
+    }
     if (Spend())
     {
         try
         {
-            platform::Log(L"interact: WorldItem mark {} -> {} ({}, from 0x{:X})", Name(key), taken,
-                          caller == kMarkFromListener ? L"the key listener" : L"another caller", caller);
+            platform::Log(L"interact: WorldItem mark {} -> {} ({}, from 0x{:X}){}", Name(key), taken,
+                          caller == kMarkFromListener ? L"the key listener" : L"another caller", caller,
+                          playerTwo ? L", in player 2's pass" : L"");
         }
         catch (...)
         {
@@ -400,13 +409,31 @@ std::uint8_t MarkByKey(void* items, std::uint64_t key) noexcept
 void Acquire(void* items, void* entry) noexcept
 {
     const auto key = Read<std::uint64_t>(static_cast<const std::uint8_t*>(entry) - kEntryKeyBack, 0);
-    reinterpret_cast<AcquireFn>(g_acquire.Original())(items, entry);
+    // An item player 2 picked: the grant runs with player 2's controller as the primary one, its only player read
+    // (the item-get rumble, RE-p2-field-interact.md §12.12 item 5).
+    const bool playerTwo = generation::OnGameThread() && field_pickup::TakeMarked(key);
+    std::wstring rumble;
+    {
+        std::optional<primary_controller::Scope> primary;
+        if (playerTwo)
+        {
+            primary.emplace();
+        }
+        reinterpret_cast<AcquireFn>(g_acquire.Original())(items, entry);
+        try
+        {
+            rumble = PrimaryText();  // read inside the scope: who the rumble went to
+        }
+        catch (...)
+        {
+        }
+    }
     if (Spend())
     {
         try
         {
-            platform::Log(L"interact: WorldItem grant {} (the item-get rumble goes to the primary controller: {})",
-                          Name(key), PrimaryText());
+            platform::Log(L"interact: WorldItem grant {}{} (the item-get rumble goes to the primary controller: {})",
+                          Name(key), playerTwo ? L" (player 2's pickup)" : L"", rumble);
         }
         catch (...)
         {
@@ -698,6 +725,7 @@ void Update(void* mgr, float dt) noexcept
     {
         return;
     }
+    field_pickup::AfterUpdate(mgr, dt);  // player 2's pass of the same game code (player_two/field_pickup.h)
     try
     {
         AfterUpdate(static_cast<const std::uint8_t*>(mgr));

@@ -10,6 +10,8 @@
 //     byte at +0x9A8+12*i and the row's weak widget at +0x9AC+12*i (hookshot/"Terrain Action",
 //     parkour, catch, memo...). Player 2's component detects from player 2's own character, so its
 //     rows are player 2's;
+//   - player 2's driven chocobo's row handles, and player 2's copy of the field-prompt manager's slot
+//     rows (player_two/field_pickup.h: the pickup rows player 2's pass of the game's update made);
 //   - everything else (the talk/examine manager, which follows the leader; the move-state summons;
 //     minigame and encounter registrars) is player 1's.
 // A row is player 2's while player 2's component names it, and stays so until it leaves the list

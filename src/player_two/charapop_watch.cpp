@@ -118,7 +118,8 @@ constexpr int           kRemembered    = 64;      // entries whose last logged s
 constexpr int           kMaxLines      = 2000;
 constexpr std::uint32_t kUndrawnSamples = 3;     // a mesh counts as not drawn after this many still samples
 constexpr std::uint32_t kSettleSamples  = 3;     // an entry's change is logged once it has held this many samples
-constexpr auto          kSummaryEvery  = std::chrono::seconds(10);
+constexpr auto          kSummaryEvery  = std::chrono::seconds(60);
+constexpr auto          kEntryLineGap  = std::chrono::seconds(60);  // the shortest gap between one entry's change lines
 
 /// What a line about an entry is logged on.
 struct EntrySteady
@@ -160,6 +161,7 @@ struct Remembered
     std::uint32_t undrawn  = 0;  // samples in a row the last render time stood still
     EntrySteady   pending{};     // a change not logged yet ...
     std::uint32_t pendingSeen = 0;  // ... and how many samples in a row it has held
+    Clock::time_point lastLine{};   // this entry's last line
 };
 
 /// The summary line's parts logged on change (the counters, count and cameras move: they come with each line).
@@ -402,10 +404,12 @@ void Remember(Sample& sample)
         }
     }
     const bool first = slot == nullptr;
+    const auto now   = Clock::now();
     if (first)
     {
-        slot  = oldest;
-        *slot = {sample.entry, sample.steady, g_samples, sample.lastRender};
+        slot           = oldest;
+        *slot          = {sample.entry, sample.steady, g_samples, sample.lastRender};
+        slot->lastLine = now;
         LogSample(sample, true);
         return;
     }
@@ -425,10 +429,14 @@ void Remember(Sample& sample)
     }
     slot->pendingSeen = slot->pendingSeen > 0 && slot->pending == sample.steady ? slot->pendingSeen + 1 : 1;
     slot->pending     = sample.steady;
-    if (slot->pendingSeen >= kSettleSamples)
+    // And at most once a minute per entry, with the state it holds then: entries near the cameras' reach edges
+    // change for minutes on end (hundreds of lines per session, live 2026-10-03). A change undone in between is
+    // not logged.
+    if (slot->pendingSeen >= kSettleSamples && now - slot->lastLine >= kEntryLineGap)
     {
         slot->steady      = sample.steady;
         slot->pendingSeen = 0;
+        slot->lastLine    = now;
         LogSample(sample, false);
     }
 }

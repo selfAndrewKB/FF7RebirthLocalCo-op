@@ -17,6 +17,7 @@
 #include "platform/settled_log.h"
 #include "player_two/chocobo_ride.h"
 #include "player_two/engine_facts.h"
+#include "player_two/field_pickup.h"
 #include "player_two/generation.h"
 #include "players/unreal_access.h"
 
@@ -75,6 +76,7 @@ struct Row
     std::uint64_t  weak      = 0;  // the list's FWeakObjectPtr, as stored
     int            p2Row     = -1; // player 2's component row naming it now, or -1
     int            p2Ride    = -1; // the handle of player 2's driven chocobo naming it now, or -1
+    int            p2Pickup  = -1; // the field-prompt slot of player 2's pass naming it now, or -1
     bool           playerTwo = false;
     std::int32_t   priority  = 0;
     std::int32_t   remove    = 0;
@@ -266,6 +268,7 @@ std::wstring Describe(const std::vector<Row>& rows)
     {
         const std::wstring owner = row.p2Row >= 0    ? std::format(L"player 2 row {}", row.p2Row)
                                    : row.p2Ride >= 0 ? std::format(L"player 2's chocobo row {}", row.p2Ride)
+                                   : row.p2Pickup >= 0 ? std::format(L"player 2's field prompt slot {}", row.p2Pickup)
                                    : row.playerTwo   ? std::wstring(L"player 2 (leaving)")
                                                    : std::wstring(L"player 1");
         text += std::format(L"{}[{} prio {} remove {}]", text.empty() ? L"" : L" ", owner, row.priority, row.remove);
@@ -364,6 +367,15 @@ void Refresh() noexcept
             std::uint64_t weak = 0;
             rideNamed[i] = Read(ride + player_two::facts::kChocoboMoveStateRowHandles[i], weak) ? Resolve(weak) : nullptr;
         }
+        // Player 2's field prompts (pickups): FieldActionMgr's slot rows in player 2's copy of its slot block, made by
+        // player 2's pass of the game's own update (player_two/field_pickup.h).
+        player_two::field_pickup::Weaks pickupWeaks{};
+        player_two::field_pickup::RowWeaks(pickupWeaks);
+        std::array<const UObject*, std::tuple_size_v<player_two::field_pickup::Weaks>> pickupNamed{};
+        for (std::size_t i = 0; i < pickupWeaks.size(); ++i)
+        {
+            pickupNamed[i] = pickupWeaks[i] != 0 ? Resolve(pickupWeaks[i]) : nullptr;
+        }
 
         std::uintptr_t list = 0;
         std::uintptr_t data = 0;
@@ -391,8 +403,12 @@ void Refresh() noexcept
             {
                 row.p2Ride = rideNamed[r] != nullptr && rideNamed[r] == row.widget ? static_cast<int>(r) : row.p2Ride;
             }
-            row.playerTwo = row.p2Row >= 0 || row.p2Ride >= 0 || std::find(g_playerTwoWidgets.begin(), g_playerTwoWidgets.end(),
-                                                        row.widget) != g_playerTwoWidgets.end();
+            for (std::size_t r = 0; r < pickupNamed.size(); ++r)
+            {
+                row.p2Pickup = pickupNamed[r] != nullptr && pickupNamed[r] == row.widget ? static_cast<int>(r) : row.p2Pickup;
+            }
+            row.playerTwo = row.p2Row >= 0 || row.p2Ride >= 0 || row.p2Pickup >= 0 ||
+                            std::find(g_playerTwoWidgets.begin(), g_playerTwoWidgets.end(), row.widget) != g_playerTwoWidgets.end();
             if (row.playerTwo)
             {
                 g_stillTwo.push_back(row.widget);

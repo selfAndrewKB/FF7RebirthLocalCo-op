@@ -53,7 +53,7 @@ constexpr std::uint32_t kResourceTarget  = 0x90;  // the render-target RHI pool 
 constexpr std::uint32_t kObjectName  = 0x18;
 constexpr std::uint32_t kObjectOuter = 0x20;
 
-constexpr std::uint64_t kHeartbeatMs = 30000;
+constexpr std::uint64_t kHeartbeatMs = 60000;
 constexpr int           kMaxLines    = 300;
 
 struct State

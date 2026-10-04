@@ -7,10 +7,11 @@
 //
 // While the split is on screen, every 10 ticks: the CharaPop parameters and override distances, the
 // tick's counters, the animation snapshot's camera and both players' cameras (on change, and every
-// 10 s); then, of the entries more than 50 m from player 1's camera, the 16 nearest player 2's,
+// 60 s); then, of the entries more than 50 m from player 1's camera, the 16 nearest player 2's,
 // each with its distance and angle to each camera, its level, minimum level, state, pause flags, and
 // its mesh's animation-optimisation fields and the actor's own paused state (the interface query the
-// evaluators compare with), logged on each change. Calls only the game's weak-pointer assign and
+// evaluators compare with), logged on first sight and on a change, at most once a minute per entry.
+// Calls only the game's weak-pointer assign and
 // resolve, guarded. Changes nothing. Game thread only.
 
 #include <cstdint>
