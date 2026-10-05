@@ -96,6 +96,9 @@ constexpr std::uint8_t   kExecuteSlotBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x
 constexpr std::uintptr_t kMarkByKey        = 0x140C10F94;  // u8(wim, FName key by value)
 constexpr std::uint8_t   kMarkByKeyBytes[] = {0x48, 0x89, 0x54, 0x24, 0x10, 0x53, 0xB8, 0x30, 0x00, 0x00, 0x00};
 constexpr std::size_t    kFirstInstruction = 5;
+// The Wheelie ride-on point's key (an FName global, RE-p2-wheelie-ride.md §11): no analysed code adds it, so its
+// registration is logged at Info to name the registrar.
+constexpr std::uintptr_t kScooterKey = 0x1491E6D10;
 constexpr std::uintptr_t kMarkFromListener = 0x1414A90AD;  // the WorldItem key listener's call returns here
 // Call redirects: the game mode tick's call of the selection update, and the WorldItem tick's call of the grant.
 constexpr std::uintptr_t kUpdateCall  = 0x1423EF160;
@@ -141,6 +144,7 @@ QueryFn                 g_query     = nullptr;
 std::uintptr_t          g_base      = 0;  // the image's live base, for IDA addresses in the log
 std::uintptr_t          g_root      = 0;  // live address of the root global
 std::uintptr_t          g_party     = 0;  // live address of the party manager global
+const std::uint64_t*    g_scooterKey = nullptr;  // live address of the ride-on key's FName global
 
 // The line budget, shared by every thread that logs here.
 SRWLOCK          g_budgetLock = SRWLOCK_INIT;
@@ -318,6 +322,25 @@ void AddPoint(void* mgr, std::uint8_t talk, const std::uint64_t* key, const std:
     const auto registrar = Ida(reinterpret_cast<std::uintptr_t>(_ReturnAddress()));
     reinterpret_cast<AddPointFn>(g_addPoint.Original())(mgr, talk, key, owner, extra, location, rotation, preset,
                                                        presetPlayer, hold, kind, flagA, flagB, preset2, presetPlayer2);
+    if (const auto keyName = Read<std::uint64_t>(key, 0);
+        g_scooterKey != nullptr && keyName != 0 && keyName == Read<std::uint64_t>(g_scooterKey, 0))
+    {
+        try
+        {
+            float at[3]{};
+            if (location != nullptr)
+            {
+                platform::CopyGuarded(at, location, sizeof(at));
+            }
+            platform::Log(L"interact: Wheelie ride-on point added by 0x{:X} (owner {}, talk {}, kind {}, presets {} / {}, "
+                          L"at {:.0f},{:.0f},{:.0f}), leader {}",
+                          registrar, Name(Read<std::uint64_t>(owner, 0)), talk, kind, Name(Read<std::uint64_t>(preset, 0)),
+                          Name(Read<std::uint64_t>(presetPlayer, 0)), at[0], at[1], at[2], LeaderText());
+        }
+        catch (...)
+        {
+        }
+    }
     if (!platform::Enabled(platform::Level::Debug))
     {
         return;  // the registration lines and the per-registrar counts are Debug
@@ -780,6 +803,10 @@ void Install(const platform::GameImage& image) noexcept
     }
     g_root  = *root;
     g_party = *party;
+    if (const auto scooterKey = image.Rebase(kScooterKey, sizeof(std::uint64_t)))
+    {
+        g_scooterKey = reinterpret_cast<const std::uint64_t*>(*scooterKey);
+    }
 
     const auto entry = [&](platform::EntryRedirect& redirect, std::uintptr_t ida, std::span<const std::uint8_t> bytes,
                            std::uintptr_t replacement) {

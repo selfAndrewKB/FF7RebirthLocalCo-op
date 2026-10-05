@@ -51,7 +51,7 @@ bool Enabled() noexcept;
 /// The switch alone (Toggle's state), whether or not it is stood down.
 bool SwitchedOn() noexcept;
 
-/// Stands per-pad input down while `on` (the buggy, player_two/buggy_turns.h: every pad drives player 1's ride,
+/// Stands per-pad input down while `on` (the buggy or the bronco, player_two/shared_ride.h: every pad drives player 1's ride,
 /// the game's own merge) and back after. Logged on change. Game thread.
 void SetStoodDown(bool on) noexcept;
 
@@ -65,6 +65,10 @@ inline constexpr unsigned kPartMemberTick      = 4;
 inline constexpr unsigned kPartPlayerOneDetect = 8;
 void SetMask(unsigned mask) noexcept;
 bool PartActs(unsigned part) noexcept;
+
+/// Logging: pad `controllerId`'s own left and right trigger from the game's per-pad records (the most pressed over the
+/// banks the game merges), whatever any scope holds. False when no record could be read. Game thread.
+bool PadTriggers(std::int32_t controllerId, float& left, float& right) noexcept;
 
 /// The controller id of the local player a controller belongs to, or -1.
 std::int32_t ControllerIdOf(const void* controller) noexcept;

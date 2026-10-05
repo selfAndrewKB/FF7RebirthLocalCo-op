@@ -399,7 +399,7 @@ Outcome ModTarget::HoldSticks(std::int32_t player, const float (&axes)[4])
 {
     if (!player_two::pad_sticks::Enabled())
     {
-        return Failed(player_two::pad_sticks::SwitchedOn() ? L"per-pad input is stood down (player 1 rides the buggy)"
+        return Failed(player_two::pad_sticks::SwitchedOn() ? L"per-pad input is stood down (player 1 rides the buggy or the bronco)"
                                                            : L"per-pad sticks are off (run 'sticks per-pad' first)");
     }
     if (!player_two::generation::Active())

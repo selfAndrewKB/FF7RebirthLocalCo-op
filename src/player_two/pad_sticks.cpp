@@ -1,5 +1,6 @@
 #include "player_two/pad_sticks.h"
 
+#include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
@@ -157,6 +158,32 @@ void SetMask(unsigned mask) noexcept
                   L"player 2's member ticked {}, player 1's detection and ridden chocobo on pad 1 {})",
                   mask, PartActs(kPartPlayerTwoInput), PartActs(kPartPlayerOneMove), PartActs(kPartMemberTick),
                   PartActs(kPartPlayerOneDetect));
+}
+
+bool PadTriggers(std::int32_t controllerId, float& left, float& right) noexcept
+{
+    left = right     = 0.0f;
+    std::byte* input = InputObject();
+    if (input == nullptr || g_directInputOnly == nullptr || controllerId < 0 || !generation::OnGameThread())
+    {
+        return false;
+    }
+    std::size_t count = 0;
+    const auto  banks = MergedBanks(input, count);
+    bool        found = false;
+    for (std::size_t i = 0; i < count; ++i)
+    {
+        float record[6]{};  // LX, LY, RX, RY, LT, RT
+        if (banks[i].records == nullptr || controllerId >= banks[i].count ||
+            !platform::CopyGuarded(record, banks[i].records + static_cast<std::ptrdiff_t>(controllerId) * 6, sizeof(record)))
+        {
+            continue;
+        }
+        left  = record[4] > left ? record[4] : left;
+        right = record[5] > right ? record[5] : right;
+        found = true;
+    }
+    return found;
 }
 
 bool PartActs(unsigned part) noexcept

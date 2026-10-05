@@ -92,7 +92,8 @@ add_library(LocalSplitScreen SHARED
     src/player_two/world_actor_reach.cpp
     src/player_two/ride_watch.cpp
     src/player_two/chocobo_ride.cpp
-    src/player_two/buggy_turns.cpp
+    src/player_two/shared_ride.cpp
+    src/player_two/wheelie_watch.cpp
     src/player_two/ride_probe.cpp
     src/hud/navimap_watch.cpp
     src/hud/minimap.cpp

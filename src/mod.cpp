@@ -54,7 +54,8 @@
 #include "player_two/world_actor_reach.h"
 #include "player_two/ride_probe.h"
 #include "player_two/ride_watch.h"
-#include "player_two/buggy_turns.h"
+#include "player_two/shared_ride.h"
+#include "player_two/wheelie_watch.h"
 #include "player_two/pad_sticks.h"
 #include "player_two/chocobo_ride.h"
 #include "player_two/nav_strand.h"
@@ -90,7 +91,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.58.0";
+constexpr const wchar_t* kVersion = L"0.59.1";
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -156,7 +157,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.58.0");
+        ModVersion     = STR("0.59.1");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -300,7 +301,8 @@ public:
         lss::player_two::world_actor_reach::Install(*image); // world actors such as chests pop around player 2 too
         lss::player_two::ride_watch::Install(*image);      // chocobo and buggy rides, logged (read-only)
         lss::player_two::chocobo_ride::Install(*image);    // player 2 drives their own chocobo while the party rides
-        lss::player_two::buggy_turns::Install(*image);     // the buggy: player 2 stands aside, every pad drives player 1's ride
+        lss::player_two::shared_ride::Install(*image);     // the buggy and the bronco: player 2 stands aside, every pad drives
+        lss::player_two::wheelie_watch::Install(*image);   // the Wheelie system, logged (read-only)
         lss::player_two::ride_probe::Install(*image);      // player 2's ride: sprint and homing, logged (read-only)
         lss::player_two::field_pickup::Install(*image);    // player 2's pickups: a second pass of the game's prompts
         lss::player_two::rumble_watch::Install(*image);    // logging only: each controller's rumble, pad by pad
@@ -439,10 +441,11 @@ private:
             LeaveBeforeWorldChange(L"the field stopped running (a field exit the redirected entry did not see)");
         }
         lss::dev::TickBeforeSession();
-        // The buggy (player_two/buggy_turns.h): player 2 stands aside, the game's merge reaches player 1 from every pad.
-        const bool buggy = lss::player_two::buggy_turns::Tick();
-        session_->SetSharedRide(buggy);
-        lss::player_two::pad_sticks::SetStoodDown(buggy);
+        // The buggy and the bronco (player_two/shared_ride.h): player 2 stands aside, the game's merge reaches player 1
+        // from every pad.
+        const bool shared = lss::player_two::shared_ride::Tick();
+        session_->SetSharedRide(shared);
+        lss::player_two::pad_sticks::SetStoodDown(shared);
         session_->Tick();
         lss::dev::TickAfterSession();
         FollowPlayerTwo();
@@ -467,6 +470,7 @@ private:
         lss::player_two::charapop_centre::Tick(splitShown, session_->PlaysMember());
         lss::player_two::world_actor_reach::Tick(session_->PlaysMember());
         lss::player_two::ride_watch::Tick();
+        lss::player_two::wheelie_watch::Tick();
         lss::player_two::ride_probe::Tick();
         lss::hud::navimap_watch::Tick(splitShown);
         lss::hud::minimap::Tick(splitShown);  // outside the overlay render, before it

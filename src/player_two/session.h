@@ -95,7 +95,7 @@ public:
         return HasPlayerTwo() && phase_ == Phase::Playing && member_ == nullptr && waitingForSlot_;
     }
 
-    /// Player 1 rides a vehicle the whole party shares (the buggy, player_two/buggy_turns.h), each tick. While it
+    /// Player 1 rides a vehicle the whole party shares (the buggy or the bronco, player_two/shared_ride.h), each tick. While it
     /// holds, player 2 gives the member back through the game's release and stays in without one, as the party is
     /// in the one-player game; once it ends, player 2 takes the 2nd slot's member again. Logged on change.
     void SetSharedRide(bool on) noexcept;
