@@ -8,6 +8,7 @@
 #include "hud/entry_filter_code.h"
 #include "hud/hud_addresses.h"
 #include "hud/label_relayouts.h"
+#include "hud/minimap_icons.h"
 #include "hud/menu_buffers.h"
 #include "hud/minimap_labels.h"
 #include "platform/call_redirect.h"
@@ -692,6 +693,7 @@ bool Install(const platform::GameImage& image) noexcept
     }
     minimap_labels::Install(image);  // optional: without it, each pass lays the labels out again (logged)
     label_relayouts::Install(image);  // logging: which text blocks relayout, where and why
+    minimap_icons::Prepare(image);    // optional: placed from the game thread (Tick); without it the icons churn
     return true;
 }
 
@@ -699,6 +701,7 @@ void Remove() noexcept
 {
     minimap_labels::Remove();  // player 1's label states back first (on the game thread)
     label_relayouts::Remove();
+    minimap_icons::Remove();
     g_frameActive          = false;
     g_fields.playerTwoName = 0;
     bool all = true;
@@ -728,6 +731,7 @@ void Tick(bool splitShown) noexcept
         const bool ok  = g_acquireCall.InstallFromOwnThread(g_acquireSite, g_acquireTarget, reinterpret_cast<std::uintptr_t>(&Acquire));
         Line(L"the circle's acquire redirect {}", ok ? L"installed from the game thread" : L"FAILED (player 1's map in both halves)");
     }
+    minimap_icons::InstallFromGameThread();  // once; here the game thread is outside the holder update
     MakeNames();
     void* const slate = CircleSlate();
     if (g_target == nullptr && !g_refused && slate != nullptr && splitShown && generation::Active() && g_namesReady)
@@ -755,6 +759,7 @@ void Tick(bool splitShown) noexcept
     }
     minimap_labels::Tick(g_frameActive);  // with player 2's minimap off, every label keeps player 1's state only
     label_relayouts::Tick(g_frameActive);
+    minimap_icons::Tick(g_frameActive);  // off: the icons only player 2 kept are removed by the next run, as the game does
     if (why != g_lastWhy)
     {
         g_lastWhy = why;
@@ -790,7 +795,9 @@ void RunHolder(bool playerTwo) noexcept
         }
         g_answerType = *type;
         minimap_labels::BeginPlayerTwoRun();  // its label texts set into player 2's own label states
+        minimap_icons::BeginRun(1);           // the icons player 1's last run kept stay (hud/minimap_icons.h)
         g_ranForTwo  = platform::CallGuarded(g_holderUpdate, holder, 0.0f);
+        minimap_icons::EndRun(holder);
         minimap_labels::EndPlayerTwoRun();
         g_answerType = -1;
         ++g_counts.runsTwo;
@@ -803,7 +810,9 @@ void RunHolder(bool playerTwo) noexcept
         return;
     }
     label_relayouts::SetScope(label_relayouts::Scope::PlayerOneRun);
+    minimap_icons::BeginRun(0);  // the icons player 2's run kept this frame stay
     const bool ranForOne = platform::CallGuarded(g_holderUpdate, holder, 0.0f);
+    minimap_icons::EndRun(holder);
     label_relayouts::SetScope(label_relayouts::Scope::Other);
     if (!ranForOne)
     {

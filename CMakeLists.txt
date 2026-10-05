@@ -97,6 +97,7 @@ add_library(LocalSplitScreen SHARED
     src/hud/minimap.cpp
     src/hud/minimap_labels.cpp
     src/hud/label_relayouts.cpp
+    src/hud/minimap_icons.cpp
     src/hud/label_states.cpp
     src/player_two/party_warp.cpp
     src/player_two/strand_watch.cpp
