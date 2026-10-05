@@ -31,6 +31,7 @@ const std::byte* const*   g_inputOwner         = nullptr;  // the global that ho
 const std::uint8_t*       g_directInputOnly    = nullptr;  // nonzero: the game merges only DirectInput
 
 std::atomic<bool>     g_enabled{false};
+std::atomic<bool>     g_stoodDown{false};  // SetStoodDown
 std::atomic<unsigned> g_mask{kPartPlayerTwoInput | kPartPlayerOneMove | kPartMemberTick | kPartPlayerOneDetect};
 bool                  g_scopeOpen = false;  // game thread only
 
@@ -67,7 +68,7 @@ void ProcessPlayerInput(void* controller, float deltaTime, bool gamePaused)
     const bool isOne = controller == generation::PlayerOneController();
     const bool isTwo = controller == generation::PlayerTwoController();
     const scope_leaks::InputScope leaks(isTwo);  // player 2's input writes the leader transform; put back after
-    if (!g_enabled.load(std::memory_order_relaxed) || !generation::Active() || (!isOne && !isTwo) ||
+    if (!Enabled() || !generation::Active() || (!isOne && !isTwo) ||
         (isTwo && !PartActs(kPartPlayerTwoInput)) || !generation::OnGameThread())
     {
         g_inputCounters.Pass();
@@ -130,7 +131,23 @@ bool Toggle() noexcept
 
 bool Enabled() noexcept
 {
+    return g_enabled.load(std::memory_order_relaxed) && !g_stoodDown.load(std::memory_order_relaxed);
+}
+
+bool SwitchedOn() noexcept
+{
     return g_enabled.load(std::memory_order_relaxed);
+}
+
+void SetStoodDown(bool on) noexcept
+{
+    if (g_stoodDown.exchange(on, std::memory_order_relaxed) == on)
+    {
+        return;
+    }
+    platform::Log(L"per-pad input {}{}", on ? L"stood down: every pad reaches player 1 (the game's own merge)"
+                                            : L"back: each pad drives its own player",
+                  g_enabled.load(std::memory_order_relaxed) ? L"" : L" (the per-pad switch is off, so nothing changes now)");
 }
 
 void SetMask(unsigned mask) noexcept

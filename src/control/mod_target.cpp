@@ -101,11 +101,11 @@ Outcome ModTarget::SetPerPadSticks(bool on)
     {
         return Failed(L"the per-pad sticks stage is not installed");
     }
-    if (player_two::pad_sticks::Enabled() != on)
+    if (player_two::pad_sticks::SwitchedOn() != on)
     {
         session_.TogglePadSticks();  // logs the new state
     }
-    return player_two::pad_sticks::Enabled() == on ? Outcome{} : Failed(L"the switch did not take");
+    return player_two::pad_sticks::SwitchedOn() == on ? Outcome{} : Failed(L"the switch did not take");
 }
 
 Outcome ModTarget::SetLayout(bool sideBySide)
@@ -399,7 +399,8 @@ Outcome ModTarget::HoldSticks(std::int32_t player, const float (&axes)[4])
 {
     if (!player_two::pad_sticks::Enabled())
     {
-        return Failed(L"per-pad sticks are off (run 'sticks per-pad' first)");
+        return Failed(player_two::pad_sticks::SwitchedOn() ? L"per-pad input is stood down (player 1 rides the buggy)"
+                                                           : L"per-pad sticks are off (run 'sticks per-pad' first)");
     }
     if (!player_two::generation::Active())
     {

@@ -95,6 +95,14 @@ public:
         return HasPlayerTwo() && phase_ == Phase::Playing && member_ == nullptr && waitingForSlot_;
     }
 
+    /// Player 1 rides a vehicle the whole party shares (the buggy, player_two/buggy_turns.h), each tick. While it
+    /// holds, player 2 gives the member back through the game's release and stays in without one, as the party is
+    /// in the one-player game; once it ends, player 2 takes the 2nd slot's member again. Logged on change.
+    void SetSharedRide(bool on) noexcept;
+
+    /// Player 2 is in and stands aside for a shared ride (only player 1 plays: player 1's single view).
+    bool StandsAside() const noexcept { return HasPlayerTwo() && sharedRide_; }
+
     /// Player 2's and player 1's ULocalPlayer (null when player 2 is out).
     const void* PlayerTwo() const noexcept { return players_.PlayerTwo(); }
     const void* PlayerOne() const noexcept { return playerOne_; }
@@ -171,6 +179,7 @@ private:
     std::uint32_t         awaitJoinTries_   = 0;        // joins the wait tried that did not add player 2
     bool                  waitingForSlot_   = false;    // in, without a member: the 2nd slot's is not free yet
     std::uint32_t         slotWaitLogged_   = 0;        // the wait's reason as last logged (logged on change)
+    bool                  sharedRide_       = false;    // player 1 rides a shared vehicle: player 2 takes no member
 
     party_member::PlayerOneBytes playerOneBytes_{};
 

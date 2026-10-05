@@ -231,6 +231,13 @@ void Session::Settle() noexcept
         }
         return;
     }
+    if (sharedRide_)
+    {
+        // Player 1 rides a vehicle the whole party shares: player 2 takes no member until it is over (RetakeWhenFree).
+        member_ = nullptr;
+        phase_  = Phase::Playing;
+        return;
+    }
     handover_watch::PartyOrder(L"choosing player 2's member", nullptr);
     const auto choice = party_member::ChooseSlot(playerOneController_);
     member_           = choice.member;
@@ -356,8 +363,8 @@ void Session::RetakeWhenFree() noexcept
     // never completed keeps it holding one). A wait on the 2nd slot is checked every few ticks: the
     // game frees it without an event (its script lets go of the member's AI).
     const bool due = looking || ticks_ % (waitingForSlot_ ? kSlotWaitTicks : BackstopTicks()) == 0;
-    if (member_ != nullptr || !installed_.member || !generation::Active() || !due || !party_member::GameReady() ||
-        !MemberReleased())
+    if (member_ != nullptr || sharedRide_ || !installed_.member || !generation::Active() || !due ||
+        !party_member::GameReady() || !MemberReleased())
     {
         return;
     }
@@ -383,6 +390,33 @@ void Session::RetakeWhenFree() noexcept
                                  : L"found by the party check");
     phase_ = Phase::SettlingPlayerOne;
     ticks_ = kPlayerOneWatchTicks;  // player 1 is settled already: choose on the next tick
+}
+
+void Session::SetSharedRide(bool on) noexcept
+{
+    if (on == sharedRide_)
+    {
+        return;
+    }
+    sharedRide_ = on;
+    if (!HasPlayerTwo())
+    {
+        return;
+    }
+    if (!on)
+    {
+        Log(L"the shared ride is over: player 2 takes the 2nd slot's member again once it is free");
+        retakeLooks_ = kRetakeLookTicks;
+        return;
+    }
+    if (MemberHeld())
+    {
+        Yield(L"standing aside: player 1 rides a vehicle the whole party shares, with the party as in the one-player game");
+    }
+    else
+    {
+        Log(L"player 2 stands aside (no member held): player 1 rides a vehicle the whole party shares");
+    }
 }
 
 /// Player 2 gives its member back through the game's release and chooses again once it is released.

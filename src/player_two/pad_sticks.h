@@ -41,10 +41,19 @@ bool Installed() noexcept;
 
 void Remove() noexcept;
 
-/// Switches per-pad sticks; returns the new state.
+/// Switches per-pad sticks; returns the new state of the switch.
 bool Toggle() noexcept;
 
+/// Per-pad input acts now: the switch is on and it is not stood down. Per-pad buttons (player_two/pad_buttons.h)
+/// follow this too.
 bool Enabled() noexcept;
+
+/// The switch alone (Toggle's state), whether or not it is stood down.
+bool SwitchedOn() noexcept;
+
+/// Stands per-pad input down while `on` (the buggy, player_two/buggy_turns.h: every pad drives player 1's ride,
+/// the game's own merge) and back after. Logged on change. Game thread.
+void SetStoodDown(bool on) noexcept;
 
 /// Diagnosis: which parts of per-pad sticks act, while they are on (bits: 1 player 2's input runs
 /// as the primary player's, 2 player 1's move state reads pad 1, 4 player 2's member is ticked, 8
