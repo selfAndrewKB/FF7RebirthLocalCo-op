@@ -7,6 +7,7 @@
 
 #include "hud/entry_filter_code.h"
 #include "hud/hud_addresses.h"
+#include "hud/label_relayouts.h"
 #include "hud/menu_buffers.h"
 #include "hud/minimap_labels.h"
 #include "platform/call_redirect.h"
@@ -690,12 +691,14 @@ bool Install(const platform::GameImage& image) noexcept
                       L"pieces (the maps flicker when the players are apart)");
     }
     minimap_labels::Install(image);  // optional: without it, each pass lays the labels out again (logged)
+    label_relayouts::Install(image);  // logging: which text blocks relayout, where and why
     return true;
 }
 
 void Remove() noexcept
 {
     minimap_labels::Remove();  // player 1's label states back first (on the game thread)
+    label_relayouts::Remove();
     g_frameActive          = false;
     g_fields.playerTwoName = 0;
     bool all = true;
@@ -751,6 +754,7 @@ void Tick(bool splitShown) noexcept
         g_pieceCentreKnown[0] = g_pieceCentreKnown[1] = false;  // a later split starts from fresh centres
     }
     minimap_labels::Tick(g_frameActive);  // with player 2's minimap off, every label keeps player 1's state only
+    label_relayouts::Tick(g_frameActive);
     if (why != g_lastWhy)
     {
         g_lastWhy = why;
@@ -798,7 +802,10 @@ void RunHolder(bool playerTwo) noexcept
         CentreOf(CircleSlate(), g_centreTwo);
         return;
     }
-    if (!platform::CallGuarded(g_holderUpdate, holder, 0.0f))
+    label_relayouts::SetScope(label_relayouts::Scope::PlayerOneRun);
+    const bool ranForOne = platform::CallGuarded(g_holderUpdate, holder, 0.0f);
+    label_relayouts::SetScope(label_relayouts::Scope::Other);
+    if (!ranForOne)
     {
         Refuse(L"the navimap holder update raised an exception in player 1's run");
     }
@@ -815,6 +822,7 @@ void RunHolder(bool playerTwo) noexcept
 
 bool BeginPlayerTwoPaint() noexcept
 {
+    label_relayouts::SetScope(label_relayouts::Scope::PlayerTwoPaint);  // player 2's overlay render follows
     g_pass = Pass::None;
     g_held = nullptr;
     if (!g_frameActive || !g_ranForTwo)
@@ -835,6 +843,7 @@ bool BeginPlayerTwoPaint() noexcept
 
 void EndPlayerTwoPaint() noexcept
 {
+    label_relayouts::SetScope(label_relayouts::Scope::Other);
     minimap_labels::SwapBack();  // player 2's paint is done: every label holds player 1's state again
     const bool painted = g_pass == Pass::PlayerTwo;
     if (g_swappedSlate != nullptr)

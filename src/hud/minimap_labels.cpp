@@ -1,5 +1,6 @@
 #include "hud/minimap_labels.h"
 
+#include "hud/label_relayouts.h"
 #include "hud/label_states.h"
 #include "platform/call_redirect.h"
 #include "platform/guarded.h"
@@ -309,7 +310,12 @@ std::uint64_t SetText(void* textBlock, const void* text) noexcept
             LogFirst(textBlock);
         }
     }
-    return original(textBlock, text);
+    // After the swap: what the game's own compare is about to see (hud/label_relayouts.h).
+    const label_relayouts::Before before = label_relayouts::BeforeSetText(textBlock, text);
+    const bool playerTwoState = before.read && g_inRun && g_book.Holds(ControllerOf(textBlock));
+    const std::uint64_t result = original(textBlock, text);
+    label_relayouts::AfterSetText(textBlock, before, playerTwoState);
+    return result;
 }
 
 }  // namespace
@@ -383,11 +389,13 @@ void Remove() noexcept
 void BeginPlayerTwoRun() noexcept
 {
     g_inRun = g_installed;
+    label_relayouts::SetScope(label_relayouts::Scope::PlayerTwoRun);
 }
 
 void EndPlayerTwoRun() noexcept
 {
     g_inRun = false;
+    label_relayouts::SetScope(label_relayouts::Scope::Other);
 }
 
 void SwapBack() noexcept

@@ -86,6 +86,8 @@ public:
 
     std::size_t        Count() const noexcept { return count_; }
     bool               AnyInside() const noexcept;
+    /// Player 2's state is in the block whose controller is `controller` (logging).
+    bool               Holds(const void* controller) const noexcept;
     const LabelCounts& Counts() const noexcept { return counts_; }
 
 private:

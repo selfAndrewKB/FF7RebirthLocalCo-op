@@ -25,6 +25,18 @@ bool LabelBook::AnyInside() const noexcept
     return false;
 }
 
+bool LabelBook::Holds(const void* controller) const noexcept
+{
+    for (std::size_t i = 0; i < count_; ++i)
+    {
+        if (records_[i].controller == controller)
+        {
+            return records_[i].inside;
+        }
+    }
+    return false;
+}
+
 LabelBook::Record* LabelBook::Find(const void* controller) noexcept
 {
     for (std::size_t i = 0; i < count_; ++i)
