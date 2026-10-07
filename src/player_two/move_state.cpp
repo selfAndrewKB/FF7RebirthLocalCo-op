@@ -47,6 +47,8 @@ TickFn                g_engineChocoboTick        = nullptr;  // the chocobo move
 TickFn                g_engineChocoboUpdateInput = nullptr;  // ... and slot 16
 TickFn                g_engineChocoboHandles     = nullptr;  // ... and slot 1: void(state, dt), rax passed through
 platform::VTableEntry g_chocoboHandlesSlot;
+platform::VTableEntry g_scooterUpdateInputSlot;
+TickFn                g_engineScooterUpdateInput = nullptr;  // the scooter move state's slot 16
 TickFn                g_engineTick      = nullptr;
 TickFn                g_engineTickInput = nullptr;
 TickFn                g_engineUpdateInput       = nullptr;  // slot 16, same shape as slot 11
@@ -208,10 +210,10 @@ std::uintptr_t PlayerUpdateInput(void* state, float deltaTime)
     return UpdateInputFor(g_enginePlayerUpdateInput, state, deltaTime);
 }
 
-/// Player 1's ridden chocobo: the field tick runs its move state for player 1 (PC1 possesses it,
-/// RE-p2-chocobo-ride.md §1.2); unscoped it read the merged stick, so pad 2 steered it (live 2026-10-02). Not
-/// counted as an engine tick: player 2's member tick waits while player 1 rides, as before. A follower's chocobo
-/// (its own AI controller) passes through.
+/// Player 1's ridden chocobo or scooter: the field tick runs its move state for player 1 (PC1 possesses it,
+/// RE-p2-chocobo-ride.md §1.2, RE-p2-wheelie-ride.md §14.5); unscoped it read the merged stick, so pad 2 steered it
+/// (live 2026-10-02, the chocobo). Not counted as an engine tick; recorded as the ride tick, which player 2's member
+/// tick and own ride run on. A follower's chocobo (its own AI controller) and player 2's own ride pass through.
 std::uintptr_t ChocoboFor(TickFn engine, void* state, float deltaTime, bool outer) noexcept
 {
     const void* chocobo = generation::OnGameThread() ? ReadPointer(state, facts::kMoveStateCharacter) : nullptr;
@@ -238,6 +240,11 @@ std::uintptr_t ChocoboTick(void* state, float deltaTime)
 std::uintptr_t ChocoboUpdateInput(void* state, float deltaTime)
 {
     return ChocoboFor(g_engineChocoboUpdateInput, state, deltaTime, true);
+}
+
+std::uintptr_t ScooterUpdateInput(void* state, float deltaTime)
+{
+    return ChocoboFor(g_engineScooterUpdateInput, state, deltaTime, true);
 }
 
 /// Every chocobo move state's slot 1, run by the chocobo's own actor tick in game context (its handles and the anim
@@ -294,6 +301,8 @@ void InstallDetectionScopes(const platform::GameImage& image) noexcept
         {facts::kChocoboMoveStateTick, g_engineChocoboTick, reinterpret_cast<std::uintptr_t>(&ChocoboTick), g_chocoboTickSlot},
         {facts::kChocoboMoveStateUpdateInput, g_engineChocoboUpdateInput,
          reinterpret_cast<std::uintptr_t>(&ChocoboUpdateInput), g_chocoboUpdateInputSlot},
+        {facts::kScooterMoveStateUpdateInput, g_engineScooterUpdateInput,
+         reinterpret_cast<std::uintptr_t>(&ScooterUpdateInput), g_scooterUpdateInputSlot},
     };
     int installed = 0;
     for (const Wrap& wrap : wraps)
@@ -302,7 +311,8 @@ void InstallDetectionScopes(const platform::GameImage& image) noexcept
         wrap.engine     = live ? reinterpret_cast<TickFn>(*live) : nullptr;
         installed += live && platform::ReplaceSlot(image, wrap.fact, wrap.replacement, wrap.slot) ? 1 : 0;
     }
-    platform::Log(L"per-pad sticks: player 1's input update, leader-action tick and ridden chocobo on pad 1: {} of {} slots",
+    platform::Log(L"per-pad sticks: player 1's input update, leader-action tick and ridden chocobo and scooter on pad 1: {} "
+                  L"of {} slots",
                   installed, std::size(wraps));
 }
 
@@ -363,7 +373,7 @@ bool Install(const platform::GameImage& image) noexcept
 void Remove() noexcept
 {
     for (auto* slot : {&g_tickSlot, &g_tickInputSlot, &g_updateInputSlot, &g_playerUpdateInputSlot, &g_leaderActionTickSlot,
-                       &g_chocoboTickSlot, &g_chocoboUpdateInputSlot, &g_chocoboHandlesSlot})
+                       &g_chocoboTickSlot, &g_chocoboUpdateInputSlot, &g_chocoboHandlesSlot, &g_scooterUpdateInputSlot})
     {
         if (!slot->Restore())
         {

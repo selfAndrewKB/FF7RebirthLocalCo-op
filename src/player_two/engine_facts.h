@@ -205,6 +205,11 @@ inline constexpr std::uint8_t kChocoboMoveStateUpdateInputBytes[] = {
 inline constexpr std::uint8_t kChocoboMoveStateHandlesBytes[] = {
     0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x57, 0xB8,
     0x40, 0x00, 0x00, 0x00, 0xE8, 0x03, 0xFD, 0xC5, 0xFE, 0x48, 0x2B, 0xE0};
+// The SB scooter (Wheelie) move state's slot 16 (vtable 0x1466B9D88; RE-p2-wheelie-ride.md §14.5): the field tick runs
+// the ridden scooter's slot 16 (drive slot 11 inside it, then the trigger feedback and the getoff latch).
+inline constexpr std::uint8_t kScooterMoveStateUpdateInputBytes[] = {
+    0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x48, 0x89,
+    0x7C, 0x24, 0x18, 0x55, 0x48, 0x8B, 0xEC, 0xB8, 0x50, 0x00, 0x00, 0x00};
 inline constexpr std::uint8_t kLeaderActionTickBytes[] = {
     0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x7C, 0x24, 0x10, 0x55, 0x48,
     0x8D, 0x6C, 0x24, 0xA9, 0xB8, 0xB0, 0x00, 0x00, 0x00, 0xE8, 0xAA, 0x2D};
@@ -407,6 +412,9 @@ inline constexpr SlotFact kChocoboMoveStateUpdateInput{
 inline constexpr SlotFact kChocoboMoveStateHandles{
     L"the chocobo move state's handle tick slot (1)", 0x1466B9E20,
     {L"ChocoboMoveState_Slot1_TickHandles", 0x14344F218, kChocoboMoveStateHandlesBytes}};
+inline constexpr SlotFact kScooterMoveStateUpdateInput{
+    L"the scooter move state's input-update slot (16)", 0x1466B9E08,
+    {L"SBScooterMoveState_Slot16_UpdateInput_GetOff", 0x1434506A0, kScooterMoveStateUpdateInputBytes}};
 inline constexpr SlotFact kLeaderActionTick{
     L"the leader-action component's tick slot (+0x428)", 0x145D6C490,
     {L"EndPlayerLeaderActionParamComponent::Tick_Vt428", 0x14125C16C, kLeaderActionTickBytes}};

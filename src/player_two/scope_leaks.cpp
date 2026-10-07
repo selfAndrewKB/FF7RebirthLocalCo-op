@@ -6,6 +6,7 @@
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
+#include "player_two/wheelie_ride.h"
 
 #include <array>
 #include <atomic>
@@ -87,6 +88,8 @@ void SummonBody(void* state, float deltaTime) noexcept
     if (state != nullptr && state == g_memberState && Acts(kFixSummonBody) && generation::OnGameThread())
     {
         ++g_counts.summonSkips;
+        // Its key-4 part, the Wheelie walk-in question, asked for player 2 instead (player_two/wheelie_ride.h).
+        wheelie_ride::Ask(state);
         return;  // as for any character the game does not tick
     }
     reinterpret_cast<SummonBodyFn>(g_summonCall.Original())(state, deltaTime);

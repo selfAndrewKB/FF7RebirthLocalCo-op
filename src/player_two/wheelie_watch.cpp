@@ -45,12 +45,12 @@ constexpr std::uint32_t  kCoordInstant     = 0x1FC;  // u8
 constexpr std::uint32_t  kCoordEnabled     = 0x29;   // u8 (vt+0x300 sets it; its key listener is registered)
 constexpr std::uint32_t  kCoordDisabled    = 0x2A;   // u8 (vt+0x308)
 constexpr std::uint32_t  kCoordStatePtr    = 0x230;  // -> u32 state id
-// The shared block: the nearest free scooter (weak), the scooter list (TArray<TWeakObjectPtr>), the ride-on point,
-// and the ride requested / drop the point / parking minigame on bytes and the minigame colour mask (§11).
+// The shared block: the nearest free scooter (weak), the scooter list (TArray<TWeakObjectPtr>), the ride-on point
+// (dormant), and the ride requested / idle / parking minigame on bytes and the minigame colour mask (§11, §13.1).
 constexpr std::uint32_t kSharedListData  = 0x8;
 constexpr std::uint32_t kSharedListNum   = 0x10;
 constexpr std::uint32_t kSharedRequested = 0x28;
-constexpr std::uint32_t kSharedDropPoint = 0x29;
+constexpr std::uint32_t kSharedIdle      = 0x29;
 constexpr std::uint32_t kSharedParking   = 0x2A;
 constexpr std::uint32_t kSharedColours   = 0x2B;
 constexpr std::int32_t  kListCap         = 32;
@@ -112,7 +112,7 @@ struct Snapshot
     const void*  rider       = nullptr;
     std::uint8_t flags[7]    = {};     // scripted, minigame, UI shown, instant, getoff instant, enabled, disabled
     std::int32_t listNum     = -1;
-    std::uint8_t shared[4]   = {};     // requested, drop the point, parking minigame on, colours
+    std::uint8_t shared[4]   = {};     // requested, idle, parking minigame on, colours
     std::int32_t tableState  = -1;
     std::int32_t tableNum    = -1;
     std::int32_t tableNamed  = 0;
@@ -212,7 +212,7 @@ Snapshot Read(float& nearestFree)
     {
         s.listNum   = ReadField<std::int32_t>(shared, kSharedListNum);
         s.shared[0] = Byte(shared, kSharedRequested);
-        s.shared[1] = Byte(shared, kSharedDropPoint);
+        s.shared[1] = Byte(shared, kSharedIdle);
         s.shared[2] = Byte(shared, kSharedParking);
         s.shared[3] = Byte(shared, kSharedColours);
         const auto* list = static_cast<const std::byte*>(ReadPointer(shared, kSharedListData));
@@ -283,7 +283,7 @@ void LogSnapshot(const Snapshot& s, float nearestFree)
         return;
     }
     platform::Log(L"wheelie watch: player 1's coordinator {} state {} ({}), scooter {} rider {}; scripted {} minigame {} UI {} "
-                  L"instant {} getoff-instant {} enabled {} disabled {}; shared: {} scooters, requested {} drop-point {} "
+                  L"instant {} getoff-instant {} enabled {} disabled {}; shared: {} scooters, requested {} idle {} "
                   L"parking {} colours {:#04x}; "
                   L"scooters free {}, ridden {}, excluded {}; nearest free to player 2's member {}; rider table state {} "
                   L"num {} named {}; player 2's coordinator {}; player 2's member {} (type {}, {}); on/off 152/136/4 "

@@ -30,6 +30,7 @@
 #include "player_two/scope_leaks.h"
 #include "player_two/tag_counts.h"
 #include "player_two/view_target.h"
+#include "player_two/wheelie_ride.h"
 #include "player_two/widget_owner.h"
 
 #include <Unreal/CoreUObject/UObject/Class.hpp>
@@ -167,6 +168,7 @@ void Session::RemoveStages() noexcept
     command_rules::Remove();
     party_switch::Remove();
     lock_on::Remove();
+    wheelie_ride::Remove();
     member_movement::Remove();
     scope_leaks::Remove();
     pad_buttons::Remove();

@@ -19,6 +19,7 @@
 #include "player_two/primary_controller.h"
 #include "player_two/ride_probe.h"
 #include "player_two/scope_leaks.h"
+#include "player_two/wheelie_ride.h"
 
 #include <atomic>
 #include <cstddef>
@@ -199,6 +200,7 @@ void TickInScopes(void* playerTwoController, void* member, void* state, int type
         return;
     }
     ClearFieldActionRows(state);
+    wheelie_ride::AfterMemberTick(playerTwoController, member);  // a Wheelie walk-in the tick answered yes to: boarded here
 }
 
 /// The member's move state, if the member is player 2's possessed character and the tick's
@@ -266,13 +268,20 @@ void Tick(void* playerTwoController, void* member) noexcept
     {
         // A ride left un-ticked would hold player 2's controller on a chocobo nobody steers or ends: given back.
         chocobo_ride::Release(L"the member's tick stopped (per-pad sticks switched off, or the tick stopped)");
+        wheelie_ride::Release(L"the member's tick stopped (per-pad sticks switched off, or the tick stopped)");
         return;
     }
     if (chocobo_ride::Tick(playerTwoController, member, engine))
     {
         return;  // player 2 drives their chocobo: its move state was ticked instead of the member's
     }
-    if (engine.count == 0 || engine.memberTicked)
+    if (wheelie_ride::Tick(playerTwoController, member, engine))
+    {
+        return;  // player 2 rides a Wheelie: its move state was ticked instead of the member's
+    }
+    // While player 1 rides a scooter, the field ticker runs only its ride body (no on-foot state is counted): that ride
+    // tick is the frame's tick for player 2's member too (live 2026-10-06: she stood still while player 1 rode).
+    if ((engine.count == 0 && !engine.rideTicked) || engine.memberTicked)
     {
         g_counters.Pass();  // the game's field ticker is idle (a menu, an event), or ran the member itself
         return;
@@ -284,7 +293,7 @@ void Tick(void* playerTwoController, void* member) noexcept
         g_counters.Refuse();
         return;
     }
-    TickInScopes(playerTwoController, member, state, type, engine.deltaTime);
+    TickInScopes(playerTwoController, member, state, type, engine.count > 0 ? engine.deltaTime : engine.rideDeltaTime);
     if (g_stopped)
     {
         platform::Log(L"member movement STOPPED: the engine raised an exception inside the member's move-state tick; "

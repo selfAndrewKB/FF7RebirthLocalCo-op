@@ -55,6 +55,7 @@
 #include "player_two/ride_probe.h"
 #include "player_two/ride_watch.h"
 #include "player_two/shared_ride.h"
+#include "player_two/wheelie_ride.h"
 #include "player_two/wheelie_watch.h"
 #include "player_two/pad_sticks.h"
 #include "player_two/chocobo_ride.h"
@@ -91,7 +92,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.59.1";
+constexpr const wchar_t* kVersion = L"0.60.3";
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -157,7 +158,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.59.1");
+        ModVersion     = STR("0.60.3");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -303,6 +304,7 @@ public:
         lss::player_two::chocobo_ride::Install(*image);    // player 2 drives their own chocobo while the party rides
         lss::player_two::shared_ride::Install(*image);     // the buggy and the bronco: player 2 stands aside, every pad drives
         lss::player_two::wheelie_watch::Install(*image);   // the Wheelie system, logged (read-only)
+        lss::player_two::wheelie_ride::Install(*image);    // player 2 boards a Wheelie of their own by walking into it
         lss::player_two::ride_probe::Install(*image);      // player 2's ride: sprint and homing, logged (read-only)
         lss::player_two::field_pickup::Install(*image);    // player 2's pickups: a second pass of the game's prompts
         lss::player_two::rumble_watch::Install(*image);    // logging only: each controller's rumble, pad by pad
