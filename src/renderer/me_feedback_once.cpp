@@ -1,5 +1,6 @@
 #include "renderer/me_feedback_once.h"
 
+#include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
 #include "platform/guarded.h"
@@ -55,7 +56,9 @@ constexpr std::uint32_t kRendererAdditionalFamily = 0x84;  // the family copy's 
 // streaming manager at +0x50, the render thread's copy of the state at +0xA1 (2 or more: no slave requests).
 constexpr std::uintptr_t kStreamingManagers = 0x149117AF8;
 constexpr std::uint32_t  kMeManager         = 0x50;
-constexpr std::uint32_t  kBudgetStateRender = 0xA1;
+// 1.005: the ME streaming manager's state pair moved 8 down: cmp byte [rax+99h],2 after [collection+50h] at
+// 0x140CD1645 (1.004 0x140C9D379 [rcx+0A1h]); its constructor clears +0x98/+0x99 at 0x144FC53C9.
+constexpr platform::PerBuild<std::uint32_t> kBudgetStateRender = {0xA1, 0x99};
 
 constexpr ULONGLONG kLogPeriodMs = 10'000;
 
@@ -207,8 +210,9 @@ bool InstallMeFeedbackOnce(const platform::GameImage& image) noexcept
     // The skip points first: they pass everything through until Render marks a family.
     const bool installed =
         g_processCall.Install(*call, *process, reinterpret_cast<std::uintptr_t>(&Process)) &&
-        g_copyEntry.Install(*copy, std::span(kCopyBytes, kCopyFirst), reinterpret_cast<std::uintptr_t>(&Copy)) &&
-        g_hiddenEntry.Install(*hidden, std::span(kHiddenBytes, kHiddenFirst), reinterpret_cast<std::uintptr_t>(&HiddenPass)) &&
+        g_copyEntry.Install(*copy, image.EntryInstruction(kCopy, std::span(kCopyBytes, kCopyFirst)), reinterpret_cast<std::uintptr_t>(&Copy)) &&
+        g_hiddenEntry.Install(*hidden, image.EntryInstruction(kHidden, std::span(kHiddenBytes, kHiddenFirst)),
+                            reinterpret_cast<std::uintptr_t>(&HiddenPass)) &&
         g_render.Replace(*entry, *render, reinterpret_cast<std::uintptr_t>(&Render));
     if (!installed)
     {

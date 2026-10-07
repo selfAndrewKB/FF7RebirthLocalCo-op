@@ -206,7 +206,7 @@ bool Entry(const platform::GameImage& image, platform::EntryRedirect& redirect, 
 {
     const auto at = image.Rebase(address);
     return at && image.BytesMatch(address, bytes) &&
-           redirect.Install(*at, bytes.first(kFirst), reinterpret_cast<std::uintptr_t>(replacement));
+           redirect.Install(*at, image.EntryInstruction(address, bytes.first(kFirst)), reinterpret_cast<std::uintptr_t>(replacement));
 }
 
 }  // namespace

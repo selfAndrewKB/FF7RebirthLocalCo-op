@@ -1219,7 +1219,7 @@ void Install(const platform::GameImage& image) noexcept
     {
         const auto at = image.Rebase(kRequest);
         screen        = at && image.BytesMatch(kRequest, kRequestBytes) &&
-                 g_request.Install(*at, std::span<const std::uint8_t>(kRequestBytes).first(kRequestFirst),
+                 g_request.Install(*at, image.EntryInstruction(kRequest, std::span<const std::uint8_t>(kRequestBytes).first(kRequestFirst)),
                                    reinterpret_cast<std::uintptr_t>(&RequestVisibility));
     }
     platform::Log(L"field pickup: {}; the screen test {}; marker widgets {}",

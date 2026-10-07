@@ -7,6 +7,7 @@
 // is checked, together with the jump encoding the redirect relies on.
 
 #include "platform/code_redirect.h"
+#include "platform/engine_addresses.h"
 #include "platform/x64_jump.h"
 #include "renderer/output_load_action_code.h"
 
@@ -181,6 +182,95 @@ void TestRedirectRefusesWhatItDoesNotRecognise()
     EXPECT(redirect.Restore());
 }
 
+/// Game version 1.005's surroundings (RE-1005-core-facts.md): an rbp frame, r14 = the view whose first field is the
+/// family, rcx live across the store (the game passes it to a call right after), the store `mov [rbp+0E0h], al` one
+/// byte into its 16-byte block (0x14118C6B1 in the block at 0x14118C6B0):
+///     push rbp ; push r14 ; sub rsp, 108h ; mov rbp, rsp ; mov r14, r9 ; cmp rdx, r8 ; setz al ; add al, 1 ; nop x9 ;
+///     mov [rbp+0E0h], al   <- the redirected instruction, at page+0x21
+///     mov [r14+8], rcx     (hands rcx back, to prove the redirect left it alone)
+///     movzx eax, byte [rbp+0E0h] ; add rsp, 108h ; pop r14 ; pop rbp ; ret
+class GameLikeCode1005
+{
+public:
+    static constexpr std::size_t kStoreOffset  = 0x21;
+    static constexpr std::size_t kResumeOffset = kStoreOffset + 6;
+
+    struct View
+    {
+        const std::uint8_t* family;
+        std::uintptr_t      rcxAfter;
+    };
+    using Fn = std::uint8_t (*)(std::uintptr_t rcx, std::uintptr_t viewsFirst, std::uintptr_t view, View* r14);
+
+    GameLikeCode1005()
+    {
+        const std::uint8_t code[] = {
+            0x55,                                      // push rbp
+            0x41, 0x56,                                // push r14
+            0x48, 0x81, 0xEC, 0x08, 0x01, 0x00, 0x00,  // sub rsp, 108h
+            0x48, 0x89, 0xE5,                          // mov rbp, rsp
+            0x4D, 0x89, 0xCE,                          // mov r14, r9
+            0x4C, 0x39, 0xC2,                          // cmp rdx, r8
+            0x0F, 0x94, 0xC0,                          // setz al
+            0x04, 0x01,                                // add al, 1
+            0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90,  // nop x9
+            0x88, 0x85, 0xE0, 0x00, 0x00, 0x00,        // mov [rbp+0E0h], al   (offset 0x21)
+            0x49, 0x89, 0x4E, 0x08,                    // mov [r14+8], rcx
+            0x0F, 0xB6, 0x85, 0xE0, 0x00, 0x00, 0x00,  // movzx eax, byte [rbp+0E0h]
+            0x48, 0x81, 0xC4, 0x08, 0x01, 0x00, 0x00,  // add rsp, 108h
+            0x41, 0x5E,                                // pop r14
+            0x5D,                                      // pop rbp
+            0xC3};                                     // ret
+        memory_ = static_cast<std::uint8_t*>(VirtualAlloc(nullptr, 0x1000, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
+        std::memcpy(memory_, code, sizeof(code));
+        DWORD previous = 0;
+        VirtualProtect(memory_, 0x1000, PAGE_EXECUTE_READ, &previous);
+        FlushInstructionCache(GetCurrentProcess(), memory_, 0x1000);
+    }
+    ~GameLikeCode1005() { VirtualFree(memory_, 0, MEM_RELEASE); }
+
+    std::uintptr_t At(std::size_t offset) const { return reinterpret_cast<std::uintptr_t>(memory_) + offset; }
+
+    /// The load action, and whether rcx came through unchanged.
+    std::uint8_t Run(bool firstInFamily, bool additionalFamily, bool& rcxKept) const
+    {
+        std::uint8_t family[0x80]{};
+        family[0x74]                  = additionalFamily ? 1 : 0;
+        View                 view{family, 0};
+        const std::uintptr_t viewId = 0x1000;
+        const std::uintptr_t rcx    = 0xC0FFEE;
+        const std::uint8_t   result =
+            reinterpret_cast<Fn>(memory_)(rcx, firstInFamily ? viewId : viewId + 8, viewId, &view);
+        rcxKept = view.rcxAfter == rcx;
+        return result;
+    }
+
+private:
+    std::uint8_t* memory_ = nullptr;
+};
+
+void TestRedirect1005()
+{
+    std::puts("1.005: the redirect applies the rule through [r14], stores to [rbp+0E0h], leaves rcx, and restores");
+    const GameLikeCode1005 game;
+    bool                   kept = false;
+    EXPECT(game.Run(true, true, kept) == kLoadActionClear && kept);  // the shipped behaviour: ignores the flag
+
+    lss::platform::CodeRedirect redirect;
+    EXPECT(redirect.Install(game.At(GameLikeCode1005::kStoreOffset), lss::engine::kOutputLoadActionStoreBytes1005,
+                            lss::renderer::kFirstUnlessAdditionalLoadAction1005, game.At(GameLikeCode1005::kResumeOffset)));
+    EXPECT(game.Run(true, false, kept) == kLoadActionClear && kept);
+    EXPECT(game.Run(true, true, kept) == kLoadActionLoad && kept);
+    EXPECT(game.Run(false, false, kept) == kLoadActionLoad && kept);
+    EXPECT(game.Run(false, true, kept) == kLoadActionLoad && kept);
+    // The research build's store bytes are not 1.005's: the redirect refuses them.
+    lss::platform::CodeRedirect wrong;
+    EXPECT(!wrong.Install(game.At(GameLikeCode1005::kStoreOffset), GameLikeCode::kStore, kFirstUnlessAdditionalLoadAction,
+                          game.At(GameLikeCode1005::kStoreOffset + 7)));
+    EXPECT(redirect.Restore());
+    EXPECT(game.Run(true, true, kept) == kLoadActionClear && kept);
+}
+
 void TestJumpEncoding()
 {
     std::puts("jump: rel32 measured from the end of the instruction, refused out of reach");
@@ -202,6 +292,7 @@ int main()
     TestTheStockRule();
     TestRedirectInstallsRunsAndRestores();
     TestRedirectRefusesWhatItDoesNotRecognise();
+    TestRedirect1005();
     TestJumpEncoding();
 
     std::printf(g_failures == 0 ? "all tests passed\n" : "%d check(s) failed\n", g_failures);

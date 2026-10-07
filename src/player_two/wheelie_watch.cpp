@@ -1,5 +1,6 @@
 #include "player_two/wheelie_watch.h"
 
+#include "platform/build_value.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -63,10 +64,11 @@ constexpr std::int32_t  kTableEntries    = 15;
 // AEndSelfBalancingScooterCharacter (SDK and §1.1): rider, ridden, parked, excluded; its control holder's accel and
 // brake as the move state's slot 11 writes them (§3.3).
 constexpr std::uintptr_t kScooterVt        = 0x14583F980;
-constexpr std::uint32_t  kScooterRider     = 0x2210;
-constexpr std::uint32_t  kScooterRidden    = 0x2318;
-constexpr std::uint32_t  kScooterParked    = 0x2319;
-constexpr std::uint32_t  kScooterExcluded  = 0x231A;
+// 1.005 moved these Square Enix character fields by +0x20 (RE-1005-player-two.md).
+constexpr platform::PerBuild<std::uint32_t> kScooterRider    = {0x2210, 0x2230};
+constexpr platform::PerBuild<std::uint32_t> kScooterRidden   = {0x2318, 0x2338};
+constexpr platform::PerBuild<std::uint32_t> kScooterParked   = {0x2319, 0x2339};
+constexpr platform::PerBuild<std::uint32_t> kScooterExcluded = {0x231A, 0x233A};
 constexpr std::uint32_t  kControlHolder    = 0x638;
 constexpr std::uint32_t  kHolderAccel      = 0x2C0;
 constexpr std::uint32_t  kHolderBrake      = 0x2C4;

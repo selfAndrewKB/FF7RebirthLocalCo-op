@@ -1,0 +1,1943 @@
+{
+ "group": "A",
+ "build": "1.005",
+ "research_build": "1.004",
+ "date": "2026-10-07",
+ "doc": "Rebirth/Documentation/research/RE-1005-offsets-A.md",
+ "changed_applied": [
+  {
+   "file": "renderer/me_feedback_once.cpp",
+   "name": "kBudgetStateRender",
+   "old": "0xA1",
+   "new": "0x99",
+   "evidence": "1.005 0x140CD1645 and 0x1447B44C1: mov rax,[collection+50h]; cmp byte ptr [rax+99h],2 (1.004 0x140C9D375/0x140C9D379 [rcx+0A1h]). ME manager ctor 1.005 0x144FC53C9 mov [rdi+98h],si (1.004 0x145193AE5 mov [rdi+0A0h],si). The collection grew 0x60 -> 0x68 (new member +0x60).",
+   "line": 61,
+   "class": "SE ME streaming manager (FStreamingManagerCollection+0x50), render-thread budget state byte"
+  },
+  {
+   "file": "renderer/family_boundary_list.h",
+   "name": "kDeviceDirect",
+   "old": "0xF70",
+   "new": "0x13D8",
+   "evidence": "ME_RenderDevice_EndFrame 1.005 0x140A4974C: 0x140A49803 mov rdi,[rax+8E8h]; 0x140A4980A mov rax,[rdi+13D8h]; mov rbx,[rax]; ... call FD3D12CommandContext__ClearState (1.004 0x140D01268 / 0x140D0126F [rsi+0F70h]). Async array 0xFB8 -> 0x1420 (0x140A4984D), count 0xF78 -> 0x13E0.",
+   "line": 44,
+   "class": "FD3D12Device (D3D12 RHI, stock UE4 + SE build): DirectCommandContexts array"
+  },
+  {
+   "file": "hud/enemy_gauges.cpp",
+   "name": "kHalfScaleXY",
+   "old": "0x4AC",
+   "new": "0x49C",
+   "evidence": "EndUI__MF8_UpdateEntries 1.005 0x140975014: 0x14097550E vmulss xmm1,xmm0,[rax+49Ch] (1.004 0x140DBA5F3 [rax+4ACh]); matches reflected CapsuleComponent.CapsuleRadius 0x4AC -> 0x49C.",
+   "line": 60,
+   "class": "UCapsuleComponent::CapsuleRadius (owner ACharacter::CapsuleComponent at +0x298)"
+  },
+  {
+   "file": "hud/enemy_gauges.cpp",
+   "name": "kHalfScaleZ",
+   "old": "0x4A8",
+   "new": "0x498",
+   "evidence": "1.005 0x14097551B vmulss xmm0,xmm2,[rax+498h] (1.004 0x140DBA600 [rax+4A8h]); reflected CapsuleHalfHeight 0x4A8 -> 0x498.",
+   "line": 61,
+   "class": "UCapsuleComponent::CapsuleHalfHeight"
+  },
+  {
+   "file": "hud/hud_trace.cpp",
+   "name": "kFieldCommandSetupPending",
+   "old": "0x2D1",
+   "new": "0x2D9",
+   "evidence": "MasterHUD_Tick 1.005 0x140F759B0: 0x140F75A05 cmp byte ptr [rbx+2D9h],0; 0x140F75A25 mov [rbx+2D9h],al; lea rcx,[rbx+2DCh] (1.004 0x140F37E5D/0x140F37E7D [rbx+2D1h], [rbx+2D4h]). EndUISystem__SetupFieldCommandOrDefer 1.005 0x1413FBB9C uses +0x2D9/+0x2DC. Members up to +0x2A8 unchanged; a member was inserted between +0x2A8 and +0x2D0. Diagnostic (hud_trace) only.",
+   "line": 77,
+   "class": "EndUISystem (SE native, static object g_EndUISystem) byte: field-command setup pending"
+  },
+  {
+   "file": "platform/engine_addresses.h",
+   "name": "kRemoveLocalPlayerVTableOffset",
+   "old": "0x2E8",
+   "new": "0x2F0",
+   "evidence": "Already PerBuild before this audit (RE-1005-core-facts.md section 3); re-listed for completeness.",
+   "line": 114,
+   "class": "UGameInstance vtable (UObject slot-19 rule)"
+  }
+ ],
+ "changed_unapplied_assumption": [],
+ "verified_unchanged": [
+  {
+   "file": "players/unreal_access.cpp",
+   "name": "kComponentWorldLocation",
+   "how": "USceneComponent::ComponentToWorld translation: execK2_GetComponentLocation 1.005 0x1451B696A vmovups xmm1,[rcx+1D0h] (1.004 0x14537C03A). The SceneComponent -8 shift lies after ComponentToWorld.",
+   "confidence": "CONFIRMED",
+   "value": "0x1d0"
+  },
+  {
+   "file": "platform/engine_addresses.h",
+   "name": "kLocalPlayerControllerOffset",
+   "how": "RemoveLocalPlayer 1.005 0x144D695CF mov rcx,[rdx+30h] (RE-1005-core-facts); also checked by reflection at run time",
+   "confidence": "CONFIRMED",
+   "value": "0x30"
+  },
+  {
+   "file": "platform/engine_addresses.h",
+   "name": "kTwoPlayerSplitscreenLayoutOffset",
+   "how": "reflected GameMapsSettings.TwoPlayerSplitscreenLayout 0x51 in both dumps; the mod also checks reflection at run time",
+   "confidence": "ASSUMPTION (dumps)",
+   "value": "0x51"
+  },
+  {
+   "file": "platform/engine_addresses.h",
+   "name": "kAspectRatioAxisConstraintOffset",
+   "how": "reflected LocalPlayer.AspectRatioAxisConstraint 0x94 in both dumps; checked by reflection at run time",
+   "confidence": "ASSUMPTION (dumps)",
+   "value": "0x94"
+  },
+  {
+   "file": "views/minimal_view_info.h",
+   "name": "kLocation",
+   "how": "FMinimalViewInfo ctor 1.005 0x1409D6D50 (renamed) instruction-identical to 1.004 0x140CC0C98: +0x18 FOV, +0x2C aspect, +0x30 flags, +0x650, +0x690 IsSet (0x1409D6DB6); reflected MinimalViewInfo identical",
+   "confidence": "CONFIRMED",
+   "value": "0x0"
+  },
+  {
+   "file": "views/minimal_view_info.h",
+   "name": "kPitch",
+   "how": "FMinimalViewInfo ctor 1.005 0x1409D6D50 (renamed) instruction-identical to 1.004 0x140CC0C98: +0x18 FOV, +0x2C aspect, +0x30 flags, +0x650, +0x690 IsSet (0x1409D6DB6); reflected MinimalViewInfo identical",
+   "confidence": "CONFIRMED",
+   "value": "0xc"
+  },
+  {
+   "file": "views/minimal_view_info.h",
+   "name": "kYaw",
+   "how": "FMinimalViewInfo ctor 1.005 0x1409D6D50 (renamed) instruction-identical to 1.004 0x140CC0C98: +0x18 FOV, +0x2C aspect, +0x30 flags, +0x650, +0x690 IsSet (0x1409D6DB6); reflected MinimalViewInfo identical",
+   "confidence": "CONFIRMED",
+   "value": "0x10"
+  },
+  {
+   "file": "views/minimal_view_info.h",
+   "name": "kFov",
+   "how": "FMinimalViewInfo ctor 1.005 0x1409D6D50 (renamed) instruction-identical to 1.004 0x140CC0C98: +0x18 FOV, +0x2C aspect, +0x30 flags, +0x650, +0x690 IsSet (0x1409D6DB6); reflected MinimalViewInfo identical",
+   "confidence": "CONFIRMED",
+   "value": "0x18"
+  },
+  {
+   "file": "views/minimal_view_info.h",
+   "name": "kAspectRatio",
+   "how": "FMinimalViewInfo ctor 1.005 0x1409D6D50 (renamed) instruction-identical to 1.004 0x140CC0C98: +0x18 FOV, +0x2C aspect, +0x30 flags, +0x650, +0x690 IsSet (0x1409D6DB6); reflected MinimalViewInfo identical",
+   "confidence": "CONFIRMED",
+   "value": "0x2c"
+  },
+  {
+   "file": "views/minimal_view_info.h",
+   "name": "kFlags",
+   "how": "FMinimalViewInfo ctor 1.005 0x1409D6D50 (renamed) instruction-identical to 1.004 0x140CC0C98: +0x18 FOV, +0x2C aspect, +0x30 flags, +0x650, +0x690 IsSet (0x1409D6DB6); reflected MinimalViewInfo identical",
+   "confidence": "CONFIRMED",
+   "value": "0x30"
+  },
+  {
+   "file": "views/minimal_view_info.h",
+   "name": "kPreviousViewTransformSet",
+   "how": "FMinimalViewInfo ctor 1.005 0x1409D6D50 (renamed) instruction-identical to 1.004 0x140CC0C98: +0x18 FOV, +0x2C aspect, +0x30 flags, +0x650, +0x690 IsSet (0x1409D6DB6); reflected MinimalViewInfo identical",
+   "confidence": "CONFIRMED",
+   "value": "0x690"
+  },
+  {
+   "file": "views/whole_screen.cpp",
+   "name": "kState",
+   "how": "reflected EndGameState.GameState 0x278, NextPauseMenuKind 0x3BC, ActiveLocation 0x304 identical in both dumps",
+   "confidence": "ASSUMPTION (dumps)",
+   "value": "0x278"
+  },
+  {
+   "file": "views/whole_screen.cpp",
+   "name": "kMenuKind",
+   "how": "reflected EndGameState.GameState 0x278, NextPauseMenuKind 0x3BC, ActiveLocation 0x304 identical in both dumps",
+   "confidence": "ASSUMPTION (dumps)",
+   "value": "0x3bc"
+  },
+  {
+   "file": "views/whole_screen.cpp",
+   "name": "kLocation",
+   "how": "reflected EndGameState.GameState 0x278, NextPauseMenuKind 0x3BC, ActiveLocation 0x304 identical in both dumps",
+   "confidence": "ASSUMPTION (dumps)",
+   "value": "0x304"
+  },
+  {
+   "file": "views/whole_screen.cpp",
+   "name": "kStateManager",
+   "how": "1.005 0x14080B17D mov rcx,[r8+170h]; 0x14080B184 mov eax,[rcx+1A1263Ch]; 0x14080B18A add eax,[rcx+1A1238Ch]; 42/40 such sites in 1.005 vs 41/39 in 1.004",
+   "confidence": "CONFIRMED",
+   "value": "0x170"
+  },
+  {
+   "file": "views/whole_screen.cpp",
+   "name": "kOnOffCountA",
+   "how": "1.005 0x14080B17D mov rcx,[r8+170h]; 0x14080B184 mov eax,[rcx+1A1263Ch]; 0x14080B18A add eax,[rcx+1A1238Ch]; 42/40 such sites in 1.005 vs 41/39 in 1.004",
+   "confidence": "CONFIRMED",
+   "value": "0x1a1238c"
+  },
+  {
+   "file": "views/whole_screen.cpp",
+   "name": "kOnOffCountB",
+   "how": "1.005 0x14080B17D mov rcx,[r8+170h]; 0x14080B184 mov eax,[rcx+1A1263Ch]; 0x14080B18A add eax,[rcx+1A1238Ch]; 42/40 such sites in 1.005 vs 41/39 in 1.004",
+   "confidence": "CONFIRMED",
+   "value": "0x1a1263c"
+  },
+  {
+   "file": "views/whole_screen.cpp",
+   "name": "kSkipping",
+   "how": "EndCutsceneMgr getter 1.005 0x140A64ECC (Malloc 0xAE0 as in 1.004); callers e.g. 0x14075DD51 cmp byte ptr [rax+0A60h],0",
+   "confidence": "CONFIRMED",
+   "value": "0xa60"
+  },
+  {
+   "file": "renderer/me_feedback_once.cpp",
+   "name": "kMeManager",
+   "how": "FStreamingManagerCollection ctor stores the ME manager at +0x50 in both (1.005 0x142280506, 1.004 0x1425CFEA3); read at 1.005 0x140CD1641",
+   "confidence": "CONFIRMED",
+   "value": "0x50"
+  },
+  {
+   "file": "renderer/me_feedback_once.cpp",
+   "name": "kRendererAdditionalFamily",
+   "how": "RE-1005-hud-renderer: FSceneRenderer base ctor still copies the family to +0x10; +0x74 inside it",
+   "confidence": "CONFIRMED",
+   "value": "0x84"
+  },
+  {
+   "file": "renderer/scene_view_family.h",
+   "name": "kViewsData",
+   "how": "RE-1005-core-facts section 1: family ctor/copy ctor identical (+0x00,+0x08,+0x70,+0x74); view +0x238 read by PrepareViewRectsForRendering 0x140C0F06C",
+   "confidence": "CONFIRMED",
+   "value": "0x0"
+  },
+  {
+   "file": "renderer/scene_view_family.h",
+   "name": "kViewsCount",
+   "how": "RE-1005-core-facts section 1: family ctor/copy ctor identical (+0x00,+0x08,+0x70,+0x74); view +0x238 read by PrepareViewRectsForRendering 0x140C0F06C",
+   "confidence": "CONFIRMED",
+   "value": "0x8"
+  },
+  {
+   "file": "renderer/scene_view_family.h",
+   "name": "kSkipFrameNumberIncrement",
+   "how": "RE-1005-core-facts section 1: family ctor/copy ctor identical (+0x00,+0x08,+0x70,+0x74); view +0x238 read by PrepareViewRectsForRendering 0x140C0F06C",
+   "confidence": "CONFIRMED",
+   "value": "0x70"
+  },
+  {
+   "file": "renderer/scene_view_family.h",
+   "name": "kAdditionalViewFamily",
+   "how": "RE-1005-core-facts section 1: family ctor/copy ctor identical (+0x00,+0x08,+0x70,+0x74); view +0x238 read by PrepareViewRectsForRendering 0x140C0F06C",
+   "confidence": "CONFIRMED",
+   "value": "0x74"
+  },
+  {
+   "file": "renderer/scene_view_family.h",
+   "name": "kUnscaledViewRect",
+   "how": "RE-1005-core-facts section 1: family ctor/copy ctor identical (+0x00,+0x08,+0x70,+0x74); view +0x238 read by PrepareViewRectsForRendering 0x140C0F06C",
+   "confidence": "CONFIRMED",
+   "value": "0x238"
+  },
+  {
+   "file": "renderer/family_boundary.cpp",
+   "name": "kSubmitSlot",
+   "how": "FD3D12CommandContext vtable 1.005 0x1468012C0 +0xF0 holds the mapped RHISubmitCommandsHint 0x140AE3410 (not a UObject vtable)",
+   "confidence": "CONFIRMED",
+   "value": "0xf0"
+  },
+  {
+   "file": "renderer/family_boundary.cpp",
+   "name": "kImmediateListSize",
+   "how": "immediate list global 1.005 0x14871EF70: +0x20/+0x28 referenced 7/7 times as in 1.004; nothing references +0x48",
+   "confidence": "CONFIRMED",
+   "value": "0x48"
+  },
+  {
+   "file": "renderer/family_boundary.cpp",
+   "name": "kComputeContext",
+   "how": "immediate list global 1.005 0x14871EF70: +0x20/+0x28 referenced 7/7 times as in 1.004; nothing references +0x48",
+   "confidence": "CONFIRMED",
+   "value": "0x28"
+  },
+  {
+   "file": "renderer/family_boundary_list.h",
+   "name": "kCommandLink",
+   "how": "inline append on the immediate list 1.005 0x14079DBDE..0x14079DC4C: cursor +0x30, end +0x38, inc +0x14, link +0x8, node {vt, next}; +0x10 byte tests 31 refs (1.004 32)",
+   "confidence": "CONFIRMED",
+   "value": "0x8"
+  },
+  {
+   "file": "renderer/family_boundary_list.h",
+   "name": "kExecuting",
+   "how": "inline append on the immediate list 1.005 0x14079DBDE..0x14079DC4C: cursor +0x30, end +0x38, inc +0x14, link +0x8, node {vt, next}; +0x10 byte tests 31 refs (1.004 32)",
+   "confidence": "CONFIRMED",
+   "value": "0x10"
+  },
+  {
+   "file": "renderer/family_boundary_list.h",
+   "name": "kNumCommands",
+   "how": "inline append on the immediate list 1.005 0x14079DBDE..0x14079DC4C: cursor +0x30, end +0x38, inc +0x14, link +0x8, node {vt, next}; +0x10 byte tests 31 refs (1.004 32)",
+   "confidence": "CONFIRMED",
+   "value": "0x14"
+  },
+  {
+   "file": "renderer/family_boundary_list.h",
+   "name": "kContext",
+   "how": "inline append on the immediate list 1.005 0x14079DBDE..0x14079DC4C: cursor +0x30, end +0x38, inc +0x14, link +0x8, node {vt, next}; +0x10 byte tests 31 refs (1.004 32)",
+   "confidence": "CONFIRMED",
+   "value": "0x20"
+  },
+  {
+   "file": "renderer/family_boundary_list.h",
+   "name": "kArena",
+   "how": "inline append on the immediate list 1.005 0x14079DBDE..0x14079DC4C: cursor +0x30, end +0x38, inc +0x14, link +0x8, node {vt, next}; +0x10 byte tests 31 refs (1.004 32)",
+   "confidence": "CONFIRMED",
+   "value": "0x30"
+  },
+  {
+   "file": "renderer/family_boundary_list.h",
+   "name": "kNodeSize",
+   "how": "inline append on the immediate list 1.005 0x14079DBDE..0x14079DC4C: cursor +0x30, end +0x38, inc +0x14, link +0x8, node {vt, next}; +0x10 byte tests 31 refs (1.004 32)",
+   "confidence": "CONFIRMED",
+   "value": "0x10"
+  },
+  {
+   "file": "renderer/family_boundary_list.h",
+   "name": "kIsAsyncCompute",
+   "how": "FD3D12CommandContext::ClearState 1.005 0x1409183E0 (renamed) displacement list identical to 1.004 0x14081FD74 (incl. +0x146)",
+   "confidence": "CONFIRMED",
+   "value": "0x146"
+  },
+  {
+   "file": "renderer/family_boundary_list.h",
+   "name": "kDevice",
+   "how": "ME_D3D12CommandContext_Init 1.005 0x1446B65D2 mov [r14+148h],rbp (1.004 0x144922AF6)",
+   "confidence": "CONFIRMED",
+   "value": "0x148"
+  },
+  {
+   "file": "hud/hud_addresses.h",
+   "name": "kEntryMatrixScaleX",
+   "how": "FEndMenuLayerEntry__SetRect_RebuildMatrix 1.005 0x140A47DB8 (renamed): ymm stores [rbx+50h]/[rbx+70h], displacement set identical to 1.004 0x140FC8CE8",
+   "confidence": "CONFIRMED",
+   "value": "0x50"
+  },
+  {
+   "file": "hud/hud_addresses.h",
+   "name": "kEntryMatrixScaleY",
+   "how": "FEndMenuLayerEntry__SetRect_RebuildMatrix 1.005 0x140A47DB8 (renamed): ymm stores [rbx+50h]/[rbx+70h], displacement set identical to 1.004 0x140FC8CE8",
+   "confidence": "CONFIRMED",
+   "value": "0x64"
+  },
+  {
+   "file": "hud/hud_addresses.h",
+   "name": "kEntryMatrixTranslateX",
+   "how": "FEndMenuLayerEntry__SetRect_RebuildMatrix 1.005 0x140A47DB8 (renamed): ymm stores [rbx+50h]/[rbx+70h], displacement set identical to 1.004 0x140FC8CE8",
+   "confidence": "CONFIRMED",
+   "value": "0x80"
+  },
+  {
+   "file": "hud/hud_addresses.h",
+   "name": "kEntryMatrixTranslateY",
+   "how": "FEndMenuLayerEntry__SetRect_RebuildMatrix 1.005 0x140A47DB8 (renamed): ymm stores [rbx+50h]/[rbx+70h], displacement set identical to 1.004 0x140FC8CE8",
+   "confidence": "CONFIRMED",
+   "value": "0x84"
+  },
+  {
+   "file": "hud/hud_addresses.h",
+   "name": "kEntryMatrixData",
+   "how": "FEndMenuRenderer__BuildBatchDataFromEntry 1.005 0x140A4897C (renamed): lea rdx,[rsi+0E0h] at 0x140A48A1C (1.004 0x140FC8F8D); displacement sets equal",
+   "confidence": "CONFIRMED",
+   "value": "0xe0"
+  },
+  {
+   "file": "hud/hud_addresses.h",
+   "name": "kEntryMatrixCount",
+   "how": "FEndMenuRenderer__BuildBatchDataFromEntry 1.005 0x140A4897C (renamed): lea rdx,[rsi+0E0h] at 0x140A48A1C (1.004 0x140FC8F8D); displacement sets equal",
+   "confidence": "CONFIRMED",
+   "value": "0xe8"
+  },
+  {
+   "file": "hud/hud_addresses.h",
+   "name": "kOverlayViewWidth",
+   "how": "SEndRootOverlay__RenderToCompositeLayer 1.005 0x140B0EF92/0x140B0EF9A/0x140B0EFF6 store +0x328/+0x32C/+0x330",
+   "confidence": "CONFIRMED",
+   "value": "0x328"
+  },
+  {
+   "file": "hud/hud_addresses.h",
+   "name": "kOverlayViewHeight",
+   "how": "SEndRootOverlay__RenderToCompositeLayer 1.005 0x140B0EF92/0x140B0EF9A/0x140B0EFF6 store +0x328/+0x32C/+0x330",
+   "confidence": "CONFIRMED",
+   "value": "0x32c"
+  },
+  {
+   "file": "hud/hud_addresses.h",
+   "name": "kOverlayHostScale",
+   "how": "SEndRootOverlay__RenderToCompositeLayer 1.005 0x140B0EF92/0x140B0EF9A/0x140B0EFF6 store +0x328/+0x32C/+0x330",
+   "confidence": "CONFIRMED",
+   "value": "0x330"
+  },
+  {
+   "file": "hud/hud_addresses.h",
+   "name": "kUserWidgetViewportAnchors",
+   "how": "UUserWidget::SetPositionInViewport 1.005 0x140E8F54C (renamed): [rbx+210h], [rbx+220h], [rbx+224h]; displacement set identical to 1.004 0x140CC39E8 (alignment/end follow contiguously)",
+   "confidence": "CONFIRMED",
+   "value": "0x210"
+  },
+  {
+   "file": "hud/hud_addresses.h",
+   "name": "kUserWidgetViewportOffsets",
+   "how": "UUserWidget::SetPositionInViewport 1.005 0x140E8F54C (renamed): [rbx+210h], [rbx+220h], [rbx+224h]; displacement set identical to 1.004 0x140CC39E8 (alignment/end follow contiguously)",
+   "confidence": "CONFIRMED",
+   "value": "0x220"
+  },
+  {
+   "file": "hud/hud_addresses.h",
+   "name": "kUserWidgetViewportAlignment",
+   "how": "UUserWidget::SetPositionInViewport 1.005 0x140E8F54C (renamed): [rbx+210h], [rbx+220h], [rbx+224h]; displacement set identical to 1.004 0x140CC39E8 (alignment/end follow contiguously)",
+   "confidence": "CONFIRMED",
+   "value": "0x230"
+  },
+  {
+   "file": "hud/hud_addresses.h",
+   "name": "kUserWidgetViewportLayoutEnd",
+   "how": "UUserWidget::SetPositionInViewport 1.005 0x140E8F54C (renamed): [rbx+210h], [rbx+220h], [rbx+224h]; displacement set identical to 1.004 0x140CC39E8 (alignment/end follow contiguously)",
+   "confidence": "CONFIRMED",
+   "value": "0x238"
+  },
+  {
+   "file": "hud/position_probe.cpp",
+   "name": "kViewportAnchors",
+   "how": "as hud_addresses.h kUserWidgetViewport*",
+   "confidence": "CONFIRMED",
+   "value": "0x210"
+  },
+  {
+   "file": "hud/position_probe.cpp",
+   "name": "kViewportOffsets",
+   "how": "as hud_addresses.h kUserWidgetViewport*",
+   "confidence": "CONFIRMED",
+   "value": "0x220"
+  },
+  {
+   "file": "hud/position_probe.cpp",
+   "name": "kViewportAlignment",
+   "how": "as hud_addresses.h kUserWidgetViewport*",
+   "confidence": "CONFIRMED",
+   "value": "0x230"
+  },
+  {
+   "file": "hud/action_icon_base.cpp",
+   "name": "kViewportPosition",
+   "how": "as hud_addresses.h kUserWidgetViewportOffsets",
+   "confidence": "CONFIRMED",
+   "value": "0x220"
+  },
+  {
+   "file": "hud/prompt_rows.cpp",
+   "name": "kWidgetViewportPosition",
+   "how": "as hud_addresses.h kUserWidgetViewportOffsets",
+   "confidence": "CONFIRMED",
+   "value": "0x220"
+  },
+  {
+   "file": "hud/action_icon_base.cpp",
+   "name": "kRowList",
+   "how": "EndUISystem members up to +0x2A8 unchanged: MasterHUD_Tick 1.005 0x140F759B0 displacement set equal below +0x2A8; EndUISystem__Get-follow fingerprint equal (+0x208: 8 sites in each)",
+   "confidence": "CONFIRMED",
+   "value": "0x208"
+  },
+  {
+   "file": "hud/prompt_rows.cpp",
+   "name": "kRowList",
+   "how": "as action_icon_base kRowList; +0x8 is the TArray Num",
+   "confidence": "CONFIRMED",
+   "value": "0x208"
+  },
+  {
+   "file": "hud/prompt_rows.cpp",
+   "name": "kListNum",
+   "how": "as action_icon_base kRowList; +0x8 is the TArray Num",
+   "confidence": "CONFIRMED",
+   "value": "0x8"
+  },
+  {
+   "file": "hud/action_icon_base.cpp",
+   "name": "kBasePos",
+   "how": "FieldActionIconList__SortAndLayout 1.005 0x1409FB938 (renamed) displacement set identical; reflected EndFieldActionIcon._BasePosY 0x3C8 both",
+   "confidence": "CONFIRMED",
+   "value": "0x3c8"
+  },
+  {
+   "file": "hud/prompt_rows.cpp",
+   "name": "kWidgetPriority",
+   "how": "SortAndLayout 1.005 0x1409FB938 uses +0x400/+0x418..+0x424 as 1.004 0x1414A9B14",
+   "confidence": "CONFIRMED",
+   "value": "0x400"
+  },
+  {
+   "file": "hud/prompt_rows.cpp",
+   "name": "kWidgetRemoveState",
+   "how": "SortAndLayout 1.005 0x1409FB938 uses +0x400/+0x418..+0x424 as 1.004 0x1414A9B14",
+   "confidence": "CONFIRMED",
+   "value": "0x418"
+  },
+  {
+   "file": "hud/prompt_rows.cpp",
+   "name": "kLeaderActions",
+   "how": "reflected EndPlayerController.PlayerLeaderActionParamComponent 0x598 in both dumps",
+   "confidence": "ASSUMPTION (dumps)",
+   "value": "0x598"
+  },
+  {
+   "file": "hud/prompt_rows.cpp",
+   "name": "kComponentRowBytes",
+   "how": "1.005 0x1409FC424 (LeaderActionComp_FlushFieldActionRows14 inlined) has the same +0x9A6/+0x9A8/+0x9A9/+0x9AC counts (2/5/2/4) as 1.004 0x1414FC2BC",
+   "confidence": "CONFIRMED",
+   "value": "0x9a8"
+  },
+  {
+   "file": "hud/prompt_rows.cpp",
+   "name": "kComponentRowWeak",
+   "how": "1.005 0x1409FC424 (LeaderActionComp_FlushFieldActionRows14 inlined) has the same +0x9A6/+0x9A8/+0x9A9/+0x9AC counts (2/5/2/4) as 1.004 0x1414FC2BC",
+   "confidence": "CONFIRMED",
+   "value": "0x9ac"
+  },
+  {
+   "file": "hud/prompt_rows.cpp",
+   "name": "kRowStride",
+   "how": "1.005 0x1409FC424 (LeaderActionComp_FlushFieldActionRows14 inlined) has the same +0x9A6/+0x9A8/+0x9A9/+0x9AC counts (2/5/2/4) as 1.004 0x1414FC2BC",
+   "confidence": "CONFIRMED",
+   "value": "0xc"
+  },
+  {
+   "file": "hud/prompt_rows.cpp",
+   "name": "kComponentRows",
+   "how": "1.005 0x1409FC424 (LeaderActionComp_FlushFieldActionRows14 inlined) has the same +0x9A6/+0x9A8/+0x9A9/+0x9AC counts (2/5/2/4) as 1.004 0x1414FC2BC",
+   "confidence": "CONFIRMED",
+   "value": "0xe"
+  },
+  {
+   "file": "hud/area_icons_two.cpp",
+   "name": "kInstanceSize",
+   "how": "RE-1005-hud-renderer (EndUISystem__Ctor mov ecx,160h; ClearAllAndDisable 1.005 0x140F62A48 +0x10/+0x18,+0x20,+0x70/+0x78,+0x80,+0xD0,+0xDC); Enable 1.005 0x140F62978 +0xD0, SetFlagD1 0x1437123CC +0xD1",
+   "confidence": "CONFIRMED",
+   "value": "0x160"
+  },
+  {
+   "file": "hud/area_icons_two.cpp",
+   "name": "kEnabled",
+   "how": "RE-1005-hud-renderer (EndUISystem__Ctor mov ecx,160h; ClearAllAndDisable 1.005 0x140F62A48 +0x10/+0x18,+0x20,+0x70/+0x78,+0x80,+0xD0,+0xDC); Enable 1.005 0x140F62978 +0xD0, SetFlagD1 0x1437123CC +0xD1",
+   "confidence": "CONFIRMED",
+   "value": "0xd0"
+  },
+  {
+   "file": "hud/area_icons_two.cpp",
+   "name": "kFlagD1",
+   "how": "RE-1005-hud-renderer (EndUISystem__Ctor mov ecx,160h; ClearAllAndDisable 1.005 0x140F62A48 +0x10/+0x18,+0x20,+0x70/+0x78,+0x80,+0xD0,+0xDC); Enable 1.005 0x140F62978 +0xD0, SetFlagD1 0x1437123CC +0xD1",
+   "confidence": "CONFIRMED",
+   "value": "0xd1"
+  },
+  {
+   "file": "hud/area_icons_two.cpp",
+   "name": "kCanvases",
+   "how": "RE-1005-hud-renderer (EndUISystem__Ctor mov ecx,160h; ClearAllAndDisable 1.005 0x140F62A48 +0x10/+0x18,+0x20,+0x70/+0x78,+0x80,+0xD0,+0xDC); Enable 1.005 0x140F62978 +0xD0, SetFlagD1 0x1437123CC +0xD1",
+   "confidence": "CONFIRMED",
+   "value": "(array/extra)"
+  },
+  {
+   "file": "hud/area_icons_two.cpp",
+   "name": "kMaps",
+   "how": "RE-1005-hud-renderer (EndUISystem__Ctor mov ecx,160h; ClearAllAndDisable 1.005 0x140F62A48 +0x10/+0x18,+0x20,+0x70/+0x78,+0x80,+0xD0,+0xDC); Enable 1.005 0x140F62978 +0xD0, SetFlagD1 0x1437123CC +0xD1",
+   "confidence": "CONFIRMED",
+   "value": "(array/extra)"
+  },
+  {
+   "file": "hud/area_icons_two.cpp",
+   "name": "kVisibility",
+   "how": "SWidget Visibility attribute: SWidget__SetVisibility_Assign 1.005 0x140DD495C (renamed) mov [rdi+1B0h],al; [rdi+1B1h]; [rdi+1B8h]",
+   "confidence": "CONFIRMED",
+   "value": "0x1b0"
+  },
+  {
+   "file": "hud/area_icons_two.cpp",
+   "name": "kVisibilityDelegate",
+   "how": "SWidget Visibility attribute: SWidget__SetVisibility_Assign 1.005 0x140DD495C (renamed) mov [rdi+1B0h],al; [rdi+1B1h]; [rdi+1B8h]",
+   "confidence": "CONFIRMED",
+   "value": "0x1b8"
+  },
+  {
+   "file": "hud/area_icons_two.cpp",
+   "name": "kSetVisibilitySlot",
+   "how": "SWidget::SetVisibility (1.005 0x140DD3400) sits at slot 59 in 40 of 40 sampled vtables, as in 1.004 (Slate, not UObject)",
+   "confidence": "CONFIRMED",
+   "value": "0x3b"
+  },
+  {
+   "file": "hud/area_icons_two.cpp",
+   "name": "kSharedCount",
+   "how": "stock TSharedPtr reference controller (+0x8 shared, +0xC weak)",
+   "confidence": "ASSUMPTION (stock)",
+   "value": "0x8"
+  },
+  {
+   "file": "hud/enemy_gauges.cpp",
+   "name": "kManager",
+   "how": "MasterHUD_Tick 1.005 [rbx+0F8h]; EndUI__MF8_UpdateEntries 1.005 0x140975014 keeps +0xC8, +0x140, +0x155..+0x158 (1.004 0x140DB9DA0)",
+   "confidence": "CONFIRMED",
+   "value": "0xf8"
+  },
+  {
+   "file": "hud/enemy_gauges.cpp",
+   "name": "kGate",
+   "how": "MasterHUD_Tick 1.005 [rbx+0F8h]; EndUI__MF8_UpdateEntries 1.005 0x140975014 keeps +0xC8, +0x140, +0x155..+0x158 (1.004 0x140DB9DA0)",
+   "confidence": "CONFIRMED",
+   "value": "0xc8"
+  },
+  {
+   "file": "hud/enemy_gauges.cpp",
+   "name": "kLockOnKey",
+   "how": "MasterHUD_Tick 1.005 [rbx+0F8h]; EndUI__MF8_UpdateEntries 1.005 0x140975014 keeps +0xC8, +0x140, +0x155..+0x158 (1.004 0x140DB9DA0)",
+   "confidence": "CONFIRMED",
+   "value": "0x140"
+  },
+  {
+   "file": "hud/enemy_gauges.cpp",
+   "name": "kFinalFlags",
+   "how": "MasterHUD_Tick 1.005 [rbx+0F8h]; EndUI__MF8_UpdateEntries 1.005 0x140975014 keeps +0xC8, +0x140, +0x155..+0x158 (1.004 0x140DB9DA0)",
+   "confidence": "CONFIRMED",
+   "value": "0x155"
+  },
+  {
+   "file": "hud/enemy_gauges.cpp",
+   "name": "kEntries",
+   "how": "EndUI__MF8_FindStatusScreenPointForCharacter 1.005 0x140F6DE00 (renamed) displacement set identical; element stride lea r14,[rax+rax*2]; shl r14,7 (0x180) at 0x140F6DEE4",
+   "confidence": "CONFIRMED",
+   "value": "0x10"
+  },
+  {
+   "file": "hud/enemy_gauges.cpp",
+   "name": "kElement",
+   "how": "EndUI__MF8_FindStatusScreenPointForCharacter 1.005 0x140F6DE00 (renamed) displacement set identical; element stride lea r14,[rax+rax*2]; shl r14,7 (0x180) at 0x140F6DEE4",
+   "confidence": "CONFIRMED",
+   "value": "0x180"
+  },
+  {
+   "file": "hud/enemy_gauges.cpp",
+   "name": "kEntryP",
+   "how": "EndUI__MF8_FindStatusScreenPointForCharacter 1.005 0x140F6DE00 (renamed) displacement set identical; element stride lea r14,[rax+rax*2]; shl r14,7 (0x180) at 0x140F6DEE4",
+   "confidence": "CONFIRMED",
+   "value": "0x10"
+  },
+  {
+   "file": "hud/enemy_gauges.cpp",
+   "name": "kWeakCount",
+   "how": "EndUI__MF8_FindStatusScreenPointForCharacter 1.005 0x140F6DE00 (renamed) displacement set identical; element stride lea r14,[rax+rax*2]; shl r14,7 (0x180) at 0x140F6DEE4",
+   "confidence": "CONFIRMED",
+   "value": "0xc"
+  },
+  {
+   "file": "hud/enemy_gauges.cpp",
+   "name": "kScreenPoint",
+   "how": "EndUI__MF8_ApplyYOffsetLerp_SetPosition 1.005 0x140975C7C (renamed): {+0xB8,+0xBC,+0x134} as 1.004",
+   "confidence": "CONFIRMED",
+   "value": "0xb8"
+  },
+  {
+   "file": "hud/enemy_gauges.cpp",
+   "name": "kYOffset",
+   "how": "EndUI__MF8_ApplyYOffsetLerp_SetPosition 1.005 0x140975C7C (renamed): {+0xB8,+0xBC,+0x134} as 1.004",
+   "confidence": "CONFIRMED",
+   "value": "0x134"
+  },
+  {
+   "file": "hud/enemy_gauges.cpp",
+   "name": "kScale",
+   "how": "EndUI__MF8_LeaderDistanceScaleLerp 1.005 0x140974A80 (renamed) identical {+0x10,+0x18,+0x98,+0x9C}; UpdateEntries keeps p+0x38; reflected Widget.RenderTransform 0x90",
+   "confidence": "CONFIRMED",
+   "value": "0x38"
+  },
+  {
+   "file": "hud/enemy_gauges.cpp",
+   "name": "kRenderScale",
+   "how": "EndUI__MF8_LeaderDistanceScaleLerp 1.005 0x140974A80 (renamed) identical {+0x10,+0x18,+0x98,+0x9C}; UpdateEntries keeps p+0x38; reflected Widget.RenderTransform 0x90",
+   "confidence": "CONFIRMED",
+   "value": "0x98"
+  },
+  {
+   "file": "hud/enemy_gauges.cpp",
+   "name": "kOwnerSlot",
+   "how": "lock-on source interface vtable +0x28 (below the slot-19 insertion point even if UObject-derived)",
+   "confidence": "CONFIRMED",
+   "value": "0x28"
+  },
+  {
+   "file": "hud/enemy_gauges.cpp",
+   "name": "kHalfSource",
+   "how": "UpdateEntries 1.005 0x1409754EE mov rax,[rcx+298h]; 0x1409754FD vmovups xmm2,[rax+1E0h] (ComponentToWorld scale)",
+   "confidence": "CONFIRMED",
+   "value": "0x298"
+  },
+  {
+   "file": "hud/enemy_gauges.cpp",
+   "name": "kHalfBounds",
+   "how": "UpdateEntries 1.005 0x1409754EE mov rax,[rcx+298h]; 0x1409754FD vmovups xmm2,[rax+1E0h] (ComponentToWorld scale)",
+   "confidence": "CONFIRMED",
+   "value": "0x1e0"
+  },
+  {
+   "file": "hud/target_views.cpp",
+   "name": "kTargetedKey",
+   "how": "as enemy_gauges (FindStatusScreenPoint 1.005 0x140F6DE00 uses +0x140/+0x148)",
+   "confidence": "CONFIRMED",
+   "value": "0x140"
+  },
+  {
+   "file": "hud/target_views.cpp",
+   "name": "kManager",
+   "how": "as enemy_gauges (FindStatusScreenPoint 1.005 0x140F6DE00 uses +0x140/+0x148)",
+   "confidence": "CONFIRMED",
+   "value": "0xf8"
+  },
+  {
+   "file": "hud/target_views.cpp",
+   "name": "kEntries",
+   "how": "as enemy_gauges (FindStatusScreenPoint 1.005 0x140F6DE00 uses +0x140/+0x148)",
+   "confidence": "CONFIRMED",
+   "value": "0x10"
+  },
+  {
+   "file": "hud/target_views.cpp",
+   "name": "kElement",
+   "how": "as enemy_gauges (FindStatusScreenPoint 1.005 0x140F6DE00 uses +0x140/+0x148)",
+   "confidence": "CONFIRMED",
+   "value": "0x180"
+  },
+  {
+   "file": "hud/target_views.cpp",
+   "name": "kEntryWidget",
+   "how": "as enemy_gauges (FindStatusScreenPoint 1.005 0x140F6DE00 uses +0x140/+0x148)",
+   "confidence": "CONFIRMED",
+   "value": "0x10"
+  },
+  {
+   "file": "hud/target_views.cpp",
+   "name": "kSharedCount",
+   "how": "as enemy_gauges (FindStatusScreenPoint 1.005 0x140F6DE00 uses +0x140/+0x148)",
+   "confidence": "CONFIRMED",
+   "value": "0x8"
+  },
+  {
+   "file": "hud/target_views.cpp",
+   "name": "kSticky",
+   "how": "EndUI__MF8_SyncEntriesWithSources 1.005 0x140F73B1C (renamed): 0x140F73B92 mov rdi,[rbx+0B0h]; 0x140F73B99 movsxd r12,[rbx+0B8h]",
+   "confidence": "CONFIRMED",
+   "value": "0xb0"
+  },
+  {
+   "file": "hud/target_views.cpp",
+   "name": "kStickyCount",
+   "how": "EndUI__MF8_SyncEntriesWithSources 1.005 0x140F73B1C (renamed): 0x140F73B92 mov rdi,[rbx+0B0h]; 0x140F73B99 movsxd r12,[rbx+0B8h]",
+   "confidence": "CONFIRMED",
+   "value": "0xb8"
+  },
+  {
+   "file": "hud/target_views.cpp",
+   "name": "kCursor",
+   "how": "EndUI__CollectLockOnTargets 1.005 0x140B768AA mov r14,[rax+70h] after the battle-system static 0x1491D8468; static-follow displacement fingerprint identical (incl. one +0x68)",
+   "confidence": "CONFIRMED",
+   "value": "0x68"
+  },
+  {
+   "file": "hud/target_views.cpp",
+   "name": "kDisplayed",
+   "how": "EndUI__CollectLockOnTargets 1.005 0x140B768AA mov r14,[rax+70h] after the battle-system static 0x1491D8468; static-follow displacement fingerprint identical (incl. one +0x68)",
+   "confidence": "CONFIRMED",
+   "value": "0x70"
+  },
+  {
+   "file": "hud/target_views.cpp",
+   "name": "kOwnerSlot",
+   "how": "interface vtable +0x28",
+   "confidence": "CONFIRMED",
+   "value": "0x28"
+  },
+  {
+   "file": "hud/target_views.cpp",
+   "name": "kShowStatus",
+   "how": "CollectLockOnTargets 1.005 0x140B7685C keeps +0x773 and the AI component lookup +0x638",
+   "confidence": "CONFIRMED",
+   "value": "0x773"
+  },
+  {
+   "file": "hud/field_markers.cpp",
+   "name": "kMarkerList",
+   "how": "EndUI__M98_WorldWidgetList_Tick 1.005 0x140F76A20 (renamed) identical; imul rbx,rsi,8Ch at 0x140F76AB1",
+   "confidence": "CONFIRMED",
+   "value": "0x98"
+  },
+  {
+   "file": "hud/field_markers.cpp",
+   "name": "kMarkerEntry",
+   "how": "EndUI__M98_WorldWidgetList_Tick 1.005 0x140F76A20 (renamed) identical; imul rbx,rsi,8Ch at 0x140F76AB1",
+   "confidence": "CONFIRMED",
+   "value": "0x8c"
+  },
+  {
+   "file": "hud/field_markers.cpp",
+   "name": "kMarkerWidgets",
+   "how": "EndUI__M98_WorldWidgetList_Tick 1.005 0x140F76A20 (renamed) identical; imul rbx,rsi,8Ch at 0x140F76AB1",
+   "confidence": "CONFIRMED",
+   "value": "(array/extra)"
+  },
+  {
+   "file": "hud/hud_roots.cpp",
+   "name": "kWidgetWorldWeak",
+   "how": "RE-1005-hud-renderer: UUserWidget::SetPlayerContext 1.005 0x141108B2C stores 16 bytes at +0x248",
+   "confidence": "CONFIRMED",
+   "value": "0x250"
+  },
+  {
+   "file": "hud/hud_trace.cpp",
+   "name": "kFieldCommandCtrl",
+   "how": "EndUISystem__SetupFieldCommandOrDefer 1.005 0x1413FBB9C reads [g+0B8h] then ctrl+0x777",
+   "confidence": "CONFIRMED",
+   "value": "0xb8"
+  },
+  {
+   "file": "hud/hud_trace.cpp",
+   "name": "kCompassManager",
+   "how": "1.005 0x140DB851A [g+108h] -> [+340h]; 0x14112F554 mov rcx,[rcx+348h] (same +0x338/+0x340/+0x348 dispatcher as 1.004 0x140F529E0)",
+   "confidence": "CONFIRMED",
+   "value": "0x108"
+  },
+  {
+   "file": "hud/hud_trace.cpp",
+   "name": "kCompassHolder",
+   "how": "1.005 0x140DB851A [g+108h] -> [+340h]; 0x14112F554 mov rcx,[rcx+348h] (same +0x338/+0x340/+0x348 dispatcher as 1.004 0x140F529E0)",
+   "confidence": "CONFIRMED",
+   "value": "0x348"
+  },
+  {
+   "file": "hud/hud_updates.cpp",
+   "name": "kCompassManager",
+   "how": "as hud_trace.cpp",
+   "confidence": "CONFIRMED",
+   "value": "0x108"
+  },
+  {
+   "file": "hud/hud_updates.cpp",
+   "name": "kCompassHolder",
+   "how": "as hud_trace.cpp",
+   "confidence": "CONFIRMED",
+   "value": "0x348"
+  },
+  {
+   "file": "hud/hud_trace.cpp",
+   "name": "kCtrlFieldMenuWidget",
+   "how": "FieldCommandCtrl__Tick 1.005 0x1408938E4: cmp [rbx+775h],dil at 0x1408939A3; +0x4E8; displacement set equal to 1.004 0x140A3D294 except the UObject vtable call 0x280->0x288",
+   "confidence": "CONFIRMED",
+   "value": "0x4e8"
+  },
+  {
+   "file": "hud/hud_trace.cpp",
+   "name": "kCtrlSetupTrigger",
+   "how": "FieldCommandCtrl__Tick 1.005 0x1408938E4: cmp [rbx+775h],dil at 0x1408939A3; +0x4E8; displacement set equal to 1.004 0x140A3D294 except the UObject vtable call 0x280->0x288",
+   "confidence": "CONFIRMED",
+   "value": "0x775"
+  },
+  {
+   "file": "hud/hud_trace.cpp",
+   "name": "kCtrlCommandMenuWidget",
+   "how": "neighbours +0x4E8 and +0x775 of the same object unchanged; no instruction read directly in 1.005",
+   "confidence": "ASSUMPTION (layout)",
+   "value": "0x4f0"
+  },
+  {
+   "file": "hud/hud_trace.cpp",
+   "name": "kCtrlStoredController",
+   "how": "neighbours +0x4E8 and +0x775 of the same object unchanged; no instruction read directly in 1.005",
+   "confidence": "ASSUMPTION (layout)",
+   "value": "0x558"
+  },
+  {
+   "file": "hud/hud_trace.cpp",
+   "name": "kViewportLayerManager",
+   "how": "UGameEngine__CreateGameViewportWidget 1.005 0x144D5DEA0 (renamed): 0x144D5E208 mov [r14+120h],rcx; lea rcx,[r14+128h] (1.004 0x144F4AC5C)",
+   "confidence": "CONFIRMED",
+   "value": "0x120"
+  },
+  {
+   "file": "hud/hud_trace.cpp",
+   "name": "kViewportLayerManagerController",
+   "how": "UGameEngine__CreateGameViewportWidget 1.005 0x144D5DEA0 (renamed): 0x144D5E208 mov [r14+120h],rcx; lea rcx,[r14+128h] (1.004 0x144F4AC5C)",
+   "confidence": "CONFIRMED",
+   "value": "0x128"
+  },
+  {
+   "file": "hud/hud_trace.cpp",
+   "name": "kGeometryBytes",
+   "how": "SGameLayerManager__GetPlayerWidgetHostGeometry 1.005 0x144FB0A50 (renamed), still IGameLayerManager slot 2; displacement set identical (stock FGeometry)",
+   "confidence": "CONFIRMED",
+   "value": "0x38"
+  },
+  {
+   "file": "hud/hud_updates.cpp",
+   "name": "kMarkerListMember",
+   "how": "MasterHUD_Tick 1.005 [rbx+150h], [rbx+140h] as 1.004",
+   "confidence": "CONFIRMED",
+   "value": "0x150"
+  },
+  {
+   "file": "hud/hud_updates.cpp",
+   "name": "kLeaderTargetMember",
+   "how": "MasterHUD_Tick 1.005 [rbx+150h], [rbx+140h] as 1.004",
+   "confidence": "CONFIRMED",
+   "value": "0x140"
+  },
+  {
+   "file": "hud/hud_updates.cpp",
+   "name": "kLeaderTargetCount",
+   "how": "RE-1005-hud-renderer: caller 0x141150034 cmp [r14+20h]; lea rcx,[r14+6Ch]",
+   "confidence": "CONFIRMED",
+   "value": "0x20"
+  },
+  {
+   "file": "hud/hud_updates.cpp",
+   "name": "kLeaderTargetWeak",
+   "how": "RE-1005-hud-renderer: caller 0x141150034 cmp [r14+20h]; lea rcx,[r14+6Ch]",
+   "confidence": "CONFIRMED",
+   "value": "0x6c"
+  },
+  {
+   "file": "hud/label_relayouts.cpp",
+   "name": "kText",
+   "how": "SEndTextBlock__Ctor 1.005 0x140886BA4 (renamed) displacement set identical to 1.004 0x14098E780 over +0x2B0..+0x5B4; Tick 1.005 0x141121208 vmovsd [rcx+558h]",
+   "confidence": "CONFIRMED",
+   "value": "0x2c8"
+  },
+  {
+   "file": "hud/label_relayouts.cpp",
+   "name": "kTextNum",
+   "how": "SEndTextBlock__Ctor 1.005 0x140886BA4 (renamed) displacement set identical to 1.004 0x14098E780 over +0x2B0..+0x5B4; Tick 1.005 0x141121208 vmovsd [rcx+558h]",
+   "confidence": "CONFIRMED",
+   "value": "0x2d0"
+  },
+  {
+   "file": "hud/label_relayouts.cpp",
+   "name": "kWidth",
+   "how": "SEndTextBlock__Ctor 1.005 0x140886BA4 (renamed) displacement set identical to 1.004 0x14098E780 over +0x2B0..+0x5B4; Tick 1.005 0x141121208 vmovsd [rcx+558h]",
+   "confidence": "CONFIRMED",
+   "value": "0x558"
+  },
+  {
+   "file": "hud/label_relayouts.cpp",
+   "name": "kWrapWidth",
+   "how": "SEndTextBlock__Ctor 1.005 0x140886BA4 (renamed) displacement set identical to 1.004 0x14098E780 over +0x2B0..+0x5B4; Tick 1.005 0x141121208 vmovsd [rcx+558h]",
+   "confidence": "CONFIRMED",
+   "value": "0x560"
+  },
+  {
+   "file": "hud/label_relayouts.cpp",
+   "name": "kLock",
+   "how": "SEndTextBlock__Ctor 1.005 0x140886BA4 (renamed) displacement set identical to 1.004 0x14098E780 over +0x2B0..+0x5B4; Tick 1.005 0x141121208 vmovsd [rcx+558h]",
+   "confidence": "CONFIRMED",
+   "value": "0x564"
+  },
+  {
+   "file": "hud/label_relayouts.cpp",
+   "name": "kPending",
+   "how": "SEndTextBlock__Ctor 1.005 0x140886BA4 (renamed) displacement set identical to 1.004 0x14098E780 over +0x2B0..+0x5B4; Tick 1.005 0x141121208 vmovsd [rcx+558h]",
+   "confidence": "CONFIRMED",
+   "value": "0x565"
+  },
+  {
+   "file": "hud/label_states.h",
+   "name": "kTextOffset",
+   "how": "SEndTextBlock ctor identical (see label_relayouts); dtor leas 1.005 0x1408865C9 [rbx+5A0h], 0x140886605 [rbx+530h]. Upgrades the quad range from ASSUMPTION (RE-1005-hud-renderer) to CONFIRMED",
+   "confidence": "CONFIRMED",
+   "value": "0x2c8"
+  },
+  {
+   "file": "hud/label_states.h",
+   "name": "kTextSize",
+   "how": "SEndTextBlock ctor identical (see label_relayouts); dtor leas 1.005 0x1408865C9 [rbx+5A0h], 0x140886605 [rbx+530h]. Upgrades the quad range from ASSUMPTION (RE-1005-hud-renderer) to CONFIRMED",
+   "confidence": "CONFIRMED",
+   "value": "0x10"
+  },
+  {
+   "file": "hud/label_states.h",
+   "name": "kRunsOffset",
+   "how": "SEndTextBlock ctor identical (see label_relayouts); dtor leas 1.005 0x1408865C9 [rbx+5A0h], 0x140886605 [rbx+530h]. Upgrades the quad range from ASSUMPTION (RE-1005-hud-renderer) to CONFIRMED",
+   "confidence": "CONFIRMED",
+   "value": "0x530"
+  },
+  {
+   "file": "hud/label_states.h",
+   "name": "kRunsSize",
+   "how": "SEndTextBlock ctor identical (see label_relayouts); dtor leas 1.005 0x1408865C9 [rbx+5A0h], 0x140886605 [rbx+530h]. Upgrades the quad range from ASSUMPTION (RE-1005-hud-renderer) to CONFIRMED",
+   "confidence": "CONFIRMED",
+   "value": "0x34"
+  },
+  {
+   "file": "hud/label_states.h",
+   "name": "kFlagsOffset",
+   "how": "SEndTextBlock ctor identical (see label_relayouts); dtor leas 1.005 0x1408865C9 [rbx+5A0h], 0x140886605 [rbx+530h]. Upgrades the quad range from ASSUMPTION (RE-1005-hud-renderer) to CONFIRMED",
+   "confidence": "CONFIRMED",
+   "value": "0x565"
+  },
+  {
+   "file": "hud/label_states.h",
+   "name": "kFlagsSize",
+   "how": "SEndTextBlock ctor identical (see label_relayouts); dtor leas 1.005 0x1408865C9 [rbx+5A0h], 0x140886605 [rbx+530h]. Upgrades the quad range from ASSUMPTION (RE-1005-hud-renderer) to CONFIRMED",
+   "confidence": "CONFIRMED",
+   "value": "0x3"
+  },
+  {
+   "file": "hud/label_states.h",
+   "name": "kQuadsOffset",
+   "how": "SEndTextBlock ctor identical (see label_relayouts); dtor leas 1.005 0x1408865C9 [rbx+5A0h], 0x140886605 [rbx+530h]. Upgrades the quad range from ASSUMPTION (RE-1005-hud-renderer) to CONFIRMED",
+   "confidence": "CONFIRMED",
+   "value": "0x570"
+  },
+  {
+   "file": "hud/label_states.h",
+   "name": "kQuadsSize",
+   "how": "SEndTextBlock ctor identical (see label_relayouts); dtor leas 1.005 0x1408865C9 [rbx+5A0h], 0x140886605 [rbx+530h]. Upgrades the quad range from ASSUMPTION (RE-1005-hud-renderer) to CONFIRMED",
+   "confidence": "CONFIRMED",
+   "value": "0x48"
+  },
+  {
+   "file": "hud/label_states.h",
+   "name": "kShadowInQuads",
+   "how": "SEndTextBlock ctor identical (see label_relayouts); dtor leas 1.005 0x1408865C9 [rbx+5A0h], 0x140886605 [rbx+530h]. Upgrades the quad range from ASSUMPTION (RE-1005-hud-renderer) to CONFIRMED",
+   "confidence": "CONFIRMED",
+   "value": "0x40"
+  },
+  {
+   "file": "hud/minimap_labels.cpp",
+   "name": "kPaintInterface",
+   "how": "SEndTextBlock ctor 1.005 0x140886BA4: [rdi+2B0h] paint vt, [rbx=rdi+2B8h] gc vt, +0x2C8.. +0x2E8, +0x2F0/+0x2F8, +0x564/+0x568 identical to 1.004",
+   "confidence": "CONFIRMED",
+   "value": "0x2b0"
+  },
+  {
+   "file": "hud/minimap_labels.cpp",
+   "name": "kGcObject",
+   "how": "SEndTextBlock ctor 1.005 0x140886BA4: [rdi+2B0h] paint vt, [rbx=rdi+2B8h] gc vt, +0x2C8.. +0x2E8, +0x2F0/+0x2F8, +0x564/+0x568 identical to 1.004",
+   "confidence": "CONFIRMED",
+   "value": "0x2b8"
+  },
+  {
+   "file": "hud/minimap_labels.cpp",
+   "name": "kGetterBound",
+   "how": "SEndTextBlock ctor 1.005 0x140886BA4: [rdi+2B0h] paint vt, [rbx=rdi+2B8h] gc vt, +0x2C8.. +0x2E8, +0x2F0/+0x2F8, +0x564/+0x568 identical to 1.004",
+   "confidence": "CONFIRMED",
+   "value": "0x2e8"
+  },
+  {
+   "file": "hud/minimap_labels.cpp",
+   "name": "kRelayoutLock",
+   "how": "SEndTextBlock ctor 1.005 0x140886BA4: [rdi+2B0h] paint vt, [rbx=rdi+2B8h] gc vt, +0x2C8.. +0x2E8, +0x2F0/+0x2F8, +0x564/+0x568 identical to 1.004",
+   "confidence": "CONFIRMED",
+   "value": "0x564"
+  },
+  {
+   "file": "hud/minimap_labels.cpp",
+   "name": "kLanguageStamp",
+   "how": "SEndTextBlock ctor 1.005 0x140886BA4: [rdi+2B0h] paint vt, [rbx=rdi+2B8h] gc vt, +0x2C8.. +0x2E8, +0x2F0/+0x2F8, +0x564/+0x568 identical to 1.004",
+   "confidence": "CONFIRMED",
+   "value": "0x568"
+  },
+  {
+   "file": "hud/minimap_labels.cpp",
+   "name": "kFont",
+   "how": "SEndTextBlock ctor 1.005 0x140886BA4: [rdi+2B0h] paint vt, [rbx=rdi+2B8h] gc vt, +0x2C8.. +0x2E8, +0x2F0/+0x2F8, +0x564/+0x568 identical to 1.004",
+   "confidence": "CONFIRMED",
+   "value": "0x2f0"
+  },
+  {
+   "file": "hud/minimap_labels.cpp",
+   "name": "kButtonFont",
+   "how": "SEndTextBlock ctor 1.005 0x140886BA4: [rdi+2B0h] paint vt, [rbx=rdi+2B8h] gc vt, +0x2C8.. +0x2E8, +0x2F0/+0x2F8, +0x564/+0x568 identical to 1.004",
+   "confidence": "CONFIRMED",
+   "value": "0x2f8"
+  },
+  {
+   "file": "hud/minimap_labels.cpp",
+   "name": "kControllerBefore",
+   "how": "stock MakeShared / TSharedFromThis / SWidget layout; the text-block ctor writes the same SWidget-base fields",
+   "confidence": "ASSUMPTION (stock)",
+   "value": "0x10"
+  },
+  {
+   "file": "hud/minimap_labels.cpp",
+   "name": "kWeakThisObject",
+   "how": "stock MakeShared / TSharedFromThis / SWidget layout; the text-block ctor writes the same SWidget-base fields",
+   "confidence": "ASSUMPTION (stock)",
+   "value": "0x8"
+  },
+  {
+   "file": "hud/minimap_labels.cpp",
+   "name": "kWeakThisCounter",
+   "how": "stock MakeShared / TSharedFromThis / SWidget layout; the text-block ctor writes the same SWidget-base fields",
+   "confidence": "ASSUMPTION (stock)",
+   "value": "0x10"
+  },
+  {
+   "file": "hud/minimap_labels.cpp",
+   "name": "kSharedCount",
+   "how": "stock MakeShared / TSharedFromThis / SWidget layout; the text-block ctor writes the same SWidget-base fields",
+   "confidence": "ASSUMPTION (stock)",
+   "value": "0x8"
+  },
+  {
+   "file": "hud/minimap_labels.cpp",
+   "name": "kWeakCount",
+   "how": "stock MakeShared / TSharedFromThis / SWidget layout; the text-block ctor writes the same SWidget-base fields",
+   "confidence": "ASSUMPTION (stock)",
+   "value": "0xc"
+  },
+  {
+   "file": "hud/minimap_labels.cpp",
+   "name": "kFastPathProxy",
+   "how": "stock MakeShared / TSharedFromThis / SWidget layout; the text-block ctor writes the same SWidget-base fields",
+   "confidence": "ASSUMPTION (stock)",
+   "value": "0x18"
+  },
+  {
+   "file": "hud/marker_timers.cpp",
+   "name": "kMarkerList",
+   "how": "EndUI__MarkerList_Tick 1.005 0x140F75088 (renamed) displacement set identical; stride lea [r15+r15*2]; shl 4 (0x30)",
+   "confidence": "CONFIRMED",
+   "value": "0x150"
+  },
+  {
+   "file": "hud/marker_timers.cpp",
+   "name": "kElements",
+   "how": "EndUI__MarkerList_Tick 1.005 0x140F75088 (renamed) displacement set identical; stride lea [r15+r15*2]; shl 4 (0x30)",
+   "confidence": "CONFIRMED",
+   "value": "0x10"
+  },
+  {
+   "file": "hud/marker_timers.cpp",
+   "name": "kElement",
+   "how": "EndUI__MarkerList_Tick 1.005 0x140F75088 (renamed) displacement set identical; stride lea [r15+r15*2]; shl 4 (0x30)",
+   "confidence": "CONFIRMED",
+   "value": "0x30"
+  },
+  {
+   "file": "hud/marker_timers.cpp",
+   "name": "kTimer",
+   "how": "EndUI__MarkerList_Tick 1.005 0x140F75088 (renamed) displacement set identical; stride lea [r15+r15*2]; shl 4 (0x30)",
+   "confidence": "CONFIRMED",
+   "value": "0x14"
+  },
+  {
+   "file": "hud/menu_buffers.h",
+   "name": "kMenuVertexCapacity",
+   "how": "FEndMenuRenderer__Ctor 1.005 0x142C57A98 (renamed): mov dword [r9+18h],400h / 600h; displacement set identical to 1.004 0x142F82068",
+   "confidence": "CONFIRMED",
+   "value": "0x400"
+  },
+  {
+   "file": "hud/menu_buffers.h",
+   "name": "kMenuIndexCapacity",
+   "how": "FEndMenuRenderer__Ctor 1.005 0x142C57A98 (renamed): mov dword [r9+18h],400h / 600h; displacement set identical to 1.004 0x142F82068",
+   "confidence": "CONFIRMED",
+   "value": "0x600"
+  },
+  {
+   "file": "hud/minimap.cpp",
+   "name": "kAreaMapManager",
+   "how": "holder update 1.005 0x140B7BB44 vs 1.004 0x140843F10: equal displacements (only UObject vtable calls +8); [g+108h] is now the static 0x149186258 = g_EndUISystem 0x149186150 + 0x108; 0x140DB851A [+340h]",
+   "confidence": "CONFIRMED",
+   "value": "0x108"
+  },
+  {
+   "file": "hud/minimap.cpp",
+   "name": "kNaviMapHolder",
+   "how": "holder update 1.005 0x140B7BB44 vs 1.004 0x140843F10: equal displacements (only UObject vtable calls +8); [g+108h] is now the static 0x149186258 = g_EndUISystem 0x149186150 + 0x108; 0x140DB851A [+340h]",
+   "confidence": "CONFIRMED",
+   "value": "0x340"
+  },
+  {
+   "file": "hud/minimap.cpp",
+   "name": "kHolderInterface",
+   "how": "holder update 1.005 0x140B7BB44 vs 1.004 0x140843F10: equal displacements (only UObject vtable calls +8); [g+108h] is now the static 0x149186258 = g_EndUISystem 0x149186150 + 0x108; 0x140DB851A [+340h]",
+   "confidence": "CONFIRMED",
+   "value": "0x20"
+  },
+  {
+   "file": "hud/minimap.cpp",
+   "name": "kObjectSlateWidget",
+   "how": "holder update 1.005 0x140B7BB44 vs 1.004 0x140843F10: equal displacements (only UObject vtable calls +8); [g+108h] is now the static 0x149186258 = g_EndUISystem 0x149186150 + 0x108; 0x140DB851A [+340h]",
+   "confidence": "CONFIRMED",
+   "value": "0x138"
+  },
+  {
+   "file": "hud/minimap.cpp",
+   "name": "kInterfaceInObject",
+   "how": "native member between UWidget and the reflected UEndNaviMapCircle props (0x110.. unchanged)",
+   "confidence": "ASSUMPTION (layout)",
+   "value": "0x108"
+  },
+  {
+   "file": "hud/minimap.cpp",
+   "name": "kSlatePaintInterface",
+   "how": "SEndNaviMapCircle__Construct_CreatesRT 1.005 0x14379FD64 displacement set identical to 1.004 0x143A5AEBC (+0x3B0, +0x490 x7); OnPaint_Pool0 0x14130A3DC +0x2B0; SEndNaviMap setters below",
+   "confidence": "CONFIRMED",
+   "value": "0x2b0"
+  },
+  {
+   "file": "hud/minimap.cpp",
+   "name": "kSlateContent",
+   "how": "SEndNaviMapCircle__Construct_CreatesRT 1.005 0x14379FD64 displacement set identical to 1.004 0x143A5AEBC (+0x3B0, +0x490 x7); OnPaint_Pool0 0x14130A3DC +0x2B0; SEndNaviMap setters below",
+   "confidence": "CONFIRMED",
+   "value": "0x3b0"
+  },
+  {
+   "file": "hud/minimap.cpp",
+   "name": "kSlateTarget",
+   "how": "SEndNaviMapCircle__Construct_CreatesRT 1.005 0x14379FD64 displacement set identical to 1.004 0x143A5AEBC (+0x3B0, +0x490 x7); OnPaint_Pool0 0x14130A3DC +0x2B0; SEndNaviMap setters below",
+   "confidence": "CONFIRMED",
+   "value": "0x490"
+  },
+  {
+   "file": "hud/minimap.cpp",
+   "name": "kContentCentre",
+   "how": "SEndNaviMapCircle__Construct_CreatesRT 1.005 0x14379FD64 displacement set identical to 1.004 0x143A5AEBC (+0x3B0, +0x490 x7); OnPaint_Pool0 0x14130A3DC +0x2B0; SEndNaviMap setters below",
+   "confidence": "CONFIRMED",
+   "value": "0x478"
+  },
+  {
+   "file": "hud/minimap.cpp",
+   "name": "kPoolZeroVertexBuffer",
+   "how": "FEndMenuRenderer__OnRenderToTexture_ConsumePool0 1.005 0x140A45CEC (renamed) displacement set identical; 0x140A460ED mov rax,[r13+80h]",
+   "confidence": "CONFIRMED",
+   "value": "0x80"
+  },
+  {
+   "file": "hud/minimap.cpp",
+   "name": "kPoolZeroIndexBuffer",
+   "how": "FEndMenuRenderer__OnRenderToTexture_ConsumePool0 1.005 0x140A45CEC (renamed) displacement set identical; 0x140A460ED mov rax,[r13+80h]",
+   "confidence": "CONFIRMED",
+   "value": "0x98"
+  },
+  {
+   "file": "hud/minimap.cpp",
+   "name": "kTargetFlags91",
+   "how": "Construct_CreatesRT identical (+0x91,+0xE0,+0xF0); InitCustomFormat 1.005 0x144FE8360 +0xE8/+0xEC/+0x102/+0x108; reflected TextureRenderTarget2D identical",
+   "confidence": "CONFIRMED",
+   "value": "0x91"
+  },
+  {
+   "file": "hud/minimap.cpp",
+   "name": "kTargetGamma",
+   "how": "Construct_CreatesRT identical (+0x91,+0xE0,+0xF0); InitCustomFormat 1.005 0x144FE8360 +0xE8/+0xEC/+0x102/+0x108; reflected TextureRenderTarget2D identical",
+   "confidence": "CONFIRMED",
+   "value": "0xe0"
+  },
+  {
+   "file": "hud/minimap.cpp",
+   "name": "kTargetSizeX",
+   "how": "Construct_CreatesRT identical (+0x91,+0xE0,+0xF0); InitCustomFormat 1.005 0x144FE8360 +0xE8/+0xEC/+0x102/+0x108; reflected TextureRenderTarget2D identical",
+   "confidence": "CONFIRMED",
+   "value": "0xe8"
+  },
+  {
+   "file": "hud/minimap.cpp",
+   "name": "kTargetSizeY",
+   "how": "Construct_CreatesRT identical (+0x91,+0xE0,+0xF0); InitCustomFormat 1.005 0x144FE8360 +0xE8/+0xEC/+0x102/+0x108; reflected TextureRenderTarget2D identical",
+   "confidence": "CONFIRMED",
+   "value": "0xec"
+  },
+  {
+   "file": "hud/minimap.cpp",
+   "name": "kTargetClearColor",
+   "how": "Construct_CreatesRT identical (+0x91,+0xE0,+0xF0); InitCustomFormat 1.005 0x144FE8360 +0xE8/+0xEC/+0x102/+0x108; reflected TextureRenderTarget2D identical",
+   "confidence": "CONFIRMED",
+   "value": "0xf0"
+  },
+  {
+   "file": "hud/minimap.cpp",
+   "name": "kTargetFormat",
+   "how": "Construct_CreatesRT identical (+0x91,+0xE0,+0xF0); InitCustomFormat 1.005 0x144FE8360 +0xE8/+0xEC/+0x102/+0x108; reflected TextureRenderTarget2D identical",
+   "confidence": "CONFIRMED",
+   "value": "0x108"
+  },
+  {
+   "file": "hud/minimap.cpp",
+   "name": "kTargetResource",
+   "how": "UpdateResourceImmediate 1.005 0x144FEEF09 mov r9,[rcx+0A8h] (1.004 0x1451B96D9)",
+   "confidence": "CONFIRMED",
+   "value": "0xa8"
+  },
+  {
+   "file": "hud/minimap.cpp",
+   "name": "kResourceTexture",
+   "how": "ConsumePool0 identical (+0x90 render target RHI); RE-p2-own-minimap 0x140FC7131 pattern",
+   "confidence": "CONFIRMED (+0x90), ASSUMPTION (+0x10, stock FTexture)",
+   "value": "0x10"
+  },
+  {
+   "file": "hud/minimap.cpp",
+   "name": "kResourceTarget",
+   "how": "ConsumePool0 identical (+0x90 render target RHI); RE-p2-own-minimap 0x140FC7131 pattern",
+   "confidence": "CONFIRMED (+0x90), ASSUMPTION (+0x10, stock FTexture)",
+   "value": "0x90"
+  },
+  {
+   "file": "hud/minimap_icons.cpp",
+   "name": "kHolderEntries",
+   "how": "holder update identical (+0xE8, element lea x*4 patterns), NaviMapHolder_RemoveIconEntry 1.005 0x14078BFD0 (renamed) identical, AreaMapIcon_Update 1.005 0x140DD2AD0 equal",
+   "confidence": "CONFIRMED",
+   "value": "0xe8"
+  },
+  {
+   "file": "hud/minimap_icons.cpp",
+   "name": "kEntryElement",
+   "how": "holder update identical (+0xE8, element lea x*4 patterns), NaviMapHolder_RemoveIconEntry 1.005 0x14078BFD0 (renamed) identical, AreaMapIcon_Update 1.005 0x140DD2AD0 equal",
+   "confidence": "CONFIRMED",
+   "value": "0xa0"
+  },
+  {
+   "file": "hud/minimap_icons.cpp",
+   "name": "kEntry",
+   "how": "holder update identical (+0xE8, element lea x*4 patterns), NaviMapHolder_RemoveIconEntry 1.005 0x14078BFD0 (renamed) identical, AreaMapIcon_Update 1.005 0x140DD2AD0 equal",
+   "confidence": "CONFIRMED",
+   "value": "0x8"
+  },
+  {
+   "file": "hud/minimap_icons.cpp",
+   "name": "kEntryIcon",
+   "how": "holder update identical (+0xE8, element lea x*4 patterns), NaviMapHolder_RemoveIconEntry 1.005 0x14078BFD0 (renamed) identical, AreaMapIcon_Update 1.005 0x140DD2AD0 equal",
+   "confidence": "CONFIRMED",
+   "value": "0x8"
+  },
+  {
+   "file": "hud/minimap_icons.cpp",
+   "name": "kEntryKind",
+   "how": "holder update identical (+0xE8, element lea x*4 patterns), NaviMapHolder_RemoveIconEntry 1.005 0x14078BFD0 (renamed) identical, AreaMapIcon_Update 1.005 0x140DD2AD0 equal",
+   "confidence": "CONFIRMED",
+   "value": "0x1c"
+  },
+  {
+   "file": "hud/minimap_icons.cpp",
+   "name": "kIconVisibility",
+   "how": "SWidget Visibility +0x1B0 (see area_icons kVisibility)",
+   "confidence": "CONFIRMED",
+   "value": "0x1b0"
+  },
+  {
+   "file": "hud/minimap_once.cpp",
+   "name": "kPoolZeroSlots",
+   "how": "AcquireLayerSlot 1.005 0x140A4796C identical to 1.004 0x140FC8694 (+0x20,+0x28, slot = 40 bytes); ConsumePool0 identical (+0x28/+0x30/+0x38/+0x39); BuildBatchDataFromEntry identical (+0x90 batch)",
+   "confidence": "CONFIRMED",
+   "value": "0x28"
+  },
+  {
+   "file": "hud/minimap_once.cpp",
+   "name": "kPoolZeroSlotCount",
+   "how": "AcquireLayerSlot 1.005 0x140A4796C identical to 1.004 0x140FC8694 (+0x20,+0x28, slot = 40 bytes); ConsumePool0 identical (+0x28/+0x30/+0x38/+0x39); BuildBatchDataFromEntry identical (+0x90 batch)",
+   "confidence": "CONFIRMED",
+   "value": "0x30"
+  },
+  {
+   "file": "hud/minimap_once.cpp",
+   "name": "kPoolZeroWrite",
+   "how": "AcquireLayerSlot 1.005 0x140A4796C identical to 1.004 0x140FC8694 (+0x20,+0x28, slot = 40 bytes); ConsumePool0 identical (+0x28/+0x30/+0x38/+0x39); BuildBatchDataFromEntry identical (+0x90 batch)",
+   "confidence": "CONFIRMED",
+   "value": "0x38"
+  },
+  {
+   "file": "hud/minimap_once.cpp",
+   "name": "kPoolZeroRead",
+   "how": "AcquireLayerSlot 1.005 0x140A4796C identical to 1.004 0x140FC8694 (+0x20,+0x28, slot = 40 bytes); ConsumePool0 identical (+0x28/+0x30/+0x38/+0x39); BuildBatchDataFromEntry identical (+0x90 batch)",
+   "confidence": "CONFIRMED",
+   "value": "0x39"
+  },
+  {
+   "file": "hud/minimap_once.cpp",
+   "name": "kSlotSize",
+   "how": "AcquireLayerSlot 1.005 0x140A4796C identical to 1.004 0x140FC8694 (+0x20,+0x28, slot = 40 bytes); ConsumePool0 identical (+0x28/+0x30/+0x38/+0x39); BuildBatchDataFromEntry identical (+0x90 batch)",
+   "confidence": "CONFIRMED",
+   "value": "0x28"
+  },
+  {
+   "file": "hud/minimap_once.cpp",
+   "name": "kSlotActive",
+   "how": "AcquireLayerSlot 1.005 0x140A4796C identical to 1.004 0x140FC8694 (+0x20,+0x28, slot = 40 bytes); ConsumePool0 identical (+0x28/+0x30/+0x38/+0x39); BuildBatchDataFromEntry identical (+0x90 batch)",
+   "confidence": "CONFIRMED",
+   "value": "0x0"
+  },
+  {
+   "file": "hud/minimap_once.cpp",
+   "name": "kSlotRecycled",
+   "how": "AcquireLayerSlot 1.005 0x140A4796C identical to 1.004 0x140FC8694 (+0x20,+0x28, slot = 40 bytes); ConsumePool0 identical (+0x28/+0x30/+0x38/+0x39); BuildBatchDataFromEntry identical (+0x90 batch)",
+   "confidence": "CONFIRMED",
+   "value": "0x10"
+  },
+  {
+   "file": "hud/minimap_once.cpp",
+   "name": "kSlotState",
+   "how": "AcquireLayerSlot 1.005 0x140A4796C identical to 1.004 0x140FC8694 (+0x20,+0x28, slot = 40 bytes); ConsumePool0 identical (+0x28/+0x30/+0x38/+0x39); BuildBatchDataFromEntry identical (+0x90 batch)",
+   "confidence": "CONFIRMED",
+   "value": "0x20"
+  },
+  {
+   "file": "hud/minimap_once.cpp",
+   "name": "kSlotFrame",
+   "how": "AcquireLayerSlot 1.005 0x140A4796C identical to 1.004 0x140FC8694 (+0x20,+0x28, slot = 40 bytes); ConsumePool0 identical (+0x28/+0x30/+0x38/+0x39); BuildBatchDataFromEntry identical (+0x90 batch)",
+   "confidence": "CONFIRMED",
+   "value": "0x24"
+  },
+  {
+   "file": "hud/minimap_once.cpp",
+   "name": "kEntryBatchData",
+   "how": "AcquireLayerSlot 1.005 0x140A4796C identical to 1.004 0x140FC8694 (+0x20,+0x28, slot = 40 bytes); ConsumePool0 identical (+0x28/+0x30/+0x38/+0x39); BuildBatchDataFromEntry identical (+0x90 batch)",
+   "confidence": "CONFIRMED",
+   "value": "0x90"
+  },
+  {
+   "file": "hud/minimap_once.cpp",
+   "name": "kBatchVertexFree",
+   "how": "AcquireLayerSlot 1.005 0x140A4796C identical to 1.004 0x140FC8694 (+0x20,+0x28, slot = 40 bytes); ConsumePool0 identical (+0x28/+0x30/+0x38/+0x39); BuildBatchDataFromEntry identical (+0x90 batch)",
+   "confidence": "CONFIRMED",
+   "value": "0x8"
+  },
+  {
+   "file": "hud/minimap_once.cpp",
+   "name": "kBatchIndexFree",
+   "how": "AcquireLayerSlot 1.005 0x140A4796C identical to 1.004 0x140FC8694 (+0x20,+0x28, slot = 40 bytes); ConsumePool0 identical (+0x28/+0x30/+0x38/+0x39); BuildBatchDataFromEntry identical (+0x90 batch)",
+   "confidence": "CONFIRMED",
+   "value": "0x18"
+  },
+  {
+   "file": "hud/minimap_once.cpp",
+   "name": "kBatchVertexArrays",
+   "how": "AcquireLayerSlot 1.005 0x140A4796C identical to 1.004 0x140FC8694 (+0x20,+0x28, slot = 40 bytes); ConsumePool0 identical (+0x28/+0x30/+0x38/+0x39); BuildBatchDataFromEntry identical (+0x90 batch)",
+   "confidence": "CONFIRMED",
+   "value": "0x28"
+  },
+  {
+   "file": "hud/minimap_once.cpp",
+   "name": "kBatchIndexArrays",
+   "how": "AcquireLayerSlot 1.005 0x140A4796C identical to 1.004 0x140FC8694 (+0x20,+0x28, slot = 40 bytes); ConsumePool0 identical (+0x28/+0x30/+0x38/+0x39); BuildBatchDataFromEntry identical (+0x90 batch)",
+   "confidence": "CONFIRMED",
+   "value": "0x38"
+  },
+  {
+   "file": "hud/navimap_watch.cpp",
+   "name": "kAreaMapManager",
+   "how": "holder update 1.005 0x140B7BB44: cmp [rdi+178h], [rdi+194h], [rdi+198h], +0x179 x2 as 1.004; Construct_CreatesRT identical",
+   "confidence": "CONFIRMED",
+   "value": "0x108"
+  },
+  {
+   "file": "hud/navimap_watch.cpp",
+   "name": "kNaviMapHolder",
+   "how": "holder update 1.005 0x140B7BB44: cmp [rdi+178h], [rdi+194h], [rdi+198h], +0x179 x2 as 1.004; Construct_CreatesRT identical",
+   "confidence": "CONFIRMED",
+   "value": "0x340"
+  },
+  {
+   "file": "hud/navimap_watch.cpp",
+   "name": "kHolderInterface",
+   "how": "holder update 1.005 0x140B7BB44: cmp [rdi+178h], [rdi+194h], [rdi+198h], +0x179 x2 as 1.004; Construct_CreatesRT identical",
+   "confidence": "CONFIRMED",
+   "value": "0x20"
+  },
+  {
+   "file": "hud/navimap_watch.cpp",
+   "name": "kHolderAutoRotate",
+   "how": "holder update 1.005 0x140B7BB44: cmp [rdi+178h], [rdi+194h], [rdi+198h], +0x179 x2 as 1.004; Construct_CreatesRT identical",
+   "confidence": "CONFIRMED",
+   "value": "0x178"
+  },
+  {
+   "file": "hud/navimap_watch.cpp",
+   "name": "kHolderFlag179",
+   "how": "holder update 1.005 0x140B7BB44: cmp [rdi+178h], [rdi+194h], [rdi+198h], +0x179 x2 as 1.004; Construct_CreatesRT identical",
+   "confidence": "CONFIRMED",
+   "value": "0x179"
+  },
+  {
+   "file": "hud/navimap_watch.cpp",
+   "name": "kHolderYawOffset",
+   "how": "holder update 1.005 0x140B7BB44: cmp [rdi+178h], [rdi+194h], [rdi+198h], +0x179 x2 as 1.004; Construct_CreatesRT identical",
+   "confidence": "CONFIRMED",
+   "value": "0x194"
+  },
+  {
+   "file": "hud/navimap_watch.cpp",
+   "name": "kHolderFixedRotation",
+   "how": "holder update 1.005 0x140B7BB44: cmp [rdi+178h], [rdi+194h], [rdi+198h], +0x179 x2 as 1.004; Construct_CreatesRT identical",
+   "confidence": "CONFIRMED",
+   "value": "0x198"
+  },
+  {
+   "file": "hud/navimap_watch.cpp",
+   "name": "kObjectSlateWidget",
+   "how": "holder update 1.005 0x140B7BB44: cmp [rdi+178h], [rdi+194h], [rdi+198h], +0x179 x2 as 1.004; Construct_CreatesRT identical",
+   "confidence": "CONFIRMED",
+   "value": "0x138"
+  },
+  {
+   "file": "hud/navimap_watch.cpp",
+   "name": "kSlatePaintInterface",
+   "how": "holder update 1.005 0x140B7BB44: cmp [rdi+178h], [rdi+194h], [rdi+198h], +0x179 x2 as 1.004; Construct_CreatesRT identical",
+   "confidence": "CONFIRMED",
+   "value": "0x2b0"
+  },
+  {
+   "file": "hud/navimap_watch.cpp",
+   "name": "kSlateContent",
+   "how": "holder update 1.005 0x140B7BB44: cmp [rdi+178h], [rdi+194h], [rdi+198h], +0x179 x2 as 1.004; Construct_CreatesRT identical",
+   "confidence": "CONFIRMED",
+   "value": "0x3b0"
+  },
+  {
+   "file": "hud/navimap_watch.cpp",
+   "name": "kSlateTarget",
+   "how": "holder update 1.005 0x140B7BB44: cmp [rdi+178h], [rdi+194h], [rdi+198h], +0x179 x2 as 1.004; Construct_CreatesRT identical",
+   "confidence": "CONFIRMED",
+   "value": "0x490"
+  },
+  {
+   "file": "hud/navimap_watch.cpp",
+   "name": "kInterfaceInObject",
+   "how": "as minimap.cpp",
+   "confidence": "ASSUMPTION (layout)",
+   "value": "0x108"
+  },
+  {
+   "file": "hud/navimap_watch.cpp",
+   "name": "kObjectRenderTexture",
+   "how": "reflected EndNaviMapCircle/Octagon.RenderTexture 0x128 both dumps",
+   "confidence": "ASSUMPTION (dumps)",
+   "value": "0x128"
+  },
+  {
+   "file": "hud/navimap_watch.cpp",
+   "name": "kContentCentre",
+   "how": "SEndNaviMap__SetPosition3D 1.005 0x14148EAEC, SetMapRotation 0x14148F7DC, SetViewRotation 0x140926190 (renamed): displacement sets identical to 1.004 0x140F54A20/0x140F53EA4/0x140CCFC98",
+   "confidence": "CONFIRMED",
+   "value": "0x478"
+  },
+  {
+   "file": "hud/navimap_watch.cpp",
+   "name": "kContentPixelPerCm",
+   "how": "SEndNaviMap__SetPosition3D 1.005 0x14148EAEC, SetMapRotation 0x14148F7DC, SetViewRotation 0x140926190 (renamed): displacement sets identical to 1.004 0x140F54A20/0x140F53EA4/0x140CCFC98",
+   "confidence": "CONFIRMED",
+   "value": "0x484"
+  },
+  {
+   "file": "hud/navimap_watch.cpp",
+   "name": "kContentMapRotation",
+   "how": "SEndNaviMap__SetPosition3D 1.005 0x14148EAEC, SetMapRotation 0x14148F7DC, SetViewRotation 0x140926190 (renamed): displacement sets identical to 1.004 0x140F54A20/0x140F53EA4/0x140CCFC98",
+   "confidence": "CONFIRMED",
+   "value": "0x488"
+  },
+  {
+   "file": "hud/navimap_watch.cpp",
+   "name": "kContentViewRotation",
+   "how": "SEndNaviMap__SetPosition3D 1.005 0x14148EAEC, SetMapRotation 0x14148F7DC, SetViewRotation 0x140926190 (renamed): displacement sets identical to 1.004 0x140F54A20/0x140F53EA4/0x140CCFC98",
+   "confidence": "CONFIRMED",
+   "value": "0x48c"
+  },
+  {
+   "file": "hud/navimap_watch.cpp",
+   "name": "kTargetFlags91",
+   "how": "as minimap.cpp",
+   "confidence": "CONFIRMED",
+   "value": "0x91"
+  },
+  {
+   "file": "hud/navimap_watch.cpp",
+   "name": "kTargetGamma",
+   "how": "as minimap.cpp",
+   "confidence": "CONFIRMED",
+   "value": "0xe0"
+  },
+  {
+   "file": "hud/navimap_watch.cpp",
+   "name": "kTargetSizeX",
+   "how": "as minimap.cpp",
+   "confidence": "CONFIRMED",
+   "value": "0xe8"
+  },
+  {
+   "file": "hud/navimap_watch.cpp",
+   "name": "kTargetSizeY",
+   "how": "as minimap.cpp",
+   "confidence": "CONFIRMED",
+   "value": "0xec"
+  },
+  {
+   "file": "hud/navimap_watch.cpp",
+   "name": "kTargetFormat",
+   "how": "as minimap.cpp",
+   "confidence": "CONFIRMED",
+   "value": "0x108"
+  },
+  {
+   "file": "hud/navimap_watch.cpp",
+   "name": "kTargetResource",
+   "how": "as minimap.cpp",
+   "confidence": "CONFIRMED",
+   "value": "0xa8"
+  },
+  {
+   "file": "hud/navimap_watch.cpp",
+   "name": "kResourceTexture",
+   "how": "as minimap.cpp",
+   "confidence": "CONFIRMED",
+   "value": "0x10"
+  },
+  {
+   "file": "hud/navimap_watch.cpp",
+   "name": "kResourceTarget",
+   "how": "as minimap.cpp",
+   "confidence": "CONFIRMED",
+   "value": "0x90"
+  },
+  {
+   "file": "hud/navimap_watch.cpp",
+   "name": "kObjectName",
+   "how": "UObjectBase (UObject layout unchanged; UE4SS reads the same fields)",
+   "confidence": "ASSUMPTION (stock)",
+   "value": "0x18"
+  },
+  {
+   "file": "hud/navimap_watch.cpp",
+   "name": "kObjectOuter",
+   "how": "UObjectBase (UObject layout unchanged; UE4SS reads the same fields)",
+   "confidence": "ASSUMPTION (stock)",
+   "value": "0x20"
+  },
+  {
+   "file": "hud/player_two_pass.cpp",
+   "name": "kGameModeHudTimeStep",
+   "how": "EndUI__MC0_Lerps_GameModeDt 1.005 0x14114E8CC (renamed) displacement set identical to 1.004 0x140F37340, incl. [AEndGameMode+5D8h]",
+   "confidence": "CONFIRMED",
+   "value": "0x5d8"
+  },
+  {
+   "file": "hud/player_two_pass.cpp",
+   "name": "kAbilityNames",
+   "how": "EndUI__M180_AITargetWidgetList_Tick 1.005 0x140F6ECE4 (renamed): lea rdx,[rbx+rbx*8]; lea rdi,[rcx+rdx*8] (0x48) as 1.004; MasterHUD [rbx+180h]",
+   "confidence": "CONFIRMED",
+   "value": "0x180"
+  },
+  {
+   "file": "hud/player_two_pass.cpp",
+   "name": "kAbilityNameEntry",
+   "how": "EndUI__M180_AITargetWidgetList_Tick 1.005 0x140F6ECE4 (renamed): lea rdx,[rbx+rbx*8]; lea rdi,[rcx+rdx*8] (0x48) as 1.004; MasterHUD [rbx+180h]",
+   "confidence": "CONFIRMED",
+   "value": "0x48"
+  },
+  {
+   "file": "hud/player_two_pass.cpp",
+   "name": "kAbilityNameWidget",
+   "how": "EndUI__M180_AITargetWidgetList_Tick 1.005 0x140F6ECE4 (renamed): lea rdx,[rbx+rbx*8]; lea rdi,[rcx+rdx*8] (0x48) as 1.004; MasterHUD [rbx+180h]",
+   "confidence": "CONFIRMED",
+   "value": "0x8"
+  },
+  {
+   "file": "hud/player_two_pass.cpp",
+   "name": "kFieldTargets",
+   "how": "as field_markers.cpp",
+   "confidence": "CONFIRMED",
+   "value": "0x98"
+  },
+  {
+   "file": "hud/player_two_pass.cpp",
+   "name": "kFieldTargetEntry",
+   "how": "as field_markers.cpp",
+   "confidence": "CONFIRMED",
+   "value": "0x8c"
+  },
+  {
+   "file": "hud/player_two_pass.cpp",
+   "name": "kFieldTargetWidgets",
+   "how": "as field_markers.cpp",
+   "confidence": "CONFIRMED",
+   "value": "(array/extra)"
+  },
+  {
+   "file": "hud/player_two_pass.cpp",
+   "name": "kOverlayRectFields",
+   "how": "RenderToCompositeLayer 1.005 0x140B0EF82/0x140B0EF8A (+0x318/+0x31C) and +0x328/+0x32C",
+   "confidence": "CONFIRMED",
+   "value": "(array/extra)"
+  },
+  {
+   "file": "hud/popups.cpp",
+   "name": "kManager",
+   "how": "EndUI__MA0_PopupNumbers_Tick 1.005 0x14130DB70 (renamed) displacement set identical to 1.004 0x140F5E0E4 (only UObject vtable call 0x290->0x298); imul 0D0h/0D8h at 0x14130DCD3/0x14130E803; MasterHUD [rbx+0A0h]",
+   "confidence": "CONFIRMED",
+   "value": "0xa0"
+  },
+  {
+   "file": "hud/popups.cpp",
+   "name": "kCanvas",
+   "how": "EndUI__MA0_PopupNumbers_Tick 1.005 0x14130DB70 (renamed) displacement set identical to 1.004 0x140F5E0E4 (only UObject vtable call 0x290->0x298); imul 0D0h/0D8h at 0x14130DCD3/0x14130E803; MasterHUD [rbx+0A0h]",
+   "confidence": "CONFIRMED",
+   "value": "0x10"
+  },
+  {
+   "file": "hud/popups.cpp",
+   "name": "kSharedCount",
+   "how": "EndUI__MA0_PopupNumbers_Tick 1.005 0x14130DB70 (renamed) displacement set identical to 1.004 0x140F5E0E4 (only UObject vtable call 0x290->0x298); imul 0D0h/0D8h at 0x14130DCD3/0x14130E803; MasterHUD [rbx+0A0h]",
+   "confidence": "CONFIRMED",
+   "value": "0x8"
+  },
+  {
+   "file": "hud/popups.cpp",
+   "name": "kLists",
+   "how": "EndUI__MA0_PopupNumbers_Tick 1.005 0x14130DB70 (renamed) displacement set identical to 1.004 0x140F5E0E4 (only UObject vtable call 0x290->0x298); imul 0D0h/0D8h at 0x14130DCD3/0x14130E803; MasterHUD [rbx+0A0h]",
+   "confidence": "CONFIRMED",
+   "value": "(array/extra)"
+  },
+  {
+   "file": "hud/second_image.cpp",
+   "name": "kOverlayWindow",
+   "how": "RE-1005-hud-renderer offset_checks_unchanged",
+   "confidence": "CONFIRMED",
+   "value": "0x2f0"
+  },
+  {
+   "file": "hud/second_image.cpp",
+   "name": "kViewUnscaledViewRect",
+   "how": "RE-1005-hud-renderer offset_checks_unchanged",
+   "confidence": "CONFIRMED",
+   "value": "0x238"
+  },
+  {
+   "file": "hud/second_image.cpp",
+   "name": "kPoolTwoVertexBuffer",
+   "how": "FEndMenuRenderer ctor identical (VB +0x80+8p, IB +0x98+8p); the consume load mov rax,[rdi+90h] is a checked site that RE-1005-hud-renderer found unchanged",
+   "confidence": "CONFIRMED",
+   "value": "0x90"
+  },
+  {
+   "file": "hud/second_image.cpp",
+   "name": "kPoolTwoIndexBuffer",
+   "how": "FEndMenuRenderer ctor identical (VB +0x80+8p, IB +0x98+8p); the consume load mov rax,[rdi+90h] is a checked site that RE-1005-hud-renderer found unchanged",
+   "confidence": "CONFIRMED",
+   "value": "0xa8"
+  },
+  {
+   "file": "hud/widget_opacity.cpp",
+   "name": "kRenderOpacity",
+   "how": "reflected Widget.RenderOpacity 0xC4 both dumps",
+   "confidence": "ASSUMPTION (dumps)",
+   "value": "0xc4"
+  },
+  {
+   "file": "hud/widget_dump.cpp",
+   "name": "kAnchorDataSize",
+   "how": "stock FAnchorData size (UMG unchanged)",
+   "confidence": "ASSUMPTION (stock)",
+   "value": "0x28"
+  },
+  {
+   "file": "platform/binned_pools.cpp",
+   "name": "kPoolTables",
+   "how": "FMallocBinned3_Ctor 1.005 0x1443EF8EC (renamed) displacement set and stride code (lea edx,[rsi+60h]) identical to 1.004 0x14467C5E4",
+   "confidence": "CONFIRMED",
+   "value": "0x28"
+  },
+  {
+   "file": "platform/binned_pools.cpp",
+   "name": "kPoolStride",
+   "how": "FMallocBinned3_Ctor 1.005 0x1443EF8EC (renamed) displacement set and stride code (lea edx,[rsi+60h]) identical to 1.004 0x14467C5E4",
+   "confidence": "CONFIRMED",
+   "value": "0x60"
+  },
+  {
+   "file": "platform/binned_pools.cpp",
+   "name": "kBlockSize",
+   "how": "FMallocBinned3_Ctor 1.005 0x1443EF8EC (renamed) displacement set and stride code (lea edx,[rsi+60h]) identical to 1.004 0x14467C5E4",
+   "confidence": "CONFIRMED",
+   "value": "0x0"
+  },
+  {
+   "file": "platform/binned_pools.cpp",
+   "name": "kPerBlock",
+   "how": "FMallocBinned3_Ctor 1.005 0x1443EF8EC (renamed) displacement set and stride code (lea edx,[rsi+60h]) identical to 1.004 0x14467C5E4",
+   "confidence": "CONFIRMED",
+   "value": "0x4"
+  },
+  {
+   "file": "platform/binned_pools.cpp",
+   "name": "kAllocBits",
+   "how": "FMallocBinned3_Ctor 1.005 0x1443EF8EC (renamed) displacement set and stride code (lea edx,[rsi+60h]) identical to 1.004 0x14467C5E4",
+   "confidence": "CONFIRMED",
+   "value": "0x8"
+  },
+  {
+   "file": "platform/binned_pools.cpp",
+   "name": "kEverUsed",
+   "how": "FMallocBinned3_Ctor 1.005 0x1443EF8EC (renamed) displacement set and stride code (lea edx,[rsi+60h]) identical to 1.004 0x14467C5E4",
+   "confidence": "CONFIRMED",
+   "value": "0x48"
+  },
+  {
+   "file": "platform/binned_pools.cpp",
+   "name": "kPoolInfos",
+   "how": "FMallocBinned3_Ctor 1.005 0x1443EF8EC (renamed) displacement set and stride code (lea edx,[rsi+60h]) identical to 1.004 0x14467C5E4",
+   "confidence": "CONFIRMED",
+   "value": "0x50"
+  },
+  {
+   "file": "platform/binned_pools.cpp",
+   "name": "kBits",
+   "how": "FMallocBinned3_Ctor 1.005 0x1443EF8EC (renamed) displacement set and stride code (lea edx,[rsi+60h]) identical to 1.004 0x14467C5E4",
+   "confidence": "CONFIRMED",
+   "value": "0x0"
+  },
+  {
+   "file": "platform/binned_pools.cpp",
+   "name": "kDesired",
+   "how": "FMallocBinned3_Ctor 1.005 0x1443EF8EC (renamed) displacement set and stride code (lea edx,[rsi+60h]) identical to 1.004 0x14467C5E4",
+   "confidence": "CONFIRMED",
+   "value": "0xc"
+  },
+  {
+   "file": "platform/binned_pools.cpp",
+   "name": "kLastRow",
+   "how": "FMallocBinned3_Ctor 1.005 0x1443EF8EC (renamed) displacement set and stride code (lea edx,[rsi+60h]) identical to 1.004 0x14467C5E4",
+   "confidence": "CONFIRMED",
+   "value": "0x14"
+  },
+  {
+   "file": "platform/binned_pools.cpp",
+   "name": "kAllocSize",
+   "how": "FMallocBinned3_Ctor 1.005 0x1443EF8EC (renamed) displacement set and stride code (lea edx,[rsi+60h]) identical to 1.004 0x14467C5E4",
+   "confidence": "CONFIRMED",
+   "value": "0x18"
+  },
+  {
+   "file": "platform/sparse_array.h",
+   "name": "kSparseData",
+   "how": "stock TSparseArray (same engine version); all TSet users above unchanged",
+   "confidence": "ASSUMPTION (stock)",
+   "value": "0x0"
+  },
+  {
+   "file": "platform/sparse_array.h",
+   "name": "kSparseInlineBits",
+   "how": "stock TSparseArray (same engine version); all TSet users above unchanged",
+   "confidence": "ASSUMPTION (stock)",
+   "value": "0x10"
+  },
+  {
+   "file": "platform/sparse_array.h",
+   "name": "kSparseHeapBits",
+   "how": "stock TSparseArray (same engine version); all TSet users above unchanged",
+   "confidence": "ASSUMPTION (stock)",
+   "value": "0x20"
+  },
+  {
+   "file": "platform/sparse_array.h",
+   "name": "kSparseNumBits",
+   "how": "stock TSparseArray (same engine version); all TSet users above unchanged",
+   "confidence": "ASSUMPTION (stock)",
+   "value": "0x28"
+  }
+ ],
+ "not_offsets": [
+  "control/command_channel.cpp:kScanTicks",
+  "control/runner.h:kMaxCommandsPerTick",
+  "control/runner.h:kPlayers",
+  "control/script.h:kDefaultWaitUntilTicks",
+  "hud/action_icon_base.cpp:kMaxRows",
+  "hud/area_icons_two.cpp:kHidden",
+  "hud/area_icons_two.cpp:kSelfHitTestInvisible",
+  "hud/arrow_edge_code.h:kArrowEdgeCodeSize",
+  "hud/centered_frame_code.h:kCenteredFrameCodeSize",
+  "hud/enemy_gauges.cpp:kTargetStillFrames",
+  "hud/enemy_gauges_code.h:kGaugeCodeSize",
+  "hud/enemy_gauges_code.h:kGaugeRecordCapacity",
+  "hud/entry_filter_code.h:kEntryBuffersCodeSize",
+  "hud/entry_filter_code.h:kEntryDrawGateCodeSize",
+  "hud/first_player_code.h:kFirstPlayerCodeSize",
+  "hud/hud_addresses.h:kEntryMatrixMaxCount",
+  "hud/hud_placement.cpp:kFrameBytes",
+  "hud/hud_placement.cpp:kMaxStreak",
+  "hud/hud_placement.cpp:kScanTicks",
+  "hud/hud_players_dump.cpp:kFrame",
+  "hud/hud_roots.cpp:kCollapsed",
+  "hud/hud_roots.cpp:kHidden",
+  "hud/hud_trace.h:kMaxHudTraceFrames",
+  "hud/label_relayouts.cpp:kCompareChars",
+  "hud/label_relayouts.cpp:kListedBlocks",
+  "hud/label_relayouts.cpp:kMaxBlocks",
+  "hud/label_relayouts.cpp:kTextChars",
+  "hud/label_states.h:kMaxLabels",
+  "hud/layout_scale.cpp:kReplaced",
+  "hud/minimap.cpp:kFormatB8G8R8A8",
+  "hud/minimap.cpp:kMaxTargetSize",
+  "hud/minimap_icons.cpp:kMaxKept",
+  "hud/minimap_icons.cpp:kMaxReported",
+  "hud/minimap_icons.cpp:kPainted",
+  "hud/minimap_labels.cpp:kInvalidateLayout",
+  "hud/minimap_once_code.h:kCircleSkipCodeSize",
+  "hud/minimap_once_code.h:kOctagonSkipCodeSize",
+  "hud/navimap_watch.cpp:kHeartbeatMs",
+  "hud/player_two_pass.cpp:kRootScanFrames",
+  "hud/player_two_pass.cpp:kTimingFrames",
+  "hud/popups_code.h:kPopupCodeSize",
+  "hud/popups_code.h:kPopupRecordCapacity",
+  "hud/prompt_rows.cpp:kCollapsed",
+  "hud/prompt_rows.cpp:kHidden",
+  "hud/prompt_rows.cpp:kMaxRows",
+  "hud/prompt_rows.cpp:kRowStillFrames",
+  "hud/second_image.cpp:kPoolTwo",
+  "hud/second_image.cpp:kRenderTimingFrames",
+  "hud/target_views.cpp:kMaxSticky",
+  "hud/widget_dump.cpp:kFrame",
+  "mod.cpp:kHalfShapeIntervalTicks",
+  "platform/binned_pools.h:kBlock32K",
+  "platform/binned_pools.h:kMaxRowWords",
+  "platform/binned_pools.h:kPool32K",
+  "platform/binned_pools.h:kPoolCount",
+  "platform/call_redirect.cpp:kCallLength",
+  "platform/call_redirect.cpp:kCallOpcode",
+  "platform/call_redirect.cpp:kJumpOpcode",
+  "platform/entry_redirect.cpp:kTrampolineStart",
+  "platform/frame_watch.cpp:kMaxJobs",
+  "platform/frame_watch.cpp:kMaxNotes",
+  "platform/memory_watch.cpp:kPoolStepPercent",
+  "platform/near_code.cpp:kAllocationGrain",
+  "platform/near_code.h:kCodeBlockSize",
+  "platform/near_code.h:kCodePageSize",
+  "platform/sparse_array.h:kSparseMaxBits",
+  "platform/x64_jump.h:kJumpLength",
+  "players/local_players.cpp:kPlayerTwoControllerId",
+  "players/split_screen_settings.h:kGrowToLargestRequest",
+  "players/unreal_access.cpp:kMaxFrame",
+  "renderer/family_boundary.cpp:kAnyThread",
+  "renderer/me_feedback_once.cpp:kCopyFirst",
+  "renderer/me_feedback_once.cpp:kHiddenFirst",
+  "renderer/output_load_action_code.h:kLoadActionClear",
+  "renderer/output_load_action_code.h:kLoadActionLoad",
+  "renderer/view_family_submission.cpp:kRectLoggedViews",
+  "renderer/view_family_submission.cpp:kTimedFamilies",
+  "views/player_view_point.cpp:kAxisRecords",
+  "views/player_view_point.cpp:kFovStillFrames",
+  "views/view_shape.h:kMaintainXFov",
+  "views/view_shape.h:kMajorAxisFov",
+  "views/whole_screen.cpp:kSkippableSceneId",
+  "views/whole_screen.h:kStateCinemaPause",
+  "views/whole_screen.h:kStatePauseMenu"
+ ],
+ "unchecked": [],
+ "notes": [
+  "Enum/id values kept as not_offsets were also compared in the dumps: EndFieldOnOffTable ids 12, 147-149, 154-156 and EGameState 7 (PAUSE_IDLE) / 8 (MENU_IDLE) are identical in 1.004 and 1.005.",
+  "kRemoveLocalPlayerVTableOffset was already PerBuild before this audit (RE-1005-core-facts).",
+  "Inline offsets outside named constants (hud_trace geometry+0x2C, menu_buffers.h +0x08/+0x0C/+0x10/+0x18, minimap_labels loop offsets, popups kLists, field_markers kMarkerWidgets) were covered by the same evidence as their structs and are unchanged."
+ ]
+}

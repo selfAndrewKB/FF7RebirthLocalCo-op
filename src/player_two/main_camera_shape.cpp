@@ -10,6 +10,7 @@
 #include <Unreal/UObjectArray.hpp>
 #include <Unreal/UObjectGlobals.hpp>
 
+#include "platform/build_value.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "player_two/engine_facts.h"
@@ -36,7 +37,9 @@ namespace UObjectGlobals = RC::Unreal::UObjectGlobals;
 // RE-p2-hud-view-levers.md §3 (this build): the component the ACameraActor constructor makes, and
 // the bit its constructor sets and the Blueprint setter stores. Both checked by reflection.
 constexpr std::int32_t kCameraComponentOffset    = 0x230;
-constexpr std::int32_t kConstrainAspectRatioByte = 0x20C;
+// 1.005: UCameraComponent's bitfield byte moved to +0x204 (USceneComponent-derived fields -8): UCameraComponent::
+// GetCameraView 0x140DA63A0 reads `test byte [rcx+204h], 8` where 1.004 0x140BEEAA2 read +0x20C (RE-1005-offsets-C.md).
+constexpr platform::PerBuild<std::int32_t> kConstrainAspectRatioByte = {0x20C, 0x204};
 
 using Tracked = players::TrackedObject;
 
@@ -130,7 +133,7 @@ bool FindReflection() noexcept
         g_reflection      = found;
         g_reflectionFound = true;
         platform::Log(L"main cameras: the stock SetConstraintAspectRatio setter and bConstrainAspectRatio (+0x{:X}) found",
-                      kConstrainAspectRatioByte);
+                      static_cast<std::int32_t>(kConstrainAspectRatioByte));
         return true;
     }
     catch (...)

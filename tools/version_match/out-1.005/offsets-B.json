@@ -1,0 +1,2297 @@
+{
+ "changed_applied": [
+  {
+   "file": "player_two/engine_facts.h",
+   "line": 84,
+   "name": "kCharacterMoveState",
+   "old": "0x1750",
+   "new": "0x1770",
+   "class": "AEndCharacter (End native, +0x20 region)",
+   "evidence": "EndCharacter tick 1.004 0x14125B20A mov rcx,[rdi+1750h] -> 1.005 0x140E8A44A mov rcx,[rdi+1770h] (1:1 aligned, 152/152 insns); getter 0x141985320 mov rax,[rcx+1770h]; CreateMoveState 0x140D8255C"
+  },
+  {
+   "file": "player_two/battle_input.cpp",
+   "line": 56,
+   "name": "kCharacterHolder",
+   "old": "0x1758",
+   "new": "0x1778",
+   "class": "AEndCharacter (party character battle holder)",
+   "evidence": "vt+0xA18 getter 1.005 0x140896CC0 mov rax,[rcx+1778h] (1.004 0x14087F0A0 [rcx+1758h]); CreateMoveState 0x140D8255C writes +0x1770/+0x1778"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "line": 83,
+   "name": "kCompLastRender",
+   "old": "0x2A4",
+   "new": "0x294",
+   "class": "UPrimitiveComponent (LastRenderTime, native)",
+   "evidence": "EndSkelMeshComp_UpdateRecentlyRendered 1.004 0x140A2E386 vmovss xmm6,[rdi+2A4h] -> 1.005 0x1408B101E [rdi+294h]"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "line": 107,
+   "name": "kCompLevelOn",
+   "old": "0x121C",
+   "new": "0x120C",
+   "class": "UEndSkeletalMeshComponent",
+   "evidence": "AnimOptimizationEval 1.004 0x140A32D8F cmp byte [rdi+121Ch] -> 1.005 0x140861DEF [rdi+120Ch]"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "line": 108,
+   "name": "kCompForced",
+   "old": "0x1220",
+   "new": "0x1210",
+   "class": "UEndSkeletalMeshComponent",
+   "evidence": "AnimOptimizationEval 1.004 0x140A32DA5 -> 1.005 0x140861E05 mov [rdi+1210h],al"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "line": 109,
+   "name": "kCompShadow",
+   "old": "0x1224",
+   "new": "0x1214",
+   "class": "UEndSkeletalMeshComponent",
+   "evidence": "AnimOptimizationEval 1.004 0x140A32D4D -> 1.005 0x140861DAD mov byte [rcx+1214h],1"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "line": 110,
+   "name": "kCompPauseLevel",
+   "old": "0x1226",
+   "new": "0x1217",
+   "class": "UEndSkeletalMeshComponent",
+   "evidence": "AnimOptimizationEval 1.004 0x140A32D2C movzx eax,byte [rcx+1226h] -> 1.005 0x140861D8C [rcx+1217h] (-0xF: a byte was inserted near +0x1215)"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "line": 111,
+   "name": "kCompLevel",
+   "old": "0x1228",
+   "new": "0x1219",
+   "class": "UEndSkeletalMeshComponent",
+   "evidence": "AnimOptimizationEval 1.004 0x140A32DDE -> 1.005 0x140861E3E mov [rdi+1219h],al"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "line": 112,
+   "name": "kCompDistance",
+   "old": "0x1234",
+   "new": "0x1224",
+   "class": "UEndSkeletalMeshComponent",
+   "evidence": "AnimOptimizationEval 0x1408628BE and CalcAnimSignificance 1.005 0x1409D9D8F [rcx+1224h] (1.004 0x1412BC527 [rcx+1234h])"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "line": 113,
+   "name": "kCompAngle",
+   "old": "0x1238",
+   "new": "0x1228",
+   "class": "UEndSkeletalMeshComponent",
+   "evidence": "CalcAnimSignificance 1.004 0x1412BC547 [rcx+1238h] -> 1.005 0x1409D9DAF [rcx+1228h]"
+  },
+  {
+   "file": "player_two/chocobo_ride.cpp",
+   "line": 90,
+   "name": "kChocoboRidden",
+   "old": "0x1924",
+   "new": "0x1944",
+   "class": "AEndChocoboCharacter",
+   "evidence": "ChocoboCoordinator_GetRideBody 1.004 0x143DA7118 -> 1.005 0x143B13E00 and FinishGetOff 0x143B14F58: [rdi+1944h]"
+  },
+  {
+   "file": "player_two/chocobo_ride.cpp",
+   "line": 91,
+   "name": "kChocoboRideObject",
+   "old": "0x1918",
+   "new": "0x1938",
+   "class": "AEndChocoboCharacter",
+   "evidence": "Chocobo_ReleaseRideObject 1.004 0x14187979C -> 1.005 0x1411903AC, chocobo tick 0x140A413DC: [rbx+1938h]"
+  },
+  {
+   "file": "player_two/command_menu_two.cpp",
+   "line": 95,
+   "name": "kSetupDeferred",
+   "old": "0x2D1",
+   "new": "0x2D9",
+   "class": "EndUISystem (SE native; +8 inserted between +0x2C0 and +0x2D0)",
+   "evidence": "EndUISystem__ClearFieldCommandSetupPending 1.004 0x140F522FA mov byte [rax+2D1h],0 -> 1.005 0x1413FBB7A [rax+2D9h]; SetupFieldCommandOrDefer 1.005 0x1413FBBE2 [rbx+2D9h]"
+  },
+  {
+   "file": "player_two/handover_watch.cpp",
+   "line": 61,
+   "name": "kCharacterMove",
+   "old": "0x1400",
+   "new": "0x1420",
+   "class": "AEndCharacter (CharMove pointer)",
+   "evidence": "AIState_ApplyStateParams 1.004 0x1408AD5D9 mov rcx,[rsi+1400h] -> 1.005 0x14123E573 [rsi+1420h]; RevertStateParams 0x14123E888, FollowState reset 0x140EB0350; iface vt+0xA0 0x141984C60 mov rax,[rcx+0F68h]"
+  },
+  {
+   "file": "player_two/handover_watch.cpp",
+   "line": 62,
+   "name": "kCharacterFlags",
+   "old": "0x1408",
+   "new": "0x1428",
+   "class": "AEndCharacter (char flags dword)",
+   "evidence": "the +0x4B8 interface's vt+0xB8 flag setter: 1.004 0x140AEA668 [rcx+0F50h] -> 1.005 0x140ED3830 [rcx+0F70h] (slot verified: same vtable's +0xA0 is 0x141984C60)"
+  }
+ ],
+ "assumption_upgraded_to_confirmed": [
+  {
+   "file": "player_two/camera_override.cpp",
+   "line": 45,
+   "name": "kAddedPayload",
+   "old": "0x17C8",
+   "new": "0x17E8",
+   "class": "AEndPlayerCharacter delegate",
+   "evidence": "OnLeaderChanged 1.005 0x1412FB179..0x1412FB1F2 swaps 0x40-byte delegates whole at +0x17C0/+0x1800 (1.004 +0x17A0/+0x17E0): payload keeps its place in the delegate"
+  },
+  {
+   "file": "player_two/camera_override.cpp",
+   "line": 47,
+   "name": "kRemovedPayload",
+   "old": "0x1808",
+   "new": "0x1828",
+   "class": "AEndPlayerCharacter delegate",
+   "evidence": "same as kAddedPayload"
+  },
+  {
+   "file": "player_two/camera_override.cpp",
+   "line": 48,
+   "name": "kHeldRequests",
+   "old": "0x1770",
+   "new": "0x1790",
+   "class": "AEndPlayerCharacter",
+   "evidence": "RemoveCameraOverride 1.004 0x141200B15 mov esi,[rcx+1770h] -> 1.005 0x14102F3F5 [rcx+1790h]"
+  }
+ ],
+ "changed_unapplied_assumption": [],
+ "verified_unchanged": [
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kActorOwner",
+   "how": "reflected AActor Owner 0xE8 / Tags 0x178 same in both dumps; ApplyStateParams 1.005 0x14123E673/0x14123E680 [rsi+180h]/[rsi+178h] 1:1",
+   "value": "0xe8"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kActorTagsData",
+   "how": "reflected AActor Owner 0xE8 / Tags 0x178 same in both dumps; ApplyStateParams 1.005 0x14123E673/0x14123E680 [rsi+180h]/[rsi+178h] 1:1",
+   "value": "0x178"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kActorTagsCount",
+   "how": "reflected AActor Owner 0xE8 / Tags 0x178 same in both dumps; ApplyStateParams 1.005 0x14123E673/0x14123E680 [rsi+180h]/[rsi+178h] 1:1",
+   "value": "0x180"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kPawnController",
+   "how": "MoveState_TickForCharacter 1.005 0x140E89EB0 (1:1 with 1.004 0x14125AECC): [rcx+8], [rax+260h], [rdi+598h]; the component call slot moved +0x428->+0x430 (UObject rule, not a mod constant)",
+   "value": "0x260"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kMoveStateCharacter",
+   "how": "MoveState_TickForCharacter 1.005 0x140E89EB0 (1:1 with 1.004 0x14125AECC): [rcx+8], [rax+260h], [rdi+598h]; the component call slot moved +0x428->+0x430 (UObject rule, not a mod constant)",
+   "value": "0x8"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kControllerLeaderActions",
+   "how": "MoveState_TickForCharacter 1.005 0x140E89EB0 (1:1 with 1.004 0x14125AECC): [rcx+8], [rax+260h], [rdi+598h]; the component call slot moved +0x428->+0x430 (UObject rule, not a mod constant)",
+   "value": "0x598"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kLocalPlayerViewportClient",
+   "how": "reflected ULocalPlayer ViewportClient 0x70 / ControllerId 0xB8 unchanged",
+   "value": "0x70"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kLocalPlayerControllerId",
+   "how": "reflected ULocalPlayer ViewportClient 0x70 / ControllerId 0xB8 unchanged",
+   "value": "0xb8"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kViewportInputModeBytes",
+   "how": "UGameViewportClient ctor 1.005 0x144D6F7FC writes [rdi+361h] as in 1.004 0x144F5C1F8",
+   "value": "0x361"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kControllerPawn",
+   "how": "reflected Controller/PlayerController/EndPlayerController props unchanged (Pawn 0x258, Player 0x2A0, PlayerCameraManager 0x2C0, bAutoManageActiveCameraTarget 0x2D0, PlayerTrigger 0x610)",
+   "value": "0x258"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kControllerPlayer",
+   "how": "reflected Controller/PlayerController/EndPlayerController props unchanged (Pawn 0x258, Player 0x2A0, PlayerCameraManager 0x2C0, bAutoManageActiveCameraTarget 0x2D0, PlayerTrigger 0x610)",
+   "value": "0x2a0"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kControllerCameraManager",
+   "how": "reflected Controller/PlayerController/EndPlayerController props unchanged (Pawn 0x258, Player 0x2A0, PlayerCameraManager 0x2C0, bAutoManageActiveCameraTarget 0x2D0, PlayerTrigger 0x610)",
+   "value": "0x2c0"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kControllerAutoManageCamera",
+   "how": "reflected Controller/PlayerController/EndPlayerController props unchanged (Pawn 0x258, Player 0x2A0, PlayerCameraManager 0x2C0, bAutoManageActiveCameraTarget 0x2D0, PlayerTrigger 0x610)",
+   "value": "0x2d0"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kControllerTrigger",
+   "how": "reflected Controller/PlayerController/EndPlayerController props unchanged (Pawn 0x258, Player 0x2A0, PlayerCameraManager 0x2C0, bAutoManageActiveCameraTarget 0x2D0, PlayerTrigger 0x610)",
+   "value": "0x610"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kControllerBattleTalkActor",
+   "how": "reflected BattleTalkOnEndBattle 0x5B0; FieldCommandCtrl_Tick_HelpText 1.005 0x1409739A8 / CellSetup 0x1411B03D0 [..+5B0h]",
+   "value": "0x5b0"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kControllerLeader",
+   "how": "ProcessPlayerInput 1.005 0x1410D62F0 and ReadMergedLeftStick 0x1410D7870 [..+5A0h] 1:1",
+   "value": "0x5a0"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kPrimaryControllerByte897",
+   "how": "PrimaryPC_SetByte890/8A4 1.005 0x140945322 [rdi+rax+890h] / 0x1409452EE [rdi+rax+8A4h]",
+   "value": "0x897"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kPrimaryControllerByte8AB",
+   "how": "PrimaryPC_SetByte890/8A4 1.005 0x140945322 [rdi+rax+890h] / 0x1409452EE [rdi+rax+8A4h]",
+   "value": "0x8ab"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kCameraManagerPcOwner",
+   "how": "reflected PlayerCameraManager PCOwner 0x228 / ViewTarget 0x1000 unchanged",
+   "value": "0x228"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kCameraManagerViewTarget",
+   "how": "reflected PlayerCameraManager PCOwner 0x228 / ViewTarget 0x1000 unchanged",
+   "value": "0x1000"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kCameraManagerOperators",
+   "how": "AEndPlayerCameraManager::UpdateCamera 1.005 0x140D51C60 1:1 (1227/1227 insns) with 1.004 0x140E55E40: +0x2C50, +0x2CD0..+0x2CD3, +0x2CB8, +0x2CC0, +0x2CC8, +0x2D54",
+   "value": "0x2c50"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kCameraManagerFieldOperator",
+   "how": "AEndPlayerCameraManager::UpdateCamera 1.005 0x140D51C60 1:1 (1227/1227 insns) with 1.004 0x140E55E40: +0x2C50, +0x2CD0..+0x2CD3, +0x2CB8, +0x2CC0, +0x2CC8, +0x2D54",
+   "value": "0x2cb0"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kCameraManagerCurrentOperator",
+   "how": "AEndPlayerCameraManager::UpdateCamera 1.005 0x140D51C60 1:1 (1227/1227 insns) with 1.004 0x140E55E40: +0x2C50, +0x2CD0..+0x2CD3, +0x2CB8, +0x2CC0, +0x2CC8, +0x2D54",
+   "value": "0x2cd0"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kCameraManagerCollisionComponent",
+   "how": "BeginPlay 1.005 0x143A99A3C [rbx+2D48h]; reflected CompositeCollisionComponent 0x2D48",
+   "value": "0x2d48"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kCameraManagerEndCameraActor",
+   "how": "ctor 1.005 0x143A9852C [rdi+2DE8h]; reflected MainCameraActor 0x2DE8",
+   "value": "0x2de8"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kFieldOperatorCommand",
+   "how": "FEndCameraOperator::CopyCommandSnapshot 1.005 0x140D4BEC0 1:1 (+0x40.. copy)",
+   "value": "0x40"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kFieldCommandSize",
+   "how": "FEndCameraOperator::CopyCommandSnapshot 1.005 0x140D4BEC0 1:1 (+0x40.. copy)",
+   "value": "0x58"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kFieldOperatorActive",
+   "how": "UpdateCamera 1.005 0x140D51C60 cmp [rcx+0D0h] / [rcx+0D1h] 1:1",
+   "value": "0xd0"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kCharacterRequestedController",
+   "how": "reflected EndCharacterBase PlayerController 0x578 / ActiveController 0x580 / AIController 0x588 unchanged (the +0x20 starts after 0x610)",
+   "value": "0x578"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kCharacterEffectiveController",
+   "how": "reflected EndCharacterBase PlayerController 0x578 / ActiveController 0x580 / AIController 0x588 unchanged (the +0x20 starts after 0x610)",
+   "value": "0x580"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kCharacterRetainedAi",
+   "how": "reflected EndCharacterBase PlayerController 0x578 / ActiveController 0x580 / AIController 0x588 unchanged (the +0x20 starts after 0x610)",
+   "value": "0x588"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kCharacterPlayerControlled",
+   "how": "CharActionCtrl_Tick_Slot2 0x14092F484, ReconcileControllerOwnership 0x1407C2B10, Move_Update_SprintFlag 0x140CFE828: [..+625h]",
+   "value": "0x625"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kAiActiveBrain",
+   "how": "AIState_ApplyStateParams 1.005 0x14123E48B [r14+518h], 0x14123E49B [rax+19h]; PopBrain 0x140BE2B48",
+   "value": "0x518"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kBrainIndex",
+   "how": "AIState_ApplyStateParams 1.005 0x14123E48B [r14+518h], 0x14123E49B [rax+19h]; PopBrain 0x140BE2B48",
+   "value": "0x19"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kBrainState",
+   "how": "AICtrl_GetCurrentAIStateType 1.005 0x1407CDAE0: [rcx+518h] -> [rcx+20h] -> [rcx+18h]",
+   "value": "0x20"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kAiStateType",
+   "how": "AICtrl_GetCurrentAIStateType 1.005 0x1407CDAE0: [rcx+518h] -> [rcx+20h] -> [rcx+18h]",
+   "value": "0x18"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kMoveStateBlocked",
+   "how": "PlayerMoveState::CanAcceptInput 1.005 0x140895AA8 (91/91 insns): cmp [rdi+91h],bl; vcomiss [rdi+94h]",
+   "value": "0x91"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kMoveStateCooldown",
+   "how": "PlayerMoveState::CanAcceptInput 1.005 0x140895AA8 (91/91 insns): cmp [rdi+91h],bl; vcomiss [rdi+94h]",
+   "value": "0x94"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kMoveStateFieldActionHandles",
+   "how": "MoveStateBase flush 1.005 0x140E8AF9C: add rcx,0A0h / lea [rbx+0F0h] / [rbx+140h]; handle +0x48 in 0x140E8AFD8",
+   "value": "array/inline"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kChocoboMoveStateRowHandles",
+   "how": "ChocoboMoveState flush 1.005 0x14316FBCE: +0x200/+0x250/+0x2A0/+0x2F0/+0x340",
+   "value": "array/inline"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kPartyManagerPrimaryController",
+   "how": "GetPrimaryEndPlayerController 1.005 0x140763D59 add rcx,140h",
+   "value": "0x140"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kOptionHolderData",
+   "how": "GetSystemOptionData 1.005 0x140C21638 mov rax,[rax+100h]",
+   "value": "0x100"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kInputMergedSticks",
+   "how": "SquareInput aggregate 1.005 0x1409F60B4 (1801/1801 insns, same size 7749) [r13+11D0h]..[r13+1210h]",
+   "value": "0x1210"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kInputDeviceBanks",
+   "how": "SquareInput aggregate 1.005 0x1409F60B4 (1801/1801 insns, same size 7749) [r13+11D0h]..[r13+1210h]",
+   "value": "0x11d0"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kInputBankHeaderSize",
+   "how": "SquareInput aggregate 1.005 0x1409F60B4 (1801/1801 insns, same size 7749) [r13+11D0h]..[r13+1210h]",
+   "value": "0x10"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kTagRegistryMap",
+   "how": "AdjustEndActorTagRefCount 1.005 0x141216474 [..+278h]/[..+280h]",
+   "value": "0x278"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kTagRegistryElementSize",
+   "how": "AdjustEndActorTagRefCount 1.005 0x141216474 [..+278h]/[..+280h]",
+   "value": "0x14"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kPlayerTypeSlotOffset",
+   "how": "IsPartyLeader 1.005 0x14092E120 call [rax+68h] (below the UObject slot-19 insertion anyway)",
+   "value": "0x68"
+  },
+  {
+   "file": "player_two/engine_facts.h",
+   "name": "kLeaderActionOwner",
+   "how": "UActorComponent own props unchanged (OwnerPrivate 0xA0; RE-1005-player-two)",
+   "value": "0xa0"
+  },
+  {
+   "file": "player_two/battle_camera.cpp",
+   "name": "kBattleOperator",
+   "how": "PCM layout: UpdateCamera 0x140D51C60 1:1; RE-1005-player-two",
+   "value": "0x2ca8"
+  },
+  {
+   "file": "player_two/battle_camera.cpp",
+   "name": "kOperatorBytes",
+   "how": "PCM layout: UpdateCamera 0x140D51C60 1:1; RE-1005-player-two",
+   "value": "0x2cd0"
+  },
+  {
+   "file": "player_two/battle_camera.cpp",
+   "name": "kOperatorState",
+   "how": "UpdateCamera 1.005 [rcx+0D0h]/[rcx+0D1h]",
+   "value": "0xd0"
+  },
+  {
+   "file": "player_two/battle_camera.cpp",
+   "name": "kOperatorActive",
+   "how": "UpdateCamera 1.005 [rcx+0D0h]/[rcx+0D1h]",
+   "value": "0xd1"
+  },
+  {
+   "file": "player_two/battle_camera.cpp",
+   "name": "kModules",
+   "how": "FEndModularCameraOperator::UpdateModules 1.005 0x140D4FC94 (300/300 insns) [rbx+6E0h], module [rdi+44h]/[rdi+45h]",
+   "value": "0x6e0"
+  },
+  {
+   "file": "player_two/battle_camera.cpp",
+   "name": "kModuleEntry",
+   "how": "FEndModularCameraOperator::UpdateModules 1.005 0x140D4FC94 (300/300 insns) [rbx+6E0h], module [rdi+44h]/[rdi+45h]",
+   "value": "0x10"
+  },
+  {
+   "file": "player_two/battle_camera.cpp",
+   "name": "kModuleActive",
+   "how": "FEndModularCameraOperator::UpdateModules 1.005 0x140D4FC94 (300/300 insns) [rbx+6E0h], module [rdi+44h]/[rdi+45h]",
+   "value": "0x44"
+  },
+  {
+   "file": "player_two/battle_input.cpp",
+   "name": "kLockMode",
+   "how": "MoveState_BattleAttack_SelectAndExecute 1.005 0x140F89EE0 and MoveState_Deactivate 0x14137CD40 (ratio 1.0)",
+   "value": "0x8c"
+  },
+  {
+   "file": "player_two/battle_input.cpp",
+   "name": "kSwitchLatch",
+   "how": "MoveState_BattleAttack_SelectAndExecute 1.005 0x140F89EE0 and MoveState_Deactivate 0x14137CD40 (ratio 1.0)",
+   "value": "0x8d"
+  },
+  {
+   "file": "player_two/battle_input.cpp",
+   "name": "kPendingAction",
+   "how": "MoveState_BattleAttack_SelectAndExecute 1.005 0x140F89EE0 and MoveState_Deactivate 0x14137CD40 (ratio 1.0)",
+   "value": "0x84"
+  },
+  {
+   "file": "player_two/battle_input.cpp",
+   "name": "kSkipTargeting",
+   "how": "BattleTarget_TickTargeting 0x140977A90, SetTargetingSuspendBit96 0x1411CB6B0",
+   "value": "0x96"
+  },
+  {
+   "file": "player_two/battle_input.cpp",
+   "name": "kDisplayed",
+   "how": "BattleTarget_UpdateLeaderSoftTarget 0x140977318 [..+258h]/[..+260h]/[..+70h]",
+   "value": "0x70"
+  },
+  {
+   "file": "player_two/battle_input.cpp",
+   "name": "kTargetSlot",
+   "how": "BattleTarget_UpdateLeaderSoftTarget 0x140977318 [..+258h]/[..+260h]/[..+70h]",
+   "value": "0x258"
+  },
+  {
+   "file": "player_two/battle_input.cpp",
+   "name": "kPartyManagerLeader",
+   "how": "ResolvePartyLeader 1.005 0x1407649A8 [rax+148h]/[rax+14Ch]",
+   "value": "0x148"
+  },
+  {
+   "file": "player_two/battle_input.cpp",
+   "name": "kController",
+   "how": "EndUISystem[23] 0xB8 (0x14088C460); FieldCommandCtrl functions self-aligned (cc pass, 31 functions)",
+   "value": "0xb8"
+  },
+  {
+   "file": "player_two/battle_input.cpp",
+   "name": "kBattleHud",
+   "how": "EndUISystem[23] 0xB8 (0x14088C460); FieldCommandCtrl functions self-aligned (cc pass, 31 functions)",
+   "value": "0x540"
+  },
+  {
+   "file": "player_two/battle_input.cpp",
+   "name": "kBattleBlocked",
+   "how": "EndUISystem[23] 0xB8 (0x14088C460); FieldCommandCtrl functions self-aligned (cc pass, 31 functions)",
+   "value": "0x541"
+  },
+  {
+   "file": "player_two/battle_input.cpp",
+   "name": "kBattleReadyA",
+   "how": "EndUISystem[23] 0xB8 (0x14088C460); FieldCommandCtrl functions self-aligned (cc pass, 31 functions)",
+   "value": "0x5e1"
+  },
+  {
+   "file": "player_two/battle_input.cpp",
+   "name": "kBattleReadyB",
+   "how": "EndUISystem[23] 0xB8 (0x14088C460); FieldCommandCtrl functions self-aligned (cc pass, 31 functions)",
+   "value": "0x782"
+  },
+  {
+   "file": "player_two/battle_input.cpp",
+   "name": "kGuardMode",
+   "how": "EndUISystem[23] 0xB8 (0x14088C460); FieldCommandCtrl functions self-aligned (cc pass, 31 functions)",
+   "value": "0x760"
+  },
+  {
+   "file": "player_two/battle_input.cpp",
+   "name": "kRequests",
+   "how": "EndUISystem[23] 0xB8 (0x14088C460); FieldCommandCtrl functions self-aligned (cc pass, 31 functions)",
+   "value": "0x570"
+  },
+  {
+   "file": "player_two/battle_input.cpp",
+   "name": "kCharacterAiHolder",
+   "how": "IsUCPC_Core 1.005 0x1409B2AF7 mov rcx,[rcx+638h]",
+   "value": "0x638"
+  },
+  {
+   "file": "player_two/battle_input.cpp",
+   "name": "kOwnerSlot",
+   "how": "holder vtable slot below 0x98; IsUCPC_Core 1.005 uses the same [rax+40h]/[rax+70h] slots",
+   "value": "0x48"
+  },
+  {
+   "file": "player_two/battle_input.cpp",
+   "name": "kCommandHandle",
+   "how": "CharHolder_BattleGuardHold 1.005 0x140EF4AC0 / GuardEnd 0x1416B8B90 [..+418h], [..+112h]; ctor 0x140D81820",
+   "value": "0x418"
+  },
+  {
+   "file": "player_two/battle_input.cpp",
+   "name": "kHandleMode",
+   "how": "CharHolder_BattleGuardHold 1.005 0x140EF4AC0 / GuardEnd 0x1416B8B90 [..+418h], [..+112h]; ctor 0x140D81820",
+   "value": "0x112"
+  },
+  {
+   "file": "player_two/battle_input.cpp",
+   "name": "kStateBytes",
+   "how": "move-state layout unchanged: 0x49/0x64 in MoveState_BattleAttackHold 0x140EF49F4; 0x4A/0x65 neighbours",
+   "value": "array/inline"
+  },
+  {
+   "file": "player_two/camera_distance.cpp",
+   "name": "kOptionFieldLevel",
+   "how": "option setter 1.005 0x1410B9F64/0x1410B9F6A [rbx+37h]/[rbx+36h]; confirm handler 0x140FE6BDA",
+   "value": "0x36"
+  },
+  {
+   "file": "player_two/camera_distance.cpp",
+   "name": "kOptionBattleLevel",
+   "how": "option setter 1.005 0x1410B9F64/0x1410B9F6A [rbx+37h]/[rbx+36h]; confirm handler 0x140FE6BDA",
+   "value": "0x37"
+  },
+  {
+   "file": "player_two/camera_distance.cpp",
+   "name": "kOpInitialized",
+   "how": "lazy init 1.005 0x141434807 cmp byte [rcx+0D2h]",
+   "value": "0xd2"
+  },
+  {
+   "file": "player_two/camera_distance.cpp",
+   "name": "kOpLevel",
+   "how": "UpdateModules 1.005 0x140D4FF55 movzx eax,byte [rbx+738h]",
+   "value": "0x738"
+  },
+  {
+   "file": "player_two/camera_override.cpp",
+   "name": "kModules",
+   "how": "as battle_camera",
+   "value": "0x6e0"
+  },
+  {
+   "file": "player_two/camera_override.cpp",
+   "name": "kModuleActive",
+   "how": "as battle_camera",
+   "value": "0x44"
+  },
+  {
+   "file": "player_two/camera_override.cpp",
+   "name": "kBattleOperator",
+   "how": "as battle_camera",
+   "value": "0x2ca8"
+  },
+  {
+   "file": "player_two/camera_override.cpp",
+   "name": "kFieldOperator",
+   "how": "as battle_camera",
+   "value": "0x2cb0"
+  },
+  {
+   "file": "player_two/camera_override.cpp",
+   "name": "kModuleOwner",
+   "how": "FEndNotifyOverrideCameraModule Compute 0x141508E68 / ReseedEntries 0x141436CEC / ctor 0x14311A50C: [..+50h], [..+3F8h]",
+   "value": "0x50"
+  },
+  {
+   "file": "player_two/camera_override.cpp",
+   "name": "kModuleRequests",
+   "how": "FEndNotifyOverrideCameraModule Compute 0x141508E68 / ReseedEntries 0x141436CEC / ctor 0x14311A50C: [..+50h], [..+3F8h]",
+   "value": "0x3f8"
+  },
+  {
+   "file": "player_two/charapop_centre.cpp",
+   "name": "kOverrideOn",
+   "how": "CharaPop_SetOverrideCenter 1.005 0x141907924 [r8+119Ch]/[..+11A0h]",
+   "value": "0x119c"
+  },
+  {
+   "file": "player_two/charapop_centre.cpp",
+   "name": "kOverrideCentre",
+   "how": "CharaPop_SetOverrideCenter 1.005 0x141907924 [r8+119Ch]/[..+11A0h]",
+   "value": "0x11a0"
+  },
+  {
+   "file": "player_two/charapop_centre.cpp",
+   "name": "kLeaderCentre",
+   "how": "CharaPopManager_Tick_LeaderCenter 1.005 0x14114E670: +0x11AC/+0x11AE/+0x11B0/+0x11B8 1:1 (0x11BE in the same unchanged block)",
+   "value": "0x11b0"
+  },
+  {
+   "file": "player_two/charapop_centre.cpp",
+   "name": "kLeaderOn",
+   "how": "CharaPopManager_Tick_LeaderCenter 1.005 0x14114E670: +0x11AC/+0x11AE/+0x11B0/+0x11B8 1:1 (0x11BE in the same unchanged block)",
+   "value": "0x11be"
+  },
+  {
+   "file": "player_two/charapop_centre.cpp",
+   "name": "kManagerSelect",
+   "how": "CharaPopObj_ApplySpawnSelection 1.005 0x1408B02F4 [..+18h] -> [..+0E8h]",
+   "value": "0x18"
+  },
+  {
+   "file": "player_two/charapop_centre.cpp",
+   "name": "kThreshold",
+   "how": "CharaPopObj_ApplySpawnSelection 1.005 0x1408B02F4 [..+18h] -> [..+0E8h]",
+   "value": "0xe8"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "name": "kOverrideOn",
+   "how": "CharaPop_SetOverrideCenter 1.005 0x141907924 [r8+119Ch]/[..+11A0h]",
+   "value": "0x119c"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "name": "kOverrideCentre",
+   "how": "CharaPop_SetOverrideCenter 1.005 0x141907924 [r8+119Ch]/[..+11A0h]",
+   "value": "0x11a0"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "name": "kLeaderCentre",
+   "how": "CharaPopManager_Tick_LeaderCenter 1.005 0x14114E670: +0x11AC/+0x11AE/+0x11B0/+0x11B8 1:1 (0x11BE in the same unchanged block)",
+   "value": "0x11b0"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "name": "kLeaderOn",
+   "how": "CharaPopManager_Tick_LeaderCenter 1.005 0x14114E670: +0x11AC/+0x11AE/+0x11B0/+0x11B8 1:1 (0x11BE in the same unchanged block)",
+   "value": "0x11be"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "name": "kManagerSelect",
+   "how": "CharaPopObj_ApplySpawnSelection 1.005 0x1408B02F4 [..+18h] -> [..+0E8h]",
+   "value": "0x18"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "name": "kThreshold",
+   "how": "CharaPopObj_ApplySpawnSelection 1.005 0x1408B02F4 [..+18h] -> [..+0E8h]",
+   "value": "0xe8"
+  },
+  {
+   "file": "player_two/charapop_facts.cpp",
+   "name": "kComponentWorldLocation",
+   "how": "USceneComponent::execK2_GetComponentLocation 1.005 0x1451B696A vmovups xmm1,[rcx+1D0h] (1.004 0x14537C03A)",
+   "value": "0x1d0"
+  },
+  {
+   "file": "player_two/charapop_facts.h",
+   "name": "kRootCharaPop",
+   "how": "CharaPop_SetOverrideCenter 1.005 0x141907924 mov r8,[rax+180h]",
+   "value": "0x180"
+  },
+  {
+   "file": "player_two/charapop_facts.h",
+   "name": "kManagerPop",
+   "how": "CharaPopManager_TickLOD 1.005 0x140BFE56C [..+10h], [..+0C8h], [..+20C8h], [..+20D0h]",
+   "value": "0x10"
+  },
+  {
+   "file": "player_two/charapop_facts.h",
+   "name": "kPopListInline",
+   "how": "CharaPopManager_TickLOD 1.005 0x140BFE56C [..+10h], [..+0C8h], [..+20C8h], [..+20D0h]",
+   "value": "0xc8"
+  },
+  {
+   "file": "player_two/charapop_facts.h",
+   "name": "kPopListHeap",
+   "how": "CharaPopManager_TickLOD 1.005 0x140BFE56C [..+10h], [..+0C8h], [..+20C8h], [..+20D0h]",
+   "value": "0x20c8"
+  },
+  {
+   "file": "player_two/charapop_facts.h",
+   "name": "kPopCount",
+   "how": "CharaPopManager_TickLOD 1.005 0x140BFE56C [..+10h], [..+0C8h], [..+20C8h], [..+20D0h]",
+   "value": "0x20d0"
+  },
+  {
+   "file": "player_two/charapop_facts.h",
+   "name": "kShouldTickFov",
+   "how": "EvalLOD_Middle 1.005 0x140BFE2A4 [rdi+1148h]..[..+1188h]",
+   "value": "0x1148"
+  },
+  {
+   "file": "player_two/charapop_facts.h",
+   "name": "kMiddleEnableDraw",
+   "how": "EvalLOD_Middle 1.005 0x140BFE2A4 [rdi+1148h]..[..+1188h]",
+   "value": "0x115c"
+  },
+  {
+   "file": "player_two/charapop_facts.h",
+   "name": "kMiddleInCamera",
+   "how": "EvalLOD_Middle 1.005 0x140BFE2A4 [rdi+1148h]..[..+1188h]",
+   "value": "0x1160"
+  },
+  {
+   "file": "player_two/charapop_facts.h",
+   "name": "kMiddleOutCamera",
+   "how": "EvalLOD_Middle 1.005 0x140BFE2A4 [rdi+1148h]..[..+1188h]",
+   "value": "0x1164"
+  },
+  {
+   "file": "player_two/charapop_facts.h",
+   "name": "kMiddleShouldTick",
+   "how": "EvalLOD_Middle 1.005 0x140BFE2A4 [rdi+1148h]..[..+1188h]",
+   "value": "0x1168"
+  },
+  {
+   "file": "player_two/charapop_facts.h",
+   "name": "kEnemyInCameraAdded",
+   "how": "EvalLOD_Middle 1.005 0x140BFE2A4 [rdi+1148h]..[..+1188h]",
+   "value": "0x1170"
+  },
+  {
+   "file": "player_two/charapop_facts.h",
+   "name": "kOverrideEnableDraw",
+   "how": "EvalLOD_Middle 1.005 0x140BFE2A4 [rdi+1148h]..[..+1188h]",
+   "value": "0x1178"
+  },
+  {
+   "file": "player_two/charapop_facts.h",
+   "name": "kOverrideInCamera",
+   "how": "EvalLOD_Middle 1.005 0x140BFE2A4 [rdi+1148h]..[..+1188h]",
+   "value": "0x1180"
+  },
+  {
+   "file": "player_two/charapop_facts.h",
+   "name": "kOverrideOutCamera",
+   "how": "EvalLOD_Middle 1.005 0x140BFE2A4 [rdi+1148h]..[..+1188h]",
+   "value": "0x1188"
+  },
+  {
+   "file": "player_two/charapop_facts.h",
+   "name": "kLightEnableDraw",
+   "how": "EvalLOD_Light 1.005 0x140BFEBA0 [..+114Ch]..[..+1158h]",
+   "value": "0x114c"
+  },
+  {
+   "file": "player_two/charapop_facts.h",
+   "name": "kLightInCamera",
+   "how": "EvalLOD_Light 1.005 0x140BFEBA0 [..+114Ch]..[..+1158h]",
+   "value": "0x1150"
+  },
+  {
+   "file": "player_two/charapop_facts.h",
+   "name": "kLightOutCamera",
+   "how": "EvalLOD_Light 1.005 0x140BFEBA0 [..+114Ch]..[..+1158h]",
+   "value": "0x1154"
+  },
+  {
+   "file": "player_two/charapop_facts.h",
+   "name": "kLightShouldTick",
+   "how": "EvalLOD_Light 1.005 0x140BFEBA0 [..+114Ch]..[..+1158h]",
+   "value": "0x1158"
+  },
+  {
+   "file": "player_two/charapop_facts.h",
+   "name": "kEntryKey",
+   "how": "EvalLOD_Middle 0x140BFE2A4 entry +0x8/+0x10/+0x24/+0x1A0/+0x1AC",
+   "value": "0x8"
+  },
+  {
+   "file": "player_two/charapop_facts.h",
+   "name": "kEntryId",
+   "how": "EvalLOD_Middle 0x140BFE2A4 entry +0x8/+0x10/+0x24/+0x1A0/+0x1AC",
+   "value": "0x10"
+  },
+  {
+   "file": "player_two/charapop_facts.h",
+   "name": "kEntryCategory",
+   "how": "EvalLOD_Middle 0x140BFE2A4 entry +0x8/+0x10/+0x24/+0x1A0/+0x1AC",
+   "value": "0x24"
+  },
+  {
+   "file": "player_two/charapop_facts.h",
+   "name": "kEntryLevel",
+   "how": "EvalLOD_Middle 0x140BFE2A4 entry +0x8/+0x10/+0x24/+0x1A0/+0x1AC",
+   "value": "0x1a0"
+  },
+  {
+   "file": "player_two/charapop_facts.h",
+   "name": "kEntryState",
+   "how": "EvalLOD_Middle 0x140BFE2A4 entry +0x8/+0x10/+0x24/+0x1A0/+0x1AC",
+   "value": "0x1ac"
+  },
+  {
+   "file": "player_two/charapop_facts.h",
+   "name": "kEntryMinLevel",
+   "how": "CharaPopObj_SetEntryMinLODLevel 1.005 0x140DC8394 [..+1A1h]",
+   "value": "0x1a1"
+  },
+  {
+   "file": "player_two/charapop_facts.h",
+   "name": "kEntryActor",
+   "how": "CharaPopEntry_TickState2 1.005 0x140D9570C lea rcx,[rbx+1A4h]",
+   "value": "0x1a4"
+  },
+  {
+   "file": "player_two/charapop_facts.h",
+   "name": "kCameraPose",
+   "how": "UpdateCamera 1.005 0x140D51C60 [..+2CB8h]",
+   "value": "0x2cb8"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "name": "kManagerParams",
+   "how": "LOD block 0x1148..0x1190 unchanged (EvalLOD Middle/Light)",
+   "value": "0x1148"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "name": "kParamsSize",
+   "how": "LOD block 0x1148..0x1190 unchanged (EvalLOD Middle/Light)",
+   "value": "array/inline"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "name": "kPopForceAll",
+   "how": "TickLOD 1.005 0x140BFE56C [..+619Ch]/[..+6230h]",
+   "value": "0x619c"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "name": "kPopCursor",
+   "how": "TickLOD 1.005 0x140BFE56C [..+619Ch]/[..+6230h]",
+   "value": "0x6230"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "name": "kPopQueueCount",
+   "how": "SetEntryMinLODLevel 1.005 0x140DC8394 [..+6228h], entry [..+40h]",
+   "value": "0x6228"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "name": "kEntryUseCount",
+   "how": "SetEntryMinLODLevel 1.005 0x140DC8394 [..+6228h], entry [..+40h]",
+   "value": "0x40"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "name": "kEntryPauseFlag",
+   "how": "EvalLOD_Middle 0x140BFE2A4 [..+110h]/[..+114h]",
+   "value": "0x110"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "name": "kEntryPauseWant",
+   "how": "EvalLOD_Middle 0x140BFE2A4 [..+110h]/[..+114h]",
+   "value": "0x114"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "name": "kEntryRequested",
+   "how": "CharaPopEntry_TickStateMachine 1.005 0x140D9622C [..+1B0h]/[..+1B4h]",
+   "value": "0x1b0"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "name": "kEntryLock",
+   "how": "CharaPopEntry_TickStateMachine 1.005 0x140D9622C [..+1B0h]/[..+1B4h]",
+   "value": "0x1b4"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "name": "kEntryScore",
+   "how": "EvalSpawnScore 1.005 0x1408AFA48 / slice 0x1408AF790 [rbx+44h]",
+   "value": "0x44"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "name": "kEntryFlags",
+   "how": "EvalSpawnScore_ByCenter 0x1408AFC14, ApplySpawnSelection 0x1408B02F4 [..+118h]",
+   "value": "0x118"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "name": "kEntryKeep",
+   "how": "CharaPopObj_PopPass 1.005 0x140D95B9C (385/385 insns) [r14+11Ch]",
+   "value": "0x11c"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "name": "kEntrySpawnHidden",
+   "how": "CharaPopEntry_TickState2 0x140D9570C [..+1A2h]",
+   "value": "0x1a2"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "name": "kFadeSlot",
+   "how": "EndActor_IsHiddenFadeDone 1.005 0x140BFCC08 / IsShowFadeDone 0x140BFDEEC call [rax+1D0h] (interface slot)",
+   "value": "0x1d0"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "name": "kActorHiddenByte",
+   "how": "AActor reflected bit fields unchanged (AActor only InputPriority moved)",
+   "value": "0x58"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "name": "kCompVisibleByte",
+   "how": "reflected USceneComponent bVisible 0x14C / bHiddenInGame 0x14D unchanged",
+   "value": "0x14c"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "name": "kCompHiddenByte",
+   "how": "reflected USceneComponent bVisible 0x14C / bHiddenInGame 0x14D unchanged",
+   "value": "0x14d"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "name": "kSnapshotLocation",
+   "how": "EndAnimWorldMgr_UpdateCameraSnapshot 1.005 0x140F99618: +0x8C0/+0x908/+0x90C/+0x910/+0x911/+0x913 identical",
+   "value": "0x8c0"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "name": "kSnapshotSpeed",
+   "how": "EndAnimWorldMgr_UpdateCameraSnapshot 1.005 0x140F99618: +0x8C0/+0x908/+0x90C/+0x910/+0x911/+0x913 identical",
+   "value": "0x908"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "name": "kSnapshotTurn",
+   "how": "EndAnimWorldMgr_UpdateCameraSnapshot 1.005 0x140F99618: +0x8C0/+0x908/+0x90C/+0x910/+0x911/+0x913 identical",
+   "value": "0x90c"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "name": "kSnapshotFaster",
+   "how": "EndAnimWorldMgr_UpdateCameraSnapshot 1.005 0x140F99618: +0x8C0/+0x908/+0x90C/+0x910/+0x911/+0x913 identical",
+   "value": "0x910"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "name": "kSnapshotValid",
+   "how": "EndAnimWorldMgr_UpdateCameraSnapshot 1.005 0x140F99618: +0x8C0/+0x908/+0x90C/+0x910/+0x911/+0x913 identical",
+   "value": "0x913"
+  },
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "name": "kPausedSlot",
+   "how": "interface slot +0x30 (IsHiddenFadeDone 1.005 [rax+30h] 1:1); [ASSUMPTION for the paused interface specifically]",
+   "value": "0x30"
+  },
+  {
+   "file": "player_two/chest_watch.cpp",
+   "name": "kPartyLeader",
+   "how": "PM+0x148 (resolver 0x1407649C3)",
+   "value": "0x148"
+  },
+  {
+   "file": "player_two/chest_watch.cpp",
+   "name": "kStateBits",
+   "how": "CharCtrlStateTreasure_GrantRewards 1.005 0x1431647FC/0x143164823 [..+131h]",
+   "value": "0x131"
+  },
+  {
+   "file": "player_two/chocobo_ride.cpp",
+   "name": "kRootRideManager",
+   "how": "GetChocoboRideMgr 1.005 0x1410AAE7A mov rax,[rcx+270h]",
+   "value": "0x270"
+  },
+  {
+   "file": "player_two/chocobo_ride.cpp",
+   "name": "kManagerGetOff",
+   "how": "1.005 0x1410AAED1 cmp byte [rcx+0EB0h] (+ 0x143A63991/0x143A6399A)",
+   "value": "0xeb0"
+  },
+  {
+   "file": "player_two/chocobo_ride.cpp",
+   "name": "kMemberEntries",
+   "how": "ChocoboRideMgr_Tick_MemberEntries 1.005 0x140B36591 lea r12,[rdi+40h]; imul r15,rax,2Ch",
+   "value": "0x40"
+  },
+  {
+   "file": "player_two/chocobo_ride.cpp",
+   "name": "kMemberEntrySize",
+   "how": "ChocoboRideMgr_Tick_MemberEntries 1.005 0x140B36591 lea r12,[rdi+40h]; imul r15,rax,2Ch",
+   "value": "0x2c"
+  },
+  {
+   "file": "player_two/chocobo_ride.cpp",
+   "name": "kActiveVehicle",
+   "how": "reflected ActiveVehicleCoordinator 0x5B8 unchanged",
+   "value": "0x5b8"
+  },
+  {
+   "file": "player_two/chocobo_ride.cpp",
+   "name": "kCoordState",
+   "how": "ChocoboCoordinator_IsRidingState2_NoPending 1.005 0x143B0D1FC [rcx+58h]/[rcx+60h] identical",
+   "value": "0x58"
+  },
+  {
+   "file": "player_two/chocobo_ride.cpp",
+   "name": "kCoordPending",
+   "how": "ChocoboCoordinator_IsRidingState2_NoPending 1.005 0x143B0D1FC [rcx+58h]/[rcx+60h] identical",
+   "value": "0x60"
+  },
+  {
+   "file": "player_two/chocobo_ride.cpp",
+   "name": "kControlHolder",
+   "how": "IsUCPC_Core 1.005 0x1409B2AF7 [rcx+638h] then vt+0x40",
+   "value": "0x638"
+  },
+  {
+   "file": "player_two/chocobo_ride.cpp",
+   "name": "kHolderComponent",
+   "how": "IsUCPC_Core 1.005 0x1409B2AF7 [rcx+638h] then vt+0x40",
+   "value": "0x40"
+  },
+  {
+   "file": "player_two/chocobo_ride.cpp",
+   "name": "kAttachParent",
+   "how": "reflected SceneComponent AttachParent 0xC0 unchanged",
+   "value": "0xc0"
+  },
+  {
+   "file": "player_two/chocobo_ride.cpp",
+   "name": "kViewTarget",
+   "how": "PCM/operator layout (UpdateCamera 0x140D51C60 [..+2CC8h]; UpdateModules [..+6E0h])",
+   "value": "0x1000"
+  },
+  {
+   "file": "player_two/chocobo_ride.cpp",
+   "name": "kRideSubjectField",
+   "how": "PCM/operator layout (UpdateCamera 0x140D51C60 [..+2CC8h]; UpdateModules [..+6E0h])",
+   "value": "0x2cc8"
+  },
+  {
+   "file": "player_two/chocobo_ride.cpp",
+   "name": "kFieldOperator",
+   "how": "PCM/operator layout (UpdateCamera 0x140D51C60 [..+2CC8h]; UpdateModules [..+6E0h])",
+   "value": "0x2cb0"
+  },
+  {
+   "file": "player_two/chocobo_ride.cpp",
+   "name": "kOperatorModules",
+   "how": "PCM/operator layout (UpdateCamera 0x140D51C60 [..+2CC8h]; UpdateModules [..+6E0h])",
+   "value": "0x6e0"
+  },
+  {
+   "file": "player_two/chocobo_ride.cpp",
+   "name": "kRowRequests",
+   "how": "move-state handles (+0x48 request) unchanged: 0x140E8AF9C, 0x14316FBCE",
+   "value": "array/inline"
+  },
+  {
+   "file": "player_two/combat_rumble.cpp",
+   "name": "kComponentOwner",
+   "how": "UActorComponent OwnerPrivate 0xA0 (reflected class unchanged; RE-1005-player-two)",
+   "value": "0xa0"
+  },
+  {
+   "file": "player_two/combat_rumble.cpp",
+   "name": "kComponentController",
+   "how": "EndFFBComp_PlayChannel_Classic 1.005 0x14102FC70 [rbx+10h] (1.004 0x1411F7286)",
+   "value": "0x10"
+  },
+  {
+   "file": "player_two/command_locks.cpp",
+   "name": "kController",
+   "how": "EndUISystem[23] 0xB8",
+   "value": "0xb8"
+  },
+  {
+   "file": "player_two/command_locks.cpp",
+   "name": "kCommandsEnabled",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x5e2"
+  },
+  {
+   "file": "player_two/command_locks.cpp",
+   "name": "kCommandsLocked",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x5e3"
+  },
+  {
+   "file": "player_two/command_locks.cpp",
+   "name": "kCategoryLocks",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x2d8"
+  },
+  {
+   "file": "player_two/command_locks.cpp",
+   "name": "kCategoryCount",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x2e0"
+  },
+  {
+   "file": "player_two/command_locks.cpp",
+   "name": "kTableBytes",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "array/inline"
+  },
+  {
+   "file": "player_two/command_menu_tick.cpp",
+   "name": "kPartyList",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x360"
+  },
+  {
+   "file": "player_two/command_menu_tick.cpp",
+   "name": "kPartyListInput",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x4a0"
+  },
+  {
+   "file": "player_two/command_menu_tick.cpp",
+   "name": "kSetupPending",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x775"
+  },
+  {
+   "file": "player_two/command_menu_tick.cpp",
+   "name": "kMenuWidget",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x4f0"
+  },
+  {
+   "file": "player_two/command_menu_tick.cpp",
+   "name": "kFieldMenu",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x4e8"
+  },
+  {
+   "file": "player_two/command_menu_tick.cpp",
+   "name": "kStoredLeaderType",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x30"
+  },
+  {
+   "file": "player_two/command_menu_tick.cpp",
+   "name": "kMembers",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x34"
+  },
+  {
+   "file": "player_two/command_menu_tick.cpp",
+   "name": "kBattleInput",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x25c"
+  },
+  {
+   "file": "player_two/command_menu_tick.cpp",
+   "name": "kSwitchingLayer",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x258"
+  },
+  {
+   "file": "player_two/command_menu_tick.cpp",
+   "name": "kRequests",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x570"
+  },
+  {
+   "file": "player_two/command_menu_tick.cpp",
+   "name": "kHudMode",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x540"
+  },
+  {
+   "file": "player_two/command_menu_tick.cpp",
+   "name": "kBlocked",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x541"
+  },
+  {
+   "file": "player_two/command_menu_tick.cpp",
+   "name": "kReady",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x5e1"
+  },
+  {
+   "file": "player_two/command_menu_tick.cpp",
+   "name": "kWaitFilter",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x644"
+  },
+  {
+   "file": "player_two/command_menu_tick.cpp",
+   "name": "kPinch",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x650"
+  },
+  {
+   "file": "player_two/command_menu_tick.cpp",
+   "name": "kGuardLatch",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x760"
+  },
+  {
+   "file": "player_two/command_menu_tick.cpp",
+   "name": "kHudSoundMode",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x774"
+  },
+  {
+   "file": "player_two/command_menu_tick.cpp",
+   "name": "kReadyB",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x782"
+  },
+  {
+   "file": "player_two/command_menu_tick.cpp",
+   "name": "kMenuLayer",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x783"
+  },
+  {
+   "file": "player_two/command_menu_tick.cpp",
+   "name": "kLoggedGates",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "array/inline"
+  },
+  {
+   "file": "player_two/command_menu_tick.cpp",
+   "name": "kOpenPending",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x5d0"
+  },
+  {
+   "file": "player_two/command_menu_tick.cpp",
+   "name": "kGate777",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x777"
+  },
+  {
+   "file": "player_two/command_menu_tick.cpp",
+   "name": "kEventKey",
+   "how": "SquareInput__RouteActionUpToUIHandlerStack 1.005 0x1409F84C0 [..+18h]",
+   "value": "0x18"
+  },
+  {
+   "file": "player_two/command_menu_tick.cpp",
+   "name": "kKeyEventUser",
+   "how": "SquareInput__HandleKeyUpEvent 1.005 0x141546794 mov edi,[r14+0Ch] 1:1",
+   "value": "0xc"
+  },
+  {
+   "file": "player_two/command_menu_tick.cpp",
+   "name": "kVisibility",
+   "how": "reflected UMG Widget Visibility 0xC3 unchanged",
+   "value": "0xc3"
+  },
+  {
+   "file": "player_two/command_menu_tick.cpp",
+   "name": "kFilterManager",
+   "how": "EndUISystem slots 0x10/0xB8/0x148/0x1A8 (8 accessors 1:1); filter +0x1C in 0x14377D038",
+   "value": "0x148"
+  },
+  {
+   "file": "player_two/command_menu_tick.cpp",
+   "name": "kFilterLatch",
+   "how": "EndUISystem slots 0x10/0xB8/0x148/0x1A8 (8 accessors 1:1); filter +0x1C in 0x14377D038",
+   "value": "0x1c"
+  },
+  {
+   "file": "player_two/command_menu_tick.cpp",
+   "name": "kInput",
+   "how": "EndUISystem slots 0x10/0xB8/0x148/0x1A8 (8 accessors 1:1); filter +0x1C in 0x14377D038",
+   "value": "0x10"
+  },
+  {
+   "file": "player_two/command_menu_tick.cpp",
+   "name": "kController",
+   "how": "EndUISystem slots 0x10/0xB8/0x148/0x1A8 (8 accessors 1:1); filter +0x1C in 0x14377D038",
+   "value": "0xb8"
+  },
+  {
+   "file": "player_two/command_menu_tick.cpp",
+   "name": "kLeaderType",
+   "how": "PM +0x140/+0x148/+0x150 (0x140763D59, 0x1407649A8, IsPartyLeader 0x14092E117)",
+   "value": "0x150"
+  },
+  {
+   "file": "player_two/command_menu_tick.cpp",
+   "name": "kPrimary",
+   "how": "PM +0x140/+0x148/+0x150 (0x140763D59, 0x1407649A8, IsPartyLeader 0x14092E117)",
+   "value": "0x140"
+  },
+  {
+   "file": "player_two/command_menu_tick.cpp",
+   "name": "kLeaderWeak",
+   "how": "PM +0x140/+0x148/+0x150 (0x140763D59, 0x1407649A8, IsPartyLeader 0x14092E117)",
+   "value": "0x148"
+  },
+  {
+   "file": "player_two/command_menu_two.cpp",
+   "name": "kControllerSize",
+   "how": "alloc 0x798 unchanged (RE-1005-player-two)",
+   "value": "0x798"
+  },
+  {
+   "file": "player_two/command_menu_two.cpp",
+   "name": "kKeyGuideSize",
+   "how": "EndUISystem ctor 1.005 0x1421EDE47 mov ecx,38h before KeyGuide53 ctor 0x1437601F0",
+   "value": "0x38"
+  },
+  {
+   "file": "player_two/command_menu_two.cpp",
+   "name": "kKeyGuideSlot",
+   "how": "EndUISystem[53] 0x1A8 (KeyGuide53_SetMode8 1.005 0x1418CE2B6), [23] 0xB8",
+   "value": "0x1a8"
+  },
+  {
+   "file": "player_two/command_menu_two.cpp",
+   "name": "kGameController",
+   "how": "EndUISystem[53] 0x1A8 (KeyGuide53_SetMode8 1.005 0x1418CE2B6), [23] 0xB8",
+   "value": "0xb8"
+  },
+  {
+   "file": "player_two/command_menu_two.cpp",
+   "name": "kKeyGuideWidget",
+   "how": "KeyGuide53 ctor 1.005 0x14376020D add rcx,4 (weak widget)",
+   "value": "0x4"
+  },
+  {
+   "file": "player_two/command_menu_two.cpp",
+   "name": "kHudMode",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x540"
+  },
+  {
+   "file": "player_two/command_menu_two.cpp",
+   "name": "kSetupDone",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x777"
+  },
+  {
+   "file": "player_two/command_menu_two.cpp",
+   "name": "kSetupPending",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x775"
+  },
+  {
+   "file": "player_two/command_menu_two.cpp",
+   "name": "kSelecterSet",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x776"
+  },
+  {
+   "file": "player_two/command_menu_two.cpp",
+   "name": "kSetupOther",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x778"
+  },
+  {
+   "file": "player_two/command_menu_two.cpp",
+   "name": "kMenuLayer",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x783"
+  },
+  {
+   "file": "player_two/command_menu_two.cpp",
+   "name": "kMembers",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x34"
+  },
+  {
+   "file": "player_two/command_menu_two.cpp",
+   "name": "kMenuWidget",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x4f0"
+  },
+  {
+   "file": "player_two/command_menu_two.cpp",
+   "name": "kWidgetCtrl",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x4e0"
+  },
+  {
+   "file": "player_two/command_menu_two.cpp",
+   "name": "kBytes",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "array/inline"
+  },
+  {
+   "file": "player_two/command_menu_two.cpp",
+   "name": "kParts",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "array/inline"
+  },
+  {
+   "file": "player_two/command_menu_two.cpp",
+   "name": "kObjectClass",
+   "how": "UObjectBase unchanged",
+   "value": "0x10"
+  },
+  {
+   "file": "player_two/command_menu_two.cpp",
+   "name": "kObjectOuter",
+   "how": "UObjectBase unchanged",
+   "value": "0x20"
+  },
+  {
+   "file": "player_two/command_rules.cpp",
+   "name": "kController",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0xb8"
+  },
+  {
+   "file": "player_two/command_rules.cpp",
+   "name": "kMembers",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x34"
+  },
+  {
+   "file": "player_two/command_rules.cpp",
+   "name": "kRequests",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x570"
+  },
+  {
+   "file": "player_two/command_rules.cpp",
+   "name": "kHudMode",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x540"
+  },
+  {
+   "file": "player_two/command_rules.cpp",
+   "name": "kReady",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x5e1"
+  },
+  {
+   "file": "player_two/command_rules.cpp",
+   "name": "kGameState",
+   "how": "GetEndGameState 1.005 0x1408B116B mov rbx,[rbx+288h]; reflected GameModeBase GameState 0x288",
+   "value": "0x288"
+  },
+  {
+   "file": "player_two/command_rules.cpp",
+   "name": "kSpeedSlots",
+   "how": "FieldSys_SetFloatSlot3C0 1.005 0x1408952B8 [rax+rbx*4+3C0h] 1:1; reflected EndGameState unchanged through 0x3BD",
+   "value": "0x3c0"
+  },
+  {
+   "file": "player_two/field_camera.cpp",
+   "name": "kHudMode",
+   "how": "FieldCommandCtrl layout unchanged: 31 1.004 functions self-aligned in 1.005 (all paired displacements identical); ctor 1.005 0x14374A720 stores +0x760..+0x788 identical; RE-1005-player-two",
+   "value": "0x540"
+  },
+  {
+   "file": "player_two/field_exit.cpp",
+   "name": "kFieldStep",
+   "how": "TickSubsystems 1.005 0x140826664 [..+70h]; RequestVisibility 0x1409A3C34",
+   "value": "0x70"
+  },
+  {
+   "file": "player_two/field_exit.cpp",
+   "name": "kRunning",
+   "how": "RequestFieldExit 1.005 0x141371D1C cmp byte [rax+71h],0 / mov [rax+71h],cl",
+   "value": "0x71"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kRootStage",
+   "how": "TickSlots 1.005 0x14117DB24 and RequestVisibility 0x1409A3C34: [..+70h], [..+210h], [..+8]",
+   "value": "0x70"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kRootSlotHeldOwner",
+   "how": "TickSlots 1.005 0x14117DB24 and RequestVisibility 0x1409A3C34: [..+70h], [..+210h], [..+8]",
+   "value": "0x210"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kSlotHeldByte",
+   "how": "TickSlots 1.005 0x14117DB24 and RequestVisibility 0x1409A3C34: [..+70h], [..+210h], [..+8]",
+   "value": "0x8"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kRootGameState",
+   "how": "EndGameMode_TickSubsystems_FieldActionInput 1.005 0x140826664 (ratio 0.97): +0x170, +0x1A0, +0x288, +0x298",
+   "value": "0x170"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kRootActionManager",
+   "how": "EndGameMode_TickSubsystems_FieldActionInput 1.005 0x140826664 (ratio 0.97): +0x170, +0x1A0, +0x288, +0x298",
+   "value": "0x1a0"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kRootWorldItems",
+   "how": "EndGameMode_TickSubsystems_FieldActionInput 1.005 0x140826664 (ratio 0.97): +0x170, +0x1A0, +0x288, +0x298",
+   "value": "0x288"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kRootChests",
+   "how": "EndGameMode_TickSubsystems_FieldActionInput 1.005 0x140826664 (ratio 0.97): +0x170, +0x1A0, +0x288, +0x298",
+   "value": "0x298"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kRootModeHolder",
+   "how": "Root1B8_GetModeClass 1.005 0x1410D5270 [..+1B8h]",
+   "value": "0x1b8"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kUIEntries",
+   "how": "EndUI23_IsEntry34ValuePositive 1.005 0x140F13748 [..+0B8h]; command controller +0x5D0",
+   "value": "0xb8"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kUIEntryValue",
+   "how": "EndUI23_IsEntry34ValuePositive 1.005 0x140F13748 [..+0B8h]; command controller +0x5D0",
+   "value": "0x5d0"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kGsBlockA",
+   "how": "TickSubsystems 1.005 0x140826664: [rcx+1A12744h]/[..+1A12494h]/[..+1A12860h]/[..+1A125B0h]/[..+1A12288h]/[..+1A17548h] identical",
+   "value": "0x1a12288"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kGsBlockB",
+   "how": "TickSubsystems 1.005 0x140826664: [rcx+1A12744h]/[..+1A12494h]/[..+1A12860h]/[..+1A125B0h]/[..+1A12288h]/[..+1A17548h] identical",
+   "value": "0x1a17548"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kGsAllowA",
+   "how": "TickSubsystems 1.005 0x140826664: [rcx+1A12744h]/[..+1A12494h]/[..+1A12860h]/[..+1A125B0h]/[..+1A12288h]/[..+1A17548h] identical",
+   "value": "0x1a12744"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kGsAllowB",
+   "how": "TickSubsystems 1.005 0x140826664: [rcx+1A12744h]/[..+1A12494h]/[..+1A12860h]/[..+1A125B0h]/[..+1A12288h]/[..+1A17548h] identical",
+   "value": "0x1a12494"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kGsSlot0A",
+   "how": "TickSubsystems 1.005 0x140826664: [rcx+1A12744h]/[..+1A12494h]/[..+1A12860h]/[..+1A125B0h]/[..+1A12288h]/[..+1A17548h] identical",
+   "value": "0x1a12860"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kGsSlot0B",
+   "how": "TickSubsystems 1.005 0x140826664: [rcx+1A12744h]/[..+1A12494h]/[..+1A12860h]/[..+1A125B0h]/[..+1A12288h]/[..+1A17548h] identical",
+   "value": "0x1a125b0"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kRanges",
+   "how": "FieldActionMgr ctor 1.005 0x14343BDA4 1:1 with 1.004 0x14370740C (+0x29C, +0x2D4, +0x2D8, +0x2F8, +0x48328, +0x483A8, +0x48608, +0x48748, +0x487D0, +0x487D8, +0x487E8, +0x487F0); latches 0x140824C28 [rcx+48738h]; +0x48320/+0x48730 sites identical",
+   "value": "array/inline"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kCandidateMax",
+   "how": "FieldActionMgr ctor 1.005 0x14343BDA4 1:1 with 1.004 0x14370740C (+0x29C, +0x2D4, +0x2D8, +0x2F8, +0x48328, +0x483A8, +0x48608, +0x48748, +0x487D0, +0x487D8, +0x487E8, +0x487F0); latches 0x140824C28 [rcx+48738h]; +0x48320/+0x48730 sites identical",
+   "value": "0x29c"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kTraceMapA",
+   "how": "FieldActionMgr ctor 1.005 0x14343BDA4 1:1 with 1.004 0x14370740C (+0x29C, +0x2D4, +0x2D8, +0x2F8, +0x48328, +0x483A8, +0x48608, +0x48748, +0x487D0, +0x487D8, +0x487E8, +0x487F0); latches 0x140824C28 [rcx+48738h]; +0x48320/+0x48730 sites identical",
+   "value": "0x2d4"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kTraceMapB",
+   "how": "FieldActionMgr ctor 1.005 0x14343BDA4 1:1 with 1.004 0x14370740C (+0x29C, +0x2D4, +0x2D8, +0x2F8, +0x48328, +0x483A8, +0x48608, +0x48748, +0x487D0, +0x487D8, +0x487E8, +0x487F0); latches 0x140824C28 [rcx+48738h]; +0x48320/+0x48730 sites identical",
+   "value": "0x2d8"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kSlotRows",
+   "how": "FieldActionMgr ctor 1.005 0x14343BDA4 1:1 with 1.004 0x14370740C (+0x29C, +0x2D4, +0x2D8, +0x2F8, +0x48328, +0x483A8, +0x48608, +0x48748, +0x487D0, +0x487D8, +0x487E8, +0x487F0); latches 0x140824C28 [rcx+48738h]; +0x48320/+0x48730 sites identical",
+   "value": "0x483a8"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kSlotTargets",
+   "how": "FieldActionMgr ctor 1.005 0x14343BDA4 1:1 with 1.004 0x14370740C (+0x29C, +0x2D4, +0x2D8, +0x2F8, +0x48328, +0x483A8, +0x48608, +0x48748, +0x487D0, +0x487D8, +0x487E8, +0x487F0); latches 0x140824C28 [rcx+48738h]; +0x48320/+0x48730 sites identical",
+   "value": "0x48608"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kSlotLatches",
+   "how": "FieldActionMgr ctor 1.005 0x14343BDA4 1:1 with 1.004 0x14370740C (+0x29C, +0x2D4, +0x2D8, +0x2F8, +0x48328, +0x483A8, +0x48608, +0x48748, +0x487D0, +0x487D8, +0x487E8, +0x487F0); latches 0x140824C28 [rcx+48738h]; +0x48320/+0x48730 sites identical",
+   "value": "0x48730"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kPendingFlag",
+   "how": "FieldActionMgr ctor 1.005 0x14343BDA4 1:1 with 1.004 0x14370740C (+0x29C, +0x2D4, +0x2D8, +0x2F8, +0x48328, +0x483A8, +0x48608, +0x48748, +0x487D0, +0x487D8, +0x487E8, +0x487F0); latches 0x140824C28 [rcx+48738h]; +0x48320/+0x48730 sites identical",
+   "value": "0x487d0"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kReExecuted",
+   "how": "FieldActionMgr ctor 1.005 0x14343BDA4 1:1 with 1.004 0x14370740C (+0x29C, +0x2D4, +0x2D8, +0x2F8, +0x48328, +0x483A8, +0x48608, +0x48748, +0x487D0, +0x487D8, +0x487E8, +0x487F0); latches 0x140824C28 [rcx+48738h]; +0x48320/+0x48730 sites identical",
+   "value": "0x487e8"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kFieldEnterFlag",
+   "how": "FieldActionMgr ctor 1.005 0x14343BDA4 1:1 with 1.004 0x14370740C (+0x29C, +0x2D4, +0x2D8, +0x2F8, +0x48328, +0x483A8, +0x48608, +0x48748, +0x487D0, +0x487D8, +0x487E8, +0x487F0); latches 0x140824C28 [rcx+48738h]; +0x48320/+0x48730 sites identical",
+   "value": "0x487e9"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kPointList",
+   "how": "FieldActionMgr ctor 1.005 0x14343BDA4 1:1 with 1.004 0x14370740C (+0x29C, +0x2D4, +0x2D8, +0x2F8, +0x48328, +0x483A8, +0x48608, +0x48748, +0x487D0, +0x487D8, +0x487E8, +0x487F0); latches 0x140824C28 [rcx+48738h]; +0x48320/+0x48730 sites identical",
+   "value": "0x48320"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kPointLock",
+   "how": "FieldActionMgr ctor 1.005 0x14343BDA4 1:1 with 1.004 0x14370740C (+0x29C, +0x2D4, +0x2D8, +0x2F8, +0x48328, +0x483A8, +0x48608, +0x48748, +0x487D0, +0x487D8, +0x487E8, +0x487F0); latches 0x140824C28 [rcx+48738h]; +0x48320/+0x48730 sites identical",
+   "value": "0x487f0"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kNodeNext",
+   "how": "TList node layout (stock) unchanged",
+   "value": "0x8"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kNodePoint",
+   "how": "TList node layout (stock) unchanged",
+   "value": "0x18"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kPointKey",
+   "how": "FieldActionMgr_Update 1.005 0x140AFC1B4 and RequestVisibility 0x1409A3C34: point +0xC/+0x44/+0x104/+0x78",
+   "value": "0xc"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kPointPreset",
+   "how": "FieldActionMgr_Update 1.005 0x140AFC1B4 and RequestVisibility 0x1409A3C34: point +0xC/+0x44/+0x104/+0x78",
+   "value": "0x44"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kPointFlags",
+   "how": "FieldActionMgr_Update 1.005 0x140AFC1B4 and RequestVisibility 0x1409A3C34: point +0xC/+0x44/+0x104/+0x78",
+   "value": "0x104"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kPointMarker",
+   "how": "FieldActionMgr_Update 1.005 0x140AFC1B4 and RequestVisibility 0x1409A3C34: point +0xC/+0x44/+0x104/+0x78",
+   "value": "0x78"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kWorldItemMap",
+   "how": "WorldItemMgr unchanged (RE-1005-player-two)",
+   "value": "array/inline"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kChestMap",
+   "how": "TreasurePointMgr RegisterTreasure 1.005 0x140FEC7C8 / OnCharaPopDespawn 0x14176D99C (ratio 1.0): +0x10/+0x18/+0x60/+0x40/+0x48; stock TSet",
+   "value": "array/inline"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kChestByPopKeyMap",
+   "how": "TreasurePointMgr RegisterTreasure 1.005 0x140FEC7C8 / OnCharaPopDespawn 0x14176D99C (ratio 1.0): +0x10/+0x18/+0x60/+0x40/+0x48; stock TSet",
+   "value": "array/inline"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kMapCount",
+   "how": "TreasurePointMgr RegisterTreasure 1.005 0x140FEC7C8 / OnCharaPopDespawn 0x14176D99C (ratio 1.0): +0x10/+0x18/+0x60/+0x40/+0x48; stock TSet",
+   "value": "0x8"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kMapBitsInline",
+   "how": "TreasurePointMgr RegisterTreasure 1.005 0x140FEC7C8 / OnCharaPopDespawn 0x14176D99C (ratio 1.0): +0x10/+0x18/+0x60/+0x40/+0x48; stock TSet",
+   "value": "0x10"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kMapBitsHeap",
+   "how": "TreasurePointMgr RegisterTreasure 1.005 0x140FEC7C8 / OnCharaPopDespawn 0x14176D99C (ratio 1.0): +0x10/+0x18/+0x60/+0x40/+0x48; stock TSet",
+   "value": "0x20"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kMapFreeCount",
+   "how": "TreasurePointMgr RegisterTreasure 1.005 0x140FEC7C8 / OnCharaPopDespawn 0x14176D99C (ratio 1.0): +0x10/+0x18/+0x60/+0x40/+0x48; stock TSet",
+   "value": "0x34"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kMapHashInline",
+   "how": "TreasurePointMgr RegisterTreasure 1.005 0x140FEC7C8 / OnCharaPopDespawn 0x14176D99C (ratio 1.0): +0x10/+0x18/+0x60/+0x40/+0x48; stock TSet",
+   "value": "0x38"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kMapHashHeap",
+   "how": "TreasurePointMgr RegisterTreasure 1.005 0x140FEC7C8 / OnCharaPopDespawn 0x14176D99C (ratio 1.0): +0x10/+0x18/+0x60/+0x40/+0x48; stock TSet",
+   "value": "0x40"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kMapHashSize",
+   "how": "TreasurePointMgr RegisterTreasure 1.005 0x140FEC7C8 / OnCharaPopDespawn 0x14176D99C (ratio 1.0): +0x10/+0x18/+0x60/+0x40/+0x48; stock TSet",
+   "value": "0x48"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kObjectOuter",
+   "how": "UObjectBase unchanged",
+   "value": "0x20"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kWorldControllers",
+   "how": "UWorld::GetFirstPlayerController 1.005 0x140F99D50 / GetFirstLocalPlayerFromControllers 0x1409D406C [..+1F0h]/[..+1F8h]",
+   "value": "0x1f0"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kWorldControllerCount",
+   "how": "UWorld::GetFirstPlayerController 1.005 0x140F99D50 / GetFirstLocalPlayerFromControllers 0x1409D406C [..+1F0h]/[..+1F8h]",
+   "value": "0x1f8"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kMarkerList",
+   "how": "FieldTargetMarker_Destroy 1.005 0x1417C9044 (ratio 1.0) [..+98h]",
+   "value": "0x98"
+  },
+  {
+   "file": "player_two/field_pickup.cpp",
+   "name": "kMarkerEntry",
+   "how": "FieldTargetMarker_Destroy 1.005 0x1417C9044 (ratio 1.0) [..+98h]",
+   "value": "0x8c"
+  },
+  {
+   "file": "player_two/focus_scope.cpp",
+   "name": "kInput",
+   "how": "EndUISystem slots unchanged",
+   "value": "0x10"
+  },
+  {
+   "file": "player_two/focus_scope.cpp",
+   "name": "kController",
+   "how": "EndUISystem slots unchanged",
+   "value": "0xb8"
+  },
+  {
+   "file": "player_two/focus_scope.cpp",
+   "name": "kKeyGuide",
+   "how": "EndUISystem slots unchanged",
+   "value": "0x1a8"
+  },
+  {
+   "file": "player_two/focus_scope.cpp",
+   "name": "kContext",
+   "how": "RouteActionToUIHandlerStack 1.005 0x140DD678C / RouteAnalog 0x140DD8F14: input +0x8, +0x40, +0x48, +0x78, +0xA8, +0xB0 identical; Owner64Gate 1.005 0x14375F6CC [..+64h]; TSet layout stock",
+   "value": "array/inline"
+  },
+  {
+   "file": "player_two/focus_scope.cpp",
+   "name": "kCaptureFirstFree",
+   "how": "RouteActionToUIHandlerStack 1.005 0x140DD678C / RouteAnalog 0x140DD8F14: input +0x8, +0x40, +0x48, +0x78, +0xA8, +0xB0 identical; Owner64Gate 1.005 0x14375F6CC [..+64h]; TSet layout stock",
+   "value": "0x30"
+  },
+  {
+   "file": "player_two/focus_scope.cpp",
+   "name": "kDelegate",
+   "how": "ActionDown_UpdateTables_Dispatch 1.005 0x140DD81C0 [..+1A0h]",
+   "value": "0x1a0"
+  },
+  {
+   "file": "player_two/focus_scope.cpp",
+   "name": "kLayerSize",
+   "how": "focus layer struct (route functions read layers at +0x40 with +0x20 priority, 1:1) [ASSUMPTION for the struct size]",
+   "value": "0x28"
+  },
+  {
+   "file": "player_two/focus_scope.cpp",
+   "name": "kLayerPriority",
+   "how": "focus layer struct (route functions read layers at +0x40 with +0x20 priority, 1:1) [ASSUMPTION for the struct size]",
+   "value": "0x20"
+  },
+  {
+   "file": "player_two/focus_scope.h",
+   "name": "kDelegateSize",
+   "how": "TBaseDelegate size, stock",
+   "value": "0x10"
+  },
+  {
+   "file": "player_two/framing_watch.cpp",
+   "name": "kOpInitialized",
+   "how": "UpdateModules 1.005 0x140D4FC94 1:1 (300/300); ResetState 0x141436A00 (+0x108, +0x50, +0x80, +0x744, +0x6E0); lazy init +0xD2",
+   "value": "0xd2"
+  },
+  {
+   "file": "player_two/framing_watch.cpp",
+   "name": "kOpLayers",
+   "how": "UpdateModules 1.005 0x140D4FC94 1:1 (300/300); ResetState 0x141436A00 (+0x108, +0x50, +0x80, +0x744, +0x6E0); lazy init +0xD2",
+   "value": "0x108"
+  },
+  {
+   "file": "player_two/framing_watch.cpp",
+   "name": "kLayerWeight",
+   "how": "UpdateModules 1.005 0x140D4FC94 1:1 (300/300); ResetState 0x141436A00 (+0x108, +0x50, +0x80, +0x744, +0x6E0); lazy init +0xD2",
+   "value": "0x30"
+  },
+  {
+   "file": "player_two/framing_watch.cpp",
+   "name": "kLayerActive",
+   "how": "UpdateModules 1.005 0x140D4FC94 1:1 (300/300); ResetState 0x141436A00 (+0x108, +0x50, +0x80, +0x744, +0x6E0); lazy init +0xD2",
+   "value": "0x35"
+  },
+  {
+   "file": "player_two/framing_watch.cpp",
+   "name": "kOpStateFov",
+   "how": "UpdateModules 1.005 0x140D4FC94 1:1 (300/300); ResetState 0x141436A00 (+0x108, +0x50, +0x80, +0x744, +0x6E0); lazy init +0xD2",
+   "value": "0x600"
+  },
+  {
+   "file": "player_two/framing_watch.cpp",
+   "name": "kOpStateAim",
+   "how": "UpdateModules 1.005 0x140D4FC94 1:1 (300/300); ResetState 0x141436A00 (+0x108, +0x50, +0x80, +0x744, +0x6E0); lazy init +0xD2",
+   "value": "0x620"
+  },
+  {
+   "file": "player_two/framing_watch.cpp",
+   "name": "kOpPosePitch",
+   "how": "UpdateModules 1.005 0x140D4FC94 1:1 (300/300); ResetState 0x141436A00 (+0x108, +0x50, +0x80, +0x744, +0x6E0); lazy init +0xD2",
+   "value": "0x50"
+  },
+  {
+   "file": "player_two/framing_watch.cpp",
+   "name": "kOpPoseFov",
+   "how": "UpdateModules 1.005 0x140D4FC94 1:1 (300/300); ResetState 0x141436A00 (+0x108, +0x50, +0x80, +0x744, +0x6E0); lazy init +0xD2",
+   "value": "0x5c"
+  },
+  {
+   "file": "player_two/framing_watch.cpp",
+   "name": "kOpPoseDistance",
+   "how": "UpdateModules 1.005 0x140D4FC94 1:1 (300/300); ResetState 0x141436A00 (+0x108, +0x50, +0x80, +0x744, +0x6E0); lazy init +0xD2",
+   "value": "0x80"
+  },
+  {
+   "file": "player_two/framing_watch.cpp",
+   "name": "kOpPoseHeight",
+   "how": "UpdateModules 1.005 0x140D4FC94 1:1 (300/300); ResetState 0x141436A00 (+0x108, +0x50, +0x80, +0x744, +0x6E0); lazy init +0xD2",
+   "value": "0x94"
+  },
+  {
+   "file": "player_two/framing_watch.cpp",
+   "name": "kOpPoseAim",
+   "how": "UpdateModules 1.005 0x140D4FC94 1:1 (300/300); ResetState 0x141436A00 (+0x108, +0x50, +0x80, +0x744, +0x6E0); lazy init +0xD2",
+   "value": "0x84"
+  },
+  {
+   "file": "player_two/framing_watch.cpp",
+   "name": "kOpModules",
+   "how": "UpdateModules 1.005 0x140D4FC94 1:1 (300/300); ResetState 0x141436A00 (+0x108, +0x50, +0x80, +0x744, +0x6E0); lazy init +0xD2",
+   "value": "0x6e0"
+  },
+  {
+   "file": "player_two/framing_watch.cpp",
+   "name": "kModuleStride",
+   "how": "UpdateModules 1.005 0x140D4FC94 1:1 (300/300); ResetState 0x141436A00 (+0x108, +0x50, +0x80, +0x744, +0x6E0); lazy init +0xD2",
+   "value": "0x10"
+  },
+  {
+   "file": "player_two/framing_watch.cpp",
+   "name": "kModuleActive",
+   "how": "UpdateModules 1.005 0x140D4FC94 1:1 (300/300); ResetState 0x141436A00 (+0x108, +0x50, +0x80, +0x744, +0x6E0); lazy init +0xD2",
+   "value": "0x44"
+  },
+  {
+   "file": "player_two/framing_watch.cpp",
+   "name": "kOpLevel",
+   "how": "UpdateModules 1.005 0x140D4FC94 1:1 (300/300); ResetState 0x141436A00 (+0x108, +0x50, +0x80, +0x744, +0x6E0); lazy init +0xD2",
+   "value": "0x738"
+  },
+  {
+   "file": "player_two/framing_watch.cpp",
+   "name": "kOpLevelBlending",
+   "how": "UpdateModules 1.005 0x140D4FC94 1:1 (300/300); ResetState 0x141436A00 (+0x108, +0x50, +0x80, +0x744, +0x6E0); lazy init +0xD2",
+   "value": "0x744"
+  },
+  {
+   "file": "player_two/framing_watch.cpp",
+   "name": "kOpPitchMin",
+   "how": "GetPitchMin/Max 1.005 0x140D4C97D [rcx+748h] / 0x140D4C95D [rcx+74Ch]",
+   "value": "0x748"
+  },
+  {
+   "file": "player_two/framing_watch.cpp",
+   "name": "kOpPitchMax",
+   "how": "GetPitchMin/Max 1.005 0x140D4C97D [rcx+748h] / 0x140D4C95D [rcx+74Ch]",
+   "value": "0x74c"
+  },
+  {
+   "file": "player_two/framing_watch.cpp",
+   "name": "kLayerStride",
+   "how": "layer struct inside the unchanged operator [ASSUMPTION: stride/row not read at an instruction]",
+   "value": "0x98"
+  },
+  {
+   "file": "player_two/framing_watch.cpp",
+   "name": "kLayerRow",
+   "how": "layer struct inside the unchanged operator [ASSUMPTION: stride/row not read at an instruction]",
+   "value": "0x68"
+  },
+  {
+   "file": "player_two/handover_watch.cpp",
+   "name": "kAiDefaultState",
+   "how": "reflected EndAIController m_DefaultAIStateID 0x340 unchanged",
+   "value": "0x340"
+  },
+  {
+   "file": "player_two/handover_watch.cpp",
+   "name": "kAiPauseMask",
+   "how": "EndAIControllerPlayerBase_Vt858 1.005 0x1407CDE10 [..+460h]",
+   "value": "0x460"
+  },
+  {
+   "file": "player_two/handover_watch.cpp",
+   "name": "kAiBrains",
+   "how": "PopBrain 1.005 0x140BE2B48 (ratio 1.0): +0x478, +0x518, +0x520, brain +0x18/+0x19",
+   "value": "0x478"
+  },
+  {
+   "file": "player_two/handover_watch.cpp",
+   "name": "kAiActiveBrain",
+   "how": "PopBrain 1.005 0x140BE2B48 (ratio 1.0): +0x478, +0x518, +0x520, brain +0x18/+0x19",
+   "value": "0x518"
+  },
+  {
+   "file": "player_two/handover_watch.cpp",
+   "name": "kAiActiveIndex",
+   "how": "PopBrain 1.005 0x140BE2B48 (ratio 1.0): +0x478, +0x518, +0x520, brain +0x18/+0x19",
+   "value": "0x520"
+  },
+  {
+   "file": "player_two/handover_watch.cpp",
+   "name": "kBrainMode",
+   "how": "PopBrain 1.005 0x140BE2B48 (ratio 1.0): +0x478, +0x518, +0x520, brain +0x18/+0x19",
+   "value": "0x18"
+  },
+  {
+   "file": "player_two/handover_watch.cpp",
+   "name": "kBrainIndex",
+   "how": "PopBrain 1.005 0x140BE2B48 (ratio 1.0): +0x478, +0x518, +0x520, brain +0x18/+0x19",
+   "value": "0x19"
+  },
+  {
+   "file": "player_two/handover_watch.cpp",
+   "name": "kBrainState",
+   "how": "AICtrl_GetCurrentAIStateType 1.005 0x1407CDAE0",
+   "value": "0x20"
+  },
+  {
+   "file": "player_two/handover_watch.cpp",
+   "name": "kStateType",
+   "how": "AICtrl_GetCurrentAIStateType 1.005 0x1407CDAE0",
+   "value": "0x18"
+  },
+  {
+   "file": "player_two/handover_watch.cpp",
+   "name": "kFollowRate",
+   "how": "AIStateFollow ctor 1.005 0x141233D28: +0x6D0, +0x39E, +0x3B0, +0x3E8; FollowState reset 0x140EB0350 +0x6D0/+0x3B0/+0x3C0/+0x600",
+   "value": "0x6d0"
+  },
+  {
+   "file": "player_two/handover_watch.cpp",
+   "name": "kFollowMode",
+   "how": "AIStateFollow ctor 1.005 0x141233D28: +0x6D0, +0x39E, +0x3B0, +0x3E8; FollowState reset 0x140EB0350 +0x6D0/+0x3B0/+0x3C0/+0x600",
+   "value": "0x39e"
+  },
+  {
+   "file": "player_two/handover_watch.cpp",
+   "name": "kLeadTarget",
+   "how": "AIStateFollow ctor 1.005 0x141233D28: +0x6D0, +0x39E, +0x3B0, +0x3E8; FollowState reset 0x140EB0350 +0x6D0/+0x3B0/+0x3C0/+0x600",
+   "value": "0x3b0"
+  },
+  {
+   "file": "player_two/handover_watch.cpp",
+   "name": "kLeadDestination",
+   "how": "AIStateFollow ctor 1.005 0x141233D28: +0x6D0, +0x39E, +0x3B0, +0x3E8; FollowState reset 0x140EB0350 +0x6D0/+0x3B0/+0x3C0/+0x600",
+   "value": "0x3e8"
+  },
+  {
+   "file": "player_two/handover_watch.cpp",
+   "name": "kMoveAnimInstance",
+   "how": "CharMove +0x160 weak anim instance: 1.005 0x140897484 lea rcx,[rbx+160h] 1:1",
+   "value": "0x160"
+  },
+  {
+   "file": "player_two/handover_watch.cpp",
+   "name": "kAnimRotationScale",
+   "how": "reflected EndCharacterAnimInstance RotationRateScale 0x550 / ...Map 0x558 / RootMotionTranslationScale 0x5A8 / ...Map 0x5B0 unchanged",
+   "value": "0x550"
+  },
+  {
+   "file": "player_two/handover_watch.cpp",
+   "name": "kAnimRotationMap",
+   "how": "reflected EndCharacterAnimInstance RotationRateScale 0x550 / ...Map 0x558 / RootMotionTranslationScale 0x5A8 / ...Map 0x5B0 unchanged",
+   "value": "0x558"
+  },
+  {
+   "file": "player_two/handover_watch.cpp",
+   "name": "kAnimRootMotionScale",
+   "how": "reflected EndCharacterAnimInstance RotationRateScale 0x550 / ...Map 0x558 / RootMotionTranslationScale 0x5A8 / ...Map 0x5B0 unchanged",
+   "value": "0x5a8"
+  },
+  {
+   "file": "player_two/handover_watch.cpp",
+   "name": "kAnimRootMotionMap",
+   "how": "reflected EndCharacterAnimInstance RotationRateScale 0x550 / ...Map 0x558 / RootMotionTranslationScale 0x5A8 / ...Map 0x5B0 unchanged",
+   "value": "0x5b0"
+  },
+  {
+   "file": "player_two/handover_watch.cpp",
+   "name": "kAnimSpeedScale",
+   "how": "CharMove1400_SetSpeedScale10CC 1.005 0x140E30FFC [..+10CCh]",
+   "value": "0x10cc"
+  },
+  {
+   "file": "player_two/handover_watch.cpp",
+   "name": "kAnimFlags",
+   "how": "CharMove1400_ClearAnimFlag11DCBit 1.005 0x14089754C [..+11DCh]",
+   "value": "0x11dc"
+  },
+  {
+   "file": "player_two/handover_watch.cpp",
+   "name": "kMapCount",
+   "how": "stock TSparseArray/TMap layout",
+   "value": "0x8"
+  },
+  {
+   "file": "player_two/handover_watch.cpp",
+   "name": "kMapInlineBits",
+   "how": "stock TSparseArray/TMap layout",
+   "value": "0x10"
+  },
+  {
+   "file": "player_two/handover_watch.cpp",
+   "name": "kMapHeapBits",
+   "how": "stock TSparseArray/TMap layout",
+   "value": "0x20"
+  },
+  {
+   "file": "player_two/handover_watch.cpp",
+   "name": "kMapElement",
+   "how": "stock TSparseArray/TMap layout",
+   "value": "0x10"
+  },
+  {
+   "file": "player_two/handover_watch.cpp",
+   "name": "kComponentWorldLocation",
+   "how": "execK2_GetComponentLocation 1.005 0x1451B696A [rcx+1D0h]",
+   "value": "0x1d0"
+  }
+ ],
+ "not_offsets": [
+  "battle_camera.cpp:kLoggedModules",
+  "battle_camera.cpp:kMaxLines",
+  "battle_input.cpp:kLoggedRequests",
+  "battle_input.cpp:kMaxLines",
+  "battle_input.cpp:kStillFrames",
+  "camera_distance.cpp:kMaxLevel",
+  "camera_distance.cpp:kMaxOffset",
+  "camera_distance.cpp:kMinLevel",
+  "camera_distance.cpp:kMinOffset",
+  "camera_override.cpp:kSlotFour",
+  "charapop_centre.cpp:kEvery",
+  "charapop_facts.h:kLevelHeavy",
+  "charapop_facts.h:kMaxEntries",
+  "charapop_near.cpp:kEvery",
+  "charapop_near.cpp:kFirstEvaluatedState",
+  "charapop_near.cpp:kLastEvaluatedState",
+  "charapop_near.cpp:kReleasePasses",
+  "charapop_watch.cpp:kActorHiddenBit",
+  "charapop_watch.cpp:kCompHiddenBit",
+  "charapop_watch.cpp:kCompVisibleBit",
+  "charapop_watch.cpp:kPauseReason",
+  "charapop_watch.cpp:kSampleEvery",
+  "charapop_watch.cpp:kSettleSamples",
+  "charapop_watch.cpp:kUndrawnSamples",
+  "charapop_watch.cpp:kUnread",
+  "chest_watch.cpp:kFirst",
+  "chest_watch.cpp:kGrantedBit",
+  "chocobo_ride.cpp:kChocoboType",
+  "chocobo_ride.cpp:kCoordIdle",
+  "chocobo_ride.cpp:kCoordRiding",
+  "chocobo_ride.cpp:kEndRetryTicks",
+  "chocobo_ride.cpp:kEntryRiding",
+  "chocobo_ride.cpp:kModuleSlot15",
+  "chocobo_ride.cpp:kPlayerTypes",
+  "command_locks.cpp:kFirstInstruction",
+  "command_locks.cpp:kMaxCategories",
+  "command_menu_tick.cpp:kDodgeGuarding",
+  "command_menu_tick.cpp:kDodgePress",
+  "command_menu_tick.cpp:kGuardHeld",
+  "command_menu_tick.cpp:kSnapshotTypes",
+  "command_menu_tick.cpp:kTintType",
+  "command_menu_tick.cpp:kWatchStillFrames",
+  "command_menu_two.cpp:kRefreshFirst",
+  "command_rules.cpp:kMenuOrdinals",
+  "command_rules.cpp:kStillFrames",
+  "command_rules_code.h:kCommandGateCodeSize",
+  "engine_facts.h:kCameraManagerOperatorCount",
+  "engine_facts.h:kDirectInputBank",
+  "engine_facts.h:kFieldLane",
+  "engine_facts.h:kMaxRosterEntries",
+  "engine_facts.h:kMoveBlockingTagA",
+  "engine_facts.h:kMoveBlockingTagB",
+  "engine_facts.h:kNameNone",
+  "engine_facts.h:kNoPlayerType",
+  "engine_facts.h:kTagRegistryCount",
+  "engine_facts.h:kXInputBank",
+  "field_exit.cpp:kFirstInstruction",
+  "field_exit.cpp:kStepSettled",
+  "field_pickup.cpp:kDisabledBit",
+  "field_pickup.cpp:kGameFlagBlocksPoll",
+  "field_pickup.cpp:kMaxItems",
+  "field_pickup.cpp:kModeBlocksPoll",
+  "field_pickup.cpp:kRequestFirst",
+  "field_pickup.cpp:kSlots",
+  "field_pickup.cpp:kTargetBits",
+  "focus_scope.cpp:kCommandMenuLayer",
+  "focus_scope.cpp:kContextSize",
+  "focus_scope.h:kContextSize",
+  "framing_watch.cpp:kHeartbeatMs",
+  "framing_watch.cpp:kLayerCount",
+  "framing_watch.cpp:kMinChangeGapMs",
+  "framing_watch.cpp:kModuleSlots",
+  "handover_watch.cpp:kBrainSlots",
+  "handover_watch.cpp:kMapShown",
+  "handover_watch.cpp:kStateBattle",
+  "handover_watch.cpp:kStateDoNothing",
+  "handover_watch.cpp:kStateFollow",
+  "handover_watch.cpp:kStateLead",
+  "handover_watch.cpp:kStateStay",
+  "handover_watch.cpp:kUnread"
+ ],
+ "unchecked": [
+  {
+   "file": "player_two/charapop_watch.cpp",
+   "name": "kFadeHidden kFadeOpacity kFadeTarget kFadeReasons (0x88/0x8C/0x90/0xA4)",
+   "reason": "the fade object returned by the +0x1D0 interface getter: its 1.004 readers (EndFadeObj_ApplyHiddenReasons 0x1418F4074, EndActor_SetHiddenReasonFade_GameThread 0x1423E2150) were not located in 1.005 (byte search for their exact displacements finds nothing, so the code or the layout changed). Log-only fields (the watch's sample). [UNKNOWN]"
+  },
+  {
+   "file": "player_two/command_menu_tick.cpp",
+   "name": "kFilterCount (0x2C)",
+   "reason": "filter manager per-type i32; +0x1C latch confirmed in 0x14377D038, +0x2C not read at an instruction. [ASSUMPTION unchanged]"
+  },
+  {
+   "file": "player_two/command_rules.cpp",
+   "name": "kAllyMode (0x44C)",
+   "reason": "command-controller field not found at an instruction in either build by the name filter; the controller layout around it is unchanged. [ASSUMPTION unchanged]"
+  },
+  {
+   "file": "player_two/handover_watch.cpp",
+   "name": "kLeadArrived (0x3C1)",
+   "reason": "lead-state byte between the confirmed +0x3B0 and +0x3E8 (shared AI-state base, ctor 1:1). [ASSUMPTION unchanged]"
+  }
+ ],
+ "notes": [
+  "ride_watch.cpp (kChocoboRideObject 0x1918, kChocoboRidden 0x1924) and ride_probe.cpp (kRidden 0x1924, kMoveHelper 0x1400) are outside group B but duplicate constants this pass found CHANGED: 0x1918->0x1938, 0x1924->0x1944, 0x1400->0x1420.",
+  "EndUISystem grew by 8 bytes between +0x2C0 and +0x2D0: +0x2D0->+0x2D8 (0x14083A16C), +0x2D1->+0x2D9. The MasterHUD weak at +0x2D4 (RE-p2 notes) is then +0x2DC [ASSUMPTION]. Any other file reading EndUISystem fields above +0x2C0 needs the same treatment.",
+  "UEndSkeletalMeshComponent's native optimisation fields moved -0x10, except bytes from +0x1226 on (-0xF): a byte was added around +0x1215. USkinnedMeshComponent +0x797 -> +0x77F (-0x18).",
+  "Square Enix End character fields: unchanged through at least +0x638 (holder), +0x20 from +0x11FC (reflected) - all character constants above 0x1000 in group B moved +0x20."
+ ]
+}

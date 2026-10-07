@@ -6,6 +6,7 @@
 #include <Unreal/CoreUObject/UObject/UnrealType.hpp>
 #include <Unreal/UObject.hpp>
 
+#include "platform/build_value.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -86,8 +87,8 @@ constexpr std::uint32_t  kCoordState        = 0x58;    // the coordinator's stat
 constexpr std::uint32_t  kCoordPending      = 0x60;    // ... pending row (null when none)
 constexpr std::uint32_t  kCoordIdle         = 0;
 constexpr std::uint32_t  kCoordRiding       = 2;
-constexpr std::uint32_t  kChocoboRidden     = 0x1924;  // u8
-constexpr std::uint32_t  kChocoboRideObject = 0x1918;
+constexpr platform::PerBuild<std::uint32_t> kChocoboRidden     = {0x1924, 0x1944};  // u8; 1.005: ChocoboCoordinator GetRideBody 0x143B13E00 / FinishGetOff 0x143B14F58 [rdi+1944h]
+constexpr platform::PerBuild<std::uint32_t> kChocoboRideObject = {0x1918, 0x1938};  // 1.005: Chocobo_ReleaseRideObject 0x1411903AC, chocobo tick 0x140A413DC [rbx+1938h]
 constexpr std::uint32_t  kControlHolder     = 0x638;   // its vt+0x40 gives the input component
 constexpr std::uint32_t  kHolderComponent   = 0x40;
 constexpr std::uint32_t  kAttachParent      = 0xC0;    // USceneComponent::AttachParent

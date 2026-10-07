@@ -19,6 +19,8 @@
 // game's ME_CmdBuf_GrowAlloc when the node does not fit (it is passed the node size + 8, as the game
 // passes it), then advance the cursor, count the command, link the node and fill it.
 
+#include "platform/build_value.h"
+
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -36,7 +38,10 @@ inline constexpr std::size_t kArena       = 0x30;  // cursor; the end follows at
 namespace context {
 inline constexpr std::size_t kIsAsyncCompute = 0x146;  // bIsAsyncComputeContext (byte)
 inline constexpr std::size_t kDevice         = 0x148;  // FD3D12Device*
-inline constexpr std::size_t kDeviceDirect   = 0xF70;  // device: the direct contexts' array; [0] is the default
+// device: the direct contexts' array; [0] is the default.
+// 1.005: FD3D12Device grew; ME_RenderDevice_EndFrame 0x140A4974C reads [device+13D8h] at 0x140A4980A, then
+// [[..]] -> ClearState (1.004 0x140D0126F [rsi+0F70h]); the async array moved 0xFB8 -> 0x1420 likewise.
+inline constexpr platform::PerBuild<std::size_t> kDeviceDirect = {0xF70, 0x13D8};
 }  // namespace context
 
 inline constexpr std::size_t   kNodeSize     = 0x10;  // {vtable, next}

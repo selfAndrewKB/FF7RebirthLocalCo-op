@@ -141,7 +141,7 @@ platform::EntryRedirect g_markByKey;
 platform::CallRedirect  g_update;
 platform::CallRedirect  g_acquire;
 QueryFn                 g_query     = nullptr;
-std::uintptr_t          g_base      = 0;  // the image's live base, for IDA addresses in the log
+std::optional<platform::GameImage> g_image;  // for research IDA addresses in the log
 std::uintptr_t          g_root      = 0;  // live address of the root global
 std::uintptr_t          g_party     = 0;  // live address of the party manager global
 const std::uint64_t*    g_scooterKey = nullptr;  // live address of the ride-on key's FName global
@@ -218,7 +218,7 @@ const std::uint8_t* PointerAt(const void* base, std::size_t offset) noexcept
 
 std::uintptr_t Ida(std::uintptr_t live) noexcept
 {
-    return live - g_base + 0x140000000;
+    return g_image ? g_image->ResearchAddress(live) : live;
 }
 
 std::wstring Name(std::uint64_t name)
@@ -793,7 +793,7 @@ void Summary(std::wstring& installed, std::wstring& skipped, const wchar_t* what
 
 void Install(const platform::GameImage& image) noexcept
 {
-    g_base           = image.Base();
+    g_image          = image;
     const auto root  = image.Rebase(kGameRoot, sizeof(void*));
     const auto party = image.Rebase(kPartyManager, sizeof(void*));
     if (!root || !party || !leader_scope::Install(image))
@@ -812,7 +812,7 @@ void Install(const platform::GameImage& image) noexcept
                            std::uintptr_t replacement) {
         const auto at = image.Rebase(ida);
         return at && image.BytesMatch(ida, bytes) &&
-               redirect.Install(*at, bytes.first(kFirstInstruction), replacement);
+               redirect.Install(*at, image.EntryInstruction(ida, bytes.first(kFirstInstruction)), replacement);
     };
     const auto call = [&](platform::CallRedirect& redirect, std::uintptr_t site, std::uintptr_t target,
                           std::uintptr_t replacement) {

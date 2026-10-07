@@ -235,8 +235,10 @@ bool Install(const platform::GameImage& image) noexcept
     g_installed = g_installed &&
                   g_enabledCall.Install(*enabledAt, *enabled, reinterpret_cast<std::uintptr_t>(&CommandsEnabled)) &&
                   g_lockedCall.Install(*lockedAt, *locked, reinterpret_cast<std::uintptr_t>(&CommandsLocked)) &&
-                  g_category.Install(*category, first(kCategoryBytes), reinterpret_cast<std::uintptr_t>(&CategoryEnabled)) &&
-                  g_dispatcher.Install(*dispatcher, first(kDispatcherBytes), reinterpret_cast<std::uintptr_t>(&Dispatch));
+                  g_category.Install(*category, image.EntryInstruction(kCategory.address, first(kCategoryBytes)),
+                                     reinterpret_cast<std::uintptr_t>(&CategoryEnabled)) &&
+                  g_dispatcher.Install(*dispatcher, image.EntryInstruction(kDispatcher.address, first(kDispatcherBytes)),
+                                       reinterpret_cast<std::uintptr_t>(&Dispatch));
     if (!g_installed)
     {
         Remove();

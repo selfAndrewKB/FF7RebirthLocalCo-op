@@ -57,6 +57,7 @@ add_library(LocalSplitScreen SHARED
     src/platform/log.cpp
     src/platform/memory_watch.cpp
     src/platform/binned_pools.cpp
+    src/platform/build_translation.cpp
     src/platform/pool_bits.cpp
     src/platform/module_folder.cpp
     src/platform/module_pin.cpp
@@ -472,3 +473,11 @@ add_executable(LabelStatesTests
 target_include_directories(LabelStatesTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(LabelStatesTests PRIVATE cxx_std_20)
 add_test(NAME label_states COMMAND LabelStatesTests)
+
+add_executable(BuildTranslationTests
+    tests/build_translation_test.cpp
+    src/platform/build_translation.cpp
+)
+target_include_directories(BuildTranslationTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(BuildTranslationTests PRIVATE cxx_std_20)
+add_test(NAME build_translation COMMAND BuildTranslationTests)

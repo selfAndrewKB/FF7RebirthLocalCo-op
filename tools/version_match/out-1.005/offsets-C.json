@@ -1,0 +1,721 @@
+{
+ "build": "1.005",
+ "research_build": "1.004",
+ "date": "2026-10-07",
+ "group": "C (player_two files >= 'interact')",
+ "doc": "Rebirth/Documentation/research/RE-1005-offsets-C.md",
+ "changed_applied": [
+  {
+   "file": "main_camera_shape.cpp",
+   "line": 42,
+   "name": "kConstrainAspectRatioByte",
+   "old": "0x20C",
+   "new": "0x204",
+   "class": "UCameraComponent (USceneComponent-derived bitfield byte)",
+   "evidence": "UCameraComponent::GetCameraView 1.004 0x140BEEA20 -> 1.005 0x140DA63A0 (ratio 1.0): all 5 uses moved, e.g. 0x140BEEAA2 `test byte [rcx+20Ch],8` -> 0x140DA6422 `test byte [rcx+204h],8`; reflected bConstrainAspectRatio 0x20C->0x204 in the dumps. The Log() argument now casts to int32."
+  },
+  {
+   "file": "nav_strand.cpp",
+   "line": 89,
+   "name": "kCharacterMoveOwner",
+   "old": "0x13F8",
+   "new": "0x1418",
+   "class": "AEndCharacterBase native (movement owner)",
+   "evidence": "char interface (pawn+0x4B8) accessor `cmp qword [rcx+0F40h],0; setne al; ret` 1.004 0x140889748 (unique) is `cmp qword [rcx+0F60h],0` in 1.005 0x1408B3A04 (unique; no F40 form left). Sibling +0x1400->+0x1420 confirmed in 4 functions."
+  },
+  {
+   "file": "ride_probe.cpp",
+   "line": 37,
+   "name": "kGait",
+   "old": "0x1A20",
+   "new": "0x1A40",
+   "class": "AEndChocoboCharacter native",
+   "evidence": "chocobo move state slot 11 1.004 0x143451320 -> 1.005 0x14317159C: 0x14345169C [rsi+1A20h] -> 0x143171918 [rsi+1A40h] (9 uses); Chocobo_ClampSpeedToRun 0x143D979E0 -> 0x143B00F7C."
+  },
+  {
+   "file": "ride_probe.cpp",
+   "line": 38,
+   "name": "kGaitSpeed",
+   "old": "0x1A18",
+   "new": "0x1A38",
+   "class": "AEndChocoboCharacter native",
+   "evidence": "0x143451601 [rsi+1A18h] -> 0x14317187D [rsi+1A38h] (10 uses); 0x143D979AE -> 0x143B00F4A."
+  },
+  {
+   "file": "ride_probe.cpp",
+   "line": 39,
+   "name": "kSpeedRatio",
+   "old": "0x1928",
+   "new": "0x1948",
+   "class": "AEndChocoboCharacter native",
+   "evidence": "0x14345257C `vmovss [rsi+1928h],xmm10` -> 0x1431727FB `vmovss [rax+1948h],xmm10`."
+  },
+  {
+   "file": "ride_probe.cpp",
+   "line": 40,
+   "name": "kAppliedLevel",
+   "old": "0x1910",
+   "new": "0x1930",
+   "class": "AEndChocoboCharacter native",
+   "evidence": "Chocobo_ApplyMoveParamRootMotionScale 0x1411A1828 [rcx+1910h] -> 0x140A41590 [rcx+1930h]; CreateRideObject 0x143D9BD14 -> 0x143B05C10."
+  },
+  {
+   "file": "ride_probe.cpp",
+   "line": 41,
+   "name": "kRidden",
+   "old": "0x1924",
+   "new": "0x1944",
+   "class": "AEndChocoboCharacter native",
+   "evidence": "0x143DA7160 [rdi+1924h] -> 0x143B13E48 [rdi+1944h]; 0x143DA7302 -> 0x143B13FEA; 0x143DA82EC -> 0x143B1501C."
+  },
+  {
+   "file": "ride_probe.cpp",
+   "line": 42,
+   "name": "kMoveHelper",
+   "old": "0x1400",
+   "new": "0x1420",
+   "class": "AEndCharacterBase native (CharMove1400)",
+   "evidence": "0x14345162E [rsi+1400h] -> 0x1431718AA [rsi+1420h]; PlayerMoveState TickInput 0x1407BD461 -> 0x1410E3D35; FieldActionMgr_Update 0x140E7ACE6 -> +0x1420; char iface +0xF48 -> +0xF68 (0x1407E3018)."
+  },
+  {
+   "file": "ride_watch.cpp",
+   "line": 66,
+   "name": "kChocoboRideMode",
+   "old": "0x1910",
+   "new": "0x1930",
+   "class": "AEndChocoboCharacter native",
+   "evidence": "as kAppliedLevel (same field)."
+  },
+  {
+   "file": "ride_watch.cpp",
+   "line": 67,
+   "name": "kChocoboRideObject",
+   "old": "0x1918",
+   "new": "0x1938",
+   "class": "AEndChocoboCharacter native",
+   "evidence": "CreateRideObject 0x143D9BCC7 `lea rdi,[rbp+1918h]` -> 0x143B05BC3 `[rbp+1938h]`; Chocobo_ReleaseRideObject 0x1418797B3 -> 0x1411903C3; slot 11 0x143451414 -> 0x143171690."
+  },
+  {
+   "file": "ride_watch.cpp",
+   "line": 68,
+   "name": "kChocoboFlag1920",
+   "old": "0x1920",
+   "new": "0x1940",
+   "class": "AEndChocoboCharacter native",
+   "evidence": "0x1411A1728 `cmp byte [rbx+1920h],0` -> 0x140A41434 `[rbx+1940h]`; 0x143DA82E5 -> 0x143B15015."
+  },
+  {
+   "file": "ride_watch.cpp",
+   "line": 69,
+   "name": "kChocoboFlag1922",
+   "old": "0x1922",
+   "new": "0x1942",
+   "class": "AEndChocoboCharacter native",
+   "evidence": "0x143D9CC8D `cmp byte [rcx+1922h],0` -> 0x143B06AF9 `[rcx+1942h]`; ride entry machine 0x1428A0685 -> +0x1942."
+  },
+  {
+   "file": "ride_watch.cpp",
+   "line": 70,
+   "name": "kChocoboRidden",
+   "old": "0x1924",
+   "new": "0x1944",
+   "class": "AEndChocoboCharacter native",
+   "evidence": "as ride_probe kRidden."
+  },
+  {
+   "file": "wheelie_ride.cpp",
+   "line": 169,
+   "name": "kScooterRidden",
+   "old": "0x2318",
+   "new": "0x2338",
+   "class": "AEndSelfBalancingScooterCharacter native",
+   "evidence": "SBScooterChara_SetRider_Ridden2318 0x140DE02C7 `mov byte [rbx+2318h],1` -> 0x1410E9D1B `[rbx+2338h]`; FindNearestFreeScooter 0x140AB2F7E -> 0x140F3599A."
+  },
+  {
+   "file": "wheelie_ride.cpp",
+   "line": 170,
+   "name": "kScooterExcluded",
+   "old": "0x231A",
+   "new": "0x233A",
+   "class": "AEndSelfBalancingScooterCharacter native",
+   "evidence": "FindNearestFreeScooter 0x140AB2F71 `cmp byte [rax+231Ah]` -> 0x140F3598D `[rax+233Ah]`."
+  },
+  {
+   "file": "wheelie_ride.cpp",
+   "line": 171,
+   "name": "kScooterSetting",
+   "old": "0x1870",
+   "new": "0x1890",
+   "class": "AEndSelfBalancingScooterCharacter.MovementSetting (reflected)",
+   "evidence": "SBScooterCoordinator_ShouldRideAuto_Vt2F8 0x141258A71 `mov rsi,[rbx+1870h]` -> 0x140E8838D `[rbx+1890h]` (then +0x394 unchanged); dumps 0x1870->0x1890."
+  }
+ ],
+ "changed_unapplied_assumption": [],
+ "verified_unchanged": [
+  {
+   "file": "wheelie_watch.cpp",
+   "name": "kScooterRidden/kScooterParked/kScooterExcluded (already PerBuild)",
+   "value": "0x2318/0x2319/0x231A -> +0x20",
+   "how": "[CONFIRMED] byte roles: ridden written only by SetRider 0x1410E9D1B (+0x2338); parked +0x2339 read/written by FindNearestFreeScooter 0x140F35A1E/0x140F35BA0 and set by 0x1410EAB26; excluded +0x233A read at 0x140F3598D. Same functions as 1.004."
+  },
+  {
+   "file": "walk_limits.cpp",
+   "name": "kControllerNavArea",
+   "value": "0x590",
+   "how": "PartyManager_SetPrimaryPC_CreateNavAreaComp 0x143D00E7A -> 0x143A62362 [rbx+590h]; reflected PlayerExistNavAreaComponent 0x590"
+  },
+  {
+   "file": "walk_limits.cpp",
+   "name": "kNavAreaController",
+   "value": "0xB0",
+   "how": "InitCacheController 0x143D07B9D -> 0x143A6C6C9"
+  },
+  {
+   "file": "walk_limits.cpp",
+   "name": "kControllerLayer7Move/kControllerLayer7Dash (0x890+7/0x8A4+7)",
+   "value": "0x897/0x8AB",
+   "how": "PrimaryPC_SetByte890/8A4 0x1408A803E/0x1408A800A -> 0x140945322/0x1409452EE; SelectFromByteArrays 0x1410E8930 (0x890/0x8A4/0x8B8/0x8C4)"
+  },
+  {
+   "file": "walk_limits.cpp",
+   "name": "kManagerVolumes kManagerVolumeCount kManagerPaused kManagerLock",
+   "value": "0x8/0x10/0x128/0x188",
+   "how": "LocationVolumeMgr_Update 0x140A9F048 -> 0x140CF09A8"
+  },
+  {
+   "file": "walk_limits.cpp",
+   "name": "kManagerStack kManagerStackCount",
+   "value": "0xF8/0x100",
+   "how": "MoveTypeStack_Push 0x1410354E5 -> 0x141431791 (TArray at +0xF8, Num +8)"
+  },
+  {
+   "file": "walk_limits.cpp",
+   "name": "kVolumeLocationId kVolumeUntouchMargin kVolumeFlags kVolumeMoveType kVolumeDashType kVolumeForcedOut",
+   "value": "0x270/0x278/0x280/0x2E9/0x2EA/0x308",
+   "how": "TestInOut 0x140CF0E88, OnVolumeEnter 0x1414312A0, OnVolumeLeave 0x141431B28 (all identical)"
+  },
+  {
+   "file": "location_rows.cpp",
+   "name": "kListenerOperator kOpSetLocation kOpClearLocation",
+   "value": "0x8/0xE0/0xE8",
+   "how": "OpLocationListener forward 0x141035AC8 -> 0x141432008 `jmp [rax+0E0h]`/`[rax+0E8h]` (camera operator: not a UObject vtable)"
+  },
+  {
+   "file": "location_rows.cpp",
+   "name": "kVolumeCameraRow kVolumeCameraPriority",
+   "value": "0x2E0/0x2E8",
+   "how": "OnVolumeEnter 0x14103514C/0x141035156 -> 0x141431360/0x14143136A"
+  },
+  {
+   "file": "location_rows.cpp",
+   "name": "kManagerVolumes kManagerVolumeCount kManagerLock kVolumeLocationId kVolumeUntouchMargin kVolumeFlags kNavAreaController kBattleOperator",
+   "value": "same as walk_limits / 0x2CA8",
+   "how": "as walk_limits; 0x2CA8 at 0x141434B37 and module getter 0x140D4FC23"
+  },
+  {
+   "file": "shoulder_scale.cpp",
+   "name": "kPoseAimY kBattleOperator",
+   "value": "0x88/0x2CA8",
+   "how": "FinalizePose 0x140A9CC5C -> 0x140D4E4E4 identical (pose op+0x40); UpdateModules 0x140A61734 -> 0x140D4FC94 zero disp changes"
+  },
+  {
+   "file": "world_actor_reach.cpp",
+   "name": "kRootWorldActors",
+   "value": "0x190",
+   "how": "root+0x190 at 0x140C129D7 -> 0x140B8F293"
+  },
+  {
+   "file": "world_actor_reach.cpp",
+   "name": "kItemsData kItemsNum kItemsBits kOctrees kOctreesNum kOctreesBits kItemElement kItemAt kOctreeElement kOctreeObject kItemOctreeId kItemField kItemRadius kItemState kItemExtent kItemKey kItemLocation kOctreeAdd kOctreeRemove",
+   "value": "",
+   "how": "WorldActorMgr_Ctor 0x14379CE7C -> 0x1434D6F58 and WorldActorItem_Init 0x140C1253C -> 0x141495AC8 identical (zero disp changes); tick 0x140D9905C -> 0x140B46BD8 only a vtable +8 change; octree vtable is not a UObject's"
+  },
+  {
+   "file": "pad_rumble.cpp",
+   "name": "kOwnerPad",
+   "value": "0x74",
+   "how": "NoteLastActiveDevice cold chunk 1.005 0x1425E6CAF `mov [rbx+74h],edi`"
+  },
+  {
+   "file": "pad_rumble.cpp",
+   "name": "kAppDeviceCode",
+   "value": "0x1E0",
+   "how": "interface+0x160 at 0x1407C0176 -> 0x1411B42A6 (app->interface +0x80 is stock, [ASSUMPTION])"
+  },
+  {
+   "file": "pad_rumble.cpp",
+   "name": "kTickPrerequisites",
+   "value": "0x40",
+   "how": "[ASSUMPTION from dumps] AActor PrimaryActorTick 0x28 unchanged, stock FTickFunction"
+  },
+  {
+   "file": "rumble_watch.cpp",
+   "name": "kPlayerInput kEffectsNum kValues kFlags kFeedbackOn kFeedbackScale kAppDeviceCode",
+   "value": "0x350/0x360/0x3B8/0x450/0x20/0x454/0x1E0",
+   "how": "ProcessForceFeedbackAndHaptics 0x1407BFB60 -> 0x1411B3DA0 (0x358/0x360/0x3B8/0x454), SendFFValues 0x1407BF920 -> 0x1411B41CC (0x3B8, test [rcx+450h],20h); 0x350 reflected APlayerController unchanged"
+  },
+  {
+   "file": "interact_watch.cpp",
+   "name": "kRootActionManager kRootWorldItems",
+   "value": "0x1A0/0x288",
+   "how": "root+0x1A0 at 0x140C89A9C -> 0x140F13660; root+0x288 at 0x141776D11 -> 0x1418B4911"
+  },
+  {
+   "file": "interact_watch.cpp",
+   "name": "kPartyController kPartyLeader kPartyLeaderType",
+   "value": "0x140/0x148/0x150",
+   "how": "PartyManager xref patterns: +0x140 0x1407646C6, +0x148 0x1407649C3, +0x150 0x14092E117 (1.005)"
+  },
+  {
+   "file": "interact_watch.cpp",
+   "name": "kOctree kCandidateCount kPointList kNodeNext kNodePoint kPointLock kSlotRows kSlotRecords kSlotRecordSize kSlotTargets kSlotHeld kSlotPressed kSlotExecuted kPending",
+   "value": "",
+   "how": "FieldActionMgr_Update 0x140E7A700 -> 0x140AFC1B4: no manager field changed (only character +0x1400 and vtable +8); 0x483A8/0x484A8/0x48740/0x487D0/0x487F0/0x48730/0x48738 seen directly; 0x48320/0x48608/0x298/0x10 bracketed"
+  },
+  {
+   "file": "interact_watch.cpp",
+   "name": "kPointTalk kPointKey kPointOwner kPointLocation kPointPreset kPointPreset2 kPointPresetPlayer kPointSlot kPointKind kPointVariant kPointFlags",
+   "value": "",
+   "how": "AddPoint 0x1411BDE60 -> 0x140FED95C zero disp changes (writes +8/+0xC/+0x1C/+0x2C/+0x44/+0x4C/+0x54/+0xF0/+0x104); Update reads +0xE8/+0xF1"
+  },
+  {
+   "file": "interact_watch.cpp",
+   "name": "kItemElements kItemCount kItemBitsInline kItemBitsHeap kItemStride kEntryKeyBack",
+   "value": "",
+   "how": "MarkByKey 0x140C10F94 and AcquireEntry 0x140C07A3C -> zero manager disp changes; RE-1005-player-two confirms WorldItemMgr 0x90"
+  },
+  {
+   "file": "leader_scope.cpp",
+   "name": "kPartyManagerLeader kPartyManagerLeaderType",
+   "value": "0x148/0x150",
+   "how": "as interact_watch"
+  },
+  {
+   "file": "vending.cpp",
+   "name": "kPartyLeader",
+   "value": "0x148",
+   "how": "as interact_watch"
+  },
+  {
+   "file": "lock_on.cpp",
+   "name": "kCursor kDisplayed kLock kFreeTime",
+   "value": "0x68/0x70/0x8C/0x90",
+   "how": "ReleaseTargetCursor68 0x14103AC2A -> 0x1411CA816; AssignDisplayedTarget70 0x1415A2A66 -> 0x14146A8A6; SetLockMode8C 0x14189B365 -> 0x140F89321; TickLockToggle 0x1409632A0 -> 0x1409778A4 (+0x90)"
+  },
+  {
+   "file": "lock_on.cpp",
+   "name": "kTrace kLatch",
+   "value": "0x80/0x8D",
+   "how": "bracketed by confirmed 0x70/0x78 and 0x8C/0x90 [ASSUMPTION]"
+  },
+  {
+   "file": "lock_on.cpp",
+   "name": "kBarManager kTargetedKey",
+   "value": "0xF8/0x140",
+   "how": "EndUISystem+0xF8 at 0x1411F043C -> 0x140B806F8; +0x140 bracketed [ASSUMPTION]"
+  },
+  {
+   "file": "lock_on.cpp",
+   "name": "kBattleOperator kModules kModuleEntry kModuleActive kModuleTarget",
+   "value": "0x2CA8/0x6E0/16/0x44/0x3F8",
+   "how": "module getter 0x140A6169C -> 0x140D4FBFC identical; SlotFlag44 0x140F8A921; LockOn module Activate 0x1418C07D0 -> 0x141504FEC (+0x3F8)"
+  },
+  {
+   "file": "menu_focus.cpp",
+   "name": "kInput kController",
+   "value": "0x10/0xB8",
+   "how": "EndUISystem__Get callers: +0x10 0x1408062FB -> 0x14158CB43; +0xB8 0x140805ECC -> 0x140891C0C"
+  },
+  {
+   "file": "menu_focus.cpp",
+   "name": "kControllerBytes",
+   "value": "0x25C,0x258,0x777,0x783,0x5E1,0x540",
+   "how": "FieldCommandCtrl layout unchanged per RE-1005-player-two.md (diff of Tick) [CONFIRMED there]"
+  },
+  {
+   "file": "widget_owner.cpp",
+   "name": "kCellPartyList kCellSlot kCellLeader kCellType",
+   "value": "0x7B0/0x9E8/0x9F8/0x7B8",
+   "how": "UEndMenuStatusPaneCell_NativeTick 0x140F3D0CC -> 0x140806814"
+  },
+  {
+   "file": "widget_owner.cpp",
+   "name": "kCellLook kCellPosition",
+   "value": "0x9EC/0xA24",
+   "how": "same widget, bracketed [ASSUMPTION]"
+  },
+  {
+   "file": "widget_owner.cpp",
+   "name": "kPaneType kPaneOwner",
+   "value": "0x3D0/0x3C8",
+   "how": "UEndCmdLinkupPane NativeTick 0x14102EA84 -> 0x140971FB0 (+0x3D0); +0x3C8 bracketed"
+  },
+  {
+   "file": "widget_owner.cpp",
+   "name": "kKeyGuide kController",
+   "value": "0x1A8/0xB8",
+   "how": "MasterHUD_Tick 0x140F37F41 -> 0x140F75AE9 (+0x1A8); EndUISystem getter callers 0x14184DE5A -> 0x1418CE2B6"
+  },
+  {
+   "file": "widget_owner.cpp",
+   "name": "kStoredLeaderType kHudMode",
+   "value": "0x30/0x540",
+   "how": "FieldCommandCtrl layout unchanged (RE-1005-player-two.md)"
+  },
+  {
+   "file": "nav_strand.cpp",
+   "name": "kOwnerStopMask",
+   "value": "0x1BC",
+   "how": "EndMoveOwner_ApplyStopMask 0x1408AE6EB -> 0x14132DDEB `cmp dword [rbx+1BCh],0`"
+  },
+  {
+   "file": "nav_strand.cpp",
+   "name": "kComponentWorldLocation kComponentAttachParent",
+   "value": "0x1D0/0xC0",
+   "how": "LocationVolumeMgr_Update 0x140A9F0A9 -> 0x140CF0A09 [rcx+1D0h]; CMC site 0x140932215 [rax+1D0h]; reflected AttachParent 0xC0 unchanged"
+  },
+  {
+   "file": "nav_strand.cpp",
+   "name": "kMoveBelowLocation",
+   "value": "0xB8-0x90",
+   "how": "1.005 site 0x1409321FA `lea rdx,[rsp+0B8h]` and 0x1409322A7 `vmovups [rsp+90h],xmm0`"
+  },
+  {
+   "file": "nav_strand.cpp",
+   "name": "kAiBrain kBrainState",
+   "value": "0x518/0x20",
+   "how": "AICtrl_GetCurrentAIState byte-identical and unique: 1.004 0x140968B18 / 1.005 0x14097A6EC"
+  },
+  {
+   "file": "nav_strand.cpp",
+   "name": "kAiPawn kAiPauseMask",
+   "value": "0x258/0x460",
+   "how": "EndAIControllerPlayerBase_Vt858 byte-identical unique 1.004 0x14096BE00 / 1.005 0x1407CDE10 (+0x460, +0x258); 0x140A3D280 -> 0x1407CE220"
+  },
+  {
+   "file": "nav_strand.cpp",
+   "name": "kStateType kStateTeleportRange kStateTeleporting kStateFollow",
+   "value": "0x18/0x344/0x39D/7",
+   "how": "FollowState_UpdateTeleport 0x140DB834C -> 0x1410AA69C (+0x39D, +0x344 at 0x1410AA8C7); FollowParam init writes `mov byte [rbx],7` 0x14123C7B5"
+  },
+  {
+   "file": "party_warp.cpp",
+   "name": "kTeleportQuerySlot kForceTeleportSlot kFinishNowSlot kUpdateTeleportSlot",
+   "value": "0x58/0x270/0x278/0x298",
+   "how": "RE-1005-player-two.md (follow-state vtable, not a UObject's); FollowStatePlayer vt+0x260 maps 1:1 (0x140B17FC8 -> 0x140E23790)"
+  },
+  {
+   "file": "party_warp.cpp",
+   "name": "kAiBrain kAiSkipsUpdate kBrainState kStateType kStateForced kStateQueryResult kQueryStatus kCharacterWarping kStateFollow",
+   "value": "",
+   "how": "as nav_strand; 0xAD8 RE-1005-player-two.md; FollowState_GetTeleportEQSResult 0x1412519CC -> 0x1411589C4 (+0x520/+0x540, status +0x28==1); CharCtrlComp_QueueWarpRequest 0x1407B69DA -> 0x14132A832 (+0xB59)"
+  },
+  {
+   "file": "ride_probe.cpp",
+   "name": "kActiveVehicle kCoordBody",
+   "value": "0x5B8/0x30",
+   "how": "reflected EndPlayerController.ActiveVehicleCoordinator 0x5B8 / VehicleChara 0x30 unchanged; coordinator state getters identical"
+  },
+  {
+   "file": "ride_probe.cpp",
+   "name": "kHelperAnim",
+   "value": "0x160",
+   "how": "CharMove1400_GetAnimLocomotionState 0x1409F35C2 -> 0x1408AB042; SetGaitRequest 0x140DEAC8E -> 0x140E2CA3A"
+  },
+  {
+   "file": "ride_probe.cpp",
+   "name": "kAnimWalkType kAnimMapData kAnimMapNum kAnimMapBits kAnimMapFree kAnimMapEntry kInlineBits",
+   "value": "0x498/0x4A0/0x4A8/0x4B0/0x4D4/12/128",
+   "how": "GaitRequests_Set_RecomputeGait498 1.004 0x140DEACB8 -> 1.005 0x140E2CA64 (callee of the matched SetGaitRequest)"
+  },
+  {
+   "file": "ride_probe.cpp",
+   "name": "kAnimSprint",
+   "value": "0x3E4",
+   "how": "Move_Update_SprintFlag3E4 0x140DF0EF3 -> 0x140CFEA3F"
+  },
+  {
+   "file": "ride_probe.cpp",
+   "name": "kAnimSpeedScale",
+   "value": "0x10CC",
+   "how": "CharMove1400_SetSpeedScale10CC 0x1418E4D84 -> 0x140E3102D"
+  },
+  {
+   "file": "ride_probe.cpp",
+   "name": "kLayerMove kLayerDash kLayerFlags kLayerCount",
+   "value": "0x890/0x8A4/0x8B8/0x8C4",
+   "how": "PrimaryPC_SelectFromByteArrays 0x141711228 -> 0x1410E8930"
+  },
+  {
+   "file": "ride_probe.cpp",
+   "name": "kRootGameMode kGameModeByte",
+   "value": "0x1B8/0x3D558",
+   "how": "root+0x1B8 0x140877A92 -> 0x140F426B2; +0x3D558 in 5 functions (e.g. 0x1414F7C74 -> 0x14105D3E8)"
+  },
+  {
+   "file": "ride_probe.cpp",
+   "name": "kAiPawn kAiPauseMask kAiMoveComp kAiRideLatch kAiBrainIndex",
+   "value": "0x258/0x460/0x528/0xAD8/0x520",
+   "how": "as nav_strand; AIMoveComponent reflected 0x528; 0x520 bracketed by 0x518/0x528"
+  },
+  {
+   "file": "ride_probe.cpp",
+   "name": "kAiWeakChar kAiWeakPawn",
+   "value": "0x464/0x46C",
+   "how": "bracketed by 0x460 and 0x518 [ASSUMPTION]"
+  },
+  {
+   "file": "ride_probe.cpp",
+   "name": "kFollowTarget kFollowRange kFollowWarp kFollowBusy",
+   "value": "0x358/0x344/0x39D/0x400",
+   "how": "FollowStatePlayer_UpdateLeaderAndTarget 0x140B18256 -> 0x140E23A1C (+0x358); teleport rule 0x1410AA69C (+0x344, +0x39D, +0x400)"
+  },
+  {
+   "file": "ride_probe.cpp",
+   "name": "kMoveStatus kMoveVelocity",
+   "value": "0x780/0x758",
+   "how": "EndAIMoveComponent_ControllerUpdate 0x1414D5354 -> 0x141518438 (+0x780); 0x758 [ASSUMPTION, same component]"
+  },
+  {
+   "file": "ride_probe.cpp",
+   "name": "kHolder kHolderMove",
+   "value": "0x638/0x18",
+   "how": "slot 11 0x143451581 -> 0x1431717FD (+0x638); 0x1407BCA36 -> 0x1410E4186 (+0x18)"
+  },
+  {
+   "file": "ride_probe.cpp",
+   "name": "kStStick kStDashLatch kStAccelPrev kStRunTimer kStRaiseHold kStSkipTimer kStRaiseSkip kStDashPrev",
+   "value": "",
+   "how": "chocobo move state slot 11 0x14317159C: +0x10/+0x2C/+0x2D/+0x34/+0x398/+0x39C/+0x3AC/+0x3AD unchanged"
+  },
+  {
+   "file": "ride_watch.cpp",
+   "name": "kActiveVehicle kVehicleMapCount kCoordBody kCoordRider",
+   "value": "0x5B8/0x5C8/0x30/0x38",
+   "how": "reflected (EndPlayerController 0x5B8/0x5C0 TMap; coordinators 0x30/0x38) unchanged"
+  },
+  {
+   "file": "ride_watch.cpp",
+   "name": "kChocoboStatePtr kBuggyStatePtr",
+   "value": "0x58/0x1E8",
+   "how": "state getters 0x143DA6FA4 -> 0x143B13C8C (+0x58), 0x140AE1834 -> 0x140B445F4 (+0x1E8)"
+  },
+  {
+   "file": "ride_watch.cpp",
+   "name": "kChocoboBoarding",
+   "value": "0x155",
+   "how": "PrimaryPC_IsActiveVehicleRiding 0x140A60A10 -> 0x1407641A8 identical [read via callee]"
+  },
+  {
+   "file": "ride_watch.cpp",
+   "name": "kRootRideManager kManagerState kManagerGetOff kManagerBattle kManagerParty",
+   "value": "0x270/0x8/0xEB0/0xEB6/0xEB5",
+   "how": "root+0x270 0x141504A96 -> 0x1411114F2; RequestPartyGetOff 0x143D025A9 -> 0x143A63991; entry machine 0x1428A0F4E -> 0x1424CCE2C (+0xEB6); 0xEB5 bracketed"
+  },
+  {
+   "file": "ride_watch.cpp",
+   "name": "kMemberEntries kMemberEntrySize kEntryChocobo kEntryGrace kEntry1C kEntry1D",
+   "value": "",
+   "how": "ride entry machine 0x1428A02BA -> 0x1424CC198 (855 ins): no entry offset changed"
+  },
+  {
+   "file": "ride_watch.cpp",
+   "name": "kCoreComponent kAttachParent",
+   "value": "0x638/0xC0",
+   "how": "as above"
+  },
+  {
+   "file": "ride_watch.cpp",
+   "name": "kRowRequests",
+   "value": "0xE8..0x388",
+   "how": "ChocoboMoveState_UpdateInput_Slot16 0x143450444 -> 0x1431706C4 (+0x298/+0x2E8/+0x338/+0x388); RequestDashRow 0x14344F9D8 (+0x248); 0xE8/0x138/0x188 [ASSUMPTION, base rows]"
+  },
+  {
+   "file": "shared_ride.cpp",
+   "name": "kActiveVehicle kCoordBody kPawnController kActorHidden kHiddenBit",
+   "value": "0x5B8/0x30/0x260/0x58/0x20",
+   "how": "reflected (APawn.Controller 0x260, AActor bHidden byte 0x58) unchanged [ASSUMPTION from dumps for the bit]"
+  },
+  {
+   "file": "shared_ride.cpp",
+   "name": "kKinds (buggy 0x1E8, bronco 0x70)",
+   "value": "0x1E8/0x70",
+   "how": "state getters 0x140B445F4 (+0x1E8) and 0x143B13CA4 (+0x70)"
+  },
+  {
+   "file": "wheelie_ride.cpp",
+   "name": "kCoordScooter kCoordShared kCoordInstant kCoordApplyNow kCoordScripted kCoordDisabled kCoordStatePtr kCoordPending kCoordStateMachine",
+   "value": "0x30/0x48/0x11C/0x11E/0x1F8/0x2A/0x230/0x238/0x218",
+   "how": "RequestRide_Scripted 0x143DAB30C -> 0x143B1830C (+0x114/+0x11C/+0x11E/+0x1F8); Init_Vt270 0x1418C9823 -> 0x14194A4E7 (+0x29/+0x2A); GetStateId 0x140AE1958 -> 0x140B44718 (+0x230); 0x140B446F0 (+0x238); ShouldRideAuto 0x140E88120 (+0x48); 0x218 = state machine whose +0x18 is the state ptr"
+  },
+  {
+   "file": "wheelie_ride.cpp",
+   "name": "kCoordCooldown",
+   "value": "0x1F4",
+   "how": "bracketed (0x1F8 confirmed) [ASSUMPTION]"
+  },
+  {
+   "file": "wheelie_ride.cpp",
+   "name": "kSettingDistance kSettingMaxYaw kSettingMinPower",
+   "value": "0x394/0x398/0x39C",
+   "how": "ShouldRideAuto 0x140E88352 (+0x394); reflected EndSBScooterMovementSetting unchanged"
+  },
+  {
+   "file": "wheelie_ride.cpp",
+   "name": "kControlHolder kHolderComponent kHolderMoveRequest kStateStickX kStateStickY",
+   "value": "0x638/vt+0x40/0x18/0x10/0x14",
+   "how": "holder +0x638 0x143172A0A; vt+0x40 < 0x98 (slot rule); +0x18 0x1410E4186; state stick 0x14317195x"
+  },
+  {
+   "file": "wheelie_ride.cpp",
+   "name": "kMeshOwner kActorRoot kAttachParent kFieldOperator kOperatorModules kModuleSlot15",
+   "value": "0xA0/0x138/0xC0/0x2CB0/0x6E0/0xF0",
+   "how": "RE-1005-player-two.md (0xA0, 0x2CB0); dumps (0x138, 0xC0); module getter (0x6E0, 16-byte slots)"
+  },
+  {
+   "file": "wheelie_watch.cpp",
+   "name": "kActiveVehicle kVehicleMap kMapElementSize kMapElementValue kCoordScooter kCoordRider kCoordShared kCoordRiderTable kCoordScripted kCoordEnabled kCoordDisabled kCoordStatePtr",
+   "value": "",
+   "how": "reflected/confirmed as wheelie_ride; +0x29 0x14194A4E7"
+  },
+  {
+   "file": "wheelie_watch.cpp",
+   "name": "kCoordGetOffFast kCoordMiniGame kCoordUiShown kCoordInstant",
+   "value": "0x182/0x1F9/0x1FA/0x1FC",
+   "how": "bracketed by confirmed 0x11E and 0x1F8/0x218 [ASSUMPTION]"
+  },
+  {
+   "file": "wheelie_watch.cpp",
+   "name": "kSharedListData kSharedListNum kSharedRequested kSharedIdle kSharedParking kSharedColours kTableNum kTableState kTableEntrySize",
+   "value": "",
+   "how": "shared/rider-table objects (non-UObject); RiderTable_ResolveSpawnedBodies 0x1423FCF64 -> 0x142211A34 zero disp changes [ASSUMPTION for unseen fields]"
+  },
+  {
+   "file": "wheelie_watch.cpp",
+   "name": "kControlHolder kHolderAccel kHolderBrake",
+   "value": "0x638/0x2C0/0x2C4",
+   "how": "SBScooterMoveState slot 11 0x14345274C -> 0x1431729C8 (+0x638, +0x2C0, +0x2C4)"
+  },
+  {
+   "file": "wheelie_watch.cpp",
+   "name": "kInputCatchAxis kInputAccelAxis kInputCatchOther kInputAccelOther",
+   "value": "0x1240/0x1244/0x11B0/0x11B4",
+   "how": "SquareInput__GetAggregatedKeyValue 0x1407C8310 -> 0x1409F5CD8 (same four reads)"
+  },
+  {
+   "file": "wheelie_watch.cpp",
+   "name": "kRootOnOff kOnOffBase kOnOffAltBase",
+   "value": "0x170/0x1A1238C/0x1A1263C",
+   "how": "root+0x170 0x1407BC339 -> 0x1410E2569; bases 0x1407BC7BD/7C3 -> 0x1410E43ED/3F3"
+  },
+  {
+   "file": "warp_camera_watch.cpp",
+   "name": "kOpWeight kOpPose kOpPivot kOpSubjectLocation kOpActive kOpCurrent kOpSubject kOpModules kModuleStride kModuleActive kModuleRunning",
+   "value": "",
+   "how": "FEndModularCameraOperator UpdateModules 0x140A61734 -> 0x140D4FC94: zero disp changes (+0x40/+0x60/+0x70/+0xF0/+0x6E0); +0xD0/+0xD1 bracketed"
+  },
+  {
+   "file": "warp_camera_watch.cpp",
+   "name": "kLeaderChangeSlot kLeaderChangeTarget",
+   "value": "22/0x3F0",
+   "how": "FEndFieldCameraOperator__OnLeaderChanged_VtB0 0x141205F10 -> 0x1412FBA48 ([+0x6E0]+0x160 = slot 22, +0x3F0); LeaderChange Activate 0x141204648 -> 0x141868298"
+  },
+  {
+   "file": "warp_camera_watch.cpp",
+   "name": "kPcmLeader kPcmLeaderWeak kPcmPreviousOperator kPcmPersistent",
+   "value": "0x2CC0/0x2CC8/0x2CD1/{0x2CD8,0x2CE4,0x2F90,0x2F94,0x2F98,0x2FA0}",
+   "how": "PCM OnLeaderChanged 1.005 0x1412FB12E `lea rsi,[rcx+2CC0h]`; PCM ctor 0x1408B0820 -> 0x14132B83C (+0x2F90/+0x2F98/+0x2FA0); camera update 0x140E55E40 -> 0x140D51C60 (+0x2CD8/+0x2CE4/+0x2F90/+0x2FA0); 0x2CC8/0x2CD1/0x2F94 bracketed"
+  },
+  {
+   "file": "scope_leaks.cpp",
+   "name": "kComponentGuard",
+   "value": "0x9A4",
+   "how": "component vt+0x428 block 0x14125C189 -> 0x1410E51B9"
+  },
+  {
+   "file": "scope_leaks.cpp",
+   "name": "kLeaderBlockSize",
+   "value": "0x5C",
+   "how": "writer 0x14125C394 -> 0x1411B59D4 identical (zero disp changes)"
+  },
+  {
+   "file": "pad_buttons.cpp",
+   "name": "kTables (0xF8 raw, 0x148 UI) kTableNum kTableInlineBits kTableHeapBits kTableMaxBits",
+   "value": "",
+   "how": "ActionDown 0x1407C3DAC -> 0x140DD81C0 and input Tick 0x1407C057C -> 0x1409F60B4 (zero disp changes; +0xF8/+0x100/+0x148/+0x150)"
+  },
+  {
+   "file": "pad_buttons.cpp",
+   "name": "kActionEventKey",
+   "value": "0x18",
+   "how": "ActionDown 0x1407C3DE5 -> 0x140DD81F9 `mov rcx,[r9+18h]`"
+  },
+  {
+   "file": "main_camera_shape.cpp",
+   "name": "kCameraComponentOffset",
+   "value": "0x230",
+   "how": "[ASSUMPTION from dumps] ACameraActor.CameraComponent 0x230 in both; the code also compares it with reflection at run time"
+  },
+  {
+   "file": "menu_focus.cpp",
+   "name": "kPath kLayers kLayerSize kLayerSaved kLayerPrio kFocusCause",
+   "value": "0x8/0x40/40/0x10/0x20/0x78",
+   "how": "[ASSUMPTION] Square input object: every other field checked (0x74, 0xF8, 0x148, 0x1210-0x1244) unchanged and the input Tick is identical"
+  }
+ ],
+ "not_offsets": [
+  "interact_watch: kFirstInstruction, kSlots, kMaxPoints, kMaxItems, kQueryExtent, periods/budgets",
+  "leave_sequence.h: kReleaseTicks",
+  "location_rows: kMaxVolumes, kFlagDisabled, kFlagChangeCamera (flag bits; confirmed same tests)",
+  "lock_on: kLockOnLayer (module index), kMaxLines",
+  "main_camera_shape: kSetterFrameBytes, kMaxChanged",
+  "menu_focus: kMaxPath, kMaxLayers",
+  "move_state.cpp: kSampleEvery",
+  "nav_strand: kStopReasonParked (bit), kStateFollow (enum), kMaxLines, times",
+  "pad_buttons: kInlineBitCount, kMaxElements, line counts",
+  "pad_rumble: kNoteLastDeviceFirst (instruction length)",
+  "pad_sticks: kOverridePads",
+  "panel_gate_code.h: kPanelGateCodeSize",
+  "party_lease.h: kAiStateBattle/Lead/Follow (enum values)",
+  "party_warp: kStateFollow, kFinishAfterSeconds",
+  "ride_probe: kLayers, kInlineBits, kAnimMapEntry (element size), times",
+  "ride_watch: kPlayerTypes, kEvery",
+  "rumble_watch: kMaxEvents",
+  "session.cpp: all tick/count constants",
+  "shared_ride: kIdle",
+  "stick_select: kFloatsPerRecord",
+  "vending: kPressFrames",
+  "walk_limits: kMaxVolumes, kFlag*, kMaxInside, times",
+  "wheelie_ride: kBeginName/kBeginFlagD/kGetOffType/kGetOffInstant (offsets in the mod's own request buffers), kScooterKey, kState* (enum)",
+  "wheelie_watch: kListCap, kTableEntries, kOnOffIds, kEvery, kRidingEvery",
+  "widget_owner: kLoggedCells",
+  "world_actor_reach: kStateDisabled, kStatePending, kMaxItems, kMaxOctrees, kEvery"
+ ],
+ "unchecked": [
+  {
+   "file": "menu_focus.cpp",
+   "name": "kWidgetType kUserWidget",
+   "reason": "Slate SWidget::TypeOfWidget (0x220) / SObjectWidget widget object (0x3A8); stock engine Slate, no instruction read. menu_focus is a logging watch."
+  },
+  {
+   "file": "menu_focus.cpp",
+   "name": "kClass kName",
+   "reason": "UObject ClassPrivate 0x10 / NamePrivate 0x18: UObject unchanged (dumps)."
+  },
+  {
+   "file": "nav_strand.cpp",
+   "name": "kNavStreamLeaderCell",
+   "reason": "EndNavStreamMgr (native singleton) +0x8; no 1.004 instruction found quickly [ASSUMPTION unchanged]."
+  },
+  {
+   "file": "party_warp.cpp",
+   "name": "FollowTeleportParams layout (0x10, 0x40, size 0x50)",
+   "reason": "argument struct of the follow-state force-teleport slot; the slot functions match 1:1 but the struct was not re-read."
+  },
+  {
+   "file": "widget_owner.cpp",
+   "name": "kPartyListOwner kGuideWidget kGuideMode kVisibility",
+   "reason": "party list +0x20, key guide struct +0x4/+0x14, UWidget::Visibility +0xC3 (UMG reflected unchanged); logging only."
+  }
+ ]
+}

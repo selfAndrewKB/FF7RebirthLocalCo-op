@@ -79,6 +79,9 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
+#include <string>
+#include <utility>
 #include <system_error>
 #include <optional>
 
@@ -92,7 +95,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.60.3";
+constexpr const wchar_t* kVersion = L"0.61.0";
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -158,7 +161,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.60.3");
+        ModVersion     = STR("0.61.0");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -222,6 +225,28 @@ public:
     auto on_unreal_init() -> void override
     {
         Log(L"v{} starting", kVersion);
+        // A diagnosis aid: `log-level.txt` in the mod's folder (one word: error, warning, info, debug or trace) sets the
+        // level before the startup checks run, which the control command `log-level` can only change afterwards.
+        if (std::wifstream level(lss::platform::ModFolder() / L"log-level.txt"); level)
+        {
+            std::wstring word;
+            level >> word;
+            constexpr std::pair<const wchar_t*, lss::platform::Level> kLevels[] = {
+                {L"error", lss::platform::Level::Error}, {L"warning", lss::platform::Level::Warning},
+                {L"info", lss::platform::Level::Info},   {L"debug", lss::platform::Level::Debug},
+                {L"trace", lss::platform::Level::Trace}};
+            for (const auto& [name, value] : kLevels)
+            {
+                if (word == name)
+                {
+                    lss::platform::SetLevel(value);
+                    Log(L"log level {} (log-level.txt)", name);
+                }
+            }
+        }
+        // Recognises the game build (and so every PerBuild value) before any thread of ours can read one; the later
+        // Locate calls find the same build.
+        static_cast<void>(lss::platform::GameImage::Locate());
         lss::platform::memory_watch::Start();  // its own thread, from launch to exit
 
         // A measuring control: with `watch_only.txt` in the mod's folder, nothing is installed but the
@@ -249,6 +274,11 @@ public:
         }
 
         const auto image = lss::platform::GameImage::Locate();
+        if (image && image->Build() != nullptr)
+        {
+            Log(L"game version {}{}", image->Build()->name,
+                image->Build()->research ? L" (the research build)" : L" (addresses translated from the research build)");
+        }
         const auto removeLocalPlayer = image ? VerifyEngine(*image) : std::nullopt;
         if (removeLocalPlayer)
         {

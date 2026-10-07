@@ -12,6 +12,8 @@
 // RE-remove-local-player.md (player removal). Engine source for comparison: FF7RebirthEngineV4
 // (stock UE4; it differs from the shipped game at the load action).
 
+#include "platform/build_value.h"
+
 #include <cstdint>
 #include <span>
 
@@ -78,6 +80,11 @@ inline constexpr std::uintptr_t kOutputLoadActionStore        = 0x14111A377;
 inline constexpr std::uint8_t   kOutputLoadActionStoreBytes[] = {0x88, 0x84, 0x24, 0x10, 0x06, 0x00, 0x00};
 inline constexpr std::uintptr_t kOutputLoadActionResume       = 0x14111A37E;
 
+/// Game version 1.005 (RE-1005-core-facts.md): the store is `mov [rbp+0E0h], al`, 6 bytes, so resume is store + 6.
+/// Both addresses translate through the 1.005 table; these bytes and renderer/output_load_action_code.h's 1.005 code
+/// replace the research build's there.
+inline constexpr std::uint8_t kOutputLoadActionStoreBytes1005[] = {0x88, 0x85, 0xE0, 0x00, 0x00, 0x00};
+
 // ---------------------------------------------------------------------------------------------
 // A local player's view point (RE-local-player-viewpoint.md)
 // ---------------------------------------------------------------------------------------------
@@ -101,9 +108,10 @@ inline constexpr std::uint8_t kGetViewPointPrologue[] = {
 // ---------------------------------------------------------------------------------------------
 
 /// UGameInstance::RemoveLocalPlayer(ULocalPlayer*). Stock GameInstance.cpp:798. Reached through
-/// the game instance's vtable at +0x2E8; no FF7R game-instance class overrides it.
-inline constexpr std::uintptr_t kRemoveLocalPlayer            = 0x144F561F0;
-inline constexpr std::uint32_t  kRemoveLocalPlayerVTableOffset = 0x2E8;
+/// the game instance's vtable at +0x2E8; no FF7R game-instance class overrides it. 1.005 inserted a UObject virtual
+/// at slot 19, so the entry is +0x2F0 there (RE-1005-core-facts.md).
+inline constexpr std::uintptr_t                    kRemoveLocalPlayer             = 0x144F561F0;
+inline constexpr platform::PerBuild<std::uint32_t> kRemoveLocalPlayerVTableOffset = {0x2E8, 0x2F0};
 
 /// Its prologue, up to the stack-probe call whose target is relative.
 inline constexpr std::uint8_t kRemoveLocalPlayerPrologue[] = {

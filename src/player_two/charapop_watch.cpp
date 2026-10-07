@@ -6,6 +6,7 @@
 #include <Unreal/CoreUObject/UObject/UnrealType.hpp>
 #include <Unreal/UObject.hpp>
 
+#include "platform/build_value.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -79,7 +80,7 @@ constexpr std::uint32_t kCompVisibleByte  = 0x14C;  // bVisible, bit 0x20
 constexpr std::uint8_t  kCompVisibleBit   = 0x20;
 constexpr std::uint32_t kCompHiddenByte   = 0x14D;  // bHiddenInGame, bit 0x04
 constexpr std::uint8_t  kCompHiddenBit    = 0x04;
-constexpr std::uint32_t kCompLastRender   = 0x2A4;  // float: LastRenderTime, written by any view that drew it
+constexpr platform::PerBuild<std::uint32_t> kCompLastRender = {0x2A4, 0x294};  // float: LastRenderTime, written by any view that drew it; 1.005: EndSkelMeshComp_UpdateRecentlyRendered 0x1408B101E [rdi+294h] (1.004 0x140A2E386 [rdi+2A4h])
 
 // The actor's paused state as the evaluators read it (§7): CharaPopEntry_GetEndActorBaseInterface(entry)
 // resolves the entry's actor and returns its EndActorBaseInterface (null if none), a pure lookup; the
@@ -103,13 +104,13 @@ constexpr std::uint32_t  kSnapshotFaster    = 0x910;  // two u8
 constexpr std::uint32_t  kSnapshotValid     = 0x913;  // u8
 
 // UEndSkeletalMeshComponent's optimisation fields (§2.2).
-constexpr std::uint32_t kCompLevelOn    = 0x121C;  // u8: reads the owner's CharaPop level
-constexpr std::uint32_t kCompForced     = 0x1220;  // u8
-constexpr std::uint32_t kCompShadow     = 0x1224;  // u8: cast shadow
-constexpr std::uint32_t kCompPauseLevel = 0x1226;  // u8
-constexpr std::uint32_t kCompLevel      = 0x1228;  // u8: the owner's CharaPop level, copied
-constexpr std::uint32_t kCompDistance   = 0x1234;  // float, to the snapshot camera
-constexpr std::uint32_t kCompAngle      = 0x1238;  // float, radians
+constexpr platform::PerBuild<std::uint32_t> kCompLevelOn    = {0x121C, 0x120C};  // u8: reads the owner's CharaPop level; 1.005: AnimOptimizationEval 0x140861DEF cmp byte [rdi+120Ch]
+constexpr platform::PerBuild<std::uint32_t> kCompForced     = {0x1220, 0x1210};  // u8; 1.005: AnimOptimizationEval 0x140861E05 mov [rdi+1210h],al
+constexpr platform::PerBuild<std::uint32_t> kCompShadow     = {0x1224, 0x1214};  // u8: cast shadow; 1.005: AnimOptimizationEval 0x140861DAD mov byte [rcx+1214h],1
+constexpr platform::PerBuild<std::uint32_t> kCompPauseLevel = {0x1226, 0x1217};  // u8; 1.005: AnimOptimizationEval 0x140861D8C movzx eax,byte [rcx+1217h] (not -0x10: a byte was inserted)
+constexpr platform::PerBuild<std::uint32_t> kCompLevel      = {0x1228, 0x1219};  // u8: the owner's CharaPop level, copied; 1.005: AnimOptimizationEval 0x140861E3E mov [rdi+1219h],al
+constexpr platform::PerBuild<std::uint32_t> kCompDistance   = {0x1234, 0x1224};  // float, to the snapshot camera; 1.005: AnimOptimizationEval 0x1408628BE, CalcAnimSignificance 0x1409D9D8F [rcx+1224h]
+constexpr platform::PerBuild<std::uint32_t> kCompAngle      = {0x1238, 0x1228};  // float, radians; 1.005: CalcAnimSignificance 0x1409D9DAF [rcx+1228h]
 
 constexpr std::uint32_t kSampleEvery   = 10;      // ticks
 constexpr float         kFarFromOneCm  = 5000.0f;  // only entries more than 50 m from player 1's camera

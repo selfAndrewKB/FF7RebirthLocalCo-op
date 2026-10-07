@@ -38,7 +38,6 @@ constexpr std::uintptr_t kCamera            = 0x143550CC4;  // ShopMenu_Activate
 constexpr std::uint8_t   kCameraBytes[]     = {0x48, 0x89, 0x5C, 0x24, 0x20};  // mov [rsp+20h], rbx
 constexpr std::uintptr_t kCameraOff         = 0x143550C90;  // ShopMenu_DeactivateShopCamera
 constexpr std::uint8_t   kCameraOffBytes[]  = {0xB8, 0x28, 0x00, 0x00, 0x00};  // mov eax, 28h
-constexpr std::uintptr_t kIdaBase           = 0x140000000;
 using Clock = std::chrono::steady_clock;
 // Player 2's press claims the shop whose camera comes within this many frames (the level script opens it the next frame,
 // §15.1) and names the pressed machine (the camera's target is the machine's Tags[0], which the pressed point's key
@@ -52,7 +51,7 @@ using Fn = std::uint64_t (*)(std::uint64_t, std::uint64_t, std::uint64_t, std::u
 platform::EntryRedirect g_end2Key, g_camera, g_cameraOff;
 const std::uint64_t*    g_vendingPreset = nullptr;  // the FName global's live address
 std::uintptr_t          g_partyManager  = 0;        // the pointer global's live address
-std::uintptr_t          g_imageBase     = 0;
+std::optional<platform::GameImage> g_image;  // for research IDA addresses in the log
 constexpr std::uint32_t kPartyLeader    = 0x148;    // the party manager's leader, an FWeakObjectPtr
 
 // Game thread.
@@ -95,7 +94,7 @@ std::uint64_t KeyAt(std::uint64_t pointer) noexcept
 std::uintptr_t CallerOf(const void* returnAddress) noexcept
 {
     const auto at = reinterpret_cast<std::uintptr_t>(returnAddress);
-    return g_imageBase != 0 && at > g_imageBase ? at - g_imageBase + kIdaBase : at;
+    return g_image ? g_image->ResearchAddress(at) : at;
 }
 
 const wchar_t* Whose(const void* character) noexcept
@@ -236,7 +235,7 @@ bool Entry(const platform::GameImage& image, platform::EntryRedirect& redirect, 
            std::span<const std::uint8_t> bytes, Fn replacement) noexcept
 {
     const auto at = image.Rebase(address);
-    return at && image.BytesMatch(address, bytes) && redirect.Install(*at, bytes, reinterpret_cast<std::uintptr_t>(replacement));
+    return at && image.BytesMatch(address, bytes) && redirect.Install(*at, image.EntryInstruction(address, bytes), reinterpret_cast<std::uintptr_t>(replacement));
 }
 
 }  // namespace
@@ -272,7 +271,7 @@ void Install(const platform::GameImage& image) noexcept
     g_vendingPreset    = preset ? reinterpret_cast<const std::uint64_t*>(*preset) : nullptr;
     const auto manager = image.Rebase(facts::kPartyManagerGlobal, sizeof(void*));
     g_partyManager     = manager ? *manager : 0;
-    g_imageBase        = image.Base();
+    g_image            = image;
     const bool presses = g_partyManager != 0 && Entry(image, g_end2Key, kEnd2Key, kEnd2KeyBytes, &End2Key);
     const bool cameras = Entry(image, g_camera, kCamera, kCameraBytes, &Camera);
     const bool closes  = Entry(image, g_cameraOff, kCameraOff, kCameraOffBytes, &CameraOff);

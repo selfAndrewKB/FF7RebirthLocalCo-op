@@ -1,5 +1,6 @@
 #include "player_two/wheelie_ride.h"
 
+#include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -162,9 +163,12 @@ constexpr std::uint32_t  kCoordStatePtr     = 0x230;        // -> u32 state id
 constexpr std::uint32_t  kCoordPending      = 0x238;        // pending row (null when none)
 constexpr std::uint32_t  kSharedTarget      = 0x0;
 constexpr std::int32_t   kStateIdle = 0, kStateBoarding = 2, kStateRiding = 3, kStateGettingOff = 4;
-constexpr std::uint32_t  kScooterRidden     = 0x2318;       // u8
-constexpr std::uint32_t  kScooterExcluded   = 0x231A;       // u8
-constexpr std::uint32_t  kScooterSetting    = 0x1870;       // MovementSetting*: +0x394 distance, +0x398 max yaw, +0x39C min power
+// 1.005 moved these scooter fields by +0x20 (RE-1005-offsets-C.md): SetRider 0x1410E9D1B writes +0x2338 (1.004
+// 0x140DE02C7 +0x2318); FindNearestFreeScooter 0x140F3598D reads +0x233A (1.004 0x140AB2F71 +0x231A);
+// ShouldRideAuto_Vt2F8 0x140E8838D loads MovementSetting from +0x1890 (1.004 0x141258A71 +0x1870).
+constexpr platform::PerBuild<std::uint32_t> kScooterRidden   = {0x2318, 0x2338};  // u8
+constexpr platform::PerBuild<std::uint32_t> kScooterExcluded = {0x231A, 0x233A};  // u8
+constexpr platform::PerBuild<std::uint32_t> kScooterSetting  = {0x1870, 0x1890};  // MovementSetting*: +0x394 distance, +0x398 max yaw, +0x39C min power
 constexpr std::uint32_t  kSettingDistance   = 0x394;
 constexpr std::uint32_t  kSettingMaxYaw     = 0x398;
 constexpr std::uint32_t  kSettingMinPower   = 0x39C;

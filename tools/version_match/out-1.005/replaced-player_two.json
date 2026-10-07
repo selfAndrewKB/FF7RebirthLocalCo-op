@@ -1,0 +1,631 @@
+{
+ "items": [
+  {
+   "old": "0x1408063DC",
+   "new": "0x1410D82B4",
+   "bytes": "48 89 5C 24 10 57 B8 40 00 00 00 E8 BC 38 09 01",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "SquareInput_IsActionHeld_Global. 7 strict-matched callers agree (PlayerMoveState__TickInput 0x1410E33C4 +0x6CD/+0x715 call it). Prologue saves rbx at [rsp+10h] (was +8); InputKey24_ReleaseShared is now inlined. Still u8(InputKey24* rcx) and still consumes its argument. The strict-byte twin 0x1410D813C is a different function (it returns !b0 && b1), not IsHeld."
+  },
+  {
+   "old": "0x1408B49D0",
+   "new": "0x140BFEA04",
+   "bytes": "48 89 5C 24 08 48 89 74 24 10 57 B8 80 00 00 00 E8 67 D1 56 01 48 2B E0",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "CharaPopEntry_GetEndActorInterface. Byte-identical apart from rel32. The two getters are byte twins; this one was told apart by its 3 strict-matched callers (EvaluateLOD 0x140BFE7F6 calls this one first, as in 1.004)."
+  },
+  {
+   "old": "0x1408B4ABC",
+   "new": "0x140BFE918",
+   "bytes": "48 89 5C 24 08 48 89 74 24 10 57 B8 80 00 00 00",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "CharaPopEntry_GetEndActorBaseInterface; 3 matched callers (EvaluateLOD 0x140BFE801). Entry bytes unchanged."
+  },
+  {
+   "old": "0x140A3D294",
+   "new": "0x1408938E4",
+   "bytes": "48 89 5C 24 10 48 89 6C 24 18 56 57 41 54 41 56 41 57 B8 D0 00 00 00 E8 80 82",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "FieldCommandCtrl__Tick. Prologue changed: rsi is pushed, and r12/r14/r15 are saved too. EndParam getters are inlined. Widget vcalls moved +0x280->+0x288 (game-internal UObject +8). Ctrl field offsets are unchanged. Only caller: kTickCall 0x140C92978->0x140B3564D (matched), but that call is now at %16=13, so it CROSSES a 16-byte block and a plain CallRedirect::Install will refuse it."
+  },
+  {
+   "old": "0x140A3D613",
+   "new": "0x140893CB3",
+   "bytes": "E8 F8 79 FF FF",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "kSnapshotCall: E8 to EndUIRequestQueue_SetTypeCommandSnapshot 0x14088B6B0 (matched). %16=3 (unchanged), inside one block."
+  },
+  {
+   "old": "0x140A402F4",
+   "new": "0x1409B0678",
+   "bytes": "40 53 B8 20 00 00 00 E8 FC B4 7B 01 48 2B E0 48",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "ControllerComponent_HasStateId (kHasStateTag); 7 caller votes. Its component vcall moved +0x520->+0x528 (game-internal UObject +8). Body otherwise identical (+0x10/+0x40 list, +0x80 id)."
+  },
+  {
+   "old": "0x140A9CC5C",
+   "new": "0x140D4E4E4",
+   "bytes": "40 53 B8 20 00 00 00 E8 90 D6 41 01 48 2B E0",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "FEndModularCameraOperator__FinalizePose: a strict unique match. kFinalizeCall 0x140A61C20->0x140D50180 calls it; the pose is still at op+0x40."
+  },
+  {
+   "old": "0x140AF5BFC",
+   "new": "0x141419328",
+   "bytes": "40 55 48 8D 6C 24 A9 B8 90 00 00 00 E8 47 28 D5 00 48 2B E0 80 3D D6 72",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "AEndCharacter__SwitchAIControl_Async. Same ABI (rcx character, dl kind, r8 controller). Its character dispatch moved vt+0x910->+0x918 (UObject +8, game-internal). The jz/jnz layout is inverted."
+  },
+  {
+   "old": "0x140B1975C",
+   "new": "0x140E22A50",
+   "bytes": null,
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "PLAYER follow state +0x298 (vtable 0x14580C8F8->0x145657190, slot offsets unchanged: not a UObject vtable). IsA_EndAIControllerBluePrintBase is inlined. The AI +0xAD8 skip gate is unchanged. The mod checks slot identity only, not bytes."
+  },
+  {
+   "old": "0x140C07A3C",
+   "new": "0x141531EE0",
+   "bytes": null,
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "WorldItemMgr_AcquireEntry_HideRumbleGrant: kAcquireCall's target. Votes: 3 callees, the structural hint, matched item-get source 0x1415322C9 inside it, and the ProcessAcquired call. wim+0x2D1/+0x2D3, entry+0x58 and PC+0x758 are unchanged."
+  },
+  {
+   "old": "0x140C10F94",
+   "new": "0x14117D034",
+   "bytes": "48 89 5C 24 20 48 89 54 24 10 57",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "WorldItemMgr_MarkAcquiredByKey (EntryRedirect). Same signature u8(wim rcx, FName key rdx), same wim+0x90 map and wim+0x140 pending set; the map lookup is now a helper call. ENTRY CHANGED: the first instruction is now mov [rsp+20h],rbx (48 89 5C 24 20, 5 bytes, %16=4, inside one block), so kMarkByKeyBytes must become these 11 bytes; kFirstInstruction stays 5. Listener call 0x14117CFF8 calls it, and kMarkFromListener 0x14117CFFD (matched) follows that call."
+  },
+  {
+   "old": "0x140C8F9C9",
+   "new": "0x140976229",
+   "bytes": "E8 CA E1 D5 00",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "kMarkerNameCall: E8 to EndUI__MarkerList_SetTargetOwnerName 0x1416D43F8 (matched). %16=9, inside one block. Containing function BattleTarget_UpdateDisplayedTarget70 = 0x140975E10."
+  },
+  {
+   "old": "0x140D9DB40",
+   "new": "0x1410DA1BB",
+   "bytes": "E8 E4 D3 60 00",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "Forced getoff, field step: in AEndGameMode_FieldStepTick 0x1410D8570, E8 to Vehicle_RequestGetOff_PrimaryActive 0x1416E75A4. %16=11 (inside one block)."
+  },
+  {
+   "old": "0x140DBE165",
+   "new": "0x1410B2D48",
+   "bytes": "E8 93 F1 47 00",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "kAcquireCall in WorldItemMgr_Tick_ProcessAcquired 0x1410B2684, E8 to 0x141531EE0. %16=8, inside one block."
+  },
+  {
+   "old": "0x140E55E40",
+   "new": "0x140D51C60",
+   "bytes": "48 89 5C 24 18 48 89 74 24 20 57 41 54 41 55 41 56 41 57 B8 70 05 00 00",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "AEndPlayerCameraManager__UpdateCamera. Frame size 0x590->0x570. Normalised diff ratio 0.989: the only displacement changes are vtable +8 and component fields -0x10 (0x4A8->0x498, 0x4AC->0x49C, 0x4F0->0x4E0), all game-internal. The manager offsets the mod uses (0x2C50 operators, 0x2CD0 index, ...) are unchanged. Slot: see 0x145D700C8."
+  },
+  {
+   "old": "0x140E66A14",
+   "new": "0x1409F84C0",
+   "bytes": "48 89 5C 24 18 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 50 FE FF FF",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "SquareInput__RouteActionUpToUIHandlerStack. Frame lea changed -0x1A0->-0x1B0; registers renamed; owner offsets 0xA8/0xB0/0xDC/0xE8 unchanged. kUpRouteCall 0x140E66914->0x1409F81C8 (matched) calls it."
+  },
+  {
+   "old": "0x140E74141",
+   "new": "0x140E93A69",
+   "bytes": "E8 52 47 F4 FF",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "kActionDownCalls, DirectInput main loop: in SquareInput__KeyDown_MapKeyToActions 0x140E93770, E8 to ActionDown 0x140DD81C0. %16=9 (was 1), inside one block. The 9 ActionDown calls keep their 1.004 order and preceding helpers."
+  },
+  {
+   "old": "0x140E74312",
+   "new": "0x140E93C3D",
+   "bytes": "E8 7E 45 F4 FF",
+   "same_semantics": false,
+   "confidence": "[CONFIRMED]",
+   "note": "kActionDownCalls, DirectInput key list. %16=13: CROSSES a 16-byte block (was blk+2). pad_buttons.cpp installs these with plain CallRedirect::Install, which refuses this site; it needs InstallFromOwnThread, as the extra-key calls already use. Call semantics otherwise unchanged."
+  },
+  {
+   "old": "0x140E745A0",
+   "new": "0x140E93EC3",
+   "bytes": "E8 F8 42 F4 FF",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "kActionDownCalls, XInput main loop. %16=3, inside one block."
+  },
+  {
+   "old": "0x140E7468D",
+   "new": "0x140E93FAC",
+   "bytes": "E8 0F 42 F4 FF",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "kExtraKeyCalls, per-button extra keys. %16=12, crosses (as in 1.004); installed with InstallFromOwnThread, so fine."
+  },
+  {
+   "old": "0x140E7477E",
+   "new": "0x140E940A7",
+   "bytes": "E8 14 41 F4 FF",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "kExtraKeyCalls, extra key list. %16=7: no longer crosses."
+  },
+  {
+   "old": "0x140EF9648",
+   "new": "0x141965660",
+   "bytes": "48 89 5C 24 08 57 B8 80 00 00 00 E8 10 65 80 00 48 2B E0 48 8B 05 CE D5",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "IsEndCharacter. Several IsA functions share its shape; this one reads class cache 0x1490F2C48, which the L\"EndCharacter\" registration fills."
+  },
+  {
+   "old": "0x140F52378",
+   "new": "0x1413FBBF8",
+   "bytes": "E8 EF 00 00 00",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "kSetupCall in EndUISystem__SetupFieldCommandOrDefer 0x1413FBB9C, E8 to FieldCommandCtrl__SetupMenuWidgets 0x1413FBCEC (matched). %16=8 (unchanged)."
+  },
+  {
+   "old": "0x1411BBAD8",
+   "new": "0x14144729C",
+   "bytes": "48 89 4C 24 08 55 53 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 F8 B8 08",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "PartyManager_ApplyPartyDataAndRefresh. Prologue changed (no mov [rsp+20h],rbx; push rbx); character-internal fields +0x20 (0x1410->0x1430). Its only caller, kAppliedCall 0x140F7F5A6->0x14110E26A (matched), calls it."
+  },
+  {
+   "old": "0x141203880",
+   "new": "0x140F8A8F8",
+   "bytes": "48 89 5C 24 08 57 B8 30 00 00 00 E8 78 12 1E 01",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "PrimaryPCM_Op2CA8_SlotFlag44 (kModuleOn); 3 caller votes; body identical."
+  },
+  {
+   "old": "0x141203BEC",
+   "new": "0x141434B1C",
+   "bytes": "40 53 B8 20 00 00 00 E8 58 70 D3 00",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "PrimaryPCM_Op2CA8_SlotCall18 (kDeactivate); still reads PCM+0x2CA8. Its byte twin 0x141591F0C reads +0x2CB0 and is a different function."
+  },
+  {
+   "old": "0x14131FE21",
+   "new": "0x1413977FB",
+   "bytes": "E8 10 C5 B3 FF",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "kGateCall in BattleHit_ApplyReaction_CamFxAndFFB 0x141394180, E8 to 0x140ED3D10 (kGate, matched). %16=11, inside one block. Same args: cl=[atk+0x380], rdx attacker, r8 target (now r15)."
+  },
+  {
+   "old": "0x14131FE78",
+   "new": "0x141397852",
+   "bytes": "E8 69 A6 DC FF",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "kCameraCall, E8 to 0x141161EC0 (kCamera, matched). %16=2. Same args: rcx=&out, rdx=hit+0x94, r8=&FName."
+  },
+  {
+   "old": "0x14131FF12",
+   "new": "0x1413978EC",
+   "bytes": null,
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "Rumble source 'battle hit': return address after E8 EndFFBComp_PlayChannel (0x14102FC14) at 0x1413978E7. Used for log attribution only; no byte check."
+  },
+  {
+   "old": "0x1413243E9",
+   "new": "0x140D44F2D",
+   "bytes": null,
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "Rumble source 'Materia ATB effect': return address after E8 PlayChannel_Classic (0x14102FC70) at 0x140D44F28, in MateriaATBAddEffect_PlayFxAndFFB_OwnerPC 0x140D44BF0 (4 callee votes plus the structural hint)."
+  },
+  {
+   "old": "0x141504270",
+   "new": "0x140B889E4",
+   "bytes": "B8 28 00 00 00 E8 92 31 5E 01 48 2B E0 48 8B 0D 70 4D 4D 08 48 85 C9 74",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "PartyData_GetDefaultBattleLeaderType; 4 caller votes; body identical (returns 0x10 when the party data is null)."
+  },
+  {
+   "old": "0x14161B408",
+   "new": "0x1418DE9B8",
+   "bytes": "48 89 5C 24 18 55 56 57 B8 20 00 00 00 E8 B6 D1",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "FieldActionMgr_OnFieldExit_ClearCandidatesRows. Recompiled: new prologue, and it reads mgr+0x290 directly (= the old (mgr+0x90)+0x200). Same effect. Called from kFieldExitCall 0x1410DC6B7 (matched)."
+  },
+  {
+   "old": "0x14161B4E0",
+   "new": "0x141866A44",
+   "bytes": "48 89 54 24 10 48 89 4C 24 08 53 55 56 57 41 54",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "FieldActionMgr_OnFieldEnter_ResetSlots. Entry bytes unchanged; recompiled, but the live-block offsets (0x487E9, 0x48328..0x48728) are the same. Called from kFieldEnterCall 0x1410D8951 (matched)."
+  },
+  {
+   "old": "0x14166129C",
+   "new": "0x1416E75A4",
+   "bytes": "48 89 5C 24 08 57 B8 20 00 00 00 E8 CC 45 A8 00 48 2B E0 48 8B D9 E8 31",
+   "same_semantics": true,
+   "confidence": "[ASSUMPTION]",
+   "note": "Vehicle_RequestGetOff_PrimaryActive: identity confirmed by 6 matched callers. The per-vehicle branches now live in cold chunks (e.g. 0x142716D24), so the hot part is 25 instructions. Same params* ABI; the branch order was not re-read in full."
+  },
+  {
+   "old": "0x141695750",
+   "new": "0x1417143A4",
+   "bytes": "B8 28 00 00 00 E8 D2 77 A5 00 48 2B E0",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "EndParam CameraLengthFieldScaleLength: its cold path builds the name L\"CameraLengthFieldScaleLength\"."
+  },
+  {
+   "old": "0x141695794",
+   "new": "0x1417143E8",
+   "bytes": "B8 28 00 00 00 E8 8E 77 A5 00 48 2B E0",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "EndParam CameraLengthFieldScaleHeight (name string verified)."
+  },
+  {
+   "old": "0x1416957D8",
+   "new": "0x14171442C",
+   "bytes": "B8 28 00 00 00 E8 4A 77 A5 00 48 2B E0",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "EndParam CameraLengthFieldScaleFOV (name string verified)."
+  },
+  {
+   "old": "0x141846EEC",
+   "new": "0x1418BF0FC",
+   "bytes": null,
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "AnimNotifyState_EndFFBRangeAdv_Begin_FirstPC = RangeAdvanced vtable 0x1456FFC00 +0x280 (was +0x278; see offset_changes). Registers renamed; notify fields +0x30..+0x4C unchanged. Checked by slot identity."
+  },
+  {
+   "old": "0x141846F3C",
+   "new": "0x1418BF156",
+   "bytes": "E8 F5 AB 6D FF",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "First-controller call in RangeAdv Begin, E8 to UWorld::GetFirstPlayerController 0x140F99D50 (matched). %16=6 (was 0xC); no longer crosses."
+  },
+  {
+   "old": "0x14184709C",
+   "new": "0x1418BF2E0",
+   "bytes": null,
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "AnimNotify_EndFFBAdvanced_Notify_FirstPC = vtable 0x1456E9710 +0x280. MeshComp is now in rdi (was rbx), which does not matter to the mod (globals, not registers)."
+  },
+  {
+   "old": "0x1418470D2",
+   "new": "0x1418BF316",
+   "bytes": "E8 35 AA 6D FF",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "First-controller call in EndFFBAdvanced Notify. %16=6."
+  },
+  {
+   "old": "0x141847117",
+   "new": "0x1418BF35B",
+   "bytes": null,
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "Rumble source 'montage notify (advanced)': return address after E8 PlayChannel at 0x1418BF356."
+  },
+  {
+   "old": "0x141884358",
+   "new": "0x1415DC2EC",
+   "bytes": "E8 B3 B2 10 00",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "Forced getoff A in FieldInteract_Begin_ForceVehicleGetOff_A 0x1415DC210 (told from B/C by its callee at +185, 0x143140784). %16=12, crosses; installed with InstallFromOwnThread, so fine."
+  },
+  {
+   "old": "0x1419058B4",
+   "new": "0x140834850",
+   "bytes": "48 89 74 24 10 57 B8 20 00 00 00 E8 20 73 93 01 48 2B E0 48 8B F1 48 85",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "FWeakObjectPtr::AssignObject (stock UE). Prologue changed (no rbx save at entry); registers renamed. Still sits just before FWeakObjectPtr::Get 0x1408349FC, as in 1.004. 2 caller votes."
+  },
+  {
+   "old": "0x1422BA490",
+   "new": "0x1409A41E4",
+   "bytes": "40 53 56 57 41 54 41 55 41",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "FieldActionMgr_OctreeQueryPointsNearProbe (kQuery): the only recursive callee of FieldActionMgr_Update 0x140AFC1B4, called at 0x140AFC990 with edx=0 and r8=rcx (root). Same 5-argument signature. FieldTracePreset_FindRowByName is inlined (its table walk and getters), but the query still writes only the out array. ENTRY CHANGED (prologue push rbx,rsi,rdi,r12..r15; frame 0xF0), so kQueryBytes must become these 9 bytes."
+  },
+  {
+   "old": "0x1423E30C0",
+   "new": "0x141819C30",
+   "bytes": "40 53 B8 50 00 00 00 E8 44 1F 95 00 48 2B E0 48 8B 84 24 90 00 00 00 48 8B",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "OnSubjectCameraOverrideAdded handler: the function AEndPlayerCameraManager__OnLeaderChanged 0x1412FB0FC binds into char+0x17C0. It is now a 103-byte adapter that unpacks the delegate args and calls the old body, now 0x141434D1C. The delegate signature is unchanged (out*, UObject** payload, ...); the mod compares and swaps this pointer and calls it, so the adapter is the right g_engineAdded."
+  },
+  {
+   "old": "0x1423E3730",
+   "new": "0x14186B980",
+   "bytes": "B8 38 00 00 00 E8 F6 01",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "OnSubjectCameraOverrideRemoved handler, bound into char+0x1800. It is now a 45-byte adapter that copies the 12-byte id and calls body 0x141434E94. Same (payload, const id12*) signature."
+  },
+  {
+   "old": "0x1423EF160",
+   "new": "0x140B38CC6",
+   "bytes": "E8 E9 34 FC FF",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "kUpdateCall: E8 to FieldActionMgr_Update_CandidatesSlotsRows 0x140AFC1B4 with rcx=[GameMode+0x1A0] and xmm1=dt, inside the new helper 0x140B38C88. That helper is called by the new Tick530 body 0x140B389C0 (the thunk's jmp target), with rbx=GameMode taken from global 0x148F325B8. %16=6, inside one block. NOTE: matches.json maps kUpdate 0x140E7A700 to 0x141510600, which is WRONG (a 0x56-byte partial match). The real function is 0x140AFC1B4 (18 callee votes, size 9574 vs 9849)."
+  },
+  {
+   "old": "0x14295F0A5",
+   "new": "0x1425439AD",
+   "bytes": "48 89 84 24 A8 00 00 00",
+   "same_semantics": false,
+   "confidence": "[CONFIRMED]",
+   "note": "kPanelClearedSite equivalent in the cold chunk: mov [rsp+0A8h],rax (the stack slot was 0x108). %16=13, so these 8 bytes CROSS a 16-byte block and CodeRedirect cannot install the panel gate here. kPanelGateSiteBytes and the copy in PanelGateCode would also have to become 48 89 84 24 A8 00 00 00. Better approach: see 0x14295F0BE."
+  },
+  {
+   "old": "0x14295F0AD",
+   "new": "0x1425439B5",
+   "bytes": null,
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "kPanelClearedResume: test rax,rax after the gated mov."
+  },
+  {
+   "old": "0x14295F0BE",
+   "new": "0x1425439C6",
+   "bytes": "E8 21 3B 1D 01",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "kPanelClearedCall: E8 to EndUI4_QueueTargetCleared 0x1437174EC. Now %16=6, inside one block, so the gate workaround is no longer needed: a plain CallRedirect here (replacement = TWeakPtrTS__Release(arg)) gives the same effect. The weak ref is added by lock inc [rax+0Ch] (was lock add ...,edi)."
+  },
+  {
+   "old": "0x14295F0C3",
+   "new": "0x1425439CB",
+   "bytes": null,
+   "same_semantics": false,
+   "confidence": "[CONFIRMED]",
+   "note": "kPanelClearedSkipTo: now 'nop; jmp 0x140976DA1'. 1.004 had 'xor r8d,r8d; jmp' here, so the merge state differs. Not needed if the call is redirected instead."
+  },
+  {
+   "old": "0x14295F139",
+   "new": "0x142543A3F",
+   "bytes": "E8 FC 09 1C 01",
+   "same_semantics": false,
+   "confidence": "[CONFIRMED]",
+   "note": "kPanelSetCall: E8 to EndUI4_QueueTargetSet 0x143704440 (matched). Now %16=15: CROSSES a block (in 1.004 it was inside one). lock_on's Redirect uses plain CallRedirect::Install, which refuses it; it needs InstallFromOwnThread or a gate. The two panel requests have swapped which one straddles."
+  },
+  {
+   "old": "0x142ADCBCA",
+   "new": "0x1410B9F6D",
+   "bytes": "E8 32 73 05 02",
+   "same_semantics": false,
+   "confidence": "[ASSUMPTION]",
+   "note": "kSetterCall: the only E8 to PrimaryPCM_ApplyCameraDistanceOptions 0x1431112A4 (matched kPrimaryApply). OptionsMenu_SetOptionValue_CopyApplyCommit is now merged into a 1273-instruction setter 0x1410B9C38 (cl=new value, dl=[opt+0x37]). %16=13: CROSSES a block, so camera_distance's plain CallRedirect::Install will refuse it. The args were not re-read in full."
+  },
+  {
+   "old": "0x1431C9638",
+   "new": "0x142ED1118",
+   "bytes": null,
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "CHOCOBO follow vtable 0x145B1E488 +0x58 thunk -> jmp FollowState_TickTeleportEQS_Vt58 0x14119AD20 (= matched 0x140CB9618). Slot identity only."
+  },
+  {
+   "old": "0x1431D851C",
+   "new": "0x142EDFAE8",
+   "bytes": null,
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "CHOCOBO_MEMBER/SUB +0x298 thunk -> jmp FollowState_UpdateTeleport_Vt298 0x1410AA69C (the PLAYER update calls the same function). Slot identity only."
+  },
+  {
+   "old": "0x1433FDFD0",
+   "new": "0x143116144",
+   "bytes": "B8 28 00 00 00 E8 32 5A 05 FF 48 2B E0 48 83 C4 28 E9 E6 EE 6A FF CC CC",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "FEndFieldCameraOperator::Deactivate: held by the matched slot 0x1465437C8 (vtable 0x1465437A8 +0x20, a non-UObject vtable, unchanged); same thunk shape -> 0x1427C5040 -> 0x1414349FC."
+  },
+  {
+   "old": "0x14360FBD4",
+   "new": "0x1433443CC",
+   "bytes": "E8 D3 31 3A FE",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "Forced getoff B in FieldInteract_Begin_ForceVehicleGetOff_B 0x1433442F0 (callee at +185 = 0x143140AC8 = old sub_143424660). %16=12, crosses; InstallFromOwnThread, so fine."
+  },
+  {
+   "old": "0x14360FDD0",
+   "new": "0x1433445C8",
+   "bytes": "E8 D7 2F 3A FE",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "Forced getoff C in FieldInteract_Begin_ForceVehicleGetOff_C 0x1433444EC (callee at +185 = 0x143140BA8). %16=8."
+  },
+  {
+   "old": "0x1439D6A84",
+   "new": "0x1437174EC",
+   "bytes": "40 53 B8 30 00 00 00 E8 88 46 A5 FE 48 2B E0 48 8B D9",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "EndUI4_QueueTargetCleared; 4 caller votes; body identical (EndUISystem__Get = 0x1408A5B8C, [+0x20])."
+  },
+  {
+   "old": "0x143A08A54",
+   "new": "0x14374A720",
+   "bytes": "48 8B C4 48 89 58 08 48 89 70 10 48 89 78 18 4C 89 70 20 55 48 8B EC B8 50 00 00 00 E8 3F 14 A2 FE",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "FieldCommandCtrl__Ctor. Prologue changed (mov rax,rsp form; r14 saved); registers renamed. Every member offset written (0x34, 0x68, 0xC0..0xE0, 0x4E8..0x4FC, 0x730..) is the same. EndUISystem ctor 0x1421ED640 still allocates 0x798."
+  },
+  {
+   "old": "0x143DA1460",
+   "new": "0x1427C0BC8",
+   "bytes": "B8 38 00 00 00 E8 AE AF 9A FF 48 2B E0 48 8D 41 48 48 83 C1 08 48 89 44",
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "SBScooterCoordinator_SM_FlushPending; 5 byte twins, told apart by 2 caller votes (RequestGetOff, Begin_SetActive)."
+  },
+  {
+   "old": "0x14583F980",
+   "new": "0x1456B2078",
+   "bytes": null,
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "AEndSelfBalancingScooterCharacter vtable: stored at +27 by ctor 0x141723BC4 (278 bytes, as in 1.004). The ctor's field writes show the +0x20 shift; 43 unique-matched slots agree at the +1-for-slot>=19 position. Scooter fields: see offset_changes."
+  },
+  {
+   "old": "0x145D700C8",
+   "new": "0x145BCF3F8",
+   "bytes": null,
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "kCameraUpdate slot: camera-manager vtable 0x145BCED58 (matched) +0x6A0, i.e. slot 212 (was 211, UObject +1). It holds 0x140D51C60."
+  },
+  {
+   "old": "0x1467C85A0",
+   "new": "0x146653E58",
+   "bytes": null,
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "AEndPlayerController vtable: lea at ctor 0x143A673D4 (5 callee votes). Consistent with matched ProcessPlayerInput slot 0x146654AE0 = vtable +0xC88 (slot 401, was 400)."
+  },
+  {
+   "old": "0x149347278",
+   "new": "0x149183A48",
+   "bytes": null,
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "FName global rpaVendingMachine. Its guard is 0x149183A40, initialised from the string at 0x145B66FB0 in FieldActionActor_RegisterPoints 0x141467384, which uses the name twice, as in 1.004."
+  },
+  {
+   "old": "0x14934D020",
+   "new": "0x1491892F8",
+   "bytes": null,
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "kCompositeCollisionNameGuard: the thread-safe-static guard. Matched BeginPlay 0x143A99A3C reads it at the same offsets (+897 cmp, +1416/+1428 init)."
+  },
+  {
+   "old": "0x14934D028",
+   "new": "0x149189300",
+   "bytes": null,
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "kCompositeCollisionNameGlobal (guard+8, as before). BeginPlay +909 mov rax, and +1454 lea at init."
+  },
+  {
+   "old": "0x14939BC48",
+   "new": "0x1491D8458",
+   "bytes": null,
+   "same_semantics": true,
+   "confidence": "[CONFIRMED]",
+   "note": "Anim world manager pointer. 2 strict-unique readers agree; same delta as matched kBattleStateGlobal (0x14939BC58->0x1491D8468). Snapshot offsets +0x8C0/+0x8E0/+0x913 are unchanged (two mapped function pairs read the same offsets)."
+  }
+ ],
+ "offset_changes": [
+  {
+   "constant": "kNotifies[].slot (vtable + 0x278 / +0x280 / +0x288)",
+   "file": "player_two/combat_rumble.cpp:69-76",
+   "old": "Notify/Begin +0x278, Tick +0x280, End +0x288",
+   "new": "Notify/Begin +0x280, Tick +0x288, End +0x290",
+   "evidence": "AnimNotify classes are UObjects, so slots >= 0x98 move +8. FFBAdv 0x1456E9710 +0x280 = 0x1418BF2E0; RangeAdv 0x1456FFC00 +0x280/+0x288/+0x290 = Begin 0x1418BF0FC / Tick 0x1418BB42C / End 0x1418BB3A8 (matched); FFB 0x14651B160 +0x280 = 0x142F6FB80 (matched)."
+  },
+  {
+   "constant": "kAddedFn",
+   "file": "player_two/camera_override.cpp:39",
+   "old": "0x17A0",
+   "new": "0x17C0",
+   "evidence": "AEndPlayerCameraManager__OnLeaderChanged 0x1412FB0FC: lea r12,[rsi+17C0h] then stores the Added handler (1.004: [rsi+17A0h]). End character field +0x20."
+  },
+  {
+   "constant": "kRemovedFn",
+   "file": "player_two/camera_override.cpp:41",
+   "old": "0x17E0",
+   "new": "0x1800",
+   "evidence": "Same function: vmovups ymm3,[rsi+1800h], then stores the Removed handler (1.004: +0x17E0)."
+  },
+  {
+   "constant": "kScooterRider",
+   "file": "player_two/wheelie_watch.cpp:66",
+   "old": "0x2210",
+   "new": "0x2230",
+   "evidence": "layout-diff: EndSelfBalancingScooterCharacter.RiderActor 0x2210->0x2230. The scooter ctor 0x141723BC4 writes [rbx+2230h] where 1.004 wrote [rbx+2210h]."
+  },
+  {
+   "constant": "kScooterRidden / kScooterParked / kScooterExcluded",
+   "file": "player_two/wheelie_watch.cpp:67-69",
+   "old": "0x2318 / 0x2319 / 0x231A",
+   "new": "0x2338 / 0x2339 / 0x233A",
+   "evidence": "The scooter ctor zeroes these with one dword at [rbx+2338h] (1.004: [rbx+2318h]), and the whole native block moved +0x20 (e.g. 0x2308->0x2328, 0x231C->0x233C). Exact byte roles not re-read: [ASSUMPTION] for the per-byte mapping."
+  },
+  {
+   "constant": "kPanelGateSiteBytes (and bytes 0..7 of PanelGateCode)",
+   "file": "player_two/panel_gate_code.h:41,49",
+   "old": "48 89 84 24 08 01 00 00 (mov [rsp+0x108],rax)",
+   "new": "48 89 84 24 A8 00 00 00 (mov [rsp+0xA8],rax)",
+   "evidence": "Cold chunk 0x1425439AD. But this site now crosses a 16-byte block (%16=13), so the gate cannot be installed there anyway; redirect the now in-block call 0x1425439C6 instead."
+  },
+  {
+   "constant": "kCameraUpdate slot label 'UpdateCamera slot (211)'",
+   "file": "player_two/engine_facts.h:377",
+   "old": "slot 211 (0x145D700C8)",
+   "new": "slot 212 (0x145BCF3F8)",
+   "evidence": "Camera-manager vtable 0x145BCED58 +0x6A0 holds UpdateCamera 0x140D51C60; the matched BeginPlay slot is also +1 (0x145BCF098 = slot 104)."
+  },
+  {
+   "constant": "kMarkByKeyBytes",
+   "file": "player_two/interact_watch.cpp:97",
+   "old": "48 89 54 24 10 53 B8 30 00 00 00",
+   "new": "48 89 5C 24 20 48 89 54 24 10 57",
+   "evidence": "New entry 0x14117D034. kFirstInstruction stays 5 (mov [rsp+20h],rbx; %16=4, inside one block)."
+  },
+  {
+   "constant": "kQueryBytes",
+   "file": "player_two/interact_watch.cpp:110",
+   "old": "41 55 41 56 B8 28 01 00 00",
+   "new": "40 53 56 57 41 54 41 55 41",
+   "evidence": "New entry 0x1409A41E4; the prologue was rewritten."
+  }
+ ],
+ "not_found": [
+  {
+   "old": "0x140C8F058",
+   "why": "EndUI23_IsCommandTargetEntryActive no longer exists as a function in 1.005: its only caller inlined it. At 0x140975F2A BattleTarget_UpdateDisplayedTarget70 does call EndUISystem__Get (0x1408A5B8C); mov rcx,[rax+0B8h]; call EndUI23_IsCommandTargetEntryActive_Impl (0x1409777B4). The Impl is byte-identical to 1.004's 0x140C8F07C (al = target list entry 10/11/13 active, reads +0x20/+0x28/+0x34/+0x38/+0x5A0/+0x5B8). lock_on.cpp's kTargetList call can become Impl(EndUISystem__Get()->[+0xB8]), with Impl entry bytes 8B 41 34 33 D2 39 51 38 4C 8B C9 0F 4D 41 38 (no __alloca_probe). Code change needed, so not replaced."
+  },
+  {
+   "old": "0x142242DD1",
+   "why": "MateriaATBAddFFB_GameThreadTask_PlayOnWeakPC (1.004 0x142242CB0, 303 bytes) was not found. No 1.005 function both reads weak-PC+0x758 and calls PlayChannel_Classic with edx=0; the 8 Classic callers were all accounted for as other sources. Probably inlined into a task dispatcher [ASSUMPTION]. It is a log-only source label, so the cost is one unnamed rumble source in the log."
+  }
+ ]
+}

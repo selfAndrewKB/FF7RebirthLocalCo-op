@@ -1,0 +1,1640 @@
+{
+ "core": [
+  {
+   "old": "0x140bee266",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "platform/engine_addresses.h:41 kFrameNumberGate"
+   ],
+   "structural_hint": {
+    "found": 5379103932,
+    "at": 5379104158,
+    "changes": [
+     "+0x2F: `mov rbx, r8` \u2192 `mov rdi, r8`",
+     "+0x41: `mov rdi, rax` \u2192 `mov rbx, rax`",
+     "+0x4C: `mov rcx, rdi` \u2192 `mov rcx, rbx`"
+    ],
+    "n_changes": 3,
+    "diverged_at": 114,
+    "size": 1119
+   }
+  },
+  {
+   "old": "0x14111a301",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "platform/engine_addresses.h:59 kOutputLoadActionSequence"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x14111a377",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "platform/engine_addresses.h:77 kOutputLoadActionStore"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x14111a37e",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "platform/engine_addresses.h:79 kOutputLoadActionResume"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x144f561f0",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "platform/engine_addresses.h:105 kRemoveLocalPlayer"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x144f56202",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "platform/engine_addresses.h:116 kRemoveLocalPlayerControllerTest"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  }
+ ],
+ "hud_renderer": [
+  {
+   "old": "0x14079f7f0",
+   "kind": "code",
+   "how": "call target from matched code (23/23 agree)",
+   "known_new_from_callers": "0x140764ea8",
+   "uses": [
+    "hud/minimap_labels.cpp:61 kFreeString"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140887ae0",
+   "kind": "code",
+   "how": "call target from matched code (4/4 agree)",
+   "known_new_from_callers": "0x1409772f8",
+   "uses": [
+    "hud/target_views.cpp:39 ",
+    "player_two/lock_on.cpp:64 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x1409156b4",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "renderer/me_feedback_once.cpp:34 kProcess"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140915958",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "renderer/me_feedback_once.cpp:40 kCopy"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140915e38",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "renderer/me_feedback_once.cpp:33 kProcessCall"
+   ],
+   "structural_hint": {
+    "found": 5381033484,
+    "at": 5381033676,
+    "changes": [
+     "+0x8A: `mov rcx, qword ptr [rbx + 0x218]` \u2192 `mov rcx, qword ptr [rbx + 0x210]`",
+     "+0xA0: `mov rcx, qword ptr [rbx + 0x218]` \u2192 `mov rcx, qword ptr [rbx + 0x210]`",
+     "+0xB4: `test byte ptr [rax + 0x220], 1` \u2192 `test byte ptr [rax + 0x218], 1`",
+     "+0xC5: `mov al, byte ptr [rbx + 0x220]` \u2192 `mov al, byte ptr [rbx + 0x218]`",
+     "+0xD3: `mov al, byte ptr [rbx + 0x220]` \u2192 `mov al, byte ptr [rbx + 0x218]`",
+     "+0xDF: `mov byte ptr [rbx + 0x220], al` \u2192 `mov byte ptr [rbx + 0x218], al`"
+    ],
+    "n_changes": 6,
+    "diverged_at": null,
+    "size": 282
+   }
+  },
+  {
+   "old": "0x14096ecac",
+   "kind": "code",
+   "how": "call target from matched code (2/2 agree)",
+   "known_new_from_callers": "0x140b12fa8",
+   "uses": [
+    "hud/enemy_gauges.cpp:97 kApplyTransform"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x14098e35c",
+   "kind": "code",
+   "how": "call target from matched code (4/4 agree)",
+   "known_new_from_callers": "0x140886704",
+   "uses": [
+    "hud/minimap_labels.cpp:53 kQuadsDtor"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x14098e3b4",
+   "kind": "code",
+   "how": "call target from matched code (2/2 agree)",
+   "known_new_from_callers": "0x14088675c",
+   "uses": [
+    "hud/minimap_labels.cpp:54 kRunsDtor"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x1409e7ef8",
+   "kind": "code",
+   "how": "call target from matched code (2/2 agree)",
+   "known_new_from_callers": "0x1408f26f0",
+   "uses": [
+    "hud/minimap.cpp:102 kBeginInitResource",
+    "hud/second_image.cpp:80 kBeginInitResource"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x1409f72b8",
+   "kind": "code",
+   "how": "call target from matched code (1/1 agree)",
+   "known_new_from_callers": "0x1409b5d90",
+   "uses": [
+    "hud/area_icons_two.cpp:31 kFrameUpdate"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x1409f73e4",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "hud/area_icons_two.cpp:47 kLeaderCall"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x1409f7439",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "hud/area_icons_two.cpp:40 kFirstControllerCall"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x1409f94fa",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "hud/hud_trace.cpp:60 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140a514ac",
+   "kind": "code",
+   "how": "call target from matched code (1/1 agree)",
+   "known_new_from_callers": "0x140a63a00",
+   "uses": [
+    "views/whole_screen.cpp:57 kIsAnyPlaying"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140c26810",
+   "kind": "code",
+   "how": "call target from matched code (1/1 agree)",
+   "known_new_from_callers": "0x140dd2ad0",
+   "uses": [
+    "hud/minimap_icons.cpp:31 kUpdate"
+   ],
+   "structural_hint": {
+    "found": 5383203536,
+    "at": 5383203536,
+    "changes": [
+     "+0x1C: `lea rbp, [rax - 0x48]` \u2192 `lea rbp, [rax - 0x68]`",
+     "+0x20: `mov eax, 0x120` \u2192 `mov eax, 0x140`",
+     "+0x2D: `vmovaps xmmword ptr [rsp + 0x110], xmm6` \u2192 `vmovaps xmmword ptr [rsp + 0x130], xmm6`",
+     "+0x40: `mov qword ptr [rbp], rax` \u2192 `mov qword ptr [rbp + 0x20], rax`",
+     "+0x44: `mov r14, rcx` \u2192 `mov r15, rcx`"
+    ],
+    "n_changes": 5,
+    "diverged_at": 71,
+    "size": 2189
+   }
+  },
+  {
+   "old": "0x140c81de0",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "hud/area_icons_two.cpp:48 kLeader"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140c95cc0",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "hud/second_image.cpp:45 kRenderToCompositeLayer"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140c960a2",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "hud/second_image.cpp:52 kAcquireCall"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140c960d9",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "hud/hud_addresses.h:23 kEntryCall"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140c96258",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "hud/hud_addresses.h:49 kSubmitCall"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140cf05f8",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "renderer/me_feedback_once.cpp:47 kHidden"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140d1791c",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "hud/second_image.cpp:62 kAddCompositePasses"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140dba287",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "hud/enemy_gauges.cpp:77 kForcedCall"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140dba664",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "hud/enemy_gauges.cpp:70 kTargetedCall"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140dbc198",
+   "kind": "code",
+   "how": "call target from matched code (2/2 agree)",
+   "known_new_from_callers": "0x140b7685c",
+   "uses": [
+    "hud/target_views.cpp:37 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140e76904",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "hud/enemy_gauges.cpp:78 kForced"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140f59c50",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "hud/hud_roots.cpp:30 kSetPlayerContext"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140f5d854",
+   "kind": "code",
+   "how": "call target from matched code (1/1 agree)",
+   "known_new_from_callers": "0x140f62a48",
+   "uses": [
+    "hud/area_icons_two.cpp:34 kClearAll"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140fc6c95",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "hud/minimap_once.cpp:49 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140fc6cae",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "hud/minimap.cpp:85 kAcquireCall",
+    "hud/minimap_once.cpp:49 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140fc6ce9",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "hud/minimap.cpp:88 kFindOrAddCall"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140fc873c",
+   "kind": "code",
+   "how": "call target from matched code (2/2 agree)",
+   "known_new_from_callers": "0x140a47a14",
+   "uses": [
+    "hud/hud_addresses.h:50 kSubmitLayerSlot"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140fc8a98",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "hud/hud_addresses.h:24 kFindOrAddNamedLayerEntry"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140fdd1f0",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "renderer/me_feedback_once.cpp:28 kRenderMain"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140fde3c1",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "hud/second_image.cpp:61 kAddCompositePassesCall"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x1410340a7",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "hud/area_icons_two.cpp:77 "
+   ],
+   "structural_hint": {
+    "found": 5386344048,
+    "at": 5386347407,
+    "changes": [
+     "+0x59: `mov dword ptr [rsp + 0x74], edx` \u2192 `mov dword ptr [rsp + 0x64], edx`",
+     "+0x5D: `mov qword ptr [rsp + 0xb8], rcx` \u2192 `mov qword ptr [rsp + 0xc0], rcx`",
+     "+0x68: `mov qword ptr [rsp + 0xa0], r15` \u2192 `mov qword ptr [rsp + 0x90], r15`"
+    ],
+    "n_changes": 3,
+    "diverged_at": 112,
+    "size": 5202
+   }
+  },
+  {
+   "old": "0x1410340b1",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "hud/area_icons_two.cpp:78 "
+   ],
+   "structural_hint": {
+    "found": 5386344048,
+    "at": 5386347417,
+    "changes": [
+     "+0x59: `mov dword ptr [rsp + 0x74], edx` \u2192 `mov dword ptr [rsp + 0x64], edx`",
+     "+0x5D: `mov qword ptr [rsp + 0xb8], rcx` \u2192 `mov qword ptr [rsp + 0xc0], rcx`",
+     "+0x68: `mov qword ptr [rsp + 0xa0], r15` \u2192 `mov qword ptr [rsp + 0x90], r15`"
+    ],
+    "n_changes": 3,
+    "diverged_at": 112,
+    "size": 5202
+   }
+  },
+  {
+   "old": "0x14106da88",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "hud/minimap_labels.cpp:48 kRelayout"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x1417267f0",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "hud/hud_updates.cpp:59 kLeaderTargetTick"
+   ],
+   "structural_hint": {
+    "found": 5426681328,
+    "at": 5426681328,
+    "changes": [
+     "+0x35: `call qword ptr [rax + 0x160]` \u2192 `call qword ptr [rax + 0x168]`"
+    ],
+    "n_changes": 1,
+    "diverged_at": 135,
+    "size": 590
+   }
+  },
+  {
+   "old": "0x1418eb3d4",
+   "kind": "code",
+   "how": "ambiguous: own match 0x140BF51CC, callers 0x140834A60",
+   "known_new_from_callers": null,
+   "uses": [
+    "views/whole_screen.cpp:43 kWeakIsValid"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x1420b8090",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "renderer/family_boundary.cpp:23 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x1423ef4a1",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "hud/hud_trace.cpp:46 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x142e714ec",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "hud/minimap.cpp:109 kNewRenderTarget"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x1451b96cc",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "hud/minimap.cpp:115 kUpdateResourceImmediate"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x1457a6720",
+   "kind": "data",
+   "how": "slot holds 0x140FDD1F0, which did not match",
+   "known_new_from_callers": null,
+   "uses": [
+    "renderer/me_feedback_once.cpp:27 kRenderEntry"
+   ],
+   "structural_hint": null
+  },
+  {
+   "old": "0x149117af8",
+   "kind": "data",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "renderer/me_feedback_once.cpp:56 kStreamingManagers"
+   ],
+   "structural_hint": null
+  },
+  {
+   "old": "0x149349880",
+   "kind": "data",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "hud/area_icons_two.cpp:24 kInstanceOne"
+   ],
+   "structural_hint": null
+  },
+  {
+   "old": "0x1493498c8",
+   "kind": "data",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "views/whole_screen.cpp:42 kJobBoardSlot"
+   ],
+   "structural_hint": null
+  },
+  {
+   "old": "0x14939c2f8",
+   "kind": "data",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "hud/minimap.cpp:90 kStockNameStatic"
+   ],
+   "structural_hint": null
+  }
+ ],
+ "player_two": [
+  {
+   "old": "0x1408063dc",
+   "kind": "code",
+   "how": "ambiguous: own match 0x1410D813C, callers 0x1410D82B4",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/field_pickup.cpp:166 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x1408b49d0",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/charapop_watch.cpp:67 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x1408b4abc",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/charapop_watch.cpp:90 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140a3d294",
+   "kind": "code",
+   "how": "call target from matched code (1/1 agree)",
+   "known_new_from_callers": "0x1408938e4",
+   "uses": [
+    "player_two/command_menu_tick.cpp:38 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140a3d613",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/command_menu_tick.cpp:46 kSnapshotCall"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140a402f4",
+   "kind": "code",
+   "how": "call target from matched code (2/2 agree)",
+   "known_new_from_callers": "0x1409b0678",
+   "uses": [
+    "player_two/engine_facts.h:364 "
+   ],
+   "structural_hint": {
+    "found": 5378868856,
+    "at": 5378868856,
+    "changes": [
+     "+0x14: `call qword ptr [rax + 0x520]` \u2192 `call qword ptr [rax + 0x528]`"
+    ],
+    "n_changes": 1,
+    "diverged_at": null,
+    "size": 70
+   }
+  },
+  {
+   "old": "0x140a9cc5c",
+   "kind": "code",
+   "how": "call target from matched code (1/1 agree)",
+   "known_new_from_callers": "0x140d4e4e4",
+   "uses": [
+    "player_two/shoulder_scale.cpp:27 kFinalizePose"
+   ],
+   "structural_hint": {
+    "found": 5382661348,
+    "at": 5382661348,
+    "changes": [],
+    "n_changes": 0,
+    "diverged_at": null,
+    "size": 47
+   }
+  },
+  {
+   "old": "0x140af5bfc",
+   "kind": "code",
+   "how": "call target from matched code (2/2 agree)",
+   "known_new_from_callers": "0x141419328",
+   "uses": [
+    "player_two/chocobo_ride.cpp:66 ",
+    "player_two/wheelie_ride.cpp:101 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140b1975c",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/party_warp.cpp:39 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140c07a3c",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/interact_watch.cpp:107 kAcquire"
+   ],
+   "structural_hint": {
+    "found": 5390933728,
+    "at": 5390933728,
+    "changes": [
+     "+0x0: `mov qword ptr [rsp + 0x18], rbx` \u2192 `mov qword ptr [rsp + 0x20], rbx`",
+     "+0x2E: `mov rbx, rcx` \u2192 `mov rsi, rcx`",
+     "+0x84: `movsxd rax, dword ptr [rbx + 0x128]` \u2192 `movsxd rax, dword ptr [rsi + 0x128]`",
+     "+0x91: `lea rax, [rbx + 0x118]` \u2192 `lea rax, [rsi + 0x118]`",
+     "+0xB3: `mov rcx, qword ptr [rbx + 0xe0]` \u2192 `mov rcx, qword ptr [rsi + 0xe0]`",
+     "+0x175: `mov rbx, qword ptr [r11 + 0x50]` \u2192 `mov rbx, qword ptr [r11 + 0x58]`",
+     "+0x19D: `mov rax, qword ptr [rbx + 0xe0]` \u2192 `mov rax, qword ptr [rsi + 0xe0]`"
+    ],
+    "n_changes": 7,
+    "diverged_at": 446,
+    "size": 1171
+   }
+  },
+  {
+   "old": "0x140c10f94",
+   "kind": "code",
+   "how": "call target from matched code (1/1 agree)",
+   "known_new_from_callers": "0x14117d034",
+   "uses": [
+    "player_two/interact_watch.cpp:96 kMarkByKey"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140c8f058",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/lock_on.cpp:71 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140c8f9c9",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/lock_on.cpp:85 kMarkerNameCall"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140d9db40",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/wheelie_ride.cpp:199 "
+   ],
+   "structural_hint": {
+    "found": 5386372464,
+    "at": 5386379656,
+    "changes": [
+     "+0x13: `mov eax, 0x6a0` \u2192 `mov eax, 0x6b0`",
+     "+0x20: `vmovaps xmmword ptr [rsp + 0x690], xmm6` \u2192 `vmovaps xmmword ptr [rsp + 0x6a0], xmm6`",
+     "+0x29: `vmovaps xmmword ptr [rsp + 0x680], xmm7` \u2192 `vmovaps xmmword ptr [rsp + 0x690], xmm7`",
+     "+0x32: `vmovaps xmmword ptr [rsp + 0x670], xmm8` \u2192 `vmovaps xmmword ptr [rsp + 0x680], xmm8`",
+     "+0x3B: `vmovaps xmmword ptr [rsp + 0x660], xmm9` \u2192 `vmovaps xmmword ptr [rsp + 0x670], xmm9`",
+     "+0x44: `vmovaps xmmword ptr [rsp + 0x650], xmm10` \u2192 `vmovaps xmmword ptr [rsp + 0x660], xmm10`",
+     "+0x4D: `vmovaps xmmword ptr [rsp + 0x640], xmm11` \u2192 `vmovaps xmmword ptr [rsp + 0x650], xmm11`",
+     "+0x56: `vmovaps xmmword ptr [rsp + 0x630], xmm12` \u2192 `vmovaps xmmword ptr [rsp + 0x640], xmm12`",
+     "+0x5F: `vmovaps xmmword ptr [rsp + 0x620], xmm13` \u2192 `vmovaps xmmword ptr [rsp + 0x630], xmm13`",
+     "+0x68: `vmovaps xmmword ptr [rsp + 0x610], xmm14` \u2192 `vmovaps xmmword ptr [rsp + 0x620], xmm14`",
+     "+0x71: `vmovaps xmmword ptr [rsp + 0x600], xmm15` \u2192 `vmovaps xmmword ptr [rsp + 0x610], xmm15`",
+     "+0x84: `mov qword ptr [rsp + 0x5f0], rax` \u2192 `mov qword ptr [rsp + 0x600], rax`"
+    ],
+    "n_changes": 21,
+    "diverged_at": 2182,
+    "size": 17545
+   }
+  },
+  {
+   "old": "0x140dbe165",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/interact_watch.cpp:106 kAcquireCall"
+   ],
+   "structural_hint": {
+    "found": 5386217092,
+    "at": 5386219033,
+    "changes": [],
+    "n_changes": 0,
+    "diverged_at": 118,
+    "size": 2550
+   }
+  },
+  {
+   "old": "0x140e55e40",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/engine_facts.h:378 "
+   ],
+   "structural_hint": {
+    "found": 5382675552,
+    "at": 5382675552,
+    "changes": [
+     "+0x13: `mov eax, 0x590` \u2192 `mov eax, 0x570`",
+     "+0x20: `vmovaps xmmword ptr [rsp + 0x580], xmm6` \u2192 `vmovaps xmmword ptr [rsp + 0x560], xmm6`",
+     "+0x29: `vmovaps xmmword ptr [rsp + 0x570], xmm7` \u2192 `vmovaps xmmword ptr [rsp + 0x550], xmm7`",
+     "+0x32: `vmovaps xmmword ptr [rsp + 0x560], xmm8` \u2192 `vmovaps xmmword ptr [rsp + 0x540], xmm8`",
+     "+0x3B: `vmovaps xmmword ptr [rsp + 0x550], xmm9` \u2192 `vmovaps xmmword ptr [rsp + 0x530], xmm9`",
+     "+0x44: `vmovaps xmmword ptr [rsp + 0x540], xmm10` \u2192 `vmovaps xmmword ptr [rsp + 0x520], xmm10`",
+     "+0x4D: `vmovaps xmmword ptr [rsp + 0x530], xmm11` \u2192 `vmovaps xmmword ptr [rsp + 0x510], xmm11`",
+     "+0x56: `vmovaps xmmword ptr [rsp + 0x520], xmm12` \u2192 `vmovaps xmmword ptr [rsp + 0x500], xmm12`",
+     "+0x5F: `vmovaps xmmword ptr [rsp + 0x510], xmm13` \u2192 `vmovaps xmmword ptr [rsp + 0x4f0], xmm13`",
+     "+0x68: `vmovaps xmmword ptr [rsp + 0x500], xmm14` \u2192 `vmovaps xmmword ptr [rsp + 0x4e0], xmm14`",
+     "+0x71: `vmovaps xmmword ptr [rsp + 0x4f0], xmm15` \u2192 `vmovaps xmmword ptr [rsp + 0x4d0], xmm15`",
+     "+0x84: `mov qword ptr [rsp + 0x4e0], rax` \u2192 `mov qword ptr [rsp + 0x4c0], rax`"
+    ],
+    "n_changes": 140,
+    "diverged_at": null,
+    "size": 6876
+   }
+  },
+  {
+   "old": "0x140e66a14",
+   "kind": "code",
+   "how": "call target from matched code (1/1 agree)",
+   "known_new_from_callers": "0x1409f84c0",
+   "uses": [
+    "player_two/command_menu_tick.cpp:102 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140e74141",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/pad_buttons.cpp:45 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140e74312",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/pad_buttons.cpp:45 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140e745a0",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/pad_buttons.cpp:45 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140e7468d",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/pad_buttons.cpp:55 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140e7477e",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/pad_buttons.cpp:55 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140ef9648",
+   "kind": "code",
+   "how": "call target from matched code (5/5 agree)",
+   "known_new_from_callers": "0x141965660",
+   "uses": [
+    "player_two/engine_facts.h:348 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x140f52378",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/command_menu_two.cpp:53 kSetupCall"
+   ],
+   "structural_hint": {
+    "found": 5389663132,
+    "at": 5389663224,
+    "changes": [
+     "+0x46: `mov byte ptr [rbx + 0x2d1], 0` \u2192 `mov byte ptr [rbx + 0x2d9], 0`"
+    ],
+    "n_changes": 1,
+    "diverged_at": null,
+    "size": 108
+   }
+  },
+  {
+   "old": "0x1411bbad8",
+   "kind": "code",
+   "how": "call target from matched code (1/1 agree)",
+   "known_new_from_callers": "0x14144729c",
+   "uses": [
+    "player_two/party_events.cpp:33 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x141203880",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/lock_on.cpp:72 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x141203bec",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/lock_on.cpp:69 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x14131fe21",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/combat_rumble.cpp:38 kGateCall"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x14131fe78",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/combat_rumble.cpp:40 kCameraCall"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x14131ff12",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/combat_rumble.cpp:94 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x1413243e9",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/combat_rumble.cpp:97 "
+   ],
+   "structural_hint": {
+    "found": 5382622192,
+    "at": 5382623025,
+    "changes": [
+     "+0x16D: `call qword ptr [rax + 0x460]` \u2192 `call qword ptr [rax + 0x468]`"
+    ],
+    "n_changes": 1,
+    "diverged_at": 730,
+    "size": 882
+   }
+  },
+  {
+   "old": "0x141504270",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/engine_facts.h:342 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x14161b408",
+   "kind": "code",
+   "how": "call target from matched code (1/1 agree)",
+   "known_new_from_callers": "0x1418de9b8",
+   "uses": [
+    "player_two/field_pickup.cpp:174 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x14161b4e0",
+   "kind": "code",
+   "how": "call target from matched code (1/1 agree)",
+   "known_new_from_callers": "0x141866a44",
+   "uses": [
+    "player_two/field_pickup.cpp:173 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x14166129c",
+   "kind": "code",
+   "how": "call target from matched code (11/11 agree)",
+   "known_new_from_callers": "0x1416e75a4",
+   "uses": [
+    "player_two/wheelie_ride.cpp:75 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x141695750",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/framing_watch.cpp:61 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x141695794",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/framing_watch.cpp:62 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x1416957d8",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/framing_watch.cpp:63 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x141846eec",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/combat_rumble.cpp:74 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x141846f3c",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/combat_rumble.cpp:74 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x14184709c",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/combat_rumble.cpp:70 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x1418470d2",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/combat_rumble.cpp:70 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x141847117",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/combat_rumble.cpp:103 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x141884358",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/wheelie_ride.cpp:201 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x1419058b4",
+   "kind": "code",
+   "how": "call target from matched code (13/13 agree)",
+   "known_new_from_callers": "0x140834850",
+   "uses": [
+    "player_two/engine_facts.h:326 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x142242dd1",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/combat_rumble.cpp:98 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x1422ba490",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/interact_watch.cpp:109 kQuery"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x1423e30c0",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/camera_override.cpp:50 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x1423e3730",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/camera_override.cpp:52 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x1423ef160",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/interact_watch.cpp:104 kUpdateCall"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x14295f0a5",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/lock_on.cpp:79 kPanelClearedSite"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x14295f0ad",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/lock_on.cpp:80 kPanelClearedResume"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x14295f0be",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/lock_on.cpp:81 kPanelClearedCall"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x14295f0c3",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/lock_on.cpp:83 kPanelClearedSkipTo"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x14295f139",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/lock_on.cpp:84 kPanelSetCall"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x142adcbca",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/camera_distance.cpp:36 kSetterCall"
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x1431c9638",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/party_warp.cpp:42 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x1431d851c",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/party_warp.cpp:40 ",
+    "player_two/party_warp.cpp:41 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x1433fdfd0",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/engine_facts.h:384 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x14360fbd4",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/wheelie_ride.cpp:203 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x14360fdd0",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/wheelie_ride.cpp:204 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x1439d6a84",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/lock_on.cpp:65 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x143a08a54",
+   "kind": "code",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/command_menu_two.cpp:43 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x143da1460",
+   "kind": "code",
+   "how": "call target from matched code (2/2 agree)",
+   "known_new_from_callers": "0x1427c0bc8",
+   "uses": [
+    "player_two/wheelie_ride.cpp:67 "
+   ],
+   "structural_hint": {
+    "found": null
+   }
+  },
+  {
+   "old": "0x14583f980",
+   "kind": "data",
+   "how": "slot holds 0x1412063E0, which did not match",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/wheelie_ride.cpp:150 kScooterVt",
+    "player_two/wheelie_watch.cpp:65 kScooterVt"
+   ],
+   "structural_hint": null
+  },
+  {
+   "old": "0x145d700c8",
+   "kind": "data",
+   "how": "slot holds 0x140E55E40, which did not match",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/engine_facts.h:377 "
+   ],
+   "structural_hint": null
+  },
+  {
+   "old": "0x1467c85a0",
+   "kind": "data",
+   "how": "slot holds 0x143D06F58, which did not match",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/engine_facts.h:28 kEndPlayerControllerVTable"
+   ],
+   "structural_hint": null
+  },
+  {
+   "old": "0x149347278",
+   "kind": "data",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/vending.cpp:34 kVendingPreset"
+   ],
+   "structural_hint": null
+  },
+  {
+   "old": "0x14934d020",
+   "kind": "data",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/engine_facts.h:119 kCompositeCollisionNameGuard"
+   ],
+   "structural_hint": null
+  },
+  {
+   "old": "0x14934d028",
+   "kind": "data",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/engine_facts.h:118 kCompositeCollisionNameGlobal"
+   ],
+   "structural_hint": null
+  },
+  {
+   "old": "0x14939bc48",
+   "kind": "data",
+   "how": "not found",
+   "known_new_from_callers": null,
+   "uses": [
+    "player_two/charapop_watch.cpp:98 kAnimWorld"
+   ],
+   "structural_hint": null
+  }
+ ],
+ "other": []
+}

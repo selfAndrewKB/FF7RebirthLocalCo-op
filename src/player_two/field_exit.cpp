@@ -88,7 +88,7 @@ bool Install(const platform::GameImage& image, LeaveFn leave, void* context) noe
         g_partyManager = *manager;
         g_leave        = leave;
         g_context      = context;
-        ok             = g_entry.Install(*target, std::span<const std::uint8_t>(kRequestExitBytes, kFirstInstruction),
+        ok             = g_entry.Install(*target, image.EntryInstruction(kRequestExit.address, std::span<const std::uint8_t>(kRequestExitBytes, kFirstInstruction)),
                                          reinterpret_cast<std::uintptr_t>(&RequestExit));
     }
     platform::Log(L"field exit: {}", ok ? L"player 2 leaves before a retry, reload, load or Blueprint exit leaves the field"

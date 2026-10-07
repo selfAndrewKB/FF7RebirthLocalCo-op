@@ -6,6 +6,7 @@
 #include <Unreal/CoreUObject/UObject/UnrealType.hpp>
 #include <Unreal/UObject.hpp>
 
+#include "platform/build_value.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -60,11 +61,13 @@ constexpr std::uint32_t kEntryChocobo    = 0x20;
 constexpr std::uint8_t  kPlayerTypes     = 15;
 
 // AEndChocoboCharacter's native tail (§1.1) and the input component the player-core test reads (§3, lever 1).
-constexpr std::uint32_t  kChocoboRideMode   = 0x1910;  // u8
-constexpr std::uint32_t  kChocoboRideObject = 0x1918;  // pointer
-constexpr std::uint32_t  kChocoboFlag1920   = 0x1920;  // u8
-constexpr std::uint32_t  kChocoboFlag1922   = 0x1922;  // u8
-constexpr std::uint32_t  kChocoboRidden     = 0x1924;  // u8
+// 1.005 moved this tail by +0x20 (RE-1005-offsets-C.md): CreateRideObject 0x143B05BC3/0x143B05C10 (+0x1938, +0x1930),
+// 0x140A41434 `cmp byte [rbx+1940h]`, 0x143B06AF9 `cmp byte [rcx+1942h]`, 0x143B13E48 `mov al,[rdi+1944h]`.
+constexpr platform::PerBuild<std::uint32_t> kChocoboRideMode   = {0x1910, 0x1930};  // u8
+constexpr platform::PerBuild<std::uint32_t> kChocoboRideObject = {0x1918, 0x1938};  // pointer
+constexpr platform::PerBuild<std::uint32_t> kChocoboFlag1920   = {0x1920, 0x1940};  // u8
+constexpr platform::PerBuild<std::uint32_t> kChocoboFlag1922   = {0x1922, 0x1942};  // u8
+constexpr platform::PerBuild<std::uint32_t> kChocoboRidden     = {0x1924, 0x1944};  // u8
 constexpr std::uint32_t  kCoreComponent     = 0x638;   // IsUCPC_Core: mov rcx,[rcx+638h]
 constexpr std::uintptr_t kChocoboMoveVt     = 0x1466B9E18;
 

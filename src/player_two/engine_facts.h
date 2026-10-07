@@ -12,6 +12,7 @@
 // RE-p2-viewtarget-movestate-ida.md; the view target and move-state vtable were read live
 // (RE-p2-first-run-ce.md).
 
+#include "platform/build_value.h"
 #include "platform/verified_code.h"
 
 #include <cstdint>
@@ -80,7 +81,7 @@ inline constexpr std::uint32_t kCharacterRequestedController = 0x578;
 inline constexpr std::uint32_t kCharacterEffectiveController = 0x580;
 inline constexpr std::uint32_t kCharacterRetainedAi          = 0x588;
 inline constexpr std::uint32_t kCharacterPlayerControlled    = 0x625;
-inline constexpr std::uint32_t kCharacterMoveState           = 0x1750;
+inline constexpr platform::PerBuild<std::uint32_t> kCharacterMoveState = {0x1750, 0x1770};  // 1.005: EndCharacter tick 0x140E8A44A mov rcx,[rdi+1770h] (1.004 0x14125B20A [rdi+1750h]); GetMoveState 0x141985320
 
 // The AI controller's active brain and its state (RE-p2-member-handover.md §3.3)
 inline constexpr std::uint32_t kAiActiveBrain = 0x518;

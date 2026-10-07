@@ -1,5 +1,6 @@
 #include "player_two/camera_override.h"
 
+#include "platform/build_value.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -35,12 +36,16 @@ constexpr std::uint32_t  kModuleRequests = 0x3F8;        // int32: request count
 constexpr std::uint32_t  kBattleOperator = 0x2CA8;       // operator 11
 constexpr std::uint32_t  kFieldOperator  = 0x2CB0;       // operator 12
 // A player character's override delegates: the added one (fn at +0x17A0, payload at +0x17C8), the
-// removed one (fn at +0x17E0, payload at +0x1808), and the requests it holds (+0x1770 count).
-constexpr std::uint32_t  kAddedFn        = 0x17A0;
-constexpr std::uint32_t  kAddedPayload   = 0x17C8;
-constexpr std::uint32_t  kRemovedFn      = 0x17E0;
-constexpr std::uint32_t  kRemovedPayload = 0x1808;
-constexpr std::uint32_t  kHeldRequests   = 0x1770;
+// removed one (fn at +0x17E0, payload at +0x1808), and the requests it holds (+0x1770 count). 1.005 moved the Square
+// Enix character fields by +0x20 (RE-1005-player-two.md: both fn fields read in code, CONFIRMED). The payloads:
+// CONFIRMED, OnLeaderChanged 0x1412FB179..0x1412FB1F2 swaps each 0x40-byte delegate whole at +0x17C0 / +0x1800 (1.004:
+// +0x17A0 / +0x17E0), so the payload keeps its place inside it. The count: CONFIRMED, RemoveCameraOverride 0x14102F3F5
+// mov esi,[rcx+1790h] (1.004 0x141200B15 [rcx+1770h]); RE-1005-offsets-B.md.
+constexpr platform::PerBuild<std::uint32_t> kAddedFn        = {0x17A0, 0x17C0};
+constexpr platform::PerBuild<std::uint32_t> kAddedPayload   = {0x17C8, 0x17E8};
+constexpr platform::PerBuild<std::uint32_t> kRemovedFn      = {0x17E0, 0x1800};
+constexpr platform::PerBuild<std::uint32_t> kRemovedPayload = {0x1808, 0x1828};
+constexpr platform::PerBuild<std::uint32_t> kHeldRequests   = {0x1770, 0x1790};
 
 constexpr std::uint8_t kAddedBytes[]   = {0x48, 0x89, 0x4C, 0x24, 0x08, 0x55, 0x53, 0x56, 0x57, 0x41, 0x57, 0x48, 0x8D,
                                           0xAC, 0x24, 0x20, 0xFF, 0xFF, 0xFF, 0xB8, 0xE0, 0x01, 0x00, 0x00, 0xE8};

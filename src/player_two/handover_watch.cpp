@@ -6,6 +6,7 @@
 #include <Unreal/CoreUObject/UObject/UnrealType.hpp>
 #include <Unreal/UObject.hpp>
 
+#include "platform/build_value.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -57,8 +58,8 @@ constexpr std::uint32_t kLeadDestination = 0x3E8;  // three floats
 
 // The character's movement object (embedded at +0x1400; its flags at +0x1408) and its anim instance, a
 // weak pointer at +0x160 of it (§1.1).
-constexpr std::uint32_t kCharacterMove    = 0x1400;
-constexpr std::uint32_t kCharacterFlags   = 0x1408;  // u8; bit 2 set by LEAD's and FOLLOW's Enter
+constexpr platform::PerBuild<std::uint32_t> kCharacterMove = {0x1400, 0x1420};  // 1.005: AIState_ApplyStateParams 0x14123E573 / RevertStateParams, FollowState reset 0x140EB0350 mov rcx,[rsi+1420h]
+constexpr platform::PerBuild<std::uint32_t> kCharacterFlags = {0x1408, 0x1428};  // u8; bit 2 set by LEAD's and FOLLOW's Enter; 1.005: the +0x4B8 interface's vt+0xB8 flag setter 0x140ED3830 reads [rcx+0F70h] (1.004 0x140AEA668 [rcx+0F50h])
 constexpr std::uint32_t kMoveAnimInstance = 0x160;
 
 // UEndCharacterAnimInstance: the root-motion and rotation-rate products and their TMap<u8, float>
@@ -430,7 +431,7 @@ const void* AnimOf(const void* character) noexcept
     Line(L"anim instance {} through the mesh; reflected RootMotionTranslationScale at {:#x} (this build: {:#x}), "
          L"RotationRateScale at {:#x} (this build: {:#x}); the weak pointer at +0x1400 +0x160 names {}",
          anim, root, kAnimRootMotionScale, rotation, kAnimRotationScale,
-         leader_scope::ObjectAt(static_cast<const std::byte*>(character) + kCharacterMove + kMoveAnimInstance));
+         leader_scope::ObjectAt(static_cast<const std::byte*>(character) + static_cast<std::uint32_t>(kCharacterMove) + kMoveAnimInstance));
     return anim;
 }
 

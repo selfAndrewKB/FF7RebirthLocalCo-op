@@ -1,5 +1,6 @@
 #include "player_two/battle_input.h"
 
+#include "platform/build_value.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -52,7 +53,7 @@ constexpr std::uint32_t  kRequests          = 0x570;  // TArray<int32> {data, nu
 constexpr std::array<std::int32_t, 10> kLoggedRequests{5, 6, 12, 13, 25, 26, 32, 37, 38, 39};
 
 // A party character's battle parts (§1.4, §1.5).
-constexpr std::uint32_t  kCharacterHolder   = 0x1758;  // holder whose +0 is the character
+constexpr platform::PerBuild<std::uint32_t> kCharacterHolder = {0x1758, 0x1778};  // holder whose +0 is the character; 1.005: vt+0xA18 getter 0x140896CC0 mov rax,[rcx+1778h], CreateMoveState 0x140D8255C
 constexpr std::uint32_t  kCharacterAiHolder = 0x638;   // its vt+0x48 gives the BattlePlayer component
 constexpr std::uint32_t  kOwnerSlot         = 0x48;
 constexpr std::uintptr_t kBattlePlayerVTable = 0x145795ED8;

@@ -181,7 +181,7 @@ void Install(const platform::GameImage& image) noexcept
     g_owner          = owner ? *owner : 0;
     g_app            = app ? *app : 0;
     const bool device = note && image.BytesMatch(kNoteLastDevice, kNoteLastDeviceBytes) &&
-                        g_note.Install(*note, std::span<const std::uint8_t>(kNoteLastDeviceBytes).first(kNoteLastDeviceFirst),
+                        g_note.Install(*note, image.EntryInstruction(kNoteLastDevice, std::span<const std::uint8_t>(kNoteLastDeviceBytes).first(kNoteLastDeviceFirst)),
                                        reinterpret_cast<std::uintptr_t>(&Note));
     const bool weaks = leader_scope::Install(image);  // the weak values that tell a new pair of controllers apart
     try

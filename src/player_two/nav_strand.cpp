@@ -6,6 +6,7 @@
 #include <Unreal/CoreUObject/UObject/UnrealType.hpp>
 #include <Unreal/UObject.hpp>
 
+#include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -83,7 +84,9 @@ constexpr std::uint8_t   kParkAfterCallBytes[] = {0x84, 0xC0, 0x75, 0x09, 0xC6, 
                                                   0x01, 0xE9, 0xF1, 0x02, 0x00, 0x00};
 // The character's movement owner (a native SE object) and its 32-bit stop-reason mask; reason 5 is the
 // safe-transform park (read live: 0x20 on the parked member, 0 on player 1).
-constexpr std::uint32_t kCharacterMoveOwner = 0x13F8;
+// 1.005: +0x1418 (End character native field +0x20): the char interface (pawn+0x4B8) accessor `cmp qword
+// [rcx+0F40h],0` (1.004 0x140889748) is `cmp qword [rcx+0F60h],0` in 1.005 (0x1408B3A04), unique in both builds.
+constexpr platform::PerBuild<std::uint32_t> kCharacterMoveOwner = {0x13F8, 0x1418};
 constexpr std::uint32_t kOwnerStopMask      = 0x1BC;
 constexpr std::uint32_t kStopReasonParked   = 1u << 5;
 

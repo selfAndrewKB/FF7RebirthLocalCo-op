@@ -2,6 +2,7 @@
 
 #include "hud/enemy_gauges_code.h"
 #include "hud/target_views.h"
+#include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/code_redirect.h"
 #include "platform/guarded.h"
@@ -54,8 +55,10 @@ constexpr std::uint32_t kFinalFlags  = 0x155;  // 3 bytes
 constexpr std::uint32_t kOwnerSlot   = 0x28;
 constexpr std::uint32_t kHalfSource  = 0x298;
 constexpr std::uint32_t kHalfBounds  = 0x1E0;
-constexpr std::uint32_t kHalfScaleXY = 0x4AC;
-constexpr std::uint32_t kHalfScaleZ  = 0x4A8;
+// c is the owner's UCapsuleComponent (ACharacter::CapsuleComponent +0x298): +0x4AC CapsuleRadius, +0x4A8 CapsuleHalfHeight.
+// 1.005: UPrimitiveComponent shrank by 0x10; UpdateEntries reads [rax+49Ch] at 0x14097550E and [rax+498h] at 0x14097551B.
+constexpr platform::PerBuild<std::uint32_t> kHalfScaleXY = {0x4AC, 0x49C};
+constexpr platform::PerBuild<std::uint32_t> kHalfScaleZ  = {0x4A8, 0x498};
 
 // EndUI__MF8_ProjectEntryByWidget: its entry checked, then its second instruction replaced.
 constexpr std::uintptr_t kByWidget         = 0x14176201C;

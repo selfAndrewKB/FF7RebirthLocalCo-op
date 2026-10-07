@@ -8,6 +8,7 @@
 #include <Unreal/UObjectArray.hpp>
 #include <Unreal/UObjectGlobals.hpp>
 
+#include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -71,7 +72,9 @@ constexpr std::uintptr_t kEndUISystem               = 0x1493496E0;
 constexpr std::uint32_t  kFieldCommandCtrl          = 0xB8;
 constexpr std::uint32_t  kCompassManager            = 0x108;
 constexpr std::uint32_t  kCompassHolder             = 0x348;   // in the compass manager; its +0 is the weak widget
-constexpr std::uint32_t  kFieldCommandSetupPending  = 0x2D1;   // EndUISystem byte
+// EndUISystem byte. 1.005: MasterHUD_Tick 0x140F75A05 cmp byte [rbx+2D9h],0 (1.004 0x140F37E5D [rbx+2D1h]);
+// EndUISystem__SetupFieldCommandOrDefer 0x1413FBB9C uses +0x2D9/+0x2DC (a member was inserted after +0x2A8).
+constexpr platform::PerBuild<std::uint32_t> kFieldCommandSetupPending = {0x2D1, 0x2D9};
 constexpr std::uint32_t  kCtrlCommandMenuWidget     = 0x4F0;   // FieldCommandCtrl weak widgets and controller
 constexpr std::uint32_t  kCtrlFieldMenuWidget       = 0x4E8;
 constexpr std::uint32_t  kCtrlStoredController      = 0x558;

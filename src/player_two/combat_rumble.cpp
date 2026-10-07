@@ -129,7 +129,7 @@ std::array<std::uintptr_t, kNotifies.size()>             g_firstSites{};
 std::array<platform::VTableEntry, kNotifies.size()>      g_notifySlots;
 platform::EntryRedirect                                  g_play, g_playClassic;
 std::uintptr_t                                           g_firstController = 0;
-std::uintptr_t                                           g_slide = 0;  // live address - IDA address
+std::optional<platform::GameImage>                       g_image;      // live addresses as research IDA addresses
 bool                                                     g_sitesTried = false;
 unsigned                                                 g_notifiesWrapped = 0;
 
@@ -487,7 +487,7 @@ void* FirstController(void* world) noexcept
 
 const wchar_t* SourceOf(std::uintptr_t returnAddress) noexcept
 {
-    const auto ida = returnAddress - g_slide;
+    const auto ida = g_image ? g_image->ResearchAddress(returnAddress) : returnAddress;
     for (const Source& source : kSources)
     {
         if (source.returnAddress == ida)
@@ -518,7 +518,7 @@ void LogPlay(const void* component, std::uint64_t channel, const void* name, std
         const std::uint64_t key    = name != nullptr ? ReadField<std::uint64_t>(name, 0) : 0;
         platform::LogDebug(L"combat rumble: frame {}: play {} channel {} on {} from {}", platform::frame_watch::FrameIndex(),
                       players::unreal::NameText(key), channel & 0xFF, ControllerText(controller),
-                      source != nullptr ? std::wstring(source) : std::format(L"0x{:X}", returnAddress - g_slide));
+                      source != nullptr ? std::wstring(source) : std::format(L"0x{:X}", g_image ? g_image->ResearchAddress(returnAddress) : returnAddress));
     }
     catch (...)
     {
@@ -536,7 +536,7 @@ std::uint64_t PlayClassic(void* component, std::uint64_t channel, const void* na
                           std::uint64_t fifth, void* sixth) noexcept
 {
     const auto from = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
-    if (from - g_slide != kFromDispatcher)  // the dispatcher's own call is logged by Play
+    if (!g_image || g_image->ResearchAddress(from) != kFromDispatcher)  // the dispatcher's own call is logged by Play
     {
         LogPlay(component, channel, name, from);
     }
@@ -568,7 +568,7 @@ void LogStatus() noexcept
 
 void Install(const platform::GameImage& image) noexcept
 {
-    g_slide = image.Base() - 0x140000000;
+    g_image = image;
     const auto call = [&image](platform::CallRedirect& redirect, std::uintptr_t site, std::uintptr_t target,
                                std::uintptr_t replacement) {
         const auto at = image.Rebase(site, 5);
@@ -610,8 +610,9 @@ void Install(const platform::GameImage& image) noexcept
     const auto classic = image.Rebase(kPlayClassic);
     const bool plays = play && classic && image.BytesMatch(kPlay, kPlayBytes) &&
                        image.BytesMatch(kPlayClassic, kPlayClassicBytes) &&
-                       g_play.Install(*play, kPlayBytes, reinterpret_cast<std::uintptr_t>(&Play)) &&
-                       g_playClassic.Install(*classic, kPlayClassicBytes, reinterpret_cast<std::uintptr_t>(&PlayClassic));
+                       g_play.Install(*play, image.EntryInstruction(kPlay, kPlayBytes), reinterpret_cast<std::uintptr_t>(&Play)) &&
+                       g_playClassic.Install(*classic, image.EntryInstruction(kPlayClassic, kPlayClassicBytes),
+                                             reinterpret_cast<std::uintptr_t>(&PlayClassic));
     platform::Log(L"combat rumble: battle hits {}; montage notifies wrapped {} of {}{}; plays {}",
                   hits ? L"per player (player 2's member's hits ask the game's gate with player 2 as the leader)"
                        : L"UNCHANGED (a call site is not what the research read)",

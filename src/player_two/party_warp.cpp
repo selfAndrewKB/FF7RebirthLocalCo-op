@@ -58,7 +58,6 @@ constexpr std::uint8_t  kStateFollow      = 7;
 // The teleport query runner (RE-p2-party-warp.md §10): the result pointer and its status (1 = done).
 constexpr std::uint32_t kStateQueryResult = 0x540;
 constexpr std::uint32_t kQueryStatus      = 0x28;
-constexpr std::uintptr_t kIdaImageBase    = 0x140000000;
 
 /// A forced request left unfinished this long is completed by the game's own "finish now". The game's
 /// fast-travel wait allows 20 s; a stranded player should not wait that long, and the EQS, the 0.2 s fade
@@ -99,7 +98,7 @@ struct Variant
 Variant        g_variants[kVariantCount];
 TestFn         g_partyIdle = nullptr;
 TestFn         g_inBattle  = nullptr;
-std::uintptr_t g_imageBase = 0;
+std::optional<platform::GameImage> g_image;  // for research IDA addresses in the log
 bool           g_installed = false;
 
 // Game thread.
@@ -174,7 +173,7 @@ void* FollowStateOf(const void* pawn, Subject subject, const Variant** variantOu
 std::uintptr_t IdaVtableOf(const void* object) noexcept
 {
     std::uintptr_t vtable = 0;
-    return Read(object, 0, vtable) && vtable >= g_imageBase ? vtable - g_imageBase + kIdaImageBase : 0;
+    return Read(object, 0, vtable) && g_image ? g_image->ResearchAddress(vtable) : 0;
 }
 
 bool Test(TestFn fn, bool& out) noexcept
@@ -250,7 +249,7 @@ bool Install(const platform::GameImage& image) noexcept
     }
     g_partyIdle = reinterpret_cast<TestFn>(*partyIdle);
     g_inBattle  = reinterpret_cast<TestFn>(*inBattle);
-    g_imageBase = image.Base();
+    g_image = image;
     g_installed = true;
     platform::Log(L"party warp: a stranded player 2 is brought back by the game's follow warp (on foot; riding: {} of 3 "
                   L"chocobo follow variants checked)",

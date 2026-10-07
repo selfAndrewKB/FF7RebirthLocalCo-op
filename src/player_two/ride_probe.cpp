@@ -1,5 +1,6 @@
 #include "player_two/ride_probe.h"
 
+#include "platform/build_value.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -29,12 +30,16 @@ using Clock = std::chrono::steady_clock;
 // RE-p2-chocobo-sprint.md §1, §5 (this build).
 constexpr std::uint32_t kActiveVehicle = 0x5B8;  // AEndPlayerController::ActiveVehicleCoordinator
 constexpr std::uint32_t kCoordBody     = 0x30;
-constexpr std::uint32_t kGait          = 0x1A20;  // u8: 0 walk, 1 run, 2 dash
-constexpr std::uint32_t kGaitSpeed     = 0x1A18;  // float, approaches the gait's TargetSpeed
-constexpr std::uint32_t kSpeedRatio    = 0x1928;  // float
-constexpr std::uint32_t kAppliedLevel  = 0x1910;  // u8: the root-motion scale level applied (4 none)
-constexpr std::uint32_t kRidden        = 0x1924;  // u8
-constexpr std::uint32_t kMoveHelper    = 0x1400;  // pointer; its +0x160 holds the anim instance as a weak pointer
+// 1.005 moved these End character fields by +0x20 (RE-1005-offsets-C.md): the chocobo move state's slot 11
+// 0x14317159C reads +0x1A40/+0x1A38/+0x1420 and writes +0x1948 (1.004 0x143451320: +0x1A20/+0x1A18/+0x1400/+0x1928);
+// Chocobo_ApplyMoveParamRootMotionScale 0x140A41590 reads +0x1930 (1.004 0x1411A1828 +0x1910); the chocobo
+// coordinator's ride-body getter 0x143B13E48 reads +0x1944 (1.004 0x143DA7160 +0x1924).
+constexpr platform::PerBuild<std::uint32_t> kGait         = {0x1A20, 0x1A40};  // u8: 0 walk, 1 run, 2 dash
+constexpr platform::PerBuild<std::uint32_t> kGaitSpeed    = {0x1A18, 0x1A38};  // float, approaches the gait's TargetSpeed
+constexpr platform::PerBuild<std::uint32_t> kSpeedRatio   = {0x1928, 0x1948};  // float
+constexpr platform::PerBuild<std::uint32_t> kAppliedLevel = {0x1910, 0x1930};  // u8: the root-motion scale level applied (4 none)
+constexpr platform::PerBuild<std::uint32_t> kRidden       = {0x1924, 0x1944};  // u8
+constexpr platform::PerBuild<std::uint32_t> kMoveHelper   = {0x1400, 0x1420};  // pointer; its +0x160 holds the anim instance as a weak pointer
 constexpr std::uint32_t kHelperAnim    = 0x160;
 constexpr std::uint32_t kAnimWalkType  = 0x498;  // u8: the minimum of the walk-type map's values (5 = dash)
 constexpr std::uint32_t kAnimSprint    = 0x3E4;  // u8 [ASSUMPTION: the sprint flag]

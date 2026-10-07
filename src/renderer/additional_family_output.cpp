@@ -6,6 +6,9 @@
 #include "platform/log.h"
 #include "renderer/output_load_action_code.h"
 
+#include <cstdint>
+#include <span>
+
 namespace lss::renderer {
 
 namespace {
@@ -16,13 +19,19 @@ platform::CodeRedirect g_redirect;
 
 bool InstallAdditionalFamilyOutput(const platform::GameImage& image) noexcept
 {
-    const auto site   = image.Rebase(engine::kOutputLoadActionStore, sizeof(engine::kOutputLoadActionStoreBytes));
+    // 1.005 compiled the store differently (its own bytes and code; output_load_action_code.h).
+    const bool v1005 = platform::RunningBuild() == platform::BuildIndex::V1005;
+    const std::span<const std::uint8_t> store =
+        v1005 ? std::span<const std::uint8_t>(engine::kOutputLoadActionStoreBytes1005) : engine::kOutputLoadActionStoreBytes;
+    const std::span<const std::uint8_t> code =
+        v1005 ? std::span<const std::uint8_t>(kFirstUnlessAdditionalLoadAction1005) : kFirstUnlessAdditionalLoadAction;
+    const auto site   = image.Rebase(engine::kOutputLoadActionStore, store.size());
     const auto resume = image.Rebase(engine::kOutputLoadActionResume);
     if (!site || !resume)
     {
         return false;
     }
-    return g_redirect.Install(*site, engine::kOutputLoadActionStoreBytes, kFirstUnlessAdditionalLoadAction, *resume);
+    return g_redirect.Install(*site, store, code, *resume);
 }
 
 void RemoveAdditionalFamilyOutput() noexcept
