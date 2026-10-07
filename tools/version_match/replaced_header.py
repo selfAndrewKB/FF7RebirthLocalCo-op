@@ -51,6 +51,9 @@ def main():
             except (KeyError, ValueError, TypeError):
                 skipped.append((os.path.basename(path), it.get("old"), "no usable old/new address"))
                 continue
+            if old < IDA_BASE or new < IDA_BASE:  # a field offset change: the C++ carries it as a PerBuild constant
+                skipped.append((os.path.basename(path), it["old"], "a field offset, not an address"))
+                continue
             note = " ".join(str(it.get("note", "")).split())
             if not it.get("same_semantics") and old not in ADAPTED:
                 skipped.append((os.path.basename(path), it["old"], note[:120]))

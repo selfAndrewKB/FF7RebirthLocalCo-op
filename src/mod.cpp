@@ -37,6 +37,7 @@
 #include "player_two/generation.h"
 #include "player_two/main_camera_shape.h"
 #include "player_two/camera_distance.h"
+#include "player_two/camera_repair.h"
 #include "player_two/framing_watch.h"
 #include "player_two/location_rows.h"
 #include "player_two/shoulder_scale.h"
@@ -61,6 +62,7 @@
 #include "player_two/pad_sticks.h"
 #include "player_two/chocobo_ride.h"
 #include "player_two/nav_strand.h"
+#include "player_two/ride_framing_watch.h"
 #include "player_two/party_warp.h"
 #include "player_two/session.h"
 #include "players/join_keys.h"
@@ -96,7 +98,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.61.1";
+constexpr const wchar_t* kVersion = L"0.61.2";
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -162,7 +164,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.61.1");
+        ModVersion     = STR("0.61.2");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -203,6 +205,7 @@ public:
         lss::hud::RemoveRootOverlayRender();
         lss::player_two::field_exit::Remove();
         lss::player_two::nav_strand::Remove();
+        lss::player_two::ride_framing_watch::Remove();
         lss::hud::target_views::Remove();
         lss::hud::area_icons_two::Remove();
         lss::hud::user_widgets::Remove();
@@ -310,6 +313,8 @@ public:
         lss::views::InstallStreamViews(*image, viewPointInstalled_);  // each player's camera streams scenery detail
         lss::player_two::party_warp::Install(*image);  // the game's follow warp, for a stranded player 2
         lss::player_two::nav_strand::Install(*image);  // player 2's member stranded off the loaded navmesh
+        lss::player_two::camera_repair::Install(*image);  // a non-finite pose on player 2's camera: the game's camera reset
+        lss::player_two::ride_framing_watch::Install(*image);  // both cameras' ride framing and who changes it (logged)
 
         // The HUD's layout in split views (hud/overlay_layout.h). Optional like the view point: without
         // it the HUD keeps the game's full-screen layout, cropped to each half.
@@ -498,6 +503,8 @@ private:
         const bool splitShown = playerTwoIn && !singleView_.Single();
         lss::views::SetSplitShown(splitShown);
         lss::player_two::nav_strand::Tick(splitShown);  // a stranded player 2 is warped back to the party
+        lss::player_two::camera_repair::Tick();
+        lss::player_two::ride_framing_watch::Tick();
         lss::player_two::camera_distance::TickFraming(playerTwoIn);  // per-layout distance steps (roadmap 2b)
         lss::player_two::shoulder_scale::Poll(splitShown);
         lss::player_two::framing_watch::Tick(splitShown);
