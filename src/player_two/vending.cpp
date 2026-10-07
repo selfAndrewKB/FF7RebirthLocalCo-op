@@ -1,5 +1,7 @@
 #include "player_two/vending.h"
 
+#include "platform/build_value.h"
+#include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
 #include "platform/frame_watch.h"
 #include "platform/guarded.h"
@@ -15,6 +17,7 @@
 #include "player_two/party_member.h"
 #include "players/unreal_access.h"
 
+#include <array>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -38,6 +41,18 @@ constexpr std::uintptr_t kCamera            = 0x143550CC4;  // ShopMenu_Activate
 constexpr std::uint8_t   kCameraBytes[]     = {0x48, 0x89, 0x5C, 0x24, 0x20};  // mov [rsp+20h], rbx
 constexpr std::uintptr_t kCameraOff         = 0x143550C90;  // ShopMenu_DeactivateShopCamera
 constexpr std::uint8_t   kCameraOffBytes[]  = {0xB8, 0x28, 0x00, 0x00, 0x00};  // mov eax, 28h
+// 1.005 (RE-1005-field-2.md §4): the camera's entry is at 0x14327FE5C, %16 = 12, so its first instruction crosses a
+// 16-byte block and cannot take an entry redirect. Its seven callers (the same seven shop paths as in this build, one
+// call each, each inside one block in 1.005) are redirected instead, to the same replacement.
+constexpr std::array<std::uintptr_t, 7> kCameraCalls{
+    0x1435387D8,  // sub_143538398
+    0x14353D73F,  // sub_14353D5AC
+    0x14353FA6F,  // sub_14353F7F4
+    0x14354EE92,  // FEndShowChadleyShopMenu_Begin
+    0x14354F409,  // sub_14354F1F0
+    0x14354FD23,  // FEndShowShopMenu_Begin (the vending path)
+    0x1435502E2,  // FEndShowSkillTreeMenu_Begin
+};
 using Clock = std::chrono::steady_clock;
 // Player 2's press claims the shop whose camera comes within this many frames (the level script opens it the next frame,
 // §15.1) and names the pressed machine (the camera's target is the machine's Tags[0], which the pressed point's key
@@ -49,6 +64,8 @@ constexpr auto          kPressWindow = std::chrono::seconds(5);  // a press olde
 using Fn = std::uint64_t (*)(std::uint64_t, std::uint64_t, std::uint64_t, std::uint64_t);
 
 platform::EntryRedirect g_end2Key, g_camera, g_cameraOff;
+std::array<platform::CallRedirect, kCameraCalls.size()> g_cameraCalls;  // 1.005: the camera's callers
+std::uintptr_t          g_cameraTarget = 0;  // 1.005: the camera function (the callers' target)
 const std::uint64_t*    g_vendingPreset = nullptr;  // the FName global's live address
 std::uintptr_t          g_partyManager  = 0;        // the pointer global's live address
 std::optional<platform::GameImage> g_image;  // for research IDA addresses in the log
@@ -164,7 +181,7 @@ std::uint64_t End2Key(std::uint64_t mgr, std::uint64_t key, std::uint64_t r8, st
 std::uint64_t Camera(std::uint64_t target, std::uint64_t preset, std::uint64_t r8, std::uint64_t r9) noexcept
 {
     const auto caller = CallerOf(_ReturnAddress());
-    const auto call   = reinterpret_cast<Fn>(g_camera.Original());
+    const auto call   = reinterpret_cast<Fn>(g_cameraTarget != 0 ? g_cameraTarget : g_camera.Original());
     if (!generation::OnGameThread() || !generation::Active())
     {
         return call(target, preset, r8, r9);
@@ -238,6 +255,35 @@ bool Entry(const platform::GameImage& image, platform::EntryRedirect& redirect, 
     return at && image.BytesMatch(address, bytes) && redirect.Install(*at, image.EntryInstruction(address, bytes), reinterpret_cast<std::uintptr_t>(replacement));
 }
 
+/// 1.005: the shop camera's activation at its seven callers (all or none: a shop path left out would open player 2's
+/// shop as player 1's).
+bool CameraCalls(const platform::GameImage& image) noexcept
+{
+    const auto target = image.Rebase(kCamera);
+    if (!target || !image.BytesMatch(kCamera, kCameraBytes))
+    {
+        return false;
+    }
+    g_cameraTarget = *target;  // before the first install: the replacement runs the moment it is reachable
+    bool all       = true;
+    for (std::size_t i = 0; i < kCameraCalls.size() && all; ++i)
+    {
+        const auto site = image.Rebase(kCameraCalls[i], 5);
+        all = site && g_cameraCalls[i].Install(*site, *target, reinterpret_cast<std::uintptr_t>(&Camera));
+    }
+    if (!all)
+    {
+        for (auto& call : g_cameraCalls)
+        {
+            if (call.IsInstalled())
+            {
+                call.Restore();
+            }
+        }
+    }
+    return all;
+}
+
 }  // namespace
 
 bool Admits(std::uint64_t pointPreset) noexcept
@@ -273,7 +319,9 @@ void Install(const platform::GameImage& image) noexcept
     g_partyManager     = manager ? *manager : 0;
     g_image            = image;
     const bool presses = g_partyManager != 0 && Entry(image, g_end2Key, kEnd2Key, kEnd2KeyBytes, &End2Key);
-    const bool cameras = Entry(image, g_camera, kCamera, kCameraBytes, &Camera);
+    const bool cameras = platform::RunningBuild() == platform::BuildIndex::V1005
+                             ? CameraCalls(image)
+                             : Entry(image, g_camera, kCamera, kCameraBytes, &Camera);
     const bool closes  = Entry(image, g_cameraOff, kCameraOff, kCameraOffBytes, &CameraOff);
     const bool ready   = g_vendingPreset != nullptr && presses && cameras && closes;
     platform::Log(L"vending: {} (presses {}, the shop camera's activation {}, its deactivation {})",

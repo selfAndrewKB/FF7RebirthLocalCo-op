@@ -26,6 +26,7 @@
 #include "hud/root_overlay_render.h"
 #include "hud/second_image.h"
 #include "hud/user_widgets.h"
+#include "platform/code_memory.h"
 #include "platform/engine_addresses.h"
 #include "platform/frame_watch.h"
 #include "platform/memory_watch.h"
@@ -95,7 +96,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.61.0";
+constexpr const wchar_t* kVersion = L"0.61.1";
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -161,7 +162,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.61.0");
+        ModVersion     = STR("0.61.1");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
     }
@@ -376,6 +377,9 @@ public:
             L"top/bottom and side by side, Ctrl+F4 switches filled halves and 16:9 halves with bars. Player 2 starts on "
             L"their own camera and pad; for testing, Ctrl+F6 switches their half to player 1's camera and Ctrl+F9 "
             L"merges the pads");
+        const auto pool = lss::platform::CodePool();
+        Log(L"code pool: {} piece(s), {} bytes of placed code in {} block(s) of 64 KiB (one search each)", pool.pieces,
+            pool.bytes, pool.blocks);
     }
 
 private:

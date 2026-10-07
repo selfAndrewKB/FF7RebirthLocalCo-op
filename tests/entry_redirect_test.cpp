@@ -152,6 +152,37 @@ void TestRedirectRefusesWhatItDoesNotRecognise()
     EXPECT(game.Call(GameLikeCode::kFunctionOffset, 5) == 6);
 }
 
+constexpr std::uint8_t kSecond[] = {0x48, 0x8B, 0x5C, 0x24, 0x08};  // mov rbx, [rsp+8]
+
+/// The copy at +0x7C: its first instruction crosses the block at 0x80, its second (0x81..0x85) does not,
+/// and reads back the slot the first one stores, so the trampoline must replay both, in order (the shape
+/// of 1.005's FieldActionMgr_AddPoint).
+void TestSecondInstructionRedirect()
+{
+    std::puts("entry redirect: at the second instruction, for a first instruction that crosses a block");
+    const GameLikeCode           game;
+    const auto                   replacement = reinterpret_cast<std::uintptr_t>(&Replacement);
+    const auto                   function    = game.At(GameLikeCode::kCrossingOffset);
+    lss::platform::EntryRedirect redirect;
+    g_redirect = &redirect;
+    constexpr std::uint8_t kOther[] = {0x48, 0x8B, 0x6C, 0x24, 0x08};  // mov rbp, [rsp+8]
+
+    EXPECT(!redirect.InstallAtSecondInstruction(function, kFirst, kOther, replacement));  // other second bytes
+    EXPECT(!redirect.InstallAtSecondInstruction(function, kOther, kSecond, replacement));  // other first bytes
+    EXPECT(!redirect.InstallAtSecondInstruction(function, kFirst, std::span<const std::uint8_t>(kSecond, 4),
+                                                replacement));  // shorter than a jump
+    EXPECT(!redirect.IsInstalled());
+    EXPECT(game.Call(GameLikeCode::kCrossingOffset, 5) == 6);
+
+    EXPECT(redirect.InstallAtSecondInstruction(function, kFirst, kSecond, replacement));
+    EXPECT(game.Call(GameLikeCode::kCrossingOffset, 5) == 16);
+    EXPECT(g_argument == 5);
+    EXPECT(game.Call(GameLikeCode::kCrossingOffset, 41) == 52);
+    EXPECT(!redirect.InstallAtSecondInstruction(function, kFirst, kSecond, replacement));  // already holds one
+    EXPECT(redirect.Restore());
+    EXPECT(game.Call(GameLikeCode::kCrossingOffset, 5) == 6);
+}
+
 }  // namespace
 
 int main()
@@ -159,6 +190,7 @@ int main()
     TestRedirectRunsAndRestores();
     TestRedirectKeepsTheCallersReturnAddress();
     TestRedirectRefusesWhatItDoesNotRecognise();
+    TestSecondInstructionRedirect();
 
     std::printf(g_failures == 0 ? "all tests passed\n" : "%d check(s) failed\n", g_failures);
     return g_failures == 0 ? 0 : 1;

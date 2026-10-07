@@ -1,14 +1,17 @@
 #include "player_two/party_switch.h"
 
+#include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "player_two/game_thread_sites.h"
 #include "player_two/generation.h"
 
 #include <cstdint>
 #include <iterator>
+#include <optional>
 
 namespace lss::player_two::party_switch {
 
@@ -43,6 +46,9 @@ platform::CallRedirect g_cycleCall;
 platform::CallRedirect g_canSwitchCall;
 platform::CallRedirect g_disabledCalls[2];
 ByTypeFn               g_byType = nullptr;
+// 1.005: the sites are placed from the game thread, with the image kept for it.
+std::optional<platform::GameImage> g_placeImage;
+bool                               g_fromGameThread = false;
 
 // Game thread.
 std::uint32_t g_refusals       = 0;  // candidates the switch was told to skip
@@ -107,9 +113,13 @@ std::uint8_t SwitchDisabled(std::uint8_t type) noexcept
     return reinterpret_cast<DisabledFn>(g_disabledCalls[0].Original())(type);
 }
 
-}  // namespace
+/// One call site redirected: at install on the research build, from the game thread on 1.005.
+bool Place(platform::CallRedirect& call, std::uintptr_t site, std::uintptr_t target, std::uintptr_t replacement) noexcept
+{
+    return g_fromGameThread ? call.InstallFromOwnThread(site, target, replacement) : call.Install(site, target, replacement);
+}
 
-bool Install(const platform::GameImage& image) noexcept
+bool InstallSites(const platform::GameImage& image) noexcept
 {
     const auto player   = platform::FindFunction(image, kPlayerComponent);
     const auto ai       = platform::FindFunction(image, kAiComponent);
@@ -118,8 +128,8 @@ bool Install(const platform::GameImage& image) noexcept
     // The cycle and its count together, or neither: a count that disagrees with the cycle would let
     // the switch be offered with no one to switch to.
     bool switching = player && ai && cycle && count &&
-                     g_cycleCall.Install(*cycle, *player, reinterpret_cast<std::uintptr_t>(&CycleComponent));
-    if (switching && !g_canSwitchCall.Install(*count, *ai, reinterpret_cast<std::uintptr_t>(&CountedComponent)))
+                     Place(g_cycleCall, *cycle, *player, reinterpret_cast<std::uintptr_t>(&CycleComponent));
+    if (switching && !Place(g_canSwitchCall, *count, *ai, reinterpret_cast<std::uintptr_t>(&CountedComponent)))
     {
         if (!g_cycleCall.Restore())
         {
@@ -137,7 +147,7 @@ bool Install(const platform::GameImage& image) noexcept
         for (std::size_t i = 0; widget && i < std::size(kDisabledCalls); ++i)
         {
             const auto site = image.Rebase(kDisabledCalls[i], 5);
-            widget = site && g_disabledCalls[i].Install(*site, *disabled, reinterpret_cast<std::uintptr_t>(&SwitchDisabled));
+            widget = site && Place(g_disabledCalls[i], *site, *disabled, reinterpret_cast<std::uintptr_t>(&SwitchDisabled));
         }
         if (!widget)
         {
@@ -157,8 +167,32 @@ bool Install(const platform::GameImage& image) noexcept
     return switching;
 }
 
+}  // namespace
+
+bool Install(const platform::GameImage& image) noexcept
+{
+    if (platform::RunningBuild() == platform::BuildIndex::V1005)
+    {
+        // The cycle's call crosses a 16-byte block in 1.005: the sites are placed from the game thread, between
+        // its ticks (player_two/game_thread_sites.h).
+        g_fromGameThread = true;
+        g_placeImage.emplace(image);
+        const bool queued = game_thread_sites::Queue([]() noexcept {
+            if (g_placeImage)
+            {
+                InstallSites(*g_placeImage);
+            }
+        });
+        platform::Log(L"party switch: {}", queued ? L"its calls are placed from the game thread (1.005: one crosses a 16-byte block)"
+                                                  : L"UNAVAILABLE (no room to place its calls from the game thread)");
+        return queued;
+    }
+    return InstallSites(image);
+}
+
 void Remove() noexcept
 {
+    g_placeImage.reset();  // a placement still queued does nothing
     for (auto* call : {&g_disabledCalls[1], &g_disabledCalls[0], &g_canSwitchCall, &g_cycleCall})
     {
         if (call->IsInstalled() && !call->Restore())

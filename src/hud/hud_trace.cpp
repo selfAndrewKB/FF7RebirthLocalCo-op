@@ -99,6 +99,12 @@ using GeometryFn = void* (*)(void* layerManager, void* out, void* localPlayer);
 platform::CallRedirect                 g_tickCall;
 platform::CallRedirect                 g_markerCall;
 std::array<platform::CallRedirect, 4>  g_projectCalls;
+// Game version 1.005 (RE-1005-hud-2.md): two project sites (0x1409B810C, 0x140808AEE there) cross a 16-byte block. The
+// game thread alone runs them, so they are installed from there, around the overlay render (TraceBeforeRender), and
+// only restored from there.
+std::array<std::uintptr_t, 4>          g_projectPending{};  // live call sites still to install (0: none)
+std::array<bool, 4>                    g_projectCrosses{};
+std::uintptr_t                         g_project          = 0;  // the live target, for every project redirect
 bool                                   g_installed        = false;
 std::uintptr_t                         g_frameNumber      = 0;
 std::uintptr_t                         g_endUISystem      = 0;
@@ -223,8 +229,8 @@ bool TracedProject(void* controller, const void* location, void* out) noexcept
         Note(L'P');
         ++g_frame.projections[PlayerSlot(controller)];
     }
-    // Every project site calls the same function (kProjectSites), so any redirect's original serves.
-    return reinterpret_cast<ProjectFn>(g_projectCalls[0].Original())(controller, location, out);
+    // Every project site calls the same function (kProjectSites), set before any of them is redirected.
+    return reinterpret_cast<ProjectFn>(g_project)(controller, location, out);
 }
 
 
@@ -361,11 +367,21 @@ bool InstallHudTrace(const platform::GameImage& image) noexcept
         g_playerHostGeometry = image.Rebase(kPlayerHostGeometry).value_or(0);
     }
 
-    bool installed = Redirect(image, g_tickCall, kMasterHudTickSite, reinterpret_cast<std::uintptr_t>(&TracedHudTick)) &&
+    g_project      = image.Rebase(kProject).value_or(0);
+    bool installed = g_project != 0 &&
+                     Redirect(image, g_tickCall, kMasterHudTickSite, reinterpret_cast<std::uintptr_t>(&TracedHudTick)) &&
 
                      Redirect(image, g_markerCall, kPlaceMarkerSite, reinterpret_cast<std::uintptr_t>(&TracedMarker));
+    const bool v1005 = platform::RunningBuild() == platform::BuildIndex::V1005;
     for (std::size_t i = 0; installed && i < kProjectSites.size(); ++i)
     {
+        const auto site = image.Rebase(kProjectSites[i].call, 5);
+        if (v1005 && site && (*site & 0xF) + 5 > 16)
+        {
+            g_projectPending[i] = *site;  // installed from the game thread (above)
+            g_projectCrosses[i] = true;
+            continue;
+        }
         installed = Redirect(image, g_projectCalls[i], kProjectSites[i], reinterpret_cast<std::uintptr_t>(&TracedProject));
     }
     if (!installed)
@@ -375,12 +391,17 @@ bool InstallHudTrace(const platform::GameImage& image) noexcept
         return false;
     }
     g_installed = true;
+    if (v1005)
+    {
+        platform::Log(L"HUD trace: installed (the project calls crossing a block follow on the game thread)");
+    }
     return true;
 }
 
 void RemoveHudTrace() noexcept
 {
     g_framesLeft.store(0, std::memory_order_relaxed);
+    g_projectPending = {};
     bool all      = true;
     auto restore  = [&all](platform::CallRedirect& call) {
         if (call.IsInstalled() && !call.Restore())
@@ -390,9 +411,13 @@ void RemoveHudTrace() noexcept
     };
     restore(g_tickCall);
     restore(g_markerCall);
-    for (auto& call : g_projectCalls)
+    const bool gameThread = player_two::generation::OnGameThread();
+    for (std::size_t i = 0; i < g_projectCalls.size(); ++i)
     {
-        restore(call);
+        if (!g_projectCrosses[i] || gameThread)  // a crossing call: only from the game thread (else it passes through)
+        {
+            restore(g_projectCalls[i]);
+        }
     }
     if (!all)
     {
@@ -408,6 +433,22 @@ bool HudTraceInstalled() noexcept
 
 void TraceBeforeRender() noexcept
 {
+    if (g_installed && g_project != 0 && player_two::generation::OnGameThread())
+    {
+        // Here the game thread is outside AreaMapIcon's frame update, as InstallFromOwnThread requires.
+        for (std::size_t i = 0; i < g_projectPending.size(); ++i)
+        {
+            if (g_projectPending[i] == 0)
+            {
+                continue;
+            }
+            const bool ok = g_projectCalls[i].InstallFromOwnThread(g_projectPending[i], g_project,
+                                                                   reinterpret_cast<std::uintptr_t>(&TracedProject));
+            g_projectPending[i] = 0;
+            platform::Log(L"HUD trace: project call {} {}", i + 1,
+                          ok ? L"installed from the game thread" : L"could not be redirected (its icons are not counted)");
+        }
+    }
     if (Tracing())
     {
         Note(L'R');

@@ -2,6 +2,7 @@
 
 #include "hud/minimap_once_code.h"
 #include "hud/second_image.h"
+#include "platform/build_value.h"
 #include "platform/code_redirect.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -50,6 +51,10 @@ constexpr WidgetSite kCircle{L"circle", 0x140FC6C95, kCircleSiteBytes, 0x140FC6C
                              0x140FC6F13, kCircleSubmit, 0x140FC6F18, kCircleAfterSubmit};
 constexpr WidgetSite kOctagon{L"octagon", 0x143A60235, kOctagonSiteBytes, 0x143A6024B, kOctagonAcquire,
                               0x143A604E0, kOctagonSubmit, 0x143A604E5, kOctagonAfterSubmit};
+// Game version 1.005 (RE-1005-hud-2.md): the circle's site is the next instruction, 0x140FC6C9C here (the same block
+// and landing point; its own skip code, hud/minimap_once_code.h).
+constexpr WidgetSite kCircle1005{L"circle", 0x140FC6C9C, kCircleSiteBytes1005, 0x140FC6CAE, kCircleAcquire,
+                                 0x140FC6F13, kCircleSubmit, 0x140FC6F18, kCircleAfterSubmit};
 
 // FEndMenuRenderer pool 0 (the render-to-texture pool), read for the log only.
 constexpr std::uint32_t kPoolZeroSlots      = 40;    // FEndMenuLayerSlot* (40 bytes each)
@@ -193,7 +198,10 @@ bool InstallMinimapOnce(const platform::GameImage& image) noexcept
     }
     const auto circleAfter  = image.Rebase(kCircle.afterSubmit);
     const auto octagonAfter = image.Rebase(kOctagon.afterSubmit);
-    const bool circle  = circleAfter && Install(image, g_circleCode, kCircle, CircleSkipCode(g_fields, *circleAfter));
+    const bool circle =
+        circleAfter && (platform::RunningBuild() == platform::BuildIndex::V1005
+                            ? Install(image, g_circleCode, kCircle1005, CircleSkipCode1005(g_fields, *circleAfter))
+                            : Install(image, g_circleCode, kCircle, CircleSkipCode(g_fields, *circleAfter)));
     const bool octagon = octagonAfter && Install(image, g_octagonCode, kOctagon, OctagonSkipCode(g_fields, *octagonAfter));
     g_installed = circle || octagon;
     g_on        = g_installed;

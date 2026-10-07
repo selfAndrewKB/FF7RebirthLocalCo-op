@@ -1,5 +1,6 @@
 #include "player_two/combat_rumble.h"
 
+#include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
 #include "platform/frame_watch.h"
@@ -16,7 +17,9 @@
 
 #include <intrin.h>
 
+#include <algorithm>
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -41,6 +44,10 @@ constexpr std::uintptr_t kCameraCall   = 0x14131FE78;
 constexpr std::uintptr_t kCamera       = 0x1416FAE10;  // PrimaryPCM_CameraEffect2DF0_Play (§10.12)
 constexpr std::uintptr_t kFallbackCall = 0x14131FEA2;
 constexpr std::uintptr_t kPrimary      = 0x140A61D1C;  // GetPrimaryEndPlayerController_FromPartyManager
+// 1.005 (RE-1005-field-2.md §6): the fallback call is at 0x14139787C, %16 = 12, so it crosses a 16-byte block. There the
+// three calls are changed together from the game thread's first tick (InstallFromOwnThread), outside every hit: the
+// hit reaction runs on the game thread [ASSUMPTION: battle damage is applied in the world tick; the gate's leader
+// scopes already rely on it, and Gate warns if a hit ever arrives off it].
 
 // UWorld::GetFirstPlayerController (stock; entry `mov eax, 28h`, as hud/area_icons_two.cpp checks).
 constexpr std::uintptr_t kFirstController        = 0x140EF3078;
@@ -131,6 +138,15 @@ platform::EntryRedirect                                  g_play, g_playClassic;
 std::uintptr_t                                           g_firstController = 0;
 std::optional<platform::GameImage>                       g_image;      // live addresses as research IDA addresses
 bool                                                     g_sitesTried = false;
+// 1.005: the battle-hit calls, installed by the first BeforeTick (sites and targets live; all three or none).
+struct HitSite
+{
+    platform::CallRedirect* redirect;
+    std::uintptr_t          site, target, replacement;
+};
+std::array<HitSite, 3> g_hitSites{};
+std::atomic<bool>       g_hitsPending   {false};
+std::atomic<bool>      g_hitsOwnThread{false};  // installed with InstallFromOwnThread (the fallback crosses a block)
 unsigned                                                 g_notifiesWrapped = 0;
 
 // Game thread.
@@ -257,6 +273,14 @@ std::uint64_t Gate(std::uint64_t kind, void* attacker, void* target, void* funct
 {
     const auto original = reinterpret_cast<GateFn>(g_gateCall.Original());
     g_hitTwo            = false;
+    // On 1.005 the fallback call was changed on the understanding that only the game thread runs a hit (call_redirect.h).
+    static std::atomic<unsigned> offThread{0};
+    if (g_hitsOwnThread.load(std::memory_order_relaxed) && !generation::OnGameThread() &&
+        offThread.fetch_add(1, std::memory_order_relaxed) < 5)
+    {
+        platform::Log(L"WARNING: combat rumble: a battle hit ran off the game thread; its fallback call was changed on the "
+                      L"understanding that only the game thread runs it");
+    }
     if (!Ready())
     {
         return original(kind, attacker, target, functor);
@@ -575,17 +599,36 @@ void Install(const platform::GameImage& image) noexcept
         const auto to = image.Rebase(target);
         return at && to && redirect.Install(*at, *to, replacement);
     };
-    const bool gate = call(g_gateCall, kGateCall, kGate, reinterpret_cast<std::uintptr_t>(&Gate));
-    const bool camera   = gate && call(g_cameraCall, kCameraCall, kCamera, reinterpret_cast<std::uintptr_t>(&Camera));
-    const bool fallback = gate && call(g_fallbackCall, kFallbackCall, kPrimary, reinterpret_cast<std::uintptr_t>(&Fallback));
-    if (gate && (!camera || !fallback))
+    bool hits = false;
+    if (platform::RunningBuild() == platform::BuildIndex::V1005)
     {
-        // All three or none: a gate passing for player 2 must not shake player 1's camera or play on player 1's pad.
-        g_cameraCall.Restore();
-        g_fallbackCall.Restore();
-        g_gateCall.Restore();
+        // Resolved now, installed by the first BeforeTick (the fallback call crosses a block).
+        const auto hit = [&image](platform::CallRedirect& redirect, std::uintptr_t site, std::uintptr_t target,
+                                  std::uintptr_t replacement) {
+            const auto at = image.Rebase(site, 5);
+            const auto to = image.Rebase(target);
+            return at && to ? HitSite{&redirect, *at, *to, replacement} : HitSite{};
+        };
+        g_hitSites    = {hit(g_gateCall, kGateCall, kGate, reinterpret_cast<std::uintptr_t>(&Gate)),
+                         hit(g_cameraCall, kCameraCall, kCamera, reinterpret_cast<std::uintptr_t>(&Camera)),
+                         hit(g_fallbackCall, kFallbackCall, kPrimary, reinterpret_cast<std::uintptr_t>(&Fallback))};
+        g_hitsPending = std::all_of(g_hitSites.begin(), g_hitSites.end(),
+                                    [](const HitSite& s) { return s.redirect != nullptr; });
     }
-    const bool hits = gate && camera && fallback;
+    else
+    {
+        const bool gate = call(g_gateCall, kGateCall, kGate, reinterpret_cast<std::uintptr_t>(&Gate));
+        const bool camera   = gate && call(g_cameraCall, kCameraCall, kCamera, reinterpret_cast<std::uintptr_t>(&Camera));
+        const bool fallback = gate && call(g_fallbackCall, kFallbackCall, kPrimary, reinterpret_cast<std::uintptr_t>(&Fallback));
+        if (gate && (!camera || !fallback))
+        {
+            // All three or none: a gate passing for player 2 must not shake player 1's camera or play on player 1's pad.
+            g_cameraCall.Restore();
+            g_fallbackCall.Restore();
+            g_gateCall.Restore();
+        }
+        hits = gate && camera && fallback;
+    }
 
     // The notifies: the first-controller call sites are installed from the game thread's first tick (two cross a block).
     const auto first = image.Rebase(kFirstController);
@@ -614,8 +657,9 @@ void Install(const platform::GameImage& image) noexcept
                        g_playClassic.Install(*classic, image.EntryInstruction(kPlayClassic, kPlayClassicBytes),
                                              reinterpret_cast<std::uintptr_t>(&PlayClassic));
     platform::Log(L"combat rumble: battle hits {}; montage notifies wrapped {} of {}{}; plays {}",
-                  hits ? L"per player (player 2's member's hits ask the game's gate with player 2 as the leader)"
-                       : L"UNCHANGED (a call site is not what the research read)",
+                  hits          ? L"per player (player 2's member's hits ask the game's gate with player 2 as the leader)"
+                  : g_hitsPending ? L"from the game thread's first tick (a call crosses a block; logged then)"
+                                  : L"UNCHANGED (a call site is not what the research read)",
                   g_notifiesWrapped, kNotifies.size(),
                   g_firstController == 0 ? L" (GetFirstPlayerController is not what the research read)" : L"",
                   plays ? L"logged with their source" : L"NOT logged (an entry is not what the research read)");
@@ -623,6 +667,32 @@ void Install(const platform::GameImage& image) noexcept
 
 void BeforeTick() noexcept
 {
+    if (g_hitsPending && generation::OnGameThread())
+    {
+        g_hitsPending = false;  // here the game thread is outside every hit, as InstallFromOwnThread requires
+        bool all      = true;
+        g_hitsOwnThread.store(true, std::memory_order_relaxed);
+        for (const HitSite& s : g_hitSites)
+        {
+            all = all && s.redirect->InstallFromOwnThread(s.site, s.target, s.replacement);
+        }
+        g_hitsOwnThread.store(all, std::memory_order_relaxed);
+        if (!all)
+        {
+            // All three or none (as Install): restored from the same thread, still outside every hit.
+            for (auto it = g_hitSites.rbegin(); it != g_hitSites.rend(); ++it)
+            {
+                if (it->redirect->IsInstalled())
+                {
+                    it->redirect->Restore();
+                }
+            }
+        }
+        platform::Log(L"combat rumble: battle hits {}",
+                      all ? L"per player (player 2's member's hits ask the game's gate with player 2 as the leader; "
+                            L"installed from the game thread)"
+                          : L"UNCHANGED (a call site is not what the research read)");
+    }
     if (!g_sitesTried && generation::OnGameThread() && g_firstController != 0)
     {
         g_sitesTried = true;  // here the game thread is outside every notify, as InstallFromOwnThread requires

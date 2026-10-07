@@ -1,5 +1,6 @@
 #include "player_two/lock_on.h"
 
+#include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/code_redirect.h"
 #include "platform/guarded.h"
@@ -9,6 +10,7 @@
 #include "player_two/command_menu_two.h"
 #include "player_two/engine_facts.h"
 #include "player_two/focus_scope.h"
+#include "player_two/game_thread_sites.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 #include "player_two/object_fields.h"
@@ -18,9 +20,11 @@
 #include "player_two/party_member.h"
 #include "player_two/primary_controller.h"
 
+#include <atomic>
 #include <cstdint>
 #include <cstring>
 #include <format>
+#include <optional>
 #include <string>
 
 #ifndef WIN32_LEAN_AND_MEAN
@@ -69,6 +73,14 @@ constexpr platform::FunctionFact kCursorRelease{L"EndUI22_ReleaseTargetCursor", 
 constexpr platform::FunctionFact kDeactivate{L"PrimaryPCM_Op2CA8_SlotCall18", 0x141203BEC, kDeactivateBytes};
 // Whether the command controller in EndUISystem[23] has its target list open (entries 10/11/13).
 constexpr platform::FunctionFact kTargetList{L"EndUI23_IsCommandTargetEntryActive", 0x140C8F058, kTargetListBytes};
+// Its body, bool(command controller), which the wrapper above tail-jumps to with EndUISystem[23]. 1.005 inlined the
+// wrapper into its only caller (RE-1005-player-two.md); the body is byte for byte the research build's
+// (RE-1005-battle-2.md), so on 1.005 the mod calls it with the same slot the wrapper read.
+constexpr std::uint8_t kTargetListImplBytes[] = {0x8B, 0x41, 0x34, 0x33, 0xD2, 0x39, 0x51, 0x38,
+                                                 0x4C, 0x8B, 0xC9, 0x0F, 0x4D, 0x41, 0x38};
+constexpr platform::FunctionFact kTargetListImpl{L"EndUI23_IsCommandTargetEntryActive_Impl", 0x140C8F07C,
+                                                 kTargetListImplBytes};
+constexpr std::uint32_t kCommandController = 0xB8;  // EndUISystem[23], the slot the wrapper reads
 constexpr platform::FunctionFact kModuleOn{L"PrimaryPCM_Op2CA8_SlotFlag44", 0x141203880, kModuleOnBytes};
 
 // The targeting tick's two calls in BattleSystem_Tick (time stopped with the menu's target select;
@@ -81,7 +93,7 @@ constexpr std::uintptr_t kPanelClearedResume   = 0x14295F0AD;
 constexpr std::uintptr_t kPanelClearedCall     = 0x14295F0BE;  // the request's call, checked: E8 to EndUI4_QueueTargetCleared
 constexpr std::uint8_t   kPanelClearedCallBytes[] = {0xE8, 0xC1, 0x79, 0x07, 0x01};
 constexpr std::uintptr_t kPanelClearedSkipTo   = 0x14295F0C3;  // after the request's call
-constexpr std::uintptr_t kPanelSetCall         = 0x14295F139;
+constexpr std::uintptr_t kPanelSetCall         = 0x14295F139;  // crosses a block on 1.005 (placed from the game thread)
 constexpr std::uintptr_t kMarkerNameCall       = 0x140C8F9C9;
 
 // The battle system (a pointer global) and its target fields (§R.1, §9; S-TGT5 §5).
@@ -118,6 +130,7 @@ struct Pair  // a TWeakPtr as the game holds it
 using TickFn         = void (*)(void* system, float deltaTime);
 using SetLockFn      = std::uint8_t (*)(void* system, std::uint8_t lock);
 using TestFn         = std::uint8_t (*)();
+using ListImplFn     = std::uint8_t (*)(void* commandController);
 using ReleaseFn      = void (*)(std::uintptr_t controller);
 using WeakReleaseFn  = void (*)(void* weakPtr);
 using PanelSetFn     = void (*)(void* weakPtr, float x, float y);
@@ -129,14 +142,20 @@ using LayerTestFn    = std::uint8_t (*)(std::uint8_t layer);
 // Set once at install.
 platform::CallRedirect g_tickTargetingCalls[2];
 platform::CodeRedirect g_panelClearedGate;
+platform::CallRedirect g_panelClearedCall;  // 1.005: the "cleared" request's call, which fits one block there
 platform::CallRedirect g_panelSetCall;
 platform::CallRedirect g_markerNameCall;
+// 1.005: the call sites are placed from the game thread (both targeting calls and the "set" call cross a block),
+// with the image kept for it (player_two/game_thread_sites.h).
+std::optional<platform::GameImage> g_placeImage;
+std::atomic<bool> g_fromGameThread {false};
 bool           g_installed   = false;  // the scope's facts: the TargetScope works
 bool           g_runReady    = false;  // player 2's run and its skipped writes are installed
 SetLockFn      g_setLock     = nullptr;
 TestFn         g_menuSelect  = nullptr;
 TestFn         g_menuBusy    = nullptr;
 TestFn         g_targetList  = nullptr;  // optional: the log of player 2's target list
+ListImplFn     g_targetListImpl = nullptr;  // the same on 1.005 (the wrapper's body; see kTargetListImpl)
 TestFn         g_isInBattle  = nullptr;
 ReleaseFn      g_release     = nullptr;
 WeakReleaseFn  g_weakRelease = nullptr;
@@ -254,6 +273,19 @@ void ReleaseCursor() noexcept
         }
     }
     g_cursor = 0;
+}
+
+/// Whether the command controller in the UI system's slot has its target list open: the game's wrapper, or on
+/// 1.005 its body with the slot the wrapper reads. False if neither is known or the call faulted.
+bool TargetListActive(std::uint8_t& open) noexcept
+{
+    if (g_targetList != nullptr)
+    {
+        return platform::CallGuarded(g_targetList, open);
+    }
+    const auto controller = Field<std::uintptr_t>(g_endUISystem != 0 ? g_endUISystem + kCommandController : 0);
+    return g_targetListImpl != nullptr && controller != 0 &&
+           platform::CallGuarded(g_targetListImpl, open, reinterpret_cast<void*>(controller));
 }
 
 /// The menu's target select is open or busy (its widgets are player 1's).
@@ -468,7 +500,7 @@ void PlayerTwoTargeting(TickFn engine, void* system, float deltaTime) noexcept
     }
     // The log: player 2's target list, read with player 2's controller still in the slot.
     std::uint8_t open = 0;
-    if (g_targetList != nullptr && platform::CallGuarded(g_targetList, open) && (open != 0) != g_listOpen)
+    if (TargetListActive(open) && (open != 0) != g_listOpen)
     {
         g_listOpen = open != 0;
         if (g_listOpen)
@@ -560,6 +592,19 @@ void PanelSet(void* weakPtr, float x, float y) noexcept
     platform::CallGuarded(g_weakRelease, weakPtr);
 }
 
+/// 1.005: replaces the tick's request for player 1's panel "old target cleared", whose call fits one block there
+/// (1.004 gates its chunk instead, panel_gate_code.h): skipped in player 2's run, its weak reference released as
+/// the request would release it at its end. The same net effect as the gate: no request, no reference left.
+void PanelCleared(void* weakPtr) noexcept
+{
+    if (!g_run)
+    {
+        return reinterpret_cast<WeakReleaseFn>(g_panelClearedCall.Original())(weakPtr);
+    }
+    ++g_panelGate.skipped;
+    platform::CallGuarded(g_weakRelease, weakPtr);
+}
+
 /// Replaces the tick's write of the marker list's target owner name: skipped in player 2's run.
 void MarkerName(void* owner) noexcept
 {
@@ -596,18 +641,30 @@ void EndOfBattle() noexcept
     g_trace    = 0;
 }
 
+/// One call site redirected: at install on the research build, from the game thread on 1.005.
+bool Place(platform::CallRedirect& call, std::uintptr_t site, std::uintptr_t target, std::uintptr_t replacement) noexcept
+{
+    return g_fromGameThread ? call.InstallFromOwnThread(site, target, replacement) : call.Install(site, target, replacement);
+}
+
 bool Redirect(const platform::GameImage& image, platform::CallRedirect& call, std::uintptr_t site,
               const platform::FunctionFact& fact, std::uintptr_t replacement) noexcept
 {
     const auto target = platform::FindFunction(image, fact);
     const auto live   = image.Rebase(site, 5);
-    return target && live && call.Install(*live, *target, replacement);
+    return target && live && Place(call, *live, *target, replacement);
 }
 
-/// The "old target cleared" request's chunk gated (player_two/panel_gate_code.h), once the chunk is
-/// the one the research read: its call still names the request, and the gated instruction matches.
+/// The "old target cleared" request kept from player 1's panel in player 2's run. On 1.005 its call fits one
+/// block and is redirected (PanelCleared); on the research build its chunk is gated (player_two/panel_gate_code.h),
+/// once the chunk is the one the research read: its call still names the request, and the gated instruction matches.
 bool InstallPanelGate(const platform::GameImage& image) noexcept
 {
+    if (platform::RunningBuild() == platform::BuildIndex::V1005)
+    {
+        return image.BytesMatch(kPanelClearedCall, kPanelClearedCallBytes) &&
+               Redirect(image, g_panelClearedCall, kPanelClearedCall, kPanelCleared, reinterpret_cast<std::uintptr_t>(&PanelCleared));
+    }
     const auto request = platform::FindFunction(image, kPanelCleared);
     const auto site    = image.Rebase(kPanelClearedSite, sizeof(kPanelGateSiteBytes));
     const auto resume  = image.Rebase(kPanelClearedResume);
@@ -627,6 +684,8 @@ void RestoreCall(platform::CallRedirect& call) noexcept
         platform::Log(L"lock-on: a call was changed after us; left in place (it passes through)");
     }
 }
+
+bool PlaceSites(const platform::GameImage& image) noexcept;
 
 }  // namespace
 
@@ -709,7 +768,14 @@ bool Install(const platform::GameImage& image) noexcept
     g_setLock       = reinterpret_cast<SetLockFn>(find(kSetLock));
     g_menuSelect    = reinterpret_cast<TestFn>(find(kMenuSelect));
     g_menuBusy      = reinterpret_cast<TestFn>(find(kMenuBusy));
-    g_targetList    = reinterpret_cast<TestFn>(find(kTargetList));
+    if (platform::RunningBuild() == platform::BuildIndex::V1005)
+    {
+        g_targetListImpl = reinterpret_cast<ListImplFn>(find(kTargetListImpl));  // the wrapper was inlined
+    }
+    else
+    {
+        g_targetList = reinterpret_cast<TestFn>(find(kTargetList));
+    }
     g_isInBattle    = reinterpret_cast<TestFn>(find(facts::kIsInBattle));
     g_release       = reinterpret_cast<ReleaseFn>(find(kRelease));
     g_weakRelease   = reinterpret_cast<WeakReleaseFn>(find(kWeakRelease));
@@ -726,15 +792,62 @@ bool Install(const platform::GameImage& image) noexcept
         platform::Log(L"lock-on: UNAVAILABLE (a check failed); player 2 has no targeting of their own");
         return false;
     }
-    // Both targeting calls (or neither), then the tick's three shared writes skipped in player 2's run:
-    // all of those, or player 2 gets no run (a partial set would leak player 2's targeting into player
-    // 1's panel or markers); the calls alone still keep player 1's targeting on pad 1's stick.
+    if (platform::RunningBuild() == platform::BuildIndex::V1005)
+    {
+        // Both targeting calls and the "set" call cross a 16-byte block in 1.005: every site is placed from the
+        // game thread, between its ticks (player_two/game_thread_sites.h).
+        g_fromGameThread = true;
+        g_placeImage.emplace(image);
+        if (game_thread_sites::Queue([]() noexcept {
+                if (g_placeImage)
+                {
+                    PlaceSites(*g_placeImage);
+                }
+            }))
+        {
+            platform::Log(L"lock-on: the targeting calls are placed from the game thread (1.005: they cross a 16-byte block)");
+            return true;
+        }
+        platform::Log(L"lock-on: player 2's targeting run UNAVAILABLE (no room to place its calls from the game thread)");
+        return false;
+    }
+    return PlaceSites(image);
+}
+
+void Remove() noexcept
+{
+    g_runReady    = false;
+    g_placeImage.reset();  // a placement still queued does nothing
+    for (auto& call : g_tickTargetingCalls)
+    {
+        RestoreCall(call);
+    }
+    if (g_panelClearedGate.IsInstalled() && !g_panelClearedGate.Restore())
+    {
+        platform::Log(L"lock-on: the panel gate was changed after us; left in place (it passes through while unset)");
+    }
+    RestoreCall(g_panelClearedCall);
+    RestoreCall(g_panelSetCall);
+    RestoreCall(g_markerNameCall);
+}
+
+namespace {
+
+/// The call sites: both targeting calls (or neither), then the tick's three shared writes skipped in player 2's
+/// run: all of those, or player 2 gets no run (a partial set would leak player 2's targeting into player 1's panel
+/// or markers); the calls alone still keep player 1's targeting on pad 1's stick.
+bool PlaceSites(const platform::GameImage& image) noexcept
+{
+    const auto find = [&image](const platform::FunctionFact& fact) {
+        const auto live = platform::FindFunction(image, fact);
+        return live ? *live : std::uintptr_t{0};
+    };
     const std::uintptr_t tick = find(kTickTargeting);
-    bool                 ok   = tick != 0 && g_menuSelect && g_menuBusy && g_weakRelease && ui;
+    bool                 ok   = tick != 0 && g_menuSelect && g_menuBusy && g_weakRelease && g_endUISystem != 0;
     for (std::size_t i = 0; ok && i < 2; ++i)
     {
         const auto site = image.Rebase(kTickTargetingCalls[i], 5);
-        ok = site && g_tickTargetingCalls[i].Install(*site, tick, reinterpret_cast<std::uintptr_t>(&Targeting));
+        ok = site && Place(g_tickTargetingCalls[i], *site, tick, reinterpret_cast<std::uintptr_t>(&Targeting));
     }
     if (!ok)
     {
@@ -756,6 +869,7 @@ bool Install(const platform::GameImage& image) noexcept
         {
             g_panelClearedGate.Restore();
         }
+        RestoreCall(g_panelClearedCall);
         RestoreCall(g_panelSetCall);
         RestoreCall(g_markerNameCall);
     }
@@ -764,27 +878,15 @@ bool Install(const platform::GameImage& image) noexcept
                                      : L"player 2's targeting run UNAVAILABLE (a check failed); player 2 has no lock-on");
     if (!ok)
     {
-        platform::Log(L"lock-on: checks: targeting calls {}, panel 'cleared' gate {}, panel 'set' call {}, marker name call {}",
-                      calls ? L"ok" : L"FAILED", cleared ? L"ok" : (calls ? L"FAILED" : L"not tried"),
+        platform::Log(L"lock-on: checks: targeting calls {}, panel 'cleared' {} {}, panel 'set' call {}, marker name call {}",
+                      calls ? L"ok" : L"FAILED", g_fromGameThread ? L"call" : L"gate",
+                      cleared ? L"ok" : (calls ? L"FAILED" : L"not tried"),
                       set ? L"ok" : (cleared ? L"FAILED" : L"not tried"), marker ? L"ok" : (set ? L"FAILED" : L"not tried"));
     }
     return ok;
 }
 
-void Remove() noexcept
-{
-    g_runReady = false;
-    for (auto& call : g_tickTargetingCalls)
-    {
-        RestoreCall(call);
-    }
-    if (g_panelClearedGate.IsInstalled() && !g_panelClearedGate.Restore())
-    {
-        platform::Log(L"lock-on: the panel gate was changed after us; left in place (it passes through while unset)");
-    }
-    RestoreCall(g_panelSetCall);
-    RestoreCall(g_markerNameCall);
-}
+}  // namespace
 
 void AfterBattle() noexcept
 {

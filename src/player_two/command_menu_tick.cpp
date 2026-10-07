@@ -1,5 +1,6 @@
 #include "player_two/command_menu_tick.h"
 
+#include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -11,6 +12,7 @@
 #include "player_two/command_rules.h"
 #include "player_two/engine_facts.h"
 #include "player_two/focus_scope.h"
+#include "player_two/game_thread_sites.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 #include "player_two/lock_on.h"
@@ -20,6 +22,7 @@
 #include "player_two/primary_controller.h"
 #include "players/unreal_access.h"
 
+#include <atomic>
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -217,6 +220,23 @@ using UpRouteFn       = std::uint8_t (*)(void* owner, void* event);
 // Set once at install.
 platform::CallRedirect g_tickCall, g_slotCall, g_snapshotCall, g_guideShowCall, g_guideMode8Call, g_upRouteCall;
 platform::CallRedirect g_filterOnCall, g_filterOffCall, g_soundOffCall;
+
+/// The calls' targets as Install found them, for the redirects (placed at once, or on 1.005 from the game thread).
+struct Targets
+{
+    std::uintptr_t filterOn = 0, filterOff = 0, menuSound = 0, slot = 0, snapshot = 0, show = 0, mode8 = 0, tick = 0;
+};
+Targets                            g_targets;
+std::optional<platform::GameImage> g_placeImage;     // 1.005: kept for the placement
+std::atomic<bool>                   g_fromGameThread {false};  // 1.005: the calls go in with InstallFromOwnThread
+
+/// One call site redirected: at install on the research build, from the game thread on 1.005.
+bool Place(platform::CallRedirect& call, std::uintptr_t site, std::uintptr_t target, std::uintptr_t replacement) noexcept
+{
+    return g_fromGameThread ? call.InstallFromOwnThread(site, target, replacement) : call.Install(site, target, replacement);
+}
+
+bool PlaceSites(const platform::GameImage& image, bool ok) noexcept;
 FilterCountFn          g_refInc = nullptr, g_refDec = nullptr;
 platform::VTableEntry  g_keyUpSlot;
 HudModeFn      g_hudMode   = nullptr;
@@ -1094,18 +1114,49 @@ bool Install(const platform::GameImage& image) noexcept
         g_refDec         = reinterpret_cast<FilterCountFn>(*refDec);
         g_commandMenuKey = *commandMenu;
     }
+    if (ok)
+    {
+        g_targets = {*filterOn, *filterOff, *menuSound, *slot, *snapshot, *show, *mode8, *tick};
+    }
+    if (ok && platform::RunningBuild() == platform::BuildIndex::V1005)
+    {
+        // The tick's call and the key guide's mode-8 call cross a 16-byte block in 1.005: every site is placed from
+        // the game thread, between its ticks (player_two/game_thread_sites.h).
+        g_fromGameThread = true;
+        g_placeImage.emplace(image);
+        const bool queued = game_thread_sites::Queue([]() noexcept {
+            if (g_placeImage)
+            {
+                const platform::GameImage image = *g_placeImage;  // a failed placement's Remove() empties g_placeImage
+                PlaceSites(image, true);
+            }
+        });
+        platform::Log(L"command menu tick: {}", queued ? L"its calls are placed from the game thread (1.005: two cross a 16-byte block)"
+                                                       : L"UNAVAILABLE (no room to place its calls from the game thread)");
+        return queued;
+    }
+    return PlaceSites(image, ok);
+}
+
+namespace {
+
+/// The call sites, from what Install found (`ok`: its checks passed). At install on the research build; on 1.005
+/// from the game thread.
+bool PlaceSites(const platform::GameImage& image, bool ok) noexcept
+{
+    const Targets& t = g_targets;
     // The shields first, the tick last: no pass runs before its shields are in place.
     const auto redirect = [&image](platform::CallRedirect& call, std::uintptr_t site, std::uintptr_t target, auto* with) {
         const auto live = image.Rebase(site, 5);
-        return live && call.Install(*live, target, reinterpret_cast<std::uintptr_t>(with));
+        return live && Place(call, *live, target, reinterpret_cast<std::uintptr_t>(with));
     };
-    ok = ok && redirect(g_filterOnCall, kFilterOnCall, *filterOn, &TintOn) &&
-         redirect(g_filterOffCall, kFilterOffCall, *filterOff, &TintOff) &&
-         redirect(g_soundOffCall, kSoundOffCall, *menuSound, &WaitSoundOff);
-    ok = ok && redirect(g_slotCall, kSlotCall, *slot, &Slot) && redirect(g_snapshotCall, kSnapshotCall, *snapshot, &CommandSnapshot) &&
-         redirect(g_guideShowCall, kGuideShowCall, *show, &GuideShow) &&
-         redirect(g_guideMode8Call, kGuideMode8Call, *mode8, &GuideMode8) &&
-         redirect(g_tickCall, kTickCall, *tick, &Tick);
+    ok = ok && redirect(g_filterOnCall, kFilterOnCall, t.filterOn, &TintOn) &&
+         redirect(g_filterOffCall, kFilterOffCall, t.filterOff, &TintOff) &&
+         redirect(g_soundOffCall, kSoundOffCall, t.menuSound, &WaitSoundOff);
+    ok = ok && redirect(g_slotCall, kSlotCall, t.slot, &Slot) && redirect(g_snapshotCall, kSnapshotCall, t.snapshot, &CommandSnapshot) &&
+         redirect(g_guideShowCall, kGuideShowCall, t.show, &GuideShow) &&
+         redirect(g_guideMode8Call, kGuideMode8Call, t.mode8, &GuideMode8) &&
+         redirect(g_tickCall, kTickCall, t.tick, &Tick);
     g_installed = ok;
     if (!ok)
     {
@@ -1121,6 +1172,8 @@ bool Install(const platform::GameImage& image) noexcept
                                                : L"UNAVAILABLE (a check failed): player 2 has no attack, guard or dodge");
     return ok;
 }
+
+}  // namespace
 
 bool RefocusMenu(void* controller) noexcept
 {
@@ -1146,6 +1199,7 @@ void Remove() noexcept
     pad_buttons::SetPlayerTwoRoute(nullptr);
     ReleaseTint(L"released: the stage is removed");
     g_installed = false;
+    g_placeImage.reset();  // a placement still queued does nothing
     if (g_keyUpSlot.Original() != 0 && !g_keyUpSlot.Restore())
     {
         platform::Log(L"command menu tick: the key-up slot was changed after us; left in place (it passes through)");

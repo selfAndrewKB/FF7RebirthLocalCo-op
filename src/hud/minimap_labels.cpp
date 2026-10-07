@@ -2,12 +2,14 @@
 
 #include "hud/label_relayouts.h"
 #include "hud/label_states.h"
+#include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "player_two/generation.h"
 
+#include <atomic>
 #include <bit>
 #include <cstddef>
 #include <cstdint>
@@ -97,6 +99,12 @@ using ReleaseFn    = void (*)(void* controller);
 using InvalidateFn = void (*)(void* widget, std::uint32_t reason);
 
 platform::CallRedirect g_call;
+// Game version 1.005 (RE-1005-hud-2.md): the call (0x1411A7E3D there) crosses a 16-byte block, so it is installed from
+// the game thread, which alone runs it, outside the holder update (Tick), and only restored from there.
+std::atomic<bool>       g_callPending    {false};
+bool                   g_callCrosses    = false;
+std::uintptr_t         g_callSite       = 0;
+std::uintptr_t         g_callTarget     = 0;
 bool                   g_installed      = false;
 bool                   g_refused        = false;  // a swap faulted: the labels as before until restart
 bool                   g_inRun          = false;  // inside the mod's player 2 holder run
@@ -356,6 +364,15 @@ bool Install(const platform::GameImage& image) noexcept
     g_freeString       = reinterpret_cast<ArrayDtorFn>(*freeString);
     g_releaseWeak      = reinterpret_cast<ReleaseFn>(*release);
     g_invalidate       = reinterpret_cast<InvalidateFn>(*invalidate);
+    if (platform::RunningBuild() == platform::BuildIndex::V1005 && (*callAt & 0xF) + 5 > 16)
+    {
+        g_callSite    = *callAt;
+        g_callTarget  = *setText;
+        g_callPending = true;
+        g_callCrosses = true;
+        platform::Log(L"minimap labels: checked; the SetText call follows on the game thread");
+        return true;
+    }
     if (!g_call.Install(*callAt, *setText, reinterpret_cast<std::uintptr_t>(&SetText)))
     {
         platform::Log(L"minimap labels: the SetText call could not be redirected; each pass lays the labels out as before");
@@ -368,7 +385,10 @@ bool Install(const platform::GameImage& image) noexcept
 
 void Remove() noexcept
 {
-    if (g_call.IsInstalled() && !g_call.Restore())
+    g_callPending = false;
+    // A call crossing two blocks is restored only from the game thread; elsewhere it stays, passing through (no run).
+    const bool restorable = !g_callCrosses || generation::OnGameThread();
+    if (restorable && g_call.IsInstalled() && !g_call.Restore())
     {
         platform::Log(L"minimap labels: the SetText call was changed after us; left in place (it passes through)");
     }
@@ -408,6 +428,15 @@ void SwapBack() noexcept
 
 void Tick(bool playerTwoMinimapOn) noexcept
 {
+    if (g_callPending && generation::OnGameThread())
+    {
+        g_callPending = false;  // here the game thread is outside the holder update, as InstallFromOwnThread requires
+        g_installed   = g_call.InstallFromOwnThread(g_callSite, g_callTarget, reinterpret_cast<std::uintptr_t>(&SetText));
+        platform::Log(L"minimap labels: {}", g_installed ? L"installed from the game thread (each player keeps their own "
+                                                           L"label text and layout)"
+                                                         : L"the SetText call could not be redirected; each pass lays "
+                                                           L"the labels out as before");
+    }
     if (!g_installed || !generation::OnGameThread())
     {
         return;

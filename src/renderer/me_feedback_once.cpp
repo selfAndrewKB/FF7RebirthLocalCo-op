@@ -50,6 +50,14 @@ constexpr std::uint8_t   kHiddenBytes[] = {0x4C, 0x89, 0x44, 0x24, 0x18, 0x48, 0
                                            0x24, 0x10, 0x55, 0x53, 0x56, 0x57, 0x41, 0x54};
 constexpr std::size_t    kHiddenFirst   = 5;
 
+// Game version 1.005 (RE-1005-hud-2.md): the process call (0x140BC0ECC there) and both entries (0x14199FE6C,
+// 0x14078389C, now `mov [rsp+10h],rdx` and `mov [rsp+10h],rbx`) cross a 16-byte block. Each of the three functions has
+// one caller, all on the render thread inside Render_Main, so their calls are redirected instead: the hidden pass's
+// (inside one block) at install, the process and copy calls (crossing) from the render thread itself, at the first
+// Render (InstallOnRenderThread), and those two are never restored from another thread.
+constexpr std::uintptr_t kCopyCall   = 0x14157B30C;  // ME_RenderChunkDispatch_ViewLoop's call of the copy
+constexpr std::uintptr_t kHiddenCall = 0x140FDD6EE;  // Render_Main's call of the hidden pass
+
 constexpr std::uint32_t kRendererAdditionalFamily = 0x84;  // the family copy's bAdditionalViewFamily (+0x74)
 
 // The budget state, for the log: IStreamingManager's static (FStreamingManagerCollection*), its ME
@@ -71,6 +79,10 @@ platform::VTableEntry   g_render;
 platform::CallRedirect  g_processCall;
 platform::EntryRedirect g_copyEntry;
 platform::EntryRedirect g_hiddenEntry;
+platform::CallRedirect  g_copyCall;    // 1.005, in place of g_copyEntry
+platform::CallRedirect  g_hiddenCall;  // 1.005, in place of g_hiddenEntry
+std::atomic<bool>       g_renderThreadPending{false};  // 1.005: the process and copy calls wait for the render thread
+std::uintptr_t          g_processSite = 0, g_processTarget = 0, g_copySite = 0, g_copyTarget = 0;  // set before it
 std::atomic<bool>       g_installed{false};
 std::atomic<bool>       g_on{false};
 std::uintptr_t          g_managers = 0;  // live address of the static
@@ -110,9 +122,31 @@ void Count(Stage stage, Family family) noexcept
     g_counts[stage][family].fetch_add(1, std::memory_order_relaxed);
 }
 
+void Process(void* group) noexcept;
+void Copy(void* builder, void* scene) noexcept;
+
+/// 1.005: the process and copy calls, from the render thread (the only one that runs them), outside Render_Main.
+void InstallOnRenderThread() noexcept
+{
+    // A plain load first: on the research build (and after the first Render) this is all a Render pays.
+    if (!g_renderThreadPending.load(std::memory_order_relaxed) ||
+        !g_renderThreadPending.exchange(false, std::memory_order_acq_rel))
+    {
+        return;
+    }
+    const bool process =
+        g_processCall.InstallFromOwnThread(g_processSite, g_processTarget, reinterpret_cast<std::uintptr_t>(&Process));
+    const bool copy = g_copyCall.InstallFromOwnThread(g_copySite, g_copyTarget, reinterpret_cast<std::uintptr_t>(&Copy));
+    platform::Log(L"stream feedback: from the render thread, the readback processing call {} and the main pass's copy "
+                  L"call {}",
+                  process ? L"installed" : L"FAILED (player 2's family still processes readbacks)",
+                  copy ? L"installed" : L"FAILED (player 2's family still copies its feedback)");
+}
+
 /// Replaces the scene renderer's Render (vtable slot): marks player 2's family for its length.
 void Render(void* renderer, void* commandList, void* a3, void* a4) noexcept
 {
+    InstallOnRenderThread();  // once, on 1.005
     std::uint8_t additional = 0;
     platform::CopyGuarded(&additional, static_cast<const std::uint8_t*>(renderer) + kRendererAdditionalFamily, 1);
     const Family previous = t_family;  // a render nested inside another on this thread restores the outer one
@@ -142,7 +176,9 @@ void Copy(void* builder, void* scene) noexcept
     Count(Copies, family);
     if (family != TwoSkipped)
     {
-        reinterpret_cast<CopyFn>(g_copyEntry.Original())(builder, scene);
+        // Only one of the two is installed (1.005: the call); each sets its original before it can be reached.
+        const std::uintptr_t original = g_copyCall.Original() != 0 ? g_copyCall.Original() : g_copyEntry.Original();
+        reinterpret_cast<CopyFn>(original)(builder, scene);
     }
 }
 
@@ -153,7 +189,8 @@ void HiddenPass(void* renderer, void* commandList, const void* views) noexcept
     Count(Hidden, family);
     if (family != TwoSkipped)
     {
-        reinterpret_cast<HiddenFn>(g_hiddenEntry.Original())(renderer, commandList, views);
+        const std::uintptr_t original = g_hiddenCall.Original() != 0 ? g_hiddenCall.Original() : g_hiddenEntry.Original();
+        reinterpret_cast<HiddenFn>(original)(renderer, commandList, views);
     }
 }
 
@@ -172,19 +209,62 @@ std::wstring BudgetState() noexcept
 
 void RemoveAll() noexcept
 {
+    g_renderThreadPending.store(false, std::memory_order_release);
     if (g_hiddenEntry.IsInstalled())
     {
         g_hiddenEntry.Restore();
+    }
+    if (g_hiddenCall.IsInstalled())
+    {
+        g_hiddenCall.Restore();
     }
     if (g_copyEntry.IsInstalled())
     {
         g_copyEntry.Restore();
     }
-    if (g_processCall.IsInstalled())
+    // 1.005's process and copy calls cross a block and were installed from the render thread: they stay, passing every
+    // call through once Render no longer marks a family (this DLL is pinned).
+    if (platform::RunningBuild() != platform::BuildIndex::V1005 && g_processCall.IsInstalled())
     {
         g_processCall.Restore();
     }
     g_render.Restore();
+}
+
+/// Game version 1.005 (kCopyCall above): the hidden pass's call now, Render, and the process and copy calls left to
+/// the render thread's first Render. The functions' first bytes were checked by the caller.
+bool Install1005(const platform::GameImage& image, std::uintptr_t entry, std::uintptr_t render, std::uintptr_t call,
+                 std::uintptr_t process, std::uintptr_t copy) noexcept
+{
+    const auto copyCall   = image.Rebase(kCopyCall, 5);
+    const auto hiddenCall = image.Rebase(kHiddenCall, 5);
+    const auto hidden     = image.Rebase(kHidden);
+    if (!copyCall || !hiddenCall || !hidden)
+    {
+        platform::Log(L"stream feedback: the scenery streaming code is not what the research read; each family hands in "
+                      L"requests as before");
+        return false;
+    }
+    g_processSite   = call;
+    g_processTarget = process;
+    g_copySite      = *copyCall;
+    g_copyTarget    = copy;
+    g_renderThreadPending.store(true, std::memory_order_release);  // before Render can run
+    const bool installed =
+        g_hiddenCall.Install(*hiddenCall, *hidden, reinterpret_cast<std::uintptr_t>(&HiddenPass)) &&
+        g_render.Replace(entry, render, reinterpret_cast<std::uintptr_t>(&Render));
+    if (!installed)
+    {
+        RemoveAll();
+        platform::Log(L"stream feedback: a site could not be redirected; each family hands in requests as before");
+        return false;
+    }
+    g_on.store(true, std::memory_order_relaxed);
+    g_installed.store(true, std::memory_order_release);
+    platform::Log(L"stream feedback: installed; player 2's family skips the readback processing, the main pass's copy "
+                  L"and the hidden-component pass, so player 1's family alone hands in scenery requests (player 2's "
+                  L"come through its streaming view); the first two calls follow on the render thread");
+    return true;
 }
 
 }  // namespace
@@ -207,6 +287,10 @@ bool InstallMeFeedbackOnce(const platform::GameImage& image) noexcept
         return false;
     }
     g_managers = *managers;
+    if (platform::RunningBuild() == platform::BuildIndex::V1005)
+    {
+        return Install1005(image, *entry, *render, *call, *process, *copy);
+    }
     // The skip points first: they pass everything through until Render marks a family.
     const bool installed =
         g_processCall.Install(*call, *process, reinterpret_cast<std::uintptr_t>(&Process)) &&

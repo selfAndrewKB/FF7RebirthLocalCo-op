@@ -1,10 +1,13 @@
 #include "player_two/camera_distance.h"
 
+#include "platform/build_value.h"
 #include "platform/call_redirect.h"
+#include "platform/entry_redirect.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "player_two/call_site.h"
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
@@ -13,8 +16,13 @@
 #include <algorithm>
 #include <cstdint>
 #include <format>
+#include <span>
 #include <string>
 #include <utility>
+
+#include <intrin.h>
+
+#pragma intrinsic(_ReturnAddress)
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -35,6 +43,10 @@ constexpr platform::FunctionFact kManagerApply{L"AEndPlayerCameraManager__ApplyC
                                                kManagerApplyBytes};
 constexpr std::uintptr_t kSetterCall  = 0x142ADCBCA;  // in the option setter: the primary camera manager's apply
 constexpr std::uintptr_t kConfirmCall = 0x14180A4D6;  // in the confirm-key handler: the per-camera-manager apply
+// 1.005 (RE-1005-field-2.md §7): the setter was merged into OptionsMenu_SetOptionValue_CopyApplyCommit and its call is
+// at 0x1410B9F6D, %16 = 13, so it crosses a 16-byte block. There it is heard at the primary apply's entry instead
+// (first instruction `mov [rsp+8], rbx`, 5 bytes at %16 = 4; that call is its only caller), by its return address.
+constexpr std::size_t kPrimaryApplyFirstInstruction = 5;
 constexpr int            kMaxLines    = 50;
 
 // Split framing (RE-p2-framing.md §1.4, §3, §6.1; RE-p2-battle-camera.md §6).
@@ -59,6 +71,8 @@ using ManagerApplyFn = void (*)(void* cameraManager, std::uint8_t field, std::ui
 // Set once at install.
 platform::CallRedirect g_setterCall;
 platform::CallRedirect g_confirmCall;
+platform::EntryRedirect g_primaryEntry;      // 1.005: the option setter's call, heard at the entry
+std::uintptr_t          g_setterReturn = 0;  // 1.005: live return address of the option setter's call
 ManagerApplyFn         g_managerApply        = nullptr;
 std::uintptr_t         g_cameraManagerVTable = 0;
 
@@ -117,6 +131,42 @@ void PrimaryApply(std::uint8_t field, std::uint8_t battle) noexcept
 {
     reinterpret_cast<PrimaryApplyFn>(g_setterCall.Original())(field, battle);
     ApplyToPlayerTwo(CameraManagerOf(generation::PlayerOneController()), field, battle);
+}
+
+/// 1.005: every call of the primary camera manager's apply, at its entry; the option setter's (by its return address)
+/// reaches player 2's camera manager too, exactly as PrimaryApply does.
+void PrimaryApplyEntry(std::uint8_t field, std::uint8_t battle) noexcept
+{
+    const bool setter = reinterpret_cast<std::uintptr_t>(_ReturnAddress()) == g_setterReturn;
+    reinterpret_cast<PrimaryApplyFn>(g_primaryEntry.Original())(field, battle);
+    if (setter)
+    {
+        ApplyToPlayerTwo(CameraManagerOf(generation::PlayerOneController()), field, battle);
+    }
+}
+
+/// The option setter's call: redirected on the research build; on 1.005, heard at the primary apply's entry.
+bool InstallSetter(const platform::GameImage& image, std::uintptr_t primary) noexcept
+{
+    const auto site = image.Rebase(kSetterCall, 5);
+    if (!site)
+    {
+        return false;
+    }
+    if (platform::RunningBuild() != platform::BuildIndex::V1005)
+    {
+        return g_setterCall.Install(*site, primary, reinterpret_cast<std::uintptr_t>(&PrimaryApply));
+    }
+    if (!call_site::Calls(*site, primary))
+    {
+        return false;
+    }
+    g_setterReturn   = *site + 5;  // before the install: the replacement runs the moment it is reachable
+    const auto first = std::span(kPrimaryApplyBytes).first(kPrimaryApplyFirstInstruction);
+    const bool ok    = g_primaryEntry.Install(primary, image.EntryInstruction(kPrimaryApply.address, first),
+                                              reinterpret_cast<std::uintptr_t>(&PrimaryApplyEntry));
+    g_setterReturn   = ok ? g_setterReturn : 0;
+    return ok;
 }
 
 /// Replaces the confirm-key handler's call of the per-camera-manager apply (on the primary one).
@@ -238,7 +288,7 @@ bool Install(const platform::GameImage& image) noexcept
         const auto live = image.Rebase(site, 5);
         return live && call.Install(*live, target, reinterpret_cast<std::uintptr_t>(with));
     };
-    const bool setter  = redirect(g_setterCall, kSetterCall, *primary, &PrimaryApply);
+    const bool setter  = InstallSetter(image, *primary);
     const bool confirm = redirect(g_confirmCall, kConfirmCall, *manager, &ManagerApply);
     platform::Log(L"camera distance: the Options distance reaches player 2's camera from the option setter {} and the "
                   L"confirm key {}",
@@ -256,6 +306,10 @@ void Remove() noexcept
         {
             platform::Log(L"camera distance: a call was changed after us; left in place (it passes through)");
         }
+    }
+    if (g_primaryEntry.IsInstalled() && !g_primaryEntry.Restore())
+    {
+        platform::Log(L"camera distance: the primary apply's entry was changed after us; left in place (it passes through)");
     }
 }
 

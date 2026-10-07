@@ -1,5 +1,6 @@
 #include "player_two/interact_watch.h"
 
+#include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
 #include "platform/guarded.h"
@@ -96,6 +97,11 @@ constexpr std::uint8_t   kExecuteSlotBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x
 constexpr std::uintptr_t kMarkByKey        = 0x140C10F94;  // u8(wim, FName key by value)
 constexpr std::uint8_t   kMarkByKeyBytes[] = {0x48, 0x89, 0x54, 0x24, 0x10, 0x53, 0xB8, 0x30, 0x00, 0x00, 0x00};
 constexpr std::size_t    kFirstInstruction = 5;
+// 1.005 (RE-1005-field-2.md §5): AddPoint's entry is at 0x140FED95C, %16 = 12, so its first instruction crosses a
+// 16-byte block. Its second (mov [rsp+20h], r9 at %16 = 1) takes the redirect instead: the first only stores rbx into
+// the caller's home area and nothing branches to the second, so the replacement is entered as at the entry, with every
+// caller's registration, on any thread (the trampoline replays both instructions).
+constexpr std::size_t    kSecondInstruction = 5;
 // The Wheelie ride-on point's key (an FName global, RE-p2-wheelie-ride.md §11): no analysed code adds it, so its
 // registration is logged at Info to name the registrar.
 constexpr std::uintptr_t kScooterKey = 0x1491E6D10;
@@ -820,7 +826,20 @@ void Install(const platform::GameImage& image) noexcept
         const auto to = image.Rebase(target);
         return at && to && redirect.Install(*at, *to, replacement);
     };
-    const bool add     = entry(g_addPoint, kAddPoint, kAddPointBytes, reinterpret_cast<std::uintptr_t>(&AddPoint));
+    bool add = false;
+    if (platform::RunningBuild() == platform::BuildIndex::V1005)
+    {
+        const std::span<const std::uint8_t> bytes(kAddPointBytes);
+        const auto                          at = image.Rebase(kAddPoint);
+        add = at && image.BytesMatch(kAddPoint, bytes) &&
+              g_addPoint.InstallAtSecondInstruction(*at, bytes.first(kFirstInstruction),
+                                                    bytes.subspan(kFirstInstruction, kSecondInstruction),
+                                                    reinterpret_cast<std::uintptr_t>(&AddPoint));
+    }
+    else
+    {
+        add = entry(g_addPoint, kAddPoint, kAddPointBytes, reinterpret_cast<std::uintptr_t>(&AddPoint));
+    }
     const bool execute = entry(g_executeSlot, kExecuteSlot, kExecuteSlotBytes, reinterpret_cast<std::uintptr_t>(&ExecuteSlot));
     const bool mark    = entry(g_markByKey, kMarkByKey, kMarkByKeyBytes, reinterpret_cast<std::uintptr_t>(&MarkByKey));
     const bool acquire = call(g_acquire, kAcquireCall, kAcquire, reinterpret_cast<std::uintptr_t>(&Acquire));

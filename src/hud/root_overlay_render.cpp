@@ -12,7 +12,9 @@
 #include "hud/field_markers.h"
 #include "hud/prompt_rows.h"
 #include "hud/second_image.h"
+#include "platform/build_value.h"
 #include "platform/call_redirect.h"
+#include "platform/entry_redirect.h"
 #include "platform/frame_watch.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -21,6 +23,7 @@
 #include "views/player_view_point.h"
 
 #include <cstdint>
+#include <span>
 
 namespace lss::hud {
 
@@ -33,9 +36,15 @@ constexpr std::uintptr_t kRenderRootOverlayCall = 0x1410A0156;
 constexpr std::uintptr_t kRenderRootOverlay     = 0x141627E98;  // void (FSlateApplication*)
 constexpr std::uint8_t   kRenderRootOverlayPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
 
+// Game version 1.005 (RE-1005-hud-2.md): the call (0x1409F205E there) crosses a 16-byte block, so the target's entry is
+// redirected instead (0x14167E258, first instruction `mov [rsp+8],rbx`, one block); UGameEngine::Tick's call is its only
+// caller, so every call is still that one.
+constexpr std::size_t kRenderRootOverlayFirst = 5;
+
 using RenderFn = void (*)(void* application);
 
-platform::CallRedirect g_call;
+platform::CallRedirect  g_call;
+platform::EntryRedirect g_entry;  // 1.005, in place of g_call
 bool                   promptRowsKnown = false;  // game thread: player 2's prompt rows are being followed
 bool                   g_installed = false;
 
@@ -79,7 +88,8 @@ void RenderRootOverlay(void* application) noexcept
             player_two::command_menu_two::ShowOnly(0);
         }
     }
-    reinterpret_cast<RenderFn>(g_call.Original())(application);
+    // The entry redirect's trampoline is set before its first call can arrive; only one of the two is ever installed.
+    reinterpret_cast<RenderFn>(g_entry.Original() != 0 ? g_entry.Original() : g_call.Original())(application);
     if (gameThread)
     {
         EndOverlayRender();
@@ -97,22 +107,30 @@ void RenderRootOverlay(void* application) noexcept
 
 bool InstallRootOverlayRender(const platform::GameImage& image) noexcept
 {
+    const bool v1005  = platform::RunningBuild() == platform::BuildIndex::V1005;
     const auto site   = image.Rebase(kRenderRootOverlayCall, 5);
     const auto target = image.Rebase(kRenderRootOverlay);
+    const auto first  = std::span(kRenderRootOverlayPrologue, kRenderRootOverlayFirst);
     if (!site || !target || !image.BytesMatch(kRenderRootOverlay, kRenderRootOverlayPrologue) ||
-        !g_call.Install(*site, *target, reinterpret_cast<std::uintptr_t>(&RenderRootOverlay)))
+        !(v1005 ? g_entry.Install(*target, image.EntryInstruction(kRenderRootOverlay, first),
+                                  reinterpret_cast<std::uintptr_t>(&RenderRootOverlay))
+                : g_call.Install(*site, *target, reinterpret_cast<std::uintptr_t>(&RenderRootOverlay))))
     {
         platform::Log(L"HUD render hook: the overlay render call is not what the research read; widgets the game "
                       L"moves are placed on the next tick instead");
         return false;
     }
     g_installed = true;
+    if (v1005)
+    {
+        platform::Log(L"HUD render hook: installed at the overlay render's entry (its call crosses a block in this build)");
+    }
     return true;
 }
 
 void RemoveRootOverlayRender() noexcept
 {
-    if (g_installed && !g_call.Restore())
+    if (g_installed && !(g_entry.IsInstalled() ? g_entry.Restore() : g_call.Restore()))
     {
         platform::Log(L"HUD render hook: changed after us; left in place, passing the call through");
     }

@@ -22,7 +22,7 @@
 // freed, the DLL is pinned (the thunk jumps into it), and the destructor does not restore; only
 // Restore() removes the redirect.
 
-#include "platform/near_code.h"
+#include "platform/code_memory.h"
 
 #include <cstdint>
 #include <span>
@@ -44,6 +44,20 @@ public:
     /// false, changing nothing, if any condition fails or this object already holds a redirect.
     bool Install(std::uintptr_t entry, std::span<const std::uint8_t> first, std::uintptr_t replacement) noexcept;
 
+    /// The same redirect placed at the function's second instruction, for a first instruction that
+    /// crosses a 16-byte block: `first` (any length up to 15) and `second` (5 to 16 bytes, inside one
+    /// block) must be exactly the function's first two instructions, both position-independent. The
+    /// jump replaces `second`; the trampoline runs `first`, `second`, then jumps to the third.
+    /// Equivalent to an entry redirect only when the caller has checked, for this function, that
+    /// `first` is free of effects the replacement could see (a store into the caller's home area: no
+    /// rsp change, no argument register written, its slot read by nothing before the trampoline
+    /// stores it again) and that no branch in the game lands on `second` (live 2026-10-07: 1.005's
+    /// FieldActionMgr_AddPoint, research/RE-1005-field-2.md §5). Unlike an entry redirect, `first`
+    /// runs on every call before the replacement does, also on calls the replacement does not pass
+    /// on to Original(): a replacement that skips the game's function must not mind that store.
+    bool InstallAtSecondInstruction(std::uintptr_t entry, std::span<const std::uint8_t> first,
+                                    std::span<const std::uint8_t> second, std::uintptr_t replacement) noexcept;
+
     /// Puts the original instruction back, if this object replaced it and it is still ours.
     /// Returns false if it was changed after us (it is then left alone).
     bool Restore() noexcept;
@@ -55,8 +69,11 @@ public:
     std::uintptr_t Original() const noexcept { return trampoline_; }
 
 private:
-    std::uintptr_t block_       = 0;  // the aligned 16-byte block holding the first instruction
-    std::uintptr_t trampoline_  = 0;  // the replaced instruction, then a jump back
+    bool Place(std::uintptr_t entry, std::span<const std::uint8_t> copied, std::size_t siteOffset,
+               std::uintptr_t replacement) noexcept;
+
+    std::uintptr_t block_       = 0;  // the aligned 16-byte block holding the replaced instruction
+    std::uintptr_t trampoline_  = 0;  // the replaced instruction(s), then a jump back
     CodeBlock      original_{};
     CodeBlock      redirected_{};
 };

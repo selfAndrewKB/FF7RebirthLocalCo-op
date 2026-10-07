@@ -1,6 +1,7 @@
 #include "hud/target_views.h"
 
 #include "hud/widget_opacity.h"
+#include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -8,6 +9,7 @@
 #include "platform/sparse_array.h"
 #include "platform/verified_code.h"
 #include "player_two/engine_facts.h"
+#include "player_two/game_thread_sites.h"
 #include "player_two/generation.h"
 #include "player_two/lock_on.h"
 
@@ -16,6 +18,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <format>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -109,6 +112,10 @@ WeakGetFn      g_weakGet      = nullptr;
 WeakSetFn      g_weakSet      = nullptr;
 std::uintptr_t g_battleSystem = 0;
 std::uintptr_t g_endUISystem  = 0;
+// 1.005: the call sites are placed from the game thread, with what Install found kept for it.
+std::optional<platform::GameImage> g_placeImage;
+std::uintptr_t                     g_placeCollect   = 0;
+bool                               g_fromGameThread = false;
 
 /// One main-target lookup, kept for the rest of the frame.
 struct MainLookup
@@ -410,6 +417,8 @@ void FindOtherGauges(std::uintptr_t system)
     });
 }
 
+void InstallSites(const platform::GameImage& image, std::uintptr_t collect) noexcept;
+
 }  // namespace
 
 bool Install(const platform::GameImage& image) noexcept
@@ -426,20 +435,58 @@ bool Install(const platform::GameImage& image) noexcept
     g_weakSet    = reinterpret_cast<WeakSetFn>(find(player_two::facts::kWeakObjectAssign));
     const auto system  = image.Rebase(kBattleSystem, sizeof(void*));
     const auto ui      = image.Rebase(kEndUISystem, kManager + sizeof(void*));
-    const auto create  = image.Rebase(kCreateCall, 5);
-    const auto sync    = image.Rebase(kSyncCall, 5);
     g_installed =
         g_mainTarget && g_release && g_enemyAi && g_weakGet && g_weakSet && system && ui && widget_opacity::Install(image);
+    g_battleSystem = system ? *system : 0;
+    g_endUISystem  = ui ? *ui : 0;
+    if (platform::RunningBuild() == platform::BuildIndex::V1005)
+    {
+        // The label lookup's call and both collection calls cross a 16-byte block in 1.005: they are placed from the
+        // game thread, between its ticks (player_two/game_thread_sites.h).
+        g_fromGameThread = true;
+        g_placeImage.emplace(image);
+        g_placeCollect = collect;
+        if (player_two::game_thread_sites::Queue([]() noexcept {
+                if (g_placeImage)
+                {
+                    const platform::GameImage image = *g_placeImage;
+                    InstallSites(image, g_placeCollect);
+                }
+            }))
+        {
+            platform::Log(L"target views: {}; the label lookup and collection calls are placed from the game thread (1.005: "
+                          L"they cross a 16-byte block)",
+                          g_installed ? L"per-view marks ready" : L"UNAVAILABLE");
+            return g_installed;
+        }
+    }
+    InstallSites(image, collect);
+    return g_installed;
+}
+
+namespace {
+
+/// The label lookup's call and both collection calls, then the install line. At install on the research build; on
+/// 1.005 from the game thread.
+void InstallSites(const platform::GameImage& image, std::uintptr_t collect) noexcept
+{
+    const auto find = [&image](const platform::FunctionFact& fact) {
+        const auto live = platform::FindFunction(image, fact);
+        return live ? *live : std::uintptr_t{0};
+    };
+    const auto place = [](platform::CallRedirect& call, std::uintptr_t site, std::uintptr_t target, auto* with) {
+        const auto replacement = reinterpret_cast<std::uintptr_t>(with);
+        return g_fromGameThread ? call.InstallFromOwnThread(site, target, replacement) : call.Install(site, target, replacement);
+    };
+    const auto create  = image.Rebase(kCreateCall, 5);
+    const auto sync    = image.Rebase(kSyncCall, 5);
     const std::uintptr_t lookup     = find(kLookup);
     const auto           lookupSite = image.Rebase(kLookupCall, 5);
     const bool           labels     = g_installed && lookup != 0 && lookupSite &&
-                            g_lookupCall.Install(*lookupSite, lookup, reinterpret_cast<std::uintptr_t>(&LabelLookup));
-    g_battleSystem = system ? *system : 0;
-    g_endUISystem  = ui ? *ui : 0;
+                            place(g_lookupCall, *lookupSite, lookup, &LabelLookup);
     // Both collection sites or neither: the keeping step removes what only the creating step names.
-    g_unionOn = g_installed && collect != 0 && create && sync &&
-                g_createCall.Install(*create, collect, reinterpret_cast<std::uintptr_t>(&Collect));
-    if (g_unionOn && !g_syncCall.Install(*sync, collect, reinterpret_cast<std::uintptr_t>(&Collect)))
+    g_unionOn = g_installed && collect != 0 && create && sync && place(g_createCall, *create, collect, &Collect);
+    if (g_unionOn && !place(g_syncCall, *sync, collect, &Collect))
     {
         if (!g_createCall.Restore())
         {
@@ -451,11 +498,13 @@ bool Install(const platform::GameImage& image) noexcept
                   g_installed ? L"per-view marks ready" : L"UNAVAILABLE",
                   g_unionOn ? L"collected with player 1's" : L"NOT collected (a check failed)",
                   labels ? L"make way for each player's own locked-on gauge" : L"follow player 1's lock-on (a check failed)");
-    return g_installed;
 }
+
+}  // namespace
 
 void Remove() noexcept
 {
+    g_placeImage.reset();  // a placement still queued does nothing
     g_hidden.clear();  // no widget calls here: this may run off the game thread
     g_unionOn = false;
     for (auto* call : {&g_lookupCall, &g_syncCall, &g_createCall})

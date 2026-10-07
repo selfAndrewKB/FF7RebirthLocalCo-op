@@ -11,6 +11,7 @@
 #include "hud/minimap_icons.h"
 #include "hud/menu_buffers.h"
 #include "hud/minimap_labels.h"
+#include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/code_redirect.h"
 #include "platform/guarded.h"
@@ -92,6 +93,10 @@ constexpr std::uintptr_t kStockNameStatic  = 0x14939C2F8;  // FName "SEndNaviMap
 // Pool 0's consume: the vertex-buffer load before DrawLayerEntry (r13 = renderer, r9 = entry).
 constexpr std::uintptr_t kConsumeLoadSite   = 0x140FC7C91;
 constexpr std::uintptr_t kConsumeLoadResume = 0x140FC7C98;
+// Game version 1.005 (RE-1005-hud-2.md): the load crosses a 16-byte block there, so the next instruction, the store
+// of the vertex-buffer argument, is redirected instead (hud/entry_filter_code.h); the call follows it.
+constexpr std::uintptr_t kConsumeStoreSite   = 0x140FC7C98;
+constexpr std::uintptr_t kConsumeStoreResume = 0x140FC7C9D;
 
 // Pool 0's buffers (renderer +0x80 vertex, +0x98 index): the same kind and capacities as every pool's (§8.3; uploads
 // grow past them on the render thread).
@@ -188,7 +193,7 @@ bool          g_refused       = false;  // a check failed: the earlier behaviour
 bool          g_namesReady    = false;
 std::uint64_t g_playerTwoName = 0;
 void*         g_renderer      = nullptr;
-bool          g_buffersQueued = false;
+std::atomic<bool> g_buffersQueued {false};
 void*         g_target        = nullptr;  // player 2's render target (rooted, kept for the process)
 bool          g_frameActive   = false;
 bool          g_ranForTwo     = false;
@@ -630,8 +635,10 @@ bool Install(const platform::GameImage& image) noexcept
     const auto submitAt  = image.Rebase(kSubmitCall, 5);
     const auto submit    = image.Rebase(engine::kSubmitLayerSlot);
     const auto name      = image.Rebase(kStockNameStatic, sizeof(std::uint64_t));
-    const auto consume   = image.Rebase(kConsumeLoadSite, sizeof(kLoadPoolZeroVertexBufferBytes));
-    const auto resume    = image.Rebase(kConsumeLoadResume);
+    const bool v1005     = platform::RunningBuild() == platform::BuildIndex::V1005;  // its consume site (above)
+    const auto consume   = v1005 ? image.Rebase(kConsumeStoreSite, sizeof(kStoreVertexBufferArgBytes1005))
+                                 : image.Rebase(kConsumeLoadSite, sizeof(kLoadPoolZeroVertexBufferBytes));
+    const auto resume    = image.Rebase(v1005 ? kConsumeStoreResume : kConsumeLoadResume);
     const auto package   = image.Rebase(kTransientPackage, sizeof(void*));
     const auto circle    = image.Rebase(kCirclePaintVTable, sizeof(void*));
     const auto vbVtable  = image.Rebase(kVertexBufferVtable, sizeof(void*));
@@ -662,9 +669,12 @@ bool Install(const platform::GameImage& image) noexcept
     g_updateNow          = reinterpret_cast<UpdateNowFn>(*update);
 
     // The consume code first: it does nothing until player 2's entry name is published with its buffers.
-    const auto code = EntryBuffersCode(g_fields, kLoadPoolZeroVertexBufferBytes);
+    const auto code     = EntryBuffersCode(g_fields, kLoadPoolZeroVertexBufferBytes);
+    const auto code1005 = EntryBuffersStoreCode1005(g_fields);
+    const bool consumed = v1005 ? g_consumeCode.Install(*consume, kStoreVertexBufferArgBytes1005, code1005, *resume)
+                                : g_consumeCode.Install(*consume, kLoadPoolZeroVertexBufferBytes, code, *resume);
     const bool installed =
-        g_consumeCode.Install(*consume, kLoadPoolZeroVertexBufferBytes, code, *resume) &&
+        consumed &&
         g_leaderCall.Install(*leaderAt, *leader, reinterpret_cast<std::uintptr_t>(&LeaderType)) &&
         g_findCall.Install(*findAt, *find, reinterpret_cast<std::uintptr_t>(&FindOrAdd)) &&
         g_submitCall.Install(*submitAt, *submit, reinterpret_cast<std::uintptr_t>(&Submit));

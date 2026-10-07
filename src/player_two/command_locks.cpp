@@ -1,5 +1,6 @@
 #include "player_two/command_locks.h"
 
+#include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
 #include "platform/guarded.h"
@@ -7,8 +8,10 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "player_two/command_menu_two.h"
+#include "player_two/game_thread_sites.h"
 #include "player_two/generation.h"
 
+#include <atomic>
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -66,6 +69,16 @@ platform::CallRedirect  g_enabledCall, g_lockedCall;
 platform::EntryRedirect g_category, g_dispatcher;
 std::uintptr_t          g_endUISystem = 0;
 bool                    g_installed   = false;
+
+/// What Install found, for the redirects (placed at once, or on 1.005 from the game thread).
+struct Sites
+{
+    std::uintptr_t                enabled = 0, locked = 0, category = 0, dispatcher = 0, enabledAt = 0, lockedAt = 0;
+    std::span<const std::uint8_t> categoryFirst, dispatcherFirst;
+};
+Sites g_sites;
+std::atomic<bool> g_fromGameThread {false};  // 1.005: the calls go in with InstallFromOwnThread
+std::atomic<bool> g_placePending   {false};  // 1.005: queued, not yet placed (Remove clears it)
 
 // Game thread.
 int g_lines = 0;
@@ -223,22 +236,21 @@ void Dispatch(void* fieldSystem, std::int32_t mode) noexcept
 
 }  // namespace
 
-bool Install(const platform::GameImage& image) noexcept
+namespace {
+
+/// The redirects, in order, from what Install found. At install on the research build; on 1.005 from the game
+/// thread, where the locked call's five bytes cross a 16-byte block (player_two/game_thread_sites.h).
+bool PlaceSites() noexcept
 {
-    const auto enabled = platform::FindFunction(image, kEnabled), locked = platform::FindFunction(image, kLocked),
-               category = platform::FindFunction(image, kCategory), dispatcher = platform::FindFunction(image, kDispatcher);
-    const auto enabledAt = image.Rebase(kEnabledCall, 5), lockedAt = image.Rebase(kLockedCall, 5);
-    const auto system    = image.Rebase(kEndUISystem, kController + sizeof(void*));
-    g_endUISystem        = system ? *system : 0;
-    g_installed          = enabled && locked && category && dispatcher && enabledAt && lockedAt && system;
-    const auto first     = [](const std::uint8_t* bytes) { return std::span<const std::uint8_t>(bytes, kFirstInstruction); };
-    g_installed = g_installed &&
-                  g_enabledCall.Install(*enabledAt, *enabled, reinterpret_cast<std::uintptr_t>(&CommandsEnabled)) &&
-                  g_lockedCall.Install(*lockedAt, *locked, reinterpret_cast<std::uintptr_t>(&CommandsLocked)) &&
-                  g_category.Install(*category, image.EntryInstruction(kCategory.address, first(kCategoryBytes)),
-                                     reinterpret_cast<std::uintptr_t>(&CategoryEnabled)) &&
-                  g_dispatcher.Install(*dispatcher, image.EntryInstruction(kDispatcher.address, first(kDispatcherBytes)),
-                                       reinterpret_cast<std::uintptr_t>(&Dispatch));
+    const Sites& s     = g_sites;
+    const auto   place = [](platform::CallRedirect& call, std::uintptr_t site, std::uintptr_t target, auto* with) {
+        const auto replacement = reinterpret_cast<std::uintptr_t>(with);
+        return g_fromGameThread ? call.InstallFromOwnThread(site, target, replacement) : call.Install(site, target, replacement);
+    };
+    g_installed = g_installed && place(g_enabledCall, s.enabledAt, s.enabled, &CommandsEnabled) &&
+                  place(g_lockedCall, s.lockedAt, s.locked, &CommandsLocked) &&
+                  g_category.Install(s.category, s.categoryFirst, reinterpret_cast<std::uintptr_t>(&CategoryEnabled)) &&
+                  g_dispatcher.Install(s.dispatcher, s.dispatcherFirst, reinterpret_cast<std::uintptr_t>(&Dispatch));
     if (!g_installed)
     {
         Remove();
@@ -250,9 +262,51 @@ bool Install(const platform::GameImage& image) noexcept
     return g_installed;
 }
 
+}  // namespace
+
+bool Install(const platform::GameImage& image) noexcept
+{
+    const auto enabled = platform::FindFunction(image, kEnabled), locked = platform::FindFunction(image, kLocked),
+               category = platform::FindFunction(image, kCategory), dispatcher = platform::FindFunction(image, kDispatcher);
+    const auto enabledAt = image.Rebase(kEnabledCall, 5), lockedAt = image.Rebase(kLockedCall, 5);
+    const auto system    = image.Rebase(kEndUISystem, kController + sizeof(void*));
+    g_endUISystem        = system ? *system : 0;
+    g_installed          = enabled && locked && category && dispatcher && enabledAt && lockedAt && system;
+    const auto first     = [](const std::uint8_t* bytes) { return std::span<const std::uint8_t>(bytes, kFirstInstruction); };
+    if (g_installed)
+    {
+        g_sites = {*enabled,
+                   *locked,
+                   *category,
+                   *dispatcher,
+                   *enabledAt,
+                   *lockedAt,
+                   image.EntryInstruction(kCategory.address, first(kCategoryBytes)),
+                   image.EntryInstruction(kDispatcher.address, first(kDispatcherBytes))};
+    }
+    if (g_installed && platform::RunningBuild() == platform::BuildIndex::V1005)
+    {
+        g_fromGameThread = true;
+        g_installed      = false;  // set again by the placement
+        g_placePending   = game_thread_sites::Queue([]() noexcept {
+            if (g_placePending)
+            {
+                g_placePending = false;
+                g_installed    = true;
+                PlaceSites();
+            }
+        });
+        platform::Log(L"command locks: {}", g_placePending ? L"its calls are placed from the game thread (1.005: one crosses a 16-byte block)"
+                                                           : L"UNAVAILABLE (no room to place its calls from the game thread)");
+        return g_placePending;
+    }
+    return PlaceSites();
+}
+
 void Remove() noexcept
 {
-    g_installed = false;
+    g_placePending = false;  // a placement still queued does nothing
+    g_installed    = false;
     const auto restore = [](auto& redirect) {
         if (redirect.IsInstalled() && !redirect.Restore())
         {

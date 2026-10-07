@@ -90,6 +90,34 @@ std::vector<std::uint8_t> BuffersHarnessCode(std::uintptr_t base, const EntryFil
     return code;
 }
 
+/// Game version 1.005's pool 0 site: the store of the vertex-buffer argument, after the game's load into rax.
+std::vector<std::uint8_t> BuffersStoreHarnessCode1005(std::uintptr_t base, const EntryFilterFields& fields)
+{
+    const std::uint8_t prologue[] = {
+        0x41, 0x55,                                      // push r13
+        0x48, 0x83, 0xEC, 0x40,                          // sub  rsp, 40h
+        0x48, 0xC7, 0x44, 0x24, 0x28, 0x11, 0, 0, 0,     // mov  qword [rsp+28h], 11h   stock index buffer
+        0x48, 0xC7, 0x44, 0x24, 0x30, 0x22, 0, 0, 0,     // mov  qword [rsp+30h], 22h   stock SRM slot
+        0x48, 0xC7, 0x44, 0x24, 0x20, 0, 0, 0, 0,        // mov  qword [rsp+20h], 0     the argument the site stores
+        0x49, 0x89, 0xC9,                                // mov  r9, rcx                the entry
+        0x49, 0x89, 0xD5,                                // mov  r13, rdx               the renderer
+        0x49, 0x8B, 0x85, 0x80, 0x00, 0x00, 0x00};       // mov  rax, [r13+80h]         the game's load before the site
+    const std::uint8_t epilogue[] = {
+        0x48, 0x8B, 0x44, 0x24, 0x20,                    // mov  rax, [rsp+20h]         the vertex buffer argument
+        0x49, 0x89, 0x00,                                // mov  [r8], rax
+        0x48, 0x8B, 0x44, 0x24, 0x28,                    // mov  rax, [rsp+28h]
+        0x49, 0x89, 0x40, 0x08,                          // mov  [r8+8], rax
+        0x48, 0x8B, 0x44, 0x24, 0x30,                    // mov  rax, [rsp+30h]
+        0x49, 0x89, 0x40, 0x10,                          // mov  [r8+10h], rax
+        0x48, 0x83, 0xC4, 0x40,                          // add  rsp, 40h
+        0x41, 0x5D, 0xC3};                               // pop r13 ; ret
+    std::vector<std::uint8_t> code(std::begin(prologue), std::end(prologue));
+    const auto site = lss::hud::EntryBuffersStoreCode1005(fields);
+    AppendWithJumpBack(code, base, site.data(), site.size());
+    code.insert(code.end(), std::begin(epilogue), std::end(epilogue));
+    return code;
+}
+
 /// int harness(const void* entry /*rcx*/, const void* batch /*rdx*/): 1 if the draw would run.
 using GateHarness = int (*)(const void* entry, const void* batch);
 
@@ -176,6 +204,27 @@ void TestBuffers()
     });
 }
 
+void TestBuffersStore1005()
+{
+    std::puts("entry buffers (1.005, pool 0 at the argument store): player 2's entry gets player 2's buffer set");
+    EntryFilterFields fields;
+    WithPage(fields, BuffersStoreHarnessCode1005, [](void* page) {
+        const auto stock = RunBuffers(page, kPlayerTwoName);  // no player-2 name set yet
+        EXPECT(stock.vertexBuffer == 0x33 && stock.indexBuffer == 0x11 && stock.srmSlot == 0x22);
+    });
+
+    fields.vertexBuffer  = 0xAA;
+    fields.indexBuffer   = 0xBB;
+    fields.srmSlot       = 0xCC;
+    fields.playerTwoName = kPlayerTwoName;
+    WithPage(fields, BuffersStoreHarnessCode1005, [](void* page) {
+        const auto own = RunBuffers(page, kPlayerTwoName);
+        EXPECT(own.vertexBuffer == 0xAA && own.indexBuffer == 0xBB && own.srmSlot == 0xCC);
+        const auto stock = RunBuffers(page, kStockName);
+        EXPECT(stock.vertexBuffer == 0x33 && stock.indexBuffer == 0x11 && stock.srmSlot == 0x22);
+    });
+}
+
 void TestDrawGate()
 {
     std::puts("draw gate: a family skips only the other player's overlay entry; other entries, the game's gate alone");
@@ -216,6 +265,9 @@ void TestSizes()
                        lss::hud::kLoadVertexBufferBytes, sizeof(lss::hud::kLoadVertexBufferBytes)) == 0);
     EXPECT(std::memcmp(gate.data() + gate.size() - sizeof(lss::hud::kDrawGateBytes), lss::hud::kDrawGateBytes,
                        sizeof(lss::hud::kDrawGateBytes)) == 0);
+    const auto store = lss::hud::EntryBuffersStoreCode1005(fields);
+    EXPECT(std::memcmp(store.data() + store.size() - sizeof(lss::hud::kStoreVertexBufferArgBytes1005),
+                       lss::hud::kStoreVertexBufferArgBytes1005, sizeof(lss::hud::kStoreVertexBufferArgBytes1005)) == 0);
 }
 
 }  // namespace
@@ -224,6 +276,7 @@ int main()
 {
     TestBuffers<false>();
     TestBuffers<true>();
+    TestBuffersStore1005();
     TestDrawGate();
     TestSizes();
 

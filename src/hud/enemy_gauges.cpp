@@ -11,6 +11,7 @@
 #include "platform/module_pin.h"
 #include "platform/settled_log.h"
 #include "platform/sparse_array.h"
+#include "player_two/game_thread_sites.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 #include "player_two/lock_on.h"
@@ -621,6 +622,38 @@ bool ReplayPlayerTwo(std::uintptr_t manager, int& replayed, int& targeted)
     return ok;
 }
 
+/// 1.005: what Install found for player 2's own targeted look, until the game thread places the forced-targeted call.
+struct PendingOwnTargets
+{
+    std::uintptr_t site = 0, forced = 0, yStep = 0, scaleStep = 0, apply = 0;  // the size step's two 0 if not checked out
+};
+PendingOwnTargets g_pending;
+
+/// 1.005, on the game thread between its ticks: the forced-targeted call placed (it crosses a 16-byte block), then
+/// player 2's own targeted look and sizes turned on as at install on the research build.
+void PlaceOwnTargets() noexcept
+{
+    const PendingOwnTargets pending = g_pending;
+    g_pending                       = {};
+    if (!g_installed || pending.site == 0)
+    {
+        return;  // removed meanwhile
+    }
+    if (g_forcedCall.InstallFromOwnThread(pending.site, pending.forced, reinterpret_cast<std::uintptr_t>(&Forced)))
+    {
+        g_yStep      = reinterpret_cast<YStepFn>(pending.yStep);
+        g_ownTargets = true;
+    }
+    if (g_ownTargets && pending.scaleStep != 0 && pending.apply != 0)
+    {
+        g_scaleStep = reinterpret_cast<ScaleStepFn>(pending.scaleStep);
+        g_apply     = reinterpret_cast<ApplyFn>(pending.apply);
+    }
+    platform::Log(L"enemy gauges: player 2's view {}, sizes {}",
+                  g_ownTargets ? L"marks player 2's own target" : L"marks player 1's target (a check failed)",
+                  g_scaleStep != nullptr ? L"from player 2's distance" : L"from player 1's distance (a check failed)");
+}
+
 }  // namespace
 
 bool Install(const platform::GameImage& image) noexcept
@@ -664,9 +697,26 @@ bool Install(const platform::GameImage& image) noexcept
     const auto forcedSite = image.Rebase(kForcedCall, 5);
     const auto forced     = image.Rebase(kForced);
     const auto yStep      = image.Rebase(kYStep);
-    if (forcedSite && forced && yStep && image.BytesMatch(kForced, kForcedPrologue) && image.BytesMatch(kYStep, kYStepPrologue) &&
-        player_two::leader_scope::Install(image) &&
-        g_forcedCall.Install(*forcedSite, *forced, reinterpret_cast<std::uintptr_t>(&Forced)))
+    const bool ownChecks  = forcedSite && forced && yStep && image.BytesMatch(kForced, kForcedPrologue) &&
+                           image.BytesMatch(kYStep, kYStepPrologue) && player_two::leader_scope::Install(image);
+    if (ownChecks && platform::RunningBuild() == platform::BuildIndex::V1005)
+    {
+        // The forced-targeted call crosses a 16-byte block in 1.005: it is placed from the game thread, between its
+        // ticks (player_two/game_thread_sites.h); the size step's checks are made now.
+        const auto scaleStep = image.Rebase(kScaleStep);
+        const auto apply     = image.Rebase(kApplyTransform);
+        const bool sizes     = scaleStep && apply && image.BytesMatch(kScaleStep, kScaleStepPrologue) &&
+                           image.BytesMatch(kApplyTransform, kApplyTransformPrologue);
+        g_pending = {*forcedSite, *forced, *yStep, sizes ? *scaleStep : 0, sizes ? *apply : 0};
+        if (player_two::game_thread_sites::Queue(&PlaceOwnTargets))
+        {
+            platform::Log(L"enemy gauges: ready (each gauge placed again in each player's view; player 2's own targets follow "
+                          L"once the game thread places their call (1.005: it crosses a 16-byte block))");
+            return true;
+        }
+        g_pending = {};
+    }
+    if (ownChecks && g_forcedCall.Install(*forcedSite, *forced, reinterpret_cast<std::uintptr_t>(&Forced)))
     {
         g_yStep      = reinterpret_cast<YStepFn>(*yStep);
         g_ownTargets = true;
@@ -687,6 +737,7 @@ bool Install(const platform::GameImage& image) noexcept
 
 void Remove() noexcept
 {
+    g_pending    = {};  // a placement still queued does nothing
     g_installed  = false;
     g_ownTargets = false;
     bool all     = (!g_forcedCall.IsInstalled() || g_forcedCall.Restore()) &&

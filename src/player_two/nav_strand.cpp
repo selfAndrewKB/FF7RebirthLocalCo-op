@@ -8,10 +8,12 @@
 
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
+#include "platform/entry_redirect.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "player_two/call_site.h"
 #include "player_two/chocobo_ride.h"
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
@@ -27,8 +29,13 @@
 #include <cstdint>
 #include <cstring>
 #include <format>
+#include <span>
 #include <string>
 #include <utility>
+
+#include <intrin.h>
+
+#pragma intrinsic(_ReturnAddress)
 
 namespace lss::player_two::nav_strand {
 
@@ -67,6 +74,12 @@ constexpr std::uint8_t   kFallLocationBytes[] = {0x48, 0x8D, 0x55, 0xAF};
 constexpr std::uintptr_t kFallAfterCall     = 0x140F2270B;
 constexpr std::uint8_t   kFallAfterCallBytes[] = {0x84, 0xC0, 0x75, 0x13, 0x48, 0xC7, 0x03, 0x00, 0x00,
                                                   0x00, 0x00, 0xC7, 0x43, 0x08, 0x00, 0x00, 0x00, 0x00};
+// 1.005 (RE-1005-field-2.md §2): the falling step's call is at 0x140C5FAEE, %16 = 14, so it crosses a 16-byte block,
+// and characters move on worker threads too, so no one thread can change it (platform/call_redirect.h). There the
+// falls are heard at the entry of EndWorld_IsReadyAt instead (its first instruction `mov [rsp+10h], rdx`, 5 bytes at
+// %16 = 8): the replacement counts only the answers that return to the falling step's call and passes every other
+// caller through unchanged.
+constexpr std::size_t kReadyAtFirstInstruction = 5;
 
 // The safe-transform check (RE-p2-party-leash.md §6d): every 0.12 s EndChar_UpdateSafeTransform_Check asks the same
 // question about the character's root with the nav clause off (`xor r8d, r8d`; `lea rdx, [rsp+50h]`, a copy of the
@@ -119,6 +132,8 @@ using ReadyAtFn = bool (*)(void* reason, const float* location, bool flag);
 platform::CallRedirect g_readyCall;
 platform::CallRedirect g_fallCall;
 platform::CallRedirect g_parkCall;
+platform::EntryRedirect g_readyEntry;           // 1.005: the falls, heard at the entry
+std::uintptr_t         g_fallReturn         = 0;  // 1.005: live return address of the falling step's call
 std::uintptr_t        g_navStreamManager   = 0;  // live address of the global
 std::uintptr_t         g_followStateVTable  = 0;
 bool                   g_installed          = false;
@@ -276,13 +291,32 @@ bool ReadyAt(void* reason, const float* location, bool flag) noexcept
 
 /// The falling redirect: the game's answer, unchanged; a refusal zeroes the member's fall velocity, so she
 /// hangs in the air, every tick, stick or no stick.
-bool FallReadyAt(void* reason, const float* location, bool flag) noexcept
+void CountFall(const float* location, bool ready) noexcept
 {
-    const bool ready = reinterpret_cast<ReadyAtFn>(g_fallCall.Original())(reason, location, flag);
     CountChocobo(location, ready, g_chocoboFalls);
     if (IsMember(location) && Count(ready))
     {
         g_tickFallRefusals.fetch_add(1, std::memory_order_relaxed);
+    }
+}
+
+bool FallReadyAt(void* reason, const float* location, bool flag) noexcept
+{
+    const bool ready = reinterpret_cast<ReadyAtFn>(g_fallCall.Original())(reason, location, flag);
+    CountFall(location, ready);
+    return ready;
+}
+
+/// 1.005: every call of the function, at its entry. Only the falling step's (by its return address) is counted;
+/// the walking and safe-transform calls reach here from their own redirects above (a return address in this DLL)
+/// and every other caller passes through.
+bool EntryReadyAt(void* reason, const float* location, bool flag) noexcept
+{
+    const bool fall  = reinterpret_cast<std::uintptr_t>(_ReturnAddress()) == g_fallReturn;
+    const bool ready = reinterpret_cast<ReadyAtFn>(g_readyEntry.Original())(reason, location, flag);
+    if (fall)
+    {
+        CountFall(location, ready);
     }
     return ready;
 }
@@ -627,11 +661,27 @@ bool Install(const platform::GameImage& image) noexcept
     g_navStreamManager  = *manager;
     g_followStateVTable = *vtable;
     g_installed         = true;
-    const auto fallSite = image.Rebase(kFallCall, 5);
-    const bool falls    = fallSite && image.BytesMatch(kFallGate, kFallGateBytes) &&
-                       image.BytesMatch(kFallLocation, kFallLocationBytes) &&
-                       image.BytesMatch(kFallAfterCall, kFallAfterCallBytes) &&
-                       g_fallCall.Install(*fallSite, *readyAt, reinterpret_cast<std::uintptr_t>(&FallReadyAt));
+    const auto fallSite  = image.Rebase(kFallCall, 5);
+    const bool fallFrame = fallSite && image.BytesMatch(kFallGate, kFallGateBytes) &&
+                           image.BytesMatch(kFallLocation, kFallLocationBytes) &&
+                           image.BytesMatch(kFallAfterCall, kFallAfterCallBytes);
+    bool falls = false;
+    if (platform::RunningBuild() == platform::BuildIndex::V1005)
+    {
+        if (fallFrame && call_site::Calls(*fallSite, *readyAt))
+        {
+            g_fallReturn = *fallSite + 5;  // before the install: the replacement runs the moment it is reachable
+            falls        = g_readyEntry.Install(
+                *readyAt,
+                image.EntryInstruction(kReadyAt.address, std::span(kReadyAtBytes).first(kReadyAtFirstInstruction)),
+                reinterpret_cast<std::uintptr_t>(&EntryReadyAt));
+            g_fallReturn = falls ? g_fallReturn : 0;
+        }
+    }
+    else
+    {
+        falls = fallFrame && g_fallCall.Install(*fallSite, *readyAt, reinterpret_cast<std::uintptr_t>(&FallReadyAt));
+    }
     const auto parkSite = image.Rebase(kParkCall, 5);
     const bool parks    = parkSite && image.BytesMatch(kParkNavFlag, kParkNavFlagBytes) &&
                        image.BytesMatch(kParkLocation, kParkLocationBytes) &&
@@ -656,6 +706,10 @@ void Remove() noexcept
         {
             platform::Log(L"nav strand: a call was changed after us; left in place (it passes through)");
         }
+    }
+    if (g_readyEntry.IsInstalled() && !g_readyEntry.Restore())
+    {
+        platform::Log(L"nav strand: the ready test's entry was changed after us; left in place (it passes through)");
     }
     Forget();  // a later Install starts from a clean slate
 }

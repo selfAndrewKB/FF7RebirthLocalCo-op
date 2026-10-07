@@ -1,0 +1,35 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-10-07",
+  "doc": "Rebirth/Documentation/research/RE-1005-hud-2.md",
+  "facts": [
+    {
+      "name": "kHiddenCall (me_feedback_once)",
+      "old": "0x140FDD6EE",
+      "new": "0x140C13AAB",
+      "bytes": "E8ECFDB6FF",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "SceneRenderer_Render_Main's only call of ME_Scene_ComputeRequestedMips_HiddenComponents (1.004 0x140CF05F8 -> 1.005 0x14078389C). Same arguments: rcx = renderer (rdi -> rsi), rdx = command list (rbx -> r14), r8 = [renderer+0E0h] (&Views[0]). 1.005: 5 bytes inside block 0x140C13AA0, so a plain CallRedirect fits (the entry's first insn crosses a block). Render thread."
+    },
+    {
+      "name": "kCopyCall (me_feedback_once)",
+      "old": "0x14157B30C",
+      "new": "0x141324D2C",
+      "bytes": "E83BB16700",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "ME_RenderChunkDispatch_ViewLoop's only call of ME_MainPass_CopyStreamingFeedbackToReadback (1.004 0x140915958 -> 1.005 0x14199FE6C); rcx = rsi, rdx = [rbx+8] as before. Crosses block 0x141324D30: installed with InstallFromOwnThread from the render thread (the chain ME_RenderSetup_AndChunkDispatch 0x140C14EB0 -> ME_ChunkDispatch_Wrapper 0x141323ED8 -> ViewLoop has Render_Main as its only code caller)."
+    },
+    {
+      "name": "kCircle1005 site (minimap_once)",
+      "old": "0x140FC6C9C",
+      "new": "0x14130A506",
+      "bytes": "C4E1F97EC2",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "SEndNaviMapCircle__OnPaint_Pool0: vmovq rdx,xmm0, the instruction after the research skip site (mov rcx,[r15+1C0h], which crosses block 0x14130A500 in 1.005). Identical instruction in both builds, before the resize call (0x14130A50E), acquire, paint and submit; no branch lands inside it. 1.005-only use: the circle skip's own code (hud/minimap_once_code.h CircleSkipCode1005) also stores 1.0f to [rsp+40h], read after the submit at 0x14130A78E."
+    }
+  ]
+}

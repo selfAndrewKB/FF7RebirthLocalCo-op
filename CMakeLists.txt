@@ -61,7 +61,7 @@ add_library(LocalSplitScreen SHARED
     src/platform/pool_bits.cpp
     src/platform/module_folder.cpp
     src/platform/module_pin.cpp
-    src/platform/near_code.cpp
+    src/platform/code_memory.cpp
     src/platform/verified_code.cpp
     src/platform/vtable_entry.cpp
 
@@ -198,7 +198,7 @@ add_test(NAME one_family_per_view COMMAND LocalSplitScreenTests)
 add_executable(OutputLoadActionTests
     tests/output_load_action_test.cpp
     src/platform/code_redirect.cpp
-    src/platform/near_code.cpp
+    src/platform/code_memory.cpp
 )
 target_include_directories(OutputLoadActionTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(OutputLoadActionTests PRIVATE cxx_std_20)
@@ -321,7 +321,7 @@ add_executable(CallRedirectTests
     tests/call_redirect_test.cpp
     src/platform/call_redirect.cpp
     src/platform/module_pin.cpp
-    src/platform/near_code.cpp
+    src/platform/code_memory.cpp
 )
 target_include_directories(CallRedirectTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(CallRedirectTests PRIVATE cxx_std_20)
@@ -331,11 +331,19 @@ add_executable(EntryRedirectTests
     tests/entry_redirect_test.cpp
     src/platform/entry_redirect.cpp
     src/platform/module_pin.cpp
-    src/platform/near_code.cpp
+    src/platform/code_memory.cpp
 )
 target_include_directories(EntryRedirectTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(EntryRedirectTests PRIVATE cxx_std_20)
 add_test(NAME entry_redirect COMMAND EntryRedirectTests)
+
+add_executable(CodeMemoryTests
+    tests/code_memory_test.cpp
+    src/platform/code_memory.cpp
+)
+target_include_directories(CodeMemoryTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(CodeMemoryTests PRIVATE cxx_std_20)
+add_test(NAME code_memory COMMAND CodeMemoryTests)
 
 add_executable(SparseArrayTests
     tests/sparse_array_test.cpp
@@ -378,7 +386,7 @@ add_test(NAME minimap_once_code COMMAND MinimapOnceCodeTests)
 add_executable(FirstPlayerCodeTests
     tests/first_player_code_test.cpp
     src/platform/code_redirect.cpp
-    src/platform/near_code.cpp
+    src/platform/code_memory.cpp
 )
 target_include_directories(FirstPlayerCodeTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(FirstPlayerCodeTests PRIVATE cxx_std_20)
@@ -387,7 +395,7 @@ add_test(NAME first_player_code COMMAND FirstPlayerCodeTests)
 add_executable(EnemyGaugesCodeTests
     tests/enemy_gauges_code_test.cpp
     src/platform/code_redirect.cpp
-    src/platform/near_code.cpp
+    src/platform/code_memory.cpp
 )
 target_include_directories(EnemyGaugesCodeTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(EnemyGaugesCodeTests PRIVATE cxx_std_20)
@@ -396,7 +404,7 @@ add_test(NAME enemy_gauges_code COMMAND EnemyGaugesCodeTests)
 add_executable(CommandRulesCodeTests
     tests/command_rules_code_test.cpp
     src/platform/code_redirect.cpp
-    src/platform/near_code.cpp
+    src/platform/code_memory.cpp
 )
 target_include_directories(CommandRulesCodeTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(CommandRulesCodeTests PRIVATE cxx_std_20)
@@ -405,7 +413,7 @@ add_test(NAME command_rules_code COMMAND CommandRulesCodeTests)
 add_executable(PanelGateCodeTests
     tests/panel_gate_code_test.cpp
     src/platform/code_redirect.cpp
-    src/platform/near_code.cpp
+    src/platform/code_memory.cpp
 )
 target_include_directories(PanelGateCodeTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(PanelGateCodeTests PRIVATE cxx_std_20)
@@ -414,7 +422,7 @@ add_test(NAME panel_gate_code COMMAND PanelGateCodeTests)
 add_executable(CenteredFrameCodeTests
     tests/centered_frame_code_test.cpp
     src/platform/code_redirect.cpp
-    src/platform/near_code.cpp
+    src/platform/code_memory.cpp
 )
 target_include_directories(CenteredFrameCodeTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(CenteredFrameCodeTests PRIVATE cxx_std_20)
@@ -423,7 +431,7 @@ add_test(NAME centered_frame_code COMMAND CenteredFrameCodeTests)
 add_executable(PopupsCodeTests
     tests/popups_code_test.cpp
     src/platform/code_redirect.cpp
-    src/platform/near_code.cpp
+    src/platform/code_memory.cpp
 )
 target_include_directories(PopupsCodeTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(PopupsCodeTests PRIVATE cxx_std_20)
@@ -432,7 +440,7 @@ add_test(NAME popups_code COMMAND PopupsCodeTests)
 add_executable(ArrowEdgeCodeTests
     tests/arrow_edge_code_test.cpp
     src/platform/code_redirect.cpp
-    src/platform/near_code.cpp
+    src/platform/code_memory.cpp
 )
 target_include_directories(ArrowEdgeCodeTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(ArrowEdgeCodeTests PRIVATE cxx_std_20)

@@ -15,8 +15,10 @@
 #include "hud/player_two_pass.h"
 #include "hud/field_markers.h"
 #include "hud/prompt_rows.h"
+#include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/code_redirect.h"
+#include "platform/entry_redirect.h"
 #include "platform/frame_watch.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -63,6 +65,10 @@ constexpr std::uintptr_t kAddCompositePasses     = 0x140D1791C;
 constexpr std::uint8_t   kAddCompositePassesPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C,
                                                           0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x57};
 constexpr std::uint32_t  kViewUnscaledViewRect = 0x238;  // FIntRect in FSceneView (FViewInfo is a copy)
+// Game version 1.005 (RE-1005-hud-2.md): the call (0x140C1481D there) crosses a 16-byte block on the render thread, so
+// the function's entry is redirected instead; Render_Main's call is its only caller, so every call is still that one.
+// First instruction `mov [rsp+8],rbx`.
+constexpr std::size_t    kAddCompositePassesFirst = 5;
 
 // The consume loop's sites (hud/entry_filter_code.h), with the instruction after each.
 constexpr std::uintptr_t kLoadVertexBufferSite   = 0x140FC8501;
@@ -102,6 +108,7 @@ enum class Pass
 // Installed once, then read.
 platform::CallRedirect g_acquireCall;
 platform::CallRedirect g_familyCall;
+platform::EntryRedirect g_familyEntry;  // 1.005, in place of g_familyCall
 platform::CodeRedirect g_buffersCode;
 platform::CodeRedirect g_gateCode;
 bool                   g_installed          = false;
@@ -253,7 +260,9 @@ void* AddCompositePasses(void* module, void* builder, const void* views, void* t
         }
     }
     g_fields.familyName = family;
-    return reinterpret_cast<AddCompositePassesFn>(g_familyCall.Original())(module, builder, views, texture, context);
+    // The entry redirect's trampoline is set before its first call can arrive; only one of the two is ever installed.
+    const std::uintptr_t original = g_familyEntry.Original() != 0 ? g_familyEntry.Original() : g_familyCall.Original();
+    return reinterpret_cast<AddCompositePassesFn>(original)(module, builder, views, texture, context);
 }
 
 bool Redirect(const platform::GameImage& image, platform::CallRedirect& call, std::uintptr_t site, std::uintptr_t target,
@@ -303,12 +312,24 @@ bool InstallSecondImage(const platform::GameImage& image) noexcept
 
     const auto buffersCode = EntryBuffersCode(g_fields);
     const auto gateCode    = EntryDrawGateCode(g_fields);
+    // The family decision: the call on the research build, the function's entry on 1.005 (kAddCompositePassesFirst).
+    const auto familyRedirect = [&image]() noexcept {
+        if (platform::RunningBuild() != platform::BuildIndex::V1005)
+        {
+            return Redirect(image, g_familyCall, kAddCompositePassesCall, kAddCompositePasses,
+                            reinterpret_cast<std::uintptr_t>(&AddCompositePasses));
+        }
+        const auto entry = image.Rebase(kAddCompositePasses);
+        return entry && g_familyEntry.Install(*entry,
+                                              image.EntryInstruction(kAddCompositePasses, std::span(kAddCompositePassesPrologue,
+                                                                                                    kAddCompositePassesFirst)),
+                                              reinterpret_cast<std::uintptr_t>(&AddCompositePasses));
+    };
     // The render-thread sites first: they do nothing until a family name and player 2's buffers are set.
     const bool installed =
         Patch(image, g_gateCode, kDrawGateSite, kDrawGateBytes, gateCode, kDrawGateResume) &&
         Patch(image, g_buffersCode, kLoadVertexBufferSite, kLoadVertexBufferBytes, buffersCode, kLoadVertexBufferResume) &&
-        Redirect(image, g_familyCall, kAddCompositePassesCall, kAddCompositePasses,
-                 reinterpret_cast<std::uintptr_t>(&AddCompositePasses)) &&
+        familyRedirect() &&
         Redirect(image, g_acquireCall, kAcquireCall, kAcquireLayerSlot, reinterpret_cast<std::uintptr_t>(&AcquireLayerSlot));
     if (!installed)
     {
@@ -340,6 +361,7 @@ void RemoveSecondImage() noexcept
     {
         all = (!call->IsInstalled() || call->Restore()) && all;
     }
+    all = (!g_familyEntry.IsInstalled() || g_familyEntry.Restore()) && all;
     for (platform::CodeRedirect* code : {&g_buffersCode, &g_gateCode})
     {
         all = (!code->IsInstalled() || code->Restore()) && all;

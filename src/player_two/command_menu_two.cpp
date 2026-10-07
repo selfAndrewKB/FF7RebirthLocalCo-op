@@ -1,5 +1,6 @@
 #include "player_two/command_menu_two.h"
 
+#include <atomic>
 #include <Unreal/CoreUObject/UObject/Class.hpp>
 #include <Unreal/UObject.hpp>
 #include <Unreal/UObjectGlobals.hpp>
@@ -17,6 +18,7 @@
 #include "player_two/describe.h"
 #include "player_two/engine_facts.h"
 #include "player_two/focus_scope.h"
+#include "player_two/game_thread_sites.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 #include "player_two/party_member.h"
@@ -65,6 +67,11 @@ constexpr std::uint8_t kRefreshBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0x
                                           0x00, 0xE8, 0xC0, 0x64, 0x4A, 0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xF9};
 constexpr platform::FunctionFact kRefresh{L"FieldCommandCtrl_RefreshFieldMenu", 0x140C08A60, kRefreshBytes};
 constexpr std::size_t            kRefreshFirst = 5;
+// In 1.005 that first instruction crosses a 16-byte block, so the entry cannot be redirected there; its only two
+// callers are redirected instead, each inside one block (RE-1005-battle-2.md): EndUI23_RefreshFieldMenu's tail jump
+// and Setup's call (the same two as in this build).
+constexpr std::uintptr_t kRefreshTailCall  = 0x140C08A59;  // jmp, in EndUI23_RefreshFieldMenu
+constexpr std::uintptr_t kRefreshSetupCall = 0x142A77DF9;  // call, in Setup's cold chunk
 // The in-field squad switch (levers §17): LB/RB in the field command menu (PartyList360_CycleSquad_ApplyAndShow)
 // and the squad picked by index (PartyList360_SelectSquad_ApplyAndShow) apply the squad to the party, then
 // lay out the Members panel of the controller that took the key directly, never through the rebuild above.
@@ -131,8 +138,18 @@ WeakGetFn g_weakGet = nullptr;
 std::uintptr_t g_worldClass = 0;  // UWorld's class
 platform::CallRedirect  g_setupCall, g_resetAllCall;
 platform::EntryRedirect g_refresh;
+platform::CallRedirect  g_refreshTailCall, g_refreshSetupCall;  // 1.005: the rebuild's two callers instead
+RefreshFn               g_refreshFn = nullptr;                   // 1.005: the rebuild itself (set before its calls)
 std::array<platform::CallRedirect, kSquadLayoutCalls.size()> g_squadLayoutCalls;
 LayoutCellsFn g_layoutCells = nullptr;  // the calls' target, set before either is redirected
+/// What Install found, for the redirects (placed at once, or on 1.005 from the game thread).
+struct Sites
+{
+    std::uintptr_t resetAt = 0, resetAll = 0, setupAt = 0, refresh = 0;
+};
+Sites                              g_sites;
+std::optional<platform::GameImage> g_placeImage;           // 1.005: kept for the placement
+std::atomic<bool>                   g_fromGameThread {false};  // 1.005: the calls go in with InstallFromOwnThread
 
 // Game thread. The controller outlives the mod's stages, like the game's.
 void*         g_controller = nullptr;
@@ -315,10 +332,17 @@ bool CanFollow(void* gameController, bool needsPlayer) noexcept
            reinterpret_cast<std::uintptr_t>(gameController) == Field<std::uintptr_t>(g_endUISystem + kGameController);
 }
 
+/// The game's Members panel rebuild, for the mod's calls: the entry redirect's trampoline, or on 1.005 the function
+/// itself (its two calls are redirected instead).
+RefreshFn RefreshFunction() noexcept
+{
+    return g_refreshFn != nullptr ? g_refreshFn : reinterpret_cast<RefreshFn>(g_refresh.Original());
+}
+
 /// The Members panel of player 2's controller rebuilt from the party, in player 2's scopes.
 void RefreshPlayerTwo(const wchar_t* why) noexcept
 {
-    const auto     refresh = reinterpret_cast<RefreshFn>(g_refresh.Original());
+    const auto     refresh = RefreshFunction();
     const wchar_t* refusal = nullptr;
     switch (InPlayerTwoScopes(refusal, [&] { return platform::CallGuarded(refresh, g_controller); }))
     {
@@ -338,7 +362,7 @@ void RefreshPlayerTwo(const wchar_t* why) noexcept
 /// own, from its Setup or from us, runs once).
 void RefreshCall(void* controller) noexcept
 {
-    reinterpret_cast<RefreshFn>(g_refresh.Original())(controller);
+    RefreshFunction()(controller);
     if (CanFollow(controller, false))
     {
         RefreshPlayerTwo(L"the game rebuilt its own");
@@ -507,6 +531,58 @@ void Watch() noexcept
                      now.context.layerCount));
 }
 
+/// One call site redirected: at install on the research build, from the game thread on 1.005.
+template <class Fn>
+bool Place(platform::CallRedirect& call, std::uintptr_t site, std::uintptr_t target, Fn* with) noexcept
+{
+    const auto replacement = reinterpret_cast<std::uintptr_t>(with);
+    return g_fromGameThread ? call.InstallFromOwnThread(site, target, replacement) : call.Install(site, target, replacement);
+}
+
+/// The Members panel rebuild followed at every caller: its entry redirected, or on 1.005 (where that entry crosses a
+/// block) its two calls.
+bool InstallRefresh(const platform::GameImage& image, std::uintptr_t refresh) noexcept
+{
+    if (platform::RunningBuild() != platform::BuildIndex::V1005)
+    {
+        return g_refresh.Install(refresh, image.EntryInstruction(kRefresh.address, std::span<const std::uint8_t>(kRefreshBytes, kRefreshFirst)),
+                                 reinterpret_cast<std::uintptr_t>(&RefreshCall));
+    }
+    const auto tail = image.Rebase(kRefreshTailCall, 5), call = image.Rebase(kRefreshSetupCall, 5);
+    g_refreshFn     = reinterpret_cast<RefreshFn>(refresh);
+    return tail && call && g_refreshTailCall.InstallTailJump(*tail, refresh, reinterpret_cast<std::uintptr_t>(&RefreshCall)) &&
+           Place(g_refreshSetupCall, *call, refresh, &RefreshCall);
+}
+
+/// The redirects, from what Install found (g_installed: its checks passed). At install on the research build; on
+/// 1.005 from the game thread.
+bool PlaceSites(const platform::GameImage& image) noexcept
+{
+    if (g_installed)
+    {
+        const Sites& s = g_sites;
+        // ResetAll first: a Setup followed without its ResetAll is the join Setup's case anyway.
+        g_installed = Place(g_resetAllCall, s.resetAt, s.resetAll, &ResetAllCall) &&
+                      Place(g_setupCall, s.setupAt, reinterpret_cast<std::uintptr_t>(g_setup), &SetupCall) &&
+                      InstallRefresh(image, s.refresh);
+        const auto layoutCells = image.Rebase(kLayoutCells);
+        g_layoutCells          = layoutCells ? reinterpret_cast<LayoutCellsFn>(*layoutCells) : nullptr;
+        for (std::size_t i = 0; g_installed && i < kSquadLayoutCalls.size(); ++i)
+        {
+            const auto at = image.Rebase(kSquadLayoutCalls[i], 5);
+            g_installed   = layoutCells && at && Place(g_squadLayoutCalls[i], *at, *layoutCells, &SquadLayoutCall);
+        }
+        if (!g_installed)
+        {
+            Remove();
+        }
+    }
+    platform::Log(L"command menu two: {}", g_installed ? L"player 2's command controller is built once player 2 plays and "
+                                                         L"follows the game's Setup, ResetAll and Members panel rebuild (logged)"
+                                                       : L"UNAVAILABLE (a check failed)");
+    return g_installed;
+}
+
 }  // namespace
 
 bool Install(const platform::GameImage& image) noexcept
@@ -534,46 +610,48 @@ bool Install(const platform::GameImage& image) noexcept
     const auto setupAt = site(kSetupCall), resetAt = site(kResetAllCall);
     g_installed = malloc && ctor && setup && get && g_worldClass != 0 && system && resetAll && refresh && setupAt &&
                   resetAt && focus_scope::Install(image);
+    g_current = false;
+    g_tries   = 0;
     if (g_installed)
     {
         g_malloc  = reinterpret_cast<MallocFn>(*malloc);
         g_ctor    = reinterpret_cast<CtorFn>(*ctor);
         g_setup   = reinterpret_cast<SetupFn>(*setup);
         g_weakGet = reinterpret_cast<WeakGetFn>(*get);
-        // ResetAll first: a Setup followed without its ResetAll is the join Setup's case anyway.
-        g_installed = g_resetAllCall.Install(*resetAt, *resetAll, reinterpret_cast<std::uintptr_t>(&ResetAllCall)) &&
-                      g_setupCall.Install(*setupAt, *setup, reinterpret_cast<std::uintptr_t>(&SetupCall)) &&
-                      g_refresh.Install(*refresh, image.EntryInstruction(kRefresh.address, std::span<const std::uint8_t>(kRefreshBytes, kRefreshFirst)),
-                                        reinterpret_cast<std::uintptr_t>(&RefreshCall));
-        const auto layoutCells = image.Rebase(kLayoutCells);
-        g_layoutCells          = layoutCells ? reinterpret_cast<LayoutCellsFn>(*layoutCells) : nullptr;
-        for (std::size_t i = 0; g_installed && i < kSquadLayoutCalls.size(); ++i)
+        g_sites   = {*resetAt, *resetAll, *setupAt, *refresh};
+        if (platform::RunningBuild() == platform::BuildIndex::V1005)
         {
-            const auto at = site(kSquadLayoutCalls[i]);
-            g_installed   = layoutCells && at &&
-                          g_squadLayoutCalls[i].Install(*at, *layoutCells, reinterpret_cast<std::uintptr_t>(&SquadLayoutCall));
-        }
-        if (!g_installed)
-        {
-            Remove();
+            // A squad layout call crosses a 16-byte block in 1.005, and the rebuild's entry too: every site is placed
+            // from the game thread, between its ticks (player_two/game_thread_sites.h).
+            g_fromGameThread = true;
+            g_installed      = false;  // set again by the placement
+            g_placeImage.emplace(image);
+            const bool queued = game_thread_sites::Queue([]() noexcept {
+                if (g_placeImage)
+                {
+                    const platform::GameImage image = *g_placeImage;  // a failed placement's Remove() empties g_placeImage
+                    g_installed                     = true;
+                    PlaceSites(image);
+                }
+            });
+            platform::Log(L"command menu two: {}", queued ? L"its calls are placed from the game thread (1.005: two cross a 16-byte block)"
+                                                          : L"UNAVAILABLE (no room to place its calls from the game thread)");
+            return queued;
         }
     }
-    g_current = false;
-    g_tries   = 0;
-    platform::Log(L"command menu two: {}", g_installed ? L"player 2's command controller is built once player 2 plays and "
-                                                         L"follows the game's Setup, ResetAll and Members panel rebuild (logged)"
-                                                       : L"UNAVAILABLE (a check failed)");
-    return g_installed;
+    return PlaceSites(image);
 }
 
 void Remove() noexcept
 {
     g_installed = false;  // the controller stays: the game's GC list refers to it
+    g_placeImage.reset();  // a placement still queued does nothing
     if (g_refresh.IsInstalled() && !g_refresh.Restore())
     {
         platform::Log(L"command menu two: the Members panel rebuild was changed after us; left in place (it passes through)");
     }
-    for (auto* call : {&g_squadLayoutCalls[0], &g_squadLayoutCalls[1], &g_setupCall, &g_resetAllCall})
+    for (auto* call : {&g_squadLayoutCalls[0], &g_squadLayoutCalls[1], &g_setupCall, &g_resetAllCall, &g_refreshTailCall,
+                       &g_refreshSetupCall})
     {
         if (call->IsInstalled() && !call->Restore())
         {

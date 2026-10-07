@@ -20,7 +20,7 @@
 // code, this thunk jumps into our DLL, so Install pins the DLL (platform/module_pin.h). The thunk
 // page is never freed and the destructor does not restore; only Restore() removes the redirect.
 
-#include "platform/near_code.h"
+#include "platform/code_memory.h"
 
 #include <cstdint>
 

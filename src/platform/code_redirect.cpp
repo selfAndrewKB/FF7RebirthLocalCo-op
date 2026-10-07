@@ -1,6 +1,6 @@
 #include "platform/code_redirect.h"
 
-#include "platform/near_code.h"
+#include "platform/code_memory.h"
 #include "platform/x64_jump.h"
 
 #include <cstring>
@@ -9,28 +9,20 @@ namespace lss::platform {
 
 namespace {
 
-/// Writes `code` then a jump to `resume` into a page near `site`, and makes it executable.
-/// Returns the page's address, or 0.
+/// Places `code` then a jump to `resume` near `site` (the shared code pool). Returns its address, or 0.
 std::uintptr_t BuildCodePage(std::uintptr_t site, std::span<const std::uint8_t> code, std::uintptr_t resume) noexcept
 {
-    if (code.size() + kJumpLength > kCodePageSize)
-    {
-        return 0;
-    }
-    const std::uintptr_t page = AllocateCodePageNear(site);
-    if (page == 0)
-    {
-        return 0;
-    }
-    const auto back = EncodeJump(page + code.size(), resume);
-    if (!back)
-    {
-        ReleaseCodePage(page);
-        return 0;
-    }
-    std::memcpy(reinterpret_cast<void*>(page), code.data(), code.size());
-    std::memcpy(reinterpret_cast<void*>(page + code.size()), back->data(), back->size());
-    return SealCodePage(page) ? page : 0;
+    return PlaceCodeNear(site, code.size() + kJumpLength,
+                         [code, resume](std::uintptr_t at, std::span<std::uint8_t> placed) noexcept {
+                             const auto back = EncodeJump(at + code.size(), resume);
+                             if (!back)
+                             {
+                                 return false;
+                             }
+                             std::memcpy(placed.data(), code.data(), code.size());
+                             std::memcpy(placed.data() + code.size(), back->data(), back->size());
+                             return true;
+                         });
 }
 
 }  // namespace
@@ -56,7 +48,7 @@ bool CodeRedirect::Install(std::uintptr_t site, std::span<const std::uint8_t> re
     const auto           jump = page != 0 ? EncodeJump(site, page) : std::nullopt;
     if (!jump)
     {
-        return false;  // a built page is left allocated and unused: never reached, never freed
+        return false;  // placed code is left unused: never reached, never freed
     }
 
     Block redirected = current;

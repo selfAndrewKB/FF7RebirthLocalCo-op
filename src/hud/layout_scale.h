@@ -28,4 +28,8 @@ bool InstallLayoutScale(const platform::GameImage& image) noexcept;
 /// Puts the game's instruction back (at mod uninstall).
 void RemoveLayoutScale() noexcept;
 
+/// Game version 1.005: its instruction crosses a 16-byte block, so the two instructions before it are replaced instead,
+/// from the game thread outside the overlay render (hud/overlay_layout.cpp calls this there); elsewhere a no-op.
+void FinishLayoutScale() noexcept;
+
 }  // namespace lss::hud

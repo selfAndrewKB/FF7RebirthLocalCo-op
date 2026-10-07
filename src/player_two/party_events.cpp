@@ -1,14 +1,23 @@
 #include "player_two/party_events.h"
 
+#include "platform/build_value.h"
 #include "platform/call_redirect.h"
+#include "platform/entry_redirect.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "player_two/call_site.h"
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
+#include <span>
+
+#include <intrin.h>
+
+#pragma intrinsic(_ReturnAddress)
 
 namespace lss::player_two::party_events {
 
@@ -18,6 +27,10 @@ namespace {
 // OnLeaderTransition's one call of SwitchLeaderInternal: rcx = the party manager's controller (+0x140),
 // rdx = the new leader, r8b = input-triggered, r9b = force.
 constexpr std::uintptr_t kLeaderCall = 0x141204E09;
+// 1.005 (RE-1005-field-2.md §3): that call is at 0x140F8B28D, %16 = 13, so it crosses a 16-byte block. There it is
+// heard at SwitchLeaderInternal's entry instead (first instruction `mov [rsp+18h], rbx`, 5 bytes at %16 = 4; its only
+// code caller is that call), by its return address; other calls (the mod's own, from party_member) pass through.
+constexpr std::size_t kSwitchLeaderFirstInstruction = 5;
 // The status commit's handler: PartyManager_OnPlayerStatusChanged(party manager, type dl, old r8b,
 // new r9b), called once, from the status TFunction's thunk.
 constexpr std::uint8_t kStatusChangedBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C, 0x24, 0x10,
@@ -41,6 +54,8 @@ using PartyAppliedFn  = void (*)(void* partyManager);
 
 // Set once at install; cleared at Remove.
 platform::CallRedirect g_leaderCall, g_statusCall, g_appliedCall;
+platform::EntryRedirect g_leaderEntry;     // 1.005: the leader change, heard at the entry
+std::uintptr_t          g_leaderReturn = 0;  // 1.005: live return address of OnLeaderTransition's call
 Listener               g_listener{};
 
 // Counted off the game thread, from either call.
@@ -62,14 +77,49 @@ bool Hearable(const wchar_t* what) noexcept
     return false;
 }
 
-/// Replaces OnLeaderTransition's call: the listener first, then the game's switch.
-void SwitchLeader(void* controller, void* character, bool inputTriggered, bool force) noexcept
+void HearLeaderChange(void* controller, void* character) noexcept
 {
     if (g_listener.leaderChanging != nullptr && Hearable(L"a leader change"))
     {
         g_listener.leaderChanging(g_listener.context, controller, character);
     }
+}
+
+/// Replaces OnLeaderTransition's call: the listener first, then the game's switch.
+void SwitchLeader(void* controller, void* character, bool inputTriggered, bool force) noexcept
+{
+    HearLeaderChange(controller, character);
     reinterpret_cast<SwitchLeaderFn>(g_leaderCall.Original())(controller, character, inputTriggered, force);
+}
+
+/// 1.005: every call of SwitchLeaderInternal, at its entry. OnLeaderTransition's (by its return address) is heard
+/// exactly as SwitchLeader hears it; the rest pass through.
+void SwitchLeaderEntry(void* controller, void* character, bool inputTriggered, bool force) noexcept
+{
+    if (reinterpret_cast<std::uintptr_t>(_ReturnAddress()) == g_leaderReturn)
+    {
+        HearLeaderChange(controller, character);
+    }
+    reinterpret_cast<SwitchLeaderFn>(g_leaderEntry.Original())(controller, character, inputTriggered, force);
+}
+
+/// The leader change: OnLeaderTransition's call redirected on the research build; on 1.005, the entry.
+bool InstallLeader(const platform::GameImage& image, std::uintptr_t switchLeader, std::uintptr_t leaderAt) noexcept
+{
+    if (platform::RunningBuild() != platform::BuildIndex::V1005)
+    {
+        return g_leaderCall.Install(leaderAt, switchLeader, reinterpret_cast<std::uintptr_t>(&SwitchLeader));
+    }
+    if (!call_site::Calls(leaderAt, switchLeader))
+    {
+        return false;
+    }
+    g_leaderReturn = leaderAt + 5;  // before the install: the replacement runs the moment it is reachable
+    const auto first = std::span(facts::kSwitchLeaderInternalBytes).first(kSwitchLeaderFirstInstruction);
+    const bool ok = g_leaderEntry.Install(switchLeader, image.EntryInstruction(facts::kSwitchLeaderInternal.address, first),
+                                          reinterpret_cast<std::uintptr_t>(&SwitchLeaderEntry));
+    g_leaderReturn = ok ? g_leaderReturn : 0;
+    return ok;
 }
 
 /// Replaces the status thunk's call: the game's handler, then the listener.
@@ -101,7 +151,7 @@ bool Install(const platform::GameImage& image, const Listener& listener) noexcep
     const auto leaderAt = image.Rebase(kLeaderCall, 5), statusAt = image.Rebase(kStatusCall, 5);
     g_listener  = listener;
     const bool ok = switchLeader && statusChanged && leaderAt && statusAt &&
-                    g_leaderCall.Install(*leaderAt, *switchLeader, reinterpret_cast<std::uintptr_t>(&SwitchLeader)) &&
+                    InstallLeader(image, *switchLeader, *leaderAt) &&
                     g_statusCall.Install(*statusAt, *statusChanged, reinterpret_cast<std::uintptr_t>(&StatusChanged));
     if (!ok)
     {
@@ -128,6 +178,10 @@ void Remove() noexcept
         {
             platform::Log(L"party events: a call was changed after us; left in place (it passes through)");
         }
+    }
+    if (g_leaderEntry.IsInstalled() && !g_leaderEntry.Restore())
+    {
+        platform::Log(L"party events: the leader switch's entry was changed after us; left in place (it passes through)");
     }
 }
 

@@ -1,0 +1,17 @@
+{
+ "build": "1.005",
+ "research_build": "1.004",
+ "date": "2026-10-07",
+ "doc": "Rebirth/Documentation/research/RE-1005-match-audit.md",
+ "facts": [
+  {
+   "name": "kDetachNotifySlot (wheelie_ride.cpp): the 'End DetachFromSBScooter' AnimNotify class's Notify slot",
+   "old": "0x1458DE3E8",
+   "new": "0x14574D9B8",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "The matcher placed this slot at 0x14574D468 ('slot found by its translated pointer and 6 neighbours'), but that is the BASE detach notify class's Notify slot (1.004 0x1458DDEA8). The Notify function 0x14331A4A8 -> 0x14302A2A4 is shared by the base and the scooter class, and the neighbour slots around both are identical, so the pointer plus neighbours cannot tell them apart. Identity by each class's GetNotifyName at slot-5: 1.004 0x1458DE3C0 = 0x14331C234 (FString of 25 chars, the scooter name) for slot 0x1458DE3E8; 1.005 0x14574D990 = 0x14302C00C ('End DetatchFromSBScooter', lea edx,[rax+19h]) for slot 0x14574D9B8. The three classes keep their 1.004 order: base 0x14574D468 (GetNotifyName 0x144C399B0), chocobo 0x14574D710 (0x14302BA8C 'End DetatchFromChococbo', Notify 0x143029DF8 = 1.004 0x143319FFC), scooter 0x14574D9B8; vtable stride 0x2A8 (was 0x2A0). 0x14574D9B8 holds 0x14302A2A4 = the translated target, so the SlotFact's pointer check passes. Without this entry the mod would replace the base detach class's Notify on 1.005 and miss the scooter getoff's swap back."
+  }
+ ]
+}

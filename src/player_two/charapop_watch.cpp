@@ -113,14 +113,14 @@ constexpr platform::PerBuild<std::uint32_t> kCompDistance   = {0x1234, 0x1224}; 
 constexpr platform::PerBuild<std::uint32_t> kCompAngle      = {0x1238, 0x1228};  // float, radians; 1.005: CalcAnimSignificance 0x1409D9DAF [rcx+1228h]
 
 constexpr std::uint32_t kSampleEvery   = 10;      // ticks
-constexpr float         kFarFromOneCm  = 5000.0f;  // only entries more than 50 m from player 1's camera
+constexpr float         kFarFromOneCm  = 5000.0f;  // entries more than 50 m from player 1's camera, or
+constexpr float         kAnimConeDegrees = 60.0f;  // outside this cone of it (End.Animation.SignificanceCameraDiffDegrees)
 constexpr int           kWatched       = 16;
 constexpr int           kRemembered    = 64;      // entries whose last logged state is kept
 constexpr int           kMaxLines      = 2000;
 constexpr std::uint32_t kUndrawnSamples = 3;     // a mesh counts as not drawn after this many still samples
 constexpr std::uint32_t kSettleSamples  = 3;     // an entry's change is logged once it has held this many samples
 constexpr auto          kSummaryEvery  = std::chrono::seconds(60);
-constexpr auto          kEntryLineGap  = std::chrono::seconds(60);  // the shortest gap between one entry's change lines
 
 /// What a line about an entry is logged on.
 struct EntrySteady
@@ -162,7 +162,6 @@ struct Remembered
     std::uint32_t undrawn  = 0;  // samples in a row the last render time stood still
     EntrySteady   pending{};     // a change not logged yet ...
     std::uint32_t pendingSeen = 0;  // ... and how many samples in a row it has held
-    Clock::time_point lastLine{};   // this entry's last line
 };
 
 /// The summary line's parts logged on change (the counters, count and cameras move: they come with each line).
@@ -409,12 +408,10 @@ void Remember(Sample& sample)
         }
     }
     const bool first = slot == nullptr;
-    const auto now   = Clock::now();
     if (first)
     {
         slot           = oldest;
         *slot          = {sample.entry, sample.steady, g_samples, sample.lastRender};
-        slot->lastLine = now;
         LogSample(sample, true);
         return;
     }
@@ -434,14 +431,10 @@ void Remember(Sample& sample)
     }
     slot->pendingSeen = slot->pendingSeen > 0 && slot->pending == sample.steady ? slot->pendingSeen + 1 : 1;
     slot->pending     = sample.steady;
-    // And at most once a minute per entry, with the state it holds then: entries near the cameras' reach edges
-    // change for minutes on end (hundreds of lines per session, live 2026-10-03). A change undone in between is
-    // not logged.
-    if (slot->pendingSeen >= kSettleSamples && now - slot->lastLine >= kEntryLineGap)
+    if (slot->pendingSeen >= kSettleSamples)
     {
         slot->steady      = sample.steady;
         slot->pendingSeen = 0;
-        slot->lastLine    = now;
         LogSample(sample, false);
     }
 }
@@ -526,7 +519,14 @@ void SampleNow()
         }
         const float d1 = Distance(at, one.location);
         const float d2 = Distance(at, two.location);
-        if (d1 <= kFarFromOneCm || (kept == kWatched && d2 >= nearest[kWatched - 1].d2))
+        if (kept == kWatched && d2 >= nearest[kWatched - 1].d2)
+        {
+            continue;
+        }
+        // Far from player 1, or near but outside player 1's anim cone (the anim optimisation's out-of-camera case:
+        // live 2026-10-07, NPCs in player 2's view froze when player 1 turned their back).
+        const float a1 = AngleOff(one, at);
+        if (d1 <= kFarFromOneCm && a1 <= kAnimConeDegrees)
         {
             continue;
         }
@@ -535,7 +535,7 @@ void SampleNow()
         sample.actor = actor;
         sample.d1    = d1;
         sample.d2    = d2;
-        sample.a1    = AngleOff(one, at);
+        sample.a1    = a1;
         sample.a2    = AngleOff(two, at);
         int place    = kept < kWatched ? kept++ : kWatched - 1;
         while (place > 0 && nearest[static_cast<std::size_t>(place - 1)].d2 > d2)

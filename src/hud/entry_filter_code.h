@@ -56,6 +56,10 @@ inline constexpr std::uint8_t kLoadVertexBufferBytes[] = {0x48, 0x8B, 0x87, 0x90
 // the minimap's map entries, so player 2's minimap entry gets its own buffers the same way.
 inline constexpr std::uint8_t kLoadPoolZeroVertexBufferBytes[] = {0x49, 0x8B, 0x85, 0x80, 0x00, 0x00, 0x00};  // mov rax,[r13+80h]
 inline constexpr std::uint8_t kDrawGateBytes[]         = {0x41, 0x83, 0x79, 0x08, 0x00};              // cmp dword [r9+8],0
+// Game version 1.005 (RE-1005-hud-2.md): pool 0's load (0x140A460ED) crosses a 16-byte block, so the site is the
+// next instruction, the store of the vertex-buffer argument (0x140A460F4, `mov [rsp+20h],rax`, one block; the call of
+// DrawLayerEntry follows at 0x140A460F9). rax already holds pool 0's vertex buffer there, r9 the entry.
+inline constexpr std::uint8_t kStoreVertexBufferArgBytes1005[] = {0x48, 0x89, 0x44, 0x24, 0x20};  // mov [rsp+20h],rax
 
 namespace detail {
 inline void PutAddress(std::uint8_t* at, const void* field) noexcept
@@ -92,6 +96,39 @@ inline std::array<std::uint8_t, kEntryBuffersCodeSize> EntryBuffersCode(
     detail::PutAddress(&code[43], &fields.srmSlot);
     detail::PutAddress(&code[61], &fields.vertexBuffer);
     std::memcpy(&code[74], stockLoad, sizeof(stockLoad));
+    return code;
+}
+
+inline constexpr std::size_t kEntryBuffersStoreCodeSize1005 = 77;
+
+/// Game version 1.005, pool 0: the same choice made at the store of the vertex-buffer argument. rax holds the stock
+/// vertex buffer and must survive for every other entry, so the code reads its fields through r10, which is volatile
+/// and carries no argument of the call that follows (DrawLayerEntry: rcx, rdx, r8, r9 and the stack); the flags are
+/// not read before that call either.
+inline std::array<std::uint8_t, kEntryBuffersStoreCodeSize1005> EntryBuffersStoreCode1005(
+    const EntryFilterFields& fields) noexcept
+{
+    std::array<std::uint8_t, kEntryBuffersStoreCodeSize1005> code = {
+        0x49, 0xBA, 0, 0, 0, 0, 0, 0, 0, 0,        //  0: mov  r10, &playerTwoName
+        0x4D, 0x8B, 0x12,                          // 10: mov  r10, [r10]
+        0x4D, 0x85, 0xD2,                          // 13: test r10, r10
+        0x74, 0x36,                                // 16: jz   store               no player-2 entry yet
+        0x4D, 0x3B, 0x11,                          // 18: cmp  r10, [r9]           this entry's FName
+        0x75, 0x31,                                // 21: jne  store
+        0x49, 0xBA, 0, 0, 0, 0, 0, 0, 0, 0,        // 23: mov  r10, &indexBuffer
+        0x4D, 0x8B, 0x12,                          // 33: mov  r10, [r10]
+        0x4C, 0x89, 0x54, 0x24, 0x28,              // 36: mov  [rsp+28h], r10      the index buffer argument
+        0x49, 0xBA, 0, 0, 0, 0, 0, 0, 0, 0,        // 41: mov  r10, &srmSlot
+        0x4D, 0x8B, 0x12,                          // 51: mov  r10, [r10]
+        0x4C, 0x89, 0x54, 0x24, 0x30,              // 54: mov  [rsp+30h], r10      the SRM slot argument
+        0x48, 0xB8, 0, 0, 0, 0, 0, 0, 0, 0,        // 59: mov  rax, &vertexBuffer
+        0x48, 0x8B, 0x00,                          // 69: mov  rax, [rax]          player 2's vertex buffer
+        0x48, 0x89, 0x44, 0x24, 0x20,              // 72: store: mov [rsp+20h], rax (the replaced instruction)
+    };                                             // 77: (the jump back is appended here)
+    detail::PutAddress(&code[2], &fields.playerTwoName);
+    detail::PutAddress(&code[25], &fields.indexBuffer);
+    detail::PutAddress(&code[43], &fields.srmSlot);
+    detail::PutAddress(&code[61], &fields.vertexBuffer);
     return code;
 }
 
