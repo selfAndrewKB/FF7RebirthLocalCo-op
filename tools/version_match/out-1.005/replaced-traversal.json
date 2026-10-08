@@ -1,0 +1,328 @@
+{
+ "build": "1.005",
+ "research_build": "1.004",
+ "date": "2026-10-07",
+ "doc": "Rebirth/Documentation/research/RE-p2-traversal.md",
+ "facts": [
+  {
+   "name": "EndCharacter_FieldActionActorNotifyPass_Vt748",
+   "old": "0x14125B3B0",
+   "new": "0x140E8ABE0",
+   "bytes": "48895C2410488974241848897C2420554154415541564157488BECB860000000E8????????482BE0488BB16002000045",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Unique 48-byte masked pattern, same size 0x348. Same body: char+0x260 must be an EndPlayerController, walks PC+0x618 (unchanged) and qword_14939BC90's always-notify list. DIFFERENCE: the per-actor notify is vt+0x750 in 1.005 (vt+0x748 in 1.004); the follow-up slots are vt+0x7D0/+0x748 (1.004 +0x7C8/+0x740). Caller EndCharacter__Tick_Vt310."
+  },
+  {
+   "name": "call site of the notify pass in EndCharacter tick",
+   "old": "0x14125B205",
+   "new": "0x140E8A445",
+   "bytes": "E896070000",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "E8 rel32, %16 = 5 in both builds (CallRedirect fits in the 16-byte line). rcx = character, xmm1 = dt."
+  },
+  {
+   "name": "FieldActionActor_RegisterWithCharacterPC618",
+   "old": "0x1413E4FF4",
+   "new": "0x140D7F288",
+   "bytes": "48895C240857B820000000E8????????482BE0488B9960020000488BFA4885DB740C488BCBE8????????84C0750FE8??",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "The pattern also matches the unregister twin 0x140D7F484; told apart by the callee (0x140D7F2DC = add-unique to PC+0x618) and by the caller (the register-with-leader slot below). char+0x260 if EndPlayerController, else PM+0x140."
+  },
+  {
+   "name": "FieldActionActor_UnregisterFromCharacterPC618",
+   "old": "0x1413E5F74",
+   "new": "0x140D7F484",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Twin of the above; callee 0x140D7F4D8 (remove)."
+  },
+  {
+   "name": "FieldActionActor_OnPlayerTriggerEnter_RegisterWithLeaderPC (shared actor slot)",
+   "old": "0x1413E5120",
+   "new": "0x140D7E3D0",
+   "bytes": "48895C240857B820000000E8????????482BE0488BF9E8????????488BD84885C07417488BC8E8????????84C0740B48",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "ResolvePartyLeaderWeakPtr (1.005 0x1407649A8), IsEndPlayerCharacter, then the register above. DIFFERENCE: actor vtable slot +0x728 in 1.005 (+0x720 in 1.004). Pattern shared with the leave twin; told apart by the callee."
+  },
+  {
+   "name": "FieldActionActor_OnPlayerTriggerLeave_UnregisterFromLeaderPC (shared actor slot)",
+   "old": "0x1413E5F2C",
+   "new": "0x140D7E418",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Calls the unregister twin 0x140D7F484. Actor vtable slot +0x730 in 1.005 (+0x728 in 1.004)."
+  },
+  {
+   "name": "End2FieldActionActor_OnTriggerEnter (PlayerTrigger key)",
+   "old": "0x1409DC534",
+   "new": "0x140D813D0",
+   "bytes": "48895C241048896C2418488974242057B820000000E8????????482BE0488B01498BF8488BF2488BD9FF90380700008B",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Found with the 1.004 LEAVE pattern because every vtable call moved +8: it calls vt+0x738 first and vt+0x728 (= the register slot) at the end, key FName PlayerTrigger at 1.005 qword_14901BFB8, entered flag +0x2A1, primary PC trigger +0x610 -> +0x230 -> +0x120 set unchanged. Actor slot +0x718 in 1.005 (+0x710 in 1.004)."
+  },
+  {
+   "name": "Ladder_Vt748_NotifyNear_AutoEngage",
+   "old": "0x141643238",
+   "new": "0x1415DC9D8",
+   "bytes": "48895C241855565741564157488D6C24C9B8D0000000E8????????482BE0C5F829B424C0000000488BFA488BF1488BD1",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Unique, same size 0x36D. Ladder vtable 1.005 = 0x1457A2650 (this entry at +0x750)."
+  },
+  {
+   "name": "vt_AEndFieldActionActorLadder",
+   "old": "0x145940748",
+   "new": "0x1457A2650",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Derived from the notify entry (0x1457A2DA0 - 0x750). Slots checked: +0x718 OnTriggerEnter 0x140D813D0, +0x720 OnTriggerLeave 0x140D81588, +0x728 register-with-leader, +0x730 unregister, +0x750 notify, +0x7C8 executer factory 0x141921E10, +0x8F0 rail/module selector 0x141598C80, +0x8F8 install ladder camera module 0x1419022D4, +0x900 leave module 0x141593610. All +8 against 1.004."
+  },
+  {
+   "name": "vt_AEndFieldActionActorDoor",
+   "old": "0x1459434F0",
+   "new": "0x1457A9798",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Derived from the door notify entry 0x1457A9EE8 (+0x750). +0x6A8 = Door press 0x14150F60C (1.004 +0x6A0), +0x728/+0x730 the shared register/unregister (same functions as the ladder's)."
+  },
+  {
+   "name": "Door_Vt748_NotifyNear_SlotTargetAndFieldActionHeld",
+   "old": "0x14128C9C4",
+   "new": "0x1412FD200",
+   "bytes": "488BC4488958084889681048897018488978204156B8F0000000E8????????482BE0F60203488BFA488BD90F85??????",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Unique, same size."
+  },
+  {
+   "name": "Door_Vt6A0_RequestFieldActionCommonOnLeader",
+   "old": "0x1418CAABC",
+   "new": "0x14150F60C",
+   "bytes": "48895C240857B850000000E8????????482BE0488BF9E8????????488BD84885C07415E8????????488B4B10488BD0E8",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Unique, same size. Leader = 1.005 0x1407649A8; CharCtrlParam_FieldActionCommon_Ctor = 1.005 0x14151059C; CharCtrl_RequestState = 1.005 0x141511E94 (read from this body; character vt+0x930 in 1.005 = 1.004 vt+0x928)."
+  },
+  {
+   "name": "CharCtrl_RequestState",
+   "old": "0x141291D98",
+   "new": "0x141511E94",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "ASSUMPTION",
+   "note": "Callee of the door press at the same place as in 1.004; its own body was not compared."
+  },
+  {
+   "name": "FieldAction_ApproachDirCheck_MergedStick",
+   "old": "0x141642A00",
+   "new": "0x1415DD02C",
+   "bytes": "48895C242055565741564157488DAC2430FFFFFFB8D0010000E8????????482BE04D8BF84C8BF2488BF1C5F829B424C0",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Unique, same size 0x7AF."
+  },
+  {
+   "name": "FieldInteract_Begin_ForceVehicleGetOff_D",
+   "old": "0x141884478",
+   "new": "0x1415DC40C",
+   "bytes": "488BC44889580848897010488978184C8960205541564157488BECB860000000E8????????482BE04C8BF9418AF1488B",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Unique, same size 0x236."
+  },
+  {
+   "name": "Ladder executer factory (ladder vt+0x7C0 / +0x7C8)",
+   "old": "0x141414A2C",
+   "new": "0x141921E10",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from the 1.005 ladder vtable +0x7C8; the 1.004 pattern matches 4 identical factories, this is the one in the ladder vtable."
+  },
+  {
+   "name": "LadderExecuter_Ctor",
+   "old": "0x141414798",
+   "new": "0x141921E54",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "(split 2026-10-07 from a combined row) Ctor unique by pattern, same size; it writes vtable 0x1457875F0. Executer slots (unchanged offsets): +0x10 Start 0x141597194, +0x18 End 0x141597444, +0x20 Tick 0x141594234, +0x30 UpdateInput 0x141594080."
+  },
+  {
+   "name": "vtable",
+   "old": "0x1458125C0",
+   "new": "0x1457875F0",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "(split 2026-10-07 from a combined row) Ctor unique by pattern, same size; it writes vtable 0x1457875F0. Executer slots (unchanged offsets): +0x10 Start 0x141597194, +0x18 End 0x141597444, +0x20 Tick 0x141594234, +0x30 UpdateInput 0x141594080."
+  },
+  {
+   "name": "LadderExecuter_Start_Vt10",
+   "old": "0x14132DA38",
+   "new": "0x141597194",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Unique pattern, same size; executer vtable +0x10."
+  },
+  {
+   "name": "LadderExecuter_End_Vt18",
+   "old": "0x14132D860",
+   "new": "0x141597444",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from the executer vtable +0x18 (the 1.004 pattern did not match). Body: IsUCPC_Core (1.005 0x1409B2AE8) -> camera off 0x1415935D8."
+  },
+  {
+   "name": "StateManagedActor_CameraOff_RailOp7OrVt8F8",
+   "old": "0x14132EB5C",
+   "new": "0x1415935D8",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "ASSUMPTION",
+   "note": "The IsUCPC-gated callee of the 1.005 End at the same place; body not compared."
+  },
+  {
+   "name": "LadderExecuter_UpdateInput_Vt30_PollsClimbMove",
+   "old": "0x14132F4A4",
+   "new": "0x141594080",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Unique pattern, same size; executer vtable +0x30."
+  },
+  {
+   "name": "LadderExecuter_S0_Enter_CameraIfUCPC",
+   "old": "0x14132DFDC",
+   "new": "0x1415926C0",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Same size 0x6C0 (the pattern hits 7 functions; only this one has the size). IsUCPC_Core gate, then ladder vt+0x8F0 (1.005; 1.004 vt+0x8E8)."
+  },
+  {
+   "name": "LadderClimbMove_PollInput_VtC8_MergedLeftY_DashAccel",
+   "old": "0x14132F9E4",
+   "new": "0x141594AA8",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Size differs (0x1DE vs 0x18F) but the body is the same: Gamepad_LeftY axis (1.005 key 0x14907DEF8) >= 0.5 / <= -0.5, Dash (0x14901C660) and Accel (0x14901C630) held; writes +0x4EA/+0x4EB. Character vt+0x930 in 1.005 (1.004 +0x928)."
+  },
+  {
+   "name": "Ladder_Vt8F0_InstallLadderCameraModule_PrimaryPCMSlot15",
+   "old": "0x1416E6860",
+   "new": "0x1419022D4",
+   "bytes": "48895C241057B840000000E8????????482BE0488BF9B938050000E8????????4885C00F84????????488BC8E8??????",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Unique, same size; ladder vtable +0x8F8 in 1.005. Calls PrimaryPCM_FieldOp_InstallModuleSlot15 (1.005 0x1415993F8, replaced-chocobo-cam.json)."
+  },
+  {
+   "name": "Ladder_Vt8F8_LeaveLadderCameraModule",
+   "old": "0x14132F264",
+   "new": "0x141593610",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Unique pattern, same size; ladder vtable +0x900 in 1.005. Module handle on the ladder actor +0x760/+0x768 (unchanged)."
+  },
+  {
+   "name": "Vt_ReadsLeaderAndPrimaryPCMOp7_ThreadAware (rail or module selector)",
+   "old": "0x1416E6D90",
+   "new": "0x141598C80",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "ASSUMPTION",
+   "note": "Read from the 1.005 ladder vtable +0x8F0; body not compared."
+  },
+  {
+   "name": "CharActionCtrl_TickParkourFindDirEffect_BlueArrow",
+   "old": "0x14153EC28",
+   "new": "0x1415DDD58",
+   "bytes": "48895C241848897424205557415441564157488DAC2490FCFFFFB870040000E8????????482BE0C5F829B42460040000",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Unique, same size 0x872. Request byte +0x144, option byte +0x2C7, config +0x2F0 (Character_GetPlayerCharacterConfigCDO = 1.005 0x1410E5618) all unchanged. Called from CharActionCtrl_Tick_Slot2 1.005 0x14092F484."
+  },
+  {
+   "name": "TerrainDetector_Evaluate_RequestRow11 (blue-arrow request site) [0]",
+   "old": "0x140EECE8C",
+   "new": "0x141301444",
+   "bytes": "48895C24184889742420574154415541564157B810030000E8????????482BE0C5F829B42400030000C5F829BC24F002",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "(split 2026-10-07 from a combined row) The only 'mov [rsi+144h], r14b' in 1.005 is in 0x141301444 (frame 0x340 vs 0x310, size 0x15E5 vs 0x14A4); the preceding block writes +0x148/+0x150 exactly as in 1.004."
+  },
+  {
+   "name": "TerrainDetector_Evaluate_RequestRow11 (blue-arrow request site) [1]",
+   "old": "0x140EEE2B8",
+   "new": "0x1413029B1",
+   "bytes": "48895C24184889742420574154415541564157B810030000E8????????482BE0C5F829B42400030000C5F829BC24F002",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "(split 2026-10-07 from a combined row) The only 'mov [rsi+144h], r14b' in 1.005 is in 0x141301444 (frame 0x340 vs 0x310, size 0x15E5 vs 0x14A4); the preceding block writes +0x148/+0x150 exactly as in 1.004."
+  },
+  {
+   "name": "vt_Ladder +0x748 entry (1.005 +0x750): Ladder_Vt748_NotifyNear_AutoEngage",
+   "old": "0x145940E90",
+   "new": "0x1457A2DA0",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Added 2026-10-07 for traversal_watch (v0.62.0): the slot holds the function in both exes (read from the exes by _traversal_check.py)."
+  },
+  {
+   "name": "vt_LadderExecuter +0x10 entry: Start",
+   "old": "0x1458125D0",
+   "new": "0x145787600",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Added 2026-10-07 for traversal_watch (v0.62.0): the slot holds the function in both exes (read from the exes by _traversal_check.py)."
+  },
+  {
+   "name": "vt_LadderExecuter +0x18 entry: End",
+   "old": "0x1458125D8",
+   "new": "0x145787608",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Added 2026-10-07 for traversal_watch (v0.62.0): the slot holds the function in both exes (read from the exes by _traversal_check.py)."
+  },
+  {
+   "name": "vt_LadderExecuter +0x30 entry: UpdateInput",
+   "old": "0x1458125F0",
+   "new": "0x145787620",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Added 2026-10-07 for traversal_watch (v0.62.0): the slot holds the function in both exes (read from the exes by _traversal_check.py)."
+  }
+ ],
+ "offset_changes": [
+  {
+   "constant": "EndFieldActionStateManagedActor-family virtual slots >= 0x6A0",
+   "old": "+0x6A0 press, +0x710/+0x718 trigger enter/leave, +0x720/+0x728 register/unregister, +0x748 notify, +0x7C0 executer factory, +0x8E8/+0x8F0/+0x8F8 camera",
+   "new": "+0x6A8, +0x718/+0x720, +0x728/+0x730, +0x750, +0x7C8, +0x8F0/+0x8F8/+0x900",
+   "evidence": "1.005 ladder vtable 0x1457A2650 and door vtable 0x1457A9798 read slot by slot; 1.005 notify pass calls vt+0x750; 1.005 OnTriggerEnter calls vt+0x738 then vt+0x728."
+  },
+  {
+   "constant": "character vtable: holder/controller getter",
+   "old": "vt+0x928",
+   "new": "vt+0x930",
+   "evidence": "1.005 door press and ladder climb poll call +0x930 where 1.004 calls +0x928."
+  }
+ ]
+}

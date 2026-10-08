@@ -55,6 +55,11 @@ struct CoreAsPlayerTwo
 };
 CoreAsPlayerTwo PlayerCoreAsPlayerTwo(const void* character, const void* member) noexcept;
 
+/// The game's `test(character)` (IsUCPC_Core) with the leader test's yes for player 2's ridden chocobo's input
+/// component held off, so the chocobo answers as player 1's ridden chocobo does (no). The member's type answer stays.
+/// For the vault's camera check (player_two/vault_camera). Game thread.
+std::uint8_t WithoutChocoboAnswer(std::uint8_t (*test)(const void* character), const void* character) noexcept;
+
 /// Runs `call(context)` inside the primary-controller scope and the member's leader answer (player_two/chocobo_ride
 /// runs the game's ride swap there). False, calling nothing, when the scope could not be held. Game thread.
 bool InPrimaryScope(const void* member, void (*call)(void* context), void* context) noexcept;

@@ -1,0 +1,413 @@
+{
+ "build": "1.005",
+ "research_build": "1.004",
+ "date": "2026-10-07",
+ "doc": "Rebirth/Documentation/research/RE-p2-chocobo-jump-camera.md",
+ "facts": [
+  {
+   "name": "FEndBehaviorVaultExtraAction__Begin_Vt98_InstallVaultCamSlot15",
+   "old": "0x1416E8E50",
+   "new": "0x1415B9E84",
+   "bytes": "48895C2410488974241855574156488DAC2400FDFFFFB800",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Action vt+0x98, called synchronously by PushAction from the control state's Enter (game thread). Gate !(+0x4A0&2), IsA EndCharacterBase, IsUCPC_Core(weak char +0x450); new FEndVaultCameraModule (0x440) into the PRIMARY PCM's slot 15; +0x4A0|=2; no module handle kept. 1.004 found as the caller of the vault module ctor that sits in vtable 0x145CCECF8 at +0x98."
+  },
+  {
+   "name": "FEndBehaviorVaultExtraAction__End_Vt120_DeactivatePrimarySlot15",
+   "old": "0x1416EA120",
+   "new": "0x1415BBD8C",
+   "bytes": "48895C241048896C241856574156B870000000E8????????",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Action vt+0x120, reached from Finish on the anim worker thread. If +0x4A0&2: PrimaryPCM_FieldOp_DeactivateModule(15). The entry is not hookable (1.004 first instruction mov rax,rsp is 3 bytes; the 1.005 first instruction crosses a 16-byte block): use the call site or the vtable entry."
+  },
+  {
+   "name": "EndBehaviorAction_Finish_CallsEndVt120",
+   "old": "0x1416E9604",
+   "new": "0x1415BAF4C",
+   "bytes": "48895C240857B820000000E8????????482BE0F681410400",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Shared by about 23 behavior-action classes. Calls this->vt+0x120(this, 1)."
+  },
+  {
+   "name": "EndBehaviorAction_VtA8_Thunk_Finish",
+   "old": "0x1416E95EC",
+   "new": "0x1415BAF34",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Vault action vt+0xA8: tail jump to Finish."
+  },
+  {
+   "name": "EndBehaviorAction_FinishDelegate_Invoke_VtA8",
+   "old": "0x1416E8DC4",
+   "new": "0x1415B9DFC",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Delegate object at action+0x488 (vtable written by the action ctor), target at +0x498; jmp [target vt+0xA8]."
+  },
+  {
+   "name": "EndBehaviorAction_Vt10_Thunk_Tick",
+   "old": "0x141859AA0",
+   "new": "0x14191EF24",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Vault action vt+0x10: tail jump to EndBehaviorAction_TickBase."
+  },
+  {
+   "name": "EndBehaviorAction_TickBase",
+   "old": "0x14141A95C",
+   "new": "0x1413E7D68",
+   "bytes": "48895C2408488974241057B820000000E8????????482BE0",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Advances the phase machine at action+0x408."
+  },
+  {
+   "name": "EndBehaviorPhaseMachine_Advance",
+   "old": "0x14141AD50",
+   "new": "0x1413E7ECC",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Its first call is FireFinished."
+  },
+  {
+   "name": "EndBehaviorPhaseMachine_FireFinished",
+   "old": "0x14141ADFC",
+   "new": "0x1413E7F78",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Clears bit 0 of +8 and calls [+0x10]->vt+8 (the finish delegate)."
+  },
+  {
+   "name": "EndBehaviorActionPlayer_TickActions",
+   "old": "0x140838F1C",
+   "new": "0x1408A5E6C",
+   "bytes": "48895C24185556574154415541564157488D6C24D9B8D000",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Calls each pushed action's vt+0x10 with the update context."
+  },
+  {
+   "name": "EndBehaviorActionPlayer_Update",
+   "old": "0x1409CF50C",
+   "new": "0x14196E81C",
+   "bytes": "48895C24205556574154415541564157488D6C24D9B8D000",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Owner +0x28 is the anim instance; calls TickActions."
+  },
+  {
+   "name": "FAnimNode_EndBehaviorAction__Update_AnyThread",
+   "old": "0x1408EF69C",
+   "new": "0x140B568E0",
+   "bytes": "48895C240848897424185557415441564157488D6C24C9B8",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "FAnimNode_Base slot 2 (SDK AnimNode_EndBehaviorAction, 0x28 bytes, Source FPoseLink at +0x10). Anim graph update: runs on the parallel anim worker."
+  },
+  {
+   "name": "vt_FAnimNode_EndBehaviorAction",
+   "old": "0x1457EC720",
+   "new": "0x14560E248",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "1.004 address from RE-p2-primary-readers-ida.md; slot 2 is Update_AnyThread in both builds."
+  },
+  {
+   "name": "vt_FAnimNode_EndBehaviorAction +0x10 (the Update_AnyThread entry)",
+   "old": "0x1457EC730",
+   "new": "0x14560E258",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "The 8-byte entry holds 0x1408EF69C / 0x140B568E0 (read from both exes)."
+  },
+  {
+   "name": "EndBehaviorActionPlayer_PushAction_CallsBeginVt98",
+   "old": "0x140F19CF4",
+   "new": "0x1407B0D38",
+   "bytes": "488BC4488958084889681048897018488978204154415641",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Calls the action's Begin (vt+0x98) on the caller's thread, then queues the action."
+  },
+  {
+   "name": "CharCtrlState_BehaviorAction__Enter_Vt18",
+   "old": "0x141293EF8",
+   "new": "0x1410612A0",
+   "bytes": "48895C24185556574154415541564157488D6C24D9B89000",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Generic behavior-action control state, used for states 10, 11, 12, 13, 14, 15, 17, 18, 21, 24 and the chocobo's 28, 29, 30. Found in 1.004 by its static string FEndCharacterControllerStateVault. The params' vt+0x48 makes the action; the Enter pushes it on the character's behavior-action player."
+  },
+  {
+   "name": "CharCtrlState_BehaviorAction__Ctor",
+   "old": "0x140F74EC0",
+   "new": "0x140B867A4",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "0xD0 bytes."
+  },
+  {
+   "name": "vt_CharCtrlState_BehaviorAction",
+   "old": "0x1457D0328",
+   "new": "0x1455FF0F0",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "+0x18 Enter."
+  },
+  {
+   "name": "CharCtrlHolder_SwitchControlState",
+   "old": "0x14110A684",
+   "new": "0x1412A5B1C",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Live frame 0x1412A5C31 is its call of the new state's vt+0x18."
+  },
+  {
+   "name": "CharCtrl_SwitchControlState_Thunk",
+   "old": "0x14110A60C",
+   "new": "0x1412A5AA4",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "SwitchControlState(*(this+8), type, params)."
+  },
+  {
+   "name": "CharCtrl_Vt50_SwitchToRequestedState",
+   "old": "0x1412903A8",
+   "new": "0x1415124E0",
+   "bytes": "48895C241048896C241856574156B820000000E8????????",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Called through vt+0x50 by RequestState (live frame 0x141512223, 'call rbx')."
+  },
+  {
+   "name": "CharCtrl_RequestState",
+   "old": "0x141291D98",
+   "new": "0x141511E94",
+   "bytes": "488BC4488958084889701848897820554154415541564157",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "About 80 callers in both builds; the params' vt+0x18 gives the state type."
+  },
+  {
+   "name": "CharCtrlParams_Vault_Ctor",
+   "old": "0x140A03F70",
+   "new": "0x14150FB88",
+   "bytes": "48895C2408488974241057B820000000E8????????482BE0",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Writes the Vault params vtable."
+  },
+  {
+   "name": "vt_CharCtrlParams_Vault",
+   "old": "0x145796FB0",
+   "new": "0x145679248",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "vt+0x18 returns 10 (EEndCharacterControllerStateType::Vault); vt+0x48 is CreateAction."
+  },
+  {
+   "name": "CharCtrlParams_Vault_CreateAction_Vt48",
+   "old": "0x140A04774",
+   "new": "0x141513870",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "FMemory_Malloc(0xF30) and the vault action ctor."
+  },
+  {
+   "name": "FEndBehaviorVaultExtraAction__Ctor",
+   "old": "0x140A04990",
+   "new": "0x1415142B8",
+   "bytes": "488BC4488958084889701048897818554154415541564157",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "0xF30 bytes = SDK FEndBehaviorVaultExtraAction."
+  },
+  {
+   "name": "vt_FEndBehaviorVaultExtraAction",
+   "old": "0x145CCECF8",
+   "new": "0x145B38E10",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "+0x10 tick thunk, +0x98 Begin, +0xA8 finish thunk, +0x120 End."
+  },
+  {
+   "name": "vt_FEndBehaviorVaultExtraAction +0x98 (the Begin entry)",
+   "old": "0x145CCED90",
+   "new": "0x145B38EA8",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Holds 0x1416E8E50 / 0x1415B9E84."
+  },
+  {
+   "name": "vt_FEndBehaviorVaultExtraAction +0x120 (the End entry)",
+   "old": "0x145CCEE18",
+   "new": "0x145B38F30",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Holds 0x1416EA120 / 0x1415BBD8C. The vtable-entry form of lever 2."
+  },
+  {
+   "name": "vt_FEndBehaviorVaultExtraAction +0x10 (the Tick entry)",
+   "old": "0x145CCED08",
+   "new": "0x145B38E20",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Holds 0x141859AA0 / 0x14191EF24."
+  },
+  {
+   "name": "PrimaryPCM_FieldOp_DeactivateModule",
+   "old": "0x1416E8868",
+   "new": "0x141591F0C",
+   "bytes": "4053B820000000E8????????482BE08AD9E8????????4885",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "void(u8 slot): GetEndPlayerCameraManager()+0x2CB0, then FEndModularCameraOperator__DeactivateModule. 26 callers in 1.005. Its entry is a 2-byte push rbx (not hookable)."
+  },
+  {
+   "name": "FEndModularCameraOperator__DeactivateModule_Vt18",
+   "old": "0x141203C20",
+   "new": "0x141434B50",
+   "bytes": "48895C240857B820000000E8????????482BE0488B81E006",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "(op, u8 slot): module = op+0x6E0[slot]; module->vt+0x18(). No type check. The game call lever 2 makes on PCM2's Field operator."
+  },
+  {
+   "name": "GetEndPlayerCameraManager",
+   "old": "0x140A60C50",
+   "new": "0x1407643E8",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Primary PC (PM+0x140), then its PCM."
+  },
+  {
+   "name": "FEndVaultCameraModule__Ctor",
+   "old": "0x1416E8AA0",
+   "new": "0x1419404D8",
+   "bytes": "4053B820000000E8????????482BE0488BD9E8????????48",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "FName DefaultVault; 0x440 bytes = SDK FEndVaultCameraModule. Found in 1.004 by the L\"DefaultVault\" string."
+  },
+  {
+   "name": "vt_FEndVaultCameraModule",
+   "old": "0x145854AB0",
+   "new": "0x1457A3E28",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "The module the live watch logged in PCM2's slot 15 at 18:26:36.314."
+  },
+  {
+   "name": "vt_FEndVaultCameraModule +0x18 (the Deactivate entry)",
+   "old": "0x145854AC8",
+   "new": "0x1457A3E40",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Holds 0x1418CA914 / 0x141956E3C. Log hook site (who ends a vault camera)."
+  },
+  {
+   "name": "FEndVaultCameraModule__Activate_Vt10",
+   "old": "0x14189CCC8",
+   "new": "0x141951300",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": ""
+  },
+  {
+   "name": "FEndVaultCameraModule__Deactivate_Vt18",
+   "old": "0x1418CA914",
+   "new": "0x141956E3C",
+   "bytes": "4053B820000000E8????????482BE0488BD9E8????????C6",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Base deactivate (blend out), then +0x438 = 0."
+  },
+  {
+   "name": "FEndVaultCameraModule__Compute_Vt20",
+   "old": "0x1416B2364",
+   "new": "0x1418AE1A4",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": ""
+  },
+  {
+   "name": "IsUCPC_Core",
+   "old": "0x14080701C",
+   "new": "0x1409B2AE8",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Known pair (RE-1005-offsets-B.md); listed for the call sites below."
+  },
+  {
+   "name": "PlayerMoveState__CanAcceptInput",
+   "old": "0x1407BDA04",
+   "new": "0x140895AA8",
+   "bytes": "48895C2408488974241057B820000000E8????????482BE0",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Found in 1.005 by the unique sequence mov sil,dl; mov rdi,rcx; call; test; jz; mov rcx,[rdi+8]; call IsUCPC_Core; test; jz."
+  },
+  {
+   "name": "call site: vault End -> PrimaryPCM_FieldOp_DeactivateModule",
+   "old": "0x1416EA304",
+   "new": "0x1415BBF4A",
+   "bytes": "E8BD5FFDFF",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "E8 rel32, 5 bytes, inside one 16-byte block in both builds (1.004 bytes E85FE5FFFF). rbx is the action at the call (mov rbx,rcx at entry; test byte [rbx+4A0h],2 just before). Lever 2 site."
+  },
+  {
+   "name": "call site: vault Begin -> IsUCPC_Core",
+   "old": "0x1416E8F52",
+   "new": "0x1415B9F86",
+   "bytes": "E85D8B3FFF",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "E8 rel32, inside one block in both builds (1.004 bytes E8C5E011FF). Lever 1b site."
+  },
+  {
+   "name": "call site: vault Begin -> PrimaryPCM_FieldOp_InstallModuleSlot15",
+   "old": "0x1416E92E7",
+   "new": "0x1415BA31B",
+   "bytes": "E8D8F0FDFF",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "E8 rel32, inside one block in both builds (1.004 bytes E87CF3FFFF). Return address 0x1415BA320 is live frame 2."
+  },
+  {
+   "name": "call site: CanAcceptInput -> IsUCPC_Core",
+   "old": "0x1407BDA33",
+   "new": "0x140895AD7",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "E8 rel32, inside one block in both builds. Lever 1a site (answer for the chocobo's component only here)."
+  }
+ ]
+}

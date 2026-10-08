@@ -1,0 +1,377 @@
+{
+ "build": "1.005",
+ "research_build": "1.004",
+ "date": "2026-10-07",
+ "doc": "Rebirth/Documentation/research/RE-p2-trigger-overlap.md",
+ "facts": [
+  {
+   "name": "FieldTick_StreamingThenLocationUpdate",
+   "old": "0x140A55FCC",
+   "new": "0x14093574C",
+   "bytes": "488BC4488958104889701848897820554154415541564157",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Also the player-trigger dispatch tick: it walks the pending TSet at registry+0x228, keyed by the owner's Tags[0]. The entry is mov rax,rsp (3 bytes), so it cannot take an EntryRedirect. Found in 1.005 as the only PlayerTrigger FName xref that also does PM+0x140 -> +0x610 -> lea +0x230."
+  },
+  {
+   "name": "FieldTick: cmp PlayerTrigger key (jz to the primary-only resolve)",
+   "old": "0x140A56108",
+   "new": "0x140935888",
+   "bytes": "48390529676E08",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "cmp cs:PlayerTrigger, rax (1.004 bytes 483905D1DD7808). For reference only, not a hook site."
+  },
+  {
+   "name": "call site: FieldTick PlayerTrigger -> FWeakObjectPtr::Get(PM+0x140)",
+   "old": "0x140A56428",
+   "new": "0x140935BB7",
+   "bytes": "E840EEEFFF",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "THE CAUSE: the PlayerTrigger key always resolves to the primary PC's trigger (+0x610 -> +0x230). The E8 rel32 sits inside one 16-byte block in both builds (1.004 bytes E86BF5EA00). Lever 1 CallRedirect site: return PC2 here on alternate frames."
+  },
+  {
+   "name": "call site: FieldTick -> TriggerTracker_DiffAndDispatchEnterLeave",
+   "old": "0x140A562B1",
+   "new": "0x140935A31",
+   "bytes": "E88A080000",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Arguments: rcx ctx, rdx tracker, r8 &overlaps (TArray, 24-byte elements), r9 &scratch keys, [rsp+20] &scratch map. The E8 rel32 sits inside one block in both builds (1.004 bytes E8F6CCFEFF). Logging site, Lever 1 scope site and Lever 2 site."
+  },
+  {
+   "name": "call site: FieldTick sweep path -> AsyncTrace_GetResultIfIssuedLastFrame",
+   "old": "0x14291FE74",
+   "new": "0x142538C0C",
+   "bytes": "E88FAA3FFE",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "In a cold chunk; rcx = tracker+0x378. 1.004 (E83378F6FD) sits inside one block. In 1.005 the call crosses a 16-byte block (0x142538C0C+5 = 0x142538C11), so it cannot take a CallRedirect."
+  },
+  {
+   "name": "TriggerTracker_DiffAndDispatchEnterLeave",
+   "old": "0x140A42FAC",
+   "new": "0x1409362C0",
+   "bytes": "4885D20F84D901000048895C24204C8944241848894C2408",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Sorted diff of the overlapped actors' Tags[0] against tracker+0x10. An enter goes to TriggerMgr_OnTrackerEnter_Filter and a leave to ..._Leave_Filter. It then rewrites +0x10, +0x120 and +0x230. The entry is test rdx,rdx (3 bytes): hook only the call sites. 1.005 callers: FieldTick 0x140935A31 and Unregister 0x141214B41. It calls the Leave filter 0x14117503C and the Enter filter 0x141174DEC."
+  },
+  {
+   "name": "TriggerTracker_IssueAsyncOverlap_AddPending",
+   "old": "0x140A51DDC",
+   "new": "0x1419860F8",
+   "bytes": "48895C24185556574154415541564157488DAC24B0FEFFFF",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Issues one tracker's async overlap or sweep (handle at +0x378). It then adds the owner's Tags[0] to the pending set (calls AddPending 0x1409361A0 twice, as 1.004 calls 0x1413E5E54). In 1.005 the first instruction is 5 bytes inside one block, so it can take an EntryRedirect. In 1.004 the first instruction crosses a block."
+  },
+  {
+   "name": "AEndPlayerTrigger__Tick_IssueTrackerOverlap",
+   "old": "0x140F67F6C",
+   "new": "0x1412149D4",
+   "bytes": "4053B820000000E8A071F500482BE0488BD9E89DF784FF48",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Super tick, then the CanTrack gate, then IssueAsyncOverlap(this+0x230, 0). The entry is push rbx (2 bytes), so it cannot take an EntryRedirect."
+  },
+  {
+   "name": "AEndPlayerTrigger vtable slot Tick (1.004 +0x468, 1.005 +0x470)",
+   "old": "0x1467D50F0",
+   "new": "0x146660640",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Slot address = vtable + offset: 1.004 vtable 0x1467D4C88 +0x468, 1.005 vtable 0x1466601D0 +0x470. The AActor/UObject virtuals moved +8 in 1.005 (GetWorld also moved, 0x160 -> 0x168)."
+  },
+  {
+   "name": "AEndPlayerTrigger vtable slot BeginPlay (1.004 +0x338, 1.005 +0x340)",
+   "old": "0x1467D4FC0",
+   "new": "0x146660510",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Holds AEndPlayerTrigger__BeginPlay_InitTracker."
+  },
+  {
+   "name": "AEndPlayerTrigger vtable",
+   "old": "0x1467D4C88",
+   "new": "0x1466601D0",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Written by the constructor."
+  },
+  {
+   "name": "call site: AEndPlayerTrigger tick -> IssueAsyncOverlap",
+   "old": "0x140F67F98",
+   "new": "0x141214A00",
+   "bytes": "E8F3167700",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "rcx = trigger+0x230, edx = 0. The E8 rel32 sits inside one block in both builds (1.004 E83F9EAEFF). Logging site: proves that P2's trigger issues every tick."
+  },
+  {
+   "name": "AEndPlayerTrigger_CanTrack_FieldModeAndAttached",
+   "old": "0x140F67FA4",
+   "new": "0x141214A0C",
+   "bytes": "4053B820000000E86871F500482BE0488BD9E88DC669FF84",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Field-mode check, and the root's attach parent != null."
+  },
+  {
+   "name": "TriggerRegistry_UnregisterTracker_FlushLeaves",
+   "old": "0x140F68000",
+   "new": "0x141214A68",
+   "bytes": "4885D20F849701000048895C2418555657488DAC24E0F7FF",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "(registry, tracker): removes the owner's key from the pending set, then diffs against an empty list (every leave fires)."
+  },
+  {
+   "name": "EndPlayerController_UnregisterTriggerTracker",
+   "old": "0x140F67F08",
+   "new": "0x141214970",
+   "bytes": "4053B820000000E80472F500482BE0488BD9488B89100600",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "(PC): PC+0x610 trigger -> FlushLeaves. The game's callers pass the primary PC."
+  },
+  {
+   "name": "TriggerRegistry_AddPendingTracker_ByOwnerTag0",
+   "old": "0x1413E5E54",
+   "new": "0x1409361A0",
+   "bytes": "4885D20F84DC00000048895C241855565741544155415641",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "(registry, owner actor): adds {Tags[0], name, name} to registry+0x228. Both PlayerTriggers produce the same key."
+  },
+  {
+   "name": "TriggerMgr_OnTrackerEnter_Filter",
+   "old": "0x1409DE760",
+   "new": "0x141174DEC",
+   "bytes": "48895C240848896C2410488974241857B830000000E87A6D",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "(mgr g_EndGameRoot+0x178, key, owner, weak) -> TriggerMgr_RouteEnter."
+  },
+  {
+   "name": "TriggerMgr_OnTrackerLeave_Filter",
+   "old": "0x1409DE524",
+   "new": "0x14117503C",
+   "bytes": "48895C240848896C2410488974241857B830000000E82A6B",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Leave counterpart -> TriggerMgr_RouteLeave."
+  },
+  {
+   "name": "TriggerMgr_RouteEnter",
+   "old": "0x1409DEE88",
+   "new": "0x141175308",
+   "bytes": "48895C241048894C2408555657488BECB830000000E85E68",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Calls the PlayerTrigger router 0x140D80B48 (1.005)."
+  },
+  {
+   "name": "TriggerMgr_RouteLeave",
+   "old": "0x1409DE41C",
+   "new": "0x141175798",
+   "bytes": "48895C241048894C2408555657488BECB830000000E8CE63",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Calls the leave router 0x140D803A8 (1.005)."
+  },
+  {
+   "name": "TriggerRouter_DispatchToActor_PlayerTriggerTag",
+   "old": "0x1409DCD00",
+   "new": "0x140D80B48",
+   "bytes": "48895C240848897424105557415441564157488BECB85000",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Calls the field-action actor's enter slot (1.005 vt+0x718). In 1.005 the first instruction is 5 bytes inside one block."
+  },
+  {
+   "name": "TriggerRouter_DispatchLeaveToActor_PlayerTriggerTag",
+   "old": "0x1409DB52C",
+   "new": "0x140D803A8",
+   "bytes": "48895C240848897424105557415441564157488BECB85000",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Calls the leave slot (1.005 vt+0x720). In 1.005 the first instruction is 5 bytes inside one block."
+  },
+  {
+   "name": "End2FieldActionActor vtable slot OnTriggerEnter (offset)",
+   "old": "0x710",
+   "new": "0x718",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "A vtable offset, not an address."
+  },
+  {
+   "name": "End2FieldActionActor vtable slot OnTriggerLeave (offset)",
+   "old": "0x718",
+   "new": "0x720",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "A vtable offset, not an address."
+  },
+  {
+   "name": "End2FieldActionActor_OnTriggerEnter (vt enter)",
+   "old": "0x1409DC534",
+   "new": "0x140D813D0",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Same row as in replaced-traversal.json; repeated here for completeness."
+  },
+  {
+   "name": "End2FieldActionActor_OnTriggerLeave (vt leave)",
+   "old": "0x1409DB844",
+   "new": "0x140D81588",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Same row as in replaced-chocobo-traversal.json."
+  },
+  {
+   "name": "AEndPlayerTrigger__BeginPlay_InitTracker",
+   "old": "0x143D33FA4",
+   "new": "0x143A9A04C",
+   "bytes": "4053B820000000E8281B6DFE482BE0488BD9E8D96105FD48",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "AActor::BeginPlay, then TriggerTracker_Init(this+0x230, capsule this+0x228, player=1). The old 1.004 IDA name AEndPlayerTrigger__PostInitializeComponents has been replaced."
+  },
+  {
+   "name": "TriggerTracker_Init_ShapeAndChannel",
+   "old": "0x141715BC8",
+   "new": "0x14177AE04",
+   "bytes": "48895C2408488974241057B820000000E8670D9F00482BE0",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Sets +8 weak shape and +0x340 channel (14 for a player, 23 otherwise), clears +0x375..+0x378, then calls the shape's bGenerateOverlapEvents setter with false [setter identity ASSUMPTION]."
+  },
+  {
+   "name": "TriggerTracker_Ctor",
+   "old": "0x1416A8E24",
+   "new": "0x141717550",
+   "bytes": "33D283C8FF890189410889510489510C8D42204889911001",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Same layout in 1.005 (+0x110 = data of the first inline array)."
+  },
+  {
+   "name": "AEndPlayerTrigger__Constructor",
+   "old": "0x143D324E0",
+   "new": "0x143A98818",
+   "bytes": "48895C2410488974241855574157488BECB860000000E84D",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Found through the StaticClass registration (class size 1456 = 0x5B0). Capsule at +0x228, tracker at +0x230."
+  },
+  {
+   "name": "AEndPlayerTrigger__StaticClass",
+   "old": "0x142B42940",
+   "new": "0x1427CB980",
+   "bytes": "B888000000E8F6019AFF482BE0488B05ECBE920633C94885",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Found through the UTF-16 string EndPlayerTrigger."
+  },
+  {
+   "name": "AEndPlayerController__EnsureEndPlayerTrigger",
+   "old": "0x143D0A4CC",
+   "new": "0x143A6F604",
+   "bytes": "48895C240857B850000000E86CC56FFE482BE033C0488BF9",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "The only StaticClass caller that writes PC+0x610."
+  },
+  {
+   "name": "AsyncTrace_GetResultIfIssuedLastFrame",
+   "old": "0x1408876AC",
+   "new": "0x1409336A0",
+   "bytes": "48895C2408488974241057B820000000E8CB848301482BE0",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "(FTraceHandle*, out datum): returns true only when the handle's frame == world frame - 1."
+  },
+  {
+   "name": "g_EndTriggerRegistryWeak (FWeakObjectPtr)",
+   "old": "0x1470C94C0",
+   "new": "0x146EFC6E0",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Weak pointer to the registry object: FieldTick's this, with the tag refcount map at +0x278 and the pending set at +0x228. The 1.005 address comes from matches.json and is used by 1.005 EndPlayerController_UnregisterTriggerTracker."
+  },
+  {
+   "name": "FName PlayerTrigger",
+   "old": "0x1491E3EE0",
+   "new": "0x14901BFB8",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Compared in the 1.005 FieldTick at 0x140935888."
+  },
+  {
+   "name": "PartyManager global (PM+0x140 primary PC)",
+   "old": "0x14939BCE0",
+   "new": "0x1491D8510",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read at 1.005 0x140935BA9, just before the primary-only resolve."
+  },
+  {
+   "name": "trace mode flag A (sweep path when set)",
+   "old": "0x1493BE6DA",
+   "new": "0x1491FAA71",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "The first flag FieldTick tests before reading the result."
+  },
+  {
+   "name": "trace mode flag B (sweep path when set)",
+   "old": "0x1493BE6D9",
+   "new": "0x1491FAA70",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "The second flag FieldTick tests."
+  },
+  {
+   "name": "async overlap buffer critical section",
+   "old": "0x1491DE5D8",
+   "new": "0x149016688",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Held while FieldTick reads the overlap datum directly."
+  },
+  {
+   "name": "call site: GlobalFieldTick -> FieldTick_StreamingThenLocationUpdate",
+   "old": "0x140C928DC",
+   "new": "0x140B35595",
+   "bytes": "E8B201E0FF",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "In 1.005 the E8 sits inside one block. In 1.004 (E8EB36DCFF) it crosses a block (0x140C928DC+5 = 0x140C928E1)."
+  },
+  {
+   "name": "EndCharacter trigger tracker offset (field, not address)",
+   "old": "0x9D0",
+   "new": "0x9F0",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "FieldTick resolves keys other than PlayerTrigger to EndCharacter+0x9D0 (1.004) / +0x9F0 (1.005: lea rsi,[r14+9F0h] at 0x1409358C6). The PlayerTrigger path does not use it."
+  }
+ ]
+}

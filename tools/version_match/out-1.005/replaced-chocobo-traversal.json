@@ -1,0 +1,337 @@
+{
+ "build": "1.005",
+ "research_build": "1.004",
+ "date": "2026-10-07",
+ "doc": "Rebirth/Documentation/research/RE-p2-chocobo-traversal.md",
+ "facts": [
+  {
+   "name": "EndCharacter_FieldActionActorNotifyPass_Vt748",
+   "old": "0x14125B3B0",
+   "new": "0x140E8ABE0",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Per-pawn pass over the pawn's own controller list PC+0x618 (called from the character actor tick). Unique 128-byte prologue+body pattern; size 0x348 in both builds. 1.005 calls actor vt+0x750 (update), vt+0x7D0 (skip test), vt+0x748 (try-begin): every slot is +8 against 1.004 (0x748/0x7C8/0x740). Candidate wrapper site for running player 2's chocobo pass inside player 2's scopes."
+  },
+  {
+   "name": "PC_FieldActionActorList618_AddUnique",
+   "old": "0x1413E5048",
+   "new": "0x140D7F2DC",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "void (AEndPlayerController* pc, AActor* fieldActionActor): adds a weak ref to pc+0x618 if absent. Explicit PC. Unique 128-byte pattern; tail-called by the register below."
+  },
+  {
+   "name": "PC_FieldActionActorList618_Remove",
+   "old": "0x1413E5FC8",
+   "new": "0x140D7F4D8",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "void (AEndPlayerController* pc, AActor* fieldActionActor): removes it from pc+0x618. Explicit PC. Unique 128-byte pattern."
+  },
+  {
+   "name": "FieldActionActor_RegisterWithCharacterPC618",
+   "old": "0x1413E4FF4",
+   "new": "0x140D7F288",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "(AEndCharacter* chr, AActor* actor): chr+0x260 if it is an EndPlayerController, else GetPrimaryEndPlayerController, then AddUnique. Prologue shared with the unregister; told apart by the tail call (AddUnique 0x140D7F2DC)."
+  },
+  {
+   "name": "FieldActionActor_UnregisterFromCharacterPC618",
+   "old": "0x1413E5F74",
+   "new": "0x140D7F484",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Same shape; tail call Remove 0x140D7F4D8."
+  },
+  {
+   "name": "End2FieldActionActor_OnTriggerEnter_Vt710_CallsVt720",
+   "old": "0x1409DC534",
+   "new": "0x140D813D0",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "PlayerTrigger begin dispatch. 1.005 sits at vtable slot +0x718 (1.004 +0x710) and calls vt+0x738 (1.004 vt+0x730) unconditionally, then the once-flag +0x2A1 and vt+0x728 (1.004 vt+0x720). Found by PlayerTrigger FName xrefs + the +0x2A1 == 0 test."
+  },
+  {
+   "name": "End2FieldActionActor_OnTriggerLeave_Vt718_CallsVt728",
+   "old": "0x1409DB844",
+   "new": "0x140D81588",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "PlayerTrigger end dispatch; 1.005 slot +0x720, calls vt+0x740 (1.004 vt+0x738)."
+  },
+  {
+   "name": "ChocoboClimbActor_OnTriggerBegin_RegisterLeader_Vt730",
+   "old": "0x143661748",
+   "new": "0x143396ED8",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Registers the climb actor on the party leader's PC (else the primary PC). 1.005 climb actor vtable 0x146585130 slot +0x738. Unique 128-byte pattern; calls ResolvePartyLeaderWeakPtr (1.005 0x1407649A8)."
+  },
+  {
+   "name": "ChocoboClimbActor_OnTriggerEnd_Unregister_Vt738",
+   "old": "0x143661AA8",
+   "new": "0x143397238",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "1.005 climb actor vtable slot +0x740."
+  },
+  {
+   "name": "ChocoboClimbActor_TryBegin_Vt740",
+   "old": "0x143665CE0",
+   "new": "0x14339B3F0",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "1.005 climb actor vtable slot +0x748; size 0x306 both builds; calls IsActiveRiddenVehicle (1.005 0x140945B1C) and CharCtrlHolder_GetResolvedStateByte68 (1.005 0x14085FCB0)."
+  },
+  {
+   "name": "ChocoboClimbActor_CreateExecuter_Vt7C0",
+   "old": "0x143654354",
+   "new": "0x143389B7C",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "1.005 climb actor vtable slot +0x7C8 (1.004 +0x7C0). Malloc(0x140) then the executer ctor 0x143383168 (1.005 passes actor and character). Executer state table 1.005 0x146585D80, row 1 enter 0x14338A56C."
+  },
+  {
+   "name": "ChocoboClimbExecuter_Setup_CamOnlyIfRiderIsLeader",
+   "old": "0x14366208C",
+   "new": "0x14339781C",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Found from the executer's row 1 enter (NOT by prologue: the prologue also matches 0x143B1AC04, which is wrong). Body: Malloc(0x6B0) climb extra action, ResolvePartyLeaderWeakPtr, then FEndChocoboCameraModule_RequestStartClimb_UpOrDown 0x143121E64 only if the rider is the leader."
+  },
+  {
+   "name": "FEndChocoboCameraModule_RequestStartClimb_UpOrDown",
+   "old": "0x1434094D0",
+   "new": "0x143121E64",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Unique 128-byte pattern; called by the 1.005 climb setup."
+  },
+  {
+   "name": "ChocoboJumpStandActor_TryLaunchGlide_Vt740",
+   "old": "0x1436663C0",
+   "new": "0x14339BAD0",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "1.005 jump stand vtable 0x1465834F0 slot +0x748; size 0x28A both builds. Begin/end registration 1.005 0x143396FE4 / 0x143397324 (slots +0x738/+0x740)."
+  },
+  {
+   "name": "CharCtrlHolder_SwitchControlState",
+   "old": "0x14110A684",
+   "new": "0x1412A5B1C",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Unique 64-byte pattern; called by BeginGlide 0x1431309A0."
+  },
+  {
+   "name": "CharCtrlHolder_GetResolvedStateByte68",
+   "old": "0x1409F0FBC",
+   "new": "0x14085FCB0",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Unique 128-byte pattern; 476 callers in 1.005; called by the 1.005 climb try-begin. Logging (26 glide, 27 jet, 8 field action e.g. climb)."
+  },
+  {
+   "name": "CharCtrlHolder_BeginChocoboGlide_State26",
+   "old": "0x143415F64",
+   "new": "0x1431309A0",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Unique 128-byte pattern, size 0x105 both; SwitchControlState(26)."
+  },
+  {
+   "name": "CharCtrlHolder_BeginChocoboJet_State27",
+   "old": "0x14341606C",
+   "new": "0x143130AA8",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Unique 128-byte pattern, size 0x54 both; SwitchControlState(27)."
+  },
+  {
+   "name": "ChocoboMoveState_PollGlide_FromUpdraft",
+   "old": "0x14344B510",
+   "new": "0x14316B6F0",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Unique 96-byte pattern; calls BeginGlide 0x1431309A0."
+  },
+  {
+   "name": "ChocoboMoveState_PollWaterJet_Button",
+   "old": "0x14344B5E8",
+   "new": "0x14316B7C8",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Unique 128-byte pattern; calls BeginJet 0x143130AA8."
+  },
+  {
+   "name": "CharCtrlStateChocoboGlide_OnEnter_Vt18 / _OnExit_Vt20 (vtable) [0]",
+   "old": "0x143427234",
+   "new": "0x143144484",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "(split 2026-10-07 from a combined row) Unique 128-byte patterns (sizes 0xADB / 0x3A0 both builds); the vtable is the data ref to the enter minus 0x18 (exit at +0x20)."
+  },
+  {
+   "name": "CharCtrlStateChocoboGlide_OnEnter_Vt18 / _OnExit_Vt20 (vtable) [1]",
+   "old": "0x14342810C",
+   "new": "0x143145364",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "(split 2026-10-07 from a combined row) Unique 128-byte patterns (sizes 0xADB / 0x3A0 both builds); the vtable is the data ref to the enter minus 0x18 (exit at +0x20)."
+  },
+  {
+   "name": "CharCtrlStateChocoboGlide_OnEnter_Vt18 / _OnExit_Vt20 (vtable) [2]",
+   "old": "0x1457953F0",
+   "new": "0x145647EC0",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "(split 2026-10-07 from a combined row) Unique 128-byte patterns (sizes 0xADB / 0x3A0 both builds); the vtable is the data ref to the enter minus 0x18 (exit at +0x20)."
+  },
+  {
+   "name": "CharCtrlStateChocoboJet_OnEnter_PushAirJetLayer_Vt18 / _OnExit_ClearLayer1_Vt20 (vtable) [0]",
+   "old": "0x143432B04",
+   "new": "0x143151B60",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "(split 2026-10-07 from a combined row) Enter references WorldChocoboAirJet in both builds; sizes 0x452 / 0x3B3 both builds; exit at vtable +0x20."
+  },
+  {
+   "name": "CharCtrlStateChocoboJet_OnEnter_PushAirJetLayer_Vt18 / _OnExit_ClearLayer1_Vt20 (vtable) [1]",
+   "old": "0x143433BE4",
+   "new": "0x143152C34",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "(split 2026-10-07 from a combined row) Enter references WorldChocoboAirJet in both builds; sizes 0x452 / 0x3B3 both builds; exit at vtable +0x20."
+  },
+  {
+   "name": "CharCtrlStateChocoboJet_OnEnter_PushAirJetLayer_Vt18 / _OnExit_ClearLayer1_Vt20 (vtable) [2]",
+   "old": "0x1457C5940",
+   "new": "0x145687600",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "(split 2026-10-07 from a combined row) Enter references WorldChocoboAirJet in both builds; sizes 0x452 / 0x3B3 both builds; exit at vtable +0x20."
+  },
+  {
+   "name": "ChocoboJetGauge_CreateWidget_RootOverlay",
+   "old": "0x143DC1434",
+   "new": "0x143B30A00",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "(split 2026-10-07 from a combined row) Create references the JetGauge FName in both builds and calls the projection. Logging only."
+  },
+  {
+   "name": "_ProjectWithFirstLocalPlayer",
+   "old": "0x143DB9EC0",
+   "new": "0x143B2955C",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "(split 2026-10-07 from a combined row) Create references the JetGauge FName in both builds and calls the projection. Logging only."
+  },
+  {
+   "name": "ChocoboCtrlHolder_Ctor_CreatesGlideJetStepDriftBrakeStates",
+   "old": "0x1409D9208",
+   "new": "0x1410DFEDC",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Unique 128-byte pattern; installs states 26-30 in both builds. Reference only."
+  },
+  {
+   "name": "vt_CharCtrlStateChocoboGlide +0x18 entry: OnEnter",
+   "old": "0x145795408",
+   "new": "0x145647ED8",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Added 2026-10-07 for traversal_watch (v0.62.0): the slot holds the function in both exes (read from the exes by _traversal_check.py)."
+  },
+  {
+   "name": "vt_CharCtrlStateChocoboGlide +0x20 entry: OnExit",
+   "old": "0x145795410",
+   "new": "0x145647EE0",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Added 2026-10-07 for traversal_watch (v0.62.0): the slot holds the function in both exes (read from the exes by _traversal_check.py)."
+  },
+  {
+   "name": "vt_CharCtrlStateChocoboJet +0x18 entry: OnEnter",
+   "old": "0x1457C5958",
+   "new": "0x145687618",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Added 2026-10-07 for traversal_watch (v0.62.0): the slot holds the function in both exes (read from the exes by _traversal_check.py)."
+  },
+  {
+   "name": "vt_CharCtrlStateChocoboJet +0x20 entry: OnExit",
+   "old": "0x1457C5960",
+   "new": "0x145687620",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Added 2026-10-07 for traversal_watch (v0.62.0): the slot holds the function in both exes (read from the exes by _traversal_check.py)."
+  },
+  {
+   "name": "vt_AEndFieldActionChocoboClimbActor",
+   "old": "0x1466F6F58",
+   "new": "0x146585130",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Found 2026-10-07 by the one 8-aligned pointer in the 1.005 exe to the translated try-begin, at the +8-shifted slot +0x748 (1.004 +0x740)."
+  },
+  {
+   "name": "vt_AEndFieldActionChocoboJumpStandActor",
+   "old": "0x1466F4DC8",
+   "new": "0x1465834F0",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Found 2026-10-07 by the one 8-aligned pointer in the 1.005 exe to the translated try-begin, at the +8-shifted slot +0x748 (1.004 +0x740)."
+  }
+ ],
+ "offset_changes": [
+  {
+   "constant": "AEndFieldActionStateManagedActor / ChocoboIconBase field-action virtuals",
+   "old": "0x710 enter, 0x718 leave, 0x720/0x728 state enter/leave, 0x730 register, 0x738 unregister, 0x740 try-begin, 0x748 update, 0x7C0 create executer, 0x7C8 skip test",
+   "new": "each +8: 0x718, 0x720, 0x728/0x730, 0x738, 0x740, 0x748, 0x750, 0x7C8, 0x7D0",
+   "evidence": "1.005 0x140D813D0 calls vt+0x738 and vt+0x728; climb vtable 0x146585130 holds the climb functions at +0x738/+0x740/+0x748/+0x7C8; 0x140E8ABE0 calls +0x750/+0x7D0/+0x748."
+  },
+  {
+   "constant": "control holder state types",
+   "old": "26 glide, 27 jet, 8 field action common",
+   "new": "unchanged",
+   "evidence": "1.005 holder ctor 0x1410DFEDC installs 26..30; BeginGlide/BeginJet pass 26/27."
+  }
+ ]
+}

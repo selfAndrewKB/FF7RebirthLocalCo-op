@@ -1,0 +1,44 @@
+{
+ "build": "1.005",
+ "research_build": "1.004",
+ "date": "2026-10-08",
+ "doc": "Rebirth/Documentation/research/RE-p2-trigger-overlap.md",
+ "facts": [
+  {
+   "name": "FMemory_Free",
+   "old": "0x14079F8D0",
+   "new": "0x141994540",
+   "bytes": "4885C90F84A003000057B850000000E82C767D00482BE04C",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "The call FieldTick makes right after the tracker dispatch to free its overlap array (1.004 0x140A56362 -> 0x14079F8D0, 1.005 0x140935B7B -> 0x141994540); the same prologue apart from the __chkstk displacement. Read by capstone from both exes (main session, 2026-10-08)."
+  },
+  {
+   "name": "FieldTick's scratch set clear",
+   "old": "0x1409B7DCC",
+   "new": "0x140A582B0",
+   "bytes": "488BC44889580848897010488978184C89702055488BECB8",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Called by FieldTick on its scratch set before each tracker when the set holds anything (1.004 0x140A5632C, 1.005 0x140935B44); identical first 24 bytes. The reset that follows (Num, FirstFree -1, NumFree, hash count) is the same in both builds."
+  },
+  {
+   "name": "call site: diff -> TriggerMgr_OnTrackerEnter_Filter",
+   "old": "0x140A43416",
+   "new": "0x1409369BD",
+   "bytes": "E82AE48300",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "rcx manager (g_EndGameRoot+0x178), rdx key, r8 owner (the trigger actor, from the tracker's +0 weak), r9 weak actor. 1.004 bytes E845B3F9FF at +0x6 of its block; 1.005 at +0xD, crossing into the next block (InstallFromOwnThread)."
+  },
+  {
+   "name": "call site: diff -> TriggerMgr_OnTrackerLeave_Filter",
+   "old": "0x140A4352D",
+   "new": "0x14093690B",
+   "bytes": "E82CE78300",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Same arguments as the enter filter. 1.004 bytes E8F2AFF9FF at +0xD (crosses); 1.005 at +0xB, inside one block."
+  }
+ ]
+}

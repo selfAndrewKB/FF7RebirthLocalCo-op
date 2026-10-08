@@ -311,6 +311,13 @@ unsigned TakeLeaderAnswers() noexcept
     return g_leaderAnswers.exchange(0, std::memory_order_relaxed);
 }
 
+std::uint8_t WithoutChocoboAnswer(std::uint8_t (*test)(const void* character), const void* character) noexcept
+{
+    // The same type, no component: the guard restores both, as every other answer scope does.
+    const LeaderAnswer leader(g_leaderType.load(std::memory_order_relaxed));
+    return test(character);
+}
+
 bool InPrimaryScope(const void* member, void (*call)(void* context), void* context) noexcept
 {
     const int type = MemberType(member);
