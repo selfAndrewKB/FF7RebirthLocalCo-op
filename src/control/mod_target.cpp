@@ -26,6 +26,9 @@
 #include "players/split_layout.h"
 #include "players/unreal_access.h"
 #include "renderer/me_feedback_once.h"
+#include "renderer/submission_census.h"
+#include "renderer/submit_hints.h"
+#include "renderer/view_family_submission.h"
 #include "views/player_view_point.h"
 #include "views/stream_views.h"
 
@@ -319,6 +322,40 @@ Outcome ModTarget::SetPlayerOneStreamFov(std::uint32_t degrees)
                                : std::format(L"player 1's camera {} degrees wide", degrees)};
 }
 
+Outcome ModTarget::SetFeedbackMask(std::uint32_t mask)
+{
+    if (!renderer::MeFeedbackOnceInstalled())
+    {
+        return Failed(L"the one-copy streaming feedback is not installed (see the install log)");
+    }
+    renderer::SetMeFeedbackMask(mask);
+    return {true, L"feedback mask set (see the log)"};
+}
+
+Outcome ModTarget::SetSubmitHints(bool skip)
+{
+    if (!renderer::SubmitHintSkipInstalled())
+    {
+        return Failed(L"the submit-hint skip is not installed (see the install log)");
+    }
+    renderer::SetSubmitHintSkip(skip);
+    return {true, skip ? std::wstring(L"parallel passes skip their submit hint") : std::wstring(L"the game's submit hints")};
+}
+
+Outcome ModTarget::SetCensus(bool on)
+{
+    if (!on)
+    {
+        renderer::RemoveSubmissionCensus();
+        return {true, L"submission census off"};
+    }
+    if (!renderer::InstallSubmissionCensus())
+    {
+        return Failed(L"the submission census could not install (see the log)");
+    }
+    return {true, L"submission census on (summary in the perf log)"};
+}
+
 Outcome ModTarget::SetStreamFeedbackOnce(bool playerOneOnly)
 {
     if (!renderer::MeFeedbackOnceInstalled())
@@ -328,6 +365,12 @@ Outcome ModTarget::SetStreamFeedbackOnce(bool playerOneOnly)
     renderer::SetMeFeedbackOnce(playerOneOnly);
     return {true, playerOneOnly ? L"player 1's family alone hands in streaming requests"
                                 : L"each family hands in streaming requests (the game's code as it runs per family)"};
+}
+
+Outcome ModTarget::SetFamilySplit(bool onePerView)
+{
+    renderer::SetFamilySplit(onePerView);
+    return {true, onePerView ? L"one view family per player" : L"both views in one family (diagnosis)"};
 }
 
 Outcome ModTarget::SetMinimapOnce(bool on)

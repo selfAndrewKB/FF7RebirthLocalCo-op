@@ -10,7 +10,8 @@ Two-player split-screen for FINAL FANTASY VII REBIRTH, as a UE4SS C++ mod.
 Press **Ctrl+F7** to add player 2 and **Ctrl+F8** to remove player 2. When a second local player
 exists, the engine splits the screen by itself. This mod makes the split correct: each player's
 view is rendered by the engine as its own view family, so the game's meshlet renderer never has
-two views in one pass. With one player, the mod changes nothing.
+two views in one pass. With one player, the mod changes nothing except the D3D12 residency manager
+(see Performance).
 
 Player 2 starts on their own camera and their own pad (sticks and movement), and the HUD is laid out
 in each half as it is in single player, with player 2's half showing player 2's HUD. None of this
@@ -26,6 +27,24 @@ needs a key.
 Control scripts (`tools/control.py`, with the development tools built in) switch the rest for
 diagnosis, e.g. `hud-band off`, `hud-image off`, `hud-levers off`, `leak-fixes 0`
 (`src/control/script.h` lists them all).
+
+## Performance
+
+Split screen renders the scene twice, so the mod trims engine work that a second view makes redundant. Each change
+was measured live and leaves the picture unchanged (`../Documentation/PLAN-P2-NATIVE-PLAY.md`, performance section).
+A file in the mod's folder keeps the game's behaviour:
+
+| Change | When | Keep the game's way |
+|--------|------|---------------------|
+| D3D12 residency manager off (one GPU wait per submission less) | whole session | `residency_on.txt` |
+| GPU frame-time gap recorder off (timing method 1 for dynamic resolution) | player 2 in | — |
+| Parallel passes without their own GPU submission | player 2 in | `submit_hints_on.txt` |
+| Player 2's duplicate scenery-streaming work skipped | player 2 in | `stream-feedback each` (control) |
+| D3D12 async compute (measured slower; off) | opt-in | `async_compute_on.txt` turns it on |
+
+`watch_only.txt` runs the game unmodified for comparisons. `perf_log.txt` turns the perf log on from launch, and
+`census.txt` (or `census on`) adds a count of every GPU submission per frame to it.
+
 ## How it is organised
 
 ```

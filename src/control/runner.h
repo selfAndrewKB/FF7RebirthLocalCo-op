@@ -61,7 +61,11 @@ public:
     virtual Outcome SetStreamViews(std::uint32_t mode)         = 0;  // 0 off, 1 p2, 2 both
     virtual Outcome SetPlayerOneStreamFov(std::uint32_t degrees) = 0;  // 0 auto
     virtual Outcome SetStreamFeedbackOnce(bool playerOneOnly)  = 0;
+    virtual Outcome SetSubmitHints(bool skip)                  = 0;
+    virtual Outcome SetCensus(bool on)                         = 0;
+    virtual Outcome SetFeedbackMask(std::uint32_t mask)        = 0;
     virtual Outcome SetMinimapOnce(bool on)                    = 0;
+    virtual Outcome SetFamilySplit(bool onePerView)            = 0;
     virtual Outcome SetFramingOffsets(std::int32_t topBottom, std::int32_t sideBySide) = 0;
     virtual Outcome SetShoulderScale(bool on)                  = 0;
     virtual Outcome SetShoulderScaleMinimum(float minimum)     = 0;

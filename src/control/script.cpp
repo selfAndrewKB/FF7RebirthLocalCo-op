@@ -406,7 +406,11 @@ ParsedLine ParseLine(std::wstring_view line)
     if (name == L"stream-views") return ParseStreamViews(words);
     if (name == L"stream-fov-p1") return ParseStreamFov(words);
     if (name == L"stream-feedback") return ParseSwitch(CommandKind::StreamFeedback, words, L"p1", L"each");
+    if (name == L"submit-hints") return ParseSwitch(CommandKind::SubmitHints, words, L"skip", L"stock");
+    if (name == L"census") return ParseSwitch(CommandKind::Census, words, L"on", L"off");
+    if (name == L"feedback-mask") return ParseMask(words, CommandKind::FeedbackMask, 31);
     if (name == L"minimap-once") return ParseSwitch(CommandKind::MinimapOnce, words, L"on", L"off");
+    if (name == L"family-split") return ParseSwitch(CommandKind::FamilySplit, words, L"on", L"off");
     if (name == L"framing-offset") return ParseFramingOffset(words);
     if (name == L"shoulder-scale") return ParseSwitch(CommandKind::ShoulderScale, words, L"on", L"off");
     if (name == L"shoulder-scale-min") return ParseShoulderMinimum(words);
@@ -458,7 +462,11 @@ std::wstring Describe(const Command& command)
         case CommandKind::StreamFovPlayerOne:
             return command.ticks == 0 ? std::wstring(L"stream-fov-p1 auto") : std::format(L"stream-fov-p1 {}", command.ticks);
         case CommandKind::StreamFeedback: return command.on ? L"stream-feedback p1" : L"stream-feedback each";
+        case CommandKind::SubmitHints: return command.on ? L"submit-hints skip" : L"submit-hints stock";
+        case CommandKind::Census: return command.on ? L"census on" : L"census off";
+        case CommandKind::FeedbackMask: return std::format(L"feedback-mask {}", command.ticks);
         case CommandKind::MinimapOnce: return command.on ? L"minimap-once on" : L"minimap-once off";
+        case CommandKind::FamilySplit: return command.on ? L"family-split on" : L"family-split off";
         case CommandKind::ShoulderScale: return command.on ? L"shoulder-scale on" : L"shoulder-scale off";
         case CommandKind::ShoulderScaleMin: return L"shoulder-scale-min " + AxisText(command.blend);
         case CommandKind::FramingOffset:

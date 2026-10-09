@@ -1,0 +1,116 @@
+{
+ "build": "1.005",
+ "research_build": "1.004",
+ "date": "2026-10-08",
+ "doc": "Rebirth/Documentation/research/RE-perf-submission-path.md",
+ "facts": [
+  {
+   "name": "GEnableResidencyManagement (byte)",
+   "old": "0x146FAA3B0",
+   "new": "0x146DDD290",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "The D3D12 residency gate, 01 in both files. The only writer is the device creation's `mov byte [gate],r14b` right after the D3D12.ResidencyManagement check (1.004 0x144924BA1, 1.005 0x1446B8BB9); found by the same byte pattern in both exes (main session, 2026-10-08)."
+  },
+  {
+   "name": "device creation: D3D12.ResidencyManagement check and gate store",
+   "old": "0x144924B9B",
+   "new": "0x1446B8BB3",
+   "bytes": "463934887507448835",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "`cmp [rax+r9*4],r14d; jne +7; mov byte [gate],r14b` in FD3D12Adapter_CreateRootDevice (1.005 0x1446B81F8); the pattern is unique in each exe; the cvar data pointers are 1.004 0x149249618 and 1.005 0x149081998."
+  },
+  {
+   "name": "g_D3D12_AllowAsyncCompute (int, r.D3D12.AllowAsyncCompute)",
+   "old": "0x1492EC9E4",
+   "new": "0x149125F64",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "0 in both files; read once in the D3D12 device initialisation's async-compute gate; found by the masked byte pattern of the whole gate (1.005 0x1446D6C30-0x1446D6C99), unique in 1.004 at 0x144940C4E (main session, 2026-10-08; RE-perf-me-shadows.md Phase 2)"
+  },
+  {
+   "name": "GSupportsEfficientAsyncCompute (bool)",
+   "old": "0x1491163C2",
+   "new": "0x148F49BB9",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "written once by the gate's `mov byte [flag],bl`; found by the masked byte pattern of the whole gate (1.005 0x1446D6C30-0x1446D6C99), unique in 1.004 at 0x144940C4E (main session, 2026-10-08; RE-perf-me-shadows.md Phase 2)"
+  },
+  {
+   "name": "async gate: setting read",
+   "old": "0x144940C81",
+   "new": "0x1446D6C63",
+   "bytes": "391D",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "`cmp dword [AllowAsyncCompute],ebx; je` after the parallel-RHI-execute test; found by the masked byte pattern of the whole gate (1.005 0x1446D6C30-0x1446D6C99), unique in 1.004 at 0x144940C4E (main session, 2026-10-08; RE-perf-me-shadows.md Phase 2)"
+  },
+  {
+   "name": "async gate: flag store",
+   "old": "0x144940CB1",
+   "new": "0x1446D6C93",
+   "bytes": "881D",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "`mov byte [GSupportsEfficientAsyncCompute],bl` after the vendor rule; found by the masked byte pattern of the whole gate (1.005 0x1446D6C30-0x1446D6C99), unique in 1.004 at 0x144940C4E (main session, 2026-10-08; RE-perf-me-shadows.md Phase 2)"
+  },
+  {
+   "name": "phase 8: sync call of ME_DispatchComputeRequestedMeshAndTextureMips",
+   "old": "0x140F10D4A",
+   "new": "0x140C8B5D4",
+   "bytes": "E8",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "MassiveEnvironment_RenderPass's per-chunk call (RE-perf-family-duplication.md 3.1); call rel32 inside one 16-byte block in both; the bool result marks entry+0x48 (test al,al after the join); checked by capstone (main session, 2026-10-08)"
+  },
+  {
+   "name": "ME_DispatchComputeRequestedMeshAndTextureMips",
+   "old": "0x140C9D2F0",
+   "new": "0x140CD1594",
+   "bytes": "40555356574154415541564157488DAC",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "callee of the phase 8 sync call; first 16 bytes equal in both builds; 1.005 takes one more byte stack argument ([rsp+28h])"
+  },
+  {
+   "name": "submit hint node: lea of the FRHICommandSubmitCommandsHint vtable (per parallel pass)",
+   "old": "0x14190784C",
+   "new": "0x141018B78",
+   "bytes": "488D05",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "lea rax,[vtable]; mov [rcx],rax in the parallel-pass dispatch; the mod adds 8 to the displacement's low byte (no carry in either build) so the node gets vtable+8, whose slot 0 is a `ret 0`. Option C (RE-perf-submission-path.md §6, live 2026-10-09: -0.14 ms/f); found by the byte pattern `4C 89 00 48 8D 05 rel32 48 89 01 44 39 05 rel32 76`, unique in each exe (main session, 2026-10-09)"
+  },
+  {
+   "name": "FRHICommandSubmitCommandsHint vtable",
+   "old": "0x146602920",
+   "new": "0x145AD4AB0",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "slot 0 = FRHICommandSubmitCommandsHint_Execute; slot at +8 = nullsub (c2 00 00). Option C (RE-perf-submission-path.md §6, live 2026-10-09: -0.14 ms/f); found by the byte pattern `4C 89 00 48 8D 05 rel32 48 89 01 44 39 05 rel32 76`, unique in each exe (main session, 2026-10-09)"
+  },
+  {
+   "name": "FRHICommandSubmitCommandsHint_Execute",
+   "old": "0x140D00988",
+   "new": "0x140AE3E90",
+   "bytes": "B828000000E8",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "the hint vtable's slot 0; the RHI command walker calls only slot 0. Option C (RE-perf-submission-path.md §6, live 2026-10-09: -0.14 ms/f); found by the byte pattern `4C 89 00 48 8D 05 rel32 48 89 01 44 39 05 rel32 76`, unique in each exe (main session, 2026-10-09)"
+  },
+  {
+   "name": "nullsub (ret 0) after the hint vtable",
+   "old": "0x14076B370",
+   "new": "0x140743B50",
+   "bytes": "C20000",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "slot 0 of hint vtable+8. Option C (RE-perf-submission-path.md §6, live 2026-10-09: -0.14 ms/f); found by the byte pattern `4C 89 00 48 8D 05 rel32 48 89 01 44 39 05 rel32 76`, unique in each exe (main session, 2026-10-09)"
+  }
+ ]
+}

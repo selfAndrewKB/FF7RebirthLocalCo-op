@@ -42,7 +42,11 @@ Outcome Run(Target& target, const Command& command)
         case CommandKind::StreamViews: return target.SetStreamViews(command.ticks);
         case CommandKind::StreamFovPlayerOne: return target.SetPlayerOneStreamFov(command.ticks);
         case CommandKind::StreamFeedback: return target.SetStreamFeedbackOnce(command.on);
+        case CommandKind::SubmitHints: return target.SetSubmitHints(command.on);
+        case CommandKind::Census: return target.SetCensus(command.on);
+        case CommandKind::FeedbackMask: return target.SetFeedbackMask(command.ticks);
         case CommandKind::MinimapOnce: return target.SetMinimapOnce(command.on);
+        case CommandKind::FamilySplit: return target.SetFamilySplit(command.on);
         case CommandKind::FramingOffset: return target.SetFramingOffsets(command.offsets[0], command.offsets[1]);
         case CommandKind::ShoulderScale: return target.SetShoulderScale(command.on);
         case CommandKind::ShoulderScaleMin: return target.SetShoulderScaleMinimum(command.blend);

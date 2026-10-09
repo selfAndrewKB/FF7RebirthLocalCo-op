@@ -17,6 +17,9 @@ namespace lss::renderer {
 /// Returns false, changing nothing, if the vtable entry does not hold the engine's function.
 bool InstallViewFamilySubmission(const platform::GameImage& image) noexcept;
 
+/// Diagnosis (family-split): true, one family per view (at start); false, the engine's one multi-view family.
+void SetFamilySplit(bool onePerView) noexcept;
+
 /// Puts the engine's own function back in the entry (at mod uninstall).
 void RemoveViewFamilySubmission() noexcept;
 

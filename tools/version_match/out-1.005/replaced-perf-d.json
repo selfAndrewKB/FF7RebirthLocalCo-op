@@ -1,0 +1,89 @@
+{
+ "build": "1.005",
+ "research_build": "1.004",
+ "date": "2026-10-08",
+ "doc": "Rebirth/Documentation/research/RE-perf-me-shadows.md",
+ "facts": [
+  {
+   "name": "ME_ChunkDraw_FullPipeline_cand (shadow-only cull chain per batch)",
+   "old": "0x140F0D5F8",
+   "new": "0x140C87B54",
+   "bytes": "48895C24185556574154415541564157",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Entry differs in the first save (1.004 mov [rsp+18h],rbx; 1.005 mov [rsp+20h],rbx: 48895C2420...). Only caller is ME_ShadowBatch_FullPipeline_Wrapper (1.005 0x140C78DDC). Option D sites below sit inside it (RE-perf-me-shadows.md Phase 3)."
+  },
+  {
+   "name": "option D stub site: jbe over the per-chunk pre-transition loop (WS region start)",
+   "old": "0x140F0DC3A",
+   "new": "0x140C882B7",
+   "bytes": "0F861C010000",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "`jbe` after `cmp dword [r14+18h],<zero reg>` (batch chunk count). 6 bytes, one aligned block in both builds (1.004 block 0x140F0DC30, 1.005 0x140C882B0): one instruction for CodeRedirect. Found by the masked pattern 418B5618 488D4D?? 03D2 4C89???? 4C89???? E8???????? 418B?? 4539??18 0F86???????? EB?? 83CBFF, unique in each exe (1.004 at 0x140F0DC1C: 418B5618 488D4D90 03D2 4C896590 4C896598 E8???????? 418BFC 45396618 0F86???????? EB?? 83CBFF; 1.005 at 0x140C88299: 418B5618 488D4D98 03D2 4C896D98 4C896DA0 E8???????? 418BFD 45396E18 0F86???????? EB?? 83CBFF; site at +30). Registers at the site: FViewInfo* in r13 (1.004) / r12 (1.005); batch r14; cmdlist rsi; zero register r12 (1.004) / r13 and edi (1.005); rax and flags dead. Family test: [[view]+0x74] = Family copy's bAdditionalViewFamily (= renderer+0x84) in both builds."
+  },
+  {
+   "name": "option D resume (normal path): jmp short after the jbe",
+   "old": "0x140F0DC40",
+   "new": "0x140C882BD",
+   "bytes": "EB03",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Falls into the pre-transition loop. Same pattern as the stub site (+36 from the match)."
+  },
+  {
+   "name": "option D: jbe target (count 0: record the empty pre-transition, then the WS runs)",
+   "old": "0x140F0DD5C",
+   "new": "0x140C883D9",
+   "bytes": "488B4590",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Decoded rel32 of the stub-site jbe in each exe (both +0x11C). 1.005 bytes 488B4598 (array at [rbp-68h]; 1.004 [rbp-70h])."
+  },
+  {
+   "name": "option D skip target: free the reserved transition array, release the two SRVs, continue at the batch-key &4 test",
+   "old": "0x140F0E345",
+   "new": "0x140C88A01",
+   "bytes": "488D4D90E8A21489FF",
+   "same_semantics": false,
+   "confidence": "CONFIRMED",
+   "note": "Different code shape, same role. 1.004: `lea rcx,[rbp-70h]; call 0x14079F7F0` (TArray dtor, unconditional), then releases [rbp+8]/[rbp-8]; code after needs r12=0 and r13=view (both already true at the stub site). 1.005: `test rbx,rbx; jz; mov rcx,rbx; call 0x141994540` (free) with rbx = array ptr, then 0x140C88A0E releases [rbp+70h]/[rbp-18h]; code after needs rdi=0, r12=view: the stub must load rbx=[rbp-68h] and zero edi. Patterns (unique): 1.004 at 0x140F0E31E 488B4590 488D5580 48894580 488BCE 8B4598 894588 C5F8104580 C5F97F4580 C5F877 E8???????? 488D4D90 E8???????? 488D4D08 E8???????? (site +39); 1.005 at 0x140C889DC 33FF 8B45A0 488D5580 894588 488BCE 48895D80 C5F8104580 C5F97F4580 C5F877 E8???????? 4885DB 74?? 488BCB E8???????? (site +37)."
+  },
+  {
+   "name": "WS run 0 shader fetch (WRITE_STREAMING_OVERWRITE=0, merge)",
+   "old": "0x140F0DD96",
+   "new": "0x140C88416",
+   "bytes": "E8355E5500",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "For per-call logging. 1.004 calls 0x141463BD0 with a 1-byte permutation (byte [rbp-40h]=0); 1.005 calls ME_GetWriteStreamingDataFromBatchedCS 0x142247230 with a 2-byte permutation (bit0 WRITE_STREAMING_OVERWRITE, bit1 SEPARATE_REQUESTED_STREAMING, both 0 here). Both calls inside one block (1.004 0x140F0DD90, 1.005 0x140C88410). Patterns: 1.004 at 0x140F0DD52 413B7E18 0F82???????? 488B4590 488D5580 48894580 488BCE 8B4598 894588 C5F8104580 C5F97F4580 C5F877 E8???????? 498B95E8B70000 4C8D45C0 488D4D80 448865C0 E8???????? (+68); 1.005 at 0x140C883CF 413B7E18 0F82???????? 488B4598 488D5580 48894580 488BCE 8B45A0 894588 C5F8104580 C5F97F4580 C5F877 E8???????? 498B942488B30000 4C8D4590 (+71). View ShaderMap offset 1.004 +0xB7E8, 1.005 +0xB388."
+  },
+  {
+   "name": "WS run 1 shader fetch (WRITE_STREAMING_OVERWRITE=1)",
+   "old": "0x140F0DFC3",
+   "new": "0x140C88664",
+   "bytes": "E8085C5500",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Same callee as run 0, permutation 1. In one block in both builds. Patterns: 1.004 at 0x140F0DFA9 4C8B6DE0 4533E4 498B95E8B70000 4C8D45C0 488D4D80 C645C001 E8???????? (+26); 1.005 at 0x140C88647 4C8B65D0 4533ED 498B942488B30000 4C8D4590 488D4D80 66C745900100 E8???????? 488B4580 (+29)."
+  },
+  {
+   "name": "r.DispatchArgumentsRearrangement storage (int, 1.005 only checked)",
+   "old": "",
+   "new": "0x146EEDE60",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Static 1, flags 0x60. 0 removes every RearrangeDispatchArguments step of the ME culling chains (shadow and main pass) and is a shader permutation bit; candidate low-cost A/B, see Phase 3 C.4. 1.004 address not looked up (find the name string's registrar)."
+  },
+  {
+   "name": "r.DispatchMeshArgumentsRearrangement storage (int, 1.005 only checked)",
+   "old": "",
+   "new": "0x146EEDE64",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Static 1, flags 0x60. Gates the mesh-dispatch rearrangement (the step before MainInShadowDepthBatched, and the base pass). 1.004 address not looked up."
+  }
+ ]
+}

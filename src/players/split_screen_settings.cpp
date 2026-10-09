@@ -23,23 +23,23 @@ SettingsChange SplitScreenSettings::Update(bool playerTwoIn) noexcept
 
 SettingsChange SplitScreenSettings::Apply() noexcept
 {
-    const auto current = console_.readInt(kResizeMethod);
+    const auto current = console_.readInt(name_);
     if (!current)
     {
         return {SettingsChange::Kind::ApplyFailed, 0};  // nothing ran
     }
-    if (*current == kGrowToLargestRequest)
+    if (*current == value_)
     {
-        // Already 2: nothing to set. A value still owed from a failed restore is kept.
+        // Already at the value: nothing to set. A value still owed from a failed restore is kept.
         return {SettingsChange::Kind::AlreadySet, *current};
     }
-    if (!Execute(kGrowToLargestRequest))
+    if (!Execute(value_))
     {
         return {SettingsChange::Kind::ApplyFailed, *current};  // the command never ran
     }
     restoreTo_ = *current;
-    const auto after = console_.readInt(kResizeMethod);
-    return after && *after == kGrowToLargestRequest ? SettingsChange{SettingsChange::Kind::Applied, *current}
+    const auto after = console_.readInt(name_);
+    return after && *after == value_ ? SettingsChange{SettingsChange::Kind::Applied, *current}
                                                     : SettingsChange{SettingsChange::Kind::ApplyFailed, *current};
 }
 
@@ -51,7 +51,7 @@ SettingsChange SplitScreenSettings::Restore() noexcept
     }
     const std::int32_t previous = *restoreTo_;
 
-    const auto current = console_.readInt(kResizeMethod);
+    const auto current = console_.readInt(name_);
     if (!current)
     {
         return {SettingsChange::Kind::RestoreFailed, previous};  // unknown: kept, retried next leave
@@ -61,7 +61,7 @@ SettingsChange SplitScreenSettings::Restore() noexcept
         restoreTo_.reset();  // our command did not take, or it was already put back
         return {};
     }
-    if (*current != kGrowToLargestRequest)
+    if (*current != value_)
     {
         restoreTo_.reset();  // someone chose another value after us
         return {SettingsChange::Kind::LeftAlone, *current};
@@ -70,7 +70,7 @@ SettingsChange SplitScreenSettings::Restore() noexcept
     {
         return {SettingsChange::Kind::RestoreFailed, previous};
     }
-    const auto after = console_.readInt(kResizeMethod);
+    const auto after = console_.readInt(name_);
     if (!after || *after != previous)
     {
         return {SettingsChange::Kind::RestoreFailed, previous};  // kept: the next leave checks again
@@ -82,7 +82,7 @@ SettingsChange SplitScreenSettings::Restore() noexcept
 bool SplitScreenSettings::Execute(std::int32_t value) noexcept
 {
     wchar_t command[96]{};
-    if (std::swprintf(command, std::size(command), L"%ls %d", kResizeMethod, value) < 0)
+    if (std::swprintf(command, std::size(command), L"%ls %d", name_, value) < 0)
     {
         return false;
     }

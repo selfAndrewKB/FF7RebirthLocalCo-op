@@ -51,6 +51,18 @@
 //   stream-feedback p1|each              which view families hand the game's scenery streaming their detail
 //                                         requests: player 1's only, as with one player (p1, at start), or
 //                                         each family (renderer/me_feedback_once.h)
+//   submit-hints skip|stock              parallel passes without their own GPU submission (skip), or the game's
+//                                         (renderer/submit_hints.h); skip while player 2 is in, set again at the
+//                                         next join or leave
+//   census on|off                        diagnosis: the GPU submission census in the perf log's window
+//                                         (renderer/submission_census.h); off at start (census.txt: on)
+//   feedback-mask <0..31>                diagnosis: which of player 2's skips under stream-feedback p1 act (1 the
+//                                         readback processing, 2 the main pass's copy, 4 the hidden-component
+//                                         pass, 8 the phase 8 mip-request dispatches, 16 the shadow pass's
+//                                         streaming writes); all at start
+//   family-split on|off                  diagnosis: one view family per player (on, at start), or both views in
+//                                         the engine's one family (off; breaks the multi-view rules, so only
+//                                         with own-camera off; renderer/view_family_submission.h)
 //   minimap-once on|off                  the minimap's map is rendered once per frame, by player 1's HUD
 //                                         pass (on, at start), or again in player 2's (hud/minimap_once.h)
 //   shoulder-scale on|off                 each half's camera shoulder offset scaled to its width (on at start;
@@ -125,7 +137,11 @@ enum class CommandKind
     StreamViews,
     StreamFovPlayerOne,
     StreamFeedback,
+    SubmitHints,
+    Census,
+    FeedbackMask,
     MinimapOnce,
+    FamilySplit,
     FramingOffset,
     ShoulderScale,
     ShoulderScaleMin,

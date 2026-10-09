@@ -37,11 +37,12 @@ struct FakeConsole
     bool         executeWorks  = true;
     bool         executeIgnored = false;  // the command "runs" but changes nothing
     int          commands      = 0;
+    std::wstring name          = SplitScreenSettings::kResizeMethod;  // the one variable it holds
 } g_console;
 
 std::optional<std::int32_t> ReadInt(const wchar_t* variable) noexcept
 {
-    if (!g_console.readWorks || std::wcscmp(variable, SplitScreenSettings::kResizeMethod) != 0)
+    if (!g_console.readWorks || variable != g_console.name)
     {
         return std::nullopt;
     }
@@ -55,7 +56,7 @@ bool Execute(const wchar_t* command) noexcept
     {
         return false;
     }
-    const std::wstring prefix = std::wstring(SplitScreenSettings::kResizeMethod) + L" ";
+    const std::wstring prefix = g_console.name + L" ";
     const std::wstring text   = command;
     if (!g_console.executeIgnored && text.rfind(prefix, 0) == 0)
     {
@@ -233,8 +234,26 @@ void TestRejoinAppliesAgain()
 
 }  // namespace
 
+void TestAnySetting()
+{
+    std::puts("any integer setting: the gap recorder held at 0 while player 2 is in");
+    g_console       = FakeConsole{};
+    g_console.name  = SplitScreenSettings::kGapRecorder;
+    g_console.value = 1;
+    SplitScreenSettings gap(ConsoleAccess{&ReadInt, &Execute}, SplitScreenSettings::kGapRecorder,
+                            SplitScreenSettings::kGapRecorderOff);
+    const auto joined = gap.Update(true);
+    EXPECT(joined.kind == Kind::Applied && joined.value == 1);
+    EXPECT(g_console.value == 0);
+    const auto left = gap.Update(false);
+    EXPECT(left.kind == Kind::Restored && left.value == 1);
+    EXPECT(g_console.value == 1);
+    EXPECT(g_console.commands == 2);
+}
+
 int main()
 {
+    TestAnySetting();
     TestJoinSetsAndLeaveRestores();
     TestAlreadySetIsNotRestored();
     TestSomeoneElsesChoiceIsKept();

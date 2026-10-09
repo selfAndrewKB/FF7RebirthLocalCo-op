@@ -4,6 +4,8 @@
 #include "platform/frame_watch.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/thread_times.h"
+#include "renderer/submission_census.h"
 #include "platform/vtable_entry.h"
 #include "renderer/family_boundary.h"
 #include "renderer/one_family_per_view.h"
@@ -16,6 +18,7 @@
 #include <intrin.h>
 
 #include <algorithm>
+#include <atomic>
 #include <array>
 #include <cstdint>
 #include <cstring>
@@ -182,9 +185,12 @@ void RecordFrameTime(std::int32_t viewCount) noexcept
         platform::Log(L"frame time {:.2f} ms average over {} frames, {} view(s)",
                       1000.0 * windowSeconds / g_framesInWindow, g_framesInWindow, viewCount);
         ReportSubmissionTimes();
+        LogSubmissionCensus();
+        platform::thread_times::EndWindow(g_framesInWindow, true);
     }
     else
     {
+        platform::thread_times::EndWindow(g_framesInWindow, false);
         std::fill(std::begin(g_submitTicks), std::end(g_submitTicks), 0);
         std::fill(std::begin(g_submitCalls), std::end(g_submitCalls), 0u);
     }
@@ -195,6 +201,12 @@ void RecordFrameTime(std::int32_t viewCount) noexcept
 // ---------------------------------------------------------------------------------------------
 // The vtable replacement
 // ---------------------------------------------------------------------------------------------
+
+// Diagnosis only (family-split off): the game viewport's family goes to the engine as it is, both views in one family,
+// to measure what one family per view costs. The renderer then breaks the three multi-view rules
+// (SPLITSCREEN-REBUILD-PHILOSOPHY.md §3): the bottom view's ME is wrong and, with the cameras apart, the GPU can crash
+// (A04B). Use with own-camera off.
+std::atomic<bool> g_familySplit{true};
 
 /// Same signature as FRendererModule::BeginRenderingViewFamily. Must not be inlined: the return
 /// address it reads is its caller's.
@@ -210,6 +222,11 @@ __declspec(noinline) void SubmitViewFamily(void* rendererModule, void* canvas, s
     LogFamilyOnChange(viewFamily);
     RecordFrameTime(g_loggedViewCount);
     g_familyInFrame = 0;
+    if (!g_familySplit.load(std::memory_order_relaxed))
+    {
+        TimedEngineSubmit(rendererModule, canvas, viewFamily);  // diagnosis: every view in the engine's one family
+        return;
+    }
     // Between two families: the game's end-of-frame state reset, in stream order (family_boundary.h).
     SubmitOneFamilyPerView(rendererModule, canvas, viewFamily, &TimedEngineSubmit, &QueueFamilyBoundary);
 }
@@ -230,6 +247,13 @@ bool InstallViewFamilySubmission(const platform::GameImage& image) noexcept
     g_engineSubmit = reinterpret_cast<SubmitViewFamilyFn>(*engineFn);
     g_drawReturn   = *drawReturn;
     return g_entry.Replace(*entry, *engineFn, reinterpret_cast<std::uintptr_t>(&SubmitViewFamily));
+}
+
+void SetFamilySplit(bool onePerView) noexcept
+{
+    g_familySplit.store(onePerView, std::memory_order_relaxed);
+    platform::Log(L"view families: {}", onePerView ? L"one family per view"
+                                                  : L"DIAGNOSIS: every view in one family (the engine's own multi-view render)");
 }
 
 void RemoveViewFamilySubmission() noexcept

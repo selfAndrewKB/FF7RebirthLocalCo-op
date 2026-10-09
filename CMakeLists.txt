@@ -56,6 +56,7 @@ add_library(LocalSplitScreen SHARED
     src/platform/image.cpp
     src/platform/log.cpp
     src/platform/memory_watch.cpp
+    src/platform/thread_times.cpp
     src/platform/binned_pools.cpp
     src/platform/build_translation.cpp
     src/platform/pool_bits.cpp
@@ -151,6 +152,11 @@ add_library(LocalSplitScreen SHARED
     src/renderer/additional_family_output.cpp
     src/renderer/family_boundary.cpp
     src/renderer/me_feedback_once.cpp
+    src/renderer/submit_hints.cpp
+    src/renderer/submission_census.cpp
+    src/renderer/async_compute.cpp
+    src/renderer/before_device.cpp
+    src/renderer/residency_off.cpp
     src/renderer/one_family_per_view.cpp
     src/renderer/view_family_submission.cpp
 

@@ -17,6 +17,7 @@ CHECK_BYTES = 128
 
 # Research addresses whose 1.005 code differs in meaning but which the mod handles with build-specific code.
 ADAPTED = {
+    0x140F0E345: "shadow streaming-write skip target: 1.005 frees the array through rbx (me_shadow_feedback_code.h has per-build code)",
     0x14111A301: "load-action sequence: the 1.005 redirect reads the family through [r14] (output_load_action_code.h)",
     0x14111A377: "load-action store: 6-byte mov [rbp+0E0h],al; the 1.005 store bytes and code are separate arrays",
 }

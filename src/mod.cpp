@@ -75,8 +75,12 @@
 #include "players/tracked_object.h"
 #include "players/unreal_access.h"
 #include "renderer/additional_family_output.h"
+#include "renderer/async_compute.h"
 #include "renderer/family_boundary.h"
 #include "renderer/me_feedback_once.h"
+#include "renderer/submission_census.h"
+#include "renderer/submit_hints.h"
+#include "renderer/residency_off.h"
 #include "renderer/view_family_submission.h"
 #include "views/player_view_point.h"
 #include "views/stream_views.h"
@@ -101,7 +105,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.62.0";
+constexpr const wchar_t* kVersion = L"0.63.0";
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -167,9 +171,12 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.62.0");
+        ModVersion     = STR("0.63.0");
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
+        // Before the engine creates its D3D12 device, which reads both settings once.
+        lss::renderer::ApplyResidencyOff();
+        lss::renderer::ApplyAsyncComputeOn();
     }
 
     ~LocalSplitScreenMod() override
@@ -225,6 +232,8 @@ public:
         lss::hud::RemoveLayoutScale();
         lss::hud::RemoveOverlayLayout();
         lss::renderer::RemoveMeFeedbackOnce();
+        lss::renderer::RemoveSubmitHintSkip();
+        lss::renderer::RemoveSubmissionCensus();
         if (rendererInstalled_)
         {
             lss::renderer::RemoveViewFamilySubmission();
@@ -257,11 +266,20 @@ public:
         // Recognises the game build (and so every PerBuild value) before any thread of ours can read one; the later
         // Locate calls find the same build.
         static_cast<void>(lss::platform::GameImage::Locate());
+        lss::renderer::ReportResidency();
+        lss::renderer::ReportAsyncCompute();
         lss::platform::memory_watch::Start();  // its own thread, from launch to exit
 
         // A measuring control: with `watch_only.txt` in the mod's folder, nothing is installed but the
         // frame-hitch watch, so the game's own frame times can be compared with the mod's.
         std::error_code missing;
+        // `perf_log.txt` turns the perf log on from launch (the frame-time and per-thread CPU lines every 10 s), for
+        // machines without the control scripts.
+        if (std::filesystem::exists(lss::platform::ModFolder() / L"perf_log.txt", missing))
+        {
+            lss::platform::frame_watch::SetDetailed(true);
+            Log(L"perf log on (perf_log.txt)");
+        }
         if (std::filesystem::exists(lss::platform::ModFolder() / L"watch_only.txt", missing))
         {
             Log(L"watch only (watch_only.txt): nothing installed except the frame-hitch watch; the game runs unmodified");
@@ -303,6 +321,8 @@ public:
         }
         session_.emplace(*removeLocalPlayer);
         session_->InstallStages(*image);
+        lss::renderer::InstallSubmitHintSkip();  // parallel passes without their own GPU submission (player 2 in)
+        lss::renderer::InstallSubmissionCensusIfAsked();  // diagnosis: census.txt
         lss::renderer::InstallMeFeedbackOnce(*image);  // one scenery-streaming hand-in per frame, player 1's family's
 
         // The view-point entry serves the filled halves and the choice of player 2's camera. The
@@ -539,7 +559,23 @@ private:
             lss::player_two::main_camera_shape::Update(lss::player_two::generation::Active() && splitShown &&
                                                        lss::views::FillsHalves());
         }
-        LogSettingsChange(settings_.Update(playerTwoIn));
+        LogSettingsChange(settings_, settings_.Update(playerTwoIn));
+        // The timing method before the gap recorder goes off, and back after it returns.
+        if (playerTwoIn)
+        {
+            LogSettingsChange(timingSettings_, timingSettings_.Update(true));
+            LogSettingsChange(gapSettings_, gapSettings_.Update(true));
+        }
+        else
+        {
+            LogSettingsChange(gapSettings_, gapSettings_.Update(false));
+            LogSettingsChange(timingSettings_, timingSettings_.Update(false));
+        }
+        if (playerTwoIn != submitHintsSkipped_)
+        {
+            submitHintsSkipped_ = playerTwoIn;
+            lss::renderer::SetSubmitHintSkip(playerTwoIn);
+        }
         LogLayoutChange(layout_.Update(playerTwoIn));
         UpdateHalfShape(splitShown);
         lss::hud::SetSplitActive(splitShown);
@@ -761,17 +797,19 @@ private:
         }
     }
 
-    static void LogSettingsChange(const lss::players::SettingsChange& change) noexcept
+    static void LogSettingsChange(const lss::players::SplitScreenSettings& setting,
+                                  const lss::players::SettingsChange& change) noexcept
     {
         using Kind = lss::players::SettingsChange::Kind;
-        constexpr auto name = lss::players::SplitScreenSettings::kResizeMethod;
+        const wchar_t*     name  = setting.Name();
+        const std::int32_t value = setting.Value();
         switch (change.kind)
         {
             case Kind::None: break;
-            case Kind::Applied: Log(L"split screen: {} {} -> 2 while player 2 is in", name, change.value); break;
-            case Kind::AlreadySet: Log(L"split screen: {} is already 2; left as it is", name); break;
+            case Kind::Applied: Log(L"split screen: {} {} -> {} while player 2 is in", name, change.value, value); break;
+            case Kind::AlreadySet: Log(L"split screen: {} is already {}; left as it is", name, value); break;
             case Kind::ApplyFailed:
-                Log(L"split screen: could not set {} to 2; rendering stays correct but slow", name);
+                Log(L"split screen: could not set {} to {}; rendering stays correct but slower", name, value);
                 break;
             case Kind::Restored: Log(L"player 2 is out: {} restored to {}", name, change.value); break;
             case Kind::LeftAlone:
@@ -786,6 +824,13 @@ private:
     ULONGLONG                                 nextStatus_ = 0;
     lss::players::SplitScreenSettings         settings_{
         {&lss::players::unreal::ConsoleVariableInt, &lss::players::unreal::ExecuteConsoleCommand}};
+    lss::players::SplitScreenSettings         timingSettings_{
+        {&lss::players::unreal::ConsoleVariableInt, &lss::players::unreal::ExecuteConsoleCommand},
+        lss::players::SplitScreenSettings::kTimingMethod, lss::players::SplitScreenSettings::kTimestampQueries};
+    bool                                      submitHintsSkipped_ = false;  // the join/leave switch's last state
+    lss::players::SplitScreenSettings         gapSettings_{
+        {&lss::players::unreal::ConsoleVariableInt, &lss::players::unreal::ExecuteConsoleCommand},
+        lss::players::SplitScreenSettings::kGapRecorder, lss::players::SplitScreenSettings::kGapRecorderOff};
     lss::players::SplitLayout                 layout_{{&lss::players::unreal::ReadTwoPlayerSplitscreenLayout,
                                                        &lss::players::unreal::WriteTwoPlayerSplitscreenLayout}};
     lss::players::SingleView                  singleView_{{&ReadSplitSwitch, &WriteSplitSwitch}};

@@ -2,15 +2,19 @@
 
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
+#include "platform/code_redirect.h"
 #include "platform/entry_redirect.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/vtable_entry.h"
+#include "renderer/me_shadow_feedback_code.h"
 
+#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <format>
+#include <iterator>
 #include <span>
 #include <string>
 
@@ -58,6 +62,25 @@ constexpr std::size_t    kHiddenFirst   = 5;
 constexpr std::uintptr_t kCopyCall   = 0x14157B30C;  // ME_RenderChunkDispatch_ViewLoop's call of the copy
 constexpr std::uintptr_t kHiddenCall = 0x140FDD6EE;  // Render_Main's call of the hidden pass
 
+// Phase 8 of MassiveEnvironment_RenderPass (RE-perf-family-duplication.md §3.1): its sync call of
+// ME_DispatchComputeRequestedMeshAndTextureMips(command list, ?, group, chunk, byte stack arguments), once per loaded
+// chunk: the slave frustums' mip requests, whose marks (entry+0x48, set from the returned bool) only the main pass's
+// copy reads. The call lies inside one 16-byte block in both builds (1.005 0x140C8B5D4 -> 0x140CD1594). The async
+// variant's call (only with async compute and r.MassiveEnvironment.UsingAsyncComputeForMainPass) is not covered.
+constexpr std::uintptr_t kMipRequestsCall    = 0x140F10D4A;
+constexpr std::uintptr_t kMipRequests        = 0x140C9D2F0;
+constexpr std::uint8_t   kMipRequestsBytes[] = {0x40, 0x55, 0x53, 0x56, 0x57, 0x41, 0x54, 0x41,
+                                                0x55, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8D, 0xAC};
+
+// Option D of RE-perf-me-shadows.md (Phase 3): the shadow pass's streaming-feedback writes, skipped in player 2's family
+// by machine code at one instruction of ME_ChunkDraw_FullPipeline_cand (renderer/me_shadow_feedback_code.h). Research
+// build; 1.005 0x140C882B7 (site), 0x140C882BD, 0x140C883D9 and 0x140C88A01.
+constexpr std::uintptr_t kShadowSite   = 0x140F0DC3A;  // jbe over the pre-transition loop (count 0)
+constexpr std::uintptr_t kShadowResume = 0x140F0DC40;  // the instruction after it
+constexpr std::uintptr_t kShadowEmpty  = 0x140F0DD5C;  // the jbe's target
+constexpr std::uintptr_t kShadowSkip   = 0x140F0E345;  // the transition array's free, past the region
+constexpr std::uint32_t  kShadowMaskBit = 16;           // feedback-mask
+
 constexpr std::uint32_t kRendererAdditionalFamily = 0x84;  // the family copy's bAdditionalViewFamily (+0x74)
 
 // The budget state, for the log: IStreamingManager's static (FStreamingManagerCollection*), its ME
@@ -74,6 +97,9 @@ using RenderFn  = void (*)(void* renderer, void* commandList, void* a3, void* a4
 using ProcessFn = void (*)(void* group);
 using CopyFn    = void (*)(void* builder, void* scene);
 using HiddenFn  = void (*)(void* renderer, void* commandList, const void* views);
+// The stack arguments are bytes (one on the research build, two on 1.005); whole slots are passed on.
+using MipRequestsFn = bool (*)(void* commandList, void* a2, void* group, std::uint64_t chunk, std::uint64_t s1,
+                               std::uint64_t s2, std::uint64_t s3);
 
 platform::VTableEntry   g_render;
 platform::CallRedirect  g_processCall;
@@ -81,10 +107,15 @@ platform::EntryRedirect g_copyEntry;
 platform::EntryRedirect g_hiddenEntry;
 platform::CallRedirect  g_copyCall;    // 1.005, in place of g_copyEntry
 platform::CallRedirect  g_hiddenCall;  // 1.005, in place of g_hiddenEntry
+platform::CallRedirect  g_mipRequestsCall;
+platform::CodeRedirect  g_shadowCode;
+ShadowFeedbackFields    g_shadowFields;
+std::uint64_t           g_shadowLogged[3] = {};  // skipped, passedOne, passedTwo at the last log
 std::atomic<bool>       g_renderThreadPending{false};  // 1.005: the process and copy calls wait for the render thread
 std::uintptr_t          g_processSite = 0, g_processTarget = 0, g_copySite = 0, g_copyTarget = 0;  // set before it
 std::atomic<bool>       g_installed{false};
 std::atomic<bool>       g_on{false};
+std::atomic<std::uint32_t> g_mask{0x1F};  // which skips act (feedback-mask): bit (stage - 1) for each Stage below
 std::uintptr_t          g_managers = 0;  // live address of the static
 
 enum Family : int
@@ -101,7 +132,8 @@ enum Stage : int
     Processes = 1,
     Copies = 2,
     Hidden = 3,
-    kStages = 4,
+    MipRequests = 4,  // counted per chunk
+    kStages = 5,
 };
 
 // The family the calling thread is rendering, set for the length of one Render_Main: only calls made inside
@@ -115,6 +147,51 @@ ULONGLONG                  g_logAt = 0;
 Family Current() noexcept
 {
     return t_family;
+}
+
+/// The shadow code's switch byte: on while player 1's family alone hands in requests, with its mask bit set.
+void UpdateShadowSwitch() noexcept
+{
+    const bool skip = g_on.load(std::memory_order_relaxed) && (g_mask.load(std::memory_order_relaxed) & kShadowMaskBit) != 0;
+    std::atomic_ref<std::uint64_t>(g_shadowFields.skip).store(skip ? 1 : 0, std::memory_order_relaxed);
+}
+
+std::uint64_t ShadowCount(std::uint64_t& field) noexcept
+{
+    return std::atomic_ref<std::uint64_t>(field).load(std::memory_order_relaxed);
+}
+
+/// Option D, optional: the feature stands without it. The code reads only its fields (this DLL is pinned).
+void InstallShadowSkip(const platform::GameImage& image) noexcept
+{
+    const auto site   = image.Rebase(kShadowSite, sizeof(kShadowFeedbackSiteBytes));
+    const auto resume = image.Rebase(kShadowResume);
+    const auto empty  = image.Rebase(kShadowEmpty);
+    const auto skipTo = image.Rebase(kShadowSkip);
+    const bool v1005  = platform::RunningBuild() == platform::BuildIndex::V1005;
+    const std::span<const std::uint8_t> compare =
+        v1005 ? std::span<const std::uint8_t>(kShadowFeedbackCompareBytes1005) : std::span<const std::uint8_t>(kShadowFeedbackCompareBytes);
+    std::uint8_t before[4] = {};
+    if (!site || !resume || !empty || !skipTo || *resume != *site + sizeof(kShadowFeedbackSiteBytes) ||
+        !platform::CopyGuarded(before, reinterpret_cast<const void*>(*site - sizeof(before)), sizeof(before)) ||
+        !std::equal(compare.begin(), compare.end(), before))
+    {
+        platform::Log(L"stream feedback: the shadow pass's streaming writes are not what the research read; player 2's "
+                      L"family still records them");
+        return;
+    }
+    UpdateShadowSwitch();
+    const bool installed =
+        v1005 ? g_shadowCode.Install(*site, kShadowFeedbackSiteBytes, ShadowFeedbackCode1005(g_shadowFields, *skipTo, *empty), *resume)
+              : g_shadowCode.Install(*site, kShadowFeedbackSiteBytes, ShadowFeedbackCode(g_shadowFields, *skipTo, *empty), *resume);
+    platform::Log(L"stream feedback: player 2's family {} the shadow pass's streaming-feedback writes",
+                  installed ? L"skips" : L"still records (the site could not be redirected)");
+}
+
+/// True if this stage's call is skipped: player 2's family under stream-feedback p1, with the stage's mask bit set.
+bool Skips(Stage stage, Family family) noexcept
+{
+    return family == TwoSkipped && (g_mask.load(std::memory_order_relaxed) & (1u << (stage - 1))) != 0;
 }
 
 void Count(Stage stage, Family family) noexcept
@@ -163,7 +240,7 @@ void Process(void* group) noexcept
 {
     const Family family = Current();
     Count(Processes, family);
-    if (family != TwoSkipped)
+    if (!Skips(Processes, family))
     {
         reinterpret_cast<ProcessFn>(g_processCall.Original())(group);
     }
@@ -174,7 +251,7 @@ void Copy(void* builder, void* scene) noexcept
 {
     const Family family = Current();
     Count(Copies, family);
-    if (family != TwoSkipped)
+    if (!Skips(Copies, family))
     {
         // Only one of the two is installed (1.005: the call); each sets its original before it can be reached.
         const std::uintptr_t original = g_copyCall.Original() != 0 ? g_copyCall.Original() : g_copyEntry.Original();
@@ -187,11 +264,25 @@ void HiddenPass(void* renderer, void* commandList, const void* views) noexcept
 {
     const Family family = Current();
     Count(Hidden, family);
-    if (family != TwoSkipped)
+    if (!Skips(Hidden, family))
     {
         const std::uintptr_t original = g_hiddenCall.Original() != 0 ? g_hiddenCall.Original() : g_hiddenEntry.Original();
         reinterpret_cast<HiddenFn>(original)(renderer, commandList, views);
     }
+}
+
+/// Replaces phase 8's call of the mip-request dispatches for one chunk. Skipped: nothing is recorded, so false (the
+/// chunk is not marked; only the skipped copy would read the mark).
+bool MipRequestsCall(void* commandList, void* a2, void* group, std::uint64_t chunk, std::uint64_t s1, std::uint64_t s2,
+                 std::uint64_t s3) noexcept
+{
+    const Family family = Current();
+    Count(MipRequests, family);
+    if (Skips(MipRequests, family))
+    {
+        return false;
+    }
+    return reinterpret_cast<MipRequestsFn>(g_mipRequestsCall.Original())(commandList, a2, group, chunk, s1, s2, s3);
 }
 
 std::wstring BudgetState() noexcept
@@ -210,6 +301,15 @@ std::wstring BudgetState() noexcept
 void RemoveAll() noexcept
 {
     g_renderThreadPending.store(false, std::memory_order_release);
+    std::atomic_ref<std::uint64_t>(g_shadowFields.skip).store(0, std::memory_order_relaxed);
+    if (g_shadowCode.IsInstalled() && !g_shadowCode.Restore())
+    {
+        platform::Log(L"stream feedback: the shadow site was changed after us; left in place (it passes through)");
+    }
+    if (g_mipRequestsCall.IsInstalled())
+    {
+        g_mipRequestsCall.Restore();
+    }
     if (g_hiddenEntry.IsInstalled())
     {
         g_hiddenEntry.Restore();
@@ -234,7 +334,7 @@ void RemoveAll() noexcept
 /// Game version 1.005 (kCopyCall above): the hidden pass's call now, Render, and the process and copy calls left to
 /// the render thread's first Render. The functions' first bytes were checked by the caller.
 bool Install1005(const platform::GameImage& image, std::uintptr_t entry, std::uintptr_t render, std::uintptr_t call,
-                 std::uintptr_t process, std::uintptr_t copy) noexcept
+                 std::uintptr_t process, std::uintptr_t copy, std::uintptr_t mipCall, std::uintptr_t mip) noexcept
 {
     const auto copyCall   = image.Rebase(kCopyCall, 5);
     const auto hiddenCall = image.Rebase(kHiddenCall, 5);
@@ -252,6 +352,7 @@ bool Install1005(const platform::GameImage& image, std::uintptr_t entry, std::ui
     g_renderThreadPending.store(true, std::memory_order_release);  // before Render can run
     const bool installed =
         g_hiddenCall.Install(*hiddenCall, *hidden, reinterpret_cast<std::uintptr_t>(&HiddenPass)) &&
+        g_mipRequestsCall.Install(mipCall, mip, reinterpret_cast<std::uintptr_t>(&MipRequestsCall)) &&
         g_render.Replace(entry, render, reinterpret_cast<std::uintptr_t>(&Render));
     if (!installed)
     {
@@ -260,9 +361,11 @@ bool Install1005(const platform::GameImage& image, std::uintptr_t entry, std::ui
         return false;
     }
     g_on.store(true, std::memory_order_relaxed);
+    InstallShadowSkip(image);
     g_installed.store(true, std::memory_order_release);
-    platform::Log(L"stream feedback: installed; player 2's family skips the readback processing, the main pass's copy "
-                  L"and the hidden-component pass, so player 1's family alone hands in scenery requests (player 2's "
+    platform::Log(L"stream feedback: installed; player 2's family skips the readback processing, the main pass's copy, "
+                  L"the hidden-component pass and phase 8's mip-request dispatches, so player 1's family alone hands in "
+                  L"scenery requests (player 2's "
                   L"come through its streaming view); the first two calls follow on the render thread");
     return true;
 }
@@ -278,9 +381,12 @@ bool InstallMeFeedbackOnce(const platform::GameImage& image) noexcept
     const auto copy    = image.Rebase(kCopy);
     const auto hidden  = image.Rebase(kHidden);
     const auto managers = image.Rebase(kStreamingManagers, sizeof(void*));
-    if (!entry || !render || !call || !process || !copy || !hidden || !managers ||
+    const auto mipCall  = image.Rebase(kMipRequestsCall, 5);
+    const auto mip      = image.Rebase(kMipRequests);
+    if (!entry || !render || !call || !process || !copy || !hidden || !managers || !mipCall || !mip ||
         !image.BytesMatch(kRenderMain, kRenderMainBytes) || !image.BytesMatch(kProcess, kProcessBytes) ||
-        !image.BytesMatch(kCopy, kCopyBytes) || !image.BytesMatch(kHidden, kHiddenBytes))
+        !image.BytesMatch(kCopy, kCopyBytes) || !image.BytesMatch(kHidden, kHiddenBytes) ||
+        !image.BytesMatch(kMipRequests, kMipRequestsBytes))
     {
         platform::Log(L"stream feedback: the scenery streaming code is not what the research read; each family hands in "
                       L"requests as before");
@@ -289,7 +395,7 @@ bool InstallMeFeedbackOnce(const platform::GameImage& image) noexcept
     g_managers = *managers;
     if (platform::RunningBuild() == platform::BuildIndex::V1005)
     {
-        return Install1005(image, *entry, *render, *call, *process, *copy);
+        return Install1005(image, *entry, *render, *call, *process, *copy, *mipCall, *mip);
     }
     // The skip points first: they pass everything through until Render marks a family.
     const bool installed =
@@ -297,6 +403,7 @@ bool InstallMeFeedbackOnce(const platform::GameImage& image) noexcept
         g_copyEntry.Install(*copy, image.EntryInstruction(kCopy, std::span(kCopyBytes, kCopyFirst)), reinterpret_cast<std::uintptr_t>(&Copy)) &&
         g_hiddenEntry.Install(*hidden, image.EntryInstruction(kHidden, std::span(kHiddenBytes, kHiddenFirst)),
                             reinterpret_cast<std::uintptr_t>(&HiddenPass)) &&
+        g_mipRequestsCall.Install(*mipCall, *mip, reinterpret_cast<std::uintptr_t>(&MipRequestsCall)) &&
         g_render.Replace(*entry, *render, reinterpret_cast<std::uintptr_t>(&Render));
     if (!installed)
     {
@@ -305,9 +412,11 @@ bool InstallMeFeedbackOnce(const platform::GameImage& image) noexcept
         return false;
     }
     g_on.store(true, std::memory_order_relaxed);
+    InstallShadowSkip(image);
     g_installed.store(true, std::memory_order_release);
-    platform::Log(L"stream feedback: installed; player 2's family skips the readback processing, the main pass's copy "
-                  L"and the hidden-component pass, so player 1's family alone hands in scenery requests (player 2's "
+    platform::Log(L"stream feedback: installed; player 2's family skips the readback processing, the main pass's copy, "
+                  L"the hidden-component pass and phase 8's mip-request dispatches, so player 1's family alone hands in "
+                  L"scenery requests (player 2's "
                   L"come through its streaming view)");
     return true;
 }
@@ -319,6 +428,7 @@ void RemoveMeFeedbackOnce() noexcept
         return;
     }
     g_on.store(false, std::memory_order_relaxed);
+    UpdateShadowSwitch();
     RemoveAll();
     g_installed.store(false, std::memory_order_release);
 }
@@ -331,9 +441,20 @@ bool MeFeedbackOnceInstalled() noexcept
 void SetMeFeedbackOnce(bool playerOneOnly) noexcept
 {
     g_on.store(playerOneOnly && MeFeedbackOnceInstalled(), std::memory_order_relaxed);
+    UpdateShadowSwitch();
     platform::Log(L"stream feedback: {}", g_on.load(std::memory_order_relaxed)
                                               ? L"player 1's family alone hands in requests"
                                               : L"each family hands in requests (the game's code as it runs per family)");
+}
+
+void SetMeFeedbackMask(std::uint32_t mask) noexcept
+{
+    g_mask.store(mask & 0x1F, std::memory_order_relaxed);
+    UpdateShadowSwitch();
+    platform::Log(L"stream feedback: under p1, player 2's family skips: readback processing {}, main-pass copy {}, "
+                  L"hidden-component pass {}, phase 8 mip requests {}, shadow streaming writes {}",
+                  (mask & 1) ? L"yes" : L"no", (mask & 2) ? L"yes" : L"no", (mask & 4) ? L"yes" : L"no",
+                  (mask & 8) ? L"yes" : L"no", (mask & 16) ? L"yes" : L"no");
 }
 
 bool MeFeedbackOnceOn() noexcept
@@ -373,10 +494,17 @@ void PollMeFeedbackOnce() noexcept
         return std::format(L"{} / {} passed / {} skipped", delta[stage][PlayerOne], delta[stage][TwoPassed],
                            delta[stage][TwoSkipped]);
     };
-    platform::LogDebug(L"stream feedback ({}): in the last period, player 1's family / player 2's: renders {}; readback "
-                  L"processing {}; main-pass copies {}; hidden-component passes {}; budget state {}",
-                  MeFeedbackOnceOn() ? L"p1" : L"each", line(Renders), line(Processes), line(Copies), line(Hidden),
-                  BudgetState());
+    const std::uint64_t shadow[3] = {ShadowCount(g_shadowFields.skipped), ShadowCount(g_shadowFields.passedOne),
+                                     ShadowCount(g_shadowFields.passedTwo)};
+    const auto shadowLine = std::format(L"{} / {} passed / {} skipped", shadow[1] - g_shadowLogged[1],
+                                        shadow[2] - g_shadowLogged[2], shadow[0] - g_shadowLogged[0]);
+    std::copy(std::begin(shadow), std::end(shadow), g_shadowLogged);
+    platform::LogDebug(L"stream feedback ({}, mask {}): in the last period, player 1's family / player 2's: renders {}; "
+                  L"readback processing {}; main-pass copies {}; hidden-component passes {}; phase 8 chunk calls {}; "
+                  L"shadow batches' streaming writes {}{}; budget state {}",
+                  MeFeedbackOnceOn() ? L"p1" : L"each", g_mask.load(std::memory_order_relaxed), line(Renders),
+                  line(Processes), line(Copies), line(Hidden), line(MipRequests), shadowLine,
+                  g_shadowCode.IsInstalled() ? L"" : L" (not installed)", BudgetState());
 }
 
 }  // namespace lss::renderer

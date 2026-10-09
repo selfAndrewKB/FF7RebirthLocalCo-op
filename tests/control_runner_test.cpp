@@ -68,11 +68,15 @@ public:
     {
         return Record(L"stream-fov-p1 " + std::to_wstring(degrees));
     }
+    Outcome SetCensus(bool on) override { return Record(on ? L"census on" : L"census off"); }
+    Outcome SetSubmitHints(bool skip) override { return Record(skip ? L"submit-hints skip" : L"submit-hints stock"); }
     Outcome SetStreamFeedbackOnce(bool playerOneOnly) override
     {
         return Record(playerOneOnly ? L"stream-feedback p1" : L"stream-feedback each");
     }
+    Outcome SetFeedbackMask(std::uint32_t mask) override { return Record(L"feedback-mask " + std::to_wstring(mask)); }
     Outcome SetMinimapOnce(bool on) override { return Record(on ? L"minimap-once on" : L"minimap-once off"); }
+    Outcome SetFamilySplit(bool on) override { return Record(on ? L"family-split on" : L"family-split off"); }
     Outcome SetShoulderScaleMinimum(float) override { return Record(L"shoulder-scale-min"); }
     Outcome SetShoulderScale(bool on) override { return Record(on ? L"shoulder-scale on" : L"shoulder-scale off"); }
     Outcome SetFramingOffsets(std::int32_t topBottom, std::int32_t sideBySide) override

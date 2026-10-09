@@ -58,7 +58,11 @@ public:
     Outcome SetStreamViews(std::uint32_t mode) override;
     Outcome SetPlayerOneStreamFov(std::uint32_t degrees) override;
     Outcome SetStreamFeedbackOnce(bool playerOneOnly) override;
+    Outcome SetSubmitHints(bool skip) override;
+    Outcome SetCensus(bool on) override;
+    Outcome SetFeedbackMask(std::uint32_t mask) override;
     Outcome SetMinimapOnce(bool on) override;
+    Outcome SetFamilySplit(bool onePerView) override;
     Outcome SetFramingOffsets(std::int32_t topBottom, std::int32_t sideBySide) override;
     Outcome SetShoulderScale(bool on) override;
     Outcome SetShoulderScaleMinimum(float minimum) override;

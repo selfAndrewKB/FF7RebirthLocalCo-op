@@ -10,13 +10,17 @@
 // levels several times a second. The game has no switch for one family only (its MassiveEnvironment
 // show flag turns off all ME work, picture included), so while player 2's family renders (the scene
 // renderer's copy of bAdditionalViewFamily, renderer+0x84, set by the mod on later families only) this
-// skips three game calls: the readback processing in the visibility gate, the main pass's copy and the
-// hidden-component pass. Player 2's family still draws ME, its shadows and its slave dispatches;
-// player 2's detail requests reach player 1's family through player 2's slave view
+// skips four game calls: the readback processing in the visibility gate, the main pass's copy, the
+// hidden-component pass, and (performance, RE-perf-family-duplication.md §3.1) phase 8's per-chunk mip-request
+// dispatches for the slave frustums, whose marks only the skipped copy reads; and (RE-perf-me-shadows.md Phase 3,
+// option D) the shadow pass's streaming-feedback writes, through machine code. Player 2's family still draws ME and
+// its shadows; player 2's detail requests reach player 1's family through player 2's slave view
 // (views/stream_views.h). A skip of game calls, not a game lever: recorded in the plan as such.
 //
 // Each skipped and passed call is counted per family and summarised in the log.
 // The switch (`stream-feedback p1|each`) is on (p1) from install.
+
+#include <cstdint>
 
 namespace lss::platform {
 class GameImage;
@@ -31,6 +35,11 @@ bool MeFeedbackOnceInstalled() noexcept;
 /// True: player 1's family alone hands in requests. False: every family runs the game's calls.
 void SetMeFeedbackOnce(bool playerOneOnly) noexcept;
 bool MeFeedbackOnceOn() noexcept;
+
+/// Diagnosis (feedback-mask): which skips act while player 1's family alone hands in requests: 1 the readback
+/// processing, 2 the main pass's copy, 4 the hidden-component pass, 8 phase 8's mip-request dispatches, 16 the shadow
+/// pass's streaming-feedback writes (renderer/me_shadow_feedback_code.h). All at start.
+void SetMeFeedbackMask(std::uint32_t mask) noexcept;
 
 /// Game thread, each engine tick: writes the per-family counts line when its period is up.
 void PollMeFeedbackOnce() noexcept;
