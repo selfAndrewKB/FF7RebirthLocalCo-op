@@ -8,14 +8,20 @@
 #include "player_two/describe.h"
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
+#include "player_two/leader_scope.h"
 #include "player_two/object_fields.h"
+#include "player_two/primary_controller.h"
 #include "player_two/traversal_watch.h"
 
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <format>
 #include <optional>
+#include <string>
+#include <string_view>
+#include <unordered_map>
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -51,7 +57,23 @@ constexpr std::uint8_t   kLeaveFilterBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x
                                                 0x74, 0x24, 0x18, 0x57, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8, 0xF2, 0x09};
 constexpr platform::FunctionFact kEnterFilter{L"TriggerMgr_OnTrackerEnter_Filter", 0x1409DE760, kEnterFilterBytes};
 constexpr platform::FunctionFact kLeaveFilter{L"TriggerMgr_OnTrackerLeave_Filter", 0x1409DE524, kLeaveFilterBytes};
-using FilterFn = std::uintptr_t (*)(void* manager, std::uint64_t key, void* owner, void* weakActor);
+// The 4th argument differs (RE-p2-traversal-L1.md §1.1): the enter's is an FOverlapResult* (weak actor at +0) or null,
+// the leave's a plain AActor* (0 if the tracker's weak had gone stale).
+using FilterFn = std::uintptr_t (*)(void* manager, std::uint64_t key, void* owner, void* actorArg);
+
+// Traversal L1 (RE-p2-traversal-L1.md §8). The routers find a field-action actor by the key, the overlapped actor's
+// Tags[0], in Square Enix's tag registry (1.005 0x140F48A40); the mod looks it up the same way.
+constexpr std::uint8_t kFindActorBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xF0, 0x88, 0x2D, 0x01,
+                                            0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9, 0xE8, 0xB9, 0xD5, 0xAB, 0xFF, 0x48};
+constexpr platform::FunctionFact kFindActor{L"EndActorTagRegistry_FindActorByTag", 0x140DD6634, kFindActorBytes};
+using FindActorFn = void* (*)(const std::uint64_t* key);
+
+// The classes admitted for player 2 (native vtables; placed Blueprint ladders keep them, live 2026-10-09).
+constexpr std::uintptr_t kLadderVt = 0x145940748;  // 1.005 0x1457A2650
+
+// End2FieldActionActorBase's entered flag: its trigger enter needs 0 and sets 1, its leave needs 1 and sets 0. One per
+// actor, so player 2's is kept aside (the shadow) and swapped in around player 2's deliveries; the field is player 1's.
+constexpr std::uint32_t kEnteredFlag = 0x2A1;
 
 // The game's allocator (stock FMemory), for the overlap array handed to the diff: the diff may empty it (TArray::Empty,
 // which frees through GMalloc), so it must be the game's memory. FieldTick frees its own copy with the same Free.
@@ -143,12 +165,22 @@ const void*          g_registryWeak = nullptr;
 CRITICAL_SECTION*    g_overlapLock  = nullptr;
 const std::uint8_t*  g_sweepFlagA   = nullptr;
 const std::uint8_t*  g_sweepFlagB   = nullptr;
+FindActorFn          g_findActor    = nullptr;  // null: no class is admitted, every event of player 2's is held back
+std::uintptr_t       g_ladderVt     = 0;
 
 // Game thread only.
 struct Counts
 {
     unsigned passes = 0, overlapReads = 0, sweepReads = 0, noResult = 0, skipped = 0, enters = 0, leaves = 0;
+    unsigned deliveredEnters = 0, deliveredLeaves = 0, refused = 0;
 };
+
+// Player 2's entered flags, by the actor's weak value; only set flags are kept. They belong to one trigger's tracker
+// (its last-pass list says which actors it is inside), so they are dropped when player 2's trigger is another object.
+std::unordered_map<std::uint64_t, std::uint8_t> g_shadow;
+std::uint64_t                                   g_shadowOwner = 0;
+bool                                            g_delivering  = false;  // inside the game's filter for player 2
+constexpr std::size_t                           kShadowPrune  = 32;  // past this, entries of destroyed actors go
 Counts                                g_counts{};
 std::int32_t                          g_lastCount = -1;
 bool                                  g_skipLogged = false;
@@ -354,22 +386,148 @@ std::uintptr_t Dispatch(void* context, void* tracker, void* overlaps, void* keys
     return result;
 }
 
-/// The diff's enter or leave filter. Player 2's trigger's events are logged and held back (no class admitted yet).
-std::uintptr_t Filter(bool enter, void* manager, std::uint64_t key, void* owner, void* weakActor) noexcept
+/// The actor the diff passed, for the log only: the enter's argument points at an overlap result, the leave's is the
+/// actor itself.
+void* PassedActor(bool enter, void* actorArg) noexcept
 {
-    const auto& call = enter ? g_enterCall : g_leaveCall;
+    if (actorArg == nullptr)
+    {
+        return nullptr;
+    }
+    return enter ? Resolve(actorArg) : actorArg;
+}
+
+std::uint8_t ShadowOf(std::uint64_t weak) noexcept
+{
+    const auto found = g_shadow.find(weak);
+    return found != g_shadow.end() ? found->second : 0;
+}
+
+void KeepShadow(std::uint64_t weak, std::uint8_t flag)
+{
+    if (flag == 0)
+    {
+        g_shadow.erase(weak);
+        return;
+    }
+    if (g_shadow.size() >= kShadowPrune)
+    {
+        std::erase_if(g_shadow, [](const auto& entry) { return leader_scope::ObjectAt(&entry.first) == nullptr; });
+    }
+    g_shadow[weak] = flag;
+}
+
+void LogEvent(bool enter, const void* actor, const void* passed, std::wstring_view outcome)
+{
+    const wchar_t* match = passed == nullptr ? L"the diff passed none"
+                         : passed == actor   ? L"the diff's own"
+                                             : L"the diff passed another";
+    std::wstring kind = L"no actor";
+    if (actor != nullptr)
+    {
+        kind = VTableOf(actor) == g_ladderVt
+                   ? std::wstring(L"ladder")
+                   : std::format(L"vt 0x{:X}", g_image ? g_image->ResearchAddress(VTableOf(actor)) : 0);
+    }
+    platform::LogDebug(L"trigger two: player 2's trigger {} {} ({}; {}): {}", enter ? L"enters" : L"leaves",
+                       actor != nullptr ? NameOf(actor) : std::wstring(L"(not in the tag registry)"), kind, match,
+                       outcome);
+}
+
+/// Player 2's event for an admitted actor, run through the game's filter as player 2: the leader and the primary
+/// controller answer player 2 (the register and unregister use the leader's controller's list, the enter and leave
+/// checks the primary controller's tracker), and the entered flag is player 2's own.
+std::uintptr_t Deliver(bool enter, FilterFn original, void* manager, std::uint64_t key, void* owner, void* actorArg,
+                       void* actor, const void* passed)
+{
+    void*      member     = generation::Member();
+    const auto memberWeak = leader_scope::WeakOf(member);
+    if (member == nullptr || memberWeak == 0 ||
+        ReadPointer(member, facts::kPawnController) != generation::PlayerTwoController())
+    {
+        ++g_counts.refused;
+        LogEvent(enter, actor, passed, L"held back: player 2's member is not possessed by player 2's controller");
+        return 0;
+    }
+    const auto actorWeak = leader_scope::WeakOf(actor);
+    const auto ownerWeak = leader_scope::WeakOf(owner);
+    if (actorWeak == 0 || ownerWeak == 0)
+    {
+        ++g_counts.refused;
+        LogEvent(enter, actor, passed, L"held back: no weak value for the actor or the trigger");
+        return 0;
+    }
+    if (ownerWeak != g_shadowOwner)
+    {
+        g_shadow.clear();
+        g_shadowOwner = ownerWeak;
+    }
+    const leader_scope::LeaderScope leader(memberWeak);
+    const primary_controller::Scope primary;
+    if (!leader.Held() || !primary.Held())
+    {
+        ++g_counts.refused;
+        LogEvent(enter, actor, passed,
+                 std::format(L"held back: {}", !leader.Held() ? L"the leader scope was refused"
+                                                              : primary_controller::Describe(primary.Why())));
+        return 0;
+    }
+    // A nested delivery would take the outer call's swapped-in shadow for player 1's flag and restore it [ASSUMPTION
+    // that the game never re-enters the filter from inside it, RE-p2-traversal-L1.md §3.3]: held back instead.
+    if (g_delivering)
+    {
+        ++g_counts.refused;
+        LogEvent(enter, actor, passed, L"held back: inside another delivery of player 2's (the filter re-entered)");
+        return 0;
+    }
+    g_delivering      = true;
+    const auto real   = ReadField<std::uint8_t>(actor, kEnteredFlag);
+    const auto before = ShadowOf(actorWeak);
+    WriteField<std::uint8_t>(actor, kEnteredFlag, before);
+    const auto result = original(manager, key, owner, actorArg);
+    // The flag is read and put back only if the call left the actor alive (a ladder's enter and leave never destroy it;
+    // a later class might).
+    const bool alive = leader_scope::StillNames(actorWeak, actor);
+    const auto after = alive ? ReadField<std::uint8_t>(actor, kEnteredFlag) : std::uint8_t{0};
+    if (alive)
+    {
+        WriteField<std::uint8_t>(actor, kEnteredFlag, real);
+    }
+    g_delivering = false;
+    ++(enter ? g_counts.deliveredEnters : g_counts.deliveredLeaves);
+    try
+    {
+        KeepShadow(actorWeak, after);
+        LogEvent(enter, actor, passed,
+                 std::format(L"delivered as player 2 (player 2's entered flag {} -> {}{}; player 1's {} kept)", before,
+                             after, before == after ? L", unchanged: the game's check stopped it" : L"", real));
+    }
+    catch (...)
+    {
+    }
+    return result;
+}
+
+/// The diff's enter or leave filter. Player 2's trigger's events go to the game as player 2 for admitted classes
+/// (ladders), and are held back otherwise.
+std::uintptr_t Filter(bool enter, void* manager, std::uint64_t key, void* owner, void* actorArg) noexcept
+{
+    const auto original = reinterpret_cast<FilterFn>((enter ? g_enterCall : g_leaveCall).Original());
     if (owner == nullptr || !generation::OnGameThread() || !generation::Active() ||
         owner != TriggerOf(generation::PlayerTwoController()))
     {
-        return reinterpret_cast<FilterFn>(call.Original())(manager, key, owner, weakActor);
+        return original(manager, key, owner, actorArg);
     }
     ++(enter ? g_counts.enters : g_counts.leaves);
-    const void* actor = Resolve(weakActor);
     try
     {
-        platform::LogDebug(L"trigger two: player 2's trigger {} {} (vt 0x{:X}): held back, no actor class admitted yet",
-                           enter ? L"enters" : L"leaves", actor != nullptr ? NameOf(actor) : std::wstring(L"(gone)"),
-                           actor != nullptr && g_image ? g_image->ResearchAddress(VTableOf(actor)) : 0);
+        void*       actor  = g_findActor != nullptr ? g_findActor(&key) : nullptr;
+        const void* passed = PassedActor(enter, actorArg);
+        if (actor != nullptr && g_ladderVt != 0 && VTableOf(actor) == g_ladderVt)
+        {
+            return Deliver(enter, original, manager, key, owner, actorArg, actor, passed);
+        }
+        LogEvent(enter, actor != nullptr ? actor : passed, passed, L"held back, its class is not admitted");
     }
     catch (...)
     {
@@ -377,14 +535,14 @@ std::uintptr_t Filter(bool enter, void* manager, std::uint64_t key, void* owner,
     return 0;
 }
 
-std::uintptr_t EnterFilter(void* manager, std::uint64_t key, void* owner, void* weakActor) noexcept
+std::uintptr_t EnterFilter(void* manager, std::uint64_t key, void* owner, void* actorArg) noexcept
 {
-    return Filter(true, manager, key, owner, weakActor);
+    return Filter(true, manager, key, owner, actorArg);
 }
 
-std::uintptr_t LeaveFilter(void* manager, std::uint64_t key, void* owner, void* weakActor) noexcept
+std::uintptr_t LeaveFilter(void* manager, std::uint64_t key, void* owner, void* actorArg) noexcept
 {
-    return Filter(false, manager, key, owner, weakActor);
+    return Filter(false, manager, key, owner, actorArg);
 }
 
 }  // namespace
@@ -423,6 +581,11 @@ void Install(const platform::GameImage& image) noexcept
     g_sweepFlagA   = reinterpret_cast<const std::uint8_t*>(*flagA);
     g_sweepFlagB   = reinterpret_cast<const std::uint8_t*>(*flagB);
     g_enterSite = *enterAt, g_leaveSite = *leaveAt, g_enterTarget = *enter, g_leaveTarget = *leave;
+    // Traversal L1: without the lookup or the ladder's vtable, every event of player 2's stays held back.
+    const auto findActor = platform::FindFunction(image, kFindActor);
+    const auto ladderVt  = image.Rebase(kLadderVt, 8);
+    g_findActor = findActor ? reinterpret_cast<FindActorFn>(*findActor) : nullptr;
+    g_ladderVt  = ladderVt ? *ladderVt : 0;
     g_ready = true;
     if (!g_dispatchCall.Install(*site, *dispatch, reinterpret_cast<std::uintptr_t>(&Dispatch)))
     {
@@ -431,8 +594,11 @@ void Install(const platform::GameImage& image) noexcept
         return;
     }
     g_filtersPending = true;
-    platform::Log(L"trigger two: installed (player 2's trigger is read right after player 1's, in the same frame, and its "
-                  L"enters and leaves are held back and logged at Debug; the diff's filter calls follow on the game thread)");
+    platform::Log(L"trigger two: installed (player 2's trigger is read right after player 1's, in the same frame; {}; "
+                  L"each event logged at Debug; the diff's filter calls follow on the game thread)",
+                  g_findActor != nullptr && g_ladderVt != 0
+                      ? L"ladders go to the game as player 2, every other class is held back"
+                      : L"every event is held back (the tag registry lookup or the ladder's vtable differs)");
 }
 
 void Remove() noexcept
@@ -489,9 +655,11 @@ void Tick() noexcept
     if (g_summaryAt != std::chrono::steady_clock::time_point{})
     {
         platform::LogDebug(L"trigger two (10 s): player 2's passes {} (overlap results {}, sweep {}, none last frame {}, "
-                           L"skipped {}); held back: enters {}, leaves {}",
+                           L"skipped {}); events: enters {}, leaves {}; delivered as player 2: enters {}, leaves {}; "
+                           L"refused by a scope or the member's controller {}; player 2's entered flags held {}",
                            g_counts.passes, g_counts.overlapReads, g_counts.sweepReads, g_counts.noResult,
-                           g_counts.skipped, g_counts.enters, g_counts.leaves);
+                           g_counts.skipped, g_counts.enters, g_counts.leaves, g_counts.deliveredEnters,
+                           g_counts.deliveredLeaves, g_counts.refused, g_shadow.size());
     }
     g_summaryAt = clock;
     g_counts    = {};

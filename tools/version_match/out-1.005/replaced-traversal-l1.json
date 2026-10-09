@@ -1,0 +1,17 @@
+{
+ "build": "1.005",
+ "research_build": "1.004",
+ "date": "2026-10-09",
+ "doc": "Rebirth/Documentation/research/RE-p2-traversal-L1.md",
+ "facts": [
+  {
+   "name": "EndActorTagRegistry_FindActorByTag",
+   "old": "0x140DD6634",
+   "new": "0x140F48A40",
+   "bytes": "4053B820000000E834312201482BE0488BD9E8ADCB98FF48",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "(const FName* key) -> AActor* or 0: the tag registry's Tags[0] lookup both PlayerTrigger routers use. Same shape in both builds (chkstk, registry Get, impl call); the IDA agent matched it, and the main session read both exes' bytes with capstone (2026-10-09). The ladder vtable 0x145940748 -> 0x1457A2650 is already in replaced-traversal.json; its trigger slots read +0x710/+0x718 -> 0x1409DC534/0x1409DB844 (1.004) and +0x718/+0x720 -> 0x140D813D0/0x140D81588 (1.005)."
+  }
+ ]
+}
