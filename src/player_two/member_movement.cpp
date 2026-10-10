@@ -8,6 +8,7 @@
 #include "platform/vtable_entry.h"
 #include "player_two/battle_input.h"
 #include "player_two/chocobo_ride.h"
+#include "player_two/climb_context.h"
 #include "player_two/lock_on.h"
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
@@ -66,6 +67,13 @@ int PlayerTypeOfComponent(const void* component) noexcept
 
 std::uint8_t LeaderTest(const void* component)
 {
+    // Player 2's climb on the anim worker (climb_context.h): this thread only, the member's type.
+    const int climbType = climb_context::LeaderTypeHere();
+    if (climbType != kNoType && PlayerTypeOfComponent(component) == climbType)
+    {
+        g_leaderAnswers.fetch_add(1, std::memory_order_relaxed);
+        return 1;
+    }
     const int   type   = g_leaderType.load(std::memory_order_relaxed);
     const void* extra  = g_leaderComponent.load(std::memory_order_relaxed);
     if ((type != kNoType || extra != nullptr) && generation::OnGameThread() &&

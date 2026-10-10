@@ -1,0 +1,197 @@
+{
+ "build": "1.005",
+ "research_build": "1.004",
+ "date": "2026-10-09",
+ "doc": "Rebirth/Documentation/research/RE-p2-traversal-climb-context.md",
+ "facts": [
+  {
+   "name": "slot: ClimbingMove Tick +0x10",
+   "old": "0x145833778",
+   "new": "0x1457BA588",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp climb_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-climb-context.md \u00a77)."
+  },
+  {
+   "name": "ClimbingMove Tick +0x10 fn",
+   "old": "0x141636878",
+   "new": "0x1413E37D8",
+   "bytes": "488BC448895808488970104889781855",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp climb_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-climb-context.md \u00a77)."
+  },
+  {
+   "name": "slot: MonkeyBarsMove Tick +0x10",
+   "old": "0x146695A18",
+   "new": "0x146522CC8",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp climb_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-climb-context.md \u00a77)."
+  },
+  {
+   "name": "MonkeyBarsMove Tick +0x10 fn",
+   "old": "0x1432FABC0",
+   "new": "0x143009B48",
+   "bytes": "488BC448895808488970104889781855",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp climb_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-climb-context.md \u00a77)."
+  },
+  {
+   "name": "slot: SpiderMoveMove Tick +0x10",
+   "old": "0x146696CF8",
+   "new": "0x146523948",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp climb_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-climb-context.md \u00a77)."
+  },
+  {
+   "name": "SpiderMoveMove Tick +0x10 fn",
+   "old": "0x143312EDC",
+   "new": "0x143022554",
+   "bytes": "488BC448895808488970104889781855",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp climb_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-climb-context.md \u00a77)."
+  },
+  {
+   "name": "slot: ClimbingMove Finish +0xA8",
+   "old": "0x145833810",
+   "new": "0x1457BA620",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp climb_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-climb-context.md \u00a77)."
+  },
+  {
+   "name": "ClimbingMove Finish +0xA8 fn",
+   "old": "0x1416E9604",
+   "new": "0x1415BAF4C",
+   "bytes": "48895C240857B820000000E8240CBB00",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp climb_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-climb-context.md \u00a77)."
+  },
+  {
+   "name": "slot: MonkeyBarsMove Finish +0xA8",
+   "old": "0x146695AB0",
+   "new": "0x146522D60",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp climb_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-climb-context.md \u00a77)."
+  },
+  {
+   "name": "MonkeyBarsMove Finish +0xA8 fn",
+   "old": "0x1432E91B8",
+   "new": "0x142FF7FCC",
+   "bytes": "4053B820000000E8A83B17FF482BE048",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp climb_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-climb-context.md \u00a77)."
+  },
+  {
+   "name": "slot: SpiderMoveMove Finish +0xA8",
+   "old": "0x146696D90",
+   "new": "0x1465239E0",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp climb_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-climb-context.md \u00a77)."
+  },
+  {
+   "name": "SpiderMoveMove Finish +0xA8 fn",
+   "old": "0x1416E95EC",
+   "new": "0x1415BAF34",
+   "bytes": "B828000000E8420CBB00482BE04883C4",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp climb_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-climb-context.md \u00a77)."
+  },
+  {
+   "name": "SquareInput__GetAggregatedKeyValue",
+   "old": "0x1407C8310",
+   "new": "0x1409F5CD8",
+   "bytes": "B838000000E89E5E7701482BE0488B02",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp climb_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-climb-context.md \u00a77)."
+  },
+  {
+   "name": "SquareInput_ActionTableF8_IsPressed_Impl",
+   "old": "0x1408062E0",
+   "new": "0x1410D8198",
+   "bytes": "48895C240857B840000000E8D8390901",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp climb_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-climb-context.md \u00a77)."
+  },
+  {
+   "name": "SquareInput_IsActionPressed_Global",
+   "old": "0x14080619C",
+   "new": "0x1410D813C",
+   "bytes": "48895C240857B840000000E8343A0901",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp climb_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-climb-context.md \u00a77)."
+  },
+  {
+   "name": "InputKey24_CopyAddRef",
+   "old": "0x14078C2F4",
+   "new": "0x1408DAE0C",
+   "bytes": "488B02488901488B420848894108488B",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp climb_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-climb-context.md \u00a77)."
+  },
+  {
+   "name": "g_InputKey_Dodge",
+   "old": "0x1491E45E0",
+   "new": "0x14901C6C0",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp climb_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-climb-context.md \u00a77)."
+  },
+  {
+   "name": "g_InputKey_FieldAction",
+   "old": "0x1491E4508",
+   "new": "0x14901C5E8",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp climb_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-climb-context.md \u00a77)."
+  },
+  {
+   "name": "g_InputKey_Catch",
+   "old": "0x1491E4A30",
+   "new": "0x14901CB10",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp climb_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-climb-context.md \u00a77)."
+  },
+  {
+   "name": "ClimbingMove Tick call TickHoldSelect",
+   "old": "0x1416368D5",
+   "new": "0x1413E3835",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp climb_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-climb-context.md \u00a77)."
+  },
+  {
+   "name": "ClimbingMove_TickHoldSelect_PrimaryPCMBasis",
+   "old": "0x141635E70",
+   "new": "0x1410D0130",
+   "bytes": "48895C24104889742418555741544156",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp climb_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-climb-context.md \u00a77)."
+  }
+ ]
+}

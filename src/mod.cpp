@@ -51,6 +51,7 @@
 #include "player_two/vending.h"
 #include "player_two/interact_watch.h"
 #include "player_two/charapop_watch.h"
+#include "player_two/climb_context.h"
 #include "player_two/charapop_near.h"
 #include "player_two/charapop_centre.h"
 #include "player_two/world_actor_reach.h"
@@ -217,6 +218,7 @@ public:
         lss::player_two::nav_strand::Remove();
         lss::player_two::ride_framing_watch::Remove();
         lss::player_two::trigger_two::Remove();
+        lss::player_two::climb_context::Remove();
         lss::player_two::traversal_watch::Remove();
         lss::player_two::vault_camera::Remove();
         lss::hud::target_views::Remove();
@@ -342,6 +344,7 @@ public:
         lss::player_two::camera_repair::Install(*image);  // a non-finite pose on player 2's camera: the game's camera reset
         lss::player_two::ride_framing_watch::Install(*image);  // both cameras' ride framing and who changes it (logged)
         lss::player_two::traversal_watch::Install(*image);  // ladders, climb spots, glide and jet for player 2 (logged)
+        lss::player_two::climb_context::Install(*image);  // climbs on the anim worker read their own climber's input (W5)
         lss::player_two::trigger_two::Install(*image);  // player 2's trigger read after player 1's (events held back, logged)
         lss::player_two::vault_camera::Install(*image);  // player 2's chocobo vaults without taking both ride framings
 
@@ -516,6 +519,7 @@ private:
         const bool shared = lss::player_two::shared_ride::Tick();
         session_->SetSharedRide(shared);
         lss::player_two::pad_sticks::SetStoodDown(shared);
+        lss::player_two::climb_context::Tick();  // this frame's input copies for the climbs on the anim worker (W5)
         session_->Tick();
         lss::dev::TickAfterSession();
         FollowPlayerTwo();
