@@ -1,0 +1,80 @@
+{
+ "build": "1.005",
+ "research_build": "1.004",
+ "date": "2026-10-10",
+ "doc": "Rebirth/Documentation/research/RE-p2-anim-optimisation-two-views.md",
+ "facts": [
+  {
+   "name": "PropagateLinkedActorCamDist: last ME_FreeResourceBindingArray call (H1)",
+   "old": "0x140A32B57",
+   "new": "0x140861C43",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp anim_check.py, 2026-10-10) after the IDA agent's match (RE-p2-anim-optimisation-two-views.md \u00a74.1)."
+  },
+  {
+   "name": "AnimBudgetAllocator_Tick_SE: call ParallelFor_Wrapper (H2)",
+   "old": "0x141001E92",
+   "new": "0x140FCFD7A",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp anim_check.py, 2026-10-10) after the IDA agent's match (RE-p2-anim-optimisation-two-views.md \u00a74.1)."
+  },
+  {
+   "name": "PropagateLinkedActorCamDist: append, call TArray8_ResizeGrow",
+   "old": "0x140A32B0A",
+   "new": "0x140861BF6",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp anim_check.py, 2026-10-10) after the IDA agent's match (RE-p2-anim-optimisation-two-views.md \u00a74.1)."
+  },
+  {
+   "name": "UObject_GetInterfaceAddress",
+   "old": "0x140885660",
+   "new": "0x141997CC0",
+   "bytes": "48895C240848896C2410488974241857",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp anim_check.py, 2026-10-10) after the IDA agent's match (RE-p2-anim-optimisation-two-views.md \u00a74.1)."
+  },
+  {
+   "name": "EndSkelMeshComp_ComputeCamDistAngle",
+   "old": "0x140886E6C",
+   "new": "0x1407E3080",
+   "bytes": "48895C2410488974241848897C242041",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp anim_check.py, 2026-10-10) after the IDA agent's match (RE-p2-anim-optimisation-two-views.md \u00a74.1)."
+  },
+  {
+   "name": "TArray8_ResizeGrow (ME_DynArray_EnsureCapacity; the bodies differ, the call shape is the same)",
+   "old": "0x14082DFE8",
+   "new": "0x140759D80",
+   "bytes": "48895C2408488974241057B820000000",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp anim_check.py, 2026-10-10) after the IDA agent's match (RE-p2-anim-optimisation-two-views.md \u00a74.1)."
+  },
+  {
+   "name": "ParallelFor_Wrapper",
+   "old": "0x1410025A0",
+   "new": "0x140FCFE00",
+   "bytes": "B838000000E876BD1901482BE0488B02",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp anim_check.py, 2026-10-10) after the IDA agent's match (RE-p2-anim-optimisation-two-views.md \u00a74.1)."
+  },
+  {
+   "name": "EndActorInterface UClass global",
+   "old": "0x1492B5E30",
+   "new": "0x1490EF218",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp anim_check.py, 2026-10-10) after the IDA agent's match (RE-p2-anim-optimisation-two-views.md \u00a74.1)."
+  }
+ ]
+}

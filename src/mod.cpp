@@ -53,6 +53,7 @@
 #include "player_two/charapop_watch.h"
 #include "player_two/climb_context.h"
 #include "player_two/near_fade.h"
+#include "player_two/anim_two_views.h"
 #include "player_two/charapop_near.h"
 #include "player_two/charapop_centre.h"
 #include "player_two/world_actor_reach.h"
@@ -223,6 +224,7 @@ public:
         lss::player_two::traversal_camera::Remove();
         lss::player_two::climb_context::Remove();
         lss::player_two::near_fade::Remove();
+        lss::player_two::anim_two_views::Remove();
         lss::player_two::traversal_watch::Remove();
         lss::player_two::vault_camera::Remove();
         lss::hud::target_views::Remove();
@@ -351,6 +353,7 @@ public:
         lss::player_two::climb_context::Install(*image);  // climbs on the anim worker read their own climber's input (W5); before traversal_camera, whose holders need its Ticks
         lss::player_two::traversal_camera::Install(*image);  // player 2's traversal gets the game's traversal cameras
         lss::player_two::near_fade::Install(*image);  // player 1's camera never fades player 2's character out
+        lss::player_two::anim_two_views::Install(*image);  // characters near player 2 animate by the nearer camera
         lss::player_two::trigger_two::Install(*image);  // player 2's trigger read after player 1's (events held back, logged)
         lss::player_two::vault_camera::Install(*image);  // player 2's chocobo vaults without taking both ride framings
 
@@ -553,6 +556,7 @@ private:
         lss::player_two::shoulder_scale::Poll(splitShown);
         lss::player_two::framing_watch::Tick(splitShown);
         lss::player_two::charapop_watch::Tick(splitShown);
+        lss::player_two::anim_two_views::Tick(splitShown);  // its frame count, before the world tick
         lss::player_two::charapop_near::Tick(splitShown, session_->PlaysMember());
         lss::player_two::charapop_centre::Tick(splitShown, session_->PlaysMember());
         lss::player_two::world_actor_reach::Tick(session_->PlaysMember());
