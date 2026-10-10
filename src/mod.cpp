@@ -52,6 +52,7 @@
 #include "player_two/interact_watch.h"
 #include "player_two/charapop_watch.h"
 #include "player_two/climb_context.h"
+#include "player_two/approach_two.h"
 #include "player_two/near_fade.h"
 #include "player_two/anim_two_views.h"
 #include "player_two/charapop_near.h"
@@ -224,6 +225,7 @@ public:
         lss::player_two::traversal_camera::Remove();
         lss::player_two::climb_context::Remove();
         lss::player_two::near_fade::Remove();
+        lss::player_two::approach_two::Remove();
         lss::player_two::anim_two_views::Remove();
         lss::player_two::traversal_watch::Remove();
         lss::player_two::vault_camera::Remove();
@@ -353,6 +355,7 @@ public:
         lss::player_two::climb_context::Install(*image);  // climbs on the anim worker read their own climber's input (W5); before traversal_camera, whose holders need its Ticks
         lss::player_two::traversal_camera::Install(*image);  // player 2's traversal gets the game's traversal cameras
         lss::player_two::near_fade::Install(*image);  // player 1's camera never fades player 2's character out
+        lss::player_two::approach_two::Install(*image);  // walk-up traversals read player 2's stick in player 2's camera basis
         lss::player_two::anim_two_views::Install(*image);  // characters near player 2 animate by the nearer camera
         lss::player_two::trigger_two::Install(*image);  // player 2's trigger read after player 1's (events held back, logged)
         lss::player_two::vault_camera::Install(*image);  // player 2's chocobo vaults without taking both ride framings
@@ -551,6 +554,7 @@ private:
         lss::player_two::trigger_two::Tick();
         lss::player_two::traversal_camera::Tick();  // the traversal cameras' collision watch (Debug, on change)
         lss::player_two::near_fade::Tick();  // player 2's character's fade state (Debug, on change)
+        lss::player_two::approach_two::Tick();  // the crossing walk-up calls, swapped once from here
         lss::player_two::vault_camera::Tick();  // player 2's vault cameras end on player 2's camera (lever L2)
         lss::player_two::camera_distance::TickFraming(playerTwoIn);  // per-layout distance steps (roadmap 2b)
         lss::player_two::shoulder_scale::Poll(splitShown);

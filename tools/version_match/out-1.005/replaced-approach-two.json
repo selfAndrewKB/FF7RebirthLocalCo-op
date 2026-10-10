@@ -1,0 +1,143 @@
+{
+ "build": "1.005",
+ "research_build": "1.004",
+ "date": "2026-10-10",
+ "doc": "Rebirth/Documentation/research/RE-p2-ladder-approach-L2.md",
+ "facts": [
+  {
+   "name": "Ladder notify: call FieldAction_ApproachDirCheck_MergedStick",
+   "old": "0x1416434D7",
+   "new": "0x1415DCC77",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp approach_check.py, 2026-10-10) after the IDA agent's match (RE-p2-ladder-approach-L2.md \u00a75, \u00a77)."
+  },
+  {
+   "name": "Crouched (crawl) notify: call FieldAction_ApproachDirCheck_MergedStick",
+   "old": "0x141642652",
+   "new": "0x1415DC89A",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp approach_check.py, 2026-10-10) after the IDA agent's match (RE-p2-ladder-approach-L2.md \u00a75, \u00a77)."
+  },
+  {
+   "name": "Crack (squeeze) notify: call FieldAction_ApproachDirCheck_MergedStick",
+   "old": "0x141645CCB",
+   "new": "0x1415DDAC7",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp approach_check.py, 2026-10-10) after the IDA agent's match (RE-p2-ladder-approach-L2.md \u00a75, \u00a77)."
+  },
+  {
+   "name": "Crack (squeeze) chunk: call FieldAction_ApproachDirCheck_MergedStick (1st)",
+   "old": "0x142A93E56",
+   "new": "0x1426F0862",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp approach_check.py, 2026-10-10) after the IDA agent's match (RE-p2-ladder-approach-L2.md \u00a75, \u00a77)."
+  },
+  {
+   "name": "Crack (squeeze) chunk: call FieldAction_ApproachDirCheck_MergedStick (2nd)",
+   "old": "0x142A93E97",
+   "new": "0x1426F08A3",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp approach_check.py, 2026-10-10) after the IDA agent's match (RE-p2-ladder-approach-L2.md \u00a75, \u00a77)."
+  },
+  {
+   "name": "Climbing wall notify: call FieldAction_ApproachDirCheck_MergedStick",
+   "old": "0x141646D35",
+   "new": "0x1415DF469",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp approach_check.py, 2026-10-10) after the IDA agent's match (RE-p2-ladder-approach-L2.md \u00a75, \u00a77)."
+  },
+  {
+   "name": "PoleSlider notify: call FieldAction_ApproachDirCheck_MergedStick",
+   "old": "0x143643121",
+   "new": "0x143377B71",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp approach_check.py, 2026-10-10) after the IDA agent's match (RE-p2-ladder-approach-L2.md \u00a75, \u00a77)."
+  },
+  {
+   "name": "HookRope notify: call FieldAction_ApproachDirCheck_MergedStick",
+   "old": "0x14367C406",
+   "new": "0x1433B295A",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp approach_check.py, 2026-10-10) after the IDA agent's match (RE-p2-ladder-approach-L2.md \u00a75, \u00a77)."
+  },
+  {
+   "name": "LiftingRope notify: call FieldAction_ApproachDirCheck_MergedStick",
+   "old": "0x14367C923",
+   "new": "0x1433B2E77",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp approach_check.py, 2026-10-10) after the IDA agent's match (RE-p2-ladder-approach-L2.md \u00a75, \u00a77)."
+  },
+  {
+   "name": "SplineMove (beam) notify: call SplineMove_ApproachCheck_MergedStickPrimaryBasis",
+   "old": "0x142A94023",
+   "new": "0x1426F0BF7",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp approach_check.py, 2026-10-10) after the IDA agent's match (RE-p2-ladder-approach-L2.md \u00a75, \u00a77)."
+  },
+  {
+   "name": "SplineMove_ApproachCheck_MergedStickPrimaryBasis",
+   "old": "0x143714DB4",
+   "new": "0x14344983C",
+   "bytes": "488BC44889580848897010488978184C",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp approach_check.py, 2026-10-10) after the IDA agent's match (RE-p2-ladder-approach-L2.md \u00a75, \u00a77)."
+  },
+  {
+   "name": "OneShotMove notify (chunk): call FieldAction_ApproachDirCheck_MergedStick",
+   "old": "0x142A9418F",
+   "new": "0x1426F09D5",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp approach_check2.py, 2026-10-10) after the IDA agent's match (RE-p2-spider-oneshot-notify-threads.md B; game thread only, installed from the game thread)."
+  },
+  {
+   "name": "MonkeyBars notify: call FieldAction_ApproachDirCheck_MergedStick",
+   "old": "0x143642F6C",
+   "new": "0x1433779BC",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp approach_check2.py, 2026-10-10) after the IDA agent's match (RE-p2-spider-oneshot-notify-threads.md B; game thread only, installed from the game thread)."
+  },
+  {
+   "name": "Zipline notify: call FieldAction_ApproachDirCheck_MergedStick",
+   "old": "0x1436436FD",
+   "new": "0x14337814D",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp approach_check2.py, 2026-10-10) after the IDA agent's match (RE-p2-spider-oneshot-notify-threads.md B; game thread only, installed from the game thread)."
+  },
+  {
+   "name": "SpiderMove notify: call FieldAction_ApproachDirCheck_MergedStick",
+   "old": "0x1436D4E7F",
+   "new": "0x14340A0FB",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp approach_check2.py, 2026-10-10) after the IDA agent's match (RE-p2-spider-oneshot-notify-threads.md B; game thread only, installed from the game thread)."
+  }
+ ]
+}
