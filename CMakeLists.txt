@@ -79,6 +79,7 @@ add_library(LocalSplitScreen SHARED
     src/player_two/climb_context.cpp
     src/player_two/near_fade.cpp
     src/player_two/approach_two.cpp
+    src/player_two/move_type_two.cpp
     src/player_two/anim_two_views.cpp
     src/player_two/traversal_camera.cpp
     src/player_two/traversal_watch.cpp

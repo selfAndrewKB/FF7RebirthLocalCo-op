@@ -1,0 +1,62 @@
+{
+ "build": "1.005",
+ "research_build": "1.004",
+ "date": "2026-10-10",
+ "doc": "Rebirth/Documentation/research/RE-p2-walk-mode.md",
+ "facts": [
+  {
+   "name": "PrimaryPC_SetByte890 (layer, value)",
+   "old": "0x1408A801C",
+   "new": "0x140945300",
+   "bytes": "48895C240857B820000000E870688201",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp walk_l2_facts.py, 2026-10-10) after the IDA agent's match (RE-p2-walk-mode.md \u00a77)."
+  },
+  {
+   "name": "PrimaryPC_ClearMoveTypeLayer2_IfFieldLeaderPC",
+   "old": "0x1412E4484",
+   "new": "0x140FA64B8",
+   "bytes": "B828000000E8BE561C01482BE0B101E8",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp walk_l2_facts.py, 2026-10-10) after the IDA agent's match (RE-p2-walk-mode.md \u00a77)."
+  },
+  {
+   "name": "slot: FieldActMove58DFA88 phase table [4] (Phase4_WalkCapL2)",
+   "old": "0x1470B98C0",
+   "new": "0x146EECA40",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp walk_l2_facts.py, 2026-10-10) after the IDA agent's match (RE-p2-walk-mode.md \u00a77)."
+  },
+  {
+   "name": "FieldActMove58DFA88 fn",
+   "old": "0x1432A4C74",
+   "new": "0x142FB7C24",
+   "bytes": "48895C2410488974241848897C242041",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp walk_l2_facts.py, 2026-10-10) after the IDA agent's match (RE-p2-walk-mode.md \u00a77)."
+  },
+  {
+   "name": "slot: RedChainDoorAction End +0x120",
+   "old": "0x145CE5898",
+   "new": "0x145B4F6B0",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp walk_l2_facts.py, 2026-10-10) after the IDA agent's match (RE-p2-walk-mode.md \u00a77)."
+  },
+  {
+   "name": "RedChainDoorAction End fn",
+   "old": "0x1432BDE98",
+   "new": "0x142FCF498",
+   "bytes": "488BC448895810488970184889782055",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp walk_l2_facts.py, 2026-10-10) after the IDA agent's match (RE-p2-walk-mode.md \u00a77)."
+  }
+ ]
+}
