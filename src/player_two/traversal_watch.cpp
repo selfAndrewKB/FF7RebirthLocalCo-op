@@ -10,6 +10,7 @@
 #include "player_two/describe.h"
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
+#include "player_two/traversal_camera.h"
 #include "player_two/leader_scope.h"
 #include "player_two/object_fields.h"
 #include "player_two/primary_controller.h"
@@ -399,8 +400,17 @@ void CountDispatch(const void* tracker, std::int32_t count) noexcept
         try
         {
             static constexpr const wchar_t* kWhose[] = {L"player 1's", L"player 2's", L"another"};
-            platform::LogDebug(L"traversal: the field tick dispatches {} trigger tracker with {} overlap(s)", kWhose[whose],
-                               count);
+            // Every other tracker shares the "another" count, so it changes on most calls: Trace, not Debug.
+            if (whose == 2)
+            {
+                platform::LogTrace(L"traversal: the field tick dispatches {} trigger tracker with {} overlap(s)",
+                                   kWhose[whose], count);
+            }
+            else
+            {
+                platform::LogDebug(L"traversal: the field tick dispatches {} trigger tracker with {} overlap(s)",
+                                   kWhose[whose], count);
+            }
         }
         catch (...)
         {
@@ -584,7 +594,8 @@ std::wstring ExecuterCharacter(void* executer)
 
 std::uintptr_t ExecStart(void* executer) noexcept
 {
-    const auto result = reinterpret_cast<ExecFn>(g_execStart.Original())(executer);
+    // The game's Start, through player 2's ladder camera (which passes every other climb straight through).
+    const auto result = traversal_camera::LadderStart(reinterpret_cast<ExecFn>(g_execStart.Original()), executer);
     if (generation::Active())
     {
         if (generation::OnGameThread())
@@ -632,7 +643,7 @@ std::uintptr_t ExecEnd(void* executer) noexcept
         {
         }
     }
-    return reinterpret_cast<ExecFn>(g_execEnd.Original())(executer);
+    return traversal_camera::LadderEnd(reinterpret_cast<ExecFn>(g_execEnd.Original()), executer);
 }
 
 std::uintptr_t ExecInput(void* executer, float dt) noexcept
@@ -656,7 +667,7 @@ std::uintptr_t ExecInput(void* executer, float dt) noexcept
             climb->inScope += scoped ? 1 : 0;
         }
     }
-    return reinterpret_cast<ExecInputFn>(g_execInput.Original())(executer, dt);
+    return traversal_camera::LadderInput(reinterpret_cast<ExecInputFn>(g_execInput.Original()), executer, dt);
 }
 
 // --- the chocobo's glide and jet states ---

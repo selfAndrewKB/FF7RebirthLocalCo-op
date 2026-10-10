@@ -1,0 +1,125 @@
+{
+ "build": "1.005",
+ "research_build": "1.004",
+ "date": "2026-10-10",
+ "doc": "Rebirth/Documentation/research/RE-p2-traversal-climb-holder.md",
+ "facts": [
+  {
+   "name": "slot: Climbing actor leave +0x8F8 (1.005 +0x900)",
+   "old": "0x1458334E0",
+   "new": "0x14567D720",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp holder_check.py, 2026-10-10) after the IDA agent's match (RE-p2-traversal-climb-holder.md \u00a75)."
+  },
+  {
+   "name": "Climbing actor leave +0x8F8 (1.005 +0x900) fn",
+   "old": "0x14132DA18",
+   "new": "0x1415923F0",
+   "bytes": "B828000000E88697BD00482BE04881C1",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp holder_check.py, 2026-10-10) after the IDA agent's match (RE-p2-traversal-climb-holder.md \u00a75)."
+  },
+  {
+   "name": "slot: MonkeyBars actor leave +0x8F8 (1.005 +0x900)",
+   "old": "0x1466EF948",
+   "new": "0x14657CD70",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp holder_check.py, 2026-10-10) after the IDA agent's match (RE-p2-traversal-climb-holder.md \u00a75)."
+  },
+  {
+   "name": "slot: SpiderMove actor leave +0x8F8 (1.005 +0x900)",
+   "old": "0x146709EF0",
+   "new": "0x146597880",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp holder_check.py, 2026-10-10) after the IDA agent's match (RE-p2-traversal-climb-holder.md \u00a75)."
+  },
+  {
+   "name": "slot: Climbing actor EndPlay +0x340 (1.005 +0x348)",
+   "old": "0x145832F28",
+   "new": "0x14567D168",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp holder_check.py, 2026-10-10) after the IDA agent's match (RE-p2-traversal-climb-holder.md \u00a75)."
+  },
+  {
+   "name": "Climbing actor EndPlay +0x340 (1.005 +0x348) fn",
+   "old": "0x14158AAD8",
+   "new": "0x14124B850",
+   "bytes": "4053B820000000E82403F200482BE048",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp holder_check.py, 2026-10-10) after the IDA agent's match (RE-p2-traversal-climb-holder.md \u00a75)."
+  },
+  {
+   "name": "slot: MonkeyBars actor EndPlay +0x340 (1.005 +0x348)",
+   "old": "0x1466EF390",
+   "new": "0x14657C7B8",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp holder_check.py, 2026-10-10) after the IDA agent's match (RE-p2-traversal-climb-holder.md \u00a75)."
+  },
+  {
+   "name": "MonkeyBars actor EndPlay +0x340 (1.005 +0x348) fn",
+   "old": "0x1418D1B14",
+   "new": "0x141955A28",
+   "bytes": "B828000000E84E618100482BE04883C4",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp holder_check.py, 2026-10-10) after the IDA agent's match (RE-p2-traversal-climb-holder.md \u00a75)."
+  },
+  {
+   "name": "slot: SpiderMove actor EndPlay +0x340 (1.005 +0x348)",
+   "old": "0x146709938",
+   "new": "0x1465972C8",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp holder_check.py, 2026-10-10) after the IDA agent's match (RE-p2-traversal-climb-holder.md \u00a75)."
+  },
+  {
+   "name": "CameraModuleHolder_InstallSharedModule",
+   "old": "0x141683E04",
+   "new": "0x1415B109C",
+   "bytes": "48895C2408488974241048897C241841",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp holder_check.py, 2026-10-10) after the IDA agent's match (RE-p2-traversal-climb-holder.md \u00a75)."
+  },
+  {
+   "name": "CameraModuleHolder_GetModule",
+   "old": "0x141634DA8",
+   "new": "0x140946CB8",
+   "bytes": "48895C241057B830000000E8B84E8201",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp holder_check.py, 2026-10-10) after the IDA agent's match (RE-p2-traversal-climb-holder.md \u00a75)."
+  },
+  {
+   "name": "CameraModuleHolder_Leave_IfOwnerChar",
+   "old": "0x14128E8EC",
+   "new": "0x140F2C6D4",
+   "bytes": "48895C241048896C2418488974242057",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp holder_check.py, 2026-10-10) after the IDA agent's match (RE-p2-traversal-climb-holder.md \u00a75)."
+  },
+  {
+   "name": "CameraModuleHolder_Validate_OwnerIsLeaderTypeUser_ElseLeave",
+   "old": "0x140E5D17C",
+   "new": "0x140EE98B8",
+   "bytes": "48895C24105556574154415541564157",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp holder_check.py, 2026-10-10) after the IDA agent's match (RE-p2-traversal-climb-holder.md \u00a75)."
+  }
+ ]
+}

@@ -1,0 +1,98 @@
+{
+ "build": "1.005",
+ "research_build": "1.004",
+ "date": "2026-10-09",
+ "doc": "Rebirth/Documentation/research/RE-p2-traversal-worker-gates.md",
+ "facts": [
+  {
+   "name": "slot: Climbing actor vt+0x790 (1.005 +0x798)",
+   "old": "0x145833378",
+   "new": "0x14567D5B8",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp gates_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-worker-gates.md \u00a78)."
+  },
+  {
+   "name": "Climbing actor fn",
+   "old": "0x140E5D070",
+   "new": "0x140EE97AC",
+   "bytes": "48895C2408488974241057B820000000",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp gates_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-worker-gates.md \u00a78)."
+  },
+  {
+   "name": "slot: MonkeyBars actor vt+0x790 (1.005 +0x798)",
+   "old": "0x1466EF7E0",
+   "new": "0x14657CC08",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp gates_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-worker-gates.md \u00a78)."
+  },
+  {
+   "name": "slot: SpiderMove actor vt+0x790 (1.005 +0x798)",
+   "old": "0x146709D88",
+   "new": "0x146597718",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp gates_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-worker-gates.md \u00a78)."
+  },
+  {
+   "name": "slot: CrackExecuter Tick +0x20",
+   "old": "0x145812480",
+   "new": "0x1456820D0",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp gates_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-worker-gates.md \u00a78)."
+  },
+  {
+   "name": "CrackExecuter Tick fn",
+   "old": "0x141330054",
+   "new": "0x141593B80",
+   "bytes": "48895C2410488974241855574156488B",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp gates_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-worker-gates.md \u00a78)."
+  },
+  {
+   "name": "slot: CrouchedExecuter Tick +0x20",
+   "old": "0x145812540",
+   "new": "0x1456DEBE0",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp gates_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-worker-gates.md \u00a78)."
+  },
+  {
+   "name": "CrouchedExecuter Tick fn",
+   "old": "0x141331314",
+   "new": "0x141594874",
+   "bytes": "48895C2410488974241848897C242055",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp gates_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-worker-gates.md \u00a78)."
+  },
+  {
+   "name": "CrackExecuter_ExitDelegate_UCPC_CameraOff",
+   "old": "0x1422A92E0",
+   "new": "0x141949B8C",
+   "bytes": "48895C240857B820000000E8E41F8200",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp gates_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-worker-gates.md \u00a78)."
+  },
+  {
+   "name": "StateManagedActor_CameraOff_RailOp7OrVt8F8",
+   "old": "0x14132EB5C",
+   "new": "0x1415935D8",
+   "bytes": "4053B870000000E89C85BD00482BE080",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp gates_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-worker-gates.md \u00a78)."
+  }
+ ]
+}

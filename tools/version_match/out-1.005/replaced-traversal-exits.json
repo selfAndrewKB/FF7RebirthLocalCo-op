@@ -1,0 +1,44 @@
+{
+ "build": "1.005",
+ "research_build": "1.004",
+ "date": "2026-10-09",
+ "doc": "Rebirth/Documentation/research/RE-p2-traversal-ladder-exit.md, RE-p2-traversal-camera-collision.md",
+ "facts": [
+  {
+   "name": "call site: ClimbingMove phase-3 exit -> IsUCPC_Core",
+   "old": "0x14141B946",
+   "new": "0x1413E8ABA",
+   "bytes": "E829A05CFF",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "mov rcx, rdi; E8 inside one 16-byte block in both builds; target IsUCPC_Core checked in both exes (main session, tmp exits_check.py, 2026-10-09; RE-p2-traversal-camera-collision.md \u00a76.3)."
+  },
+  {
+   "name": "call site: ClimbingMove phase-3 enter -> IsUCPC_Core",
+   "old": "0x14141C056",
+   "new": "0x1413E91B8",
+   "bytes": "E82B995CFF",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "mov rcx, rdi; E8 inside one 16-byte block in both builds; target IsUCPC_Core checked in both exes (main session, tmp exits_check.py, 2026-10-09; RE-p2-traversal-camera-collision.md \u00a76.3)."
+  },
+  {
+   "name": "LadderExecuter_OnClimbStateChanged_RequestCamExit",
+   "old": "0x1422AB010",
+   "new": "0x140EDC860",
+   "bytes": "48895C2410488974241857B870000000",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Same 16 bytes in both exes; each build's delegate thunk calls it (main session, tmp exits_check.py, 2026-10-09; RE-p2-traversal-ladder-exit.md \u00a78)."
+  },
+  {
+   "name": "vt_FEndClimbingCameraModule",
+   "old": "0x145854970",
+   "new": "0x1456822B8",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "vt+0x20 holds FEndClimbingCameraModule_Update_Vt20_HipPivot in both exes (0x1416B8784 / 0x14172BB74), +0x10/+0x18 Activate/Deactivate as the collision doc \u00a78 (main session, tmp exits_check.py, 2026-10-09)."
+  }
+ ]
+}

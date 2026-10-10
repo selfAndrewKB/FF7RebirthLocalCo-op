@@ -1,0 +1,332 @@
+{
+ "build": "1.005",
+ "research_build": "1.004",
+ "date": "2026-10-09",
+ "doc": "Rebirth/Documentation/research/RE-p2-traversal-cameras.md",
+ "facts": [
+  {
+   "name": "slot: CrackExecuter Start +0x10",
+   "old": "0x145812470",
+   "new": "0x1456820C0",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp cams_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-cameras.md \u00a79)."
+  },
+  {
+   "name": "CrackExecuter Start fn",
+   "old": "0x141413D04",
+   "new": "0x141592410",
+   "bytes": "48895C2410488974241855574156488D",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp cams_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-cameras.md \u00a79)."
+  },
+  {
+   "name": "slot: CrackExecuter End +0x18",
+   "old": "0x145812478",
+   "new": "0x1456820C8",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp cams_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-cameras.md \u00a79)."
+  },
+  {
+   "name": "CrackExecuter End fn",
+   "old": "0x141413280",
+   "new": "0x141591CA4",
+   "bytes": "48895C2418488974242055574156488B",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp cams_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-cameras.md \u00a79)."
+  },
+  {
+   "name": "slot: CrouchedExecuter Start +0x10",
+   "old": "0x145812530",
+   "new": "0x1456DEBD0",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp cams_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-cameras.md \u00a79)."
+  },
+  {
+   "name": "CrouchedExecuter Start fn",
+   "old": "0x14151F3DC",
+   "new": "0x141595F64",
+   "bytes": "48895C241048896C241856574156B8D0",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp cams_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-cameras.md \u00a79)."
+  },
+  {
+   "name": "slot: CrouchedExecuter End +0x18",
+   "old": "0x145812538",
+   "new": "0x1456DEBD8",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp cams_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-cameras.md \u00a79)."
+  },
+  {
+   "name": "CrouchedExecuter End fn",
+   "old": "0x14151F04C",
+   "new": "0x1417E7E94",
+   "bytes": "48895C2418488974242055574157488B",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp cams_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-cameras.md \u00a79)."
+  },
+  {
+   "name": "slot: PoleSliderExecuter Start +0x10",
+   "old": "0x1466ED7C0",
+   "new": "0x14657C400",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp cams_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-cameras.md \u00a79)."
+  },
+  {
+   "name": "PoleSliderExecuter Start fn",
+   "old": "0x143635638",
+   "new": "0x143369F70",
+   "bytes": "48895C2410488974241855574156488D",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp cams_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-cameras.md \u00a79)."
+  },
+  {
+   "name": "slot: PoleSliderExecuter End +0x18",
+   "old": "0x1466ED7C8",
+   "new": "0x14657C408",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp cams_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-cameras.md \u00a79)."
+  },
+  {
+   "name": "PoleSliderExecuter End fn",
+   "old": "0x143638D00",
+   "new": "0x14336D6E8",
+   "bytes": "48895C241048896C2418488974242057",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp cams_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-cameras.md \u00a79)."
+  },
+  {
+   "name": "slot: PoleSliderExecuter Tick +0x20",
+   "old": "0x1466ED7D0",
+   "new": "0x14657C410",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp cams_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-cameras.md \u00a79)."
+  },
+  {
+   "name": "PoleSliderExecuter Tick fn",
+   "old": "0x143647374",
+   "new": "0x14337B950",
+   "bytes": "48895C2408488974241048897C241855",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp cams_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-cameras.md \u00a79)."
+  },
+  {
+   "name": "slot: LiftingRopeExecuter Start +0x10",
+   "old": "0x1466FF520",
+   "new": "0x14658C050",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp cams_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-cameras.md \u00a79)."
+  },
+  {
+   "name": "LiftingRopeExecuter Start fn",
+   "old": "0x14366B55C",
+   "new": "0x1433A1DC8",
+   "bytes": "48895C241048897424185741564157B8",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp cams_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-cameras.md \u00a79)."
+  },
+  {
+   "name": "slot: LiftingRopeExecuter End +0x18",
+   "old": "0x1466FF528",
+   "new": "0x14658C058",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp cams_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-cameras.md \u00a79)."
+  },
+  {
+   "name": "LiftingRopeExecuter End fn",
+   "old": "0x14366E374",
+   "new": "0x1433A4C68",
+   "bytes": "48895C2410488974241848897C242055",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp cams_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-cameras.md \u00a79)."
+  },
+  {
+   "name": "slot: LiftingRopeExecuter Tick +0x20 (shared FieldActionExecuter tick)",
+   "old": "0x1466FF530",
+   "new": "0x14658C060",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp cams_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-cameras.md \u00a79)."
+  },
+  {
+   "name": "LiftingRopeExecuter Tick fn",
+   "old": "0x1436827D0",
+   "new": "0x1433B84A8",
+   "bytes": "4053B830000000E8CC36DBFE482BE048",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp cams_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-cameras.md \u00a79)."
+  },
+  {
+   "name": "slot: ClimbingMove Begin +0x98",
+   "old": "0x145833800",
+   "new": "0x1457BA610",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp cams_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-cameras.md \u00a79)."
+  },
+  {
+   "name": "ClimbingMove Begin fn",
+   "old": "0x1414182B0",
+   "new": "0x141597A24",
+   "bytes": "48895C24104889742418555741544156",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp cams_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-cameras.md \u00a79)."
+  },
+  {
+   "name": "slot: MonkeyBarsMove Begin +0x98",
+   "old": "0x146695AA0",
+   "new": "0x146522D50",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp cams_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-cameras.md \u00a79)."
+  },
+  {
+   "name": "MonkeyBarsMove Begin fn",
+   "old": "0x1432F0790",
+   "new": "0x142FFF6B8",
+   "bytes": "48895C2410488974241855574156488D",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp cams_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-cameras.md \u00a79)."
+  },
+  {
+   "name": "slot: SpiderMoveMove Begin +0x98",
+   "old": "0x146696D80",
+   "new": "0x1465239D0",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp cams_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-cameras.md \u00a79)."
+  },
+  {
+   "name": "SpiderMoveMove Begin fn",
+   "old": "0x143304A90",
+   "new": "0x143014104",
+   "bytes": "488BC44889580848897010488978184C",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp cams_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-cameras.md \u00a79)."
+  },
+  {
+   "name": "call site: MonkeyBarsMove Tick -> FieldActionMove_IsPlayerChar",
+   "old": "0x1432FAC10",
+   "new": "0x143009B98",
+   "bytes": "E8031E3EFE",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "E8 inside one 16-byte block in both builds; target checked in both exes."
+  },
+  {
+   "name": "call site: SpiderMoveMove Tick -> FieldActionMove_IsPlayerChar",
+   "old": "0x143312F31",
+   "new": "0x1430225A9",
+   "bytes": "E8F2933CFE",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "E8 inside one 16-byte block in both builds; target checked in both exes."
+  },
+  {
+   "name": "FieldActionMove_IsPlayerChar_UCPCOrLeaderTypeTag",
+   "old": "0x141634C30",
+   "new": "0x1413EB9A0",
+   "bytes": "4053B820000000E8D401D800482BE048",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp cams_check.py, 2026-10-09) after the IDA agent's match (RE-p2-traversal-cameras.md \u00a79)."
+  },
+  {
+   "name": "slot: OneShotMoveExecuter Start +0x10",
+   "old": "0x146706C50",
+   "new": "0x146594710",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp oneshot_facts.py, 2026-10-10) after the IDA agent's match (RE-p2-traversal-cameras.md \u00a79.1, \u00a710)."
+  },
+  {
+   "name": "OneShotMoveExecuter Start fn",
+   "old": "0x143693618",
+   "new": "0x1433CB044",
+   "bytes": "48895C2410488974241848897C242041",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp oneshot_facts.py, 2026-10-10) after the IDA agent's match (RE-p2-traversal-cameras.md \u00a79.1, \u00a710)."
+  },
+  {
+   "name": "slot: OneShotMoveExecuter End +0x18",
+   "old": "0x146706C58",
+   "new": "0x146594718",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp oneshot_facts.py, 2026-10-10) after the IDA agent's match (RE-p2-traversal-cameras.md \u00a79.1, \u00a710)."
+  },
+  {
+   "name": "OneShotMoveExecuter End fn",
+   "old": "0x143695630",
+   "new": "0x1433CCFA4",
+   "bytes": "48895C2410488974241848897C242055",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp oneshot_facts.py, 2026-10-10) after the IDA agent's match (RE-p2-traversal-cameras.md \u00a79.1, \u00a710)."
+  },
+  {
+   "name": "slot: OneShotMoveExecuter Tick +0x20 (shared FieldActionExecuter tick)",
+   "old": "0x146706C60",
+   "new": "0x146594720",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp oneshot_facts.py, 2026-10-10) after the IDA agent's match (RE-p2-traversal-cameras.md \u00a79.1, \u00a710)."
+  },
+  {
+   "name": "slot: OneShotMove actor leave +0x8F8 (1.005 +0x900)",
+   "old": "0x14580F7F8",
+   "new": "0x145731940",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp oneshot_facts.py, 2026-10-10) after the IDA agent's match (RE-p2-traversal-cameras.md \u00a79.1, \u00a710)."
+  },
+  {
+   "name": "OneShotMove actor leave fn",
+   "old": "0x1436A9130",
+   "new": "0x1433E0A18",
+   "bytes": "4053B820000000E85CB1D8FE482BE080",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp oneshot_facts.py, 2026-10-10) after the IDA agent's match (RE-p2-traversal-cameras.md \u00a79.1, \u00a710)."
+  }
+ ]
+}

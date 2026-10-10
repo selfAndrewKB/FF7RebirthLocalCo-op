@@ -1,0 +1,26 @@
+{
+ "build": "1.005",
+ "research_build": "1.004",
+ "date": "2026-10-09",
+ "doc": "Rebirth/Documentation/research/RE-p2-traversal-L3-ladder-camera.md",
+ "facts": [
+  {
+   "name": "vt_LadderExecuter +0x20 entry: Tick",
+   "old": "0x1458125E0",
+   "new": "0x145787610",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "The slot holds LadderExecuter_Tick_Vt20 in both exes (vtable 1.004 0x1458125C0, 1.005 0x1457875F0; read with pe_image by the main session 2026-10-09, after the IDA agent's match)."
+  },
+  {
+   "name": "LadderExecuter_Tick_Vt20",
+   "old": "0x14132F658",
+   "new": "0x141594234",
+   "bytes": "48895C2410488974241848897C242055",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Sub-state tick, then at the climb move's exit phase (+0xC0 -> +0x4E8 = 3, 6 or 10) camera off gated by IsUCPC_Core (1.004 call 0x14132F7F3, 1.005 0x1415943CF). Same prologue in both builds."
+  }
+ ]
+}
