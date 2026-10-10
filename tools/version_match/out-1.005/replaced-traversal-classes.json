@@ -1,0 +1,23 @@
+{
+ "build": "1.005",
+ "research_build": "1.004",
+ "date": "2026-10-09",
+ "doc": "Rebirth/Documentation/research/RE-p2-traversal-classes.md",
+ "facts": [
+  {"name": "vt ClimbingActor", "old": "0x145832BE8", "new": "0x14567CE20", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "Trigger slot holds the shared OnTriggerEnter in both exes (1.004 +0x710 = 0x1409DC534, 1.005 +0x718 = 0x140D813D0); read by the main session's pe_image check 2026-10-09 (tmp classes_check.py)."},
+  {"name": "vt Crouched", "old": "0x1457D8960", "new": "0x14567F388", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "As ClimbingActor."},
+  {"name": "vt Crack", "old": "0x1466E8B68", "new": "0x145681760", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "As ClimbingActor."},
+  {"name": "vt SplineMove", "old": "0x145872C88", "new": "0x145758C48", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "As ClimbingActor."},
+  {"name": "vt MonkeyBars", "old": "0x1466EF050", "new": "0x14657C470", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "As ClimbingActor."},
+  {"name": "vt LiftingRope", "old": "0x1466FE5D0", "new": "0x14658C8D8", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "As ClimbingActor."},
+  {"name": "vt SpiderMove", "old": "0x1467095F8", "new": "0x146596F80", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "As ClimbingActor."},
+  {"name": "vt Zipline", "old": "0x1458BA188", "new": "0x14571A528", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "As ClimbingActor; bUseEnterEffect at +0x770 in both builds."},
+  {"name": "vt PoleSlider", "old": "0x1458B41F8", "new": "0x14575B888", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "As ClimbingActor; register/unregister slots hold 0x143642820/0x143642998 (1.004) and 0x143377270/0x1433773E8 (1.005)."},
+  {"name": "vt OneShotMove", "old": "0x14580EF00", "new": "0x145731040", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "As ClimbingActor; register/unregister slots hold 0x141812DB0/0x141812E50 (1.004) and 0x140D7E4EC/0x1433D85BC (1.005)."},
+  {"name": "vt WallRunning", "old": "0x146707D88", "new": "0x146595638", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "As ClimbingActor; register/unregister 0x1436D4AE4/0x1436D4C30 (1.004), 0x143409D60/0x143409EAC (1.005)."},
+  {"name": "PoleSlider unregister override (stored +0x758)", "old": "0x143642998", "new": "0x1433773E8", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "Unregisters from the stored +0x758 character's controller; read at the vtable's unregister slot in both exes."},
+  {"name": "OneShotMove unregister override (stored +0x840)", "old": "0x141812E50", "new": "0x1433D85BC", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "Unregisters from the stored +0x840 character's controller; read at the vtable's unregister slot in both exes."},
+  {"name": "LeaderActionComp_FindWallRunActorEntered_Flag2A1", "old": "0x143CFFE9C", "new": "0x143A61384", "bytes": "48895C2408488974241057B820000000", "same_semantics": true, "confidence": "CONFIRMED", "note": "(LeaderActionComp) -> the first actor on its wall-run list +0x14F0 whose +0x2A1 is set. Same first 16 bytes in both builds."},
+  {"name": "call site: WallRunState_UpdateInput_Body -> FindWallRunActorEntered", "old": "0x1434372CA", "new": "0x14315631A", "bytes": "E865B09000", "same_semantics": true, "confidence": "CONFIRMED", "note": "Its only call; %16 = 0xA in both builds (inside one block). 1.004 bytes E8CD8B8C00. Target checked in both exes."}
+ ]
+}

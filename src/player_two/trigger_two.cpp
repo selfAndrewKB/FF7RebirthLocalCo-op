@@ -13,11 +13,13 @@
 #include "player_two/primary_controller.h"
 #include "player_two/traversal_watch.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <format>
+#include <iterator>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -68,8 +70,55 @@ constexpr std::uint8_t kFindActorBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 
 constexpr platform::FunctionFact kFindActor{L"EndActorTagRegistry_FindActorByTag", 0x140DD6634, kFindActorBytes};
 using FindActorFn = void* (*)(const std::uint64_t* key);
 
-// The classes admitted for player 2 (native vtables; placed Blueprint ladders keep them, live 2026-10-09).
-constexpr std::uintptr_t kLadderVt = 0x145940748;  // 1.005 0x1457A2650
+// The classes admitted for player 2 (research/RE-p2-traversal-classes.md §7): native vtables, which placed Blueprint
+// actors keep. Each registers on the leader's controller list through the shared trigger enter (checked live at the
+// slot below); its register/unregister reads only the leader, so the same delivery serves all of them. 1.005 vtables
+// through replaced-traversal-classes.json.
+struct AdmittedClass
+{
+    const wchar_t* name;
+    std::uintptr_t vtable;
+    std::uint32_t  storedWeak = 0;   // a character weak the class stores at register and unregisters from (shadowed too)
+    std::uintptr_t unregister = 0;   // that class's unregister override, checked at its slot
+    bool           enterEffectOnly = false;  // zip lines: only the auto-start kind (bUseEnterEffect +0x770)
+    bool           logsUseFields   = false;  // one-shot moves: the register's +0x848 / +0x86C, logged per delivery
+};
+constexpr AdmittedClass kAdmitted[] = {
+    {L"ladder", 0x145940748},
+    {L"climbing wall", 0x145832BE8},
+    {L"crawl", 0x1457D8960},
+    {L"squeeze", 0x1466E8B68},
+    {L"beam", 0x145872C88},
+    {L"monkey bars", 0x1466EF050},
+    {L"lifting rope", 0x1466FE5D0},
+    {L"spider move", 0x1467095F8},
+    {L"zip line", 0x1458BA188, 0, 0, true},
+    {L"pole slide", 0x1458B41F8, 0x758, 0x143642998},
+    {L"one-shot move", 0x14580EF00, 0x840, 0x141812E50, false, true},
+    {L"wall run", 0x146707D88},
+};
+constexpr std::size_t   kClassCount     = std::size(kAdmitted);
+constexpr std::uint32_t kZiplineEnterEffect = 0x770;  // u8 bUseEnterEffect: set = starts on approach, else a button prompt
+constexpr std::uint32_t kOneShotUseA     = 0x848;  // OneShotMove fields its register resets [UNKNOWN meaning]: logged
+constexpr std::uint32_t kOneShotUseB     = 0x86C;
+constexpr std::uintptr_t kTriggerEnter   = 0x1409DC534;  // End2FieldActionActor_OnTriggerEnter (1.005 0x140D813D0)
+inline constexpr platform::PerBuild<std::uint32_t> kEnterSlot{0x710, 0x718};
+inline constexpr platform::PerBuild<std::uint32_t> kUnregisterSlot{0x728, 0x730};
+constexpr std::uint64_t kNoWeak = 0x00000000FFFFFFFFull;  // FWeakObjectPtr reset: index -1, serial 0
+
+// The wall-run move state's camera pick (RE §3.13): LeaderActionComp_FindWallRunActorEntered_Flag2A1(lac) returns the
+// first actor on the LeaderActionComp's wall-run list (+0x14F0) whose REAL entered flag is set. Its only call
+// (1.004 0x1434372CA, 1.005 0x14315631A, inside one 16-byte block in both) is taken over: for player 2's
+// LeaderActionComp (*(PC2+0x598)) player 2's flags are swapped in around it.
+constexpr std::uintptr_t kWallRunPickCall = 0x1434372CA;
+constexpr std::uint8_t   kWallRunPickBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
+                                                0x24, 0x10, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
+constexpr platform::FunctionFact kWallRunPick{L"LeaderActionComp_FindWallRunActorEntered_Flag2A1", 0x143CFFE9C,
+                                              kWallRunPickBytes};
+using WallRunPickFn = void* (*)(void* leaderActionComp);
+constexpr std::uint32_t kControllerLeaderAction = 0x598;   // PC -> its LeaderActionComp
+constexpr std::uint32_t kWallRunList            = 0x14F0;  // TArray<FWeakObjectPtr>: data, then the count at +0x8
+constexpr std::int32_t  kWallRunListMax         = 32;
 
 // End2FieldActionActorBase's entered flag: its trigger enter needs 0 and sets 1, its leave needs 1 and sets 0. One per
 // actor, so player 2's is kept aside (the shadow) and swapped in around player 2's deliveries; the field is player 1's.
@@ -166,7 +215,9 @@ CRITICAL_SECTION*    g_overlapLock  = nullptr;
 const std::uint8_t*  g_sweepFlagA   = nullptr;
 const std::uint8_t*  g_sweepFlagB   = nullptr;
 FindActorFn          g_findActor    = nullptr;  // null: no class is admitted, every event of player 2's is held back
-std::uintptr_t       g_ladderVt     = 0;
+std::uintptr_t       g_classVt[kClassCount] = {};  // live vtables of the admitted classes that passed their checks (0: not)
+platform::CallRedirect g_wallRunCall;
+const void*            g_wallRunPicked = nullptr;  // player 2's last camera pick, logged on change
 
 // Game thread only.
 struct Counts
@@ -175,15 +226,31 @@ struct Counts
     unsigned deliveredEnters = 0, deliveredLeaves = 0, refused = 0;
 };
 
-// Player 2's entered flags, by the actor's weak value; only set flags are kept. They belong to one trigger's tracker
-// (its last-pass list says which actors it is inside), so they are dropped when player 2's trigger is another object.
-std::unordered_map<std::uint64_t, std::uint8_t> g_shadow;
+// Player 2's per-actor state, by the actor's weak value: the entered flag, and for classes that store a character the
+// stored weak. Kept only while the flag is set. It belongs to one trigger's tracker (its last-pass list says which
+// actors it is inside), so it is dropped when player 2's trigger is another object.
+struct Shadow
+{
+    std::uint8_t  flag   = 0;
+    std::uint64_t stored = kNoWeak;
+};
+std::unordered_map<std::uint64_t, Shadow> g_shadow;
 std::uint64_t                                   g_shadowOwner = 0;
 bool                                            g_delivering  = false;  // inside the game's filter for player 2
 constexpr std::size_t                           kShadowPrune  = 32;  // past this, entries of destroyed actors go
+
+/// Holds g_delivering for one delivery; reset on every way out.
+struct Delivering
+{
+    Delivering() noexcept { g_delivering = true; }
+    ~Delivering() { g_delivering = false; }
+    Delivering(const Delivering&)            = delete;
+    Delivering& operator=(const Delivering&) = delete;
+};
 Counts                                g_counts{};
 std::int32_t                          g_lastCount = -1;
 bool                                  g_skipLogged = false;
+bool                                  g_wallRunCapLogged = false;
 std::chrono::steady_clock::time_point g_summaryAt{};
 
 using WeakGetFn = void* (*)(const void* weak);
@@ -397,15 +464,15 @@ void* PassedActor(bool enter, void* actorArg) noexcept
     return enter ? Resolve(actorArg) : actorArg;
 }
 
-std::uint8_t ShadowOf(std::uint64_t weak) noexcept
+Shadow ShadowOf(std::uint64_t weak) noexcept
 {
     const auto found = g_shadow.find(weak);
-    return found != g_shadow.end() ? found->second : 0;
+    return found != g_shadow.end() ? found->second : Shadow{};
 }
 
-void KeepShadow(std::uint64_t weak, std::uint8_t flag)
+void KeepShadow(std::uint64_t weak, const Shadow& shadow)
 {
-    if (flag == 0)
+    if (shadow.flag == 0)
     {
         g_shadow.erase(weak);
         return;
@@ -414,7 +481,21 @@ void KeepShadow(std::uint64_t weak, std::uint8_t flag)
     {
         std::erase_if(g_shadow, [](const auto& entry) { return leader_scope::ObjectAt(&entry.first) == nullptr; });
     }
-    g_shadow[weak] = flag;
+    g_shadow[weak] = shadow;
+}
+
+/// The admitted class `actor` belongs to (by its vtable), or -1.
+int ClassOf(const void* actor) noexcept
+{
+    const auto vt = VTableOf(actor);
+    for (std::size_t i = 0; i < kClassCount; ++i)
+    {
+        if (vt != 0 && g_classVt[i] == vt)
+        {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
 }
 
 void LogEvent(bool enter, const void* actor, const void* passed, std::wstring_view outcome)
@@ -425,9 +506,9 @@ void LogEvent(bool enter, const void* actor, const void* passed, std::wstring_vi
     std::wstring kind = L"no actor";
     if (actor != nullptr)
     {
-        kind = VTableOf(actor) == g_ladderVt
-                   ? std::wstring(L"ladder")
-                   : std::format(L"vt 0x{:X}", g_image ? g_image->ResearchAddress(VTableOf(actor)) : 0);
+        const int cls = ClassOf(actor);
+        kind          = cls >= 0 ? std::wstring(kAdmitted[cls].name)
+                                 : std::format(L"vt 0x{:X}", g_image ? g_image->ResearchAddress(VTableOf(actor)) : 0);
     }
     platform::LogDebug(L"trigger two: player 2's trigger {} {} ({}; {}): {}", enter ? L"enters" : L"leaves",
                        actor != nullptr ? NameOf(actor) : std::wstring(L"(not in the tag registry)"), kind, match,
@@ -438,7 +519,7 @@ void LogEvent(bool enter, const void* actor, const void* passed, std::wstring_vi
 /// controller answer player 2 (the register and unregister use the leader's controller's list, the enter and leave
 /// checks the primary controller's tracker), and the entered flag is player 2's own.
 std::uintptr_t Deliver(bool enter, FilterFn original, void* manager, std::uint64_t key, void* owner, void* actorArg,
-                       void* actor, const void* passed)
+                       void* actor, const void* passed, const AdmittedClass& cls)
 {
     void*      member     = generation::Member();
     const auto memberWeak = leader_scope::WeakOf(member);
@@ -480,27 +561,57 @@ std::uintptr_t Deliver(bool enter, FilterFn original, void* manager, std::uint64
         LogEvent(enter, actor, passed, L"held back: inside another delivery of player 2's (the filter re-entered)");
         return 0;
     }
-    g_delivering      = true;
-    const auto real   = ReadField<std::uint8_t>(actor, kEnteredFlag);
-    const auto before = ShadowOf(actorWeak);
-    WriteField<std::uint8_t>(actor, kEnteredFlag, before);
+    // Player 2's own state in place of player 1's for the call: the entered flag, and the stored character for the
+    // classes whose unregister uses it (pole slides, one-shot moves), so player 1's leave never takes the spot off
+    // player 2's list and the reverse.
+    const Delivering delivering;
+    const bool       stores = cls.storedWeak != 0;
+    const Shadow real{ReadField<std::uint8_t>(actor, kEnteredFlag),
+                      stores ? ReadField<std::uint64_t>(actor, cls.storedWeak) : kNoWeak};
+    const Shadow before = ShadowOf(actorWeak);
+    const bool   oneShot = cls.logsUseFields;
+    const auto   useA = oneShot ? ReadField<std::uint32_t>(actor, kOneShotUseA) : 0u;
+    const auto   useB = oneShot ? ReadField<std::int32_t>(actor, kOneShotUseB) : 0;
+    WriteField<std::uint8_t>(actor, kEnteredFlag, before.flag);
+    if (stores)
+    {
+        WriteField<std::uint64_t>(actor, cls.storedWeak, before.stored);
+    }
     const auto result = original(manager, key, owner, actorArg);
-    // The flag is read and put back only if the call left the actor alive (a ladder's enter and leave never destroy it;
-    // a later class might).
+    // The state is read and put back only if the call left the actor alive (no admitted class's enter or leave
+    // destroys it; a later one might).
     const bool alive = leader_scope::StillNames(actorWeak, actor);
-    const auto after = alive ? ReadField<std::uint8_t>(actor, kEnteredFlag) : std::uint8_t{0};
+    Shadow     after;
     if (alive)
     {
-        WriteField<std::uint8_t>(actor, kEnteredFlag, real);
+        after = {ReadField<std::uint8_t>(actor, kEnteredFlag),
+                 stores ? ReadField<std::uint64_t>(actor, cls.storedWeak) : kNoWeak};
+        WriteField<std::uint8_t>(actor, kEnteredFlag, real.flag);
+        if (stores)
+        {
+            WriteField<std::uint64_t>(actor, cls.storedWeak, real.stored);
+        }
     }
-    g_delivering = false;
     ++(enter ? g_counts.deliveredEnters : g_counts.deliveredLeaves);
     try
     {
         KeepShadow(actorWeak, after);
+        std::wstring extra;
+        if (stores)
+        {
+            extra = std::format(L"; player 2's stored character 0x{:X} -> 0x{:X}, player 1's 0x{:X} kept", before.stored,
+                                after.stored, real.stored);
+        }
+        if (oneShot && alive)
+        {
+            extra += std::format(L"; +0x848 {} -> {}, +0x86C {} -> {}", useA, ReadField<std::uint32_t>(actor, kOneShotUseA),
+                                 useB, ReadField<std::int32_t>(actor, kOneShotUseB));
+        }
         LogEvent(enter, actor, passed,
-                 std::format(L"delivered as player 2 (player 2's entered flag {} -> {}{}; player 1's {} kept)", before,
-                             after, before == after ? L", unchanged: the game's check stopped it" : L"", real));
+                 std::format(L"delivered as player 2 (player 2's entered flag {} -> {}{}; player 1's {} kept{})",
+                             before.flag, after.flag,
+                             before.flag == after.flag ? L", unchanged: the game's check stopped it" : L"", real.flag,
+                             extra));
     }
     catch (...)
     {
@@ -509,7 +620,7 @@ std::uintptr_t Deliver(bool enter, FilterFn original, void* manager, std::uint64
 }
 
 /// The diff's enter or leave filter. Player 2's trigger's events go to the game as player 2 for admitted classes
-/// (ladders), and are held back otherwise.
+/// (kAdmitted), and are held back otherwise.
 std::uintptr_t Filter(bool enter, void* manager, std::uint64_t key, void* owner, void* actorArg) noexcept
 {
     const auto original = reinterpret_cast<FilterFn>((enter ? g_enterCall : g_leaveCall).Original());
@@ -523,11 +634,20 @@ std::uintptr_t Filter(bool enter, void* manager, std::uint64_t key, void* owner,
     {
         void*       actor  = g_findActor != nullptr ? g_findActor(&key) : nullptr;
         const void* passed = PassedActor(enter, actorArg);
-        if (actor != nullptr && g_ladderVt != 0 && VTableOf(actor) == g_ladderVt)
+        const int   cls    = actor != nullptr ? ClassOf(actor) : -1;
+        if (cls < 0)
         {
-            return Deliver(enter, original, manager, key, owner, actorArg, actor, passed);
+            LogEvent(enter, actor != nullptr ? actor : passed, passed, L"held back, its class is not admitted");
+            return 0;
         }
-        LogEvent(enter, actor != nullptr ? actor : passed, passed, L"held back, its class is not admitted");
+        // A prompt zip line would put its FieldActionMgr point and press flag under both players' notifies (player 1's
+        // press could be lost), and player 2 has no prompt there: held back.
+        if (kAdmitted[cls].enterEffectOnly && ReadField<std::uint8_t>(actor, kZiplineEnterEffect) == 0)
+        {
+            LogEvent(enter, actor, passed, L"held back: a button-prompt zip line (only auto-start lines are admitted)");
+            return 0;
+        }
+        return Deliver(enter, original, manager, key, owner, actorArg, actor, passed, kAdmitted[cls]);
     }
     catch (...)
     {
@@ -543,6 +663,72 @@ std::uintptr_t EnterFilter(void* manager, std::uint64_t key, void* owner, void* 
 std::uintptr_t LeaveFilter(void* manager, std::uint64_t key, void* owner, void* actorArg) noexcept
 {
     return Filter(false, manager, key, owner, actorArg);
+}
+
+/// The wall-run move state's camera pick. For player 2's LeaderActionComp, the actors on its wall-run list show player
+/// 2's entered flags for the call (their real flags are player 1's), so player 2's camera follows player 2's own wall-run
+/// volume. Every other call passes through.
+void* WallRunPick(void* leaderActionComp) noexcept
+{
+    const auto original = reinterpret_cast<WallRunPickFn>(g_wallRunCall.Original());
+    if (leaderActionComp == nullptr || g_delivering || !generation::Active() || !generation::OnGameThread() ||
+        leaderActionComp != ReadPointer(generation::PlayerTwoController(), kControllerLeaderAction))
+    {
+        return original(leaderActionComp);
+    }
+    auto*      data  = static_cast<std::byte*>(ReadPointer(leaderActionComp, kWallRunList));
+    const auto listed = data != nullptr ? ReadField<std::int32_t>(leaderActionComp, kWallRunList + 8) : 0;
+    const auto count  = std::clamp(listed, 0, kWallRunListMax);
+    if (listed > kWallRunListMax && !g_wallRunCapLogged)
+    {
+        g_wallRunCapLogged = true;
+        try
+        {
+            platform::LogDebug(L"trigger two: player 2's wall-run list holds {} actors; past the first {} they keep "
+                               L"player 1's entered flags for the camera pick (logged once)",
+                               listed, kWallRunListMax);
+        }
+        catch (...)
+        {
+        }
+    }
+    void*         actors[kWallRunListMax] = {};
+    std::uint64_t weaks[kWallRunListMax]  = {};
+    std::uint8_t  real[kWallRunListMax]   = {};
+    for (std::int32_t i = 0; i < count; ++i)
+    {
+        const std::byte* weak = data + 8 * static_cast<std::size_t>(i);
+        actors[i]             = leader_scope::ObjectAt(weak);
+        if (actors[i] != nullptr)
+        {
+            weaks[i] = ReadField<std::uint64_t>(weak, 0);
+            real[i]  = ReadField<std::uint8_t>(actors[i], kEnteredFlag);
+            WriteField<std::uint8_t>(actors[i], kEnteredFlag, ShadowOf(weaks[i]).flag);
+        }
+    }
+    void* picked = original(leaderActionComp);
+    // Put back only on actors the pick left alive (it is a list scan [ASSUMPTION], but a write into a freed actor
+    // would crash).
+    for (std::int32_t i = 0; i < count; ++i)
+    {
+        if (actors[i] != nullptr && leader_scope::StillNames(weaks[i], actors[i]))
+        {
+            WriteField<std::uint8_t>(actors[i], kEnteredFlag, real[i]);
+        }
+    }
+    if (picked != g_wallRunPicked)
+    {
+        g_wallRunPicked = picked;
+        try
+        {
+            platform::LogDebug(L"trigger two: player 2's wall-run camera pick: {} (of {} wall-run actor(s) near player 2)",
+                               picked != nullptr ? NameOf(picked) : std::wstring(L"none"), count);
+        }
+        catch (...)
+        {
+        }
+    }
+    return picked;
 }
 
 }  // namespace
@@ -581,11 +767,37 @@ void Install(const platform::GameImage& image) noexcept
     g_sweepFlagA   = reinterpret_cast<const std::uint8_t*>(*flagA);
     g_sweepFlagB   = reinterpret_cast<const std::uint8_t*>(*flagB);
     g_enterSite = *enterAt, g_leaveSite = *leaveAt, g_enterTarget = *enter, g_leaveTarget = *leave;
-    // Traversal L1: without the lookup or the ladder's vtable, every event of player 2's stays held back.
+    // Traversal L1: without the lookup, every event of player 2's stays held back. A class is admitted only if its live
+    // vtable's trigger slot holds the shared enter, and (for the classes that store a character) its unregister slot the
+    // expected override.
     const auto findActor = platform::FindFunction(image, kFindActor);
-    const auto ladderVt  = image.Rebase(kLadderVt, 8);
-    g_findActor = findActor ? reinterpret_cast<FindActorFn>(*findActor) : nullptr;
-    g_ladderVt  = ladderVt ? *ladderVt : 0;
+    g_findActor          = findActor ? reinterpret_cast<FindActorFn>(*findActor) : nullptr;
+    const auto liveEnter = image.Rebase(kTriggerEnter);
+    std::wstring admitted, refused;
+    for (std::size_t i = 0; i < kClassCount; ++i)
+    {
+        const AdmittedClass& cls = kAdmitted[i];
+        const auto vt            = image.Rebase(cls.vtable, 0x740);
+        bool ok = vt && liveEnter && ReadField<std::uintptr_t>(reinterpret_cast<const void*>(*vt), kEnterSlot) == *liveEnter;
+        if (ok && cls.unregister != 0)
+        {
+            const auto unregister = image.Rebase(cls.unregister);
+            ok = unregister &&
+                 ReadField<std::uintptr_t>(reinterpret_cast<const void*>(*vt), kUnregisterSlot) == *unregister;
+        }
+        g_classVt[i] = ok ? *vt : 0;
+        auto& list   = ok ? admitted : refused;
+        list += std::format(L"{}{}", list.empty() ? L"" : L", ", cls.name);
+    }
+    // The wall-run camera pick (an E8 inside one 16-byte block in both builds).
+    const auto pickSite = image.Rebase(kWallRunPickCall, 5);
+    const auto pick     = platform::FindFunction(image, kWallRunPick);
+    const bool wallRunPick =
+        pickSite && pick && g_wallRunCall.Install(*pickSite, *pick, reinterpret_cast<std::uintptr_t>(&WallRunPick));
+    platform::Log(L"trigger two: classes delivered as player 2: {}{}{}; wall-run camera pick {}",
+                  g_findActor != nullptr ? (admitted.empty() ? L"none" : admitted.c_str()) : L"none (the tag lookup differs)",
+                  refused.empty() ? L"" : L"; NOT admitted (a slot differs): ", refused,
+                  wallRunPick ? L"follows player 2's own flags" : L"NOT placed (it follows player 1's flags)");
     g_ready = true;
     if (!g_dispatchCall.Install(*site, *dispatch, reinterpret_cast<std::uintptr_t>(&Dispatch)))
     {
@@ -594,11 +806,9 @@ void Install(const platform::GameImage& image) noexcept
         return;
     }
     g_filtersPending = true;
-    platform::Log(L"trigger two: installed (player 2's trigger is read right after player 1's, in the same frame; {}; "
-                  L"each event logged at Debug; the diff's filter calls follow on the game thread)",
-                  g_findActor != nullptr && g_ladderVt != 0
-                      ? L"ladders go to the game as player 2, every other class is held back"
-                      : L"every event is held back (the tag registry lookup or the ladder's vtable differs)");
+    platform::Log(L"trigger two: installed (player 2's trigger is read right after player 1's, in the same frame; the "
+                  L"admitted classes go to the game as player 2, every other event is held back; each event logged at "
+                  L"Debug; the diff's filter calls follow on the game thread)");
 }
 
 void Remove() noexcept
@@ -607,6 +817,10 @@ void Remove() noexcept
     if (g_dispatchCall.IsInstalled() && !g_dispatchCall.Restore())
     {
         platform::Log(L"trigger two: the dispatch call was changed after us; left in place (it passes through)");
+    }
+    if (g_wallRunCall.IsInstalled() && !g_wallRunCall.Restore())
+    {
+        platform::Log(L"trigger two: the wall-run pick call was changed after us; left in place (it passes through)");
     }
     // A call crossing two blocks is restored only from the game thread. Elsewhere it stays in place; it holds player 2's
     // events back only while player 2 is active, and passes everything else through.
