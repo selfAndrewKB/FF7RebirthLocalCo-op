@@ -77,6 +77,7 @@ add_library(LocalSplitScreen SHARED
     src/player_two/camera_repair.cpp
     src/player_two/ride_framing_watch.cpp
     src/player_two/climb_context.cpp
+    src/player_two/near_fade.cpp
     src/player_two/traversal_camera.cpp
     src/player_two/traversal_watch.cpp
     src/player_two/trigger_two.cpp

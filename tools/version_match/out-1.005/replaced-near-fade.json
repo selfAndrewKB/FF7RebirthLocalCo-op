@@ -1,0 +1,80 @@
+{
+ "build": "1.005",
+ "research_build": "1.004",
+ "date": "2026-10-10",
+ "doc": "Rebirth/Documentation/research/RE-p2-camera-near-fade.md",
+ "facts": [
+  {
+   "name": "NearFade core: call EndCharaRegistry_GatherCharsWithin500OfPoint",
+   "old": "0x140A54F89",
+   "new": "0x140933A52",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp fade_check.py, 2026-10-10) after the IDA agent's match (RE-p2-camera-near-fade.md \u00a74)."
+  },
+  {
+   "name": "EndCharaRegistry_GatherCharsWithin500OfPoint",
+   "old": "0x14093D388",
+   "new": "0x141970B28",
+   "bytes": "48895C241048896C2418565741544156",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp fade_check.py, 2026-10-10) after the IDA agent's match (RE-p2-camera-near-fade.md \u00a74)."
+  },
+  {
+   "name": "NearFade_KickActorNow_IfGameThread: call FindUnit",
+   "old": "0x1418969B1",
+   "new": "0x143A9DE05",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp fade_check.py, 2026-10-10) after the IDA agent's match (RE-p2-camera-near-fade.md \u00a74)."
+  },
+  {
+   "name": "NearFade_KickActorNow_FindUnit",
+   "old": "0x1418969BC",
+   "new": "0x143A950D8",
+   "bytes": "4885D20F840301000048895C24084889",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp fade_check.py, 2026-10-10) after the IDA agent's match (RE-p2-camera-near-fade.md \u00a74)."
+  },
+  {
+   "name": "NearFade_BuildCandidateSet phase A: call FWeakObjectPtr::Get(hit actor)",
+   "old": "0x140A54DCB",
+   "new": "0x140933898",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp fade_check.py, 2026-10-10) after the IDA agent's match (RE-p2-camera-near-fade.md \u00a78)."
+  },
+  {
+   "name": "Pawn_RootAttachParent_FieldA0",
+   "old": "0x1408F18AC",
+   "new": "0x1407E29B0",
+   "bytes": "488B81380100004885C0740C",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp fade_check.py, 2026-10-10) after the IDA agent's match (RE-p2-camera-near-fade.md \u00a78)."
+  },
+  {
+   "name": "CharActionCtrl_TickOverlapFade_HiddenReason9: call IsUCPC_WithVehicleCheck",
+   "old": "0x1414D74C6",
+   "new": "0x1412FA1E6",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp approach_check.py, 2026-10-10) after the IDA agent's match (RE-p2-camera-near-fade.md \u00a79)."
+  },
+  {
+   "name": "IsUCPC_WithVehicleCheck",
+   "old": "0x140806FE0",
+   "new": "0x140763270",
+   "bytes": "4053B820000000E80489A001482BE048",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both exes by the main session (tmp approach_check.py, 2026-10-10) after the IDA agent's match (RE-p2-camera-near-fade.md \u00a79)."
+  }
+ ]
+}
