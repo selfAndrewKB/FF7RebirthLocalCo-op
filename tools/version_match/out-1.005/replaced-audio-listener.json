@@ -1,0 +1,224 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-10-12",
+  "doc": "Rebirth/Documentation/research/RE-p2-audio-listener.md",
+  "facts": [
+    {
+      "name": "slot: SEAD audio device vt+0x1B8 (SeadAudioDevice_PushListener0ToSead)",
+      "old": "0x1465E6058",
+      "new": "0x1464711E8",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad audio_facts.py, 2026-10-12) after the IDA agent's match (RE-p2-audio-listener.md section 6): each slot holds the matched function in both builds; the functions' first 12 bytes are identical across builds."
+    },
+    {
+      "name": "SeadAudioDevice_PushListener0ToSead",
+      "old": "0x14082ECE4",
+      "new": "0x140A11310",
+      "bytes": "488bc4488958104889701848",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad audio_facts.py, 2026-10-12) after the IDA agent's match (RE-p2-audio-listener.md section 6): each slot holds the matched function in both builds; the functions' first 12 bytes are identical across builds."
+    },
+    {
+      "name": "slot: SQEX::Sd::Lay::DynamicSound vt+0x160 (UpdateAudible)",
+      "old": "0x1457DA960",
+      "new": "0x145659A98",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad audio_facts.py, 2026-10-12) after the IDA agent's match (RE-p2-audio-listener.md section 6): each slot holds the matched function in both builds; the functions' first 12 bytes are identical across builds."
+    },
+    {
+      "name": "SEAD_LayDynamic_UpdateAudible",
+      "old": "0x140B94018",
+      "new": "0x140A0D918",
+      "bytes": "488bc4488958104889701848",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad audio_facts.py, 2026-10-12) after the IDA agent's match (RE-p2-audio-listener.md section 6): each slot holds the matched function in both builds; the functions' first 12 bytes are identical across builds."
+    },
+    {
+      "name": "slot: SQEX::Sd::Lay::PointSound vt+0x160 (UpdateAudible)",
+      "old": "0x1457DA5D0",
+      "new": "0x145659C58",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad audio_facts.py, 2026-10-12) after the IDA agent's match (RE-p2-audio-listener.md section 6): each slot holds the matched function in both builds; the functions' first 12 bytes are identical across builds."
+    },
+    {
+      "name": "SEAD_LayPoint_UpdateAudible",
+      "old": "0x14127585C",
+      "new": "0x1419D7B90",
+      "bytes": "f30f10a9f40100000f57db0f",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad audio_facts.py, 2026-10-12) after the IDA agent's match (RE-p2-audio-listener.md section 6): each slot holds the matched function in both builds; the functions' first 12 bytes are identical across builds."
+    },
+    {
+      "name": "slot: SEAD FSoundSource vt+0x18 (Init)",
+      "old": "0x1465E4738",
+      "new": "0x14646F880",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad audio_facts.py, 2026-10-12) after the IDA agent's match (RE-p2-audio-listener.md section 6): each slot holds the matched function in both builds; the functions' first 12 bytes are identical across builds."
+    },
+    {
+      "name": "SEAD_SoundSource_Init",
+      "old": "0x141020A68",
+      "new": "0x1412472AC",
+      "bytes": "48895c241848897424205557",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad audio_facts.py, 2026-10-12) after the IDA agent's match (RE-p2-audio-listener.md section 6): each slot holds the matched function in both builds; the functions' first 12 bytes are identical across builds."
+    },
+    {
+      "name": "g_SeadLayListener (pointer to SQEX::Sd::Lay::Listener; position +0x30, magnification +0xA0)",
+      "old": "0x14939BAB0",
+      "new": "0x1491D8350",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad audio_facts.py, 2026-10-12) after the IDA agent's match (RE-p2-audio-listener.md section 6): each slot holds the matched function in both builds; the functions' first 12 bytes are identical across builds."
+    },
+    {
+      "name": "slot: SQEX::Sd::Lay::DynamicSound vt+0x58 (Update: doppler, then the base update)",
+      "old": "0x1457DA858",
+      "new": "0x145659990",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad audio_fix_facts.py, 2026-10-12) for the listener fix (RE-p2-audio-listener.md sections 6 and 7, RE-p2-rumble-owner-chocobo.md section 2.1b): each slot holds the matched function in both builds, each call site calls the matched target, and the functions' first 12 bytes are identical across builds."
+    },
+    {
+      "name": "SEAD_LayDynamic_Update_Doppler",
+      "old": "0x1414624C0",
+      "new": "0x1414A8424",
+      "bytes": "b848000000e8",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad audio_fix_facts.py, 2026-10-12) for the listener fix (RE-p2-audio-listener.md sections 6 and 7, RE-p2-rumble-owner-chocobo.md section 2.1b): each slot holds the matched function in both builds, each call site calls the matched target, and the functions' first 12 bytes are identical across builds."
+    },
+    {
+      "name": "slot: SQEX::Sd::Lay::PointSound vt+0x58 (Update = the base update)",
+      "old": "0x1457DA4C8",
+      "new": "0x145659B50",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad audio_fix_facts.py, 2026-10-12) for the listener fix (RE-p2-audio-listener.md sections 6 and 7, RE-p2-rumble-owner-chocobo.md section 2.1b): each slot holds the matched function in both builds, each call site calls the matched target, and the functions' first 12 bytes are identical across builds."
+    },
+    {
+      "name": "SEAD_LayObj_Update_Base",
+      "old": "0x1407AC83C",
+      "new": "0x14079FCCC",
+      "bytes": "488bc4488958104889701848",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad audio_fix_facts.py, 2026-10-12) for the listener fix (RE-p2-audio-listener.md sections 6 and 7, RE-p2-rumble-owner-chocobo.md section 2.1b): each slot holds the matched function in both builds, each call site calls the matched target, and the functions' first 12 bytes are identical across builds."
+    },
+    {
+      "name": "call site: SEAD_Lay_UpdateFrame -> SEAD_LayListener_UpdateVelocity (E8, %16=B)",
+      "old": "0x14082D51B",
+      "new": "0x140A10BDB",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad audio_fix_facts.py, 2026-10-12) for the listener fix (RE-p2-audio-listener.md sections 6 and 7, RE-p2-rumble-owner-chocobo.md section 2.1b): each slot holds the matched function in both builds, each call site calls the matched target, and the functions' first 12 bytes are identical across builds."
+    },
+    {
+      "name": "SEAD_LayListener_UpdateVelocity",
+      "old": "0x14161261C",
+      "new": "0x1416452F8",
+      "bytes": "48895c240848897c24105548",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad audio_fix_facts.py, 2026-10-12) for the listener fix (RE-p2-audio-listener.md sections 6 and 7, RE-p2-rumble-owner-chocobo.md section 2.1b): each slot holds the matched function in both builds, each call site calls the matched target, and the functions' first 12 bytes are identical across builds."
+    },
+    {
+      "name": "SEAD_LayListener_Set",
+      "old": "0x1413E3AD0",
+      "new": "0x140A11A6C",
+      "bytes": "48895c241055488d6c24d9b8",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad audio_fix_facts.py, 2026-10-12) for the listener fix (RE-p2-audio-listener.md sections 6 and 7, RE-p2-rumble-owner-chocobo.md section 2.1b): each slot holds the matched function in both builds, each call site calls the matched target, and the functions' first 12 bytes are identical across builds."
+    },
+    {
+      "name": "SeadLayListener_GetPosition (entry redirect; first instruction mov [rsp+10h], rbx)",
+      "old": "0x140808FA0",
+      "new": "0x140E7C068",
+      "bytes": "48895c241057b860000000e8",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad audio_fix_facts.py, 2026-10-12) for the listener fix (RE-p2-audio-listener.md sections 6 and 7, RE-p2-rumble-owner-chocobo.md section 2.1b): each slot holds the matched function in both builds, each call site calls the matched target, and the functions' first 12 bytes are identical across builds."
+    },
+    {
+      "name": "return address: SeadAutoSeProc_Update_ClipAndLodFilter's GetPosition call (the distance clip)",
+      "old": "0x140807DE8",
+      "new": "0x140E7AEB4",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad audio_fix_facts.py, 2026-10-12) for the listener fix (RE-p2-audio-listener.md sections 6 and 7, RE-p2-rumble-owner-chocobo.md section 2.1b): each slot holds the matched function in both builds, each call site calls the matched target, and the functions' first 12 bytes are identical across builds."
+    },
+    {
+      "name": "slot: UEndAutoSeCallback vt+0x2A8 (GetProcLODLevel)",
+      "old": "0x145D72670",
+      "new": "0x145BD2720",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad audio_fix_facts.py, 2026-10-12) for the listener fix (RE-p2-audio-listener.md sections 6 and 7, RE-p2-rumble-owner-chocobo.md section 2.1b): each slot holds the matched function in both builds, each call site calls the matched target, and the functions' first 12 bytes are identical across builds."
+    },
+    {
+      "name": "EndAutoSeCallback_GetProcLODLevel_P1Listener",
+      "old": "0x143D6E0EC",
+      "new": "0x143AD8B84",
+      "bytes": "48895c240848897424185548",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad audio_fix_facts.py, 2026-10-12) for the listener fix (RE-p2-audio-listener.md sections 6 and 7, RE-p2-rumble-owner-chocobo.md section 2.1b): each slot holds the matched function in both builds, each call site calls the matched target, and the functions' first 12 bytes are identical across builds."
+    },
+    {
+      "name": "APlayerController GetAudioListenerPosition (AEndPlayerController vt+0xC70 in 1.004, vt+0xC78 in 1.005)",
+      "old": "0x140BF1968",
+      "new": "0x1409D4164",
+      "bytes": "405553565741554156415748",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad audio_fix_facts.py, 2026-10-12) for the listener fix (RE-p2-audio-listener.md sections 6 and 7, RE-p2-rumble-owner-chocobo.md section 2.1b): each slot holds the matched function in both builds, each call site calls the matched target, and the functions' first 12 bytes are identical across builds."
+    },
+    {
+      "name": "call site: SeadAutoSeProc_TickById -> SeadAutoSeProc_Update_ClipAndLodFilter (E8)",
+      "old": "0x1408072F8",
+      "new": "0x140E7AD80",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad audio_fix_facts.py, 2026-10-12) for the listener fix (RE-p2-audio-listener.md sections 6 and 7, RE-p2-rumble-owner-chocobo.md section 2.1b): each slot holds the matched function in both builds, each call site calls the matched target, and the functions' first 12 bytes are identical across builds."
+    },
+    {
+      "name": "SeadAutoSeProc_Update_ClipAndLodFilter",
+      "old": "0x140807D24",
+      "new": "0x140E7ADF0",
+      "bytes": "48895c242055565741544155",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad audio_fix_facts.py, 2026-10-12) for the listener fix (RE-p2-audio-listener.md sections 6 and 7, RE-p2-rumble-owner-chocobo.md section 2.1b): each slot holds the matched function in both builds, each call site calls the matched target, and the functions' first 12 bytes are identical across builds."
+    },
+    {
+      "name": "AutoSe position converter pointer (called by SeadLayListener_GetPosition; default a 12-byte copy)",
+      "old": "0x1470E3C48",
+      "new": "0x146F16EB8",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad audio_fix_facts.py, 2026-10-12) for the listener fix (RE-p2-audio-listener.md sections 6 and 7, RE-p2-rumble-owner-chocobo.md section 2.1b): each slot holds the matched function in both builds, each call site calls the matched target, and the functions' first 12 bytes are identical across builds."
+    }
+  ]
+}
