@@ -49,6 +49,10 @@ struct Report
     bool  namesSwapped  = false;
 };
 
+/// Game thread: player 1's controller while a join's CreatePlayer runs (player 2's controller is constructed inside
+/// it), else null.
+void* JoiningPlayerOne() noexcept;
+
 /// Marks a join as under way for its lifetime: only then does the replacement act.
 class JoinScope
 {

@@ -1,0 +1,116 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-10-12",
+  "doc": "Rebirth/Documentation/research/RE-p2-ffb-manager-per-pc.md section 8",
+  "facts": [
+    {
+      "name": "data: g_EndFFBMgr (the force-feedback manager singleton; EndFFBMgr_Get's load)",
+      "old": "0x1490FEE18",
+      "new": "0x148F325E8",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad ffb_json.py, 2026-10-12) after the IDA agent's match (RE-p2-ffb-manager-per-pc.md section 8); signatures compared in both databases by the main session."
+    },
+    {
+      "name": "AEndPlayerController ctor: call EndFFBComp_Ctor_PC758 (call redirect; PC2's component made during a join)",
+      "old": "0x143D05AB7",
+      "new": "0x143A674D7",
+      "bytes": "e8",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad ffb_json.py, 2026-10-12) after the IDA agent's match (RE-p2-ffb-manager-per-pc.md section 8); signatures compared in both databases by the main session."
+    },
+    {
+      "name": "EndFFBComp_Ctor_PC758(component, owner) -> component",
+      "old": "0x1437DBC78",
+      "new": "0x143516F1C",
+      "bytes": "48895c240857b820000000e8",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad ffb_json.py, 2026-10-12) after the IDA agent's match (RE-p2-ffb-manager-per-pc.md section 8); signatures compared in both databases by the main session."
+    },
+    {
+      "name": "EndFFBMgr_Ctor(memory 0x538) -> memory",
+      "old": "0x1437DBAE0",
+      "new": "0x143516D84",
+      "bytes": "48895c240857b820000000e8",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad ffb_json.py, 2026-10-12) after the IDA agent's match (RE-p2-ffb-manager-per-pc.md section 8); signatures compared in both databases by the main session."
+    },
+    {
+      "name": "EndFFBMgr_Tick(mgr, dt xmm1)",
+      "old": "0x140C91268",
+      "new": "0x14097236C",
+      "bytes": "4053b830000000e8",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad ffb_json.py, 2026-10-12) after the IDA agent's match (RE-p2-ffb-manager-per-pc.md section 8); signatures compared in both databases by the main session."
+    },
+    {
+      "name": "EndFFBMgr_BuildTracks90_FFBTr0to15(mgr): the 16 tracks, FNames only (no loads)",
+      "old": "0x1437E0568",
+      "new": "0x14351B8B8",
+      "bytes": "48895c24",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad ffb_json.py, 2026-10-12) after the IDA agent's match (RE-p2-ffb-manager-per-pc.md section 8); signatures compared in both databases by the main session."
+    },
+    {
+      "name": "EndStateMachine_RequestStateById(machine, id) -> bool",
+      "old": "0x140A0BE80",
+      "new": "0x140C9A160",
+      "bytes": "33c04c8bc948894120394108",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad ffb_json.py, 2026-10-12) after the IDA agent's match (RE-p2-ffb-manager-per-pc.md section 8); signatures compared in both databases by the main session."
+    },
+    {
+      "name": "EndFFBMgr_SetEnabled531(mgr, on) (entry redirect; first instruction mov [rsp+8],rbx)",
+      "old": "0x1422DE548",
+      "new": "0x1421E13B8",
+      "bytes": "48895c240848896c24104889",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad ffb_json.py, 2026-10-12) after the IDA agent's match (RE-p2-ffb-manager-per-pc.md section 8); signatures compared in both databases by the main session."
+    },
+    {
+      "name": "EndFFBMgr_MuteAll_PrimaryPC(mgr, mute) (entry redirect; first instruction mov [rsp+8],rbx; 1.005 mutes instead of removing, same signature)",
+      "old": "0x1411F6AA4",
+      "new": "0x140FE11BC",
+      "bytes": "48895c240848896c24104889",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad ffb_json.py, 2026-10-12) after the IDA agent's match (RE-p2-ffb-manager-per-pc.md section 8); signatures compared in both databases by the main session."
+    },
+    {
+      "name": "TArray<void*> Contains(array, &element) -> bool",
+      "old": "0x140786200",
+      "new": "0x140A6A1C8",
+      "bytes": "4c8b0148634108498d0cc04c",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad ffb_json.py, 2026-10-12) after the IDA agent's match (RE-p2-ffb-manager-per-pc.md section 8); signatures compared in both databases by the main session."
+    },
+    {
+      "name": "TArray<void*> grow after Num++ (array) (first allocation 4: eax 20h before __alloca_probe)",
+      "old": "0x1420DE464",
+      "new": "0x14218D854",
+      "bytes": "48895c241048894c24085556",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad ffb_json.py, 2026-10-12) after the IDA agent's match (RE-p2-ffb-manager-per-pc.md section 8); signatures compared in both databases by the main session."
+    },
+    {
+      "name": "TArray<void*> RemoveAll(array, &&element) -> removed",
+      "old": "0x1420DD440",
+      "new": "0x142192ACC",
+      "bytes": "48",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad ffb_json.py, 2026-10-12) after the IDA agent's match (RE-p2-ffb-manager-per-pc.md section 8); signatures compared in both databases by the main session."
+    }
+  ]
+}

@@ -31,11 +31,13 @@
 // bytes at its list load, under the game's lock, take player 2's list on the thread the invoker named. A stop of player
 // 2's on a worker is left (no source found does one; logged).
 //
-// Not routed: the hook rope and the hookshot (player 2 cannot start them), and the bronco and buggy (player 1 drives;
-// their rumble plays on pad 1).
+// Shared rides (player 1 drives the buggy or the bronco, player 2 stands aside): while player 2's component has a
+// force-feedback manager of its own (ffb_manager_two.h), every add and stop on the game's list is copied onto player
+// 2's list, so both pads play the ride (the vehicles add and stop by name, on the game thread). The ride's end stops on
+// player 2's list whatever copy is left. Without player 2's own manager there is no copy: the shared manager's tracks
+// would let player 2's copy play first and skip player 1's.
 //
-// Residual: the force-feedback manager names its channel slots globally, so the same effect on the same channel for
-// both players at once can suppress one play. PS5 haptics stay single-target.
+// Not routed: the hook rope and the hookshot (player 2 cannot start them). PS5 haptics stay single-target.
 
 namespace lss::platform {
 class GameImage;
@@ -57,5 +59,9 @@ void Tick() noexcept;
 /// Game thread, while player 2 can still be the primary player (before the generation is withdrawn): stops player 2's
 /// channels on player 2's controller and destroys player 2's list.
 void PlayerTwoOut() noexcept;
+
+/// Game thread, once per engine tick: copy the game's list onto player 2's (a shared ride with player 2's own
+/// force-feedback manager) or not. Turning it off stops on player 2's list what was copied and not yet stopped.
+void CopyPlayerOne(bool on) noexcept;
 
 }  // namespace lss::player_two::rumble_list_two

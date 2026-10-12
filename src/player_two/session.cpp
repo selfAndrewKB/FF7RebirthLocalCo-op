@@ -15,6 +15,7 @@
 #include "player_two/menu_focus.h"
 #include "player_two/lock_on.h"
 #include "player_two/rumble_list_two.h"
+#include "player_two/ffb_manager_two.h"
 #include "player_two/field_camera.h"
 #include "player_two/game_thread_sites.h"
 #include "player_two/generation.h"
@@ -817,6 +818,7 @@ void Session::Leave() noexcept
     camera_override::PlayerTwoOut();  // the member's camera delegates back to the engine's, while it is still held
     lock_on::PlayerTwoOut();
     rumble_list_two::PlayerTwoOut();  // stops player 2's channels while player 2 can still be the primary player
+    ffb_manager_two::PlayerTwoOut();  // player 2's component back on the game's force-feedback manager
     generation::Withdraw();  // every wrapper passes through from here on
     phase_ = Phase::Leaving;
     ticks_ = 0;
@@ -835,6 +837,7 @@ bool Session::LeaveNow() noexcept
     camera_override::PlayerTwoOut();
     lock_on::PlayerTwoOut();
     rumble_list_two::PlayerTwoOut();  // stops player 2's channels while player 2 can still be the primary player
+    ffb_manager_two::PlayerTwoOut();
     generation::Withdraw();
     if (HoldsMember())
     {
@@ -935,6 +938,7 @@ void Session::Forget() noexcept
     camera_override::PlayerTwoOut();
     lock_on::PlayerTwoOut();
     rumble_list_two::PlayerTwoOut();  // stops player 2's channels while player 2 can still be the primary player
+    ffb_manager_two::PlayerTwoOut();
     generation::Withdraw();
     primary_controller::Unbind();
     leave_.Finish();

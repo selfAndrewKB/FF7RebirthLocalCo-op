@@ -133,6 +133,11 @@ bool UsesNativeClasses(const void* playerOneController) noexcept
            VTableOf(ReadPointer(playerOneController, facts::kControllerCameraManager)) == g_cameraManagerVTable;
 }
 
+void* JoiningPlayerOne() noexcept
+{
+    return g_joiningPlayerOne.load(std::memory_order_relaxed);
+}
+
 JoinScope::JoinScope(void* playerOneController) noexcept
 {
     g_report = {};

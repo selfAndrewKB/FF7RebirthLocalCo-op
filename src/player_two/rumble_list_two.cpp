@@ -21,6 +21,7 @@
 #include <Windows.h>
 #include <intrin.h>
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -174,6 +175,13 @@ bool                    g_installed   = false;
 std::atomic<void*>         g_listTwo{nullptr};
 std::atomic<std::uint64_t> g_memberWeak{0};  // the zip line's gate compares the move's character with it (any thread)
 
+// A shared ride (player 1 rides the buggy or the bronco, player 2 stands aside): adds and stops on the game's list are
+// copied into player 2's list, so player 2's pad plays what player 1's does. Set by the game thread; read anywhere.
+std::atomic<bool> g_copyOne{false};
+// The keys copied and not yet stopped there, under the game's lock (the ride's end stops what is left).
+std::array<std::uint64_t, 16> g_copiedKeys{};
+std::size_t                   g_copiedCount = 0;
+
 // Player 2's chocobo (weak) and their member's player type, for the sources on any thread (written each engine tick).
 std::atomic<std::uint64_t> g_chocoboWeak{0};
 std::atomic<int>           g_memberType{-1};
@@ -230,6 +238,10 @@ struct Counts
     std::atomic<unsigned> ownerStopsLeft{0};  // ... on a worker: left (no game path stops a list there)
     std::atomic<unsigned> sourceWorker{0};   // source calls for player 2 on a thread other than the game thread
     std::atomic<unsigned> actionsOnGame{0};  // drift and brake calls for player 2 on the game thread (expected 0)
+    // A shared ride: the game's list copied into player 2's list.
+    std::atomic<unsigned> copiesTwo{0};      // adds copied
+    std::atomic<unsigned> copyStopsTwo{0};   // stops copied (game thread)
+    std::atomic<unsigned> copyStopsLeft{0};  // stops on a worker: not copied
 };
 Counts g_counts;
 
@@ -271,8 +283,31 @@ bool AddTwo(std::uint64_t key, const void* params, std::uint8_t flag) noexcept
     return true;
 }
 
+/// A shared ride's copy of an add to the game's list, into player 2's list (any thread, under the game's lock). The key
+/// is kept until its stop is copied too, so the ride's end can stop what is left.
+void CopyTwo(std::uint64_t key, const void* params, std::uint8_t flag) noexcept
+{
+    const ListLock lock;
+    void* const    list = g_listTwo.load(std::memory_order_acquire);
+    // Read again under the lock: the ride's end clears the flag before it takes the lock to stop what was copied, so
+    // a copy that saw the flag set outside the lock cannot land after that cleanup (and play on with nothing to stop it).
+    if (list == nullptr || !g_copyOne.load(std::memory_order_acquire))
+    {
+        return;
+    }
+    g_addOrUpdate(list, key, params, flag);
+    g_counts.copiesTwo.fetch_add(1, std::memory_order_relaxed);
+    const auto end = g_copiedKeys.begin() + g_copiedCount;
+    if (std::find(g_copiedKeys.begin(), end, key) == end && g_copiedCount < g_copiedKeys.size())
+    {
+        g_copiedKeys[g_copiedCount++] = key;
+        platform::LogDebug(L"rumble list: shared ride: {} copied into player 2's list", KeyText(key));
+    }
+}
+
 /// The add by name: player 2's add goes to player 2's list. It is player 2's when its source names player 2 (OwnerTwo,
-/// any thread), or on the game thread while player 2 is the primary player (player 2's scopes).
+/// any thread), or on the game thread while player 2 is the primary player (player 2's scopes). During a shared ride
+/// an add to the game's list is copied into player 2's list too.
 void PlayNamed(std::uint64_t key, const void* params, std::uint8_t flag) noexcept
 {
     const auto original = reinterpret_cast<PlayNamedFn>(g_playNamed.Original());
@@ -283,6 +318,10 @@ void PlayNamed(std::uint64_t key, const void* params, std::uint8_t flag) noexcep
     {
         g_counts.addsOne.fetch_add(1, std::memory_order_relaxed);
         original(key, params, flag);
+        if (!two && g_copyOne.load(std::memory_order_acquire))
+        {
+            CopyTwo(key, params, flag);
+        }
         return;
     }
     (owner ? g_counts.ownerAddsTwo : g_counts.addsTwo).fetch_add(1, std::memory_order_relaxed);
@@ -411,9 +450,38 @@ bool StopTwo(StopNamedFn original, std::uint64_t key) noexcept
     return true;
 }
 
+/// The key leaves the shared ride's copied keys (its stop was copied).
+void ForgetCopied(std::uint64_t key) noexcept
+{
+    const ListLock lock;
+    const auto     end = g_copiedKeys.begin() + g_copiedCount;
+    const auto     at  = std::find(g_copiedKeys.begin(), end, key);
+    if (at != end)
+    {
+        *at = g_copiedKeys[--g_copiedCount];
+    }
+}
+
+/// A shared ride's copy of a stop on the game's list, on player 2's list (game thread: the owner's list is named only
+/// there).
+void CopyStopTwo(StopNamedFn original, std::uint64_t key, bool game) noexcept
+{
+    if (!game)
+    {
+        g_counts.copyStopsLeft.fetch_add(1, std::memory_order_relaxed);
+        return;
+    }
+    if (StopTwo(original, key))
+    {
+        g_counts.copyStopsTwo.fetch_add(1, std::memory_order_relaxed);
+        ForgetCopied(key);
+        platform::LogDebug(L"rumble list: shared ride: {} stopped on player 2's list too", KeyText(key));
+    }
+}
+
 /// The game's stop by name: player 2's stop goes to player 2's list, by the same rule as the add (game thread, player 2
 /// the primary player). Player 2's looping effects (jet, scooter, swimming) were added to player 2's list and never
-/// stopped there.
+/// stopped there. During a shared ride a stop on the game's list is copied onto player 2's list too.
 void StopNamed(std::uint64_t key) noexcept
 {
     const auto original = reinterpret_cast<StopNamedFn>(g_stopNamed.Original());
@@ -436,6 +504,10 @@ void StopNamed(std::uint64_t key) noexcept
     {
         g_counts.stopsOne.fetch_add(1, std::memory_order_relaxed);
         original(key);
+        if (!two && g_copyOne.load(std::memory_order_acquire))
+        {
+            CopyStopTwo(original, key, game);
+        }
         return;
     }
     (owner ? g_counts.ownerStopsTwo : g_counts.stopsTwo).fetch_add(1, std::memory_order_relaxed);
@@ -798,6 +870,7 @@ void DropList(const wchar_t* why) noexcept
         {
             WriteField<std::int32_t>(list, kListEntries + kArrayNum, 0);  // as the game's own clear
         }
+        g_copiedCount = 0;  // the shared ride's copies go with the list
     }
     if (list == nullptr)
     {
@@ -1126,6 +1199,7 @@ void Tick() noexcept
         g_footChocobo.store(nullptr, std::memory_order_relaxed);
         g_chocoboWeak.store(0, std::memory_order_relaxed);
         g_memberType.store(-1, std::memory_order_relaxed);
+        g_copyOne.store(false, std::memory_order_release);
         DropList(L"player 2 is out");
         return;
     }
@@ -1153,10 +1227,61 @@ void Tick() noexcept
     LogSummary();
 }
 
+void CopyPlayerOne(bool on) noexcept
+{
+    if (!g_installed || !generation::OnGameThread())
+    {
+        return;
+    }
+    on = on && g_listTwo.load(std::memory_order_acquire) != nullptr;
+    if (g_copyOne.load(std::memory_order_relaxed) == on)
+    {
+        return;
+    }
+    g_copyOne.store(on, std::memory_order_release);
+    if (on)
+    {
+        platform::Log(L"rumble list: shared ride: player 1's rumble list is copied into player 2's (both pads)");
+        return;
+    }
+    // The ride is over: what was copied and not stopped stops on player 2's list now, as the game stops it on player
+    // 1's.
+    std::array<std::uint64_t, 16> left{};
+    std::size_t                   count = 0;
+    {
+        const ListLock lock;
+        left          = g_copiedKeys;
+        count         = g_copiedCount;
+        g_copiedCount = 0;
+    }
+    const auto original = reinterpret_cast<StopNamedFn>(g_stopNamed.Original());
+    for (std::size_t i = 0; i < count; ++i)
+    {
+        StopTwo(original, left[i]);
+    }
+    try
+    {
+        std::wstring names;
+        for (std::size_t i = 0; i < count; ++i)
+        {
+            names += (i == 0 ? L"" : L", ") + KeyText(left[i]);
+        }
+        platform::Log(L"rumble list: shared ride over: copies {}, their stops {} (on a worker, not copied {}); stopped "
+                      L"now on player 2's list: {}",
+                      g_counts.copiesTwo.exchange(0, std::memory_order_relaxed),
+                      g_counts.copyStopsTwo.exchange(0, std::memory_order_relaxed),
+                      g_counts.copyStopsLeft.exchange(0, std::memory_order_relaxed), names.empty() ? L"none" : names);
+    }
+    catch (...)
+    {
+    }
+}
+
 void PlayerTwoOut() noexcept
 {
     if (g_installed && generation::OnGameThread())
     {
+        CopyPlayerOne(false);
         g_memberWeak.store(0, std::memory_order_relaxed);
         g_chocoboWeak.store(0, std::memory_order_relaxed);
         g_memberType.store(-1, std::memory_order_relaxed);

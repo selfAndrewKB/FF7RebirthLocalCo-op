@@ -48,6 +48,7 @@
 #include "player_two/pad_rumble.h"
 #include "player_two/combat_rumble.h"
 #include "player_two/rumble_list_two.h"
+#include "player_two/ffb_manager_two.h"
 #include "player_two/audio_listener_two.h"
 #include "player_two/chest_watch.h"
 #include "player_two/vending.h"
@@ -234,6 +235,7 @@ public:
         lss::player_two::approach_two::Remove();
         lss::player_two::move_type_two::Remove();
         lss::player_two::anim_two_views::Remove();
+        lss::player_two::ffb_manager_two::Remove();
         lss::player_two::rumble_list_two::Remove();
         lss::player_two::audio_listener_two::Remove();
         lss::player_two::traversal_watch::Remove();
@@ -402,6 +404,7 @@ public:
         lss::player_two::pad_rumble::Install(*image);      // each player's rumble on their own pad
         lss::player_two::combat_rumble::Install(*image);   // player 2's combat rumble (hits, montage notifies) on player 2's pad
         lss::player_two::rumble_list_two::Install(*image);  // the traversal rumble list per player (zip line, chocobo, ropes)
+        lss::player_two::ffb_manager_two::Install(*image);  // player 2's own force-feedback manager (its own channel tracks)
         lss::player_two::audio_listener_two::Install(*image);  // player 2's sound: each SEAD sound from the nearer listener
         lss::player_two::chest_watch::Install(*image);     // chests, logged (read-only): presses, opens, grants
         lss::player_two::vending::Install(*image);         // player 2's vending machines: the shop's camera and pad
@@ -499,6 +502,7 @@ private:
         lss::player_two::pad_rumble::BeforeTick();  // before the world tick: player 2's controller ordered after player 1's
         lss::player_two::combat_rumble::BeforeTick();  // outside every notify: their call sites; the status line
         lss::player_two::rumble_list_two::Tick();      // player 2's list made at join (dropped if player 2 went out another way)
+        lss::player_two::ffb_manager_two::Tick();      // player 2's component on player 2's own manager, after its BeginPlay
         lss::player_two::audio_listener_two::Tick();  // the controller listener slot; the listeners and the summary (Debug)
         lss::player_two::chest_watch::Tick();          // an open followed from its press to its grant (logged)
         lss::player_two::vending::Tick();              // a press that opened no shop; player 2 leaving with their shop up
@@ -544,7 +548,8 @@ private:
         // The buggy and the bronco (player_two/shared_ride.h): player 2 stands aside, the game's merge reaches player 1
         // from every pad.
         const bool shared = lss::player_two::shared_ride::Tick();
-        lss::player_two::shared_ride_rumble::Tick(shared);  // logging: the rumble player 2's pad would meet
+        lss::player_two::shared_ride_rumble::Tick(shared);  // logging: each controller's manager and the ride's tracks
+        lss::player_two::rumble_list_two::CopyPlayerOne(shared && lss::player_two::ffb_manager_two::Attached());
         session_->SetSharedRide(shared);
         lss::player_two::pad_sticks::SetStoodDown(shared);
         lss::player_two::climb_context::Tick();  // this frame's input copies for the climbs on the anim worker (W5)
