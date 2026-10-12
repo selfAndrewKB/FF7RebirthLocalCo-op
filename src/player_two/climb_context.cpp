@@ -18,6 +18,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -36,6 +37,7 @@ constexpr std::uint8_t kTickBytes[]          = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x
 constexpr std::uint8_t kClimbFinishBytes[]   = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
 constexpr std::uint8_t kBarsFinishBytes[]    = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00};
 constexpr std::uint8_t kSpiderFinishBytes[]  = {0xB8, 0x28, 0x00, 0x00, 0x00};
+constexpr std::uint8_t kEdgeStopTickBytes[]  = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00};
 constexpr std::uint8_t kCameraGetterBytes[]  = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C,
                                                 0x24, 0x10, 0x57, 0xB8, 0x80, 0x00, 0x00, 0x00};
 constexpr std::uint8_t kKeyValueBytes[]      = {0xB8, 0x38, 0x00, 0x00, 0x00};
@@ -63,32 +65,53 @@ constexpr std::uint32_t kKeyFieldsEnd  = 0x1264;
 constexpr std::uint32_t kFreshFrames   = 1;       // a copy from this frame or the one before
 constexpr auto          kSummaryEvery  = std::chrono::seconds(10);
 
+// The edge-stop action (research/RE-p2-ledge-peek.md): its type, phase and phase-3 sub-phase, and the edge's rotation.
+constexpr std::uint32_t kActionType     = 0x499;
+constexpr std::uint32_t kActionPhase    = 0x411;
+constexpr std::uint32_t kLeanSubPhase   = 0x440;
+constexpr std::uint32_t kEdgeRotation   = 0x720;  // FQuat; its X axis is the direction the stick is tested against
+constexpr unsigned      kLeanPhase      = 3;
+constexpr unsigned      kLeanStart      = 0;
+constexpr unsigned      kLeanEnd        = 2;
+constexpr auto          kStutterWindow  = std::chrono::seconds(2);
+constexpr unsigned      kStutterStarts  = 3;
+
 struct MoveClass
 {
     const wchar_t*     name;
     platform::SlotFact tick;
     platform::SlotFact finish;
     bool               holdSelect;  // its Tick calls the hold-select (its redirect is required)
+    bool               climb;       // a climb: player 2's identity (leader test, buttons) and the climb camera's holder
 };
 const MoveClass kMoves[] = {
     {L"climbing wall",
      {L"ClimbingMove's Tick slot (+0x10)", 0x145833778, {L"ClimbingMove_Tick_Vt10_CamRot", 0x141636878, kTickBytes}},
      {L"ClimbingMove's Finish slot (+0xA8)", 0x145833810,
       {L"EndBehaviorAction_Finish_CallsEndVt120", 0x1416E9604, kClimbFinishBytes}},
-     true},
+     true, true},
     {L"monkey bars",
      {L"MonkeyBarsMove's Tick slot (+0x10)", 0x146695A18,
       {L"MonkeyBarsMove_Tick_Vt10_CamRotIfPlayer", 0x1432FABC0, kTickBytes}},
      {L"MonkeyBarsMove's Finish slot (+0xA8)", 0x146695AB0, {L"MonkeyBarsMove_Finish_VtA8", 0x1432E91B8, kBarsFinishBytes}},
-     false},
+     false, true},
     {L"spider wall",
      {L"SpiderMoveMove's Tick slot (+0x10)", 0x146696CF8,
       {L"SpiderMoveMove_Tick_Vt10_CamRotIfPlayer", 0x143312EDC, kTickBytes}},
      {L"SpiderMoveMove's Finish slot (+0xA8)", 0x146696D90,
       {L"EndBehaviorAction_VtA8_Thunk_Finish", 0x1416E95EC, kSpiderFinishBytes}},
-     false},
+     false, true},
+    // Not a climb: the ledge lean, the step after an edge stop and the walk step (one action class). Only its stick and
+    // camera basis become the player's; the identity stays the game's (phases 7-10 not read).
+    {L"edge stop (ledge lean)",
+     {L"FieldActMove58DFA88's Tick slot (+0x10)", 0x1458DFA98,
+      {L"FieldActMove58DFA88_Tick_Vt10", 0x141860338, kEdgeStopTickBytes}},
+     {L"FieldActMove58DFA88's Finish slot (+0xA8)", 0x1458DFB30,
+      {L"EndBehaviorAction_Finish_CallsEndVt120", 0x1416E9604, kClimbFinishBytes}},
+     false, false},
 };
-constexpr std::size_t kMoveCount = std::size(kMoves);
+constexpr std::size_t kMoveCount  = std::size(kMoves);
+constexpr std::size_t kClimbCount = 3;  // the first three entries
 
 using TickFn           = std::uintptr_t (*)(void* move, void* arg);
 using FinishFn         = std::uintptr_t (*)(void* move);
@@ -102,15 +125,17 @@ using KeyCopyFn        = void* (*)(void* out, const void* key);
 
 struct Context
 {
-    int  player    = 0;      // 0 none, 1 or 2: whose climb this thread is ticking
-    bool suspended = false;  // player 2's identity (leader test, buttons) off for this call
+    int      player    = 0;      // 0 none, 1 or 2: whose move this thread is ticking
+    bool     suspended = false;  // player 2's identity (leader test, buttons) off for this call
+    bool     climb     = false;  // the move is a climb (PlayerHere answers only for climbs)
+    unsigned cameraTwo = 0;      // times the camera manager getter answered player 2's in this context
 };
 thread_local Context t_climb;
 
 class InContext
 {
 public:
-    explicit InContext(int player) noexcept : saved_(t_climb) { t_climb = {player, false}; }
+    InContext(int player, bool climb) noexcept : saved_(t_climb) { t_climb = {player, false, climb, 0}; }
     ~InContext() { t_climb = saved_; }
     InContext(const InContext&)            = delete;
     InContext& operator=(const InContext&) = delete;
@@ -170,8 +195,20 @@ struct Counts
     std::atomic<unsigned> holdOff{0};      // hold-selects run without player 2's identity
     std::atomic<unsigned> finishOff{0};    // finishes run without player 2's identity
     std::atomic<unsigned> staleCopies{0};  // a context found no fresh copy (the merged value read instead)
+    std::atomic<unsigned> edgeTicks[2]{};  // edge-stop action ticks, per player
 };
 Counts g_counts;
+
+// The edge-stop action as each player's Tick last left it (written by that player's Ticks, one at a time).
+struct EdgeSeen
+{
+    std::atomic<std::uint32_t> state{~0u};  // type << 16 | phase << 8 | sub-phase
+    std::atomic<const void*>   move{nullptr};
+    std::atomic<std::int64_t>  windowAt{0};  // ms: the first lean start of the current stutter window
+    std::atomic<unsigned>      starts{0};
+    std::atomic<bool>          reported{false};
+};
+std::array<EdgeSeen, 2> g_edge;
 
 // --- set at install -----------------------------------------------------------------------------------------------------
 
@@ -191,7 +228,7 @@ PressedFn                        g_pressedGlobal = nullptr;
 KeyCopyFn                        g_keyCopy       = nullptr;
 bool                             g_installed     = false;
 bool                             g_buttons       = false;  // player 2's presses recorded and answered
-unsigned                         g_ticksPlaced   = 0;      // Tick slots placed (of kMoveCount)
+unsigned                         g_ticksPlaced   = 0;      // climb Tick slots placed (of kClimbCount)
 
 // Game thread only.
 bool                                  g_loggedOn = false;
@@ -217,6 +254,91 @@ int PlayerOf(const void* move) noexcept
     return weak == g_playerOneWeak.load(std::memory_order_relaxed) ? 1 : 0;
 }
 
+/// The yaw (degrees) of the edge rotation's X axis, the direction the lean's stick test compares with.
+float EdgeYaw(const void* move) noexcept
+{
+    const float x = ReadField<float>(move, kEdgeRotation), y = ReadField<float>(move, kEdgeRotation + 0x4);
+    const float z = ReadField<float>(move, kEdgeRotation + 0x8), w = ReadField<float>(move, kEdgeRotation + 0xC);
+    return std::atan2(2.0f * (x * y + w * z), 1.0f - 2.0f * (y * y + z * z)) * 57.295776f;
+}
+
+std::uint32_t EdgeStateOf(const void* move) noexcept
+{
+    return static_cast<std::uint32_t>(ReadField<std::uint8_t>(move, kActionType)) << 16 |
+           static_cast<std::uint32_t>(ReadField<std::uint8_t>(move, kActionPhase)) << 8 |
+           ReadField<std::uint8_t>(move, kLeanSubPhase);
+}
+
+/// After a player's edge-stop Tick (that player's thread): Trace per Tick, Debug on change, and the stutter detector
+/// (Info once per episode when the lean restarts kStutterStarts times within kStutterWindow).
+void NoteEdgeStop(int player, const void* move, unsigned cameraTwo) noexcept
+{
+    EdgeSeen&      seen   = g_edge[static_cast<std::size_t>(player - 1)];
+    const auto     state  = EdgeStateOf(move);
+    const unsigned phase  = (state >> 8) & 0xFFu;
+    const unsigned sub    = state & 0xFFu;
+    const auto     before = seen.state.exchange(state, std::memory_order_relaxed);
+    const auto*    was    = seen.move.exchange(move, std::memory_order_relaxed);
+    platform::LogTrace(L"edge stop: player {}'s action ticks: type {}, phase {}, sub-phase {}", player, state >> 16,
+                       phase, sub);
+    if (before == state && was == move)
+    {
+        return;
+    }
+    const wchar_t* basis   = player == 1        ? L"pad 1's stick in player 1's camera"
+                             : cameraTwo != 0u   ? L"pad 2's stick in player 2's camera"
+                                                 : L"pad 2's stick; no camera read on this tick";
+    if (phase == kLeanPhase && sub == kLeanEnd)
+    {
+        platform::LogDebug(L"edge stop: player {}'s ledge lean ends (stick released or turned away; tested as {}; the "
+                           L"edge faces {:.0f} deg)",
+                           player, basis, EdgeYaw(move));
+        return;
+    }
+    platform::LogDebug(L"edge stop: player {}'s action: type {}, phase {}, sub-phase {} ({})", player, state >> 16, phase,
+                       sub, basis);
+    if (phase != kLeanPhase || sub != kLeanStart)
+    {
+        return;  // a lean starts on each change into sub-phase 0
+    }
+    const auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
+                         std::chrono::steady_clock::now().time_since_epoch())
+                         .count();
+    const auto windowAt = seen.windowAt.load(std::memory_order_relaxed);
+    if (windowAt == 0 || now - windowAt > std::chrono::milliseconds(kStutterWindow).count())
+    {
+        seen.windowAt.store(now, std::memory_order_relaxed);
+        seen.starts.store(1, std::memory_order_relaxed);
+        seen.reported.store(false, std::memory_order_relaxed);
+        return;
+    }
+    const auto starts = seen.starts.fetch_add(1, std::memory_order_relaxed) + 1;
+    if (starts >= kStutterStarts && !seen.reported.exchange(true, std::memory_order_relaxed))
+    {
+        platform::Log(L"edge stop: player {}'s ledge lean restarted {} times in {} s (a stutter; tested as {})", player,
+                      starts, kStutterWindow.count(), basis);
+    }
+}
+
+/// The edge-stop action's Tick: the player's stick and camera basis, the game's identity (the context is suspended for
+/// player 2, so the leader test and the buttons stay the game's).
+template <std::size_t Index>
+std::uintptr_t EdgeStopTick(void* move, void* arg, int player) noexcept
+{
+    const auto original = reinterpret_cast<TickFn>(g_moves[Index].tick.Original());
+    g_counts.edgeTicks[player - 1].fetch_add(1, std::memory_order_relaxed);
+    std::uintptr_t result    = 0;
+    unsigned       cameraTwo = 0;
+    {
+        const InContext context(player, false);
+        const Suspended suspended;
+        result    = original(move, arg);
+        cameraTwo = t_climb.cameraTwo;
+    }
+    NoteEdgeStop(player, move, cameraTwo);  // the caller still holds the action after its Tick
+    return result;
+}
+
 template <std::size_t Index>
 std::uintptr_t MoveTick(void* move, void* arg) noexcept
 {
@@ -225,6 +347,10 @@ std::uintptr_t MoveTick(void* move, void* arg) noexcept
     if (player == 0)
     {
         return original(move, arg);
+    }
+    if (!kMoves[Index].climb)
+    {
+        return EdgeStopTick<Index>(move, arg, player);
     }
     const auto frame = g_frame.load(std::memory_order_relaxed);
     if (player == 2)
@@ -237,7 +363,7 @@ std::uintptr_t MoveTick(void* move, void* arg) noexcept
         g_playerOneClimbFrame.store(frame, std::memory_order_relaxed);
     }
     g_counts.ticks[player - 1].fetch_add(1, std::memory_order_relaxed);
-    const InContext context(player);
+    const InContext context(player, true);
     return original(move, arg);
 }
 
@@ -282,6 +408,7 @@ void* CameraGetter() noexcept
         if (void* two = weak != 0 ? leader_scope::ObjectAt(&weak) : nullptr)
         {
             g_counts.cameraTwo.fetch_add(1, std::memory_order_relaxed);
+            ++t_climb.cameraTwo;
             return two;
         }
     }
@@ -414,15 +541,17 @@ void LogChanges() noexcept
     const auto hold = g_counts.holdOff.exchange(0, std::memory_order_relaxed);
     const auto fin  = g_counts.finishOff.exchange(0, std::memory_order_relaxed);
     const auto old  = g_counts.staleCopies.exchange(0, std::memory_order_relaxed);
-    if (two == 0 && one == 0)
+    const auto e2   = g_counts.edgeTicks[1].exchange(0, std::memory_order_relaxed);
+    const auto e1   = g_counts.edgeTicks[0].exchange(0, std::memory_order_relaxed);
+    if (two == 0 && one == 0 && e2 == 0 && e1 == 0)
     {
         return;
     }
-    platform::LogDebug(L"climb context ({} s): player 2's climb ticks {}, player 1's {}; inside player 2's: leader tests "
-                       L"asked {}, player 2's camera manager {}, keys from pad 2 {}, hold-select presses {}, hold-selects "
-                       L"without player 2's identity {}, finishes without it {}; keys from pad 1 in player 1's {}; no "
-                       L"fresh copy {}",
-                       kSummaryEvery.count(), two, one, asks, cam, k2, btn, hold, fin, k1, old);
+    platform::LogDebug(L"climb context ({} s): player 2's climb ticks {}, player 1's {}; edge-stop ticks player 2 {}, "
+                       L"player 1 {}; inside player 2's: leader tests asked {}, player 2's camera manager {}, keys from "
+                       L"pad 2 {}, hold-select presses {}, hold-selects without player 2's identity {}, finishes without "
+                       L"it {}; keys from pad 1 in player 1's {}; no fresh copy {}",
+                       kSummaryEvery.count(), two, one, e2, e1, asks, cam, k2, btn, hold, fin, k1, old);
 }
 
 template <std::size_t Index>
@@ -443,7 +572,7 @@ std::wstring PlaceMove(const platform::GameImage& image, bool holdSelect)
     {
         live.finish.Restore();
     }
-    g_ticksPlaced += tick ? 1u : 0u;
+    g_ticksPlaced += tick && cls.climb ? 1u : 0u;
     return std::wstring(cls.name) + (tick ? L" yes" : L" NO");
 }
 
@@ -600,12 +729,12 @@ int LeaderTypeHere() noexcept
 
 int PlayerHere() noexcept
 {
-    return t_climb.player;
+    return t_climb.climb ? t_climb.player : 0;
 }
 
 bool TicksPlaced() noexcept
 {
-    return g_ticksPlaced == kMoveCount;
+    return g_ticksPlaced == kClimbCount;
 }
 
 bool WithPlayerTwoCamera(void (*call)(void*), void* context) noexcept
@@ -615,7 +744,7 @@ bool WithPlayerTwoCamera(void (*call)(void*), void* context) noexcept
     {
         return false;
     }
-    const InContext inContext(2);
+    const InContext inContext(2, true);
     const Suspended suspended;
     call(context);
     return true;

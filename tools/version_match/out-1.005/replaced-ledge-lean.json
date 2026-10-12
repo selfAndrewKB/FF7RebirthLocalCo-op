@@ -1,0 +1,35 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-10-11",
+  "doc": "Rebirth/Documentation/research/RE-p2-ledge-peek.md",
+  "facts": [
+    {
+      "name": "slot: FieldActMove58DFA88 Tick (+0x10)",
+      "old": "0x1458DFA98",
+      "new": "0x1457464D8",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad lean_facts.py, 2026-10-11) after the IDA agent's match (RE-p2-ledge-peek.md section 3)."
+    },
+    {
+      "name": "slot: FieldActMove58DFA88 Finish (+0xA8)",
+      "old": "0x1458DFB30",
+      "new": "0x145746570",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad lean_facts.py, 2026-10-11) after the IDA agent's match (RE-p2-ledge-peek.md section 3)."
+    },
+    {
+      "name": "FieldActMove58DFA88_Tick_Vt10",
+      "old": "0x141860338",
+      "new": "0x1418EFCA4",
+      "bytes": "4053b820000000e8",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad lean_facts.py, 2026-10-11) after the IDA agent's match (RE-p2-ledge-peek.md section 3)."
+    }
+  ]
+}

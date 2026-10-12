@@ -20,6 +20,13 @@
 // controller. The hold-select drops it while player 1 also climbs: its prompt point is one global. Zip lines are left
 // out (their rumble plays on pad 1).
 //
+// The edge-stop action (ledge lean, the step after an edge stop, the walk step; research/RE-p2-ledge-peek.md) ticks the
+// same way. Its lean holds only while the stick, turned by the primary camera's yaw, points within 60 degrees of the
+// edge, so player 2's lean ended and restarted every few frames (a stutter) unless player 1's camera faced the ledge. Its
+// Tick runs in the player's context with the identity suspended: only the key values and the camera manager getter
+// answer (player 2: pad 2 and player 2's camera; player 1: pad 1). It is not a climb (PlayerHere and TicksPlaced leave it
+// out). Logged: Debug per action change, Trace per Tick, and Info when a lean restarts 3 times within 2 s.
+//
 // The copies are taken in the engine-tick pre-callback (Tick below), after the game's merge and before the world tick:
 // the worker reads the same frame's values. Every answer outside a context, and on every other thread, is the game's.
 
@@ -31,8 +38,8 @@ class GameImage;
 
 namespace lss::player_two::climb_context {
 
-/// Replaces the three moves' Tick and Finish slots, the hold-select call and the three getters (each checked; a failed
-/// check leaves that part to the game, logged).
+/// Replaces the three climbs' and the edge-stop action's Tick and Finish slots, the hold-select call and the three
+/// getters (each checked; a failed check leaves that part to the game, logged).
 void Install(const platform::GameImage& image) noexcept;
 
 void Remove() noexcept;
