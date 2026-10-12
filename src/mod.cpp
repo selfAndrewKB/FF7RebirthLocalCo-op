@@ -65,6 +65,7 @@
 #include "player_two/ride_probe.h"
 #include "player_two/ride_watch.h"
 #include "player_two/shared_ride.h"
+#include "player_two/shared_ride_rumble.h"
 #include "player_two/wheelie_ride.h"
 #include "player_two/wheelie_watch.h"
 #include "player_two/pad_sticks.h"
@@ -543,6 +544,7 @@ private:
         // The buggy and the bronco (player_two/shared_ride.h): player 2 stands aside, the game's merge reaches player 1
         // from every pad.
         const bool shared = lss::player_two::shared_ride::Tick();
+        lss::player_two::shared_ride_rumble::Tick(shared);  // logging: the rumble player 2's pad would meet
         session_->SetSharedRide(shared);
         lss::player_two::pad_sticks::SetStoodDown(shared);
         lss::player_two::climb_context::Tick();  // this frame's input copies for the climbs on the anim worker (W5)
