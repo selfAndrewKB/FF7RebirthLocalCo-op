@@ -14,6 +14,7 @@
 #include "player_two/command_rules.h"
 #include "player_two/menu_focus.h"
 #include "player_two/lock_on.h"
+#include "player_two/rumble_list_two.h"
 #include "player_two/field_camera.h"
 #include "player_two/game_thread_sites.h"
 #include "player_two/generation.h"
@@ -815,6 +816,7 @@ void Session::Leave() noexcept
     wheelie_ride::Release(L"player 2 leaves");
     camera_override::PlayerTwoOut();  // the member's camera delegates back to the engine's, while it is still held
     lock_on::PlayerTwoOut();
+    rumble_list_two::PlayerTwoOut();  // stops player 2's channels while player 2 can still be the primary player
     generation::Withdraw();  // every wrapper passes through from here on
     phase_ = Phase::Leaving;
     ticks_ = 0;
@@ -832,6 +834,7 @@ bool Session::LeaveNow() noexcept
     wheelie_ride::Release(L"a map load takes player 2 out");
     camera_override::PlayerTwoOut();
     lock_on::PlayerTwoOut();
+    rumble_list_two::PlayerTwoOut();  // stops player 2's channels while player 2 can still be the primary player
     generation::Withdraw();
     if (HoldsMember())
     {
@@ -931,6 +934,7 @@ void Session::Forget() noexcept
 {
     camera_override::PlayerTwoOut();
     lock_on::PlayerTwoOut();
+    rumble_list_two::PlayerTwoOut();  // stops player 2's channels while player 2 can still be the primary player
     generation::Withdraw();
     primary_controller::Unbind();
     leave_.Finish();

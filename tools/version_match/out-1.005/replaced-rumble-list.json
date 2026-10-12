@@ -1,0 +1,170 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-10-11",
+  "doc": "Rebirth/Documentation/research/RE-p2-zipline-rumble-hook-who.md",
+  "facts": [
+    {
+      "name": "VibrationList3B0_PlayNamed",
+      "old": "0x141302F0C",
+      "new": "0x1410C9320",
+      "bytes": "48895c240848896c2410488974241857",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad rumble_facts.py, 2026-10-11) after the IDA agent's match (RE-p2-zipline-rumble-hook-who.md section 8)."
+    },
+    {
+      "name": "VibrationList3B0_AddOrUpdate",
+      "old": "0x141302E2C",
+      "new": "0x1410C9240",
+      "bytes": "48895c240848897c241055488becb850",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad rumble_facts.py, 2026-10-11) after the IDA agent's match (RE-p2-zipline-rumble-hook-who.md section 8)."
+    },
+    {
+      "name": "Vibration_TickGlobalList_ApplyToPrimaryPC",
+      "old": "0x14125D324",
+      "new": "0x1411B64B0",
+      "bytes": "48895c240857b840000000",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad rumble_facts.py, 2026-10-11) after the IDA agent's match (RE-p2-zipline-rumble-hook-who.md section 8)."
+    },
+    {
+      "name": "Vibration_TickList_BuildChannelSet",
+      "old": "0x14125CFD0",
+      "new": "0x1411B6024",
+      "bytes": "48895c241048896c241856574156b850",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad rumble_facts.py, 2026-10-11) after the IDA agent's match (RE-p2-zipline-rumble-hook-who.md section 8)."
+    },
+    {
+      "name": "PrimaryPC_ApplyVibrationChannels758",
+      "old": "0x1408A1688",
+      "new": "0x14189679C",
+      "bytes": "48895c240848896c2410488974241857",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad rumble_facts.py, 2026-10-11) after the IDA agent's match (RE-p2-zipline-rumble-hook-who.md section 8)."
+    },
+    {
+      "name": "VibrationList_Ctor (1.004 6 slots, 1.005 7)",
+      "old": "0x143727368",
+      "new": "0x14345C1C4",
+      "bytes": "48895c240857b820000000",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad rumble_facts.py, 2026-10-11) after the IDA agent's match (RE-p2-zipline-rumble-hook-who.md section 8)."
+    },
+    {
+      "name": "LeaderActionComp_PerFrameB_RowsAndVibration",
+      "old": "0x14125D474",
+      "new": "0x1411B6600",
+      "bytes": "48895c240848897c241055488d6c24a9",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad rumble_facts.py, 2026-10-11) after the IDA agent's match (RE-p2-zipline-rumble-hook-who.md section 8)."
+    },
+    {
+      "name": "PerFrameB: call Vibration_TickGlobalList_ApplyToPrimaryPC",
+      "old": "0x14125D558",
+      "new": "0x1411B66E4",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad rumble_facts.py, 2026-10-11) after the IDA agent's match (RE-p2-zipline-rumble-hook-who.md section 8)."
+    },
+    {
+      "name": "Zipline phase 3: call FieldActionMove_IsPlayerChar_Ex (rumble gate)",
+      "old": "0x1433251E2",
+      "new": "0x143035446",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad rumble_facts.py, 2026-10-11) after the IDA agent's match (RE-p2-zipline-rumble-hook-who.md section 8)."
+    },
+    {
+      "name": "FieldActionMove_IsPlayerChar_Ex_UCPCOrVehicleOrLeaderTag",
+      "old": "0x141635DE8",
+      "new": "0x1410D02D4",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad rumble_facts.py, 2026-10-11) after the IDA agent's match (RE-p2-zipline-rumble-hook-who.md section 8)."
+    },
+    {
+      "name": "Zipline phase 3: call VibrationList3B0_PlayNamed (keep-alive add)",
+      "old": "0x1433252C6",
+      "new": "0x14303552A",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad rumble_facts.py, 2026-10-11) after the IDA agent's match (RE-p2-zipline-rumble-hook-who.md section 8)."
+    },
+    {
+      "name": "the list lock (CRITICAL_SECTION)",
+      "old": "0x14881C428",
+      "new": "0x14864FC48",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad rumble_facts.py, 2026-10-11) after the IDA agent's match (RE-p2-zipline-rumble-hook-who.md section 8)."
+    },
+    {
+      "name": "VibrationList3B0_StopNamed",
+      "old": "0x1422C4818",
+      "new": "0x1421D9EB4",
+      "bytes": "48895c240857b820000000",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad foot_facts.py, 2026-10-12) after the IDA agent's match (RE-p2-rumble-owner-chocobo.md section 4)."
+    },
+    {
+      "name": "the list's owner global (g_FieldActionGlobal; list at +0x3B0, read by StopNamed and PlayNamed)",
+      "old": "0x14939BC90",
+      "new": "0x1491D84B0",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad foot_facts.py, 2026-10-12) after the IDA agent's match (RE-p2-rumble-owner-chocobo.md section 4)."
+    },
+    {
+      "name": "slot: EndChocoboCharacter footsteps (1.004 vt+0x978, 1.005 vt+0x980)",
+      "old": "0x1457F3ED0",
+      "new": "0x14566D868",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad foot_facts.py, 2026-10-12) after the IDA agent's match (RE-p2-rumble-owner-chocobo.md section 4)."
+    },
+    {
+      "name": "EndChocoboCharacter_FootImpact (the slot's function)",
+      "old": "0x1418BA510",
+      "new": "0x141926AD4",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad foot_facts.py, 2026-10-12) after the IDA agent's match (RE-p2-rumble-owner-chocobo.md section 4)."
+    },
+    {
+      "name": "PrimaryPCModes_AnyVt2A8ForActor_Keys0to5 (the footsteps gate: rider ride status)",
+      "old": "0x140A60ABC",
+      "new": "0x1407641D0",
+      "bytes": "48895c2408488974241057",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad foot_facts.py and gate_facts.py, 2026-10-12) after the IDA agent's match (RE-p2-rumble-owner-chocobo.md section 4)."
+    },
+    {
+      "name": "PrimaryPC_Char5A0_CanStartFieldAction (the footsteps gate)",
+      "old": "0x140E82AF4",
+      "new": "0x1410CFF7C",
+      "bytes": "488bc44889580848896810",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad foot_facts.py and gate_facts.py, 2026-10-12) after the IDA agent's match (RE-p2-rumble-owner-chocobo.md section 4)."
+    }
+  ]
+}

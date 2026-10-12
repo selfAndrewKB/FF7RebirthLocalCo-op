@@ -47,6 +47,7 @@
 #include "player_two/rumble_watch.h"
 #include "player_two/pad_rumble.h"
 #include "player_two/combat_rumble.h"
+#include "player_two/rumble_list_two.h"
 #include "player_two/chest_watch.h"
 #include "player_two/vending.h"
 #include "player_two/interact_watch.h"
@@ -231,6 +232,7 @@ public:
         lss::player_two::approach_two::Remove();
         lss::player_two::move_type_two::Remove();
         lss::player_two::anim_two_views::Remove();
+        lss::player_two::rumble_list_two::Remove();
         lss::player_two::traversal_watch::Remove();
         lss::player_two::vault_camera::Remove();
         lss::hud::target_views::Remove();
@@ -396,6 +398,7 @@ public:
         lss::player_two::rumble_watch::Install(*image);    // logging only: each controller's rumble, pad by pad
         lss::player_two::pad_rumble::Install(*image);      // each player's rumble on their own pad
         lss::player_two::combat_rumble::Install(*image);   // player 2's combat rumble (hits, montage notifies) on player 2's pad
+        lss::player_two::rumble_list_two::Install(*image);  // the traversal rumble list per player (zip line, chocobo, ropes)
         lss::player_two::chest_watch::Install(*image);     // chests, logged (read-only): presses, opens, grants
         lss::player_two::vending::Install(*image);         // player 2's vending machines: the shop's camera and pad
         lss::player_two::interact_watch::Install(*image);  // field interactions (pickups) per player, logged (read-only)
@@ -491,6 +494,7 @@ private:
         const lss::platform::frame_watch::Charge charge(lss::platform::frame_watch::Part::EngineTick);
         lss::player_two::pad_rumble::BeforeTick();  // before the world tick: player 2's controller ordered after player 1's
         lss::player_two::combat_rumble::BeforeTick();  // outside every notify: their call sites; the status line
+        lss::player_two::rumble_list_two::Tick();      // player 2's list made at join (dropped if player 2 went out another way)
         lss::player_two::chest_watch::Tick();          // an open followed from its press to its grant (logged)
         lss::player_two::vending::Tick();              // a press that opened no shop; player 2 leaving with their shop up
         if (!tickSeen_)
