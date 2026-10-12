@@ -22,6 +22,18 @@
 // primary scope, as the game runs the chocobo player 1 rides, so the game's gate asks player 2's coordinator and the
 // add goes to player 2's list.
 //
+// Sources that run outside player 2's scopes name player 2 as the owner of their adds and stops while they run for
+// player 2's scooter or chocobo (a per-thread owner; RE-p2-rumble-owner-chocobo.md §9): the scooter move state's slot 1
+// (hit and loop) and slot 8 (the loop's stop), the sky glide's rumble delegate, the jump box's OnEnded, and the drift
+// and brake actions. The last three often run on the anim worker. There the add goes to player 2's list under the game's
+// lock. The drift and brake gates ask whether the chocobo's rider is the player, and the leader test answers yes for
+// player 2's member on that thread (member_movement::ThreadLeaderAnswer). In 1.004 the jump box's add is inlined: a few
+// bytes at its list load, under the game's lock, take player 2's list on the thread the invoker named. A stop of player
+// 2's on a worker is left (no source found does one; logged).
+//
+// Not routed: the hook rope and the hookshot (player 2 cannot start them), and the bronco and buggy (player 1 drives;
+// their rumble plays on pad 1).
+//
 // Residual: the force-feedback manager names its channel slots globally, so the same effect on the same channel for
 // both players at once can suppress one play. PS5 haptics stay single-target.
 
@@ -32,7 +44,8 @@ class GameImage;
 namespace lss::player_two::rumble_list_two {
 
 /// Replaces the add's and the stop's entries, the component tick's entry and its list-tick call, and the zip line's two
-/// calls (each checked; all or none; logged), then the chocobo's footstep slot (optional; logged).
+/// calls (each checked; all or none; logged), then the chocobo's footstep slot and the sources outside player 2's scopes
+/// (each optional; logged).
 void Install(const platform::GameImage& image) noexcept;
 
 void Remove() noexcept;

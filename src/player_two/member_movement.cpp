@@ -52,6 +52,8 @@ std::atomic<int>      g_leaderType{kNoType};
 // 1's included, so it cannot be answered by type; RE-p2-chocobo-ride.md §7.0 item 2). Null outside the ride's tick.
 std::atomic<const void*> g_leaderComponent{nullptr};
 std::atomic<unsigned> g_leaderAnswers{0};
+// The player type the leader test says yes to on this thread only (ThreadLeaderAnswer), or kNoType.
+thread_local int      t_threadType = kNoType;
 
 // Game thread only: set once the engine raised an exception inside the member's tick.
 bool g_stopped = false;
@@ -67,9 +69,11 @@ int PlayerTypeOfComponent(const void* component) noexcept
 
 std::uint8_t LeaderTest(const void* component)
 {
-    // Player 2's climb on the anim worker (climb_context.h): this thread only, the member's type.
+    // Player 2's climb on the anim worker (climb_context.h), or player 2's chocobo's actions there (ThreadLeaderAnswer):
+    // this thread only, the member's type.
     const int climbType = climb_context::LeaderTypeHere();
-    if (climbType != kNoType && PlayerTypeOfComponent(component) == climbType)
+    const int hereType  = climbType != kNoType ? climbType : t_threadType;
+    if (hereType != kNoType && PlayerTypeOfComponent(component) == hereType)
     {
         g_leaderAnswers.fetch_add(1, std::memory_order_relaxed);
         return 1;
@@ -440,6 +444,16 @@ CoreAsPlayerTwo PlayerCoreAsPlayerTwo(const void* character, const void* member)
     const unsigned after = g_leaderAnswers.load(std::memory_order_relaxed);
     g_leaderAnswers.fetch_sub(after > before ? after - before : 0u, std::memory_order_relaxed);
     return result;
+}
+
+ThreadLeaderAnswer::ThreadLeaderAnswer(int type) noexcept : saved_(t_threadType)
+{
+    t_threadType = type;
+}
+
+ThreadLeaderAnswer::~ThreadLeaderAnswer()
+{
+    t_threadType = saved_;
 }
 
 }  // namespace lss::player_two::member_movement

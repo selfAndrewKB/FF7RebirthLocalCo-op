@@ -1,0 +1,143 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-10-12",
+  "doc": "Rebirth/Documentation/research/RE-p2-rumble-owner-chocobo.md section 9",
+  "facts": [
+    {
+      "name": "slot: SBScooterMoveState slot 1 (TickHandles_Rumble)",
+      "old": "0x1466B9D90",
+      "new": "0x146547860",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad gaps_json.py, 2026-10-12) after the IDA agent's match (RE-p2-rumble-owner-chocobo.md section 9): each slot holds the matched function in both builds, and the functions' first bytes are identical across builds (up to the first call's displacement)."
+    },
+    {
+      "name": "SBScooterMoveState_Slot1_TickHandles_Rumble",
+      "old": "0x14344F38C",
+      "new": "0x14316F660",
+      "bytes": "4053b830000000e8",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad gaps_json.py, 2026-10-12) after the IDA agent's match (RE-p2-rumble-owner-chocobo.md section 9): each slot holds the matched function in both builds, and the functions' first bytes are identical across builds (up to the first call's displacement)."
+    },
+    {
+      "name": "slot: SBScooterMoveState slot 8 (Deactivate)",
+      "old": "0x1466B9DC8",
+      "new": "0x146547898",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad gaps_json.py, 2026-10-12) after the IDA agent's match (RE-p2-rumble-owner-chocobo.md section 9): each slot holds the matched function in both builds, and the functions' first bytes are identical across builds (up to the first call's displacement)."
+    },
+    {
+      "name": "SBScooterMoveState_Slot8_Deactivate",
+      "old": "0x14344A350",
+      "new": "0x14316A150",
+      "bytes": "48895c240857b840000000e8",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad gaps_json.py, 2026-10-12) after the IDA agent's match (RE-p2-rumble-owner-chocobo.md section 9): each slot holds the matched function in both builds, and the functions' first bytes are identical across builds (up to the first call's displacement)."
+    },
+    {
+      "name": "slot: vtbl_GlideSkyFFB_DelegateInstance +0x50 (ExecuteIfSafe)",
+      "old": "0x145CE5C48",
+      "new": "0x146545DD0",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad gaps_json.py, 2026-10-12) after the IDA agent's match (RE-p2-rumble-owner-chocobo.md section 9): each slot holds the matched function in both builds, and the functions' first bytes are identical across builds (up to the first call's displacement)."
+    },
+    {
+      "name": "GlideSkyFFB_DelegateInst_ExecuteIfSafe",
+      "old": "0x142247D60",
+      "new": "0x14314299C",
+      "bytes": "b828000000e8",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad gaps_json.py, 2026-10-12) after the IDA agent's match (RE-p2-rumble-owner-chocobo.md section 9): each slot holds the matched function in both builds, and the functions' first bytes are identical across builds (up to the first call's displacement)."
+    },
+    {
+      "name": "slot: vtbl_GlideSkyFFB_DelegateInstance +0x48 (Execute)",
+      "old": "0x145CE5C40",
+      "new": "0x146545DC8",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad gaps_json.py, 2026-10-12) after the IDA agent's match (RE-p2-rumble-owner-chocobo.md section 9): each slot holds the matched function in both builds, and the functions' first bytes are identical across builds (up to the first call's displacement)."
+    },
+    {
+      "name": "GlideSkyFFB_DelegateInst_Execute",
+      "old": "0x142247D30",
+      "new": "0x143142980",
+      "bytes": "b828000000e8",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad gaps_json.py, 2026-10-12) after the IDA agent's match (RE-p2-rumble-owner-chocobo.md section 9): each slot holds the matched function in both builds, and the functions' first bytes are identical across builds (up to the first call's displacement)."
+    },
+    {
+      "name": "slot: ChocoboDriftAction state table: state 1 tick",
+      "old": "0x146692AF0",
+      "new": "0x14651F8E0",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad gaps_json.py, 2026-10-12) after the IDA agent's match (RE-p2-rumble-owner-chocobo.md section 9): each slot holds the matched function in both builds, and the functions' first bytes are identical across builds (up to the first call's displacement)."
+    },
+    {
+      "name": "ChocoboDriftAction_State1_Tick_FFBChocobo3",
+      "old": "0x14328EFA4",
+      "new": "0x142FA1FF0",
+      "bytes": "488bc448895810488978184c",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad gaps_json.py, 2026-10-12) after the IDA agent's match (RE-p2-rumble-owner-chocobo.md section 9): each slot holds the matched function in both builds, and the functions' first bytes are identical across builds (up to the first call's displacement)."
+    },
+    {
+      "name": "slot: ChocoboBrakeMove phase table: phase 1",
+      "old": "0x1470FCDE0",
+      "new": "0x146F30380",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad gaps_json.py, 2026-10-12) after the IDA agent's match (RE-p2-rumble-owner-chocobo.md section 9): each slot holds the matched function in both builds, and the functions' first bytes are identical across builds (up to the first call's displacement)."
+    },
+    {
+      "name": "ChocoboBrakeMove_Phase1_FFBChocoboStop",
+      "old": "0x14328B9FC",
+      "new": "0x142F9EC8C",
+      "bytes": "48895c241055565741564157",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad gaps_json.py, 2026-10-12) after the IDA agent's match (RE-p2-rumble-owner-chocobo.md section 9): each slot holds the matched function in both builds, and the functions' first bytes are identical across builds (up to the first call's displacement)."
+    },
+    {
+      "name": "slot: ChocoboBrakeMove phase table: phase 2",
+      "old": "0x1470FCDE8",
+      "new": "0x146F30388",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad gaps_json.py, 2026-10-12) after the IDA agent's match (RE-p2-rumble-owner-chocobo.md section 9): each slot holds the matched function in both builds, and the functions' first bytes are identical across builds (up to the first call's displacement)."
+    },
+    {
+      "name": "ChocoboBrakeMove_Phase2_FFBChocoboStop",
+      "old": "0x14328A1A0",
+      "new": "0x142F9D430",
+      "bytes": "48895c241055565741544156",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad gaps_json.py, 2026-10-12) after the IDA agent's match (RE-p2-rumble-owner-chocobo.md section 9): each slot holds the matched function in both builds, and the functions' first bytes are identical across builds (up to the first call's displacement)."
+    },
+    {
+      "name": "ChocoboJumpBox_TFunctionInvoker_FFB (entry redirect; first instruction mov eax,28h)",
+      "old": "0x1422ADF00",
+      "new": "0x143387694",
+      "bytes": "b828000000e8",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad gaps_json.py, 2026-10-12) after the IDA agent's match (RE-p2-rumble-owner-chocobo.md section 9): each slot holds the matched function in both builds, and the functions' first bytes are identical across builds (up to the first call's displacement)."
+    }
+  ]
+}

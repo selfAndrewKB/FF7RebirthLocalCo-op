@@ -2,15 +2,19 @@
 
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
+#include "platform/code_redirect.h"
 #include "platform/entry_redirect.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/vtable_entry.h"
 #include "player_two/chocobo_ride.h"
+#include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
+#include "player_two/member_movement.h"
 #include "player_two/object_fields.h"
+#include "player_two/party_member.h"
 #include "player_two/primary_controller.h"
 #include "players/unreal_access.h"
 
@@ -22,7 +26,10 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
+#include <format>
 #include <span>
+#include <string>
 
 namespace lss::player_two::rumble_list_two {
 
@@ -66,6 +73,32 @@ constexpr std::uintptr_t kCanAct        = 0x140E82AF4;  // PrimaryPC_Char5A0_Can
 constexpr std::uint8_t   kCanActBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x68, 0x10};
 constexpr platform::PerBuild<std::uint32_t> kChocoboRider{0x908, 0x910};    // the chocobo's vtable: its rider
 constexpr platform::PerBuild<std::uint32_t> kChocoboGait{0x1A20, 0x1A40};   // the chocobo's gait (footsteps when > 0)
+// The rumble sources that run outside player 2's scopes (RE-p2-rumble-owner-chocobo.md §9; slots and code read from
+// both exes, 2026-10-12). Each names player 2 as the owner of its adds while it runs for player 2's scooter or chocobo.
+constexpr std::uintptr_t kScooterTickSlot = 0x1466B9D90;  // SBScooterMoveState slot 1: hit and loop rumble (actor tick)
+constexpr std::uintptr_t kScooterTick     = 0x14344F38C;
+constexpr std::uintptr_t kScooterOffSlot  = 0x1466B9DC8;  // ... slot 8, Deactivate: stops the loop
+constexpr std::uintptr_t kScooterOff      = 0x14344A350;
+constexpr std::uintptr_t kGlideSafeSlot   = 0x145CE5C48;  // the sky-glide rumble delegate's ExecuteIfSafe (+0x50, Broadcast)
+constexpr std::uintptr_t kGlideSafe       = 0x142247D60;
+constexpr std::uintptr_t kGlideRunSlot    = 0x145CE5C40;  // ... its Execute (+0x48)
+constexpr std::uintptr_t kGlideRun        = 0x142247D30;
+constexpr std::uintptr_t kJumpEnded       = 0x1422ADF00;  // the jump box's OnEnded TFunction invoker (often the worker)
+constexpr std::uint8_t   kJumpEndedBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00};  // mov eax,28h
+// 1.004 only: the jump box's add is inlined there; this is its list load, under the game's lock (1.005 calls PlayNamed).
+constexpr std::uintptr_t kJumpListLoad    = 0x1422AD981;
+constexpr std::uint8_t   kJumpListLoadBytes[] = {0x48, 0x8B, 0xB6, 0xB0, 0x03, 0x00, 0x00};  // mov rsi,[rsi+3B0h]
+constexpr std::uintptr_t kDriftSlot       = 0x146692AF0;  // the drift action's state 1 tick (state table; anim worker)
+constexpr std::uintptr_t kDrift           = 0x14328EFA4;
+constexpr std::uintptr_t kBrakeOneSlot    = 0x1470FCDE0;  // the brake move's phase 1 and 2 (phase table; anim worker)
+constexpr std::uintptr_t kBrakeOne        = 0x14328B9FC;
+constexpr std::uintptr_t kBrakeTwoSlot    = 0x1470FCDE8;
+constexpr std::uintptr_t kBrakeTwo        = 0x14328A1A0;
+constexpr std::uint32_t  kStateOwner      = 0x8;    // the scooter move state's scooter; the glide state's move owner
+constexpr std::uint32_t  kOwnerWeak       = 0x8;    // ... whose weak at +8 is the chocobo
+constexpr std::uint32_t  kGlideState      = 0x18;   // the glide delegate instance's captured glide state
+constexpr std::uint32_t  kJumpWeak        = 0x8;    // the jump box payload's weak character (the chocobo)
+constexpr std::uint32_t  kDriftChocobo    = 0x4B0;  // the drift action's chocobo, a weak
 
 // The list object's size, as the global owner's creator allocates it (1.004 `mov ecx,178h` at 0x1436F4AF2, 1.005
 // `mov ecx,1B0h` at 0x143429CAA; read from both exes, 2026-10-11).
@@ -94,6 +127,13 @@ using FootFn        = double (*)(void* chocobo);  // returns xmm0 as the game's 
 using RideStatusFn  = std::uint8_t (*)(const void* actor, int key);
 using CanActFn      = bool (*)(void* unused, bool a, bool b, bool c, bool d, bool e);
 using RiderFn       = void* (*)(void* chocobo);
+using ScooterTickFn = std::uint64_t (*)(void* state, float dt);  // dt in xmm1
+using ScooterOffFn  = std::uint64_t (*)(void* state);
+using GlideSafeFn   = bool (*)(void* instance);
+using GlideRunFn    = void (*)(void* instance);
+using JumpEndedFn   = void (*)(void* payload);
+using DriftFn       = std::uint64_t (*)(void* action, double dt);  // dt in xmm1
+using BrakeFn       = std::uint64_t (*)(void* move, std::uint64_t event, double xmm2, double xmm3);
 
 struct ChannelSet  // the game's TArray of 32-byte channel items
 {
@@ -109,6 +149,15 @@ platform::CallRedirect  g_zipGateCall;
 platform::CallRedirect  g_zipAddCall;
 platform::EntryRedirect g_stopNamed;
 platform::VTableEntry   g_footSlot;
+platform::VTableEntry   g_scooterTickSlot;
+platform::VTableEntry   g_scooterOffSlot;
+platform::VTableEntry   g_glideSafeSlot;
+platform::VTableEntry   g_glideRunSlot;
+platform::EntryRedirect g_jumpEnded;
+platform::CodeRedirect  g_jumpListLoad;  // 1.004 only
+platform::VTableEntry   g_driftSlot;
+platform::VTableEntry   g_brakeOneSlot;
+platform::VTableEntry   g_brakeTwoSlot;
 std::uintptr_t          g_listOwner = 0;  // the global holding the list's owner
 RideStatusFn            g_rideStatus = nullptr;  // the footsteps' gate, for the log (null: not logged)
 CanActFn                g_canAct     = nullptr;
@@ -125,8 +174,32 @@ bool                    g_installed   = false;
 std::atomic<void*>         g_listTwo{nullptr};
 std::atomic<std::uint64_t> g_memberWeak{0};  // the zip line's gate compares the move's character with it (any thread)
 
+// Player 2's chocobo (weak) and their member's player type, for the sources on any thread (written each engine tick).
+std::atomic<std::uint64_t> g_chocoboWeak{0};
+std::atomic<int>           g_memberType{-1};
+// 1.004's jump box: the thread whose inline add takes player 2's list at its list load (0: none). Read by the code at
+// the load, under the game's lock, against the running thread's id.
+std::atomic<std::uint32_t> g_jumpThread{0};
+static_assert(sizeof(std::atomic<void*>) == sizeof(void*) && std::atomic<void*>::is_always_lock_free,
+              "the load's code reads g_listTwo as a plain pointer");
+static_assert(sizeof(std::atomic<std::uint32_t>) == sizeof(std::uint32_t));
+
 thread_local const void* t_tickOwner = nullptr;  // the controller whose component's rows tick runs on this thread
 thread_local bool        t_zipTwo    = false;    // the zip line's rumble block runs for player 2's member
+thread_local bool        t_ownerTwo  = false;    // this thread runs one of player 2's rumble sources (OwnerTwo)
+
+/// Names player 2 as the owner of this thread's adds and stops while it lives (nesting keeps the outer owner).
+class OwnerTwo
+{
+public:
+    OwnerTwo() noexcept : saved_(t_ownerTwo) { t_ownerTwo = true; }
+    ~OwnerTwo() { t_ownerTwo = saved_; }
+    OwnerTwo(const OwnerTwo&)            = delete;
+    OwnerTwo& operator=(const OwnerTwo&) = delete;
+
+private:
+    bool saved_;
+};
 
 struct Counts
 {
@@ -146,6 +219,17 @@ struct Counts
     std::atomic<unsigned> footWorkerTwo{0};  // ... called on a worker (the game's gate drops worker calls)
     std::atomic<unsigned> footOther{0};    // every other chocobo's footsteps (game thread)
     std::atomic<unsigned> footWorkerOther{0};  // ... on a worker
+    // The sources run as player 2's (OwnerTwo), by source, and what their adds and stops did.
+    std::atomic<unsigned> scooterTwo{0};   // player 2's scooter's slot 1 or 8
+    std::atomic<unsigned> glideTwo{0};     // the glide rumble of player 2's chocobo
+    std::atomic<unsigned> jumpTwo{0};      // the jump box of player 2's chocobo
+    std::atomic<unsigned> driftTwo{0};     // player 2's chocobo's drift (state 1 ticks)
+    std::atomic<unsigned> brakeTwo{0};     // ... and brake (phase calls)
+    std::atomic<unsigned> ownerAddsTwo{0};   // adds into player 2's list from those sources
+    std::atomic<unsigned> ownerStopsTwo{0};  // stops on player 2's list from them (game thread)
+    std::atomic<unsigned> ownerStopsLeft{0};  // ... on a worker: left (no game path stops a list there)
+    std::atomic<unsigned> sourceWorker{0};   // source calls for player 2 on a thread other than the game thread
+    std::atomic<unsigned> actionsOnGame{0};  // drift and brake calls for player 2 on the game thread (expected 0)
 };
 Counts g_counts;
 
@@ -156,7 +240,7 @@ std::atomic<std::uintptr_t> g_footWorkerCaller{0};
 bool                        g_footWorkerLogged = false;  // game thread
 
 // Game thread.
-std::uint64_t                         g_lastKeyTwo  = 0;  // the last effect key added for player 2 (Debug on change)
+std::atomic<std::uint64_t>            g_lastKeyTwo{0};    // the last effect key added for player 2 (Debug on change)
 std::uint64_t                         g_lastStopTwo = 0;  // ... and stopped for player 2
 std::chrono::steady_clock::time_point g_summaryAt{};
 
@@ -187,24 +271,27 @@ bool AddTwo(std::uint64_t key, const void* params, std::uint8_t flag) noexcept
     return true;
 }
 
+/// The add by name: player 2's add goes to player 2's list. It is player 2's when its source names player 2 (OwnerTwo,
+/// any thread), or on the game thread while player 2 is the primary player (player 2's scopes).
 void PlayNamed(std::uint64_t key, const void* params, std::uint8_t flag) noexcept
 {
     const auto original = reinterpret_cast<PlayNamedFn>(g_playNamed.Original());
-    const bool two      = generation::OnGameThread() && generation::Active() &&
-                          primary_controller::Is(generation::PlayerTwoController());
+    const bool owner    = t_ownerTwo;
+    const bool two      = owner || (generation::OnGameThread() && generation::Active() &&
+                                    primary_controller::Is(generation::PlayerTwoController()));
     if (!two || !AddTwo(key, params, flag))
     {
         g_counts.addsOne.fetch_add(1, std::memory_order_relaxed);
         original(key, params, flag);
         return;
     }
-    g_counts.addsTwo.fetch_add(1, std::memory_order_relaxed);
+    (owner ? g_counts.ownerAddsTwo : g_counts.addsTwo).fetch_add(1, std::memory_order_relaxed);
     platform::LogTrace(L"rumble list: {} added to player 2's list", KeyText(key));
-    if (key != g_lastKeyTwo)
+    if (g_lastKeyTwo.exchange(key, std::memory_order_relaxed) != key)
     {
-        g_lastKeyTwo = key;
-        platform::LogDebug(L"rumble list: {} ({}) goes to player 2's list (player 2 is the primary player)", KeyText(key),
-                           KeyText(params != nullptr ? ReadField<std::uint64_t>(params, 0) : 0));
+        platform::LogDebug(L"rumble list: {} ({}) goes to player 2's list ({})", KeyText(key),
+                           KeyText(params != nullptr ? ReadField<std::uint64_t>(params, 0) : 0),
+                           owner ? L"its source is player 2's" : L"player 2 is the primary player");
     }
 }
 
@@ -330,21 +417,212 @@ bool StopTwo(StopNamedFn original, std::uint64_t key) noexcept
 void StopNamed(std::uint64_t key) noexcept
 {
     const auto original = reinterpret_cast<StopNamedFn>(g_stopNamed.Original());
-    const bool two      = generation::OnGameThread() && generation::Active() &&
-                          primary_controller::Is(generation::PlayerTwoController());
-    if (!two || !StopTwo(original, key))
+    const bool owner    = t_ownerTwo;
+    const bool game     = generation::OnGameThread();
+    if (owner && !game && g_listTwo.load(std::memory_order_acquire) != nullptr)
+    {
+        // A source of player 2's stopping on a worker: the owner's list can be named only on the game thread, and no
+        // source found stops there (RE-p2-rumble-owner-chocobo.md §9.4). Player 1's entries are left alone.
+        if (g_counts.ownerStopsLeft.fetch_add(1, std::memory_order_relaxed) == 0)
+        {
+            platform::Log(L"rumble list: a stop of player 2's ({}) ran on a worker; player 1's list was left alone "
+                          L"(counted in the Debug summary)",
+                          KeyText(key));
+        }
+        return;
+    }
+    const bool two = owner || (game && generation::Active() && primary_controller::Is(generation::PlayerTwoController()));
+    if (!two || !game || !StopTwo(original, key))
     {
         g_counts.stopsOne.fetch_add(1, std::memory_order_relaxed);
         original(key);
         return;
     }
-    g_counts.stopsTwo.fetch_add(1, std::memory_order_relaxed);
+    (owner ? g_counts.ownerStopsTwo : g_counts.stopsTwo).fetch_add(1, std::memory_order_relaxed);
     platform::LogTrace(L"rumble list: {} stopped on player 2's list", KeyText(key));
     if (key != g_lastStopTwo)
     {
         g_lastStopTwo = key;
-        platform::LogDebug(L"rumble list: {} stops on player 2's list (player 2 is the primary player)", KeyText(key));
+        platform::LogDebug(L"rumble list: {} stops on player 2's list ({})", KeyText(key),
+                           owner ? L"its source is player 2's" : L"player 2 is the primary player");
     }
+}
+
+/// Player 2's chocobo, by the weak the game keeps for it (any thread).
+bool ChocoboTwo(std::uint64_t weak) noexcept
+{
+    const std::uint64_t two = g_chocoboWeak.load(std::memory_order_relaxed);
+    return two != 0 && weak == two && g_listTwo.load(std::memory_order_acquire) != nullptr;
+}
+
+/// Counts a source run as player 2's, and whether it ran off the game thread.
+void NoteSource(std::atomic<unsigned>& count) noexcept
+{
+    count.fetch_add(1, std::memory_order_relaxed);
+    if (!generation::OnGameThread())
+    {
+        g_counts.sourceWorker.fetch_add(1, std::memory_order_relaxed);
+    }
+}
+
+/// Drift and brake are expected on the anim worker: the per-thread leader answer is then the worker's alone. Counted
+/// when one runs on the game thread instead (RE-p2-rumble-owner-chocobo.md §9.5, thread ASSUMPTION).
+void NoteAction() noexcept
+{
+    if (generation::OnGameThread())
+    {
+        g_counts.actionsOnGame.fetch_add(1, std::memory_order_relaxed);
+    }
+}
+
+/// Player 2's scooter: its move state's scooter is possessed by player 2's controller (any thread).
+bool ScooterTwo(const void* state) noexcept
+{
+    const void* const two     = generation::PlayerTwoController();
+    const void* const scooter = two != nullptr ? ReadPointer(state, kStateOwner) : nullptr;
+    return scooter != nullptr && ReadPointer(scooter, facts::kPawnController) == two &&
+           g_listTwo.load(std::memory_order_acquire) != nullptr;
+}
+
+/// The scooter move state's slot 1 (every scooter's, from its actor tick, outside every scope of the mod): player 2's
+/// scooter's hit and loop rumble, and the loop's stop, are player 2's.
+std::uint64_t ScooterTick(void* state, float dt) noexcept
+{
+    const auto original = reinterpret_cast<ScooterTickFn>(g_scooterTickSlot.Original());
+    if (!ScooterTwo(state))
+    {
+        return original(state, dt);
+    }
+    NoteSource(g_counts.scooterTwo);
+    const OwnerTwo owner;
+    return original(state, dt);
+}
+
+/// ... and its slot 8 (Deactivate), which stops the loop.
+std::uint64_t ScooterOff(void* state) noexcept
+{
+    const auto original = reinterpret_cast<ScooterOffFn>(g_scooterOffSlot.Original());
+    if (!ScooterTwo(state))
+    {
+        return original(state);
+    }
+    NoteSource(g_counts.scooterTwo);
+    const OwnerTwo owner;
+    return original(state);
+}
+
+/// The sky glide's rumble delegate (the move owner's "back to normal movement" broadcast): player 2's chocobo's is
+/// player 2's. The chocobo is the weak at +8 of the glide state's move owner.
+bool GlideTwo(void* instance) noexcept
+{
+    const void* const state = ReadPointer(instance, kGlideState);
+    const void* const mover = state != nullptr ? ReadPointer(state, kStateOwner) : nullptr;
+    return mover != nullptr && ChocoboTwo(ReadField<std::uint64_t>(mover, kOwnerWeak));
+}
+
+bool GlideSafe(void* instance) noexcept
+{
+    const auto original = reinterpret_cast<GlideSafeFn>(g_glideSafeSlot.Original());
+    if (!GlideTwo(instance))
+    {
+        return original(instance);
+    }
+    NoteSource(g_counts.glideTwo);
+    const OwnerTwo owner;
+    return original(instance);
+}
+
+void GlideRun(void* instance) noexcept
+{
+    const auto original = reinterpret_cast<GlideRunFn>(g_glideRunSlot.Original());
+    if (!GlideTwo(instance))
+    {
+        original(instance);
+        return;
+    }
+    NoteSource(g_counts.glideTwo);
+    const OwnerTwo owner;
+    original(instance);
+}
+
+/// 1.004: names this thread for the jump box's inline list load while it lives (the code there takes player 2's list).
+class JumpRoute
+{
+public:
+    JumpRoute() noexcept
+    {
+        std::uint32_t none = 0;
+        named_ = g_jumpListLoad.IsInstalled() &&
+                 g_jumpThread.compare_exchange_strong(none, GetCurrentThreadId(), std::memory_order_relaxed);
+    }
+    ~JumpRoute()
+    {
+        if (named_)
+        {
+            g_jumpThread.store(0, std::memory_order_relaxed);
+        }
+    }
+    JumpRoute(const JumpRoute&)            = delete;
+    JumpRoute& operator=(const JumpRoute&) = delete;
+
+private:
+    bool named_ = false;
+};
+
+/// The jump box's OnEnded (the jump action's finish or abort): player 2's chocobo's landing rumble is player 2's.
+void JumpEnded(void* payload) noexcept
+{
+    const auto original = reinterpret_cast<JumpEndedFn>(g_jumpEnded.Original());
+    if (!ChocoboTwo(ReadField<std::uint64_t>(payload, kJumpWeak)))
+    {
+        original(payload);
+        return;
+    }
+    NoteSource(g_counts.jumpTwo);
+    const OwnerTwo  owner;
+    const JumpRoute route;
+    original(payload);
+}
+
+/// The drift action's state 1 tick (anim worker): player 2's chocobo's drift is player 2's, and the game's gate (is the
+/// chocobo's rider the player?) answers yes for player 2's member on this thread.
+std::uint64_t Drift(void* action, double dt) noexcept
+{
+    const auto original = reinterpret_cast<DriftFn>(g_driftSlot.Original());
+    if (!ChocoboTwo(ReadField<std::uint64_t>(action, kDriftChocobo)))
+    {
+        return original(action, dt);
+    }
+    NoteSource(g_counts.driftTwo);
+    NoteAction();
+    const OwnerTwo                               owner;
+    const member_movement::ThreadLeaderAnswer leader(g_memberType.load(std::memory_order_relaxed));
+    return original(action, dt);
+}
+
+/// The brake move's phases 1 and 2 (anim worker), as the drift.
+std::uint64_t Brake(platform::VTableEntry& slot, void* move, std::uint64_t event, double xmm2, double xmm3) noexcept
+{
+    const auto original = reinterpret_cast<BrakeFn>(slot.Original());
+    if (!ChocoboTwo(ReadField<std::uint64_t>(move, kMoveCharacter)))
+    {
+        return original(move, event, xmm2, xmm3);
+    }
+    NoteSource(g_counts.brakeTwo);
+    NoteAction();
+    const OwnerTwo                               owner;
+    const member_movement::ThreadLeaderAnswer leader(g_memberType.load(std::memory_order_relaxed));
+    return original(move, event, xmm2, xmm3);
+}
+
+std::uint64_t BrakeOne(void* move, std::uint64_t event, double xmm2, double xmm3) noexcept
+{
+    return Brake(g_brakeOneSlot, move, event, xmm2, xmm3);
+}
+
+std::uint64_t BrakeTwo(void* move, std::uint64_t event, double xmm2, double xmm3) noexcept
+{
+    return Brake(g_brakeTwoSlot, move, event, xmm2, xmm3);
 }
 
 // The callers of the chocobo's footstep slot (none is visible statically): the first few, by return address.
@@ -580,6 +858,136 @@ void LogSummary() noexcept
                        L"list skipped inside player 2's scope {}",
                        kSummaryEvery.count(), a1, z1, a2 + z2, z2, s1, s2, foot, footRefused, footWorkerTwo, footOther,
                        footWorkerOther, t1, t2, p2, ref, skip);
+    const auto scooter = g_counts.scooterTwo.exchange(0, std::memory_order_relaxed);
+    const auto glide   = g_counts.glideTwo.exchange(0, std::memory_order_relaxed);
+    const auto jump    = g_counts.jumpTwo.exchange(0, std::memory_order_relaxed);
+    const auto drift   = g_counts.driftTwo.exchange(0, std::memory_order_relaxed);
+    const auto brake   = g_counts.brakeTwo.exchange(0, std::memory_order_relaxed);
+    const auto oa      = g_counts.ownerAddsTwo.exchange(0, std::memory_order_relaxed);
+    const auto os      = g_counts.ownerStopsTwo.exchange(0, std::memory_order_relaxed);
+    const auto left    = g_counts.ownerStopsLeft.exchange(0, std::memory_order_relaxed);
+    const auto worker  = g_counts.sourceWorker.exchange(0, std::memory_order_relaxed);
+    const auto onGame  = g_counts.actionsOnGame.exchange(0, std::memory_order_relaxed);
+    if (scooter + glide + jump + drift + brake != 0)
+    {
+        platform::LogDebug(L"rumble list ({} s): player 2's sources outside player 2's scopes: scooter {}, glide {}, jump "
+                           L"box {}, drift {}, brake {} ({} off the game thread; drift and brake on it {}); their adds "
+                           L"to player 2's list {}, stops on it {}, worker stops left {}",
+                           kSummaryEvery.count(), scooter, glide, jump, drift, brake, worker, onGame, oa, os, left);
+    }
+}
+
+/// The 1.004 jump box's list load, then: on the thread JumpEnded named (g_jumpThread, against the TEB's thread id at
+/// gs:[48h]), player 2's list when it exists. It runs under the game's lock, which DropList also takes to clear
+/// g_listTwo, so the list it takes is live for the whole add. No call, no stack use; rax, rcx and the flags are dead at
+/// that point (overwritten before any read: 0x1422AD988, 0x1422AD997, 0x1422AD99B). The code reads this DLL's globals,
+/// which stay mapped: the DLL is pinned (platform/module_pin.h).
+bool PlaceJumpListLoad(const platform::GameImage& image) noexcept
+{
+    if (platform::RunningBuild() != platform::BuildIndex::Research)
+    {
+        return false;
+    }
+    const auto site = image.Rebase(kJumpListLoad, sizeof(kJumpListLoadBytes));
+    if (!site)
+    {
+        return false;
+    }
+    const auto thread = reinterpret_cast<std::uint64_t>(&g_jumpThread);
+    const auto list   = reinterpret_cast<std::uint64_t>(&g_listTwo);
+    std::array<std::uint8_t, 49> code{
+        0x48, 0x8B, 0xB6, 0xB0, 0x03, 0x00, 0x00,        // mov rsi,[rsi+3B0h]  (the game's load)
+        0x65, 0x8B, 0x04, 0x25, 0x48, 0x00, 0x00, 0x00,  // mov eax,gs:[48h]    (this thread's id)
+        0x48, 0xB9, 0, 0, 0, 0, 0, 0, 0, 0,              // mov rcx,&g_jumpThread
+        0x3B, 0x01,                                      // cmp eax,[rcx]
+        0x75, 0x14,                                      // jne done
+        0x48, 0xB9, 0, 0, 0, 0, 0, 0, 0, 0,              // mov rcx,&g_listTwo
+        0x48, 0x8B, 0x09,                                // mov rcx,[rcx]
+        0x48, 0x85, 0xC9,                                // test rcx,rcx
+        0x48, 0x0F, 0x45, 0xF1,                          // cmovnz rsi,rcx
+    };                                                   // done: (the jump back follows)
+    std::memcpy(code.data() + 17, &thread, sizeof(thread));
+    std::memcpy(code.data() + 31, &list, sizeof(list));
+    return g_jumpListLoad.Install(*site, kJumpListLoadBytes, code, *site + sizeof(kJumpListLoadBytes));
+}
+
+/// A slot of a source, checked against the function the research read. Logged by the caller.
+bool Slot(const platform::GameImage& image, platform::VTableEntry& entry, std::uintptr_t slot, std::uintptr_t function,
+          std::uintptr_t replacement) noexcept
+{
+    const auto at = image.Rebase(slot, sizeof(void*));
+    const auto fn = image.Rebase(function);
+    return at && fn && entry.Replace(*at, *fn, replacement);
+}
+
+/// Player 2's rumble sources outside player 2's scopes (each optional). Returns the install line's text.
+std::wstring InstallSources(const platform::GameImage& image) noexcept
+{
+    const bool scooter =
+        Slot(image, g_scooterTickSlot, kScooterTickSlot, kScooterTick, reinterpret_cast<std::uintptr_t>(&ScooterTick)) &&
+        Slot(image, g_scooterOffSlot, kScooterOffSlot, kScooterOff, reinterpret_cast<std::uintptr_t>(&ScooterOff));
+    if (!scooter && g_scooterTickSlot.Original() != 0)
+    {
+        g_scooterTickSlot.Restore();  // both or neither: the loop added in slot 1 is stopped by slot 8 at getoff
+    }
+    const bool glide =
+        Slot(image, g_glideSafeSlot, kGlideSafeSlot, kGlideSafe, reinterpret_cast<std::uintptr_t>(&GlideSafe)) &&
+        Slot(image, g_glideRunSlot, kGlideRunSlot, kGlideRun, reinterpret_cast<std::uintptr_t>(&GlideRun));
+    if (!glide && g_glideSafeSlot.Original() != 0)
+    {
+        g_glideSafeSlot.Restore();  // both or neither: Broadcast calls one, a direct call the other
+    }
+    // 1.004's add is inline: its list load must follow the invoker, so the invoker waits for it there.
+    const bool research = platform::RunningBuild() == platform::BuildIndex::Research;
+    const bool load     = research && PlaceJumpListLoad(image);
+    const auto jumpAt   = image.Rebase(kJumpEnded);
+    const bool jump     = (load || !research) && jumpAt && image.BytesMatch(kJumpEnded, kJumpEndedBytes) &&
+                      g_jumpEnded.Install(*jumpAt, image.EntryInstruction(kJumpEnded, kJumpEndedBytes),
+                                          reinterpret_cast<std::uintptr_t>(&JumpEnded));
+    if (!jump && g_jumpListLoad.IsInstalled())
+    {
+        g_jumpListLoad.Restore();
+    }
+    const bool drift = Slot(image, g_driftSlot, kDriftSlot, kDrift, reinterpret_cast<std::uintptr_t>(&Drift));
+    const bool brake =
+        Slot(image, g_brakeOneSlot, kBrakeOneSlot, kBrakeOne, reinterpret_cast<std::uintptr_t>(&BrakeOne)) &&
+        Slot(image, g_brakeTwoSlot, kBrakeTwoSlot, kBrakeTwo, reinterpret_cast<std::uintptr_t>(&BrakeTwo));
+    if (!brake && g_brakeOneSlot.Original() != 0)
+    {
+        g_brakeOneSlot.Restore();  // both phases or neither
+    }
+    auto part = [](bool on) { return on ? L"on" : L"OFF (not what the research read)"; };
+    try
+    {
+        return std::format(L"player 2's sources outside their scopes: scooter {}, glide {}, jump box {}{}, drift {}, "
+                           L"brake {}",
+                           part(scooter), part(glide), part(jump),
+                           research && jump ? L" (1.004: its inline add's list load)" : L"", part(drift), part(brake));
+    }
+    catch (...)
+    {
+        return {};  // formatting fails only out of memory: the install line then goes without this part
+    }
+}
+
+void RemoveSources() noexcept
+{
+    for (platform::VTableEntry* slot : {&g_brakeTwoSlot, &g_brakeOneSlot, &g_driftSlot, &g_glideRunSlot,
+                                        &g_glideSafeSlot, &g_scooterOffSlot, &g_scooterTickSlot})
+    {
+        if (slot->Original() != 0)
+        {
+            slot->Restore();
+        }
+    }
+    if (g_jumpEnded.IsInstalled())
+    {
+        g_jumpEnded.Restore();
+    }
+    if (g_jumpListLoad.IsInstalled())
+    {
+        g_jumpListLoad.Restore();
+    }
 }
 
 bool Call(const platform::GameImage& image, platform::CallRedirect& redirect, std::uintptr_t site,
@@ -677,7 +1085,9 @@ void Install(const platform::GameImage& image) noexcept
         g_rideStatus = nullptr;  // the footsteps' gate is not logged
         g_canAct     = nullptr;
     }
-    platform::Log(L"rumble list: {}{}",
+    // The sources outside player 2's scopes (each optional: without one, its rumble plays on pad 1 as before).
+    const std::wstring sources = g_installed ? InstallSources(image) : std::wstring{};
+    platform::Log(L"rumble list: {}{}{}{}",
                   g_installed ? L"each player's traversal rumble (zip line, chocobo, ropes, gimmicks) plays and stops on "
                                 L"their own pad"
                               : L"UNCHANGED, the game's one list plays on the primary player's pad (a function or call "
@@ -685,7 +1095,8 @@ void Install(const platform::GameImage& image) noexcept
                   !g_installed ? L""
                   : feet       ? L"; player 2's chocobo's footsteps run in player 2's scope"
                                : L"; the chocobo's footstep slot is not what the research read: player 2's footsteps stay "
-                                 L"on the primary player's pad");
+                                 L"on the primary player's pad",
+                  sources.empty() ? L"" : L"; ", sources);
 }
 
 void Remove() noexcept
@@ -699,6 +1110,7 @@ void Remove() noexcept
         platform::Log(L"WARNING: rumble list: removed off the game thread; player 2's list is left allocated");
     }
     g_installed = false;
+    RemoveSources();  // before the add and the stop they route through
     RemoveRedirects();
 }
 
@@ -712,10 +1124,15 @@ void Tick() noexcept
     {
         g_memberWeak.store(0, std::memory_order_relaxed);
         g_footChocobo.store(nullptr, std::memory_order_relaxed);
+        g_chocoboWeak.store(0, std::memory_order_relaxed);
+        g_memberType.store(-1, std::memory_order_relaxed);
         DropList(L"player 2 is out");
         return;
     }
-    g_footChocobo.store(chocobo_ride::DrivenChocobo(), std::memory_order_relaxed);
+    const void* const chocobo = chocobo_ride::DrivenChocobo();
+    g_footChocobo.store(chocobo, std::memory_order_relaxed);
+    g_chocoboWeak.store(chocobo != nullptr ? leader_scope::WeakOf(const_cast<void*>(chocobo)) : 0,
+                        std::memory_order_relaxed);
     const auto workerCaller = g_footWorkerCaller.load(std::memory_order_relaxed);
     if (workerCaller != 0 && !g_footWorkerLogged)
     {
@@ -727,6 +1144,8 @@ void Tick() noexcept
     }
     void* const member = generation::Member();
     g_memberWeak.store(member != nullptr ? leader_scope::WeakOf(member) : 0, std::memory_order_relaxed);
+    const auto type = member != nullptr ? party_member::PlayerTypeOf(member) : std::nullopt;
+    g_memberType.store(type ? static_cast<int>(*type) : -1, std::memory_order_relaxed);
     if (g_listTwo.load(std::memory_order_relaxed) == nullptr && generation::PlayerTwoController() != nullptr)
     {
         MakeList();
@@ -739,6 +1158,8 @@ void PlayerTwoOut() noexcept
     if (g_installed && generation::OnGameThread())
     {
         g_memberWeak.store(0, std::memory_order_relaxed);
+        g_chocoboWeak.store(0, std::memory_order_relaxed);
+        g_memberType.store(-1, std::memory_order_relaxed);
         DropList(L"player 2 leaves");
     }
 }

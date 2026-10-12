@@ -98,4 +98,20 @@ struct HandlesTick
 HandlesTick TickRideHandles(const void* member, void* state, const void* chocobo, const void* component, float deltaTime,
                             HandlesFn engine, bool sample) noexcept;
 
+/// Answers yes to the leader test on this thread only, for components of player type `type` (-1: none), while it
+/// lives; nesting keeps the outer answer. For the actions of player 2's ridden chocobo that tick on the anim worker
+/// (player_two/rumble_list_two): their gate asks whether the chocobo's rider is the player, and the rider is the member.
+/// Any thread.
+class ThreadLeaderAnswer
+{
+public:
+    explicit ThreadLeaderAnswer(int type) noexcept;
+    ~ThreadLeaderAnswer();
+    ThreadLeaderAnswer(const ThreadLeaderAnswer&)            = delete;
+    ThreadLeaderAnswer& operator=(const ThreadLeaderAnswer&) = delete;
+
+private:
+    int saved_;
+};
+
 }  // namespace lss::player_two::member_movement
