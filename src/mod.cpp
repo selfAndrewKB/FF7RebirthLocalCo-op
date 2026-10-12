@@ -51,6 +51,7 @@
 #include "player_two/vending.h"
 #include "player_two/interact_watch.h"
 #include "player_two/charapop_watch.h"
+#include "player_two/chocobo_climb.h"
 #include "player_two/climb_context.h"
 #include "player_two/approach_two.h"
 #include "player_two/move_type_two.h"
@@ -223,6 +224,7 @@ public:
         lss::player_two::nav_strand::Remove();
         lss::player_two::ride_framing_watch::Remove();
         lss::player_two::trigger_two::Remove();
+        lss::player_two::chocobo_climb::Remove();
         lss::player_two::traversal_camera::Remove();
         lss::player_two::climb_context::Remove();
         lss::player_two::near_fade::Remove();
@@ -362,6 +364,7 @@ public:
         lss::player_two::anim_two_views::Install(*image);  // characters near player 2 animate by the nearer camera
         lss::player_two::trigger_two::Install(*image);  // player 2's trigger read after player 1's (events held back, logged)
         lss::player_two::vault_camera::Install(*image);  // player 2's chocobo vaults without taking both ride framings
+        lss::player_two::chocobo_climb::Install(*image);  // player 2's chocobo climbs walls, with its own climb camera
 
         // The HUD's layout in split views (hud/overlay_layout.h). Optional like the view point: without
         // it the HUD keeps the game's full-screen layout, cropped to each half.
@@ -560,6 +563,7 @@ private:
         lss::player_two::approach_two::Tick();  // the crossing walk-up calls, swapped once from here
         lss::player_two::move_type_two::Tick();  // player 2's deferred walk-cap clear, the layer-2 watch
         lss::player_two::vault_camera::Tick();  // player 2's vault cameras end on player 2's camera (lever L2)
+        lss::player_two::chocobo_climb::Tick();  // player 2's climb camera's states and the summary (Debug)
         lss::player_two::camera_distance::TickFraming(playerTwoIn);  // per-layout distance steps (roadmap 2b)
         lss::player_two::shoulder_scale::Poll(splitShown);
         lss::player_two::framing_watch::Tick(splitShown);

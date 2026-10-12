@@ -49,6 +49,11 @@ const void* RiddenChocobo() noexcept;
 /// null when not driving or it no longer checks out. Game thread.
 const void* DrivenMoveState() noexcept;
 
+/// When `chocobo` is the chocobo player 2 rides (seated), runs `call` inside player 2's primary scope and leader answer,
+/// as the game runs the chocobo player 1 rides, and returns true. False, calling nothing, for any other chocobo or
+/// when a scope is refused. Game thread.
+bool RunAsRider(const void* chocobo, void (*call)(void* context), void* context) noexcept;
+
 /// From player_two/move_state's wrapper of the chocobo move state's slot 1 (every chocobo's, run by its own actor tick):
 /// when `state` is the move state of the chocobo player 2 rides, runs `engine` (the game's slot 1) inside player 2's
 /// primary scope and leader answer, as the game runs the chocobo player 1 rides, so the game's anim sync leaves the

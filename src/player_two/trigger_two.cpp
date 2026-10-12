@@ -5,6 +5,7 @@
 #include "platform/guarded.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "player_two/chocobo_ride.h"
 #include "player_two/describe.h"
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
@@ -82,7 +83,12 @@ struct AdmittedClass
     std::uintptr_t unregister = 0;   // that class's unregister override, checked at its slot
     bool           enterEffectOnly = false;  // zip lines: only the auto-start kind (bUseEnterEffect +0x770)
     bool           logsUseFields   = false;  // one-shot moves: the register's +0x848 / +0x86C, logged per delivery
+    platform::PerBuild<std::uint32_t> unregisterSlot{0x728, 0x730};  // where `unregister` sits in the vtable
+    bool           rides = false;  // chocobo climbs: delivered while player 2 rides their own chocobo too
 };
+// The chocobo climb (RE-p2-chocobo-climb.md §1.1, §3.1): a stored-character class whose unregister override sits one
+// slot past the others'. During a ride both players' members are possessed by their AI, so its register falls back to
+// the primary controller: player 2's inside the delivery's scope. 1.005 vtable through replaced-chocobo-traversal.json.
 constexpr AdmittedClass kAdmitted[] = {
     {L"ladder", 0x145940748},
     {L"climbing wall", 0x145832BE8},
@@ -96,6 +102,7 @@ constexpr AdmittedClass kAdmitted[] = {
     {L"pole slide", 0x1458B41F8, 0x758, 0x143642998},
     {L"one-shot move", 0x14580EF00, 0x840, 0x141812E50, false, true},
     {L"wall run", 0x146707D88},
+    {L"chocobo climb", 0x1466F6F58, 0x738, 0x143661AA8, false, false, {0x738, 0x740}, true},
 };
 constexpr std::size_t   kClassCount     = std::size(kAdmitted);
 constexpr std::uint32_t kZiplineEnterEffect = 0x770;  // u8 bUseEnterEffect: set = starts on approach, else a button prompt
@@ -103,7 +110,7 @@ constexpr std::uint32_t kOneShotUseA     = 0x848;  // OneShotMove fields its reg
 constexpr std::uint32_t kOneShotUseB     = 0x86C;
 constexpr std::uintptr_t kTriggerEnter   = 0x1409DC534;  // End2FieldActionActor_OnTriggerEnter (1.005 0x140D813D0)
 inline constexpr platform::PerBuild<std::uint32_t> kEnterSlot{0x710, 0x718};
-inline constexpr platform::PerBuild<std::uint32_t> kUnregisterSlot{0x728, 0x730};
+constexpr std::size_t   kVtableSpan = 0x750;  // the slots read below, the climb's unregister (1.005 +0x740) included
 constexpr std::uint64_t kNoWeak = 0x00000000FFFFFFFFull;  // FWeakObjectPtr reset: index -1, serial 0
 
 // The wall-run move state's camera pick (RE §3.13): LeaderActionComp_FindWallRunActorEntered_Flag2A1(lac) returns the
@@ -521,13 +528,21 @@ void LogEvent(bool enter, const void* actor, const void* passed, std::wstring_vi
 std::uintptr_t Deliver(bool enter, FilterFn original, void* manager, std::uint64_t key, void* owner, void* actorArg,
                        void* actor, const void* passed, const AdmittedClass& cls)
 {
-    void*      member     = generation::Member();
-    const auto memberWeak = leader_scope::WeakOf(member);
-    if (member == nullptr || memberWeak == 0 ||
-        ReadPointer(member, facts::kPawnController) != generation::PlayerTwoController())
+    void*       member     = generation::Member();
+    const auto  memberWeak = leader_scope::WeakOf(member);
+    void* const two        = generation::PlayerTwoController();
+    const bool  possessed  = member != nullptr && ReadPointer(member, facts::kPawnController) == two;
+    // The chocobo climb also while player 2 rides their own chocobo (the member then belongs to her AI), and for the
+    // leave of a spot player 2 entered, so a ride that ended inside it still takes the spot off player 2's list.
+    const void* chocobo = cls.rides ? chocobo_ride::RiddenChocobo() : nullptr;
+    const bool  rides   = chocobo != nullptr && ReadPointer(chocobo, facts::kPawnController) == two;
+    const bool  entered = cls.rides && !enter && ShadowOf(leader_scope::WeakOf(actor)).flag != 0;
+    if (member == nullptr || memberWeak == 0 || !(possessed || rides || entered))
     {
         ++g_counts.refused;
-        LogEvent(enter, actor, passed, L"held back: player 2's member is not possessed by player 2's controller");
+        LogEvent(enter, actor, passed,
+                 cls.rides ? L"held back: player 2 neither rides their own chocobo nor controls their member"
+                           : L"held back: player 2's member is not possessed by player 2's controller");
         return 0;
     }
     const auto actorWeak = leader_scope::WeakOf(actor);
@@ -597,10 +612,14 @@ std::uintptr_t Deliver(bool enter, FilterFn original, void* manager, std::uint64
     {
         KeepShadow(actorWeak, after);
         std::wstring extra;
+        if (!possessed)
+        {
+            extra = rides ? L"; through player 2's ride" : L"; the leave of a spot player 2 entered during a ride";
+        }
         if (stores)
         {
-            extra = std::format(L"; player 2's stored character 0x{:X} -> 0x{:X}, player 1's 0x{:X} kept", before.stored,
-                                after.stored, real.stored);
+            extra += std::format(L"; player 2's stored character 0x{:X} -> 0x{:X}, player 1's 0x{:X} kept", before.stored,
+                                 after.stored, real.stored);
         }
         if (oneShot && alive)
         {
@@ -777,13 +796,13 @@ void Install(const platform::GameImage& image) noexcept
     for (std::size_t i = 0; i < kClassCount; ++i)
     {
         const AdmittedClass& cls = kAdmitted[i];
-        const auto vt            = image.Rebase(cls.vtable, 0x740);
+        const auto vt            = image.Rebase(cls.vtable, kVtableSpan);
         bool ok = vt && liveEnter && ReadField<std::uintptr_t>(reinterpret_cast<const void*>(*vt), kEnterSlot) == *liveEnter;
         if (ok && cls.unregister != 0)
         {
             const auto unregister = image.Rebase(cls.unregister);
             ok = unregister &&
-                 ReadField<std::uintptr_t>(reinterpret_cast<const void*>(*vt), kUnregisterSlot) == *unregister;
+                 ReadField<std::uintptr_t>(reinterpret_cast<const void*>(*vt), cls.unregisterSlot) == *unregister;
         }
         g_classVt[i] = ok ? *vt : 0;
         auto& list   = ok ? admitted : refused;

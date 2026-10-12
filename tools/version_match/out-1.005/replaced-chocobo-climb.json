@@ -1,0 +1,35 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-10-12",
+  "doc": "Rebirth/Documentation/research/RE-p2-chocobo-climb.md",
+  "facts": [
+    {
+      "name": "slot: AEndFieldActionChocoboClimbActor try-begin (1.004 vt+0x740, 1.005 vt+0x748)",
+      "old": "0x1466F7698",
+      "new": "0x146585878",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad climb_facts.py, 2026-10-12): the slot holds ChocoboClimbActor_TryBegin (1.004 0x143665CE0, 1.005 0x14339B3F0) in both; RE-p2-chocobo-climb.md section 3.2."
+    },
+    {
+      "name": "slot: ChocoboClimbExecuter state table row 1 enter (table +0x28)",
+      "old": "0x1466F8C68",
+      "new": "0x146585DA8",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad climb_facts.py, 2026-10-12): row {1, enter, tick, 0} with enter 0x143654DE4 / 0x14338A56C and tick 0x143656C5C / 0x14338C3C0; row 0 {0, 0, approach tick}. RE-p2-chocobo-climb.md section 3.2."
+    },
+    {
+      "name": "ChocoboClimbExecuter_State1_Enter",
+      "old": "0x143654DE4",
+      "new": "0x14338A56C",
+      "bytes": "4053b820000000e8",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad climb_facts.py, 2026-10-12): push rbx; alloca 0x20; mov rbx,rcx; call Setup (0x14366208C / 0x14339781C); one argument (the executer)."
+    }
+  ]
+}

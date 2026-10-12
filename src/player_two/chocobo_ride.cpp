@@ -802,6 +802,15 @@ const void* DrivenMoveState() noexcept
     return VTableOf(state) == g_moveVt && ReadPointer(state, facts::kMoveStateCharacter) == g_ride.chocobo ? state : nullptr;
 }
 
+bool RunAsRider(const void* chocobo, void (*call)(void* context), void* context) noexcept
+{
+    if (!generation::OnGameThread() || chocobo == nullptr || chocobo != RiddenChocobo())
+    {
+        return false;
+    }
+    return member_movement::InPrimaryScope(g_ride.member, call, context);
+}
+
 bool TickHandles(void* state, float deltaTime, std::uintptr_t (*engine)(void* state, float deltaTime),
                  std::uintptr_t& returned) noexcept
 {

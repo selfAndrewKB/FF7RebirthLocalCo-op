@@ -105,6 +105,7 @@ add_library(LocalSplitScreen SHARED
     src/player_two/world_actor_reach.cpp
     src/player_two/ride_watch.cpp
     src/player_two/chocobo_ride.cpp
+    src/player_two/chocobo_climb.cpp
     src/player_two/shared_ride.cpp
     src/player_two/wheelie_ride.cpp
     src/player_two/wheelie_watch.cpp
