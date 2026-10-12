@@ -14,6 +14,10 @@
 // a `quit` or a crash; the result file's last line is `finished: ok`, `finished: failed` or
 // `finished: rejected`.
 //
+// Scripts already in the inbox when the channel opens were sent to an earlier game session (their
+// sender timed out, or the game closed first). They are retired unrun (`finished: skipped`): a stale
+// `quit` would otherwise end the next launch at startup.
+//
 // Game thread only: Tick runs from the engine-tick callback, before the world ticks.
 
 #include "control/runner.h"
@@ -42,6 +46,7 @@ private:
         std::wstring          name;
     };
 
+    bool RetireLeftovers();
     void StartNext();
     void Append(const std::filesystem::path& file, const std::wstring& line) noexcept;
     void Report(const std::vector<LineResult>& results);

@@ -119,6 +119,10 @@ bool CommandChannel::Open() noexcept
             Log(L"control: could not create {}; the command channel is closed", root.wstring());
             return false;
         }
+        if (!RetireLeftovers())
+        {
+            return false;
+        }
         open_ = true;
         Log(L"control: command channel open; scripts go in {}", inbox_.wstring());
         return true;
@@ -166,6 +170,42 @@ void CommandChannel::Tick(Target& target) noexcept
         }
         open_ = false;
     }
+}
+
+bool CommandChannel::RetireLeftovers()
+{
+    std::vector<fs::path> leftovers;
+    std::error_code       error;
+    for (fs::directory_iterator it(inbox_, error), end; !error && it != end; it.increment(error))
+    {
+        if (it->is_regular_file(error) && it->path().extension() == L".txt")
+        {
+            leftovers.push_back(it->path());
+        }
+    }
+    for (const auto& script : leftovers)
+    {
+        const fs::path taken   = done_ / script.filename();
+        const fs::path results = done_ / (script.stem().wstring() + L".result.txt");
+        fs::remove(taken, error);
+        fs::remove(results, error);
+        fs::rename(script, taken, error);
+        if (error)
+        {
+            fs::remove(script, error);
+        }
+        if (error || fs::exists(script, error))
+        {
+            Log(L"control: {} was left in the inbox before this launch and cannot be moved or removed; the command "
+                L"channel stays closed so it never runs",
+                script.filename().wstring());
+            return false;
+        }
+        Append(results, L"left in the inbox before this launch (its sender timed out or the game closed first)");
+        Append(results, L"finished: skipped");
+        Log(L"control: {} was left in the inbox before this launch; retired unrun", script.filename().wstring());
+    }
+    return true;
 }
 
 void CommandChannel::StartNext()
