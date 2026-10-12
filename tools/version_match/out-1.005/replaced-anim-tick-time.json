@@ -1,0 +1,17 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-10-11",
+  "doc": "Rebirth/Documentation/research/RE-p2-detail-drop-p1-facing.md",
+  "facts": [
+    {
+      "name": "End.Animation.SignificanceCameraDiffDegrees (float, degrees)",
+      "old": "0x1470B99A0",
+      "new": "0x146EECAE0",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad levert_facts.py, 2026-10-11): 60.0 in both; read by ShouldUpdateTransform mode 1 (RE-p2-detail-drop-p1-facing.md section 2)."
+    }
+  ]
+}

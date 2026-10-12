@@ -2,11 +2,14 @@
 
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
+#include "platform/entry_redirect.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "player_two/charapop_facts.h"
+#include "player_two/describe.h"
+#include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 #include "player_two/object_fields.h"
@@ -14,10 +17,14 @@
 #include <Windows.h>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
+#include <mutex>
+#include <span>
 #include <utility>
 #include <vector>
 
@@ -64,6 +71,17 @@ constexpr platform::PerBuild<std::uint32_t> kMeshAngle = {0x1238, 0x1228};
 constexpr float kReach        = 33000.0f;
 constexpr auto  kSummaryEvery = std::chrono::seconds(10);
 
+// The tick-time measure (RE-p2-detail-drop-p1-facing.md §2). Its first instruction crosses a block in 1.004, so the
+// second is replaced there (both a store into the caller's home area).
+constexpr std::uint8_t   kMeasureFirstTwo[]  = {0x48, 0x89, 0x5C, 0x24, 0x10,   // mov [rsp+10h],rbx
+                                                0x48, 0x89, 0x74, 0x24, 0x18};  // mov [rsp+18h],rsi
+constexpr std::size_t    kFirstInstruction   = 5;
+constexpr std::size_t    kSecondInstruction  = 5;
+constexpr std::uintptr_t kCameraDiffDegrees  = 0x1470B99A0;  // End.Animation.SignificanceCameraDiffDegrees (60)
+constexpr platform::PerBuild<std::uint32_t> kMeshMode = {0x122A, 0x121B};  // ShouldUpdateTransform's mode (1 = angle)
+constexpr std::uint32_t  kComponentOwner     = 0xA0;
+constexpr float          kRadians            = 3.14159265f / 180.0f;
+
 using PassFn        = std::uintptr_t (*)(void* a, std::uintptr_t b, std::uintptr_t c, std::uintptr_t d);
 using InterfaceOfFn = void* (*)(const void* object, const void* cls);
 using IfaceValidFn  = std::uint8_t (*)(void* iface);
@@ -104,6 +122,177 @@ struct Counts
 };
 Counts                                g_counts;
 std::chrono::steady_clock::time_point g_summaryAt{};
+
+platform::EntryRedirect g_measureEntry;
+const float*            g_cameraDiff = nullptr;  // the game's cvar, degrees
+
+// Player 2's camera for the tick-time measures (last frame's pose, as player 1's snapshot), with player 2's character
+// and mount for the log. Written by the game thread once per engine tick, read by the workers that tick the meshes
+// (live 2026-10-11: every measure from player 1's snapshot runs on a worker). A seqlock: the version is odd while the
+// game thread writes, and a reader that sees it odd or changed keeps player 1's answer.
+struct TwoCamera
+{
+    std::atomic<std::uint32_t>        version{0};
+    std::atomic<bool>                 valid{false};
+    std::array<std::atomic<float>, 3> location{};
+    std::array<std::atomic<float>, 3> forward{};
+    std::atomic<const void*>          member{nullptr};
+    std::atomic<const void*>          mount{nullptr};
+};
+TwoCamera g_twoCamera;
+
+// A reader's copy.
+struct CameraCopy
+{
+    float       location[4]{};
+    float       forward[4]{};
+    const void* member = nullptr;
+    const void* mount  = nullptr;
+};
+
+struct TickCounts
+{
+    std::atomic<unsigned>      calls{0}, nearer{0}, onWorkers{0}, torn{0};
+    std::atomic<std::uint64_t> ticks{0};  // QueryPerformanceCounter ticks spent
+};
+TickCounts g_tick;  // any thread
+
+// Player 2's character's and mount's meshes: their last state (Debug on change). Keyed by address only, never read
+// through: a freed mesh's address reused by another mesh can at worst skip or add one log line. Few meshes, and
+// cleared whenever the split stops being shown.
+struct Watched
+{
+    const void* mesh  = nullptr;
+    int         state = -1;
+};
+std::array<Watched, 8> g_watched{};
+std::mutex             g_watchedLock;  // the workers note, the game thread clears
+
+/// Game thread: publishes player 2's camera (or none) for the workers' measures.
+void PublishTwoCamera(bool valid, const charapop::Camera& two, const void* member, const void* mount) noexcept
+{
+    const auto version = g_twoCamera.version.load(std::memory_order_relaxed);
+    g_twoCamera.version.store(version + 1, std::memory_order_relaxed);
+    std::atomic_thread_fence(std::memory_order_release);
+    g_twoCamera.valid.store(valid, std::memory_order_relaxed);
+    for (std::size_t i = 0; i < std::size(charapop::Camera{}.location); ++i)
+    {
+        g_twoCamera.location[i].store(two.location[i], std::memory_order_relaxed);
+        g_twoCamera.forward[i].store(two.forward[i], std::memory_order_relaxed);
+    }
+    g_twoCamera.member.store(member, std::memory_order_relaxed);
+    g_twoCamera.mount.store(mount, std::memory_order_relaxed);
+    g_twoCamera.version.store(version + 2, std::memory_order_release);
+}
+
+/// Any thread: player 2's camera as last published. False if there is none, or the game thread kept writing it.
+bool ReadTwoCamera(CameraCopy& out) noexcept
+{
+    for (int attempt = 0; attempt < 4; ++attempt)
+    {
+        const auto before = g_twoCamera.version.load(std::memory_order_acquire);
+        if ((before & 1u) != 0)
+        {
+            continue;
+        }
+        const bool valid = g_twoCamera.valid.load(std::memory_order_relaxed);
+        for (std::size_t i = 0; i < std::size(charapop::Camera{}.location); ++i)
+        {
+            out.location[i] = g_twoCamera.location[i].load(std::memory_order_relaxed);
+            out.forward[i]  = g_twoCamera.forward[i].load(std::memory_order_relaxed);
+        }
+        out.member = g_twoCamera.member.load(std::memory_order_relaxed);
+        out.mount  = g_twoCamera.mount.load(std::memory_order_relaxed);
+        std::atomic_thread_fence(std::memory_order_acquire);
+        if (g_twoCamera.version.load(std::memory_order_relaxed) == before)
+        {
+            return valid;
+        }
+    }
+    g_tick.torn.fetch_add(1, std::memory_order_relaxed);
+    return false;
+}
+
+/// Logs a change of a mesh of player 2's character or mount: its mode and whether player 1's camera alone would have
+/// skipped its bone refresh and bone physics (mode 1 and an angle past the limit; the camera-cut exception aside).
+/// Any thread.
+void NoteMesh(void* mesh, float angleOne, float angleNow, const CameraCopy& two) noexcept
+{
+    const void* owner = ReadPointer(mesh, kComponentOwner);
+    if (owner == nullptr || (owner != two.member && (owner != two.mount || two.mount == two.member)))
+    {
+        return;
+    }
+    const auto  mode  = ReadField<std::uint8_t>(mesh, kMeshMode);
+    const float limit = (g_cameraDiff != nullptr ? *g_cameraDiff : 60.0f) * kRadians;
+    const bool  byOne = mode == 1 && angleOne >= limit;
+    const bool  now   = mode == 1 && angleNow >= limit;
+    const int   state = mode | (byOne ? 0x100 : 0) | (now ? 0x200 : 0);
+    const std::lock_guard lock(g_watchedLock);
+    Watched*              slot = nullptr;
+    for (Watched& w : g_watched)
+    {
+        if (w.mesh == mesh || (slot == nullptr && w.mesh == nullptr))
+        {
+            slot = &w;
+            if (w.mesh == mesh)
+            {
+                break;
+            }
+        }
+    }
+    if (slot == nullptr || (slot->mesh == mesh && slot->state == state))
+    {
+        return;
+    }
+    slot->mesh  = mesh;
+    slot->state = state;
+    platform::LogDebug(L"anim tick time: {} mesh {}: mode {}, angle from player 1's camera {:.0f} deg, kept {:.0f} deg "
+                       L"(limit {:.0f}); player 1's camera alone would {} its bones and bone physics; they {}",
+                       owner == two.member ? L"player 2's character's" : L"player 2's mount's", NameOf(mesh), mode,
+                       angleOne / kRadians, angleNow / kRadians, limit / kRadians, byOne ? L"skip" : L"update",
+                       now ? L"are skipped" : L"update");
+}
+
+/// The game's measure of a mesh's distance and angle. Called by a mesh tick from player 1's snapshot, it measures
+/// again from player 2's camera and keeps the minimum of each value (any thread: the workers tick the meshes).
+void MeasureTwoViews(void* mesh, const float* location, const float* forward) noexcept
+{
+    const auto original = reinterpret_cast<MeasureFn>(g_measureEntry.Original());
+    original(mesh, location, forward);
+    if (!generation::Active())
+    {
+        return;
+    }
+    // Both of the game's callers (the budgeted mesh tick and 1.004 0x140AFD2B8 / 1.005 0x141983790) pass stack copies
+    // of player 1's snapshot (W+0x8C0, W+0x8E0), so every call here is a measure from player 1's camera (live
+    // 2026-10-11: a test for W+0x8C0's own address never matched). The mod's own measures call the original directly.
+    CameraCopy two;
+    if (!ReadTwoCamera(two))
+    {
+        return;  // the split is not shown, or player 2's camera is being written: player 1's answer stands
+    }
+    LARGE_INTEGER start{}, stop{};
+    QueryPerformanceCounter(&start);
+    const std::uint32_t distAt = kMeshDist, angleAt = kMeshAngle;
+    const float         distOne  = ReadField<float>(mesh, distAt);
+    const float         angleOne = ReadField<float>(mesh, angleAt);
+    original(mesh, two.location, two.forward);
+    const float distTwo  = ReadField<float>(mesh, distAt);
+    const float angleTwo = ReadField<float>(mesh, angleAt);
+    const float angle    = std::min(angleOne, angleTwo);
+    WriteField<float>(mesh, distAt, std::min(distOne, distTwo));
+    WriteField<float>(mesh, angleAt, angle);
+    QueryPerformanceCounter(&stop);
+    g_tick.calls.fetch_add(1, std::memory_order_relaxed);
+    g_tick.nearer.fetch_add(distTwo < distOne || angleTwo < angleOne ? 1u : 0u, std::memory_order_relaxed);
+    g_tick.onWorkers.fetch_add(generation::OnGameThread() ? 0u : 1u, std::memory_order_relaxed);
+    g_tick.ticks.fetch_add(static_cast<std::uint64_t>(stop.QuadPart - start.QuadPart), std::memory_order_relaxed);
+    if (platform::Enabled(platform::Level::Debug))
+    {
+        NoteMesh(mesh, angleOne, angle, two);
+    }
+}
 
 /// The game's last call in its refill (a worker, on a normal pass): the pair lists are this frame's.
 std::uintptr_t Refilled(void* a, std::uintptr_t b, std::uintptr_t c, std::uintptr_t d) noexcept
@@ -306,13 +495,37 @@ void Install(const platform::GameImage& image) noexcept
     {
         g_clearCall.Restore();
     }
-    platform::Log(L"anim two views: {}",
+    // The tick-time measure: player 2's appends above call the game's measure directly (its trampoline), not this.
+    bool       tickTime = false;
+    const auto diff     = image.Rebase(kCameraDiffDegrees, sizeof(float));
+    if (eval && diff)
+    {
+        g_cameraDiff = reinterpret_cast<const float*>(*diff);
+        const std::span<const std::uint8_t> bytes(kMeasureFirstTwo);
+        const auto replacement = reinterpret_cast<std::uintptr_t>(&MeasureTwoViews);
+        tickTime = g_measureEntry.Install(*meas, image.EntryInstruction(kMeasure.address, bytes.first(kFirstInstruction)),
+                                          replacement) ||
+                   g_measureEntry.InstallAtSecondInstruction(*meas, bytes.first(kFirstInstruction),
+                                                             bytes.subspan(kFirstInstruction, kSecondInstruction),
+                                                             replacement);
+        if (tickTime)
+        {
+            g_measure = reinterpret_cast<MeasureFn>(g_measureEntry.Original());
+        }
+    }
+    platform::Log(L"anim two views: {}; at tick time, {}",
                   eval ? L"characters near player 2 animate by the nearer of the two cameras (the game's own pair list)"
-                       : L"NOT installed (a call differs); characters near player 2 keep player 1's camera's rate");
+                       : L"NOT installed (a call differs); characters near player 2 keep player 1's camera's rate",
+                  tickTime ? L"meshes refresh their bones and bone physics by the nearer camera too"
+                           : L"bone refresh and bone physics STILL follow player 1's camera (the measure differs)");
 }
 
 void Remove() noexcept
 {
+    if (g_measureEntry.IsInstalled() && !g_measureEntry.Restore())
+    {
+        platform::Log(L"anim two views: the measure was changed after us; left in place (it passes through)");
+    }
     for (platform::CallRedirect* redirect : {&g_evalCall, &g_clearCall})
     {
         if (redirect->IsInstalled() && !redirect->Restore())
@@ -329,13 +542,41 @@ void Tick(bool splitShown) noexcept
         return;
     }
     g_frame.fetch_add(1, std::memory_order_relaxed);
-    g_split   = splitShown;
+    g_split = splitShown;
+    if (splitShown && generation::Active())
+    {
+        void* const            controller = generation::PlayerTwoController();
+        const charapop::Camera two        = charapop::CameraOf(controller);
+        PublishTwoCamera(two.read, two, generation::Member(), ReadPointer(controller, facts::kControllerPawn));
+    }
+    else
+    {
+        PublishTwoCamera(false, charapop::Camera{}, nullptr, nullptr);
+        const std::lock_guard lock(g_watchedLock);
+        g_watched = {};
+    }
     const auto now = std::chrono::steady_clock::now();
     if (now - g_summaryAt < kSummaryEvery)
     {
         return;
     }
-    g_summaryAt = now;
+    g_summaryAt       = now;
+    const auto calls  = g_tick.calls.exchange(0, std::memory_order_relaxed);
+    const auto nearer = g_tick.nearer.exchange(0, std::memory_order_relaxed);
+    const auto worker = g_tick.onWorkers.exchange(0, std::memory_order_relaxed);
+    const auto torn   = g_tick.torn.exchange(0, std::memory_order_relaxed);
+    const auto ticks  = g_tick.ticks.exchange(0, std::memory_order_relaxed);
+    if (calls != 0 || torn != 0)
+    {
+        LARGE_INTEGER rate{};
+        QueryPerformanceFrequency(&rate);
+        const double ms = rate.QuadPart > 0 ? 1000.0 * double(ticks) / double(rate.QuadPart) : 0.0;
+        platform::LogDebug(L"anim tick time ({} s): {} measures from player 1's snapshot also from player 2's camera ({} "
+                           L"on workers), {} of them nearer for player 2; {:.3f} ms of thread time per frame on average; "
+                           L"{} left player 1's (player 2's camera was being written)",
+                           kSummaryEvery.count(), calls, worker, nearer,
+                           ms / std::max(1.0, double(g_counts.evaluations)), torn);
+    }
     const auto refills = g_refills.exchange(0, std::memory_order_relaxed);
     if (g_counts.frames != 0 || g_counts.skipped != 0)
     {

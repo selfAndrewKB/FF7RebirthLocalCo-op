@@ -4128,7 +4128,7 @@ inline constexpr std::uint8_t kBytes_051B96CC[] = {
     0x02, 0x75, 0x18, 0xC5, 0xF8, 0x10, 0x44, 0x24, 0x20, 0x48, 0x8D, 0x4C, 0x24, 0x20, 0xC5, 0xF9,
 };
 
-inline constexpr std::array<ReplacedAddress, 485> kReplaced{{
+inline constexpr std::array<ReplacedAddress, 486> kReplaced{{
     {0x0076B370, 0x00743B50, kBytes_0076B370, 0},
     {0x0078C2F4, 0x008DAE0C, kBytes_0078C2F4, 3},
     {0x0079F7F0, 0x00764EA8, kBytes_0079F7F0, 5},
@@ -4594,6 +4594,7 @@ inline constexpr std::array<ReplacedAddress, 485> kReplaced{{
     {0x06BB3650, 0x06A189E8, {}},  // 0x146BB3650 -> 0x146A189E8 (replaced-core.json, CONFIRMED): vtable + 0x280 (slot 80; 1.004 +0x278, slot 79): the UObject slot-19 insertion. Holds 0x1409D4708. S
     {0x06FAA3B0, 0x06DDD290, {}},  // 0x146FAA3B0 -> 0x146DDD290 (replaced-perf.json, CONFIRMED): The D3D12 residency gate, 01 in both files. The only writer is the device creation's `mov byte [gate
     {0x070B98C0, 0x06EECA40, {}},  // 0x1470B98C0 -> 0x146EECA40 (replaced-walk-layer2.json, CONFIRMED): Read from both exes by the main session (tmp walk_l2_facts.py, 2026-10-10) after the IDA agent's mat
+    {0x070B99A0, 0x06EECAE0, {}},  // 0x1470B99A0 -> 0x146EECAE0 (replaced-anim-tick-time.json, CONFIRMED): Read from both exes by the main session (scratchpad levert_facts.py, 2026-10-11): 60.0 in both; read
     {0x070C94C0, 0x06EFC6E0, {}},  // 0x1470C94C0 -> 0x146EFC6E0 (replaced-p2-trigger.json, CONFIRMED): Weak pointer to the registry object: FieldTick's this, with the tag refcount map at +0x278 and the p
     {0x091163C2, 0x08F49BB9, {}},  // 0x1491163C2 -> 0x148F49BB9 (replaced-perf.json, CONFIRMED): written once by the gate's `mov byte [flag],bl`; found by the masked byte pattern of the whole gate 
     {0x09117AF8, 0x08F4B3B0, {}},  // 0x149117AF8 -> 0x148F4B3B0 (replaced-hud_renderer.json, CONFIRMED): kStreamingManagers (IStreamingManager collection static). Two separately located functions agree (th

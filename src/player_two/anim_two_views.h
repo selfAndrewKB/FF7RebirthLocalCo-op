@@ -9,6 +9,15 @@
 // evaluation, each registered actor gets one more pair: its distance and angle to player 2's camera, measured by the
 // game's own function. The game's evaluation then runs unchanged on the nearer or better of the two cameras.
 // Game thread, while the split is shown; the timing and counts are logged.
+//
+// The same two cameras at tick time (research/RE-p2-detail-drop-p1-facing.md §2): each budgeted mesh's own tick first
+// re-measures its distance and angle from player 1's snapshot alone, and SE's ShouldUpdateTransform (mode 1, set by the
+// evaluation) then reads that angle to decide whether the mesh refreshes its bones and its KBD component (KineDriver and
+// Bonamik bone physics) runs; the KBD tick reads it again later. Player 2's chocobo and its rider lost that detail
+// whenever player 1 looked away. The game's measure is redirected: when a game caller measures from player 1's
+// snapshot, it measures again from player 2's camera and keeps the minimum of each value (the semantics of the pair
+// list). Logged for player 2's character and mount: the mode and whether player 1's camera alone would have skipped
+// the bones (Debug on change).
 
 namespace lss::platform {
 class GameImage;
