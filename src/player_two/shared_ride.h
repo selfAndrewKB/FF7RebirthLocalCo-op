@@ -36,4 +36,8 @@ bool Install(const platform::GameImage& image) noexcept;
 /// when not installed).
 bool Tick() noexcept;
 
+/// Game thread: player 1's controller rides the buggy or the bronco now (the test Tick makes, without player 2: a join
+/// while player 1 rides lets player 2 in standing aside). Read-only.
+bool Rides(const void* playerOneController) noexcept;
+
 }  // namespace lss::player_two::shared_ride

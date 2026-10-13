@@ -21,6 +21,7 @@
 #include "player_two/battle_input.h"
 #include "player_two/camera_distance.h"
 #include "player_two/member_movement.h"
+#include "player_two/shared_ride.h"
 #include "player_two/move_state.h"
 #include "player_two/object_fields.h"
 #include "player_two/own_controller.h"
@@ -228,12 +229,20 @@ void Session::Join() noexcept
     {
         return;
     }
-    // Player 2 exists only with a character to play: with none free, the game stays as with one player.
-    if (installed_.member && FreeMember(one.controller) == nullptr)
+    // Player 2 exists only with a character to play: with none free, the game stays as with one player. A shared ride
+    // needs none: player 2 would stand aside in it anyway (the 2nd slot's member may sit in the vehicle on another AI
+    // brain, as in a save loaded mid-ride), and takes the member once the ride is over.
+    const bool riding = shared_ride::Rides(one.controller);
+    if (installed_.member && !riding && FreeMember(one.controller) == nullptr)
     {
         party_member::ChooseSlot(one.controller);  // the 2nd slot's verdict, for the log
         AwaitMember(L"the party's 2nd slot has no member free for player 2");
         return;
+    }
+    if (riding && !sharedRide_)
+    {
+        sharedRide_ = true;  // before the first choice: player 2 takes no member until the ride is over
+        Log(L"player 1 rides a vehicle the whole party shares: player 2 joins standing aside");
     }
 
     const auto                   before = JoinWitness::Take(one.localPlayer);

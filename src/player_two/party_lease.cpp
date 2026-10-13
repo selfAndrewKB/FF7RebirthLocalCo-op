@@ -97,7 +97,7 @@ const wchar_t* Describe(AiReadiness readiness) noexcept
     {
         case AiReadiness::Ready: return L"ready";
         case AiReadiness::Unread: return L"its AI could not be read";
-        case AiReadiness::ScriptBrain: return L"a story script holds its AI";
+        case AiReadiness::ScriptBrain: return L"another AI brain holds it (a story script, or a vehicle seat)";
         case AiReadiness::NotFollow: return L"its AI is not following the party";
     }
     return L"unknown";

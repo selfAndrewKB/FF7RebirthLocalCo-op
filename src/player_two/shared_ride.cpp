@@ -65,6 +65,18 @@ std::int32_t StateOf(const void* coordinator, const Kind& kind) noexcept
     return state != nullptr ? ReadField<std::int32_t>(state, 0) : -1;
 }
 
+/// The shared vehicle the coordinator drives (an index into kKinds), or kKinds.size() for none.
+std::size_t KindOf(const void* coordinator) noexcept
+{
+    const std::uintptr_t vt   = VTableOf(coordinator);
+    std::size_t          kind = kKinds.size();
+    for (std::size_t i = 0; coordinator != nullptr && i < kKinds.size(); ++i)
+    {
+        kind = g_vt[i] != 0 && vt == g_vt[i] ? i : kind;
+    }
+    return kind;
+}
+
 /// The member's AI state type (its retained AI controller's active brain's state), or -1.
 std::int32_t AiStateOf(const void* character) noexcept
 {
@@ -111,12 +123,7 @@ bool Run()
 {
     void*       playerOne   = generation::Active() ? generation::PlayerOneController() : nullptr;
     const void* coordinator = ReadPointer(playerOne, kActiveVehicle);
-    const std::uintptr_t vt = VTableOf(coordinator);
-    std::size_t  kind       = kKinds.size();
-    for (std::size_t i = 0; coordinator != nullptr && i < kKinds.size(); ++i)
-    {
-        kind = g_vt[i] != 0 && vt == g_vt[i] ? i : kind;
-    }
+    const std::size_t  kind   = KindOf(coordinator);
     const std::int32_t state  = kind < kKinds.size() ? StateOf(coordinator, kKinds[kind]) : -1;
     const bool         riding = kind < kKinds.size() && state != kIdle;
     if (riding != g_riding || (riding && kind != g_kind))
@@ -188,6 +195,17 @@ bool Install(const platform::GameImage& image) noexcept
                   L"every pad drives)",
                   g_vt[0] != 0 ? L"installed" : L"UNAVAILABLE", g_vt[1] != 0 ? L"installed" : L"UNAVAILABLE");
     return any;
+}
+
+bool Rides(const void* playerOneController) noexcept
+{
+    if (!generation::OnGameThread())
+    {
+        return false;
+    }
+    const void*       coordinator = ReadPointer(playerOneController, kActiveVehicle);
+    const std::size_t kind        = KindOf(coordinator);
+    return kind < kKinds.size() && StateOf(coordinator, kKinds[kind]) != kIdle;
 }
 
 bool Tick() noexcept

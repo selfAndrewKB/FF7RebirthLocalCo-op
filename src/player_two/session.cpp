@@ -16,6 +16,7 @@
 #include "player_two/lock_on.h"
 #include "player_two/rumble_list_two.h"
 #include "player_two/ffb_manager_two.h"
+#include "player_two/shared_ride.h"
 #include "player_two/field_camera.h"
 #include "player_two/game_thread_sites.h"
 #include "player_two/generation.h"
@@ -720,12 +721,17 @@ void Session::JoinWhenMemberFree() noexcept
     }
     // Player 1 on a controller of another class for a moment is not ready either (the join would refuse).
     const auto one = players_.SolePlayer(false);
-    if (one.controller == nullptr || !own_controller::UsesNativeClasses(one.controller) ||
-        FreeMember(one.controller) == nullptr)
+    if (one.controller == nullptr || !own_controller::UsesNativeClasses(one.controller))
     {
         return;
     }
-    Log(L"a party member is free for player 2 ({}): player 2 joins",
+    const bool free   = FreeMember(one.controller) != nullptr;
+    const bool riding = !free && shared_ride::Rides(one.controller);  // player 2 joins standing aside (Join)
+    if (!free && !riding)
+    {
+        return;
+    }
+    Log(L"{} ({}): player 2 joins", free ? L"a party member is free for player 2" : L"player 1 rides a shared vehicle",
         looking ? L"after the game's party change" : L"found by the slow check");
     Join();  // ends the wait once player 2 is in; a refused or failed join leaves it, and is counted
     if (HasPlayerTwo() || !awaitingMember_)
