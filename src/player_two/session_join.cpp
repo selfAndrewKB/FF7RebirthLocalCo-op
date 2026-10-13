@@ -8,6 +8,7 @@
 #include "player_two/field_camera.h"
 #include "player_two/generation.h"
 #include "player_two/battle_camera.h"
+#include "player_two/battle_warp_two.h"
 #include "player_two/camera_override.h"
 #include "player_two/command_locks.h"
 #include "player_two/command_menu_tick.h"
@@ -138,6 +139,7 @@ void Session::InstallStages(const platform::GameImage& image) noexcept
     lock_on::Install(image);       // player 2's targeting: the game's tick run again for player 2 (logged)
     party_switch::Install(image);  // player 1's switch skips player 2's member (logged)
     command_rules::Install(image); // player 1 cannot command player 2's member (logged)
+    battle_warp_two::Install(image); // battles leave player 2's member where it is, start and end (logged)
     menu_focus::Install(image);    // player 1's UI focus logged on change (read-only)
     command_menu_two::Install(image); // player 2's command controller, built; follows the game's Setup/ResetAll (logged)
     command_locks::Install(image);    // the battle's command locks reach it through the game's setters (logged)
@@ -166,6 +168,7 @@ void Session::RemoveStages() noexcept
     command_locks::Remove();
     command_menu_two::Remove();
     menu_focus::Remove();
+    battle_warp_two::Remove();
     command_rules::Remove();
     party_switch::Remove();
     lock_on::Remove();

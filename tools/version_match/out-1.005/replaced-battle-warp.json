@@ -1,0 +1,44 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-10-12",
+  "doc": "Rebirth/Documentation/research/RE-p2-battle-gather-warp.md section S-BTLWARP2",
+  "facts": [
+    {
+      "name": "PartyBattleAIMgr_QueueBattleInTeleports loop 1: call InlineActorArray16_Contains (call redirect; player 2's member reads as excluded; 1.005 crosses a 16-byte block, placed from the game thread)",
+      "old": "0x141251364",
+      "new": "0x14115801E",
+      "bytes": "e8",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad btlwarp_json.py, 2026-10-12) after the IDA agent's byte scan (RE-p2-battle-gather-warp.md section S-BTLWARP2); call targets and entry bytes checked in both."
+    },
+    {
+      "name": "InlineActorArray16_Contains(set, AActor** element) -> bool",
+      "old": "0x140A6C818",
+      "new": "0x140F40678",
+      "bytes": "488b81800000004c8bc14885c04c0f45c048638188000000",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad btlwarp_json.py, 2026-10-12) after the IDA agent's byte scan (RE-p2-battle-gather-warp.md section S-BTLWARP2); call targets and entry bytes checked in both."
+    },
+    {
+      "name": "PartyBattleAIMgr_QueueBattleFinishTeleports: call PartyBattleAIMgr_BattleEnd_PlaceMember (call redirect; none for player 2's member)",
+      "old": "0x141324E04",
+      "new": "0x141159D88",
+      "bytes": "e8",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad btlwarp_json.py, 2026-10-12) after the IDA agent's byte scan (RE-p2-battle-gather-warp.md section S-BTLWARP2); call targets and entry bytes checked in both."
+    },
+    {
+      "name": "PartyBattleAIMgr_BattleEnd_PlaceMember(ctx, character, FVector* location, bool extra)",
+      "old": "0x1421DCD50",
+      "new": "0x1421ADB70",
+      "bytes": "48895c240848897424204c89442418488954241057415441",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (scratchpad btlwarp_json.py, 2026-10-12) after the IDA agent's byte scan (RE-p2-battle-gather-warp.md section S-BTLWARP2); call targets and entry bytes checked in both."
+    }
+  ]
+}
