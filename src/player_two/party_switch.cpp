@@ -9,9 +9,9 @@
 #include "player_two/game_thread_sites.h"
 #include "player_two/generation.h"
 
+#include <atomic>
 #include <cstdint>
 #include <iterator>
-#include <optional>
 
 namespace lss::player_two::party_switch {
 
@@ -46,9 +46,15 @@ platform::CallRedirect g_cycleCall;
 platform::CallRedirect g_canSwitchCall;
 platform::CallRedirect g_disabledCalls[2];
 ByTypeFn               g_byType = nullptr;
-// 1.005: the sites are placed from the game thread, with the image kept for it.
-std::optional<platform::GameImage> g_placeImage;
-bool                               g_fromGameThread = false;
+/// What Install found, for the redirects (placed at once, or on 1.005 from the game thread).
+struct Sites
+{
+    std::uintptr_t player = 0, ai = 0, cycle = 0, count = 0;  // 0: not found (logged by the finder)
+    std::uintptr_t disabled = 0, byType = 0, disabledSites[2]{};
+};
+Sites             g_sites;
+bool              g_fromGameThread = false;
+std::atomic<bool> g_placePending{false};  // 1.005: queued, not yet placed (Remove clears it)
 
 // Game thread.
 std::uint32_t g_refusals       = 0;  // candidates the switch was told to skip
@@ -119,17 +125,15 @@ bool Place(platform::CallRedirect& call, std::uintptr_t site, std::uintptr_t tar
     return g_fromGameThread ? call.InstallFromOwnThread(site, target, replacement) : call.Install(site, target, replacement);
 }
 
-bool InstallSites(const platform::GameImage& image) noexcept
+/// The redirects, from what Install found.
+bool PlaceSites() noexcept
 {
-    const auto player   = platform::FindFunction(image, kPlayerComponent);
-    const auto ai       = platform::FindFunction(image, kAiComponent);
-    const auto cycle    = image.Rebase(kCycleCall, 5);
-    const auto count    = image.Rebase(kCanSwitchCall, 5);
+    const Sites& s = g_sites;
     // The cycle and its count together, or neither: a count that disagrees with the cycle would let
     // the switch be offered with no one to switch to.
-    bool switching = player && ai && cycle && count &&
-                     Place(g_cycleCall, *cycle, *player, reinterpret_cast<std::uintptr_t>(&CycleComponent));
-    if (switching && !Place(g_canSwitchCall, *count, *ai, reinterpret_cast<std::uintptr_t>(&CountedComponent)))
+    bool switching = s.player != 0 && s.ai != 0 && s.cycle != 0 && s.count != 0 &&
+                     Place(g_cycleCall, s.cycle, s.player, reinterpret_cast<std::uintptr_t>(&CycleComponent));
+    if (switching && !Place(g_canSwitchCall, s.count, s.ai, reinterpret_cast<std::uintptr_t>(&CountedComponent)))
     {
         if (!g_cycleCall.Restore())
         {
@@ -138,16 +142,14 @@ bool InstallSites(const platform::GameImage& image) noexcept
         switching = false;
     }
     // The widget greys player 2's member only when the switch really skips it.
-    const auto disabled = platform::FindFunction(image, kDisabled);
-    const auto byType   = platform::FindFunction(image, kByType);
-    bool       widget   = switching && disabled && byType;
+    bool widget = switching && s.disabled != 0 && s.byType != 0;
     if (widget)
     {
-        g_byType = reinterpret_cast<ByTypeFn>(*byType);
-        for (std::size_t i = 0; widget && i < std::size(kDisabledCalls); ++i)
+        g_byType = reinterpret_cast<ByTypeFn>(s.byType);
+        for (std::size_t i = 0; widget && i < std::size(s.disabledSites); ++i)
         {
-            const auto site = image.Rebase(kDisabledCalls[i], 5);
-            widget = site && Place(g_disabledCalls[i], *site, *disabled, reinterpret_cast<std::uintptr_t>(&SwitchDisabled));
+            widget = s.disabledSites[i] != 0 && Place(g_disabledCalls[i], s.disabledSites[i], s.disabled,
+                                                      reinterpret_cast<std::uintptr_t>(&SwitchDisabled));
         }
         if (!widget)
         {
@@ -171,28 +173,37 @@ bool InstallSites(const platform::GameImage& image) noexcept
 
 bool Install(const platform::GameImage& image) noexcept
 {
+    const auto find = [&image](const platform::FunctionFact& fact) { return platform::FindFunction(image, fact).value_or(0); };
+    const auto site = [&image](std::uintptr_t address) { return image.Rebase(address, 5).value_or(0); };
+    g_sites = {find(kPlayerComponent), find(kAiComponent), site(kCycleCall), site(kCanSwitchCall),
+               find(kDisabled),        find(kByType),      {site(kDisabledCalls[0]), site(kDisabledCalls[1])}};
     if (platform::RunningBuild() == platform::BuildIndex::V1005)
     {
         // The cycle's call crosses a 16-byte block in 1.005: the sites are placed from the game thread, between
-        // its ticks (player_two/game_thread_sites.h).
+        // its ticks (player_two/game_thread_sites.h). The placement reads only the addresses found here, and a
+        // pending flag Remove clears.
         g_fromGameThread = true;
-        g_placeImage.emplace(image);
+        g_placePending   = true;
         const bool queued = game_thread_sites::Queue([]() noexcept {
-            if (g_placeImage)
+            if (g_placePending.exchange(false))
             {
-                InstallSites(*g_placeImage);
+                PlaceSites();
             }
         });
+        if (!queued)
+        {
+            g_placePending = false;
+        }
         platform::Log(L"party switch: {}", queued ? L"its calls are placed from the game thread (1.005: one crosses a 16-byte block)"
                                                   : L"UNAVAILABLE (no room to place its calls from the game thread)");
         return queued;
     }
-    return InstallSites(image);
+    return PlaceSites();
 }
 
 void Remove() noexcept
 {
-    g_placeImage.reset();  // a placement still queued does nothing
+    g_placePending = false;  // a placement still queued does nothing
     for (auto* call : {&g_disabledCalls[1], &g_disabledCalls[0], &g_canSwitchCall, &g_cycleCall})
     {
         if (call->IsInstalled() && !call->Restore())
