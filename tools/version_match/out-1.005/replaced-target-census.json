@@ -1,0 +1,152 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-10-13",
+  "doc": "Rebirth/Documentation/research/RE-p2-enemy-target-bias.md section 8 (S-TGTCENSUS)",
+  "facts": [
+    {
+      "name": "EnemyChar_InitTargetSelector: call EnemyTargetSel_Create_ByCharaSpecType (call redirect; census once per enemy: rcx = selector holder, holder+8 is the new selector after it)",
+      "old": "0x1413D8397",
+      "new": "0x140E560F7",
+      "bytes": "e8",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes (scratchpad tgtcensus_bytes.py, 2026-10-13): E8 to the Create below in both; inside one 16-byte block in both builds; the only caller of Create. rcx = [EnemyAIController+0xBF8] (holder: +0 controller, +8 selector, +0x10 shared ref)."
+    },
+    {
+      "name": "EnemyTargetSel_Create_ByCharaSpecType(holder*) -> void",
+      "old": "0x1414F4908",
+      "new": "0x14104F374",
+      "bytes": "48895c2410488974241857b830000000e813a6bb00482be0",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes (scratchpad tgtcensus_bytes.py, 2026-10-13): only the __alloca_probe call displacement differs (1.005 ...e8f7c71101...). Returns at once if holder+8 is set; else allocates Hate 0x630 / Condition 0x1E8 / None 0x188 by [EnemyAIComponent+0x3E0]+0x196, then selector vt+0x68."
+    },
+    {
+      "name": "EnemyTargetSel_Decide(selector, u8 reason, u8 lockCheckArg) (entry redirect: first instruction 48 89 5C 24 10, one block in both)",
+      "old": "0x1407FEB68",
+      "new": "0x14080A374",
+      "bytes": "48895c241048896c24184889742420574154415541564157",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes (scratchpad tgtcensus_bytes.py, 2026-10-13): identical 24 bytes; whole body identical in IDA. 6 code callers (5 E8 + 1 E9 tail jump); in 1.005 the HateTargetSel_OnDamage_Vt38 call (0x141115ACC) and the tail jump (0x142EE79FD) cross a 16-byte block, so the entry is the hook. No xref lands inside the first instruction in either build."
+    },
+    {
+      "name": "slot: Hate target selector vt+0x88 (select)",
+      "old": "0x145CB40B0",
+      "new": "0x145B1EDB8",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes (scratchpad tgtcensus_bytes.py, 2026-10-13): vtable 0x145CB4028 / 0x145B1ED30, slot +0x88 holds HateTargetSel_Select_Vt88 (0x140FA729C / 0x1411160B0) in both."
+    },
+    {
+      "name": "HateTargetSel_Select_Vt88(selector, u8 reason, UObject** out) -> bool (always 1)",
+      "old": "0x140FA729C",
+      "new": "0x1411160B0",
+      "bytes": "48895c24105556574154415541564157488d6c24e0b82001",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes (scratchpad tgtcensus_bytes.py, 2026-10-13): 1.005 is 48895c24105556574154415541564157488d6c2480b88001 (frame 0x180 instead of 0x120; the RNG and free are inlined differently). Same table (+0x188, 72-byte entries), same score, same +0x620 current type in both decompilations."
+    },
+    {
+      "name": "slot: Condition target selector vt+0x88 (select)",
+      "old": "0x14580C260",
+      "new": "0x14566CB18",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes (scratchpad tgtcensus_bytes.py, 2026-10-13): vtable 0x14580C1D8 / 0x14566CA90, slot +0x88 holds CondTargetSel_Select_Vt88 (0x140FA5230 / 0x141113AF8) in both."
+    },
+    {
+      "name": "CondTargetSel_Select_Vt88(selector, u8 reason, UObject** out) -> bool (0 = keep current)",
+      "old": "0x140FA5230",
+      "new": "0x141113AF8",
+      "bytes": "48895c24105556574154415541564157488dac2430ffffff",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes (scratchpad tgtcensus_bytes.py, 2026-10-13): identical 24 bytes; decompilations identical (offsets 0x174, 0x190, 0x1A0, 0x1B8, 0x1E0)."
+    },
+    {
+      "name": "slot: None target selector vt+0x88 (select)",
+      "old": "0x14580C318",
+      "new": "0x14566CA60",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes (scratchpad tgtcensus_bytes.py, 2026-10-13): vtable 0x14580C290 / 0x14566C9D8, slot +0x88 holds NoneTargetSel_Select_Vt88 (0x140CBA0C8 / 0x140E26740) in both."
+    },
+    {
+      "name": "NoneTargetSel_Select_Vt88(selector, u8 reason, UObject** out) -> bool (always 1)",
+      "old": "0x140CBA0C8",
+      "new": "0x140E26740",
+      "bytes": "4053b820000000e85c4e3f01482be0488b4908498bd8488b",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes (scratchpad tgtcensus_bytes.py, 2026-10-13): only the __alloca_probe displacement differs. It calls the enemy controller's ctrl-comp target getter, which is vt+0xAB8 in 1.004 but vt+0xAC0 in 1.005 (a slot was inserted)."
+    },
+    {
+      "name": "CondTargetSel_Select_Vt88: call CondTargetSel_ApplyExclusion (call redirect; the drawn element = *(r8 - 0x10))",
+      "old": "0x140FA5570",
+      "new": "0x141113E38",
+      "bytes": "e8",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes (scratchpad tgtcensus_bytes.py, 2026-10-13): E8 to ApplyExclusion in both, inside one 16-byte block in both; its only caller. r8 = drawn entry + 0x10; entry +0 = FEndAIBattleEnemyTargetSelectConditionElement* (0x14 bytes). Can run several times per select (one draw per priority group)."
+    },
+    {
+      "name": "CondTargetSel_ApplyExclusion(unused, candidates*, entryExclusions*) -> void",
+      "old": "0x140FA5FE0",
+      "new": "0x141114708",
+      "bytes": "4533d24533c94983781000498bc0490f45401041803c0200",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes (scratchpad tgtcensus_bytes.py, 2026-10-13): identical 24 bytes. Not entry-hookable (first instruction xor r10d,r10d is 3 bytes): call-site only. Marks candidates (+0xB) excluded where the entry's 15-byte array is set."
+    },
+    {
+      "name": "LockGroups_TickPruneAndRepick: call LockGroup_PickTarget_PrioritizeUCPC (call redirect; re-pick when a member's target is gone)",
+      "old": "0x14295F387",
+      "new": "0x142607759",
+      "bytes": "e8",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes (scratchpad tgtcensus_bytes.py, 2026-10-13): E8 to the pick in both, inside one 16-byte block in both. Caller chain BattleSystem_Tick <- AEndGameMode__Tick530_Body (1.004). rcx = group (TMap pair + 8; FName GroupName at rcx - 8), rdx = out FWeakObjectPtr."
+    },
+    {
+      "name": "execRegisterTargetLockGroup: call LockGroup_PickTarget_PrioritizeUCPC (call redirect; first pick for a newly registered member)",
+      "old": "0x143E42D05",
+      "new": "0x143BB211B",
+      "bytes": "e8",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes (scratchpad tgtcensus_bytes.py, 2026-10-13): E8 to the pick in both, inside one 16-byte block in both. rcx = group (pair + 8 in PartyBattleAIMgr+0x808 TMap<FName, group>), rdx = out FWeakObjectPtr."
+    },
+    {
+      "name": "LockGroup_PickTarget_PrioritizeUCPC(group*, FWeakObjectPtr* out) -> bool",
+      "old": "0x1431EB200",
+      "new": "0x142EF2A38",
+      "bytes": "48895c24185556574154415541564157488d6c24b0b85001",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes (scratchpad tgtcensus_bytes.py, 2026-10-13): identical 24 bytes. Two callers in both builds (the rows above). Group: +0 TArray<member 20 B {weak enemy, weak target, u8}>, +0x10 TArray<FWeakObjectPtr> TargetList, +0x20 int MaxEachTargetNum, +0x24 u8 bPrioritizeUCPC, +0x25 u8 Priority (strong)."
+    },
+    {
+      "name": "Character_GetHatePlayerType(AActor* character) -> u8 (called by the census, not hooked)",
+      "old": "0x140E8BAE0",
+      "new": "0x140B6DDEC",
+      "bytes": "48895c240857b820000000e840342201482be0488bd94885",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes (scratchpad tgtcensus_bytes.py, 2026-10-13): only the __alloca_probe displacement differs (1.005 ...e884dd5f01...). The type hate is credited to: own player type (component vt+0x68), a summon's owner's type, 14 guest, 16 none. 16 callers in both."
+    },
+    {
+      "name": "EnemyCtrl_GetCtrlCompTarget(AEndAIControllerEnemyBase*) -> AActor* (called by the census after Decide, not hooked)",
+      "old": "0x140A5F41C",
+      "new": "0x140C25C58",
+      "bytes": "48895c241048896c2418488974242057b820000000e8fafa",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes (scratchpad tgtcensus_bytes.py, 2026-10-13): only the __alloca_probe displacement differs (1.005 ...e80e5f). Weak char at controller+0x464 -> AI controller component +0x258/+0x260 TWeakPtr -> vt+0x28: the target EnemyTargetSel_ApplyTarget wrote (post-decoy). Called directly because the controller slot moved (vt+0xAB8 in 1.004, vt+0xAC0 in 1.005)."
+    }
+  ]
+}

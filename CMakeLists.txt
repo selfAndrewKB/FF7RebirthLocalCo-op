@@ -129,6 +129,7 @@ add_library(LocalSplitScreen SHARED
     src/player_two/main_camera_shape.cpp
     src/player_two/command_locks.cpp
     src/player_two/battle_warp_two.cpp
+    src/player_two/target_census.cpp
     src/player_two/command_rules.cpp
     src/player_two/menu_focus.cpp
     src/player_two/focus_scope.cpp

@@ -73,6 +73,7 @@
 #include "player_two/chocobo_ride.h"
 #include "player_two/nav_strand.h"
 #include "player_two/ride_framing_watch.h"
+#include "player_two/target_census.h"
 #include "player_two/traversal_camera.h"
 #include "player_two/traversal_watch.h"
 #include "player_two/trigger_two.h"
@@ -239,6 +240,7 @@ public:
         lss::player_two::rumble_list_two::Remove();
         lss::player_two::audio_listener_two::Remove();
         lss::player_two::traversal_watch::Remove();
+        lss::player_two::target_census::Remove();
         lss::player_two::vault_camera::Remove();
         lss::hud::target_views::Remove();
         lss::hud::area_icons_two::Remove();
@@ -409,6 +411,7 @@ public:
         lss::player_two::chest_watch::Install(*image);     // chests, logged (read-only): presses, opens, grants
         lss::player_two::vending::Install(*image);         // player 2's vending machines: the shop's camera and pad
         lss::player_two::interact_watch::Install(*image);  // field interactions (pickups) per player, logged (read-only)
+        lss::player_two::target_census::Install(*image);   // whom enemies target, and by which stage, logged (read-only)
         lss::hud::InstallPlayerTwoPass(*image);      // player 2's HUD content, on (the hud-levers command switches it)
         lss::hud::InstallRootOverlayRender(*image);  // before the overlay renders: placement follow, trace
         lss::hud::prompt_rows::Install(*image);      // each player's field prompt rows in their own half
