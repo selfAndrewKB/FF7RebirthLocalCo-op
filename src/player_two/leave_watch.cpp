@@ -4,6 +4,7 @@
 #include "player_two/describe.h"
 #include "player_two/object_fields.h"
 
+#include <Unreal/CoreUObject/UObject/Class.hpp>
 #include <Unreal/UObject.hpp>
 #include <Unreal/UObjectArray.hpp>
 #include <Unreal/UObjectGlobals.hpp>
@@ -32,6 +33,9 @@ constexpr std::uint32_t kActorBits     = 0x5C;   // AActor: 0x40 bActorIsBeingDe
 constexpr std::uint32_t kActorRole     = 0xF8;
 constexpr std::uint32_t kPcInput       = 0x350;  // APlayerController::PlayerInput (Destroyed nulls it)
 constexpr std::uint32_t kLevelActors   = 0x98;   // ULevel::Actors (TArray)
+constexpr std::uint32_t kInputCache    = 0x120;  // UInputComponent::CachedKeyToActionInfo (TArray; both builds)
+constexpr std::uint32_t kInputCacheEntry = 0x70;  // its entry; +0 the UPlayerInput*
+constexpr std::int32_t  kListCap         = 64;    // cache entries read per component, at most
 constexpr std::uint8_t  kBeingDestroyed = 0x40;
 constexpr std::int32_t  kPendingKill    = 0x20000000;
 constexpr std::int32_t  kUnreachable    = 0x10000000;
@@ -152,19 +156,43 @@ const wchar_t* InLevel(const void* actor) noexcept
     return L"no";
 }
 
-/// C: every object whose outer chain holds the controller, live ones first (one walk of the object array).
+/// C: every object whose outer chain holds the controller, live ones first, and every input component whose key-map
+/// cache still names the controller's PlayerInput (one walk of the object array).
 void ListHolders() noexcept
 {
     const void* controller = g_leave.controller.object;
-    std::wstring live, pending;
-    std::size_t  liveCount = 0, pendingCount = 0, rooted = 0;
+    const void* input      = g_leave.input.object;
+    std::wstring live, pending, caching;
+    std::size_t  liveCount = 0, pendingCount = 0, rooted = 0, cachingCount = 0, components = 0;
     const auto   started   = Clock::now();
     try
     {
+        auto* inputComponent = RC::Unreal::UObjectGlobals::StaticFindObject<RC::Unreal::UClass*>(
+            nullptr, nullptr, STR("/Script/Engine.InputComponent"));
         RC::Unreal::UObjectGlobals::ForEachUObject([&](RC::Unreal::UObject* object, std::int32_t, std::int32_t) {
             if (object == nullptr || object == controller)
             {
                 return RC::LoopAction::Continue;
+            }
+            // RE-p2-controller-after-leave.md S-PC2LEAK2: UInputComponent::CachedKeyToActionInfo at +0x120 (0x70-B
+            // entries, +0 the UPlayerInput*), dropped only when the collector nulls the PlayerInput.
+            if (input != nullptr && inputComponent != nullptr && object->IsA(inputComponent))
+            {
+                ++components;
+                const void* cache = ReadPointer(object, kInputCache);
+                const auto  count = ReadField<std::int32_t>(object, kInputCache + 8);
+                for (std::int32_t i = 0; cache != nullptr && i < count && i < kListCap; ++i)
+                {
+                    if (ReadPointer(cache, static_cast<std::uint32_t>(i) * kInputCacheEntry) == input)
+                    {
+                        if (++cachingCount <= kListed)
+                        {
+                            caching += std::format(L"{}{} (outer {}; entry {} of {})", caching.empty() ? L"" : L", ",
+                                                   NameOf(object), NameOf(ReadPointer(object, kObjectOuter)), i, count);
+                        }
+                        break;
+                    }
+                }
             }
             const void* outer = ReadPointer(object, kObjectOuter);
             for (int depth = 0; outer != nullptr && outer != controller && depth < kOuterDepth; ++depth)
@@ -201,6 +229,8 @@ void ListHolders() noexcept
                   L"unreachable{}{}; {} in the root set",
                   g_leave.number, ms, liveCount, live.empty() ? L"" : L": ", live, pendingCount,
                   pending.empty() ? L"" : L": ", pending, rooted);
+    platform::Log(L"leave watch: leave {}: input components whose key-map cache still names its PlayerInput: {} of {}{}{}",
+                  g_leave.number, cachingCount, components, caching.empty() ? L"" : L": ", caching);
     if (liveCount == 0)
     {
         platform::Log(L"leave watch: leave {}: no live object is outered to it; the holder is a root-set flag or a "

@@ -13,7 +13,9 @@
 //      their object slots; each one's end is logged once;
 //   C. once the leftover actors are gone and the controller is not: its internal flags (RootSet, ClusterRoot...)
 //      and one walk of the object array listing every live object whose outer chain holds the controller (the
-//      outer reference is the kind the collector never clears). The walk costs ~20-25 ms, once per leave.
+//      outer reference is the kind the collector never clears), and every input component whose key-map cache still
+//      names the controller's PlayerInput (S-PC2LEAK2: the never-unloaded level scripts' components are the
+//      expected holders). The walk costs ~20-25 ms, once per leave.
 // Every line is Info: a few per leave.
 
 #include "player_two/leftover_actors.h"
