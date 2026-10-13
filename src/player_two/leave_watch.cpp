@@ -22,6 +22,7 @@ namespace {
 constexpr std::uint32_t kObjectFlags   = 0x08;  // UObject::ObjectFlags
 constexpr std::uint32_t kObjectIndex   = 0x0C;  // UObject::InternalIndex
 constexpr std::uint32_t kObjectClass   = 0x10;
+constexpr std::uint32_t kObjectName    = 0x18;  // FName (8 bytes)
 constexpr std::uint32_t kObjectOuter   = 0x20;
 constexpr std::uint32_t kItemFlags     = 0x08;  // FUObjectItem: internal flags, ClusterRootIndex, SerialNumber
 constexpr std::uint32_t kItemCluster   = 0x0C;
@@ -55,12 +56,17 @@ constexpr auto kFastEvery = std::chrono::seconds(1);
 constexpr auto kSlowEvery = std::chrono::seconds(10);
 constexpr auto kWatchFor  = std::chrono::minutes(30);
 
-/// One object followed after the leave: alive while its object slot still holds its address.
+/// One object followed after the leave: alive while its object slot still holds it. A new object can take the freed
+/// slot at the same address (a rejoin's controller), so the class and FName must match too, and the serial when one
+/// was set (UE4 sets it only once a weak pointer is made, and clears it when the slot is freed).
 struct Watched
 {
     const wchar_t* what   = L"";
     void*          object = nullptr;
     std::int32_t   index  = -1;
+    std::int32_t   serial = 0;
+    const void*    cls    = nullptr;
+    std::uint64_t  fname  = 0;
     std::wstring   name;
     bool           gone   = true;  // nothing to follow, or freed
 };
@@ -84,7 +90,10 @@ void* ItemOf(const Watched& watched) noexcept
 bool Alive(const Watched& watched) noexcept
 {
     const void* item = ItemOf(watched);
-    return item != nullptr && ReadPointer(item, 0) == watched.object;
+    return item != nullptr && ReadPointer(item, 0) == watched.object &&
+           (watched.serial == 0 || ReadField<std::int32_t>(item, kItemSerial) == watched.serial) &&
+           ReadPointer(watched.object, kObjectClass) == watched.cls &&
+           ReadField<std::uint64_t>(watched.object, kObjectName) == watched.fname;
 }
 
 Watched Watch(const wchar_t* what, void* object) noexcept
@@ -92,9 +101,13 @@ Watched Watch(const wchar_t* what, void* object) noexcept
     Watched watched{what, object};
     if (object != nullptr)
     {
-        watched.index = ReadField<std::int32_t>(object, kObjectIndex);
-        watched.name  = NameOf(object);
-        watched.gone  = !Alive(watched);
+        watched.index      = ReadField<std::int32_t>(object, kObjectIndex);
+        watched.cls        = ReadPointer(object, kObjectClass);
+        watched.fname      = ReadField<std::uint64_t>(object, kObjectName);
+        const void* item   = ItemOf(watched);
+        watched.serial     = item != nullptr ? ReadField<std::int32_t>(item, kItemSerial) : 0;
+        watched.name       = NameOf(object);
+        watched.gone       = !Alive(watched);
     }
     return watched;
 }
