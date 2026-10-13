@@ -227,7 +227,10 @@ struct Targets
     std::uintptr_t filterOn = 0, filterOff = 0, menuSound = 0, slot = 0, snapshot = 0, show = 0, mode8 = 0, tick = 0;
 };
 Targets                            g_targets;
-std::optional<platform::GameImage> g_placeImage;     // 1.005: kept for the placement
+// 1.005: kept for the placement. Set before it is queued and never reset, so Remove (from a failed placement, or on
+// another thread) cannot pull it from under a running placement; Remove clears the pending flag.
+std::optional<platform::GameImage> g_placeImage;
+std::atomic<bool>                   g_placePending {false};   // 1.005: queued, not yet placed
 std::atomic<bool>                   g_fromGameThread {false};  // 1.005: the calls go in with InstallFromOwnThread
 
 /// One call site redirected: at install on the research build, from the game thread on 1.005.
@@ -1124,13 +1127,17 @@ bool Install(const platform::GameImage& image) noexcept
         // the game thread, between its ticks (player_two/game_thread_sites.h).
         g_fromGameThread = true;
         g_placeImage.emplace(image);
+        g_placePending    = true;
         const bool queued = game_thread_sites::Queue([]() noexcept {
-            if (g_placeImage)
+            if (g_placePending.exchange(false))
             {
-                const platform::GameImage image = *g_placeImage;  // a failed placement's Remove() empties g_placeImage
-                PlaceSites(image, true);
+                PlaceSites(*g_placeImage, true);
             }
         });
+        if (!queued)
+        {
+            g_placePending = false;
+        }
         platform::Log(L"command menu tick: {}", queued ? L"its calls are placed from the game thread (1.005: two cross a 16-byte block)"
                                                        : L"UNAVAILABLE (no room to place its calls from the game thread)");
         return queued;
@@ -1199,7 +1206,7 @@ void Remove() noexcept
     pad_buttons::SetPlayerTwoRoute(nullptr);
     ReleaseTint(L"released: the stage is removed");
     g_installed = false;
-    g_placeImage.reset();  // a placement still queued does nothing
+    g_placePending = false;  // a placement still queued does nothing
     if (g_keyUpSlot.Original() != 0 && !g_keyUpSlot.Restore())
     {
         platform::Log(L"command menu tick: the key-up slot was changed after us; left in place (it passes through)");

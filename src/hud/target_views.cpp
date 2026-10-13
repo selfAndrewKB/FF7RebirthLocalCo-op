@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <format>
@@ -112,9 +113,12 @@ WeakGetFn      g_weakGet      = nullptr;
 WeakSetFn      g_weakSet      = nullptr;
 std::uintptr_t g_battleSystem = 0;
 std::uintptr_t g_endUISystem  = 0;
-// 1.005: the call sites are placed from the game thread, with what Install found kept for it.
+// 1.005: the call sites are placed from the game thread, with what Install found kept for it. Set before the
+// placement is queued and never reset, so Remove on another thread cannot pull it from under a running placement;
+// Remove clears the pending flag.
 std::optional<platform::GameImage> g_placeImage;
 std::uintptr_t                     g_placeCollect   = 0;
+std::atomic<bool>                  g_placePending{false};  // 1.005: queued, not yet placed
 bool                               g_fromGameThread = false;
 
 /// One main-target lookup, kept for the rest of the frame.
@@ -446,11 +450,11 @@ bool Install(const platform::GameImage& image) noexcept
         g_fromGameThread = true;
         g_placeImage.emplace(image);
         g_placeCollect = collect;
+        g_placePending = true;
         if (player_two::game_thread_sites::Queue([]() noexcept {
-                if (g_placeImage)
+                if (g_placePending.exchange(false))
                 {
-                    const platform::GameImage image = *g_placeImage;
-                    InstallSites(image, g_placeCollect);
+                    InstallSites(*g_placeImage, g_placeCollect);
                 }
             }))
         {
@@ -459,6 +463,7 @@ bool Install(const platform::GameImage& image) noexcept
                           g_installed ? L"per-view marks ready" : L"UNAVAILABLE");
             return g_installed;
         }
+        g_placePending = false;
     }
     InstallSites(image, collect);
     return g_installed;
@@ -504,7 +509,7 @@ void InstallSites(const platform::GameImage& image, std::uintptr_t collect) noex
 
 void Remove() noexcept
 {
-    g_placeImage.reset();  // a placement still queued does nothing
+    g_placePending = false;  // a placement still queued does nothing
     g_hidden.clear();  // no widget calls here: this may run off the game thread
     g_unionOn = false;
     for (auto* call : {&g_lookupCall, &g_syncCall, &g_createCall})

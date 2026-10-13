@@ -148,7 +148,10 @@ struct Sites
     std::uintptr_t resetAt = 0, resetAll = 0, setupAt = 0, refresh = 0;
 };
 Sites                              g_sites;
-std::optional<platform::GameImage> g_placeImage;           // 1.005: kept for the placement
+// 1.005: kept for the placement. Set before it is queued and never reset, so Remove (from a failed placement, or on
+// another thread) cannot pull it from under a running placement; Remove clears the pending flag.
+std::optional<platform::GameImage> g_placeImage;
+std::atomic<bool>                   g_placePending {false};   // 1.005: queued, not yet placed
 std::atomic<bool>                   g_fromGameThread {false};  // 1.005: the calls go in with InstallFromOwnThread
 
 // Game thread. The controller outlives the mod's stages, like the game's.
@@ -626,14 +629,18 @@ bool Install(const platform::GameImage& image) noexcept
             g_fromGameThread = true;
             g_installed      = false;  // set again by the placement
             g_placeImage.emplace(image);
+            g_placePending    = true;
             const bool queued = game_thread_sites::Queue([]() noexcept {
-                if (g_placeImage)
+                if (g_placePending.exchange(false))
                 {
-                    const platform::GameImage image = *g_placeImage;  // a failed placement's Remove() empties g_placeImage
-                    g_installed                     = true;
-                    PlaceSites(image);
+                    g_installed = true;
+                    PlaceSites(*g_placeImage);
                 }
             });
+            if (!queued)
+            {
+                g_placePending = false;
+            }
             platform::Log(L"command menu two: {}", queued ? L"its calls are placed from the game thread (1.005: two cross a 16-byte block)"
                                                           : L"UNAVAILABLE (no room to place its calls from the game thread)");
             return queued;
@@ -645,7 +652,7 @@ bool Install(const platform::GameImage& image) noexcept
 void Remove() noexcept
 {
     g_installed = false;  // the controller stays: the game's GC list refers to it
-    g_placeImage.reset();  // a placement still queued does nothing
+    g_placePending = false;  // a placement still queued does nothing
     if (g_refresh.IsInstalled() && !g_refresh.Restore())
     {
         platform::Log(L"command menu two: the Members panel rebuild was changed after us; left in place (it passes through)");

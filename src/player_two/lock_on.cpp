@@ -146,8 +146,10 @@ platform::CallRedirect g_panelClearedCall;  // 1.005: the "cleared" request's ca
 platform::CallRedirect g_panelSetCall;
 platform::CallRedirect g_markerNameCall;
 // 1.005: the call sites are placed from the game thread (both targeting calls and the "set" call cross a block),
-// with the image kept for it (player_two/game_thread_sites.h).
+// with the image kept for it (player_two/game_thread_sites.h). The image is set before the placement is queued and never
+// reset, so Remove on another thread cannot pull it from under a running placement; Remove clears the pending flag.
 std::optional<platform::GameImage> g_placeImage;
+std::atomic<bool> g_placePending {false};  // 1.005: queued, not yet placed
 std::atomic<bool> g_fromGameThread {false};
 bool           g_installed   = false;  // the scope's facts: the TargetScope works
 bool           g_runReady    = false;  // player 2's run and its skipped writes are installed
@@ -798,8 +800,9 @@ bool Install(const platform::GameImage& image) noexcept
         // game thread, between its ticks (player_two/game_thread_sites.h).
         g_fromGameThread = true;
         g_placeImage.emplace(image);
+        g_placePending = true;
         if (game_thread_sites::Queue([]() noexcept {
-                if (g_placeImage)
+                if (g_placePending.exchange(false))
                 {
                     PlaceSites(*g_placeImage);
                 }
@@ -808,6 +811,7 @@ bool Install(const platform::GameImage& image) noexcept
             platform::Log(L"lock-on: the targeting calls are placed from the game thread (1.005: they cross a 16-byte block)");
             return true;
         }
+        g_placePending = false;
         platform::Log(L"lock-on: player 2's targeting run UNAVAILABLE (no room to place its calls from the game thread)");
         return false;
     }
@@ -817,7 +821,7 @@ bool Install(const platform::GameImage& image) noexcept
 void Remove() noexcept
 {
     g_runReady    = false;
-    g_placeImage.reset();  // a placement still queued does nothing
+    g_placePending = false;  // a placement still queued does nothing
     for (auto& call : g_tickTargetingCalls)
     {
         RestoreCall(call);
