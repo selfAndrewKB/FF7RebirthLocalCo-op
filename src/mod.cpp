@@ -73,6 +73,7 @@
 #include "player_two/chocobo_ride.h"
 #include "player_two/nav_strand.h"
 #include "player_two/ride_framing_watch.h"
+#include "player_two/leave_watch.h"
 #include "player_two/target_census.h"
 #include "player_two/traversal_camera.h"
 #include "player_two/traversal_watch.h"
@@ -508,6 +509,7 @@ private:
         lss::player_two::ffb_manager_two::Tick();      // player 2's component on player 2's own manager, after its BeginPlay
         lss::player_two::audio_listener_two::Tick();  // the controller listener slot; the listeners and the summary (Debug)
         lss::player_two::chest_watch::Tick();          // an open followed from its press to its grant (logged)
+        lss::player_two::leave_watch::Tick();          // the last leave's controller, followed until it is freed (logged)
         lss::player_two::vending::Tick();              // a press that opened no shop; player 2 leaving with their shop up
         if (!tickSeen_)
         {

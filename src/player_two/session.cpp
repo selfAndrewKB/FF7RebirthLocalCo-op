@@ -22,6 +22,7 @@
 #include "player_two/generation.h"
 #include "player_two/handover_watch.h"
 #include "player_two/leader_scope.h"
+#include "player_two/leave_watch.h"
 #include "player_two/leftover_actors.h"
 #include "player_two/member_movement.h"
 #include "player_two/move_state.h"
@@ -894,7 +895,9 @@ void Session::Teardown() noexcept
         LogTagCounts(L"after the give-back");
     }
     const auto actors = leftover_actors::Collect(playerTwoController_);
-    const bool out    = players_.Remove();
+    leave_watch::BeforeRemove(players_.PlayerTwo(), playerTwoController_, actors);  // logging only (S-PC2LEAK)
+    const bool out = players_.Remove();
+    leave_watch::AfterRemove(out);
     leave_.Finish();
     if (out)
     {
