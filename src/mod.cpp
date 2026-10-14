@@ -76,6 +76,7 @@
 #include "player_two/leave_watch.h"
 #include "player_two/target_census.h"
 #include "player_two/equal_targeting.h"
+#include "player_two/player_hits.h"
 #include "player_two/traversal_camera.h"
 #include "player_two/traversal_watch.h"
 #include "player_two/trigger_two.h"
@@ -222,6 +223,7 @@ public:
         // leader-test slot (which answers half of it) is still in place (the reverse of the install order).
         lss::player_two::target_census::Remove();
         lss::player_two::equal_targeting::Remove();
+        lss::player_two::player_hits::Remove();
         if (session_)
         {
             session_->RemoveStages();
@@ -418,6 +420,7 @@ public:
         lss::player_two::interact_watch::Install(*image);  // field interactions (pickups) per player, logged (read-only)
         lss::player_two::equal_targeting::Install(*image);  // Condition enemies (bosses) count either player as the UCPC
         lss::player_two::target_census::Install(*image);   // whom enemies target, and by which stage, logged; holds the above
+        lss::player_two::player_hits::Install(*image);     // player 2's hits and the hits player 2 takes count as the player's
         lss::hud::InstallPlayerTwoPass(*image);      // player 2's HUD content, on (the hud-levers command switches it)
         lss::hud::InstallRootOverlayRender(*image);  // before the overlay renders: placement follow, trace
         lss::hud::prompt_rows::Install(*image);      // each player's field prompt rows in their own half

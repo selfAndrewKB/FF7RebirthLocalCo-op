@@ -1,0 +1,26 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-10-14",
+  "doc": "Rebirth/Documentation/research/RE-p2-enemy-target-bias.md sections 13-14 (S-BPEVENT, S-DMGEDGE)",
+  "facts": [
+    {"name": "BattleCtrlComp_ApplyTakeDamage_FireAIEvents (the damage slot's base)", "old": "0x1418E6AC8", "new": "0x14152024C", "bytes": "405553", "same_semantics": true, "confidence": "CONFIRMED", "note": "Read from both databases (2026-10-14): 8 pushes, lea rbp; frame 0x338/0x398 differs from byte 17. Slot +0x380 in 1.004, +0x388 in 1.005."},
+    {"name": "EnemyBattleComp_Vt380_OnTakeDamage (Enemy override: stagger/ATB pre-code, base, summon gauge)", "old": "0x140CB40D4", "new": "0x1412E1DE8", "bytes": "488bc4", "same_semantics": true, "confidence": "CONFIRMED", "note": "First 24 bytes identical in both (48 8B C4 48 89 58 08 ...). Calls ATBGauge_AddOnHit (1.005 0x1412E086C), the base, the summon gauge (0x1412E190C)."},
+    {"name": "BattlePlayerComp_Vt380_OnTakeDamage", "old": "0x140CB27B4", "new": "0x1412E05D4", "bytes": "48895c", "same_semantics": true, "confidence": "CONFIRMED", "note": "First 21 bytes identical; then the __alloca_probe rel32."},
+    {"name": "FatMoogleComp_Vt380_OnTakeDamage_IfNotHeal", "old": "0x14341C6AC", "new": "0x143137FAC", "bytes": "b83800", "same_semantics": true, "confidence": "CONFIRMED", "note": "Same layout; only the __alloca_probe rel32 differs."},
+    {"name": "SummonComp_Vt380_OnTakeDamage (tail-jumps to the base)", "old": "0x1434220B0", "new": "0x14313E5D0", "bytes": "b83800", "same_semantics": true, "confidence": "CONFIRMED", "note": "Same layout; rel32 differ."},
+    {"name": "CondorFortComp_Vt380_OnTakeDamage", "old": "0x1434220C8", "new": "0x14313E5E8", "bytes": "4053b8", "same_semantics": true, "confidence": "CONFIRMED", "note": "Same layout; rel32 differ."},
+    {"name": "BattleComp2_Vt380_OnTakeDamage_Gated", "old": "0x143422120", "new": "0x14313E640", "bytes": "4885d2", "same_semantics": true, "confidence": "CONFIRMED", "note": "First 24 bytes identical."},
+    {"name": "slot: Enemy battle component damage slot", "old": "0x1457F1040", "new": "0x1455FEBB0", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "vt_FEndCharCtrlCompBattle_Enemy 0x1457F0CC0+0x380 / 0x1455FE828+0x388, holds the Enemy override in both."},
+    {"name": "slot: EnemyEN2228 battle component damage slot", "old": "0x1466B7678", "new": "0x145B4DDD8", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "0x1466B72F8+0x380 / 0x145B4DA50+0x388 (paired by constructor neighbourhood with CondorFort), holds the Enemy override in both."},
+    {"name": "slot: BattlePlayer component damage slot", "old": "0x145796258", "new": "0x145611AC8", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "vt_FEndCharacterControllerComponentBattlePlayer 0x145795ED8+0x380 / 0x145611740+0x388."},
+    {"name": "slot: PlayerBase battle component damage slot", "old": "0x145795B40", "new": "0x1455FE270", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "0x1457957C0+0x380 / 0x1455FDEE8+0x388, holds the base."},
+    {"name": "slot: Friend battle component damage slot", "old": "0x14580B078", "new": "0x1456BA658", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "0x14580ACF8+0x380 / 0x1456BA2D0+0x388 (paired by constructor neighbourhood with Summon and PlayerBase2), holds the base."},
+    {"name": "slot: Battle battle component damage slot", "old": "0x145CE3E58", "new": "0x145B4D5D0", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "0x145CE3AD8+0x380 / 0x145B4D248+0x388 (constructor beside PlayerBase's in both), holds the base."},
+    {"name": "slot: PlayerBase2 (fat moogle) battle component damage slot", "old": "0x14580BA48", "new": "0x1456B9DE8", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "0x14580B6C8+0x380 / 0x1456B9A60+0x388."},
+    {"name": "slot: Summon battle component damage slot", "old": "0x145902A48", "new": "0x14576FCA8", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "0x1459026C8+0x380 / 0x14576F920+0x388."},
+    {"name": "slot: CondorFort battle component damage slot", "old": "0x1466B87F8", "new": "0x146545818", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "0x1466B8478+0x380 / 0x146545490+0x388."},
+    {"name": "slot: Battle2 battle component damage slot", "old": "0x1466B7F08", "new": "0x146544FF8", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "0x1466B7B88+0x380 / 0x146544C70+0x388."},
+    {"name": "EnemyBattleComp_SummonGauge_AddOnHit_LeaderPtr: call ResolvePartyLeaderWeakPtr (call redirect)", "old": "0x140CB3D51", "new": "0x1412E19B1", "bytes": "e8", "same_semantics": true, "confidence": "CONFIRMED", "note": "1.004 E8 BA D4 DA FF -> 0x140A61210, 1.005 E8 F2 2F 48 FF -> 0x1407649A8. Inside one 16-byte block in both; no branch lands inside the 5 bytes. The function's only leader read."}
+  ]
+}
