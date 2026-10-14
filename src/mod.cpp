@@ -77,6 +77,7 @@
 #include "player_two/target_census.h"
 #include "player_two/equal_targeting.h"
 #include "player_two/player_hits.h"
+#include "player_two/target_coin.h"
 #include "player_two/traversal_camera.h"
 #include "player_two/traversal_watch.h"
 #include "player_two/trigger_two.h"
@@ -222,6 +223,7 @@ public:
         // Before the stages: the Condition selects stop taking the equal-targeting answer while member_movement's
         // leader-test slot (which answers half of it) is still in place (the reverse of the install order).
         lss::player_two::target_census::Remove();
+        lss::player_two::target_coin::Remove();
         lss::player_two::equal_targeting::Remove();
         lss::player_two::player_hits::Remove();
         if (session_)
@@ -421,6 +423,7 @@ public:
         lss::player_two::equal_targeting::Install(*image);  // Condition enemies (bosses) count either player as the UCPC
         lss::player_two::target_census::Install(*image);   // whom enemies target, and by which stage, logged; holds the above
         lss::player_two::player_hits::Install(*image);     // player 2's hits and the hits player 2 takes count as the player's
+        lss::player_two::target_coin::Install(*image);     // each enemy aims at player 1 or 2, a coin per action
         lss::hud::InstallPlayerTwoPass(*image);      // player 2's HUD content, on (the hud-levers command switches it)
         lss::hud::InstallRootOverlayRender(*image);  // before the overlay renders: placement follow, trace
         lss::hud::prompt_rows::Install(*image);      // each player's field prompt rows in their own half
@@ -515,6 +518,7 @@ private:
         lss::player_two::combat_rumble::BeforeTick();  // outside every notify: their call sites; the status line
         lss::player_two::rumble_list_two::Tick();      // player 2's list made at join (dropped if player 2 went out another way)
         lss::player_two::equal_targeting::Tick();      // both players' types for the Condition selects (no leader scope held here)
+        lss::player_two::target_coin::Tick();          // the blueprint natives' swaps once reflection is up; the summary
         lss::player_two::ffb_manager_two::Tick();      // player 2's component on player 2's own manager, after its BeginPlay
         lss::player_two::audio_listener_two::Tick();  // the controller listener slot; the listeners and the summary (Debug)
         lss::player_two::chest_watch::Tick();          // an open followed from its press to its grant (logged)

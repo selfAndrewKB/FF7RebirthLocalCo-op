@@ -132,6 +132,7 @@ add_library(LocalSplitScreen SHARED
     src/player_two/target_census.cpp
     src/player_two/equal_targeting.cpp
     src/player_two/player_hits.cpp
+    src/player_two/target_coin.cpp
     src/player_two/leave_watch.cpp
     src/player_two/command_rules.cpp
     src/player_two/menu_focus.cpp
