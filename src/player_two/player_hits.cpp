@@ -317,13 +317,15 @@ void Remove() noexcept
                           kSlotNames[i]);
         }
     }
-    for (auto* call : {&g_leaderRead, &g_sensing, &g_takeAbility})
+    for (auto* call : {&g_leaderRead, &g_sensing})
     {
         if (call->IsInstalled() && !call->Restore())
         {
             platform::Log(L"player hits: a redirected call was changed after us; left in place (it passes through)");
         }
     }
+    // The TakeAbility call crosses a block in both builds: put back only from the one thread that can run it, which
+    // unloading is not; it passes through once g_on is off.
 }
 
 Human HumanInCall() noexcept
