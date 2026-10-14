@@ -11,10 +11,11 @@
 // player_two/player_hits records which).
 //
 // The levers:
-//   - the enemy controllers' three decision slots (OnActionInvoke +0xAD8, OnActionInterruptInvoke +0xAE0,
-//     OnActionTopPriorityInvoke +0xB18) on the two native enemy controller vtables, EnemyBase and BossBase (BossBase
-//     fires them only in mode 1, ctrl+0x101C, and tosses only then): the toss, before the blueprint chooses and before
-//     the action's lock target is resolved;
+//   - the toss, exactly when one of the enemy's three decision events is about to run (before the blueprint chooses
+//     and before the action's lock target is resolved), and only then: OnActionInvoke at its one call (the +0xAD8
+//     slot's function skips it under a global gate or for interval type 4), OnActionInterruptInvoke and
+//     OnActionTopPriorityInvoke at the +0xAE0 / +0xB18 slots of the two native enemy controller vtables, EnemyBase
+//     and BossBase, under the events' own conditions (a non-null argument; BossBase's gates also mode 1, ctrl+0x101C);
 //   - the UFunctions' native pointers (UFunction::Func, read by the blueprint VM on every call): GetPartyLeader and the
 //     two controller aliases sharing its exec, IsUCPC, IsAIPC, GetPartyLeaderType. Each answers for a calling object
 //     (FFrame::Object) whose vtable is one of the two enemy controllers' (every enemy AI blueprint, the summon fights'

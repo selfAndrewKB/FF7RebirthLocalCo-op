@@ -7,6 +7,7 @@
 #include <Unreal/UObject.hpp>
 #include <Unreal/UObjectGlobals.hpp>
 
+#include "platform/call_redirect.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
@@ -31,37 +32,37 @@ namespace UObjectGlobals = RC::Unreal::UObjectGlobals;
 
 // Facts read from the database (RE-p2-enemy-target-bias.md §16; this build). 1.005: replaced-target-coin.json.
 
-// The enemy controllers' decision slots. EnemyBase's hold the blueprint events' stubs; BossBase's hold gates that call
-// the same stubs only when the controller's mode byte is 1. Each takes the controller first and at most three integer
-// arguments (+0xAD8: ctrl, u8, ptr; +0xAE0 / +0xB18: ctrl, ptr), all passed on.
-constexpr std::uint8_t kActionBytes[]      = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74,
-                                              0x24, 0x18, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
-constexpr std::uint8_t kEventBytes[]       = {0x48, 0x85, 0xD2, 0x74, 0x48, 0x48, 0x89, 0x5C,
-                                              0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
-constexpr std::uint8_t kBossActionBytes[]  = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x86, 0x62,
-                                              0x88, 0x00, 0x48, 0x2B, 0xE0, 0x80, 0xB9, 0x1C};
+// Where an enemy decides its next action, tossed exactly when the blueprint event is about to run (the game's own
+// conditions decide whether it does):
+//   - OnActionInvoke: its one call, inside EnemyCtrl_VtAD8_FireOnActionInvoke (the +0xAD8 slot, which skips it under a
+//     global gate or for interval type 4; BossBase's +0xAD8 gate calls the same function in mode 1). A call redirect;
+//     the call crosses a 16-byte block on this build (1.005: inside one), so it is placed at on_unreal_init.
+//   - OnActionInterruptInvoke / OnActionTopPriorityInvoke: the +0xAE0 / +0xB18 slots of both controllers. EnemyBase's
+//     hold the events' stubs, which fire only with a non-null second argument; BossBase's hold gates that call the
+//     same stubs only when the controller's mode byte is 1. Each takes (ctrl, ptr), passed on.
+constexpr std::uintptr_t kActionCall = 0x140CBA04E;  // call EnemyAICtrl_Event_OnActionInvoke(ctrl, u8 type, ptr)
+constexpr std::uintptr_t kAction     = 0x140CBA078;
+
+constexpr std::uint8_t kEventBytes[]         = {0x48, 0x85, 0xD2, 0x74, 0x48, 0x48, 0x89, 0x5C,
+                                                0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
 constexpr std::uint8_t kBossInterruptBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xD2, 0x98,
                                                 0x7F, 0x00, 0x48, 0x2B, 0xE0, 0x80, 0xB9, 0x1C};
-constexpr std::uint8_t kBossTopBytes[]     = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x7E, 0x6D,
-                                              0x8B, 0x00, 0x48, 0x2B, 0xE0, 0x80, 0xB9, 0x1C};
+constexpr std::uint8_t kBossTopBytes[]       = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x7E, 0x6D,
+                                                0x8B, 0x00, 0x48, 0x2B, 0xE0, 0x80, 0xB9, 0x1C};
 
-constexpr std::size_t kDecisions  = 6;
-constexpr std::size_t kFirstBoss  = 3;  // slots 3..5 are BossBase's
+constexpr std::size_t        kDecisions = 4;
+constexpr std::size_t        kFirstBoss = 2;  // slots 2..3 are BossBase's
 constexpr platform::SlotFact kDecisionSlots[kDecisions] = {
-    {L"the EnemyBase controller's OnActionInvoke slot (+0xAD8)", 0x1457DC768,
-     {L"EnemyCtrl_VtAD8_FireOnActionInvoke", 0x140CB9FF4, kActionBytes}},
     {L"the EnemyBase controller's OnActionInterruptInvoke slot (+0xAE0)", 0x1457DC770,
      {L"EnemyAICtrl_Event_OnActionInterruptInvoke", 0x1418B5674, kEventBytes}},
     {L"the EnemyBase controller's OnActionTopPriorityInvoke slot (+0xB18)", 0x1457DC7A8,
      {L"EnemyAICtrl_Event_OnActionTopPriorityInvoke", 0x1417F81C8, kEventBytes}},
-    {L"the BossBase controller's OnActionInvoke slot (+0xAD8)", 0x1457DBAD8,
-     {L"BossCtrl_VtAD8_FireOnActionInvoke_IfMode1", 0x141828CA0, kBossActionBytes}},
     {L"the BossBase controller's OnActionInterruptInvoke slot (+0xAE0)", 0x1457DBAE0,
      {L"BossCtrl_VtAE0_Interrupt_IfMode1", 0x1418B5654, kBossInterruptBytes}},
     {L"the BossBase controller's OnActionTopPriorityInvoke slot (+0xB18)", 0x1457DBB18,
      {L"BossCtrl_VtB18_TopPriority_IfMode1", 0x1417F81A8, kBossTopBytes}},
 };
-constexpr std::uint32_t kActionSlot = 0xAD8;  // the vtable is the first slot's address minus this (both builds)
+constexpr std::uint32_t kInterruptSlot = 0xAE0;  // the vtable is the first slot's address minus this (both builds)
 
 // Enemy AI controller (both builds): the mode byte BossBase's gates test, and the target selector's holder (a pointer
 // to {controller, selector}).
@@ -100,7 +101,8 @@ using DecisionFn = std::uint64_t (*)(std::uint64_t controller, std::uint64_t b, 
 using ExecFn     = RC::Unreal::UnrealScriptFunction;
 
 // Set once at install.
-platform::VTableEntry g_decisions[kDecisions];
+platform::VTableEntry  g_decisions[kDecisions];
+platform::CallRedirect g_actionCall;
 std::uintptr_t        g_enemyVTable = 0, g_bossVTable = 0;
 std::uintptr_t        g_execs[kNatives]{};     // live exec addresses
 std::atomic<ExecFn>   g_originals[kNatives]{};  // null until swapped
@@ -348,21 +350,36 @@ void Exec(RC::Unreal::UObject* context, RC::Unreal::FFrame& frame, void* result)
 
 constexpr ExecFn kExecs[kNatives] = {&Exec<0>, &Exec<1>, &Exec<2>, &Exec<3>, &Exec<4>, &Exec<5>};
 
+bool Tossing() noexcept
+{
+    return g_on.load(std::memory_order_acquire) && equal_targeting::Types().has_value();
+}
+
+/// The OnActionInvoke event's one call: the event is about to run.
+std::uint64_t Action(std::uint64_t controller, std::uint64_t type, std::uint64_t extra, std::uint64_t d) noexcept
+{
+    if (Tossing())
+    {
+        Toss(reinterpret_cast<const void*>(controller), L"action decision");
+    }
+    return reinterpret_cast<DecisionFn>(g_actionCall.Original())(controller, type, extra, d);
+}
+
+/// The interrupt and top-priority slots: tossed only when the game's own conditions fire the event (a non-null
+/// argument; BossBase also mode 1).
 template <std::size_t I>
 std::uint64_t Decision(std::uint64_t controller, std::uint64_t b, std::uint64_t c, std::uint64_t d) noexcept
 {
     const auto original = reinterpret_cast<DecisionFn>(g_decisions[I].Original());
     const auto* self    = reinterpret_cast<const void*>(controller);
-    if (g_on.load(std::memory_order_acquire) && equal_targeting::Types() &&
-        (I < kFirstBoss || ReadField<std::uint8_t>(self, kCtrlMode) == 1))
+    if (b != 0 && (I < kFirstBoss || ReadField<std::uint8_t>(self, kCtrlMode) == 1) && Tossing())
     {
-        Toss(self, L"action decision");
+        Toss(self, I % 2 == 0 ? L"interrupt decision" : L"top-priority decision");
     }
     return original(controller, b, c, d);
 }
 
-constexpr DecisionFn kDecisionWrappers[kDecisions] = {&Decision<0>, &Decision<1>, &Decision<2>,
-                                                      &Decision<3>, &Decision<4>, &Decision<5>};
+constexpr DecisionFn kDecisionWrappers[kDecisions] = {&Decision<0>, &Decision<1>, &Decision<2>, &Decision<3>};
 
 /// Swaps each UFunction's native pointer whose function exists and still holds the exec IDA named. Game thread.
 void TrySwaps() noexcept
@@ -428,9 +445,14 @@ bool Install(const platform::GameImage& image) noexcept
     }
     const auto enemySlot = image.Rebase(kDecisionSlots[0].slot, sizeof(void*));
     const auto bossSlot  = image.Rebase(kDecisionSlots[kFirstBoss].slot, sizeof(void*));
-    g_enemyVTable        = enemySlot ? *enemySlot - kActionSlot : 0;
-    g_bossVTable         = bossSlot ? *bossSlot - kActionSlot : 0;
+    g_enemyVTable        = enemySlot ? *enemySlot - kInterruptSlot : 0;
+    g_bossVTable         = bossSlot ? *bossSlot - kInterruptSlot : 0;
     g_on.store(true, std::memory_order_release);
+    // on_unreal_init: no world and no enemy exist yet, so no thread can be at the call (InstallFromOwnThread's rule).
+    const auto actionSite = image.Rebase(kActionCall, 5);
+    const auto action     = image.Rebase(kAction);
+    const bool actions    = actionSite && action &&
+                         g_actionCall.InstallFromOwnThread(*actionSite, *action, reinterpret_cast<std::uintptr_t>(&Action));
     std::size_t slots = 0;
     for (std::size_t i = 0; i < kDecisions; ++i)
     {
@@ -447,9 +469,9 @@ bool Install(const platform::GameImage& image) noexcept
                       L"player 1");
         return false;
     }
-    platform::Log(L"target coin: {} of {} enemy decision slots toss a coin per action (no coin answers until the "
-                  L"blueprint natives are swapped)",
-                  slots, kDecisions);
+    platform::Log(L"target coin: enemies toss a coin per action at OnActionInvoke {} and at {} of {} interrupt and "
+                  L"top-priority slots (no coin answers until the blueprint natives are swapped)",
+                  actions ? L"(on)" : L"(UNAVAILABLE: the call differs)", slots, kDecisions);
     return true;
 }
 
@@ -471,6 +493,8 @@ void Remove() noexcept
             platform::Log(L"target coin: a decision slot was changed after us; left in place (it passes through)");
         }
     }
+    // The action call crosses a block on the research build: put back only from the one thread that can run it,
+    // which unloading is not; it passes through once g_on is off.
 }
 
 void Tick() noexcept
