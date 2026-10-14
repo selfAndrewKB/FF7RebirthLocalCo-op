@@ -487,4 +487,16 @@ int ExchangeThreadOnlyLeader(int type) noexcept
     return previous;
 }
 
+int ExchangeThreadLeaderAnswer(int type) noexcept
+{
+    const int previous = t_threadType;
+    t_threadType       = type;
+    return previous;
+}
+
+int ComponentPlayerType(const void* component) noexcept
+{
+    return component == nullptr ? kNoType : PlayerTypeOfComponent(component);
+}
+
 }  // namespace lss::player_two::member_movement

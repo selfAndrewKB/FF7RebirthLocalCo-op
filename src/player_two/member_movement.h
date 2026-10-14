@@ -126,4 +126,13 @@ bool LeaderTestReplaced() noexcept;
 /// player-controlled character (player_two/equal_targeting). Any thread.
 int ExchangeThreadOnlyLeader(int type) noexcept;
 
+/// ThreadLeaderAnswer as a function: yes to the leader test on this thread for components of player type `type` (-1
+/// ends it), the engine's own answers kept for every other. Returns the previous value, which the caller puts back in a
+/// __finally (see ExchangeThreadOnlyLeader for why). For a damage call in which player 2's character is the attacker
+/// or the victim (player_two/player_hits). Any thread.
+int ExchangeThreadLeaderAnswer(int type) noexcept;
+
+/// The player type `component` (a battle-control component) reports through its own type slot, or -1.
+int ComponentPlayerType(const void* component) noexcept;
+
 }  // namespace lss::player_two::member_movement
