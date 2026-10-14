@@ -54,6 +54,11 @@ std::atomic<const void*> g_leaderComponent{nullptr};
 std::atomic<unsigned> g_leaderAnswers{0};
 // The player type the leader test says yes to on this thread only (ThreadLeaderAnswer), or kNoType.
 thread_local int      t_threadType = kNoType;
+// The only player type the leader test says yes to on this thread, every other type a no (ThreadOnlyLeader), or kNoType.
+thread_local int      t_onlyType   = kNoType;
+
+// The leader-test slot holds LeaderTest (LeaderTestReplaced); any thread reads it.
+std::atomic<bool>     g_leaderReplaced{false};
 
 // Game thread only: set once the engine raised an exception inside the member's tick.
 bool g_stopped = false;
@@ -69,6 +74,13 @@ int PlayerTypeOfComponent(const void* component) noexcept
 
 std::uint8_t LeaderTest(const void* component)
 {
+    // An enemy's target choice (ThreadOnlyLeader): exactly one player-controlled type, over every other answer. The
+    // engine's own test compares the same type byte with the party manager's leader type (RE-p2-enemy-target-bias.md
+    // §10.3), so this is that test with the chosen type as the leader's.
+    if (t_onlyType != kNoType)
+    {
+        return PlayerTypeOfComponent(component) == t_onlyType ? 1 : 0;
+    }
     // Player 2's climb on the anim worker (climb_context.h), or player 2's chocobo's actions there (ThreadLeaderAnswer):
     // this thread only, the member's type.
     const int climbType = climb_context::LeaderTypeHere();
@@ -255,13 +267,19 @@ bool Install(const platform::GameImage& image) noexcept
         platform::Log(L"member movement: the field-action handle clear differs; player 2's member will add its own "
                       L"(dim) summon rows to the prompt list");
     }
-    return platform::ReplaceSlot(image, facts::kIsPartyLeader, reinterpret_cast<std::uintptr_t>(&LeaderTest),
-                                 g_leaderSlot);
+    const bool replaced = platform::ReplaceSlot(image, facts::kIsPartyLeader, reinterpret_cast<std::uintptr_t>(&LeaderTest),
+                                                g_leaderSlot);
+    g_leaderReplaced.store(replaced, std::memory_order_release);
+    return replaced;
 }
 
 void Remove() noexcept
 {
-    if (!g_leaderSlot.Restore())
+    if (g_leaderSlot.Restore())
+    {
+        g_leaderReplaced.store(false, std::memory_order_release);
+    }
+    else
     {
         platform::Log(L"could not restore the leader-test slot; the replacement stays in place");
     }
@@ -454,6 +472,21 @@ ThreadLeaderAnswer::ThreadLeaderAnswer(int type) noexcept : saved_(t_threadType)
 ThreadLeaderAnswer::~ThreadLeaderAnswer()
 {
     t_threadType = saved_;
+}
+
+bool LeaderTestReplaced() noexcept
+{
+    return g_leaderReplaced.load(std::memory_order_acquire);
+}
+
+ThreadOnlyLeader::ThreadOnlyLeader(int type) noexcept : saved_(t_onlyType)
+{
+    t_onlyType = type;
+}
+
+ThreadOnlyLeader::~ThreadOnlyLeader()
+{
+    t_onlyType = saved_;
 }
 
 }  // namespace lss::player_two::member_movement
