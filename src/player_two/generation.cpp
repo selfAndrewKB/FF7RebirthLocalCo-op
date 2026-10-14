@@ -44,7 +44,6 @@ void Withdraw() noexcept
 void End() noexcept
 {
     g_active.store(false);
-    g_playerOne.store(nullptr);
     g_playerTwo.store(nullptr);
     g_member.store(nullptr);
 }

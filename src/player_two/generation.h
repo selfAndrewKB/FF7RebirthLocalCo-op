@@ -22,9 +22,10 @@ void SetMember(void* member) noexcept;
 /// Ends the generation: from now on every wrapper passes through.
 void Withdraw() noexcept;
 
-/// After player 2's removal: also forgets the controllers and the member, as before the first join.
-/// The removed controller is freed by the next garbage collection (RE-p2-controller-after-leave.md,
-/// S-PC2LEAK2), so no reader may still find it here.
+/// After player 2's removal: also forgets player 2's controller and the member. The removed controller
+/// is freed by the next garbage collection (RE-p2-controller-after-leave.md, S-PC2LEAK2), so no reader
+/// may still find it here. Player 1's controller stays: it lives on, and the leave before a world change
+/// clears the viewport's split switch through it right after this.
 void End() noexcept;
 
 /// Withdraws the generation and records `reason` (a string literal). Only the first reason is kept.
