@@ -54,7 +54,8 @@ std::atomic<const void*> g_leaderComponent{nullptr};
 std::atomic<unsigned> g_leaderAnswers{0};
 // The player type the leader test says yes to on this thread only (ThreadLeaderAnswer), or kNoType.
 thread_local int      t_threadType = kNoType;
-// The only player type the leader test says yes to on this thread, every other type a no (ThreadOnlyLeader), or kNoType.
+// The only player type the leader test says yes to on this thread, every other type a no (ExchangeThreadOnlyLeader),
+// or kNoType.
 thread_local int      t_onlyType   = kNoType;
 
 // The leader-test slot holds LeaderTest (LeaderTestReplaced); any thread reads it.
@@ -74,7 +75,7 @@ int PlayerTypeOfComponent(const void* component) noexcept
 
 std::uint8_t LeaderTest(const void* component)
 {
-    // An enemy's target choice (ThreadOnlyLeader): exactly one player-controlled type, over every other answer. The
+    // An enemy's target choice (ExchangeThreadOnlyLeader): exactly one player-controlled type, over every other answer. The
     // engine's own test compares the same type byte with the party manager's leader type (RE-p2-enemy-target-bias.md
     // §10.3), so this is that test with the chosen type as the leader's.
     if (t_onlyType != kNoType)
@@ -479,14 +480,11 @@ bool LeaderTestReplaced() noexcept
     return g_leaderReplaced.load(std::memory_order_acquire);
 }
 
-ThreadOnlyLeader::ThreadOnlyLeader(int type) noexcept : saved_(t_onlyType)
+int ExchangeThreadOnlyLeader(int type) noexcept
 {
-    t_onlyType = type;
-}
-
-ThreadOnlyLeader::~ThreadOnlyLeader()
-{
-    t_onlyType = saved_;
+    const int previous = t_onlyType;
+    t_onlyType         = type;
+    return previous;
 }
 
 }  // namespace lss::player_two::member_movement

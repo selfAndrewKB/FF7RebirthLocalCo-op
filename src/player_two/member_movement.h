@@ -114,24 +114,16 @@ private:
     int saved_;
 };
 
-/// The leader-test slot holds this module's test (Install succeeded and it was not removed): ThreadOnlyLeader and
-/// ThreadLeaderAnswer reach the game's IsUCPC_Core only then.
+/// The leader-test slot holds this module's test (Install succeeded and it was not removed): the thread answers below
+/// and above reach the game's IsUCPC_Core only then.
 bool LeaderTestReplaced() noexcept;
 
-/// Makes the leader test answer by type alone on this thread only, while it lives: yes for components of player type
-/// `type`, no for every other, over every other answer (the climb's, the member tick's, the engine's); nesting keeps
-/// the outer answer. For an enemy's target choice, which must see exactly one player-controlled character
-/// (player_two/equal_targeting). Any thread.
-class ThreadOnlyLeader
-{
-public:
-    explicit ThreadOnlyLeader(int type) noexcept;
-    ~ThreadOnlyLeader();
-    ThreadOnlyLeader(const ThreadOnlyLeader&)            = delete;
-    ThreadOnlyLeader& operator=(const ThreadOnlyLeader&) = delete;
-
-private:
-    int saved_;
-};
+/// Makes the leader test answer by type alone on this thread only: yes for components of player type `type`, no for
+/// every other, over every other answer (the climb's, the member tick's, the engine's); -1 ends it. Returns the
+/// previous value, which the caller puts back (nesting keeps the outer answer). A function rather than a scope object
+/// so the caller can put it back in a __finally, which also runs when a structured exception unwinds (the mod builds
+/// with /EHsc, where destructors would not). For an enemy's target choice, which must see exactly one
+/// player-controlled character (player_two/equal_targeting). Any thread.
+int ExchangeThreadOnlyLeader(int type) noexcept;
 
 }  // namespace lss::player_two::member_movement
