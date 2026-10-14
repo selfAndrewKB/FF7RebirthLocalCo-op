@@ -1,0 +1,35 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-10-14",
+  "doc": "Rebirth/Documentation/research/RE-p2-enemy-target-bias.md section 10 (lever 5.1 pre-implementation facts)",
+  "facts": [
+    {
+      "name": "CondTargetSel_BuildCandidates_LeaderTypeFlag: call UEndPartyAPI_GetPartyLeaderType (call redirect; the Condition select's one read of the leader type, PM+0x150)",
+      "old": "0x140FA5E1F",
+      "new": "0x141114547",
+      "bytes": "e8",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes (scratchpad lever51_bytes.py, 2026-10-14): 1.004 E8 A0 12 86 FF -> 0x1408070C4, 1.005 E8 E8 9B 81 FF -> 0x14092E134. 1.004 crosses a 16-byte block (offset 15), 1.005 inside one block (offset 7). Called once per BuildCandidates before the per-type loop; only al is used (mov r12b,al; cmp r12b,dil; setz). The only GetPartyLeaderType call in BuildCandidates, whose only caller is the Condition select. No jump lands inside the 5 bytes in either build."
+    },
+    {
+      "name": "PartyManager_GetCharacterByPlayerType(u8 lane, u8 type) -> AEndCharacter*",
+      "old": "0x140A31634",
+      "new": "0x1409AE1E8",
+      "bytes": "4c8b05",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes (2026-10-14): first 24 bytes 4C 8B 05 rel32 44 0F B6 C9 4D 85 C0 0F 84 87 00 00 00 80 FA 0F 73, identical apart from the RIP-relative party-manager load. BuildCandidates calls it as (0, type) for each candidate; lane 0 = the battle/field party slots; null for no party manager, type >= 15, an empty or dead slot."
+    },
+    {
+      "name": "EnemyTargetSel_IsValidTarget(selector*, AEndCharacter*, u8) -> bool",
+      "old": "0x140CB9B78",
+      "new": "0x140F743B4",
+      "bytes": "488bc4488958084889681848897020488950105",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes (2026-10-14): first 24 bytes 48 8B C4 48 89 58 08 48 89 68 18 48 89 70 20 48 89 50 10 57 B8 40 00 00 identical. BuildCandidates calls it as (selector, character, 0) for each candidate's valid flag; null character -> false; in battle (enemy controller +0xA08 set) tests the selector's participant list."
+    }
+  ]
+}
