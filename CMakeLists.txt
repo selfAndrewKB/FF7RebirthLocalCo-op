@@ -492,6 +492,13 @@ target_include_directories(SettledLogTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/
 target_compile_features(SettledLogTests PRIVATE cxx_std_20)
 add_test(NAME settled_log COMMAND SettledLogTests)
 
+add_executable(UcpcChoiceTests
+    tests/ucpc_choice_test.cpp
+)
+target_include_directories(UcpcChoiceTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(UcpcChoiceTests PRIVATE cxx_std_20)
+add_test(NAME ucpc_choice COMMAND UcpcChoiceTests)
+
 add_executable(CharaPopRuleTests
     tests/charapop_rule_test.cpp
 )
