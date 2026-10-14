@@ -63,11 +63,15 @@ bool MarkPendingKill(void* object) noexcept
         return false;
     }
     std::atomic_ref<std::int32_t> flags(*reinterpret_cast<std::int32_t*>(reinterpret_cast<std::uint8_t*>(item) + kItemFlags));
-    if ((flags.load(std::memory_order_relaxed) & kRootSet) != 0)
+    // One compare-and-swap, as the engine's ThisThreadAtomicallySetFlag: the root-set test holds for the word written.
+    std::int32_t now = flags.load(std::memory_order_relaxed);
+    do
     {
-        return false;
-    }
-    flags.fetch_or(kPendingKill);
+        if ((now & kRootSet) != 0)
+        {
+            return false;
+        }
+    } while (!flags.compare_exchange_weak(now, now | kPendingKill));
     return true;
 }
 
