@@ -902,7 +902,9 @@ void Session::Teardown() noexcept
     if (out)
     {
         const auto result = leftover_actors::Destroy(actors);
-        Log(L"leave: player 2 left; {} leftover actor(s) destroyed ({} failed)", result.destroyed, result.failed);
+        Log(L"leave: player 2 left; {} leftover actor(s) destroyed ({} failed); PlayerInput {}", result.destroyed,
+            result.failed,
+            actors.playerInput == nullptr ? L"none" : result.inputReleased ? L"marked pending kill" : L"NOT marked (rooted or moved)");
     }
     else
     {

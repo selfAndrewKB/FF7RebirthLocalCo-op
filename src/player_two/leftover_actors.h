@@ -13,6 +13,13 @@
 // player 2, and only if that worked calls Destroy (AActor::K2_DestroyActor on each) in the same
 // game-thread step. Destroying first would leave a camera manager that is still updating with a
 // destroyed camera actor, which its update reads without a null check, if the removal then failed.
+//
+// The controller's PlayerInput (+0x350) is not an actor but is left behind too, and it keeps the
+// controller alive (RE-p2-controller-after-leave.md, S-PC2LEAK2): APlayerController::Destroyed only
+// nulls the field, while the key-map cache of every level script's input component (stock UE4) still
+// names it, and its outer is the controller. Destroy marks it PendingKill, as DestroyActor marks the
+// controller's own components (the user's OK, 2026-10-13); the collector then nulls the cache entries,
+// the input components drop them, and the controller and the PlayerInput are freed.
 
 namespace lss::player_two::leftover_actors {
 
@@ -22,19 +29,23 @@ struct Actors
     void* battleTalk        = nullptr;
     void* cameraActor       = nullptr;
     void* collisionActor    = nullptr;
+    void* playerInput       = nullptr;  // not an actor: marked PendingKill
 };
 
-/// Reads player 2's leftover actors. Game thread.
+/// Reads player 2's leftover actors and PlayerInput. Game thread.
 Actors Collect(void* playerTwoController) noexcept;
 
-/// How many actors were destroyed, and how many calls raised an exception.
+/// How many actors were destroyed, how many calls raised an exception, and whether the PlayerInput
+/// was marked PendingKill.
 struct Result
 {
-    int destroyed = 0;
-    int failed    = 0;
+    int  destroyed     = 0;
+    int  failed        = 0;
+    bool inputReleased = false;
 };
 
-/// Destroys every actor in `actors`. Game thread, in the same step as (after) player 2's removal.
+/// Destroys every actor in `actors` and marks the PlayerInput PendingKill. Game thread, in the same
+/// step as (after) player 2's removal.
 Result Destroy(const Actors& actors) noexcept;
 
 }  // namespace lss::player_two::leftover_actors

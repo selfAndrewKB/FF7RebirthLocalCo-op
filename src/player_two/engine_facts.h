@@ -53,6 +53,7 @@ inline constexpr std::uint32_t kViewportInputModeBytes = 0x361;
 inline constexpr std::uint32_t kControllerPawn           = 0x258;
 inline constexpr std::uint32_t kControllerPlayer         = 0x2A0;  // the ULocalPlayer
 inline constexpr std::uint32_t kControllerCameraManager  = 0x2C0;
+inline constexpr std::uint32_t kControllerPlayerInput    = 0x350;  // APlayerController::PlayerInput (Destroyed nulls it)
 inline constexpr std::uint32_t kControllerBattleTalkActor = 0x5B0;
 inline constexpr std::uint32_t kControllerLeader         = 0x5A0;
 inline constexpr std::uint32_t kControllerTrigger        = 0x610;
