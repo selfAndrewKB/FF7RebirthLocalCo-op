@@ -6,9 +6,9 @@
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
 #include "player_two/engine_facts.h"
+#include "player_two/equal_targeting.h"
 #include "player_two/generation.h"
 #include "player_two/member_movement.h"
-#include "player_two/party_member.h"
 
 #include <atomic>
 #include <cstddef>
@@ -71,101 +71,154 @@ constexpr const wchar_t* kSlotNames[kSlots] = {L"Enemy",    L"EnemyEN2228", L"Ba
 // builds; no branch lands inside it.
 constexpr std::uintptr_t kLeaderReadCall = 0x140CB3D51;
 
+// The enemy AI's reaction sensing (AIBrainReactionSensing_Vt20_Tick): its two blueprint events, whose second argument
+// is the attacking character. The first call is inside one 16-byte block in both builds; the second crosses one in
+// both (InstallFromOwnThread, at on_unreal_init). No branch lands inside either.
+constexpr std::uintptr_t kSensingCall     = 0x1409B7A91;  // OnReactionSensingInvoke(ctrl, causer, handle, type, dir)
+constexpr std::uintptr_t kSensing         = 0x14176F28C;
+constexpr std::uintptr_t kTakeAbilityCall = 0x1409B7ACF;  // OnReactionSensingTakeAbilityInvoke(ctrl, causer, handle)
+constexpr std::uintptr_t kTakeAbility     = 0x1417B7008;
+
 using DamageFn = std::uint64_t (*)(std::uint64_t component, std::uint64_t attacker, std::uint64_t hit,
                                    std::uint64_t damage, std::uint64_t e);
 using LeaderFn = std::uint64_t (*)(std::uint64_t, std::uint64_t, std::uint64_t, std::uint64_t);
+using ResolveFn = void* (*)();
 
 // Set once at install.
 platform::VTableEntry  g_slots[kSlots];
-platform::CallRedirect g_leaderRead;
+platform::CallRedirect g_leaderRead, g_sensing, g_takeAbility;
+ResolveFn              g_resolveLeader = nullptr;  // ResolvePartyLeaderWeakPtr: player 1's character
 
 std::atomic<bool> g_on{false};
 
 // Player 2's character while its hit is applied on this thread (the summon gauge's leader read answers it), else null.
 thread_local const void* t_attacker = nullptr;
+// The human the damage or reaction call running on this thread is about.
+thread_local Human t_human = Human::None;
 
-enum class Role : std::uint8_t
-{
-    None,
-    Attacker,
-    Victim,
-};
-
+/// Who a damage or reaction call is about, and the answer it holds.
 struct Involvement
 {
-    Role        role   = Role::None;
-    int         type   = -1;  // player 2's member's player type
-    const void* member = nullptr;
+    Human       human    = Human::None;
+    bool        attacks  = false;  // the human is the attacker (else the character hit)
+    int         type     = -1;     // player 2's member's player type: the leader test's extra yes (player 2 only)
+    const void* member   = nullptr;
 };
 
-/// Whether player 2's character attacks in this damage call, or (on its own component's slot) takes it.
+/// The human `attacker` is, or that `component` (on the battle-player slot only) belongs to: player 2's member, or
+/// player 1's character (the party leader). Any thread: the types come from equal_targeting's per-frame copy.
 Involvement Involved(std::uint64_t component, std::uint64_t attacker, bool victimSlot) noexcept
 {
-    if (!g_on.load(std::memory_order_acquire) || !generation::OnGameThread() || !generation::Active())
-    {
-        return {};
-    }
+    const auto types = equal_targeting::Types();
     const void* const member = generation::Member();
-    if (member == nullptr)
+    if (!g_on.load(std::memory_order_acquire) || !types || member == nullptr)
     {
         return {};
     }
-    const bool attacks = reinterpret_cast<const void*>(attacker) == member;
-    if (!attacks && !victimSlot)
+    const auto* const by = reinterpret_cast<const void*>(attacker);
+    if (by == member)
     {
-        return {};
+        return {Human::PlayerTwo, true, types->two, member};
     }
-    const auto type = party_member::PlayerTypeOf(member);
-    if (!type)
+    const void* const leader = g_resolveLeader != nullptr ? g_resolveLeader() : nullptr;
+    if (by != nullptr && by == leader)
     {
-        return {};
+        return {Human::PlayerOne, true, -1, member};
     }
-    if (attacks)
+    if (victimSlot)
     {
-        return {Role::Attacker, *type, member};
+        const int hit = member_movement::ComponentPlayerType(reinterpret_cast<const void*>(component));
+        if (hit == types->two)
+        {
+            return {Human::PlayerTwo, false, types->two, member};
+        }
+        if (hit == types->one)
+        {
+            return {Human::PlayerOne, false, -1, member};
+        }
     }
-    return member_movement::ComponentPlayerType(reinterpret_cast<const void*>(component)) == *type
-               ? Involvement{Role::Victim, *type, member}
-               : Involvement{};
+    return {};
 }
 
-/// The game's damage call with player 2's answers held on this thread: the leader test's yes for player 2's type, and
-/// player 2's character for the summon gauge's leader read when it attacks. Both are put back in the __finally, which
-/// also runs when a structured exception unwinds through here (destructors would not, under /EHsc), so a thread never
-/// keeps a stale answer. No object here needs unwinding (the __try rule).
-std::uint64_t CallAsPlayer(DamageFn original, std::uint64_t component, std::uint64_t attacker, std::uint64_t hit,
-                           std::uint64_t damage, std::uint64_t e, int type, const void* attackerAnswer) noexcept
+/// Player 2's answers for one call, put back however it leaves.
+struct Held
 {
-    const int         outerType     = member_movement::ExchangeThreadLeaderAnswer(type);
-    const void* const outerAttacker = t_attacker;
-    t_attacker                      = attackerAnswer;  // null when player 2 is the victim (a nested call's own)
-    std::uint64_t result            = 0;
+    int         type;
+    const void* attacker;
+    Human       human;
+};
+
+Held Hold(const Involvement& who) noexcept
+{
+    const Held outer{member_movement::ExchangeThreadLeaderAnswer(who.type), t_attacker, t_human};
+    if (who.human != Human::PlayerTwo)
+    {
+        member_movement::ExchangeThreadLeaderAnswer(outer.type);  // player 1's calls keep any outer answer
+    }
+    t_attacker = who.human == Human::PlayerTwo && who.attacks ? who.member : nullptr;  // null: a nested call's own
+    t_human    = who.human;
+    return outer;
+}
+
+void Restore(const Held& outer) noexcept
+{
+    t_attacker = outer.attacker;
+    t_human    = outer.human;
+    member_movement::ExchangeThreadLeaderAnswer(outer.type);
+}
+
+/// The game's damage call with the call's answers held on this thread: for player 2, the leader test's yes for player
+/// 2's type and player 2's character for the summon gauge's leader read when it attacks; for either human, the
+/// reaction context. All put back in the __finally, which also runs when a structured exception unwinds through here
+/// (destructors would not, under /EHsc), so a thread never keeps a stale answer. No object here needs unwinding (the
+/// __try rule).
+std::uint64_t CallHolding(DamageFn original, std::uint64_t component, std::uint64_t attacker, std::uint64_t hit,
+                          std::uint64_t damage, std::uint64_t e, const Involvement& who) noexcept
+{
+    const Held    outer  = Hold(who);
+    std::uint64_t result = 0;
     __try
     {
         result = original(component, attacker, hit, damage, e);
     }
     __finally
     {
-        t_attacker = outerAttacker;
-        member_movement::ExchangeThreadLeaderAnswer(outerType);
+        Restore(outer);
     }
     return result;
+}
+
+const wchar_t* HumanText(Human human) noexcept
+{
+    return human == Human::PlayerTwo ? L"player 2's" : L"player 1's";
 }
 
 template <std::size_t I>
 std::uint64_t Damage(std::uint64_t component, std::uint64_t attacker, std::uint64_t hit, std::uint64_t damage,
                      std::uint64_t e) noexcept
 {
-    const auto        original = reinterpret_cast<DamageFn>(g_slots[I].Original());
-    const Involvement who      = Involved(component, attacker, I == kPlayerSlot);
-    if (who.role == Role::None)
+    const auto original = reinterpret_cast<DamageFn>(g_slots[I].Original());
+    if (!generation::OnGameThread())
     {
         return original(component, attacker, hit, damage, e);
     }
-    platform::LogDebug(L"player hits: player 2's character {} on {} {:#x}; player 2 counts as the player in this call",
-                       who.role == Role::Attacker ? L"hits" : L"is hit", kSlotNames[I], component);
-    return CallAsPlayer(original, component, attacker, hit, damage, e, who.type,
-                        who.role == Role::Attacker ? who.member : nullptr);
+    const Involvement who = Involved(component, attacker, I == kPlayerSlot);
+    if (who.human == Human::None)
+    {
+        return original(component, attacker, hit, damage, e);
+    }
+    if (who.human == Human::PlayerTwo)
+    {
+        platform::LogDebug(L"player hits: player 2's character {} on {} {:#x}; player 2 counts as the player in this "
+                           L"call",
+                           who.attacks ? L"hits" : L"is hit", kSlotNames[I], component);
+    }
+    else
+    {
+        platform::LogTrace(L"player hits: player 1's character {} on {} {:#x}; reactions aim at player 1",
+                           who.attacks ? L"hits" : L"is hit", kSlotNames[I], component);
+    }
+    return CallHolding(original, component, attacker, hit, damage, e, who);
 }
 
 /// The summon gauge's leader read: player 2's character while its hit is applied, else the game's leader.
@@ -179,6 +232,23 @@ std::uint64_t LeaderRead(std::uint64_t a, std::uint64_t b, std::uint64_t c, std:
     return reinterpret_cast<LeaderFn>(g_leaderRead.Original())(a, b, c, d);
 }
 
+/// One reaction-sensing event with the attacker's answers held (any thread). Five integer arguments, the fifth on the
+/// stack (the attack direction), all passed on.
+template <platform::CallRedirect& Call>
+std::uint64_t Sensing(std::uint64_t controller, std::uint64_t causer, std::uint64_t handle, std::uint64_t type,
+                      std::uint64_t direction) noexcept
+{
+    const auto        original = reinterpret_cast<DamageFn>(Call.Original());
+    const Involvement who      = Involved(0, causer, false);
+    if (who.human == Human::None)
+    {
+        return original(controller, causer, handle, type, direction);
+    }
+    platform::LogTrace(L"player hits: an enemy senses {} attack; {}", HumanText(who.human),
+                       who.human == Human::PlayerTwo ? L"player 2 counts as the player" : L"the game's own answers");
+    return CallHolding(original, controller, causer, handle, type, direction, who);
+}
+
 constexpr DamageFn kWrappers[kSlots] = {&Damage<0>, &Damage<1>, &Damage<2>, &Damage<3>, &Damage<4>,
                                         &Damage<5>, &Damage<6>, &Damage<7>, &Damage<8>, &Damage<9>};
 
@@ -186,17 +256,29 @@ constexpr DamageFn kWrappers[kSlots] = {&Damage<0>, &Damage<1>, &Damage<2>, &Dam
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    if (!member_movement::LeaderTestReplaced())
+    if (!member_movement::LeaderTestReplaced() || !equal_targeting::Installed())
     {
-        platform::Log(L"player hits: UNAVAILABLE (the leader-test slot is not the mod's); player 2's hits count as an "
-                      L"AI ally's");
+        platform::Log(L"player hits: UNAVAILABLE (the leader-test slot or equal targeting is not in place); player 2's "
+                      L"hits count as an AI ally's");
         return false;
     }
-    // The leader read first: it answers only inside a wrapped call, so it changes nothing until a slot is in place.
-    const auto site     = image.Rebase(kLeaderReadCall, 5);
     const auto resolver = platform::FindFunction(image, facts::kResolvePartyLeader);
-    const bool gauge    = site && resolver &&
+    g_resolveLeader     = resolver ? reinterpret_cast<ResolveFn>(*resolver) : nullptr;
+    // The redirects first: they answer only inside a held call, so they change nothing until a slot is in place.
+    const auto site  = image.Rebase(kLeaderReadCall, 5);
+    const bool gauge = site && resolver &&
                        g_leaderRead.Install(*site, *resolver, reinterpret_cast<std::uintptr_t>(&LeaderRead));
+    const auto sensingSite = image.Rebase(kSensingCall, 5);
+    const auto sensing     = image.Rebase(kSensing);
+    const auto takeSite    = image.Rebase(kTakeAbilityCall, 5);
+    const auto take        = image.Rebase(kTakeAbility);
+    // on_unreal_init: no world and no enemy exist yet, so no thread can be at the calls (InstallFromOwnThread's rule).
+    const bool senses =
+        sensingSite && sensing &&
+        g_sensing.InstallFromOwnThread(*sensingSite, *sensing, reinterpret_cast<std::uintptr_t>(&Sensing<g_sensing>));
+    const bool takes = takeSite && take &&
+                       g_takeAbility.InstallFromOwnThread(*takeSite, *take,
+                                                          reinterpret_cast<std::uintptr_t>(&Sensing<g_takeAbility>));
     g_on.store(true, std::memory_order_release);
     std::size_t slots = 0;
     for (std::size_t i = 0; i < kSlots; ++i)
@@ -210,22 +292,23 @@ bool Install(const platform::GameImage& image) noexcept
             platform::Log(L"player hits: the {} damage slot keeps the game's own answers", kSlotNames[i]);
         }
     }
-    if (slots == 0)
+    if (slots == 0 && !senses && !takes)
     {
         g_on.store(false, std::memory_order_release);
-        platform::Log(L"player hits: UNAVAILABLE (no damage slot could be replaced); player 2's hits count as an AI "
-                      L"ally's");
+        platform::Log(L"player hits: UNAVAILABLE (no damage slot or reaction call could be changed); player 2's hits "
+                      L"count as an AI ally's");
         return false;
     }
     platform::Log(L"player hits: player 2's hits and the hits player 2 takes count as the player's ({} of {} damage "
-                  L"slots); summon gauge at the player's rate {}",
-                  slots, kSlots, gauge ? L"on" : L"UNAVAILABLE (the leader read differs)");
+                  L"slots); summon gauge at the player's rate {}; reaction sensing {}",
+                  slots, kSlots, gauge ? L"on" : L"UNAVAILABLE (the leader read differs)",
+                  senses && takes ? L"on" : (senses || takes ? L"partly on" : L"UNAVAILABLE"));
     return true;
 }
 
 void Remove() noexcept
 {
-    g_on.store(false, std::memory_order_release);  // every damage call from now on keeps the game's own answers
+    g_on.store(false, std::memory_order_release);  // every call from now on keeps the game's own answers
     for (std::size_t i = 0; i < kSlots; ++i)
     {
         if (g_slots[i].Original() != 0 && !g_slots[i].Restore())
@@ -234,11 +317,18 @@ void Remove() noexcept
                           kSlotNames[i]);
         }
     }
-    if (g_leaderRead.IsInstalled() && !g_leaderRead.Restore())
+    for (auto* call : {&g_leaderRead, &g_sensing, &g_takeAbility})
     {
-        platform::Log(L"player hits: the summon gauge's leader read was changed after us; left in place (it passes "
-                      L"through)");
+        if (call->IsInstalled() && !call->Restore())
+        {
+            platform::Log(L"player hits: a redirected call was changed after us; left in place (it passes through)");
+        }
     }
+}
+
+Human HumanInCall() noexcept
+{
+    return t_human;
 }
 
 }  // namespace lss::player_two::player_hits

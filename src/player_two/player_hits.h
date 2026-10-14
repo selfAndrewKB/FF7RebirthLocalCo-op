@@ -19,7 +19,16 @@
 //
 // The ten damage slots (every vtable holding one of the seven damage functions) are replaced. Game thread only: every
 // root of the damage call found is the game thread (§14.3); a call on another thread passes straight through.
+//
+// The same answer is held when an enemy senses player 2's attack starting (OnReactionSensing and its TakeAbility
+// variant, whose argument is the attacking character; §16.4): any thread, since enemy AI may tick on workers.
+//
+// Each damage or reaction call also records which human it is about (the attacker, or the character hit), the
+// reaction context: player_two/target_coin answers an enemy's "who is the leader" with that player there (the user's
+// rule, 2026-10-14: a counter aims at the player who hit it), and with the enemy's coin everywhere else.
 // Logged: each call that held the answer and each summon-gauge answer (Debug), the install (Info).
+
+#include <cstdint>
 
 namespace lss::platform {
 class GameImage;
@@ -27,10 +36,20 @@ class GameImage;
 
 namespace lss::player_two::player_hits {
 
-/// Replaces the damage slots and places the summon gauge's leader-read redirect (logged). Needs member_movement's
-/// leader-test slot.
+/// Replaces the damage slots and places the summon gauge's leader-read and the reaction-sensing redirects (logged).
+/// Needs member_movement's leader-test slot. Call from on_unreal_init: one reaction-sensing call crosses a 16-byte block
+/// in both builds, which is safe to change only while no thread can be running it.
 bool Install(const platform::GameImage& image) noexcept;
 
 void Remove() noexcept;
+
+/// The human a damage or reaction call running on this thread is about.
+enum class Human : std::uint8_t
+{
+    None,  // outside such a call, or one between enemies and AI members
+    PlayerOne,
+    PlayerTwo,
+};
+Human HumanInCall() noexcept;
 
 }  // namespace lss::player_two::player_hits

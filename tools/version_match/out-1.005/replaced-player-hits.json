@@ -2,7 +2,7 @@
   "build": "1.005",
   "research_build": "1.004",
   "date": "2026-10-14",
-  "doc": "Rebirth/Documentation/research/RE-p2-enemy-target-bias.md sections 13-14 (S-BPEVENT, S-DMGEDGE)",
+  "doc": "Rebirth/Documentation/research/RE-p2-enemy-target-bias.md sections 13-16 (S-BPEVENT, S-DMGEDGE)",
   "facts": [
     {"name": "BattleCtrlComp_ApplyTakeDamage_FireAIEvents (the damage slot's base)", "old": "0x1418E6AC8", "new": "0x14152024C", "bytes": "405553", "same_semantics": true, "confidence": "CONFIRMED", "note": "Read from both databases (2026-10-14): 8 pushes, lea rbp; frame 0x338/0x398 differs from byte 17. Slot +0x380 in 1.004, +0x388 in 1.005."},
     {"name": "EnemyBattleComp_Vt380_OnTakeDamage (Enemy override: stagger/ATB pre-code, base, summon gauge)", "old": "0x140CB40D4", "new": "0x1412E1DE8", "bytes": "488bc4", "same_semantics": true, "confidence": "CONFIRMED", "note": "First 24 bytes identical in both (48 8B C4 48 89 58 08 ...). Calls ATBGauge_AddOnHit (1.005 0x1412E086C), the base, the summon gauge (0x1412E190C)."},
@@ -21,6 +21,10 @@
     {"name": "slot: Summon battle component damage slot", "old": "0x145902A48", "new": "0x14576FCA8", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "0x1459026C8+0x380 / 0x14576F920+0x388."},
     {"name": "slot: CondorFort battle component damage slot", "old": "0x1466B87F8", "new": "0x146545818", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "0x1466B8478+0x380 / 0x146545490+0x388."},
     {"name": "slot: Battle2 battle component damage slot", "old": "0x1466B7F08", "new": "0x146544FF8", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "0x1466B7B88+0x380 / 0x146544C70+0x388."},
-    {"name": "EnemyBattleComp_SummonGauge_AddOnHit_LeaderPtr: call ResolvePartyLeaderWeakPtr (call redirect)", "old": "0x140CB3D51", "new": "0x1412E19B1", "bytes": "e8", "same_semantics": true, "confidence": "CONFIRMED", "note": "1.004 E8 BA D4 DA FF -> 0x140A61210, 1.005 E8 F2 2F 48 FF -> 0x1407649A8. Inside one 16-byte block in both; no branch lands inside the 5 bytes. The function's only leader read."}
+    {"name": "EnemyBattleComp_SummonGauge_AddOnHit_LeaderPtr: call ResolvePartyLeaderWeakPtr (call redirect)", "old": "0x140CB3D51", "new": "0x1412E19B1", "bytes": "e8", "same_semantics": true, "confidence": "CONFIRMED", "note": "1.004 E8 BA D4 DA FF -> 0x140A61210, 1.005 E8 F2 2F 48 FF -> 0x1407649A8. Inside one 16-byte block in both; no branch lands inside the 5 bytes. The function's only leader read."},
+    {"name": "AIBrainReactionSensing_Vt20_Tick: call OnReactionSensingInvoke (call redirect)", "old": "0x1409B7A91", "new": "0x140A58971", "bytes": "e8", "same_semantics": true, "confidence": "CONFIRMED", "note": "1.004 E8 F6 77 DB 00 -> 0x14176F28C, 1.005 E8 6A FD D9 00 -> 0x1417F86E0; offset 1 in its block in both; no branch inside."},
+    {"name": "EnemyAICtrl_Event_OnReactionSensingInvoke", "old": "0x14176F28C", "new": "0x1417F86E0", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "Address only: the redirect's expected target."},
+    {"name": "AIBrainReactionSensing_Vt20_Tick: call OnReactionSensingTakeAbilityInvoke (call redirect, crosses a block)", "old": "0x1409B7ACF", "new": "0x140A589AF", "bytes": "e8", "same_semantics": true, "confidence": "CONFIRMED", "note": "1.004 E8 34 F5 DF 00 -> 0x1417B7008, 1.005 E8 08 85 DF 00 -> 0x141850EBC; offset 15 in both (InstallFromOwnThread at on_unreal_init); no branch inside."},
+    {"name": "EnemyAICtrl_Event_OnReactionSensingTakeAbilityInvoke", "old": "0x1417B7008", "new": "0x141850EBC", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "Address only: the redirect's expected target."}
   ]
 }
