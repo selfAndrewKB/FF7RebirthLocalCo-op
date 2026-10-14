@@ -41,6 +41,14 @@ void Withdraw() noexcept
     g_active.store(false);
 }
 
+void End() noexcept
+{
+    g_active.store(false);
+    g_playerOne.store(nullptr);
+    g_playerTwo.store(nullptr);
+    g_member.store(nullptr);
+}
+
 void Fault(const wchar_t* reason) noexcept
 {
     g_active.store(false);

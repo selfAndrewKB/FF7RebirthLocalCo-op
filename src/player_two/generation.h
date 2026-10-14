@@ -22,6 +22,11 @@ void SetMember(void* member) noexcept;
 /// Ends the generation: from now on every wrapper passes through.
 void Withdraw() noexcept;
 
+/// After player 2's removal: also forgets the controllers and the member, as before the first join.
+/// The removed controller is freed by the next garbage collection (RE-p2-controller-after-leave.md,
+/// S-PC2LEAK2), so no reader may still find it here.
+void End() noexcept;
+
 /// Withdraws the generation and records `reason` (a string literal). Only the first reason is kept.
 void Fault(const wchar_t* reason) noexcept;
 

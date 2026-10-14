@@ -950,7 +950,7 @@ void Session::Forget() noexcept
     lock_on::PlayerTwoOut();
     rumble_list_two::PlayerTwoOut();  // stops player 2's channels while player 2 can still be the primary player
     ffb_manager_two::PlayerTwoOut();
-    generation::Withdraw();
+    generation::End();  // player 2 is removed: its controller is freed at the next collection
     primary_controller::Unbind();
     leave_.Finish();
     phase_               = Phase::Out;
