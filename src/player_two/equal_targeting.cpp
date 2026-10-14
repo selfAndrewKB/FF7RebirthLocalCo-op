@@ -139,8 +139,9 @@ Answer AnswerFor(void* selector) noexcept
 std::uint64_t CallHolding(SelectFn select, std::uint64_t selector, std::uint64_t reason, std::uint64_t out,
                           std::uint64_t d, Answer* answer, int onlyType) noexcept
 {
+    // Both set unconditionally: an untouched select nested in an answered one must not inherit the outer's leader test.
     Answer* const outer     = t_answer;
-    const int     outerOnly = onlyType != kNoType ? member_movement::ExchangeThreadOnlyLeader(onlyType) : kNoType;
+    const int     outerOnly = member_movement::ExchangeThreadOnlyLeader(onlyType);
     t_answer                = answer;
     std::uint64_t result    = 0;
     __try
@@ -150,10 +151,7 @@ std::uint64_t CallHolding(SelectFn select, std::uint64_t selector, std::uint64_t
     __finally
     {
         t_answer = outer;
-        if (onlyType != kNoType)
-        {
-            member_movement::ExchangeThreadOnlyLeader(outerOnly);
-        }
+        member_movement::ExchangeThreadOnlyLeader(outerOnly);
     }
     return result;
 }

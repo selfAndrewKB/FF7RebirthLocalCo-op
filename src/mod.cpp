@@ -218,6 +218,10 @@ public:
             Log(L"unloading with player 2 still in: the per-player rendering and player 2's stages stay installed");
             return;
         }
+        // Before the stages: the Condition selects stop taking the equal-targeting answer while member_movement's
+        // leader-test slot (which answers half of it) is still in place (the reverse of the install order).
+        lss::player_two::target_census::Remove();
+        lss::player_two::equal_targeting::Remove();
         if (session_)
         {
             session_->RemoveStages();
@@ -242,8 +246,6 @@ public:
         lss::player_two::rumble_list_two::Remove();
         lss::player_two::audio_listener_two::Remove();
         lss::player_two::traversal_watch::Remove();
-        lss::player_two::target_census::Remove();
-        lss::player_two::equal_targeting::Remove();
         lss::player_two::vault_camera::Remove();
         lss::hud::target_views::Remove();
         lss::hud::area_icons_two::Remove();
