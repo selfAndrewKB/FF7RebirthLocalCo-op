@@ -9,6 +9,7 @@
 #include "platform/vtable_entry.h"
 #include "player_two/describe.h"
 #include "player_two/engine_facts.h"
+#include "player_two/equal_targeting.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 #include "player_two/object_fields.h"
@@ -116,8 +117,8 @@ constexpr std::uint32_t kSelFinal        = 0x17C;  // FWeakObjectPtr: after lock
 constexpr std::uint32_t kHateInline = 0x188, kHateHeap = 0x5C0, kHateNum = 0x5C8, kHatePair = 72, kHateChosen = 0x620;
 // Condition selector: the history of picks, u8 last kind (0 UCPC, 1 AIPC, 3 none) and int run count.
 constexpr std::uint32_t kCondLastKind = 0x1E0, kCondRunCount = 0x1E4;
-// Party manager: the leader (FWeakObjectPtr) and the leader type the Condition select reads as "the UCPC".
-constexpr std::uint32_t kPartyLeader = 0x148, kPartyLeaderType = 0x150;
+// Party manager: the leader (FWeakObjectPtr), player 1's character.
+constexpr std::uint32_t kPartyLeader = 0x148;
 // Lock group (a TMap value; its FName key is 8 bytes before it).
 constexpr std::int32_t  kGroupName = -8;
 constexpr std::uint32_t kGroupMembersNum = 0x08, kGroupMaxEach = 0x20, kGroupPrioritize = 0x24, kGroupPriority = 0x25;
@@ -179,6 +180,7 @@ struct Tally
     std::atomic<std::uint32_t> draws[3]{};                     // Condition draws by element class: UCPC, AIPC, ALL
     std::atomic<std::uint32_t> groupPicks{0}, prioritizedWhose[kWhose]{};
     std::atomic<std::uint32_t> selectors[kKinds + 1]{};  // new selectors by kind
+    std::atomic<std::uint32_t> ucpc[3][4]{};  // Condition selects that read the UCPC: by ucpc_choice::Ucpc and Why
 };
 Tally                     g_tally;
 std::atomic<std::int64_t> g_windowStart{0};  // steady_clock ticks; 0: no window yet
@@ -192,7 +194,7 @@ struct Frame
     bool         selected     = false;  // the select ran
     std::uint8_t selectResult = 0;
     void*        selectOut    = nullptr;
-    std::uint8_t leaderType   = 0xFF;  // Condition: the type it read as "the UCPC"
+    equal_targeting::Answer ucpc;      // Condition: who it counted as "the UCPC"
     std::uint8_t draws        = 0;
     std::uint8_t drawClass[4]{};       // Condition: each drawn element's CharacterType, ConditionType
     std::uint8_t drawCondition[4]{};
@@ -306,18 +308,30 @@ void MaybeSummarize() noexcept
         stages[i] = Take(t.stages[i]);
     }
     const auto decisions = Take(t.decisions), off = Take(t.offGameThread), picks = Take(t.groupPicks);
-    const auto ucpc = Take(t.draws[0]), aipc = Take(t.draws[1]), all = Take(t.draws[2]);
+    const auto ucpcDraws = Take(t.draws[0]), aipc = Take(t.draws[1]), all = Take(t.draws[2]);
     const auto newHate = Take(t.selectors[0]), newCond = Take(t.selectors[1]), newNone = Take(t.selectors[2]),
                newOther = Take(t.selectors[3]);
+    std::uint32_t ucpc[3][4]{};
+    for (std::size_t u = 0; u < 3; ++u)
+    {
+        for (std::size_t w = 0; w < 4; ++w)
+        {
+            ucpc[u][w] = Take(t.ucpc[u][w]);
+        }
+    }
+    // Rows: Untouched, PlayerOne, PlayerTwo; columns: NoPlayerTwo, Coin, OnlyEligible, NeitherEligible.
+    const auto untouched = ucpc[0][0] + ucpc[0][1] + ucpc[0][2] + ucpc[0][3];
     platform::Log(L"target census (last {} s): {} decision(s) ({} off the game thread); targets: player 1's character {}, "
                   L"player 2's member {}, AI party {}, other {}, none {}; chosen by select {}, lock {}, redirect {}, "
                   L"decoy {}, kept {}; by kind (P1/P2/AI): Hate {}/{}/{}, Condition {}/{}/{}, None {}/{}/{}; Condition "
-                  L"draws UCPC {}, AIPC {}, ALL {}; lock-group picks {} (prioritising the UCPC: P1 {}, P2 {}, AI {}); new "
-                  L"selectors Hate {}, Condition {}, None {}, unknown {}",
+                  L"draws UCPC {}, AIPC {}, ALL {}; Condition UCPC: player 1 by coin {}, alone eligible {}, neither "
+                  L"eligible {}, player 2 by coin {}, alone eligible {}, game's own {}; lock-group picks {} (prioritising "
+                  L"the UCPC: P1 {}, P2 {}, AI {}); new selectors Hate {}, Condition {}, None {}, unknown {}",
                   std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::duration(now - start)).count(),
                   decisions, off, whose[0], whose[1], whose[2], whose[3], whose[4], stages[0], stages[1], stages[2],
                   stages[3], stages[4], kinds[0][0], kinds[0][1], kinds[0][2], kinds[1][0], kinds[1][1], kinds[1][2],
-                  kinds[2][0], kinds[2][1], kinds[2][2], ucpc, aipc, all, picks, prioritized[0], prioritized[1],
+                  kinds[2][0], kinds[2][1], kinds[2][2], ucpcDraws, aipc, all, ucpc[1][1], ucpc[1][2], ucpc[1][3],
+                  ucpc[2][1], ucpc[2][2], untouched, picks, prioritized[0], prioritized[1],
                   prioritized[2], newHate, newCond, newNone, newOther);
 }
 
@@ -452,19 +466,30 @@ std::uint64_t Select(std::uint64_t selector, std::uint64_t reason, std::uint64_t
 {
     auto* const self  = reinterpret_cast<void*>(selector);
     Frame*      frame = FrameFor(self);
-    if constexpr (K == Kind::Condition)
-    {
-        if (frame != nullptr)
-        {
-            frame->leaderType = ReadField<std::uint8_t>(PartyManager(), kPartyLeaderType);
-        }
-    }
+    const auto  original = reinterpret_cast<Fn>(g_selectSlots[static_cast<std::size_t>(K)].Original());
     if constexpr (K == Kind::Hate)
     {
         LogHateTable(self);
     }
-    const auto result =
-        reinterpret_cast<Fn>(g_selectSlots[static_cast<std::size_t>(K)].Original())(selector, reason, out, d);
+    std::uint64_t result = 0;
+    if constexpr (K == Kind::Condition)
+    {
+        // Who this select counts as the UCPC (player_two/equal_targeting), held for the game's select only.
+        equal_targeting::Answer ucpc;
+        result = equal_targeting::RunSelect(original, selector, reason, out, d, ucpc);
+        if (ucpc.read)
+        {
+            Count(g_tally.ucpc[static_cast<std::size_t>(ucpc.choice.ucpc)][static_cast<std::size_t>(ucpc.choice.why)]);
+        }
+        if (frame != nullptr)
+        {
+            frame->ucpc = ucpc;
+        }
+    }
+    else
+    {
+        result = original(selector, reason, out, d);
+    }
     if (frame != nullptr)
     {
         frame->kind         = K;
@@ -513,6 +538,24 @@ int LockHolding(const void* selector, const void* target) noexcept
         }
     }
     return -1;
+}
+
+/// Who a Condition select counted as the UCPC, for the decision's line.
+std::wstring UcpcText(const equal_targeting::Answer& answer)
+{
+    using ucpc_choice::Ucpc;
+    using ucpc_choice::Why;
+    if (!answer.read)
+    {
+        return L"no candidates built";
+    }
+    if (answer.choice.ucpc == Ucpc::Untouched)
+    {
+        return L"the game's own (no player 2 member)";
+    }
+    constexpr const wchar_t* kWhy[] = {L"", L"coin", L"only one eligible", L"neither eligible"};
+    return std::format(L"{} type {} ({})", answer.choice.ucpc == Ucpc::PlayerTwo ? L"player 2's member" : L"player 1's",
+                       answer.type, kWhy[static_cast<std::size_t>(answer.choice.why)]);
 }
 
 std::wstring Draws(const Frame& frame) noexcept
@@ -589,8 +632,8 @@ std::uint64_t Decide(std::uint64_t selector, std::uint64_t reason, std::uint64_t
         }
         else if (frame.kind == Kind::Condition && frame.selected)
         {
-            detail = std::format(L"; Condition {} (UCPC = type {}; draws: {}; history: last {} x{})",
-                                 frame.selectResult != 0 ? L"picked" : L"kept the current target", frame.leaderType,
+            detail = std::format(L"; Condition {} (UCPC: {}; draws: {}; history: last {} x{})",
+                                 frame.selectResult != 0 ? L"picked" : L"kept the current target", UcpcText(frame.ucpc),
                                  Draws(frame), ReadField<std::uint8_t>(self, kCondLastKind),
                                  ReadField<std::int32_t>(self, kCondRunCount));
         }
@@ -655,7 +698,7 @@ void Install(const platform::GameImage& image) noexcept
     g_applied          = reinterpret_cast<AppliedFn>(find(kApplied));
     if (g_partyManager == 0 || g_hateType == nullptr || g_applied == nullptr || !leader_scope::Install(image))
     {
-        platform::Log(L"target census (logging only): UNAVAILABLE (a check failed)");
+        platform::Log(L"target census: UNAVAILABLE (a check failed); Condition enemies keep the game's own UCPC");
         return;
     }
     // The selects first, the decision last: a decision never runs before the selects can report to it.
@@ -680,11 +723,15 @@ void Install(const platform::GameImage& image) noexcept
         decide && image.BytesMatch(kDecide, kDecideBytes) &&
         g_decide.Install(*decide, image.EntryInstruction(kDecide, std::span(kDecideBytes).first(kDecideFirst)),
                          reinterpret_cast<std::uintptr_t>(&Decide));
-    platform::Log(L"target census (logging only): decisions {}, selects {} of 3, Condition draws {}, lock-group picks {}, "
-                  L"new selectors {}",
+    // The Condition select's slot is the one place the equal-targeting answer is held (player_two/equal_targeting).
+    const bool equal =
+        g_selectSlots[static_cast<std::size_t>(Kind::Condition)].Original() != 0 && equal_targeting::Installed();
+    platform::Log(L"target census: decisions {}, selects {} of 3, Condition draws {}, lock-group picks {}, new selectors "
+                  L"{}; Condition selects {}",
                   decisions ? L"watched" : L"NOT watched", selects, draws ? L"watched" : L"NOT watched",
                   repicks && firsts ? L"watched" : (repicks || firsts ? L"partly watched" : L"NOT watched"),
-                  creation ? L"watched" : L"NOT watched");
+                  creation ? L"watched" : L"NOT watched",
+                  equal ? L"hold the equal-targeting answer" : L"keep the game's own UCPC (equal targeting NOT held)");
 }
 
 void Remove() noexcept
