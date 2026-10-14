@@ -17,6 +17,7 @@ public static class LssKeys {
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hwnd);
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hwnd, int cmd);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr FindWindow(string cls, string title);
     [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
     // Windows lets a process take the foreground right after it has sent input; an Alt tap is the
     // least disruptive input to send (it opens no menu in a game window).
@@ -41,9 +42,10 @@ $scan = @{ Enter = @(0x1C, $false); Escape = @(0x01, $false); Space = @(0x39, $f
            F4 = @(0x3E, $false); F5 = @(0x3F, $false); F6 = @(0x40, $false); F7 = @(0x41, $false); F8 = @(0x42, $false)
            F9 = @(0x43, $false) }
 $ctrl = @(0x1D, $false)  # left Ctrl; "Ctrl+<key>" holds it around the key (the mod's switches are Ctrl+F4..F9)
-$game = Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -eq $Title } | Select-Object -First 1
-if (-not $game) { throw "no window titled '$Title'" }
-$hwnd = $game.MainWindowHandle
+# By title, not the process's main window: with the UE4SS console open, Windows can report the
+# console as the game process's main window.
+$hwnd = [LssKeys]::FindWindow([NullString]::Value, $Title)  # $null would reach it as "" (a class name)
+if ($hwnd -eq [IntPtr]::Zero) { throw "no window titled '$Title'" }
 [void][LssKeys]::ShowWindow($hwnd, 9)
 [void][LssKeys]::Focus($hwnd)
 Start-Sleep -Milliseconds 300
