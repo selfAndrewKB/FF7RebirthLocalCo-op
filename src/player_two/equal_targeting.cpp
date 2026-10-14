@@ -265,4 +265,26 @@ std::uint64_t RunSelect(SelectFn select, std::uint64_t selector, std::uint64_t r
                        answer.choice.ucpc == ucpc_choice::Ucpc::Untouched ? kNoType : answer.type);
 }
 
+std::optional<PlayerTypes> Types() noexcept
+{
+    const auto types = g_types.load(std::memory_order_relaxed);
+    if (types == kNoTypes || !g_on.load(std::memory_order_acquire))
+    {
+        return std::nullopt;
+    }
+    return PlayerTypes{static_cast<std::uint8_t>(types & 0xFF), static_cast<std::uint8_t>(types >> 8)};
+}
+
+Answer ChooseFor(void* selector) noexcept
+{
+    return AnswerFor(selector);
+}
+
+bool PlayerTwoEligible(void* selector) noexcept
+{
+    const auto  types  = Types();
+    const void* member = generation::Member();
+    return selector != nullptr && types && member != nullptr && Eligible(selector, types->two, member);
+}
+
 }  // namespace lss::player_two::equal_targeting

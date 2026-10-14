@@ -25,6 +25,7 @@
 #include "player_two/ucpc_choice.h"
 
 #include <cstdint>
+#include <optional>
 
 namespace lss::platform {
 class GameImage;
@@ -61,5 +62,22 @@ using SelectFn = std::uint64_t (*)(std::uint64_t selector, std::uint64_t reason,
 /// through it. Any thread.
 std::uint64_t RunSelect(SelectFn select, std::uint64_t selector, std::uint64_t reason, std::uint64_t out,
                         std::uint64_t d, Answer& answer) noexcept;
+
+/// Both players' player types as Tick last saw them: player 1's (the leader's) and player 2's member's. Empty without
+/// player 2's member (or before Install). Any thread.
+struct PlayerTypes
+{
+    std::uint8_t one = 16;
+    std::uint8_t two = 16;
+};
+std::optional<PlayerTypes> Types() noexcept;
+
+/// Who an enemy with target selector `selector` counts as the player, by the rule of a Condition select: each player's
+/// character must be a candidate for that selector, a coin when both are. For player_two/target_coin's coin per enemy
+/// action. Untouched without player 2. Any thread.
+Answer ChooseFor(void* selector) noexcept;
+
+/// Whether player 2's member is still a candidate for `selector` (the same rule). Any thread.
+bool PlayerTwoEligible(void* selector) noexcept;
 
 }  // namespace lss::player_two::equal_targeting
