@@ -77,6 +77,7 @@
 #include "player_two/target_census.h"
 #include "player_two/equal_targeting.h"
 #include "player_two/player_hits.h"
+#include "player_two/leader_reads.h"
 #include "player_two/lock_group_coin.h"
 #include "player_two/target_coin.h"
 #include "player_two/traversal_camera.h"
@@ -221,6 +222,7 @@ public:
             Log(L"unloading with player 2 still in: the per-player rendering and player 2's stages stay installed");
             return;
         }
+        lss::player_two::leader_reads::Remove();     // first: no enemy leader-read answer is held from here on
         lss::player_two::lock_group_coin::Remove();  // first: no lock-group answer is held from here on
         // Before the stages: the Condition selects stop taking the equal-targeting answer while member_movement's
         // leader-test slot (which answers half of it) is still in place (the reverse of the install order).
@@ -427,6 +429,7 @@ public:
         lss::player_two::player_hits::Install(*image);     // player 2's hits and the hits player 2 takes count as the player's
         lss::player_two::target_coin::Install(*image);     // each enemy aims at player 1 or 2, a coin per action
         lss::player_two::lock_group_coin::Install(*image);  // lock groups (Stun Ray) prefer player 1 or 2 by each pick's coin
+        lss::player_two::leader_reads::Install(*image);     // the game's own leader reads for an enemy follow its coin
         lss::hud::InstallPlayerTwoPass(*image);      // player 2's HUD content, on (the hud-levers command switches it)
         lss::hud::InstallRootOverlayRender(*image);  // before the overlay renders: placement follow, trace
         lss::hud::prompt_rows::Install(*image);      // each player's field prompt rows in their own half

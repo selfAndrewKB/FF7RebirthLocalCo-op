@@ -49,6 +49,24 @@ void Tick() noexcept;
 /// enemy controller; the caller must already have checked that `controller` is a live object). Any thread.
 int TossForLockPick(const void* controller) noexcept;
 
+/// `enemy`'s AI controller, only when the controller's own enemy pointer names `enemy` back (the game's path to it:
+/// character +0x588; RE-p2-enemy-target-bias.md §18.2). Null on any mismatch. Guarded reads; any thread.
+const void* ControllerOfEnemy(const void* enemy) noexcept;
+
+/// `controller` itself when its enemy character's controller pointer names it back, else null. Any thread.
+const void* CheckedController(const void* controller) noexcept;
+
+/// The coin `controller` holds now, for a native read of "the player" made for that enemy (RE-p2-leader-native-reads.md
+/// S-LEADERLEVERS): tossed if it has none, tossed again if it names player 2 and player 2 is no longer a candidate
+/// (the blueprint answers' rule). 2 player 2, 1 player 1, 0 none (off, no player 2, or not an enemy controller; the
+/// caller must already have checked that `controller` is a live object). Any thread.
+int CoinFor(const void* controller) noexcept;
+
+/// `to` takes the coin `from` holds now (a combination's partner aims where its initiator does), until its own next
+/// decision. Nothing if `from` holds none or `to` is not an enemy controller (both must be checked live objects).
+/// Any thread.
+void ShareCoin(const void* from, const void* to) noexcept;
+
 /// After a lock-group pick whose coin named player 2 locked onto someone else (player 2 could not take it, so the
 /// game's own player-1 term decided): `controller`'s coin becomes player 1, so its blueprint answers agree with the
 /// game's single-player view of that pick. Any thread; nothing if the coin is no longer player 2.

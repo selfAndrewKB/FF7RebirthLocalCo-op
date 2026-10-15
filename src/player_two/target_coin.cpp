@@ -12,8 +12,10 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
+#include "player_two/engine_facts.h"
 #include "player_two/equal_targeting.h"
 #include "player_two/generation.h"
+#include "player_two/leader_scope.h"
 #include "player_two/member_movement.h"
 #include "player_two/object_fields.h"
 #include "player_two/player_hits.h"
@@ -171,25 +173,29 @@ std::size_t Find(std::uintptr_t key) noexcept
     return kNoSlot;
 }
 
-/// Where a new coin for `key` goes: its own slot, else an empty one, else the one tossed longest ago.
-std::size_t Place(std::uintptr_t key) noexcept
+/// Where a new coin for `key` goes: its own slot, else an empty one, else the one tossed longest ago (never `keep`).
+std::size_t Place(std::uintptr_t key, std::size_t keep = kNoSlot) noexcept
 {
     if (const std::size_t own = Find(key); own != kNoSlot)
     {
         return own;
     }
     const std::uint32_t now    = Seconds();
-    std::size_t         oldest = SlotOf(key, 0);
+    std::size_t         oldest = kNoSlot;
     std::uint32_t       age    = 0;
     for (std::size_t probe = 0; probe < kProbe; ++probe)
     {
         const std::size_t slot = SlotOf(key, probe);
+        if (slot == keep)
+        {
+            continue;
+        }
         if (g_coins[slot].load(std::memory_order_relaxed) == 0)
         {
             return slot;
         }
         const std::uint32_t slotAge = now - g_tossedAt[slot].load(std::memory_order_relaxed);
-        if (slotAge >= age)
+        if (oldest == kNoSlot || slotAge >= age)
         {
             age    = slotAge;
             oldest = slot;
@@ -523,6 +529,72 @@ int TossForLockPick(const void* controller) noexcept
         break;
     }
     return 0;
+}
+
+const void* ControllerOfEnemy(const void* enemy) noexcept
+{
+    const auto* const controller = static_cast<const std::byte*>(ReadPointer(enemy, facts::kCharacterRetainedAi));
+    return controller != nullptr && enemy != nullptr &&
+                   leader_scope::ObjectAt(controller + facts::kEnemyControllerCharacter) == enemy
+               ? controller
+               : nullptr;
+}
+
+const void* CheckedController(const void* controller) noexcept
+{
+    const void* const enemy =
+        controller != nullptr
+            ? leader_scope::ObjectAt(static_cast<const std::byte*>(controller) + facts::kEnemyControllerCharacter)
+            : nullptr;
+    return enemy != nullptr && ReadPointer(enemy, facts::kCharacterRetainedAi) == controller ? controller : nullptr;
+}
+
+int CoinFor(const void* controller) noexcept
+{
+    const auto* const object     = static_cast<const RC::Unreal::UObject*>(controller);
+    const auto* const enemyClass = g_enemyClass.load(std::memory_order_acquire);
+    if (!Tossing() || object == nullptr || enemyClass == nullptr || !object->IsA(enemyClass))
+    {
+        return 0;
+    }
+    switch (CoinOf(controller))
+    {
+    case Player::One:
+        return 1;
+    case Player::Two:
+        return 2;
+    case Player::None:
+        break;
+    }
+    return 0;
+}
+
+void ShareCoin(const void* from, const void* to) noexcept
+{
+    const auto* const object     = static_cast<const RC::Unreal::UObject*>(to);
+    const auto* const enemyClass = g_enemyClass.load(std::memory_order_acquire);
+    if (!Tossing() || from == nullptr || to == nullptr || from == to || enemyClass == nullptr ||
+        !object->IsA(enemyClass))
+    {
+        return;
+    }
+    const auto        fromKey = reinterpret_cast<std::uintptr_t>(from);
+    const std::size_t found   = Find(fromKey);
+    const auto        held    = found == kNoSlot ? 0 : g_coins[found].load(std::memory_order_relaxed);
+    if ((held & ~kCoinMask) != fromKey || (held & kCoinMask) == 0)
+    {
+        return;
+    }
+    // The partner's own rule still holds: player 2 only while player 2's character is a candidate for its selector.
+    const bool        two   = (held & kCoinMask) == 2 && equal_targeting::PlayerTwoEligible(SelectorOf(to));
+    const auto        toKey = reinterpret_cast<std::uintptr_t>(to);
+    const std::size_t slot  = Place(toKey, found);  // never evicting `from`'s own coin
+    g_tossedAt[slot].store(Seconds(), std::memory_order_relaxed);
+    g_coins[slot].store(toKey | (two ? 2u : 1u), std::memory_order_relaxed);
+    platform::LogDebug(L"target coin: enemy {:#x} takes enemy {:#x}'s coin, player {}, until its next action "
+                       L"(combination partner{})",
+                       toKey, fromKey, two ? 2 : 1,
+                       (held & kCoinMask) == 2 && !two ? L"; player 2 is not a candidate for it" : L"");
 }
 
 void LockPickFellBack(const void* controller) noexcept

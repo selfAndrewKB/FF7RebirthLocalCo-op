@@ -36,10 +36,6 @@ constexpr std::uintptr_t kRebalance     = 0x1431DAD5C;  // LockGroup_RebalanceLe
 constexpr std::uint32_t kGroupMembers = 0x00, kGroupMembersNum = 0x08, kGroupPrioritize = 0x24;
 constexpr std::uint32_t kMemberSize = 20, kMemberEnemy = 0x00, kMemberTarget = 0x08;
 constexpr std::int32_t  kMemberCap  = 64;  // more members than this: not the layout we know
-// Enemy character → its AI controller the way the game reaches it for the lock slot (interface +0x4B8, vt +0x1C8,
-// which reads facts::kCharacterRetainedAi), and the controller's own FWeakObjectPtr back to its enemy (both builds).
-constexpr std::uint32_t kEnemyController = facts::kCharacterRetainedAi;
-constexpr std::uint32_t kControllerEnemy = facts::kEnemyControllerCharacter;
 
 using CallFn    = std::uint64_t (*)(std::uint64_t, std::uint64_t, std::uint64_t, std::uint64_t);
 using ResolveFn = void* (*)();
@@ -110,14 +106,6 @@ const std::byte* PickedFor(const void* group) noexcept
         }
     }
     return nullptr;
-}
-
-/// `enemy`'s AI controller, only when the controller's own enemy pointer names `enemy` back (so the object is checked
-/// before anything calls into it).
-const void* ControllerOf(const void* enemy) noexcept
-{
-    const auto* const controller = static_cast<const std::byte*>(ReadPointer(enemy, kEnemyController));
-    return controller != nullptr && leader_scope::ObjectAt(controller + kControllerEnemy) == enemy ? controller : nullptr;
 }
 
 /// Records whether `group`'s rebalance holds player 2 now; true when that changed (and could be recorded).
@@ -262,7 +250,7 @@ std::uint64_t Pick(PickFn pick, std::uint64_t group, std::uint64_t out, std::uin
     }
     const std::byte* const member     = PickedFor(self);
     const void* const      enemy      = member != nullptr ? leader_scope::ObjectAt(member + kMemberEnemy) : nullptr;
-    const void* const      controller = ControllerOf(enemy);
+    const void* const      controller = target_coin::ControllerOfEnemy(enemy);  // checked before anything calls into it
     const int              coin       = controller != nullptr ? target_coin::TossForLockPick(controller) : 0;
     if (coin != 2)
     {
