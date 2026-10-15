@@ -96,7 +96,7 @@ bool                                 g_capSaid        = false;  // the walk met 
 
 struct Counts
 {
-    std::uint32_t updates = 0, entriesTwo = 0, entriesOne = 0, cutsTwo = 0, cutsOne = 0, lists = 0;
+    std::uint32_t updates = 0, entriesTwo = 0, entriesOne = 0, cutsTwo = 0, cutsOne = 0, lists = 0, onlyTwo = 0;
 };
 Counts            g_counts;
 Clock::time_point g_statusAt{};
@@ -341,13 +341,17 @@ PlayerTwoUpdate::~PlayerTwoUpdate()
         {
             activeTwo[activeTwoCount++] = entry;
         }
-        // Entries still in the list after player 2's update get player 1's byte back; one the update removed is not
-        // touched (the walk finds only live entries).
+        // Entries still in the list after player 2's update hold "active on either camera": the readers outside the
+        // updates (the stop by id, which defers the end of a sequence some camera still plays; the battle system's
+        // post-tick) then see a sequence player 2 plays as playing, as solo sees the one camera's (S-ATKCAMVERIFY 2e).
+        // One the update removed is not touched (the walk finds only live entries).
+        const auto two = ReadField<std::uint8_t>(entry, kEntryActive);
         for (std::size_t i = 0; i < g_flagCount; ++i)
         {
             if (SameEntry(g_flags[i], entry))
             {
-                WriteField<std::uint8_t>(entry, kEntryActive, g_flags[i].active);
+                WriteField<std::uint8_t>(entry, kEntryActive, (g_flags[i].active != 0 || two != 0) ? 1 : 0);
+                g_counts.onlyTwo += g_flags[i].active == 0 && two != 0 ? 1 : 0;
                 break;
             }
         }
@@ -382,9 +386,9 @@ void Tick() noexcept
         return;
     }
     platform::LogDebug(L"attack cameras (10 s): player 2's updates with its own sequence state {}; sequences started on "
-                       L"player 1's camera {}, on player 2's {}; shot cuts on player 2's camera {}, player 1's {}; lists "
-                       L"seeded {}",
-                       c.updates, c.entriesOne, c.entriesTwo, c.cutsTwo, c.cutsOne, c.lists);
+                       L"player 1's camera {}, on player 2's {}; entry-frames active on player 2's camera only {}; shot cuts on "
+                       L"player 2's camera {}, player 1's {}; lists seeded {}",
+                       c.updates, c.entriesOne, c.entriesTwo, c.onlyTwo, c.cutsTwo, c.cutsOne, c.lists);
 }
 
 }  // namespace lss::player_two::attack_cameras

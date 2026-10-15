@@ -14,8 +14,9 @@
 //   - each entry's active byte (+0x14), which code outside the updates reads (a stop by id, the leader change, the Menu
 //     operator): after both updates it held player 2's view.
 // A PlayerTwoUpdate around player 2's update puts player 2's own copy of the smoothing and of the active bytes in the
-// list and player 1's back after, so each camera reads only its own state (solo in each half; the game's decision is
-// untouched).
+// list, and after it player 1's smoothing back and each entry's byte as "active on either camera" (what the readers
+// outside the updates need: a sequence one camera still plays is playing). Each camera reads only its own state (solo
+// in each half; the game's decision is untouched).
 //
 // The shot change: a sequence cut asks UWorld::GetFirstPlayerController's camera manager for a camera cut, so a cut in
 // player 2's update cut player 1's view (its TAA / motion-blur history) and left player 2's smeared. Inside player 2's

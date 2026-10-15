@@ -62,6 +62,9 @@ struct Counts
     std::uint32_t guards = 0, shakes = 0, shakeStates = 0, steals = 0, refused = 0;
 };
 Counts                     g_counts;
+// The meshes whose shake NotifyState Begin ran on player 2's camera: their End stops it there (the handle is per
+// component, so an End on the other camera could stop an unrelated shake; S-ATKCAMVERIFY 4b).
+std::array<const void*, 16> g_shakeMeshes{};
 std::atomic<std::uint32_t> g_offThread{0};
 Clock::time_point          g_statusAt{};
 int                        g_lines = 0;
@@ -186,6 +189,40 @@ void Shake(void* notify, void* mesh, void* animation) noexcept
     original(notify, mesh, animation);
 }
 
+void RememberShake(const void* mesh) noexcept
+{
+    for (const void* slot : g_shakeMeshes)
+    {
+        if (slot == mesh)
+        {
+            return;
+        }
+    }
+    for (const void*& slot : g_shakeMeshes)
+    {
+        if (slot == nullptr)
+        {
+            slot = mesh;
+            return;
+        }
+    }
+    g_shakeMeshes[0] = mesh;  // full (an End never came): one entry goes
+}
+
+/// Forgets `mesh`; true if its Begin ran on player 2's camera.
+bool ForgetShake(const void* mesh) noexcept
+{
+    for (const void*& slot : g_shakeMeshes)
+    {
+        if (slot == mesh)
+        {
+            slot = nullptr;
+            return true;
+        }
+    }
+    return false;
+}
+
 void ShakeBegin(void* notify, void* mesh, void* animation, float duration) noexcept
 {
     const auto original = reinterpret_cast<Notify4Fn>(g_shakeBeginSlot.Original());
@@ -197,22 +234,33 @@ void ShakeBegin(void* notify, void* mesh, void* animation, float duration) noexc
     const PlayerTwoView view(generation::Member(), true);
     g_counts.shakeStates += view.Held() ? 1 : 0;
     g_counts.refused += view.Held() ? 0 : 1;
+    if (view.Held())
+    {
+        RememberShake(mesh);
+    }
     original(notify, mesh, animation, duration);
 }
 
-/// The End stops the component's shake handle on the primary camera: the same camera as its Begin (both keyed on the
-/// mesh's owner).
+/// The End stops the component's shake handle on the primary camera: on player 2's camera exactly when its Begin ran
+/// there.
 void ShakeEnd(void* notify, void* mesh, void* animation) noexcept
 {
     const auto original = reinterpret_cast<Notify3Fn>(g_shakeEndSlot.Original());
-    if (!MembersMesh(mesh))
+    if (!generation::OnGameThread() || !ForgetShake(mesh))
     {
         original(notify, mesh, animation);
         return;
     }
+    if (!generation::Active() || generation::Member() == nullptr)
+    {
+        return;  // player 2 left: the shake went with its camera manager; nothing of it to stop on player 1's
+    }
     const PlayerTwoView view(generation::Member(), true);
     g_counts.refused += view.Held() ? 0 : 1;
-    original(notify, mesh, animation);
+    if (view.Held())
+    {
+        original(notify, mesh, animation);
+    }
 }
 
 // ---------------------------------------------------------------------------------------------
