@@ -1,6 +1,7 @@
 #include "player_two/field_camera.h"
 
 #include "platform/image.h"
+#include "player_two/attack_cameras.h"
 #include "player_two/battle_camera.h"
 #include "player_two/command_menu_two.h"
 #include "player_two/focus_scope.h"
@@ -215,7 +216,9 @@ void RunAsPrimary(void* cameraManager, float deltaTime)
     const lock_on::TargetScope      targets;  // in battle, the LockOn module reads player 2's displayed target
     std::optional<leader_scope::LeaderScope>     leader;
     std::optional<leader_scope::LeaderTypeScope> type;
-    if (focus)
+    // In battle the leader view decides which camera an attack camera belongs to (the game's leader-keyed test of each
+    // battle camera sequence, RE-p2-attack-cameras.md §3.2), so it opens even when the UI context was refused.
+    if (focus || (member != nullptr && battle_camera::PlayerTwoBattleActive(cameraManager)))
     {
         const auto memberType = party_member::PlayerTypeOf(member);
         const auto memberWeak = leader_scope::WeakOf(member);
@@ -233,6 +236,7 @@ void RunAsPrimary(void* cameraManager, float deltaTime)
     {
         g_updateCounters.Refuse();
     }
+    const attack_cameras::PlayerTwoUpdate attack;  // player 2's own state of the battle camera sequences (inside the scopes)
     g_engineUpdate(cameraManager, deltaTime);
 }
 

@@ -1,0 +1,152 @@
+{
+ "build": "1.005",
+ "research_build": "1.004",
+ "date": "2026-10-15",
+ "doc": "Rebirth/Documentation/research/RE-p2-attack-cameras.md; RE-p2-menu-census.md",
+ "facts": [
+  {
+   "name": "ApplyCam: call FirstPC_PCM_SetCameraCutBit400 (Lever D site)",
+   "old": "0x140C42F23",
+   "new": "0x140E24C56",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "S-ATKCAM / S-ATKCAMEDGE (RE-p2-attack-cameras.md \u00a79.11); bytes and targets re-read from both exes by the main session (scratchpad atkcam_check.py, 2026-10-15)."
+  },
+  {
+   "name": "FirstPC_PCM_SetCameraCutBit400 (1.005 takes (cl, dl); the mod passes both)",
+   "old": "0x140F9A40C",
+   "new": "0x1421D25B0",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "S-ATKCAM / S-ATKCAMEDGE (RE-p2-attack-cameras.md \u00a79.11); bytes and targets re-read from both exes by the main session (scratchpad atkcam_check.py, 2026-10-15)."
+  },
+  {
+   "name": "PrimaryPCM_SetGameCameraCutThisFrame",
+   "old": "0x1417ED43C",
+   "new": "0x14143AD50",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "S-ATKCAM / S-ATKCAMEDGE (RE-p2-attack-cameras.md \u00a79.11); bytes and targets re-read from both exes by the main session (scratchpad atkcam_check.py, 2026-10-15)."
+  },
+  {
+   "name": "slot: BattlePlayer comp PlayCameraEffectIfEnabled (vt+0x678 / 1.005 +0x680)",
+   "old": "0x145796550",
+   "new": "0x145611DC0",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "S-ATKCAM / S-ATKCAMEDGE (RE-p2-attack-cameras.md \u00a79.11); bytes and targets re-read from both exes by the main session (scratchpad atkcam_check.py, 2026-10-15)."
+  },
+  {
+   "name": "CharComp_Vt_PlayCameraEffectIfEnabled",
+   "old": "0x14143C948",
+   "new": "0x1407A5C9C",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "S-ATKCAM / S-ATKCAMEDGE (RE-p2-attack-cameras.md \u00a79.11); bytes and targets re-read from both exes by the main session (scratchpad atkcam_check.py, 2026-10-15)."
+  },
+  {
+   "name": "slot: UEndBattleCameraShakeNotify::Notify",
+   "old": "0x1457F7D70",
+   "new": "0x14563BB50",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "S-ATKCAM / S-ATKCAMEDGE (RE-p2-attack-cameras.md \u00a79.11); bytes and targets re-read from both exes by the main session (scratchpad atkcam_check.py, 2026-10-15)."
+  },
+  {
+   "name": "UEndBattleCameraShakeNotify__Notify",
+   "old": "0x140E52890",
+   "new": "0x1411621F0",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "S-ATKCAM / S-ATKCAMEDGE (RE-p2-attack-cameras.md \u00a79.11); bytes and targets re-read from both exes by the main session (scratchpad atkcam_check.py, 2026-10-15)."
+  },
+  {
+   "name": "slot: UEndBattleCameraShakeNotifyState::NotifyBegin",
+   "old": "0x1459075E8",
+   "new": "0x14576EEC0",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "S-ATKCAM / S-ATKCAMEDGE (RE-p2-attack-cameras.md \u00a79.11); bytes and targets re-read from both exes by the main session (scratchpad atkcam_check.py, 2026-10-15)."
+  },
+  {
+   "name": "UEndBattleCameraShakeNotifyState__NotifyBegin",
+   "old": "0x1418AFB54",
+   "new": "0x142F86800",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "S-ATKCAM / S-ATKCAMEDGE (RE-p2-attack-cameras.md \u00a79.11); bytes and targets re-read from both exes by the main session (scratchpad atkcam_check.py, 2026-10-15)."
+  },
+  {
+   "name": "slot: UEndBattleCameraShakeNotifyState::NotifyEnd",
+   "old": "0x1459075F8",
+   "new": "0x14576EED0",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "S-ATKCAM / S-ATKCAMEDGE (RE-p2-attack-cameras.md \u00a79.11); bytes and targets re-read from both exes by the main session (scratchpad atkcam_check.py, 2026-10-15)."
+  },
+  {
+   "name": "UEndBattleCameraShakeNotifyState__NotifyEnd",
+   "old": "0x1418AFCE8",
+   "new": "0x142F885CC",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "S-ATKCAM / S-ATKCAMEDGE (RE-p2-attack-cameras.md \u00a79.11); bytes and targets re-read from both exes by the main session (scratchpad atkcam_check.py, 2026-10-15)."
+  },
+  {
+   "name": "slot: UEndAnimNotifyStateStealCamera::NotifyBegin",
+   "old": "0x145886240",
+   "new": "0x14563E990",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "S-ATKCAM / S-ATKCAMEDGE (RE-p2-attack-cameras.md \u00a79.11); bytes and targets re-read from both exes by the main session (scratchpad atkcam_check.py, 2026-10-15)."
+  },
+  {
+   "name": "UEndAnimNotifyStateStealCamera__NotifyBegin",
+   "old": "0x141812908",
+   "new": "0x140D7E844",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "S-ATKCAM / S-ATKCAMEDGE (RE-p2-attack-cameras.md \u00a79.11); bytes and targets re-read from both exes by the main session (scratchpad atkcam_check.py, 2026-10-15)."
+  },
+  {
+   "name": "Character_SharesActionKeyWith",
+   "old": "0x141812A08",
+   "new": "0x140D7E938",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "S-ATKCAM / S-ATKCAMEDGE (RE-p2-attack-cameras.md \u00a79.11); bytes and targets re-read from both exes by the main session (scratchpad atkcam_check.py, 2026-10-15)."
+  },
+  {
+   "name": "EndUI_NoBlockingWidgetAlive (UEndMenuAPI::IsPauseMenuClosed thunk)",
+   "old": "0x140806908",
+   "new": "0x1408A5B6C",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "S-MENUSWEEP / S-MENUEDGE (RE-p2-menu-census.md E1, E5); bytes re-read from both exes by the main session (atkcam_check.py, 2026-10-15)."
+  },
+  {
+   "name": "UEndUserWidget__AddToRootOverlay_ZOrderPlus10",
+   "old": "0x140E68B98",
+   "new": "0x141106AA0",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "S-MENUSWEEP / S-MENUEDGE (RE-p2-menu-census.md E1, E5); bytes re-read from both exes by the main session (atkcam_check.py, 2026-10-15)."
+  }
+ ]
+}
