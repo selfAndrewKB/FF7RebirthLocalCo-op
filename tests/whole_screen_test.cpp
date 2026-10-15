@@ -5,7 +5,9 @@
 
 #include "views/whole_screen.h"
 
+#include <cstdint>
 #include <cstdio>
+#include <initializer_list>
 
 namespace {
 
@@ -78,6 +80,56 @@ void TestEachSignal()
     EXPECT(ReasonOf(signals) == WholeScreenReason::Title);
 }
 
+void TestMenuWidgets()
+{
+    std::puts("whole screen: the pause-family widgets, the slot menus and the full-screen Blueprint menus give their reasons");
+    auto signals        = Readable();
+    signals.pauseWidget = true;  // a Blueprint-opened pause mode: no state 8
+    EXPECT(ReasonOf(signals) == WholeScreenReason::PauseWidget);
+
+    for (const std::uint16_t menu : {lss::views::kJukebox, lss::views::kCarriage, lss::views::kPointWarp,
+                                     lss::views::kCardDeckNpc, lss::views::kChocoboStable, lss::views::kChocoboSelect,
+                                     lss::views::kChocoboRace, lss::views::kCardChallenge, lss::views::kBrawlerSelect,
+                                     lss::views::kBrawlerWinner})
+    {
+        signals             = Readable();
+        signals.nativeMenus = menu;
+        EXPECT(ReasonOf(signals) == WholeScreenReason::NativeMenu);
+    }
+
+    signals              = Readable();
+    signals.screenWidget = true;
+    EXPECT(ReasonOf(signals) == WholeScreenReason::ScreenWidget);
+
+    std::puts("whole screen: the log-only candidates (on/off 153 and 92, Chadley's state) switch nothing");
+    signals               = Readable();
+    signals.colosseumFlag = true;
+    signals.miniGameMenu  = true;
+    for (const std::int8_t state : {std::int8_t{-1}, std::int8_t{0}, std::int8_t{1}, std::int8_t{2}, std::int8_t{3},
+                                    std::int8_t{4}, std::int8_t{5}})
+    {
+        signals.chadleyState = state;
+        EXPECT(ReasonOf(signals) == WholeScreenReason::None);
+    }
+
+    std::puts("whole screen: the state machine and the on/off menus are named before the widget reads");
+    signals             = Readable();
+    signals.gameState   = lss::views::kStatePauseMenu;
+    signals.pauseWidget = true;  // the state-8 openers create the same widgets
+    EXPECT(ReasonOf(signals) == WholeScreenReason::PauseMenu);
+    signals.gameState   = 6;
+    signals.scriptMenu  = true;
+    signals.nativeMenus = lss::views::kJukebox;
+    EXPECT(ReasonOf(signals) == WholeScreenReason::ScriptMenu);
+    signals.scriptMenu  = false;
+    signals.pauseWidget = false;
+    signals.screenWidget = true;
+    EXPECT(ReasonOf(signals) == WholeScreenReason::NativeMenu);
+    signals.nativeMenus = 0;
+    signals.cutscene    = true;
+    EXPECT(ReasonOf(signals) == WholeScreenReason::ScreenWidget);
+}
+
 void TestSceneLeadIn()
 {
     std::puts("whole screen: a skippable scene's lead-in holds the single view until its cinematic takes over");
@@ -137,6 +189,7 @@ int main()
 {
     TestNothingKnown();
     TestEachSignal();
+    TestMenuWidgets();
     TestSceneLeadIn();
     TestOrder();
     TestOtherStates();

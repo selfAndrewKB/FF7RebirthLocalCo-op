@@ -186,6 +186,7 @@ add_library(LocalSplitScreen SHARED
     src/views/stream_views.cpp
     src/views/view_shape.cpp
     src/views/whole_screen.cpp
+    src/views/screen_widgets.cpp
     src/views/whole_screen_reason.cpp
 )
 

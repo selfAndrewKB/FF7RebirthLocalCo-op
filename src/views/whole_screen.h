@@ -15,7 +15,14 @@
 //   - the cutscene manager: a sequence of type 0 or 2 playing (the game's own check, used by 92 of
 //     its callers), or a cutscene skip under way;
 //   - the title: the game state's current location is "0005-TITLB", the comparison the game itself
-//     makes (§7.3).
+//     makes (§7.3);
+//   - the pause-menu family's widgets, by the game's own UEndMenuAPI::IsPauseMenuClosed: also the pause
+//     modes a Blueprint opens without the state machine, and script-shown widgets (RE-p2-menu-census.md E1);
+//   - the script menus that keep their widget in their own EndUISystem slot (jukebox, chocobo carriage,
+//     point warp, chocobo stable and race menus, the Queen's Blood NPC deck and challenge, the 3D Brawler
+//     screens), each by the game's own "still open" test for it (E2);
+//   - the full-screen Blueprint menus no native code reads (Chadley's VR list, the colosseum list, photo
+//     mode): the widgets as the game adds them to the screen (views/screen_widgets.h).
 //
 // The decision is pure, so it is tested on the host; the reads are in whole_screen.cpp.
 
@@ -39,6 +46,28 @@ struct ScreenSignals
     bool          skippable  = false;  // on/off id 12: a skippable dialogue or camera-planner scene
     bool          skipping   = false;  // a cutscene skip is under way (the game holds black)
     bool          title      = false;  // the current location is the title
+    bool          pauseWidget = false;  // a pause-family widget is alive (IsPauseMenuClosed is false)
+    std::uint16_t nativeMenus = 0;      // NativeMenu bits: script menus with their own EndUISystem slot open
+    bool          screenWidget = false; // a full-screen Blueprint menu is on screen (views/screen_widgets.h)
+    // For the log only (candidates the open log is to settle, RE-p2-menu-census.md E6, RE-p2-vr-menu.md):
+    bool          colosseumFlag = false;  // on/off 153 ShowColosseumMenu
+    bool          miniGameMenu  = false;  // on/off 92 SoundCallEventMiniGameMenuInOut
+    std::int8_t   chadleyState  = -1;     // Chadley's manager state (0 idle, 1 greeting, 2 shop, 3 VR, 4 farewell, 5 end)
+};
+
+/// ScreenSignals::nativeMenus bits.
+enum NativeMenu : std::uint16_t
+{
+    kJukebox        = 1 << 0,
+    kCarriage       = 1 << 1,
+    kPointWarp      = 1 << 2,
+    kCardDeckNpc    = 1 << 3,
+    kChocoboStable  = 1 << 4,
+    kChocoboSelect  = 1 << 5,
+    kChocoboRace    = 1 << 6,
+    kCardChallenge  = 1 << 7,
+    kBrawlerSelect  = 1 << 8,
+    kBrawlerWinner  = 1 << 9,
 };
 
 enum class WholeScreenReason : std::uint8_t
@@ -48,6 +77,9 @@ enum class WholeScreenReason : std::uint8_t
     CinemaPause,  // EndGameState 7
     ScriptMenu,
     JobBoard,
+    PauseWidget,
+    NativeMenu,
+    ScreenWidget,
     Cutscene,
     SkippableScene,
     CutsceneSkip,

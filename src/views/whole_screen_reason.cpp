@@ -24,6 +24,18 @@ WholeScreenReason ReasonOf(const ScreenSignals& signals) noexcept
     {
         return WholeScreenReason::JobBoard;
     }
+    if (signals.pauseWidget)
+    {
+        return WholeScreenReason::PauseWidget;
+    }
+    if (signals.nativeMenus != 0)
+    {
+        return WholeScreenReason::NativeMenu;
+    }
+    if (signals.screenWidget)
+    {
+        return WholeScreenReason::ScreenWidget;
+    }
     if (signals.cutscene)
     {
         return WholeScreenReason::Cutscene;
@@ -48,6 +60,9 @@ const wchar_t* NameOf(WholeScreenReason reason) noexcept
         case WholeScreenReason::CinemaPause: return L"the cutscene pause (EndGameState 7)";
         case WholeScreenReason::ScriptMenu: return L"a script-opened menu (on/off table)";
         case WholeScreenReason::JobBoard: return L"the job board";
+        case WholeScreenReason::PauseWidget: return L"a pause-family menu (IsPauseMenuClosed)";
+        case WholeScreenReason::NativeMenu: return L"a script menu with its own UI slot";
+        case WholeScreenReason::ScreenWidget: return L"a full-screen Blueprint menu";
         case WholeScreenReason::Cutscene: return L"a cutscene";
         case WholeScreenReason::SkippableScene: return L"a skippable scene (on/off 12)";
         case WholeScreenReason::CutsceneSkip: return L"a cutscene skip";
