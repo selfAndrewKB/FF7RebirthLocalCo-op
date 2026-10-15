@@ -18,7 +18,7 @@
 //     and BossBase, under the events' own conditions (a non-null argument; BossBase's gates also mode 1, ctrl+0x101C);
 //   - the UFunctions' native pointers (UFunction::Func, read by the blueprint VM on every call): GetPartyLeader and the
 //     two controller aliases sharing its exec, IsUCPC, IsAIPC, GetPartyLeaderType. Each answers for a calling object
-//     (FFrame::Object) whose vtable is one of the two enemy controllers' (every enemy AI blueprint, the summon fights'
+//     (FFrame::Object) that is an EndAIControllerEnemyBase (BossBase and every enemy AI blueprint, the summon fights'
 //     included; party summons, party AI, UI and level blueprints are not), and passes everything else through.
 // Who may be "the player" is the Condition select's rule (player_two/equal_targeting): each player's character must be
 // a candidate for that enemy's target selector; a coin when both are. A coin naming player 2 is checked again at each

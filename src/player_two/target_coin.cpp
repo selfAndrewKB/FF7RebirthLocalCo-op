@@ -62,7 +62,6 @@ constexpr platform::SlotFact kDecisionSlots[kDecisions] = {
     {L"the BossBase controller's OnActionTopPriorityInvoke slot (+0xB18)", 0x1457DBB18,
      {L"BossCtrl_VtB18_TopPriority_IfMode1", 0x1417F81A8, kBossTopBytes}},
 };
-constexpr std::uint32_t kInterruptSlot = 0xAE0;  // the vtable is the first slot's address minus this (both builds)
 
 // Enemy AI controller (both builds): the mode byte BossBase's gates test, and the target selector's holder (a pointer
 // to {controller, selector}).
@@ -72,6 +71,11 @@ constexpr std::uint32_t kHolderSelector = 0x8;
 
 // The blueprint VM's frame (stock 4.26 FFrame): the object whose blueprint is running.
 constexpr std::uint32_t kFrameObject = 0x18;
+
+// Whose blueprint calls are answered: the native enemy controller class and its children (BossBase and every enemy
+// AIBP, summon fights included; §16.2). A class test, not vtable addresses: 1.005 moved the controllers' slots by 8, so
+// a vtable placed from a slot address was 8 bytes off there and no caller ever matched (live Titan fight, 2026-10-14).
+constexpr const wchar_t* kEnemyControllerClass = STR("/Script/EndGame.EndAIControllerEnemyBase");
 
 // The natives, by their UFunctions. The exec addresses are checked against UFunction::Func before a swap.
 enum class Kind : std::uint8_t
@@ -103,7 +107,7 @@ using ExecFn     = RC::Unreal::UnrealScriptFunction;
 // Set once at install.
 platform::VTableEntry  g_decisions[kDecisions];
 platform::CallRedirect g_actionCall;
-std::uintptr_t        g_enemyVTable = 0, g_bossVTable = 0;
+const RC::Unreal::UClass* g_enemyClass = nullptr;  // set on the game thread before the first swap; then read only
 std::uintptr_t        g_execs[kNatives]{};     // live exec addresses
 std::atomic<ExecFn>   g_originals[kNatives]{};  // null until swapped
 UFunction*            g_functions[kNatives]{};  // game thread
@@ -259,9 +263,8 @@ Player AnswerFor(const void* frame, bool& reaction) noexcept
     {
         return Player::None;
     }
-    const void* const caller = ReadPointer(frame, kFrameObject);
-    const auto        vtable = VTableOf(caller);
-    if (vtable == 0 || (vtable != g_enemyVTable && vtable != g_bossVTable))
+    const auto* const caller = static_cast<const RC::Unreal::UObject*>(ReadPointer(frame, kFrameObject));
+    if (caller == nullptr || !caller->IsA(g_enemyClass))
     {
         return Player::None;
     }
@@ -384,6 +387,19 @@ constexpr DecisionFn kDecisionWrappers[kDecisions] = {&Decision<0>, &Decision<1>
 /// Swaps each UFunction's native pointer whose function exists and still holds the exec IDA named. Game thread.
 void TrySwaps() noexcept
 {
+    if (g_enemyClass == nullptr)
+    {
+        // Before any swap: an answering native reads it from any thread (the swap's release store publishes it).
+        g_enemyClass = UObjectGlobals::StaticFindObject<RC::Unreal::UClass*>(nullptr, nullptr, kEnemyControllerClass);
+        if (g_enemyClass == nullptr)
+        {
+            if (++g_swapTries == 1)
+            {
+                platform::LogDebug(L"target coin: {} not found yet; trying again each second", kEnemyControllerClass);
+            }
+            return;
+        }
+    }
     std::size_t done = 0, missing = 0;
     for (std::size_t i = 0; i < kNatives; ++i)
     {
@@ -443,10 +459,6 @@ bool Install(const platform::GameImage& image) noexcept
         const auto exec = image.Rebase(kNativeFacts[i].exec);
         g_execs[i]      = exec ? *exec : 0;
     }
-    const auto enemySlot = image.Rebase(kDecisionSlots[0].slot, sizeof(void*));
-    const auto bossSlot  = image.Rebase(kDecisionSlots[kFirstBoss].slot, sizeof(void*));
-    g_enemyVTable        = enemySlot ? *enemySlot - kInterruptSlot : 0;
-    g_bossVTable         = bossSlot ? *bossSlot - kInterruptSlot : 0;
     g_on.store(true, std::memory_order_release);
     // on_unreal_init: no world and no enemy exist yet, so no thread can be at the call (InstallFromOwnThread's rule).
     const auto actionSite = image.Rebase(kActionCall, 5);
@@ -461,13 +473,6 @@ bool Install(const platform::GameImage& image) noexcept
         {
             ++slots;
         }
-    }
-    if (g_enemyVTable == 0 || g_bossVTable == 0)
-    {
-        g_on.store(false, std::memory_order_release);
-        platform::Log(L"target coin: UNAVAILABLE (the enemy controllers' vtables could not be placed); enemies aim at "
-                      L"player 1");
-        return false;
     }
     platform::Log(L"target coin: enemies toss a coin per action at OnActionInvoke {} and at {} of {} interrupt and "
                   L"top-priority slots (no coin answers until the blueprint natives are swapped)",
