@@ -61,6 +61,8 @@ struct ScreenSignals
     // The minigame inputs (RE-p2-minigames.md §7.6):
     std::uint32_t exclusion   = 0;      // the field-exclusion mask (bit 21 minigame, bit 1 the second-purpose bit)
     bool          minigameIds = false;  // on/off 36 MiniGamePlaying, 139 crash box or 140 cactus mission
+    bool          fieldMinigame = false;  // the only one on is 36, held by a field minigame (the chicken lure, the chocobo
+                                          // capture's chase): it does not count (S-FRAMINGVERIFY 5e/5f)
     bool          frogGuys    = false;  // the frog-guys manager holds its frog, or it set id 23
     bool          inBattle    = false;  // the game's UEndBattleAPI::IsInBattle test
     bool          gbike       = false;  // the G-Bike manager lives

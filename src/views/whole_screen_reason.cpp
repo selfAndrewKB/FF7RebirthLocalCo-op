@@ -8,12 +8,13 @@ bool MinigameStage(const ScreenSignals& signals) noexcept
     {
         return true;
     }
-    if ((signals.exclusion & kExclusionMiniGame) != 0 && !signals.colosseumFlag &&
-        (!signals.inBattle || signals.minigameIds))
+    // A field minigame's id 36 is not a stage: the chicken lure's result and a field event's bit 1 during it stay split.
+    const bool ids = signals.minigameIds && !signals.fieldMinigame;
+    if ((signals.exclusion & kExclusionMiniGame) != 0 && !signals.colosseumFlag && (!signals.inBattle || ids))
     {
         return true;
     }
-    return (signals.exclusion & kExclusionSecond) != 0 && (signals.minigameIds || signals.frogGuys);
+    return (signals.exclusion & kExclusionSecond) != 0 && (ids || signals.frogGuys);
 }
 
 WholeScreenReason ReasonOf(const ScreenSignals& signals) noexcept

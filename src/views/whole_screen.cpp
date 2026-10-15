@@ -91,6 +91,10 @@ constexpr std::int32_t  kCactusId       = 140;
 constexpr std::int32_t  kId23           = 23;         // DisableOptionsButton; read only while it is on
 constexpr std::uint32_t kId23Setter     = 0x1A129A4;
 constexpr const wchar_t* kFrogGuysSetter = L"FEndFrogGuysMiniGame";
+// Id 36's setter (SM+0x1A128EC + 8*36, cleared when 36 goes off) for the field minigames, whose party stays in the field
+// with player 1 (RE-p2-minigames.md §2, S-FRAMINGVERIFY 5e/5f).
+constexpr std::uint32_t                 kId36Setter = 0x1A12A0C;
+constexpr std::array<const wchar_t*, 2> kFieldMinigames{L"FEndChickenLureMiniGameFlow", L"EndChocoboCaptureManager"};
 // The game's battle test, UEndBattleAPI_IsInBattle (1.004 0x1408E242C), as reads: the battle system's byte +0x300 is 0
 // and the encounter state ([[game root]+0x1B8]+0x3D558) is 3 or 4. The game does not null-check the battle system; this
 // does.
@@ -156,6 +160,8 @@ bool          g_atTitle            = false;  // g_location is the title's
 bool          g_atMinigameMap      = false;  // g_location is a minigame-only map
 std::uint64_t g_id23Setter         = 0;      // the last id-23 setter read
 bool          g_id23Frog           = false;  // it is the frog-guys minigame
+std::uint64_t g_id36Setter         = 0;      // the last id-36 setter read
+bool          g_id36Field          = false;  // it is a field minigame
 
 template <class T>
 bool Read(std::uintptr_t address, T& out) noexcept
@@ -372,6 +378,28 @@ bool FrogGuysSetter(std::uintptr_t stateManager) noexcept
     return g_id23Frog;
 }
 
+/// Whether id 36's setter is a field minigame (the name turned into text only when it changes).
+bool FieldMinigameSetter(std::uintptr_t stateManager) noexcept
+{
+    std::uint64_t setter = 0;
+    if (!Read(stateManager + kId36Setter, setter) || setter == 0)
+    {
+        return false;
+    }
+    if (setter != g_id36Setter)
+    {
+        g_id36Setter             = setter;
+        const std::wstring text  = players::unreal::NameText(setter);
+        g_id36Field              = false;
+        for (const wchar_t* name : kFieldMinigames)
+        {
+            g_id36Field = g_id36Field || text == name;
+        }
+        platform::LogDebug(L"whole screen: on/off 36 set by {}{}", text, g_id36Field ? L" (a field minigame: stays split)" : L"");
+    }
+    return g_id36Field;
+}
+
 /// The minigame inputs of the signals (RE-p2-minigames.md §7.6).
 void ReadMinigame(ScreenSignals& signals, std::uintptr_t root, std::uintptr_t stateManager) noexcept
 {
@@ -383,12 +411,15 @@ void ReadMinigame(ScreenSignals& signals, std::uintptr_t root, std::uintptr_t st
         return;
     }
     Read(stateManager + kExclusionMask, signals.exclusion);
-    signals.minigameIds = OnOff(stateManager, kMiniGameId) || OnOff(stateManager, kCrashBoxId) ||
-                          OnOff(stateManager, kCactusId);
-    if ((signals.exclusion & kExclusionSecond) != 0 && !signals.minigameIds)  // the frog test matters only then
+    const bool mini     = OnOff(stateManager, kMiniGameId);
+    const bool others   = OnOff(stateManager, kCrashBoxId) || OnOff(stateManager, kCactusId);
+    signals.minigameIds = mini || others;
+    signals.fieldMinigame = mini && !others && FieldMinigameSetter(stateManager);
+    if ((signals.exclusion & kExclusionSecond) != 0 && (!signals.minigameIds || signals.fieldMinigame))
     {
+        // Frog guys: only while its manager exists (set at its setup, cleared in its destructor).
         const std::uintptr_t frog = g_frogManager != 0 ? Pointer(g_frogManager) : 0;
-        signals.frogGuys          = (frog != 0 && WeakValid(frog + kFrogCharacter)) || FrogGuysSetter(stateManager);
+        signals.frogGuys          = frog != 0 && (WeakValid(frog + kFrogCharacter) || FrogGuysSetter(stateManager));
     }
 }
 
@@ -443,6 +474,7 @@ void LogOnChange(const ScreenSignals& now) noexcept
         now.miniGameMenu == g_logged.miniGameMenu && now.chadleyState == g_logged.chadleyState &&
         now.exclusion == g_logged.exclusion && now.minigameIds == g_logged.minigameIds &&
         now.frogGuys == g_logged.frogGuys && now.inBattle == g_logged.inBattle && now.gbike == g_logged.gbike &&
+        now.fieldMinigame == g_logged.fieldMinigame &&
         now.minigameMap == g_logged.minigameMap)
     {
         return;
@@ -450,12 +482,12 @@ void LogOnChange(const ScreenSignals& now) noexcept
     g_logged = now;
     platform::LogDebug(L"whole screen: {}game state {} (menu kind {}), script menu {}, job board {}, pause widget {}, slot "
                        L"menus {:#x}, full-screen widget {}, cutscene {}, skippable scene {}, skip {}, title {}; on/off 153 "
-                       L"{}, 92 {}, Chadley state {}; exclusion {:#x}, minigame ids {}, frog {}, in battle {}, G-Bike {}, "
+                       L"{}, 92 {}, Chadley state {}; exclusion {:#x}, minigame ids {} (field {}), frog {}, in battle {}, G-Bike {}, "
                        L"minigame map {} -> {}",
                        now.readable ? L"" : L"(no game state) ", now.gameState, now.menuKind, now.scriptMenu,
                        now.jobBoard, now.pauseWidget, now.nativeMenus, now.screenWidget, now.cutscene, now.skippable,
                        now.skipping, now.title, now.colosseumFlag, now.miniGameMenu, now.chadleyState, now.exclusion,
-                       now.minigameIds, now.frogGuys, now.inBattle, now.gbike, now.minigameMap, NameOf(ReasonOf(now)));
+                       now.minigameIds, now.fieldMinigame, now.frogGuys, now.inBattle, now.gbike, now.minigameMap, NameOf(ReasonOf(now)));
 }
 
 }  // namespace

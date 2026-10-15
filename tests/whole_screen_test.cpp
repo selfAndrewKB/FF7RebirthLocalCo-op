@@ -136,8 +136,16 @@ void TestMinigames()
     using lss::views::kExclusionSecond;
     std::puts("whole screen: minigames on their own stage go single; the field ones, battles and the buggy stay split");
 
-    auto lure        = Readable();  // the chicken lure: id 36 on, no exclusion bit while played
-    lure.minigameIds = true;
+    auto lure          = Readable();  // the chicken lure: id 36 on, no exclusion bit while played
+    lure.minigameIds   = true;
+    lure.fieldMinigame = true;
+    EXPECT(ReasonOf(lure) == WholeScreenReason::None);
+    lure.exclusion = kExclusionSecond;  // its result screen, or a field event's bit 1 during it: still split
+    EXPECT(ReasonOf(lure) == WholeScreenReason::None);
+    lure.exclusion = kExclusionMiniGame;  // the chocobo capture's catch step: the minigame bit, a stage
+    EXPECT(ReasonOf(lure) == WholeScreenReason::Minigame);
+    lure.exclusion = kExclusionMiniGame;
+    lure.inBattle  = true;  // a field minigame's id does not override the battle guard
     EXPECT(ReasonOf(lure) == WholeScreenReason::None);
 
     auto stage        = Readable();  // Queen's Blood, chocobo race...: the minigame bit and id 36
