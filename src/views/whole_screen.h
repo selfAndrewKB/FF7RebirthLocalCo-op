@@ -22,7 +22,12 @@
 //     point warp, chocobo stable and race menus, the Queen's Blood NPC deck and challenge, the 3D Brawler
 //     screens), each by the game's own "still open" test for it (E2);
 //   - the full-screen Blueprint menus no native code reads (Chadley's VR list, the colosseum list, photo
-//     mode): the widgets as the game adds them to the screen (views/screen_widgets.h).
+//     mode): the widgets as the game adds them to the screen (views/screen_widgets.h);
+//   - a minigame that takes player 1 away to its own stage (the user's rule, 2026-10-15: the chicken lure,
+//     where the party stays in the field with player 1, stays split; frog jumping goes single). The game's own
+//     switch for it is its field-exclusion mask: bit 21 DisableController_MiniGame, bit 1 DisableController_2nd
+//     (RE-p2-minigames.md §1, §7), guarded by the game's own battle test and the colosseum flag, plus the
+//     minigames that set no bit (G-Bike's manager, the minigame-only maps).
 //
 // The decision is pure, so it is tested on the host; the reads are in whole_screen.cpp.
 
@@ -53,7 +58,24 @@ struct ScreenSignals
     bool          colosseumFlag = false;  // on/off 153 ShowColosseumMenu
     bool          miniGameMenu  = false;  // on/off 92 SoundCallEventMiniGameMenuInOut
     std::int8_t   chadleyState  = -1;     // Chadley's manager state (0 idle, 1 greeting, 2 shop, 3 VR, 4 farewell, 5 end)
+    // The minigame inputs (RE-p2-minigames.md §7.6):
+    std::uint32_t exclusion   = 0;      // the field-exclusion mask (bit 21 minigame, bit 1 the second-purpose bit)
+    bool          minigameIds = false;  // on/off 36 MiniGamePlaying, 139 crash box or 140 cactus mission
+    bool          frogGuys    = false;  // the frog-guys manager holds its frog, or it set id 23
+    bool          inBattle    = false;  // the game's UEndBattleAPI::IsInBattle test
+    bool          gbike       = false;  // the G-Bike manager lives
+    bool          minigameMap = false;  // the location is a minigame-only map (chocobo race, coaster, G-Bike, Moogle)
 };
+
+/// The field-exclusion bits the minigame rule reads (UEnum EndFieldExclusion).
+inline constexpr std::uint32_t kExclusionMiniGame = 1u << 21;  // DisableController_MiniGame
+inline constexpr std::uint32_t kExclusionSecond   = 1u << 1;   // DisableController_2nd
+
+/// Whether a minigame has taken player 1 to its own stage (§7.6): G-Bike or a minigame map; or the minigame bit, outside
+/// the colosseum / VR battles (on/off 153) and outside a battle unless a minigame id is on (the cactus mission is a
+/// battle); or the second-purpose bit with a minigame id or frog guys (the buggy, summon bosses, the gravity device and
+/// program actions also use that bit, without them).
+bool MinigameStage(const ScreenSignals& signals) noexcept;
 
 /// ScreenSignals::nativeMenus bits.
 enum NativeMenu : std::uint16_t
@@ -80,6 +102,7 @@ enum class WholeScreenReason : std::uint8_t
     PauseWidget,
     NativeMenu,
     ScreenWidget,
+    Minigame,
     Cutscene,
     SkippableScene,
     CutsceneSkip,

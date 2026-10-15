@@ -2,6 +2,20 @@
 
 namespace lss::views {
 
+bool MinigameStage(const ScreenSignals& signals) noexcept
+{
+    if (signals.gbike || signals.minigameMap)
+    {
+        return true;
+    }
+    if ((signals.exclusion & kExclusionMiniGame) != 0 && !signals.colosseumFlag &&
+        (!signals.inBattle || signals.minigameIds))
+    {
+        return true;
+    }
+    return (signals.exclusion & kExclusionSecond) != 0 && (signals.minigameIds || signals.frogGuys);
+}
+
 WholeScreenReason ReasonOf(const ScreenSignals& signals) noexcept
 {
     if (!signals.readable)
@@ -36,6 +50,10 @@ WholeScreenReason ReasonOf(const ScreenSignals& signals) noexcept
     {
         return WholeScreenReason::ScreenWidget;
     }
+    if (MinigameStage(signals))
+    {
+        return WholeScreenReason::Minigame;
+    }
     if (signals.cutscene)
     {
         return WholeScreenReason::Cutscene;
@@ -63,6 +81,7 @@ const wchar_t* NameOf(WholeScreenReason reason) noexcept
         case WholeScreenReason::PauseWidget: return L"a pause-family menu (IsPauseMenuClosed)";
         case WholeScreenReason::NativeMenu: return L"a script menu with its own UI slot";
         case WholeScreenReason::ScreenWidget: return L"a full-screen Blueprint menu";
+        case WholeScreenReason::Minigame: return L"a minigame on its own stage";
         case WholeScreenReason::Cutscene: return L"a cutscene";
         case WholeScreenReason::SkippableScene: return L"a skippable scene (on/off 12)";
         case WholeScreenReason::CutsceneSkip: return L"a cutscene skip";

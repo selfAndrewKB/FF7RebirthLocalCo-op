@@ -5602,7 +5602,7 @@ inline constexpr std::uint8_t kBytes_051B96CC[] = {
     0x02, 0x75, 0x18, 0xC5, 0xF8, 0x10, 0x44, 0x24, 0x20, 0x48, 0x8D, 0x4C, 0x24, 0x20, 0xC5, 0xF9,
 };
 
-inline constexpr std::array<ReplacedAddress, 668> kReplaced{{
+inline constexpr std::array<ReplacedAddress, 670> kReplaced{{
     {0x0076B370, 0x00743B50, kBytes_0076B370, 0},
     {0x00786200, 0x00A6A1C8, kBytes_00786200, 3},
     {0x0078C2F4, 0x008DAE0C, kBytes_0078C2F4, 3},
@@ -6244,6 +6244,7 @@ inline constexpr std::array<ReplacedAddress, 668> kReplaced{{
     {0x06FAA3B0, 0x06DDD290, {}},  // 0x146FAA3B0 -> 0x146DDD290 (replaced-perf.json, CONFIRMED): The D3D12 residency gate, 01 in both files. The only writer is the device creation's `mov byte [gate
     {0x070B98C0, 0x06EECA40, {}},  // 0x1470B98C0 -> 0x146EECA40 (replaced-walk-layer2.json, CONFIRMED): Read from both exes by the main session (tmp walk_l2_facts.py, 2026-10-10) after the IDA agent's mat
     {0x070B99A0, 0x06EECAE0, {}},  // 0x1470B99A0 -> 0x146EECAE0 (replaced-anim-tick-time.json, CONFIRMED): Read from both exes by the main session (scratchpad levert_facts.py, 2026-10-11): 60.0 in both; read
+    {0x070C6CF0, 0x06EF9F10, {}},  // 0x1470C6CF0 -> 0x146EF9F10 (replaced-minigames.json, CONFIRMED): S-MINIGAME (RE-p2-minigames.md section 7); 1.005 address confirmed by the main session from both exe
     {0x070C94C0, 0x06EFC6E0, {}},  // 0x1470C94C0 -> 0x146EFC6E0 (replaced-p2-trigger.json, CONFIRMED): Weak pointer to the registry object: FieldTick's this, with the tag refcount map at +0x278 and the p
     {0x070E3C48, 0x06F16EB8, {}},  // 0x1470E3C48 -> 0x146F16EB8 (replaced-audio-listener.json, CONFIRMED): Read from both exes by the main session (scratchpad audio_fix_facts.py, 2026-10-12) for the listener
     {0x070FCDE0, 0x06F30380, {}},  // 0x1470FCDE0 -> 0x146F30380 (replaced-rumble-gaps.json, CONFIRMED): Read from both exes by the main session (scratchpad gaps_json.py, 2026-10-12) after the IDA agent's 
@@ -6267,6 +6268,7 @@ inline constexpr std::array<ReplacedAddress, 668> kReplaced{{
     {0x0939BAB0, 0x091D8350, {}},  // 0x14939BAB0 -> 0x1491D8350 (replaced-audio-listener.json, CONFIRMED): Read from both exes by the main session (scratchpad audio_facts.py, 2026-10-12) after the IDA agent'
     {0x0939BC48, 0x091D8458, {}},  // 0x14939BC48 -> 0x1491D8458 (replaced-player_two.json, [CONFIRMED]): Anim world manager pointer. 2 strict-unique readers agree; same delta as matched kBattleStateGlobal 
     {0x0939BC90, 0x091D84B0, {}},  // 0x14939BC90 -> 0x1491D84B0 (replaced-rumble-list.json, CONFIRMED): Read from both exes by the main session (scratchpad foot_facts.py, 2026-10-12) after the IDA agent's
+    {0x0939BCC0, 0x091D84E8, {}},  // 0x14939BCC0 -> 0x1491D84E8 (replaced-minigames.json, CONFIRMED): S-MINIGAME (RE-p2-minigames.md section 7); 1.005 address confirmed by the main session from both exe
     {0x0939BCE0, 0x091D8510, {}},  // 0x14939BCE0 -> 0x1491D8510 (replaced-p2-trigger.json, CONFIRMED): Read at 1.005 0x140935BA9, just before the primary-only resolve.
     {0x0939C2F8, 0x091873A8, {}},  // 0x14939C2F8 -> 0x1491873A8 (replaced-hud_renderer.json, CONFIRMED): kStockNameStatic: FName 'SEndNaviMapCircle' static read by the circle's FindOrAdd (mov rdx,[0x149187
     {0x093BE6D9, 0x091FAA70, {}},  // 0x1493BE6D9 -> 0x1491FAA70 (replaced-p2-trigger.json, CONFIRMED): The second flag FieldTick tests.

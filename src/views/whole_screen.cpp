@@ -81,6 +81,30 @@ constexpr std::uint32_t kChadleyCurrent   = 0x1E0;
 constexpr std::uint32_t kChadleyRequested = 0x1E8;
 constexpr std::uint32_t kChadleyRecord    = 32;
 
+// Minigames (RE-p2-minigames.md §1, §7; S-MINIGAME, both builds, the same offsets): the field-exclusion mask (u32 in the
+// on/off table's owner), the on/off ids 36 MiniGamePlaying, 139 CrashBoxMiniGamePlaying, 140 CactusMissionMiniGamePlaying,
+// and id 23's setter (the FName of the last code that turned it on; SM+0x1A128EC + 8*id).
+constexpr std::uint32_t kExclusionMask  = 0x1A12288;
+constexpr std::int32_t  kMiniGameId     = 36;
+constexpr std::int32_t  kCrashBoxId     = 139;
+constexpr std::int32_t  kCactusId       = 140;
+constexpr std::uint32_t kId23Setter     = 0x1A129A4;
+constexpr const wchar_t* kFrogGuysSetter = L"FEndFrogGuysMiniGame";
+// The game's battle test, UEndBattleAPI_IsInBattle (1.004 0x1408E242C), as reads: the battle system's byte +0x300 is 0
+// and the encounter state ([[game root]+0x1B8]+0x3D558) is 3 or 4. The game does not null-check the battle system; this
+// does.
+constexpr std::uintptr_t kBattleSystem   = 0x14939BC58;
+constexpr std::uint32_t  kBattleIdle     = 0x300;
+constexpr std::uint32_t  kRootGameMode   = 0x1B8;
+constexpr std::uint32_t  kEncounterState = 0x3D558;
+// The frog-guys manager (pointer global) and its frog character's weak pointer (FrogGuysManager_GetWeakCharacter16C); the
+// G-Bike manager actor's weak pointer (a static FWeakObjectPtr).
+constexpr std::uintptr_t kFrogManager  = 0x14939BCC0;
+constexpr std::uint32_t  kFrogCharacter = 0x16C;
+constexpr std::uintptr_t kGBikeManager = 0x1470C6CF0;
+// The minigame-only maps (the game state's location).
+constexpr std::array<const wchar_t*, 4> kMinigameMaps{L"2351-CRACE", L"2352-SCOST", L"2353-GBIKE", L"7110-MOGHS"};
+
 // The game state's current location (an 8-byte FName; +0x30C requested, +0x314 previous) and the
 // title's, which the game compares against itself (§7.3).
 constexpr std::uint32_t  kLocation  = 0x304;
@@ -112,6 +136,9 @@ WeakGetFn         g_weakGet         = nullptr;  // null: the slot menus are not 
 PauseClosedFn     g_pauseClosed     = nullptr;  // null: the pause-family widgets are not read
 std::uintptr_t    g_uiSlot27        = 0;
 std::array<std::uintptr_t, 7> g_uiSlots{};     // 54, 56, 57, 68, 72, 78, 82 (0: not read)
+std::uintptr_t    g_battleSystem    = 0;  // the address holding the battle system (0: no battle test)
+std::uintptr_t    g_frogManager     = 0;
+std::uintptr_t    g_gbikeManager    = 0;
 bool              g_screenWidgets   = false;
 bool              g_installed       = false;
 
@@ -125,6 +152,9 @@ unsigned      g_slotFaults         = 0;  // guarded slot calls that faulted (a s
 std::uint64_t g_location           = 0;      // the last location FName read
 bool          g_locationRead       = false;
 bool          g_atTitle            = false;  // g_location is the title's
+bool          g_atMinigameMap      = false;  // g_location is a minigame-only map
+std::uint64_t g_id23Setter         = 0;      // the last id-23 setter read
+bool          g_id23Frog           = false;  // it is the frog-guys minigame
 
 template <class T>
 bool Read(std::uintptr_t address, T& out) noexcept
@@ -313,6 +343,53 @@ std::int8_t ChadleyState(std::uintptr_t root) noexcept
     return static_cast<std::int8_t>(id);
 }
 
+/// The game's UEndBattleAPI::IsInBattle, as reads.
+bool InBattle(std::uintptr_t root) noexcept
+{
+    const std::uintptr_t system = Pointer(g_battleSystem);
+    std::uint8_t         idle   = 1;
+    std::uint8_t         state  = 0;
+    const std::uintptr_t mode   = root != 0 ? Pointer(root + kRootGameMode) : 0;
+    return system != 0 && Read(system + kBattleIdle, idle) && idle == 0 && mode != 0 &&
+           Read(mode + kEncounterState, state) && (state == 3 || state == 4);
+}
+
+/// Whether id 23's setter is the frog-guys minigame (the name turned into text only when it changes).
+bool FrogGuysSetter(std::uintptr_t stateManager) noexcept
+{
+    std::uint64_t setter = 0;
+    if (!Read(stateManager + kId23Setter, setter) || setter == 0)
+    {
+        return false;
+    }
+    if (setter != g_id23Setter)
+    {
+        g_id23Setter = setter;
+        g_id23Frog   = players::unreal::NameText(setter) == kFrogGuysSetter;
+    }
+    return g_id23Frog;
+}
+
+/// The minigame inputs of the signals (RE-p2-minigames.md §7.6).
+void ReadMinigame(ScreenSignals& signals, std::uintptr_t root, std::uintptr_t stateManager) noexcept
+{
+    signals.inBattle    = g_battleSystem == 0 || InBattle(root);  // no battle test: the minigame bit needs a minigame id
+    signals.minigameMap = g_atMinigameMap;
+    signals.gbike       = g_gbikeManager != 0 && WeakValid(g_gbikeManager);
+    if (stateManager == 0)
+    {
+        return;
+    }
+    Read(stateManager + kExclusionMask, signals.exclusion);
+    signals.minigameIds = OnOff(stateManager, kMiniGameId) || OnOff(stateManager, kCrashBoxId) ||
+                          OnOff(stateManager, kCactusId);
+    if ((signals.exclusion & kExclusionSecond) != 0 && !signals.minigameIds)  // the frog test matters only then
+    {
+        const std::uintptr_t frog = g_frogManager != 0 ? Pointer(g_frogManager) : 0;
+        signals.frogGuys          = (frog != 0 && WeakValid(frog + kFrogCharacter)) || FrogGuysSetter(stateManager);
+    }
+}
+
 /// Logs the new location (a location jump; rare) and says whether it is the title.
 bool IsTitleName(std::uint64_t name) noexcept
 {
@@ -336,9 +413,15 @@ bool AtTitle(std::uintptr_t gameState) noexcept
     }
     if (!g_locationRead || name != g_location)
     {
-        g_location     = name;
-        g_locationRead = true;
-        g_atTitle      = IsTitleName(name);
+        g_location      = name;
+        g_locationRead  = true;
+        g_atTitle       = IsTitleName(name);
+        const std::wstring text = players::unreal::NameText(name);
+        g_atMinigameMap = false;
+        for (const wchar_t* map : kMinigameMaps)
+        {
+            g_atMinigameMap = g_atMinigameMap || text == map;
+        }
     }
     return g_atTitle;
 }
@@ -355,18 +438,22 @@ void LogOnChange(const ScreenSignals& now) noexcept
         now.skippable == g_logged.skippable && now.skipping == g_logged.skipping && now.title == g_logged.title &&
         now.pauseWidget == g_logged.pauseWidget && now.nativeMenus == g_logged.nativeMenus &&
         now.screenWidget == g_logged.screenWidget && now.colosseumFlag == g_logged.colosseumFlag &&
-        now.miniGameMenu == g_logged.miniGameMenu && now.chadleyState == g_logged.chadleyState)
+        now.miniGameMenu == g_logged.miniGameMenu && now.chadleyState == g_logged.chadleyState &&
+        now.exclusion == g_logged.exclusion && now.minigameIds == g_logged.minigameIds &&
+        now.frogGuys == g_logged.frogGuys && now.inBattle == g_logged.inBattle && now.gbike == g_logged.gbike &&
+        now.minigameMap == g_logged.minigameMap)
     {
         return;
     }
     g_logged = now;
     platform::LogDebug(L"whole screen: {}game state {} (menu kind {}), script menu {}, job board {}, pause widget {}, slot "
                        L"menus {:#x}, full-screen widget {}, cutscene {}, skippable scene {}, skip {}, title {}; on/off 153 "
-                       L"{}, 92 {}, Chadley state {} -> {}",
+                       L"{}, 92 {}, Chadley state {}; exclusion {:#x}, minigame ids {}, frog {}, in battle {}, G-Bike {}, "
+                       L"minigame map {} -> {}",
                        now.readable ? L"" : L"(no game state) ", now.gameState, now.menuKind, now.scriptMenu,
                        now.jobBoard, now.pauseWidget, now.nativeMenus, now.screenWidget, now.cutscene, now.skippable,
-                       now.skipping, now.title, now.colosseumFlag, now.miniGameMenu, now.chadleyState,
-                       NameOf(ReasonOf(now)));
+                       now.skipping, now.title, now.colosseumFlag, now.miniGameMenu, now.chadleyState, now.exclusion,
+                       now.minigameIds, now.frogGuys, now.inBattle, now.gbike, now.minigameMap, NameOf(ReasonOf(now)));
 }
 
 }  // namespace
@@ -416,6 +503,15 @@ bool InstallWholeScreen(const platform::GameImage& image) noexcept
         }
     }
     g_screenWidgets = screen_widgets::Install(image);
+    const auto battleSystem = image.Rebase(kBattleSystem, sizeof(std::uintptr_t));
+    const auto frogManager  = image.Rebase(kFrogManager, sizeof(std::uintptr_t));
+    const auto gbikeManager = image.Rebase(kGBikeManager, sizeof(std::uint64_t));
+    g_battleSystem          = battleSystem ? *battleSystem : 0;
+    g_frogManager           = frogManager ? *frogManager : 0;
+    g_gbikeManager          = gbikeManager ? *gbikeManager : 0;
+    platform::Log(L"whole screen: minigames on their own stage by the game's field-exclusion mask{}{}{}",
+                  g_battleSystem != 0 ? L"" : L" (NO battle test: the minigame bit is read only with a minigame id)",
+                  g_frogManager != 0 ? L"" : L" (no frog-guys manager)", g_gbikeManager != 0 ? L"" : L" (no G-Bike)");
     platform::Log(L"whole screen: menus, {}the map, skippable scenes, cutscenes and the title are read from the game's "
                   L"own state; {}; {}",
                   g_jobBoardSlot != 0 ? L"the job board, " : L"(NOT the job board: its check failed) ",
@@ -462,6 +558,7 @@ ScreenSignals ReadScreenSignals() noexcept
             signals.miniGameMenu  = OnOff(stateManager, kMiniGameMenuId);
         }
         signals.chadleyState = ChadleyState(root);
+        ReadMinigame(signals, root, root != 0 ? Pointer(root + kStateManager) : 0);
         signals.pauseWidget  = PauseWidgetAlive();
         signals.nativeMenus  = NativeMenusOpen();
         signals.screenWidget = g_screenWidgets && screen_widgets::FullScreenOpen();

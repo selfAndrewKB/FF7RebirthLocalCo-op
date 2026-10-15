@@ -1,0 +1,26 @@
+{
+ "build": "1.005",
+ "research_build": "1.004",
+ "date": "2026-10-15",
+ "doc": "Rebirth/Documentation/research/RE-p2-minigames.md",
+ "facts": [
+  {
+   "name": "g_FrogGuysManager (pointer global; weak player character at +0x16C)",
+   "old": "0x14939BCC0",
+   "new": "0x1491D84E8",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "S-MINIGAME (RE-p2-minigames.md section 7); 1.005 address confirmed by the main session from both exes (frog: the getter 0x14168E1B8 / 0x140B34280 RIP operand; G-Bike: matching reference patterns, riprefs.py), 2026-10-15. The range table put the frog static 8 bytes off."
+  },
+  {
+   "name": "G-Bike manager FWeakObjectPtr (static)",
+   "old": "0x1470C6CF0",
+   "new": "0x146EF9F10",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "S-MINIGAME (RE-p2-minigames.md section 7); 1.005 address confirmed by the main session from both exes (frog: the getter 0x14168E1B8 / 0x140B34280 RIP operand; G-Bike: matching reference patterns, riprefs.py), 2026-10-15. The range table put the frog static 8 bytes off."
+  }
+ ]
+}

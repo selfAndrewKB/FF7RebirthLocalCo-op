@@ -130,6 +130,80 @@ void TestMenuWidgets()
     EXPECT(ReasonOf(signals) == WholeScreenReason::ScreenWidget);
 }
 
+void TestMinigames()
+{
+    using lss::views::kExclusionMiniGame;
+    using lss::views::kExclusionSecond;
+    std::puts("whole screen: minigames on their own stage go single; the field ones, battles and the buggy stay split");
+
+    auto lure        = Readable();  // the chicken lure: id 36 on, no exclusion bit while played
+    lure.minigameIds = true;
+    EXPECT(ReasonOf(lure) == WholeScreenReason::None);
+
+    auto stage        = Readable();  // Queen's Blood, chocobo race...: the minigame bit and id 36
+    stage.exclusion   = kExclusionMiniGame;
+    stage.minigameIds = true;
+    EXPECT(ReasonOf(stage) == WholeScreenReason::Minigame);
+
+    auto runWild      = Readable();  // Run Wild, bike shooting...: the minigame bit without id 36, no battle
+    runWild.exclusion = kExclusionMiniGame;
+    EXPECT(ReasonOf(runWild) == WholeScreenReason::Minigame);
+
+    auto vr          = Readable();  // the VR summon battle's intro and result: the minigame bit under on/off 153
+    vr.exclusion     = kExclusionMiniGame;
+    vr.colosseumFlag = true;
+    EXPECT(ReasonOf(vr) == WholeScreenReason::None);
+    vr.minigameIds = true;  // the colosseum guard holds even with a minigame id
+    EXPECT(ReasonOf(vr) == WholeScreenReason::None);
+
+    auto battle      = Readable();  // the minigame bit during a battle without a minigame id
+    battle.exclusion = kExclusionMiniGame;
+    battle.inBattle  = true;
+    EXPECT(ReasonOf(battle) == WholeScreenReason::None);
+
+    auto cactus        = Readable();  // the cactus mission: the second bit and id 140, probably a field battle
+    cactus.exclusion   = kExclusionSecond;
+    cactus.minigameIds = true;
+    cactus.inBattle    = true;
+    EXPECT(ReasonOf(cactus) == WholeScreenReason::Minigame);
+
+    auto summonBoss      = Readable();  // RestrictBattleFieldBySummonBoss: the second bit in battle, no minigame
+    summonBoss.exclusion = kExclusionSecond;
+    summonBoss.inBattle  = true;
+    EXPECT(ReasonOf(summonBoss) == WholeScreenReason::None);
+
+    auto buggy      = Readable();  // the buggy, the gravity device, program actions: the second bit alone
+    buggy.exclusion = kExclusionSecond;
+    EXPECT(ReasonOf(buggy) == WholeScreenReason::None);
+
+    auto frog      = Readable();  // frog guys: the second bit and its own manager (it sets id 23, not 36)
+    frog.exclusion = kExclusionSecond;
+    frog.frogGuys  = true;
+    EXPECT(ReasonOf(frog) == WholeScreenReason::Minigame);
+    frog.exclusion = 0;  // its manager alone (before or after the bit) decides nothing
+    EXPECT(ReasonOf(frog) == WholeScreenReason::None);
+
+    auto gbike  = Readable();  // G-Bike sets no bit: its manager, or a minigame-only map
+    gbike.gbike = true;
+    EXPECT(ReasonOf(gbike) == WholeScreenReason::Minigame);
+    auto map        = Readable();
+    map.minigameMap = true;
+    map.inBattle    = true;
+    EXPECT(ReasonOf(map) == WholeScreenReason::Minigame);
+
+    auto other      = Readable();  // events, travel and battle exits use other bits
+    other.exclusion = ~(kExclusionMiniGame | kExclusionSecond);
+    other.minigameIds = true;
+    EXPECT(ReasonOf(other) == WholeScreenReason::None);
+
+    std::puts("whole screen: a minigame is named after the menus and before cutscenes");
+    stage.nativeMenus = lss::views::kChocoboRace;
+    EXPECT(ReasonOf(stage) == WholeScreenReason::NativeMenu);
+    stage.nativeMenus = 0;
+    stage.cutscene    = true;
+    EXPECT(ReasonOf(stage) == WholeScreenReason::Minigame);
+}
+
 void TestSceneLeadIn()
 {
     std::puts("whole screen: a skippable scene's lead-in holds the single view until its cinematic takes over");
@@ -190,6 +264,7 @@ int main()
     TestNothingKnown();
     TestEachSignal();
     TestMenuWidgets();
+    TestMinigames();
     TestSceneLeadIn();
     TestOrder();
     TestOtherStates();
