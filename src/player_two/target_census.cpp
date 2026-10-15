@@ -12,6 +12,7 @@
 #include "player_two/equal_targeting.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
+#include "player_two/lock_group_coin.h"
 #include "player_two/object_fields.h"
 #include "players/unreal_access.h"
 
@@ -100,7 +101,7 @@ constexpr platform::FunctionFact kApplied{L"EnemyCtrl_GetCtrlCompTarget", 0x140A
 // Holder (ctrl+0xBF8 points to it; the creation call hands it over): +0 the enemy AI controller, +8 the selector.
 constexpr std::uint32_t kHolderSelector = 0x8;
 // Enemy AI controller (same offsets in both builds).
-constexpr std::uint32_t kCtrlEnemy      = 0x464;  // FWeakObjectPtr: the enemy character
+constexpr std::uint32_t kCtrlEnemy      = facts::kEnemyControllerCharacter;  // FWeakObjectPtr: the enemy character
 constexpr std::uint32_t kCtrlConditions = 0xB68;  // TMap<u8 Category, {TArray<Element>}> TargetSelectConditions
 // Selector (base layout, both builds).
 constexpr std::uint32_t kSelController   = 0x08;
@@ -119,9 +120,10 @@ constexpr std::uint32_t kHateInline = 0x188, kHateHeap = 0x5C0, kHateNum = 0x5C8
 constexpr std::uint32_t kCondLastKind = 0x1E0, kCondRunCount = 0x1E4;
 // Party manager: the leader (FWeakObjectPtr), player 1's character.
 constexpr std::uint32_t kPartyLeader = 0x148;
-// Lock group (a TMap value; its FName key is 8 bytes before it).
+// Lock group (a TMap value; its FName key is 8 bytes before it). +0x25 is bIgnoreProvocation: the strong lock slot (7)
+// when set, else the weak one (1); each member's priority is in the member (RE §18.4).
 constexpr std::int32_t  kGroupName = -8;
-constexpr std::uint32_t kGroupMembersNum = 0x08, kGroupMaxEach = 0x20, kGroupPrioritize = 0x24, kGroupPriority = 0x25;
+constexpr std::uint32_t kGroupMembersNum = 0x08, kGroupMaxEach = 0x20, kGroupPrioritize = 0x24, kGroupStrong = 0x25;
 
 constexpr std::uint8_t kLastPartyType = 13;  // party types 0..13; 14 guest, 16 none
 constexpr std::int32_t kListCap       = 64;  // more entries than this in a read list: not the layout we know
@@ -653,7 +655,9 @@ std::uint64_t Decide(std::uint64_t selector, std::uint64_t reason, std::uint64_t
 template <platform::CallRedirect& Call>
 std::uint64_t Pick(std::uint64_t group, std::uint64_t out, std::uint64_t c, std::uint64_t d) noexcept
 {
-    const auto result = reinterpret_cast<Fn>(Call.Original())(group, out, c, d);
+    // The pick itself runs through lock_group_coin (the picking enemy's coin names "the player"); this logs the result.
+    const auto result = lock_group_coin::Pick(reinterpret_cast<Fn>(Call.Original()), group, out, c, d,
+                                              &Call == &g_registerCall);
     const auto* self  = reinterpret_cast<const std::byte*>(group);
     if (self == nullptr || (result & 0xFF) == 0)
     {
@@ -670,11 +674,11 @@ std::uint64_t Pick(std::uint64_t group, std::uint64_t out, std::uint64_t c, std:
     if (platform::Enabled(platform::Level::Debug))
     {
         platform::LogDebug(L"target census: lock group {} ({}; prioritise the UCPC {}, {} member(s), at most {} each, "
-                           L"priority {}) picked {} (type {}); thread {}",
+                           L"strong lock {}) picked {} (type {}); thread {}",
                            players::unreal::NameText(ReadField<std::uint64_t>(self + kGroupName, 0)),
                            &Call == &g_repickCall ? L"re-pick" : L"first pick", YesNo(prioritized),
                            ReadField<std::int32_t>(self, kGroupMembersNum), ReadField<std::int32_t>(self, kGroupMaxEach),
-                           ReadField<std::uint8_t>(self, kGroupPriority), kWhoseNames[static_cast<std::size_t>(whose)],
+                           ReadField<std::uint8_t>(self, kGroupStrong), kWhoseNames[static_cast<std::size_t>(whose)],
                            TypeOf(picked), GetCurrentThreadId());
     }
     return result;

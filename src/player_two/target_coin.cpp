@@ -107,7 +107,7 @@ using ExecFn     = RC::Unreal::UnrealScriptFunction;
 // Set once at install.
 platform::VTableEntry  g_decisions[kDecisions];
 platform::CallRedirect g_actionCall;
-const RC::Unreal::UClass* g_enemyClass = nullptr;  // set on the game thread before the first swap; then read only
+std::atomic<const RC::Unreal::UClass*> g_enemyClass{nullptr};  // set once on the game thread; read on any thread
 std::uintptr_t        g_execs[kNatives]{};     // live exec addresses
 std::atomic<ExecFn>   g_originals[kNatives]{};  // null until swapped
 UFunction*            g_functions[kNatives]{};  // game thread
@@ -264,7 +264,8 @@ Player AnswerFor(const void* frame, bool& reaction) noexcept
         return Player::None;
     }
     const auto* const caller = static_cast<const RC::Unreal::UObject*>(ReadPointer(frame, kFrameObject));
-    if (caller == nullptr || !caller->IsA(g_enemyClass))
+    const auto* const enemyClass = g_enemyClass.load(std::memory_order_acquire);
+    if (caller == nullptr || enemyClass == nullptr || !caller->IsA(enemyClass))
     {
         return Player::None;
     }
@@ -387,11 +388,13 @@ constexpr DecisionFn kDecisionWrappers[kDecisions] = {&Decision<0>, &Decision<1>
 /// Swaps each UFunction's native pointer whose function exists and still holds the exec IDA named. Game thread.
 void TrySwaps() noexcept
 {
-    if (g_enemyClass == nullptr)
+    if (g_enemyClass.load(std::memory_order_relaxed) == nullptr)
     {
-        // Before any swap: an answering native reads it from any thread (the swap's release store publishes it).
-        g_enemyClass = UObjectGlobals::StaticFindObject<RC::Unreal::UClass*>(nullptr, nullptr, kEnemyControllerClass);
-        if (g_enemyClass == nullptr)
+        // Before any swap; read from any thread (an answering native, a lock-group pick).
+        const auto* const found =
+            UObjectGlobals::StaticFindObject<RC::Unreal::UClass*>(nullptr, nullptr, kEnemyControllerClass);
+        g_enemyClass.store(found, std::memory_order_release);
+        if (found == nullptr)
         {
             if (++g_swapTries == 1)
             {
@@ -500,6 +503,43 @@ void Remove() noexcept
     }
     // The action call crosses a block on the research build: put back only from the one thread that can run it,
     // which unloading is not; it passes through once g_on is off.
+}
+
+int TossForLockPick(const void* controller) noexcept
+{
+    const auto* const object     = static_cast<const RC::Unreal::UObject*>(controller);
+    const auto* const enemyClass = g_enemyClass.load(std::memory_order_acquire);
+    if (!Tossing() || object == nullptr || enemyClass == nullptr || !object->IsA(enemyClass))
+    {
+        return 0;
+    }
+    switch (Toss(controller, L"lock-group pick"))
+    {
+    case Player::One:
+        return 1;
+    case Player::Two:
+        return 2;
+    case Player::None:
+        break;
+    }
+    return 0;
+}
+
+void LockPickFellBack(const void* controller) noexcept
+{
+    const auto        key  = reinterpret_cast<std::uintptr_t>(controller);
+    const std::size_t slot = Find(key);
+    if (slot == kNoSlot)
+    {
+        return;
+    }
+    std::uintptr_t held = g_coins[slot].load(std::memory_order_relaxed);
+    if (held == (key | 2u) && g_coins[slot].compare_exchange_strong(held, key | 1u, std::memory_order_relaxed))
+    {
+        platform::LogDebug(L"target coin: enemy {:#x} counts player 1 as the player until its next action (its "
+                           L"lock-group pick could not take player 2)",
+                           key);
+    }
 }
 
 void Tick() noexcept

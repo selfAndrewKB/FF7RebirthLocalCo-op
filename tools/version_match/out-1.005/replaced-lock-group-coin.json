@@ -1,0 +1,12 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-10-15",
+  "doc": "Rebirth/Documentation/research/RE-p2-enemy-target-bias.md section 18 (S-LOCKGRP) and 20",
+  "facts": [
+    {"name": "LockGroup_PickTarget_PrioritizeUCPC: call ResolvePartyLeaderWeakPtr (call redirect; the bPrioritizeUCPC term)", "old": "0x1431EB28B", "new": "0x142EF2AC3", "bytes": "e8", "same_semantics": true, "confidence": "CONFIRMED", "note": "1.004 E8 80 5F 87 FD -> 0x140A61210, 1.005 E8 E0 1E 87 FD -> 0x1407649A8. Inside one 16-byte block in both. Pick's only leader read."},
+    {"name": "LockGroup_CountLocksPerTarget: call ResolvePartyLeaderWeakPtr (call redirect; the isLeader byte, read only by the rebalance)", "old": "0x1431DFC57", "new": "0x142EE860F", "bytes": "e8", "same_semantics": true, "confidence": "CONFIRMED", "note": "Fits one block on 1.004, crosses on 1.005: InstallFromOwnThread at on_unreal_init."},
+    {"name": "LockGroups_TickPruneAndRepick: call LockGroup_RebalanceLevelLocks (call redirect; its only caller)", "old": "0x14295F34C", "new": "0x14260771E", "bytes": "e8", "same_semantics": true, "confidence": "CONFIRMED", "note": "Crosses a block in both builds: InstallFromOwnThread at on_unreal_init. Game thread (BattleSystem_Tick -> PartyBattleAIMgr_Tick -> PBAIMgrLockSub_Tick)."},
+    {"name": "LockGroup_RebalanceLevelLocks", "old": "0x1431DAD5C", "new": "0x142EE3608", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "Address only: the redirect's expected target (entry 48 8B C4, 3 bytes)."}
+  ]
+}

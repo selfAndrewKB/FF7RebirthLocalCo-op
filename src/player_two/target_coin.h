@@ -44,4 +44,14 @@ void Remove() noexcept;
 /// Game thread, once per frame: the UFunction swaps until they are in place, and the summary.
 void Tick() noexcept;
 
+/// A lock-group pick is a decision whose target holds until it dies (RE §18.4, §20): tosses `controller`'s coin now,
+/// by the same rule, and keeps it as the enemy's coin. 2 player 2, 1 player 1, 0 none (off, no player 2, or not an
+/// enemy controller; the caller must already have checked that `controller` is a live object). Any thread.
+int TossForLockPick(const void* controller) noexcept;
+
+/// After a lock-group pick whose coin named player 2 locked onto someone else (player 2 could not take it, so the
+/// game's own player-1 term decided): `controller`'s coin becomes player 1, so its blueprint answers agree with the
+/// game's single-player view of that pick. Any thread; nothing if the coin is no longer player 2.
+void LockPickFellBack(const void* controller) noexcept;
+
 }  // namespace lss::player_two::target_coin

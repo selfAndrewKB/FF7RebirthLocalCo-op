@@ -81,6 +81,9 @@ inline constexpr std::uint32_t kFieldOperatorActive  = 0xD0;
 inline constexpr std::uint32_t kCharacterRequestedController = 0x578;
 inline constexpr std::uint32_t kCharacterEffectiveController = 0x580;
 inline constexpr std::uint32_t kCharacterRetainedAi          = 0x588;
+
+// Enemy AI controllers (EndAIControllerEnemyBase, both builds): an FWeakObjectPtr to the enemy character.
+inline constexpr std::uint32_t kEnemyControllerCharacter = 0x464;
 inline constexpr std::uint32_t kCharacterPlayerControlled    = 0x625;
 inline constexpr platform::PerBuild<std::uint32_t> kCharacterMoveState = {0x1750, 0x1770};  // 1.005: EndCharacter tick 0x140E8A44A mov rcx,[rdi+1770h] (1.004 0x14125B20A [rdi+1750h]); GetMoveState 0x141985320
 
