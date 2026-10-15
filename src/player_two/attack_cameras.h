@@ -13,9 +13,9 @@
 //     held player 2's view near player 1's (the Titan report of 2026-10-15);
 //   - each entry's active byte (+0x14), which code outside the updates reads (a stop by id, the leader change, the Menu
 //     operator): after both updates it held player 2's view.
-// A PlayerTwoUpdate around player 2's update puts player 2's own copy of the smoothing in the list and player 1's back
-// after, and puts back player 1's active bytes, so each camera reads only its own state (solo in each half; the game's
-// decision is untouched).
+// A PlayerTwoUpdate around player 2's update puts player 2's own copy of the smoothing and of the active bytes in the
+// list and player 1's back after, so each camera reads only its own state (solo in each half; the game's decision is
+// untouched).
 //
 // The shot change: a sequence cut asks UWorld::GetFirstPlayerController's camera manager for a camera cut, so a cut in
 // player 2's update cut player 1's view (its TAA / motion-blur history) and left player 2's smeared. Inside player 2's

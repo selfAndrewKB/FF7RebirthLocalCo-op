@@ -1,5 +1,6 @@
 #include "player_two/camera_effects_two.h"
 
+#include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/vtable_entry.h"
@@ -230,7 +231,9 @@ void StealBegin(void* notify, void* mesh, void* animation, float duration) noexc
     const void* owner  = OwnerOf(mesh);
     // Another party character (the game's own Begin wants an EndPlayerCharacter; the pair test reads character fields),
     // in a chain pair with player 2's member by the game's own test.
-    if (owner == nullptr || owner == member || !party_member::PlayerTypeOf(owner) || g_sharesKey(owner, member) == 0)
+    char shares = 0;
+    if (owner == nullptr || owner == member || !party_member::PlayerTypeOf(owner) ||
+        !platform::CallGuarded(g_sharesKey, shares, owner, static_cast<const void*>(member)) || shares == 0)
     {
         original(notify, mesh, animation, duration);
         return;

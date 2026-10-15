@@ -80,8 +80,10 @@ Copy        g_saved;               // player 1's, while g_inside
 std::array<float, 3> g_playerOneCamera{};  // player 1's previous camera location, while g_inside (for the log)
 struct SavedFlag
 {
-    void*        entry;
-    std::uint8_t active;
+    void*         entry;
+    std::uint64_t actor;     // the entry's sequence-actor weak (+4): with the priority, tells a reused address apart
+    std::uint8_t  priority;
+    std::uint8_t  active;
 };
 std::array<SavedFlag, kMaxEntries> g_flags{};
 std::size_t                        g_flagCount = 0;
@@ -90,6 +92,7 @@ std::array<const void*, kMaxEntries> g_activeTwo{};
 std::size_t                          g_activeTwoCount = 0;
 std::array<const void*, kMaxEntries> g_activeOne{};
 std::size_t                          g_activeOneCount = 0;
+bool                                 g_capSaid        = false;  // the walk met its cap once (logged)
 
 struct Counts
 {
@@ -135,7 +138,26 @@ void ForEachEntry(const void* list, Visit&& visit) noexcept
         visit(entry);
         entry = ReadPointer(entry, kEntryNext);
     }
+    if (entry != nullptr && !g_capSaid)
+    {
+        g_capSaid = true;
+        platform::LogDebug(L"attack cameras: the sequence list holds more than {} entries; the rest keep the last update's "
+                           L"active byte",
+                           kMaxEntries);
+    }
 }
+
+SavedFlag Identity(void* entry, std::uint8_t active) noexcept
+{
+    return {entry, ReadField<std::uint64_t>(entry, kEntryActor), ReadField<std::uint8_t>(entry, kEntryPriority), active};
+}
+
+bool SameEntry(const SavedFlag& saved, void* entry) noexcept
+{
+    const SavedFlag now = Identity(entry, 0);
+    return saved.entry == entry && saved.actor == now.actor && saved.priority == now.priority;
+}
+
 
 bool Contains(const std::array<const void*, kMaxEntries>& set, std::size_t count, const void* entry) noexcept
 {
@@ -253,6 +275,7 @@ PlayerTwoUpdate::PlayerTwoUpdate() noexcept
     void* list = ListNow();
     if (list == nullptr)
     {
+        g_copyList = nullptr;  // a list made later at the same address is a new one
         return;
     }
     if (list != g_copyList)
@@ -270,11 +293,14 @@ PlayerTwoUpdate::PlayerTwoUpdate() noexcept
     std::size_t                          activeOneCount = 0;
     ForEachEntry(list, [&](void* entry) {
         const auto active       = ReadField<std::uint8_t>(entry, kEntryActive);
-        g_flags[g_flagCount++] = {entry, active};
+        g_flags[g_flagCount++] = Identity(entry, active);
         if (active != 0)
         {
             activeOne[activeOneCount++] = entry;
         }
+        // Player 2's own byte from its last update (the Skill module re-flags every entry first, RE §1.3; this keeps any
+        // reader before that on player 2's own history). A new entry starts inactive, as in the game.
+        WriteField<std::uint8_t>(entry, kEntryActive, Contains(g_activeTwo, g_activeTwoCount, entry) ? 1 : 0);
     });
     // Player 1's view of the entries, as its own update left them (the stock order updates player 1's camera first).
     for (std::size_t i = 0; i < activeOneCount; ++i)
@@ -319,7 +345,7 @@ PlayerTwoUpdate::~PlayerTwoUpdate()
         // touched (the walk finds only live entries).
         for (std::size_t i = 0; i < g_flagCount; ++i)
         {
-            if (g_flags[i].entry == entry)
+            if (SameEntry(g_flags[i], entry))
             {
                 WriteField<std::uint8_t>(entry, kEntryActive, g_flags[i].active);
                 break;

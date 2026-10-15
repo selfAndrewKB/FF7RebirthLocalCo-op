@@ -121,7 +121,7 @@ bool          g_stateCallFailed    = false;
 bool          g_cutsceneCallFailed = false;
 bool          g_boardCallFailed    = false;
 bool          g_pauseCallFailed    = false;
-bool          g_slotCallFailed     = false;
+unsigned      g_slotFaults         = 0;  // guarded slot calls that faulted (a stale holder): that read says closed
 std::uint64_t g_location           = 0;      // the last location FName read
 bool          g_locationRead       = false;
 bool          g_atTitle            = false;  // g_location is the title's
@@ -190,36 +190,45 @@ bool PauseWidgetAlive() noexcept
     return !closed;
 }
 
-/// The game's validity test of the FWeakObjectPtr at `weak`; false if it faults (then not called again this run).
+/// A guarded slot call faulted: that read gives "closed" (the other slots go on being read). Logged on the first fault
+/// and every 1000th.
+void SlotFault() noexcept
+{
+    if (g_slotFaults++ % 1000 == 0)
+    {
+        platform::Log(L"whole screen: a menu slot's weak-pointer call raised an exception ({} so far); that menu reads as "
+                      L"closed",
+                      g_slotFaults);
+    }
+}
+
+/// The game's validity test of the FWeakObjectPtr at `weak`; false if none or it faults.
 bool WeakValid(std::uintptr_t weak) noexcept
 {
     bool valid = false;
-    if (weak == 0 || g_slotCallFailed || g_weakIsValid == nullptr)
+    if (weak == 0 || g_weakIsValid == nullptr)
     {
         return false;
     }
     if (!platform::CallGuarded(g_weakIsValid, valid, reinterpret_cast<const void*>(weak)))
     {
-        g_slotCallFailed = true;
-        platform::Log(L"whole screen: a menu slot's validity test raised an exception; the slot menus no longer switch the "
-                      L"view");
+        SlotFault();
         return false;
     }
     return valid;
 }
 
-/// The game's resolve of the FWeakObjectPtr at `weak`; 0 if none or it faults (then not called again this run).
+/// The game's resolve of the FWeakObjectPtr at `weak`; 0 if none or it faults.
 std::uintptr_t WeakObject(std::uintptr_t weak) noexcept
 {
     void* object = nullptr;
-    if (weak == 0 || g_slotCallFailed || g_weakGet == nullptr)
+    if (weak == 0 || g_weakGet == nullptr)
     {
         return 0;
     }
     if (!platform::CallGuarded(g_weakGet, object, reinterpret_cast<const void*>(weak)))
     {
-        g_slotCallFailed = true;
-        platform::Log(L"whole screen: a menu slot's resolve raised an exception; the slot menus no longer switch the view");
+        SlotFault();
         return 0;
     }
     return reinterpret_cast<std::uintptr_t>(object);

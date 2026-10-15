@@ -14,7 +14,8 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
-#include <unordered_set>
+#include <unordered_map>
+#include <utility>
 
 namespace lss::views::screen_widgets {
 
@@ -26,7 +27,7 @@ namespace {
 constexpr std::uintptr_t kAdd           = 0x140E68B98;
 constexpr std::uint8_t   kAddFirst[]    = {0x48, 0x89, 0x5C, 0x24, 0x18};
 constexpr std::uint32_t  kZOrder        = 0x2A8;  // i32; -1 once RemoveFromParent took it off the overlay
-constexpr std::uint32_t  kVisibility    = 0xC3;   // UWidget::Visibility (ESlateVisibility; stock UE 4.26 UMG)
+constexpr std::uint32_t  kVisibility    = 0xC3;   // UWidget::Visibility (ESlateVisibility; the UE4SS header dump, UMG.hpp)
 constexpr std::uint8_t   kCollapsed     = 1;
 constexpr std::uint8_t   kHidden        = 2;
 constexpr std::size_t    kMaxFollowed   = 8;
@@ -48,15 +49,31 @@ struct Followed
     std::wstring  name;
 };
 std::array<Followed, kMaxFollowed> g_followed{};
-std::unordered_set<std::wstring>   g_seen;
+// Each widget class seen, with whether it is a full-screen menu: the name is built once per class.
+struct ClassInfo
+{
+    std::wstring name;
+    bool         fullScreen = false;
+};
+std::unordered_map<const void*, ClassInfo> g_classes;
 
-std::wstring ClassName(void* widget) noexcept
+const void* ClassOf(void* widget) noexcept
 {
     try
     {
-        auto* object = static_cast<RC::Unreal::UObject*>(widget);
-        auto* type   = object->GetClassPrivate();
-        return type != nullptr ? std::wstring(type->GetName()) : std::wstring(L"?");
+        return static_cast<RC::Unreal::UObject*>(widget)->GetClassPrivate();
+    }
+    catch (...)
+    {
+        return nullptr;
+    }
+}
+
+std::wstring NameOfClass(const void* type)
+{
+    try
+    {
+        return std::wstring(static_cast<const RC::Unreal::UClass*>(type)->GetName());
     }
     catch (...)
     {
@@ -82,20 +99,28 @@ bool Read(const void* widget, std::uint32_t offset, T& out) noexcept
     return platform::CopyGuarded(&out, static_cast<const std::byte*>(widget) + offset, sizeof(T));
 }
 
-/// Alive (the game's weak resolve), in the overlay and not Collapsed or Hidden.
-bool OnScreen(const Followed& followed) noexcept
+enum class Presence
 {
-    if (!player_two::leader_scope::StillNames(followed.weak, followed.widget))
+    Gone,    // destroyed or taken off the overlay: no longer followed
+    Hidden,  // still in the overlay, Collapsed or Hidden: followed, not counted (it may be shown again without an add)
+    Shown,
+};
+
+Presence PresenceOf(const Followed& followed) noexcept
+{
+    std::int32_t z = -1;
+    if (!player_two::leader_scope::StillNames(followed.weak, followed.widget) || !Read(followed.widget, kZOrder, z) ||
+        z == -1)
     {
-        return false;
+        return Presence::Gone;
     }
-    std::int32_t z          = -1;
     std::uint8_t visibility = kCollapsed;
-    return Read(followed.widget, kZOrder, z) && z != -1 && Read(followed.widget, kVisibility, visibility) &&
-           visibility != kCollapsed && visibility != kHidden;
+    return Read(followed.widget, kVisibility, visibility) && visibility != kCollapsed && visibility != kHidden
+               ? Presence::Shown
+               : Presence::Hidden;
 }
 
-void Follow(void* widget, const std::wstring& name, std::int32_t z) noexcept
+void Follow(void* widget, const std::wstring& name, std::int32_t z)
 {
     for (const Followed& followed : g_followed)
     {
@@ -127,18 +152,23 @@ char Add(void* widget, std::int32_t z) noexcept
     }
     try
     {
-        const std::wstring name = ClassName(widget);
-        if (g_seen.insert(name).second)
+        const void* type = ClassOf(widget);
+        auto        it   = g_classes.find(type);
+        if (it == g_classes.end())
         {
-            platform::LogDebug(L"screen widgets: first add of {} (z {})", name, z);
+            ClassInfo info{NameOfClass(type)};
+            info.fullScreen = FullScreenName(info.name);
+            it              = g_classes.emplace(type, std::move(info)).first;
+            platform::LogDebug(L"screen widgets: first add of {} (z {}){}", it->second.name, z,
+                               it->second.fullScreen ? L": a full-screen menu" : L"");
         }
         else
         {
-            platform::LogTrace(L"screen widgets: {} added (z {})", name, z);
+            platform::LogTrace(L"screen widgets: {} added (z {})", it->second.name, z);
         }
-        if (FullScreenName(name))
+        if (it->second.fullScreen)
         {
-            Follow(widget, name, z);
+            Follow(widget, it->second.name, z);
         }
     }
     catch (...)
@@ -169,9 +199,10 @@ bool FullScreenOpen() noexcept
         {
             continue;
         }
-        if (OnScreen(followed))
+        const Presence presence = PresenceOf(followed);
+        if (presence != Presence::Gone)
         {
-            open = true;
+            open = open || presence == Presence::Shown;
             continue;
         }
         platform::Log(L"screen widgets: {} off screen", followed.name);
