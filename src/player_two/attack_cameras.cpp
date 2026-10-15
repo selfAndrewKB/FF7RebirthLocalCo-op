@@ -371,6 +371,11 @@ PlayerTwoUpdate::~PlayerTwoUpdate()
     g_activeTwoCount = activeTwoCount;
 }
 
+bool InsidePlayerTwoUpdate() noexcept
+{
+    return g_inside;
+}
+
 void Tick() noexcept
 {
     const auto now = Clock::now();

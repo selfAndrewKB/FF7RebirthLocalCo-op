@@ -147,6 +147,105 @@
    "same_semantics": true,
    "confidence": "CONFIRMED",
    "note": "S-MENUSWEEP / S-MENUEDGE (RE-p2-menu-census.md E1, E5); bytes re-read from both exes by the main session (atkcam_check.py, 2026-10-15)."
+  },
+  {
+   "name": "slot-20 compute: call CamEntry_IsActive_LeaderKeyed (Lever C site; 1.005 crosses a block)",
+   "old": "0x140E58FD0",
+   "new": "0x140D4F31C",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "S-ATKCAMLEADER (RE-p2-attack-cameras.md section 10.4); sites, targets and first bytes re-read from both exes by the main session (framing_check.py, 2026-10-15)."
+  },
+  {
+   "name": "CamEntry_IsActive_LeaderKeyed",
+   "old": "0x140AEEB7C",
+   "new": "0x140ED4598",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "S-ATKCAMLEADER (RE-p2-attack-cameras.md section 10.4); sites, targets and first bytes re-read from both exes by the main session (framing_check.py, 2026-10-15)."
+  },
+  {
+   "name": "EndBattleCameraActor_UsesTargetMeshOrActor",
+   "old": "0x140AEED2C",
+   "new": "0x140ED4A20",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "S-ATKCAMLEADER (RE-p2-attack-cameras.md section 10.4); sites, targets and first bytes re-read from both exes by the main session (framing_check.py, 2026-10-15)."
+  },
+  {
+   "name": "EndBattleCameraActor_GetTarget",
+   "old": "0x140AEEEEC",
+   "new": "0x140ED4BE0",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "S-ATKCAMLEADER (RE-p2-attack-cameras.md section 10.4); sites, targets and first bytes re-read from both exes by the main session (framing_check.py, 2026-10-15)."
+  },
+  {
+   "name": "EndBattleCameraActor_ShotInvolvesLeader",
+   "old": "0x140AEED90",
+   "new": "0x140ED4A84",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "S-ATKCAMLEADER (RE-p2-attack-cameras.md section 10.4); sites, targets and first bytes re-read from both exes by the main session (framing_check.py, 2026-10-15)."
+  },
+  {
+   "name": "EvaluatePose: call UpdateFromOperatorPose (per camera; 1.004 crosses a block)",
+   "old": "0x140C427CE",
+   "new": "0x14156AB2A",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "S-ATKCAMLEADER (RE-p2-attack-cameras.md section 10.4); sites, targets and first bytes re-read from both exes by the main session (framing_check.py, 2026-10-15)."
+  },
+  {
+   "name": "SetupAndSpawnCameraActor: call UpdateFromOperatorPose (seed)",
+   "old": "0x140B6A798",
+   "new": "0x141417B50",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "S-ATKCAMLEADER (RE-p2-attack-cameras.md section 10.4); sites, targets and first bytes re-read from both exes by the main session (framing_check.py, 2026-10-15)."
+  },
+  {
+   "name": "EndBattleCameraActor_UpdateFromOperatorPose",
+   "old": "0x140AEF118",
+   "new": "0x140ED5B40",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "S-ATKCAMLEADER (RE-p2-attack-cameras.md section 10.4); sites, targets and first bytes re-read from both exes by the main session (framing_check.py, 2026-10-15)."
+  },
+  {
+   "name": "ResolveTargetPoint type 3: call GetCharacterByPlayerType (R1)",
+   "old": "0x140AF0EC5",
+   "new": "0x140ED8273",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "S-ATKCAMLEADER (RE-p2-attack-cameras.md section 10.4); sites, targets and first bytes re-read from both exes by the main session (framing_check.py, 2026-10-15)."
+  },
+  {
+   "name": "ResolveTargetPoint type 6: call GetCharacterByPlayerType (R2)",
+   "old": "0x14292F6D9",
+   "new": "0x1425F03B4",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "S-ATKCAMLEADER (RE-p2-attack-cameras.md section 10.4); sites, targets and first bytes re-read from both exes by the main session (framing_check.py, 2026-10-15)."
+  },
+  {
+   "name": "BattleCamTarget_GetActorRotation: call GetCharacterByPlayerType (R3)",
+   "old": "0x142AA2995",
+   "new": "0x142705343",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "S-ATKCAMLEADER (RE-p2-attack-cameras.md section 10.4); sites, targets and first bytes re-read from both exes by the main session (framing_check.py, 2026-10-15)."
   }
  ]
 }

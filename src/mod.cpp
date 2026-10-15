@@ -47,6 +47,7 @@
 #include "player_two/rumble_watch.h"
 #include "player_two/pad_rumble.h"
 #include "player_two/attack_cameras.h"
+#include "player_two/attack_framing.h"
 #include "player_two/camera_effects_two.h"
 #include "player_two/combat_rumble.h"
 #include "player_two/rumble_list_two.h"
@@ -433,6 +434,7 @@ public:
         lss::player_two::lock_group_coin::Install(*image);  // lock groups (Stun Ray) prefer player 1 or 2 by each pick's coin
         lss::player_two::leader_reads::Install(*image);     // the game's own leader reads for an enemy follow its coin
         lss::player_two::attack_cameras::Install(*image);   // battle camera sequences (grabs, specials) on each camera's own state
+        lss::player_two::attack_framing::Install(*image);   // enemy specials: the target's half only; leader shots on the coin player
         lss::player_two::camera_effects_two::Install(*image);  // player 2's member's guard effect, shakes and chain pulls on player 2's camera
         lss::hud::InstallPlayerTwoPass(*image);      // player 2's HUD content, on (the hud-levers command switches it)
         lss::hud::InstallRootOverlayRender(*image);  // before the overlay renders: placement follow, trace
@@ -535,6 +537,7 @@ private:
         lss::player_two::leave_watch::Tick();          // the last leave's controller, followed until it is freed (logged)
         lss::player_two::vending::Tick();              // a press that opened no shop; player 2 leaving with their shop up
         lss::player_two::attack_cameras::Tick();       // the attack-camera status line (Debug)
+        lss::player_two::attack_framing::Tick();       // the attack-framing latches' clock and status line (Debug)
         lss::player_two::camera_effects_two::Tick();   // the camera-effect status line (Debug)
         if (!tickSeen_)
         {

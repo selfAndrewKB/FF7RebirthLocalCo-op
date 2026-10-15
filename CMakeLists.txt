@@ -126,6 +126,7 @@ add_library(LocalSplitScreen SHARED
     src/player_two/battle_camera.cpp
     src/player_two/camera_override.cpp
     src/player_two/attack_cameras.cpp
+    src/player_two/attack_framing.cpp
     src/player_two/camera_effects_two.cpp
     src/player_two/camera_distance.cpp
     src/player_two/main_camera_shape.cpp

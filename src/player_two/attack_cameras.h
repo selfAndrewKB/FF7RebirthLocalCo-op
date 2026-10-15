@@ -48,6 +48,9 @@ private:
     void* list_ = nullptr;
 };
 
+/// Game thread: inside player 2's camera update (a PlayerTwoUpdate holds the list), so "this camera" is player 2's.
+bool InsidePlayerTwoUpdate() noexcept;
+
 /// Game thread, once per engine tick: the status line (Debug, every 10 s with activity).
 void Tick() noexcept;
 
