@@ -88,6 +88,7 @@ constexpr std::uint32_t kExclusionMask  = 0x1A12288;
 constexpr std::int32_t  kMiniGameId     = 36;
 constexpr std::int32_t  kCrashBoxId     = 139;
 constexpr std::int32_t  kCactusId       = 140;
+constexpr std::int32_t  kId23           = 23;         // DisableOptionsButton; read only while it is on
 constexpr std::uint32_t kId23Setter     = 0x1A129A4;
 constexpr const wchar_t* kFrogGuysSetter = L"FEndFrogGuysMiniGame";
 // The game's battle test, UEndBattleAPI_IsInBattle (1.004 0x1408E242C), as reads: the battle system's byte +0x300 is 0
@@ -220,14 +221,14 @@ bool PauseWidgetAlive() noexcept
     return !closed;
 }
 
-/// A guarded slot call faulted: that read gives "closed" (the other slots go on being read). Logged on the first fault
-/// and every 1000th.
+/// A guarded weak-pointer call faulted (a menu slot's, or the frog-guys / G-Bike manager's): that read gives "closed"
+/// (the others go on being read). Logged on the first fault and every 1000th.
 void SlotFault() noexcept
 {
     if (g_slotFaults++ % 1000 == 0)
     {
-        platform::Log(L"whole screen: a menu slot's weak-pointer call raised an exception ({} so far); that menu reads as "
-                      L"closed",
+        platform::Log(L"whole screen: a weak-pointer call (a menu slot, or the frog-guys / G-Bike manager) raised an "
+                      L"exception ({} so far); that read says closed",
                       g_slotFaults);
     }
 }
@@ -354,11 +355,12 @@ bool InBattle(std::uintptr_t root) noexcept
            Read(mode + kEncounterState, state) && (state == 3 || state == 4);
 }
 
-/// Whether id 23's setter is the frog-guys minigame (the name turned into text only when it changes).
+/// Whether id 23 is on and its setter is the frog-guys minigame (the name turned into text only when it changes). Only
+/// while 23 is on: whether the game clears the setter when the id goes off is not established.
 bool FrogGuysSetter(std::uintptr_t stateManager) noexcept
 {
     std::uint64_t setter = 0;
-    if (!Read(stateManager + kId23Setter, setter) || setter == 0)
+    if (!OnOff(stateManager, kId23) || !Read(stateManager + kId23Setter, setter) || setter == 0)
     {
         return false;
     }

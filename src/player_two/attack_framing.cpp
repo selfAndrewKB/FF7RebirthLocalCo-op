@@ -19,7 +19,6 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
-#include <optional>
 
 namespace lss::player_two::attack_framing {
 
@@ -202,18 +201,23 @@ bool IsActive(void* unused, void* entry) noexcept
     {
         return active;
     }
-    const auto  key    = ReadField<std::uint64_t>(entry, kEntryActor);
-    const void* actor  = leader_scope::ObjectAt(static_cast<const std::byte*>(entry) + kEntryActor);
-    const void* camera = ReadPointer(actor, kSequenceCamera);
-    if (key == 0 || camera == nullptr)
+    const auto key = ReadField<std::uint64_t>(entry, kEntryActor);
+    if (key == 0)
     {
         return active;
     }
     const std::uint64_t perCamera = key ^ (attack_cameras::InsidePlayerTwoUpdate() ? 0x8000000000000000ull : 0);
     bool                made      = false;
     Latch&              latch     = Find(g_d1, perCamera, made);
+    const void*         camera    = nullptr;
     if (latch.value == kUndecided)
     {
+        const void* actor = leader_scope::ObjectAt(static_cast<const std::byte*>(entry) + kEntryActor);
+        camera            = ReadPointer(actor, kSequenceCamera);
+        if (camera == nullptr)
+        {
+            return active;
+        }
         latch.value = Decide(priority, camera);
         if (latch.value != kUndecided)
         {
@@ -262,10 +266,14 @@ std::uint8_t CoinOf(const void* camera) noexcept
 /// Around UpdateFromOperatorPose: the shot being evaluated, for the leader reads inside it.
 std::uint8_t UpdatePose(std::size_t site, void* camera, float deltaTime, const void* pose) noexcept
 {
-    const auto  original = reinterpret_cast<UpdateFn>(g_updateCalls[site].Original());
-    const void* saved    = g_shotCamera;
-    g_shotCamera         = generation::OnGameThread() ? camera : nullptr;
-    const auto result    = original(camera, deltaTime, pose);
+    const auto original = reinterpret_cast<UpdateFn>(g_updateCalls[site].Original());
+    if (!generation::OnGameThread())
+    {
+        return original(camera, deltaTime, pose);  // the shot camera belongs to the game thread
+    }
+    const void* saved = g_shotCamera;
+    g_shotCamera      = camera;
+    const auto result = original(camera, deltaTime, pose);
     g_shotCamera         = saved;
     return result;
 }
@@ -398,10 +406,15 @@ void Install(const platform::GameImage& image) noexcept
         g_sites.leader[i] = at(kLeaderCalls[i], 5);
         g_sites.d2        = g_sites.d2 && g_sites.leader[i] != 0;
     }
-    if (!(g_sites.d1 || g_sites.d2) || !game_thread_sites::Queue(&Place))
+    if (!(g_sites.d1 || g_sites.d2))
     {
-        platform::Log(L"attack framing: the sites are not what the research read (or the queue is full); enemy specials "
-                      L"keep the game's own framing");
+        platform::Log(L"attack framing: the sites are not what the research read; enemy specials keep the game's own "
+                      L"framing");
+    }
+    else if (!game_thread_sites::Queue(&Place))
+    {
+        platform::Log(L"attack framing: the game-thread placement queue is full; enemy specials keep the game's own "
+                      L"framing");
     }
 }
 

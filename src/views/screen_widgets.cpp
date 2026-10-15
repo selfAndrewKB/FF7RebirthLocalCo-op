@@ -71,6 +71,10 @@ const void* ClassOf(void* widget) noexcept
 
 std::wstring NameOfClass(const void* type)
 {
+    if (type == nullptr)
+    {
+        return L"?";
+    }
     try
     {
         return std::wstring(static_cast<const RC::Unreal::UClass*>(type)->GetName());

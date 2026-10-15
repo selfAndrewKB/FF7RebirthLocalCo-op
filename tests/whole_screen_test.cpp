@@ -161,6 +161,9 @@ void TestMinigames()
     battle.inBattle  = true;
     EXPECT(ReasonOf(battle) == WholeScreenReason::None);
 
+    battle.minigameIds = true;  // a minigame id overrides the battle guard
+    EXPECT(ReasonOf(battle) == WholeScreenReason::Minigame);
+
     auto cactus        = Readable();  // the cactus mission: the second bit and id 140, probably a field battle
     cactus.exclusion   = kExclusionSecond;
     cactus.minigameIds = true;
@@ -180,7 +183,10 @@ void TestMinigames()
     frog.exclusion = kExclusionSecond;
     frog.frogGuys  = true;
     EXPECT(ReasonOf(frog) == WholeScreenReason::Minigame);
-    frog.exclusion = 0;  // its manager alone (before or after the bit) decides nothing
+    frog.colosseumFlag = true;  // the colosseum guard is for the minigame bit only
+    EXPECT(ReasonOf(frog) == WholeScreenReason::Minigame);
+    frog.colosseumFlag = false;
+    frog.exclusion     = 0;  // its manager alone (before or after the bit) decides nothing
     EXPECT(ReasonOf(frog) == WholeScreenReason::None);
 
     auto gbike  = Readable();  // G-Bike sets no bit: its manager, or a minigame-only map
