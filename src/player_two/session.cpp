@@ -575,6 +575,17 @@ void Session::WaitForSlot(const party_member::SlotChoice& choice) noexcept
         return;
     }
     slotWaitLogged_ = key;
+    if (choice.wait == party_member::SlotWait::LinkPartner)
+    {
+        // RE-p2-synergy-skills.md S-SYNTAKE: the game gives a partner back only at the link's member end.
+        Log(L"player 2 waits for party member type {} (the 2nd slot, ordinal {}): a synergy partner the game has not "
+            L"given back yet (its link: ability kind {} mode {}, partner state {}, started {} ended {}); taken once the "
+            L"game ends its part of the link",
+            choice.type, choice.ordinal, choice.link.kind, choice.link.mode,
+            choice.link.state[choice.link.partner], choice.link.started[choice.link.partner],
+            choice.link.ended[choice.link.partner]);
+        return;
+    }
     Log(L"player 2 waits for party member type {} (the 2nd slot, ordinal {}): {} (AI brain {} state {}); the game's "
         L"party order chooses player 2's member, so a menu reorder ends the wait",
         choice.type, choice.ordinal,

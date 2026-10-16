@@ -14,6 +14,8 @@
 #include <Windows.h>
 
 #include <algorithm>
+#include <cstddef>
+#include <iterator>
 
 namespace lss::player_two::party_member {
 
@@ -46,6 +48,7 @@ struct Functions
     TypeFn            fieldLeaderType     = nullptr;
     TypeFn            defaultBattleLeader = nullptr;
     TypeTestFn        isBattleMember      = nullptr;
+    TypeFn            inBattle            = nullptr;  // UEndBattleAPI::IsInBattle, al only
 };
 Functions         g_fn;  // set once at install
 bool              g_installed    = false;
@@ -157,6 +160,7 @@ bool Install(const platform::GameImage& image) noexcept
     found      = Find(image, facts::kFieldLeaderType, g_fn.fieldLeaderType) && found;
     found      = Find(image, facts::kDefaultBattleLeaderType, g_fn.defaultBattleLeader) && found;
     found      = Find(image, facts::kIsBattleMember, g_fn.isBattleMember) && found;
+    found      = Find(image, facts::kIsInBattle, g_fn.inBattle) && found;
     const auto optionHolder = image.Rebase(facts::kOptionHolderGlobal, sizeof(void*));
     const auto battleState  = image.Rebase(facts::kBattleStateGlobal, sizeof(void*));
     if (!optionHolder || !battleState)
@@ -208,7 +212,62 @@ struct SlotRead
     void*          character   = nullptr;
     MemberSnapshot member{};
     AiSnapshot     ai{};
+    bool           linkBusy = false;
+    LinkRecordView link{};
 };
+
+// The battle system's link manager and its records (RE-p2-synergy-skills.md S-SYNTAKE §3; the same
+// offsets in both builds). The battle system is kBattleStateGlobal's object.
+constexpr std::uint32_t kLinkManager      = 0x2F0;
+constexpr std::uint32_t kLinkRecords      = 0x00;  // TArray of kLinkRecordSize-byte records: data, count
+constexpr std::uint32_t kLinkRecordCount  = 0x08;
+constexpr std::uint32_t kRecordAbility    = 0x10;
+constexpr std::uint32_t kAbilityKind      = 0x8B;
+constexpr std::uint32_t kAbilityMode      = 0x8F;
+constexpr std::uint32_t kRecordTypes      = 0x29;
+constexpr std::uint32_t kRecordPartner    = 0x39;
+constexpr std::uint32_t kRecordState      = 0x56;
+constexpr std::uint32_t kRecordStarted    = 0x100;
+constexpr std::uint32_t kRecordEnded      = 0x103;
+constexpr std::int32_t  kMaxLinkRecords   = 32;  // a sanity bound: a few records live at once
+
+/// The game's link record in which `playerType` is a partner it has not given back yet (party_lease.h
+/// LinkPartnerBusy). Plain reads; the caller holds the SEH guard.
+bool FindBusyLink(std::uint8_t playerType, LinkRecordView& out) noexcept
+{
+    const void* manager = ReadPointer(*g_battleState, kLinkManager);
+    const auto* records = static_cast<const std::byte*>(ReadPointer(manager, kLinkRecords));
+    if (records == nullptr)
+    {
+        return false;
+    }
+    const std::int32_t count = std::min(ReadField<std::int32_t>(manager, kLinkRecordCount), kMaxLinkRecords);
+    for (std::int32_t index = 0; index < count; ++index)
+    {
+        const std::byte* record = records + static_cast<std::size_t>(index) * kLinkRecordSize;
+        LinkRecordView   view;
+        for (std::uint32_t member = 0; member < std::size(view.types); ++member)
+        {
+            view.types[member]   = ReadField<std::uint8_t>(record, kRecordTypes + member);
+            view.state[member]   = ReadField<std::uint8_t>(record, kRecordState + member);
+            view.started[member] = ReadField<std::uint8_t>(record, kRecordStarted + member);
+            view.ended[member]   = ReadField<std::uint8_t>(record, kRecordEnded + member);
+        }
+        view.partner        = ReadField<std::uint8_t>(record, kRecordPartner);
+        const void* ability = ReadPointer(record, kRecordAbility);
+        if (ability != nullptr)
+        {
+            view.mode = ReadField<std::uint8_t>(ability, kAbilityMode);
+            view.kind = ReadField<std::uint8_t>(ability, kAbilityKind);
+        }
+        if (LinkPartnerBusy(view, playerType))
+        {
+            out = view;
+            return true;
+        }
+    }
+    return false;
+}
 
 void ReadSlot(void* playerOneController, SlotRead& out) noexcept
 {
@@ -243,6 +302,9 @@ void ReadSlot(void* playerOneController, SlotRead& out) noexcept
         out.character = character;
         out.member    = member;
         out.ai        = ReadAi(character);
+        // In battle only: synergy records come only from battle commands, and the battle teardown keeps a
+        // record whose started member never ended (S-SYNGATEVERIFY §3), which must not hold player 2 after it.
+        out.linkBusy  = g_fn.inBattle() != 0 && FindBusyLink(type, out.link);
         return;
     }
 }
@@ -304,6 +366,12 @@ SlotChoice ChooseSlot(void* playerOneController, bool log) noexcept
     {
         choice.wait = SlotWait::AiNotReady;
     }
+    else if (read.linkBusy)
+    {
+        // A synergy partner on its approach (its AI's, in BATTLE): taken only once the game gives it back.
+        choice.wait = SlotWait::LinkPartner;
+        choice.link = read.link;
+    }
     else
     {
         choice.wait   = SlotWait::None;
@@ -312,10 +380,11 @@ SlotChoice ChooseSlot(void* playerOneController, bool log) noexcept
     if (log)
     {
         platform::Log(L"party slot: field leader type {} at ordinal {}; the 2nd slot is ordinal {} (type {}): {}; its AI "
-                      L"brain {} state {}: {}",
+                      L"brain {} state {}: {}{}",
                       static_cast<unsigned>(read.fieldLeader), read.anchor, read.ordinal, static_cast<unsigned>(read.type),
                       Describe(choice.verdict), static_cast<unsigned>(choice.ai.brainIndex),
-                      static_cast<unsigned>(choice.ai.state), Describe(readiness));
+                      static_cast<unsigned>(choice.ai.state), Describe(readiness),
+                      choice.wait == SlotWait::LinkPartner ? L"; a synergy partner the game has not given back yet" : L"");
     }
     return choice;
 }

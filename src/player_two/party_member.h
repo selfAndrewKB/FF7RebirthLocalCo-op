@@ -40,24 +40,28 @@ enum class SlotWait
     NoSlot,       // the party has no member but player 1's (a solo story party): nothing to wait on here
     NotEligible,  // the 2nd slot's member is not free by the switch's own member test (yet)
     AiNotReady,   // the 2nd slot's member is held by a story script, or not following the party
+    LinkPartner,  // the 2nd slot's member is a synergy partner the game has not given back yet (`link`)
     Unread,       // the party reads faulted (objects torn down under them, as in a reload)
 };
 
 struct SlotChoice
 {
-    void*        member  = nullptr;  // the member to take; null while waiting
-    SlotWait     wait    = SlotWait::NoSlot;
-    std::uint8_t type    = 0xFF;     // the 2nd slot's player type (0xFF with no slot)
-    std::int32_t ordinal = -1;
-    Eligibility  verdict = Eligibility::NoCharacter;
-    AiSnapshot   ai{};
+    void*          member  = nullptr;  // the member to take; null while waiting
+    SlotWait       wait    = SlotWait::NoSlot;
+    std::uint8_t   type    = 0xFF;     // the 2nd slot's player type (0xFF with no slot)
+    std::int32_t   ordinal = -1;
+    Eligibility    verdict = Eligibility::NoCharacter;
+    AiSnapshot     ai{};
+    LinkRecordView link{};             // with LinkPartner: the game's link record that holds it
 };
 
 /// The member player 2 plays: the 2nd slot of the game's party order, the row after the field leader
 /// in the battle-member list the party panel shows and player 1's battle switch cycles, stepping past
 /// player 1's character as that cycle does (RE-p2-party-order.md §5). It is taken only when free by the
-/// battle switch's own member test and its AI is in the state the game hands players (FOLLOW, BATTLE);
-/// otherwise player 2 waits on it and never falls through to the 3rd slot. Logged when `log` is set.
+/// battle switch's own member test and its AI is in the state the game hands players (FOLLOW, BATTLE),
+/// and not while it is a synergy partner the game has not given back yet (party_lease.h
+/// LinkPartnerBusy); otherwise player 2 waits on it and never falls through to the 3rd slot. Logged
+/// when `log` is set.
 SlotChoice ChooseSlot(void* playerOneController, bool log = true) noexcept;
 
 /// `member`'s AI: its active brain and that brain's state. Game thread.
