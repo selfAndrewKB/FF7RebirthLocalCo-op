@@ -23,7 +23,9 @@
 //   - LinkMember_End_RepossessLeaderWithPrimaryPC names the member for the call; for a remembered character its
 //     leader-type test answers the member's type and its primary-controller read answers that player's controller, so
 //     the game gives it back to its own player, unless that player has switched to another character meanwhile (then it
-//     stays with its AI, as in single player). Player 2's member is always given back to player 2's controller.
+//     stays with its AI, as in single player) or no longer owns it (player 2 gave it back during the approach, or the
+//     other human drives it: the game's own test decides). Player 2's member is always given back to player 2's
+//     controller.
 // Nothing else reads a changed leader: only those four calls inside the three functions are answered. Classic mode
 // (deferred) is left to the game: its Classic hand-over keeps the controller. Placed from the game thread
 // (game_thread_sites; some calls cross a 16-byte block), all or nothing. Game thread only; other threads pass through.

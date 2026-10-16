@@ -121,6 +121,7 @@ const void*             g_partner   = nullptr;  // the partner of the AI request
 const void*             g_initiator = nullptr;
 const void*             g_ending    = nullptr;  // the member of the member end being run
 int                     g_endPlayer = 0;        // the player whose character that member end gives back (T3's answer)
+constexpr int           kRefused    = -1;       // g_endPlayer: T3 refused a remembered character (no longer owned)
 const void*             g_session   = nullptr;  // player 2's controller the remembered characters belong to
 
 struct Counts
@@ -159,6 +160,29 @@ const wchar_t* Holder(const void* character) noexcept
            : driver == generation::PlayerOneController() ? L"player 1"
            : driver == generation::PlayerTwoController() ? L"player 2"
                                                          : L"its AI";
+}
+
+/// Why `player` no longer owns `character` (nullptr: it does). Player 2 owns only the session's member
+/// (generation::Member(): cleared at once when player 2 gives it back, loses it or leaves, set again only by a take),
+/// player 1 every other character; neither owns one the other human's controller drives. The weak pointer of a
+/// remembered character proves only that it is the same object, not that its player still has it.
+const wchar_t* LostBy(int player, const void* character) noexcept
+{
+    const bool playerTwos = character == generation::Member();
+    if (player == 2 && !playerTwos)
+    {
+        return L"player 2 does not play it (a give-back, a lost member, a leave, or a take not finished)";
+    }
+    if (player == 1 && playerTwos)
+    {
+        return L"player 2 plays it now";
+    }
+    const int holding = PlayerHolding(character);
+    if (holding != 0 && holding != player)
+    {
+        return holding == 1 ? L"player 1's controller drives it" : L"player 2's controller drives it";
+    }
+    return nullptr;
 }
 
 std::uint8_t TypeOf(const void* character) noexcept
@@ -312,6 +336,18 @@ std::uint8_t PartnerLeaderType(std::uint8_t original) noexcept
         }
         return original;
     }
+    if (const wchar_t* why = LostBy(player, partner))
+    {
+        // Player 2's controller still drives a member the session gave up (its give-back is under way): the game's
+        // own answer, as before player 2 had it.
+        if (Line())
+        {
+            platform::LogDebug(L"synergy partner: {}'s partner {} is driven by player {} but not owned ({}): the game's "
+                               L"own answer ({})",
+                               NameOf(g_initiator), NameOf(partner), player, why, original);
+        }
+        return original;
+    }
     const std::uint8_t type = TypeOf(partner);
     if (type >= kNoType)
     {
@@ -363,7 +399,7 @@ std::uint64_t MemberEnd(void* unused, void* record, void* member, std::uint64_t 
     g_ending                = member;
     g_endPlayer             = 0;
     const auto result       = original(unused, record, member, index);
-    if (g_endPlayer != 0)
+    if (g_endPlayer > 0)
     {
         if (Held* held = Find(member))
         {
@@ -389,6 +425,22 @@ std::uint8_t EndLeaderType() noexcept
     {
         return original;
     }
+    // Only while its player still owns it: player 2 may have given it back during the approach (a party change, the
+    // game making it player 1's leader); re-possessing it then would undo that. Tested here as well as in Tick: the
+    // give-back and the member end can run in one frame. The game's own test then decides (player 1's new leader goes
+    // to player 1; a character nobody holds stays with its AI, as a non-leader partner in single player).
+    if (const wchar_t* why = LostBy(held->player, member))
+    {
+        if (Line())
+        {
+            platform::LogDebug(L"synergy partner: {} not given back to player {}: {} (driven by {}); the game's own "
+                               L"give-back test",
+                               NameOf(member), held->player, why, Holder(member));
+        }
+        *held       = {};
+        g_endPlayer = kRefused;  // an earlier answer in this member end no longer stands
+        return original;
+    }
     // Only while its player has no other character: a player who switched to another member during the approach keeps
     // that one, and the old one stays with its AI, as in single player (the game's test then fails for it as well).
     void* const       controller = held->player == 2 ? generation::PlayerTwoController() : generation::PlayerOneController();
@@ -400,7 +452,8 @@ std::uint8_t EndLeaderType() noexcept
             platform::LogDebug(L"synergy partner: {} not given back: player {} plays {} now", NameOf(member),
                                held->player, NameOf(pawn));
         }
-        *held = {};
+        *held       = {};
+        g_endPlayer = kRefused;
         return original;
     }
     const std::uint8_t type = TypeOf(member);
@@ -425,6 +478,23 @@ void* EndPrimary() noexcept
     // ran with player 2's member as the leader type, inside player 2's command window, without the primary controller
     // swapped, would otherwise give it to player 1).
     int player = g_endPlayer;
+    if (player == kRefused)
+    {
+        // A refused give-back never lands on player 2's controller, even when the primary controller reads it (a member
+        // end inside a player-2 scope): the game's single-player target, player 1's, or the game's own.
+        void* const playerOne = generation::PlayerOneController();
+        if (original == generation::PlayerTwoController() && playerOne != nullptr && member != generation::Member())
+        {
+            if (Line())
+            {
+                platform::LogDebug(L"synergy partner: {} (refused) would go to player 2's controller as the primary; "
+                                   L"player 1's instead",
+                                   NameOf(member));
+            }
+            return playerOne;
+        }
+        return original;
+    }
     if (player == 0 && member == generation::Member())
     {
         player = 2;
@@ -603,6 +673,17 @@ void Tick() noexcept
         }
         if (!leader_scope::StillNames(held.weak, held.character))
         {
+            held = {};
+            continue;
+        }
+        if (const wchar_t* why = LostBy(held.player, held.character))
+        {
+            if (Line())
+            {
+                platform::LogDebug(L"synergy partner: {} forgotten (handed to its AI for player {}): {}; the game's own "
+                                   L"give-back applies to it",
+                                   NameOf(held.character), held.player, why);
+            }
             held = {};
             continue;
         }
