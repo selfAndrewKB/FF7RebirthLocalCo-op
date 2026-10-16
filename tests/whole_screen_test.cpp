@@ -147,12 +147,12 @@ void TestMinigames()
     play.inBattle = true;  // 36 needs no battle guard (no battle holds it; the cactus mission is a battle with 140)
     EXPECT(ReasonOf(play) == WholeScreenReason::Minigame);
 
-    // The chicken lure, the chocobo capture's chase, the buggy: 36 held by a field use.
+    // The chicken lure, the chocobo capture's chase: 36 held by a field use.
     auto field            = Readable();
     field.minigamePlaying = true;
     field.fieldMinigame   = true;
     EXPECT(ReasonOf(field) == WholeScreenReason::None);
-    field.exclusion = kExclusionSecond;  // the lure's result, the buggy's bit 1: still split
+    field.exclusion = kExclusionSecond;  // the lure's result, a field event's bit 1: still split
     EXPECT(ReasonOf(field) == WholeScreenReason::None);
     field.exclusion = kExclusionMiniGame;  // the chocobo capture's catch step: the minigame bit, a stage
     EXPECT(ReasonOf(field) == WholeScreenReason::Minigame);
@@ -246,12 +246,12 @@ void TestMinigames()
 void TestFieldUseNames()
 {
     using lss::views::FieldUseName;
-    std::puts("whole screen: on/off 36's field uses by name (exact flows, action prefixes)");
+    std::puts("whole screen: on/off 36's field uses by name (the two native flows, exactly)");
     EXPECT(FieldUseName(L"FEndChickenLureMiniGameFlow"));
     EXPECT(FieldUseName(L"EndChocoboCaptureManager"));
     EXPECT(!FieldUseName(L"FEndChickenLureMiniGameFlowX"));  // the flows by exact name
-    EXPECT(FieldUseName(L"act2360_MiniGame_Buggy"));
-    EXPECT(FieldUseName(L"act2360_MiniGame_Buggy_Hard"));
+    EXPECT(!FieldUseName(L"act2360_MiniGame_Buggy"));  // the desert buggy course: a minigame
+    EXPECT(!FieldUseName(L"act2360_MiniGame_Buggy_Hard"));
     EXPECT(!FieldUseName(L"act3110_Gravity_010_A_Room"));  // the gravity console holds the party: single
     EXPECT(!FieldUseName(L"act3110_Other"));
     EXPECT(!FieldUseName(L"act1310_MiniGame_FrogGuys_Normal_Quest"));

@@ -27,8 +27,8 @@
 //     the session's on/off 153 with the minigame bit, outside a battle (the game sets the bit in the session's
 //     menu, intro and result states and clears it for the fight; the intro is already a battle);
 //   - a minigame (the user's rule, 2026-10-15/16: single, except the field uses where the party stays with player 1:
-//     the chicken lure, the chocobo capture's chase, the buggy; the Temple's gravity rooms go single: their console
-//     holds the whole party floating until player 1 chooses, the user's call 2026-10-16). The game's own switch is
+//     the chicken lure and the chocobo capture's chase; the Temple's gravity rooms and the desert buggy course go
+//     single). The game's own switch is
 //     on/off 36 MiniGamePlaying: the event runner holds it from before an action's opening fade to after its closing
 //     fade, named after the action, and the native flows hold it for their game (RE-p2-minigames.md §9-§10,
 //     RE-p2-minigames-stage2.md). The field-exclusion bits only flash during play (frog jumping and Run Wild clear
@@ -69,8 +69,8 @@ struct ScreenSignals
     // The minigame inputs (RE-p2-minigames.md §7.6):
     std::uint32_t exclusion   = 0;      // the field-exclusion mask (bit 21 minigame read; the rest logged)
     bool          minigamePlaying = false;  // on/off 36 MiniGamePlaying
-    bool          fieldMinigame   = false;  // 36's setter is a field use (the chicken lure, the chocobo capture's chase,
-                                            // the buggy): it does not count
+    bool          fieldMinigame   = false;  // 36's setter is a field use (the chicken lure, the chocobo capture's
+                                            // chase): it does not count
     bool          minigameIds     = false;  // on/off 139 crash box or 140 cactus mission (their own ids)
     bool          frogGuys        = false;  // the frog-guys manager is in a game state (2..11: load to finish)
     bool          inBattle    = false;  // the game's UEndBattleAPI::IsInBattle test
@@ -88,8 +88,8 @@ inline constexpr std::uint32_t kExclusionSecond   = 1u << 1;   // DisableControl
 /// intro runs inside the battle).
 bool ArenaMenu(const ScreenSignals& signals) noexcept;
 
-/// Whether on/off 36's setter names a field use, where the party stays with player 1 (the user's calls): exactly the
-/// native chicken lure or chocobo capture, or a data action of the buggy (by prefix).
+/// Whether on/off 36's setter names a field use, where the party stays with player 1: exactly the native chicken lure or
+/// chocobo capture.
 bool FieldUseName(std::wstring_view setter) noexcept;
 
 /// Whether a minigame holds player 1: G-Bike or a minigame map; on/off 36 held by a minigame (not a field use); the crash

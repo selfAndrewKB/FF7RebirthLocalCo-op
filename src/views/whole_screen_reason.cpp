@@ -7,12 +7,12 @@ namespace lss::views {
 namespace {
 
 // On/off 36's setter is the FName of the last SetOn that passed one: the event runner passes the action's own name (its
-// Action row), the native flows their class name. Every other 36 holder in the game's Action tables is a minigame or a
-// minigame's scene (RE-p2-minigames-stage2.md, S-STAGEMG2's list of all 409).
+// Action row), the native flows their class name. Every holder in the game's Action tables is a minigame or a minigame's
+// scene (RE-p2-minigames-stage2.md, S-STAGEMG2's list of all 409), so only these two native flows are field uses. The
+// Temple's gravity rooms (their console floats the whole party until player 1 chooses) and the desert buggy course
+// (act2360_MiniGame_Buggy, a looped course with a hard mode and a shooting game; not the field vehicle, which sets no 36)
+// go single (the user's calls, 2026-10-16).
 constexpr std::array<std::wstring_view, 2> kFieldFlows{L"FEndChickenLureMiniGameFlow", L"EndChocoboCaptureManager"};
-// The Temple's gravity rooms (act3110_Gravity_*) are not a field use: their console floats the whole party until player 1
-// chooses (the user's call, 2026-10-16), so they go single like the other 36 holders.
-constexpr std::array<std::wstring_view, 1> kFieldActions{L"act2360_MiniGame_Buggy"};
 
 }  // namespace
 
@@ -21,13 +21,6 @@ bool FieldUseName(std::wstring_view setter) noexcept
     for (const std::wstring_view name : kFieldFlows)
     {
         if (setter == name)
-        {
-            return true;
-        }
-    }
-    for (const std::wstring_view prefix : kFieldActions)
-    {
-        if (setter.starts_with(prefix))
         {
             return true;
         }
