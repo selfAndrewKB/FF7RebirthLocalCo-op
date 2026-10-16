@@ -27,9 +27,10 @@
 //     the session's on/off 153 with the minigame bit, outside a battle (the game sets the bit in the session's
 //     menu, intro and result states and clears it for the fight; the intro is already a battle);
 //   - a minigame (the user's rule, 2026-10-15/16: single, except the field uses where the party stays with player 1:
-//     the chicken lure, the chocobo capture's chase, the buggy, the gravity rooms). The game's own switch is on/off 36
-//     MiniGamePlaying: the event runner holds it from before an action's opening fade to after its closing fade, named
-//     after the action, and the native flows hold it for their game (RE-p2-minigames.md §9-§10,
+//     the chicken lure, the chocobo capture's chase, the buggy; the Temple's gravity rooms go single: their console
+//     holds the whole party floating until player 1 chooses, the user's call 2026-10-16). The game's own switch is
+//     on/off 36 MiniGamePlaying: the event runner holds it from before an action's opening fade to after its closing
+//     fade, named after the action, and the native flows hold it for their game (RE-p2-minigames.md §9-§10,
 //     RE-p2-minigames-stage2.md). The field-exclusion bits only flash during play (frog jumping and Run Wild clear
 //     them for the play state), so they cover only what comes before a game's 36: bit 21 DisableController_MiniGame
 //     outside battles and the VR / colosseum session. Plus the crash box's and cactus mission's own ids (139, 140),
@@ -69,7 +70,7 @@ struct ScreenSignals
     std::uint32_t exclusion   = 0;      // the field-exclusion mask (bit 21 minigame read; the rest logged)
     bool          minigamePlaying = false;  // on/off 36 MiniGamePlaying
     bool          fieldMinigame   = false;  // 36's setter is a field use (the chicken lure, the chocobo capture's chase,
-                                            // the buggy, a gravity room): it does not count
+                                            // the buggy): it does not count
     bool          minigameIds     = false;  // on/off 139 crash box or 140 cactus mission (their own ids)
     bool          frogGuys        = false;  // the frog-guys manager is in a game state (2..11: load to finish)
     bool          inBattle    = false;  // the game's UEndBattleAPI::IsInBattle test
@@ -88,7 +89,7 @@ inline constexpr std::uint32_t kExclusionSecond   = 1u << 1;   // DisableControl
 bool ArenaMenu(const ScreenSignals& signals) noexcept;
 
 /// Whether on/off 36's setter names a field use, where the party stays with player 1 (the user's calls): exactly the
-/// native chicken lure or chocobo capture, or a data action of the buggy or the Temple's gravity rooms (by prefix).
+/// native chicken lure or chocobo capture, or a data action of the buggy (by prefix).
 bool FieldUseName(std::wstring_view setter) noexcept;
 
 /// Whether a minigame holds player 1: G-Bike or a minigame map; on/off 36 held by a minigame (not a field use); the crash

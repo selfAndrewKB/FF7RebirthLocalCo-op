@@ -10,7 +10,9 @@ namespace {
 // Action row), the native flows their class name. Every other 36 holder in the game's Action tables is a minigame or a
 // minigame's scene (RE-p2-minigames-stage2.md, S-STAGEMG2's list of all 409).
 constexpr std::array<std::wstring_view, 2> kFieldFlows{L"FEndChickenLureMiniGameFlow", L"EndChocoboCaptureManager"};
-constexpr std::array<std::wstring_view, 2> kFieldActions{L"act2360_MiniGame_Buggy", L"act3110_Gravity_"};
+// The Temple's gravity rooms (act3110_Gravity_*) are not a field use: their console floats the whole party until player 1
+// chooses (the user's call, 2026-10-16), so they go single like the other 36 holders.
+constexpr std::array<std::wstring_view, 1> kFieldActions{L"act2360_MiniGame_Buggy"};
 
 }  // namespace
 
