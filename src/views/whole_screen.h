@@ -26,15 +26,19 @@
 //   - the VR and colosseum menus and result screens (Chadley's combat simulator, the Gold Saucer colosseum):
 //     the session's on/off 153 with the minigame bit, outside a battle (the game sets the bit in the session's
 //     menu, intro and result states and clears it for the fight; the intro is already a battle);
-//   - a minigame that takes player 1 away to its own stage (the user's rule, 2026-10-15: the chicken lure,
-//     where the party stays in the field with player 1, stays split; frog jumping goes single). The game's own
-//     switch for it is its field-exclusion mask: bit 21 DisableController_MiniGame, bit 1 DisableController_2nd
-//     (RE-p2-minigames.md §1, §7), guarded by the game's own battle test and the colosseum flag, plus the
-//     minigames that set no bit (G-Bike's manager, the minigame-only maps).
+//   - a minigame (the user's rule, 2026-10-15/16: single, except the field uses where the party stays with player 1:
+//     the chicken lure, the chocobo capture's chase, the buggy, the gravity rooms). The game's own switch is on/off 36
+//     MiniGamePlaying: the event runner holds it from before an action's opening fade to after its closing fade, named
+//     after the action, and the native flows hold it for their game (RE-p2-minigames.md §9-§10,
+//     RE-p2-minigames-stage2.md). The field-exclusion bits only flash during play (frog jumping and Run Wild clear
+//     them for the play state), so they cover only what comes before a game's 36: bit 21 DisableController_MiniGame
+//     outside battles and the VR / colosseum session. Plus the crash box's and cactus mission's own ids (139, 140),
+//     the frog manager's own state, G-Bike's manager and the minigame-only maps.
 //
 // The decision is pure, so it is tested on the host; the reads are in whole_screen.cpp.
 
 #include <cstdint>
+#include <string_view>
 
 namespace lss::platform {
 class GameImage;
@@ -62,11 +66,12 @@ struct ScreenSignals
     bool          miniGameMenu  = false;  // on/off 92 SoundCallEventMiniGameMenuInOut
     std::int8_t   chadleyState  = -1;     // Chadley's manager state (0 idle, 1 greeting, 2 shop, 3 VR, 4 farewell, 5 end)
     // The minigame inputs (RE-p2-minigames.md §7.6):
-    std::uint32_t exclusion   = 0;      // the field-exclusion mask (bit 21 minigame, bit 1 the second-purpose bit)
-    bool          minigameIds = false;  // on/off 36 MiniGamePlaying, 139 crash box or 140 cactus mission
-    bool          fieldMinigame = false;  // the only one on is 36, held by a field minigame (the chicken lure, the chocobo
-                                          // capture's chase): it does not count (S-FRAMINGVERIFY 5e/5f)
-    bool          frogGuys    = false;  // the frog-guys manager holds its frog, or it set id 23
+    std::uint32_t exclusion   = 0;      // the field-exclusion mask (bit 21 minigame read; the rest logged)
+    bool          minigamePlaying = false;  // on/off 36 MiniGamePlaying
+    bool          fieldMinigame   = false;  // 36's setter is a field use (the chicken lure, the chocobo capture's chase,
+                                            // the buggy, a gravity room): it does not count
+    bool          minigameIds     = false;  // on/off 139 crash box or 140 cactus mission (their own ids)
+    bool          frogGuys        = false;  // the frog-guys manager is in a game state (2..11: load to finish)
     bool          inBattle    = false;  // the game's UEndBattleAPI::IsInBattle test
     bool          gbike       = false;  // the G-Bike manager lives
     bool          minigameMap = false;  // the location is a minigame-only map (chocobo race, coaster, G-Bike, Moogle)
@@ -74,17 +79,21 @@ struct ScreenSignals
 
 /// The field-exclusion bits the minigame rule reads (UEnum EndFieldExclusion).
 inline constexpr std::uint32_t kExclusionMiniGame = 1u << 21;  // DisableController_MiniGame
-inline constexpr std::uint32_t kExclusionSecond   = 1u << 1;   // DisableController_2nd
+inline constexpr std::uint32_t kExclusionSecond   = 1u << 1;   // DisableController_2nd: not read (it flashes during
+                                                                // play); named for the tests of the uses that keep split
 
 /// Whether a VR or colosseum session shows its menu or result screen: on/off 153 with the minigame bit, outside a battle
 /// (RE-p2-minigames.md §7.2: the bit is on in the session's menu, intro and result states, off in the fight; the
 /// intro runs inside the battle).
 bool ArenaMenu(const ScreenSignals& signals) noexcept;
 
-/// Whether a minigame has taken player 1 to its own stage (§7.6): G-Bike or a minigame map; or the minigame bit, outside
-/// the colosseum / VR battles (on/off 153) and outside a battle unless a minigame id is on (the cactus mission is a
-/// battle); or the second-purpose bit with a minigame id or frog guys (the buggy, summon bosses, the gravity device and
-/// program actions also use that bit, without them).
+/// Whether on/off 36's setter names a field use, where the party stays with player 1 (the user's calls): exactly the
+/// native chicken lure or chocobo capture, or a data action of the buggy or the Temple's gravity rooms (by prefix).
+bool FieldUseName(std::wstring_view setter) noexcept;
+
+/// Whether a minigame holds player 1: G-Bike or a minigame map; on/off 36 held by a minigame (not a field use); the crash
+/// box's or cactus mission's own id; the frog manager in a game state; or the minigame bit outside a battle and the
+/// VR / colosseum session (the entry prompts and the native flows' first states, before their 36).
 bool MinigameStage(const ScreenSignals& signals) noexcept;
 
 /// ScreenSignals::nativeMenus bits.

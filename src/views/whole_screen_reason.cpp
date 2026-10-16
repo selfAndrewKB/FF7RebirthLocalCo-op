@@ -1,6 +1,37 @@
 #include "views/whole_screen.h"
 
+#include <array>
+
 namespace lss::views {
+
+namespace {
+
+// On/off 36's setter is the FName of the last SetOn that passed one: the event runner passes the action's own name (its
+// Action row), the native flows their class name. Every other 36 holder in the game's Action tables is a minigame or a
+// minigame's scene (RE-p2-minigames-stage2.md, S-STAGEMG2's list of all 409).
+constexpr std::array<std::wstring_view, 2> kFieldFlows{L"FEndChickenLureMiniGameFlow", L"EndChocoboCaptureManager"};
+constexpr std::array<std::wstring_view, 2> kFieldActions{L"act2360_MiniGame_Buggy", L"act3110_Gravity_"};
+
+}  // namespace
+
+bool FieldUseName(std::wstring_view setter) noexcept
+{
+    for (const std::wstring_view name : kFieldFlows)
+    {
+        if (setter == name)
+        {
+            return true;
+        }
+    }
+    for (const std::wstring_view prefix : kFieldActions)
+    {
+        if (setter.starts_with(prefix))
+        {
+            return true;
+        }
+    }
+    return false;
+}
 
 bool ArenaMenu(const ScreenSignals& signals) noexcept
 {
@@ -13,13 +44,13 @@ bool MinigameStage(const ScreenSignals& signals) noexcept
     {
         return true;
     }
-    // A field minigame's id 36 is not a stage: the chicken lure's result and a field event's bit 1 during it stay split.
-    const bool ids = signals.minigameIds && !signals.fieldMinigame;
-    if ((signals.exclusion & kExclusionMiniGame) != 0 && !signals.colosseumFlag && (!signals.inBattle || ids))
+    // 36 is held for the whole game (the bits flash); a field use's 36 is not a minigame stage. 36 needs neither the
+    // battle nor the colosseum guard: no battle or VR / colosseum session holds it (S-HELDBITS).
+    if ((signals.minigamePlaying && !signals.fieldMinigame) || signals.minigameIds || signals.frogGuys)
     {
         return true;
     }
-    return (signals.exclusion & kExclusionSecond) != 0 && (ids || signals.frogGuys);
+    return (signals.exclusion & kExclusionMiniGame) != 0 && !signals.colosseumFlag && !signals.inBattle;
 }
 
 WholeScreenReason ReasonOf(const ScreenSignals& signals) noexcept
