@@ -275,20 +275,21 @@ PlayerTwoUpdate::PlayerTwoUpdate() noexcept
     void* list = ListNow();
     if (list == nullptr)
     {
-        g_copyList = nullptr;  // a list made later at the same address is a new one
+        g_copyList       = nullptr;  // a list made later at the same address is a new one
+        g_activeOneCount = 0;
         return;
     }
     if (list != g_copyList)
     {
-        g_copyList = list;
-        g_copy     = Read(list);  // seeded from the live state; player 2's own pose replaces it on its first idle frame
+        g_copyList       = list;
+        g_copy           = Read(list);  // seeded from the live state; player 2's own pose replaces it on its first idle frame
+        g_activeOneCount = 0;           // player 1's last active entries belonged to the old list
         ++g_counts.lists;
         platform::LogDebug(L"attack cameras: player 2's copy of the sequence list's camera state seeded (list {})", list);
     }
     g_saved           = Read(list);
     g_playerOneCamera = PreviousCamera(g_saved);
     g_flagCount       = 0;
-    g_activeOneCount  = 0;
     std::array<const void*, kMaxEntries> activeOne{};
     std::size_t                          activeOneCount = 0;
     ForEachEntry(list, [&](void* entry) {
