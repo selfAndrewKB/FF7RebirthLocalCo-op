@@ -101,7 +101,7 @@ void TestMenuWidgets()
     signals.screenWidget = true;
     EXPECT(ReasonOf(signals) == WholeScreenReason::ScreenWidget);
 
-    std::puts("whole screen: the log-only candidates (on/off 153 and 92, Chadley's state) switch nothing");
+    std::puts("whole screen: on/off 153 without the minigame bit, 92 and Chadley's state switch nothing");
     signals               = Readable();
     signals.colosseumFlag = true;
     signals.miniGameMenu  = true;
@@ -157,11 +157,18 @@ void TestMinigames()
     runWild.exclusion = kExclusionMiniGame;
     EXPECT(ReasonOf(runWild) == WholeScreenReason::Minigame);
 
-    auto vr          = Readable();  // the VR summon battle's intro and result: the minigame bit under on/off 153
+    auto vr          = Readable();  // a VR / colosseum session's menu or result: the minigame bit under on/off 153
     vr.exclusion     = kExclusionMiniGame;
     vr.colosseumFlag = true;
+    EXPECT(ReasonOf(vr) == WholeScreenReason::ArenaMenu);
+    vr.inBattle = true;  // its intro runs inside the battle: split
     EXPECT(ReasonOf(vr) == WholeScreenReason::None);
     vr.minigameIds = true;  // the colosseum guard holds even with a minigame id
+    EXPECT(ReasonOf(vr) == WholeScreenReason::None);
+    vr.exclusion   = 0;  // the fight: the bit is cleared
+    vr.minigameIds = false;
+    EXPECT(ReasonOf(vr) == WholeScreenReason::None);
+    vr.inBattle = false;  // between phases with the bit clear: split
     EXPECT(ReasonOf(vr) == WholeScreenReason::None);
 
     auto battle      = Readable();  // the minigame bit during a battle without a minigame id

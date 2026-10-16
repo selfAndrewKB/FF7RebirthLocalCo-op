@@ -32,9 +32,10 @@ constexpr std::uint8_t   kCollapsed     = 1;
 constexpr std::uint8_t   kHidden        = 2;
 constexpr std::size_t    kMaxFollowed   = 8;
 
-// The full-screen Blueprint menus, by class name: Chadley's VR battle list and the colosseum list (ColosseumMenuWidget,
-// VRMenuWidget; their Blueprint classes carry these names), and photo mode (UEndCameraModeMenu, CameraModeWidget).
-constexpr std::array<std::wstring_view, 3> kFullScreen{L"VRMenu", L"ColosseumMenu", L"CameraMode"};
+// The full-screen Blueprint menus, by class name: photo mode (UEndCameraModeMenu, CameraModeWidget). The VR and colosseum
+// menus are read from their session's own state instead (views/whole_screen.h): their classes (VR_Top_C, VR_Result_C...)
+// do not carry the menu settings' slot names.
+constexpr std::array<std::wstring_view, 1> kFullScreen{L"CameraMode"};
 
 using AddFn = char (*)(void* widget, std::int32_t z);
 
@@ -189,7 +190,7 @@ bool Install(const platform::GameImage& image) noexcept
     const bool installed = add && image.BytesMatch(kAdd, kAddFirst) &&
                            g_add.Install(*add, image.EntryInstruction(kAdd, kAddFirst), reinterpret_cast<std::uintptr_t>(&Add));
     platform::Log(L"screen widgets: {}",
-                  installed ? L"the game's widget adds are logged; the VR / colosseum lists and photo mode give the single view"
+                  installed ? L"the game's widget adds are logged; photo mode gives the single view"
                             : L"the widget add is not what the research read; Blueprint full-screen menus stay split");
     return installed;
 }

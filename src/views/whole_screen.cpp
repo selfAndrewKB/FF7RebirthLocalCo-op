@@ -69,9 +69,10 @@ constexpr std::uintptr_t kWeakGet        = 0x141905998;
 constexpr std::uint8_t   kWeakGetBytes[] = {0x44, 0x8B, 0x49, 0x04, 0x45, 0x33, 0xC0, 0x45,
                                             0x85, 0xC9, 0x74, 0x4F, 0x8B, 0x01, 0x85, 0xC0};
 
-// For the log only (E4, E6): on/off 153 ShowColosseumMenu and 92 SoundCallEventMiniGameMenuInOut (set by no native
-// code: Blueprint or script data), and Chadley's manager [root+0x258]: state machine count +0x1D0, table +0x1D8 (32-byte
-// records {i32 id; Enter; Tick; Exit}), current +0x1E0, requested +0x1E8.
+// On/off 153 ShowColosseumMenu, held by a VR or colosseum session from Begin to End (RE-p2-minigames.md §7.2). For the
+// log only (E4, E6): 92 SoundCallEventMiniGameMenuInOut (set by no native code: Blueprint or script data), and Chadley's
+// manager [root+0x258]: state machine count +0x1D0, table +0x1D8 (32-byte records {i32 id; Enter; Tick; Exit}), current
+// +0x1E0, requested +0x1E8.
 constexpr std::int32_t  kColosseumMenuId  = 153;
 constexpr std::int32_t  kMiniGameMenuId   = 92;
 constexpr std::uint32_t kChadley          = 0x258;

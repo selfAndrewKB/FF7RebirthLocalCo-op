@@ -21,8 +21,11 @@
 //   - the script menus that keep their widget in their own EndUISystem slot (jukebox, chocobo carriage,
 //     point warp, chocobo stable and race menus, the Queen's Blood NPC deck and challenge, the 3D Brawler
 //     screens), each by the game's own "still open" test for it (E2);
-//   - the full-screen Blueprint menus no native code reads (Chadley's VR list, the colosseum list, photo
-//     mode): the widgets as the game adds them to the screen (views/screen_widgets.h);
+//   - the full-screen Blueprint menus no native code reads (photo mode): the widgets as the game adds them
+//     to the screen (views/screen_widgets.h);
+//   - the VR and colosseum menus and result screens (Chadley's combat simulator, the Gold Saucer colosseum):
+//     the session's on/off 153 with the minigame bit, outside a battle (the game sets the bit in the session's
+//     menu, intro and result states and clears it for the fight; the intro is already a battle);
 //   - a minigame that takes player 1 away to its own stage (the user's rule, 2026-10-15: the chicken lure,
 //     where the party stays in the field with player 1, stays split; frog jumping goes single). The game's own
 //     switch for it is its field-exclusion mask: bit 21 DisableController_MiniGame, bit 1 DisableController_2nd
@@ -54,8 +57,8 @@ struct ScreenSignals
     bool          pauseWidget = false;  // a pause-family widget is alive (IsPauseMenuClosed is false)
     std::uint16_t nativeMenus = 0;      // NativeMenu bits: script menus with their own EndUISystem slot open
     bool          screenWidget = false; // a full-screen Blueprint menu is on screen (views/screen_widgets.h)
+    bool          colosseumFlag = false;  // on/off 153 ShowColosseumMenu: a VR or colosseum session (Begin to End)
     // For the log only (candidates the open log is to settle, RE-p2-menu-census.md E6, RE-p2-vr-menu.md):
-    bool          colosseumFlag = false;  // on/off 153 ShowColosseumMenu
     bool          miniGameMenu  = false;  // on/off 92 SoundCallEventMiniGameMenuInOut
     std::int8_t   chadleyState  = -1;     // Chadley's manager state (0 idle, 1 greeting, 2 shop, 3 VR, 4 farewell, 5 end)
     // The minigame inputs (RE-p2-minigames.md §7.6):
@@ -72,6 +75,11 @@ struct ScreenSignals
 /// The field-exclusion bits the minigame rule reads (UEnum EndFieldExclusion).
 inline constexpr std::uint32_t kExclusionMiniGame = 1u << 21;  // DisableController_MiniGame
 inline constexpr std::uint32_t kExclusionSecond   = 1u << 1;   // DisableController_2nd
+
+/// Whether a VR or colosseum session shows its menu or result screen: on/off 153 with the minigame bit, outside a battle
+/// (RE-p2-minigames.md §7.2: the bit is on in the session's menu, intro and result states, off in the fight; the
+/// intro runs inside the battle).
+bool ArenaMenu(const ScreenSignals& signals) noexcept;
 
 /// Whether a minigame has taken player 1 to its own stage (§7.6): G-Bike or a minigame map; or the minigame bit, outside
 /// the colosseum / VR battles (on/off 153) and outside a battle unless a minigame id is on (the cactus mission is a
@@ -104,6 +112,7 @@ enum class WholeScreenReason : std::uint8_t
     PauseWidget,
     NativeMenu,
     ScreenWidget,
+    ArenaMenu,
     Minigame,
     Cutscene,
     SkippableScene,

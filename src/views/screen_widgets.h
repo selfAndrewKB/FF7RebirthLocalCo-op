@@ -5,8 +5,8 @@
 //
 //   - Each widget class is logged the first time it is added (Debug: class, z), later adds at Trace: the log names the
 //     screens no native code reads, so a family the single view misses can be told apart in one play session.
-//   - The full-screen Blueprint menus no native code reads (Chadley's VR battle list, the colosseum list, photo mode;
-//     E6) are followed while they stay on screen: alive (the game's own weak-pointer resolve), still in the overlay
+//   - The full-screen Blueprint menus no native code reads (photo mode; E6; the VR and colosseum menus are read from
+//     their session's state in views/whole_screen) are followed while they stay on screen: alive (the game's own weak-pointer resolve), still in the overlay
 //     (the game's z field +0x2A8, which its RemoveFromParent override sets to -1) and not Collapsed or Hidden
 //     (UWidget::Visibility). While one is, views/whole_screen gives the single view.
 //

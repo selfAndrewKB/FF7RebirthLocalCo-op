@@ -2,6 +2,11 @@
 
 namespace lss::views {
 
+bool ArenaMenu(const ScreenSignals& signals) noexcept
+{
+    return signals.colosseumFlag && (signals.exclusion & kExclusionMiniGame) != 0 && !signals.inBattle;
+}
+
 bool MinigameStage(const ScreenSignals& signals) noexcept
 {
     if (signals.gbike || signals.minigameMap)
@@ -51,6 +56,10 @@ WholeScreenReason ReasonOf(const ScreenSignals& signals) noexcept
     {
         return WholeScreenReason::ScreenWidget;
     }
+    if (ArenaMenu(signals))
+    {
+        return WholeScreenReason::ArenaMenu;
+    }
     if (MinigameStage(signals))
     {
         return WholeScreenReason::Minigame;
@@ -82,6 +91,7 @@ const wchar_t* NameOf(WholeScreenReason reason) noexcept
         case WholeScreenReason::PauseWidget: return L"a pause-family menu (IsPauseMenuClosed)";
         case WholeScreenReason::NativeMenu: return L"a script menu with its own UI slot";
         case WholeScreenReason::ScreenWidget: return L"a full-screen Blueprint menu";
+        case WholeScreenReason::ArenaMenu: return L"a VR or colosseum menu or result (on/off 153, the minigame bit, not in battle)";
         case WholeScreenReason::Minigame: return L"a minigame on its own stage";
         case WholeScreenReason::Cutscene: return L"a cutscene";
         case WholeScreenReason::SkippableScene: return L"a skippable scene (on/off 12)";
