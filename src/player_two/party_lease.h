@@ -113,4 +113,33 @@ bool Acquired(const LeaseState& state, const void* member, const void* playerTwo
 /// The member is back with its own AI, and player 2's controller names nothing.
 bool Released(const LeaseState& state, const void* member) noexcept;
 
+// ---- a synergy partner the game has not given back yet (RE-p2-synergy-skills.md S-SYNTAKE §3, §5) ----
+//
+// The game hands a synergy partner to its AI for the approach and gives it back only in
+// LinkMember_End (the sync start, the record end, or a mode-2 partner's own command end). No leader
+// switch path of the game tests the link, so a deliberate switch onto an approaching partner stalls
+// the approach; player 2's take is automatic, not a press, so it waits for the game's give-back as the
+// game's own command menu treats an awaited partner as busy.
+
+inline constexpr std::uint32_t kLinkRecordSize = 264;
+
+/// One record of the battle system's link manager: the bytes the gate reads (the same offsets in both
+/// builds).
+struct LinkRecordView
+{
+    std::uint8_t types[3]{};      // +0x29+idx the members' player types
+    std::uint8_t partner = 0xFF;  // +0x39 the partner's index
+    std::uint8_t state[3]{};      // +0x56+idx 1 deferred start, 2 BT flag, 3 AI requested, 4 executing; 0 after
+                                  // LinkMember_End
+    std::uint8_t started[3]{};    // +0x100+idx
+    std::uint8_t ended[3]{};      // +0x103+idx
+    std::uint8_t mode = 0;        // the ability's +0x8F (1-4; 0 without an ability)
+    std::uint8_t kind = 0xFF;     // the ability's +0x8B (logged: 1 ATB synergy ability, 0 synergy skill [ASSUMPTION])
+};
+
+/// `playerType` is this record's partner and the game has not given it back yet: the record is live
+/// (LinkRecord_AllMembersEnded is false) and the partner is on its approach (state 1-3), or a mode-2
+/// partner plays its own half (started, not ended).
+bool LinkPartnerBusy(const LinkRecordView& record, std::uint8_t playerType) noexcept;
+
 }  // namespace lss::player_two

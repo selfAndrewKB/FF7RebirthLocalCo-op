@@ -1,5 +1,7 @@
 #include "player_two/party_lease.h"
 
+#include <iterator>
+
 namespace lss::player_two {
 
 Eligibility Assess(const MemberSnapshot& member) noexcept
@@ -119,6 +121,28 @@ bool Released(const LeaseState& state, const void* member) noexcept
     const void* ai = state.memberRetainedAi;
     return member != nullptr && ai != nullptr && state.memberEffective == ai && state.aiPawn == member &&
            state.playerTwoPawn == nullptr && state.playerTwoLeader == nullptr;
+}
+
+bool LinkPartnerBusy(const LinkRecordView& record, std::uint8_t playerType) noexcept
+{
+    const std::uint8_t partner = record.partner;
+    if (partner >= std::size(record.types) || record.types[partner] != playerType)
+    {
+        return false;
+    }
+    bool live = false;  // !LinkRecord_AllMembersEnded: some member started and has not ended
+    for (std::size_t index = 0; index < std::size(record.started); ++index)
+    {
+        live = live || (record.started[index] != 0 && record.ended[index] == 0);
+    }
+    if (!live)
+    {
+        return false;
+    }
+    const std::uint8_t state       = record.state[partner];
+    const bool         approaching = state >= 1 && state <= 3;
+    const bool         ownHalf     = record.mode == 2 && record.started[partner] != 0 && record.ended[partner] == 0;
+    return approaching || ownHalf;
 }
 
 }  // namespace lss::player_two

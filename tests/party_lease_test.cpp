@@ -202,9 +202,67 @@ void TestAiReadiness()
     }
 }
 
+void TestLinkPartnerBusy()
+{
+    std::puts("link: a synergy partner the game has not given back is busy; its initiator and others are not");
+    LinkRecordView record;  // initiator Cloud (0) at index 0, partner Yuffie (5) at index 1, on its approach
+    record.types[0]   = 0;
+    record.types[1]   = 5;
+    record.partner    = 1;
+    record.started[0] = 1;
+    record.mode       = 1;
+    for (const std::uint8_t state : {1, 2, 3})
+    {
+        record.state[1] = state;
+        EXPECT(LinkPartnerBusy(record, 5));
+    }
+    EXPECT(!LinkPartnerBusy(record, 0));  // the initiator: its half is driven by its component
+    EXPECT(!LinkPartnerBusy(record, 3));  // not in this record
+
+    auto given = record;
+    given.state[1] = 0;  // LinkMember_End gave it back
+    EXPECT(!LinkPartnerBusy(given, 5));
+    given.state[1] = 4;  // executing: re-possessed at the sync start
+    EXPECT(!LinkPartnerBusy(given, 5));
+
+    auto ended = record;
+    ended.ended[0] = 1;  // every started member ended: the record is going away
+    EXPECT(!LinkPartnerBusy(ended, 5));
+    auto none = record;
+    none.started[0] = 0;
+    EXPECT(!LinkPartnerBusy(none, 5));
+
+    auto ownHalf       = given;  // mode 2: the partner plays its own half, still with its AI
+    ownHalf.mode       = 2;
+    ownHalf.started[1] = 1;
+    EXPECT(LinkPartnerBusy(ownHalf, 5));
+    ownHalf.ended[1] = 1;
+    EXPECT(!LinkPartnerBusy(ownHalf, 5));  // its half ended; the initiator's alone keeps the record live
+
+    auto modeTwoApproach = record;  // mode 2 on its approach: busy by its state alone
+    modeTwoApproach.mode = 2;
+    EXPECT(LinkPartnerBusy(modeTwoApproach, 5));
+    auto noAbility = record;  // no ability read: the approach state still decides
+    noAbility.mode = 0;
+    EXPECT(LinkPartnerBusy(noAbility, 5));
+
+    auto partnerLive       = given;  // live only through the partner (initiator ended), mode 1, executing
+    partnerLive.ended[0]   = 1;
+    partnerLive.started[1] = 1;
+    EXPECT(!LinkPartnerBusy(partnerLive, 5));
+
+    auto bad    = record;
+    bad.partner = 3;  // an index out of the record
+    EXPECT(!LinkPartnerBusy(bad, 5));
+    bad.partner = 0xFF;  // the view's default: no record read
+    EXPECT(!LinkPartnerBusy(bad, 5));
+    EXPECT(!LinkPartnerBusy(LinkRecordView{}, 0));
+}
+
 int main()
 {
     TestSecondSlot();
+    TestLinkPartnerBusy();
     TestAiReadiness();
     TestAiOwnedMemberIsEligible();
     TestEachRuleRefuses();
