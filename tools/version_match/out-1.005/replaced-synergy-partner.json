@@ -1,0 +1,106 @@
+{
+ "build": "1.005",
+ "research_build": "1.004",
+ "date": "2026-10-16",
+ "doc": "RE-p2-synergy-skills.md, RE-p2-synergy-abilities.md",
+ "facts": [
+  {
+   "old": "0x140ED637A",
+   "new": "0x14129E784",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "LinkMgr_TickMode2 -> LinkPartner_RequestAI call: S-SYNSKILL/S-SYNABIL (RE-p2-synergy-skills.md section 6, RE-p2-synergy-abilities.md section 6); found by both IDA agents in the 1.005 database by masked bytes and call context, and confirmed by match.py's function ranges (main session, 2026-10-16)."
+  },
+  {
+   "old": "0x14337BD83",
+   "new": "0x143090C87",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "LinkPartner_Mode1_StartOrRequestAI -> LinkPartner_RequestAI call: S-SYNSKILL/S-SYNABIL (RE-p2-synergy-skills.md section 6, RE-p2-synergy-abilities.md section 6); found by both IDA agents in the 1.005 database by masked bytes and call context, and confirmed by match.py's function ranges (main session, 2026-10-16)."
+  },
+  {
+   "old": "0x140F2D000",
+   "new": "0x1411CAEA0",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "LinkPartner_Start -> LinkPartner_RequestAI call: S-SYNSKILL/S-SYNABIL (RE-p2-synergy-skills.md section 6, RE-p2-synergy-abilities.md section 6); found by both IDA agents in the 1.005 database by masked bytes and call context, and confirmed by match.py's function ranges (main session, 2026-10-16)."
+  },
+  {
+   "old": "0x140F2AC8C",
+   "new": "0x14129C548",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "LinkPartner_RequestAI_HandLeaderToAI entry: S-SYNSKILL/S-SYNABIL (RE-p2-synergy-skills.md section 6, RE-p2-synergy-abilities.md section 6); found by both IDA agents in the 1.005 database by masked bytes and call context, and confirmed by match.py's function ranges (main session, 2026-10-16)."
+  },
+  {
+   "old": "0x140F2AD1E",
+   "new": "0x14129C5DA",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "LinkPartner_RequestAI's GetPartyLeaderType call (hand-over test): S-SYNSKILL/S-SYNABIL (RE-p2-synergy-skills.md section 6, RE-p2-synergy-abilities.md section 6); found by both IDA agents in the 1.005 database by masked bytes and call context, and confirmed by match.py's function ranges (main session, 2026-10-16)."
+  },
+  {
+   "old": "0x140F2AB58",
+   "new": "0x14149F86C",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "LinkMember_End_RepossessLeaderWithPrimaryPC entry (1.005: first instruction crosses a block): S-SYNSKILL/S-SYNABIL (RE-p2-synergy-skills.md section 6, RE-p2-synergy-abilities.md section 6); found by both IDA agents in the 1.005 database by masked bytes and call context, and confirmed by match.py's function ranges (main session, 2026-10-16)."
+  },
+  {
+   "old": "0x140F2AB8A",
+   "new": "0x14149F89E",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "LinkMember_End's GetPartyLeaderType call (give-back test): S-SYNSKILL/S-SYNABIL (RE-p2-synergy-skills.md section 6, RE-p2-synergy-abilities.md section 6); found by both IDA agents in the 1.005 database by masked bytes and call context, and confirmed by match.py's function ranges (main session, 2026-10-16)."
+  },
+  {
+   "old": "0x140F2ABBA",
+   "new": "0x14149F8CE",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "LinkMember_End's GetPrimaryEndPlayerController call: S-SYNSKILL/S-SYNABIL (RE-p2-synergy-skills.md section 6, RE-p2-synergy-abilities.md section 6); found by both IDA agents in the 1.005 database by masked bytes and call context, and confirmed by match.py's function ranges (main session, 2026-10-16)."
+  },
+  {
+   "old": "0x140F2C3B7",
+   "new": "0x14129DDAE",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "LinkMgr_Request (command branch) -> LinkPartner_Start call; 1.005 crosses a block: S-SYNVERIFY (RE-p2-synergy-skills.md, verification section); read in both databases by the verifier and the main session (2026-10-16): same call target, same block layout as described."
+  },
+  {
+   "old": "0x1429A9B47",
+   "new": "0x14129D7DB",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "LinkMgr_Request (Cait Sith mounted branch) -> LinkPartner_Start call: S-SYNVERIFY (RE-p2-synergy-skills.md, verification section); read in both databases by the verifier and the main session (2026-10-16): same call target, same block layout as described."
+  },
+  {
+   "old": "0x143375806",
+   "new": "0x14308A8A6",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "LinkPartner_StartForType -> LinkPartner_Start call: S-SYNVERIFY (RE-p2-synergy-skills.md, verification section); read in both databases by the verifier and the main session (2026-10-16): same call target, same block layout as described."
+  },
+  {
+   "old": "0x140F2CDE0",
+   "new": "0x1411CAC80",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "LinkPartner_Start_HandLeaderToAI entry: S-SYNVERIFY (RE-p2-synergy-skills.md, verification section); read in both databases by the verifier and the main session (2026-10-16): same call target, same block layout as described."
+  },
+  {
+   "old": "0x140F2D03C",
+   "new": "0x1411CAEDC",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "LinkPartner_Start's GetPartyLeaderType call (modes 2/3 hand-over test): S-SYNVERIFY (RE-p2-synergy-skills.md, verification section); read in both databases by the verifier and the main session (2026-10-16): same call target, same block layout as described."
+  },
+  {
+   "old": "0x140963368",
+   "new": "0x14097796C",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Option_IsClassicMode_AutoPlayOn_NotHard entry: S-SYNVERIFY (RE-p2-synergy-skills.md, verification section); read in both databases by the verifier and the main session (2026-10-16): same call target, same block layout as described."
+  }
+ ]
+}
