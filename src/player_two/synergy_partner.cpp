@@ -12,7 +12,11 @@
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 #include "player_two/object_fields.h"
+#include "player_two/party_member.h"
 
+#include <Windows.h>
+
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstddef>
@@ -71,11 +75,13 @@ constexpr std::uint8_t kClassicBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x
                                           0xE0, 0x48, 0x8B, 0x05, 0xDC, 0x89, 0xA3, 0x08, 0x48, 0x8B, 0x88, 0x00};
 constexpr platform::FunctionFact kClassic{L"Option_IsClassicMode_AutoPlayOn_NotHard", 0x140963368, kClassicBytes};
 
-constexpr std::uint8_t kNoType       = 16;  // the game's "no character type"
-constexpr std::size_t  kHeld         = 4;   // characters handed to their AI at once: at most the two humans' (spare)
-constexpr auto         kLateAfter    = std::chrono::seconds(5);
-constexpr auto         kStatusEvery  = std::chrono::seconds(10);
-constexpr int          kMaxLines     = 400;
+constexpr std::uint8_t kNoType      = 16;  // the game's "no character type"
+constexpr std::size_t  kHeld        = 4;   // characters handed to their AI at once: at most the two humans' (spare)
+constexpr std::size_t  kNotes       = 8;   // member ends off the game thread between two ticks (a few per synergy)
+constexpr auto         kLateAfter   = std::chrono::seconds(5);
+constexpr auto         kGoneAfter   = std::chrono::seconds(1);  // a record gone, or a queued give-back not landed
+constexpr auto         kStatusEvery = std::chrono::seconds(10);
+constexpr int          kMaxLines    = 400;
 
 using StartFn       = std::uint64_t (*)(void* manager, void* record, void* partner, void* initiator, void* a5, void* a6,
                                         void* a7, void* a8);
@@ -106,27 +112,115 @@ struct Sites
 };
 Sites g_sites;
 
+enum class EndSeen : std::uint8_t
+{
+    Never,
+    GameThread,
+    OffThread,
+};
+
 // Game thread.
 // A human's character the game handed to its AI for a synergy approach, and whose controller gets it back.
 struct Held
 {
-    const void*       character = nullptr;
-    std::uint64_t     weak      = 0;
-    int               player    = 0;  // 1 or 2; 0 = free
-    Clock::time_point since{};
-    bool              warned    = false;
+    const void*       character  = nullptr;
+    std::uint64_t     weak       = 0;
+    int               player     = 0;               // 1 or 2; 0 = free
+    std::uint8_t      type       = kNoType;         // its player type (the give-back test's answer)
+    Clock::time_point since{};                      // the hand-over of this approach
+    bool              warned     = false;
+    EndSeen           endSeen    = EndSeen::Never;  // a member end of it ran (and did not give it back)
+    bool              recordSeen = false;           // the live link record naming it as the partner was found
+    LinkRecordView    record{};                     // that record as last read
+    Clock::time_point goneSince{};                  // that record not found since (zero while found)
+    Clock::time_point queuedAt{};                   // a member end off the game thread gave it back (the game queued
+                                                    // the possession; zero otherwise): confirmed by a later tick
 };
 std::array<Held, kHeld> g_held{};
 const void*             g_partner   = nullptr;  // the partner of the AI request being run
 const void*             g_initiator = nullptr;
-const void*             g_ending    = nullptr;  // the member of the member end being run
-int                     g_endPlayer = 0;        // the player whose character that member end gives back (T3's answer)
-constexpr int           kRefused    = -1;       // g_endPlayer: T3 refused a remembered character (no longer owned)
+const void*             g_record    = nullptr;  // the link record of the start or AI request being run
 const void*             g_session   = nullptr;  // player 2's controller the remembered characters belong to
 
+// The thread running a member end (any thread: a mode-2 partner's own command end runs where its command executor
+// finishes, which the game writes for worker threads; S-SYNSTUCK2 §2).
+thread_local const void* t_ending        = nullptr;  // the member of the member end being run
+thread_local int         t_endPlayer     = 0;  // the player whose character that member end gives back (T3's answer)
+thread_local void*       t_endController = nullptr;  // T3's checked controller of that player (null: read in P)
+thread_local bool        t_givenBack     = false;    // P answered: the game gives the member back (not Classic's branch)
+constexpr int            kRefused        = -1;       // t_endPlayer: T3 refused a remembered character (not owned)
+
+/// One member end's scope on this thread, restored on the way out (member ends nest: a record end runs several).
+class EndScope
+{
+public:
+    explicit EndScope(const void* member) noexcept
+        : ending_(t_ending), player_(t_endPlayer), controller_(t_endController), givenBack_(t_givenBack)
+    {
+        t_ending        = member;
+        t_endPlayer     = 0;
+        t_endController = nullptr;
+        t_givenBack     = false;
+    }
+    ~EndScope()
+    {
+        t_ending        = ending_;
+        t_endPlayer     = player_;
+        t_endController = controller_;
+        t_givenBack     = givenBack_;
+    }
+    EndScope(const EndScope&)            = delete;
+    EndScope& operator=(const EndScope&) = delete;
+
+private:
+    const void* ending_;
+    int         player_;
+    void*       controller_;
+    bool        givenBack_;
+};
+
+// Any thread, under g_lock. What a member end off the game thread answers, published by the game thread from g_held
+// each tick: a remembered character its player still owns and has not switched away from, with the controller that
+// player had then. The worker reads only this and the generation's atomics, never the session's objects; the snapshot
+// is at most one frame old, and the parts of ownership that change at once (player 2's member, the session, a leave)
+// are read again from the atomics.
+struct Answer
+{
+    const void* character  = nullptr;
+    const void* controller = nullptr;
+    int         player     = 0;  // 0 = none
+};
+// A member end that ran off the game thread, for the game thread's tick to log and to forget a character given back.
+struct Note
+{
+    const void*   member     = nullptr;
+    std::uint32_t thread     = 0;
+    int           answer     = 0;      // the player it was given back to, kRefused, or 0 (the game's own test)
+    bool          answerable = false;  // published when noted (its own read: for the log only)
+    std::uint8_t  state      = 0;      // the record at the member's index, before the member end
+    std::uint8_t  started    = 0;
+    std::uint8_t  ended      = 0;
+};
+SRWLOCK                   g_lock = SRWLOCK_INIT;  // never throws, unlike std::mutex in noexcept code; held for a copy
+std::array<Answer, kHeld> g_answers{};
+std::array<Note, kNotes>  g_notes{};
+std::size_t               g_noteCount = 0;
+std::uint32_t             g_notesLost = 0;
+
+class Locked
+{
+public:
+    Locked() noexcept { AcquireSRWLockExclusive(&g_lock); }
+    ~Locked() { ReleaseSRWLockExclusive(&g_lock); }
+    Locked(const Locked&)            = delete;
+    Locked& operator=(const Locked&) = delete;
+};
+
+// Game thread.
 struct Counts
 {
-    std::uint32_t requests = 0, aiPartners = 0, gameHandOvers = 0, modHandOvers = 0, givenBack = 0, memberEnds = 0;
+    std::uint32_t requests = 0, aiPartners = 0, gameHandOvers = 0, modHandOvers = 0, givenBack = 0, memberEnds = 0,
+                  offThread = 0;
 };
 Counts            g_counts;
 Clock::time_point g_statusAt{};
@@ -137,9 +231,16 @@ bool Line() noexcept
     return platform::Enabled(platform::Level::Debug) && g_lines < kMaxLines && ++g_lines > 0;
 }
 
+/// A player-2 session is running (any thread: the generation's atomics).
+bool Session() noexcept
+{
+    return generation::Active() && generation::PlayerTwoController() != nullptr;
+}
+
+/// The hand-over's wrappers and the game-thread member end act only here.
 bool Bound() noexcept
 {
-    return generation::OnGameThread() && generation::Active() && generation::PlayerTwoController() != nullptr;
+    return generation::OnGameThread() && Session();
 }
 
 /// 1 or 2 if that player's controller drives `character` now, else 0.
@@ -207,37 +308,123 @@ Held* Find(const void* character) noexcept
     return nullptr;
 }
 
-void Remember(const void* character, int player) noexcept
+/// Remembers `character` for `player` from this hand-over on; a character already remembered starts afresh (a new
+/// approach: nothing of the last one counts).
+void Remember(const void* character, int player, std::uint8_t type) noexcept
 {
-    if (Held* held = Find(character))
+    Held* slot = Find(character);
+    if (slot == nullptr)
     {
-        held->player = player;
-        return;
+        const auto free = std::find_if(g_held.begin(), g_held.end(), [](const Held& held) { return held.player == 0; });
+        slot            = free != g_held.end()
+                              ? &*free
+                              : &*std::min_element(g_held.begin(), g_held.end(),
+                                                   [](const Held& a, const Held& b) { return a.since < b.since; });
     }
-    Held* slot = &g_held[0];
-    for (Held& held : g_held)
-    {
-        if (held.player == 0)
-        {
-            slot = &held;
-            break;
-        }
-        if (held.since < slot->since)
-        {
-            slot = &held;
-        }
-    }
-    if (slot->player != 0 && Line())
+    if (slot->player != 0 && slot->character != character && Line())
     {
         platform::LogDebug(L"synergy partner: forgot {} (player {}) to remember another", NameOf(slot->character),
                            slot->player);
     }
-    *slot = {character, leader_scope::WeakOf(const_cast<void*>(character)), player, Clock::now(), false};
+    *slot           = {};
+    slot->character = character;
+    slot->weak      = leader_scope::WeakOf(const_cast<void*>(character));
+    slot->player    = player;
+    slot->type      = type;
+    slot->since     = Clock::now();
 }
 
 void ForgetAll() noexcept
 {
     g_held = {};
+}
+
+void* ControllerOf(int player) noexcept
+{
+    return player == 2 ? generation::PlayerTwoController() : player == 1 ? generation::PlayerOneController() : nullptr;
+}
+
+/// The pawn `controller` plays instead of `character` (null if it plays nothing, or that character).
+const void* PlaysInstead(const void* controller, const void* character) noexcept
+{
+    const void* pawn = ReadPointer(controller, facts::kControllerPawn);
+    return pawn != character ? pawn : nullptr;
+}
+
+/// Game thread: publishes what a member end off the game thread may give back (Answer): the remembered characters
+/// their player still owns, with that player playing nothing else.
+void Publish() noexcept
+{
+    std::array<Answer, kHeld> answers{};
+    for (std::size_t i = 0; i < kHeld; ++i)
+    {
+        const Held& held       = g_held[i];
+        void* const controller = ControllerOf(held.player);
+        if (held.player == 0 || held.type >= kNoType || controller == nullptr || held.queuedAt != Clock::time_point{} ||
+            LostBy(held.player, held.character) != nullptr || PlaysInstead(controller, held.character) != nullptr)
+        {
+            continue;
+        }
+        answers[i] = {held.character, controller, held.player};
+    }
+    Locked lock;
+    g_answers = answers;
+}
+
+/// Any thread: the published answer for `member` (player 0 if none).
+Answer Published(const void* member) noexcept
+{
+    Locked lock;
+    for (const Answer& answer : g_answers)
+    {
+        if (answer.player != 0 && answer.character == member)
+        {
+            return answer;
+        }
+    }
+    return {};
+}
+
+/// Any thread: a member end off the game thread, for the next tick.
+void AddNote(const Note& note) noexcept
+{
+    Locked lock;
+    if (g_noteCount < g_notes.size())
+    {
+        g_notes[g_noteCount++] = note;
+    }
+    else
+    {
+        ++g_notesLost;
+    }
+}
+
+/// The members' action ids (they name the skill offline), the ability's mode and category, and the no-link flag, as
+/// one log phrase. Game thread.
+std::wstring RecordText(const LinkRecordView& record) noexcept
+{
+    try
+    {
+        return std::format(L"actions {}/{}/{} (mode {}, category {}, no-link flag {})", record.actions[0],
+                           record.actions[1], record.actions[2], record.mode, record.kind, record.noLink);
+    }
+    catch (...)
+    {
+        return {};
+    }
+}
+
+/// The record at a member's index, as one log phrase. Game thread.
+std::wstring MemberText(std::uint8_t state, std::uint8_t started, std::uint8_t ended) noexcept
+{
+    try
+    {
+        return std::format(L"state {}, started {}, ended {}", state, started, ended);
+    }
+    catch (...)
+    {
+        return {};
+    }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -254,11 +441,14 @@ std::uint64_t Start(std::size_t site, void* manager, void* record, void* partner
     }
     const void* savedPartner   = g_partner;
     const void* savedInitiator = g_initiator;
+    const void* savedRecord    = g_record;
     g_partner                  = partner;
     g_initiator                = initiator;
+    g_record                   = record;
     const auto result          = original(manager, record, partner, initiator, a5, a6, a7, a8);  // al: started
     g_partner                  = savedPartner;
     g_initiator                = savedInitiator;
+    g_record                   = savedRecord;
     return result;
 }
 
@@ -288,11 +478,14 @@ std::uint64_t Request(std::size_t site, void* unused, void* record, void* initia
     ++g_counts.requests;
     const void* savedPartner   = g_partner;
     const void* savedInitiator = g_initiator;
+    const void* savedRecord    = g_record;
     g_partner                  = partner;
     g_initiator                = initiator;
+    g_record                   = record;
     const auto result          = original(unused, record, initiator, partner, partnerComp, weakA, weakB);
     g_partner                  = savedPartner;
     g_initiator                = savedInitiator;
+    g_record                   = savedRecord;
     return result;
 }
 
@@ -359,15 +552,16 @@ std::uint8_t PartnerLeaderType(std::uint8_t original) noexcept
         }
         return original;
     }
-    Remember(partner, player);
+    Remember(partner, player, type);
+    Publish();
     (type == original ? g_counts.gameHandOvers : g_counts.modHandOvers) += 1;
     if (Line())
     {
         platform::LogDebug(L"synergy partner: {}'s partner {} is player {}'s: handed to its AI for the approach ({}; "
-                           L"the leader type read {}, the partner's {})",
+                           L"the leader type read {}, the partner's {}); the synergy {}",
                            NameOf(g_initiator), NameOf(partner), player,
                            type == original ? L"the game's own answer" : L"answered as the player's character",
-                           original, type);
+                           original, type, RecordText(party_member::ReadLinkRecord(g_record)));
     }
     return type;
 }
@@ -385,40 +579,110 @@ std::uint8_t RequestLeaderType() noexcept
 // ---------------------------------------------------------------------------------------------
 // The give-back: the member end names its member; its test and controller answer that member's player
 // ---------------------------------------------------------------------------------------------
+//
+// Any thread. The game runs LinkMember_End on the game thread (the sync start, the record end, the battle teardown)
+// and from a member's own command end, wherever that member's command executor finishes. A mode-2 synergy skill's
+// partner plays its own half and is given back only there, and the executor's finish is written for worker threads:
+// its thread-aware callees post to the game thread, and so does the give-back itself, SwitchAIControl_Async
+// (RE-p2-synergy-skills.md S-SYNSTUCK, S-SYNSTUCK2). On the game thread the answers read the session live. On another
+// thread they read the answer the game thread published (Publish) and the generation's atomics, and the member end is
+// noted for the tick, which logs it and forgets a character given back there.
+
+/// Any thread: the record at the member's index, before the member end, and who it may be given back to.
+Note NoteOf(const void* record, const void* member, std::uint64_t index) noexcept
+{
+    Note note;
+    note.member     = member;
+    note.thread     = GetCurrentThreadId();
+    note.answerable = Published(member).player != 0;
+    if (index < std::size(LinkRecordView{}.state))
+    {
+        const LinkRecordView view = party_member::ReadLinkRecord(record);
+        note.state                = view.state[index];
+        note.started              = view.started[index];
+        note.ended                = view.ended[index];
+    }
+    return note;
+}
 
 std::uint64_t MemberEnd(void* unused, void* record, void* member, std::uint64_t index) noexcept
 {
     const auto original = reinterpret_cast<MemberEndFn>(g_memberEnd.Original());
-    if (member == nullptr || !Bound())
+    if (member == nullptr || !Session())
     {
         return original(unused, record, member, index);
     }
-    ++g_counts.memberEnds;
-    const void* savedEnding = g_ending;
-    const int   savedPlayer = g_endPlayer;
-    g_ending                = member;
-    g_endPlayer             = 0;
-    const auto result       = original(unused, record, member, index);
-    if (g_endPlayer > 0)
+    const bool gameThread = generation::OnGameThread();
+    const Note note       = gameThread ? Note{} : NoteOf(record, member, index);
+    EndScope   scope(member);
+    const auto result     = original(unused, record, member, index);
+    if (gameThread)
     {
+        ++g_counts.memberEnds;
         if (Held* held = Find(member))
         {
-            *held = {};  // given back (or Classic's flag cleared): the next end of it is the game's own
+            if (t_endPlayer > 0)
+            {
+                *held = {};  // given back (or Classic's flag cleared): the next end of it is the game's own
+            }
+            else
+            {
+                held->endSeen = EndSeen::GameThread;
+            }
         }
+        Publish();
     }
-    g_ending    = savedEnding;
-    g_endPlayer = savedPlayer;
+    else
+    {
+        Note done   = note;
+        done.answer = t_givenBack ? t_endPlayer : t_endPlayer == kRefused ? kRefused : 0;
+        AddNote(done);
+    }
     return result;
+}
+
+/// T3 off the game thread: the published answer, while the generation's atomics still agree with it.
+std::uint8_t EndLeaderTypeOffThread(std::uint8_t original, const void* member) noexcept
+{
+    const Answer answer = Published(member);
+    if (answer.player == 0 || Classic())
+    {
+        return original;  // Classic's branch keeps the controller: the game's own (a leaf read, as TypeOf below)
+    }
+    // Read again now: a leave, a new session, or player 2's member given back or taken since the tick published it; and
+    // the controller's pawn (a guarded read), since the game's queued possession checks nothing and would take another
+    // pawn from that controller, leaving it without its AI (S-SYNANYTHREAD Q1).
+    const bool playerTwos = member == generation::Member();
+    if (ControllerOf(answer.player) != answer.controller || (answer.player == 2) != playerTwos ||
+        PlaysInstead(answer.controller, member) != nullptr)
+    {
+        t_endPlayer = kRefused;
+        return original;
+    }
+    // The type the game compares, read now as the game does (plain reads, any thread; S-SYNANYTHREAD Q3): without its
+    // battle-player component the game's own compare fails, so nothing is answered.
+    const std::uint8_t type = TypeOf(member);
+    if (type >= kNoType)
+    {
+        return original;
+    }
+    t_endPlayer     = answer.player;
+    t_endController = const_cast<void*>(answer.controller);
+    return type;
 }
 
 /// T3: "is the member the player's character?", answered yes for a character handed over for its player.
 std::uint8_t EndLeaderType() noexcept
 {
     const std::uint8_t original = reinterpret_cast<LeaderTypeFn>(g_endTest.Original())();
-    const void*        member   = g_ending;
-    if (member == nullptr || !Bound())
+    const void*        member   = t_ending;
+    if (member == nullptr || !Session())
     {
         return original;
+    }
+    if (!generation::OnGameThread())
+    {
+        return EndLeaderTypeOffThread(original, member);
     }
     Held* held = Find(member);
     if (held == nullptr)
@@ -438,22 +702,22 @@ std::uint8_t EndLeaderType() noexcept
                                NameOf(member), held->player, why, Holder(member));
         }
         *held       = {};
-        g_endPlayer = kRefused;  // an earlier answer in this member end no longer stands
+        t_endPlayer = kRefused;  // an earlier answer in this member end no longer stands
         return original;
     }
     // Only while its player has no other character: a player who switched to another member during the approach keeps
     // that one, and the old one stays with its AI, as in single player (the game's test then fails for it as well).
-    void* const       controller = held->player == 2 ? generation::PlayerTwoController() : generation::PlayerOneController();
-    const void* const pawn       = ReadPointer(controller, facts::kControllerPawn);
-    if (controller == nullptr || (pawn != nullptr && pawn != member))
+    void* const       controller = ControllerOf(held->player);
+    const void* const other      = PlaysInstead(controller, member);
+    if (controller == nullptr || other != nullptr)
     {
         if (Line())
         {
             platform::LogDebug(L"synergy partner: {} not given back: player {} plays {} now", NameOf(member),
-                               held->player, NameOf(pawn));
+                               held->player, NameOf(other));
         }
         *held       = {};
-        g_endPlayer = kRefused;
+        t_endPlayer = kRefused;
         return original;
     }
     const std::uint8_t type = TypeOf(member);
@@ -461,7 +725,8 @@ std::uint8_t EndLeaderType() noexcept
     {
         return original;
     }
-    g_endPlayer = held->player;
+    t_endPlayer     = held->player;
+    t_endController = controller;
     return type;
 }
 
@@ -469,15 +734,16 @@ std::uint8_t EndLeaderType() noexcept
 void* EndPrimary() noexcept
 {
     void* const original = reinterpret_cast<PrimaryFn>(g_endPrimary.Original())();
-    const void* member   = g_ending;
-    if (member == nullptr || !Bound())
+    const void* member   = t_ending;
+    if (member == nullptr || !Session())
     {
         return original;
     }
+    const bool gameThread = generation::OnGameThread();
     // A remembered character goes back to its player; player 2's member to player 2 in any case (a member end that
     // ran with player 2's member as the leader type, inside player 2's command window, without the primary controller
     // swapped, would otherwise give it to player 1).
-    int player = g_endPlayer;
+    int player = t_endPlayer;
     if (player == kRefused)
     {
         // A refused give-back never lands on player 2's controller, even when the primary controller reads it (a member
@@ -485,7 +751,7 @@ void* EndPrimary() noexcept
         void* const playerOne = generation::PlayerOneController();
         if (original == generation::PlayerTwoController() && playerOne != nullptr && member != generation::Member())
         {
-            if (Line())
+            if (gameThread && Line())
             {
                 platform::LogDebug(L"synergy partner: {} (refused) would go to player 2's controller as the primary; "
                                    L"player 1's instead",
@@ -497,16 +763,19 @@ void* EndPrimary() noexcept
     }
     if (player == 0 && member == generation::Member())
     {
-        player = 2;
+        player = 2;  // the game's own test passed for player 2's member (not remembered)
     }
-    if (player == 0)
-    {
-        return original;
-    }
-    void* const controller = player == 2 ? generation::PlayerTwoController() : generation::PlayerOneController();
+    void* const controller = t_endController != nullptr ? t_endController : ControllerOf(player);
     if (controller == nullptr)
     {
+        t_endPlayer = 0;  // nothing given back by the mod's answer
         return original;
+    }
+    t_endPlayer = player;  // the member end's answer: given back to this player
+    t_givenBack = true;
+    if (!gameThread)
+    {
+        return controller;  // counted and logged by the tick, from the member end's note
     }
     ++g_counts.givenBack;
     if (Line())
@@ -515,13 +784,168 @@ void* EndPrimary() noexcept
         const auto  ms   = held != nullptr
                                ? std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - held->since).count()
                                : -1;
-        platform::LogDebug(L"synergy partner: {} given back to player {}'s controller (driven by {} now{}; the game's "
-                           L"primary controller {})",
-                           NameOf(member), player, Holder(member),
-                           ms >= 0 ? std::format(L", {} ms after the hand-over", ms) : std::wstring(),
+        platform::LogDebug(L"synergy partner: {} given back to player {}'s controller (driven by {} now; {} ms after the "
+                           L"hand-over, -1 if not remembered; the game's primary controller {})",
+                           NameOf(member), player, Holder(member), ms,
                            controller == original ? L"is the same" : L"was the other player's");
     }
     return controller;
+}
+
+// ---------------------------------------------------------------------------------------------
+// The tick's side: member ends off the game thread, and the record of a partner not given back
+// ---------------------------------------------------------------------------------------------
+
+const wchar_t* SeenText(EndSeen seen) noexcept
+{
+    switch (seen)
+    {
+    case EndSeen::GameThread:
+        return L"ran on the game thread without a give-back";
+    case EndSeen::OffThread:
+        return L"ran off the game thread without a give-back";
+    case EndSeen::Never:
+        break;
+    }
+    return L"not seen";
+}
+
+/// Game thread: the member ends that ran off the game thread since the last tick. Counted and logged: Info for a
+/// remembered character or a give-back (a few per synergy that has a human partner: member ends come only from link
+/// records), Debug otherwise. A give-back is confirmed by later ticks; a refused character is forgotten.
+void TakeNotes() noexcept
+{
+    std::array<Note, kNotes> notes{};
+    std::size_t              count = 0;
+    std::uint32_t            lost  = 0;
+    {
+        Locked lock;
+        count       = g_noteCount;
+        lost        = g_notesLost;
+        std::copy_n(g_notes.begin(), count, notes.begin());
+        g_noteCount = 0;
+        g_notesLost = 0;
+    }
+    for (std::size_t i = 0; i < count; ++i)
+    {
+        const Note& note = notes[i];
+        ++g_counts.memberEnds;
+        ++g_counts.offThread;
+        Held* const held   = Find(note.member);
+        const int   player = held != nullptr ? held->player : 0;
+        if (held != nullptr)
+        {
+            if (note.answer > 0)
+            {
+                held->queuedAt = Clock::now();  // the game queued the possession: Confirm checks it lands
+            }
+            else if (note.answer == kRefused)
+            {
+                *held = {};
+            }
+            else
+            {
+                held->endSeen = EndSeen::OffThread;
+            }
+        }
+        const std::wstring at = MemberText(note.state, note.started, note.ended);
+        if (note.answer > 0)
+        {
+            ++g_counts.givenBack;
+            platform::Log(L"synergy partner: {} given back to player {}'s controller from a member end off the game "
+                          L"thread (thread {}; the game queues the possession; the record: {})",
+                          NameOf(note.member), note.answer, note.thread, at);
+        }
+        else if (note.answer == kRefused)
+        {
+            platform::Log(L"synergy partner: {} not given back to player {} from a member end off the game thread "
+                          L"(thread {}): no longer owned, the game's own give-back test (the record: {})",
+                          NameOf(note.member), player, note.thread, at);
+        }
+        else if (player != 0)
+        {
+            platform::Log(L"synergy partner: member end of {} (player {}'s) ran off the game thread (thread {}) without "
+                          L"a give-back ({}; the record: {})",
+                          NameOf(note.member), player, note.thread,
+                          note.answerable ? L"the game did not run its give-back" : L"no published answer",
+                          at);
+        }
+        else if (Line())
+        {
+            platform::LogDebug(L"synergy partner: member end of {} ran off the game thread (thread {}): not remembered, "
+                               L"the game's own give-back test (the record: {})",
+                               NameOf(note.member), note.thread, at);
+        }
+    }
+    if (lost != 0)
+    {
+        platform::LogWarning(L"synergy partner: {} member ends off the game thread were not noted (more than {} in one "
+                             L"frame); their give-backs ran, their logging did not",
+                             lost, kNotes);
+    }
+}
+
+/// Game thread: a give-back the game queued from a member end off the game thread. True once it is decided: the
+/// possession landed (Debug), or kGoneAfter passed without it (Info).
+bool Confirm(const Held& held, Clock::time_point now) noexcept
+{
+    if (PlayerHolding(held.character) == held.player)
+    {
+        if (Line())
+        {
+            platform::LogDebug(L"synergy partner: {} is driven by player {}'s controller again (the queued give-back "
+                               L"landed, {} ms after the member end)",
+                               NameOf(held.character), held.player,
+                               std::chrono::duration_cast<std::chrono::milliseconds>(now - held.queuedAt).count());
+        }
+        return true;
+    }
+    if (now - held.queuedAt < kGoneAfter)
+    {
+        return false;
+    }
+    platform::Log(L"synergy partner: {}'s queued give-back to player {} did not land (driven by {})",
+                  NameOf(held.character), held.player, Holder(held.character));
+    return true;
+}
+
+/// Game thread: follows the link record that names `held` as the partner. True once that record is gone: silently
+/// when its player drives it again; logged when the character is still not given back after kGoneAfter, since nothing
+/// in the game gives it back after that (S-SYNSTUCK causes 2 and 3).
+bool WatchRecord(Held& held, Clock::time_point now) noexcept
+{
+    LinkRecordView record;
+    if (party_member::FindPartnerLink(held.type, record))
+    {
+        held.record     = record;
+        held.recordSeen = true;
+        held.goneSince  = {};
+        return false;
+    }
+    if (!held.recordSeen)
+    {
+        return false;
+    }
+    if (PlayerHolding(held.character) == held.player)
+    {
+        return true;
+    }
+    if (held.goneSince == Clock::time_point{})
+    {
+        held.goneSince = now;  // the member end that removed it may still be noting itself on another thread
+        return false;
+    }
+    if (now - held.goneSince < kGoneAfter)
+    {
+        return false;
+    }
+    const std::uint8_t partner = std::min<std::uint8_t>(held.record.partner, std::size(held.record.state) - 1);
+    platform::Log(L"synergy partner: {} (player {}'s) is still driven by {} and its synergy record is gone; nothing in "
+                  L"the game gives it back now (its member end: {}; the synergy {}; the partner's record: {})",
+                  NameOf(held.character), held.player, Holder(held.character), SeenText(held.endSeen),
+                  RecordText(held.record),
+                  MemberText(held.record.state[partner], held.record.started[partner], held.record.ended[partner]));
+    return true;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -664,6 +1088,7 @@ void Tick() noexcept
         ForgetAll();
         g_session = session;
     }
+    TakeNotes();
     const auto now = Clock::now();
     for (Held& held : g_held)
     {
@@ -674,6 +1099,14 @@ void Tick() noexcept
         if (!leader_scope::StillNames(held.weak, held.character))
         {
             held = {};
+            continue;
+        }
+        if (held.queuedAt != Clock::time_point{})
+        {
+            if (Confirm(held, now))
+            {
+                held = {};
+            }
             continue;
         }
         if (const wchar_t* why = LostBy(held.player, held.character))
@@ -687,15 +1120,21 @@ void Tick() noexcept
             held = {};
             continue;
         }
+        if (WatchRecord(held, now))
+        {
+            held = {};
+            continue;
+        }
         if (!held.warned && now - held.since >= kLateAfter && PlayerHolding(held.character) != held.player)
         {
             held.warned = true;
             platform::Log(L"synergy partner: {} (player {}'s) is still driven by {} {} s after its synergy hand-over; "
-                          L"the game has not ended its link yet",
+                          L"the game has not ended its link yet (its member end: {})",
                           NameOf(held.character), held.player, Holder(held.character),
-                          std::chrono::duration_cast<std::chrono::seconds>(kLateAfter).count());
+                          std::chrono::duration_cast<std::chrono::seconds>(kLateAfter).count(), SeenText(held.endSeen));
         }
     }
+    Publish();
     if (now - g_statusAt < kStatusEvery)
     {
         return;
@@ -708,9 +1147,10 @@ void Tick() noexcept
         return;
     }
     platform::LogDebug(L"synergy partner (10 s): AI requests {}, AI partners {}, humans' partners handed over by the "
-                       L"game's own answer {} / by the answered test {}; member ends {}, given back to their own "
-                       L"player {}",
-                       c.requests, c.aiPartners, c.gameHandOvers, c.modHandOvers, c.memberEnds, c.givenBack);
+                       L"game's own answer {} / by the answered test {}; member ends {} ({} off the game thread), given "
+                       L"back to their own player {}",
+                       c.requests, c.aiPartners, c.gameHandOvers, c.modHandOvers, c.memberEnds, c.offThread,
+                       c.givenBack);
 }
 
 }  // namespace lss::player_two::synergy_partner
