@@ -32,10 +32,10 @@
 //
 // Threads: the hand-over runs on the game thread (other threads pass through). A mode-2 partner's own command end calls
 // LinkMember_End wherever its command executor finishes, which the game writes for worker threads
-// (RE-p2-synergy-skills.md S-SYNSTUCK2). There the member end is only noted (T3 passes through; P only keeps player 2's
-// controller from a character not player 2's), and the next tick gives a remembered character back on the game thread
-// with the game's own call, SwitchAIControl_Async(member, 1, its player's controller), after the same ownership tests
-// as T3, read live. Answering T3/P on the worker instead would let the game queue that possession with raw pointers
+// (RE-p2-synergy-skills.md S-SYNSTUCK2). There the member end is only noted (T3 fails for player 2's member and passes
+// through otherwise; P never names player 2's controller), so nothing the game queues is ever possessed by player 2,
+// and the next tick gives a remembered character back on the game thread with the game's own call,
+// SwitchAIControl_Async(member, 1, its player's controller), after the same ownership tests as T3, read live. Answering T3/P on the worker instead would let the game queue that possession with raw pointers
 // that nothing checks when it runs (S-SYNANYTHREAD Q1): it could outlive the player's ownership or controller. The tick
 // also watches each remembered partner's live link record and logs one that vanished with it still not given back.
 

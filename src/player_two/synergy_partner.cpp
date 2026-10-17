@@ -81,6 +81,7 @@ constexpr std::uint8_t kSwitchAiBytes[] = {0x40, 0x55, 0x48, 0x8D, 0x6C, 0x24, 0
 constexpr platform::FunctionFact kSwitchAi{L"AEndCharacter::SwitchAIControl_Async", 0x140AF5BFC, kSwitchAiBytes};
 
 constexpr std::uint8_t kNoType      = 16;  // the game's "no character type"
+constexpr std::uint8_t kNoMatch     = 0xFF;  // a leader type no character's type equals (types are 0..16)
 constexpr std::size_t  kHeld        = 4;   // characters handed to their AI at once: at most the two humans' (spare)
 constexpr std::size_t  kNotes       = 8;   // member ends off the game thread between two ticks (a few per synergy)
 constexpr auto         kLateAfter   = std::chrono::seconds(5);
@@ -148,8 +149,8 @@ const void*             g_initiator = nullptr;
 const void*             g_record    = nullptr;  // the link record of the start or AI request being run
 const void*             g_session   = nullptr;  // player 2's controller the remembered characters belong to
 
-// The member end being run on this thread (T3 answers only on the game thread; P off it only keeps player 2's
-// controller from a character not player 2's).
+// The member end being run on this thread (T3 answers only on the game thread; off it T3 fails for player 2's member
+// and P never names player 2's controller).
 thread_local const void* t_ending    = nullptr;  // the member of the member end being run
 thread_local int         t_endPlayer = 0;        // the player whose character that member end gives back (T3's answer)
 thread_local bool        t_gameGave  = false;    // off the game thread: the game's own test passed and P ran (it queued
@@ -539,11 +540,12 @@ std::uint8_t RequestLeaderType() noexcept
 // member's own command end, wherever that member's command executor finishes. A mode-2 synergy skill's partner plays
 // its own half and is given back only there, and the executor's finish is written for worker threads
 // (RE-p2-synergy-skills.md S-SYNSTUCK, S-SYNSTUCK2). On the game thread T3 and P answer for a remembered character.
-// Off it they pass through, and the member end is noted: the next tick gives a remembered character back on the game
-// thread with the game's own call, SwitchAIControl_Async(member, 1, its player's controller), after checking that its
-// player still owns it and plays nothing else. The game's own off-thread give-back would queue that possession with
-// raw pointers and check nothing when it runs (S-SYNANYTHREAD Q1), so it could outlive the player's ownership or
-// controller (a leave, a party change in between); the tick's call runs at once and only on what is true then.
+// Off it T3 fails for player 2's member and P never names player 2's controller, and the member end is noted: the next
+// tick gives a remembered character back on the game thread with the game's own call, SwitchAIControl_Async(member, 1,
+// its player's controller), after checking that its player still owns it and plays nothing else. The game's own
+// off-thread give-back would queue that possession with raw pointers and check nothing when it runs (S-SYNANYTHREAD
+// Q1), so it could outlive the player's ownership or controller (a leave, a party change in between); the tick's call
+// runs at once and only on what is true then.
 
 /// Any thread: the member end and the record at the member's index, before the member end.
 Note NoteOf(const void* record, const void* member, std::uint64_t index) noexcept
@@ -573,7 +575,7 @@ std::uint64_t MemberEnd(void* unused, void* record, void* member, std::uint64_t 
     {
         Note       note = NoteOf(record, member, index);
         EndScope   scope(member);
-        const auto result = original(unused, record, member, index);  // T3 passes through here
+        const auto result = original(unused, record, member, index);  // T3 / P: nothing for player 2 here
         note.gameGave     = t_gameGave;
         AddNote(note);  // the tick gives a remembered character back
         return result;
@@ -600,9 +602,16 @@ std::uint8_t EndLeaderType() noexcept
 {
     const std::uint8_t original = reinterpret_cast<LeaderTypeFn>(g_endTest.Original())();
     const void*        member   = t_ending;
-    if (member == nullptr || !Bound())
+    if (member == nullptr || !Session())
     {
         return original;
+    }
+    if (!generation::OnGameThread())
+    {
+        // Player 2's member is never given back from a worker: the game would queue its possession by player 2's
+        // controller with raw pointers that nothing checks when it runs. The game's compare fails; the tick gives a
+        // remembered member back on the game thread. Atomics only.
+        return member == generation::Member() ? kNoMatch : original;
     }
     Held* held = Find(member);
     if (held == nullptr)
@@ -660,19 +669,14 @@ void* EndPrimary() noexcept
     }
     if (!generation::OnGameThread())
     {
-        // The game's own give-back (T3 passed by its own test: the member is the leader type). The primary controller it
-        // reads may catch a player-2 scope of the game thread's, or miss one; its queued possession then goes to the
-        // wrong human. Player 2's member goes to player 2, any other character never to player 2. Atomics only. That
-        // queued possession itself is the game's (as in single player, where the leader is never handed to the other
-        // human in between); the tick does not give the character back again.
+        // The game's own give-back of a character not player 2's (T3 passed by its own test: the leader type; T3 fails
+        // for player 2's member here). The primary controller it reads may catch a player-2 scope of the game thread's;
+        // its queued possession is never by player 2's controller: player 1's instead, or none (its AI keeps it).
+        // Atomics only. That queued possession is the game's single-player path for player 1's character; the tick does
+        // not give the character back again.
         t_gameGave            = true;
         void* const playerOne = generation::PlayerOneController();
-        void* const playerTwo = generation::PlayerTwoController();
-        if (member == generation::Member())
-        {
-            return playerTwo;
-        }
-        return original == playerTwo && playerOne != nullptr ? playerOne : original;
+        return original == generation::PlayerTwoController() ? playerOne : original;
     }
     // A remembered character goes back to its player; player 2's member to player 2 in any case (a member end that
     // ran with player 2's member as the leader type, inside player 2's command window, without the primary controller
