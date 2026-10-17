@@ -30,13 +30,14 @@
 // (deferred) is left to the game: its Classic hand-over keeps the controller. Placed from the game thread
 // (game_thread_sites; some calls cross a 16-byte block), all or nothing.
 //
-// Threads: the hand-over runs on the game thread (other threads pass through). The give-back runs on any thread: a
-// mode-2 partner's own command end calls LinkMember_End wherever its command executor finishes, which the game writes
-// for worker threads, and SwitchAIControl_Async then queues the possession to the game thread itself
-// (RE-p2-synergy-skills.md S-SYNSTUCK2). Off the game thread its answers come from a snapshot the game thread publishes
-// each tick (the remembered characters their players still own and play nothing else than) plus the session's
-// atomics; the member end is noted, and the tick logs it and forgets a character given back there. The tick also
-// watches each remembered partner's link record and logs one whose record is gone while it is still not given back.
+// Threads: the hand-over runs on the game thread (other threads pass through). A mode-2 partner's own command end calls
+// LinkMember_End wherever its command executor finishes, which the game writes for worker threads
+// (RE-p2-synergy-skills.md S-SYNSTUCK2). There the member end is only noted (T3 passes through; P only keeps player 2's
+// controller from a character not player 2's), and the next tick gives a remembered character back on the game thread
+// with the game's own call, SwitchAIControl_Async(member, 1, its player's controller), after the same ownership tests
+// as T3, read live. Answering T3/P on the worker instead would let the game queue that possession with raw pointers
+// that nothing checks when it runs (S-SYNANYTHREAD Q1): it could outlive the player's ownership or controller. The tick
+// also watches each remembered partner's live link record and logs one that vanished with it still not given back.
 
 namespace lss::platform {
 class GameImage;
