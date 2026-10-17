@@ -64,6 +64,15 @@ struct SlotChoice
 /// when `log` is set.
 SlotChoice ChooseSlot(void* playerOneController, bool log = true) noexcept;
 
+/// One of the game's link records (RE-p2-synergy-skills.md S-SYNTAKE §3, S-SYNSTUCK2 §1); every read guarded, so any
+/// thread that is running the record (an empty view for null).
+LinkRecordView ReadLinkRecord(const void* record) noexcept;
+
+/// The first of the game's link records whose partner is `playerType` and has not ended there (a record stays until
+/// all its members ended, and the battle teardown keeps one whose started member never ended). Guarded reads; false if
+/// none, outside battle, or if the reads faulted. Game thread.
+bool FindPartnerLink(std::uint8_t playerType, LinkRecordView& out) noexcept;
+
 /// `member`'s AI: its active brain and that brain's state. Game thread.
 AiSnapshot ReadAi(const void* member) noexcept;
 

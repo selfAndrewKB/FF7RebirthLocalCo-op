@@ -225,15 +225,47 @@ constexpr std::uint32_t kRecordAbility    = 0x10;
 constexpr std::uint32_t kAbilityKind      = 0x8B;
 constexpr std::uint32_t kAbilityMode      = 0x8F;
 constexpr std::uint32_t kRecordTypes      = 0x29;
+constexpr std::uint32_t kRecordActions    = 0x2C;
 constexpr std::uint32_t kRecordPartner    = 0x39;
+constexpr std::uint32_t kRecordNoLink     = 0x3A;
 constexpr std::uint32_t kRecordState      = 0x56;
 constexpr std::uint32_t kRecordStarted    = 0x100;
 constexpr std::uint32_t kRecordEnded      = 0x103;
 constexpr std::int32_t  kMaxLinkRecords   = 32;  // a sanity bound: a few records live at once
 
-/// The game's link record in which `playerType` is a partner it has not given back yet (party_lease.h
-/// LinkPartnerBusy). Plain reads; the caller holds the SEH guard.
-bool FindBusyLink(std::uint8_t playerType, LinkRecordView& out) noexcept
+}  // namespace
+
+LinkRecordView ReadLinkRecord(const void* record) noexcept
+{
+    LinkRecordView view;
+    if (record == nullptr)
+    {
+        return view;
+    }
+    for (std::uint32_t member = 0; member < std::size(view.types); ++member)
+    {
+        view.types[member]   = ReadField<std::uint8_t>(record, kRecordTypes + member);
+        view.state[member]   = ReadField<std::uint8_t>(record, kRecordState + member);
+        view.started[member] = ReadField<std::uint8_t>(record, kRecordStarted + member);
+        view.ended[member]   = ReadField<std::uint8_t>(record, kRecordEnded + member);
+        view.actions[member] = ReadField<std::uint32_t>(record, kRecordActions + 4 * member);
+    }
+    view.partner        = ReadField<std::uint8_t>(record, kRecordPartner);
+    view.noLink         = ReadField<std::uint8_t>(record, kRecordNoLink);
+    const void* ability = ReadPointer(record, kRecordAbility);
+    if (ability != nullptr)
+    {
+        view.mode = ReadField<std::uint8_t>(ability, kAbilityMode);
+        view.kind = ReadField<std::uint8_t>(ability, kAbilityKind);
+    }
+    return view;
+}
+
+namespace {
+
+/// The first of the game's link records that `accept` takes. Plain reads; the caller holds the SEH guard.
+template <class Accept>
+bool FindLink(Accept accept, LinkRecordView& out) noexcept
 {
     const void* manager = ReadPointer(*g_battleState, kLinkManager);
     const auto* records = static_cast<const std::byte*>(ReadPointer(manager, kLinkRecords));
@@ -244,29 +276,39 @@ bool FindBusyLink(std::uint8_t playerType, LinkRecordView& out) noexcept
     const std::int32_t count = std::min(ReadField<std::int32_t>(manager, kLinkRecordCount), kMaxLinkRecords);
     for (std::int32_t index = 0; index < count; ++index)
     {
-        const std::byte* record = records + static_cast<std::size_t>(index) * kLinkRecordSize;
-        LinkRecordView   view;
-        for (std::uint32_t member = 0; member < std::size(view.types); ++member)
-        {
-            view.types[member]   = ReadField<std::uint8_t>(record, kRecordTypes + member);
-            view.state[member]   = ReadField<std::uint8_t>(record, kRecordState + member);
-            view.started[member] = ReadField<std::uint8_t>(record, kRecordStarted + member);
-            view.ended[member]   = ReadField<std::uint8_t>(record, kRecordEnded + member);
-        }
-        view.partner        = ReadField<std::uint8_t>(record, kRecordPartner);
-        const void* ability = ReadPointer(record, kRecordAbility);
-        if (ability != nullptr)
-        {
-            view.mode = ReadField<std::uint8_t>(ability, kAbilityMode);
-            view.kind = ReadField<std::uint8_t>(ability, kAbilityKind);
-        }
-        if (LinkPartnerBusy(view, playerType))
+        const LinkRecordView view = ReadLinkRecord(records + static_cast<std::size_t>(index) * kLinkRecordSize);
+        if (accept(view))
         {
             out = view;
             return true;
         }
     }
     return false;
+}
+
+/// The game's link record in which `playerType` is a partner it has not given back yet (party_lease.h
+/// LinkPartnerBusy).
+bool FindBusyLink(std::uint8_t playerType, LinkRecordView& out) noexcept
+{
+    return FindLink([playerType](const LinkRecordView& view) { return LinkPartnerBusy(view, playerType); }, out);
+}
+
+bool FindPartnerLinkGuarded(std::uint8_t playerType, LinkRecordView& out) noexcept
+{
+    __try
+    {
+        return g_fn.inBattle() != 0 &&
+               FindLink(
+            [playerType](const LinkRecordView& view) {
+                return view.partner < std::size(view.types) && view.types[view.partner] == playerType &&
+                       view.ended[view.partner] == 0;
+            },
+            out);
+    }
+    __except (platform::GuardFilter(GetExceptionCode()))
+    {
+        return false;
+    }
 }
 
 void ReadSlot(void* playerOneController, SlotRead& out) noexcept
@@ -325,6 +367,11 @@ bool ReadSlotGuarded(void* playerOneController, SlotRead& out) noexcept
 }
 
 }  // namespace
+
+bool FindPartnerLink(std::uint8_t playerType, LinkRecordView& out) noexcept
+{
+    return g_installed && *g_battleState != nullptr && FindPartnerLinkGuarded(playerType, out);
+}
 
 SlotChoice ChooseSlot(void* playerOneController, bool log) noexcept
 {

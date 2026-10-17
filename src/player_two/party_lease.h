@@ -133,8 +133,10 @@ struct LinkRecordView
                                   // LinkMember_End
     std::uint8_t started[3]{};    // +0x100+idx
     std::uint8_t ended[3]{};      // +0x103+idx
-    std::uint8_t mode = 0;        // the ability's +0x8F (1-4; 0 without an ability)
-    std::uint8_t kind = 0xFF;     // the ability's +0x8B (logged: 1 ATB synergy ability, 0 synergy skill [ASSUMPTION])
+    std::uint8_t mode = 0;        // the ability's +0x8F ExecuteConditionType0 (1-4; 0 without an ability)
+    std::uint8_t kind = 0xFF;     // the ability's +0x8B CombinationCategory (1 ATB synergy ability, 0 synergy skill)
+    std::uint8_t noLink = 0;      // +0x3A the halves run without the link flag (logged only; S-SYNSTUCK2 §4)
+    std::uint32_t actions[3]{};   // +0x2C+4*idx the members' action ids (logged only: they name the skill offline)
 };
 
 /// `playerType` is this record's partner and the game has not given it back yet: the record is live
