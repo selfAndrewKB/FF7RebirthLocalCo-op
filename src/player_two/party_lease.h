@@ -136,7 +136,9 @@ struct LinkRecordView
     std::uint8_t mode = 0;        // the ability's +0x8F ExecuteConditionType0 (1-4; 0 without an ability)
     std::uint8_t kind = 0xFF;     // the ability's +0x8B CombinationCategory (1 ATB synergy ability, 0 synergy skill)
     std::uint8_t noLink = 0;      // +0x3A the halves run without the link flag (logged only; S-SYNSTUCK2 §4)
-    std::uint32_t actions[3]{};   // +0x2C+4*idx the members' action ids (logged only: they name the skill offline)
+    std::uint8_t window = 0;      // +0x50 the combination window: the initiator's animation notify holds it open while
+                                  // the game may ask for a mode-2 partner (S-SYNCOUNTER Q2)
+    std::uint32_t actions[3]{};   // +0x2C+4*idx the members' command serials (logged only; not skill ids)
 };
 
 /// `playerType` is this record's partner and the game has not given it back yet: the record is live

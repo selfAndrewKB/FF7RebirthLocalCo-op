@@ -228,6 +228,7 @@ constexpr std::uint32_t kRecordTypes      = 0x29;
 constexpr std::uint32_t kRecordActions    = 0x2C;
 constexpr std::uint32_t kRecordPartner    = 0x39;
 constexpr std::uint32_t kRecordNoLink     = 0x3A;
+constexpr std::uint32_t kRecordWindow     = 0x50;
 constexpr std::uint32_t kRecordState      = 0x56;
 constexpr std::uint32_t kRecordStarted    = 0x100;
 constexpr std::uint32_t kRecordEnded      = 0x103;
@@ -252,6 +253,7 @@ LinkRecordView ReadLinkRecord(const void* record) noexcept
     }
     view.partner        = ReadField<std::uint8_t>(record, kRecordPartner);
     view.noLink         = ReadField<std::uint8_t>(record, kRecordNoLink);
+    view.window         = ReadField<std::uint8_t>(record, kRecordWindow);
     const void* ability = ReadPointer(record, kRecordAbility);
     if (ability != nullptr)
     {
