@@ -10,9 +10,9 @@
 // machines use.
 //   - Admit: player 2's field pass (player_two/field_pickup) leaves a point open when its key is a shopkeeper's, read
 //     from the game's own data with the game's accessors (§1.2: the GS object's talk state, its next state, that
-//     state's enter actions, a type-43 action of kind 1 or 7). The walk runs once per key in Tick, outside the field
-//     manager's lock; the pass reads only the cached verdict. A key whose rows cannot be read falls back to its name
-//     containing "Shop" (logged).
+//     state's enter actions, a type-43 action of kind 1 or 7). The walk runs in Tick, outside the field manager's lock
+//     (a key again after 5 s, a shop's after 60 s; all forgotten when player 2 leaves); the pass reads only the cached
+//     verdict. A key whose rows cannot be read falls back to its name containing "Shop" (logged).
 //   - Press: an entry redirect on StateTrigger_Request marks player 2's press when it comes from DispatchKey's object
 //     branch inside player 2's pass; player_two/vending then gives the shop that names the pressed NPC to player 2 (pad 2
 //     drives it, the leader-type scope for its camera preset).

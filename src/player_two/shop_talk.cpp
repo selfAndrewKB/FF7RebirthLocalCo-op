@@ -80,7 +80,8 @@ constexpr std::int32_t  kMaxActions    = 32;
 constexpr std::int32_t  kMaxText       = 127;
 
 using Clock = std::chrono::steady_clock;
-constexpr auto        kRecheck      = std::chrono::seconds(10);  // a key that is not a shop is read again after this
+constexpr auto        kRecheck      = std::chrono::seconds(5);   // a key that is not a shop is read again after this
+constexpr auto        kShopRecheck  = std::chrono::seconds(60);  // a shop's verdict is confirmed again after this
 constexpr std::size_t kQueueSize    = 256;
 constexpr int         kWalksPerTick = 32;
 constexpr int         kLeaderLogs   = 6;  // LEADER_ resolutions logged per pending press
@@ -345,7 +346,7 @@ std::uint64_t LeaderName(std::uint64_t a, std::uint64_t b, std::uint64_t c, std:
 {
     const auto returnAddress = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
     const auto result        = reinterpret_cast<Fn4>(g_leaderName.Original())(a, b, c, d);
-    if (g_pressKey != 0 && generation::OnGameThread() && vending::ShopkeeperPending())
+    if (generation::OnGameThread() && g_pressKey != 0 && vending::ShopkeeperPending())
     {
         ++g_leaderCalls;
         if (g_leaderLogged < kLeaderLogs)
@@ -397,7 +398,7 @@ void Install(const platform::GameImage& image) noexcept
 
 bool Admits(std::uint64_t key) noexcept
 {
-    if (!g_admitting || key == 0 || !vending::ShopIdle())
+    if (!g_admitting || key == 0 || !generation::OnGameThread() || !vending::ShopIdle())
     {
         return false;
     }
@@ -410,19 +411,18 @@ bool Admits(std::uint64_t key) noexcept
         }
         return false;
     }
-    Known& known = found->second;
-    if (IsAdmitted(known.verdict))
-    {
-        return true;  // a shop's data does not change: read once
-    }
-    // Not a shop now: read again later (its GS object may come after its point, or its talk state may be mid-talk).
-    const auto now = Clock::now();
-    if (now - known.queuedAt > kRecheck && g_queue.size() < g_queue.capacity())
+    // Read again later: a shop's verdict is confirmed now and then (admitted meanwhile); any other is read again soon
+    // (its GS object may come after its point, or its talk state may be mid-talk).
+    Known&     known    = found->second;
+    const bool admitted = IsAdmitted(known.verdict);
+    const auto now      = Clock::now();
+    if (now - known.queuedAt > (known.verdict == Verdict::Shop ? kShopRecheck : kRecheck) &&
+        g_queue.size() < g_queue.capacity())
     {
         known.queuedAt = now;
         g_queue.push_back(key);
     }
-    return false;
+    return admitted;
 }
 
 void Tick() noexcept
@@ -440,26 +440,40 @@ void Tick() noexcept
         }
         g_pressKey = 0;
     }
+    if (!generation::Active())
+    {
+        g_known.clear();  // a new session (or map) reads every key again
+        g_queue.clear();  // keeps its reserved capacity
+        return;
+    }
     if (g_queue.empty())
     {
         return;
     }
-    const auto now   = Clock::now();
-    int        walks = 0;
-    std::size_t done = 0;
-    try
+    const auto  now   = Clock::now();
+    int         walks = 0;
+    std::size_t done  = 0;
+    while (done < g_queue.size() && walks < kWalksPerTick)
     {
-        for (; done < g_queue.size() && walks < kWalksPerTick; ++done)
+        const std::uint64_t key = g_queue[done++];  // counted before the read: a key that throws is not read again here
+        try
         {
-            const std::uint64_t key   = g_queue[done];
-            auto                known = g_known.find(key);
+            auto known = g_known.find(key);
             if (known != g_known.end() && now - known->second.readAt < kDuplicate)
             {
                 continue;  // queued again before its read (an unknown key is queued on every pass until then)
             }
             ++walks;
-            std::wstring  seen;
-            const Verdict verdict = Walk(key, seen);
+            std::wstring seen;
+            Verdict      verdict = Verdict::Unreadable;
+            try
+            {
+                verdict = Walk(key, seen);
+            }
+            catch (...)
+            {
+                seen = L"the read threw";
+            }
             if (known == g_known.end())
             {
                 known = g_known.emplace(key, Known{verdict, now, now, false}).first;
@@ -484,9 +498,9 @@ void Tick() noexcept
                 }
             }
         }
-    }
-    catch (...)
-    {
+        catch (...)
+        {
+        }
     }
     g_queue.erase(g_queue.begin(), g_queue.begin() + static_cast<std::ptrdiff_t>(done));
 }
