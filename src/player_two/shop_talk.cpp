@@ -51,6 +51,7 @@ constexpr platform::FunctionFact kFindObject{L"GS_FindObjectByKeyAndAttribute", 
 constexpr std::uint8_t kAccessorBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00};  // push rbx; mov eax, 20h
 constexpr platform::FunctionFact kStateRow{L"DataAcc_StateChange_Ctor", 0x14087B56C, kAccessorBytes};
 constexpr platform::FunctionFact kActionRow{L"DataAcc_Action_Ctor", 0x1407BEB9C, kAccessorBytes};
+constexpr platform::FunctionFact kGroupRow{L"DataAcc_ActionGroup_Ctor", 0x1411CB32C, kAccessorBytes};
 constexpr std::size_t kFirstInstruction = 5;  // each redirected entry starts with a 5-byte mov [rsp+n], reg
 // DispatchKey's return address after its StateTrigger_Request call (the object branch, §2.1 step 6).
 constexpr std::uintptr_t kDispatchReturn = 0x1414A8FB3;
@@ -65,18 +66,22 @@ using AccessorFn = void* (*)(void* accessor, std::uint64_t rowName);  // fills {
 constexpr std::uint32_t kRootGs        = 0x170;
 constexpr std::int32_t  kTalkAttribute = 5;
 constexpr std::uint32_t kObjectState   = 0x10;
-// Memory-mapped data rows (§1.2): an array or string field is {u64 pointer, or (offset << 1) | 1 from the field; i32
-// count}; a string's count includes its terminator.
+// Memory-mapped data rows (RE-statechange-row-layout.md, the game's own field-type tables): an array or string field is
+// {u64 pointer, or (signed offset << 1) | 1 from the field; i32 count}; a string's count includes its terminator.
 constexpr std::uint32_t kAccessorRow   = 0x08;
-constexpr std::uint32_t kStateNext     = 0;    // StateChange NextStateChange_Array [ASSUMPTION: field order]
-constexpr std::uint32_t kStateActions  = 48;   // StateChange EnterActionList_Array [ASSUMPTION: field order]
+constexpr std::uint32_t kStateNext     = 0;    // StateChange NextStateChange_Array (16-byte strings; empty: no change)
+constexpr std::uint32_t kStateSwaps    = 32;   // StateChange SwapStateChange (FNames: states entered instead, by rule)
+constexpr std::uint32_t kStateActions  = 48;   // StateChange EnterActionList_Array (FNames: Action or ActionGroup rows)
+constexpr std::uint32_t kGroupActions  = 0;    // ActionGroup row: its Action FNames
 constexpr std::uint32_t kActionInts    = 112;  // Action IntegerArgumentList (i32 elements), count at +120
 constexpr std::uint32_t kActionType    = 280;  // Action Type (i32)
 constexpr std::int32_t  kShowMenu      = 43;
 constexpr std::int32_t  kShopKind      = 1;    // FEndShowShopMenu
 constexpr std::int32_t  kSkillTreeKind = 7;    // FEndShowSkillTreeMenu (the magic and book shops)
-constexpr std::int32_t  kMaxNext       = 4;
-constexpr std::int32_t  kMaxActions    = 32;
+constexpr std::int32_t  kMaxNext       = 16;
+constexpr std::int32_t  kMaxSwaps      = 8;
+constexpr std::int32_t  kMaxActions    = 8;   // GSObject_PostStateEnterActions reads at most 8
+constexpr std::int32_t  kMaxGroup      = 32;  // GSObject_PostActionRequest queues at most 32 of a group
 constexpr std::int32_t  kMaxText       = 127;
 
 using Clock = std::chrono::steady_clock;
@@ -108,6 +113,7 @@ platform::EntryRedirect g_request, g_aiEvent, g_leaderName;
 FindFn                  g_findObject = nullptr;
 AccessorFn              g_stateRow   = nullptr;
 AccessorFn              g_actionRow  = nullptr;
+AccessorFn              g_groupRow   = nullptr;  // optional: without it a name is read as an Action row only
 const std::uintptr_t*   g_gameRoot   = nullptr;
 std::optional<platform::GameImage> g_image;
 bool                    g_admitting  = false;  // the walk's functions were found
@@ -137,7 +143,7 @@ const wchar_t* Text(Verdict verdict) noexcept
     return L"?";
 }
 
-/// A mapped field's data (pointer, or offset from the field when the low bit is set).
+/// A mapped field's data (pointer, or a signed offset from the field when the low bit is set: shared strings point back).
 const std::byte* MappedData(const std::byte* field) noexcept
 {
     const auto value = ReadField<std::uint64_t>(field, 0);
@@ -145,7 +151,7 @@ const std::byte* MappedData(const std::byte* field) noexcept
     {
         return nullptr;
     }
-    return (value & 1) != 0 ? field + (value >> 1) : reinterpret_cast<const std::byte*>(value);
+    return (value & 1) != 0 ? field + (static_cast<std::int64_t>(value) >> 1) : reinterpret_cast<const std::byte*>(value);
 }
 
 /// A mapped array's element count, at most `max` (0 if unreadable).
@@ -179,7 +185,41 @@ std::wstring MappedText(const std::byte* element)
     return text;
 }
 
-/// A row by name through the game's accessor (its row pointer, or null).
+/// A mapped array of FNames (8-byte elements): at most `max`, up to the first None (as the game reads them).
+std::vector<std::uint64_t> MappedNames(const std::byte* field, std::int32_t max)
+{
+    std::vector<std::uint64_t> names;
+    const auto* data  = MappedData(field);
+    const auto  count = MappedCount(field, max);
+    for (std::int32_t i = 0; i < count && data != nullptr; ++i)
+    {
+        const auto name = ReadField<std::uint64_t>(data, 8 * static_cast<std::uint32_t>(i));
+        if (name == 0)
+        {
+            break;
+        }
+        names.push_back(name);
+    }
+    return names;
+}
+
+/// A row by FName through the game's accessor (its row pointer, or null).
+const std::byte* Row(AccessorFn accessor, std::uint64_t name)
+{
+    if (accessor == nullptr || name == 0)
+    {
+        return nullptr;
+    }
+    alignas(16) std::array<std::byte, 64> buffer{};
+    void* filled = nullptr;
+    if (!platform::CallGuarded(accessor, filled, static_cast<void*>(buffer.data()), name))
+    {
+        return nullptr;
+    }
+    return static_cast<const std::byte*>(ReadPointer(buffer.data(), kAccessorRow));
+}
+
+/// A row by its name's text (next states are named by strings): the FName is looked up, never added.
 const std::byte* Row(AccessorFn accessor, const std::wstring& name)
 {
     std::uint64_t value = 0;
@@ -192,17 +232,7 @@ const std::byte* Row(AccessorFn accessor, const std::wstring& name)
     {
         return nullptr;
     }
-    if (value == 0)
-    {
-        return nullptr;
-    }
-    alignas(16) std::array<std::byte, 64> buffer{};
-    void* filled = nullptr;
-    if (!platform::CallGuarded(accessor, filled, static_cast<void*>(buffer.data()), value))
-    {
-        return nullptr;
-    }
-    return static_cast<const std::byte*>(ReadPointer(buffer.data(), kAccessorRow));
+    return Row(accessor, value);
 }
 
 void* Gs() noexcept
@@ -232,57 +262,70 @@ Verdict Walk(std::uint64_t key, std::wstring& seen)
     const std::wstring keyText = players::unreal::NameText(key);
     const bool         named   = keyText.find(L"Shop") != std::wstring::npos;
     const auto unreadable      = [named] { return named ? Verdict::ByName : Verdict::Unreadable; };
-    const std::wstring stateText = players::unreal::NameText(state);
-    const std::byte*   row       = Row(g_stateRow, stateText);
-    seen = std::format(L"state {}", stateText);
+    const std::byte*   row     = Row(g_stateRow, state);
+    seen = std::format(L"state {}", players::unreal::NameText(state));
     if (row == nullptr)
     {
         seen += L" (no row)";
         return unreadable();
     }
+    // Each next state (GS_ApplyTriggerToObject_NextState), with the states its swap rules may enter instead
+    // (StateChange_ResolveSwapState); each one's enter actions (GSObject_PostStateEnterActions), a name standing for an
+    // ActionGroup row's actions when it has one (GSObject_PostActionRequest).
     const auto* next  = MappedData(row + kStateNext);
     const auto  nexts = MappedCount(row + kStateNext, kMaxNext);
-    if (nexts == 0)
+    for (std::int32_t n = 0; n < nexts && next != nullptr; ++n)
     {
-        seen += L", no next state";
-        return Verdict::NotShop;
-    }
-    bool readAll = next != nullptr;
-    for (std::int32_t n = 0; n < nexts && readAll; ++n)
-    {
-        const std::wstring nextText = MappedText(next + 16 * n);
+        const std::byte* element = next + 16 * n;
+        if (ReadField<std::int32_t>(element, 8) <= 1)
+        {
+            continue;  // an empty name: no change on that trigger
+        }
+        const std::wstring nextText = MappedText(element);
         const std::byte*   nextRow  = nextText.empty() ? nullptr : Row(g_stateRow, nextText);
         if (nextRow == nullptr)
         {
             seen += std::format(L", next {} unreadable", n);
-            readAll = false;
-            break;
+            return unreadable();
         }
         seen += std::format(L", next {}:", nextText);
-        const auto* actions = MappedData(nextRow + kStateActions);
-        const auto  count   = MappedCount(nextRow + kStateActions, kMaxActions);
-        for (std::int32_t a = 0; a < count && actions != nullptr; ++a)
+        std::vector<const std::byte*> states{nextRow};
+        for (const auto swap : MappedNames(nextRow + kStateSwaps, kMaxSwaps))
         {
-            const std::wstring actionText = MappedText(actions + 16 * a);
-            const std::byte*   actionRow  = actionText.empty() ? nullptr : Row(g_actionRow, actionText);
-            if (actionRow == nullptr)
+            if (const std::byte* swapRow = Row(g_stateRow, swap))
             {
-                seen += std::format(L" [{} unreadable]", a);
-                readAll = false;
-                break;
+                states.push_back(swapRow);
+                seen += std::format(L" (or {}:)", players::unreal::NameText(swap));
             }
-            const auto  type  = ReadField<std::int32_t>(actionRow, kActionType);
-            const auto* ints  = MappedData(actionRow + kActionInts);
-            const auto  kinds = MappedCount(actionRow + kActionInts, 64);
-            const auto  kind  = kinds > 0 && ints != nullptr ? ReadField<std::int32_t>(ints, 0) : -1;
-            seen += std::format(L" {}({}, {})", actionText, type, kind);
-            if (type == kShowMenu && (kind == kShopKind || kind == kSkillTreeKind))
+        }
+        for (const std::byte* stateRow : states)
+        {
+            for (const auto name : MappedNames(stateRow + kStateActions, kMaxActions))
             {
-                return Verdict::Shop;
+                const std::byte* group   = Row(g_groupRow, name);
+                const auto       actions = group != nullptr ? MappedNames(group + kGroupActions, kMaxGroup)
+                                                            : std::vector<std::uint64_t>{name};
+                for (const auto action : actions)
+                {
+                    const std::byte* actionRow = Row(g_actionRow, action);
+                    if (actionRow == nullptr)
+                    {
+                        continue;  // no Action row: nothing runs for it
+                    }
+                    const auto  type  = ReadField<std::int32_t>(actionRow, kActionType);
+                    const auto* ints  = MappedData(actionRow + kActionInts);
+                    const auto  kinds = MappedCount(actionRow + kActionInts, 64);
+                    const auto  kind  = kinds > 0 && ints != nullptr ? ReadField<std::int32_t>(ints, 0) : -1;
+                    seen += std::format(L" {}({}, {})", players::unreal::NameText(action), type, kind);
+                    if (type == kShowMenu && (kind == kShopKind || kind == kSkillTreeKind))
+                    {
+                        return Verdict::Shop;
+                    }
+                }
             }
         }
     }
-    return readAll ? Verdict::NotShop : unreadable();
+    return Verdict::NotShop;
 }
 
 /// The press: StateTrigger_Request. Player 2's press of a shopkeeper (DispatchKey's object branch inside player 2's
@@ -377,10 +420,12 @@ void Install(const platform::GameImage& image) noexcept
     const auto find  = platform::FindFunction(image, kFindObject);
     const auto state = platform::FindFunction(image, kStateRow);
     const auto act   = platform::FindFunction(image, kActionRow);
+    const auto group = platform::FindFunction(image, kGroupRow);
     const auto root  = image.Rebase(charapop::kGameRoot, sizeof(std::uintptr_t));
     g_findObject     = find ? reinterpret_cast<FindFn>(*find) : nullptr;
     g_stateRow       = state ? reinterpret_cast<AccessorFn>(*state) : nullptr;
     g_actionRow      = act ? reinterpret_cast<AccessorFn>(*act) : nullptr;
+    g_groupRow       = group ? reinterpret_cast<AccessorFn>(*group) : nullptr;
     g_gameRoot       = root ? reinterpret_cast<const std::uintptr_t*>(*root) : nullptr;
     g_queue.reserve(kQueueSize);
     const bool walk    = g_findObject != nullptr && g_stateRow != nullptr && g_actionRow != nullptr && g_gameRoot != nullptr;
@@ -388,10 +433,12 @@ void Install(const platform::GameImage& image) noexcept
     const bool events  = Place(image, g_aiEvent, kAiEvent, reinterpret_cast<std::uintptr_t>(&AiEvent));
     const bool leaders = Place(image, g_leaderName, kLeaderName, reinterpret_cast<std::uintptr_t>(&LeaderName));
     g_admitting        = walk && presses;
-    platform::Log(L"shop talk: {} (the data walk {}, presses {}, the shop's AI event {}, the LEADER_ log {})",
+    platform::Log(L"shop talk: {} (the data walk {}{}, presses {}, the shop's AI event {}, the LEADER_ log {})",
                   g_admitting ? L"ready (player 2 uses shopkeepers through the game's own field prompt and shop)"
                               : L"UNAVAILABLE for player 2 (a check failed; shopkeepers stay player 1's)",
-                  walk ? L"found" : L"NOT found", presses ? L"watched" : L"NOT watched",
+                  walk ? L"found" : L"NOT found",
+                  g_groupRow != nullptr ? L"" : L" (action groups NOT found: names read as actions only)",
+                  presses ? L"watched" : L"NOT watched",
                   events ? L"for player 2's shop" : L"NOT placed (the NPC reacts to player 1's character)",
                   leaders ? L"placed" : L"NOT placed");
 }
