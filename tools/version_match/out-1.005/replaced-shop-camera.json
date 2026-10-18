@@ -1,0 +1,22 @@
+{
+ "build": "1.005",
+ "research_build": "1.004",
+ "date": "2026-10-18",
+ "doc": "RE-p2-shop-camera-skip.md, RE-statechange-row-layout.md",
+ "facts": [
+  {
+   "old": "0x1411CB32C",
+   "new": "0x141173210",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "DataAcc_ActionGroup_Ctor (accessor over g_DataReg_ActionGroup 0x1488DE610 / 0x148711EA0; GSObject_PostActionRequest's group lookup): RE-statechange-row-layout.md Q2; named in both databases by the agent; the first 7 bytes (push rbx; mov eax, 20h) identical and bytes 12-23 identical in both exes (main session read, 2026-10-18)."
+  },
+  {
+   "old": "0x140E5629C",
+   "new": "0x140D520BC",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "AEndPlayerCameraManager::UpdateCamera's return address after its call of the Field operator's Activate (call [rax+10h]) when a special camera first blends out: RE-p2-shop-camera-skip.md section 6; the 24 bytes from 0x140E56297 / 0x140D520B7 identical in both exes (main session read, 2026-10-18). Logging only (field_camera)."
+  }
+ ]
+}
