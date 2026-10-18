@@ -14,10 +14,12 @@
 //     and of each point's carried target bits (+0x104 bits 1 and 2), kept by point key;
 //   - with the game's own "point disabled" bit (+0x104 bit 4, which the candidate query skips) set on every
 //     point that is neither one of WorldItemMgr's items, one of TreasurePointMgr's chests (§13; the chest listener's
-//     own test) nor a vending machine (its point preset rpaVendingMachine, §15.5; player_two/vending), and cleared
-//     again after: player 2 is offered collectibles, materials, chests and vending machines; talk, doors, scripts and
-//     menus stay player 1's. A chest or machine player 2 uses runs the game's own state (treasure, field action) on
-//     player 2's member (the listener asks for the leader, which the scope makes player 2's);
+//     own test), a vending machine (its point preset rpaVendingMachine, §15.5; player_two/vending) nor a shopkeeper
+//     (the game's data names a shop action for its key; player_two/shop_talk), and cleared again after: player 2 is
+//     offered collectibles, materials, chests, vending machines and shopkeepers; talk, doors, scripts and menus stay
+//     player 1's. A chest or machine player 2 uses runs the game's own state (treasure, field action) on player 2's
+//     member (the listener asks for the leader, which the scope makes player 2's); a shopkeeper's press fires the NPC's
+//     own state trigger;
 //   - the input step's FieldAction part in the game's order (its gate, the slot poll into the mod's own
 //     buffers, the latch, the press/execute tick), then the selection update;
 //   - with player 2's controller first in the world's controller list for each visibility request the pass

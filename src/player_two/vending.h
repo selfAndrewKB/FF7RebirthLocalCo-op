@@ -21,6 +21,11 @@
 // its camera target, preset and calling site, the close and how far player 2's member moved while it was up (the mod's own
 // movement of the member must not fight the shop), a press that opened no shop within 5 s, and a press a shop did not
 // match. Game thread.
+//
+// Shopkeepers (player_two/shop_talk, RE-p2-shopkeeper-talk.md) open the same shop command: player 2's press of one is
+// recorded here (PressedShopkeeper) and claims the first shop camera within 15 s whose target, the NPC's ActorName,
+// shares the pressed CharaPop key's text after its first '_' (Npc2100_shopweapon01 / oba2100_ShopWeapon01); the press
+// stays pending through any other shop.
 
 #include <cstdint>
 
@@ -36,6 +41,18 @@ void Install(const platform::GameImage& image) noexcept;
 /// Whether player 2's pass should leave a point with this point-side preset open: a vending machine's, while no shop is up.
 /// Game thread (inside the pass).
 bool Admits(std::uint64_t pointPreset) noexcept;
+
+/// Player 2 pressed the shopkeeper with this CharaPop key (player_two/shop_talk, inside player 2's pass).
+void PressedShopkeeper(std::uint64_t key) noexcept;
+
+/// No shop is up and no press of player 2's is pending (a vending machine's or a shopkeeper's).
+bool ShopIdle() noexcept;
+
+/// Player 2's press of a shopkeeper waits for its shop.
+bool ShopkeeperPending() noexcept;
+
+/// The shop up now is player 2's.
+bool PlayerTwosShop() noexcept;
 
 /// Once per frame (the engine-tick callback): a press that opened no shop is dropped; player 2 leaving ends their shop's pad.
 void Tick() noexcept;

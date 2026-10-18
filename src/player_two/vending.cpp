@@ -21,6 +21,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <cwctype>
 #include <optional>
 #include <span>
 #include <string>
@@ -59,6 +60,9 @@ using Clock = std::chrono::steady_clock;
 // contains, e.g. VendingMachine_..._obl2250_VendingBook_NearDrawbridge_PressVolume). Any other shop stays player 1's.
 constexpr std::uint64_t kPressFrames = 60;
 constexpr auto          kPressWindow = std::chrono::seconds(5);  // a press older than this is logged as having opened no shop
+// A shopkeeper's shop opens after its greeting, if any (a voiced line of about 2 s and more; RE-p2-shopkeeper-talk.md
+// §4.1): player 2's press of a shopkeeper claims the first shop camera within this time that names the pressed NPC.
+constexpr auto          kShopkeeperWindow = std::chrono::seconds(15);
 
 // Each wrapped function takes at most four integer arguments (§15 listings); all four are passed on.
 using Fn = std::uint64_t (*)(std::uint64_t, std::uint64_t, std::uint64_t, std::uint64_t);
@@ -88,6 +92,7 @@ struct Press
     std::uint64_t     point = 0;  // the pressed point's key
 };
 Press         g_press;
+Press         g_shopkeeper;  // player 2's press of a shopkeeper (player_two/shop_talk); point = the NPC's CharaPop key
 Shop          g_shop = Shop::None;
 float         g_memberAt[3]{};  // player 2's member when player 2's shop opened
 bool          g_memberKnown = false;
@@ -156,6 +161,39 @@ bool NamesPressedMachine(std::uint64_t target) noexcept
     }
 }
 
+/// The text after the first '_', lower case (the NPC's ActorName and its CharaPop key share it: Npc2100_shopweapon01
+/// and oba2100_ShopWeapon01; RE-p2-shopkeeper-talk.md §7.3).
+std::wstring AfterPrefix(const std::wstring& name)
+{
+    const auto   at   = name.find(L'_');
+    std::wstring rest = at == std::wstring::npos ? name : name.substr(at + 1);
+    for (wchar_t& c : rest)
+    {
+        c = static_cast<wchar_t>(std::towlower(c));
+    }
+    return rest;
+}
+
+/// Whether the shop camera's target names the NPC of player 2's pending shopkeeper press (the action passes the NPC's
+/// ActorName, §4.1). No target is never a shopkeeper's: some vending scripts pass none, and player 1's machine must not
+/// take player 2's pending press.
+bool NamesPressedShopkeeper(std::uint64_t target) noexcept
+{
+    if (target == 0)
+    {
+        return false;
+    }
+    try
+    {
+        const std::wstring rest = AfterPrefix(players::unreal::NameText(target));
+        return !rest.empty() && rest == AfterPrefix(players::unreal::NameText(g_shopkeeper.point));
+    }
+    catch (...)
+    {
+        return false;
+    }
+}
+
 /// The End2 listener (the vending press path, and other End2 actors'): logged; player 2's successful press is kept for the
 /// shop it opens.
 std::uint64_t End2Key(std::uint64_t mgr, std::uint64_t key, std::uint64_t r8, std::uint64_t r9) noexcept
@@ -186,14 +224,29 @@ std::uint64_t Camera(std::uint64_t target, std::uint64_t preset, std::uint64_t r
     {
         return call(target, preset, r8, r9);
     }
-    const auto frames = platform::frame_watch::FrameIndex() - g_press.frame;
-    const bool twos   = g_press.active && frames <= kPressFrames && NamesPressedMachine(target);
-    if (g_press.active && !twos)
+    const auto frames  = platform::frame_watch::FrameIndex() - g_press.frame;
+    const bool machine = g_press.active && frames <= kPressFrames && NamesPressedMachine(target);
+    if (g_press.active && !machine)
     {
         platform::Log(L"vending: player 2's press of {} is not this shop's ({} frames since it, camera target {})",
                       players::unreal::NameText(g_press.point), frames, players::unreal::NameText(target));
     }
     g_press.active = false;
+    // A shopkeeper's press stays pending through another shop (player 1's opened first, or the game queued player 2's
+    // behind it) until its own shop names the NPC, or the window ends.
+    const bool keeper = !machine && g_shopkeeper.active && NamesPressedShopkeeper(target);
+    if (g_shopkeeper.active)
+    {
+        platform::Log(L"vending: player 2's press of shopkeeper {} {} ({:.1f} s, {} frames since it, camera target {})",
+                      players::unreal::NameText(g_shopkeeper.point), keeper ? L"opened this shop" : L"is not this shop's",
+                      std::chrono::duration<double>(Clock::now() - g_shopkeeper.at).count(),
+                      platform::frame_watch::FrameIndex() - g_shopkeeper.frame, players::unreal::NameText(target));
+    }
+    if (keeper)
+    {
+        g_shopkeeper.active = false;
+    }
+    const bool twos = machine || keeper;
     if (!twos)
     {
         g_shop = Shop::PlayerOne;
@@ -288,7 +341,27 @@ bool CameraCalls(const platform::GameImage& image) noexcept
 
 bool Admits(std::uint64_t pointPreset) noexcept
 {
-    return pointPreset != 0 && g_shop == Shop::None && pointPreset == PresetName();
+    return pointPreset != 0 && g_shop == Shop::None && !g_shopkeeper.active && pointPreset == PresetName();
+}
+
+void PressedShopkeeper(std::uint64_t key) noexcept
+{
+    g_shopkeeper = Press{true, Clock::now(), platform::frame_watch::FrameIndex(), key};
+}
+
+bool ShopIdle() noexcept
+{
+    return g_shop == Shop::None && !g_press.active && !g_shopkeeper.active;
+}
+
+bool ShopkeeperPending() noexcept
+{
+    return g_shopkeeper.active;
+}
+
+bool PlayerTwosShop() noexcept
+{
+    return g_shop == Shop::PlayerTwo;
 }
 
 void Tick() noexcept
@@ -302,6 +375,13 @@ void Tick() noexcept
         g_press.active = false;
         platform::Log(L"vending: player 2's press of {} opened no shop within {} s", players::unreal::NameText(g_press.point),
                       std::chrono::duration_cast<std::chrono::seconds>(kPressWindow).count());
+    }
+    if (g_shopkeeper.active && (Clock::now() - g_shopkeeper.at > kShopkeeperWindow || !generation::Active()))
+    {
+        g_shopkeeper.active = false;
+        platform::Log(L"vending: player 2's press of shopkeeper {} opened no shop within {} s",
+                      players::unreal::NameText(g_shopkeeper.point),
+                      std::chrono::duration_cast<std::chrono::seconds>(kShopkeeperWindow).count());
     }
     if (g_shop == Shop::PlayerTwo && !generation::Active())
     {

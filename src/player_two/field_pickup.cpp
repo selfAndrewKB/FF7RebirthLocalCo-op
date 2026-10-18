@@ -13,6 +13,7 @@
 #include "player_two/pad_sticks.h"
 #include "player_two/party_member.h"
 #include "player_two/primary_controller.h"
+#include "player_two/shop_talk.h"
 #include "player_two/vending.h"
 #include "players/unreal_access.h"
 
@@ -307,7 +308,8 @@ bool                                                g_hashTrusted    = true;
 // The status line's counts since the last line.
 struct Counts
 {
-    std::uint32_t passes = 0, polled = 0, filtered = 0, worldItems = 0, chests = 0, vending = 0, executed = 0, fieldResets = 0;
+    std::uint32_t passes = 0, polled = 0, filtered = 0, worldItems = 0, chests = 0, vending = 0, shopkeepers = 0, executed = 0,
+                  fieldResets = 0;
     std::uint32_t requests = 0, requestsAsTwo = 0;  // visibility requests in the pass; those with player 2 first
     std::uint32_t markersMade = 0, markersGone = 0, markersDestroyed = 0;  // player 2's made; gone by the game; the mod's
     std::array<std::uint32_t, kSkipCount> skips{};
@@ -764,7 +766,8 @@ void Before(void* mgr, const std::uint8_t* items, const std::uint8_t* chests, bo
             const bool     worldItem = filter && InMap(items, kWorldItemMap, key);
             const bool     chest     = filter && !worldItem && InMap(chests, kChestMap, key);
             const bool     machine   = filter && !worldItem && !chest && vending::Admits(Read<std::uint64_t>(point, kPointPreset));
-            const bool     disable   = filter && !worldItem && !chest && !machine && (flags & kDisabledBit) == 0;
+            const bool     keeper    = filter && !worldItem && !chest && !machine && shop_talk::Admits(key);
+            const bool     disable   = filter && !worldItem && !chest && !machine && !keeper && (flags & kDisabledBit) == 0;
             std::uintptr_t oneMarker = 0;
             std::uintptr_t twoMarker = 0;
             if (g_destroy != nullptr)
@@ -783,6 +786,7 @@ void Before(void* mgr, const std::uint8_t* items, const std::uint8_t* chests, bo
             g_counts.worldItems += worldItem ? 1 : 0;
             g_counts.chests += chest ? 1 : 0;
             g_counts.vending += machine ? 1 : 0;
+            g_counts.shopkeepers += keeper ? 1 : 0;
             g_counts.filtered += disable ? 1 : 0;
             flags = static_cast<std::uint8_t>((flags & ~kTargetBits) | (two != g_twoBits.end() ? two->second : 0) |
                                               (disable ? kDisabledBit : 0));
@@ -1052,7 +1056,7 @@ void LogStatus() noexcept
     {
         platform::LogDebug(L"field pickup (60 s): {} pass(es) (poll open in {}), {} pickup(s) by player 2, {} field reset(s) "
                       L"of player 2's copy; {} visibility request(s), {} with player 2 as the first local player; per "
-                      L"pass on average {} WorldItem point(s), {} chest point(s) and {} vending machine(s) left open, {} other point(s) disabled for the pass; "
+                      L"pass on average {} WorldItem point(s), {} chest point(s), {} vending machine(s) and {} shopkeeper(s) left open, {} other point(s) disabled for the pass; "
                       L"skipped: scopes {}, member {}; WorldItem and chest lookups by {} ({} checked, {} mismatch(es)); player 2's "
                       L"marker widgets: {} now, {} made and {} destroyed by the game's own code, {} by the mod's call of "
                       L"its destroy; player 1's point markers now {}",
@@ -1061,6 +1065,7 @@ void LogStatus() noexcept
                       g_counts.passes != 0 ? g_counts.worldItems / g_counts.passes : 0,
                       g_counts.passes != 0 ? g_counts.chests / g_counts.passes : 0,
                       g_counts.passes != 0 ? g_counts.vending / g_counts.passes : 0,
+                      g_counts.passes != 0 ? g_counts.shopkeepers / g_counts.passes : 0,
                       g_counts.passes != 0 ? g_counts.filtered / g_counts.passes : 0, g_counts.skips[kSkipScopes],
                       g_counts.skips[kSkipMember], g_hashTrusted ? L"the map's hash" : L"a walk of the map", g_hashChecked,
                       g_hashMismatches, g_twoMarkers.size(), g_counts.markersMade, g_counts.markersGone,

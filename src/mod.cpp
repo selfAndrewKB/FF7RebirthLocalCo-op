@@ -55,6 +55,7 @@
 #include "player_two/ffb_manager_two.h"
 #include "player_two/audio_listener_two.h"
 #include "player_two/chest_watch.h"
+#include "player_two/shop_talk.h"
 #include "player_two/vending.h"
 #include "player_two/interact_watch.h"
 #include "player_two/charapop_watch.h"
@@ -427,6 +428,7 @@ public:
         lss::player_two::audio_listener_two::Install(*image);  // player 2's sound: each SEAD sound from the nearer listener
         lss::player_two::chest_watch::Install(*image);     // chests, logged (read-only): presses, opens, grants
         lss::player_two::vending::Install(*image);         // player 2's vending machines: the shop's camera and pad
+        lss::player_two::shop_talk::Install(*image);       // player 2's shopkeepers: admit, press, the shop's AI event
         lss::player_two::interact_watch::Install(*image);  // field interactions (pickups) per player, logged (read-only)
         lss::player_two::equal_targeting::Install(*image);  // Condition enemies (bosses) count either player as the UCPC
         lss::player_two::target_census::Install(*image);   // whom enemies target, and by which stage, logged; holds the above
@@ -538,6 +540,7 @@ private:
         lss::player_two::chest_watch::Tick();          // an open followed from its press to its grant (logged)
         lss::player_two::leave_watch::Tick();          // the last leave's controller, followed until it is freed (logged)
         lss::player_two::vending::Tick();              // a press that opened no shop; player 2 leaving with their shop up
+        lss::player_two::shop_talk::Tick();            // the shopkeeper verdicts queued by player 2's pass
         lss::player_two::attack_cameras::Tick();       // the attack-camera status line (Debug)
         lss::player_two::attack_framing::Tick();       // the attack-framing latches' clock and status line (Debug)
         lss::player_two::camera_effects_two::Tick();   // the camera-effect status line (Debug)
