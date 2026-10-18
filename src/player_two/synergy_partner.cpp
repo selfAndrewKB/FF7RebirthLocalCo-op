@@ -155,23 +155,27 @@ thread_local const void* t_ending    = nullptr;  // the member of the member end
 thread_local int         t_endPlayer = 0;        // the player whose character that member end gives back (T3's answer)
 thread_local bool        t_gameGave  = false;    // off the game thread: the game's own test passed and P ran (it queued
                                                  // its own give-back)
+thread_local bool        t_heldBack  = false;    // off the game thread: T3 failed for player 2's member (no give-back)
 constexpr int            kRefused    = -1;       // t_endPlayer: T3 refused a remembered character (no longer owned)
 
 /// One member end's scope, restored on the way out (member ends nest: a record end runs several).
 class EndScope
 {
 public:
-    explicit EndScope(const void* member) noexcept : ending_(t_ending), player_(t_endPlayer), gameGave_(t_gameGave)
+    explicit EndScope(const void* member) noexcept
+        : ending_(t_ending), player_(t_endPlayer), gameGave_(t_gameGave), heldBack_(t_heldBack)
     {
         t_ending    = member;
         t_endPlayer = 0;
         t_gameGave  = false;
+        t_heldBack  = false;
     }
     ~EndScope()
     {
         t_ending    = ending_;
         t_endPlayer = player_;
         t_gameGave  = gameGave_;
+        t_heldBack  = heldBack_;
     }
     EndScope(const EndScope&)            = delete;
     EndScope& operator=(const EndScope&) = delete;
@@ -180,6 +184,7 @@ private:
     const void* ending_;
     int         player_;
     bool        gameGave_;
+    bool        heldBack_;
 };
 
 // A member end that ran off the game thread (any thread, under g_lock), for the game thread's tick (TakeNotes).
@@ -189,6 +194,7 @@ struct Note
     Clock::time_point at{};             // when it ran: a note older than the character's hand-over is not its end
     std::uint32_t     thread   = 0;
     bool              gameGave = false;  // the game's own test passed: it queued its own give-back
+    bool              heldBack = false;  // T3 failed for player 2's member: no give-back by the game
     std::uint8_t      state    = 0;      // the record at the member's index, before the member end
     std::uint8_t      started  = 0;
     std::uint8_t      ended    = 0;
@@ -577,6 +583,7 @@ std::uint64_t MemberEnd(void* unused, void* record, void* member, std::uint64_t 
         EndScope   scope(member);
         const auto result = original(unused, record, member, index);  // T3 / P: nothing for player 2 here
         note.gameGave     = t_gameGave;
+        note.heldBack     = t_heldBack;
         AddNote(note);  // the tick gives a remembered character back
         return result;
     }
@@ -611,7 +618,12 @@ std::uint8_t EndLeaderType() noexcept
         // Player 2's member is never given back from a worker: the game would queue its possession by player 2's
         // controller with raw pointers that nothing checks when it runs. The game's compare fails; the tick gives a
         // remembered member back on the game thread. Atomics only.
-        return member == generation::Member() ? kNoMatch : original;
+        if (member == generation::Member())
+        {
+            t_heldBack = true;
+            return kNoMatch;
+        }
+        return original;
     }
     Held* held = Find(member);
     if (held == nullptr)
@@ -794,9 +806,14 @@ void TakeNotes() noexcept
         {
             if (Line())
             {
+                // The game's queued give-back may not have run yet: "now" is this tick's holder.
+                const wchar_t* const what = note.heldBack ? L"no give-back (player 2's member is given back only on "
+                                                            L"the game thread)"
+                                            : note.gameGave ? L"the game queued its own give-back"
+                                                            : L"no give-back (the game's own test failed)";
                 platform::LogDebug(L"synergy partner: member end of {} ran off the game thread (thread {}): not "
-                                   L"remembered, the game's own give-back (the record: {})",
-                                   NameOf(note.member), note.thread, at);
+                                   L"remembered; {}; driven by {} now (the record: {})",
+                                   NameOf(note.member), note.thread, what, Holder(note.member), at);
             }
             continue;
         }
