@@ -55,6 +55,7 @@ constexpr std::array<std::uintptr_t, 7> kCameraCalls{
     0x14354FD23,  // FEndShowShopMenu_Begin (the vending path)
     0x1435502E2,  // FEndShowSkillTreeMenu_Begin
 };
+constexpr std::size_t kChadleyCall = 3;  // kCameraCalls' FEndShowChadleyShopMenu_Begin
 using Clock = std::chrono::steady_clock;
 // Player 2's press claims the shop whose camera comes within this many frames (the level script opens it the next frame,
 // §15.1) and names the pressed machine (the camera's target is the machine's Tags[0], which the pressed point's key
@@ -72,6 +73,10 @@ constexpr auto          kHoldAtMost = std::chrono::seconds(120);
 using Fn = std::uint64_t (*)(std::uint64_t, std::uint64_t, std::uint64_t, std::uint64_t);
 
 platform::EntryRedirect g_end2Key, g_camera, g_cameraOff;
+// The shop camera's caller in FEndShowChadleyShopMenu_Begin (its return address, this build): Chadley's shop keeps its
+// camera for player 2, since coming back from a VR battle activates the shop camera again outside the hooked function with
+// the target and preset saved at the VR start (RE-p2-shop-camera-skip.md §7).
+std::uintptr_t g_chadleyReturn = 0;
 std::array<platform::CallRedirect, kCameraCalls.size()> g_cameraCalls;  // 1.005: the camera's callers
 std::uintptr_t          g_cameraTarget = 0;  // 1.005: the camera function (the callers' target)
 const std::uint64_t*    g_vendingPreset = nullptr;  // the FName global's live address
@@ -221,6 +226,10 @@ std::uint64_t End2Key(std::uint64_t mgr, std::uint64_t key, std::uint64_t r8, st
 }
 
 /// The shop camera's activation (every shop path; the shop UI and OnOff 148 are already up): whose shop this is.
+/// Player 2's shop opens without it (the user, 2026-10-18: "When P2 initiates them, just disable the entire scripted
+/// camera zoom action on P1's view"): the camera would run on player 1's camera manager, framing player 1's character
+/// and leaving player 1's camera at the shop's angle on close (RE-p2-shop-camera-skip.md). Nothing in the shop waits on
+/// it and no caller reads its result (§2, §3); its deactivation at the close still runs and does nothing (§4).
 std::uint64_t Camera(std::uint64_t target, std::uint64_t preset, std::uint64_t r8, std::uint64_t r9) noexcept
 {
     const auto caller = CallerOf(_ReturnAddress());
@@ -273,6 +282,14 @@ std::uint64_t Camera(std::uint64_t target, std::uint64_t preset, std::uint64_t r
     const auto type   = party_member::PlayerTypeOf(member);
     g_memberKnown     = member != nullptr && charapop::ActorLocation(member, g_memberAt);
     pad_buttons::SetMenuPlayer(1);
+    const bool chadley = g_chadleyReturn != 0 && reinterpret_cast<std::uintptr_t>(_ReturnAddress()) == g_chadleyReturn;
+    if (!chadley)
+    {
+        platform::Log(L"vending: player 2's shop opened (camera target {}, preset {}, from 0x{:X}); pad 2 drives it; the "
+                      L"shop camera is skipped (player 1's view stays as it is)",
+                      players::unreal::NameText(target), players::unreal::NameText(preset), caller);
+        return 0;  // no caller reads it (RE-p2-shop-camera-skip.md §2)
+    }
     std::uint64_t result = 0;
     if (type)
     {
@@ -283,7 +300,8 @@ std::uint64_t Camera(std::uint64_t target, std::uint64_t preset, std::uint64_t r
     {
         result = call(target, preset, r8, r9);
     }
-    platform::Log(L"vending: player 2's shop opened (camera target {}, preset {} by {}, from 0x{:X}); pad 2 drives it",
+    platform::Log(L"vending: player 2's shop opened (Chadley's: its camera runs, target {}, preset {} by {}, from 0x{:X}); "
+                  L"pad 2 drives it",
                   players::unreal::NameText(target), players::unreal::NameText(preset),
                   type ? L"player 2's member's type" : L"player 1's type (no member type)", caller);
     return result;
@@ -432,18 +450,20 @@ void Install(const platform::GameImage& image) noexcept
     const auto manager = image.Rebase(facts::kPartyManagerGlobal, sizeof(void*));
     g_partyManager     = manager ? *manager : 0;
     g_image            = image;
+    const auto chadley = image.Rebase(kCameraCalls[kChadleyCall], 5);
+    g_chadleyReturn    = chadley ? *chadley + 5 : 0;  // the call is 5 bytes (E8 rel32)
     const bool presses = g_partyManager != 0 && Entry(image, g_end2Key, kEnd2Key, kEnd2KeyBytes, &End2Key);
     const bool cameras = platform::RunningBuild() == platform::BuildIndex::V1005
                              ? CameraCalls(image)
                              : Entry(image, g_camera, kCamera, kCameraBytes, &Camera);
     const bool closes  = Entry(image, g_cameraOff, kCameraOff, kCameraOffBytes, &CameraOff);
     const bool ready   = g_vendingPreset != nullptr && presses && cameras && closes;
-    platform::Log(L"vending: {} (presses {}, the shop camera's activation {}, its deactivation {})",
+    platform::Log(L"vending: {} (presses {}, the shop camera's activation {}, its deactivation {}; Chadley's camera call {})",
                   ready ? L"ready (player 2 uses vending machines through the game's own field action and shop; the pad of "
-                          L"whoever opened the shop drives it)"
+                          L"whoever opened the shop drives it; player 2's shops open without the shop camera)"
                         : L"UNAVAILABLE for player 2 (a check failed; machines stay player 1's)",
                   presses ? L"watched" : L"NOT watched", cameras ? L"watched" : L"NOT watched",
-                  closes ? L"watched" : L"NOT watched");
+                  closes ? L"watched" : L"NOT watched", g_chadleyReturn != 0 ? L"found" : L"NOT found (its camera is skipped too)");
     if (!ready)
     {
         g_vendingPreset = nullptr;  // Admits says no: machines stay player 1's

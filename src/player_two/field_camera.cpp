@@ -21,6 +21,10 @@
 #include <cstring>
 #include <optional>
 
+#include <intrin.h>
+
+#pragma intrinsic(_ReturnAddress)
+
 namespace lss::player_two::field_camera {
 
 namespace {
@@ -45,6 +49,12 @@ std::uintptr_t        g_cameraManagerVTable = 0;
 // Player 2's command controller's battle HUD mode (u8; 0 out of battle).
 constexpr std::uint32_t kHudMode = 0x540;
 std::atomic<unsigned> g_uiRefusals{0};  // battle updates that ran without player 2's UI context
+
+// UpdateCamera's call of the Field operator's Activate when a special camera (a shop's) first blends out: the resume
+// before it gave the Field operator that camera's last rotation (RE-p2-shop-camera-skip.md §5, §6). Its return address,
+// this build (0 when not found): logged, to settle whether the mirror below snaps player 2's camera to it.
+constexpr std::uintptr_t kBlendOutResume = 0x140E5629C;
+std::uintptr_t           g_blendOutResume = 0;
 
 StageCounters              g_settingsCounters;
 StageCounters              g_updateCounters;
@@ -128,9 +138,17 @@ void Activate(void* field, float blendTime, bool flag)
         g_settingsCounters.Pass();
         return;
     }
+    const auto twoWas = ActiveState(pair->two);
     g_engineActivate(pair->two, blendTime, flag);
     g_engineCopy(pair->two, Command(pair->one));  // after activation, which rewrites the command
     CountResult(*pair);
+    const auto caller = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
+    if (g_blendOutResume != 0 && caller == g_blendOutResume)
+    {
+        platform::LogDebug(L"field camera: player 1's Field operator resumed after a special camera's blend-out (blend {:.2f} "
+                           L"s); player 2's mirrored with player 1's command (player 2's operator state was {})",
+                           blendTime, twoWas);
+    }
 }
 
 void Deactivate(void* field, float blendTime, bool flag)
@@ -276,6 +294,8 @@ bool InstallSettings(const platform::GameImage& image) noexcept
         return false;
     }
     g_engineActivate   = reinterpret_cast<StateFn>(*activate);
+    const auto resume  = image.Rebase(kBlendOutResume);
+    g_blendOutResume   = resume ? *resume : 0;
     g_engineDeactivate = reinterpret_cast<StateFn>(*deactivate);
     g_engineCopy       = reinterpret_cast<CopyFn>(*copy);
 

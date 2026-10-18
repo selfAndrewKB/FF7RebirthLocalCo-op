@@ -11,10 +11,12 @@
 // the live log, 2026-10-04), so the camera already aims at the machine used. For a shop player 2's press opened (the shop
 // camera activated within 60 frames of the press, naming the pressed machine), this module, at the shop camera's entry
 // (every shop path: FEndShowShopMenu's and the others, such as the book vendor's):
-//   - runs the activation in the leader-type scope (the default preset by player 2's member's type, §15.3); the camera stays
-//     on player 1's camera manager, the one the whole-screen view renders, so the shot is taken from player 1's side
-//     [known: the user, 2026-10-04, "a tad awkward" depending on where player 1 stands; the fix needs a whole-screen view of
-//     player 2, left for later];
+//   - skips the activation (the user, 2026-10-18: "When P2 initiates them, just disable the entire scripted camera zoom
+//     action on P1's view"; RE-p2-shop-camera-skip.md): on player 1's camera manager, the one the whole-screen view
+//     renders, it framed player 1's character and left player 1's camera at the shop's angle on close. Nothing in the
+//     shop waits on it; the deactivation at the close still runs and does nothing. Chadley's shop keeps it (its VR return
+//     activates the camera again outside the hook), run in the leader-type scope (the default preset by player 2's
+//     member's type, §15.3);
 //   - from the activation to the camera's deactivation (every close), makes pad 2 the menu pad (player_two/pad_buttons
 //     SetMenuPlayer): the pad of whoever opened the shop drives it.
 // Logged (Info: a press, a shop open and close are rare): each End2 press (whose run, the leader), whose shop opened with
