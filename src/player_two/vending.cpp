@@ -22,6 +22,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cwctype>
+#include <initializer_list>
 #include <optional>
 #include <span>
 #include <string>
@@ -231,9 +232,13 @@ std::uint64_t Camera(std::uint64_t target, std::uint64_t preset, std::uint64_t r
         platform::Log(L"vending: player 2's press of {} is not this shop's ({} frames since it, camera target {})",
                       players::unreal::NameText(g_press.point), frames, players::unreal::NameText(target));
     }
-    g_press.active = false;
-    // A shopkeeper's press stays pending through another shop (player 1's opened first, or the game queued player 2's
-    // behind it) until its own shop names the NPC, or the window ends.
+    // A press stays pending through another shop (player 1's opened first, and the game queues player 2's behind it:
+    // the event runner waits while a shop's Exclusion bit is live, RE-p2-shopkeeper-talk.md §6) until its own shop names
+    // what was pressed; its window is paused while another shop is up and restarts when that shop closes (CameraOff).
+    if (machine)
+    {
+        g_press.active = false;
+    }
     const bool keeper = !machine && g_shopkeeper.active && NamesPressedShopkeeper(target);
     if (g_shopkeeper.active)
     {
@@ -298,6 +303,19 @@ std::uint64_t CameraOff(std::uint64_t a, std::uint64_t b, std::uint64_t c, std::
         platform::Log(L"vending: player 1's shop closed");
     }
     g_shop = Shop::None;
+    // A press of player 2's queued behind this shop: its window starts again now (the game opens the queued shop next).
+    const auto now   = Clock::now();
+    const auto frame = platform::frame_watch::FrameIndex();
+    for (Press* press : {&g_press, &g_shopkeeper})
+    {
+        if (press->active)
+        {
+            press->at    = now;
+            press->frame = frame;
+            platform::Log(L"vending: player 2's press of {} still waits for its shop; its window starts again",
+                          players::unreal::NameText(press->point));
+        }
+    }
     return result;
 }
 
@@ -370,13 +388,15 @@ void Tick() noexcept
     {
         return;
     }
-    if (g_press.active && Clock::now() - g_press.at > kPressWindow)
+    // A shop up holds the windows (a press of player 2's may be queued behind it; CameraOff restarts them).
+    const bool held = g_shop != Shop::None && generation::Active();
+    if (g_press.active && !held && Clock::now() - g_press.at > kPressWindow)
     {
         g_press.active = false;
         platform::Log(L"vending: player 2's press of {} opened no shop within {} s", players::unreal::NameText(g_press.point),
                       std::chrono::duration_cast<std::chrono::seconds>(kPressWindow).count());
     }
-    if (g_shopkeeper.active && (Clock::now() - g_shopkeeper.at > kShopkeeperWindow || !generation::Active()))
+    if (g_shopkeeper.active && ((!held && Clock::now() - g_shopkeeper.at > kShopkeeperWindow) || !generation::Active()))
     {
         g_shopkeeper.active = false;
         platform::Log(L"vending: player 2's press of shopkeeper {} opened no shop within {} s",
