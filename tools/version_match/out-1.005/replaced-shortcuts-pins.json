@@ -1,0 +1,50 @@
+{
+ "build": "1.005",
+ "research_build": "1.004",
+ "date": "2026-10-18",
+ "doc": "RE-p2-shortcut-refresh.md, RE-p2-ranged-reticle.md",
+ "facts": [
+  {
+   "old": "0x1439D02A0",
+   "new": "0x14178EA68",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "EndUI23_RebuildShortcutTables (W on EndUISystem[23]): P2-SHORTCUT section 1.2; named in both databases by the agent; the first 5 bytes (mov eax,28h) and mov rcx,[rax+0B8h] identical, the rel32s differ (main session read, 2026-10-18). Entry redirect (5 bytes at %16=8)."
+  },
+  {
+   "old": "0x141523DC4",
+   "new": "0x14178EA8C",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "FieldCommandCtrl_RebuildShortcutTables (R on ctrl+0xF0, then ctrl+0x280 = -1): P2-SHORTCUT section 1.2; the 25 bytes identical apart from the alloca-probe rel32 (main session read, 2026-10-18). Called on the other controller."
+  },
+  {
+   "old": "0x140D202B4",
+   "new": "0x1411D93B8",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "MemberSelecter_RebuildShortcutTables: P2-SHORTCUT section 1.2; the first 25 bytes identical (main session read, 2026-10-18). The mod uses it on 1.004 only (the status menu's inlined call); listed for completeness."
+  },
+  {
+   "old": "0x141524C69",
+   "new": "0x1413FE791",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "FieldCommandCtrl_ExecuteCommandRecord's call of FieldCommandCtrl_RebuildShortcutTables (item use): P2-SHORTCUT section 5.3; call then jmp, then mov cl,[rdi+6] / call / jmp in both; targets 0x141523DC4 / 0x14178EA8C (main session read, 2026-10-18). Call redirect (%16=1)."
+  },
+  {
+   "old": "0x143A0CFDC",
+   "new": "0x14374ED08",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "EndUI__M1B8_PlacePin_OwnerPC_EdgeFade: P2-RANGED-RETICLE section 2.3; named in both databases by the agent; the first 22 bytes identical (main session read, 2026-10-18). Called per search-pin entry in each HUD pass."
+  },
+  {
+   "old": "0x143A0CEA0",
+   "new": "0x14374EBCC",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "EndUI__M1B8_PlaceHookIcon_ByAngle: P2-RANGED-RETICLE section 2.3; the first 14 bytes identical, then the alloca-probe rel32 (main session read, 2026-10-18). Called per search-pin entry in each HUD pass."
+  }
+ ]
+}
