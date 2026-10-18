@@ -1,0 +1,57 @@
+{
+ "build": "1.005",
+ "research_build": "1.004",
+ "date": "2026-10-18",
+ "doc": "RE-p2-shopkeeper-talk.md",
+ "facts": [
+  {
+   "old": "0x1408A95B8",
+   "new": "0x1411989F0",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "ResolveNamedPoint_LEADER_BATTLELEADER ('LEADER_' = PM+0x148): S-LEADERNATIVE / P2-TALK (section 3 row 5); named in the 1.005 database by the agent; the first 24 bytes identical in both exes (main session read, 2026-10-18)."
+  },
+  {
+   "old": "0x140F7AA58",
+   "new": "0x141177604",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "StateTrigger_Request: P2-TALK (RE-p2-shopkeeper-talk.md section 7.2); the one call after the five object branches in the twin DispatchKey; the first 16 bytes identical in both exes (main session read, 2026-10-18)."
+  },
+  {
+   "old": "0x14353E9C0",
+   "new": "0x14326DCD8",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "ShopMenu_SendLeaderTargetAIEvent5: P2-TALK (section 7.2); the call right after the shop camera in the four menu Begins, 671 bytes in both; the first 24 bytes identical (main session read)."
+  },
+  {
+   "old": "0x14087AD50",
+   "new": "0x140C23D4C",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "GS_FindObjectByKeyAndAttribute: P2-TALK (section 1.2); call order inside the twin DispatchKey, 276 bytes in both."
+  },
+  {
+   "old": "0x14087B56C",
+   "new": "0x1409A891C",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "DataAcc_StateChange_Ctor (accessor over g_DataReg_StateChange 0x1488DF880 / 0x148713110): P2-TALK (sections 1.2, IDA changes); call order inside the twin DispatchKey."
+  },
+  {
+   "old": "0x1407BEB9C",
+   "new": "0x140C23C2C",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "DataAcc_Action_Ctor (accessor over g_DataReg_Action 0x1488DE5C0 / 0x148711E50): P2-TALK (IDA changes); matched by the agent in the 1.005 database."
+  },
+  {
+   "old": "0x1414A8FB3",
+   "new": "0x14117CCE3",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "DispatchKey's return address after its StateTrigger_Request call (the object branch): P2-TALK (section 7.2); the call at 0x1414A8FAE / 0x14117CCDE is followed by the same jmp rel32 82h in both."
+  }
+ ]
+}
