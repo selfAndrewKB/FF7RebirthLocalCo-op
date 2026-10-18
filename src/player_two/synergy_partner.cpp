@@ -24,6 +24,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <format>
+#include <iterator>
 #include <span>
 #include <string>
 
@@ -173,6 +174,7 @@ struct Waiting
     int               player     = 0;        // 1 or 2; 0 = free
     std::uint8_t      type       = kNoType;
     Clock::time_point since{};               // the start (the stance)
+    std::uint32_t     serials[3]{};          // its record's command serials (the counter's own start repeats them)
     bool              recordSeen = false;    // its live record was found
     bool              windowSeen = false;    // that record's combination window was seen open
     std::uint8_t      state      = 0;        // the partner's record state as last read
@@ -374,12 +376,20 @@ void ForgetAll() noexcept
     g_waiting = {};
 }
 
-/// Starts following `character`, kept by `player` through a parry window (a newer stance replaces an older one).
-void Wait(const void* character, const void* initiator, int player, std::uint8_t type) noexcept
+/// Starts following `character`, kept by `player` through a parry window (a newer stance replaces an older one). Returns
+/// false for a later start of the stance it already follows (the same initiator and serials: the counter's own start,
+/// by type), which keeps that stance's entry and time.
+bool Wait(const void* character, const void* initiator, const std::uint32_t (&serials)[3], int player,
+          std::uint8_t type) noexcept
 {
     auto slot = std::find_if(g_waiting.begin(), g_waiting.end(), [character](const Waiting& waiting) {
         return waiting.player != 0 && waiting.character == character;
     });
+    if (slot != g_waiting.end() && slot->initiator == initiator &&
+        std::equal(std::begin(serials), std::end(serials), std::begin(slot->serials)))
+    {
+        return false;
+    }
     if (slot == g_waiting.end())
     {
         slot = std::find_if(g_waiting.begin(), g_waiting.end(), [](const Waiting& waiting) { return waiting.player == 0; });
@@ -396,6 +406,8 @@ void Wait(const void* character, const void* initiator, int player, std::uint8_t
     slot->player    = player;
     slot->type      = type;
     slot->since     = Clock::now();
+    std::copy(std::begin(serials), std::end(serials), std::begin(slot->serials));
+    return true;
 }
 
 /// The waiting entry of `character`, or null. Game thread.
@@ -663,15 +675,29 @@ std::uint8_t PartnerLeaderType(std::uint8_t original) noexcept
     {
         // A parry-window skill's stance (W): its partner is asked for only when the counter animation opens the window,
         // by the AI request (T2), which then hands it over; a failed parry never asks. Until then its player keeps it.
-        // A game's own yes (the leader type is the partner's) waits for T2 as well.
-        Wait(partner, g_initiator, player, type);
-        ++g_counts.kept;
-        if (Line())
+        // A game's own yes (the leader type is the partner's) waits for T2 as well. The counter repeats the start (by
+        // type) just before its AI request: the same stance, still kept.
+        const LinkRecordView record = party_member::ReadLinkRecord(g_record);
+        if (Wait(partner, g_initiator, record.actions, player, type))
         {
-            platform::LogDebug(L"synergy partner: {}'s partner {} is player {}'s: kept by its player through the parry "
-                               L"window; the game's own request at the counter hands it over ({}; the synergy {})",
-                               NameOf(g_initiator), NameOf(partner), player, g_via,
-                               RecordText(party_member::ReadLinkRecord(g_record)));
+            ++g_counts.kept;
+            if (Line())
+            {
+                platform::LogDebug(L"synergy partner: {}'s partner {} is player {}'s: kept by its player through the "
+                                   L"parry window; the game's own request at the counter hands it over ({}; the synergy {})",
+                                   NameOf(g_initiator), NameOf(partner), player, g_via, RecordText(record));
+            }
+        }
+        else if (Line())
+        {
+            const Waiting* waiting = WaitingOf(partner);
+            platform::LogDebug(L"synergy partner: {}'s partner {} is player {}'s: still kept at the counter's own start "
+                               L"({} ms after its stance); the AI request hands it over ({}; the synergy {})",
+                               NameOf(g_initiator), NameOf(partner), player,
+                               waiting ? std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - waiting->since)
+                                             .count()
+                                       : -1LL,
+                               g_via, RecordText(record));
         }
         return original == type ? kNoMatch : original;
     }
