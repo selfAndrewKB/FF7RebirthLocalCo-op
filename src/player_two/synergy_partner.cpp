@@ -13,12 +13,14 @@
 #include "player_two/leader_scope.h"
 #include "player_two/object_fields.h"
 #include "player_two/party_member.h"
+#include "players/unreal_access.h"
 
 #include <Windows.h>
 
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <format>
@@ -80,12 +82,26 @@ constexpr std::uint8_t kSwitchAiBytes[] = {0x40, 0x55, 0x48, 0x8D, 0x6C, 0x24, 0
                                            0xE8, 0x23, 0x93, 0x5B, 0x01, 0x48, 0x2B, 0xE0, 0x80, 0x3D, 0x3A, 0x72};
 constexpr platform::FunctionFact kSwitchAi{L"AEndCharacter::SwitchAIControl_Async", 0x140AF5BFC, kSwitchAiBytes};
 
+// W: a parry-window skill (S-SYNCOUNTER). LinkPartner_Start's 7th argument is the initiator's BattleAbility handle
+// (this vtable; +8 its row). The row's AnimationSelectType_Array (+0x90 data, +0x98 count; u8 kinds; a data word with
+// its low bit set is an offset from the field) holds kind 26, the window that ends the link when the parry fails, in
+// Counterfire's eight rows only (ChainCounter_PC0000_*). The game asks for such a skill's partner only when the counter
+// animation opens the record's combination window (rec+0x50), through the AI request (T2); nothing before that reads
+// the partner's AI.
+constexpr std::uintptr_t kAbilityHandleVtable = 0x145793088;
+constexpr std::uint32_t  kHandleRow           = 0x08;
+constexpr std::uint32_t  kRowKinds            = 0x90;
+constexpr std::uint32_t  kRowKindCount        = 0x98;
+constexpr std::uint8_t   kParryWindow         = 26;
+constexpr std::int32_t   kMaxKinds            = 16;
+
 constexpr std::uint8_t kNoType      = 16;  // the game's "no character type"
 constexpr std::uint8_t kNoMatch     = 0xFF;  // a leader type no character's type equals (types are 0..16)
 constexpr std::size_t  kHeld        = 4;   // characters handed to their AI at once: at most the two humans' (spare)
 constexpr std::size_t  kNotes       = 8;   // member ends off the game thread between two ticks (a few per synergy)
 constexpr auto         kLateAfter   = std::chrono::seconds(5);
 constexpr auto         kGoneAfter   = std::chrono::seconds(1);  // a record gone, or a give-back not landed
+constexpr auto         kWaitAtMost  = std::chrono::seconds(10);  // a parry-window stance followed for the log (W)
 constexpr auto         kStatusEvery = std::chrono::seconds(10);
 constexpr int          kMaxLines    = 400;
 
@@ -115,6 +131,7 @@ struct Sites
     std::array<std::uintptr_t, std::size(kRequestCalls)> request{};
     std::uintptr_t requestAi = 0, requestTest = 0, leaderType = 0;
     std::uintptr_t memberEnd = 0, endTest = 0, endPrimary = 0, primary = 0;
+    std::uintptr_t abilityHandle = 0;  // the BattleAbility handle's vtable (0: no parry-window test; W)
     std::span<const std::uint8_t> memberEndFirst;  // this build's first instruction there (empty: the second is used)
     bool           ok = false;
 };
@@ -144,9 +161,29 @@ struct Held
                                                     // (zero otherwise): Confirm checks the possession
 };
 std::array<Held, kHeld> g_held{};
-const void*             g_partner   = nullptr;  // the partner of the AI request being run
-const void*             g_initiator = nullptr;
-const void*             g_record    = nullptr;  // the link record of the start or AI request being run
+
+// Game thread.
+// A human's character kept by its player through a parry window (W): the game hands it over at the counter (T2), or
+// never when the parry fails. Followed for the log only.
+struct Waiting
+{
+    const void*       character  = nullptr;
+    const void*       initiator  = nullptr;  // whose stance (compared only, never read)
+    std::uint64_t     weak       = 0;
+    int               player     = 0;        // 1 or 2; 0 = free
+    std::uint8_t      type       = kNoType;
+    Clock::time_point since{};               // the start (the stance)
+    bool              recordSeen = false;    // its live record was found
+    bool              windowSeen = false;    // that record's combination window was seen open
+    std::uint8_t      state      = 0;        // the partner's record state as last read
+};
+std::array<Waiting, kHeld> g_waiting{};
+
+const void*    g_partner   = nullptr;  // the partner of the AI request being run
+const void*    g_initiator = nullptr;
+const void*    g_record    = nullptr;  // the link record of the start or AI request being run
+bool           g_window    = false;    // the start being run is a parry-window skill's (W): T1 keeps a human's partner
+const wchar_t* g_via       = L"";      // which call asks (for the log)
 const void*             g_session   = nullptr;  // player 2's controller the remembered characters belong to
 
 // The member end being run on this thread (T3 answers only on the game thread; off it T3 fails for player 2's member
@@ -217,7 +254,7 @@ public:
 struct Counts
 {
     std::uint32_t requests = 0, aiPartners = 0, gameHandOvers = 0, modHandOvers = 0, givenBack = 0, memberEnds = 0,
-                  offThread = 0;
+                  offThread = 0, kept = 0;
 };
 Counts            g_counts;
 Clock::time_point g_statusAt{};
@@ -333,7 +370,94 @@ void Remember(const void* character, int player, std::uint8_t type) noexcept
 
 void ForgetAll() noexcept
 {
-    g_held = {};
+    g_held    = {};
+    g_waiting = {};
+}
+
+/// Starts following `character`, kept by `player` through a parry window (a newer stance replaces an older one).
+void Wait(const void* character, const void* initiator, int player, std::uint8_t type) noexcept
+{
+    auto slot = std::find_if(g_waiting.begin(), g_waiting.end(), [character](const Waiting& waiting) {
+        return waiting.player != 0 && waiting.character == character;
+    });
+    if (slot == g_waiting.end())
+    {
+        slot = std::find_if(g_waiting.begin(), g_waiting.end(), [](const Waiting& waiting) { return waiting.player == 0; });
+    }
+    if (slot == g_waiting.end())
+    {
+        slot = std::min_element(g_waiting.begin(), g_waiting.end(),
+                                [](const Waiting& a, const Waiting& b) { return a.since < b.since; });
+    }
+    *slot           = {};
+    slot->character = character;
+    slot->initiator = initiator;
+    slot->weak      = leader_scope::WeakOf(const_cast<void*>(character));
+    slot->player    = player;
+    slot->type      = type;
+    slot->since     = Clock::now();
+}
+
+/// The waiting entry of `character`, or null. Game thread.
+Waiting* WaitingOf(const void* character) noexcept
+{
+    for (Waiting& waiting : g_waiting)
+    {
+        if (waiting.player != 0 && waiting.character == character)
+        {
+            return &waiting;
+        }
+    }
+    return nullptr;
+}
+
+/// W: true if `handle` is a BattleAbility handle whose row has the parry-window kind. Guarded reads; game thread.
+bool HasParryWindow(const void* handle) noexcept
+{
+    if (handle == nullptr || g_sites.abilityHandle == 0)
+    {
+        return false;
+    }
+    std::uintptr_t vtable = 0;
+    std::uintptr_t row    = 0;
+    if (!platform::CopyGuarded(&vtable, handle, sizeof(vtable)))
+    {
+        return false;
+    }
+    if (vtable != g_sites.abilityHandle)
+    {
+        static bool logged = false;  // a start whose 7th argument is not the handle: the research expects none
+        if (!logged && vtable != 0)
+        {
+            logged = true;
+            platform::LogDebug(L"synergy partner: a start's ability argument has another vtable (0x{:X}); no parry-window "
+                               L"test for it",
+                               vtable);
+        }
+        return false;
+    }
+    if (!platform::CopyGuarded(&row, static_cast<const std::byte*>(handle) + kHandleRow, sizeof(row)) || row == 0)
+    {
+        return false;
+    }
+    std::int64_t data  = 0;
+    std::int32_t count = 0;
+    if (!platform::CopyGuarded(&data, reinterpret_cast<const void*>(row + kRowKinds), sizeof(data)) ||
+        !platform::CopyGuarded(&count, reinterpret_cast<const void*>(row + kRowKindCount), sizeof(count)))
+    {
+        return false;
+    }
+    count = std::clamp(count, 0, kMaxKinds);
+    // As BattleAbility_GetAnimSelectType0: an odd word is an offset from the field (arithmetic shift), else a pointer.
+    const std::uintptr_t kinds = (data & 1) != 0 ? row + kRowKinds + static_cast<std::uintptr_t>(data >> 1)
+                                                 : static_cast<std::uintptr_t>(data);
+    std::array<std::uint8_t, kMaxKinds> bytes{};
+    if (count == 0 || kinds == 0 ||
+        !platform::CopyGuarded(bytes.data(), reinterpret_cast<const void*>(kinds), static_cast<std::size_t>(count)))
+    {
+        return false;
+    }
+    return std::find(bytes.begin(), bytes.begin() + count, kParryWindow) != bytes.begin() + count;
 }
 
 void* ControllerOf(int player) noexcept
@@ -368,8 +492,10 @@ std::wstring RecordText(const LinkRecordView& record) noexcept
 {
     try
     {
-        return std::format(L"actions {}/{}/{} (mode {}, category {}, no-link flag {})", record.actions[0],
-                           record.actions[1], record.actions[2], record.mode, record.kind, record.noLink);
+        const std::size_t partner = std::min<std::size_t>(record.partner, std::size(record.state) - 1);
+        return std::format(L"serials {}/{}/{} (mode {}, category {}, no-link flag {}, window {}, partner state {})",
+                           record.actions[0], record.actions[1], record.actions[2], record.mode, record.kind,
+                           record.noLink, record.window, record.state[partner]);
     }
     catch (...)
     {
@@ -402,16 +528,24 @@ std::uint64_t Start(std::size_t site, void* manager, void* record, void* partner
     {
         return original(manager, record, partner, initiator, a5, a6, a7, a8);
     }
-    const void* savedPartner   = g_partner;
-    const void* savedInitiator = g_initiator;
-    const void* savedRecord    = g_record;
-    g_partner                  = partner;
-    g_initiator                = initiator;
-    g_record                   = record;
-    const auto result          = original(manager, record, partner, initiator, a5, a6, a7, a8);  // al: started
-    g_partner                  = savedPartner;
-    g_initiator                = savedInitiator;
-    g_record                   = savedRecord;
+    static constexpr const wchar_t* kVia[] = {L"the start (command)", L"the start (Cait Sith mounted)",
+                                              L"the start (by type)"};
+    const void*    savedPartner   = g_partner;
+    const void*    savedInitiator = g_initiator;
+    const void*    savedRecord    = g_record;
+    const bool     savedWindow    = g_window;
+    const wchar_t* savedVia       = g_via;
+    g_partner                     = partner;
+    g_initiator                   = initiator;
+    g_record                      = record;
+    g_window                      = HasParryWindow(a7);  // before the call: it overwrites the handle on its way out
+    g_via                         = kVia[site];
+    const auto result             = original(manager, record, partner, initiator, a5, a6, a7, a8);  // al: started
+    g_partner                     = savedPartner;
+    g_initiator                   = savedInitiator;
+    g_record                      = savedRecord;
+    g_window                      = savedWindow;
+    g_via                         = savedVia;
     return result;
 }
 
@@ -439,16 +573,24 @@ std::uint64_t Request(std::size_t site, void* unused, void* record, void* initia
         return original(unused, record, initiator, partner, partnerComp, weakA, weakB);
     }
     ++g_counts.requests;
-    const void* savedPartner   = g_partner;
-    const void* savedInitiator = g_initiator;
-    const void* savedRecord    = g_record;
-    g_partner                  = partner;
-    g_initiator                = initiator;
-    g_record                   = record;
-    const auto result          = original(unused, record, initiator, partner, partnerComp, weakA, weakB);
-    g_partner                  = savedPartner;
-    g_initiator                = savedInitiator;
-    g_record                   = savedRecord;
+    static constexpr const wchar_t* kVia[] = {L"the window's AI request (modes 2/3)", L"the deferred AI request (mode 1)",
+                                              L"the AI request at the start (mode 1)"};
+    const void*    savedPartner   = g_partner;
+    const void*    savedInitiator = g_initiator;
+    const void*    savedRecord    = g_record;
+    const bool     savedWindow    = g_window;
+    const wchar_t* savedVia       = g_via;
+    g_partner                     = partner;
+    g_initiator                   = initiator;
+    g_record                      = record;
+    g_window                      = false;  // the game asks for the partner now: T2 hands a human's partner over
+    g_via                         = kVia[site];
+    const auto result             = original(unused, record, initiator, partner, partnerComp, weakA, weakB);
+    g_partner                     = savedPartner;
+    g_initiator                   = savedInitiator;
+    g_record                      = savedRecord;
+    g_window                      = savedWindow;
+    g_via                         = savedVia;
     return result;
 }
 
@@ -487,8 +629,10 @@ std::uint8_t PartnerLeaderType(std::uint8_t original) noexcept
         ++g_counts.aiPartners;
         if (Line())
         {
-            platform::LogDebug(L"synergy partner: {}'s partner {} is driven by {}: the game's own approach",
-                               NameOf(g_initiator), NameOf(partner), Holder(partner));
+            platform::LogDebug(L"synergy partner: {}'s partner {} is driven by {}: the game's own approach ({}; the "
+                               L"synergy {})",
+                               NameOf(g_initiator), NameOf(partner), Holder(partner), g_via,
+                               RecordText(party_member::ReadLinkRecord(g_record)));
         }
         return original;
     }
@@ -515,15 +659,50 @@ std::uint8_t PartnerLeaderType(std::uint8_t original) noexcept
         }
         return original;
     }
+    if (g_window)
+    {
+        // A parry-window skill's stance (W): its partner is asked for only when the counter animation opens the window,
+        // by the AI request (T2), which then hands it over; a failed parry never asks. Until then its player keeps it.
+        // A game's own yes (the leader type is the partner's) waits for T2 as well.
+        Wait(partner, g_initiator, player, type);
+        ++g_counts.kept;
+        if (Line())
+        {
+            platform::LogDebug(L"synergy partner: {}'s partner {} is player {}'s: kept by its player through the parry "
+                               L"window; the game's own request at the counter hands it over ({}; the synergy {})",
+                               NameOf(g_initiator), NameOf(partner), player, g_via,
+                               RecordText(party_member::ReadLinkRecord(g_record)));
+        }
+        return original == type ? kNoMatch : original;
+    }
+    if (Waiting* waiting = WaitingOf(partner))
+    {
+        // Handed over now: the waiting ends here, whatever the remembered entry's fate (a give-back in this frame).
+        if (waiting->initiator == g_initiator && Line())
+        {
+            // The counter came: the far-partner risk (S-SYNCOUNTER Q8) is the distance the AI must cover in the window.
+            float      from[3]{};
+            float      to[3]{};
+            const bool located =
+                players::unreal::ActorLocation(g_initiator, from) && players::unreal::ActorLocation(partner, to);
+            const float dx = to[0] - from[0], dy = to[1] - from[1], dz = to[2] - from[2];
+            const float cm = std::sqrt(dx * dx + dy * dy + dz * dz);
+            platform::LogDebug(L"synergy partner: {}'s counter came {} ms after its stance; {} is {} cm from it",
+                               NameOf(g_initiator),
+                               std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - waiting->since).count(),
+                               NameOf(partner), located && std::isfinite(cm) ? static_cast<long long>(cm) : -1LL);
+        }
+        *waiting = {};
+    }
     Remember(partner, player, type);
     (type == original ? g_counts.gameHandOvers : g_counts.modHandOvers) += 1;
     if (Line())
     {
         platform::LogDebug(L"synergy partner: {}'s partner {} is player {}'s: handed to its AI for the approach ({}; "
-                           L"the leader type read {}, the partner's {}); the synergy {}",
+                           L"the leader type read {}, the partner's {}; {}); the synergy {}",
                            NameOf(g_initiator), NameOf(partner), player,
                            type == original ? L"the game's own answer" : L"answered as the player's character",
-                           original, type, RecordText(party_member::ReadLinkRecord(g_record)));
+                           original, type, g_via, RecordText(party_member::ReadLinkRecord(g_record)));
     }
     return type;
 }
@@ -927,6 +1106,75 @@ bool WatchRecord(Held& held, Clock::time_point now) noexcept
     return true;
 }
 
+/// Game thread: follows each character kept through a parry window (W) until the game asks for it at the counter (the
+/// hand-over remembers it), the window opens and closes without it (Info: the counter went without that partner; state
+/// 2 means its command slot was busy, 3 that its AI was not ready), or the record ends without a window (the parry
+/// failed; Debug). Log only: the game decides each outcome.
+void WatchWaiting(Clock::time_point now) noexcept
+{
+    for (Waiting& waiting : g_waiting)
+    {
+        if (waiting.player == 0)
+        {
+            continue;
+        }
+        if (!leader_scope::StillNames(waiting.weak, waiting.character))
+        {
+            waiting = {};
+            continue;
+        }
+        // (A hand-over at the counter ends the entry where it happens, in PartnerLeaderType.)
+        const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - waiting.since).count();
+        if (now - waiting.since > kWaitAtMost)
+        {
+            if (Line())
+            {
+                platform::LogDebug(L"synergy partner: stopped following {} ({} ms after the stance; its record: seen {}, "
+                                   L"window seen {}, partner state {})",
+                                   NameOf(waiting.character), ms, waiting.recordSeen, waiting.windowSeen, waiting.state);
+            }
+            waiting = {};
+            continue;
+        }
+        LinkRecordView record;
+        if (party_member::FindPartnerLink(waiting.type, record))
+        {
+            const std::size_t partner = std::min<std::size_t>(record.partner, std::size(record.state) - 1);
+            waiting.recordSeen        = true;
+            waiting.state             = record.state[partner];
+            if (record.window != 0)
+            {
+                waiting.windowSeen = true;
+            }
+            else if (waiting.windowSeen && record.started[partner] == 0)
+            {
+                platform::Log(L"synergy partner: the counter's window closed {} ms after the stance without {} (player "
+                              L"{}'s; partner state {}: 2 its command slot was busy, 3 its AI was not ready)",
+                              ms, NameOf(waiting.character), waiting.player, waiting.state);
+                waiting = {};
+            }
+            continue;
+        }
+        if (!waiting.recordSeen && now - waiting.since < kGoneAfter)
+        {
+            continue;  // the start's record frame is pushed into the game's list within its own call; a moment more
+        }
+        if (waiting.windowSeen)
+        {
+            platform::Log(L"synergy partner: the counter's record ended {} ms after the stance without {} joining "
+                          L"(player {}'s; partner state {})",
+                          ms, NameOf(waiting.character), waiting.player, waiting.state);
+        }
+        else if (Line())
+        {
+            platform::LogDebug(L"synergy partner: {} stayed with player {} through the parry window: the link ended "
+                               L"{} ms after the stance without asking for it (the parry failed)",
+                               NameOf(waiting.character), waiting.player, ms);
+        }
+        waiting = {};
+    }
+}
+
 // ---------------------------------------------------------------------------------------------
 // Placement
 // ---------------------------------------------------------------------------------------------
@@ -1019,6 +1267,8 @@ void Install(const platform::GameImage& image) noexcept
     g_sites.endTest     = at(kEndLeaderTest, 5);
     g_sites.endPrimary  = at(kEndPrimary, 5);
     g_sites.primary     = at(kPrimary);
+    // Optional: without it a parry-window skill's human partner is handed over at the stance, as before.
+    g_sites.abilityHandle = at(kAbilityHandleVtable, sizeof(void*));
     const auto typeOf   = platform::FindFunction(image, kComponentType);
     g_typeOf            = typeOf ? reinterpret_cast<TypeFn>(*typeOf) : nullptr;
     const auto classic  = platform::FindFunction(image, kClassic);
@@ -1115,6 +1365,7 @@ void Tick() noexcept
                           std::chrono::duration_cast<std::chrono::seconds>(kLateAfter).count(), SeenText(held.endSeen));
         }
     }
+    WatchWaiting(now);
     if (now - g_statusAt < kStatusEvery)
     {
         return;
@@ -1122,14 +1373,14 @@ void Tick() noexcept
     g_statusAt     = now;
     const Counts c = g_counts;
     g_counts       = {};
-    if (c.requests + c.memberEnds == 0)
+    if (c.requests + c.memberEnds + c.kept == 0)
     {
         return;
     }
     platform::LogDebug(L"synergy partner (10 s): AI requests {}, AI partners {}, humans' partners handed over by the "
-                       L"game's own answer {} / by the answered test {}; member ends {} ({} off the game thread), given "
-                       L"back to their own player {}",
-                       c.requests, c.aiPartners, c.gameHandOvers, c.modHandOvers, c.memberEnds, c.offThread,
+                       L"game's own answer {} / by the answered test {}, kept through a parry window {}; member ends {} "
+                       L"({} off the game thread), given back to their own player {}",
+                       c.requests, c.aiPartners, c.gameHandOvers, c.modHandOvers, c.kept, c.memberEnds, c.offThread,
                        c.givenBack);
 }
 

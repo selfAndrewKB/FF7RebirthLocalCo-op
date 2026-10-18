@@ -26,6 +26,10 @@
 //     stays with its AI, as in single player) or no longer owns it (player 2 gave it back during the approach, or the
 //     other human drives it: the game's own test decides). Player 2's member is always given back to player 2's
 //     controller.
+// A parry-window skill (Counterfire: its initiator's ability row has kind 26, the window that ends the link when the
+// parry fails; RE S-SYNCOUNTER) keeps a human's partner with its player at the start: the game asks for that partner
+// only when the counter animation opens the record's combination window, through the AI request, whose test then hands
+// it over as above; after a failed parry it never asks. The tick logs how each such stance ended.
 // Nothing else reads a changed leader: only those four calls inside the three functions are answered. Classic mode
 // (deferred) is left to the game: its Classic hand-over keeps the controller. Placed from the game thread
 // (game_thread_sites; some calls cross a 16-byte block), all or nothing.

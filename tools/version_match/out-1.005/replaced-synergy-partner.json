@@ -101,6 +101,13 @@
    "same_semantics": true,
    "confidence": "CONFIRMED",
    "note": "Option_IsClassicMode_AutoPlayOn_NotHard entry: S-SYNVERIFY (RE-p2-synergy-skills.md, verification section); read in both databases by the verifier and the main session (2026-10-16): same call target, same block layout as described."
+  },
+  {
+   "old": "0x145793088",
+   "new": "0x1455F0EB0",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "BattleAbility handle vtable (LinkPartner_Start's 7th argument, the initiator's ability handle; the parry-window test): S-SYNCOUNTER Q6 (RE-p2-synergy-skills.md); read in both databases by the IDA agent (2026-10-18)."
   }
  ]
 }

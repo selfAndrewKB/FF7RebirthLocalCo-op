@@ -5877,7 +5877,7 @@ inline constexpr std::uint8_t kBytes_051B96CC[] = {
     0x02, 0x75, 0x18, 0xC5, 0xF8, 0x10, 0x44, 0x24, 0x20, 0x48, 0x8D, 0x4C, 0x24, 0x20, 0xC5, 0xF9,
 };
 
-inline constexpr std::array<ReplacedAddress, 695> kReplaced{{
+inline constexpr std::array<ReplacedAddress, 696> kReplaced{{
     {0x0076B370, 0x00743B50, kBytes_0076B370, 0},
     {0x00786200, 0x00A6A1C8, kBytes_00786200, 3},
     {0x0078C2F4, 0x008DAE0C, kBytes_0078C2F4, 3},
@@ -6411,6 +6411,7 @@ inline constexpr std::array<ReplacedAddress, 695> kReplaced{{
     {0x04F561F0, 0x04D695A8, kBytes_04F561F0, 3},
     {0x04F56202, 0x04D695C6, kBytes_04F56202, 3},
     {0x051B96CC, 0x04FEEEFC, kBytes_051B96CC, 5},
+    {0x05793088, 0x055F0EB0, {}},  // 0x145793088 -> 0x1455F0EB0 (replaced-synergy-partner.json, CONFIRMED): BattleAbility handle vtable (LinkPartner_Start's 7th argument, the initiator's ability handle; the p
     {0x057953F0, 0x05647EC0, {}},  // 0x1457953F0 -> 0x145647EC0 (replaced-chocobo-traversal.json, CONFIRMED): (split 2026-10-07 from a combined row) Unique 128-byte patterns (sizes 0xADB / 0x3A0 both builds); t
     {0x05795408, 0x05647ED8, {}},  // 0x145795408 -> 0x145647ED8 (replaced-chocobo-traversal.json, CONFIRMED): Added 2026-10-07 for traversal_watch (v0.62.0): the slot holds the function in both exes (read from 
     {0x05795410, 0x05647EE0, {}},  // 0x145795410 -> 0x145647EE0 (replaced-chocobo-traversal.json, CONFIRMED): Added 2026-10-07 for traversal_watch (v0.62.0): the slot holds the function in both exes (read from 
