@@ -655,9 +655,10 @@ std::uintptr_t Filter(bool enter, void* manager, std::uint64_t key, void* owner,
         {
             return original(manager, key, owner, actorArg);
         }
-        void*      actor  = g_findActor != nullptr ? g_findActor(&key) : nullptr;
+        // A switch volume's Tags[0] (its CharaPop row key) is not in the tag registry: the diff's own actor names it.
+        void*      volume = PassedActor(enter, actorArg);
         const auto result = original(manager, key, owner, actorArg);
-        switch_volume_two::AfterPlayerOne(enter, actor);
+        switch_volume_two::AfterPlayerOne(enter, volume);
         return result;
     }
     ++(enter ? g_counts.enters : g_counts.leaves);
@@ -665,10 +666,11 @@ std::uintptr_t Filter(bool enter, void* manager, std::uint64_t key, void* owner,
     {
         void*       actor  = g_findActor != nullptr ? g_findActor(&key) : nullptr;
         const void* passed = PassedActor(enter, actorArg);
-        // A CharaPop switch volume: only its own enter/leave override, for player 2 (switch_volume_two).
-        if (switch_volume_two::Is(actor))
+        // A CharaPop switch volume: only its own enter/leave override, for player 2 (switch_volume_two). Its Tags[0] (the
+        // CharaPop row key) is not in the tag registry, so the lookup gives null there: the diff's own actor names it.
+        if (switch_volume_two::Is(passed))
         {
-            switch_volume_two::PlayerTwoEvent(enter, actor, owner);
+            switch_volume_two::PlayerTwoEvent(enter, const_cast<void*>(passed), owner);
             return 0;
         }
         const int   cls    = actor != nullptr ? ClassOf(actor) : -1;
