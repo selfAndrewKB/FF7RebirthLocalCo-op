@@ -87,6 +87,7 @@ add_library(LocalSplitScreen SHARED
     src/player_two/anim_two_views.cpp
     src/player_two/traversal_camera.cpp
     src/player_two/traversal_watch.cpp
+    src/player_two/switch_volume_two.cpp
     src/player_two/trigger_two.cpp
     src/player_two/vault_camera.cpp
     src/player_two/warp_camera_watch.cpp

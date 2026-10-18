@@ -12,6 +12,7 @@
 #include "player_two/leader_scope.h"
 #include "player_two/object_fields.h"
 #include "player_two/primary_controller.h"
+#include "player_two/switch_volume_two.h"
 #include "player_two/traversal_watch.h"
 
 #include <algorithm>
@@ -643,16 +644,33 @@ std::uintptr_t Deliver(bool enter, FilterFn original, void* manager, std::uint64
 std::uintptr_t Filter(bool enter, void* manager, std::uint64_t key, void* owner, void* actorArg) noexcept
 {
     const auto original = reinterpret_cast<FilterFn>((enter ? g_enterCall : g_leaveCall).Original());
-    if (owner == nullptr || !generation::OnGameThread() || !generation::Active() ||
-        owner != TriggerOf(generation::PlayerTwoController()))
+    if (owner == nullptr || !generation::OnGameThread() || !generation::Active())
     {
         return original(manager, key, owner, actorArg);
+    }
+    if (owner != TriggerOf(generation::PlayerTwoController()))
+    {
+        // Player 1's event, seen while player 2 is inside a switch volume (its union with player 1's, switch_volume_two).
+        if (!switch_volume_two::Watching() || owner != TriggerOf(generation::PlayerOneController()))
+        {
+            return original(manager, key, owner, actorArg);
+        }
+        void*      actor  = g_findActor != nullptr ? g_findActor(&key) : nullptr;
+        const auto result = original(manager, key, owner, actorArg);
+        switch_volume_two::AfterPlayerOne(enter, actor);
+        return result;
     }
     ++(enter ? g_counts.enters : g_counts.leaves);
     try
     {
         void*       actor  = g_findActor != nullptr ? g_findActor(&key) : nullptr;
         const void* passed = PassedActor(enter, actorArg);
+        // A CharaPop switch volume: only its own enter/leave override, for player 2 (switch_volume_two).
+        if (switch_volume_two::Is(actor))
+        {
+            switch_volume_two::PlayerTwoEvent(enter, actor, owner);
+            return 0;
+        }
         const int   cls    = actor != nullptr ? ClassOf(actor) : -1;
         if (cls < 0)
         {
@@ -791,6 +809,10 @@ void Install(const platform::GameImage& image) noexcept
     // expected override.
     const auto findActor = platform::FindFunction(image, kFindActor);
     g_findActor          = findActor ? reinterpret_cast<FindActorFn>(*findActor) : nullptr;
+    if (g_findActor != nullptr)
+    {
+        switch_volume_two::Install(image);
+    }
     const auto liveEnter = image.Rebase(kTriggerEnter);
     std::wstring admitted, refused;
     for (std::size_t i = 0; i < kClassCount; ++i)
@@ -875,6 +897,7 @@ void Tick() noexcept
         platform::Log(L"trigger two: {}", g_filtersPlaced ? L"the diff's filter calls placed; player 2's pass runs"
                                                           : L"the diff's filter calls differ; player 2's pass stays off");
     }
+    switch_volume_two::Tick();
     if (!generation::Active())
     {
         g_lastCount = -1;
