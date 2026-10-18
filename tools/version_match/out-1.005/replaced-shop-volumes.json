@@ -2,7 +2,7 @@
  "build": "1.005",
  "research_build": "1.004",
  "date": "2026-10-18",
- "doc": "RE-p2-shop-npcs-near-p2.md",
+ "doc": "RE-p2-shop-npcs-near-p2.md, RE-p2-charapop-two-centres.md",
  "facts": [
   {
    "old": "0x145888590",
@@ -24,6 +24,13 @@
    "same_semantics": true,
    "confidence": "CONFIRMED",
    "note": "AEndCharaPopSwitchVolume_OnTriggerLeave_ClearInside (vt+0x670 / 1.005 vt+0x678): P2-SHOPSV and S-SHOPSV2 (RE-p2-shop-npcs-near-p2.md sections 2.1, 10.1); read in both databases by the IDA agents (2026-10-18)."
+  },
+  {
+   "old": "0x1408B5B8C",
+   "new": "0x1408AFC14",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "CharaPopEntry_EvalSpawnScore_ByCenter: P2-POPB (RE-p2-charapop-two-centres.md section 1); read in both databases by the IDA agent; the first 21 bytes re-read from both exes by the main session (2026-10-18)."
   }
  ]
 }
