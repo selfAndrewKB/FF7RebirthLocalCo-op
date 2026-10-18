@@ -10,6 +10,7 @@
 #include "hud/overlay_layout.h"
 #include "hud/popups.h"
 #include "hud/field_markers.h"
+#include "hud/search_pins.h"
 #include "hud/prompt_rows.h"
 #include "hud/second_image.h"
 #include "platform/build_value.h"
@@ -85,6 +86,7 @@ void RenderRootOverlay(void* application) noexcept
             area_icons_two::ShowOnly(0);
             prompt_rows::ShowOnly(0);
             field_markers::ShowOnly(0);
+            search_pins::ShowOnly(0);
             player_two::command_menu_two::ShowOnly(0);
         }
     }
@@ -97,6 +99,7 @@ void RenderRootOverlay(void* application) noexcept
         popups::EndFrame();
         prompt_rows::Restore();  // every prompt row back to its own visibility
         field_markers::Restore();  // every point marker back to its own opacity
+        search_pins::Restore();    // every search pin and the compass back to their own
         player_two::command_menu_two::Restore();  // player 1's command menu back, player 2's hidden
         target_views::AfterPass();  // every mark hidden for player 1's pass back
         dev::AfterOverlayRender();

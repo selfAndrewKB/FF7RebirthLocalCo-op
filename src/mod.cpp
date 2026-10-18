@@ -23,6 +23,7 @@
 #include "hud/target_views.h"
 #include "hud/prompt_rows.h"
 #include "hud/field_markers.h"
+#include "hud/search_pins.h"
 #include "hud/root_overlay_render.h"
 #include "hud/second_image.h"
 #include "hud/user_widgets.h"
@@ -444,6 +445,7 @@ public:
         lss::hud::InstallRootOverlayRender(*image);  // before the overlay renders: placement follow, trace
         lss::hud::prompt_rows::Install(*image);      // each player's field prompt rows in their own half
         lss::hud::field_markers::Install(*image);    // each player's point markers in their own half (after the opacity setter)
+        lss::hud::search_pins::Install(*image);      // each player's search pins (ranged lock-on, hookshot) in their own half
         lss::hud::action_icon_base::Install(*image); // the prompt rows keep their corner by their own base
         lss::hud::area_icons_two::Install(*image);   // player 2's own map icons and markers
         lss::hud::target_views::Install(*image);     // each half's cursor and enemy gauges follow its player's target

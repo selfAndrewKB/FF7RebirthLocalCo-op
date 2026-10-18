@@ -10,6 +10,7 @@
 #include "hud/hud_addresses.h"
 #include "hud/hud_roots.h"
 #include "hud/hud_updates.h"
+#include "hud/search_pins.h"
 #include "hud/marker_timers.h"
 #include "hud/minimap.h"
 #include "hud/popups.h"
@@ -482,6 +483,7 @@ bool EnterPlayerTwo() noexcept
         g_firstPlayerAnswer = Acts(kLeverFirstPlayer) ? reinterpret_cast<std::uint64_t>(playerTwo) : 0;  // L2
         AdoptAbilityNames();
         AdoptFieldTargets();
+        search_pins::Adopt();
         if (!ContextsToPlayerTwo())                                                                       // L1
         {
             return false;
@@ -495,6 +497,7 @@ bool EnterPlayerTwo() noexcept
         }
         const double start = Now();
         const bool   runs  = RunUpdates(true);
+        search_pins::Place();  // the search pins from player 2's camera (hud/search_pins.h)
         Charge(kTicksTwo, start);
         if (!runs)
         {
@@ -530,6 +533,7 @@ void LeavePlayerTwo() noexcept
     WriteRect(g_playerOneRect);
     mark             = Now();
     const bool ticks = RunUpdates(false);  // player 1's positions again, before player 1's render
+    search_pins::Place();                  // and the search pins'
     Charge(kTicksOne, mark);
     RestoreTimeStep();
     try
