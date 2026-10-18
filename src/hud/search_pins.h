@@ -17,7 +17,8 @@
 //   which also runs the compass and the pins' animations, is never run again.
 // - ShowOnly: before each half's render, the other player's pins (a pin is a player's when that player's component
 //   holds it in an interact point, +0x1490) get render opacity 0 through the game's setter, and their own back
-//   after; pins no component holds (encounter pins and other owners) stay in both halves. The compass shows in the
+//   after; a pin its point released keeps its last owner while it animates out; pins no component ever held
+//   (encounter pins and other owners) stay in both halves. The compass shows in the
 //   halves of the players whose component had an active point when it was last open (both when neither did).
 // Logged at Debug on change. Game thread only.
 

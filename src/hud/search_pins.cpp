@@ -85,6 +85,15 @@ std::uintptr_t g_system    = 0;  // set once at install
 PlacePinFn     g_placePin  = nullptr;
 PlaceHookFn    g_placeHook = nullptr;
 // Game thread.
+/// A pin's owner as last seen: a point that goes inactive releases its pin (EndUI__RemoveFieldTargetSearchPin), which
+/// stays in the list through its out-animation with no point holding it; it keeps its owner until it leaves the list.
+struct Known
+{
+    std::uint64_t pin   = 0;
+    int           owner = -1;
+};
+std::array<Known, kMaxHidden> g_known{};
+std::size_t                   g_knownCount = 0;
 std::array<Hidden, kMaxHidden> g_hidden{};
 std::size_t                    g_hiddenCount   = 0;
 unsigned                       g_compassOwners = 3;  // bit 0 player 1, bit 1 player 2 (both until known)
@@ -285,12 +294,22 @@ void ShowOnly(int player) noexcept
     g_compassOwners       = !compass ? 3u : active != 0 ? active : g_compassOwners;
     Logged now{.compass = compass, .compassOwners = g_compassOwners, .activeOne = one.active, .activeTwo = two.active,
                .shootingOne = one.shooting, .shootingTwo = two.shooting};
+    std::array<Known, kMaxHidden> seen{};
+    std::size_t                   seenCount = 0;
     try
     {
         platform::ForEachSparseElement(manager + kPins, kPinEntry, [&](std::uintptr_t entry) {
             ++now.entries;
             const auto pin   = Field<std::uint64_t>(entry + kPinWidget);
-            const int  owner = Holds(one, pin) ? 0 : Holds(two, pin) ? 1 : -1;
+            int        owner = Holds(one, pin) ? 0 : Holds(two, pin) ? 1 : -1;
+            for (std::size_t i = 0; owner < 0 && i < g_knownCount; ++i)
+            {
+                owner = g_known[i].pin == pin ? g_known[i].owner : -1;  // released, still animating out
+            }
+            if (owner >= 0 && seenCount < seen.size())
+            {
+                seen[seenCount++] = {pin, owner};
+            }
             if (owner < 0)
             {
                 ++now.nobody;
@@ -312,7 +331,9 @@ void ShowOnly(int player) noexcept
     {
         // What was hidden before the throw is listed and comes back in Restore.
     }
-    if (compass && (g_compassOwners & (1u << mine)) == 0)
+    g_known      = seen;  // pins gone from the list are forgotten
+    g_knownCount = seenCount;
+    if (compass &&(g_compassOwners & (1u << mine)) == 0)
     {
         Hide(manager + kCompass);
     }
