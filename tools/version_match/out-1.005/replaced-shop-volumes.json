@@ -1,0 +1,29 @@
+{
+ "build": "1.005",
+ "research_build": "1.004",
+ "date": "2026-10-18",
+ "doc": "RE-p2-shop-npcs-near-p2.md",
+ "facts": [
+  {
+   "old": "0x145888590",
+   "new": "0x1456F2240",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "AEndCharaPopSwitchVolume vtable: P2-SHOPSV (RE-p2-shop-npcs-near-p2.md section 2.1); the 1.005 vtable named by trigger_two's held-back lines in the live log, and 56 live instances found by it (main session read, 2026-10-18)."
+  },
+  {
+   "old": "0x1417FD038",
+   "new": "0x14189CA14",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "AEndCharaPopSwitchVolume_OnTriggerEnter_SetInside (vt+0x668 / 1.005 vt+0x670): P2-SHOPSV and S-SHOPSV2 (RE-p2-shop-npcs-near-p2.md sections 2.1, 10.1); read in both databases by the IDA agents (2026-10-18)."
+  },
+  {
+   "old": "0x1409DD160",
+   "new": "0x14189E758",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "AEndCharaPopSwitchVolume_OnTriggerLeave_ClearInside (vt+0x670 / 1.005 vt+0x678): P2-SHOPSV and S-SHOPSV2 (RE-p2-shop-npcs-near-p2.md sections 2.1, 10.1); read in both databases by the IDA agents (2026-10-18)."
+  }
+ ]
+}
