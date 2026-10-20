@@ -39,6 +39,7 @@ Outcome Run(Target& target, const Command& command)
         case CommandKind::PerfLog: return target.SetPerfLog(command.on);
         case CommandKind::LogLevel: return target.SetLogLevel(command.ticks);
         case CommandKind::SingleView: return target.SetSingleView(command.ticks);
+        case CommandKind::ThirdView: return target.SetThirdView(command.on);
         case CommandKind::StreamViews: return target.SetStreamViews(command.ticks);
         case CommandKind::StreamFovPlayerOne: return target.SetPlayerOneStreamFov(command.ticks);
         case CommandKind::StreamFeedback: return target.SetStreamFeedbackOnce(command.on);

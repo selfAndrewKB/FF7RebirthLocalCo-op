@@ -142,6 +142,12 @@ inline constexpr std::uint32_t kLocalPlayerControllerOffset = 0x30;
 /// Reflection data 0x1463E88E8.
 inline constexpr std::uint32_t kTwoPlayerSplitscreenLayoutOffset = 0x51;
 
+/// UGameMapsSettings::ThreePlayerSplitscreenLayout (a byte; 0 favour top, 1 favour bottom, 2 three columns,
+/// 3 three rows): the byte after TwoPlayerSplitscreenLayout (UE 4.26 GameMapsSettings.h), read by the same
+/// function once there are three local players. Reflection confirms the offset before any write
+/// (views/third_view.h, the multi-monitor branch).
+inline constexpr std::uint32_t kThreePlayerSplitscreenLayoutOffset = 0x52;
+
 /// ULocalPlayer::AspectRatioAxisConstraint (a byte), read by GetProjectionData after GetViewPoint:
 /// `mov dl,[r14+94h]` at 0x140CC0B1D. Reflection data 0x1464B6818.
 inline constexpr std::uint32_t kAspectRatioAxisConstraintOffset = 0x94;

@@ -81,6 +81,9 @@
 //   single-view auto|on|off              player 1's single view while player 2 is in: for the game's
 //                                         whole-screen states (auto, the default), always, or never
 //                                         (players/single_view.h)
+//   third-view on|off                    a third full-size view (a third local player on player 1's camera,
+//                                         three columns) for the multi-monitor measurement; needs player 2 in
+//                                         (views/third_view.h)
 //   hud-trace <frames>                  log the order of the HUD's tick, marker placements, icon
 //                                         projections and render for 1-30 frames, and which player
 //                                         each placement and projection used (hud/hud_trace.h)
@@ -134,6 +137,7 @@ enum class CommandKind
     PerfLog,
     LogLevel,
     SingleView,
+    ThirdView,
     StreamViews,
     StreamFovPlayerOne,
     StreamFeedback,

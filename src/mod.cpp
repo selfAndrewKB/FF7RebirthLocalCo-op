@@ -108,6 +108,7 @@
 #include "renderer/view_family_submission.h"
 #include "views/player_view_point.h"
 #include "views/stream_views.h"
+#include "views/third_view.h"
 #include "views/view_shape.h"
 #include "views/whole_screen.h"
 
@@ -129,7 +130,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.79.1";
+constexpr const wchar_t* kVersion = L"0.80.0-mm1";  // the multi-monitor-support branch, measurement build 1
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -379,6 +380,7 @@ public:
         mainCameraShape_ = viewPointInstalled_ && lss::player_two::main_camera_shape::Install(*image);
         wholeScreen_     = lss::views::InstallWholeScreen(*image);  // menus, the map, cutscenes: player 1's single view
         lss::views::InstallStreamViews(*image, viewPointInstalled_);  // each player's camera streams scenery detail
+        lss::views::third_view::Install(*removeLocalPlayer);  // a third full-size view for the multi-monitor measurement
         lss::player_two::party_warp::Install(*image);  // the game's follow warp, for a stranded player 2
         lss::player_two::nav_strand::Install(*image);  // player 2's member stranded off the loaded navmesh
         lss::player_two::camera_repair::Install(*image);  // a non-finite pose on player 2's camera: the game's camera reset
@@ -474,7 +476,7 @@ public:
         Log(L"ready: every engine check passed. Ctrl+F7 adds player 2, Ctrl+F8 removes player 2, Ctrl+F5 switches "
             L"top/bottom and side by side, Ctrl+F4 switches filled halves and 16:9 halves with bars. Player 2 starts on "
             L"their own camera and pad; for testing, Ctrl+F6 switches their half to player 1's camera and Ctrl+F9 "
-            L"merges the pads");
+            L"merges the pads. Ctrl+F3 adds a third full-size view (the multi-monitor measurement)");
         const auto pool = lss::platform::CodePool();
         Log(L"code pool: {} piece(s), {} bytes of placed code in {} block(s) of 64 KiB (one search each)", pool.pieces,
             pool.bytes, pool.blocks);
@@ -509,6 +511,7 @@ private:
         {
             return;
         }
+        lss::views::third_view::Remove(why);  // first: it borrows player 2's join, and its controller is this world's
         const bool left = session_->LeaveNow();
         FollowPlayerTwo();  // now, not at the next tick: the view module must not keep the old player 2
         // The viewport outlives the world: its split switch is cleared while player 1's controller
@@ -555,7 +558,20 @@ private:
         switch (keys_.Poll())
         {
             case lss::players::PlayerIntent::Join: session_->Join(); break;
-            case lss::players::PlayerIntent::Leave: session_->Leave(); break;  // logs its own outcome
+            case lss::players::PlayerIntent::Leave:
+                lss::views::third_view::Remove(L"player 2 leaves (Ctrl+F8)");
+                session_->Leave();  // logs its own outcome
+                break;
+            case lss::players::PlayerIntent::ToggleThirdView:
+                if (lss::views::third_view::In())
+                {
+                    lss::views::third_view::Remove(L"Ctrl+F3");
+                }
+                else
+                {
+                    lss::views::third_view::Add();
+                }
+                break;
             case lss::players::PlayerIntent::ToggleOwnCamera: ToggleOwnCamera(); break;
             case lss::players::PlayerIntent::ToggleLayout: LogLayoutChange(layout_.Toggle()); break;
             case lss::players::PlayerIntent::ToggleFill: ToggleFill(); break;
@@ -597,6 +613,7 @@ private:
         session_->Tick();
         lss::dev::TickAfterSession();
         FollowPlayerTwo();
+        lss::views::third_view::Tick(session_->HasPlayerTwo());  // leaves with player 2; follows player 1's view target
         lss::player_two::walk_limits::Tick();  // after the session's tick: a take's copy is overwritten this frame
         lss::player_two::handover_watch::Tick();
 
@@ -685,9 +702,10 @@ private:
     /// Read twice a second; until the first reading the split FOV leaves the stock rule in place.
     void UpdateHalfShape(bool splitShown) noexcept
     {
-        if (!splitShown)
+        if (!splitShown || lss::views::third_view::In())  // three columns: the halves rule does not apply (stock FOV)
         {
-            halfShapeTicks_ = 0;
+            halfShapeTicks_   = 0;
+            loggedHalfAspect_ = -1.0f;
             lss::views::SetHalfShape({});
             return;
         }

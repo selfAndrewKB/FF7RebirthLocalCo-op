@@ -100,4 +100,21 @@ bool Aim(void* controller) noexcept
     return OnOwnCamera(controller);
 }
 
+bool AimAt(void* controller, void* actor) noexcept
+{
+    void* cameraManager = OwnedCameraManager(controller);
+    if (!Installed() || g_stopped || cameraManager == nullptr || actor == nullptr || !generation::OnGameThread())
+    {
+        return false;
+    }
+    if (!GuardedSetViewTarget(cameraManager, actor))
+    {
+        g_stopped = true;
+        platform::Log(L"camera view STOPPED: the engine raised an exception inside SetViewTarget (aiming a camera manager "
+                      L"at another actor); no camera manager is aimed again this session");
+        return false;
+    }
+    return ReadPointer(cameraManager, facts::kCameraManagerViewTarget) == actor;
+}
+
 }  // namespace lss::player_two::view_target

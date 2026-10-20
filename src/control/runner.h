@@ -58,6 +58,7 @@ public:
     virtual Outcome SetPerfLog(bool on)                        = 0;
     virtual Outcome SetLogLevel(std::uint32_t level)           = 0;  // 0 error .. 4 trace
     virtual Outcome SetSingleView(std::uint32_t mode)          = 0;  // 0 auto, 1 on, 2 off
+    virtual Outcome SetThirdView(bool on)                      = 0;
     virtual Outcome SetStreamViews(std::uint32_t mode)         = 0;  // 0 off, 1 p2, 2 both
     virtual Outcome SetPlayerOneStreamFov(std::uint32_t degrees) = 0;  // 0 auto
     virtual Outcome SetStreamFeedbackOnce(bool playerOneOnly)  = 0;

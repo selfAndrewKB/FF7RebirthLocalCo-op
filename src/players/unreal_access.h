@@ -50,6 +50,11 @@ std::optional<std::uint8_t> ReadTwoPlayerSplitscreenLayout() noexcept;
 /// Writes it; false (writing nothing) under the same conditions.
 bool WriteTwoPlayerSplitscreenLayout(std::uint8_t value) noexcept;
 
+/// UGameMapsSettings::ThreePlayerSplitscreenLayout, as the two-player one
+/// (engine::kThreePlayerSplitscreenLayoutOffset): the layout the engine uses with three local players.
+std::optional<std::uint8_t> ReadThreePlayerSplitscreenLayout() noexcept;
+bool WriteThreePlayerSplitscreenLayout(std::uint8_t value) noexcept;
+
 /// The offset of ULocalPlayer::AspectRatioAxisConstraint as reflection reports it, if it is the
 /// one-byte field the engine reads (engine::kAspectRatioAxisConstraintOffset).
 std::optional<std::uint32_t> AspectRatioAxisConstraintOffset() noexcept;

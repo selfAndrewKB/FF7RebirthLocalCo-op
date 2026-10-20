@@ -55,6 +55,7 @@ public:
     Outcome SetPerfLog(bool on) override;
     Outcome SetLogLevel(std::uint32_t level) override;
     Outcome SetSingleView(std::uint32_t mode) override;
+    Outcome SetThirdView(bool on) override;
     Outcome SetStreamViews(std::uint32_t mode) override;
     Outcome SetPlayerOneStreamFov(std::uint32_t degrees) override;
     Outcome SetStreamFeedbackOnce(bool playerOneOnly) override;

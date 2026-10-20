@@ -8,6 +8,7 @@
 //   Ctrl+F9  each pad drives only its own player's sticks (on at start; off merges them, for testing)
 //   Ctrl+F10 the NPC population follows both players (on at start; off follows the leader, to compare)
 //   Ctrl+F11 characters near player 2 keep full detail (on at start; off: player 1's camera alone, to compare)
+//   Ctrl+F3  a third full-size view in and out (the multi-monitor measurement; views/third_view.h)
 // Keys never reach renderer internals; the renderer follows the player count.
 
 namespace lss::players {
@@ -23,6 +24,7 @@ enum class PlayerIntent
     TogglePadSticks,
     ToggleNpcCentre,
     ToggleNpcDetail,
+    ToggleThirdView,
 };
 
 class JoinKeys
@@ -41,6 +43,7 @@ private:
     bool sticksWasDown_ = false;
     bool centreWasDown_ = false;
     bool detailWasDown_ = false;
+    bool thirdWasDown_  = false;
 };
 
 }  // namespace lss::players

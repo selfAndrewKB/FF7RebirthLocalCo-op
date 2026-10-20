@@ -189,6 +189,7 @@ add_library(LocalSplitScreen SHARED
     src/views/player_view_point.cpp
     src/views/stream_view_math.cpp
     src/views/stream_views.cpp
+    src/views/third_view.cpp
     src/views/view_shape.cpp
     src/views/whole_screen.cpp
     src/views/screen_widgets.cpp

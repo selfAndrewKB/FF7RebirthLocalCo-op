@@ -226,6 +226,34 @@ bool WriteTwoPlayerSplitscreenLayout(std::uint8_t value) noexcept
     return true;
 }
 
+namespace {
+
+std::uint8_t* ThreePlayerSplitscreenLayoutField() noexcept
+{
+    UObject*   settings = ClassDefaultObject(STR("/Script/EngineSettings.GameMapsSettings"));
+    const auto offset   = ByteOffset(settings, STR("ThreePlayerSplitscreenLayout"), engine::kThreePlayerSplitscreenLayoutOffset);
+    return offset ? reinterpret_cast<std::uint8_t*>(settings) + *offset : nullptr;
+}
+
+}  // namespace
+
+std::optional<std::uint8_t> ReadThreePlayerSplitscreenLayout() noexcept
+{
+    const auto* field = ThreePlayerSplitscreenLayoutField();
+    return field == nullptr ? std::nullopt : std::optional<std::uint8_t>(*field);
+}
+
+bool WriteThreePlayerSplitscreenLayout(std::uint8_t value) noexcept
+{
+    auto* field = ThreePlayerSplitscreenLayoutField();
+    if (field == nullptr)
+    {
+        return false;
+    }
+    *field = value;  // game thread, as the two-player one
+    return true;
+}
+
 std::optional<std::uint32_t> AspectRatioAxisConstraintOffset() noexcept
 {
     return ByteOffset(ClassDefaultObject(STR("/Script/Engine.LocalPlayer")), STR("AspectRatioAxisConstraint"),

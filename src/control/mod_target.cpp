@@ -31,6 +31,7 @@
 #include "renderer/view_family_submission.h"
 #include "views/player_view_point.h"
 #include "views/stream_views.h"
+#include "views/third_view.h"
 
 namespace lss::control {
 
@@ -77,6 +78,7 @@ Outcome ModTarget::Leave()
     {
         return Failed(L"player 2 is not in");
     }
+    views::third_view::Remove(L"player 2 leaves (the leave command)");  // before: it borrows player 2's join
     session_.Leave();  // completes over the following ticks (or stops a wait); `wait-until out` confirms it
     return {};
 }
@@ -277,6 +279,20 @@ Outcome ModTarget::SetPerfLog(bool on)
 {
     platform::frame_watch::SetDetailed(on);
     return {true, on ? L"perf log on" : L"perf log off"};
+}
+
+Outcome ModTarget::SetThirdView(bool on)
+{
+    if (on == views::third_view::In())
+    {
+        return {true, on ? L"the third view is already in" : L"the third view is not in"};
+    }
+    if (on)
+    {
+        return views::third_view::Add() ? Outcome{} : Failed(L"the third view could not be added (the log says why)");
+    }
+    views::third_view::Remove(L"the third-view command");
+    return views::third_view::In() ? Failed(L"the third local player could not be removed") : Outcome{};
 }
 
 Outcome ModTarget::SetSingleView(std::uint32_t mode)
