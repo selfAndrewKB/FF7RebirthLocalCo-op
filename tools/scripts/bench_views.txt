@@ -1,18 +1,21 @@
 # Multi-monitor measurement (the multi-monitor-support branch): frame times for one, two and three full-size
 # 16:9 views, each 2560x1440, in one window the width of the views together. Run at a quiet field spot after
 # the load, both players standing still. Read the "hitches:" summaries (every 10 s, with the mod's hooks per
-# frame) and the thread-times lines between each pair of "bench views:" notes. The window may reach past the
-# monitors; the GPU renders every column either way.
+# frame) and the thread-times lines between each pair of "bench views:" notes.
+#
+# Known from the 2026-10-20 run (research/RE-multi-monitor-views.md):
+# - the engine centres a resized window on the monitor it was on, so a 7680-wide window spills off that monitor;
+#   the GPU renders every column either way, so the measurement does not need the window moved. To SEE the
+#   columns, move the window onto the monitors afterwards (SetWindowPos from outside, as a user drags it);
+# - one view in a 7680-wide window is pillarboxed to 16:9 (2560 wide), so a single view at triple width measures
+#   nothing extra; the one-view reference is taken uncapped instead (t.MaxFPS 0, back to 120 after).
 note bench views: begin
 perf-log on
-console r.SetRes 2560x1440w
+console t.MaxFPS 0
 wait 300
-note bench views: one view 2560x1440
+note bench views: one view uncapped
 wait 1800
-console r.SetRes 7680x1440w
-wait 300
-note bench views: one view 7680x1440 (the pixel cost alone)
-wait 1800
+console t.MaxFPS 120
 console r.SetRes 2560x1440w
 join
 wait-until playing 1800
@@ -30,6 +33,6 @@ wait 1800
 third-view off
 leave
 wait-until out 900
-console r.SetRes 3440x1440wf
+console r.SetRes 2560x1440wf
 perf-log off
 note bench views: end
