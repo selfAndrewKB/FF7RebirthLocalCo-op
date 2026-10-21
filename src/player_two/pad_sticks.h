@@ -9,9 +9,10 @@
 // (indexed by controller id) in each device bank (+0x11D0, 16 bytes per bank header).
 //
 // A StickScope replaces the four merged floats with one pad's own record for the length of one
-// engine call, and puts the merged values back afterwards. Nothing inside such a call writes those
-// floats (their only writer runs before the world tick). A merged stick that is exactly zero stays
-// zero, which keeps the game's own "not focused" rule.
+// engine call, and puts the merged values back afterwards (a Set range of platform/byte_scope.h:
+// were the game to write the floats inside the call, its newer values would be kept and noted).
+// Nothing inside such a call writes those floats (their only writer runs before the world tick).
+// A merged stick that is exactly zero stays zero, which keeps the game's own "not focused" rule.
 //
 // Two kinds of call are scoped while per-pad sticks are on (from install; Ctrl+F9 switches them,
 // for testing):
@@ -24,6 +25,7 @@
 // Both act only on the game thread (player_two/generation.h); a call on any other thread is left alone.
 
 #include "dev/dev_switch.h"
+#include "platform/byte_scope.h"
 #include "player_two/stage_counters.h"
 #include "player_two/stick_select.h"
 
@@ -93,8 +95,8 @@ public:
     bool Held() const noexcept { return held_; }
 
 private:
-    float saved_[4]{};
-    bool  held_ = false;
+    platform::ByteStore<1, sizeof(Sticks)> context_;
+    bool                                   held_ = false;
 };
 
 StageCounters& InputCounters() noexcept;

@@ -220,11 +220,12 @@ void SetStickOverride(std::int32_t controllerId, const Sticks* sticks) noexcept
 StickScope::StickScope(std::int32_t controllerId) noexcept
 {
     std::byte* input = InputObject();
-    if (g_scopeOpen || input == nullptr || controllerId < 0 || !generation::OnGameThread())
+    Sticks     merged{};
+    if (g_scopeOpen || input == nullptr || controllerId < 0 || !generation::OnGameThread() ||
+        !platform::CopyGuarded(merged.data(), input + facts::kInputMergedSticks, sizeof(merged)))
     {
         return;
     }
-    std::memcpy(saved_, input + facts::kInputMergedSticks, sizeof(saved_));
     Sticks own{};
     if (controllerId < kOverridePads && g_overrides[static_cast<std::size_t>(controllerId)])
     {
@@ -234,12 +235,17 @@ StickScope::StickScope(std::int32_t controllerId) noexcept
     {
         std::size_t count = 0;
         const auto  banks = MergedBanks(input, count);
-        const Sticks merged{saved_[0], saved_[1], saved_[2], saved_[3]};
         own = SelectPadSticks(std::span<const StickBank>(banks.data(), count), controllerId, merged);
     }
-    std::memcpy(input + facts::kInputMergedSticks, own.data(), sizeof(saved_));
-    g_scopeOpen = true;
-    held_       = true;
+    const platform::ByteContext::Range range{reinterpret_cast<std::uintptr_t>(input + facts::kInputMergedSticks),
+                                             sizeof(Sticks), platform::ByteContext::Kind::Set};
+    if (!context_.Define(std::span<const platform::ByteContext::Range>(&range, 1)))
+    {
+        return;
+    }
+    std::memcpy(context_.Value(0).data(), own.data(), sizeof(own));
+    held_       = context_.Open();
+    g_scopeOpen = held_;
 }
 
 StickScope::~StickScope()
@@ -248,7 +254,10 @@ StickScope::~StickScope()
     {
         return;
     }
-    std::memcpy(InputObject() + facts::kInputMergedSticks, saved_, sizeof(saved_));
+    if (context_.Close() != 0)
+    {
+        platform::LogDebug(L"per-pad sticks: the game wrote the merged sticks inside a pad's scope; its values kept");
+    }
     g_scopeOpen = false;
 }
 
