@@ -4,6 +4,7 @@
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
+#include "platform/every.h"
 #include "platform/frame_watch.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -161,7 +162,7 @@ unsigned                                                 g_notifiesWrapped = 0;
 // known to start another hit [ASSUMPTION, §10.12 item 4]. A nested hit there would overwrite the flag.
 bool  g_hitTwo           = false;
 void* g_notifyController = nullptr;  // player 2's controller while a notify for player 2 runs
-Clock::time_point g_statusAt{};
+platform::Every g_status{kStatusEvery};
 struct Counts
 {
     std::uint32_t hitsOne = 0, hitsTwo = 0, gatesTwo = 0, camerasTwo = 0, fallbacksTwo = 0, hitSkips = 0;
@@ -576,13 +577,11 @@ const wchar_t* InstallPlays(const platform::GameImage&) noexcept { return L"not 
 void LogStatus() noexcept
 {
     const auto now = Clock::now();
-    if (now - g_statusAt < kStatusEvery || !generation::Active())
+    if (!generation::Active() || !g_status.Due(now))
     {
         return;
     }
-    g_statusAt = now;
-    const Counts c = g_counts;
-    g_counts       = {};
+    const Counts c = std::exchange(g_counts, {});
     if (c.hitsOne + c.hitsTwo + c.notifiesOne + c.notifiesTwo + c.playsOne + c.playsTwo + c.playsOther == 0)
     {
         return;

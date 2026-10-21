@@ -3,6 +3,7 @@
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
+#include "platform/every.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -193,7 +194,7 @@ Counts g_counts;
 std::atomic<int> g_lodOne{-2}, g_lodTwo{-2};  // the latest lowered level pair
 
 // Game thread.
-std::chrono::steady_clock::time_point g_summaryAt{};
+platform::Every g_summary{kSummaryEvery};
 int                                   g_gameCount   = -1;
 unsigned                              g_exampleSeen = 0;
 bool                                  g_twoLogged   = false;
@@ -726,31 +727,29 @@ void NoteListenerTwo() noexcept
 void LogSummary() noexcept
 {
     const auto now = std::chrono::steady_clock::now();
-    if (now - g_summaryAt < kSummaryEvery)
+    const bool first = g_summary.Never();  // before the ask: the first summary
+    if (!g_summary.Due(now))
     {
         return;
     }
-    const bool first = g_summaryAt == std::chrono::steady_clock::time_point{};
-    g_summaryAt      = now;
-    auto take = [](std::atomic<unsigned>& count) { return count.exchange(0, std::memory_order_relaxed); };
-    const auto pushes   = take(g_counts.pushes);
-    const auto checked  = take(g_counts.checked);
-    const auto relative = take(g_counts.relative);
-    const auto fromTwo  = take(g_counts.fromTwo);
-    const auto heardTwo = take(g_counts.audibleTwo);
-    const auto heardOne = take(g_counts.audibleOne);
-    const auto missed   = take(g_counts.missed);
-    const auto noTwo    = take(g_counts.noTwo);
-    const auto updates  = take(g_counts.updatesTwo);
-    const auto reads    = take(g_counts.reads);
-    const auto clips    = take(g_counts.clipReads);
-    const auto clipTwo  = take(g_counts.clipTwo);
-    const auto waits    = take(g_counts.readWaits);
-    const auto held     = take(g_counts.readHeld);
-    const auto lods     = take(g_counts.lods);
-    const auto lodTwo   = take(g_counts.lodTwo);
-    const auto lowered  = take(g_counts.lodLowered);
-    const auto away     = take(g_counts.lodElsewhere);
+    const auto pushes   = platform::Take(g_counts.pushes);
+    const auto checked  = platform::Take(g_counts.checked);
+    const auto relative = platform::Take(g_counts.relative);
+    const auto fromTwo  = platform::Take(g_counts.fromTwo);
+    const auto heardTwo = platform::Take(g_counts.audibleTwo);
+    const auto heardOne = platform::Take(g_counts.audibleOne);
+    const auto missed   = platform::Take(g_counts.missed);
+    const auto noTwo    = platform::Take(g_counts.noTwo);
+    const auto updates  = platform::Take(g_counts.updatesTwo);
+    const auto reads    = platform::Take(g_counts.reads);
+    const auto clips    = platform::Take(g_counts.clipReads);
+    const auto clipTwo  = platform::Take(g_counts.clipTwo);
+    const auto waits    = platform::Take(g_counts.readWaits);
+    const auto held     = platform::Take(g_counts.readHeld);
+    const auto lods     = platform::Take(g_counts.lods);
+    const auto lodTwo   = platform::Take(g_counts.lodTwo);
+    const auto lowered  = platform::Take(g_counts.lodLowered);
+    const auto away     = platform::Take(g_counts.lodElsewhere);
     if (first || !platform::Enabled(platform::Level::Debug))
     {
         return;

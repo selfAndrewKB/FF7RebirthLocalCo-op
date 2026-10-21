@@ -8,6 +8,7 @@
 #include <Unreal/UObjectGlobals.hpp>
 
 #include "platform/call_redirect.h"
+#include "platform/every.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
@@ -131,7 +132,8 @@ struct Counts
     std::atomic<unsigned> retosses{0};      // player 2 no longer a candidate
 };
 Counts                                g_counts;
-std::chrono::steady_clock::time_point g_lastSummary{};
+platform::Every                       g_swapRetry{std::chrono::seconds(1)};  // the swaps tried again
+platform::Every                       g_summary{std::chrono::seconds(60)};
 
 enum class Player : std::uint8_t
 {
@@ -534,25 +536,22 @@ void Tick() noexcept
         return;
     }
     const auto now = std::chrono::steady_clock::now();
-    if (!g_swapsDone && (g_swapTries == 0 || now - g_lastSummary >= std::chrono::seconds(1)))
+    if (!g_swapsDone && (g_swapTries == 0 || g_swapRetry.Due(now)))
     {
         TrySwaps();
         if (!g_swapsDone)
         {
-            g_lastSummary = now;
             return;
         }
     }
-    if (now - g_lastSummary < std::chrono::seconds(60))
+    if (!g_summary.Due(now))
     {
         return;
     }
-    g_lastSummary = now;
-    const auto take = [](std::atomic<unsigned>& count) { return count.exchange(0, std::memory_order_relaxed); };
-    const unsigned t1 = take(g_counts.tosses[0]), t2 = take(g_counts.tosses[1]);
-    const unsigned a1 = take(g_counts.answers[0]), a2 = take(g_counts.answers[1]);
-    const unsigned r1 = take(g_counts.reactions[0]), r2 = take(g_counts.reactions[1]);
-    const unsigned again = take(g_counts.retosses);
+    const unsigned t1 = platform::Take(g_counts.tosses[0]), t2 = platform::Take(g_counts.tosses[1]);
+    const unsigned a1 = platform::Take(g_counts.answers[0]), a2 = platform::Take(g_counts.answers[1]);
+    const unsigned r1 = platform::Take(g_counts.reactions[0]), r2 = platform::Take(g_counts.reactions[1]);
+    const unsigned again = platform::Take(g_counts.retosses);
     if (t1 + t2 + a1 + a2 + r1 + r2 + again != 0)
     {
         platform::LogDebug(L"target coin (60 s): tosses P1 {} / P2 {}; coin answers P1 {} / P2 {}; damage or reaction "

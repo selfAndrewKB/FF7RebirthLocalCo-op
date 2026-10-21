@@ -1,5 +1,6 @@
 #include "player_two/member_movement.h"
 
+#include "platform/every.h"
 #include "platform/frame_watch.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -344,7 +345,7 @@ StageCounters& Counters() noexcept
 
 unsigned TakeLeaderAnswers() noexcept
 {
-    return g_leaderAnswers.exchange(0, std::memory_order_relaxed);
+    return platform::Take(g_leaderAnswers);
 }
 
 std::uint8_t WithoutChocoboAnswer(std::uint8_t (*test)(const void* character), const void* character) noexcept

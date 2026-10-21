@@ -1,5 +1,6 @@
 #include "platform/frame_watch.h"
 
+#include "platform/every.h"
 #include "platform/hitch_step.h"
 #include "platform/log.h"
 
@@ -180,7 +181,7 @@ void OnFrameStart() noexcept
 {
     ++g_frameIndex;
     const double now      = Now();
-    const unsigned lines  = g_logLines.exchange(0, std::memory_order_relaxed);
+    const unsigned lines  = Take(g_logLines);
     if (g_frameStart != 0.0)
     {
         const double frameMs = (now - g_frameStart) * 1000.0;

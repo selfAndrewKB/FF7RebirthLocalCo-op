@@ -3,6 +3,7 @@
 #include "player_two/field_rules.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
+#include "platform/every.h"
 #include "platform/guarded.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
@@ -260,7 +261,7 @@ Counts                                g_counts{};
 std::int32_t                          g_lastCount = -1;
 bool                                  g_skipLogged = false;
 bool                                  g_wallRunCapLogged = false;
-std::chrono::steady_clock::time_point g_summaryAt{};
+platform::Every                       g_summary{std::chrono::seconds(10)};
 
 using WeakGetFn = void* (*)(const void* weak);
 
@@ -913,11 +914,12 @@ void Tick() noexcept
         return;
     }
     const auto clock = std::chrono::steady_clock::now();
-    if (clock - g_summaryAt < std::chrono::seconds(10))
+    const bool first = g_summary.Never();  // the first period counts, the line comes with the second
+    if (!g_summary.Due(clock))
     {
         return;
     }
-    if (g_summaryAt != std::chrono::steady_clock::time_point{})
+    if (!first)
     {
         platform::LogDebug(L"trigger two (10 s): player 2's passes {} (overlap results {}, sweep {}, none last frame {}, "
                            L"skipped {}); events: enters {}, leaves {}; delivered as player 2: enters {}, leaves {}; "
@@ -926,8 +928,7 @@ void Tick() noexcept
                            g_counts.skipped, g_counts.enters, g_counts.leaves, g_counts.deliveredEnters,
                            g_counts.deliveredLeaves, g_counts.refused, g_shadow.size());
     }
-    g_summaryAt = clock;
-    g_counts    = {};
+    g_counts = {};
 }
 
 }  // namespace lss::player_two::trigger_two

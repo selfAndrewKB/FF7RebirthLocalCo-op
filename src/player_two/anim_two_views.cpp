@@ -3,6 +3,7 @@
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
+#include "platform/every.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -121,7 +122,7 @@ struct Counts
     double        micros = 0, maxMicros = 0;
 };
 Counts                                g_counts;
-std::chrono::steady_clock::time_point g_summaryAt{};
+platform::Every g_summary{kSummaryEvery};
 
 platform::EntryRedirect g_measureEntry;
 const float*            g_cameraDiff = nullptr;  // the game's cvar, degrees
@@ -550,16 +551,15 @@ void Tick(bool splitShown) noexcept
         g_watched = {};
     }
     const auto now = std::chrono::steady_clock::now();
-    if (now - g_summaryAt < kSummaryEvery)
+    if (!g_summary.Due(now))
     {
         return;
     }
-    g_summaryAt       = now;
-    const auto calls  = g_tick.calls.exchange(0, std::memory_order_relaxed);
-    const auto nearer = g_tick.nearer.exchange(0, std::memory_order_relaxed);
-    const auto worker = g_tick.onWorkers.exchange(0, std::memory_order_relaxed);
-    const auto torn   = g_tick.torn.exchange(0, std::memory_order_relaxed);
-    const auto ticks  = g_tick.ticks.exchange(0, std::memory_order_relaxed);
+    const auto calls  = platform::Take(g_tick.calls);
+    const auto nearer = platform::Take(g_tick.nearer);
+    const auto worker = platform::Take(g_tick.onWorkers);
+    const auto torn   = platform::Take(g_tick.torn);
+    const auto ticks  = platform::Take(g_tick.ticks);
     if (calls != 0 || torn != 0)
     {
         LARGE_INTEGER rate{};
@@ -571,7 +571,7 @@ void Tick(bool splitShown) noexcept
                            kSummaryEvery.count(), calls, worker, nearer,
                            ms / std::max(1.0, double(g_counts.evaluations)), torn);
     }
-    const auto refills = g_refills.exchange(0, std::memory_order_relaxed);
+    const auto refills = platform::Take(g_refills);
     if (g_counts.frames != 0 || g_counts.skipped != 0)
     {
         const double frames = g_counts.frames != 0 ? g_counts.frames : 1;

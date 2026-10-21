@@ -7,6 +7,7 @@
 #include <Unreal/UObject.hpp>
 
 #include "platform/build_value.h"
+#include "platform/every.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -175,7 +176,7 @@ Order                                      g_lastOrder{};
 std::array<Watched, facts::kNoPlayerType>  g_members{};
 std::array<Pending, kPending>              g_pending{};
 Held                                       g_held{};
-Clock::time_point                          g_lastWatch{};
+platform::Every g_watch{kWatchEvery};
 std::int32_t                               g_rootOffset = -1;
 
 template <class... A>
@@ -777,11 +778,10 @@ void Tick() noexcept
             RunPending(now);
             WatchHeld(now);
         }
-        if (now - g_lastWatch < kWatchEvery)
+        if (!g_watch.Due(now))
         {
             return;
         }
-        g_lastWatch       = now;
         const Order order = ReadOrder();
         if (order != g_lastOrder)
         {

@@ -1,5 +1,6 @@
 #include "player_two/charapop_near.h"
 
+#include "platform/every.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -74,7 +75,7 @@ const void*                    g_pop         = nullptr;  // the pop object the r
 std::uint32_t                  g_ticks       = 0;
 std::uint32_t                  g_raisedTotal = 0, g_takenBack = 0;
 std::uint32_t                  g_outOfReachTotal = 0, g_coveredTotal = 0, g_goneTotal = 0;  // releases, by reason
-Clock::time_point              g_lastSummary{};
+platform::Every g_summary{kSummaryEvery};
 int                            g_skipSamples  = 0;
 std::array<const void*, kLeftRemembered> g_leftLogged{};  // ring; an entry leaves it when raised
 std::uint32_t                  g_leftNext     = 0;
@@ -210,11 +211,10 @@ void LogSummary(const charapop::Camera& one, const charapop::Camera& two, const 
 {
     // Once a minute: each raise and clear has its own line, and busy scenes change the count each pass.
     const auto now = Clock::now();
-    if (now - g_lastSummary < kSummaryEvery)
+    if (!g_summary.Due(now))
     {
         return;
     }
-    g_lastSummary  = now;
     g_skipSamples  = 0;
     Line(L"{}: {} raised now (cameras {:.0f} m apart); this pass player 2's view needed {}, player 1's camera already "
          L"keeps {} of them; so far {} raised, {} cleared ({} out of reach, {} kept by player 1, {} left the evaluated "

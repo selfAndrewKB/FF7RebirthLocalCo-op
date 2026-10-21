@@ -7,6 +7,7 @@
 #include <Unreal/UObject.hpp>
 
 #include "platform/build_value.h"
+#include "platform/every.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -181,7 +182,7 @@ std::uint32_t                         g_ticks   = 0;
 std::uint32_t                         g_samples = 0;
 std::array<Remembered, kRemembered>   g_remembered{};
 SummarySteady                         g_summary{};
-Clock::time_point                     g_lastSummary{};
+platform::Every                       g_summaryEvery{kSummaryEvery};
 bool                                  g_wasShown = false;
 
 /// Per class: the reflected Mesh offset (-1: none) and whether that mesh is an EndSkeletalMeshComponent.
@@ -443,12 +444,12 @@ void LogSummary(const std::byte* manager, const std::byte* pop, const Camera& on
     SummarySteady steady;
     platform::CopyGuarded(steady.params.data(), manager + kManagerParams, steady.params.size());
     const auto now   = Clock::now();
-    if (steady == g_summary && now - g_lastSummary < kSummaryEvery)
+    if (steady == g_summary && !g_summaryEvery.Due(now))
     {
         return;
     }
-    g_summary     = steady;
-    g_lastSummary = now;
+    g_summary = steady;
+    g_summaryEvery.Restart(now);  // a change logs at once, and the period counts from it
     const auto f  = [&steady](std::uint32_t offset) {
         float value = 0.0f;
         std::memcpy(&value, steady.params.data() + (offset - kManagerParams), sizeof(value));
@@ -569,8 +570,8 @@ void Tick(bool splitShown) noexcept
     }
     if (!g_wasShown)
     {
-        g_wasShown    = true;
-        g_lastSummary = {};
+        g_wasShown = true;
+        g_summaryEvery.Reset();
     }
     if (++g_ticks % kSampleEvery != 0)
     {

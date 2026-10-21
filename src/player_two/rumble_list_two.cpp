@@ -4,6 +4,7 @@
 #include "platform/call_redirect.h"
 #include "platform/code_redirect.h"
 #include "platform/entry_redirect.h"
+#include "platform/every.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -235,7 +236,7 @@ std::atomic<const void*> g_footChocobo{nullptr};
 // Game thread.
 std::atomic<std::uint64_t>            g_lastKeyTwo{0};    // the last effect key added for player 2 (Debug on change)
 std::uint64_t                         g_lastStopTwo = 0;  // ... and stopped for player 2
-std::chrono::steady_clock::time_point g_summaryAt{};
+platform::Every g_summary{kSummaryEvery};
 
 std::wstring KeyText(std::uint64_t key) noexcept
 {
@@ -878,27 +879,26 @@ void DropList(const wchar_t* why) noexcept
 void LogSummary() noexcept
 {
     const auto now = std::chrono::steady_clock::now();
-    if (now - g_summaryAt < kSummaryEvery)
+    if (!g_summary.Due(now))
     {
         return;
     }
-    g_summaryAt     = now;
-    const auto a1   = g_counts.addsOne.exchange(0, std::memory_order_relaxed);
-    const auto a2   = g_counts.addsTwo.exchange(0, std::memory_order_relaxed);
-    const auto z2   = g_counts.zipAddsTwo.exchange(0, std::memory_order_relaxed);
-    const auto z1   = g_counts.zipAddsOne.exchange(0, std::memory_order_relaxed);
-    const auto t1   = g_counts.ticksOne.exchange(0, std::memory_order_relaxed);
-    const auto t2   = g_counts.ticksTwo.exchange(0, std::memory_order_relaxed);
-    const auto p2   = g_counts.appliedTwo.exchange(0, std::memory_order_relaxed);
-    const auto skip = g_counts.skippedOne.exchange(0, std::memory_order_relaxed);
-    const auto ref  = g_counts.refused.exchange(0, std::memory_order_relaxed);
-    const auto s1   = g_counts.stopsOne.exchange(0, std::memory_order_relaxed);
-    const auto s2   = g_counts.stopsTwo.exchange(0, std::memory_order_relaxed);
-    const auto foot = g_counts.footTwo.exchange(0, std::memory_order_relaxed);
-    const auto footRefused     = g_counts.footRefused.exchange(0, std::memory_order_relaxed);
-    const auto footWorkerTwo   = g_counts.footWorkerTwo.exchange(0, std::memory_order_relaxed);
-    const auto footOther       = g_counts.footOther.exchange(0, std::memory_order_relaxed);
-    const auto footWorkerOther = g_counts.footWorkerOther.exchange(0, std::memory_order_relaxed);
+    const auto a1   = platform::Take(g_counts.addsOne);
+    const auto a2   = platform::Take(g_counts.addsTwo);
+    const auto z2   = platform::Take(g_counts.zipAddsTwo);
+    const auto z1   = platform::Take(g_counts.zipAddsOne);
+    const auto t1   = platform::Take(g_counts.ticksOne);
+    const auto t2   = platform::Take(g_counts.ticksTwo);
+    const auto p2   = platform::Take(g_counts.appliedTwo);
+    const auto skip = platform::Take(g_counts.skippedOne);
+    const auto ref  = platform::Take(g_counts.refused);
+    const auto s1   = platform::Take(g_counts.stopsOne);
+    const auto s2   = platform::Take(g_counts.stopsTwo);
+    const auto foot = platform::Take(g_counts.footTwo);
+    const auto footRefused     = platform::Take(g_counts.footRefused);
+    const auto footWorkerTwo   = platform::Take(g_counts.footWorkerTwo);
+    const auto footOther       = platform::Take(g_counts.footOther);
+    const auto footWorkerOther = platform::Take(g_counts.footWorkerOther);
     if (a1 + a2 + z1 + z2 + t1 + t2 == 0 || g_listTwo.load(std::memory_order_relaxed) == nullptr)
     {
         return;
@@ -910,16 +910,16 @@ void LogSummary() noexcept
                        L"list skipped inside player 2's scope {}",
                        kSummaryEvery.count(), a1, z1, a2 + z2, z2, s1, s2, foot, footRefused, footWorkerTwo, footOther,
                        footWorkerOther, t1, t2, p2, ref, skip);
-    const auto scooter = g_counts.scooterTwo.exchange(0, std::memory_order_relaxed);
-    const auto glide   = g_counts.glideTwo.exchange(0, std::memory_order_relaxed);
-    const auto jump    = g_counts.jumpTwo.exchange(0, std::memory_order_relaxed);
-    const auto drift   = g_counts.driftTwo.exchange(0, std::memory_order_relaxed);
-    const auto brake   = g_counts.brakeTwo.exchange(0, std::memory_order_relaxed);
-    const auto oa      = g_counts.ownerAddsTwo.exchange(0, std::memory_order_relaxed);
-    const auto os      = g_counts.ownerStopsTwo.exchange(0, std::memory_order_relaxed);
-    const auto left    = g_counts.ownerStopsLeft.exchange(0, std::memory_order_relaxed);
-    const auto worker  = g_counts.sourceWorker.exchange(0, std::memory_order_relaxed);
-    const auto onGame  = g_counts.actionsOnGame.exchange(0, std::memory_order_relaxed);
+    const auto scooter = platform::Take(g_counts.scooterTwo);
+    const auto glide   = platform::Take(g_counts.glideTwo);
+    const auto jump    = platform::Take(g_counts.jumpTwo);
+    const auto drift   = platform::Take(g_counts.driftTwo);
+    const auto brake   = platform::Take(g_counts.brakeTwo);
+    const auto oa      = platform::Take(g_counts.ownerAddsTwo);
+    const auto os      = platform::Take(g_counts.ownerStopsTwo);
+    const auto left    = platform::Take(g_counts.ownerStopsLeft);
+    const auto worker  = platform::Take(g_counts.sourceWorker);
+    const auto onGame  = platform::Take(g_counts.actionsOnGame);
     if (scooter + glide + jump + drift + brake != 0)
     {
         platform::LogDebug(L"rumble list ({} s): player 2's sources outside player 2's scopes: scooter {}, glide {}, jump "
@@ -1229,9 +1229,9 @@ void CopyPlayerOne(bool on) noexcept
         }
         platform::Log(L"rumble list: shared ride over: copies {}, their stops {} (on a worker, not copied {}); stopped "
                       L"now on player 2's list: {}",
-                      g_counts.copiesTwo.exchange(0, std::memory_order_relaxed),
-                      g_counts.copyStopsTwo.exchange(0, std::memory_order_relaxed),
-                      g_counts.copyStopsLeft.exchange(0, std::memory_order_relaxed), names.empty() ? L"none" : names);
+                      platform::Take(g_counts.copiesTwo),
+                      platform::Take(g_counts.copyStopsTwo),
+                      platform::Take(g_counts.copyStopsLeft), names.empty() ? L"none" : names);
     }
     catch (...)
     {

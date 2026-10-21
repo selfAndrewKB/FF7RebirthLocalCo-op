@@ -1,6 +1,7 @@
 #include "player_two/charapop_centre.h"
 
 #include "platform/entry_redirect.h"
+#include "platform/every.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -25,6 +26,7 @@
 #include <cstring>
 #include <format>
 #include <span>
+#include <utility>
 
 namespace lss::player_two::charapop_centre {
 
@@ -88,7 +90,7 @@ float             g_two[3]     = {};     // player 2's member's location, read e
 bool              g_twoRead    = false;
 bool              g_eventCentre = false;  // an event's override centre was in place at the last tick
 std::uint32_t     g_ticks      = 0;
-Clock::time_point g_lastSummary{};
+platform::Every g_summary{kSummaryEvery};
 
 struct Counts
 {
@@ -181,13 +183,11 @@ void WatchEventCentre(const std::byte* manager, const float (&one)[3]) noexcept
 void LogSummary(const charapop::Objects& objects, const float (&one)[3]) noexcept
 {
     const auto now = Clock::now();
-    if (now - g_lastSummary < kSummaryEvery)
+    if (!g_summary.Due(now))
     {
         return;
     }
-    g_lastSummary  = now;
-    const Counts c = g_counts;
-    g_counts       = {};
+    const Counts c = std::exchange(g_counts, {});
     if (!platform::Enabled(platform::Level::Debug))
     {
         return;
@@ -329,7 +329,7 @@ void Tick(bool splitShown, bool playerTwoPlays) noexcept
 void SetEnabled(bool on) noexcept
 {
     g_enabled.store(on, std::memory_order_relaxed);
-    g_lastSummary = {};
+    g_summary.Reset();
     platform::Log(L"npc centre: switched {} (the population {})", on ? L"on" : L"off",
                   on ? L"is scored from the nearer player while split" : L"follows the leader, as the game alone does");
 }

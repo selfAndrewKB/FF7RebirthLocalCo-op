@@ -2,6 +2,7 @@
 
 #include "player_two/world_rules.h"
 #include "platform/build_value.h"
+#include "platform/every.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -20,6 +21,7 @@
 #include <cstdint>
 #include <format>
 #include <string>
+#include <utility>
 
 namespace lss::player_two::switch_volume_two {
 
@@ -88,7 +90,7 @@ std::array<Held, kMaxHeld> g_held{};
 std::uint64_t         g_trigger   = 0;  // weak of player 2's trigger the held volumes belong to
 std::uint64_t         g_entrant   = 0;  // that trigger's Tags[0]
 Counts                g_counts{};
-std::chrono::steady_clock::time_point g_summaryAt{};
+platform::Every       g_summary{std::chrono::seconds(10)};
 
 void* Root() noexcept
 {
@@ -413,13 +415,11 @@ void Tick() noexcept
         }
     }
     const auto clock = std::chrono::steady_clock::now();
-    if (clock - g_summaryAt < std::chrono::seconds(10))
+    if (!g_summary.Due(clock))
     {
         return;
     }
-    g_summaryAt = clock;
-    const Counts c = g_counts;
-    g_counts       = {};
+    const Counts c = std::exchange(g_counts, {});
     if (c.enters + c.leaves + c.keptForPlayerOne + c.reentered + c.refused + c.skippedOnOff == 0 && !Watching())
     {
         return;

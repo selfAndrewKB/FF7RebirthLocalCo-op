@@ -2,6 +2,7 @@
 
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
+#include "platform/every.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -337,7 +338,7 @@ struct Counts
     bool operator==(const Counts&) const = default;
 };
 Counts            g_counts;
-Clock::time_point g_statusAt{};
+platform::Every g_status{kStatusEvery};
 
 const std::uint8_t* PointerAt(const void* base, std::size_t offset) noexcept
 {
@@ -1060,11 +1061,10 @@ void LogTargets() noexcept
 void LogStatus() noexcept
 {
     const auto now = Clock::now();
-    if (now - g_statusAt < kStatusEvery || g_counts == Counts{})
+    if (g_counts == Counts{} || !g_status.Due(now))
     {
         return;
     }
-    g_statusAt = now;
     try
     {
         platform::LogDebug(L"field pickup (60 s): {} pass(es) (poll open in {}), {} pickup(s) by player 2, {} field reset(s) "

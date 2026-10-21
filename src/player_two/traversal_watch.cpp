@@ -2,6 +2,7 @@
 
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
+#include "platform/every.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
@@ -207,7 +208,7 @@ std::array<std::uint32_t, 2>                 g_trackerFrames{};
 platform::CallRedirect                       g_resolveCall;
 std::array<TrackerPasses, 3>                 g_dispatches{};  // player 1's tracker, player 2's, another
 std::array<unsigned, 3>                      g_resolves{};    // the key resolved to player 1's controller, 2's, another
-std::chrono::steady_clock::time_point        g_summaryAt{};
+platform::Every                              g_summary{std::chrono::seconds(10)};
 
 std::uintptr_t Live(const platform::GameImage& image, std::uintptr_t research) noexcept
 {
@@ -862,9 +863,10 @@ void Tick() noexcept
         }
     }
     const auto clock = std::chrono::steady_clock::now();
-    if (clock - g_summaryAt >= std::chrono::seconds(10))
+    const bool first = g_summary.Never();  // the first period counts, the line comes with the second
+    if (g_summary.Due(clock))
     {
-        if (g_summaryAt != std::chrono::steady_clock::time_point{})
+        if (!first)
         {
             try
             {
@@ -878,8 +880,7 @@ void Tick() noexcept
             {
             }
         }
-        g_summaryAt = clock;
-        g_resolves  = {};
+        g_resolves = {};
         for (auto& d : g_dispatches)
         {
             d.passes = 0;

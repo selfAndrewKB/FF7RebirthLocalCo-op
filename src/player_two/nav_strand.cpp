@@ -10,6 +10,7 @@
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
+#include "platform/every.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -484,9 +485,9 @@ void EndRideStrand(const void* chocobo, const wchar_t* why) noexcept
 void MountedTick(void* member, const void* chocobo, const void* ridden, bool splitShown, float seconds) noexcept
 {
     g_chocoboRoot.store(chocobo == nullptr ? nullptr : RootOf(const_cast<void*>(chocobo)), std::memory_order_release);
-    const std::uint32_t refusals = g_chocoboRefusals.exchange(0, std::memory_order_relaxed);
-    const std::uint32_t falls    = g_chocoboFalls.exchange(0, std::memory_order_relaxed);
-    const std::uint32_t unsafe   = g_chocoboUnsafe.exchange(0, std::memory_order_relaxed);
+    const std::uint32_t refusals = platform::Take(g_chocoboRefusals);
+    const std::uint32_t falls    = platform::Take(g_chocoboFalls);
+    const std::uint32_t unsafe   = platform::Take(g_chocoboUnsafe);
     if (ridden != g_rideChocobo)
     {
         if (g_rideWatch.Stranded())
@@ -602,9 +603,9 @@ void Forget() noexcept
     if (g_watch.Stranded())
     {
         // The last tick's counts, not yet taken, belong to the strand being closed.
-        g_strand.refusals += g_tickRefusals.exchange(0, std::memory_order_relaxed);
-        g_strand.falls += g_tickFallRefusals.exchange(0, std::memory_order_relaxed);
-        const std::uint32_t unsafe = g_tickUnsafeChecks.exchange(0, std::memory_order_relaxed);
+        g_strand.refusals += platform::Take(g_tickRefusals);
+        g_strand.falls += platform::Take(g_tickFallRefusals);
+        const std::uint32_t unsafe = platform::Take(g_tickUnsafeChecks);
         g_strand.parkChecks += unsafe > 0 && Parked(g_member) ? unsafe : 0;
         g_strand.longestMove =
             std::max(g_strand.longestMove, g_tickLongestMove.exchange(0.0f, std::memory_order_relaxed));
@@ -733,10 +734,10 @@ void Tick(bool splitShown) noexcept
     const void* ridden = chocobo_ride::RiddenChocobo();
     MountedTick(member, chocobo_ride::DrivenChocobo(), ridden, splitShown, seconds);
 
-    const std::uint32_t refusals = g_tickRefusals.exchange(0, std::memory_order_relaxed);
+    const std::uint32_t refusals = platform::Take(g_tickRefusals);
     const float         longest  = g_tickLongestMove.exchange(0.0f, std::memory_order_relaxed);
-    const std::uint32_t falls    = g_tickFallRefusals.exchange(0, std::memory_order_relaxed);
-    const std::uint32_t unsafe   = g_tickUnsafeChecks.exchange(0, std::memory_order_relaxed);
+    const std::uint32_t falls    = platform::Take(g_tickFallRefusals);
+    const std::uint32_t unsafe   = platform::Take(g_tickUnsafeChecks);
     // A failed check alone may still end in the game's own return-warp to her safe spot (the collision wall,
     // §6b); it strands her only once the game has parked her.
     const std::uint32_t parkChecks = unsafe > 0 && Parked(member) ? unsafe : 0;

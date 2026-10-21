@@ -8,6 +8,7 @@
 #include <Unreal/UObject.hpp>
 
 #include "platform/build_value.h"
+#include "platform/every.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -159,7 +160,7 @@ Ride              g_ride{};
 const void*       g_heldBack = nullptr;  // a chocobo not to board again until its ridden flag clears
 bool              g_stopped  = false;    // a ride failed: player 2 stays a passenger this session
 std::int32_t      g_rootOffset = -1;
-Clock::time_point g_lastSummary{};
+platform::Every g_summary{kSummaryEvery};
 CharacterArray    g_released{};          // reused for every EndRide: the game keeps one allocation in it
 
 const void* RootOf(void* actor) noexcept
@@ -540,7 +541,7 @@ void Begin(void* playerTwo, void* member, void* chocobo) noexcept
         End(L"the boarding did not complete", false);
         return;
     }
-    g_lastSummary = Clock::now();
+    g_summary.Restart(Clock::now());
     try
     {
         platform::Log(L"chocobo ride: player 2 boards their chocobo with their own coordinator (the game's boarding, instant; "
@@ -613,11 +614,10 @@ void LogSummary(const Ride& ride) noexcept
         return;  // a periodic status line: Debug
     }
     const auto now = Clock::now();
-    if (now - g_lastSummary < kSummaryEvery)
+    if (!g_summary.Due(now))
     {
         return;
     }
-    g_lastSummary = now;
     float two[3]{}, one[3]{};
     const void* oneBody = ReadPointer(generation::PlayerOneController(), facts::kControllerPawn);
     const bool  read    = charapop::ActorLocation(ride.chocobo, two) && charapop::ActorLocation(const_cast<void*>(oneBody), one);

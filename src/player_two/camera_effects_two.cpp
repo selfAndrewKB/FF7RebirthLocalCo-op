@@ -1,5 +1,6 @@
 #include "player_two/camera_effects_two.h"
 
+#include "platform/every.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -17,6 +18,7 @@
 #include <chrono>
 #include <cstdint>
 #include <optional>
+#include <utility>
 
 namespace lss::player_two::camera_effects_two {
 
@@ -65,7 +67,7 @@ Counts                     g_counts;
 // component, so an End on the other camera could stop an unrelated shake; S-ATKCAMVERIFY 4b).
 std::array<const void*, 16> g_shakeMeshes{};
 std::atomic<std::uint32_t> g_offThread{0};
-Clock::time_point          g_statusAt{};
+platform::Every g_status{kStatusEvery};
 
 bool Ready() noexcept
 {
@@ -337,14 +339,12 @@ void Install(const platform::GameImage& image) noexcept
 void Tick() noexcept
 {
     const auto now = Clock::now();
-    if (now - g_statusAt < kStatusEvery)
+    if (!g_status.Due(now))
     {
         return;
     }
-    g_statusAt          = now;
-    const Counts c      = g_counts;
-    g_counts            = {};
-    const auto offThread = g_offThread.exchange(0, std::memory_order_relaxed);
+    const Counts c = std::exchange(g_counts, {});
+    const auto offThread = platform::Take(g_offThread);
     if (c.guards + c.shakes + c.shakeStates + c.steals + c.refused + offThread == 0)
     {
         return;

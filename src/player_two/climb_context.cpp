@@ -2,6 +2,7 @@
 
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
+#include "platform/every.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -232,7 +233,7 @@ unsigned                         g_ticksPlaced   = 0;      // climb Tick slots p
 
 // Game thread only.
 bool                                  g_loggedOn = false;
-std::chrono::steady_clock::time_point g_summaryAt{};
+platform::Every g_summary{kSummaryEvery};
 
 bool Fresh(std::uint32_t stamp) noexcept
 {
@@ -526,23 +527,22 @@ void LogChanges() noexcept
                            on ? L"ticks as player 2's (player 2's stick, buttons and camera basis)" : L"ended");
     }
     const auto now = std::chrono::steady_clock::now();
-    if (now - g_summaryAt < kSummaryEvery)
+    if (!g_summary.Due(now))
     {
         return;
     }
-    g_summaryAt     = now;
-    const auto two  = g_counts.ticks[1].exchange(0, std::memory_order_relaxed);
-    const auto one  = g_counts.ticks[0].exchange(0, std::memory_order_relaxed);
-    const auto asks = g_counts.leaderAsks.exchange(0, std::memory_order_relaxed);
-    const auto cam  = g_counts.cameraTwo.exchange(0, std::memory_order_relaxed);
-    const auto k2   = g_counts.keys[1].exchange(0, std::memory_order_relaxed);
-    const auto k1   = g_counts.keys[0].exchange(0, std::memory_order_relaxed);
-    const auto btn  = g_counts.buttons.exchange(0, std::memory_order_relaxed);
-    const auto hold = g_counts.holdOff.exchange(0, std::memory_order_relaxed);
-    const auto fin  = g_counts.finishOff.exchange(0, std::memory_order_relaxed);
-    const auto old  = g_counts.staleCopies.exchange(0, std::memory_order_relaxed);
-    const auto e2   = g_counts.edgeTicks[1].exchange(0, std::memory_order_relaxed);
-    const auto e1   = g_counts.edgeTicks[0].exchange(0, std::memory_order_relaxed);
+    const auto two  = platform::Take(g_counts.ticks[1]);
+    const auto one  = platform::Take(g_counts.ticks[0]);
+    const auto asks = platform::Take(g_counts.leaderAsks);
+    const auto cam  = platform::Take(g_counts.cameraTwo);
+    const auto k2   = platform::Take(g_counts.keys[1]);
+    const auto k1   = platform::Take(g_counts.keys[0]);
+    const auto btn  = platform::Take(g_counts.buttons);
+    const auto hold = platform::Take(g_counts.holdOff);
+    const auto fin  = platform::Take(g_counts.finishOff);
+    const auto old  = platform::Take(g_counts.staleCopies);
+    const auto e2   = platform::Take(g_counts.edgeTicks[1]);
+    const auto e1   = platform::Take(g_counts.edgeTicks[0]);
     if (two == 0 && one == 0 && e2 == 0 && e1 == 0)
     {
         return;

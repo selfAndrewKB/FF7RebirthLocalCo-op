@@ -3,6 +3,7 @@
 #include "player_two/world_rules.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
+#include "platform/every.h"
 #include "platform/game_thread_sites.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -20,6 +21,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <utility>
 
 namespace lss::player_two::attack_framing {
 
@@ -97,7 +99,7 @@ struct Counts
     std::uint32_t kept = 0, offOther = 0, native = 0, coinOne = 0, coinTwo = 0, coinNone = 0, answers = 0;
 };
 Counts            g_counts;
-Clock::time_point g_statusAt{};
+platform::Every g_status{kStatusEvery};
 
 bool Line() noexcept
 {
@@ -400,13 +402,11 @@ void Tick() noexcept
 {
     ++g_tick;
     const auto now = Clock::now();
-    if (now - g_statusAt < kStatusEvery)
+    if (!g_status.Due(now))
     {
         return;
     }
-    g_statusAt     = now;
-    const Counts c = g_counts;
-    g_counts       = {};
+    const Counts c = std::exchange(g_counts, {});
     if (c.kept + c.offOther + c.native + c.coinOne + c.coinTwo + c.coinNone + c.answers == 0)
     {
         return;

@@ -2,6 +2,7 @@
 
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
+#include "platform/every.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -263,11 +264,6 @@ Whose WhoseIs(void* target, const void* leader) noexcept
     return TypeOf(target) <= kLastPartyType ? Whose::AiParty : Whose::Other;
 }
 
-std::uint32_t Take(std::atomic<std::uint32_t>& count) noexcept
-{
-    return count.exchange(0, std::memory_order_relaxed);
-}
-
 void Count(std::atomic<std::uint32_t>& count) noexcept
 {
     count.fetch_add(1, std::memory_order_relaxed);
@@ -292,27 +288,30 @@ void MaybeSummarize() noexcept
     std::uint32_t whose[kWhose]{}, stages[kStages]{}, kinds[kKinds][kWhose]{}, prioritized[kWhose]{};
     for (std::size_t i = 0; i < kWhose; ++i)
     {
-        whose[i]       = Take(t.whose[i]);
-        prioritized[i] = Take(t.prioritizedWhose[i]);
+        whose[i]       = platform::Take(t.whose[i]);
+        prioritized[i] = platform::Take(t.prioritizedWhose[i]);
         for (std::size_t k = 0; k < kKinds; ++k)
         {
-            kinds[k][i] = Take(t.selectWhose[k][i]);
+            kinds[k][i] = platform::Take(t.selectWhose[k][i]);
         }
     }
     for (std::size_t i = 0; i < kStages; ++i)
     {
-        stages[i] = Take(t.stages[i]);
+        stages[i] = platform::Take(t.stages[i]);
     }
-    const auto decisions = Take(t.decisions), off = Take(t.offGameThread), picks = Take(t.groupPicks);
-    const auto ucpcDraws = Take(t.draws[0]), aipc = Take(t.draws[1]), all = Take(t.draws[2]);
-    const auto newHate = Take(t.selectors[0]), newCond = Take(t.selectors[1]), newNone = Take(t.selectors[2]),
-               newOther = Take(t.selectors[3]);
+    const auto decisions = platform::Take(t.decisions), off = platform::Take(t.offGameThread),
+               picks = platform::Take(t.groupPicks);
+    const auto ucpcDraws = platform::Take(t.draws[0]), aipc = platform::Take(t.draws[1]),
+               all = platform::Take(t.draws[2]);
+    const auto newHate = platform::Take(t.selectors[0]), newCond = platform::Take(t.selectors[1]),
+               newNone = platform::Take(t.selectors[2]),
+               newOther = platform::Take(t.selectors[3]);
     std::uint32_t ucpc[3][4]{};
     for (std::size_t u = 0; u < 3; ++u)
     {
         for (std::size_t w = 0; w < 4; ++w)
         {
-            ucpc[u][w] = Take(t.ucpc[u][w]);
+            ucpc[u][w] = platform::Take(t.ucpc[u][w]);
         }
     }
     // Rows: Untouched, PlayerOne, PlayerTwo; columns: NoPlayerTwo, Coin, OnlyEligible, NeitherEligible.

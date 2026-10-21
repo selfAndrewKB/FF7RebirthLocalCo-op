@@ -7,6 +7,7 @@
 #include <Unreal/UObjectGlobals.hpp>
 
 #include "platform/entry_redirect.h"
+#include "platform/every.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -65,7 +66,7 @@ std::uint32_t     g_passes = 0;
 std::int32_t      g_codeLogged = 0;
 std::int32_t      g_padLogged  = -1;
 bool              g_firstLogged = false;
-Clock::time_point g_statusAt{};
+platform::Every   g_status{kStatusEvery};
 
 const void* Pointee(std::uintptr_t global) noexcept
 {
@@ -140,9 +141,8 @@ void LogDevice() noexcept
                           code, pad, code == -2 - 3 * g_twoPad ? L": PLAYER 2'S PAD" : L"");
         }
         const auto now = Clock::now();
-        if (now - g_statusAt >= kStatusEvery)
+        if (g_status.Due(now))
         {
-            g_statusAt = now;
             if (g_skips != 0 || g_passes != 0)
             {
                 platform::LogDebug(L"pad rumble (60 s): {} input event(s) from player 2's pad (pad {}) kept out of player 1's "

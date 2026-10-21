@@ -6,6 +6,8 @@
 // something for player 2, `passed` a call it left to the engine unchanged, and `refused` a call
 // where it would have acted but a precondition did not hold (the reason is counted by the stage).
 
+#include "platform/every.h"
+
 #include <atomic>
 #include <cstdint>
 
@@ -30,8 +32,7 @@ struct StageCounters
     };
     Snapshot Take() noexcept
     {
-        return {acted.exchange(0, std::memory_order_relaxed), passed.exchange(0, std::memory_order_relaxed),
-                refused.exchange(0, std::memory_order_relaxed)};
+        return {platform::Take(acted), platform::Take(passed), platform::Take(refused)};
     }
 };
 

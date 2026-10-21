@@ -1,5 +1,6 @@
 #include "player_two/rumble_watch.h"
 
+#include "platform/every.h"
 #include "platform/frame_watch.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -108,7 +109,7 @@ std::uintptr_t        g_app = 0;  // the pointer global's live address
 Frame             g_frame;
 Frame             g_logged;  // the last frame logged (its shape)
 int               g_depth = 0;
-Clock::time_point g_statusAt{};
+platform::Every g_status{kStatusEvery};
 struct Counts
 {
     std::uint32_t frames = 0, sendsOne = 0, sendsTwo = 0, sendsOther = 0, padWrites = 0, nonZeroFrames = 0;
@@ -187,12 +188,11 @@ void Flush() noexcept
 void LogStatus() noexcept
 {
     const auto now = Clock::now();
-    if (now - g_statusAt < kStatusEvery || !generation::Active() || !platform::Enabled(platform::Level::Debug))
+    if (!generation::Active() || !platform::Enabled(platform::Level::Debug) || !g_status.Due(now))
     {
         return;
     }
-    g_statusAt     = now;
-    const auto offThread = g_offThread.exchange(0, std::memory_order_relaxed);
+    const auto offThread = platform::Take(g_offThread);
     const void* one = generation::PlayerOneController();
     const void* two = generation::PlayerTwoController();
     const auto* app = reinterpret_cast<const std::uint8_t*>(ReadAt<std::uintptr_t>(g_app));

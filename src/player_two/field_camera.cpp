@@ -1,5 +1,6 @@
 #include "player_two/field_camera.h"
 
+#include "platform/every.h"
 #include "platform/image.h"
 #include "player_two/attack_cameras.h"
 #include "player_two/battle_camera.h"
@@ -371,7 +372,7 @@ StageCounters& UpdateCounters() noexcept
 
 unsigned TakeMismatches() noexcept
 {
-    return g_mismatches.exchange(0, std::memory_order_relaxed);
+    return platform::Take(g_mismatches);
 }
 
 }  // namespace lss::player_two::field_camera

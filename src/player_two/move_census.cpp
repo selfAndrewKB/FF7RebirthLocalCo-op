@@ -1,5 +1,6 @@
 #include "player_two/move_census.h"
 
+#include "platform/every.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
@@ -158,9 +159,9 @@ void Log() noexcept
         {
             continue;
         }
-        const std::uint32_t ticks      = entry.ticks.exchange(0, std::memory_order_relaxed);
-        const std::uint32_t inputTicks = entry.inputTicks.exchange(0, std::memory_order_relaxed);
-        const std::uint32_t ownTicks   = entry.ownTicks.exchange(0, std::memory_order_relaxed);
+        const std::uint32_t ticks      = platform::Take(entry.ticks);
+        const std::uint32_t inputTicks = platform::Take(entry.inputTicks);
+        const std::uint32_t ownTicks   = platform::Take(entry.ownTicks);
         if (ticks + inputTicks > 0 && OfInterest(character))
         {
             platform::Log(

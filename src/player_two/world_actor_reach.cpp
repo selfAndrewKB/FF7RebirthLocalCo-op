@@ -1,6 +1,7 @@
 #include "player_two/world_actor_reach.h"
 
 #include "player_two/world_rules.h"
+#include "platform/every.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -84,7 +85,7 @@ bool              g_on           = false;
 bool              g_vtableWarned = false;
 std::uint32_t     g_ticks        = 0;
 std::uint32_t     g_reinserts    = 0;  // since the last summary
-Clock::time_point g_lastSummary{};
+platform::Every   g_summary{kSummaryEvery};
 
 const std::byte* Manager() noexcept
 {
@@ -373,9 +374,8 @@ void Pass() noexcept
                       L"radius widened by the players' separation ({:.0f} m now, {} items)",
                       by / 100.0f, widened);
     }
-    if (platform::Enabled(platform::Level::Debug) && Clock::now() - g_lastSummary >= kSummaryEvery)
+    if (platform::Enabled(platform::Level::Debug) && g_summary.Due(Clock::now()))
     {
-        g_lastSummary = Clock::now();
         platform::LogDebug(L"world actor reach: players {:.0f} m apart; {} items widened by {:.0f} m; {} octree reinsert(s) since "
                            L"the last line",
                            apart / 100.0f, widened, by / 100.0f, g_reinserts);

@@ -2,6 +2,7 @@
 
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
+#include "platform/every.h"
 #include "platform/game_thread_sites.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -28,6 +29,7 @@
 #include <iterator>
 #include <span>
 #include <string>
+#include <utility>
 
 namespace lss::player_two::synergy_partner {
 
@@ -214,7 +216,7 @@ struct Counts
                   offThread = 0, kept = 0;
 };
 Counts            g_counts;
-Clock::time_point g_statusAt{};
+platform::Every g_status{kStatusEvery};
 
 bool Line() noexcept
 {
@@ -1192,13 +1194,11 @@ void Tick() noexcept
                           std::chrono::duration_cast<std::chrono::seconds>(kLateAfter).count(), SeenText(held.endSeen));
         }
     }
-    if (now - g_statusAt < kStatusEvery)
+    if (!g_status.Due(now))
     {
         return;
     }
-    g_statusAt     = now;
-    const Counts c = g_counts;
-    g_counts       = {};
+    const Counts c = std::exchange(g_counts, {});
     if (c.requests + c.memberEnds + c.kept == 0)
     {
         return;

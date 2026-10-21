@@ -2,6 +2,7 @@
 
 #include "dev/dev_switch.h"
 #include "platform/build_value.h"
+#include "platform/every.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -18,6 +19,7 @@
 #include <cstdint>
 #include <format>
 #include <string>
+#include <utility>
 
 namespace lss::player_two::chocobo_climb {
 
@@ -65,7 +67,7 @@ constexpr auto kSummaryEvery = std::chrono::seconds(10);
 
 IsRiddenFn                            g_isRidden    = nullptr;  // null: not logged
 HolderStateFn                         g_holderState = nullptr;
-std::chrono::steady_clock::time_point g_summaryAt{};
+platform::Every g_summary{kSummaryEvery};
 
 struct TryNote
 {
@@ -287,13 +289,11 @@ void Enter(void* executer) noexcept
 void LogSummary() noexcept
 {
     const auto now = std::chrono::steady_clock::now();
-    if (now - g_summaryAt < kSummaryEvery)
+    if (!g_summary.Due(now))
     {
         return;
     }
-    g_summaryAt = now;
-    const Counts counts = g_counts;
-    g_counts            = {};
+    const Counts counts = std::exchange(g_counts, {});
     if (counts.tryTwo + counts.tryRefused + counts.enterTwo + counts.enterTwoRefused + counts.enterOthers == 0)
     {
         return;

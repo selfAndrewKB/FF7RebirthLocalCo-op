@@ -2,6 +2,7 @@
 
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
+#include "platform/every.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -20,6 +21,7 @@
 #include <cstring>
 #include <format>
 #include <string>
+#include <utility>
 
 namespace lss::player_two::attack_cameras {
 
@@ -99,7 +101,7 @@ struct Counts
     std::uint32_t updates = 0, entriesTwo = 0, entriesOne = 0, cutsTwo = 0, cutsOne = 0, lists = 0, onlyTwo = 0;
 };
 Counts            g_counts;
-Clock::time_point g_statusAt{};
+platform::Every g_status{kStatusEvery};
 
 void* ListNow() noexcept
 {
@@ -380,13 +382,11 @@ bool InsidePlayerTwoUpdate() noexcept
 void Tick() noexcept
 {
     const auto now = Clock::now();
-    if (now - g_statusAt < kStatusEvery)
+    if (!g_status.Due(now))
     {
         return;
     }
-    g_statusAt     = now;
-    const Counts c = g_counts;
-    g_counts       = {};
+    const Counts c = std::exchange(g_counts, {});
     if (c.entriesOne + c.entriesTwo + c.cutsTwo + c.cutsOne + c.lists == 0)
     {
         return;

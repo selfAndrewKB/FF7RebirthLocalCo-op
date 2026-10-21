@@ -3,6 +3,7 @@
 #include "player_two/ride_rules.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
+#include "platform/every.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -290,7 +291,7 @@ struct Ride
 bool              g_active  = false;
 Ride              g_ride{};
 bool              g_stopped = false;  // a ride failed: player 2 does not board again this session
-Clock::time_point g_lastSummary{};
+platform::Every g_summary{kSummaryEvery};
 
 std::int32_t CoordState(const void* coordinator) noexcept
 {
@@ -1086,7 +1087,7 @@ void AfterMemberTick(void* playerTwoController, void* member) noexcept
     g_ride.weak        = asked.weak;
     g_ride.state       = CoordState(coordinator);
     g_active           = true;
-    g_lastSummary      = Clock::now();
+    g_summary.Restart(Clock::now());
     const bool owned   = begun && flushed && g_ride.state == kStateBoarding &&
                        PlayerTwoHolds(scooter, playerTwoController) &&
                        ReadPointer(playerTwoController, kActiveVehicle) == coordinator &&
@@ -1153,11 +1154,10 @@ void LogSummary() noexcept
         return;  // a periodic status line: Debug
     }
     const auto now = Clock::now();
-    if (now - g_lastSummary < kSummaryEvery)
+    if (!g_summary.Due(now))
     {
         return;
     }
-    g_lastSummary = now;
     try
     {
         platform::LogDebug(L"wheelie ride: driving, {} ticks ({} refused); {}", g_ride.ticks, g_ride.refused, LeaseText(g_ride));
