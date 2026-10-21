@@ -7,6 +7,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/module_pin.h"
+#include "platform/verified_code.h"
 
 #include <cstdint>
 #include <span>
@@ -25,33 +26,31 @@ namespace {
 // so the block is the one the research read) and the instruction after the submit, where it lands.
 struct WidgetSite
 {
-    const wchar_t*                 name;
-    std::uintptr_t                 site;
-    std::span<const std::uint8_t>  siteBytes;
-    std::uintptr_t                 acquireCall;
-    std::span<const std::uint8_t>  acquireBytes;
-    std::uintptr_t                 submitCall;
-    std::span<const std::uint8_t>  submitBytes;
-    std::uintptr_t                 afterSubmit;
-    std::span<const std::uint8_t>  afterSubmitBytes;
+    const wchar_t*                name;
+    std::uintptr_t                site;
+    std::span<const std::uint8_t> siteBytes;
+    platform::FunctionFact        acquireCall;
+    platform::FunctionFact        submitCall;
+    platform::FunctionFact        afterSubmit;
 };
 
-constexpr std::uint8_t kCircleAcquire[]      = {0xE8, 0xE1, 0x19, 0x00, 0x00};  // call FEndMenuRenderer__AcquireLayerSlot
-constexpr std::uint8_t kCircleSubmit[]       = {0xE8, 0x24, 0x18, 0x00, 0x00};  // call FEndMenuRenderer__SubmitLayerSlot
 constexpr std::uint8_t kCircleAfterSubmit[]  = {0x49, 0x8B, 0x8F, 0xE0, 0x01, 0x00, 0x00};  // mov rcx,[r15+1E0h]
 constexpr std::uint8_t kOctagonAcquire[]     = {0xE8, 0x44, 0x84, 0x56, 0xFD};
 constexpr std::uint8_t kOctagonSubmit[]      = {0xE8, 0x57, 0x82, 0x56, 0xFD};
 constexpr std::uint8_t kOctagonAfterSubmit[] = {0x49, 0x8B, 0x8E, 0xE0, 0x01, 0x00, 0x00};  // mov rcx,[r14+1E0h]
+constexpr platform::FunctionFact kCircleAfter{L"after the circle's submit call", 0x140FC6F18, kCircleAfterSubmit};
+constexpr platform::FunctionFact kOctagonAcquireCall{L"the octagon's acquire call", 0x143A6024B, kOctagonAcquire};
+constexpr platform::FunctionFact kOctagonSubmitCall{L"the octagon's submit call", 0x143A604E0, kOctagonSubmit};
+constexpr platform::FunctionFact kOctagonAfter{L"after the octagon's submit call", 0x143A604E5, kOctagonAfterSubmit};
 
-constexpr WidgetSite kCircle{L"circle", 0x140FC6C95, kCircleSiteBytes, facts::kNaviMapCircleAcquireCall, kCircleAcquire,
-                             facts::kNaviMapCircleSubmitCall, kCircleSubmit, 0x140FC6F18, kCircleAfterSubmit};
-constexpr WidgetSite kOctagon{L"octagon", 0x143A60235, kOctagonSiteBytes, 0x143A6024B, kOctagonAcquire,
-                              0x143A604E0, kOctagonSubmit, 0x143A604E5, kOctagonAfterSubmit};
+constexpr WidgetSite kCircle{L"circle", 0x140FC6C95, kCircleSiteBytes, facts::kNaviMapCircleAcquireCall,
+                             facts::kNaviMapCircleSubmitCall, kCircleAfter};
+constexpr WidgetSite kOctagon{L"octagon", 0x143A60235, kOctagonSiteBytes, kOctagonAcquireCall, kOctagonSubmitCall,
+                              kOctagonAfter};
 // Game version 1.005 (RE-1005-hud-2.md): the circle's site is the next instruction, 0x140FC6C9C here (the same block
 // and landing point; its own skip code, hud/minimap_once_code.h).
 constexpr WidgetSite kCircle1005{L"circle", 0x140FC6C9C, kCircleSiteBytes1005, facts::kNaviMapCircleAcquireCall,
-                                 kCircleAcquire, facts::kNaviMapCircleSubmitCall, kCircleSubmit, 0x140FC6F18,
-                                 kCircleAfterSubmit};
+                                 facts::kNaviMapCircleSubmitCall, kCircleAfter};
 
 constexpr ULONGLONG kLogPeriodMs = 60'000;  // the counts line, once a minute (the 32 KB leak's pool reading is retired)
 
@@ -75,9 +74,8 @@ bool Install(const platform::GameImage& image, platform::CodeRedirect& redirect,
              std::span<const std::uint8_t> code) noexcept
 {
     const auto site = image.Rebase(widget.site, widget.siteBytes.size());
-    if (!site || !image.BytesMatch(widget.acquireCall, widget.acquireBytes) ||
-        !image.BytesMatch(widget.submitCall, widget.submitBytes) ||
-        !image.BytesMatch(widget.afterSubmit, widget.afterSubmitBytes))
+    if (!site || !platform::FindFunction(image, widget.acquireCall) ||
+        !platform::FindFunction(image, widget.submitCall))
     {
         platform::Log(L"minimap once: the {}'s paint is not what the research read; its map renders in both passes",
                       widget.name);
@@ -101,8 +99,8 @@ bool InstallMinimapOnce(const platform::GameImage& image) noexcept
         platform::Log(L"minimap once: this DLL could not be pinned; the minimap renders in both passes");
         return false;
     }
-    const auto circleAfter  = image.Rebase(kCircle.afterSubmit);
-    const auto octagonAfter = image.Rebase(kOctagon.afterSubmit);
+    const auto circleAfter  = platform::FindFunction(image, kCircle.afterSubmit);
+    const auto octagonAfter = platform::FindFunction(image, kOctagon.afterSubmit);
     const bool circle =
         circleAfter && (platform::RunningBuild() == platform::BuildIndex::V1005
                             ? Install(image, g_circleCode, kCircle1005, CircleSkipCode1005(g_fields, *circleAfter))

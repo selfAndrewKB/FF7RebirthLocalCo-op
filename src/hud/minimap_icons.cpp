@@ -6,6 +6,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/sparse_array.h"
+#include "platform/verified_code.h"
 #include "player_two/generation.h"
 
 #include <algorithm>
@@ -29,21 +30,21 @@ namespace generation = player_two::generation;
 // FName key, a qword) and `mov rcx,rdi` (the holder); neither result is read. Each call's five bytes cross a 16-byte
 // block.
 constexpr std::uintptr_t kUpdateCall          = 0x1408447BF;  // in range: AreaMapIcon_Update(holder, key, source)
-constexpr std::uintptr_t kUpdate              = 0x140C26810;
 constexpr std::uint8_t   kUpdateBytes[]       = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x70, 0x18, 0x48,
                                                  0x89, 0x78, 0x20, 0x48, 0x89, 0x50, 0x10, 0x55, 0x41, 0x54, 0x41, 0x55};
-constexpr std::uintptr_t kUpdateArgs          = 0x1408447B5;
+constexpr platform::FunctionFact kUpdate{L"AreaMapIcon_Update", 0x140C26810, kUpdateBytes};
 constexpr std::uint8_t   kUpdateArgsBytes[]   = {0x4B, 0x8B, 0x14, 0x27, 0x4C, 0x8B, 0xC6, 0x48, 0x8B, 0xCF};
-constexpr std::uintptr_t kUpdateAfter         = 0x1408447C4;
+constexpr platform::FunctionFact kUpdateArgs{L"the update call's arguments", 0x1408447B5, kUpdateArgsBytes};
 constexpr std::uint8_t   kUpdateAfterBytes[]  = {0xE9, 0x08, 0xFF, 0xFF, 0xFF};
+constexpr platform::FunctionFact kUpdateAfter{L"after the update call", 0x1408447C4, kUpdateAfterBytes};
 constexpr std::uintptr_t kRemoveCall          = 0x1408446CC;  // out of range: NaviMapHolder_RemoveIconEntry_DestroysWidget
-constexpr std::uintptr_t kRemove              = 0x140843C44;
 constexpr std::uint8_t   kRemoveBytes[]       = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C, 0x24, 0x18,
                                                  0x56, 0x57, 0x41, 0x56, 0xB8, 0x40, 0x00, 0x00, 0x00, 0xE8};
-constexpr std::uintptr_t kRemoveArgs          = 0x1408446C5;
+constexpr platform::FunctionFact kRemove{L"NaviMapHolder_RemoveIconEntry_DestroysWidget", 0x140843C44, kRemoveBytes};
 constexpr std::uint8_t   kRemoveArgsBytes[]   = {0x4B, 0x8B, 0x14, 0x27, 0x48, 0x8B, 0xCF};
-constexpr std::uintptr_t kRemoveAfter         = 0x1408446D1;
+constexpr platform::FunctionFact kRemoveArgs{L"the remove call's arguments", 0x1408446C5, kRemoveArgsBytes};
 constexpr std::uint8_t   kRemoveAfterBytes[]  = {0x8A, 0x9C, 0x24, 0x81, 0x00, 0x00, 0x00};
+constexpr platform::FunctionFact kRemoveAfter{L"after the remove call", 0x1408446D1, kRemoveAfterBytes};
 
 // The holder's entries (§7.5): a TSet at holder+0xE8 of 160-byte elements, the FName key at +0, the entry after it:
 // entry+0x8 the SEndMapIcon, entry+0x1C the icon kind. The widget's Slate visibility byte at +0x1B0 (stock 4.26
@@ -262,14 +263,13 @@ bool PlaceCalls(const platform::GameImage&) noexcept
 
 bool Prepare(const platform::GameImage& image) noexcept
 {
-    const bool bytes = image.BytesMatch(kUpdate, kUpdateBytes) && image.BytesMatch(kUpdateArgs, kUpdateArgsBytes) &&
-                       image.BytesMatch(kUpdateAfter, kUpdateAfterBytes) && image.BytesMatch(kRemove, kRemoveBytes) &&
-                       image.BytesMatch(kRemoveArgs, kRemoveArgsBytes) && image.BytesMatch(kRemoveAfter, kRemoveAfterBytes);
+    const bool sites    = platform::FindFunction(image, kUpdateArgs) && platform::FindFunction(image, kUpdateAfter) &&
+                          platform::FindFunction(image, kRemoveArgs) && platform::FindFunction(image, kRemoveAfter);
     const auto updateAt = image.Rebase(kUpdateCall, 5);
-    const auto update   = image.Rebase(kUpdate);
+    const auto update   = platform::FindFunction(image, kUpdate);
     const auto removeAt = image.Rebase(kRemoveCall, 5);
-    const auto remove   = image.Rebase(kRemove);
-    if (!bytes || !updateAt || !update || !removeAt || !remove)
+    const auto remove   = platform::FindFunction(image, kRemove);
+    if (!sites || !updateAt || !update || !removeAt || !remove)
     {
         platform::Log(L"minimap icons: the holder's icon calls are not what the research read; each run removes the "
                       L"other player's icons as before");

@@ -106,8 +106,12 @@ inline constexpr FunctionFact kAcquireLayerSlot{L"FEndMenuRenderer::AcquireLayer
 // crosses a 16-byte block, so it is installed from the game thread while that thread is outside the paint) and the
 // submit (rcx renderer, dl 0, r8 slot). hud/minimap redirects them; hud/minimap_once skips the block
 // (RE-p2-own-minimap.md §8.1).
-inline constexpr std::uintptr_t kNaviMapCircleAcquireCall = 0x140FC6CAE;
-inline constexpr std::uintptr_t kNaviMapCircleSubmitCall  = 0x140FC6F13;
+inline constexpr std::uint8_t kNaviMapCircleAcquireCallBytes[] = {0xE8, 0xE1, 0x19, 0x00, 0x00};  // call Acquire
+inline constexpr platform::FunctionFact kNaviMapCircleAcquireCall{L"the navi-map circle's acquire call", 0x140FC6CAE,
+                                                                  kNaviMapCircleAcquireCallBytes};
+inline constexpr std::uint8_t kNaviMapCircleSubmitCallBytes[] = {0xE8, 0x24, 0x18, 0x00, 0x00};  // call Submit
+inline constexpr platform::FunctionFact kNaviMapCircleSubmitCall{L"the navi-map circle's submit call", 0x140FC6F13,
+                                                                 kNaviMapCircleSubmitCallBytes};
 
 // A layer slot's pool buffers are FVertexBuffer and FIndexBuffer resources (their vtables, data), initialised through
 // BeginInitResource_OrDirectIfRenderThread (render thread: vt+0x28 directly).

@@ -36,39 +36,44 @@ using label_states::Parked;
 // RE-p2-minimap-cost.md §7 (this build). SEndMapIcon::SetLabelText's one call into the text block's SetText:
 // `mov rdx,rbp` (the FString*), `mov rcx,rdi` (the SEndTextBlock, never null here), the call, then only rsi/rbp/rdi and
 // the stack are read (rax unread).
-constexpr std::uintptr_t kSetLabelText        = 0x14098EB7C;  // SEndMapIcon__SetLabelText
 constexpr std::uint8_t   kSetLabelTextBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C, 0x24, 0x10, 0x48, 0x89,
                                                  0x74, 0x24, 0x18, 0x57, 0xB8, 0x40, 0x00, 0x00, 0x00, 0xE8, 0x9A, 0x03,
                                                  0x72, 0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xB9, 0xC0, 0x03, 0x00, 0x00};
-constexpr std::uintptr_t kSetTextArgs         = 0x14098EBAB;
+constexpr platform::FunctionFact kSetLabelText{L"SEndMapIcon__SetLabelText", 0x14098EB7C, kSetLabelTextBytes};
 constexpr std::uint8_t   kSetTextArgsBytes[]  = {0x48, 0x8B, 0xD5, 0x48, 0x8B, 0xCF};
+constexpr platform::FunctionFact kSetTextArgs{L"the SetText call's arguments", 0x14098EBAB, kSetTextArgsBytes};
 constexpr std::uintptr_t kSetTextCall         = 0x14098EBB1;  // E8 rel32, inside the block at 0x14098EBB0
-constexpr std::uintptr_t kSetTextAfter        = 0x14098EBB6;
 constexpr std::uint8_t   kSetTextAfterBytes[] = {0x80, 0xBE, 0x3C, 0x04, 0x00, 0x00, 0x00};
+constexpr platform::FunctionFact kSetTextAfter{L"after the SetText call", 0x14098EBB6, kSetTextAfterBytes};
 // SEndTextBlock_SetText_RelayoutIfChanged: the game's own compare (≤ 20 characters) in front of its relayout.
-constexpr std::uintptr_t kSetText             = 0x14098EC24;
 constexpr std::uint8_t   kSetTextBytes[]      = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x70, 0x10,
                                                  0x48, 0x89, 0x78, 0x18, 0x4C, 0x89, 0x70, 0x20, 0x55, 0x48, 0x8B,
                                                  0xEC, 0xB8, 0x50, 0x00, 0x00, 0x00, 0xE8, 0xEB, 0x02, 0x72};
-constexpr std::uintptr_t kRelayout            = 0x14106DA88;  // checked only: the state it writes is what is swapped
+constexpr platform::FunctionFact kSetText{L"SEndTextBlock_SetText_RelayoutIfChanged", 0x14098EC24, kSetTextBytes};
 constexpr std::uint8_t   kRelayoutBytes[]     = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x10, 0x48, 0x89, 0x70, 0x18,
                                                  0x48, 0x89, 0x78, 0x20, 0x55, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56,
                                                  0x41, 0x57, 0x48, 0x8D, 0xA8, 0x78, 0xF6, 0xFF, 0xFF, 0xB8};
+// checked only: the state it writes is what is swapped
+constexpr platform::FunctionFact kRelayout{L"the text block's relayout", 0x14106DA88, kRelayoutBytes};
 // The text block's destructor frees the ranges with these (its offsets are checked below).
-constexpr std::uintptr_t kQuadsDtor           = 0x14098E35C;  // TArray<TArray<Quad80>>
-constexpr std::uintptr_t kRunsDtor            = 0x14098E3B4;  // TArray<TArray<Run52>>
 constexpr std::uint8_t   kArrayDtorBytes[]    = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
                                                  0x24, 0x10, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
-constexpr std::uintptr_t kDtorQuadsLea        = 0x14098E221;  // lea rcx,[rbx+5A0h]
+// TArray<TArray<Run52>>
+constexpr platform::FunctionFact kRunsDtor{L"the runs array's destructor", 0x14098E3B4, kArrayDtorBytes};
+// TArray<TArray<Quad80>>
+constexpr platform::FunctionFact kQuadsDtor{L"the quads array's destructor", 0x14098E35C, kArrayDtorBytes};
 constexpr std::uint8_t   kDtorQuadsLeaBytes[] = {0x48, 0x8D, 0x8B, 0xA0, 0x05, 0x00, 0x00};
-constexpr std::uintptr_t kDtorRunsLea         = 0x14098E25D;  // lea rcx,[rbx+530h]
+// lea rcx,[rbx+5A0h]
+constexpr platform::FunctionFact kDtorQuadsLea{L"the destructor's quads lea", 0x14098E221, kDtorQuadsLeaBytes};
 constexpr std::uint8_t   kDtorRunsLeaBytes[]  = {0x48, 0x8D, 0x8B, 0x30, 0x05, 0x00, 0x00};
-constexpr std::uintptr_t kReleaseWeak         = 0x140C29AAC;  // RefController_ReleaseWeakReference
+// lea rcx,[rbx+530h]
+constexpr platform::FunctionFact kDtorRunsLea{L"the destructor's runs lea", 0x14098E25D, kDtorRunsLeaBytes};
 constexpr std::uint8_t   kReleaseWeakBytes[]  = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x7A, 0x54,
                                                  0x48, 0x01, 0x48, 0x2B, 0xE0, 0x83, 0x69, 0x0C};
-constexpr std::uintptr_t kInvalidate          = 0x140970724;  // SWidget::Invalidate(reason)
+constexpr platform::FunctionFact kReleaseWeak{L"RefController_ReleaseWeakReference", 0x140C29AAC, kReleaseWeakBytes};
 constexpr std::uint8_t   kInvalidateBytes[]   = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x48, 0x89,
                                                  0x7C, 0x24, 0x18, 0x55, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8B, 0xEC, 0xB8};
+constexpr platform::FunctionFact kInvalidate{L"SWidget::Invalidate", 0x140970724, kInvalidateBytes};
 constexpr std::uint32_t  kInvalidateLayout    = 5;  // what the game's SetText passes after a relayout
 
 // The text block and its MakeShared block: the reference controller sits 0x10 before the widget (shared count +8, weak
@@ -338,26 +343,23 @@ bool PlaceCall(const platform::GameImage&) noexcept
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const bool bytes = image.BytesMatch(kSetLabelText, kSetLabelTextBytes) &&
-                       image.BytesMatch(kSetTextArgs, kSetTextArgsBytes) &&
-                       image.BytesMatch(kSetTextAfter, kSetTextAfterBytes) && image.BytesMatch(kSetText, kSetTextBytes) &&
-                       image.BytesMatch(kRelayout, kRelayoutBytes) && image.BytesMatch(kQuadsDtor, kArrayDtorBytes) &&
-                       image.BytesMatch(kRunsDtor, kArrayDtorBytes) && image.BytesMatch(kDtorQuadsLea, kDtorQuadsLeaBytes) &&
-                       image.BytesMatch(kDtorRunsLea, kDtorRunsLeaBytes) &&
-                       image.BytesMatch(kReleaseWeak, kReleaseWeakBytes) && image.BytesMatch(kInvalidate, kInvalidateBytes);
+    const bool checked    = platform::FindFunction(image, kSetLabelText) && platform::FindFunction(image, kRelayout) &&
+                            platform::FindFunction(image, kSetTextArgs) &&
+                            platform::FindFunction(image, kSetTextAfter) &&
+                            platform::FindFunction(image, kDtorQuadsLea) && platform::FindFunction(image, kDtorRunsLea);
     const auto callAt     = image.Rebase(kSetTextCall, 5);
-    const auto setText    = image.Rebase(kSetText);
-    const auto quads      = image.Rebase(kQuadsDtor);
-    const auto runs       = image.Rebase(kRunsDtor);
+    const auto setText    = platform::FindFunction(image, kSetText);
+    const auto quads      = platform::FindFunction(image, kQuadsDtor);
+    const auto runs       = platform::FindFunction(image, kRunsDtor);
     const auto freeString = platform::FindFunction(image, facts::kFreeArrayData);
-    const auto release    = image.Rebase(kReleaseWeak);
-    const auto invalidate = image.Rebase(kInvalidate);
+    const auto release    = platform::FindFunction(image, kReleaseWeak);
+    const auto invalidate = platform::FindFunction(image, kInvalidate);
     const auto textBlock  = image.Rebase(kTextBlockVTable, sizeof(void*));
     const auto paint      = image.Rebase(kPaintVTable, sizeof(void*));
     const auto gcObject   = image.Rebase(kGcObjectVTable, sizeof(void*));
     const auto controller = image.Rebase(kControllerVTable, sizeof(void*));
-    if (!bytes || !callAt || !setText || !quads || !runs || !freeString || !release || !invalidate || !textBlock || !paint ||
-        !gcObject || !controller)
+    if (!checked || !callAt || !setText || !quads || !runs || !freeString || !release || !invalidate || !textBlock ||
+        !paint || !gcObject || !controller)
     {
         platform::Log(L"minimap labels: the label code is not what the research read; each pass lays the labels out as "
                       L"before");

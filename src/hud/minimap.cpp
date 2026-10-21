@@ -61,9 +61,10 @@ constexpr std::uint32_t  kContentCentre       = 0x478;  // float x, y, z
 constexpr std::uintptr_t kCirclePaintVTable   = 0x14676E5D8;
 
 // MasterIconPaint_NaviMapHolder_FrameUpdate(holder, dt): the content's only writer (centre, rotations, icons).
-constexpr std::uintptr_t kHolderUpdate        = 0x140843F10;
 constexpr std::uint8_t   kHolderUpdateBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x57, 0x41, 0x54,
                                                  0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0xB8, 0x90, 0x03, 0x00, 0x00, 0xE8};
+constexpr platform::FunctionFact kHolderUpdate{L"MasterIconPaint_NaviMapHolder_FrameUpdate", 0x140843F10,
+                                               kHolderUpdateBytes};
 // Its one leader read: call UEndPartyAPI_GetPartyLeaderType (u8 in al) at 0x140844016; location, range, arrow yaw
 // and the party-icon skip all follow that answer (no sub-function reads the leader itself, §8.5).
 constexpr std::uintptr_t kLeaderTypeCall    = 0x140844016;
@@ -75,10 +76,11 @@ using facts::kGetPartyLeaderType;
 // dropped the other's pieces (CONFIRMED live: ~17 load/drop cycles a second, the flicker).
 constexpr std::uintptr_t kPieceUnloadCall      = 0x140844905;
 constexpr std::uintptr_t kPieceShouldUnload    = 0x141513F24;  // NaviMapPiece__ShouldUnload_CentreOutOfRectPlus500
-constexpr std::uintptr_t kPieceUnloadArgs      = 0x1408448FA;
 constexpr std::uint8_t   kPieceUnloadArgsBytes[] = {0x48, 0x8D, 0x94, 0x24, 0x90, 0x00, 0x00, 0x00, 0x48, 0x8B, 0xCB};
-constexpr std::uintptr_t kPieceUnloadAfter     = 0x14084490A;
+constexpr platform::FunctionFact kPieceUnloadArgs{L"the piece-unload call's arguments", 0x1408448FA,
+                                                  kPieceUnloadArgsBytes};
 constexpr std::uint8_t   kPieceUnloadAfterBytes[] = {0x84, 0xC0};
+constexpr platform::FunctionFact kPieceUnloadAfter{L"after the piece-unload call", 0x14084490A, kPieceUnloadAfterBytes};
 
 // SEndNaviMapCircle__OnPaint_Pool0's pool-0 block (§8.1): the acquire (rcx renderer, dl 0; its call crosses a
 // 16-byte block, so it is installed from the game thread while that thread is outside the paint), FindOrAdd (rcx
@@ -102,15 +104,17 @@ constexpr std::uint32_t  kPoolZeroIndexBuffer  = 0x98;
 // The widget's own target recipe (SEndNaviMapCircle__Construct_CreatesRT, §8.4): NewObject in GObjTransientPkg, SRGB
 // (+0x91 bit 0), TargetGamma 1, ClearColor 0, InitCustomFormat(X, Y, PF_B8G8R8A8, linear), UpdateResourceImmediate.
 constexpr std::uintptr_t kTransientPackage = 0x149115C28;
-constexpr std::uintptr_t kNewRenderTarget  = 0x142E714EC;
 constexpr std::uint8_t   kNewRenderTargetBytes[] = {0x40, 0x53, 0xB8, 0x60, 0x00, 0x00, 0x00, 0xE8,
                                                     0x38, 0xDA, 0x23, 0xFF, 0x48, 0x2B, 0xE0, 0x48};
-constexpr std::uintptr_t kInitCustomFormat = 0x1451B2EA0;
+constexpr platform::FunctionFact kNewRenderTarget{L"the render target's NewObject", 0x142E714EC, kNewRenderTargetBytes};
 constexpr std::uint8_t   kInitCustomFormatBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x86, 0xC0,
                                                      0xEF, 0xFC, 0x48, 0x2B, 0xE0, 0x8A, 0x44, 0x24};
-constexpr std::uintptr_t kUpdateResourceImmediate = 0x1451B96CC;
+constexpr platform::FunctionFact kInitCustomFormat{L"UTextureRenderTarget2D::InitCustomFormat", 0x1451B2EA0,
+                                                   kInitCustomFormatBytes};
 constexpr std::uint8_t   kUpdateResourceImmediateBytes[] = {0xB8, 0x58, 0x00, 0x00, 0x00, 0xE8, 0x5A, 0x58,
                                                             0xEF, 0xFC, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x81};
+constexpr platform::FunctionFact kUpdateResourceImmediate{L"UTexture::UpdateResourceImmediate", 0x1451B96CC,
+                                                          kUpdateResourceImmediateBytes};
 constexpr std::uint32_t  kTargetFlags91    = 0x91;  // bit 0: SRGB
 constexpr std::uint32_t  kTargetGamma      = 0xE0;
 constexpr std::uint32_t  kTargetSizeX      = 0xE8;
@@ -606,19 +610,15 @@ bool PlaceAcquire(const platform::GameImage&) noexcept
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const bool bytes = image.BytesMatch(kHolderUpdate, kHolderUpdateBytes) &&
-                       image.BytesMatch(kNewRenderTarget, kNewRenderTargetBytes) &&
-                       image.BytesMatch(kInitCustomFormat, kInitCustomFormatBytes) &&
-                       image.BytesMatch(kUpdateResourceImmediate, kUpdateResourceImmediateBytes);
     const auto system    = image.Rebase(facts::kEndUISystem, facts::kUIAreaMap + sizeof(void*));
-    const auto holder    = image.Rebase(kHolderUpdate);
+    const auto holder    = platform::FindFunction(image, kHolderUpdate);
     const auto leader    = platform::FindFunction(image, kGetPartyLeaderType);
     const auto leaderAt  = image.Rebase(kLeaderTypeCall, 5);
-    const auto acquireAt = image.Rebase(facts::kNaviMapCircleAcquireCall, 5);
+    const auto acquireAt = platform::FindFunction(image, facts::kNaviMapCircleAcquireCall);
     const auto acquire   = platform::FindFunction(image, facts::kAcquireLayerSlot);
     const auto findAt    = image.Rebase(kFindOrAddCall, 5);
     const auto find      = platform::FindFunction(image, facts::kFindOrAddNamedLayerEntry);
-    const auto submitAt  = image.Rebase(facts::kNaviMapCircleSubmitCall, 5);
+    const auto submitAt  = platform::FindFunction(image, facts::kNaviMapCircleSubmitCall);
     const auto submit    = platform::FindFunction(image, facts::kSubmitLayerSlot);
     const auto name      = image.Rebase(kStockNameStatic, sizeof(std::uint64_t));
     const bool v1005     = platform::RunningBuild() == platform::BuildIndex::V1005;  // its consume site (above)
@@ -630,10 +630,10 @@ bool Install(const platform::GameImage& image) noexcept
     const auto vbVtable  = image.Rebase(facts::kVertexBufferVtable, sizeof(void*));
     const auto ibVtable  = image.Rebase(facts::kIndexBufferVtable, sizeof(void*));
     const auto init      = platform::FindFunction(image, facts::kBeginInitResource);
-    const auto newTarget = image.Rebase(kNewRenderTarget);
-    const auto format    = image.Rebase(kInitCustomFormat);
-    const auto update    = image.Rebase(kUpdateResourceImmediate);
-    if (!bytes || !system || !holder || !leader || !leaderAt || !acquireAt || !acquire || !findAt || !find || !submitAt ||
+    const auto newTarget = platform::FindFunction(image, kNewRenderTarget);
+    const auto format    = platform::FindFunction(image, kInitCustomFormat);
+    const auto update    = platform::FindFunction(image, kUpdateResourceImmediate);
+    if (!system || !holder || !leader || !leaderAt || !acquireAt || !acquire || !findAt || !find || !submitAt ||
         !submit || !name || !consume || !resume || !package || !circle || !vbVtable || !ibVtable || !init || !newTarget ||
         !format || !update || !platform::PinThisModule())
     {
@@ -677,8 +677,8 @@ bool Install(const platform::GameImage& image) noexcept
 
     const auto unloadAt = image.Rebase(kPieceUnloadCall, 5);
     const auto unload   = image.Rebase(kPieceShouldUnload);
-    const bool pieces   = unloadAt && unload && image.BytesMatch(kPieceUnloadArgs, kPieceUnloadArgsBytes) &&
-                        image.BytesMatch(kPieceUnloadAfter, kPieceUnloadAfterBytes) &&
+    const bool pieces   = unloadAt && unload && platform::FindFunction(image, kPieceUnloadArgs) &&
+                        platform::FindFunction(image, kPieceUnloadAfter) &&
                         g_unloadCall.Install(*unloadAt, *unload, reinterpret_cast<std::uintptr_t>(&ShouldUnload));
     if (pieces)
     {
