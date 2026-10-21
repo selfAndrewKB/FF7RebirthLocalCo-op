@@ -33,8 +33,12 @@ struct Region
 };
 constexpr std::array<Region, 5> kContext{{{0x08, 32}, {0x40, 16}, {0x78, 1}, {0xA8, 0x50}, {0x64, 1}}};
 constexpr std::uint32_t kDelegate = 0x1A0;  // the menu-core delegate, run when no widget takes an action
+static_assert(kContext[0].size + kContext[1].size + kContext[2].size + kContext[3].size + kContext[4].size ==
+              kContextSize);
 
-constexpr std::size_t kContextSize = 32 + 16 + 1 + 0x50 + 1;
+using Kind  = platform::ByteContext::Kind;
+using Range = platform::ByteContext::Range;
+
 constexpr std::size_t kCaptureAt   = 32 + 16 + 1;  // the capture map's place in the copy
 // An empty TSet as the game constructs one: all zero but its sparse array's FirstFreeIndex (+0x30), -1.
 constexpr std::size_t kCaptureFirstFree = 0x30;
@@ -82,36 +86,25 @@ bool                                   g_inside      = false;
 std::uintptr_t                         g_keyGuide    = 0;  // player 2's key guide, or 0
 int                                    g_layout      = 0;  // player 1's capture map checked: 0 not yet, 1 holds, -1 does not
 
-bool CopyContext(std::uintptr_t input, std::uint8_t* out) noexcept
+/// Player 2's copy into the context's five Exchange values (before a scope), or out of them (after it).
+void CopyBetween(platform::ByteContext& context, bool intoContext) noexcept
 {
     std::size_t at = 0;
-    for (const auto& region : kContext)
+    for (std::size_t i = 0; i < kContext.size(); ++i)
     {
-        if (!platform::CopyGuarded(out + at, reinterpret_cast<const void*>(input + region.offset), region.size))
+        if (intoContext)
         {
-            return false;
+            std::memcpy(context.Value(i).data(), g_playerTwo.data() + at, kContext[i].size);
         }
-        at += region.size;
-    }
-    return true;
-}
-
-bool WriteContext(std::uintptr_t input, const std::uint8_t* from) noexcept
-{
-    std::size_t at = 0;
-    for (const auto& region : kContext)
-    {
-        if (!platform::WriteGuarded(reinterpret_cast<void*>(input + region.offset), from + at, region.size))
+        else
         {
-            return false;
+            std::memcpy(g_playerTwo.data() + at, context.Value(i).data(), kContext[i].size);
         }
-        at += region.size;
+        at += kContext[i].size;
     }
-    return true;
 }
 
 }  // namespace
-
 
 
 bool Install(const platform::GameImage& image) noexcept
@@ -157,15 +150,16 @@ bool PlayerOneTopIsCommandMenu() noexcept
 
 FocusScope::FocusScope(void* controller) noexcept
 {
+    std::uintptr_t input = 0;
     if (g_inside || !generation::OnGameThread())
     {
         refusal_ = L"inside another focus scope, or off the game thread";
     }
-    else if (g_endUISystem == 0 || !Read(g_endUISystem + kUIInput, input_) || input_ == 0)
+    else if (g_endUISystem == 0 || !Read(g_endUISystem + kUIInput, input) || input == 0)
     {
         refusal_ = L"no input object";
     }
-    else if (g_layout == 0 && (g_layout = CaptureLayoutHolds(input_) ? 1 : -1) < 0)
+    else if (g_layout == 0 && (g_layout = CaptureLayoutHolds(input) ? 1 : -1) < 0)
     {
         platform::Log(L"focus scope: player 1's capture map does not have the TSet layout player 2's copy assumes; "
                       L"player 2's UI stays off");
@@ -174,37 +168,38 @@ FocusScope::FocusScope(void* controller) noexcept
     {
         refusal_ = L"the capture map's layout is not the one assumed";
     }
-    else if (refusal_ == nullptr &&
-             (!CopyContext(input_, savedContext_.data()) ||
-             !platform::CopyGuarded(savedDelegate_.data(), reinterpret_cast<const void*>(input_ + kDelegate),
-                                    savedDelegate_.size()) ||
-             !Read(g_endUISystem + kUICommandController, savedController_) ||
-             !Read(g_endUISystem + kUIKeyGuide, savedKeyGuide_)))
-    {
-        refusal_ = L"player 1's context could not be read";
-    }
     if (refusal_ != nullptr)
     {
         return;
     }
-    const std::array<std::uint8_t, kDelegateSize> unbound{};
-    const auto                                    slot = reinterpret_cast<void*>(g_endUISystem + kUICommandController);
-    if (!WriteContext(input_, g_playerTwo.data()) ||
-        !platform::WriteGuarded(reinterpret_cast<void*>(input_ + kDelegate), unbound.data(), unbound.size()) ||
-        !platform::WriteGuarded(slot, &controller, sizeof(controller)) ||
-        (g_keyGuide != 0 &&
-         !platform::WriteGuarded(reinterpret_cast<void*>(g_endUISystem + kUIKeyGuide), &g_keyGuide,
-                                 sizeof(g_keyGuide))))
+    // The five regions exchanged with player 2's copy; the delegate unbound (zeros), the UI system's controller slot
+    // and, when player 2 has one, its key guide slot set.
+    std::array<Range, 8> ranges{};
+    std::size_t          count = 0;
+    for (const Region& region : kContext)
     {
-        // Put back whatever was written: the bytes were just read from the same places.
-        const bool back =
-            WriteContext(input_, savedContext_.data()) &&
-            platform::WriteGuarded(reinterpret_cast<void*>(input_ + kDelegate), savedDelegate_.data(), savedDelegate_.size()) &&
-            platform::WriteGuarded(slot, &savedController_, sizeof(savedController_)) &&
-            platform::WriteGuarded(reinterpret_cast<void*>(g_endUISystem + kUIKeyGuide), &savedKeyGuide_,
-                                   sizeof(savedKeyGuide_));
-        refusal_ = back ? L"player 2's context could not be written"
-                        : L"player 2's context could not be written, NOR player 1's put back (player 1's UI focus may be wrong)";
+        ranges[count++] = {input + region.offset, region.size, Kind::Exchange};
+    }
+    ranges[count++] = {input + kDelegate, kDelegateSize, Kind::Set};
+    ranges[count++] = {g_endUISystem + kUICommandController, sizeof(controller), Kind::Set};
+    if (g_keyGuide != 0)
+    {
+        ranges[count++] = {g_endUISystem + kUIKeyGuide, sizeof(g_keyGuide), Kind::Set};
+    }
+    if (!context_.Define(std::span<const Range>(ranges.data(), count)))
+    {
+        refusal_ = L"player 2's context could not be laid out";
+        return;
+    }
+    CopyBetween(context_, true);
+    std::memcpy(context_.Value(kContext.size() + 1).data(), &controller, sizeof(controller));
+    if (g_keyGuide != 0)
+    {
+        std::memcpy(context_.Value(kContext.size() + 2).data(), &g_keyGuide, sizeof(g_keyGuide));
+    }
+    if (!context_.Open())
+    {
+        refusal_ = L"player 1's context could not be read, or player 2's not written (player 1's is in place)";
         return;
     }
     entered_ = true;
@@ -218,7 +213,8 @@ FocusScope::~FocusScope()
         return;
     }
     g_inside = false;
-    bool kept = true;
+    // Player 1's context back; what the game left in the five regions is player 2's now (the Exchange values).
+    const unsigned kept = context_.Close();
     if (abandon_)
     {
         g_playerTwo = EmptyContext();
@@ -226,19 +222,12 @@ FocusScope::~FocusScope()
     }
     else
     {
-        kept = CopyContext(input_, g_playerTwo.data());
+        CopyBetween(context_, false);
     }
-    const bool back = WriteContext(input_, savedContext_.data()) &&
-                      platform::WriteGuarded(reinterpret_cast<void*>(input_ + kDelegate), savedDelegate_.data(),
-                                             savedDelegate_.size()) &&
-                      platform::WriteGuarded(reinterpret_cast<void*>(g_endUISystem + kUICommandController),
-                                             &savedController_, sizeof(savedController_)) &&
-                      platform::WriteGuarded(reinterpret_cast<void*>(g_endUISystem + kUIKeyGuide), &savedKeyGuide_,
-                                             sizeof(savedKeyGuide_));
-    if (!kept || !back)
+    if (kept != 0)
     {
-        platform::Log(L"focus scope: FAILED to {} (player 1's UI focus may be wrong)",
-                      !back ? L"restore player 1's context" : L"keep player 2's context");
+        platform::LogDebug(L"focus scope: the game wrote the delegate or a UI system slot inside player 2's scope; the "
+                           L"game's value kept");
     }
 }
 

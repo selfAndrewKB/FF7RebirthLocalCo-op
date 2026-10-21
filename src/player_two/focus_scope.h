@@ -12,9 +12,14 @@
 // object's menu-core delegate is unbound (player 2 never runs player 1's cinema handler), and the UI
 // system's command controller slot names player 2's. Weak-pointer counts travel with the bytes, so
 // nothing is added or released. The scope is refused inside another scope or without the input
-// object. Game thread only.
+// object. One byte context (platform/byte_scope.h) holds it all: the five regions as Exchange
+// ranges, the delegate and the two UI system slots as Set ranges (a slot the game wrote inside the
+// scope keeps the game's value, noted). Game thread only.
+
+#include "platform/byte_scope.h"
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 
 namespace lss::platform {
@@ -24,6 +29,11 @@ class GameImage;
 namespace lss::player_two::focus_scope {
 
 bool Install(const platform::GameImage& image) noexcept;
+
+// Player 2's context as copied: the path, the layers, the cause, the capture map and the owner byte; and the
+// menu-core delegate's size.
+inline constexpr std::size_t kContextSize  = 32 + 16 + 1 + 0x50 + 1;
+inline constexpr std::size_t kDelegateSize = 16;
 
 /// Player 2's key guide (a second KeyGuide53 built with the game's constructor), or null: while set, a scope
 /// also names it in the UI system's key guide slot (EndUISystem[53]), so player 2's controller drives its own.
@@ -60,17 +70,11 @@ public:
     void Abandon() noexcept { abandon_ = true; }
 
 private:
-    static constexpr std::size_t kContextSize  = 32 + 16 + 1 + 0x50 + 1;  // path, layers, cause, capture map, owner byte
-    static constexpr std::size_t kDelegateSize = 16;
-
-    bool                                   entered_ = false;
-    bool                                   abandon_ = false;
-    const wchar_t*                         refusal_ = nullptr;
-    std::uintptr_t                         input_   = 0;
-    std::uintptr_t                         savedController_ = 0;
-    std::uintptr_t                         savedKeyGuide_   = 0;
-    std::array<std::uint8_t, kContextSize>  savedContext_{};   // player 1's
-    std::array<std::uint8_t, kDelegateSize> savedDelegate_{};
+    // The five regions, the delegate, the controller slot and the key guide slot.
+    platform::ByteStore<8, kContextSize + kDelegateSize + 2 * sizeof(std::uintptr_t)> context_;
+    bool                                                                              entered_ = false;
+    bool                                                                              abandon_ = false;
+    const wchar_t*                                                                    refusal_ = nullptr;
 };
 
 }  // namespace lss::player_two::focus_scope
