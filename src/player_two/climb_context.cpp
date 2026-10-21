@@ -44,22 +44,20 @@ constexpr std::uint8_t kCameraGetterBytes[]  = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x
                                                 0x24, 0x10, 0x57, 0xB8, 0x80, 0x00, 0x00, 0x00};
 constexpr std::uint8_t kKeyValueBytes[]      = {0xB8, 0x38, 0x00, 0x00, 0x00};
 constexpr std::uint8_t kPressedBytes[]       = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x40, 0x00, 0x00, 0x00};
-constexpr std::uint8_t kKeyCopyBytes[]       = {0x48, 0x8B, 0x02, 0x48, 0x89, 0x01, 0x48, 0x8B,
-                                                0x42, 0x08, 0x48, 0x89, 0x41, 0x08, 0x48, 0x8B};
 constexpr std::size_t  kFirst                = 5;  // each redirected entry's first instruction
 
 const platform::FunctionFact kCameraGetter{L"GetEndPlayerCameraManager", 0x140A60C50, kCameraGetterBytes};
 const platform::FunctionFact kKeyValue{L"SquareInput__GetAggregatedKeyValue", 0x1407C8310, kKeyValueBytes};
 const platform::FunctionFact kPressedImpl{L"SquareInput_ActionTableF8_IsPressed_Impl", 0x1408062E0, kPressedBytes};
 const platform::FunctionFact kPressedGlobal{L"SquareInput_IsActionPressed_Global", 0x14080619C, kPressedBytes};
-const platform::FunctionFact kKeyCopy{L"InputKey24_CopyAddRef", 0x14078C2F4, kKeyCopyBytes};
+using facts::kInputKeyCopy;
 constexpr std::uintptr_t     kHoldSelectCall = 0x1416368D5;  // ClimbingMove's Tick: call TickHoldSelect
 constexpr std::uintptr_t     kHoldSelect     = 0x141635E70;  // ClimbingMove_TickHoldSelect_PrimaryPCMBasis
 
 // The hold-select's three actions (FKey24 statics: the FName first).
-constexpr std::uintptr_t   kActionKeys[]    = {0x1491E45E0, 0x1491E4508, 0x1491E4A30};
+constexpr std::uintptr_t   kActionKeys[]    = {facts::kKeyDodge, 0x1491E4508, 0x1491E4A30};
 constexpr std::size_t      kActionCount     = std::size(kActionKeys);
-constexpr std::size_t      kKeySize         = 24;
+using facts::kKeySize;
 
 constexpr std::uint32_t kMoveCharacter = 0x450;   // the move's character, an FWeakObjectPtr
 constexpr std::uint32_t kKeyFields     = 0x1120;  // the input owner's fields the key-value getter reads
@@ -607,7 +605,7 @@ void Install(const platform::GameImage& image) noexcept
         return;
     }
     const auto pressedGlobal = platform::FindFunction(image, kPressedGlobal);
-    const auto keyCopy       = platform::FindFunction(image, kKeyCopy);
+    const auto keyCopy       = platform::FindFunction(image, kInputKeyCopy);
     bool       keys          = pressedGlobal && keyCopy;
     for (std::size_t i = 0; keys && i < kActionCount; ++i)
     {

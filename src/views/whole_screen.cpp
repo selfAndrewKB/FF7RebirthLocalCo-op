@@ -1,7 +1,9 @@
 #include "views/whole_screen.h"
 
+#include "facts/engine.h"
 #include "facts/party.h"
 #include "facts/world.h"
+#include "platform/verified_code.h"
 #include "views/whole_screen_rules.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -69,9 +71,6 @@ constexpr std::uint32_t  kCarriageShown  = 0x20;
 constexpr std::uint32_t  kWidgetState    = 0x3D8;
 constexpr std::uint32_t  kWidgetZOrder   = 0x2A8;  // -1 once the game's RemoveFromParent took it off its overlay
 constexpr std::uint8_t   kRaceMenuDone   = 5;
-constexpr std::uintptr_t kWeakGet        = 0x141905998;
-constexpr std::uint8_t   kWeakGetBytes[] = {0x44, 0x8B, 0x49, 0x04, 0x45, 0x33, 0xC0, 0x45,
-                                            0x85, 0xC9, 0x74, 0x4F, 0x8B, 0x01, 0x85, 0xC0};
 
 // On/off 153 ShowColosseumMenu, held by a VR or colosseum session from Begin to End (RE-p2-minigames.md §7.2). For the
 // log only (E4, E6): 92 SoundCallEventMiniGameMenuInOut (set by no native code: Blueprint or script data), and Chadley's
@@ -497,8 +496,8 @@ bool InstallWholeScreen(const platform::GameImage& image) noexcept
         g_pauseClosed = reinterpret_cast<PauseClosedFn>(*pauseClosed);
         g_uiSlot27    = *slot27;
     }
-    const auto weakGet = image.Rebase(kWeakGet);
-    if (g_weakIsValid != nullptr && weakGet && image.BytesMatch(kWeakGet, kWeakGetBytes))
+    const auto weakGet = platform::FindFunction(image, facts::kWeakObjectGet);
+    if (g_weakIsValid != nullptr && weakGet)
     {
         g_weakGet = reinterpret_cast<WeakGetFn>(*weakGet);
         const std::array<std::uintptr_t, 7> statics{kUiSlot54, kUiSlot56, kUiSlot57, kUiSlot68,

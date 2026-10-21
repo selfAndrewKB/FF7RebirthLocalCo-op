@@ -1,5 +1,6 @@
 #include "player_two/ffb_manager_two.h"
 
+#include "facts/engine.h"
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
 #include "platform/image.h"
@@ -24,8 +25,6 @@ namespace {
 
 // 1.004 addresses; 1.005 through replaced-ffb-manager.json (every fact read from both exes, 2026-10-12).
 constexpr std::uintptr_t kGlobal       = 0x1490FEE18;  // g_EndFFBMgr: the singleton EndFFBMgr_Get makes and returns
-constexpr std::uintptr_t kMalloc       = 0x14083F3D8;  // FMemory_Malloc(size), as the getter allocates the manager
-constexpr std::uint8_t   kMallocBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
 constexpr std::uintptr_t kCtor         = 0x1437DBAE0;  // EndFFBMgr_Ctor(memory) -> memory
 constexpr std::uint8_t   kCtorBytes[]  = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
 // The component constructor's only call, in the AEndPlayerController constructor. The manager's constructor loads its
@@ -448,7 +447,7 @@ void Install(const platform::GameImage& image) noexcept
 {
     const auto global    = image.Rebase(kGlobal, sizeof(void*));
     g_global             = global ? reinterpret_cast<void**>(*global) : nullptr;
-    const bool functions = g_global != nullptr && Find(image, kMalloc, kMallocBytes, g_malloc) &&
+    const bool functions = g_global != nullptr && Find(image, facts::kMalloc.address, facts::kMallocBytes, g_malloc) &&
                            Find(image, kCtor, kCtorBytes, g_ctor) && Find(image, kTick, kTickBytes, g_tick) &&
                            Find(image, kRequest, kRequestBytes, g_request) &&
                            Find(image, kContains, kContainsBytes, g_contains) &&

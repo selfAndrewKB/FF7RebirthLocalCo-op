@@ -1,5 +1,6 @@
 #include "renderer/submission_census.h"
 
+#include "facts/engine.h"
 #include "platform/build_value.h"
 #include "platform/code_memory.h"
 #include "platform/guarded.h"
@@ -41,8 +42,8 @@ constexpr Addr kSubmitSlot{0x14697C560, 0x1468018F8};  // FD3D12CommandListManag
 constexpr Addr kSubmitFn{0x140D00E88, 0x140AE0798};    // what it holds
 constexpr Addr kSignalSlot{0x14697C0B0, 0x1468013C8};  // context vtable +0x108: signal a GPU fence, no flush
 constexpr Addr kSignalFn{0x140A4B804, 0x140ADFC1C};
-constexpr Addr kHintVtable{0x146602920, 0x145AD4AB0};  // FRHICommandSubmitCommandsHint
-constexpr Addr kHintExecute{0x140D00988, 0x140AE3E90};
+constexpr Addr kHintVtable{facts::kSubmitCommandsHintVTable, 0x145AD4AB0};  // FRHICommandSubmitCommandsHint
+constexpr Addr kHintExecute{facts::kSubmitCommandsHintExecute, 0x140AE3E90};
 constexpr Addr kBatchingMode{0x1470B9E34, 0x146EECFAC};       // D3D12.CommandListBatchingMode (int)
 constexpr Addr kNiagaraHint{0x1492AF9C4, 0x1490E8C48};        // fx.NiagaraGpuSubmitCommandHint (int)
 constexpr platform::PerBuild<std::uint32_t> kPendingNum{0xD8, 0x88};  // device: PendingCommandLists.Num

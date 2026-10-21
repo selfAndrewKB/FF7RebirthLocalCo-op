@@ -7,6 +7,7 @@
 #include <Unreal/UObjectGlobals.hpp>
 
 #include "facts/controller.h"
+#include "facts/engine.h"
 #include "platform/entry_redirect.h"
 #include "platform/every.h"
 #include "platform/guarded.h"
@@ -40,8 +41,8 @@ constexpr std::uint8_t   kNoteLastDeviceBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08,
 constexpr std::size_t    kNoteLastDeviceFirst   = 5;
 using facts::kSquareInputGlobal;
 constexpr std::uint32_t  kOwnerPad      = 0x74;         // i32: the last XInput pad
-constexpr std::uintptr_t kPlatformApp   = 0x149247570;  // pointer global: the platform application
-constexpr std::uint32_t  kAppDeviceCode = 0x1E0;        // i32: the device code PC1's force feedback goes to
+using facts::kPlatformApplication;
+using facts::kPlatformAppDeviceCode;
 // AActor::PrimaryActorTick at +0x28; its Prerequisites TArray at +0x38, Num at +0x40 (stock 4.26 layout).
 constexpr std::uint32_t kTickPrerequisites = 0x40;
 
@@ -128,7 +129,7 @@ void Order(void* one, void* two) noexcept
 /// Player 1's device code and last XInput pad on change, and the skips once a minute (while player 2 is in).
 void LogDevice() noexcept
 {
-    const auto code = ReadField<std::int32_t>(Pointee(g_app), kAppDeviceCode);
+    const auto code = ReadField<std::int32_t>(Pointee(g_app), kPlatformAppDeviceCode);
     const auto pad  = ReadField<std::int32_t>(Pointee(g_owner), kOwnerPad);
     try
     {
@@ -164,7 +165,7 @@ void LogDevice() noexcept
 void Install(const platform::GameImage& image) noexcept
 {
     const auto owner = image.Rebase(kSquareInputGlobal, sizeof(void*));
-    const auto app   = image.Rebase(kPlatformApp, sizeof(void*));
+    const auto app   = image.Rebase(kPlatformApplication, sizeof(void*));
     const auto note  = image.Rebase(kNoteLastDevice);
     g_owner          = owner ? *owner : 0;
     g_app            = app ? *app : 0;

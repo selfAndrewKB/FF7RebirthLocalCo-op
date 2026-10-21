@@ -1,5 +1,6 @@
 #include "player_two/rumble_watch.h"
 
+#include "facts/engine.h"
 #include "platform/every.h"
 #include "platform/frame_watch.h"
 #include "platform/guarded.h"
@@ -33,8 +34,8 @@ constexpr std::uintptr_t kPadSlot     = 0x146959478;
 constexpr std::uintptr_t kPadSet      = 0x1407BF308;
 constexpr std::uint8_t   kPadSetBytes[] = {0x40, 0x53, 0x55, 0x56, 0x57, 0x41, 0x56, 0xB8, 0x60, 0x00, 0x00, 0x00};
 // The platform application (pointer global); the send's interface is app+0x80, so the code is at interface+0x160.
-constexpr std::uintptr_t kPlatformApp     = 0x149247570;
-constexpr std::uint32_t  kAppDeviceCode   = 0x1E0;  // i32: the last active device (XInput pad k = -2-3k)
+using facts::kPlatformApplication;
+using facts::kPlatformAppDeviceCode;
 // APlayerController (stock 4.26 fields, this build's offsets).
 constexpr std::uint32_t kPlayerInput   = 0x350;
 constexpr std::uint32_t kEffectsNum    = 0x360;  // ActiveForceFeedbackEffects.Num
@@ -205,7 +206,7 @@ void LogStatus() noexcept
                       g_counts.padWrites,
                       offThread != 0 ? std::format(L", {} call(s) off the game thread", offThread)
                                               : std::wstring(),
-                      ReadField<std::int32_t>(app, kAppDeviceCode),
+                      ReadField<std::int32_t>(app, kPlatformAppDeviceCode),
                       (ReadField<std::uint8_t>(one, kFlags) & kFeedbackOn) != 0 ? L"on" : L"OFF",
                       ReadField<float>(one, kFeedbackScale), EffectCount(one),
                       (ReadField<std::uint8_t>(two, kFlags) & kFeedbackOn) != 0 ? L"on" : L"OFF",
@@ -257,7 +258,7 @@ std::uint64_t Send(void* controller, void* input, std::int32_t id) noexcept
                     : controller == generation::PlayerTwoController() ? 2
                                                                       : 0;
     event.id      = id;
-    event.code    = ReadField<std::int32_t>(input, kAppDeviceCode - 0x80);
+    event.code    = ReadField<std::int32_t>(input, kPlatformAppDeviceCode - 0x80);
     event.effects = EffectCount(controller);
     event.on      = (ReadField<std::uint8_t>(controller, kFlags) & kFeedbackOn) != 0;
     event.values  = ValuesAt(static_cast<const std::uint8_t*>(controller) + kValues);
@@ -299,7 +300,7 @@ void Install(const platform::GameImage& image) noexcept
     const auto send     = image.Rebase(kSend);
     const auto padSlot  = image.Rebase(kPadSlot, sizeof(void*));
     const auto padSet   = image.Rebase(kPadSet);
-    const auto app      = image.Rebase(kPlatformApp, sizeof(void*));
+    const auto app      = image.Rebase(kPlatformApplication, sizeof(void*));
     g_app               = app ? *app : 0;
     const bool sends = sendSlot && send && image.BytesMatch(kSend, kSendBytes) &&
                        g_send.Replace(*sendSlot, *send, reinterpret_cast<std::uintptr_t>(&Send));

@@ -241,6 +241,15 @@ inline constexpr FunctionFact kWeakObjectAssign{L"FWeakObjectPtr assignment", 0x
 // Memory and smart pointers (stock UE4)
 // ---------------------------------------------------------------------------------------------
 
+/// FMemory::Malloc(size, alignment) and FMemory::Free(block): the game's allocator (GMalloc behind them), for memory
+/// the game itself frees or that must be the game's (an array handed to a game function).
+inline constexpr std::uint8_t kMallocBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20,
+                                                0x00, 0x00, 0x00, 0xE8, 0x48, 0xFB, 0x86, 0x01};
+inline constexpr FunctionFact kMalloc{L"FMemory::Malloc", 0x14083F3D8, kMallocBytes};
+inline constexpr std::uint8_t kFreeBytes[] = {0x48, 0x85, 0xC9, 0x0F, 0x84, 0xA0, 0x03, 0x00, 0x00, 0x57, 0xB8, 0x50,
+                                              0x00, 0x00, 0x00, 0xE8, 0x4C, 0xF6, 0x90, 0x01, 0x48, 0x2B, 0xE0, 0x4C};
+inline constexpr FunctionFact kFree{L"FMemory::Free", 0x14079F8D0, kFreeBytes};
+
 /// The engine's array-data free (IDA: ME_FreeResourceBindingArray): `mov rcx,[rcx]; if (rcx) FMemory::Free(rcx)`
 /// for the TArray at rcx. hud/minimap_labels calls it; player_two/anim_two_views redirects a call to it.
 inline constexpr std::uint8_t kFreeArrayDataBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x36, 0xF7,
@@ -263,6 +272,20 @@ inline constexpr std::uint8_t kReleaseWeakReferenceBytes[] = {0xB8, 0x28, 0x00, 
                                                               0xF0, 0x0F, 0xC1, 0x41, 0x0C};
 inline constexpr FunctionFact kReleaseWeakReference{L"TReferenceControllerTS::ReleaseWeakReference", 0x140887B00,
                                                     kReleaseWeakReferenceBytes};
+
+// ---------------------------------------------------------------------------------------------
+// The platform application and the RHI (stock UE4)
+// ---------------------------------------------------------------------------------------------
+
+/// The platform application (a pointer global): +0x1E0 is the i32 device code of the last active input device (an
+/// XInput pad k reads -2-3k), which force feedback goes to; its send interface is at +0x80.
+inline constexpr std::uintptr_t kPlatformApplication   = 0x149247570;
+inline constexpr std::uint32_t  kPlatformAppDeviceCode = 0x1E0;
+
+/// FRHICommandSubmitCommandsHint: its vtable (data) and the Execute in slot 0 (1.005: 0x145AD4AB0, 0x140AE3E90;
+/// renderer/submit_hints, renderer/submission_census).
+inline constexpr std::uintptr_t kSubmitCommandsHintVTable  = 0x146602920;
+inline constexpr std::uintptr_t kSubmitCommandsHintExecute = 0x140D00988;
 
 // ---------------------------------------------------------------------------------------------
 // The startup check list

@@ -139,12 +139,8 @@ constexpr std::uint32_t kEnteredFlag = 0x2A1;
 
 // The game's allocator (stock FMemory), for the overlap array handed to the diff: the diff may empty it (TArray::Empty,
 // which frees through GMalloc), so it must be the game's memory. FieldTick frees its own copy with the same Free.
-constexpr std::uint8_t kMallocBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20,
-                                         0x00, 0x00, 0x00, 0xE8, 0x48, 0xFB, 0x86, 0x01};  // as command_menu_two
-constexpr std::uint8_t kFreeBytes[]   = {0x48, 0x85, 0xC9, 0x0F, 0x84, 0xA0, 0x03, 0x00, 0x00, 0x57, 0xB8, 0x50,
-                                         0x00, 0x00, 0x00, 0xE8, 0x4C, 0xF6, 0x90, 0x01, 0x48, 0x2B, 0xE0, 0x4C};
-constexpr platform::FunctionFact kMalloc{L"FMemory_Malloc", 0x14083F3D8, kMallocBytes};
-constexpr platform::FunctionFact kFree{L"FMemory_Free", 0x14079F8D0, kFreeBytes};
+using facts::kFree;
+using facts::kMalloc;
 using MallocFn = void* (*)(std::size_t size, std::uint32_t alignment);
 using FreeFn   = void (*)(void* block);
 

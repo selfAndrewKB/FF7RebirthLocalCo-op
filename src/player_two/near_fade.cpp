@@ -1,6 +1,7 @@
 #include "player_two/near_fade.h"
 
 #include "dev/dev_switch.h"
+#include "facts/engine.h"
 #include "platform/call_redirect.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -24,7 +25,6 @@ constexpr std::uintptr_t kKick       = 0x1418969BC;
 // bUpdateJointsFromAnimation bit), so player 2's character between player 1's camera and player 1 was faded. The hit
 // actor's weak pointer is resolved here; a null answer makes the game skip the hit.
 constexpr std::uintptr_t kHitResolveCall = 0x140A54DCB;  // NearFade_BuildCandidateSet: call FWeakObjectPtr::Get(hit actor)
-constexpr std::uintptr_t kWeakGet        = 0x141905998;
 constexpr std::uint8_t   kAttachParentBytes[] = {0x48, 0x8B, 0x81, 0x38, 0x01, 0x00, 0x00, 0x48, 0x85, 0xC0, 0x74, 0x0C};
 const platform::FunctionFact kAttachParent{L"Pawn_RootAttachParent_FieldA0", 0x1408F18AC, kAttachParentBytes};
 // The overlap fade (§9): climbing walls, spider walls and one-shot moves turn on a per-character tick that fades the
@@ -194,7 +194,7 @@ void Install(const platform::GameImage& image) noexcept
     const bool kick   = g_kickCall.InstallResearch(image, kKickCall, kKick, reinterpret_cast<std::uintptr_t>(&Kick));
     const auto parent = platform::FindFunction(image, kAttachParent);
     g_attachParent    = parent ? reinterpret_cast<AttachParentFn>(*parent) : nullptr;
-    const bool hits   = g_hitCall.InstallResearch(image, kHitResolveCall, kWeakGet,
+    const bool hits   = g_hitCall.InstallResearch(image, kHitResolveCall, facts::kWeakObjectGet.address,
                                                   reinterpret_cast<std::uintptr_t>(&HitActor));
     const bool overlap = g_overlapCall.InstallResearch(image, kOverlapPlayerCall, kIsPlayerChar,
                                                        reinterpret_cast<std::uintptr_t>(&OverlapPlayerTest));

@@ -26,8 +26,6 @@ namespace {
 constexpr std::uintptr_t kInstanceOne = 0x149349880;  // the game's instance (EndUISystem+0x1A0), a pointer
 constexpr std::size_t    kInstanceSize = 0x160;
 
-constexpr std::uintptr_t kMalloc           = 0x14083F3D8;  // FMemory_Malloc(rcx = size); never reads rdx
-constexpr std::uint8_t   kMallocPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
 constexpr std::uintptr_t kCtor             = 0x143A0D944;  // AreaMapIconMgr__Ctor(memory), returns it
 constexpr std::uint8_t   kCtorPrologue[]   = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00};
 constexpr std::uintptr_t kFrameUpdate      = 0x1409F72B8;  // AreaMapIcon_FrameUpdate(instance, xmm1 = DeltaTime)
@@ -505,12 +503,12 @@ void LogIfChanged(std::uintptr_t one) noexcept
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const bool prologues = image.BytesMatch(kMalloc, kMallocPrologue) && image.BytesMatch(kCtor, kCtorPrologue) &&
+    const bool prologues = image.BytesMatch(kCtor, kCtorPrologue) &&
                            image.BytesMatch(kFrameUpdate, kFrameUpdatePrologue) &&
                            image.BytesMatch(kClearAll, kClearAllPrologue) &&
                            image.BytesMatch(kSetVisibility, kSetVisibilityPrologue);
     const auto instance   = image.Rebase(kInstanceOne, sizeof(void*));
-    const auto allocate   = image.Rebase(kMalloc);
+    const auto allocate   = platform::FindFunction(image, facts::kMalloc);
     const auto ctor       = image.Rebase(kCtor);
     const auto update     = image.Rebase(kFrameUpdate);
     const auto clear      = image.Rebase(kClearAll);

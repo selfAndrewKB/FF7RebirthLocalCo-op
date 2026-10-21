@@ -13,6 +13,7 @@
 
 #include "platform/verified_code.h"
 
+#include <cstddef>
 #include <cstdint>
 
 namespace lss::facts {
@@ -69,7 +70,18 @@ inline constexpr SlotFact kLeaderActionTick{
     L"the leader-action component's tick slot (+0x428)", 0x145D6C490,
     {L"EndPlayerLeaderActionParamComponent::Tick_Vt428", 0x14125C16C, kLeaderActionTickBytes}};
 
-// Square's input object
+// Square's input object and its keys
+/// The action keys (FKey24 statics, 24 bytes: the FName first) the routes compare an event's key name with
+/// (RE-p2-battle-input.md).
+inline constexpr std::size_t    kKeySize          = 24;
+inline constexpr std::uintptr_t kKeyAttack        = 0x1491E44D8;
+inline constexpr std::uintptr_t kKeyUniqueAbility = 0x1491E4520;
+inline constexpr std::uintptr_t kKeyGuard         = 0x1491E4598;
+inline constexpr std::uintptr_t kKeyDodge         = 0x1491E45E0;
+/// InputKey24_CopyAddRef(out, key): copies a key, taking a reference on its name.
+inline constexpr std::uint8_t kInputKeyCopyBytes[] = {0x48, 0x8B, 0x02, 0x48, 0x89, 0x01, 0x48, 0x8B,
+                                                      0x42, 0x08, 0x48, 0x89, 0x41, 0x08, 0x48, 0x8B};
+inline constexpr FunctionFact kInputKeyCopy{L"InputKey24_CopyAddRef", 0x14078C2F4, kInputKeyCopyBytes};
 /// Square's input object (its stick fields and per-pad banks), and the byte that makes the merge
 /// read DirectInput alone.
 inline constexpr std::uintptr_t kSquareInputGlobal     = 0x1493496F0;

@@ -48,11 +48,8 @@ constexpr std::uintptr_t kAddOrUpdate   = 0x141302E2C;  // VibrationList3B0_AddO
 constexpr std::uintptr_t kListTick      = 0x14125D324;  // Vibration_TickGlobalList_ApplyToPrimaryPC(dt xmm0)
 constexpr std::uintptr_t kBuildSet      = 0x14125CFD0;  // Vibration_TickList_BuildChannelSet(list, dt xmm1, set*) -> changed
 constexpr std::uintptr_t kApply         = 0x1408A1688;  // PrimaryPC_ApplyVibrationChannels758(list, set*): on PM+0x140
-constexpr std::uintptr_t kFreeArray     = 0x14079F8D0;  // the set's data, freed as the list tick frees it
 constexpr std::uintptr_t kListCtor      = 0x143727368;  // VibrationList_Ctor (6 channel slots in 1.004, 7 in 1.005)
-constexpr std::uintptr_t kMalloc        = 0x14083F3D8;  // FMemory_Malloc(size)
 constexpr std::uint8_t   kCtorBytes[]   = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
-constexpr std::uint8_t   kMallocBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
 constexpr std::uintptr_t kListLock      = 0x14881C428;  // the game's CRITICAL_SECTION around adds and the set build
 constexpr std::uintptr_t kRows          = 0x14125D474;  // LeaderActionComp_PerFrameB_RowsAndVibration(comp, xmm1, xmm2)
 constexpr std::uint8_t   kRowsBytes[]   = {0x48, 0x89, 0x5C, 0x24, 0x08};
@@ -1063,9 +1060,11 @@ void Install(const platform::GameImage& image) noexcept
     g_lock          = lock ? reinterpret_cast<CRITICAL_SECTION*>(*lock) : nullptr;
     const bool functions = g_lock != nullptr && Find(image, kAddOrUpdate, g_addOrUpdate) &&
                            Find(image, kBuildSet, g_buildSet) && Find(image, kApply, g_apply) &&
-                           Find(image, kFreeArray, g_free) && image.BytesMatch(kListCtor, kCtorBytes) &&
-                           Find(image, kListCtor, g_ctor) && image.BytesMatch(kMalloc, kMallocBytes) &&
-                           Find(image, kMalloc, g_malloc);
+                           image.BytesMatch(facts::kFree.address, facts::kFreeBytes) &&
+                           Find(image, facts::kFree.address, g_free) && image.BytesMatch(kListCtor, kCtorBytes) &&
+                           Find(image, kListCtor, g_ctor) &&
+                           image.BytesMatch(facts::kMalloc.address, facts::kMallocBytes) &&
+                           Find(image, facts::kMalloc.address, g_malloc);
     // The add's entry: its first instruction crosses a block in 1.004, so the second is replaced there.
     bool                                add = false;
     const std::span<const std::uint8_t> bytes(kPlayNamedBytes);

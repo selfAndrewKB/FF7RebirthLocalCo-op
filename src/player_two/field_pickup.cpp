@@ -1,6 +1,7 @@
 #include "player_two/field_pickup.h"
 
 #include "facts/command_controller.h"
+#include "facts/controller.h"
 #include "facts/hud.h"
 #include "facts/world.h"
 #include "platform/call_redirect.h"
@@ -150,8 +151,6 @@ constexpr std::uint8_t kUIEntryBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x
                                           0x42, 0x01, 0x48, 0x2B, 0xE0, 0xE8, 0xAA, 0xCD};
 constexpr std::uint8_t kIsHeldBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x40,
                                          0x00, 0x00, 0x00, 0xE8, 0x44, 0x8B, 0x8A, 0x01};
-constexpr std::uint8_t kCopyKeyBytes[] = {0x48, 0x8B, 0x02, 0x48, 0x89, 0x01, 0x48, 0x8B,
-                                          0x42, 0x08, 0x48, 0x89, 0x41, 0x08, 0x48, 0x8B};
 constexpr std::uint8_t kPollSlot0Bytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x30,
                                             0x00, 0x00, 0x00, 0xE8, 0x60, 0x52, 0xC0, 0x00};
 constexpr std::uint8_t kPoll8Bytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48,
@@ -170,7 +169,7 @@ constexpr platform::FunctionFact kTestFlag{L"GameFlags3A8_TestBit", 0x140A2E488,
 constexpr platform::FunctionFact kModeClass{L"Root1B8_GetModeClass_2BlocksFieldAction", 0x1407BDB64, kModeClassBytes};
 constexpr platform::FunctionFact kUIEntry{L"EndUI23_IsEntry34ValuePositive", 0x140C89B84, kUIEntryBytes};
 constexpr platform::FunctionFact kIsHeld{L"SquareInput_IsActionHeld_Global", 0x1408063DC, kIsHeldBytes};
-constexpr platform::FunctionFact kCopyKey{L"InputKey24_CopyAddRef", 0x14078C2F4, kCopyKeyBytes};
+using facts::kInputKeyCopy;
 constexpr platform::FunctionFact kPollSlot0{L"FieldActionMgr_PollSlotButtons_Slot0Only", 0x1414A9CC0, kPollSlot0Bytes};
 constexpr platform::FunctionFact kPoll8{L"FieldActionMgr_PollSlotButtons8", 0x1414A9D7C, kPoll8Bytes};
 constexpr platform::FunctionFact kLatch{L"FieldActionMgr_LatchSlotButtons", 0x1414FA05C, kLatchBytes};
@@ -1252,7 +1251,7 @@ void Install(const platform::GameImage& image) noexcept
     g_modeClass  = reinterpret_cast<ModeClassFn>(find(kModeClass));
     g_uiEntry    = reinterpret_cast<UIEntryFn>(find(kUIEntry));
     g_isHeld     = reinterpret_cast<IsHeldFn>(find(kIsHeld));
-    g_copyKey    = reinterpret_cast<CopyKeyFn>(find(kCopyKey));
+    g_copyKey    = reinterpret_cast<CopyKeyFn>(find(kInputKeyCopy));
     g_pollSlot0  = reinterpret_cast<PollFn>(find(kPollSlot0));
     g_poll8      = reinterpret_cast<PollFn>(find(kPoll8));
     g_latch      = reinterpret_cast<PollFn>(find(kLatch));

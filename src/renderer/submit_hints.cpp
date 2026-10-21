@@ -1,5 +1,6 @@
 #include "renderer/submit_hints.h"
 
+#include "facts/engine.h"
 #include "platform/rip_relative.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -18,11 +19,11 @@ namespace lss::renderer {
 namespace {
 
 // `lea rax,[FRHICommandSubmitCommandsHint vtable]; mov [rcx],rax` where the parallel-pass dispatch builds its hint node.
-// Research build; 1.005 0x141018B78. The opcode is checked, and the displacement must reach kHintVtable.
+// Research build; 1.005 0x141018B78. The opcode is checked, and the displacement must reach kSubmitCommandsHintVTable.
 constexpr std::uintptr_t kHintNodeLea  = 0x14190784C;
 constexpr std::uint8_t   kLeaOpcode[]  = {0x48, 0x8D, 0x05};
-constexpr std::uintptr_t kHintVtable   = 0x146602920;  // 1.005 0x145AD4AB0
-constexpr std::uintptr_t kHintExecute  = 0x140D00988;  // its slot 0; 1.005 0x140AE3E90
+using facts::kSubmitCommandsHintVTable;
+using facts::kSubmitCommandsHintExecute;
 constexpr std::uintptr_t kNullsub      = 0x14076B370;  // slot 0 of the vtable 8 bytes on; 1.005 0x140743B50
 constexpr std::uint8_t   kRetZero[]    = {0xC2, 0x00, 0x00};
 constexpr std::uint8_t   kVtableStep   = 8;
@@ -41,8 +42,8 @@ bool                       g_skipping = false;
 std::optional<Site> Locate(const platform::GameImage& image) noexcept
 {
     const auto lea     = image.Rebase(kHintNodeLea, sizeof(kLeaOpcode) + 4);
-    const auto vtable  = image.Rebase(kHintVtable, 2 * sizeof(void*));
-    const auto execute = image.Rebase(kHintExecute);
+    const auto vtable  = image.Rebase(kSubmitCommandsHintVTable, 2 * sizeof(void*));
+    const auto execute = image.Rebase(kSubmitCommandsHintExecute);
     const auto nullsub = image.Rebase(kNullsub, sizeof(kRetZero));
     if (!lea || !vtable || !execute || !nullsub || !image.BytesMatch(kHintNodeLea, kLeaOpcode) ||
         !image.BytesMatch(kNullsub, kRetZero))

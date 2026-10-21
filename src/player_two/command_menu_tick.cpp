@@ -1,6 +1,7 @@
 #include "player_two/command_menu_tick.h"
 
 #include "facts/command_controller.h"
+#include "facts/controller.h"
 #include "facts/hud.h"
 #include "facts/party.h"
 #include "platform/build_value.h"
@@ -150,7 +151,8 @@ enum Action : std::size_t
     kDodge,
     kActions
 };
-constexpr std::array<std::uintptr_t, kActions> kActionKeys{0x1491E44D8, 0x1491E4520, 0x1491E4598, 0x1491E45E0};
+constexpr std::array<std::uintptr_t, kActions> kActionKeys{facts::kKeyAttack, facts::kKeyUniqueAbility,
+                                                           facts::kKeyGuard, facts::kKeyDodge};
 
 // The UI system's slots: the input object [2], the command controller [23]. Two values player 2's tick
 // also writes need nothing here: EndUISystem[50]+0x20/+0x2C have no reader in the game, and the input
