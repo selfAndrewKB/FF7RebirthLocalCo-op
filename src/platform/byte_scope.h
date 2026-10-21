@@ -74,6 +74,10 @@ public:
     /// Puts the live bytes back. Returns the number of Set and Keep ranges the game had changed inside (a Set
     /// range is left as the game wrote it, a Keep range put back); 0 when everything was still the scope's own.
     unsigned Close() noexcept;
+    /// A read or write of the last Close faulted (a range the call left unreadable): what it holds is unknown.
+    bool Faulted() const noexcept { return faulted_; }
+    /// Closes without touching the live bytes: the slot is gone or no longer this scope's to put back.
+    void Forget() noexcept { open_ = false; }
 
 protected:
     ByteContext() noexcept = default;
@@ -89,6 +93,7 @@ private:
     std::size_t             count_ = 0;
     std::size_t             bytes_ = 0;  // of every range together
     bool                    open_  = false;
+    bool                    faulted_ = false;
 };
 
 /// A context with room for `Ranges` ranges of `Bytes` bytes together.

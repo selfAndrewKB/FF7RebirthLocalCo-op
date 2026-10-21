@@ -229,6 +229,11 @@ FocusScope::~FocusScope()
         platform::LogDebug(L"focus scope: the game wrote the delegate or a UI system slot inside player 2's scope; the "
                            L"game's value kept");
     }
+    if (context_.Faulted())
+    {
+        platform::Log(L"focus scope: FAILED to put player 1's context back or keep player 2's (player 1's UI focus "
+                      L"may be wrong)");
+    }
 }
 
 }  // namespace lss::player_two::focus_scope

@@ -134,6 +134,7 @@ unsigned ByteContext::Close() noexcept
     }
     unsigned    changed = 0;
     std::size_t at      = bytes_;
+    faulted_            = false;
     for (std::size_t i = count_; i-- > 0;)
     {
         const Range& range = ranges_[i];
@@ -143,8 +144,8 @@ unsigned ByteContext::Close() noexcept
         auto* saved = saved_.data() + at;
         if (range.kind == Kind::Exchange)
         {
-            CopyGuarded(value, live, range.size);  // what the game left there is the player's now
-            WriteGuarded(live, saved, range.size);
+            faulted_ |= !CopyGuarded(value, live, range.size);  // what the game left there is the player's now
+            faulted_ |= !WriteGuarded(live, saved, range.size);
             continue;
         }
         std::uint8_t now[64];
@@ -153,8 +154,13 @@ unsigned ByteContext::Close() noexcept
         {
             const std::size_t part = range.size - done < sizeof(now) ? range.size - done : sizeof(now);
             const auto*       was  = range.kind == Kind::Set ? value + done : saved + done;
-            if (!CopyGuarded(now, static_cast<const std::uint8_t*>(live) + done, part) ||
-                std::memcmp(now, was, part) != 0)
+            if (!CopyGuarded(now, static_cast<const std::uint8_t*>(live) + done, part))
+            {
+                faulted_ = true;
+                same     = false;
+                break;
+            }
+            if (std::memcmp(now, was, part) != 0)
             {
                 same = false;
                 break;
@@ -164,14 +170,14 @@ unsigned ByteContext::Close() noexcept
         {
             if (range.kind == Kind::Set)
             {
-                WriteGuarded(live, saved, range.size);
+                faulted_ |= !WriteGuarded(live, saved, range.size);
             }
             continue;
         }
         ++changed;
         if (range.kind == Kind::Keep)
         {
-            WriteGuarded(live, saved, range.size);  // the game wrote it inside: put back as it was found
+            faulted_ |= !WriteGuarded(live, saved, range.size);  // the game wrote it inside: put back as found
         }
         // A Set range the game wrote inside keeps the game's newer value.
     }

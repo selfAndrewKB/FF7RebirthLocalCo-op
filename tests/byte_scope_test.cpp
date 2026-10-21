@@ -9,6 +9,11 @@
 
 #include "expect.h"
 
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <Windows.h>
+
 #include <array>
 #include <cstdio>
 #include <cstring>
@@ -144,6 +149,40 @@ void TestRetarget()
     EXPECT(a == 1 && b == 2);
 }
 
+void TestFaultedClose()
+{
+    std::puts("byte scope: a range the call left unreadable is reported by Faulted after Close");
+    auto* page = static_cast<std::uint8_t*>(VirtualAlloc(nullptr, 0x1000, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
+    EXPECT(page != nullptr);
+    page[0] = 5;
+    ByteStore<1, 1> context;
+    const ByteContext::Range one[] = {{At(page), 1, Kind::Set}};
+    EXPECT(context.Define(one));
+    context.Value(0)[0] = 6;
+    EXPECT(context.Open() && page[0] == 6);
+    DWORD previous = 0;
+    VirtualProtect(page, 0x1000, PAGE_NOACCESS, &previous);
+    EXPECT(context.Close() == 1 && context.Faulted());  // unreadable: counted as changed, and the fault reported
+    VirtualProtect(page, 0x1000, PAGE_READWRITE, &previous);
+    EXPECT(page[0] == 6);  // nothing could be put back
+    EXPECT(context.Open() && context.Close() == 0 && !context.Faulted());  // a clean close clears it
+    VirtualFree(page, 0, MEM_RELEASE);
+}
+
+void TestForget()
+{
+    std::puts("byte scope: Forget closes without writing");
+    std::uint8_t    slot = 1;
+    ByteStore<1, 1> context;
+    const ByteContext::Range one[] = {{At(&slot), 1, Kind::Set}};
+    EXPECT(context.Define(one));
+    context.Value(0)[0] = 2;
+    EXPECT(context.Open() && slot == 2);
+    context.Forget();
+    EXPECT(!context.IsOpen() && slot == 2);
+    EXPECT(context.Open() && context.Close() == 0 && slot == 2);  // usable again; the game's bytes are the 2 now
+}
+
 }  // namespace
 
 int main()
@@ -151,6 +190,8 @@ int main()
     TestOpenAndClose();
     TestRefusals();
     TestRetarget();
+    TestFaultedClose();
+    TestForget();
 
     return lss::test::Report();
 }
