@@ -577,6 +577,19 @@ void MarkerName(void* owner) noexcept
     }
 }
 
+/// Player 2's displayed target, targeted key and cursor given back; their lock, switch latch, rest timer and
+/// trace handle cleared (outside a TargetScope).
+void ForgetPlayerTwoTargets() noexcept
+{
+    ReleasePair(g_displayed);
+    ReleasePair(g_targetedKey);
+    ReleaseCursor();
+    g_lock     = 0;
+    g_latch    = 0;
+    g_freeTime = 0;
+    g_trace    = 0;
+}
+
 /// Player 2's lock ends with the battle, as the game's teardown ends player 1's: the lock camera
 /// off (inside the member tick, player 2's camera manager is the primary one), the displayed target,
 /// the targeted key and the cursor given back, the lock and the rest timer cleared.
@@ -588,20 +601,15 @@ void EndOfBattle() noexcept
     {
         Fail(L"the lock camera call");
     }
-    ReleasePair(g_displayed);
-    ReleasePair(g_targetedKey);
-    ReleaseCursor();
+    const std::uint8_t lock = g_lock;
+    ForgetPlayerTwoTargets();
     try
     {
-        Note(std::format(L"battle over: player 2's lock {} cleared", g_lock));
+        Note(std::format(L"battle over: player 2's lock {} cleared", lock));
     }
     catch (...)
     {
     }
-    g_lock     = 0;
-    g_latch    = 0;
-    g_freeTime = 0;
-    g_trace    = 0;
 }
 
 bool Redirect(const platform::GameImage& image, platform::CallRedirect& call, std::uintptr_t site,
@@ -773,6 +781,7 @@ bool Install(const platform::GameImage& image) noexcept
 
 void Remove() noexcept
 {
+    g_installed   = false;  // a TargetScope opened from here on holds nothing
     g_runReady    = false;
     g_placement.Cancel();  // a placement still queued does nothing
     for (auto& call : g_tickTargetingCalls)
@@ -867,17 +876,10 @@ void SetEnabled(bool on) noexcept
 
 void PlayerTwoOut() noexcept
 {
-    if (g_held)
+    if (!g_held)
     {
-        return;
+        ForgetPlayerTwoTargets();
     }
-    ReleaseCursor();
-    ReleasePair(g_displayed);
-    ReleasePair(g_targetedKey);
-    g_lock     = 0;
-    g_latch    = 0;
-    g_freeTime = 0;
-    g_trace    = 0;
 }
 
 bool Held() noexcept

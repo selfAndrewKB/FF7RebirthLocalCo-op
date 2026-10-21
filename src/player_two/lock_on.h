@@ -42,7 +42,7 @@ namespace lss::player_two::lock_on {
 
 bool Install(const platform::GameImage& image) noexcept;
 
-/// Player 1's targeting calls and the skipped writes back to the game's.
+/// Player 1's targeting calls and the skipped writes back to the game's; no TargetScope holds after it.
 void Remove() noexcept;
 
 /// In battle, player 2's target fields in the battle system while it lives (nested scopes do
