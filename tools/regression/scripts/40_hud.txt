@@ -2,10 +2,10 @@
 # area-icon manager, the placements set back at the leave. The once-per-launch lines of the first join are checked in
 # 10_join_leave. The two passes' timing lines are the perf log's (perf_log.txt in the mod folder), not checked here.
 # expect: minimap: on
-# expect: field-action icons: layout 1920x1080 -> 3840x1080
+# expect: field-action icons: layout 1920x1080 -> \d+x1080
 # expect: area icons: player 2's icon manager starts with player 1's event state
 # expect: HUD placement: \d+ widget\(s\) set back
-# expect: field-action icons: layout 3840x1080 -> 1920x1080
+# expect: field-action icons: layout \d+x1080 -> 1920x1080
 # expect: area icons: player 2 is out
 # expect: minimap: no split view with player 2 playing
 # expect-not: stays off

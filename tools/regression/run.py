@@ -7,7 +7,8 @@ each one's `# expect:` / `# expect-not:` lines against the slice of UE4SS.log it
     python tools/regression/run.py --in-field 10 20      the game is already at the save: run scripts 10 and 20 only
 
 Every script in tools/regression/scripts/ is a control script (src/control/script.h) with checks in comments:
-    # expect: <regex>        at least one line of the script's log slice matches (Python re.search)
+    # expect: <regex>        at least one line of the script's log slice matches (Python re.search); `{vw}`, `{vh}`,
+                            `{vw/2}`, `{vh/2}` stand for the run's own viewport (the mod's "split halves" line)
     # expect-dev: <regex>    the same, checked on the dev build only (a line of the dev tools)
     # expect-not: <regex>    no line matches
     # scope: log             the checks run over the whole log of this launch (the startup script)
@@ -298,9 +299,33 @@ class Result:
         return self.ran_ok is not False and not self.missing and not self.present
 
 
-def check(script: Script, lines: list[str], result: Result, build: str = "dev") -> None:
+VIEWPORT = re.compile(r"split halves: viewport (\d+)x(\d+)")
+
+
+def viewport_sizes(lines: list[str]) -> dict[str, str]:
+    """The run's own viewport, from the mod's last "split halves" line, for the size placeholders an expectation may
+    carry: the half sizes follow the monitor the game runs on (2560x1440 in the baselines, 3440x1440 on an ultrawide
+    primary), which the mod only reads."""
+    for line in reversed(lines):
+        m = VIEWPORT.search(line)
+        if m:
+            w, h = int(m[1]), int(m[2])
+            return {"{vw}": str(w), "{vh}": str(h), "{vw/2}": str(w // 2), "{vh/2}": str(h // 2)}
+    return {}
+
+
+def filled(pattern: str, sizes: dict[str, str]) -> str:
+    for key, value in sizes.items():
+        pattern = pattern.replace(key, value)
+    return pattern
+
+
+def check(script: Script, lines: list[str], result: Result, build: str = "dev",
+          all_lines: list[str] | None = None) -> None:
     result.lines = len(lines)
+    sizes = viewport_sizes(all_lines if all_lines is not None else lines)
     for pattern in script.expect + (script.expect_dev if build == "dev" else []):
+        pattern = filled(pattern, sizes)
         rx = re.compile(pattern)
         hit = next((line for line in lines if rx.search(line)), None)
         if hit is None:
@@ -445,7 +470,7 @@ def main() -> int:
             code, output = route.run_file(script.path, script.timeout)
             result.ran_ok, result.control_output = code == 0, output
             time.sleep(1.0)  # the last lines of the script land after its result
-            check(script, log.new_lines(), result, args.build)
+            check(script, log.new_lines(), result, args.build, log.all_lines())
         print("   pass" if result.passed else f"   FAIL: missing {len(result.missing)}, present {len(result.present)}, ran ok {result.ran_ok}")
     if isinstance(route, Keys) and route.skipped:
         notes.append("commands without a key, skipped: " + "; ".join(sorted(set(route.skipped))))

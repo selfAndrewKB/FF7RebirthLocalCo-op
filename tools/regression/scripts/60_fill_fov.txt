@@ -7,7 +7,7 @@
 # expect: split-fov 0\.5 -> ok
 # expect: bars on -> ok \(16:9 halves with bars\)
 # expect: HUD layout \(player 2's pass\): UI image \d+x\d+, view 1280x720
-# expect: HUD layout \(player 2's pass\): UI image \d+x\d+, view 2560x720
+# expect: HUD layout \(player 2's pass\): UI image \d+x\d+, view {vw}x720
 # expect-not: filled halves unavailable
 note regression: fill/fov start
 join

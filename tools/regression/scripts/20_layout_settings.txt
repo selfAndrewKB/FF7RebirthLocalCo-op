@@ -8,7 +8,7 @@
 # expect: split screen: D3D12\.EnableGapRecorder \d+ -> 0 while player 2 is in
 # expect-dev: layout side-by-side -> ok \(side by side\)
 # expect: split halves: viewport \d+x\d+, layout 1, half aspect
-# expect: HUD layout \(player 2's pass\): UI image \d+x\d+, view 1280x1440
+# expect: HUD layout \(player 2's pass\): UI image \d+x\d+, view {vw/2}x1440
 # expect-dev: layout top-bottom -> ok \(top/bottom\)
 # expect: split halves: viewport \d+x\d+, layout 0, half aspect
 # expect: player 2 is out: TwoPlayerSplitscreenLayout restored to 0 \(top/bottom\)
