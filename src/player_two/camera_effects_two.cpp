@@ -11,6 +11,7 @@
 #include "player_two/leader_scope.h"
 #include "player_two/member_movement.h"
 #include "player_two/object_fields.h"
+#include "player_two/p2_scope.h"
 #include "player_two/party_member.h"
 #include "player_two/primary_controller.h"
 
@@ -86,46 +87,23 @@ bool Line() noexcept
 }
 
 /// Player 2's leader view (leader, leader type, and with `primary` the primary controller) for one call; nothing held if
-/// any part refuses.
+/// any part refuses (the ladder's all-or-nothing rule).
 class PlayerTwoView
 {
 public:
     PlayerTwoView(void* member, bool primary) noexcept
     {
-        const auto type = party_member::PlayerTypeOf(member);
-        const auto weak = leader_scope::WeakOf(member);
-        if (!type || weak == 0)
+        p2_scope::Args args;
+        if (p2_scope::FillMember(args, member))
         {
-            return;
+            scopes_.emplace((primary ? p2_scope::Primary : 0u) | p2_scope::Leader | p2_scope::LeaderType, args);
         }
-        if (primary)
-        {
-            primary_.emplace();
-            if (!primary_->Held())
-            {
-                primary_.reset();
-                return;
-            }
-        }
-        leader_.emplace(weak);
-        type_.emplace(*type);
-        if (!leader_->Held() || !type_->Held())
-        {
-            type_.reset();
-            leader_.reset();
-            primary_.reset();
-            return;
-        }
-        held_ = true;
     }
 
-    bool Held() const noexcept { return held_; }
+    bool Held() const noexcept { return scopes_ && scopes_->Held(); }
 
 private:
-    std::optional<primary_controller::Scope>     primary_;  // destroyed last (opened first)
-    std::optional<leader_scope::LeaderScope>     leader_;
-    std::optional<leader_scope::LeaderTypeScope> type_;
-    bool                                         held_ = false;
+    std::optional<p2_scope::P2Scope> scopes_;
 };
 
 void* OwnerOf(const void* mesh) noexcept

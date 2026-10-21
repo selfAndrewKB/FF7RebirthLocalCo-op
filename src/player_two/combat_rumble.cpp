@@ -17,6 +17,7 @@
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 #include "player_two/object_fields.h"
+#include "player_two/p2_scope.h"
 #include "player_two/party_member.h"
 #include "player_two/primary_controller.h"
 #include "players/unreal_access.h"
@@ -187,47 +188,24 @@ void* PlayerOnePawn() noexcept
     return ReadPointer(generation::PlayerOneController(), facts::kControllerPawn);
 }
 
-/// Player 2's leader view (leader, leader type, primary controller) for one call; nothing held if any part refuses.
+/// Player 2's leader view (leader, leader type, primary controller) for one call; nothing held if any part refuses
+/// (the ladder's all-or-nothing rule).
 class PlayerTwoView
 {
 public:
     explicit PlayerTwoView(bool primary) noexcept
     {
-        void*      member = generation::Member();
-        const auto type   = party_member::PlayerTypeOf(member);
-        const auto weak   = leader_scope::WeakOf(member);
-        if (!type || weak == 0)
+        p2_scope::Args args;
+        if (p2_scope::FillMember(args, generation::Member()))
         {
-            return;
+            scopes_.emplace((primary ? p2_scope::Primary : 0u) | p2_scope::Leader | p2_scope::LeaderType, args);
         }
-        if (primary)
-        {
-            primary_.emplace();
-            if (!primary_->Held())
-            {
-                primary_.reset();
-                return;
-            }
-        }
-        leader_.emplace(weak);
-        type_.emplace(*type);
-        if (!leader_->Held() || !type_->Held())
-        {
-            type_.reset();
-            leader_.reset();
-            primary_.reset();
-            return;
-        }
-        held_ = true;
     }
 
-    bool Held() const noexcept { return held_; }
+    bool Held() const noexcept { return scopes_ && scopes_->Held(); }
 
 private:
-    std::optional<primary_controller::Scope>       primary_;  // destroyed last (opened first)
-    std::optional<leader_scope::LeaderScope>       leader_;
-    std::optional<leader_scope::LeaderTypeScope>   type_;
-    bool                                           held_ = false;
+    std::optional<p2_scope::P2Scope> scopes_;
 };
 
 // ---------------------------------------------------------------------------------------------

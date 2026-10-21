@@ -17,6 +17,7 @@
 #include "platform/vtable_entry.h"
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
+#include "player_two/p2_scope.h"
 #include "player_two/primary_controller.h"
 
 #include <atomic>
@@ -218,38 +219,34 @@ void RunAsPrimary(void* cameraManager, float deltaTime)
     void*      member     = generation::Member();
     const bool battle     = controller != nullptr && member != nullptr &&
                             ReadField<std::uint8_t>(controller, kCmdHudMode) != 0;
-    std::optional<focus_scope::FocusScope> focus;
-    if (battle)
+    // In battle player 2's UI context (counted and logged when refused), player 2 as the primary controller (refused:
+    // the update runs as player 1's, counted) and, in battle, the target fields the LockOn module reads: each as far
+    // as it opens, the update runs either way.
+    p2_scope::Args args;
+    args.controller      = controller;
+    const unsigned which = (battle ? p2_scope::Focus : 0u) | p2_scope::Primary | p2_scope::Targets;
+    const p2_scope::P2Scope scopes(which, which, args);
+    if (battle && !scopes.Holds<p2_scope::FocusPart>())
     {
-        focus.emplace(controller);
-        if (!focus->Entered())
+        const unsigned refusals = g_uiRefusals.fetch_add(1, std::memory_order_relaxed) + 1;
+        if (refusals <= 5 || refusals % 600 == 0)
         {
-            const unsigned refusals = g_uiRefusals.fetch_add(1, std::memory_order_relaxed) + 1;
-            if (refusals <= 5 || refusals % 600 == 0)
-            {
-                platform::Log(L"player 2's camera update ran without player 2's UI context: {} ({} time(s))",
-                              focus->Refusal() != nullptr ? focus->Refusal() : L"refused", refusals);
-            }
-            focus.reset();
+            platform::Log(L"player 2's camera update ran without player 2's UI context: {} ({} time(s))",
+                          scopes.Noted() != nullptr ? scopes.Noted() : L"refused", refusals);
         }
     }
-    const primary_controller::Scope scope;
-    const lock_on::TargetScope      targets;  // in battle, the LockOn module reads player 2's displayed target
-    std::optional<leader_scope::LeaderScope>     leader;
-    std::optional<leader_scope::LeaderTypeScope> type;
     // In battle the leader view decides which camera an attack camera belongs to (the game's leader-keyed test of each
     // battle camera sequence, RE-p2-attack-cameras.md §3.2), so it opens even when the UI context was refused.
-    if (focus || (member != nullptr && battle_camera::PlayerTwoBattleActive(cameraManager)))
+    std::optional<p2_scope::P2Scope> leader;
+    if (scopes.Holds<p2_scope::FocusPart>() ||
+        (member != nullptr && battle_camera::PlayerTwoBattleActive(cameraManager)))
     {
-        const auto memberType = party_member::PlayerTypeOf(member);
-        const auto memberWeak = leader_scope::WeakOf(member);
-        if (memberType && memberWeak != 0)
+        if (member != nullptr && p2_scope::FillMember(args, member))
         {
-            leader.emplace(memberWeak);
-            type.emplace(*memberType);
+            leader.emplace(p2_scope::Leader | p2_scope::LeaderType, p2_scope::Leader | p2_scope::LeaderType, args);
         }
     }
-    if (scope.Held())
+    if (scopes.Holds<p2_scope::PrimaryPart>())
     {
         g_updateCounters.Act();
     }
