@@ -1,8 +1,9 @@
 #include "player_two/tag_counts.h"
 
+#include "facts/engine.h"
+#include "facts/party.h"
 #include "platform/image.h"
 #include "platform/verified_code.h"
-#include "player_two/engine_facts.h"
 #include "player_two/object_fields.h"
 #include "player_two/weak_object.h"
 

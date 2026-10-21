@@ -1,7 +1,11 @@
 #include "player_two/chocobo_ride.h"
 
+#include "facts/controller.h"
+#include "facts/engine.h"
+#include "facts/in_battle.h"
+#include "facts/move_state.h"
+#include "facts/party.h"
 #include "player_two/describe.h"
-#include "player_two/in_battle.h"
 #include "player_two/ride_rules.h"
 #define RC_UNREAL_DISABLE_PROPERTY_DEPRECATION_WARNINGS
 #define RC_UNREAL_DISABLE_CLASS_DEPRECATION_WARNINGS
@@ -16,7 +20,6 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "player_two/charapop_facts.h"
-#include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 #include "player_two/member_movement.h"

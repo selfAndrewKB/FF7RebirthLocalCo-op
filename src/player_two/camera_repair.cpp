@@ -1,11 +1,12 @@
 #include "player_two/camera_repair.h"
 
+#include "facts/cameras.h"
+#include "facts/controller.h"
 #include "player_two/world_rules.h"
 #include "platform/guarded.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "player_two/chocobo_ride.h"
-#include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 #include "player_two/object_fields.h"

@@ -4,8 +4,8 @@
 //
 // The guarded reads are platform/guarded_read.h's, one family for the whole mod; this header brings
 // them into player_two, where every module reads engine objects, and adds the unguarded write. Every
-// offset passed here is one read in IDA at the instruction that uses it (listed in
-// player_two/engine_facts.h). memcpy keeps the access free of alignment and aliasing assumptions.
+// offset passed here is one read in IDA at the instruction that uses it (the shared ones in
+// facts/). memcpy keeps the access free of alignment and aliasing assumptions.
 // Reads are guarded: a read from an object whose memory was released gives zero (null) instead of
 // ending the game. Pointers, flags and counts read zero as "not there"; a field whose zero is a real
 // value is read with Read, which says whether it was readable. WriteField is not guarded: a write

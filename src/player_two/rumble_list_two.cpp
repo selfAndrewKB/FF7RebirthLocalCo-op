@@ -1,5 +1,6 @@
 #include "player_two/rumble_list_two.h"
 
+#include "facts/engine.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/code_redirect.h"
@@ -10,7 +11,6 @@
 #include "platform/log.h"
 #include "platform/vtable_entry.h"
 #include "player_two/chocobo_ride.h"
-#include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 #include "player_two/member_movement.h"

@@ -1,5 +1,6 @@
 #include "player_two/charapop_centre.h"
 
+#include "facts/controller.h"
 #include "platform/entry_redirect.h"
 #include "platform/every.h"
 #include "platform/guarded.h"
@@ -7,7 +8,6 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "player_two/charapop_facts.h"
-#include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 
 #ifndef WIN32_LEAN_AND_MEAN

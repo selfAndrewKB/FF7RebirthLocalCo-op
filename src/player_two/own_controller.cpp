@@ -1,11 +1,13 @@
 #include "player_two/own_controller.h"
 
+#include "facts/cameras.h"
+#include "facts/controller.h"
+#include "facts/engine.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
 #include "player_two/camera_override.h"
-#include "player_two/engine_facts.h"
 #include "player_two/object_fields.h"
 
 #include <atomic>

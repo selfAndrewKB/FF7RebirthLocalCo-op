@@ -4,7 +4,7 @@
 //
 // An FWeakObjectPtr is {object index, serial number}, 8 bytes. Player 2's modules keep weak pointers
 // to the objects they follow (a member, a chocobo, a widget) and read the game's own weak fields;
-// both go through FWeakObjectPtr::Get and its assignment (engine_facts.h: kWeakObjectGet,
+// both go through FWeakObjectPtr::Get and its assignment (facts/engine.h: kWeakObjectGet,
 // kWeakObjectAssign), found here once at startup, before the stages, and called under a guard. A
 // weak whose serial is 0 was never set and names nothing. Any thread (the engine's Get reads its
 // object array; the callers' objects are theirs to keep alive).

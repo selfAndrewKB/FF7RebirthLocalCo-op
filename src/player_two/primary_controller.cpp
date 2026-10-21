@@ -1,8 +1,8 @@
 #include "player_two/primary_controller.h"
 
+#include "facts/party.h"
 #include "platform/image.h"
 #include "platform/verified_code.h"
-#include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/weak_object.h"
 

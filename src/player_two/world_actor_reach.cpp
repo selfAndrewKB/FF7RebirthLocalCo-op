@@ -1,5 +1,6 @@
 #include "player_two/world_actor_reach.h"
 
+#include "facts/controller.h"
 #include "player_two/world_rules.h"
 #include "platform/every.h"
 #include "platform/guarded.h"
@@ -7,7 +8,6 @@
 #include "platform/log.h"
 #include "player_two/charapop_centre.h"
 #include "player_two/charapop_facts.h"
-#include "player_two/engine_facts.h"
 #include "player_two/field_pickup.h"
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"

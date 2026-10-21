@@ -1,5 +1,7 @@
 #include "player_two/camera_distance.h"
 
+#include "facts/cameras.h"
+#include "facts/controller.h"
 #include "player_two/world_rules.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
@@ -9,7 +11,6 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "player_two/call_site.h"
-#include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
 #include "players/unreal_access.h"

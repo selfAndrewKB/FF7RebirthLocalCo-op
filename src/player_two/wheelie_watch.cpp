@@ -1,5 +1,6 @@
 #include "player_two/wheelie_watch.h"
 
+#include "facts/controller.h"
 #include "platform/build_value.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -8,7 +9,6 @@
 #include "platform/verified_code.h"
 #include "player_two/charapop_facts.h"
 #include "player_two/describe.h"
-#include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
 #include "player_two/pad_sticks.h"

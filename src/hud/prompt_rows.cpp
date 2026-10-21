@@ -9,6 +9,7 @@
 #include <Unreal/UObject.hpp>
 #include <Unreal/UObjectGlobals.hpp>
 
+#include "facts/vehicles.h"
 #include "hud/viewport_placement.h"
 #include "hud/widget_opacity.h"
 #include "platform/guarded.h"
@@ -16,7 +17,6 @@
 #include "platform/log.h"
 #include "platform/settled_log.h"
 #include "player_two/chocobo_ride.h"
-#include "player_two/engine_facts.h"
 #include "player_two/field_pickup.h"
 #include "player_two/generation.h"
 #include "player_two/weak_object.h"
@@ -352,13 +352,13 @@ void Refresh() noexcept
         }
         // Player 2's driven chocobo's own handles (Dash, Dismount, Jet, Scent, Scour): its tick makes their rows in the
         // one shared list, so they are player 2's the same way (RE-p2-chocobo-rows.md §4).
-        constexpr std::size_t kRideRows = std::size(player_two::facts::kChocoboMoveStateRowHandles);
+        constexpr std::size_t kRideRows = std::size(facts::kChocoboMoveStateRowHandles);
         std::array<const UObject*, kRideRows> rideNamed{};
         const auto ride = reinterpret_cast<std::uintptr_t>(player_two::chocobo_ride::DrivenMoveState());
         for (std::size_t i = 0; ride != 0 && i < kRideRows; ++i)
         {
             std::uint64_t weak = 0;
-            rideNamed[i] = Read(ride + player_two::facts::kChocoboMoveStateRowHandles[i], weak) ? Resolve(weak) : nullptr;
+            rideNamed[i] = Read(ride + facts::kChocoboMoveStateRowHandles[i], weak) ? Resolve(weak) : nullptr;
         }
         // Player 2's field prompts (pickups): FieldActionMgr's slot rows in player 2's copy of its slot block, made by
         // player 2's pass of the game's own update (player_two/field_pickup.h).

@@ -1,12 +1,12 @@
 #include "player_two/equal_targeting.h"
 
+#include "facts/party.h"
 #include "platform/call_redirect.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
-#include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/member_movement.h"
 #include "player_two/object_fields.h"

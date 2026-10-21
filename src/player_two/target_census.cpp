@@ -1,5 +1,6 @@
 #include "player_two/target_census.h"
 
+#include "facts/party.h"
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
 #include "platform/every.h"
@@ -9,7 +10,6 @@
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
 #include "player_two/describe.h"
-#include "player_two/engine_facts.h"
 #include "player_two/equal_targeting.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"

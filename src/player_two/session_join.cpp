@@ -1,10 +1,12 @@
 // Session: installing the stages, and player 2's join.
 
+#include "facts/cameras.h"
+#include "facts/controller.h"
+#include "facts/engine.h"
 #include "player_two/session.h"
 
 #include "platform/log.h"
 #include "player_two/describe.h"
-#include "player_two/engine_facts.h"
 #include "player_two/field_camera.h"
 #include "player_two/generation.h"
 #include "player_two/battle_camera.h"

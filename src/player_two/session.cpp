@@ -1,12 +1,12 @@
 // Session: player 2's party member, the leave, and the status line.
 
+#include "facts/controller.h"
 #include "player_two/session.h"
 
 #include "platform/frame_watch.h"
 #include "platform/game_thread_sites.h"
 #include "platform/log.h"
 #include "player_two/describe.h"
-#include "player_two/engine_facts.h"
 #include "player_two/field_exit.h"
 #include "player_two/battle_camera.h"
 #include "player_two/camera_override.h"

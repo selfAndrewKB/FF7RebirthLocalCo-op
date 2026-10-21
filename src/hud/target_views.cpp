@@ -10,7 +10,6 @@
 #include "platform/log.h"
 #include "platform/sparse_array.h"
 #include "platform/verified_code.h"
-#include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/lock_on.h"
 #include "player_two/weak_object.h"

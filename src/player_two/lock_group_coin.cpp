@@ -1,10 +1,10 @@
 #include "player_two/lock_group_coin.h"
 
+#include "facts/party.h"
 #include "platform/call_redirect.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
-#include "player_two/engine_facts.h"
 #include "player_two/equal_targeting.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"

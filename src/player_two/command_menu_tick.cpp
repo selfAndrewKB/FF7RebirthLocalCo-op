@@ -1,5 +1,6 @@
 #include "player_two/command_menu_tick.h"
 
+#include "facts/party.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/deferred_sites.h"
@@ -11,7 +12,6 @@
 #include "platform/vtable_entry.h"
 #include "player_two/command_menu_two.h"
 #include "player_two/command_rules.h"
-#include "player_two/engine_facts.h"
 #include "player_two/focus_scope.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"

@@ -1,5 +1,10 @@
 #include "player_two/member_movement.h"
 
+#include "facts/controller.h"
+#include "facts/engine.h"
+#include "facts/move_state.h"
+#include "facts/party.h"
+#include "facts/vehicles.h"
 #include "platform/every.h"
 #include "platform/frame_watch.h"
 #include "platform/guarded.h"
@@ -13,7 +18,6 @@
 #include "player_two/chocobo_ride.h"
 #include "player_two/climb_context.h"
 #include "player_two/lock_on.h"
-#include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/move_state.h"
 #include "player_two/object_fields.h"

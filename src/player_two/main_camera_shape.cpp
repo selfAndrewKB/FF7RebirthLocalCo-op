@@ -10,10 +10,11 @@
 #include <Unreal/UObjectArray.hpp>
 #include <Unreal/UObjectGlobals.hpp>
 
+#include "facts/cameras.h"
+#include "facts/controller.h"
 #include "platform/build_value.h"
 #include "platform/image.h"
 #include "platform/log.h"
-#include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
 #include "platform/guarded.h"

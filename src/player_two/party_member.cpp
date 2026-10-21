@@ -1,11 +1,13 @@
 #include "player_two/party_member.h"
 
+#include "facts/controller.h"
+#include "facts/engine.h"
+#include "facts/in_battle.h"
+#include "facts/party.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
-#include "player_two/engine_facts.h"
-#include "player_two/in_battle.h"
 #include "player_two/object_fields.h"
 #include "player_two/primary_controller.h"
 
@@ -52,8 +54,8 @@ struct Functions
 };
 Functions         g_fn;  // set once at install
 bool              g_installed    = false;
-const void* const* g_optionHolder = nullptr;  // engine_facts.h: kOptionHolderGlobal
-const void* const* g_battleState  = nullptr;  // engine_facts.h: kBattleStateGlobal
+const void* const* g_optionHolder = nullptr;  // facts/party.h: kOptionHolderGlobal
+const void* const* g_battleState  = nullptr;  // facts/party.h: kBattleStateGlobal
 
 // The two engine calls that change game state run inside structured-exception guards
 // (platform/guarded.h).

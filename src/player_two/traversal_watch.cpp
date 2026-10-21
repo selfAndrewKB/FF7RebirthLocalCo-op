@@ -1,5 +1,7 @@
 #include "player_two/traversal_watch.h"
 
+#include "facts/controller.h"
+#include "facts/engine.h"
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
 #include "platform/every.h"
@@ -9,7 +11,6 @@
 #include "player_two/charapop_facts.h"
 #include "player_two/chocobo_ride.h"
 #include "player_two/describe.h"
-#include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/traversal_camera.h"
 #include "player_two/leader_scope.h"

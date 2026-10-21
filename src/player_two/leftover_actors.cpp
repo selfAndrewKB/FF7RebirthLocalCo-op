@@ -1,9 +1,10 @@
 #include "player_two/leftover_actors.h"
 
+#include "facts/cameras.h"
+#include "facts/controller.h"
 #include "platform/guarded.h"
 #include "platform/log.h"
 #include "players/unreal_access.h"
-#include "player_two/engine_facts.h"
 #include "player_two/object_fields.h"
 
 #define RC_UNREAL_DISABLE_PROPERTY_DEPRECATION_WARNINGS

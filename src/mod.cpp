@@ -12,6 +12,7 @@
 
 #include "dev/dev_tools.h"
 #include "facts/engine.h"
+#include "facts/in_battle.h"
 #include "hud/action_icon_base.h"
 #include "hud/hud_placement.h"
 #include "hud/layout_scale.h"
@@ -37,7 +38,6 @@
 #include "platform/verified_code.h"
 #include "player_two/field_exit.h"
 #include "player_two/generation.h"
-#include "player_two/in_battle.h"
 #include "player_two/main_camera_shape.h"
 #include "player_two/camera_distance.h"
 #include "player_two/camera_repair.h"
@@ -340,7 +340,7 @@ public:
             return;
         }
         lss::player_two::weak_object::Install(*image);    // the engine's weak pointers, once, for every module
-        lss::player_two::facts::InstallInBattle(*image);  // the game's in-battle test, once, for the stages that ask it
+        lss::facts::InstallInBattle(*image);  // the game's in-battle test, once, for the stages that ask it
         session_.emplace(*removeLocalPlayer);
         session_->InstallStages(*image);
         lss::renderer::InstallSubmitHintSkip(*image);  // parallel passes without their own GPU submission (player 2 in)

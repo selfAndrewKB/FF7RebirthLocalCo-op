@@ -14,7 +14,6 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "player_two/charapop_facts.h"
-#include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 #include "player_two/object_fields.h"

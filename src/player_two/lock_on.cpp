@@ -1,5 +1,7 @@
 #include "player_two/lock_on.h"
 
+#include "facts/controller.h"
+#include "facts/in_battle.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/code_redirect.h"
@@ -9,10 +11,8 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "player_two/command_menu_two.h"
-#include "player_two/engine_facts.h"
 #include "player_two/focus_scope.h"
 #include "player_two/generation.h"
-#include "player_two/in_battle.h"
 #include "player_two/leader_scope.h"
 #include "player_two/object_fields.h"
 #include "player_two/pad_buttons.h"

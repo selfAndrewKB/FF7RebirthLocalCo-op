@@ -6,6 +6,8 @@
 #include <Unreal/CoreUObject/UObject/UnrealType.hpp>
 #include <Unreal/UObject.hpp>
 
+#include "facts/controller.h"
+#include "facts/party.h"
 #include "platform/build_value.h"
 #include "platform/every.h"
 #include "platform/guarded.h"
@@ -13,7 +15,6 @@
 #include "platform/log.h"
 #include "platform/sparse_array.h"
 #include "platform/verified_code.h"
-#include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 #include "player_two/object_fields.h"

@@ -1,14 +1,14 @@
-#include "player_two/in_battle.h"
+#include "facts/in_battle.h"
 
+#include "facts/party.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/verified_code.h"
-#include "player_two/engine_facts.h"
 
 #include <atomic>
 #include <cstdint>
 
-namespace lss::player_two::facts {
+namespace lss::facts {
 
 namespace {
 
@@ -37,4 +37,4 @@ bool InBattle() noexcept
     return test != nullptr && platform::CallGuarded(test, answer) && answer != 0;
 }
 
-}  // namespace lss::player_two::facts
+}  // namespace lss::facts

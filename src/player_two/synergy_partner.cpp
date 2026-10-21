@@ -1,5 +1,7 @@
 #include "player_two/synergy_partner.h"
 
+#include "facts/controller.h"
+#include "facts/party.h"
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
 #include "platform/every.h"
@@ -9,7 +11,6 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "player_two/describe.h"
-#include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 #include "player_two/object_fields.h"

@@ -6,6 +6,7 @@
 // Layout: RE-onefamily-feasibility.md §Q1 (the FSceneViewFamily table), read from the FF7R
 // constructor 0x140CC42D0 and matched to stock SceneView.h field order.
 
+
 #include <cstddef>
 
 namespace lss::renderer::family {

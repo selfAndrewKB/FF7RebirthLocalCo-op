@@ -1,10 +1,10 @@
 #include "player_two/approach_two.h"
 
+#include "facts/controller.h"
 #include "platform/angles.h"
 #include "platform/call_redirect.h"
 #include "platform/image.h"
 #include "platform/log.h"
-#include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
 #include "player_two/pad_sticks.h"

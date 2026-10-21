@@ -1,5 +1,7 @@
 #include "player_two/trigger_two.h"
 
+#include "facts/controller.h"
+#include "facts/engine.h"
 #include "player_two/field_rules.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
@@ -9,7 +11,6 @@
 #include "platform/verified_code.h"
 #include "player_two/chocobo_ride.h"
 #include "player_two/describe.h"
-#include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 #include "player_two/object_fields.h"

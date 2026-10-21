@@ -1,5 +1,6 @@
 #include "player_two/party_events.h"
 
+#include "facts/controller.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
@@ -7,7 +8,6 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "player_two/call_site.h"
-#include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 
 #include <atomic>

@@ -3,8 +3,8 @@
 // The CharaPop manager, its entries and a camera manager's pose, as the game's character LOD reads them
 // (RE-p2-charapop-per-view.md §1; IDA addresses and offsets of this build).
 
+#include "facts/controller.h"
 #include "platform/angles.h"
-#include "player_two/engine_facts.h"
 #include "player_two/object_fields.h"
 
 #include <cmath>

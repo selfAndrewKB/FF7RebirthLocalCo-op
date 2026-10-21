@@ -1,6 +1,7 @@
 #include "player_two/pad_buttons.h"
 
 #include "dev/dev_switch.h"
+#include "facts/controller.h"
 
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
@@ -12,7 +13,6 @@
 #include "platform/vtable_entry.h"
 #include "player_two/button_view.h"
 #include "player_two/call_site.h"
-#include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/pad_sticks.h"
 #include "players/unreal_access.h"

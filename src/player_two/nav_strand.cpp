@@ -1,6 +1,8 @@
 #include "player_two/nav_strand.h"
 
 #include "dev/dev_switch.h"
+#include "facts/controller.h"
+#include "facts/party.h"
 #define RC_UNREAL_DISABLE_PROPERTY_DEPRECATION_WARNINGS
 #define RC_UNREAL_DISABLE_CLASS_DEPRECATION_WARNINGS
 #include <Unreal/CoreUObject/UObject/Class.hpp>
@@ -17,7 +19,6 @@
 #include "platform/verified_code.h"
 #include "player_two/call_site.h"
 #include "player_two/chocobo_ride.h"
-#include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
 #include "player_two/party_warp.h"

@@ -1,6 +1,7 @@
 #include "player_two/chocobo_climb.h"
 
 #include "dev/dev_switch.h"
+#include "facts/engine.h"
 #include "platform/build_value.h"
 #include "platform/every.h"
 #include "platform/guarded.h"
@@ -9,7 +10,6 @@
 #include "platform/vtable_entry.h"
 #include "player_two/chocobo_ride.h"
 #include "player_two/describe.h"
-#include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 #include "player_two/object_fields.h"

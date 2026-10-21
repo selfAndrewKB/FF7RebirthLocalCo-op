@@ -208,6 +208,34 @@ inline constexpr FunctionFact   kWindowsWindowGetOSWindowHandle{L"FWindowsWindow
                                                               kWindowsWindowGetOSWindowHandlePrologue};
 
 // ---------------------------------------------------------------------------------------------
+// Actors, pawns, local players and the viewport (stock UE4 fields; RE-p2-build-facts-ida.md,
+// RE-p2-own-controller-ida.md)
+// ---------------------------------------------------------------------------------------------
+
+// AActor
+inline constexpr std::uint32_t kActorOwner     = 0xE8;   // AActor::SetOwner stores it
+inline constexpr std::uint32_t kActorTagsData  = 0x178;  // Tags.GetData()
+inline constexpr std::uint32_t kActorTagsCount = 0x180;  // Tags.Num()
+inline constexpr std::uint32_t kPawnController = 0x260;  // APawn::Controller
+// ULocalPlayer
+inline constexpr std::uint32_t kLocalPlayerViewportClient = 0x70;
+inline constexpr std::uint32_t kLocalPlayerControllerId   = 0xB8;
+// UGameViewportClient: the four input-mode bytes (+0x361..+0x364) the controller's BeginPlay sets
+// through SetInputMode on the one viewport all local players share.
+inline constexpr std::uint32_t kViewportInputModeBytes = 0x361;
+
+// FWeakObjectPtr
+/// FWeakObjectPtr::Get and assignment from an object.
+inline constexpr std::uint8_t kWeakObjectGetBytes[] = {
+    0x44, 0x8B, 0x49, 0x04, 0x45, 0x33, 0xC0, 0x45, 0x85, 0xC9, 0x74, 0x4F,
+    0x8B, 0x01, 0x85, 0xC0, 0x78, 0x49, 0x3B, 0x05, 0x1C, 0x5B, 0xFE, 0x06};
+inline constexpr FunctionFact kWeakObjectGet{L"FWeakObjectPtr::Get", 0x141905998, kWeakObjectGetBytes};
+inline constexpr std::uint8_t kWeakObjectAssignBytes[] = {
+    0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x57, 0xB8,
+    0x20, 0x00, 0x00, 0x00, 0xE8, 0x67, 0x96, 0x7A, 0x00, 0x48, 0x2B, 0xE0};
+inline constexpr FunctionFact kWeakObjectAssign{L"FWeakObjectPtr assignment", 0x1419058B4, kWeakObjectAssignBytes};
+
+// ---------------------------------------------------------------------------------------------
 // The startup check list
 // ---------------------------------------------------------------------------------------------
 

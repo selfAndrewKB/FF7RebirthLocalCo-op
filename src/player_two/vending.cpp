@@ -1,5 +1,7 @@
 #include "player_two/vending.h"
 
+#include "facts/controller.h"
+#include "facts/party.h"
 #include "player_two/field_rules.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
@@ -9,7 +11,6 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "player_two/charapop_facts.h"
-#include "player_two/engine_facts.h"
 #include "player_two/field_pickup.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"

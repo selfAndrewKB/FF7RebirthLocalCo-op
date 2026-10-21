@@ -8,7 +8,6 @@
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
 #include "player_two/command_menu_two.h"
-#include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 #include "player_two/object_fields.h"

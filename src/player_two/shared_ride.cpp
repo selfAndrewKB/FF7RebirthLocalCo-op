@@ -1,5 +1,6 @@
 #include "player_two/shared_ride.h"
 
+#include "facts/party.h"
 #include "player_two/ride_rules.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -7,7 +8,6 @@
 #include "platform/verified_code.h"
 #include "player_two/charapop_facts.h"
 #include "player_two/describe.h"
-#include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 #include "player_two/object_fields.h"
