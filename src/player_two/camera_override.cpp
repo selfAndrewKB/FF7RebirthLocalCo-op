@@ -5,6 +5,7 @@
 #include "facts/controller.h"
 #include "facts/engine.h"
 #include "platform/build_value.h"
+#include "platform/byte_scope.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -83,24 +84,35 @@ Pair         g_playerTwo;          // player 2's camera's own module (one weak r
 void*        g_member = nullptr;   // the member whose delegates hold the thunks
 
 /// Swaps player 2's module into the global for one engine call, with player 2 as the primary
-/// controller, and puts player 1's back after if the global is still player 2's.
+/// controller, and puts player 1's back after if the global is still player 2's (a Set range of
+/// platform/byte_scope.h: a module the game itself wrote inside the call is kept).
 class GlobalScope
 {
 public:
-    GlobalScope() noexcept : saved_(*g_global) { *g_global = g_playerTwo; }
+    GlobalScope() noexcept
+    {
+        using Range = platform::ByteContext::Range;
+        const Range range{reinterpret_cast<std::uintptr_t>(g_global), sizeof(Pair), platform::ByteContext::Kind::Set};
+        if (context_.Define(std::span<const Range>(&range, 1)))
+        {
+            std::memcpy(context_.Value(0).data(), &g_playerTwo, sizeof(Pair));
+            held_ = context_.Open();
+        }
+    }
     ~GlobalScope()
     {
-        if (*g_global == g_playerTwo)
+        if (held_)
         {
-            *g_global = saved_;
+            context_.Close();
         }
     }
     GlobalScope(const GlobalScope&)            = delete;
     GlobalScope& operator=(const GlobalScope&) = delete;
 
 private:
-    const primary_controller::Scope primary_;
-    Pair                            saved_;
+    const primary_controller::Scope      primary_;  // opened first, closed last
+    platform::ByteStore<1, sizeof(Pair)> context_;
+    bool                                 held_ = false;
 };
 
 // The thunks the member's delegates call (same signatures as the engine's handlers).
