@@ -50,6 +50,7 @@ add_library(LocalSplitScreen SHARED
     src/hud/layout_scale.cpp
 
     src/platform/block_patch.cpp
+    src/platform/byte_scope.cpp
     src/platform/call_redirect.cpp
     src/platform/code_redirect.cpp
     src/platform/deferred_sites.cpp
@@ -291,6 +292,7 @@ lss_test(generation src/player_two/generation.cpp src/player_two/weak_object.cpp
          src/platform/vtable_entry.cpp src/platform/module_pin.cpp src/platform/guarded.cpp src/platform/image.cpp
          src/platform/build_translation.cpp tests/log_console.cpp)
 lss_test(thread_hold)
+lss_test(byte_scope src/platform/byte_scope.cpp src/platform/guarded.cpp)
 lss_test(angles)
 lss_test(every)
 lss_test(frame_watch_clock src/platform/frame_watch.cpp tests/log_console.cpp)
