@@ -681,25 +681,6 @@ ButtonScope::~ButtonScope()
     g_scopeOpen = false;
 }
 
-std::int32_t TracedHeldNow(std::size_t action) noexcept
-{
-    const std::uint64_t key   = action < 2 ? TraceKey(action) : 0;
-    const Table&        table = g_tables[0];
-    if (key == 0 || !generation::OnGameThread() || !Fresh(table, kTables[0].offset))
-    {
-        return -1;
-    }
-    for (std::size_t i = 0; i < table.names.size() && i < table.allocated.size(); ++i)
-    {
-        if (table.allocated[i] != 0 && table.names[i] == key)
-        {
-            std::uint8_t held = 0;
-            return platform::CopyGuarded(&held, table.data + i * sizeof(Element) + offsetof(Element, held), 1) ? held : -1;
-        }
-    }
-    return -1;
-}
-
 void SetMask(unsigned mask) noexcept
 {
     g_mask.store(mask, std::memory_order_relaxed);

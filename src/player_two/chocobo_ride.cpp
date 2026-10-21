@@ -19,7 +19,6 @@
 #include "player_two/member_movement.h"
 #include "player_two/object_fields.h"
 #include "player_two/party_member.h"
-#include "player_two/ride_probe.h"
 
 #include <chrono>
 #include <cstddef>
@@ -511,9 +510,7 @@ void Begin(void* playerTwo, void* member, void* chocobo) noexcept
     }
     const void* oldObject = ReadPointer(chocobo, kChocoboRideObject);
     BeginCall   call{playerTwo, chocobo, member};
-    ride_probe::Boarding(L"before the game's boarding", chocobo);
     member_movement::InPrimaryScope(member, &RunBegin, &call);
-    ride_probe::Boarding(L"after the game's boarding", chocobo);
     g_ride = {};
     g_ride.playerTwo   = playerTwo;
     g_ride.member      = member;

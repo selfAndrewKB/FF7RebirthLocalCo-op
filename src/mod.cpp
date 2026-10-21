@@ -15,7 +15,6 @@
 #include "hud/hud_placement.h"
 #include "hud/layout_scale.h"
 #include "hud/minimap_once.h"
-#include "hud/navimap_watch.h"
 #include "hud/minimap.h"
 #include "hud/overlay_layout.h"
 #include "hud/player_two_pass.h"
@@ -56,7 +55,6 @@
 #include "player_two/rumble_list_two.h"
 #include "player_two/ffb_manager_two.h"
 #include "player_two/audio_listener_two.h"
-#include "player_two/chest_watch.h"
 #include "player_two/shop_talk.h"
 #include "player_two/vending.h"
 #include "player_two/interact_watch.h"
@@ -70,16 +68,13 @@
 #include "player_two/charapop_near.h"
 #include "player_two/charapop_centre.h"
 #include "player_two/world_actor_reach.h"
-#include "player_two/ride_probe.h"
 #include "player_two/ride_watch.h"
 #include "player_two/shared_ride.h"
-#include "player_two/shared_ride_rumble.h"
 #include "player_two/wheelie_ride.h"
 #include "player_two/wheelie_watch.h"
 #include "player_two/pad_sticks.h"
 #include "player_two/chocobo_ride.h"
 #include "player_two/nav_strand.h"
-#include "player_two/ride_framing_watch.h"
 #include "player_two/leave_watch.h"
 #include "player_two/target_census.h"
 #include "player_two/equal_targeting.h"
@@ -247,7 +242,6 @@ public:
         lss::hud::RemoveRootOverlayRender();
         lss::player_two::field_exit::Remove();
         lss::player_two::nav_strand::Remove();
-        lss::player_two::ride_framing_watch::Remove();
         lss::player_two::trigger_two::Remove();
         lss::player_two::chocobo_climb::Remove();
         lss::player_two::traversal_camera::Remove();
@@ -377,7 +371,6 @@ public:
         lss::player_two::party_warp::Install(*image);  // the game's follow warp, for a stranded player 2
         lss::player_two::nav_strand::Install(*image);  // player 2's member stranded off the loaded navmesh
         lss::player_two::camera_repair::Install(*image);  // a non-finite pose on player 2's camera: the game's camera reset
-        lss::player_two::ride_framing_watch::Install(*image);  // both cameras' ride framing and who changes it (logged)
         lss::player_two::traversal_watch::Install(*image);  // ladders, climb spots, glide and jet for player 2 (logged)
         lss::player_two::climb_context::Install(*image);  // climbs on the anim worker read their own climber's input (W5); before traversal_camera, whose holders need its Ticks
         lss::player_two::traversal_camera::Install(*image);  // player 2's traversal gets the game's traversal cameras
@@ -398,7 +391,6 @@ public:
         lss::hud::user_widgets::Install();          // HUD widgets as the engine constructs them
         lss::hud::InstallSecondImage(*image);        // player 2's HUD image, on (the hud-image command switches it)
         lss::hud::InstallMinimapOnce(*image);        // the minimap's map rendered by player 1's pass only
-        lss::hud::navimap_watch::Install(*image);    // the minimap's objects, logged (read-only)
         lss::hud::minimap::Install(*image);      // player 2's minimap in player 2's half
         lss::player_two::framing_watch::Install(*image);  // each player's field-camera framing, logged (read-only)
         lss::player_two::location_rows::Install(*image);  // each camera's location rows from its own player
@@ -414,7 +406,6 @@ public:
         lss::player_two::shared_ride::Install(*image);     // the buggy and the bronco: player 2 stands aside, every pad drives
         lss::player_two::wheelie_watch::Install(*image);   // the Wheelie system, logged (read-only)
         lss::player_two::wheelie_ride::Install(*image);    // player 2 boards a Wheelie of their own by walking into it
-        lss::player_two::ride_probe::Install(*image);      // player 2's ride: sprint and homing, logged (read-only)
         lss::player_two::field_pickup::Install(*image);    // player 2's pickups: a second pass of the game's prompts
         lss::player_two::rumble_watch::Install(*image);    // logging only: each controller's rumble, pad by pad
         lss::player_two::pad_rumble::Install(*image);      // each player's rumble on their own pad
@@ -422,7 +413,6 @@ public:
         lss::player_two::rumble_list_two::Install(*image);  // the traversal rumble list per player (zip line, chocobo, ropes)
         lss::player_two::ffb_manager_two::Install(*image);  // player 2's own force-feedback manager (its own channel tracks)
         lss::player_two::audio_listener_two::Install(*image);  // player 2's sound: each SEAD sound from the nearer listener
-        lss::player_two::chest_watch::Install(*image);     // chests, logged (read-only): presses, opens, grants
         lss::player_two::vending::Install(*image);         // player 2's vending machines: the shop's camera and pad
         lss::player_two::shop_talk::Install(*image);       // player 2's shopkeepers: admit, press, the shop's AI event
         lss::player_two::interact_watch::Install(*image);  // field interactions (pickups) per player, logged (read-only)
@@ -536,7 +526,6 @@ private:
         lss::player_two::target_coin::Tick();          // the blueprint natives' swaps once reflection is up; the summary
         lss::player_two::ffb_manager_two::Tick();      // player 2's component on player 2's own manager, after its BeginPlay
         lss::player_two::audio_listener_two::Tick();  // the controller listener slot; the listeners and the summary (Debug)
-        lss::player_two::chest_watch::Tick();          // an open followed from its press to its grant (logged)
         lss::player_two::leave_watch::Tick();          // the last leave's controller, followed until it is freed (logged)
         lss::player_two::vending::Tick();              // a press that opened no shop; player 2 leaving with their shop up
         lss::player_two::shop_talk::Tick();            // the shopkeeper verdicts queued by player 2's pass
@@ -614,7 +603,6 @@ private:
         // The buggy and the bronco (player_two/shared_ride.h): player 2 stands aside, the game's merge reaches player 1
         // from every pad.
         const bool shared = lss::player_two::shared_ride::Tick();
-        lss::player_two::shared_ride_rumble::Tick(shared);  // logging: each controller's manager and the ride's tracks
         lss::player_two::rumble_list_two::CopyPlayerOne(shared && lss::player_two::ffb_manager_two::Attached());
         session_->SetSharedRide(shared);
         lss::player_two::pad_sticks::SetStoodDown(shared);
@@ -640,7 +628,6 @@ private:
         lss::views::SetSplitShown(splitShown);
         lss::player_two::nav_strand::Tick(splitShown);  // a stranded player 2 is warped back to the party
         lss::player_two::camera_repair::Tick();
-        lss::player_two::ride_framing_watch::Tick();
         lss::player_two::traversal_watch::Tick();
         lss::player_two::trigger_two::Tick();
         lss::player_two::traversal_camera::Tick();  // the traversal cameras' collision watch (Debug, on change)
@@ -659,8 +646,6 @@ private:
         lss::player_two::world_actor_reach::Tick(session_->PlaysMember());
         lss::player_two::ride_watch::Tick();
         lss::player_two::wheelie_watch::Tick();
-        lss::player_two::ride_probe::Tick();
-        lss::hud::navimap_watch::Tick(splitShown);
         lss::hud::minimap::Tick(splitShown);  // outside the overlay render, before it
         if (wholeScreen_)
         {

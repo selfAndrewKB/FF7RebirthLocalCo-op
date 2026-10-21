@@ -4,11 +4,12 @@
 #include "platform/guarded.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "player_two/chocobo_ride.h"
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
+#include "player_two/leader_scope.h"
 #include "player_two/object_fields.h"
 #include "player_two/primary_controller.h"
-#include "player_two/ride_framing_watch.h"
 #include "players/unreal_access.h"
 
 #include <chrono>
@@ -52,6 +53,14 @@ constexpr std::uint32_t kResetYaw      = 0x40C;  // float
 constexpr std::uint32_t kPcmFlags      = 0x2C10;  // bit 0x400: the stock bGameCameraCutThisFrame
 constexpr std::uint32_t kCameraCutBit  = 0x400;
 
+// The ride framing (RE-p2-chocobo-warp-camera.md §3, §6): while a player rides, slot 15 holds the chocobo camera
+// module the boarding installed; the repair lines describe it (the former ride_framing_watch's describer; its
+// redirects answered their question, 2026-10-07).
+constexpr std::uintptr_t kChocoboModuleVt   = 0x145CE2C50;  // FEndChocoboCameraModule
+constexpr std::uint32_t  kModuleOwner       = 0x50;         // the operator SetModuleSlot15 wrote
+constexpr std::uint32_t  kChocoboModuleBody = 0x540;        // FWeakObjectPtr: the ride body it follows
+constexpr std::uint32_t  kPcmRideSubject    = 0x2CC8;       // FWeakObjectPtr
+
 constexpr auto     kRetryGap     = std::chrono::milliseconds(500);
 constexpr auto     kHealthyFor   = std::chrono::seconds(2);  // finite this long: the next NaN starts a new count
 constexpr unsigned kMaxInARow    = 5;
@@ -64,7 +73,8 @@ struct Pose
 };
 
 // Set once at install.
-ResetFn g_reset = nullptr;
+ResetFn        g_reset           = nullptr;
+std::uintptr_t g_chocoboModuleVt = 0;  // live
 
 // Game thread.
 unsigned                         g_inARow        = 0;  // repairs since the pose was last healthy
@@ -140,6 +150,62 @@ std::wstring PoseText(const Pose& pose)
                        pose.rotation[0], pose.rotation[1], pose.rotation[2]);
 }
 
+/// Whom an actor is, for the log. Game thread.
+std::wstring Whom(const void* actor)
+{
+    if (actor == nullptr)
+    {
+        return L"none";
+    }
+    const void* one = generation::PlayerOneController();
+    const void* two = generation::PlayerTwoController();
+    if (actor == chocobo_ride::RiddenChocobo() || actor == chocobo_ride::DrivenChocobo())
+    {
+        return L"player 2's chocobo";
+    }
+    if (actor == generation::Member())
+    {
+        return L"player 2's member";
+    }
+    if (one != nullptr && actor == ReadPointer(one, facts::kControllerPawn))
+    {
+        return L"player 1's pawn";
+    }
+    if (two != nullptr && actor == ReadPointer(two, facts::kControllerPawn))
+    {
+        return L"player 2's pawn";
+    }
+    return std::format(L"another actor {}", actor);
+}
+
+/// The camera's ride framing in words: slot 15 of its Field operator and the ride subject (the pose is PoseText's).
+std::wstring Describe(const void* cameraManager)
+{
+    const void* op = ReadPointer(cameraManager, facts::kCameraManagerFieldOperator);
+    if (op == nullptr)
+    {
+        return L"no Field operator";
+    }
+    const void*  module = Module(op, kSlotFifteen);
+    std::wstring slot   = L"empty";
+    if (module != nullptr)
+    {
+        const std::uintptr_t vtable = VTableOf(module);
+        slot = vtable == g_chocoboModuleVt ? std::wstring(L"chocobo module") : std::format(L"module vt {:#x} (live)", vtable);
+        slot += std::format(L" {} (active {} running {} weight {:.2f}, owner {})", module,
+                            ReadField<std::uint8_t>(module, kModuleActive), ReadField<std::uint8_t>(module, kModuleRunning),
+                            ReadField<float>(module, kModuleWeight),
+                            ReadPointer(module, kModuleOwner) == op ? L"this operator" : L"OTHER");
+        if (vtable == g_chocoboModuleVt)
+        {
+            slot += std::format(L", follows {}",
+                                Whom(leader_scope::ObjectAt(static_cast<const std::byte*>(module) + kChocoboModuleBody)));
+        }
+    }
+    return std::format(L"slot 15 {}; ride subject {}", slot,
+                       Whom(leader_scope::ObjectAt(static_cast<const std::byte*>(cameraManager) + kPcmRideSubject)));
+}
+
 /// The repair's follow-up lines: after one frame (did the reset write the pose) and after ten (did the camera reach
 /// the member, and is the ride framing still there).
 void FollowUp(const void* cameraManager, const void* op, const Pose& pose) noexcept
@@ -156,7 +222,7 @@ void FollowUp(const void* cameraManager, const void* op, const Pose& pose) noexc
             const void* slot = Module(op, kSlotFifteen);
             platform::Log(L"camera repair: after {} frames: {}: {}, camera→member {}; slot 15 {}; {}", g_followUp,
                           pose.finite ? L"REPAIRED" : L"NOT repaired", PoseText(pose), Metres(CameraToMember(cameraManager)),
-                          slot == g_slotBefore ? L"unchanged" : L"CHANGED", ride_framing_watch::Describe(cameraManager));
+                          slot == g_slotBefore ? L"unchanged" : L"CHANGED", Describe(cameraManager));
             g_following = false;
         }
     }
@@ -199,7 +265,7 @@ void Repair(void* cameraManager, const void* op, const Pose& pose) noexcept
         platform::Log(L"camera repair: player 2's camera pose is not finite ({}); the game's player-warp camera reset "
                       L"(PrimaryPCM_ResetCameraToField, cut) on player 2's camera in player 2's primary scope, try {} of {} "
                       L"({} this session). Before: {}; {}; camera→member {}",
-                      PoseText(pose), g_inARow, kMaxInARow, g_repairs, ride_framing_watch::Describe(cameraManager),
+                      PoseText(pose), g_inARow, kMaxInARow, g_repairs, Describe(cameraManager),
                       ResetInputs(cameraManager, op), Metres(CameraToMember(cameraManager)));
     }
     catch (...)
@@ -222,6 +288,8 @@ void Install(const platform::GameImage& image) noexcept
 {
     const auto reset = platform::FindFunction(image, kReset);
     g_reset          = reset ? reinterpret_cast<ResetFn>(*reset) : nullptr;
+    const auto vt    = image.Rebase(kChocoboModuleVt);
+    g_chocoboModuleVt = vt ? *vt : 0;
     platform::Log(L"camera repair: {}", g_reset != nullptr
                                             ? L"installed (a non-finite pose on player 2's camera gets the game's camera reset)"
                                             : L"UNAVAILABLE (the reset's bytes differ; a lost camera needs Ctrl+F8, Ctrl+F7)");
@@ -266,7 +334,7 @@ void Tick() noexcept
         try
         {
             platform::Log(L"camera repair: gave up after {} tries; the pose stays non-finite ({}); {}; {}", kMaxInARow,
-                          PoseText(pose), ResetInputs(cameraManager, op), ride_framing_watch::Describe(cameraManager));
+                          PoseText(pose), ResetInputs(cameraManager, op), Describe(cameraManager));
         }
         catch (...)
         {

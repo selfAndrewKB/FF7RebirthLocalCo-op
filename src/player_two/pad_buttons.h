@@ -58,10 +58,6 @@ private:
     bool held_ = false;
 };
 
-/// Logging (RE-p2-chocobo-input.md §6): the held byte the game reads now in the raw table for the chocobo's Accel (0)
-/// or Dash (1) action, as the current view shows it (player 2's inside a ButtonScope); -1 when unread. Game thread.
-std::int32_t TracedHeldNow(std::size_t action) noexcept;
-
 /// The game's action-down dispatcher: (owner, unused, source bit, the action event, alreadyHandled),
 /// 1 when the UI consumed the action.
 using ActionDownFn = char (*)(void* owner, void* unused, std::uint32_t sourceBit, void* event, std::uint8_t alreadyHandled);

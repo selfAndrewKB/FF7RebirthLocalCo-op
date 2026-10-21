@@ -18,7 +18,6 @@
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/party_warp.h"
-#include "player_two/warp_camera_watch.h"
 #include "player_two/strand_watch.h"
 
 #include <algorithm>
@@ -543,10 +542,7 @@ void MountedTick(void* member, const void* chocobo, const void* ridden, bool spl
                               L"failed check(s) while parked; warping the chocobo with player 2 seated",
                               g_rideWatch.Held(), g_rideStrand.refusals + refusals, g_rideStrand.falls + falls,
                               g_rideStrand.parkChecks + parkChecks);
-                if (party_warp::Start(const_cast<void*>(ridden), party_warp::Subject::Chocobo, false, splitShown))
-                {
-                    warp_camera_watch::Arm(member);  // she is carried with it: the same camera follow question
-                }
+                party_warp::Start(const_cast<void*>(ridden), party_warp::Subject::Chocobo, false, splitShown);  // logs its outcome
                 break;
             case StrandEvent::Ended:
                 EndRideStrand(ridden, L"no refusal for a moment: stick let go, the world is back, or it was brought back");
@@ -734,7 +730,6 @@ void Tick(bool splitShown) noexcept
     {
         MountedTick(nullptr, nullptr, nullptr, splitShown, 0.0f);
         party_warp::Tick(nullptr, nullptr, splitShown, 0.0f);  // lets a warp in progress go
-        warp_camera_watch::Tick(nullptr, 0.0f);
         return;
     }
     g_memberRoot.store(RootOf(member), std::memory_order_release);
@@ -774,12 +769,8 @@ void Tick(bool splitShown) noexcept
                           g_strand.parkChecks + parkChecks, std::max(g_strand.longestMove, longest), MovedSinceStart(),
                           Places());
             ProbeAi(L"at the warp", true);
-            if (party_warp::Start(member, party_warp::Subject::Member,
-                                  PointerAt(RootOf(member), kComponentAttachParent) != nullptr,
-                                  splitShown))  // logs its own outcome
-            {
-                warp_camera_watch::Arm(member);
-            }
+            party_warp::Start(member, party_warp::Subject::Member, PointerAt(RootOf(member), kComponentAttachParent) != nullptr,
+                              splitShown);  // logs its own outcome
             break;
         case StrandEvent::Ended:
             EndStrand(L"no refusal for a moment: stick let go, the world is back, or she was brought back");
@@ -787,7 +778,6 @@ void Tick(bool splitShown) noexcept
         case StrandEvent::None: ProbeAi(L"changed", false); break;
     }
     party_warp::Tick(member, ridden, splitShown, seconds);
-    warp_camera_watch::Tick(member, seconds);
     if (g_watch.Stranded())
     {
         g_strand.refusals += refusals;

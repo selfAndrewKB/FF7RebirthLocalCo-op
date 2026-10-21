@@ -18,7 +18,6 @@
 #include "player_two/pad_sticks.h"
 #include "player_two/party_member.h"
 #include "player_two/primary_controller.h"
-#include "player_two/ride_probe.h"
 #include "player_two/scope_leaks.h"
 #include "player_two/wheelie_ride.h"
 
@@ -405,10 +404,7 @@ RideTick TickRide(void* playerTwoController, void* member, void* state, const vo
     const move_state::OwnTick          own;
     const scope_leaks::MemberTickScope leaks(state, playerTwoController, deltaTime);
     g_counters.Act();
-    ride_probe::Slot11(state, false);
-    const bool ticked = GuardedTick(state, deltaTime);
-    ride_probe::Slot11(state, true);
-    return ticked ? RideTick::Ticked : RideTick::Faulted;
+    return GuardedTick(state, deltaTime) ? RideTick::Ticked : RideTick::Faulted;
 }
 
 HandlesTick TickRideHandles(const void* member, void* state, const void* chocobo, const void* component, float deltaTime,

@@ -76,12 +76,10 @@ add_library(LocalSplitScreen SHARED
     src/player_two/member_movement.cpp
     src/player_two/nav_strand.cpp
     src/player_two/camera_repair.cpp
-    src/player_two/ride_framing_watch.cpp
     src/player_two/climb_context.cpp
     src/player_two/near_fade.cpp
     src/player_two/rumble_list_two.cpp
     src/player_two/ffb_manager_two.cpp
-    src/player_two/shared_ride_rumble.cpp
     src/player_two/audio_listener_two.cpp
     src/player_two/approach_two.cpp
     src/player_two/move_type_two.cpp
@@ -92,7 +90,6 @@ add_library(LocalSplitScreen SHARED
     src/player_two/switch_volume_two.cpp
     src/player_two/trigger_two.cpp
     src/player_two/vault_camera.cpp
-    src/player_two/warp_camera_watch.cpp
     src/player_two/framing_watch.cpp
     src/player_two/location_rows.cpp
     src/player_two/shoulder_scale.cpp
@@ -102,7 +99,6 @@ add_library(LocalSplitScreen SHARED
     src/player_two/rumble_watch.cpp
     src/player_two/pad_rumble.cpp
     src/player_two/combat_rumble.cpp
-    src/player_two/chest_watch.cpp
     src/player_two/vending.cpp
     src/player_two/interact_watch.cpp
     src/player_two/charapop_watch.cpp
@@ -116,8 +112,6 @@ add_library(LocalSplitScreen SHARED
     src/player_two/shared_ride.cpp
     src/player_two/wheelie_ride.cpp
     src/player_two/wheelie_watch.cpp
-    src/player_two/ride_probe.cpp
-    src/hud/navimap_watch.cpp
     src/hud/minimap.cpp
     src/hud/minimap_labels.cpp
     src/hud/label_relayouts.cpp
