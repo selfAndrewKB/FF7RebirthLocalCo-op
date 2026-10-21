@@ -8,6 +8,7 @@
 #include "platform/log.h"
 #include "platform/module_pin.h"
 #include "platform/sparse_array.h"
+#include "platform/verified_code.h"
 #include "player_two/generation.h"
 #include "player_two/weak_object.h"
 
@@ -43,12 +44,12 @@ constexpr List kLists[] = {
 };
 
 // The wrappers: prologues up to the stack probe, checked before their first instruction is replaced.
-constexpr std::uintptr_t kPlaceSlate           = 0x140F5F708;
 constexpr std::uint8_t   kPlaceSlatePrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x57, 0xB8, 0x60,
                                                   0x00, 0x00, 0x00, 0xE8, 0x18, 0xF8, 0x14, 0x01};
-constexpr std::uintptr_t kPlaceUmg             = 0x143A41704;
+constexpr platform::FunctionFact kPlaceSlate{L"the Slate popup's place wrapper", 0x140F5F708, kPlaceSlatePrologue};
 constexpr std::uint8_t   kPlaceUmgPrologue[]   = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C, 0x24, 0x18, 0x56, 0x57,
                                                   0x41, 0x56, 0xB8, 0x70, 0x00, 0x00, 0x00, 0xE8, 0x14, 0xD8, 0x66, 0xFE};
+constexpr platform::FunctionFact kPlaceUmg{L"the UMG popup's place wrapper", 0x143A41704, kPlaceUmgPrologue};
 constexpr std::uintptr_t kEntryLength          = sizeof(kPopupEntryBytes);
 
 // FWeakObjectPtr::Get (hud/hud_updates.cpp).
@@ -150,10 +151,9 @@ int ReplayList(std::uintptr_t manager, const List& list, void* canvas, void* pla
 bool Install(const platform::GameImage& image) noexcept
 {
     const auto system      = image.Rebase(facts::kEndUISystem, kManager + sizeof(void*));
-    const auto slate       = image.Rebase(kPlaceSlate, kEntryLength);
-    const auto umg         = image.Rebase(kPlaceUmg, kEntryLength);
-    if (!system || !slate || !umg || !player_two::weak_object::Known() ||
-        !image.BytesMatch(kPlaceSlate, kPlaceSlatePrologue) || !image.BytesMatch(kPlaceUmg, kPlaceUmgPrologue))
+    const auto slate       = platform::FindFunction(image, kPlaceSlate);
+    const auto umg         = platform::FindFunction(image, kPlaceUmg);
+    if (!system || !slate || !umg || !player_two::weak_object::Known())
     {
         platform::Log(L"popups: the placement code is not what the research read; popups stay player 1's in both halves");
         return false;

@@ -19,6 +19,7 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/verified_code.h"
 #include "player_two/generation.h"
 #include "player_two/primary_controller.h"
 #include "players/unreal_access.h"
@@ -476,9 +477,10 @@ using facts::kCmdSetupPending;
 // SGameLayerManager::GetPlayerWidgetHostGeometry: IGameLayerManager vtable slot 2,
 // FGeometry* (IGameLayerManager*, FGeometry* out, ULocalPlayer*). The interface pointer is held
 // by the game viewport client at +0x120 (a weak pointer; its reference controller at +0x128).
-constexpr std::uintptr_t kPlayerHostGeometry           = 0x1451803CC;
 constexpr std::uint8_t   kPlayerHostGeometryPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74,
                                                           0x24, 0x18, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
+constexpr platform::FunctionFact kPlayerHostGeometry{L"GameLayerManager player-host geometry", 0x1451803CC,
+                                                     kPlayerHostGeometryPrologue};
 constexpr std::uint32_t  kViewportLayerManager           = 0x120;
 constexpr std::uint32_t  kViewportLayerManagerController = 0x128;
 constexpr std::size_t    kGeometryBytes                  = 0x38;  // Size +0, Scale +8, translation +0x2C
@@ -609,9 +611,7 @@ int LogHudManagers(const platform::GameImage& image)
     platform::Log(L"hud managers: compass holder's widget {}",
                   holder != 0 ? DescribeWeak(holder) : std::wstring(L"(no holder)"));
     ++lines;
-    const std::uintptr_t geometry = image.BytesMatch(kPlayerHostGeometry, kPlayerHostGeometryPrologue)
-                                        ? image.Rebase(kPlayerHostGeometry).value_or(0)
-                                        : 0;
+    const std::uintptr_t geometry = platform::FindFunction(image, kPlayerHostGeometry).value_or(0);
     return lines + LogPlayerLayers(geometry);
 }
 

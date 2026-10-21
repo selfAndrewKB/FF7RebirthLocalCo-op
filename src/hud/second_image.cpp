@@ -46,9 +46,10 @@ namespace {
 
 // SEndRootOverlay__RenderToCompositeLayer(overlay): returns at once while the overlay has no
 // window (+0x2F0), before writing anything.
-constexpr std::uintptr_t kRenderToCompositeLayer = 0x140C95CC0;
 constexpr std::uint8_t   kRenderToCompositeLayerPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x48,
                                                               0x89, 0x7C, 0x24, 0x20, 0x41, 0x56, 0xB8, 0x80, 0x03, 0x00, 0x00};
+constexpr platform::FunctionFact kRenderToCompositeLayer{L"SEndRootOverlay__RenderToCompositeLayer", 0x140C95CC0,
+                                                         kRenderToCompositeLayerPrologue};
 constexpr std::uint32_t  kOverlayWindow = 0x2F0;
 
 // Its call to FEndMenuRenderer__AcquireLayerSlot(renderer, pool 2): rcx = renderer, dl = 2, the
@@ -61,9 +62,10 @@ constexpr std::uintptr_t kDeltaTime = 0x146FAA330;
 // SceneRenderer_Render_Main's call to AddRenderCompositeLayerDelegatePasses(module, builder,
 // &Views, texture, context), once per view family, before that family's composite consume.
 constexpr std::uintptr_t kAddCompositePassesCall = 0x140FDE3C1;
-constexpr std::uintptr_t kAddCompositePasses     = 0x140D1791C;
 constexpr std::uint8_t   kAddCompositePassesPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C,
                                                           0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x57};
+constexpr platform::FunctionFact kAddCompositePasses{L"SceneRenderer_AddCompositePasses", 0x140D1791C,
+                                                     kAddCompositePassesPrologue};
 constexpr std::uint32_t  kViewUnscaledViewRect = 0x238;  // FIntRect in FSceneView (FViewInfo is a copy)
 // Game version 1.005 (RE-1005-hud-2.md): the call (0x140C1481D there) crosses a 16-byte block on the render thread, so
 // the function's entry is redirected instead; Render_Main's call is its only caller, so every call is still that one.
@@ -260,9 +262,8 @@ bool Patch(const platform::GameImage& image, platform::CodeRedirect& redirect, s
 
 bool InstallSecondImage(const platform::GameImage& image) noexcept
 {
-    const bool prologues = image.BytesMatch(kRenderToCompositeLayer, kRenderToCompositeLayerPrologue) &&
-                           image.BytesMatch(kAddCompositePasses, kAddCompositePassesPrologue);
-    const auto render    = image.Rebase(kRenderToCompositeLayer);
+    const auto render    = platform::FindFunction(image, kRenderToCompositeLayer);
+    const auto passes    = platform::FindFunction(image, kAddCompositePasses);
     const auto acquire   = platform::FindFunction(image, facts::kAcquireLayerSlot);
     const auto init      = platform::FindFunction(image, facts::kBeginInitResource);
     const auto submit    = platform::FindFunction(image, facts::kSubmitLayerSlot);
@@ -270,7 +271,7 @@ bool InstallSecondImage(const platform::GameImage& image) noexcept
     const auto delta     = image.Rebase(kDeltaTime, sizeof(double));
     const auto vbVtable  = image.Rebase(facts::kVertexBufferVtable, sizeof(void*));
     const auto ibVtable  = image.Rebase(facts::kIndexBufferVtable, sizeof(void*));
-    if (!prologues || !render || !acquire || !init || !submit || !overlay || !delta || !vbVtable || !ibVtable)
+    if (!render || !passes || !acquire || !init || !submit || !overlay || !delta || !vbVtable || !ibVtable)
     {
         platform::Log(L"HUD image: the overlay's render code is not what the research read; no player-2 image");
         return false;
@@ -286,17 +287,15 @@ bool InstallSecondImage(const platform::GameImage& image) noexcept
     const auto buffersCode = EntryBuffersCode(g_fields);
     const auto gateCode    = EntryDrawGateCode(g_fields);
     // The family decision: the call on the research build, the function's entry on 1.005 (kAddCompositePassesFirst).
-    const auto familyRedirect = [&image]() noexcept {
+    const auto familyRedirect = [&image, passes = *passes]() noexcept {
         if (platform::RunningBuild() != platform::BuildIndex::V1005)
         {
-            return g_familyCall.InstallResearch(image, kAddCompositePassesCall, kAddCompositePasses,
-                                                reinterpret_cast<std::uintptr_t>(&AddCompositePasses));
+            return g_familyCall.Install(image, kAddCompositePassesCall, passes,
+                                        reinterpret_cast<std::uintptr_t>(&AddCompositePasses));
         }
-        const auto entry = image.Rebase(kAddCompositePasses);
-        return entry && g_familyEntry.Install(*entry,
-                                              image.EntryInstruction(kAddCompositePasses, std::span(kAddCompositePassesPrologue,
-                                                                                                    kAddCompositePassesFirst)),
-                                              reinterpret_cast<std::uintptr_t>(&AddCompositePasses));
+        const auto first = kAddCompositePasses.entryBytes.first(kAddCompositePassesFirst);
+        return g_familyEntry.Install(passes, image.EntryInstruction(kAddCompositePasses.address, first),
+                                     reinterpret_cast<std::uintptr_t>(&AddCompositePasses));
     };
     // The render-thread sites first: they do nothing until a family name and player 2's buffers are set.
     const bool installed =

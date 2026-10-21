@@ -5,13 +5,13 @@
 #include "platform/frame_watch.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
+#include "platform/verified_code.h"
 
 #include "player_two/weak_object.h"
 
 #include <array>
 #include <cstdint>
 #include <format>
-#include <span>
 
 namespace lss::hud::hud_updates {
 
@@ -22,9 +22,8 @@ namespace {
 
 struct SubTick
 {
-    std::uint32_t                 member;    // EndUISystem member holding the object (a pointer)
-    std::uintptr_t                function;  // void (object)
-    std::span<const std::uint8_t> prologue;
+    std::uint32_t          member;    // EndUISystem member holding the object (a pointer)
+    platform::FunctionFact function;  // void (object)
 };
 
 constexpr std::uint8_t kTick98[]  = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x55, 0x57, 0x41,
@@ -43,13 +42,13 @@ constexpr std::uint8_t kTick180[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0
 constexpr std::uint32_t kMarkerListMember = 0x150;  // the off-screen enemy arrows among them (hud/marker_timers.h)
 
 // In MasterHUD_Tick's order (pass 9, P9.1).
-const std::array<SubTick, 6> kSubTicks{{
-    {0x98, 0x140A677F0, kTick98},
-    {0xB0, 0x140B8B374, kTickB0},
-    {0x150, 0x140C8D360, kTick150},  // EndUI__MarkerList_Tick
-    {0x188, 0x140F37874, kTick188},
-    {0x170, 0x140F37ACC, kTick170},
-    {0x180, 0x140A68620, kTick180},
+constexpr std::array<SubTick, 6> kSubTicks{{
+    {0x98, {L"the HUD's +0x98 object's tick", 0x140A677F0, kTick98}},
+    {0xB0, {L"the HUD's +0xB0 object's tick", 0x140B8B374, kTickB0}},
+    {0x150, {L"EndUI__MarkerList_Tick", 0x140C8D360, kTick150}},
+    {0x188, {L"the HUD's +0x188 object's tick", 0x140F37874, kTick188}},
+    {0x170, {L"the HUD's +0x170 object's tick", 0x140F37ACC, kTick170}},
+    {0x180, {L"the HUD's +0x180 object's tick", 0x140A68620, kTick180}},
 }};
 
 // The leader-target icon (pass 9 step 7): m = *(g+0x140); if *(int32*)(m+0x20) != 0 and
@@ -57,19 +56,21 @@ const std::array<SubTick, 6> kSubTicks{{
 constexpr std::uint32_t  kLeaderTargetMember = 0x140;
 constexpr std::uint32_t  kLeaderTargetCount  = 0x20;
 constexpr std::uint32_t  kLeaderTargetWeak   = 0x6C;
-constexpr std::uintptr_t kLeaderTargetTick   = 0x1417267F0;
 constexpr std::uint8_t   kLeaderTargetPrologue[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x10, 0x48, 0x89, 0x70, 0x18, 0x48,
                                                     0x89, 0x78, 0x20, 0x55, 0x48, 0x8D, 0x68, 0xA1, 0xB8, 0xA0, 0x00, 0x00, 0x00};
+constexpr platform::FunctionFact kLeaderTargetTick{L"the leader-target icon's tick", 0x1417267F0,
+                                                   kLeaderTargetPrologue};
 
 // The compass (pass 12 item 5): CompassHolder__FrameUpdate(holder, DeltaTime), holder =
 // *(*(g+0x108)+0x348). Its heading and scale come from the primary camera manager (L3). Run with a
 // DeltaTime of 0 for each player [pass 12: looks safe to re-run, not fully traced].
 constexpr std::uint32_t  kCompassHolder     = 0x348;
-constexpr std::uintptr_t kCompassFrameUpdate = 0x14122FBA0;
 constexpr std::uint8_t   kCompassFrameUpdatePrologue[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x10, 0x48, 0x89, 0x70, 0x18,
                                                           0x48, 0x89, 0x78, 0x20, 0x55, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56,
                                                           0x41, 0x57, 0x48, 0x8D, 0xA8, 0xC8, 0xFD, 0xFF, 0xFF, 0xB8, 0x10,
                                                           0x03, 0x00, 0x00};
+constexpr platform::FunctionFact kCompassFrameUpdate{L"the compass holder's FrameUpdate", 0x14122FBA0,
+                                                     kCompassFrameUpdatePrologue};
 
 using ObjectFn  = void (*)(void* object);
 using CompassFn = void (*)(void* holder, float deltaTime);
@@ -185,17 +186,16 @@ bool RunCompass() noexcept
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    bool holds = player_two::weak_object::Known() && image.BytesMatch(kLeaderTargetTick, kLeaderTargetPrologue) &&
-                 image.BytesMatch(kCompassFrameUpdate, kCompassFrameUpdatePrologue);
+    bool holds = player_two::weak_object::Known();
     for (std::size_t i = 0; holds && i < kSubTicks.size(); ++i)
     {
-        const auto live = image.Rebase(kSubTicks[i].function);
-        holds           = live && image.BytesMatch(kSubTicks[i].function, kSubTicks[i].prologue);
+        const auto live = platform::FindFunction(image, kSubTicks[i].function);
+        holds           = live.has_value();
         g_subTicks[i]   = live ? reinterpret_cast<ObjectFn>(*live) : nullptr;
     }
     const auto system  = image.Rebase(facts::kEndUISystem, kSubTicks.back().member + sizeof(void*));
-    const auto leader  = image.Rebase(kLeaderTargetTick);
-    const auto compass = image.Rebase(kCompassFrameUpdate);
+    const auto leader  = platform::FindFunction(image, kLeaderTargetTick);
+    const auto compass = platform::FindFunction(image, kCompassFrameUpdate);
     if (!holds || !system || !leader || !compass)
     {
         return false;

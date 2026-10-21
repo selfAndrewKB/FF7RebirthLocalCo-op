@@ -4,6 +4,7 @@
 #include "platform/call_redirect.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/verified_code.h"
 #include "player_two/generation.h"
 
 #include <array>
@@ -16,34 +17,33 @@ namespace lss::hud {
 
 namespace {
 
-// Call sites and targets, as IDA shows them (RE-p2-hud.md P8.9; bytes read from the database).
-// Each target's prologue up to its stack probe call is checked before anything is redirected.
-struct Site
-{
-    std::uintptr_t call;    // an E8 rel32 inside one aligned 16-byte block
-    std::uintptr_t target;
-};
+// Call sites and targets, as IDA shows them (RE-p2-hud.md P8.9; bytes read from the database). Each
+// target's prologue up to its stack probe call is checked before anything is redirected; each call
+// is an E8 rel32 inside one aligned 16-byte block.
 
-constexpr std::uintptr_t kMasterHudTick = 0x140F37E08;  // void (EndUISystem*, float DeltaTime)
 constexpr std::uint8_t   kMasterHudTickPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x30, 0x00, 0x00, 0x00};
-constexpr Site           kMasterHudTickSite{0x1423EF4A1, kMasterHudTick};  // AEndGameMode__Tick530_Body
+// void (EndUISystem*, float DeltaTime)
+constexpr platform::FunctionFact kMasterHudTick{L"EndUISystem MasterHUD_Tick", 0x140F37E08, kMasterHudTickPrologue};
+constexpr std::uintptr_t kMasterHudTickCall = 0x1423EF4A1;  // in AEndGameMode__Tick530_Body
 
 
 // bool (APlayerController*, UUserWidget* marker, const FVector*, float* inout)
-constexpr std::uintptr_t kPlaceMarker = 0x140A59A30;
 constexpr std::uint8_t   kPlaceMarkerPrologue[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x10, 0x48, 0x89, 0x70,
                                                    0x18, 0x48, 0x89, 0x78, 0x20, 0x55, 0x41, 0x56, 0x41, 0x57};
-constexpr Site           kPlaceMarkerSite{0x140C8D620, kPlaceMarker};  // EndUI__MarkerList_Tick
+constexpr platform::FunctionFact kPlaceMarker{L"EndUI__PlaceMarkerWidgetAtWorld_Clamped", 0x140A59A30,
+                                              kPlaceMarkerPrologue};
+constexpr std::uintptr_t kPlaceMarkerCall = 0x140C8D620;  // in EndUI__MarkerList_Tick
 
 // bool (APlayerController*, const FVector*, FVector2D* out)
-constexpr std::uintptr_t kProject = 0x140CBF974;
 constexpr std::uint8_t   kProjectPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
                                                0x24, 0x10, 0x57, 0xB8, 0x40, 0x00, 0x00, 0x00};
-constexpr std::array<Site, 4> kProjectSites{{
-    {0x1409F94FA, kProject},  // AreaMapIcon_FrameUpdate
-    {0x1409FA4F6, kProject},  // AreaMapIcon_FrameUpdate
-    {0x1408607C5, kProject},  // AreaMapIcon__ProjectIconElement
-    {0x140860829, kProject},  // AreaMapIcon__ProjectIconElement
+constexpr platform::FunctionFact kProject{L"the HUD's project-to-screen (controller, point, out)", 0x140CBF974,
+                                          kProjectPrologue};
+constexpr std::array<std::uintptr_t, 4> kProjectCalls{{
+    0x1409F94FA,  // AreaMapIcon_FrameUpdate
+    0x1409FA4F6,  // AreaMapIcon_FrameUpdate
+    0x1408607C5,  // AreaMapIcon__ProjectIconElement
+    0x140860829,  // AreaMapIcon__ProjectIconElement
 }};
 
 constexpr std::uintptr_t kFrameNumber = 0x146FAA370;  // GFrameNumber, uint32
@@ -183,7 +183,7 @@ bool TracedProject(void* controller, const void* location, void* out) noexcept
         Note(L'P');
         ++g_frame.projections[PlayerSlot(controller)];
     }
-    // Every project site calls the same function (kProjectSites), set before any of them is redirected.
+    // Every project site calls the same function (kProjectCalls), set before any of them is redirected.
     return reinterpret_cast<ProjectFn>(g_project)(controller, location, out);
 }
 
@@ -193,36 +193,33 @@ bool TracedProject(void* controller, const void* location, void* out) noexcept
 
 bool InstallHudTrace(const platform::GameImage& image) noexcept
 {
-    const bool prologues = image.BytesMatch(kMasterHudTick, kMasterHudTickPrologue) &&
-
-                           image.BytesMatch(kPlaceMarker, kPlaceMarkerPrologue) &&
-                           image.BytesMatch(kProject, kProjectPrologue);
-    const auto frame  = image.Rebase(kFrameNumber, sizeof(std::uint32_t));
-    if (!prologues || !frame)
+    const auto tick    = platform::FindFunction(image, kMasterHudTick);
+    const auto marker  = platform::FindFunction(image, kPlaceMarker);
+    const auto project = platform::FindFunction(image, kProject);
+    const auto frame   = image.Rebase(kFrameNumber, sizeof(std::uint32_t));
+    if (!tick || !marker || !project || !frame)
     {
         platform::Log(L"HUD trace: the functions are not what the research read; no trace");
         return false;
     }
-    g_frameNumber = *frame;
-    g_project      = image.Rebase(kProject).value_or(0);
-    bool installed = g_project != 0 &&
-                     g_tickCall.InstallResearch(image, kMasterHudTickSite.call, kMasterHudTickSite.target,
-                                                reinterpret_cast<std::uintptr_t>(&TracedHudTick)) &&
-
-                     g_markerCall.InstallResearch(image, kPlaceMarkerSite.call, kPlaceMarkerSite.target,
-                                                  reinterpret_cast<std::uintptr_t>(&TracedMarker));
+    g_frameNumber  = *frame;
+    g_project      = *project;
+    bool installed = g_tickCall.Install(image, kMasterHudTickCall, *tick,
+                                        reinterpret_cast<std::uintptr_t>(&TracedHudTick)) &&
+                     g_markerCall.Install(image, kPlaceMarkerCall, *marker,
+                                          reinterpret_cast<std::uintptr_t>(&TracedMarker));
     const bool v1005 = platform::RunningBuild() == platform::BuildIndex::V1005;
-    for (std::size_t i = 0; installed && i < kProjectSites.size(); ++i)
+    for (std::size_t i = 0; installed && i < kProjectCalls.size(); ++i)
     {
-        const auto site = image.Rebase(kProjectSites[i].call, 5);
+        const auto site = image.Rebase(kProjectCalls[i], 5);
         if (v1005 && site && (*site & 0xF) + 5 > 16)
         {
             g_projectPending[i] = *site;  // installed from the game thread (above)
             g_projectCrosses[i] = true;
             continue;
         }
-        installed = g_projectCalls[i].InstallResearch(image, kProjectSites[i].call, kProjectSites[i].target,
-                                                      reinterpret_cast<std::uintptr_t>(&TracedProject));
+        installed = g_projectCalls[i].Install(image, kProjectCalls[i], *project,
+                                              reinterpret_cast<std::uintptr_t>(&TracedProject));
     }
     if (!installed)
     {

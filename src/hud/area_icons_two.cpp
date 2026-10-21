@@ -26,14 +26,17 @@ namespace {
 constexpr std::uintptr_t kInstanceOne = 0x149349880;  // the game's instance (EndUISystem+0x1A0), a pointer
 constexpr std::size_t    kInstanceSize = 0x160;
 
-constexpr std::uintptr_t kCtor             = 0x143A0D944;  // AreaMapIconMgr__Ctor(memory), returns it
 constexpr std::uint8_t   kCtorPrologue[]   = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00};
-constexpr std::uintptr_t kFrameUpdate      = 0x1409F72B8;  // AreaMapIcon_FrameUpdate(instance, xmm1 = DeltaTime)
+// AreaMapIconMgr__Ctor(memory), returns it
+constexpr platform::FunctionFact kCtor{L"AreaMapIconMgr__Ctor", 0x143A0D944, kCtorPrologue};
 constexpr std::uint8_t   kFrameUpdatePrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x57, 0x41,
                                                    0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0xB8, 0x50, 0x07, 0x00, 0x00};
-constexpr std::uintptr_t kClearAll         = 0x140F5D854;  // AreaMapIconMgr__ClearAllAndDisable(instance)
+// AreaMapIcon_FrameUpdate(instance, xmm1 = DeltaTime)
+constexpr platform::FunctionFact kFrameUpdate{L"AreaMapIcon_FrameUpdate", 0x1409F72B8, kFrameUpdatePrologue};
 constexpr std::uint8_t   kClearAllPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x55, 0x57,
                                                 0x41, 0x54, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8D, 0x6C, 0x24, 0xC9, 0xB8};
+// AreaMapIconMgr__ClearAllAndDisable(instance)
+constexpr platform::FunctionFact kClearAll{L"AreaMapIconMgr__ClearAllAndDisable", 0x140F5D854, kClearAllPrologue};
 
 // The frame function's only call for the first player controller (§8.2): E8 rel32 at 0x1409F7439
 // to UWorld__GetFirstPlayerController, rcx = the world, inside the block at 0x1409F7430.
@@ -43,20 +46,23 @@ constexpr std::uintptr_t kFirstControllerCall = 0x1409F7439;
 // (RE-p2-hud-targets.md §1.1, R1): E8 rel32 at 0x1409F73E4 to Party_GetLeaderCharacterByLeaderType,
 // no arguments, inside the block at 0x1409F73E0.
 constexpr std::uintptr_t kLeaderCall = 0x1409F73E4;
-constexpr std::uintptr_t kLeader     = 0x140C81DE0;
 constexpr std::uint8_t   kLeaderPrologue[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x46, 0xD1, 0x42, 0x01};
+constexpr platform::FunctionFact kLeader{L"Party_GetLeaderCharacterByLeaderType", 0x140C81DE0, kLeaderPrologue};
 
 // The three game events that write player 1's instance, and their seven call sites
 // (RE-p2-hud-view-levers.md §6 and S-HUD31). None takes the instance: each reads EndUISystem+0x1A0.
 // Each site keeps calling the event, then the event's instance effect is applied to player 2's
 // instance directly. The events themselves are not run again: Enable and HideAndClear also play
 // the in/out animation of one shared widget (EndUISystem+0x60), which a second run would restart.
-constexpr std::uintptr_t kEnable              = 0x141816F1C;  // void(): +0xD0 = 1, and the shared widget's "in"
 constexpr std::uint8_t   kEnablePrologue[]    = {0xB8, 0x28, 0x00, 0x00, 0x00};
-constexpr std::uintptr_t kHideAndClear        = 0x141816EE0;  // void(): ClearAllAndDisable, and the widget's "out"
+// void(): +0xD0 = 1, and the shared widget's "in"
+constexpr platform::FunctionFact kEnable{L"AreaMapIconMgr Enable", 0x141816F1C, kEnablePrologue};
 constexpr std::uint8_t   kHideAndClearPrologue[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00};
-constexpr std::uintptr_t kSetFlagD1           = 0x1439D1CEC;  // void(char): +0xD1 = cl
+// void(): ClearAllAndDisable, and the widget's "out"
+constexpr platform::FunctionFact kHideAndClear{L"AreaMapIconMgr HideAndClear", 0x141816EE0, kHideAndClearPrologue};
 constexpr std::uint8_t   kSetFlagD1Prologue[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00};
+// void(char): +0xD1 = cl
+constexpr platform::FunctionFact kSetFlagD1{L"AreaMapIconMgr SetFlagD1", 0x1439D1CEC, kSetFlagD1Prologue};
 
 enum class Event : std::uint8_t
 {
@@ -82,8 +88,8 @@ constexpr EventSite kEventSites[] = {
 };
 
 // SWidget::SetVisibility(widget, TAttribute<EVisibility>*), canvas vtable slot 59 (§8.3).
-constexpr std::uintptr_t kSetVisibility           = 0x140C27B38;
 constexpr std::uint8_t   kSetVisibilityPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x40, 0x00, 0x00, 0x00};
+constexpr platform::FunctionFact kSetVisibility{L"SWidget::SetVisibility", 0x140C27B38, kSetVisibilityPrologue};
 constexpr std::size_t    kSetVisibilitySlot       = 59;
 
 // The instance (§1, §2): the canvases as TWeakPtr {object, reference controller} (#1 icons, #2 quest
@@ -427,11 +433,10 @@ void RestoreEventSites() noexcept
 /// Redirects all seven sites, or none.
 bool FollowEvents(const platform::GameImage& image) noexcept
 {
-    const auto enable = image.Rebase(kEnable);
-    const auto hide   = image.Rebase(kHideAndClear);
-    const auto flag   = image.Rebase(kSetFlagD1);
-    if (!enable || !hide || !flag || !image.BytesMatch(kEnable, kEnablePrologue) ||
-        !image.BytesMatch(kHideAndClear, kHideAndClearPrologue) || !image.BytesMatch(kSetFlagD1, kSetFlagD1Prologue))
+    const auto enable = platform::FindFunction(image, kEnable);
+    const auto hide   = platform::FindFunction(image, kHideAndClear);
+    const auto flag   = platform::FindFunction(image, kSetFlagD1);
+    if (!enable || !hide || !flag)
     {
         return false;
     }
@@ -503,27 +508,23 @@ void LogIfChanged(std::uintptr_t one) noexcept
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const bool prologues = image.BytesMatch(kCtor, kCtorPrologue) &&
-                           image.BytesMatch(kFrameUpdate, kFrameUpdatePrologue) &&
-                           image.BytesMatch(kClearAll, kClearAllPrologue) &&
-                           image.BytesMatch(kSetVisibility, kSetVisibilityPrologue);
     const auto instance   = image.Rebase(kInstanceOne, sizeof(void*));
     const auto allocate   = platform::FindFunction(image, facts::kMalloc);
-    const auto ctor       = image.Rebase(kCtor);
-    const auto update     = image.Rebase(kFrameUpdate);
-    const auto clear      = image.Rebase(kClearAll);
-    const auto visibility = image.Rebase(kSetVisibility);
+    const auto ctor       = platform::FindFunction(image, kCtor);
+    const auto update     = platform::FindFunction(image, kFrameUpdate);
+    const auto clear      = platform::FindFunction(image, kClearAll);
+    const auto visibility = platform::FindFunction(image, kSetVisibility);
     const auto site       = image.Rebase(kFirstControllerCall, 5);
     const auto first      = platform::FindFunction(image, facts::kGetFirstPlayerController);
-    if (!prologues || !instance || !allocate || !ctor || !update || !clear || !visibility || !site || !first ||
+    if (!instance || !allocate || !ctor || !update || !clear || !visibility || !site || !first ||
         !g_firstControllerCall.Install(*site, *first, reinterpret_cast<std::uintptr_t>(&FirstController)))
     {
         platform::Log(L"area icons: the icon manager's code is not what the research read; no icons of player 2's own");
         return false;
     }
     const auto leaderSite = image.Rebase(kLeaderCall, 5);
-    const auto leader     = image.Rebase(kLeader);
-    if (!leaderSite || !leader || !image.BytesMatch(kLeader, kLeaderPrologue) ||
+    const auto leader     = platform::FindFunction(image, kLeader);
+    if (!leaderSite || !leader ||
         !g_leaderCall.Install(*leaderSite, *leader, reinterpret_cast<std::uintptr_t>(&Leader)))
     {
         platform::Log(L"area icons: the range-origin call is not what the research read; player 2's icons range from "

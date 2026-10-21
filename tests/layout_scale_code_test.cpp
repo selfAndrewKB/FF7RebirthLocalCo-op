@@ -83,7 +83,7 @@ void TestTheBytes()
     EXPECT(Near(Constant(kConstant1920) * 1920.0f, 1.0f));
     EXPECT(std::memcmp(kCode1005, kContextBytes, kReplaced1005) == 0);
     EXPECT(std::memcmp(kCode1005 + kReplaced1005, kCode, sizeof(kCode)) == 0);
-    EXPECT(kSite - kContext == 8);
+    EXPECT(kSite - kContext.address == 8);
     EXPECT(kResume - kSite == kReplaced);
     EXPECT(kCode[24] == 0xEB && kCode[25] == sizeof(kCode) - 26);  // the jump lands right after the constants
 }

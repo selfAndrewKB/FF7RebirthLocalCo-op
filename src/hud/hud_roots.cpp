@@ -10,6 +10,7 @@
 #include "hud/user_widgets.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
+#include "platform/verified_code.h"
 #include "player_two/primary_controller.h"
 #include "players/unreal_access.h"
 
@@ -27,9 +28,10 @@ using RC::Unreal::UObject;
 
 // UUserWidget::SetPlayerContext(widget, const FLocalPlayerContext&): writes the 16 bytes at +0x248
 // (weak local player, weak world) and walks the widget's child user widgets. No events.
-constexpr std::uintptr_t kSetPlayerContext = 0x140F59C50;
 constexpr std::uint8_t   kSetPlayerContextPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 0x48, 0x8B, 0xEC,
                                                         0xB8, 0x40, 0x00, 0x00, 0x00};
+constexpr platform::FunctionFact kSetPlayerContext{L"UUserWidget::SetPlayerContext", 0x140F59C50,
+                                                   kSetPlayerContextPrologue};
 constexpr std::uint32_t  kWidgetWorldWeak = 0x250;
 
 using SetPlayerContextFn = void (*)(void* widget, const void* context);
@@ -131,8 +133,8 @@ bool Shown(const Root& root) noexcept
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto context = image.Rebase(kSetPlayerContext);
-    if (!context || !image.BytesMatch(kSetPlayerContext, kSetPlayerContextPrologue))
+    const auto context = platform::FindFunction(image, kSetPlayerContext);
+    if (!context)
     {
         return false;
     }

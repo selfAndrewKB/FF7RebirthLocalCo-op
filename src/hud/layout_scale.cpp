@@ -29,7 +29,8 @@ bool PlaceScale(const platform::GameImage&) noexcept
     const std::span<const std::uint8_t> context(kContextBytes);
     const bool ok = g_placement.FromGameThread()
                         ? g_redirect.Install(g_site, context.first(kReplaced1005), kCode1005, g_resume)
-                        : g_redirect.Install(g_site, context.subspan(kSite - kContext, kReplaced), kCode, g_resume);
+                        : g_redirect.Install(g_site, context.subspan(kSite - kContext.address, kReplaced), kCode,
+                                             g_resume);
     platform::Log(L"HUD layout scale: {}",
                   !ok ? L"the overlay's layout-scale code could not be redirected; left alone (side-by-side halves "
                         L"keep the game's height rule)"
@@ -44,9 +45,9 @@ bool PlaceScale(const platform::GameImage&) noexcept
 bool InstallLayoutScale(const platform::GameImage& image) noexcept
 {
     const bool deferred = platform::DeferredSites::Deferred();
-    const auto site     = image.Rebase(deferred ? kContext : kSite, deferred ? kReplaced1005 : kReplaced);
+    const auto site     = image.Rebase(deferred ? kContext.address : kSite, deferred ? kReplaced1005 : kReplaced);
     const auto resume   = image.Rebase(kResume);
-    if (!site || !resume || !image.BytesMatch(kContext, kContextBytes))
+    if (!site || !resume || !platform::FindFunction(image, kContext))
     {
         platform::Log(L"HUD layout scale: the overlay's layout-scale code is not what the research read; left alone "
                       L"(side-by-side halves keep the game's height rule)");

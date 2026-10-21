@@ -22,6 +22,8 @@
 // xmm10 = cy, xmm14 = cx/|dx|, xmm6 = 0, xmm1 = |angle|; xmm3 and xmm4 are free (clobbered by the
 // atan2 call before). Only rax, xmm3, xmm4 and the flags change; no calls, no stack writes.
 
+#include "platform/verified_code.h"
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -29,10 +31,8 @@
 
 namespace lss::hud {
 
-inline constexpr std::uintptr_t kArrowEdgeCheckStart = 0x140A59D44;  // checked from here...
 inline constexpr std::uintptr_t kArrowEdgeSite       = 0x140A59DB8;
 inline constexpr std::uintptr_t kArrowEdgeSide       = 0x140A59DCB;  // the side branch
-inline constexpr std::uintptr_t kArrowEdgeTopBottom  = 0x140A59E19;  // the top/bottom branch
 inline constexpr std::uintptr_t kArrowEdgeSixty      = 0x1460A2ABC;  // 60.0f (read at 0x140A59DA1)
 inline constexpr std::uintptr_t kArrowEdgeOneTwenty  = 0x1460A3814;  // 120.0f (read at 0x140A59DC1)
 
@@ -47,7 +47,14 @@ inline constexpr std::uint8_t kArrowEdgeBytes[] = {
     0x0D, 0x13, 0x8D, 0x64, 0x05, 0xC4, 0xC1, 0x78, 0x28, 0xC2, 0xC4, 0xC2, 0x09, 0xB9, 0xC0, 0xC4,
     0x41, 0x78, 0x28, 0xC3, 0xC4, 0x62, 0x11, 0xB9, 0x44, 0x24, 0x24, 0x76, 0x58, 0xC5, 0xF8, 0x2F,
     0x0D, 0x4B, 0x9A, 0x64, 0x05, 0x73, 0x4E, 0xC5, 0xF8, 0x2F, 0xD6};
-static_assert(sizeof(kArrowEdgeBytes) == 0x140A59DCF - kArrowEdgeCheckStart);
+inline constexpr platform::FunctionFact kArrowEdgeCheckStart{L"the off-screen arrow's edge split", 0x140A59D44,
+                                                             kArrowEdgeBytes};  // checked from here...
+static_assert(sizeof(kArrowEdgeBytes) == 0x140A59DCF - kArrowEdgeCheckStart.address);
+
+/// The top/bottom branch, from its first instruction (vmovss xmm0, [rip+...]).
+inline constexpr std::uint8_t kArrowEdgeTopBottomBytes[] = {0xC5, 0xFA, 0x10, 0x05, 0x4F, 0x8D, 0x64, 0x05};
+inline constexpr platform::FunctionFact kArrowEdgeTopBottom{L"the arrow edge's top/bottom branch", 0x140A59E19,
+                                                            kArrowEdgeTopBottomBytes};
 
 /// The instruction replaced: vfmadd231ss xmm8, xmm13, dword ptr [rsp+24h].
 inline constexpr std::uint8_t kArrowEdgeFmaBytes[] = {0xC4, 0x62, 0x11, 0xB9, 0x44, 0x24, 0x24};

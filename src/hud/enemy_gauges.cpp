@@ -64,9 +64,9 @@ constexpr platform::PerBuild<std::uint32_t> kHalfScaleXY = {0x4AC, 0x49C};
 constexpr platform::PerBuild<std::uint32_t> kHalfScaleZ  = {0x4A8, 0x498};
 
 // EndUI__MF8_ProjectEntryByWidget: its entry checked, then its second instruction replaced.
-constexpr std::uintptr_t kByWidget         = 0x14176201C;
 constexpr std::uint8_t   kByWidgetPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x4C, 0x89, 0x44, 0x24, 0x18, 0x55, 0x56,
                                                 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8D, 0x6C};
+constexpr platform::FunctionFact kByWidget{L"EndUI__MF8_ProjectEntryByWidget", 0x14176201C, kByWidgetPrologue};
 constexpr std::uintptr_t kByWidgetSite   = 0x141762021;
 constexpr std::uintptr_t kByWidgetResume = 0x141762026;
 
@@ -74,35 +74,36 @@ constexpr std::uintptr_t kByWidgetResume = 0x141762026;
 // {source, controller} (the callee releases one weak reference), r9 &loc, then scratch, halfSize,
 // skipLeaderClamp on the stack.
 constexpr std::uintptr_t kTargetedCall = 0x140DBA664;
-constexpr std::uintptr_t kTargeted     = 0x140A6699C;
 constexpr std::uint8_t   kTargetedPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C, 0x24, 0x18, 0x56, 0x57,
                                                 0x41, 0x56, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8, 0x7C, 0x85, 0x64, 0x01};
+constexpr platform::FunctionFact kTargeted{L"EndUI__MF8_ProjectEntry_Targeted", 0x140A6699C, kTargetedPrologue};
 
 // The tick's one call to EndUI__MF8_IsEntryForcedTargeted_DecTimer15C(p) (bar-targeted R1), made for
 // every entry it places: case (d) of the targeted rule. Never called by the mod (it decrements a timer).
 constexpr std::uintptr_t kForcedCall = 0x140DBA287;
-constexpr std::uintptr_t kForced     = 0x140E76904;
 constexpr std::uint8_t   kForcedPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C, 0x24, 0x10, 0x48, 0x89, 0x74,
                                               0x24, 0x18, 0x57, 0x41, 0x56, 0x41, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8,
                                               0x0E, 0x86, 0x23, 0x01};
+constexpr platform::FunctionFact kForced{L"EndUI__MF8_IsEntryForcedTargeted_DecTimer15C", 0x140E76904, kForcedPrologue};
 
 // EndUI__MF8_ApplyYOffsetLerp_SetPosition(unused, widget, p): one step of the ease on World dt, then
 // the gauge at its cached point plus the offset.
-constexpr std::uintptr_t kYStep           = 0x140B8B10C;
 constexpr std::uint8_t   kYStepPrologue[] = {0x48, 0x85, 0xD2, 0x0F, 0x84, 0x86, 0x00, 0x00, 0x00, 0x48, 0x89, 0x5C, 0x24,
                                              0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x0B, 0x3E, 0x52, 0x01};
+constexpr platform::FunctionFact kYStep{L"EndUI__MF8_ApplyYOffsetLerp_SetPosition", 0x140B8B10C, kYStepPrologue};
 
 // EndUI__MF8_LeaderDistanceScaleLerp(unused, widget, owner, float* state, unused, caseC): eases a
 // gauge's size (p+0x38) toward one set by its enemy's distance from the leader (read through
 // ResolvePartyLeaderWeakPtr: a LeaderScope answers it), then writes the widget's render scale
 // (+0x98/+0x9C) and applies it (bar-targeted §2 #4, §3.3).
-constexpr std::uintptr_t kScaleStep           = 0x140B8AF5C;
 constexpr std::uint8_t   kScaleStepPrologue[] = {0x48, 0x85, 0xD2, 0x0F, 0x84, 0x98, 0x01, 0x00, 0x00, 0x48, 0x89, 0x5C, 0x24, 0x08,
                                                  0x48, 0x89, 0x74, 0x24, 0x10, 0x57, 0xB8, 0x80, 0x00, 0x00, 0x00, 0xE8, 0xB6, 0x3F,
                                                  0x52, 0x01};
-constexpr std::uintptr_t kApplyTransform           = 0x14096ECAC;  // the widget's render transform applied
+constexpr platform::FunctionFact kScaleStep{L"EndUI__MF8_LeaderDistanceScaleLerp", 0x140B8AF5C, kScaleStepPrologue};
 constexpr std::uint8_t   kApplyTransformPrologue[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x10, 0x48, 0x89, 0x70, 0x18, 0x48,
                                                       0x89, 0x78, 0x20, 0x55, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8D, 0x68, 0x98};
+constexpr platform::FunctionFact kApplyTransform{L"the gauge widget's render transform applied", 0x14096ECAC,
+                                                 kApplyTransformPrologue};
 constexpr std::uint32_t  kScale       = 0x38;   // p: the gauge's size state
 constexpr std::uint32_t  kRenderScale = 0x98;   // widget: render scale x, y
 
@@ -627,15 +628,14 @@ void PlaceOwnTargets() noexcept
 bool Install(const platform::GameImage& image) noexcept
 {
     const auto system   = image.Rebase(facts::kEndUISystem, facts::kUIEnemyStatus + sizeof(void*));
-    const auto byWidget = image.Rebase(kByWidget);
+    const auto byWidget = platform::FindFunction(image, kByWidget);
     const auto site     = image.Rebase(kByWidgetSite, sizeof(kGaugeEntryBytes));
     const auto resume   = image.Rebase(kByWidgetResume);
     const auto call     = image.Rebase(kTargetedCall, 5);
-    const auto targeted = image.Rebase(kTargeted);
+    const auto targeted = platform::FindFunction(image, kTargeted);
     const auto position = platform::FindFunction(image, facts::kSetPositionInViewport);
     if (!system || !byWidget || !site || !resume || !call || !targeted || !position ||
-        !player_two::weak_object::Known() || !image.BytesMatch(kByWidget, kByWidgetPrologue) ||
-        !image.BytesMatch(kTargeted, kTargetedPrologue))
+        !player_two::weak_object::Known())
     {
         platform::Log(L"enemy gauges: the placement code is not what the research read; gauges stay player 1's in both halves");
         return false;
@@ -661,18 +661,16 @@ bool Install(const platform::GameImage& image) noexcept
 
     // Player 2's own targeted look: the forced-targeted capture, the y step, the leader scope.
     const auto forcedSite = image.Rebase(kForcedCall, 5);
-    const auto forced     = image.Rebase(kForced);
-    const auto yStep      = image.Rebase(kYStep);
-    const bool ownChecks  = forcedSite && forced && yStep && image.BytesMatch(kForced, kForcedPrologue) &&
-                           image.BytesMatch(kYStep, kYStepPrologue) && player_two::leader_scope::Install(image);
+    const auto forced     = platform::FindFunction(image, kForced);
+    const auto yStep      = platform::FindFunction(image, kYStep);
+    const bool ownChecks  = forcedSite && forced && yStep && player_two::leader_scope::Install(image);
+    const auto scaleStep  = platform::FindFunction(image, kScaleStep);
+    const auto apply      = platform::FindFunction(image, kApplyTransform);
+    const bool sizes      = scaleStep && apply;
     if (ownChecks && platform::RunningBuild() == platform::BuildIndex::V1005)
     {
         // The forced-targeted call crosses a 16-byte block in 1.005: it is placed from the game thread, between its
         // ticks (platform/game_thread_sites.h); the size step's checks are made now.
-        const auto scaleStep = image.Rebase(kScaleStep);
-        const auto apply     = image.Rebase(kApplyTransform);
-        const bool sizes     = scaleStep && apply && image.BytesMatch(kScaleStep, kScaleStepPrologue) &&
-                           image.BytesMatch(kApplyTransform, kApplyTransformPrologue);
         g_pending = {*forcedSite, *forced, *yStep, sizes ? *scaleStep : 0, sizes ? *apply : 0};
         if (platform::game_thread_sites::Queue(&PlaceOwnTargets))
         {
@@ -687,10 +685,7 @@ bool Install(const platform::GameImage& image) noexcept
         g_yStep      = reinterpret_cast<YStepFn>(*yStep);
         g_ownTargets = true;
     }
-    const auto scaleStep = image.Rebase(kScaleStep);
-    const auto apply     = image.Rebase(kApplyTransform);
-    if (g_ownTargets && scaleStep && apply && image.BytesMatch(kScaleStep, kScaleStepPrologue) &&
-        image.BytesMatch(kApplyTransform, kApplyTransformPrologue))
+    if (g_ownTargets && sizes)
     {
         g_scaleStep = reinterpret_cast<ScaleStepFn>(*scaleStep);
         g_apply     = reinterpret_cast<ApplyFn>(*apply);

@@ -4,6 +4,8 @@
 // min(height/1080, width/1920), with the game's own constants (RE-p2-hud.md passes 4-5; RE-1005-hud-2.md for 1.005).
 // Pure data, so it is executed on the host (tests/layout_scale_code_test.cpp).
 
+#include "platform/verified_code.h"
+
 #include <cstddef>
 #include <cstdint>
 
@@ -15,12 +17,13 @@ namespace lss::hud::layout_scale_code {
 //   0x140C95FC2  vcvtsi2ss xmm7, xmm7, edx               ; H
 //   0x140C95FC6  vmulss    xmm0, xmm7, [1/1080]          ; s = H/1080     <- redirected
 //   0x140C95FCE  vdivss    xmm1, xmm2, xmm0              ; xmm1 overwritten here, so free before
-inline constexpr std::uintptr_t kContext        = 0x140C95FBE;
 inline constexpr std::uint8_t   kContextBytes[] = {
     0xC5, 0xC0, 0x57, 0xFF,                          // vxorps xmm7, xmm7, xmm7
     0xC5, 0xC2, 0x2A, 0xFA,                          // vcvtsi2ss xmm7, xmm7, edx
     0xC5, 0xC2, 0x59, 0x05, 0x62, 0xDB, 0x40, 0x05,  // vmulss xmm0, xmm7, [rip+0x0540DB62] = [0x1460A3B30]
     0xC5, 0xEA, 0x5E, 0xC8};                         // vdivss xmm1, xmm2, xmm0
+inline constexpr platform::FunctionFact kContext{L"the overlay's layout-scale instruction and its context", 0x140C95FBE,
+                                                 kContextBytes};
 inline constexpr std::uintptr_t kSite     = 0x140C95FC6;
 inline constexpr std::size_t    kReplaced = 8;
 inline constexpr std::uintptr_t kResume   = 0x140C95FCE;

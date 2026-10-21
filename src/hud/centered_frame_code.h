@@ -16,6 +16,8 @@
 // Max = L; otherwise it runs the replaced store. rax (set again by the next instruction) and the
 // flags change; nothing else. No calls, no stack use.
 
+#include "platform/verified_code.h"
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -23,7 +25,6 @@
 
 namespace lss::hud {
 
-inline constexpr std::uintptr_t kCenteredFrame       = 0x140F5FBBC;
 inline constexpr std::uintptr_t kCenteredFrameSite   = 0x140F5FC54;
 inline constexpr std::uintptr_t kCenteredFrameResume = 0x140F5FC59;
 
@@ -43,7 +44,9 @@ inline constexpr std::uint8_t kCenteredFrameBytes[] = {
     0x11, 0x4B, 0x04, 0xC5, 0xD2, 0x5C, 0xC9, 0xC5, 0xDA, 0x5C, 0xC3, 0xC5,
     0xFA, 0x11, 0x4B, 0x0C, 0xC5, 0xFA, 0x11, 0x1B, 0xC5, 0xFA, 0x11, 0x43,
     0x08};
-static_assert(sizeof(kCenteredFrameBytes) == kCenteredFrameResume - kCenteredFrame);
+inline constexpr platform::FunctionFact kCenteredFrame{L"EndUI__GetCentered1920x1080Frame", 0x140F5FBBC,
+                                                       kCenteredFrameBytes};
+static_assert(sizeof(kCenteredFrameBytes) == kCenteredFrameResume - kCenteredFrame.address);
 
 /// The instruction replaced: vmovss [rbx+8], xmm0.
 inline constexpr std::uint8_t kCenteredFrameStoreBytes[] = {0xC5, 0xFA, 0x11, 0x43, 0x08};

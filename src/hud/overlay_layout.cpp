@@ -124,7 +124,7 @@ void InstallCenteredFrame(const platform::GameImage& image) noexcept
     const auto site   = image.Rebase(kCenteredFrameSite, sizeof(kCenteredFrameStoreBytes));
     const auto resume = image.Rebase(kCenteredFrameResume);
     const auto code   = CenteredFrameCode(g_bandApplies);
-    const bool held   = image.BytesMatch(kCenteredFrame, kCenteredFrameBytes) && site && resume &&
+    const bool held   = platform::FindFunction(image, kCenteredFrame) && site && resume &&
                       platform::PinThisModule() && g_frameCode.Install(*site, kCenteredFrameStoreBytes, code, *resume);
     platform::Log(L"HUD layout: the centred 1920x1080 frame {}", held ? L"is the whole layout in a band"
                                                                      : L"keeps the game's 16:9 box (its code differs)");
@@ -133,14 +133,13 @@ void InstallCenteredFrame(const platform::GameImage& image) noexcept
 /// Optional: the off-screen arrows pick their edge by where the ray leaves a band (hud/arrow_edge_code.h).
 void InstallArrowEdge(const platform::GameImage& image) noexcept
 {
-    constexpr std::uint8_t kTopBottomFirst[] = {0xC5, 0xFA, 0x10, 0x05, 0x4F, 0x8D, 0x64, 0x05};
     const auto site      = image.Rebase(kArrowEdgeSite, sizeof(kArrowEdgeFmaBytes));
     const auto side      = image.Rebase(kArrowEdgeSide);
-    const auto topBottom = image.Rebase(kArrowEdgeTopBottom, sizeof(kTopBottomFirst));
+    const auto topBottom = platform::FindFunction(image, kArrowEdgeTopBottom);
     const auto sixty     = image.Rebase(kArrowEdgeSixty, sizeof(float));
     const auto oneTwenty = image.Rebase(kArrowEdgeOneTwenty, sizeof(float));
-    bool held = site && side && topBottom && sixty && oneTwenty && image.BytesMatch(kArrowEdgeCheckStart, kArrowEdgeBytes) &&
-                image.BytesMatch(kArrowEdgeTopBottom, kTopBottomFirst) && platform::PinThisModule();
+    bool held = site && side && topBottom && sixty && oneTwenty &&
+                platform::FindFunction(image, kArrowEdgeCheckStart) && platform::PinThisModule();
     if (held)
     {
         const auto code = ArrowEdgeCode(g_bandApplies, *side, *topBottom, *sixty, *oneTwenty);

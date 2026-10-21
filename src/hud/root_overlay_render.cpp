@@ -19,6 +19,7 @@
 #include "platform/frame_watch.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/verified_code.h"
 #include "player_two/generation.h"
 #include "player_two/command_menu_two.h"
 #include "views/player_view_point.h"
@@ -34,8 +35,9 @@ namespace {
 // database): E8 rel32 at 0x1410A0156, inside the block at 0x1410A0150. Its target's prologue up
 // to the stack probe call is checked before the call is redirected.
 constexpr std::uintptr_t kRenderRootOverlayCall = 0x1410A0156;
-constexpr std::uintptr_t kRenderRootOverlay     = 0x141627E98;  // void (FSlateApplication*)
 constexpr std::uint8_t   kRenderRootOverlayPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
+constexpr platform::FunctionFact kRenderRootOverlay{L"SlateApp_RenderRootOverlay", 0x141627E98,
+                                                    kRenderRootOverlayPrologue};  // void (FSlateApplication*)
 
 // Game version 1.005 (RE-1005-hud-2.md): the call (0x1409F205E there) crosses a 16-byte block, so the target's entry is
 // redirected instead (0x14167E258, first instruction `mov [rsp+8],rbx`, one block); UGameEngine::Tick's call is its only
@@ -112,10 +114,10 @@ bool InstallRootOverlayRender(const platform::GameImage& image) noexcept
 {
     const bool v1005  = platform::RunningBuild() == platform::BuildIndex::V1005;
     const auto site   = image.Rebase(kRenderRootOverlayCall, 5);
-    const auto target = image.Rebase(kRenderRootOverlay);
-    const auto first  = std::span(kRenderRootOverlayPrologue, kRenderRootOverlayFirst);
-    if (!site || !target || !image.BytesMatch(kRenderRootOverlay, kRenderRootOverlayPrologue) ||
-        !(v1005 ? g_entry.Install(*target, image.EntryInstruction(kRenderRootOverlay, first),
+    const auto target = platform::FindFunction(image, kRenderRootOverlay);
+    const auto first  = kRenderRootOverlay.entryBytes.first(kRenderRootOverlayFirst);
+    if (!site || !target ||
+        !(v1005 ? g_entry.Install(*target, image.EntryInstruction(kRenderRootOverlay.address, first),
                                   reinterpret_cast<std::uintptr_t>(&RenderRootOverlay))
                 : g_call.Install(*site, *target, reinterpret_cast<std::uintptr_t>(&RenderRootOverlay))))
     {
