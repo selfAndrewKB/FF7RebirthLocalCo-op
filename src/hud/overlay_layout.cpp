@@ -3,12 +3,12 @@
 #include "hud/arrow_edge_code.h"
 #include "hud/centered_frame_code.h"
 #include "hud/hud_addresses.h"
-#include "hud/layout_scale.h"
 #include "hud/overlay_band.h"
 #include "hud/second_image.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/code_redirect.h"
+#include "platform/deferred_sites.h"
 #include "platform/module_pin.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -44,10 +44,9 @@ platform::CallRedirect g_rectCall;
 platform::CallRedirect g_entryCall;
 platform::CallRedirect g_submitCall;
 // Game version 1.005 (RE-1005-hud-2.md): the rect call (0x140B0EFAD there) crosses a 16-byte block. The overlay renders
-// on the game thread alone, so the call is installed from there, outside the render (SetSplitActive, each engine tick),
-// and is only restored from there.
-std::atomic<bool>       g_rectPending      {false};  // game thread after install
-bool                   g_rectCrosses      = false;
+// on the game thread alone, so the call is placed from there, outside the render (platform/deferred_sites.h: the
+// session's tick), and is only restored from there.
+platform::DeferredSites g_rect;
 std::uintptr_t         g_rectSite         = 0;
 std::uintptr_t         g_rectTarget       = 0;
 ContainScaleFn         g_containScale     = nullptr;  // the game's UI scale of a rect (hud_addresses.h)
@@ -298,6 +297,20 @@ void OverlaySubmit(void* renderer, std::uintptr_t pool, void* slot, std::uintptr
     reinterpret_cast<SubmitLayerSlotFn>(g_submitCall.Original())(renderer, pool, slot, unused);
 }
 
+/// The rect call: at install, or on 1.005 from the game thread between its ticks, where it crosses a block.
+bool PlaceRect(const platform::GameImage&) noexcept
+{
+    const bool ok =
+        g_rect.Place(g_rectCall, g_rectSite, g_rectTarget, reinterpret_cast<std::uintptr_t>(&OverlayLayoutRect));
+    if (g_rect.FromGameThread())
+    {
+        platform::Log(L"HUD layout: the overlay's rect call {}",
+                      ok ? L"installed from the game thread"
+                         : L"could not be redirected (the HUD keeps the game's layout, cropped to each half)");
+    }
+    return ok;
+}
+
 }  // namespace
 
 bool InstallOverlayLayout(const platform::GameImage& image) noexcept
@@ -336,14 +349,10 @@ bool InstallOverlayLayout(const platform::GameImage& image) noexcept
         platform::Log(L"HUD layout: the overlay's layer-entry call could not be redirected; not installed");
         return false;
     }
-    g_rectCrosses = platform::RunningBuild() == platform::BuildIndex::V1005 && (*rectCall & 0xF) + 5 > 16;
-    if (g_rectCrosses)
-    {
-        g_rectSite    = *rectCall;
-        g_rectTarget  = *rectFn;
-        g_rectPending = true;  // until then the band is simply never applied
-    }
-    else if (!g_rectCall.Install(*rectCall, *rectFn, reinterpret_cast<std::uintptr_t>(&OverlayLayoutRect)))
+    g_rectSite   = *rectCall;
+    g_rectTarget = *rectFn;
+    const bool crosses = platform::DeferredSites::Deferred() && (*rectCall & 0xF) + 5 > 16;
+    if (!g_rect.Install(image, &PlaceRect, crosses))  // until a queued placement runs, the band is simply not applied
     {
         g_entryCall.Restore();
         g_submitCall.Restore();
@@ -352,7 +361,7 @@ bool InstallOverlayLayout(const platform::GameImage& image) noexcept
     }
     g_installed = true;
     platform::Log(L"HUD layout: installed (hud-band {}){}", BandEnabled() ? L"on" : L"off",
-                  g_rectCrosses ? L"; the rect call follows on the game thread" : L"");
+                  g_rect.FromGameThread() ? L"; the rect call follows on the game thread" : L"");
     InstallCenteredFrame(image);
     InstallArrowEdge(image);
     return true;
@@ -371,10 +380,11 @@ void RemoveOverlayLayout() noexcept
     g_submit.active  = false;
 
     g_bandApplies = 0;
-    g_rectPending = false;
+    g_rect.Cancel();  // a placement still queued does nothing
     // A rect call crossing two blocks is restored only from the game thread; elsewhere it stays (band off: it passes
     // the engine's rect through).
-    const bool rect   = g_rectCrosses && !player_two::generation::OnGameThread() ? true : g_rectCall.Restore();
+    const bool rect   =
+        g_rect.FromGameThread() && !player_two::generation::OnGameThread() ? true : g_rectCall.Restore();
     const bool entry  = g_entryCall.Restore();
     const bool submit = g_submitCall.Restore();
     if (g_arrowEdgeCode.IsInstalled() && !g_arrowEdgeCode.Restore())
@@ -406,16 +416,6 @@ bool OverlayLayoutInstalled() noexcept
 
 void SetSplitActive(bool active) noexcept
 {
-    if (g_rectPending && g_installed && player_two::generation::OnGameThread())
-    {
-        g_rectPending = false;  // here the game thread is outside the overlay render, as InstallFromOwnThread requires
-        const bool ok = g_rectCall.InstallFromOwnThread(g_rectSite, g_rectTarget,
-                                                        reinterpret_cast<std::uintptr_t>(&OverlayLayoutRect));
-        platform::Log(L"HUD layout: the overlay's rect call {}", ok ? L"installed from the game thread"
-                                                                    : L"could not be redirected (the HUD keeps the game's "
-                                                                      L"layout, cropped to each half)");
-        FinishLayoutScale();  // the layout scale's site is in the same render (hud/layout_scale.h)
-    }
     g_splitActive.store(active, std::memory_order_relaxed);
 }
 

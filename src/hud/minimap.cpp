@@ -15,6 +15,7 @@
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/code_redirect.h"
+#include "platform/deferred_sites.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -188,7 +189,7 @@ EntryFilterFields g_fields;
 MenuBufferSet     g_buffers;  // player 2's (hud/menu_buffers.h)
 
 // Game thread.
-bool          g_acquireTried  = false;
+platform::DeferredSites g_acquire;  // crosses a block on both builds: placed from the game thread, off the paint
 bool          g_refused       = false;  // a check failed: the earlier behaviour until restart
 bool          g_namesReady    = false;
 std::uint64_t g_playerTwoName = 0;
@@ -602,6 +603,16 @@ void LogCounts() noexcept
            g_offThread.load(std::memory_order_relaxed));
 }
 
+/// The circle's acquire call, from the game thread outside the paint (its call crosses a block on both builds).
+bool PlaceAcquire(const platform::GameImage&) noexcept
+{
+    const bool ok =
+        g_acquire.Place(g_acquireCall, g_acquireSite, g_acquireTarget, reinterpret_cast<std::uintptr_t>(&Acquire));
+    Line(L"the circle's acquire redirect {}",
+         ok ? L"installed from the game thread" : L"FAILED (player 1's map in both halves)");
+    return ok;
+}
+
 }  // namespace
 
 bool Install(const platform::GameImage& image) noexcept
@@ -674,8 +685,10 @@ bool Install(const platform::GameImage& image) noexcept
         platform::Log(L"minimap: a site is not what the research read; player 1's map in both halves");
         return false;
     }
-    g_installed = true;
-    platform::Log(L"minimap: installed (the acquire redirect follows on the game thread)");
+    g_installed       = true;
+    const bool queued = g_acquire.Install(image, &PlaceAcquire, true);  // outside the paint: the session's tick
+    platform::Log(L"minimap: installed ({})", queued ? L"the acquire redirect follows on the game thread"
+                                                    : L"no room to place the acquire redirect from the game thread");
 
     const auto unloadAt = image.Rebase(kPieceUnloadCall, 5);
     const auto unload   = image.Rebase(kPieceShouldUnload);
@@ -692,7 +705,7 @@ bool Install(const platform::GameImage& image) noexcept
                       L"pieces (the maps flicker when the players are apart)");
     }
     minimap_labels::Install(image);  // optional: without it, each pass lays the labels out again (logged)
-    minimap_icons::Prepare(image);    // optional: placed from the game thread (Tick); without it the icons churn
+    minimap_icons::Prepare(image);    // optional: its calls placed from the game thread; without it the icons churn
     return true;
 }
 
@@ -700,6 +713,7 @@ void Remove() noexcept
 {
     minimap_labels::Remove();  // player 1's label states back first (on the game thread)
     minimap_icons::Remove();
+    g_acquire.Cancel();  // a placement still queued does nothing
     g_frameActive          = false;
     g_fields.playerTwoName = 0;
     bool all = true;
@@ -723,13 +737,6 @@ void Tick(bool splitShown) noexcept
     {
         return;
     }
-    if (!g_acquireTried)
-    {
-        g_acquireTried = true;  // here the game thread is outside the paint, as InstallFromOwnThread requires
-        const bool ok  = g_acquireCall.InstallFromOwnThread(g_acquireSite, g_acquireTarget, reinterpret_cast<std::uintptr_t>(&Acquire));
-        Line(L"the circle's acquire redirect {}", ok ? L"installed from the game thread" : L"FAILED (player 1's map in both halves)");
-    }
-    minimap_icons::InstallFromGameThread();  // once; here the game thread is outside the holder update
     MakeNames();
     void* const slate = CircleSlate();
     if (g_target == nullptr && !g_refused && slate != nullptr && splitShown && generation::Active() && g_namesReady)

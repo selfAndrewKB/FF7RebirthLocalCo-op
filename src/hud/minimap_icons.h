@@ -24,11 +24,9 @@ class GameImage;
 
 namespace lss::hud::minimap_icons {
 
-/// Checks both call sites and their targets (hud/minimap.cpp's Install). Logs a failure.
+/// Checks both call sites and their targets (hud/minimap.cpp's Install) and queues their placement for the game
+/// thread, outside the holder update (their calls cross a 16-byte block). Logs a failure.
 bool Prepare(const platform::GameImage& image) noexcept;
-
-/// Places the two redirects (their calls cross a 16-byte block): on the game thread, outside the holder update.
-void InstallFromGameThread() noexcept;
 
 /// Puts the calls back on the game thread (else leaves them: they pass through once inactive).
 void Remove() noexcept;

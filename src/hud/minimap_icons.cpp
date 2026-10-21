@@ -1,6 +1,7 @@
 #include "hud/minimap_icons.h"
 
 #include "platform/call_redirect.h"
+#include "platform/deferred_sites.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -69,9 +70,8 @@ struct Counts
 
 platform::CallRedirect g_updateCall;
 platform::CallRedirect g_removeCall;
-bool           g_prepared   = false;
-bool           g_tried      = false;
-std::uintptr_t g_updateSite = 0, g_updateTarget = 0, g_removeSite = 0, g_removeTarget = 0;
+platform::DeferredSites g_placement;  // the two calls cross a block: placed from the game thread, off the holder update
+std::uintptr_t          g_updateSite = 0, g_updateTarget = 0, g_removeSite = 0, g_removeTarget = 0;
 
 // Game thread.
 std::atomic<bool>          g_active{false};    // player 2's minimap is on (Remove may write it off the game thread)
@@ -237,6 +237,27 @@ void Clear() noexcept
     g_skippedThisRun.clear();
 }
 
+/// The two calls, from the game thread outside the holder update (they cross a block on both builds).
+bool PlaceCalls(const platform::GameImage&) noexcept
+{
+    const bool update = g_placement.Place(g_updateCall, g_updateSite, g_updateTarget,
+                                          reinterpret_cast<std::uintptr_t>(&Update));
+    const bool remove = update && g_placement.Place(g_removeCall, g_removeSite, g_removeTarget,
+                                                    reinterpret_cast<std::uintptr_t>(&RemoveIcon));
+    if (!remove)
+    {
+        if (update)
+        {
+            g_updateCall.Restore();
+        }
+        platform::Log(L"minimap icons: the holder's icon calls could not be redirected; each run removes the other "
+                      L"player's icons as before");
+        return false;
+    }
+    platform::Log(L"minimap icons: installed (each player's minimap keeps the icons the other player's has in range)");
+    return true;
+}
+
 }  // namespace
 
 bool Prepare(const platform::GameImage& image) noexcept
@@ -258,35 +279,12 @@ bool Prepare(const platform::GameImage& image) noexcept
     g_updateTarget = *update;
     g_removeSite   = *removeAt;
     g_removeTarget = *remove;
-    g_prepared     = true;
-    return true;
-}
-
-void InstallFromGameThread() noexcept
-{
-    if (!g_prepared || g_tried || !generation::OnGameThread())
-    {
-        return;
-    }
-    g_tried = true;
-    const bool update = g_updateCall.InstallFromOwnThread(g_updateSite, g_updateTarget, reinterpret_cast<std::uintptr_t>(&Update));
-    const bool remove = update && g_removeCall.InstallFromOwnThread(g_removeSite, g_removeTarget,
-                                                                     reinterpret_cast<std::uintptr_t>(&RemoveIcon));
-    if (!remove)
-    {
-        if (update)
-        {
-            g_updateCall.Restore();
-        }
-        platform::Log(L"minimap icons: the holder's icon calls could not be redirected; each run removes the other "
-                      L"player's icons as before");
-        return;
-    }
-    platform::Log(L"minimap icons: installed (each player's minimap keeps the icons the other player's has in range)");
+    return g_placement.Install(image, &PlaceCalls, true);  // outside the holder update: the session's tick
 }
 
 void Remove() noexcept
 {
+    g_placement.Cancel();  // a placement still queued does nothing
     g_active = false;
     if (!generation::OnGameThread())
     {

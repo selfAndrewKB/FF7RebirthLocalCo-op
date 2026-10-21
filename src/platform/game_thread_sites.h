@@ -25,9 +25,10 @@ using PlaceFn = void (*)() noexcept;
 /// The same with a context: an object that queued itself (platform/deferred_sites.h).
 using PlaceWithFn = void (*)(void* context) noexcept;
 
-namespace detail {
-inline constexpr std::size_t kCapacity = 16;
+/// Placements the queue holds between two ticks: every module that defers, with room to spare.
+inline constexpr std::size_t kCapacity = 32;
 
+namespace detail {
 struct Entry
 {
     PlaceFn     place     = nullptr;
@@ -88,8 +89,8 @@ inline bool Queue(PlaceWithFn place, void* context) noexcept
 /// Runs and empties the queue. Game thread, from the session's tick only.
 inline void Run() noexcept
 {
-    std::array<detail::Entry, detail::kCapacity> queued{};
-    std::size_t                                  count = 0;
+    std::array<detail::Entry, kCapacity> queued{};
+    std::size_t                          count = 0;
     {
         const detail::Lock lock;
         if (detail::g_count == 0)

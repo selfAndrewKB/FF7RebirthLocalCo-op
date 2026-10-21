@@ -49,7 +49,7 @@ inline constexpr std::size_t kConstant1920 = 30;
 // 0x140B0F014, one block, neither RIP-relative) are replaced instead by themselves followed by the code above, which
 // resumes after the vmulss (0x140B0F024), so the game's vmulss is left in place unrun. A thread stopped between the two
 // would resume inside the jump, so this is installed from the game thread, the only one rendering the overlay, while it
-// is outside the render (FinishLayoutScale).
+// is outside the render (platform/deferred_sites.h: the session's tick).
 inline constexpr std::size_t  kReplaced1005 = 8;
 inline constexpr std::uint8_t kCode1005[]   = {
     0xC5, 0xC0, 0x57, 0xFF,  // vxorps    xmm7, xmm7, xmm7   (the replaced instructions)

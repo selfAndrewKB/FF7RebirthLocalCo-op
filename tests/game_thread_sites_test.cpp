@@ -1,8 +1,8 @@
 // Host-side tests for platform/game_thread_sites, run without the game.
 //
-// The queue of 1.005 placements: runs what was queued, in order, once; refuses a null and a seventeenth entry; a
-// placement that queues another during the run (the queue is copied out first) sees it run at the next tick; a
-// placement queued with a context gets it.
+// The queue of 1.005 placements: runs what was queued, in order, once; refuses a null and one entry past its
+// capacity; a placement that queues another during the run (the queue is copied out first) sees it run at the
+// next tick; a placement queued with a context gets it.
 
 #include "platform/game_thread_sites.h"
 
@@ -13,6 +13,7 @@
 
 namespace {
 
+using lss::platform::game_thread_sites::kCapacity;
 using lss::platform::game_thread_sites::Queue;
 using lss::platform::game_thread_sites::Run;
 
@@ -53,16 +54,16 @@ void TestRunsInOrderOnce()
 
 void TestRefusals()
 {
-    std::puts("game thread sites: a null is refused, and so is a seventeenth placement (the first sixteen still run)");
+    std::puts("game thread sites: a null is refused, and so is one placement past the capacity (the others still run)");
     g_ran.clear();
     EXPECT(!Queue(nullptr));
-    for (int i = 0; i < 16; ++i)
+    for (std::size_t i = 0; i < kCapacity; ++i)
     {
         EXPECT(Queue(&PlaceA));
     }
     EXPECT(!Queue(&PlaceB));
     Run();
-    EXPECT(g_ran.size() == 16);
+    EXPECT(g_ran.size() == kCapacity);
     for (int ran : g_ran)
     {
         EXPECT(ran == 1);

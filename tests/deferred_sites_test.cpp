@@ -106,7 +106,7 @@ void TestCancel()
 void TestNoRoom()
 {
     std::puts("deferred sites: a full queue places nothing: the install says false and nothing is pending");
-    for (int i = 0; i < 16; ++i)
+    for (std::size_t i = 0; i < lss::platform::game_thread_sites::kCapacity; ++i)
     {
         EXPECT(Queue(&Nothing));
     }
