@@ -1,7 +1,6 @@
 #include "control/mod_target.h"
 
 #include "hud/area_icons_two.h"
-#include "hud/hud_players_dump.h"
 #include "hud/hud_trace.h"
 #include "hud/minimap_once.h"
 #include "hud/overlay_layout.h"
@@ -11,6 +10,7 @@
 #include "hud/position_probe.h"
 #include "hud/widget_dump.h"
 #include "platform/frame_watch.h"
+#include "platform/image.h"
 #include "platform/log.h"
 #include "player_two/battle_input.h"
 #include "player_two/camera_distance.h"
@@ -195,9 +195,18 @@ Outcome ModTarget::SetNpcDetail(std::uint32_t level)
 
 Outcome ModTarget::SetHudProbe(bool on)
 {
+    // Installed by the first switch-on, not at every dev start (its redirect sits on a Blueprint call path).
+    if (on && !hud::PositionProbeInstalled())
+    {
+        const auto image = platform::GameImage::Locate();
+        if (!image || !hud::InstallPositionProbe(*image))
+        {
+            return Failed(L"the HUD position probe could not be installed (see the log)");
+        }
+    }
     if (!hud::PositionProbeInstalled())
     {
-        return Failed(L"the HUD position probe is not installed (see the startup log)");
+        return {true, L"the HUD probe was never installed (it is off)"};
     }
     hud::SetPositionProbe(on);
     return {};
@@ -205,9 +214,18 @@ Outcome ModTarget::SetHudProbe(bool on)
 
 Outcome ModTarget::TraceHud(std::int32_t frames)
 {
-    if (!hud::HudTraceInstalled() || !hud::RootOverlayRenderInstalled())
+    if (!hud::RootOverlayRenderInstalled())
     {
-        return Failed(L"the HUD trace or the overlay render hook is not installed (see the startup log)");
+        return Failed(L"the overlay render hook is not installed (see the startup log)");
+    }
+    // Installed by the first trace, not at every dev start (seven call redirects on the HUD's hot path).
+    if (!hud::HudTraceInstalled())
+    {
+        const auto image = platform::GameImage::Locate();
+        if (!image || !hud::InstallHudTrace(*image))
+        {
+            return Failed(L"the HUD trace could not be installed (see the log)");
+        }
     }
     hud::StartHudTrace(frames);
     return {true, L"tracing (one log line per frame)"};
@@ -473,9 +491,13 @@ Outcome ModTarget::Dump(const std::wstring& topic)
 {
     // "widgets", "hud-players" or "slots <class>" (control/script.cpp).
     const bool slots  = topic.starts_with(L"slots ");
+    const auto players = []() {
+        const auto image = platform::GameImage::Locate();
+        return image ? hud::DumpHudPlayers(*image) : -1;
+    };
     const int  listed = slots                     ? hud::DumpSlots(topic.substr(6))
                         : topic == L"widgets"     ? hud::DumpWidgets()
-                        : topic == L"hud-players" ? hud::DumpHudPlayers()
+                        : topic == L"hud-players" ? players()
                                                   : -1;
     const wchar_t* what = slots ? L" slots" : topic == L"widgets" ? L" widgets" : L" lines";
     return listed >= 0 ? Outcome{true, std::to_wstring(listed) + what + L" listed in the log"}

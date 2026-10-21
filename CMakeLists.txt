@@ -200,7 +200,6 @@ if(LSS_DEV_TOOLS)
         src/control/mod_target.cpp
         src/control/runner.cpp
         src/control/script.cpp
-        src/hud/hud_players_dump.cpp
         src/hud/hud_trace.cpp
         src/hud/position_probe.cpp
         src/hud/widget_dump.cpp

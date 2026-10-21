@@ -31,8 +31,8 @@ control::CommandChannel           g_channel;
 void Install(const platform::GameImage& image, player_two::Session& session, players::SplitLayout& layout,
              players::SingleView& singleView, bool viewPointInstalled) noexcept
 {
-    hud::InstallPositionProbe(image);  // logging only, off until the hud-probe command
-    hud::InstallHudTrace(image);       // logging only, idle until the hud-trace command
+    // The HUD trace and the position probe are installed by their first command (control/mod_target.cpp), not here:
+    // their call redirects sit on the HUD's hot path and nearly every dev start never asks for them.
     // The watches: each reads and logs, changes nothing, and reports its own install (its header says what it reads).
     player_two::rumble_watch::Install(image);    // each controller's rumble, pad by pad
     player_two::ride_watch::Install(image);      // the chocobo rides and the vehicle coordinators
@@ -59,7 +59,7 @@ void InstallControl(player_two::Session& session, players::SplitLayout& layout, 
 
 void Remove() noexcept
 {
-    hud::RemovePositionProbe();
+    hud::RemovePositionProbe();  // each a no-op unless a command installed it
     hud::RemoveHudTrace();
     hud::label_relayouts::Remove();
     player_two::menu_focus::Remove();

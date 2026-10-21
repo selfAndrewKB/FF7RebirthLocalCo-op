@@ -94,7 +94,7 @@
 //                                         (hud/widget_dump.h)
 //   dump slots <Class>                    log a widget class's viewport layout and inner slots
 //   dump hud-players                      log which player the HUD roots and its global player
-//                                         reads name (hud/hud_players_dump.h)
+//                                         reads name (hud/widget_dump.h)
 //   stick <player> <lx> <ly> <rx> <ry> <ticks>
 //                                         hold a player's sticks (-1..1) for a number of ticks;
 //                                         needs per-pad sticks, and wins over the pad itself

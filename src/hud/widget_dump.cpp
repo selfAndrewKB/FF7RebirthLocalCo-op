@@ -3,21 +3,31 @@
 #define RC_UNREAL_DISABLE_PROPERTY_DEPRECATION_WARNINGS
 #define RC_UNREAL_DISABLE_CLASS_DEPRECATION_WARNINGS
 #include <Unreal/Core/Containers/Array.hpp>
+#include <Unreal/Core/Containers/FString.hpp>
 #include <Unreal/CoreUObject/UObject/Class.hpp>
 #include <Unreal/CoreUObject/UObject/UnrealType.hpp>
+#include <Unreal/FProperty.hpp>
+#include <Unreal/NameTypes.hpp>
 #include <Unreal/UFunction.hpp>
 #include <Unreal/UObject.hpp>
+#include <Unreal/UObjectArray.hpp>
 #include <Unreal/UObjectGlobals.hpp>
 
 #include "hud/hud_addresses.h"
+#include "platform/build_value.h"
 #include "platform/guarded.h"
+#include "platform/image.h"
 #include "platform/log.h"
+#include "player_two/generation.h"
+#include "player_two/primary_controller.h"
 #include "players/unreal_access.h"
 
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <format>
+#include <initializer_list>
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -31,6 +41,9 @@ namespace lss::hud {
 
 namespace {
 
+using RC::Unreal::FName;
+using RC::Unreal::FProperty;
+using RC::Unreal::UClass;
 using RC::Unreal::UFunction;
 using RC::Unreal::UObject;
 namespace UObjectGlobals = RC::Unreal::UObjectGlobals;
@@ -39,6 +52,9 @@ constexpr int         kMaxLines = 60;
 constexpr std::size_t kFrame    = 256;  // parameter frame; every function used here needs far less
 
 using players::unreal::GuardedProcessEvent;
+using platform::CopyGuarded;
+
+// ---- dump widgets, dump slots ------------------------------------------------------------------
 
 /// A reflected UWidget function with no inputs, and where its return value sits in the frame.
 struct Getter
@@ -174,6 +190,452 @@ void LogPlacement(UObject* widget)
                   v[8], v[9]);
 }
 
+// ---- dump hud-players --------------------------------------------------------------------------
+
+constexpr int kMaxRootLines    = 60;
+constexpr int kMaxSettingLines = 400;
+constexpr int kMaxControllers  = 4;
+
+/// The offset of a parameter in `function`'s frame, if it exists with this size and fits.
+std::optional<std::int32_t> ParamOffset(UFunction* function, const wchar_t* name, std::int32_t size) noexcept
+{
+    auto* property = function->FindProperty(FName(name, RC::Unreal::FNAME_Find));
+    if (property == nullptr)
+    {
+        return std::nullopt;
+    }
+    const std::int32_t offset = property->GetOffset_Internal();
+    if (property->GetSize() != size || offset < 0 || offset + size > function->GetParmsSize())
+    {
+        return std::nullopt;
+    }
+    return offset;
+}
+
+/// A reflected function returning an object, with no inputs, called on `target`.
+struct ObjectGetter
+{
+    UFunction*   function = nullptr;
+    std::int32_t result   = -1;
+
+    /// The first of `paths` that names such a function (UMG declares some getters on UWidget and
+    /// some on UUserWidget).
+    static ObjectGetter Find(std::initializer_list<const wchar_t*> paths) noexcept
+    {
+        for (const wchar_t* path : paths)
+        {
+            auto* function = UObjectGlobals::StaticFindObject<UFunction*>(nullptr, nullptr, path);
+            if (function == nullptr || function->GetParmsSize() > static_cast<std::int32_t>(kFrame))
+            {
+                continue;
+            }
+            if (const auto result = ParamOffset(function, STR("ReturnValue"), sizeof(UObject*)))
+            {
+                return ObjectGetter{function, *result};
+            }
+        }
+        return {};
+    }
+
+    bool Found() const noexcept { return function != nullptr; }
+
+    std::optional<UObject*> Call(UObject* target) const noexcept
+    {
+        alignas(16) std::uint8_t frame[kFrame]{};
+        if (!Found() || target == nullptr || !GuardedProcessEvent(target, function, frame))
+        {
+            return std::nullopt;
+        }
+        return *reinterpret_cast<UObject* const*>(frame + result);
+    }
+};
+
+std::wstring NameOf(const UObject* object)
+{
+    return object == nullptr ? std::wstring(L"(none)") : std::wstring(object->GetName());
+}
+
+/// What `object` is to the co-op session: a player's controller or local player, or its name.
+class Players
+{
+public:
+    Players()
+    {
+        controllers_[0] = static_cast<UObject*>(player_two::generation::PlayerOneController());
+        controllers_[1] = static_cast<UObject*>(player_two::generation::PlayerTwoController());
+        if (auto* list = players::unreal::LocalPlayers(players::unreal::GameInstance()))
+        {
+            for (std::int32_t i = 0; i < list->Num(); ++i)
+            {
+                localPlayers_.push_back((*list)[i]);
+            }
+        }
+    }
+
+    const std::vector<UObject*>& LocalPlayers() const noexcept { return localPlayers_; }
+
+    std::wstring Label(const UObject* object) const
+    {
+        if (object == nullptr)
+        {
+            return L"(none)";
+        }
+        for (int i = 0; i < 2; ++i)
+        {
+            if (object == controllers_[i])
+            {
+                return std::format(L"player {}'s controller", i + 1);
+            }
+        }
+        for (std::size_t i = 0; i < localPlayers_.size(); ++i)
+        {
+            if (object == localPlayers_[i])
+            {
+                return std::format(L"LocalPlayers[{}]", i);
+            }
+        }
+        return NameOf(object);
+    }
+
+private:
+    UObject*              controllers_[2] = {};
+    std::vector<UObject*> localPlayers_;
+};
+
+int LogLocalPlayers(const Players& players)
+{
+    int lines = 0;
+    for (std::size_t i = 0; i < players.LocalPlayers().size(); ++i)
+    {
+        UObject*  localPlayer = players.LocalPlayers()[i];
+        UObject** controller  = players::unreal::ControllerField(localPlayer);
+        platform::Log(L"hud players: LocalPlayers[{}] {} -> {}", i, NameOf(localPlayer),
+                      controller != nullptr ? players.Label(*controller) : std::wstring(L"(controller field not found)"));
+        ++lines;
+    }
+    return lines;
+}
+
+/// UGameplayStatics::GetPlayerController(context, index) walks the world's controller list in order.
+int LogControllerOrder(const Players& players)
+{
+    auto* function = UObjectGlobals::StaticFindObject<UFunction*>(nullptr, nullptr,
+                                                                  STR("/Script/Engine.GameplayStatics:GetPlayerController"));
+    auto* statics = UObjectGlobals::StaticFindObject<UClass*>(nullptr, nullptr, STR("/Script/Engine.GameplayStatics"));
+    UObject* context = players::unreal::GameInstance();
+    if (function == nullptr || statics == nullptr || context == nullptr ||
+        function->GetParmsSize() > static_cast<std::int32_t>(kFrame))
+    {
+        platform::Log(L"hud players: GameplayStatics:GetPlayerController not found; controller order not read");
+        return 1;
+    }
+    const auto contextAt = ParamOffset(function, STR("WorldContextObject"), sizeof(UObject*));
+    const auto indexAt   = ParamOffset(function, STR("PlayerIndex"), sizeof(std::int32_t));
+    const auto resultAt  = ParamOffset(function, STR("ReturnValue"), sizeof(UObject*));
+    if (!contextAt || !indexAt || !resultAt)
+    {
+        platform::Log(L"hud players: GetPlayerController's parameters are not as expected; controller order not read");
+        return 1;
+    }
+    std::wstring order;
+    for (std::int32_t i = 0; i < kMaxControllers; ++i)
+    {
+        alignas(16) std::uint8_t frame[kFrame]{};
+        *reinterpret_cast<UObject**>(frame + *contextAt)    = context;
+        *reinterpret_cast<std::int32_t*>(frame + *indexAt) = i;
+        if (!GuardedProcessEvent(statics->GetClassDefaultObject(), function, frame))
+        {
+            order += std::format(L" [{}] (call failed)", i);
+            break;
+        }
+        UObject* controller = *reinterpret_cast<UObject* const*>(frame + *resultAt);
+        if (controller == nullptr)
+        {
+            break;
+        }
+        order += std::format(L" [{}] {}", i, players.Label(controller));
+    }
+    platform::Log(L"hud players: the world's controller list:{}", order.empty() ? L" (empty)" : order);
+    return 1;
+}
+
+int LogPrimaryController(const Players& players)
+{
+    if (!player_two::primary_controller::Installed())
+    {
+        platform::Log(L"hud players: primary controller not readable (the party manager was not found at startup)");
+        return 1;
+    }
+    platform::Log(L"hud players: the party manager's primary controller: {}",
+                  players.Label(static_cast<UObject*>(player_two::primary_controller::Current())));
+    return 1;
+}
+
+bool IsViewportRoot(UObject* widget)
+{
+    auto* slot = widget->GetPropertyByNameInChain(STR("Slot"));
+    if (slot == nullptr || slot->GetSize() != static_cast<std::int32_t>(sizeof(UObject*)) ||
+        *widget->GetValuePtrByPropertyNameInChain<UObject*>(STR("Slot")) != nullptr)
+    {
+        return false;  // inside a panel: its root decides where it goes
+    }
+    UObject* outer = widget->GetOuterPrivate();
+    return outer != nullptr && std::wstring(outer->GetClassPrivate()->GetName()).find(L"GameInstance") != std::wstring::npos;
+}
+
+/// Each HUD root (no slot, owned by the game instance): its owning player and local player.
+int LogRoots(const Players& players)
+{
+    const auto owningPlayer      = ObjectGetter::Find({STR("/Script/UMG.Widget:GetOwningPlayer"),
+                                                       STR("/Script/UMG.UserWidget:GetOwningPlayer")});
+    const auto owningLocalPlayer = ObjectGetter::Find({STR("/Script/UMG.Widget:GetOwningLocalPlayer"),
+                                                       STR("/Script/UMG.UserWidget:GetOwningLocalPlayer")});
+    if (!owningPlayer.Found() || !owningLocalPlayer.Found())
+    {
+        platform::Log(L"hud players: GetOwningPlayer {} and GetOwningLocalPlayer {} (on Widget or UserWidget); roots not read",
+                      owningPlayer.Found() ? L"found" : L"NOT found", owningLocalPlayer.Found() ? L"found" : L"NOT found");
+        return 1;
+    }
+    std::vector<UObject*> widgets;
+    UObjectGlobals::FindAllOf(STR("UserWidget"), widgets);
+    std::map<std::wstring, int> byOwner;
+    int                         lines = 0;
+    int                         roots = 0;
+    for (UObject* widget : widgets)
+    {
+        if (!IsViewportRoot(widget))
+        {
+            continue;
+        }
+        ++roots;
+        const auto controller  = owningPlayer.Call(widget);
+        const auto localPlayer = owningLocalPlayer.Call(widget);
+        const std::wstring owner = std::format(L"{} / {}", controller ? players.Label(*controller) : L"(call failed)",
+                                               localPlayer ? players.Label(*localPlayer) : L"(call failed)");
+        ++byOwner[owner];
+        if (lines < kMaxRootLines)
+        {
+            platform::Log(L"hud players: root {} '{}': owning player {}", std::wstring(widget->GetClassPrivate()->GetName()),
+                          NameOf(widget), owner);
+            ++lines;
+        }
+    }
+    for (const auto& [owner, count] : byOwner)
+    {
+        platform::Log(L"hud players: {} of {} root(s) owned by {}", count, roots, owner);
+        ++lines;
+    }
+    return lines;
+}
+
+/// Every FSoftClassPath member of UEndMenuSettings' class default object: name, offset, path.
+int LogMenuSettings()
+{
+    auto* type = UObjectGlobals::StaticFindObject<UClass*>(nullptr, nullptr, STR("/Script/EndGame.EndMenuSettings"));
+    UObject* defaults = type != nullptr ? type->GetClassDefaultObject() : nullptr;
+    if (defaults == nullptr)
+    {
+        platform::Log(L"hud players: /Script/EndGame.EndMenuSettings or its default object not found");
+        return 1;
+    }
+    int lines = 0;
+    int named = 0;
+    for (FProperty* property :
+         RC::Unreal::TFieldRange<FProperty>(type, RC::Unreal::EFieldIterationFlags::IncludeSuper))
+    {
+        if (!property->IsA<RC::Unreal::FStructProperty>())
+        {
+            continue;
+        }
+        auto* structure = static_cast<RC::Unreal::FStructProperty*>(property)->GetStruct().Get();
+        if (structure == nullptr || std::wstring(structure->GetName()) != L"SoftClassPath")
+        {
+            continue;
+        }
+        // FSoftClassPath begins with its FName AssetPathName (the package.class path).
+        std::uint64_t name = 0;
+        if (!CopyGuarded(&name, reinterpret_cast<const std::uint8_t*>(defaults) + property->GetOffset_Internal(),
+                         sizeof(name)))
+        {
+            continue;
+        }
+        const std::wstring text = players::unreal::NameText(name);  // guarded: "?" if the name pool faulted
+        if (text.empty() || text == L"None" || text == L"?")
+        {
+            continue;
+        }
+        ++named;
+        if (lines < kMaxSettingLines)
+        {
+            platform::Log(L"hud players: EndMenuSettings {} (+0x{:X}) = {}", std::wstring(property->GetName()),
+                          property->GetOffset_Internal(), text);
+            ++lines;
+        }
+    }
+    platform::Log(L"hud players: EndMenuSettings names {} widget class(es)", named);
+    return lines + 1;
+}
+
+// ---- the HUD's owner: EndUISystem and the stock player layers (RE-p2-hud.md P8.9) ----------------
+
+// EndUISystem (g_EndUISystem) and the members P8.9 read: 8-byte heap pointers, weak object
+// pointers as {int32 index, int32 serial} (serial 0 = null), and one-byte flags.
+constexpr std::uintptr_t kEndUISystem      = 0x1493496E0;
+constexpr std::uint32_t  kFieldCommandCtrl = 0xB8;
+constexpr std::uint32_t  kCompassManager   = 0x108;
+constexpr std::uint32_t  kCompassHolder    = 0x348;  // in the compass manager; its +0 is the weak widget
+// EndUISystem byte. 1.005: MasterHUD_Tick 0x140F75A05 cmp byte [rbx+2D9h],0 (1.004 0x140F37E5D [rbx+2D1h]);
+// EndUISystem__SetupFieldCommandOrDefer 0x1413FBB9C uses +0x2D9/+0x2DC (a member was inserted after +0x2A8).
+constexpr platform::PerBuild<std::uint32_t> kFieldCommandSetupPending = {0x2D1, 0x2D9};
+constexpr std::uint32_t  kCtrlCommandMenuWidget = 0x4F0;  // FieldCommandCtrl weak widgets and controller
+constexpr std::uint32_t  kCtrlFieldMenuWidget   = 0x4E8;
+constexpr std::uint32_t  kCtrlStoredController  = 0x558;
+constexpr std::uint32_t  kCtrlSetupTrigger      = 0x775;  // FieldCommandCtrl byte
+
+// SGameLayerManager::GetPlayerWidgetHostGeometry: IGameLayerManager vtable slot 2,
+// FGeometry* (IGameLayerManager*, FGeometry* out, ULocalPlayer*). The interface pointer is held
+// by the game viewport client at +0x120 (a weak pointer; its reference controller at +0x128).
+constexpr std::uintptr_t kPlayerHostGeometry           = 0x1451803CC;
+constexpr std::uint8_t   kPlayerHostGeometryPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74,
+                                                          0x24, 0x18, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
+constexpr std::uint32_t  kViewportLayerManager           = 0x120;
+constexpr std::uint32_t  kViewportLayerManagerController = 0x128;
+constexpr std::size_t    kGeometryBytes                  = 0x38;  // Size +0, Scale +8, translation +0x2C
+
+using GeometryFn = void* (*)(void* layerManager, void* out, void* localPlayer);
+
+std::optional<std::uintptr_t> PointerAt(std::uintptr_t address) noexcept
+{
+    std::uintptr_t value = 0;
+    return address != 0 && CopyGuarded(&value, reinterpret_cast<const void*>(address), sizeof(value)) ? std::optional(value)
+                                                                                                        : std::nullopt;
+}
+
+std::optional<std::uint8_t> ByteAt(std::uintptr_t address) noexcept
+{
+    std::uint8_t value = 0;
+    return address != 0 && CopyGuarded(&value, reinterpret_cast<const void*>(address), sizeof(value)) ? std::optional(value)
+                                                                                                        : std::nullopt;
+}
+
+bool CallGeometry(GeometryFn function, void* layerManager, void* out, void* localPlayer) noexcept
+{
+    __try
+    {
+        function(layerManager, out, localPlayer);
+        return true;
+    }
+    __except (platform::GuardFilter(GetExceptionCode()))
+    {
+        return false;
+    }
+}
+
+/// A weak object pointer at `address`, resolved through GUObjectArray with its serial checked.
+std::wstring DescribeWeak(std::uintptr_t address)
+{
+    std::int32_t weak[2] = {};
+    if (address == 0 || !CopyGuarded(weak, reinterpret_cast<const void*>(address), sizeof(weak)))
+    {
+        return L"(unreadable)";
+    }
+    if (weak[1] == 0)
+    {
+        return L"(null)";
+    }
+    auto* item = RC::Unreal::UObjectArray::IndexToObject(weak[0]);
+    if (item == nullptr || item->GetUObject() == nullptr || item->GetSerialNumber() != weak[1])
+    {
+        return std::format(L"(stale: index {}, serial {})", weak[0], weak[1]);
+    }
+    UObject* object = item->GetUObject();
+    const std::wstring who = object == player_two::generation::PlayerOneController()   ? L" = player 1's controller"
+                             : object == player_two::generation::PlayerTwoController() ? L" = player 2's controller"
+                                                                                       : L"";
+    return std::format(L"{} '{}'{}", std::wstring(object->GetClassPrivate()->GetName()), std::wstring(object->GetName()), who);
+}
+
+std::wstring Flag(std::uintptr_t address)
+{
+    const auto value = ByteAt(address);
+    return value ? std::to_wstring(*value) : std::wstring(L"(unreadable)");
+}
+
+int LogPlayerLayers(std::uintptr_t playerHostGeometry)
+{
+    UObject* engine   = UObjectGlobals::FindFirstOf(STR("GameEngine"));
+    auto*    viewport = engine != nullptr && engine->GetPropertyByNameInChain(STR("GameViewport")) != nullptr
+                            ? *engine->GetValuePtrByPropertyNameInChain<UObject*>(STR("GameViewport"))
+                            : nullptr;
+    const auto base     = reinterpret_cast<std::uintptr_t>(viewport);
+    const auto manager  = viewport != nullptr ? PointerAt(base + kViewportLayerManager) : std::nullopt;
+    const auto refCount = viewport != nullptr ? PointerAt(base + kViewportLayerManagerController) : std::nullopt;
+    if (playerHostGeometry == 0 || !manager || *manager == 0 || !refCount || *refCount == 0)
+    {
+        platform::Log(L"hud managers: the game layer manager is not reachable; player layers not read");
+        return 1;
+    }
+    const auto vtable = PointerAt(*manager);
+    const auto slot2  = vtable ? PointerAt(*vtable + 2 * sizeof(void*)) : std::nullopt;
+    if (!slot2 || *slot2 != playerHostGeometry)
+    {
+        platform::Log(L"hud managers: the layer manager's vtable slot 2 is not GetPlayerWidgetHostGeometry; not called");
+        return 1;
+    }
+    int lines = 0;
+    auto* list = players::unreal::LocalPlayers(players::unreal::GameInstance());
+    for (std::int32_t i = 0; list != nullptr && i < list->Num(); ++i)
+    {
+        alignas(16) std::uint8_t geometry[kGeometryBytes]{};
+        if (!CallGeometry(reinterpret_cast<GeometryFn>(*slot2), reinterpret_cast<void*>(*manager), geometry, (*list)[i]))
+        {
+            platform::Log(L"hud managers: GetPlayerWidgetHostGeometry raised an exception for LocalPlayers[{}]", i);
+            ++lines;
+            continue;
+        }
+        float size[2] = {}, scale = 0.0f, translation[2] = {};
+        std::memcpy(size, geometry, sizeof(size));
+        std::memcpy(&scale, geometry + 8, sizeof(scale));
+        std::memcpy(translation, geometry + 0x2C, sizeof(translation));
+        platform::Log(L"hud managers: LocalPlayers[{}]'s stock player layer: size {:.0f}x{:.0f}, scale {:.3f}, at ({:.0f}, {:.0f})",
+                      i, size[0], size[1], scale, translation[0], translation[1]);
+        ++lines;
+    }
+    return lines;
+}
+
+/// The HUD's one owner, EndUISystem: its field command controller's weak widgets and stored controller, the compass
+/// holder's widget, the two setup flags, and the stock per-player layer geometry each local player would get.
+int LogHudManagers(const platform::GameImage& image)
+{
+    const auto system = image.Rebase(kEndUISystem, kFieldCommandSetupPending + 1);
+    if (!system)
+    {
+        platform::Log(L"hud managers: EndUISystem not located");
+        return 1;
+    }
+    const auto ctrl    = PointerAt(*system + kFieldCommandCtrl).value_or(0);
+    const auto compass = PointerAt(*system + kCompassManager).value_or(0);
+    const auto holder  = compass != 0 ? PointerAt(compass + kCompassHolder).value_or(0) : 0;
+    platform::Log(L"hud managers: EndUISystem field-command setup pending {}; field command controller {}",
+                  Flag(*system + kFieldCommandSetupPending), ctrl != 0 ? L"present" : L"absent");
+    int lines = 1;
+    if (ctrl != 0)
+    {
+        platform::Log(L"hud managers: field command: command menu {}; field menu {}; stored controller {}; setup trigger {}",
+                      DescribeWeak(ctrl + kCtrlCommandMenuWidget), DescribeWeak(ctrl + kCtrlFieldMenuWidget),
+                      DescribeWeak(ctrl + kCtrlStoredController), Flag(ctrl + kCtrlSetupTrigger));
+        ++lines;
+    }
+    platform::Log(L"hud managers: compass holder's widget {}",
+                  holder != 0 ? DescribeWeak(holder) : std::wstring(L"(no holder)"));
+    ++lines;
+    const std::uintptr_t geometry = image.BytesMatch(kPlayerHostGeometry, kPlayerHostGeometryPrologue)
+                                        ? image.Rebase(kPlayerHostGeometry).value_or(0)
+                                        : 0;
+    return lines + LogPlayerLayers(geometry);
+}
+
 }  // namespace
 
 int DumpSlots(const std::wstring& className) noexcept
@@ -273,6 +735,27 @@ int DumpWidgets() noexcept
     catch (...)
     {
         platform::Log(L"dump widgets: failed (an exception while listing)");
+        return -1;
+    }
+}
+
+int DumpHudPlayers(const platform::GameImage& image) noexcept
+{
+    try
+    {
+        // Each section logs its own failure and the next still runs.
+        const Players players;
+        int           lines = LogLocalPlayers(players);
+        lines += LogControllerOrder(players);
+        lines += LogPrimaryController(players);
+        lines += LogRoots(players);
+        lines += LogMenuSettings();
+        lines += LogHudManagers(image);
+        return lines;
+    }
+    catch (...)
+    {
+        platform::Log(L"hud players: failed (an exception while reading)");
         return -1;
     }
 }

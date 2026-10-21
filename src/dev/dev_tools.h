@@ -27,7 +27,7 @@ namespace lss::dev {
 
 #if defined(LSS_DEV_TOOLS) && LSS_DEV_TOOLS
 
-/// Installs the watches and the logging redirects (idle until a command starts them) and opens the control channel.
+/// Installs the watches and opens the control channel (the HUD trace and probe install on their first command).
 void Install(const platform::GameImage& image, player_two::Session& session, players::SplitLayout& layout,
              players::SingleView& singleView, bool viewPointInstalled) noexcept;
 void Remove() noexcept;

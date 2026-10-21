@@ -15,9 +15,8 @@
 //      TraceAfterRender around it); each frame's line is logged there.
 // It also counts M and P by the player whose controller was passed.
 //
-// LogHudManagers (part of `dump hud-players`) reads the HUD's one owner, EndUISystem: its field
-// command controller's weak widgets and stored controller, the compass holder's widget, the two
-// setup flags, and the stock per-player layer geometry each local player would get.
+// A dev tool, installed on the first `hud-trace` (control/mod_target.cpp), not at every dev start: its seven call
+// redirects sit on the HUD's hot path.
 
 #include <cstdint>
 
@@ -40,8 +39,5 @@ void StartHudTrace(std::int32_t frames) noexcept;
 /// Game thread, around the overlay render (hud/root_overlay_render.h).
 void TraceBeforeRender() noexcept;
 void TraceAfterRender() noexcept;
-
-/// The EndUISystem reads above; returns the lines logged. Game thread only.
-int LogHudManagers() noexcept;
 
 }  // namespace lss::hud
