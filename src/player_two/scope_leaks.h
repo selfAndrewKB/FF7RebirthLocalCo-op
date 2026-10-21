@@ -14,7 +14,7 @@
 //   Leak 2, the leader transform: player 2's controller input (the component's vt+0x430) writes
 //     player 2's member's transform and motion into the one global block that follower AI reads as
 //     the leader's (its formation anchor). InputScope saves the block around player 2's input and
-//     puts it back.
+//     puts it back (a Keep range of platform/byte_scope.h).
 //   Leak 5, the field summons: the move state's summon body (chocobo whistle, buggy call/return,
 //     cactus statue, their row upgrades) reads the shared buttons, so player 1's press could call
 //     or return a vehicle a second time through player 2's member. The game never runs it for a

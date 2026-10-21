@@ -2,6 +2,7 @@
 
 #include "facts/controller.h"
 #include "player_two/field_rules.h"
+#include "platform/byte_scope.h"
 #include "platform/call_redirect.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -112,7 +113,8 @@ std::int64_t                              g_savedMs      = 0;
 bool                                      g_rewound      = false;
 bool                                      g_inputOpen    = false;  // an InputScope holds the saved block
 bool                                      g_tickOpen     = false;  // a MemberTickScope holds the saved clock
-std::array<std::byte, kLeaderBlockSize>   g_savedLeaderBlock{};
+// The leader block around player 2's input: saved and put back whatever the input wrote (defined at install).
+platform::ByteStore<1, kLeaderBlockSize>  g_leaderBlock;
 
 }  // namespace
 
@@ -130,7 +132,11 @@ bool Install(const platform::GameImage& image) noexcept
     }
     if (const auto leader = image.Rebase(kLeaderBlock, kLeaderBlockSize))
     {
-        g_leader = reinterpret_cast<std::byte*>(*leader);
+        const platform::ByteContext::Range block{*leader, kLeaderBlockSize, platform::ByteContext::Kind::Keep};
+        if (g_leaderBlock.Define(std::span<const platform::ByteContext::Range>(&block, 1)))
+        {
+            g_leader = reinterpret_cast<std::byte*>(*leader);
+        }
     }
     const auto site   = image.Rebase(kSummonCall, 5);
     const auto target = platform::FindFunction(image, kSummonBody);
@@ -159,11 +165,12 @@ void SetMask(unsigned mask) noexcept
 
 InputScope::InputScope(bool playerTwo) noexcept
 {
-    if (!playerTwo || g_leader == nullptr || g_inputOpen || !InPlayerTwoScope())
+    // With the fix off (diagnosis) the block is left as player 2's input writes it, as without this scope.
+    if (!playerTwo || g_leader == nullptr || g_inputOpen || !InPlayerTwoScope() || !Acts(kFixLeaderTransform) ||
+        !g_leaderBlock.Open())
     {
         return;  // (an open scope already holds the block: this one leaves it to it)
     }
-    std::memcpy(g_savedLeaderBlock.data(), g_leader, kLeaderBlockSize);
     g_inputOpen = true;
     held_       = true;
 }
@@ -175,15 +182,9 @@ InputScope::~InputScope()
         return;
     }
     g_inputOpen = false;
-    if (std::memcmp(g_savedLeaderBlock.data(), g_leader, kLeaderBlockSize) != 0)
-    {
-        ++g_counts.leaderRewrites;
-        if (Acts(kFixLeaderTransform))
-        {
-            std::memcpy(g_leader, g_savedLeaderBlock.data(), kLeaderBlockSize);
-            ++g_counts.leaderPutBack;
-        }
-    }
+    const unsigned rewrote = g_leaderBlock.Close();  // the block as it was found, whatever the input wrote
+    g_counts.leaderRewrites += rewrote;
+    g_counts.leaderPutBack += rewrote;
 }
 
 MemberTickScope::MemberTickScope(void* state, const void* playerTwoController, float deltaTime) noexcept
