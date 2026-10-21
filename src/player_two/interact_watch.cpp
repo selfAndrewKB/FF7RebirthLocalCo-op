@@ -42,7 +42,6 @@ namespace {
 
 // The objects (RE-p2-field-interact.md §1.1, §10; this build).
 constexpr std::uintptr_t kGameRoot          = 0x1490FEDE8;  // pointer global: the engine root
-constexpr std::uint32_t  kRootActionManager = 0x1A0;        // FieldActionMgr
 constexpr std::uint32_t  kRootWorldItems    = 0x288;        // WorldItemMgr
 constexpr std::uintptr_t kPartyManager      = 0x14939BCE0;  // pointer global
 constexpr std::uint32_t  kPartyController   = 0x140;        // FWeakObjectPtr: the primary controller

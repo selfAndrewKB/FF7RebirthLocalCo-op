@@ -158,7 +158,6 @@ constexpr std::uint32_t  kCoordScooter      = 0x30;
 constexpr std::uint32_t  kCoordShared       = 0x48;         // TSharedPtr object: +0 target (weak), +8 list, +0x10 num
 constexpr std::uint32_t  kCoordInstant      = 0x11C;        // u8, from the request
 constexpr std::uint32_t  kCoordApplyNow     = 0x11E;        // u8, from the request
-constexpr std::uint32_t  kCoordCooldown     = 0x1F4;        // float
 constexpr std::uint32_t  kCoordScripted     = 0x1F8;        // u8: a ride latched for TryBeginRide
 constexpr std::uint32_t  kCoordDisabled     = 0x2A;         // u8
 constexpr std::uint32_t  kCoordStateMachine = 0x218;

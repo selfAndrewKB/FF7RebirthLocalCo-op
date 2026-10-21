@@ -52,7 +52,6 @@ constexpr std::uintptr_t kGameRoot          = 0x1490FEDE8;  // pointer global: t
 constexpr std::uint32_t  kRootStage         = 0x70;         // u8: the input step's FieldAction part runs from 8
 constexpr std::uint32_t  kRootGameState     = 0x170;        // GS
 constexpr std::uint32_t  kRootModeHolder    = 0x1B8;        // read by the mode-class gate (no null check of its own)
-constexpr std::uint32_t  kRootActionManager = 0x1A0;        // FieldActionMgr
 constexpr std::uint32_t  kRootSlotHeldOwner = 0x210;        // -> +8: a u8 TickSlots writes (§12.1)
 constexpr std::uint32_t  kSlotHeldByte      = 0x08;
 constexpr std::uint32_t  kRootWorldItems    = 0x288;        // WorldItemMgr

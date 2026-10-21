@@ -135,8 +135,6 @@ constexpr std::uint32_t  kHudMode        = 0x540;  // u8: the battle HUD mode
 constexpr std::uint32_t kSetupDone     = 0x777;
 constexpr std::uint32_t kSetupPending  = 0x775;
 constexpr platform::PerBuild<std::uint32_t> kSetupDeferred = {0x2D1, 0x2D9};  // in the UI system; 1.005: EndUISystem__ClearFieldCommandSetupPending 0x1413FBB7A / SetupFieldCommandOrDefer 0x1413FBBE2 mov byte [..+2D9h],0 (EndUISystem +8 from between +0x2C0 and +0x2D0)
-constexpr std::uint32_t kSelecterSet   = 0x776;  // u8, set by Setup (logged)
-constexpr std::uint32_t kSetupOther    = 0x778;  // u8, set by Setup (logged)
 constexpr std::uint32_t kMenuLayer     = 0x783;  // u8 (logged)
 // What the log reads of a controller: the members (leader, ally, shortcut target, ally pick), the
 // menu widget (FWeakObjectPtr) and its back pointer to the controller, and the focus bytes (§11 of

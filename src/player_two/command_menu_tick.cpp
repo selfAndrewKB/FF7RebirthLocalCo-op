@@ -185,16 +185,11 @@ enum Request : std::int32_t
     kReqUnique  = 13,
     kReqGuardDodge = 32,
     kReqGuard   = 37,
-    kReqSynergyPane = 27,  // set on Guard's press (the synergy pane at top level); the up route clears it
 };
 // Also the shortcut commands [14..18] (the Shortcut*_Second keys), the synergy requests [20..23], and what
 // keeps the shortcut modifier [6] through a release: [7], [41], [42] (RE-p2-shortcut-modifier.md).
 constexpr std::array<std::int32_t, 23> kLoggedRequests{0,  1,  5,  6,  7,  12, 13, 14, 15, 16, 17, 18,
                                                        20, 21, 22, 23, 25, 32, 37, 38, 39, 41, 42};
-constexpr std::int32_t kDodgePress    = 3;  // req[32]: a dodge press
-constexpr std::int32_t kDodgeGuarding = 4;  // req[32]: a dodge press while guarding
-constexpr std::int32_t kGuardHeld     = 1;  // req[32]: guard held
-
 constexpr std::size_t kSnapshotTypes = 15;
 constexpr std::uint32_t kOpenPending = 0x5D0;  // i32: a menu open requested (>= 0), pushed 0.125 s later
 constexpr std::uint32_t kGate777     = 0x777;  // u8: [UNKNOWN] 1 on the game's controller; 0 on player 2's after a reset
