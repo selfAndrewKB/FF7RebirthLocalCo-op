@@ -1,5 +1,6 @@
 #include "player_two/shop_talk.h"
 
+#include "player_two/field_rules.h"
 #include "platform/entry_redirect.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -146,12 +147,7 @@ const wchar_t* Text(Verdict verdict) noexcept
 /// A mapped field's data (pointer, or a signed offset from the field when the low bit is set: shared strings point back).
 const std::byte* MappedData(const std::byte* field) noexcept
 {
-    const auto value = ReadField<std::uint64_t>(field, 0);
-    if (value == 0)
-    {
-        return nullptr;
-    }
-    return (value & 1) != 0 ? field + (static_cast<std::int64_t>(value) >> 1) : reinterpret_cast<const std::byte*>(value);
+    return field_rules::MappedPointer(field, ReadField<std::uint64_t>(field, 0));
 }
 
 /// A mapped array's element count, at most `max` (0 if unreadable).
@@ -175,12 +171,9 @@ std::wstring MappedText(const std::byte* element)
     {
         return {};
     }
-    for (const wchar_t c : text)
+    if (!field_rules::IsRowName(text))
     {
-        if (c < 0x20 || c > 0x7E)
-        {
-            return {};  // row names are ASCII: anything else means the offset is wrong
-        }
+        return {};  // row names are ASCII: anything else means the offset is wrong
     }
     return text;
 }

@@ -1,5 +1,6 @@
 #include "player_two/scope_leaks.h"
 
+#include "player_two/field_rules.h"
 #include "platform/call_redirect.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -98,14 +99,7 @@ void SummonBody(void* state, float deltaTime) noexcept
 /// The seconds from which adding dt the game's way lands exactly on `target`, if one is near.
 double SecondsBefore(double target, float deltaTime) noexcept
 {
-    const double step   = static_cast<double>(deltaTime);
-    double       before = target - step;
-    for (int i = 0; i < kNudges && step + before != target; ++i)
-    {
-        before = std::nextafter(before, step + before < target ? std::numeric_limits<double>::infinity()
-                                                               : -std::numeric_limits<double>::infinity());
-    }
-    return before;
+    return field_rules::SecondsBefore(target, deltaTime, kNudges);
 }
 
 // Saved between a scope's construction and destruction (neither kind nests).

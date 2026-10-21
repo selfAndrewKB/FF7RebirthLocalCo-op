@@ -1,5 +1,6 @@
 #include "player_two/trigger_two.h"
 
+#include "player_two/field_rules.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/guarded.h"
@@ -648,13 +649,16 @@ std::uintptr_t Filter(bool enter, void* manager, std::uint64_t key, void* owner,
     {
         return original(manager, key, owner, actorArg);
     }
-    if (owner != TriggerOf(generation::PlayerTwoController()))
+    const auto route = field_rules::TriggerRouteOf(owner == TriggerOf(generation::PlayerTwoController()),
+                                                   owner == TriggerOf(generation::PlayerOneController()),
+                                                   switch_volume_two::Watching());
+    if (route == field_rules::TriggerRoute::Original)
+    {
+        return original(manager, key, owner, actorArg);
+    }
+    if (route == field_rules::TriggerRoute::PlayerOne)
     {
         // Player 1's event, seen while player 2 is inside a switch volume (its union with player 1's, switch_volume_two).
-        if (!switch_volume_two::Watching() || owner != TriggerOf(generation::PlayerOneController()))
-        {
-            return original(manager, key, owner, actorArg);
-        }
         // A switch volume's Tags[0] (its CharaPop row key) is not in the tag registry: the diff's own actor names it.
         void*      volume = PassedActor(enter, actorArg);
         const auto result = original(manager, key, owner, actorArg);
@@ -673,15 +677,18 @@ std::uintptr_t Filter(bool enter, void* manager, std::uint64_t key, void* owner,
             switch_volume_two::PlayerTwoEvent(enter, const_cast<void*>(passed), owner);
             return 0;
         }
-        const int   cls    = actor != nullptr ? ClassOf(actor) : -1;
-        if (cls < 0)
+        const int  cls     = actor != nullptr ? ClassOf(actor) : -1;
+        const auto verdict = field_rules::TriggerVerdictOf(
+            cls, cls >= 0 && kAdmitted[cls].enterEffectOnly,
+            cls >= 0 && kAdmitted[cls].enterEffectOnly ? ReadField<std::uint8_t>(actor, kZiplineEnterEffect) : 1);
+        if (verdict == field_rules::TriggerVerdict::NotAdmitted)
         {
             LogEvent(enter, actor != nullptr ? actor : passed, passed, L"held back, its class is not admitted");
             return 0;
         }
         // A prompt zip line would put its FieldActionMgr point and press flag under both players' notifies (player 1's
         // press could be lost), and player 2 has no prompt there: held back.
-        if (kAdmitted[cls].enterEffectOnly && ReadField<std::uint8_t>(actor, kZiplineEnterEffect) == 0)
+        if (verdict == field_rules::TriggerVerdict::PromptZipLine)
         {
             LogEvent(enter, actor, passed, L"held back: a button-prompt zip line (only auto-start lines are admitted)");
             return 0;

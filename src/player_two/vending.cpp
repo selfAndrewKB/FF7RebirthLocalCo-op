@@ -1,5 +1,6 @@
 #include "player_two/vending.h"
 
+#include "player_two/field_rules.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
@@ -175,13 +176,7 @@ bool NamesPressedMachine(std::uint64_t target) noexcept
 /// and oba2100_ShopWeapon01; RE-p2-shopkeeper-talk.md §7.3).
 std::wstring AfterPrefix(const std::wstring& name)
 {
-    const auto   at   = name.find(L'_');
-    std::wstring rest = at == std::wstring::npos ? name : name.substr(at + 1);
-    for (wchar_t& c : rest)
-    {
-        c = static_cast<wchar_t>(std::towlower(c));
-    }
-    return rest;
+    return field_rules::AfterPrefix(name);
 }
 
 /// Whether the shop camera's target names the NPC of player 2's pending shopkeeper press (the action passes the NPC's
