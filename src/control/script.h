@@ -99,8 +99,9 @@
 //                                         hold a player's sticks (-1..1) for a number of ticks;
 //                                         needs per-pad sticks, and wins over the pad itself
 //   wait <ticks>                          do nothing for a number of ticks
-//   wait-until playing|out [<ticks>]      until player 2 plays their member, or is out
-//                                         (fails after the timeout, 600 ticks by default)
+//   wait-until playing|out|field [<ticks>]
+//                                         until player 2 plays their member, or is out, or the field is loaded
+//                                         and playable (fails after the timeout, 600 ticks by default)
 //   console <command>                     an engine console command, as typed in the console
 //   quit                                  quit the game through the engine (player 2 must be out)
 //   status                                write player 2's status line to the log
@@ -169,6 +170,7 @@ enum class WaitCondition
 {
     Playing,
     Out,
+    Field,  // the field runs, the game is ready and player 1's controller is ready: a save loaded and playable
 };
 
 struct Command

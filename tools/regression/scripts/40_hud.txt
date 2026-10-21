@@ -1,0 +1,16 @@
+# Player 2's HUD: the layout band, the second image, the levers' pass, the minimap, the placements set back at the leave.
+# expect: HUD layout \(player 2's pass\)
+# expect: HUD levers: player 2's pass with \d+ HUD root
+# expect: HUD image: player 2's buffers are initialised
+# expect: minimap: on
+# expect: HUD placement: \d+ widget\(s\) set back
+# expect-not: stays off
+# expect-not: safety submit
+note regression: hud start
+join
+wait-until playing 1800
+wait 360
+status
+leave
+wait-until out 900
+note regression: hud done

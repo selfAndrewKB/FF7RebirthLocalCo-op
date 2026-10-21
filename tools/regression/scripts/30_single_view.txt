@@ -1,0 +1,14 @@
+# Player 1's single view by the development switch: on, then back to the automatic choice.
+# expect: single view: player 1's view alone
+# expect: single view: over, the split is back
+# expect-not: single view: the split switch could not be
+note regression: single view start
+join
+wait-until playing 1800
+single-view on
+wait 90
+single-view auto
+wait 90
+leave
+wait-until out 900
+note regression: single view done

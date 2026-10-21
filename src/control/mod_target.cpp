@@ -16,6 +16,8 @@
 #include "player_two/camera_distance.h"
 #include "player_two/charapop_centre.h"
 #include "player_two/charapop_near.h"
+#include "player_two/field_exit.h"
+#include "player_two/own_controller.h"
 #include "player_two/shoulder_scale.h"
 #include "player_two/generation.h"
 #include "player_two/pad_buttons.h"
@@ -61,6 +63,13 @@ bool ModTarget::HasPlayerTwo() const
 bool ModTarget::PlayerTwoPlaying() const
 {
     return session_.PlaysMember();
+}
+
+/// The same readiness the session's rejoin waits for: the field running (the entry steps done), the game's
+/// battle system and option data built, player 1's controller and camera manager on the End classes.
+bool ModTarget::FieldReady() const
+{
+    return player_two::field_exit::FieldReady() && player_two::party_member::GameReady() && player_two::own_controller::Ready();
 }
 
 Outcome ModTarget::Join()

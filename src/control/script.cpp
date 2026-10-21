@@ -234,13 +234,16 @@ ParsedLine ParseWait(const std::vector<std::wstring_view>& words)
 
 ParsedLine ParseWaitUntil(const std::vector<std::wstring_view>& words)
 {
-    if ((words.size() != 2 && words.size() != 3) || (words[1] != L"playing" && words[1] != L"out"))
+    if ((words.size() != 2 && words.size() != 3) ||
+        (words[1] != L"playing" && words[1] != L"out" && words[1] != L"field"))
     {
-        return Error(L"wait-until takes playing or out, and optionally a timeout in ticks");
+        return Error(L"wait-until takes playing, out or field, and optionally a timeout in ticks");
     }
     Command command;
     command.kind      = CommandKind::WaitUntil;
-    command.condition = words[1] == L"playing" ? WaitCondition::Playing : WaitCondition::Out;
+    command.condition = words[1] == L"playing" ? WaitCondition::Playing
+                        : words[1] == L"out"   ? WaitCondition::Out
+                                                : WaitCondition::Field;
     command.ticks     = kDefaultWaitUntilTicks;
     if (words.size() == 3)
     {
@@ -482,7 +485,10 @@ std::wstring Describe(const Command& command)
                                command.ticks);
         case CommandKind::Wait: return std::format(L"wait {}", command.ticks);
         case CommandKind::WaitUntil:
-            return std::format(L"wait-until {} {}", command.condition == WaitCondition::Playing ? L"playing" : L"out",
+            return std::format(L"wait-until {} {}",
+                               command.condition == WaitCondition::Playing ? L"playing"
+                               : command.condition == WaitCondition::Out   ? L"out"
+                                                                            : L"field",
                                command.ticks);
         case CommandKind::Console: return L"console " + command.text;
         case CommandKind::Note: return L"note " + command.text;

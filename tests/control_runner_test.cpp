@@ -24,11 +24,13 @@ class FakeMod final : public lss::control::Target
 public:
     bool                      playerTwo = false;
     bool                      playing   = false;
+    bool                      field     = false;
     bool                      perPad    = true;
     std::vector<std::wstring> calls;
 
     bool HasPlayerTwo() const override { return playerTwo; }
     bool PlayerTwoPlaying() const override { return playing; }
+    bool FieldReady() const override { return field; }
 
     Outcome Join() override { return Record(L"join"); }
     Outcome Leave() override { return Record(L"leave"); }
@@ -166,6 +168,14 @@ void TestWaitUntilPassesOrTimesOut()
     auto    immediate = Script({L"wait-until out", L"note out"});
     immediate.Step(already, 1);
     EXPECT(immediate.Finished() && (already.calls == std::vector<std::wstring>{L"note out"}));
+
+    FakeMod loading;
+    auto    field = Script({L"wait-until field 5", L"note field"});
+    field.Step(loading, 1);
+    EXPECT(loading.calls.empty() && !field.Finished());
+    loading.field = true;
+    field.Step(loading, 2);
+    EXPECT(field.Finished() && !field.Failed() && (loading.calls == std::vector<std::wstring>{L"note field"}));
 }
 
 void TestHoldsOverlapAndExpire()

@@ -134,7 +134,7 @@ void TestStick()
 
 void TestWaits()
 {
-    std::puts("script: wait <ticks>; wait-until playing|out [<ticks>] with a default timeout");
+    std::puts("script: wait <ticks>; wait-until playing|out|field [<ticks>] with a default timeout");
     EXPECT(ParseLine(L"wait 30").command->ticks == 30);
     EXPECT(Rejected(L"wait"));
     EXPECT(Rejected(L"wait -5"));
@@ -144,6 +144,8 @@ void TestWaits()
     EXPECT(until.command && until.command->ticks == lss::control::kDefaultWaitUntilTicks);
     const auto timed = ParseLine(L"wait-until playing 900");
     EXPECT(timed.command && timed.command->condition == WaitCondition::Playing && timed.command->ticks == 900);
+    const auto field = ParseLine(L"wait-until field 3600");
+    EXPECT(field.command && field.command->condition == WaitCondition::Field && field.command->ticks == 3600);
     EXPECT(Rejected(L"wait-until dancing"));
 }
 

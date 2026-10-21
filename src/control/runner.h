@@ -34,6 +34,7 @@ public:
 
     virtual bool HasPlayerTwo() const = 0;
     virtual bool PlayerTwoPlaying() const = 0;  // player 2 plays their member
+    virtual bool FieldReady() const = 0;        // the field is loaded and playable (a save, past the title and the load)
 
     virtual Outcome Join()                                     = 0;
     virtual Outcome Leave()                                    = 0;

@@ -9,8 +9,10 @@
        in; both hashes are printed and must match.
     3. The last session's UE4SS.log is kept under ue4ss\logs (the newest ten), since each launch
        starts a new one.
-    4. The game is launched through Steam, and this returns once the mod has logged its ready line
-       for this launch (or reports that it did not). With -NoLaunch it is left closed.
+    4. The game is launched through Steam (or, with -Direct, its exe is started directly: the 1.004
+       copy must never go through Steam, which starts the live game), and this returns once the mod
+       has logged its ready line for this launch (or reports that it did not). With -NoLaunch it is
+       left closed. -GameDir names another game folder (the 1.004 copy's End\Binaries\Win64).
     Title and load menus are left to keys.ps1 and shot.ps1, so each one is checked on screen first.
 
 .EXAMPLE
@@ -21,24 +23,26 @@ param(
     [switch]$NoLaunch,  # quit, deploy and keep the log, but leave the game closed
     [string]$Label = '',
     [string]$Build = "$PSScriptRoot\..\build\Game__Shipping__Win64\LocalSplitScreen.dll",
-    [int]$ReadyTimeoutSeconds = 150
+    [int]$ReadyTimeoutSeconds = 150,
+    [string]$GameDir = 'G:\_SSD Games\SteamLibrary\steamapps\common\FINAL FANTASY VII REBIRTH\End\Binaries\Win64',
+    [switch]$Direct  # start ff7rebirth_.exe from $GameDir instead of Steam's -applaunch (the 1.004 copy)
 )
 
 $ErrorActionPreference = 'Stop'
-$gameDir = 'G:\_SSD Games\SteamLibrary\steamapps\common\FINAL FANTASY VII REBIRTH\End\Binaries\Win64'
+$gameDir = $GameDir
 $modDir  = "$gameDir\ue4ss\Mods\LocalSplitScreen"
 $log     = "$gameDir\ue4ss\UE4SS.log"
 $control = "$PSScriptRoot\control.py"
 
 $game = Get-Process ff7rebirth_ -ErrorAction SilentlyContinue
 if ($game) {
-    $status = python $control -c 'status' --timeout 20
+    $status = python $control --mod $modDir -c 'status' --timeout 20
     if ($status -match 'player 2 is not in') {
         'player 2 is out'
     } else {
-        python $control -c 'leave' -c 'wait-until out 900' --timeout 60 | Select-Object -Last 1
+        python $control --mod $modDir -c 'leave' -c 'wait-until out 900' --timeout 60 | Select-Object -Last 1
     }
-    python $control -c 'quit' --timeout 30 | Select-Object -Last 1
+    python $control --mod $modDir -c 'quit' --timeout 30 | Select-Object -Last 1
     if (-not $game.WaitForExit(120000)) { throw 'the game did not exit within 2 minutes; not deploying' }
     'game exited'
 }
@@ -68,7 +72,11 @@ if (Test-Path $log) {
 if ($NoLaunch) { 'not launched (-NoLaunch)'; return }
 
 $start = Get-Date
-Start-Process 'c:/program files (x86)/steam/steam.exe' -ArgumentList '-applaunch', '2909400'
+if ($Direct) {
+    Start-Process "$gameDir\ff7rebirth_.exe" -WorkingDirectory $gameDir
+} else {
+    Start-Process 'c:/program files (x86)/steam/steam.exe' -ArgumentList '-applaunch', '2909400'
+}
 for ($i = 0; $i -lt $ReadyTimeoutSeconds; $i++) {
     Start-Sleep 1
     if ((Test-Path $log) -and (Get-Item $log).LastWriteTime -gt $start -and

@@ -1,0 +1,18 @@
+# Filled halves and the split FOV: bars off and on again, the FOV blend's ends.
+# expect: split halves fill the screen
+# expect: split halves kept 16:9 with bars
+note regression: fill/fov start
+join
+wait-until playing 1800
+bars off
+wait 90
+split-fov 1
+wait 60
+split-fov 0
+wait 60
+split-fov 0.5
+bars on
+wait 90
+leave
+wait-until out 900
+note regression: fill/fov done

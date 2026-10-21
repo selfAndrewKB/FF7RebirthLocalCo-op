@@ -1,0 +1,13 @@
+# The third view (the multi-monitor branch): a third local player on player 1's camera, in and out.
+# expect: third view: a third local player is in
+# expect: ThreePlayerSplitscreenLayout restored to
+note regression: third view start
+join
+wait-until playing 1800
+third-view on
+wait 180
+third-view off
+wait 60
+leave
+wait-until out 900
+note regression: third view done

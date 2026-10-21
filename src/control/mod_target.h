@@ -31,6 +31,7 @@ public:
 
     bool HasPlayerTwo() const override;
     bool PlayerTwoPlaying() const override;
+    bool FieldReady() const override;
 
     Outcome Join() override;
     Outcome Leave() override;

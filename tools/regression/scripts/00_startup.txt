@@ -1,0 +1,10 @@
+# Startup: every engine check passed on this build, nothing stood aside, the version line is the source's.
+# scope: log
+# expect: \[LocalSplitScreen\] v\d+\.\d+\.\d+\S* starting
+# expect: ready: every engine check passed
+# expect: game version 1\.00[45]
+# expect: command channel open
+# expect-not: standing aside
+# expect-not: stands aside
+# expect-not: not what the research read
+note regression: startup checked

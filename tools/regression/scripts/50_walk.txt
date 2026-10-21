@@ -1,0 +1,15 @@
+# Player 2 walks on their own pad and camera: per-pad sticks, a held stick, the member tick counted on the status line.
+# expect: per-pad sticks ON
+# expect: member movement ticked [1-9]\d*
+# expect-not: member movement ticked 0 skipped
+note regression: walk start
+join
+wait-until playing 1800
+own-camera on
+sticks per-pad
+stick 2 0 1 0 0 180
+wait 200
+status
+leave
+wait-until out 900
+note regression: walk done

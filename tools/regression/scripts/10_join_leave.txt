@@ -1,0 +1,15 @@
+# Join and leave: player 2 joins with its own controller, takes the 2nd slot's member, and leaves clean.
+# expect: player 2 joined with its own controller
+# expect: player 2 took .+ after \d+ tick
+# expect: player 2's Field camera brought to player 1's settings: matches
+# expect: leave: player 2 left; \d+ leftover actor
+# expect-not: JOIN FAILED
+# expect-not: could not be given back
+note regression: join/leave start
+join
+wait-until playing 1800
+status
+wait 120
+leave
+wait-until out 900
+note regression: join/leave done

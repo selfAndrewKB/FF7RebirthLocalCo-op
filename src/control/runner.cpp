@@ -9,7 +9,13 @@ namespace {
 
 bool ConditionHolds(const Target& target, WaitCondition condition)
 {
-    return condition == WaitCondition::Playing ? target.PlayerTwoPlaying() : !target.HasPlayerTwo();
+    switch (condition)
+    {
+        case WaitCondition::Playing: return target.PlayerTwoPlaying();
+        case WaitCondition::Out: return !target.HasPlayerTwo();
+        case WaitCondition::Field: return target.FieldReady();
+    }
+    return false;
 }
 
 Outcome Run(Target& target, const Command& command)

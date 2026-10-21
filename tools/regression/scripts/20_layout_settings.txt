@@ -1,0 +1,21 @@
+# The layout switch and the held settings: side by side and back, the engine settings set at the join and restored at
+# the leave.
+# expect: split screen: r\.SceneRenderTargetResizeMethod \d+ -> 2 while player 2 is in
+# expect: split screen: r\.DynamicRes\.GPUTimingMeasureMethod \d+ -> 1 while player 2 is in
+# expect: split screen: D3D12\.EnableGapRecorder \d+ -> 0 while player 2 is in
+# expect: split layout: TwoPlayerSplitscreenLayout = 1 \(side by side\)
+# expect: split layout: TwoPlayerSplitscreenLayout = 0 \(top/bottom\)
+# expect: split halves: viewport \d+x\d+, layout
+# expect: player 2 is out: r\.SceneRenderTargetResizeMethod restored to
+# expect: player 2 is out: D3D12\.EnableGapRecorder restored to
+# expect: player 2 is out: TwoPlayerSplitscreenLayout restored to
+note regression: layout/settings start
+join
+wait-until playing 1800
+layout side-by-side
+wait 90
+layout top-bottom
+wait 90
+leave
+wait-until out 900
+note regression: layout/settings done
