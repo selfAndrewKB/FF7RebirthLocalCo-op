@@ -160,6 +160,7 @@ add_library(LocalSplitScreen SHARED
     src/player_two/move_state.cpp
     src/player_two/pad_buttons.cpp
     src/player_two/pad_sticks.cpp
+    src/player_two/outside_join.cpp
     src/player_two/session.cpp
     src/player_two/session_join.cpp
     src/player_two/stick_select.cpp
@@ -286,6 +287,8 @@ lss_test(game_thread_sites)
 lss_test(layout_scale_code)
 lss_test(shadow_feedback_code)
 lss_test(rumble_list_code)
+lss_test(outside_join src/player_two/outside_join.cpp)
+lss_test(session_rules)
 
 get_property(LSS_TEST_TARGETS GLOBAL PROPERTY LSS_TEST_TARGETS)
 add_custom_target(lss_tests DEPENDS ${LSS_TEST_TARGETS})

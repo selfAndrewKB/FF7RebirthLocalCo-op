@@ -265,8 +265,7 @@ void Session::Join() noexcept
     playerOneController_ = one.controller;
     playerTwoController_ = added.controller;
     phase_               = Phase::Playing;
-    rejoinPending_       = false;  // joined, by the key, the rejoin after a map load, or a member freed
-    awaitingMember_      = false;
+    outside_.End();  // joined, by the key, the rejoin after a map load, or a member freed
 
     if (added.raised)
     {

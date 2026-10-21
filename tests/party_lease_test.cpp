@@ -249,6 +249,67 @@ void TestLinkPartnerBusy()
     EXPECT(!LinkPartnerBusy(LinkRecordView{}, 0));
 }
 
+void TestSlotWait()
+{
+    std::puts("slot wait: not eligible beats an unready AI, which beats a busy synergy partner; else the member is taken");
+    EXPECT(SlotWaitOf(Eligibility::Eligible, AiReadiness::Ready, false) == SlotWait::None);
+    EXPECT(SlotWaitOf(Eligibility::Eligible, AiReadiness::Ready, true) == SlotWait::LinkPartner);
+    EXPECT(SlotWaitOf(Eligibility::Eligible, AiReadiness::ScriptBrain, true) == SlotWait::AiNotReady);
+    EXPECT(SlotWaitOf(Eligibility::Eligible, AiReadiness::NotFollow, false) == SlotWait::AiNotReady);
+    EXPECT(SlotWaitOf(Eligibility::Eligible, AiReadiness::Unread, false) == SlotWait::AiNotReady);
+    EXPECT(SlotWaitOf(Eligibility::Requested, AiReadiness::ScriptBrain, true) == SlotWait::NotEligible);
+    EXPECT(SlotWaitOf(Eligibility::PlayerOnes, AiReadiness::Ready, false) == SlotWait::NotEligible);
+}
+
+void TestIsPartnerOf()
+{
+    std::puts("link: the record whose partner is the player type and has not ended there");
+    LinkRecordView record;
+    record.types[0] = 0;
+    record.types[1] = 5;
+    record.partner  = 1;
+    EXPECT(IsPartnerOf(record, 5));
+    EXPECT(!IsPartnerOf(record, 0));  // the initiator
+    EXPECT(!IsPartnerOf(record, 3));
+    record.ended[1] = 1;
+    EXPECT(!IsPartnerOf(record, 5));  // given back
+    record.ended[1] = 0;
+    record.partner  = 3;  // out of the record
+    EXPECT(!IsPartnerOf(record, 5));
+    EXPECT(!IsPartnerOf(LinkRecordView{}, 0));
+}
+
+void TestTakeAndSwapOutcomes()
+{
+    std::puts("take: acquired at any tick wins, the timeout only after it; swap: released, then player 1's with "
+              "player 2's controller empty, then the timeout");
+    EXPECT(TakeOutcomeOf(true, 0, 120) == TakeOutcome::Took);
+    EXPECT(TakeOutcomeOf(true, 500, 120) == TakeOutcome::Took);
+    EXPECT(TakeOutcomeOf(false, 0, 120) == TakeOutcome::Wait);
+    EXPECT(TakeOutcomeOf(false, 119, 120) == TakeOutcome::Wait);
+    EXPECT(TakeOutcomeOf(false, 120, 120) == TakeOutcome::TimedOut);
+
+    int        playerOne;
+    LeaseState lease;
+    EXPECT(SwapOutcomeOf(true, lease, &playerOne, 0, 120) == SwapOutcome::Released);
+    EXPECT(SwapOutcomeOf(false, lease, &playerOne, 0, 120) == SwapOutcome::Wait);
+    EXPECT(SwapOutcomeOf(false, lease, &playerOne, 119, 120) == SwapOutcome::Wait);
+    EXPECT(SwapOutcomeOf(false, lease, &playerOne, 120, 120) == SwapOutcome::TimedOut);
+
+    lease.memberEffective = &playerOne;  // the game made it player 1's leader
+    EXPECT(SwapOutcomeOf(false, lease, &playerOne, 0, 120) == SwapOutcome::PlayerOnes);
+    EXPECT(SwapOutcomeOf(true, lease, &playerOne, 0, 120) == SwapOutcome::Released);  // released first
+    EXPECT(SwapOutcomeOf(false, lease, &playerOne, 500, 120) == SwapOutcome::PlayerOnes);  // before the timeout
+    lease.playerTwoPawn = &g_member;  // player 2's controller still holds it: not yet
+    EXPECT(SwapOutcomeOf(false, lease, &playerOne, 0, 120) == SwapOutcome::Wait);
+    lease.playerTwoPawn   = nullptr;
+    lease.playerTwoLeader = &g_member;
+    EXPECT(SwapOutcomeOf(false, lease, &playerOne, 0, 120) == SwapOutcome::Wait);
+    lease.playerTwoLeader = nullptr;
+    lease.memberEffective = &g_other;  // another controller's: wait for the release
+    EXPECT(SwapOutcomeOf(false, lease, &playerOne, 0, 120) == SwapOutcome::Wait);
+}
+
 int main()
 {
     TestSecondSlot();
@@ -260,6 +321,9 @@ int main()
     TestEveryVerdictHasText();
     TestAcquired();
     TestReleased();
+    TestSlotWait();
+    TestIsPartnerOf();
+    TestTakeAndSwapOutcomes();
 
     return lss::test::Report();
 }

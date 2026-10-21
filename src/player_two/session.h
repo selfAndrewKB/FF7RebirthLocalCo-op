@@ -36,6 +36,7 @@
 // Game thread only, outside Draw.
 
 #include "player_two/leave_sequence.h"
+#include "player_two/outside_join.h"
 #include "player_two/party_member.h"
 #include "players/local_players.h"
 
@@ -67,7 +68,7 @@ public:
     void Leave() noexcept;
 
     /// Player 2 was asked for but is out until a party member is free for it.
-    bool AwaitingMember() const noexcept { return awaitingMember_; }
+    bool AwaitingMember() const noexcept { return outside_.Current() == outside_join::Mode::Await; }
 
     /// A map is about to load: player 2 leaves now, without waiting for the member's release.
     /// Returns true if player 2 is out.
@@ -137,11 +138,12 @@ private:
     void WatchOwnCamera() noexcept;
     void RetakeWhenFree() noexcept;
     bool MemberDestroyed() noexcept;
-    void TryRejoin() noexcept;
+    bool ReadyToJoinOutside() const noexcept;
+    void OutsideTick() noexcept;
+    void LogGaveUp(outside_join::Reason reason) noexcept;
     void* FreeMember(void* playerOneController) const noexcept;
     void AwaitMember(const wchar_t* why) noexcept;
     void LeaveToAwait(const wchar_t* why) noexcept;
-    void JoinWhenMemberFree() noexcept;
     std::uint32_t BackstopTicks() const noexcept;
     void Yield(const wchar_t* why) noexcept;
     bool MemberHeld() const noexcept;  // taking or playing a member
@@ -169,14 +171,7 @@ private:
     bool                  viewOnOwnCamera_  = true;     // as last seen (a move is logged once per move)
     bool                  gateClosedLogged_ = false;
     bool                  refuseJoins_      = false;    // after an exception during a join
-    bool                  rejoinPending_    = false;    // a map load took player 2 out: join again when it is ready
-    std::uint32_t         rejoinTicks_      = 0;        // ticks the new map has looked ready
-    std::uint32_t         rejoinTries_      = 0;
-    std::chrono::steady_clock::time_point rejoinAsked_{};  // when the map load asked for the rejoin
-    bool                  awaitingMember_   = false;    // asked for, but out until a party member is free
-    std::uint32_t         awaitReadyTicks_  = 0;        // ticks the field has looked ready during the wait
-    std::uint32_t         awaitTicks_       = 0;        // ticks of the wait's slow check
-    std::uint32_t         awaitJoinTries_   = 0;        // joins the wait tried that did not add player 2
+    outside_join::OutsideJoin outside_;                 // out: the rejoin after a map load, or the wait for a member
     bool                  waitingForSlot_   = false;    // in, without a member: the 2nd slot's is not free yet
     std::uint32_t         slotWaitLogged_   = 0;        // the wait's reason as last logged (logged on change)
     bool                  sharedRide_       = false;    // player 1 rides a shared vehicle: player 2 takes no member

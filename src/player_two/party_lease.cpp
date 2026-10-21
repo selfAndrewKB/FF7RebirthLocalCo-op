@@ -145,4 +145,52 @@ bool LinkPartnerBusy(const LinkRecordView& record, std::uint8_t playerType) noex
     return approaching || ownHalf;
 }
 
+bool IsPartnerOf(const LinkRecordView& record, std::uint8_t playerType) noexcept
+{
+    return record.partner < std::size(record.types) && record.types[record.partner] == playerType &&
+           record.ended[record.partner] == 0;
+}
+
+SlotWait SlotWaitOf(Eligibility verdict, AiReadiness readiness, bool linkBusy) noexcept
+{
+    if (verdict != Eligibility::Eligible)
+    {
+        return SlotWait::NotEligible;
+    }
+    if (readiness != AiReadiness::Ready)
+    {
+        return SlotWait::AiNotReady;
+    }
+    if (linkBusy)
+    {
+        // A synergy partner on its approach (its AI's, in BATTLE): taken only once the game gives it back.
+        return SlotWait::LinkPartner;
+    }
+    return SlotWait::None;
+}
+
+TakeOutcome TakeOutcomeOf(bool acquired, std::uint32_t ticks, std::uint32_t takeTicks) noexcept
+{
+    if (acquired)
+    {
+        return TakeOutcome::Took;
+    }
+    return ticks < takeTicks ? TakeOutcome::Wait : TakeOutcome::TimedOut;
+}
+
+SwapOutcome SwapOutcomeOf(bool released, const LeaseState& lease, const void* playerOneController, std::uint32_t ticks,
+                          std::uint32_t takeTicks) noexcept
+{
+    if (released)
+    {
+        return SwapOutcome::Released;
+    }
+    // Given back as the game made it player 1's leader: it never returns to its AI.
+    if (lease.memberEffective == playerOneController && lease.playerTwoPawn == nullptr && lease.playerTwoLeader == nullptr)
+    {
+        return SwapOutcome::PlayerOnes;
+    }
+    return ticks < takeTicks ? SwapOutcome::Wait : SwapOutcome::TimedOut;
+}
+
 }  // namespace lss::player_two

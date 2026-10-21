@@ -301,10 +301,7 @@ bool FindPartnerLinkGuarded(std::uint8_t playerType, LinkRecordView& out) noexce
     {
         return g_fn.inBattle() != 0 &&
                FindLink(
-            [playerType](const LinkRecordView& view) {
-                return view.partner < std::size(view.types) && view.types[view.partner] == playerType &&
-                       view.ended[view.partner] == 0;
-            },
+            [playerType](const LinkRecordView& view) { return IsPartnerOf(view, playerType); },
             out);
     }
     __except (platform::GuardFilter(GetExceptionCode()))
@@ -407,23 +404,13 @@ SlotChoice ChooseSlot(void* playerOneController, bool log) noexcept
     choice.verdict = Assess(read.member);
     choice.ai      = read.ai;
     const AiReadiness readiness = AssessAi(choice.ai);
-    if (choice.verdict != Eligibility::Eligible)
+    choice.wait                 = SlotWaitOf(choice.verdict, readiness, read.linkBusy);
+    if (choice.wait == SlotWait::LinkPartner)
     {
-        choice.wait = SlotWait::NotEligible;
-    }
-    else if (readiness != AiReadiness::Ready)
-    {
-        choice.wait = SlotWait::AiNotReady;
-    }
-    else if (read.linkBusy)
-    {
-        // A synergy partner on its approach (its AI's, in BATTLE): taken only once the game gives it back.
-        choice.wait = SlotWait::LinkPartner;
         choice.link = read.link;
     }
-    else
+    else if (choice.wait == SlotWait::None)
     {
-        choice.wait   = SlotWait::None;
         choice.member = read.character;
     }
     if (log)

@@ -146,4 +146,49 @@ struct LinkRecordView
 /// partner plays its own half (started, not ended).
 bool LinkPartnerBusy(const LinkRecordView& record, std::uint8_t playerType) noexcept;
 
+/// `playerType` is this record's partner and has not ended there (the record to read for LinkPartnerBusy).
+bool IsPartnerOf(const LinkRecordView& record, std::uint8_t playerType) noexcept;
+
+// ---- the 2nd slot's member: whether player 2 takes it now, or waits on it ----
+
+/// Why player 2 has no member to take now.
+enum class SlotWait
+{
+    None,         // `member` is the one to take
+    NoSlot,       // the party has no member but player 1's (a solo story party): nothing to wait on here
+    NotEligible,  // the 2nd slot's member is not free by the switch's own member test (yet)
+    AiNotReady,   // the 2nd slot's member is held by a story script, or not following the party
+    LinkPartner,  // the 2nd slot's member is a synergy partner the game has not given back yet (`link`)
+    Unread,       // the party reads faulted (objects torn down under them, as in a reload)
+};
+
+/// The 2nd slot's member is taken only when free by the switch's own member test, with its AI in a state the game
+/// hands players, and not while it is a synergy partner the game has not given back: None, or the first reason
+/// in that order.
+SlotWait SlotWaitOf(Eligibility verdict, AiReadiness readiness, bool linkBusy) noexcept;
+
+// ---- the take and the swap, awaited over the following ticks ----
+
+enum class TakeOutcome
+{
+    Wait,
+    Took,      // player 2's controller holds the member
+    TimedOut,  // not within `takeTicks`: given back; player 2 stays in on its own controller
+};
+
+/// The take's state this tick: acquired wins at any tick, the timeout only after it.
+TakeOutcome TakeOutcomeOf(bool acquired, std::uint32_t ticks, std::uint32_t takeTicks) noexcept;
+
+enum class SwapOutcome
+{
+    Wait,
+    Released,    // back with its AI: choose again
+    PlayerOnes,  // the game made it player 1's leader and player 2's controller holds nothing: choose again
+    TimedOut,    // not back within `takeTicks`: player 2 stays without a character
+};
+
+/// The give-back's state this tick: released first; then player 1's with player 2's controller empty; then the timeout.
+SwapOutcome SwapOutcomeOf(bool released, const LeaseState& lease, const void* playerOneController, std::uint32_t ticks,
+                          std::uint32_t takeTicks) noexcept;
+
 }  // namespace lss::player_two

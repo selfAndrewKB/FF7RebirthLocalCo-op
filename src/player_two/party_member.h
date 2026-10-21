@@ -33,16 +33,8 @@ bool Installed() noexcept;
 /// a load, when the party's objects cannot be relied on).
 bool GameReady() noexcept;
 
-/// Why player 2 has no member to take now.
-enum class SlotWait
-{
-    None,         // `member` is the one to take
-    NoSlot,       // the party has no member but player 1's (a solo story party): nothing to wait on here
-    NotEligible,  // the 2nd slot's member is not free by the switch's own member test (yet)
-    AiNotReady,   // the 2nd slot's member is held by a story script, or not following the party
-    LinkPartner,  // the 2nd slot's member is a synergy partner the game has not given back yet (`link`)
-    Unread,       // the party reads faulted (objects torn down under them, as in a reload)
-};
+/// Why player 2 has no member to take now (party_lease.h).
+using SlotWait = player_two::SlotWait;
 
 struct SlotChoice
 {
