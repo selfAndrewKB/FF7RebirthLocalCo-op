@@ -68,21 +68,19 @@ std::optional<Site> Locate(const platform::GameImage& image) noexcept
 
 }  // namespace
 
-void InstallSubmitHintSkip() noexcept
+void InstallSubmitHintSkip(const platform::GameImage& image) noexcept
 {
-    std::error_code missing;
-    if (std::filesystem::exists(platform::ModFolder() / L"submit_hints_on.txt", missing))
+    if (platform::FlagFile(L"submit_hints_on.txt"))
     {
         platform::Log(L"GPU submissions: parallel passes keep their submit hints (submit_hints_on.txt)");
         return;
     }
-    if (std::filesystem::exists(platform::ModFolder() / L"watch_only.txt", missing))
+    if (platform::WatchOnly())
     {
         platform::Log(L"GPU submissions: parallel passes keep their submit hints (watch_only.txt: the game runs unmodified)");
         return;
     }
-    const auto image = platform::GameImage::Locate();
-    g_site           = image ? Locate(*image) : std::nullopt;
+    g_site = Locate(image);
     if (g_site)
     {
         platform::Log(L"GPU submissions: the parallel passes' submit hint found; skipped while player 2 is in");

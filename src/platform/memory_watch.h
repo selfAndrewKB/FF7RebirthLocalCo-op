@@ -13,10 +13,15 @@
 // line, or the card going over or back under its budget, is logged at the sample (at most once a second), so
 // a sudden climb before a crash shows how fast and how far. Under 4 GB of free commit, a line every 10 s.
 
+#include "platform/image.h"
+
+#include <optional>
+
 namespace lss::platform::memory_watch {
 
-/// Starts the sampling thread once (later calls do nothing). It pins the DLL first, then runs until the
-/// process ends; it is never joined, so nothing waits on it at unload.
-void Start() noexcept;
+/// Starts the sampling thread once (later calls do nothing), with the game image for the allocator's pools (none:
+/// the pools are not read). It pins the DLL first, then runs until the process ends; it is never joined, so nothing
+/// waits on it at unload.
+void Start(const std::optional<GameImage>& image) noexcept;
 
 }  // namespace lss::platform::memory_watch

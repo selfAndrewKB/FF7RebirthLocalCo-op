@@ -1,6 +1,7 @@
 #include "platform/module_folder.h"
 
 #include <string>
+#include <system_error>
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -38,6 +39,18 @@ std::filesystem::path ModFolder()
 {
     const auto dlls = DllFolder();
     return dlls.empty() ? dlls : dlls.parent_path();
+}
+
+bool FlagFile(const wchar_t* name) noexcept
+{
+    std::error_code missing;
+    return std::filesystem::exists(ModFolder() / name, missing);
+}
+
+bool WatchOnly() noexcept
+{
+    static const bool on = FlagFile(L"watch_only.txt");
+    return on;
 }
 
 }  // namespace lss::platform

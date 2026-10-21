@@ -14,10 +14,14 @@
 // performance roadmap). Held while player 2 is in, so one-player play keeps the game's hints; `submit_hints_on.txt` or
 // `watch_only.txt` in the mod's folder keeps them always.
 
+namespace lss::platform {
+class GameImage;
+}
+
 namespace lss::renderer {
 
 /// Game thread, after start-up: checks the site and both vtables, and logs what it found. Changes nothing yet.
-void InstallSubmitHintSkip() noexcept;
+void InstallSubmitHintSkip(const platform::GameImage& image) noexcept;
 
 /// True if the site was verified (the control command and the join/leave switch act).
 bool SubmitHintSkipInstalled() noexcept;

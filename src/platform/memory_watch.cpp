@@ -138,10 +138,12 @@ std::wstring FullestPools(const binned_pools::Pools& pools)
     return text.empty() ? L"none above 0%" : text;
 }
 
+std::optional<GameImage> g_image;  // given to Start, for the allocator's pools
+
 DWORD WINAPI Run(void*) noexcept
 {
-    const auto adapter = MainAdapter();
-    const auto image   = GameImage::Locate();
+    const auto  adapter = MainAdapter();
+    const auto& image   = g_image;
     const auto pools   = image ? binned_pools::Pools::Locate(*image) : std::nullopt;
     Log(L"memory: watching every {} ms on its own thread (graphics card memory {}; the allocator's 32 KB pool {})",
         kSampleMs, adapter ? L"included" : L"UNAVAILABLE",
@@ -237,8 +239,9 @@ DWORD WINAPI Run(void*) noexcept
 
 }  // namespace
 
-void Start() noexcept
+void Start(const std::optional<GameImage>& image) noexcept
 {
+    g_image = image;
     if (g_started.exchange(true))
     {
         return;

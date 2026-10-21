@@ -49,13 +49,12 @@ int ReadGate(std::uintptr_t gate) noexcept
 
 void ApplyResidencyOff() noexcept
 {
-    std::error_code missing;
-    if (std::filesystem::exists(platform::ModFolder() / L"residency_on.txt", missing))
+    if (platform::FlagFile(L"residency_on.txt"))
     {
         platform::Log(L"D3D12 residency management: kept on (residency_on.txt)");
         return;
     }
-    if (std::filesystem::exists(platform::ModFolder() / L"watch_only.txt", missing))
+    if (platform::WatchOnly())
     {
         platform::Log(L"D3D12 residency management: kept on (watch_only.txt: the game runs unmodified)");
         return;
@@ -90,10 +89,9 @@ void ApplyResidencyOff() noexcept
                   L"residency_on.txt keeps it)");
 }
 
-void ReportResidency() noexcept
+void ReportResidency(const platform::GameImage& image) noexcept
 {
-    const auto image = platform::GameImage::Locate();
-    const auto gate  = image ? GateAddress(*image) : std::nullopt;
+    const auto gate = GateAddress(image);
     if (gate)
     {
         const int value = ReadGate(*gate);

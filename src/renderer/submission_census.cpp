@@ -558,8 +558,7 @@ bool InstallSubmissionCensus() noexcept
 
 void InstallSubmissionCensusIfAsked() noexcept
 {
-    std::error_code missing;
-    if (std::filesystem::exists(platform::ModFolder() / L"census.txt", missing))
+    if (platform::FlagFile(L"census.txt"))
     {
         InstallSubmissionCensus();
     }

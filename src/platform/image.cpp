@@ -55,8 +55,10 @@ std::optional<GameImage> GameImage::Locate() noexcept
     const auto nt   = reinterpret_cast<const IMAGE_NT_HEADERS64*>(base + dos->e_lfanew);
     const GameBuild* build =
         FindBuild(nt->FileHeader.TimeDateStamp, nt->OptionalHeader.SizeOfImage, nt->OptionalHeader.CheckSum);
-    if (build == nullptr)
+    static bool warned = false;  // once: the image is located again by the control commands
+    if (build == nullptr && !warned)
     {
+        warned = true;
         LogWarning(L"unknown game build (timestamp 0x{:08X}, image size 0x{:X}, checksum 0x{:08X}): addresses are used "
                    L"as the research build's, and every check decides",
                    nt->FileHeader.TimeDateStamp, nt->OptionalHeader.SizeOfImage, nt->OptionalHeader.CheckSum);

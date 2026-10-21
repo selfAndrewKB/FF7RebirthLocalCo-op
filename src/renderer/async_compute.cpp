@@ -59,13 +59,12 @@ std::optional<Live> Locate(const platform::GameImage& image) noexcept
 
 void ApplyAsyncComputeOn() noexcept
 {
-    std::error_code missing;
-    if (!std::filesystem::exists(platform::ModFolder() / L"async_compute_on.txt", missing))
+    if (!platform::FlagFile(L"async_compute_on.txt"))
     {
         platform::LogDebug(L"D3D12 async compute: the game's setting kept (no async_compute_on.txt)");
         return;
     }
-    if (std::filesystem::exists(platform::ModFolder() / L"watch_only.txt", missing))
+    if (platform::WatchOnly())
     {
         platform::Log(L"D3D12 async compute: the game's setting kept (watch_only.txt: the game runs unmodified)");
         return;
@@ -99,10 +98,9 @@ void ApplyAsyncComputeOn() noexcept
                   L"device's vendor rule decides (async_compute_on.txt)");
 }
 
-void ReportAsyncCompute() noexcept
+void ReportAsyncCompute(const platform::GameImage& image) noexcept
 {
-    const auto image = platform::GameImage::Locate();
-    const auto found = image ? Locate(*image) : std::nullopt;
+    const auto found = Locate(image);
     if (!found)
     {
         return;

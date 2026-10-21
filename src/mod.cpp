@@ -285,27 +285,28 @@ public:
         }
         // Recognises the game build (and so every PerBuild value) before any thread of ours can read one; the later
         // Locate calls find the same build.
-        static_cast<void>(lss::platform::GameImage::Locate());
-        lss::renderer::ReportResidency();
-        lss::renderer::ReportAsyncCompute();
-        lss::platform::memory_watch::Start();  // its own thread, from launch to exit
+        const auto image = lss::platform::GameImage::Locate();
+        if (image)
+        {
+            lss::renderer::ReportResidency(*image);
+            lss::renderer::ReportAsyncCompute(*image);
+        }
+        lss::platform::memory_watch::Start(image);  // its own thread, from launch to exit
 
         // A measuring control: with `watch_only.txt` in the mod's folder, nothing is installed but the
         // frame-hitch watch, so the game's own frame times can be compared with the mod's.
-        std::error_code missing;
         // `perf_log.txt` turns the perf log on from launch (the frame-time and per-thread CPU lines every 10 s), for
         // machines without the control scripts.
-        if (std::filesystem::exists(lss::platform::ModFolder() / L"perf_log.txt", missing))
+        if (lss::platform::FlagFile(L"perf_log.txt"))
         {
             lss::platform::frame_watch::SetDetailed(true);
             Log(L"perf log on (perf_log.txt)");
         }
-        if (std::filesystem::exists(lss::platform::ModFolder() / L"watch_only.txt", missing))
+        if (lss::platform::WatchOnly())
         {
             Log(L"watch only (watch_only.txt): nothing installed except the frame-hitch watch; the game runs unmodified");
             lss::platform::frame_watch::SetDetailed(true);  // the hitch summary is this control's whole output
             // The control channel alone (no engine redirects), so a script can still quit the game.
-            const auto image = lss::platform::GameImage::Locate();
             if (const auto removeLocalPlayer = image ? VerifyEngine(*image) : std::nullopt)
             {
                 session_.emplace(*removeLocalPlayer);
@@ -321,7 +322,6 @@ public:
             return;
         }
 
-        const auto image = lss::platform::GameImage::Locate();
         if (image && image->Build() != nullptr)
         {
             Log(L"game version {}{}", image->Build()->name,
@@ -343,7 +343,7 @@ public:
         lss::player_two::facts::InstallInBattle(*image);  // the game's in-battle test, once, for the stages that ask it
         session_.emplace(*removeLocalPlayer);
         session_->InstallStages(*image);
-        lss::renderer::InstallSubmitHintSkip();  // parallel passes without their own GPU submission (player 2 in)
+        lss::renderer::InstallSubmitHintSkip(*image);  // parallel passes without their own GPU submission (player 2 in)
         lss::renderer::InstallMeFeedbackOnce(*image);  // one scenery-streaming hand-in per frame, player 1's family's
 
         // The view-point entry serves the filled halves and the choice of player 2's camera. The

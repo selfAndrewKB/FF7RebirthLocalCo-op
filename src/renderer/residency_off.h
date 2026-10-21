@@ -14,12 +14,16 @@
 // to game behaviour (the plan's performance roadmap). `residency_on.txt` in the mod's folder keeps the
 // game's residency management, and so does `watch_only.txt` (the unmodified-game baseline).
 
+namespace lss::platform {
+class GameImage;
+}
+
 namespace lss::renderer {
 
 /// From the mod's constructor, before the engine creates its D3D12 device. Logs what it did and why.
 void ApplyResidencyOff() noexcept;
 
 /// After the engine is up: logs the gate's value, which shows whether residency management stayed off.
-void ReportResidency() noexcept;
+void ReportResidency(const platform::GameImage& image) noexcept;
 
 }  // namespace lss::renderer

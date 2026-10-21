@@ -13,12 +13,16 @@
 // alone changed nothing (84.5 against 84.3 fps) and the async main pass cost 1.5 ms of GPU time (2026-10-08), so it
 // is kept only to measure other GPUs (the cloud L4).
 
+namespace lss::platform {
+class GameImage;
+}
+
 namespace lss::renderer {
 
 /// From the mod's constructor, before the engine creates its D3D12 device. Logs what it did and why.
 void ApplyAsyncComputeOn() noexcept;
 
 /// After the engine is up: logs the setting and whether the device turned async compute on.
-void ReportAsyncCompute() noexcept;
+void ReportAsyncCompute(const platform::GameImage& image) noexcept;
 
 }  // namespace lss::renderer
