@@ -7,6 +7,7 @@
 #include "facts/in_battle.h"
 #include "facts/party.h"
 #include "platform/build_value.h"
+#include "platform/byte_scope.h"
 #include "platform/call_redirect.h"
 #include "platform/code_redirect.h"
 #include "platform/deferred_sites.h"
@@ -124,6 +125,9 @@ struct Pair  // a TWeakPtr as the game holds it
     std::uintptr_t controller = 0;
     bool operator==(const Pair&) const = default;
 };
+
+using Kind  = platform::ByteContext::Kind;
+using Range = platform::ByteContext::Range;
 
 using TickFn         = void (*)(void* system, float deltaTime);
 using SetLockFn      = std::uint8_t (*)(void* system, std::uint8_t lock);
@@ -267,39 +271,38 @@ bool MenuTargetSelect() noexcept
     return !platform::CallGuarded(g_menuSelect, open) || open != 0 || !platform::CallGuarded(g_menuBusy, busy) || busy != 0;
 }
 
-/// The bar manager's targeted key is player 2's while it lives (the weak reference moves with it).
+/// The bar manager's targeted key is player 2's while it lives (the weak reference moves with it): one Exchange
+/// range of platform/byte_scope.h over the pair, player 2's copy loaded in and read back at the end.
 class TargetedKeyScope
 {
 public:
-    TargetedKeyScope() noexcept : address_(TargetedKeyAddress())
+    TargetedKeyScope() noexcept
     {
-        if (address_ == 0)
+        const std::uintptr_t address = TargetedKeyAddress();
+        const Range          range{address, sizeof(Pair), Kind::Exchange};
+        if (address == 0 || !context_.Define(std::span<const Range>(&range, 1)))
         {
             return;
         }
-        saved_ = PairAt(address_);
-        if (!WriteAt(address_, g_targetedKey))
-        {
-            WriteAt(address_, saved_);
-            address_ = 0;
-        }
+        std::memcpy(context_.Value(0).data(), &g_targetedKey, sizeof(Pair));
+        held_ = context_.Open();
     }
     ~TargetedKeyScope()
     {
-        if (address_ != 0)
+        if (held_)
         {
-            g_targetedKey = PairAt(address_);
-            WriteAt(address_, saved_);
+            context_.Close();
+            std::memcpy(&g_targetedKey, context_.Value(0).data(), sizeof(Pair));
         }
     }
     TargetedKeyScope(const TargetedKeyScope&)            = delete;
     TargetedKeyScope& operator=(const TargetedKeyScope&) = delete;
 
-    bool Held() const noexcept { return address_ != 0; }
+    bool Held() const noexcept { return held_; }
 
 private:
-    std::uintptr_t address_ = 0;
-    Pair           saved_;
+    platform::ByteStore<1, sizeof(Pair)> context_;
+    bool                                 held_ = false;
 };
 
 void Refused(const wchar_t* why) noexcept
