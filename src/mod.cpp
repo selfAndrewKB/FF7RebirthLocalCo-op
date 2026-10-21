@@ -121,7 +121,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.86.0";  // cleanup-2026-10: phase 4, the scopes (the byte scope and the ladder)
+constexpr const wchar_t* kVersion = L"0.86.1";  // phase-4 play check: a live-object check before a name read
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;

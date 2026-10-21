@@ -1,5 +1,6 @@
 #include "player_two/leave_watch.h"
 
+#include "facts/engine.h"
 #include "platform/log.h"
 #include "player_two/describe.h"
 #include "player_two/object_fields.h"
@@ -21,7 +22,7 @@ namespace {
 
 // RE-p2-controller-after-leave.md, "Offsets" (the same in both builds; stock UE 4.26 unless noted).
 constexpr std::uint32_t kObjectFlags   = 0x08;  // UObject::ObjectFlags
-constexpr std::uint32_t kObjectIndex   = 0x0C;  // UObject::InternalIndex
+using facts::kObjectInternalIndex;
 constexpr std::uint32_t kObjectClass   = 0x10;
 constexpr std::uint32_t kObjectName    = 0x18;  // FName (8 bytes)
 constexpr std::uint32_t kObjectOuter   = 0x20;
@@ -105,7 +106,7 @@ Watched Watch(const wchar_t* what, void* object) noexcept
     Watched watched{what, object};
     if (object != nullptr)
     {
-        watched.index      = ReadField<std::int32_t>(object, kObjectIndex);
+        watched.index      = ReadField<std::int32_t>(object, kObjectInternalIndex);
         watched.cls        = ReadPointer(object, kObjectClass);
         watched.fname      = ReadField<std::uint64_t>(object, kObjectName);
         const void* item   = ItemOf(watched);
@@ -204,7 +205,8 @@ void ListHolders() noexcept
                 return RC::LoopAction::Continue;
             }
             // The object's own index: the walk's index argument may be within its chunk.
-            const void*  item  = RC::Unreal::UObjectArray::IndexToObject(ReadField<std::int32_t>(object, kObjectIndex));
+            const auto   index = ReadField<std::int32_t>(object, kObjectInternalIndex);
+            const void*  item  = RC::Unreal::UObjectArray::IndexToObject(index);
             const std::int32_t flags = item != nullptr ? ReadField<std::int32_t>(item, kItemFlags) : 0;
             const bool         dying = (flags & (kPendingKill | kUnreachable)) != 0;
             rooted += (flags & 0x40000000) != 0 ? 1 : 0;

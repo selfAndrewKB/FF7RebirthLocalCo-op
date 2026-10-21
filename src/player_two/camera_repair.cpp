@@ -69,9 +69,22 @@ constexpr unsigned kSettleFrames = 10;
 
 struct Pose
 {
-    bool  read = false, finite = true;
-    float rotation[3]{};  // pitch, yaw, roll
+    bool          read = false, finite = true;
+    float         rotation[3]{};          // pitch, yaw, roll
+    float         values[kOpPoseFloats]{};  // the whole block, for naming a non-finite float
+    std::uint32_t nonFinite = 0;          // bit i: values[i] is not finite
 };
+
+/// What the float at pose offset `4 * i` is (RE-p2-framing.md §1.3: the operator's 0x58-byte camera command).
+const wchar_t* PoseFloatName(std::uint32_t i) noexcept
+{
+    constexpr const wchar_t* kNames[kOpPoseFloats] = {
+        L"location x",  L"location y",  L"location z",  L"+0x4C",         L"pitch",        L"yaw",
+        L"roll",        L"FOV",         L"pivot x",      L"pivot y",       L"pivot z",      L"+0x6C",
+        L"base x",      L"base y",      L"base z",       L"+0x7C",         L"distance",     L"aim offset x",
+        L"aim offset y", L"aim offset z", L"+0x90",      L"height"};
+    return i < kOpPoseFloats ? kNames[i] : L"?";
+}
 
 // Set once at install.
 ResetFn        g_reset           = nullptr;
@@ -90,20 +103,24 @@ unsigned                         g_repairs       = 0;      // this process
 
 Pose ReadPose(const void* op) noexcept
 {
-    Pose  pose;
-    float values[kOpPoseFloats]{};
-    pose.read = op != nullptr && platform::CopyGuarded(values, static_cast<const std::byte*>(op) + kOpPose, sizeof(values));
+    Pose pose;
+    pose.read = op != nullptr &&
+                platform::CopyGuarded(pose.values, static_cast<const std::byte*>(op) + kOpPose, sizeof(pose.values));
     if (!pose.read)
     {
         return pose;
     }
     for (std::uint32_t i = 0; i < kOpPoseFloats; ++i)
     {
-        pose.finite = pose.finite && std::isfinite(values[i]);
+        if (!std::isfinite(pose.values[i]))
+        {
+            pose.finite = false;
+            pose.nonFinite |= 1u << i;
+        }
     }
     for (std::uint32_t i = 0; i < 3; ++i)
     {
-        pose.rotation[i] = values[kOpPitch + i];
+        pose.rotation[i] = pose.values[kOpPitch + i];
     }
     return pose;
 }
@@ -145,10 +162,20 @@ std::wstring ResetInputs(const void* cameraManager, const void* op)
                        (ReadField<std::uint32_t>(cameraManager, kPcmFlags) & kCameraCutBit) != 0 ? L"set" : L"clear");
 }
 
+/// "pose finite yes (pitch … yaw … roll …)", and when it is not, which floats of the block are not finite and
+/// what they hold: the rotation printed finite while the pose was called non-finite (the 2026-10-21 play check).
 std::wstring PoseText(const Pose& pose)
 {
-    return std::format(L"pose finite {} (pitch {:.1f} yaw {:.1f} roll {:.1f})", pose.finite ? L"yes" : L"NO",
-                       pose.rotation[0], pose.rotation[1], pose.rotation[2]);
+    std::wstring text = std::format(L"pose finite {} (pitch {:.1f} yaw {:.1f} roll {:.1f}",
+                                    pose.finite ? L"yes" : L"NO", pose.rotation[0], pose.rotation[1], pose.rotation[2]);
+    for (std::uint32_t i = 0; i < kOpPoseFloats; ++i)
+    {
+        if ((pose.nonFinite & (1u << i)) != 0)
+        {
+            text += std::format(L"; {} at +{:#x} = {}", PoseFloatName(i), kOpPose + 4 * i, pose.values[i]);
+        }
+    }
+    return text + L")";
 }
 
 /// Whom an actor is, for the log. Game thread.

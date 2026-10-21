@@ -212,6 +212,8 @@ inline constexpr FunctionFact   kWindowsWindowGetOSWindowHandle{L"FWindowsWindow
 // RE-p2-own-controller-ida.md)
 // ---------------------------------------------------------------------------------------------
 
+// UObject
+inline constexpr std::uint32_t kObjectInternalIndex = 0x0C;  // UObjectBase::InternalIndex: its GUObjectArray slot
 // AActor
 inline constexpr std::uint32_t kActorOwner     = 0xE8;   // AActor::SetOwner stores it
 inline constexpr std::uint32_t kActorTagsData  = 0x178;  // Tags.GetData()
