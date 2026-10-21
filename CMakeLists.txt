@@ -293,6 +293,7 @@ lss_test(generation src/player_two/generation.cpp src/player_two/weak_object.cpp
          src/platform/build_translation.cpp tests/log_console.cpp)
 lss_test(thread_hold)
 lss_test(byte_scope src/platform/byte_scope.cpp src/platform/guarded.cpp)
+lss_test(scope_ladder)
 lss_test(angles)
 lss_test(every)
 lss_test(frame_watch_clock src/platform/frame_watch.cpp tests/log_console.cpp)
