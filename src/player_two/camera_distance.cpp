@@ -1,5 +1,6 @@
 #include "player_two/camera_distance.h"
 
+#include "player_two/world_rules.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
@@ -263,7 +264,7 @@ void TickFraming(bool playerTwoIn) noexcept
         }
     }
     g_wasIn = true;
-    const std::int32_t  target = std::clamp(static_cast<std::int32_t>(field) + g_offsets[g_layout], kMinLevel, kMaxLevel);
+    const std::int32_t  target = world_rules::DistanceLevel(static_cast<std::int32_t>(field), g_offsets[g_layout], kMinLevel, kMaxLevel);
     const std::uint8_t  level  = static_cast<std::uint8_t>(target);
     DriveTo(CameraManagerOf(generation::PlayerOneController()), 1, level, battle);
     DriveTo(CameraManagerOf(generation::PlayerTwoController()), 2, level, battle);

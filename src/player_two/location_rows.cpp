@@ -1,5 +1,6 @@
 #include "player_two/location_rows.h"
 
+#include "player_two/world_rules.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -233,7 +234,7 @@ std::optional<Location> PlayerTwoLocation(const float (&position)[3]) noexcept
         std::uint8_t  priority = 0xFF;
         float         margin   = 0.0f;
         if (!platform::CopyGuarded(&volume, volumes + i, sizeof(volume)) || volume == nullptr ||
-            !Read(volume, kVolumeFlags, flags) || (flags & kFlagDisabled) != 0 || (flags & kFlagChangeCamera) == 0 ||
+            !Read(volume, kVolumeFlags, flags) || !world_rules::LocationCandidate(flags, kFlagDisabled, kFlagChangeCamera) ||
             !Read(volume, kVolumeCameraPriority, priority))
         {
             continue;
@@ -251,7 +252,8 @@ std::optional<Location> PlayerTwoLocation(const float (&position)[3]) noexcept
             margin = 0.0f;
         }
         bool inside = false;
-        if (!platform::CallGuarded(g_contains, inside, volume, &position[0], margin) || !inside || priority >= bestPriority)
+        if (!platform::CallGuarded(g_contains, inside, volume, &position[0], margin) || !inside ||
+            !world_rules::LowerPriority(priority, bestPriority))
         {
             continue;
         }

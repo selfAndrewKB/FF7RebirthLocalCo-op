@@ -1,5 +1,6 @@
 #include "player_two/traversal_camera.h"
 
+#include "player_two/world_rules.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
@@ -198,7 +199,7 @@ constexpr std::uint32_t kCrawlExitActor = 0xB0;  // FWeakObjectPtr: the actor th
 /// The climb move's exit phases: 3, 6, 10 switch the camera off in the Tick; 11, 12 only ask for the exit blend.
 bool ExitState(std::uint8_t state) noexcept
 {
-    return state == 3 || state == 6 || state == 10 || state == 11 || state == 12;
+    return world_rules::ClimbExitState(state);
 }
 
 // The climbing wall's hip framing (RE-p2-traversal-camera-collision.md §3, §6): entering phase 3 (on the wall, between
@@ -804,7 +805,7 @@ std::optional<std::uintptr_t> LadderExitTick(Call& tick, std::uint8_t state) noe
         return std::nullopt;  // these exits switch no camera in the Tick: the blend does it all
     }
     const ModuleExit now = LadderModuleExit(tick.executer);
-    if (g_requestCamExit != nullptr && !now.blending && !now.off && g_ladderExit.waited < kExitWait)
+    if (world_rules::LadderExitWaits(g_requestCamExit != nullptr, now.blending, now.off, g_ladderExit.waited, kExitWait))
     {
         ++g_ladderExit.waited;
         return std::nullopt;

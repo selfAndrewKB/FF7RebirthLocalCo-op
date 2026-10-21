@@ -1,5 +1,6 @@
 #include "player_two/world_actor_reach.h"
 
+#include "player_two/world_rules.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -266,7 +267,7 @@ std::size_t Apply(const std::byte* manager, const float (&one)[3], const float (
         const float extent = ReadField<float>(item, kItemExtent);
         auto        known  = g_items.find(key);
         if (known != g_items.end() &&
-            (known->second.writtenRadius != radius || known->second.writtenExtent != extent))
+            world_rules::Rewritten(known->second.writtenRadius, known->second.writtenExtent, radius, extent))
         {
             g_items.erase(known);  // the game rewrote it (registered again): its values are the game's
             known = g_items.end();
@@ -295,8 +296,8 @@ std::size_t Apply(const std::byte* manager, const float (&one)[3], const float (
         {
             LogChestState(logKey, state, charapop::Distance(at, one), toTwo);
         }
-        const bool  close = state != kStateDisabled && state != kStatePending &&
-                            toTwo <= baseRadius + (widenedNow ? kLeaveSlackCm : 0.0f);
+        const bool  close = world_rules::ItemClose(state, kStateDisabled, kStatePending, toTwo, baseRadius, widenedNow,
+                                                   kLeaveSlackCm);
         if (close)
         {
             const float wantRadius = baseRadius + by;
@@ -363,7 +364,7 @@ void Pass() noexcept
         return;
     }
     const float apart   = charapop::Distance(one, two);
-    const float by      = std::ceil((apart + kCentreSlackCm) / kStepCm) * kStepCm;
+    const float by      = world_rules::WidenBy(apart, kCentreSlackCm, kStepCm);
     const auto  widened = Apply(manager, one, two, by);
     if (!g_on)
     {

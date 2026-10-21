@@ -1,5 +1,6 @@
 #include "player_two/walk_limits.h"
 
+#include "player_two/world_rules.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -95,12 +96,6 @@ struct Inside
     std::uint64_t location = 0;
     Pair          pair;
 };
-struct Entry
-{
-    int  refs = 0;
-    Pair pair;
-};
-
 /// Player 2's copy of the manager's per-volume "inside" bits and its move-type stack (index 0 = top).
 struct State
 {
@@ -108,8 +103,7 @@ struct State
     void*         member     = nullptr;
     Inside        inside[kMaxInside];
     int           insideCount = 0;
-    Entry         stack[kMaxInside];  // every entry is held by an inside volume, so never more
-    int           stackCount   = 0;
+    world_rules::PairStack<Pair, kMaxInside> stack;  // every entry is held by an inside volume, so never more
     std::uint64_t gateLocation = 0;  // a LocationId for the listener's "not 0" gate
 };
 State     g_state;
@@ -165,40 +159,13 @@ std::wstring PairText(Pair pair)
 /// The game's push: a pair already on the stack gains a reference; a new one goes to the front.
 void Push(Pair pair) noexcept
 {
-    for (int i = 0; i < g_state.stackCount; ++i)
-    {
-        if (g_state.stack[i].pair == pair)
-        {
-            ++g_state.stack[i].refs;
-            return;
-        }
-    }
-    for (int i = g_state.stackCount; i > 0; --i)
-    {
-        g_state.stack[i] = g_state.stack[i - 1];
-    }
-    g_state.stack[0] = {1, pair};
-    ++g_state.stackCount;
+    g_state.stack.Push(pair);
 }
 
 /// The game's pop: the pair loses a reference and goes at 0.
 void Pop(Pair pair) noexcept
 {
-    for (int i = 0; i < g_state.stackCount; ++i)
-    {
-        if (g_state.stack[i].pair == pair)
-        {
-            if (--g_state.stack[i].refs <= 0)
-            {
-                for (int j = i; j + 1 < g_state.stackCount; ++j)
-                {
-                    g_state.stack[j] = g_state.stack[j + 1];
-                }
-                --g_state.stackCount;
-            }
-            return;
-        }
-    }
+    g_state.stack.Pop(pair);
 }
 
 /// Once per controller: the game creates player 2's nav-area component, run as the primary player's.
@@ -298,7 +265,7 @@ bool Walk(const float (&position)[3], Changes& changes) noexcept
             {
                 continue;
             }
-            in = current < 0 || forcedOut == 0;
+            in = world_rules::ForcedInside(current >= 0, forcedOut);
         }
         else
         {
@@ -492,7 +459,7 @@ void Tick() noexcept
         return;
     }
     Apply(changes);
-    const Pair want   = g_state.stackCount > 0 ? g_state.stack[0].pair : kNoLimit;
+    const Pair want   = g_state.stack.Count() > 0 ? g_state.stack.At(0).pair : kNoLimit;
     const Pair before = ControllerLayer7(controller);
     if (!(before == want))
     {
@@ -509,7 +476,7 @@ void Tick() noexcept
                                              L"volumes, {} stack entries)",
                                              PairText(ControllerLayer7(generation::PlayerOneController())),
                                              PairText(changes.managerTop), PairText(ControllerLayer7(controller)),
-                                             PairText(want), g_state.insideCount, g_state.stackCount);
+                                             PairText(want), g_state.insideCount, g_state.stack.Count());
             if (state != g_lastState)
             {
                 g_lastState = state;

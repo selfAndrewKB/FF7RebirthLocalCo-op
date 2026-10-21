@@ -1,5 +1,6 @@
 #include "player_two/shoulder_scale.h"
 
+#include "player_two/world_rules.h"
 #include "platform/call_redirect.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -45,7 +46,7 @@ float                  g_logged[2] = {0.0f, 0.0f};
 float Scale(int p) noexcept
 {
     const float ratio = views::SplitWidthRatio(p == 1);
-    return std::fmin(std::fmax(ratio, g_minimum.load(std::memory_order_relaxed)), kMaxScale);
+    return world_rules::ShoulderScale(ratio, g_minimum.load(std::memory_order_relaxed), kMaxScale);
 }
 
 /// 0 or 1 for an operator of player 1's or player 2's camera manager, -1 otherwise.

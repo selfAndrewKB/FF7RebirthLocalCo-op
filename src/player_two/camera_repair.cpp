@@ -1,5 +1,6 @@
 #include "player_two/camera_repair.h"
 
+#include "player_two/world_rules.h"
 #include "platform/guarded.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
@@ -70,7 +71,7 @@ unsigned                         g_inARow        = 0;  // repairs since the pose
 bool                             g_gaveUp        = false;
 bool                             g_refusalLogged = false;
 Clock::time_point                g_nextTry{};
-std::optional<Clock::time_point> g_finiteSince;        // the pose finite on every tick since
+world_rules::HealthyTimer        g_healthy;            // the pose finite on every tick since: a new count after a while
 bool                             g_following     = false;  // the last repair's follow-up lines are due
 unsigned                         g_followUp      = 0;      // frames since the last repair
 const void*                      g_slotBefore    = nullptr;
@@ -246,38 +247,29 @@ void Tick() noexcept
         FollowUp(cameraManager, op, pose);
     }
     const auto now = Clock::now();
-    if (!pose.finite)
-    {
-        g_finiteSince.reset();
-    }
-    else if (!g_finiteSince)
-    {
-        g_finiteSince = now;
-    }
-    else if (now - *g_finiteSince >= kHealthyFor)
+    if (g_healthy.Observe(pose.finite, now, kHealthyFor))
     {
         g_inARow        = 0;  // a NaN that comes back at once counts toward the same 5 tries
         g_gaveUp        = false;
         g_refusalLogged = false;
     }
     // Not before the last repair's follow-up is written (below ~20 fps the 0.5 s gap is shorter than 10 frames).
-    if (!pose.finite && !g_following && ReadField<std::uint8_t>(op, kOpCurrent) != 0 && now >= g_nextTry)
+    const auto verdict = world_rules::RepairVerdict(pose.finite, g_following, ReadField<std::uint8_t>(op, kOpCurrent) != 0,
+                                                    now >= g_nextTry, g_inARow, kMaxInARow, g_gaveUp);
+    if (verdict == world_rules::Repair::Repair)
     {
-        if (g_inARow < kMaxInARow)
+        Repair(cameraManager, op, pose);
+    }
+    else if (verdict == world_rules::Repair::GiveUp)
+    {
+        g_gaveUp = true;
+        try
         {
-            Repair(cameraManager, op, pose);
+            platform::Log(L"camera repair: gave up after {} tries; the pose stays non-finite ({}); {}; {}", kMaxInARow,
+                          PoseText(pose), ResetInputs(cameraManager, op), ride_framing_watch::Describe(cameraManager));
         }
-        else if (!g_gaveUp)
+        catch (...)
         {
-            g_gaveUp = true;
-            try
-            {
-                platform::Log(L"camera repair: gave up after {} tries; the pose stays non-finite ({}); {}; {}", kMaxInARow,
-                              PoseText(pose), ResetInputs(cameraManager, op), ride_framing_watch::Describe(cameraManager));
-            }
-            catch (...)
-            {
-            }
         }
     }
 }

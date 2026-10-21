@@ -1,5 +1,6 @@
 #include "player_two/switch_volume_two.h"
 
+#include "player_two/world_rules.h"
 #include "platform/build_value.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -275,12 +276,13 @@ void PlayerTwoEvent(bool enter, void* volume, const void* trigger) noexcept
         std::wstring       what;
         if (enter)
         {
-            if (OnOff(kDisableBox) || OnOff(kDisableBoxInOut))
+            const auto verdict = world_rules::EnterVerdict(OnOff(kDisableBox), OnOff(kDisableBoxInOut), counts, held != nullptr);
+            if (verdict == world_rules::Enter::SkippedOnOff)
             {
                 ++g_counts.skippedOnOff;
                 what = L"not called: the game's DisableTriggerBox is on (as for player 1)";
             }
-            else if (!counts && held != nullptr)
+            else if (verdict == world_rules::Enter::AlreadyInside)
             {
                 what = L"already inside";
             }
@@ -306,17 +308,20 @@ void PlayerTwoEvent(bool enter, void* volume, const void* trigger) noexcept
                                    held->playerOne ? L"; player 1 is inside too" : L"");
             }
         }
-        else if (held == nullptr)
+        else if (const auto verdict = world_rules::LeaveVerdict(held != nullptr, OnOff(kDisableBoxInOut),
+                                                                held != nullptr && held->counts,
+                                                                held != nullptr && held->playerOne);
+                 verdict == world_rules::Leave::NotEntered)
         {
             what = L"not called: player 2 was not entered here";
         }
-        else if (OnOff(kDisableBoxInOut))
+        else if (verdict == world_rules::Leave::SkippedOnOff)
         {
             ++g_counts.skippedOnOff;
             *held = {};
             what  = L"not called: the game's DisableTriggerBox_InOut is on (as for player 1)";
         }
-        else if (!held->counts && held->playerOne)
+        else if (verdict == world_rules::Leave::KeptForPlayerOne)
         {
             ++g_counts.keptForPlayerOne;
             *held = {};
@@ -358,15 +363,16 @@ void AfterPlayerOne(bool enter, void* actor) noexcept
         const std::uint8_t before = Inside(actor);
         std::wstring       what;
         held->playerOne = enter;
-        if (enter)
+        const auto change = world_rules::PlayerOneChangeOf(enter, before != 0, OnOff(kDisableBox), OnOff(kDisableBoxInOut));
+        if (change == world_rules::PlayerOneChange::Entered)
         {
             what = L"player 1 is inside too";
         }
-        else if (before != 0)
+        else if (change == world_rules::PlayerOneChange::StillInside)
         {
             what = L"still inside";
         }
-        else if (OnOff(kDisableBox) || OnOff(kDisableBoxInOut))
+        else if (change == world_rules::PlayerOneChange::NotReentered)
         {
             what = L"not entered again: the game's DisableTriggerBox is on";
         }

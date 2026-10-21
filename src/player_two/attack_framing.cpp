@@ -1,5 +1,6 @@
 #include "player_two/attack_framing.h"
 
+#include "player_two/world_rules.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/guarded.h"
@@ -86,12 +87,7 @@ Sites g_sites;
 // Game thread.
 // D1: per sequence (its actor's weak) and camera, the decision: show (native) or keep off this camera.
 // D2: per shot (the camera actor's weak), the enemy's coin: 1 player 1, 2 player 2, 0 the game's own answer.
-struct Latch
-{
-    std::uint64_t key   = 0;
-    std::uint8_t  value = 0;
-    std::uint64_t used  = 0;
-};
+using world_rules::Latch;
 std::array<Latch, kLatches> g_d1{};
 std::array<Latch, kLatches> g_d2{};
 std::uint64_t               g_tick = 0;
@@ -113,23 +109,7 @@ bool Line() noexcept
 /// The latch for `key`, made (value `fresh`) if absent; the least recently used goes when full.
 Latch& Find(std::array<Latch, kLatches>& latches, std::uint64_t key, bool& made) noexcept
 {
-    Latch* oldest = &latches[0];
-    for (Latch& latch : latches)
-    {
-        if (latch.key == key)
-        {
-            latch.used = g_tick;
-            made       = false;
-            return latch;
-        }
-        if (latch.used < oldest->used)
-        {
-            oldest = &latch;
-        }
-    }
-    *oldest = {key, 0, g_tick};
-    made    = true;
-    return *oldest;
+    return world_rules::LatchFor(latches, key, g_tick, made);
 }
 
 void* PlayerOneCharacter() noexcept
@@ -176,17 +156,17 @@ std::uint8_t Decide(std::uint8_t priority, const void* camera) noexcept
     {
         return kUndecided;  // decided on a later frame, once there is a target
     }
-    void*       member = generation::Member();
-    void*       one    = PlayerOneCharacter();
+    void* const member = generation::Member();
+    void* const one    = PlayerOneCharacter();
     if (target != member && target != one)
     {
         return kShow;  // the AI ally or an enemy: both cameras, as solo shows it
     }
-    const bool  two    = attack_cameras::InsidePlayerTwoUpdate();
-    const void* mine   = two ? member : one;
-    const void* other  = two ? one : member;
-    const void* owner  = ReadPointer(camera, kCameraOwner);
-    return target == other && owner != mine ? kOff : kShow;
+    // The other player's target is off unless this camera is the viewer's own.
+    return world_rules::ShotShows(target, member, one, attack_cameras::InsidePlayerTwoUpdate(),
+                                  ReadPointer(camera, kCameraOwner))
+               ? kShow
+               : kOff;
 }
 
 bool IsActive(void* unused, void* entry) noexcept
