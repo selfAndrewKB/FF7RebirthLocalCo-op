@@ -1,5 +1,6 @@
 #include "player_two/chocobo_ride.h"
 
+#include "player_two/ride_rules.h"
 #define RC_UNREAL_DISABLE_PROPERTY_DEPRECATION_WARNINGS
 #define RC_UNREAL_DISABLE_CLASS_DEPRECATION_WARNINGS
 #include <Unreal/CoreUObject/UObject/Class.hpp>
@@ -426,7 +427,7 @@ void End(const wchar_t* why, bool force) noexcept
     }
     if (!CoordRiding(ride.coordinator))
     {
-        if (!force && ++ride.endTries < kEndRetryTicks)
+        if (ride_rules::EndRetryAllowed(force, ride.endTries, kEndRetryTicks))
         {
             g_phase     = Phase::Ending;  // boarding's completion reaches riding on player 2's next input tick
             ride.endWhy = why;
@@ -479,17 +480,19 @@ void* SeatedChocobo(void* playerTwo, void* member) noexcept
     {
         return nullptr;
     }
-    if (ReadField<std::uint8_t>(chocobo, kChocoboRidden) == 0)
+    switch (ride_rules::SeatedVerdict(ReadField<std::uint8_t>(chocobo, kChocoboRidden) != 0, g_heldBack == chocobo,
+                                      Attached(member), InBattle()))
     {
-        if (g_heldBack == chocobo)
-        {
-            g_heldBack = nullptr;  // that ride is over: the next mount may be boarded
-        }
-        return nullptr;
-    }
-    if (g_heldBack == chocobo || !Attached(member) || InBattle())
-    {
-        return nullptr;
+        case ride_rules::Seated::Unridden:
+            if (g_heldBack == chocobo)
+            {
+                g_heldBack = nullptr;  // that ride is over: the next mount may be boarded
+            }
+            return nullptr;
+        case ride_rules::Seated::HeldBack:
+        case ride_rules::Seated::Detached:
+        case ride_rules::Seated::Battle: return nullptr;
+        case ride_rules::Seated::Seated: break;
     }
     return chocobo;
 }
@@ -555,34 +558,20 @@ void Begin(void* playerTwo, void* member, void* chocobo) noexcept
 /// Why the ride ends now, or null. `getOff`: the game dismounted her (the ridden flag cleared): wait for the getoff.
 const wchar_t* EndReason(const Ride& ride, bool& getOff) noexcept
 {
-    getOff = false;
-    if (!leader_scope::StillNames(ride.weak, ride.chocobo))
+    ride_rules::EndReads reads;
+    reads.gone = !leader_scope::StillNames(ride.weak, ride.chocobo);
+    if (!reads.gone)  // the rest is read only while the chocobo is still there
     {
-        return L"the chocobo is gone";
+        reads.ridden      = ReadField<std::uint8_t>(ride.chocobo, kChocoboRidden) != 0;
+        reads.inBattle    = InBattle();
+        reads.entryRiding = EntryState(RideManager(), ride.member) == kEntryRiding;
+        reads.attached    = Attached(ride.member);
+        reads.holds       = ReadPointer(ride.playerTwo, facts::kControllerPawn) == ride.chocobo &&
+                            ReadPointer(ride.chocobo, facts::kCharacterEffectiveController) == ride.playerTwo;
     }
-    if (ReadField<std::uint8_t>(ride.chocobo, kChocoboRidden) == 0)
-    {
-        getOff = true;
-        return L"the game dismounted the party";
-    }
-    if (InBattle())
-    {
-        return L"a battle started";
-    }
-    if (EntryState(RideManager(), ride.member) != kEntryRiding)
-    {
-        return L"the ride manager ended her ride";
-    }
-    if (!Attached(ride.member))
-    {
-        return L"the member was detached";
-    }
-    if (ReadPointer(ride.playerTwo, facts::kControllerPawn) != ride.chocobo ||
-        ReadPointer(ride.chocobo, facts::kCharacterEffectiveController) != ride.playerTwo)
-    {
-        return L"player 2's controller no longer holds the chocobo";
-    }
-    return nullptr;
+    const auto reason = ride_rules::EndReasonOf(reads);
+    getOff            = reason == ride_rules::EndReason::Dismounted;
+    return ride_rules::Describe(reason);
 }
 
 void LogRows(Ride& ride, void* state) noexcept
@@ -716,8 +705,8 @@ bool Tick(void* playerTwoController, void* member, const move_state::EngineTicks
     if (g_phase == Phase::GettingOff)
     {
         // The game's getoff animation detaches her; the end then gives player 2 the member back (§9.2, the end order).
-        const bool done = !Attached(member) || InBattle() || Clock::now() - g_ride.getOffAt >= kGetOffWait ||
-                          !leader_scope::StillNames(g_ride.weak, g_ride.chocobo);
+        const bool done = ride_rules::GetOffDone(Attached(member), InBattle(), Clock::now() - g_ride.getOffAt >= kGetOffWait,
+                                                 !leader_scope::StillNames(g_ride.weak, g_ride.chocobo));
         if (done)
         {
             End(L"the game dismounted the party", false);

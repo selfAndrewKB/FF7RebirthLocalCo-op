@@ -1,5 +1,6 @@
 #include "player_two/wheelie_ride.h"
 
+#include "player_two/ride_rules.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/guarded.h"
@@ -178,7 +179,6 @@ constexpr std::uint32_t  kHolderMoveRequest = 0x18;         // FVector: SetMoveI
 constexpr std::uint32_t  kStateStickX       = 0x10;         // the on-foot state's stick pair (slot 11 TickInput)
 constexpr std::uint32_t  kStateStickY       = 0x14;
 constexpr float          kMoveEpsilon       = 1e-4f;        // FieldSummonBody's test (0x1460A26F8)
-constexpr float          kDegrees           = 0.017453292f;
 constexpr float          kWarpDistance      = 5000.0f;      // the rental-return warp: > 50 m from the leader (§13.2 row 6)
 constexpr float          kNearTarget        = 300.0f;       // the ask's Debug line: player 2's member within 3 m of the mark
 constexpr std::uint32_t  kMeshOwner         = 0xA0;         // a component's owner (the notify's mesh -> the rider)
@@ -459,7 +459,7 @@ bool WorldStick(const void* state, const void* member, float (&stick)[4]) noexce
     {
         request[i] = ReadField<float>(holder, kHolderMoveRequest + 4u * static_cast<std::uint32_t>(i));
     }
-    if (std::fabs(request[0]) <= kMoveEpsilon && std::fabs(request[1]) <= kMoveEpsilon && std::fabs(request[2]) <= kMoveEpsilon)
+    if (!ride_rules::RequestMoves(request, kMoveEpsilon))
     {
         return false;
     }
@@ -469,13 +469,12 @@ bool WorldStick(const void* state, const void* member, float (&stick)[4]) noexce
     {
         return false;
     }
-    const float yaw = ReadField<float>(answer, 4) * kDegrees;
-    const float sx  = ReadField<float>(state, kStateStickX);
-    const float sy  = ReadField<float>(state, kStateStickY);
-    stick[0]        = sy * std::cos(yaw) - sx * std::sin(yaw);
-    stick[1]        = sy * std::sin(yaw) + sx * std::cos(yaw);
-    stick[2]        = 0.0f;
-    stick[3]        = 0.0f;
+    const auto world = ride_rules::WorldStickOf(ReadField<float>(state, kStateStickX), ReadField<float>(state, kStateStickY),
+                                                ReadField<float>(answer, 4));
+    stick[0]         = world[0];
+    stick[1]         = world[1];
+    stick[2]         = 0.0f;
+    stick[3]         = 0.0f;
     return true;
 }
 
@@ -727,7 +726,10 @@ std::uint8_t ForcedGetOff(const GetOffParams* params)
     }
     const std::uint8_t type  = params != nullptr ? params->bytes[kGetOffType] : 0;
     const std::int32_t state = CoordState(g_ride.coordinator);
-    if ((type != 0 && type != kScooterKey) || state != kStateRiding)
+    const auto         plan  = ride_rules::ForcedGetOffPlanOf(
+        type, state, kScooterKey, kStateRiding, params != nullptr && params->bytes[kGetOffInstant] != 0,
+        [] { return WarpWouldFire(g_ride.scooter); });
+    if (plan == ride_rules::ForcedGetOff::Skip)
     {
         platform::Log(L"wheelie ride: the game's forced getoff from {} not followed for player 2 (type {}, player 2's "
                       L"coordinator {}; the game ends rides only while riding)",
@@ -739,7 +741,7 @@ std::uint8_t ForcedGetOff(const GetOffParams* params)
     {
         call.params = *params;
     }
-    const bool warp = call.params.bytes[kGetOffInstant] == 0 && WarpWouldFire(g_ride.scooter);
+    const bool warp = plan == ride_rules::ForcedGetOff::FollowInstant;
     if (warp)
     {
         call.params.bytes[kGetOffInstant] = 1;
@@ -1205,16 +1207,14 @@ bool Tick(void* playerTwoController, void* member, const move_state::EngineTicks
         const std::wstring prefix =
             std::format(L"player 2's coordinator {} -> {}", StateName(was), StateName(state));
         LogLine(prefix.c_str(), ride);
-        if (state == kStateIdle)
+        switch (ride_rules::CoordChangeOf(was, state, kStateIdle))
         {
-            Finish(L"the game's getoff finished");
-            return false;
-        }
-        if (state < 0)
-        {
-            g_stopped = true;
-            Finish(L"player 2's coordinator is gone; rides stopped for this session");
-            return false;
+            case ride_rules::CoordChange::Finished: Finish(L"the game's getoff finished"); return false;
+            case ride_rules::CoordChange::Gone:
+                g_stopped = true;
+                Finish(L"player 2's coordinator is gone; rides stopped for this session");
+                return false;
+            case ride_rules::CoordChange::None: break;
         }
     }
     if (state == kStateRiding && InBattle())

@@ -1,5 +1,6 @@
 #include "player_two/shared_ride.h"
 
+#include "player_two/ride_rules.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -125,8 +126,8 @@ bool Run()
     const void* coordinator = ReadPointer(playerOne, kActiveVehicle);
     const std::size_t  kind   = KindOf(coordinator);
     const std::int32_t state  = kind < kKinds.size() ? StateOf(coordinator, kKinds[kind]) : -1;
-    const bool         riding = kind < kKinds.size() && state != kIdle;
-    if (riding != g_riding || (riding && kind != g_kind))
+    const bool         riding = ride_rules::SharedRiding(kind < kKinds.size(), state, kIdle);
+    if (ride_rules::RideChanged(g_riding, g_kind, riding, kind))
     {
         if (g_riding)
         {

@@ -6,10 +6,12 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/seqlock.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
 #include "player_two/charapop_facts.h"
 #include "player_two/generation.h"
+#include "player_two/listener_choice.h"
 #include "player_two/object_fields.h"
 
 #include <Windows.h>
@@ -105,47 +107,9 @@ constexpr float         kHandOver            = 0.8f;   // a sound changes listen
 constexpr int           kPositionTries       = 256;    // spins while a swap runs, before the latest clean answer
 constexpr std::size_t   kChoiceBits          = 12;     // 4096 remembered choices; ~250 live SEAD objects
 
-/// N floats one thread writes and another reads (Boehm's seqlock, as anim_two_views').
+/// N floats one thread writes and another reads (platform/seqlock.h).
 template <std::size_t N>
-struct Floats
-{
-    std::atomic<unsigned>             version{0};
-    std::array<std::atomic<float>, N> values{};
-
-    void Publish(const std::array<float, N>& in) noexcept
-    {
-        const auto v = version.load(std::memory_order_relaxed);
-        version.store(v + 1, std::memory_order_relaxed);
-        std::atomic_thread_fence(std::memory_order_release);
-        for (std::size_t i = 0; i < N; ++i)
-        {
-            values[i].store(in[i], std::memory_order_relaxed);
-        }
-        version.store(v + 2, std::memory_order_release);
-    }
-
-    bool Read(std::array<float, N>& out) const noexcept
-    {
-        for (int attempt = 0; attempt < 4; ++attempt)
-        {
-            const auto before = version.load(std::memory_order_acquire);
-            if ((before & 1u) != 0)
-            {
-                continue;
-            }
-            for (std::size_t i = 0; i < N; ++i)
-            {
-                out[i] = values[i].load(std::memory_order_relaxed);
-            }
-            std::atomic_thread_fence(std::memory_order_acquire);
-            if (version.load(std::memory_order_relaxed) == before)
-            {
-                return before != 0;
-            }
-        }
-        return false;
-    }
-};
+using Floats = platform::SeqFloats<N>;
 
 // The audio thread's view: the UE listener count, [0], [1] with its front and up as the device would push them, and
 // SEAD's position after the push.
@@ -250,15 +214,6 @@ float Distance(const float* a, const float* b) noexcept
     return std::sqrt(x * x + y * y + z * z);
 }
 
-/// FQuat::RotateVector, as the device's push computes it for listener [0] (two cross products).
-std::array<float, 3> Rotate(const float* q, std::array<float, 3> v) noexcept
-{
-    const float t[3] = {2.0f * (q[1] * v[2] - q[2] * v[1]), 2.0f * (q[2] * v[0] - q[0] * v[2]),
-                        2.0f * (q[0] * v[1] - q[1] * v[0])};
-    return {v[0] + q[3] * t[0] + (q[1] * t[2] - q[2] * t[1]), v[1] + q[3] * t[1] + (q[2] * t[0] - q[0] * t[2]),
-            v[2] + q[3] * t[2] + (q[0] * t[1] - q[1] * t[0])};
-}
-
 void NoteThread(std::atomic<DWORD>& slot) noexcept
 {
     if (slot.load(std::memory_order_relaxed) == 0)
@@ -299,8 +254,8 @@ std::uint64_t Push(void* device) noexcept
             // The device's two lines for [0]: front = Q·X, up = -(Q·Z).
             const float q[4] = {ReadField<float>(element, kRotation), ReadField<float>(element, kRotation + 4),
                                 ReadField<float>(element, kRotation + 8), ReadField<float>(element, kRotation + 12)};
-            const auto  front = Rotate(q, {1.0f, 0.0f, 0.0f});
-            const auto  up    = Rotate(q, {0.0f, 0.0f, 1.0f});
+            const auto  front = listener_choice::RotateVector(q, {1.0f, 0.0f, 0.0f});
+            const auto  up    = listener_choice::RotateVector(q, {0.0f, 0.0f, 1.0f});
             for (std::size_t k = 0; k < 3; ++k)
             {
                 out[kFrontX + k] = front[k];
@@ -405,14 +360,7 @@ bool ChooseTwo(const void* object, const float* where, const void* one) noexcept
     const float toOne  = Distance(where, first.data());
     const float toTwo  = Distance(where, second.data());
     Choice&     choice = ChoiceOf(object);
-    if (choice.object != object)
-    {
-        choice = {object, toTwo < toOne};
-    }
-    else if (choice.two ? toOne < toTwo * kHandOver : toTwo < toOne * kHandOver)
-    {
-        choice.two = !choice.two;
-    }
+    choice = {object, listener_choice::ChooseNearer(choice.object == object, choice.two, toOne, toTwo, kHandOver)};
     return choice.two;
 }
 
@@ -450,7 +398,7 @@ void Tally(const void* object, bool moving, bool two) noexcept
     const auto  first   = Read3(listener, kListenerPosition);
     const auto  second  = Read3(g_two.data(), kListenerPosition);
     const float toTwo   = Distance(where.data(), second.data());
-    if (range <= 0.0f || !(magnify * range > toTwo))
+    if (!listener_choice::MissedByTwo(range, magnify, toTwo))
     {
         return;
     }
@@ -557,7 +505,8 @@ void NearerForClip(void* out) noexcept
     const float* converted = convert(two, &seen[kOneX]);
     const auto  character  = Read3(frame, kFramePosition);
     const auto* one        = static_cast<const float*>(out);
-    if (converted == nullptr || !(Distance(character.data(), converted) < Distance(character.data(), one)))
+    if (converted == nullptr ||
+        !listener_choice::NearerForClip(Distance(character.data(), converted), Distance(character.data(), one)))
     {
         return;
     }
@@ -640,7 +589,7 @@ std::uint64_t Lod(void* callback, void* character) noexcept
     const auto result = level(callback, character);
     g_counts.lods.fetch_add(1, std::memory_order_relaxed);
     const auto one = static_cast<std::int32_t>(result);
-    if (one <= 0)
+    if (listener_choice::LodKeepsFirst(one))
     {
         return result;  // no filter, or the finest level already
     }
@@ -661,7 +610,7 @@ std::uint64_t Lod(void* callback, void* character) noexcept
     t_lodController   = saved;
     g_counts.lodTwo.fetch_add(1, std::memory_order_relaxed);
     const auto other = static_cast<std::int32_t>(second);
-    if (other >= one)
+    if (!listener_choice::LodLowered(one, other))
     {
         return result;
     }

@@ -17,6 +17,7 @@
 #include "player_two/party_member.h"
 #include "player_two/primary_controller.h"
 #include "player_two/rumble_list_code.h"
+#include "player_two/rumble_rules.h"
 #include "players/unreal_access.h"
 
 #include <Windows.h>
@@ -177,8 +178,7 @@ std::atomic<std::uint64_t> g_memberWeak{0};  // the zip line's gate compares the
 // copied into player 2's list, so player 2's pad plays what player 1's does. Set by the game thread; read anywhere.
 std::atomic<bool> g_copyOne{false};
 // The keys copied and not yet stopped there, under the game's lock (the ride's end stops what is left).
-std::array<std::uint64_t, 16> g_copiedKeys{};
-std::size_t                   g_copiedCount = 0;
+rumble_rules::KeySet<16> g_copiedKeys;
 
 // Player 2's chocobo (weak) and their member's player type, for the sources on any thread (written each engine tick).
 std::atomic<std::uint64_t> g_chocoboWeak{0};
@@ -295,10 +295,8 @@ void CopyTwo(std::uint64_t key, const void* params, std::uint8_t flag) noexcept
     }
     g_addOrUpdate(list, key, params, flag);
     g_counts.copiesTwo.fetch_add(1, std::memory_order_relaxed);
-    const auto end = g_copiedKeys.begin() + g_copiedCount;
-    if (std::find(g_copiedKeys.begin(), end, key) == end && g_copiedCount < g_copiedKeys.size())
+    if (g_copiedKeys.Insert(key))
     {
-        g_copiedKeys[g_copiedCount++] = key;
         platform::LogDebug(L"rumble list: shared ride: {} copied into player 2's list", KeyText(key));
     }
 }
@@ -312,11 +310,13 @@ void PlayNamed(std::uint64_t key, const void* params, std::uint8_t flag) noexcep
     const bool owner    = t_ownerTwo;
     const bool two      = owner || (generation::OnGameThread() && generation::Active() &&
                                     primary_controller::Is(generation::PlayerTwoController()));
-    if (!two || !AddTwo(key, params, flag))
+    const bool added    = two && AddTwo(key, params, flag);
+    const auto route    = rumble_rules::AddRouteOf(two, added, g_copyOne.load(std::memory_order_acquire));
+    if (route != rumble_rules::Route::Two)
     {
         g_counts.addsOne.fetch_add(1, std::memory_order_relaxed);
         original(key, params, flag);
-        if (!two && g_copyOne.load(std::memory_order_acquire))
+        if (route == rumble_rules::Route::GameAndCopy)
         {
             CopyTwo(key, params, flag);
         }
@@ -367,21 +367,16 @@ void ListTick(float dt) noexcept
     const auto original = reinterpret_cast<ListTickFn>(g_listTickCall.Original());
     void* const list    = generation::OnGameThread() && generation::Active() ? g_listTwo.load(std::memory_order_acquire)
                                                                              : nullptr;
-    if (list == nullptr)
+    void* const two     = generation::PlayerTwoController();
+    switch (rumble_rules::ListTickChoice(list != nullptr, t_tickOwner != nullptr && t_tickOwner == two,
+                                         primary_controller::Is(two)))
     {
-        original(dt);
-        return;
-    }
-    void* const two = generation::PlayerTwoController();
-    if (t_tickOwner != nullptr && t_tickOwner == two)
-    {
-        TickTwo(list, dt);
-        return;
-    }
-    if (primary_controller::Is(two))
-    {
-        g_counts.skippedOne.fetch_add(1, std::memory_order_relaxed);  // the game's list never plays on player 2's pad
-        return;
+        case rumble_rules::ListTick::Game: original(dt); return;
+        case rumble_rules::ListTick::Two: TickTwo(list, dt); return;
+        case rumble_rules::ListTick::Skip:
+            g_counts.skippedOne.fetch_add(1, std::memory_order_relaxed);  // the game's list never plays on player 2's pad
+            return;
+        case rumble_rules::ListTick::GameOne: break;
     }
     g_counts.ticksOne.fetch_add(1, std::memory_order_relaxed);
     original(dt);
@@ -457,8 +452,6 @@ constexpr std::uint32_t kEntryDuration = 0x10;  // f32
 constexpr std::uint32_t kEntryEffect   = 0x18;  // FName
 constexpr std::uint32_t kEntryHold     = 0x20;  // FName: the hold-point key
 constexpr std::uint32_t kEntryKey      = 0x28;  // FName
-constexpr std::uint8_t  kFlagLoop      = 0x02;
-constexpr std::uint8_t  kFlagEnding    = 0x04 | 0x08 | 0x10;
 constexpr std::int32_t  kMaxEntries    = 64;    // a sanity cap for the walk (a ride holds a handful)
 
 struct AddParams
@@ -524,7 +517,7 @@ std::size_t SeedTwo(std::array<std::uint64_t, 16>& names) noexcept
         const auto          flags = ReadField<std::uint8_t>(entry, kEntryFlags);
         const auto          state = ReadField<std::uint8_t>(entry, kEntryState);
         const auto          key   = ReadField<std::uint64_t>(entry, kEntryKey);
-        if ((flags & kFlagLoop) == 0 || (flags & kFlagEnding) != 0 || state == 6 || state == 7 || HasKey(two, key))
+        if (!rumble_rules::SeedsLoop(flags, state) || HasKey(two, key))
         {
             continue;
         }
@@ -536,11 +529,7 @@ std::size_t SeedTwo(std::array<std::uint64_t, 16>& names) noexcept
         params.loop     = 1;
         g_addOrUpdate(two, key, &params, 1);
         names[seeded++] = key;
-        const auto end  = g_copiedKeys.begin() + g_copiedCount;
-        if (std::find(g_copiedKeys.begin(), end, key) == end && g_copiedCount < g_copiedKeys.size())
-        {
-            g_copiedKeys[g_copiedCount++] = key;
-        }
+        g_copiedKeys.Insert(key);
     }
     return seeded;
 }
@@ -549,12 +538,7 @@ std::size_t SeedTwo(std::array<std::uint64_t, 16>& names) noexcept
 void ForgetCopied(std::uint64_t key) noexcept
 {
     const ListLock lock;
-    const auto     end = g_copiedKeys.begin() + g_copiedCount;
-    const auto     at  = std::find(g_copiedKeys.begin(), end, key);
-    if (at != end)
-    {
-        *at = g_copiedKeys[--g_copiedCount];
-    }
+    g_copiedKeys.Erase(key);
 }
 
 /// A shared ride's copy of a stop on the game's list, on player 2's list (game thread: the owner's list is named only
@@ -582,7 +566,11 @@ void StopNamed(std::uint64_t key) noexcept
     const auto original = reinterpret_cast<StopNamedFn>(g_stopNamed.Original());
     const bool owner    = t_ownerTwo;
     const bool game     = generation::OnGameThread();
-    if (owner && !game && g_listTwo.load(std::memory_order_acquire) != nullptr)
+    const bool hasList  = g_listTwo.load(std::memory_order_acquire) != nullptr;
+    const bool two      = owner || (game && generation::Active() && primary_controller::Is(generation::PlayerTwoController()));
+    const bool stopped  = two && game && StopTwo(original, key);
+    const auto route    = rumble_rules::StopRouteOf(owner, game, hasList, two, stopped, g_copyOne.load(std::memory_order_acquire));
+    if (route == rumble_rules::Route::LeftOnWorker)
     {
         // A source of player 2's stopping on a worker: the owner's list can be named only on the game thread, and no
         // source found stops there (RE-p2-rumble-owner-chocobo.md §9.4). Player 1's entries are left alone.
@@ -594,12 +582,11 @@ void StopNamed(std::uint64_t key) noexcept
         }
         return;
     }
-    const bool two = owner || (game && generation::Active() && primary_controller::Is(generation::PlayerTwoController()));
-    if (!two || !game || !StopTwo(original, key))
+    if (route != rumble_rules::Route::Two)
     {
         g_counts.stopsOne.fetch_add(1, std::memory_order_relaxed);
         original(key);
-        if (!two && g_copyOne.load(std::memory_order_acquire))
+        if (route == rumble_rules::Route::GameAndCopy)
         {
             CopyStopTwo(original, key, game);
         }
@@ -965,7 +952,7 @@ void DropList(const wchar_t* why) noexcept
         {
             WriteField<std::int32_t>(list, kListEntries + kArrayNum, 0);  // as the game's own clear
         }
-        g_copiedCount = 0;  // the shared ride's copies go with the list
+        g_copiedKeys.Clear();  // the shared ride's copies go with the list
     }
     if (list == nullptr)
     {
@@ -1347,9 +1334,9 @@ void CopyPlayerOne(bool on) noexcept
     std::size_t                   count = 0;
     {
         const ListLock lock;
-        left          = g_copiedKeys;
-        count         = g_copiedCount;
-        g_copiedCount = 0;
+        left  = g_copiedKeys.Keys();
+        count = g_copiedKeys.Count();
+        g_copiedKeys.Clear();
     }
     const auto original = reinterpret_cast<StopNamedFn>(g_stopNamed.Original());
     for (std::size_t i = 0; i < count; ++i)
