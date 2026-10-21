@@ -3,6 +3,7 @@
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/code_redirect.h"
+#include "platform/deferred_sites.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -10,7 +11,6 @@
 #include "player_two/command_menu_two.h"
 #include "player_two/engine_facts.h"
 #include "player_two/focus_scope.h"
-#include "player_two/game_thread_sites.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 #include "player_two/object_fields.h"
@@ -145,11 +145,8 @@ platform::CallRedirect g_panelClearedCall;  // 1.005: the "cleared" request's ca
 platform::CallRedirect g_panelSetCall;
 platform::CallRedirect g_markerNameCall;
 // 1.005: the call sites are placed from the game thread (both targeting calls and the "set" call cross a block),
-// with the image kept for it (player_two/game_thread_sites.h). The image is set before the placement is queued and never
-// reset, so Remove on another thread cannot pull it from under a running placement; Remove clears the pending flag.
-std::optional<platform::GameImage> g_placeImage;
-std::atomic<bool> g_placePending {false};  // 1.005: queued, not yet placed
-std::atomic<bool> g_fromGameThread {false};
+// with the image kept for it (platform/deferred_sites.h).
+platform::DeferredSites g_placement;
 bool           g_installed   = false;  // the scope's facts: the TargetScope works
 bool           g_runReady    = false;  // player 2's run and its skipped writes are installed
 SetLockFn      g_setLock     = nullptr;
@@ -619,18 +616,12 @@ void EndOfBattle() noexcept
     g_trace    = 0;
 }
 
-/// One call site redirected: at install on the research build, from the game thread on 1.005.
-bool Place(platform::CallRedirect& call, std::uintptr_t site, std::uintptr_t target, std::uintptr_t replacement) noexcept
-{
-    return g_fromGameThread ? call.InstallFromOwnThread(site, target, replacement) : call.Install(site, target, replacement);
-}
-
 bool Redirect(const platform::GameImage& image, platform::CallRedirect& call, std::uintptr_t site,
               const platform::FunctionFact& fact, std::uintptr_t replacement) noexcept
 {
     const auto target = platform::FindFunction(image, fact);
     const auto live   = image.Rebase(site, 5);
-    return target && live && Place(call, *live, *target, replacement);
+    return target && live && g_placement.Place(call, *live, *target, replacement);
 }
 
 /// The "old target cleared" request kept from player 1's panel in player 2's run. On 1.005 its call fits one
@@ -772,34 +763,24 @@ bool Install(const platform::GameImage& image) noexcept
         platform::Log(L"lock-on: UNAVAILABLE (a check failed); player 2 has no targeting of their own");
         return false;
     }
-    if (platform::RunningBuild() == platform::BuildIndex::V1005)
+    // Both targeting calls and the "set" call cross a 16-byte block in 1.005: every site is placed from the game
+    // thread, between its ticks (platform/deferred_sites.h).
+    const bool placed = g_placement.Install(image, &PlaceSites);
+    if (g_placement.FromGameThread())
     {
-        // Both targeting calls and the "set" call cross a 16-byte block in 1.005: every site is placed from the
-        // game thread, between its ticks (player_two/game_thread_sites.h).
-        g_fromGameThread = true;
-        g_placeImage.emplace(image);
-        g_placePending = true;
-        if (game_thread_sites::Queue([]() noexcept {
-                if (g_placePending.exchange(false))
-                {
-                    PlaceSites(*g_placeImage);
-                }
-            }))
-        {
-            platform::Log(L"lock-on: the targeting calls are placed from the game thread (1.005: they cross a 16-byte block)");
-            return true;
-        }
-        g_placePending = false;
-        platform::Log(L"lock-on: player 2's targeting run UNAVAILABLE (no room to place its calls from the game thread)");
-        return false;
+        platform::Log(L"lock-on: {}",
+                      placed ? L"the targeting calls are placed from the game thread (1.005: they cross a 16-byte "
+                               L"block)"
+                             : L"player 2's targeting run UNAVAILABLE (no room to place its calls from the game "
+                               L"thread)");
     }
-    return PlaceSites(image);
+    return placed;
 }
 
 void Remove() noexcept
 {
     g_runReady    = false;
-    g_placePending = false;  // a placement still queued does nothing
+    g_placement.Cancel();  // a placement still queued does nothing
     for (auto& call : g_tickTargetingCalls)
     {
         RestoreCall(call);
@@ -829,7 +810,8 @@ bool PlaceSites(const platform::GameImage& image) noexcept
     for (std::size_t i = 0; ok && i < 2; ++i)
     {
         const auto site = image.Rebase(kTickTargetingCalls[i], 5);
-        ok = site && Place(g_tickTargetingCalls[i], *site, tick, reinterpret_cast<std::uintptr_t>(&Targeting));
+        ok = site && g_placement.Place(g_tickTargetingCalls[i], *site, tick,
+                                       reinterpret_cast<std::uintptr_t>(&Targeting));
     }
     if (!ok)
     {
@@ -861,7 +843,7 @@ bool PlaceSites(const platform::GameImage& image) noexcept
     if (!ok)
     {
         platform::Log(L"lock-on: checks: targeting calls {}, panel 'cleared' {} {}, panel 'set' call {}, marker name call {}",
-                      calls ? L"ok" : L"FAILED", g_fromGameThread ? L"call" : L"gate",
+                      calls ? L"ok" : L"FAILED", g_placement.FromGameThread() ? L"call" : L"gate",
                       cleared ? L"ok" : (calls ? L"FAILED" : L"not tried"),
                       set ? L"ok" : (cleared ? L"FAILED" : L"not tried"), marker ? L"ok" : (set ? L"FAILED" : L"not tried"));
     }

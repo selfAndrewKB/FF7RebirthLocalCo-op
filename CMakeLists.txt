@@ -51,6 +51,7 @@ add_library(LocalSplitScreen SHARED
 
     src/platform/call_redirect.cpp
     src/platform/code_redirect.cpp
+    src/platform/deferred_sites.cpp
     src/platform/entry_redirect.cpp
     src/platform/guarded.cpp
     src/platform/frame_watch.cpp
@@ -280,6 +281,7 @@ lss_test(vtable_entry src/platform/vtable_entry.cpp src/platform/module_pin.cpp)
 lss_test(guarded src/platform/guarded.cpp)
 lss_test(call_site src/platform/guarded.cpp)
 lss_test(game_thread_sites)
+lss_test(deferred_sites src/platform/deferred_sites.cpp src/platform/image.cpp src/platform/build_translation.cpp)
 lss_test(layout_scale_code)
 lss_test(shadow_feedback_code)
 lss_test(rumble_list_code)

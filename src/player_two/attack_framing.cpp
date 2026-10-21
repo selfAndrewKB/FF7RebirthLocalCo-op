@@ -3,13 +3,13 @@
 #include "player_two/world_rules.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
+#include "platform/game_thread_sites.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "player_two/attack_cameras.h"
 #include "player_two/describe.h"
 #include "player_two/engine_facts.h"
-#include "player_two/game_thread_sites.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 #include "player_two/object_fields.h"
@@ -389,7 +389,7 @@ void Install(const platform::GameImage& image) noexcept
         platform::Log(L"attack framing: the sites are not what the research read; enemy specials keep the game's own "
                       L"framing");
     }
-    else if (!game_thread_sites::Queue(&Place))
+    else if (!platform::game_thread_sites::Queue(&Place))
     {
         platform::Log(L"attack framing: the game-thread placement queue is full; enemy specials keep the game's own "
                       L"framing");

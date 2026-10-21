@@ -22,6 +22,13 @@ public:
     /// Finds the running game image. Empty if the process is not FF7 Rebirth.
     static std::optional<GameImage> Locate() noexcept;
 
+    /// An image at `base` of `size` bytes with no build table (addresses as the research build's): a stand-in for
+    /// the host tests of code that keeps an image (platform/deferred_sites.h).
+    static GameImage At(std::uintptr_t base, std::size_t size) noexcept
+    {
+        return GameImage(base, size, nullptr);
+    }
+
     /// The live address of a research-build IDA address, or empty if it falls outside the image or this build's
     /// table does not hold all of [idaAddress, idaAddress + length).
     std::optional<std::uintptr_t> Rebase(std::uintptr_t idaAddress, std::size_t length = 1) const noexcept;

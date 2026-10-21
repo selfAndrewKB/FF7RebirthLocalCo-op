@@ -2,13 +2,13 @@
 
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
+#include "platform/game_thread_sites.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "player_two/describe.h"
 #include "player_two/engine_facts.h"
-#include "player_two/game_thread_sites.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 #include "player_two/object_fields.h"
@@ -1116,7 +1116,7 @@ void Install(const platform::GameImage& image) noexcept
         platform::Log(L"synergy partner: the sites are not what the research read; synergies keep the game's "
                       L"single-player hand-over");
     }
-    else if (!game_thread_sites::Queue(&Place))
+    else if (!platform::game_thread_sites::Queue(&Place))
     {
         platform::Log(L"synergy partner: the game-thread placement queue is full; synergies keep the game's "
                       L"single-player hand-over");

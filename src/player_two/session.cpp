@@ -3,6 +3,7 @@
 #include "player_two/session.h"
 
 #include "platform/frame_watch.h"
+#include "platform/game_thread_sites.h"
 #include "platform/log.h"
 #include "player_two/describe.h"
 #include "player_two/engine_facts.h"
@@ -18,7 +19,6 @@
 #include "player_two/ffb_manager_two.h"
 #include "player_two/shared_ride.h"
 #include "player_two/field_camera.h"
-#include "player_two/game_thread_sites.h"
 #include "player_two/generation.h"
 #include "player_two/handover_watch.h"
 #include "player_two/leader_scope.h"
@@ -116,7 +116,7 @@ void Session::LogTagCounts(const wchar_t* when) noexcept
 void Session::Tick() noexcept
 {
     generation::SetGameThread();  // the engine-tick callback runs on the thread that ticks the world
-    game_thread_sites::Run();     // 1.005: call sites that cross a 16-byte block, placed here (outside the game's ticks)
+    platform::game_thread_sites::Run();  // the 1.005 placements (platform/deferred_sites.h), outside the game's ticks
     command_rules::Update();      // which member player 1 may not command (none without player 2)
     command_menu_two::KeepHidden();  // player 2's menu widget stays out of both halves
     if (!HasPlayerTwo())

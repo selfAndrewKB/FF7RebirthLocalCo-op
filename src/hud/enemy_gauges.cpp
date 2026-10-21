@@ -6,13 +6,13 @@
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/code_redirect.h"
+#include "platform/game_thread_sites.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/module_pin.h"
 #include "platform/settled_log.h"
 #include "platform/sparse_array.h"
-#include "player_two/game_thread_sites.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 #include "player_two/lock_on.h"
@@ -689,13 +689,13 @@ bool Install(const platform::GameImage& image) noexcept
     if (ownChecks && platform::RunningBuild() == platform::BuildIndex::V1005)
     {
         // The forced-targeted call crosses a 16-byte block in 1.005: it is placed from the game thread, between its
-        // ticks (player_two/game_thread_sites.h); the size step's checks are made now.
+        // ticks (platform/game_thread_sites.h); the size step's checks are made now.
         const auto scaleStep = image.Rebase(kScaleStep);
         const auto apply     = image.Rebase(kApplyTransform);
         const bool sizes     = scaleStep && apply && image.BytesMatch(kScaleStep, kScaleStepPrologue) &&
                            image.BytesMatch(kApplyTransform, kApplyTransformPrologue);
         g_pending = {*forcedSite, *forced, *yStep, sizes ? *scaleStep : 0, sizes ? *apply : 0};
-        if (player_two::game_thread_sites::Queue(&PlaceOwnTargets))
+        if (platform::game_thread_sites::Queue(&PlaceOwnTargets))
         {
             platform::Log(L"enemy gauges: ready (each gauge placed again in each player's view; player 2's own targets follow "
                           L"once the game thread places their call (1.005: it crosses a 16-byte block))");

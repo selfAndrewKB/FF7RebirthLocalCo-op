@@ -1,9 +1,10 @@
-// Host-side tests for player_two::game_thread_sites, run without the game.
+// Host-side tests for platform/game_thread_sites, run without the game.
 //
 // The queue of 1.005 placements: runs what was queued, in order, once; refuses a null and a seventeenth entry; a
-// placement that queues another during the run (the queue is copied out first) sees it run at the next tick.
+// placement that queues another during the run (the queue is copied out first) sees it run at the next tick; a
+// placement queued with a context gets it.
 
-#include "player_two/game_thread_sites.h"
+#include "platform/game_thread_sites.h"
 
 #include "expect.h"
 
@@ -12,8 +13,8 @@
 
 namespace {
 
-using lss::player_two::game_thread_sites::Queue;
-using lss::player_two::game_thread_sites::Run;
+using lss::platform::game_thread_sites::Queue;
+using lss::platform::game_thread_sites::Run;
 
 std::vector<int> g_ran;
 
@@ -24,6 +25,10 @@ void PlaceA() noexcept
 void PlaceB() noexcept
 {
     g_ran.push_back(2);
+}
+void PlaceWith(void* context) noexcept
+{
+    g_ran.push_back(*static_cast<const int*>(context));
 }
 void PlaceAndRequeue() noexcept
 {
@@ -64,6 +69,18 @@ void TestRefusals()
     }
 }
 
+void TestContext()
+{
+    std::puts("game thread sites: a placement queued with a context runs with it, in order with the others");
+    g_ran.clear();
+    int seven = 7;
+    EXPECT(Queue(&PlaceA));
+    EXPECT(Queue(&PlaceWith, &seven));
+    EXPECT(!Queue(static_cast<void (*)(void*) noexcept>(nullptr), &seven));
+    Run();
+    EXPECT((g_ran == std::vector<int>{1, 7}));
+}
+
 void TestQueueDuringRun()
 {
     std::puts("game thread sites: a placement queued during a run waits for the next one");
@@ -83,6 +100,7 @@ int main()
 {
     TestRunsInOrderOnce();
     TestRefusals();
+    TestContext();
     TestQueueDuringRun();
 
     return lss::test::Report();

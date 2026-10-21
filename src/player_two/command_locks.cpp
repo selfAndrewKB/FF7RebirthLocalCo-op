@@ -2,13 +2,13 @@
 
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
+#include "platform/deferred_sites.h"
 #include "platform/entry_redirect.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "player_two/command_menu_two.h"
-#include "player_two/game_thread_sites.h"
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
 
@@ -76,9 +76,10 @@ struct Sites
     std::uintptr_t                enabled = 0, locked = 0, category = 0, dispatcher = 0, enabledAt = 0, lockedAt = 0;
     std::span<const std::uint8_t> categoryFirst, dispatcherFirst;
 };
-Sites g_sites;
-std::atomic<bool> g_fromGameThread {false};  // 1.005: the calls go in with InstallFromOwnThread
-std::atomic<bool> g_placePending   {false};  // 1.005: queued, not yet placed (Remove clears it)
+Sites                   g_sites;
+platform::DeferredSites g_placement;  // 1.005: the calls placed from the game thread (platform/deferred_sites.h)
+constexpr const wchar_t* kUnavailable =
+    L"UNAVAILABLE (a check failed): player 2's command menu keeps the values of its last join";
 
 // Game thread.
 
@@ -219,16 +220,15 @@ void Dispatch(void* fieldSystem, std::int32_t mode) noexcept
 
 namespace {
 
-/// The redirects, in order, from what Install found. At install on the research build; on 1.005 from the game
-/// thread, where the locked call's five bytes cross a 16-byte block (player_two/game_thread_sites.h).
-bool PlaceSites() noexcept
+/// The redirects, in order, from what Install found (its checks passed). At install on the research build; on 1.005
+/// from the game thread, where the locked call's five bytes cross a 16-byte block (platform/deferred_sites.h).
+bool PlaceSites(const platform::GameImage&) noexcept
 {
     const Sites& s     = g_sites;
     const auto   place = [](platform::CallRedirect& call, std::uintptr_t site, std::uintptr_t target, auto* with) {
-        const auto replacement = reinterpret_cast<std::uintptr_t>(with);
-        return g_fromGameThread ? call.InstallFromOwnThread(site, target, replacement) : call.Install(site, target, replacement);
+        return g_placement.Place(call, site, target, reinterpret_cast<std::uintptr_t>(with));
     };
-    g_installed = g_installed && place(g_enabledCall, s.enabledAt, s.enabled, &CommandsEnabled) &&
+    g_installed = place(g_enabledCall, s.enabledAt, s.enabled, &CommandsEnabled) &&
                   place(g_lockedCall, s.lockedAt, s.locked, &CommandsLocked) &&
                   g_category.Install(s.category, s.categoryFirst, reinterpret_cast<std::uintptr_t>(&CategoryEnabled)) &&
                   g_dispatcher.Install(s.dispatcher, s.dispatcherFirst, reinterpret_cast<std::uintptr_t>(&Dispatch));
@@ -239,7 +239,7 @@ bool PlaceSites() noexcept
     platform::Log(L"command locks: {}",
                   g_installed ? L"the battle's command locks, category locks and on/off-table bytes reach player 2's "
                                 L"controller through the game's setters (logged)"
-                              : L"UNAVAILABLE (a check failed): player 2's command menu keeps the values of its last join");
+                              : kUnavailable);
     return g_installed;
 }
 
@@ -265,28 +265,28 @@ bool Install(const platform::GameImage& image) noexcept
                    image.EntryInstruction(kCategory.address, first(kCategoryBytes)),
                    image.EntryInstruction(kDispatcher.address, first(kDispatcherBytes))};
     }
-    if (g_installed && platform::RunningBuild() == platform::BuildIndex::V1005)
+    if (!g_installed)
     {
-        g_fromGameThread = true;
-        g_installed      = false;  // set again by the placement
-        g_placePending   = game_thread_sites::Queue([]() noexcept {
-            if (g_placePending)
-            {
-                g_placePending = false;
-                g_installed    = true;
-                PlaceSites();
-            }
-        });
-        platform::Log(L"command locks: {}", g_placePending ? L"its calls are placed from the game thread (1.005: one crosses a 16-byte block)"
-                                                           : L"UNAVAILABLE (no room to place its calls from the game thread)");
-        return g_placePending;
+        platform::Log(L"command locks: {}", kUnavailable);
+        return false;
     }
-    return PlaceSites();
+    if (platform::DeferredSites::Deferred())
+    {
+        g_installed = false;  // until the placement: nothing follows the controller before its calls are in
+    }
+    const bool placed = g_placement.Install(image, &PlaceSites);
+    if (g_placement.FromGameThread())
+    {
+        platform::Log(L"command locks: {}",
+                      placed ? L"its calls are placed from the game thread (1.005: one crosses a 16-byte block)"
+                             : L"UNAVAILABLE (no room to place its calls from the game thread)");
+    }
+    return placed;
 }
 
 void Remove() noexcept
 {
-    g_placePending = false;  // a placement still queued does nothing
+    g_placement.Cancel();  // a placement still queued does nothing
     g_installed    = false;
     const auto restore = [](auto& redirect) {
         if (redirect.IsInstalled() && !redirect.Restore())

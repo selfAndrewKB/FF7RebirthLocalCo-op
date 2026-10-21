@@ -8,6 +8,7 @@
 
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
+#include "platform/deferred_sites.h"
 #include "platform/entry_redirect.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -19,7 +20,6 @@
 #include "player_two/describe.h"
 #include "player_two/engine_facts.h"
 #include "player_two/focus_scope.h"
-#include "player_two/game_thread_sites.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 #include "player_two/menu_rules.h"
@@ -191,11 +191,8 @@ struct Sites
     std::uintptr_t rebuildShortcuts = 0, statusAt = 0, itemAt = 0;
 };
 Sites                              g_sites;
-// 1.005: kept for the placement. Set before it is queued and never reset, so Remove (from a failed placement, or on
-// another thread) cannot pull it from under a running placement; Remove clears the pending flag.
-std::optional<platform::GameImage> g_placeImage;
-std::atomic<bool>                   g_placePending {false};   // 1.005: queued, not yet placed
-std::atomic<bool>                   g_fromGameThread {false};  // 1.005: the calls go in with InstallFromOwnThread
+platform::DeferredSites g_placement;  // 1.005: the calls placed from the game thread (platform/deferred_sites.h)
+constexpr const wchar_t* kUnavailable = L"UNAVAILABLE (a check failed)";
 
 // Game thread. The controller outlives the mod's stages, like the game's.
 void*         g_controller = nullptr;
@@ -676,8 +673,7 @@ void Watch() noexcept
 template <class Fn>
 bool Place(platform::CallRedirect& call, std::uintptr_t site, std::uintptr_t target, Fn* with) noexcept
 {
-    const auto replacement = reinterpret_cast<std::uintptr_t>(with);
-    return g_fromGameThread ? call.InstallFromOwnThread(site, target, replacement) : call.Install(site, target, replacement);
+    return g_placement.Place(call, site, target, reinterpret_cast<std::uintptr_t>(with));
 }
 
 /// The Members panel rebuild followed at every caller: its entry redirected, or on 1.005 (where that entry crosses a
@@ -721,36 +717,33 @@ void PlaceShortcuts(const platform::GameImage& image) noexcept
                   items ? L"yes" : L"NO");
 }
 
-/// The redirects, from what Install found (g_installed: its checks passed). At install on the research build; on
-/// 1.005 from the game thread.
+/// The redirects, from what Install found (its checks passed). At install on the research build; on 1.005 from
+/// the game thread.
 bool PlaceSites(const platform::GameImage& image) noexcept
 {
-    if (g_installed)
+    const Sites& s = g_sites;
+    // ResetAll first: a Setup followed without its ResetAll is the join Setup's case anyway.
+    g_installed = Place(g_resetAllCall, s.resetAt, s.resetAll, &ResetAllCall) &&
+                  Place(g_setupCall, s.setupAt, reinterpret_cast<std::uintptr_t>(g_setup), &SetupCall) &&
+                  InstallRefresh(image, s.refresh);
+    const auto layoutCells = image.Rebase(kLayoutCells);
+    g_layoutCells          = layoutCells ? reinterpret_cast<LayoutCellsFn>(*layoutCells) : nullptr;
+    for (std::size_t i = 0; g_installed && i < kSquadLayoutCalls.size(); ++i)
     {
-        const Sites& s = g_sites;
-        // ResetAll first: a Setup followed without its ResetAll is the join Setup's case anyway.
-        g_installed = Place(g_resetAllCall, s.resetAt, s.resetAll, &ResetAllCall) &&
-                      Place(g_setupCall, s.setupAt, reinterpret_cast<std::uintptr_t>(g_setup), &SetupCall) &&
-                      InstallRefresh(image, s.refresh);
-        const auto layoutCells = image.Rebase(kLayoutCells);
-        g_layoutCells          = layoutCells ? reinterpret_cast<LayoutCellsFn>(*layoutCells) : nullptr;
-        for (std::size_t i = 0; g_installed && i < kSquadLayoutCalls.size(); ++i)
-        {
-            const auto at = image.Rebase(kSquadLayoutCalls[i], 5);
-            g_installed   = layoutCells && at && Place(g_squadLayoutCalls[i], *at, *layoutCells, &SquadLayoutCall);
-        }
-        if (!g_installed)
-        {
-            Remove();
-        }
-        else
-        {
-            PlaceShortcuts(image);
-        }
+        const auto at = image.Rebase(kSquadLayoutCalls[i], 5);
+        g_installed   = layoutCells && at && Place(g_squadLayoutCalls[i], *at, *layoutCells, &SquadLayoutCall);
+    }
+    if (!g_installed)
+    {
+        Remove();
+    }
+    else
+    {
+        PlaceShortcuts(image);
     }
     platform::Log(L"command menu two: {}", g_installed ? L"player 2's command controller is built once player 2 plays and "
                                                          L"follows the game's Setup, ResetAll and Members panel rebuild (logged)"
-                                                       : L"UNAVAILABLE (a check failed)");
+                                                       : kUnavailable);
     return g_installed;
 }
 
@@ -804,37 +797,32 @@ bool Install(const platform::GameImage& image) noexcept
             g_selecterShortcuts = builder ? reinterpret_cast<SelecterShortcutsFn>(*builder) : nullptr;
             g_sites.statusAt    = site(kStatusShortcutsCall).value_or(0);
         }
-        if (platform::RunningBuild() == platform::BuildIndex::V1005)
-        {
-            // A squad layout call crosses a 16-byte block in 1.005, and the rebuild's entry too: every site is placed
-            // from the game thread, between its ticks (player_two/game_thread_sites.h).
-            g_fromGameThread = true;
-            g_installed      = false;  // set again by the placement
-            g_placeImage.emplace(image);
-            g_placePending    = true;
-            const bool queued = game_thread_sites::Queue([]() noexcept {
-                if (g_placePending.exchange(false))
-                {
-                    g_installed = true;
-                    PlaceSites(*g_placeImage);
-                }
-            });
-            if (!queued)
-            {
-                g_placePending = false;
-            }
-            platform::Log(L"command menu two: {}", queued ? L"its calls are placed from the game thread (1.005: two cross a 16-byte block)"
-                                                          : L"UNAVAILABLE (no room to place its calls from the game thread)");
-            return queued;
-        }
     }
-    return PlaceSites(image);
+    if (!g_installed)
+    {
+        platform::Log(L"command menu two: {}", kUnavailable);
+        return false;
+    }
+    // A squad layout call crosses a 16-byte block in 1.005, and the rebuild's entry too: every site is placed from
+    // the game thread, between its ticks (platform/deferred_sites.h).
+    if (platform::DeferredSites::Deferred())
+    {
+        g_installed = false;  // until the placement: the controller is not built before its calls are in
+    }
+    const bool placed = g_placement.Install(image, &PlaceSites);
+    if (g_placement.FromGameThread())
+    {
+        platform::Log(L"command menu two: {}",
+                      placed ? L"its calls are placed from the game thread (1.005: two cross a 16-byte block)"
+                             : L"UNAVAILABLE (no room to place its calls from the game thread)");
+    }
+    return placed;
 }
 
 void Remove() noexcept
 {
     g_installed = false;  // the controller stays: the game's GC list refers to it
-    g_placePending = false;  // a placement still queued does nothing
+    g_placement.Cancel();  // a placement still queued does nothing
     if (g_refresh.IsInstalled() && !g_refresh.Restore())
     {
         platform::Log(L"command menu two: the Members panel rebuild was changed after us; left in place (it passes through)");

@@ -4,13 +4,13 @@
 #include "hud/widget_opacity.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
+#include "platform/deferred_sites.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/sparse_array.h"
 #include "platform/verified_code.h"
 #include "player_two/engine_facts.h"
-#include "player_two/game_thread_sites.h"
 #include "player_two/generation.h"
 #include "player_two/lock_on.h"
 
@@ -113,13 +113,10 @@ WeakGetFn      g_weakGet      = nullptr;
 WeakSetFn      g_weakSet      = nullptr;
 std::uintptr_t g_battleSystem = 0;
 std::uintptr_t g_endUISystem  = 0;
-// 1.005: the call sites are placed from the game thread, with what Install found kept for it. Set before the
-// placement is queued and never reset, so Remove on another thread cannot pull it from under a running placement;
-// Remove clears the pending flag.
-std::optional<platform::GameImage> g_placeImage;
-std::uintptr_t                     g_placeCollect   = 0;
-std::atomic<bool>                  g_placePending{false};  // 1.005: queued, not yet placed
-bool                               g_fromGameThread = false;
+// 1.005: the call sites are placed from the game thread (platform/deferred_sites.h), with what Install found kept
+// for it.
+platform::DeferredSites g_placement;
+std::uintptr_t          g_collect = 0;  // the collection function
 
 /// One main-target lookup, kept for the rest of the frame.
 struct MainLookup
@@ -411,7 +408,7 @@ void FindOtherGauges(std::uintptr_t system)
     });
 }
 
-void InstallSites(const platform::GameImage& image, std::uintptr_t collect) noexcept;
+bool InstallSites(const platform::GameImage& image) noexcept;
 
 }  // namespace
 
@@ -433,29 +430,17 @@ bool Install(const platform::GameImage& image) noexcept
         g_mainTarget && g_release && g_enemyAi && g_weakGet && g_weakSet && system && ui && widget_opacity::Install(image);
     g_battleSystem = system ? *system : 0;
     g_endUISystem  = ui ? *ui : 0;
-    if (platform::RunningBuild() == platform::BuildIndex::V1005)
+    g_collect = collect;
+    // The label lookup's call and both collection calls cross a 16-byte block in 1.005: they are placed from the
+    // game thread, between its ticks (platform/deferred_sites.h).
+    const bool placed = g_placement.Install(image, &InstallSites);
+    if (g_placement.FromGameThread())
     {
-        // The label lookup's call and both collection calls cross a 16-byte block in 1.005: they are placed from the
-        // game thread, between its ticks (player_two/game_thread_sites.h).
-        g_fromGameThread = true;
-        g_placeImage.emplace(image);
-        g_placeCollect = collect;
-        g_placePending = true;
-        if (player_two::game_thread_sites::Queue([]() noexcept {
-                if (g_placePending.exchange(false))
-                {
-                    InstallSites(*g_placeImage, g_placeCollect);
-                }
-            }))
-        {
-            platform::Log(L"target views: {}; the label lookup and collection calls are placed from the game thread (1.005: "
-                          L"they cross a 16-byte block)",
-                          g_installed ? L"per-view marks ready" : L"UNAVAILABLE");
-            return g_installed;
-        }
-        g_placePending = false;
+        platform::Log(L"target views: {}; the label lookup and collection calls {}",
+                      g_installed ? L"per-view marks ready" : L"UNAVAILABLE",
+                      placed ? L"are placed from the game thread (1.005: they cross a 16-byte block)"
+                             : L"are NOT placed (no room to place them from the game thread)");
     }
-    InstallSites(image, collect);
     return g_installed;
 }
 
@@ -463,15 +448,15 @@ namespace {
 
 /// The label lookup's call and both collection calls, then the install line. At install on the research build; on
 /// 1.005 from the game thread.
-void InstallSites(const platform::GameImage& image, std::uintptr_t collect) noexcept
+bool InstallSites(const platform::GameImage& image) noexcept
 {
+    const std::uintptr_t collect = g_collect;
     const auto find = [&image](const platform::FunctionFact& fact) {
         const auto live = platform::FindFunction(image, fact);
         return live ? *live : std::uintptr_t{0};
     };
     const auto place = [](platform::CallRedirect& call, std::uintptr_t site, std::uintptr_t target, auto* with) {
-        const auto replacement = reinterpret_cast<std::uintptr_t>(with);
-        return g_fromGameThread ? call.InstallFromOwnThread(site, target, replacement) : call.Install(site, target, replacement);
+        return g_placement.Place(call, site, target, reinterpret_cast<std::uintptr_t>(with));
     };
     const auto create  = image.Rebase(kCreateCall, 5);
     const auto sync    = image.Rebase(kSyncCall, 5);
@@ -493,13 +478,14 @@ void InstallSites(const platform::GameImage& image, std::uintptr_t collect) noex
                   g_installed ? L"per-view marks ready" : L"UNAVAILABLE",
                   g_unionOn ? L"collected with player 1's" : L"NOT collected (a check failed)",
                   labels ? L"make way for each player's own locked-on gauge" : L"follow player 1's lock-on (a check failed)");
+    return g_installed;
 }
 
 }  // namespace
 
 void Remove() noexcept
 {
-    g_placePending = false;  // a placement still queued does nothing
+    g_placement.Cancel();  // a placement still queued does nothing
     g_hidden.clear();  // no widget calls here: this may run off the game thread
     g_unionOn = false;
     for (auto* call : {&g_lookupCall, &g_syncCall, &g_createCall})

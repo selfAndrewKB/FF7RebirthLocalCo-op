@@ -2,11 +2,11 @@
 
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
+#include "platform/deferred_sites.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
-#include "player_two/game_thread_sites.h"
 #include "player_two/generation.h"
 #include "players/unreal_access.h"
 
@@ -45,9 +45,8 @@ struct Sites
 {
     std::uintptr_t contains = 0, place = 0, inSite = 0, endSite = 0;  // 0: not found (logged by the finder)
 };
-Sites             g_sites;
-bool              g_fromGameThread = false;
-std::atomic<bool> g_placePending{false};  // 1.005: queued, not yet placed (Remove clears it)
+Sites                   g_sites;
+platform::DeferredSites g_placement;  // 1.005: the sites placed from the game thread (platform/deferred_sites.h)
 
 /// Player 2's member while player 2 plays, on the game thread; else null.
 void* PlayerTwoMember() noexcept
@@ -102,20 +101,16 @@ void BattleFinishPlace(void* context, void* character, void* location, bool extr
     reinterpret_cast<PlaceFn>(g_battleFinishCall.Original())(context, character, location, extra);
 }
 
-/// One call site redirected: at install on the research build, from the game thread on 1.005.
-bool Place(platform::CallRedirect& call, std::uintptr_t site, std::uintptr_t target, std::uintptr_t replacement) noexcept
-{
-    return g_fromGameThread ? call.InstallFromOwnThread(site, target, replacement) : call.Install(site, target, replacement);
-}
-
 /// The redirects, from what Install found.
-bool PlaceSites() noexcept
+bool PlaceSites(const platform::GameImage&) noexcept
 {
     const Sites& s     = g_sites;
     const bool   start = s.contains != 0 && s.inSite != 0 &&
-                       Place(g_battleInCall, s.inSite, s.contains, reinterpret_cast<std::uintptr_t>(&BattleInExcluded));
+                         g_placement.Place(g_battleInCall, s.inSite, s.contains,
+                                           reinterpret_cast<std::uintptr_t>(&BattleInExcluded));
     const bool end = s.place != 0 && s.endSite != 0 &&
-                     Place(g_battleFinishCall, s.endSite, s.place, reinterpret_cast<std::uintptr_t>(&BattleFinishPlace));
+                     g_placement.Place(g_battleFinishCall, s.endSite, s.place,
+                                       reinterpret_cast<std::uintptr_t>(&BattleFinishPlace));
     platform::Log(L"battle warp: battle start {}; battle end {}",
                   start ? L"leaves player 2's member where it is" : L"UNAVAILABLE (a check failed): warps player 2's member in",
                   end ? L"leaves player 2's member where it is" : L"UNAVAILABLE (a check failed): may warp player 2's member back");
@@ -131,33 +126,22 @@ bool Install(const platform::GameImage& image) noexcept
     const auto inSite   = image.Rebase(kBattleInCall, 5);
     const auto endSite  = image.Rebase(kBattleFinishCall, 5);
     g_sites             = {contains.value_or(0), place.value_or(0), inSite.value_or(0), endSite.value_or(0)};
-    if (platform::RunningBuild() == platform::BuildIndex::V1005)
+    // The battle-in call crosses a 16-byte block in 1.005: the sites are placed from the game thread, between its
+    // ticks (platform/deferred_sites.h; battle setup runs in the game mode's tick). The placement reads only the
+    // addresses found here.
+    const bool placed = g_placement.Install(image, &PlaceSites);
+    if (g_placement.FromGameThread())
     {
-        // The battle-in call crosses a 16-byte block in 1.005: the sites are placed from the game thread, between its
-        // ticks (player_two/game_thread_sites.h; battle setup runs in the game mode's tick). The placement reads only
-        // the addresses found here, and a pending flag Remove clears.
-        g_fromGameThread = true;
-        g_placePending   = true;
-        const bool queued = game_thread_sites::Queue([]() noexcept {
-            if (g_placePending.exchange(false))
-            {
-                PlaceSites();
-            }
-        });
-        if (!queued)
-        {
-            g_placePending = false;
-        }
-        platform::Log(L"battle warp: {}", queued ? L"its calls are placed from the game thread (1.005: one crosses a 16-byte block)"
-                                                 : L"UNAVAILABLE (no room to place its calls from the game thread)");
-        return queued;
+        platform::Log(L"battle warp: {}",
+                      placed ? L"its calls are placed from the game thread (1.005: one crosses a 16-byte block)"
+                             : L"UNAVAILABLE (no room to place its calls from the game thread)");
     }
-    return PlaceSites();
+    return placed;
 }
 
 void Remove() noexcept
 {
-    g_placePending = false;  // a placement still queued does nothing
+    g_placement.Cancel();  // a placement still queued does nothing
     for (auto* call : {&g_battleFinishCall, &g_battleInCall})
     {
         if (call->IsInstalled() && !call->Restore())
