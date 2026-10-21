@@ -287,6 +287,9 @@ lss_test(vtable_entry src/platform/vtable_entry.cpp src/platform/module_pin.cpp 
 lss_test(guarded src/platform/guarded.cpp)
 lss_test(call_site src/platform/guarded.cpp)
 lss_test(game_thread_sites)
+lss_test(generation src/player_two/generation.cpp src/player_two/weak_object.cpp src/platform/verified_code.cpp
+         src/platform/vtable_entry.cpp src/platform/module_pin.cpp src/platform/guarded.cpp src/platform/image.cpp
+         src/platform/build_translation.cpp tests/log_console.cpp)
 lss_test(thread_hold)
 lss_test(angles)
 lss_test(every)

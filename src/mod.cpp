@@ -505,6 +505,8 @@ private:
     {
         lss::platform::frame_watch::OnFrameStart();
         const lss::platform::frame_watch::Charge charge(lss::platform::frame_watch::Part::EngineTick);
+        // The tick's identities (the member's and player 1's pawn's weaks, the driven chocobo) before any module's.
+        lss::player_two::generation::BeginTick(lss::player_two::chocobo_ride::DrivenChocobo());
         lss::player_two::pad_rumble::BeforeTick();  // before the world tick: player 2's controller ordered after player 1's
         lss::player_two::combat_rumble::BeforeTick();  // outside every notify: their call sites; the status line
         lss::player_two::rumble_list_two::Tick();      // player 2's list made at join (dropped if player 2 went out another way)

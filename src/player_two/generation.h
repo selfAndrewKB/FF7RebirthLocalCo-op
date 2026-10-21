@@ -11,6 +11,8 @@
 // calls on the game thread. The values are atomics so a wrapper reached from another thread still
 // reads whole values.
 
+#include <cstdint>
+
 namespace lss::player_two::generation {
 
 /// Starts a generation for player 2's controller. Player 1's is recorded to tell the two apart.
@@ -48,5 +50,21 @@ bool  Active() noexcept;
 void* PlayerOneController() noexcept;
 void* PlayerTwoController() noexcept;
 void* Member() noexcept;
+
+/// Once per engine tick, first thing, on the game thread: the identities the wrappers compare against on any
+/// thread, as the game's weak pointers (0 while there is none, or while the generation is inactive). The
+/// member's follows SetMember at once; player 1's pawn is read here; `drivenChocobo` is chocobo_ride's (the
+/// chocobo player 2 rides or is getting off).
+void BeginTick(const void* drivenChocobo) noexcept;
+
+/// Player 2's member, as a weak pointer.
+std::uint64_t MemberWeak() noexcept;
+
+/// Player 1's possessed pawn this tick, as a weak pointer.
+std::uint64_t PlayerOnePawnWeak() noexcept;
+
+/// The chocobo player 2 drives this tick (as given to BeginTick), and its weak pointer.
+const void*   Chocobo() noexcept;
+std::uint64_t ChocoboWeak() noexcept;
 
 }  // namespace lss::player_two::generation

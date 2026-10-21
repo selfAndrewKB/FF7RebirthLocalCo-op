@@ -9,7 +9,6 @@
 #include "platform/vtable_entry.h"
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
-#include "player_two/leader_scope.h"
 #include "player_two/object_fields.h"
 #include "player_two/primary_controller.h"
 
@@ -66,8 +65,6 @@ bool                               g_redPlaced   = false;
 ClearFn                            g_clear       = nullptr;
 
 // Written on the game thread each tick, read on any thread (compared only).
-std::atomic<std::uint64_t> g_memberWeak{0};
-std::atomic<std::uint64_t> g_playerOneWeak{0};  // player 1's pawn
 std::atomic<const void*>   g_controllerOne{nullptr};
 std::atomic<const void*>   g_controllerTwo{nullptr};
 
@@ -124,15 +121,14 @@ const wchar_t* GaitText(int value) noexcept
     }
 }
 
-bool ActionOf(const void* action, const std::atomic<std::uint64_t>& who) noexcept
+bool ActionOf(const void* action, std::uint64_t weak) noexcept
 {
-    const auto weak = who.load(std::memory_order_acquire);
     return action != nullptr && weak != 0 && ReadField<std::uint64_t>(action, kActionCharacter) == weak;
 }
 
 bool PlayerTwosAction(const void* action) noexcept
 {
-    return ActionOf(action, g_memberWeak);
+    return ActionOf(action, generation::MemberWeak());
 }
 
 #if LSS_DEV
@@ -200,7 +196,7 @@ std::uintptr_t PhaseFour(void* move, std::uint32_t event, float dt, std::uintptr
     }
     // An enter's owner is published before the game's write, an exit's after its clear: the game tick never sees a
     // live step's cap without its owner (it would take it for a stray cap and clear it).
-    if (ActionOf(move, g_playerOneWeak))
+    if (ActionOf(move, generation::PlayerOnePawnWeak()))
     {
         if (code == kPhaseEnter)
         {
@@ -324,8 +320,6 @@ void Tick() noexcept
                                    GaitText(before), GaitText(ReadField<std::uint8_t>(one, kLayerTwo)));
             }
         }
-        g_memberWeak.store(0, std::memory_order_release);
-        g_playerOneWeak.store(0, std::memory_order_release);
         g_oneStepLive.store(false, std::memory_order_release);
         g_controllerTwo.store(nullptr, std::memory_order_release);
         g_controllerOne.store(nullptr, std::memory_order_release);
@@ -335,9 +329,6 @@ void Tick() noexcept
         g_layerSeen = -1;
         return;
     }
-    g_memberWeak.store(leader_scope::WeakOf(member), std::memory_order_release);
-    void* onePawn = ReadPointer(generation::PlayerOneController(), facts::kControllerPawn);
-    g_playerOneWeak.store(onePawn != nullptr ? leader_scope::WeakOf(onePawn) : 0, std::memory_order_release);
     g_controllerTwo.store(two, std::memory_order_release);
     g_controllerOne.store(generation::PlayerOneController(), std::memory_order_release);
 

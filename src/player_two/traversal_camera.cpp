@@ -366,8 +366,6 @@ platform::EntryRedirect            g_getModuleEntry;
 HolderLeaveFn                      g_holderLeave    = nullptr;
 HolderValidateFn                   g_holderValidate = nullptr;
 bool                               g_twoHoldersOn   = false;  // every hook placed (set at install)
-std::atomic<const void*>           g_memberNow{nullptr};      // player 2's member (game thread, per tick)
-std::atomic<std::uint64_t>         g_memberWeakNow{0};
 thread_local bool                  t_twoBegin = false;        // inside player 2's move Begin (game thread)
 
 /// Holds t_twoBegin for one Begin.
@@ -1038,7 +1036,7 @@ void* HolderModule(void* holder) noexcept
     {
         return original(two);
     }
-    return HolderNames(static_cast<const std::byte*>(holder), g_memberWeakNow.load(std::memory_order_relaxed))
+    return HolderNames(static_cast<const std::byte*>(holder), generation::MemberWeak())
                ? original(holder)
                : nullptr;
 }
@@ -1050,7 +1048,7 @@ template <std::size_t Index>
 std::uintptr_t HolderLeave(void* actor, void* character) noexcept
 {
     const auto original = reinterpret_cast<LeaveSlotFn>(g_move[Index].leave.Original());
-    if (character != nullptr && character == g_memberNow.load(std::memory_order_relaxed))
+    if (character != nullptr && generation::Active() && character == generation::Member())
     {
         if (std::byte* two = TwoHolderOf(actor))
         {
@@ -1079,7 +1077,7 @@ void RunLeave(void* context)
 std::uintptr_t OneShotLeave(void* actor, void* character) noexcept
 {
     const auto  original = reinterpret_cast<LeaveSlotFn>(g_oneShotLeave.Original());
-    const void* member   = g_memberNow.load(std::memory_order_relaxed);
+    const void* member   = generation::Active() ? generation::Member() : nullptr;
     const bool  two      = member != nullptr && actor != nullptr &&
                      (character != nullptr ? character == member
                                            : leader_scope::StillNames(g_oneShotTwoWeak.load(std::memory_order_acquire),
@@ -1716,8 +1714,6 @@ void Tick() noexcept
         ResetCollisionWatch();
         g_ladderModule = nullptr;
         g_climbActor.store(nullptr, std::memory_order_release);
-        g_memberNow.store(nullptr, std::memory_order_relaxed);
-        g_memberWeakNow.store(0, std::memory_order_relaxed);
         g_oneShotTwoWeak.store(0, std::memory_order_release);
         for (TwoHolder& two : g_twoHolders)
         {
@@ -1725,9 +1721,6 @@ void Tick() noexcept
         }
         return;
     }
-    void* member = generation::Member();
-    g_memberNow.store(member, std::memory_order_relaxed);
-    g_memberWeakNow.store(member != nullptr ? leader_scope::WeakOf(member) : 0, std::memory_order_relaxed);
     // Player 2's holders: a line when one's camera goes on or off; an idle one is released (a new Begin claims again).
     for (TwoHolder& two : g_twoHolders)
     {

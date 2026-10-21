@@ -8,7 +8,6 @@
 #include "player_two/chocobo_ride.h"
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
-#include "player_two/leader_scope.h"
 #include "player_two/member_movement.h"
 #include "player_two/object_fields.h"
 #include "player_two/primary_controller.h"
@@ -58,10 +57,8 @@ platform::CallRedirect g_endCall;
 OperatorDeactivateFn   g_operatorDeactivate = nullptr;
 std::optional<platform::GameImage> g_image;
 
-// Written on the game thread each tick, read by the vault's End on the animation worker: player 2's member and chocobo
-// as weak values (compared with the action's, never resolved there) and player 2's Field operator.
-std::atomic<std::uint64_t> g_memberWeak{0};
-std::atomic<std::uint64_t> g_chocoboWeak{0};
+// Written on the game thread each tick, read by the vault's End on the animation worker: player 2's Field operator
+// (the member's and the chocobo's weaks it compares the action's with are generation's).
 std::atomic<void*>         g_operatorTwo{nullptr};
 
 const wchar_t* ScopeText() noexcept
@@ -125,8 +122,8 @@ void EndDeactivate(std::uint8_t slot, const void* action) noexcept
 {
     const auto primary = reinterpret_cast<PrimaryDeactivateFn>(g_endCall.Original());
     const auto weak    = ReadField<std::uint64_t>(action, kActionCharacter);
-    const bool member  = weak != 0 && weak == g_memberWeak.load(std::memory_order_acquire);
-    const bool chocobo = !member && weak != 0 && weak == g_chocoboWeak.load(std::memory_order_acquire);
+    const bool member  = weak != 0 && weak == generation::MemberWeak();
+    const bool chocobo = !member && weak != 0 && weak == generation::ChocoboWeak();
     // Active() first: a map-load leave withdraws the generation before its teardown, in the same game-thread call,
     // ahead of the next Tick that clears the cached operator. A camera manager destroyed by that teardown is only freed
     // by a later garbage collection, which runs on the game thread outside the frame's animation work.
@@ -238,8 +235,6 @@ void Remove() noexcept
 
 void Tick() noexcept
 {
-    static const void* member  = nullptr;
-    static const void* chocobo = nullptr;
     if (!generation::OnGameThread())
     {
         return;
@@ -247,23 +242,7 @@ void Tick() noexcept
     if (!generation::Active())
     {
         g_operatorTwo.store(nullptr, std::memory_order_release);
-        g_memberWeak.store(0, std::memory_order_release);
-        g_chocoboWeak.store(0, std::memory_order_release);
-        member = chocobo = nullptr;
         return;
-    }
-    const void* nowMember  = generation::Member();
-    const void* nowChocobo = chocobo_ride::DrivenChocobo() != nullptr ? chocobo_ride::DrivenChocobo()
-                                                                      : chocobo_ride::RiddenChocobo();
-    if (nowMember != member)
-    {
-        member = nowMember;
-        g_memberWeak.store(leader_scope::WeakOf(const_cast<void*>(nowMember)), std::memory_order_release);
-    }
-    if (nowChocobo != chocobo)
-    {
-        chocobo = nowChocobo;
-        g_chocoboWeak.store(leader_scope::WeakOf(const_cast<void*>(nowChocobo)), std::memory_order_release);
     }
     // The operator as the game's PrimaryPCM_FieldOp_DeactivateModule loads it (*(PCM+0x2CB0)), and only with its module
     // table in place: the game's DeactivateModule reads the table unchecked.

@@ -159,7 +159,6 @@ bool                    g_installed   = false;
 
 // Player 2's list: written on the game thread under the game's lock, read by adds on any thread under it.
 std::atomic<void*>         g_listTwo{nullptr};
-std::atomic<std::uint64_t> g_memberWeak{0};  // the zip line's gate compares the move's character with it (any thread)
 
 // A shared ride (player 1 rides the buggy or the bronco, player 2 stands aside): adds and stops on the game's list are
 // copied into player 2's list, so player 2's pad plays what player 1's does. Set by the game thread; read anywhere.
@@ -167,9 +166,8 @@ std::atomic<bool> g_copyOne{false};
 // The keys copied and not yet stopped there, under the game's lock (the ride's end stops what is left).
 rumble_rules::KeySet<16> g_copiedKeys;
 
-// Player 2's chocobo (weak) and their member's player type, for the sources on any thread (written each engine tick).
-std::atomic<std::uint64_t> g_chocoboWeak{0};
-std::atomic<int>           g_memberType{-1};
+// Player 2's member's player type, for the sources on any thread (written each engine tick).
+std::atomic<int> g_memberType{-1};
 // 1.004's jump box: the thread whose inline add takes player 2's list at its list load (0: none). Read by the code at
 // the load, under the game's lock, against the running thread's id.
 std::atomic<std::uint32_t> g_jumpThread{0};
@@ -229,9 +227,6 @@ struct Counts
     std::atomic<unsigned> copyStopsLeft{0};  // stops on a worker: not copied
 };
 Counts g_counts;
-
-// The chocobo player 2 drives, for the footstep slot on any thread (the game thread writes it each engine tick).
-std::atomic<const void*> g_footChocobo{nullptr};
 
 // Game thread.
 std::atomic<std::uint64_t>            g_lastKeyTwo{0};    // the last effect key added for player 2 (Debug on change)
@@ -382,7 +377,7 @@ std::uint64_t Rows(void* component, double xmm1, double xmm2) noexcept
 bool ZipGate(void* move) noexcept
 {
     const auto          original = reinterpret_cast<ZipGateFn>(g_zipGateCall.Original());
-    const std::uint64_t member   = g_memberWeak.load(std::memory_order_relaxed);
+    const std::uint64_t member   = generation::MemberWeak();
     t_zipTwo = member != 0 && ReadField<std::uint64_t>(move, kMoveCharacter) == member &&
                g_listTwo.load(std::memory_order_acquire) != nullptr;
     return t_zipTwo || original(move);
@@ -589,7 +584,7 @@ void StopNamed(std::uint64_t key) noexcept
 /// Player 2's chocobo, by the weak the game keeps for it (any thread).
 bool ChocoboTwo(std::uint64_t weak) noexcept
 {
-    const std::uint64_t two = g_chocoboWeak.load(std::memory_order_relaxed);
+    const std::uint64_t two = generation::ChocoboWeak();
     return two != 0 && weak == two && g_listTwo.load(std::memory_order_acquire) != nullptr;
 }
 
@@ -785,7 +780,7 @@ void RunFoot(void* context) noexcept
 double FootImpact(void* chocobo) noexcept
 {
     const auto original = reinterpret_cast<FootFn>(g_footSlot.Original());
-    const bool twos     = chocobo != nullptr && chocobo == g_footChocobo.load(std::memory_order_relaxed);
+    const bool twos     = chocobo != nullptr && chocobo == generation::Chocobo();
     if (!generation::OnGameThread())
     {
         // Logging only: the game's gate returns at once on a worker.
@@ -1150,20 +1145,12 @@ void Tick() noexcept
     }
     if (!generation::Active())
     {
-        g_memberWeak.store(0, std::memory_order_relaxed);
-        g_footChocobo.store(nullptr, std::memory_order_relaxed);
-        g_chocoboWeak.store(0, std::memory_order_relaxed);
         g_memberType.store(-1, std::memory_order_relaxed);
         g_copyOne.store(false, std::memory_order_release);
         DropList(L"player 2 is out");
         return;
     }
-    const void* const chocobo = chocobo_ride::DrivenChocobo();
-    g_footChocobo.store(chocobo, std::memory_order_relaxed);
-    g_chocoboWeak.store(chocobo != nullptr ? leader_scope::WeakOf(const_cast<void*>(chocobo)) : 0,
-                        std::memory_order_relaxed);
     void* const member = generation::Member();
-    g_memberWeak.store(member != nullptr ? leader_scope::WeakOf(member) : 0, std::memory_order_relaxed);
     const auto type = member != nullptr ? party_member::PlayerTypeOf(member) : std::nullopt;
     g_memberType.store(type ? static_cast<int>(*type) : -1, std::memory_order_relaxed);
     if (g_listTwo.load(std::memory_order_relaxed) == nullptr && generation::PlayerTwoController() != nullptr)
@@ -1243,8 +1230,6 @@ void PlayerTwoOut() noexcept
     if (g_installed && generation::OnGameThread())
     {
         CopyPlayerOne(false);
-        g_memberWeak.store(0, std::memory_order_relaxed);
-        g_chocoboWeak.store(0, std::memory_order_relaxed);
         g_memberType.store(-1, std::memory_order_relaxed);
         DropList(L"player 2 leaves");
     }

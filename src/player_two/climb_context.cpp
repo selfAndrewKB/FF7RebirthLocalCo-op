@@ -161,8 +161,6 @@ private:
 // --- written on the game thread, read on any ------------------------------------------------------------------------
 
 std::atomic<std::uint32_t> g_frame{0};  // engine ticks counted by Tick; 0 = none yet
-std::atomic<std::uint64_t> g_memberWeak{0};
-std::atomic<std::uint64_t> g_playerOneWeak{0};  // player 1's pawn
 std::atomic<std::uint64_t> g_cameraTwoWeak{0};  // player 2's camera manager
 std::atomic<int>           g_memberType{-1};
 std::atomic<const void*>   g_owner{nullptr};  // the input owner (the key-value getter's first argument)
@@ -249,11 +247,11 @@ int PlayerOf(const void* move) noexcept
     {
         return 0;
     }
-    if (weak == g_memberWeak.load(std::memory_order_relaxed))
+    if (weak == generation::MemberWeak())
     {
         return 2;
     }
-    return weak == g_playerOneWeak.load(std::memory_order_relaxed) ? 1 : 0;
+    return weak == generation::PlayerOnePawnWeak() ? 1 : 0;
 }
 
 /// The yaw (degrees) of the edge rotation's X axis, the direction the lean's stick test compares with.
@@ -465,8 +463,6 @@ std::uint8_t Pressed(void* key) noexcept
 
 void Clear() noexcept
 {
-    g_memberWeak.store(0, std::memory_order_relaxed);
-    g_playerOneWeak.store(0, std::memory_order_relaxed);
     g_cameraTwoWeak.store(0, std::memory_order_relaxed);
     g_memberType.store(-1, std::memory_order_relaxed);
     g_owner.store(nullptr, std::memory_order_relaxed);
@@ -692,8 +688,6 @@ void Tick() noexcept
         return;
     }
     const auto type = party_member::PlayerTypeOf(member);
-    g_memberWeak.store(leader_scope::WeakOf(member), std::memory_order_relaxed);
-    g_playerOneWeak.store(leader_scope::WeakOf(ReadPointer(one, facts::kControllerPawn)), std::memory_order_relaxed);
     g_cameraTwoWeak.store(leader_scope::WeakOf(ReadPointer(two, facts::kControllerCameraManager)),
                           std::memory_order_relaxed);
     g_memberType.store(type ? *type : -1, std::memory_order_relaxed);
