@@ -117,7 +117,6 @@ constexpr float         kFarFromOneCm  = 5000.0f;  // entries more than 50 m fro
 constexpr float         kAnimConeDegrees = 60.0f;  // outside this cone of it (End.Animation.SignificanceCameraDiffDegrees)
 constexpr int           kWatched       = 16;
 constexpr int           kRemembered    = 64;      // entries whose last logged state is kept
-constexpr int           kMaxLines      = 2000;
 constexpr std::uint32_t kUndrawnSamples = 3;     // a mesh counts as not drawn after this many still samples
 constexpr std::uint32_t kSettleSamples  = 3;     // an entry's change is logged once it has held this many samples
 constexpr auto          kSummaryEvery  = std::chrono::seconds(60);
@@ -180,7 +179,6 @@ bool           g_installed = false;
 // Game thread.
 std::uint32_t                         g_ticks   = 0;
 std::uint32_t                         g_samples = 0;
-int                                   g_lines   = 0;
 std::array<Remembered, kRemembered>   g_remembered{};
 SummarySteady                         g_summary{};
 Clock::time_point                     g_lastSummary{};
@@ -209,21 +207,12 @@ void Line(std::wformat_string<A...> format, A&&... args) noexcept
     {
         return;  // a Debug report (platform/log.h)
     }
-    if (g_lines >= kMaxLines)
-    {
-        return;
-    }
-    ++g_lines;
     try
     {
         platform::WriteLine(L"[debug] charapop: " + std::format(format, std::forward<A>(args)...));
     }
     catch (...)
     {
-    }
-    if (g_lines == kMaxLines)
-    {
-        platform::WriteLine(L"[debug] charapop: line limit reached; the watch is quiet from here on");
     }
 }
 
@@ -575,7 +564,7 @@ void Tick(bool splitShown) noexcept
 {
     // The watch only logs, and its lines are Debug: nothing is sampled below that level.
     if (!g_installed || !splitShown || !platform::Enabled(platform::Level::Debug) || !generation::OnGameThread() ||
-        !generation::Active() || g_lines >= kMaxLines)
+        !generation::Active())
     {
         g_wasShown = false;
         return;

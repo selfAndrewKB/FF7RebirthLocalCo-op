@@ -101,7 +101,6 @@ constexpr std::size_t  kNotes       = 8;   // member ends off the game thread be
 constexpr auto         kLateAfter   = std::chrono::seconds(5);
 constexpr auto         kGoneAfter   = std::chrono::seconds(1);  // a record gone, or a give-back not landed
 constexpr auto         kStatusEvery = std::chrono::seconds(10);
-constexpr int          kMaxLines    = 400;
 
 using StartFn       = std::uint64_t (*)(void* manager, void* record, void* partner, void* initiator, void* a5, void* a6,
                                         void* a7, void* a8);
@@ -216,11 +215,10 @@ struct Counts
 };
 Counts            g_counts;
 Clock::time_point g_statusAt{};
-int               g_lines = 0;
 
 bool Line() noexcept
 {
-    return platform::Enabled(platform::Level::Debug) && g_lines < kMaxLines && ++g_lines > 0;
+    return platform::Enabled(platform::Level::Debug);
 }
 
 /// A player-2 session is running (any thread: the generation's atomics).

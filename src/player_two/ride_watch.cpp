@@ -98,7 +98,6 @@ constexpr std::uint32_t kRowRequests[] = {0xE8, 0x138, 0x188, 0x298, 0x2E8, 0x33
 constexpr std::uint32_t kEvery         = 5;  // ticks between samples
 constexpr auto          kSnapshotEvery = std::chrono::seconds(1);
 constexpr auto          kSnapshotHeartbeat = std::chrono::seconds(10);
-constexpr int           kMaxLines      = 1500;
 
 enum class Kind : std::uint8_t
 {
@@ -188,7 +187,6 @@ bool           g_installed = false;
 Sample            g_last{};
 bool              g_logged = false;
 std::uint32_t     g_ticks  = 0;
-int               g_lines  = 0;
 std::int32_t      g_rootOffset = -1;
 Clock::time_point g_lastSnapshot{};
 float             g_oneAt[3]{};
@@ -210,7 +208,7 @@ Kind         g_kind      = Kind::None;
 std::int32_t g_state     = -1;
 bool         g_kindKnown = false;
 
-/// A report of `level` (Debug or Trace, platform/log.h), within the watch's line budget.
+/// A report of `level` (Debug or Trace, platform/log.h).
 template <class... A>
 void LineAt(platform::Level level, std::wformat_string<A...> format, A&&... args) noexcept
 {
@@ -218,11 +216,6 @@ void LineAt(platform::Level level, std::wformat_string<A...> format, A&&... args
     {
         return;
     }
-    if (g_lines >= kMaxLines)
-    {
-        return;
-    }
-    ++g_lines;
     try
     {
         platform::WriteLine(std::format(L"[{}] ride watch: ", platform::LevelName(level)) +
@@ -230,10 +223,6 @@ void LineAt(platform::Level level, std::wformat_string<A...> format, A&&... args
     }
     catch (...)
     {
-    }
-    if (g_lines == kMaxLines)
-    {
-        platform::WriteLine(L"[debug] ride watch: line limit reached");
     }
 }
 

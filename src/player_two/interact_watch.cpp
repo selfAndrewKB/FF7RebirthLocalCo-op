@@ -112,10 +112,7 @@ constexpr float          kQueryExtent  = 10.0f;  // as the update's call (cm)
 
 constexpr float     kNearCm         = 2000.0f;  // the census: points within 20 m of either player
 constexpr ULONGLONG kCensusPeriodMs = 500;
-constexpr ULONGLONG kBudgetPeriodMs = 10'000;
 constexpr ULONGLONG kRegistrarPeriodMs = 30'000;
-constexpr int       kBudgetLines    = 300;  // lines per period; the rest are counted
-constexpr int       kAddLinesInFull = 400;  // registrations logged in full, then counted per registrar
 
 using AddPointFn = void (*)(void* mgr, std::uint8_t talk, const std::uint64_t* key, const std::uint64_t* owner,
                             const std::uint64_t* extra, const float* location, const float* rotation,
@@ -140,15 +137,8 @@ std::uintptr_t          g_root      = 0;  // live address of the root global
 std::uintptr_t          g_party     = 0;  // live address of the party manager global
 const std::uint64_t*    g_scooterKey = nullptr;  // live address of the ride-on key's FName global
 
-// The line budget, shared by every thread that logs here.
-SRWLOCK          g_budgetLock = SRWLOCK_INIT;
-ULONGLONG        g_budgetAt   = 0;
-int              g_budgetUsed = 0;
-int              g_dropped    = 0;
-
-// Registrations (any thread): logged in full up to kAddLinesInFull, then counted per registrar.
+// Registrations (any thread): logged, and counted per registrar for the summary.
 SRWLOCK                                     g_addLock = SRWLOCK_INIT;
-int                                         g_addsLogged = 0;
 std::unordered_map<std::uintptr_t, std::uint64_t> g_addsByRegistrar;  // IDA return address -> count since summary
 thread_local int                            t_marksInExecute = -1;  // -1 outside ExecuteSlot
 thread_local std::int32_t                   t_effectsBefore[2] = {0, 0};  // each controller's effects before a grant
@@ -219,31 +209,6 @@ std::uintptr_t Ida(std::uintptr_t live) noexcept
 std::wstring Name(std::uint64_t name)
 {
     return name == 0 ? std::wstring(L"-") : players::unreal::NameText(name);
-}
-
-/// Spends one line of the period's budget; false when it is used up (the line is counted instead).
-bool Spend(int lines = 1) noexcept
-{
-    int  droppedLastPeriod = 0;
-    bool spent             = false;
-    {
-        Lock            lock(g_budgetLock);
-        const ULONGLONG now = GetTickCount64();
-        if (now >= g_budgetAt)
-        {
-            droppedLastPeriod = g_dropped;
-            g_budgetAt        = now + kBudgetPeriodMs;
-            g_budgetUsed      = 0;
-            g_dropped         = 0;
-        }
-        spent = g_budgetUsed + lines <= kBudgetLines;
-        (spent ? g_budgetUsed : g_dropped) += lines;
-    }
-    if (droppedLastPeriod != 0)
-    {
-        platform::LogDebug(L"interact: {} line(s) over the budget were not written in the last period", droppedLastPeriod);
-    }
-    return spent;
 }
 
 const std::uint8_t* Root() noexcept
@@ -340,20 +305,13 @@ void AddPoint(void* mgr, std::uint8_t talk, const std::uint64_t* key, const std:
     {
         return;  // the registration lines and the per-registrar counts are Debug
     }
-    bool inFull = false;
     try
     {
         Lock lock(g_addLock);
         ++g_addsByRegistrar[registrar];
-        inFull = g_addsLogged < kAddLinesInFull;
-        g_addsLogged += inFull ? 1 : 0;
     }
     catch (...)
     {
-    }
-    if (!inFull || !Spend())
-    {
-        return;
     }
     try
     {
@@ -385,7 +343,7 @@ void ExecuteSlot(void* mgr, std::uint8_t slot) noexcept
     reinterpret_cast<ExecuteSlotFn>(g_executeSlot.Original())(mgr, slot);
     const int marks  = t_marksInExecute;
     t_marksInExecute = outer;
-    if (!platform::Enabled(platform::Level::Debug) || !Spend())
+    if (!platform::Enabled(platform::Level::Debug))
     {
         return;
     }
@@ -408,7 +366,7 @@ void OnMarked(std::uint64_t key, std::uint8_t taken, std::uintptr_t returnAddres
     {
         ++t_marksInExecute;
     }
-    if (!platform::Enabled(platform::Level::Debug) || !Spend())
+    if (!platform::Enabled(platform::Level::Debug))
     {
         return;
     }
@@ -439,7 +397,7 @@ void OnGranting(std::uint64_t, bool) noexcept
 /// ... and after it, inside the grant's scope: who the rumble went to.
 void OnGranted(std::uint64_t key, bool playerTwo) noexcept
 {
-    if (!platform::Enabled(platform::Level::Debug) || !Spend())
+    if (!platform::Enabled(platform::Level::Debug))
     {
         return;
     }
@@ -476,7 +434,7 @@ void LogSlots(const std::uint8_t* mgr)
     platform::CopyGuarded(now.data() + at + 2 * kSlots, mgr + kSlotExecuted, kSlots);
     at += 3 * kSlots;
     now[at] = Read<std::uint8_t>(mgr, kPending);
-    if (now == g_slotSeen || !Spend())
+    if (now == g_slotSeen)
     {
         return;
     }
@@ -575,7 +533,7 @@ void Census(const std::uint8_t* mgr, const std::unordered_set<std::uint64_t>& it
         }
     }
     // A summary every kRegistrarPeriodMs, so an empty census reads as "nothing near", not as a broken walk.
-    if (const ULONGLONG now = GetTickCount64(); now >= g_censusSummaryAt && Spend())
+    if (const ULONGLONG now = GetTickCount64(); now >= g_censusSummaryAt)
     {
         g_censusSummaryAt = now + kRegistrarPeriodMs;
         platform::LogDebug(L"interact: census: {} point(s) registered, {} within 20 m of a player; nearest to player 1 {} at "
@@ -592,10 +550,6 @@ void Census(const std::uint8_t* mgr, const std::unordered_set<std::uint64_t>& it
         if (!first && it->second == n.seen)
         {
             continue;
-        }
-        if (!Spend())
-        {
-            continue;  // retried at the next census
         }
         g_points[n.key] = n.seen;
         if (first)
@@ -622,11 +576,6 @@ void Census(const std::uint8_t* mgr, const std::unordered_set<std::uint64_t>& it
         if (present.contains(it->first))
         {
             ++it;
-            continue;
-        }
-        if (!Spend())
-        {
-            ++it;  // retried at the next census
             continue;
         }
         platform::LogDebug(L"interact: {} is no longer near either player (or was removed)", Name(it->first));
@@ -660,7 +609,7 @@ void DryRun(const std::uint8_t* mgr, const std::unordered_set<std::uint64_t>& it
         keys.push_back(Read<std::uint64_t>(g_found[i], kPointKey));
     }
     std::sort(keys.begin(), keys.end());
-    if (keys == g_dryRunSeen || !Spend())
+    if (keys == g_dryRunSeen)
     {
         return;
     }
@@ -694,7 +643,7 @@ void LogRegistrars()
         Lock lock(g_addLock);
         counts.swap(g_addsByRegistrar);
     }
-    if (counts.empty() || !Spend())
+    if (counts.empty())
     {
         return;
     }

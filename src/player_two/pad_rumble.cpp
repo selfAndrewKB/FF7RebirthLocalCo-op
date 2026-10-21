@@ -43,7 +43,6 @@ constexpr std::uint32_t  kAppDeviceCode = 0x1E0;        // i32: the device code 
 constexpr std::uint32_t kTickPrerequisites = 0x40;
 
 constexpr auto kStatusEvery = std::chrono::seconds(60);
-constexpr int  kMaxLines    = 300;
 
 using NoteFn = void (*)(void* owner, std::int32_t userIndex);
 
@@ -65,7 +64,6 @@ std::uint32_t     g_passes = 0;
 std::int32_t      g_codeLogged = 0;
 std::int32_t      g_padLogged  = -1;
 bool              g_firstLogged = false;
-int               g_lines = 0;
 Clock::time_point g_statusAt{};
 
 template <class T>
@@ -142,9 +140,8 @@ void LogDevice() noexcept
     const auto pad  = Read<std::int32_t>(Pointee(g_owner), kOwnerPad);
     try
     {
-        if ((!g_firstLogged || code != g_codeLogged || pad != g_padLogged) && g_lines < kMaxLines)
+        if ((!g_firstLogged || code != g_codeLogged || pad != g_padLogged))
         {
-            ++g_lines;
             g_firstLogged = true;
             g_codeLogged  = code;
             g_padLogged   = pad;

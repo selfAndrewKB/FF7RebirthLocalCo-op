@@ -64,7 +64,6 @@ constexpr platform::FunctionFact kScaleFacts[] = {
 };
 
 constexpr std::uint64_t kHeartbeatMs = 120000;
-constexpr int   kMaxLines         = 1500;
 
 using ScaleFn = float (*)(void* unused);
 
@@ -110,7 +109,6 @@ ScaleFn  g_scale[3]    = {};
 bool     g_scalesLogged = false;
 bool     g_wasShown     = false;
 std::uint64_t g_lastLineMs = 0;
-int      g_lines        = 0;
 Framing  g_last[2];
 
 template <class T>
@@ -261,8 +259,7 @@ void Tick(bool splitShown) noexcept
     const bool changed = changedOne[0] || changedOne[1];
     g_wasShown = true;
     const std::uint64_t nowMs = GetTickCount64();
-    if ((!changed && nowMs - g_lastLineMs < kHeartbeatMs) || (changed && wasShown && nowMs - g_lastLineMs < kMinChangeGapMs) ||
-        g_lines >= kMaxLines)
+    if ((!changed && nowMs - g_lastLineMs < kHeartbeatMs) || (changed && wasShown && nowMs - g_lastLineMs < kMinChangeGapMs))
     {
         return;
     }
@@ -275,7 +272,6 @@ void Tick(bool splitShown) noexcept
             {
                 continue;  // a change line for the player whose framing changed; the heartbeat has both
             }
-            ++g_lines;
             platform::LogDebug(L"framing: player {} {}: {}", p + 1, changed ? L"changed" : L"now", Describe(now[p]));
             g_last[p] = now[p];
         }

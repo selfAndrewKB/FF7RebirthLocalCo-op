@@ -127,9 +127,7 @@ std::vector<std::uint64_t>               g_queue;  // reserved: Admits runs unde
 
 std::uint64_t g_pressKey      = 0;  // the pending press (the LEADER_ log, and its end noted in Tick)
 #if LSS_DEV
-constexpr int           kLeaderLogs    = 6;  // LEADER_ resolutions logged per pending press
 platform::EntryRedirect g_leaderName;
-int                     g_leaderLogged = 0;
 unsigned                g_leaderCalls  = 0;
 #endif
 
@@ -345,7 +343,6 @@ std::uint64_t Request(std::uint64_t trigger, std::uint64_t sender, float delay, 
                 vending::PressedShopkeeper(sender);
                 g_pressKey     = sender;
 #if LSS_DEV
-                g_leaderLogged = 0;
                 g_leaderCalls  = 0;
 #endif
             }
@@ -395,14 +392,10 @@ std::uint64_t LeaderName(std::uint64_t a, std::uint64_t b, std::uint64_t c, std:
     if (generation::OnGameThread() && g_pressKey != 0 && vending::ShopkeeperPending())
     {
         ++g_leaderCalls;
-        if (g_leaderLogged < kLeaderLogs)
-        {
-            ++g_leaderLogged;
-            platform::LogDebug(L"shop talk: the game resolved a named point (LEADER_ or BATTLE_LEADER_, result {}) while "
+        platform::LogDebug(L"shop talk: the game resolved a named point (LEADER_ or BATTLE_LEADER_, result {}) while "
                                L"player 2's press of {} is pending, from 0x{:X}; the leader is player 1's character",
                                result & 0xFF, players::unreal::NameText(g_pressKey),
                                g_image ? g_image->ResearchAddress(returnAddress) : returnAddress);
-        }
     }
     return result;
 }

@@ -45,7 +45,6 @@ constexpr std::uint8_t   kSharesKeyBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57
 
 constexpr std::uint32_t kComponentOwner = 0xA0;  // UActorComponent::OwnerPrivate (the mesh's character)
 constexpr auto          kStatusEvery    = std::chrono::seconds(10);
-constexpr int           kMaxLines       = 200;
 
 using GuardFn     = char (*)(void* component, const void* location);
 using Notify3Fn   = void (*)(void* notify, void* mesh, void* animation);
@@ -67,7 +66,6 @@ Counts                     g_counts;
 std::array<const void*, 16> g_shakeMeshes{};
 std::atomic<std::uint32_t> g_offThread{0};
 Clock::time_point          g_statusAt{};
-int                        g_lines = 0;
 
 bool Ready() noexcept
 {
@@ -81,7 +79,7 @@ bool Ready() noexcept
 
 bool Line() noexcept
 {
-    return platform::Enabled(platform::Level::Debug) && g_lines < kMaxLines && ++g_lines > 0;
+    return platform::Enabled(platform::Level::Debug);
 }
 
 /// Player 2's leader view (leader, leader type, and with `primary` the primary controller) for one call; nothing held if

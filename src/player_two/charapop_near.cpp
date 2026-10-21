@@ -42,7 +42,6 @@ constexpr std::uint32_t kReleasePasses  = 6;     // a raised entry goes back aft
                                                  // unneeded (about a second; margins in charapop_rule.h)
 constexpr float         kReducedReach   = 0.5f;  // Detail::Reduced: half the game's distances
 constexpr int           kMaxRaised      = 128;
-constexpr int           kMaxLines       = 1500;
 constexpr int           kSkipSamples    = 3;     // "left to player 1" examples logged per summary period
 constexpr int           kLeftRemembered = 32;    // entries already logged as left to player 1 (not logged again)
 constexpr auto          kSummaryEvery   = std::chrono::seconds(60);
@@ -73,7 +72,6 @@ std::array<Raised, kMaxRaised> g_raised{};
 int                            g_raisedCount = 0;
 const void*                    g_pop         = nullptr;  // the pop object the records belong to
 std::uint32_t                  g_ticks       = 0;
-int                            g_lines       = 0;
 std::uint32_t                  g_raisedTotal = 0, g_takenBack = 0;
 std::uint32_t                  g_outOfReachTotal = 0, g_coveredTotal = 0, g_goneTotal = 0;  // releases, by reason
 Clock::time_point              g_lastSummary{};
@@ -94,21 +92,12 @@ void Line(std::wformat_string<A...> format, A&&... args) noexcept
     {
         return;  // a Debug report (platform/log.h)
     }
-    if (g_lines >= kMaxLines)
-    {
-        return;
-    }
-    ++g_lines;
     try
     {
         platform::WriteLine(L"[debug] charapop near: " + std::format(format, std::forward<A>(args)...));
     }
     catch (...)
     {
-    }
-    if (g_lines == kMaxLines)
-    {
-        platform::WriteLine(L"[debug] charapop near: line limit reached; raising and clearing go on unlogged");
     }
 }
 

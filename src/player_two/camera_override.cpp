@@ -180,8 +180,6 @@ void RestoreMember() noexcept
 
 #if LSS_DEV
 // The snapshot (dev tools): both cameras' layer-4 modules and both characters' delegates, logged on change (Debug).
-constexpr int kMaxLines = 300;
-int           g_lines   = 0;  // game thread
 
 std::wstring DescribeCamera(void* controller)
 {
@@ -277,10 +275,6 @@ void Log(void* member)
         g_snapshot = Snapshot{};  // off: the next line starts fresh (as at start)
         return;
     }
-    if (g_lines >= kMaxLines)
-    {
-        return;
-    }
     const Snapshot now = Take(member);
     if (now == g_snapshot)
     {
@@ -289,7 +283,6 @@ void Log(void* member)
     g_snapshot                 = now;
     void*      playerOne = generation::PlayerOneController();
     const auto oneChar   = reinterpret_cast<std::uintptr_t>(ReadPointer(playerOne, facts::kControllerPawn));
-    ++g_lines;
     platform::LogDebug(L"camera override: global {:#x} P2's {:#x} | P1 camera{} | P2 camera{} | P1 {} | P2 {}", g_global->object,
                   g_playerTwo.object, DescribeCamera(playerOne), DescribeCamera(generation::PlayerTwoController()),
                   DescribeCharacter(oneChar), DescribeCharacter(reinterpret_cast<std::uintptr_t>(member)));

@@ -118,7 +118,6 @@ constexpr std::uint32_t  kModuleEntry    = 16;
 constexpr std::uint32_t  kModuleActive   = 0x44;
 constexpr std::uint32_t  kModuleTarget   = 0x3F8;
 
-constexpr int kMaxLines = 600;
 
 struct Pair  // a TWeakPtr as the game holds it
 {
@@ -184,7 +183,6 @@ bool          g_enabled   = true;
 bool          g_listOpen  = false;  // player 2's command target list, as last seen in player 2's run
 std::uint32_t g_listOpenings = 0;
 bool          g_failed    = false;
-int           g_lines     = 0;
 std::uint64_t g_runs = 0, g_refusals = 0, g_menuPauses = 0, g_panelSkips = 0, g_lockRestores = 0;
 
 template <class T>
@@ -204,12 +202,11 @@ bool Put(std::uintptr_t address, const T& value) noexcept
     return platform::WriteGuarded(reinterpret_cast<void*>(address), &value, sizeof(T));
 }
 
-/// A line; a line above the current level uses none of the budget.
+/// A line of `level`.
 void Note(const std::wstring& text, platform::Level level = platform::Level::Info) noexcept
 {
-    if (g_lines < kMaxLines && platform::Enabled(level))
+    if (platform::Enabled(level))
     {
-        ++g_lines;
         platform::LogAt(level, L"lock-on: {}", text);
     }
 }
@@ -392,10 +389,6 @@ void LogPlayerTwo() noexcept
     if (!platform::Enabled(platform::Level::Debug))
     {
         g_snapshot = Snapshot{};  // off: the next line starts fresh (as at start)
-        return;
-    }
-    if (g_lines >= kMaxLines)
-    {
         return;
     }
     float rest = 0.0f;

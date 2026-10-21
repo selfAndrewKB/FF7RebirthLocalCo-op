@@ -58,7 +58,6 @@ constexpr std::uint8_t                      kMenuPriority   = 70;  // and 71 Deb
 
 constexpr std::size_t kLatches     = 32;
 constexpr auto        kStatusEvery = std::chrono::seconds(10);
-constexpr int         kMaxLines    = 300;
 
 using IsActiveFn  = bool (*)(void* unused, void* entry);
 using CameraFn    = bool (*)(const void* camera);
@@ -99,11 +98,10 @@ struct Counts
 };
 Counts            g_counts;
 Clock::time_point g_statusAt{};
-int               g_lines = 0;
 
 bool Line() noexcept
 {
-    return platform::Enabled(platform::Level::Debug) && g_lines < kMaxLines && ++g_lines > 0;
+    return platform::Enabled(platform::Level::Debug);
 }
 
 /// The latch for `key`, made (value `fresh`) if absent; the least recently used goes when full.

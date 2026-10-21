@@ -40,7 +40,6 @@ constexpr std::array<std::uint32_t, 6> kControllerBytes{0x25C, 0x258, 0x777, 0x7
 
 constexpr std::int32_t kMaxPath   = 16;
 constexpr std::int32_t kMaxLayers = 8;
-constexpr int          kMaxLines  = 400;
 
 std::uintptr_t g_endUISystem = 0;
 
@@ -65,7 +64,6 @@ struct Snapshot
 // Game thread.
 Snapshot g_logged{};
 bool     g_loggedOnce = false;
-int      g_lines      = 0;
 
 template <class T>
 T Field(std::uintptr_t address) noexcept
@@ -183,8 +181,7 @@ void Remove() noexcept
 
 void Watch() noexcept
 {
-    if (g_endUISystem == 0 || !platform::Enabled(platform::Level::Trace) || !generation::OnGameThread() ||
-        g_lines >= kMaxLines)
+    if (g_endUISystem == 0 || !platform::Enabled(platform::Level::Trace) || !generation::OnGameThread())
     {
         return;
     }
@@ -201,10 +198,6 @@ void Watch() noexcept
     }
     catch (...)
     {
-    }
-    if (++g_lines == kMaxLines)
-    {
-        platform::LogTrace(L"menu focus: {} lines logged; the log stops here", kMaxLines);
     }
 }
 

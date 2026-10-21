@@ -77,7 +77,6 @@ constexpr std::uint32_t  kOwnerSlot   = 0x28;
 constexpr std::uint32_t  kShowStatus  = 0x773;
 constexpr std::uint32_t  kSharedCount = 0x8;
 
-constexpr int kMaxLines = 300;
 
 struct Pair  // a thread-safe TWeakPtr
 {
@@ -162,8 +161,7 @@ std::array<PassHides, 2>    g_loggedHides{};
 std::array<LabelLog, 8>     g_loggedLabels{};  // per character, as last logged
 std::uint32_t               g_nextLabel = 0;   // the slot a newly seen character takes
 std::array<std::int32_t, 2> g_loggedUnion{-1, -1};
-int                         g_lines = 0;
-std::uint32_t               g_listOpenings = 0;  // player 2's target list openings seen: each starts a fresh budget
+std::uint32_t               g_listOpenings = 0;  // player 2's target list openings seen: each logs the hides afresh
 std::int32_t                g_entryCount   = 0;  // the bar manager's gauges, counted by this frame's walk (the log)
 
 template <class T>
@@ -177,13 +175,12 @@ T Field(std::uintptr_t address) noexcept
     return value;
 }
 
-/// One line of `level`, within the budget (a line whose level is off takes none of it). Callers of Debug and
+/// One line of `level`. Callers of Debug and
 /// Trace lines check platform::Enabled before building `text`.
 void Note(platform::Level level, const std::wstring& text)
 {
-    if (g_lines < kMaxLines && platform::Enabled(level))
+    if (platform::Enabled(level))
     {
-        ++g_lines;
         platform::LogAt(level, L"target views: {}", text);
     }
 }
@@ -539,8 +536,7 @@ void BeforePass(int player) noexcept
     {
         if (const auto openings = player_two::lock_on::TargetListOpenings(); openings != g_listOpenings)
         {
-            g_listOpenings = openings;  // player 2's target list opened: a fresh budget to see what each pass does
-            g_lines        = 0;
+            g_listOpenings = openings;  // player 2's target list opened: the hides are logged afresh
             g_loggedHides  = {};
         }
         const std::uintptr_t system  = Field<std::uintptr_t>(g_battleSystem);

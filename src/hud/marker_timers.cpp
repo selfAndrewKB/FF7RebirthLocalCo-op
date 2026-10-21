@@ -22,12 +22,10 @@ constexpr std::uint32_t  kMarkerList  = 0x150;
 constexpr std::uint32_t  kElements    = 0x10;
 constexpr std::uint32_t  kElement     = 0x30;
 constexpr std::uint32_t  kTimer       = 0x14;
-constexpr int            kMaxLines    = 40;
 
 // Game thread.
 std::uintptr_t       g_endUISystem = 0;
 hud_rules::TimerSwap g_timers;  // player 1's set aside during player 2's run; player 2's own between frames
-int                g_lines = 0;
 
 template <class T>
 bool Read(std::uintptr_t address, T& out) noexcept
@@ -101,9 +99,8 @@ void SwapOut() noexcept
             }
         });
         g_timers.EndOut();  // player 2's own; arrows no longer in the list are dropped
-        if (pinned > 0 && g_lines < kMaxLines && platform::Enabled(platform::Level::Debug))
+        if (pinned > 0 && platform::Enabled(platform::Level::Debug))
         {
-            ++g_lines;
             platform::LogDebug(L"marker timers: {} of {} arrows have their own timer in player 2's view", pinned,
                           g_timers.TwoCount());
         }

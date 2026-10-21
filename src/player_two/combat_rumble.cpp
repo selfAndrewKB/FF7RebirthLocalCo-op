@@ -123,7 +123,6 @@ using PlayFn = std::uint64_t (*)(void* component, std::uint64_t channel, const v
                                  std::uint64_t fifth, void* sixth);
 #endif
 
-constexpr int  kMaxLines    = 600;
 constexpr auto kStatusEvery = std::chrono::seconds(10);
 
 using GateFn      = std::uint64_t (*)(std::uint64_t kind, void* attacker, void* target, void* functor);
@@ -162,8 +161,6 @@ unsigned                                                 g_notifiesWrapped = 0;
 // known to start another hit [ASSUMPTION, §10.12 item 4]. A nested hit there would overwrite the flag.
 bool  g_hitTwo           = false;
 void* g_notifyController = nullptr;  // player 2's controller while a notify for player 2 runs
-int   g_lines            = 0;
-bool  g_budgetSaid       = false;
 Clock::time_point g_statusAt{};
 struct Counts
 {
@@ -178,24 +175,10 @@ bool Ready() noexcept
     return generation::OnGameThread() && generation::Active();
 }
 
-/// A Debug line may be written (the level is on and the budget lasts).
+/// A Debug line may be written (the level is on).
 bool Line() noexcept
 {
-    if (!platform::Enabled(platform::Level::Debug))
-    {
-        return false;
-    }
-    if (g_lines < kMaxLines)
-    {
-        ++g_lines;
-        return true;
-    }
-    if (!g_budgetSaid)
-    {
-        g_budgetSaid = true;
-        platform::LogDebug(L"combat rumble: {} lines written; only the status line from here on", kMaxLines);
-    }
-    return false;
+    return platform::Enabled(platform::Level::Debug);
 }
 
 void* PlayerOnePawn() noexcept

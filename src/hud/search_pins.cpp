@@ -45,7 +45,6 @@ constexpr std::uint32_t kAnyActive     = 0x14A0;
 constexpr std::uint32_t kShooting      = 0x4E0;
 constexpr std::size_t   kMaxPoints     = 32;
 constexpr std::size_t   kMaxHidden     = 64;
-constexpr int           kMaxLines      = 200;
 
 // The per-entry placement the list's tick runs (§2.3): stateless.
 constexpr std::uint8_t kPlacePinBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x18, 0x55,
@@ -101,7 +100,6 @@ unsigned                       g_compassOwners = 3;  // bit 0 player 1, bit 1 pl
 bool                           g_placeFaulted  = false;
 std::array<Logged, 2>          g_logged{};
 bool                           g_loggedOnce[2] = {false, false};
-int                            g_lines         = 0;
 
 template <class T>
 T Field(std::uintptr_t address) noexcept
@@ -175,13 +173,12 @@ void Hide(std::uintptr_t weakField) noexcept
 
 void LogIfChanged(int mine, const Logged& now, std::uintptr_t manager) noexcept
 {
-    if (!platform::Enabled(platform::Level::Debug) || g_lines >= kMaxLines || (g_loggedOnce[mine] && now == g_logged[mine]))
+    if (!platform::Enabled(platform::Level::Debug) || (g_loggedOnce[mine] && now == g_logged[mine]))
     {
         return;
     }
     g_logged[mine]     = now;
     g_loggedOnce[mine] = true;
-    ++g_lines;
     try
     {
         // The first few pins by name, so the reticle the user sees can be named.

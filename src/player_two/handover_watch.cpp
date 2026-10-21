@@ -88,7 +88,6 @@ constexpr std::uint8_t kUnread         = 0xFF;
 constexpr std::uint32_t kComponentWorldLocation = 0x1D0;
 
 constexpr int   kMaxMembers        = 8;
-constexpr int   kMaxLines          = 1500;
 constexpr int   kPending           = 4;
 constexpr auto  kWatchEvery        = std::chrono::milliseconds(100);
 constexpr auto  kHeldEvery         = std::chrono::seconds(1);
@@ -178,7 +177,6 @@ std::array<Pending, kPending>              g_pending{};
 Held                                       g_held{};
 Clock::time_point                          g_lastWatch{};
 std::int32_t                               g_rootOffset = -1;
-int                                        g_lines      = 0;
 
 template <class... A>
 void Line(std::wformat_string<A...> format, A&&... args) noexcept
@@ -187,21 +185,12 @@ void Line(std::wformat_string<A...> format, A&&... args) noexcept
     {
         return;  // a Debug report (platform/log.h)
     }
-    if (g_lines >= kMaxLines)
-    {
-        return;
-    }
-    ++g_lines;
     try
     {
         platform::WriteLine(L"[debug] handover: " + std::format(format, std::forward<A>(args)...));
     }
     catch (...)
     {
-    }
-    if (g_lines == kMaxLines)
-    {
-        platform::WriteLine(L"[debug] handover: line limit reached; the watch is quiet from here on");
     }
 }
 

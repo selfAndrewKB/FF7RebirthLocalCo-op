@@ -24,7 +24,6 @@ constexpr std::uintptr_t kEndUISystem     = 0x1493496E0;
 constexpr std::uint32_t  kMarkerList      = 0x98;
 constexpr std::uint32_t  kMarkerEntry     = 140;
 constexpr std::uint32_t  kMarkerWidgets[] = {0x00, 0x08, 0x28, 0x30};
-constexpr int            kMaxLines        = 300;
 
 struct Hidden
 {
@@ -42,7 +41,6 @@ std::uintptr_t      g_system = 0;  // set once at install
 // Game thread.
 std::vector<Hidden> g_hidden;
 std::array<Half, 2> g_logged{{{static_cast<std::size_t>(-1), 0}, {static_cast<std::size_t>(-1), 0}}};
-int                 g_lines = 0;
 
 void* Resolve(const void* weakField) noexcept
 {
@@ -51,12 +49,11 @@ void* Resolve(const void* weakField) noexcept
 
 void LogIfChanged(int player, const Half& now) noexcept
 {
-    if (!platform::Enabled(platform::Level::Debug) || now == g_logged[player] || g_lines >= kMaxLines)
+    if (!platform::Enabled(platform::Level::Debug) || now == g_logged[player])
     {
         return;
     }
     g_logged[player] = now;
-    ++g_lines;
     try
     {
         platform::LogDebug(L"field markers: player {}'s half hides {} of player {}'s point marker(s) ({} widget(s))", player + 1,

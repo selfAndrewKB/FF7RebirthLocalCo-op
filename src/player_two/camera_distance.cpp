@@ -48,7 +48,6 @@ constexpr std::uintptr_t kConfirmCall = 0x14180A4D6;  // in the confirm-key hand
 // at 0x1410B9F6D, %16 = 13, so it crosses a 16-byte block. There it is heard at the primary apply's entry instead
 // (first instruction `mov [rsp+8], rbx`, 5 bytes at %16 = 4; that call is its only caller), by its return address.
 constexpr std::size_t kPrimaryApplyFirstInstruction = 5;
-constexpr int            kMaxLines    = 50;
 
 // Split framing (RE-p2-framing.md §1.4, §3, §6.1; RE-p2-battle-camera.md §6).
 // GetSystemOptionData(): the global option struct (pure read: [[[g]+0x100]+0x28]+0x10).
@@ -78,7 +77,6 @@ ManagerApplyFn         g_managerApply        = nullptr;
 std::uintptr_t         g_cameraManagerVTable = 0;
 
 // Game thread.
-int g_lines = 0;
 
 // Split framing, game thread.
 OptionDataFn  g_optionData     = nullptr;
@@ -90,11 +88,7 @@ int           g_framingLines   = 0;
 
 void Line(const std::wstring& text) noexcept
 {
-    if (g_lines < kMaxLines)
-    {
-        ++g_lines;
-        platform::Log(L"camera distance: {}", text);
-    }
+    platform::Log(L"camera distance: {}", text);
 }
 
 /// A controller's End camera manager, if it is one and names the controller as its owner.

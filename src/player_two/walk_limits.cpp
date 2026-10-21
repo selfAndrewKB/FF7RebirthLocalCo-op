@@ -68,7 +68,6 @@ constexpr std::uint8_t   kContainsPointBytes[] = {0x40, 0x53, 0xB8, 0x50, 0x00, 
 constexpr int       kMaxInside  = 32;   // move-type volumes player 2 stands in at once (a handful in practice)
 constexpr ULONGLONG kRetryMs    = 250;  // a write the game's gate declined is tried again this often
 constexpr ULONGLONG kStateMs    = 1000;
-constexpr int       kMaxLines   = 400;
 
 using CreateNavAreaFn = void (*)(void* partyManager, void* controller);
 using SetLayer7Fn     = void (*)(void* listener, std::uint64_t location, std::uint8_t move, std::uint8_t dash,
@@ -110,21 +109,19 @@ State     g_state;
 void*     g_navTried   = nullptr;  // the controller the nav-area creation ran (or was found) for
 ULONGLONG g_nextRetry  = 0;
 ULONGLONG g_nextState  = 0;
-int       g_lines      = 0;
 bool      g_overflowed = false;
 std::wstring g_lastState, g_lastCall;
 
-/// A line of `level`; a line above the current level uses none of the budget.
+/// A line of `level`.
 template <class... A>
 void LineAt(platform::Level level, std::wformat_string<A...> format, A&&... args) noexcept
 {
-    if (g_lines >= kMaxLines || !platform::Enabled(level))
+    if (!platform::Enabled(level))
     {
         return;
     }
     try
     {
-        ++g_lines;
         platform::LogAt(level, L"walk limits: {}", std::format(format, std::forward<A>(args)...));
     }
     catch (...)

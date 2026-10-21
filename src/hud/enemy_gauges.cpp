@@ -171,8 +171,6 @@ ApplyFn                g_apply        = nullptr;
 SetPositionFn          g_setPosition  = nullptr;
 WeakGetFn              g_weakGet      = nullptr;
 
-constexpr int kMaxLines = 40;
-constexpr int kMaxTargetLines = 300;
 
 // Game thread.
 std::array<Capture, kGaugeRecordCapacity> g_captures{};
@@ -180,8 +178,6 @@ std::uint32_t                           g_captureCount = 0;
 std::vector<PlayerTwoOffset>            g_offsets;
 std::vector<ScaleRestore>               g_scaleRestores;  // player 2's pass: sizes to put back after its render
 bool         g_failed = false;
-int          g_lines  = 0;
-int          g_targetLines = 0;
 /// Player 2's target's gauge (or its main target's) as the log shows it, in tenths.
 struct TargetGauge
 {
@@ -225,13 +221,12 @@ T Field(std::uintptr_t address) noexcept
     return value;
 }
 
-/// One line of player 2's target gauges at `level` (Debug or Trace), within the target-list budget. Callers
+/// One line of player 2's target gauges at `level` (Debug or Trace). Callers
 /// check platform::Enabled(level) before building `text`.
 void Note(platform::Level level, const std::wstring& text)
 {
-    if (g_targetLines < kMaxTargetLines && platform::Enabled(level))
+    if (platform::Enabled(level))
     {
-        ++g_targetLines;
         platform::LogAt(level, L"enemy gauges: {}", text);
     }
 }
@@ -763,14 +758,13 @@ struct PassState
     bool operator==(const PassState&) const = default;
 };
 PassState     g_loggedPass{0xFF};
-std::uint32_t g_listOpenings = 0;  // player 2's target list openings seen: each starts a fresh budget
+std::uint32_t g_listOpenings = 0;  // player 2's target list openings seen: each logs the pass afresh
 
 void LogPlayerTwoPass(const PassState& now) noexcept
 {
     if (const auto openings = player_two::lock_on::TargetListOpenings(); openings != g_listOpenings)
     {
         g_listOpenings = openings;
-        g_targetLines  = 0;
         g_loggedPass   = PassState{0xFF};
     }
     if (!platform::Enabled(platform::Level::Trace) || now == g_loggedPass)
@@ -824,9 +818,8 @@ void Replay(bool playerTwo) noexcept
     {
         LogPlayerTwoPass({gate, static_cast<std::int32_t>(g_record.count), replayed, targeted, player_two::lock_on::TargetListOpen()});
     }
-    if (replayed > 0 && g_lines < kMaxLines && platform::Enabled(platform::Level::Debug))
+    if (replayed > 0 && platform::Enabled(platform::Level::Debug))
     {
-        ++g_lines;
         platform::LogDebug(L"enemy gauges: {} placed again for player {}'s view ({} targeted) of {} recorded", replayed,
                       playerTwo ? 2 : 1, targeted, g_record.count);
     }

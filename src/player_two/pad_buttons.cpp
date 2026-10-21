@@ -78,7 +78,6 @@ constexpr std::array<TableFields, 2> kTables{{{0xF8, L"raw"}, {0x148, L"UI"}}};
 // tools).
 constexpr std::uintptr_t kAccelKeyName = 0x1491E4550;
 constexpr std::uintptr_t kDashKeyName  = 0x1491E4580;
-constexpr unsigned       kTraceLines   = 3000;
 #endif
 
 constexpr std::uint32_t kTableNum        = 0x08;
@@ -87,7 +86,6 @@ constexpr std::uint32_t kTableHeapBits   = 0x20;
 constexpr std::uint32_t kTableMaxBits    = 0x2C;
 constexpr std::uint32_t kInlineBitCount  = 128;
 constexpr std::int32_t  kMaxElements     = 1024;
-constexpr unsigned      kLinesPerStatus  = 120;
 
 struct Element  // 40 bytes
 {
@@ -147,7 +145,6 @@ unsigned g_scopes      = 0;
 unsigned g_scopeSkips  = 0;  // a table moved between the Tick and player 2's call
 unsigned g_writeFaults = 0;
 unsigned g_lines       = 0;
-unsigned g_dropped     = 0;
 unsigned g_padTwoDowns = 0;  // pad 2's action-downs kept from the UI and the menu core
 unsigned g_padOneDowns = 0;  // pad 1's action-downs kept from the UI while player 2 holds the menus
 int      g_menuPlayer  = 0;  // whose view the tables show outside player 2's calls, and whose presses reach the UI
@@ -156,7 +153,6 @@ std::atomic<unsigned> g_mask{kPartViews | kPartEvents};  // SetMask
 #if LSS_DEV
 const std::uint64_t*  g_traceKeys[2] = {};  // Accel, Dash (live addresses of the FName globals)
 std::array<std::array<std::uint64_t, 2>, 2> g_traceLast{};  // per table, per key: the last traced bytes
-unsigned              g_traceLines = 0;
 
 /// The FName in a traced key's global, or 0.
 std::uint64_t TraceKey(std::size_t i) noexcept
@@ -183,12 +179,11 @@ void Trace(std::size_t which, const Element& element, const button_view::Views& 
                                      std::uint64_t{element.repeat} << 16 | std::uint64_t{element.latch} << 24 |
                                      std::uint64_t{element.sources & 0x00FFFFFFu} << 32 | std::uint64_t{views.gameHeld} << 56 |
                                      std::uint64_t{views.now[0]} << 60 | std::uint64_t{views.now[1]} << 61 | 1ull << 63;
-        if (packed == g_traceLast[which][k] || g_traceLines >= kTraceLines)
+        if (packed == g_traceLast[which][k])
         {
             return;
         }
         g_traceLast[which][k] = packed;
-        ++g_traceLines;
         platform::LogTrace(L"buttons trace ({}): {} as the game left it: previous {} held {} repeat {} latch {} sources 0x{:08X}; "
                       L"game held {}; player 1 sees {}, player 2 sees {}",
                       kTables[which].name, k == 0 ? L"Accel" : L"Dash", element.previous, element.held, element.repeat,
@@ -302,11 +297,6 @@ void LogChange(const wchar_t* table, const Element& element, std::uint8_t wasHel
 {
     if (!platform::Enabled(platform::Level::Trace))
     {
-        return;
-    }
-    if (g_lines >= kLinesPerStatus)
-    {
-        ++g_dropped;
         return;
     }
     ++g_lines;
@@ -707,11 +697,11 @@ void SetMask(unsigned mask) noexcept
 void LogStatus() noexcept
 {
     platform::Log(L"  buttons: split {} frame(s), player 2's view held {} time(s) ({} skipped: a table moved), pad 2's "
-                  L"presses kept from the UI {}, {} write fault(s); {} change line(s) logged, {} dropped; tables raw {} / "
+                  L"presses kept from the UI {}, {} write fault(s); {} change line(s) logged; tables raw {} / "
                   L"UI {} elements",
-                  g_framesSplit, g_scopes, g_scopeSkips, g_padTwoDowns, g_writeFaults, g_lines, g_dropped,
+                  g_framesSplit, g_scopes, g_scopeSkips, g_padTwoDowns, g_writeFaults, g_lines,
                   g_tables[0].elements.size(), g_tables[1].elements.size());
-    g_framesSplit = g_scopes = g_scopeSkips = g_writeFaults = g_lines = g_dropped = g_padTwoDowns = 0;
+    g_framesSplit = g_scopes = g_scopeSkips = g_writeFaults = g_lines = g_padTwoDowns = 0;
 }
 
 }  // namespace lss::player_two::pad_buttons

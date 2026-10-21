@@ -65,7 +65,6 @@ constexpr std::uint32_t kGuideWidget = 0x04;
 constexpr std::uint32_t kGuideMode   = 0x14;
 constexpr std::uint32_t kVisibility  = 0xC3;
 constexpr std::size_t   kLoggedCells = 4;
-constexpr int           kMaxLines    = 300;
 
 using CellTickFn  = void (*)(void* cell, const void* geometry, float deltaTime);
 using GuideTickFn = void (*)(void* keyGuide);
@@ -82,7 +81,6 @@ std::uintptr_t         g_endUISystem = 0;
 bool          g_cellsOn  = false;
 bool          g_guidesOn = false;
 bool          g_panesOn  = false;
-int           g_lines    = 0;
 std::uint64_t g_cellTicks = 0, g_guideTicks = 0, g_paneTicks = 0, g_refusals = 0;
 
 template <class T>
@@ -96,12 +94,11 @@ T Field(std::uintptr_t address) noexcept
     return value;
 }
 
-/// A line; a line above the current level uses none of the budget.
+/// A line of `level`.
 void Line(const std::wstring& text, platform::Level level = platform::Level::Info) noexcept
 {
-    if (g_lines < kMaxLines && platform::Enabled(level))
+    if (platform::Enabled(level))
     {
-        ++g_lines;
         platform::LogAt(level, L"widget owner: {}", text);
     }
 }

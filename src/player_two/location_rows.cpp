@@ -67,7 +67,6 @@ constexpr std::uint32_t  kOpSetLocation   = 0xE0;  // op vtable: SetLocationSett
 constexpr std::uint32_t  kOpClearLocation = 0xE8;  // op vtable: ClearLocationSetting(op, location, row)
 
 constexpr ULONGLONG kPollMs   = 10000;
-constexpr int       kMaxLines = 200;
 
 using ForwardFn = std::uintptr_t (*)(void* listener, std::uintptr_t location, std::uintptr_t row, std::uintptr_t enter);
 using TickFn    = void (*)(void* component, float deltaTime, std::uintptr_t tickType, void* tickFunction);
@@ -104,7 +103,6 @@ enum Count
 std::atomic<unsigned> g_counts[kCountKinds];
 unsigned              g_logged[kCountKinds] = {};
 ULONGLONG             g_nextPoll            = 0;
-std::atomic<int>      g_lines{0};
 
 void Bump(Count count) noexcept
 {
@@ -113,10 +111,7 @@ void Bump(Count count) noexcept
 
 void Line(const std::wstring& text) noexcept
 {
-    if (g_lines.load(std::memory_order_relaxed) < kMaxLines && g_lines.fetch_add(1, std::memory_order_relaxed) < kMaxLines)
-    {
-        platform::Log(L"location rows: {}", text);
-    }
+    platform::Log(L"location rows: {}", text);
 }
 
 void* CameraManager(void* controller) noexcept

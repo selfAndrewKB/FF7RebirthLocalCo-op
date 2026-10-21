@@ -8,7 +8,7 @@
 // one probe, the party leader; a press runs the slot's key, and a WorldItem key marks the item taken and grants it to
 // the shared inventory. Player 2's pass (field_pickup) runs the same code once more as player 2. Logged:
 //   - each point registration (AddPoint, its own hook: key, owner, presets, kind, the registrar, the leader type),
-//     in full up to a budget, then counts per registrar;
+//     and counts per registrar for a summary;
 //   - after each selection update and player 2's pass: the slot block on change (target keys, rows, latches,
 //     pending) and, while player 2 is in, every 0.5 s:
 //       - a census of the points within 20 m of either player, logged on change (key, owner, presets,

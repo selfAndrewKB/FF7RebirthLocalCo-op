@@ -102,7 +102,6 @@ constexpr std::uint32_t kVisibilityDelegate = 0x1B8;
 constexpr std::uint8_t  kHidden               = 0x02;
 constexpr std::uint8_t  kSelfHitTestInvisible = 0x11;  // what the canvases are constructed with
 
-constexpr int kMaxLines = 60;
 
 enum Part : unsigned
 {
@@ -166,13 +165,10 @@ std::array<ShownCanvas, 2>   g_hiddenOne{};
 std::uint32_t                g_answered = 0;  // first-controller calls answered with player 2's
 std::uint32_t                g_leaderAnswers = 0;  // range-origin calls answered with player 2's member
 std::array<std::uint64_t, 7> g_logged{};
-int                          g_lines = 0;
 bool                         g_boundLogged = false;
 bool                         g_seeded      = false;  // player 2's instance has player 1's event state
 bool                         g_offThreadLogged = false;
 std::uint32_t                g_replays     = 0;
-int                          g_replayLines = 0;
-constexpr int                kMaxReplayLines = 40;
 
 bool Acts(Part part) noexcept
 {
@@ -389,9 +385,8 @@ void FollowEvent(Event event, char flag) noexcept
             break;
     }
     ++g_replays;
-    if (g_replayLines < kMaxReplayLines && platform::Enabled(platform::Level::Debug))
+    if (platform::Enabled(platform::Level::Debug))
     {
-        ++g_replayLines;
         platform::LogDebug(L"area icons: the game's {} followed on player 2's icon manager ({} so far)",
                       event == Event::Enable         ? L"Enable"
                       : event == Event::HideAndClear ? L"HideAndClear"
@@ -472,7 +467,7 @@ bool FollowEvents(const platform::GameImage& image) noexcept
 /// One line whenever either instance's enable flag, canvases or map sizes change.
 void LogIfChanged(std::uintptr_t one) noexcept
 {
-    if (g_lines >= kMaxLines || !platform::Enabled(platform::Level::Debug))
+    if (!platform::Enabled(platform::Level::Debug))
     {
         return;
     }
@@ -498,7 +493,6 @@ void LogIfChanged(std::uintptr_t one) noexcept
         return;
     }
     g_logged = now;
-    ++g_lines;
     try
     {
         platform::LogDebug(L"area icons: player 1's enabled {} icons/markers slots {}/{}; player 2's enabled {} slots {}/{} "
@@ -659,7 +653,6 @@ void SetMask(unsigned mask) noexcept
         }
     }
     g_mask  = mask;
-    g_lines = 0;
     platform::Log(L"area icons: mask {} (ticked {}, first controller player 2's {}, canvases per pass {}, ranged from "
                   L"player 2's member {})",
                   mask, Acts(kPartTick), Acts(kPartController), Acts(kPartCanvases), Acts(kPartLeader));

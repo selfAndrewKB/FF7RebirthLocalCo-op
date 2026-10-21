@@ -50,7 +50,6 @@ constexpr std::uint32_t kModuleEntry  = 16;
 constexpr std::uint32_t kModuleActive = 0x44;
 constexpr std::uint32_t kLoggedModules[] = {5, 6, 7, 16, 20, 21, 22, 23};
 
-constexpr int kMaxLines = 600;
 
 using StateFn = void (*)(void* battleOperator, float blendTime, bool flag);
 
@@ -63,7 +62,6 @@ std::uintptr_t        g_battleVTable        = 0;
 std::uintptr_t        g_cameraManagerVTable = 0;
 
 // Game thread.
-int g_lines = 0;
 
 struct Pair
 {
@@ -127,13 +125,9 @@ void OnPlayerTwo(StateFn engine, void* battle, float blendTime, bool flag)
 {
     const primary_controller::Scope scope;
     const bool                      ok = CallGuarded(engine, battle, blendTime, flag);
-    if (g_lines < kMaxLines || !ok)
-    {
-        ++g_lines;
-        platform::Log(L"battle camera: player 2's Battle operator {} (primary scope {}); active now {}{}",
-                      engine == g_engineActivate ? L"activated" : L"deactivated", scope.Held() ? L"held" : L"REFUSED",
-                      Active(battle), ok ? L"" : L"; the engine call RAISED an exception");
-    }
+    platform::Log(L"battle camera: player 2's Battle operator {} (primary scope {}); active now {}{}",
+                  engine == g_engineActivate ? L"activated" : L"deactivated", scope.Held() ? L"held" : L"REFUSED",
+                  Active(battle), ok ? L"" : L"; the engine call RAISED an exception");
 }
 
 // The two replacements: the engine's call first, then the same on player 2's Battle operator when
@@ -293,7 +287,7 @@ bool PlayerTwoBattleActive(void* cameraManager) noexcept
 void Watch() noexcept
 {
 #if LSS_DEV
-    if (g_lines >= kMaxLines || !platform::Enabled(platform::Level::Debug) || !generation::OnGameThread() ||
+    if (!platform::Enabled(platform::Level::Debug) || !generation::OnGameThread() ||
         !generation::Active())
     {
         return;
@@ -305,7 +299,6 @@ void Watch() noexcept
         return;
     }
     g_logged = now;
-    ++g_lines;
     try
     {
         platform::LogDebug(L"battle camera: P1 {} | P2 {}", Describe(now[0]), Describe(now[1]));

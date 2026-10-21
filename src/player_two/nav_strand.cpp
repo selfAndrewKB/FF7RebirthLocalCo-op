@@ -123,7 +123,6 @@ constexpr std::uint32_t  kStateTeleporting   = 0x39D;
 constexpr std::uint8_t   kStateFollow        = 7;
 constexpr std::uintptr_t kFollowStatePlayerVTable = 0x14580C8F8;
 
-constexpr int   kMaxLines      = 300;
 constexpr float kMaxTickSeconds = 0.25f;  // a hitch counts as this much, so one frame never completes a hold
 
 using ReadyAtFn = bool (*)(void* reason, const float* location, bool flag);
@@ -182,7 +181,6 @@ std::uint32_t g_loggedReadyNoNavmesh = 0;
 const void*   g_loggedState = nullptr;  // the AI probe's last state (dev tools)
 std::uint8_t  g_loggedType  = 0xFF;
 #endif
-int           g_lines       = 0;
 
 template <class... A>
 void Line(std::wformat_string<A...> format, A&&... args) noexcept
@@ -191,11 +189,6 @@ void Line(std::wformat_string<A...> format, A&&... args) noexcept
     {
         return;  // a Debug report (platform/log.h)
     }
-    if (g_lines >= kMaxLines)
-    {
-        return;
-    }
-    ++g_lines;
     try
     {
         platform::WriteLine(L"[debug] nav strand: " + std::format(format, std::forward<A>(args)...));

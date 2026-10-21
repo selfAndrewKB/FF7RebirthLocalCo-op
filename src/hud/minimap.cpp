@@ -137,7 +137,6 @@ constexpr const wchar_t* kStockEntryName     = L"SEndNaviMapCircle";
 constexpr const wchar_t* kPlayerTwoEntryName = L"SEndNaviMapCircle_P2";
 constexpr ULONGLONG      kCountsPeriodMs     = 120'000;  // a safety submit is logged at once
 constexpr ULONGLONG      kCentrePeriodMs     = 120'000;
-constexpr int            kMaxLines           = 300;
 
 using HolderUpdateFn = void (*)(void* holder, float deltaTime);
 using LeaderTypeFn   = std::uint8_t (*)();
@@ -208,7 +207,6 @@ ULONGLONG     g_countsAt      = 0;
 ULONGLONG     g_centreAt      = 0;
 const wchar_t* g_lastWhy      = nullptr;
 float         g_centreTwo[2]  = {};
-int           g_lines         = 0;
 std::atomic<std::uint64_t> g_offThread{0};
 std::uint64_t g_loggedOffThread = 0;
 bool          g_sizeDiffers     = false;
@@ -225,17 +223,16 @@ PieceCounts   g_pieces[2], g_loggedPieces[2];  // by the run asking: [0] player 
 ULONGLONG     g_piecesAt        = 0;
 bool          g_loggedFirstKeep = false;
 
-/// One "minimap:" line of `level`, within the line budget (a line whose level is off takes none of it).
+/// One "minimap:" line of `level`.
 template <class... A>
 void LineAt(platform::Level level, std::wformat_string<A...> format, A&&... args) noexcept
 {
-    if (g_lines >= kMaxLines || !platform::Enabled(level))
+    if (!platform::Enabled(level))
     {
         return;
     }
     try
     {
-        ++g_lines;
         platform::LogAt(level, L"minimap: {}", std::format(format, std::forward<A>(args)...));
     }
     catch (...)

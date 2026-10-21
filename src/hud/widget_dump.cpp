@@ -48,7 +48,7 @@ using RC::Unreal::UFunction;
 using RC::Unreal::UObject;
 namespace UObjectGlobals = RC::Unreal::UObjectGlobals;
 
-constexpr int         kMaxLines = 60;
+constexpr int         kListedWidgets = 60;  // a listing's size, largest first
 constexpr std::size_t kFrame    = 256;  // parameter frame; every function used here needs far less
 
 using players::unreal::GuardedProcessEvent;
@@ -724,8 +724,8 @@ int DumpWidgets() noexcept
         }
         std::sort(rows.begin(), rows.end(), [](const Row& a, const Row& b) { return a.area > b.area; });
         platform::Log(L"dump widgets: {} user widgets, {} visible and arranged{}", widgets.size(), rows.size(),
-                      rows.size() > kMaxLines ? L" (largest listed)" : L"");
-        const int count = static_cast<int>(std::min<std::size_t>(rows.size(), kMaxLines));
+                      rows.size() > kListedWidgets ? L" (largest listed)" : L"");
+        const int count = static_cast<int>(std::min<std::size_t>(rows.size(), kListedWidgets));
         for (int i = 0; i < count; ++i)
         {
             platform::Log(L"{}", rows[static_cast<std::size_t>(i)].line);

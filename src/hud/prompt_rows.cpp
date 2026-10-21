@@ -49,7 +49,6 @@ constexpr std::uint32_t  kWidgetPriority    = 0x400;
 constexpr std::uint32_t  kWidgetRemoveState = 0x418;
 constexpr std::uint32_t  kWidgetViewportPosition = 0x220;  // UUserWidget viewport offsets (hud/hud_addresses.h)
 constexpr std::int32_t   kMaxRows           = 64;
-constexpr int            kMaxLines          = 200;
 
 // FieldActionIconList__SortAndLayout(TArray<FWeakObjectPtr>* list, UObject* placeNow): sorts the
 // given array by priority and gives each live row the next slot in it (§4). Called by the game only
@@ -116,7 +115,6 @@ float                                     g_againWidth  = 0.0f;
 float                                     g_againHeight = 0.0f;
 std::vector<const UObject*>               g_stillTwo;  // scratch, reused
 std::vector<std::pair<const UObject*, bool>> g_layoutNow;  // scratch, reused
-int                                       g_lines = 0;
 
 template <class T>
 bool Read(std::uintptr_t address, T& out) noexcept
@@ -283,10 +281,6 @@ void LogIfChanged(const std::array<std::uint8_t, kComponentRows>& bytes)
         g_rowLog.Reset();  // off: the next line starts fresh
         return;
     }
-    if (g_lines >= kMaxLines)
-    {
-        return;
-    }
     // Which rows, whose, and player 2's requests log at once; a row's remove state steps through its fade
     // over a few frames, so it logs once it holds.
     RowsSteady steady;
@@ -312,7 +306,6 @@ void LogIfChanged(const std::array<std::uint8_t, kComponentRows>& bytes)
     {
         requests += bytes[i] != 0 ? std::format(L" {}:{:#04x}", i, bytes[i]) : L"";
     }
-    ++g_lines;
     platform::LogDebug(L"prompt rows: {}; player 2's requests:{}", Describe(g_rows), requests.empty() ? L" none" : requests);
 }
 

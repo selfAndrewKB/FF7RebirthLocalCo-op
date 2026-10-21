@@ -32,14 +32,12 @@ constexpr std::uint32_t kViewportAnchors   = 0x210;  // FAnchors: Min, Max
 constexpr std::uint32_t kViewportOffsets   = 0x220;  // FMargin: Left, Top, Right, Bottom
 constexpr std::uint32_t kViewportAlignment = 0x230;  // FVector2D
 
-constexpr int kProbeLines = 120;
 
 using SetPositionFn = void (*)(void* widget, std::uint64_t position, std::uint64_t removeDpiScale, std::uint64_t r9);
 
 platform::CallRedirect g_call;
 bool                   g_installed = false;
 std::atomic<bool>      g_on{false};
-std::atomic<int>       g_linesLeft{0};
 
 // The last position logged per widget, so a widget repeating the same position logs once.
 struct Seen
@@ -101,14 +99,10 @@ void Log(void* widget, std::uint64_t position, std::uint64_t removeDpiScale) noe
 void BlueprintSetPosition(void* widget, std::uint64_t position, std::uint64_t removeDpiScale, std::uint64_t r9)
 {
     reinterpret_cast<SetPositionFn>(g_call.Original())(widget, position, removeDpiScale, r9);
-    if (!g_on.load(std::memory_order_relaxed) || widget == nullptr || g_linesLeft.load(std::memory_order_relaxed) <= 0 ||
+    if (!g_on.load(std::memory_order_relaxed) || widget == nullptr ||
         AlreadyLogged(widget, position))
     {
         return;
-    }
-    if (g_linesLeft.fetch_sub(1, std::memory_order_relaxed) == 1)
-    {
-        platform::Log(L"HUD probe: line limit reached; switch the probe off and on for more");
     }
     Log(widget, position, removeDpiScale);
 }
@@ -145,7 +139,6 @@ bool PositionProbeInstalled() noexcept
 
 void SetPositionProbe(bool on) noexcept
 {
-    g_linesLeft.store(on ? kProbeLines : 0, std::memory_order_relaxed);
     g_on.store(on, std::memory_order_relaxed);
     platform::Log(L"HUD probe: {}", on ? L"on" : L"off");
 }

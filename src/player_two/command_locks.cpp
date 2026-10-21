@@ -58,7 +58,6 @@ constexpr std::int32_t  kMaxCategories   = 32;
 // u8 each, stored on EndUISystem[23] by the dispatcher's cmds 0x2B (+0x77C = !on, EndUI23_Set77C), 0x3E, 0x3F
 // and 0x43 (levers §3.1, §14.4).
 constexpr std::array<std::uint32_t, 4> kTableBytes{0x77C, 0x77F, 0x780, 0x782};
-constexpr int kMaxLines = 120;
 
 using LockFn     = void (*)(std::uint8_t value);
 using CategoryFn = void (*)(std::uint8_t category, std::uint8_t enabled);
@@ -81,7 +80,6 @@ std::atomic<bool> g_fromGameThread {false};  // 1.005: the calls go in with Inst
 std::atomic<bool> g_placePending   {false};  // 1.005: queued, not yet placed (Remove clears it)
 
 // Game thread.
-int g_lines = 0;
 
 template <class T>
 T Field(std::uintptr_t address) noexcept
@@ -100,12 +98,11 @@ bool Put(std::uintptr_t address, T value) noexcept
     return address != 0 && platform::WriteGuarded(reinterpret_cast<void*>(address), &value, sizeof(T));
 }
 
-/// A line; a line above the current level uses none of the budget.
+/// A line of `level`.
 void Line(const std::wstring& text, platform::Level level = platform::Level::Info) noexcept
 {
-    if (g_lines < kMaxLines && platform::Enabled(level))
+    if (platform::Enabled(level))
     {
-        ++g_lines;
         platform::LogAt(level, L"command locks: {}", text);
     }
 }

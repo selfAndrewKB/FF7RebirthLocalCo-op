@@ -150,8 +150,6 @@ constexpr std::uint32_t kObjectOuter = 0x20;
 // first kSetupTries tries run on consecutive ticks, later ones every kWaitGap ticks, until one runs
 // (menu_rules::JoinTryDue).
 using menu_rules::kSetupTries;
-constexpr int kMaxLines   = 200;
-constexpr int kMaxReplayLines = 60;  // the game's Setup and ResetAll made again on player 2's controller
 
 using MallocFn = void* (*)(std::size_t size, std::uint32_t alignment);
 using CtorFn   = void* (*)(void* controller);
@@ -209,8 +207,6 @@ bool          g_failed     = false;
 bool          g_current    = false;
 int           g_tries      = 0;        // join Setup tries since g_current was last cleared, refusals included
 unsigned      g_waitTicks  = 0;        // ticks counted between the paced tries
-int           g_lines      = 0;
-int           g_replayLines = 0;
 
 struct Snapshot
 {
@@ -264,11 +260,7 @@ T Field(std::uintptr_t address) noexcept
 
 void Line(const std::wstring& text) noexcept
 {
-    if (g_lines < kMaxLines)
-    {
-        ++g_lines;
-        platform::Log(L"command menu two: {}", text);
-    }
+    platform::Log(L"command menu two: {}", text);
 }
 
 /// The world player 1's controller is in (the first outer of class UWorld; guarded reads), or null.
@@ -362,9 +354,8 @@ void WatchLifecycle() noexcept
 
 void ReplayLine(const std::wstring& text) noexcept
 {
-    if (g_replayLines < kMaxReplayLines && platform::Enabled(platform::Level::Debug))
+    if (platform::Enabled(platform::Level::Debug))
     {
-        ++g_replayLines;
         platform::LogDebug(L"command menu two: {}", text);
     }
 }
@@ -671,7 +662,7 @@ Snapshot Read() noexcept
 
 void Watch() noexcept
 {
-    if (!platform::Enabled(platform::Level::Debug) || g_lines >= kMaxLines)
+    if (!platform::Enabled(platform::Level::Debug))
     {
         return;
     }
@@ -683,7 +674,6 @@ void Watch() noexcept
     g_logged     = now;
     g_loggedOnce = true;
     const auto& b = now.bytes;
-    ++g_lines;
     platform::LogDebug(L"command menu two: {}", std::format(L"members {} {} {} {} | menu {} (names this controller: {}) | 25C={} 258={} 777={} 783={} 5E1={} "
                      L"540={} | player 2's focus: path {}, layers {}",
                      now.members[0], now.members[1], now.members[2], now.members[3], NameOf(now.widget),

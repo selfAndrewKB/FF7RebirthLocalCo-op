@@ -194,8 +194,6 @@ constexpr std::int32_t kDodgeGuarding = 4;  // req[32]: a dodge press while guar
 constexpr std::int32_t kGuardHeld     = 1;  // req[32]: guard held
 
 constexpr std::size_t kSnapshotTypes = 15;
-constexpr int         kMaxLines      = 400;  // events
-constexpr int         kMaxWatchLines = 800;  // player 2's controller's state, on change
 constexpr std::uint32_t kOpenPending = 0x5D0;  // i32: a menu open requested (>= 0), pushed 0.125 s later
 constexpr std::uint32_t kGate777     = 0x777;  // u8: [UNKNOWN] 1 on the game's controller; 0 on player 2's after a reset
 
@@ -264,8 +262,6 @@ float        g_oneSlot   = 1.0F;
 float        g_twoSlot   = 1.0F;
 float        g_written   = 1.0F;
 bool         g_passed    = false;  // player 2's controller ticked this frame
-int          g_lines     = 0;
-int          g_watchLines = 0;
 unsigned     g_refusals  = 0, g_guideSkips = 0, g_snapshotEntries = 0;
 std::uint64_t g_passes     = 0;  // player 2's passes run
 unsigned     g_routed      = 0;  // pad 2's presses dispatched in player 2's focus context
@@ -298,19 +294,14 @@ bool Put(std::uintptr_t address, T value) noexcept
 
 void WatchLine(const std::wstring& text) noexcept
 {
-    if (g_watchLines < kMaxWatchLines)
-    {
-        ++g_watchLines;
-        platform::LogTrace(L"command menu tick: {}", text);
-    }
+    platform::LogTrace(L"command menu tick: {}", text);
 }
 
-/// An event line; a line above the current level uses none of the budget.
+/// An event line of `level`.
 void Line(const std::wstring& text, platform::Level level = platform::Level::Info) noexcept
 {
-    if (g_lines < kMaxLines && platform::Enabled(level))
+    if (platform::Enabled(level))
     {
-        ++g_lines;
         platform::LogAt(level, L"command menu tick: {}", text);
     }
 }
@@ -477,10 +468,6 @@ void Watch(std::uintptr_t two, std::uintptr_t one) noexcept
     if (!platform::Enabled(platform::Level::Trace))
     {
         g_watchLog.Reset();  // off: the next line starts fresh
-        return;
-    }
-    if (g_watchLines >= kMaxWatchLines)
-    {
         return;
     }
     Snapshot now;

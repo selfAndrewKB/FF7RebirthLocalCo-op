@@ -42,7 +42,6 @@ constexpr std::uint8_t  kFeedbackOn    = 0x20;   // bForceFeedbackEnabled
 constexpr std::uint32_t kFeedbackScale = 0x454;
 
 constexpr std::size_t kMaxEvents = 24;    // per frame
-constexpr int         kMaxLines  = 2000;  // frame lines; the status line goes on
 constexpr auto        kStatusEvery = std::chrono::seconds(10);
 
 using SendFn = std::uint64_t (*)(void* controller, void* input, std::int32_t id);
@@ -108,8 +107,6 @@ std::uintptr_t        g_app = 0;  // the pointer global's live address
 Frame             g_frame;
 Frame             g_logged;  // the last frame logged (its shape)
 int               g_depth = 0;
-int               g_lines = 0;
-bool              g_budgetSaid = false;
 Clock::time_point g_statusAt{};
 struct Counts
 {
@@ -182,24 +179,12 @@ void Flush() noexcept
     ++g_counts.frames;
     const bool nonZero = g_frame.NonZero();
     g_counts.nonZeroFrames += nonZero ? 1 : 0;
-    if (platform::Enabled(platform::Level::Trace) && (nonZero || !g_frame.SameShape(g_logged)) && g_lines < kMaxLines)
+    if (platform::Enabled(platform::Level::Trace) && (nonZero || !g_frame.SameShape(g_logged)))
     {
-        ++g_lines;
         g_logged = g_frame;
         try
         {
             platform::LogTrace(L"rumble: frame {}: {}", g_frame.index, Describe(g_frame));
-        }
-        catch (...)
-        {
-        }
-    }
-    else if (platform::Enabled(platform::Level::Trace) && g_lines >= kMaxLines && !g_budgetSaid)
-    {
-        g_budgetSaid = true;
-        try
-        {
-            platform::LogTrace(L"rumble: {} frame lines written; only the status line from here on", kMaxLines);
         }
         catch (...)
         {

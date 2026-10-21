@@ -93,7 +93,7 @@ void Displayed(std::uintptr_t& object, std::uintptr_t& controller) noexcept;
 void* Cursor() noexcept;
 
 /// For the log: whether player 2's command target list was open at player 2's last targeting run,
-/// and how many times it has opened (a HUD module starts a fresh log budget when this changes).
+/// and how many times it has opened (a HUD module logs its pass afresh when this changes).
 bool          TargetListOpen() noexcept;
 std::uint32_t TargetListOpenings() noexcept;
 

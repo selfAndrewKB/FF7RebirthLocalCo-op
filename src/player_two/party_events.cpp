@@ -46,7 +46,6 @@ constexpr std::uint8_t kPartyAppliedBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x20, 0x4
 constexpr platform::FunctionFact kPartyApplied{L"PartyManager_ApplyPartyDataAndRefresh", 0x1411BBAD8, kPartyAppliedBytes};
 constexpr std::uintptr_t         kAppliedCall = 0x140F7F5A6;
 
-constexpr int kMaxLines = 40;
 
 using SwitchLeaderFn  = void (*)(void* controller, void* character, bool inputTriggered, bool force);
 using StatusChangedFn = void (*)(void* partyManager, std::uint8_t type, std::uint8_t before, std::uint8_t after);
@@ -59,7 +58,6 @@ std::uintptr_t          g_leaderReturn = 0;  // 1.005: live return address of On
 Listener               g_listener{};
 
 // Counted off the game thread, from either call.
-std::atomic<int> g_lines{0};
 
 /// True if the listener may hear a call now (logged, a few times, when not).
 bool Hearable(const wchar_t* what) noexcept
@@ -68,12 +66,9 @@ bool Hearable(const wchar_t* what) noexcept
     {
         return true;
     }
-    if (g_lines.fetch_add(1) < kMaxLines)
-    {
-        platform::Log(L"party events: {} made {}; the session did not hear it", what,
-                      generation::GameThreadKnown() ? L"off the game thread"
-                                                    : L"before the first engine tick (the game thread is not known yet)");
-    }
+    platform::Log(L"party events: {} made {}; the session did not hear it", what,
+                  generation::GameThreadKnown() ? L"off the game thread"
+                                                : L"before the first engine tick (the game thread is not known yet)");
     return false;
 }
 

@@ -29,7 +29,6 @@ constexpr std::uint32_t  kFieldStep  = 0x70;         // EEndFieldStep; 13 once t
 constexpr std::uint32_t  kRunning    = 0x71;         // 1 while the field runs
 constexpr std::uint8_t   kStepSettled = 13;
 
-constexpr int kMaxLines = 200;
 
 using RequestExitFn = void (*)();
 
@@ -42,7 +41,6 @@ void*                   g_context      = nullptr;
 
 // Game thread.
 std::uint16_t g_logged = 0xFFFF;
-int           g_lines  = 0;
 
 template <class T>
 T Field(std::uintptr_t address) noexcept
@@ -126,7 +124,7 @@ bool FieldReady() noexcept
 void Watch() noexcept
 {
     const std::uintptr_t gameMode = GameMode();
-    if (gameMode == 0 || g_lines >= kMaxLines)
+    if (gameMode == 0)
     {
         return;
     }
@@ -135,7 +133,6 @@ void Watch() noexcept
     if (now != g_logged)
     {
         g_logged = now;
-        ++g_lines;
         platform::Log(L"field exit: field step {} running {}", now & 0xFF, now >> 8);
     }
 }

@@ -54,7 +54,6 @@ constexpr std::uintptr_t kEntryLength          = sizeof(kPopupEntryBytes);
 constexpr std::uintptr_t kWeakGet           = 0x141905998;
 constexpr std::uint8_t   kWeakGetPrologue[] = {0x44, 0x8B, 0x49, 0x04, 0x45, 0x33, 0xC0, 0x45, 0x85, 0xC9, 0x74, 0x4F};
 
-constexpr int kMaxLines = 40;
 
 using PlaceFn   = std::uintptr_t (*)(void* out, void* controller, void* canvas, void* widget, const float* location,
                                      std::uint64_t offset, std::uint8_t clamp);
@@ -72,7 +71,6 @@ WeakGetFn              g_weakGet     = nullptr;
 
 // Game thread.
 bool g_failed = false;
-int  g_lines  = 0;
 
 template <class T>
 bool Read(std::uintptr_t address, T& out) noexcept
@@ -240,10 +238,9 @@ void Replay(bool playerTwo) noexcept
     {
         platform::Log(L"popups: a placement raised an exception; popups are no longer placed per view");
     }
-    else if (playerTwo && counts[0] + counts[1] + counts[2] > 0 && g_lines < kMaxLines &&
+    else if (playerTwo && counts[0] + counts[1] + counts[2] > 0 &&
              platform::Enabled(platform::Level::Debug))
     {
-        ++g_lines;
         platform::LogDebug(L"popups: placed again in player 2's view: {} numbers, {} texts, {} UMG ({} recorded)",
                            counts[0], counts[1], counts[2], g_record.count);
     }

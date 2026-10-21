@@ -59,7 +59,6 @@ constexpr std::uint32_t  kHandleMode        = 0x112;  // u8 in the handle's obje
 constexpr std::array<std::uint32_t, 4> kStateBytes{0x49, 0x4A, 0x64, 0x65};
 constexpr std::uint32_t  kPendingAction     = 0x84;   // int32
 
-constexpr int kMaxLines = 600;
 
 using OwnerFn        = void* (*)(void* aiHolder);
 using GlobalTestFn   = std::uint8_t (*)();
@@ -73,7 +72,6 @@ std::uintptr_t g_battleSystem  = 0;  // the address holding the battle system
 std::uintptr_t g_partyManager  = 0;  // the address holding the party manager
 
 // Game thread.
-int                      g_lines = 0;
 
 template <class T>
 bool Read(std::uintptr_t address, T& out) noexcept
@@ -269,10 +267,6 @@ void Watch(void* member, void* state) noexcept
             g_log.Reset();  // off: the next line starts fresh
             return;
         }
-        if (g_lines >= kMaxLines)
-        {
-            return;
-        }
         // The log: player 1's controller, both characters, the targets; raw values compared each frame,
         // the text built only when they change.
         Snapshot now;
@@ -314,7 +308,6 @@ void Watch(void* member, void* state) noexcept
         steady.requests = {};  // the action requests flip with each press: logged once they hold
         if (g_log.Offer(steady, now.requests))
         {
-            ++g_lines;
             platform::LogTrace(L"battle input: {}", Describe(now));
         }
     }
