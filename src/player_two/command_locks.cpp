@@ -1,5 +1,6 @@
 #include "player_two/command_locks.h"
 
+#include "facts/hud.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/deferred_sites.h"
@@ -48,8 +49,8 @@ constexpr std::uint8_t kDispatcherBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48,
 constexpr platform::FunctionFact kDispatcher{L"EventCmd_Dispatch_BattleModeCase87", 0x141033388, kDispatcherBytes};
 constexpr std::size_t kFirstInstruction = 5;
 
-constexpr std::uintptr_t kEndUISystem = 0x1493496E0;
-constexpr std::uint32_t  kController  = 0xB8;  // EndUISystem[23]
+using facts::kUICommandController;  // the UI system's slot (facts/hud.h)
+
 // The controller's values (RE-p2-command-menu-views.md §10.2; levers §3.2).
 constexpr std::uint32_t kCommandsEnabled = 0x5E2;  // u8
 constexpr std::uint32_t kCommandsLocked  = 0x5E3;  // u8
@@ -113,7 +114,7 @@ std::uintptr_t FollowingController(const wchar_t* what) noexcept
         Line(std::format(L"{} made off the game thread: NOT made on player 2's controller", what));
         return 0;
     }
-    const auto one = ReadAt<std::uintptr_t>(g_endUISystem + kController);
+    const auto one = ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController);
     if (one == 0 || one == two)
     {
         Line(std::format(L"{} made while the UI system's slot names {}: NOT followed", what,
@@ -128,7 +129,7 @@ std::uintptr_t FollowingController(const wchar_t* what) noexcept
 template <class Call>
 bool WithSlot(std::uintptr_t two, Call&& call) noexcept
 {
-    const auto slot = g_endUISystem + kController;
+    const auto slot = g_endUISystem + kUICommandController;
     const auto one  = ReadAt<std::uintptr_t>(slot);
     if (!WriteAt(slot, two))
     {
@@ -190,14 +191,14 @@ void CategoryEnabled(std::uint8_t category, std::uint8_t enabled) noexcept
 /// category cmds reach CategoryEnabled nested inside it.
 void Dispatch(void* fieldSystem, std::int32_t mode) noexcept
 {
-    const auto one = ReadAt<std::uintptr_t>(g_endUISystem + kController);
+    const auto one = ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController);
     std::array<std::uint8_t, kTableBytes.size()> before{};
     for (std::size_t i = 0; i < kTableBytes.size(); ++i)
     {
         before[i] = ReadAt<std::uint8_t>(one + kTableBytes[i]);
     }
     reinterpret_cast<DispatchFn>(g_dispatcher.Original())(fieldSystem, mode);
-    if (one == 0 || one != ReadAt<std::uintptr_t>(g_endUISystem + kController))
+    if (one == 0 || one != ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController))
     {
         return;
     }
@@ -250,7 +251,7 @@ bool Install(const platform::GameImage& image) noexcept
     const auto enabled = platform::FindFunction(image, kEnabled), locked = platform::FindFunction(image, kLocked),
                category = platform::FindFunction(image, kCategory), dispatcher = platform::FindFunction(image, kDispatcher);
     const auto enabledAt = image.Rebase(kEnabledCall, 5), lockedAt = image.Rebase(kLockedCall, 5);
-    const auto system    = image.Rebase(kEndUISystem, kController + sizeof(void*));
+    const auto system    = image.Rebase(facts::kEndUISystem, kUICommandController + sizeof(void*));
     g_endUISystem        = system ? *system : 0;
     g_installed          = enabled && locked && category && dispatcher && enabledAt && lockedAt && system;
     const auto first     = [](const std::uint8_t* bytes) { return std::span<const std::uint8_t>(bytes, kFirstInstruction); };
@@ -303,7 +304,7 @@ void Remove() noexcept
 void Sync(void* playerTwoController) noexcept
 {
     const auto two = reinterpret_cast<std::uintptr_t>(playerTwoController);
-    const auto one = ReadAt<std::uintptr_t>(g_endUISystem + kController);
+    const auto one = ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController);
     if (two == 0 || one == 0 || one == two)
     {
         return;

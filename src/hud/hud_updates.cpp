@@ -1,5 +1,6 @@
 #include "hud/hud_updates.h"
 
+#include "facts/hud.h"
 #include "hud/marker_timers.h"
 #include "platform/frame_watch.h"
 #include "platform/guarded.h"
@@ -18,7 +19,6 @@ namespace {
 
 // Facts read from the database (RE-p2-hud.md pass 9 table, pass 12). Each function's prologue up
 // to its stack probe call is checked before it is called.
-constexpr std::uintptr_t kEndUISystem = 0x1493496E0;  // g_EndUISystem (data)
 
 struct SubTick
 {
@@ -64,7 +64,6 @@ constexpr std::uint8_t   kLeaderTargetPrologue[] = {0x48, 0x8B, 0xC4, 0x48, 0x89
 // The compass (pass 12 item 5): CompassHolder__FrameUpdate(holder, DeltaTime), holder =
 // *(*(g+0x108)+0x348). Its heading and scale come from the primary camera manager (L3). Run with a
 // DeltaTime of 0 for each player [pass 12: looks safe to re-run, not fully traced].
-constexpr std::uint32_t  kCompassManager    = 0x108;
 constexpr std::uint32_t  kCompassHolder     = 0x348;
 constexpr std::uintptr_t kCompassFrameUpdate = 0x14122FBA0;
 constexpr std::uint8_t   kCompassFrameUpdatePrologue[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x10, 0x48, 0x89, 0x70, 0x18,
@@ -171,7 +170,7 @@ bool RunLeaderTarget() noexcept
 bool RunCompass() noexcept
 {
     const double start   = Now();
-    auto*        manager = static_cast<std::uint8_t*>(Member(kCompassManager));
+    auto*        manager = static_cast<std::uint8_t*>(Member(facts::kUIAreaMap));
     void*        holder  = nullptr;
     if (manager != nullptr && platform::CopyGuarded(&holder, manager + kCompassHolder, sizeof(holder)) &&
         holder != nullptr && !CompassGuarded(holder))
@@ -194,7 +193,7 @@ bool Install(const platform::GameImage& image) noexcept
         holds           = live && image.BytesMatch(kSubTicks[i].function, kSubTicks[i].prologue);
         g_subTicks[i]   = live ? reinterpret_cast<ObjectFn>(*live) : nullptr;
     }
-    const auto system  = image.Rebase(kEndUISystem, kSubTicks.back().member + sizeof(void*));
+    const auto system  = image.Rebase(facts::kEndUISystem, kSubTicks.back().member + sizeof(void*));
     const auto leader  = image.Rebase(kLeaderTargetTick);
     const auto compass = image.Rebase(kCompassFrameUpdate);
     if (!holds || !system || !leader || !compass)

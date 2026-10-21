@@ -5,9 +5,9 @@
 #include <Unreal/FWeakObjectPtr.hpp>
 #include <Unreal/UObject.hpp>
 
+#include "facts/hud.h"
 #include "hud/enemy_gauges.h"
 #include "hud/first_player_code.h"
-#include "hud/hud_addresses.h"
 #include "hud/hud_roots.h"
 #include "hud/hud_updates.h"
 #include "hud/search_pins.h"
@@ -47,14 +47,11 @@ constexpr std::uintptr_t kFirstGamePlayerResume = 0x140CCF8E9;
 
 // The enemy ability-name labels (RE-p2-battle-popups.md §2.1): a TSparseArray at *(EndUISystem+0x180),
 // 72-byte elements, the label's weak widget at +8. A new label is made for each name shown.
-constexpr std::uintptr_t kEndUISystem       = 0x1493496E0;
 constexpr std::uint32_t  kAbilityNames      = 0x180;
 constexpr std::uint32_t  kAbilityNameEntry  = 0x48;
 constexpr std::uint32_t  kAbilityNameWidget = 0x8;
 // The field-target markers (RE-p2-field-interact.md §12.14): EndUISystem+0x98 points to a TSparseArray of 140-byte
 // elements; weak widgets at +0x00 (projected), +0x28 (placed at the point), +0x30 (animated).
-constexpr std::uint32_t  kFieldTargets      = 0x98;
-constexpr std::uint32_t  kFieldTargetEntry  = 140;
 constexpr std::uint32_t  kFieldTargetWidgets[] = {0x00, 0x28, 0x30};
 
 // The overlay's cached player view rect (RE-p2-hud.md P2.5): min x/y and size, floats.
@@ -320,13 +317,13 @@ void AdoptAbilityNames()
 void AdoptFieldTargets()
 {
     std::uintptr_t list = 0;
-    if (g_endUISystem == 0 || !platform::CopyGuarded(&list, reinterpret_cast<const void*>(g_endUISystem + kFieldTargets),
-                                                     sizeof(list)))
+    const auto markers = reinterpret_cast<const void*>(g_endUISystem + facts::kUIFieldMarkers);
+    if (g_endUISystem == 0 || !platform::CopyGuarded(&list, markers, sizeof(list)))
     {
         return;
     }
     std::size_t entries = 0, roots = 0;
-    platform::ForEachSparseElement(list, kFieldTargetEntry, [&entries, &roots](std::uintptr_t entry) {
+    platform::ForEachSparseElement(list, facts::kFieldMarkerEntry, [&entries, &roots](std::uintptr_t entry) {
         ++entries;
         for (const std::uint32_t at : kFieldTargetWidgets)
         {
@@ -389,7 +386,7 @@ bool InstallPlayerTwoPass(const platform::GameImage& image) noexcept
     enemy_gauges::Install(image);  // optional: without it the gauges keep player 1's placement in both halves
     popups::Install(image);      // optional, likewise for the battle popups
     const auto mode    = image.Rebase(kGameMode, sizeof(void*));
-    const auto overlay = image.Rebase(engine::kRootOverlaySingleton, sizeof(void*));
+    const auto overlay = image.Rebase(facts::kRootOverlaySingleton, sizeof(void*));
     const auto entry   = image.Rebase(kFirstGamePlayer, sizeof(kFirstPlayerEntryBytes));
     const auto resume  = image.Rebase(kFirstGamePlayerResume);
     if (!parts || !mode || !overlay || !entry || !resume)
@@ -399,7 +396,7 @@ bool InstallPlayerTwoPass(const platform::GameImage& image) noexcept
     }
     g_gameMode = *mode;
     g_overlay  = *overlay;
-    const auto system = image.Rebase(kEndUISystem, kAbilityNames + sizeof(void*));
+    const auto system = image.Rebase(facts::kEndUISystem, kAbilityNames + sizeof(void*));
     g_endUISystem     = system ? *system : 0;
 
     // The first-player code reads g_firstPlayerAnswer, in this DLL: pin it before installing.

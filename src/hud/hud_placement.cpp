@@ -9,7 +9,7 @@
 #include <Unreal/UObjectArray.hpp>
 #include <Unreal/UObjectGlobals.hpp>
 
-#include "hud/hud_addresses.h"
+#include "facts/hud.h"
 #include "hud/hud_rules.h"
 #include "hud/user_widgets.h"
 #include "hud/viewport_placement.h"
@@ -148,7 +148,7 @@ using platform::CopyGuarded;
 /// The widget's viewport layout, or nullopt if its memory cannot be read.
 std::optional<ViewportLayout> ReadLayout(const UObject* widget) noexcept
 {
-    using namespace engine;
+    using namespace facts;
     static_assert(kUserWidgetViewportOffsets == kUserWidgetViewportAnchors + sizeof(ViewportLayout::anchors) &&
                   kUserWidgetViewportAlignment == kUserWidgetViewportOffsets + sizeof(ViewportLayout::offsets) &&
                   kUserWidgetViewportLayoutEnd == kUserWidgetViewportAlignment + sizeof(ViewportLayout::alignment));

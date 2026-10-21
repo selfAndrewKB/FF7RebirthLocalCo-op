@@ -1,5 +1,6 @@
 #include "player_two/field_pickup.h"
 
+#include "facts/hud.h"
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
 #include "platform/every.h"
@@ -55,8 +56,6 @@ constexpr std::uint32_t  kRootModeHolder    = 0x1B8;        // read by the mode-
 constexpr std::uint32_t  kRootSlotHeldOwner = 0x210;        // -> +8: a u8 TickSlots writes (§12.1)
 constexpr std::uint32_t  kSlotHeldByte      = 0x08;
 constexpr std::uint32_t  kRootWorldItems    = 0x288;        // WorldItemMgr
-constexpr std::uintptr_t kEndUISystem       = 0x1493496E0;  // the EndUISystem object itself
-constexpr std::uint32_t  kUIEntries         = 0xB8;         // -> +0x5D0: i32, the poll needs it < 0
 constexpr std::uint32_t  kUIEntryValue      = 0x5D0;
 constexpr std::uintptr_t kPauseMenuKey      = 0x1491E44C0;  // InputKey24 "PauseMenu" (the poll needs it not held)
 
@@ -208,7 +207,6 @@ constexpr std::uint32_t  kWorldControllerCount = 0x1F8;
 // The marker list (§12.14): EndUISystem+0x98 points to a TSparseArray of 140-byte elements, the marker's weak widget
 // at +0x00. The game's destroy (§12.15), the call RemovePointByKey makes: it finds the element by the widget, releases
 // its parts, pools the Slate widget and removes the element, at once. Entry: push rbx; mov eax,20h; call (stack probe).
-constexpr std::uint32_t kMarkerList     = 0x98;
 constexpr std::uint32_t kMarkerEntry    = 140;
 constexpr std::uint8_t  kDestroyBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8,
                                            0x28, 0xFD, 0xEE, 0x00, 0x48, 0x2B, 0xE0, 0x48};
@@ -658,7 +656,8 @@ bool InMap(const std::uint8_t* owner, const MapShape& shape, std::uint64_t key) 
 /// Whether `widget` is a marker in the game's marker list now (an element's weak +0x00 names it).
 bool InMarkerList(std::uintptr_t widget) noexcept
 {
-    const auto list  = reinterpret_cast<std::uintptr_t>(PointerAt(reinterpret_cast<const void*>(g_uiSystem), kMarkerList));
+    const auto list  = reinterpret_cast<std::uintptr_t>(
+        PointerAt(reinterpret_cast<const void*>(g_uiSystem), facts::kUIFieldMarkers));
     bool       found = false;
     platform::ForEachSparseElement(list, kMarkerEntry, [widget, &found](std::uintptr_t entry) noexcept {
         found = reinterpret_cast<std::uintptr_t>(leader_scope::ObjectAt(reinterpret_cast<const void*>(entry))) == widget;
@@ -962,7 +961,7 @@ bool PollGate(const std::uint8_t* root, bool& slot0Only, bool& faulted) noexcept
         faulted = true;
         return false;
     }
-    const auto* entries = PointerAt(reinterpret_cast<const void*>(g_uiSystem), kUIEntries);
+    const auto* entries = PointerAt(reinterpret_cast<const void*>(g_uiSystem), facts::kUICommandController);
     if (mode == kModeBlocksPoll || entries == nullptr || ReadField<std::int32_t>(entries, kUIEntryValue) >= 0)
     {
         return false;
@@ -1241,7 +1240,7 @@ void FieldExit(void* mgr) noexcept
 void Install(const platform::GameImage& image) noexcept
 {
     const auto root    = image.Rebase(kGameRoot, sizeof(void*));
-    const auto ui      = image.Rebase(kEndUISystem, kUIEntries + sizeof(void*));
+    const auto ui      = image.Rebase(facts::kEndUISystem, facts::kUICommandController + sizeof(void*));
     const auto pause   = image.Rebase(kPauseMenuKey, 24);
     const auto find    = [&image](const platform::FunctionFact& fact) {
         const auto at = platform::FindFunction(image, fact);

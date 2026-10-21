@@ -1,5 +1,6 @@
 #include "hud/marker_timers.h"
 
+#include "facts/hud.h"
 #include "hud/hud_rules.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -17,7 +18,6 @@ namespace {
 // Facts read from the database (RE-p2-enemy-markers.md §7.5; this build). The list is a TSet like
 // the enemy-status manager's: its element TSparseArray at +0x10 (platform/sparse_array.h); each
 // element 0x30 bytes: +0 the weak widget, +0x14 T.
-constexpr std::uintptr_t kEndUISystem = 0x1493496E0;
 constexpr std::uint32_t  kMarkerList  = 0x150;
 constexpr std::uint32_t  kElements    = 0x10;
 constexpr std::uint32_t  kElement     = 0x30;
@@ -57,7 +57,7 @@ void Write(std::uintptr_t element, float t) noexcept
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto system = image.Rebase(kEndUISystem, kMarkerList + sizeof(void*));
+    const auto system = image.Rebase(facts::kEndUISystem, kMarkerList + sizeof(void*));
     g_endUISystem     = system ? *system : 0;
     return g_endUISystem != 0;
 }

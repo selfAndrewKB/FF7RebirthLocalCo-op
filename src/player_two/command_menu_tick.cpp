@@ -1,5 +1,6 @@
 #include "player_two/command_menu_tick.h"
 
+#include "facts/hud.h"
 #include "facts/party.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
@@ -153,9 +154,8 @@ constexpr std::array<std::uintptr_t, kActions> kActionKeys{0x1491E44D8, 0x1491E4
 // The UI system's slots: the input object [2], the command controller [23]. Two values player 2's tick
 // also writes need nothing here: EndUISystem[50]+0x20/+0x2C have no reader in the game, and the input
 // object's +0x64 is per-player state kept in player 2's focus scope (RE-p2-command-menu-levers.md §5).
-constexpr std::uintptr_t kEndUISystem = 0x1493496E0;
-constexpr std::uint32_t  kInput       = 0x10;
-constexpr std::uint32_t  kController  = 0xB8;
+using facts::kUICommandController;
+using facts::kUIInput;
 // The party manager's leader type (u8; PM+0x148 is the leader's weak pointer, player_two/leader_scope).
 constexpr std::uint32_t kLeaderType = 0x150;
 constexpr std::uint32_t kPrimary    = 0x140;
@@ -531,7 +531,7 @@ void ReleaseTint(const wchar_t* why) noexcept;  // below, with the tint's thunks
 void PlayerTwoPass(float deltaTime) noexcept
 {
     const auto two    = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller());
-    const auto one    = ReadAt<std::uintptr_t>(g_endUISystem + kController);
+    const auto one    = ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController);
     void*      member = generation::Member();
     if (two == 0 || one == 0 || one == two || member == nullptr ||
         (ReadAt<std::uint8_t>(one + kHudMode) == 0 && ReadAt<std::uint8_t>(two + kHudMode) == 0))
@@ -664,7 +664,7 @@ bool InPlayerTwoUi(Route route, const wchar_t* what, Call&& call) noexcept
         return refuse(L"the route is off, inside a pass, or player 2 is out");
     }
     const auto two    = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller());
-    const auto one    = ReadAt<std::uintptr_t>(g_endUISystem + kController);
+    const auto one    = ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController);
     void*      member = generation::Member();
     if (two == 0 || one == 0 || one == two || member == nullptr)
     {
@@ -720,7 +720,7 @@ bool InPlayerTwoUi(Route route, const wchar_t* what, Call&& call) noexcept
 /// For the route log: player 2's battle input, its action requests, and player 1's capture map's count.
 std::wstring RouteState(std::uintptr_t two)
 {
-    const auto input = ReadAt<std::uintptr_t>(g_endUISystem + kInput);
+    const auto input = ReadAt<std::uintptr_t>(g_endUISystem + kUIInput);
     return std::format(L"25C {} req 6:{} 7:{} 12:{} 13:{} 26:{} 32:{} 37:{} | members {} {} {} | captures {}",
                        ReadAt<std::uint8_t>(two + kBattleInput), RequestOf(two, 6), RequestOf(two, 7),
                        RequestOf(two, kReqAttack), RequestOf(two, kReqUnique), RequestOf(two, 26),
@@ -841,7 +841,7 @@ void TintLine(const wchar_t* what) noexcept
         return;
     }
     const auto fm  = FilterManager();
-    const auto one = ReadAt<std::uintptr_t>(g_endUISystem + kController);
+    const auto one = ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController);
     const auto two = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller());
     platform::LogDebug(L"command menu tick: tint {} (pass {}; wait P1 {} P2 {}; latch {} count {}; P2 holds {})", what, g_pass,
                   one != 0 ? ReadAt<std::int32_t>(one + kWaitFilter) : -1,
@@ -899,7 +899,7 @@ void TintOff(std::uint8_t type) noexcept
 /// menu is still in wait mode. Player 1's ticks first, so if both close in one frame player 2's plays it.
 void WaitSoundOff(std::uint8_t index) noexcept
 {
-    const auto one  = ReadAt<std::uintptr_t>(g_endUISystem + kController);
+    const auto one  = ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController);
     const auto two  = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller());
     const auto wait = [](std::uintptr_t ctrl) { return ctrl != 0 ? ReadAt<std::int32_t>(ctrl + kWaitFilter) : 0; };
     const auto s1 = wait(one), s2 = wait(two);
@@ -1031,7 +1031,7 @@ bool Install(const platform::GameImage& image) noexcept
                filterOn = find(kFilterOn), filterOff = find(kFilterOff),
                menuSound = find(kMenuSound), refInc = find(kRefInc), refDec = find(kRefDec);
     const auto commandMenu = image.Rebase(kCommandMenuKey, 24);
-    const auto system  = image.Rebase(kEndUISystem, kFilterManager + sizeof(void*));
+    const auto system  = image.Rebase(facts::kEndUISystem, kFilterManager + sizeof(void*));
     const auto manager = image.Rebase(facts::kPartyManagerGlobal, sizeof(void*));
     bool       ok      = tick && slot && snapshot && show && mode8 && hud && resume && suspend && listInput && leader &&
                   layer && weak_object::Known() && filterOn && filterOff && menuSound && refInc && refDec &&

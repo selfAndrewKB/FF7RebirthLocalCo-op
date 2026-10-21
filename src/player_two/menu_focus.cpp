@@ -1,5 +1,6 @@
 #include "player_two/menu_focus.h"
 
+#include "facts/hud.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -18,9 +19,6 @@ namespace lss::player_two::menu_focus {
 namespace {
 
 // Facts read from the database (RE-p2-command-menu-input.md §1.2, §2, §10; this build).
-constexpr std::uintptr_t kEndUISystem = 0x1493496E0;
-constexpr std::uint32_t  kInput       = 0x10;  // EndUISystem[2]: Square's input object
-constexpr std::uint32_t  kController  = 0xB8;  // EndUISystem[23]: the command controller
 // The input object: the focus path (FWeakWidgetPath: TArray<TWeakPtr<SWidget>> first) and the focus
 // layers (TArray of 40 bytes: weak layer widget, weak saved focus at +0x10, int32 priority at +0x20).
 constexpr std::uint32_t kPath       = 0x08;
@@ -107,7 +105,7 @@ std::wstring Describe(std::uintptr_t widget)
 Snapshot Read() noexcept
 {
     Snapshot   now;
-    const auto input = ReadAt<std::uintptr_t>(g_endUISystem + kInput);
+    const auto input = ReadAt<std::uintptr_t>(g_endUISystem + facts::kUIInput);
     if (input != 0)
     {
         const auto path   = ReadAt<std::uintptr_t>(input + kPath);
@@ -126,7 +124,7 @@ Snapshot Read() noexcept
         }
         now.cause = ReadAt<std::uint8_t>(input + kFocusCause);
     }
-    const auto controller = ReadAt<std::uintptr_t>(g_endUISystem + kController);
+    const auto controller = ReadAt<std::uintptr_t>(g_endUISystem + facts::kUICommandController);
     for (std::size_t i = 0; controller != 0 && i < kControllerBytes.size(); ++i)
     {
         now.controller[i] = ReadAt<std::uint8_t>(controller + kControllerBytes[i]);
@@ -157,7 +155,7 @@ std::wstring Format(const Snapshot& now)
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto system = image.Rebase(kEndUISystem, kController + sizeof(void*));
+    const auto system = image.Rebase(facts::kEndUISystem, facts::kUICommandController + sizeof(void*));
     g_endUISystem     = system ? *system : 0;
     g_loggedOnce      = false;
     platform::Log(L"menu focus: {}", system ? L"player 1's UI focus logged on change (read-only)"

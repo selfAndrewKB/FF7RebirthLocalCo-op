@@ -9,6 +9,7 @@
 #include <Unreal/UObject.hpp>
 #include <Unreal/UObjectGlobals.hpp>
 
+#include "facts/hud.h"
 #include "facts/vehicles.h"
 #include "hud/viewport_placement.h"
 #include "hud/widget_opacity.h"
@@ -16,6 +17,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/settled_log.h"
+#include "platform/verified_code.h"
 #include "player_two/chocobo_ride.h"
 #include "player_two/field_pickup.h"
 #include "player_two/generation.h"
@@ -38,8 +40,6 @@ using RC::Unreal::UFunction;
 using RC::Unreal::UObject;
 
 // RE-p2-field-prompts.md §1.2 and §4 (this build).
-constexpr std::uintptr_t kEndUISystem       = 0x1493496E0;  // g_EndUISystem (data)
-constexpr std::uint32_t  kRowList           = 0x208;        // -> {FWeakObjectPtr* data, int32 num}
 constexpr std::uint32_t  kListNum           = 0x8;
 constexpr std::uint32_t  kLeaderActions     = 0x598;        // PC -> the leader-action component
 constexpr std::uint32_t  kComponentRowBytes = 0x9A8;        // + 12*i: request byte
@@ -48,15 +48,9 @@ constexpr std::uint32_t  kRowStride         = 12;
 constexpr std::size_t    kComponentRows     = 14;
 constexpr std::uint32_t  kWidgetPriority    = 0x400;
 constexpr std::uint32_t  kWidgetRemoveState = 0x418;
-constexpr std::uint32_t  kWidgetViewportPosition = 0x220;  // UUserWidget viewport offsets (hud/hud_addresses.h)
 constexpr std::int32_t   kMaxRows           = 64;
 
-// FieldActionIconList__SortAndLayout(TArray<FWeakObjectPtr>* list, UObject* placeNow): sorts the
-// given array by priority and gives each live row the next slot in it (§4). Called by the game only
-// when a row is added or removed.
-constexpr std::uintptr_t kSortAndLayout        = 0x1414A9B14;
-constexpr std::uint8_t   kSortAndLayoutBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x20, 0x48, 0x89, 0x54, 0x24, 0x10, 0x55, 0x56,
-                                                  0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0xB8, 0x20, 0x00};
+// FieldActionIconList__SortAndLayout (facts::kSortAndLayout).
 using SortAndLayoutFn = void (*)(void* list, void* placeNow);
 
 // ESlateVisibility.
@@ -141,7 +135,7 @@ bool LayoutGuarded(ListHeader* list, void* placeNow) noexcept
 LayoutPoint PositionOf(const UObject* widget) noexcept
 {
     LayoutPoint position;
-    Read(reinterpret_cast<std::uintptr_t>(widget) + kWidgetViewportPosition, position);
+    Read(reinterpret_cast<std::uintptr_t>(widget) + facts::kUserWidgetViewportOffsets, position);
     return position;
 }
 
@@ -308,10 +302,10 @@ void LogIfChanged(const std::array<std::uint8_t, kComponentRows>& bytes)
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto system = image.Rebase(kEndUISystem, kRowList + sizeof(void*));
-    const auto layout = image.Rebase(kSortAndLayout);
+    const auto system = image.Rebase(facts::kEndUISystem, facts::kUIActionRows + sizeof(void*));
+    const auto layout = platform::FindFunction(image, facts::kSortAndLayout);
     g_endUISystem     = system ? *system : 0;
-    if (layout && image.BytesMatch(kSortAndLayout, kSortAndLayoutBytes))
+    if (layout)
     {
         g_sortAndLayout = reinterpret_cast<SortAndLayoutFn>(*layout);
     }
@@ -374,8 +368,8 @@ void Refresh() noexcept
         std::uintptr_t data = 0;
         std::int32_t   num  = 0;
         g_rows.clear();
-        if (!Read(g_endUISystem + kRowList, list) || list == 0 || !Read(list, data) || !Read(list + kListNum, num) ||
-            num < 0 || num > kMaxRows)
+        if (!Read(g_endUISystem + facts::kUIActionRows, list) || list == 0 || !Read(list, data) ||
+            !Read(list + kListNum, num) || num < 0 || num > kMaxRows)
         {
             return;
         }

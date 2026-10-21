@@ -4,11 +4,11 @@
 #define RC_UNREAL_DISABLE_CLASS_DEPRECATION_WARNINGS
 #include <Unreal/NameTypes.hpp>
 
+#include "facts/hud.h"
 #include "hud/area_icons_two.h"
 #include "hud/enemy_gauges.h"
 #include "hud/target_views.h"
 #include "hud/entry_filter_code.h"
-#include "hud/hud_addresses.h"
 #include "hud/menu_buffers.h"
 #include "hud/minimap_once.h"
 #include "hud/minimap.h"
@@ -25,6 +25,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/module_pin.h"
+#include "platform/verified_code.h"
 #include "player_two/generation.h"
 #include "player_two/command_menu_two.h"
 
@@ -53,8 +54,6 @@ constexpr std::uint32_t  kOverlayWindow = 0x2F0;
 // Its call to FEndMenuRenderer__AcquireLayerSlot(renderer, pool 2): rcx = renderer, dl = 2, the
 // slot in rax.
 constexpr std::uintptr_t kAcquireCall = 0x140C960A2;
-constexpr std::uintptr_t kAcquireLayerSlot = 0x140FC8694;
-constexpr std::uint8_t   kAcquireLayerSlotPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
 
 // FApp::DeltaTime, a double, which the overlay's paint args and fade read.
 constexpr std::uintptr_t kDeltaTime = 0x146FAA330;
@@ -82,11 +81,6 @@ constexpr std::uintptr_t kDrawGateResume         = 0x140FC8E0A;
 // BeginInitResource_OrDirectIfRenderThread (render thread: vt+0x28 directly).
 constexpr std::uint32_t  kPoolTwoVertexBuffer = 0x90;
 constexpr std::uint32_t  kPoolTwoIndexBuffer  = 0xA8;
-constexpr std::uintptr_t kVertexBufferVtable  = 0x146621CF8;
-constexpr std::uintptr_t kIndexBufferVtable   = 0x146621D50;
-constexpr std::uintptr_t kBeginInitResource   = 0x1409E7EF8;  // void (FRenderResource*)
-constexpr std::uint8_t   kBeginInitResourcePrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x48,
-                                                         0x89, 0x7C, 0x24, 0x18, 0x41, 0x56, 0xB8, 0x90, 0x00, 0x00, 0x00};
 
 constexpr const wchar_t* kPlayerTwoEntryName = L"SEndRootOverlay_P2";
 constexpr const wchar_t* kStockEntryName     = L"SEndRootOverlay";
@@ -267,18 +261,16 @@ bool Patch(const platform::GameImage& image, platform::CodeRedirect& redirect, s
 bool InstallSecondImage(const platform::GameImage& image) noexcept
 {
     const bool prologues = image.BytesMatch(kRenderToCompositeLayer, kRenderToCompositeLayerPrologue) &&
-                           image.BytesMatch(kAcquireLayerSlot, kAcquireLayerSlotPrologue) &&
-                           image.BytesMatch(kAddCompositePasses, kAddCompositePassesPrologue) &&
-                           image.BytesMatch(kBeginInitResource, kBeginInitResourcePrologue) &&
-                           image.BytesMatch(engine::kSubmitLayerSlot, engine::kSubmitLayerSlotPrologue);
+                           image.BytesMatch(kAddCompositePasses, kAddCompositePassesPrologue);
     const auto render    = image.Rebase(kRenderToCompositeLayer);
-    const auto init      = image.Rebase(kBeginInitResource);
-    const auto submit    = image.Rebase(engine::kSubmitLayerSlot);
-    const auto overlay   = image.Rebase(engine::kRootOverlaySingleton, sizeof(void*));
+    const auto acquire   = platform::FindFunction(image, facts::kAcquireLayerSlot);
+    const auto init      = platform::FindFunction(image, facts::kBeginInitResource);
+    const auto submit    = platform::FindFunction(image, facts::kSubmitLayerSlot);
+    const auto overlay   = image.Rebase(facts::kRootOverlaySingleton, sizeof(void*));
     const auto delta     = image.Rebase(kDeltaTime, sizeof(double));
-    const auto vbVtable  = image.Rebase(kVertexBufferVtable, sizeof(void*));
-    const auto ibVtable  = image.Rebase(kIndexBufferVtable, sizeof(void*));
-    if (!prologues || !render || !init || !submit || !overlay || !delta || !vbVtable || !ibVtable)
+    const auto vbVtable  = image.Rebase(facts::kVertexBufferVtable, sizeof(void*));
+    const auto ibVtable  = image.Rebase(facts::kIndexBufferVtable, sizeof(void*));
+    if (!prologues || !render || !acquire || !init || !submit || !overlay || !delta || !vbVtable || !ibVtable)
     {
         platform::Log(L"HUD image: the overlay's render code is not what the research read; no player-2 image");
         return false;
@@ -311,7 +303,7 @@ bool InstallSecondImage(const platform::GameImage& image) noexcept
         Patch(image, g_gateCode, kDrawGateSite, kDrawGateBytes, gateCode, kDrawGateResume) &&
         Patch(image, g_buffersCode, kLoadVertexBufferSite, kLoadVertexBufferBytes, buffersCode, kLoadVertexBufferResume) &&
         familyRedirect() &&
-        g_acquireCall.InstallResearch(image, kAcquireCall, kAcquireLayerSlot,
+        g_acquireCall.InstallResearch(image, kAcquireCall, facts::kAcquireLayerSlot.address,
                                       reinterpret_cast<std::uintptr_t>(&AcquireLayerSlot));
     if (!installed)
     {

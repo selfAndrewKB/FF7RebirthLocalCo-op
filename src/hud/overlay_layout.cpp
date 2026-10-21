@@ -1,8 +1,8 @@
 #include "hud/overlay_layout.h"
 
+#include "facts/hud.h"
 #include "hud/arrow_edge_code.h"
 #include "hud/centered_frame_code.h"
-#include "hud/hud_addresses.h"
 #include "hud/overlay_band.h"
 #include "hud/second_image.h"
 #include "platform/build_value.h"
@@ -12,6 +12,7 @@
 #include "platform/module_pin.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/verified_code.h"
 #include "player_two/generation.h"
 
 #ifndef WIN32_LEAN_AND_MEAN
@@ -49,7 +50,7 @@ platform::CallRedirect g_submitCall;
 platform::DeferredSites g_rect;
 std::uintptr_t         g_rectSite         = 0;
 std::uintptr_t         g_rectTarget       = 0;
-ContainScaleFn         g_containScale     = nullptr;  // the game's UI scale of a rect (hud_addresses.h)
+ContainScaleFn         g_containScale     = nullptr;  // the game's UI scale of a rect (facts/hud.h)
 std::uintptr_t         g_overlaySingleton = 0;  // live 0x1491D1948
 bool                   g_installed        = false;
 
@@ -186,8 +187,8 @@ IntRect* OverlayLayoutRect(IntRect* out)
     {
         return result;
     }
-    const float   viewW   = ReadFloat(overlay + engine::kOverlayViewWidth);
-    const float   viewH   = ReadFloat(overlay + engine::kOverlayViewHeight);
+    const float   viewW   = ReadFloat(overlay + facts::kOverlayViewWidth);
+    const float   viewH   = ReadFloat(overlay + facts::kOverlayViewHeight);
     const IntRect image   = *out;
     const IntRect band    = VisibleBand(image.Width(), image.Height(), viewW, viewH);
     const float   uiScale = g_containScale({static_cast<float>(band.Width()), static_cast<float>(band.Height())});
@@ -224,17 +225,17 @@ void* OverlayLayerEntry(void* slot, std::uintptr_t name, IntRect* rect, std::uin
         g_logged[g_loggedPass].entry = true;
         platform::LogDebug(L"HUD layout: entry matrix x/y ({:.6f}, {:.6f}, {:.3f}, {:.3f}) -> ({:.6f}, {:.6f}, {:.3f}, "
                            L"{:.3f}); host scale {:.4f} -> {:.4f}",
-                           ReadFloat(e + engine::kEntryMatrixScaleX), ReadFloat(e + engine::kEntryMatrixScaleY),
-                           ReadFloat(e + engine::kEntryMatrixTranslateX), ReadFloat(e + engine::kEntryMatrixTranslateY),
+                           ReadFloat(e + facts::kEntryMatrixScaleX), ReadFloat(e + facts::kEntryMatrixScaleY),
+                           ReadFloat(e + facts::kEntryMatrixTranslateX), ReadFloat(e + facts::kEntryMatrixTranslateY),
                            g_pending.placement.scaleX, g_pending.placement.scaleY, g_pending.placement.translateX,
-                           g_pending.placement.translateY, ReadFloat(g_pending.overlay + engine::kOverlayHostScale),
+                           g_pending.placement.translateY, ReadFloat(g_pending.overlay + facts::kOverlayHostScale),
                            g_pending.hostScale);
     }
-    WriteFloat(e + engine::kEntryMatrixScaleX, g_pending.placement.scaleX);
-    WriteFloat(e + engine::kEntryMatrixScaleY, g_pending.placement.scaleY);
-    WriteFloat(e + engine::kEntryMatrixTranslateX, g_pending.placement.translateX);
-    WriteFloat(e + engine::kEntryMatrixTranslateY, g_pending.placement.translateY);
-    WriteFloat(g_pending.overlay + engine::kOverlayHostScale, g_pending.hostScale);
+    WriteFloat(e + facts::kEntryMatrixScaleX, g_pending.placement.scaleX);
+    WriteFloat(e + facts::kEntryMatrixScaleY, g_pending.placement.scaleY);
+    WriteFloat(e + facts::kEntryMatrixTranslateX, g_pending.placement.translateX);
+    WriteFloat(e + facts::kEntryMatrixTranslateY, g_pending.placement.translateY);
+    WriteFloat(g_pending.overlay + facts::kOverlayHostScale, g_pending.hostScale);
     g_submit = {true, g_pending.thread, e, g_pending.clip};
     return entry;
 }
@@ -244,9 +245,9 @@ void* OverlayLayerEntry(void* slot, std::uintptr_t name, IntRect* rect, std::uin
 /// with these instead of the entry matrix, and they map the layout onto the whole target.
 void PlaceEntryMatrices(const Submit& submit) noexcept
 {
-    const auto count = *reinterpret_cast<const std::int32_t*>(submit.entry + engine::kEntryMatrixCount);
-    auto*      data  = *reinterpret_cast<float* const*>(submit.entry + engine::kEntryMatrixData);
-    if (count < 0 || count > engine::kEntryMatrixMaxCount || (count > 0 && data == nullptr))
+    const auto count = *reinterpret_cast<const std::int32_t*>(submit.entry + facts::kEntryMatrixCount);
+    auto*      data  = *reinterpret_cast<float* const*>(submit.entry + facts::kEntryMatrixData);
+    if (count < 0 || count > facts::kEntryMatrixMaxCount || (count > 0 && data == nullptr))
     {
         if (g_loggedMatrixCount != -2)
         {
@@ -315,21 +316,16 @@ bool PlaceRect(const platform::GameImage&) noexcept
 
 bool InstallOverlayLayout(const platform::GameImage& image) noexcept
 {
-    const bool bytesHold =
-        image.BytesMatch(engine::kGetCompositeLayerRect, engine::kGetCompositeLayerRectPrologue) &&
-        image.BytesMatch(engine::kFindOrAddNamedLayerEntry, engine::kFindOrAddNamedLayerEntryPrologue);
-    const auto rectCall  = image.Rebase(engine::kOverlayRectCall, 5);
-    const auto rectFn    = image.Rebase(engine::kGetCompositeLayerRect);
-    const auto entryCall = image.Rebase(engine::kEntryCall, 5);
-    const auto entryFn    = image.Rebase(engine::kFindOrAddNamedLayerEntry);
-    const auto submitCall = image.Rebase(engine::kSubmitCall, 5);
-    const auto submitFn   = image.Rebase(engine::kSubmitLayerSlot);
-    const auto singleton  = image.Rebase(engine::kRootOverlaySingleton, sizeof(void*));
-    const bool submitHolds = image.BytesMatch(engine::kSubmitLayerSlot, engine::kSubmitLayerSlotPrologue);
-    const auto contain     = image.Rebase(engine::kContainScale);
-    const bool containHolds = contain && image.BytesMatch(engine::kContainScale, engine::kContainScaleBytes);
-    if (!bytesHold || !submitHolds || !containHolds || !rectCall || !rectFn || !entryCall || !entryFn || !submitCall ||
-        !submitFn || !singleton)
+    // Each function found only where its bytes are (platform::FindFunction logs the one that is not).
+    const auto rectFn     = platform::FindFunction(image, facts::kGetCompositeLayerRect);
+    const auto entryFn    = platform::FindFunction(image, facts::kFindOrAddNamedLayerEntry);
+    const auto submitFn   = platform::FindFunction(image, facts::kSubmitLayerSlot);
+    const auto contain    = platform::FindFunction(image, facts::kContainScale);
+    const auto rectCall   = image.Rebase(facts::kOverlayRectCall, 5);
+    const auto entryCall  = image.Rebase(facts::kEntryCall, 5);
+    const auto submitCall = image.Rebase(facts::kSubmitCall, 5);
+    const auto singleton  = image.Rebase(facts::kRootOverlaySingleton, sizeof(void*));
+    if (!rectFn || !entryFn || !submitFn || !contain || !rectCall || !entryCall || !submitCall || !singleton)
     {
         platform::Log(L"HUD layout: the overlay's code is not what the research read; the HUD keeps the game's layout");
         return false;

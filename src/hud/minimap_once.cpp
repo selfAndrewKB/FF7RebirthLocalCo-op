@@ -1,5 +1,6 @@
 #include "hud/minimap_once.h"
 
+#include "facts/hud.h"
 #include "hud/minimap_once_code.h"
 #include "platform/build_value.h"
 #include "platform/code_redirect.h"
@@ -42,14 +43,15 @@ constexpr std::uint8_t kOctagonAcquire[]     = {0xE8, 0x44, 0x84, 0x56, 0xFD};
 constexpr std::uint8_t kOctagonSubmit[]      = {0xE8, 0x57, 0x82, 0x56, 0xFD};
 constexpr std::uint8_t kOctagonAfterSubmit[] = {0x49, 0x8B, 0x8E, 0xE0, 0x01, 0x00, 0x00};  // mov rcx,[r14+1E0h]
 
-constexpr WidgetSite kCircle{L"circle", 0x140FC6C95, kCircleSiteBytes, 0x140FC6CAE, kCircleAcquire,
-                             0x140FC6F13, kCircleSubmit, 0x140FC6F18, kCircleAfterSubmit};
+constexpr WidgetSite kCircle{L"circle", 0x140FC6C95, kCircleSiteBytes, facts::kNaviMapCircleAcquireCall, kCircleAcquire,
+                             facts::kNaviMapCircleSubmitCall, kCircleSubmit, 0x140FC6F18, kCircleAfterSubmit};
 constexpr WidgetSite kOctagon{L"octagon", 0x143A60235, kOctagonSiteBytes, 0x143A6024B, kOctagonAcquire,
                               0x143A604E0, kOctagonSubmit, 0x143A604E5, kOctagonAfterSubmit};
 // Game version 1.005 (RE-1005-hud-2.md): the circle's site is the next instruction, 0x140FC6C9C here (the same block
 // and landing point; its own skip code, hud/minimap_once_code.h).
-constexpr WidgetSite kCircle1005{L"circle", 0x140FC6C9C, kCircleSiteBytes1005, 0x140FC6CAE, kCircleAcquire,
-                                 0x140FC6F13, kCircleSubmit, 0x140FC6F18, kCircleAfterSubmit};
+constexpr WidgetSite kCircle1005{L"circle", 0x140FC6C9C, kCircleSiteBytes1005, facts::kNaviMapCircleAcquireCall,
+                                 kCircleAcquire, facts::kNaviMapCircleSubmitCall, kCircleSubmit, 0x140FC6F18,
+                                 kCircleAfterSubmit};
 
 constexpr ULONGLONG kLogPeriodMs = 60'000;  // the counts line, once a minute (the 32 KB leak's pool reading is retired)
 

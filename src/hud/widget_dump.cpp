@@ -13,7 +13,7 @@
 #include <Unreal/UObjectArray.hpp>
 #include <Unreal/UObjectGlobals.hpp>
 
-#include "hud/hud_addresses.h"
+#include "facts/hud.h"
 #include "platform/build_value.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -171,7 +171,7 @@ void WalkSlots(UObject* widget, int depth, int& lines)
 }
 
 /// Where a user widget is: visible or not, its cached geometry, and its viewport layout (anchors,
-/// offsets, alignment; hud_addresses.h).
+/// offsets, alignment; facts/hud.h).
 void LogPlacement(UObject* widget)
 {
     static const auto isVisible = FindGetter(STR("/Script/UMG.Widget:IsVisible"), 1);
@@ -183,8 +183,8 @@ void LogPlacement(UObject* widget)
         return;
     }
     float v[10] = {};
-    static_assert(sizeof(v) == engine::kUserWidgetViewportLayoutEnd - engine::kUserWidgetViewportAnchors);
-    std::memcpy(v, reinterpret_cast<const std::uint8_t*>(widget) + engine::kUserWidgetViewportAnchors, sizeof(v));
+    static_assert(sizeof(v) == facts::kUserWidgetViewportLayoutEnd - facts::kUserWidgetViewportAnchors);
+    std::memcpy(v, reinterpret_cast<const std::uint8_t*>(widget) + facts::kUserWidgetViewportAnchors, sizeof(v));
     platform::Log(L"dump slots:   visible {}; geometry size {:.0f}x{:.0f} scale {:.3f} at ({:.0f}, {:.0f}); viewport "
                   L"anchors ({:.2f},{:.2f})-({:.2f},{:.2f}) offsets ({:.0f},{:.0f},{:.0f},{:.0f}) alignment ({:.2f},{:.2f})",
                   visible, geom[0], geom[1], geom[2], geom[3], geom[4], v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7],
@@ -465,9 +465,6 @@ int LogMenuSettings()
 
 // EndUISystem (g_EndUISystem) and the members P8.9 read: 8-byte heap pointers, weak object
 // pointers as {int32 index, int32 serial} (serial 0 = null), and one-byte flags.
-constexpr std::uintptr_t kEndUISystem      = 0x1493496E0;
-constexpr std::uint32_t  kFieldCommandCtrl = 0xB8;
-constexpr std::uint32_t  kCompassManager   = 0x108;
 constexpr std::uint32_t  kCompassHolder    = 0x348;  // in the compass manager; its +0 is the weak widget
 // EndUISystem byte. 1.005: MasterHUD_Tick 0x140F75A05 cmp byte [rbx+2D9h],0 (1.004 0x140F37E5D [rbx+2D1h]);
 // EndUISystem__SetupFieldCommandOrDefer 0x1413FBB9C uses +0x2D9/+0x2DC (a member was inserted after +0x2A8).
@@ -591,14 +588,14 @@ int LogPlayerLayers(std::uintptr_t playerHostGeometry)
 /// holder's widget, the two setup flags, and the stock per-player layer geometry each local player would get.
 int LogHudManagers(const platform::GameImage& image)
 {
-    const auto system = image.Rebase(kEndUISystem, kFieldCommandSetupPending + 1);
+    const auto system = image.Rebase(facts::kEndUISystem, kFieldCommandSetupPending + 1);
     if (!system)
     {
         platform::Log(L"hud managers: EndUISystem not located");
         return 1;
     }
-    const auto ctrl    = PointerAt(*system + kFieldCommandCtrl).value_or(0);
-    const auto compass = PointerAt(*system + kCompassManager).value_or(0);
+    const auto ctrl    = PointerAt(*system + facts::kUICommandController).value_or(0);
+    const auto compass = PointerAt(*system + facts::kUIAreaMap).value_or(0);
     const auto holder  = compass != 0 ? PointerAt(compass + kCompassHolder).value_or(0) : 0;
     platform::Log(L"hud managers: EndUISystem field-command setup pending {}; field command controller {}",
                   Flag(*system + kFieldCommandSetupPending), ctrl != 0 ? L"present" : L"absent");

@@ -1,5 +1,6 @@
 #include "hud/search_pins.h"
 
+#include "facts/hud.h"
 #include "hud/hud_roots.h"
 #include "hud/hud_rules.h"
 #include "hud/widget_opacity.h"
@@ -26,7 +27,6 @@ namespace {
 // RE-p2-ranged-reticle.md §2.3 (this build). EndUISystem[55] points to the pin manager: +0x00 the compass (weak),
 // +0x30 the pins, a TSparseArray of 40-byte entries: +0x00 the pin (weak), +0x08 its world location (FVector), +0x18
 // the hook icon (weak).
-constexpr std::uintptr_t kEndUISystem = 0x1493496E0;
 constexpr std::uint32_t  kPinManager  = 0x1B8;
 constexpr std::uint32_t  kCompass     = 0x00;
 constexpr std::uint32_t  kPins        = 0x30;
@@ -199,7 +199,7 @@ void LogIfChanged(int mine, const Logged& now, std::uintptr_t manager) noexcept
 
 void Install(const platform::GameImage& image) noexcept
 {
-    const auto system = image.Rebase(kEndUISystem, kPinManager + sizeof(void*));
+    const auto system = image.Rebase(facts::kEndUISystem, kPinManager + sizeof(void*));
     const auto pin    = platform::FindFunction(image, kPlacePin);
     const auto hook   = platform::FindFunction(image, kPlaceHook);
     g_system          = system ? *system : 0;

@@ -1,6 +1,7 @@
 #include "player_two/battle_input.h"
 
 #include "facts/controller.h"
+#include "facts/hud.h"
 #include "facts/in_battle.h"
 #include "facts/party.h"
 #include "platform/build_value.h"
@@ -41,8 +42,6 @@ constexpr std::uint32_t  kTargetSlot     = 0x258;
 constexpr std::uint32_t  kPartyManagerLeader = 0x148;
 
 // The command controller (read only, for the log): its battle-phase gates, guard mode and request array.
-constexpr std::uintptr_t kEndUISystem       = 0x1493496E0;
-constexpr std::uint32_t  kController        = 0xB8;
 constexpr std::uint32_t  kBattleHud         = 0x540;  // u8
 constexpr std::uint32_t  kBattleBlocked     = 0x541;  // u8
 constexpr std::uint32_t  kBattleReadyA      = 0x5E1;  // u8
@@ -200,7 +199,7 @@ bool Install(const platform::GameImage& image) noexcept
     };
     const auto battleSystem = image.Rebase(kBattleSystem, sizeof(void*));
     const auto partyManager = image.Rebase(facts::kPartyManagerGlobal, sizeof(void*));
-    const auto system = image.Rebase(kEndUISystem, kController + sizeof(void*));
+    const auto system = image.Rebase(facts::kEndUISystem, facts::kUICommandController + sizeof(void*));
     const auto vtable = image.Rebase(kBattlePlayerVTable, sizeof(void*));
     g_installed = leader_scope::Install(image) && facts::InBattleKnown() && battleSystem && partyManager && system &&
                   vtable;
@@ -221,7 +220,7 @@ void Watch(void* member, void* state) noexcept
     try
     {
         std::uintptr_t controller = 0;
-        Read(g_endUISystem + kController, controller);
+        Read(g_endUISystem + facts::kUICommandController, controller);
         const bool battleHud  = controller != 0 && ReadAt<std::uint8_t>(controller + kBattleHud) != 0;
         const bool blocked    = controller != 0 && ReadAt<std::uint8_t>(controller + kBattleBlocked) != 0;
         const bool ready      = controller != 0 && (ReadAt<std::uint8_t>(controller + kBattleReadyA) != 0 ||

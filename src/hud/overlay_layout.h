@@ -33,7 +33,7 @@ namespace lss::hud {
 /// band applies, 1920x1080 otherwise.
 LayoutSize LastLayoutSize() noexcept;
 
-/// Checks every fact in hud/hud_addresses.h and installs the three redirects and the code patches
+/// Checks every fact it needs (facts/hud.h) and installs the three redirects and the code patches
 /// (hud/centered_frame_code.h, hud/arrow_edge_code.h), or none.
 bool InstallOverlayLayout(const platform::GameImage& image) noexcept;
 

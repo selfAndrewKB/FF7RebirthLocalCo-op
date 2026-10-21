@@ -1,5 +1,6 @@
 #include "hud/target_views.h"
 
+#include "facts/hud.h"
 #include "hud/hud_rules.h"
 #include "hud/widget_opacity.h"
 #include "platform/build_value.h"
@@ -64,8 +65,6 @@ constexpr std::uint32_t  kDisplayed    = 0x70;
 
 // The gauge manager (EndUISystem[31]): its entries (a TSet, elements of 0x180 bytes: +0 source, +0x10
 // the weak widget) and the sticky list (+0xB0 {object, controller} pairs, +0xB8 count).
-constexpr std::uintptr_t kEndUISystem = 0x1493496E0;
-constexpr std::uint32_t  kManager     = 0xF8;
 constexpr std::uint32_t  kEntries     = 0x10;
 constexpr std::uint32_t  kElement     = 0x180;
 constexpr std::uint32_t  kEntryWidget = 0x10;
@@ -376,7 +375,7 @@ void FindOtherGauges(std::uintptr_t system)
     g_entryCount  = 0;
     g_otherGauges[0].clear();
     g_otherGauges[1].clear();
-    const std::uintptr_t manager = ReadAt<std::uintptr_t>(g_endUISystem + kManager);
+    const std::uintptr_t manager = ReadAt<std::uintptr_t>(g_endUISystem + facts::kUIEnemyStatus);
     if (manager == 0 || system == 0)
     {
         return;
@@ -418,7 +417,7 @@ bool Install(const platform::GameImage& image) noexcept
     g_release    = reinterpret_cast<ReleaseFn>(find(kRelease));
     g_enemyAi    = reinterpret_cast<EnemyAiFn>(find(kEnemyAi));
     const auto system  = image.Rebase(kBattleSystem, sizeof(void*));
-    const auto ui      = image.Rebase(kEndUISystem, kManager + sizeof(void*));
+    const auto ui      = image.Rebase(facts::kEndUISystem, facts::kUIEnemyStatus + sizeof(void*));
     g_installed =
         g_mainTarget && g_release && g_enemyAi && player_two::weak_object::Known() && system && ui &&
         widget_opacity::Install(image);

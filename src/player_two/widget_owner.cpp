@@ -1,5 +1,6 @@
 #include "player_two/widget_owner.h"
 
+#include "facts/hud.h"
 #include "hud/widget_opacity.h"
 #include "platform/call_redirect.h"
 #include "platform/guarded.h"
@@ -56,10 +57,8 @@ constexpr std::uint32_t kCellPosition   = 0xA24;  // float x, y
 // its ticks; for the game's controller it equals PM+0x150) and its battle HUD mode (0 out of battle).
 constexpr std::uint32_t kStoredLeaderType = 0x30;
 constexpr std::uint32_t kHudMode          = 0x540;
-// The UI system's slots.
-constexpr std::uintptr_t kEndUISystem = 0x1493496E0;
-constexpr std::uint32_t  kController  = 0xB8;   // EndUISystem[23]
-constexpr std::uint32_t  kKeyGuide    = 0x1A8;  // EndUISystem[53]
+using facts::kUICommandController;  // the UI system's slots (facts/hud.h)
+using facts::kUIKeyGuide;
 // A key guide (logged): +0 active, +2 the option's cache, +3 shown, +0x14 mode, +4 its widget
 // (FWeakObjectPtr); the widget's UWidget::Visibility (u8 at +0xC3).
 constexpr std::uint32_t kGuideWidget = 0x04;
@@ -114,7 +113,7 @@ class OwnerView
 public:
     OwnerView(std::uintptr_t controller, std::uintptr_t keyGuide) noexcept
     {
-        held_ = Enter(0, kController, controller) && (keyGuide == 0 || Enter(1, kKeyGuide, keyGuide));
+        held_ = Enter(0, kUICommandController, controller) && (keyGuide == 0 || Enter(1, kUIKeyGuide, keyGuide));
         if (held_ && ReadAt<std::uint8_t>(controller + kHudMode) != 0)
         {
             type_.emplace(ReadAt<std::uint8_t>(controller + kStoredLeaderType));
@@ -213,7 +212,7 @@ void WatchCell(std::uintptr_t cell, std::uintptr_t two) noexcept
         return;
     }
     before = now;
-    const auto one = ReadAt<std::uintptr_t>(g_endUISystem + kController);
+    const auto one = ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController);
     Line(std::format(L"player 2's cell {:#x} (slot {}): type {} leader {} look {} at ({:.1f}, {:.1f}) | leader type "
                      L"answered {} (player 1's controller's {}) | P2 battle HUD {}",
                      cell, slot, now.type, now.leader, now.look, ReadAt<float>(cell + kCellPosition),
@@ -378,7 +377,7 @@ void GuideTick(void* keyGuide) noexcept
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto system  = image.Rebase(kEndUISystem, kKeyGuide + sizeof(void*));
+    const auto system  = image.Rebase(facts::kEndUISystem, kUIKeyGuide + sizeof(void*));
     const auto guide   = platform::FindFunction(image, kGuideTick);
     const auto site    = image.Rebase(kGuideTickCall, 5);
     if (!system)

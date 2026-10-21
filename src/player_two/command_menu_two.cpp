@@ -6,6 +6,7 @@
 #include <Unreal/UObject.hpp>
 #include <Unreal/UObjectGlobals.hpp>
 
+#include "facts/hud.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/deferred_sites.h"
@@ -122,11 +123,9 @@ constexpr std::uint8_t kKeyGuideCtorBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x0
                                                0x0F, 0x69, 0xFE, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9};
 constexpr platform::FunctionFact kKeyGuideCtor{L"KeyGuide53__Ctor", 0x143A1DF44, kKeyGuideCtorBytes};
 constexpr std::size_t   kKeyGuideSize   = 0x38;
-constexpr std::uint32_t kKeyGuideSlot   = 0x1A8;  // EndUISystem[53]
 constexpr std::uint32_t kKeyGuideWidget = 0x04;
-// The UI system's command controller slot (EndUISystem[23]: the game's controller).
-constexpr std::uintptr_t kEndUISystem = 0x1493496E0;
-constexpr std::uint32_t  kGameController = 0xB8;
+using facts::kUICommandController;  // the UI system's slots (facts/hud.h)
+using facts::kUIKeyGuide;
 constexpr std::uint32_t  kHudMode        = 0x540;  // u8: the battle HUD mode
 // The controller's lifecycle (RE-p2-command-menu-lifecycle.md §2, §3.1): "setup done" (+0x777: Setup sets
 // it, only ResetAll clears it; while 0 no menu state can be pushed) and "setup pending" (+0x775). The
@@ -322,7 +321,7 @@ SetupResult RunSetup(void* world, std::uint8_t& result, const wchar_t*& refusal)
 /// Logs the "setup done" bytes of both controllers and the deferred mark on change.
 void WatchLifecycle() noexcept
 {
-    const auto one = ReadAt<std::uintptr_t>(g_endUISystem + kGameController);
+    const auto one = ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController);
     const auto two = reinterpret_cast<std::uintptr_t>(g_controller);
     const std::array<std::uint8_t, 3> lifecycle{ReadAt<std::uint8_t>(one + kSetupDone),
                                                 ReadAt<std::uint8_t>(g_endUISystem + kSetupDeferred),
@@ -351,7 +350,7 @@ bool CanFollow(void* gameController, bool needsPlayer) noexcept
     return menu_rules::CanFollow(g_installed, g_failed, g_controller != nullptr, generation::OnGameThread(), needsPlayer,
                                  generation::Active(), gameController != nullptr, gameController == g_controller,
                                  reinterpret_cast<std::uintptr_t>(gameController) ==
-                                     ReadAt<std::uintptr_t>(g_endUISystem + kGameController));
+                                     ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController));
 }
 
 /// The game's Members panel rebuild, for the mod's calls: the entry redirect's trampoline, or on 1.005 the function
@@ -411,7 +410,7 @@ void SquadLayoutCall(void* controller, std::uint8_t all, std::uint32_t first, st
 /// read outside it.
 std::uintptr_t GameController() noexcept
 {
-    const auto slot = ReadAt<std::uintptr_t>(g_endUISystem + kGameController);
+    const auto slot = ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController);
     if (slot != 0 && slot != reinterpret_cast<std::uintptr_t>(g_controller))
     {
         g_lastGame = slot;
@@ -476,7 +475,7 @@ void FollowShortcuts(std::uintptr_t source, std::uintptr_t target, const wchar_t
 void RebuildShortcutsCall() noexcept
 {
     const auto caller = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
-    const auto ran    = ReadAt<std::uintptr_t>(g_endUISystem + kGameController);
+    const auto ran    = ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController);
     reinterpret_cast<void (*)()>(g_rebuildShortcuts.Original())();
     const auto two = reinterpret_cast<std::uintptr_t>(g_controller);
     if (CanFollow(reinterpret_cast<void*>(ran), false))
@@ -757,7 +756,7 @@ bool Install(const platform::GameImage& image) noexcept
     {
         g_worldClass = 0;
     }
-    const auto system = image.Rebase(kEndUISystem, kKeyGuideSlot + sizeof(void*));
+    const auto system = image.Rebase(facts::kEndUISystem, kUIKeyGuide + sizeof(void*));
     g_endUISystem     = system ? *system : 0;
     const auto site   = [&image](std::uintptr_t address) { return image.Rebase(address, 5); };
     const auto resetAll = image.Rebase(kResetAll);
@@ -866,7 +865,7 @@ void ShowOnly(int player) noexcept
         return;
     }
     const auto two = reinterpret_cast<std::uintptr_t>(g_controller);
-    const auto one = ReadAt<std::uintptr_t>(g_endUISystem + kGameController);
+    const auto one = ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController);
     if (player != 1 || ReadAt<std::uint8_t>(two + kHudMode) == 0 || one == 0)
     {
         return Restore();
@@ -877,7 +876,7 @@ void ShowOnly(int player) noexcept
         // Player 2's shows at full opacity: its own tick (player_two/widget_owner) sets its visibility and
         // plays its show and hide animations.
         const bool guide     = i == kParts.size();
-        const auto oneOwner  = guide ? ReadAt<std::uintptr_t>(g_endUISystem + kKeyGuideSlot) : one;
+        const auto oneOwner  = guide ? ReadAt<std::uintptr_t>(g_endUISystem + kUIKeyGuide) : one;
         const auto twoOwner  = guide ? reinterpret_cast<std::uintptr_t>(g_keyGuide) : two;
         const auto offset    = guide ? kKeyGuideWidget : kParts[i].offset;
         const bool borrow    = !guide && kParts[i].borrowOpacity;
@@ -1002,7 +1001,7 @@ void Tick() noexcept
     // The join Setup: player 2's controller is built or set up when player 2 plays and it does not follow
     // the game's current setup (player 2 joined, or was out or refused at the game's Setup). It follows the
     // game's controller: only once that one is set up and no Setup of its own is pending or deferred.
-    const auto one = ReadAt<std::uintptr_t>(g_endUISystem + kGameController);
+    const auto one = ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController);
     if (one == 0 || !menu_rules::GameSetUp(one, ReadAt<std::uint8_t>(one + kSetupDone),
                                            ReadAt<std::uint8_t>(one + kSetupPending),
                                            ReadAt<std::uint8_t>(g_endUISystem + kSetupDeferred)))

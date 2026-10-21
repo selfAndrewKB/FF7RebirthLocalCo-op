@@ -1,5 +1,6 @@
 #include "hud/enemy_gauges.h"
 
+#include "facts/hud.h"
 #include "hud/enemy_gauges_code.h"
 #include "hud/hud_rules.h"
 #include "hud/target_views.h"
@@ -13,6 +14,7 @@
 #include "platform/module_pin.h"
 #include "platform/settled_log.h"
 #include "platform/sparse_array.h"
+#include "platform/verified_code.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 #include "player_two/lock_on.h"
@@ -36,8 +38,6 @@ namespace lss::hud::enemy_gauges {
 namespace {
 
 // Facts read from the database (RE-p2-enemy-markers.md §7; RE-p2-bar-targeted.md; this build).
-constexpr std::uintptr_t kEndUISystem = 0x1493496E0;  // g_EndUISystem (data)
-constexpr std::uint32_t  kManager     = 0xF8;         // the enemy-status manager (a pointer)
 constexpr std::uint32_t  kGate        = 0xC8;         // u8: the manager updates its entries only when set
 constexpr std::uint32_t  kLockOnKey   = 0x140;        // player 1's targeted key, a TWeakPtr {object, controller}
 
@@ -105,10 +105,6 @@ constexpr std::uint8_t   kApplyTransformPrologue[] = {0x48, 0x8B, 0xC4, 0x48, 0x
                                                       0x89, 0x78, 0x20, 0x55, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8D, 0x68, 0x98};
 constexpr std::uint32_t  kScale       = 0x38;   // p: the gauge's size state
 constexpr std::uint32_t  kRenderScale = 0x98;   // widget: render scale x, y
-
-// UUserWidget::SetPositionInViewport(widget, FVector2D, bRemoveDPIScale) (hud/position_probe.cpp).
-constexpr std::uintptr_t kSetPosition           = 0x140CC39E8;
-constexpr std::uint8_t   kSetPositionPrologue[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00};
 
 // FWeakObjectPtr::Get (hud/hud_updates.cpp).
 
@@ -630,16 +626,16 @@ void PlaceOwnTargets() noexcept
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto system   = image.Rebase(kEndUISystem, kManager + sizeof(void*));
+    const auto system   = image.Rebase(facts::kEndUISystem, facts::kUIEnemyStatus + sizeof(void*));
     const auto byWidget = image.Rebase(kByWidget);
     const auto site     = image.Rebase(kByWidgetSite, sizeof(kGaugeEntryBytes));
     const auto resume   = image.Rebase(kByWidgetResume);
     const auto call     = image.Rebase(kTargetedCall, 5);
     const auto targeted = image.Rebase(kTargeted);
-    const auto position = image.Rebase(kSetPosition);
+    const auto position = platform::FindFunction(image, facts::kSetPositionInViewport);
     if (!system || !byWidget || !site || !resume || !call || !targeted || !position ||
         !player_two::weak_object::Known() || !image.BytesMatch(kByWidget, kByWidgetPrologue) ||
-        !image.BytesMatch(kSetPosition, kSetPositionPrologue) || !image.BytesMatch(kTargeted, kTargetedPrologue))
+        !image.BytesMatch(kTargeted, kTargetedPrologue))
     {
         platform::Log(L"enemy gauges: the placement code is not what the research read; gauges stay player 1's in both halves");
         return false;
@@ -760,7 +756,8 @@ void Replay(bool playerTwo) noexcept
 {
     std::uintptr_t manager = 0;
     std::uint8_t   gate    = 0;
-    const bool     read    = Read(g_endUISystem + kManager, manager) && manager != 0 && Read(manager + kGate, gate);
+    const bool     read    = Read(g_endUISystem + facts::kUIEnemyStatus, manager) && manager != 0 &&
+                             Read(manager + kGate, gate);
     if (playerTwo && g_installed && !g_failed && (!read || gate == 0 || g_record.count == 0))
     {
         LogPlayerTwoPass({gate, static_cast<std::int32_t>(g_record.count), 0, 0, player_two::lock_on::TargetListOpen()});

@@ -5,9 +5,11 @@
 #include <Unreal/CoreUObject/UObject/Class.hpp>
 #include <Unreal/UObject.hpp>
 
+#include "facts/hud.h"
 #include "platform/call_redirect.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/verified_code.h"
 
 #include <array>
 #include <atomic>
@@ -23,8 +25,6 @@ namespace {
 // UUserWidget::execSetPositionInViewport's call to SetPositionInViewport (bytes read 2026-09-25):
 //   call UUserWidget__SetPositionInViewport at 0x144CED910 (the start of its 16-byte block).
 constexpr std::uintptr_t kBlueprintSetPositionCall = 0x144CED910;
-constexpr std::uintptr_t kSetPositionInViewport    = 0x140CC39E8;  // (UUserWidget*, FVector2D, bool)
-constexpr std::uint8_t   kSetPositionInViewportPrologue[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00};
 
 // The widget's viewport slot as UUserWidget keeps it (pass 4: anchors +0x210, offsets +0x220,
 // alignment +0x230; read, never written).
@@ -112,8 +112,8 @@ void BlueprintSetPosition(void* widget, std::uint64_t position, std::uint64_t re
 bool InstallPositionProbe(const platform::GameImage& image) noexcept
 {
     const auto site   = image.Rebase(kBlueprintSetPositionCall, 5);
-    const auto target = image.Rebase(kSetPositionInViewport);
-    if (!site || !target || !image.BytesMatch(kSetPositionInViewport, kSetPositionInViewportPrologue) ||
+    const auto target = platform::FindFunction(image, facts::kSetPositionInViewport);
+    if (!site || !target ||
         !g_call.Install(*site, *target, reinterpret_cast<std::uintptr_t>(&BlueprintSetPosition)))
     {
         platform::Log(L"HUD probe: the Blueprint SetPositionInViewport call is not what the research read; no probe");

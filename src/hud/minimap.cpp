@@ -5,8 +5,8 @@
 #include <Unreal/NameTypes.hpp>
 #include <Unreal/UObject.hpp>
 
+#include "facts/hud.h"
 #include "hud/entry_filter_code.h"
-#include "hud/hud_addresses.h"
 #include "hud/hud_rules.h"
 #include "hud/label_relayouts.h"
 #include "hud/minimap_icons.h"
@@ -20,6 +20,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/module_pin.h"
+#include "platform/verified_code.h"
 #include "player_two/generation.h"
 #include "player_two/party_member.h"
 
@@ -48,8 +49,6 @@ namespace party_member = player_two::party_member;
 // The widget, through the navimap holder: g_EndUISystem (the object itself) +0x108 area-map manager, +0x340 holder,
 // +0x20 the widget's native interface (UEndNaviMapCircle +0x108), the Slate widget at +0x138 (a TSharedPtr, object
 // first), its paint interface (+0x2B0, the vtable says circle), its content SEndNaviMap (+0x3B0) and target (+0x490).
-constexpr std::uintptr_t kEndUISystem         = 0x1493496E0;
-constexpr std::uint32_t  kAreaMapManager      = 0x108;
 constexpr std::uint32_t  kNaviMapHolder       = 0x340;
 constexpr std::uint32_t  kHolderInterface     = 0x20;
 constexpr std::uint32_t  kInterfaceInObject   = 0x108;
@@ -85,11 +84,7 @@ constexpr std::uint8_t   kPieceUnloadAfterBytes[] = {0x84, 0xC0};
 // SEndNaviMapCircle__OnPaint_Pool0's pool-0 block (§8.1): the acquire (rcx renderer, dl 0; its call crosses a
 // 16-byte block, so it is installed from the game thread while that thread is outside the paint), FindOrAdd (rcx
 // slot, rdx the FName value from the static below, r8 rect), and the submit (rcx renderer, dl 0, r8 slot).
-constexpr std::uintptr_t kAcquireCall      = 0x140FC6CAE;
-constexpr std::uintptr_t kAcquireLayerSlot = 0x140FC8694;
-constexpr std::uint8_t   kAcquireLayerSlotPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
 constexpr std::uintptr_t kFindOrAddCall    = 0x140FC6CE9;
-constexpr std::uintptr_t kSubmitCall       = 0x140FC6F13;
 constexpr std::uintptr_t kStockNameStatic  = 0x14939C2F8;  // FName "SEndNaviMapCircle", built once by the game
 
 // Pool 0's consume: the vertex-buffer load before DrawLayerEntry (r13 = renderer, r9 = entry).
@@ -104,11 +99,6 @@ constexpr std::uintptr_t kConsumeStoreResume = 0x140FC7C9D;
 // grow past them on the render thread).
 constexpr std::uint32_t  kPoolZeroVertexBuffer = 0x80;
 constexpr std::uint32_t  kPoolZeroIndexBuffer  = 0x98;
-constexpr std::uintptr_t kVertexBufferVtable   = 0x146621CF8;
-constexpr std::uintptr_t kIndexBufferVtable    = 0x146621D50;
-constexpr std::uintptr_t kBeginInitResource    = 0x1409E7EF8;
-constexpr std::uint8_t   kBeginInitResourcePrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x48,
-                                                         0x89, 0x7C, 0x24, 0x18, 0x41, 0x56, 0xB8, 0x90, 0x00, 0x00, 0x00};
 
 // The widget's own target recipe (SEndNaviMapCircle__Construct_CreatesRT, §8.4): NewObject in GObjTransientPkg, SRGB
 // (+0x91 bit 0), TargetGamma 1, ClearColor 0, InitCustomFormat(X, Y, PF_B8G8R8A8, linear), UpdateResourceImmediate.
@@ -259,7 +249,7 @@ void Refuse(const wchar_t* why) noexcept
 
 void* Holder() noexcept
 {
-    return ReadPointer(ReadPointer(reinterpret_cast<const void*>(g_system), kAreaMapManager), kNaviMapHolder);
+    return ReadPointer(ReadPointer(reinterpret_cast<const void*>(g_system), facts::kUIAreaMap), kNaviMapHolder);
 }
 
 /// The circle minimap's Slate widget, or null (no minimap, or the octagon).
@@ -618,23 +608,19 @@ bool PlaceAcquire(const platform::GameImage&) noexcept
 bool Install(const platform::GameImage& image) noexcept
 {
     const bool bytes = image.BytesMatch(kHolderUpdate, kHolderUpdateBytes) && image.BytesMatch(kLeaderType, kLeaderTypeBytes) &&
-                       image.BytesMatch(kAcquireLayerSlot, kAcquireLayerSlotPrologue) &&
-                       image.BytesMatch(engine::kFindOrAddNamedLayerEntry, engine::kFindOrAddNamedLayerEntryPrologue) &&
-                       image.BytesMatch(engine::kSubmitLayerSlot, engine::kSubmitLayerSlotPrologue) &&
-                       image.BytesMatch(kBeginInitResource, kBeginInitResourcePrologue) &&
                        image.BytesMatch(kNewRenderTarget, kNewRenderTargetBytes) &&
                        image.BytesMatch(kInitCustomFormat, kInitCustomFormatBytes) &&
                        image.BytesMatch(kUpdateResourceImmediate, kUpdateResourceImmediateBytes);
-    const auto system    = image.Rebase(kEndUISystem, kAreaMapManager + sizeof(void*));
+    const auto system    = image.Rebase(facts::kEndUISystem, facts::kUIAreaMap + sizeof(void*));
     const auto holder    = image.Rebase(kHolderUpdate);
     const auto leader    = image.Rebase(kLeaderType);
     const auto leaderAt  = image.Rebase(kLeaderTypeCall, 5);
-    const auto acquireAt = image.Rebase(kAcquireCall, 5);
-    const auto acquire   = image.Rebase(kAcquireLayerSlot);
+    const auto acquireAt = image.Rebase(facts::kNaviMapCircleAcquireCall, 5);
+    const auto acquire   = platform::FindFunction(image, facts::kAcquireLayerSlot);
     const auto findAt    = image.Rebase(kFindOrAddCall, 5);
-    const auto find      = image.Rebase(engine::kFindOrAddNamedLayerEntry);
-    const auto submitAt  = image.Rebase(kSubmitCall, 5);
-    const auto submit    = image.Rebase(engine::kSubmitLayerSlot);
+    const auto find      = platform::FindFunction(image, facts::kFindOrAddNamedLayerEntry);
+    const auto submitAt  = image.Rebase(facts::kNaviMapCircleSubmitCall, 5);
+    const auto submit    = platform::FindFunction(image, facts::kSubmitLayerSlot);
     const auto name      = image.Rebase(kStockNameStatic, sizeof(std::uint64_t));
     const bool v1005     = platform::RunningBuild() == platform::BuildIndex::V1005;  // its consume site (above)
     const auto consume   = v1005 ? image.Rebase(kConsumeStoreSite, sizeof(kStoreVertexBufferArgBytes1005))
@@ -642,9 +628,9 @@ bool Install(const platform::GameImage& image) noexcept
     const auto resume    = image.Rebase(v1005 ? kConsumeStoreResume : kConsumeLoadResume);
     const auto package   = image.Rebase(kTransientPackage, sizeof(void*));
     const auto circle    = image.Rebase(kCirclePaintVTable, sizeof(void*));
-    const auto vbVtable  = image.Rebase(kVertexBufferVtable, sizeof(void*));
-    const auto ibVtable  = image.Rebase(kIndexBufferVtable, sizeof(void*));
-    const auto init      = image.Rebase(kBeginInitResource);
+    const auto vbVtable  = image.Rebase(facts::kVertexBufferVtable, sizeof(void*));
+    const auto ibVtable  = image.Rebase(facts::kIndexBufferVtable, sizeof(void*));
+    const auto init      = platform::FindFunction(image, facts::kBeginInitResource);
     const auto newTarget = image.Rebase(kNewRenderTarget);
     const auto format    = image.Rebase(kInitCustomFormat);
     const auto update    = image.Rebase(kUpdateResourceImmediate);

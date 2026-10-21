@@ -8,12 +8,14 @@
 #include <Unreal/UObject.hpp>
 #include <Unreal/UObjectArray.hpp>
 
+#include "facts/hud.h"
 #include "hud/prompt_rows.h"
 #include "hud/user_widgets.h"
 #include "hud/viewport_placement.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/verified_code.h"
 #include "player_two/generation.h"
 #include "players/tracked_object.h"
 
@@ -36,16 +38,10 @@ using RC::Unreal::UClass;
 using RC::Unreal::UObject;
 
 // RE-p2-hud-view-levers.md §1 and RE-p2-field-prompts.md §4 (this build).
-constexpr std::uintptr_t kEndUISystem = 0x1493496E0;  // g_EndUISystem (data)
-constexpr std::uint32_t  kRowList     = 0x208;        // -> the icon list, a TArray<FWeakObjectPtr>
 constexpr std::int32_t   kBasePos     = 0x3C8;        // UEndFieldActionIcon._BasePosY, an FVector2D
-constexpr std::uint32_t  kViewportPosition = 0x220;   // UUserWidget viewport offsets Left, Top (hud_addresses.h)
 constexpr std::int32_t   kMaxRows     = 64;
 
-// FieldActionIconList__SortAndLayout(TArray<FWeakObjectPtr>* list, UObject* placeNow).
-constexpr std::uintptr_t kSortAndLayout        = 0x1414A9B14;
-constexpr std::uint8_t   kSortAndLayoutBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x20, 0x48, 0x89, 0x54, 0x24, 0x10, 0x55, 0x56,
-                                                  0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0xB8, 0x20, 0x00};
+// FieldActionIconList__SortAndLayout (facts::kSortAndLayout).
 using SortAndLayoutFn = void (*)(void* list, void* placeNow);
 
 constexpr int kMaxOwnBaseLines = 20;
@@ -193,7 +189,7 @@ IconClass* ClassOf(UObject* widget)
 std::uintptr_t ListOf() noexcept
 {
     std::uintptr_t list = 0;
-    return g_endUISystem != 0 && Read(g_endUISystem + kRowList, list) ? list : 0;
+    return g_endUISystem != 0 && Read(g_endUISystem + facts::kUIActionRows, list) ? list : 0;
 }
 
 /// The list's rows, resolved.
@@ -227,7 +223,7 @@ std::vector<UObject*> RowsOf(std::uintptr_t list)
 LayoutPoint PositionOf(const UObject* row) noexcept
 {
     LayoutPoint position;
-    Read(reinterpret_cast<std::uintptr_t>(row) + kViewportPosition, position);
+    Read(reinterpret_cast<std::uintptr_t>(row) + facts::kUserWidgetViewportOffsets, position);
     return position;
 }
 
@@ -305,10 +301,10 @@ void CheckRows()
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto system = image.Rebase(kEndUISystem, kRowList + sizeof(void*));
-    const auto layout = image.Rebase(kSortAndLayout);
+    const auto system = image.Rebase(facts::kEndUISystem, facts::kUIActionRows + sizeof(void*));
+    const auto layout = platform::FindFunction(image, facts::kSortAndLayout);
     g_endUISystem     = system ? *system : 0;
-    if (layout && image.BytesMatch(kSortAndLayout, kSortAndLayoutBytes))
+    if (layout)
     {
         g_sortAndLayout = reinterpret_cast<SortAndLayoutFn>(*layout);
     }

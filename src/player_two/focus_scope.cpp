@@ -1,5 +1,6 @@
 #include "player_two/focus_scope.h"
 
+#include "facts/hud.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -14,11 +15,11 @@ namespace lss::player_two::focus_scope {
 
 namespace {
 
+using facts::kUICommandController;  // the UI system's slots (facts/hud.h)
+using facts::kUIInput;
+using facts::kUIKeyGuide;
+
 // Facts read from the database (RE-p2-command-menu-input.md §2, §3.3, §10; this build).
-constexpr std::uintptr_t kEndUISystem = 0x1493496E0;
-constexpr std::uint32_t  kInput       = 0x10;  // EndUISystem[2]: Square's input object
-constexpr std::uint32_t  kController  = 0xB8;  // EndUISystem[23]: the command controller
-constexpr std::uint32_t  kKeyGuide    = 0x1A8; // EndUISystem[53]: the key guide
 // The input object's focus context, as {offset, size} copied in this order: the focus path
 // (FWeakWidgetPath), the focus layers (TArray), the last focus cause, and the capture map (a TSet
 // keyed by action: the widget that took a held action's press gets its release; the command menu
@@ -115,7 +116,7 @@ bool WriteContext(std::uintptr_t input, const std::uint8_t* from) noexcept
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto system = image.Rebase(kEndUISystem, kKeyGuide + sizeof(void*));
+    const auto system = image.Rebase(facts::kEndUISystem, kUIKeyGuide + sizeof(void*));
     g_endUISystem     = system ? *system : 0;
     return system.has_value();
 }
@@ -137,7 +138,7 @@ std::int32_t LivePathCount() noexcept
 {
     std::uintptr_t input = 0;
     std::int32_t   count = 0;
-    return g_endUISystem != 0 && Read(g_endUISystem + kInput, input) && input != 0 &&
+    return g_endUISystem != 0 && Read(g_endUISystem + kUIInput, input) && input != 0 &&
                    Read(input + kContext[0].offset + 8, count)
                ? count
                : 0;
@@ -147,7 +148,8 @@ bool PlayerOneTopIsCommandMenu() noexcept
 {
     std::uintptr_t input = 0, layers = 0;
     std::int32_t   count = 0, priority = 0;
-    return !g_inside && Read(g_endUISystem + kInput, input) && input != 0 && Read(input + kContext[1].offset, layers) &&
+    return !g_inside && Read(g_endUISystem + kUIInput, input) && input != 0 &&
+           Read(input + kContext[1].offset, layers) &&
            Read(input + kContext[1].offset + 8, count) && layers != 0 && count > 0 &&
            Read(layers + static_cast<std::uintptr_t>(count - 1) * kLayerSize + kLayerPriority, priority) &&
            priority == kCommandMenuLayer;
@@ -159,7 +161,7 @@ FocusScope::FocusScope(void* controller) noexcept
     {
         refusal_ = L"inside another focus scope, or off the game thread";
     }
-    else if (g_endUISystem == 0 || !Read(g_endUISystem + kInput, input_) || input_ == 0)
+    else if (g_endUISystem == 0 || !Read(g_endUISystem + kUIInput, input_) || input_ == 0)
     {
         refusal_ = L"no input object";
     }
@@ -176,8 +178,8 @@ FocusScope::FocusScope(void* controller) noexcept
              (!CopyContext(input_, savedContext_.data()) ||
              !platform::CopyGuarded(savedDelegate_.data(), reinterpret_cast<const void*>(input_ + kDelegate),
                                     savedDelegate_.size()) ||
-             !Read(g_endUISystem + kController, savedController_) ||
-             !Read(g_endUISystem + kKeyGuide, savedKeyGuide_)))
+             !Read(g_endUISystem + kUICommandController, savedController_) ||
+             !Read(g_endUISystem + kUIKeyGuide, savedKeyGuide_)))
     {
         refusal_ = L"player 1's context could not be read";
     }
@@ -186,19 +188,21 @@ FocusScope::FocusScope(void* controller) noexcept
         return;
     }
     const std::array<std::uint8_t, kDelegateSize> unbound{};
-    const auto                                    slot = reinterpret_cast<void*>(g_endUISystem + kController);
+    const auto                                    slot = reinterpret_cast<void*>(g_endUISystem + kUICommandController);
     if (!WriteContext(input_, g_playerTwo.data()) ||
         !platform::WriteGuarded(reinterpret_cast<void*>(input_ + kDelegate), unbound.data(), unbound.size()) ||
         !platform::WriteGuarded(slot, &controller, sizeof(controller)) ||
         (g_keyGuide != 0 &&
-         !platform::WriteGuarded(reinterpret_cast<void*>(g_endUISystem + kKeyGuide), &g_keyGuide, sizeof(g_keyGuide))))
+         !platform::WriteGuarded(reinterpret_cast<void*>(g_endUISystem + kUIKeyGuide), &g_keyGuide,
+                                 sizeof(g_keyGuide))))
     {
         // Put back whatever was written: the bytes were just read from the same places.
         const bool back =
             WriteContext(input_, savedContext_.data()) &&
             platform::WriteGuarded(reinterpret_cast<void*>(input_ + kDelegate), savedDelegate_.data(), savedDelegate_.size()) &&
             platform::WriteGuarded(slot, &savedController_, sizeof(savedController_)) &&
-            platform::WriteGuarded(reinterpret_cast<void*>(g_endUISystem + kKeyGuide), &savedKeyGuide_, sizeof(savedKeyGuide_));
+            platform::WriteGuarded(reinterpret_cast<void*>(g_endUISystem + kUIKeyGuide), &savedKeyGuide_,
+                                   sizeof(savedKeyGuide_));
         refusal_ = back ? L"player 2's context could not be written"
                         : L"player 2's context could not be written, NOR player 1's put back (player 1's UI focus may be wrong)";
         return;
@@ -227,9 +231,9 @@ FocusScope::~FocusScope()
     const bool back = WriteContext(input_, savedContext_.data()) &&
                       platform::WriteGuarded(reinterpret_cast<void*>(input_ + kDelegate), savedDelegate_.data(),
                                              savedDelegate_.size()) &&
-                      platform::WriteGuarded(reinterpret_cast<void*>(g_endUISystem + kController), &savedController_,
-                                             sizeof(savedController_)) &&
-                      platform::WriteGuarded(reinterpret_cast<void*>(g_endUISystem + kKeyGuide), &savedKeyGuide_,
+                      platform::WriteGuarded(reinterpret_cast<void*>(g_endUISystem + kUICommandController),
+                                             &savedController_, sizeof(savedController_)) &&
+                      platform::WriteGuarded(reinterpret_cast<void*>(g_endUISystem + kUIKeyGuide), &savedKeyGuide_,
                                              sizeof(savedKeyGuide_));
     if (!kept || !back)
     {

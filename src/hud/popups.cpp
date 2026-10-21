@@ -1,5 +1,6 @@
 #include "hud/popups.h"
 
+#include "facts/hud.h"
 #include "hud/popups_code.h"
 #include "platform/code_redirect.h"
 #include "platform/guarded.h"
@@ -24,7 +25,6 @@ namespace lss::hud::popups {
 namespace {
 
 // Facts read from the database (RE-p2-battle-popups.md §1; this build).
-constexpr std::uintptr_t kEndUISystem = 0x1493496E0;
 constexpr std::uint32_t  kManager     = 0xA0;   // the popup manager (a pointer)
 constexpr std::uint32_t  kCanvas      = 0x10;   // TSharedPtr<SEndPopupMessageCanvas> {object, controller}
 constexpr std::uint32_t  kSharedCount = 0x8;    // a reference controller's shared count (int32)
@@ -149,7 +149,7 @@ int ReplayList(std::uintptr_t manager, const List& list, void* canvas, void* pla
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto system      = image.Rebase(kEndUISystem, kManager + sizeof(void*));
+    const auto system      = image.Rebase(facts::kEndUISystem, kManager + sizeof(void*));
     const auto slate       = image.Rebase(kPlaceSlate, kEntryLength);
     const auto umg         = image.Rebase(kPlaceUmg, kEntryLength);
     if (!system || !slate || !umg || !player_two::weak_object::Known() ||

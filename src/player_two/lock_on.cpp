@@ -1,6 +1,7 @@
 #include "player_two/lock_on.h"
 
 #include "facts/controller.h"
+#include "facts/hud.h"
 #include "facts/in_battle.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
@@ -81,7 +82,6 @@ constexpr std::uint8_t kTargetListImplBytes[] = {0x8B, 0x41, 0x34, 0x33, 0xD2, 0
                                                  0x4C, 0x8B, 0xC9, 0x0F, 0x4D, 0x41, 0x38};
 constexpr platform::FunctionFact kTargetListImpl{L"EndUI23_IsCommandTargetEntryActive_Impl", 0x140C8F07C,
                                                  kTargetListImplBytes};
-constexpr std::uint32_t kCommandController = 0xB8;  // EndUISystem[23], the slot the wrapper reads
 constexpr platform::FunctionFact kModuleOn{L"PrimaryPCM_Op2CA8_SlotFlag44", 0x141203880, kModuleOnBytes};
 
 // The targeting tick's two calls in BattleSystem_Tick (time stopped with the menu's target select;
@@ -107,8 +107,6 @@ constexpr std::uint32_t  kLatch        = 0x8D;
 constexpr std::uint32_t  kFreeTime     = 0x90;  // float: the lock camera's rest after a stick move
 // The UI system's bar manager (EndUISystem[31]), whose +0x140 is the "targeted" key the tick sets from
 // the displayed target (a TWeakPtr).
-constexpr std::uintptr_t kEndUISystem  = 0x1493496E0;
-constexpr std::uint32_t  kBarManager   = 0xF8;
 constexpr std::uint32_t  kTargetedKey  = 0x140;
 // TRefCtrlTS counts; the LockOn module (layer 7) in a Battle operator's module table, its active
 // byte and cached target (logged).
@@ -219,7 +217,7 @@ std::uintptr_t BattleSystem() noexcept
 
 std::uintptr_t TargetedKeyAddress() noexcept
 {
-    const auto manager = ReadAt<std::uintptr_t>(g_endUISystem + kBarManager);
+    const auto manager = ReadAt<std::uintptr_t>(g_endUISystem + facts::kUIEnemyStatus);
     return manager != 0 ? manager + kTargetedKey : 0;
 }
 
@@ -256,7 +254,8 @@ bool TargetListActive(std::uint8_t& open) noexcept
     {
         return platform::CallGuarded(g_targetList, open);
     }
-    const auto controller = ReadAt<std::uintptr_t>(g_endUISystem != 0 ? g_endUISystem + kCommandController : 0);
+    const auto controller =
+        ReadAt<std::uintptr_t>(g_endUISystem != 0 ? g_endUISystem + facts::kUICommandController : 0);
     return g_targetListImpl != nullptr && controller != 0 &&
            platform::CallGuarded(g_targetListImpl, open, reinterpret_cast<void*>(controller));
 }
@@ -747,7 +746,7 @@ bool Install(const platform::GameImage& image) noexcept
     g_deactivate    = reinterpret_cast<LayerFn>(find(kDeactivate));
     g_moduleOn      = reinterpret_cast<LayerTestFn>(find(kModuleOn));
     const auto system = image.Rebase(kBattleSystem, sizeof(void*));
-    const auto ui     = image.Rebase(kEndUISystem, kBarManager + sizeof(void*));
+    const auto ui     = image.Rebase(facts::kEndUISystem, facts::kUIEnemyStatus + sizeof(void*));
     g_battleSystem    = system ? *system : 0;
     g_endUISystem     = ui ? *ui : 0;
     g_installed = g_setLock && facts::InBattleKnown() && g_release && g_cursorRelease && g_deactivate && g_moduleOn &&
