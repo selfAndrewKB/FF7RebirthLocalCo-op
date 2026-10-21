@@ -44,7 +44,8 @@ Two routes drive the mod behind one interface in `run.py`:
 
 Reaching the save: `continue_save.ps1` presses through the title, then `wait-until field` must hold (the field running,
 the game ready, player 1's controller on the End classes, and not the title: the title's scene is a field too; the key
-route reads the same from the mod's "field step" lines: a running field stopped, then one settled). The game sometimes
+route reads the mod's "field step" lines: the title's settled field leaving at Continue, then a field settling). The game
+sometimes
 shows popups at start-up (seen when the two versions are launched one after the other), which swallow the fixed
 presses; the harness then presses one more Enter per round and waits again, four rounds, before giving up with "the
 field is not reached". Running the versions back to back is therefore allowed but slower.

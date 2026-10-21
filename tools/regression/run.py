@@ -162,15 +162,18 @@ WAIT_LINES = {
     "playing": re.compile(r"player 2 took .+ after \d+ tick"),
     "out": re.compile(r"leave: player 2 left|player 2 was removed by the game"),
 }
-FIELD_STOPPED = re.compile(r"field exit: field step \d+ running 0")
+FIELD_LEFT    = re.compile(r"field exit: field step 13 running 0")
 FIELD_SETTLED = re.compile(r"field exit: field step 13 running 1")
 
 
 def field_reached(lines: list[str]) -> bool:
-    """The field after a load: the running field stopped (the title's, or the previous one) and a field settled after
-    it (step 13, running). The title's own scene is a field, so a settled line alone is not enough."""
-    stopped = next((i for i, line in enumerate(lines) if FIELD_STOPPED.search(line)), None)
-    return stopped is not None and any(FIELD_SETTLED.search(line) for line in lines[stopped + 1:])
+    """The save's field is up: a settled field was left (the title's, "step 13 running 0": Continue confirmed) and a
+    field settled after it ("step 13 running 1"). The title's own scene is a field, and its start-up logs "0 running 0
+    ... 13 running 1" like a load, so a settled line alone (or a "running 0" of a lower step) is not enough: a run of
+    2026-10-21 took the title for the field that way. (The mod's "whole screen: location" line is no signal here: the
+    release build reads the location only once player 2 is in.)"""
+    left = next((i for i, line in enumerate(lines) if FIELD_LEFT.search(line)), None)
+    return left is not None and any(FIELD_SETTLED.search(line) for line in lines[left + 1:])
 
 
 class Keys:
