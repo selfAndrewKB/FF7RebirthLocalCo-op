@@ -89,6 +89,27 @@ void Refuses(const std::uintptr_t data)
     EXPECT(Walk(header).empty());
 }
 
+void OwnBound(const std::uintptr_t data)
+{
+    std::puts("sparse array: a caller's own bound admits a set larger than the default");
+    std::vector<std::uint32_t> heap(130, 0);
+    heap[4100 / 32] = 1u << (4100 % 32);
+    Header header;
+    header.data     = data;
+    header.heapBits = reinterpret_cast<std::uintptr_t>(heap.data());
+    header.numBits  = 130 * 32;
+    EXPECT(Walk(header).empty());  // over kSparseMaxBits
+    std::vector<int> seen;
+    lss::platform::ForEachSparseElement(
+        reinterpret_cast<std::uintptr_t>(&header), kElement,
+        [&](std::uintptr_t element) {
+            seen.push_back(static_cast<int>((element - header.data) / kElement));
+            return true;
+        },
+        1 << 16);
+    EXPECT((seen == std::vector<int>{4100}));
+}
+
 }  // namespace
 
 int main()
@@ -99,5 +120,6 @@ int main()
     HeapBits(data);
     Stops(data);
     Refuses(data);
+    OwnBound(data);
     return lss::test::Report();
 }

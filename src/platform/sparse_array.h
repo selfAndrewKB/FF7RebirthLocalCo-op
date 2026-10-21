@@ -24,16 +24,19 @@ inline constexpr std::uint32_t kSparseNumBits    = 0x28;
 inline constexpr std::int32_t  kSparseMaxBits    = 4096;  // far above any HUD set; guards a bad read
 
 /// Calls `visit(elementAddress)` for each allocated element of the TSparseArray at `array`, in index
-/// order, until it returns false. May throw what `visit` throws.
+/// order, until it returns false. A bit count over `maxBits` is a bad read: nothing is visited (the
+/// HUD's sets stay far under the default; a world set passes its own bound). May throw what `visit`
+/// throws.
 template <class Visit>
-void ForEachSparseElement(std::uintptr_t array, std::uint32_t elementSize, Visit&& visit)
+void ForEachSparseElement(std::uintptr_t array, std::uint32_t elementSize, Visit&& visit,
+                          std::int32_t maxBits = kSparseMaxBits)
 {
     std::uintptr_t data = 0, heapBits = 0;
     std::int32_t   numBits = 0;
     if (array == 0 || !CopyGuarded(&data, reinterpret_cast<const void*>(array + kSparseData), sizeof(data)) || data == 0 ||
         !CopyGuarded(&heapBits, reinterpret_cast<const void*>(array + kSparseHeapBits), sizeof(heapBits)) ||
         !CopyGuarded(&numBits, reinterpret_cast<const void*>(array + kSparseNumBits), sizeof(numBits)) || numBits <= 0 ||
-        numBits > kSparseMaxBits)
+        numBits > maxBits)
     {
         return;
     }

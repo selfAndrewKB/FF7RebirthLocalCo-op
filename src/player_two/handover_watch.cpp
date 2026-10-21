@@ -11,6 +11,7 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/sparse_array.h"
 #include "platform/verified_code.h"
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
@@ -64,8 +65,8 @@ constexpr platform::PerBuild<std::uint32_t> kCharacterFlags = {0x1408, 0x1428}; 
 constexpr std::uint32_t kMoveAnimInstance = 0x160;
 
 // UEndCharacterAnimInstance: the root-motion and rotation-rate products and their TMap<u8, float>
-// modifier maps (a TSparseArray: data +0, count +8, its allocation bits inline at +0x10 or at the
-// pointer at +0x20; 16-byte elements, key u8 at +0, value float at +4).
+// modifier maps (a stock TSparseArray, platform/sparse_array.h: count +8; 16-byte elements, key u8 at
+// +0, value float at +4).
 constexpr std::uint32_t kAnimRotationScale   = 0x550;
 constexpr std::uint32_t kAnimRotationMap     = 0x558;
 constexpr std::uint32_t kAnimRootMotionScale = 0x5A8;
@@ -73,8 +74,6 @@ constexpr std::uint32_t kAnimRootMotionMap   = 0x5B0;
 constexpr std::uint32_t kAnimSpeedScale      = 0x10CC;  // float, for comparison
 constexpr std::uint32_t kAnimFlags           = 0x11DC;  // u32; bit 0 set by LEAD's Enter
 constexpr std::uint32_t kMapCount            = 0x8;
-constexpr std::uint32_t kMapInlineBits       = 0x10;
-constexpr std::uint32_t kMapHeapBits         = 0x20;
 constexpr std::uint32_t kMapElement          = 16;
 constexpr std::int32_t  kMapShown            = 32;
 
@@ -423,30 +422,18 @@ const void* AnimOf(const void* character) noexcept
 std::wstring MapText(const void* anim, std::uint32_t mapOffset)
 {
     const auto*        map   = static_cast<const std::byte*>(anim) + mapOffset;
-    const void*        data  = ReadPointer(map, 0);
     const std::int32_t count = ReadField<std::int32_t>(map, kMapCount);
-    if (data == nullptr || count <= 0)
-    {
-        return L"{}";
-    }
     if (count > kMapShown)
     {
         return std::format(L"{{{} slots}}", count);
     }
-    const void*         heapBits = ReadPointer(map, kMapHeapBits);
-    const std::uint32_t bits     = heapBits != nullptr ? ReadField<std::uint32_t>(heapBits, 0)
-                                                       : ReadField<std::uint32_t>(map, kMapInlineBits);
-    std::wstring        text     = L"{";
-    for (std::int32_t index = 0; index < count; ++index)
-    {
-        if ((bits & (1u << index)) == 0)
-        {
-            continue;  // a free slot
-        }
-        const auto* element = static_cast<const std::byte*>(data) + static_cast<std::size_t>(index) * kMapElement;
+    std::wstring text = L"{";
+    platform::ForEachSparseElement(reinterpret_cast<std::uintptr_t>(map), kMapElement, [&text](std::uintptr_t at) {
+        const auto* element = reinterpret_cast<const std::byte*>(at);
         text += std::format(L"{}{}: {:.2f}", text.size() == 1 ? L"" : L", ", ReadField<std::uint8_t>(element, 0),
                             ReadField<float>(element, 4));
-    }
+        return true;
+    });
     return text + L"}";
 }
 

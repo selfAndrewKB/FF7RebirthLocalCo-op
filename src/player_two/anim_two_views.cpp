@@ -8,6 +8,7 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/sparse_array.h"
 #include "platform/verified_code.h"
 #include "player_two/charapop_facts.h"
 #include "player_two/describe.h"
@@ -50,15 +51,12 @@ constexpr std::uint8_t kMeasureBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x
                                           0x24, 0x18, 0x48, 0x89, 0x7C, 0x24, 0x20, 0x41};
 const platform::FunctionFact kMeasure{L"EndSkelMeshComp_ComputeCamDistAngle", 0x140886E6C, kMeasureBytes};
 
-// W's registrations: a TSparseArray of 56-byte elements (data, then the allocation TBitArray: inline words at +0x808, a
-// heap pointer at +0x818 when used, the bit count at +0x820). An element's actor is a weak pointer at +0x18.
-constexpr std::uint32_t kSetData     = 0x7F8;
-constexpr std::uint32_t kSetBits     = 0x808;
-constexpr std::uint32_t kSetBitsHeap = 0x818;
-constexpr std::uint32_t kSetNumBits  = 0x820;
-constexpr std::uint32_t kElemSize    = 56;
-constexpr std::uint32_t kElemActor   = 0x18;
-constexpr std::int32_t  kMaxBits     = 1 << 16;  // sanity bound on the set's bit count
+// W's registrations: a stock TSparseArray (platform/sparse_array.h) at +0x7F8 of 56-byte elements. An element's
+// actor is a weak pointer at +0x18.
+constexpr std::uint32_t kSetData   = 0x7F8;
+constexpr std::uint32_t kElemSize  = 56;
+constexpr std::uint32_t kElemActor = 0x18;
+constexpr std::int32_t  kMaxBits   = 1 << 16;  // sanity bound on the set's bit count (a world set, not a HUD one)
 
 // The actor's EndActorInterface: vt+0x90 valid, vt+0xA0 its data X (X+0x10 weak main mesh, X+0x40 the pair list).
 constexpr std::uint32_t kIfaceValid = 0x90;
@@ -306,11 +304,6 @@ std::uintptr_t Refilled(void* a, std::uintptr_t b, std::uintptr_t c, std::uintpt
     return reinterpret_cast<PassFn>(g_clearCall.Original())(a, b, c, d);
 }
 
-bool BitSet(const std::uint32_t* words, std::int32_t i) noexcept
-{
-    return ((words[i >> 5] >> (i & 31)) & 1u) != 0;
-}
-
 /// Each registered actor near player 2's camera gets player 2's {distance, angle} in its pair list (game thread, before
 /// the parallel evaluation: nothing else touches the lists or the meshes' two fields now).
 void AppendPlayerTwo() noexcept
@@ -323,42 +316,30 @@ void AppendPlayerTwo() noexcept
         ++g_counts.skipped;
         return;
     }
-    auto*      data    = static_cast<std::byte*>(ReadPointer(world, kSetData));
-    const auto numBits = ReadField<std::int32_t>(world, kSetNumBits);
-    auto*      words   = static_cast<const std::uint32_t*>(ReadPointer(world, kSetBitsHeap));
-    if (words == nullptr)
+    if (ReadPointer(world, kSetData) == nullptr)
     {
-        words = reinterpret_cast<const std::uint32_t*>(world + kSetBits);
-    }
-    if (data == nullptr || numBits <= 0 || numBits > kMaxBits)
-    {
-        ++g_counts.skipped;
+        ++g_counts.skipped;  // the walk below refuses an unreadable bit count itself
         return;
     }
     const float location[4] = {two.location[0], two.location[1], two.location[2], 0.0f};
     const float forward[4]  = {two.forward[0], two.forward[1], two.forward[2], 0.0f};
     g_items.clear();
-    for (std::int32_t i = 0; i < numBits; ++i)
-    {
-        if (!BitSet(words, i))
-        {
-            continue;
-        }
-        void* actor = leader_scope::ObjectAt(data + static_cast<std::size_t>(i) * kElemSize + kElemActor);
+    const auto visit = [&](std::uintptr_t element) {
+        void* actor = leader_scope::ObjectAt(reinterpret_cast<const std::byte*>(element) + kElemActor);
         if (actor == nullptr)
         {
-            continue;
+            return true;
         }
         ++g_counts.elements;
         float at[3]{};
         if (!charapop::ActorLocation(actor, at) || charapop::Distance(at, two.location) > kReach)
         {
-            continue;
+            return true;
         }
         void* iface = nullptr;
         if (!platform::CallGuarded(g_interfaceOf, iface, static_cast<const void*>(actor), cls) || iface == nullptr)
         {
-            continue;
+            return true;
         }
         const auto   valid = reinterpret_cast<IfaceValidFn>(ReadPointer(ReadPointer(iface, 0), kIfaceValid));
         const auto   get   = reinterpret_cast<IfaceDataFn>(ReadPointer(ReadPointer(iface, 0), kIfaceData));
@@ -367,14 +348,16 @@ void AppendPlayerTwo() noexcept
         if (valid == nullptr || get == nullptr || !platform::CallGuarded(valid, ok, iface) || ok == 0 ||
             !platform::CallGuarded(get, pairs, iface) || pairs == nullptr)
         {
-            continue;
+            return true;
         }
         void* mesh = leader_scope::ObjectAt(static_cast<std::byte*>(pairs) + kDataMesh);
         if (mesh != nullptr && g_items.size() < g_items.capacity())
         {
             g_items.push_back({pairs, mesh});  // within the capacity reserved at install: never allocates
         }
-    }
+        return true;
+    };
+    platform::ForEachSparseElement(reinterpret_cast<std::uintptr_t>(world) + kSetData, kElemSize, visit, kMaxBits);
     // One pair per actor (several registrations can share an actor).
     std::sort(g_items.begin(), g_items.end(), [](const Item& a, const Item& b) { return a.data < b.data; });
     const auto end = std::unique(g_items.begin(), g_items.end(), [](const Item& a, const Item& b) { return a.data == b.data; });
