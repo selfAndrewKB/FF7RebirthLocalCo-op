@@ -20,6 +20,7 @@
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 #include "player_two/object_fields.h"
+#include "player_two/p2_scope.h"
 #include "player_two/pad_buttons.h"
 #include "player_two/pad_sticks.h"
 #include "player_two/panel_gate_code.h"
@@ -423,9 +424,8 @@ void PlayerTwoTargeting(TickFn engine, void* system, float deltaTime) noexcept
         }
         return;
     }
-    const auto memberType = party_member::PlayerTypeOf(member);
-    const auto memberWeak = leader_scope::WeakOf(member);
-    if (!memberType || memberWeak == 0)
+    p2_scope::Args args;
+    if (!p2_scope::FillMember(args, member))
     {
         return Refused(L"player 2's member could not be read");
     }
@@ -433,30 +433,22 @@ void PlayerTwoTargeting(TickFn engine, void* system, float deltaTime) noexcept
     // command controller (EndUISystem[23]) and, for an open target list, the list's selected row, which
     // the list answers from the focus path (RE-p2-target-select-views.md §9). The controller slot alone
     // would read player 1's focus path, find no row and clear player 2's target.
-    void* controller = command_menu_two::Controller();
-    if (controller == nullptr)
+    args.controller = command_menu_two::Controller();
+    if (args.controller == nullptr)
     {
         return Refused(L"player 2's command controller does not exist");
     }
-    focus_scope::FocusScope focus(controller);
-    if (!focus.Entered())
+    p2_scope::P2Scope scopes(p2_scope::Focus | p2_scope::Sticks | p2_scope::Primary | p2_scope::Buttons |
+                                 p2_scope::Targets | p2_scope::Leader | p2_scope::LeaderType,
+                             args);
+    if (!scopes.Held())
     {
-        return Refused(focus.Refusal());
+        return Refused(scopes.Refusal());
     }
-    const pad_sticks::StickScope    sticks(pad_sticks::ControllerIdOf(generation::PlayerTwoController()));
-    const primary_controller::Scope primary;
-    if (!sticks.Held() || !primary.Held())
+    const TargetedKeyScope targeted;
+    if (!targeted.Held())
     {
-        return Refused(L"pad 2's sticks or the primary controller");
-    }
-    const pad_buttons::ButtonScope      buttons;
-    const TargetScope                   targets;
-    const leader_scope::LeaderScope     leader(memberWeak);
-    const leader_scope::LeaderTypeScope type(*memberType);
-    const TargetedKeyScope              targeted;
-    if (!buttons.Held() || !targets.Held() || !leader.Held() || !type.Held() || !targeted.Held())
-    {
-        return Refused(L"pad 2's buttons, the target fields, the party leader or the targeted key");
+        return Refused(L"the targeted key");
     }
     g_run            = true;
     g_panelGate.skip = 1;
@@ -466,7 +458,7 @@ void PlayerTwoTargeting(TickFn engine, void* system, float deltaTime) noexcept
     ++g_runs;
     if (!ok)
     {
-        focus.Abandon();  // what the scope holds may be mid-change: leaked, never put back
+        scopes.Get<p2_scope::FocusPart>()->scope.Abandon();  // what it holds may be mid-change: leaked, never put back
         Fail(L"player 2's targeting tick");
     }
     // The log: player 2's target list, read with player 2's controller still in the slot.
@@ -486,7 +478,7 @@ void PlayerTwoTargeting(TickFn engine, void* system, float deltaTime) noexcept
                                  g_listOpen ? L"OPENED" : L"closed",
                                  ReadAt<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(system) + kDisplayed),
                                  ReadAt<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(system) + kCursor),
-                                 targets.OtherCursor()),
+                                 scopes.Get<p2_scope::TargetsPart>()->scope.OtherCursor()),
                      platform::Level::Debug);
             }
         }

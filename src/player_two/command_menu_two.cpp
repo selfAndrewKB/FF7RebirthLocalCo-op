@@ -26,6 +26,7 @@
 #include "player_two/leader_scope.h"
 #include "player_two/menu_rules.h"
 #include "player_two/object_fields.h"
+#include "player_two/p2_scope.h"
 #include "player_two/party_member.h"
 #include "player_two/weak_object.h"
 
@@ -288,25 +289,22 @@ enum class SetupResult
 template <class Call>
 SetupResult InPlayerTwoScopes(const wchar_t*& refusal, Call&& call) noexcept
 {
-    void*      member     = generation::Member();
-    const auto memberType = member != nullptr ? party_member::PlayerTypeOf(member) : std::nullopt;
-    const auto memberWeak = member != nullptr ? leader_scope::WeakOf(member) : 0;
-    focus_scope::FocusScope scope(g_controller);
-    if (!scope.Entered())
+    void*          member = generation::Member();
+    p2_scope::Args args;
+    args.controller = g_controller;
+    // The leader pair when the member is known, and not required (the call runs without it, as before).
+    const unsigned leader = member != nullptr && p2_scope::FillMember(args, member)
+                                ? p2_scope::Leader | p2_scope::LeaderType
+                                : 0u;
+    p2_scope::P2Scope scopes(p2_scope::Focus | leader, leader, args);
+    if (!scopes.Held())
     {
-        refusal = scope.Refusal();
+        refusal = scopes.Refusal();
         return SetupResult::Refused;
-    }
-    std::optional<leader_scope::LeaderScope>     leader;
-    std::optional<leader_scope::LeaderTypeScope> type;
-    if (memberType && memberWeak != 0)
-    {
-        leader.emplace(memberWeak);
-        type.emplace(*memberType);
     }
     if (!call())
     {
-        scope.Abandon();
+        scopes.Get<p2_scope::FocusPart>()->scope.Abandon();
         return SetupResult::Faulted;
     }
     return SetupResult::Ran;

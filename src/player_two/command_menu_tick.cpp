@@ -21,6 +21,7 @@
 #include "player_two/lock_on.h"
 #include "player_two/menu_rules.h"
 #include "player_two/object_fields.h"
+#include "player_two/p2_scope.h"
 #include "player_two/pad_buttons.h"
 #include "player_two/pad_sticks.h"
 #include "player_two/party_member.h"
@@ -543,41 +544,29 @@ void PlayerTwoPass(float deltaTime) noexcept
         ReleaseTint(L"released: player 2's menu is not ticked (out of battle)");
         return;  // out of battle: player 2's controller has nothing to do yet
     }
-    const auto memberType = party_member::PlayerTypeOf(member);
-    const auto memberWeak = leader_scope::WeakOf(member);
-    const auto manager    = ReadAt<std::uintptr_t>(g_partyManager);
-    if (!memberType || memberWeak == 0 || manager == 0)
+    p2_scope::Args args;
+    args.controller    = reinterpret_cast<void*>(two);
+    const auto manager = ReadAt<std::uintptr_t>(g_partyManager);
+    if (!p2_scope::FillMember(args, member) || manager == 0)
     {
         return Refused(L"player 2's member could not be read");
     }
     const auto before = std::array<std::uint64_t, 3>{ReadAt<std::uint64_t>(manager + kPartyManagerPrimaryController),
                                                      ReadAt<std::uint64_t>(manager + kPartyManagerLeader),
                                                      ReadAt<std::uint8_t>(manager + kPartyManagerLeaderType)};
-    const auto leaderType = static_cast<std::uint8_t>(before[2]);
+    args.leaderType   = static_cast<std::uint8_t>(before[2]);
     {
-        focus_scope::FocusScope focus(reinterpret_cast<void*>(two));
-        if (!focus.Entered())
+        // Every scope of player 2's, the rules last; the target fields only in battle (optional).
+        p2_scope::P2Scope scopes(p2_scope::Focus | p2_scope::Sticks | p2_scope::Primary | p2_scope::Buttons |
+                                     p2_scope::Targets | p2_scope::Leader | p2_scope::LeaderType | p2_scope::Rules,
+                                 p2_scope::Targets, args);
+        if (!scopes.Held())
         {
-            return Refused(focus.Refusal());
+            return Refused(scopes.Refusal());
         }
-        const pad_sticks::StickScope    sticks(pad_sticks::ControllerIdOf(generation::PlayerTwoController()));
-        const primary_controller::Scope primary;
-        if (!sticks.Held() || !primary.Held())
-        {
-            return Refused(L"pad 2's sticks or the primary controller");
-        }
-        const pad_buttons::ButtonScope   buttons;
-        const lock_on::TargetScope       targets;
-        const leader_scope::LeaderScope  leader(memberWeak);
-        const leader_scope::LeaderTypeScope type(*memberType);
-        if (!buttons.Held() || !leader.Held() || !type.Held())
-        {
-            return Refused(L"pad 2's buttons or the party leader");
-        }
-        const command_rules::PlayerTwoRules rules(leaderType);
         g_pass = 2;
         ++g_passes;
-        MirrorHudMode(two, one, *memberType);
+        MirrorHudMode(two, one, args.memberType);
         MirrorPartyListInput(two, one);
         MirrorMenuLayer(two, one);
         WriteRequests(two);
@@ -595,7 +584,7 @@ void PlayerTwoPass(float deltaTime) noexcept
         }
         if (!ticked)
         {
-            focus.Abandon();
+            scopes.Get<p2_scope::FocusPart>()->scope.Abandon();
             ReleaseTint(L"released: player 2's tick faulted");
             g_installed = false;
             Line(L"FAILED: player 2's controller's tick faulted; player 2's command controller stops, and with it "
@@ -681,40 +670,29 @@ bool InPlayerTwoUi(Route route, const wchar_t* what, Call&& call) noexcept
     {
         return refuse(L"not in player 2's battle menu");
     }
-    const auto memberType = party_member::PlayerTypeOf(member);
-    const auto memberWeak = leader_scope::WeakOf(member);
-    const auto manager    = ReadAt<std::uintptr_t>(g_partyManager);
-    if (!memberType || memberWeak == 0 || manager == 0)
+    p2_scope::Args args;
+    args.controller    = reinterpret_cast<void*>(two);
+    const auto manager = ReadAt<std::uintptr_t>(g_partyManager);
+    if (!p2_scope::FillMember(args, member) || manager == 0)
     {
         return refuse(L"player 2's member could not be read");
     }
-    const auto leaderType = ReadAt<std::uint8_t>(manager + kPartyManagerLeaderType);
-    focus_scope::FocusScope focus(reinterpret_cast<void*>(two));
-    if (!focus.Entered())
-    {
-        return refuse(focus.Refusal());
-    }
-    const primary_controller::Scope primary;
-    if (!primary.Held())
-    {
-        return refuse(L"the primary controller");
-    }
+    args.leaderType = ReadAt<std::uint8_t>(manager + kPartyManagerLeaderType);
     // The menu's target-switch handler (a press) writes the target fields: player 2's, or no press. A
-    // release needs none, and after a battle there are none to hold.
-    const lock_on::TargetScope      targets;
-    const leader_scope::LeaderScope leader(memberWeak);
-    const leader_scope::LeaderTypeScope type(*memberType);
-    if ((route == Route::kPress && !targets.Held()) || !leader.Held() || !type.Held())
+    // release needs none, and after a battle there are none to hold (the part is optional then).
+    p2_scope::P2Scope scopes(p2_scope::Focus | p2_scope::Primary | p2_scope::Targets | p2_scope::Leader |
+                                 p2_scope::LeaderType | p2_scope::Rules,
+                             route == Route::kPress ? 0u : p2_scope::Targets, args);
+    if (!scopes.Held())
     {
-        return refuse(L"the target fields or the party leader");
+        return refuse(scopes.Refusal());
     }
-    const command_rules::PlayerTwoRules rules(leaderType);
     g_pass         = 3;
     const bool ran = call();
     g_pass         = 0;
     if (!ran)
     {
-        focus.Abandon();
+        scopes.Get<p2_scope::FocusPart>()->scope.Abandon();
         g_routeFailed = true;
         Line(std::format(L"FAILED: pad 2's {} faulted in player 2's menu; pad 2 stays out of the menus", what));
     }
