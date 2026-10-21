@@ -74,22 +74,12 @@ bool                               g_reflectionFailed = false;
 std::array<Changed, kMaxChanged>   g_changed{};
 bool                               g_refusalLogged = false;
 
-/// A pointer field read under a guard (the object holding it may have gone), or null.
-void* ReadPointerGuarded(const void* object, std::uint32_t offset) noexcept
-{
-    void* value = nullptr;
-    return object != nullptr && platform::CopyGuarded(&value, static_cast<const std::byte*>(object) + offset,
-                                                       sizeof(value))
-               ? value
-               : nullptr;
-}
-
 void* CameraManagerOf(void* controller) noexcept
 {
-    void* cameraManager = ReadPointerGuarded(controller, facts::kControllerCameraManager);
+    void* cameraManager = ReadPointer(controller, facts::kControllerCameraManager);
     if (cameraManager == nullptr ||
-        reinterpret_cast<std::uintptr_t>(ReadPointerGuarded(cameraManager, 0)) != g_cameraManagerVTable ||
-        ReadPointerGuarded(cameraManager, facts::kCameraManagerPcOwner) != controller)
+        reinterpret_cast<std::uintptr_t>(ReadPointer(cameraManager, 0)) != g_cameraManagerVTable ||
+        ReadPointer(cameraManager, facts::kCameraManagerPcOwner) != controller)
     {
         return nullptr;
     }
@@ -176,7 +166,7 @@ bool SetConstraint(UObject* component, bool value) noexcept
 void ShapeMainCamera(void* controller, const wchar_t* who) noexcept
 {
     void* cameraManager = CameraManagerOf(controller);
-    auto* camera = static_cast<UObject*>(ReadPointerGuarded(cameraManager, facts::kCameraManagerEndCameraActor));
+    auto* camera = static_cast<UObject*>(ReadPointer(cameraManager, facts::kCameraManagerEndCameraActor));
     if (camera == nullptr || IsTracked(camera) || !players::IsLiveObject(camera))
     {
         return;  // none, already set, or not a live object (reflection is not run on it)

@@ -507,15 +507,13 @@ using GeometryFn = void* (*)(void* layerManager, void* out, void* localPlayer);
 std::optional<std::uintptr_t> PointerAt(std::uintptr_t address) noexcept
 {
     std::uintptr_t value = 0;
-    return address != 0 && CopyGuarded(&value, reinterpret_cast<const void*>(address), sizeof(value)) ? std::optional(value)
-                                                                                                        : std::nullopt;
+    return platform::Read(address, value) ? std::optional(value) : std::nullopt;
 }
 
 std::optional<std::uint8_t> ByteAt(std::uintptr_t address) noexcept
 {
     std::uint8_t value = 0;
-    return address != 0 && CopyGuarded(&value, reinterpret_cast<const void*>(address), sizeof(value)) ? std::optional(value)
-                                                                                                        : std::nullopt;
+    return platform::Read(address, value) ? std::optional(value) : std::nullopt;
 }
 
 bool CallGeometry(GeometryFn function, void* layerManager, void* out, void* localPlayer) noexcept

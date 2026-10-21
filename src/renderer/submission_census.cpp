@@ -494,8 +494,8 @@ void FillLive(std::uintptr_t base) noexcept
 
 std::int32_t ReadInt(Addr address) noexcept
 {
-    std::int32_t value = -999;
-    platform::CopyGuarded(&value, reinterpret_cast<const void*>(LiveOf(address)), sizeof(value));
+    std::int32_t value = -999;  // unreadable: a number no count takes
+    platform::Read(LiveOf(address), value);
     return value;
 }
 

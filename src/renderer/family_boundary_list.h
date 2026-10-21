@@ -50,8 +50,10 @@ inline constexpr std::int32_t  kGrowRequest  = kNodeSize + 8;
 /// ME_CmdBuf_GrowAlloc(&arena, bytes): gives the arena a new block, rewriting cursor, end and head.
 using GrowFn = void (*)(void* arena, std::int32_t bytes);
 
+/// A field of the list, unguarded: the callers run inside family_boundary.cpp's __try. Load, not Read, so
+/// it is not taken for the guarded platform::Read.
 template <typename T>
-T Read(const std::byte* at, std::size_t offset) noexcept
+T Load(const std::byte* at, std::size_t offset) noexcept
 {
     T value{};
     std::memcpy(&value, at + offset, sizeof(value));
@@ -66,24 +68,24 @@ void Write(std::byte* at, std::size_t offset, T value) noexcept
 
 inline bool IsExecuting(const std::byte* commandList) noexcept
 {
-    return Read<std::uint8_t>(commandList, list::kExecuting) != 0;
+    return Load<std::uint8_t>(commandList, list::kExecuting) != 0;
 }
 
 /// Appends a node holding `vtable` to the end of `commandList`; returns the node's address.
 inline std::uintptr_t AppendNode(std::byte* commandList, const void* vtable, GrowFn grow) noexcept
 {
     const auto fits = [commandList](std::uint64_t node) {
-        return node != 0 && node + kNodeSize <= Read<std::uint64_t>(commandList, list::kArena + 8);
+        return node != 0 && node + kNodeSize <= Load<std::uint64_t>(commandList, list::kArena + 8);
     };
-    std::uint64_t node = (Read<std::uint64_t>(commandList, list::kArena) + 7) & ~std::uint64_t{7};
+    std::uint64_t node = (Load<std::uint64_t>(commandList, list::kArena) + 7) & ~std::uint64_t{7};
     if (!fits(node))
     {
         grow(commandList + list::kArena, kGrowRequest);
-        node = (Read<std::uint64_t>(commandList, list::kArena) + 7) & ~std::uint64_t{7};
+        node = (Load<std::uint64_t>(commandList, list::kArena) + 7) & ~std::uint64_t{7};
     }
     Write<std::uint64_t>(commandList, list::kArena, node + kNodeSize);
-    Write<std::uint32_t>(commandList, list::kNumCommands, Read<std::uint32_t>(commandList, list::kNumCommands) + 1);
-    auto* const link = reinterpret_cast<std::byte*>(Read<std::uint64_t>(commandList, list::kCommandLink));
+    Write<std::uint32_t>(commandList, list::kNumCommands, Load<std::uint32_t>(commandList, list::kNumCommands) + 1);
+    auto* const link = reinterpret_cast<std::byte*>(Load<std::uint64_t>(commandList, list::kCommandLink));
     Write<std::uint64_t>(link, 0, node);
     Write<std::uint64_t>(commandList, list::kCommandLink, node + 8);
     auto* const bytes = reinterpret_cast<std::byte*>(node);
@@ -97,16 +99,16 @@ inline std::uintptr_t AppendNode(std::byte* commandList, const void* vtable, Gro
 /// first of its device's direct contexts.
 inline bool IsDefaultDirectContext(const std::byte* ctx, std::uintptr_t contextVtable) noexcept
 {
-    if (ctx == nullptr || Read<std::uintptr_t>(ctx, 0) != contextVtable ||
-        Read<std::uint8_t>(ctx, context::kIsAsyncCompute) != 0)
+    if (ctx == nullptr || Load<std::uintptr_t>(ctx, 0) != contextVtable ||
+        Load<std::uint8_t>(ctx, context::kIsAsyncCompute) != 0)
     {
         return false;
     }
-    const auto* device = reinterpret_cast<const std::byte*>(Read<std::uintptr_t>(ctx, context::kDevice));
+    const auto* device = reinterpret_cast<const std::byte*>(Load<std::uintptr_t>(ctx, context::kDevice));
     const auto* direct = device != nullptr ? reinterpret_cast<const std::byte*>(
-                                                 Read<std::uintptr_t>(device, context::kDeviceDirect))
+                                                 Load<std::uintptr_t>(device, context::kDeviceDirect))
                                            : nullptr;
-    return direct != nullptr && Read<const std::byte*>(direct, 0) == ctx;
+    return direct != nullptr && Load<const std::byte*>(direct, 0) == ctx;
 }
 
 }  // namespace lss::renderer::boundary

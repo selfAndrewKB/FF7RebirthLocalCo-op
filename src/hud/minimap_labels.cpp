@@ -124,11 +124,7 @@ bool                   g_loggedInvalidateFault = false;
 LabelCounts            g_loggedCounts;
 ULONGLONG              g_countsAt       = 0;
 
-template <class T>
-bool Read(const void* object, std::uint32_t offset, T& out) noexcept
-{
-    return object != nullptr && platform::CopyGuarded(&out, static_cast<const std::byte*>(object) + offset, sizeof(T));
-}
+using platform::Read;  // the guarded reads: platform/guarded.h
 
 std::byte* ControllerOf(void* widget) noexcept
 {

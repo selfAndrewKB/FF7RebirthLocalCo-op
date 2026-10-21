@@ -11,6 +11,7 @@
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
+#include "player_two/object_fields.h"
 
 #include <array>
 #include <cstdint>
@@ -83,17 +84,6 @@ bool          g_guidesOn = false;
 bool          g_panesOn  = false;
 std::uint64_t g_cellTicks = 0, g_guideTicks = 0, g_paneTicks = 0, g_refusals = 0;
 
-template <class T>
-T Field(std::uintptr_t address) noexcept
-{
-    T value{};
-    if (address != 0)
-    {
-        platform::CopyGuarded(&value, reinterpret_cast<const void*>(address), sizeof(T));
-    }
-    return value;
-}
-
 /// A line of `level`.
 void Line(const std::wstring& text, platform::Level level = platform::Level::Info) noexcept
 {
@@ -127,9 +117,9 @@ public:
     OwnerView(std::uintptr_t controller, std::uintptr_t keyGuide) noexcept
     {
         held_ = Enter(0, kController, controller) && (keyGuide == 0 || Enter(1, kKeyGuide, keyGuide));
-        if (held_ && Field<std::uint8_t>(controller + kHudMode) != 0)
+        if (held_ && ReadAt<std::uint8_t>(controller + kHudMode) != 0)
         {
-            type_.emplace(Field<std::uint8_t>(controller + kStoredLeaderType));
+            type_.emplace(ReadAt<std::uint8_t>(controller + kStoredLeaderType));
             typeRefused_ = !type_->Held();
         }
     }
@@ -195,8 +185,8 @@ void Refused(const wchar_t* what) noexcept
 
 std::uintptr_t OwnerOf(const void* cell) noexcept
 {
-    const auto list = Field<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(cell) + kCellPartyList);
-    return list != 0 ? Field<std::uintptr_t>(list + kPartyListOwner) : 0;
+    const auto list = ReadAt<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(cell) + kCellPartyList);
+    return list != 0 ? ReadAt<std::uintptr_t>(list + kPartyListOwner) : 0;
 }
 
 /// Player 2's cells on change (by slot): what the cell tick left in them, and the leader types it compared.
@@ -212,25 +202,25 @@ void WatchCell(std::uintptr_t cell, std::uintptr_t two) noexcept
     {
         return;
     }
-    const auto slot = Field<std::int32_t>(cell + kCellSlot);
+    const auto slot = ReadAt<std::int32_t>(cell + kCellSlot);
     if (slot < 0 || slot >= static_cast<std::int32_t>(kLoggedCells))
     {
         return;
     }
-    const Seen now{Field<std::uint8_t>(cell + kCellLook), Field<std::uint8_t>(cell + kCellLeader),
-                   Field<std::uint8_t>(cell + kCellType), Field<std::uint8_t>(two + kStoredLeaderType)};
+    const Seen now{ReadAt<std::uint8_t>(cell + kCellLook), ReadAt<std::uint8_t>(cell + kCellLeader),
+                   ReadAt<std::uint8_t>(cell + kCellType), ReadAt<std::uint8_t>(two + kStoredLeaderType)};
     auto& before = seen[static_cast<std::size_t>(slot)];
     if (now == before)
     {
         return;
     }
     before = now;
-    const auto one = Field<std::uintptr_t>(g_endUISystem + kController);
+    const auto one = ReadAt<std::uintptr_t>(g_endUISystem + kController);
     Line(std::format(L"player 2's cell {:#x} (slot {}): type {} leader {} look {} at ({:.1f}, {:.1f}) | leader type "
                      L"answered {} (player 1's controller's {}) | P2 battle HUD {}",
-                     cell, slot, now.type, now.leader, now.look, Field<float>(cell + kCellPosition),
-                     Field<float>(cell + kCellPosition + 4), now.answered, Field<std::uint8_t>(one + kStoredLeaderType),
-                     Field<std::uint8_t>(two + kHudMode)),
+                     cell, slot, now.type, now.leader, now.look, ReadAt<float>(cell + kCellPosition),
+                     ReadAt<float>(cell + kCellPosition + 4), now.answered,
+                     ReadAt<std::uint8_t>(one + kStoredLeaderType), ReadAt<std::uint8_t>(two + kHudMode)),
          platform::Level::Debug);
 }
 
@@ -279,7 +269,7 @@ void PaneTick(void* pane, const void* geometry, float deltaTime) noexcept
     const auto two      = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller());
     const auto at       = reinterpret_cast<std::uintptr_t>(pane);
     if (!g_panesOn || two == 0 || !generation::OnGameThread() || !generation::Active() ||
-        Field<std::uintptr_t>(at + kPaneOwner) != two)
+        ReadAt<std::uintptr_t>(at + kPaneOwner) != two)
     {
         return original(pane, geometry, deltaTime);
     }
@@ -303,13 +293,13 @@ void PaneTick(void* pane, const void* geometry, float deltaTime) noexcept
         return;
     }
     static std::uint8_t shown = 0xFF;
-    const auto          type  = Field<std::uint8_t>(at + kPaneType);
+    const auto          type  = ReadAt<std::uint8_t>(at + kPaneType);
     if ((PowerOfTen(++g_paneTicks) || type != shown) && DebugOn())
     {
         shown = type;
         Line(std::format(L"player 2's synergy pane ticked in player 2's view ({} time(s)); it lists type {} (player 2's "
                          L"controller's leader type {})",
-                         g_paneTicks, type, Field<std::uint8_t>(two + kStoredLeaderType)),
+                         g_paneTicks, type, ReadAt<std::uint8_t>(two + kStoredLeaderType)),
              platform::Level::Debug);
     }
 }
@@ -336,11 +326,11 @@ void WatchGuides(std::uintptr_t one, std::uintptr_t two) noexcept
     for (std::size_t i = 0; i < 2; ++i)
     {
         const auto guide  = i == 0 ? one : two;
-        void*      widget = Resolve(Field<std::uint64_t>(guide + kGuideWidget));
+        void*      widget = Resolve(ReadAt<std::uint64_t>(guide + kGuideWidget));
         const auto at     = reinterpret_cast<std::uintptr_t>(widget);
-        now[i]     = {Field<std::uint8_t>(guide), Field<std::uint8_t>(guide + 2), Field<std::uint8_t>(guide + 3),
-                      Field<std::uint8_t>(guide + kGuideMode), static_cast<std::uint8_t>(widget != nullptr),
-                      widget != nullptr ? Field<std::uint8_t>(at + kVisibility) : std::uint8_t{0xFF}};
+        now[i]     = {ReadAt<std::uint8_t>(guide), ReadAt<std::uint8_t>(guide + 2), ReadAt<std::uint8_t>(guide + 3),
+                      ReadAt<std::uint8_t>(guide + kGuideMode), static_cast<std::uint8_t>(widget != nullptr),
+                      widget != nullptr ? ReadAt<std::uint8_t>(at + kVisibility) : std::uint8_t{0xFF}};
         opacity[i] = widget != nullptr ? hud::widget_opacity::Get(widget) : -1.0F;
     }
     if (now == seen && opacity == seenOpacity)

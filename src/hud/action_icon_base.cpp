@@ -72,11 +72,7 @@ LayoutSize                                 g_applied = kSoloLayout;  // the layo
 std::vector<const UObject*>                g_ownBaseLogged;
 int                                        g_ownBaseLines = 0;
 
-template <class T>
-bool Read(std::uintptr_t address, T& out) noexcept
-{
-    return platform::CopyGuarded(&out, reinterpret_cast<const void*>(address), sizeof(T));
-}
+using platform::Read;  // the guarded reads: platform/guarded.h
 
 bool ReadBase(const UObject* object, LayoutPoint& base) noexcept
 {

@@ -188,12 +188,6 @@ void NavAreaTick(void* component, float deltaTime, std::uintptr_t tickType, void
     original(component, deltaTime, tickType, tickFunction);
 }
 
-template <class T>
-bool Read(const void* object, std::uint32_t offset, T& out) noexcept
-{
-    return object != nullptr && platform::CopyGuarded(&out, static_cast<const std::byte*>(object) + offset, sizeof(T));
-}
-
 /// The volume player 2's character is in, by the game's own test and rules: a volume that changes the camera and
 /// is not disabled; strictly inside to enter, within its UntouchMargin to stay in the current one; the lowest
 /// CameraSettingPriority wins. Empty if the manager is busy or unreadable (then nothing changes this tick).

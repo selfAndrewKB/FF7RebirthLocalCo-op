@@ -194,12 +194,6 @@ void Line(std::wformat_string<A...> format, A&&... args) noexcept
     }
 }
 
-template <class T>
-T At(const void* object, std::uint32_t offset) noexcept
-{
-    return object == nullptr ? T{} : ReadField<T>(object, offset);
-}
-
 const wchar_t* TypeName(std::uint8_t type) noexcept
 {
     static constexpr const wchar_t* kNames[] = {L"Cloud",   L"Barret", L"Tifa",      L"Aerith",
@@ -320,12 +314,12 @@ Ai ReadAi(const void* character) noexcept
     }
     const void* brain = ReadPointer(ai.controller, kAiActiveBrain);
     ai.stateObject    = ReadPointer(brain, kBrainState);
-    ai.state          = ai.stateObject == nullptr ? kUnread : At<std::uint8_t>(ai.stateObject, kStateType);
-    ai.brain          = brain == nullptr ? kUnread : At<std::uint8_t>(brain, kBrainIndex);
-    ai.brainMode      = brain == nullptr ? kUnread : At<std::uint8_t>(brain, kBrainMode);
-    ai.activeIndex    = At<std::uint8_t>(ai.controller, kAiActiveIndex);
-    ai.defaultState   = At<std::uint8_t>(ai.controller, kAiDefaultState);
-    ai.pause          = At<std::uint32_t>(ai.controller, kAiPauseMask);
+    ai.state          = ai.stateObject == nullptr ? kUnread : ReadField<std::uint8_t>(ai.stateObject, kStateType);
+    ai.brain          = brain == nullptr ? kUnread : ReadField<std::uint8_t>(brain, kBrainIndex);
+    ai.brainMode      = brain == nullptr ? kUnread : ReadField<std::uint8_t>(brain, kBrainMode);
+    ai.activeIndex    = ReadField<std::uint8_t>(ai.controller, kAiActiveIndex);
+    ai.defaultState   = ReadField<std::uint8_t>(ai.controller, kAiDefaultState);
+    ai.pause          = ReadField<std::uint32_t>(ai.controller, kAiPauseMask);
     return ai;
 }
 
@@ -344,8 +338,9 @@ std::wstring BrainsText(const void* controller)
         {
             continue;  // an unused brain (every slot holds one)
         }
-        text += std::format(L"{}{}: mode {} {}", text.empty() ? L"" : L", ", slot, At<std::uint8_t>(brain, kBrainMode),
-                            StateName(At<std::uint8_t>(state, kStateType)));
+        text += std::format(L"{}{}: mode {} {}", text.empty() ? L"" : L", ", slot,
+                            ReadField<std::uint8_t>(brain, kBrainMode),
+                            StateName(ReadField<std::uint8_t>(state, kStateType)));
     }
     return text.empty() ? std::wstring(L"none") : text;
 }
@@ -428,7 +423,7 @@ std::wstring MapText(const void* anim, std::uint32_t mapOffset)
 {
     const auto*        map   = static_cast<const std::byte*>(anim) + mapOffset;
     const void*        data  = ReadPointer(map, 0);
-    const std::int32_t count = At<std::int32_t>(map, kMapCount);
+    const std::int32_t count = ReadField<std::int32_t>(map, kMapCount);
     if (data == nullptr || count <= 0)
     {
         return L"{}";
@@ -438,7 +433,8 @@ std::wstring MapText(const void* anim, std::uint32_t mapOffset)
         return std::format(L"{{{} slots}}", count);
     }
     const void*         heapBits = ReadPointer(map, kMapHeapBits);
-    const std::uint32_t bits     = heapBits != nullptr ? At<std::uint32_t>(heapBits, 0) : At<std::uint32_t>(map, kMapInlineBits);
+    const std::uint32_t bits     = heapBits != nullptr ? ReadField<std::uint32_t>(heapBits, 0)
+                                                       : ReadField<std::uint32_t>(map, kMapInlineBits);
     std::wstring        text     = L"{";
     for (std::int32_t index = 0; index < count; ++index)
     {
@@ -447,8 +443,8 @@ std::wstring MapText(const void* anim, std::uint32_t mapOffset)
             continue;  // a free slot
         }
         const auto* element = static_cast<const std::byte*>(data) + static_cast<std::size_t>(index) * kMapElement;
-        text += std::format(L"{}{}: {:.2f}", text.size() == 1 ? L"" : L", ", At<std::uint8_t>(element, 0),
-                            At<float>(element, 4));
+        text += std::format(L"{}{}: {:.2f}", text.size() == 1 ? L"" : L", ", ReadField<std::uint8_t>(element, 0),
+                            ReadField<float>(element, 4));
     }
     return text + L"}";
 }
@@ -462,25 +458,25 @@ std::wstring ModifiersText(const void* character)
     }
     return std::format(L"root-motion scale {:.2f} {} (6 = FieldAI), rotation-rate scale {:.2f} {} (0 = Field), +0x10CC "
                        L"{:.2f}, anim flags +0x11DC {:#x}, character flags +0x1408 {:#04x}",
-                       At<float>(anim, kAnimRootMotionScale), MapText(anim, kAnimRootMotionMap),
-                       At<float>(anim, kAnimRotationScale), MapText(anim, kAnimRotationMap),
-                       At<float>(anim, kAnimSpeedScale), At<std::uint32_t>(anim, kAnimFlags),
-                       At<std::uint8_t>(character, kCharacterFlags));
+                       ReadField<float>(anim, kAnimRootMotionScale), MapText(anim, kAnimRootMotionMap),
+                       ReadField<float>(anim, kAnimRotationScale), MapText(anim, kAnimRotationMap),
+                       ReadField<float>(anim, kAnimSpeedScale), ReadField<std::uint32_t>(anim, kAnimFlags),
+                       ReadField<std::uint8_t>(character, kCharacterFlags));
 }
 
 std::wstring StateFieldsText(const Ai& ai)
 {
     if (ai.state == kStateFollow)
     {
-        return std::format(L"FOLLOW rate {:.2f}, follow mode {}", At<float>(ai.stateObject, kFollowRate),
-                           At<std::uint8_t>(ai.stateObject, kFollowMode));
+        return std::format(L"FOLLOW rate {:.2f}, follow mode {}", ReadField<float>(ai.stateObject, kFollowRate),
+                           ReadField<std::uint8_t>(ai.stateObject, kFollowMode));
     }
     if (ai.state == kStateLead)
     {
         const auto* state = static_cast<const std::byte*>(ai.stateObject);
         return std::format(L"LEAD arrived {}, destination ({:.0f}, {:.0f}, {:.0f}), target {}",
-                           At<std::uint8_t>(state, kLeadArrived), At<float>(state, kLeadDestination),
-                           At<float>(state, kLeadDestination + 4), At<float>(state, kLeadDestination + 8),
+                           ReadField<std::uint8_t>(state, kLeadArrived), ReadField<float>(state, kLeadDestination),
+                           ReadField<float>(state, kLeadDestination + 4), ReadField<float>(state, kLeadDestination + 8),
                            leader_scope::ObjectAt(state == nullptr ? nullptr : state + kLeadTarget));
     }
     return L"no catch-up fields";
@@ -632,8 +628,8 @@ void WatchHeld(const Clock::time_point now)
     {
         g_held.lastCheck  = now;
         const Ai ai       = ReadAi(character);
-        const int root    = anim == nullptr ? -1 : Percent(At<float>(anim, kAnimRootMotionScale));
-        const int rotation = anim == nullptr ? -1 : Percent(At<float>(anim, kAnimRotationScale));
+        const int root    = anim == nullptr ? -1 : Percent(ReadField<float>(anim, kAnimRootMotionScale));
+        const int rotation = anim == nullptr ? -1 : Percent(ReadField<float>(anim, kAnimRotationScale));
         if (ai.state != g_held.ai.state || ai.brain != g_held.ai.brain || ai.pause != g_held.ai.pause ||
             root != g_held.rootPercent || rotation != g_held.rotationPercent)
         {
@@ -655,7 +651,7 @@ void WatchHeld(const Clock::time_point now)
         const float seconds  = std::chrono::duration<float>(now - g_held.lastSpeed).count();
         const float twoSpeed = Apart(two, g_held.two) / seconds;
         const float oneSpeed = Apart(one, g_held.one) / seconds;
-        const int   root     = anim == nullptr ? -1 : Percent(At<float>(anim, kAnimRootMotionScale));
+        const int   root     = anim == nullptr ? -1 : Percent(ReadField<float>(anim, kAnimRootMotionScale));
         if (twoSpeed >= kMovingCmPerSecond &&
             (now - g_held.lastSpeedLine >= kSpeedLineEvery || root != g_held.speedLinePercent))
         {

@@ -4,6 +4,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "player_two/generation.h"
+#include "player_two/object_fields.h"
 #include "players/unreal_access.h"
 
 #include <algorithm>
@@ -65,23 +66,12 @@ struct Snapshot
 Snapshot g_logged{};
 bool     g_loggedOnce = false;
 
-template <class T>
-T Field(std::uintptr_t address) noexcept
-{
-    T value{};
-    if (address != 0)
-    {
-        platform::CopyGuarded(&value, reinterpret_cast<const void*>(address), sizeof(T));
-    }
-    return value;
-}
-
 /// The object a TWeakPtr at `address` names, or 0 when it has expired (its shared count is 0).
 std::uintptr_t LiveWeak(std::uintptr_t address) noexcept
 {
-    const auto object     = Field<std::uintptr_t>(address);
-    const auto controller = Field<std::uintptr_t>(address + 8);
-    return object != 0 && controller != 0 && Field<std::int32_t>(controller + 8) > 0 ? object : 0;
+    const auto object     = ReadAt<std::uintptr_t>(address);
+    const auto controller = ReadAt<std::uintptr_t>(address + 8);
+    return object != 0 && controller != 0 && ReadAt<std::int32_t>(controller + 8) > 0 ? object : 0;
 }
 
 /// The FName at `address` (a name read from a freed object can index past the name pool; both the read
@@ -107,8 +97,8 @@ std::wstring Describe(std::uintptr_t widget)
     std::wstring text = NameText(widget + kWidgetType);
     if (text == L"SObjectWidget" || text == L"SEndObjectWidget")  // UMG's host, and Square's subclass of it
     {
-        const auto user = Field<std::uintptr_t>(widget + kUserWidget);
-        const auto cls  = Field<std::uintptr_t>(user + kClass);
+        const auto user = ReadAt<std::uintptr_t>(widget + kUserWidget);
+        const auto cls  = ReadAt<std::uintptr_t>(user + kClass);
         text += L"<" + (cls != 0 ? NameText(cls + kName) : std::wstring(L"?")) + L">";
     }
     return std::format(L"{}@{:04X}", text, widget & 0xFFFF);
@@ -117,28 +107,29 @@ std::wstring Describe(std::uintptr_t widget)
 Snapshot Read() noexcept
 {
     Snapshot   now;
-    const auto input = Field<std::uintptr_t>(g_endUISystem + kInput);
+    const auto input = ReadAt<std::uintptr_t>(g_endUISystem + kInput);
     if (input != 0)
     {
-        const auto path   = Field<std::uintptr_t>(input + kPath);
-        now.pathCount     = Field<std::int32_t>(input + kPath + 8);
+        const auto path   = ReadAt<std::uintptr_t>(input + kPath);
+        now.pathCount     = ReadAt<std::int32_t>(input + kPath + 8);
         for (std::int32_t i = 0; path != 0 && i < std::min(now.pathCount, kMaxPath); ++i)
         {
             now.path[i] = LiveWeak(path + static_cast<std::uintptr_t>(i) * 16);
         }
-        const auto layers = Field<std::uintptr_t>(input + kLayers);
-        now.layerCount    = Field<std::int32_t>(input + kLayers + 8);
+        const auto layers = ReadAt<std::uintptr_t>(input + kLayers);
+        now.layerCount    = ReadAt<std::int32_t>(input + kLayers + 8);
         for (std::int32_t i = 0; layers != 0 && i < std::min(now.layerCount, kMaxLayers); ++i)
         {
             const auto layer = layers + static_cast<std::uintptr_t>(i) * kLayerSize;
-            now.layers[i]    = {LiveWeak(layer), LiveWeak(layer + kLayerSaved), Field<std::int32_t>(layer + kLayerPrio)};
+            now.layers[i]    = {LiveWeak(layer), LiveWeak(layer + kLayerSaved),
+                                ReadAt<std::int32_t>(layer + kLayerPrio)};
         }
-        now.cause = Field<std::uint8_t>(input + kFocusCause);
+        now.cause = ReadAt<std::uint8_t>(input + kFocusCause);
     }
-    const auto controller = Field<std::uintptr_t>(g_endUISystem + kController);
+    const auto controller = ReadAt<std::uintptr_t>(g_endUISystem + kController);
     for (std::size_t i = 0; controller != 0 && i < kControllerBytes.size(); ++i)
     {
-        now.controller[i] = Field<std::uint8_t>(controller + kControllerBytes[i]);
+        now.controller[i] = ReadAt<std::uint8_t>(controller + kControllerBytes[i]);
     }
     return now;
 }

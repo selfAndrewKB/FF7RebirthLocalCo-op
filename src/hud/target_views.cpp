@@ -164,16 +164,7 @@ std::array<std::int32_t, 2> g_loggedUnion{-1, -1};
 std::uint32_t               g_listOpenings = 0;  // player 2's target list openings seen: each logs the hides afresh
 std::int32_t                g_entryCount   = 0;  // the bar manager's gauges, counted by this frame's walk (the log)
 
-template <class T>
-T Field(std::uintptr_t address) noexcept
-{
-    T value{};
-    if (address != 0)
-    {
-        platform::CopyGuarded(&value, reinterpret_cast<const void*>(address), sizeof(T));
-    }
-    return value;
-}
+using platform::ReadAt;  // the guarded reads: platform/guarded.h
 
 /// One line of `level`. Callers of Debug and
 /// Trace lines check platform::Enabled before building `text`.
@@ -192,7 +183,7 @@ void Note(const std::wstring& text)
 
 std::int32_t Count(const void* list) noexcept
 {
-    return Field<std::int32_t>(reinterpret_cast<std::uintptr_t>(list) + 8);
+    return ReadAt<std::int32_t>(reinterpret_cast<std::uintptr_t>(list) + 8);
 }
 
 /// Replaces both collection calls: the game's collection, then again with player 2's target fields.
@@ -238,7 +229,7 @@ std::array<std::uintptr_t, 2> MainOf(const Pair& target)
         }
     }
     std::array<std::uintptr_t, 2> objects{target.object, 0};
-    if (target.object == 0 || target.controller == 0 || Field<std::int32_t>(target.controller + kSharedCount) <= 0)
+    if (target.object == 0 || target.controller == 0 || ReadAt<std::int32_t>(target.controller + kSharedCount) <= 0)
     {
         return {};
     }
@@ -269,17 +260,18 @@ bool Shared(std::uintptr_t source, std::uintptr_t manager)
 {
     void*          owner = nullptr;
     std::uintptr_t ai    = 0;
-    const auto     slot  = reinterpret_cast<OwnerFn>(Field<std::uintptr_t>(Field<std::uintptr_t>(source) + kOwnerSlot));
+    const auto     slot  =
+        reinterpret_cast<OwnerFn>(ReadAt<std::uintptr_t>(ReadAt<std::uintptr_t>(source) + kOwnerSlot));
     if (CallGuarded(slot, owner, reinterpret_cast<void*>(source)) && owner != nullptr && CallGuarded(g_enemyAi, ai, owner) &&
-        ai != 0 && Field<std::uint8_t>(ai + kShowStatus) != 0)
+        ai != 0 && ReadAt<std::uint8_t>(ai + kShowStatus) != 0)
     {
         return true;
     }
-    const auto         sticky = Field<std::uintptr_t>(manager + kSticky);
-    const std::int32_t count  = Field<std::int32_t>(manager + kStickyCount);
+    const auto         sticky = ReadAt<std::uintptr_t>(manager + kSticky);
+    const std::int32_t count  = ReadAt<std::int32_t>(manager + kStickyCount);
     for (std::int32_t i = 0; sticky != 0 && i < count && i < kMaxSticky; ++i)
     {
-        if (Field<std::uintptr_t>(sticky + sizeof(Pair) * static_cast<std::uint32_t>(i)) == source)
+        if (ReadAt<std::uintptr_t>(sticky + sizeof(Pair) * static_cast<std::uint32_t>(i)) == source)
         {
             return true;
         }
@@ -335,7 +327,7 @@ std::uint8_t LabelLookup(void* manager, float* point, float* scale, void* charac
     Pair two;
     player_two::lock_on::Displayed(two.object, two.controller);
     const auto key   = reinterpret_cast<std::uintptr_t>(manager) + kTargetedKey;
-    const Pair theirs{Field<std::uintptr_t>(key), Field<std::uintptr_t>(key + 8)};
+    const Pair theirs{ReadAt<std::uintptr_t>(key), ReadAt<std::uintptr_t>(key + 8)};
     // A borrowed swap: the lookup pins the key with its own reference and releases it again.
     if (!platform::WriteGuarded(reinterpret_cast<void*>(key), &two, sizeof(two)))
     {
@@ -348,7 +340,7 @@ std::uint8_t LabelLookup(void* manager, float* point, float* scale, void* charac
     }
     std::uint8_t found = 0;
     const bool   ok    = CallGuarded(original, found, manager, point, scale, character);
-    if (Pair{Field<std::uintptr_t>(key), Field<std::uintptr_t>(key + 8)} == two &&
+    if (Pair{ReadAt<std::uintptr_t>(key), ReadAt<std::uintptr_t>(key + 8)} == two &&
         !platform::WriteGuarded(reinterpret_cast<void*>(key), &theirs, sizeof(theirs)))
     {
         g_failed = true;  // the per-view marks stop; the game rewrites its key next frame
@@ -392,14 +384,15 @@ void FindOtherGauges(std::uintptr_t system)
     g_entryCount  = 0;
     g_otherGauges[0].clear();
     g_otherGauges[1].clear();
-    const std::uintptr_t manager = Field<std::uintptr_t>(g_endUISystem + kManager);
+    const std::uintptr_t manager = ReadAt<std::uintptr_t>(g_endUISystem + kManager);
     if (manager == 0 || system == 0)
     {
         return;
     }
     Pair two;
     player_two::lock_on::Displayed(two.object, two.controller);
-    const auto one  = MainOf(Pair{Field<std::uintptr_t>(system + kDisplayed), Field<std::uintptr_t>(system + kDisplayed + 8)});
+    const auto one  =
+        MainOf(Pair{ReadAt<std::uintptr_t>(system + kDisplayed), ReadAt<std::uintptr_t>(system + kDisplayed + 8)});
     const auto mine = MainOf(two);
     if (g_failed)
     {
@@ -407,12 +400,12 @@ void FindOtherGauges(std::uintptr_t system)
     }
     platform::ForEachSparseElement(manager + kEntries, kElement, [&](std::uintptr_t entry) {
         ++g_entryCount;
-        const auto source = Field<std::uintptr_t>(entry);
+        const auto source = ReadAt<std::uintptr_t>(entry);
         const int  pass   = hud_rules::OtherGaugePass(Contains(one, source), Contains(mine, source));
         if (pass >= 0 && !Shared(source, manager))
         {
             // Player 2's pass takes out player 1's only; player 1's pass player 2's only.
-            g_otherGauges[pass].push_back(Field<std::uint64_t>(entry + kEntryWidget));
+            g_otherGauges[pass].push_back(ReadAt<std::uint64_t>(entry + kEntryWidget));
         }
         return true;
     });
@@ -539,8 +532,8 @@ void BeforePass(int player) noexcept
             g_listOpenings = openings;  // player 2's target list opened: the hides are logged afresh
             g_loggedHides  = {};
         }
-        const std::uintptr_t system  = Field<std::uintptr_t>(g_battleSystem);
-        const auto           oneCur  = Field<std::uintptr_t>(system != 0 ? system + kCursor : 0);
+        const std::uintptr_t system  = ReadAt<std::uintptr_t>(g_battleSystem);
+        const auto           oneCur  = ReadAt<std::uintptr_t>(system != 0 ? system + kCursor : 0);
         const auto           twoCur  = reinterpret_cast<std::uintptr_t>(player_two::lock_on::Cursor());
         PassHides            hides;
         hides.hiddenCursor = player != 0 ? oneCur : twoCur;

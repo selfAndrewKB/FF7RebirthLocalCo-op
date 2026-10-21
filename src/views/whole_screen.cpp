@@ -160,17 +160,8 @@ bool          g_atMinigameMap      = false;  // g_location is a minigame-only ma
 std::uint64_t g_id36Setter         = 0;      // the last id-36 setter read
 bool          g_id36Field          = false;  // it is a field use
 
-template <class T>
-bool Read(std::uintptr_t address, T& out) noexcept
-{
-    return address != 0 && platform::CopyGuarded(&out, reinterpret_cast<const void*>(address), sizeof(T));
-}
-
-std::uintptr_t Pointer(std::uintptr_t address) noexcept
-{
-    std::uintptr_t value = 0;
-    return Read(address, value) ? value : 0;
-}
+using platform::Read;  // the guarded reads: platform/guarded.h
+using platform::ReadAt;
 
 bool OnOff(std::uintptr_t stateManager, std::int32_t id) noexcept
 {
@@ -194,7 +185,7 @@ bool AnyMenuId(std::uintptr_t stateManager) noexcept
 
 bool JobBoardOpen() noexcept
 {
-    const std::uintptr_t weak = g_boardCallFailed ? 0 : Pointer(g_jobBoardSlot);
+    const std::uintptr_t weak = g_boardCallFailed ? 0 : ReadAt<std::uintptr_t>(g_jobBoardSlot);
     bool                 valid = false;
     if (weak != 0 && !platform::CallGuarded(g_weakIsValid, valid, reinterpret_cast<const void*>(weak)))
     {
@@ -209,7 +200,7 @@ bool JobBoardOpen() noexcept
 /// The game's own "a pause-family widget is alive": IsPauseMenuClosed is false.
 bool PauseWidgetAlive() noexcept
 {
-    if (g_pauseClosed == nullptr || g_pauseCallFailed || Pointer(g_uiSlot27) == 0)
+    if (g_pauseClosed == nullptr || g_pauseCallFailed || ReadAt<std::uintptr_t>(g_uiSlot27) == 0)
     {
         return false;
     }
@@ -277,7 +268,7 @@ bool InOverlay(std::uintptr_t widget) noexcept
 
 std::uintptr_t Holder(std::size_t index) noexcept
 {
-    return g_uiSlots[index] != 0 ? Pointer(g_uiSlots[index]) : 0;
+    return g_uiSlots[index] != 0 ? ReadAt<std::uintptr_t>(g_uiSlots[index]) : 0;
 }
 
 /// The slot menus open now (NativeMenu bits), each by the test the game itself uses for it (E2).
@@ -328,14 +319,14 @@ std::uint16_t NativeMenusOpen() noexcept
 /// manager's own table (-1: none or unreadable).
 std::int8_t ChadleyState(std::uintptr_t root) noexcept
 {
-    const std::uintptr_t manager = root != 0 ? Pointer(root + kChadley) : 0;
+    const std::uintptr_t manager = root != 0 ? ReadAt<std::uintptr_t>(root + kChadley) : 0;
     if (manager == 0)
     {
         return -1;
     }
-    const std::uintptr_t table  = Pointer(manager + kChadleyTable);
-    std::uintptr_t       record = Pointer(manager + kChadleyRequested);
-    record                      = record != 0 ? record : Pointer(manager + kChadleyCurrent);
+    const std::uintptr_t table  = ReadAt<std::uintptr_t>(manager + kChadleyTable);
+    std::uintptr_t       record = ReadAt<std::uintptr_t>(manager + kChadleyRequested);
+    record                      = record != 0 ? record : ReadAt<std::uintptr_t>(manager + kChadleyCurrent);
     std::int32_t count = 0;
     std::int32_t id    = -1;
     if (table == 0 || record < table || !Read(manager + kChadleyCount, count) ||
@@ -349,10 +340,10 @@ std::int8_t ChadleyState(std::uintptr_t root) noexcept
 /// The game's UEndBattleAPI::IsInBattle, as reads.
 bool InBattle(std::uintptr_t root) noexcept
 {
-    const std::uintptr_t system = Pointer(g_battleSystem);
+    const std::uintptr_t system = ReadAt<std::uintptr_t>(g_battleSystem);
     std::uint8_t         idle   = 1;
     std::uint8_t         state  = 0;
-    const std::uintptr_t mode   = root != 0 ? Pointer(root + kRootGameMode) : 0;
+    const std::uintptr_t mode   = root != 0 ? ReadAt<std::uintptr_t>(root + kRootGameMode) : 0;
     return system != 0 && Read(system + kBattleIdle, idle) && idle == 0 && mode != 0 &&
            Read(mode + kEncounterState, state) && EncounterInBattle(state);
 }
@@ -383,8 +374,8 @@ bool FieldMinigameSetter(std::uintptr_t stateManager) noexcept
 /// Whether the frog-guys manager is in a game state (2..11); its global stays set in state 0 until the command dies.
 bool FrogGuysPlaying() noexcept
 {
-    const std::uintptr_t frog  = g_frogManager != 0 ? Pointer(g_frogManager) : 0;
-    const std::uintptr_t row   = frog != 0 ? Pointer(frog + kFrogStateRow) : 0;
+    const std::uintptr_t frog  = g_frogManager != 0 ? ReadAt<std::uintptr_t>(g_frogManager) : 0;
+    const std::uintptr_t row   = frog != 0 ? ReadAt<std::uintptr_t>(frog + kFrogStateRow) : 0;
     std::int32_t         state = 0;
     return row != 0 && Read(row, state) && state >= 2 && state <= 11;
 }
@@ -564,8 +555,8 @@ ScreenSignals ReadScreenSignals() noexcept
         Read(gameState + kMenuKind, signals.menuKind);
         signals.title             = AtTitle(gameState);
         signals.jobBoard          = JobBoardOpen();
-        const std::uintptr_t root = Pointer(g_gameRoot);
-        if (const std::uintptr_t stateManager = root != 0 ? Pointer(root + kStateManager) : 0)
+        const std::uintptr_t root = ReadAt<std::uintptr_t>(g_gameRoot);
+        if (const std::uintptr_t stateManager = root != 0 ? ReadAt<std::uintptr_t>(root + kStateManager) : 0)
         {
             signals.scriptMenu    = AnyMenuId(stateManager);
             signals.skippable     = OnOff(stateManager, kSkippableSceneId);
@@ -573,11 +564,11 @@ ScreenSignals ReadScreenSignals() noexcept
             signals.miniGameMenu  = OnOff(stateManager, kMiniGameMenuId);
         }
         signals.chadleyState = ChadleyState(root);
-        ReadMinigame(signals, root, root != 0 ? Pointer(root + kStateManager) : 0);
+        ReadMinigame(signals, root, root != 0 ? ReadAt<std::uintptr_t>(root + kStateManager) : 0);
         signals.pauseWidget  = PauseWidgetAlive();
         signals.nativeMenus  = NativeMenusOpen();
         signals.screenWidget = g_screenWidgets && screen_widgets::FullScreenOpen();
-        if (const std::uintptr_t manager = Pointer(g_cutsceneManager))  // only once the game has made it
+        if (const std::uintptr_t manager = ReadAt<std::uintptr_t>(g_cutsceneManager))  // only once the game has made it
         {
             std::uint8_t skipping = 0;
             signals.skipping      = Read(manager + kSkipping, skipping) && skipping != 0;

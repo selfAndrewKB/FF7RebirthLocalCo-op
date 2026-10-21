@@ -216,12 +216,6 @@ void Line(std::wformat_string<A...> format, A&&... args) noexcept
     }
 }
 
-template <class T>
-T At(const void* object, std::uint32_t offset) noexcept
-{
-    return object == nullptr ? T{} : ReadField<T>(object, offset);
-}
-
 /// The actor's own paused state for the evaluators' reason 6: the game's interface getter, then the call the
 /// evaluators make (`iface vt+0x30(iface, 6)`), both guarded (RE-p2-charapop-per-view.md §7). 0xFF if unread.
 std::uint8_t PausedOf(const void* entry) noexcept
@@ -313,44 +307,44 @@ void ReadEntry(Sample& sample)
 {
     const void* e          = sample.entry;
     EntrySteady& s         = sample.steady;
-    s.level                = At<std::uint8_t>(e, kEntryLevel);
-    s.minLevel             = At<std::uint8_t>(e, kEntryMinLevel);
-    s.lock                 = At<std::uint8_t>(e, kEntryLock);
-    s.pauseWant            = At<std::uint8_t>(e, kEntryPauseWant);
-    s.state                = At<std::int32_t>(e, kEntryState);
-    s.requested            = At<std::int32_t>(e, kEntryRequested);
-    s.pauseFlag            = At<std::uint32_t>(e, kEntryPauseFlag);
+    s.level                = ReadField<std::uint8_t>(e, kEntryLevel);
+    s.minLevel             = ReadField<std::uint8_t>(e, kEntryMinLevel);
+    s.lock                 = ReadField<std::uint8_t>(e, kEntryLock);
+    s.pauseWant            = ReadField<std::uint8_t>(e, kEntryPauseWant);
+    s.state                = ReadField<std::int32_t>(e, kEntryState);
+    s.requested            = ReadField<std::int32_t>(e, kEntryRequested);
+    s.pauseFlag            = ReadField<std::uint32_t>(e, kEntryPauseFlag);
     // Asked only in states 5 and 7, where the evaluators ask it themselves (§1.3, §7.4).
     s.paused               = s.state == 5 || s.state == 7 ? PausedOf(e) : kUnread;
     const void* mesh       = EndMeshOf(sample.actor);
     s.meshRead             = mesh != nullptr;
     if (mesh != nullptr)
     {
-        s.levelOn           = At<std::uint8_t>(mesh, kCompLevelOn);
-        s.forced            = At<std::uint8_t>(mesh, kCompForced);
-        s.shadow            = At<std::uint8_t>(mesh, kCompShadow);
-        s.pauseLevel        = At<std::uint8_t>(mesh, kCompPauseLevel);
-        s.meshLevel         = At<std::uint8_t>(mesh, kCompLevel);
-        sample.meshDistance = At<float>(mesh, kCompDistance);
-        sample.meshAngle    = At<float>(mesh, kCompAngle) * 180.0f / 3.14159265f;
-        s.meshVisible       = (At<std::uint8_t>(mesh, kCompVisibleByte) & kCompVisibleBit) != 0;
-        s.meshHiddenInGame  = (At<std::uint8_t>(mesh, kCompHiddenByte) & kCompHiddenBit) != 0;
-        sample.lastRender   = At<float>(mesh, kCompLastRender);
+        s.levelOn           = ReadField<std::uint8_t>(mesh, kCompLevelOn);
+        s.forced            = ReadField<std::uint8_t>(mesh, kCompForced);
+        s.shadow            = ReadField<std::uint8_t>(mesh, kCompShadow);
+        s.pauseLevel        = ReadField<std::uint8_t>(mesh, kCompPauseLevel);
+        s.meshLevel         = ReadField<std::uint8_t>(mesh, kCompLevel);
+        sample.meshDistance = ReadField<float>(mesh, kCompDistance);
+        sample.meshAngle    = ReadField<float>(mesh, kCompAngle) * 180.0f / 3.14159265f;
+        s.meshVisible       = (ReadField<std::uint8_t>(mesh, kCompVisibleByte) & kCompVisibleBit) != 0;
+        s.meshHiddenInGame  = (ReadField<std::uint8_t>(mesh, kCompHiddenByte) & kCompHiddenBit) != 0;
+        sample.lastRender   = ReadField<float>(mesh, kCompLastRender);
     }
-    s.flags           = At<std::uint32_t>(e, kEntryFlags);
-    s.keep            = At<std::uint32_t>(e, kEntryKeep);
-    s.spawnHidden     = At<std::uint8_t>(e, kEntrySpawnHidden);
-    sample.score      = At<std::int32_t>(e, kEntryScore);
-    sample.useCount   = At<std::int32_t>(e, kEntryUseCount);
-    s.actorHidden     = (At<std::uint8_t>(sample.actor, kActorHiddenByte) & kActorHiddenBit) != 0;
+    s.flags           = ReadField<std::uint32_t>(e, kEntryFlags);
+    s.keep            = ReadField<std::uint32_t>(e, kEntryKeep);
+    s.spawnHidden     = ReadField<std::uint8_t>(e, kEntrySpawnHidden);
+    sample.score      = ReadField<std::int32_t>(e, kEntryScore);
+    sample.useCount   = ReadField<std::int32_t>(e, kEntryUseCount);
+    s.actorHidden     = (ReadField<std::uint8_t>(sample.actor, kActorHiddenByte) & kActorHiddenBit) != 0;
     const void* fade  = FadeOf(e);
     s.fadeRead        = fade != nullptr;
     if (fade != nullptr)
     {
-        s.fadeHidden   = At<std::uint8_t>(fade, kFadeHidden) != 0;
-        s.fadeReasons  = At<std::uint32_t>(fade, kFadeReasons);
-        s.fadeTarget   = At<float>(fade, kFadeTarget);
-        sample.opacity = At<float>(fade, kFadeOpacity);
+        s.fadeHidden   = ReadField<std::uint8_t>(fade, kFadeHidden) != 0;
+        s.fadeReasons  = ReadField<std::uint32_t>(fade, kFadeReasons);
+        s.fadeTarget   = ReadField<float>(fade, kFadeTarget);
+        sample.opacity = ReadField<float>(fade, kFadeOpacity);
     }
 }
 
@@ -372,8 +366,10 @@ void LogSample(const Sample& sample, bool first)
     Line(L"{} {:#x}{}: player 1 {:.0f} m at {:.0f} deg, player 2 {:.0f} m at {:.0f} deg | level {} (min {}) state {} "
          L"(requested {}, lock {}) pause flag {} want {} paused {} | {} | {}",
          first ? L"watching" : L"changed", reinterpret_cast<std::uintptr_t>(sample.entry),
-         first ? std::format(L" ({}, id {}, category {}, key {:#x})", NameOf(sample.actor), At<std::int32_t>(sample.entry, kEntryId),
-                             At<std::uint8_t>(sample.entry, kEntryCategory), At<std::uint64_t>(sample.entry, kEntryKey))
+         first ? std::format(L" ({}, id {}, category {}, key {:#x})", NameOf(sample.actor),
+                             ReadField<std::int32_t>(sample.entry, kEntryId),
+                             ReadField<std::uint8_t>(sample.entry, kEntryCategory),
+                             ReadField<std::uint64_t>(sample.entry, kEntryKey))
                : std::wstring(),
          sample.d1 / 100.0f, sample.a1, sample.d2 / 100.0f, sample.a2, s.level, s.minLevel, s.state, s.requested, s.lock,
          s.pauseFlag, s.pauseWant, s.paused == kUnread ? std::wstring(L"?") : std::to_wstring(s.paused), mesh, shown);
@@ -431,8 +427,8 @@ void Remember(Sample& sample)
 /// Which centre the population follows, and its distance to each camera.
 std::wstring CentreText(const std::byte* manager, const Camera& one, const Camera& two)
 {
-    const bool overridden = At<std::uint8_t>(manager, kOverrideOn) != 0;
-    if (!overridden && At<std::uint8_t>(manager, kLeaderOn) == 0)
+    const bool overridden = ReadField<std::uint8_t>(manager, kOverrideOn) != 0;
+    if (!overridden && ReadField<std::uint8_t>(manager, kLeaderOn) == 0)
     {
         return L"none";
     }
@@ -463,18 +459,20 @@ void LogSummary(const std::byte* manager, const std::byte* pop, const Camera& on
     std::memcpy(&split, steady.params.data() + (0x116C - kManagerParams), sizeof(split));
     float snapshot[3]{};
     const auto* world = static_cast<const std::byte*>(ReadPointer(reinterpret_cast<const void*>(g_animWorld), 0));
-    const bool  shot  = world != nullptr && At<std::uint8_t>(world, kSnapshotValid) != 0 &&
+    const bool  shot  = world != nullptr && ReadField<std::uint8_t>(world, kSnapshotValid) != 0 &&
                       platform::CopyGuarded(snapshot, world + kSnapshotLocation, sizeof(snapshot));
     Line(L"{} entries (cursor {}, force-all {}, queued {}); cameras {:.0f} m apart; anim snapshot {} ({:.0f} m from "
          L"player 1's camera, {:.0f} from player 2's; speed {:.0f} turn {:.2f} faster {}/{}) | params: FOV {:.0f}, Light draw "
          L"{:.0f} in {:.0f} out {:.0f} tick {:.0f}, Middle draw {:.0f} in {:.0f} out {:.0f} tick {:.0f}, split {}, enemy +{:.0f} "
          L"audience +{:.0f}; overrides draw {:.0f} ({}) in {:.0f} ({}) out {:.0f} ({}) | population centre: {}; threshold {}",
-         count, At<std::int32_t>(pop, kPopCursor), At<std::int32_t>(pop, kPopForceAll), At<std::int32_t>(pop, kPopQueueCount),
-         Distance(one.location, two.location) / 100.0f, shot ? L"read" : L"not read", Distance(snapshot, one.location) / 100.0f,
-         Distance(snapshot, two.location) / 100.0f, At<float>(world, kSnapshotSpeed), At<float>(world, kSnapshotTurn),
-         At<std::uint8_t>(world, kSnapshotFaster), At<std::uint8_t>(world, kSnapshotFaster + 1), f(0x1148), f(0x114C),
-         f(0x1150), f(0x1154), f(0x1158), f(0x115C), f(0x1160), f(0x1164), f(0x1168), split, f(0x1170), f(0x1174), f(0x1178),
-         b(0x117C), f(0x1180), b(0x1184), f(0x1188), b(0x118C), CentreText(manager, one, two),
+         count, ReadField<std::int32_t>(pop, kPopCursor), ReadField<std::int32_t>(pop, kPopForceAll),
+         ReadField<std::int32_t>(pop, kPopQueueCount), Distance(one.location, two.location) / 100.0f,
+         shot ? L"read" : L"not read", Distance(snapshot, one.location) / 100.0f,
+         Distance(snapshot, two.location) / 100.0f, ReadField<float>(world, kSnapshotSpeed),
+         ReadField<float>(world, kSnapshotTurn), ReadField<std::uint8_t>(world, kSnapshotFaster),
+         ReadField<std::uint8_t>(world, kSnapshotFaster + 1), f(0x1148), f(0x114C), f(0x1150), f(0x1154), f(0x1158),
+         f(0x115C), f(0x1160), f(0x1164), f(0x1168), split, f(0x1170), f(0x1174), f(0x1178), b(0x117C), f(0x1180),
+         b(0x1184), f(0x1188), b(0x118C), CentreText(manager, one, two),
          ReadField<std::int32_t>(ReadPointer(manager, kManagerSelect), kThreshold));
 }
 

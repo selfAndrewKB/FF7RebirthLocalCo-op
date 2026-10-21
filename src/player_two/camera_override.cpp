@@ -83,14 +83,6 @@ ReleaseFn      g_releaseWeak   = nullptr;
 Pair         g_playerTwo;          // player 2's camera's own module (one weak reference is the mod's)
 void*        g_member = nullptr;   // the member whose delegates hold the thunks
 
-template <class T>
-T Field(std::uintptr_t address) noexcept
-{
-    T value{};
-    platform::CopyGuarded(&value, reinterpret_cast<const void*>(address), sizeof(T));
-    return value;
-}
-
 /// Swaps player 2's module into the global for one engine call, with player 2 as the primary
 /// controller, and puts player 1's back after if the global is still player 2's.
 class GlobalScope
@@ -167,11 +159,11 @@ void RestoreMember() noexcept
         return;
     }
     const auto base = reinterpret_cast<std::uintptr_t>(g_member);
-    if (Field<std::uintptr_t>(base + kAddedFn) == reinterpret_cast<std::uintptr_t>(&AddedThunk))
+    if (ReadAt<std::uintptr_t>(base + kAddedFn) == reinterpret_cast<std::uintptr_t>(&AddedThunk))
     {
         Write(g_member, kAddedFn, reinterpret_cast<std::uintptr_t>(g_engineAdded));
     }
-    if (Field<std::uintptr_t>(base + kRemovedFn) == reinterpret_cast<std::uintptr_t>(&RemovedThunk))
+    if (ReadAt<std::uintptr_t>(base + kRemovedFn) == reinterpret_cast<std::uintptr_t>(&RemovedThunk))
     {
         Write(g_member, kRemovedFn, reinterpret_cast<std::uintptr_t>(g_engineRemoved));
     }
@@ -191,23 +183,23 @@ std::wstring DescribeCamera(void* controller)
     std::wstring text;
     for (const std::uint32_t op : {kBattleOperator, kFieldOperator})
     {
-        const auto oper   = Field<std::uintptr_t>(camera + op);
-        const auto slots  = oper != 0 ? Field<std::uintptr_t>(oper + kModules) : 0;
-        const auto module = slots != 0 ? Field<std::uintptr_t>(slots + kSlotFour) : 0;
-        const auto owner  = module != 0 ? Field<std::uintptr_t>(module + kModuleOwner) : 0;
+        const auto oper   = ReadAt<std::uintptr_t>(camera + op);
+        const auto slots  = oper != 0 ? ReadAt<std::uintptr_t>(oper + kModules) : 0;
+        const auto module = slots != 0 ? ReadAt<std::uintptr_t>(slots + kSlotFour) : 0;
+        const auto owner  = module != 0 ? ReadAt<std::uintptr_t>(module + kModuleOwner) : 0;
         text += std::format(L" {} module {:#x} owner {} requests {} active {}{}", op == kBattleOperator ? L"battle" : L"field",
-                            module, owner == Field<std::uintptr_t>(camera + kBattleOperator) ? L"own" : L"OTHER",
-                            module != 0 ? Field<std::int32_t>(module + kModuleRequests) : 0,
-                            module != 0 ? Field<std::uint8_t>(module + kModuleActive) : 0,
-                            module != 0 ? Field<std::uint8_t>(module + kModuleActive + 1) : 0);
+                            module, owner == ReadAt<std::uintptr_t>(camera + kBattleOperator) ? L"own" : L"OTHER",
+                            module != 0 ? ReadAt<std::int32_t>(module + kModuleRequests) : 0,
+                            module != 0 ? ReadAt<std::uint8_t>(module + kModuleActive) : 0,
+                            module != 0 ? ReadAt<std::uint8_t>(module + kModuleActive + 1) : 0);
     }
     return text;
 }
 
 std::wstring DescribeCharacter(std::uintptr_t character)
 {
-    const auto added   = Field<std::uintptr_t>(character + kAddedFn);
-    const auto removed = Field<std::uintptr_t>(character + kRemovedFn);
+    const auto added   = ReadAt<std::uintptr_t>(character + kAddedFn);
+    const auto removed = ReadAt<std::uintptr_t>(character + kRemovedFn);
     const auto name    = [](std::uintptr_t fn, std::uintptr_t engine, std::uintptr_t thunk) {
         return fn == 0 ? L"unbound" : fn == engine ? L"engine" : fn == thunk ? L"thunk" : L"other";
     };
@@ -215,9 +207,9 @@ std::wstring DescribeCharacter(std::uintptr_t character)
                        name(added, reinterpret_cast<std::uintptr_t>(g_engineAdded), reinterpret_cast<std::uintptr_t>(&AddedThunk)),
                        name(removed, reinterpret_cast<std::uintptr_t>(g_engineRemoved),
                             reinterpret_cast<std::uintptr_t>(&RemovedThunk)),
-                       Field<std::uintptr_t>(character + kAddedPayload) == character ? L"self" : L"other",
-                       Field<std::uintptr_t>(character + kRemovedPayload) == character ? L"self" : L"other",
-                       Field<std::int32_t>(character + kHeldRequests));
+                       ReadAt<std::uintptr_t>(character + kAddedPayload) == character ? L"self" : L"other",
+                       ReadAt<std::uintptr_t>(character + kRemovedPayload) == character ? L"self" : L"other",
+                       ReadAt<std::int32_t>(character + kHeldRequests));
 }
 
 /// The raw values the log shows, compared each frame; the text is built only when they change.
@@ -245,22 +237,22 @@ Snapshot Take(void* member) noexcept
         const auto camera = reinterpret_cast<std::uintptr_t>(ReadPointer(controllers[i], facts::kControllerCameraManager));
         for (int k = 0; k < 2 && camera != 0; ++k)
         {
-            const auto oper   = Field<std::uintptr_t>(camera + (k == 0 ? kBattleOperator : kFieldOperator));
-            const auto slots  = oper != 0 ? Field<std::uintptr_t>(oper + kModules) : 0;
-            const auto module = slots != 0 ? Field<std::uintptr_t>(slots + kSlotFour) : 0;
+            const auto oper   = ReadAt<std::uintptr_t>(camera + (k == 0 ? kBattleOperator : kFieldOperator));
+            const auto slots  = oper != 0 ? ReadAt<std::uintptr_t>(oper + kModules) : 0;
+            const auto module = slots != 0 ? ReadAt<std::uintptr_t>(slots + kSlotFour) : 0;
             now.cameras[i][k]  = module;
-            now.owners[i][k]   = module != 0 ? Field<std::uintptr_t>(module + kModuleOwner) : 0;
-            now.requests[i][k] = module != 0 ? Field<std::int32_t>(module + kModuleRequests) : 0;
-            now.active[i][k]   = module != 0 ? Field<std::uint16_t>(module + kModuleActive) : 0;
+            now.owners[i][k]   = module != 0 ? ReadAt<std::uintptr_t>(module + kModuleOwner) : 0;
+            now.requests[i][k] = module != 0 ? ReadAt<std::int32_t>(module + kModuleRequests) : 0;
+            now.active[i][k]   = module != 0 ? ReadAt<std::uint16_t>(module + kModuleActive) : 0;
         }
         const std::uintptr_t character = characters[i];
         if (character != 0)
         {
-            now.delegates[i][0] = Field<std::uintptr_t>(character + kAddedFn);
-            now.delegates[i][1] = Field<std::uintptr_t>(character + kRemovedFn);
-            now.delegates[i][2] = Field<std::uintptr_t>(character + kAddedPayload);
-            now.delegates[i][3] = Field<std::uintptr_t>(character + kRemovedPayload);
-            now.held[i]         = Field<std::int32_t>(character + kHeldRequests);
+            now.delegates[i][0] = ReadAt<std::uintptr_t>(character + kAddedFn);
+            now.delegates[i][1] = ReadAt<std::uintptr_t>(character + kRemovedFn);
+            now.delegates[i][2] = ReadAt<std::uintptr_t>(character + kAddedPayload);
+            now.delegates[i][3] = ReadAt<std::uintptr_t>(character + kRemovedPayload);
+            now.held[i]         = ReadAt<std::int32_t>(character + kHeldRequests);
         }
     }
     return now;
@@ -338,7 +330,7 @@ void BeginPlayWithOwnModule(void (*engineBeginPlay)(void*), void* cameraManager)
         // now (with the weak reference the global took), and player 1's goes back.
         const Pair built = *g_global;
         *g_global        = saved;
-        const bool own   = built.object != 0 && Field<std::uintptr_t>(built.object) == g_moduleVTable;
+        const bool own   = built.object != 0 && ReadAt<std::uintptr_t>(built.object) == g_moduleVTable;
         if (own)
         {
             g_playerTwo = built;
@@ -367,13 +359,13 @@ void Tick(void* member) noexcept
         const auto base = reinterpret_cast<std::uintptr_t>(member);
         // The camera manager that follows the member binds these; a rebind puts the engine's back,
         // and this puts the thunks on again.
-        if (Field<std::uintptr_t>(base + kAddedFn) == reinterpret_cast<std::uintptr_t>(g_engineAdded) &&
-            Field<std::uintptr_t>(base + kAddedPayload) == base)
+        if (ReadAt<std::uintptr_t>(base + kAddedFn) == reinterpret_cast<std::uintptr_t>(g_engineAdded) &&
+            ReadAt<std::uintptr_t>(base + kAddedPayload) == base)
         {
             Write(member, kAddedFn, reinterpret_cast<std::uintptr_t>(&AddedThunk));
             g_member = member;
         }
-        if (Field<std::uintptr_t>(base + kRemovedFn) == reinterpret_cast<std::uintptr_t>(g_engineRemoved))
+        if (ReadAt<std::uintptr_t>(base + kRemovedFn) == reinterpret_cast<std::uintptr_t>(g_engineRemoved))
         {
             Write(member, kRemovedFn, reinterpret_cast<std::uintptr_t>(&RemovedThunk));
             g_member = member;

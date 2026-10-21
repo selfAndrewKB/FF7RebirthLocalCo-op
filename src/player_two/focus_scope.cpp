@@ -4,6 +4,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "player_two/generation.h"
+#include "player_two/object_fields.h"
 
 #include <array>
 #include <cstdint>
@@ -79,12 +80,6 @@ std::array<std::uint8_t, kContextSize> g_playerTwo = EmptyContext();  // player 
 bool                                   g_inside      = false;
 std::uintptr_t                         g_keyGuide    = 0;  // player 2's key guide, or 0
 int                                    g_layout      = 0;  // player 1's capture map checked: 0 not yet, 1 holds, -1 does not
-
-template <class T>
-bool Read(std::uintptr_t address, T& out) noexcept
-{
-    return address != 0 && platform::CopyGuarded(&out, reinterpret_cast<const void*>(address), sizeof(T));
-}
 
 bool CopyContext(std::uintptr_t input, std::uint8_t* out) noexcept
 {

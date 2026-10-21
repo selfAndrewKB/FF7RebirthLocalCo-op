@@ -39,11 +39,8 @@ bool Installed() noexcept
 
 float Get(const void* widget) noexcept
 {
-    float opacity = 1.0f;
-    if (widget != nullptr)
-    {
-        platform::CopyGuarded(&opacity, static_cast<const std::byte*>(widget) + kRenderOpacity, sizeof(opacity));
-    }
+    float opacity = 1.0f;  // unreadable: opaque
+    platform::Read(widget, kRenderOpacity, opacity);
     return opacity;
 }
 

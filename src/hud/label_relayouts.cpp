@@ -91,11 +91,7 @@ const wchar_t* ScopeName(std::size_t scope) noexcept
     return L"elsewhere";
 }
 
-template <class T>
-bool Read(const void* object, std::uint32_t offset, T& out) noexcept
-{
-    return object != nullptr && platform::CopyGuarded(&out, static_cast<const std::byte*>(object) + offset, sizeof(T));
-}
+using platform::Read;  // the guarded reads: platform/guarded.h
 
 /// Up to kTextChars characters of an FString {data, Num}; line breaks as spaces.
 std::wstring Characters(const void* data, int num) noexcept

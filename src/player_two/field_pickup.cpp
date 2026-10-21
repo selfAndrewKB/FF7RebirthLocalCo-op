@@ -9,6 +9,7 @@
 #include "platform/verified_code.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
+#include "player_two/object_fields.h"
 #include "player_two/pad_buttons.h"
 #include "player_two/pad_sticks.h"
 #include "player_two/party_member.h"
@@ -338,20 +339,9 @@ struct Counts
 Counts            g_counts;
 Clock::time_point g_statusAt{};
 
-template <class T>
-T Read(const void* base, std::size_t offset) noexcept
-{
-    T value{};
-    if (base != nullptr)
-    {
-        platform::CopyGuarded(&value, static_cast<const std::uint8_t*>(base) + offset, sizeof(T));
-    }
-    return value;
-}
-
 const std::uint8_t* PointerAt(const void* base, std::size_t offset) noexcept
 {
-    return reinterpret_cast<const std::uint8_t*>(Read<std::uintptr_t>(base, offset));
+    return static_cast<const std::uint8_t*>(ReadPointer(base, offset));
 }
 
 const std::uint8_t* Root() noexcept
@@ -465,7 +455,7 @@ private:
     static std::uint8_t* Entries(const void* controller) noexcept
     {
         const auto* world = PointerAt(PointerAt(controller, kObjectOuter), kObjectOuter);
-        if (controller == nullptr || world == nullptr || Read<std::int32_t>(world, kWorldControllerCount) < 2)
+        if (controller == nullptr || world == nullptr || ReadField<std::int32_t>(world, kWorldControllerCount) < 2)
         {
             return nullptr;
         }
@@ -577,7 +567,8 @@ void FreshCopy(void* mgr) noexcept
 /// through the game's destroy (only those still in the marker list: after a new manager, the old points are gone).
 void DropCopy(bool clear) noexcept
 {
-    if (g_copyOf != nullptr && clear && !g_broken && !OnCopy(g_copyOf, g_fieldExit, Read<std::uint8_t>(g_copyOf, kFieldEnterFlag)))
+    if (g_copyOf != nullptr && clear && !g_broken &&
+        !OnCopy(g_copyOf, g_fieldExit, ReadField<std::uint8_t>(g_copyOf, kFieldEnterFlag)))
     {
         Break(L"the field-exit clear of player 2's copy");
     }
@@ -593,12 +584,12 @@ void DropCopy(bool clear) noexcept
 bool HashFind(const std::uint8_t* owner, const MapShape& shape, std::uint64_t key) noexcept
 {
     const std::uint8_t* map = owner + shape.elements;
-    if (Read<std::int32_t>(map, kMapCount) == Read<std::int32_t>(map, kMapFreeCount))
+    if (ReadField<std::int32_t>(map, kMapCount) == ReadField<std::int32_t>(map, kMapFreeCount))
     {
         return false;
     }
     const auto* elements = PointerAt(map, 0);
-    const auto  size     = Read<std::int32_t>(map, kMapHashSize);
+    const auto  size     = ReadField<std::int32_t>(map, kMapHashSize);
     const auto* heap     = PointerAt(map, kMapHashHeap);
     const auto* buckets  = heap != nullptr ? heap : map + kMapHashInline;
     if (elements == nullptr || size <= 0 || (size & (size - 1)) != 0)
@@ -609,15 +600,15 @@ bool HashFind(const std::uint8_t* owner, const MapShape& shape, std::uint64_t ke
     const auto lo    = index & 0xFFFF;
     const auto hi    = index >> 16;
     const auto hash  = static_cast<std::uint32_t>(key >> 32) + hi + lo + (lo >> 4) + ((lo + 8 * hi) << 16);
-    auto       i     = Read<std::int32_t>(buckets, 4 * (hash & static_cast<std::uint32_t>(size - 1)));
+    auto       i     = ReadField<std::int32_t>(buckets, 4 * (hash & static_cast<std::uint32_t>(size - 1)));
     for (int steps = 0; i >= 0 && i < kMaxItems && steps < kMaxItems; ++steps)
     {
         const auto* element = elements + static_cast<std::size_t>(i) * shape.stride;
-        if (Read<std::uint64_t>(element, 0) == key)
+        if (ReadField<std::uint64_t>(element, 0) == key)
         {
             return true;
         }
-        i = Read<std::int32_t>(element, shape.hashNext);
+        i = ReadField<std::int32_t>(element, shape.hashNext);
     }
     return false;
 }
@@ -626,13 +617,13 @@ bool WalkFind(const std::uint8_t* owner, const MapShape& shape, std::uint64_t ke
 {
     const std::uint8_t* map      = owner + shape.elements;
     const auto*         elements = PointerAt(map, 0);
-    const auto          count    = std::clamp(Read<std::int32_t>(map, kMapCount), 0, kMaxItems);
+    const auto          count    = std::clamp(ReadField<std::int32_t>(map, kMapCount), 0, kMaxItems);
     const auto*         heapBits = PointerAt(map, kMapBitsHeap);
     const auto*         bits     = heapBits != nullptr ? heapBits : map + kMapBitsInline;
     for (std::int32_t i = 0; elements != nullptr && i < count; ++i)
     {
-        if ((Read<std::uint32_t>(bits, static_cast<std::size_t>(i / 32) * 4) >> (i % 32) & 1) != 0 &&
-            Read<std::uint64_t>(elements, static_cast<std::size_t>(i) * shape.stride) == key)
+        if ((ReadField<std::uint32_t>(bits, static_cast<std::size_t>(i / 32) * 4) >> (i % 32) & 1) != 0 &&
+            ReadField<std::uint64_t>(elements, static_cast<std::size_t>(i) * shape.stride) == key)
         {
             return true;
         }
@@ -780,12 +771,13 @@ void Before(void* mgr, const std::uint8_t* items, const std::uint8_t* chests, bo
         for (int n = 0; node != nullptr && n < kMaxPoints; ++n, node = PointerAt(node, kNodeNext))
         {
             auto*          point = const_cast<std::uint8_t*>(node) + kNodePoint;
-            const auto     key   = Read<std::uint64_t>(point, kPointKey);
+            const auto     key   = ReadField<std::uint64_t>(point, kPointKey);
             std::uint8_t   flags = point[kPointFlags];
             const auto     two   = g_twoBits.find(key);
             const bool     worldItem = filter && InMap(items, kWorldItemMap, key);
             const bool     chest     = filter && !worldItem && InMap(chests, kChestMap, key);
-            const bool     machine   = filter && !worldItem && !chest && vending::Admits(Read<std::uint64_t>(point, kPointPreset));
+            const bool     machine   = filter && !worldItem && !chest &&
+                                       vending::Admits(ReadField<std::uint64_t>(point, kPointPreset));
             const bool     keeper    = filter && !worldItem && !chest && !machine && shop_talk::Admits(key);
             const bool     disable   = filter && !worldItem && !chest && !machine && !keeper && (flags & kDisabledBit) == 0;
             std::uintptr_t oneMarker = 0;
@@ -837,7 +829,7 @@ void After(void* mgr) noexcept
         for (int n = 0; node != nullptr && n < kMaxPoints; ++n, node = PointerAt(node, kNodeNext))
         {
             auto*      point = const_cast<std::uint8_t*>(node) + kNodePoint;
-            const auto key   = Read<std::uint64_t>(point, kPointKey);
+            const auto key   = ReadField<std::uint64_t>(point, kPointKey);
             const auto saved = std::lower_bound(g_saved.begin(), g_saved.end(), point,
                                                 [](const Saved& s, const std::uint8_t* p) { return s.point < p; });
             const bool known = saved != g_saved.end() && saved->point == point && saved->key == key;
@@ -955,9 +947,10 @@ bool PollGate(const std::uint8_t* root, bool& slot0Only, bool& faulted) noexcept
         faulted = true;
         return false;
     }
-    const bool open    = flag == 0 && Read<std::int32_t>(gs, kGsBlockA) == 0 && Read<std::int32_t>(gs, kGsBlockB) == 0;
-    const auto allow   = Read<std::uint32_t>(gs, kGsAllowA) + Read<std::uint32_t>(gs, kGsAllowB);
-    const auto slot0   = Read<std::uint32_t>(gs, kGsSlot0A) + Read<std::uint32_t>(gs, kGsSlot0B);
+    const bool open    = flag == 0 && ReadField<std::int32_t>(gs, kGsBlockA) == 0 &&
+                         ReadField<std::int32_t>(gs, kGsBlockB) == 0;
+    const auto allow   = ReadField<std::uint32_t>(gs, kGsAllowA) + ReadField<std::uint32_t>(gs, kGsAllowB);
+    const auto slot0   = ReadField<std::uint32_t>(gs, kGsSlot0A) + ReadField<std::uint32_t>(gs, kGsSlot0B);
     slot0Only          = slot0 != 0;
     if (!open && allow == 0 && slot0 == 0)
     {
@@ -970,7 +963,7 @@ bool PollGate(const std::uint8_t* root, bool& slot0Only, bool& faulted) noexcept
         return false;
     }
     const auto* entries = PointerAt(reinterpret_cast<const void*>(g_uiSystem), kUIEntries);
-    if (mode == kModeBlocksPoll || entries == nullptr || Read<std::int32_t>(entries, kUIEntryValue) >= 0)
+    if (mode == kModeBlocksPoll || entries == nullptr || ReadField<std::int32_t>(entries, kUIEntryValue) >= 0)
     {
         return false;
     }
@@ -1001,7 +994,7 @@ bool PollGate(const std::uint8_t* root, bool& slot0Only, bool& faulted) noexcept
 /// latch and the press tick, the last two always. False if a game call raised.
 bool InputStep(void* mgr, const std::uint8_t* root, float dt) noexcept
 {
-    if (Read<std::uint8_t>(root, kRootStage) < 8)
+    if (ReadField<std::uint8_t>(root, kRootStage) < 8)
     {
         return true;  // the game runs no FieldAction input either
     }
@@ -1022,7 +1015,7 @@ bool InputStep(void* mgr, const std::uint8_t* root, float dt) noexcept
         return false;
     }
     auto*              slotHeld = const_cast<std::uint8_t*>(PointerAt(root, kRootSlotHeldOwner));
-    const std::uint8_t saved    = Read<std::uint8_t>(slotHeld, kSlotHeldByte);
+    const std::uint8_t saved    = ReadField<std::uint8_t>(slotHeld, kSlotHeldByte);
     const bool         ok       = platform::CallGuarded(g_latch, mgr, held, pressed) && platform::CallGuarded(g_tickSlots, mgr, dt);
     if (slotHeld != nullptr)
     {
@@ -1176,7 +1169,7 @@ void AfterFieldReset(void* mgr, ResetFn reset, std::uint8_t flagSeen) noexcept
 
 void FieldEnter(void* mgr) noexcept
 {
-    const std::uint8_t seen = Read<std::uint8_t>(mgr, kFieldEnterFlag);
+    const std::uint8_t seen = ReadField<std::uint8_t>(mgr, kFieldEnterFlag);
     reinterpret_cast<ResetFn>(g_enterCall.Original())(mgr);
     AfterFieldReset(mgr, g_fieldEnter, seen);
 }
@@ -1219,7 +1212,7 @@ std::uint8_t MarkByKey(void* items, std::uint64_t key) noexcept
 /// one, its only player read (the item-get rumble, §12.12 item 5).
 void Acquire(void* items, void* entry) noexcept
 {
-    const auto key       = Read<std::uint64_t>(static_cast<const std::uint8_t*>(entry) - kEntryKeyBack, 0);
+    const auto key       = ReadField<std::uint64_t>(static_cast<const std::uint8_t*>(entry) - kEntryKeyBack, 0);
     const bool playerTwo = generation::OnGameThread() && TakeMarked(key);
     if (g_observer.granting != nullptr)
     {
@@ -1239,7 +1232,7 @@ void Acquire(void* items, void* entry) noexcept
 
 void FieldExit(void* mgr) noexcept
 {
-    const std::uint8_t seen = Read<std::uint8_t>(mgr, kFieldEnterFlag);
+    const std::uint8_t seen = ReadField<std::uint8_t>(mgr, kFieldEnterFlag);
     reinterpret_cast<ResetFn>(g_exitCall.Original())(mgr);
     AfterFieldReset(mgr, g_fieldExit, seen);
 }

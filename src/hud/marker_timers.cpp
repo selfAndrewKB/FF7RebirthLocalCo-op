@@ -27,11 +27,7 @@ constexpr std::uint32_t  kTimer       = 0x14;
 std::uintptr_t       g_endUISystem = 0;
 hud_rules::TimerSwap g_timers;  // player 1's set aside during player 2's run; player 2's own between frames
 
-template <class T>
-bool Read(std::uintptr_t address, T& out) noexcept
-{
-    return platform::CopyGuarded(&out, reinterpret_cast<const void*>(address), sizeof(T));
-}
+using platform::Read;  // the guarded reads: platform/guarded.h
 
 /// Calls `visit(elementAddress, key)` for each allocated element of the list.
 template <class Visit>

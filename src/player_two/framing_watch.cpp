@@ -111,12 +111,6 @@ bool     g_wasShown     = false;
 std::uint64_t g_lastLineMs = 0;
 Framing  g_last[2];
 
-template <class T>
-bool Read(const void* object, std::uint32_t offset, T& out) noexcept
-{
-    return object != nullptr && platform::CopyGuarded(&out, static_cast<const std::byte*>(object) + offset, sizeof(T));
-}
-
 Framing Take(void* controller) noexcept
 {
     Framing f;

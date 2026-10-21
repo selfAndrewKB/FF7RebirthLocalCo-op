@@ -17,6 +17,7 @@
 #include "player_two/leader_scope.h"
 #include "player_two/lock_on.h"
 #include "player_two/menu_rules.h"
+#include "player_two/object_fields.h"
 #include "player_two/pad_buttons.h"
 #include "player_two/pad_sticks.h"
 #include "player_two/party_member.h"
@@ -275,23 +276,6 @@ const wchar_t* g_uiRefusal = L"";  // why InPlayerTwoUi last ran nothing (for th
 std::int32_t g_upPad       = -1;  // the pad of the release being handled (key-up handler), or -1
 menu_rules::TakenKeys g_taken;  // pad 2's keys whose press went to player 2's UI
 
-template <class T>
-T Field(std::uintptr_t address) noexcept
-{
-    T value{};
-    if (address != 0)
-    {
-        platform::CopyGuarded(&value, reinterpret_cast<const void*>(address), sizeof(T));
-    }
-    return value;
-}
-
-template <class T>
-bool Put(std::uintptr_t address, T value) noexcept
-{
-    return address != 0 && platform::WriteGuarded(reinterpret_cast<void*>(address), &value, sizeof(T));
-}
-
 void WatchLine(const std::wstring& text) noexcept
 {
     platform::LogTrace(L"command menu tick: {}", text);
@@ -308,18 +292,18 @@ void Line(const std::wstring& text, platform::Level level = platform::Level::Inf
 
 std::int32_t RequestOf(std::uintptr_t controller, std::int32_t index) noexcept
 {
-    const auto data = Field<std::uintptr_t>(controller + kRequests);
-    return data != 0 && index < Field<std::int32_t>(controller + kRequests + 8)
-               ? Field<std::int32_t>(data + 4 * static_cast<std::uint32_t>(index))
+    const auto data = ReadAt<std::uintptr_t>(controller + kRequests);
+    return data != 0 && index < ReadAt<std::int32_t>(controller + kRequests + 8)
+               ? ReadAt<std::int32_t>(data + 4 * static_cast<std::uint32_t>(index))
                : -1;
 }
 
 void SetRequest(std::uintptr_t controller, std::int32_t index, std::int32_t value) noexcept
 {
-    const auto data = Field<std::uintptr_t>(controller + kRequests);
-    if (data != 0 && index < Field<std::int32_t>(controller + kRequests + 8))
+    const auto data = ReadAt<std::uintptr_t>(controller + kRequests);
+    if (data != 0 && index < ReadAt<std::int32_t>(controller + kRequests + 8))
     {
-        Put(data + 4 * static_cast<std::uint32_t>(index), value);
+        WriteAt(data + 4 * static_cast<std::uint32_t>(index), value);
     }
 }
 
@@ -343,8 +327,8 @@ void WriteRequests(std::uintptr_t two) noexcept
 /// (RE-p2-command-menu-actions.md; RE-p2-command-menu-lifecycle.md §3.3).
 void MirrorBattleInput(std::uintptr_t two, std::uintptr_t one) noexcept
 {
-    const auto want = Field<std::uint8_t>(one + kBattleInput);
-    const auto have = Field<std::uint8_t>(two + kBattleInput);
+    const auto want = ReadAt<std::uint8_t>(one + kBattleInput);
+    const auto have = ReadAt<std::uint8_t>(two + kBattleInput);
     if (want == have)
     {
         return;
@@ -353,14 +337,14 @@ void MirrorBattleInput(std::uintptr_t two, std::uintptr_t one) noexcept
                                : platform::CallGuarded(g_suspendHudInput, std::uint8_t{0}, std::uint8_t{0});
     Line(std::format(L"player 2's battle input {} -> {} ({}){}: now {}", have, want,
                      want != 0 ? L"ResumeHudInput(0)" : L"SuspendHudInput(0, 0)", set ? L"" : L" FAULTED",
-                     Field<std::uint8_t>(two + kBattleInput)));
+                     ReadAt<std::uint8_t>(two + kBattleInput)));
 }
 
 /// Player 2's controller follows the game's battle HUD mode through its own setter (§4.2, §7).
 void MirrorHudMode(std::uintptr_t two, std::uintptr_t one, std::uint8_t memberType) noexcept
 {
-    const auto mode = Field<std::uint8_t>(one + kHudMode);
-    if (Field<std::uint8_t>(two + kHudMode) != mode)
+    const auto mode = ReadAt<std::uint8_t>(one + kHudMode);
+    if (ReadAt<std::uint8_t>(two + kHudMode) != mode)
     {
         if (mode != 0)
         {
@@ -368,7 +352,7 @@ void MirrorHudMode(std::uintptr_t two, std::uintptr_t one, std::uint8_t memberTy
             // player 2's controller still holds player 1's field leader type, and the tick's leader-change
             // handler would clear the battle system's slot for player 1's type (BattleSys920_ClearTypeSlot
             // ForType) on a character player 1 is playing. No game path gives it player 2's type earlier.
-            Put(two + kStoredLeaderType, memberType);
+            WriteAt(two + kStoredLeaderType, memberType);
         }
         // The game's battle start and end call only this setter (RE-p2-command-menu-lifecycle.md §4.1); a
         // full reset would also clear "setup done" (+0x777), which only Setup puts back.
@@ -381,7 +365,7 @@ void MirrorHudMode(std::uintptr_t two, std::uintptr_t one, std::uint8_t memberTy
 /// A controller's widget (its FWeakObjectPtr at `offset`), or null.
 void* WidgetOf(std::uintptr_t controller, std::uint32_t offset) noexcept
 {
-    const auto weak   = Field<std::uint64_t>(controller + offset);
+    const auto weak   = ReadAt<std::uint64_t>(controller + offset);
     void*      widget = nullptr;
     return weak != 0 && platform::CallGuarded(g_weakGet, widget, &weak) ? widget : nullptr;
 }
@@ -390,14 +374,14 @@ void* WidgetOf(std::uintptr_t controller, std::uint32_t offset) noexcept
 std::uint8_t VisibilityOf(std::uintptr_t controller, std::uint32_t offset) noexcept
 {
     const auto widget = reinterpret_cast<std::uintptr_t>(WidgetOf(controller, offset));
-    return widget != 0 ? Field<std::uint8_t>(widget + kVisibility) : 0xFF;
+    return widget != 0 ? ReadAt<std::uint8_t>(widget + kVisibility) : 0xFF;
 }
 
 /// Player 2's party list input flag follows player 1's, through the game's own calls (§10.2 R1).
 void MirrorPartyListInput(std::uintptr_t two, std::uintptr_t one) noexcept
 {
-    const auto want = Field<std::uint8_t>(one + kPartyListInput);
-    const auto have = Field<std::uint8_t>(two + kPartyListInput);
+    const auto want = ReadAt<std::uint8_t>(one + kPartyListInput);
+    const auto have = ReadAt<std::uint8_t>(two + kPartyListInput);
     if (want == have)
     {
         return;
@@ -414,8 +398,8 @@ void MirrorPartyListInput(std::uintptr_t two, std::uintptr_t one) noexcept
 /// (MirrorBattleInput) already keep it in step, so this acts only on a change they did not carry.
 void MirrorMenuLayer(std::uintptr_t two, std::uintptr_t one) noexcept
 {
-    const auto want = Field<std::uint8_t>(one + kMenuLayer);
-    if (want == Field<std::uint8_t>(two + kMenuLayer))
+    const auto want = ReadAt<std::uint8_t>(one + kMenuLayer);
+    if (want == ReadAt<std::uint8_t>(two + kMenuLayer))
     {
         return;
     }
@@ -478,9 +462,9 @@ void Watch(std::uintptr_t two, std::uintptr_t one) noexcept
         const auto ctrl = side == 0 ? one : two;
         for (std::size_t i = 0; i < kCompared.size(); ++i)
         {
-            now.compared[side][i] = Field<std::uint8_t>(ctrl + kCompared[i]);
+            now.compared[side][i] = ReadAt<std::uint8_t>(ctrl + kCompared[i]);
         }
-        now.openPending[side] = Field<std::int32_t>(ctrl + kOpenPending);
+        now.openPending[side] = ReadAt<std::int32_t>(ctrl + kOpenPending);
     }
     now.path                = focus_scope::LivePathCount();
     now.menuVisibility      = {VisibilityOf(one, kMenuWidget), VisibilityOf(two, kMenuWidget)};
@@ -495,17 +479,17 @@ void Watch(std::uintptr_t two, std::uintptr_t one) noexcept
                                                   kHudSoundMode};
     for (std::size_t i = 0; i < kBytes.size(); ++i)
     {
-        now.bytes[i] = Field<std::uint8_t>(two + kBytes[i]);
+        now.bytes[i] = ReadAt<std::uint8_t>(two + kBytes[i]);
     }
     for (std::size_t i = 0; i < kLoggedGates.size(); ++i)
     {
-        now.gates[i] = Field<std::uint8_t>(two + kLoggedGates[i]);
+        now.gates[i] = ReadAt<std::uint8_t>(two + kLoggedGates[i]);
     }
-    now.guardLatch = Field<std::int32_t>(two + kGuardLatch);
-    now.waitFilter = Field<std::int32_t>(two + kWaitFilter);
-    now.storedType = Field<std::uint8_t>(two + kStoredLeaderType);
-    now.pinch      = Field<std::uint8_t>(two + kPinch);
-    now.members    = {Field<std::int32_t>(two + kMembers), Field<std::int32_t>(two + kMembers + 4)};
+    now.guardLatch = ReadAt<std::int32_t>(two + kGuardLatch);
+    now.waitFilter = ReadAt<std::int32_t>(two + kWaitFilter);
+    now.storedType = ReadAt<std::uint8_t>(two + kStoredLeaderType);
+    now.pinch      = ReadAt<std::uint8_t>(two + kPinch);
+    now.members    = {ReadAt<std::int32_t>(two + kMembers), ReadAt<std::int32_t>(two + kMembers + 4)};
     Snapshot steady = now;
     steady.requests = {};
     if (!g_watchLog.Offer(steady, now.requests))
@@ -564,24 +548,24 @@ void ReleaseTint(const wchar_t* why) noexcept;  // below, with the tint's thunks
 void PlayerTwoPass(float deltaTime) noexcept
 {
     const auto two    = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller());
-    const auto one    = Field<std::uintptr_t>(g_endUISystem + kController);
+    const auto one    = ReadAt<std::uintptr_t>(g_endUISystem + kController);
     void*      member = generation::Member();
     if (two == 0 || one == 0 || one == two || member == nullptr ||
-        (Field<std::uint8_t>(one + kHudMode) == 0 && Field<std::uint8_t>(two + kHudMode) == 0))
+        (ReadAt<std::uint8_t>(one + kHudMode) == 0 && ReadAt<std::uint8_t>(two + kHudMode) == 0))
     {
         ReleaseTint(L"released: player 2's menu is not ticked (out of battle)");
         return;  // out of battle: player 2's controller has nothing to do yet
     }
     const auto memberType = party_member::PlayerTypeOf(member);
     const auto memberWeak = leader_scope::WeakOf(member);
-    const auto manager    = Field<std::uintptr_t>(g_partyManager);
+    const auto manager    = ReadAt<std::uintptr_t>(g_partyManager);
     if (!memberType || memberWeak == 0 || manager == 0)
     {
         return Refused(L"player 2's member could not be read");
     }
-    const auto before = std::array<std::uint64_t, 3>{Field<std::uint64_t>(manager + kPrimary),
-                                                     Field<std::uint64_t>(manager + kLeaderWeak),
-                                                     Field<std::uint8_t>(manager + kLeaderType)};
+    const auto before = std::array<std::uint64_t, 3>{ReadAt<std::uint64_t>(manager + kPrimary),
+                                                     ReadAt<std::uint64_t>(manager + kLeaderWeak),
+                                                     ReadAt<std::uint8_t>(manager + kLeaderType)};
     const auto leaderType = static_cast<std::uint8_t>(before[2]);
     {
         focus_scope::FocusScope focus(reinterpret_cast<void*>(two));
@@ -613,12 +597,12 @@ void PlayerTwoPass(float deltaTime) noexcept
         // A written exception (RE-p2-command-menu-levers.md §4.1, §15): the battle-HUD sound is one global
         // cue per edge, played by the first controller whose +0x774 differs from its HUD mode; player 2's
         // is pre-seeded with the value its own tick writes one line after the sound, so the cue plays once.
-        Put(two + kHudSoundMode, Field<std::uint8_t>(two + kHudMode));
+        WriteAt(two + kHudSoundMode, ReadAt<std::uint8_t>(two + kHudMode));
         const bool ticked = platform::CallGuarded(reinterpret_cast<TickFn>(g_tickCall.Original()),
                                                   reinterpret_cast<void*>(two), deltaTime);
         g_pass   = 0;
         g_passed = ticked;
-        if (g_twoHoldsTint && Field<std::int32_t>(two + kWaitFilter) == 0)
+        if (g_twoHoldsTint && ReadAt<std::int32_t>(two + kWaitFilter) == 0)
         {
             ReleaseTint(L"WARNING: player 2's menu is idle but held a count; released");
         }
@@ -632,9 +616,9 @@ void PlayerTwoPass(float deltaTime) noexcept
         }
         Watch(two, one);
     }
-    const auto after = std::array<std::uint64_t, 3>{Field<std::uint64_t>(manager + kPrimary),
-                                                    Field<std::uint64_t>(manager + kLeaderWeak),
-                                                    Field<std::uint8_t>(manager + kLeaderType)};
+    const auto after = std::array<std::uint64_t, 3>{ReadAt<std::uint64_t>(manager + kPrimary),
+                                                    ReadAt<std::uint64_t>(manager + kLeaderWeak),
+                                                    ReadAt<std::uint8_t>(manager + kLeaderType)};
     if (after != before)
     {
         Line(L"WARNING: the primary controller or the party leader differs after player 2's pass");
@@ -649,7 +633,7 @@ int KnownAction(std::uint64_t key) noexcept
                                              g_keys[kDodge]};
     for (std::size_t i = 0; i < keys.size(); ++i)
     {
-        if (keys[i] != 0 && Field<std::uint64_t>(keys[i]) == key)
+        if (keys[i] != 0 && ReadAt<std::uint64_t>(keys[i]) == key)
         {
             return static_cast<int>(i);
         }
@@ -665,7 +649,7 @@ std::wstring KeyText(std::uint64_t key)
          {g_keys[kGuard], L"Guard"}, {g_keys[kDodge], L"Dodge"}}};
     for (const auto& [address, name] : known)
     {
-        if (address != 0 && Field<std::uint64_t>(address) == key)
+        if (address != 0 && ReadAt<std::uint64_t>(address) == key)
         {
             return name;
         }
@@ -697,27 +681,27 @@ bool InPlayerTwoUi(Route route, const wchar_t* what, Call&& call) noexcept
         return refuse(L"the route is off, inside a pass, or player 2 is out");
     }
     const auto two    = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller());
-    const auto one    = Field<std::uintptr_t>(g_endUISystem + kController);
+    const auto one    = ReadAt<std::uintptr_t>(g_endUISystem + kController);
     void*      member = generation::Member();
     if (two == 0 || one == 0 || one == two || member == nullptr)
     {
         return refuse(L"a controller or player 2's member is missing");
     }
     if (route == Route::kPress &&
-        !menu_rules::PressAllowed(Field<std::uint8_t>(two + kHudMode), Field<std::uint8_t>(two + kMenuLayer),
-                                  Field<std::uint8_t>(one + kBattleInput), Field<std::uint8_t>(one + kMenuLayer),
+        !menu_rules::PressAllowed(ReadAt<std::uint8_t>(two + kHudMode), ReadAt<std::uint8_t>(two + kMenuLayer),
+                                  ReadAt<std::uint8_t>(one + kBattleInput), ReadAt<std::uint8_t>(one + kMenuLayer),
                                   focus_scope::PlayerOneTopIsCommandMenu()))
     {
         return refuse(L"not in player 2's battle menu");
     }
     const auto memberType = party_member::PlayerTypeOf(member);
     const auto memberWeak = leader_scope::WeakOf(member);
-    const auto manager    = Field<std::uintptr_t>(g_partyManager);
+    const auto manager    = ReadAt<std::uintptr_t>(g_partyManager);
     if (!memberType || memberWeak == 0 || manager == 0)
     {
         return refuse(L"player 2's member could not be read");
     }
-    const auto leaderType = Field<std::uint8_t>(manager + kLeaderType);
+    const auto leaderType = ReadAt<std::uint8_t>(manager + kLeaderType);
     focus_scope::FocusScope focus(reinterpret_cast<void*>(two));
     if (!focus.Entered())
     {
@@ -753,13 +737,13 @@ bool InPlayerTwoUi(Route route, const wchar_t* what, Call&& call) noexcept
 /// For the route log: player 2's battle input, its action requests, and player 1's capture map's count.
 std::wstring RouteState(std::uintptr_t two)
 {
-    const auto input = Field<std::uintptr_t>(g_endUISystem + kInput);
+    const auto input = ReadAt<std::uintptr_t>(g_endUISystem + kInput);
     return std::format(L"25C {} req 6:{} 7:{} 12:{} 13:{} 26:{} 32:{} 37:{} | members {} {} {} | captures {}",
-                       Field<std::uint8_t>(two + kBattleInput), RequestOf(two, 6), RequestOf(two, 7),
+                       ReadAt<std::uint8_t>(two + kBattleInput), RequestOf(two, 6), RequestOf(two, 7),
                        RequestOf(two, kReqAttack), RequestOf(two, kReqUnique), RequestOf(two, 26),
-                       RequestOf(two, kReqGuardDodge), RequestOf(two, kReqGuard), Field<std::int32_t>(two + kMembers),
-                       Field<std::int32_t>(two + kMembers + 4), Field<std::int32_t>(two + kMembers + 8),
-                       Field<std::int32_t>(input + 0xB0) - Field<std::int32_t>(input + 0xDC));
+                       RequestOf(two, kReqGuardDodge), RequestOf(two, kReqGuard), ReadAt<std::int32_t>(two + kMembers),
+                       ReadAt<std::int32_t>(two + kMembers + 4), ReadAt<std::int32_t>(two + kMembers + 8),
+                       ReadAt<std::int32_t>(input + 0xB0) - ReadAt<std::int32_t>(input + 0xDC));
 }
 
 /// Notes that pad 2's press of `key` went to player 2's UI: its release goes there too.
@@ -782,7 +766,7 @@ bool TakeTaken(std::uint64_t key) noexcept
 bool RoutePadTwo(pad_buttons::ActionDownFn dispatch, void* owner, void* unused, std::uint32_t sourceBit, void* event,
                  std::uint8_t alreadyHandled, char& result) noexcept
 {
-    const auto key = Field<std::uint64_t>(reinterpret_cast<std::uintptr_t>(event) + kEventKey);
+    const auto key = ReadAt<std::uint64_t>(reinterpret_cast<std::uintptr_t>(event) + kEventKey);
     if (key == 0)
     {
         return false;
@@ -826,7 +810,7 @@ bool RoutePadTwo(pad_buttons::ActionDownFn dispatch, void* owner, void* unused, 
 std::uint8_t KeyUp(void* self, void* application, const void* keyEvent) noexcept
 {
     const std::int32_t previous = g_upPad;
-    g_upPad = Field<std::int32_t>(reinterpret_cast<std::uintptr_t>(keyEvent) + kKeyEventUser);
+    g_upPad = ReadAt<std::int32_t>(reinterpret_cast<std::uintptr_t>(keyEvent) + kKeyEventUser);
     const auto answer = reinterpret_cast<KeyUpFn>(g_keyUpSlot.Original())(self, application, keyEvent);
     g_upPad = previous;
     return answer;
@@ -840,7 +824,7 @@ std::uint8_t UpRoute(void* owner, void* event) noexcept
 {
     const auto original = reinterpret_cast<UpRouteFn>(g_upRouteCall.Original());
     const bool padTwo   = g_upPad >= 0 && g_upPad == pad_sticks::ControllerIdOf(generation::PlayerTwoController());
-    const auto key      = Field<std::uint64_t>(reinterpret_cast<std::uintptr_t>(event) + kEventKey);
+    const auto key      = ReadAt<std::uint64_t>(reinterpret_cast<std::uintptr_t>(event) + kEventKey);
     if (!padTwo || !TakeTaken(key))
     {
         return original(owner, event);
@@ -864,7 +848,7 @@ std::uint8_t UpRoute(void* owner, void* event) noexcept
 /// The tint's filter manager and, for the log, its latch and count for the tint type.
 std::uintptr_t FilterManager() noexcept
 {
-    return Field<std::uintptr_t>(g_endUISystem + kFilterManager);
+    return ReadAt<std::uintptr_t>(g_endUISystem + kFilterManager);
 }
 
 void TintLine(const wchar_t* what) noexcept
@@ -874,12 +858,13 @@ void TintLine(const wchar_t* what) noexcept
         return;
     }
     const auto fm  = FilterManager();
-    const auto one = Field<std::uintptr_t>(g_endUISystem + kController);
+    const auto one = ReadAt<std::uintptr_t>(g_endUISystem + kController);
     const auto two = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller());
     platform::LogDebug(L"command menu tick: tint {} (pass {}; wait P1 {} P2 {}; latch {} count {}; P2 holds {})", what, g_pass,
-                  one != 0 ? Field<std::int32_t>(one + kWaitFilter) : -1, two != 0 ? Field<std::int32_t>(two + kWaitFilter) : -1,
-                  Field<std::uint8_t>(fm + kFilterLatch + kTintType), Field<std::int32_t>(fm + kFilterCount + 4 * kTintType),
-                  g_twoHoldsTint ? 1 : 0);
+                  one != 0 ? ReadAt<std::int32_t>(one + kWaitFilter) : -1,
+                  two != 0 ? ReadAt<std::int32_t>(two + kWaitFilter) : -1,
+                  ReadAt<std::uint8_t>(fm + kFilterLatch + kTintType),
+                  ReadAt<std::int32_t>(fm + kFilterCount + 4 * kTintType), g_twoHoldsTint ? 1 : 0);
 }
 
 /// Player 2's count of the tint given back (its menu closed, or it stops holding for another reason).
@@ -931,9 +916,9 @@ void TintOff(std::uint8_t type) noexcept
 /// menu is still in wait mode. Player 1's ticks first, so if both close in one frame player 2's plays it.
 void WaitSoundOff(std::uint8_t index) noexcept
 {
-    const auto one  = Field<std::uintptr_t>(g_endUISystem + kController);
+    const auto one  = ReadAt<std::uintptr_t>(g_endUISystem + kController);
     const auto two  = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller());
-    const auto wait = [](std::uintptr_t ctrl) { return ctrl != 0 ? Field<std::int32_t>(ctrl + kWaitFilter) : 0; };
+    const auto wait = [](std::uintptr_t ctrl) { return ctrl != 0 ? ReadAt<std::int32_t>(ctrl + kWaitFilter) : 0; };
     const auto s1 = wait(one), s2 = wait(two);
     if (menu_rules::SkipWaitSoundOff(g_pass, s1, s2))
     {
@@ -1160,7 +1145,7 @@ bool RefocusMenu(void* controller) noexcept
     {
         return false;
     }
-    const auto layer = Field<std::uint8_t>(reinterpret_cast<std::uintptr_t>(controller) + kMenuLayer);
+    const auto layer = ReadAt<std::uint8_t>(reinterpret_cast<std::uintptr_t>(controller) + kMenuLayer);
     if (layer != 0 && !platform::CallGuarded(g_setMenuLayer, controller, std::uint8_t{0}))
     {
         return false;
@@ -1170,7 +1155,8 @@ bool RefocusMenu(void* controller) noexcept
 
 bool BattleInputOn(const void* controller) noexcept
 {
-    return controller != nullptr && Field<std::uint8_t>(reinterpret_cast<std::uintptr_t>(controller) + kBattleInput) != 0;
+    return controller != nullptr &&
+           ReadAt<std::uint8_t>(reinterpret_cast<std::uintptr_t>(controller) + kBattleInput) != 0;
 }
 
 void Remove() noexcept

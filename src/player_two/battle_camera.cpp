@@ -170,9 +170,6 @@ struct CameraState
 CameraState StateOf(void* cameraManager) noexcept
 {
     // Every read guarded: these are the game's heap objects, and a log must never be able to crash it.
-    const auto guarded = [](std::uintptr_t address, auto& out) {
-        return address != 0 && platform::CopyGuarded(&out, reinterpret_cast<const void*>(address), sizeof(out));
-    };
     CameraState state;
     if (cameraManager == nullptr)
     {
@@ -181,20 +178,20 @@ CameraState StateOf(void* cameraManager) noexcept
     state.present = true;
     void* battle  = BattleOperatorOf(cameraManager);
     void* field   = ReadPointer(cameraManager, facts::kCameraManagerFieldOperator);
-    guarded(reinterpret_cast<std::uintptr_t>(cameraManager) + kOperatorBytes, state.operators);
+    Read(reinterpret_cast<std::uintptr_t>(cameraManager) + kOperatorBytes, state.operators);
     const auto battleAt = reinterpret_cast<std::uintptr_t>(battle);
     const auto fieldAt  = reinterpret_cast<std::uintptr_t>(field);
-    guarded(battleAt != 0 ? battleAt + kOperatorState : 0, state.battle[0]);
-    guarded(battleAt != 0 ? battleAt + kOperatorActive : 0, state.battle[1]);
-    guarded(fieldAt != 0 ? fieldAt + kOperatorState : 0, state.field[0]);
-    guarded(fieldAt != 0 ? fieldAt + kOperatorActive : 0, state.field[1]);
+    Read(battleAt != 0 ? battleAt + kOperatorState : 0, state.battle[0]);
+    Read(battleAt != 0 ? battleAt + kOperatorActive : 0, state.battle[1]);
+    Read(fieldAt != 0 ? fieldAt + kOperatorState : 0, state.field[0]);
+    Read(fieldAt != 0 ? fieldAt + kOperatorActive : 0, state.field[1]);
     std::uintptr_t table = 0;
-    guarded(battle != nullptr ? reinterpret_cast<std::uintptr_t>(battle) + kModules : 0, table);
+    Read(battle != nullptr ? reinterpret_cast<std::uintptr_t>(battle) + kModules : 0, table);
     for (std::size_t i = 0; i < std::size(kLoggedModules); ++i)
     {
         std::uintptr_t module = 0;
-        state.moduleRead[i] = guarded(table != 0 ? table + kLoggedModules[i] * kModuleEntry : 0, module) &&
-                              guarded(module != 0 ? module + kModuleActive : 0, state.modules[i]);
+        state.moduleRead[i] = Read(table != 0 ? table + kLoggedModules[i] * kModuleEntry : 0, module) &&
+                              Read(module != 0 ? module + kModuleActive : 0, state.modules[i]);
     }
     return state;
 }

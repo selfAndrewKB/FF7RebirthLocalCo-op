@@ -101,43 +101,38 @@ bool                           g_placeFaulted  = false;
 std::array<Logged, 2>          g_logged{};
 bool                           g_loggedOnce[2] = {false, false};
 
-template <class T>
-T Field(std::uintptr_t address) noexcept
-{
-    T value{};
-    if (address != 0)
-    {
-        platform::CopyGuarded(&value, reinterpret_cast<const void*>(address), sizeof(T));
-    }
-    return value;
-}
+using platform::ReadAt;  // the guarded reads: platform/guarded.h
 
 void* Resolve(std::uintptr_t weakField) noexcept
 {
-    return Field<std::uint64_t>(weakField) != 0 ? player_two::leader_scope::ObjectAt(reinterpret_cast<const void*>(weakField))
-                                                 : nullptr;
+    return ReadAt<std::uint64_t>(weakField) != 0
+               ? player_two::leader_scope::ObjectAt(reinterpret_cast<const void*>(weakField))
+               : nullptr;
 }
 
 std::uintptr_t Manager() noexcept
 {
-    return g_system != 0 ? Field<std::uintptr_t>(g_system + kPinManager) : 0;
+    return g_system != 0 ? ReadAt<std::uintptr_t>(g_system + kPinManager) : 0;
 }
 
 Held HeldBy(void* controller) noexcept
 {
     Held       held;
-    const auto component = controller != nullptr ? Field<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(controller) + kLeaderActions) : 0;
+    const auto component = controller != nullptr
+                               ? ReadAt<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(controller) + kLeaderActions)
+                               : 0;
     if (component == 0)
     {
         return held;
     }
-    held.active   = Field<std::uint8_t>(component + kAnyActive) != 0;
-    held.shooting = Field<std::uint8_t>(component + kShooting);
-    const auto points = Field<std::uintptr_t>(component + kPoints);
-    const auto count  = Field<std::int32_t>(component + kPointCount);
+    held.active   = ReadAt<std::uint8_t>(component + kAnyActive) != 0;
+    held.shooting = ReadAt<std::uint8_t>(component + kShooting);
+    const auto points = ReadAt<std::uintptr_t>(component + kPoints);
+    const auto count  = ReadAt<std::int32_t>(component + kPointCount);
     for (std::int32_t i = 0; points != 0 && i < count && held.count < kMaxPoints; ++i)
     {
-        if (const auto pin = Field<std::uint64_t>(points + kPointSize * static_cast<std::uintptr_t>(i) + kPointPin); pin != 0)
+        if (const auto pin = ReadAt<std::uint64_t>(points + kPointSize * static_cast<std::uintptr_t>(i) + kPointPin);
+            pin != 0)
         {
             held.pins[held.count++] = pin;
         }
@@ -167,7 +162,7 @@ void Hide(std::uintptr_t weakField) noexcept
     const float previous = widget_opacity::Get(widget);
     if (previous != 0.0f && widget_opacity::Set(widget, 0.0f))
     {
-        g_hidden[g_hiddenCount++] = {Field<std::uint64_t>(weakField), previous};
+        g_hidden[g_hiddenCount++] = {ReadAt<std::uint64_t>(weakField), previous};
     }
 }
 
@@ -297,7 +292,7 @@ void ShowOnly(int player) noexcept
     {
         platform::ForEachSparseElement(manager + kPins, kPinEntry, [&](std::uintptr_t entry) {
             ++now.entries;
-            const auto pin   = Field<std::uint64_t>(entry + kPinWidget);
+            const auto pin   = ReadAt<std::uint64_t>(entry + kPinWidget);
             int        owner = hud_rules::PinOwnerOf(Holds(one, pin), Holds(two, pin));
             for (std::size_t i = 0; owner < 0 && i < g_knownCount; ++i)
             {

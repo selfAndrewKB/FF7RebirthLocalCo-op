@@ -29,12 +29,6 @@ constexpr std::uint32_t kAllocSize = 0x18;  // u32, bytes
 
 constexpr std::uint32_t kMaxInfos = kMaxRowWords * 64;
 
-template <class T>
-bool ReadField(std::uintptr_t address, T& out) noexcept
-{
-    return address != 0 && CopyGuarded(&out, reinterpret_cast<const void*>(address), sizeof(T));
-}
-
 }  // namespace
 
 std::optional<Pools> Pools::Locate(const GameImage& image) noexcept
@@ -43,8 +37,10 @@ std::optional<Pools> Pools::Locate(const GameImage& image) noexcept
     const auto vtable = image.Rebase(kBinned3Vtable);
     std::uintptr_t allocator = 0, actual = 0;
     std::uint32_t  blockSize = 0;
-    if (!slot || !vtable || !ReadField(*slot, allocator) || !ReadField(allocator, actual) || actual != *vtable ||
-        !ReadField(allocator + kPoolTables + kPool32K * kPoolStride + kBlockSize, blockSize) || blockSize != kBlock32K)
+    if (!slot || !vtable || !platform::Read(*slot, allocator) || !platform::Read(allocator, actual) ||
+        actual != *vtable ||
+        !platform::Read(allocator + kPoolTables + kPool32K * kPoolStride + kBlockSize, blockSize) ||
+        blockSize != kBlock32K)
     {
         return std::nullopt;
     }
@@ -63,10 +59,10 @@ std::optional<PoolFill> Pools::Read(std::uint32_t index) const noexcept
     std::uint16_t        perBlock = 0;
     std::uintptr_t       bits = 0, infosPage = 0, infos = 0;
     std::uint32_t        lastRow = 0, allocSize = 0, everUsed = 0;
-    if (!ReadField(table + kBlockSize, fill.blockSize) || !ReadField(table + kPerBlock, perBlock) ||
-        !ReadField(tree + kBits, bits) || !ReadField(tree + kDesired, fill.capacity) ||
-        !ReadField(tree + kLastRow, lastRow) || !ReadField(tree + kAllocSize, allocSize) ||
-        !ReadField(table + kEverUsed, everUsed) || !ReadField(table + kPoolInfos, infosPage))
+    if (!platform::Read(table + kBlockSize, fill.blockSize) || !platform::Read(table + kPerBlock, perBlock) ||
+        !platform::Read(tree + kBits, bits) || !platform::Read(tree + kDesired, fill.capacity) ||
+        !platform::Read(tree + kLastRow, lastRow) || !platform::Read(tree + kAllocSize, allocSize) ||
+        !platform::Read(table + kEverUsed, everUsed) || !platform::Read(table + kPoolInfos, infosPage))
     {
         return std::nullopt;
     }
@@ -79,14 +75,14 @@ std::optional<PoolFill> Pools::Read(std::uint32_t index) const noexcept
     std::uint64_t                            root = 0;
     if (!CopyGuarded(row.data(), reinterpret_cast<const void*>(bits + lastRow * sizeof(std::uint64_t)),
                      words * sizeof(std::uint64_t)) ||
-        !ReadField(bits, root))
+        !platform::Read(bits, root))
     {
         return std::nullopt;
     }
     fill.committed = CommittedFromLastRow(std::span(row.data(), words), fill.capacity);
     fill.perBlock  = perBlock;
     fill.full      = root == ~0ull;
-    if (infosPage != 0 && ReadField(infosPage, infos) && infos != 0)
+    if (infosPage != 0 && platform::Read(infosPage, infos) && infos != 0)
     {
         std::array<std::uint32_t, kMaxInfos> words32;  // only the copied `count` words are read
         const std::uint32_t                  count = everUsed < kMaxInfos ? everUsed : kMaxInfos;

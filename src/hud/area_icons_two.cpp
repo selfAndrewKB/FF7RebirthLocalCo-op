@@ -175,11 +175,7 @@ bool Acts(Part part) noexcept
     return (g_mask & part) != 0;
 }
 
-template <class T>
-bool Read(std::uintptr_t address, T& out) noexcept
-{
-    return platform::CopyGuarded(&out, reinterpret_cast<const void*>(address), sizeof(T));
-}
+using platform::Read;  // the guarded reads: platform/guarded.h
 
 /// Replaces the frame function's call for the first player controller.
 void* FirstController(void* world) noexcept

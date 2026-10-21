@@ -66,11 +66,7 @@ struct NativeWindow
 std::optional<std::uintptr_t> ReadPointer(std::uintptr_t at) noexcept
 {
     std::uintptr_t value = 0;
-    if (at == 0 || !platform::CopyGuarded(&value, reinterpret_cast<const void*>(at), sizeof(value)))
-    {
-        return std::nullopt;
-    }
-    return value;
+    return platform::Read(at, value) ? std::optional(value) : std::nullopt;
 }
 
 template <class Fn>

@@ -28,8 +28,8 @@ struct FakeList
         boundary::Write<std::uint64_t>(bytes.data(), boundary::list::kArena, reinterpret_cast<std::uint64_t>(start));
         boundary::Write<std::uint64_t>(bytes.data(), boundary::list::kArena + 8, reinterpret_cast<std::uint64_t>(end));
     }
-    std::uint64_t Field(std::size_t offset) const { return boundary::Read<std::uint64_t>(bytes.data(), offset); }
-    std::uint32_t Commands() const { return boundary::Read<std::uint32_t>(bytes.data(), boundary::list::kNumCommands); }
+    std::uint64_t Field(std::size_t offset) const { return boundary::Load<std::uint64_t>(bytes.data(), offset); }
+    std::uint32_t Commands() const { return boundary::Load<std::uint32_t>(bytes.data(), boundary::list::kNumCommands); }
 };
 
 std::uint64_t Qword(std::uint64_t at)

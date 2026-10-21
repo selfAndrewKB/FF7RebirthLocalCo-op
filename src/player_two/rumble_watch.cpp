@@ -6,6 +6,7 @@
 #include "platform/log.h"
 #include "platform/vtable_entry.h"
 #include "player_two/generation.h"
+#include "player_two/object_fields.h"
 
 #include <array>
 #include <atomic>
@@ -116,17 +117,6 @@ std::atomic<std::uint32_t> g_offThread{0};  // calls off the game thread (counte
 
 Counts g_counts;
 
-template <class T>
-T Read(const void* base, std::size_t offset) noexcept
-{
-    T value{};
-    if (base != nullptr)
-    {
-        platform::CopyGuarded(&value, static_cast<const std::uint8_t*>(base) + offset, sizeof(T));
-    }
-    return value;
-}
-
 std::array<float, 4> ValuesAt(const void* at) noexcept
 {
     std::array<float, 4> values{};
@@ -205,7 +195,7 @@ void LogStatus() noexcept
     const auto offThread = g_offThread.exchange(0, std::memory_order_relaxed);
     const void* one = generation::PlayerOneController();
     const void* two = generation::PlayerTwoController();
-    const auto* app = reinterpret_cast<const std::uint8_t*>(Read<std::uintptr_t>(reinterpret_cast<const void*>(g_app), 0));
+    const auto* app = reinterpret_cast<const std::uint8_t*>(ReadAt<std::uintptr_t>(g_app));
     try
     {
         platform::LogDebug(L"rumble (10 s): {} frame(s), {} with a non-zero value; sends PC1 {}, PC2 {}, other {}; {} pad write(s)"
@@ -215,10 +205,12 @@ void LogStatus() noexcept
                       g_counts.padWrites,
                       offThread != 0 ? std::format(L", {} call(s) off the game thread", offThread)
                                               : std::wstring(),
-                      Read<std::int32_t>(app, kAppDeviceCode), (Read<std::uint8_t>(one, kFlags) & kFeedbackOn) != 0 ? L"on" : L"OFF",
-                      Read<float>(one, kFeedbackScale), EffectCount(one),
-                      (Read<std::uint8_t>(two, kFlags) & kFeedbackOn) != 0 ? L"on" : L"OFF", Read<float>(two, kFeedbackScale),
-                      EffectCount(two), Read<std::uintptr_t>(two, kPlayerInput) != 0 ? L"present" : L"MISSING");
+                      ReadField<std::int32_t>(app, kAppDeviceCode),
+                      (ReadField<std::uint8_t>(one, kFlags) & kFeedbackOn) != 0 ? L"on" : L"OFF",
+                      ReadField<float>(one, kFeedbackScale), EffectCount(one),
+                      (ReadField<std::uint8_t>(two, kFlags) & kFeedbackOn) != 0 ? L"on" : L"OFF",
+                      ReadField<float>(two, kFeedbackScale), EffectCount(two),
+                      ReadField<std::uintptr_t>(two, kPlayerInput) != 0 ? L"present" : L"MISSING");
     }
     catch (...)
     {
@@ -265,9 +257,9 @@ std::uint64_t Send(void* controller, void* input, std::int32_t id) noexcept
                     : controller == generation::PlayerTwoController() ? 2
                                                                       : 0;
     event.id      = id;
-    event.code    = Read<std::int32_t>(input, kAppDeviceCode - 0x80);
+    event.code    = ReadField<std::int32_t>(input, kAppDeviceCode - 0x80);
     event.effects = EffectCount(controller);
-    event.on      = (Read<std::uint8_t>(controller, kFlags) & kFeedbackOn) != 0;
+    event.on      = (ReadField<std::uint8_t>(controller, kFlags) & kFeedbackOn) != 0;
     event.values  = ValuesAt(static_cast<const std::uint8_t*>(controller) + kValues);
     if (!event.on)
     {
@@ -320,7 +312,7 @@ void Install(const platform::GameImage& image) noexcept
 
 std::int32_t EffectCount(const void* controller) noexcept
 {
-    return controller == nullptr ? -1 : Read<std::int32_t>(controller, kEffectsNum);
+    return controller == nullptr ? -1 : ReadField<std::int32_t>(controller, kEffectsNum);
 }
 
 }  // namespace lss::player_two::rumble_watch

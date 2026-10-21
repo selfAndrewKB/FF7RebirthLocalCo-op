@@ -204,22 +204,8 @@ std::int32_t Tenths(float value) noexcept
     return static_cast<std::int32_t>(value * 10.0f + (value < 0.0f ? -0.5f : 0.5f));
 }
 
-template <class T>
-bool Read(std::uintptr_t address, T& out) noexcept
-{
-    return platform::CopyGuarded(&out, reinterpret_cast<const void*>(address), sizeof(T));
-}
-
-template <class T>
-T Field(std::uintptr_t address) noexcept
-{
-    T value{};
-    if (address != 0)
-    {
-        Read(address, value);
-    }
-    return value;
-}
+using platform::Read;  // the guarded reads: platform/guarded.h
+using platform::ReadAt;
 
 /// One line of player 2's target gauges at `level` (Debug or Trace). Callers
 /// check platform::Enabled(level) before building `text`.
@@ -437,18 +423,19 @@ bool FinalStep(void* widget, std::uintptr_t p, const GaugePlacement& placement, 
 float HalfSize(std::uintptr_t source) noexcept
 {
     void*      owner = nullptr;
-    const auto slot  = reinterpret_cast<OwnerFn>(Field<std::uintptr_t>(Field<std::uintptr_t>(source) + kOwnerSlot));
+    const auto slot  = reinterpret_cast<OwnerFn>(ReadAt<std::uintptr_t>(ReadAt<std::uintptr_t>(source) + kOwnerSlot));
     if (!platform::CallGuarded(slot, owner, reinterpret_cast<void*>(source)) || owner == nullptr)
     {
         return 0.0f;
     }
-    const auto  c = Field<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(owner) + kHalfSource);
+    const auto  c = ReadAt<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(owner) + kHalfSource);
     float       bounds[3]{};
     if (c == 0 || !Read(c + kHalfBounds, bounds))
     {
         return 0.0f;
     }
-    return std::max(std::min(bounds[0], bounds[1]) * Field<float>(c + kHalfScaleXY), bounds[2] * Field<float>(c + kHalfScaleZ));
+    return std::max(std::min(bounds[0], bounds[1]) * ReadAt<float>(c + kHalfScaleXY),
+                    bounds[2] * ReadAt<float>(c + kHalfScaleZ));
 }
 
 PlayerTwoOffset& OffsetFor(const Key& key, std::uintptr_t p, bool seedFromGame)
@@ -463,7 +450,7 @@ PlayerTwoOffset& OffsetFor(const Key& key, std::uintptr_t p, bool seedFromGame)
     }
     // A key new to the walk is a new entry, which the game starts at 0; the first pass after player 2
     // arrives starts from the game's values instead. Its size starts from the game's.
-    g_offsets.push_back({key, seedFromGame ? Field<float>(p + kYOffset) : 0.0f, Field<float>(p + kScale), true});
+    g_offsets.push_back({key, seedFromGame ? ReadAt<float>(p + kYOffset) : 0.0f, ReadAt<float>(p + kScale), true});
     return g_offsets.back();
 }
 
@@ -471,7 +458,7 @@ PlayerTwoOffset& OffsetFor(const Key& key, std::uintptr_t p, bool seedFromGame)
 /// targeted rule against the tick's choice (logged when it disagrees).
 bool ReplayPlayerOne(std::uintptr_t manager, int& replayed, int& targeted)
 {
-    const Key  lockOn{Field<std::uintptr_t>(manager + kLockOnKey), Field<std::uintptr_t>(manager + kLockOnKey + 8)};
+    const Key  lockOn{ReadAt<std::uintptr_t>(manager + kLockOnKey), ReadAt<std::uintptr_t>(manager + kLockOnKey + 8)};
     const auto one        = target_views::TargetAndMain(lockOn.source, lockOn.controller);
     int        mismatches = 0;
     bool       ok         = true;
@@ -491,7 +478,7 @@ bool ReplayPlayerOne(std::uintptr_t manager, int& replayed, int& targeted)
             ok = false;
             return false;
         }
-        const auto source = Field<std::uintptr_t>(entry);
+        const auto source = ReadAt<std::uintptr_t>(entry);
         const bool rule   = hud_rules::PlayerOneTargetRule(source, one[0], one[1], placed->targeted != 0,
                                                            placed->skipLeaderClamp != 0, capture.forced != 0);
         mismatches += rule != (placed->targeted != 0) ? 1 : 0;
@@ -532,7 +519,7 @@ bool ReplayPlayerTwo(std::uintptr_t manager, int& replayed, int& targeted)
             return true;
         }
         const Capture capture = Captured(p);
-        const Key     key{Field<std::uintptr_t>(entry), Field<std::uintptr_t>(entry + 8)};
+        const Key     key{ReadAt<std::uintptr_t>(entry), ReadAt<std::uintptr_t>(entry + 8)};
         const auto    gauge   = hud_rules::ClassifyGauge(key.source, two[0], two[1], placed->targeted != 0,
                                                          placed->skipLeaderClamp != 0, capture.forced != 0);
         const bool    own     = gauge.own;
@@ -550,18 +537,19 @@ bool ReplayPlayerTwo(std::uintptr_t manager, int& replayed, int& targeted)
         }
         PlayerTwoOffset& offset = OffsetFor(key, p, seed);
         const float      before = offset.y;
-        const float      theirs = Field<float>(p + kYOffset);
+        const float      theirs = ReadAt<float>(p + kYOffset);
         if ((target || AnyFlag(capture)) && !StepGuarded(widget, p, offset.y, gauge.steps))
         {
             ok = false;
             return false;
         }
-        const float theirScale = Field<float>(p + kScale);
+        const float theirScale = ReadAt<float>(p + kScale);
         if (g_scaleStep != nullptr)
         {
             // The size from the enemy's distance to player 2's member, player 2's own ease.
             void*      owner = nullptr;
-            const auto slot  = reinterpret_cast<OwnerFn>(Field<std::uintptr_t>(Field<std::uintptr_t>(key.source) + kOwnerSlot));
+            const auto slot  =
+                reinterpret_cast<OwnerFn>(ReadAt<std::uintptr_t>(ReadAt<std::uintptr_t>(key.source) + kOwnerSlot));
             ScaleRestore saved;
             bool         stepped = false;
             if (platform::CallGuarded(slot, owner, reinterpret_cast<void*>(key.source)) && owner != nullptr)
@@ -582,7 +570,8 @@ bool ReplayPlayerTwo(std::uintptr_t manager, int& replayed, int& targeted)
         if ((own || main) && targetCount < static_cast<std::int32_t>(targets.size()))
         {
             targets[targetCount++] = {own, Tenths(half), Tenths(before), Tenths(offset.y), Tenths(theirs),
-                                      Field<float>(p + kYOffset) == theirs, Tenths(offset.scale * 10.0f), Tenths(theirScale * 10.0f)};
+                                      ReadAt<float>(p + kYOffset) == theirs, Tenths(offset.scale * 10.0f),
+                                      Tenths(theirScale * 10.0f)};
         }
         ++replayed;
         targeted += target ? 1 : 0;

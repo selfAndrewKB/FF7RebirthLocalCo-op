@@ -6,6 +6,7 @@
 #include "platform/verified_code.h"
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
+#include "player_two/object_fields.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -109,18 +110,8 @@ Subject        g_subject = Subject::Member;
 float          g_elapsed = 0.0f;
 int            g_updates = 0;
 
-template <class T>
-bool Read(const void* object, std::uint32_t offset, T& out) noexcept
-{
-    return object != nullptr && platform::CopyGuarded(&out, static_cast<const std::byte*>(object) + offset, sizeof(T));
-}
-
-void* PointerAt(const void* object, std::uint32_t offset) noexcept
-{
-    void* value = nullptr;
-    return Read(object, offset, value) ? value : nullptr;
-}
-
+/// A byte of `object`; 0xFF when unreadable, so a state that cannot be read is neither FOLLOW nor "nothing
+/// pending".
 std::uint8_t ByteAt(const void* object, std::uint32_t offset) noexcept
 {
     std::uint8_t value = 0xFF;
@@ -155,8 +146,8 @@ const Variant* VariantOf(const void* state, Subject subject) noexcept
 void* FollowStateOf(const void* pawn, Subject subject, const Variant** variantOut = nullptr,
                     const void** aiOut = nullptr) noexcept
 {
-    void* ai    = PointerAt(pawn, facts::kCharacterRetainedAi);
-    void* state = PointerAt(PointerAt(ai, kAiBrain), kBrainState);
+    void* ai    = ReadPointer(pawn, facts::kCharacterRetainedAi);
+    void* state = ReadPointer(ReadPointer(ai, kAiBrain), kBrainState);
     if (aiOut != nullptr)
     {
         *aiOut = ai;
@@ -193,7 +184,7 @@ void Stop() noexcept
 /// The follow query's status for a log line: 1 = a result is ready; -1 = no result object (the query never ran).
 int QueryStatus() noexcept
 {
-    const void* result = PointerAt(g_state, kStateQueryResult);
+    const void* result = ReadPointer(g_state, kStateQueryResult);
     std::uint8_t status = 0;
     return result == nullptr ? -1 : Read(result, kQueryStatus, status) ? status : -2;
 }
@@ -294,7 +285,7 @@ bool Start(void* pawn, Subject subject, bool attached, bool splitShown) noexcept
                                                                               : nullptr;
     if (refused != nullptr)
     {
-        const void* current = PointerAt(PointerAt(ai, kAiBrain), kBrainState);
+        const void* current = ReadPointer(ReadPointer(ai, kAiBrain), kBrainState);
         platform::Log(L"party warp: {} not started ({}); its AI {} state vtable {:#x} type {}", Who(subject), refused, ai,
                       IdaVtableOf(current), ByteAt(current, kStateType));
         return false;

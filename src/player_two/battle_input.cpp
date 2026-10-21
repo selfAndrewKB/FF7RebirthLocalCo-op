@@ -73,20 +73,6 @@ std::uintptr_t g_partyManager  = 0;  // the address holding the party manager
 
 // Game thread.
 
-template <class T>
-bool Read(std::uintptr_t address, T& out) noexcept
-{
-    return platform::CopyGuarded(&out, reinterpret_cast<const void*>(address), sizeof(T));
-}
-
-template <class T>
-T Field(std::uintptr_t address) noexcept
-{
-    T value{};
-    Read(address, value);
-    return value;
-}
-
 void* OwnerGuarded(std::uintptr_t aiHolder) noexcept
 {
     __try
@@ -121,12 +107,12 @@ Parts PartsOf(std::uintptr_t character) noexcept
         return parts;
     }
     parts.owner = reinterpret_cast<std::uintptr_t>(OwnerGuarded(aiHolder));
-    if (parts.owner == 0 || Field<std::uintptr_t>(parts.owner) != g_battlePlayerVTable)
+    if (parts.owner == 0 || ReadAt<std::uintptr_t>(parts.owner) != g_battlePlayerVTable)
     {
         return parts;
     }
-    parts.handle = Field<std::uintptr_t>(parts.owner + kCommandHandle);
-    parts.mode   = parts.handle != 0 ? Field<std::uint8_t>(parts.handle + kHandleMode) : 0;
+    parts.handle = ReadAt<std::uintptr_t>(parts.owner + kCommandHandle);
+    parts.mode   = parts.handle != 0 ? ReadAt<std::uint8_t>(parts.handle + kHandleMode) : 0;
     parts.ready  = parts.handle != 0;
     return parts;
 }
@@ -146,9 +132,9 @@ CharacterState CharacterOf(std::uintptr_t state, const Parts& parts) noexcept
     CharacterState character{parts.holder != 0, parts.owner != 0, parts.handle != 0, parts.mode};
     for (std::size_t i = 0; i < kStateBytes.size(); ++i)
     {
-        character.bytes[i] = Field<std::uint8_t>(state + kStateBytes[i]);
+        character.bytes[i] = ReadAt<std::uint8_t>(state + kStateBytes[i]);
     }
-    character.pending = state != 0 ? Field<std::int32_t>(state + kPendingAction) : 0;
+    character.pending = state != 0 ? ReadAt<std::int32_t>(state + kPendingAction) : 0;
     return character;
 }
 
@@ -212,7 +198,7 @@ std::uint8_t InBattleGuarded() noexcept
 
 std::uintptr_t BattleSystem() noexcept
 {
-    return Field<std::uintptr_t>(g_battleSystem);
+    return ReadAt<std::uintptr_t>(g_battleSystem);
 }
 
 }  // namespace
@@ -247,16 +233,16 @@ void Watch(void* member, void* state) noexcept
     {
         std::uintptr_t controller = 0;
         Read(g_endUISystem + kController, controller);
-        const bool battleHud  = controller != 0 && Field<std::uint8_t>(controller + kBattleHud) != 0;
-        const bool blocked    = controller != 0 && Field<std::uint8_t>(controller + kBattleBlocked) != 0;
-        const bool ready      = controller != 0 && (Field<std::uint8_t>(controller + kBattleReadyA) != 0 ||
-                                               Field<std::uint8_t>(controller + kBattleReadyB) != 0);
+        const bool battleHud  = controller != 0 && ReadAt<std::uint8_t>(controller + kBattleHud) != 0;
+        const bool blocked    = controller != 0 && ReadAt<std::uint8_t>(controller + kBattleBlocked) != 0;
+        const bool ready      = controller != 0 && (ReadAt<std::uint8_t>(controller + kBattleReadyA) != 0 ||
+                                               ReadAt<std::uint8_t>(controller + kBattleReadyB) != 0);
         const auto           memberAddress = reinterpret_cast<std::uintptr_t>(member);
         const Parts          two           = PartsOf(memberAddress);
         const std::uintptr_t system        = BattleSystem();
         const std::uint64_t  memberWeak    = leader_scope::WeakOf(member);
         // In battle: the member tick's TargetScope already asked the game (lock_on::Held), else ask.
-        const bool           targeting     = system != 0 && Field<std::uint8_t>(system + kSkipTargeting) == 0 &&
+        const bool           targeting     = system != 0 && ReadAt<std::uint8_t>(system + kSkipTargeting) == 0 &&
                                    (lock_on::Held() || InBattleGuarded() != 0);
         // Player 2's soft target, lock, lock camera, switching and cursor: the game's targeting tick run
         // for player 2 (player_two/lock_on.h). Attack, unique, guard and dodge: player 2's command
@@ -273,7 +259,7 @@ void Watch(void* member, void* state) noexcept
         now.hud       = battleHud;
         now.blocked   = blocked;
         now.ready     = ready;
-        now.guardMode = controller != 0 ? Field<std::int32_t>(controller + kGuardMode) : 0;
+        now.guardMode = controller != 0 ? ReadAt<std::int32_t>(controller + kGuardMode) : 0;
         std::uintptr_t requests = 0;
         std::int32_t   count    = 0;
         if (controller != 0)
@@ -284,7 +270,9 @@ void Watch(void* member, void* state) noexcept
         for (std::size_t i = 0; i < kLoggedRequests.size(); ++i)
         {
             const std::int32_t index = kLoggedRequests[i];
-            now.requests[i] = requests != 0 && index < count ? Field<std::int32_t>(requests + 4 * static_cast<std::uint32_t>(index)) : -1;
+            now.requests[i] = requests != 0 && index < count
+                                  ? ReadAt<std::int32_t>(requests + 4 * static_cast<std::uint32_t>(index))
+                                  : -1;
         }
         const auto one      = reinterpret_cast<std::uintptr_t>(ReadPointer(generation::PlayerOneController(), facts::kControllerPawn));
         const auto oneState = one != 0 ? reinterpret_cast<std::uintptr_t>(ReadPointer(reinterpret_cast<void*>(one),
@@ -293,16 +281,16 @@ void Watch(void* member, void* state) noexcept
         const Parts oneParts = PartsOf(one);
         now.characters[0]    = CharacterOf(oneState, oneParts);
         now.characters[1]    = CharacterOf(reinterpret_cast<std::uintptr_t>(state), two);
-        if (const auto manager = Field<std::uintptr_t>(g_partyManager); manager != 0)
+        if (const auto manager = ReadAt<std::uintptr_t>(g_partyManager); manager != 0)
         {
             Read(manager + kPartyManagerLeader, now.leaderWeak);
         }
         now.targeting  = targeting;
-        now.lock       = system != 0 ? Field<std::uint8_t>(system + kLockMode) : 0;
-        now.latch      = system != 0 ? Field<std::uint8_t>(system + kSwitchLatch) : 0;
-        now.displayed  = system != 0 ? Field<std::uintptr_t>(system + kDisplayed) : 0;
-        now.targets[0] = oneParts.owner != 0 ? Field<std::uintptr_t>(oneParts.owner + kTargetSlot) : 0;
-        now.targets[1] = two.owner != 0 ? Field<std::uintptr_t>(two.owner + kTargetSlot) : 0;
+        now.lock       = system != 0 ? ReadAt<std::uint8_t>(system + kLockMode) : 0;
+        now.latch      = system != 0 ? ReadAt<std::uint8_t>(system + kSwitchLatch) : 0;
+        now.displayed  = system != 0 ? ReadAt<std::uintptr_t>(system + kDisplayed) : 0;
+        now.targets[0] = oneParts.owner != 0 ? ReadAt<std::uintptr_t>(oneParts.owner + kTargetSlot) : 0;
+        now.targets[1] = two.owner != 0 ? ReadAt<std::uintptr_t>(two.owner + kTargetSlot) : 0;
         now.memberWeak = memberWeak;
         Snapshot steady = now;
         steady.requests = {};  // the action requests flip with each press: logged once they hold

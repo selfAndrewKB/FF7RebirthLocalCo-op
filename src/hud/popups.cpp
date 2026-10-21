@@ -72,11 +72,7 @@ WeakGetFn              g_weakGet     = nullptr;
 // Game thread.
 bool g_failed = false;
 
-template <class T>
-bool Read(std::uintptr_t address, T& out) noexcept
-{
-    return platform::CopyGuarded(&out, reinterpret_cast<const void*>(address), sizeof(T));
-}
+using platform::Read;  // the guarded reads: platform/guarded.h
 
 void* WeakGetGuarded(const void* weak) noexcept
 {

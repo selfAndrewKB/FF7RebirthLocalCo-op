@@ -3,12 +3,15 @@
 // The guards around engine memory and engine calls: a copy from readable memory succeeds and one from a page nothing
 // may touch, or from null, fails without taking the process down; a guarded call that faults reports false and
 // records what faulted (the code, the kind of access, the address) for the log; the filter passes a stack overflow on.
+// The Read family every module reads engine memory with: by address or by object and offset, false or zero for a
+// null or unreadable source, the value otherwise; WriteAt says whether a write landed.
 
 #include "platform/guarded.h"
 
 #include "exec_page.h"
 #include "expect.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -22,6 +25,12 @@ using lss::platform::DescribeFault;
 using lss::platform::Fault;
 using lss::platform::GuardFilter;
 using lss::platform::LastFault;
+using lss::platform::Read;
+using lss::platform::ReadAt;
+using lss::platform::ReadField;
+using lss::platform::ReadPointer;
+using lss::platform::ReadPointerAt;
+using lss::platform::WriteAt;
 using lss::platform::WriteGuarded;
 
 int ReadsThrough(const int* pointer)
@@ -127,6 +136,65 @@ void TestCallRecordsTheFault()
     EXPECT(value == 1);
 }
 
+/// An engine object as the modules see one: fields at offsets read in IDA.
+struct Object
+{
+    std::uint32_t head    = 0x11223344;
+    void*         pointer = nullptr;
+    std::uint8_t  flag    = 7;
+};
+
+void TestReads()
+{
+    std::puts("guarded: Read by address, by pointer and by object and offset; a null or no-access source reads false, "
+              "the output untouched");
+    int value = 42;
+    int out   = 7;
+    EXPECT(Read(reinterpret_cast<std::uintptr_t>(&value), out) && out == 42);
+    out = 7;
+    EXPECT(Read(static_cast<const void*>(&value), out) && out == 42);
+    out = 7;
+    EXPECT(!Read(std::uintptr_t{0}, out) && out == 7);
+    EXPECT(!Read(static_cast<const void*>(nullptr), out) && out == 7);
+    const lss::test::NoAccessPage noAccess;
+    EXPECT(!Read(noAccess.At(0x10), out) && out == 7);
+    EXPECT(!Read(noAccess.Pointer(0x10), out) && out == 7);
+
+    Object object;
+    object.pointer    = &value;
+    std::uint8_t flag = 0;
+    EXPECT(Read(&object, offsetof(Object, flag), flag) && flag == 7);
+    EXPECT(!Read(static_cast<const void*>(nullptr), offsetof(Object, flag), flag));
+    EXPECT(!Read(noAccess.Pointer(), 0x20, flag) && flag == 7);
+
+    std::puts("guarded: ReadAt, ReadField, ReadPointer and ReadPointerAt give the value, or zero when unreadable");
+    EXPECT(ReadAt<int>(reinterpret_cast<std::uintptr_t>(&value)) == 42);
+    EXPECT(ReadAt<int>(0) == 0);
+    EXPECT(ReadAt<int>(noAccess.At(0x10)) == 0);
+    EXPECT(ReadField<std::uint32_t>(&object, offsetof(Object, head)) == 0x11223344);
+    EXPECT(ReadField<std::uint32_t>(nullptr, offsetof(Object, head)) == 0);
+    EXPECT(ReadField<std::uint32_t>(noAccess.Pointer(), 0) == 0);
+    EXPECT(ReadPointer(&object, offsetof(Object, pointer)) == &value);
+    EXPECT(ReadPointer(nullptr, offsetof(Object, pointer)) == nullptr);
+    EXPECT(ReadPointer(noAccess.Pointer(), 0x10) == nullptr);
+    void* const slot = &object;
+    EXPECT(ReadPointerAt(reinterpret_cast<std::uintptr_t>(&slot)) == &object);
+    EXPECT(ReadPointerAt(0) == nullptr);
+    EXPECT(ReadPointerAt(noAccess.At(0x18)) == nullptr);
+}
+
+void TestWriteAt()
+{
+    std::puts("guarded: WriteAt lands in writable memory; a null address or a read-only page reads false, the page "
+              "unchanged");
+    int target = 0;
+    EXPECT(WriteAt(reinterpret_cast<std::uintptr_t>(&target), 5) && target == 5);
+    EXPECT(!WriteAt(std::uintptr_t{0}, 5));
+    const ReadOnlyPage readOnly;
+    EXPECT(!WriteAt(reinterpret_cast<std::uintptr_t>(readOnly.Pointer() + 0x20), std::uint8_t{1}));
+    EXPECT(readOnly.Pointer()[0x20] == 0x5A);
+}
+
 void TestFilterAndText()
 {
     std::puts("guarded: the filter handles everything but a stack overflow; a fault never recorded has its own text");
@@ -143,6 +211,8 @@ int main()
     TestCopies();
     TestWrites();
     TestCallRecordsTheFault();
+    TestReads();
+    TestWriteAt();
     TestFilterAndText();
 
     return lss::test::Report();

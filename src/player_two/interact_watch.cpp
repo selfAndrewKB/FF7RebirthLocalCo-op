@@ -9,6 +9,7 @@
 #include "player_two/field_pickup.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
+#include "player_two/object_fields.h"
 #include "player_two/primary_controller.h"
 #include "player_two/rumble_watch.h"
 #include "players/unreal_access.h"
@@ -185,20 +186,9 @@ private:
     PSRWLOCK lock_;
 };
 
-template <class T>
-T Read(const void* base, std::size_t offset) noexcept
-{
-    T value{};
-    if (base != nullptr)
-    {
-        platform::CopyGuarded(&value, static_cast<const std::uint8_t*>(base) + offset, sizeof(T));
-    }
-    return value;
-}
-
 const std::uint8_t* PointerAt(const void* base, std::size_t offset) noexcept
 {
-    return reinterpret_cast<const std::uint8_t*>(Read<std::uintptr_t>(base, offset));
+    return static_cast<const std::uint8_t*>(ReadPointer(base, offset));
 }
 
 std::uintptr_t Ida(std::uintptr_t live) noexcept
@@ -282,8 +272,8 @@ void AddPoint(void* mgr, std::uint8_t talk, const std::uint64_t* key, const std:
     const auto registrar = Ida(reinterpret_cast<std::uintptr_t>(_ReturnAddress()));
     reinterpret_cast<AddPointFn>(g_addPoint.Original())(mgr, talk, key, owner, extra, location, rotation, preset,
                                                        presetPlayer, hold, kind, flagA, flagB, preset2, presetPlayer2);
-    if (const auto keyName = Read<std::uint64_t>(key, 0);
-        g_scooterKey != nullptr && keyName != 0 && keyName == Read<std::uint64_t>(g_scooterKey, 0))
+    if (const auto keyName = ReadField<std::uint64_t>(key, 0);
+        g_scooterKey != nullptr && keyName != 0 && keyName == ReadField<std::uint64_t>(g_scooterKey, 0))
     {
         try
         {
@@ -294,8 +284,9 @@ void AddPoint(void* mgr, std::uint8_t talk, const std::uint64_t* key, const std:
             }
             platform::Log(L"interact: Wheelie ride-on point added by 0x{:X} (owner {}, talk {}, kind {}, presets {} / {}, "
                           L"at {:.0f},{:.0f},{:.0f}), leader {}",
-                          registrar, Name(Read<std::uint64_t>(owner, 0)), talk, kind, Name(Read<std::uint64_t>(preset, 0)),
-                          Name(Read<std::uint64_t>(presetPlayer, 0)), at[0], at[1], at[2], LeaderText());
+                          registrar, Name(ReadField<std::uint64_t>(owner, 0)), talk, kind,
+                          Name(ReadField<std::uint64_t>(preset, 0)), Name(ReadField<std::uint64_t>(presetPlayer, 0)),
+                          at[0], at[1], at[2], LeaderText());
         }
         catch (...)
         {
@@ -322,11 +313,11 @@ void AddPoint(void* mgr, std::uint8_t talk, const std::uint64_t* key, const std:
         }
         platform::LogDebug(L"interact: add {} (owner {}, talk {}, kind {}, presets {} / {}{}{}, at {:.0f},{:.0f},{:.0f}) by "
                       L"0x{:X}, leader type {}",
-                      Name(Read<std::uint64_t>(key, 0)), Name(Read<std::uint64_t>(owner, 0)), talk, kind,
-                      Name(Read<std::uint64_t>(preset, 0)), Name(Read<std::uint64_t>(presetPlayer, 0)),
+                      Name(ReadField<std::uint64_t>(key, 0)), Name(ReadField<std::uint64_t>(owner, 0)), talk, kind,
+                      Name(ReadField<std::uint64_t>(preset, 0)), Name(ReadField<std::uint64_t>(presetPlayer, 0)),
                       preset2 != 0 ? L", second " + Name(preset2) : std::wstring(),
                       presetPlayer2 != 0 ? L" / " + Name(presetPlayer2) : std::wstring(), at[0], at[1], at[2],
-                      registrar, Read<std::uint8_t>(Party(), kPartyLeaderType));
+                      registrar, ReadField<std::uint8_t>(Party(), kPartyLeaderType));
     }
     catch (...)
     {
@@ -336,8 +327,8 @@ void AddPoint(void* mgr, std::uint8_t talk, const std::uint64_t* key, const std:
 void ExecuteSlot(void* mgr, std::uint8_t slot) noexcept
 {
     const auto* record = static_cast<const std::uint8_t*>(mgr) + kSlotRecords + kSlotRecordSize * (slot & 7);
-    const auto  key    = Read<std::uint64_t>(record, 0);
-    const auto  owner  = Read<std::uint64_t>(record, 8);
+    const auto  key    = ReadField<std::uint64_t>(record, 0);
+    const auto  owner  = ReadField<std::uint64_t>(record, 8);
     const int   outer  = t_marksInExecute;
     t_marksInExecute   = 0;
     reinterpret_cast<ExecuteSlotFn>(g_executeSlot.Original())(mgr, slot);
@@ -352,7 +343,8 @@ void ExecuteSlot(void* mgr, std::uint8_t slot) noexcept
         platform::LogDebug(L"interact: execute slot {} key {} (owner {}): leader {}, primary {}; executed {}, pending {}, "
                       L"WorldItem marks {}",
                       slot, Name(key), Name(owner), LeaderText(), PrimaryText(),
-                      Read<std::uint8_t>(mgr, kSlotExecuted + (slot & 7)), Read<std::uint8_t>(mgr, kPending), marks);
+                      ReadField<std::uint8_t>(mgr, kSlotExecuted + (slot & 7)), ReadField<std::uint8_t>(mgr, kPending),
+                      marks);
     }
     catch (...)
     {
@@ -433,7 +425,7 @@ void LogSlots(const std::uint8_t* mgr)
     platform::CopyGuarded(now.data() + at + kSlots, mgr + kSlotPressed, kSlots);
     platform::CopyGuarded(now.data() + at + 2 * kSlots, mgr + kSlotExecuted, kSlots);
     at += 3 * kSlots;
-    now[at] = Read<std::uint8_t>(mgr, kPending);
+    now[at] = ReadField<std::uint8_t>(mgr, kPending);
     if (now == g_slotSeen)
     {
         return;
@@ -442,11 +434,11 @@ void LogSlots(const std::uint8_t* mgr)
     std::wstring slots;
     for (int i = 0; i < kSlots; ++i)
     {
-        const auto target = Read<std::uint64_t>(mgr, kSlotTargets + 8 * i);
-        const auto row    = Read<std::uint64_t>(mgr, kSlotRows + 8 * i);
-        const auto held   = Read<std::uint8_t>(mgr, kSlotHeld + i);
-        const auto press  = Read<std::uint8_t>(mgr, kSlotPressed + i);
-        const auto done   = Read<std::uint8_t>(mgr, kSlotExecuted + i);
+        const auto target = ReadField<std::uint64_t>(mgr, kSlotTargets + 8 * i);
+        const auto row    = ReadField<std::uint64_t>(mgr, kSlotRows + 8 * i);
+        const auto held   = ReadField<std::uint8_t>(mgr, kSlotHeld + i);
+        const auto press  = ReadField<std::uint8_t>(mgr, kSlotPressed + i);
+        const auto done   = ReadField<std::uint8_t>(mgr, kSlotExecuted + i);
         if (target == 0 && row == 0 && held == 0 && press == 0 && done == 0)
         {
             continue;
@@ -456,7 +448,7 @@ void LogSlots(const std::uint8_t* mgr)
                              done != 0 ? L", executed" : L"");
     }
     platform::LogTrace(L"interact: slots {} (candidates {}, pending {}, leader {})", slots.empty() ? L"none" : slots,
-                  Read<std::int32_t>(mgr, kCandidateCount), now[at], LeaderText());
+                  ReadField<std::int32_t>(mgr, kCandidateCount), now[at], LeaderText());
 }
 
 /// The keys in WorldItemMgr's map (allocated elements only).
@@ -464,7 +456,7 @@ std::unordered_set<std::uint64_t> WorldItemKeys(const std::uint8_t* items)
 {
     std::unordered_set<std::uint64_t> keys;
     const auto*                       elements = PointerAt(items, kItemElements);
-    const auto                        count    = std::clamp(Read<std::int32_t>(items, kItemCount), 0, kMaxItems);
+    const auto                        count    = std::clamp(ReadField<std::int32_t>(items, kItemCount), 0, kMaxItems);
     const auto*                       heapBits = PointerAt(items, kItemBitsHeap);
     const auto* bits = heapBits != nullptr ? heapBits : items + kItemBitsInline;
     if (elements == nullptr)
@@ -473,10 +465,10 @@ std::unordered_set<std::uint64_t> WorldItemKeys(const std::uint8_t* items)
     }
     for (std::int32_t i = 0; i < count; ++i)
     {
-        const auto word = Read<std::uint32_t>(bits, static_cast<std::size_t>(i / 32) * 4);
+        const auto word = ReadField<std::uint32_t>(bits, static_cast<std::size_t>(i / 32) * 4);
         if ((word >> (i % 32) & 1) != 0)
         {
-            keys.insert(Read<std::uint64_t>(elements, static_cast<std::size_t>(i) * kItemStride));
+            keys.insert(ReadField<std::uint64_t>(elements, static_cast<std::size_t>(i) * kItemStride));
         }
     }
     return keys;
@@ -512,24 +504,24 @@ void Census(const std::uint8_t* mgr, const std::unordered_set<std::uint64_t>& it
             if (d1 < nearestOne)
             {
                 nearestOne    = d1;
-                nearestOneKey = Read<std::uint64_t>(point, kPointKey);
+                nearestOneKey = ReadField<std::uint64_t>(point, kPointKey);
             }
             if (d2 < nearestTwo)
             {
                 nearestTwo    = d2;
-                nearestTwoKey = Read<std::uint64_t>(point, kPointKey);
+                nearestTwoKey = ReadField<std::uint64_t>(point, kPointKey);
             }
             if (d1 > kNearCm && d2 > kNearCm)
             {
                 continue;
             }
             PointSeen seen;
-            seen.flags   = Read<std::uint32_t>(point, kPointFlags);
-            seen.slot    = Read<std::uint8_t>(point, kPointSlot);
-            seen.talk    = Read<std::uint8_t>(point, kPointTalk);
+            seen.flags   = ReadField<std::uint32_t>(point, kPointFlags);
+            seen.slot    = ReadField<std::uint8_t>(point, kPointSlot);
+            seen.talk    = ReadField<std::uint8_t>(point, kPointTalk);
             seen.nearOne = d1 <= kNearCm;
             seen.nearTwo = d2 <= kNearCm;
-            nearby.push_back({Read<std::uint64_t>(point, kPointKey), seen, point, d1, d2});
+            nearby.push_back({ReadField<std::uint64_t>(point, kPointKey), seen, point, d1, d2});
         }
     }
     // A summary every kRegistrarPeriodMs, so an empty census reads as "nothing near", not as a broken walk.
@@ -556,12 +548,12 @@ void Census(const std::uint8_t* mgr, const std::unordered_set<std::uint64_t>& it
         {
             platform::LogDebug(L"interact: near {} (owner {}, {}, talk {}, presets {} / {} / {}, slot {}, kind {}, variant {}, "
                           L"flags 0x{:08X}): {:.1f} m from player 1, {:.1f} m from player 2",
-                          Name(n.key), Name(Read<std::uint64_t>(n.point, kPointOwner)),
+                          Name(n.key), Name(ReadField<std::uint64_t>(n.point, kPointOwner)),
                           items.contains(n.key) ? L"WorldItem" : L"not a WorldItem", n.seen.talk,
-                          Name(Read<std::uint64_t>(n.point, kPointPreset)),
-                          Name(Read<std::uint64_t>(n.point, kPointPreset2)),
-                          Name(Read<std::uint64_t>(n.point, kPointPresetPlayer)), n.seen.slot,
-                          Read<std::uint8_t>(n.point, kPointKind), Read<std::uint8_t>(n.point, kPointVariant),
+                          Name(ReadField<std::uint64_t>(n.point, kPointPreset)),
+                          Name(ReadField<std::uint64_t>(n.point, kPointPreset2)),
+                          Name(ReadField<std::uint64_t>(n.point, kPointPresetPlayer)), n.seen.slot,
+                          ReadField<std::uint8_t>(n.point, kPointKind), ReadField<std::uint8_t>(n.point, kPointVariant),
                           n.seen.flags, n.d1 / 100.0f, n.d2 / 100.0f);
         }
         else
@@ -606,7 +598,7 @@ void DryRun(const std::uint8_t* mgr, const std::unordered_set<std::uint64_t>& it
     keys.reserve(static_cast<std::size_t>(count));
     for (int i = 0; i < count; ++i)
     {
-        keys.push_back(Read<std::uint64_t>(g_found[i], kPointKey));
+        keys.push_back(ReadField<std::uint64_t>(g_found[i], kPointKey));
     }
     std::sort(keys.begin(), keys.end());
     if (keys == g_dryRunSeen)
@@ -618,11 +610,11 @@ void DryRun(const std::uint8_t* mgr, const std::unordered_set<std::uint64_t>& it
     for (int i = 0; i < count; ++i)
     {
         const auto* point = static_cast<const std::uint8_t*>(g_found[i]);
-        const auto  key   = Read<std::uint64_t>(point, kPointKey);
+        const auto  key   = ReadField<std::uint64_t>(point, kPointKey);
         float       at[3]{};
         platform::CopyGuarded(at, point + kPointLocation, sizeof(at));
         line += std::format(L"{}{} ({}, {:.1f} m)", line.empty() ? L"" : L"; ", Name(key),
-                            items.contains(key) ? L"WorldItem" : Name(Read<std::uint64_t>(point, kPointPreset)),
+                            items.contains(key) ? L"WorldItem" : Name(ReadField<std::uint64_t>(point, kPointPreset)),
                             Distance(at, two) / 100.0f);
     }
     platform::LogDebug(L"interact: dry run around player 2's member: {} candidate(s){}{}", count, count != 0 ? L": " : L"",

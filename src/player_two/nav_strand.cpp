@@ -18,6 +18,7 @@
 #include "player_two/chocobo_ride.h"
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
+#include "player_two/object_fields.h"
 #include "player_two/party_warp.h"
 #include "player_two/strand_watch.h"
 
@@ -198,21 +199,9 @@ void Line(std::wformat_string<A...> format, A&&... args) noexcept
     }
 }
 
-template <class T>
-bool Read(const void* address, T& out) noexcept
-{
-    return address != nullptr && platform::CopyGuarded(&out, address, sizeof(T));
-}
-
 const std::byte* At(const void* object, std::uint32_t offset) noexcept
 {
     return object == nullptr ? nullptr : static_cast<const std::byte*>(object) + offset;
-}
-
-const void* PointerAt(const void* object, std::uint32_t offset) noexcept
-{
-    const void* value = nullptr;
-    return Read(At(object, offset), value) ? value : nullptr;
 }
 
 /// True when `location` is player 2's member's. The call sites pass no component, only a copy of its
@@ -334,7 +323,7 @@ bool SafeCheckReadyAt(void* reason, const float* location, bool flag) noexcept
 bool Parked(const void* member) noexcept
 {
     std::uint32_t mask = 0;
-    return Read(At(PointerAt(member, kCharacterMoveOwner), kOwnerStopMask), mask) && (mask & kStopReasonParked) != 0;
+    return Read(At(ReadPointer(member, kCharacterMoveOwner), kOwnerStopMask), mask) && (mask & kStopReasonParked) != 0;
 }
 
 /// The member's root component, through the reflected RootComponent offset (found once).
@@ -360,7 +349,7 @@ const std::byte* RootOf(void* member) noexcept
             return nullptr;
         }
     }
-    return static_cast<const std::byte*>(PointerAt(member, static_cast<std::uint32_t>(g_rootOffset)));
+    return static_cast<const std::byte*>(ReadPointer(member, static_cast<std::uint32_t>(g_rootOffset)));
 }
 
 bool LocationOf(const void* pawn, float (&out)[3]) noexcept
@@ -372,7 +361,7 @@ bool LocationOf(const void* pawn, float (&out)[3]) noexcept
 std::wstring PlacesText()
 {
     float one[3]{}, two[3]{}, cell[3]{};
-    const void* leader = PointerAt(generation::PlayerOneController(), facts::kControllerPawn);
+    const void* leader = ReadPointer(generation::PlayerOneController(), facts::kControllerPawn);
     const bool  hasOne = LocationOf(leader, one);
     const bool  hasTwo = LocationOf(g_member, two);
     const void* manager = nullptr;
@@ -418,9 +407,9 @@ void ProbeAi(const wchar_t* when, bool always) noexcept
     {
         return;
     }
-    const void*   ai   = PointerAt(g_member, facts::kCharacterRetainedAi);
-    const void*   brain = PointerAt(ai, kAiBrain);
-    const void*   state = PointerAt(brain, kBrainState);
+    const void*   ai   = ReadPointer(g_member, facts::kCharacterRetainedAi);
+    const void*   brain = ReadPointer(ai, kAiBrain);
+    const void*   state = ReadPointer(brain, kBrainState);
     std::uint8_t  type  = 0xFF;
     Read(At(state, kStateType), type);
     if (!always && state == g_loggedState && type == g_loggedType)
@@ -437,7 +426,7 @@ void ProbeAi(const wchar_t* when, bool always) noexcept
     Read(At(state, kStateTeleportRange), range);
     Read(At(state, kStateTeleporting), warping);
     Read(At(ai, kAiPauseMask), pause);
-    const void* aiPawn = PointerAt(ai, kAiPawn);
+    const void* aiPawn = ReadPointer(ai, kAiPawn);
     const bool follow = type == kStateFollow;
     Line(L"{}: retained AI {} (pawn {}, pause mask {:#x}), state {} type {}{}; player follow vtable {}, teleport range "
          L"{:.0f}, warping {}",
@@ -577,8 +566,8 @@ void MountedTick(void* member, const void* chocobo, const void* ridden, bool spl
         return;
     }
     g_mountedQuiet      = quiet;
-    const void*  ai     = PointerAt(chocobo, facts::kCharacterRetainedAi);
-    const void*  state  = PointerAt(PointerAt(ai, kAiBrain), kBrainState);
+    const void*  ai     = ReadPointer(chocobo, facts::kCharacterRetainedAi);
+    const void*  state  = ReadPointer(ReadPointer(ai, kAiBrain), kBrainState);
     std::uint8_t type   = 0xFF, warping = 0;
     std::uint32_t pause = 0;
     float        range  = 0.0f;
@@ -771,7 +760,8 @@ void Tick(bool splitShown) noexcept
                           g_strand.parkChecks + parkChecks, std::max(g_strand.longestMove, longest), MovedSinceStart(),
                           Places());
             ProbeAi(L"at the warp", true);
-            party_warp::Start(member, party_warp::Subject::Member, PointerAt(RootOf(member), kComponentAttachParent) != nullptr,
+            party_warp::Start(member, party_warp::Subject::Member,
+                              ReadPointer(RootOf(member), kComponentAttachParent) != nullptr,
                               splitShown);  // logs its own outcome
             break;
         case StrandEvent::Ended:

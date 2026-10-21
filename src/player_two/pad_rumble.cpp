@@ -12,6 +12,7 @@
 #include "platform/log.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
+#include "player_two/object_fields.h"
 #include "player_two/pad_sticks.h"
 #include "players/unreal_access.h"
 
@@ -66,20 +67,9 @@ std::int32_t      g_padLogged  = -1;
 bool              g_firstLogged = false;
 Clock::time_point g_statusAt{};
 
-template <class T>
-T Read(const void* base, std::size_t offset) noexcept
-{
-    T value{};
-    if (base != nullptr)
-    {
-        platform::CopyGuarded(&value, static_cast<const std::uint8_t*>(base) + offset, sizeof(T));
-    }
-    return value;
-}
-
 const void* Pointee(std::uintptr_t global) noexcept
 {
-    return reinterpret_cast<const void*>(Read<std::uintptr_t>(reinterpret_cast<const void*>(global), 0));
+    return reinterpret_cast<const void*>(ReadField<std::uintptr_t>(reinterpret_cast<const void*>(global), 0));
 }
 
 /// The game's last-device note; an event from player 2's pad leaves player 1's last device as it is.
@@ -110,13 +100,13 @@ void Order(void* one, void* two) noexcept
     {
         return;
     }
-    const auto before = Read<std::int32_t>(two, kTickPrerequisites);
+    const auto before = ReadField<std::int32_t>(two, kTickPrerequisites);
     struct
     {
         void* prerequisite;
     } params{one};
     const bool called = players::unreal::GuardedProcessEvent(static_cast<UObject*>(two), g_addPrerequisite, &params);
-    const auto after  = Read<std::int32_t>(two, kTickPrerequisites);
+    const auto after  = ReadField<std::int32_t>(two, kTickPrerequisites);
     g_orderedOne      = one;
     g_orderedTwo      = two;
     g_orderedOneWeak  = leader_scope::WeakOf(one);
@@ -136,8 +126,8 @@ void Order(void* one, void* two) noexcept
 /// Player 1's device code and last XInput pad on change, and the skips once a minute (while player 2 is in).
 void LogDevice() noexcept
 {
-    const auto code = Read<std::int32_t>(Pointee(g_app), kAppDeviceCode);
-    const auto pad  = Read<std::int32_t>(Pointee(g_owner), kOwnerPad);
+    const auto code = ReadField<std::int32_t>(Pointee(g_app), kAppDeviceCode);
+    const auto pad  = ReadField<std::int32_t>(Pointee(g_owner), kOwnerPad);
     try
     {
         if ((!g_firstLogged || code != g_codeLogged || pad != g_padLogged))

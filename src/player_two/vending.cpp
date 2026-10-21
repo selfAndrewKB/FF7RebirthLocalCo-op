@@ -118,11 +118,6 @@ std::uint64_t PresetName() noexcept
     return g_presetName;
 }
 
-std::uint64_t KeyAt(std::uint64_t pointer) noexcept
-{
-    return pointer != 0 ? ReadField<std::uint64_t>(reinterpret_cast<const void*>(pointer), 0) : 0;
-}
-
 /// The caller's IDA address (its return address), for the log.
 std::uintptr_t CallerOf(const void* returnAddress) noexcept
 {
@@ -209,7 +204,7 @@ std::uint64_t End2Key(std::uint64_t mgr, std::uint64_t key, std::uint64_t r8, st
         return result;
     }
     const bool inPass = field_pickup::InPass();
-    const auto point  = KeyAt(key);
+    const auto point  = ReadAt<std::uint64_t>(key);
     if (inPass)  // player 1's presses (any End2 action) leave player 2's pending press alone
     {
         g_press = Press{true, Clock::now(), platform::frame_watch::FrameIndex(), point};

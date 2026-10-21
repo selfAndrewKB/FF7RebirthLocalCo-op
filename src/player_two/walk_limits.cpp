@@ -135,19 +135,6 @@ void Line(std::wformat_string<A...> format, A&&... args) noexcept
     LineAt(platform::Level::Info, format, std::forward<A>(args)...);
 }
 
-template <class T>
-bool Read(const void* object, std::uint32_t offset, T& out) noexcept
-{
-    return object != nullptr && platform::CopyGuarded(&out, static_cast<const std::byte*>(object) + offset, sizeof(T));
-}
-
-void* Global(std::uintptr_t address) noexcept
-{
-    void* value = nullptr;
-    return address != 0 && platform::CopyGuarded(&value, reinterpret_cast<const void*>(address), sizeof(value)) ? value
-                                                                                                                 : nullptr;
-}
-
 std::wstring PairText(Pair pair)
 {
     return pair == kNoLimit ? std::wstring(L"none") : std::format(L"{}/{}", pair.move, pair.dash);
@@ -178,7 +165,7 @@ void EnsureNavArea(void* controller) noexcept
         Line(L"player 2's controller already has its nav-area component (kept)");
         return;
     }
-    void* partyManager = Global(g_partyManager);
+    void* partyManager = ReadPointerAt(g_partyManager);
     if (partyManager == nullptr)
     {
         return;  // tried again next tick
@@ -210,7 +197,7 @@ struct Changes
 
 bool Walk(const float (&position)[3], Changes& changes) noexcept
 {
-    void* manager = Global(g_manager);
+    void* manager = ReadPointerAt(g_manager);
     if (manager == nullptr)
     {
         return false;
@@ -358,7 +345,7 @@ Pair ControllerLayer7(const void* controller) noexcept
 void Write(void* controller, Pair want, Pair before) noexcept
 {
     const ULONGLONG now = GetTickCount64();
-    void*           listener = Global(g_listener);
+    void*           listener = ReadPointerAt(g_listener);
     if (now < g_nextRetry || listener == nullptr || g_state.gateLocation == 0)
     {
         return;

@@ -23,6 +23,7 @@
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 #include "player_two/menu_rules.h"
+#include "player_two/object_fields.h"
 #include "player_two/party_member.h"
 
 #include <array>
@@ -247,17 +248,6 @@ struct Saved
 std::array<Saved, kParts.size() + 1> g_oneSaved{};  // the parts, then the key guide's widget
 bool                             g_swapped = false;
 
-template <class T>
-T Field(std::uintptr_t address) noexcept
-{
-    T value{};
-    if (address != 0)
-    {
-        platform::CopyGuarded(&value, reinterpret_cast<const void*>(address), sizeof(T));
-    }
-    return value;
-}
-
 void Line(const std::wstring& text) noexcept
 {
     platform::Log(L"command menu two: {}", text);
@@ -269,8 +259,8 @@ void* WorldOf(void* controller) noexcept
     auto object = reinterpret_cast<std::uintptr_t>(controller);
     for (int depth = 0; object != 0 && g_worldClass != 0 && depth < 4; ++depth)
     {
-        object = Field<std::uintptr_t>(object + kObjectOuter);
-        if (object != 0 && Field<std::uintptr_t>(object + kObjectClass) == g_worldClass)
+        object = ReadAt<std::uintptr_t>(object + kObjectOuter);
+        if (object != 0 && ReadAt<std::uintptr_t>(object + kObjectClass) == g_worldClass)
         {
             return reinterpret_cast<void*>(object);
         }
@@ -339,11 +329,11 @@ SetupResult RunSetup(void* world, std::uint8_t& result, const wchar_t*& refusal)
 /// Logs the "setup done" bytes of both controllers and the deferred mark on change.
 void WatchLifecycle() noexcept
 {
-    const auto one = Field<std::uintptr_t>(g_endUISystem + kGameController);
+    const auto one = ReadAt<std::uintptr_t>(g_endUISystem + kGameController);
     const auto two = reinterpret_cast<std::uintptr_t>(g_controller);
-    const std::array<std::uint8_t, 3> lifecycle{Field<std::uint8_t>(one + kSetupDone),
-                                                Field<std::uint8_t>(g_endUISystem + kSetupDeferred),
-                                                two != 0 ? Field<std::uint8_t>(two + kSetupDone) : std::uint8_t{0xFF}};
+    const std::array<std::uint8_t, 3> lifecycle{ReadAt<std::uint8_t>(one + kSetupDone),
+                                                ReadAt<std::uint8_t>(g_endUISystem + kSetupDeferred),
+                                                two != 0 ? ReadAt<std::uint8_t>(two + kSetupDone) : std::uint8_t{0xFF}};
     if (lifecycle != g_loggedLifecycle)
     {
         g_loggedLifecycle = lifecycle;
@@ -368,7 +358,7 @@ bool CanFollow(void* gameController, bool needsPlayer) noexcept
     return menu_rules::CanFollow(g_installed, g_failed, g_controller != nullptr, generation::OnGameThread(), needsPlayer,
                                  generation::Active(), gameController != nullptr, gameController == g_controller,
                                  reinterpret_cast<std::uintptr_t>(gameController) ==
-                                     Field<std::uintptr_t>(g_endUISystem + kGameController));
+                                     ReadAt<std::uintptr_t>(g_endUISystem + kGameController));
 }
 
 /// The game's Members panel rebuild, for the mod's calls: the entry redirect's trampoline, or on 1.005 the function
@@ -428,7 +418,7 @@ void SquadLayoutCall(void* controller, std::uint8_t all, std::uint32_t first, st
 /// read outside it.
 std::uintptr_t GameController() noexcept
 {
-    const auto slot = Field<std::uintptr_t>(g_endUISystem + kGameController);
+    const auto slot = ReadAt<std::uintptr_t>(g_endUISystem + kGameController);
     if (slot != 0 && slot != reinterpret_cast<std::uintptr_t>(g_controller))
     {
         g_lastGame = slot;
@@ -440,17 +430,18 @@ std::uintptr_t GameController() noexcept
 std::wstring ShortcutIds(std::uintptr_t controller, int set, std::int32_t row) noexcept
 {
     const auto table = controller + kShortcutSets + 16 * set;
-    const auto rows  = Field<std::uintptr_t>(table);
-    if (rows == 0 || row < 0 || row >= Field<std::int32_t>(table + 8))
+    const auto rows  = ReadAt<std::uintptr_t>(table);
+    if (rows == 0 || row < 0 || row >= ReadAt<std::int32_t>(table + 8))
     {
         return L"[none]";
     }
-    const auto records = Field<std::uintptr_t>(rows + 16 * row);
-    const auto count   = Field<std::int32_t>(rows + 16 * row + 8);
+    const auto records = ReadAt<std::uintptr_t>(rows + 16 * row);
+    const auto count   = ReadAt<std::int32_t>(rows + 16 * row + 8);
     std::wstring text  = L"[";
     for (std::int32_t r = 0; r < 6 && r < count && records != 0; ++r)
     {
-        text += std::format(L"{}{}", r != 0 ? L" " : L"", Field<std::uint32_t>(records + kRecordSize * r + kRecordCommand));
+        text += std::format(L"{}{}", r != 0 ? L" " : L"",
+                            ReadAt<std::uint32_t>(records + kRecordSize * r + kRecordCommand));
     }
     return text + L"]";
 }
@@ -465,7 +456,7 @@ void FollowShortcuts(std::uintptr_t source, std::uintptr_t target, const wchar_t
         return;
     }
     const bool log   = g_shortcutLines < kMaxShortcutLines && platform::Enabled(platform::Level::Debug);
-    const auto row   = Field<std::int32_t>(target + kShortcutTarget);
+    const auto row   = ReadAt<std::int32_t>(target + kShortcutTarget);
     const auto ids   = [row](std::uintptr_t c, int set) { return ShortcutIds(c, set, row); };
     const auto before = log ? ids(target, 0) + L" " + ids(target, 1) : std::wstring{};
     if (!platform::CallGuarded(g_ctrlShortcuts, reinterpret_cast<void*>(target)))
@@ -483,7 +474,7 @@ void FollowShortcuts(std::uintptr_t source, std::uintptr_t target, const wchar_t
                            target == reinterpret_cast<std::uintptr_t>(g_controller) ? L"player 2" : L"player 1", why,
                            g_image ? g_image->ResearchAddress(caller) : caller, row, after0, after1, before, source0,
                            source1, YesNo(after0 == source0 && after1 == source1),
-                           Field<std::int32_t>(target + kShortcutShown));
+                           ReadAt<std::int32_t>(target + kShortcutShown));
     }
 }
 
@@ -492,7 +483,7 @@ void FollowShortcuts(std::uintptr_t source, std::uintptr_t target, const wchar_t
 void RebuildShortcutsCall() noexcept
 {
     const auto caller = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
-    const auto ran    = Field<std::uintptr_t>(g_endUISystem + kGameController);
+    const auto ran    = ReadAt<std::uintptr_t>(g_endUISystem + kGameController);
     reinterpret_cast<void (*)()>(g_rebuildShortcuts.Original())();
     const auto two = reinterpret_cast<std::uintptr_t>(g_controller);
     if (CanFollow(reinterpret_cast<void*>(ran), false))
@@ -555,8 +546,8 @@ std::uint8_t SetupCall(void* controller, void* world) noexcept
         case SetupResult::Ran:
             g_current = true;
             ReplayLine(std::format(L"the game's Setup made on player 2's controller too (returned {}): 777={} 783={}", set,
-                                   Field<std::uint8_t>(reinterpret_cast<std::uintptr_t>(g_controller) + kSetupDone),
-                                   Field<std::uint8_t>(reinterpret_cast<std::uintptr_t>(g_controller) + kMenuLayer)));
+                                   ReadAt<std::uint8_t>(reinterpret_cast<std::uintptr_t>(g_controller) + kSetupDone),
+                                   ReadAt<std::uint8_t>(reinterpret_cast<std::uintptr_t>(g_controller) + kMenuLayer)));
             break;
         case SetupResult::Refused:
             ReplayLine(std::format(L"the game's Setup NOT made on player 2's controller: {}; the join Setup follows", refusal));
@@ -591,7 +582,7 @@ void ResetAllCall(void* controller) noexcept
     {
         case SetupResult::Ran:
             ReplayLine(std::format(L"the game's ResetAll made on player 2's controller too: 777={}",
-                                   Field<std::uint8_t>(reinterpret_cast<std::uintptr_t>(g_controller) + kSetupDone)));
+                                   ReadAt<std::uint8_t>(reinterpret_cast<std::uintptr_t>(g_controller) + kSetupDone)));
             break;
         case SetupResult::Refused:
             ReplayLine(std::format(L"the game's ResetAll NOT made on player 2's controller: {}", refusal));
@@ -643,19 +634,19 @@ Snapshot Read() noexcept
     const auto ctrl = reinterpret_cast<std::uintptr_t>(g_controller);
     for (std::size_t i = 0; i < now.members.size(); ++i)
     {
-        now.members[i] = Field<std::int32_t>(ctrl + kMembers + i * 4);
+        now.members[i] = ReadAt<std::int32_t>(ctrl + kMembers + i * 4);
     }
     for (std::size_t i = 0; i < kBytes.size(); ++i)
     {
-        now.bytes[i] = Field<std::uint8_t>(ctrl + kBytes[i]);
+        now.bytes[i] = ReadAt<std::uint8_t>(ctrl + kBytes[i]);
     }
-    const auto weak = Field<std::uint64_t>(ctrl + kMenuWidget);
+    const auto weak = ReadAt<std::uint64_t>(ctrl + kMenuWidget);
     if (weak != 0)
     {
         platform::CallGuarded(g_weakGet, now.widget, &weak);
     }
     now.widgetNamesUs = now.widget != nullptr &&
-                        Field<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(now.widget) + kWidgetCtrl) == ctrl;
+                        ReadAt<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(now.widget) + kWidgetCtrl) == ctrl;
     now.context = focus_scope::PlayerTwoContext();
     return now;
 }
@@ -884,7 +875,7 @@ void* Resolve(std::uint64_t weak) noexcept
 /// A controller's widget (its FWeakObjectPtr at `offset`), or null.
 void* WidgetOf(std::uintptr_t controller, std::uint32_t offset) noexcept
 {
-    return controller != 0 ? Resolve(Field<std::uint64_t>(controller + offset)) : nullptr;
+    return controller != 0 ? Resolve(ReadAt<std::uint64_t>(controller + offset)) : nullptr;
 }
 
 void SetOpacity(void* widget, float opacity) noexcept
@@ -904,8 +895,8 @@ void ShowOnly(int player) noexcept
         return;
     }
     const auto two = reinterpret_cast<std::uintptr_t>(g_controller);
-    const auto one = Field<std::uintptr_t>(g_endUISystem + kGameController);
-    if (player != 1 || Field<std::uint8_t>(two + kHudMode) == 0 || one == 0)
+    const auto one = ReadAt<std::uintptr_t>(g_endUISystem + kGameController);
+    if (player != 1 || ReadAt<std::uint8_t>(two + kHudMode) == 0 || one == 0)
     {
         return Restore();
     }
@@ -915,7 +906,7 @@ void ShowOnly(int player) noexcept
         // Player 2's shows at full opacity: its own tick (player_two/widget_owner) sets its visibility and
         // plays its show and hide animations.
         const bool guide     = i == kParts.size();
-        const auto oneOwner  = guide ? Field<std::uintptr_t>(g_endUISystem + kKeyGuideSlot) : one;
+        const auto oneOwner  = guide ? ReadAt<std::uintptr_t>(g_endUISystem + kKeyGuideSlot) : one;
         const auto twoOwner  = guide ? reinterpret_cast<std::uintptr_t>(g_keyGuide) : two;
         const auto offset    = guide ? kKeyGuideWidget : kParts[i].offset;
         const bool borrow    = !guide && kParts[i].borrowOpacity;
@@ -927,7 +918,7 @@ void ShowOnly(int player) noexcept
         }
         if (!g_swapped)
         {
-            g_oneSaved[i] = {Field<std::uint64_t>(oneOwner + offset), hud::widget_opacity::Get(oneWidget)};
+            g_oneSaved[i] = {ReadAt<std::uint64_t>(oneOwner + offset), hud::widget_opacity::Get(oneWidget)};
         }
         SetOpacity(twoWidget, borrow ? g_oneSaved[i].opacity : 1.0F);
         SetOpacity(oneWidget, 0.0F);
@@ -980,7 +971,7 @@ void RefocusAtJoin(std::uintptr_t one) noexcept
     {
         return;
     }
-    const auto     layer   = Field<std::uint8_t>(reinterpret_cast<std::uintptr_t>(g_controller) + kMenuLayer);
+    const auto     layer   = ReadAt<std::uint8_t>(reinterpret_cast<std::uintptr_t>(g_controller) + kMenuLayer);
     const wchar_t* refusal = nullptr;
     switch (InPlayerTwoScopes(refusal, [] { return command_menu_tick::RefocusMenu(g_controller); }))
     {
@@ -1040,10 +1031,10 @@ void Tick() noexcept
     // The join Setup: player 2's controller is built or set up when player 2 plays and it does not follow
     // the game's current setup (player 2 joined, or was out or refused at the game's Setup). It follows the
     // game's controller: only once that one is set up and no Setup of its own is pending or deferred.
-    const auto one = Field<std::uintptr_t>(g_endUISystem + kGameController);
-    if (one == 0 || !menu_rules::GameSetUp(one, Field<std::uint8_t>(one + kSetupDone),
-                                           Field<std::uint8_t>(one + kSetupPending),
-                                           Field<std::uint8_t>(g_endUISystem + kSetupDeferred)))
+    const auto one = ReadAt<std::uintptr_t>(g_endUISystem + kGameController);
+    if (one == 0 || !menu_rules::GameSetUp(one, ReadAt<std::uint8_t>(one + kSetupDone),
+                                           ReadAt<std::uint8_t>(one + kSetupPending),
+                                           ReadAt<std::uint8_t>(g_endUISystem + kSetupDeferred)))
     {
         return;
     }

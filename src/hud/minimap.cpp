@@ -246,18 +246,8 @@ void Line(std::wformat_string<A...> format, A&&... args) noexcept
     LineAt(platform::Level::Info, format, std::forward<A>(args)...);
 }
 
-template <class T>
-bool Read(const void* object, std::uint32_t offset, T& out) noexcept
-{
-    return object != nullptr && platform::CopyGuarded(&out, static_cast<const std::byte*>(object) + offset, sizeof(T));
-}
-
-void* Pointer(const void* object, std::uint32_t offset) noexcept
-{
-    void* value = nullptr;
-    Read(object, offset, value);
-    return value;
-}
+using platform::Read;  // the guarded reads: platform/guarded.h
+using platform::ReadPointer;
 
 void Refuse(const wchar_t* why) noexcept
 {
@@ -268,25 +258,25 @@ void Refuse(const wchar_t* why) noexcept
 
 void* Holder() noexcept
 {
-    return Pointer(Pointer(reinterpret_cast<const void*>(g_system), kAreaMapManager), kNaviMapHolder);
+    return ReadPointer(ReadPointer(reinterpret_cast<const void*>(g_system), kAreaMapManager), kNaviMapHolder);
 }
 
 /// The circle minimap's Slate widget, or null (no minimap, or the octagon).
 void* CircleSlate() noexcept
 {
-    const auto* iface = static_cast<const std::byte*>(Pointer(Holder(), kHolderInterface));
+    const auto* iface = static_cast<const std::byte*>(ReadPointer(Holder(), kHolderInterface));
     if (iface == nullptr)
     {
         return nullptr;
     }
-    void*          slate  = Pointer(iface - kInterfaceInObject, kObjectSlateWidget);
+    void*          slate  = ReadPointer(iface - kInterfaceInObject, kObjectSlateWidget);
     std::uintptr_t vtable = 0;
     return Read(slate, kSlatePaintInterface, vtable) && vtable == g_circleVTable ? slate : nullptr;
 }
 
 bool CentreOf(const void* slate, float (&centre)[2]) noexcept
 {
-    return Read(Pointer(slate, kSlateContent), kContentCentre, centre);
+    return Read(ReadPointer(slate, kSlateContent), kContentCentre, centre);
 }
 
 // --- The game's calls, redirected ---
@@ -431,7 +421,7 @@ bool RootGuarded(void* object) noexcept
 /// Player 2's target, made with the widget's own recipe at the live target's size.
 void MakeTarget(const void* slate) noexcept
 {
-    const void*   live  = Pointer(slate, kSlateTarget);
+    const void*   live  = ReadPointer(slate, kSlateTarget);
     std::uint32_t sizeX = 0, sizeY = 0;
     std::uint8_t  flags = 0, format = 0;
     float         gamma = 0.0f;
@@ -443,7 +433,7 @@ void MakeTarget(const void* slate) noexcept
     Read(live, kTargetFlags91, flags);
     Read(live, kTargetFormat, format);
     Read(live, kTargetGamma, gamma);
-    void* outer  = Pointer(reinterpret_cast<const void*>(g_transientPackage), 0);
+    void* outer  = ReadPointer(reinterpret_cast<const void*>(g_transientPackage), 0);
     void* target = nullptr;
     if (outer == nullptr || !platform::CallGuarded(g_newTarget, target, outer) || target == nullptr)
     {
@@ -478,9 +468,9 @@ void MakeTarget(const void* slate) noexcept
 
 bool TargetReady() noexcept
 {
-    const void* resource = Pointer(g_target, kTargetResource);
-    return resource != nullptr && Pointer(resource, kResourceTarget) != nullptr &&
-           Pointer(resource, kResourceTexture) != nullptr;
+    const void* resource = ReadPointer(g_target, kTargetResource);
+    return resource != nullptr && ReadPointer(resource, kResourceTarget) != nullptr &&
+           ReadPointer(resource, kResourceTexture) != nullptr;
 }
 
 /// Player 2's buffer set, built as the renderer's ctor builds pool 0's, once the renderer is known.
@@ -750,8 +740,8 @@ void Tick(bool splitShown) noexcept
     {
         // Player 2's target keeps the size it was made at; a widget with another NaviMapSize would stretch it.
         std::uint32_t live[2] = {}, own[2] = {};
-        const bool    differs = Read(Pointer(slate, kSlateTarget), kTargetSizeX, live) && Read(g_target, kTargetSizeX, own) &&
-                             (live[0] != own[0] || live[1] != own[1]);
+        const bool    differs = Read(ReadPointer(slate, kSlateTarget), kTargetSizeX, live) &&
+                                Read(g_target, kTargetSizeX, own) && (live[0] != own[0] || live[1] != own[1]);
         if (differs != g_sizeDiffers)
         {
             g_sizeDiffers = differs;
@@ -847,7 +837,7 @@ bool BeginPlayerTwoPaint() noexcept
         return false;
     }
     void* slate = CircleSlate();
-    void* live  = Pointer(slate, kSlateTarget);
+    void* live  = ReadPointer(slate, kSlateTarget);
     if (live == nullptr || !platform::WriteGuarded(static_cast<std::byte*>(slate) + kSlateTarget, &g_target, sizeof(g_target)))
     {
         return false;
@@ -866,7 +856,7 @@ void EndPlayerTwoPaint() noexcept
     if (g_swappedSlate != nullptr)
     {
         // Put the widget's own target back, unless the game replaced the field during the render.
-        if (Pointer(g_swappedSlate, kSlateTarget) == g_target &&
+        if (ReadPointer(g_swappedSlate, kSlateTarget) == g_target &&
             !platform::WriteGuarded(static_cast<std::byte*>(g_swappedSlate) + kSlateTarget, &g_savedTarget,
                                     sizeof(g_savedTarget)))
         {

@@ -185,23 +185,6 @@ std::uint32_t g_listOpenings = 0;
 bool          g_failed    = false;
 std::uint64_t g_runs = 0, g_refusals = 0, g_menuPauses = 0, g_panelSkips = 0, g_lockRestores = 0;
 
-template <class T>
-T Field(std::uintptr_t address) noexcept
-{
-    T value{};
-    if (address != 0)
-    {
-        platform::CopyGuarded(&value, reinterpret_cast<const void*>(address), sizeof(T));
-    }
-    return value;
-}
-
-template <class T>
-bool Put(std::uintptr_t address, const T& value) noexcept
-{
-    return platform::WriteGuarded(reinterpret_cast<void*>(address), &value, sizeof(T));
-}
-
 /// A line of `level`.
 void Note(const std::wstring& text, platform::Level level = platform::Level::Info) noexcept
 {
@@ -229,7 +212,7 @@ void Fail(const wchar_t* what) noexcept
 
 Pair PairAt(std::uintptr_t address) noexcept
 {
-    return {Field<std::uintptr_t>(address), Field<std::uintptr_t>(address + 8)};
+    return {ReadAt<std::uintptr_t>(address), ReadAt<std::uintptr_t>(address + 8)};
 }
 
 bool InBattle() noexcept
@@ -240,12 +223,12 @@ bool InBattle() noexcept
 
 std::uintptr_t BattleSystem() noexcept
 {
-    return Field<std::uintptr_t>(g_battleSystem);
+    return ReadAt<std::uintptr_t>(g_battleSystem);
 }
 
 std::uintptr_t TargetedKeyAddress() noexcept
 {
-    const auto manager = Field<std::uintptr_t>(g_endUISystem + kBarManager);
+    const auto manager = ReadAt<std::uintptr_t>(g_endUISystem + kBarManager);
     return manager != 0 ? manager + kTargetedKey : 0;
 }
 
@@ -282,7 +265,7 @@ bool TargetListActive(std::uint8_t& open) noexcept
     {
         return platform::CallGuarded(g_targetList, open);
     }
-    const auto controller = Field<std::uintptr_t>(g_endUISystem != 0 ? g_endUISystem + kCommandController : 0);
+    const auto controller = ReadAt<std::uintptr_t>(g_endUISystem != 0 ? g_endUISystem + kCommandController : 0);
     return g_targetListImpl != nullptr && controller != 0 &&
            platform::CallGuarded(g_targetListImpl, open, reinterpret_cast<void*>(controller));
 }
@@ -305,9 +288,9 @@ public:
             return;
         }
         saved_ = PairAt(address_);
-        if (!Put(address_, g_targetedKey))
+        if (!WriteAt(address_, g_targetedKey))
         {
-            Put(address_, saved_);
+            WriteAt(address_, saved_);
             address_ = 0;
         }
     }
@@ -316,7 +299,7 @@ public:
         if (address_ != 0)
         {
             g_targetedKey = PairAt(address_);
-            Put(address_, saved_);
+            WriteAt(address_, saved_);
         }
     }
     TargetedKeyScope(const TargetedKeyScope&)            = delete;
@@ -356,15 +339,15 @@ struct LockCamera
 LockCamera LockCameraOf(void* controller) noexcept
 {
     const auto camera = reinterpret_cast<std::uintptr_t>(ReadPointer(controller, facts::kControllerCameraManager));
-    const auto op     = Field<std::uintptr_t>(camera != 0 ? camera + kBattleOperator : 0);
-    const auto table  = Field<std::uintptr_t>(op != 0 ? op + kModules : 0);
-    const auto module = Field<std::uintptr_t>(table != 0 ? table + kLockOnLayer * kModuleEntry : 0);
+    const auto op     = ReadAt<std::uintptr_t>(camera != 0 ? camera + kBattleOperator : 0);
+    const auto table  = ReadAt<std::uintptr_t>(op != 0 ? op + kModules : 0);
+    const auto module = ReadAt<std::uintptr_t>(table != 0 ? table + kLockOnLayer * kModuleEntry : 0);
     if (module == 0)
     {
         return {};
     }
-    return {true, {Field<std::uint8_t>(module + kModuleActive), Field<std::uint8_t>(module + kModuleActive + 1)},
-            Field<std::uintptr_t>(module + kModuleTarget)};
+    return {true, {ReadAt<std::uint8_t>(module + kModuleActive), ReadAt<std::uint8_t>(module + kModuleActive + 1)},
+            ReadAt<std::uintptr_t>(module + kModuleTarget)};
 }
 
 std::wstring DescribeCamera(const LockCamera& camera)
@@ -508,8 +491,8 @@ void PlayerTwoTargeting(TickFn engine, void* system, float deltaTime) noexcept
             {
                 Note(std::format(L"player 2's command target list {} (displayed {:#x}, cursor {:#x}; player 1's cursor {:#x})",
                                  g_listOpen ? L"OPENED" : L"closed",
-                                 Field<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(system) + kDisplayed),
-                                 Field<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(system) + kCursor),
+                                 ReadAt<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(system) + kDisplayed),
+                                 ReadAt<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(system) + kCursor),
                                  targets.OtherCursor()),
                      platform::Level::Debug);
             }
@@ -555,8 +538,8 @@ void Targeting(void* system, float deltaTime) noexcept
     if (platform::Enabled(platform::Level::Debug))
     {
         const auto base   = reinterpret_cast<std::uintptr_t>(system);
-        const auto target = Field<std::uintptr_t>(base + kDisplayed);
-        const auto lock   = Field<std::uint8_t>(base + kLock);
+        const auto target = ReadAt<std::uintptr_t>(base + kDisplayed);
+        const auto lock   = ReadAt<std::uint8_t>(base + kLock);
         if (target != loggedTarget || lock != loggedLock)
         {
             loggedTarget = target;
@@ -696,23 +679,24 @@ TargetScope::TargetScope() noexcept
         return;
     }
     const Pair saved = PairAt(system + kDisplayed);
-    cursor_          = Field<std::uintptr_t>(system + kCursor);
+    cursor_          = ReadAt<std::uintptr_t>(system + kCursor);
     object_          = saved.object;
     controller_      = saved.controller;
-    trace_           = Field<std::uint64_t>(system + kTrace);
-    freeTime_        = Field<std::uint32_t>(system + kFreeTime);
-    lock_            = Field<std::uint8_t>(system + kLock);
-    latch_           = Field<std::uint8_t>(system + kLatch);
+    trace_           = ReadAt<std::uint64_t>(system + kTrace);
+    freeTime_        = ReadAt<std::uint32_t>(system + kFreeTime);
+    lock_            = ReadAt<std::uint8_t>(system + kLock);
+    latch_           = ReadAt<std::uint8_t>(system + kLatch);
     twoLock_         = g_lock;
-    if (!Put(system + kCursor, g_cursor) || !Put(system + kDisplayed, g_displayed) || !Put(system + kTrace, g_trace) ||
-        !Put(system + kFreeTime, g_freeTime) || !Put(system + kLock, g_lock) || !Put(system + kLatch, g_latch))
+    if (!WriteAt(system + kCursor, g_cursor) || !WriteAt(system + kDisplayed, g_displayed) ||
+        !WriteAt(system + kTrace, g_trace) || !WriteAt(system + kFreeTime, g_freeTime) ||
+        !WriteAt(system + kLock, g_lock) || !WriteAt(system + kLatch, g_latch))
     {
-        Put(system + kCursor, cursor_);  // the fields are the game's heap: put back what was written
-        Put(system + kDisplayed, saved);
-        Put(system + kTrace, trace_);
-        Put(system + kFreeTime, freeTime_);
-        Put(system + kLock, lock_);
-        Put(system + kLatch, latch_);
+        WriteAt(system + kCursor, cursor_);  // the fields are the game's heap: put back what was written
+        WriteAt(system + kDisplayed, saved);
+        WriteAt(system + kTrace, trace_);
+        WriteAt(system + kFreeTime, freeTime_);
+        WriteAt(system + kLock, lock_);
+        WriteAt(system + kLatch, latch_);
         return;
     }
     system_ = system;
@@ -725,14 +709,15 @@ TargetScope::~TargetScope()
     {
         return;
     }
-    g_cursor    = Field<std::uintptr_t>(system_ + kCursor);
+    g_cursor    = ReadAt<std::uintptr_t>(system_ + kCursor);
     g_displayed = PairAt(system_ + kDisplayed);
-    g_trace     = Field<std::uint64_t>(system_ + kTrace);
-    g_freeTime  = Field<std::uint32_t>(system_ + kFreeTime);
-    g_lock      = Field<std::uint8_t>(system_ + kLock);
-    g_latch     = Field<std::uint8_t>(system_ + kLatch);
-    bool restored = Put(system_ + kCursor, cursor_) && Put(system_ + kDisplayed, Pair{object_, controller_}) &&
-                    Put(system_ + kTrace, trace_) && Put(system_ + kFreeTime, freeTime_) && Put(system_ + kLatch, latch_);
+    g_trace     = ReadAt<std::uint64_t>(system_ + kTrace);
+    g_freeTime  = ReadAt<std::uint32_t>(system_ + kFreeTime);
+    g_lock      = ReadAt<std::uint8_t>(system_ + kLock);
+    g_latch     = ReadAt<std::uint8_t>(system_ + kLatch);
+    bool restored = WriteAt(system_ + kCursor, cursor_) && WriteAt(system_ + kDisplayed, Pair{object_, controller_}) &&
+                    WriteAt(system_ + kTrace, trace_) && WriteAt(system_ + kFreeTime, freeTime_) &&
+                    WriteAt(system_ + kLatch, latch_);
     // Player 2's toggle went through the game's lock setter, which also set Global.LockOn to player 2's
     // lock: player 1's lock goes back through the same setter, which sets the parameter back. The setter
     // touches only the lock byte and the parameter, so the scopes still open around this one (player 2
@@ -745,7 +730,7 @@ TargetScope::~TargetScope()
     }
     else
     {
-        restored = Put(system_ + kLock, lock_) && restored;
+        restored = WriteAt(system_ + kLock, lock_) && restored;
     }
     g_held = false;
     if (!restored)

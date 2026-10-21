@@ -7,6 +7,7 @@
 #include "platform/verified_code.h"
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
+#include "player_two/object_fields.h"
 
 #include <cstdint>
 #include <span>
@@ -42,20 +43,9 @@ void*                   g_context      = nullptr;
 // Game thread.
 std::uint16_t g_logged = 0xFFFF;
 
-template <class T>
-T Field(std::uintptr_t address) noexcept
-{
-    T value{};
-    if (address != 0)
-    {
-        platform::CopyGuarded(&value, reinterpret_cast<const void*>(address), sizeof(T));
-    }
-    return value;
-}
-
 std::uintptr_t GameMode() noexcept
 {
-    return Field<std::uintptr_t>(g_gameMode);
+    return ReadAt<std::uintptr_t>(g_gameMode);
 }
 
 /// Replaces the entry of the game's "leave the field" request: player 2 leaves first, while the
@@ -63,10 +53,11 @@ std::uintptr_t GameMode() noexcept
 void RequestExit() noexcept
 {
     const std::uintptr_t gameMode = GameMode();
-    if (gameMode != 0 && Field<std::uint8_t>(gameMode + kRunning) != 0 && g_leave != nullptr && generation::OnGameThread())
+    if (gameMode != 0 && ReadAt<std::uint8_t>(gameMode + kRunning) != 0 && g_leave != nullptr &&
+        generation::OnGameThread())
     {
         platform::Log(L"field exit: the game leaves the field (step {}); player 2 leaves first",
-                      Field<std::uint8_t>(gameMode + kFieldStep));
+                      ReadAt<std::uint8_t>(gameMode + kFieldStep));
         g_leave(g_context);
     }
     reinterpret_cast<RequestExitFn>(g_entry.Original())();
@@ -106,7 +97,7 @@ void Remove() noexcept
 bool FieldLeft() noexcept
 {
     const std::uintptr_t gameMode = GameMode();
-    return gameMode != 0 && Field<std::uint8_t>(gameMode + kRunning) == 0;
+    return gameMode != 0 && ReadAt<std::uint8_t>(gameMode + kRunning) == 0;
 }
 
 bool FieldReady() noexcept
@@ -116,9 +107,9 @@ bool FieldReady() noexcept
         return true;  // not installed: nothing to wait for
     }
     const std::uintptr_t gameMode = GameMode();
-    const std::uintptr_t manager  = Field<std::uintptr_t>(g_partyManager);
-    return gameMode != 0 && manager != 0 && Field<std::uint8_t>(gameMode + kFieldStep) == kStepSettled &&
-           Field<std::uint8_t>(gameMode + kRunning) == 1 && Field<std::uint8_t>(manager) == 0;
+    const std::uintptr_t manager  = ReadAt<std::uintptr_t>(g_partyManager);
+    return gameMode != 0 && manager != 0 && ReadAt<std::uint8_t>(gameMode + kFieldStep) == kStepSettled &&
+           ReadAt<std::uint8_t>(gameMode + kRunning) == 1 && ReadAt<std::uint8_t>(manager) == 0;
 }
 
 void Watch() noexcept
@@ -128,8 +119,8 @@ void Watch() noexcept
     {
         return;
     }
-    const auto now = static_cast<std::uint16_t>(Field<std::uint8_t>(gameMode + kFieldStep) |
-                                                (Field<std::uint8_t>(gameMode + kRunning) << 8));
+    const auto now = static_cast<std::uint16_t>(ReadAt<std::uint8_t>(gameMode + kFieldStep) |
+                                                (ReadAt<std::uint8_t>(gameMode + kRunning) << 8));
     if (now != g_logged)
     {
         g_logged = now;

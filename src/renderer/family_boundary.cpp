@@ -104,9 +104,9 @@ ContextCheck CheckContext(const std::byte* commandList, std::byte*& context) noe
 {
     __try
     {
-        context        = boundary::Read<std::byte*>(commandList, boundary::list::kContext);
+        context        = boundary::Load<std::byte*>(commandList, boundary::list::kContext);
         int  unknown   = -1;
-        const int same = boundary::Read<std::byte*>(commandList, kComputeContext) == context ? 1 : 0;
+        const int same = boundary::Load<std::byte*>(commandList, kComputeContext) == context ? 1 : 0;
         g_counts.computeIsContext.compare_exchange_strong(unknown, same, std::memory_order_relaxed);
         return boundary::IsDefaultDirectContext(context, g_contextVtable) ? ContextCheck::DefaultDirect
                                                                           : ContextCheck::Other;

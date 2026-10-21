@@ -10,6 +10,7 @@
 #include "player_two/command_menu_two.h"
 #include "player_two/game_thread_sites.h"
 #include "player_two/generation.h"
+#include "player_two/object_fields.h"
 
 #include <atomic>
 #include <algorithm>
@@ -81,23 +82,6 @@ std::atomic<bool> g_placePending   {false};  // 1.005: queued, not yet placed (R
 
 // Game thread.
 
-template <class T>
-T Field(std::uintptr_t address) noexcept
-{
-    T value{};
-    if (address != 0)
-    {
-        platform::CopyGuarded(&value, reinterpret_cast<const void*>(address), sizeof(T));
-    }
-    return value;
-}
-
-template <class T>
-bool Put(std::uintptr_t address, T value) noexcept
-{
-    return address != 0 && platform::WriteGuarded(reinterpret_cast<void*>(address), &value, sizeof(T));
-}
-
 /// A line of `level`.
 void Line(const std::wstring& text, platform::Level level = platform::Level::Info) noexcept
 {
@@ -128,7 +112,7 @@ std::uintptr_t FollowingController(const wchar_t* what) noexcept
         Line(std::format(L"{} made off the game thread: NOT made on player 2's controller", what));
         return 0;
     }
-    const auto one = Field<std::uintptr_t>(g_endUISystem + kController);
+    const auto one = ReadAt<std::uintptr_t>(g_endUISystem + kController);
     if (one == 0 || one == two)
     {
         Line(std::format(L"{} made while the UI system's slot names {}: NOT followed", what,
@@ -144,13 +128,13 @@ template <class Call>
 bool WithSlot(std::uintptr_t two, Call&& call) noexcept
 {
     const auto slot = g_endUISystem + kController;
-    const auto one  = Field<std::uintptr_t>(slot);
-    if (!Put(slot, two))
+    const auto one  = ReadAt<std::uintptr_t>(slot);
+    if (!WriteAt(slot, two))
     {
         return false;
     }
     const bool ran = call();
-    if (!Put(slot, one))
+    if (!WriteAt(slot, one))
     {
         Line(L"FAILED to put the game's controller back in the UI system's slot");
     }
@@ -169,7 +153,7 @@ void Follow(const platform::CallRedirect& redirect, const wchar_t* what, std::ui
     }
     const bool ran = WithSlot(two, [&] { return platform::CallGuarded(original, value); });
     Line(std::format(L"{} {} -> player 2's controller too{} (now {})", what, value, ran ? L"" : L" (FAULTED)",
-                     Field<std::uint8_t>(two + offset)),
+                     ReadAt<std::uint8_t>(two + offset)),
          FollowLevel(ran));
 }
 
@@ -205,26 +189,26 @@ void CategoryEnabled(std::uint8_t category, std::uint8_t enabled) noexcept
 /// category cmds reach CategoryEnabled nested inside it.
 void Dispatch(void* fieldSystem, std::int32_t mode) noexcept
 {
-    const auto one = Field<std::uintptr_t>(g_endUISystem + kController);
+    const auto one = ReadAt<std::uintptr_t>(g_endUISystem + kController);
     std::array<std::uint8_t, kTableBytes.size()> before{};
     for (std::size_t i = 0; i < kTableBytes.size(); ++i)
     {
-        before[i] = Field<std::uint8_t>(one + kTableBytes[i]);
+        before[i] = ReadAt<std::uint8_t>(one + kTableBytes[i]);
     }
     reinterpret_cast<DispatchFn>(g_dispatcher.Original())(fieldSystem, mode);
-    if (one == 0 || one != Field<std::uintptr_t>(g_endUISystem + kController))
+    if (one == 0 || one != ReadAt<std::uintptr_t>(g_endUISystem + kController))
     {
         return;
     }
     std::uintptr_t two = 0;
     for (std::size_t i = 0; i < kTableBytes.size(); ++i)
     {
-        const auto after = Field<std::uint8_t>(one + kTableBytes[i]);
+        const auto after = ReadAt<std::uint8_t>(one + kTableBytes[i]);
         if (after == before[i] || (two == 0 && (two = FollowingController(L"on/off table")) == 0))
         {
             continue;
         }
-        const bool stored = Put(two + kTableBytes[i], after);
+        const bool stored = WriteAt(two + kTableBytes[i], after);
         Line(std::format(L"on/off table: +{:#x} {} -> {} on the game's controller; player 2's {}", kTableBytes[i],
                          before[i], after, stored ? L"too" : L"NOT (write failed)"),
              FollowLevel(stored));
@@ -319,7 +303,7 @@ void Remove() noexcept
 void Sync(void* playerTwoController) noexcept
 {
     const auto two = reinterpret_cast<std::uintptr_t>(playerTwoController);
-    const auto one = Field<std::uintptr_t>(g_endUISystem + kController);
+    const auto one = ReadAt<std::uintptr_t>(g_endUISystem + kController);
     if (two == 0 || one == 0 || one == two)
     {
         return;
@@ -328,14 +312,14 @@ void Sync(void* playerTwoController) noexcept
     for (const std::uint32_t offset :
          {kCommandsEnabled, kCommandsLocked, kTableBytes[0], kTableBytes[1], kTableBytes[2], kTableBytes[3]})
     {
-        const auto value = Field<std::uint8_t>(one + offset);
-        text += std::format(L" +{:#x} {}->{}", offset, Field<std::uint8_t>(two + offset), value);
-        Put(two + offset, value);
+        const auto value = ReadAt<std::uint8_t>(one + offset);
+        text += std::format(L" +{:#x} {}->{}", offset, ReadAt<std::uint8_t>(two + offset), value);
+        WriteAt(two + offset, value);
     }
-    const auto oneLocks = Field<std::uintptr_t>(one + kCategoryLocks);
-    const auto twoLocks = Field<std::uintptr_t>(two + kCategoryLocks);
-    const auto count    = std::min({Field<std::int32_t>(one + kCategoryCount), Field<std::int32_t>(two + kCategoryCount),
-                                    kMaxCategories});
+    const auto oneLocks = ReadAt<std::uintptr_t>(one + kCategoryLocks);
+    const auto twoLocks = ReadAt<std::uintptr_t>(two + kCategoryLocks);
+    const auto count    = std::min(
+        {ReadAt<std::int32_t>(one + kCategoryCount), ReadAt<std::int32_t>(two + kCategoryCount), kMaxCategories});
     std::array<std::uint8_t, kMaxCategories> locks{};
     if (oneLocks != 0 && twoLocks != 0 && count > 0 &&
         platform::CopyGuarded(locks.data(), reinterpret_cast<const void*>(oneLocks), static_cast<std::size_t>(count)) &&

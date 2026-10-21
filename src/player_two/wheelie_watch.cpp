@@ -132,11 +132,6 @@ struct Snapshot
 bool     g_logged = false;
 Snapshot g_last;
 
-std::uint8_t Byte(const void* object, std::uint32_t offset) noexcept
-{
-    return object == nullptr ? 0 : ReadField<std::uint8_t>(object, offset);
-}
-
 void* WeakGet(const void* weak) noexcept
 {
     void* out = nullptr;
@@ -202,21 +197,21 @@ Snapshot Read(float& nearestFree)
     s.state              = statePtr != nullptr ? ReadField<std::int32_t>(statePtr, 0) : -1;
     s.scooter            = ReadPointer(coord, kCoordScooter);
     s.rider              = ReadPointer(coord, kCoordRider);
-    s.flags[0]           = Byte(coord, kCoordScripted);
-    s.flags[1]           = Byte(coord, kCoordMiniGame);
-    s.flags[2]           = Byte(coord, kCoordUiShown);
-    s.flags[3]           = Byte(coord, kCoordInstant);
-    s.flags[4]           = Byte(coord, kCoordGetOffFast);
-    s.flags[5]           = Byte(coord, kCoordEnabled);
-    s.flags[6]           = Byte(coord, kCoordDisabled);
+    s.flags[0]           = ReadField<std::uint8_t>(coord, kCoordScripted);
+    s.flags[1]           = ReadField<std::uint8_t>(coord, kCoordMiniGame);
+    s.flags[2]           = ReadField<std::uint8_t>(coord, kCoordUiShown);
+    s.flags[3]           = ReadField<std::uint8_t>(coord, kCoordInstant);
+    s.flags[4]           = ReadField<std::uint8_t>(coord, kCoordGetOffFast);
+    s.flags[5]           = ReadField<std::uint8_t>(coord, kCoordEnabled);
+    s.flags[6]           = ReadField<std::uint8_t>(coord, kCoordDisabled);
     const void* shared   = ReadPointer(coord, kCoordShared);
     if (shared != nullptr)
     {
         s.listNum   = ReadField<std::int32_t>(shared, kSharedListNum);
-        s.shared[0] = Byte(shared, kSharedRequested);
-        s.shared[1] = Byte(shared, kSharedIdle);
-        s.shared[2] = Byte(shared, kSharedParking);
-        s.shared[3] = Byte(shared, kSharedColours);
+        s.shared[0] = ReadField<std::uint8_t>(shared, kSharedRequested);
+        s.shared[1] = ReadField<std::uint8_t>(shared, kSharedIdle);
+        s.shared[2] = ReadField<std::uint8_t>(shared, kSharedParking);
+        s.shared[3] = ReadField<std::uint8_t>(shared, kSharedColours);
         const auto* list = static_cast<const std::byte*>(ReadPointer(shared, kSharedListData));
         for (std::int32_t i = 0; list != nullptr && i < s.listNum && i < kListCap; ++i)
         {
@@ -225,8 +220,8 @@ Snapshot Read(float& nearestFree)
             {
                 continue;
             }
-            const bool ridden   = Byte(scooter, kScooterRidden) != 0;
-            const bool excluded = Byte(scooter, kScooterExcluded) != 0;
+            const bool ridden   = ReadField<std::uint8_t>(scooter, kScooterRidden) != 0;
+            const bool excluded = ReadField<std::uint8_t>(scooter, kScooterExcluded) != 0;
             s.ridden += ridden ? 1 : 0;
             s.excluded += excluded ? 1 : 0;
             if (ridden || excluded)
@@ -244,7 +239,7 @@ Snapshot Read(float& nearestFree)
     const void* table = ReadPointer(coord, kCoordRiderTable);
     if (table != nullptr)
     {
-        s.tableState = Byte(table, kTableState);
+        s.tableState = ReadField<std::uint8_t>(table, kTableState);
         s.tableNum   = ReadField<std::int32_t>(table, kTableNum);
         for (std::int32_t i = 0; i < kTableEntries; ++i)
         {

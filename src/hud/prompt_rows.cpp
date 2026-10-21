@@ -116,11 +116,7 @@ float                                     g_againHeight = 0.0f;
 std::vector<const UObject*>               g_stillTwo;  // scratch, reused
 std::vector<std::pair<const UObject*, bool>> g_layoutNow;  // scratch, reused
 
-template <class T>
-bool Read(std::uintptr_t address, T& out) noexcept
-{
-    return platform::CopyGuarded(&out, reinterpret_cast<const void*>(address), sizeof(T));
-}
+using platform::Read;  // the guarded reads: platform/guarded.h
 
 UObject* Resolve(std::uint64_t weakValue)
 {

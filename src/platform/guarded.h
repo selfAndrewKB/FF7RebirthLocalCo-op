@@ -7,6 +7,11 @@
 // stops instead of the game ending. MSVC allows __try only in functions without objects that need
 // unwinding, so each guard is a small function of its own. A stack overflow is passed on: the guard
 // frame cannot recover it.
+//
+// Every module reads engine memory through the Read family of platform/guarded_read.h (by address, or
+// by object and offset; as a bool with the value out, or as the value with zero for "unreadable"),
+// never through a guarded helper of its own. The family is its own header so that a module can
+// include it without Windows.h and its macros (Yield, GetObject, ...); this header includes it.
 
 #include <cstddef>
 #include <cstdint>
@@ -18,6 +23,8 @@
 #define NOMINMAX  // this header is included beside UE4SS's, which use std::numeric_limits<>::max()
 #endif
 #include <Windows.h>
+
+#include "platform/guarded_read.h"
 
 namespace lss::platform {
 

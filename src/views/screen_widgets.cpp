@@ -98,11 +98,7 @@ bool FullScreenName(std::wstring_view name) noexcept
     return false;
 }
 
-template <class T>
-bool Read(const void* widget, std::uint32_t offset, T& out) noexcept
-{
-    return platform::CopyGuarded(&out, static_cast<const std::byte*>(widget) + offset, sizeof(T));
-}
+using platform::Read;  // the guarded reads: platform/guarded.h
 
 enum class Presence
 {
