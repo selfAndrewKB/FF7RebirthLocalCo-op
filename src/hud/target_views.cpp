@@ -2,6 +2,7 @@
 
 #include "facts/engine.h"
 #include "facts/hud.h"
+#include "facts/in_battle.h"
 #include "facts/party.h"
 #include "hud/hud_rules.h"
 #include "hud/widget_opacity.h"
@@ -419,7 +420,8 @@ bool Install(const platform::GameImage& image) noexcept
     const auto system  = image.Rebase(kBattleStateGlobal, sizeof(void*));
     const auto ui      = image.Rebase(facts::kEndUISystem, facts::kUIEnemyStatus + sizeof(void*));
     g_installed =
-        g_mainTarget && g_release && g_enemyAi && player_two::weak_object::Known() && system && ui &&
+        g_mainTarget && g_release && g_enemyAi && player_two::weak_object::Known() && system &&
+        facts::InBattleKnown() && ui &&
         widget_opacity::Install(image);
     g_battleSystem = system ? *system : 0;
     g_endUISystem  = ui ? *ui : 0;

@@ -43,6 +43,9 @@ constexpr std::uintptr_t kClearCall   = 0x140A32B57;  // PropagateLinkedActorCam
 constexpr std::uintptr_t kEvalCall    = 0x141001E92;  // AnimBudgetAllocator_Tick_SE: the parallel evaluation
 constexpr std::uintptr_t kEvalTarget  = 0x1410025A0;  // ParallelFor_Wrapper
 constexpr std::uintptr_t kGrowCall    = 0x140A32B0A;  // the game's own append: `mov rcx, array; call TArray8_ResizeGrow`
+constexpr std::uint8_t   kGrowBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x4C, 0x24, 0x08, 0x55, 0x56,
+                                         0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0xB8, 0x20, 0x00};
+const platform::FunctionFact kGrow{L"TArray8_ResizeGrow", 0x14082DFE8, kGrowBytes};  // what the call must reach
 constexpr std::uintptr_t kInterfaceClassGlobal = 0x1492B5E30;  // UClass* of EndActorInterface
 
 constexpr std::uint8_t kInterfaceOfBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C,
@@ -448,7 +451,7 @@ void Install(const platform::GameImage& image) noexcept
     const auto iface = platform::FindFunction(image, kInterfaceOf);
     const auto meas  = platform::FindFunction(image, kMeasure);
     const auto grow  = CallTarget(image, kGrowCall);
-    const auto growMapped = image.Rebase(0x14082DFE8);
+    const auto growMapped = platform::FindFunction(image, kGrow);
     try
     {
         g_items.reserve(4096);

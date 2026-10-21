@@ -62,6 +62,9 @@ public:
 
     std::uintptr_t Base() const noexcept { return base_; }
 
+    /// True if a live address lies inside the image (a vtable slot's value is the game's own code, for one).
+    bool Contains(std::uintptr_t live) const noexcept { return live >= base_ && live - base_ < size_; }
+
     /// The game build, or nullptr if it is none the mod knows (addresses are then used untranslated).
     const GameBuild* Build() const noexcept { return build_; }
 

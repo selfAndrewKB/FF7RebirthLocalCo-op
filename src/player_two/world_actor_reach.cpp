@@ -391,8 +391,12 @@ bool Install(const platform::GameImage& image) noexcept
     const auto root   = image.Rebase(facts::kEndGameRoot, sizeof(void*));
     const auto vtable = image.Rebase(kOctreeVtable, sizeof(void*));
     const auto items  = image.Rebase(kItemVtable, sizeof(void*));
+    // The octree vtable is where the research said only if the two slots the tick calls hold the game's own code.
+    const auto add    = image.ReadPointer(kOctreeVtable + kOctreeAdd);
+    const auto remove = image.ReadPointer(kOctreeVtable + kOctreeRemove);
+    const bool slots  = add && remove && image.Contains(*add) && image.Contains(*remove);
     g_rootGlobal      = root ? *root : 0;
-    g_octreeVtable    = vtable ? *vtable : 0;
+    g_octreeVtable    = vtable && slots ? *vtable : 0;
     g_itemVtable      = items ? *items : 0;
     g_installed       = g_rootGlobal != 0 && g_octreeVtable != 0 && g_itemVtable != 0;
     platform::Log(L"world actor reach: {}", g_installed ? L"installed (world actors such as chests pop around player 2 too, "

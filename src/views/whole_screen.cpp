@@ -1,6 +1,7 @@
 #include "views/whole_screen.h"
 
 #include "facts/engine.h"
+#include "facts/in_battle.h"
 #include "facts/party.h"
 #include "facts/world.h"
 #include "platform/verified_code.h"
@@ -512,7 +513,8 @@ bool InstallWholeScreen(const platform::GameImage& image) noexcept
     const auto battleSystem = image.Rebase(kBattleStateGlobal, sizeof(std::uintptr_t));
     const auto frogManager  = image.Rebase(kFrogManager, sizeof(std::uintptr_t));
     const auto gbikeManager = image.Rebase(kGBikeManager, sizeof(std::uint64_t));
-    g_battleSystem          = battleSystem ? *battleSystem : 0;
+    // The global's address is proven by IsInBattle's bytes (its RIP-relative read of it), found at startup.
+    g_battleSystem          = battleSystem && facts::InBattleKnown() ? *battleSystem : 0;
     g_frogManager           = frogManager ? *frogManager : 0;
     g_gbikeManager          = gbikeManager ? *gbikeManager : 0;
     platform::Log(L"whole screen: minigames by the game's on/off 36 MiniGamePlaying (the field uses stay split), and by "

@@ -1,6 +1,7 @@
 #include "player_two/attack_cameras.h"
 
 #include "facts/cameras.h"
+#include "facts/in_battle.h"
 #include "facts/party.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
@@ -235,7 +236,8 @@ void Cut(std::uint64_t cut, std::uint64_t second) noexcept
 void Install(const platform::GameImage& image) noexcept
 {
     const auto system = image.Rebase(kBattleStateGlobal, sizeof(std::uintptr_t));
-    g_battleSystem    = system ? *system : 0;
+    // The global's address is proven by IsInBattle's bytes (its RIP-relative read of it), found at startup.
+    g_battleSystem    = system && facts::InBattleKnown() ? *system : 0;
 
     const auto site    = image.Rebase(kCutCall, 5);
     const auto firstPc = image.Rebase(kFirstPcCut);
