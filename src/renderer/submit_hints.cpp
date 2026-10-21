@@ -1,15 +1,16 @@
 #include "renderer/submit_hints.h"
 
 #include "platform/rip_relative.h"
-#include "platform/code_memory.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
+#include "platform/instruction_patch.h"
 #include "platform/log.h"
 #include "platform/module_folder.h"
 
 #include <cstdint>
 #include <filesystem>
 #include <optional>
+#include <span>
 #include <system_error>
 
 namespace lss::renderer {
@@ -28,13 +29,14 @@ constexpr std::uint8_t   kVtableStep   = 8;
 
 struct Site
 {
-    std::uintptr_t      block = 0;  // the aligned 16-byte block holding the displacement's low byte
-    platform::CodeBlock stock{};
-    platform::CodeBlock skip{};
+    std::uintptr_t lowByte = 0;  // the displacement's low byte, the one byte written
+    std::uint8_t   stock   = 0;
+    std::uint8_t   skip    = 0;  // stock + kVtableStep
 };
 
-std::optional<Site> g_site;
-bool                g_skipping = false;
+std::optional<Site>        g_site;
+platform::InstructionPatch g_patch;  // the byte, in while player 2 is in (platform/instruction_patch.h)
+bool                       g_skipping = false;
 
 std::optional<Site> Locate(const platform::GameImage& image) noexcept
 {
@@ -60,13 +62,9 @@ std::optional<Site> Locate(const platform::GameImage& image) noexcept
         return std::nullopt;
     }
     Site site;
-    site.block = lowByte & ~(platform::kCodeBlockSize - 1);
-    if (!platform::CopyGuarded(site.stock.data(), reinterpret_cast<const void*>(site.block), site.stock.size()))
-    {
-        return std::nullopt;
-    }
-    site.skip = site.stock;
-    site.skip[lowByte - site.block] = static_cast<std::uint8_t>(site.skip[lowByte - site.block] + kVtableStep);
+    site.lowByte = lowByte;
+    site.stock   = static_cast<std::uint8_t>(displacement);
+    site.skip    = static_cast<std::uint8_t>(site.stock + kVtableStep);
     return site;
 }
 
@@ -108,8 +106,11 @@ void SetSubmitHintSkip(bool skip) noexcept
     {
         return;
     }
-    const bool swapped = skip ? platform::SwapCodeBlock(g_site->block, g_site->stock, g_site->skip)
-                              : platform::SwapCodeBlock(g_site->block, g_site->skip, g_site->stock);
+    // The first skip applies the patch; later ones apply the same byte again. Either way the byte must still be
+    // the one Locate read.
+    const bool swapped = skip ? (g_patch.Reapply() || g_patch.Apply(g_site->lowByte, std::span(&g_site->stock, 1),
+                                                                     std::span(&g_site->skip, 1)))
+                              : g_patch.Restore();
     if (!swapped)
     {
         // Someone else changed the block: stand aside for the session rather than write over them.

@@ -4,9 +4,11 @@
 #include "platform/code_memory.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
+#include "platform/instruction_patch.h"
 #include "platform/log.h"
 #include "platform/module_folder.h"
 #include "platform/vtable_entry.h"
+#include "platform/x64_jump.h"
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -357,13 +359,10 @@ void HintThunk(void* node, void* commandList, void* debug) noexcept
 
 struct HintSite
 {
-    const wchar_t*      name;
-    Addr                site;
-    const void*         thunk;
-    std::uintptr_t      block = 0;
-    platform::CodeBlock stock{};
-    platform::CodeBlock tagged{};
-    bool                on = false;
+    const wchar_t*             name;
+    Addr                       site;
+    const void*                thunk;
+    platform::InstructionPatch patch;  // the lea's displacement, pointed at the tagged vtable copy
 };
 
 std::array<HintSite, 4> g_hints = {{
@@ -377,10 +376,9 @@ std::array<HintSite, 4> g_hints = {{
 /// aligned 16-byte block (one atomic swap); where it does not, the site stays untagged.
 const wchar_t* TagHint(HintSite& hint, std::uintptr_t vtable, std::uintptr_t stub) noexcept
 {
-    if (hint.block != 0)  // tagged before: the copy exists, swap the block again
+    if (hint.patch.WasApplied())  // tagged before: the copy exists, the same displacement goes in again
     {
-        hint.on = platform::SwapCodeBlock(hint.block, hint.stock, hint.tagged);
-        return hint.on ? L"tagged" : L"its code changed";
+        return hint.patch.Reapply() ? L"tagged" : L"its code changed";
     }
     const std::uintptr_t site     = LiveOf(hint.site);
     std::uint8_t         lea[7]   = {};
@@ -406,39 +404,25 @@ const wchar_t* TagHint(HintSite& hint, std::uintptr_t vtable, std::uintptr_t stu
         std::memcpy(code.data(), slots, sizeof(slots));
         return true;
     });
-    const std::int64_t displacement = static_cast<std::int64_t>(copy) - static_cast<std::int64_t>(site + 7);
-    if (copy == 0 || displacement != static_cast<std::int32_t>(displacement))
+    const auto displacement = copy != 0 ? platform::Rel32(site + 7, copy) : std::nullopt;
+    if (!displacement)
     {
         return L"no room for the vtable copy within reach";
     }
-    platform::CodeBlock stock{};
-    if (!platform::CopyGuarded(stock.data(), reinterpret_cast<const void*>(block), stock.size()))
-    {
-        return L"its code is unreadable";
-    }
-    platform::CodeBlock tagged = stock;
-    const auto          value  = static_cast<std::int32_t>(displacement);
-    std::memcpy(tagged.data() + (rel - block), &value, sizeof(value));
-    if (!platform::SwapCodeBlock(block, stock, tagged))
-    {
-        return L"its code changed";
-    }
-    hint.block  = block;
-    hint.stock  = stock;
-    hint.tagged = tagged;
-    hint.on     = true;
-    return L"tagged";
+    std::uint8_t tagged[sizeof(original)] = {};
+    std::memcpy(tagged, &*displacement, sizeof(tagged));
+    return hint.patch.Apply(rel, std::span<const std::uint8_t>(lea + 3, sizeof(original)), tagged) ? L"tagged"
+                                                                                               : L"its code changed";
 }
 
 void UntagHints() noexcept
 {
     for (HintSite& hint : g_hints)
     {
-        if (hint.on && !platform::SwapCodeBlock(hint.block, hint.tagged, hint.stock))
+        if (hint.patch.IsApplied() && !hint.patch.Restore())
         {
             platform::Log(L"submission census: the {} hint site changed after us; left as it is", hint.name);
         }
-        hint.on = false;
     }
 }
 
