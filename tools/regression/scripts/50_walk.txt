@@ -1,5 +1,6 @@
 # Player 2 walks on their own pad and camera: the per-pad sticks (on by default; the switch echoes), a stick held on
 # pad 2, the input and the member tick counted on the status line, the member's move ticks run by the mod.
+# needs: control
 # expect: own-camera on -> ok \(player 2's own camera\)
 # expect: sticks per-pad -> ok
 # expect: stick 2 0 1 0 0 180 -> ok \(controller id 1\)

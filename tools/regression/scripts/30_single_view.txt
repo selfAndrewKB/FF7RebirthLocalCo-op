@@ -1,4 +1,5 @@
 # Player 1's single view by the development switch: on, then back to the automatic choice.
+# needs: control
 # expect: single view: player 1's view alone
 # expect: single view: over, the split is back
 # expect-not: single view: the split switch could not be

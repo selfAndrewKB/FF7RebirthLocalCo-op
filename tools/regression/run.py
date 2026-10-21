@@ -3,7 +3,7 @@ each one's `# expect:` / `# expect-not:` lines against the slice of UE4SS.log it
 
     python tools/regression/run.py                       the dev build on the live game (1.005)
     python tools/regression/run.py --version 1.004       the dev build on the 1.004 copy (its exe started directly)
-    python tools/regression/run.py --build release       the release build: its startup lines only (no control channel)
+    python tools/regression/run.py --build release       the release build: the scripts driven by the mod's hotkeys
     python tools/regression/run.py --in-field 10 20      the game is already at the save: run scripts 10 and 20 only
 
 Every script in tools/regression/scripts/ is a control script (src/control/script.h) with checks in comments:
@@ -11,6 +11,8 @@ Every script in tools/regression/scripts/ is a control script (src/control/scrip
     # expect-dev: <regex>    the same, checked on the dev build only (a line of the dev tools)
     # expect-not: <regex>    no line matches
     # scope: log             the checks run over the whole log of this launch (the startup script)
+    # needs: control         the script runs only through the control channel (the dev build): it is skipped on
+                             the key route (the release build, which has no control channel)
     # timeout: <seconds>     how long to wait for the script's result (300 by default)
 plus three checks every script gets: no "raised an exception", no "check failed:", no command channel stop. A script
 must leave player 2 out (the next one joins afresh; the last one is followed by `quit`).
@@ -18,7 +20,9 @@ must leave player 2 out (the next one joins afresh; the last one is followed by 
 The report goes to tools/regression/out/<stamp>-<version>-<build>.md; the baseline kept under version control is
 tools/regression/baseline/<version>-<build>.md (copied there by hand after the run that defines it).
 
-The mod is talked to through one function, Control(), so the control port's switch to TCP changes one place.
+Two routes drive the mod behind one interface (run_file, wait_until): Control is the file inbox through
+tools/control.py (the dev build); Keys presses the mod's hotkeys through tools/keys.ps1 and waits on the mod's own
+log lines (the release build). The control port's switch to TCP changes Control only.
 """
 import argparse
 import datetime as dt
@@ -50,6 +54,10 @@ BUILDS = {
     "release": ROOT / "build-release" / "Game__Shipping__Win64" / "LocalSplitScreen.dll",
 }
 ALWAYS_EXPECT_NOT = [r"raised an exception", r"check failed:", r"an exception stopped the command channel"]
+
+# A tick of `wait`/`wait-until` is one frame; the key route counts them at the slowest frame rate the game is played at,
+# so its waits are never shorter than the control route's.
+SECONDS_PER_TICK = 1.0 / 60.0
 
 
 def mod_dir(game: pathlib.Path) -> pathlib.Path:
@@ -84,26 +92,6 @@ def close_game_window(wait_seconds: float = 180) -> bool:
     return False
 
 
-class Control:
-    """The one place the harness talks to the mod: today the file inbox through tools/control.py."""
-
-    def __init__(self, game: pathlib.Path):
-        self.mod = mod_dir(game)
-
-    def run_file(self, script: pathlib.Path, timeout: float) -> tuple[int, str]:
-        proc = subprocess.run([sys.executable, str(TOOLS / "control.py"), str(script), "--mod", str(self.mod),
-                               "--timeout", str(timeout)], capture_output=True, text=True, encoding="utf-8", errors="replace")
-        return proc.returncode, proc.stdout + proc.stderr
-
-    def run(self, *commands: str, timeout: float = 120) -> tuple[int, str]:
-        args = []
-        for command in commands:
-            args += ["-c", command]
-        proc = subprocess.run([sys.executable, str(TOOLS / "control.py"), *args, "--mod", str(self.mod), "--timeout",
-                               str(timeout)], capture_output=True, text=True, encoding="utf-8", errors="replace")
-        return proc.returncode, proc.stdout + proc.stderr
-
-
 class Log:
     """UE4SS.log, read from where the last read stopped (the game keeps it open; Python opens it shared)."""
 
@@ -129,6 +117,140 @@ class Log:
         return self.path.read_bytes().decode("utf-8", errors="replace").splitlines()
 
 
+class Control:
+    """The control channel: the file inbox through tools/control.py (the dev build)."""
+
+    name = "control"
+
+    def __init__(self, game: pathlib.Path):
+        self.mod = mod_dir(game)
+
+    def run_file(self, script: pathlib.Path, timeout: float) -> tuple[int, str]:
+        proc = subprocess.run([sys.executable, str(TOOLS / "control.py"), str(script), "--mod", str(self.mod),
+                               "--timeout", str(timeout)], capture_output=True, text=True, encoding="utf-8", errors="replace")
+        return proc.returncode, proc.stdout + proc.stderr
+
+    def run(self, *commands: str, timeout: float = 120) -> tuple[int, str]:
+        args = []
+        for command in commands:
+            args += ["-c", command]
+        proc = subprocess.run([sys.executable, str(TOOLS / "control.py"), *args, "--mod", str(self.mod), "--timeout",
+                               str(timeout)], capture_output=True, text=True, encoding="utf-8", errors="replace")
+        return proc.returncode, proc.stdout + proc.stderr
+
+    def wait_until(self, what: str, ticks: int) -> tuple[bool, str]:
+        code, out = self.run(f"wait-until {what} {ticks}", timeout=ticks * SECONDS_PER_TICK + 60)
+        return code == 0, out
+
+
+# The mod's switches: the key, and the state the switch starts in at launch (players/join_keys.h). A `layout`, `bars`,
+# `own-camera`, `sticks` or `third-view` command presses the key only when the state it asks for is not the one held.
+# The chosen layout, the bars and the sticks persist across a leave; player 2's own camera is the start of every join
+# (views/player_view_point.h), and the third view leaves with player 2.
+KEY_SWITCHES = {
+    "layout": ("Ctrl+F5", "top-bottom"),
+    "bars": ("Ctrl+F4", "off"),
+    "own-camera": ("Ctrl+F6", "on"),
+    "sticks": ("Ctrl+F9", "per-pad"),
+    "third-view": ("Ctrl+F3", "off"),
+}
+RESET_AT_JOIN = {"own-camera": "on"}
+RESET_AT_LEAVE = {"third-view": "off"}
+
+# The mod's own lines that end a `wait-until` (player_two/session.cpp, player_two/field_exit.cpp).
+WAIT_LINES = {
+    "playing": re.compile(r"player 2 took .+ after \d+ tick"),
+    "out": re.compile(r"leave: player 2 left|player 2 was removed by the game"),
+}
+FIELD_STOPPED = re.compile(r"field exit: field step \d+ running 0")
+FIELD_SETTLED = re.compile(r"field exit: field step 13 running 1")
+
+
+def field_reached(lines: list[str]) -> bool:
+    """The field after a load: the running field stopped (the title's, or the previous one) and a field settled after
+    it (step 13, running). The title's own scene is a field, so a settled line alone is not enough."""
+    stopped = next((i for i, line in enumerate(lines) if FIELD_STOPPED.search(line)), None)
+    return stopped is not None and any(FIELD_SETTLED.search(line) for line in lines[stopped + 1:])
+
+
+class Keys:
+    """The hotkey route: the commands a key expresses are pressed through tools/keys.ps1; the waits watch the log for
+    the mod's own lines; the rest (status, stick, split-fov, single-view, note, ...) is skipped and reported."""
+
+    name = "keys"
+
+    def __init__(self, game: pathlib.Path):
+        self.log = Log(log_path(game))
+        self.state = {name: start for name, (_, start) in KEY_SWITCHES.items()}
+        self.skipped: list[str] = []
+
+    def press(self, key: str) -> str:
+        proc = powershell(TOOLS / "keys.ps1", "-Keys", key, timeout=60)
+        text = (proc.stdout + proc.stderr).strip()
+        return f"pressed {key}" if proc.returncode == 0 and f"pressed {key}" in text else f"PRESS FAILED {key}: {text}"
+
+    def wait_lines(self, seconds: float, done) -> tuple[bool, list[str]]:
+        """Reads the log until `done(lines so far)` holds or the time is up."""
+        lines: list[str] = []
+        deadline = time.monotonic() + seconds
+        while True:
+            lines += self.log.new_lines()
+            if done(lines):
+                return True, lines
+            if time.monotonic() >= deadline:
+                return False, lines
+            time.sleep(0.5)
+
+    def wait_until(self, what: str, ticks: int) -> tuple[bool, str]:
+        seconds = ticks * SECONDS_PER_TICK
+        if what == "field":
+            ok, _ = self.wait_lines(seconds, field_reached)
+        elif what in WAIT_LINES:
+            ok, _ = self.wait_lines(seconds, lambda lines: any(WAIT_LINES[what].search(line) for line in lines))
+        else:
+            return False, f"wait-until {what}: unknown"
+        return ok, f"wait-until {what} {ticks} -> {'ok' if ok else 'TIMEOUT'} (watched the log for up to {seconds:.0f} s)"
+
+    def command(self, line: str) -> tuple[bool, str]:
+        words = line.split()
+        verb = words[0]
+        if verb == "join":
+            self.state.update(RESET_AT_JOIN)
+            return True, f"{line} -> {self.press('Ctrl+F7')}"
+        if verb == "leave":
+            self.state.update(RESET_AT_LEAVE)
+            return True, f"{line} -> {self.press('Ctrl+F8')}"
+        if verb in KEY_SWITCHES and len(words) == 2:
+            key, _ = KEY_SWITCHES[verb]
+            wanted, held = words[1], self.state[verb]
+            if wanted == held:
+                return True, f"{line} -> no press ({verb} is {held} already)"
+            self.state[verb] = wanted
+            return True, f"{line} -> {self.press(key)} (was {held})"
+        if verb == "wait" and len(words) == 2:
+            time.sleep(int(words[1]) * SECONDS_PER_TICK)
+            return True, f"{line} -> waited"
+        if verb == "wait-until" and len(words) in (2, 3):
+            # Over the lines since the last wait ended: the press before this wait has produced its lines already.
+            return self.wait_until(words[1], int(words[2]) if len(words) == 3 else 600)
+        self.skipped.append(line)
+        return True, f"{line} -> skipped (no key for it)"
+
+    def run_file(self, script: pathlib.Path, timeout: float) -> tuple[int, str]:
+        """Every command runs even after a failed wait (the script's leave must still happen); the verdict is 1 then."""
+        out: list[str] = []
+        failed = False
+        self.log.skip_to_end()
+        for raw in script.read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            ok, text = self.command(line)
+            out.append(text)
+            failed = failed or not ok
+        return (1 if failed else 0), "\n".join(out) + "\n"
+
+
 class Script:
     def __init__(self, path: pathlib.Path):
         self.path = path
@@ -137,6 +259,7 @@ class Script:
         self.expect_dev: list[str] = []  # checked on the dev build only (lines of the dev tools)
         self.expect_not: list[str] = []
         self.scope_log = False
+        self.needs_control = False  # skipped on the key route
         self.timeout = 300.0
         self.commands = 0
         for line in path.read_text(encoding="utf-8").splitlines():
@@ -149,6 +272,8 @@ class Script:
                 self.expect.append(text[len("# expect:"):].strip())
             elif text.startswith("# scope:"):
                 self.scope_log = text[len("# scope:"):].strip() == "log"
+            elif text.startswith("# needs:"):
+                self.needs_control = text[len("# needs:"):].strip() == "control"
             elif text.startswith("# timeout:"):
                 self.timeout = float(text[len("# timeout:"):].strip())
             elif text and not text.startswith("#"):
@@ -158,7 +283,7 @@ class Script:
 class Result:
     def __init__(self, script: Script):
         self.script = script
-        self.ran_ok: bool | None = None  # the control channel's verdict (None: not run)
+        self.ran_ok: bool | None = None  # the route's verdict (None: not run)
         self.control_output = ""
         self.missing: list[str] = []            # expect lines nothing matched
         self.present: list[tuple[str, str]] = []  # expect-not lines that matched, with the first line
@@ -204,18 +329,21 @@ def deploy_and_launch(build: str, version: str, stamp: str, no_deploy: bool) -> 
     return ready, output, backup
 
 
-def reach_the_field(control: Control, rounds: int = 4) -> tuple[bool, str]:
+def reach_the_field(route, rounds: int = 4) -> tuple[bool, str]:
     """From the title right after the ready line: press through to Continue and the load, then wait for the field
-    (`wait-until field`: the save loaded and playable, not the title). The game sometimes shows popups at start-up
-    (seen when the two versions are launched one after the other), which swallow the fixed presses; while the field
-    is not reached, one more Enter is pressed per round (it confirms a popup, or Continue, or the resume dialog) and
-    the wait repeated. Each wait covers a load (2700 ticks: 27 s at 100 fps, 45 s at 60)."""
+    (`wait-until field`: the save loaded and playable, not the title; on the key route, the field lines the mod logs
+    through the load). The game sometimes shows popups at start-up (seen when the two versions are launched one after
+    the other), which swallow the fixed presses; while the field is not reached, one more Enter is pressed per round
+    (it confirms a popup, or Continue, or the resume dialog) and the wait repeated. Each wait covers a load (2700
+    ticks: 27 s at 100 fps, 45 s at 60)."""
+    if isinstance(route, Keys):
+        route.log.skip_to_end()  # the load's field lines come after the presses
     pressed = powershell(TOOLS / "continue_save.ps1", timeout=300)
     text = pressed.stdout + pressed.stderr
     for attempt in range(rounds):
-        code, out = control.run("wait-until field 2700", timeout=120)
-        text += out
-        if code == 0:
+        ok, out = route.wait_until("field", 2700)
+        text += out + "\n"
+        if ok:
             return True, text
         text += f"the field is not reached (round {attempt + 1} of {rounds}): one more Enter\n"
         keys = powershell(TOOLS / "keys.ps1", "-Keys", "Enter", timeout=60)
@@ -234,7 +362,7 @@ def report_text(stamp: str, version: str, build: str, deploy_output: str, result
     for r in results:
         lines += ["", f"## {r.script.name}", ""]
         if r.ran_ok is False:
-            lines.append("The control channel reported a failure:")
+            lines.append("The route reported a failure:")
             lines.append("```")
             lines += r.control_output.strip().splitlines()[-12:]
             lines.append("```")
@@ -254,6 +382,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--build", choices=BUILDS, default="dev")
     parser.add_argument("--version", choices=GAMES, default="1.005")
+    parser.add_argument("--route", choices=("control", "keys"), default=None,
+                        help="how the mod is driven: control (the dev build's default) or keys (the release build's)")
     parser.add_argument("--no-deploy", action="store_true", help="launch what is installed")
     parser.add_argument("--in-field", action="store_true", help="the game runs at the save already: no launch, no quit")
     parser.add_argument("--keep-running", action="store_true", help="leave the game running at the end")
@@ -263,18 +393,21 @@ def main() -> int:
 
     stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     game = GAMES[args.version]
-    control = Control(game["dir"])
+    route_name = args.route or ("keys" if args.build == "release" else "control")
+    route = Keys(game["dir"]) if route_name == "keys" else Control(game["dir"])
     log = Log(log_path(game["dir"]))
     OUT.mkdir(exist_ok=True)
-    notes: list[str] = []
+    notes: list[str] = [f"route: {route_name}"]
     deploy_output = ""
     backup = None
 
     all_scripts = [Script(p) for p in sorted(SCRIPTS.glob("*.txt"))]
     wanted = [s for s in all_scripts if not args.scripts or any(s.name.startswith(w) or s.name == w for w in args.scripts)]
-    if args.build == "release":
-        wanted = [s for s in wanted if s.scope_log]  # no control channel: the startup checks only
-        notes.append("release build: the control channel is not built, so only the startup script ran")
+    if route_name == "keys":
+        left_out = [s.name for s in wanted if s.needs_control]
+        wanted = [s for s in wanted if not s.needs_control]
+        if left_out:
+            notes.append("skipped on the key route (`# needs: control`): " + ", ".join(left_out))
 
     if not args.in_field:
         if game_running():
@@ -288,13 +421,12 @@ def main() -> int:
             (OUT / f"{stamp}-{args.version}-{args.build}.md").write_text(
                 report_text(stamp, args.version, args.build, deploy_output, [], ["the ready line never came"]), encoding="utf-8")
             return 2
-        if args.build != "release":
-            print("reaching the field...")
-            ok, text = reach_the_field(control)
-            print(text.strip().splitlines()[-1] if text.strip() else "")
-            if not ok:
-                notes.append("the field did not become ready after Continue: the scripts that need it were skipped")
-                wanted = [s for s in wanted if s.scope_log]
+        print("reaching the field...")
+        ok, text = reach_the_field(route)
+        print(text.strip().splitlines()[-1] if text.strip() else "")
+        if not ok:
+            notes.append("the field did not become ready after Continue: the scripts that need it were skipped")
+            wanted = [s for s in wanted if s.scope_log]
     results: list[Result] = []
     for script in wanted:
         result = Result(script)
@@ -302,19 +434,21 @@ def main() -> int:
         print(f"-- {script.name}")
         if script.scope_log:
             check(script, log.all_lines(), result, args.build)
-            if script.commands > 0 and args.build != "release":
-                result.ran_ok, result.control_output = (lambda c: (c[0] == 0, c[1]))(control.run_file(script.path, script.timeout))
+            if script.commands > 0:
+                result.ran_ok, result.control_output = (lambda c: (c[0] == 0, c[1]))(route.run_file(script.path, script.timeout))
             log.skip_to_end()
         else:
             log.skip_to_end()
-            code, output = control.run_file(script.path, script.timeout)
+            code, output = route.run_file(script.path, script.timeout)
             result.ran_ok, result.control_output = code == 0, output
             time.sleep(1.0)  # the last lines of the script land after its result
             check(script, log.new_lines(), result, args.build)
         print("   pass" if result.passed else f"   FAIL: missing {len(result.missing)}, present {len(result.present)}, ran ok {result.ran_ok}")
+    if isinstance(route, Keys) and route.skipped:
+        notes.append("commands without a key, skipped: " + "; ".join(sorted(set(route.skipped))))
 
     if not args.in_field and not args.keep_running:
-        if args.build == "release":
+        if route_name == "keys":
             closed = close_game_window()
             notes.append("closed by its window" if closed else "the game did not close by its window; left running")
         else:

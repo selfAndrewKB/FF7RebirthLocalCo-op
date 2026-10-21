@@ -39,9 +39,10 @@ $scan = @{ Enter = @(0x1C, $false); Escape = @(0x01, $false); Space = @(0x39, $f
            Up = @(0x48, $true); Down = @(0x50, $true); Left = @(0x4B, $true); Right = @(0x4D, $true)
            C = @(0x2E, $false); Q = @(0x10, $false); E = @(0x12, $false)   # C: commands menu; Q/E: its party switch
            G = @(0x22, $false)                                            # G: call the chocobo (field)
+           F2 = @(0x3C, $false); F3 = @(0x3D, $false)
            F4 = @(0x3E, $false); F5 = @(0x3F, $false); F6 = @(0x40, $false); F7 = @(0x41, $false); F8 = @(0x42, $false)
-           F9 = @(0x43, $false) }
-$ctrl = @(0x1D, $false)  # left Ctrl; "Ctrl+<key>" holds it around the key (the mod's switches are Ctrl+F4..F9)
+           F9 = @(0x43, $false); F10 = @(0x44, $false); F11 = @(0x57, $false) }
+$ctrl = @(0x1D, $false)  # left Ctrl; "Ctrl+<key>" holds it around the key (the mod's switches are Ctrl+F2..F11)
 # By title, not the process's main window: with the UE4SS console open, Windows can report the
 # console as the game process's main window.
 $hwnd = [LssKeys]::FindWindow([NullString]::Value, $Title)  # $null would reach it as "" (a class name)

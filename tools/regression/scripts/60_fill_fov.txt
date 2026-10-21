@@ -1,5 +1,6 @@
 # Filled halves and the split FOV: the halves fill by default (bars off echoes that), the FOV weight's ends and middle
 # are accepted, bars on lays the HUD out in a 16:9 view of the half, bars off fills the half again before the leave.
+# needs: control
 # expect: bars off -> ok \(halves filled\)
 # expect: split-fov 1 -> ok
 # expect: split-fov 0 -> ok
