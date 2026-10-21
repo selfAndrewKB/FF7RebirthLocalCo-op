@@ -4,6 +4,7 @@
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
 #include "platform/guarded.h"
+#include "platform/image.h"
 #include "platform/log.h"
 #include "player_two/field_pickup.h"
 #include "player_two/generation.h"
@@ -94,8 +95,6 @@ constexpr std::uint8_t   kAddPointBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x4C,
 constexpr std::uintptr_t kExecuteSlot        = 0x1414A90E4;  // void(mgr, u8 slot)
 constexpr std::uint8_t   kExecuteSlotBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x55, 0x56, 0x57,
                                                 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57};
-constexpr std::uintptr_t kMarkByKey        = 0x140C10F94;  // u8(wim, FName key by value)
-constexpr std::uint8_t   kMarkByKeyBytes[] = {0x48, 0x89, 0x54, 0x24, 0x10, 0x53, 0xB8, 0x30, 0x00, 0x00, 0x00};
 constexpr std::size_t    kFirstInstruction = 5;
 // 1.005 (RE-1005-field-2.md §5): AddPoint's entry is at 0x140FED95C, %16 = 12, so its first instruction crosses a
 // 16-byte block. Its second (mov [rsp+20h], r9 at %16 = 1) takes the redirect instead: the first only stores rbx into
@@ -106,11 +105,6 @@ constexpr std::size_t    kSecondInstruction = 5;
 // registration is logged at Info to name the registrar.
 constexpr std::uintptr_t kScooterKey = 0x1491E6D10;
 constexpr std::uintptr_t kMarkFromListener = 0x1414A90AD;  // the WorldItem key listener's call returns here
-// Call redirects: the game mode tick's call of the selection update, and the WorldItem tick's call of the grant.
-constexpr std::uintptr_t kUpdateCall  = 0x1423EF160;
-constexpr std::uintptr_t kUpdate      = 0x140E7A700;  // void(mgr, float dt)
-constexpr std::uintptr_t kAcquireCall = 0x140DBE165;
-constexpr std::uintptr_t kAcquire     = 0x140C07A3C;  // (wim, entry); the caller ignores its result
 // The candidate query, called read-only for the dry run (§10.C): void(octree, node, context, box*, cap*).
 constexpr std::uintptr_t kQuery        = 0x1422BA490;
 constexpr std::uint8_t   kQueryBytes[] = {0x41, 0x55, 0x41, 0x56, 0xB8, 0x28, 0x01, 0x00, 0x00};
@@ -129,9 +123,6 @@ using AddPointFn = void (*)(void* mgr, std::uint8_t talk, const std::uint64_t* k
                             std::uint8_t kind, std::uint8_t flagA, std::uint8_t flagB, std::uint64_t preset2,
                             std::uint64_t presetPlayer2);
 using ExecuteSlotFn = void (*)(void* mgr, std::uint8_t slot);
-using MarkByKeyFn   = std::uint8_t (*)(void* items, std::uint64_t key);
-using UpdateFn      = void (*)(void* mgr, float dt);
-using AcquireFn     = void (*)(void* items, void* entry);
 using QueryFn       = void (*)(void* octree, std::int32_t node, void* context, const float* box, void* cap);
 
 struct RawArray  // TArray<Point*> with the default allocator
@@ -143,9 +134,6 @@ struct RawArray  // TArray<Point*> with the default allocator
 
 platform::EntryRedirect g_addPoint;
 platform::EntryRedirect g_executeSlot;
-platform::EntryRedirect g_markByKey;
-platform::CallRedirect  g_update;
-platform::CallRedirect  g_acquire;
 QueryFn                 g_query     = nullptr;
 std::optional<platform::GameImage> g_image;  // for research IDA addresses in the log
 std::uintptr_t          g_root      = 0;  // live address of the root global
@@ -163,6 +151,7 @@ SRWLOCK                                     g_addLock = SRWLOCK_INIT;
 int                                         g_addsLogged = 0;
 std::unordered_map<std::uintptr_t, std::uint64_t> g_addsByRegistrar;  // IDA return address -> count since summary
 thread_local int                            t_marksInExecute = -1;  // -1 outside ExecuteSlot
+thread_local std::int32_t                   t_effectsBefore[2] = {0, 0};  // each controller's effects before a grant
 
 // Game thread (the update hook).
 std::array<std::uint8_t, 8 * kSlots + kSlots * 8 + 3 * kSlots + 1> g_slotSeen{};
@@ -412,79 +401,58 @@ void ExecuteSlot(void* mgr, std::uint8_t slot) noexcept
     }
 }
 
-std::uint8_t MarkByKey(void* items, std::uint64_t key) noexcept
+/// The pass's mark hook (player_two/field_pickup): a WorldItem key marked.
+void OnMarked(std::uint64_t key, std::uint8_t taken, std::uintptr_t returnAddress, bool playerTwo) noexcept
 {
-    const auto caller = Ida(reinterpret_cast<std::uintptr_t>(_ReturnAddress()));
-    const auto taken  = reinterpret_cast<MarkByKeyFn>(g_markByKey.Original())(items, key);
     if (t_marksInExecute >= 0 && taken != 0)
     {
         ++t_marksInExecute;
     }
-    const bool playerTwo = taken != 0 && generation::OnGameThread() && field_pickup::InPass();
-    if (playerTwo)
+    if (!platform::Enabled(platform::Level::Debug) || !Spend())
     {
-        field_pickup::NoteMarked(key);
+        return;
     }
-    if (platform::Enabled(platform::Level::Debug) && Spend())
+    try
     {
-        try
-        {
-            platform::LogDebug(L"interact: WorldItem mark {} -> {} ({}, from 0x{:X}){}", Name(key), taken,
-                          caller == kMarkFromListener ? L"the key listener" : L"another caller", caller,
-                          playerTwo ? L", in player 2's pass" : L"");
-        }
-        catch (...)
-        {
-        }
+        const auto caller = Ida(returnAddress);
+        platform::LogDebug(L"interact: WorldItem mark {} -> {} ({}, from 0x{:X}){}", Name(key), taken,
+                           caller == kMarkFromListener ? L"the key listener" : L"another caller", caller,
+                           playerTwo ? L", in player 2's pass" : L"");
     }
-    return taken;
+    catch (...)
+    {
+    }
 }
 
-void Acquire(void* items, void* entry) noexcept
+/// The pass's grant hook, before the game's grant: each controller's active force-feedback effects (RE-p2-rumble.md §6
+/// item 4: expect +1 on the primary one). The grant's line is Debug: its reads are made only when it is written.
+void OnGranting(std::uint64_t, bool) noexcept
 {
-    const auto key = Read<std::uint64_t>(static_cast<const std::uint8_t*>(entry) - kEntryKeyBack, 0);
-    // An item player 2 picked: the grant runs with player 2's controller as the primary one, its only player read
-    // (the item-get rumble, RE-p2-field-interact.md §12.12 item 5).
-    const bool playerTwo = generation::OnGameThread() && field_pickup::TakeMarked(key);
-    // The grant's line is Debug: its reads are made only when it is written.
-    const bool         logged      = platform::Enabled(platform::Level::Debug);
-    std::wstring rumble;
-    // Each controller's active force-feedback effects around the grant (RE-p2-rumble.md §6 item 4: expect +1 on the
-    // primary one).
-    void* const        one         = logged ? generation::PlayerOneController() : nullptr;
-    void* const        two         = logged ? generation::PlayerTwoController() : nullptr;
-    const std::int32_t oneBefore   = logged ? rumble_watch::EffectCount(one) : 0;
-    const std::int32_t twoBefore   = logged ? rumble_watch::EffectCount(two) : 0;
+    if (!platform::Enabled(platform::Level::Debug))
     {
-        std::optional<primary_controller::Scope> primary;
-        if (playerTwo)
-        {
-            primary.emplace();
-        }
-        reinterpret_cast<AcquireFn>(g_acquire.Original())(items, entry);
-        try
-        {
-            if (logged)
-            {
-                rumble = PrimaryText();  // read inside the scope: who the rumble went to
-            }
-        }
-        catch (...)
-        {
-        }
+        return;
     }
-    if (logged && Spend())
+    t_effectsBefore[0] = rumble_watch::EffectCount(generation::PlayerOneController());
+    t_effectsBefore[1] = rumble_watch::EffectCount(generation::PlayerTwoController());
+}
+
+/// ... and after it, inside the grant's scope: who the rumble went to.
+void OnGranted(std::uint64_t key, bool playerTwo) noexcept
+{
+    if (!platform::Enabled(platform::Level::Debug) || !Spend())
     {
-        try
-        {
-            platform::LogDebug(L"interact: WorldItem grant {}{} (the item-get rumble goes to the primary controller: {}; "
-                          L"force-feedback effects: player 1's controller {} -> {}, player 2's {} -> {})",
-                          Name(key), playerTwo ? L" (player 2's pickup)" : L"", rumble, oneBefore,
-                          rumble_watch::EffectCount(one), twoBefore, rumble_watch::EffectCount(two));
-        }
-        catch (...)
-        {
-        }
+        return;
+    }
+    try
+    {
+        platform::LogDebug(L"interact: WorldItem grant {}{} (the item-get rumble goes to the primary controller: {}; "
+                           L"force-feedback effects: player 1's controller {} -> {}, player 2's {} -> {})",
+                           Name(key), playerTwo ? L" (player 2's pickup)" : L"", PrimaryText(), t_effectsBefore[0],
+                           rumble_watch::EffectCount(generation::PlayerOneController()), t_effectsBefore[1],
+                           rumble_watch::EffectCount(generation::PlayerTwoController()));
+    }
+    catch (...)
+    {
     }
 }
 
@@ -773,14 +741,9 @@ void AfterUpdate(const std::uint8_t* mgr)
     DryRun(mgr, items, two);
 }
 
-void Update(void* mgr, float dt) noexcept
+/// The pass's update hook (game thread): after the game's own update and player 2's pass.
+void OnUpdate(void* mgr) noexcept
 {
-    reinterpret_cast<UpdateFn>(g_update.Original())(mgr, dt);
-    if (mgr == nullptr || !generation::OnGameThread())
-    {
-        return;
-    }
-    field_pickup::AfterUpdate(mgr, dt);  // player 2's pass of the same game code (player_two/field_pickup.h)
     try
     {
         AfterUpdate(static_cast<const std::uint8_t*>(mgr));
@@ -820,12 +783,6 @@ void Install(const platform::GameImage& image) noexcept
         return at && image.BytesMatch(ida, bytes) &&
                redirect.Install(*at, image.EntryInstruction(ida, bytes.first(kFirstInstruction)), replacement);
     };
-    const auto call = [&](platform::CallRedirect& redirect, std::uintptr_t site, std::uintptr_t target,
-                          std::uintptr_t replacement) {
-        const auto at = image.Rebase(site, 5);
-        const auto to = image.Rebase(target);
-        return at && to && redirect.Install(*at, *to, replacement);
-    };
     bool add = false;
     if (platform::RunningBuild() == platform::BuildIndex::V1005)
     {
@@ -841,23 +798,20 @@ void Install(const platform::GameImage& image) noexcept
         add = entry(g_addPoint, kAddPoint, kAddPointBytes, reinterpret_cast<std::uintptr_t>(&AddPoint));
     }
     const bool execute = entry(g_executeSlot, kExecuteSlot, kExecuteSlotBytes, reinterpret_cast<std::uintptr_t>(&ExecuteSlot));
-    const bool mark    = entry(g_markByKey, kMarkByKey, kMarkByKeyBytes, reinterpret_cast<std::uintptr_t>(&MarkByKey));
-    const bool acquire = call(g_acquire, kAcquireCall, kAcquire, reinterpret_cast<std::uintptr_t>(&Acquire));
     if (const auto query = image.Rebase(kQuery); query && image.BytesMatch(kQuery, kQueryBytes))
     {
         g_query = reinterpret_cast<QueryFn>(*query);
     }
-    const bool update = call(g_update, kUpdateCall, kUpdate, reinterpret_cast<std::uintptr_t>(&Update));
+    // The update, the marks and the grants: told by the pass's own hooks (installed or not, as its line says).
+    field_pickup::SetHookObserver({&OnUpdate, &OnMarked, &OnGranting, &OnGranted});
     try
     {
         std::wstring installed, skipped;
         Summary(installed, skipped, L"registrations", add);
         Summary(installed, skipped, L"executions", execute);
-        Summary(installed, skipped, L"WorldItem marks", mark);
-        Summary(installed, skipped, L"WorldItem grants", acquire);
-        Summary(installed, skipped, L"the slots, census and dry run after each update", update);
         Summary(installed, skipped, L"the dry-run query", g_query != nullptr);
-        platform::Log(L"interact: watching {}; not watched (the code is not what the research read): {}",
+        platform::Log(L"interact: watching {}, and the pass's update, marks and grants through its hooks; not watched (the "
+                      L"code is not what the research read): {}",
                       installed.empty() ? L"nothing" : installed, skipped.empty() ? L"none" : skipped);
     }
     catch (...)

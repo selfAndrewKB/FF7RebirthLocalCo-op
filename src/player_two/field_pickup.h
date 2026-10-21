@@ -6,8 +6,8 @@
 // FieldActionMgr keeps every field prompt as a point and runs one selection per frame around one probe, the
 // party leader, with one slot block: the candidates, the visibility-trace handles, eight button slots with
 // their rows, records and latches. Nothing in it is per player. So right after the game's own update
-// (player 1's; its call in the game mode's tick is redirected by player_two/interact_watch), the same game
-// code runs once more as player 2:
+// (player 1's; its call in the game mode's tick is redirected here), the same game code runs once more as
+// player 2:
 //   - inside player 2's scopes: pad 2's sticks and buttons, player 2's controller as the primary one, player
 //     2's member as the leader (and its type). Every gate and the probe then resolve to player 2 (§12.7);
 //   - with player 2's copy of the manager's per-player ranges swapped in (§12.9; player 1's put back after),
@@ -33,6 +33,11 @@
 // byte the press tick writes (root+0x210 -> +8) is put back after. The game's field enter/exit resets run
 // on player 2's copy too, and its field-exit clear runs on it when player 2 leaves.
 //
+// Three more hooks carry the pass's edges: the game mode tick's call of the selection update (the pass runs right
+// after it), WorldItemMgr's mark by key (a key player 2's pass marks is noted) and the WorldItem tick's call of the
+// grant (run with player 2's controller as the primary one for a noted key: the item-get rumble's only player read,
+// §12.12 item 5). Each tells the one observer (player_two/interact_watch, a dev tool) what passed through it.
+//
 // Logged: the scopes or gates that stopped a pass (counted), player 2's slot targets and marker widgets on
 // change, each widget the mod destroys, a status line once a minute. Game thread only.
 
@@ -45,11 +50,26 @@ class GameImage;
 
 namespace lss::player_two::field_pickup {
 
-/// Finds the game's functions (each checked) and installs the field enter/exit redirects. Logged.
+/// Finds the game's functions (each checked) and installs the field enter/exit redirects and the three hooks. Logged.
 void Install(const platform::GameImage& image) noexcept;
 
-/// Player 2's pass, right after the game's own selection update of `mgr` (the update's redirect).
+/// Player 2's pass, right after the game's own selection update of `mgr` (the update hook calls it).
 void AfterUpdate(void* mgr, float dt) noexcept;
+
+/// What the three hooks tell the observer (each entry may be null): after the game's update and player 2's pass
+/// (game thread); a WorldItem key marked (the game's answer, the caller's return address, whether player 2's pass
+/// marked it; any thread); a grant, before the game's call and after it, inside the same scope (`playerTwo`: the
+/// grant ran with player 2's controller as the primary one).
+struct HookObserver
+{
+    void (*afterUpdate)(void* mgr) noexcept                                                                 = nullptr;
+    void (*marked)(std::uint64_t key, std::uint8_t taken, std::uintptr_t caller, bool playerTwo) noexcept = nullptr;
+    void (*granting)(std::uint64_t key, bool playerTwo) noexcept                                           = nullptr;
+    void (*granted)(std::uint64_t key, bool playerTwo) noexcept                                            = nullptr;
+};
+
+/// The one observer (a copy is kept). Set before any field exists, cleared at unload.
+void SetHookObserver(const HookObserver& observer) noexcept;
 
 /// Player 2's copy of the slot rows (FWeakObjectPtr values, 0 for none), for hud/prompt_rows: the rows
 /// player 2's pass made. All 0 while player 2 has no copy.
@@ -60,10 +80,10 @@ void RowWeaks(Weaks& out) noexcept;
 bool InPass() noexcept;
 
 /// Whether a CharaPop entry's key is one of TreasurePointMgr's chests (its CharaPop key -> treasure key map at +0x60,
-/// the spawn handler's own lookup). For player_two/chest_watch. Game thread.
+/// the spawn handler's own lookup). Game thread.
 bool IsChestEntry(std::uint64_t popKey) noexcept;
 
-/// A WorldItem key player 2's pass marked taken (player_two/interact_watch's mark hook, inside the pass).
+/// A WorldItem key player 2's pass marked taken (the mark hook, inside the pass).
 void NoteMarked(std::uint64_t key) noexcept;
 
 /// Whether `key` was marked by player 2's pass (forgotten once asked): the grant then runs with player 2's

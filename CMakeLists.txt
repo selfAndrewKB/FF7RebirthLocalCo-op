@@ -97,7 +97,6 @@ add_library(LocalSplitScreen SHARED
     src/player_two/pad_rumble.cpp
     src/player_two/combat_rumble.cpp
     src/player_two/vending.cpp
-    src/player_two/interact_watch.cpp
     src/player_two/charapop_facts.cpp
     src/player_two/charapop_near.cpp
     src/player_two/charapop_centre.cpp
@@ -206,6 +205,7 @@ if(LSS_DEV_TOOLS)
         src/player_two/charapop_watch.cpp
         src/player_two/framing_watch.cpp
         src/player_two/handover_watch.cpp
+        src/player_two/interact_watch.cpp
         src/player_two/menu_focus.cpp
         src/player_two/move_census.cpp
         src/player_two/ride_watch.cpp

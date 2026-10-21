@@ -24,12 +24,15 @@
 #include <cstdint>
 #include <cstring>
 #include <format>
+#include <optional>
 #include <span>
 #include <string>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <vector>
+
+#include <intrin.h>
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -184,6 +187,19 @@ constexpr std::uintptr_t kRequest        = 0x140ADE688;
 constexpr std::uint8_t   kRequestBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 0x56, 0x57,
                                             0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57};
 constexpr std::size_t    kRequestFirst   = 5;
+
+// The pass's hooks (§10.A, §12.12): the game mode tick's call of the selection update (the pass runs right after it),
+// WorldItemMgr's mark by key (a key player 2's pass marks is noted; its entry's first instruction, 5 bytes) and the
+// WorldItem tick's call of the grant (run with player 2's controller as the primary one for a noted key).
+constexpr std::uintptr_t kUpdateCall      = 0x1423EF160;
+constexpr std::uintptr_t kMarkByKey       = 0x140C10F94;  // u8(wim, FName key by value)
+constexpr std::uint8_t   kMarkByKeyBytes[] = {0x48, 0x89, 0x54, 0x24, 0x10, 0x53, 0xB8, 0x30, 0x00, 0x00, 0x00};
+constexpr std::size_t    kMarkFirst       = 5;
+constexpr std::uintptr_t kAcquireCall     = 0x140DBE165;
+constexpr std::uintptr_t kAcquire         = 0x140C07A3C;  // (wim, entry); the caller ignores its result
+constexpr std::uint32_t  kEntryKeyBack    = 0x10;         // AcquireEntry's entry = element + 0x10
+using MarkByKeyFn = std::uint8_t (*)(void* items, std::uint64_t key);
+using AcquireFn   = void (*)(void* items, void* entry);
 // UObjectBase's outer, and UWorld's ControllerList: TArray<TWeakObjectPtr<AController>> (8-byte entries).
 constexpr std::uint32_t  kObjectOuter      = 0x20;
 constexpr std::uint32_t  kWorldControllers = 0x1F0;
@@ -255,6 +271,10 @@ TickFn         g_update      = nullptr;
 ResetFn        g_fieldEnter  = nullptr;
 ResetFn        g_fieldExit   = nullptr;
 DestroyFn      g_destroy     = nullptr;  // null: the markers stay shared (no per-player widgets)
+platform::CallRedirect  g_updateCall;   // the pass's hooks
+platform::EntryRedirect g_markByKey;
+platform::CallRedirect  g_acquireCall;
+HookObserver            g_observer;     // set before any field exists; read by the hooks on any thread
 platform::CallRedirect g_enterCall;
 platform::CallRedirect g_exitCall;
 platform::EntryRedirect g_request;
@@ -1161,6 +1181,62 @@ void FieldEnter(void* mgr) noexcept
     AfterFieldReset(mgr, g_fieldEnter, seen);
 }
 
+// --- The pass's hooks --------------------------------------------------------------------------------------
+
+/// The game mode tick's call of the selection update: the game's (player 1's), then player 2's pass.
+void UpdateCall(void* mgr, float dt) noexcept
+{
+    reinterpret_cast<TickFn>(g_updateCall.Original())(mgr, dt);
+    if (mgr == nullptr || !generation::OnGameThread())
+    {
+        return;
+    }
+    AfterUpdate(mgr, dt);
+    if (g_observer.afterUpdate != nullptr)
+    {
+        g_observer.afterUpdate(mgr);
+    }
+}
+
+/// WorldItemMgr's mark by key: a key player 2's pass marks is noted for its grant.
+std::uint8_t MarkByKey(void* items, std::uint64_t key) noexcept
+{
+    const auto caller    = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
+    const auto taken     = reinterpret_cast<MarkByKeyFn>(g_markByKey.Original())(items, key);
+    const bool playerTwo = taken != 0 && generation::OnGameThread() && InPass();
+    if (playerTwo)
+    {
+        NoteMarked(key);
+    }
+    if (g_observer.marked != nullptr)
+    {
+        g_observer.marked(key, taken, caller, playerTwo);
+    }
+    return taken;
+}
+
+/// The WorldItem tick's call of the grant: an item player 2 picked is granted with player 2's controller as the primary
+/// one, its only player read (the item-get rumble, §12.12 item 5).
+void Acquire(void* items, void* entry) noexcept
+{
+    const auto key       = Read<std::uint64_t>(static_cast<const std::uint8_t*>(entry) - kEntryKeyBack, 0);
+    const bool playerTwo = generation::OnGameThread() && TakeMarked(key);
+    if (g_observer.granting != nullptr)
+    {
+        g_observer.granting(key, playerTwo);
+    }
+    std::optional<primary_controller::Scope> primary;
+    if (playerTwo)
+    {
+        primary.emplace();
+    }
+    reinterpret_cast<AcquireFn>(g_acquireCall.Original())(items, entry);
+    if (g_observer.granted != nullptr)
+    {
+        g_observer.granted(key, playerTwo);  // inside the scope: the observer may read who the rumble went to
+    }
+}
+
 void FieldExit(void* mgr) noexcept
 {
     const std::uint8_t seen = Read<std::uint8_t>(mgr, kFieldEnterFlag);
@@ -1218,7 +1294,22 @@ void Install(const platform::GameImage& image) noexcept
             g_enterCall.Restore();  // both or neither: player 2's rows must not outlive a field change
         }
     }
-    g_ready = resets;
+    // The three hooks: the pass runs only through the update's; the mark and the grant carry its edges.
+    bool hooks = false;
+    if (resets)
+    {
+        leader_scope::Install(image);  // the pass's leader scope (the targeting modules install it too)
+        const auto markAt    = image.Rebase(kMarkByKey);
+        const auto acquireAt = image.Rebase(kAcquireCall, 5);
+        const auto acquire   = image.Rebase(kAcquire);
+        hooks = call(g_updateCall, kUpdateCall, kUpdate, reinterpret_cast<std::uintptr_t>(&UpdateCall)) && markAt &&
+                image.BytesMatch(kMarkByKey, kMarkByKeyBytes) &&
+                g_markByKey.Install(*markAt,
+                                    image.EntryInstruction(kMarkByKey, std::span<const std::uint8_t>(kMarkByKeyBytes).first(kMarkFirst)),
+                                    reinterpret_cast<std::uintptr_t>(&MarkByKey)) &&
+                acquireAt && acquire && g_acquireCall.Install(*acquireAt, *acquire, reinterpret_cast<std::uintptr_t>(&Acquire));
+    }
+    g_ready = resets && hooks;
     bool screen = false;
     if (g_ready)
     {
@@ -1228,15 +1319,21 @@ void Install(const platform::GameImage& image) noexcept
                                    reinterpret_cast<std::uintptr_t>(&RequestVisibility));
     }
     platform::Log(L"field pickup: {}; the screen test {}; marker widgets {}",
-                  g_ready ? L"ready (player 2 picks up collectibles and materials, opens chests and uses vending machines through the game's own field prompts, a "
-                            L"second pass of its selection and press)"
-                          : L"UNAVAILABLE (a check failed: the root, the UI system, a function or a field reset's call site)",
+                  g_ready ? L"ready (player 2 picks up collectibles and materials, opens chests, uses vending machines and shopkeepers "
+                            L"through the game's own field prompts, a second pass of its selection and press)"
+                  : resets ? L"UNAVAILABLE (a hook is not what the research read: the update's call, the mark's entry or the grant's call)"
+                           : L"UNAVAILABLE (a check failed: the root, the UI system, a function or a field reset's call site)",
                   screen ? L"sees player 2's view in player 2's pass"
                          : L"is NOT redirected (the request's entry is not what the research read): player 2's offers follow "
                            L"player 1's screen",
                   g_destroy != nullptr ? L"per player (each point's widget swapped too; player 2's destroyed by the game's own call)"
                                        : L"SHARED (the game's destroy is not what the research read): both players write one "
                                          L"widget per point");
+}
+
+void SetHookObserver(const HookObserver& observer) noexcept
+{
+    g_observer = observer;
 }
 
 void AfterUpdate(void* mgr, float dt) noexcept

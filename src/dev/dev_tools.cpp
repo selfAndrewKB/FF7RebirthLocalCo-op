@@ -10,6 +10,7 @@
 #include "player_two/charapop_watch.h"
 #include "player_two/framing_watch.h"
 #include "player_two/handover_watch.h"
+#include "player_two/interact_watch.h"
 #include "player_two/menu_focus.h"
 #include "player_two/move_census.h"
 #include "player_two/ride_watch.h"
@@ -47,6 +48,7 @@ void Install(const platform::GameImage& image, player_two::Session& session, pla
     player_two::battle_input::Install(image);    // player 2's battle state inside the member tick, on change (Trace)
     player_two::move_census::Install(image);     // the move-state ticks and gate tests per character (the status line)
     player_two::target_census::Install(image);   // whom enemies target, and by which stage (after the targeting group)
+    player_two::interact_watch::Install(image);  // the field interactions around player 2's pickups (after field_pickup)
     const bool tags = player_two::tag_counts::Install(image);  // the actor-tag registry (the session's Debug counts)
     platform::Log(L"tag counts: {}", tags ? L"readable (the session's take and leave counts, Debug)"
                                           : L"NOT readable (a check failed); the session's counts are not logged");

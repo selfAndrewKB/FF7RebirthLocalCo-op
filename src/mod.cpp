@@ -54,7 +54,6 @@
 #include "player_two/audio_listener_two.h"
 #include "player_two/shop_talk.h"
 #include "player_two/vending.h"
-#include "player_two/interact_watch.h"
 #include "player_two/chocobo_climb.h"
 #include "player_two/climb_context.h"
 #include "player_two/approach_two.h"
@@ -398,7 +397,6 @@ public:
         lss::player_two::audio_listener_two::Install(*image);  // player 2's sound: each SEAD sound from the nearer listener
         lss::player_two::vending::Install(*image);         // player 2's vending machines: the shop's camera and pad
         lss::player_two::shop_talk::Install(*image);       // player 2's shopkeepers: admit, press, the shop's AI event
-        lss::player_two::interact_watch::Install(*image);  // field interactions (pickups) per player, logged (read-only)
         lss::player_two::equal_targeting::Install(*image);  // Condition enemies (bosses) count either player as the UCPC
         lss::player_two::player_hits::Install(*image);     // player 2's hits and the hits player 2 takes count as the player's
         lss::player_two::target_coin::Install(*image);     // each enemy aims at player 1 or 2, a coin per action

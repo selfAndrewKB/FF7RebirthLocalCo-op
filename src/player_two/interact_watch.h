@@ -1,31 +1,44 @@
 #pragma once
 
-// Logs the game's field interactions (FieldActionMgr) for player 2's pickups (read-only;
-// RE-p2-field-interact.md §6, §10).
+// Logs the game's field interactions (FieldActionMgr) around player 2's pickups (RE-p2-field-interact.md §6, §10). A
+// dev tool: dev/dev_tools.h installs it; a player's build has the stub below. It changes nothing: its own two hooks
+// pass the game's calls on, and the pass's three hooks (player_two/field_pickup.h) tell it what passed through them.
 //
-// FieldActionMgr keeps every field prompt as a point. Each frame its update picks one target per button
-// slot around one probe, the party leader; a press runs the slot's key, and a WorldItem key marks the item
-// taken and grants it to the shared inventory. All of it runs in the game mode's tick, outside every
-// player-2 window, so nothing near player 2 is ever offered. Before a second pass "as player 2" is built,
-// this logs what the game does, without changing it:
-//   - each point registration (AddPoint: key, owner, presets, kind, the registrar, the leader type),
+// FieldActionMgr keeps every field prompt as a point. Each frame its update picks one target per button slot around
+// one probe, the party leader; a press runs the slot's key, and a WorldItem key marks the item taken and grants it to
+// the shared inventory. Player 2's pass (field_pickup) runs the same code once more as player 2. Logged:
+//   - each point registration (AddPoint, its own hook: key, owner, presets, kind, the registrar, the leader type),
 //     in full up to a budget, then counts per registrar;
-//   - after each selection update (its call in the game mode's tick is redirected): the slot block on
-//     change (target keys, rows, latches, pending) and, while player 2 is in, every 0.5 s:
+//   - after each selection update and player 2's pass: the slot block on change (target keys, rows, latches,
+//     pending) and, while player 2 is in, every 0.5 s:
 //       - a census of the points within 20 m of either player, logged on change (key, owner, presets,
 //         slot, kind, flags, whether it is a WorldItem, the distance to each player);
 //       - a dry run of the game's own candidate query around player 2's member into a mod-owned array
 //         (writes nothing else), its keys logged on change;
-//   - each slot execution (the slot's key, the leader, the primary controller, whether a WorldItem took it);
-//   - each WorldItem mark (MarkAcquiredByKey: key, result, which caller) and grant (AcquireEntry: key, the
-//     primary controller the rumble goes to).
+//   - each slot execution (its own hook: the slot's key, the leader, the primary controller, whether a WorldItem took
+//     it);
+//   - each WorldItem mark (key, result, which caller, whether in player 2's pass) and grant (key, the primary
+//     controller the rumble goes to, each controller's force-feedback effects around it).
 // Pad 2's FieldAction presses are logged by player_two/pad_buttons.
 
-#include "platform/image.h"
+#include "dev/dev_switch.h"
+
+namespace lss::platform {
+class GameImage;
+}
 
 namespace lss::player_two::interact_watch {
 
-/// Installs the five pass-through hooks, each only if its code is what the research read (logged).
+#if LSS_DEV
+
+/// Installs the two pass-through hooks (each only if its code is what the research read) and the pass's observer.
+/// After field_pickup. Logged.
 void Install(const platform::GameImage& image) noexcept;
+
+#else
+
+inline void Install(const platform::GameImage&) noexcept {}
+
+#endif
 
 }  // namespace lss::player_two::interact_watch
