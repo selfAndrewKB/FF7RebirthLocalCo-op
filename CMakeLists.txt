@@ -297,6 +297,7 @@ lss_test(seqlock)
 lss_test(listener_choice)
 lss_test(rumble_rules)
 lss_test(ride_rules)
+lss_test(hud_rules)
 
 get_property(LSS_TEST_TARGETS GLOBAL PROPERTY LSS_TEST_TARGETS)
 add_custom_target(lss_tests DEPENDS ${LSS_TEST_TARGETS})

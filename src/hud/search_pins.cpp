@@ -1,6 +1,7 @@
 #include "hud/search_pins.h"
 
 #include "hud/hud_roots.h"
+#include "hud/hud_rules.h"
 #include "hud/widget_opacity.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -290,8 +291,7 @@ void ShowOnly(int player) noexcept
     // The compass: whoever had an active point while it was open; while it closes nobody does (kept); a new one
     // starts as both players'.
     const bool compass = Resolve(manager + kCompass) != nullptr;
-    const unsigned active = (one.active ? 1u : 0u) | (two.active ? 2u : 0u);
-    g_compassOwners       = !compass ? 3u : active != 0 ? active : g_compassOwners;
+    g_compassOwners    = hud_rules::CompassOwners(compass, one.active, two.active, g_compassOwners);
     Logged now{.compass = compass, .compassOwners = g_compassOwners, .activeOne = one.active, .activeTwo = two.active,
                .shootingOne = one.shooting, .shootingTwo = two.shooting};
     std::array<Known, kMaxHidden> seen{};
@@ -301,7 +301,7 @@ void ShowOnly(int player) noexcept
         platform::ForEachSparseElement(manager + kPins, kPinEntry, [&](std::uintptr_t entry) {
             ++now.entries;
             const auto pin   = Field<std::uint64_t>(entry + kPinWidget);
-            int        owner = Holds(one, pin) ? 0 : Holds(two, pin) ? 1 : -1;
+            int        owner = hud_rules::PinOwnerOf(Holds(one, pin), Holds(two, pin));
             for (std::size_t i = 0; owner < 0 && i < g_knownCount; ++i)
             {
                 owner = g_known[i].pin == pin ? g_known[i].owner : -1;  // released, still animating out

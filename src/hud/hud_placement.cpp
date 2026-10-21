@@ -10,6 +10,7 @@
 #include <Unreal/UObjectGlobals.hpp>
 
 #include "hud/hud_addresses.h"
+#include "hud/hud_rules.h"
 #include "hud/user_widgets.h"
 #include "hud/viewport_placement.h"
 #include "platform/frame_watch.h"
@@ -295,7 +296,7 @@ void FollowGameChanges(const Setters& set)
         {
             continue;
         }
-        placed.streak         = g_ticks - placed.lastPlacedTick <= 2 ? placed.streak + 1 : 0;
+        placed.streak         = hud_rules::StreakAfter(g_ticks, placed.lastPlacedTick, placed.streak);
         placed.lastPlacedTick = g_ticks;
         if (placed.streak >= kMaxStreak)
         {
@@ -341,11 +342,13 @@ void RestoreAll(const Setters& set)
             platform::Log(L"HUD placement: {} was set by the game {} time(s) during the split; each placed again",
                           placed.placement->className, placed.followed);
         }
-        if (!placed.managed || placed.applied == placed.original || !Alive(placed))
+        const auto verdict = hud_rules::RestoreVerdict(placed.managed, placed.applied == placed.original, Alive(placed),
+                                                       [&] { return ReadLayout(placed.widget) == placed.applied; });
+        if (verdict == hud_rules::Restore::Skip)
         {
             continue;  // never changed, or gone
         }
-        if (ReadLayout(placed.widget) != placed.applied)
+        if (verdict == hud_rules::Restore::GamesOwn)
         {
             // The game set it after the last tick's check: that layout is the game's own.
             platform::Log(L"HUD placement: {} was set by the game since; left with the game's layout",

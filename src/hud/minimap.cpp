@@ -7,6 +7,7 @@
 
 #include "hud/entry_filter_code.h"
 #include "hud/hud_addresses.h"
+#include "hud/hud_rules.h"
 #include "hud/label_relayouts.h"
 #include "hud/minimap_icons.h"
 #include "hud/menu_buffers.h"
@@ -319,12 +320,14 @@ bool ShouldUnload(const void* piece, const float* centre) noexcept
     std::memcpy(g_pieceCentre[run], centre, sizeof(g_pieceCentre[run]));
     g_pieceCentreKnown[run] = true;
     ++g_pieces[run].asked;
-    if (!drop || !g_pieceCentreKnown[other])
+    const auto verdict = hud_rules::UnloadVerdict(drop, g_pieceCentreKnown[other],
+                                                  [&] { return original(piece, g_pieceCentre[other]); });
+    if (verdict == hud_rules::Unload::GamesOwn)
     {
         g_pieces[run].dropped += drop ? 1 : 0;
         return drop;
     }
-    if (!original(piece, g_pieceCentre[other]))
+    if (verdict == hud_rules::Unload::KeptForOther)
     {
         ++g_pieces[run].keptForOther;
         if (!g_loggedFirstKeep)

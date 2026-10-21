@@ -1,5 +1,6 @@
 #include "hud/target_views.h"
 
+#include "hud/hud_rules.h"
 #include "hud/widget_opacity.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
@@ -409,13 +410,12 @@ void FindOtherGauges(std::uintptr_t system)
     }
     platform::ForEachSparseElement(manager + kEntries, kElement, [&](std::uintptr_t entry) {
         ++g_entryCount;
-        const auto source   = Field<std::uintptr_t>(entry);
-        const bool onlyOne  = Contains(one, source) && !Contains(mine, source);
-        const bool onlyTwo  = Contains(mine, source) && !Contains(one, source);
-        if ((onlyOne || onlyTwo) && !Shared(source, manager))
+        const auto source = Field<std::uintptr_t>(entry);
+        const int  pass   = hud_rules::OtherGaugePass(Contains(one, source), Contains(mine, source));
+        if (pass >= 0 && !Shared(source, manager))
         {
             // Player 2's pass takes out player 1's only; player 1's pass player 2's only.
-            g_otherGauges[onlyOne ? 1 : 0].push_back(Field<std::uint64_t>(entry + kEntryWidget));
+            g_otherGauges[pass].push_back(Field<std::uint64_t>(entry + kEntryWidget));
         }
         return true;
     });

@@ -1,5 +1,6 @@
 #include "hud/marker_timers.h"
 
+#include "hud/hud_rules.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -23,17 +24,9 @@ constexpr std::uint32_t  kElement     = 0x30;
 constexpr std::uint32_t  kTimer       = 0x14;
 constexpr int            kMaxLines    = 40;
 
-struct Timer
-{
-    std::uint64_t key = 0;  // the element's FWeakObjectPtr, as stored
-    float         t   = 0.0f;
-};
-
 // Game thread.
-std::uintptr_t     g_endUISystem = 0;
-std::vector<Timer> g_playerOne;  // set aside during player 2's run
-std::vector<Timer> g_playerTwo;  // player 2's own, between frames
-std::vector<Timer> g_seen;       // scratch, reused
+std::uintptr_t       g_endUISystem = 0;
+hud_rules::TimerSwap g_timers;  // player 1's set aside during player 2's run; player 2's own between frames
 int                g_lines = 0;
 
 template <class T>
@@ -61,12 +54,6 @@ void ForEachElement(Visit&& visit)  // may throw what `visit` throws
     });
 }
 
-const Timer* Find(const std::vector<Timer>& timers, std::uint64_t key) noexcept
-{
-    const auto found = std::find_if(timers.begin(), timers.end(), [key](const Timer& timer) { return timer.key == key; });
-    return found != timers.end() ? &*found : nullptr;
-}
-
 void Write(std::uintptr_t element, float t) noexcept
 {
     platform::WriteGuarded(reinterpret_cast<void*>(element + kTimer), &t, sizeof(t));
@@ -85,18 +72,16 @@ void SwapIn() noexcept
 {
     try
     {
-        g_playerOne.clear();
+        g_timers.BeginIn();
         ForEachElement([](std::uintptr_t element, std::uint64_t key) {
             float mine = 0.0f;
             Read(element + kTimer, mine);
-            g_playerOne.push_back({key, mine});
-            const Timer* theirs = Find(g_playerTwo, key);
-            Write(element, theirs != nullptr ? theirs->t : 0.0f);
+            Write(element, g_timers.In(key, mine));
         });
     }
     catch (...)  // only the vectors allocate: player 1's timers are then left in place
     {
-        g_playerOne.clear();
+        g_timers.Abandon();
     }
 }
 
@@ -104,36 +89,34 @@ void SwapOut() noexcept
 {
     try
     {
-        g_seen.clear();
+        g_timers.BeginOut();
         int pinned = 0;
         ForEachElement([&pinned](std::uintptr_t element, std::uint64_t key) {
             float theirs = 0.0f;
             Read(element + kTimer, theirs);
-            g_seen.push_back({key, theirs});
-            if (const Timer* mine = Find(g_playerOne, key); mine != nullptr)
+            if (const auto mine = g_timers.Out(key, theirs); mine)
             {
-                Write(element, mine->t);  // an element new in player 2's run keeps what it has
-                pinned += theirs != mine->t;
+                Write(element, *mine);  // an element new in player 2's run keeps what it has
+                pinned += theirs != *mine;
             }
         });
-        g_playerTwo.swap(g_seen);  // player 2's own; arrows no longer in the list are dropped
+        g_timers.EndOut();  // player 2's own; arrows no longer in the list are dropped
         if (pinned > 0 && g_lines < kMaxLines && platform::Enabled(platform::Level::Debug))
         {
             ++g_lines;
             platform::LogDebug(L"marker timers: {} of {} arrows have their own timer in player 2's view", pinned,
-                          g_playerTwo.size());
+                          g_timers.TwoCount());
         }
     }
     catch (...)
     {
     }
-    g_playerOne.clear();
+    g_timers.Abandon();  // player 1's are back in place, or were never set aside
 }
 
 void Forget() noexcept
 {
-    g_playerOne.clear();
-    g_playerTwo.clear();
+    g_timers.Forget();
 }
 
 }  // namespace lss::hud::marker_timers

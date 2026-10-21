@@ -1,6 +1,7 @@
 #include "hud/enemy_gauges.h"
 
 #include "hud/enemy_gauges_code.h"
+#include "hud/hud_rules.h"
 #include "hud/target_views.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
@@ -496,8 +497,8 @@ bool ReplayPlayerOne(std::uintptr_t manager, int& replayed, int& targeted)
             return false;
         }
         const auto source = Field<std::uintptr_t>(entry);
-        const bool rule   = (source != 0 && (source == one[0] || source == one[1])) ||
-                          (placed->targeted != 0 && placed->skipLeaderClamp != 0) || capture.forced != 0;
+        const bool rule   = hud_rules::PlayerOneTargetRule(source, one[0], one[1], placed->targeted != 0,
+                                                           placed->skipLeaderClamp != 0, capture.forced != 0);
         mismatches += rule != (placed->targeted != 0) ? 1 : 0;
         ++replayed;
         targeted += placed->targeted;
@@ -537,13 +538,15 @@ bool ReplayPlayerTwo(std::uintptr_t manager, int& replayed, int& targeted)
         }
         const Capture capture = Captured(p);
         const Key     key{Field<std::uintptr_t>(entry), Field<std::uintptr_t>(entry + 8)};
-        const bool    own     = key.source != 0 && key.source == two[0];
-        const bool    main    = key.source != 0 && key.source == two[1];
-        const bool    caseC   = placed->targeted != 0 && placed->skipLeaderClamp != 0;
-        const bool    target  = own || main || caseC || capture.forced != 0;
+        const auto    gauge   = hud_rules::ClassifyGauge(key.source, two[0], two[1], placed->targeted != 0,
+                                                         placed->skipLeaderClamp != 0, capture.forced != 0);
+        const bool    own     = gauge.own;
+        const bool    main    = gauge.main;
+        const bool    caseC   = gauge.caseC;
+        const bool    target  = gauge.target;
         const float   half    = !target ? 0.0f : placed->targeted != 0 ? placed->halfSize : HalfSize(key.source);
         {
-            const player_two::leader_scope::LeaderScope leader(target && !caseC ? memberWeak : 0);
+            const player_two::leader_scope::LeaderScope leader(gauge.leaderScope ? memberWeak : 0);
             if (!PlaceGuarded(manager, widget, target, placed->location, half, caseC ? 1 : 0, entry))
             {
                 ok = false;
@@ -553,7 +556,7 @@ bool ReplayPlayerTwo(std::uintptr_t manager, int& replayed, int& targeted)
         PlayerTwoOffset& offset = OffsetFor(key, p, seed);
         const float      before = offset.y;
         const float      theirs = Field<float>(p + kYOffset);
-        if ((target || AnyFlag(capture)) && !StepGuarded(widget, p, offset.y, own ? 2 : 1))
+        if ((target || AnyFlag(capture)) && !StepGuarded(widget, p, offset.y, gauge.steps))
         {
             ok = false;
             return false;
