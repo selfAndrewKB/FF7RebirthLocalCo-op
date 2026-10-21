@@ -286,7 +286,7 @@ bool           g_ready       = false;
 using Kind = platform::ByteContext::Kind;
 
 // Game thread.
-std::array<std::byte, kCopySize>               g_copy{};      // player 2's ranges (player 1's while swapped in)
+platform::ByteStore<kRanges.size(), kCopySize> g_copy;        // player 2's ranges: five Exchange values (byte_scope.h)
 void*                                          g_copyOf  = nullptr;  // the manager the copy belongs to
 bool                                           g_inPass  = false;
 bool                                           g_broken  = false;
@@ -358,46 +358,63 @@ std::wstring Name(std::uint64_t name)
     return name == 0 ? std::wstring(L"-") : players::unreal::NameText(name);
 }
 
-/// Where a manager offset sits in the copy (only offsets inside kRanges).
-constexpr std::size_t CopyIndex(std::uint32_t offset) noexcept
+/// Where a manager offset sits in the copy (only offsets inside kRanges), or null without a copy.
+std::uint8_t* CopyAt(std::uint32_t offset) noexcept
 {
-    std::size_t at = 0;
-    for (const Range& range : kRanges)
+    for (std::size_t i = 0; i < kRanges.size(); ++i)
     {
+        const Range& range = kRanges[i];
         if (offset >= range.offset && offset < range.offset + range.size)
         {
-            return at + (offset - range.offset);
+            const auto value = g_copy.Value(i);
+            return value.empty() ? nullptr : value.data() + (offset - range.offset);
         }
-        at += range.size;
     }
-    return kCopySize;
+    return nullptr;
 }
 
 template <class T>
 void PutInCopy(std::uint32_t offset, T value) noexcept
 {
     static_assert(std::is_trivially_copyable_v<T>);
-    std::memcpy(g_copy.data() + CopyIndex(offset), &value, sizeof(value));
+    if (auto* at = CopyAt(offset))
+    {
+        std::memcpy(at, &value, sizeof(value));
+    }
 }
 
 template <class T>
 T TakeFromCopy(std::uint32_t offset) noexcept
 {
     T value{};
-    std::memcpy(&value, g_copy.data() + CopyIndex(offset), sizeof(value));
+    if (const auto* at = CopyAt(offset))
+    {
+        std::memcpy(&value, at, sizeof(value));
+    }
     return value;
 }
 
-/// Exchanges the manager's per-player ranges with the copy (the same call puts them back).
-void Exchange(void* mgr) noexcept
+/// Player 2's ranges into the manager, player 1's saved (the copy belongs to `mgr`). False, nothing swapped, if a
+/// range could not be read or written.
+bool SwapIn(void* mgr) noexcept
 {
-    auto*       live = static_cast<std::byte*>(mgr);
-    std::size_t at   = 0;
-    for (const Range& range : kRanges)
+    const auto live = reinterpret_cast<std::uintptr_t>(mgr);
+    for (std::size_t i = 0; i < kRanges.size(); ++i)
     {
-        std::swap_ranges(live + range.offset, live + range.offset + range.size, g_copy.data() + at);
-        at += range.size;
+        if (!g_copy.Retarget(i, live + kRanges[i].offset))
+        {
+            return false;
+        }
     }
+    return g_copy.Open();
+}
+
+/// Player 1's ranges back; what the game left in them is player 2's copy now. False if a range faulted on the way
+/// (player 1's block or player 2's copy may be wrong).
+bool SwapOut() noexcept
+{
+    g_copy.Close();
+    return !g_copy.Faulted();
 }
 
 class SharedLock
@@ -517,15 +534,18 @@ bool OnCopy(void* mgr, ResetFn reset, std::uint8_t flagSeen) noexcept
 {
     auto* flag = static_cast<std::uint8_t*>(mgr) + kFieldEnterFlag;
     const std::uint8_t after = *flag;
-    Exchange(mgr);
+    if (!SwapIn(mgr))
+    {
+        return false;
+    }
     Before(mgr, nullptr, nullptr, false);
     *flag         = flagSeen;
     const bool ok = platform::CallGuarded(reset, mgr);
     *flag         = after;
     After(mgr);
-    Exchange(mgr);
+    const bool out = SwapOut();
     DestroyDoomed();
-    return ok;
+    return ok && out;
 }
 
 void Break(const wchar_t* what) noexcept
@@ -547,7 +567,14 @@ void Break(const wchar_t* what) noexcept
 /// Player 2's copy as the game's constructor and field-enter reset leave a block.
 void FreshCopy(void* mgr) noexcept
 {
-    g_copy.fill(std::byte{0});
+    // The five ranges at this manager, zeroed (SwapIn retargets them: a later manager gets a fresh copy anyway).
+    const auto                                            live = reinterpret_cast<std::uintptr_t>(mgr);
+    std::array<platform::ByteContext::Range, kRanges.size()> ranges{};
+    for (std::size_t i = 0; i < kRanges.size(); ++i)
+    {
+        ranges[i] = {live + kRanges[i].offset, kRanges[i].size, Kind::Exchange};
+    }
+    g_copy.Define(ranges);
     PutInCopy<std::int32_t>(kCandidateMax, 64);
     PutInCopy<std::int32_t>(kTraceMapA, 128);
     PutInCopy<std::int32_t>(kTraceMapB, -1);
@@ -1125,19 +1152,25 @@ void Pass(void* mgr, float dt) noexcept
     const auto* root  = Root();
     const auto* items  = PointerAt(root, kRootWorldItems);
     const auto* chests = PointerAt(root, kRootChests);
+    if (!SwapIn(mgr))
+    {
+        ++g_counts.skips[kSkipScopes];
+        return;
+    }
     ++g_counts.passes;
     g_inPass = true;
-    Exchange(mgr);
     Before(mgr, items, chests, true);
     const bool input  = InputStep(mgr, root, dt);
     const bool update = input && platform::CallGuarded(g_update, mgr, dt);
     After(mgr);
-    Exchange(mgr);
-    g_inPass = false;
+    const bool out = SwapOut();
+    g_inPass       = false;
     DestroyDoomed();
-    if (!input || !update)
+    if (!input || !update || !out)
     {
-        Break(input ? L"player 2's selection update" : L"player 2's prompt input step");
+        Break(!input    ? L"player 2's prompt input step"
+              : !update ? L"player 2's selection update"
+                        : L"putting player 1's field-action ranges back");
         return;
     }
     LogTargets();
