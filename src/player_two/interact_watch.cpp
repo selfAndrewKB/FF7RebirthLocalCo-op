@@ -9,6 +9,7 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/verified_code.h"
 #include "player_two/describe.h"
 #include "player_two/field_pickup.h"
 #include "player_two/generation.h"
@@ -93,12 +94,14 @@ using facts::kFieldActionEntryKeyBack;
 
 // The hooked functions (§10.A). Entry redirects replace the first instruction (5 bytes); the rest of the
 // listed bytes are checked too.
-constexpr std::uintptr_t kAddPoint        = 0x1411BDE60;  // void(mgr, talk, key*, owner*, u64*, loc*, rot*, preset*, presetPlayer*, float, kind, u8, u8, FName, FName)
 constexpr std::uint8_t   kAddPointBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x4C, 0x89, 0x4C,
                                              0x24, 0x20, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41};
-constexpr std::uintptr_t kExecuteSlot        = 0x1414A90E4;  // void(mgr, u8 slot)
+// void(mgr, talk, key*, owner*, u64*, loc*, rot*, preset*, presetPlayer*, float, kind, u8, u8, FName, FName)
+constexpr platform::FunctionFact kAddPoint{L"FieldActionMgr's AddPoint", 0x1411BDE60, kAddPointBytes};
 constexpr std::uint8_t   kExecuteSlotBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x55, 0x56, 0x57,
                                                 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57};
+// void(mgr, u8 slot)
+constexpr platform::FunctionFact kExecuteSlot{L"FieldActionMgr's ExecuteSlot", 0x1414A90E4, kExecuteSlotBytes};
 constexpr std::size_t    kFirstInstruction = 5;
 // 1.005 (RE-1005-field-2.md §5): AddPoint's entry is at 0x140FED95C, %16 = 12, so its first instruction crosses a
 // 16-byte block. Its second (mov [rsp+20h], r9 at %16 = 1) takes the redirect instead: the first only stores rbx into
@@ -110,8 +113,8 @@ constexpr std::size_t    kSecondInstruction = 5;
 constexpr std::uintptr_t kScooterKey = 0x1491E6D10;
 constexpr std::uintptr_t kMarkFromListener = 0x1414A90AD;  // the WorldItem key listener's call returns here
 // The candidate query, called read-only for the dry run (§10.C): void(octree, node, context, box*, cap*).
-constexpr std::uintptr_t kQuery        = 0x1422BA490;
 constexpr std::uint8_t   kQueryBytes[] = {0x41, 0x55, 0x41, 0x56, 0xB8, 0x28, 0x01, 0x00, 0x00};
+constexpr platform::FunctionFact kQuery{L"the octree's candidate query", 0x1422BA490, kQueryBytes};
 constexpr float          kQueryExtent  = 10.0f;  // as the update's call (cm)
 
 constexpr float     kNearCm         = 2000.0f;  // the census: points within 20 m of either player
@@ -702,28 +705,28 @@ void Install(const platform::GameImage& image) noexcept
         g_scooterKey = reinterpret_cast<const std::uint64_t*>(*scooterKey);
     }
 
-    const auto entry = [&](platform::EntryRedirect& redirect, std::uintptr_t ida, std::span<const std::uint8_t> bytes,
+    const auto entry = [&](platform::EntryRedirect& redirect, const platform::FunctionFact& fact,
                            std::uintptr_t replacement) {
-        const auto at = image.Rebase(ida);
-        return at && image.BytesMatch(ida, bytes) &&
-               redirect.Install(*at, image.EntryInstruction(ida, bytes.first(kFirstInstruction)), replacement);
+        const auto at    = platform::FindFunction(image, fact);
+        const auto first = fact.entryBytes.first(kFirstInstruction);
+        return at && redirect.Install(*at, image.EntryInstruction(fact.address, first), replacement);
     };
     bool add = false;
     if (platform::RunningBuild() == platform::BuildIndex::V1005)
     {
-        const std::span<const std::uint8_t> bytes(kAddPointBytes);
-        const auto                          at = image.Rebase(kAddPoint);
-        add = at && image.BytesMatch(kAddPoint, bytes) &&
+        const auto bytes = kAddPoint.entryBytes;
+        const auto at    = platform::FindFunction(image, kAddPoint);
+        add = at &&
               g_addPoint.InstallAtSecondInstruction(*at, bytes.first(kFirstInstruction),
                                                     bytes.subspan(kFirstInstruction, kSecondInstruction),
                                                     reinterpret_cast<std::uintptr_t>(&AddPoint));
     }
     else
     {
-        add = entry(g_addPoint, kAddPoint, kAddPointBytes, reinterpret_cast<std::uintptr_t>(&AddPoint));
+        add = entry(g_addPoint, kAddPoint, reinterpret_cast<std::uintptr_t>(&AddPoint));
     }
-    const bool execute = entry(g_executeSlot, kExecuteSlot, kExecuteSlotBytes, reinterpret_cast<std::uintptr_t>(&ExecuteSlot));
-    if (const auto query = image.Rebase(kQuery); query && image.BytesMatch(kQuery, kQueryBytes))
+    const bool execute = entry(g_executeSlot, kExecuteSlot, reinterpret_cast<std::uintptr_t>(&ExecuteSlot));
+    if (const auto query = platform::FindFunction(image, kQuery))
     {
         g_query = reinterpret_cast<QueryFn>(*query);
     }

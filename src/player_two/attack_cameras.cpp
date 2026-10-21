@@ -9,6 +9,7 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/verified_code.h"
 #include "player_two/describe.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
@@ -59,8 +60,8 @@ constexpr std::uint32_t                     kCameraTarget = 0xA68;
 // bGameCameraCutThisFrame (PCM+0x2C10 bit 10) on GetEndPlayerCameraManager()'s and tells the anim world manager.
 constexpr std::uintptr_t kCutCall       = 0x140C42F23;
 constexpr std::uintptr_t kFirstPcCut    = 0x140F9A40C;
-constexpr std::uintptr_t kPrimaryCut    = 0x1417ED43C;
 constexpr std::uint8_t   kPrimaryCutBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8};  // mov eax, 28h; call __alloca_probe
+constexpr platform::FunctionFact kPrimaryCut{L"the primary camera manager's cut", 0x1417ED43C, kPrimaryCutBytes};
 
 constexpr auto kStatusEvery = std::chrono::seconds(10);
 
@@ -241,9 +242,9 @@ void Install(const platform::GameImage& image) noexcept
 
     const auto site    = image.Rebase(kCutCall, 5);
     const auto firstPc = image.Rebase(kFirstPcCut);
-    const auto primary = image.Rebase(kPrimaryCut);
+    const auto primary = platform::FindFunction(image, kPrimaryCut);
     bool       cut     = false;
-    if (site && firstPc && primary && image.BytesMatch(kPrimaryCut, kPrimaryCutBytes))
+    if (site && firstPc && primary)
     {
         g_primaryCut = reinterpret_cast<CutFn>(*primary);
         cut          = g_cutCall.Install(*site, *firstPc, reinterpret_cast<std::uintptr_t>(&Cut));

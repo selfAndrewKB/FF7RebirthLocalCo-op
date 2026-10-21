@@ -158,10 +158,10 @@ void Setter(std::uint8_t layer, std::uint8_t value) noexcept
 /// Places the write log on the setter's entry; what the install line says of it.
 const wchar_t* InstallWriteLog(const platform::GameImage& image) noexcept
 {
-    const std::span<const std::uint8_t> setterBytes(kSetterBytes);
-    const auto                          at = image.Rebase(kSetter.address);
-    const bool logged = at && image.BytesMatch(kSetter.address, setterBytes) &&
-                        g_setter.Install(*at, image.EntryInstruction(kSetter.address, setterBytes.first(kSetterFirst)),
+    const auto at     = platform::FindFunction(image, kSetter);
+    const auto first  = kSetter.entryBytes.first(kSetterFirst);
+    const bool logged = at &&
+                        g_setter.Install(*at, image.EntryInstruction(kSetter.address, first),
                                          reinterpret_cast<std::uintptr_t>(&Setter));
     return logged ? L"on (Debug)" : L"unavailable in this build (the setter's entry crosses a block)";
 }

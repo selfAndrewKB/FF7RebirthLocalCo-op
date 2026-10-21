@@ -5,6 +5,7 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
@@ -42,8 +43,8 @@ constexpr std::uintptr_t kShakeEnd       = 0x1418AFCE8;  // UEndBattleCameraShak
 // action key (char+0x638 -> attack state +0xE8/+0xF0) the same and not null.
 constexpr std::uintptr_t kStealBeginSlot = 0x145886240;
 constexpr std::uintptr_t kStealBegin     = 0x141812908;
-constexpr std::uintptr_t kSharesKey      = 0x141812A08;
 constexpr std::uint8_t   kSharesKeyBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x40, 0x00, 0x00, 0x00, 0xE8};
+constexpr platform::FunctionFact kSharesKey{L"the two characters' action keys shared", 0x141812A08, kSharesKeyBytes};
 
 constexpr std::uint32_t kComponentOwner = 0xA0;  // UActorComponent::OwnerPrivate (the mesh's character)
 constexpr auto          kStatusEvery    = std::chrono::seconds(10);
@@ -321,9 +322,9 @@ void Install(const platform::GameImage& image) noexcept
         g_shakeEndSlot.Restore();
         g_shakeBeginSlot.Restore();
     }
-    const auto shares = image.Rebase(kSharesKey);
+    const auto shares = platform::FindFunction(image, kSharesKey);
     bool       steal  = false;
-    if (shares && image.BytesMatch(kSharesKey, kSharesKeyBytes))
+    if (shares)
     {
         g_sharesKey = reinterpret_cast<SharesKeyFn>(*shares);
         steal = g_stealSlot.Replace(image, kStealBeginSlot, kStealBegin, reinterpret_cast<std::uintptr_t>(&StealBegin));

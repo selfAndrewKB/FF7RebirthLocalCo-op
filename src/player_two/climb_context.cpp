@@ -582,8 +582,8 @@ std::wstring PlaceMoves(const platform::GameImage& image, bool holdSelect, std::
 bool Entry(const platform::GameImage& image, platform::EntryRedirect& redirect, const platform::FunctionFact& fact,
            std::uintptr_t replacement) noexcept
 {
-    const auto at = image.Rebase(fact.address);
-    return at && image.BytesMatch(fact.address, fact.entryBytes) &&
+    const auto at = platform::FindFunction(image, fact);
+    return at &&
            redirect.Install(*at, image.EntryInstruction(fact.address, fact.entryBytes.first(kFirst)), replacement);
 }
 

@@ -57,27 +57,29 @@ constexpr std::uintptr_t kReadyCall = 0x140A538C6;  // in EndCMC_ConstrainMoveDe
 // The caller's frame around the call: `lea rdx, [rsp+0B8h]` (the location it asks about, the updated
 // component's world location), and after the call, on false, `vmovups [rsp+90h], xmm0` storing zero
 // into the move delta. So the move being refused lies 0x28 bytes below the location passed.
-constexpr std::uintptr_t kLocationArgument  = 0x140A53846;
 constexpr std::uint8_t   kLocationArgumentBytes[] = {0x48, 0x8D, 0x94, 0x24, 0xB8, 0x00, 0x00, 0x00};
-constexpr std::uintptr_t kAfterCall         = 0x140A538CB;
+constexpr platform::FunctionFact kLocationArgument{L"the move refusal's location argument", 0x140A53846,
+                                                   kLocationArgumentBytes};
 constexpr std::uint8_t   kAfterCallBytes[] = {0x84, 0xC0, 0x75, 0x2D, 0xC5, 0xFA, 0x11, 0xB4, 0x24, 0x80, 0x00, 0x00,
                                               0x00, 0xC5, 0xFA, 0x11, 0xB4, 0x24, 0x84, 0x00, 0x00, 0x00, 0xC5, 0xFA,
                                               0x11, 0xB4, 0x24, 0x88, 0x00, 0x00, 0x00, 0xC5, 0xF8, 0x10, 0x84, 0x24,
                                               0x80, 0x00, 0x00, 0x00, 0xC5, 0xF8, 0x11, 0x84, 0x24, 0x90, 0x00, 0x00,
                                               0x00};
+constexpr platform::FunctionFact kAfterCall{L"after the move refusal's call", 0x140A538CB, kAfterCallBytes};
 constexpr std::ptrdiff_t kMoveBelowLocation = 0xB8 - 0x90;
 
 // The falling step's call (RE-p2-party-leash.md §6c): EndCMC_NewFallVelocity_WorldReadyFreeze asks the same
 // question with the same arguments when CMC+0xB6B is set (`cmp byte [rcx+0B6Bh], 0` before it; `lea rdx,
 // [rbp-51h]`, a copy of the updated component's world location) and on false returns a zero velocity.
 constexpr std::uintptr_t kFallCall          = 0x140F22706;
-constexpr std::uintptr_t kFallGate          = 0x140F22659;
 constexpr std::uint8_t   kFallGateBytes[]   = {0x80, 0xB9, 0x6B, 0x0B, 0x00, 0x00, 0x00};
-constexpr std::uintptr_t kFallLocation      = 0x140F226BD;
+constexpr platform::FunctionFact kFallGate{L"the falling step's CMC+0xB6B gate", 0x140F22659, kFallGateBytes};
 constexpr std::uint8_t   kFallLocationBytes[] = {0x48, 0x8D, 0x55, 0xAF};
-constexpr std::uintptr_t kFallAfterCall     = 0x140F2270B;
+constexpr platform::FunctionFact kFallLocation{L"the falling step's location argument", 0x140F226BD,
+                                               kFallLocationBytes};
 constexpr std::uint8_t   kFallAfterCallBytes[] = {0x84, 0xC0, 0x75, 0x13, 0x48, 0xC7, 0x03, 0x00, 0x00,
                                                   0x00, 0x00, 0xC7, 0x43, 0x08, 0x00, 0x00, 0x00, 0x00};
+constexpr platform::FunctionFact kFallAfterCall{L"after the falling step's call", 0x140F2270B, kFallAfterCallBytes};
 // 1.005 (RE-1005-field-2.md §2): the falling step's call is at 0x140C5FAEE, %16 = 14, so it crosses a 16-byte block,
 // and characters move on worker threads too, so no one thread can change it (platform/call_redirect.h). There the
 // falls are heard at the entry of EndWorld_IsReadyAt instead (its first instruction `mov [rsp+10h], rdx`, 5 bytes at
@@ -91,14 +93,14 @@ constexpr std::size_t kReadyAtFirstInstruction = 5;
 // The next pawn tick either return-warps her to her last safe spot or, standing on it, parks her: stop reason 5 in
 // her movement owner's stop mask, which forces MOVE_None, so neither call above is asked any more.
 constexpr std::uintptr_t kParkCall            = 0x140DECB06;
-constexpr std::uintptr_t kParkNavFlag         = 0x140DECAE9;
 constexpr std::uint8_t   kParkNavFlagBytes[]  = {0x45, 0x33, 0xC0};
-constexpr std::uintptr_t kParkLocation        = 0x140DECAF1;
+constexpr platform::FunctionFact kParkNavFlag{L"the park's nav-flag argument", 0x140DECAE9, kParkNavFlagBytes};
 constexpr std::uint8_t   kParkLocationBytes[] = {0x48, 0x8D, 0x54, 0x24, 0x50, 0xC6, 0x44, 0x24, 0x40,
                                                  0x00, 0x48, 0x8D, 0x4C, 0x24, 0x40};
-constexpr std::uintptr_t kParkAfterCall       = 0x140DECB0B;
+constexpr platform::FunctionFact kParkLocation{L"the park's location argument", 0x140DECAF1, kParkLocationBytes};
 constexpr std::uint8_t   kParkAfterCallBytes[] = {0x84, 0xC0, 0x75, 0x09, 0xC6, 0x43, 0x70,
                                                   0x01, 0xE9, 0xF1, 0x02, 0x00, 0x00};
+constexpr platform::FunctionFact kParkAfterCall{L"after the park's call", 0x140DECB0B, kParkAfterCallBytes};
 // The character's movement owner (a native SE object) and its 32-bit stop-reason mask; reason 5 is the
 // safe-transform park (read live: 0x20 on the parked member, 0 on player 1).
 // 1.005: +0x1418 (End character native field +0x20): the char interface (pawn+0x4B8) accessor `cmp qword
@@ -639,8 +641,7 @@ bool Install(const platform::GameImage& image) noexcept
     const auto site    = image.Rebase(kReadyCall, 5);
     const auto manager = image.Rebase(kNavStreamManagerGlobal, sizeof(void*));
     const auto vtable  = image.Rebase(kFollowStatePlayerVTable);
-    const bool frame   = image.BytesMatch(kLocationArgument, kLocationArgumentBytes) &&
-                       image.BytesMatch(kAfterCall, kAfterCallBytes);
+    const bool frame   = platform::FindFunction(image, kLocationArgument) && platform::FindFunction(image, kAfterCall);
     if (!readyAt || !site || !manager || !vtable || !frame ||
         !g_readyCall.Install(*site, *readyAt, reinterpret_cast<std::uintptr_t>(&ReadyAt)))
     {
@@ -652,9 +653,9 @@ bool Install(const platform::GameImage& image) noexcept
     g_followStateVTable = *vtable;
     g_installed         = true;
     const auto fallSite  = image.Rebase(kFallCall, 5);
-    const bool fallFrame = fallSite && image.BytesMatch(kFallGate, kFallGateBytes) &&
-                           image.BytesMatch(kFallLocation, kFallLocationBytes) &&
-                           image.BytesMatch(kFallAfterCall, kFallAfterCallBytes);
+    const bool fallFrame = fallSite && platform::FindFunction(image, kFallGate) &&
+                           platform::FindFunction(image, kFallLocation) &&
+                           platform::FindFunction(image, kFallAfterCall);
     bool falls = false;
     if (platform::RunningBuild() == platform::BuildIndex::V1005)
     {
@@ -673,9 +674,8 @@ bool Install(const platform::GameImage& image) noexcept
         falls = fallFrame && g_fallCall.Install(*fallSite, *readyAt, reinterpret_cast<std::uintptr_t>(&FallReadyAt));
     }
     const auto parkSite = image.Rebase(kParkCall, 5);
-    const bool parks    = parkSite && image.BytesMatch(kParkNavFlag, kParkNavFlagBytes) &&
-                       image.BytesMatch(kParkLocation, kParkLocationBytes) &&
-                       image.BytesMatch(kParkAfterCall, kParkAfterCallBytes) &&
+    const bool parks    = parkSite && platform::FindFunction(image, kParkNavFlag) &&
+                       platform::FindFunction(image, kParkLocation) && platform::FindFunction(image, kParkAfterCall) &&
                        g_parkCall.Install(*parkSite, *readyAt, reinterpret_cast<std::uintptr_t>(&SafeCheckReadyAt));
     platform::Log(L"nav strand: watching the game's refusals of player 2's member's moves{}{} (a strand held {:.1f} s "
                   L"warps her back)",

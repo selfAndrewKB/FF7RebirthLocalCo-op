@@ -7,6 +7,7 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/verified_code.h"
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
 #include "views/player_view_point.h"
@@ -26,9 +27,9 @@ namespace {
 // the modules' ApplyToPose. FinalizePose(op, stick, dt) applies the stick and computes the location from the pose
 // at op+0x40 (checked by disassembly, 2026-10-01).
 constexpr std::uintptr_t kFinalizeCall = 0x140A61C20;
-constexpr std::uintptr_t kFinalizePose = 0x140A9CC5C;
 constexpr std::uint8_t   kFinalizePoseBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8,
                                                  0xC8, 0x22, 0x61, 0x01, 0x48, 0x2B, 0xE0};
+constexpr platform::FunctionFact kFinalizePose{L"the camera operator's FinalizePose", 0x140A9CC5C, kFinalizePoseBytes};
 constexpr std::uint32_t  kPoseAimY        = 0x88;  // op+0x40 pose, +0x48 AimOffset Y (lateral)
 using facts::kCameraManagerBattleOperator;
 constexpr float          kMinRatio = 0.25f, kMaxRatio = 4.0f;  // a ratio outside this is not trusted
@@ -93,8 +94,8 @@ void Finalize(void* op, void* stick, float deltaTime) noexcept
 bool Install(const platform::GameImage& image) noexcept
 {
     const auto site   = image.Rebase(kFinalizeCall, 5);
-    const auto target = image.Rebase(kFinalizePose);
-    g_installed       = site && target && image.BytesMatch(kFinalizePose, kFinalizePoseBytes) &&
+    const auto target = platform::FindFunction(image, kFinalizePose);
+    g_installed       = site && target &&
                   g_call.Install(*site, *target, reinterpret_cast<std::uintptr_t>(&Finalize));
     platform::Log(L"shoulder scale: {}", g_installed ? L"each half's camera shoulder offset scaled to its width (on)"
                                                      : L"UNAVAILABLE (a check failed)");

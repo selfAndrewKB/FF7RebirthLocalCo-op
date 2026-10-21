@@ -11,6 +11,7 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/verified_code.h"
 #include "player_two/attack_cameras.h"
 #include "player_two/describe.h"
 #include "player_two/generation.h"
@@ -34,19 +35,24 @@ using Clock = std::chrono::steady_clock;
 // RE-p2-attack-cameras.md §10.4 (S-ATKCAMLEADER, both builds; every site re-read from both exes).
 // D1: the slot-20 compute's call of CamEntry_IsActive_LeaderKeyed(rcx unused, rdx entry) -> bool (1.005: crosses a block).
 constexpr std::uintptr_t kActiveCall     = 0x140E58FD0;
-constexpr std::uintptr_t kIsActive       = 0x140AEEB7C;
-constexpr std::uintptr_t kUsesTarget     = 0x140AEED2C;  // EndBattleCameraActor_UsesTargetMeshOrActor(cam) -> bool
-constexpr std::uintptr_t kGetTarget      = 0x140AEEEEC;  // EndBattleCameraActor_GetTarget(cam) -> UObject*
-constexpr std::uintptr_t kInvolvesLeader = 0x140AEED90;  // EndBattleCameraActor_ShotInvolvesLeader(cam) -> bool
 constexpr std::uint8_t   kUsesTargetBytes[] = {0x8A, 0x91, 0x80, 0x08, 0x00, 0x00, 0x32, 0xC0};
+// EndBattleCameraActor_UsesTargetMeshOrActor(cam) -> bool
+constexpr platform::FunctionFact kUsesTarget{L"EndBattleCameraActor_UsesTargetMeshOrActor", 0x140AEED2C,
+                                             kUsesTargetBytes};
 constexpr std::uint8_t   kFrameBytes[]      = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C, 0x24, 0x10};
+// EndBattleCameraActor_ShotInvolvesLeader(cam) -> bool
+constexpr platform::FunctionFact kInvolvesLeader{L"EndBattleCameraActor_ShotInvolvesLeader", 0x140AEED90, kFrameBytes};
+// EndBattleCameraActor_GetTarget(cam) -> UObject*
+constexpr platform::FunctionFact kGetTarget{L"EndBattleCameraActor_GetTarget", 0x140AEEEEC, kFrameBytes};
+constexpr platform::FunctionFact kIsActive{L"CamEntry_IsActive_LeaderKeyed", 0x140AEEB7C, kFrameBytes};
 // D2: the calls of EndBattleCameraActor_UpdateFromOperatorPose(cam rcx, float dt xmm1, pose r8) -> byte: per camera in
 // BattleCamSeqEntry_EvaluatePose (1.004: crosses a block) and the seed at play; and the three calls of
 // PartyManager_GetCharacterByPlayerType(u8 lane, u8 type) -> UObject* that read the leader inside it (R1 selector 3,
 // R2 selector 6, R3 the eye's relative rotation).
 constexpr std::uintptr_t                kUpdateCalls[]  = {0x140C427CE, 0x140B6A798};
-constexpr std::uintptr_t                kUpdatePose     = 0x140AEF118;
 constexpr std::uint8_t                  kUpdatePoseBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x20, 0x55, 0x56, 0x57};
+constexpr platform::FunctionFact kUpdatePose{L"EndBattleCameraActor_UpdateFromOperatorPose", 0x140AEF118,
+                                             kUpdatePoseBytes};
 constexpr std::uintptr_t                kLeaderCalls[]  = {0x140AF0EC5, 0x14292F6D9, 0x142AA2995};
 using facts::kCharacterByPlayerType;
 
@@ -360,23 +366,24 @@ void Install(const platform::GameImage& image) noexcept
         const auto live = image.Rebase(address, length);
         return live ? *live : 0;
     };
+    const auto found = [&image](const platform::FunctionFact& fact) {
+        return platform::FindFunction(image, fact).value_or(0);
+    };
     g_sites.active   = at(kActiveCall, 5);
-    g_sites.isActive = at(kIsActive);
-    const auto uses     = at(kUsesTarget);
-    const auto target   = at(kGetTarget);
-    const auto involves = at(kInvolvesLeader);
-    g_sites.d1 = g_sites.active != 0 && g_sites.isActive != 0 && uses != 0 && target != 0 && involves != 0 &&
-                 image.BytesMatch(kIsActive, kFrameBytes) && image.BytesMatch(kUsesTarget, kUsesTargetBytes) &&
-                 image.BytesMatch(kGetTarget, kFrameBytes) && image.BytesMatch(kInvolvesLeader, kFrameBytes);
+    g_sites.isActive = found(kIsActive);
+    const auto uses     = found(kUsesTarget);
+    const auto target   = found(kGetTarget);
+    const auto involves = found(kInvolvesLeader);
+    g_sites.d1 = g_sites.active != 0 && g_sites.isActive != 0 && uses != 0 && target != 0 && involves != 0;
     if (g_sites.d1)
     {
         g_usesTarget     = reinterpret_cast<CameraFn>(uses);
         g_getTarget      = reinterpret_cast<TargetFn>(target);
         g_involvesLeader = reinterpret_cast<CameraFn>(involves);
     }
-    g_sites.updatePose      = at(kUpdatePose);
+    g_sites.updatePose      = found(kUpdatePose);
     g_sites.characterByType = at(kCharacterByPlayerType.address);
-    g_sites.d2 = g_sites.updatePose != 0 && g_sites.characterByType != 0 && image.BytesMatch(kUpdatePose, kUpdatePoseBytes);
+    g_sites.d2              = g_sites.updatePose != 0 && g_sites.characterByType != 0;
     for (std::size_t i = 0; i < std::size(kUpdateCalls); ++i)
     {
         g_sites.update[i] = at(kUpdateCalls[i], 5);

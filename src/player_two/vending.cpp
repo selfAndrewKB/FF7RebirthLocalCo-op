@@ -10,6 +10,7 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/verified_code.h"
 #include "player_two/charapop_facts.h"
 #include "player_two/field_pickup.h"
 #include "player_two/generation.h"
@@ -39,12 +40,16 @@ namespace {
 
 // RE-p2-field-interact.md §15.9 (this build).
 constexpr std::uintptr_t kVendingPreset     = 0x149347278;  // the FName global rpaVendingMachine (the point-side preset)
-constexpr std::uintptr_t kEnd2Key           = 0x1414A8A94;  // FieldActionKeyListener_End2FieldActionActor_CallVt6A0(mgr, &key)
 constexpr std::uint8_t   kEnd2KeyBytes[]    = {0x48, 0x89, 0x5C, 0x24, 0x08};  // mov [rsp+8], rbx
-constexpr std::uintptr_t kCamera            = 0x143550CC4;  // ShopMenu_ActivateShopCamera_TargetOrSlot0Key(FName target, FName preset)
+// FieldActionKeyListener_End2FieldActionActor_CallVt6A0(mgr, &key)
+constexpr platform::FunctionFact kEnd2Key{L"FieldActionKeyListener_End2FieldActionActor_CallVt6A0", 0x1414A8A94,
+                                          kEnd2KeyBytes};
 constexpr std::uint8_t   kCameraBytes[]     = {0x48, 0x89, 0x5C, 0x24, 0x20};  // mov [rsp+20h], rbx
-constexpr std::uintptr_t kCameraOff         = 0x143550C90;  // ShopMenu_DeactivateShopCamera
+// ShopMenu_ActivateShopCamera_TargetOrSlot0Key(FName target, FName preset)
+constexpr platform::FunctionFact kCamera{L"ShopMenu_ActivateShopCamera_TargetOrSlot0Key", 0x143550CC4, kCameraBytes};
 constexpr std::uint8_t   kCameraOffBytes[]  = {0xB8, 0x28, 0x00, 0x00, 0x00};  // mov eax, 28h
+// ShopMenu_DeactivateShopCamera
+constexpr platform::FunctionFact kCameraOff{L"ShopMenu_DeactivateShopCamera", 0x143550C90, kCameraOffBytes};
 // 1.005 (RE-1005-field-2.md §4): the camera's entry is at 0x14327FE5C, %16 = 12, so its first instruction crosses a
 // 16-byte block and cannot take an entry redirect. Its seven callers (the same seven shop paths as in this build, one
 // call each, each inside one block in 1.005) are redirected instead, to the same replacement.
@@ -338,19 +343,20 @@ std::uint64_t CameraOff(std::uint64_t a, std::uint64_t b, std::uint64_t c, std::
     return result;
 }
 
-bool Entry(const platform::GameImage& image, platform::EntryRedirect& redirect, std::uintptr_t address,
-           std::span<const std::uint8_t> bytes, Fn replacement) noexcept
+bool Entry(const platform::GameImage& image, platform::EntryRedirect& redirect, const platform::FunctionFact& fact,
+           Fn replacement) noexcept
 {
-    const auto at = image.Rebase(address);
-    return at && image.BytesMatch(address, bytes) && redirect.Install(*at, image.EntryInstruction(address, bytes), reinterpret_cast<std::uintptr_t>(replacement));
+    const auto at = platform::FindFunction(image, fact);
+    return at && redirect.Install(*at, image.EntryInstruction(fact.address, fact.entryBytes),
+                                  reinterpret_cast<std::uintptr_t>(replacement));
 }
 
 /// 1.005: the shop camera's activation at its seven callers (all or none: a shop path left out would open player 2's
 /// shop as player 1's).
 bool CameraCalls(const platform::GameImage& image) noexcept
 {
-    const auto target = image.Rebase(kCamera);
-    if (!target || !image.BytesMatch(kCamera, kCameraBytes))
+    const auto target = platform::FindFunction(image, kCamera);
+    if (!target)
     {
         return false;
     }
@@ -444,11 +450,11 @@ void Install(const platform::GameImage& image) noexcept
     g_image            = image;
     const auto chadley = image.Rebase(kCameraCalls[kChadleyCall], 5);
     g_chadleyReturn    = chadley ? *chadley + 5 : 0;  // the call is 5 bytes (E8 rel32)
-    const bool presses = g_partyManager != 0 && Entry(image, g_end2Key, kEnd2Key, kEnd2KeyBytes, &End2Key);
+    const bool presses = g_partyManager != 0 && Entry(image, g_end2Key, kEnd2Key, &End2Key);
     const bool cameras = platform::RunningBuild() == platform::BuildIndex::V1005
                              ? CameraCalls(image)
-                             : Entry(image, g_camera, kCamera, kCameraBytes, &Camera);
-    const bool closes  = Entry(image, g_cameraOff, kCameraOff, kCameraOffBytes, &CameraOff);
+                             : Entry(image, g_camera, kCamera, &Camera);
+    const bool closes  = Entry(image, g_cameraOff, kCameraOff, &CameraOff);
     const bool ready   = g_vendingPreset != nullptr && presses && cameras && closes;
     platform::Log(L"vending: {} (presses {}, the shop camera's activation {}, its deactivation {}; Chadley's camera call {})",
                   ready ? L"ready (player 2 uses vending machines through the game's own field action and shop; the pad of "

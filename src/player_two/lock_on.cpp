@@ -89,8 +89,10 @@ constexpr platform::FunctionFact kModuleOn{L"PrimaryPCM_Op2CA8_SlotFlag44", 0x14
 constexpr std::uintptr_t kTickTargetingCalls[] = {0x140C91AA2, 0x140C91CC0};
 constexpr std::uintptr_t kPanelClearedSite     = 0x14295F0A5;  // in the cold chunk of the "cleared" request (the call straddles a block)
 constexpr std::uintptr_t kPanelClearedResume   = 0x14295F0AD;
-constexpr std::uintptr_t kPanelClearedCall     = 0x14295F0BE;  // the request's call, checked: E8 to EndUI4_QueueTargetCleared
 constexpr std::uint8_t   kPanelClearedCallBytes[] = {0xE8, 0xC1, 0x79, 0x07, 0x01};
+// the request's call, checked: E8 to EndUI4_QueueTargetCleared
+constexpr platform::FunctionFact kPanelClearedCall{L"the cleared request's call of QueueTargetCleared", 0x14295F0BE,
+                                                   kPanelClearedCallBytes};
 constexpr std::uintptr_t kPanelClearedSkipTo   = 0x14295F0C3;  // after the request's call
 constexpr std::uintptr_t kPanelSetCall         = 0x14295F139;  // crosses a block on 1.005 (placed from the game thread)
 constexpr std::uintptr_t kMarkerNameCall       = 0x140C8F9C9;
@@ -622,14 +624,15 @@ bool InstallPanelGate(const platform::GameImage& image) noexcept
 {
     if (platform::RunningBuild() == platform::BuildIndex::V1005)
     {
-        return image.BytesMatch(kPanelClearedCall, kPanelClearedCallBytes) &&
-               Redirect(image, g_panelClearedCall, kPanelClearedCall, kPanelCleared, reinterpret_cast<std::uintptr_t>(&PanelCleared));
+        return platform::FindFunction(image, kPanelClearedCall) &&
+               Redirect(image, g_panelClearedCall, kPanelClearedCall.address, kPanelCleared,
+                        reinterpret_cast<std::uintptr_t>(&PanelCleared));
     }
     const auto request = platform::FindFunction(image, kPanelCleared);
     const auto site    = image.Rebase(kPanelClearedSite, sizeof(kPanelGateSiteBytes));
     const auto resume  = image.Rebase(kPanelClearedResume);
     const auto skipTo  = image.Rebase(kPanelClearedSkipTo);
-    if (!request || !site || !resume || !skipTo || !image.BytesMatch(kPanelClearedCall, kPanelClearedCallBytes))
+    if (!request || !site || !resume || !skipTo || !platform::FindFunction(image, kPanelClearedCall))
     {
         return false;
     }

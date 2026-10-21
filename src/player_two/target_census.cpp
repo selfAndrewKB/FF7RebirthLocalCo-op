@@ -44,7 +44,7 @@ constexpr std::uintptr_t         kCreateCall = 0x1413D8397;
 // one is a tail jump), so an entry redirect. First instruction mov [rsp+10h],rbx.
 constexpr std::uint8_t kDecideBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C,
                                          0x24, 0x18, 0x48, 0x89, 0x74, 0x24, 0x20, 0x57};
-constexpr std::uintptr_t kDecide      = 0x1407FEB68;
+constexpr platform::FunctionFact kDecide{L"TargetSelector Decide", 0x1407FEB68, kDecideBytes};
 constexpr std::size_t    kDecideFirst = 5;
 
 // Each kind's select, bool(selector, u8 reason, UObject** out), in its vtable's slot +0x88 (the out is written on
@@ -712,10 +712,10 @@ void Install(const platform::GameImage& image) noexcept
                                                   reinterpret_cast<std::uintptr_t>(&Exclusion));
     const bool creation = g_createCall.Install(image, kCreateCall, find(kCreate),
                                                reinterpret_cast<std::uintptr_t>(&Create));
-    const auto decide   = image.Rebase(kDecide);
+    const auto decide   = platform::FindFunction(image, kDecide);
     const bool decisions =
-        decide && image.BytesMatch(kDecide, kDecideBytes) &&
-        g_decide.Install(*decide, image.EntryInstruction(kDecide, std::span(kDecideBytes).first(kDecideFirst)),
+        decide &&
+        g_decide.Install(*decide, image.EntryInstruction(kDecide.address, kDecide.entryBytes.first(kDecideFirst)),
                          reinterpret_cast<std::uintptr_t>(&Decide));
     platform::Log(L"target census: decisions {}, Hate and None selects {} of 2, Condition draws {}, new selectors {}; the "
                   L"Condition selects and the lock-group picks reported by their owners",

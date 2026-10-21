@@ -38,13 +38,15 @@ namespace {
 constexpr std::uintptr_t kRegisterPairCall = 0x14336B027;  // in EnemyCombination_ResolvePairByRowAndRegister
 constexpr std::uintptr_t kRegisterPair     = 0x14341EC20;  // (?, enemy A, enemy B, request*, target*): 5 integer args
 constexpr std::uintptr_t kStartLeaderCall  = 0x1433892CD;  // in EnemyCombination_Start_TargetModeLeader; crosses both
-constexpr std::uintptr_t kMode1            = 0x143388060;  // EnemyCombination_Mode1_TargetLeaderElseOther
-constexpr std::uintptr_t kMode2            = 0x1433871F4;  // EnemyCombination_Mode2_TargetLeader
 constexpr std::uintptr_t kMode1LeaderCall  = 0x1433883FC;  // crosses both
 constexpr std::uintptr_t kMode2LeaderCall  = 0x14338759A;
 // Both modes, both builds: void(manager, entry, float dt in xmm2); first instruction mov [rsp+18h],rbx.
 constexpr std::uint8_t kModeBytes[]  = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x48, 0x89, 0x4C,
                                         0x24, 0x08, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41};
+// EnemyCombination_Mode2_TargetLeader
+constexpr platform::FunctionFact kMode2{L"EnemyCombination_Mode2_TargetLeader", 0x1433871F4, kModeBytes};
+// EnemyCombination_Mode1_TargetLeaderElseOther
+constexpr platform::FunctionFact kMode1{L"EnemyCombination_Mode1_TargetLeaderElseOther", 0x143388060, kModeBytes};
 constexpr std::size_t  kModeFirst    = 5;
 constexpr std::uint32_t kEntryEnemies = 0x30, kEntryIndexA = 0x54, kEntryIndexB = 0x55;
 
@@ -452,13 +454,12 @@ bool PlaceCall(const platform::GameImage& image, platform::CallRedirect& call, s
 }
 
 template <class F>
-bool PlaceMode(const platform::GameImage& image, platform::EntryRedirect& entry, std::uintptr_t function,
+bool PlaceMode(const platform::GameImage& image, platform::EntryRedirect& entry, const platform::FunctionFact& mode,
                F* replacement) noexcept
 {
-    const auto live = image.Rebase(function, sizeof(kModeBytes));
-    return live && image.BytesMatch(function, kModeBytes) &&
-           entry.Install(*live, image.EntryInstruction(function, std::span(kModeBytes).first(kModeFirst)),
-                         reinterpret_cast<std::uintptr_t>(replacement));
+    const auto live = platform::FindFunction(image, mode);
+    return live && entry.Install(*live, image.EntryInstruction(mode.address, mode.entryBytes.first(kModeFirst)),
+                                 reinterpret_cast<std::uintptr_t>(replacement));
 }
 
 template <class F>

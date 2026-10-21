@@ -292,11 +292,13 @@ constexpr std::uint32_t kHolderActorAt = 0x20;  // the owning actor (the install
 constexpr std::size_t   kTwoHolders    = 4;
 
 constexpr std::uint8_t kInstallBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10};
+// CameraModuleHolder_InstallSharedModule
+constexpr platform::FunctionFact kInstall{L"CameraModuleHolder_InstallSharedModule", 0x141683E04, kInstallBytes};
 constexpr std::size_t  kInstallFirst   = 5;  // mov [rsp+8], rbx (a home-area store), then mov [rsp+10h], rsi
 constexpr std::size_t  kInstallSecond  = 5;
-constexpr std::uintptr_t kInstall      = 0x141683E04;  // CameraModuleHolder_InstallSharedModule
 constexpr std::uint8_t kGetModuleBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x57, 0xB8, 0x30, 0x00, 0x00, 0x00};
-constexpr std::uintptr_t kGetModule      = 0x141634DA8;  // CameraModuleHolder_GetModule
+// CameraModuleHolder_GetModule
+constexpr platform::FunctionFact kGetModule{L"CameraModuleHolder_GetModule", 0x141634DA8, kGetModuleBytes};
 constexpr std::size_t    kGetModuleFirst = 5;
 constexpr std::uint8_t kHolderLeaveBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C, 0x24, 0x18};
 const platform::FunctionFact kHolderLeave{L"CameraModuleHolder_Leave_IfOwnerChar", 0x14128E8EC, kHolderLeaveBytes};
@@ -1585,10 +1587,10 @@ bool PlaceTwoHolders(const platform::GameImage& image) noexcept
     }
     g_holderLeave    = reinterpret_cast<HolderLeaveFn>(*leave);
     g_holderValidate = reinterpret_cast<HolderValidateFn>(*validate);
-    const std::span<const std::uint8_t> install(kInstallBytes);
-    const auto                          installAt = image.Rebase(kInstall);
-    bool installed = false;
-    if (installAt && image.BytesMatch(kInstall, install))
+    const auto install   = kInstall.entryBytes;
+    const auto installAt = platform::FindFunction(image, kInstall);
+    bool       installed = false;
+    if (installAt)
     {
         // 1.005's entry instruction crosses a 16-byte block: the redirect goes on the second (the first is a store
         // into the caller's home area, and no branch lands on the second; RE-p2-traversal-climb-holder.md §4).
@@ -1596,14 +1598,15 @@ bool PlaceTwoHolders(const platform::GameImage& image) noexcept
                         ? g_installEntry.InstallAtSecondInstruction(*installAt, install.first(kInstallFirst),
                                                                     install.subspan(kInstallFirst, kInstallSecond),
                                                                     reinterpret_cast<std::uintptr_t>(&HolderInstall))
-                        : g_installEntry.Install(*installAt, image.EntryInstruction(kInstall, install.first(kInstallFirst)),
+                        : g_installEntry.Install(*installAt,
+                                                 image.EntryInstruction(kInstall.address, install.first(kInstallFirst)),
                                                  reinterpret_cast<std::uintptr_t>(&HolderInstall));
     }
-    const std::span<const std::uint8_t> getModule(kGetModuleBytes);
-    const auto                          getAt = image.Rebase(kGetModule);
-    const bool got = installed && getAt && image.BytesMatch(kGetModule, getModule) &&
-                     g_getModuleEntry.Install(*getAt, image.EntryInstruction(kGetModule, getModule.first(kGetModuleFirst)),
-                                              reinterpret_cast<std::uintptr_t>(&HolderModule));
+    const auto getFirst = kGetModule.entryBytes.first(kGetModuleFirst);
+    const auto getAt    = platform::FindFunction(image, kGetModule);
+    const bool got      = installed && getAt &&
+                          g_getModuleEntry.Install(*getAt, image.EntryInstruction(kGetModule.address, getFirst),
+                                                   reinterpret_cast<std::uintptr_t>(&HolderModule));
     if (installed && !got)
     {
         g_installEntry.Restore();

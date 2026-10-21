@@ -35,16 +35,18 @@ namespace {
 // RE-p2-framing.md "Live finding" §1.1, §2.3, §3.3 (this build; slots and entries checked by disassembly).
 // vtbl_OpLocationListener slot 2: OpLocationListener_OnCameraSetting_ForwardToOp(listener, location, row, enter):
 // op = *(listener+8); enter -> op vt+0xE0 (set layer 5), else op vt+0xE8 (clear layer 5).
-constexpr std::uintptr_t kListenerSlot    = 0x1466B6F90;
-constexpr std::uintptr_t kListenerForward = 0x141035AC8;
-constexpr std::uint8_t   kListenerForwardBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x5E, 0x94, 0x07,
-                                                    0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x49, 0x08};
+constexpr std::uint8_t kListenerForwardBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x5E, 0x94, 0x07,
+                                                  0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x49, 0x08};
+constexpr platform::SlotFact kListenerSlot{L"OpLocationListener's OnCameraSetting slot (2)", 0x1466B6F90,
+                                           {L"OpLocationListener_OnCameraSetting_ForwardToOp", 0x141035AC8,
+                                            kListenerForwardBytes}};
 constexpr std::uint32_t  kListenerOperator = 0x08;
 // vtbl_UEndPlayerExistNavAreaComponent TickComponent slot: UpdateNavModifiers from its controller's leader.
-constexpr std::uintptr_t kNavAreaTickSlot = 0x1467C8448;
-constexpr std::uintptr_t kNavAreaTick     = 0x141662054;
-constexpr std::uint8_t   kNavAreaTickBytes[] = {0x40, 0x53, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8, 0xD0, 0xCE,
-                                                0xA4, 0x00, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x41, 0x10};
+constexpr std::uint8_t kNavAreaTickBytes[] = {0x40, 0x53, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8, 0xD0, 0xCE,
+                                              0xA4, 0x00, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x41, 0x10};
+constexpr platform::SlotFact kNavAreaTickSlot{L"UEndPlayerExistNavAreaComponent's TickComponent slot", 0x1467C8448,
+                                              {L"EndPlayerExistNavAreaComponent_TickComponent", 0x141662054,
+                                               kNavAreaTickBytes}};
 constexpr std::uint32_t  kNavAreaController = 0xB0;
 using facts::kCameraManagerBattleOperator;
 
@@ -312,15 +314,11 @@ void Tick() noexcept
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto listenerSlot = image.Rebase(kListenerSlot, sizeof(void*));
-    const auto forward      = image.Rebase(kListenerForward);
-    const auto navSlot      = image.Rebase(kNavAreaTickSlot, sizeof(void*));
-    const auto navTick      = image.Rebase(kNavAreaTick);
-    const bool listener = listenerSlot && forward && image.BytesMatch(kListenerForward, kListenerForwardBytes) &&
-                          g_listener.Replace(*listenerSlot, *forward, reinterpret_cast<std::uintptr_t>(&Forward));
-    const bool nav = navSlot && navTick && primary_controller::Installed() &&
-                     image.BytesMatch(kNavAreaTick, kNavAreaTickBytes) &&
-                     g_navTick.Replace(*navSlot, *navTick, reinterpret_cast<std::uintptr_t>(&NavAreaTick));
+    const bool listener = platform::ReplaceSlot(image, kListenerSlot, reinterpret_cast<std::uintptr_t>(&Forward),
+                                                g_listener);
+    const bool nav      = primary_controller::Installed() &&
+                          platform::ReplaceSlot(image, kNavAreaTickSlot, reinterpret_cast<std::uintptr_t>(&NavAreaTick),
+                                                g_navTick);
     const auto manager  = image.Rebase(kLocationVolumeManager, sizeof(void*));
     const auto contains = platform::FindFunction(image, kLocationVolumeContainsPoint);
     // Player 2's own rows check their own two facts only (the gate above is a separate lever).

@@ -102,9 +102,10 @@ constexpr std::uint32_t  kEventKey       = 0x18;
 // are checked after that instruction.
 constexpr std::uintptr_t kKeyUpEntry     = 0x145D40598;  // the vtable entry
 constexpr std::uintptr_t kKeyUp          = 0x140E65D18;  // SquareInput__HandleKeyUpEvent
-constexpr std::uintptr_t kKeyUpAfterFirst = 0x140E65D1D;
 constexpr std::uint8_t   kKeyUpRestBytes[] = {0x48, 0x89, 0x6C, 0x24, 0x10, 0x56, 0x57, 0x41,
                                               0x56, 0xB8, 0x60, 0x00, 0x00, 0x00, 0xE8};
+constexpr platform::FunctionFact kKeyUpAfterFirst{L"HandleKeyUpEvent after its first instruction", 0x140E65D1D,
+                                                  kKeyUpRestBytes};
 constexpr std::uint32_t kKeyEventUser = 0x0C;
 constexpr std::uint8_t  kUpRouteBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55,
                                            0x41, 0x56, 0x41, 0x57, 0x48, 0x8D, 0xAC, 0x24, 0x60, 0xFE, 0xFF, 0xFF};
@@ -1015,7 +1016,7 @@ void InstallReleases(const platform::GameImage& image) noexcept
     const auto entry   = image.Rebase(kKeyUpEntry, sizeof(void*));
     const auto keyUp   = image.Rebase(kKeyUp);
     const auto site    = image.Rebase(kUpRouteCall, 5);
-    const bool ok      = upRoute && entry && keyUp && site && image.BytesMatch(kKeyUpAfterFirst, kKeyUpRestBytes) &&
+    const bool ok      = upRoute && entry && keyUp && site && platform::FindFunction(image, kKeyUpAfterFirst) &&
                     g_keyUpSlot.Replace(*entry, *keyUp, reinterpret_cast<std::uintptr_t>(&KeyUp)) &&
                     g_upRouteCall.Install(*site, *upRoute, reinterpret_cast<std::uintptr_t>(&UpRoute));
     if (!ok && g_keyUpSlot.Original() != 0)

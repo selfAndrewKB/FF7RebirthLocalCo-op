@@ -30,18 +30,20 @@ namespace {
 // RE-p2-walk-mode.md §4.2: PartyManager_SetPrimaryPC_CreateNavAreaComp(partyManager, controller) sets the primary
 // controller, ensures its trigger, NewObjects and registers its UEndPlayerExistNavAreaComponent (pc+0x590) and sets
 // pc+0x7DC. It has no guard of its own (a second call makes a second component), so it runs only while +0x590 is null.
-constexpr std::uintptr_t kCreateNavArea = 0x143D00E00;
 constexpr std::uint8_t   kCreateNavAreaBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x55, 0x48, 0x8B,
                                                   0xEC, 0xB8, 0x70, 0x00, 0x00, 0x00, 0xE8, 0x1D};
+constexpr platform::FunctionFact kCreateNavArea{L"PartyManager_SetPrimaryPC_CreateNavAreaComp", 0x143D00E00,
+                                                kCreateNavAreaBytes};
 constexpr std::uint32_t  kControllerNavArea  = 0x590;
 constexpr std::uint32_t  kNavAreaController  = 0xB0;
 
 // §4.3.3: LocMoveTypeListener_Vt40_SetPrimaryPCLayer7(listener, LocationId, move, dash, enter) writes the primary
 // controller's layer 7 (+0x897 move, +0x8AB dash): {move, dash} on enter, {6, 0} on leave; nothing for LocationId 0.
 // `this` is unused; the game's instance is the singleton at 0x14939BCE8.
-constexpr std::uintptr_t kSetLayer7 = 0x14182BE00;
 constexpr std::uint8_t   kSetLayer7Bytes[] = {0x48, 0x85, 0xD2, 0x74, 0x54, 0x48, 0x89, 0x5C,
                                               0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
+constexpr platform::FunctionFact kSetLayer7{L"LocMoveTypeListener_Vt40_SetPrimaryPCLayer7", 0x14182BE00,
+                                            kSetLayer7Bytes};
 constexpr std::uintptr_t kMoveTypeListener = 0x14939BCE8;
 constexpr std::uint32_t  kControllerLayer7Move = 0x890 + 7;
 constexpr std::uint32_t  kControllerLayer7Dash = 0x8A4 + 7;
@@ -393,19 +395,18 @@ void Reset(void* controller, void* member) noexcept
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto create   = image.Rebase(kCreateNavArea);
+    const auto create   = platform::FindFunction(image, kCreateNavArea);
     const auto party    = image.Rebase(facts::kPartyManagerGlobal, sizeof(void*));
-    const auto set      = image.Rebase(kSetLayer7);
+    const auto set      = platform::FindFunction(image, kSetLayer7);
     const auto listener = image.Rebase(kMoveTypeListener, sizeof(void*));
     const auto manager  = image.Rebase(kLocationVolumeManager, sizeof(void*));
     const auto contains = platform::FindFunction(image, kLocationVolumeContainsPoint);
-    if (create && party && primary_controller::Installed() && image.BytesMatch(kCreateNavArea, kCreateNavAreaBytes))
+    if (create && party && primary_controller::Installed())
     {
         g_createNavArea = reinterpret_cast<CreateNavAreaFn>(*create);
         g_partyManager  = *party;
     }
-    if (set && listener && manager && contains && primary_controller::Installed() &&
-        image.BytesMatch(kSetLayer7, kSetLayer7Bytes))
+    if (set && listener && manager && contains && primary_controller::Installed())
     {
         g_setLayer7 = reinterpret_cast<SetLayer7Fn>(*set);
         g_listener  = *listener;

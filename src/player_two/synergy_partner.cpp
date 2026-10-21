@@ -45,17 +45,17 @@ using namespace synergy_rules;
 // block). T1: its hand-over test for modes 2/3 (mode 3 never reaches the AI request below), partner comp type ==
 // GetPartyLeaderType() (both builds: crosses a block).
 constexpr std::uintptr_t kStartCalls[] = {0x140F2C3B7, 0x1429A9B47, 0x143375806};
-constexpr std::uintptr_t kStart        = 0x140F2CDE0;
 constexpr std::uint8_t   kStartBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x10, 0x4C,
                                           0x89, 0x48, 0x20, 0x48, 0x89, 0x48, 0x08, 0x55};
+constexpr platform::FunctionFact kStart{L"LinkPartner_Start_HandLeaderToAI", 0x140F2CDE0, kStartBytes};
 constexpr std::uintptr_t kStartLeaderTest = 0x140F2D03C;
 // R: the three calls of LinkPartner_RequestAI_HandLeaderToAI(rcx unused, record, initiator, partner, partner comp, weak,
 // weak): LinkMgr_TickMode2 (modes 2/3), LinkPartner_Mode1_StartOrRequestAI (the deferred mode-1 start, both from
 // LinkMgr_Tick), and LinkPartner_Start_HandLeaderToAI (mode 1 at the request). They are its only callers.
 constexpr std::uintptr_t kRequestCalls[] = {0x140ED637A, 0x14337BD83, 0x140F2D000};
-constexpr std::uintptr_t kRequestAi      = 0x140F2AC8C;
 constexpr std::uint8_t   kRequestAiBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x55, 0x56, 0x57,
                                               0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57};
+constexpr platform::FunctionFact kRequestAi{L"LinkPartner_RequestAI_HandLeaderToAI", 0x140F2AC8C, kRequestAiBytes};
 // T2: its hand-over test, partner comp type == UEndPartyAPI_GetPartyLeaderType() (1.004: crosses a block).
 constexpr std::uintptr_t kRequestLeaderTest = 0x140F2AD1E;
 using facts::kGetPartyLeaderType;
@@ -64,9 +64,10 @@ using facts::kGetPartyLeaderType;
 // redirect goes on the second. T3: its give-back test, EndCharacter_GetPlayerTypeFromComponent(member) ==
 // GetPartyLeaderType(); P: the controller it gives back to, GetPrimaryEndPlayerController_FromPartyManager() (1.005:
 // both cross a block).
-constexpr std::uintptr_t kMemberEnd       = 0x140F2AB58;
 constexpr std::uint8_t   kMemberEndBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
                                               0x24, 0x10, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
+constexpr platform::FunctionFact kMemberEnd{L"LinkMember_End_RepossessLeaderWithPrimaryPC", 0x140F2AB58,
+                                            kMemberEndBytes};
 constexpr std::size_t    kFirstInstruction  = 5;  // mov [rsp+8], rbx
 constexpr std::size_t    kSecondInstruction = 5;  // mov [rsp+10h], rsi
 constexpr std::uintptr_t kEndLeaderTest   = 0x140F2AB8A;
@@ -1048,7 +1049,7 @@ void Place() noexcept
     }
     if (ok)
     {
-        const std::span<const std::uint8_t> bytes(kMemberEndBytes);
+        const auto bytes = kMemberEnd.entryBytes;
         const auto replacement = reinterpret_cast<std::uintptr_t>(&MemberEnd);
         ok = g_memberEnd.Install(g_sites.memberEnd, g_sites.memberEndFirst, replacement) ||
              g_memberEnd.InstallAtSecondInstruction(g_sites.memberEnd, bytes.first(kFirstInstruction),
@@ -1072,6 +1073,9 @@ void Install(const platform::GameImage& image) noexcept
         const auto live = image.Rebase(address, length);
         return live ? *live : 0;
     };
+    const auto found = [&image](const platform::FunctionFact& fact) {
+        return platform::FindFunction(image, fact).value_or(0);
+    };
     bool ok = true;
     for (std::size_t i = 0; i < std::size(kRequestCalls); ++i)
     {
@@ -1083,12 +1087,12 @@ void Install(const platform::GameImage& image) noexcept
         g_sites.start[i] = at(kStartCalls[i], 5);
         ok               = ok && g_sites.start[i] != 0;
     }
-    g_sites.startFn     = at(kStart);
+    g_sites.startFn     = found(kStart);
     g_sites.startTest   = at(kStartLeaderTest, 5);
-    g_sites.requestAi   = at(kRequestAi);
+    g_sites.requestAi   = found(kRequestAi);
     g_sites.requestTest = at(kRequestLeaderTest, 5);
     g_sites.leaderType  = at(kGetPartyLeaderType.address);
-    g_sites.memberEnd   = at(kMemberEnd, std::size(kMemberEndBytes));
+    g_sites.memberEnd   = found(kMemberEnd);
     g_sites.endTest     = at(kEndLeaderTest, 5);
     g_sites.endPrimary  = at(kEndPrimary, 5);
     g_sites.primary     = at(kGetPrimaryEndPlayerController);
@@ -1101,13 +1105,13 @@ void Install(const platform::GameImage& image) noexcept
     const auto switchAi = platform::FindFunction(image, kSwitchAiControlAsync);
     g_switchAi          = switchAi ? reinterpret_cast<SwitchAiFn>(*switchAi) : nullptr;
     g_sites.ok = ok && g_sites.startFn != 0 && g_sites.startTest != 0 && g_classic != nullptr && g_switchAi != nullptr &&
-                 image.BytesMatch(kStart, kStartBytes) && g_sites.requestAi != 0 && g_sites.requestTest != 0 && g_sites.leaderType != 0 &&
+                 g_sites.requestAi != 0 && g_sites.requestTest != 0 && g_sites.leaderType != 0 &&
                  g_sites.memberEnd != 0 && g_sites.endTest != 0 && g_sites.endPrimary != 0 && g_sites.primary != 0 &&
-                 g_typeOf != nullptr && image.BytesMatch(kRequestAi, kRequestAiBytes) &&
-                 image.BytesMatch(kMemberEnd, kMemberEndBytes);
+                 g_typeOf != nullptr;
     if (g_sites.ok)
     {
-        g_sites.memberEndFirst = image.EntryInstruction(kMemberEnd, std::span(kMemberEndBytes).first(kFirstInstruction));
+        g_sites.memberEndFirst =
+            image.EntryInstruction(kMemberEnd.address, kMemberEnd.entryBytes.first(kFirstInstruction));
     }
     if (!g_sites.ok)
     {

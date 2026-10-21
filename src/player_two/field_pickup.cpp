@@ -185,17 +185,18 @@ constexpr std::uintptr_t kFieldExitCall  = 0x140D9FFD8;
 // local player (the first controller in World->ControllerList whose player is local), always player 1's. Inside
 // player 2's pass the request runs with player 2's controller first in that list. Entry: mov [rsp+18h],rbx (the
 // 5 bytes replaced), then push rbp/rsi/rdi/r12/r13/r14/r15.
-constexpr std::uintptr_t kRequest        = 0x140ADE688;
 constexpr std::uint8_t   kRequestBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 0x56, 0x57,
                                             0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57};
+constexpr platform::FunctionFact kRequest{L"the world items' screen-visibility request", 0x140ADE688, kRequestBytes};
 constexpr std::size_t    kRequestFirst   = 5;
 
 // The pass's hooks (§10.A, §12.12): the game mode tick's call of the selection update (the pass runs right after it),
 // WorldItemMgr's mark by key (a key player 2's pass marks is noted; its entry's first instruction, 5 bytes) and the
 // WorldItem tick's call of the grant (run with player 2's controller as the primary one for a noted key).
 constexpr std::uintptr_t kUpdateCall      = 0x1423EF160;
-constexpr std::uintptr_t kMarkByKey       = 0x140C10F94;  // u8(wim, FName key by value)
 constexpr std::uint8_t   kMarkByKeyBytes[] = {0x48, 0x89, 0x54, 0x24, 0x10, 0x53, 0xB8, 0x30, 0x00, 0x00, 0x00};
+// u8(wim, FName key by value)
+constexpr platform::FunctionFact kMarkByKey{L"WorldItemMgr's mark by key", 0x140C10F94, kMarkByKeyBytes};
 constexpr std::size_t    kMarkFirst       = 5;
 constexpr std::uintptr_t kAcquireCall     = 0x140DBE165;
 constexpr std::uintptr_t kAcquire         = 0x140C07A3C;  // (wim, entry); the caller ignores its result
@@ -1290,14 +1291,13 @@ void Install(const platform::GameImage& image) noexcept
     if (resets)
     {
         leader_scope::Install(image);  // the pass's leader scope (the targeting modules install it too)
-        const auto markAt    = image.Rebase(kMarkByKey);
+        const auto markAt    = platform::FindFunction(image, kMarkByKey);
         const auto acquireAt = image.Rebase(kAcquireCall, 5);
         const auto acquire   = image.Rebase(kAcquire);
         hooks = g_updateCall.InstallResearch(image, kUpdateCall, kUpdate.address,
                                              reinterpret_cast<std::uintptr_t>(&UpdateCall)) && markAt &&
-                image.BytesMatch(kMarkByKey, kMarkByKeyBytes) &&
                 g_markByKey.Install(*markAt,
-                                    image.EntryInstruction(kMarkByKey, std::span<const std::uint8_t>(kMarkByKeyBytes).first(kMarkFirst)),
+                                    image.EntryInstruction(kMarkByKey.address, kMarkByKey.entryBytes.first(kMarkFirst)),
                                     reinterpret_cast<std::uintptr_t>(&MarkByKey)) &&
                 acquireAt && acquire && g_acquireCall.Install(*acquireAt, *acquire, reinterpret_cast<std::uintptr_t>(&Acquire));
     }
@@ -1305,9 +1305,10 @@ void Install(const platform::GameImage& image) noexcept
     bool screen = false;
     if (g_ready)
     {
-        const auto at = image.Rebase(kRequest);
-        screen        = at && image.BytesMatch(kRequest, kRequestBytes) &&
-                 g_request.Install(*at, image.EntryInstruction(kRequest, std::span<const std::uint8_t>(kRequestBytes).first(kRequestFirst)),
+        const auto at = platform::FindFunction(image, kRequest);
+        screen        = at &&
+                 g_request.Install(*at,
+                                   image.EntryInstruction(kRequest.address, kRequest.entryBytes.first(kRequestFirst)),
                                    reinterpret_cast<std::uintptr_t>(&RequestVisibility));
     }
     platform::Log(L"field pickup: {}; the screen test {}; marker widgets {}",
