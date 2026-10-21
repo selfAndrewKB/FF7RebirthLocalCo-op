@@ -3,6 +3,7 @@
 #include "facts/command_controller.h"
 #include "facts/hud.h"
 #include "hud/widget_opacity.h"
+#include "platform/byte_scope.h"
 #include "platform/call_redirect.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -17,6 +18,7 @@
 
 #include <array>
 #include <cstdint>
+#include <cstring>
 #include <format>
 #include <optional>
 #include <string>
@@ -24,6 +26,8 @@
 namespace lss::player_two::widget_owner {
 
 namespace {
+
+using Kind = platform::ByteContext::Kind;
 
 // Facts read from the database (RE-p2-party-list-views.md §8.1; this build).
 constexpr std::uint8_t kCellTickBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C, 0x24, 0x18, 0x56, 0x57,
@@ -106,14 +110,27 @@ bool PowerOfTen(std::uint64_t count) noexcept
 }
 
 /// A controller's view for its widget's tick: EndUISystem[23] answers the controller and, when given,
-/// EndUISystem[53] its key guide; in battle the party leader's type answers the controller's own record
-/// of its leader. The slots are put back when it ends.
+/// EndUISystem[53] its key guide (two Set ranges of platform/byte_scope.h: put back when it ends, unless the
+/// game wrote a slot inside, which is kept and noted); in battle the party leader's type answers the
+/// controller's own record of its leader.
 class OwnerView
 {
 public:
     OwnerView(std::uintptr_t controller, std::uintptr_t keyGuide) noexcept
     {
-        held_ = Enter(0, kUICommandController, controller) && (keyGuide == 0 || Enter(1, kUIKeyGuide, keyGuide));
+        using Range = platform::ByteContext::Range;
+        const Range slots[] = {{g_endUISystem + kUICommandController, sizeof(controller), Kind::Set},
+                               {g_endUISystem + kUIKeyGuide, sizeof(keyGuide), Kind::Set}};
+        if (!slots_.Define(std::span<const Range>(slots, keyGuide == 0 ? 1 : 2)))
+        {
+            return;
+        }
+        std::memcpy(slots_.Value(0).data(), &controller, sizeof(controller));
+        if (keyGuide != 0)
+        {
+            std::memcpy(slots_.Value(1).data(), &keyGuide, sizeof(keyGuide));
+        }
+        held_ = slots_.Open();
         if (held_ && ReadAt<std::uint8_t>(controller + kCmdHudMode) != 0)
         {
             type_.emplace(ReadAt<std::uint8_t>(controller + kCmdStoredLeaderType));
@@ -123,12 +140,10 @@ public:
     ~OwnerView()
     {
         type_.reset();
-        for (auto it = slots_.rbegin(); it != slots_.rend(); ++it)
+        if (held_ && slots_.Close() != 0)
         {
-            if (it->address != 0)
-            {
-                platform::WriteGuarded(reinterpret_cast<void*>(it->address), &it->saved, sizeof(it->saved));
-            }
+            platform::LogDebug(L"widget owner: the game wrote a UI system slot inside a widget tick in player 2's "
+                               L"view; the game's value kept");
         }
     }
     OwnerView(const OwnerView&)            = delete;
@@ -139,27 +154,10 @@ public:
     bool TypeRefused() const noexcept { return typeRefused_; }
 
 private:
-    bool Enter(std::size_t i, std::uint32_t slot, std::uintptr_t value) noexcept
-    {
-        const auto     address = g_endUISystem + slot;
-        std::uintptr_t saved   = 0;
-        if (!platform::CopyGuarded(&saved, reinterpret_cast<const void*>(address), sizeof(saved)) ||
-            !platform::WriteGuarded(reinterpret_cast<void*>(address), &value, sizeof(value)))
-        {
-            return false;
-        }
-        slots_[i] = {address, saved};
-        return true;
-    }
-
-    struct Saved
-    {
-        std::uintptr_t address = 0, saved = 0;
-    };
-    std::array<Saved, 2>                         slots_{};
-    std::optional<leader_scope::LeaderTypeScope> type_;
-    bool                                         held_        = false;
-    bool                                         typeRefused_ = false;
+    platform::ByteStore<2, 2 * sizeof(std::uintptr_t)>  slots_;
+    std::optional<leader_scope::LeaderTypeScope>        type_;
+    bool                                                held_        = false;
+    bool                                                typeRefused_ = false;
 };
 
 void TypeRefused() noexcept
