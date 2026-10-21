@@ -2,6 +2,7 @@
 
 #include "facts/command_controller.h"
 #include "facts/hud.h"
+#include "facts/world.h"
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
 #include "platform/every.h"
@@ -50,13 +51,13 @@ namespace {
 using Clock = std::chrono::steady_clock;
 
 // The objects (RE-p2-field-interact.md §1.1, §12; this build).
-constexpr std::uintptr_t kGameRoot          = 0x1490FEDE8;  // pointer global: the engine root
+using facts::kEndGameRoot;
 constexpr std::uint32_t  kRootStage         = 0x70;         // u8: the input step's FieldAction part runs from 8
-constexpr std::uint32_t  kRootGameState     = 0x170;        // GS
-constexpr std::uint32_t  kRootModeHolder    = 0x1B8;        // read by the mode-class gate (no null check of its own)
+using facts::kRootGameState;
+using facts::kRootModeHolder;
 constexpr std::uint32_t  kRootSlotHeldOwner = 0x210;        // -> +8: a u8 TickSlots writes (§12.1)
 constexpr std::uint32_t  kSlotHeldByte      = 0x08;
-constexpr std::uint32_t  kRootWorldItems    = 0x288;        // WorldItemMgr
+using facts::kRootWorldItems;
 using facts::kCmdOpenPending;
 constexpr std::uintptr_t kPauseMenuKey      = 0x1491E44C0;  // InputKey24 "PauseMenu" (the poll needs it not held)
 
@@ -1240,7 +1241,7 @@ void FieldExit(void* mgr) noexcept
 
 void Install(const platform::GameImage& image) noexcept
 {
-    const auto root    = image.Rebase(kGameRoot, sizeof(void*));
+    const auto root    = image.Rebase(kEndGameRoot, sizeof(void*));
     const auto ui      = image.Rebase(facts::kEndUISystem, facts::kUICommandController + sizeof(void*));
     const auto pause   = image.Rebase(kPauseMenuKey, 24);
     const auto find    = [&image](const platform::FunctionFact& fact) {

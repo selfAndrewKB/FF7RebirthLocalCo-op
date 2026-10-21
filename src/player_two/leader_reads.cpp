@@ -83,7 +83,7 @@ constexpr std::uintptr_t kFilterLeaderCall = 0x141464FFC;  // crosses on 1.004
 constexpr std::uintptr_t kMinePartCall = 0x1431B9490;  // crosses on 1.005
 constexpr std::uintptr_t kMinePart     = 0x1431B46E8;  // u64(mine)
 constexpr std::uintptr_t kMineTypeCall = 0x1431B9664;  // call UEndPartyAPI_GetPartyLeaderType, u8()
-constexpr std::uintptr_t kLeaderType   = 0x1408070C4;
+using facts::kGetPartyLeaderType;
 // The mine: u8 state at +0x4F0 (15 or more: none); +0x10 an object whose +0x10 is an FWeakObjectPtr to its AI controller.
 constexpr std::uint32_t kMineState = 0x4F0, kMineObject = 0x10, kMineObjectController = 0x10;
 constexpr std::uint8_t  kMineStates = 15;
@@ -501,7 +501,8 @@ bool Install(const platform::GameImage& image) noexcept
                        PlaceCall(image, g_filterCall1, kFilterCall[1], image.Rebase(kFilter), &Filter<g_filterCall1>) &&
                        PlaceCall(image, g_filterCall2, kFilterCall[2], image.Rebase(kFilter), &Filter<g_filterCall2>);
     placed[kMine] = g_characterByType != nullptr &&
-                    PlaceCall(image, g_mineType, kMineTypeCall, image.Rebase(kLeaderType), &MineLeaderType) &&
+                    PlaceCall(image, g_mineType, kMineTypeCall, image.Rebase(kGetPartyLeaderType.address),
+                              &MineLeaderType) &&
                     PlaceCall(image, g_minePart, kMinePartCall, image.Rebase(kMinePart), &MinePart);
     placed[kArms] = PlaceCall(image, g_armRead[0], kArmReadCall[0], leader, &ArmLeader<0>) &&
                     PlaceCall(image, g_armRead[1], kArmReadCall[1], leader, &ArmLeader<1>) &&

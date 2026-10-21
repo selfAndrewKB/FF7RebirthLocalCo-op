@@ -2,6 +2,7 @@
 
 #include "dev/dev_switch.h"
 #include "facts/engine.h"
+#include "facts/move_state.h"
 #include "platform/build_value.h"
 #include "platform/every.h"
 #include "platform/guarded.h"
@@ -35,7 +36,6 @@ using TryBeginFn    = void (*)(void* actor, float dt, void* pawn);
 using EnterFn       = void (*)(void* executer);
 #if LSS_DEV
 // The game's own answers, read for the log alone (dev tools).
-constexpr std::uintptr_t kIsRidden     = 0x1408A6A74;  // IsActiveRiddenVehicle(character): the primary PC rides it
 constexpr std::uintptr_t kHolderState  = 0x1409F0FBC;  // CharCtrlHolder_GetResolvedStateByte68(holder)
 using IsRiddenFn    = bool (*)(const void* character);
 using HolderStateFn = std::uint8_t (*)(const void* holder);
@@ -307,7 +307,7 @@ void LogSummary() noexcept
 /// Finds the game's answers the log reads; what it says in the install line.
 const wchar_t* InstallLogging(const platform::GameImage& image) noexcept
 {
-    const auto isRidden = image.Rebase(kIsRidden);
+    const auto isRidden = image.Rebase(facts::kIsActiveRiddenVehicle.address);
     const auto holder   = image.Rebase(kHolderState);
     g_isRidden          = isRidden ? reinterpret_cast<IsRiddenFn>(*isRidden) : nullptr;
     g_holderState       = holder ? reinterpret_cast<HolderStateFn>(*holder) : nullptr;

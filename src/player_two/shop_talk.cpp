@@ -1,6 +1,7 @@
 #include "player_two/shop_talk.h"
 
 #include "dev/dev_switch.h"
+#include "facts/world.h"
 #include "player_two/field_rules.h"
 #include "platform/entry_redirect.h"
 #include "platform/guarded.h"
@@ -418,7 +419,7 @@ void Install(const platform::GameImage& image) noexcept
     const auto state = platform::FindFunction(image, kStateRow);
     const auto act   = platform::FindFunction(image, kActionRow);
     const auto group = platform::FindFunction(image, kGroupRow);
-    const auto root  = image.Rebase(charapop::kGameRoot, sizeof(std::uintptr_t));
+    const auto root  = image.Rebase(facts::kEndGameRoot, sizeof(std::uintptr_t));
     g_findObject     = find ? reinterpret_cast<FindFn>(*find) : nullptr;
     g_stateRow       = state ? reinterpret_cast<AccessorFn>(*state) : nullptr;
     g_actionRow      = act ? reinterpret_cast<AccessorFn>(*act) : nullptr;

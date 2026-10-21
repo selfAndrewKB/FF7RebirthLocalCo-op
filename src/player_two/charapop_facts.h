@@ -4,6 +4,7 @@
 // (RE-p2-charapop-per-view.md §1; IDA addresses and offsets of this build).
 
 #include "facts/controller.h"
+#include "facts/world.h"
 #include "platform/angles.h"
 #include "player_two/object_fields.h"
 
@@ -19,8 +20,8 @@ bool CopyGuarded(void* out, const void* from, std::size_t length) noexcept;  // 
 namespace lss::player_two::charapop {
 
 // The manager M = [[game root]+0x180] and its pop object P = [M+0x10] (§1.1).
-inline constexpr std::uintptr_t kGameRoot      = 0x1490FEDE8;
-inline constexpr std::uint32_t  kRootCharaPop  = 0x180;
+using facts::kEndGameRoot;
+using facts::kRootCharaPop;
 inline constexpr std::uint32_t  kManagerPop    = 0x10;
 inline constexpr std::uint32_t  kPopListInline = 0xC8;
 inline constexpr std::uint32_t  kPopListHeap   = 0x20C8;

@@ -6,6 +6,7 @@
 #include <Unreal/UObject.hpp>
 
 #include "facts/hud.h"
+#include "facts/party.h"
 #include "hud/entry_filter_code.h"
 #include "hud/hud_rules.h"
 #include "hud/label_relayouts.h"
@@ -66,9 +67,7 @@ constexpr std::uint8_t   kHolderUpdateBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0
 // Its one leader read: call UEndPartyAPI_GetPartyLeaderType (u8 in al) at 0x140844016; location, range, arrow yaw
 // and the party-icon skip all follow that answer (no sub-function reads the leader itself, §8.5).
 constexpr std::uintptr_t kLeaderTypeCall    = 0x140844016;
-constexpr std::uintptr_t kLeaderType        = 0x1408070C4;
-constexpr std::uint8_t   kLeaderTypeBytes[] = {0x48, 0x8B, 0x05, 0x15, 0x4C, 0xB9, 0x08, 0x48, 0x85, 0xC0, 0x74,
-                                               0x07, 0x8A, 0x80, 0x50, 0x01, 0x00, 0x00, 0xC3, 0xB0, 0x10, 0xC3};
+using facts::kGetPartyLeaderType;
 
 // The holder update's map pieces (RE-p2-minimap-tiles.md §2, §4): a piece in state 2 (shown) is dropped when the run's
 // centre is out of its rectangle + margin + 5 m, asked at 0x140844905 (`lea rdx,[rsp+90h]` = the centre; `mov rcx,rbx`
@@ -607,13 +606,13 @@ bool PlaceAcquire(const platform::GameImage&) noexcept
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const bool bytes = image.BytesMatch(kHolderUpdate, kHolderUpdateBytes) && image.BytesMatch(kLeaderType, kLeaderTypeBytes) &&
+    const bool bytes = image.BytesMatch(kHolderUpdate, kHolderUpdateBytes) &&
                        image.BytesMatch(kNewRenderTarget, kNewRenderTargetBytes) &&
                        image.BytesMatch(kInitCustomFormat, kInitCustomFormatBytes) &&
                        image.BytesMatch(kUpdateResourceImmediate, kUpdateResourceImmediateBytes);
     const auto system    = image.Rebase(facts::kEndUISystem, facts::kUIAreaMap + sizeof(void*));
     const auto holder    = image.Rebase(kHolderUpdate);
-    const auto leader    = image.Rebase(kLeaderType);
+    const auto leader    = platform::FindFunction(image, kGetPartyLeaderType);
     const auto leaderAt  = image.Rebase(kLeaderTypeCall, 5);
     const auto acquireAt = image.Rebase(facts::kNaviMapCircleAcquireCall, 5);
     const auto acquire   = platform::FindFunction(image, facts::kAcquireLayerSlot);

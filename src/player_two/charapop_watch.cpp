@@ -6,6 +6,7 @@
 #include <Unreal/CoreUObject/UObject/UnrealType.hpp>
 #include <Unreal/UObject.hpp>
 
+#include "facts/world.h"
 #include "platform/angles.h"
 #include "platform/build_value.h"
 #include "platform/every.h"
@@ -97,7 +98,7 @@ constexpr std::uint8_t  kPauseReason = 6;
 constexpr std::uint8_t  kUnread      = 0xFF;
 
 // The animation world manager W = [0x14939BC48] and its camera snapshot (§2.1).
-constexpr std::uintptr_t kAnimWorld         = 0x14939BC48;
+using facts::kAnimWorldManager;
 constexpr std::uint32_t  kSnapshotLocation  = 0x8C0;
 constexpr std::uint32_t  kSnapshotSpeed     = 0x908;  // float
 constexpr std::uint32_t  kSnapshotTurn      = 0x90C;  // float
@@ -545,8 +546,8 @@ void SampleNow()
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto root  = image.Rebase(kGameRoot, sizeof(void*));
-    const auto world = image.Rebase(kAnimWorld, sizeof(void*));
+    const auto root  = image.Rebase(facts::kEndGameRoot, sizeof(void*));
+    const auto world = image.Rebase(kAnimWorldManager, sizeof(void*));
     g_gameRoot       = root ? *root : 0;
     g_animWorld      = world ? *world : 0;
     g_installed      = leader_scope::Install(image) && g_gameRoot != 0;

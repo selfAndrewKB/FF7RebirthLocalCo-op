@@ -12,8 +12,8 @@ namespace lss::player_two::leader_scope {
 namespace {
 
 // The party manager's leader, an FWeakObjectPtr {index, serial} read by ResolvePartyLeaderWeakPtr.
-constexpr std::uint32_t kPartyManagerLeader = 0x148;
-constexpr std::uint32_t kPartyManagerLeaderType = 0x150;  // u8
+using facts::kPartyManagerLeader;
+using facts::kPartyManagerLeaderType;
 
 // Set once at install.
 std::uintptr_t g_partyManager = 0;  // the address holding the party manager

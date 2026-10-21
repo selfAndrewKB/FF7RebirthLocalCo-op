@@ -3,6 +3,7 @@
 #include "dev/dev_switch.h"
 #include "facts/controller.h"
 #include "facts/engine.h"
+#include "facts/party.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
@@ -48,7 +49,7 @@ constexpr std::uintptr_t kGate         = 0x14169AE88;  // BattleHitFx_ShouldPlay
 constexpr std::uintptr_t kCameraCall   = 0x14131FE78;
 constexpr std::uintptr_t kCamera       = 0x1416FAE10;  // PrimaryPCM_CameraEffect2DF0_Play (§10.12)
 constexpr std::uintptr_t kFallbackCall = 0x14131FEA2;
-constexpr std::uintptr_t kPrimary      = 0x140A61D1C;  // GetPrimaryEndPlayerController_FromPartyManager
+using facts::kGetPrimaryEndPlayerController;
 // 1.005 (RE-1005-field-2.md §6): the fallback call is at 0x14139787C, %16 = 12, so it crosses a 16-byte block. There the
 // three calls are changed together from the game thread's first tick (InstallFromOwnThread), outside every hit: the
 // hit reaction runs on the game thread [ASSUMPTION: battle damage is applied in the world tick; the gate's leader
@@ -584,7 +585,8 @@ void Install(const platform::GameImage& image) noexcept
         };
         g_hitSites    = {hit(g_gateCall, kGateCall, kGate, reinterpret_cast<std::uintptr_t>(&Gate)),
                          hit(g_cameraCall, kCameraCall, kCamera, reinterpret_cast<std::uintptr_t>(&Camera)),
-                         hit(g_fallbackCall, kFallbackCall, kPrimary, reinterpret_cast<std::uintptr_t>(&Fallback))};
+                         hit(g_fallbackCall, kFallbackCall, kGetPrimaryEndPlayerController,
+                             reinterpret_cast<std::uintptr_t>(&Fallback))};
         g_hitsPending = std::all_of(g_hitSites.begin(), g_hitSites.end(),
                                     [](const HitSite& s) { return s.redirect != nullptr; });
     }
@@ -593,7 +595,8 @@ void Install(const platform::GameImage& image) noexcept
         const bool gate = g_gateCall.InstallResearch(image, kGateCall, kGate, reinterpret_cast<std::uintptr_t>(&Gate));
         const bool camera   = gate && g_cameraCall.InstallResearch(image, kCameraCall, kCamera,
                                                                    reinterpret_cast<std::uintptr_t>(&Camera));
-        const bool fallback = gate && g_fallbackCall.InstallResearch(image, kFallbackCall, kPrimary,
+        const bool fallback = gate && g_fallbackCall.InstallResearch(image, kFallbackCall,
+                                                                    kGetPrimaryEndPlayerController,
                                                                      reinterpret_cast<std::uintptr_t>(&Fallback));
         if (gate && (!camera || !fallback))
         {

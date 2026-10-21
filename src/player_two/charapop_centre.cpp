@@ -1,6 +1,7 @@
 #include "player_two/charapop_centre.h"
 
 #include "facts/controller.h"
+#include "facts/world.h"
 #include "platform/entry_redirect.h"
 #include "platform/every.h"
 #include "platform/guarded.h"
@@ -280,7 +281,7 @@ void SetActive(bool active, const wchar_t* why) noexcept
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto root   = image.Rebase(charapop::kGameRoot, sizeof(void*));
+    const auto root   = image.Rebase(facts::kEndGameRoot, sizeof(void*));
     const auto setter = platform::FindFunction(image, kSetCentre);
     const auto score  = platform::FindFunction(image, kScore);
     g_gameRoot        = root ? *root : 0;

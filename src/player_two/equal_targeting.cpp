@@ -28,20 +28,14 @@ namespace {
 // (PM ? PM[+0x150] : 16), once before its per-type loop; only al is used. On this build the call's five bytes cross a
 // 16-byte block (1.005: inside one). The target is checked by the redirect itself (the site must call it).
 constexpr std::uintptr_t kLeaderTypeCall = 0x140FA5E1F;
-constexpr std::uintptr_t kLeaderType     = 0x1408070C4;
+using facts::kGetPartyLeaderType;
 
 // The Condition select, bool(selector, u8 reason, UObject** out), in its vtable's slot +0x88 (the out is written on
 // every path; 0 keeps the current target). RE §8, S-TGTCENSUS; 1.005 through replaced-target-census.json.
-constexpr std::uint8_t kCondSelectBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x55, 0x56, 0x57,
-                                             0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57};
-constexpr platform::SlotFact kCondSelect{L"the Condition target selector's select slot (vt+0x88)", 0x14580C260,
-                                         {L"CondTargetSel_Select_Vt88", 0x140FA5230, kCondSelectBytes}};
+using facts::kCondTargetSelect;
 
 // Called, not hooked: the game's own rule for a candidate, as BuildCandidates applies it to each player type.
-constexpr std::uint8_t kCharacterByTypeBytes[] = {0x4C, 0x8B, 0x05, 0xA5, 0xA6, 0x96, 0x08, 0x44,
-                                                  0x0F, 0xB6, 0xC9, 0x4D, 0x85, 0xC0, 0x0F, 0x84};
-constexpr platform::FunctionFact kCharacterByType{L"PartyManager_GetCharacterByPlayerType", 0x140A31634,
-                                                  kCharacterByTypeBytes};
+using facts::kCharacterByPlayerType;
 constexpr std::uint8_t kValidTargetBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48,
                                               0x89, 0x68, 0x18, 0x48, 0x89, 0x70, 0x20, 0x48};
 constexpr platform::FunctionFact kValidTarget{L"EnemyTargetSel_IsValidTarget", 0x140CB9B78, kValidTargetBytes};
@@ -50,7 +44,7 @@ constexpr std::uint8_t  kPartyLane = 0;  // the battle/field party's slots
 // The selector's excluded player types: TArray<u8, TInlineAllocator<10>> holding 15, so the data is on the heap
 // (read like the game: the heap pointer if set, else inline).
 constexpr std::uint32_t kSelExcluded = 0x140, kSelExcludedHeap = 0x150, kSelExcludedNum = 0x158;
-constexpr std::uint32_t kPartyLeaderType = 0x150;  // u8, the party manager's leader type
+using facts::kPartyManagerLeaderType;
 constexpr std::uint8_t  kPartyTypes      = 15;     // candidate types 0..14
 constexpr std::uint32_t kNoTypes         = 0xFFFF;
 constexpr int           kNoType          = -1;  // no leader-test answer (member_movement)
@@ -185,11 +179,11 @@ bool Install(const platform::GameImage& image) noexcept
                       L"the game's own answer");
         return false;
     }
-    const auto characterByType = platform::FindFunction(image, kCharacterByType);
+    const auto characterByType = platform::FindFunction(image, kCharacterByPlayerType);
     const auto validTarget     = platform::FindFunction(image, kValidTarget);
     const auto manager         = image.Rebase(facts::kPartyManagerGlobal, sizeof(void*));
     const auto site            = image.Rebase(kLeaderTypeCall, 5);
-    const auto target          = image.Rebase(kLeaderType);
+    const auto target          = image.Rebase(kGetPartyLeaderType.address);
     if (!characterByType || !validTarget || !manager || !site || !target)
     {
         platform::Log(L"equal targeting: UNAVAILABLE (a check failed); Condition enemies keep the game's own answer");
@@ -211,7 +205,7 @@ bool Install(const platform::GameImage& image) noexcept
     }
     // The select slot: the one place the answer is held. Without it the leader-type redirect passes through (no
     // answer is ever on a thread).
-    if (!platform::ReplaceSlot(image, kCondSelect, reinterpret_cast<std::uintptr_t>(&CondSelect), g_condSelect))
+    if (!platform::ReplaceSlot(image, kCondTargetSelect, reinterpret_cast<std::uintptr_t>(&CondSelect), g_condSelect))
     {
         platform::Log(L"equal targeting: UNAVAILABLE (the Condition select's slot differs); Condition enemies keep the "
                       L"game's own answer");
@@ -271,7 +265,8 @@ void Tick() noexcept
     if (member != nullptr &&
         platform::CopyGuarded(&manager, reinterpret_cast<const void*>(g_partyManager), sizeof(manager)) &&
         manager != nullptr &&
-        platform::CopyGuarded(&leader, static_cast<const std::byte*>(manager) + kPartyLeaderType, sizeof(leader)))
+        platform::CopyGuarded(&leader, static_cast<const std::byte*>(manager) + kPartyManagerLeaderType,
+                              sizeof(leader)))
     {
         const auto memberType = party_member::PlayerTypeOf(member);
         if (memberType && *memberType < kPartyTypes && leader < kPartyTypes && *memberType != leader)

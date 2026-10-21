@@ -1,5 +1,6 @@
 #include "player_two/charapop_near.h"
 
+#include "facts/world.h"
 #include "platform/every.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -432,7 +433,7 @@ void Pass(Detail detail)
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto root   = image.Rebase(charapop::kGameRoot, sizeof(void*));
+    const auto root   = image.Rebase(facts::kEndGameRoot, sizeof(void*));
     const auto setter = platform::FindFunction(image, kSetMinLevel);
     g_gameRoot        = root ? *root : 0;
     g_setMinLevel     = setter ? reinterpret_cast<SetMinLevelFn>(*setter) : nullptr;

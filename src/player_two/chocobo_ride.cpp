@@ -7,6 +7,7 @@
 #include "facts/move_state.h"
 #include "facts/party.h"
 #include "facts/vehicles.h"
+#include "facts/world.h"
 #include "player_two/describe.h"
 #include "player_two/ride_rules.h"
 #define RC_UNREAL_DISABLE_PROPERTY_DEPRECATION_WARNINGS
@@ -635,7 +636,7 @@ bool Install(const platform::GameImage& image) noexcept
     g_fn.endRide        = reinterpret_cast<EndRideFn>(find(kEndRide));
     g_fn.switchAi       = reinterpret_cast<SwitchAiFn>(find(kSwitchAiControlAsync));
     g_fn.chocoboFor     = reinterpret_cast<ChocoboForFn>(find(kChocoboForCharacter));
-    const auto root     = image.Rebase(charapop::kGameRoot, sizeof(void*));
+    const auto root     = image.Rebase(facts::kEndGameRoot, sizeof(void*));
     const auto key      = image.Rebase(kVehicleKeyName, sizeof(std::uint64_t));
     g_gameRoot          = root ? *root : 0;
     g_vehicleKey        = key ? reinterpret_cast<const std::uint64_t*>(*key) : nullptr;

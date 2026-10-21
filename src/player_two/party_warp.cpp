@@ -37,7 +37,8 @@ struct VariantFact
 };
 
 constexpr VariantFact kVariants[] = {
-    {L"PLAYER", Subject::Member, 0x14580C8F8, 0x140CB9618, 0x14183BD94, 0x1431CF7D4, 0x140B1975C, true},
+    {L"PLAYER", Subject::Member, facts::kFollowStatePlayerVTable, 0x140CB9618, 0x14183BD94, 0x1431CF7D4, 0x140B1975C,
+     true},
     {L"CHOCOBO_MEMBER", Subject::Chocobo, 0x145CB2C00, 0x140CB9618, 0x14183BD94, 0x1431CF7D4, 0x1431D851C, false},
     {L"CHOCOBO_SUB", Subject::Chocobo, 0x145CB1650, 0x140CB9618, 0x14183BD94, 0x1431CF7D4, 0x1431D851C, false},
     {L"CHOCOBO", Subject::Chocobo, 0x145CB2918, 0x1431C9638, 0x14183BD94, 0x1431CF7D4, 0x1431D84F4, false},

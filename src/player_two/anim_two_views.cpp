@@ -2,6 +2,7 @@
 
 #include "facts/controller.h"
 #include "facts/engine.h"
+#include "facts/world.h"
 #include "platform/angles.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
@@ -37,7 +38,7 @@ namespace lss::player_two::anim_two_views {
 namespace {
 
 // 1.004 addresses; 1.005 through replaced-anim-two-views.json (every call site and function read from both exes).
-constexpr std::uintptr_t kAnimWorld   = 0x14939BC48;  // the animation world manager W
+using facts::kAnimWorldManager;
 constexpr std::uintptr_t kClearCall   = 0x140A32B57;  // PropagateLinkedActorCamDist's last call: its arrays are refilled
 constexpr std::uintptr_t kEvalCall    = 0x141001E92;  // AnimBudgetAllocator_Tick_SE: the parallel evaluation
 constexpr std::uintptr_t kEvalTarget  = 0x1410025A0;  // ParallelFor_Wrapper
@@ -442,7 +443,7 @@ std::uintptr_t CallTarget(const platform::GameImage& image, std::uintptr_t site)
 
 void Install(const platform::GameImage& image) noexcept
 {
-    const auto world = image.Rebase(kAnimWorld, sizeof(void*));
+    const auto world = image.Rebase(kAnimWorldManager, sizeof(void*));
     const auto cls   = image.Rebase(kInterfaceClassGlobal, sizeof(void*));
     const auto iface = platform::FindFunction(image, kInterfaceOf);
     const auto meas  = platform::FindFunction(image, kMeasure);

@@ -121,7 +121,7 @@ bool Find(const platform::GameImage& image, const platform::FunctionFact& fact, 
 bool Install(const platform::GameImage& image) noexcept
 {
     bool gate   = Find(image, facts::kIsPlayerCore, g_gate.isPlayerCore);
-    gate        = Find(image, facts::kIsPrimaryCharacter, g_gate.isPrimaryOnes) && gate;
+    gate        = Find(image, facts::kIsActiveRiddenVehicle, g_gate.isPrimaryOnes) && gate;
     gate        = Find(image, facts::kSpecialMoveCharacter, g_gate.specialActor) && gate;
     gate        = Find(image, facts::kMoveStateControlOwner, g_gate.controlOwner) && gate;
     gate        = Find(image, facts::kHasStateTag, g_gate.hasStateTag) && gate;

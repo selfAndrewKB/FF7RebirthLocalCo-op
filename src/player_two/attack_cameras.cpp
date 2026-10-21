@@ -1,5 +1,6 @@
 #include "player_two/attack_cameras.h"
 
+#include "facts/party.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/every.h"
@@ -32,7 +33,7 @@ using Clock = std::chrono::steady_clock;
 // The battle system (a pointer global; it creates the list with itself and frees it with itself, §9.1d) and its
 // sequence list at +0x50: entry list head +0x08; per-camera state +0x48 (u8 last active priority) and +0x70..+0x8F (the
 // previous focus point and camera location, an FVector and 4 bytes of padding each).
-constexpr std::uintptr_t kBattleSystem   = 0x14939BC58;
+using facts::kBattleStateGlobal;
 constexpr std::uint32_t  kList           = 0x50;
 constexpr std::uint32_t  kEntries        = 0x08;
 constexpr std::uint32_t  kLastPriority   = 0x48;
@@ -231,7 +232,7 @@ void Cut(std::uint64_t cut, std::uint64_t second) noexcept
 
 void Install(const platform::GameImage& image) noexcept
 {
-    const auto system = image.Rebase(kBattleSystem, sizeof(std::uintptr_t));
+    const auto system = image.Rebase(kBattleStateGlobal, sizeof(std::uintptr_t));
     g_battleSystem    = system ? *system : 0;
 
     const auto site    = image.Rebase(kCutCall, 5);

@@ -33,14 +33,14 @@ namespace {
 // The battle target system (RE-p2-targeting.md §1, §2; a pointer global): the lock byte, the switch
 // latch, the skip byte, the displayed target. The soft target itself lives in each character's
 // BattlePlayer component (+0x258 object, +0x260 its reference controller).
-constexpr std::uintptr_t kBattleSystem   = 0x14939BC58;
+using facts::kBattleStateGlobal;
 constexpr std::uint32_t  kLockMode       = 0x8C;
 constexpr std::uint32_t  kSwitchLatch    = 0x8D;
 constexpr std::uint32_t  kSkipTargeting  = 0x96;
 constexpr std::uint32_t  kDisplayed      = 0x70;
 constexpr std::uint32_t  kTargetSlot     = 0x258;
 // The party manager's leader, an FWeakObjectPtr {index, serial} read by ResolvePartyLeaderWeakPtr.
-constexpr std::uint32_t  kPartyManagerLeader = 0x148;
+using facts::kPartyManagerLeader;
 
 // The command controller (read only, for the log): its battle-phase gates, guard mode and request array.
 using facts::kCmdHudMode;
@@ -199,7 +199,7 @@ bool Install(const platform::GameImage& image) noexcept
         const auto live = platform::FindFunction(image, fact);
         return live ? *live : std::uintptr_t{0};
     };
-    const auto battleSystem = image.Rebase(kBattleSystem, sizeof(void*));
+    const auto battleSystem = image.Rebase(kBattleStateGlobal, sizeof(void*));
     const auto partyManager = image.Rebase(facts::kPartyManagerGlobal, sizeof(void*));
     const auto system = image.Rebase(facts::kEndUISystem, facts::kUICommandController + sizeof(void*));
     const auto vtable = image.Rebase(kBattlePlayerComponentVTable, sizeof(void*));

@@ -22,10 +22,21 @@ using platform::FunctionFact;
 using platform::SlotFact;
 
 // The party manager
-/// The party manager (a native singleton): +0x140 is the primary player controller, an
-/// FWeakObjectPtr {index, serial} read by GetPrimaryEndPlayerController (0x140A61D1C).
+/// The party manager (a native singleton): +0x140 is the primary player controller, an FWeakObjectPtr {index, serial}
+/// read by GetPrimaryEndPlayerController_FromPartyManager (its only read, RE-p2-camera-movement-ida.md §1.1); +0x148
+/// the leader (an FWeakObjectPtr, read by ResolvePartyLeaderWeakPtr); +0x150 the leader's player type (u8).
 inline constexpr std::uintptr_t kPartyManagerGlobal            = 0x14939BCE0;
 inline constexpr std::uint32_t  kPartyManagerPrimaryController = 0x140;
+inline constexpr std::uint32_t  kPartyManagerLeader            = 0x148;
+inline constexpr std::uint32_t  kPartyManagerLeaderType        = 0x150;
+/// GetPrimaryEndPlayerController_FromPartyManager: a redirect target only; the call sites it is placed at prove it.
+inline constexpr std::uintptr_t kGetPrimaryEndPlayerController = 0x140A61D1C;
+/// UEndPartyAPI_GetPartyLeaderType (a leaf): PM ? PM[+0x150] : 16, in al (RE-p2-enemy-target-bias.md).
+inline constexpr std::uint8_t kGetPartyLeaderTypeBytes[] = {0x48, 0x8B, 0x05, 0x15, 0x4C, 0xB9, 0x08, 0x48, 0x85, 0xC0,
+                                                            0x74, 0x07, 0x8A, 0x80, 0x50, 0x01, 0x00, 0x00, 0xC3, 0xB0,
+                                                            0x10, 0xC3};
+inline constexpr FunctionFact kGetPartyLeaderType{L"UEndPartyAPI_GetPartyLeaderType", 0x1408070C4,
+                                                  kGetPartyLeaderTypeBytes};
 /// Party roster: lane 0 is the field lane; a type of 0x10 or more is "none".
 inline constexpr std::uint8_t kFieldLane       = 0;
 inline constexpr std::uint8_t kNoPlayerType    = 0x10;
@@ -109,7 +120,10 @@ inline constexpr std::uint8_t kPlayerTypeFromComponentBytes[] = {
 inline constexpr FunctionFact kPlayerTypeFromComponent{L"EndCharacter_GetPlayerTypeFromComponent", 0x1409EFE50,
                                                        kPlayerTypeFromComponentBytes};
 
-// The AI: enemy controllers, the active brain and its state
+// The AI: enemy controllers, the active brain and its state, the follow state
+/// The AI follow state's player-subject class (vtable, data): FollowState_TickTeleportEQS at its +0x58, ForceTeleport
+/// +0x270, FinishForcedTeleportNow +0x278 (player_two/party_warp, nav_strand).
+inline constexpr std::uintptr_t kFollowStatePlayerVTable = 0x14580C8F8;
 // Enemy AI controllers (EndAIControllerEnemyBase, both builds): an FWeakObjectPtr to the enemy character.
 inline constexpr std::uint32_t kEnemyControllerCharacter = 0x464;
 // The AI controller's active brain and its state (RE-p2-member-handover.md §3.3)
@@ -129,8 +143,9 @@ inline constexpr FunctionFact kValidateAiController{L"EndCharacter::ValidateAICo
                                                     kValidateAiControllerBytes};
 
 // The tag registry
-/// The tag registry: a weak pointer to the world's EndCharacterMovementActor, whose +0x278 is a
-/// TMap<FName, int32> with 20-byte elements {FName, int32 count, ...}; and the trigger actor's tag.
+/// The tag registry: a weak pointer to the world's EndCharacterMovementActor (the trigger registry, FieldTick's `this`;
+/// player_two/trigger_two), whose +0x278 is a TMap<FName, int32> with 20-byte elements {FName, int32 count, ...}; and
+/// the trigger actor's tag.
 inline constexpr std::uintptr_t kTagRegistryWeak         = 0x1470C94C0;
 inline constexpr std::uint32_t  kTagRegistryMap          = 0x278;
 inline constexpr std::uint32_t  kTagRegistryElementSize  = 20;
@@ -140,6 +155,14 @@ inline constexpr std::uintptr_t kTriggerTagName          = 0x1491E3EE0;
 inline constexpr std::uint8_t kTagSetFindIdBytes[] = {
     0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x7C, 0x24, 0x10, 0x8B, 0x41, 0x08, 0x48, 0x8B, 0xFA};
 inline constexpr FunctionFact kTagSetFindId{L"the tag registry lookup", 0x1408428F0, kTagSetFindIdBytes};
+
+// Battle targeting: the Condition target selector's select, bool(selector, u8 reason, UObject** out), in its vtable's
+// slot +0x88 (the out is written on every path; 0 keeps the current target). RE-p2-enemy-target-bias.md §8; the slot
+// is replaced by player_two/equal_targeting, watched by target_census.
+inline constexpr std::uint8_t kCondTargetSelectBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x55, 0x56, 0x57,
+                                                          0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57};
+inline constexpr SlotFact kCondTargetSelect{L"the Condition target selector's select slot (vt+0x88)", 0x14580C260,
+                                            {L"CondTargetSel_Select_Vt88", 0x140FA5230, kCondTargetSelectBytes}};
 
 // Game globals: the option holder and the battle state
 /// Two game objects that exist once the game has started and are missing at the title and early in

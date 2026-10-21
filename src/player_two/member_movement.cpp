@@ -269,7 +269,7 @@ bool Install(const platform::GameImage& image) noexcept
     g_moveStateVTable  = *vtable;
     const auto core    = platform::FindFunction(image, facts::kIsPlayerCore);
     g_isPlayerCore     = core ? reinterpret_cast<LeaderTestFn>(*core) : nullptr;
-    const auto ridden  = platform::FindFunction(image, facts::kIsPrimaryCharacter);
+    const auto ridden  = platform::FindFunction(image, facts::kIsActiveRiddenVehicle);
     g_isRiddenVehicle  = ridden ? reinterpret_cast<LeaderTestFn>(*ridden) : nullptr;
     const auto clear   = platform::FindFunction(image, facts::kFieldActionHandleClear);
     g_handleClear      = clear ? reinterpret_cast<HandleClearFn>(*clear) : nullptr;

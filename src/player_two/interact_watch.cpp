@@ -1,5 +1,7 @@
 #include "player_two/interact_watch.h"
 
+#include "facts/party.h"
+#include "facts/world.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
@@ -41,12 +43,12 @@ namespace lss::player_two::interact_watch {
 namespace {
 
 // The objects (RE-p2-field-interact.md §1.1, §10; this build).
-constexpr std::uintptr_t kGameRoot          = 0x1490FEDE8;  // pointer global: the engine root
-constexpr std::uint32_t  kRootWorldItems    = 0x288;        // WorldItemMgr
-constexpr std::uintptr_t kPartyManager      = 0x14939BCE0;  // pointer global
-constexpr std::uint32_t  kPartyController   = 0x140;        // FWeakObjectPtr: the primary controller
-constexpr std::uint32_t  kPartyLeader       = 0x148;        // FWeakObjectPtr: the leader
-constexpr std::uint32_t  kPartyLeaderType   = 0x150;        // u8
+using facts::kEndGameRoot;
+using facts::kRootWorldItems;
+using facts::kPartyManagerGlobal;
+using facts::kPartyManagerPrimaryController;
+using facts::kPartyManagerLeader;
+using facts::kPartyManagerLeaderType;
 
 // FieldActionMgr (§1.2, §1.3, §10.D).
 constexpr std::uint32_t kOctree         = 0x10;
@@ -214,13 +216,13 @@ const std::uint8_t* Party() noexcept
 void* Leader() noexcept
 {
     const auto* party = Party();
-    return party != nullptr ? leader_scope::ObjectAt(party + kPartyLeader) : nullptr;
+    return party != nullptr ? leader_scope::ObjectAt(party + kPartyManagerLeader) : nullptr;
 }
 
 void* PrimaryController() noexcept
 {
     const auto* party = Party();
-    return party != nullptr ? leader_scope::ObjectAt(party + kPartyController) : nullptr;
+    return party != nullptr ? leader_scope::ObjectAt(party + kPartyManagerPrimaryController) : nullptr;
 }
 
 /// The leader and primary controller for the log: resolved only on the game thread (the weak-pointer resolve is
@@ -296,7 +298,7 @@ void AddPoint(void* mgr, std::uint8_t talk, const std::uint64_t* key, const std:
                       Name(ReadField<std::uint64_t>(preset, 0)), Name(ReadField<std::uint64_t>(presetPlayer, 0)),
                       preset2 != 0 ? L", second " + Name(preset2) : std::wstring(),
                       presetPlayer2 != 0 ? L" / " + Name(presetPlayer2) : std::wstring(), at[0], at[1], at[2],
-                      registrar, ReadField<std::uint8_t>(Party(), kPartyLeaderType));
+                      registrar, ReadField<std::uint8_t>(Party(), kPartyManagerLeaderType));
     }
     catch (...)
     {
@@ -683,8 +685,8 @@ void Summary(std::wstring& installed, std::wstring& skipped, const wchar_t* what
 void Install(const platform::GameImage& image) noexcept
 {
     g_image          = image;
-    const auto root  = image.Rebase(kGameRoot, sizeof(void*));
-    const auto party = image.Rebase(kPartyManager, sizeof(void*));
+    const auto root  = image.Rebase(kEndGameRoot, sizeof(void*));
+    const auto party = image.Rebase(kPartyManagerGlobal, sizeof(void*));
     if (!root || !party || !leader_scope::Install(image))
     {
         platform::Log(L"interact: the root or party manager is outside the image; not watched");

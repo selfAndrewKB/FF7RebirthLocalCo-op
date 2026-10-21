@@ -3,6 +3,7 @@
 #include "facts/controller.h"
 #include "facts/party.h"
 #include "facts/vehicles.h"
+#include "facts/world.h"
 #include "platform/build_value.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -83,7 +84,7 @@ constexpr std::uint32_t kInputCatchOther = 0x11B0;
 constexpr std::uint32_t kInputAccelOther = 0x11B4;
 
 // The on/off counters (§4): [[game root]+0x170] + base + 4 * id, two arrays.
-constexpr std::uint32_t                kRootOnOff      = 0x170;
+using facts::kRootGameState;
 constexpr std::uint32_t                kOnOffBase      = 0x1A1238C;
 constexpr std::uint32_t                kOnOffAltBase   = 0x1A1263C;
 constexpr std::array<std::uint32_t, 3> kOnOffIds       = {152, 136, 4};
@@ -172,7 +173,7 @@ Snapshot Read(float& nearestFree)
         s.memberType = *type;
     }
     const void* root  = ReadPointer(reinterpret_cast<const void*>(g_gameRoot), 0);
-    const void* onOff = ReadPointer(root, kRootOnOff);
+    const void* onOff = ReadPointer(root, kRootGameState);
     for (std::size_t i = 0; onOff != nullptr && i < kOnOffIds.size(); ++i)
     {
         s.onOff[i]     = ReadField<std::int32_t>(onOff, kOnOffBase + 4 * kOnOffIds[i]);
@@ -337,7 +338,7 @@ bool Install(const platform::GameImage& image) noexcept
 {
     const auto coord   = image.Rebase(kScooterCoordinatorVTable);
     const auto scooter = image.Rebase(kScooterCharacterVTable);
-    const auto root    = image.Rebase(charapop::kGameRoot, sizeof(void*));
+    const auto root    = image.Rebase(facts::kEndGameRoot, sizeof(void*));
     const auto input   = image.Rebase(facts::kSquareInputGlobal, sizeof(void*));
     g_coordVt          = coord ? *coord : 0;
     g_scooterVt        = scooter ? *scooter : 0;

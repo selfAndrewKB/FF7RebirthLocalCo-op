@@ -1,6 +1,7 @@
 #include "player_two/attack_framing.h"
 
 #include "facts/controller.h"
+#include "facts/party.h"
 #include "player_two/world_rules.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
@@ -46,7 +47,7 @@ constexpr std::uintptr_t                kUpdateCalls[]  = {0x140C427CE, 0x140B6A
 constexpr std::uintptr_t                kUpdatePose     = 0x140AEF118;
 constexpr std::uint8_t                  kUpdatePoseBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x20, 0x55, 0x56, 0x57};
 constexpr std::uintptr_t                kLeaderCalls[]  = {0x140AF0EC5, 0x14292F6D9, 0x142AA2995};
-constexpr std::uintptr_t                kCharacterByType = 0x140A31634;
+using facts::kCharacterByPlayerType;
 
 // The list entry {u8 priority +0, FWeakObjectPtr sequence actor +4}; the sequence actor's camera actor (1.005 +0x20);
 // the camera actor's owner (reflection, both builds).
@@ -374,7 +375,7 @@ void Install(const platform::GameImage& image) noexcept
         g_involvesLeader = reinterpret_cast<CameraFn>(involves);
     }
     g_sites.updatePose      = at(kUpdatePose);
-    g_sites.characterByType = at(kCharacterByType);
+    g_sites.characterByType = at(kCharacterByPlayerType.address);
     g_sites.d2 = g_sites.updatePose != 0 && g_sites.characterByType != 0 && image.BytesMatch(kUpdatePose, kUpdatePoseBytes);
     for (std::size_t i = 0; i < std::size(kUpdateCalls); ++i)
     {

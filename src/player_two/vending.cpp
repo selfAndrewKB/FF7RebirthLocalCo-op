@@ -84,7 +84,7 @@ std::uintptr_t          g_cameraTarget = 0;  // 1.005: the camera function (the 
 const std::uint64_t*    g_vendingPreset = nullptr;  // the FName global's live address
 std::uintptr_t          g_partyManager  = 0;        // the pointer global's live address
 std::optional<platform::GameImage> g_image;  // for research IDA addresses in the log
-constexpr std::uint32_t kPartyLeader    = 0x148;    // the party manager's leader, an FWeakObjectPtr
+using facts::kPartyManagerLeader;
 
 // Game thread.
 enum class Shop
@@ -146,7 +146,8 @@ const wchar_t* Whose(const void* character) noexcept
 const void* Leader() noexcept
 {
     const void* manager = ReadPointer(reinterpret_cast<const void*>(g_partyManager), 0);
-    return manager != nullptr ? leader_scope::ObjectAt(static_cast<const std::uint8_t*>(manager) + kPartyLeader) : nullptr;
+    return manager != nullptr ? leader_scope::ObjectAt(static_cast<const std::uint8_t*>(manager) + kPartyManagerLeader)
+                              : nullptr;
 }
 
 /// Whether the shop camera's target names the machine of player 2's pending press (no target: a press is enough).

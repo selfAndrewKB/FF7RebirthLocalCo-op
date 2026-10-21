@@ -58,7 +58,7 @@ constexpr std::uint8_t   kRequestAiBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x55
                                               0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57};
 // T2: its hand-over test, partner comp type == UEndPartyAPI_GetPartyLeaderType() (1.004: crosses a block).
 constexpr std::uintptr_t kRequestLeaderTest = 0x140F2AD1E;
-constexpr std::uintptr_t kLeaderType        = 0x1408070C4;
+using facts::kGetPartyLeaderType;
 // E1: LinkMember_End_RepossessLeaderWithPrimaryPC(rcx unused, record, member, index): every link member's end (sync
 // start for the partner, command end, record end, battle teardown). 1.005: the first instruction crosses a block, the
 // redirect goes on the second. T3: its give-back test, EndCharacter_GetPlayerTypeFromComponent(member) ==
@@ -71,7 +71,7 @@ constexpr std::size_t    kFirstInstruction  = 5;  // mov [rsp+8], rbx
 constexpr std::size_t    kSecondInstruction = 5;  // mov [rsp+10h], rsi
 constexpr std::uintptr_t kEndLeaderTest   = 0x140F2AB8A;
 constexpr std::uintptr_t kEndPrimary      = 0x140F2ABBA;
-constexpr std::uintptr_t kPrimary         = 0x140A61D1C;
+using facts::kGetPrimaryEndPlayerController;
 // The type the give-back test compares: the same function, on the remembered character.
 using facts::kPlayerTypeFromComponent;
 // Classic mode (deferred): the game's Classic hand-over keeps the controller (AI pause reason 5), so it is left alone.
@@ -1087,11 +1087,11 @@ void Install(const platform::GameImage& image) noexcept
     g_sites.startTest   = at(kStartLeaderTest, 5);
     g_sites.requestAi   = at(kRequestAi);
     g_sites.requestTest = at(kRequestLeaderTest, 5);
-    g_sites.leaderType  = at(kLeaderType);
+    g_sites.leaderType  = at(kGetPartyLeaderType.address);
     g_sites.memberEnd   = at(kMemberEnd, std::size(kMemberEndBytes));
     g_sites.endTest     = at(kEndLeaderTest, 5);
     g_sites.endPrimary  = at(kEndPrimary, 5);
-    g_sites.primary     = at(kPrimary);
+    g_sites.primary     = at(kGetPrimaryEndPlayerController);
     // Optional: without it a parry-window skill's human partner is handed over at the stance, as before.
     g_sites.abilityHandle = at(kAbilityHandleVtable, sizeof(void*));
     const auto typeOf   = platform::FindFunction(image, kPlayerTypeFromComponent);

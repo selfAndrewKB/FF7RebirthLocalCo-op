@@ -60,10 +60,12 @@ inline constexpr std::uint8_t kIsPlayerCoreBytes[] = {
     0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x08, 0x7F, 0x8A, 0x01,
     0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x89, 0x38, 0x06, 0x00, 0x00, 0x33, 0xDB};
 inline constexpr FunctionFact kIsPlayerCore{L"IsUCPC_Core", 0x14080701C, kIsPlayerCoreBytes};
-inline constexpr std::uint8_t kIsPrimaryCharacterBytes[] = {
+inline constexpr std::uint8_t kIsActiveRiddenVehicleBytes[] = {
     0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xAC, 0x84, 0x80, 0x01};
-inline constexpr FunctionFact kIsPrimaryCharacter{L"the primary controller's character test", 0x1408A6A74,
-                                                  kIsPrimaryCharacterBytes};
+/// IsActiveRiddenVehicle(actor): the primary controller rides it (its +0x5B8 coordinator's body is the actor;
+/// RE-p2-chocobo-ride.md, RE-p2-chocobo-climb.md); the movement gate's second character clause.
+inline constexpr FunctionFact kIsActiveRiddenVehicle{L"IsActiveRiddenVehicle", 0x1408A6A74,
+                                                     kIsActiveRiddenVehicleBytes};
 inline constexpr std::uint8_t kSpecialMoveCharacterBytes[] = {
     0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x6C, 0x0D, 0xA2, 0x00, 0x48, 0x2B, 0xE0, 0x48};
 inline constexpr FunctionFact kSpecialMoveCharacter{L"the gate's third character", 0x14168E1B8,

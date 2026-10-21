@@ -158,9 +158,9 @@ constexpr std::array<std::uintptr_t, kActions> kActionKeys{0x1491E44D8, 0x1491E4
 using facts::kUICommandController;
 using facts::kUIInput;
 // The party manager's leader type (u8; PM+0x148 is the leader's weak pointer, player_two/leader_scope).
-constexpr std::uint32_t kLeaderType = 0x150;
-constexpr std::uint32_t kPrimary    = 0x140;
-constexpr std::uint32_t kLeaderWeak = 0x148;
+using facts::kPartyManagerLeaderType;
+using facts::kPartyManagerPrimaryController;
+using facts::kPartyManagerLeader;
 
 // The controller (RE-p2-command-menu-tick.md §1, §2, §7).
 using facts::kCmdStoredLeaderType;
@@ -547,9 +547,9 @@ void PlayerTwoPass(float deltaTime) noexcept
     {
         return Refused(L"player 2's member could not be read");
     }
-    const auto before = std::array<std::uint64_t, 3>{ReadAt<std::uint64_t>(manager + kPrimary),
-                                                     ReadAt<std::uint64_t>(manager + kLeaderWeak),
-                                                     ReadAt<std::uint8_t>(manager + kLeaderType)};
+    const auto before = std::array<std::uint64_t, 3>{ReadAt<std::uint64_t>(manager + kPartyManagerPrimaryController),
+                                                     ReadAt<std::uint64_t>(manager + kPartyManagerLeader),
+                                                     ReadAt<std::uint8_t>(manager + kPartyManagerLeaderType)};
     const auto leaderType = static_cast<std::uint8_t>(before[2]);
     {
         focus_scope::FocusScope focus(reinterpret_cast<void*>(two));
@@ -600,9 +600,9 @@ void PlayerTwoPass(float deltaTime) noexcept
         }
         Watch(two, one);
     }
-    const auto after = std::array<std::uint64_t, 3>{ReadAt<std::uint64_t>(manager + kPrimary),
-                                                    ReadAt<std::uint64_t>(manager + kLeaderWeak),
-                                                    ReadAt<std::uint8_t>(manager + kLeaderType)};
+    const auto after = std::array<std::uint64_t, 3>{ReadAt<std::uint64_t>(manager + kPartyManagerPrimaryController),
+                                                    ReadAt<std::uint64_t>(manager + kPartyManagerLeader),
+                                                    ReadAt<std::uint8_t>(manager + kPartyManagerLeaderType)};
     if (after != before)
     {
         Line(L"WARNING: the primary controller or the party leader differs after player 2's pass");
@@ -685,7 +685,7 @@ bool InPlayerTwoUi(Route route, const wchar_t* what, Call&& call) noexcept
     {
         return refuse(L"player 2's member could not be read");
     }
-    const auto leaderType = ReadAt<std::uint8_t>(manager + kLeaderType);
+    const auto leaderType = ReadAt<std::uint8_t>(manager + kPartyManagerLeaderType);
     focus_scope::FocusScope focus(reinterpret_cast<void*>(two));
     if (!focus.Entered())
     {

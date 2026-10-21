@@ -11,6 +11,7 @@
 #include "facts/move_state.h"
 #include "facts/party.h"
 #include "facts/vehicles.h"
+#include "facts/world.h"
 #include "platform/build_value.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -577,7 +578,7 @@ void Run()
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto root  = image.Rebase(charapop::kGameRoot, sizeof(void*));
+    const auto root  = image.Rebase(facts::kEndGameRoot, sizeof(void*));
     const auto input = image.Rebase(facts::kSquareInputGlobal, sizeof(void*));
     const auto test  = platform::FindFunction(image, facts::kIsPlayerCore);
     const std::uintptr_t vts[] = {kChocoboCoordinatorVTable, kBuggyCoordinatorVTable, kBroncoCoordinatorVTable,

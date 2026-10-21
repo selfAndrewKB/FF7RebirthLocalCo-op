@@ -1,6 +1,8 @@
 #include "player_two/walk_limits.h"
 
 #include "facts/party.h"
+#include "facts/world.h"
+#include "platform/verified_code.h"
 #include "player_two/world_rules.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -46,7 +48,7 @@ constexpr std::uint32_t  kControllerLayer7Dash = 0x8A4 + 7;
 
 // §4.3.1: the location manager (a pointer), its volume array, lock, pause byte and move-type stack; each
 // AEndLocationVolume's fields; and the game's containment test LocationVolume_ContainsPoint(volume, &position, margin).
-constexpr std::uintptr_t kLocationManager    = 0x14939BCA0;
+using facts::kLocationVolumeManager;
 constexpr std::uint32_t  kManagerVolumes     = 0x08;
 constexpr std::uint32_t  kManagerVolumeCount = 0x10;
 constexpr std::uint32_t  kManagerStack       = 0xF8;   // {int32 refcount; u8 move; u8 dash; pad} entries
@@ -61,9 +63,7 @@ constexpr std::uint32_t  kVolumeDashType     = 0x2EA;  // EEndDashType
 constexpr std::uint32_t  kVolumeForcedOut    = 0x308;  // bool: never entered by position; a forced volume leaves
 constexpr std::uint32_t  kFlagDisabled = 0x1, kFlagForce = 0x2, kFlagChangeMovementType = 0x8000;
 constexpr std::int32_t   kMaxVolumes   = 4096;
-constexpr std::uintptr_t kContainsPoint = 0x140A9F840;
-constexpr std::uint8_t   kContainsPointBytes[] = {0x40, 0x53, 0xB8, 0x50, 0x00, 0x00, 0x00, 0xE8, 0xE4,
-                                                  0xF6, 0x60, 0x01, 0x48, 0x2B, 0xE0, 0x33, 0xDB};
+using facts::kLocationVolumeContainsPoint;
 
 constexpr int       kMaxInside  = 32;   // move-type volumes player 2 stands in at once (a handful in practice)
 constexpr ULONGLONG kRetryMs    = 250;  // a write the game's gate declined is tried again this often
@@ -397,15 +397,15 @@ bool Install(const platform::GameImage& image) noexcept
     const auto party    = image.Rebase(facts::kPartyManagerGlobal, sizeof(void*));
     const auto set      = image.Rebase(kSetLayer7);
     const auto listener = image.Rebase(kMoveTypeListener, sizeof(void*));
-    const auto manager  = image.Rebase(kLocationManager, sizeof(void*));
-    const auto contains = image.Rebase(kContainsPoint);
+    const auto manager  = image.Rebase(kLocationVolumeManager, sizeof(void*));
+    const auto contains = platform::FindFunction(image, kLocationVolumeContainsPoint);
     if (create && party && primary_controller::Installed() && image.BytesMatch(kCreateNavArea, kCreateNavAreaBytes))
     {
         g_createNavArea = reinterpret_cast<CreateNavAreaFn>(*create);
         g_partyManager  = *party;
     }
     if (set && listener && manager && contains && primary_controller::Installed() &&
-        image.BytesMatch(kSetLayer7, kSetLayer7Bytes) && image.BytesMatch(kContainsPoint, kContainsPointBytes))
+        image.BytesMatch(kSetLayer7, kSetLayer7Bytes))
     {
         g_setLayer7 = reinterpret_cast<SetLayer7Fn>(*set);
         g_listener  = *listener;

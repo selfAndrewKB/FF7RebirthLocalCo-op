@@ -1,5 +1,7 @@
 #include "views/whole_screen.h"
 
+#include "facts/party.h"
+#include "facts/world.h"
 #include "views/whole_screen_rules.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -28,8 +30,8 @@ constexpr std::uint32_t  kMenuKind = 0x3BC;  // uint8: EEndSystemPauseMenuKind
 
 // The on/off table: its owner at [[0x1490FEDE8]+0x170] (a native game object the game mode creates
 // and frees), two int32 counts per id; an id is on while their sum is not zero.
-constexpr std::uintptr_t kGameRoot     = 0x1490FEDE8;
-constexpr std::uint32_t  kStateManager = 0x170;
+using facts::kEndGameRoot;
+using facts::kRootGameState;
 constexpr std::uint32_t  kOnOffCountA  = 0x1A1238C;
 constexpr std::uint32_t  kOnOffCountB  = 0x1A1263C;
 
@@ -97,9 +99,9 @@ constexpr std::uint32_t kId36Setter = 0x1A12A0C;
 // The game's battle test, UEndBattleAPI_IsInBattle (1.004 0x1408E242C), as reads: the battle system's byte +0x300 is 0
 // and the encounter state ([[game root]+0x1B8]+0x3D558) is 3 or 4. The game does not null-check the battle system; this
 // does.
-constexpr std::uintptr_t kBattleSystem   = 0x14939BC58;
+using facts::kBattleStateGlobal;
 constexpr std::uint32_t  kBattleIdle     = 0x300;
-constexpr std::uint32_t  kRootGameMode   = 0x1B8;
+using facts::kRootModeHolder;
 constexpr std::uint32_t  kEncounterState = 0x3D558;
 // The frog-guys manager (a pointer global to a plain C++ object, cleared in its destructor before it dies) and its
 // EndStateMachine's current row (+0x18, into a static table in the exe; the state id is the row's first i32: 2 load ..
@@ -343,7 +345,7 @@ bool InBattle(std::uintptr_t root) noexcept
     const std::uintptr_t system = ReadAt<std::uintptr_t>(g_battleSystem);
     std::uint8_t         idle   = 1;
     std::uint8_t         state  = 0;
-    const std::uintptr_t mode   = root != 0 ? ReadAt<std::uintptr_t>(root + kRootGameMode) : 0;
+    const std::uintptr_t mode   = root != 0 ? ReadAt<std::uintptr_t>(root + kRootModeHolder) : 0;
     return system != 0 && Read(system + kBattleIdle, idle) && idle == 0 && mode != 0 &&
            Read(mode + kEncounterState, state) && EncounterInBattle(state);
 }
@@ -466,7 +468,7 @@ void LogOnChange(const ScreenSignals& now) noexcept
 bool InstallWholeScreen(const platform::GameImage& image) noexcept
 {
     const auto getState = image.Rebase(kGetEndGameState);
-    const auto root     = image.Rebase(kGameRoot, sizeof(std::uintptr_t));
+    const auto root     = image.Rebase(kEndGameRoot, sizeof(std::uintptr_t));
     const auto manager  = image.Rebase(kCutsceneManager, sizeof(std::uintptr_t));
     const auto playing  = image.Rebase(kIsAnyPlaying);
     if (!getState || !root || !manager || !playing || !image.BytesMatch(kGetEndGameState, kGetEndGameStateBytes) ||
@@ -508,7 +510,7 @@ bool InstallWholeScreen(const platform::GameImage& image) noexcept
         }
     }
     g_screenWidgets = screen_widgets::Install(image);
-    const auto battleSystem = image.Rebase(kBattleSystem, sizeof(std::uintptr_t));
+    const auto battleSystem = image.Rebase(kBattleStateGlobal, sizeof(std::uintptr_t));
     const auto frogManager  = image.Rebase(kFrogManager, sizeof(std::uintptr_t));
     const auto gbikeManager = image.Rebase(kGBikeManager, sizeof(std::uint64_t));
     g_battleSystem          = battleSystem ? *battleSystem : 0;
@@ -556,7 +558,7 @@ ScreenSignals ReadScreenSignals() noexcept
         signals.title             = AtTitle(gameState);
         signals.jobBoard          = JobBoardOpen();
         const std::uintptr_t root = ReadAt<std::uintptr_t>(g_gameRoot);
-        if (const std::uintptr_t stateManager = root != 0 ? ReadAt<std::uintptr_t>(root + kStateManager) : 0)
+        if (const std::uintptr_t stateManager = root != 0 ? ReadAt<std::uintptr_t>(root + kRootGameState) : 0)
         {
             signals.scriptMenu    = AnyMenuId(stateManager);
             signals.skippable     = OnOff(stateManager, kSkippableSceneId);
@@ -564,7 +566,7 @@ ScreenSignals ReadScreenSignals() noexcept
             signals.miniGameMenu  = OnOff(stateManager, kMiniGameMenuId);
         }
         signals.chadleyState = ChadleyState(root);
-        ReadMinigame(signals, root, root != 0 ? ReadAt<std::uintptr_t>(root + kStateManager) : 0);
+        ReadMinigame(signals, root, root != 0 ? ReadAt<std::uintptr_t>(root + kRootGameState) : 0);
         signals.pauseWidget  = PauseWidgetAlive();
         signals.nativeMenus  = NativeMenusOpen();
         signals.screenWidget = g_screenWidgets && screen_widgets::FullScreenOpen();

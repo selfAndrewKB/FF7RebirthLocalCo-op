@@ -2,6 +2,8 @@
 
 #include "facts/cameras.h"
 #include "facts/controller.h"
+#include "facts/world.h"
+#include "platform/verified_code.h"
 #include "player_two/world_rules.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -50,7 +52,7 @@ constexpr std::uint32_t  kBattleOperator    = 0x2CA8;
 // g_LocationVolumeManager (a pointer), its volume array (+8 data, +0x10 count) and lock (+0x188, a
 // CRITICAL_SECTION the game's update holds), each AEndLocationVolume's flags, margin, row and priority, and the
 // game's own containment test LocationVolume_ContainsPoint(volume, &position, margin) (a pure read).
-constexpr std::uintptr_t kLocationManager    = 0x14939BCA0;
+using facts::kLocationVolumeManager;
 constexpr std::uint32_t  kManagerVolumes     = 0x08;
 constexpr std::uint32_t  kManagerVolumeCount = 0x10;
 constexpr std::uint32_t  kManagerLock        = 0x188;
@@ -61,9 +63,7 @@ constexpr std::uint32_t  kVolumeCameraRow    = 0x2E0;   // FName CameraSettingID
 constexpr std::uint32_t  kVolumeCameraPriority = 0x2E8; // lower = higher priority
 constexpr std::uint32_t  kFlagDisabled = 0x1, kFlagChangeCamera = 0x8;
 constexpr std::int32_t   kMaxVolumes   = 4096;
-constexpr std::uintptr_t kContainsPoint = 0x140A9F840;
-constexpr std::uint8_t   kContainsPointBytes[] = {0x40, 0x53, 0xB8, 0x50, 0x00, 0x00, 0x00, 0xE8, 0xE4,
-                                                  0xF6, 0x60, 0x01, 0x48, 0x2B, 0xE0, 0x33, 0xDB};
+using facts::kLocationVolumeContainsPoint;
 constexpr std::uint32_t  kOpSetLocation   = 0xE0;  // op vtable: SetLocationSetting(op, location, row)
 constexpr std::uint32_t  kOpClearLocation = 0xE8;  // op vtable: ClearLocationSetting(op, location, row)
 
@@ -320,10 +320,10 @@ bool Install(const platform::GameImage& image) noexcept
     const bool nav = navSlot && navTick && primary_controller::Installed() &&
                      image.BytesMatch(kNavAreaTick, kNavAreaTickBytes) &&
                      g_navTick.Replace(*navSlot, *navTick, reinterpret_cast<std::uintptr_t>(&NavAreaTick));
-    const auto manager  = image.Rebase(kLocationManager, sizeof(void*));
-    const auto contains = image.Rebase(kContainsPoint);
+    const auto manager  = image.Rebase(kLocationVolumeManager, sizeof(void*));
+    const auto contains = platform::FindFunction(image, kLocationVolumeContainsPoint);
     // Player 2's own rows check their own two facts only (the gate above is a separate lever).
-    if (manager && contains && image.BytesMatch(kContainsPoint, kContainsPointBytes))
+    if (manager && contains)
     {
         g_manager  = *manager;
         g_contains = reinterpret_cast<ContainsFn>(*contains);

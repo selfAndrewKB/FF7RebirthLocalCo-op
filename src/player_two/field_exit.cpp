@@ -1,6 +1,7 @@
 #include "player_two/field_exit.h"
 
 #include "facts/party.h"
+#include "facts/world.h"
 #include "platform/entry_redirect.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -25,7 +26,7 @@ constexpr std::uint8_t kRequestExitBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8
 constexpr platform::FunctionFact kRequestExit{L"AEndGameMode_RequestFieldExit_Clear71", 0x1410A9168, kRequestExitBytes};
 constexpr std::size_t kFirstInstruction = 5;
 
-constexpr std::uintptr_t kGameMode   = 0x1490FEDE8;  // the AEndGameMode (a pointer global)
+using facts::kEndGameRoot;
 constexpr std::uint32_t  kFieldStep  = 0x70;         // EEndFieldStep; 13 once the entry steps are done
 constexpr std::uint32_t  kRunning    = 0x71;         // 1 while the field runs
 constexpr std::uint8_t   kStepSettled = 13;
@@ -68,7 +69,7 @@ void RequestExit() noexcept
 bool Install(const platform::GameImage& image, LeaveFn leave, void* context) noexcept
 {
     const auto target  = platform::FindFunction(image, kRequestExit);
-    const auto mode    = image.Rebase(kGameMode, sizeof(void*));
+    const auto mode    = image.Rebase(kEndGameRoot, sizeof(void*));
     const auto manager = image.Rebase(facts::kPartyManagerGlobal, sizeof(void*));
     bool       ok      = target && mode && manager;
     if (ok)

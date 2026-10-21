@@ -1,5 +1,6 @@
 #include "player_two/party_switch.h"
 
+#include "facts/party.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/deferred_sites.h"
@@ -20,10 +21,9 @@ namespace {
 // Facts read from the database (RE-p2-party-switch.md §Q1, §Q4, recipe; this build).
 // The two component getters the switch asks per member, and their calls in the cycle and CanSwitch.
 constexpr std::uint8_t kPlayerComponentBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x08, 0xF7, 0x6B, 0x01};
-constexpr std::uint8_t kAiComponentBytes[]     = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x02, 0xF0, 0x6B, 0x01};
 constexpr platform::FunctionFact kPlayerComponent{L"EndCharacter_GetBattlePlayerControllerComponent", 0x1409EF81C,
                                                   kPlayerComponentBytes};
-constexpr platform::FunctionFact kAiComponent{L"EndCharacter_GetAIControllerComponent", 0x1409EFF24, kAiComponentBytes};
+using facts::kAiControllerComponent;
 constexpr std::uintptr_t kCycleCall     = 0x14158BAB0;  // in BattleLeader_CycleSwitch: rcx = the candidate
 constexpr std::uintptr_t kCanSwitchCall = 0x14158BD82;  // in CanSwitch: rcx = the member counted
 
@@ -31,10 +31,8 @@ constexpr std::uintptr_t kCanSwitchCall = 0x14158BD82;  // in CanSwitch: rcx = t
 // lookup of a character by player type (a leaf), PartyManager_GetCharacterByPlayerType(0, type).
 constexpr std::uint8_t kDisabledBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x80,
                                            0x00, 0x00, 0x00, 0xE8, 0x38, 0xD3, 0x17, 0x01};
-constexpr std::uint8_t kByTypeBytes[]   = {0x4C, 0x8B, 0x05, 0xA5, 0xA6, 0x96, 0x08, 0x44,
-                                           0x0F, 0xB6, 0xC9, 0x4D, 0x85, 0xC0, 0x0F, 0x84};
 constexpr platform::FunctionFact kDisabled{L"CommandSwitchHud_IsMemberSwitchDisabled", 0x140F31BE8, kDisabledBytes};
-constexpr platform::FunctionFact kByType{L"PartyManager_GetCharacterByPlayerType", 0x140A31634, kByTypeBytes};
+using facts::kCharacterByPlayerType;
 constexpr std::uintptr_t kDisabledCalls[] = {0x140F318C3, 0x140F31BB5};
 
 using ComponentFn = void* (*)(void* character);
@@ -170,8 +168,9 @@ bool Install(const platform::GameImage& image) noexcept
 {
     const auto find = [&image](const platform::FunctionFact& fact) { return platform::FindFunction(image, fact).value_or(0); };
     const auto site = [&image](std::uintptr_t address) { return image.Rebase(address, 5).value_or(0); };
-    g_sites = {find(kPlayerComponent), find(kAiComponent), site(kCycleCall), site(kCanSwitchCall),
-               find(kDisabled),        find(kByType),      {site(kDisabledCalls[0]), site(kDisabledCalls[1])}};
+    g_sites = {find(kPlayerComponent), find(kAiControllerComponent), site(kCycleCall), site(kCanSwitchCall),
+               find(kDisabled),        find(kCharacterByPlayerType),
+               {site(kDisabledCalls[0]), site(kDisabledCalls[1])}};
     // The cycle's call crosses a 16-byte block in 1.005: the sites are placed from the game thread, between its
     // ticks (platform/deferred_sites.h). The placement reads only the addresses found here.
     const bool placed = g_placement.Install(image, &PlaceSites);

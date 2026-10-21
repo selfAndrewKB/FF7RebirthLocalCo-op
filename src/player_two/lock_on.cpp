@@ -4,6 +4,7 @@
 #include "facts/engine.h"
 #include "facts/hud.h"
 #include "facts/in_battle.h"
+#include "facts/party.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/code_redirect.h"
@@ -94,7 +95,7 @@ constexpr std::uintptr_t kPanelSetCall         = 0x14295F139;  // crosses a bloc
 constexpr std::uintptr_t kMarkerNameCall       = 0x140C8F9C9;
 
 // The battle system (a pointer global) and its target fields (§R.1, §9; S-TGT5 §5).
-constexpr std::uintptr_t kBattleSystem = 0x14939BC58;
+using facts::kBattleStateGlobal;
 constexpr std::uint32_t  kCursor       = 0x68;  // the target cursor widget
 constexpr std::uint32_t  kDisplayed    = 0x70;  // TWeakPtr {object, reference controller}
 constexpr std::uint32_t  kTrace        = 0x80;  // the cursor's async trace handle
@@ -741,7 +742,7 @@ bool Install(const platform::GameImage& image) noexcept
     g_cursorRelease = reinterpret_cast<CursorFn>(find(kCursorRelease));
     g_deactivate    = reinterpret_cast<LayerFn>(find(kDeactivate));
     g_moduleOn      = reinterpret_cast<LayerTestFn>(find(kModuleOn));
-    const auto system = image.Rebase(kBattleSystem, sizeof(void*));
+    const auto system = image.Rebase(kBattleStateGlobal, sizeof(void*));
     const auto ui     = image.Rebase(facts::kEndUISystem, facts::kUIEnemyStatus + sizeof(void*));
     g_battleSystem    = system ? *system : 0;
     g_endUISystem     = ui ? *ui : 0;

@@ -52,8 +52,6 @@ constexpr std::size_t    kDecideFirst = 5;
 // equal_targeting's (it holds the answer there and tells this census); the Hate and None slots are watched here.
 constexpr std::uint8_t kHateSelectBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x55, 0x56, 0x57,
                                              0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57};
-constexpr std::uint8_t kCondSelectBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x55, 0x56, 0x57,
-                                             0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57};
 constexpr std::uint8_t kNoneSelectBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8,
                                              0x5C, 0x4E, 0x3F, 0x01, 0x48, 0x2B, 0xE0, 0x48};
 constexpr std::uint32_t kSelectSlot = 0x88;
@@ -71,8 +69,7 @@ constexpr std::size_t    kKinds       = 3;  // the kinds told apart
 constexpr platform::SlotFact kSelectSlots[kKinds] = {
     {L"the Hate target selector's select slot (vt+0x88)", 0x145CB40B0,
      {L"HateTargetSel_Select_Vt88", 0x140FA729C, kHateSelectBytes}},
-    {L"the Condition target selector's select slot (vt+0x88)", 0x14580C260,
-     {L"CondTargetSel_Select_Vt88", 0x140FA5230, kCondSelectBytes}},  // its vtable only: the slot is equal_targeting's
+    facts::kCondTargetSelect,  // its vtable only: the slot is equal_targeting's
     {L"the None target selector's select slot (vt+0x88)", 0x14580C318,
      {L"NoneTargetSel_Select_Vt88", 0x140CBA0C8, kNoneSelectBytes}},
 };
@@ -114,7 +111,7 @@ constexpr std::uint32_t kHateInline = 0x188, kHateHeap = 0x5C0, kHateNum = 0x5C8
 // Condition selector: the history of picks, u8 last kind (0 UCPC, 1 AIPC, 3 none) and int run count.
 constexpr std::uint32_t kCondLastKind = 0x1E0, kCondRunCount = 0x1E4;
 // Party manager: the leader (FWeakObjectPtr), player 1's character.
-constexpr std::uint32_t kPartyLeader = 0x148;
+using facts::kPartyManagerLeader;
 // Lock group (a TMap value; its FName key is 8 bytes before it). +0x25 is bIgnoreProvocation: the strong lock slot (7)
 // when set, else the weak one (1); each member's priority is in the member (RE §18.4).
 constexpr std::int32_t  kGroupName = -8;
@@ -586,7 +583,7 @@ std::uint64_t Decide(std::uint64_t selector, std::uint64_t reason, std::uint64_t
     {
         applied = final;
     }
-    const void* leader = Weak(PartyManager(), kPartyLeader);
+    const void* leader = Weak(PartyManager(), kPartyManagerLeader);
     // The stage: the decoy changed the applied target; else the select's pick stood; else the redirect pair or the
     // highest lock slot holding it; else the current target was kept (no select, reasons 3 and 4, or a Condition 0).
     Stage stage = Stage::Kept;
@@ -657,7 +654,7 @@ void OnPick(const void* group, std::uint64_t result, std::uint64_t out, bool fir
         return;
     }
     void*       picked      = out != 0 ? leader_scope::ObjectAt(reinterpret_cast<const void*>(out)) : nullptr;
-    const Whose whose       = WhoseIs(picked, Weak(PartyManager(), kPartyLeader));
+    const Whose whose       = WhoseIs(picked, Weak(PartyManager(), kPartyManagerLeader));
     const bool  prioritized = ReadField<std::uint8_t>(self, kGroupPrioritize) != 0;
     Count(g_tally.groupPicks);
     if (prioritized)

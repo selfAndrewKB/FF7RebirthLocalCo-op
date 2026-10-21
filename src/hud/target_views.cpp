@@ -2,6 +2,7 @@
 
 #include "facts/engine.h"
 #include "facts/hud.h"
+#include "facts/party.h"
 #include "hud/hud_rules.h"
 #include "hud/widget_opacity.h"
 #include "platform/build_value.h"
@@ -58,7 +59,7 @@ constexpr std::uintptr_t kCreateCall = 0x140A66B85;
 constexpr std::uintptr_t kSyncCall   = 0x140B20F39;
 
 // The battle system's displayed target and cursor (player 1's outside every scope).
-constexpr std::uintptr_t kBattleSystem = 0x14939BC58;
+using facts::kBattleStateGlobal;
 constexpr std::uint32_t  kCursor       = 0x68;
 constexpr std::uint32_t  kDisplayed    = 0x70;
 
@@ -415,7 +416,7 @@ bool Install(const platform::GameImage& image) noexcept
     g_mainTarget = reinterpret_cast<MainTargetFn>(find(kMainTarget));
     g_release    = reinterpret_cast<ReleaseFn>(find(facts::kWeakPtrRelease));
     g_enemyAi    = reinterpret_cast<EnemyAiFn>(find(kEnemyAi));
-    const auto system  = image.Rebase(kBattleSystem, sizeof(void*));
+    const auto system  = image.Rebase(kBattleStateGlobal, sizeof(void*));
     const auto ui      = image.Rebase(facts::kEndUISystem, facts::kUIEnemyStatus + sizeof(void*));
     g_installed =
         g_mainTarget && g_release && g_enemyAi && player_two::weak_object::Known() && system && ui &&

@@ -2,6 +2,7 @@
 
 #include "facts/controller.h"
 #include "facts/engine.h"
+#include "facts/party.h"
 #include "player_two/field_rules.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
@@ -155,7 +156,7 @@ constexpr platform::FunctionFact kSetClear{L"FieldTick's scratch set clear", 0x1
 using SetClearFn = void (*)(void* set);
 
 // Data.
-constexpr std::uintptr_t kRegistryWeak = 0x1470C94C0;  // FWeakObjectPtr to the trigger registry (FieldTick's `this`)
+using facts::kTagRegistryWeak;
 constexpr std::uintptr_t kOverlapLock  = 0x1491DE5D8;  // CRITICAL_SECTION held while FieldTick reads an overlap datum
 constexpr std::uintptr_t kSweepFlagA   = 0x1493BE6DA;  // either set: FieldTick reads sweep results instead
 constexpr std::uintptr_t kSweepFlagB   = 0x1493BE6D9;
@@ -786,7 +787,7 @@ void Install(const platform::GameImage& image) noexcept
     const auto allocate = platform::FindFunction(image, kMalloc);
     const auto release  = platform::FindFunction(image, kFree);
     const auto clear    = platform::FindFunction(image, kSetClear);
-    const auto registry = image.Rebase(kRegistryWeak, 8);
+    const auto registry = image.Rebase(kTagRegistryWeak, 8);
     const auto lock     = image.Rebase(kOverlapLock, sizeof(CRITICAL_SECTION));
     const auto flagA    = image.Rebase(kSweepFlagA);
     const auto flagB    = image.Rebase(kSweepFlagB);

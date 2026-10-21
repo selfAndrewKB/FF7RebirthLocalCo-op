@@ -1,6 +1,7 @@
 #include "player_two/switch_volume_two.h"
 
 #include "facts/engine.h"
+#include "facts/world.h"
 #include "player_two/world_rules.h"
 #include "platform/build_value.h"
 #include "platform/every.h"
@@ -218,7 +219,7 @@ void Install(const platform::GameImage& image) noexcept
     const auto vtable = image.Rebase(kVolumeVtable, std::max<std::uint32_t>(kEnterSlot, kLeaveSlot) + 8);
     const auto enter  = image.Rebase(kEnterOverride);
     const auto leave  = image.Rebase(kLeaveOverride);
-    const auto root   = image.Rebase(charapop::kGameRoot, sizeof(std::uintptr_t));
+    const auto root   = image.Rebase(facts::kEndGameRoot, sizeof(std::uintptr_t));
     const bool slots  = vtable && enter && leave &&
                        ReadField<std::uintptr_t>(reinterpret_cast<const void*>(*vtable), kEnterSlot) == *enter &&
                        ReadField<std::uintptr_t>(reinterpret_cast<const void*>(*vtable), kLeaveSlot) == *leave;

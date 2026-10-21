@@ -125,7 +125,7 @@ constexpr std::uint32_t  kStateType          = 0x18;
 constexpr std::uint32_t  kStateTeleportRange = 0x344;
 constexpr std::uint32_t  kStateTeleporting   = 0x39D;
 constexpr std::uint8_t   kStateFollow        = 7;
-constexpr std::uintptr_t kFollowStatePlayerVTable = 0x14580C8F8;
+using facts::kFollowStatePlayerVTable;
 
 constexpr float kMaxTickSeconds = 0.25f;  // a hitch counts as this much, so one frame never completes a hold
 

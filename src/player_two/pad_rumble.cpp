@@ -6,6 +6,7 @@
 #include <Unreal/UObject.hpp>
 #include <Unreal/UObjectGlobals.hpp>
 
+#include "facts/controller.h"
 #include "platform/entry_redirect.h"
 #include "platform/every.h"
 #include "platform/guarded.h"
@@ -37,7 +38,7 @@ constexpr std::uintptr_t kNoteLastDevice        = 0x1415F4900;
 constexpr std::uint8_t   kNoteLastDeviceBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
                                                    0x24, 0x10, 0x48, 0x89, 0x7C, 0x24, 0x18, 0x41};
 constexpr std::size_t    kNoteLastDeviceFirst   = 5;
-constexpr std::uintptr_t kInputOwner    = 0x1493496F0;  // pointer global: the owner (EndUISystem+0x10)
+using facts::kSquareInputGlobal;
 constexpr std::uint32_t  kOwnerPad      = 0x74;         // i32: the last XInput pad
 constexpr std::uintptr_t kPlatformApp   = 0x149247570;  // pointer global: the platform application
 constexpr std::uint32_t  kAppDeviceCode = 0x1E0;        // i32: the device code PC1's force feedback goes to
@@ -162,7 +163,7 @@ void LogDevice() noexcept
 
 void Install(const platform::GameImage& image) noexcept
 {
-    const auto owner = image.Rebase(kInputOwner, sizeof(void*));
+    const auto owner = image.Rebase(kSquareInputGlobal, sizeof(void*));
     const auto app   = image.Rebase(kPlatformApp, sizeof(void*));
     const auto note  = image.Rebase(kNoteLastDevice);
     g_owner          = owner ? *owner : 0;

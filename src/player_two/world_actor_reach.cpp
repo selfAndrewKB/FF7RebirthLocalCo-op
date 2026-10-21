@@ -1,6 +1,7 @@
 #include "player_two/world_actor_reach.h"
 
 #include "facts/controller.h"
+#include "facts/world.h"
 #include "player_two/world_rules.h"
 #include "platform/every.h"
 #include "platform/guarded.h"
@@ -387,7 +388,7 @@ void Pass() noexcept
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto root   = image.Rebase(charapop::kGameRoot, sizeof(void*));
+    const auto root   = image.Rebase(facts::kEndGameRoot, sizeof(void*));
     const auto vtable = image.Rebase(kOctreeVtable, sizeof(void*));
     const auto items  = image.Rebase(kItemVtable, sizeof(void*));
     g_rootGlobal      = root ? *root : 0;
