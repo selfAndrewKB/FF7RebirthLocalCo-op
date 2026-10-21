@@ -1,8 +1,9 @@
 #include "views/window_span.h"
 
-#include "platform/engine_addresses.h"
+#include "facts/engine.h"
 #include "platform/guarded.h"
 #include "platform/log.h"
+#include "platform/verified_code.h"
 #include "players/unreal_access.h"
 #include "views/monitor_row.h"
 
@@ -105,7 +106,8 @@ std::optional<NativeWindow> FindNativeWindow(const wchar_t** why) noexcept
     NativeWindow window;
     window.object = reinterpret_cast<void*>(*native);
     void* handle  = nullptr;
-    if (!platform::CallGuarded(Slot<GetOSWindowHandleFn>(engine::kWindowsWindowSlotGetOSWindowHandle), handle, window.object))
+    if (!platform::CallGuarded(Slot<GetOSWindowHandleFn>(facts::kWindowsWindowSlotGetOSWindowHandle), handle,
+                               window.object))
     {
         *why = L"GetOSWindowHandle faulted";
         return std::nullopt;
@@ -118,7 +120,8 @@ std::optional<NativeWindow> FindNativeWindow(const wchar_t** why) noexcept
         *why = L"GetOSWindowHandle is not a top-level window of this process";
         return std::nullopt;
     }
-    if (!platform::CallGuarded(Slot<GetWindowModeFn>(engine::kWindowsWindowSlotGetWindowMode), window.mode, window.object))
+    if (!platform::CallGuarded(Slot<GetWindowModeFn>(facts::kWindowsWindowSlotGetWindowMode), window.mode,
+                               window.object))
     {
         *why = L"GetWindowMode faulted";
         return std::nullopt;
@@ -175,7 +178,7 @@ BOOL CALLBACK CollectMonitor(HMONITOR handle, HDC, LPRECT, LPARAM param) noexcep
 
 bool Reshape(void* native, const Rect& rect) noexcept
 {
-    return platform::CallGuarded(Slot<ReshapeWindowFn>(engine::kWindowsWindowSlotReshapeWindow), native, rect.left,
+    return platform::CallGuarded(Slot<ReshapeWindowFn>(facts::kWindowsWindowSlotReshapeWindow), native, rect.left,
                                  rect.top, rect.Width(), rect.Height());
 }
 
@@ -194,20 +197,20 @@ void Forget() noexcept
 bool Install(const platform::GameImage& image) noexcept
 {
     // The vtable is one hand-found data address per build (its slots are read live, not translated one by one).
-    const auto engineGlobal = image.Rebase(engine::kGEngine, sizeof(std::uintptr_t));
-    const auto vtable       = image.Rebase(engine::kWindowsWindowVTable, sizeof(std::uintptr_t));
-    const auto reshape      = vtable ? ReadPointer(*vtable + engine::kWindowsWindowSlotReshapeWindow * 8) : std::nullopt;
-    const auto mode         = vtable ? ReadPointer(*vtable + engine::kWindowsWindowSlotGetWindowMode * 8) : std::nullopt;
-    const auto handle       = vtable ? ReadPointer(*vtable + engine::kWindowsWindowSlotGetOSWindowHandle * 8) : std::nullopt;
-    const auto reshapeLive  = image.Rebase(engine::kWindowsWindowReshapeWindow);
-    const auto modeLive     = image.Rebase(engine::kWindowsWindowGetWindowMode);
-    const auto handleLive   = image.Rebase(engine::kWindowsWindowGetOSWindowHandle);
-    const bool slotsHold    = reshape && mode && handle && reshapeLive && modeLive && handleLive && *reshape == *reshapeLive &&
+    const auto engineGlobal = image.Rebase(facts::kGEngine, sizeof(std::uintptr_t));
+    const auto vtable       = image.Rebase(facts::kWindowsWindowVTable, sizeof(std::uintptr_t));
+    const auto reshape      = vtable ? ReadPointer(*vtable + facts::kWindowsWindowSlotReshapeWindow * 8) : std::nullopt;
+    const auto mode         = vtable ? ReadPointer(*vtable + facts::kWindowsWindowSlotGetWindowMode * 8) : std::nullopt;
+    const auto handle       = vtable ? ReadPointer(*vtable + facts::kWindowsWindowSlotGetOSWindowHandle * 8)
+                                     : std::nullopt;
+    // Each function found only where its prologue is (platform::FindFunction logs the one that is not).
+    const auto reshapeLive  = platform::FindFunction(image, facts::kWindowsWindowReshapeWindow);
+    const auto modeLive     = platform::FindFunction(image, facts::kWindowsWindowGetWindowMode);
+    const auto handleLive   = platform::FindFunction(image, facts::kWindowsWindowGetOSWindowHandle);
+    const bool codeMatches  = platform::FindFunction(image, facts::kSetWindowTitle).has_value() && reshapeLive &&
+                             modeLive && handleLive;
+    const bool slotsHold    = codeMatches && reshape && mode && handle && *reshape == *reshapeLive &&
                            *mode == *modeLive && *handle == *handleLive;
-    const bool codeMatches = image.BytesMatch(engine::kSetWindowTitle, engine::kSetWindowTitlePrologue) &&
-                             image.BytesMatch(engine::kWindowsWindowReshapeWindow, engine::kWindowsWindowReshapeWindowPrologue) &&
-                             image.BytesMatch(engine::kWindowsWindowGetWindowMode, engine::kWindowsWindowGetWindowModePrologue) &&
-                             image.BytesMatch(engine::kWindowsWindowGetOSWindowHandle, engine::kWindowsWindowGetOSWindowHandlePrologue);
     if (!engineGlobal || !vtable || !slotsHold || !codeMatches)
     {
         platform::Log(L"window span: the game window's code is not what the research read (GEngine {}, vtable {}, slots {}, "
@@ -218,8 +221,8 @@ bool Install(const platform::GameImage& image) noexcept
     }
     g_engineGlobal         = *engineGlobal;
     g_vtable               = *vtable;
-    g_viewportWindowOffset = engine::kGameViewportWindowOffset;
-    g_nativeWindowOffset   = engine::kSWindowNativeWindowOffset;
+    g_viewportWindowOffset = facts::kGameViewportWindowOffset;
+    g_nativeWindowOffset   = facts::kSWindowNativeWindowOffset;
     g_installed            = true;
     platform::Log(L"window span: ready ('window-span on' or Ctrl+F2 while player 2 is in: the game window across its row of "
                   L"monitors through the engine's own window reshape; GameViewportWindow at +{:#x}, NativeWindow at +{:#x})",

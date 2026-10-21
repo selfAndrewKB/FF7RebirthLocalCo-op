@@ -9,7 +9,7 @@ std::optional<std::uintptr_t> FindFunction(const GameImage& image, const Functio
     const auto live = image.Rebase(fact.address);
     if (!live || !image.BytesMatch(fact.address, fact.entryBytes))
     {
-        Log(L"check failed: {} (IDA 0x{:X}) does not start with the expected bytes", fact.what, fact.address);
+        Log(L"check failed: {} (IDA 0x{:X}) does not hold the bytes the research read", fact.what, fact.address);
         return std::nullopt;
     }
     return live;

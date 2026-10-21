@@ -50,15 +50,20 @@ A file in the mod's folder keeps the game's behaviour:
 ```
 src/
   mod.cpp        the UE4SS entry point: verify, install, wire the modules together
-  platform/      the game image, the engine address table, the vtable entry, the log
+  facts/         the engine facts two or more modules share, one declaration per address
+  platform/      the game image, the fact checks, the vtable entry, the log
   players/       player 2 joining and leaving, through UE's own local-player path
   renderer/      one view family per player
 tests/           host-side tests of the logic that needs neither the game nor UE4SS
 ```
 
-Every engine address lives in `src/platform/engine_addresses.h`, with the bytes the mod checks at
-startup and the research document that established it. If any check fails, the mod installs
-nothing and says why in `UE4SS.log`.
+Engine facts (addresses, vtable slots, field offsets) are written as IDA shows them for the research
+build, each with the bytes that prove it and the research document that established it. The ones two
+or more modules share live in `src/facts/`, one declaration per address, grouped by engine object
+(`facts/engine.h` is the stock engine's); a fact one module reads stays in that module. The startup
+facts (`facts::kStartupFacts`) are checked before anything is installed: if any fails, the mod installs
+nothing and says why in `UE4SS.log`. Every other fact is checked where its feature installs
+(`platform/verified_code.h`), and that feature alone stands aside.
 
 ## Game versions
 

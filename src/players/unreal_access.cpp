@@ -1,6 +1,6 @@
 #include "players/unreal_access.h"
 
-#include "platform/engine_addresses.h"
+#include "facts/engine.h"
 #include "platform/guarded.h"
 
 #include <Unreal/Core/Containers/FString.hpp>
@@ -173,7 +173,7 @@ UObject** ControllerField(UObject* localPlayer) noexcept
     }
     auto* field = localPlayer->GetValuePtrByPropertyNameInChain<UObject*>(STR("PlayerController"));
     const auto offset = reinterpret_cast<std::uintptr_t>(field) - reinterpret_cast<std::uintptr_t>(localPlayer);
-    return field != nullptr && offset == engine::kLocalPlayerControllerOffset ? field : nullptr;
+    return field != nullptr && offset == facts::kLocalPlayerControllerOffset ? field : nullptr;
 }
 
 namespace {
@@ -203,7 +203,8 @@ std::optional<std::uint32_t> ByteOffset(UObject* object, const wchar_t* name, st
 std::uint8_t* TwoPlayerSplitscreenLayoutField() noexcept
 {
     UObject*   settings = ClassDefaultObject(STR("/Script/EngineSettings.GameMapsSettings"));
-    const auto offset   = ByteOffset(settings, STR("TwoPlayerSplitscreenLayout"), engine::kTwoPlayerSplitscreenLayoutOffset);
+    const auto offset   = ByteOffset(settings, STR("TwoPlayerSplitscreenLayout"),
+                                     facts::kTwoPlayerSplitscreenLayoutOffset);
     return offset ? reinterpret_cast<std::uint8_t*>(settings) + *offset : nullptr;
 }
 
@@ -231,7 +232,8 @@ namespace {
 std::uint8_t* ThreePlayerSplitscreenLayoutField() noexcept
 {
     UObject*   settings = ClassDefaultObject(STR("/Script/EngineSettings.GameMapsSettings"));
-    const auto offset   = ByteOffset(settings, STR("ThreePlayerSplitscreenLayout"), engine::kThreePlayerSplitscreenLayoutOffset);
+    const auto offset   = ByteOffset(settings, STR("ThreePlayerSplitscreenLayout"),
+                                     facts::kThreePlayerSplitscreenLayoutOffset);
     return offset ? reinterpret_cast<std::uint8_t*>(settings) + *offset : nullptr;
 }
 
@@ -257,7 +259,7 @@ bool WriteThreePlayerSplitscreenLayout(std::uint8_t value) noexcept
 std::optional<std::uint32_t> AspectRatioAxisConstraintOffset() noexcept
 {
     return ByteOffset(ClassDefaultObject(STR("/Script/Engine.LocalPlayer")), STR("AspectRatioAxisConstraint"),
-                      engine::kAspectRatioAxisConstraintOffset);
+                      facts::kAspectRatioAxisConstraintOffset);
 }
 
 CreatedPlayer CreatePlayerWithController(UObject* worldContext, std::int32_t controllerId) noexcept
@@ -518,7 +520,7 @@ bool RemoveLocalPlayer(UObject* gameInstance, UObject* localPlayer, std::uintptr
     // The game instance's class decides which vtable is used; RE found no class overriding this
     // entry, and this check makes that a precondition rather than an assumption.
     const auto vtable = *reinterpret_cast<const std::uintptr_t* const*>(gameInstance);
-    const auto entry  = vtable[engine::kRemoveLocalPlayerVTableOffset / sizeof(std::uintptr_t)];
+    const auto entry  = vtable[facts::kRemoveLocalPlayerVTableOffset / sizeof(std::uintptr_t)];
     if (entry != removeLocalPlayer)
     {
         return false;

@@ -1,7 +1,7 @@
 #include "views/player_view_point.h"
 
+#include "facts/engine.h"
 #include "views/axis_records.h"
-#include "platform/engine_addresses.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/settled_log.h"
@@ -304,9 +304,9 @@ void GetViewPoint(void* localPlayer, std::byte* viewInfo, std::int32_t stereoPas
 
 bool InstallPlayerViewPoint(const platform::GameImage& image) noexcept
 {
-    const auto entry    = image.Rebase(engine::kGetViewPointEntry, sizeof(void*));
-    const auto engineFn = image.Rebase(engine::kGetViewPoint);
-    const auto vtable   = image.Rebase(engine::kLocalPlayerVTable);
+    const auto entry    = image.Rebase(facts::kGetViewPointEntry, sizeof(void*));
+    const auto engineFn = image.Rebase(facts::kGetViewPoint.address);
+    const auto vtable   = image.Rebase(facts::kLocalPlayerVTable);
     if (!entry || !engineFn || !vtable)
     {
         return false;

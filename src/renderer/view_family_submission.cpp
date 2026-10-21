@@ -1,6 +1,6 @@
 #include "renderer/view_family_submission.h"
 
-#include "platform/engine_addresses.h"
+#include "facts/engine.h"
 #include "platform/frame_watch.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -235,9 +235,9 @@ __declspec(noinline) void SubmitViewFamily(void* rendererModule, void* canvas, s
 
 bool InstallViewFamilySubmission(const platform::GameImage& image) noexcept
 {
-    const auto entry      = image.Rebase(engine::kBeginRenderingViewFamilyEntry, sizeof(void*));
-    const auto engineFn   = image.Rebase(engine::kBeginRenderingViewFamily);
-    const auto drawReturn = image.Rebase(engine::kDrawSubmitReturn);
+    const auto entry      = image.Rebase(facts::kBeginRenderingViewFamilyEntry, sizeof(void*));
+    const auto engineFn   = image.Rebase(facts::kBeginRenderingViewFamily);
+    const auto drawReturn = image.Rebase(facts::kDrawSubmitReturn);
     if (!entry || !engineFn || !drawReturn)
     {
         return false;

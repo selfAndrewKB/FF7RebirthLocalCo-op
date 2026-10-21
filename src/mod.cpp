@@ -11,6 +11,7 @@
 #include <Unreal/Hooks/Hooks.hpp>
 
 #include "dev/dev_tools.h"
+#include "facts/engine.h"
 #include "hud/action_icon_base.h"
 #include "hud/hud_placement.h"
 #include "hud/layout_scale.h"
@@ -27,13 +28,13 @@
 #include "hud/second_image.h"
 #include "hud/user_widgets.h"
 #include "platform/code_memory.h"
-#include "platform/engine_addresses.h"
 #include "platform/frame_watch.h"
 #include "platform/memory_watch.h"
 #include "platform/image.h"
 #include "platform/level_names.h"
 #include "platform/log.h"
 #include "platform/module_folder.h"
+#include "platform/verified_code.h"
 #include "player_two/field_exit.h"
 #include "player_two/generation.h"
 #include "player_two/in_battle.h"
@@ -125,22 +126,21 @@ constexpr const wchar_t* kVersion = L"0.84.0";  // cleanup-2026-10: phase 2, the
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
 
-/// Checks every engine fact against the running game and logs each one that fails.
+/// Checks every startup fact against the running game; each failure is logged with the fact's name.
 /// Returns the live address of RemoveLocalPlayer when all hold.
 std::optional<std::uintptr_t> VerifyEngine(const lss::platform::GameImage& image) noexcept
 {
     bool allHold = true;
-    for (const auto& fact : lss::engine::kVerifiedCode)
+    for (const auto& fact : lss::facts::kStartupFacts)
     {
-        if (!image.BytesMatch(fact.idaAddress, fact.bytes))
+        if (!lss::platform::FindFunction(image, fact))
         {
-            Log(L"check failed: {} (IDA 0x{:X}) does not have the expected bytes", fact.what, fact.idaAddress);
             allHold = false;
         }
     }
 
-    const auto entryHolds = image.ReadPointer(lss::engine::kBeginRenderingViewFamilyEntry);
-    const auto engineFn   = image.Rebase(lss::engine::kBeginRenderingViewFamily);
+    const auto entryHolds = image.ReadPointer(lss::facts::kBeginRenderingViewFamilyEntry);
+    const auto engineFn   = image.Rebase(lss::facts::kBeginRenderingViewFamily);
     if (!entryHolds || !engineFn || *entryHolds != *engineFn)
     {
         Log(L"check failed: the renderer's vtable entry does not hold BeginRenderingViewFamily "
@@ -152,7 +152,7 @@ std::optional<std::uintptr_t> VerifyEngine(const lss::platform::GameImage& image
     // and its install is itself a compare-and-swap against the expected function
     // (views/player_view_point).
 
-    const auto removeLocalPlayer = image.Rebase(lss::engine::kRemoveLocalPlayer);
+    const auto removeLocalPlayer = image.Rebase(lss::facts::kRemoveLocalPlayer.address);
     if (!allHold || !removeLocalPlayer)
     {
         return std::nullopt;

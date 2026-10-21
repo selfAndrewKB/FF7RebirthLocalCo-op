@@ -6,8 +6,8 @@
 // for the store to [rsp+610h]. Every combination of "first in its family" and "additional family"
 // is checked, together with the jump encoding the redirect relies on.
 
+#include "facts/engine.h"
 #include "platform/code_redirect.h"
-#include "platform/engine_addresses.h"
 #include "platform/x64_jump.h"
 #include "renderer/output_load_action_code.h"
 
@@ -231,7 +231,7 @@ void TestRedirect1005()
     EXPECT(game.Run(true, true, kept) == kLoadActionClear && kept);  // the shipped behaviour: ignores the flag
 
     lss::platform::CodeRedirect redirect;
-    EXPECT(redirect.Install(game.At(GameLikeCode1005::kStoreOffset), lss::engine::kOutputLoadActionStoreBytes1005,
+    EXPECT(redirect.Install(game.At(GameLikeCode1005::kStoreOffset), lss::facts::kOutputLoadActionStoreBytes1005,
                             lss::renderer::kFirstUnlessAdditionalLoadAction1005, game.At(GameLikeCode1005::kResumeOffset)));
     EXPECT(game.Run(true, false, kept) == kLoadActionClear && kept);
     EXPECT(game.Run(true, true, kept) == kLoadActionLoad && kept);

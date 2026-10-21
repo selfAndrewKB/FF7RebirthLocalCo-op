@@ -1,24 +1,34 @@
 #pragma once
 
-// Every engine address the mod relies on, with the bytes that prove it at startup.
+// The stock engine's facts: what the mod relies on in Unreal's own code and objects, with the bytes that prove
+// each one at startup.
 //
-// Addresses are written as IDA shows them (image base 0x140000000) so they can be looked up in
-// the research documents directly; platform::GameImage rebases them. Before anything is
-// installed, the mod checks every fact in kVerifiedCode against the running game. If any
-// differs (a game patch, another mod), the mod installs nothing.
+// Addresses are written as IDA shows them (image base 0x140000000) so they can be looked up in the research
+// documents directly; platform::GameImage rebases them (and translates them for a later build). Before anything
+// is installed, the mod checks every fact in kStartupFacts against the running game. If any differs (a game
+// patch, another mod), the mod installs nothing. A fact a single feature needs is checked where that feature
+// installs, with platform::FindFunction, and the feature alone stands aside.
 //
-// Research: Rebirth/Documentation/research/RE-onefamily-feasibility.md (the view-family
-// submission), RE-additional-view-family-reader.md (the final output's load action) and
-// RE-remove-local-player.md (player removal). Engine source for comparison: FF7RebirthEngineV4
-// (stock UE4; it differs from the shipped game at the load action).
+// The facts directory holds every fact two or more modules share, one declaration per address, grouped by the
+// engine object it belongs to; a fact one module reads stays in that module. The host test tests/facts_once
+// enforces the rule.
+//
+// Research: Rebirth/Documentation/research/RE-onefamily-feasibility.md (the view-family submission),
+// RE-additional-view-family-reader.md (the final output's load action), RE-remove-local-player.md (player
+// removal), RE-local-player-viewpoint.md, RE-vertical-split-and-fill.md, RE-game-window-reshape.md. Engine source
+// for comparison: FF7RebirthEngineV4 (stock UE4; it differs from the shipped game at the load action).
 
 #include "platform/build_value.h"
+#include "platform/verified_code.h"
 
 #include <cstddef>
 #include <cstdint>
 #include <span>
 
-namespace lss::engine {
+namespace lss::facts {
+
+using platform::FunctionFact;
+using platform::SlotFact;
 
 // ---------------------------------------------------------------------------------------------
 // The view-family submission (RE-onefamily-feasibility.md §Q1, §Q2)
@@ -34,21 +44,24 @@ inline constexpr std::uintptr_t kBeginRenderingViewFamilyEntry = 0x14698B4D0;
 /// The single call in UGameViewportClient::Draw (0x140CC2194) that submits the game's view
 /// family: `call r9`. Its return address identifies the game viewport among all callers
 /// (UMG widgets submit their own families through the same entry).
-inline constexpr std::uintptr_t kDrawSubmitCall   = 0x140CC2F86;
-inline constexpr std::uintptr_t kDrawSubmitReturn = 0x140CC2F89;
 inline constexpr std::uint8_t   kDrawSubmitCallBytes[] = {0x41, 0xFF, 0xD1};  // call r9
+inline constexpr FunctionFact   kDrawSubmitCall{L"Draw's view-family submission call", 0x140CC2F86,
+                                              kDrawSubmitCallBytes};
+inline constexpr std::uintptr_t kDrawSubmitReturn = 0x140CC2F89;
 
 /// BeginRenderingViewFamily skips Scene->IncrementFrameNumber() when family+0x70 is nonzero:
 /// `cmp [rbx+70h], r12d` (rbx = the family). This is the instruction that makes +0x70 mean what
 /// renderer/scene_view_family.h says it means.
-inline constexpr std::uintptr_t kFrameNumberGate        = 0x140BEE266;
-inline constexpr std::uint8_t   kFrameNumberGateBytes[] = {0x44, 0x39, 0x63, 0x70};
+inline constexpr std::uint8_t kFrameNumberGateBytes[] = {0x44, 0x39, 0x63, 0x70};
+inline constexpr FunctionFact kFrameNumberGate{L"the frame-number gate on family+0x70", 0x140BEE266,
+                                               kFrameNumberGateBytes};
 
 /// The FSceneViewFamily constructor (0x140CC42D0) storing bAdditionalViewFamily to family+0x74:
 /// `mov al,[rbx+68h]; and al,cl; mov [rdi+74h],al` (cl = 1). The shipped game never reads the
 /// field; the mod restores its stock reader below.
-inline constexpr std::uintptr_t kAdditionalFamilyStore        = 0x140CC4353;
-inline constexpr std::uint8_t   kAdditionalFamilyStoreBytes[] = {0x8A, 0x43, 0x68, 0x22, 0xC1, 0x88, 0x47, 0x74};
+inline constexpr std::uint8_t kAdditionalFamilyStoreBytes[] = {0x8A, 0x43, 0x68, 0x22, 0xC1, 0x88, 0x47, 0x74};
+inline constexpr FunctionFact kAdditionalFamilyStore{L"the bAdditionalViewFamily store to family+0x74", 0x140CC4353,
+                                                     kAdditionalFamilyStoreBytes};
 
 // ---------------------------------------------------------------------------------------------
 // The final output's load action (RE-additional-view-family-reader.md §Q1)
@@ -59,8 +72,7 @@ inline constexpr std::uint8_t   kAdditionalFamilyStoreBytes[] = {0x8A, 0x43, 0x6
 /// action to [rsp+610h]. Checked whole, so nothing between the family load and the decision can
 /// have changed rcx: 0x14111A301 mov rcx,[r12] ... 0x14111A363 mov rax,[rcx];
 /// cmp [rax],r12 (Views[0] == View); vmovdqu; setz al; add al,1; mov [rsp+610h],al.
-inline constexpr std::uintptr_t kOutputLoadActionSequence        = 0x14111A301;
-inline constexpr std::uint8_t   kOutputLoadActionSequenceBytes[] = {
+inline constexpr std::uint8_t kOutputLoadActionSequenceBytes[] = {
     0x49, 0x8B, 0x0C, 0x24, 0x74, 0x08, 0x49, 0x8D, 0x9C, 0x24, 0x38, 0x02,
     0x00, 0x00, 0xC5, 0xF8, 0x10, 0x03, 0x48, 0x89, 0x84, 0x24, 0xF8, 0x05,
     0x00, 0x00, 0x49, 0x8B, 0xD5, 0x41, 0x8B, 0x84, 0x24, 0x38, 0x02, 0x00,
@@ -72,6 +84,8 @@ inline constexpr std::uint8_t   kOutputLoadActionSequenceBytes[] = {
     0x00, 0x00, 0x48, 0x8B, 0x01, 0x4C, 0x39, 0x20, 0xC5, 0xFA, 0x7F, 0xBC,
     0x24, 0xC8, 0x01, 0x00, 0x00, 0x0F, 0x94, 0xC0, 0x04, 0x01, 0x88, 0x84,
     0x24, 0x10, 0x06, 0x00, 0x00};
+inline constexpr FunctionFact kOutputLoadActionSequence{L"the final output's load-action decision", 0x14111A301,
+                                                        kOutputLoadActionSequenceBytes};
 
 /// The store of the computed load action (al = 2 clear if first in the family, 1 load otherwise),
 /// `mov [rsp+610h], al`, which the mod replaces; and the instruction after it, where execution
@@ -94,15 +108,13 @@ inline constexpr std::uint8_t kOutputLoadActionStoreBytes1005[] = {0x88, 0x85, 0
 /// is. Stock: the controller's camera-manager cache, so a player with a borrowed controller gets
 /// the lender's view. Called only virtually, twice per player per frame (for the view matrix and
 /// for CalcSceneView's location/rotation), through the ULocalPlayer vtable (0x146BB33D8) entry
-/// at +0x278. No native subclass overrides it.
+/// at +0x278. No native subclass overrides it. Its prologue, up to the stack-probe call whose target is relative.
 inline constexpr std::uintptr_t kLocalPlayerVTable = 0x146BB33D8;
 inline constexpr std::uintptr_t kGetViewPointEntry = 0x146BB3650;
-inline constexpr std::uintptr_t kGetViewPoint      = 0x140BF1270;
-
-/// Its prologue, up to the stack-probe call whose target is relative.
-inline constexpr std::uint8_t kGetViewPointPrologue[] = {
+inline constexpr std::uint8_t   kGetViewPointPrologue[] = {
     0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41,
     0x57, 0x48, 0x8D, 0xAC, 0x24, 0xC0, 0xF9, 0xFF, 0xFF, 0xB8, 0x40, 0x07, 0x00, 0x00, 0xE8};
+inline constexpr FunctionFact kGetViewPoint{L"ULocalPlayer::GetViewPoint", 0x140BF1270, kGetViewPointPrologue};
 
 // ---------------------------------------------------------------------------------------------
 // Removing a local player (RE-remove-local-player.md §Q1)
@@ -110,22 +122,22 @@ inline constexpr std::uint8_t kGetViewPointPrologue[] = {
 
 /// UGameInstance::RemoveLocalPlayer(ULocalPlayer*). Stock GameInstance.cpp:798. Reached through
 /// the game instance's vtable at +0x2E8; no FF7R game-instance class overrides it. 1.005 inserted a UObject virtual
-/// at slot 19, so the entry is +0x2F0 there (RE-1005-core-facts.md).
-inline constexpr std::uintptr_t                    kRemoveLocalPlayer             = 0x144F561F0;
-inline constexpr platform::PerBuild<std::uint32_t> kRemoveLocalPlayerVTableOffset = {0x2E8, 0x2F0};
-
-/// Its prologue, up to the stack-probe call whose target is relative.
+/// at slot 19, so the entry is +0x2F0 there (RE-1005-core-facts.md). Its prologue, up to the stack-probe call.
 inline constexpr std::uint8_t kRemoveLocalPlayerPrologue[] = {
     0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 0x56, 0x57, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8};
+inline constexpr FunctionFact kRemoveLocalPlayer{L"UGameInstance::RemoveLocalPlayer", 0x144F561F0,
+                                                 kRemoveLocalPlayerPrologue};
+inline constexpr platform::PerBuild<std::uint32_t> kRemoveLocalPlayerVTableOffset = {0x2E8, 0x2F0};
 
 /// Right after the probe call: `sub rsp,rax; mov rsi,rcx; mov [rsp+20h],rdx;
 /// mov rcx,[rdx+30h]; mov rbx,rdx; test rcx,rcx; jz` (the jz is at 0x144F56217). It reads the
 /// player's PlayerController at +0x30 and skips all controller cleanup when it is null.
 /// That skip is what makes removing player 2 safe once its borrowed controller is cleared.
-inline constexpr std::uintptr_t kRemoveLocalPlayerControllerTest = 0x144F56202;
-inline constexpr std::uint8_t   kRemoveLocalPlayerControllerTestBytes[] = {
+inline constexpr std::uint8_t kRemoveLocalPlayerControllerTestBytes[] = {
     0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xF1, 0x48, 0x89, 0x54, 0x24, 0x20,
     0x48, 0x8B, 0x4A, 0x30, 0x48, 0x8B, 0xDA, 0x48, 0x85, 0xC9, 0x74};
+inline constexpr FunctionFact kRemoveLocalPlayerControllerTest{L"RemoveLocalPlayer's null-controller skip", 0x144F56202,
+                                                               kRemoveLocalPlayerControllerTestBytes};
 
 /// ULocalPlayer::PlayerController, as RemoveLocalPlayer reads it. The shared camera writes this
 /// field through reflection and refuses if reflection reports any other offset.
@@ -166,9 +178,10 @@ inline constexpr std::uint32_t kAspectRatioAxisConstraintOffset = 0x94;
 inline constexpr std::uintptr_t kGEngine = 0x149117CC0;
 
 /// UKismetSystemLibrary::SetWindowTitle: the reader whose code proves the two offsets below. Its prologue.
-inline constexpr std::uintptr_t kSetWindowTitle           = 0x144FD5330;
-inline constexpr std::uint8_t   kSetWindowTitlePrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
-                                                             0x24, 0x18, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
+inline constexpr std::uint8_t kSetWindowTitlePrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
+                                                           0x24, 0x18, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
+inline constexpr FunctionFact kSetWindowTitle{L"UKismetSystemLibrary::SetWindowTitle", 0x144FD5330,
+                                              kSetWindowTitlePrologue};
 
 /// UGameEngine::GameViewportWindow: the SWindow pointer (the weak referencer follows at +0xE60).
 inline constexpr std::uint32_t kGameViewportWindowOffset = 0xE58;
@@ -176,39 +189,37 @@ inline constexpr std::uint32_t kGameViewportWindowOffset = 0xE58;
 /// SWindow::NativeWindow: the FGenericWindow pointer (its reference controller follows at +0x930).
 inline constexpr std::uint32_t kSWindowNativeWindowOffset = 0x928;
 
-/// The FWindowsWindow vtable (data) and the slots the mod calls, with the functions they must hold.
-inline constexpr std::uintptr_t kWindowsWindowVTable                 = 0x1469594D8;
-inline constexpr std::size_t    kWindowsWindowSlotReshapeWindow      = 1;
-inline constexpr std::size_t    kWindowsWindowSlotGetWindowMode      = 13;
-inline constexpr std::size_t    kWindowsWindowSlotGetOSWindowHandle  = 24;
-inline constexpr std::uintptr_t kWindowsWindowReshapeWindow          = 0x1447CA234;  // WindowsWindow.cpp:411
+/// The FWindowsWindow vtable (data) and the slots the mod calls, with the functions they must hold:
+/// ReshapeWindow (WindowsWindow.cpp:411), GetWindowMode (`mov eax,[rcx+38h]; ret`) and GetOSWindowHandle
+/// (`mov rax,[rcx+28h]; ret`).
+inline constexpr std::uintptr_t kWindowsWindowVTable                = 0x1469594D8;
+inline constexpr std::size_t    kWindowsWindowSlotReshapeWindow     = 1;
+inline constexpr std::size_t    kWindowsWindowSlotGetWindowMode     = 13;
+inline constexpr std::size_t    kWindowsWindowSlotGetOSWindowHandle = 24;
 inline constexpr std::uint8_t   kWindowsWindowReshapeWindowPrologue[] = {0x40, 0x55, 0x53, 0x56, 0x57, 0x41, 0x54, 0x41,
-                                                                        0x56, 0x41, 0x57, 0x48, 0x8D, 0x6C, 0x24, 0xE1};
-inline constexpr std::uintptr_t kWindowsWindowGetWindowMode          = 0x1418D5940;  // mov eax,[rcx+38h]; ret
+                                                                       0x56, 0x41, 0x57, 0x48, 0x8D, 0x6C, 0x24, 0xE1};
+inline constexpr FunctionFact   kWindowsWindowReshapeWindow{L"FWindowsWindow::ReshapeWindow", 0x1447CA234,
+                                                          kWindowsWindowReshapeWindowPrologue};
 inline constexpr std::uint8_t   kWindowsWindowGetWindowModePrologue[] = {0x8B, 0x41, 0x38, 0xC3};
-inline constexpr std::uintptr_t kWindowsWindowGetOSWindowHandle      = 0x1418D5220;  // mov rax,[rcx+28h]; ret
+inline constexpr FunctionFact   kWindowsWindowGetWindowMode{L"FWindowsWindow::GetWindowMode", 0x1418D5940,
+                                                          kWindowsWindowGetWindowModePrologue};
 inline constexpr std::uint8_t   kWindowsWindowGetOSWindowHandlePrologue[] = {0x48, 0x8B, 0x41, 0x28, 0xC3};
+inline constexpr FunctionFact   kWindowsWindowGetOSWindowHandle{L"FWindowsWindow::GetOSWindowHandle", 0x1418D5220,
+                                                              kWindowsWindowGetOSWindowHandlePrologue};
 
 // ---------------------------------------------------------------------------------------------
 // The startup check list
 // ---------------------------------------------------------------------------------------------
 
-struct VerifiedCode
-{
-    const wchar_t*                what;
-    std::uintptr_t                idaAddress;
-    std::span<const std::uint8_t> bytes;
+/// Checked before anything is installed; one failure and the mod installs nothing.
+inline constexpr FunctionFact kStartupFacts[] = {
+    kDrawSubmitCall,
+    kFrameNumberGate,
+    kAdditionalFamilyStore,
+    kOutputLoadActionSequence,
+    kGetViewPoint,
+    kRemoveLocalPlayer,
+    kRemoveLocalPlayerControllerTest,
 };
 
-inline constexpr VerifiedCode kVerifiedCode[] = {
-    {L"Draw's view-family submission call", kDrawSubmitCall, kDrawSubmitCallBytes},
-    {L"the frame-number gate on family+0x70", kFrameNumberGate, kFrameNumberGateBytes},
-    {L"the bAdditionalViewFamily store to family+0x74", kAdditionalFamilyStore, kAdditionalFamilyStoreBytes},
-    {L"the final output's load-action decision", kOutputLoadActionSequence, kOutputLoadActionSequenceBytes},
-    {L"ULocalPlayer::GetViewPoint's prologue", kGetViewPoint, kGetViewPointPrologue},
-    {L"RemoveLocalPlayer's prologue", kRemoveLocalPlayer, kRemoveLocalPlayerPrologue},
-    {L"RemoveLocalPlayer's null-controller skip", kRemoveLocalPlayerControllerTest,
-     kRemoveLocalPlayerControllerTestBytes},
-};
-
-}  // namespace lss::engine
+}  // namespace lss::facts
