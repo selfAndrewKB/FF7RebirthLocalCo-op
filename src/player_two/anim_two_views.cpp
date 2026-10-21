@@ -452,14 +452,6 @@ std::uintptr_t CallTarget(const platform::GameImage& image, std::uintptr_t site)
     return *at + 5 + static_cast<std::intptr_t>(rel);
 }
 
-bool Redirect(const platform::GameImage& image, platform::CallRedirect& redirect, std::uintptr_t site,
-              std::uintptr_t target, std::uintptr_t replacement) noexcept
-{
-    const auto at = image.Rebase(site, 5);
-    const auto to = image.Rebase(target);
-    return at && to && redirect.Install(*at, *to, replacement);
-}
-
 }  // namespace
 
 void Install(const platform::GameImage& image) noexcept
@@ -489,8 +481,10 @@ void Install(const platform::GameImage& image) noexcept
     g_interfaceOf = reinterpret_cast<InterfaceOfFn>(*iface);
     g_measure     = reinterpret_cast<MeasureFn>(*meas);
     g_grow        = reinterpret_cast<GrowFn>(grow);
-    const bool refill = Redirect(image, g_clearCall, kClearCall, kClearTarget, reinterpret_cast<std::uintptr_t>(&Refilled));
-    const bool eval   = refill && Redirect(image, g_evalCall, kEvalCall, kEvalTarget, reinterpret_cast<std::uintptr_t>(&Evaluate));
+    const bool refill = g_clearCall.InstallResearch(image, kClearCall, kClearTarget,
+                                                    reinterpret_cast<std::uintptr_t>(&Refilled));
+    const bool eval   = refill && g_evalCall.InstallResearch(image, kEvalCall, kEvalTarget,
+                                                             reinterpret_cast<std::uintptr_t>(&Evaluate));
     if (refill && !eval)
     {
         g_clearCall.Restore();

@@ -677,13 +677,6 @@ void OnPick(const void* group, std::uint64_t result, std::uint64_t out, bool fir
     }
 }
 
-bool Redirect(const platform::GameImage& image, platform::CallRedirect& call, std::uintptr_t site,
-              std::uintptr_t target, Fn replacement) noexcept
-{
-    const auto live = image.Rebase(site, 5);
-    return live && target != 0 && call.Install(*live, target, reinterpret_cast<std::uintptr_t>(replacement));
-}
-
 }  // namespace
 
 void Install(const platform::GameImage& image) noexcept
@@ -711,15 +704,18 @@ void Install(const platform::GameImage& image) noexcept
         }
         g_vtables[i] = *slot - kSelectSlot;
         if (kSelects[i] != nullptr &&
-            platform::ReplaceSlot(image, kSelectSlots[i], reinterpret_cast<std::uintptr_t>(kSelects[i]), g_selectSlots[i]))
+            platform::ReplaceSlot(image, kSelectSlots[i],
+                                  reinterpret_cast<std::uintptr_t>(kSelects[i]), g_selectSlots[i]))
         {
             ++selects;
         }
     }
     equal_targeting::SetSelectObserver(&OnConditionSelect);
     lock_group_coin::SetPickObserver(&OnPick);
-    const bool draws    = Redirect(image, g_exclusionCall, kExclusionCall, find(kExclusion), &Exclusion);
-    const bool creation = Redirect(image, g_createCall, kCreateCall, find(kCreate), &Create);
+    const bool draws    = g_exclusionCall.Install(image, kExclusionCall, find(kExclusion),
+                                                  reinterpret_cast<std::uintptr_t>(&Exclusion));
+    const bool creation = g_createCall.Install(image, kCreateCall, find(kCreate),
+                                               reinterpret_cast<std::uintptr_t>(&Create));
     const auto decide   = image.Rebase(kDecide);
     const bool decisions =
         decide && image.BytesMatch(kDecide, kDecideBytes) &&

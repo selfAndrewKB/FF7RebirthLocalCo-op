@@ -279,12 +279,9 @@ bool Install(const platform::GameImage& image) noexcept
     const auto options    = platform::FindFunction(image, kOptionData);
     g_optionData          = options ? reinterpret_cast<OptionDataFn>(*options) : nullptr;
     g_cameraManagerVTable = *vtable;
-    const auto redirect = [&image](platform::CallRedirect& call, std::uintptr_t site, std::uintptr_t target, auto* with) {
-        const auto live = image.Rebase(site, 5);
-        return live && call.Install(*live, target, reinterpret_cast<std::uintptr_t>(with));
-    };
     const bool setter  = InstallSetter(image, *primary);
-    const bool confirm = redirect(g_confirmCall, kConfirmCall, *manager, &ManagerApply);
+    const bool confirm = g_confirmCall.Install(image, kConfirmCall, *manager,
+                                               reinterpret_cast<std::uintptr_t>(&ManagerApply));
     platform::Log(L"camera distance: the Options distance reaches player 2's camera from the option setter {} and the "
                   L"confirm key {}",
                   setter ? L"yes" : L"NO (check failed)", confirm ? L"yes" : L"NO (check failed)");

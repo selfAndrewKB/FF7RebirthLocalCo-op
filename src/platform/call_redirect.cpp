@@ -1,5 +1,6 @@
 #include "platform/call_redirect.h"
 
+#include "platform/image.h"
 #include "platform/module_pin.h"
 #include "platform/x64_jump.h"
 
@@ -38,6 +39,21 @@ std::uintptr_t BuildThunk(std::uintptr_t site, std::uintptr_t replacement) noexc
 bool CallRedirect::Install(std::uintptr_t site, std::uintptr_t target, std::uintptr_t replacement) noexcept
 {
     return Place(site, target, replacement, false, kCallOpcode);
+}
+
+bool CallRedirect::Install(const GameImage& image, std::uintptr_t idaSite, std::uintptr_t target,
+                           std::uintptr_t replacement) noexcept
+{
+    const auto site = image.Rebase(idaSite, kCallLength);
+    return site && Install(*site, target, replacement);
+}
+
+bool CallRedirect::InstallResearch(const GameImage& image, std::uintptr_t idaSite, std::uintptr_t idaTarget,
+                                   std::uintptr_t replacement) noexcept
+{
+    const auto site   = image.Rebase(idaSite, kCallLength);
+    const auto target = image.Rebase(idaTarget);
+    return site && target && Install(*site, *target, replacement);
 }
 
 bool CallRedirect::InstallTailJump(std::uintptr_t site, std::uintptr_t target, std::uintptr_t replacement) noexcept

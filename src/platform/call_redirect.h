@@ -26,6 +26,8 @@
 
 namespace lss::platform {
 
+class GameImage;
+
 class CallRedirect
 {
 public:
@@ -39,6 +41,15 @@ public:
     /// `target` whose five bytes lie inside one aligned 16-byte block. Returns false, changing
     /// nothing, if any condition fails or this object already holds a redirect.
     bool Install(std::uintptr_t site, std::uintptr_t target, std::uintptr_t replacement) noexcept;
+
+    /// Install at a research address: `idaSite` rebased through `image` (five bytes), the target a live address
+    /// (found by FindFunction, or read from the game). False if the site is outside the image, else as Install.
+    bool Install(const GameImage& image, std::uintptr_t idaSite, std::uintptr_t target,
+                 std::uintptr_t replacement) noexcept;
+
+    /// The same with the target a research address too, rebased through `image`.
+    bool InstallResearch(const GameImage& image, std::uintptr_t idaSite, std::uintptr_t idaTarget,
+                         std::uintptr_t replacement) noexcept;
 
     /// The same for a tail call, `jmp rel32` (E9) to `target`, the caller's frame already torn down.
     /// The replacement is an ordinary function with the target's signature: its `ret` goes to the

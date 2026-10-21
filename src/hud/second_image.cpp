@@ -266,14 +266,6 @@ void* AddCompositePasses(void* module, void* builder, const void* views, void* t
     return reinterpret_cast<AddCompositePassesFn>(original)(module, builder, views, texture, context);
 }
 
-bool Redirect(const platform::GameImage& image, platform::CallRedirect& call, std::uintptr_t site, std::uintptr_t target,
-              std::uintptr_t replacement) noexcept
-{
-    const auto live   = image.Rebase(site, 5);
-    const auto rebased = image.Rebase(target);
-    return live && rebased && call.Install(*live, *rebased, replacement);
-}
-
 bool Patch(const platform::GameImage& image, platform::CodeRedirect& redirect, std::uintptr_t site,
            std::span<const std::uint8_t> replaced, std::span<const std::uint8_t> code, std::uintptr_t resume) noexcept
 {
@@ -317,8 +309,8 @@ bool InstallSecondImage(const platform::GameImage& image) noexcept
     const auto familyRedirect = [&image]() noexcept {
         if (platform::RunningBuild() != platform::BuildIndex::V1005)
         {
-            return Redirect(image, g_familyCall, kAddCompositePassesCall, kAddCompositePasses,
-                            reinterpret_cast<std::uintptr_t>(&AddCompositePasses));
+            return g_familyCall.InstallResearch(image, kAddCompositePassesCall, kAddCompositePasses,
+                                                reinterpret_cast<std::uintptr_t>(&AddCompositePasses));
         }
         const auto entry = image.Rebase(kAddCompositePasses);
         return entry && g_familyEntry.Install(*entry,
@@ -331,7 +323,8 @@ bool InstallSecondImage(const platform::GameImage& image) noexcept
         Patch(image, g_gateCode, kDrawGateSite, kDrawGateBytes, gateCode, kDrawGateResume) &&
         Patch(image, g_buffersCode, kLoadVertexBufferSite, kLoadVertexBufferBytes, buffersCode, kLoadVertexBufferResume) &&
         familyRedirect() &&
-        Redirect(image, g_acquireCall, kAcquireCall, kAcquireLayerSlot, reinterpret_cast<std::uintptr_t>(&AcquireLayerSlot));
+        g_acquireCall.InstallResearch(image, kAcquireCall, kAcquireLayerSlot,
+                                      reinterpret_cast<std::uintptr_t>(&AcquireLayerSlot));
     if (!installed)
     {
         RemoveSecondImage();

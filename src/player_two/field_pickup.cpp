@@ -1263,12 +1263,6 @@ void Install(const platform::GameImage& image) noexcept
     g_destroy    = reinterpret_cast<DestroyFn>(find(kDestroy));  // optional: without it the markers stay shared
     const bool functions = g_testFlag && g_modeClass && g_uiEntry && g_isHeld && g_copyKey && g_pollSlot0 && g_poll8 &&
                            g_latch && g_tickSlots && g_update && g_fieldEnter && g_fieldExit;
-    const auto call = [&image](platform::CallRedirect& redirect, std::uintptr_t site, const platform::FunctionFact& target,
-                               std::uintptr_t replacement) {
-        const auto at = image.Rebase(site, 5);
-        const auto to = image.Rebase(target.address);
-        return at && to && redirect.Install(*at, *to, replacement);
-    };
     bool resets = false;
     if (root && ui && pause && functions)
     {
@@ -1280,8 +1274,10 @@ void Install(const platform::GameImage& image) noexcept
         g_twoMarkersNow.reserve(kMaxPoints);
         g_oneMarkers.reserve(kMaxPoints);
         g_doomed.reserve(3 * kMaxPoints);  // Before's, After's and KeepTwoMarkers' each at most one per point
-        resets = call(g_enterCall, kFieldEnterCall, kFieldEnter, reinterpret_cast<std::uintptr_t>(&FieldEnter)) &&
-                 call(g_exitCall, kFieldExitCall, kFieldExit, reinterpret_cast<std::uintptr_t>(&FieldExit));
+        resets = g_enterCall.InstallResearch(image, kFieldEnterCall, kFieldEnter.address,
+                                             reinterpret_cast<std::uintptr_t>(&FieldEnter)) &&
+                 g_exitCall.InstallResearch(image, kFieldExitCall, kFieldExit.address,
+                                            reinterpret_cast<std::uintptr_t>(&FieldExit));
         if (!resets)
         {
             g_enterCall.Restore();  // both or neither: player 2's rows must not outlive a field change
@@ -1295,7 +1291,8 @@ void Install(const platform::GameImage& image) noexcept
         const auto markAt    = image.Rebase(kMarkByKey);
         const auto acquireAt = image.Rebase(kAcquireCall, 5);
         const auto acquire   = image.Rebase(kAcquire);
-        hooks = call(g_updateCall, kUpdateCall, kUpdate, reinterpret_cast<std::uintptr_t>(&UpdateCall)) && markAt &&
+        hooks = g_updateCall.InstallResearch(image, kUpdateCall, kUpdate.address,
+                                             reinterpret_cast<std::uintptr_t>(&UpdateCall)) && markAt &&
                 image.BytesMatch(kMarkByKey, kMarkByKeyBytes) &&
                 g_markByKey.Install(*markAt,
                                     image.EntryInstruction(kMarkByKey, std::span<const std::uint8_t>(kMarkByKeyBytes).first(kMarkFirst)),

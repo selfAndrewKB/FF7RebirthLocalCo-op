@@ -963,7 +963,8 @@ bool Slot(const platform::GameImage& image, platform::VTableEntry& entry, std::u
 std::wstring InstallSources(const platform::GameImage& image) noexcept
 {
     const bool scooter =
-        Slot(image, g_scooterTickSlot, kScooterTickSlot, kScooterTick, reinterpret_cast<std::uintptr_t>(&ScooterTick)) &&
+        Slot(image, g_scooterTickSlot, kScooterTickSlot, kScooterTick,
+             reinterpret_cast<std::uintptr_t>(&ScooterTick)) &&
         Slot(image, g_scooterOffSlot, kScooterOffSlot, kScooterOff, reinterpret_cast<std::uintptr_t>(&ScooterOff));
     if (!scooter && g_scooterTickSlot.Original() != 0)
     {
@@ -1029,14 +1030,6 @@ void RemoveSources() noexcept
     }
 }
 
-bool Call(const platform::GameImage& image, platform::CallRedirect& redirect, std::uintptr_t site,
-          std::uintptr_t target, std::uintptr_t replacement) noexcept
-{
-    const auto at = image.Rebase(site, 5);
-    const auto to = image.Rebase(target);
-    return at && to && redirect.Install(*at, *to, replacement);
-}
-
 template <class Fn>
 bool Find(const platform::GameImage& image, std::uintptr_t address, Fn& out) noexcept
 {
@@ -1094,11 +1087,13 @@ void Install(const platform::GameImage& image) noexcept
     const bool rows   = add && rowsAt && image.BytesMatch(kRows, kRowsBytes) &&
                       g_rows.Install(*rowsAt, image.EntryInstruction(kRows, kRowsBytes),
                                      reinterpret_cast<std::uintptr_t>(&Rows));
-    const bool tick = rows && Call(image, g_listTickCall, kListTickCall, kListTick,
-                                   reinterpret_cast<std::uintptr_t>(&ListTick));
+    const bool tick = rows && g_listTickCall.InstallResearch(image, kListTickCall, kListTick,
+                                                             reinterpret_cast<std::uintptr_t>(&ListTick));
     const bool zip  = tick &&
-                     Call(image, g_zipAddCall, kZipAddCall, kPlayNamed, reinterpret_cast<std::uintptr_t>(&ZipAdd)) &&
-                     Call(image, g_zipGateCall, kZipGateCall, kZipGate, reinterpret_cast<std::uintptr_t>(&ZipGate));
+                     g_zipAddCall.InstallResearch(image, kZipAddCall, kPlayNamed,
+                                                  reinterpret_cast<std::uintptr_t>(&ZipAdd)) &&
+                     g_zipGateCall.InstallResearch(image, kZipGateCall, kZipGate,
+                                                   reinterpret_cast<std::uintptr_t>(&ZipGate));
     // The stop by name: player 2's loops added to player 2's list must stop there.
     const auto owner  = image.Rebase(kListOwner, sizeof(void*));
     g_listOwner       = owner ? *owner : 0;

@@ -1,5 +1,6 @@
 #include "platform/vtable_entry.h"
 
+#include "platform/image.h"
 #include "platform/module_pin.h"
 
 #ifndef WIN32_LEAN_AND_MEAN
@@ -63,6 +64,14 @@ bool VTableEntry::Replace(std::uintptr_t entryAddress, std::uintptr_t expected, 
     entry_       = entryAddress;
     replacement_ = replacement;
     return true;
+}
+
+bool VTableEntry::Replace(const GameImage& image, std::uintptr_t idaEntry, std::uintptr_t idaExpected,
+                          std::uintptr_t replacement) noexcept
+{
+    const auto entry    = image.Rebase(idaEntry, sizeof(void*));
+    const auto expected = image.Rebase(idaExpected);
+    return entry && expected && Replace(*entry, *expected, replacement);
 }
 
 bool VTableEntry::Restore() noexcept

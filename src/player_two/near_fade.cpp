@@ -185,25 +185,19 @@ const void* FadeOfMember(void* member) noexcept
     return getter != nullptr && platform::CallGuarded(getter, fade, iface) ? fade : nullptr;
 }
 
-bool Redirect(const platform::GameImage& image, platform::CallRedirect& redirect, std::uintptr_t site,
-              std::uintptr_t target, std::uintptr_t replacement) noexcept
-{
-    const auto at = image.Rebase(site, 5);
-    const auto to = image.Rebase(target);
-    return at && to && redirect.Install(*at, *to, replacement);
-}
-
 }  // namespace
 
 void Install(const platform::GameImage& image) noexcept
 {
-    const bool gather = Redirect(image, g_gatherCall, kGatherCall, kGather, reinterpret_cast<std::uintptr_t>(&Gather));
-    const bool kick   = Redirect(image, g_kickCall, kKickCall, kKick, reinterpret_cast<std::uintptr_t>(&Kick));
+    const bool gather = g_gatherCall.InstallResearch(image, kGatherCall, kGather,
+                                                     reinterpret_cast<std::uintptr_t>(&Gather));
+    const bool kick   = g_kickCall.InstallResearch(image, kKickCall, kKick, reinterpret_cast<std::uintptr_t>(&Kick));
     const auto parent = platform::FindFunction(image, kAttachParent);
     g_attachParent    = parent ? reinterpret_cast<AttachParentFn>(*parent) : nullptr;
-    const bool hits   = Redirect(image, g_hitCall, kHitResolveCall, kWeakGet, reinterpret_cast<std::uintptr_t>(&HitActor));
-    const bool overlap = Redirect(image, g_overlapCall, kOverlapPlayerCall, kIsPlayerChar,
-                                  reinterpret_cast<std::uintptr_t>(&OverlapPlayerTest));
+    const bool hits   = g_hitCall.InstallResearch(image, kHitResolveCall, kWeakGet,
+                                                  reinterpret_cast<std::uintptr_t>(&HitActor));
+    const bool overlap = g_overlapCall.InstallResearch(image, kOverlapPlayerCall, kIsPlayerChar,
+                                                       reinterpret_cast<std::uintptr_t>(&OverlapPlayerTest));
     platform::Log(L"near fade: player 2's character {} by player 1's camera's near fade; the cameras' immediate fade "
                   L"{}; the occluder traces {}; the climbing overlap fade {}",
                   gather ? L"is never faded" : L"is STILL faded (the gather call differs)",

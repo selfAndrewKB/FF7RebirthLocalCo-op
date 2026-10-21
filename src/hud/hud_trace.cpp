@@ -189,14 +189,6 @@ bool TracedProject(void* controller, const void* location, void* out) noexcept
 
 
 
-bool Redirect(const platform::GameImage& image, platform::CallRedirect& call, const Site& site,
-              std::uintptr_t replacement) noexcept
-{
-    const auto live   = image.Rebase(site.call, 5);
-    const auto target = image.Rebase(site.target);
-    return live && target && call.Install(*live, *target, replacement);
-}
-
 }  // namespace
 
 bool InstallHudTrace(const platform::GameImage& image) noexcept
@@ -214,9 +206,11 @@ bool InstallHudTrace(const platform::GameImage& image) noexcept
     g_frameNumber = *frame;
     g_project      = image.Rebase(kProject).value_or(0);
     bool installed = g_project != 0 &&
-                     Redirect(image, g_tickCall, kMasterHudTickSite, reinterpret_cast<std::uintptr_t>(&TracedHudTick)) &&
+                     g_tickCall.InstallResearch(image, kMasterHudTickSite.call, kMasterHudTickSite.target,
+                                                reinterpret_cast<std::uintptr_t>(&TracedHudTick)) &&
 
-                     Redirect(image, g_markerCall, kPlaceMarkerSite, reinterpret_cast<std::uintptr_t>(&TracedMarker));
+                     g_markerCall.InstallResearch(image, kPlaceMarkerSite.call, kPlaceMarkerSite.target,
+                                                  reinterpret_cast<std::uintptr_t>(&TracedMarker));
     const bool v1005 = platform::RunningBuild() == platform::BuildIndex::V1005;
     for (std::size_t i = 0; installed && i < kProjectSites.size(); ++i)
     {
@@ -227,7 +221,8 @@ bool InstallHudTrace(const platform::GameImage& image) noexcept
             g_projectCrosses[i] = true;
             continue;
         }
-        installed = Redirect(image, g_projectCalls[i], kProjectSites[i], reinterpret_cast<std::uintptr_t>(&TracedProject));
+        installed = g_projectCalls[i].InstallResearch(image, kProjectSites[i].call, kProjectSites[i].target,
+                                                      reinterpret_cast<std::uintptr_t>(&TracedProject));
     }
     if (!installed)
     {

@@ -6,6 +6,7 @@
 // to call the original, and the original must come back after Restore.
 
 #include "platform/call_redirect.h"
+#include "platform/image.h"
 #include "platform/log.h"
 
 #include "exec_page.h"
@@ -228,6 +229,31 @@ void TestTailJump()
     EXPECT(redirect.Restore());
     EXPECT(game.Run() == 1);
 }
+void TestInstallThroughTheImage()
+{
+    std::puts("call redirect: a site given as a research address is rebased through the image, the target live or "
+              "research");
+    const GameLikeCode game;
+    constexpr std::uintptr_t kIdaBase = 0x140000000;
+    const auto image = lss::platform::GameImage::At(game.At(0), 0x1000);  // the page as the image
+    const auto replacement = reinterpret_cast<std::uintptr_t>(&Replacement);
+
+    lss::platform::CallRedirect redirect;
+    g_redirect = &redirect;
+    EXPECT(!redirect.Install(image, kIdaBase + 0x2000, game.At(GameLikeCode::kTargetOffset), replacement));  // outside
+    EXPECT(!redirect.InstallResearch(image, kIdaBase + GameLikeCode::kCallOffset, kIdaBase + 0x2000, replacement));
+    EXPECT(game.Run() == 1);
+    EXPECT(redirect.Install(image, kIdaBase + GameLikeCode::kCallOffset, game.At(GameLikeCode::kTargetOffset),
+                            replacement));
+    EXPECT(game.Run() == 3);
+    EXPECT(redirect.Restore());
+    EXPECT(redirect.InstallResearch(image, kIdaBase + GameLikeCode::kCallOffset, kIdaBase + GameLikeCode::kTargetOffset,
+                                    replacement));
+    EXPECT(game.Run() == 3);
+    EXPECT(redirect.Restore());
+    EXPECT(game.Run() == 1);
+}
+
 }  // namespace
 
 int main()
@@ -236,6 +262,7 @@ int main()
     TestRedirectRefusesWhatItDoesNotRecognise();
     TestCrossingCallFromOwnThread();
     TestTailJump();
+    TestInstallThroughTheImage();
 
     return lss::test::Report();
 }

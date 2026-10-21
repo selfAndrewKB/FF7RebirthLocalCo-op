@@ -14,6 +14,8 @@
 
 namespace lss::platform {
 
+class GameImage;
+
 class VTableEntry
 {
 public:
@@ -27,6 +29,11 @@ public:
     /// Returns false, changing nothing, if the entry holds anything else or cannot be written.
     /// On success the mod's DLL is pinned for the life of the process (see the .cpp for why).
     bool Replace(std::uintptr_t entryAddress, std::uintptr_t expected, std::uintptr_t replacement) noexcept;
+
+    /// The same at research addresses: the entry and the function it must hold, both rebased through `image`.
+    /// False if either is outside the image.
+    bool Replace(const GameImage& image, std::uintptr_t idaEntry, std::uintptr_t idaExpected,
+                 std::uintptr_t replacement) noexcept;
 
     /// Puts the original function back, if this object replaced it. Returns false if it could
     /// not (the entry no longer holds our function, or cannot be written); the replacement then

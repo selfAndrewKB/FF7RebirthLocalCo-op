@@ -599,12 +599,6 @@ void LogStatus() noexcept
 void Install(const platform::GameImage& image) noexcept
 {
     g_image = image;
-    const auto call = [&image](platform::CallRedirect& redirect, std::uintptr_t site, std::uintptr_t target,
-                               std::uintptr_t replacement) {
-        const auto at = image.Rebase(site, 5);
-        const auto to = image.Rebase(target);
-        return at && to && redirect.Install(*at, *to, replacement);
-    };
     bool hits = false;
     if (platform::RunningBuild() == platform::BuildIndex::V1005)
     {
@@ -623,9 +617,11 @@ void Install(const platform::GameImage& image) noexcept
     }
     else
     {
-        const bool gate = call(g_gateCall, kGateCall, kGate, reinterpret_cast<std::uintptr_t>(&Gate));
-        const bool camera   = gate && call(g_cameraCall, kCameraCall, kCamera, reinterpret_cast<std::uintptr_t>(&Camera));
-        const bool fallback = gate && call(g_fallbackCall, kFallbackCall, kPrimary, reinterpret_cast<std::uintptr_t>(&Fallback));
+        const bool gate = g_gateCall.InstallResearch(image, kGateCall, kGate, reinterpret_cast<std::uintptr_t>(&Gate));
+        const bool camera   = gate && g_cameraCall.InstallResearch(image, kCameraCall, kCamera,
+                                                                   reinterpret_cast<std::uintptr_t>(&Camera));
+        const bool fallback = gate && g_fallbackCall.InstallResearch(image, kFallbackCall, kPrimary,
+                                                                     reinterpret_cast<std::uintptr_t>(&Fallback));
         if (gate && (!camera || !fallback))
         {
             // All three or none: a gate passing for player 2 must not shake player 1's camera or play on player 1's pad.

@@ -210,14 +210,6 @@ constexpr auto MakeDirChecks(std::index_sequence<Index...>) noexcept
 }
 constexpr auto kDirChecks = MakeDirChecks(std::make_index_sequence<kDirCount>{});
 
-bool Redirect(const platform::GameImage& image, platform::CallRedirect& redirect, std::uintptr_t site,
-              std::uintptr_t target, std::uintptr_t replacement) noexcept
-{
-    const auto at = image.Rebase(site, 5);
-    const auto to = image.Rebase(target);
-    return at && to && redirect.Install(*at, *to, replacement);
-}
-
 }  // namespace
 
 void Install(const platform::GameImage& image) noexcept
@@ -237,8 +229,8 @@ void Install(const platform::GameImage& image) noexcept
                 continue;
             }
         }
-        else if (Redirect(image, g_dirCalls[i], kDirSites[i].call, kDirCheck,
-                          reinterpret_cast<std::uintptr_t>(kDirChecks[i])))
+        else if (g_dirCalls[i].InstallResearch(image, kDirSites[i].call, kDirCheck,
+                                               reinterpret_cast<std::uintptr_t>(kDirChecks[i])))
         {
             ++placed;
             continue;
@@ -252,7 +244,8 @@ void Install(const platform::GameImage& image) noexcept
         }
     }
     g_lateTried = false;
-    const bool beam = Redirect(image, g_beamCall, kBeamSite.call, kBeamCheck, reinterpret_cast<std::uintptr_t>(&BeamCheck));
+    const bool beam = g_beamCall.InstallResearch(image, kBeamSite.call, kBeamCheck,
+                                                 reinterpret_cast<std::uintptr_t>(&BeamCheck));
     platform::Log(L"approach: {} walk-up checks (ladder, crawl, squeeze, climbing wall, pole slide, hook rope, lifting "
                   L"rope) read player 2's stick in player 2's camera basis, {} more (one-shot move, monkey bars, zip "
                   L"line, spider wall) from the game thread's first tick{}{}; balance beam {}",

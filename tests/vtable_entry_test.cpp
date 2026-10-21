@@ -6,13 +6,19 @@
 
 #include "platform/vtable_entry.h"
 
+#include "platform/image.h"
+
 #include "expect.h"
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <Windows.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -167,6 +173,28 @@ void TestDestructorRestores()
     EXPECT(table.Holds(1) == Address(&Original));
 }
 
+void TestReplaceThroughTheImage()
+{
+    std::puts("vtable entry: an entry and its function given as research addresses are rebased through the image");
+    const ReadOnlyTable table;
+    constexpr std::uintptr_t kIdaBase = 0x140000000;
+    // An image spanning the table's page and Original's code (a span is only numbers to Rebase), so both have a
+    // research address: the entry's and the function's are their offsets from the lower of the two.
+    const std::uintptr_t low  = std::min(table.Entry(0), Address(&Original));
+    const std::uintptr_t high = std::max(table.Entry(0), Address(&Original));
+    const auto           image = lss::platform::GameImage::At(low, high - low + 0x1000);
+    const std::uintptr_t idaEntry    = kIdaBase + (table.Entry(1) - low);
+    const std::uintptr_t idaOriginal = kIdaBase + (Address(&Original) - low);
+    VTableEntry entry;
+    EXPECT(!entry.Replace(image, kIdaBase + (high - low) + 0x2000, idaOriginal, Address(&Replacement)));  // outside
+    EXPECT(!entry.Replace(image, idaEntry, kIdaBase + (high - low) + 0x2000, Address(&Replacement)));
+    EXPECT(table.Holds(1) == Address(&Original));
+    EXPECT(entry.Replace(image, idaEntry, idaOriginal, Address(&Replacement)));
+    EXPECT(table.Holds(1) == Address(&Replacement) && table.OthersUntouched());
+    EXPECT(entry.Restore());
+    EXPECT(table.Holds(1) == Address(&Original));
+}
+
 }  // namespace
 
 int main()
@@ -175,6 +203,7 @@ int main()
     TestRefusals();
     TestForeignWriteAfterUs();
     TestDestructorRestores();
+    TestReplaceThroughTheImage();
 
     return lss::test::Report();
 }

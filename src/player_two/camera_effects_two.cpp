@@ -302,23 +302,17 @@ void StealBegin(void* notify, void* mesh, void* animation, float duration) noexc
     }
 }
 
-bool Replace(const platform::GameImage& image, platform::VTableEntry& entry, std::uintptr_t slot, std::uintptr_t function,
-             std::uintptr_t replacement) noexcept
-{
-    const auto at = image.Rebase(slot, sizeof(void*));
-    const auto fn = image.Rebase(function);
-    return at && fn && entry.Replace(*at, *fn, replacement);
-}
-
 }  // namespace
 
 void Install(const platform::GameImage& image) noexcept
 {
-    const bool guard = Replace(image, g_guardSlot, kGuardSlot, kGuard, reinterpret_cast<std::uintptr_t>(&Guard));
+    const bool guard = g_guardSlot.Replace(image, kGuardSlot, kGuard, reinterpret_cast<std::uintptr_t>(&Guard));
     // The shakes as one item: a Begin played on player 2's camera must be stopped there by its End.
-    bool shakes = Replace(image, g_shakeBeginSlot, kShakeBeginSlot, kShakeBegin, reinterpret_cast<std::uintptr_t>(&ShakeBegin));
-    shakes      = shakes && Replace(image, g_shakeEndSlot, kShakeEndSlot, kShakeEnd, reinterpret_cast<std::uintptr_t>(&ShakeEnd));
-    shakes      = shakes && Replace(image, g_shakeSlot, kShakeSlot, kShake, reinterpret_cast<std::uintptr_t>(&Shake));
+    bool shakes = g_shakeBeginSlot.Replace(image, kShakeBeginSlot, kShakeBegin,
+                                           reinterpret_cast<std::uintptr_t>(&ShakeBegin));
+    shakes      = shakes && g_shakeEndSlot.Replace(image, kShakeEndSlot, kShakeEnd,
+                                                   reinterpret_cast<std::uintptr_t>(&ShakeEnd));
+    shakes      = shakes && g_shakeSlot.Replace(image, kShakeSlot, kShake, reinterpret_cast<std::uintptr_t>(&Shake));
     if (!shakes)
     {
         g_shakeSlot.Restore();
@@ -330,7 +324,7 @@ void Install(const platform::GameImage& image) noexcept
     if (shares && image.BytesMatch(kSharesKey, kSharesKeyBytes))
     {
         g_sharesKey = reinterpret_cast<SharesKeyFn>(*shares);
-        steal = Replace(image, g_stealSlot, kStealBeginSlot, kStealBegin, reinterpret_cast<std::uintptr_t>(&StealBegin));
+        steal = g_stealSlot.Replace(image, kStealBeginSlot, kStealBegin, reinterpret_cast<std::uintptr_t>(&StealBegin));
     }
     platform::Log(L"camera effects: player 2's member's guard effect {}; its camera-shake notifies {}; chain-move camera "
                   L"pulls (StealCamera) {}",
