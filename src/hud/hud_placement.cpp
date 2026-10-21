@@ -81,6 +81,7 @@ bool                g_failedLogged = false;
 bool                g_renderFollows = false;  // set once the before-render follow has run
 
 using players::unreal::GuardedProcessEvent;
+using players::unreal::ParamOffset;
 
 /// A reflected UUserWidget setter and where its struct parameter sits in its frame.
 struct Setter
@@ -90,17 +91,6 @@ struct Setter
 };
 
 constexpr std::int32_t kFrameBytes = 64;  // every setter used here needs far less
-
-std::optional<std::int32_t> ParamOffset(UFunction* function, const wchar_t* name, std::int32_t size)
-{
-    auto* property = function->FindProperty(RC::Unreal::FName(name, RC::Unreal::FNAME_Find));
-    if (property == nullptr || property->GetSize() != size || property->GetOffset_Internal() < 0 ||
-        property->GetOffset_Internal() + size > function->GetParmsSize())
-    {
-        return std::nullopt;
-    }
-    return property->GetOffset_Internal();
-}
 
 std::optional<Setter> FindSetter(const wchar_t* path, const wchar_t* param, std::int32_t size)
 {

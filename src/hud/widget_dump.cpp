@@ -52,6 +52,7 @@ constexpr int         kListedWidgets = 60;  // a listing's size, largest first
 constexpr std::size_t kFrame    = 256;  // parameter frame; every function used here needs far less
 
 using players::unreal::GuardedProcessEvent;
+using players::unreal::ParamOffset;
 using platform::CopyGuarded;
 
 // ---- dump widgets, dump slots ------------------------------------------------------------------
@@ -195,22 +196,6 @@ void LogPlacement(UObject* widget)
 constexpr int kMaxRootLines    = 60;
 constexpr int kMaxSettingLines = 400;
 constexpr int kMaxControllers  = 4;
-
-/// The offset of a parameter in `function`'s frame, if it exists with this size and fits.
-std::optional<std::int32_t> ParamOffset(UFunction* function, const wchar_t* name, std::int32_t size) noexcept
-{
-    auto* property = function->FindProperty(FName(name, RC::Unreal::FNAME_Find));
-    if (property == nullptr)
-    {
-        return std::nullopt;
-    }
-    const std::int32_t offset = property->GetOffset_Internal();
-    if (property->GetSize() != size || offset < 0 || offset + size > function->GetParmsSize())
-    {
-        return std::nullopt;
-    }
-    return offset;
-}
 
 /// A reflected function returning an object, with no inputs, called on `target`.
 struct ObjectGetter

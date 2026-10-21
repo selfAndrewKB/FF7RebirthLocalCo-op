@@ -298,6 +298,21 @@ std::size_t CountObjects(const wchar_t* className) noexcept
     }
 }
 
+std::optional<std::int32_t> ParamOffset(UFunction* function, const wchar_t* name, std::int32_t size) noexcept
+{
+    auto* property = function->FindProperty(RC::Unreal::FName(name, RC::Unreal::FNAME_Find));
+    if (property == nullptr)
+    {
+        return std::nullopt;
+    }
+    const std::int32_t offset = property->GetOffset_Internal();
+    if (property->GetSize() != size || offset < 0 || offset + size > function->GetParmsSize())
+    {
+        return std::nullopt;
+    }
+    return offset;
+}
+
 namespace {
 
 /// A reflected UKismetSystemLibrary function and the class default object to call it on.
@@ -316,22 +331,6 @@ KismetCall FindKismet(const wchar_t* path) noexcept
         return {};
     }
     return {function, library->GetClassDefaultObject()};
-}
-
-/// The offset of a parameter in `function`'s frame, if it exists and fits.
-std::optional<std::int32_t> ParamOffset(UFunction* function, const wchar_t* name, std::int32_t size) noexcept
-{
-    auto* property = function->FindProperty(RC::Unreal::FName(name, RC::Unreal::FNAME_Find));
-    if (property == nullptr)
-    {
-        return std::nullopt;
-    }
-    const std::int32_t offset = property->GetOffset_Internal();
-    if (property->GetSize() != size || offset < 0 || offset + size > function->GetParmsSize())
-    {
-        return std::nullopt;
-    }
-    return offset;
 }
 
 /// Calls `call` with a zeroed parameter frame in which `text` is placed as an FString at

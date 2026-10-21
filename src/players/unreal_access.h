@@ -28,6 +28,11 @@ using RC::Unreal::UObject;
 /// engine raised an exception.
 bool GuardedProcessEvent(UObject* target, RC::Unreal::UFunction* function, void* params) noexcept;
 
+/// The offset of the parameter `name` in `function`'s frame, if it exists with this size and fits the frame:
+/// where an input is written, or a result read, around GuardedProcessEvent.
+std::optional<std::int32_t> ParamOffset(RC::Unreal::UFunction* function, const wchar_t* name,
+                                        std::int32_t size) noexcept;
+
 /// The running game instance (FF7R's UEndGameInstance), or null before the game has one.
 UObject* GameInstance() noexcept;
 
