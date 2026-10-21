@@ -13,6 +13,7 @@
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/lock_on.h"
+#include "player_two/weak_object.h"
 
 #include <algorithm>
 #include <array>
@@ -96,8 +97,6 @@ using MainTargetFn = Pair* (*)(Pair* out, const Pair* in);
 using ReleaseFn    = void (*)(Pair* weak);
 using EnemyAiFn    = std::uintptr_t (*)(void* character);
 using OwnerFn      = void* (*)(void* target);
-using WeakGetFn    = void* (*)(const std::uint64_t* weak);
-using WeakSetFn    = void (*)(std::uint64_t* weak, void* object);
 using LookupFn     = std::uint8_t (*)(void* manager, float* point, float* scale, void* character);
 
 // Set once at install.
@@ -109,8 +108,6 @@ bool           g_unionOn      = false;
 MainTargetFn   g_mainTarget   = nullptr;
 ReleaseFn      g_release      = nullptr;
 EnemyAiFn      g_enemyAi      = nullptr;
-WeakGetFn      g_weakGet      = nullptr;
-WeakSetFn      g_weakSet      = nullptr;
 std::uintptr_t g_battleSystem = 0;
 std::uintptr_t g_endUISystem  = 0;
 // 1.005: the call sites are placed from the game thread (platform/deferred_sites.h), with what Install found kept
@@ -279,8 +276,7 @@ bool Shared(std::uintptr_t source, std::uintptr_t manager)
 /// A widget from its FWeakObjectPtr value, or null if it is gone.
 void* WidgetOf(std::uint64_t weak) noexcept
 {
-    void* widget = nullptr;
-    return weak != 0 && CallGuarded(g_weakGet, widget, static_cast<const std::uint64_t*>(&weak)) ? widget : nullptr;
+    return player_two::weak_object::ObjectOf(weak);
 }
 
 /// Takes `widget` out of this pass's image (render opacity 0, so it stays painted and ticked),
@@ -293,7 +289,7 @@ bool Hide(void* widget) noexcept
         return false;  // not drawn anyway
     }
     std::uint64_t weak = 0;
-    if (!CallGuarded(g_weakSet, &weak, widget) || !widget_opacity::Set(widget, 0.0f))
+    if (!player_two::weak_object::Assign(&weak, widget) || !widget_opacity::Set(widget, 0.0f))
     {
         return false;
     }
@@ -422,12 +418,11 @@ bool Install(const platform::GameImage& image) noexcept
     g_mainTarget = reinterpret_cast<MainTargetFn>(find(kMainTarget));
     g_release    = reinterpret_cast<ReleaseFn>(find(kRelease));
     g_enemyAi    = reinterpret_cast<EnemyAiFn>(find(kEnemyAi));
-    g_weakGet    = reinterpret_cast<WeakGetFn>(find(player_two::facts::kWeakObjectGet));
-    g_weakSet    = reinterpret_cast<WeakSetFn>(find(player_two::facts::kWeakObjectAssign));
     const auto system  = image.Rebase(kBattleSystem, sizeof(void*));
     const auto ui      = image.Rebase(kEndUISystem, kManager + sizeof(void*));
     g_installed =
-        g_mainTarget && g_release && g_enemyAi && g_weakGet && g_weakSet && system && ui && widget_opacity::Install(image);
+        g_mainTarget && g_release && g_enemyAi && player_two::weak_object::Known() && system && ui &&
+        widget_opacity::Install(image);
     g_battleSystem = system ? *system : 0;
     g_endUISystem  = ui ? *ui : 0;
     g_collect = collect;
@@ -560,9 +555,8 @@ void AfterPass() noexcept
     for (const Hidden& hidden : g_hidden)
     {
         // Only while it is still transparent: an opacity the game set since is its own.
-        void* widget = nullptr;
-        if (CallGuarded(g_weakGet, widget, static_cast<const std::uint64_t*>(&hidden.weak)) && widget != nullptr &&
-            widget_opacity::Get(widget) == 0.0f)
+        void* widget = player_two::weak_object::ObjectOf(hidden.weak);
+        if (widget != nullptr && widget_opacity::Get(widget) == 0.0f)
         {
             widget_opacity::Set(widget, hidden.previous);
         }

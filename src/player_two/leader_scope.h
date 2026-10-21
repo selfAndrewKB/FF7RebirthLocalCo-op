@@ -8,6 +8,8 @@
 // corrects, clamps or tests around player 2's member. Player 1's leader is put back when it ends.
 // Game thread only.
 
+#include "player_two/weak_object.h"
+
 #include <cstdint>
 
 namespace lss::platform {
@@ -18,15 +20,20 @@ namespace lss::player_two::leader_scope {
 
 bool Install(const platform::GameImage& image) noexcept;
 
-/// `object` as an FWeakObjectPtr value {index, serial}, or 0 if it cannot be (or the serial would be 0).
-std::uint64_t WeakOf(void* object) noexcept;
-
-/// Whether `weak` (from WeakOf) still resolves to `object`: false once the object is destroyed.
-bool StillNames(std::uint64_t weak, const void* object) noexcept;
-
-/// The object an FWeakObjectPtr stored at `field` names now, by the game's own resolve (null if none,
-/// stale, or unreadable).
-void* ObjectAt(const void* field) noexcept;
+// The weak-pointer helpers under this namespace's names, for the modules that use them here; their home is
+// player_two/weak_object.h.
+inline std::uint64_t WeakOf(void* object) noexcept
+{
+    return weak_object::WeakOf(object);
+}
+inline bool StillNames(std::uint64_t weak, const void* object) noexcept
+{
+    return weak_object::StillNames(weak, object);
+}
+inline void* ObjectAt(const void* field) noexcept
+{
+    return weak_object::ObjectAt(field);
+}
 
 class LeaderScope
 {

@@ -25,6 +25,7 @@
 #include "player_two/menu_rules.h"
 #include "player_two/object_fields.h"
 #include "player_two/party_member.h"
+#include "player_two/weak_object.h"
 
 #include <array>
 #include <cstdint>
@@ -161,14 +162,12 @@ using LayoutCellsFn = void (*)(void* controller, std::uint8_t all, std::uint32_t
 using KeyGuideCtorFn = void* (*)(void* keyGuide);
 using ShortcutsFn    = void (*)(void* controller);  // FieldCommandCtrl_RebuildShortcutTables
 using SelecterShortcutsFn = void (*)(void* selecter);  // MemberSelecter_RebuildShortcutTables
-using WeakGetFn = void* (*)(const std::uint64_t* weak);
 
 // Set once at install.
 MallocFn  g_malloc  = nullptr;
 CtorFn    g_ctor    = nullptr;
 SetupFn   g_setup   = nullptr;
 KeyGuideCtorFn g_keyGuideCtor = nullptr;
-WeakGetFn g_weakGet = nullptr;
 std::uintptr_t g_worldClass = 0;  // UWorld's class
 platform::CallRedirect  g_setupCall, g_resetAllCall;
 platform::EntryRedirect g_refresh;
@@ -637,11 +636,7 @@ Snapshot Read() noexcept
     {
         now.bytes[i] = ReadAt<std::uint8_t>(ctrl + kBytes[i]);
     }
-    const auto weak = ReadAt<std::uint64_t>(ctrl + kMenuWidget);
-    if (weak != 0)
-    {
-        platform::CallGuarded(g_weakGet, now.widget, &weak);
-    }
+    now.widget = weak_object::ObjectOf(ReadAt<std::uint64_t>(ctrl + kMenuWidget));
     now.widgetNamesUs = now.widget != nullptr &&
                         ReadAt<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(now.widget) + kWidgetCtrl) == ctrl;
     now.context = focus_scope::PlayerTwoContext();
@@ -754,7 +749,6 @@ bool Install(const platform::GameImage& image) noexcept
     const auto malloc = platform::FindFunction(image, kMalloc);
     const auto ctor   = platform::FindFunction(image, kCtor);
     const auto setup  = platform::FindFunction(image, kSetup);
-    const auto get    = platform::FindFunction(image, facts::kWeakObjectGet);
     const auto guide  = platform::FindFunction(image, kKeyGuideCtor);
     g_keyGuideCtor    = guide ? reinterpret_cast<KeyGuideCtorFn>(*guide) : nullptr;
     try
@@ -772,8 +766,8 @@ bool Install(const platform::GameImage& image) noexcept
     const auto resetAll = image.Rebase(kResetAll);
     const auto refresh  = platform::FindFunction(image, kRefresh);
     const auto setupAt = site(kSetupCall), resetAt = site(kResetAllCall);
-    g_installed = malloc && ctor && setup && get && g_worldClass != 0 && system && resetAll && refresh && setupAt &&
-                  resetAt && focus_scope::Install(image);
+    g_installed = malloc && ctor && setup && weak_object::Known() && g_worldClass != 0 && system && resetAll &&
+                  refresh && setupAt && resetAt && focus_scope::Install(image);
     g_current = false;
     g_tries   = 0;
     if (g_installed)
@@ -781,7 +775,6 @@ bool Install(const platform::GameImage& image) noexcept
         g_malloc  = reinterpret_cast<MallocFn>(*malloc);
         g_ctor    = reinterpret_cast<CtorFn>(*ctor);
         g_setup   = reinterpret_cast<SetupFn>(*setup);
-        g_weakGet = reinterpret_cast<WeakGetFn>(*get);
         g_sites   = {*resetAt, *resetAll, *setupAt, *refresh};
         g_image.emplace(image);
         // The shortcut follows: the wrapper and the controller's rebuild on both builds; the status menu's inlined
@@ -853,17 +846,10 @@ void* KeyGuide() noexcept
 
 namespace {
 
-/// The object a FWeakObjectPtr names, or null.
-void* Resolve(std::uint64_t weak) noexcept
-{
-    void* object = nullptr;
-    return weak != 0 && g_weakGet != nullptr && platform::CallGuarded(g_weakGet, object, &weak) ? object : nullptr;
-}
-
 /// A controller's widget (its FWeakObjectPtr at `offset`), or null.
 void* WidgetOf(std::uintptr_t controller, std::uint32_t offset) noexcept
 {
-    return controller != 0 ? Resolve(ReadAt<std::uint64_t>(controller + offset)) : nullptr;
+    return controller != 0 ? weak_object::ObjectOf(ReadAt<std::uint64_t>(controller + offset)) : nullptr;
 }
 
 void SetOpacity(void* widget, float opacity) noexcept
@@ -929,7 +915,7 @@ void Restore() noexcept
     {
         for (auto& saved : g_oneSaved)
         {
-            SetOpacity(Resolve(saved.weak), saved.opacity);  // null (skipped) if the game rebuilt it
+            SetOpacity(weak_object::ObjectOf(saved.weak), saved.opacity);  // null (skipped) if the game rebuilt it
             saved = {};
         }
         g_swapped = false;
@@ -981,7 +967,7 @@ void RefocusAtJoin(std::uintptr_t one) noexcept
 
 void KeepHidden() noexcept
 {
-    if (g_controller == nullptr || g_weakGet == nullptr || !hud::widget_opacity::Installed() ||
+    if (g_controller == nullptr || !weak_object::Known() || !hud::widget_opacity::Installed() ||
         !generation::OnGameThread())
     {
         return;

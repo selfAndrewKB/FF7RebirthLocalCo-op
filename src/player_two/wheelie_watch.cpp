@@ -13,6 +13,7 @@
 #include "player_two/object_fields.h"
 #include "player_two/pad_sticks.h"
 #include "player_two/party_member.h"
+#include "player_two/weak_object.h"
 
 #include <array>
 #include <cstddef>
@@ -88,7 +89,6 @@ constexpr std::array<std::uint32_t, 3> kOnOffIds       = {152, 136, 4};
 // FWeakObjectPtr::Get (hud/hud_updates.cpp).
 constexpr std::uint8_t           kWeakGetBytes[] = {0x44, 0x8B, 0x49, 0x04, 0x45, 0x33, 0xC0, 0x45, 0x85, 0xC9, 0x74, 0x4F};
 constexpr platform::FunctionFact kWeakGet{L"FWeakObjectPtr::Get", 0x141905998, kWeakGetBytes};
-using WeakGetFn = void* (*)(const void* weak);
 
 /// Ticks between reads, and reads between the riding lines (about one a second).
 constexpr std::uint32_t kEvery       = 10;
@@ -99,7 +99,6 @@ std::uintptr_t g_coordVt   = 0;
 std::uintptr_t g_scooterVt = 0;
 std::uintptr_t g_gameRoot  = 0;  // the global that holds the game root
 std::uintptr_t g_input     = 0;  // the global that holds Square's input object
-WeakGetFn      g_weakGet   = nullptr;
 
 // Game thread.
 std::uint32_t g_ticks       = 0;
@@ -131,12 +130,6 @@ struct Snapshot
 
 bool     g_logged = false;
 Snapshot g_last;
-
-void* WeakGet(const void* weak) noexcept
-{
-    void* out = nullptr;
-    return g_weakGet != nullptr && platform::CallGuarded(g_weakGet, out, weak) ? out : nullptr;
-}
 
 /// The key-4 (SB Scooter) coordinator among a controller's own coordinators, by vtable.
 const void* ScooterCoordinatorOf(const void* controller)
@@ -215,7 +208,7 @@ Snapshot Read(float& nearestFree)
         const auto* list = static_cast<const std::byte*>(ReadPointer(shared, kSharedListData));
         for (std::int32_t i = 0; list != nullptr && i < s.listNum && i < kListCap; ++i)
         {
-            void* scooter = WeakGet(list + static_cast<std::ptrdiff_t>(i) * sizeof(std::uint64_t));
+            void* scooter = weak_object::ObjectAt(list + static_cast<std::ptrdiff_t>(i) * sizeof(std::uint64_t));
             if (scooter == nullptr || VTableOf(scooter) != g_scooterVt)
             {
                 continue;
@@ -348,13 +341,11 @@ bool Install(const platform::GameImage& image) noexcept
     const auto scooter = image.Rebase(kScooterVt);
     const auto root    = image.Rebase(charapop::kGameRoot, sizeof(void*));
     const auto input   = image.Rebase(facts::kSquareInputGlobal, sizeof(void*));
-    const auto weakGet = platform::FindFunction(image, kWeakGet);
     g_coordVt          = coord ? *coord : 0;
     g_scooterVt        = scooter ? *scooter : 0;
     g_gameRoot         = root ? *root : 0;
     g_input            = input ? *input : 0;
-    g_weakGet          = weakGet ? reinterpret_cast<WeakGetFn>(*weakGet) : nullptr;
-    const bool ok      = g_coordVt != 0 && g_scooterVt != 0 && g_gameRoot != 0 && g_input != 0 && g_weakGet != nullptr;
+    const bool ok      = g_coordVt != 0 && g_scooterVt != 0 && g_gameRoot != 0 && g_input != 0 && weak_object::Known();
     platform::Log(L"wheelie watch: {}", ok ? L"installed (the Wheelie system logged while player 2 is in; read-only)"
                                            : L"UNAVAILABLE (a check failed)");
     if (!ok)

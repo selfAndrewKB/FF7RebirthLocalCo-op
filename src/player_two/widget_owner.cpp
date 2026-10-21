@@ -12,6 +12,7 @@
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 #include "player_two/object_fields.h"
+#include "player_two/weak_object.h"
 
 #include <array>
 #include <cstdint>
@@ -69,13 +70,11 @@ constexpr std::size_t   kLoggedCells = 4;
 
 using CellTickFn  = void (*)(void* cell, const void* geometry, float deltaTime);
 using GuideTickFn = void (*)(void* keyGuide);
-using WeakGetFn   = void* (*)(const std::uint64_t* weak);
 
 // Set once at install.
 platform::VTableEntry  g_cellSlot;
 platform::VTableEntry  g_paneSlot;
 platform::CallRedirect g_guideCall;
-WeakGetFn              g_weakGet     = nullptr;
 std::uintptr_t         g_endUISystem = 0;
 
 // Game thread.
@@ -304,12 +303,6 @@ void PaneTick(void* pane, const void* geometry, float deltaTime) noexcept
     }
 }
 
-void* Resolve(std::uint64_t weak) noexcept
-{
-    void* object = nullptr;
-    return weak != 0 && g_weakGet != nullptr && platform::CallGuarded(g_weakGet, object, &weak) ? object : nullptr;
-}
-
 /// Both key guides on change: active, the option's cache, shown, mode, and their widget's visibility and
 /// render opacity.
 void WatchGuides(std::uintptr_t one, std::uintptr_t two) noexcept
@@ -326,7 +319,7 @@ void WatchGuides(std::uintptr_t one, std::uintptr_t two) noexcept
     for (std::size_t i = 0; i < 2; ++i)
     {
         const auto guide  = i == 0 ? one : two;
-        void*      widget = Resolve(ReadAt<std::uint64_t>(guide + kGuideWidget));
+        void*      widget = weak_object::ObjectOf(ReadAt<std::uint64_t>(guide + kGuideWidget));
         const auto at     = reinterpret_cast<std::uintptr_t>(widget);
         now[i]     = {ReadAt<std::uint8_t>(guide), ReadAt<std::uint8_t>(guide + 2), ReadAt<std::uint8_t>(guide + 3),
                       ReadAt<std::uint8_t>(guide + kGuideMode), static_cast<std::uint8_t>(widget != nullptr),
@@ -387,7 +380,6 @@ void GuideTick(void* keyGuide) noexcept
 bool Install(const platform::GameImage& image) noexcept
 {
     const auto system  = image.Rebase(kEndUISystem, kKeyGuide + sizeof(void*));
-    const auto weakGet = platform::FindFunction(image, facts::kWeakObjectGet);
     const auto guide   = platform::FindFunction(image, kGuideTick);
     const auto site    = image.Rebase(kGuideTickCall, 5);
     if (!system)
@@ -396,7 +388,6 @@ bool Install(const platform::GameImage& image) noexcept
         return false;
     }
     g_endUISystem = *system;
-    g_weakGet     = weakGet ? reinterpret_cast<WeakGetFn>(*weakGet) : nullptr;  // the key-guide log only
     g_cellsOn     = platform::ReplaceSlot(image, kCellTick, reinterpret_cast<std::uintptr_t>(&CellTick), g_cellSlot);
     g_guidesOn    = guide && site && g_guideCall.Install(*site, *guide, reinterpret_cast<std::uintptr_t>(&GuideTick));
     g_panesOn     = platform::ReplaceSlot(image, kPaneTick, reinterpret_cast<std::uintptr_t>(&PaneTick), g_paneSlot);

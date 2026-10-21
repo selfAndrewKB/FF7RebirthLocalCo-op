@@ -63,6 +63,7 @@
 #include "player_two/anim_two_views.h"
 #include "player_two/charapop_near.h"
 #include "player_two/charapop_centre.h"
+#include "player_two/weak_object.h"
 #include "player_two/world_actor_reach.h"
 #include "player_two/shared_ride.h"
 #include "player_two/wheelie_ride.h"
@@ -338,6 +339,7 @@ public:
             Log(L"standing aside: nothing installed, the game runs unmodified");
             return;
         }
+        lss::player_two::weak_object::Install(*image);    // the engine's weak pointers, once, for every module
         lss::player_two::facts::InstallInBattle(*image);  // the game's in-battle test, once, for the stages that ask it
         session_.emplace(*removeLocalPlayer);
         session_->InstallStages(*image);

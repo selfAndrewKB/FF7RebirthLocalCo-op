@@ -11,6 +11,7 @@
 #include "player_two/describe.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
+#include "player_two/weak_object.h"
 
 #include <array>
 #include <cstddef>
@@ -105,9 +106,7 @@ using platform::ReadAt;  // the guarded reads: platform/guarded.h
 
 void* Resolve(std::uintptr_t weakField) noexcept
 {
-    return ReadAt<std::uint64_t>(weakField) != 0
-               ? player_two::leader_scope::ObjectAt(reinterpret_cast<const void*>(weakField))
-               : nullptr;
+    return player_two::weak_object::ObjectAt(reinterpret_cast<const void*>(weakField));
 }
 
 std::uintptr_t Manager() noexcept
@@ -336,7 +335,7 @@ void Restore() noexcept
 {
     for (std::size_t i = 0; i < g_hiddenCount; ++i)
     {
-        if (void* widget = player_two::leader_scope::ObjectAt(&g_hidden[i].weak))
+        if (void* widget = player_two::weak_object::ObjectAt(&g_hidden[i].weak))
         {
             widget_opacity::Set(widget, g_hidden[i].previous);
         }

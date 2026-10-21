@@ -8,6 +8,7 @@
 #include "platform/module_pin.h"
 #include "platform/sparse_array.h"
 #include "player_two/generation.h"
+#include "player_two/weak_object.h"
 
 #include <cstdint>
 #include <cstring>
@@ -51,13 +52,10 @@ constexpr std::uint8_t   kPlaceUmgPrologue[]   = {0x48, 0x89, 0x5C, 0x24, 0x10, 
 constexpr std::uintptr_t kEntryLength          = sizeof(kPopupEntryBytes);
 
 // FWeakObjectPtr::Get (hud/hud_updates.cpp).
-constexpr std::uintptr_t kWeakGet           = 0x141905998;
-constexpr std::uint8_t   kWeakGetPrologue[] = {0x44, 0x8B, 0x49, 0x04, 0x45, 0x33, 0xC0, 0x45, 0x85, 0xC9, 0x74, 0x4F};
 
 
 using PlaceFn   = std::uintptr_t (*)(void* out, void* controller, void* canvas, void* widget, const float* location,
                                      std::uint64_t offset, std::uint8_t clamp);
-using WeakGetFn = void* (*)(const void* weak);
 
 // Installed once, then read. The record is read and written by the code near the game.
 platform::CodeRedirect g_slateCode;
@@ -67,24 +65,11 @@ bool                   g_installed   = false;
 std::uintptr_t         g_endUISystem = 0;
 PlaceFn                g_placeSlate  = nullptr;
 PlaceFn                g_placeUmg    = nullptr;
-WeakGetFn              g_weakGet     = nullptr;
 
 // Game thread.
 bool g_failed = false;
 
 using platform::Read;  // the guarded reads: platform/guarded.h
-
-void* WeakGetGuarded(const void* weak) noexcept
-{
-    __try
-    {
-        return g_weakGet(weak);
-    }
-    __except (platform::GuardFilter(GetExceptionCode()))
-    {
-        return nullptr;
-    }
-}
 
 bool PlaceGuarded(PlaceFn place, void* controller, void* canvas, void* widget, const PopupPlacement& placement) noexcept
 {
@@ -131,7 +116,7 @@ int ReplayList(std::uintptr_t manager, const List& list, void* canvas, void* pla
         void*         widget = nullptr;  // the wrapper's r9: the entry's own TSharedPtr, or the UUserWidget
         if (list.umg)
         {
-            widget = WeakGetGuarded(reinterpret_cast<const void*>(element));
+            widget = player_two::weak_object::ObjectAt(reinterpret_cast<const void*>(element));
             key    = reinterpret_cast<std::uint64_t>(widget);
         }
         else
@@ -167,9 +152,8 @@ bool Install(const platform::GameImage& image) noexcept
     const auto system      = image.Rebase(kEndUISystem, kManager + sizeof(void*));
     const auto slate       = image.Rebase(kPlaceSlate, kEntryLength);
     const auto umg         = image.Rebase(kPlaceUmg, kEntryLength);
-    const auto weakGet     = image.Rebase(kWeakGet);
-    if (!system || !slate || !umg || !weakGet || !image.BytesMatch(kPlaceSlate, kPlaceSlatePrologue) ||
-        !image.BytesMatch(kPlaceUmg, kPlaceUmgPrologue) || !image.BytesMatch(kWeakGet, kWeakGetPrologue))
+    if (!system || !slate || !umg || !player_two::weak_object::Known() ||
+        !image.BytesMatch(kPlaceSlate, kPlaceSlatePrologue) || !image.BytesMatch(kPlaceUmg, kPlaceUmgPrologue))
     {
         platform::Log(L"popups: the placement code is not what the research read; popups stay player 1's in both halves");
         return false;
@@ -177,7 +161,6 @@ bool Install(const platform::GameImage& image) noexcept
     g_endUISystem = *system;
     g_placeSlate  = reinterpret_cast<PlaceFn>(*slate);
     g_placeUmg    = reinterpret_cast<PlaceFn>(*umg);
-    g_weakGet     = reinterpret_cast<WeakGetFn>(*weakGet);
 
     // The capture code reads and writes g_record, in this DLL: pin it first.
     const auto slateCode = PopupCaptureCode(g_record, PopupKey::Slate);

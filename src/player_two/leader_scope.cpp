@@ -15,65 +15,20 @@ namespace {
 constexpr std::uint32_t kPartyManagerLeader = 0x148;
 constexpr std::uint32_t kPartyManagerLeaderType = 0x150;  // u8
 
-using WeakGetFn    = void* (*)(const std::uint64_t* weak);
-using WeakAssignFn = void (*)(std::uint64_t* weak, void* object);
-
 // Set once at install.
-WeakGetFn      g_weakGet      = nullptr;
-WeakAssignFn   g_weakAssign   = nullptr;
 std::uintptr_t g_partyManager = 0;  // the address holding the party manager
-
-std::uint64_t WeakOfGuarded(void* object) noexcept
-{
-    __try
-    {
-        std::uint64_t weak = 0;
-        g_weakAssign(&weak, object);
-        return (weak >> 32) != 0 && g_weakGet(&weak) == object ? weak : 0;
-    }
-    __except (platform::GuardFilter(GetExceptionCode()))
-    {
-        return 0;
-    }
-}
 
 }  // namespace
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto get     = platform::FindFunction(image, facts::kWeakObjectGet);
-    const auto assign  = platform::FindFunction(image, facts::kWeakObjectAssign);
     const auto manager = image.Rebase(facts::kPartyManagerGlobal, sizeof(void*));
-    if (!get || !assign || !manager)
+    if (!weak_object::Known() || !manager)
     {
         return false;
     }
-    g_weakGet      = reinterpret_cast<WeakGetFn>(*get);
-    g_weakAssign   = reinterpret_cast<WeakAssignFn>(*assign);
     g_partyManager = *manager;
     return true;
-}
-
-std::uint64_t WeakOf(void* object) noexcept
-{
-    return object != nullptr && g_weakAssign != nullptr ? WeakOfGuarded(object) : 0;
-}
-
-bool StillNames(std::uint64_t weak, const void* object) noexcept
-{
-    void* live = nullptr;
-    return weak != 0 && object != nullptr && g_weakGet != nullptr && platform::CallGuarded(g_weakGet, live, &weak) &&
-           live == object;
-}
-
-void* ObjectAt(const void* field) noexcept
-{
-    std::uint64_t weak = 0;
-    void*         live = nullptr;
-    return field != nullptr && g_weakGet != nullptr && platform::CopyGuarded(&weak, field, sizeof(weak)) &&
-                   (weak >> 32) != 0 && platform::CallGuarded(g_weakGet, live, &weak)
-               ? live
-               : nullptr;
 }
 
 LeaderScope::LeaderScope(std::uint64_t memberWeak) noexcept

@@ -4,6 +4,8 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 
+#include "player_two/weak_object.h"
+
 #include <array>
 #include <cstdint>
 #include <format>
@@ -54,8 +56,6 @@ const std::array<SubTick, 6> kSubTicks{{
 constexpr std::uint32_t  kLeaderTargetMember = 0x140;
 constexpr std::uint32_t  kLeaderTargetCount  = 0x20;
 constexpr std::uint32_t  kLeaderTargetWeak   = 0x6C;
-constexpr std::uintptr_t kWeakGet            = 0x141905998;
-constexpr std::uint8_t   kWeakGetPrologue[]  = {0x44, 0x8B, 0x49, 0x04, 0x45, 0x33, 0xC0, 0x45, 0x85, 0xC9, 0x74, 0x4F};
 constexpr std::uintptr_t kLeaderTargetTick   = 0x1417267F0;
 constexpr std::uint8_t   kLeaderTargetPrologue[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x10, 0x48, 0x89, 0x70, 0x18, 0x48,
                                                     0x89, 0x78, 0x20, 0x55, 0x48, 0x8D, 0x68, 0xA1, 0xB8, 0xA0, 0x00, 0x00, 0x00};
@@ -73,7 +73,6 @@ constexpr std::uint8_t   kCompassFrameUpdatePrologue[] = {0x48, 0x8B, 0xC4, 0x48
 
 using ObjectFn  = void (*)(void* object);
 using CompassFn = void (*)(void* holder, float deltaTime);
-using WeakGetFn = void* (*)(const void* weak);
 
 constexpr std::size_t kLeaderSlot  = kSubTicks.size();
 constexpr std::size_t kCompassSlot = kSubTicks.size() + 1;
@@ -82,7 +81,6 @@ constexpr const wchar_t* kNames[]  = {L"+98", L"+B0", L"+150", L"+188", L"+170",
 // Set once at install.
 std::uintptr_t          g_endUISystem  = 0;
 std::array<ObjectFn, 6> g_subTicks{};
-WeakGetFn               g_weakGet      = nullptr;
 ObjectFn                g_leaderTarget = nullptr;
 CompassFn               g_compass      = nullptr;
 
@@ -129,18 +127,6 @@ bool CompassGuarded(void* holder) noexcept
     }
 }
 
-void* WeakGetGuarded(const void* weak) noexcept
-{
-    __try
-    {
-        return g_weakGet(weak);
-    }
-    __except (platform::GuardFilter(GetExceptionCode()))
-    {
-        return nullptr;
-    }
-}
-
 void* Member(std::uint32_t member) noexcept
 {
     void* object = nullptr;
@@ -184,7 +170,8 @@ bool RunLeaderTarget() noexcept
     std::int32_t count  = 0;
     if (leader != nullptr && platform::CopyGuarded(&count, leader + kLeaderTargetCount, sizeof(count)) && count != 0)
     {
-        if (void* target = WeakGetGuarded(leader + kLeaderTargetWeak); target != nullptr && !CallGuarded(g_leaderTarget, target))
+        if (void* target = player_two::weak_object::ObjectAt(leader + kLeaderTargetWeak);
+            target != nullptr && !CallGuarded(g_leaderTarget, target))
         {
             return false;
         }
@@ -211,7 +198,7 @@ bool RunCompass() noexcept
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    bool holds = image.BytesMatch(kWeakGet, kWeakGetPrologue) && image.BytesMatch(kLeaderTargetTick, kLeaderTargetPrologue) &&
+    bool holds = player_two::weak_object::Known() && image.BytesMatch(kLeaderTargetTick, kLeaderTargetPrologue) &&
                  image.BytesMatch(kCompassFrameUpdate, kCompassFrameUpdatePrologue);
     for (std::size_t i = 0; holds && i < kSubTicks.size(); ++i)
     {
@@ -220,15 +207,13 @@ bool Install(const platform::GameImage& image) noexcept
         g_subTicks[i]   = live ? reinterpret_cast<ObjectFn>(*live) : nullptr;
     }
     const auto system  = image.Rebase(kEndUISystem, kSubTicks.back().member + sizeof(void*));
-    const auto get     = image.Rebase(kWeakGet);
     const auto leader  = image.Rebase(kLeaderTargetTick);
     const auto compass = image.Rebase(kCompassFrameUpdate);
-    if (!holds || !system || !get || !leader || !compass)
+    if (!holds || !system || !leader || !compass)
     {
         return false;
     }
     g_endUISystem  = *system;
-    g_weakGet      = reinterpret_cast<WeakGetFn>(*get);
     g_leaderTarget = reinterpret_cast<ObjectFn>(*leader);
     g_compass      = reinterpret_cast<CompassFn>(*compass);
     return true;

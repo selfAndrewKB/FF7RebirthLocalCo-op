@@ -16,6 +16,7 @@
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 #include "player_two/lock_on.h"
+#include "player_two/weak_object.h"
 
 #include <algorithm>
 #include <array>
@@ -110,8 +111,6 @@ constexpr std::uintptr_t kSetPosition           = 0x140CC39E8;
 constexpr std::uint8_t   kSetPositionPrologue[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00};
 
 // FWeakObjectPtr::Get (hud/hud_updates.cpp).
-constexpr std::uintptr_t kWeakGet           = 0x141905998;
-constexpr std::uint8_t   kWeakGetPrologue[] = {0x44, 0x8B, 0x49, 0x04, 0x45, 0x33, 0xC0, 0x45, 0x85, 0xC9, 0x74, 0x4F};
 
 using ByWidgetFn    = void (*)(void* manager, void* widget, const float* location);
 using TargetedFn    = std::uint64_t (*)(void* manager, void* widget, void* key, const float* location, std::int32_t scratch,
@@ -119,7 +118,6 @@ using TargetedFn    = std::uint64_t (*)(void* manager, void* widget, void* key, 
 using ForcedFn      = std::uint8_t (*)(void* p);
 using YStepFn       = void (*)(void* unused, void* widget, void* p);
 using SetPositionFn = void (*)(void* widget, std::uint64_t position, bool removeDpiScale);
-using WeakGetFn     = void* (*)(const void* weak);
 using OwnerFn       = void* (*)(void* source);
 using ScaleStepFn   = void (*)(void* unused, void* widget, void* owner, float* state, std::int32_t unusedToo, std::uint8_t caseC);
 using ApplyFn       = void (*)(void* widget);
@@ -169,7 +167,6 @@ YStepFn                g_yStep        = nullptr;
 ScaleStepFn            g_scaleStep    = nullptr;
 ApplyFn                g_apply        = nullptr;
 SetPositionFn          g_setPosition  = nullptr;
-WeakGetFn              g_weakGet      = nullptr;
 
 
 // Game thread.
@@ -246,18 +243,6 @@ std::uint8_t Forced(void* p) noexcept
         std::memcpy(capture.flags, static_cast<const std::byte*>(p) + kFinalFlags, sizeof(capture.flags));
     }
     return forced;
-}
-
-void* WeakGetGuarded(const void* weak) noexcept
-{
-    __try
-    {
-        return g_weakGet(weak);
-    }
-    __except (platform::GuardFilter(GetExceptionCode()))
-    {
-        return nullptr;
-    }
 }
 
 /// One gauge placed by the untargeted or targeted function; the targeted key {source, controller} is
@@ -464,7 +449,7 @@ bool ReplayPlayerOne(std::uintptr_t manager, int& replayed, int& targeted)
     bool       ok         = true;
     platform::ForEachSparseElement(manager + kEntries, kElement, [&](std::uintptr_t entry) {
         const std::uintptr_t p      = entry + kEntryP;
-        void*                widget = WeakGetGuarded(reinterpret_cast<const void*>(p));
+        void*                widget = player_two::weak_object::ObjectAt(reinterpret_cast<const void*>(p));
         const GaugePlacement*  placed = widget != nullptr ? Recorded(widget) : nullptr;
         if (placed == nullptr)
         {
@@ -512,7 +497,7 @@ bool ReplayPlayerTwo(std::uintptr_t manager, int& replayed, int& targeted)
     bool         ok          = true;
     platform::ForEachSparseElement(manager + kEntries, kElement, [&](std::uintptr_t entry) {
         const std::uintptr_t p      = entry + kEntryP;
-        void*                widget = WeakGetGuarded(reinterpret_cast<const void*>(p));
+        void*                widget = player_two::weak_object::ObjectAt(reinterpret_cast<const void*>(p));
         const GaugePlacement*  placed = widget != nullptr ? Recorded(widget) : nullptr;
         if (placed == nullptr)
         {
@@ -652,10 +637,9 @@ bool Install(const platform::GameImage& image) noexcept
     const auto call     = image.Rebase(kTargetedCall, 5);
     const auto targeted = image.Rebase(kTargeted);
     const auto position = image.Rebase(kSetPosition);
-    const auto weakGet  = image.Rebase(kWeakGet);
-    if (!system || !byWidget || !site || !resume || !call || !targeted || !position || !weakGet ||
-        !image.BytesMatch(kByWidget, kByWidgetPrologue) || !image.BytesMatch(kSetPosition, kSetPositionPrologue) ||
-        !image.BytesMatch(kWeakGet, kWeakGetPrologue) || !image.BytesMatch(kTargeted, kTargetedPrologue))
+    if (!system || !byWidget || !site || !resume || !call || !targeted || !position ||
+        !player_two::weak_object::Known() || !image.BytesMatch(kByWidget, kByWidgetPrologue) ||
+        !image.BytesMatch(kSetPosition, kSetPositionPrologue) || !image.BytesMatch(kTargeted, kTargetedPrologue))
     {
         platform::Log(L"enemy gauges: the placement code is not what the research read; gauges stay player 1's in both halves");
         return false;
@@ -663,7 +647,6 @@ bool Install(const platform::GameImage& image) noexcept
     g_endUISystem = *system;
     g_byWidget    = reinterpret_cast<ByWidgetFn>(*byWidget);
     g_setPosition = reinterpret_cast<SetPositionFn>(*position);
-    g_weakGet     = reinterpret_cast<WeakGetFn>(*weakGet);
 
     // The capture code reads and writes g_record, in this DLL: pin it first.
     const auto code = GaugeCaptureCode(g_record);

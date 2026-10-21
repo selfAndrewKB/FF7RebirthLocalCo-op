@@ -22,6 +22,7 @@
 #include "player_two/pad_sticks.h"
 #include "player_two/party_member.h"
 #include "player_two/primary_controller.h"
+#include "player_two/weak_object.h"
 #include "players/unreal_access.h"
 
 #include <atomic>
@@ -213,7 +214,6 @@ using SuspendHudInputFn = void (*)(std::uint8_t kind, std::uint8_t reset);
 using PartyListInputFn = void (*)(void* partyList, std::uint8_t on, std::uint8_t applyVisibility);
 using LeaderFn         = void* (*)();
 using SetMenuLayerFn = void (*)(void* controller, std::uint8_t on);
-using WeakGetFn       = void* (*)(const std::uint64_t* weak);
 using KeyUpFn         = std::uint8_t (*)(void* self, void* application, const void* keyEvent);
 using UpRouteFn       = std::uint8_t (*)(void* owner, void* event);
 
@@ -242,7 +242,6 @@ std::array<std::uintptr_t, kActions> g_keys{};
 std::uintptr_t g_endUISystem  = 0;
 std::uintptr_t g_partyManager = 0;  // the address holding the party manager
 SetMenuLayerFn g_setMenuLayer = nullptr;
-WeakGetFn      g_weakGet = nullptr;
 std::uintptr_t g_commandMenuKey = 0;
 
 // Game thread.
@@ -356,9 +355,7 @@ void MirrorHudMode(std::uintptr_t two, std::uintptr_t one, std::uint8_t memberTy
 /// A controller's widget (its FWeakObjectPtr at `offset`), or null.
 void* WidgetOf(std::uintptr_t controller, std::uint32_t offset) noexcept
 {
-    const auto weak   = ReadAt<std::uint64_t>(controller + offset);
-    void*      widget = nullptr;
-    return weak != 0 && platform::CallGuarded(g_weakGet, widget, &weak) ? widget : nullptr;
+    return weak_object::ObjectOf(ReadAt<std::uint64_t>(controller + offset));
 }
 
 /// A widget's visibility (0 Visible, 1 Collapsed, ...), or 0xFF without the widget.
@@ -1036,14 +1033,14 @@ bool Install(const platform::GameImage& image) noexcept
     const auto tick = find(kTick), slot = find(kSlot), snapshot = find(kSnapshot), show = find(kGuideShow),
                mode8 = find(kGuideMode8), hud = find(kSetHudMode), resume = find(kResumeHudInput), suspend = find(kSuspendHudInput), listInput = find(kSetPartyListInput),
                leader = find(facts::kResolvePartyLeader), layer = find(kSetMenuLayer),
-               weakGet = find(facts::kWeakObjectGet), filterOn = find(kFilterOn), filterOff = find(kFilterOff),
+               filterOn = find(kFilterOn), filterOff = find(kFilterOff),
                menuSound = find(kMenuSound), refInc = find(kRefInc), refDec = find(kRefDec);
     const auto commandMenu = image.Rebase(kCommandMenuKey, 24);
     const auto system  = image.Rebase(kEndUISystem, kFilterManager + sizeof(void*));
     const auto manager = image.Rebase(facts::kPartyManagerGlobal, sizeof(void*));
     bool       ok      = tick && slot && snapshot && show && mode8 && hud && resume && suspend && listInput && leader &&
-                  layer && weakGet && filterOn && filterOff && menuSound && refInc && refDec && commandMenu && system &&
-                  manager;
+                  layer && weak_object::Known() && filterOn && filterOff && menuSound && refInc && refDec &&
+                  commandMenu && system && manager;
     for (std::size_t i = 0; ok && i < kActions; ++i)
     {
         const auto key = image.Rebase(kActionKeys[i], 24);
@@ -1060,7 +1057,6 @@ bool Install(const platform::GameImage& image) noexcept
         g_endUISystem  = *system;
         g_partyManager = *manager;
         g_setMenuLayer   = reinterpret_cast<SetMenuLayerFn>(*layer);
-        g_weakGet        = reinterpret_cast<WeakGetFn>(*weakGet);
         g_refInc         = reinterpret_cast<FilterCountFn>(*refInc);
         g_refDec         = reinterpret_cast<FilterCountFn>(*refDec);
         g_commandMenuKey = *commandMenu;

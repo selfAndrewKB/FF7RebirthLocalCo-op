@@ -19,6 +19,7 @@
 #include "player_two/engine_facts.h"
 #include "player_two/field_pickup.h"
 #include "player_two/generation.h"
+#include "player_two/weak_object.h"
 #include "players/unreal_access.h"
 
 #include <algorithm>
@@ -118,11 +119,9 @@ std::vector<std::pair<const UObject*, bool>> g_layoutNow;  // scratch, reused
 
 using platform::Read;  // the guarded reads: platform/guarded.h
 
-UObject* Resolve(std::uint64_t weakValue)
+UObject* Resolve(std::uint64_t weakValue) noexcept
 {
-    RC::Unreal::FWeakObjectPtr weak;
-    std::memcpy(&weak, &weakValue, sizeof(weakValue));
-    return weak.Get();
+    return static_cast<UObject*>(player_two::weak_object::ObjectOf(weakValue));
 }
 
 bool LayoutGuarded(ListHeader* list, void* placeNow) noexcept

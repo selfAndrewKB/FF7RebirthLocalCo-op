@@ -16,6 +16,7 @@
 #include "player_two/primary_controller.h"
 #include "player_two/switch_volume_two.h"
 #include "player_two/traversal_watch.h"
+#include "player_two/weak_object.h"
 
 #include <algorithm>
 #include <chrono>
@@ -219,7 +220,6 @@ std::optional<platform::GameImage> g_image;
 MallocFn             g_malloc   = nullptr;
 FreeFn               g_free     = nullptr;
 SetClearFn           g_setClear = nullptr;
-void*                g_weakGet  = nullptr;
 const void*          g_registryWeak = nullptr;
 CRITICAL_SECTION*    g_overlapLock  = nullptr;
 const std::uint8_t*  g_sweepFlagA   = nullptr;
@@ -262,13 +262,6 @@ std::int32_t                          g_lastCount = -1;
 bool                                  g_skipLogged = false;
 bool                                  g_wallRunCapLogged = false;
 platform::Every                       g_summary{std::chrono::seconds(10)};
-
-using WeakGetFn = void* (*)(const void* weak);
-
-void* Resolve(const void* weak) noexcept
-{
-    return g_weakGet != nullptr ? reinterpret_cast<WeakGetFn>(g_weakGet)(weak) : nullptr;
-}
 
 void* TriggerOf(const void* controller) noexcept
 {
@@ -318,7 +311,7 @@ const std::byte* Datum(const std::byte* world, std::uint32_t chunks, std::uint32
 /// Player 2's tracker's query result, read as FieldTick reads it (RE-p2-trigger-overlap.md §5.1), into `out`.
 Read ReadResult(void* tracker, ResultArray& out) noexcept
 {
-    void* registry = Resolve(g_registryWeak);
+    void* registry = weak_object::ObjectAt(g_registryWeak);
     if (registry == nullptr)
     {
         return Read::NoResult;
@@ -352,7 +345,7 @@ Read ReadResult(void* tracker, ResultArray& out) noexcept
         for (std::int32_t i = 0; i < count; ++i)
         {
             const std::byte* weak = hits + static_cast<std::size_t>(kHitSize) * i + kHitActor;
-            if (Resolve(weak) != nullptr)
+            if (weak_object::ObjectAt(weak) != nullptr)
             {
                 std::memcpy(out.data + static_cast<std::size_t>(kResultSize) * out.num++, weak, 8);
             }
@@ -471,7 +464,7 @@ void* PassedActor(bool enter, void* actorArg) noexcept
     {
         return nullptr;
     }
-    return enter ? Resolve(actorArg) : actorArg;
+    return enter ? weak_object::ObjectAt(actorArg) : actorArg;
 }
 
 Shadow ShadowOf(std::uint64_t weak) noexcept
@@ -792,13 +785,12 @@ void Install(const platform::GameImage& image) noexcept
     const auto allocate = platform::FindFunction(image, kMalloc);
     const auto release  = platform::FindFunction(image, kFree);
     const auto clear    = platform::FindFunction(image, kSetClear);
-    const auto weakGet  = platform::FindFunction(image, facts::kWeakObjectGet);
     const auto registry = image.Rebase(kRegistryWeak, 8);
     const auto lock     = image.Rebase(kOverlapLock, sizeof(CRITICAL_SECTION));
     const auto flagA    = image.Rebase(kSweepFlagA);
     const auto flagB    = image.Rebase(kSweepFlagB);
-    const bool found = site && dispatch && enter && leave && enterAt && leaveAt && allocate && release && clear && weakGet &&
-                       registry && lock && flagA && flagB;
+    const bool found = site && dispatch && enter && leave && enterAt && leaveAt && allocate && release && clear &&
+                       weak_object::Known() && registry && lock && flagA && flagB;
     if (!found)
     {
         platform::Log(L"trigger two: UNAVAILABLE (a function or datum of the field tick's trigger pass differs); player 2's "
@@ -808,7 +800,6 @@ void Install(const platform::GameImage& image) noexcept
     g_malloc       = reinterpret_cast<MallocFn>(*allocate);
     g_free         = reinterpret_cast<FreeFn>(*release);
     g_setClear     = reinterpret_cast<SetClearFn>(*clear);
-    g_weakGet      = reinterpret_cast<void*>(*weakGet);
     g_registryWeak = reinterpret_cast<const void*>(*registry);
     g_overlapLock  = reinterpret_cast<CRITICAL_SECTION*>(*lock);
     g_sweepFlagA   = reinterpret_cast<const std::uint8_t*>(*flagA);

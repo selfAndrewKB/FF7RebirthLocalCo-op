@@ -4,18 +4,16 @@
 #include "platform/verified_code.h"
 #include "player_two/engine_facts.h"
 #include "player_two/object_fields.h"
+#include "player_two/weak_object.h"
 
 namespace lss::player_two::tag_counts {
 
 namespace {
 
-using WeakGetFn = void* (*)(const std::uint64_t* weak);
-
 /// TSet<TPair<FName, int32>>::FindId(this, &outIndex, key): the index, or -1.
 using FindIdFn = std::int32_t* (*)(const void* set, std::int32_t* outIndex, std::uint64_t key);
 
 // Set once at install.
-WeakGetFn            g_weakGet       = nullptr;
 FindIdFn             g_findId        = nullptr;
 const std::uint64_t* g_registryWeak  = nullptr;
 const std::uint64_t* g_triggerTag    = nullptr;
@@ -24,15 +22,13 @@ const std::uint64_t* g_triggerTag    = nullptr;
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto get      = platform::FindFunction(image, facts::kWeakObjectGet);
     const auto findId   = platform::FindFunction(image, facts::kTagSetFindId);
     const auto registry = image.Rebase(facts::kTagRegistryWeak, sizeof(std::uint64_t));
     const auto trigger  = image.Rebase(facts::kTriggerTagName, sizeof(std::uint64_t));
-    if (!get || !findId || !registry || !trigger)
+    if (!weak_object::Known() || !findId || !registry || !trigger)
     {
         return false;
     }
-    g_weakGet      = reinterpret_cast<WeakGetFn>(*get);
     g_findId       = reinterpret_cast<FindIdFn>(*findId);
     g_registryWeak = reinterpret_cast<const std::uint64_t*>(*registry);
     g_triggerTag   = reinterpret_cast<const std::uint64_t*>(*trigger);
@@ -65,7 +61,7 @@ std::optional<std::int32_t> CountOf(std::uint64_t tag) noexcept
     {
         return std::nullopt;
     }
-    const void* registry = g_weakGet(g_registryWeak);
+    const void* registry = weak_object::ObjectAt(g_registryWeak);
     if (registry == nullptr)
     {
         return std::nullopt;

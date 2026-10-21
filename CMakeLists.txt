@@ -139,6 +139,7 @@ add_library(LocalSplitScreen SHARED
     src/player_two/party_events.cpp
     src/player_two/party_lease.cpp
     src/player_two/in_battle.cpp
+    src/player_two/weak_object.cpp
     src/player_two/party_member.cpp
     src/player_two/party_switch.cpp
     src/player_two/primary_controller.cpp

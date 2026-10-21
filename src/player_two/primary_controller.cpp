@@ -4,6 +4,7 @@
 #include "platform/verified_code.h"
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
+#include "player_two/weak_object.h"
 
 #include <atomic>
 
@@ -17,13 +18,8 @@ namespace lss::player_two::primary_controller {
 namespace {
 
 /// FWeakObjectPtr::Get(this) and FWeakObjectPtr::operator=(UObject*).
-using WeakGetFn    = void* (*)(const std::uint64_t* weak);
-using WeakAssignFn = void (*)(std::uint64_t* weak, void* object);
-
 // Set once at install.
-void* const*  g_partyManager = nullptr;  // the global that holds the party manager
-WeakGetFn     g_weakGet      = nullptr;
-WeakAssignFn  g_weakAssign   = nullptr;
+void* const* g_partyManager = nullptr;  // the global that holds the party manager
 
 // Game thread: set by Bind.
 void*                    g_playerOne = nullptr;
@@ -41,21 +37,17 @@ std::uint64_t* PrimaryField() noexcept
 bool Install(const platform::GameImage& image) noexcept
 {
     const auto manager = image.Rebase(facts::kPartyManagerGlobal, sizeof(void*));
-    const auto get     = platform::FindFunction(image, facts::kWeakObjectGet);
-    const auto assign  = platform::FindFunction(image, facts::kWeakObjectAssign);
-    if (!manager || !get || !assign)
+    if (!manager || !weak_object::Known())
     {
         return false;
     }
     g_partyManager = reinterpret_cast<void* const*>(*manager);
-    g_weakGet      = reinterpret_cast<WeakGetFn>(*get);
-    g_weakAssign   = reinterpret_cast<WeakAssignFn>(*assign);
     return true;
 }
 
 bool Installed() noexcept
 {
-    return g_weakGet != nullptr;
+    return g_partyManager != nullptr;
 }
 
 bool Bind(void* playerOneController, void* playerTwoController) noexcept
@@ -65,9 +57,8 @@ bool Bind(void* playerOneController, void* playerTwoController) noexcept
     {
         return false;
     }
-    std::uint64_t weak = 0;
-    g_weakAssign(&weak, playerTwoController);
-    if (weak == 0 || g_weakGet(&weak) != playerTwoController)
+    const std::uint64_t weak = weak_object::WeakOf(playerTwoController);
+    if (weak == 0)
     {
         return false;
     }
@@ -84,33 +75,9 @@ void Unbind() noexcept
     g_playerTwoWeak = 0;
 }
 
-namespace {
-
-/// FWeakObjectPtr::operator= then Get, inside a structured-exception guard (MSVC allows __try
-/// only in a function with no objects to unwind).
-bool AssignAndCheckGuarded(std::uint64_t* weak, void* object) noexcept
-{
-    __try
-    {
-        g_weakAssign(weak, object);
-        return g_weakGet(weak) == object;
-    }
-    __except (GetExceptionCode() == EXCEPTION_STACK_OVERFLOW ? EXCEPTION_CONTINUE_SEARCH : EXCEPTION_EXECUTE_HANDLER)
-    {
-        return false;
-    }
-}
-
-}  // namespace
-
 std::uint64_t WeakValueOf(void* object) noexcept
 {
-    if (!Installed() || object == nullptr)
-    {
-        return 0;
-    }
-    std::uint64_t weak = 0;
-    return AssignAndCheckGuarded(&weak, object) ? weak : 0;
+    return Installed() ? weak_object::WeakOf(object) : 0;
 }
 
 bool Is(const void* controller) noexcept
@@ -121,7 +88,7 @@ bool Is(const void* controller) noexcept
 void* Current() noexcept
 {
     const std::uint64_t* field = Installed() ? PrimaryField() : nullptr;
-    return field == nullptr ? nullptr : g_weakGet(field);
+    return weak_object::ObjectAt(field);
 }
 
 Scope::Scope() noexcept
@@ -136,13 +103,13 @@ Scope::Scope() noexcept
         refusal_ = Refusal::NoPartyManager;
         return;
     }
-    if (g_weakGet(&g_playerTwoWeak) != g_playerTwo)
+    if (weak_object::ObjectAt(&g_playerTwoWeak) != g_playerTwo)
     {
         refusal_ = Refusal::PlayerTwoStale;
         return;
     }
     const std::uint64_t current = std::atomic_ref<std::uint64_t>(*field).load();
-    if (current != g_playerTwoWeak && g_weakGet(field) != g_playerOne)
+    if (current != g_playerTwoWeak && weak_object::ObjectAt(field) != g_playerOne)
     {
         refusal_ = Refusal::NotPlayerOne;
         return;

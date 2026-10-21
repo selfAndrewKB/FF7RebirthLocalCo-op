@@ -7,6 +7,7 @@
 #include "platform/sparse_array.h"
 #include "player_two/field_pickup.h"
 #include "player_two/leader_scope.h"
+#include "player_two/weak_object.h"
 
 #include <array>
 #include <cstddef>
@@ -41,11 +42,6 @@ std::uintptr_t      g_system = 0;  // set once at install
 // Game thread.
 std::vector<Hidden> g_hidden;
 std::array<Half, 2> g_logged{{{static_cast<std::size_t>(-1), 0}, {static_cast<std::size_t>(-1), 0}}};
-
-void* Resolve(const void* weakField) noexcept
-{
-    return player_two::leader_scope::ObjectAt(weakField);
-}
 
 void LogIfChanged(int player, const Half& now) noexcept
 {
@@ -97,7 +93,8 @@ void ShowOnly(int player) noexcept
     try
     {
         platform::ForEachSparseElement(list, kMarkerEntry, [mine, &half](std::uintptr_t entry) {
-            const int owner = player_two::field_pickup::MarkerOwner(Resolve(reinterpret_cast<const void*>(entry)));
+            const int owner = player_two::field_pickup::MarkerOwner(
+                player_two::weak_object::ObjectAt(reinterpret_cast<const void*>(entry)));
             if (owner < 0 || owner == mine)
             {
                 return true;  // this half's own, or not a point's marker
@@ -108,7 +105,7 @@ void ShowOnly(int player) noexcept
                 std::uint64_t weak   = 0;
                 void*         widget = nullptr;
                 if (!platform::CopyGuarded(&weak, reinterpret_cast<const void*>(entry + at), sizeof(weak)) || weak == 0 ||
-                    (widget = Resolve(reinterpret_cast<const void*>(entry + at))) == nullptr)
+                    (widget = player_two::weak_object::ObjectAt(reinterpret_cast<const void*>(entry + at))) == nullptr)
                 {
                     continue;
                 }
@@ -133,7 +130,7 @@ void Restore() noexcept
 {
     for (const Hidden& hidden : g_hidden)
     {
-        if (void* widget = Resolve(&hidden.weak))
+        if (void* widget = player_two::weak_object::ObjectAt(&hidden.weak))
         {
             widget_opacity::Set(widget, hidden.previous);
         }
