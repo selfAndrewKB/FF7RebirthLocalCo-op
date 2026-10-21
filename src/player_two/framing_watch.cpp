@@ -39,7 +39,7 @@ constexpr std::uint32_t kOpPoseFov       = 0x5C;
 constexpr std::uint32_t kOpPoseDistance  = 0x80;
 constexpr std::uint32_t kOpPoseHeight    = 0x94;
 constexpr std::uint32_t kOpPoseAim       = 0x84;   // the pose's AimOffset X, Y (lateral: the shoulder), Z
-constexpr std::uint32_t kOpModules       = 0x6E0;  // module table, 16 bytes a slot (module pointer first)
+using facts::kOperatorModules;
 constexpr std::uint32_t kModuleSlots     = 25;
 constexpr std::uint32_t kModuleStride    = 16;
 constexpr std::uint32_t kModuleActive    = 0x44;   // u8
@@ -141,7 +141,7 @@ Framing Take(void* controller) noexcept
     Read(op, kOpPitchMin, f.pitchMin);
     Read(op, kOpPitchMax, f.pitchMax);
     Read(op, kOpPoseAim, f.poseAim);
-    const auto* modules = static_cast<const std::byte*>(ReadPointer(op, kOpModules));
+    const auto* modules = static_cast<const std::byte*>(ReadPointer(op, kOperatorModules));
     for (std::uint32_t slot = 0; modules != nullptr && slot < kModuleSlots; ++slot)
     {
         const void*  module = ReadPointer(modules + slot * kModuleStride, 0);

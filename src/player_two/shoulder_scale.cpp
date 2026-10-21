@@ -30,7 +30,7 @@ constexpr std::uintptr_t kFinalizePose = 0x140A9CC5C;
 constexpr std::uint8_t   kFinalizePoseBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8,
                                                  0xC8, 0x22, 0x61, 0x01, 0x48, 0x2B, 0xE0};
 constexpr std::uint32_t  kPoseAimY        = 0x88;  // op+0x40 pose, +0x48 AimOffset Y (lateral)
-constexpr std::uint32_t  kBattleOperator  = 0x2CA8;
+using facts::kCameraManagerBattleOperator;
 constexpr float          kMinRatio = 0.25f, kMaxRatio = 4.0f;  // a ratio outside this is not trusted
 constexpr float          kMaxScale = 1.0f;  // only ever softened: a wider half keeps the game's offset (the user, 2026-10-01)
 
@@ -57,7 +57,8 @@ int PlayerOf(const void* op) noexcept
     for (int p = 0; p < 2; ++p)
     {
         void* pcm = ReadPointer(controllers[p], facts::kControllerCameraManager);
-        if (pcm != nullptr && (ReadPointer(pcm, facts::kCameraManagerFieldOperator) == op || ReadPointer(pcm, kBattleOperator) == op))
+        if (pcm != nullptr && (ReadPointer(pcm, facts::kCameraManagerFieldOperator) == op ||
+                               ReadPointer(pcm, kCameraManagerBattleOperator) == op))
         {
             return p;
         }

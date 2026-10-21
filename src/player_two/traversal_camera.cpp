@@ -223,7 +223,7 @@ constexpr std::uint32_t  kClimbHipBlend    = 0x488;        // float: eases towar
 constexpr std::uint32_t kPcmPulledIn = 0x2DE4;
 constexpr std::uint32_t kPcmHitActor = 0x2DC0;
 constexpr unsigned      kAfterFrames = 60;  // frames watched after a traversal module leaves slot 15 (the ladder top)
-constexpr std::uint32_t kOpModules   = 0x6E0;    // the Field operator's module table, 16 bytes a slot
+using facts::kOperatorModules;
 constexpr std::uint32_t kSlotFifteen = 15 * 16;
 
 // --- move classes ---------------------------------------------------------------------------------------------------
@@ -1391,7 +1391,7 @@ std::array<CollisionWatch, 2> g_collision;
 const void* SlotFifteen(const void* cameraManager) noexcept
 {
     const void* op      = ReadPointer(cameraManager, facts::kCameraManagerFieldOperator);
-    const void* modules = op != nullptr ? ReadPointer(op, kOpModules) : nullptr;
+    const void* modules = op != nullptr ? ReadPointer(op, kOperatorModules) : nullptr;
     return modules != nullptr ? ReadPointer(modules, kSlotFifteen) : nullptr;
 }
 

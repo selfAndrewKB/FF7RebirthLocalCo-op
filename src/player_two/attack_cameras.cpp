@@ -1,5 +1,6 @@
 #include "player_two/attack_cameras.h"
 
+#include "facts/cameras.h"
 #include "facts/party.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
@@ -41,15 +42,15 @@ constexpr std::uint32_t  kSmoothing      = 0x70;
 constexpr std::size_t    kSmoothingSize  = 0x20;
 constexpr std::uint32_t  kPreviousCamera = 0x80;  // FVector: the previous camera location (cm)
 // Entry {u8 priority +0, FWeakObjectPtr sequence actor +4, ..., u8 active +0x14, next +0x18}.
-constexpr std::uint32_t kEntryPriority = 0x00;
-constexpr std::uint32_t kEntryActor    = 0x04;
+using facts::kSequenceEntryPriority;
+using facts::kSequenceEntryActor;
 constexpr std::uint32_t kEntryActive   = 0x14;
 constexpr std::uint32_t kEntryNext     = 0x18;
 constexpr std::size_t   kMaxEntries    = 32;  // the list holds a handful (one per playing sequence)
-// AEndBattleLevelSequenceActor's camera actor (1.005: +0x20, §1.1); AEndBattleCameraActor's owner and explicit target
-// (reflection offsets, the same in both builds).
-constexpr platform::PerBuild<std::uint32_t> kSequenceCamera{0x3F8, 0x418};
-constexpr std::uint32_t                     kCameraOwner  = 0xA60;
+// AEndBattleLevelSequenceActor's camera actor and AEndBattleCameraActor's owner (facts/cameras.h); its explicit target
+// (reflection offset, the same in both builds).
+using facts::kSequenceActorCamera;
+using facts::kBattleCameraOwner;
 constexpr std::uint32_t                     kCameraTarget = 0xA68;
 
 // The shot change (§9.3): BattleCamSeqList_AnyActive_ApplyCam's call of FirstPC_PCM_SetCameraCutBit400 (cl = 1; 1.005
@@ -151,7 +152,8 @@ void ForEachEntry(const void* list, Visit&& visit) noexcept
 
 SavedFlag Identity(void* entry, std::uint8_t active) noexcept
 {
-    return {entry, ReadField<std::uint64_t>(entry, kEntryActor), ReadField<std::uint8_t>(entry, kEntryPriority), active};
+    return {entry, ReadField<std::uint64_t>(entry, kSequenceEntryActor),
+            ReadField<std::uint8_t>(entry, kSequenceEntryPriority), active};
 }
 
 bool SameEntry(const SavedFlag& saved, void* entry) noexcept
@@ -197,16 +199,16 @@ void LogStarted(const void* entry, const wchar_t* camera, float metresFromOne) n
     }
     try
     {
-        const auto  priority = ReadField<std::uint8_t>(entry, kEntryPriority);
-        const void* actor    = leader_scope::ObjectAt(static_cast<const std::byte*>(entry) + kEntryActor);
-        const void* shot     = ReadPointer(actor, kSequenceCamera);
+        const auto  priority = ReadField<std::uint8_t>(entry, kSequenceEntryPriority);
+        const void* actor    = leader_scope::ObjectAt(static_cast<const std::byte*>(entry) + kSequenceEntryActor);
+        const void* shot     = ReadPointer(actor, kSequenceActorCamera);
         const std::wstring smoothing =
             metresFromOne < 0.0f ? std::wstring()
                                  : std::format(L"; its smoothing starts from player 2's own camera ({:.1f} m from player 1's)",
                                                metresFromOne);
         platform::LogDebug(L"attack cameras: {}'s camera plays a battle camera sequence, priority {} {}, owner {}, explicit "
                            L"target {}{}",
-                           camera, priority, PriorityText(priority), Who(ReadPointer(shot, kCameraOwner)),
+                           camera, priority, PriorityText(priority), Who(ReadPointer(shot, kBattleCameraOwner)),
                            Who(ReadPointer(shot, kCameraTarget)), smoothing);
     }
     catch (...)

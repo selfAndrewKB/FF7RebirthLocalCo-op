@@ -41,7 +41,7 @@ constexpr std::uint32_t kOpPose        = 0x40;  // the pose floats +0x40..+0x98;
 constexpr std::uint32_t kOpPoseFloats  = (0x98 - 0x40) / 4;
 constexpr std::uint32_t kOpPitch       = (0x50 - 0x40) / 4;
 constexpr std::uint32_t kOpCurrent     = 0xD1;   // u8: the operator the camera actor is written from
-constexpr std::uint32_t kOpModules     = 0x6E0;  // 16 bytes a slot, module pointer first
+using facts::kOperatorModules;
 constexpr std::uint32_t kModuleStride  = 16;
 constexpr std::uint32_t kResetSlot     = 10;     // FEndResetCameraModule
 constexpr std::uint32_t kSlotTwenty    = 20;     // its weight above 0 makes the Reset module stop without writing
@@ -110,7 +110,7 @@ Pose ReadPose(const void* op) noexcept
 
 const void* Module(const void* op, std::uint32_t slot) noexcept
 {
-    const void* modules = ReadPointer(op, kOpModules);
+    const void* modules = ReadPointer(op, kOperatorModules);
     return modules != nullptr ? ReadPointer(modules, slot * kModuleStride) : nullptr;
 }
 

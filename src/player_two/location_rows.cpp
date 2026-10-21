@@ -46,7 +46,7 @@ constexpr std::uintptr_t kNavAreaTick     = 0x141662054;
 constexpr std::uint8_t   kNavAreaTickBytes[] = {0x40, 0x53, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8, 0xD0, 0xCE,
                                                 0xA4, 0x00, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x41, 0x10};
 constexpr std::uint32_t  kNavAreaController = 0xB0;
-constexpr std::uint32_t  kBattleOperator    = 0x2CA8;
+using facts::kCameraManagerBattleOperator;
 
 // Player 2's own location rows (§2.3, a documented recreation of the manager's enter/leave bookkeeping only):
 // g_LocationVolumeManager (a pointer), its volume array (+8 data, +0x10 count) and lock (+0x188, a
@@ -133,7 +133,7 @@ std::wstring OperatorText(const void* op, bool& playerTwo) noexcept
             continue;
         }
         const bool field  = ReadPointer(managers[p], facts::kCameraManagerFieldOperator) == op;
-        const bool battle = ReadPointer(managers[p], kBattleOperator) == op;
+        const bool battle = ReadPointer(managers[p], kCameraManagerBattleOperator) == op;
         if (field || battle)
         {
             playerTwo = p == 1;
@@ -286,7 +286,8 @@ void Tick() noexcept
     {
         return;
     }
-    void* const ops[2] = {ReadPointer(pcm, facts::kCameraManagerFieldOperator), ReadPointer(pcm, kBattleOperator)};
+    void* const ops[2] = {ReadPointer(pcm, facts::kCameraManagerFieldOperator),
+                          ReadPointer(pcm, kCameraManagerBattleOperator)};
     bool        ok     = true;
     for (void* op : ops)
     {

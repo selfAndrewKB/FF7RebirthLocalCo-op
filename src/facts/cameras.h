@@ -11,6 +11,7 @@
 // Research: Rebirth/Documentation/research/RE-p2-own-controller-ida.md, RE-p2-camera-movement-ida.md,
 // RE-p2-viewtarget-movestate-ida.md; the view target was read live (RE-p2-first-run-ce.md).
 
+#include "platform/build_value.h"
 #include "platform/verified_code.h"
 
 #include <cstdint>
@@ -30,14 +31,25 @@ inline constexpr std::uint32_t kCameraManagerPcOwner           = 0x228;
 inline constexpr std::uint32_t kCameraManagerViewTarget        = 0x1000;  // ViewTarget.Target
 inline constexpr std::uint32_t kCameraManagerOperators         = 0x2C50;  // 13 operator pointers
 inline constexpr std::uint32_t kCameraManagerOperatorCount     = 13;
+inline constexpr std::uint32_t kCameraManagerBattleOperator    = 0x2CA8;  // operator 11
 inline constexpr std::uint32_t kCameraManagerFieldOperator     = 0x2CB0;  // operator 12
 inline constexpr std::uint32_t kCameraManagerCurrentOperator   = 0x2CD0;  // u8 index into the operators
 inline constexpr std::uint32_t kCameraManagerCollisionComponent = 0x2D48;  // outer: the collision actor
 inline constexpr std::uint32_t kCameraManagerEndCameraActor    = 0x2DE8;
+// Any operator: its module table (TSharedPtr slots, 16 bytes each, the module pointer first)
+inline constexpr std::uint32_t kOperatorModules = 0x6E0;
 // Field camera operator
 inline constexpr std::uint32_t kFieldOperatorCommand = 0x40;
 inline constexpr std::uint32_t kFieldCommandSize     = 0x58;
 inline constexpr std::uint32_t kFieldOperatorActive  = 0xD0;
+
+// Battle level sequences (player_two/attack_cameras, attack_framing): the sequence list's entry {u8 priority +0,
+// FWeakObjectPtr sequence actor +4}; AEndBattleLevelSequenceActor's camera actor (1.005 +0x20); AEndBattleCameraActor's
+// owner (reflection, both builds).
+inline constexpr std::uint32_t                     kSequenceEntryPriority = 0x00;
+inline constexpr std::uint32_t                     kSequenceEntryActor    = 0x04;
+inline constexpr platform::PerBuild<std::uint32_t> kSequenceActorCamera   = {0x3F8, 0x418};
+inline constexpr std::uint32_t                     kBattleCameraOwner     = 0xA60;
 
 // The spawn names
 /// The camera manager's two spawn names (8-byte FNames; zero is None to UWorld::SpawnActor, which

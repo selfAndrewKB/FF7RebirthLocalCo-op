@@ -187,7 +187,7 @@ constexpr std::uint32_t  kMeshOwner         = 0xA0;         // a component's own
 constexpr std::uint32_t  kActorRoot         = 0x138;        // an actor's root component (§14.15)
 using facts::kSceneComponentAttachParent;
 using facts::kCameraManagerFieldOperator;
-constexpr std::uint32_t  kOperatorModules   = 0x6E0;        // op: the module slots (16 bytes each)
+using facts::kOperatorModules;
 constexpr std::uint32_t  kModuleSlot15      = 15 * 16;
 
 constexpr auto     kSummaryEvery = std::chrono::seconds(10);

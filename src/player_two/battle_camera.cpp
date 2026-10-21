@@ -29,7 +29,7 @@ namespace {
 
 // Facts read from the database (RE-p2-battle-camera.md; this build).
 constexpr std::uintptr_t kBattleOperatorVTable = 0x1466B4928;
-constexpr std::uint32_t  kBattleOperator       = 0x2CA8;  // operator 11
+using facts::kCameraManagerBattleOperator;
 constexpr std::uint32_t  kOperatorState        = 0xD0;    // u8 (the Field operator's active byte is at the same place)
 constexpr std::uint32_t  kOperatorActive       = 0xD1;    // u8: the update picks the lowest-numbered active operator
 constexpr std::uint32_t  kOperatorBytes        = 0x2CD0;  // current / previous operator bytes (+0x2CD0..+0x2CD3)
@@ -46,7 +46,7 @@ constexpr platform::SlotFact kDeactivate{L"the Battle operator's Deactivate slot
 // The operator's camera modules (EEndCameraModuleLayer): +0x6E0 points at 25 TSharedPtr entries (16
 // bytes each), each module's active bytes at +0x44/+0x45. Logged: battle offset, length, lock-on,
 // look-at, skill, command, leader change, scan.
-constexpr std::uint32_t kModules      = 0x6E0;
+using facts::kOperatorModules;
 constexpr std::uint32_t kModuleEntry  = 16;
 constexpr std::uint32_t kModuleActive = 0x44;
 constexpr std::uint32_t kLoggedModules[] = {5, 6, 7, 16, 20, 21, 22, 23};
@@ -83,7 +83,7 @@ void* CameraManagerOf(void* controller) noexcept
 
 void* BattleOperatorOf(void* cameraManager) noexcept
 {
-    void* battle = ReadPointer(cameraManager, kBattleOperator);
+    void* battle = ReadPointer(cameraManager, kCameraManagerBattleOperator);
     return VTableOf(battle) == g_battleVTable ? battle : nullptr;
 }
 
@@ -187,7 +187,7 @@ CameraState StateOf(void* cameraManager) noexcept
     Read(fieldAt != 0 ? fieldAt + kOperatorState : 0, state.field[0]);
     Read(fieldAt != 0 ? fieldAt + kOperatorActive : 0, state.field[1]);
     std::uintptr_t table = 0;
-    Read(battle != nullptr ? reinterpret_cast<std::uintptr_t>(battle) + kModules : 0, table);
+    Read(battle != nullptr ? reinterpret_cast<std::uintptr_t>(battle) + kOperatorModules : 0, table);
     for (std::size_t i = 0; i < std::size(kLoggedModules); ++i)
     {
         std::uintptr_t module = 0;

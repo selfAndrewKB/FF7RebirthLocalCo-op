@@ -1,6 +1,7 @@
 #include "player_two/camera_override.h"
 
 #include "dev/dev_switch.h"
+#include "facts/cameras.h"
 #include "facts/controller.h"
 #include "facts/engine.h"
 #include "platform/build_value.h"
@@ -30,12 +31,12 @@ namespace {
 // Facts read from the database (RE-p2-battle-camera.md §5; this build).
 constexpr std::uintptr_t kModuleGlobal   = 0x1491A4B78;  // TWeakPtr {object, reference controller}
 constexpr std::uintptr_t kModuleVTable   = 0x1466B70D0;  // FEndNotifyOverrideCameraModule
-constexpr std::uint32_t  kModules        = 0x6E0;        // an operator's module table (TSharedPtr, 16 bytes each)
+using facts::kOperatorModules;
 constexpr std::uint32_t  kSlotFour       = 4 * 16;       // layer 4, NotifyOverride
 constexpr std::uint32_t  kModuleOwner    = 0x50;         // the owner operator
 constexpr std::uint32_t  kModuleActive   = 0x44;         // entering / active bytes
 constexpr std::uint32_t  kModuleRequests = 0x3F8;        // int32: request count
-constexpr std::uint32_t  kBattleOperator = 0x2CA8;       // operator 11
+using facts::kCameraManagerBattleOperator;
 constexpr std::uint32_t  kFieldOperator  = 0x2CB0;       // operator 12
 // A player character's override delegates: the added one (fn at +0x17A0, payload at +0x17C8), the
 // removed one (fn at +0x17E0, payload at +0x1808), and the requests it holds (+0x1770 count). 1.005 moved the Square
@@ -179,14 +180,16 @@ std::wstring DescribeCamera(void* controller)
         return L"-";
     }
     std::wstring text;
-    for (const std::uint32_t op : {kBattleOperator, kFieldOperator})
+    for (const std::uint32_t op : {kCameraManagerBattleOperator, kFieldOperator})
     {
         const auto oper   = ReadAt<std::uintptr_t>(camera + op);
-        const auto slots  = oper != 0 ? ReadAt<std::uintptr_t>(oper + kModules) : 0;
+        const auto slots  = oper != 0 ? ReadAt<std::uintptr_t>(oper + kOperatorModules) : 0;
         const auto module = slots != 0 ? ReadAt<std::uintptr_t>(slots + kSlotFour) : 0;
         const auto owner  = module != 0 ? ReadAt<std::uintptr_t>(module + kModuleOwner) : 0;
-        text += std::format(L" {} module {:#x} owner {} requests {} active {}{}", op == kBattleOperator ? L"battle" : L"field",
-                            module, owner == ReadAt<std::uintptr_t>(camera + kBattleOperator) ? L"own" : L"OTHER",
+        text += std::format(L" {} module {:#x} owner {} requests {} active {}{}",
+                            op == kCameraManagerBattleOperator ? L"battle" : L"field", module,
+                            owner == ReadAt<std::uintptr_t>(camera + kCameraManagerBattleOperator) ? L"own"
+                                                                                                   : L"OTHER",
                             module != 0 ? ReadAt<std::int32_t>(module + kModuleRequests) : 0,
                             module != 0 ? ReadAt<std::uint8_t>(module + kModuleActive) : 0,
                             module != 0 ? ReadAt<std::uint8_t>(module + kModuleActive + 1) : 0);
@@ -235,8 +238,9 @@ Snapshot Take(void* member) noexcept
         const auto camera = reinterpret_cast<std::uintptr_t>(ReadPointer(controllers[i], facts::kControllerCameraManager));
         for (int k = 0; k < 2 && camera != 0; ++k)
         {
-            const auto oper   = ReadAt<std::uintptr_t>(camera + (k == 0 ? kBattleOperator : kFieldOperator));
-            const auto slots  = oper != 0 ? ReadAt<std::uintptr_t>(oper + kModules) : 0;
+            const auto oper =
+                ReadAt<std::uintptr_t>(camera + (k == 0 ? kCameraManagerBattleOperator : kFieldOperator));
+            const auto slots  = oper != 0 ? ReadAt<std::uintptr_t>(oper + kOperatorModules) : 0;
             const auto module = slots != 0 ? ReadAt<std::uintptr_t>(slots + kSlotFour) : 0;
             now.cameras[i][k]  = module;
             now.owners[i][k]   = module != 0 ? ReadAt<std::uintptr_t>(module + kModuleOwner) : 0;

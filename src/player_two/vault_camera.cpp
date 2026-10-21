@@ -1,5 +1,6 @@
 #include "player_two/vault_camera.h"
 
+#include "facts/cameras.h"
 #include "facts/controller.h"
 #include "facts/move_state.h"
 #include "platform/call_redirect.h"
@@ -34,7 +35,7 @@ using CoreFn = std::uint8_t (*)(const void* character);
 constexpr std::uintptr_t kEndDeactivateCall = 0x1416EA304;
 constexpr std::uint32_t  kActionCharacter   = 0x450;   // the action's character, an FWeakObjectPtr {index, serial}
 constexpr std::uint32_t  kFieldOperator     = 0x2CB0;  // a camera manager's Field operator (a pointer to it)
-constexpr std::uint32_t  kOperatorModules   = 0x6E0;   // an operator's module table (a pointer to it), 16 bytes a slot
+using facts::kOperatorModules;
 constexpr std::uint32_t  kModuleSlot15      = 15 * 16;
 
 inline constexpr std::uint8_t kPrimaryDeactivateBytes[] = {

@@ -1,5 +1,6 @@
 #include "player_two/lock_on.h"
 
+#include "facts/cameras.h"
 #include "facts/controller.h"
 #include "facts/engine.h"
 #include "facts/hud.h"
@@ -108,8 +109,8 @@ constexpr std::uint32_t  kTargetedKey  = 0x140;
 // TRefCtrlTS counts; the LockOn module (layer 7) in a Battle operator's module table, its active
 // byte and cached target (logged).
 constexpr std::uint8_t   kLockOnLayer    = 7;
-constexpr std::uint32_t  kBattleOperator = 0x2CA8;
-constexpr std::uint32_t  kModules        = 0x6E0;
+using facts::kCameraManagerBattleOperator;
+using facts::kOperatorModules;
 constexpr std::uint32_t  kModuleEntry    = 16;
 constexpr std::uint32_t  kModuleActive   = 0x44;
 constexpr std::uint32_t  kModuleTarget   = 0x3F8;
@@ -326,8 +327,8 @@ struct LockCamera
 LockCamera LockCameraOf(void* controller) noexcept
 {
     const auto camera = reinterpret_cast<std::uintptr_t>(ReadPointer(controller, facts::kControllerCameraManager));
-    const auto op     = ReadAt<std::uintptr_t>(camera != 0 ? camera + kBattleOperator : 0);
-    const auto table  = ReadAt<std::uintptr_t>(op != 0 ? op + kModules : 0);
+    const auto op     = ReadAt<std::uintptr_t>(camera != 0 ? camera + kCameraManagerBattleOperator : 0);
+    const auto table  = ReadAt<std::uintptr_t>(op != 0 ? op + kOperatorModules : 0);
     const auto module = ReadAt<std::uintptr_t>(table != 0 ? table + kLockOnLayer * kModuleEntry : 0);
     if (module == 0)
     {

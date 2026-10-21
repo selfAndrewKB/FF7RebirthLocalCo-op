@@ -98,7 +98,7 @@ using facts::kSceneComponentAttachParent;
 using facts::kCameraManagerViewTarget;
 constexpr std::uint32_t  kRideSubjectField  = 0x2CC8;  // PCM, weak
 using facts::kCameraManagerFieldOperator;
-constexpr std::uint32_t  kOperatorModules   = 0x6E0;   // op: the module slots (16 bytes each)
+using facts::kOperatorModules;
 constexpr std::uint32_t  kModuleSlot15      = 15 * 16;
 using facts::kChocoboCoordinatorVTable;
 using facts::kChocoboMoveStateVTable;

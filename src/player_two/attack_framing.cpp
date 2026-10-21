@@ -1,5 +1,6 @@
 #include "player_two/attack_framing.h"
 
+#include "facts/cameras.h"
 #include "facts/controller.h"
 #include "facts/party.h"
 #include "player_two/world_rules.h"
@@ -49,12 +50,11 @@ constexpr std::uint8_t                  kUpdatePoseBytes[] = {0x48, 0x89, 0x5C, 
 constexpr std::uintptr_t                kLeaderCalls[]  = {0x140AF0EC5, 0x14292F6D9, 0x142AA2995};
 using facts::kCharacterByPlayerType;
 
-// The list entry {u8 priority +0, FWeakObjectPtr sequence actor +4}; the sequence actor's camera actor (1.005 +0x20);
-// the camera actor's owner (reflection, both builds).
-constexpr std::uint32_t                     kEntryPriority  = 0x00;
-constexpr std::uint32_t                     kEntryActor     = 0x04;
-constexpr platform::PerBuild<std::uint32_t> kSequenceCamera{0x3F8, 0x418};
-constexpr std::uint32_t                     kCameraOwner    = 0xA60;
+// The sequence list's entry, the sequence actor's camera and the camera's owner (facts/cameras.h).
+using facts::kSequenceEntryPriority;
+using facts::kSequenceEntryActor;
+using facts::kSequenceActorCamera;
+using facts::kBattleCameraOwner;
 constexpr std::uint8_t                      kSyncPriority   = 10;
 constexpr std::uint8_t                      kPlayerPriority = 20;
 constexpr std::uint8_t                      kMenuPriority   = 70;  // and 71 Debug
@@ -165,7 +165,7 @@ std::uint8_t Decide(std::uint8_t priority, const void* camera) noexcept
     }
     // The other player's target is off unless this camera is the viewer's own.
     return world_rules::ShotShows(target, member, one, attack_cameras::InsidePlayerTwoUpdate(),
-                                  ReadPointer(camera, kCameraOwner))
+                                  ReadPointer(camera, kBattleCameraOwner))
                ? kShow
                : kOff;
 }
@@ -177,12 +177,12 @@ bool IsActive(void* unused, void* entry) noexcept
     {
         return active;
     }
-    const auto priority = ReadField<std::uint8_t>(entry, kEntryPriority);
+    const auto priority = ReadField<std::uint8_t>(entry, kSequenceEntryPriority);
     if (priority == kPlayerPriority || priority >= kMenuPriority)
     {
         return active;
     }
-    const auto key = ReadField<std::uint64_t>(entry, kEntryActor);
+    const auto key = ReadField<std::uint64_t>(entry, kSequenceEntryActor);
     if (key == 0)
     {
         return active;
@@ -193,8 +193,8 @@ bool IsActive(void* unused, void* entry) noexcept
     const void*         camera    = nullptr;
     if (latch.value == kUndecided)
     {
-        const void* actor = leader_scope::ObjectAt(static_cast<const std::byte*>(entry) + kEntryActor);
-        camera            = ReadPointer(actor, kSequenceCamera);
+        const void* actor = leader_scope::ObjectAt(static_cast<const std::byte*>(entry) + kSequenceEntryActor);
+        camera            = ReadPointer(actor, kSequenceActorCamera);
         if (camera == nullptr)
         {
             return active;
@@ -206,7 +206,7 @@ bool IsActive(void* unused, void* entry) noexcept
             if (latch.value == kOff && Line())
             {
                 platform::LogDebug(L"attack framing: {}'s shot (priority {}) targets the other player: not on {}'s camera",
-                                   NameOf(ReadPointer(camera, kCameraOwner)), priority,
+                                   NameOf(ReadPointer(camera, kBattleCameraOwner)), priority,
                                    attack_cameras::InsidePlayerTwoUpdate() ? L"player 2" : L"player 1");
             }
         }
@@ -235,7 +235,7 @@ std::uint8_t CoinOf(const void* camera) noexcept
     Latch& latch = Find(g_d2, key, made);
     if (made)
     {
-        const void* owner      = ReadPointer(camera, kCameraOwner);
+        const void* owner      = ReadPointer(camera, kBattleCameraOwner);
         const void* controller = owner != nullptr ? target_coin::ControllerOfEnemy(owner) : nullptr;
         const int   coin       = controller != nullptr ? target_coin::CoinFor(controller) : 0;
         latch.value            = static_cast<std::uint8_t>(coin == 1 || coin == 2 ? coin : 0);
