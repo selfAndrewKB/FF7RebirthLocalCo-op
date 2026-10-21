@@ -12,6 +12,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
+#include "player_two/coin_table.h"
 #include "player_two/engine_facts.h"
 #include "player_two/equal_targeting.h"
 #include "player_two/generation.h"
@@ -118,17 +119,8 @@ unsigned              g_swapTries   = 0;        // game thread
 
 std::atomic<bool> g_on{false};
 
-// The coins: the controller's address with the answered player in its low bits (1 player 1, 2 player 2), 0 empty, and
-// when it was tossed. A controller's coin is in one of four neighbouring slots; a new one takes an empty slot, else the
-// one tossed longest ago (a live enemy tosses at each decision, every few seconds; the oldest is a gone enemy's). Two
-// threads placing coins in the same slot at once leave one of them: the other tosses again at its next question.
-constexpr std::size_t    kCoinBits  = 10;
-constexpr std::size_t    kCoinSlots = std::size_t{1} << kCoinBits;
-constexpr std::size_t    kProbe     = 4;
-constexpr std::uintptr_t kCoinMask  = 3;
-constexpr std::size_t    kNoSlot    = kCoinSlots;
-std::atomic<std::uintptr_t> g_coins[kCoinSlots]{};
-std::atomic<std::uint32_t>  g_tossedAt[kCoinSlots]{};  // seconds on the steady clock
+// The coins, keyed by the controller: the player each names and when it was tossed (player_two/coin_table.h).
+coin_table::CoinTable g_coins;
 
 struct Counts
 {
@@ -147,61 +139,10 @@ enum class Player : std::uint8_t
     Two,
 };
 
-std::size_t SlotOf(std::uintptr_t controller, std::size_t probe) noexcept
-{
-    const auto base = static_cast<std::size_t>(((controller >> 4) * 0x9E3779B97F4A7C15ull) >> (64 - kCoinBits));
-    return (base + probe) & (kCoinSlots - 1);
-}
-
 std::uint32_t Seconds() noexcept
 {
     return static_cast<std::uint32_t>(
         std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
-}
-
-/// The slot holding `controller`'s coin, or kNoSlot.
-std::size_t Find(std::uintptr_t key) noexcept
-{
-    for (std::size_t probe = 0; probe < kProbe; ++probe)
-    {
-        const std::size_t slot = SlotOf(key, probe);
-        if ((g_coins[slot].load(std::memory_order_relaxed) & ~kCoinMask) == key)
-        {
-            return slot;
-        }
-    }
-    return kNoSlot;
-}
-
-/// Where a new coin for `key` goes: its own slot, else an empty one, else the one tossed longest ago (never `keep`).
-std::size_t Place(std::uintptr_t key, std::size_t keep = kNoSlot) noexcept
-{
-    if (const std::size_t own = Find(key); own != kNoSlot)
-    {
-        return own;
-    }
-    const std::uint32_t now    = Seconds();
-    std::size_t         oldest = kNoSlot;
-    std::uint32_t       age    = 0;
-    for (std::size_t probe = 0; probe < kProbe; ++probe)
-    {
-        const std::size_t slot = SlotOf(key, probe);
-        if (slot == keep)
-        {
-            continue;
-        }
-        if (g_coins[slot].load(std::memory_order_relaxed) == 0)
-        {
-            return slot;
-        }
-        const std::uint32_t slotAge = now - g_tossedAt[slot].load(std::memory_order_relaxed);
-        if (oldest == kNoSlot || slotAge >= age)
-        {
-            age    = slotAge;
-            oldest = slot;
-        }
-    }
-    return oldest;
 }
 
 void* SelectorOf(const void* controller) noexcept
@@ -216,20 +157,11 @@ Player Toss(const void* controller, const wchar_t* when) noexcept
     const auto answer = equal_targeting::ChooseFor(SelectorOf(controller));
     if (answer.choice.ucpc == ucpc_choice::Ucpc::Untouched)
     {
-        if (const std::size_t slot = Find(key); slot != kNoSlot)
-        {
-            std::uintptr_t held = g_coins[slot].load(std::memory_order_relaxed);
-            if ((held & ~kCoinMask) == key)
-            {
-                g_coins[slot].compare_exchange_strong(held, 0, std::memory_order_relaxed);
-            }
-        }
+        g_coins.Clear(key);
         return Player::None;
     }
     const bool two = answer.choice.ucpc == ucpc_choice::Ucpc::PlayerTwo;
-    const std::size_t slot = Place(key);
-    g_tossedAt[slot].store(Seconds(), std::memory_order_relaxed);
-    g_coins[slot].store(key | (two ? 2u : 1u), std::memory_order_relaxed);
+    g_coins.Set(key, two ? 2 : 1, Seconds());
     g_counts.tosses[two ? 1 : 0].fetch_add(1, std::memory_order_relaxed);
     platform::LogDebug(L"target coin: enemy {:#x} counts player {} as the player until its next action ({}, {})", key,
                        two ? 2 : 1, when,
@@ -241,14 +173,13 @@ Player Toss(const void* controller, const wchar_t* when) noexcept
 /// a candidate for it.
 Player CoinOf(const void* controller) noexcept
 {
-    const auto        key  = reinterpret_cast<std::uintptr_t>(controller);
-    const std::size_t slot = Find(key);
-    const auto        held = slot == kNoSlot ? 0 : g_coins[slot].load(std::memory_order_relaxed);
-    if ((held & ~kCoinMask) != key)
+    const auto key  = reinterpret_cast<std::uintptr_t>(controller);
+    const int  held = g_coins.PlayerOf(key);
+    if (held == 0)
     {
         return Toss(controller, L"first question");
     }
-    if ((held & kCoinMask) == 2)
+    if (held == 2)
     {
         if (equal_targeting::PlayerTwoEligible(SelectorOf(controller)))
         {
@@ -579,34 +510,26 @@ void ShareCoin(const void* from, const void* to) noexcept
         return;
     }
     const auto        fromKey = reinterpret_cast<std::uintptr_t>(from);
-    const std::size_t found   = Find(fromKey);
-    const auto        held    = found == kNoSlot ? 0 : g_coins[found].load(std::memory_order_relaxed);
-    if ((held & ~kCoinMask) != fromKey || (held & kCoinMask) == 0)
+    const std::size_t found   = g_coins.Find(fromKey);
+    const int         held    = g_coins.PlayerOf(fromKey);
+    if (held == 0)
     {
         return;
     }
     // The partner's own rule still holds: player 2 only while player 2's character is a candidate for its selector.
-    const bool        two   = (held & kCoinMask) == 2 && equal_targeting::PlayerTwoEligible(SelectorOf(to));
-    const auto        toKey = reinterpret_cast<std::uintptr_t>(to);
-    const std::size_t slot  = Place(toKey, found);  // never evicting `from`'s own coin
-    g_tossedAt[slot].store(Seconds(), std::memory_order_relaxed);
-    g_coins[slot].store(toKey | (two ? 2u : 1u), std::memory_order_relaxed);
+    const bool two   = held == 2 && equal_targeting::PlayerTwoEligible(SelectorOf(to));
+    const auto toKey = reinterpret_cast<std::uintptr_t>(to);
+    g_coins.Set(toKey, two ? 2 : 1, Seconds(), found);  // never evicting `from`'s own coin
     platform::LogDebug(L"target coin: enemy {:#x} takes enemy {:#x}'s coin, player {}, until its next action "
                        L"(combination partner{})",
                        toKey, fromKey, two ? 2 : 1,
-                       (held & kCoinMask) == 2 && !two ? L"; player 2 is not a candidate for it" : L"");
+                       held == 2 && !two ? L"; player 2 is not a candidate for it" : L"");
 }
 
 void LockPickFellBack(const void* controller) noexcept
 {
-    const auto        key  = reinterpret_cast<std::uintptr_t>(controller);
-    const std::size_t slot = Find(key);
-    if (slot == kNoSlot)
-    {
-        return;
-    }
-    std::uintptr_t held = g_coins[slot].load(std::memory_order_relaxed);
-    if (held == (key | 2u) && g_coins[slot].compare_exchange_strong(held, key | 1u, std::memory_order_relaxed))
+    const auto key = reinterpret_cast<std::uintptr_t>(controller);
+    if (g_coins.FallBack(key))
     {
         platform::LogDebug(L"target coin: enemy {:#x} counts player 1 as the player until its next action (its "
                            L"lock-group pick could not take player 2)",

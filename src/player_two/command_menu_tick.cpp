@@ -16,6 +16,7 @@
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 #include "player_two/lock_on.h"
+#include "player_two/menu_rules.h"
 #include "player_two/pad_buttons.h"
 #include "player_two/pad_sticks.h"
 #include "player_two/party_member.h"
@@ -276,9 +277,7 @@ unsigned     g_upRouted    = 0;   // pad 2's releases routed to player 2's menu
 unsigned     g_upLost      = 0;   // pad 2's releases whose press went to player 2's UI but could not follow it
 const wchar_t* g_uiRefusal = L"";  // why InPlayerTwoUi last ran nothing (for the log)
 std::int32_t g_upPad       = -1;  // the pad of the release being handled (key-up handler), or -1
-// Pad 2's keys whose press went to player 2's UI (0: free). A pad has fewer inputs (buttons, triggers,
-// stick clicks and stick directions) than this, so every held key fits.
-std::array<std::uint64_t, 32> g_taken{};
+menu_rules::TakenKeys g_taken;  // pad 2's keys whose press went to player 2's UI
 
 template <class T>
 T Field(std::uintptr_t address) noexcept
@@ -718,9 +717,9 @@ bool InPlayerTwoUi(Route route, const wchar_t* what, Call&& call) noexcept
         return refuse(L"a controller or player 2's member is missing");
     }
     if (route == Route::kPress &&
-        (Field<std::uint8_t>(two + kHudMode) == 0 || Field<std::uint8_t>(two + kMenuLayer) == 0 ||
-         Field<std::uint8_t>(one + kBattleInput) == 0 || Field<std::uint8_t>(one + kMenuLayer) == 0 ||
-         !focus_scope::PlayerOneTopIsCommandMenu()))
+        !menu_rules::PressAllowed(Field<std::uint8_t>(two + kHudMode), Field<std::uint8_t>(two + kMenuLayer),
+                                  Field<std::uint8_t>(one + kBattleInput), Field<std::uint8_t>(one + kMenuLayer),
+                                  focus_scope::PlayerOneTopIsCommandMenu()))
     {
         return refuse(L"not in player 2's battle menu");
     }
@@ -779,15 +778,7 @@ std::wstring RouteState(std::uintptr_t two)
 /// Notes that pad 2's press of `key` went to player 2's UI: its release goes there too.
 void NoteTaken(std::uint64_t key) noexcept
 {
-    if (std::find(g_taken.begin(), g_taken.end(), key) != g_taken.end())
-    {
-        return;
-    }
-    if (const auto free = std::find(g_taken.begin(), g_taken.end(), std::uint64_t{0}); free != g_taken.end())
-    {
-        *free = key;
-    }
-    else
+    if (g_taken.NoteTaken(key) == menu_rules::TakenKeys::Note::Full)
     {
         Line(L"WARNING: more pad-2 presses held in player 2's UI than noted; a release may reach player 1's route");
     }
@@ -796,13 +787,7 @@ void NoteTaken(std::uint64_t key) noexcept
 /// True (and forgotten) if pad 2's press of `key` went to player 2's UI.
 bool TakeTaken(std::uint64_t key) noexcept
 {
-    const auto it = std::find(g_taken.begin(), g_taken.end(), key);
-    if (key == 0 || it == g_taken.end())
-    {
-        return false;
-    }
-    *it = 0;
-    return true;
+    return g_taken.Take(key);
 }
 
 /// Pad 2's press through the game's own dispatcher in player 2's UI, so its route, list and
@@ -963,7 +948,7 @@ void WaitSoundOff(std::uint8_t index) noexcept
     const auto two  = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller());
     const auto wait = [](std::uintptr_t ctrl) { return ctrl != 0 ? Field<std::int32_t>(ctrl + kWaitFilter) : 0; };
     const auto s1 = wait(one), s2 = wait(two);
-    if ((g_pass == 1 && (s2 == 1 || s2 == 5 || s2 == 4)) || (g_pass == 2 && (s1 == 1 || s1 == 5)))
+    if (menu_rules::SkipWaitSoundOff(g_pass, s1, s2))
     {
         TintLine(L"wait sound off skipped (the other menu is still in wait mode)");
         return;
@@ -1000,7 +985,7 @@ void Slot(std::uint8_t slot, float value) noexcept
         {
             Line(L"WARNING: player 2's slow value came without player 1's this frame; written as is");
         }
-        g_written = g_oneFrame == g_frame ? std::min(g_oneSlot, value) : value;
+        g_written = menu_rules::SlowWritten(g_oneFrame == g_frame, g_oneSlot, value);
         return original(slot, g_written);
     }
     if (g_pass == 1)

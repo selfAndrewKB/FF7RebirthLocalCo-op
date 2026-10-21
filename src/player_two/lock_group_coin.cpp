@@ -8,6 +8,7 @@
 #include "player_two/equal_targeting.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
+#include "player_two/lock_group_rules.h"
 #include "player_two/object_fields.h"
 #include "player_two/target_coin.h"
 
@@ -50,8 +51,7 @@ std::atomic<bool> g_on{false};
 thread_local const void* t_player = nullptr;
 // The groups whose rebalance now holds player 2 (game thread; for the Debug line on a change). A battle has one group
 // in Rebirth (Stun Ray's 'Default'); a fifth held group is still answered, only its changes go unlogged.
-constexpr std::size_t kHeldGroups = 4;
-const void*           g_heldGroups[kHeldGroups]{};
+lock_group_rules::HeldGroups<4> g_heldGroups;
 
 /// One of the two leader reads: the held character, else the game's leader.
 template <platform::CallRedirect& Call>
@@ -108,33 +108,6 @@ const std::byte* PickedFor(const void* group) noexcept
     return nullptr;
 }
 
-/// Records whether `group`'s rebalance holds player 2 now; true when that changed (and could be recorded).
-bool NoteHeld(const void* group, bool hold) noexcept
-{
-    const void** free = nullptr;
-    for (auto& held : g_heldGroups)
-    {
-        if (held == group)
-        {
-            if (!hold)
-            {
-                held = nullptr;
-            }
-            return !hold;
-        }
-        if (held == nullptr && free == nullptr)
-        {
-            free = &held;
-        }
-    }
-    if (hold && free != nullptr)
-    {
-        *free = group;
-        return true;
-    }
-    return false;
-}
-
 const wchar_t* PickText(bool first) noexcept
 {
     return first ? L"first pick" : L"re-pick";
@@ -162,8 +135,8 @@ std::uint64_t Rebalance(std::uint64_t group, std::uint64_t b, std::uint64_t c, s
         twoHolds                 = twoHolds || target == two;
         oneHolds                 = oneHolds || (target != nullptr && target == one);
     }
-    const bool hold = twoHolds && !oneHolds;
-    if (NoteHeld(self, hold))
+    const bool hold = lock_group_rules::RebalanceHoldsPlayerTwo(twoHolds, oneHolds);
+    if (g_heldGroups.Note(self, hold))
     {
         platform::LogDebug(L"lock group coin: group {:#x}: {}", group,
                            hold ? L"player 2 holds a lock and player 1 none; the rebalance counts player 2 as the player"
@@ -219,10 +192,7 @@ bool Install(const platform::GameImage& image) noexcept
 void Remove() noexcept
 {
     g_on.store(false, std::memory_order_release);  // from now on no answer is held: every call passes through
-    for (auto& held : g_heldGroups)
-    {
-        held = nullptr;
-    }
+    g_heldGroups.Clear();
     if (g_pickLeader.IsInstalled() && !g_pickLeader.Restore())
     {
         platform::Log(L"lock group coin: the pick's leader call was changed after us; left in place (it passes through)");

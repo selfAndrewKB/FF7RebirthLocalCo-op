@@ -22,6 +22,7 @@
 #include "player_two/game_thread_sites.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
+#include "player_two/menu_rules.h"
 #include "player_two/party_member.h"
 
 #include <array>
@@ -135,7 +136,6 @@ constexpr platform::PerBuild<std::uint32_t> kSetupDeferred = {0x2D1, 0x2D9};  //
 constexpr std::uint32_t kSelecterSet   = 0x776;  // u8, set by Setup (logged)
 constexpr std::uint32_t kSetupOther    = 0x778;  // u8, set by Setup (logged)
 constexpr std::uint32_t kMenuLayer     = 0x783;  // u8 (logged)
-constexpr int           kWaitGap       = 30;     // engine ticks between paced join tries
 // What the log reads of a controller: the members (leader, ally, shortcut target, ally pick), the
 // menu widget (FWeakObjectPtr) and its back pointer to the controller, and the focus bytes (§11 of
 // RE-p2-command-menu-input.md: battle input, switching layer, +0x777, menu focus layer, ready, HUD mode).
@@ -147,8 +147,9 @@ constexpr std::array<std::uint32_t, 6> kBytes{0x25C, 0x258, 0x777, 0x783, 0x5E1,
 constexpr std::uint32_t kObjectClass = 0x10;
 constexpr std::uint32_t kObjectOuter = 0x20;
 // A refused join Setup (player 2's focus scope could not be entered) is a wait, never a give-up: the
-// first kSetupTries tries run on consecutive ticks, later ones every kWaitGap ticks, until one runs.
-constexpr int kSetupTries = 5;
+// first kSetupTries tries run on consecutive ticks, later ones every kWaitGap ticks, until one runs
+// (menu_rules::JoinTryDue).
+using menu_rules::kSetupTries;
 constexpr int kMaxLines   = 200;
 constexpr int kMaxReplayLines = 60;  // the game's Setup and ResetAll made again on player 2's controller
 
@@ -373,9 +374,10 @@ void ReplayLine(const std::wstring& text) noexcept
 /// 2's member (Setup stores the leader's type), player 2 plays.
 bool CanFollow(void* gameController, bool needsPlayer) noexcept
 {
-    return g_installed && !g_failed && g_controller != nullptr && generation::OnGameThread() &&
-           (!needsPlayer || generation::Active()) && gameController != nullptr && gameController != g_controller &&
-           reinterpret_cast<std::uintptr_t>(gameController) == Field<std::uintptr_t>(g_endUISystem + kGameController);
+    return menu_rules::CanFollow(g_installed, g_failed, g_controller != nullptr, generation::OnGameThread(), needsPlayer,
+                                 generation::Active(), gameController != nullptr, gameController == g_controller,
+                                 reinterpret_cast<std::uintptr_t>(gameController) ==
+                                     Field<std::uintptr_t>(g_endUISystem + kGameController));
 }
 
 /// The game's Members panel rebuild, for the mod's calls: the entry redirect's trampoline, or on 1.005 the function
@@ -1049,8 +1051,9 @@ void Tick() noexcept
     // the game's current setup (player 2 joined, or was out or refused at the game's Setup). It follows the
     // game's controller: only once that one is set up and no Setup of its own is pending or deferred.
     const auto one = Field<std::uintptr_t>(g_endUISystem + kGameController);
-    if (one == 0 || Field<std::uint8_t>(one + kSetupDone) == 0 || Field<std::uint8_t>(one + kSetupPending) != 0 ||
-        Field<std::uint8_t>(g_endUISystem + kSetupDeferred) != 0)
+    if (one == 0 || !menu_rules::GameSetUp(one, Field<std::uint8_t>(one + kSetupDone),
+                                           Field<std::uint8_t>(one + kSetupPending),
+                                           Field<std::uint8_t>(g_endUISystem + kSetupDeferred)))
     {
         return;
     }
@@ -1059,7 +1062,7 @@ void Tick() noexcept
     {
         return;
     }
-    if (g_tries >= kSetupTries && ++g_waitTicks % kWaitGap != 0)
+    if (!menu_rules::JoinTryDue(g_tries, g_waitTicks))
     {
         return;  // refused so far: paced tries, never given up
     }
