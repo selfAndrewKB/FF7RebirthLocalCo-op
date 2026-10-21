@@ -8,6 +8,7 @@ each one's `# expect:` / `# expect-not:` lines against the slice of UE4SS.log it
 
 Every script in tools/regression/scripts/ is a control script (src/control/script.h) with checks in comments:
     # expect: <regex>        at least one line of the script's log slice matches (Python re.search)
+    # expect-dev: <regex>    the same, checked on the dev build only (a line of the dev tools)
     # expect-not: <regex>    no line matches
     # scope: log             the checks run over the whole log of this launch (the startup script)
     # timeout: <seconds>     how long to wait for the script's result (300 by default)
@@ -133,6 +134,7 @@ class Script:
         self.path = path
         self.name = path.stem
         self.expect: list[str] = []
+        self.expect_dev: list[str] = []  # checked on the dev build only (lines of the dev tools)
         self.expect_not: list[str] = []
         self.scope_log = False
         self.timeout = 300.0
@@ -141,6 +143,8 @@ class Script:
             text = line.strip()
             if text.startswith("# expect-not:"):
                 self.expect_not.append(text[len("# expect-not:"):].strip())
+            elif text.startswith("# expect-dev:"):
+                self.expect_dev.append(text[len("# expect-dev:"):].strip())
             elif text.startswith("# expect:"):
                 self.expect.append(text[len("# expect:"):].strip())
             elif text.startswith("# scope:"):
@@ -166,9 +170,9 @@ class Result:
         return self.ran_ok is not False and not self.missing and not self.present
 
 
-def check(script: Script, lines: list[str], result: Result) -> None:
+def check(script: Script, lines: list[str], result: Result, build: str = "dev") -> None:
     result.lines = len(lines)
-    for pattern in script.expect:
+    for pattern in script.expect + (script.expect_dev if build == "dev" else []):
         rx = re.compile(pattern)
         hit = next((line for line in lines if rx.search(line)), None)
         if hit is None:
@@ -200,11 +204,23 @@ def deploy_and_launch(build: str, version: str, stamp: str, no_deploy: bool) -> 
     return ready, output, backup
 
 
-def reach_the_field(control: Control) -> tuple[bool, str]:
-    """From the title right after the ready line: press through to Continue and the load, then wait for the field."""
+def reach_the_field(control: Control, rounds: int = 4) -> tuple[bool, str]:
+    """From the title right after the ready line: press through to Continue and the load, then wait for the field
+    (`wait-until field`: the save loaded and playable, not the title). The game sometimes shows popups at start-up
+    (seen when the two versions are launched one after the other), which swallow the fixed presses; while the field
+    is not reached, one more Enter is pressed per round (it confirms a popup, or Continue, or the resume dialog) and
+    the wait repeated. Each wait covers a load (2700 ticks: 27 s at 100 fps, 45 s at 60)."""
     pressed = powershell(TOOLS / "continue_save.ps1", timeout=300)
-    code, out = control.run("wait-until field 7200", timeout=240)
-    return code == 0, pressed.stdout + pressed.stderr + out
+    text = pressed.stdout + pressed.stderr
+    for attempt in range(rounds):
+        code, out = control.run("wait-until field 2700", timeout=120)
+        text += out
+        if code == 0:
+            return True, text
+        text += f"the field is not reached (round {attempt + 1} of {rounds}): one more Enter\n"
+        keys = powershell(TOOLS / "keys.ps1", "-Keys", "Enter", timeout=60)
+        text += keys.stdout + keys.stderr
+    return False, text
 
 
 def report_text(stamp: str, version: str, build: str, deploy_output: str, results: list[Result], notes: list[str]) -> str:
@@ -285,7 +301,7 @@ def main() -> int:
         results.append(result)
         print(f"-- {script.name}")
         if script.scope_log:
-            check(script, log.all_lines(), result)
+            check(script, log.all_lines(), result, args.build)
             if script.commands > 0 and args.build != "release":
                 result.ran_ok, result.control_output = (lambda c: (c[0] == 0, c[1]))(control.run_file(script.path, script.timeout))
             log.skip_to_end()
@@ -294,7 +310,7 @@ def main() -> int:
             code, output = control.run_file(script.path, script.timeout)
             result.ran_ok, result.control_output = code == 0, output
             time.sleep(1.0)  # the last lines of the script land after its result
-            check(script, log.new_lines(), result)
+            check(script, log.new_lines(), result, args.build)
         print("   pass" if result.passed else f"   FAIL: missing {len(result.missing)}, present {len(result.present)}, ran ok {result.ran_ok}")
 
     if not args.in_field and not args.keep_running:

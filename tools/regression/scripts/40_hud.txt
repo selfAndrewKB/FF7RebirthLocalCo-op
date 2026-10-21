@@ -1,9 +1,13 @@
-# Player 2's HUD: the layout band, the second image, the levers' pass, the minimap, the placements set back at the leave.
-# expect: HUD layout \(player 2's pass\)
-# expect: HUD levers: player 2's pass with \d+ HUD root
-# expect: HUD image: player 2's buffers are initialised
+# Player 2's HUD across a join: the minimap, the field-action icons moved for the split layout and back, player 2's
+# area-icon manager, the placements set back at the leave. The once-per-launch lines of the first join are checked in
+# 10_join_leave. The two passes' timing lines are the perf log's (perf_log.txt in the mod folder), not checked here.
 # expect: minimap: on
+# expect: field-action icons: layout 1920x1080 -> 3840x1080
+# expect: area icons: player 2's icon manager starts with player 1's event state
 # expect: HUD placement: \d+ widget\(s\) set back
+# expect: field-action icons: layout 3840x1080 -> 1920x1080
+# expect: area icons: player 2 is out
+# expect: minimap: no split view with player 2 playing
 # expect-not: stays off
 # expect-not: safety submit
 note regression: hud start

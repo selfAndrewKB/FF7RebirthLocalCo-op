@@ -18,6 +18,7 @@ Each script is a control script (`src/control/script.h`) whose comments carry it
 
 ```
 # expect: <regex>        at least one line of the script's log slice matches
+# expect-dev: <regex>    the same, checked on the dev build only (a line of the dev tools, e.g. the control channel)
 # expect-not: <regex>    no line matches
 # scope: log             the checks run over the whole log of this launch (the startup script)
 # timeout: <seconds>     how long to wait for the script's result (300 by default)
@@ -25,6 +26,14 @@ Each script is a control script (`src/control/script.h`) whose comments carry it
 
 Every script also gets three checks: no "raised an exception", no "check failed:", no command channel stop. A script
 must leave player 2 out; the harness quits the game through the mod at the end and keeps the log under `ue4ss/logs/`.
+
+Reaching the save: `continue_save.ps1` presses through the title, then `wait-until field` must hold (the field running,
+the game ready, player 1's controller on the End classes, and not the title: the title's scene is a field too). The
+game sometimes shows popups at start-up (seen when the two versions are launched one after the other), which swallow
+the fixed presses; the harness then presses one more Enter per round and waits again, four rounds, before giving up
+with "the field is not reached". Running the versions back to back is therefore allowed but slower.
+
+The two HUD passes' timing lines are the perf log's (`perf_log.txt` in the mod folder); no script expects them.
 
 What the loop cannot establish stays the user's play check: feel, audio, and anything needing a human reaction.
 

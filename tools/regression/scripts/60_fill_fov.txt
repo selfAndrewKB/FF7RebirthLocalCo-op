@@ -1,6 +1,13 @@
-# Filled halves and the split FOV: bars off and on again, the FOV blend's ends.
-# expect: split halves fill the screen
-# expect: split halves kept 16:9 with bars
+# Filled halves and the split FOV: the halves fill by default (bars off echoes that), the FOV weight's ends and middle
+# are accepted, bars on lays the HUD out in a 16:9 view of the half, bars off fills the half again before the leave.
+# expect: bars off -> ok \(halves filled\)
+# expect: split-fov 1 -> ok
+# expect: split-fov 0 -> ok
+# expect: split-fov 0\.5 -> ok
+# expect: bars on -> ok \(16:9 halves with bars\)
+# expect: HUD layout \(player 2's pass\): UI image \d+x\d+, view 1280x720
+# expect: HUD layout \(player 2's pass\): UI image \d+x\d+, view 2560x720
+# expect-not: filled halves unavailable
 note regression: fill/fov start
 join
 wait-until playing 1800
@@ -12,6 +19,8 @@ split-fov 0
 wait 60
 split-fov 0.5
 bars on
+wait 90
+bars off
 wait 90
 leave
 wait-until out 900

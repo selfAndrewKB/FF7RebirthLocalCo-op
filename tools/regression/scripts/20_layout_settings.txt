@@ -1,14 +1,21 @@
-# The layout switch and the held settings: side by side and back, the engine settings set at the join and restored at
-# the leave.
+# The layout switch and the held settings: the engine settings set at the join and restored at the leave; side by side
+# (the half readback and the HUD's pass show the tall half), back to top/bottom, side by side again, then a leave that
+# restores the game's own layout; top/bottom chosen again while out so the later scripts join on the game's layout.
+# The control route reports a switch in its own echo line (the hotkey route logs "split layout: ..." instead).
 # expect: split screen: r\.SceneRenderTargetResizeMethod \d+ -> 2 while player 2 is in
 # expect: split screen: r\.DynamicRes\.GPUTimingMeasureMethod \d+ -> 1 while player 2 is in
 # expect: split screen: D3D12\.EnableGapRecorder \d+ -> 0 while player 2 is in
-# expect: split layout: TwoPlayerSplitscreenLayout = 1 \(side by side\)
-# expect: split layout: TwoPlayerSplitscreenLayout = 0 \(top/bottom\)
-# expect: split halves: viewport \d+x\d+, layout
+# expect: layout side-by-side -> ok \(side by side\)
+# expect: split halves: viewport \d+x\d+, layout 1, half aspect
+# expect: HUD layout \(player 2's pass\): UI image \d+x\d+, view 1280x1440
+# expect: layout top-bottom -> ok \(top/bottom\)
+# expect: split halves: viewport \d+x\d+, layout 0, half aspect
+# expect: player 2 is out: TwoPlayerSplitscreenLayout restored to 0 \(top/bottom\)
+# expect: layout top-bottom -> ok \(top/bottom from the next join\)
 # expect: player 2 is out: r\.SceneRenderTargetResizeMethod restored to
 # expect: player 2 is out: D3D12\.EnableGapRecorder restored to
-# expect: player 2 is out: TwoPlayerSplitscreenLayout restored to
+# expect-not: could not set TwoPlayerSplitscreenLayout
+# expect-not: could not restore TwoPlayerSplitscreenLayout
 note regression: layout/settings start
 join
 wait-until playing 1800
@@ -16,6 +23,9 @@ layout side-by-side
 wait 90
 layout top-bottom
 wait 90
+layout side-by-side
+wait 90
 leave
 wait-until out 900
+layout top-bottom
 note regression: layout/settings done

@@ -34,6 +34,7 @@
 #include "views/player_view_point.h"
 #include "views/stream_views.h"
 #include "views/third_view.h"
+#include "views/whole_screen.h"
 #include "views/window_span.h"
 
 namespace lss::control {
@@ -66,10 +67,13 @@ bool ModTarget::PlayerTwoPlaying() const
 }
 
 /// The same readiness the session's rejoin waits for: the field running (the entry steps done), the game's
-/// battle system and option data built, player 1's controller and camera manager on the End classes.
+/// battle system and option data built, player 1's controller and camera manager on the End classes; and not
+/// the title (its scene is a field with a one-member party, which the first three tests accept: a run of
+/// 2026-10-21 whose presses were thrown off by the game's start-up popups ran every script at the title).
 bool ModTarget::FieldReady() const
 {
-    return player_two::field_exit::FieldReady() && player_two::party_member::GameReady() && player_two::own_controller::Ready();
+    return player_two::field_exit::FieldReady() && player_two::party_member::GameReady() &&
+           player_two::own_controller::Ready() && !views::ReadScreenSignals().title;
 }
 
 Outcome ModTarget::Join()

@@ -1,6 +1,11 @@
-# Player 2 walks on their own pad and camera: per-pad sticks, a held stick, the member tick counted on the status line.
-# expect: per-pad sticks ON
-# expect: member movement ticked [1-9]\d*
+# Player 2 walks on their own pad and camera: the per-pad sticks (on by default; the switch echoes), a stick held on
+# pad 2, the input and the member tick counted on the status line, the member's move ticks run by the mod.
+# expect: own-camera on -> ok \(player 2's own camera\)
+# expect: sticks per-pad -> ok
+# expect: stick 2 0 1 0 0 180 -> ok \(controller id 1\)
+# expect: per-pad sticks on \(input acted [1-9]\d* refused 0
+# expect: own camera yes .*member movement ticked [1-9]\d* skipped 0 refused 0
+# expect: move state of \S+ \(player 2's\): ticks \d+ \+ [1-9]\d* direct, [1-9]\d* of them by this mod
 # expect-not: member movement ticked 0 skipped
 note regression: walk start
 join

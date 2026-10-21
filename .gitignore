@@ -3,3 +3,4 @@
 *.user
 __pycache__/
 /build-release/
+/tools/regression/out/
