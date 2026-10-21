@@ -20,6 +20,7 @@
 #include "player_two/member_movement.h"
 #include "player_two/object_fields.h"
 #include "player_two/player_hits.h"
+#include "player_two/thread_hold.h"
 
 #include <atomic>
 #include <chrono>
@@ -229,21 +230,6 @@ void Count(Player player, bool reaction) noexcept
     }
 }
 
-/// The game's IsUCPC / IsAIPC with only `type` counting as the player on this thread, put back in the __finally (see
-/// equal_targeting's CallHolding). No object here needs unwinding (the __try rule).
-void CallOnly(ExecFn original, RC::Unreal::UObject* context, RC::Unreal::FFrame& frame, void* result, int type) noexcept
-{
-    const int outer = member_movement::ExchangeThreadOnlyLeader(type);
-    __try
-    {
-        original(context, frame, result);
-    }
-    __finally
-    {
-        member_movement::ExchangeThreadOnlyLeader(outer);
-    }
-}
-
 template <std::size_t I>
 void Exec(RC::Unreal::UObject* context, RC::Unreal::FFrame& frame, void* result)
 {
@@ -266,7 +252,11 @@ void Exec(RC::Unreal::UObject* context, RC::Unreal::FFrame& frame, void* result)
         }
         else
         {
-            CallOnly(original, context, frame, result, player == Player::Two ? types->two : types->one);
+            // The game's IsUCPC / IsAIPC with only the player's type counting as the player on this thread, put
+            // back afterwards.
+            thread_hold::HoldingExchange(&member_movement::ExchangeThreadOnlyLeader,
+                                         player == Player::Two ? types->two : types->one, original, context,
+                                         frame, result);
         }
     }
     else

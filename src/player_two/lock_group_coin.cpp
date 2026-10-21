@@ -11,6 +11,7 @@
 #include "player_two/lock_group_rules.h"
 #include "player_two/object_fields.h"
 #include "player_two/target_coin.h"
+#include "player_two/thread_hold.h"
 
 #include <atomic>
 #include <cstddef>
@@ -70,25 +71,6 @@ std::uint64_t LeaderRead(std::uint64_t a, std::uint64_t b, std::uint64_t c, std:
         return reinterpret_cast<std::uint64_t>(player);
     }
     return reinterpret_cast<CallFn>(Call.Original())(a, b, c, d);
-}
-
-/// `fn` with the leader reads answering `player` on this thread, put back in the __finally (the outer answer, if any).
-/// No object here needs unwinding (the __try rule).
-std::uint64_t CallHolding(CallFn fn, const void* player, std::uint64_t a, std::uint64_t b, std::uint64_t c,
-                          std::uint64_t d) noexcept
-{
-    const void* const outer  = t_player;
-    std::uint64_t     result = 0;
-    t_player                 = player;
-    __try
-    {
-        result = fn(a, b, c, d);
-    }
-    __finally
-    {
-        t_player = outer;
-    }
-    return result;
 }
 
 /// The group's members array and count, or null when it is not the layout we know.
@@ -155,7 +137,7 @@ std::uint64_t Rebalance(std::uint64_t group, std::uint64_t b, std::uint64_t c, s
         return original(group, b, c, d);
     }
     platform::LogTrace(L"lock group coin: group {:#x}: rebalance with player 2 as the player", group);
-    return CallHolding(original, two, group, b, c, d);
+    return thread_hold::Holding(t_player, two, original, group, b, c, d);  // the leader reads answer player 2's member
 }
 
 /// One lock-group pick through the game's `pick`, with the picking enemy's coin naming "the player". `first`: the
@@ -193,7 +175,7 @@ std::uint64_t Pick(CallFn pick, std::uint64_t group, std::uint64_t out, std::uin
         return own;
     }
     // Pick writes only `out` (RE §18.9), so it may run again: this time with player 2's member as "the player".
-    const std::uint64_t held = CallHolding(pick, two, group, out, c, d);
+    const std::uint64_t held = thread_hold::Holding(t_player, two, pick, group, out, c, d);
     if ((held & 0xFF) != 0 && leader_scope::ObjectAt(reinterpret_cast<const void*>(out)) == two)
     {
         platform::LogDebug(L"lock group coin: {} for enemy {:#x}: its coin names player 2; it locks onto player 2's "

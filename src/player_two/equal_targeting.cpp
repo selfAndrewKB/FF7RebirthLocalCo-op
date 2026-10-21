@@ -11,6 +11,7 @@
 #include "player_two/member_movement.h"
 #include "player_two/object_fields.h"
 #include "player_two/party_member.h"
+#include "player_two/thread_hold.h"
 
 #include <atomic>
 #include <chrono>
@@ -142,28 +143,22 @@ Answer AnswerFor(void* selector) noexcept
     return answer;
 }
 
+/// The game's select with the leader test answering `onlyType` alone on this thread (kNoType: none), put back
+/// afterwards (player_two/thread_hold.h).
+std::uint64_t SelectWithOnlyLeader(Fn select, std::uint64_t selector, std::uint64_t reason, std::uint64_t out,
+                                   std::uint64_t d, int onlyType) noexcept
+{
+    return thread_hold::HoldingExchange(&member_movement::ExchangeThreadOnlyLeader, onlyType, select, selector, reason,
+                                        out, d);
+}
+
 /// The game's select with this thread's two answers held: `answer` for the leader-type read, `onlyType` for the
-/// leader test (kNoType: none). Both are put back in the __finally, which also runs when a structured exception
-/// unwinds through here (destructors would not, under /EHsc), so a thread never keeps a stale answer. No object here
-/// needs unwinding (the __try rule).
+/// leader test. Both set unconditionally: an untouched select nested in an answered one must not inherit the
+/// outer's leader test. Both put back afterwards, also when a structured exception unwinds through the select.
 std::uint64_t CallHolding(Fn select, std::uint64_t selector, std::uint64_t reason, std::uint64_t out, std::uint64_t d,
                           Answer* answer, int onlyType) noexcept
 {
-    // Both set unconditionally: an untouched select nested in an answered one must not inherit the outer's leader test.
-    Answer* const outer     = t_answer;
-    const int     outerOnly = member_movement::ExchangeThreadOnlyLeader(onlyType);
-    t_answer                = answer;
-    std::uint64_t result    = 0;
-    __try
-    {
-        result = select(selector, reason, out, d);
-    }
-    __finally
-    {
-        t_answer = outer;
-        member_movement::ExchangeThreadOnlyLeader(outerOnly);
-    }
-    return result;
+    return thread_hold::Holding(t_answer, answer, &SelectWithOnlyLeader, select, selector, reason, out, d, onlyType);
 }
 
 /// The Condition select's slot: the game's select with who it counts as the UCPC answered on this thread, for that

@@ -9,6 +9,7 @@
 #include "player_two/equal_targeting.h"
 #include "player_two/generation.h"
 #include "player_two/member_movement.h"
+#include "player_two/thread_hold.h"
 
 #include <atomic>
 #include <cstddef>
@@ -148,6 +149,9 @@ struct Held
     Human       human;
 };
 
+/// The call's answers held on this thread (player_two/thread_hold.h's enter): for player 2, the leader test's yes for
+/// player 2's type and player 2's character for the summon gauge's leader read when it attacks; for either human,
+/// the reaction context. Restore puts the outer answers back, also when a structured exception unwinds the call.
 Held Hold(const Involvement& who) noexcept
 {
     const Held outer{member_movement::ExchangeThreadLeaderAnswer(who.type), t_attacker, t_human};
@@ -165,27 +169,6 @@ void Restore(const Held& outer) noexcept
     t_attacker = outer.attacker;
     t_human    = outer.human;
     member_movement::ExchangeThreadLeaderAnswer(outer.type);
-}
-
-/// The game's damage call with the call's answers held on this thread: for player 2, the leader test's yes for player
-/// 2's type and player 2's character for the summon gauge's leader read when it attacks; for either human, the
-/// reaction context. All put back in the __finally, which also runs when a structured exception unwinds through here
-/// (destructors would not, under /EHsc), so a thread never keeps a stale answer. No object here needs unwinding (the
-/// __try rule).
-std::uint64_t CallHolding(DamageFn original, std::uint64_t component, std::uint64_t attacker, std::uint64_t hit,
-                          std::uint64_t damage, std::uint64_t e, const Involvement& who) noexcept
-{
-    const Held    outer  = Hold(who);
-    std::uint64_t result = 0;
-    __try
-    {
-        result = original(component, attacker, hit, damage, e);
-    }
-    __finally
-    {
-        Restore(outer);
-    }
-    return result;
 }
 
 const wchar_t* HumanText(Human human) noexcept
@@ -218,7 +201,7 @@ std::uint64_t Damage(std::uint64_t component, std::uint64_t attacker, std::uint6
         platform::LogTrace(L"player hits: player 1's character {} on {} {:#x}; reactions aim at player 1",
                            who.attacks ? L"hits" : L"is hit", kSlotNames[I], component);
     }
-    return CallHolding(original, component, attacker, hit, damage, e, who);
+    return thread_hold::HoldingBy(&Hold, &Restore, who, original, component, attacker, hit, damage, e);
 }
 
 /// The summon gauge's leader read: player 2's character while its hit is applied, else the game's leader.
@@ -246,7 +229,7 @@ std::uint64_t Sensing(std::uint64_t controller, std::uint64_t causer, std::uint6
     }
     platform::LogTrace(L"player hits: an enemy senses {} attack; {}", HumanText(who.human),
                        who.human == Human::PlayerTwo ? L"player 2 counts as the player" : L"the game's own answers");
-    return CallHolding(original, controller, causer, handle, type, direction, who);
+    return thread_hold::HoldingBy(&Hold, &Restore, who, original, controller, causer, handle, type, direction);
 }
 
 constexpr DamageFn kWrappers[kSlots] = {&Damage<0>, &Damage<1>, &Damage<2>, &Damage<3>, &Damage<4>,

@@ -13,6 +13,7 @@
 #include "player_two/leader_scope.h"
 #include "player_two/object_fields.h"
 #include "player_two/target_coin.h"
+#include "player_two/thread_hold.h"
 
 #include <atomic>
 #include <cstddef>
@@ -161,25 +162,6 @@ bool Active(Item item) noexcept
     return On(item) && generation::Member() != nullptr && equal_targeting::Types().has_value();
 }
 
-/// `fn(args...)` with `slot` (a thread-local) holding `value`, put back in the __finally (the outer value: wrappers nest).
-/// No object here needs unwinding (the __try rule); the game function's rax is passed back unchanged.
-template <class R, class... P>
-R Holding(const void*& slot, const void* value, R (*fn)(P...), std::type_identity_t<P>... args) noexcept
-{
-    const void* const outer  = slot;
-    R                 result = R{};
-    slot                     = value;
-    __try
-    {
-        result = fn(args...);
-    }
-    __finally
-    {
-        slot = outer;
-    }
-    return result;
-}
-
 void NoteFirst(Item item) noexcept
 {
     bool seen = false;
@@ -224,7 +206,7 @@ std::uint64_t RegisterPair(std::uint64_t a, std::uint64_t enemyA, std::uint64_t 
                                                          : L"player 1; the partner's controller did not check out")
                                             : (coin == 2 ? L"both count player 2 as the player" : L"both count player 1 as the player"));
     void* const two = coin == 2 ? generation::Member() : nullptr;
-    return Holding(t_combination, two, original, a, enemyA, enemyB, request, target);
+    return thread_hold::Holding(t_combination, two, original, a, enemyA, enemyB, request, target);
 }
 
 /// The start's leader read (ForceTargetLeader rows): the registration's answer.
@@ -248,7 +230,7 @@ std::uint64_t Mode(std::uint64_t manager, std::uint64_t entry, float dt) noexcep
     {
         return original(manager, entry, dt);
     }
-    return Holding(t_combinationEntry, reinterpret_cast<const void*>(entry), original, manager, entry, dt);
+    return thread_hold::Holding(t_combinationEntry, reinterpret_cast<const void*>(entry), original, manager, entry, dt);
 }
 
 /// A mode's leader read (once per combination, when both enemies are ready): the initiator's coin, shared again with the
@@ -296,7 +278,7 @@ std::uint64_t BossTick(std::uint64_t controller, float dt) noexcept
     {
         return original(controller, dt);
     }
-    return Holding(t_boss, reinterpret_cast<const void*>(controller), original, controller, dt);
+    return thread_hold::Holding(t_boss, reinterpret_cast<const void*>(controller), original, controller, dt);
 }
 
 /// After a summon's cut scene (once): records the boss for its read.
@@ -307,7 +289,7 @@ std::uint64_t AfterSummon(std::uint64_t controller, std::uint64_t b, std::uint64
     {
         return original(controller, b, c, d);
     }
-    return Holding(t_boss, reinterpret_cast<const void*>(controller), original, controller, b, c, d);
+    return thread_hold::Holding(t_boss, reinterpret_cast<const void*>(controller), original, controller, b, c, d);
 }
 
 /// The two damage-phase reads (each once per phase change / cut scene): the boss's coin.
@@ -343,7 +325,7 @@ std::uint64_t Filter(std::uint64_t manager, std::uint64_t causer, std::uint64_t 
     {
         return original(manager, causer, info, lists);
     }
-    return Holding(t_causer, two, original, manager, causer, info, lists);
+    return thread_hold::Holding(t_causer, two, original, manager, causer, info, lists);
 }
 
 /// The filter's leader read (reached only past the filter's own early-outs): the held causer.
@@ -407,7 +389,7 @@ std::uint64_t ArmsBegin(std::uint64_t arms, std::uint64_t b, std::uint64_t c, st
     {
         return original(arms, b, c, d, e);
     }
-    return Holding(t_arms, reinterpret_cast<const void*>(arms), original, arms, b, c, d, e);
+    return thread_hold::Holding(t_arms, reinterpret_cast<const void*>(arms), original, arms, b, c, d, e);
 }
 
 std::uint64_t ArmsTick(std::uint64_t arms, float dt) noexcept
@@ -417,7 +399,7 @@ std::uint64_t ArmsTick(std::uint64_t arms, float dt) noexcept
     {
         return original(arms, dt);
     }
-    return Holding(t_arms, reinterpret_cast<const void*>(arms), original, arms, dt);
+    return thread_hold::Holding(t_arms, reinterpret_cast<const void*>(arms), original, arms, dt);
 }
 
 std::uint64_t PurgeArm(std::uint64_t arms, std::uint64_t b, std::uint64_t c, std::uint64_t d) noexcept
@@ -427,7 +409,7 @@ std::uint64_t PurgeArm(std::uint64_t arms, std::uint64_t b, std::uint64_t c, std
     {
         return original(arms, b, c, d);
     }
-    return Holding(t_arms, reinterpret_cast<const void*>(arms), original, arms, b, c, d);
+    return thread_hold::Holding(t_arms, reinterpret_cast<const void*>(arms), original, arms, b, c, d);
 }
 
 /// One of the three arm reads: the boss's coin (the first runs every frame for each waiting arm: Trace per answer,

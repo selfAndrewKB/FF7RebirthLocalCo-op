@@ -285,6 +285,7 @@ lss_test(vtable_entry src/platform/vtable_entry.cpp src/platform/module_pin.cpp 
 lss_test(guarded src/platform/guarded.cpp)
 lss_test(call_site src/platform/guarded.cpp)
 lss_test(game_thread_sites)
+lss_test(thread_hold)
 lss_test(deferred_sites src/platform/deferred_sites.cpp src/platform/image.cpp src/platform/build_translation.cpp)
 lss_test(game_image src/platform/image.cpp src/platform/build_translation.cpp)
 lss_test(layout_scale_code)
