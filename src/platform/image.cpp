@@ -121,7 +121,8 @@ bool GameImage::BytesMatch(std::uintptr_t idaAddress, std::span<const std::uint8
     return std::memcmp(bytes.data(), expected.data(), expected.size()) == 0;
 }
 
-std::optional<std::uintptr_t> GameImage::RipTarget(std::uintptr_t idaSite, std::span<const std::uint8_t> opcode) const noexcept
+std::optional<std::uintptr_t> GameImage::RipTarget(std::uintptr_t                idaSite,
+                                                   std::span<const std::uint8_t> opcode) const noexcept
 {
     const std::size_t length = opcode.size() + sizeof(std::int32_t);
     const auto        live   = Rebase(idaSite, length);
