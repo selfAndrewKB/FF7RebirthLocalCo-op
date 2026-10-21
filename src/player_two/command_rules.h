@@ -14,11 +14,7 @@
 //
 // The command test is gated at its own first instruction (player_two/command_rules_code.h), which
 // covers all five of its callers. The member's type and menu ordinal are read once per engine tick
-// (Update), with guarded calls, not inside the menu's own tick.
-//
-// Also logged each frame while player 2 plays, on change: the command controller's members,
-// battle-HUD and menu bytes, its menu requests, and the world's battle-command speed slot (the
-// menu's time slow), for the next stages (player 2's own menu). Game thread only.
+// (Update), with guarded calls, not inside the menu's own tick. Game thread only.
 
 namespace lss::platform {
 class GameImage;
@@ -32,9 +28,6 @@ void Remove() noexcept;
 /// Once per engine tick: player 2's member's type and command-menu ordinal read, or cleared when player
 /// 2 has none.
 void Update() noexcept;
-
-/// Once per frame while player 2 plays: the command controller logged on change.
-void Watch() noexcept;
 
 /// While alive (player 2's command controller ticks): the rules turned around, so the member that may
 /// not be commanded is player 1's leader (type `leaderType`), not player 2's member.

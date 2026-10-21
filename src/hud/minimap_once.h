@@ -15,8 +15,8 @@
 // In player 2's pass this skips that render (see the .cpp for the exact sites); player 2's minimap shows
 // the map player 1's pass rendered, as it already did. The minimap stays a copy of player 1's.
 //
-// Logged: pool-0 submits per pass and skips, and, once a second while the minimap is up, the circle
-// entry's batch arrays (in use and free), which climb when arrays are stranded.
+// Logged (Debug, once a minute while a minimap is up): each widget's map renders and skips per period. The reading
+// of pool 0's batch arrays that watched the leak was retired once the fix was confirmed (2026-10-21).
 // The switch (`minimap-once on|off`) is on from install.
 
 namespace lss::platform {

@@ -21,7 +21,6 @@
 #include "players/unreal_access.h"
 
 #include <Windows.h>
-#include <intrin.h>
 
 #include <algorithm>
 #include <array>
@@ -68,14 +67,6 @@ constexpr std::size_t    kStopFirstInstruction = 5;
 constexpr std::uintptr_t kListOwner     = 0x14939BC90;  // the list's owner (StopNamed and PlayNamed read it)
 constexpr std::uintptr_t kFootSlot      = 0x1457F3ED0;  // EndChocoboCharacter vt+0x978 (1.005 +0x980): footsteps
 constexpr std::uintptr_t kFootImpact    = 0x1418BA510;  // ... its function: GetMoveState, then FFB_Chocobo_1/2
-// The footsteps' gate, read again for the log when player 2's footstep adds nothing: the primary player's coordinator's
-// ride status for the rider (2 = riding), the chocobo's gait (> 0), and the primary player's "can start a field action".
-constexpr std::uintptr_t kRideStatus    = 0x140A60ABC;  // PrimaryPCModes_AnyVt2A8ForActor_Keys0to5(actor, 0)
-constexpr std::uint8_t   kRideStatusBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x57};
-constexpr std::uintptr_t kCanAct        = 0x140E82AF4;  // PrimaryPC_Char5A0_CanStartFieldAction(_, 1, 1, 1, 1, 1)
-constexpr std::uint8_t   kCanActBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x68, 0x10};
-constexpr platform::PerBuild<std::uint32_t> kChocoboRider{0x908, 0x910};    // the chocobo's vtable: its rider
-constexpr platform::PerBuild<std::uint32_t> kChocoboGait{0x1A20, 0x1A40};   // the chocobo's gait (footsteps when > 0)
 // The rumble sources that run outside player 2's scopes (RE-p2-rumble-owner-chocobo.md §9; slots and code read from
 // both exes, 2026-10-12). Each names player 2 as the owner of its adds while it runs for player 2's scooter or chocobo.
 constexpr std::uintptr_t kScooterTickSlot = 0x1466B9D90;  // SBScooterMoveState slot 1: hit and loop rumble (actor tick)
@@ -124,9 +115,6 @@ using RowsFn        = std::uint64_t (*)(void* component, double xmm1, double xmm
 using ZipGateFn     = bool (*)(void* move);
 using StopNamedFn   = void (*)(std::uint64_t key);
 using FootFn        = double (*)(void* chocobo);  // returns xmm0 as the game's does
-using RideStatusFn  = std::uint8_t (*)(const void* actor, int key);
-using CanActFn      = bool (*)(void* unused, bool a, bool b, bool c, bool d, bool e);
-using RiderFn       = void* (*)(void* chocobo);
 using ScooterTickFn = std::uint64_t (*)(void* state, float dt);  // dt in xmm1
 using ScooterOffFn  = std::uint64_t (*)(void* state);
 using GlideSafeFn   = bool (*)(void* instance);
@@ -159,8 +147,6 @@ platform::VTableEntry   g_driftSlot;
 platform::VTableEntry   g_brakeOneSlot;
 platform::VTableEntry   g_brakeTwoSlot;
 std::uintptr_t          g_listOwner = 0;  // the global holding the list's owner
-RideStatusFn            g_rideStatus = nullptr;  // the footsteps' gate, for the log (null: not logged)
-CanActFn                g_canAct     = nullptr;
 AddOrUpdateFn           g_addOrUpdate = nullptr;
 BuildSetFn              g_buildSet    = nullptr;
 ApplyFn                 g_apply       = nullptr;
@@ -245,9 +231,6 @@ Counts g_counts;
 
 // The chocobo player 2 drives, for the footstep slot on any thread (the game thread writes it each engine tick).
 std::atomic<const void*> g_footChocobo{nullptr};
-// The first worker call of player 2's chocobo's footsteps: its return address, logged by the game thread.
-std::atomic<std::uintptr_t> g_footWorkerCaller{0};
-bool                        g_footWorkerLogged = false;  // game thread
 
 // Game thread.
 std::atomic<std::uint64_t>            g_lastKeyTwo{0};    // the last effect key added for player 2 (Debug on change)
@@ -779,42 +762,13 @@ std::uint64_t BrakeTwo(void* move, std::uint64_t event, double xmm2, double xmm3
     return Brake(g_brakeTwoSlot, move, event, xmm2, xmm3);
 }
 
-// The callers of the chocobo's footstep slot (none is visible statically): the first few, by return address.
-std::array<std::uintptr_t, 4> g_footCallers{};  // game thread
-
-void NoteFootCaller(std::uintptr_t returnAddress) noexcept
-{
-    for (std::uintptr_t& slot : g_footCallers)
-    {
-        if (slot == returnAddress)
-        {
-            return;
-        }
-        if (slot == 0)
-        {
-            slot             = returnAddress;
-            const auto image = reinterpret_cast<std::uintptr_t>(GetModuleHandleW(nullptr));
-            platform::LogDebug(L"rumble list: the chocobo's footsteps are called from 0x{:X} (image +0x{:X})",
-                               returnAddress, returnAddress - image);
-            return;
-        }
-    }
-}
-
 struct FootCall
 {
-    FootFn       fn;
-    void*        chocobo;
-    double       result = 0.0;
-    bool         added  = false;  // the footstep went to player 2's list
-    // The gate as player 2's scope answers it, read when nothing was added.
-    std::uint8_t status = 0;
-    std::int32_t gait   = 0;
-    bool         canAct = false;
+    FootFn fn;
+    void*  chocobo;
+    double result = 0.0;
+    bool   added  = false;  // the footstep went to player 2's list
 };
-
-// Game thread: the last logged state of player 2's footstep gate (Debug on change).
-int g_footState = -1;
 
 void RunFoot(void* context) noexcept
 {
@@ -822,45 +776,6 @@ void RunFoot(void* context) noexcept
     const auto before = g_counts.addsTwo.load(std::memory_order_relaxed);
     call.result       = call.fn(call.chocobo);
     call.added        = g_counts.addsTwo.load(std::memory_order_relaxed) != before;
-    if (call.added || g_rideStatus == nullptr || g_canAct == nullptr || !platform::Enabled(platform::Level::Debug))
-    {
-        return;
-    }
-    // Logging only: every game call guarded, a null getter skipped.
-    const auto getRider = reinterpret_cast<RiderFn>(ReadPointer(ReadPointer(call.chocobo, 0), kChocoboRider));
-    void*      rider    = nullptr;
-    if (getRider == nullptr || !platform::CallGuarded(getRider, rider, call.chocobo))
-    {
-        rider = nullptr;
-    }
-    if (rider == nullptr || !platform::CallGuarded(g_rideStatus, call.status, static_cast<const void*>(rider), 0))
-    {
-        call.status = 0;
-    }
-    call.gait = ReadField<std::int32_t>(call.chocobo, kChocoboGait);
-    if (!platform::CallGuarded(g_canAct, call.canAct, static_cast<void*>(nullptr), true, true, true, true, true))
-    {
-        call.canAct = false;
-    }
-}
-
-/// Logs a change of player 2's footstep result: added, or which part of the game's gate said no (Debug on change).
-void NoteFoot(const FootCall& call) noexcept
-{
-    const int state = call.added ? 1 : 0x100 | call.status | (call.gait > 0 ? 0x1000 : 0) | (call.canAct ? 0x2000 : 0);
-    if (state == g_footState)
-    {
-        return;
-    }
-    g_footState = state;
-    if (call.added)
-    {
-        platform::LogDebug(L"rumble list: player 2's chocobo's footsteps add to player 2's list");
-        return;
-    }
-    platform::LogDebug(L"rumble list: player 2's chocobo's footstep added nothing; the game's gate in player 2's scope: "
-                       L"ride status {} (2 = riding), gait {}, can start a field action {}",
-                       call.status, call.gait, call.canAct ? 1 : 0);
 }
 
 /// The chocobo's footstep slot (every chocobo's; game thread). The footsteps of the chocobo player 2 rides run inside
@@ -873,22 +788,8 @@ double FootImpact(void* chocobo) noexcept
     if (!generation::OnGameThread())
     {
         // Logging only: the game's gate returns at once on a worker.
-        if (twos)
-        {
-            g_counts.footWorkerTwo.fetch_add(1, std::memory_order_relaxed);
-            std::uintptr_t none = 0;
-            g_footWorkerCaller.compare_exchange_strong(none, reinterpret_cast<std::uintptr_t>(_ReturnAddress()),
-                                                       std::memory_order_relaxed);
-        }
-        else
-        {
-            g_counts.footWorkerOther.fetch_add(1, std::memory_order_relaxed);
-        }
+        (twos ? g_counts.footWorkerTwo : g_counts.footWorkerOther).fetch_add(1, std::memory_order_relaxed);
         return original(chocobo);
-    }
-    if (platform::Enabled(platform::Level::Debug))
-    {
-        NoteFootCaller(reinterpret_cast<std::uintptr_t>(_ReturnAddress()));
     }
     FootCall call{original, chocobo};
     if (!twos)
@@ -900,10 +801,6 @@ double FootImpact(void* chocobo) noexcept
         g_counts.footTwo.fetch_add(1, std::memory_order_relaxed);
         platform::LogTrace(L"rumble list: player 2's chocobo's footsteps ran in player 2's scope (added {})",
                            call.added ? 1 : 0);
-        if (platform::Enabled(platform::Level::Debug))
-        {
-            NoteFoot(call);
-        }
         return call.result;
     }
     if (twos)
@@ -1221,12 +1118,6 @@ void Install(const platform::GameImage& image) noexcept
     const auto foot     = image.Rebase(kFootImpact);
     const bool feet     = g_installed && footSlot && foot &&
                       g_footSlot.Replace(*footSlot, *foot, reinterpret_cast<std::uintptr_t>(&FootImpact));
-    if (!(image.BytesMatch(kRideStatus, kRideStatusBytes) && Find(image, kRideStatus, g_rideStatus) &&
-          image.BytesMatch(kCanAct, kCanActBytes) && Find(image, kCanAct, g_canAct)))
-    {
-        g_rideStatus = nullptr;  // the footsteps' gate is not logged
-        g_canAct     = nullptr;
-    }
     // The sources outside player 2's scopes (each optional: without one, its rumble plays on pad 1 as before).
     const std::wstring sources = g_installed ? InstallSources(image) : std::wstring{};
     platform::Log(L"rumble list: {}{}{}{}",
@@ -1276,15 +1167,6 @@ void Tick() noexcept
     g_footChocobo.store(chocobo, std::memory_order_relaxed);
     g_chocoboWeak.store(chocobo != nullptr ? leader_scope::WeakOf(const_cast<void*>(chocobo)) : 0,
                         std::memory_order_relaxed);
-    const auto workerCaller = g_footWorkerCaller.load(std::memory_order_relaxed);
-    if (workerCaller != 0 && !g_footWorkerLogged)
-    {
-        g_footWorkerLogged = true;
-        const auto image   = reinterpret_cast<std::uintptr_t>(GetModuleHandleW(nullptr));
-        platform::LogDebug(L"rumble list: player 2's chocobo's footsteps are called on a worker, from 0x{:X} (image "
-                           L"+0x{:X}); the game's gate drops worker calls",
-                           workerCaller, workerCaller - image);
-    }
     void* const member = generation::Member();
     g_memberWeak.store(member != nullptr ? leader_scope::WeakOf(member) : 0, std::memory_order_relaxed);
     const auto type = member != nullptr ? party_member::PlayerTypeOf(member) : std::nullopt;

@@ -1,19 +1,14 @@
 #include "hud/minimap_once.h"
 
 #include "hud/minimap_once_code.h"
-#include "hud/second_image.h"
 #include "platform/build_value.h"
 #include "platform/code_redirect.h"
-#include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/module_pin.h"
-#include "players/unreal_access.h"
 
 #include <cstdint>
-#include <format>
 #include <span>
-#include <string>
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -56,25 +51,7 @@ constexpr WidgetSite kOctagon{L"octagon", 0x143A60235, kOctagonSiteBytes, 0x143A
 constexpr WidgetSite kCircle1005{L"circle", 0x140FC6C9C, kCircleSiteBytes1005, 0x140FC6CAE, kCircleAcquire,
                                  0x140FC6F13, kCircleSubmit, 0x140FC6F18, kCircleAfterSubmit};
 
-// FEndMenuRenderer pool 0 (the render-to-texture pool), read for the log only.
-constexpr std::uint32_t kPoolZeroSlots      = 40;    // FEndMenuLayerSlot* (40 bytes each)
-constexpr std::uint32_t kPoolZeroSlotCount  = 48;    // int32
-constexpr std::uint32_t kPoolZeroWrite      = 56;    // uint8
-constexpr std::uint32_t kPoolZeroRead       = 57;    // uint8
-constexpr std::uint32_t kSlotSize           = 40;
-constexpr std::uint32_t kSlotActive         = 0;     // TArray<TSharedPtr<entry>>: data, +8 Num
-constexpr std::uint32_t kSlotRecycled       = 16;
-constexpr std::uint32_t kSlotState          = 32;    // 0 initial, 1 acquired, 2 submitted, 3 consuming, 4 consumed
-constexpr std::uint32_t kSlotFrame          = 36;    // GFrameNumber at submit
-constexpr std::uint32_t kEntryBatchData     = 144;
-constexpr std::uint32_t kBatchVertexFree    = 8;     // VertexArrayFreeList Num
-constexpr std::uint32_t kBatchIndexFree     = 24;
-constexpr std::uint32_t kBatchVertexArrays  = 40;    // BatchVertexArrays Num
-constexpr std::uint32_t kBatchIndexArrays   = 56;
-constexpr int           kMaxSlots           = 4;
-constexpr int           kMaxEntriesLogged   = 4;
-
-constexpr ULONGLONG kLogPeriodMs = 60'000;  // the 32 KB leak's watch (v0.35.0); its fix is confirmed, so once a minute
+constexpr ULONGLONG kLogPeriodMs = 60'000;  // the counts line, once a minute (the 32 KB leak's pool reading is retired)
 
 MinimapOnceFields      g_fields;  // read and counted into by the installed code, through its address
 platform::CodeRedirect g_circleCode;
@@ -110,80 +87,6 @@ bool Install(const platform::GameImage& image, platform::CodeRedirect& redirect,
         return false;
     }
     return true;
-}
-
-template <class T>
-bool Read(std::uintptr_t address, T& out) noexcept
-{
-    return address != 0 && platform::CopyGuarded(&out, reinterpret_cast<const void*>(address), sizeof(T));
-}
-
-/// One reading of pool 0: its ring and each layer entry's batch arrays (in use and on the free lists).
-std::wstring PoolZeroReading() noexcept
-{
-    const auto renderer = reinterpret_cast<std::uintptr_t>(MenuRenderer());
-    std::uintptr_t slots = 0;
-    std::int32_t   count = 0;
-    std::uint8_t   write = 0, read = 0;
-    if (renderer == 0 || !Read(renderer + kPoolZeroSlots, slots) || !Read(renderer + kPoolZeroSlotCount, count) ||
-        !Read(renderer + kPoolZeroWrite, write) || !Read(renderer + kPoolZeroRead, read) || slots == 0 || count <= 0 ||
-        count > kMaxSlots)
-    {
-        return L"pool 0 not readable";
-    }
-    std::wstring text = std::format(L"pool 0: write {} read {}; slots", write, read);
-    std::uintptr_t entries[kMaxEntriesLogged] = {};
-    int            entryCount                 = 0;
-    for (int i = 0; i < count; ++i)
-    {
-        const std::uintptr_t slot  = slots + static_cast<std::uintptr_t>(i) * kSlotSize;
-        std::int32_t         state = -1;
-        std::uint32_t        frame = 0;
-        Read(slot + kSlotState, state);
-        Read(slot + kSlotFrame, frame);
-        text += std::format(L" [{} frame {}]", state, frame);
-        for (const std::uint32_t list : {kSlotActive, kSlotRecycled})
-        {
-            std::uintptr_t data = 0;
-            std::int32_t   num  = 0;
-            if (!Read(slot + list, data) || !Read(slot + list + 8, num) || data == 0 || num <= 0 || num > 16)
-            {
-                continue;
-            }
-            for (std::int32_t k = 0; k < num; ++k)
-            {
-                std::uintptr_t entry = 0;  // a TSharedPtr: the object first
-                if (!Read(data + static_cast<std::uintptr_t>(k) * 16, entry) || entry == 0)
-                {
-                    continue;
-                }
-                bool seen = false;
-                for (int e = 0; e < entryCount; ++e)
-                {
-                    seen = seen || entries[e] == entry;
-                }
-                if (!seen && entryCount < kMaxEntriesLogged)
-                {
-                    entries[entryCount++] = entry;
-                }
-            }
-        }
-    }
-    for (int e = 0; e < entryCount; ++e)
-    {
-        std::uint64_t  name = 0;
-        std::uintptr_t batch = 0;
-        std::uint32_t  vertexArrays = 0, vertexFree = 0, indexArrays = 0, indexFree = 0;
-        if (!Read(entries[e], name) || !Read(entries[e] + kEntryBatchData, batch) || batch == 0 ||
-            !Read(batch + kBatchVertexArrays, vertexArrays) || !Read(batch + kBatchVertexFree, vertexFree) ||
-            !Read(batch + kBatchIndexArrays, indexArrays) || !Read(batch + kBatchIndexFree, indexFree))
-        {
-            continue;
-        }
-        text += std::format(L"; {}: vertex arrays {} ({} free), index arrays {} ({} free)", players::unreal::NameText(name),
-                            vertexArrays, vertexFree, indexArrays, indexFree);
-    }
-    return text;
 }
 
 }  // namespace
@@ -284,9 +187,9 @@ void PollMinimapOnce() noexcept
     if (platform::Enabled(platform::Level::Debug))
     {
         platform::LogDebug(L"minimap once ({}): in the last period the circle's map rendered {} and skipped {} times, the "
-                           L"octagon's rendered {} and skipped {}; player 2's HUD passes {}; {}",
+                           L"octagon's rendered {} and skipped {}; player 2's HUD passes {}",
                            g_on ? L"on" : L"off", counts[0] - g_logged[0], counts[1] - g_logged[1],
-                           counts[2] - g_logged[2], counts[3] - g_logged[3], counts[4] - g_logged[4], PoolZeroReading());
+                           counts[2] - g_logged[2], counts[3] - g_logged[3], counts[4] - g_logged[4]);
     }
     for (int i = 0; i < 5; ++i)
     {

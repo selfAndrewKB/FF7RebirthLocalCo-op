@@ -6,18 +6,14 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/module_pin.h"
-#include "platform/settled_log.h"
 #include "platform/verified_code.h"
 #include "player_two/generation.h"
 #include "player_two/command_rules_code.h"
 #include "player_two/party_member.h"
 
-#include <array>
 #include <atomic>
 #include <cstdint>
-#include <format>
 #include <optional>
-#include <string>
 
 namespace lss::player_two::command_rules {
 
@@ -43,23 +39,6 @@ constexpr std::uint8_t kOrdinalTypeBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58
                                               0x01};
 constexpr platform::FunctionFact kOrdinalType{L"Party_GetCommandOrdinalType", 0x140A3F19C, kOrdinalTypeBytes};
 
-// The command controller (EndUISystem+0xB8) and what the log reads of it (§1, §10 Stage 0).
-constexpr std::uintptr_t kEndUISystem = 0x1493496E0;
-constexpr std::uint32_t  kController  = 0xB8;
-constexpr std::uint32_t  kMembers     = 0x34;   // int32 x4: leader, ally, shortcut target, ally pick
-constexpr std::uint32_t  kRequests    = 0x570;  // TArray<int32> {data, num}
-constexpr std::uint32_t  kHudMode     = 0x540;
-constexpr std::uint32_t  kAllyMode    = 0x44C;
-constexpr std::uint32_t  kReady       = 0x5E1;
-constexpr std::array<std::int32_t, 7> kLoggedRequests{2, 3, 4, 19, 26, 36, 40};
-// The game state's speed slots (GetEndGameState 0x140A2E4B4 reads *(0x1490FF2B8)+0x288, then checks
-// its class; 12 floats at +0x3C0; slot 0 is the battle command speed the open menu lowers).
-constexpr std::uintptr_t kGameMode      = 0x1490FF2B8;
-constexpr std::uint32_t  kGameState     = 0x288;
-constexpr std::uint32_t  kSpeedSlots    = 0x3C0;
-
-constexpr int kMaxLines = 400;
-
 using HpFn          = std::uint32_t (*)(std::uint8_t type);
 using OrdinalTypeFn = std::uint8_t (*)(void* unused, std::int32_t ordinal);
 
@@ -67,18 +46,6 @@ using OrdinalTypeFn = std::uint8_t (*)(void* unused, std::int32_t ordinal);
 platform::CallRedirect g_hpCall;
 platform::CodeRedirect g_commandableGate;
 OrdinalTypeFn          g_ordinalType = nullptr;
-std::uintptr_t         g_endUISystem = 0;
-std::uintptr_t         g_gameMode    = 0;
-
-/// What the log shows, as raw values.
-struct Snapshot
-{
-    std::array<std::int32_t, 4>                       members{};
-    std::uint8_t                                      hudMode = 0, allyMode = 0, ready = 0;
-    std::array<std::int32_t, kLoggedRequests.size()>  requests{};
-    std::int32_t                                      speed = 0;  // slot 0, in thousandths
-    bool operator==(const Snapshot&) const = default;
-};
 
 // The gate is read by the code at the test's entry (-1: no member refused), and written through
 // SetGate: Remove may run off the game thread.
@@ -88,26 +55,6 @@ std::int32_t g_gate = -1;
 bool          g_installed     = false;
 std::int32_t  g_forbiddenType = -1;  // player 2's member's type, or -1
 std::uint32_t g_refusals      = 0;
-struct Moving
-{
-    std::array<std::int32_t, kLoggedRequests.size()> requests{};
-    std::int32_t                                     speed = 0;
-    bool operator==(const Moving&) const = default;
-};
-constexpr std::uint32_t kStillFrames = 30;
-platform::SettledLog<Snapshot, Moving> g_log(kStillFrames);  // game thread
-int           g_lines = 0;
-
-template <class T>
-T Field(std::uintptr_t address) noexcept
-{
-    T value{};
-    if (address != 0)
-    {
-        platform::CopyGuarded(&value, reinterpret_cast<const void*>(address), sizeof(T));
-    }
-    return value;
-}
 
 void SetGate(std::int32_t ordinal) noexcept
 {
@@ -178,10 +125,6 @@ bool Install(const platform::GameImage& image) noexcept
     const auto hp          = platform::FindFunction(image, kHp);
     const auto commandable = platform::FindFunction(image, kCommandable);
     const auto ordinalType = platform::FindFunction(image, kOrdinalType);
-    const auto system      = image.Rebase(kEndUISystem, kController + sizeof(void*));
-    const auto mode        = image.Rebase(kGameMode, sizeof(void*));
-    g_endUISystem = system ? *system : 0;
-    g_gameMode    = mode ? *mode : 0;
     // The HP lever and the command test together, or neither: ally mode and the menu must agree. The
     // gate's code reads g_gate in this DLL: pin it first.
     bool ok = hp && commandable && ordinalType && platform::PinThisModule();
@@ -247,63 +190,6 @@ PlayerTwoRules::~PlayerTwoRules()
 {
     g_forbiddenType = savedType_;
     SetGate(savedGate_);
-}
-
-void Watch() noexcept
-{
-    if (!platform::Enabled(platform::Level::Debug))
-    {
-        g_log.Reset();  // off: the next line starts fresh
-        return;
-    }
-    if (g_lines >= kMaxLines || g_endUISystem == 0 ||
-        !generation::OnGameThread())
-    {
-        return;
-    }
-    const auto ctrl = Field<std::uintptr_t>(g_endUISystem + kController);
-    if (ctrl == 0)
-    {
-        return;
-    }
-    Snapshot now;
-    platform::CopyGuarded(now.members.data(), reinterpret_cast<const void*>(ctrl + kMembers), sizeof(now.members));
-    now.hudMode  = Field<std::uint8_t>(ctrl + kHudMode);
-    now.allyMode = Field<std::uint8_t>(ctrl + kAllyMode);
-    now.ready    = Field<std::uint8_t>(ctrl + kReady);
-    const auto requests = Field<std::uintptr_t>(ctrl + kRequests);
-    const auto count    = Field<std::int32_t>(ctrl + kRequests + 8);
-    for (std::size_t i = 0; i < kLoggedRequests.size(); ++i)
-    {
-        const std::int32_t index = kLoggedRequests[i];
-        now.requests[i] = requests != 0 && index < count ? Field<std::int32_t>(requests + 4 * static_cast<std::uint32_t>(index)) : -1;
-    }
-    const auto gameState = Field<std::uintptr_t>(Field<std::uintptr_t>(g_gameMode) + kGameState);
-    now.speed = static_cast<std::int32_t>(Field<float>(gameState != 0 ? gameState + kSpeedSlots : 0) * 1000.0f);
-    // The requests flip with each press and the speed eases through a time slow: both are logged once they hold.
-    Snapshot steady = now;
-    steady.requests = {};
-    steady.speed    = 0;
-    if (!g_log.Offer(steady, Moving{now.requests, now.speed}))
-    {
-        return;
-    }
-    ++g_lines;
-    try
-    {
-        std::wstring text = std::format(L"command menu: members leader {} ally {} shortcut {} pick {} | hud {} ally mode {} "
-                                        L"ready {} | requests",
-                                        now.members[0], now.members[1], now.members[2], now.members[3], now.hudMode,
-                                        now.allyMode, now.ready);
-        for (std::size_t i = 0; i < kLoggedRequests.size(); ++i)
-        {
-            text += std::format(L" {}:{}", kLoggedRequests[i], now.requests[i]);
-        }
-        platform::LogDebug(L"{} | battle command speed {:.3f}", text, now.speed / 1000.0);
-    }
-    catch (...)
-    {
-    }
 }
 
 }  // namespace lss::player_two::command_rules

@@ -1,8 +1,8 @@
 #pragma once
 
 // The synergy partner's decisions (player_two/synergy_partner.h) as pure functions over values read from the game,
-// and the two tables it keeps, tested on the host (tests/synergy_rules_test.cpp). The module keeps the engine reads,
-// the redirects and the log lines.
+// and the table it keeps, tested on the host (tests/synergy_rules_test.cpp). The module keeps the engine reads, the
+// redirects and the log lines.
 
 #include "player_two/party_lease.h"
 
@@ -43,22 +43,6 @@ struct Held
     Clock::time_point goneSince{};                  // that record not found since (zero while found)
     Clock::time_point givenAt{};                    // the tick gave it back after a member end off the game thread
                                                     // (zero otherwise): Confirm checks the possession
-};
-
-/// A human's character kept by its player through a parry window (W): the game hands it over at the counter (T2), or
-/// never when the parry fails. Followed for the log only.
-struct Waiting
-{
-    const void*       character  = nullptr;
-    const void*       initiator  = nullptr;  // whose stance (compared only, never read)
-    std::uint64_t     weak       = 0;
-    int               player     = 0;        // 1 or 2; 0 = free
-    std::uint8_t      type       = kNoType;
-    Clock::time_point since{};               // the start (the stance)
-    std::uint32_t     serials[3]{};          // its record's command serials (the counter's own start repeats them)
-    bool              recordSeen = false;    // its live record was found
-    bool              windowSeen = false;    // that record's combination window was seen open
-    std::uint8_t      state      = 0;        // the partner's record state as last read
 };
 
 // ---- the hand-over (T1 / T2): "is the partner the player's character?" ----
@@ -196,15 +180,6 @@ Entry& SlotFor(std::array<Entry, N>& entries, const void* character) noexcept
     }
     return *std::min_element(entries.begin(), entries.end(),
                              [](const Entry& a, const Entry& b) { return a.since < b.since; });
-}
-
-/// A later start of the stance `waiting` already follows: the same character, initiator and serials (the counter's own
-/// start, by type).
-inline bool SameStance(const Waiting& waiting, const void* character, const void* initiator,
-                       const std::uint32_t (&serials)[3]) noexcept
-{
-    return waiting.player != 0 && waiting.character == character && waiting.initiator == initiator &&
-           std::equal(std::begin(serials), std::end(serials), std::begin(waiting.serials));
 }
 
 }  // namespace lss::player_two::synergy_rules

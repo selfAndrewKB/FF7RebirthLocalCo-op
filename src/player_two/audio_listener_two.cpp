@@ -46,8 +46,6 @@ constexpr std::uintptr_t kDynamicUpdateSlot = 0x1457DA858;  // Lay::DynamicSound
 constexpr std::uintptr_t kDynamicUpdate     = 0x1414624C0;  // SEAD_LayDynamic_Update_Doppler(object): doppler, then the base
 constexpr std::uintptr_t kPointUpdateSlot   = 0x1457DA4C8;  // Lay::PointSound vt+0x58
 constexpr std::uintptr_t kBaseUpdate        = 0x1407AC83C;  // SEAD_LayObj_Update_Base(object): Calc3D, the voice's start/stop
-constexpr std::uintptr_t kInitSlot          = 0x1465E4738;  // SEAD FSoundSource vt+0x18
-constexpr std::uintptr_t kInit              = 0x141020A68;  // SEAD_SoundSource_Init(source, wave instance)
 constexpr std::uintptr_t kVelocityCall      = 0x14082D51B;  // SEAD_Lay_UpdateFrame: E8 SEAD_LayListener_UpdateVelocity
 constexpr std::uintptr_t kVelocity          = 0x14161261C;  // SEAD_LayListener_UpdateVelocity(): the singleton's velocity
 constexpr std::uintptr_t kListenerGlobal    = 0x14939BAB0;  // g_SeadLayListener: the one SQEX::Sd::Lay::Listener
@@ -72,7 +70,6 @@ constexpr std::size_t kGetPositionFirst = 5;
 
 using PushFn       = std::uint64_t (*)(void* device);
 using ObjectFn     = std::uint64_t (*)(void* object);  // UpdateAudible and Update (vt+0x160, vt+0x58)
-using InitFn       = bool (*)(void* source, void* wave);
 using VelocityFn   = std::uint64_t (*)(void*, void*, void*);  // takes no arguments; the registers pass through
 using SetFn        = std::int64_t (*)(void* listener, float px, float py, float pz, float fx, float fy, float fz, float ux,
                                      float uy, float uz);
@@ -129,7 +126,7 @@ Floats<kListenerFields> g_listeners;
 enum ExampleField : std::size_t { kKind, kToOne, kToTwo, kRange, kMagnify, kWhereX, kExampleFields = kWhereX + 3 };
 Floats<kExampleFields> g_example;
 
-platform::VTableEntry   g_pushSlot, g_dynamicSlot, g_pointSlot, g_dynamicUpdateSlot, g_pointUpdateSlot, g_initSlot;
+platform::VTableEntry   g_pushSlot, g_dynamicSlot, g_pointSlot, g_dynamicUpdateSlot, g_pointUpdateSlot;
 platform::VTableEntry   g_lodSlot, g_pcSlot;
 platform::CallRedirect  g_velocityCall, g_clipCall;
 platform::EntryRedirect g_positionEntry;
@@ -182,7 +179,6 @@ struct Counts
     std::atomic<unsigned> missed{0};       // culled by the chosen listener, within range of player 2's
     std::atomic<unsigned> noTwo{0};        // checked while player 2's listener was off
     std::atomic<unsigned> updatesTwo{0};   // updates (doppler, gain, pan, voice) run from player 2's listener
-    std::atomic<unsigned> starts{0};       // sound sources started
     std::atomic<unsigned> reads{0};        // AutoSe listener position reads
     std::atomic<unsigned> clipReads{0};    //   ... by the distance clip
     std::atomic<unsigned> clipTwo{0};      //   ... answered with player 2's listener (nearer the character)
@@ -467,12 +463,6 @@ std::uint64_t PointUpdate(void* object) noexcept
     return Update(g_pointUpdateSlot, object);
 }
 
-bool Init(void* source, void* wave) noexcept
-{
-    g_counts.starts.fetch_add(1, std::memory_order_relaxed);
-    return reinterpret_cast<InitFn>(g_initSlot.Original())(source, wave);
-}
-
 /// The AutoSe processor update (footstep detection, gate A's caller): its frame is noted for the distance clip.
 std::uint64_t ClipUpdate(void* processor, float dt, void* frame, std::int32_t count, std::int32_t fifth,
                          void* sixth) noexcept
@@ -752,7 +742,6 @@ void LogSummary() noexcept
     const auto missed   = take(g_counts.missed);
     const auto noTwo    = take(g_counts.noTwo);
     const auto updates  = take(g_counts.updatesTwo);
-    const auto starts   = take(g_counts.starts);
     const auto reads    = take(g_counts.reads);
     const auto clips    = take(g_counts.clipReads);
     const auto clipTwo  = take(g_counts.clipTwo);
@@ -780,11 +769,11 @@ void LogSummary() noexcept
     platform::LogDebug(L"audio listeners ({} s): {} push(es) on the audio thread (thread {}; {}); player 2's listener {}; "
                        L"SEAD sound checks {} on SEAD's thread (thread {}): from player 2's listener {} ({} audible), "
                        L"audible from player 1's {}, culled within player 2's range {}, listener-relative {}, player 2's "
-                       L"listener off {}; updates from player 2's listener {}; {} sound source(s) started",
+                       L"listener off {}; updates from player 2's listener {}",
                        kSummaryEvery.count(), pushes, g_audioThread.load(std::memory_order_relaxed), where,
                        g_twoActive.load(std::memory_order_relaxed) ? L"on" : L"off", checked,
                        g_seadThread.load(std::memory_order_relaxed), fromTwo, heardTwo, heardOne, missed, relative, noTwo,
-                       updates, starts);
+                       updates);
     platform::LogDebug(L"audio listeners ({} s): AutoSe listener reads {} (the distance clip's {}, {} of them from player "
                        L"2's listener; {} waited out a swap, {} took the latest clean answer); footstep LOD levels {} "
                        L"(asked for player 2 {}, lowered {}{}; off the game thread {})",
@@ -815,9 +804,8 @@ void Install(const platform::GameImage& image) noexcept
     g_listenerGlobal.store(global ? reinterpret_cast<void**>(*global) : nullptr, std::memory_order_relaxed);
     const bool known = global.has_value();
 
-    // Logging (and the mailbox): the push, the sound starts.
-    const bool push   = Place(image, g_pushSlot, kPushSlot, kPush, reinterpret_cast<void*>(&Push));
-    const bool starts = Place(image, g_initSlot, kInitSlot, kInit, reinterpret_cast<void*>(&Init));
+    // Logging (and the mailbox): the push.
+    const bool push = Place(image, g_pushSlot, kPushSlot, kPush, reinterpret_cast<void*>(&Push));
 
     // The AutoSe reader first: once a swap can happen, it must already be shielded.
     bool       shield = false;
@@ -862,9 +850,9 @@ void Install(const platform::GameImage& image) noexcept
     auto outcome = [](bool ok) { return ok ? L"on" : L"OFF (a check failed)"; };
     platform::Log(L"audio listeners: player 2's SEAD listener {} (moving sounds {}, placed sounds {}; the AutoSe reader "
                   L"shielded {}); footstep detection from the nearer listener: the distance clip {}, the LOD {}; "
-                  L"logging: the push {}, sound starts {}",
+                  L"logging: the push {}",
                   outcome(second), outcome(moving), outcome(placed), outcome(shield), outcome(clipNearest), outcome(lod),
-                  outcome(push), outcome(starts));
+                  outcome(push));
 }
 
 void Remove() noexcept
@@ -878,7 +866,7 @@ void Remove() noexcept
     }
     g_twoActive.store(false, std::memory_order_relaxed);
     for (platform::VTableEntry* entry : {&g_pcSlot, &g_lodSlot, &g_dynamicSlot, &g_dynamicUpdateSlot, &g_pointSlot,
-                                         &g_pointUpdateSlot, &g_pushSlot, &g_initSlot})
+                                         &g_pointUpdateSlot, &g_pushSlot})
     {
         if (entry->Original() != 0)
         {

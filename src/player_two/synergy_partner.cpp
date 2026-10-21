@@ -100,7 +100,6 @@ constexpr std::int32_t   kMaxKinds            = 16;
 constexpr std::size_t  kNotes       = 8;   // member ends off the game thread between two ticks (a few per synergy)
 constexpr auto         kLateAfter   = std::chrono::seconds(5);
 constexpr auto         kGoneAfter   = std::chrono::seconds(1);  // a record gone, or a give-back not landed
-constexpr auto         kWaitAtMost  = std::chrono::seconds(10);  // a parry-window stance followed for the log (W)
 constexpr auto         kStatusEvery = std::chrono::seconds(10);
 constexpr int          kMaxLines    = 400;
 
@@ -138,9 +137,6 @@ Sites g_sites;
 
 // Game thread. The characters handed to their AI for an approach (synergy_rules.h Held).
 std::array<Held, kHeld> g_held{};
-
-// Game thread. The characters kept by their player through a parry window (synergy_rules.h Waiting).
-std::array<Waiting, kHeld> g_waiting{};
 
 const void*    g_partner   = nullptr;  // the partner of the AI request being run
 const void*    g_initiator = nullptr;
@@ -328,43 +324,7 @@ void Remember(const void* character, int player, std::uint8_t type) noexcept
 
 void ForgetAll() noexcept
 {
-    g_held    = {};
-    g_waiting = {};
-}
-
-/// Starts following `character`, kept by `player` through a parry window (a newer stance replaces an older one). Returns
-/// false for a later start of the stance it already follows (the same initiator and serials: the counter's own start,
-/// by type), which keeps that stance's entry and time.
-bool Wait(const void* character, const void* initiator, const std::uint32_t (&serials)[3], int player,
-          std::uint8_t type) noexcept
-{
-    Waiting* slot = &SlotFor(g_waiting, character);
-    if (SameStance(*slot, character, initiator, serials))
-    {
-        return false;
-    }
-    *slot           = {};
-    slot->character = character;
-    slot->initiator = initiator;
-    slot->weak      = leader_scope::WeakOf(const_cast<void*>(character));
-    slot->player    = player;
-    slot->type      = type;
-    slot->since     = Clock::now();
-    std::copy(std::begin(serials), std::end(serials), std::begin(slot->serials));
-    return true;
-}
-
-/// The waiting entry of `character`, or null. Game thread.
-Waiting* WaitingOf(const void* character) noexcept
-{
-    for (Waiting& waiting : g_waiting)
-    {
-        if (waiting.player != 0 && waiting.character == character)
-        {
-            return &waiting;
-        }
-    }
-    return nullptr;
+    g_held = {};
 }
 
 /// W: true if `handle` is a BattleAbility handle whose row has the parry-window kind. Guarded reads; game thread.
@@ -621,49 +581,17 @@ std::uint8_t PartnerLeaderType(std::uint8_t original) noexcept
         // A parry-window skill's stance (W): its partner is asked for only when the counter animation opens the window,
         // by the AI request (T2), which then hands it over; a failed parry never asks. Until then its player keeps it.
         // A game's own yes (the leader type is the partner's) waits for T2 as well. The counter repeats the start (by
-        // type) just before its AI request: the same stance, still kept.
-        const LinkRecordView record = party_member::ReadLinkRecord(g_record);
-        if (Wait(partner, g_initiator, record.actions, player, type))
+        // type) just before its AI request: the same stance, still kept. (The stance's outcome was followed for the log
+        // until the counter's keep-until-counter was confirmed live, v0.74.7; the follow-up is retired.)
+        ++g_counts.kept;
+        if (Line())
         {
-            ++g_counts.kept;
-            if (Line())
-            {
-                platform::LogDebug(L"synergy partner: {}'s partner {} is player {}'s: kept by its player through the "
-                                   L"parry window; the game's own request at the counter hands it over ({}; the synergy {})",
-                                   NameOf(g_initiator), NameOf(partner), player, g_via, RecordText(record));
-            }
-        }
-        else if (Line())
-        {
-            const Waiting* waiting = WaitingOf(partner);
-            platform::LogDebug(L"synergy partner: {}'s partner {} is player {}'s: still kept at the counter's own start "
-                               L"({} ms after its stance); the AI request hands it over ({}; the synergy {})",
-                               NameOf(g_initiator), NameOf(partner), player,
-                               waiting ? std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - waiting->since)
-                                             .count()
-                                       : -1LL,
-                               g_via, RecordText(record));
+            platform::LogDebug(L"synergy partner: {}'s partner {} is player {}'s: kept by its player through the parry "
+                               L"window; the game's own request at the counter hands it over ({}; the synergy {})",
+                               NameOf(g_initiator), NameOf(partner), player, g_via,
+                               RecordText(party_member::ReadLinkRecord(g_record)));
         }
         return decision.answer;
-    }
-    if (Waiting* waiting = WaitingOf(partner))
-    {
-        // Handed over now: the waiting ends here, whatever the remembered entry's fate (a give-back in this frame).
-        if (waiting->initiator == g_initiator && Line())
-        {
-            // The counter came: the far-partner risk (S-SYNCOUNTER Q8) is the distance the AI must cover in the window.
-            float      from[3]{};
-            float      to[3]{};
-            const bool located =
-                players::unreal::ActorLocation(g_initiator, from) && players::unreal::ActorLocation(partner, to);
-            const float dx = to[0] - from[0], dy = to[1] - from[1], dz = to[2] - from[2];
-            const float cm = std::sqrt(dx * dx + dy * dy + dz * dz);
-            platform::LogDebug(L"synergy partner: {}'s counter came {} ms after its stance; {} is {} cm from it",
-                               NameOf(g_initiator),
-                               std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - waiting->since).count(),
-                               NameOf(partner), located && std::isfinite(cm) ? static_cast<long long>(cm) : -1LL);
-        }
-        *waiting = {};
     }
     Remember(partner, player, type);
     (type == original ? g_counts.gameHandOvers : g_counts.modHandOvers) += 1;
@@ -1076,75 +1004,6 @@ bool WatchRecord(Held& held, Clock::time_point now) noexcept
     return true;
 }
 
-/// Game thread: follows each character kept through a parry window (W) until the game asks for it at the counter (the
-/// hand-over remembers it), the window opens and closes without it (Info: the counter went without that partner; state
-/// 2 means its command slot was busy, 3 that its AI was not ready), or the record ends without a window (the parry
-/// failed; Debug). Log only: the game decides each outcome.
-void WatchWaiting(Clock::time_point now) noexcept
-{
-    for (Waiting& waiting : g_waiting)
-    {
-        if (waiting.player == 0)
-        {
-            continue;
-        }
-        if (!leader_scope::StillNames(waiting.weak, waiting.character))
-        {
-            waiting = {};
-            continue;
-        }
-        // (A hand-over at the counter ends the entry where it happens, in PartnerLeaderType.)
-        const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - waiting.since).count();
-        if (now - waiting.since > kWaitAtMost)
-        {
-            if (Line())
-            {
-                platform::LogDebug(L"synergy partner: stopped following {} ({} ms after the stance; its record: seen {}, "
-                                   L"window seen {}, partner state {})",
-                                   NameOf(waiting.character), ms, waiting.recordSeen, waiting.windowSeen, waiting.state);
-            }
-            waiting = {};
-            continue;
-        }
-        LinkRecordView record;
-        if (party_member::FindPartnerLink(waiting.type, record))
-        {
-            const std::size_t partner = std::min<std::size_t>(record.partner, std::size(record.state) - 1);
-            waiting.recordSeen        = true;
-            waiting.state             = record.state[partner];
-            if (record.window != 0)
-            {
-                waiting.windowSeen = true;
-            }
-            else if (waiting.windowSeen && record.started[partner] == 0)
-            {
-                platform::Log(L"synergy partner: the counter's window closed {} ms after the stance without {} (player "
-                              L"{}'s; partner state {}: 2 its command slot was busy, 3 its AI was not ready)",
-                              ms, NameOf(waiting.character), waiting.player, waiting.state);
-                waiting = {};
-            }
-            continue;
-        }
-        if (!waiting.recordSeen && now - waiting.since < kGoneAfter)
-        {
-            continue;  // the start's record frame is pushed into the game's list within its own call; a moment more
-        }
-        if (waiting.windowSeen)
-        {
-            platform::Log(L"synergy partner: the counter's record ended {} ms after the stance without {} joining "
-                          L"(player {}'s; partner state {})",
-                          ms, NameOf(waiting.character), waiting.player, waiting.state);
-        }
-        else if (Line())
-        {
-            platform::LogDebug(L"synergy partner: {} stayed with player {} through the parry window: the link ended "
-                               L"{} ms after the stance without asking for it (the parry failed)",
-                               NameOf(waiting.character), waiting.player, ms);
-        }
-        waiting = {};
-    }
-}
-
 // ---------------------------------------------------------------------------------------------
 // Placement
 // ---------------------------------------------------------------------------------------------
@@ -1335,7 +1194,6 @@ void Tick() noexcept
                           std::chrono::duration_cast<std::chrono::seconds>(kLateAfter).count(), SeenText(held.endSeen));
         }
     }
-    WatchWaiting(now);
     if (now - g_statusAt < kStatusEvery)
     {
         return;

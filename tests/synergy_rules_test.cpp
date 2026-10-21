@@ -100,7 +100,7 @@ void TestNotes()
 
 void TestSlots()
 {
-    std::puts("tables: a character's own slot, else a free one, else the oldest; the same stance is told apart");
+    std::puts("the table: a character's own slot, else a free one, else the oldest");
     std::array<Held, kHeld> held{};
     const auto              t0 = Clock::time_point(100s);
     held[0] = {&g_a, 0, 1, 0, t0 + 3s};
@@ -113,21 +113,6 @@ void TestSlots()
     held[2].player = 0;                        // freed: a free slot wins over the oldest
     EXPECT(&SlotFor(held, &g_e) == &held[2]);
     EXPECT(&SlotFor(held, &g_c) == &held[2]);  // a freed entry no longer names its character
-
-    std::array<Waiting, kHeld> waiting{};
-    const std::uint32_t        serials[3] = {7, 8, 9};
-    Waiting&                   slot       = SlotFor(waiting, &g_a);
-    EXPECT(!SameStance(slot, &g_a, &g_b, serials));  // free: no stance yet
-    slot.character = &g_a;
-    slot.initiator = &g_b;
-    slot.player    = 1;
-    std::copy(std::begin(serials), std::end(serials), std::begin(slot.serials));
-    EXPECT(SameStance(slot, &g_a, &g_b, serials));
-    const std::uint32_t other[3] = {7, 8, 10};
-    EXPECT(!SameStance(slot, &g_a, &g_b, other));
-    EXPECT(!SameStance(slot, &g_a, &g_c, serials));
-    EXPECT(!SameStance(slot, &g_c, &g_b, serials));
-    EXPECT(&SlotFor(waiting, &g_a) == &slot);
 }
 
 }  // namespace
