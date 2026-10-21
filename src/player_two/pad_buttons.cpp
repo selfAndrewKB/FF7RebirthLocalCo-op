@@ -43,9 +43,9 @@ using TickFn = void (*)(void* self, float deltaTime, void* application, void* cu
 // hands the action to the UI handler stack and the menu core's delegate (menus, field prompts,
 // battle commands). Its callers that can carry pad 2's presses and whose call fits one aligned
 // block: the XInput main loop (every bound action) and two DirectInput loops.
-constexpr std::uintptr_t kActionDown = 0x1407C3DAC;
 constexpr std::uint8_t   kActionDownBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55,
                                                0x41, 0x56, 0x41, 0x57, 0xB8, 0x00, 0x01, 0x00, 0x00, 0xE8, 0x6A, 0xB1};
+constexpr platform::FunctionFact kActionDown{L"SquareInput's action-down dispatcher", 0x1407C3DAC, kActionDownBytes};
 constexpr std::array<std::uintptr_t, 3> kActionDownCalls{0x140E745A0, 0x140E74141, 0x140E74312};
 // 1.005 (RE-1005-field-2.md §8): the DirectInput key list's call is at 0x140E93C3D, %16 = 13, so it crosses a 16-byte
 // block. It is in KeyDown_MapKeyToActions too, so on 1.005 a dispatch call that crosses a block is changed with the
@@ -568,9 +568,9 @@ bool Install(const platform::GameImage& image) noexcept
     {
         return false;
     }
-    const auto target = image.Rebase(kActionDown);
+    const auto target = platform::FindFunction(image, kActionDown);
     unsigned   calls  = 0;
-    if (target && image.BytesMatch(kActionDown, kActionDownBytes))
+    if (target)
     {
         g_actionDown = reinterpret_cast<ActionDownFn>(*target);
         for (std::size_t i = 0; i < kActionDownCalls.size(); ++i)

@@ -13,6 +13,7 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/verified_code.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 #include "player_two/object_fields.h"
@@ -35,9 +36,10 @@ using RC::Unreal::UObject;
 // RE-p2-rumble.md §9 (this build).
 // SquareInput__NoteLastActiveDevice(owner, userIndex): the input layer's "last active device" for player 1. Entry:
 // mov [rsp+8], rbx (the 5 bytes replaced), position-independent; no branch into +1..+4.
-constexpr std::uintptr_t kNoteLastDevice        = 0x1415F4900;
 constexpr std::uint8_t   kNoteLastDeviceBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
                                                    0x24, 0x10, 0x48, 0x89, 0x7C, 0x24, 0x18, 0x41};
+constexpr platform::FunctionFact kNoteLastDevice{L"SquareInput__NoteLastActiveDevice", 0x1415F4900,
+                                                 kNoteLastDeviceBytes};
 constexpr std::size_t    kNoteLastDeviceFirst   = 5;
 using facts::kSquareInputGlobal;
 constexpr std::uint32_t  kOwnerPad      = 0x74;         // i32: the last XInput pad
@@ -166,11 +168,13 @@ void Install(const platform::GameImage& image) noexcept
 {
     const auto owner = image.Rebase(kSquareInputGlobal, sizeof(void*));
     const auto app   = image.Rebase(kPlatformApplication, sizeof(void*));
-    const auto note  = image.Rebase(kNoteLastDevice);
+    const auto note  = platform::FindFunction(image, kNoteLastDevice);
     g_owner          = owner ? *owner : 0;
     g_app            = app ? *app : 0;
-    const bool device = note && image.BytesMatch(kNoteLastDevice, kNoteLastDeviceBytes) &&
-                        g_note.Install(*note, image.EntryInstruction(kNoteLastDevice, std::span<const std::uint8_t>(kNoteLastDeviceBytes).first(kNoteLastDeviceFirst)),
+    const bool device = note &&
+                        g_note.Install(*note,
+                                       image.EntryInstruction(kNoteLastDevice.address,
+                                                              kNoteLastDevice.entryBytes.first(kNoteLastDeviceFirst)),
                                        reinterpret_cast<std::uintptr_t>(&Note));
     const bool weaks = leader_scope::Install(image);  // the weak values that tell a new pair of controllers apart
     try

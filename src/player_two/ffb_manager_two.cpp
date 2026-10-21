@@ -5,6 +5,7 @@
 #include "platform/entry_redirect.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/verified_code.h"
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
 #include "player_two/own_controller.h"
@@ -25,31 +26,39 @@ namespace {
 
 // 1.004 addresses; 1.005 through replaced-ffb-manager.json (every fact read from both exes, 2026-10-12).
 constexpr std::uintptr_t kGlobal       = 0x1490FEE18;  // g_EndFFBMgr: the singleton EndFFBMgr_Get makes and returns
-constexpr std::uintptr_t kCtor         = 0x1437DBAE0;  // EndFFBMgr_Ctor(memory) -> memory
 constexpr std::uint8_t   kCtorBytes[]  = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
+constexpr platform::FunctionFact kCtor{L"EndFFBMgr_Ctor", 0x1437DBAE0, kCtorBytes};  // EndFFBMgr_Ctor(memory) -> memory
 // The component constructor's only call, in the AEndPlayerController constructor. The manager's constructor loads its
 // effect list with FObjectFinder, which only a constructor may use: player 2's manager is made inside this call.
 constexpr std::uintptr_t kCompCtorCall = 0x143D05AB7;
 constexpr std::uintptr_t kCompCtor     = 0x1437DBC78;  // EndFFBComp_Ctor_PC758(component, owner) -> component
-constexpr std::uintptr_t kBuildTracks  = 0x1437E0568;  // EndFFBMgr_BuildTracks90_FFBTr0to15(mgr): FNames only, no loads
 constexpr std::uint8_t   kBuildTracksBytes[] = {0x48, 0x89, 0x5C, 0x24};
-constexpr std::uintptr_t kTick         = 0x140C91268;  // EndFFBMgr_Tick(mgr, dt xmm1): its state machine
+// EndFFBMgr_BuildTracks90_FFBTr0to15(mgr): FNames only, no loads
+constexpr platform::FunctionFact kBuildTracks{L"EndFFBMgr_BuildTracks90_FFBTr0to15", 0x1437E0568, kBuildTracksBytes};
 constexpr std::uint8_t   kTickBytes[]  = {0x40, 0x53, 0xB8, 0x30, 0x00, 0x00, 0x00};
-constexpr std::uintptr_t kRequest      = 0x140A0BE80;  // EndStateMachine_RequestStateById(machine, id) -> found
+// EndFFBMgr_Tick(mgr, dt xmm1): its state machine
+constexpr platform::FunctionFact kTick{L"EndFFBMgr_Tick", 0x140C91268, kTickBytes};
 constexpr std::uint8_t   kRequestBytes[] = {0x33, 0xC0, 0x4C, 0x8B, 0xC9, 0x48, 0x89, 0x41, 0x20, 0x39, 0x41, 0x08};
-constexpr std::uintptr_t kSetEnabled   = 0x1422DE548;  // EndFFBMgr_SetEnabled531(mgr, on): the Vibration option
-constexpr std::uintptr_t kMuteAll      = 0x1411F6AA4;  // EndFFBMgr_MuteAll_PrimaryPC(mgr, mute): fades, menus, states
+// EndStateMachine_RequestStateById(machine, id) -> found
+constexpr platform::FunctionFact kRequest{L"EndStateMachine_RequestStateById", 0x140A0BE80, kRequestBytes};
 constexpr std::uint8_t   kEntryBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08,   // mov [rsp+8],rbx (crosses a block: 1.005 MuteAll)
                                           0x48, 0x89, 0x6C, 0x24, 0x10};  // mov [rsp+10h],rbp
+// EndFFBMgr_MuteAll_PrimaryPC(mgr, mute): fades, menus, states
+constexpr platform::FunctionFact kMuteAll{L"EndFFBMgr_MuteAll_PrimaryPC", 0x1411F6AA4, kEntryBytes};
+// EndFFBMgr_SetEnabled531(mgr, on): the Vibration option
+constexpr platform::FunctionFact kSetEnabled{L"EndFFBMgr_SetEnabled531", 0x1422DE548, kEntryBytes};
 constexpr std::size_t    kFirstInstruction  = 5;
 constexpr std::size_t    kSecondInstruction = 5;
 // The registry's TArray<component*> helpers, as BeginPlay (AddUnique, inline) and the component's destructor use them.
-constexpr std::uintptr_t kContains     = 0x140786200;  // Contains(array, &element) -> bool
 constexpr std::uint8_t   kContainsBytes[] = {0x4C, 0x8B, 0x01, 0x48, 0x63, 0x41, 0x08, 0x49, 0x8D, 0x0C, 0xC0, 0x4C};
-constexpr std::uintptr_t kGrow         = 0x1420DE464;  // grow after Num++ (array); a first allocation holds 4
+// Contains(array, &element) -> bool
+constexpr platform::FunctionFact kContains{L"TArray Contains(array, &element)", 0x140786200, kContainsBytes};
 constexpr std::uint8_t   kGrowBytes[]  = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x4C, 0x24, 0x08, 0x55, 0x56};
-constexpr std::uintptr_t kRemoveAll    = 0x1420DD440;  // RemoveAll(array, &&element) -> removed
+// grow after Num++ (array); a first allocation holds 4
+constexpr platform::FunctionFact kGrow{L"TArray grow after Num++", 0x1420DE464, kGrowBytes};
 constexpr std::uint8_t   kRemoveAllBytes[] = {0x48, 0x89, 0x54, 0x24, 0x10, 0x41, 0x54, 0x41, 0x55};
+// RemoveAll(array, &&element) -> removed
+constexpr platform::FunctionFact kRemoveAll{L"TArray RemoveAll(array, &&element)", 0x1420DD440, kRemoveAllBytes};
 
 constexpr std::size_t   kManagerSize  = 0x538;  // the getter's FMemory_Malloc(0x538)
 constexpr std::uint32_t kComponent    = 0x758;  // the controller's force-feedback component (embedded)
@@ -404,24 +413,23 @@ void MuteAllHook(void* manager, std::uint8_t mute) noexcept
 }
 
 template <class Fn>
-bool Find(const platform::GameImage& image, std::uintptr_t address, std::span<const std::uint8_t> bytes,
-          Fn& out) noexcept
+bool Find(const platform::GameImage& image, const platform::FunctionFact& fact, Fn& out) noexcept
 {
-    const auto at = image.BytesMatch(address, bytes) ? image.Rebase(address) : std::nullopt;
+    const auto at = platform::FindFunction(image, fact);
     out           = at ? reinterpret_cast<Fn>(*at) : nullptr;
     return out != nullptr;
 }
 
-bool Entry(const platform::GameImage& image, platform::EntryRedirect& redirect, std::uintptr_t address,
+bool Entry(const platform::GameImage& image, platform::EntryRedirect& redirect, const platform::FunctionFact& fact,
            std::uintptr_t replacement) noexcept
 {
-    const std::span<const std::uint8_t> bytes(kEntryBytes);
-    const auto                          at = image.Rebase(address);
-    if (!at || !image.BytesMatch(address, bytes))
+    const auto bytes = fact.entryBytes;
+    const auto at    = platform::FindFunction(image, fact);
+    if (!at)
     {
         return false;
     }
-    return redirect.Install(*at, image.EntryInstruction(address, bytes.first(kFirstInstruction)), replacement) ||
+    return redirect.Install(*at, image.EntryInstruction(fact.address, bytes.first(kFirstInstruction)), replacement) ||
            redirect.InstallAtSecondInstruction(*at, bytes.first(kFirstInstruction),
                                                bytes.subspan(kFirstInstruction, kSecondInstruction), replacement);
 }
@@ -447,13 +455,10 @@ void Install(const platform::GameImage& image) noexcept
 {
     const auto global    = image.Rebase(kGlobal, sizeof(void*));
     g_global             = global ? reinterpret_cast<void**>(*global) : nullptr;
-    const bool functions = g_global != nullptr && Find(image, facts::kMalloc.address, facts::kMallocBytes, g_malloc) &&
-                           Find(image, kCtor, kCtorBytes, g_ctor) && Find(image, kTick, kTickBytes, g_tick) &&
-                           Find(image, kRequest, kRequestBytes, g_request) &&
-                           Find(image, kContains, kContainsBytes, g_contains) &&
-                           Find(image, kGrow, kGrowBytes, g_grow) &&
-                           Find(image, kRemoveAll, kRemoveAllBytes, g_removeAll) &&
-                           Find(image, kBuildTracks, kBuildTracksBytes, g_buildTracks);
+    const bool functions = g_global != nullptr && Find(image, facts::kMalloc, g_malloc) && Find(image, kCtor, g_ctor) &&
+                           Find(image, kTick, g_tick) && Find(image, kRequest, g_request) &&
+                           Find(image, kContains, g_contains) && Find(image, kGrow, g_grow) &&
+                           Find(image, kRemoveAll, g_removeAll) && Find(image, kBuildTracks, g_buildTracks);
     const auto site      = image.Rebase(kCompCtorCall, 5);
     const auto ctor      = image.Rebase(kCompCtor);
     // The option and the stop-all first: a component on player 2's manager must never miss them.

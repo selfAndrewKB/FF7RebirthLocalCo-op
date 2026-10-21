@@ -9,6 +9,7 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
 #include "player_two/chocobo_ride.h"
 #include "player_two/generation.h"
@@ -39,28 +40,32 @@ namespace lss::player_two::rumble_list_two {
 namespace {
 
 // 1.004 addresses; 1.005 through replaced-rumble-list.json (every function, call and the lock read from both exes).
-constexpr std::uintptr_t kPlayNamed     = 0x141302F0C;  // VibrationList3B0_PlayNamed(key, params*, flag)
 constexpr std::uint8_t   kPlayNamedBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08,   // mov [rsp+8],rbx (crosses a block in 1.004)
                                               0x48, 0x89, 0x6C, 0x24, 0x10};  // mov [rsp+10h],rbp
+// VibrationList3B0_PlayNamed(key, params*, flag)
+constexpr platform::FunctionFact kPlayNamed{L"VibrationList3B0_PlayNamed", 0x141302F0C, kPlayNamedBytes};
 constexpr std::size_t    kFirstInstruction  = 5;
 constexpr std::size_t    kSecondInstruction = 5;
 constexpr std::uintptr_t kAddOrUpdate   = 0x141302E2C;  // VibrationList3B0_AddOrUpdate(list, key, params*, flag)
 constexpr std::uintptr_t kListTick      = 0x14125D324;  // Vibration_TickGlobalList_ApplyToPrimaryPC(dt xmm0)
 constexpr std::uintptr_t kBuildSet      = 0x14125CFD0;  // Vibration_TickList_BuildChannelSet(list, dt xmm1, set*) -> changed
 constexpr std::uintptr_t kApply         = 0x1408A1688;  // PrimaryPC_ApplyVibrationChannels758(list, set*): on PM+0x140
-constexpr std::uintptr_t kListCtor      = 0x143727368;  // VibrationList_Ctor (6 channel slots in 1.004, 7 in 1.005)
 constexpr std::uint8_t   kCtorBytes[]   = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
+// VibrationList_Ctor (6 channel slots in 1.004, 7 in 1.005)
+constexpr platform::FunctionFact kListCtor{L"VibrationList_Ctor", 0x143727368, kCtorBytes};
 constexpr std::uintptr_t kListLock      = 0x14881C428;  // the game's CRITICAL_SECTION around adds and the set build
-constexpr std::uintptr_t kRows          = 0x14125D474;  // LeaderActionComp_PerFrameB_RowsAndVibration(comp, xmm1, xmm2)
 constexpr std::uint8_t   kRowsBytes[]   = {0x48, 0x89, 0x5C, 0x24, 0x08};
+// LeaderActionComp_PerFrameB_RowsAndVibration(comp, xmm1, xmm2)
+constexpr platform::FunctionFact kRows{L"LeaderActionComp_PerFrameB_RowsAndVibration", 0x14125D474, kRowsBytes};
 constexpr std::uintptr_t kListTickCall  = 0x14125D558;  // ... its call of the list tick
 constexpr std::uintptr_t kZipGateCall   = 0x1433251E2;  // Zipline phase 3: the rumble block's player test (rcx = move)
 constexpr std::uintptr_t kZipGate       = 0x141635DE8;  // FieldActionMove_IsPlayerChar_Ex_UCPCOrVehicleOrLeaderTag
 constexpr std::uintptr_t kZipAddCall    = 0x1433252C6;  // ... the keep-alive add (call PlayNamed)
 // RE-p2-rumble-owner-chocobo.md (read from both exes, 2026-10-12).
-constexpr std::uintptr_t kStopNamed     = 0x1422C4818;  // VibrationList3B0_StopNamed(key): flags the global list's entries
 constexpr std::uint8_t   kStopNamedBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08,  // mov [rsp+8],rbx
                                               0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
+// VibrationList3B0_StopNamed(key): flags the global list's entries
+constexpr platform::FunctionFact kStopNamed{L"VibrationList3B0_StopNamed", 0x1422C4818, kStopNamedBytes};
 constexpr std::size_t    kStopFirstInstruction = 5;
 constexpr std::uintptr_t kListOwner     = 0x14939BC90;  // the list's owner (StopNamed and PlayNamed read it)
 constexpr std::uintptr_t kFootSlot      = 0x1457F3ED0;  // EndChocoboCharacter vt+0x978 (1.005 +0x980): footsteps
@@ -75,8 +80,9 @@ constexpr std::uintptr_t kGlideSafeSlot   = 0x145CE5C48;  // the sky-glide rumbl
 constexpr std::uintptr_t kGlideSafe       = 0x142247D60;
 constexpr std::uintptr_t kGlideRunSlot    = 0x145CE5C40;  // ... its Execute (+0x48)
 constexpr std::uintptr_t kGlideRun        = 0x142247D30;
-constexpr std::uintptr_t kJumpEnded       = 0x1422ADF00;  // the jump box's OnEnded TFunction invoker (often the worker)
 constexpr std::uint8_t   kJumpEndedBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00};  // mov eax,28h
+// the jump box's OnEnded TFunction invoker (often the worker)
+constexpr platform::FunctionFact kJumpEnded{L"the jump box's OnEnded invoker", 0x1422ADF00, kJumpEndedBytes};
 constexpr std::uintptr_t kDriftSlot       = 0x146692AF0;  // the drift action's state 1 tick (state table; anim worker)
 constexpr std::uintptr_t kDrift           = 0x14328EFA4;
 constexpr std::uintptr_t kBrakeOneSlot    = 0x1470FCDE0;  // the brake move's phase 1 and 2 (phase table; anim worker)
@@ -972,9 +978,9 @@ std::wstring InstallSources(const platform::GameImage& image) noexcept
     // 1.004's add is inline: its list load must follow the invoker, so the invoker waits for it there.
     const bool research = platform::RunningBuild() == platform::BuildIndex::Research;
     const bool load     = research && PlaceJumpListLoad(image);
-    const auto jumpAt   = image.Rebase(kJumpEnded);
-    const bool jump     = (load || !research) && jumpAt && image.BytesMatch(kJumpEnded, kJumpEndedBytes) &&
-                      g_jumpEnded.Install(*jumpAt, image.EntryInstruction(kJumpEnded, kJumpEndedBytes),
+    const auto jumpAt   = platform::FindFunction(image, kJumpEnded);
+    const bool jump     = (load || !research) && jumpAt &&
+                      g_jumpEnded.Install(*jumpAt, image.EntryInstruction(kJumpEnded.address, kJumpEnded.entryBytes),
                                           reinterpret_cast<std::uintptr_t>(&JumpEnded));
     if (!jump && g_jumpListLoad.IsInstalled())
     {
@@ -1030,6 +1036,14 @@ bool Find(const platform::GameImage& image, std::uintptr_t address, Fn& out) noe
     return out != nullptr;
 }
 
+template <class Fn>
+bool Find(const platform::GameImage& image, const platform::FunctionFact& fact, Fn& out) noexcept
+{
+    const auto at = platform::FindFunction(image, fact);
+    out           = at ? reinterpret_cast<Fn>(*at) : nullptr;
+    return out != nullptr;
+}
+
 void RemoveRedirects() noexcept
 {
     for (platform::CallRedirect* call : {&g_zipAddCall, &g_zipGateCall, &g_listTickCall})
@@ -1060,42 +1074,39 @@ void Install(const platform::GameImage& image) noexcept
     g_lock          = lock ? reinterpret_cast<CRITICAL_SECTION*>(*lock) : nullptr;
     const bool functions = g_lock != nullptr && Find(image, kAddOrUpdate, g_addOrUpdate) &&
                            Find(image, kBuildSet, g_buildSet) && Find(image, kApply, g_apply) &&
-                           image.BytesMatch(facts::kFree.address, facts::kFreeBytes) &&
-                           Find(image, facts::kFree.address, g_free) && image.BytesMatch(kListCtor, kCtorBytes) &&
-                           Find(image, kListCtor, g_ctor) &&
-                           image.BytesMatch(facts::kMalloc.address, facts::kMallocBytes) &&
-                           Find(image, facts::kMalloc.address, g_malloc);
+                           Find(image, facts::kFree, g_free) && Find(image, kListCtor, g_ctor) &&
+                           Find(image, facts::kMalloc, g_malloc);
     // The add's entry: its first instruction crosses a block in 1.004, so the second is replaced there.
-    bool                                add = false;
-    const std::span<const std::uint8_t> bytes(kPlayNamedBytes);
-    const auto                          playAt = image.Rebase(kPlayNamed);
-    if (functions && playAt && image.BytesMatch(kPlayNamed, bytes))
+    bool       add    = false;
+    const auto bytes  = kPlayNamed.entryBytes;
+    const auto playAt = platform::FindFunction(image, kPlayNamed);
+    if (functions && playAt)
     {
         const auto replacement = reinterpret_cast<std::uintptr_t>(&PlayNamed);
-        add = g_playNamed.Install(*playAt, image.EntryInstruction(kPlayNamed, bytes.first(kFirstInstruction)),
+        add = g_playNamed.Install(*playAt, image.EntryInstruction(kPlayNamed.address, bytes.first(kFirstInstruction)),
                                   replacement) ||
               g_playNamed.InstallAtSecondInstruction(*playAt, bytes.first(kFirstInstruction),
                                                      bytes.subspan(kFirstInstruction, kSecondInstruction), replacement);
     }
-    const auto rowsAt = image.Rebase(kRows);
-    const bool rows   = add && rowsAt && image.BytesMatch(kRows, kRowsBytes) &&
-                      g_rows.Install(*rowsAt, image.EntryInstruction(kRows, kRowsBytes),
+    const auto rowsAt = platform::FindFunction(image, kRows);
+    const bool rows   = add && rowsAt &&
+                      g_rows.Install(*rowsAt, image.EntryInstruction(kRows.address, kRows.entryBytes),
                                      reinterpret_cast<std::uintptr_t>(&Rows));
     const bool tick = rows && g_listTickCall.InstallResearch(image, kListTickCall, kListTick,
                                                              reinterpret_cast<std::uintptr_t>(&ListTick));
     const bool zip  = tick &&
-                     g_zipAddCall.InstallResearch(image, kZipAddCall, kPlayNamed,
+                     g_zipAddCall.InstallResearch(image, kZipAddCall, kPlayNamed.address,
                                                   reinterpret_cast<std::uintptr_t>(&ZipAdd)) &&
                      g_zipGateCall.InstallResearch(image, kZipGateCall, kZipGate,
                                                    reinterpret_cast<std::uintptr_t>(&ZipGate));
     // The stop by name: player 2's loops added to player 2's list must stop there.
     const auto owner  = image.Rebase(kListOwner, sizeof(void*));
     g_listOwner       = owner ? *owner : 0;
-    const auto stopAt = image.Rebase(kStopNamed);
-    const bool stop   = zip && g_listOwner != 0 && stopAt && image.BytesMatch(kStopNamed, kStopNamedBytes) &&
+    const auto stopAt = platform::FindFunction(image, kStopNamed);
+    const bool stop   = zip && g_listOwner != 0 && stopAt &&
                       g_stopNamed.Install(*stopAt,
-                                          image.EntryInstruction(kStopNamed,
-                                                                 std::span(kStopNamedBytes).first(kStopFirstInstruction)),
+                                          image.EntryInstruction(kStopNamed.address,
+                                                                 kStopNamed.entryBytes.first(kStopFirstInstruction)),
                                           reinterpret_cast<std::uintptr_t>(&StopNamed));
     g_installed = stop;
     if (!g_installed)

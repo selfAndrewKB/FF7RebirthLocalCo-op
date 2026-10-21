@@ -6,6 +6,7 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
@@ -26,13 +27,13 @@ using Clock = std::chrono::steady_clock;
 
 // RE-p2-rumble.md §2.2, §5 (this build).
 // AEndPlayerController vt+0xC90 (vtable 0x1467C85A0): SendFFValuesToInputInterface(PC, IInputInterface*, id), stock.
-constexpr std::uintptr_t kSendSlot    = 0x1467C9230;
-constexpr std::uintptr_t kSend        = 0x1407BF920;
-constexpr std::uint8_t   kSendBytes[] = {0xB8, 0x68, 0x00, 0x00, 0x00};  // mov eax, 68h (then the stack probe)
+constexpr std::uint8_t kSendBytes[] = {0xB8, 0x68, 0x00, 0x00, 0x00};  // mov eax, 68h (then the stack probe)
+constexpr platform::SlotFact kSendSlot{L"the controller's SendFFValuesToInputInterface slot", 0x1467C9230,
+                                       {L"SendFFValuesToInputInterface", 0x1407BF920, kSendBytes}};
 // The XInput device's SetChannelValues (its vtable 0x146959448, slot 6): (device, id, const FForceFeedbackValues*).
-constexpr std::uintptr_t kPadSlot     = 0x146959478;
-constexpr std::uintptr_t kPadSet      = 0x1407BF308;
-constexpr std::uint8_t   kPadSetBytes[] = {0x40, 0x53, 0x55, 0x56, 0x57, 0x41, 0x56, 0xB8, 0x60, 0x00, 0x00, 0x00};
+constexpr std::uint8_t kPadSetBytes[] = {0x40, 0x53, 0x55, 0x56, 0x57, 0x41, 0x56, 0xB8, 0x60, 0x00, 0x00, 0x00};
+constexpr platform::SlotFact kPadSlot{L"the XInput device's SetChannelValues slot", 0x146959478,
+                                      {L"XInputDevice_SetChannelValues", 0x1407BF308, kPadSetBytes}};
 // The platform application (pointer global); the send's interface is app+0x80, so the code is at interface+0x160.
 using facts::kPlatformApplication;
 using facts::kPlatformAppDeviceCode;
@@ -296,16 +297,10 @@ std::uint64_t PadSet(void* device, std::int32_t id, const void* values) noexcept
 
 void Install(const platform::GameImage& image) noexcept
 {
-    const auto sendSlot = image.Rebase(kSendSlot, sizeof(void*));
-    const auto send     = image.Rebase(kSend);
-    const auto padSlot  = image.Rebase(kPadSlot, sizeof(void*));
-    const auto padSet   = image.Rebase(kPadSet);
-    const auto app      = image.Rebase(kPlatformApplication, sizeof(void*));
-    g_app               = app ? *app : 0;
-    const bool sends = sendSlot && send && image.BytesMatch(kSend, kSendBytes) &&
-                       g_send.Replace(*sendSlot, *send, reinterpret_cast<std::uintptr_t>(&Send));
-    const bool pads  = padSlot && padSet && image.BytesMatch(kPadSet, kPadSetBytes) &&
-                       g_pad.Replace(*padSlot, *padSet, reinterpret_cast<std::uintptr_t>(&PadSet));
+    const auto app   = image.Rebase(kPlatformApplication, sizeof(void*));
+    g_app            = app ? *app : 0;
+    const bool sends = platform::ReplaceSlot(image, kSendSlot, reinterpret_cast<std::uintptr_t>(&Send), g_send);
+    const bool pads  = platform::ReplaceSlot(image, kPadSlot, reinterpret_cast<std::uintptr_t>(&PadSet), g_pad);
     platform::Log(L"rumble watch (logging only): the controllers' sends {}, the XInput pad writes {}",
                   sends ? L"watched" : L"NOT watched (the entry is not what the research read)",
                   pads ? L"watched" : L"NOT watched (the entry is not what the research read)");

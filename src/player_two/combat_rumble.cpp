@@ -89,10 +89,10 @@ constexpr std::uint32_t kComponentOwner = 0xA0;  // UActorComponent::OwnerPrivat
 #if LSS_DEV
 // The plays, for the log (dev tools): EndFFBComp_PlayChannel (the dispatcher) and its classic path (also called
 // directly).
-constexpr std::uintptr_t kPlay               = 0x1411F71E8;
 constexpr std::uint8_t   kPlayBytes[]        = {0x48, 0x89, 0x5C, 0x24, 0x08};
-constexpr std::uintptr_t kPlayClassic        = 0x1411F7244;
+constexpr platform::FunctionFact kPlay{L"EndFFBComp_PlayChannel", 0x1411F71E8, kPlayBytes};
 constexpr std::uint8_t   kPlayClassicBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x20};
+constexpr platform::FunctionFact kPlayClassic{L"EndFFBComp_PlayChannel's classic path", 0x1411F7244, kPlayClassicBytes};
 constexpr std::uintptr_t kFromDispatcher     = 0x1411F7234;  // the dispatcher's own call of the classic path, +5
 constexpr std::uint32_t  kComponentController = 0x10;        // the End force-feedback component's controller
 
@@ -536,12 +536,13 @@ std::uint64_t PlayClassic(void* component, std::uint64_t channel, const void* na
 /// Places the two play entries; what the install line says of them.
 const wchar_t* InstallPlays(const platform::GameImage& image) noexcept
 {
-    const auto play    = image.Rebase(kPlay);
-    const auto classic = image.Rebase(kPlayClassic);
-    const bool plays = play && classic && image.BytesMatch(kPlay, kPlayBytes) &&
-                       image.BytesMatch(kPlayClassic, kPlayClassicBytes) &&
-                       g_play.Install(*play, image.EntryInstruction(kPlay, kPlayBytes), reinterpret_cast<std::uintptr_t>(&Play)) &&
-                       g_playClassic.Install(*classic, image.EntryInstruction(kPlayClassic, kPlayClassicBytes),
+    const auto play    = platform::FindFunction(image, kPlay);
+    const auto classic = platform::FindFunction(image, kPlayClassic);
+    const bool plays = play && classic &&
+                       g_play.Install(*play, image.EntryInstruction(kPlay.address, kPlay.entryBytes),
+                                      reinterpret_cast<std::uintptr_t>(&Play)) &&
+                       g_playClassic.Install(*classic,
+                                             image.EntryInstruction(kPlayClassic.address, kPlayClassic.entryBytes),
                                              reinterpret_cast<std::uintptr_t>(&PlayClassic));
     return plays ? L"logged with their source" : L"NOT logged (an entry is not what the research read)";
 }
