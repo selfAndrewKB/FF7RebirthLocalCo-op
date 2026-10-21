@@ -44,7 +44,7 @@ StageCounters& Counters() noexcept;
 /// Times the leader test answered yes for the member since the last call.
 unsigned TakeLeaderAnswers() noexcept;
 
-/// Logging (RE-p2-chocobo-ride.md §7.2 item 2): the game's IsUCPC_Core(`character`) as player 2's chocobo swap
+/// The boarding gate of player 2's rides (chocobo_ride, wheelie_ride; RE-p2-chocobo-ride.md §7.2 item 2): the game's IsUCPC_Core(`character`) as player 2's chocobo swap
 /// would see it, inside the primary-controller scope and the member's leader answer, and the primary
 /// controller seen there. Calls nothing else. -1 when a scope could not be held or the test is unavailable.
 /// Game thread.

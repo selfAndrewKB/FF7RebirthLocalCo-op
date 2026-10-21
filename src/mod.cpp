@@ -366,7 +366,7 @@ public:
         lss::player_two::approach_two::Install(*image);  // walk-up traversals read player 2's stick in player 2's camera basis
         lss::player_two::move_type_two::Install(*image);  // player 2's walk-step cap ends on player 2's controller
         lss::player_two::anim_two_views::Install(*image);  // characters near player 2 animate by the nearer camera
-        lss::player_two::trigger_two::Install(*image);  // player 2's trigger read after player 1's (events held back, logged)
+        lss::player_two::trigger_two::Install(*image);  // player 2's trigger read after player 1's; admitted actors' events delivered to player 2
         lss::player_two::vault_camera::Install(*image);  // player 2's chocobo vaults without taking both ride framings
         lss::player_two::chocobo_climb::Install(*image);  // player 2's chocobo climbs walls, with its own climb camera
 

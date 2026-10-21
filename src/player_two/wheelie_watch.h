@@ -6,7 +6,7 @@
 // Every 10 ticks, from player 1's key-4 vehicle coordinator (`PC+0x5C0`, a TMap<uint8, coordinator>; Costa del Sol's
 // parked scooters register with it at BeginPlay), whether or not player 1 rides:
 //   - the coordinator: active on player 1 (`PC+0x5B8`), state (`*[+0x230]`: 0 idle, 1 resume, 2 boarding, 3 riding,
-//     4 getting off), scooter, rider, its flags, the shared block's ride request / enabled / disabled bytes and scooter
+//     4 getting off), scooter, rider, its flags, the shared block's requested / idle / parking / colour bytes and scooter
 //     count, and the per-rider table's state and named entries (expected empty: the table is dormant, §2);
 //   - the scooters in its list: how many are free by the game's own rule (not excluded, not ridden), and the nearest
 //     free one's distance to player 2's member;
