@@ -1,6 +1,7 @@
 #include "platform/log.h"
 
 #include "platform/frame_watch.h"
+#include "platform/level_names.h"
 
 #include <DynamicOutput/DynamicOutput.hpp>
 
@@ -67,15 +68,7 @@ Level CurrentLevel() noexcept
 
 const wchar_t* LevelName(Level level) noexcept
 {
-    switch (level)
-    {
-        case Level::Error: return L"error";
-        case Level::Warning: return L"warning";
-        case Level::Info: return L"info";
-        case Level::Debug: return L"debug";
-        case Level::Trace: return L"trace";
-    }
-    return L"?";
+    return LevelWord(level).data();  // level_names.h's words are literals: null-terminated
 }
 void WriteLine(std::wstring_view line) noexcept
 {

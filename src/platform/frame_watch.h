@@ -23,6 +23,10 @@ enum class Part
     Count,
 };
 
+/// Seconds on the performance counter (a fixed-rate clock from boot): the clock of every timing here and in the
+/// HUD's own timing logs. Any thread. Differences only; the origin means nothing.
+double Now() noexcept;
+
 /// Adds the time between construction and destruction to `part` for this frame. Game thread.
 class Charge
 {

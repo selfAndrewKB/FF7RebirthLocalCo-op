@@ -31,21 +31,6 @@ constexpr std::size_t kMaxNotes        = 6;
 constexpr std::size_t kParts           = static_cast<std::size_t>(Part::Count);
 constexpr const wchar_t* kPartNames[kParts] = {L"engine tick", L"overlay render", L"input", L"member tick"};
 
-double g_secondsPerCount = 0.0;
-
-double Now() noexcept
-{
-    LARGE_INTEGER counter{};
-    QueryPerformanceCounter(&counter);
-    if (g_secondsPerCount == 0.0)
-    {
-        LARGE_INTEGER frequency{};
-        QueryPerformanceFrequency(&frequency);
-        g_secondsPerCount = 1.0 / static_cast<double>(frequency.QuadPart);
-    }
-    return static_cast<double>(counter.QuadPart) * g_secondsPerCount;
-}
-
 // Game thread, except the log-line counter.
 std::array<double, kParts>                 g_partSeconds{};
 std::array<double, kParts>                 g_partTotals{};  // summed over the summary's frames (the per-frame average)
@@ -123,6 +108,20 @@ void LogHitch(double frameMs, unsigned logLines)
 }
 
 }  // namespace
+
+double Now() noexcept
+{
+    // The counter's rate is fixed for the process; read once, on the first call from any thread (a function-local
+    // static initialises under the language's own lock, so no thread sees it half-set).
+    static const double secondsPerCount = [] {
+        LARGE_INTEGER frequency{};
+        QueryPerformanceFrequency(&frequency);
+        return 1.0 / static_cast<double>(frequency.QuadPart);
+    }();
+    LARGE_INTEGER counter{};
+    QueryPerformanceCounter(&counter);
+    return static_cast<double>(counter.QuadPart) * secondsPerCount;
+}
 
 Charge::Charge(Part part) noexcept : part_(part), start_(Now()) {}
 

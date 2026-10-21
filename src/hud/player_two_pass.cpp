@@ -121,25 +121,13 @@ FieldTargets                                         g_fieldTargetsLogged{static
 unsigned                                             g_mask               = 511;  // SetPlayerTwoLeversMask
 std::array<double, kParts>                           g_partSeconds{};
 std::uint32_t                                        g_timedFrames     = 0;
-double                                               g_secondsPerCount = 0.0;
 
 bool Acts(Lever lever) noexcept
 {
     return (g_mask & lever) != 0;
 }
 
-double Now() noexcept
-{
-    LARGE_INTEGER counter{};
-    QueryPerformanceCounter(&counter);
-    if (g_secondsPerCount == 0.0)
-    {
-        LARGE_INTEGER frequency{};
-        QueryPerformanceFrequency(&frequency);
-        g_secondsPerCount = 1.0 / static_cast<double>(frequency.QuadPart);
-    }
-    return static_cast<double>(counter.QuadPart) * g_secondsPerCount;
-}
+using platform::frame_watch::Now;
 
 /// Adds the time since `start` to `part`, and returns now.
 double Charge(Part part, double start) noexcept

@@ -1,6 +1,7 @@
 #include "hud/hud_updates.h"
 
 #include "hud/marker_timers.h"
+#include "platform/frame_watch.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 
@@ -86,20 +87,7 @@ CompassFn               g_compass      = nullptr;
 
 // Game thread: seconds per update since the last TakeTimings.
 std::array<double, kSubTicks.size() + 2> g_seconds{};
-double                                   g_secondsPerCount = 0.0;
-
-double Now() noexcept
-{
-    LARGE_INTEGER counter{};
-    QueryPerformanceCounter(&counter);
-    if (g_secondsPerCount == 0.0)
-    {
-        LARGE_INTEGER frequency{};
-        QueryPerformanceFrequency(&frequency);
-        g_secondsPerCount = 1.0 / static_cast<double>(frequency.QuadPart);
-    }
-    return static_cast<double>(counter.QuadPart) * g_secondsPerCount;
-}
+using platform::frame_watch::Now;
 
 bool CallGuarded(ObjectFn function, void* object) noexcept
 {

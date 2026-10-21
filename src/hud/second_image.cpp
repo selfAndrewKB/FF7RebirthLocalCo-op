@@ -140,24 +140,12 @@ std::atomic<int> g_familyLogLines{0};
 
 // Render cost, logged every kRenderTimingFrames frames while player 2's image is on.
 constexpr std::uint32_t kRenderTimingFrames = 240;
-double        g_secondsPerCount    = 0.0;
 double        g_playerTwoSeconds   = 0.0;
 double        g_playerOneSeconds   = 0.0;
 double        g_playerOneStart     = 0.0;
 std::uint32_t g_renderTimedFrames  = 0;
 
-double Now() noexcept
-{
-    LARGE_INTEGER counter{};
-    QueryPerformanceCounter(&counter);
-    if (g_secondsPerCount == 0.0)
-    {
-        LARGE_INTEGER frequency{};
-        QueryPerformanceFrequency(&frequency);
-        g_secondsPerCount = 1.0 / static_cast<double>(frequency.QuadPart);
-    }
-    return static_cast<double>(counter.QuadPart) * g_secondsPerCount;
-}
+using platform::frame_watch::Now;
 
 using platform::CopyGuarded;
 
