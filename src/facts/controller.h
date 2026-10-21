@@ -35,7 +35,7 @@ inline constexpr std::uint32_t kControllerAutoManageCamera = 0x2D0;  // u8 bAuto
 inline constexpr std::uint32_t kControllerLeaderActions  = 0x598;  // the move-state tick calls through it unchecked
 inline constexpr std::uint32_t kPrimaryControllerByte897 = 0x897;  // written by the switch through "the primary"
 inline constexpr std::uint32_t kPrimaryControllerByte8AB = 0x8AB;
-// ActiveVehicleCoordinator (RE-p2-control-mode-object.md): the coordinator of the vehicle the controller's player rides.
+// ActiveVehicleCoordinator (RE-p2-control-mode-object.md): the coordinator of the vehicle its player rides.
 inline constexpr std::uint32_t kControllerActiveVehicle  = 0x5B8;
 
 // Functions

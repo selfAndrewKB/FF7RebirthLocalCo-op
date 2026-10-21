@@ -1,5 +1,6 @@
 #include "player_two/widget_owner.h"
 
+#include "facts/command_controller.h"
 #include "facts/hud.h"
 #include "hud/widget_opacity.h"
 #include "platform/call_redirect.h"
@@ -53,10 +54,9 @@ constexpr std::uint32_t kCellLook       = 0x9EC;  // u8
 constexpr std::uint32_t kCellLeader     = 0x9F8;  // u8
 constexpr std::uint32_t kCellType       = 0x7B8;  // u8
 constexpr std::uint32_t kCellPosition   = 0xA24;  // float x, y
-// The controller: its own record of its leader's type (written from the leader type at the end of each of
-// its ticks; for the game's controller it equals PM+0x150) and its battle HUD mode (0 out of battle).
-constexpr std::uint32_t kStoredLeaderType = 0x30;
-constexpr std::uint32_t kHudMode          = 0x540;
+// The controller's leader type and battle HUD mode (facts/command_controller.h).
+using facts::kCmdStoredLeaderType;
+using facts::kCmdHudMode;
 using facts::kUICommandController;  // the UI system's slots (facts/hud.h)
 using facts::kUIKeyGuide;
 // A key guide (logged): +0 active, +2 the option's cache, +3 shown, +0x14 mode, +4 its widget
@@ -114,9 +114,9 @@ public:
     OwnerView(std::uintptr_t controller, std::uintptr_t keyGuide) noexcept
     {
         held_ = Enter(0, kUICommandController, controller) && (keyGuide == 0 || Enter(1, kUIKeyGuide, keyGuide));
-        if (held_ && ReadAt<std::uint8_t>(controller + kHudMode) != 0)
+        if (held_ && ReadAt<std::uint8_t>(controller + kCmdHudMode) != 0)
         {
-            type_.emplace(ReadAt<std::uint8_t>(controller + kStoredLeaderType));
+            type_.emplace(ReadAt<std::uint8_t>(controller + kCmdStoredLeaderType));
             typeRefused_ = !type_->Held();
         }
     }
@@ -205,7 +205,7 @@ void WatchCell(std::uintptr_t cell, std::uintptr_t two) noexcept
         return;
     }
     const Seen now{ReadAt<std::uint8_t>(cell + kCellLook), ReadAt<std::uint8_t>(cell + kCellLeader),
-                   ReadAt<std::uint8_t>(cell + kCellType), ReadAt<std::uint8_t>(two + kStoredLeaderType)};
+                   ReadAt<std::uint8_t>(cell + kCellType), ReadAt<std::uint8_t>(two + kCmdStoredLeaderType)};
     auto& before = seen[static_cast<std::size_t>(slot)];
     if (now == before)
     {
@@ -217,7 +217,7 @@ void WatchCell(std::uintptr_t cell, std::uintptr_t two) noexcept
                      L"answered {} (player 1's controller's {}) | P2 battle HUD {}",
                      cell, slot, now.type, now.leader, now.look, ReadAt<float>(cell + kCellPosition),
                      ReadAt<float>(cell + kCellPosition + 4), now.answered,
-                     ReadAt<std::uint8_t>(one + kStoredLeaderType), ReadAt<std::uint8_t>(two + kHudMode)),
+                     ReadAt<std::uint8_t>(one + kCmdStoredLeaderType), ReadAt<std::uint8_t>(two + kCmdHudMode)),
          platform::Level::Debug);
 }
 
@@ -296,7 +296,7 @@ void PaneTick(void* pane, const void* geometry, float deltaTime) noexcept
         shown = type;
         Line(std::format(L"player 2's synergy pane ticked in player 2's view ({} time(s)); it lists type {} (player 2's "
                          L"controller's leader type {})",
-                         g_paneTicks, type, ReadAt<std::uint8_t>(two + kStoredLeaderType)),
+                         g_paneTicks, type, ReadAt<std::uint8_t>(two + kCmdStoredLeaderType)),
              platform::Level::Debug);
     }
 }

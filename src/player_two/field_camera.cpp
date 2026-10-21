@@ -1,6 +1,7 @@
 #include "player_two/field_camera.h"
 
 #include "facts/cameras.h"
+#include "facts/command_controller.h"
 #include "facts/controller.h"
 #include "platform/every.h"
 #include "platform/image.h"
@@ -48,8 +49,7 @@ CopyFn                g_engineCopy          = nullptr;
 UpdateFn              g_engineUpdate        = nullptr;
 std::uintptr_t        g_fieldVTable         = 0;
 std::uintptr_t        g_cameraManagerVTable = 0;
-// Player 2's command controller's battle HUD mode (u8; 0 out of battle).
-constexpr std::uint32_t kHudMode = 0x540;
+using facts::kCmdHudMode;
 std::atomic<unsigned> g_uiRefusals{0};  // battle updates that ran without player 2's UI context
 
 // UpdateCamera's call of the Field operator's Activate when a special camera (a shop's) first blends out: the resume
@@ -216,7 +216,8 @@ void RunAsPrimary(void* cameraManager, float deltaTime)
 {
     void*      controller = command_menu_two::Controller();
     void*      member     = generation::Member();
-    const bool battle     = controller != nullptr && member != nullptr && ReadField<std::uint8_t>(controller, kHudMode) != 0;
+    const bool battle     = controller != nullptr && member != nullptr &&
+                            ReadField<std::uint8_t>(controller, kCmdHudMode) != 0;
     std::optional<focus_scope::FocusScope> focus;
     if (battle)
     {

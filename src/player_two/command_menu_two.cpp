@@ -6,6 +6,7 @@
 #include <Unreal/UObject.hpp>
 #include <Unreal/UObjectGlobals.hpp>
 
+#include "facts/command_controller.h"
 #include "facts/hud.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
@@ -126,21 +127,20 @@ constexpr std::size_t   kKeyGuideSize   = 0x38;
 constexpr std::uint32_t kKeyGuideWidget = 0x04;
 using facts::kUICommandController;  // the UI system's slots (facts/hud.h)
 using facts::kUIKeyGuide;
-constexpr std::uint32_t  kHudMode        = 0x540;  // u8: the battle HUD mode
-// The controller's lifecycle (RE-p2-command-menu-lifecycle.md §2, §3.1): "setup done" (+0x777: Setup sets
-// it, only ResetAll clears it; while 0 no menu state can be pushed) and "setup pending" (+0x775). The
-// UI system's +0x2D1 marks a Setup deferred behind a fade.
-constexpr std::uint32_t kSetupDone     = 0x777;
-constexpr std::uint32_t kSetupPending  = 0x775;
-constexpr platform::PerBuild<std::uint32_t> kSetupDeferred = {0x2D1, 0x2D9};  // in the UI system; 1.005: EndUISystem__ClearFieldCommandSetupPending 0x1413FBB7A / SetupFieldCommandOrDefer 0x1413FBBE2 mov byte [..+2D9h],0 (EndUISystem +8 from between +0x2C0 and +0x2D0)
-constexpr std::uint32_t kMenuLayer     = 0x783;  // u8 (logged)
+using facts::kCmdHudMode;
+// The controller's lifecycle facts (facts/command_controller.h; RE-p2-command-menu-lifecycle.md §2, §3.1).
+using facts::kCmdSetupDone;
+using facts::kCmdSetupPending;
+using facts::kUISetupDeferred;
+using facts::kCmdMenuLayer;
 // What the log reads of a controller: the members (leader, ally, shortcut target, ally pick), the
 // menu widget (FWeakObjectPtr) and its back pointer to the controller, and the focus bytes (§11 of
 // RE-p2-command-menu-input.md: battle input, switching layer, +0x777, menu focus layer, ready, HUD mode).
-constexpr std::uint32_t kMembers    = 0x34;
-constexpr std::uint32_t kMenuWidget = 0x4F0;
+using facts::kCmdMembers;
+using facts::kCmdMenuWidget;
+using facts::kCmdFieldMenu;
 constexpr std::uint32_t kWidgetCtrl = 0x4E0;
-constexpr std::array<std::uint32_t, 6> kBytes{0x25C, 0x258, 0x777, 0x783, 0x5E1, 0x540};
+using facts::kCmdLogBytes;
 // UObjectBase: the class and the outer.
 constexpr std::uint32_t kObjectClass = 0x10;
 constexpr std::uint32_t kObjectOuter = 0x20;
@@ -204,7 +204,7 @@ unsigned      g_waitTicks  = 0;        // ticks counted between the paced tries
 struct Snapshot
 {
     std::array<std::int32_t, 4>          members{};
-    std::array<std::uint8_t, kBytes.size()> bytes{};
+    std::array<std::uint8_t, kCmdLogBytes.size()> bytes{};
     void*                                widget = nullptr;
     bool                                 widgetNamesUs = false;
     focus_scope::Summary                 context{};
@@ -229,7 +229,7 @@ struct Part
     std::uint32_t offset;
     bool          borrowOpacity;
 };
-constexpr std::array<Part, 3> kParts{{{kMenuWidget, true}, {0x4E8, true}, {0x62C, false}}};
+constexpr std::array<Part, 3> kParts{{{kCmdMenuWidget, true}, {kCmdFieldMenu, true}, {0x62C, false}}};
 // Render (game thread): player 1's widgets (FWeakObjectPtr, resolved again at each use: the game can
 // rebuild them) and their own opacity while player 2's pass shows player 2's.
 struct Saved
@@ -323,9 +323,10 @@ void WatchLifecycle() noexcept
 {
     const auto one = ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController);
     const auto two = reinterpret_cast<std::uintptr_t>(g_controller);
-    const std::array<std::uint8_t, 3> lifecycle{ReadAt<std::uint8_t>(one + kSetupDone),
-                                                ReadAt<std::uint8_t>(g_endUISystem + kSetupDeferred),
-                                                two != 0 ? ReadAt<std::uint8_t>(two + kSetupDone) : std::uint8_t{0xFF}};
+    const std::array<std::uint8_t, 3> lifecycle{ReadAt<std::uint8_t>(one + kCmdSetupDone),
+                                                ReadAt<std::uint8_t>(g_endUISystem + kUISetupDeferred),
+                                                two != 0 ? ReadAt<std::uint8_t>(two + kCmdSetupDone)
+                                                         : std::uint8_t{0xFF}};
     if (lifecycle != g_loggedLifecycle)
     {
         g_loggedLifecycle = lifecycle;
@@ -536,11 +537,14 @@ std::uint8_t SetupCall(void* controller, void* world) noexcept
     switch (RunSetup(world, set, refusal))
     {
         case SetupResult::Ran:
-            g_current = true;
+        {
+            g_current      = true;
+            const auto own = reinterpret_cast<std::uintptr_t>(g_controller);
             ReplayLine(std::format(L"the game's Setup made on player 2's controller too (returned {}): 777={} 783={}", set,
-                                   ReadAt<std::uint8_t>(reinterpret_cast<std::uintptr_t>(g_controller) + kSetupDone),
-                                   ReadAt<std::uint8_t>(reinterpret_cast<std::uintptr_t>(g_controller) + kMenuLayer)));
+                                   ReadAt<std::uint8_t>(own + kCmdSetupDone),
+                                   ReadAt<std::uint8_t>(own + kCmdMenuLayer)));
             break;
+        }
         case SetupResult::Refused:
             ReplayLine(std::format(L"the game's Setup NOT made on player 2's controller: {}; the join Setup follows", refusal));
             break;
@@ -574,7 +578,8 @@ void ResetAllCall(void* controller) noexcept
     {
         case SetupResult::Ran:
             ReplayLine(std::format(L"the game's ResetAll made on player 2's controller too: 777={}",
-                                   ReadAt<std::uint8_t>(reinterpret_cast<std::uintptr_t>(g_controller) + kSetupDone)));
+                                   ReadAt<std::uint8_t>(reinterpret_cast<std::uintptr_t>(g_controller) +
+                                                        kCmdSetupDone)));
             break;
         case SetupResult::Refused:
             ReplayLine(std::format(L"the game's ResetAll NOT made on player 2's controller: {}", refusal));
@@ -626,13 +631,13 @@ Snapshot Read() noexcept
     const auto ctrl = reinterpret_cast<std::uintptr_t>(g_controller);
     for (std::size_t i = 0; i < now.members.size(); ++i)
     {
-        now.members[i] = ReadAt<std::int32_t>(ctrl + kMembers + i * 4);
+        now.members[i] = ReadAt<std::int32_t>(ctrl + kCmdMembers + i * 4);
     }
-    for (std::size_t i = 0; i < kBytes.size(); ++i)
+    for (std::size_t i = 0; i < kCmdLogBytes.size(); ++i)
     {
-        now.bytes[i] = ReadAt<std::uint8_t>(ctrl + kBytes[i]);
+        now.bytes[i] = ReadAt<std::uint8_t>(ctrl + kCmdLogBytes[i]);
     }
-    now.widget = weak_object::ObjectOf(ReadAt<std::uint64_t>(ctrl + kMenuWidget));
+    now.widget = weak_object::ObjectOf(ReadAt<std::uint64_t>(ctrl + kCmdMenuWidget));
     now.widgetNamesUs = now.widget != nullptr &&
                         ReadAt<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(now.widget) + kWidgetCtrl) == ctrl;
     now.context = focus_scope::PlayerTwoContext();
@@ -866,7 +871,7 @@ void ShowOnly(int player) noexcept
     }
     const auto two = reinterpret_cast<std::uintptr_t>(g_controller);
     const auto one = ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController);
-    if (player != 1 || ReadAt<std::uint8_t>(two + kHudMode) == 0 || one == 0)
+    if (player != 1 || ReadAt<std::uint8_t>(two + kCmdHudMode) == 0 || one == 0)
     {
         return Restore();
     }
@@ -941,7 +946,7 @@ void RefocusAtJoin(std::uintptr_t one) noexcept
     {
         return;
     }
-    const auto     layer   = ReadAt<std::uint8_t>(reinterpret_cast<std::uintptr_t>(g_controller) + kMenuLayer);
+    const auto     layer   = ReadAt<std::uint8_t>(reinterpret_cast<std::uintptr_t>(g_controller) + kCmdMenuLayer);
     const wchar_t* refusal = nullptr;
     switch (InPlayerTwoScopes(refusal, [] { return command_menu_tick::RefocusMenu(g_controller); }))
     {
@@ -1002,9 +1007,9 @@ void Tick() noexcept
     // the game's current setup (player 2 joined, or was out or refused at the game's Setup). It follows the
     // game's controller: only once that one is set up and no Setup of its own is pending or deferred.
     const auto one = ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController);
-    if (one == 0 || !menu_rules::GameSetUp(one, ReadAt<std::uint8_t>(one + kSetupDone),
-                                           ReadAt<std::uint8_t>(one + kSetupPending),
-                                           ReadAt<std::uint8_t>(g_endUISystem + kSetupDeferred)))
+    if (one == 0 || !menu_rules::GameSetUp(one, ReadAt<std::uint8_t>(one + kCmdSetupDone),
+                                           ReadAt<std::uint8_t>(one + kCmdSetupPending),
+                                           ReadAt<std::uint8_t>(g_endUISystem + kUISetupDeferred)))
     {
         return;
     }

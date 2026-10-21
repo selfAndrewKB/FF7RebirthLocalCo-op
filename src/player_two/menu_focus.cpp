@@ -1,5 +1,6 @@
 #include "player_two/menu_focus.h"
 
+#include "facts/command_controller.h"
 #include "facts/hud.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -33,9 +34,8 @@ constexpr std::uint32_t kWidgetType = 0x220;
 constexpr std::uint32_t kUserWidget = 0x3A8;
 constexpr std::uint32_t kClass      = 0x10;
 constexpr std::uint32_t kName       = 0x18;
-// The controller's focus bytes: battle input (+0x25C), member selecter layer (+0x258), HUD input
-// suspended (+0x777), menu focus layer (+0x783), ready (+0x5E1), battle HUD mode (+0x540).
-constexpr std::array<std::uint32_t, 6> kControllerBytes{0x25C, 0x258, 0x777, 0x783, 0x5E1, 0x540};
+// The controller's focus bytes, as the log reads them (facts/command_controller.h).
+using facts::kCmdLogBytes;
 
 constexpr std::int32_t kMaxPath   = 16;
 constexpr std::int32_t kMaxLayers = 8;
@@ -56,7 +56,7 @@ struct Snapshot
     std::array<std::uintptr_t, kMaxPath>      path{};
     std::array<Layer, kMaxLayers>             layers{};
     std::uint8_t                              cause = 0;
-    std::array<std::uint8_t, kControllerBytes.size()> controller{};
+    std::array<std::uint8_t, kCmdLogBytes.size()> controller{};
     bool operator==(const Snapshot&) const = default;
 };
 
@@ -125,9 +125,9 @@ Snapshot Read() noexcept
         now.cause = ReadAt<std::uint8_t>(input + kFocusCause);
     }
     const auto controller = ReadAt<std::uintptr_t>(g_endUISystem + facts::kUICommandController);
-    for (std::size_t i = 0; controller != 0 && i < kControllerBytes.size(); ++i)
+    for (std::size_t i = 0; controller != 0 && i < kCmdLogBytes.size(); ++i)
     {
-        now.controller[i] = ReadAt<std::uint8_t>(controller + kControllerBytes[i]);
+        now.controller[i] = ReadAt<std::uint8_t>(controller + kCmdLogBytes[i]);
     }
     return now;
 }

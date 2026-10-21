@@ -1,5 +1,6 @@
 #include "player_two/battle_input.h"
 
+#include "facts/command_controller.h"
 #include "facts/controller.h"
 #include "facts/hud.h"
 #include "facts/in_battle.h"
@@ -42,12 +43,12 @@ constexpr std::uint32_t  kTargetSlot     = 0x258;
 constexpr std::uint32_t  kPartyManagerLeader = 0x148;
 
 // The command controller (read only, for the log): its battle-phase gates, guard mode and request array.
-constexpr std::uint32_t  kBattleHud         = 0x540;  // u8
-constexpr std::uint32_t  kBattleBlocked     = 0x541;  // u8
-constexpr std::uint32_t  kBattleReadyA      = 0x5E1;  // u8
-constexpr std::uint32_t  kBattleReadyB      = 0x782;  // u8
-constexpr std::uint32_t  kGuardMode         = 0x760;  // int32
-constexpr std::uint32_t  kRequests          = 0x570;  // TArray<int32> {data, num}
+using facts::kCmdHudMode;
+using facts::kCmdBlocked;
+using facts::kCmdReady;
+using facts::kCmdReadyB;
+using facts::kCmdGuardLatch;
+using facts::kCmdRequests;
 constexpr std::array<std::int32_t, 10> kLoggedRequests{5, 6, 12, 13, 25, 26, 32, 37, 38, 39};
 
 // A party character's battle parts (§1.4, §1.5).
@@ -222,10 +223,10 @@ void Watch(void* member, void* state) noexcept
     {
         std::uintptr_t controller = 0;
         Read(g_endUISystem + facts::kUICommandController, controller);
-        const bool battleHud  = controller != 0 && ReadAt<std::uint8_t>(controller + kBattleHud) != 0;
-        const bool blocked    = controller != 0 && ReadAt<std::uint8_t>(controller + kBattleBlocked) != 0;
-        const bool ready      = controller != 0 && (ReadAt<std::uint8_t>(controller + kBattleReadyA) != 0 ||
-                                               ReadAt<std::uint8_t>(controller + kBattleReadyB) != 0);
+        const bool battleHud  = controller != 0 && ReadAt<std::uint8_t>(controller + kCmdHudMode) != 0;
+        const bool blocked    = controller != 0 && ReadAt<std::uint8_t>(controller + kCmdBlocked) != 0;
+        const bool ready      = controller != 0 && (ReadAt<std::uint8_t>(controller + kCmdReady) != 0 ||
+                                               ReadAt<std::uint8_t>(controller + kCmdReadyB) != 0);
         const auto           memberAddress = reinterpret_cast<std::uintptr_t>(member);
         const Parts          two           = PartsOf(memberAddress);
         const std::uintptr_t system        = BattleSystem();
@@ -248,13 +249,13 @@ void Watch(void* member, void* state) noexcept
         now.hud       = battleHud;
         now.blocked   = blocked;
         now.ready     = ready;
-        now.guardMode = controller != 0 ? ReadAt<std::int32_t>(controller + kGuardMode) : 0;
+        now.guardMode = controller != 0 ? ReadAt<std::int32_t>(controller + kCmdGuardLatch) : 0;
         std::uintptr_t requests = 0;
         std::int32_t   count    = 0;
         if (controller != 0)
         {
-            Read(controller + kRequests, requests);
-            Read(controller + kRequests + 8, count);
+            Read(controller + kCmdRequests, requests);
+            Read(controller + kCmdRequests + 8, count);
         }
         for (std::size_t i = 0; i < kLoggedRequests.size(); ++i)
         {

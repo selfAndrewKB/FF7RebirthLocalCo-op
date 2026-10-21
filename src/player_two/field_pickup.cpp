@@ -1,5 +1,6 @@
 #include "player_two/field_pickup.h"
 
+#include "facts/command_controller.h"
 #include "facts/hud.h"
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
@@ -56,7 +57,7 @@ constexpr std::uint32_t  kRootModeHolder    = 0x1B8;        // read by the mode-
 constexpr std::uint32_t  kRootSlotHeldOwner = 0x210;        // -> +8: a u8 TickSlots writes (§12.1)
 constexpr std::uint32_t  kSlotHeldByte      = 0x08;
 constexpr std::uint32_t  kRootWorldItems    = 0x288;        // WorldItemMgr
-constexpr std::uint32_t  kUIEntryValue      = 0x5D0;
+using facts::kCmdOpenPending;
 constexpr std::uintptr_t kPauseMenuKey      = 0x1491E44C0;  // InputKey24 "PauseMenu" (the poll needs it not held)
 
 // The input step's gate fields in GS (§12.12 item 2): i32 each.
@@ -962,7 +963,7 @@ bool PollGate(const std::uint8_t* root, bool& slot0Only, bool& faulted) noexcept
         return false;
     }
     const auto* entries = PointerAt(reinterpret_cast<const void*>(g_uiSystem), facts::kUICommandController);
-    if (mode == kModeBlocksPoll || entries == nullptr || ReadField<std::int32_t>(entries, kUIEntryValue) >= 0)
+    if (mode == kModeBlocksPoll || entries == nullptr || ReadField<std::int32_t>(entries, kCmdOpenPending) >= 0)
     {
         return false;
     }

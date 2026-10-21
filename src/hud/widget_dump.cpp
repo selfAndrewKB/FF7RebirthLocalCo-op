@@ -13,6 +13,7 @@
 #include <Unreal/UObjectArray.hpp>
 #include <Unreal/UObjectGlobals.hpp>
 
+#include "facts/command_controller.h"
 #include "facts/hud.h"
 #include "platform/build_value.h"
 #include "platform/guarded.h"
@@ -466,13 +467,11 @@ int LogMenuSettings()
 // EndUISystem (g_EndUISystem) and the members P8.9 read: 8-byte heap pointers, weak object
 // pointers as {int32 index, int32 serial} (serial 0 = null), and one-byte flags.
 constexpr std::uint32_t  kCompassHolder    = 0x348;  // in the compass manager; its +0 is the weak widget
-// EndUISystem byte. 1.005: MasterHUD_Tick 0x140F75A05 cmp byte [rbx+2D9h],0 (1.004 0x140F37E5D [rbx+2D1h]);
-// EndUISystem__SetupFieldCommandOrDefer 0x1413FBB9C uses +0x2D9/+0x2DC (a member was inserted after +0x2A8).
-constexpr platform::PerBuild<std::uint32_t> kFieldCommandSetupPending = {0x2D1, 0x2D9};
-constexpr std::uint32_t  kCtrlCommandMenuWidget = 0x4F0;  // FieldCommandCtrl weak widgets and controller
-constexpr std::uint32_t  kCtrlFieldMenuWidget   = 0x4E8;
+using facts::kUISetupDeferred;
+using facts::kCmdMenuWidget;
+using facts::kCmdFieldMenu;
 constexpr std::uint32_t  kCtrlStoredController  = 0x558;
-constexpr std::uint32_t  kCtrlSetupTrigger      = 0x775;  // FieldCommandCtrl byte
+using facts::kCmdSetupPending;
 
 // SGameLayerManager::GetPlayerWidgetHostGeometry: IGameLayerManager vtable slot 2,
 // FGeometry* (IGameLayerManager*, FGeometry* out, ULocalPlayer*). The interface pointer is held
@@ -588,7 +587,7 @@ int LogPlayerLayers(std::uintptr_t playerHostGeometry)
 /// holder's widget, the two setup flags, and the stock per-player layer geometry each local player would get.
 int LogHudManagers(const platform::GameImage& image)
 {
-    const auto system = image.Rebase(facts::kEndUISystem, kFieldCommandSetupPending + 1);
+    const auto system = image.Rebase(facts::kEndUISystem, kUISetupDeferred + 1);
     if (!system)
     {
         platform::Log(L"hud managers: EndUISystem not located");
@@ -598,13 +597,13 @@ int LogHudManagers(const platform::GameImage& image)
     const auto compass = PointerAt(*system + facts::kUIAreaMap).value_or(0);
     const auto holder  = compass != 0 ? PointerAt(compass + kCompassHolder).value_or(0) : 0;
     platform::Log(L"hud managers: EndUISystem field-command setup pending {}; field command controller {}",
-                  Flag(*system + kFieldCommandSetupPending), ctrl != 0 ? L"present" : L"absent");
+                  Flag(*system + kUISetupDeferred), ctrl != 0 ? L"present" : L"absent");
     int lines = 1;
     if (ctrl != 0)
     {
         platform::Log(L"hud managers: field command: command menu {}; field menu {}; stored controller {}; setup trigger {}",
-                      DescribeWeak(ctrl + kCtrlCommandMenuWidget), DescribeWeak(ctrl + kCtrlFieldMenuWidget),
-                      DescribeWeak(ctrl + kCtrlStoredController), Flag(ctrl + kCtrlSetupTrigger));
+                      DescribeWeak(ctrl + kCmdMenuWidget), DescribeWeak(ctrl + kCmdFieldMenu),
+                      DescribeWeak(ctrl + kCtrlStoredController), Flag(ctrl + kCmdSetupPending));
         ++lines;
     }
     platform::Log(L"hud managers: compass holder's widget {}",
