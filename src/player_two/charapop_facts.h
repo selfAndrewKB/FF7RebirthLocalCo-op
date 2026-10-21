@@ -3,6 +3,7 @@
 // The CharaPop manager, its entries and a camera manager's pose, as the game's character LOD reads them
 // (RE-p2-charapop-per-view.md §1; IDA addresses and offsets of this build).
 
+#include "platform/angles.h"
 #include "player_two/engine_facts.h"
 #include "player_two/object_fields.h"
 
@@ -102,10 +103,9 @@ inline Camera CameraOf(const void* controller) noexcept
     {
         return camera;
     }
-    constexpr float kRadians = 3.14159265f / 180.0f;
-    const float     pitch    = pose[4] * kRadians;
-    const float     yaw      = pose[5] * kRadians;
-    camera.read              = true;
+    const float pitch = pose[4] * platform::kRadiansPerDegree;
+    const float yaw   = pose[5] * platform::kRadiansPerDegree;
+    camera.read       = true;
     for (int i = 0; i < 3; ++i)
     {
         camera.location[i] = pose[i];
@@ -140,7 +140,7 @@ inline float AngleOff(const Camera& camera, const float (&at)[3]) noexcept
     }
     float dot = (to[0] * camera.forward[0] + to[1] * camera.forward[1] + to[2] * camera.forward[2]) / length;
     dot       = dot < -1.0f ? -1.0f : dot > 1.0f ? 1.0f : dot;
-    return std::acos(dot) * 180.0f / 3.14159265f;
+    return std::acos(dot) * platform::kDegreesPerRadian;
 }
 
 }  // namespace lss::player_two::charapop

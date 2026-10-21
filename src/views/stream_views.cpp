@@ -1,5 +1,6 @@
 #include "views/stream_views.h"
 
+#include "platform/angles.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -25,7 +26,7 @@ constexpr std::uint8_t   kAddViewSlaveLocationBytes[] = {0x48, 0x89, 0x5C, 0x24,
 using AddViewSlaveLocationFn = char (*)(const float* location, const float* direction, float fovRadians,
                                         float mainPassScale, bool skipSlaveFrusta, float slaveFar, float shadowFar);
 
-constexpr float kRadiansPerDegree = 3.14159265358979f / 180.0f;
+using platform::kRadiansPerDegree;
 // 0 keeps r.MassiveEnvironment.FrustumScaleForMainPass as the game set it. A positive value is written to that cvar
 // every tick (EndGameState tick 0x140C94690), so 1.0 would halve the game's off-screen margin (2 on Windows) for good.
 constexpr float kMainPassScale    = 0.0f;

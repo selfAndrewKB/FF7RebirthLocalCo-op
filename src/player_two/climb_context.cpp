@@ -1,5 +1,6 @@
 #include "player_two/climb_context.h"
 
+#include "platform/angles.h"
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
 #include "platform/every.h"
@@ -260,7 +261,7 @@ float EdgeYaw(const void* move) noexcept
 {
     const float x = ReadField<float>(move, kEdgeRotation), y = ReadField<float>(move, kEdgeRotation + 0x4);
     const float z = ReadField<float>(move, kEdgeRotation + 0x8), w = ReadField<float>(move, kEdgeRotation + 0xC);
-    return std::atan2(2.0f * (x * y + w * z), 1.0f - 2.0f * (y * y + z * z)) * 57.295776f;
+    return platform::QuaternionYawDegrees(x, y, z, w);
 }
 
 std::uint32_t EdgeStateOf(const void* move) noexcept

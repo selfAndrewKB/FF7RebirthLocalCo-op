@@ -1,5 +1,6 @@
 #include "views/stream_view_math.h"
 
+#include "platform/angles.h"
 #include "views/minimal_view_info.h"
 
 #include <cmath>
@@ -14,7 +15,7 @@ using view_info::kLocation;
 using view_info::kPitch;
 using view_info::kYaw;
 
-constexpr float kRadiansPerDegree = 3.14159265358979f / 180.0f;
+using platform::kRadiansPerDegree;
 
 float FloatAt(const std::byte* base, std::size_t offset) noexcept
 {

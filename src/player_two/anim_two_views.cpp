@@ -1,5 +1,6 @@
 #include "player_two/anim_two_views.h"
 
+#include "platform/angles.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
@@ -81,7 +82,8 @@ constexpr std::size_t    kSecondInstruction  = 5;
 constexpr std::uintptr_t kCameraDiffDegrees  = 0x1470B99A0;  // End.Animation.SignificanceCameraDiffDegrees (60)
 constexpr platform::PerBuild<std::uint32_t> kMeshMode = {0x122A, 0x121B};  // ShouldUpdateTransform's mode (1 = angle)
 constexpr std::uint32_t  kComponentOwner     = 0xA0;
-constexpr float          kRadians            = 3.14159265f / 180.0f;
+using platform::kDegreesPerRadian;
+using platform::kRadiansPerDegree;
 
 using PassFn        = std::uintptr_t (*)(void* a, std::uintptr_t b, std::uintptr_t c, std::uintptr_t d);
 using InterfaceOfFn = void* (*)(const void* object, const void* cls);
@@ -225,7 +227,7 @@ void NoteMesh(void* mesh, float angleOne, float angleNow, const CameraCopy& two)
         return;
     }
     const auto  mode  = ReadField<std::uint8_t>(mesh, kMeshMode);
-    const float limit = (g_cameraDiff != nullptr ? *g_cameraDiff : 60.0f) * kRadians;
+    const float limit = (g_cameraDiff != nullptr ? *g_cameraDiff : 60.0f) * kRadiansPerDegree;
     const bool  byOne = mode == 1 && angleOne >= limit;
     const bool  now   = mode == 1 && angleNow >= limit;
     const int   state = mode | (byOne ? 0x100 : 0) | (now ? 0x200 : 0);
@@ -251,8 +253,8 @@ void NoteMesh(void* mesh, float angleOne, float angleNow, const CameraCopy& two)
     platform::LogDebug(L"anim tick time: {} mesh {}: mode {}, angle from player 1's camera {:.0f} deg, kept {:.0f} deg "
                        L"(limit {:.0f}); player 1's camera alone would {} its bones and bone physics; they {}",
                        owner == two.member ? L"player 2's character's" : L"player 2's mount's", NameOf(mesh), mode,
-                       angleOne / kRadians, angleNow / kRadians, limit / kRadians, byOne ? L"skip" : L"update",
-                       now ? L"are skipped" : L"update");
+                       angleOne * kDegreesPerRadian, angleNow * kDegreesPerRadian, limit * kDegreesPerRadian,
+                       byOne ? L"skip" : L"update", now ? L"are skipped" : L"update");
 }
 
 /// The game's measure of a mesh's distance and angle. Called by a mesh tick from player 1's snapshot, it measures

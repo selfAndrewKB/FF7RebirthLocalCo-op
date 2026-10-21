@@ -1,5 +1,6 @@
 #include "views/view_shape.h"
 
+#include "platform/angles.h"
 #include "views/minimal_view_info.h"
 
 #include <cmath>
@@ -54,7 +55,7 @@ HalfShape HalfOf(std::int32_t width, std::int32_t height, bool sideBySide) noexc
 
 float SplitFov(float fovDegrees, float cameraAspect, const HalfShape& half, float weight) noexcept
 {
-    constexpr float kDegreesToHalfRadians = 3.14159265f / 360.0f;
+    constexpr float kDegreesToHalfRadians = platform::kRadiansPerDegree / 2.0f;
     const bool usable = std::isfinite(fovDegrees) && fovDegrees > kMinFov && fovDegrees < kMaxFov &&
                         std::isfinite(cameraAspect) && cameraAspect >= kMinAspectRatio && cameraAspect <= kMaxAspectRatio &&
                         std::isfinite(half.aspect) && half.aspect >= kMinAspectRatio && half.aspect <= kMaxAspectRatio &&
@@ -72,14 +73,14 @@ float SplitFov(float fovDegrees, float cameraAspect, const HalfShape& half, floa
 
 float WidthRatio(float splitFovDegrees, float cameraFovDegrees) noexcept
 {
-    constexpr float kHalfAngle = 3.14159265f / 360.0f;
+    constexpr float kHalfAngle = platform::kRadiansPerDegree / 2.0f;
     const float     ratio      = std::tan(splitFovDegrees * kHalfAngle) / std::tan(cameraFovDegrees * kHalfAngle);
     return std::isfinite(ratio) && ratio > 0.0f ? ratio : 1.0f;
 }
 
 float VerticalFovDegrees(float horizontalFovDegrees, float aspect) noexcept
 {
-    constexpr float kHalfRadians = 3.14159265f / 360.0f;
+    constexpr float kHalfRadians = platform::kRadiansPerDegree / 2.0f;
     return std::atan(std::tan(horizontalFovDegrees * kHalfRadians) / aspect) / kHalfRadians;
 }
 

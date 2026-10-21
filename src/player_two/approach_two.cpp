@@ -1,5 +1,6 @@
 #include "player_two/approach_two.h"
 
+#include "platform/angles.h"
 #include "platform/call_redirect.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -96,7 +97,7 @@ float ForwardYaw(const void* transform) noexcept
 {
     const float x = ReadField<float>(transform, 0x0), y = ReadField<float>(transform, 0x4);
     const float z = ReadField<float>(transform, 0x8), w = ReadField<float>(transform, 0xC);
-    return std::atan2(2.0f * (x * y + w * z), 1.0f - 2.0f * (y * y + z * z)) * 57.295776f;
+    return platform::QuaternionYawDegrees(x, y, z, w);
 }
 
 // Game thread: the last answer logged per player (Debug on change).

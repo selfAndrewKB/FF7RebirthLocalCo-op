@@ -6,6 +6,7 @@
 #include <Unreal/CoreUObject/UObject/UnrealType.hpp>
 #include <Unreal/UObject.hpp>
 
+#include "platform/angles.h"
 #include "platform/build_value.h"
 #include "platform/every.h"
 #include "platform/guarded.h"
@@ -327,7 +328,7 @@ void ReadEntry(Sample& sample)
         s.pauseLevel        = ReadField<std::uint8_t>(mesh, kCompPauseLevel);
         s.meshLevel         = ReadField<std::uint8_t>(mesh, kCompLevel);
         sample.meshDistance = ReadField<float>(mesh, kCompDistance);
-        sample.meshAngle    = ReadField<float>(mesh, kCompAngle) * 180.0f / 3.14159265f;
+        sample.meshAngle    = ReadField<float>(mesh, kCompAngle) * platform::kDegreesPerRadian;
         s.meshVisible       = (ReadField<std::uint8_t>(mesh, kCompVisibleByte) & kCompVisibleBit) != 0;
         s.meshHiddenInGame  = (ReadField<std::uint8_t>(mesh, kCompHiddenByte) & kCompHiddenBit) != 0;
         sample.lastRender   = ReadField<float>(mesh, kCompLastRender);

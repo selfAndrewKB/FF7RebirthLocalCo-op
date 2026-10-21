@@ -3,6 +3,8 @@
 // The rides' pure decisions (player_two/chocobo_ride.h, wheelie_ride.h, shared_ride.h), tested on the host
 // (tests/ride_rules_test.cpp). The modules keep the engine reads, the scopes and the log.
 
+#include "platform/angles.h"
+
 #include <array>
 #include <cmath>
 #include <cstdint>
@@ -161,12 +163,10 @@ inline bool RequestMoves(const float (&request)[3], float epsilon) noexcept
     return !(std::fabs(request[0]) <= epsilon && std::fabs(request[1]) <= epsilon && std::fabs(request[2]) <= epsilon);
 }
 
-inline constexpr float kDegrees = 0.017453292f;
-
 /// The stick pair turned by the primary camera's yaw (degrees), as FieldSummonBody computes the world stick.
 inline std::array<float, 2> WorldStickOf(float stickX, float stickY, float yawDegrees) noexcept
 {
-    const float yaw = yawDegrees * kDegrees;
+    const float yaw = yawDegrees * platform::kRadiansPerDegree;
     return {stickY * std::cos(yaw) - stickX * std::sin(yaw), stickY * std::sin(yaw) + stickX * std::cos(yaw)};
 }
 
