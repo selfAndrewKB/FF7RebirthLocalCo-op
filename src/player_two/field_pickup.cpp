@@ -5,6 +5,7 @@
 #include "facts/field_action.h"
 #include "facts/hud.h"
 #include "facts/world.h"
+#include "platform/byte_scope.h"
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
 #include "platform/every.h"
@@ -282,6 +283,8 @@ platform::CallRedirect g_exitCall;
 platform::EntryRedirect g_request;
 bool           g_ready       = false;
 
+using Kind = platform::ByteContext::Kind;
+
 // Game thread.
 std::array<std::byte, kCopySize>               g_copy{};      // player 2's ranges (player 1's while swapped in)
 void*                                          g_copyOf  = nullptr;  // the manager the copy belongs to
@@ -415,24 +418,36 @@ private:
 
 /// Player 2's controller first in the world's controller list for one call, so "the first local player" the game asks
 /// for is player 2's; player 1's order put back after. Opens only when the list's first two entries resolve to player
-/// 1's and player 2's controllers, and restores only if they still name them swapped (a list the engine changed in
+/// 1's and player 2's controllers (two Set ranges of platform/byte_scope.h, each holding the other's entry), and
+/// restores only if the list is still where it was and names them swapped (a list the engine moved or changed in
 /// between is left alone). Game thread.
 class FirstPlayerScope
 {
 public:
     FirstPlayerScope() noexcept
     {
-        void* one = generation::PlayerOneController();
-        void* two = generation::PlayerTwoController();
-        auto* entries = Entries(two);
+        using Range = platform::ByteContext::Range;
+        void*         one     = generation::PlayerOneController();
+        void*         two     = generation::PlayerTwoController();
+        auto*         entries = Entries(two);
+        std::uint64_t first = 0, second = 0;
         if (one == nullptr || entries == nullptr || leader_scope::ObjectAt(entries) != one ||
-            leader_scope::ObjectAt(entries + 8) != two || !Swap(entries))
+            leader_scope::ObjectAt(entries + 8) != two || !platform::CopyGuarded(&first, entries, sizeof(first)) ||
+            !platform::CopyGuarded(&second, entries + 8, sizeof(second)))
         {
             return;
         }
+        const Range swapped[] = {{reinterpret_cast<std::uintptr_t>(entries), sizeof(second), Kind::Set},
+                                 {reinterpret_cast<std::uintptr_t>(entries + 8), sizeof(first), Kind::Set}};
+        if (!context_.Define(swapped))
+        {
+            return;
+        }
+        std::memcpy(context_.Value(0).data(), &second, sizeof(second));
+        std::memcpy(context_.Value(1).data(), &first, sizeof(first));
         one_  = one;
         two_  = two;
-        held_ = true;
+        held_ = context_.Open();
     }
     ~FirstPlayerScope()
     {
@@ -440,11 +455,17 @@ public:
         {
             return;
         }
-        // The list as it is now (the call may have changed it): put back only if it still names them swapped.
+        // The list as it is now (the call may have changed it): put back only if it is the same list and still
+        // names them swapped; else forgotten (nothing of the old order written anywhere).
         auto* entries = Entries(two_);
-        if (entries != nullptr && leader_scope::ObjectAt(entries) == two_ && leader_scope::ObjectAt(entries + 8) == one_)
+        if (reinterpret_cast<std::uintptr_t>(entries) == context_.RangeAt(0).live &&
+            leader_scope::ObjectAt(entries) == two_ && leader_scope::ObjectAt(entries + 8) == one_)
         {
-            Swap(entries);
+            context_.Close();
+        }
+        else
+        {
+            context_.Forget();
         }
     }
     FirstPlayerScope(const FirstPlayerScope&)            = delete;
@@ -464,27 +485,10 @@ private:
         return const_cast<std::uint8_t*>(PointerAt(world, kWorldControllers));
     }
 
-    /// Exchanges entries [0] and [1] (guarded writes; on a fault the first is written back).
-    static bool Swap(std::uint8_t* entries) noexcept
-    {
-        std::uint64_t first = 0, second = 0;
-        if (!platform::CopyGuarded(&first, entries, sizeof(first)) ||
-            !platform::CopyGuarded(&second, entries + 8, sizeof(second)) ||
-            !platform::WriteGuarded(entries, &second, sizeof(second)))
-        {
-            return false;
-        }
-        if (!platform::WriteGuarded(entries + 8, &first, sizeof(first)))
-        {
-            platform::WriteGuarded(entries, &first, sizeof(first));
-            return false;
-        }
-        return true;
-    }
-
-    void* one_  = nullptr;
-    void* two_  = nullptr;
-    bool  held_ = false;
+    platform::ByteStore<2, 2 * sizeof(std::uint64_t)> context_;
+    void*                                             one_  = nullptr;
+    void*                                             two_  = nullptr;
+    bool                                              held_ = false;
 };
 
 /// The game's visibility request; inside player 2's pass its screen test sees player 2's view (§12.13).
