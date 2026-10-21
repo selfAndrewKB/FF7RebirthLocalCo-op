@@ -38,6 +38,11 @@ public:
     /// build's table lists as moved (branch and RIP-relative distances) are not compared.
     bool BytesMatch(std::uintptr_t idaAddress, std::span<const std::uint8_t> expected) const noexcept;
 
+    /// The address the RIP-relative instruction at `idaSite` reaches: its `opcode` bytes, then a 32-bit
+    /// displacement that ends the instruction, counted from the instruction's end. Empty if the site is outside
+    /// the image, its bytes are not `opcode` (BytesMatch, this build's table included) or unreadable.
+    std::optional<std::uintptr_t> RipTarget(std::uintptr_t idaSite, std::span<const std::uint8_t> opcode) const noexcept;
+
     /// The pointer stored at an IDA address (for vtable entries), or empty if outside the image.
     std::optional<std::uintptr_t> ReadPointer(std::uintptr_t idaAddress) const noexcept;
 

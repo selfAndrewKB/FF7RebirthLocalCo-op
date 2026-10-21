@@ -1,6 +1,5 @@
 #include "renderer/async_compute.h"
 
-#include "platform/rip_relative.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -34,17 +33,10 @@ constexpr std::uint8_t   kFlagStoreBytes[]   = {0x88, 0x1D};
 /// True if the RIP-relative instruction at `site` (opcode bytes `opcode`, then a 32-bit displacement that ends the
 /// instruction) addresses `target`.
 bool Reaches(const platform::GameImage& image, std::uintptr_t site, std::span<const std::uint8_t> opcode,
-               std::uintptr_t target) noexcept
+             std::uintptr_t target) noexcept
 {
-    const auto live   = image.Rebase(site, opcode.size() + 4);
     const auto wanted = image.Rebase(target);
-    std::int32_t displacement = 0;
-    if (!live || !wanted || !image.BytesMatch(site, opcode) ||
-        !platform::CopyGuarded(&displacement, reinterpret_cast<const void*>(*live + opcode.size()), sizeof(displacement)))
-    {
-        return false;
-    }
-    return platform::RipTarget(*live, opcode.size() + sizeof(displacement), displacement) == *wanted;
+    return wanted && image.RipTarget(site, opcode) == wanted;
 }
 
 struct Live

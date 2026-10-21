@@ -1,6 +1,7 @@
 #include "platform/image.h"
 
 #include "platform/log.h"
+#include "platform/rip_relative.h"
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -118,6 +119,19 @@ bool GameImage::BytesMatch(std::uintptr_t idaAddress, std::span<const std::uint8
         return matches;
     }
     return std::memcmp(bytes.data(), expected.data(), expected.size()) == 0;
+}
+
+std::optional<std::uintptr_t> GameImage::RipTarget(std::uintptr_t idaSite, std::span<const std::uint8_t> opcode) const noexcept
+{
+    const std::size_t length = opcode.size() + sizeof(std::int32_t);
+    const auto        live   = Rebase(idaSite, length);
+    if (!live || !BytesMatch(idaSite, opcode) || !IsReadable(*live + opcode.size(), sizeof(std::int32_t)))
+    {
+        return std::nullopt;
+    }
+    std::int32_t displacement = 0;
+    std::memcpy(&displacement, reinterpret_cast<const void*>(*live + opcode.size()), sizeof(displacement));
+    return platform::RipTarget(*live, length, displacement);
 }
 
 std::span<const std::uint8_t> GameImage::EntryInstruction(std::uintptr_t idaAddress,

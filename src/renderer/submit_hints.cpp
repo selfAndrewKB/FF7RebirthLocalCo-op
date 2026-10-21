@@ -53,10 +53,8 @@ std::optional<Site> Locate(const platform::GameImage& image) noexcept
     std::int32_t   displacement = 0;
     std::uintptr_t slots[2]     = {};
     const auto     lowByte      = *lea + sizeof(kLeaOpcode);
-    if (!platform::CopyGuarded(&displacement, reinterpret_cast<const void*>(lowByte), sizeof(displacement)) ||
-        !platform::CopyGuarded(slots, reinterpret_cast<const void*>(*vtable), sizeof(slots)) ||
-        platform::RipTarget(*lea, sizeof(kLeaOpcode) + sizeof(displacement), displacement) != *vtable ||
-        slots[0] != *execute || slots[1] != *nullsub ||
+    if (image.RipTarget(kHintNodeLea, kLeaOpcode) != vtable || !platform::Read(lowByte, displacement) ||
+        !platform::Read(*vtable, slots) || slots[0] != *execute || slots[1] != *nullsub ||
         !platform::LowByteFits(displacement, kVtableStep))  // the +8 must stay in the low byte (one byte written)
     {
         return std::nullopt;

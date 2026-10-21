@@ -1,6 +1,5 @@
 #include "renderer/residency_off.h"
 
-#include "platform/rip_relative.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -10,6 +9,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <optional>
+#include <span>
 #include <system_error>
 
 namespace lss::renderer {
@@ -30,15 +30,13 @@ std::optional<std::uintptr_t> GateAddress(const platform::GameImage& image) noex
     // must reach the gate (as async_compute's Reaches does).
     constexpr std::size_t kStoreOffset = sizeof(kGateStoreBytes) - 3;
     const auto            gate         = image.Rebase(kResidencyGate);
-    const auto            site         = image.Rebase(kGateStoreSite, sizeof(kGateStoreBytes) + 4);
-    std::int32_t          displacement = 0;
-    if (!gate || !site || !image.BytesMatch(kGateStoreSite, kGateStoreBytes) ||
-        !platform::CopyGuarded(&displacement, reinterpret_cast<const void*>(*site + sizeof(kGateStoreBytes)),
-                               sizeof(displacement)))
+    const auto            store        = std::span(kGateStoreBytes).subspan(kStoreOffset);
+    if (!gate || !image.BytesMatch(kGateStoreSite, kGateStoreBytes) ||
+        image.RipTarget(kGateStoreSite + kStoreOffset, store) != gate)
     {
         return std::nullopt;
     }
-    return platform::RipTarget(*site + kStoreOffset, 3 + sizeof(displacement), displacement) == *gate ? gate : std::nullopt;
+    return gate;
 }
 
 int ReadGate(std::uintptr_t gate) noexcept
