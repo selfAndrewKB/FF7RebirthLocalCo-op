@@ -5,9 +5,11 @@
 // ResolvePartyLeaderWeakPtr reads the party manager's leader, an FWeakObjectPtr {index, serial} at
 // +0x148. While a LeaderScope lives it holds player 2's member (built and checked with the game's
 // own weak pointer functions; a zero serial is never written), so the game's leader-bound code picks,
-// corrects, clamps or tests around player 2's member. Player 1's leader is put back when it ends.
-// Game thread only.
+// corrects, clamps or tests around player 2's member. Player 1's leader is put back when it ends,
+// unless the game itself wrote the field inside the call: then the game's newer value is kept and
+// noted (a Set range of platform/byte_scope.h). Game thread only.
 
+#include "platform/byte_scope.h"
 #include "player_two/weak_object.h"
 
 #include <cstdint>
@@ -47,9 +49,8 @@ public:
     bool Held() const noexcept { return held_; }
 
 private:
-    std::uintptr_t leader_      = 0;
-    std::uint64_t  savedLeader_ = 0;
-    bool           held_        = false;
+    platform::ByteStore<1, sizeof(std::uint64_t)> context_;
+    bool                                          held_ = false;
 };
 
 /// The party manager's leader type (u8 at +0x150, read by code that wants the leader's type rather
@@ -66,9 +67,8 @@ public:
     bool Held() const noexcept { return held_; }
 
 private:
-    std::uintptr_t address_ = 0;
-    std::uint8_t   saved_   = 0;
-    bool           held_    = false;
+    platform::ByteStore<1, 1> context_;
+    bool                      held_ = false;
 };
 
 }  // namespace lss::player_two::leader_scope
