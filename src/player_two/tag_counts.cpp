@@ -39,6 +39,11 @@ bool Install(const platform::GameImage& image) noexcept
     return true;
 }
 
+bool Installed() noexcept
+{
+    return g_findId != nullptr;
+}
+
 std::optional<std::uint64_t> FirstTagOf(const void* actor) noexcept
 {
     if (actor == nullptr || ReadField<std::int32_t>(actor, facts::kActorTagsCount) <= 0)

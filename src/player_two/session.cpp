@@ -101,9 +101,9 @@ void Session::TogglePadSticks() noexcept
 
 void Session::LogTagCounts(const wchar_t* when) noexcept
 {
-    if (!installed_.tagCounts || !platform::Enabled(platform::Level::Debug))
+    if (!tag_counts::Installed() || !platform::Enabled(platform::Level::Debug))
     {
-        return;  // a snapshot (Debug): nothing is read below that level
+        return;  // a snapshot (Debug, dev tools): nothing is read below that level
     }
     const auto counts = tag_counts::Read(member_);
     const auto text   = [](const std::optional<std::int32_t>& count) {
@@ -544,7 +544,9 @@ void Session::FollowSlot(const wchar_t* when) noexcept
     {
         return;
     }
-    const auto choice = party_member::ChooseSlot(playerOneController_, false);
+    // Logged: the party order after the game's apply is the one Info line a field report needs for a hand-over
+    // question (the handover watch, which listed the whole order, is a dev tool now).
+    const auto choice = party_member::ChooseSlot(playerOneController_);
     const auto held   = party_member::PlayerTypeOf(member_);
     if (choice.wait == party_member::SlotWait::NoSlot || !held || choice.type == *held)
     {

@@ -90,31 +90,24 @@ add_library(LocalSplitScreen SHARED
     src/player_two/switch_volume_two.cpp
     src/player_two/trigger_two.cpp
     src/player_two/vault_camera.cpp
-    src/player_two/framing_watch.cpp
     src/player_two/location_rows.cpp
     src/player_two/shoulder_scale.cpp
     src/player_two/walk_limits.cpp
-    src/player_two/handover_watch.cpp
     src/player_two/field_pickup.cpp
-    src/player_two/rumble_watch.cpp
     src/player_two/pad_rumble.cpp
     src/player_two/combat_rumble.cpp
     src/player_two/vending.cpp
     src/player_two/interact_watch.cpp
-    src/player_two/charapop_watch.cpp
     src/player_two/charapop_facts.cpp
     src/player_two/charapop_near.cpp
     src/player_two/charapop_centre.cpp
     src/player_two/world_actor_reach.cpp
-    src/player_two/ride_watch.cpp
     src/player_two/chocobo_ride.cpp
     src/player_two/chocobo_climb.cpp
     src/player_two/shared_ride.cpp
     src/player_two/wheelie_ride.cpp
-    src/player_two/wheelie_watch.cpp
     src/hud/minimap.cpp
     src/hud/minimap_labels.cpp
-    src/hud/label_relayouts.cpp
     src/hud/minimap_icons.cpp
     src/hud/label_states.cpp
     src/player_two/party_warp.cpp
@@ -138,7 +131,6 @@ add_library(LocalSplitScreen SHARED
     src/player_two/target_coin.cpp
     src/player_two/leave_watch.cpp
     src/player_two/command_rules.cpp
-    src/player_two/menu_focus.cpp
     src/player_two/focus_scope.cpp
     src/player_two/command_menu_two.cpp
     src/player_two/command_menu_tick.cpp
@@ -159,7 +151,6 @@ add_library(LocalSplitScreen SHARED
     src/player_two/session_join.cpp
     src/player_two/stick_select.cpp
     src/player_two/swap_window.cpp
-    src/player_two/tag_counts.cpp
     src/player_two/view_target.cpp
     src/player_two/widget_owner.cpp
 
@@ -174,7 +165,6 @@ add_library(LocalSplitScreen SHARED
     src/renderer/family_boundary.cpp
     src/renderer/me_feedback_once.cpp
     src/renderer/submit_hints.cpp
-    src/renderer/submission_census.cpp
     src/renderer/async_compute.cpp
     src/renderer/before_device.cpp
     src/renderer/residency_off.cpp
@@ -199,7 +189,9 @@ target_compile_features(LocalSplitScreen PRIVATE cxx_std_20)
 target_link_libraries(LocalSplitScreen PUBLIC UE4SS)
 
 # Development tools (src/dev/dev_tools.h): the control-script channel, the HUD trace, the position
-# probe and the dump commands. Off for a player's build: -DLSS_DEV_TOOLS=OFF.
+# probe, the dump commands, and the watches that only log (installed and ticked by dev_tools.cpp; a
+# header a shipped module includes carries empty stubs for the build without them). Off for a player's
+# build: -DLSS_DEV_TOOLS=OFF.
 option(LSS_DEV_TOOLS "Build the development tools into the mod" ON)
 if(LSS_DEV_TOOLS)
     target_sources(LocalSplitScreen PRIVATE
@@ -212,6 +204,16 @@ if(LSS_DEV_TOOLS)
         src/hud/hud_trace.cpp
         src/hud/position_probe.cpp
         src/hud/widget_dump.cpp
+        src/hud/label_relayouts.cpp
+        src/player_two/charapop_watch.cpp
+        src/player_two/framing_watch.cpp
+        src/player_two/handover_watch.cpp
+        src/player_two/menu_focus.cpp
+        src/player_two/ride_watch.cpp
+        src/player_two/rumble_watch.cpp
+        src/player_two/tag_counts.cpp
+        src/player_two/wheelie_watch.cpp
+        src/renderer/submission_census.cpp
     )
     target_compile_definitions(LocalSplitScreen PRIVATE LSS_DEV_TOOLS=1)
 else()

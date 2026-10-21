@@ -705,7 +705,6 @@ bool Install(const platform::GameImage& image) noexcept
                       L"pieces (the maps flicker when the players are apart)");
     }
     minimap_labels::Install(image);  // optional: without it, each pass lays the labels out again (logged)
-    label_relayouts::Install(image);  // logging: which text blocks relayout, where and why
     minimap_icons::Prepare(image);    // optional: placed from the game thread (Tick); without it the icons churn
     return true;
 }
@@ -713,7 +712,6 @@ bool Install(const platform::GameImage& image) noexcept
 void Remove() noexcept
 {
     minimap_labels::Remove();  // player 1's label states back first (on the game thread)
-    label_relayouts::Remove();
     minimap_icons::Remove();
     g_frameActive          = false;
     g_fields.playerTwoName = 0;
@@ -771,7 +769,7 @@ void Tick(bool splitShown) noexcept
         g_pieceCentreKnown[0] = g_pieceCentreKnown[1] = false;  // a later split starts from fresh centres
     }
     minimap_labels::Tick(g_frameActive);  // with player 2's minimap off, every label keeps player 1's state only
-    label_relayouts::Tick(g_frameActive);
+    label_relayouts::Tick(g_frameActive);  // the relayout watch (dev tools; empty in a player's build)
     minimap_icons::Tick(g_frameActive);  // off: the icons only player 2 kept are removed by the next run, as the game does
     if (why != g_lastWhy)
     {

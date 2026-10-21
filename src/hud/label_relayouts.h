@@ -1,6 +1,8 @@
 #pragma once
 
 // Which text blocks the game lays out again, where in the frame, and why (logging only; RE-perf-solo-vs-split §12).
+// A dev tool: dev/dev_tools.h installs it; the minimap modules mark the scopes and tick it through the stubs below
+// in a player's build.
 //
 // The 2026-10-04 capture found two text relayouts every frame in player 2's HUD pass (5.7 ms a frame on the game
 // thread): one in player 2's minimap holder run, through the game's SetText, and one in player 2's overlay paint. This
@@ -28,13 +30,6 @@ enum class Scope : unsigned char
     PlayerTwoPaint,  // player 2's overlay render
 };
 
-/// Replaces the text block's Tick slot. Logs either way; without it only SetText relayouts are counted.
-bool Install(const platform::GameImage& image) noexcept;
-void Remove() noexcept;
-
-/// Where the frame is (hud/minimap.cpp and minimap_labels around the runs and player 2's paint).
-void SetScope(Scope scope) noexcept;
-
 /// What the text block held before the game's SetText.
 struct Before
 {
@@ -45,11 +40,31 @@ struct Before
     bool          locked = false;    // +0x564: the relayout only marks itself pending
 };
 
+#if defined(LSS_DEV_TOOLS) && LSS_DEV_TOOLS
+
+/// Replaces the text block's Tick slot. Logs either way; without it only SetText relayouts are counted.
+bool Install(const platform::GameImage& image) noexcept;
+void Remove() noexcept;
+
+/// Where the frame is (hud/minimap.cpp and minimap_labels around the runs and player 2's paint).
+void SetScope(Scope scope) noexcept;
+
 /// minimap_labels' SetText redirect, around the game's SetText (`text` is the FString* it passes).
 Before BeforeSetText(const void* textBlock, const void* text) noexcept;
 void   AfterSetText(const void* textBlock, const Before& before, bool playerTwoState) noexcept;
 
 /// Each engine tick (hud/minimap.cpp): whether player 2 plays, and the 5-second lines.
 void Tick(bool watch) noexcept;
+
+#else
+
+inline bool   Install(const platform::GameImage&) noexcept { return false; }
+inline void   Remove() noexcept {}
+inline void   SetScope(Scope) noexcept {}
+inline Before BeforeSetText(const void*, const void*) noexcept { return {}; }
+inline void   AfterSetText(const void*, const Before&, bool) noexcept {}
+inline void   Tick(bool) noexcept {}
+
+#endif
 
 }  // namespace lss::hud::label_relayouts

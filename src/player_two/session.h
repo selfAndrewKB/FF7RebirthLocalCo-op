@@ -187,7 +187,6 @@ private:
         bool cameraUpdate   = false;
         bool moveCensus     = false;
         bool padSticks      = false;
-        bool tagCounts      = false;
         bool viewTarget     = false;
         bool memberMovement = false;
         bool scopeLeaks     = false;

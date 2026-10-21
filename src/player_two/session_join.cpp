@@ -14,7 +14,6 @@
 #include "player_two/command_menu_tick.h"
 #include "player_two/command_menu_two.h"
 #include "player_two/command_rules.h"
-#include "player_two/menu_focus.h"
 #include "player_two/field_exit.h"
 #include "player_two/lock_on.h"
 #include "player_two/party_events.h"
@@ -30,7 +29,6 @@
 #include "player_two/pad_sticks.h"
 #include "player_two/primary_controller.h"
 #include "player_two/scope_leaks.h"
-#include "player_two/tag_counts.h"
 #include "player_two/view_target.h"
 #include "player_two/wheelie_ride.h"
 #include "player_two/widget_owner.h"
@@ -119,7 +117,6 @@ void Session::InstallStages(const platform::GameImage& image) noexcept
     camera_distance::Install(image);  // the Options camera distance reaches player 2's camera too (logged)
     installed_.padSticks     = installed_.primary && pad_sticks::Install(image);
     installed_.moveCensus    = move_state::Install(image);
-    installed_.tagCounts     = tag_counts::Install(image);
     installed_.viewTarget    = view_target::Install(image);
     installed_.scopeLeaks    = scope_leaks::Install(image);
     installed_.padButtons    = pad_buttons::Install(image);
@@ -140,7 +137,6 @@ void Session::InstallStages(const platform::GameImage& image) noexcept
     party_switch::Install(image);  // player 1's switch skips player 2's member (logged)
     command_rules::Install(image); // player 1 cannot command player 2's member (logged)
     battle_warp_two::Install(image); // battles leave player 2's member where it is, start and end (logged)
-    menu_focus::Install(image);    // player 1's UI focus logged on change (read-only)
     command_menu_two::Install(image); // player 2's command controller, built; follows the game's Setup/ResetAll (logged)
     command_locks::Install(image);    // the battle's command locks reach it through the game's setters (logged)
     command_menu_tick::Install(image); // ticked in battle; player 2's attack, guard and dodge through it (logged)
@@ -154,7 +150,6 @@ void Session::InstallStages(const platform::GameImage& image) noexcept
     LogStage(L"per-pad sticks (on; Ctrl+F9 switches)", installed_.padSticks);
     LogStage(L"member movement (with per-pad sticks)", installed_.memberMovement);
     LogStage(L"movement census", installed_.moveCensus);
-    LogStage(L"tag counts (log only)", installed_.tagCounts);
     LogStage(L"scope leaks put back", installed_.scopeLeaks);
     LogStage(L"per-pad buttons (logging only)", installed_.padButtons);
     LogStage(L"party events (the game's leader and status changes)", installed_.partyEvents);
@@ -167,7 +162,6 @@ void Session::RemoveStages() noexcept
     command_menu_tick::Remove();
     command_locks::Remove();
     command_menu_two::Remove();
-    menu_focus::Remove();
     battle_warp_two::Remove();
     command_rules::Remove();
     party_switch::Remove();

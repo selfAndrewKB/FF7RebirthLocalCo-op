@@ -1,7 +1,8 @@
 #pragma once
 
 // Logging only: where each player controller's force feedback goes, pad by pad, frame by frame
-// (RE-p2-rumble.md §6; plan, "Per-pad rumble").
+// (RE-p2-rumble.md §6; plan, "Per-pad rumble"). A dev tool (dev/dev_tools.h installs it; a player's build has the
+// empty stubs below): the only view of the per-pad device writes.
 //
 // The stock path is per controller: each PC's ProcessForceFeedbackAndHaptics sends its own values with its own
 // ControllerId through the PC's vt+0xC90 send. Square's platform layer then turns ControllerId 0 into the "last active
@@ -22,10 +23,19 @@ class GameImage;
 
 namespace lss::player_two::rumble_watch {
 
+#if defined(LSS_DEV_TOOLS) && LSS_DEV_TOOLS
+
 /// Wraps the two entries (each checked). Logged.
 void Install(const platform::GameImage& image) noexcept;
 
 /// The controller's active force-feedback effects (APlayerController::ActiveForceFeedbackEffects.Num), or -1.
 std::int32_t EffectCount(const void* controller) noexcept;
+
+#else
+
+inline void         Install(const platform::GameImage&) noexcept {}
+inline std::int32_t EffectCount(const void*) noexcept { return -1; }
+
+#endif
 
 }  // namespace lss::player_two::rumble_watch

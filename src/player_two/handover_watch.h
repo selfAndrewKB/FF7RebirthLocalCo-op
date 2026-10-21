@@ -1,7 +1,9 @@
 #pragma once
 
 // Logs, read-only, what the member choice and the hand-over need (RE-p2-party-order.md §6,
-// RE-p2-member-handover.md §7):
+// RE-p2-member-handover.md §7); a dev tool (dev/dev_tools.h installs and ticks it; a player's build has the empty
+// stubs below, and keeps the party-order Info line through party_member::ChooseSlot's own log at the session's
+// party-change check):
 //   - the deployed party's order (the battle-member list the party panel shows), the field leader and
 //     the member the 2nd-slot rule would give player 2, beside the member player 2 holds: at each game
 //     party change and whenever the watch sees the order change;
@@ -21,6 +23,8 @@ class GameImage;
 
 namespace lss::player_two::handover_watch {
 
+#if defined(LSS_DEV_TOOLS) && LSS_DEV_TOOLS
+
 /// Finds the party reads; logged either way. False if a check failed (nothing is logged then).
 bool Install(const platform::GameImage& image) noexcept;
 
@@ -33,5 +37,14 @@ void Snapshot(const wchar_t* when, void* member) noexcept;
 
 /// Each engine tick, after the session's.
 void Tick() noexcept;
+
+#else
+
+inline bool Install(const platform::GameImage&) noexcept { return false; }
+inline void PartyOrder(const wchar_t*, const void*) noexcept {}
+inline void Snapshot(const wchar_t*, void*) noexcept {}
+inline void Tick() noexcept {}
+
+#endif
 
 }  // namespace lss::player_two::handover_watch

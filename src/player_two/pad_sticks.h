@@ -66,9 +66,12 @@ inline constexpr unsigned kPartPlayerOneDetect = 8;
 void SetMask(unsigned mask) noexcept;
 bool PartActs(unsigned part) noexcept;
 
-/// Logging: pad `controllerId`'s own left and right trigger from the game's per-pad records (the most pressed over the
-/// banks the game merges), whatever any scope holds. False when no record could be read. Game thread.
+#if defined(LSS_DEV_TOOLS) && LSS_DEV_TOOLS
+/// Logging (the Wheelie watch, a dev tool): pad `controllerId`'s own left and right trigger from the game's per-pad
+/// records (the most pressed over the banks the game merges), whatever any scope holds. False when no record could be
+/// read. Game thread.
 bool PadTriggers(std::int32_t controllerId, float& left, float& right) noexcept;
+#endif
 
 /// The controller id of the local player a controller belongs to, or -1.
 std::int32_t ControllerIdOf(const void* controller) noexcept;

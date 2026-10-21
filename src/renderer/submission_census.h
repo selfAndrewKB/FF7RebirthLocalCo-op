@@ -1,6 +1,7 @@
 #pragma once
 
-// Diagnosis: a census of the game's GPU submissions (RE-perf-submission-census.md; the parent doc's §7).
+// Diagnosis: a census of the game's GPU submissions (RE-perf-submission-census.md; the parent doc's §7). A dev tool
+// (dev/dev_tools.h; a player's build has the empty stubs below).
 //
 // The GPU idles ~5 % of a split frame with work queued, and removing submissions is what has paid (the gap recorder,
 // the parallel passes' submit hints). This counts every ExecuteCommandLists the engine makes, per frame: which code
@@ -17,6 +18,8 @@
 
 namespace lss::renderer {
 
+#if defined(LSS_DEV_TOOLS) && LSS_DEV_TOOLS
+
 /// Game thread: installs the hooks (logs what it found). True if the submit wrapper is in.
 bool InstallSubmissionCensus() noexcept;
 
@@ -30,5 +33,15 @@ bool SubmissionCensusInstalled() noexcept;
 
 /// Game thread, from the perf log's window: one summary of the window (per frame), then a new window.
 void LogSubmissionCensus() noexcept;
+
+#else
+
+inline bool InstallSubmissionCensus() noexcept { return false; }
+inline void InstallSubmissionCensusIfAsked() noexcept {}
+inline void RemoveSubmissionCensus() noexcept {}
+inline bool SubmissionCensusInstalled() noexcept { return false; }
+inline void LogSubmissionCensus() noexcept {}
+
+#endif
 
 }  // namespace lss::renderer

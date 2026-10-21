@@ -39,13 +39,10 @@
 #include "player_two/main_camera_shape.h"
 #include "player_two/camera_distance.h"
 #include "player_two/camera_repair.h"
-#include "player_two/framing_watch.h"
 #include "player_two/location_rows.h"
 #include "player_two/shoulder_scale.h"
 #include "player_two/walk_limits.h"
-#include "player_two/handover_watch.h"
 #include "player_two/field_pickup.h"
-#include "player_two/rumble_watch.h"
 #include "player_two/pad_rumble.h"
 #include "player_two/attack_cameras.h"
 #include "player_two/attack_framing.h"
@@ -58,7 +55,6 @@
 #include "player_two/shop_talk.h"
 #include "player_two/vending.h"
 #include "player_two/interact_watch.h"
-#include "player_two/charapop_watch.h"
 #include "player_two/chocobo_climb.h"
 #include "player_two/climb_context.h"
 #include "player_two/approach_two.h"
@@ -68,10 +64,8 @@
 #include "player_two/charapop_near.h"
 #include "player_two/charapop_centre.h"
 #include "player_two/world_actor_reach.h"
-#include "player_two/ride_watch.h"
 #include "player_two/shared_ride.h"
 #include "player_two/wheelie_ride.h"
-#include "player_two/wheelie_watch.h"
 #include "player_two/pad_sticks.h"
 #include "player_two/chocobo_ride.h"
 #include "player_two/nav_strand.h"
@@ -98,7 +92,6 @@
 #include "renderer/async_compute.h"
 #include "renderer/family_boundary.h"
 #include "renderer/me_feedback_once.h"
-#include "renderer/submission_census.h"
 #include "renderer/submit_hints.h"
 #include "renderer/residency_off.h"
 #include "renderer/view_family_submission.h"
@@ -269,7 +262,6 @@ public:
         lss::hud::RemoveOverlayLayout();
         lss::renderer::RemoveMeFeedbackOnce();
         lss::renderer::RemoveSubmitHintSkip();
-        lss::renderer::RemoveSubmissionCensus();
         if (rendererInstalled_)
         {
             lss::renderer::RemoveViewFamilySubmission();
@@ -351,7 +343,6 @@ public:
         session_.emplace(*removeLocalPlayer);
         session_->InstallStages(*image);
         lss::renderer::InstallSubmitHintSkip();  // parallel passes without their own GPU submission (player 2 in)
-        lss::renderer::InstallSubmissionCensusIfAsked();  // diagnosis: census.txt
         lss::renderer::InstallMeFeedbackOnce(*image);  // one scenery-streaming hand-in per frame, player 1's family's
 
         // The view-point entry serves the filled halves and the choice of player 2's camera. The
@@ -392,22 +383,16 @@ public:
         lss::hud::InstallSecondImage(*image);        // player 2's HUD image, on (the hud-image command switches it)
         lss::hud::InstallMinimapOnce(*image);        // the minimap's map rendered by player 1's pass only
         lss::hud::minimap::Install(*image);      // player 2's minimap in player 2's half
-        lss::player_two::framing_watch::Install(*image);  // each player's field-camera framing, logged (read-only)
         lss::player_two::location_rows::Install(*image);  // each camera's location rows from its own player
         lss::player_two::shoulder_scale::Install(*image);  // each half's shoulder offset scaled to its width
         lss::player_two::walk_limits::Install(*image);     // player 2's walk limits from player 2's own surroundings
-        lss::player_two::handover_watch::Install(*image);  // the party order and the members' AI at hand-overs, logged
-        lss::player_two::charapop_watch::Install(*image);  // the character detail near player 2, logged (read-only)
         lss::player_two::charapop_near::Install(*image);   // characters near player 2 keep the detail player 2's view gives them
         lss::player_two::charapop_centre::Install(*image); // the NPC population follows both players (Ctrl+F10 compares)
         lss::player_two::world_actor_reach::Install(*image); // world actors such as chests pop around player 2 too
-        lss::player_two::ride_watch::Install(*image);      // chocobo and buggy rides, logged (read-only)
         lss::player_two::chocobo_ride::Install(*image);    // player 2 drives their own chocobo while the party rides
         lss::player_two::shared_ride::Install(*image);     // the buggy and the bronco: player 2 stands aside, every pad drives
-        lss::player_two::wheelie_watch::Install(*image);   // the Wheelie system, logged (read-only)
         lss::player_two::wheelie_ride::Install(*image);    // player 2 boards a Wheelie of their own by walking into it
         lss::player_two::field_pickup::Install(*image);    // player 2's pickups: a second pass of the game's prompts
-        lss::player_two::rumble_watch::Install(*image);    // logging only: each controller's rumble, pad by pad
         lss::player_two::pad_rumble::Install(*image);      // each player's rumble on their own pad
         lss::player_two::combat_rumble::Install(*image);   // player 2's combat rumble (hits, montage notifies) on player 2's pad
         lss::player_two::rumble_list_two::Install(*image);  // the traversal rumble list per player (zip line, chocobo, ropes)
@@ -435,7 +420,9 @@ public:
         lss::hud::area_icons_two::Install(*image);   // player 2's own map icons and markers
         lss::hud::target_views::Install(*image);     // each half's cursor and enemy gauges follow its player's target
 
-        lss::dev::Install(*image, *session_, layout_, singleView_, viewPointInstalled_);  // built with LSS_DEV_TOOLS only
+        // The dev tools (built with LSS_DEV_TOOLS only): the control channel, the HUD trace and probe, and the watches
+        // that only log (dev/dev_tools.h names them); a player's build has none of them.
+        lss::dev::Install(*image, *session_, layout_, singleView_, viewPointInstalled_);
 
         const Hook::FCallbackOptions tickOptions{false, false, STR("LocalSplitScreen"), STR("player intent")};
         tickCallback_ = Hook::RegisterEngineTickPreCallback(
@@ -613,7 +600,6 @@ private:
         lss::views::third_view::Tick(session_->HasPlayerTwo());  // leaves with player 2; follows player 1's view target
         lss::views::window_span::Tick(session_->HasPlayerTwo());  // leaves with player 2; holds the window's rect
         lss::player_two::walk_limits::Tick();  // after the session's tick: a take's copy is overwritten this frame
-        lss::player_two::handover_watch::Tick();
 
         // Player 1's single view for the game's whole-screen states (players/single_view.h), and while
         // player 2 waits for a member (only player 1 plays then; the user's decision, 2026-10-01): while
@@ -638,14 +624,11 @@ private:
         lss::player_two::chocobo_climb::Tick();  // player 2's climb camera's states and the summary (Debug)
         lss::player_two::camera_distance::TickFraming(playerTwoIn);  // per-layout distance steps (roadmap 2b)
         lss::player_two::shoulder_scale::Poll(splitShown);
-        lss::player_two::framing_watch::Tick(splitShown);
-        lss::player_two::charapop_watch::Tick(splitShown);
         lss::player_two::anim_two_views::Tick(splitShown);  // its frame count, before the world tick
         lss::player_two::charapop_near::Tick(splitShown, session_->PlaysMember());
         lss::player_two::charapop_centre::Tick(splitShown, session_->PlaysMember());
         lss::player_two::world_actor_reach::Tick(session_->PlaysMember());
-        lss::player_two::ride_watch::Tick();
-        lss::player_two::wheelie_watch::Tick();
+        lss::dev::TickWatches(splitShown);  // the dev-only watches, after the levers they observe (empty in a player's build)
         lss::hud::minimap::Tick(splitShown);  // outside the overlay render, before it
         if (wholeScreen_)
         {
