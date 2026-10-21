@@ -1,6 +1,7 @@
 #include "player_two/lock_on.h"
 
 #include "facts/controller.h"
+#include "facts/engine.h"
 #include "facts/hud.h"
 #include "facts/in_battle.h"
 #include "platform/build_value.h"
@@ -46,9 +47,6 @@ constexpr std::uint8_t kSetLockBytes[]       = {0xB8, 0x98, 0x00, 0x00, 0x00, 0x
 constexpr std::uint8_t kMenuSelectBytes[]    = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xC6, 0xF9, 0x41, 0x01};
 constexpr std::uint8_t kMenuBusyBytes[]      = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xFE, 0xF9, 0x41, 0x01,
                                                 0x48, 0x2B, 0xE0, 0xE8, 0x06, 0x74, 0xB7, 0xFF};
-constexpr std::uint8_t kReleaseBytes[]       = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x26, 0x74, 0x82, 0x01};
-constexpr std::uint8_t kWeakReleaseBytes[]   = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x46, 0x74, 0x82, 0x01,
-                                                0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x49, 0x08};
 constexpr std::uint8_t kPanelClearedBytes[]  = {0x40, 0x53, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8, 0xA0,
                                                 0x84, 0x6D, 0xFE, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9};
 constexpr std::uint8_t kPanelSetBytes[]      = {0x40, 0x53, 0xB8, 0x50, 0x00, 0x00, 0x00, 0xE8, 0xF4, 0xA3, 0x6E,
@@ -66,8 +64,6 @@ constexpr platform::FunctionFact kTickTargeting{L"BattleTarget_TickTargeting", 0
 constexpr platform::FunctionFact kSetLock{L"BattleTarget_SetLockMode8C", 0x14189B358, kSetLockBytes};
 constexpr platform::FunctionFact kMenuSelect{L"BattleTarget_IsMenuTargetSelectOpen", 0x140C8F560, kMenuSelectBytes};
 constexpr platform::FunctionFact kMenuBusy{L"BattleTarget_IsMenuTargetSelectBusy", 0x140C8F528, kMenuBusyBytes};
-constexpr platform::FunctionFact kRelease{L"TRefCtrlTS__ReleaseWeakRef", 0x140887B00, kReleaseBytes};
-constexpr platform::FunctionFact kWeakRelease{L"TWeakPtrTS__Release", 0x140887AE0, kWeakReleaseBytes};
 constexpr platform::FunctionFact kPanelCleared{L"EndUI4_QueueTargetCleared", 0x1439D6A84, kPanelClearedBytes};
 constexpr platform::FunctionFact kPanelSet{L"EndUI4_QueueTargetSet", 0x1439C4B30, kPanelSetBytes};
 constexpr platform::FunctionFact kMarkerName{L"EndUI__MarkerList_SetTargetOwnerName", 0x140C8E828, kMarkerNameBytes};
@@ -740,8 +736,8 @@ bool Install(const platform::GameImage& image) noexcept
     {
         g_targetList = reinterpret_cast<TestFn>(find(kTargetList));
     }
-    g_release       = reinterpret_cast<ReleaseFn>(find(kRelease));
-    g_weakRelease   = reinterpret_cast<WeakReleaseFn>(find(kWeakRelease));
+    g_release       = reinterpret_cast<ReleaseFn>(find(facts::kReleaseWeakReference));
+    g_weakRelease   = reinterpret_cast<WeakReleaseFn>(find(facts::kWeakPtrRelease));
     g_cursorRelease = reinterpret_cast<CursorFn>(find(kCursorRelease));
     g_deactivate    = reinterpret_cast<LayerFn>(find(kDeactivate));
     g_moduleOn      = reinterpret_cast<LayerTestFn>(find(kModuleOn));

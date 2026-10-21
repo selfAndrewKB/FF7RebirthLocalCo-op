@@ -1,6 +1,7 @@
 #include "player_two/anim_two_views.h"
 
 #include "facts/controller.h"
+#include "facts/engine.h"
 #include "platform/angles.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
@@ -38,7 +39,6 @@ namespace {
 // 1.004 addresses; 1.005 through replaced-anim-two-views.json (every call site and function read from both exes).
 constexpr std::uintptr_t kAnimWorld   = 0x14939BC48;  // the animation world manager W
 constexpr std::uintptr_t kClearCall   = 0x140A32B57;  // PropagateLinkedActorCamDist's last call: its arrays are refilled
-constexpr std::uintptr_t kClearTarget = 0x14079F7F0;  // ME_FreeResourceBindingArray
 constexpr std::uintptr_t kEvalCall    = 0x141001E92;  // AnimBudgetAllocator_Tick_SE: the parallel evaluation
 constexpr std::uintptr_t kEvalTarget  = 0x1410025A0;  // ParallelFor_Wrapper
 constexpr std::uintptr_t kGrowCall    = 0x140A32B0A;  // the game's own append: `mov rcx, array; call TArray8_ResizeGrow`
@@ -467,7 +467,7 @@ void Install(const platform::GameImage& image) noexcept
     g_interfaceOf = reinterpret_cast<InterfaceOfFn>(*iface);
     g_measure     = reinterpret_cast<MeasureFn>(*meas);
     g_grow        = reinterpret_cast<GrowFn>(grow);
-    const bool refill = g_clearCall.InstallResearch(image, kClearCall, kClearTarget,
+    const bool refill = g_clearCall.InstallResearch(image, kClearCall, facts::kFreeArrayData.address,
                                                     reinterpret_cast<std::uintptr_t>(&Refilled));
     const bool eval   = refill && g_evalCall.InstallResearch(image, kEvalCall, kEvalTarget,
                                                              reinterpret_cast<std::uintptr_t>(&Evaluate));

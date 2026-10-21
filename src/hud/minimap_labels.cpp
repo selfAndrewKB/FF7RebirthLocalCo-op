@@ -1,5 +1,6 @@
 #include "hud/minimap_labels.h"
 
+#include "facts/engine.h"
 #include "hud/label_relayouts.h"
 #include "hud/label_states.h"
 #include "platform/build_value.h"
@@ -8,6 +9,7 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/verified_code.h"
 #include "player_two/generation.h"
 
 #include <atomic>
@@ -61,9 +63,6 @@ constexpr std::uintptr_t kDtorQuadsLea        = 0x14098E221;  // lea rcx,[rbx+5A
 constexpr std::uint8_t   kDtorQuadsLeaBytes[] = {0x48, 0x8D, 0x8B, 0xA0, 0x05, 0x00, 0x00};
 constexpr std::uintptr_t kDtorRunsLea         = 0x14098E25D;  // lea rcx,[rbx+530h]
 constexpr std::uint8_t   kDtorRunsLeaBytes[]  = {0x48, 0x8D, 0x8B, 0x30, 0x05, 0x00, 0x00};
-constexpr std::uintptr_t kFreeString          = 0x14079F7F0;  // if (data) FMemory::Free(data)
-constexpr std::uint8_t   kFreeStringBytes[]   = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x36, 0xF7,
-                                                 0x90, 0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x09};
 constexpr std::uintptr_t kReleaseWeak         = 0x140C29AAC;  // RefController_ReleaseWeakReference
 constexpr std::uint8_t   kReleaseWeakBytes[]  = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x7A, 0x54,
                                                  0x48, 0x01, 0x48, 0x2B, 0xE0, 0x83, 0x69, 0x0C};
@@ -344,13 +343,13 @@ bool Install(const platform::GameImage& image) noexcept
                        image.BytesMatch(kSetTextAfter, kSetTextAfterBytes) && image.BytesMatch(kSetText, kSetTextBytes) &&
                        image.BytesMatch(kRelayout, kRelayoutBytes) && image.BytesMatch(kQuadsDtor, kArrayDtorBytes) &&
                        image.BytesMatch(kRunsDtor, kArrayDtorBytes) && image.BytesMatch(kDtorQuadsLea, kDtorQuadsLeaBytes) &&
-                       image.BytesMatch(kDtorRunsLea, kDtorRunsLeaBytes) && image.BytesMatch(kFreeString, kFreeStringBytes) &&
+                       image.BytesMatch(kDtorRunsLea, kDtorRunsLeaBytes) &&
                        image.BytesMatch(kReleaseWeak, kReleaseWeakBytes) && image.BytesMatch(kInvalidate, kInvalidateBytes);
     const auto callAt     = image.Rebase(kSetTextCall, 5);
     const auto setText    = image.Rebase(kSetText);
     const auto quads      = image.Rebase(kQuadsDtor);
     const auto runs       = image.Rebase(kRunsDtor);
-    const auto freeString = image.Rebase(kFreeString);
+    const auto freeString = platform::FindFunction(image, facts::kFreeArrayData);
     const auto release    = image.Rebase(kReleaseWeak);
     const auto invalidate = image.Rebase(kInvalidate);
     const auto textBlock  = image.Rebase(kTextBlockVTable, sizeof(void*));

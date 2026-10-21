@@ -1,5 +1,6 @@
 #include "hud/target_views.h"
 
+#include "facts/engine.h"
 #include "facts/hud.h"
 #include "hud/hud_rules.h"
 #include "hud/widget_opacity.h"
@@ -37,12 +38,10 @@ constexpr std::uint8_t kCollectBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x
                                           0xE7, 0xFF, 0xFF, 0xB8, 0xE0, 0x18, 0x00, 0x00, 0xE8, 0x6F, 0x2D, 0x2F, 0x01};
 constexpr std::uint8_t kMainTargetBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C, 0x24, 0x18, 0x56, 0x57,
                                              0x41, 0x56, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xAC, 0xA0, 0xA9, 0x00};
-constexpr std::uint8_t kReleaseBytes[]    = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x46, 0x74, 0x82, 0x01};
 constexpr std::uint8_t kEnemyAiBytes[]    = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x68, 0x23, 0x2F, 0x01};
 
 constexpr platform::FunctionFact kCollect{L"EndUI__CollectLockOnTargets", 0x140DBC198, kCollectBytes};
 constexpr platform::FunctionFact kMainTarget{L"EndUI__GetMainTargetOfLockOnTarget", 0x141614E6C, kMainTargetBytes};
-constexpr platform::FunctionFact kRelease{L"TWeakPtrTS__Release", 0x140887AE0, kReleaseBytes};
 constexpr platform::FunctionFact kEnemyAi{L"EndCharacter_GetEnemyAIComponent", 0x140DBCBBC, kEnemyAiBytes};
 
 // The red ability label's lookup of its enemy's gauge: the entry for the character whose source is
@@ -414,7 +413,7 @@ bool Install(const platform::GameImage& image) noexcept
     };
     const std::uintptr_t collect = find(kCollect);
     g_mainTarget = reinterpret_cast<MainTargetFn>(find(kMainTarget));
-    g_release    = reinterpret_cast<ReleaseFn>(find(kRelease));
+    g_release    = reinterpret_cast<ReleaseFn>(find(facts::kWeakPtrRelease));
     g_enemyAi    = reinterpret_cast<EnemyAiFn>(find(kEnemyAi));
     const auto system  = image.Rebase(kBattleSystem, sizeof(void*));
     const auto ui      = image.Rebase(facts::kEndUISystem, facts::kUIEnemyStatus + sizeof(void*));

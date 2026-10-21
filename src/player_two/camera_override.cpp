@@ -2,6 +2,7 @@
 
 #include "dev/dev_switch.h"
 #include "facts/controller.h"
+#include "facts/engine.h"
 #include "platform/build_value.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -51,13 +52,10 @@ constexpr platform::PerBuild<std::uint32_t> kHeldRequests   = {0x1770, 0x1790};
 constexpr std::uint8_t kAddedBytes[]   = {0x48, 0x89, 0x4C, 0x24, 0x08, 0x55, 0x53, 0x56, 0x57, 0x41, 0x57, 0x48, 0x8D,
                                           0xAC, 0x24, 0x20, 0xFF, 0xFF, 0xFF, 0xB8, 0xE0, 0x01, 0x00, 0x00, 0xE8};
 constexpr std::uint8_t kRemovedBytes[] = {0x40, 0x57, 0xB8, 0x40, 0x00, 0x00, 0x00, 0xE8};
-constexpr std::uint8_t kReleaseBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x26, 0x74, 0x82, 0x01, 0x48,
-                                          0x2B, 0xE0, 0x83, 0xC8, 0xFF, 0xF0, 0x0F, 0xC1, 0x41, 0x0C};  // lock xadd [rcx+0Ch], -1
 constexpr platform::FunctionFact kAdded{L"NotifyOverride_OnSubjectCameraOverrideAdded_GlobalModule", 0x1423E30C0,
                                         kAddedBytes};
 constexpr platform::FunctionFact kRemoved{L"NotifyOverride_OnSubjectCameraOverrideRemoved_GlobalModule", 0x1423E3730,
                                           kRemovedBytes};
-constexpr platform::FunctionFact kReleaseWeak{L"TRefCtrlTS__ReleaseWeakRef", 0x140887B00, kReleaseBytes};
 
 struct Pair  // a TWeakPtr as the global holds it
 {
@@ -291,7 +289,7 @@ bool Install(const platform::GameImage& image) noexcept
     const auto vtable  = image.Rebase(kModuleVTable);
     const auto added   = platform::FindFunction(image, kAdded);
     const auto removed = platform::FindFunction(image, kRemoved);
-    const auto release = platform::FindFunction(image, kReleaseWeak);
+    const auto release = platform::FindFunction(image, facts::kReleaseWeakReference);
     g_installed = global && vtable && added && removed && release && primary_controller::Installed();
     if (g_installed)
     {

@@ -236,6 +236,33 @@ inline constexpr std::uint8_t kWeakObjectAssignBytes[] = {
 inline constexpr FunctionFact kWeakObjectAssign{L"FWeakObjectPtr assignment", 0x1419058B4, kWeakObjectAssignBytes};
 
 // ---------------------------------------------------------------------------------------------
+// Memory and smart pointers (stock UE4)
+// ---------------------------------------------------------------------------------------------
+
+/// The engine's array-data free (IDA: ME_FreeResourceBindingArray): `mov rcx,[rcx]; if (rcx) FMemory::Free(rcx)`
+/// for the TArray at rcx. hud/minimap_labels calls it; player_two/anim_two_views redirects a call to it.
+inline constexpr std::uint8_t kFreeArrayDataBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x36, 0xF7,
+                                                       0x90, 0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x09};
+inline constexpr FunctionFact kFreeArrayData{L"the array-data free (ME_FreeResourceBindingArray)", 0x14079F7F0,
+                                             kFreeArrayDataBytes};
+
+/// UWorld::GetFirstPlayerController (entry `mov eax, 28h`).
+inline constexpr std::uint8_t kGetFirstPlayerControllerBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00};
+inline constexpr FunctionFact kGetFirstPlayerController{L"UWorld::GetFirstPlayerController", 0x140EF3078,
+                                                        kGetFirstPlayerControllerBytes};
+
+/// Thread-safe shared pointers: TWeakPtr's release of its reference (rcx = the weak pointer; `mov rcx,[rcx+8]` the
+/// controller) and the reference controller's ReleaseWeakReference (`lock xadd [rcx+0Ch], -1`).
+inline constexpr std::uint8_t kWeakPtrReleaseBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x46, 0x74, 0x82, 0x01,
+                                                        0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x49, 0x08};
+inline constexpr FunctionFact kWeakPtrRelease{L"TWeakPtrTS::Release", 0x140887AE0, kWeakPtrReleaseBytes};
+inline constexpr std::uint8_t kReleaseWeakReferenceBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x26, 0x74,
+                                                              0x82, 0x01, 0x48, 0x2B, 0xE0, 0x83, 0xC8, 0xFF,
+                                                              0xF0, 0x0F, 0xC1, 0x41, 0x0C};
+inline constexpr FunctionFact kReleaseWeakReference{L"TReferenceControllerTS::ReleaseWeakReference", 0x140887B00,
+                                                    kReleaseWeakReferenceBytes};
+
+// ---------------------------------------------------------------------------------------------
 // The startup check list
 // ---------------------------------------------------------------------------------------------
 

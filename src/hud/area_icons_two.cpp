@@ -1,9 +1,11 @@
 #include "hud/area_icons_two.h"
 
+#include "facts/engine.h"
 #include "platform/call_redirect.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/verified_code.h"
 #include "player_two/generation.h"
 
 #include <array>
@@ -38,8 +40,6 @@ constexpr std::uint8_t   kClearAllPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x
 // The frame function's only call for the first player controller (§8.2): E8 rel32 at 0x1409F7439
 // to UWorld__GetFirstPlayerController, rcx = the world, inside the block at 0x1409F7430.
 constexpr std::uintptr_t kFirstControllerCall = 0x1409F7439;
-constexpr std::uintptr_t kFirstController     = 0x140EF3078;
-constexpr std::uint8_t   kFirstControllerPrologue[] = {0xB8, 0x28, 0x00, 0x00, 0x00};
 
 // The frame function's call for the range origin, the leader character by the leader's player type
 // (RE-p2-hud-targets.md §1.1, R1): E8 rel32 at 0x1409F73E4 to Party_GetLeaderCharacterByLeaderType,
@@ -508,7 +508,6 @@ bool Install(const platform::GameImage& image) noexcept
     const bool prologues = image.BytesMatch(kMalloc, kMallocPrologue) && image.BytesMatch(kCtor, kCtorPrologue) &&
                            image.BytesMatch(kFrameUpdate, kFrameUpdatePrologue) &&
                            image.BytesMatch(kClearAll, kClearAllPrologue) &&
-                           image.BytesMatch(kFirstController, kFirstControllerPrologue) &&
                            image.BytesMatch(kSetVisibility, kSetVisibilityPrologue);
     const auto instance   = image.Rebase(kInstanceOne, sizeof(void*));
     const auto allocate   = image.Rebase(kMalloc);
@@ -517,7 +516,7 @@ bool Install(const platform::GameImage& image) noexcept
     const auto clear      = image.Rebase(kClearAll);
     const auto visibility = image.Rebase(kSetVisibility);
     const auto site       = image.Rebase(kFirstControllerCall, 5);
-    const auto first      = image.Rebase(kFirstController);
+    const auto first      = platform::FindFunction(image, facts::kGetFirstPlayerController);
     if (!prologues || !instance || !allocate || !ctor || !update || !clear || !visibility || !site || !first ||
         !g_firstControllerCall.Install(*site, *first, reinterpret_cast<std::uintptr_t>(&FirstController)))
     {

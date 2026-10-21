@@ -2,6 +2,7 @@
 
 #include "dev/dev_switch.h"
 #include "facts/controller.h"
+#include "facts/engine.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
@@ -9,6 +10,7 @@
 #include "platform/frame_watch.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
 #include "player_two/describe.h"
 #include "player_two/generation.h"
@@ -51,10 +53,6 @@ constexpr std::uintptr_t kPrimary      = 0x140A61D1C;  // GetPrimaryEndPlayerCon
 // three calls are changed together from the game thread's first tick (InstallFromOwnThread), outside every hit: the
 // hit reaction runs on the game thread [ASSUMPTION: battle damage is applied in the world tick; the gate's leader
 // scopes already rely on it, and Gate warns if a hit ever arrives off it].
-
-// UWorld::GetFirstPlayerController (stock; entry `mov eax, 28h`, as hud/area_icons_two.cpp checks).
-constexpr std::uintptr_t kFirstController        = 0x140EF3078;
-constexpr std::uint8_t   kFirstControllerBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00};
 
 // The force-feedback notifies (SE End classes; RUMBLE3-0x1411F7C78-AnimNotify_EndFFB_family.txt): each class's vtable
 // slot, the function it holds, its GetFirstPlayerController call site.
@@ -608,8 +606,8 @@ void Install(const platform::GameImage& image) noexcept
     }
 
     // The notifies: the first-controller call sites are installed from the game thread's first tick (two cross a block).
-    const auto first = image.Rebase(kFirstController);
-    g_firstController = first && image.BytesMatch(kFirstController, kFirstControllerBytes) ? *first : 0;
+    const auto first  = platform::FindFunction(image, facts::kGetFirstPlayerController);
+    g_firstController = first ? *first : 0;
     if (g_firstController != 0)
     {
         const auto wrappers = Wrappers(std::make_index_sequence<kNotifies.size()>{});
