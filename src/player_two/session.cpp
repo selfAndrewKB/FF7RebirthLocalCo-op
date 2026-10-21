@@ -532,21 +532,22 @@ void Session::CheckAfterPartyChange(bool followSlot) noexcept
     }
     else if (followSlot)
     {
-        FollowSlot(L"after the game's party apply");
+        FollowSlot(L"after the game's party apply", true);  // one Info line per party apply
     }
 }
 
 /// Player 2 plays the 2nd slot: when it names another member, player 2's is given back and the slot's
 /// is taken (or waited on), even though player 2's is still in the party.
-void Session::FollowSlot(const wchar_t* when) noexcept
+void Session::FollowSlot(const wchar_t* when, bool log) noexcept
 {
     if (phase_ != Phase::Playing || member_ == nullptr || generation::Member() != member_ || !party_member::GameReady())
     {
         return;
     }
-    // Logged: the party order after the game's apply is the one Info line a field report needs for a hand-over
-    // question (the handover watch, which listed the whole order, is a dev tool now).
-    const auto choice = party_member::ChooseSlot(playerOneController_);
+    // Logged from the party-apply caller only: the party order after the game's apply is the one Info line a field
+    // report needs for a hand-over question (the handover watch, which listed the whole order, is a dev tool now).
+    // The slow slot check asks every kSlotCheckTicks and stays quiet (the v0.83.0 play check: a line per poll).
+    const auto choice = party_member::ChooseSlot(playerOneController_, log);
     const auto held   = party_member::PlayerTypeOf(member_);
     if (choice.wait == party_member::SlotWait::NoSlot || !held || choice.type == *held)
     {
@@ -749,7 +750,7 @@ void Session::CheckMemberPlayable() noexcept
     CheckHeldAi();
     if (phase_ == Phase::Playing && ticks_ % kSlotCheckTicks == 0)
     {
-        FollowSlot(L"found by the slow slot check");
+        FollowSlot(L"found by the slow slot check", false);
     }
 }
 

@@ -239,9 +239,9 @@ void Replay(bool playerTwo) noexcept
         platform::Log(L"popups: a placement raised an exception; popups are no longer placed per view");
     }
     else if (playerTwo && counts[0] + counts[1] + counts[2] > 0 &&
-             platform::Enabled(platform::Level::Debug))
+             platform::Enabled(platform::Level::Trace))  // every HUD pass: Trace (platform/log.h)
     {
-        platform::LogDebug(L"popups: placed again in player 2's view: {} numbers, {} texts, {} UMG ({} recorded)",
+        platform::LogTrace(L"popups: placed again in player 2's view: {} numbers, {} texts, {} UMG ({} recorded)",
                            counts[0], counts[1], counts[2], g_record.count);
     }
 }

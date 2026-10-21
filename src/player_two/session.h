@@ -152,7 +152,7 @@ private:
     void OnStatusChanged(std::uint8_t playerType, std::uint8_t before, std::uint8_t after) noexcept;
     void OnPartyApplied() noexcept;
     void CheckAfterPartyChange(bool followSlot) noexcept;
-    void FollowSlot(const wchar_t* when) noexcept;
+    void FollowSlot(const wchar_t* when, bool log) noexcept;  // log: the slot's verdict as an Info line
     void WaitForSlot(const party_member::SlotChoice& choice) noexcept;
     void CheckHeldAi() noexcept;
 

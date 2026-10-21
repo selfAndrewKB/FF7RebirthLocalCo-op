@@ -818,10 +818,10 @@ void Replay(bool playerTwo) noexcept
     {
         LogPlayerTwoPass({gate, static_cast<std::int32_t>(g_record.count), replayed, targeted, player_two::lock_on::TargetListOpen()});
     }
-    if (replayed > 0 && platform::Enabled(platform::Level::Debug))
+    if (replayed > 0 && platform::Enabled(platform::Level::Trace))  // every HUD pass: Trace (platform/log.h)
     {
-        platform::LogDebug(L"enemy gauges: {} placed again for player {}'s view ({} targeted) of {} recorded", replayed,
-                      playerTwo ? 2 : 1, targeted, g_record.count);
+        platform::LogTrace(L"enemy gauges: {} placed again for player {}'s view ({} targeted) of {} recorded", replayed,
+                           playerTwo ? 2 : 1, targeted, g_record.count);
     }
 }
 

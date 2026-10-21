@@ -99,10 +99,10 @@ void SwapOut() noexcept
             }
         });
         g_timers.EndOut();  // player 2's own; arrows no longer in the list are dropped
-        if (pinned > 0 && platform::Enabled(platform::Level::Debug))
+        if (pinned > 0 && platform::Enabled(platform::Level::Trace))  // every HUD pass: Trace (platform/log.h)
         {
-            platform::LogDebug(L"marker timers: {} of {} arrows have their own timer in player 2's view", pinned,
-                          g_timers.TwoCount());
+            platform::LogTrace(L"marker timers: {} of {} arrows have their own timer in player 2's view", pinned,
+                               g_timers.TwoCount());
         }
     }
     catch (...)
