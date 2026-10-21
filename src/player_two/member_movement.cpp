@@ -6,7 +6,9 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
+#include "player_two/battle_camera.h"
 #include "player_two/battle_input.h"
+#include "player_two/camera_override.h"
 #include "player_two/chocobo_ride.h"
 #include "player_two/climb_context.h"
 #include "player_two/lock_on.h"
@@ -217,7 +219,11 @@ void TickInScopes(void* playerTwoController, void* member, void* state, int type
     const move_state::OwnTick        own;
     const scope_leaks::MemberTickScope leaks(state, playerTwoController, deltaTime);
     g_counters.Act();
-    battle_input::InScopes(member, state, deltaTime);  // player 2's soft target and lock-on, before the tick
+    // Before the tick, inside every scope (player 2's camera manager is the primary one here):
+    camera_override::Tick(member);         // the member's animation camera overrides reach player 2's camera
+    lock_on::AfterBattle();                // out of battle, player 2's lock ends
+    battle_camera::Watch();                // both camera managers' operators, logged on change (dev tools)
+    battle_input::Watch(member, state);     // player 2's battle state, logged on change (dev tools)
     if (!GuardedTick(state, deltaTime))
     {
         g_stopped = true;

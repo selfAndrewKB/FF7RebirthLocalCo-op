@@ -12,11 +12,11 @@
 #include "platform/frame_watch.h"
 #include "platform/image.h"
 #include "platform/log.h"
-#include "player_two/battle_input.h"
 #include "player_two/camera_distance.h"
 #include "player_two/charapop_centre.h"
 #include "player_two/charapop_near.h"
 #include "player_two/field_exit.h"
+#include "player_two/lock_on.h"
 #include "player_two/own_controller.h"
 #include "player_two/shoulder_scale.h"
 #include "player_two/generation.h"
@@ -292,7 +292,10 @@ Outcome ModTarget::SetIconsMask(std::uint32_t mask)
 
 Outcome ModTarget::SetBattleMask(std::uint32_t mask)
 {
-    player_two::battle_input::SetMask(mask);
+    // Bit 8 is player 2's targeting run (player_two/lock_on.h). The other bits (1, 2, 4, 16: the direct actions; 32,
+    // 64, 128, 256: the mod's own lock, switching, lock camera and cursor) are retired: the game's own handler and
+    // targeting tick do those for player 2.
+    player_two::lock_on::SetEnabled((mask & 8u) != 0);
     return {true, L"battle mask set (see the log)"};
 }
 

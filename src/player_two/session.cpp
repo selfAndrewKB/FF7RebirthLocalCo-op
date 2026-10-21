@@ -25,7 +25,7 @@
 #include "player_two/leave_watch.h"
 #include "player_two/leftover_actors.h"
 #include "player_two/member_movement.h"
-#include "player_two/move_state.h"
+#include "player_two/move_census.h"
 #include "player_two/object_fields.h"
 #include "player_two/own_controller.h"
 #include "player_two/pad_buttons.h"
@@ -964,7 +964,7 @@ void Session::LogStatus() noexcept
         member.refused, member_movement::TakeLeaderAnswers());
     scope_leaks::LogStatus();
     pad_buttons::LogStatus();
-    move_state::LogCensus();
+    move_census::Log();  // dev tools
 }
 
 }  // namespace lss::player_two

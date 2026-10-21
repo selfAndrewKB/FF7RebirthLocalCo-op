@@ -18,7 +18,6 @@
 #include "player_two/lock_on.h"
 #include "player_two/party_events.h"
 #include "player_two/party_switch.h"
-#include "player_two/battle_input.h"
 #include "player_two/camera_distance.h"
 #include "player_two/member_movement.h"
 #include "player_two/shared_ride.h"
@@ -116,12 +115,12 @@ void Session::InstallStages(const platform::GameImage& image) noexcept
     camera_override::Install(image);  // player 2's camera gets its own NotifyOverride module (logged)
     camera_distance::Install(image);  // the Options camera distance reaches player 2's camera too (logged)
     installed_.padSticks     = installed_.primary && pad_sticks::Install(image);
-    installed_.moveCensus    = move_state::Install(image);
+    installed_.moveTicks     = move_state::Install(image);
     installed_.viewTarget    = view_target::Install(image);
     installed_.scopeLeaks    = scope_leaks::Install(image);
     installed_.padButtons    = pad_buttons::Install(image);
-    installed_.memberMovement = installed_.member && installed_.padSticks && installed_.moveCensus &&
-                                member_movement::Install(image);
+    installed_.memberMovement = installed_.member && installed_.padSticks && installed_.moveTicks &&
+                                member_movement::Install(image);  // the member tick runs on the game's recorded ticks
     installed_.partyEvents =
         installed_.member &&
         party_events::Install(image, {[](void* self, void* controller, void* character) noexcept {
@@ -132,7 +131,6 @@ void Session::InstallStages(const platform::GameImage& image) noexcept
                                       },
                                       [](void* self) noexcept { static_cast<Session*>(self)->OnPartyApplied(); },
                                       this});
-    battle_input::Install(image);  // player 2's battle targeting, inside the member tick (logged)
     lock_on::Install(image);       // player 2's targeting: the game's tick run again for player 2 (logged)
     party_switch::Install(image);  // player 1's switch skips player 2's member (logged)
     command_rules::Install(image); // player 1 cannot command player 2's member (logged)
@@ -149,7 +147,7 @@ void Session::InstallStages(const platform::GameImage& image) noexcept
     LogStage(L"own camera update", installed_.cameraUpdate);
     LogStage(L"per-pad sticks (on; Ctrl+F9 switches)", installed_.padSticks);
     LogStage(L"member movement (with per-pad sticks)", installed_.memberMovement);
-    LogStage(L"movement census", installed_.moveCensus);
+    LogStage(L"move-state ticks (the game's recorded; player 1's on pad 1)", installed_.moveTicks);
     LogStage(L"scope leaks put back", installed_.scopeLeaks);
     LogStage(L"per-pad buttons (logging only)", installed_.padButtons);
     LogStage(L"party events (the game's leader and status changes)", installed_.partyEvents);

@@ -6,10 +6,12 @@
 #include "hud/label_relayouts.h"
 #include "hud/position_probe.h"
 #include "platform/log.h"
+#include "player_two/battle_input.h"
 #include "player_two/charapop_watch.h"
 #include "player_two/framing_watch.h"
 #include "player_two/handover_watch.h"
 #include "player_two/menu_focus.h"
+#include "player_two/move_census.h"
 #include "player_two/ride_watch.h"
 #include "player_two/rumble_watch.h"
 #include "player_two/tag_counts.h"
@@ -41,6 +43,8 @@ void Install(const platform::GameImage& image, player_two::Session& session, pla
     player_two::charapop_watch::Install(image);  // the character detail near player 2
     player_two::handover_watch::Install(image);  // the party order and the members' AI at hand-overs
     player_two::menu_focus::Install(image);      // player 1's UI focus, on change
+    player_two::battle_input::Install(image);    // player 2's battle state inside the member tick, on change (Trace)
+    player_two::move_census::Install(image);     // the move-state ticks and gate tests per character (the status line)
     const bool tags = player_two::tag_counts::Install(image);  // the actor-tag registry (the session's Debug counts)
     platform::Log(L"tag counts: {}", tags ? L"readable (the session's take and leave counts, Debug)"
                                           : L"NOT readable (a check failed); the session's counts are not logged");

@@ -185,7 +185,7 @@ private:
         bool member         = false;
         bool fieldSettings  = false;
         bool cameraUpdate   = false;
-        bool moveCensus     = false;
+        bool moveTicks      = false;  // the game's move-state ticks recorded (member movement runs on them)
         bool padSticks      = false;
         bool viewTarget     = false;
         bool memberMovement = false;

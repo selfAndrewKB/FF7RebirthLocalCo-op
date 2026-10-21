@@ -5,11 +5,10 @@
 // Every party member has a move state (the character's +0x1750), ticked through slot 11 of its
 // vtable. The game's field tick runs exactly one of them each frame, the character it selects from
 // global state: the party leader. Both slot-11 entries are wrapped to
-//   - count, per character of interest, ticks and the movement gate's per-character tests
-//     (logged on the status line);
 //   - record that the game's ticker ran since the last look, with its delta time, and whether it
 //     ticked player 2's member itself (player_two/member_movement.h reads this);
-//   - give player 1's character only player 1's pad while per-pad sticks are on.
+//   - give player 1's character only player 1's pad while per-pad sticks are on;
+//   - count each tick into the movement census (player_two/move_census.h, a dev tool).
 // A tick the mod makes itself (OwnTick) is counted, never recorded as the game's.
 
 #include "player_two/stage_counters.h"
@@ -26,9 +25,6 @@ namespace lss::player_two::move_state {
 bool Install(const platform::GameImage& image) noexcept;
 
 void Remove() noexcept;
-
-/// Writes one line per character of interest seen since the last call, then starts afresh.
-void LogCensus() noexcept;
 
 /// The game's own move-state ticks since the last call (game thread).
 struct EngineTicks

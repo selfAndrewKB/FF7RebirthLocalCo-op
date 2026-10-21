@@ -112,7 +112,6 @@ add_library(LocalSplitScreen SHARED
     src/hud/label_states.cpp
     src/player_two/party_warp.cpp
     src/player_two/strand_watch.cpp
-    src/player_two/battle_input.cpp
     src/player_two/battle_camera.cpp
     src/player_two/camera_override.cpp
     src/player_two/attack_cameras.cpp
@@ -204,10 +203,12 @@ if(LSS_DEV_TOOLS)
         src/hud/position_probe.cpp
         src/hud/widget_dump.cpp
         src/hud/label_relayouts.cpp
+        src/player_two/battle_input.cpp
         src/player_two/charapop_watch.cpp
         src/player_two/framing_watch.cpp
         src/player_two/handover_watch.cpp
         src/player_two/menu_focus.cpp
+        src/player_two/move_census.cpp
         src/player_two/ride_watch.cpp
         src/player_two/rumble_watch.cpp
         src/player_two/tag_counts.cpp

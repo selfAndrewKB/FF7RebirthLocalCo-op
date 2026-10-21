@@ -6,8 +6,6 @@
 #include "platform/log.h"
 #include "platform/settled_log.h"
 #include "platform/verified_code.h"
-#include "player_two/battle_camera.h"
-#include "player_two/camera_override.h"
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
@@ -62,11 +60,6 @@ constexpr std::array<std::uint32_t, 4> kStateBytes{0x49, 0x4A, 0x64, 0x65};
 constexpr std::uint32_t  kPendingAction     = 0x84;   // int32
 
 constexpr int kMaxLines = 600;
-
-// The battle mask's one live bit: player 2's targeting run (player_two/lock_on.h). The other bits
-// (1, 2, 4, 16: the direct actions; 32, 64, 128, 256: the mod's own lock, switching, lock camera and
-// cursor) are retired: the game's own handler and targeting tick do those for player 2.
-constexpr unsigned kPartTargeting = 8;
 
 using OwnerFn        = void* (*)(void* aiHolder);
 using GlobalTestFn   = std::uint8_t (*)();
@@ -246,11 +239,8 @@ bool Install(const platform::GameImage& image) noexcept
     return g_installed;
 }
 
-void InScopes(void* member, void* state, float deltaTime) noexcept
+void Watch(void* member, void* state) noexcept
 {
-    battle_camera::Watch();          // both camera managers' operators, logged on change
-    camera_override::Tick(member);   // the member's animation camera overrides reach player 2's camera
-    lock_on::AfterBattle();          // out of battle, player 2's lock ends (player 2's camera manager is primary here)
     if (!g_installed || member == nullptr || state == nullptr)
     {
         return;
@@ -327,15 +317,10 @@ void InScopes(void* member, void* state, float deltaTime) noexcept
             ++g_lines;
             platform::LogTrace(L"battle input: {}", Describe(now));
         }
-    }    catch (...)
+    }
+    catch (...)
     {
     }
-}
-
-void SetMask(unsigned mask) noexcept
-{
-    g_lines = 0;
-    lock_on::SetEnabled((mask & kPartTargeting) != 0);
 }
 
 }  // namespace lss::player_two::battle_input
