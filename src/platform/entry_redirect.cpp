@@ -10,9 +10,7 @@ namespace lss::platform {
 
 namespace {
 
-/// jmp qword ptr [rip+0] ; dq <address>
-constexpr std::uint8_t kAbsoluteJump[]  = {0xFF, 0x25, 0x00, 0x00, 0x00, 0x00};
-constexpr std::size_t  kTrampolineStart = 0x10;  // after the thunk's 14 bytes
+constexpr std::size_t kTrampolineStart = 0x10;  // after the thunk's 14 bytes (x64_jump.h, EncodeAbsoluteJump)
 
 constexpr std::size_t  kMaxCopied       = 2 * kCodeBlockSize;  // the instructions a trampoline replays
 
@@ -29,8 +27,8 @@ std::uintptr_t BuildPage(std::uintptr_t entry, std::span<const std::uint8_t> cop
             {
                 return false;
             }
-            std::memcpy(code.data(), kAbsoluteJump, sizeof(kAbsoluteJump));
-            std::memcpy(code.data() + sizeof(kAbsoluteJump), &replacement, sizeof(replacement));
+            const auto thunk = EncodeAbsoluteJump(replacement);
+            std::memcpy(code.data(), thunk.data(), thunk.size());
             std::memcpy(code.data() + kTrampolineStart, copied.data(), copied.size());
             std::memcpy(code.data() + kTrampolineStart + copied.size(), back->data(), back->size());
             return true;
@@ -70,20 +68,17 @@ bool EntryRedirect::Place(std::uintptr_t entry, std::span<const std::uint8_t> co
     const std::uintptr_t site     = entry + siteOffset;
     const std::size_t    replaced = copied.size() - siteOffset;
     const std::uintptr_t block    = site & ~(kCodeBlockSize - 1);
-    const std::size_t    at       = site - block;
+    const std::span<const std::uint8_t> expected = copied.subspan(siteOffset);
     // The thunk jumps into our compiled code, so the DLL must outlive any chance of the function
     // being entered (platform/module_pin.h).
-    if (block_ != 0 || replacement == 0 || siteOffset >= copied.size() || replaced < kJumpLength ||
-        at + replaced > kCodeBlockSize || !PinThisModule())
+    if (patch_.IsApplied() || replacement == 0 || siteOffset >= copied.size() || replaced < kJumpLength ||
+        site - block + replaced > kCodeBlockSize || !PinThisModule())
     {
         return false;
     }
-
-    CodeBlock current{};
-    std::memcpy(current.data(), reinterpret_cast<const void*>(block), current.size());
-    if (std::memcmp(current.data() + at, copied.data() + siteOffset, replaced) != 0)
+    if (std::memcmp(reinterpret_cast<const void*>(site), expected.data(), expected.size()) != 0)
     {
-        return false;
+        return false;  // checked before any code is placed (the patch checks again at its swap)
     }
 
     const std::uintptr_t page = BuildPage(entry, copied, replacement);
@@ -93,33 +88,21 @@ bool EntryRedirect::Place(std::uintptr_t entry, std::span<const std::uint8_t> co
         return false;  // placed code is left unused: never reached, never freed
     }
 
-    CodeBlock redirected = current;
-    std::memcpy(redirected.data() + at, jump->data(), jump->size());
-    std::memset(redirected.data() + at + jump->size(), 0x90, replaced - jump->size());  // nop, never run
+    CodeBlock redirected{};
+    std::memcpy(redirected.data(), jump->data(), jump->size());
+    std::memset(redirected.data() + jump->size(), 0x90, replaced - jump->size());  // nop, never run
     trampoline_ = page + kTrampolineStart;  // before the swap: the replacement may run the moment it is reachable
-    if (!SwapCodeBlock(block, current, redirected))
+    if (!patch_.Apply(site, expected, std::span<const std::uint8_t>(redirected.data(), replaced)))
     {
         trampoline_ = 0;
         return false;
     }
-    block_      = block;
-    original_   = current;
-    redirected_ = redirected;
     return true;
 }
 
 bool EntryRedirect::Restore() noexcept
 {
-    if (block_ == 0)
-    {
-        return true;
-    }
-    if (!SwapCodeBlock(block_, redirected_, original_))
-    {
-        return false;
-    }
-    block_ = 0;
-    return true;
+    return patch_.Revert();
 }
 
 }  // namespace lss::platform

@@ -1,14 +1,18 @@
 // Host-side tests for the platform's small pure rules, run without the game: the log level words, the hitch step, the
-// memory alarm, and RIP-relative addressing.
+// memory alarm, RIP-relative addressing, and the jumps the mod encodes.
 
 #include "platform/hitch_step.h"
 #include "platform/level_names.h"
 #include "platform/memory_alarm.h"
 #include "platform/rip_relative.h"
+#include "platform/x64_jump.h"
 
 #include "expect.h"
 
+#include <array>
+#include <cstdint>
 #include <cstdio>
+#include <limits>
 
 namespace {
 
@@ -92,6 +96,30 @@ void TestRipRelative()
     EXPECT(LowByteFits(-0x100, 8));
 }
 
+void TestJumps()
+{
+    std::puts("jumps: a rel32 from the instruction's end, refused past 2 GiB; jmp rel32 bytes; the 14-byte absolute "
+              "jump");
+    EXPECT(Rel32(0x1005, 0x1105) == 0x100);
+    EXPECT(Rel32(0x1005, 0x0F05) == -0x100);
+    EXPECT(Rel32(0x1005, 0x1005 + 0x7FFFFFFFull) == 0x7FFFFFFF);
+    EXPECT(!Rel32(0x1005, 0x1005 + 0x80000000ull).has_value());
+    EXPECT(Rel32(0x100000000, 0x100000000 - 0x80000000ull) == std::numeric_limits<std::int32_t>::min());
+    EXPECT(!Rel32(0x100000000, 0x100000000 - 0x80000001ull).has_value());
+
+    const auto jump = EncodeJump(0x1000, 0x1105);
+    EXPECT(jump.has_value());
+    EXPECT((*jump == std::array<std::uint8_t, 5>{0xE9, 0x00, 0x01, 0x00, 0x00}));
+    const auto back = EncodeJump(0x1105, 0x1000);
+    EXPECT(back.has_value());
+    EXPECT((*back == std::array<std::uint8_t, 5>{0xE9, 0xF6, 0xFE, 0xFF, 0xFF}));  // -0x10A
+    EXPECT(!EncodeJump(0x1000, 0x1000 + 0x80000005ull).has_value());
+
+    const auto absolute = EncodeAbsoluteJump(0x0123456789ABCDEFull);
+    EXPECT((absolute == std::array<std::uint8_t, 14>{0xFF, 0x25, 0x00, 0x00, 0x00, 0x00, 0xEF, 0xCD, 0xAB, 0x89, 0x67,
+                                                     0x45, 0x23, 0x01}));
+}
+
 }  // namespace
 
 int main()
@@ -100,6 +128,7 @@ int main()
     TestHitchStep();
     TestMemoryAlarm();
     TestRipRelative();
+    TestJumps();
 
     return lss::test::Report();
 }

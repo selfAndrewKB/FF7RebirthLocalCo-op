@@ -22,7 +22,7 @@
 // freed, the DLL is pinned (the thunk jumps into it), and the destructor does not restore; only
 // Restore() removes the redirect.
 
-#include "platform/code_memory.h"
+#include "platform/block_patch.h"
 
 #include <cstdint>
 #include <span>
@@ -62,7 +62,7 @@ public:
     /// Returns false if it was changed after us (it is then left alone).
     bool Restore() noexcept;
 
-    bool IsInstalled() const noexcept { return block_ != 0; }
+    bool IsInstalled() const noexcept { return patch_.IsApplied(); }
 
     /// The game's function, for the replacement to call (0 before Install; kept after Restore: a
     /// call already inside the replacement may still use it).
@@ -72,10 +72,8 @@ private:
     bool Place(std::uintptr_t entry, std::span<const std::uint8_t> copied, std::size_t siteOffset,
                std::uintptr_t replacement) noexcept;
 
-    std::uintptr_t block_       = 0;  // the aligned 16-byte block holding the replaced instruction
-    std::uintptr_t trampoline_  = 0;  // the replaced instruction(s), then a jump back
-    CodeBlock      original_{};
-    CodeBlock      redirected_{};
+    BlockPatch     patch_;           // the replaced instruction, a jump and nops in its place
+    std::uintptr_t trampoline_ = 0;  // the replaced instruction(s), then a jump back
 };
 
 }  // namespace lss::platform

@@ -31,17 +31,13 @@ bool CodeRedirect::Install(std::uintptr_t site, std::span<const std::uint8_t> re
                            std::span<const std::uint8_t> code, std::uintptr_t resume) noexcept
 {
     const std::uintptr_t block = site & ~(kCodeBlockSize - 1);
-    const std::size_t    at    = site - block;
-    if (block_ != 0 || replaced.size() < kJumpLength || at + replaced.size() > kCodeBlockSize)
+    if (patch_.IsApplied() || replaced.size() < kJumpLength || site - block + replaced.size() > kCodeBlockSize)
     {
         return false;
     }
-
-    Block current{};
-    std::memcpy(current.data(), reinterpret_cast<const void*>(block), current.size());
-    if (std::memcmp(current.data() + at, replaced.data(), replaced.size()) != 0)
+    if (std::memcmp(reinterpret_cast<const void*>(site), replaced.data(), replaced.size()) != 0)
     {
-        return false;
+        return false;  // checked before any code is placed (the patch checks again at its swap)
     }
 
     const std::uintptr_t page = BuildCodePage(site, code, resume);
@@ -51,32 +47,15 @@ bool CodeRedirect::Install(std::uintptr_t site, std::span<const std::uint8_t> re
         return false;  // placed code is left unused: never reached, never freed
     }
 
-    Block redirected = current;
-    std::memcpy(redirected.data() + at, jump->data(), jump->size());
-    std::memset(redirected.data() + at + jump->size(), 0x90, replaced.size() - jump->size());  // nop
-
-    if (!SwapCodeBlock(block, current, redirected))
-    {
-        return false;
-    }
-    block_      = block;
-    original_   = current;
-    redirected_ = redirected;
-    return true;
+    CodeBlock redirected{};
+    std::memcpy(redirected.data(), jump->data(), jump->size());
+    std::memset(redirected.data() + jump->size(), 0x90, replaced.size() - jump->size());  // nop
+    return patch_.Apply(site, replaced, std::span<const std::uint8_t>(redirected.data(), replaced.size()));
 }
 
 bool CodeRedirect::Restore() noexcept
 {
-    if (block_ == 0)
-    {
-        return true;
-    }
-    if (!SwapCodeBlock(block_, redirected_, original_))
-    {
-        return false;
-    }
-    block_ = 0;
-    return true;
+    return patch_.Revert();
 }
 
 }  // namespace lss::platform

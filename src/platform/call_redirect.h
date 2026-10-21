@@ -20,7 +20,7 @@
 // code, this thunk jumps into our DLL, so Install pins the DLL (platform/module_pin.h). The thunk
 // page is never freed and the destructor does not restore; only Restore() removes the redirect.
 
-#include "platform/code_memory.h"
+#include "platform/block_patch.h"
 
 #include <cstdint>
 
@@ -57,7 +57,7 @@ public:
     /// Returns false if it was changed after us (it is then left alone).
     bool Restore() noexcept;
 
-    bool IsInstalled() const noexcept { return block_ != 0; }
+    bool IsInstalled() const noexcept { return patch_.IsApplied(); }
 
     /// The call's usual target, for the replacement to call.
     std::uintptr_t Original() const noexcept { return target_; }
@@ -66,13 +66,8 @@ private:
     bool Place(std::uintptr_t site, std::uintptr_t target, std::uintptr_t replacement, bool crossingAllowed,
                std::uint8_t opcode) noexcept;
 
-    std::uintptr_t block_  = 0;  // the aligned 16-byte block holding the call (its first byte)
+    BlockPatch     patch_;  // the call's displacement (over two blocks when the call crosses)
     std::uintptr_t target_ = 0;
-    CodeBlock      original_{};
-    CodeBlock      redirected_{};
-    bool           crosses_ = false;  // the call's last bytes are in the next block
-    CodeBlock      nextOriginal_{};
-    CodeBlock      nextRedirected_{};
 };
 
 }  // namespace lss::platform

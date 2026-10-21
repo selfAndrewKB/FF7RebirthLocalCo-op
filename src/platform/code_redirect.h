@@ -19,7 +19,8 @@
 // The page has no unwind data registered: the code makes no calls and leaves rsp unchanged, and it
 // can only fault if the register it reads is not what the startup byte check established.
 
-#include <array>
+#include "platform/block_patch.h"
+
 #include <cstdint>
 #include <span>
 
@@ -49,14 +50,10 @@ public:
     /// Returns false if they were changed after us (they are then left alone).
     bool Restore() noexcept;
 
-    bool IsInstalled() const noexcept { return block_ != 0; }
+    bool IsInstalled() const noexcept { return patch_.IsApplied(); }
 
 private:
-    using Block = std::array<std::uint8_t, 16>;
-
-    std::uintptr_t block_ = 0;  // the aligned 16-byte block holding the site
-    Block          original_{};
-    Block          redirected_{};
+    BlockPatch patch_;  // the replaced instructions, a jump and nops in their place
 };
 
 }  // namespace lss::platform

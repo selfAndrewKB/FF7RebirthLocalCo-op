@@ -49,6 +49,7 @@ add_library(LocalSplitScreen SHARED
     src/hud/viewport_placement.cpp
     src/hud/layout_scale.cpp
 
+    src/platform/block_patch.cpp
     src/platform/call_redirect.cpp
     src/platform/code_redirect.cpp
     src/platform/deferred_sites.cpp
@@ -239,7 +240,7 @@ function(lss_test name)
 endfunction()
 
 lss_test(one_family_per_view src/renderer/one_family_per_view.cpp)
-lss_test(output_load_action src/platform/code_redirect.cpp src/platform/code_memory.cpp)
+lss_test(output_load_action src/platform/code_redirect.cpp src/platform/block_patch.cpp src/platform/code_memory.cpp tests/log_console.cpp)
 lss_test(split_screen_settings src/players/split_screen_settings.cpp)
 lss_test(view_shape src/views/view_shape.cpp)
 lss_test(split_layout src/players/split_layout.cpp)
@@ -255,21 +256,22 @@ lss_test(leave_sequence src/player_two/leave_sequence.cpp)
 lss_test(control_script src/control/script.cpp)
 lss_test(control_runner src/control/runner.cpp src/control/script.cpp)
 lss_test(stick_select src/player_two/stick_select.cpp)
-lss_test(call_redirect src/platform/call_redirect.cpp src/platform/module_pin.cpp src/platform/code_memory.cpp)
-lss_test(entry_redirect src/platform/entry_redirect.cpp src/platform/module_pin.cpp src/platform/code_memory.cpp)
+lss_test(call_redirect src/platform/call_redirect.cpp src/platform/block_patch.cpp src/platform/module_pin.cpp src/platform/code_memory.cpp)
+lss_test(entry_redirect src/platform/entry_redirect.cpp src/platform/block_patch.cpp src/platform/module_pin.cpp src/platform/code_memory.cpp tests/log_console.cpp)
 lss_test(code_memory src/platform/code_memory.cpp)
+lss_test(block_patch src/platform/block_patch.cpp src/platform/code_memory.cpp)
 lss_test(sparse_array src/platform/guarded.cpp)
 lss_test(overlay_band src/hud/overlay_band.cpp)
 lss_test(viewport_placement src/hud/viewport_placement.cpp)
 lss_test(entry_filter_code)
 lss_test(minimap_once_code)
-lss_test(first_player_code src/platform/code_redirect.cpp src/platform/code_memory.cpp)
-lss_test(enemy_gauges_code src/platform/code_redirect.cpp src/platform/code_memory.cpp)
-lss_test(command_rules_code src/platform/code_redirect.cpp src/platform/code_memory.cpp)
-lss_test(panel_gate_code src/platform/code_redirect.cpp src/platform/code_memory.cpp)
-lss_test(centered_frame_code src/platform/code_redirect.cpp src/platform/code_memory.cpp)
-lss_test(popups_code src/platform/code_redirect.cpp src/platform/code_memory.cpp)
-lss_test(arrow_edge_code src/platform/code_redirect.cpp src/platform/code_memory.cpp)
+lss_test(first_player_code src/platform/code_redirect.cpp src/platform/block_patch.cpp src/platform/code_memory.cpp tests/log_console.cpp)
+lss_test(enemy_gauges_code src/platform/code_redirect.cpp src/platform/block_patch.cpp src/platform/code_memory.cpp tests/log_console.cpp)
+lss_test(command_rules_code src/platform/code_redirect.cpp src/platform/block_patch.cpp src/platform/code_memory.cpp tests/log_console.cpp)
+lss_test(panel_gate_code src/platform/code_redirect.cpp src/platform/block_patch.cpp src/platform/code_memory.cpp tests/log_console.cpp)
+lss_test(centered_frame_code src/platform/code_redirect.cpp src/platform/block_patch.cpp src/platform/code_memory.cpp tests/log_console.cpp)
+lss_test(popups_code src/platform/code_redirect.cpp src/platform/block_patch.cpp src/platform/code_memory.cpp tests/log_console.cpp)
+lss_test(arrow_edge_code src/platform/code_redirect.cpp src/platform/block_patch.cpp src/platform/code_memory.cpp tests/log_console.cpp)
 lss_test(family_boundary_list)
 lss_test(button_view)
 lss_test(settled_log)
