@@ -9,28 +9,14 @@
 #include "platform/code_redirect.h"
 #include "player_two/panel_gate_code.h"
 
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <Windows.h>
+#include "exec_page.h"
+#include "expect.h"
 
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
 
 namespace {
-
-int g_failures = 0;
-
-#define EXPECT(condition)                                                                \
-    do                                                                                   \
-    {                                                                                    \
-        if (!(condition))                                                                \
-        {                                                                                \
-            std::printf("  FAILED line %d: %s\n", __LINE__, #condition);                 \
-            ++g_failures;                                                                \
-        }                                                                                \
-    } while (false)
 
 /// sub rsp, 0x118 ; mov rax, rcx ; nops to offset 0x15 ; mov [rsp+0x108], rax (the site) ;
 /// mov rax, [rsp+0x108] ; add rsp, 0x118 ; ret (the game's path: returns the stored argument)
@@ -58,15 +44,11 @@ public:
         std::memcpy(code, entry, sizeof(entry));
         std::memcpy(code + kSiteOffset, site, sizeof(site));
         std::memcpy(code + kSkipOffset, skip, sizeof(skip));
-        memory_ = static_cast<std::uint8_t*>(VirtualAlloc(nullptr, 0x1000, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
-        std::memcpy(memory_, code, sizeof(code));
-        DWORD previous = 0;
-        VirtualProtect(memory_, 0x1000, PAGE_EXECUTE_READ, &previous);
-        FlushInstructionCache(GetCurrentProcess(), memory_, 0x1000);
+        page_.Write(0, code);
+        page_.Seal();
     }
-    ~ChunkLike() { VirtualFree(memory_, 0, MEM_RELEASE); }
 
-    std::uintptr_t At(std::size_t offset) const { return reinterpret_cast<std::uintptr_t>(memory_) + offset; }
+    std::uintptr_t At(std::size_t offset) const { return page_.At(offset); }
     std::uint64_t  Call(std::uint64_t value) const
     {
         using Fn = std::uint64_t (*)(std::uint64_t value);
@@ -74,7 +56,7 @@ public:
     }
 
 private:
-    std::uint8_t* memory_ = nullptr;
+    lss::test::ExecutablePage page_;
 };
 
 void TestGate()
@@ -111,6 +93,5 @@ int main()
 {
     TestGate();
 
-    std::printf(g_failures == 0 ? "all tests passed\n" : "%d check(s) failed\n", g_failures);
-    return g_failures == 0 ? 0 : 1;
+    return lss::test::Report();
 }

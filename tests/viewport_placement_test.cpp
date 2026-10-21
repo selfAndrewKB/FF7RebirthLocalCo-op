@@ -2,6 +2,8 @@
 
 #include "hud/viewport_placement.h"
 
+#include "expect.h"
+
 #include <cmath>
 #include <cstdio>
 #include <limits>
@@ -16,18 +18,6 @@ using lss::hud::LayoutPoint;
 using lss::hud::Plausible;
 using lss::hud::SplitLayoutFor;
 using lss::hud::ViewportLayout;
-
-int g_failures = 0;
-
-#define EXPECT(condition)                                                                \
-    do                                                                                   \
-    {                                                                                    \
-        if (!(condition))                                                                \
-        {                                                                                \
-            std::printf("  FAILED line %d: %s\n", __LINE__, #condition);                 \
-            ++g_failures;                                                                \
-        }                                                                                \
-    } while (false)
 
 /// The stock layout of a root added to fill the viewport (as the game's HUD roots have it).
 ViewportLayout Stretch()
@@ -144,6 +134,5 @@ int main()
     TestIconBaseKeepsCornerDistance();
     TestRejected();
 
-    std::printf(g_failures == 0 ? "all tests passed\n" : "%d check(s) failed\n", g_failures);
-    return g_failures == 0 ? 0 : 1;
+    return lss::test::Report();
 }

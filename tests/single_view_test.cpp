@@ -7,6 +7,8 @@
 
 #include "players/single_view.h"
 
+#include "expect.h"
+
 #include <cstdio>
 
 namespace {
@@ -16,18 +18,6 @@ using lss::players::SingleViewChange;
 using lss::players::SingleViewMode;
 using lss::players::SplitSwitchAccess;
 using Kind = SingleViewChange::Kind;
-
-int g_failures = 0;
-
-#define EXPECT(condition)                                                                \
-    do                                                                                   \
-    {                                                                                    \
-        if (!(condition))                                                                \
-        {                                                                                \
-            std::printf("  FAILED line %d: %s\n", __LINE__, #condition);                 \
-            ++g_failures;                                                                \
-        }                                                                                \
-    } while (false)
 
 struct FakeSwitch
 {
@@ -179,6 +169,5 @@ int main()
     TestFailuresReportedOncePerRequest();
     TestModes();
 
-    std::printf(g_failures == 0 ? "all tests passed\n" : "%d check(s) failed\n", g_failures);
-    return g_failures == 0 ? 0 : 1;
+    return lss::test::Report();
 }

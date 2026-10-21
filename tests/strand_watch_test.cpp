@@ -2,6 +2,8 @@
 
 #include "player_two/strand_watch.h"
 
+#include "expect.h"
+
 #include <cstdio>
 #include <vector>
 
@@ -9,18 +11,6 @@ namespace {
 
 using lss::player_two::StrandEvent;
 using lss::player_two::StrandWatch;
-
-int g_failures = 0;
-
-#define EXPECT(condition)                                                                \
-    do                                                                                   \
-    {                                                                                    \
-        if (!(condition))                                                                \
-        {                                                                                \
-            std::printf("  FAILED line %d: %s\n", __LINE__, #condition);                 \
-            ++g_failures;                                                                \
-        }                                                                                \
-    } while (false)
 
 constexpr float kTick = 1.0f / 60.0f;
 
@@ -148,6 +138,5 @@ int main()
     TestCooldownDelaysTheNextWarp();
     TestResetForgetsEverything();
 
-    std::printf(g_failures == 0 ? "all tests passed\n" : "%d check(s) failed\n", g_failures);
-    return g_failures == 0 ? 0 : 1;
+    return lss::test::Report();
 }

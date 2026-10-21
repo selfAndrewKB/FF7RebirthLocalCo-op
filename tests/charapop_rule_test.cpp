@@ -4,6 +4,8 @@
 
 #include "player_two/charapop_rule.h"
 
+#include "expect.h"
+
 #include <cstdio>
 
 namespace {
@@ -14,18 +16,6 @@ using lss::player_two::charapop::HoldOf;
 using lss::player_two::charapop::KeepsAwakeOrShown;
 using lss::player_two::charapop::LodDistances;
 using lss::player_two::charapop::ShouldRaise;
-
-int g_failures = 0;
-
-#define EXPECT(condition)                                                                \
-    do                                                                                   \
-    {                                                                                    \
-        if (!(condition))                                                                \
-        {                                                                                \
-            std::printf("  FAILED line %d: %s\n", __LINE__, #condition);                 \
-            ++g_failures;                                                                \
-        }                                                                                \
-    } while (false)
 
 constexpr LodDistances kMiddle{75.0f, 1000.0f, 6000.0f, 3000.0f, 10000.0f, 2000.0f};
 
@@ -126,11 +116,5 @@ int main()
     TestRaiseHidingEntries();
     TestReducedReach();
     TestHold();
-    if (g_failures != 0)
-    {
-        std::printf("%d failure(s)\n", g_failures);
-        return 1;
-    }
-    std::puts("all passed");
-    return 0;
+    return lss::test::Report();
 }

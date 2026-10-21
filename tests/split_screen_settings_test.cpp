@@ -6,6 +6,8 @@
 
 #include "players/split_screen_settings.h"
 
+#include "expect.h"
+
 #include <cstdio>
 #include <cwchar>
 #include <string>
@@ -16,18 +18,6 @@ using lss::players::ConsoleAccess;
 using lss::players::SettingsChange;
 using lss::players::SplitScreenSettings;
 using Kind = SettingsChange::Kind;
-
-int g_failures = 0;
-
-#define EXPECT(condition)                                                                \
-    do                                                                                   \
-    {                                                                                    \
-        if (!(condition))                                                                \
-        {                                                                                \
-            std::printf("  FAILED line %d: %s\n", __LINE__, #condition);                 \
-            ++g_failures;                                                                \
-        }                                                                                \
-    } while (false)
 
 // The fake console: one variable, and switches to make reading or executing fail.
 struct FakeConsole
@@ -265,6 +255,5 @@ int main()
     TestCommandThatDidNotTakeNeedsNoRestore();
     TestRejoinAppliesAgain();
 
-    std::printf(g_failures == 0 ? "all tests passed\n" : "%d check(s) failed\n", g_failures);
-    return g_failures == 0 ? 0 : 1;
+    return lss::test::Report();
 }

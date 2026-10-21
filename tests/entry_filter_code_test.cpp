@@ -9,10 +9,8 @@
 #include "hud/entry_filter_code.h"
 #include "platform/x64_jump.h"
 
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <Windows.h>
+#include "exec_page.h"
+#include "expect.h"
 
 #include <cstdio>
 #include <cstring>
@@ -24,18 +22,6 @@ namespace {
 using lss::hud::EntryBuffersCode;
 using lss::hud::EntryDrawGateCode;
 using lss::hud::EntryFilterFields;
-
-int g_failures = 0;
-
-#define EXPECT(condition)                                                                \
-    do                                                                                   \
-    {                                                                                    \
-        if (!(condition))                                                                \
-        {                                                                                \
-            std::printf("  FAILED line %d: %s\n", __LINE__, #condition);                 \
-            ++g_failures;                                                                \
-        }                                                                                \
-    } while (false)
 
 /// Appends `code` and, where the redirect appends it, a jump to the next instruction.
 void AppendWithJumpBack(std::vector<std::uint8_t>& out, std::uintptr_t base, const std::uint8_t* code, std::size_t size)
@@ -145,14 +131,11 @@ std::vector<std::uint8_t> GateHarnessCode(std::uintptr_t base, const EntryFilter
 template <class Make, class Run>
 void WithPage(const EntryFilterFields& fields, Make&& make, Run&& run)
 {
-    auto* memory = static_cast<std::uint8_t*>(VirtualAlloc(nullptr, 0x1000, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
-    const auto code = make(reinterpret_cast<std::uintptr_t>(memory), fields);
-    std::memcpy(memory, code.data(), code.size());
-    DWORD previous = 0;
-    VirtualProtect(memory, 0x1000, PAGE_EXECUTE_READ, &previous);
-    FlushInstructionCache(GetCurrentProcess(), memory, 0x1000);
-    run(static_cast<void*>(memory));
-    VirtualFree(memory, 0, MEM_RELEASE);
+    lss::test::ExecutablePage page;
+    const auto code = make(page.At(), fields);
+    page.Write(0, code);
+    page.Seal();
+    run(reinterpret_cast<void*>(page.At()));
 }
 
 Arguments RunBuffers(void* page, std::uint64_t entryName)
@@ -280,6 +263,5 @@ int main()
     TestDrawGate();
     TestSizes();
 
-    std::printf(g_failures == 0 ? "all tests passed\n" : "%d check(s) failed\n", g_failures);
-    return g_failures == 0 ? 0 : 1;
+    return lss::test::Report();
 }

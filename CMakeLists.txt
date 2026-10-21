@@ -228,320 +228,57 @@ endif()
 # ------------------------------------------------------------------------------------------------
 enable_testing()
 
-add_executable(LocalSplitScreenTests
-    tests/one_family_per_view_test.cpp
-    src/renderer/one_family_per_view.cpp
-)
-target_include_directories(LocalSplitScreenTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(LocalSplitScreenTests PRIVATE cxx_std_20)
-add_test(NAME one_family_per_view COMMAND LocalSplitScreenTests)
+# One test executable per test file: tests/<name>_test.cpp with the sources it needs (headers alone
+# need none). Every test is a dependency of `lss_tests`, so `cmake --build build --target lss_tests`
+# builds them all before `ctest` runs them (tests/expect.h: the check and the verdict).
+function(lss_test name)
+    set(target ${name}_test)
+    add_executable(${target} tests/${name}_test.cpp ${ARGN})
+    target_include_directories(${target} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src" "${CMAKE_CURRENT_SOURCE_DIR}/tests")
+    target_compile_features(${target} PRIVATE cxx_std_20)
+    add_test(NAME ${name} COMMAND ${target})
+    set_property(GLOBAL APPEND PROPERTY LSS_TEST_TARGETS ${target})
+endfunction()
 
-add_executable(OutputLoadActionTests
-    tests/output_load_action_test.cpp
-    src/platform/code_redirect.cpp
-    src/platform/code_memory.cpp
-)
-target_include_directories(OutputLoadActionTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(OutputLoadActionTests PRIVATE cxx_std_20)
-add_test(NAME output_load_action COMMAND OutputLoadActionTests)
+lss_test(one_family_per_view src/renderer/one_family_per_view.cpp)
+lss_test(output_load_action src/platform/code_redirect.cpp src/platform/code_memory.cpp)
+lss_test(split_screen_settings src/players/split_screen_settings.cpp)
+lss_test(view_shape src/views/view_shape.cpp)
+lss_test(split_layout src/players/split_layout.cpp)
+lss_test(monitor_row src/views/monitor_row.cpp)
+lss_test(single_view src/players/single_view.cpp)
+lss_test(whole_screen src/views/whole_screen_reason.cpp)
+lss_test(stream_view_math src/views/stream_view_math.cpp)
+lss_test(pool_bits src/platform/pool_bits.cpp)
+lss_test(strand_watch src/player_two/strand_watch.cpp)
+lss_test(swap_window src/player_two/swap_window.cpp)
+lss_test(party_lease src/player_two/party_lease.cpp)
+lss_test(leave_sequence src/player_two/leave_sequence.cpp)
+lss_test(control_script src/control/script.cpp)
+lss_test(control_runner src/control/runner.cpp src/control/script.cpp)
+lss_test(stick_select src/player_two/stick_select.cpp)
+lss_test(call_redirect src/platform/call_redirect.cpp src/platform/module_pin.cpp src/platform/code_memory.cpp)
+lss_test(entry_redirect src/platform/entry_redirect.cpp src/platform/module_pin.cpp src/platform/code_memory.cpp)
+lss_test(code_memory src/platform/code_memory.cpp)
+lss_test(sparse_array src/platform/guarded.cpp)
+lss_test(overlay_band src/hud/overlay_band.cpp)
+lss_test(viewport_placement src/hud/viewport_placement.cpp)
+lss_test(entry_filter_code)
+lss_test(minimap_once_code)
+lss_test(first_player_code src/platform/code_redirect.cpp src/platform/code_memory.cpp)
+lss_test(enemy_gauges_code src/platform/code_redirect.cpp src/platform/code_memory.cpp)
+lss_test(command_rules_code src/platform/code_redirect.cpp src/platform/code_memory.cpp)
+lss_test(panel_gate_code src/platform/code_redirect.cpp src/platform/code_memory.cpp)
+lss_test(centered_frame_code src/platform/code_redirect.cpp src/platform/code_memory.cpp)
+lss_test(popups_code src/platform/code_redirect.cpp src/platform/code_memory.cpp)
+lss_test(arrow_edge_code src/platform/code_redirect.cpp src/platform/code_memory.cpp)
+lss_test(family_boundary_list)
+lss_test(button_view)
+lss_test(settled_log)
+lss_test(ucpc_choice)
+lss_test(charapop_rule)
+lss_test(label_states src/hud/label_states.cpp)
+lss_test(build_translation src/platform/build_translation.cpp)
 
-add_executable(SplitScreenSettingsTests
-    tests/split_screen_settings_test.cpp
-    src/players/split_screen_settings.cpp
-)
-target_include_directories(SplitScreenSettingsTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(SplitScreenSettingsTests PRIVATE cxx_std_20)
-add_test(NAME split_screen_settings COMMAND SplitScreenSettingsTests)
-
-add_executable(ViewShapeTests
-    tests/view_shape_test.cpp
-    src/views/view_shape.cpp
-)
-target_include_directories(ViewShapeTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(ViewShapeTests PRIVATE cxx_std_20)
-add_test(NAME view_shape COMMAND ViewShapeTests)
-
-add_executable(SplitLayoutTests
-    tests/split_layout_test.cpp
-    src/players/split_layout.cpp
-)
-target_include_directories(SplitLayoutTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(SplitLayoutTests PRIVATE cxx_std_20)
-add_test(NAME split_layout COMMAND SplitLayoutTests)
-
-add_executable(MonitorRowTests
-    tests/monitor_row_test.cpp
-    src/views/monitor_row.cpp
-)
-target_include_directories(MonitorRowTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(MonitorRowTests PRIVATE cxx_std_20)
-add_test(NAME monitor_row COMMAND MonitorRowTests)
-
-add_executable(SingleViewTests
-    tests/single_view_test.cpp
-    src/players/single_view.cpp
-)
-target_include_directories(SingleViewTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(SingleViewTests PRIVATE cxx_std_20)
-add_test(NAME single_view COMMAND SingleViewTests)
-
-add_executable(WholeScreenTests
-    tests/whole_screen_test.cpp
-    src/views/whole_screen_reason.cpp
-)
-target_include_directories(WholeScreenTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(WholeScreenTests PRIVATE cxx_std_20)
-add_test(NAME whole_screen COMMAND WholeScreenTests)
-
-add_executable(StreamViewMathTests
-    tests/stream_view_math_test.cpp
-    src/views/stream_view_math.cpp
-)
-target_include_directories(StreamViewMathTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(StreamViewMathTests PRIVATE cxx_std_20)
-add_test(NAME stream_view_math COMMAND StreamViewMathTests)
-
-add_executable(PoolBitsTests
-    tests/pool_bits_test.cpp
-    src/platform/pool_bits.cpp
-)
-target_include_directories(PoolBitsTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(PoolBitsTests PRIVATE cxx_std_20)
-add_test(NAME pool_bits COMMAND PoolBitsTests)
-
-add_executable(StrandWatchTests
-    tests/strand_watch_test.cpp
-    src/player_two/strand_watch.cpp
-)
-target_include_directories(StrandWatchTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(StrandWatchTests PRIVATE cxx_std_20)
-add_test(NAME strand_watch COMMAND StrandWatchTests)
-
-add_executable(SwapWindowTests
-    tests/swap_window_test.cpp
-    src/player_two/swap_window.cpp
-)
-target_include_directories(SwapWindowTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(SwapWindowTests PRIVATE cxx_std_20)
-add_test(NAME swap_window COMMAND SwapWindowTests)
-
-add_executable(PartyLeaseTests
-    tests/party_lease_test.cpp
-    src/player_two/party_lease.cpp
-)
-target_include_directories(PartyLeaseTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(PartyLeaseTests PRIVATE cxx_std_20)
-add_test(NAME party_lease COMMAND PartyLeaseTests)
-
-add_executable(LeaveSequenceTests
-    tests/leave_sequence_test.cpp
-    src/player_two/leave_sequence.cpp
-)
-target_include_directories(LeaveSequenceTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(LeaveSequenceTests PRIVATE cxx_std_20)
-add_test(NAME leave_sequence COMMAND LeaveSequenceTests)
-
-add_executable(ControlScriptTests
-    tests/control_script_test.cpp
-    src/control/script.cpp
-)
-target_include_directories(ControlScriptTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(ControlScriptTests PRIVATE cxx_std_20)
-add_test(NAME control_script COMMAND ControlScriptTests)
-
-add_executable(ControlRunnerTests
-    tests/control_runner_test.cpp
-    src/control/runner.cpp
-    src/control/script.cpp
-)
-target_include_directories(ControlRunnerTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(ControlRunnerTests PRIVATE cxx_std_20)
-add_test(NAME control_runner COMMAND ControlRunnerTests)
-
-add_executable(StickSelectTests
-    tests/stick_select_test.cpp
-    src/player_two/stick_select.cpp
-)
-target_include_directories(StickSelectTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(StickSelectTests PRIVATE cxx_std_20)
-add_test(NAME stick_select COMMAND StickSelectTests)
-
-add_executable(CallRedirectTests
-    tests/call_redirect_test.cpp
-    src/platform/call_redirect.cpp
-    src/platform/module_pin.cpp
-    src/platform/code_memory.cpp
-)
-target_include_directories(CallRedirectTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(CallRedirectTests PRIVATE cxx_std_20)
-add_test(NAME call_redirect COMMAND CallRedirectTests)
-
-add_executable(EntryRedirectTests
-    tests/entry_redirect_test.cpp
-    src/platform/entry_redirect.cpp
-    src/platform/module_pin.cpp
-    src/platform/code_memory.cpp
-)
-target_include_directories(EntryRedirectTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(EntryRedirectTests PRIVATE cxx_std_20)
-add_test(NAME entry_redirect COMMAND EntryRedirectTests)
-
-add_executable(CodeMemoryTests
-    tests/code_memory_test.cpp
-    src/platform/code_memory.cpp
-)
-target_include_directories(CodeMemoryTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(CodeMemoryTests PRIVATE cxx_std_20)
-add_test(NAME code_memory COMMAND CodeMemoryTests)
-
-add_executable(SparseArrayTests
-    tests/sparse_array_test.cpp
-    src/platform/guarded.cpp
-)
-target_include_directories(SparseArrayTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(SparseArrayTests PRIVATE cxx_std_20)
-add_test(NAME sparse_array COMMAND SparseArrayTests)
-
-add_executable(OverlayBandTests
-    tests/overlay_band_test.cpp
-    src/hud/overlay_band.cpp
-)
-target_include_directories(OverlayBandTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(OverlayBandTests PRIVATE cxx_std_20)
-add_test(NAME overlay_band COMMAND OverlayBandTests)
-
-add_executable(ViewportPlacementTests
-    tests/viewport_placement_test.cpp
-    src/hud/viewport_placement.cpp
-)
-target_include_directories(ViewportPlacementTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(ViewportPlacementTests PRIVATE cxx_std_20)
-add_test(NAME viewport_placement COMMAND ViewportPlacementTests)
-
-add_executable(EntryFilterCodeTests
-    tests/entry_filter_code_test.cpp
-)
-target_include_directories(EntryFilterCodeTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(EntryFilterCodeTests PRIVATE cxx_std_20)
-add_test(NAME entry_filter_code COMMAND EntryFilterCodeTests)
-
-add_executable(MinimapOnceCodeTests
-    tests/minimap_once_code_test.cpp
-)
-target_include_directories(MinimapOnceCodeTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(MinimapOnceCodeTests PRIVATE cxx_std_20)
-add_test(NAME minimap_once_code COMMAND MinimapOnceCodeTests)
-
-add_executable(FirstPlayerCodeTests
-    tests/first_player_code_test.cpp
-    src/platform/code_redirect.cpp
-    src/platform/code_memory.cpp
-)
-target_include_directories(FirstPlayerCodeTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(FirstPlayerCodeTests PRIVATE cxx_std_20)
-add_test(NAME first_player_code COMMAND FirstPlayerCodeTests)
-
-add_executable(EnemyGaugesCodeTests
-    tests/enemy_gauges_code_test.cpp
-    src/platform/code_redirect.cpp
-    src/platform/code_memory.cpp
-)
-target_include_directories(EnemyGaugesCodeTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(EnemyGaugesCodeTests PRIVATE cxx_std_20)
-add_test(NAME enemy_gauges_code COMMAND EnemyGaugesCodeTests)
-
-add_executable(CommandRulesCodeTests
-    tests/command_rules_code_test.cpp
-    src/platform/code_redirect.cpp
-    src/platform/code_memory.cpp
-)
-target_include_directories(CommandRulesCodeTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(CommandRulesCodeTests PRIVATE cxx_std_20)
-add_test(NAME command_rules_code COMMAND CommandRulesCodeTests)
-
-add_executable(PanelGateCodeTests
-    tests/panel_gate_code_test.cpp
-    src/platform/code_redirect.cpp
-    src/platform/code_memory.cpp
-)
-target_include_directories(PanelGateCodeTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(PanelGateCodeTests PRIVATE cxx_std_20)
-add_test(NAME panel_gate_code COMMAND PanelGateCodeTests)
-
-add_executable(CenteredFrameCodeTests
-    tests/centered_frame_code_test.cpp
-    src/platform/code_redirect.cpp
-    src/platform/code_memory.cpp
-)
-target_include_directories(CenteredFrameCodeTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(CenteredFrameCodeTests PRIVATE cxx_std_20)
-add_test(NAME centered_frame_code COMMAND CenteredFrameCodeTests)
-
-add_executable(PopupsCodeTests
-    tests/popups_code_test.cpp
-    src/platform/code_redirect.cpp
-    src/platform/code_memory.cpp
-)
-target_include_directories(PopupsCodeTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(PopupsCodeTests PRIVATE cxx_std_20)
-add_test(NAME popups_code COMMAND PopupsCodeTests)
-
-add_executable(ArrowEdgeCodeTests
-    tests/arrow_edge_code_test.cpp
-    src/platform/code_redirect.cpp
-    src/platform/code_memory.cpp
-)
-target_include_directories(ArrowEdgeCodeTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(ArrowEdgeCodeTests PRIVATE cxx_std_20)
-add_test(NAME arrow_edge_code COMMAND ArrowEdgeCodeTests)
-
-add_executable(FamilyBoundaryListTests
-    tests/family_boundary_list_test.cpp
-)
-target_include_directories(FamilyBoundaryListTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(FamilyBoundaryListTests PRIVATE cxx_std_20)
-add_test(NAME family_boundary_list COMMAND FamilyBoundaryListTests)
-
-add_executable(ButtonViewTests
-    tests/button_view_test.cpp
-)
-target_include_directories(ButtonViewTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(ButtonViewTests PRIVATE cxx_std_20)
-add_test(NAME button_view COMMAND ButtonViewTests)
-
-add_executable(SettledLogTests
-    tests/settled_log_test.cpp
-)
-target_include_directories(SettledLogTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(SettledLogTests PRIVATE cxx_std_20)
-add_test(NAME settled_log COMMAND SettledLogTests)
-
-add_executable(UcpcChoiceTests
-    tests/ucpc_choice_test.cpp
-)
-target_include_directories(UcpcChoiceTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(UcpcChoiceTests PRIVATE cxx_std_20)
-add_test(NAME ucpc_choice COMMAND UcpcChoiceTests)
-
-add_executable(CharaPopRuleTests
-    tests/charapop_rule_test.cpp
-)
-target_include_directories(CharaPopRuleTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(CharaPopRuleTests PRIVATE cxx_std_20)
-add_test(NAME charapop_rule COMMAND CharaPopRuleTests)
-
-add_executable(LabelStatesTests
-    tests/label_states_test.cpp
-    src/hud/label_states.cpp
-)
-target_include_directories(LabelStatesTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(LabelStatesTests PRIVATE cxx_std_20)
-add_test(NAME label_states COMMAND LabelStatesTests)
-
-add_executable(BuildTranslationTests
-    tests/build_translation_test.cpp
-    src/platform/build_translation.cpp
-)
-target_include_directories(BuildTranslationTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_features(BuildTranslationTests PRIVATE cxx_std_20)
-add_test(NAME build_translation COMMAND BuildTranslationTests)
+get_property(LSS_TEST_TARGETS GLOBAL PROPERTY LSS_TEST_TARGETS)
+add_custom_target(lss_tests DEPENDS ${LSS_TEST_TARGETS})

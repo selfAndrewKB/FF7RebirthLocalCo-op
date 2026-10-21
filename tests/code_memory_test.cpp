@@ -3,6 +3,8 @@
 
 #include "platform/code_memory.h"
 
+#include "expect.h"
+
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
@@ -11,18 +13,6 @@
 namespace {
 
 using namespace lss::platform;
-
-int g_failures = 0;
-
-#define EXPECT(condition)                                                                \
-    do                                                                                   \
-    {                                                                                    \
-        if (!(condition))                                                                \
-        {                                                                                \
-            std::printf("  FAILED line %d: %s\n", __LINE__, #condition);                 \
-            ++g_failures;                                                                \
-        }                                                                                \
-    } while (false)
 
 constexpr std::uintptr_t kGrain = 0x10000;
 constexpr std::uintptr_t kTop   = 0x7FFFFFFF0000;  // the made-up address space ends here
@@ -206,11 +196,5 @@ int main()
     TestLowSite();
     TestPoolPlacesNearAndShares();
     TestPoolFarSiteGetsItsOwnBlock();
-    if (g_failures != 0)
-    {
-        std::printf("code_memory: %d failure(s)\n", g_failures);
-        return 1;
-    }
-    std::printf("code_memory: all passed\n");
-    return 0;
+    return lss::test::Report();
 }

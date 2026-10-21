@@ -2,6 +2,8 @@
 
 #include "control/runner.h"
 
+#include "expect.h"
+
 #include <cstdio>
 #include <format>
 #include <string>
@@ -15,18 +17,6 @@ using lss::control::Outcome;
 using lss::control::ParseLine;
 using lss::control::Runner;
 using lss::control::ScriptLine;
-
-int g_failures = 0;
-
-#define EXPECT(condition)                                                                \
-    do                                                                                   \
-    {                                                                                    \
-        if (!(condition))                                                                \
-        {                                                                                \
-            std::printf("  FAILED line %d: %s\n", __LINE__, #condition);                 \
-            ++g_failures;                                                                \
-        }                                                                                \
-    } while (false)
 
 /// Records every call; player 2's state is set by the test.
 class FakeMod final : public lss::control::Target
@@ -255,6 +245,5 @@ int main()
     TestScriptEndsWhenItsHoldsDo();
     TestCommandsPerTickAreCapped();
 
-    std::printf(g_failures == 0 ? "all tests passed\n" : "%d check(s) failed\n", g_failures);
-    return g_failures == 0 ? 0 : 1;
+    return lss::test::Report();
 }

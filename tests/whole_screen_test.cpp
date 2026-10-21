@@ -5,6 +5,8 @@
 
 #include "views/whole_screen.h"
 
+#include "expect.h"
+
 #include <cstdint>
 #include <cstdio>
 #include <initializer_list>
@@ -14,18 +16,6 @@ namespace {
 using lss::views::ReasonOf;
 using lss::views::ScreenSignals;
 using lss::views::WholeScreenReason;
-
-int g_failures = 0;
-
-#define EXPECT(condition)                                                                \
-    do                                                                                   \
-    {                                                                                    \
-        if (!(condition))                                                                \
-        {                                                                                \
-            std::printf("  FAILED line %d: %s\n", __LINE__, #condition);                 \
-            ++g_failures;                                                                \
-        }                                                                                \
-    } while (false)
 
 ScreenSignals Readable()
 {
@@ -327,6 +317,5 @@ int main()
     TestOrder();
     TestOtherStates();
 
-    std::printf(g_failures == 0 ? "all tests passed\n" : "%d check(s) failed\n", g_failures);
-    return g_failures == 0 ? 0 : 1;
+    return lss::test::Report();
 }

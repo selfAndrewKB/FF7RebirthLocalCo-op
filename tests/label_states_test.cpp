@@ -7,6 +7,8 @@
 
 #include "hud/label_states.h"
 
+#include "expect.h"
+
 #include <cstdio>
 #include <cstring>
 #include <vector>
@@ -17,18 +19,6 @@ using lss::hud::label_states::EmptyState;
 using lss::hud::label_states::LabelAccess;
 using lss::hud::label_states::LabelBook;
 using lss::hud::label_states::Parked;
-
-int g_failures = 0;
-
-#define EXPECT(condition)                                                                \
-    do                                                                                   \
-    {                                                                                    \
-        if (!(condition))                                                                \
-        {                                                                                \
-            std::printf("  FAILED line %d: %s\n", __LINE__, #condition);                 \
-            ++g_failures;                                                                \
-        }                                                                                \
-    } while (false)
 
 struct FakeWidget
 {
@@ -316,11 +306,5 @@ int main()
     TestReleaseAll();
     TestRefusalsAndFull();
     TestFaults();
-    if (g_failures != 0)
-    {
-        std::printf("%d failure(s)\n", g_failures);
-        return 1;
-    }
-    std::puts("all label state tests passed");
-    return 0;
+    return lss::test::Report();
 }

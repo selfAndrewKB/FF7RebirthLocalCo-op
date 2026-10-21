@@ -8,27 +8,13 @@
 #include "hud/centered_frame_code.h"
 #include "platform/code_redirect.h"
 
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <Windows.h>
+#include "exec_page.h"
+#include "expect.h"
 
 #include <cstdio>
 #include <cstring>
 
 namespace {
-
-int g_failures = 0;
-
-#define EXPECT(condition)                                                                \
-    do                                                                                   \
-    {                                                                                    \
-        if (!(condition))                                                                \
-        {                                                                                \
-            std::printf("  FAILED line %d: %s\n", __LINE__, #condition);                 \
-            ++g_failures;                                                                \
-        }                                                                                \
-    } while (false)
 
 struct Box
 {
@@ -62,25 +48,21 @@ public:
             0x48, 0x89, 0xD8,                          // 57: mov rax, rbx
             0x5B,                                      // 60: pop rbx
             0xC3};                                     // 61: ret
-        memory_ = static_cast<std::uint8_t*>(VirtualAlloc(nullptr, 0x1000, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
-        std::memcpy(memory_, code, sizeof(code));
-        DWORD previous = 0;
-        VirtualProtect(memory_, 0x1000, PAGE_EXECUTE_READ, &previous);
-        FlushInstructionCache(GetCurrentProcess(), memory_, 0x1000);
+        page_.Write(0, code);
+        page_.Seal();
     }
-    ~FunctionLike() { VirtualFree(memory_, 0, MEM_RELEASE); }
 
-    std::uintptr_t At(std::size_t offset) const { return reinterpret_cast<std::uintptr_t>(memory_) + offset; }
+    std::uintptr_t At(std::size_t offset) const { return page_.At(offset); }
     Box            Call() const
     {
         Box box{-1, -1, -1, -1};
-        const auto returned = reinterpret_cast<Box* (*)(Box*)>(memory_)(&box);
+        const auto returned = page_.Function<Box* (*)(Box*)>()(&box);
         EXPECT(returned == &box);
         return box;
     }
 
 private:
-    std::uint8_t* memory_ = nullptr;
+    lss::test::ExecutablePage page_;
 };
 
 bool Is(const Box& box, float minX, float minY, float maxX, float maxY)
@@ -115,6 +97,5 @@ int main()
 {
     TestFrame();
 
-    std::printf(g_failures == 0 ? "all tests passed\n" : "%d check(s) failed\n", g_failures);
-    return g_failures == 0 ? 0 : 1;
+    return lss::test::Report();
 }

@@ -6,6 +6,8 @@
 
 #include "player_two/swap_window.h"
 
+#include "expect.h"
+
 #include <cstdint>
 #include <cstdio>
 
@@ -13,18 +15,6 @@ namespace {
 
 using lss::player_two::SwapWindow;
 using Opened = SwapWindow::Opened;
-
-int g_failures = 0;
-
-#define EXPECT(condition)                                                                \
-    do                                                                                   \
-    {                                                                                    \
-        if (!(condition))                                                                \
-        {                                                                                \
-            std::printf("  FAILED line %d: %s\n", __LINE__, #condition);                 \
-            ++g_failures;                                                                \
-        }                                                                                \
-    } while (false)
 
 constexpr std::uint64_t kPlayerOne = 0x0000000700001234;  // {serial 7, index 0x1234}
 constexpr std::uint64_t kPlayerTwo = 0x0000000900005678;
@@ -108,6 +98,5 @@ int main()
     TestNestedWindowLeavesTheOuterOneAlone();
     TestMisalignedAndNullSlotsAreRefused();
 
-    std::printf(g_failures == 0 ? "all tests passed\n" : "%d check(s) failed\n", g_failures);
-    return g_failures == 0 ? 0 : 1;
+    return lss::test::Report();
 }

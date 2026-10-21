@@ -2,6 +2,8 @@
 
 #include "platform/build_translation.h"
 
+#include "expect.h"
+
 #include <array>
 #include <cstdint>
 #include <cstdio>
@@ -10,18 +12,6 @@
 namespace {
 
 using namespace lss::platform;
-
-int g_failures = 0;
-
-#define EXPECT(condition)                                                                \
-    do                                                                                   \
-    {                                                                                    \
-        if (!(condition))                                                                \
-        {                                                                                \
-            std::printf("  FAILED line %d: %s\n", __LINE__, #condition);                 \
-            ++g_failures;                                                                \
-        }                                                                                \
-    } while (false)
 
 // Two ranges: 0x1000..0x1040 moved to 0x2000 (a call's rel32 at +0x10 and a RIP-relative disp32 at +0x20 moved),
 // and 0x3000..0x3008 (a data slot) moved to 0x2F00. One hand-found address at 0x5000 -> 0x6000 with its own bytes.
@@ -168,11 +158,5 @@ int main()
     TestMatches();
     TestFindBuild();
     TestPerBuild();
-    if (g_failures != 0)
-    {
-        std::printf("%d failure(s)\n", g_failures);
-        return 1;
-    }
-    std::puts("all passed");
-    return 0;
+    return lss::test::Report();
 }

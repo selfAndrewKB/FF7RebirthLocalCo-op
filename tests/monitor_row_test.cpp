@@ -7,6 +7,8 @@
 
 #include "views/monitor_row.h"
 
+#include "expect.h"
+
 #include <cstdio>
 #include <vector>
 
@@ -16,18 +18,6 @@ using lss::views::monitor_row::Choice;
 using lss::views::monitor_row::Choose;
 using lss::views::monitor_row::Monitor;
 using lss::views::monitor_row::Rect;
-
-int g_failures = 0;
-
-#define EXPECT(condition)                                                                \
-    do                                                                                   \
-    {                                                                                    \
-        if (!(condition))                                                                \
-        {                                                                                \
-            std::printf("  FAILED line %d: %s\n", __LINE__, #condition);                 \
-            ++g_failures;                                                                \
-        }                                                                                \
-    } while (false)
 
 Monitor At(std::int32_t left, std::int32_t top, std::int32_t width = 2560, std::int32_t height = 1440,
            std::uint32_t dpi = 96)
@@ -135,11 +125,5 @@ int main()
     TestRowBrokenByAGap();
     TestScalingBreaksTheRow();
     TestBadInputs();
-    if (g_failures == 0)
-    {
-        std::printf("all monitor_row tests passed\n");
-        return 0;
-    }
-    std::printf("%d failure(s)\n", g_failures);
-    return 1;
+    return lss::test::Report();
 }

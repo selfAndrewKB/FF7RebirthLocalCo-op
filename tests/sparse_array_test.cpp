@@ -4,6 +4,8 @@
 
 #include "platform/sparse_array.h"
 
+#include "expect.h"
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -11,18 +13,6 @@
 #include <vector>
 
 namespace {
-
-int g_failures = 0;
-
-#define EXPECT(condition)                                                                \
-    do                                                                                   \
-    {                                                                                    \
-        if (!(condition))                                                                \
-        {                                                                                \
-            std::printf("  FAILED line %d: %s\n", __LINE__, #condition);                 \
-            ++g_failures;                                                                \
-        }                                                                                \
-    } while (false)
 
 struct Header
 {
@@ -109,6 +99,5 @@ int main()
     HeapBits(data);
     Stops(data);
     Refuses(data);
-    std::printf("%s\n", g_failures == 0 ? "all passed" : "FAILURES");
-    return g_failures == 0 ? 0 : 1;
+    return lss::test::Report();
 }

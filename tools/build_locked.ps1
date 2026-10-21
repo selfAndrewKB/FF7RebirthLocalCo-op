@@ -16,7 +16,7 @@
 param(
     [switch]$Regenerate,
     [switch]$Tests,
-    [string]$Target = '',          # e.g. LocalSplitScreen; empty builds everything (the tests too)
+    [string]$Target = '',          # e.g. LocalSplitScreen; empty builds everything (the tests too; -Tests builds them anyway)
     [int]$WaitMinutes = 30
 )
 
@@ -49,6 +49,9 @@ try {
     if ($failed) { '--- the build output ends:'; $output | ForEach-Object { "$_" } | Select-Object -Last 25 }
     if ($failed) { throw 'the build failed' }
     if ($Tests) {
+        # Every test executable first (ctest runs only what is built), then the tests.
+        $testOutput = & cmake --build $build --config Game__Shipping__Win64 --target lss_tests 2>&1
+        if ($LASTEXITCODE -ne 0) { $testOutput | ForEach-Object { "$_" } | Select-String -Pattern 'error' | ForEach-Object { $_.Line }; throw 'the tests did not build' }
         & ctest --test-dir $build -C Game__Shipping__Win64 --output-on-failure 2>&1 | Select-Object -Last 15
         if ($LASTEXITCODE -ne 0) { throw 'a host test failed' }
     }

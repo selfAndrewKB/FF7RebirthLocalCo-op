@@ -2,6 +2,8 @@
 
 #include "platform/pool_bits.h"
 
+#include "expect.h"
+
 #include <array>
 #include <cstdint>
 #include <cstdio>
@@ -10,18 +12,6 @@ namespace {
 
 using lss::platform::binned_pools::CommittedFromLastRow;
 using lss::platform::binned_pools::LiveBlocks;
-
-int g_failures = 0;
-
-#define EXPECT(condition)                                                                \
-    do                                                                                   \
-    {                                                                                    \
-        if (!(condition))                                                                \
-        {                                                                                \
-            std::printf("  FAILED line %d: %s\n", __LINE__, #condition);                 \
-            ++g_failures;                                                                \
-        }                                                                                \
-    } while (false)
 
 void TestCommitted()
 {
@@ -70,6 +60,5 @@ int main()
 {
     TestCommitted();
     TestLiveBlocks();
-    std::printf(g_failures == 0 ? "all tests passed\n" : "%d check(s) failed\n", g_failures);
-    return g_failures == 0 ? 0 : 1;
+    return lss::test::Report();
 }

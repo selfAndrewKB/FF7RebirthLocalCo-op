@@ -7,6 +7,8 @@
 
 #include "players/split_layout.h"
 
+#include "expect.h"
+
 #include <cstdio>
 
 namespace {
@@ -15,18 +17,6 @@ using lss::players::LayoutAccess;
 using lss::players::LayoutChange;
 using lss::players::SplitLayout;
 using Kind = LayoutChange::Kind;
-
-int g_failures = 0;
-
-#define EXPECT(condition)                                                                \
-    do                                                                                   \
-    {                                                                                    \
-        if (!(condition))                                                                \
-        {                                                                                \
-            std::printf("  FAILED line %d: %s\n", __LINE__, #condition);                 \
-            ++g_failures;                                                                \
-        }                                                                                \
-    } while (false)
 
 constexpr std::uint8_t kTopBottom  = 0;
 constexpr std::uint8_t kSideBySide = 1;
@@ -210,6 +200,5 @@ int main()
     TestSomeoneElseChangedIt();
     TestFailuresReported();
 
-    std::printf(g_failures == 0 ? "all tests passed\n" : "%d check(s) failed\n", g_failures);
-    return g_failures == 0 ? 0 : 1;
+    return lss::test::Report();
 }

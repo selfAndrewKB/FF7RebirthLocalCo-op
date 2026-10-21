@@ -8,28 +8,15 @@
 
 #include "platform/entry_redirect.h"
 
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <Windows.h>
+#include "exec_page.h"
+#include "expect.h"
+
 #include <intrin.h>
 
 #include <cstdio>
 #include <cstring>
 
 namespace {
-
-int g_failures = 0;
-
-#define EXPECT(condition)                                                                \
-    do                                                                                   \
-    {                                                                                    \
-        if (!(condition))                                                                \
-        {                                                                                \
-            std::printf("  FAILED line %d: %s\n", __LINE__, #condition);                 \
-            ++g_failures;                                                                \
-        }                                                                                \
-    } while (false)
 
 using IntFn = int (*)(int);
 
@@ -49,7 +36,6 @@ public:
 
     GameLikeCode()
     {
-        memory_ = static_cast<std::uint8_t*>(VirtualAlloc(nullptr, 0x1000, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
         const std::uint8_t caller[] = {0x48, 0x83, 0xEC, 0x28,        // sub rsp, 28h
                                        0xB9, 0x05, 0x00, 0x00, 0x00,  // mov ecx, 5
                                        0xE8, 0x00, 0x00, 0x00, 0x00,  // call function (displacement below)
@@ -59,23 +45,19 @@ public:
                                          0x48, 0x8B, 0x5C, 0x24, 0x08,  // mov rbx, [rsp+8]
                                          0x8D, 0x41, 0x01,              // lea eax, [rcx+1]
                                          0xC3};                         // ret
-        std::memcpy(memory_, caller, sizeof(caller));
-        const std::int32_t rel = static_cast<std::int32_t>(kFunctionOffset - (kCallOffset + 5));
-        std::memcpy(memory_ + kCallOffset + 1, &rel, sizeof(rel));
-        std::memcpy(memory_ + kFunctionOffset, function, sizeof(function));
-        std::memcpy(memory_ + kCrossingOffset, function, sizeof(function));
-        DWORD previous = 0;
-        VirtualProtect(memory_, 0x1000, PAGE_EXECUTE_READ, &previous);
-        FlushInstructionCache(GetCurrentProcess(), memory_, 0x1000);
+        page_.Write(0, caller);
+        page_.WriteRel32(kCallOffset, kFunctionOffset);
+        page_.Write(kFunctionOffset, function);
+        page_.Write(kCrossingOffset, function);
+        page_.Seal();
     }
-    ~GameLikeCode() { VirtualFree(memory_, 0, MEM_RELEASE); }
 
-    std::uintptr_t At(std::size_t offset) const { return reinterpret_cast<std::uintptr_t>(memory_) + offset; }
-    int            RunCaller() const { return reinterpret_cast<int (*)()>(memory_)(); }
+    std::uintptr_t At(std::size_t offset) const { return page_.At(offset); }
+    int            RunCaller() const { return page_.Function<int (*)()>()(); }
     int            Call(std::size_t offset, int value) const { return reinterpret_cast<IntFn>(At(offset))(value); }
 
 private:
-    std::uint8_t* memory_ = nullptr;
+    lss::test::ExecutablePage page_;
 };
 
 lss::platform::EntryRedirect* g_redirect      = nullptr;
@@ -192,6 +174,5 @@ int main()
     TestRedirectRefusesWhatItDoesNotRecognise();
     TestSecondInstructionRedirect();
 
-    std::printf(g_failures == 0 ? "all tests passed\n" : "%d check(s) failed\n", g_failures);
-    return g_failures == 0 ? 0 : 1;
+    return lss::test::Report();
 }

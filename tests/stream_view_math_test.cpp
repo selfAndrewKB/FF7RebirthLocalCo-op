@@ -2,6 +2,8 @@
 
 #include "views/stream_view_math.h"
 
+#include "expect.h"
+
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -10,18 +12,6 @@ namespace {
 
 using lss::views::CameraOf;
 using lss::views::ForwardOf;
-
-int g_failures = 0;
-
-#define EXPECT(condition)                                                                \
-    do                                                                                   \
-    {                                                                                    \
-        if (!(condition))                                                                \
-        {                                                                                \
-            std::printf("  FAILED line %d: %s\n", __LINE__, #condition);                 \
-            ++g_failures;                                                                \
-        }                                                                                \
-    } while (false)
 
 bool Near(float a, float b)
 {
@@ -101,6 +91,5 @@ int main()
     TestCoveringFov();
     TestStreamFov();
     TestCameraOf();
-    std::printf(g_failures == 0 ? "all tests passed\n" : "%d check(s) failed\n", g_failures);
-    return g_failures == 0 ? 0 : 1;
+    return lss::test::Report();
 }

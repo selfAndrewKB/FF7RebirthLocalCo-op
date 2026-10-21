@@ -8,27 +8,13 @@
 #include "hud/popups_code.h"
 #include "platform/code_redirect.h"
 
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <Windows.h>
+#include "exec_page.h"
+#include "expect.h"
 
 #include <cstdio>
 #include <cstring>
 
 namespace {
-
-int g_failures = 0;
-
-#define EXPECT(condition)                                                                \
-    do                                                                                   \
-    {                                                                                    \
-        if (!(condition))                                                                \
-        {                                                                                \
-            std::printf("  FAILED line %d: %s\n", __LINE__, #condition);                 \
-            ++g_failures;                                                                \
-        }                                                                                \
-    } while (false)
 
 /// nop x8 ; mov [rsp+10h], rbx (offset 8) ; mov rax, rdx ; xor rax, r9 ; ret
 class FunctionLike
@@ -45,26 +31,22 @@ public:
             0x48, 0x89, 0xD0,                                // 13: mov rax, rdx
             0x4C, 0x31, 0xC8,                                // 16: xor rax, r9
             0xC3};                                           // 19: ret
-        memory_ = static_cast<std::uint8_t*>(VirtualAlloc(nullptr, 0x1000, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
-        std::memcpy(memory_, code, sizeof(code));
-        DWORD previous = 0;
-        VirtualProtect(memory_, 0x1000, PAGE_EXECUTE_READ, &previous);
-        FlushInstructionCache(GetCurrentProcess(), memory_, 0x1000);
+        page_.Write(0, code);
+        page_.Seal();
     }
-    ~FunctionLike() { VirtualFree(memory_, 0, MEM_RELEASE); }
 
-    std::uintptr_t At(std::size_t offset) const { return reinterpret_cast<std::uintptr_t>(memory_) + offset; }
+    std::uintptr_t At(std::size_t offset) const { return page_.At(offset); }
     std::uint64_t  Call(std::uint64_t controller, const void* key, const float* location, std::uint64_t offset,
                         std::uint8_t clamp) const
     {
         using Fn = std::uint64_t (*)(void*, std::uint64_t, void*, const void*, const float*, std::uint64_t, std::uint8_t);
         float out[2]{};
         void* canvas[2]{};
-        return reinterpret_cast<Fn>(memory_)(out, controller, canvas, key, location, offset, clamp);
+        return page_.Function<Fn>()(out, controller, canvas, key, location, offset, clamp);
     }
 
 private:
-    std::uint8_t* memory_ = nullptr;
+    lss::test::ExecutablePage page_;
 };
 
 void TestKind(lss::hud::PopupKey kind)
@@ -124,6 +106,5 @@ int main()
     TestKind(lss::hud::PopupKey::Slate);
     TestKind(lss::hud::PopupKey::Umg);
 
-    std::printf(g_failures == 0 ? "all tests passed\n" : "%d check(s) failed\n", g_failures);
-    return g_failures == 0 ? 0 : 1;
+    return lss::test::Report();
 }

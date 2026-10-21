@@ -7,27 +7,13 @@
 #include "hud/first_player_code.h"
 #include "platform/code_redirect.h"
 
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <Windows.h>
+#include "exec_page.h"
+#include "expect.h"
 
 #include <cstdio>
 #include <cstring>
 
 namespace {
-
-int g_failures = 0;
-
-#define EXPECT(condition)                                                                \
-    do                                                                                   \
-    {                                                                                    \
-        if (!(condition))                                                                \
-        {                                                                                \
-            std::printf("  FAILED line %d: %s\n", __LINE__, #condition);                 \
-            ++g_failures;                                                                \
-        }                                                                                \
-    } while (false)
 
 /// A stand-in for the function, with `mov eax, 28h` at the same offset in its 16-byte block as the
 /// game's (0x140CCF8E4 is 4 bytes into the block at 0x140CCF8E0):
@@ -46,19 +32,15 @@ public:
             0xB8, 0x28, 0x00, 0x00, 0x00,                          // mov eax, 28h   (offset 4)
             0x48, 0xB8, 0x5A, 0x5A, 0, 0, 0, 0, 0, 0,              // mov rax, 5A5Ah
             0xC3};                                                 // ret
-        memory_ = static_cast<std::uint8_t*>(VirtualAlloc(nullptr, 0x1000, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
-        std::memcpy(memory_, code, sizeof(code));
-        DWORD previous = 0;
-        VirtualProtect(memory_, 0x1000, PAGE_EXECUTE_READ, &previous);
-        FlushInstructionCache(GetCurrentProcess(), memory_, 0x1000);
+        page_.Write(0, code);
+        page_.Seal();
     }
-    ~FunctionLike() { VirtualFree(memory_, 0, MEM_RELEASE); }
 
-    std::uintptr_t At(std::size_t offset) const { return reinterpret_cast<std::uintptr_t>(memory_) + offset; }
+    std::uintptr_t At(std::size_t offset) const { return page_.At(offset); }
     std::uint64_t Call() const { return reinterpret_cast<std::uint64_t (*)()>(At(kEntryOffset))(); }
 
 private:
-    std::uint8_t* memory_ = nullptr;
+    lss::test::ExecutablePage page_;
 };
 
 void TestAnswer()
@@ -88,6 +70,5 @@ int main()
 {
     TestAnswer();
 
-    std::printf(g_failures == 0 ? "all tests passed\n" : "%d check(s) failed\n", g_failures);
-    return g_failures == 0 ? 0 : 1;
+    return lss::test::Report();
 }

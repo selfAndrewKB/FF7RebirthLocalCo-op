@@ -9,10 +9,8 @@
 #include "hud/minimap_once_code.h"
 #include "platform/x64_jump.h"
 
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <Windows.h>
+#include "exec_page.h"
+#include "expect.h"
 
 #include <cstdio>
 #include <cstring>
@@ -23,18 +21,6 @@
 namespace {
 
 using lss::hud::MinimapOnceFields;
-
-int g_failures = 0;
-
-#define EXPECT(condition)                                                                \
-    do                                                                                   \
-    {                                                                                    \
-        if (!(condition))                                                                \
-        {                                                                                \
-            std::printf("  FAILED line %d: %s\n", __LINE__, #condition);                 \
-            ++g_failures;                                                                \
-        }                                                                                \
-    } while (false)
 
 /// std::uint64_t harness(const void* widget /*rcx*/)
 using Harness = std::uint64_t (*)(const void* widget);
@@ -104,15 +90,12 @@ std::vector<std::uint8_t> HarnessCode(std::uintptr_t base, std::size_t siteSize,
 template <class Build>
 std::uint64_t Run(std::size_t siteSize, Build&& build, const Tail& tail = kTail)
 {
-    auto* memory = static_cast<std::uint8_t*>(VirtualAlloc(nullptr, 0x1000, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
-    const auto code = HarnessCode(reinterpret_cast<std::uintptr_t>(memory), siteSize, build, tail);
-    std::memcpy(memory, code.data(), code.size());
-    DWORD previous = 0;
-    VirtualProtect(memory, 0x1000, PAGE_EXECUTE_READ, &previous);
-    FlushInstructionCache(GetCurrentProcess(), memory, 0x1000);
+    lss::test::ExecutablePage page;
+    const auto code = HarnessCode(page.At(), siteSize, build, tail);
+    page.Write(0, code);
+    page.Seal();
     std::uint8_t widget[0x200]{};
-    const std::uint64_t result = reinterpret_cast<Harness>(memory)(widget);
-    VirtualFree(memory, 0, MEM_RELEASE);
+    const std::uint64_t result = page.Function<Harness>()(widget);
     return result;
 }
 
@@ -179,6 +162,5 @@ int main()
     TestOctagon();
     TestSizes();
 
-    std::printf(g_failures == 0 ? "all tests passed\n" : "%d check(s) failed\n", g_failures);
-    return g_failures == 0 ? 0 : 1;
+    return lss::test::Report();
 }

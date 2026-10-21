@@ -5,24 +5,14 @@
 
 #include "player_two/party_lease.h"
 
+#include "expect.h"
+
 #include <cstdio>
 #include <initializer_list>
 
 namespace {
 
 using namespace lss::player_two;
-
-int g_failures = 0;
-
-#define EXPECT(condition)                                                                \
-    do                                                                                   \
-    {                                                                                    \
-        if (!(condition))                                                                \
-        {                                                                                \
-            std::printf("  FAILED line %d: %s\n", __LINE__, #condition);                 \
-            ++g_failures;                                                                \
-        }                                                                                \
-    } while (false)
 
 int g_member;
 int g_ai;
@@ -271,6 +261,5 @@ int main()
     TestAcquired();
     TestReleased();
 
-    std::printf(g_failures == 0 ? "all tests passed\n" : "%d check(s) failed\n", g_failures);
-    return g_failures == 0 ? 0 : 1;
+    return lss::test::Report();
 }

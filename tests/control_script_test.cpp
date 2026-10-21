@@ -2,6 +2,8 @@
 
 #include "control/script.h"
 
+#include "expect.h"
+
 #include <cstdio>
 #include <initializer_list>
 
@@ -10,18 +12,6 @@ namespace {
 using lss::control::CommandKind;
 using lss::control::ParseLine;
 using lss::control::WaitCondition;
-
-int g_failures = 0;
-
-#define EXPECT(condition)                                                                \
-    do                                                                                   \
-    {                                                                                    \
-        if (!(condition))                                                                \
-        {                                                                                \
-            std::printf("  FAILED line %d: %s\n", __LINE__, #condition);                 \
-            ++g_failures;                                                                \
-        }                                                                                \
-    } while (false)
 
 bool Rejected(const wchar_t* line)
 {
@@ -201,6 +191,5 @@ int main()
     TestTextCommands();
     TestDescribeRoundTrips();
 
-    std::printf(g_failures == 0 ? "all tests passed\n" : "%d check(s) failed\n", g_failures);
-    return g_failures == 0 ? 0 : 1;
+    return lss::test::Report();
 }

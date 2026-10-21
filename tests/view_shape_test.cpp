@@ -7,6 +7,8 @@
 #include "views/minimal_view_info.h"
 #include "views/view_shape.h"
 
+#include "expect.h"
+
 #include <array>
 #include <cmath>
 #include <cstdio>
@@ -17,18 +19,6 @@ namespace {
 
 using lss::views::LooksLikeViewInfo;
 namespace view_info = lss::views::view_info;
-
-int g_failures = 0;
-
-#define EXPECT(condition)                                                                \
-    do                                                                                   \
-    {                                                                                    \
-        if (!(condition))                                                                \
-        {                                                                                \
-            std::printf("  FAILED line %d: %s\n", __LINE__, #condition);                 \
-            ++g_failures;                                                                \
-        }                                                                                \
-    } while (false)
 
 struct ViewInfo
 {
@@ -142,6 +132,5 @@ int main()
     TestSplitFovDefault();
     TestSplitFovRefusesBadInputs();
 
-    std::printf(g_failures == 0 ? "all tests passed\n" : "%d check(s) failed\n", g_failures);
-    return g_failures == 0 ? 0 : 1;
+    return lss::test::Report();
 }

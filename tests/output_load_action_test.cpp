@@ -11,10 +11,8 @@
 #include "platform/x64_jump.h"
 #include "renderer/output_load_action_code.h"
 
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <Windows.h>
+#include "exec_page.h"
+#include "expect.h"
 
 #include <cstdio>
 #include <cstring>
@@ -26,18 +24,6 @@ using lss::platform::EncodeJump;
 using lss::renderer::kFirstUnlessAdditionalLoadAction;
 using lss::renderer::kLoadActionClear;
 using lss::renderer::kLoadActionLoad;
-
-int g_failures = 0;
-
-#define EXPECT(condition)                                                                \
-    do                                                                                   \
-    {                                                                                    \
-        if (!(condition))                                                                \
-        {                                                                                \
-            std::printf("  FAILED line %d: %s\n", __LINE__, #condition);                 \
-            ++g_failures;                                                                \
-        }                                                                                \
-    } while (false)
 
 /// uint8_t harness(const uint8_t* family, uintptr_t viewsFirst, uintptr_t view):
 ///     sub rsp, 618h ; cmp rdx, r8 ; setz al ; add al, 1 (the game's computation) ;
@@ -57,33 +43,29 @@ public:
         const std::uint8_t epilogue[] = {0x0F, 0xB6, 0x84, 0x24, 0x10, 0x06, 0x00, 0x00,  // movzx eax, [rsp+610h]
                                          0x48, 0x81, 0xC4, 0x18, 0x06, 0x00, 0x00,        // add rsp, 618h
                                          0xC3};                                           // ret
-        memory_ = static_cast<std::uint8_t*>(VirtualAlloc(nullptr, 0x1000, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
         std::vector<std::uint8_t> code(prologue, prologue + sizeof(prologue));
         code.insert(code.end(), std::begin(kFirstUnlessAdditionalLoadAction), std::end(kFirstUnlessAdditionalLoadAction));
 
         // The jump back, placed where the redirect appends it, to the instruction after the store.
-        const auto from = reinterpret_cast<std::uintptr_t>(memory_) + code.size();
+        const auto from = page_.At() + code.size();
         const auto back = EncodeJump(from, from + lss::platform::kJumpLength);
         code.insert(code.end(), back->begin(), back->end());
         code.insert(code.end(), epilogue, epilogue + sizeof(epilogue));
 
-        std::memcpy(memory_, code.data(), code.size());
-        DWORD previous = 0;
-        VirtualProtect(memory_, 0x1000, PAGE_EXECUTE_READ, &previous);
-        FlushInstructionCache(GetCurrentProcess(), memory_, 0x1000);
+        page_.Write(0, code);
+        page_.Seal();
     }
-    ~ExecutableHarness() { VirtualFree(memory_, 0, MEM_RELEASE); }
 
     std::uint8_t Run(bool firstInFamily, bool additionalFamily) const
     {
         std::uint8_t family[0x80]{};
         family[0x74] = additionalFamily ? 1 : 0;
         const std::uintptr_t view = 0x1000;
-        return reinterpret_cast<Harness>(memory_)(family, firstInFamily ? view : view + 8, view);
+        return page_.Function<Harness>()(family, firstInFamily ? view : view + 8, view);
     }
 
 private:
-    std::uint8_t* memory_ = nullptr;
+    lss::test::ExecutablePage page_;
 };
 
 void TestTheStockRule()
@@ -120,26 +102,22 @@ public:
             0x0F, 0xB6, 0x84, 0x24, 0x10, 0x06, 0x00, 0x00,  // movzx eax, [rsp+610h]
             0x48, 0x81, 0xC4, 0x18, 0x06, 0x00, 0x00,        // add rsp, 618h
             0xC3};                                           // ret
-        memory_ = static_cast<std::uint8_t*>(VirtualAlloc(nullptr, 0x1000, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
-        std::memcpy(memory_, code, sizeof(code));
-        DWORD previous = 0;
-        VirtualProtect(memory_, 0x1000, PAGE_EXECUTE_READ, &previous);
-        FlushInstructionCache(GetCurrentProcess(), memory_, 0x1000);
+        page_.Write(0, code);
+        page_.Seal();
     }
-    ~GameLikeCode() { VirtualFree(memory_, 0, MEM_RELEASE); }
 
-    std::uintptr_t At(std::size_t offset) const { return reinterpret_cast<std::uintptr_t>(memory_) + offset; }
+    std::uintptr_t At(std::size_t offset) const { return page_.At(offset); }
 
     std::uint8_t Run(bool firstInFamily, bool additionalFamily) const
     {
         std::uint8_t family[0x80]{};
         family[0x74] = additionalFamily ? 1 : 0;
         const std::uintptr_t view = 0x1000;
-        return reinterpret_cast<Harness>(memory_)(family, firstInFamily ? view : view + 8, view);
+        return page_.Function<Harness>()(family, firstInFamily ? view : view + 8, view);
     }
 
 private:
-    std::uint8_t* memory_ = nullptr;
+    lss::test::ExecutablePage page_;
 };
 
 void TestRedirectInstallsRunsAndRestores()
@@ -221,15 +199,11 @@ public:
             0x41, 0x5E,                                // pop r14
             0x5D,                                      // pop rbp
             0xC3};                                     // ret
-        memory_ = static_cast<std::uint8_t*>(VirtualAlloc(nullptr, 0x1000, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
-        std::memcpy(memory_, code, sizeof(code));
-        DWORD previous = 0;
-        VirtualProtect(memory_, 0x1000, PAGE_EXECUTE_READ, &previous);
-        FlushInstructionCache(GetCurrentProcess(), memory_, 0x1000);
+        page_.Write(0, code);
+        page_.Seal();
     }
-    ~GameLikeCode1005() { VirtualFree(memory_, 0, MEM_RELEASE); }
 
-    std::uintptr_t At(std::size_t offset) const { return reinterpret_cast<std::uintptr_t>(memory_) + offset; }
+    std::uintptr_t At(std::size_t offset) const { return page_.At(offset); }
 
     /// The load action, and whether rcx came through unchanged.
     std::uint8_t Run(bool firstInFamily, bool additionalFamily, bool& rcxKept) const
@@ -240,13 +214,13 @@ public:
         const std::uintptr_t viewId = 0x1000;
         const std::uintptr_t rcx    = 0xC0FFEE;
         const std::uint8_t   result =
-            reinterpret_cast<Fn>(memory_)(rcx, firstInFamily ? viewId : viewId + 8, viewId, &view);
+            page_.Function<Fn>()(rcx, firstInFamily ? viewId : viewId + 8, viewId, &view);
         rcxKept = view.rcxAfter == rcx;
         return result;
     }
 
 private:
-    std::uint8_t* memory_ = nullptr;
+    lss::test::ExecutablePage page_;
 };
 
 void TestRedirect1005()
@@ -295,6 +269,5 @@ int main()
     TestRedirect1005();
     TestJumpEncoding();
 
-    std::printf(g_failures == 0 ? "all tests passed\n" : "%d check(s) failed\n", g_failures);
-    return g_failures == 0 ? 0 : 1;
+    return lss::test::Report();
 }

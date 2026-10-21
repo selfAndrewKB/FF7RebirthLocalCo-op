@@ -8,10 +8,9 @@
 #include "platform/call_redirect.h"
 #include "platform/log.h"
 
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <Windows.h>
+#include "exec_page.h"
+#include "expect.h"
+
 #include <intrin.h>
 
 #include <cstdint>
@@ -36,18 +35,6 @@ const wchar_t* LevelName(Level) noexcept
 
 namespace {
 
-int g_failures = 0;
-
-#define EXPECT(condition)                                                                \
-    do                                                                                   \
-    {                                                                                    \
-        if (!(condition))                                                                \
-        {                                                                                \
-            std::printf("  FAILED line %d: %s\n", __LINE__, #condition);                 \
-            ++g_failures;                                                                \
-        }                                                                                \
-    } while (false)
-
 using IntFn = int (*)();
 
 /// page+0x00: sub rsp, 28h ; nop x3 ; call target (at +0x07) ; add rsp, 28h ; ret
@@ -61,28 +48,23 @@ public:
 
     GameLikeCode()
     {
-        memory_ = static_cast<std::uint8_t*>(VirtualAlloc(nullptr, 0x1000, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
         const std::uint8_t caller[] = {0x48, 0x83, 0xEC, 0x28,        // sub rsp, 28h
                                        0x90, 0x90, 0x90,              // nop x3
                                        0xE8, 0x00, 0x00, 0x00, 0x00,  // call target (displacement below)
                                        0x48, 0x83, 0xC4, 0x28,        // add rsp, 28h
                                        0xC3};                         // ret
         const std::uint8_t target[] = {0xB8, 0x01, 0x00, 0x00, 0x00, 0xC3};  // mov eax, 1 ; ret
-        std::memcpy(memory_, caller, sizeof(caller));
-        const std::int32_t rel = static_cast<std::int32_t>(kTargetOffset - (kCallOffset + 5));
-        std::memcpy(memory_ + kCallOffset + 1, &rel, sizeof(rel));
-        std::memcpy(memory_ + kTargetOffset, target, sizeof(target));
-        DWORD previous = 0;
-        VirtualProtect(memory_, 0x1000, PAGE_EXECUTE_READ, &previous);
-        FlushInstructionCache(GetCurrentProcess(), memory_, 0x1000);
+        page_.Write(0, caller);
+        page_.WriteRel32(kCallOffset, kTargetOffset);
+        page_.Write(kTargetOffset, target);
+        page_.Seal();
     }
-    ~GameLikeCode() { VirtualFree(memory_, 0, MEM_RELEASE); }
 
-    std::uintptr_t At(std::size_t offset) const { return reinterpret_cast<std::uintptr_t>(memory_) + offset; }
-    int            Run() const { return reinterpret_cast<IntFn>(memory_)(); }
+    std::uintptr_t At(std::size_t offset) const { return page_.At(offset); }
+    int            Run() const { return page_.Function<IntFn>()(); }
 
 private:
-    std::uint8_t* memory_ = nullptr;
+    lss::test::ExecutablePage page_;
 };
 
 lss::platform::CallRedirect* g_redirect      = nullptr;
@@ -147,28 +129,23 @@ public:
 
     CrossingCode()
     {
-        memory_ = static_cast<std::uint8_t*>(VirtualAlloc(nullptr, 0x1000, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
         const std::uint8_t caller[] = {0x48, 0x83, 0xEC, 0x28,                                // sub rsp, 28h
                                        0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90,  // nop x9
                                        0xE8, 0x00, 0x00, 0x00, 0x00,                          // call target
                                        0x48, 0x83, 0xC4, 0x28,                                // add rsp, 28h
                                        0xC3};                                                 // ret
         const std::uint8_t target[] = {0xB8, 0x01, 0x00, 0x00, 0x00, 0xC3};
-        std::memcpy(memory_, caller, sizeof(caller));
-        const std::int32_t rel = static_cast<std::int32_t>(kTargetOffset - (kCallOffset + 5));
-        std::memcpy(memory_ + kCallOffset + 1, &rel, sizeof(rel));
-        std::memcpy(memory_ + kTargetOffset, target, sizeof(target));
-        DWORD previous = 0;
-        VirtualProtect(memory_, 0x1000, PAGE_EXECUTE_READ, &previous);
-        FlushInstructionCache(GetCurrentProcess(), memory_, 0x1000);
+        page_.Write(0, caller);
+        page_.WriteRel32(kCallOffset, kTargetOffset);
+        page_.Write(kTargetOffset, target);
+        page_.Seal();
     }
-    ~CrossingCode() { VirtualFree(memory_, 0, MEM_RELEASE); }
 
-    std::uintptr_t At(std::size_t offset) const { return reinterpret_cast<std::uintptr_t>(memory_) + offset; }
-    int            Run() const { return reinterpret_cast<IntFn>(memory_)(); }
+    std::uintptr_t At(std::size_t offset) const { return page_.At(offset); }
+    int            Run() const { return page_.Function<IntFn>()(); }
 
 private:
-    std::uint8_t* memory_ = nullptr;
+    lss::test::ExecutablePage page_;
 };
 
 void TestCrossingCallFromOwnThread()
@@ -212,28 +189,22 @@ public:
 
     TailJumpCode()
     {
-        memory_ = static_cast<std::uint8_t*>(VirtualAlloc(nullptr, 0x1000, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
         const std::uint8_t caller[] = {0x48, 0x83, 0xEC, 0x28, 0xE8, 0x00, 0x00, 0x00, 0x00, 0x48, 0x83, 0xC4, 0x28, 0xC3};
         const std::uint8_t middle[] = {0x48, 0x83, 0xEC, 0x28, 0x48, 0x83, 0xC4, 0x28, 0xE9, 0x00, 0x00, 0x00, 0x00};
         const std::uint8_t target[] = {0xB8, 0x01, 0x00, 0x00, 0x00, 0xC3};
-        std::memcpy(memory_, caller, sizeof(caller));
-        std::memcpy(memory_ + kMiddleOffset, middle, sizeof(middle));
-        std::memcpy(memory_ + kTargetOffset, target, sizeof(target));
-        const std::int32_t toMiddle = static_cast<std::int32_t>(kMiddleOffset - (kCallOffset + 5));
-        const std::int32_t toTarget = static_cast<std::int32_t>(kTargetOffset - (kJumpOffset + 5));
-        std::memcpy(memory_ + kCallOffset + 1, &toMiddle, sizeof(toMiddle));
-        std::memcpy(memory_ + kJumpOffset + 1, &toTarget, sizeof(toTarget));
-        DWORD previous = 0;
-        VirtualProtect(memory_, 0x1000, PAGE_EXECUTE_READ, &previous);
-        FlushInstructionCache(GetCurrentProcess(), memory_, 0x1000);
+        page_.Write(0, caller);
+        page_.Write(kMiddleOffset, middle);
+        page_.Write(kTargetOffset, target);
+        page_.WriteRel32(kCallOffset, kMiddleOffset);
+        page_.WriteRel32(kJumpOffset, kTargetOffset);
+        page_.Seal();
     }
-    ~TailJumpCode() { VirtualFree(memory_, 0, MEM_RELEASE); }
 
-    std::uintptr_t At(std::size_t offset) const { return reinterpret_cast<std::uintptr_t>(memory_) + offset; }
-    int            Run() const { return reinterpret_cast<IntFn>(memory_)(); }
+    std::uintptr_t At(std::size_t offset) const { return page_.At(offset); }
+    int            Run() const { return page_.Function<IntFn>()(); }
 
 private:
-    std::uint8_t* memory_ = nullptr;
+    lss::test::ExecutablePage page_;
 };
 
 void TestTailJump()
@@ -266,6 +237,5 @@ int main()
     TestCrossingCallFromOwnThread();
     TestTailJump();
 
-    std::printf(g_failures == 0 ? "all tests passed\n" : "%d check(s) failed\n", g_failures);
-    return g_failures == 0 ? 0 : 1;
+    return lss::test::Report();
 }

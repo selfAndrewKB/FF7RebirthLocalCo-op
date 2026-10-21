@@ -197,7 +197,7 @@ public:
     LocalSplitScreenMod()
     {
         ModName        = STR("LocalSplitScreen");
-        ModVersion     = STR("0.78.0");
+        ModVersion     = kVersion;  // one version string: the one the log's "starting" line prints
         ModDescription = STR("Two-player split-screen, one view family per player");
         ModAuthors     = STR("Andrew");
         // Before the engine creates its D3D12 device, which reads both settings once.

@@ -7,27 +7,13 @@
 #include "platform/code_redirect.h"
 #include "player_two/command_rules_code.h"
 
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <Windows.h>
+#include "exec_page.h"
+#include "expect.h"
 
 #include <cstdio>
 #include <cstring>
 
 namespace {
-
-int g_failures = 0;
-
-#define EXPECT(condition)                                                                \
-    do                                                                                   \
-    {                                                                                    \
-        if (!(condition))                                                                \
-        {                                                                                \
-            std::printf("  FAILED line %d: %s\n", __LINE__, #condition);                 \
-            ++g_failures;                                                                \
-        }                                                                                \
-    } while (false)
 
 /// nop x4 ; mov [rsp+8], rbx (offset 4) ; lea eax, [rdx+1] ; ret
 /// It returns ordinal + 1: the replaced instruction ran and the ordinal register did not change.
@@ -46,15 +32,11 @@ public:
             0x8D, 0x42, 0x01,              //  9: lea eax, [rdx+1]
             0xC3};                         // 12: ret
         std::memcpy(code + kEntryOffset, body, sizeof(body));
-        memory_ = static_cast<std::uint8_t*>(VirtualAlloc(nullptr, 0x1000, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
-        std::memcpy(memory_, code, sizeof(code));
-        DWORD previous = 0;
-        VirtualProtect(memory_, 0x1000, PAGE_EXECUTE_READ, &previous);
-        FlushInstructionCache(GetCurrentProcess(), memory_, 0x1000);
+        page_.Write(0, code);
+        page_.Seal();
     }
-    ~FunctionLike() { VirtualFree(memory_, 0, MEM_RELEASE); }
 
-    std::uintptr_t At(std::size_t offset) const { return reinterpret_cast<std::uintptr_t>(memory_) + offset; }
+    std::uintptr_t At(std::size_t offset) const { return page_.At(offset); }
     std::uint32_t  Call(std::int32_t ordinal) const
     {
         using Fn = std::uint32_t (*)(void* ctrl, std::int32_t ordinal, std::uint8_t flag);
@@ -62,7 +44,7 @@ public:
     }
 
 private:
-    std::uint8_t* memory_ = nullptr;
+    lss::test::ExecutablePage page_;
 };
 
 void TestGate()
@@ -101,6 +83,5 @@ int main()
 {
     TestGate();
 
-    std::printf(g_failures == 0 ? "all tests passed\n" : "%d check(s) failed\n", g_failures);
-    return g_failures == 0 ? 0 : 1;
+    return lss::test::Report();
 }

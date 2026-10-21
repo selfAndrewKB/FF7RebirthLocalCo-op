@@ -5,25 +5,15 @@
 
 #include "player_two/ucpc_choice.h"
 
+#include "expect.h"
+
 #include <cstdio>
 
 namespace {
 
 using namespace lss::player_two::ucpc_choice;
 
-int g_failures = 0;
-
 constexpr bool kCoins[] = {false, true};
-
-#define EXPECT(condition)                                                                \
-    do                                                                                   \
-    {                                                                                    \
-        if (!(condition))                                                                \
-        {                                                                                \
-            std::printf("  FAILED line %d: %s\n", __LINE__, #condition);                 \
-            ++g_failures;                                                                \
-        }                                                                                \
-    } while (false)
 
 bool Is(Choice choice, Ucpc ucpc, Why why)
 {
@@ -75,11 +65,5 @@ int main()
     TestBothEligible();
     TestOneEligible();
     TestNeitherEligible();
-    if (g_failures != 0)
-    {
-        std::printf("%d failure(s)\n", g_failures);
-        return 1;
-    }
-    std::puts("all passed");
-    return 0;
+    return lss::test::Report();
 }

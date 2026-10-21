@@ -5,23 +5,13 @@
 
 #include "platform/settled_log.h"
 
+#include "expect.h"
+
 #include <cstdio>
 
 namespace {
 
 using lss::platform::SettledLog;
-
-int g_failures = 0;
-
-#define EXPECT(condition)                                                                \
-    do                                                                                   \
-    {                                                                                    \
-        if (!(condition))                                                                \
-        {                                                                                \
-            std::printf("  FAILED line %d: %s\n", __LINE__, #condition);                 \
-            ++g_failures;                                                                \
-        }                                                                                \
-    } while (false)
 
 void TestFirstAndSteady()
 {
@@ -91,11 +81,5 @@ int main()
     TestFlickerIgnored();
     TestSteadyResetsMoving();
     TestZeroCountsAsOne();
-    if (g_failures != 0)
-    {
-        std::printf("%d failure(s)\n", g_failures);
-        return 1;
-    }
-    std::puts("all passed");
-    return 0;
+    return lss::test::Report();
 }

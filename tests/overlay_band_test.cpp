@@ -6,6 +6,8 @@
 
 #include "hud/overlay_band.h"
 
+#include "expect.h"
+
 #include <cmath>
 #include <cstdio>
 
@@ -14,18 +16,6 @@ namespace {
 using lss::hud::IntRect;
 using lss::hud::MarkerHostScale;
 using lss::hud::VisibleBand;
-
-int g_failures = 0;
-
-#define EXPECT(condition)                                                                \
-    do                                                                                   \
-    {                                                                                    \
-        if (!(condition))                                                                \
-        {                                                                                \
-            std::printf("  FAILED line %d: %s\n", __LINE__, #condition);                 \
-            ++g_failures;                                                                \
-        }                                                                                \
-    } while (false)
 
 bool Near(float value, float expected, float tolerance = 0.001f)
 {
@@ -199,6 +189,5 @@ int main()
     TestUnusable();
     TestLayoutSize();
 
-    std::printf(g_failures == 0 ? "all tests passed\n" : "%d check(s) failed\n", g_failures);
-    return g_failures == 0 ? 0 : 1;
+    return lss::test::Report();
 }

@@ -4,6 +4,8 @@
 
 #include "player_two/button_view.h"
 
+#include "expect.h"
+
 #include <cstdio>
 
 namespace {
@@ -11,18 +13,6 @@ namespace {
 using lss::player_two::button_view::Held;
 using lss::player_two::button_view::PadBits;
 using lss::player_two::button_view::Views;
-
-int g_failures = 0;
-
-#define EXPECT(condition)                                                                \
-    do                                                                                   \
-    {                                                                                    \
-        if (!(condition))                                                                \
-        {                                                                                \
-            std::printf("  FAILED line %d: %s\n", __LINE__, #condition);                 \
-            ++g_failures;                                                                \
-        }                                                                                \
-    } while (false)
 
 constexpr std::uint32_t kPadOne   = 0x1;
 constexpr std::uint32_t kPadTwo   = 0x2;
@@ -129,11 +119,5 @@ int main()
     TestPadTwoHoldSurvivesPlayerOnesView();
     TestPadOneReleaseWhilePadTwoHolds();
     TestGameReleaseWithMaskSet();
-    if (g_failures != 0)
-    {
-        std::printf("%d failure(s)\n", g_failures);
-        return 1;
-    }
-    std::puts("all tests passed");
-    return 0;
+    return lss::test::Report();
 }
