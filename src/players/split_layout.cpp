@@ -1,5 +1,7 @@
 #include "players/split_layout.h"
 
+#include <format>
+
 namespace lss::players {
 
 namespace {
@@ -113,6 +115,36 @@ LayoutChange SplitLayout::Restore() noexcept
     }
     restoreTo_.reset();
     return {LayoutChange::Kind::Restored, previous};
+}
+
+std::wstring Describe(const LayoutChange& change)
+{
+    using Kind = LayoutChange::Kind;
+    const auto name = [](std::uint8_t value) {
+        return value == static_cast<std::uint8_t>(SplitLayoutKind::SideBySide) ? L"side by side"
+               : value == static_cast<std::uint8_t>(SplitLayoutKind::TopBottom) ? L"top/bottom"
+                                                                              : L"another value";
+    };
+    switch (change.kind)
+    {
+        case Kind::None: return {};
+        case Kind::Chosen: return std::format(L"split layout: {} from the next join", name(change.value));
+        case Kind::Unreadable: return L"split layout: TwoPlayerSplitscreenLayout cannot be read, so the switch did nothing";
+        case Kind::Applied:
+            return std::format(L"split layout: TwoPlayerSplitscreenLayout = {} ({})", change.value, name(change.value));
+        case Kind::ApplyFailed:
+            return std::format(L"split layout: could not set TwoPlayerSplitscreenLayout to {}; the game's layout stays",
+                               change.value);
+        case Kind::Restored:
+            return std::format(L"player 2 is out: TwoPlayerSplitscreenLayout restored to {} ({})", change.value,
+                               name(change.value));
+        case Kind::LeftAlone:
+            return std::format(L"player 2 is out: TwoPlayerSplitscreenLayout was changed to {} meanwhile; left as it is",
+                               change.value);
+        case Kind::RestoreFailed:
+            return std::format(L"player 2 is out: could not restore TwoPlayerSplitscreenLayout to {}", change.value);
+    }
+    return {};
 }
 
 }  // namespace lss::players

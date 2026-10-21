@@ -1,5 +1,7 @@
 #include "players/split_screen_settings.h"
 
+#include <format>
+
 #include <cwchar>
 #include <iterator>
 
@@ -87,6 +89,26 @@ bool SplitScreenSettings::Execute(std::int32_t value) noexcept
         return false;
     }
     return console_.execute(command);
+}
+
+std::wstring Describe(const SplitScreenSettings& setting, const SettingsChange& change)
+{
+    using Kind = SettingsChange::Kind;
+    const wchar_t*     name  = setting.Name();
+    const std::int32_t value = setting.Value();
+    switch (change.kind)
+    {
+        case Kind::None: return {};
+        case Kind::Applied: return std::format(L"split screen: {} {} -> {} while player 2 is in", name, change.value, value);
+        case Kind::AlreadySet: return std::format(L"split screen: {} is already {}; left as it is", name, value);
+        case Kind::ApplyFailed:
+            return std::format(L"split screen: could not set {} to {}; rendering stays correct but slower", name, value);
+        case Kind::Restored: return std::format(L"player 2 is out: {} restored to {}", name, change.value);
+        case Kind::LeftAlone:
+            return std::format(L"player 2 is out: {} was changed to {} meanwhile; left as it is", name, change.value);
+        case Kind::RestoreFailed: return std::format(L"player 2 is out: could not restore {} to {}", name, change.value);
+    }
+    return {};
 }
 
 }  // namespace lss::players

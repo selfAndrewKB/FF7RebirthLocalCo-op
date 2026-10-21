@@ -121,6 +121,36 @@ void TestSplitFovRefusesBadInputs()
     EXPECT(SplitFov(0.5f, kSixteenByNine, half, 0.5f) == 0.5f);
 }
 
+void TestRatiosAndWatch()
+{
+    std::puts("view shape: the width ratio and vertical FOV; the half-shape watch resets, paces and logs on change");
+    using lss::views::HalfShapeWatch;
+    using lss::views::kHalfShapeIntervalTicks;
+    using lss::views::VerticalFovDegrees;
+    using lss::views::WidthRatio;
+    EXPECT(std::fabs(WidthRatio(90.0f, 90.0f) - 1.0f) < 1e-6f);
+    EXPECT(WidthRatio(90.0f, 60.0f) > 1.7f && WidthRatio(90.0f, 60.0f) < 1.74f);  // tan 45 / tan 30
+    EXPECT(WidthRatio(0.0f, 60.0f) == 1.0f);  // a zero ratio is unusable
+    EXPECT(WidthRatio(std::numeric_limits<float>::quiet_NaN(), 60.0f) == 1.0f);
+    EXPECT(std::fabs(VerticalFovDegrees(90.0f, 1.0f) - 90.0f) < 1e-3f);
+    EXPECT(std::fabs(VerticalFovDegrees(90.0f, 16.0f / 9.0f) - 58.716f) < 0.01f);
+
+    HalfShapeWatch watch;
+    EXPECT(watch.Next(false, false) == HalfShapeWatch::Step::Reset);
+    EXPECT(watch.Next(true, true) == HalfShapeWatch::Step::Reset);
+    EXPECT(watch.Next(true, false) == HalfShapeWatch::Step::Read);  // the first tick after a reset
+    for (std::uint32_t i = 1; i < kHalfShapeIntervalTicks; ++i)
+    {
+        EXPECT(watch.Next(true, false) == HalfShapeWatch::Step::Skip);
+    }
+    EXPECT(watch.Next(true, false) == HalfShapeWatch::Step::Read);
+    EXPECT(watch.AspectChanged(1.7f));
+    EXPECT(!watch.AspectChanged(1.7f));
+    EXPECT(watch.AspectChanged(0.0f));
+    EXPECT(watch.Next(false, false) == HalfShapeWatch::Step::Reset);
+    EXPECT(watch.AspectChanged(0.0f));  // the reset forgets the logged aspect
+}
+
 }  // namespace
 
 int main()
@@ -131,6 +161,7 @@ int main()
     TestSplitFovEnds();
     TestSplitFovDefault();
     TestSplitFovRefusesBadInputs();
+    TestRatiosAndWatch();
 
     return lss::test::Report();
 }

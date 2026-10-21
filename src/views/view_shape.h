@@ -46,6 +46,56 @@ inline constexpr float kDefaultSplitFovWeight = 0.5f;
 /// (0: framing kept; 1: scale kept). Returns `fovDegrees` unchanged for unusable inputs.
 float SplitFov(float fovDegrees, float cameraAspect, const HalfShape& half, float weight) noexcept;
 
+/// The width of a split view against the camera's single-player view, as the ratio of the tangents of the two
+/// horizontal FOVs (degrees); 1 for an unusable result.
+float WidthRatio(float splitFovDegrees, float cameraFovDegrees) noexcept;
+
+/// The vertical FOV (degrees) of a view `horizontalFovDegrees` wide at `aspect`.
+float VerticalFovDegrees(float horizontalFovDegrees, float aspect) noexcept;
+
+/// How often the halves' shape is read while the split shows (the viewport size changes with the window, the
+/// layout by key or script): twice a second at 60 ticks.
+inline constexpr std::uint32_t kHalfShapeIntervalTicks = 30;
+
+/// Keeps the half-shape reads paced and the aspect's log on change: reset while the split is not shown or a third
+/// view is in (the halves rule does not apply), a read every kHalfShapeIntervalTicks ticks otherwise.
+class HalfShapeWatch
+{
+public:
+    enum class Step
+    {
+        Reset,  // the halves rule does not apply: clear the shape
+        Skip,   // not this tick
+        Read,   // read the viewport and the layout
+    };
+
+    Step Next(bool splitShown, bool thirdViewIn) noexcept
+    {
+        if (!splitShown || thirdViewIn)
+        {
+            ticks_        = 0;
+            loggedAspect_ = -1.0f;
+            return Step::Reset;
+        }
+        return ticks_++ % kHalfShapeIntervalTicks != 0 ? Step::Skip : Step::Read;
+    }
+
+    /// True once per change of the aspect read (the caller logs it).
+    bool AspectChanged(float aspect) noexcept
+    {
+        if (aspect == loggedAspect_)
+        {
+            return false;
+        }
+        loggedAspect_ = aspect;
+        return true;
+    }
+
+private:
+    std::uint32_t ticks_        = 0;
+    float         loggedAspect_ = -1.0f;
+};
+
 /// True if the struct holds an aspect ratio and a FOV a real camera could have, as this build's
 /// FMinimalViewInfo does at those offsets. A struct that fails is not written.
 bool LooksLikeViewInfo(const std::byte* viewInfo) noexcept;

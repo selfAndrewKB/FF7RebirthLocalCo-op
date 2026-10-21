@@ -29,6 +29,57 @@ enum class PlayerIntent
     ToggleWindowSpan,
 };
 
+/// The intent of one tick's presses: joining and leaving win over everything else pressed on the same tick (and
+/// cancel each other); of the switches, one per tick, in this order (the others are reported on their own presses).
+constexpr PlayerIntent ResolveIntent(bool join, bool leave, bool camera, bool layout, bool fill, bool sticks, bool centre,
+                                     bool detail, bool third, bool span) noexcept
+{
+    if (!join && !leave)
+    {
+        if (camera)
+        {
+            return PlayerIntent::ToggleOwnCamera;
+        }
+        if (layout)
+        {
+            return PlayerIntent::ToggleLayout;
+        }
+        if (fill)
+        {
+            return PlayerIntent::ToggleFill;
+        }
+        if (sticks)
+        {
+            return PlayerIntent::TogglePadSticks;
+        }
+        if (centre)
+        {
+            return PlayerIntent::ToggleNpcCentre;
+        }
+        if (detail)
+        {
+            return PlayerIntent::ToggleNpcDetail;
+        }
+        if (third)
+        {
+            return PlayerIntent::ToggleThirdView;
+        }
+        if (span)
+        {
+            return PlayerIntent::ToggleWindowSpan;
+        }
+    }
+    if (join && !leave)
+    {
+        return PlayerIntent::Join;
+    }
+    if (leave && !join)
+    {
+        return PlayerIntent::Leave;
+    }
+    return PlayerIntent::None;
+}
+
 class JoinKeys
 {
 public:

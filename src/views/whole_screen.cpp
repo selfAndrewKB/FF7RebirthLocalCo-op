@@ -1,5 +1,6 @@
 #include "views/whole_screen.h"
 
+#include "views/whole_screen_rules.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -107,13 +108,11 @@ constexpr std::uint32_t  kEncounterState = 0x3D558;
 constexpr std::uintptr_t kFrogManager  = 0x14939BCC0;
 constexpr std::uint32_t  kFrogStateRow = 0x18;
 constexpr std::uintptr_t kGBikeManager = 0x1470C6CF0;
-// The minigame-only maps (the game state's location).
-constexpr std::array<const wchar_t*, 4> kMinigameMaps{L"2351-CRACE", L"2352-SCOST", L"2353-GBIKE", L"7110-MOGHS"};
+// The minigame-only maps (the game state's location): views/whole_screen_rules.h.
 
 // The game state's current location (an 8-byte FName; +0x30C requested, +0x314 previous) and the
 // title's, which the game compares against itself (§7.3).
-constexpr std::uint32_t  kLocation  = 0x304;
-constexpr const wchar_t* kTitleName = L"0005-TITLB";
+constexpr std::uint32_t  kLocation  = 0x304;  // the title's name: views/whole_screen_rules.h
 
 // The cutscene manager (a pointer global; the game creates the manager on first use, so the check
 // below is called only once it exists) and the game's own "a sequence of type 0 or 2 plays". The
@@ -339,9 +338,8 @@ std::int8_t ChadleyState(std::uintptr_t root) noexcept
     record                      = record != 0 ? record : Pointer(manager + kChadleyCurrent);
     std::int32_t count = 0;
     std::int32_t id    = -1;
-    if (table == 0 || record < table || !Read(manager + kChadleyCount, count) || count <= 0 || count > 8 ||
-        record >= table + kChadleyRecord * static_cast<std::uint32_t>(count) || (record - table) % kChadleyRecord != 0 ||
-        !Read(record, id) || id < 0 || id > 127)
+    if (table == 0 || record < table || !Read(manager + kChadleyCount, count) ||
+        !ChadleyRecordValid(table, record, count, kChadleyRecord) || !Read(record, id) || !ChadleyIdValid(id))
     {
         return -1;
     }
@@ -356,7 +354,7 @@ bool InBattle(std::uintptr_t root) noexcept
     std::uint8_t         state  = 0;
     const std::uintptr_t mode   = root != 0 ? Pointer(root + kRootGameMode) : 0;
     return system != 0 && Read(system + kBattleIdle, idle) && idle == 0 && mode != 0 &&
-           Read(mode + kEncounterState, state) && (state == 3 || state == 4);
+           Read(mode + kEncounterState, state) && EncounterInBattle(state);
 }
 
 /// Whether id 36's setter is a field use (the name turned into text only when it changes).
@@ -418,7 +416,7 @@ bool IsTitleName(std::uint64_t name) noexcept
         return false;
     }
     platform::Log(L"whole screen: location {}", text);
-    return text == kTitleName;
+    return ClassifyLocation(text).title;
 }
 
 /// Whether the game state's current location is the title; the name is turned into text only when it changes.
@@ -434,12 +432,7 @@ bool AtTitle(std::uintptr_t gameState) noexcept
         g_location      = name;
         g_locationRead  = true;
         g_atTitle       = IsTitleName(name);
-        const std::wstring text = players::unreal::NameText(name);
-        g_atMinigameMap = false;
-        for (const wchar_t* map : kMinigameMaps)
-        {
-            g_atMinigameMap = g_atMinigameMap || text == map;
-        }
+        g_atMinigameMap = ClassifyLocation(players::unreal::NameText(name)).minigameMap;
     }
     return g_atTitle;
 }

@@ -14,6 +14,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
 
 namespace lss::players {
 
@@ -46,6 +47,9 @@ struct LayoutChange
     Kind         kind  = Kind::None;
     std::uint8_t value = 0;
 };
+
+/// The change for the log (empty for None).
+std::wstring Describe(const LayoutChange& change);
 
 class SplitLayout
 {

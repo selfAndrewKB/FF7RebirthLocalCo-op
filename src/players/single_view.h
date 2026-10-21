@@ -17,6 +17,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
 
 namespace lss::players {
 
@@ -49,6 +50,17 @@ struct SingleViewChange
     };
     Kind kind = Kind::None;
 };
+
+/// The screen is single while the automatic choice is on and the game shows something that takes the whole
+/// screen, or player 2 waits for a party member, or player 2 stands aside for a shared ride (each already known
+/// only while player 2 is in).
+constexpr bool SingleViewWanted(bool autoMode, bool wholeScreenShown, bool waitsForMember, bool standsAside) noexcept
+{
+    return autoMode && (wholeScreenShown || waitsForMember || standsAside);
+}
+
+/// The change for the log (empty for None).
+std::wstring Describe(const SingleViewChange& change);
 
 class SingleView
 {

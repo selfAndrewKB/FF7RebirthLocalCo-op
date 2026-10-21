@@ -10,6 +10,7 @@
 #include "expect.h"
 
 #include <cstdio>
+#include <string>
 
 namespace {
 
@@ -188,6 +189,21 @@ void TestFailuresReported()
     EXPECT(g_setting.writes == 0);
 }
 
+void TestDescribe()
+{
+    std::puts("layout: every change has text, None none; the applied line names the layout");
+    using lss::players::Describe;
+    EXPECT(Describe(LayoutChange{Kind::None, 0}).empty());
+    for (const auto kind : {Kind::Chosen, Kind::Unreadable, Kind::Applied, Kind::ApplyFailed, Kind::Restored, Kind::LeftAlone,
+                            Kind::RestoreFailed})
+    {
+        EXPECT(!Describe(LayoutChange{kind, kSideBySide}).empty());
+    }
+    EXPECT(Describe(LayoutChange{Kind::Applied, kSideBySide}) == L"split layout: TwoPlayerSplitscreenLayout = 1 (side by side)");
+    EXPECT(Describe(LayoutChange{Kind::Restored, kTopBottom}).find(L"restored to 0 (top/bottom)") != std::wstring::npos);
+    EXPECT(Describe(LayoutChange{Kind::Chosen, 7}).find(L"another value") != std::wstring::npos);
+}
+
 }  // namespace
 
 int main()
@@ -199,6 +215,7 @@ int main()
     TestGameAlreadySideBySide();
     TestSomeoneElseChangedIt();
     TestFailuresReported();
+    TestDescribe();
 
     return lss::test::Report();
 }

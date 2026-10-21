@@ -241,6 +241,27 @@ void TestAnySetting()
     EXPECT(g_console.commands == 2);
 }
 
+void TestOrderAndDescribe()
+{
+    std::puts("settings: the timing method before the gap recorder on a join, after it on a leave; every change has text");
+    using lss::players::Describe;
+    using lss::players::SettingsOrder;
+    using lss::players::SettingsStep;
+    const auto join = SettingsOrder(true);
+    EXPECT(join[0] == SettingsStep::Resolution && join[1] == SettingsStep::Timing && join[2] == SettingsStep::Gap);
+    const auto leave = SettingsOrder(false);
+    EXPECT(leave[0] == SettingsStep::Resolution && leave[1] == SettingsStep::Gap && leave[2] == SettingsStep::Timing);
+    const SplitScreenSettings setting(ConsoleAccess{&ReadInt, &Execute}, SplitScreenSettings::kGapRecorder,
+                                      SplitScreenSettings::kGapRecorderOff);
+    EXPECT(Describe(setting, SettingsChange{Kind::None, 0}).empty());
+    for (const auto kind : {Kind::Applied, Kind::AlreadySet, Kind::ApplyFailed, Kind::Restored, Kind::LeftAlone, Kind::RestoreFailed})
+    {
+        EXPECT(!Describe(setting, SettingsChange{kind, 1}).empty());
+    }
+    EXPECT(Describe(setting, SettingsChange{Kind::Applied, 1}) == L"split screen: D3D12.EnableGapRecorder 1 -> 0 while player 2 is in");
+    EXPECT(Describe(setting, SettingsChange{Kind::Restored, 1}) == L"player 2 is out: D3D12.EnableGapRecorder restored to 1");
+}
+
 int main()
 {
     TestAnySetting();
@@ -254,6 +275,7 @@ int main()
     TestUnreadableLeaveIsRetried();
     TestCommandThatDidNotTakeNeedsNoRestore();
     TestRejoinAppliesAgain();
+    TestOrderAndDescribe();
 
     return lss::test::Report();
 }

@@ -70,4 +70,17 @@ float SplitFov(float fovDegrees, float cameraAspect, const HalfShape& half, floa
     return result > kMinFov && result < kMaxFov ? result : fovDegrees;
 }
 
+float WidthRatio(float splitFovDegrees, float cameraFovDegrees) noexcept
+{
+    constexpr float kHalfAngle = 3.14159265f / 360.0f;
+    const float     ratio      = std::tan(splitFovDegrees * kHalfAngle) / std::tan(cameraFovDegrees * kHalfAngle);
+    return std::isfinite(ratio) && ratio > 0.0f ? ratio : 1.0f;
+}
+
+float VerticalFovDegrees(float horizontalFovDegrees, float aspect) noexcept
+{
+    constexpr float kHalfRadians = 3.14159265f / 360.0f;
+    return std::atan(std::tan(horizontalFovDegrees * kHalfRadians) / aspect) / kHalfRadians;
+}
+
 }  // namespace lss::views

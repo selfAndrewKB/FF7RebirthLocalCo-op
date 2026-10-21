@@ -10,6 +10,7 @@
 #include "expect.h"
 
 #include <cstdio>
+#include <string>
 
 namespace {
 
@@ -157,6 +158,25 @@ void TestModes()
     EXPECT(view.Update(false, true).kind == Kind::Split);  // no player 2: never single
 }
 
+void TestWantedAndDescribe()
+{
+    std::puts("single view: wanted only in auto mode, for the whole screen, a wait or standing aside; each change has text");
+    using lss::players::Describe;
+    using lss::players::SingleViewWanted;
+    EXPECT(!SingleViewWanted(true, false, false, false));
+    EXPECT(SingleViewWanted(true, true, false, false));
+    EXPECT(SingleViewWanted(true, false, true, false));
+    EXPECT(SingleViewWanted(true, false, false, true));
+    EXPECT(!SingleViewWanted(false, true, true, true));
+    EXPECT(Describe(SingleViewChange{Kind::None}).empty());
+    for (const auto kind : {Kind::Single, Kind::AlreadySingle, Kind::SingleFailed, Kind::Split, Kind::LeftAlone, Kind::SplitFailed})
+    {
+        EXPECT(!Describe(SingleViewChange{kind}).empty());
+    }
+    EXPECT(Describe(SingleViewChange{Kind::Single}).find(L"player 1's view alone") != std::wstring::npos);
+    EXPECT(Describe(SingleViewChange{Kind::Split}).find(L"the split is back") != std::wstring::npos);
+}
+
 }  // namespace
 
 int main()
@@ -168,6 +188,7 @@ int main()
     TestClearedBySomeoneElse();
     TestFailuresReportedOncePerRequest();
     TestModes();
+    TestWantedAndDescribe();
 
     return lss::test::Report();
 }

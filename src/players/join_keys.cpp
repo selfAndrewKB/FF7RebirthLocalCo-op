@@ -45,52 +45,7 @@ PlayerIntent JoinKeys::Poll() noexcept
     const bool third  = Pressed(active && IsDown(VK_F3), thirdWasDown_);
     const bool span   = Pressed(active && IsDown(VK_F2), spanWasDown_);
 
-    // Joining and leaving win over everything else pressed on the same tick; of the switches,
-    // one per tick (the others are reported on their own presses).
-    if (!join && !leave)
-    {
-        if (camera)
-        {
-            return PlayerIntent::ToggleOwnCamera;
-        }
-        if (layout)
-        {
-            return PlayerIntent::ToggleLayout;
-        }
-        if (fill)
-        {
-            return PlayerIntent::ToggleFill;
-        }
-        if (sticks)
-        {
-            return PlayerIntent::TogglePadSticks;
-        }
-        if (centre)
-        {
-            return PlayerIntent::ToggleNpcCentre;
-        }
-        if (detail)
-        {
-            return PlayerIntent::ToggleNpcDetail;
-        }
-        if (third)
-        {
-            return PlayerIntent::ToggleThirdView;
-        }
-        if (span)
-        {
-            return PlayerIntent::ToggleWindowSpan;
-        }
-    }
-    if (join && !leave)
-    {
-        return PlayerIntent::Join;
-    }
-    if (leave && !join)
-    {
-        return PlayerIntent::Leave;
-    }
-    return PlayerIntent::None;
+    return ResolveIntent(join, leave, camera, layout, fill, sticks, centre, detail, third, span);
 }
 
 }  // namespace lss::players

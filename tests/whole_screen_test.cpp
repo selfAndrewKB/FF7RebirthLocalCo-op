@@ -4,6 +4,7 @@
 // wins over the others; the other game states (the field running, a load) give none.
 
 #include "views/whole_screen.h"
+#include "views/whole_screen_rules.h"
 
 #include "expect.h"
 
@@ -304,6 +305,25 @@ void TestOtherStates()
     }
 }
 
+void TestRules()
+{
+    std::puts("rules: the title and the minigame maps by name; a Chadley record inside its table; the battle states");
+    using namespace lss::views;
+    EXPECT(ClassifyLocation(L"0005-TITLB").title);
+    EXPECT(!ClassifyLocation(L"0005-TITLB").minigameMap);
+    EXPECT(ClassifyLocation(L"2353-GBIKE").minigameMap);
+    EXPECT(!ClassifyLocation(L"2353-GBIKE").title);
+    EXPECT(!ClassifyLocation(L"?").title && !ClassifyLocation(L"?").minigameMap);
+    EXPECT(ChadleyRecordValid(0x1000, 0x1040, 4, 32));
+    EXPECT(!ChadleyRecordValid(0x1000, 0x1080, 4, 32));  // past the table
+    EXPECT(!ChadleyRecordValid(0x1000, 0x1030, 4, 32));  // misaligned
+    EXPECT(!ChadleyRecordValid(0x1000, 0x1000, 9, 32));  // more than eight records
+    EXPECT(!ChadleyRecordValid(0x1000, 0x1000, 0, 32));
+    EXPECT(!ChadleyRecordValid(0, 0, 1, 32));
+    EXPECT(ChadleyIdValid(0) && ChadleyIdValid(127) && !ChadleyIdValid(-1) && !ChadleyIdValid(128));
+    EXPECT(EncounterInBattle(3) && EncounterInBattle(4) && !EncounterInBattle(2) && !EncounterInBattle(5));
+}
+
 }  // namespace
 
 int main()
@@ -316,6 +336,7 @@ int main()
     TestSceneLeadIn();
     TestOrder();
     TestOtherStates();
+    TestRules();
 
     return lss::test::Report();
 }

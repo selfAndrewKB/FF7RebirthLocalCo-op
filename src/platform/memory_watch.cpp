@@ -1,5 +1,6 @@
 #include "platform/memory_watch.h"
 
+#include "platform/memory_alarm.h"
 #include "platform/binned_pools.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -178,16 +179,13 @@ DWORD WINAPI Run(void*) noexcept
         const auto      poolChange = first || !pool || !loggedPoolKnown
                                          ? 0
                                          : static_cast<std::int64_t>(pool->committed) - static_cast<std::int64_t>(loggedPool);
-        const bool      poolStep   = pool && pool->capacity != 0 &&
-                              (poolChange >= 0 ? poolChange : -poolChange) * 100 >=
-                                  static_cast<std::int64_t>(pool->capacity) * kPoolStepPercent;
+        const bool      poolStep   = pool && PoolStepped(poolChange, pool->capacity, kPoolStepPercent);
         const bool      poolHigh   = pool && Percent(*pool) >= kPoolHighPercent;
-        const bool      jump       = change >= kJumpGb || change <= -kJumpGb || cardChange >= kJumpGb ||
-                            cardChange <= -kJumpGb || poolStep;
+        const bool      jump       = MemoryJump(change, cardChange, poolStep, kJumpGb);
         // A lasting state (over budget, low commit, a nearly full pool) is not repeated every second: a change of
-        // budget state is, and the others every 10 s.
-        const bool alarm = jump || over != loggedOver || ((low || poolHigh) && now - lastLog >= kLowRepeatMs);
-        if (!first && !(alarm && now - lastLog >= kMinLineMs) && now - lastLog < kPeriodMs)
+        // budget state is, and the others every 10 s (platform/memory_alarm.h).
+        const bool alarm = MemoryAlarm(jump, over, loggedOver, low, poolHigh, now - lastLog, kLowRepeatMs);
+        if (!MemoryLineDue(first, alarm, now - lastLog, kMinLineMs, kPeriodMs))
         {
             continue;
         }

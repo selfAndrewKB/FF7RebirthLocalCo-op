@@ -1,5 +1,6 @@
 #include "views/player_view_point.h"
 
+#include "views/axis_records.h"
 #include "platform/engine_addresses.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -115,17 +116,10 @@ void LogShapeOnChange(bool isPlayerTwo, const std::byte* viewInfo) noexcept
 // The FOV rule is only read for a view without the constraint, so with the fill switched off
 // (bars) the value left in place makes no difference until it is restored at the leave.
 
-/// A player whose FOV rule the mod changed, the value to put back, the rule the mod wrote, and the
-/// value last seen in the field (so each change the game makes is logged once).
-struct AxisRecord
-{
-    const void*  player   = nullptr;
-    std::uint8_t original = 0;
-    std::uint8_t applied  = 0;
-    std::uint8_t seen     = 0;
-};
-constexpr std::size_t kAxisRecords = 4;  // one per local player the engine allows (4 in stock UE)
-AxisRecord            g_axisRecords[kAxisRecords]{};  // game thread only
+/// The players whose FOV rule the mod changed, the value to put back, the rule the mod wrote, and the
+/// value last seen in the field (so each change the game makes is logged once): views/axis_records.h.
+constexpr std::size_t     kAxisRecords = 4;  // one per local player the engine allows (4 in stock UE)
+AxisRecords<kAxisRecords> g_axisRecords;     // game thread only
 bool                  g_refusalLogged = false;
 bool                  g_fillLogged    = false;
 
@@ -133,25 +127,6 @@ bool                  g_fillLogged    = false;
 bool IsModRule(std::uint8_t value) noexcept
 {
     return value == kMajorAxisFov || value == kMaintainXFov;
-}
-
-/// A value the game wrote over the mod's rule (a camera cut's), logged once per change.
-void NoteGameRule(AxisRecord& record, std::uint8_t now) noexcept
-{
-    if (now == record.seen)
-    {
-        return;
-    }
-    record.seen = now;
-    if (now == record.applied)
-    {
-        platform::Log(L"a player's FOV rule is the mod's {} again (the game put it back)", static_cast<unsigned>(now));
-    }
-    else
-    {
-        platform::Log(L"a player's FOV rule is {} (the game's, e.g. a camera cut); left to the game",
-                      static_cast<unsigned>(now));
-    }
 }
 
 /// Gives `localPlayer` the FOV rule `rule` once: at its first split frame, or when the mod's rule
@@ -164,31 +139,21 @@ bool ApplyAxisRule(void* localPlayer, std::uint8_t rule) noexcept
     {
         return false;  // not confirmed by reflection: the engine's rule stays
     }
-    auto*       field = static_cast<std::uint8_t*>(localPlayer) + offset;
-    AxisRecord* free  = nullptr;
-    for (auto& record : g_axisRecords)
+    auto* field = static_cast<std::uint8_t*>(localPlayer) + offset;
+    switch (g_axisRecords.Apply(localPlayer, *field, rule))
     {
-        if (record.player == localPlayer)
-        {
-            if (record.applied != rule)  // the mod's own FOV mode changed
-            {
-                record.applied = record.seen = *field = rule;
-                return true;
-            }
-            NoteGameRule(record, *field);
-            return true;
-        }
-        if (record.player == nullptr && free == nullptr)
-        {
-            free = &record;
-        }
+        case AxisApplied::NoRoom: return false;  // no room to remember the original, so it is not changed
+        case AxisApplied::GamePutBack:
+            platform::Log(L"a player's FOV rule is the mod's {} again (the game put it back)", static_cast<unsigned>(*field));
+            break;
+        case AxisApplied::GameWrote:  // a value the game wrote over the mod's rule (a camera cut's), logged once per change
+            platform::Log(L"a player's FOV rule is {} (the game's, e.g. a camera cut); left to the game",
+                          static_cast<unsigned>(*field));
+            break;
+        case AxisApplied::First:
+        case AxisApplied::RuleChanged:
+        case AxisApplied::Unchanged: break;
     }
-    if (free == nullptr)
-    {
-        return false;  // no room to remember the original, so it is not changed
-    }
-    *free  = {localPlayer, *field, rule, rule};
-    *field = rule;
     return true;
 }
 
@@ -233,11 +198,7 @@ void ApplySplitFov(void* localPlayer, std::byte* viewInfo, bool isPlayerTwo) noe
     std::memcpy(&cameraRatio, viewInfo + view_info::kAspectRatio, sizeof(cameraRatio));
     const float split = SplitFov(fov, cameraRatio, half, weight);
     std::memcpy(viewInfo + view_info::kFov, &split, sizeof(split));
-    {
-        constexpr float kHalfAngle = 3.14159265f / 360.0f;
-        const float     ratio      = std::tan(split * kHalfAngle) / std::tan(fov * kHalfAngle);
-        g_widthRatio[isPlayerTwo ? 1 : 0].store(std::isfinite(ratio) && ratio > 0.0f ? ratio : 1.0f, std::memory_order_relaxed);
-    }
+    g_widthRatio[isPlayerTwo ? 1 : 0].store(WidthRatio(split, fov), std::memory_order_relaxed);
 
     const FovSteady steady{weight, half.aspect, half.heightRatio, cameraRatio};
     if (!platform::Enabled(platform::Level::Debug))
@@ -246,8 +207,7 @@ void ApplySplitFov(void* localPlayer, std::byte* viewInfo, bool isPlayerTwo) noe
     }
     else if (g_fovLog[isPlayerTwo ? 1 : 0].Offer(steady, static_cast<int>(std::lround(fov * 10.0f))))
     {
-        constexpr float kHalfRadians = 3.14159265f / 360.0f;
-        const float vertical = std::atan(std::tan(split * kHalfRadians) / half.aspect) / kHalfRadians;
+        const float vertical = VerticalFovDegrees(split, half.aspect);
         platform::LogDebug(L"split FOV ({}): weight {:.2f}, half aspect {:.3f} (height {:.2f} of the screen): camera "
                            L"{:.1f} deg wide at {:.3f} -> {:.1f} deg wide, {:.1f} deg tall",
                            isPlayerTwo ? L"player 2" : L"player 1", weight, half.aspect, half.heightRatio, fov,
@@ -284,19 +244,13 @@ void ShapeSplitView(void* localPlayer, std::byte* viewInfo, bool isPlayerTwo) no
 void RestoreAxisRules(const void* removedPlayer) noexcept
 {
     const auto offset = g_axisOffset.load(std::memory_order_relaxed);
-    for (auto& record : g_axisRecords)
-    {
-        if (record.player != nullptr && record.player != removedPlayer && offset != 0)
-        {
-            auto* field = static_cast<std::uint8_t*>(const_cast<void*>(record.player)) + offset;
-            if (IsModRule(*field))
-            {
-                *field = record.original;
-                platform::Log(L"a player's FOV rule restored to {}", static_cast<unsigned>(record.original));
-            }
-        }
-        record = {};
-    }
+    g_axisRecords.Restore(
+        removedPlayer,
+        [offset](const void* player) -> std::uint8_t* {
+            return offset != 0 ? static_cast<std::uint8_t*>(const_cast<void*>(player)) + offset : nullptr;
+        },
+        &IsModRule,
+        [](std::uint8_t original) { platform::Log(L"a player's FOV rule restored to {}", static_cast<unsigned>(original)); });
     g_fillLogged = false;
 }
 

@@ -1,5 +1,6 @@
 #include "platform/frame_watch.h"
 
+#include "platform/hitch_step.h"
 #include "platform/log.h"
 
 #include <array>
@@ -51,13 +52,12 @@ std::array<const wchar_t*, kMaxNotes>      g_notes{};
 std::size_t                                g_noteCount = 0;
 std::atomic<unsigned>                      g_logLines{0};
 double                                     g_frameStart   = 0.0;
-double                                     g_averageMs    = 0.0;
+HitchState                                 g_hitch;              // the running average and the hitch run
 double                                     g_summaryStart = 0.0;
 unsigned                                   g_hitches      = 0;
 unsigned                                   g_hitchLines   = 0;
 double                                     g_worstMs      = 0.0;
 unsigned                                   g_frames       = 0;
-unsigned                                   g_hitchRun     = 0;  // hitch frames in a row
 std::atomic<bool>                          g_detailed{false};
 std::uint64_t                              g_frameIndex = 0;  // frames started since the mod loaded (never reset)
 
@@ -118,7 +118,7 @@ void LogHitch(double frameMs, unsigned logLines)
         jobs += std::format(L"{}{}", i == 0 ? L"" : L", ", g_notes[i]);
     }
     Log(L"hitch: frame {:.1f} ms (average {:.1f}); the mod's time in it: {} ms; {} log line(s); periodic jobs: {}", frameMs,
-        g_averageMs, parts, logLines, jobs.empty() ? L"none" : jobs.c_str());
+        g_hitch.averageMs, parts, logLines, jobs.empty() ? L"none" : jobs.c_str());
 }
 
 }  // namespace
@@ -185,12 +185,9 @@ void OnFrameStart() noexcept
     {
         const double frameMs = (now - g_frameStart) * 1000.0;
         ++g_frames;
-        if (g_averageMs == 0.0)
-        {
-            g_averageMs = frameMs;
-        }
-        else if (frameMs > g_averageMs * kHitchRatio && frameMs > g_averageMs + kHitchMarginMs &&
-                 ++g_hitchRun <= kNewNormalRun)
+        // A hitch does not move the average (it would hide the next one); long "hitches" are the new normal (a
+        // load screen ended, say): platform/hitch_step.h.
+        if (HitchStep(g_hitch, frameMs, kHitchRatio, kHitchMarginMs, kNewNormalRun, kAverageWeight) == FrameKind::Hitch)
         {
             ++g_hitches;
             g_worstMs = frameMs > g_worstMs ? frameMs : g_worstMs;
@@ -201,17 +198,6 @@ void OnFrameStart() noexcept
             catch (...)
             {
             }
-            // A hitch does not move the average (it would hide the next one).
-        }
-        else if (g_hitchRun > kNewNormalRun)
-        {
-            g_averageMs = frameMs;  // long "hitches" are the new normal (a load screen ended, say)
-            g_hitchRun  = 0;
-        }
-        else
-        {
-            g_hitchRun = 0;
-            g_averageMs += (frameMs - g_averageMs) * kAverageWeight;
         }
     }
     if (g_frameStart != 0.0)  // the frames the summary counts
@@ -243,7 +229,7 @@ void OnFrameStart() noexcept
                 }
                 Log(L"hitches: {} in the last {:.0f} s ({} frames, average {:.1f} ms), worst {:.1f} ms; the mod's hooks per "
                     L"frame (ms): {}; the mod's periodic jobs: {}",
-                    g_hitches, now - g_summaryStart, g_frames, g_averageMs, g_worstMs, perFrame, JobSummary());
+                    g_hitches, now - g_summaryStart, g_frames, g_hitch.averageMs, g_worstMs, perFrame, JobSummary());
             }
         }
         catch (...)

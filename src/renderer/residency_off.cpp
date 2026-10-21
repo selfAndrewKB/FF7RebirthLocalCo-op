@@ -1,5 +1,6 @@
 #include "renderer/residency_off.h"
 
+#include "platform/rip_relative.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -37,8 +38,7 @@ std::optional<std::uintptr_t> GateAddress(const platform::GameImage& image) noex
     {
         return std::nullopt;
     }
-    const std::uintptr_t next = *site + kStoreOffset + 3 + sizeof(displacement);
-    return next + displacement == *gate ? gate : std::nullopt;
+    return platform::RipTarget(*site + kStoreOffset, 3 + sizeof(displacement), displacement) == *gate ? gate : std::nullopt;
 }
 
 int ReadGate(std::uintptr_t gate) noexcept

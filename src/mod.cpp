@@ -32,6 +32,7 @@
 #include "platform/frame_watch.h"
 #include "platform/memory_watch.h"
 #include "platform/image.h"
+#include "platform/level_names.h"
 #include "platform/log.h"
 #include "platform/module_folder.h"
 #include "player_two/field_exit.h"
@@ -135,9 +136,6 @@ constexpr const wchar_t* kVersion = L"0.81.0-mm2";  // the multi-monitor-support
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
-
-/// How often, in engine ticks, the split halves' shape is read while player 2 is in.
-constexpr std::uint32_t kHalfShapeIntervalTicks = 30;
 
 /// Checks every engine fact against the running game and logs each one that fails.
 /// Returns the live address of RemoveLocalPlayer when all hold.
@@ -294,17 +292,10 @@ public:
         {
             std::wstring word;
             level >> word;
-            constexpr std::pair<const wchar_t*, lss::platform::Level> kLevels[] = {
-                {L"error", lss::platform::Level::Error}, {L"warning", lss::platform::Level::Warning},
-                {L"info", lss::platform::Level::Info},   {L"debug", lss::platform::Level::Debug},
-                {L"trace", lss::platform::Level::Trace}};
-            for (const auto& [name, value] : kLevels)
+            if (const auto parsed = lss::platform::ParseLevel(word))
             {
-                if (word == name)
-                {
-                    lss::platform::SetLevel(value);
-                    Log(L"log level {} (log-level.txt)", name);
-                }
+                lss::platform::SetLevel(*parsed);
+                Log(L"log level {} (log-level.txt)", lss::platform::LevelWord(*parsed));
             }
         }
         // Recognises the game build (and so every PerBuild value) before any thread of ours can read one; the later
@@ -640,9 +631,11 @@ private:
         // player 2 waits for a member (only player 1 plays then; the user's decision, 2026-10-01): while
         // it holds, player 2 stays in but the split's presentation is off, as with one player.
         const bool playerTwoIn = session_->HasPlayerTwo();
+        const bool autoMode    = singleView_.Mode() == lss::players::SingleViewMode::Auto;
         const bool waits       = PlayerTwoWaits();
-        const bool asides      = session_->StandsAside() && singleView_.Mode() == lss::players::SingleViewMode::Auto;
-        LogSingleViewChange(singleView_.Update(playerTwoIn, WholeScreenShown(playerTwoIn) || waits || asides));
+        LogSingleViewChange(singleView_.Update(
+            playerTwoIn,
+            lss::players::SingleViewWanted(autoMode, WholeScreenShown(playerTwoIn), waits, session_->StandsAside())));
         const bool splitShown = playerTwoIn && !singleView_.Single();
         lss::views::SetSplitShown(splitShown);
         lss::player_two::nav_strand::Tick(splitShown);  // a stranded player 2 is warped back to the party
@@ -679,17 +672,13 @@ private:
             lss::player_two::main_camera_shape::Update(lss::player_two::generation::Active() && splitShown &&
                                                        lss::views::FillsHalves());
         }
-        LogSettingsChange(settings_, settings_.Update(playerTwoIn));
-        // The timing method before the gap recorder goes off, and back after it returns.
-        if (playerTwoIn)
+        // The timing method before the gap recorder goes off, and back after it returns (SettingsOrder).
+        for (const auto step : lss::players::SettingsOrder(playerTwoIn))
         {
-            LogSettingsChange(timingSettings_, timingSettings_.Update(true));
-            LogSettingsChange(gapSettings_, gapSettings_.Update(true));
-        }
-        else
-        {
-            LogSettingsChange(gapSettings_, gapSettings_.Update(false));
-            LogSettingsChange(timingSettings_, timingSettings_.Update(false));
+            auto& setting = step == lss::players::SettingsStep::Resolution ? settings_
+                            : step == lss::players::SettingsStep::Timing   ? timingSettings_
+                                                                            : gapSettings_;
+            LogSettingsChange(setting, setting.Update(playerTwoIn));
         }
         if (playerTwoIn != submitHintsSkipped_)
         {
@@ -721,16 +710,12 @@ private:
     /// Read twice a second; until the first reading the split FOV leaves the stock rule in place.
     void UpdateHalfShape(bool splitShown) noexcept
     {
-        if (!splitShown || lss::views::third_view::In())  // three columns: the halves rule does not apply (stock FOV)
+        // Three columns: the halves rule does not apply (stock FOV).
+        switch (halfShape_.Next(splitShown, lss::views::third_view::In()))
         {
-            halfShapeTicks_   = 0;
-            loggedHalfAspect_ = -1.0f;
-            lss::views::SetHalfShape({});
-            return;
-        }
-        if (halfShapeTicks_++ % kHalfShapeIntervalTicks != 0)
-        {
-            return;
+            case lss::views::HalfShapeWatch::Step::Reset: lss::views::SetHalfShape({}); return;
+            case lss::views::HalfShapeWatch::Step::Skip: return;
+            case lss::views::HalfShapeWatch::Step::Read: break;
         }
         const lss::platform::frame_watch::Job job(L"half shape read");
         auto*      playerOne  = static_cast<RC::Unreal::UObject*>(const_cast<void*>(session_->PlayerOne()));
@@ -742,9 +727,8 @@ private:
                                                                                lss::players::SplitLayoutKind::SideBySide))
                                            : lss::views::HalfShape{};
         lss::views::SetHalfShape(half);
-        if (half.aspect != loggedHalfAspect_)
+        if (halfShape_.AspectChanged(half.aspect))
         {
-            loggedHalfAspect_ = half.aspect;
             if (half.aspect > 0.0f)
             {
                 Log(L"split halves: viewport {}x{}, layout {}, half aspect {:.3f}, height {:.2f} of the screen",
@@ -776,34 +760,9 @@ private:
 
     static void LogLayoutChange(const lss::players::LayoutChange& change) noexcept
     {
-        using Kind = lss::players::LayoutChange::Kind;
-        const auto name = [](std::uint8_t value) {
-            return value == static_cast<std::uint8_t>(lss::players::SplitLayoutKind::SideBySide) ? L"side by side"
-                   : value == static_cast<std::uint8_t>(lss::players::SplitLayoutKind::TopBottom) ? L"top/bottom"
-                                                                                                   : L"another value";
-        };
-        switch (change.kind)
+        if (const auto text = lss::players::Describe(change); !text.empty())
         {
-            case Kind::None: break;
-            case Kind::Chosen: Log(L"split layout: {} from the next join", name(change.value)); break;
-            case Kind::Unreadable:
-                Log(L"split layout: TwoPlayerSplitscreenLayout cannot be read, so the switch did nothing");
-                break;
-            case Kind::Applied:
-                Log(L"split layout: TwoPlayerSplitscreenLayout = {} ({})", change.value, name(change.value));
-                break;
-            case Kind::ApplyFailed:
-                Log(L"split layout: could not set TwoPlayerSplitscreenLayout to {}; the game's layout stays", change.value);
-                break;
-            case Kind::Restored:
-                Log(L"player 2 is out: TwoPlayerSplitscreenLayout restored to {} ({})", change.value, name(change.value));
-                break;
-            case Kind::LeftAlone:
-                Log(L"player 2 is out: TwoPlayerSplitscreenLayout was changed to {} meanwhile; left as it is", change.value);
-                break;
-            case Kind::RestoreFailed:
-                Log(L"player 2 is out: could not restore TwoPlayerSplitscreenLayout to {}", change.value);
-                break;
+            Log(L"{}", text);
         }
     }
 
@@ -895,48 +854,18 @@ private:
 
     static void LogSingleViewChange(const lss::players::SingleViewChange& change) noexcept
     {
-        using Kind = lss::players::SingleViewChange::Kind;
-        switch (change.kind)
+        if (const auto text = lss::players::Describe(change); !text.empty())
         {
-            case Kind::None: break;
-            case Kind::Single:
-                Log(L"single view: player 1's view alone (SetForceDisableSplitscreen(true)); player 2 stays in");
-                break;
-            case Kind::AlreadySingle:
-                Log(L"single view: the split was already force-disabled by someone else; used, and not cleared by the mod");
-                break;
-            case Kind::SingleFailed:
-                Log(L"single view: the split switch could not be read or set; the split stays");
-                break;
-            case Kind::Split: Log(L"single view: over, the split is back (SetForceDisableSplitscreen(false))"); break;
-            case Kind::LeftAlone:
-                Log(L"single view: over; the split switch is not the mod's (or was cleared meanwhile), left as it is");
-                break;
-            case Kind::SplitFailed:
-                Log(L"single view: the split switch could not be read or cleared; the screen stays single");
-                break;
+            Log(L"{}", text);
         }
     }
 
     static void LogSettingsChange(const lss::players::SplitScreenSettings& setting,
                                   const lss::players::SettingsChange& change) noexcept
     {
-        using Kind = lss::players::SettingsChange::Kind;
-        const wchar_t*     name  = setting.Name();
-        const std::int32_t value = setting.Value();
-        switch (change.kind)
+        if (const auto text = lss::players::Describe(setting, change); !text.empty())
         {
-            case Kind::None: break;
-            case Kind::Applied: Log(L"split screen: {} {} -> {} while player 2 is in", name, change.value, value); break;
-            case Kind::AlreadySet: Log(L"split screen: {} is already {}; left as it is", name, value); break;
-            case Kind::ApplyFailed:
-                Log(L"split screen: could not set {} to {}; rendering stays correct but slower", name, value);
-                break;
-            case Kind::Restored: Log(L"player 2 is out: {} restored to {}", name, change.value); break;
-            case Kind::LeftAlone:
-                Log(L"player 2 is out: {} was changed to {} meanwhile; left as it is", name, change.value);
-                break;
-            case Kind::RestoreFailed: Log(L"player 2 is out: could not restore {} to {}", name, change.value); break;
+            Log(L"{}", text);
         }
     }
 
@@ -956,8 +885,7 @@ private:
                                                        &lss::players::unreal::WriteTwoPlayerSplitscreenLayout}};
     lss::players::SingleView                  singleView_{{&ReadSplitSwitch, &WriteSplitSwitch}};
     bool                                      playerTwoWaited_ = false;  // as last logged
-    std::uint32_t                             halfShapeTicks_     = 0;
-    float                                     loggedHalfAspect_   = -1.0f;
+    lss::views::HalfShapeWatch                halfShape_;
     bool                                      tickSeen_           = false;
     bool                                      rendererInstalled_  = false;
     bool                                      viewPointInstalled_ = false;

@@ -1,5 +1,6 @@
 #include "renderer/submit_hints.h"
 
+#include "platform/rip_relative.h"
 #include "platform/code_memory.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -52,9 +53,9 @@ std::optional<Site> Locate(const platform::GameImage& image) noexcept
     const auto     lowByte      = *lea + sizeof(kLeaOpcode);
     if (!platform::CopyGuarded(&displacement, reinterpret_cast<const void*>(lowByte), sizeof(displacement)) ||
         !platform::CopyGuarded(slots, reinterpret_cast<const void*>(*vtable), sizeof(slots)) ||
-        *lea + sizeof(kLeaOpcode) + sizeof(displacement) + displacement != *vtable || slots[0] != *execute ||
-        slots[1] != *nullsub ||
-        (displacement & 0xFF) > 0xFF - kVtableStep)  // the +8 must stay in the low byte (one byte written)
+        platform::RipTarget(*lea, sizeof(kLeaOpcode) + sizeof(displacement), displacement) != *vtable ||
+        slots[0] != *execute || slots[1] != *nullsub ||
+        !platform::LowByteFits(displacement, kVtableStep))  // the +8 must stay in the low byte (one byte written)
     {
         return std::nullopt;
     }

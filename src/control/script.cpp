@@ -1,5 +1,6 @@
 #include "control/script.h"
 
+#include "platform/level_names.h"
 #include <cmath>
 #include <cwchar>
 #include <format>
@@ -336,14 +337,13 @@ ParsedLine ParseStreamFov(const std::vector<std::wstring_view>& words)
 
 ParsedLine ParseLogLevel(const std::vector<std::wstring_view>& words)
 {
-    constexpr std::wstring_view kLevels[] = {L"error", L"warning", L"info", L"debug", L"trace"};
-    for (std::uint32_t level = 0; words.size() == 2 && level < std::size(kLevels); ++level)
+    if (words.size() == 2)
     {
-        if (words[1] == kLevels[level])
+        if (const auto level = platform::ParseLevel(words[1]))
         {
             Command command;
             command.kind  = CommandKind::LogLevel;
-            command.ticks = level;
+            command.ticks = static_cast<std::uint32_t>(*level);
             return Parsed(std::move(command));
         }
     }
@@ -455,10 +455,8 @@ std::wstring Describe(const Command& command)
         case CommandKind::ThirdView: return command.on ? L"third-view on" : L"third-view off";
         case CommandKind::WindowSpan: return command.on ? L"window-span on" : L"window-span off";
         case CommandKind::LogLevel:
-        {
-            constexpr const wchar_t* kLevels[] = {L"error", L"warning", L"info", L"debug", L"trace"};
-            return std::wstring(L"log-level ") + kLevels[command.ticks < std::size(kLevels) ? command.ticks : 2];
-        }
+            return std::wstring(L"log-level ") +
+                   std::wstring(platform::LevelWord(static_cast<platform::Level>(command.ticks)));
         case CommandKind::SingleView:
             return command.ticks == 1 ? L"single-view on" : command.ticks == 2 ? L"single-view off" : L"single-view auto";
         case CommandKind::StreamViews:

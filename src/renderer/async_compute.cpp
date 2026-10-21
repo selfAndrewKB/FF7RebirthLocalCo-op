@@ -1,5 +1,6 @@
 #include "renderer/async_compute.h"
 
+#include "platform/rip_relative.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -43,7 +44,7 @@ bool Reaches(const platform::GameImage& image, std::uintptr_t site, std::span<co
     {
         return false;
     }
-    return *live + opcode.size() + sizeof(displacement) + displacement == *wanted;
+    return platform::RipTarget(*live, opcode.size() + sizeof(displacement), displacement) == *wanted;
 }
 
 struct Live

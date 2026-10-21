@@ -20,8 +20,10 @@
 // The engine is reached through ConsoleAccess, so this policy has no UE4SS dependency and is
 // tested on the host.
 
+#include <array>
 #include <cstdint>
 #include <optional>
+#include <string>
 
 namespace lss::players {
 
@@ -47,6 +49,25 @@ struct SettingsChange
     Kind         kind  = Kind::None;
     std::int32_t value = 0;
 };
+
+/// The three settings the mod holds, in the order they are updated: joining, the timing method before the gap
+/// recorder goes off; leaving, the gap recorder back before the timing method.
+enum class SettingsStep
+{
+    Resolution,
+    Timing,
+    Gap,
+};
+constexpr std::array<SettingsStep, 3> SettingsOrder(bool playerTwoIn) noexcept
+{
+    return playerTwoIn ? std::array<SettingsStep, 3>{SettingsStep::Resolution, SettingsStep::Timing, SettingsStep::Gap}
+                       : std::array<SettingsStep, 3>{SettingsStep::Resolution, SettingsStep::Gap, SettingsStep::Timing};
+}
+
+class SplitScreenSettings;
+
+/// The change for the log (empty for None).
+std::wstring Describe(const SplitScreenSettings& setting, const SettingsChange& change);
 
 class SplitScreenSettings
 {

@@ -71,4 +71,24 @@ SingleViewChange SingleView::SetSplit() noexcept
     return {SingleViewChange::Kind::Split};
 }
 
+std::wstring Describe(const SingleViewChange& change)
+{
+    using Kind = SingleViewChange::Kind;
+    switch (change.kind)
+    {
+        case Kind::None: return {};
+        case Kind::Single:
+            return L"single view: player 1's view alone (SetForceDisableSplitscreen(true)); player 2 stays in";
+        case Kind::AlreadySingle:
+            return L"single view: the split was already force-disabled by someone else; used, and not cleared by the mod";
+        case Kind::SingleFailed: return L"single view: the split switch could not be read or set; the split stays";
+        case Kind::Split: return L"single view: over, the split is back (SetForceDisableSplitscreen(false))";
+        case Kind::LeftAlone:
+            return L"single view: over; the split switch is not the mod's (or was cleared meanwhile), left as it is";
+        case Kind::SplitFailed:
+            return L"single view: the split switch could not be read or cleared; the screen stays single";
+    }
+    return {};
+}
+
 }  // namespace lss::players
