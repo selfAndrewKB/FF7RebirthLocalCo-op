@@ -1,5 +1,6 @@
 #include "player_two/interact_watch.h"
 
+#include "facts/field_action.h"
 #include "facts/party.h"
 #include "facts/world.h"
 #include "platform/build_value.h"
@@ -53,33 +54,33 @@ using facts::kPartyManagerLeaderType;
 // FieldActionMgr (§1.2, §1.3, §10.D).
 constexpr std::uint32_t kOctree         = 0x10;
 constexpr std::uint32_t kCandidateCount = 0x298;    // i32
-constexpr std::uint32_t kPointList      = 0x48320;  // the live list's head node; node+0x08 next, point = node+0x18
-constexpr std::uint32_t kNodeNext       = 0x08;
-constexpr std::uint32_t kNodePoint      = 0x18;
-constexpr std::uint32_t kPointLock      = 0x487F0;  // SRWLOCK
-constexpr std::uint32_t kSlotRows       = 0x483A8;  // 8 x FWeakObjectPtr
+using facts::kFieldActionPointList;
+using facts::kFieldActionNodeNext;
+using facts::kFieldActionNodePoint;
+using facts::kFieldActionPointLock;
+using facts::kFieldActionSlotRows;
 constexpr std::uint32_t kSlotRecords    = 0x484A8;  // 8 x 36 bytes: +0 key, +8 owner, +0x18 hold timer
 constexpr std::uint32_t kSlotRecordSize = 36;
-constexpr std::uint32_t kSlotTargets    = 0x48608;  // 8 x FName: this frame's target keys
-constexpr std::uint32_t kSlotHeld       = 0x48730;  // 8 x u8
-constexpr std::uint32_t kSlotPressed    = 0x48738;  // 8 x u8
-constexpr std::uint32_t kSlotExecuted   = 0x48740;  // 8 x u8
-constexpr std::uint32_t kPending        = 0x487D0;  // u8
-constexpr int           kSlots          = 8;
-constexpr int           kMaxPoints      = 1024;     // the pool's size
+using facts::kFieldActionSlotTargets;
+using facts::kFieldActionSlotHeld;
+using facts::kFieldActionSlotPressed;
+using facts::kFieldActionSlotExecuted;
+using facts::kFieldActionPending;
+using facts::kFieldActionSlots;
+using facts::kFieldActionMaxPoints;
 
 // A point (§1.2 as corrected in §10.B).
 constexpr std::uint32_t kPointTalk          = 0x08;   // u8
-constexpr std::uint32_t kPointKey           = 0x0C;   // FName
+using facts::kFieldActionPointKey;
 constexpr std::uint32_t kPointOwner         = 0x1C;   // FName
 constexpr std::uint32_t kPointLocation      = 0x2C;   // FVector
-constexpr std::uint32_t kPointPreset        = 0x44;   // FName rpa<Owner>
+using facts::kFieldActionPointPreset;
 constexpr std::uint32_t kPointPreset2       = 0x4C;   // FName, a second point-side preset
 constexpr std::uint32_t kPointPresetPlayer  = 0x54;   // FName rpa<Owner>Player
 constexpr std::uint32_t kPointSlot          = 0xE8;   // u8
 constexpr std::uint32_t kPointKind          = 0xF0;   // u8
 constexpr std::uint32_t kPointVariant       = 0xF1;   // u8
-constexpr std::uint32_t kPointFlags         = 0x104;  // 4 bytes: bit 1 slot target, 2 runner-up, 4 skipped by the query
+using facts::kFieldActionPointFlags;
 
 // WorldItemMgr's map of items (§10.E): a stock TMap, elements of 0xD0 bytes with the key FName at +0.
 constexpr std::uint32_t kItemElements   = 0x90;
@@ -88,7 +89,7 @@ constexpr std::uint32_t kItemBitsInline = 0xA0;
 constexpr std::uint32_t kItemBitsHeap   = 0xB0;
 constexpr std::uint32_t kItemStride     = 0xD0;
 constexpr std::int32_t  kMaxItems       = 16384;
-constexpr std::uint32_t kEntryKeyBack   = 0x10;  // AcquireEntry's entry = element + 0x10
+using facts::kFieldActionEntryKeyBack;
 
 // The hooked functions (§10.A). Entry redirects replace the first instruction (5 bytes); the rest of the
 // listed bytes are checked too.
@@ -147,7 +148,7 @@ thread_local int                            t_marksInExecute = -1;  // -1 outsid
 thread_local std::int32_t                   t_effectsBefore[2] = {0, 0};  // each controller's effects before a grant
 
 // Game thread (the update hook).
-std::array<std::uint8_t, 8 * kSlots + kSlots * 8 + 3 * kSlots + 1> g_slotSeen{};
+std::array<std::uint8_t, 8 * kFieldActionSlots + kFieldActionSlots * 8 + 3 * kFieldActionSlots + 1> g_slotSeen{};
 ULONGLONG                                g_censusAt = 0;
 ULONGLONG                                g_registrarsAt = 0;
 ULONGLONG                                g_censusSummaryAt = 0;
@@ -160,7 +161,7 @@ struct PointSeen
 };
 std::unordered_map<std::uint64_t, PointSeen> g_points;  // key -> last logged
 std::vector<std::uint64_t>                   g_dryRunSeen;
-std::array<void*, kMaxPoints>                g_found{};
+std::array<void*, kFieldActionMaxPoints>                g_found{};
 bool                                         g_wasIn = false;
 
 class Lock
@@ -324,7 +325,8 @@ void ExecuteSlot(void* mgr, std::uint8_t slot) noexcept
         platform::LogDebug(L"interact: execute slot {} key {} (owner {}): leader {}, primary {}; executed {}, pending {}, "
                       L"WorldItem marks {}",
                       slot, Name(key), Name(owner), LeaderText(), PrimaryText(),
-                      ReadField<std::uint8_t>(mgr, kSlotExecuted + (slot & 7)), ReadField<std::uint8_t>(mgr, kPending),
+                      ReadField<std::uint8_t>(mgr, kFieldActionSlotExecuted + (slot & 7)),
+                      ReadField<std::uint8_t>(mgr, kFieldActionPending),
                       marks);
     }
     catch (...)
@@ -398,28 +400,28 @@ void LogSlots(const std::uint8_t* mgr)
     }
     std::array<std::uint8_t, sizeof(g_slotSeen)> now{};
     std::size_t                                  at = 0;
-    platform::CopyGuarded(now.data() + at, mgr + kSlotTargets, 8 * kSlots);
-    at += 8 * kSlots;
-    platform::CopyGuarded(now.data() + at, mgr + kSlotRows, 8 * kSlots);
-    at += 8 * kSlots;
-    platform::CopyGuarded(now.data() + at, mgr + kSlotHeld, kSlots);
-    platform::CopyGuarded(now.data() + at + kSlots, mgr + kSlotPressed, kSlots);
-    platform::CopyGuarded(now.data() + at + 2 * kSlots, mgr + kSlotExecuted, kSlots);
-    at += 3 * kSlots;
-    now[at] = ReadField<std::uint8_t>(mgr, kPending);
+    platform::CopyGuarded(now.data() + at, mgr + kFieldActionSlotTargets, 8 * kFieldActionSlots);
+    at += 8 * kFieldActionSlots;
+    platform::CopyGuarded(now.data() + at, mgr + kFieldActionSlotRows, 8 * kFieldActionSlots);
+    at += 8 * kFieldActionSlots;
+    platform::CopyGuarded(now.data() + at, mgr + kFieldActionSlotHeld, kFieldActionSlots);
+    platform::CopyGuarded(now.data() + at + kFieldActionSlots, mgr + kFieldActionSlotPressed, kFieldActionSlots);
+    platform::CopyGuarded(now.data() + at + 2 * kFieldActionSlots, mgr + kFieldActionSlotExecuted, kFieldActionSlots);
+    at += 3 * kFieldActionSlots;
+    now[at] = ReadField<std::uint8_t>(mgr, kFieldActionPending);
     if (now == g_slotSeen)
     {
         return;
     }
     g_slotSeen = now;
     std::wstring slots;
-    for (int i = 0; i < kSlots; ++i)
+    for (int i = 0; i < kFieldActionSlots; ++i)
     {
-        const auto target = ReadField<std::uint64_t>(mgr, kSlotTargets + 8 * i);
-        const auto row    = ReadField<std::uint64_t>(mgr, kSlotRows + 8 * i);
-        const auto held   = ReadField<std::uint8_t>(mgr, kSlotHeld + i);
-        const auto press  = ReadField<std::uint8_t>(mgr, kSlotPressed + i);
-        const auto done   = ReadField<std::uint8_t>(mgr, kSlotExecuted + i);
+        const auto target = ReadField<std::uint64_t>(mgr, kFieldActionSlotTargets + 8 * i);
+        const auto row    = ReadField<std::uint64_t>(mgr, kFieldActionSlotRows + 8 * i);
+        const auto held   = ReadField<std::uint8_t>(mgr, kFieldActionSlotHeld + i);
+        const auto press  = ReadField<std::uint8_t>(mgr, kFieldActionSlotPressed + i);
+        const auto done   = ReadField<std::uint8_t>(mgr, kFieldActionSlotExecuted + i);
         if (target == 0 && row == 0 && held == 0 && press == 0 && done == 0)
         {
             continue;
@@ -468,16 +470,16 @@ void Census(const std::uint8_t* mgr, const std::unordered_set<std::uint64_t>& it
         float         d1, d2;
     };
     std::vector<Near> nearby;
-    nearby.reserve(kMaxPoints);  // nothing allocates while the game's lock is held
+    nearby.reserve(kFieldActionMaxPoints);  // nothing allocates while the game's lock is held
     int           walked = 0;
     float         nearestOne = 1e30f, nearestTwo = 1e30f;
     std::uint64_t nearestOneKey = 0, nearestTwoKey = 0;
     {
-        const SharedLock lock(reinterpret_cast<PSRWLOCK>(const_cast<std::uint8_t*>(mgr) + kPointLock));
-        const auto* node = PointerAt(mgr, kPointList);
-        for (int n = 0; node != nullptr && n < kMaxPoints; ++n, node = PointerAt(node, kNodeNext))
+        const SharedLock lock(reinterpret_cast<PSRWLOCK>(const_cast<std::uint8_t*>(mgr) + kFieldActionPointLock));
+        const auto* node = PointerAt(mgr, kFieldActionPointList);
+        for (int n = 0; node != nullptr && n < kFieldActionMaxPoints; ++n, node = PointerAt(node, kFieldActionNodeNext))
         {
-            const auto* point = node + kNodePoint;
+            const auto* point = node + kFieldActionNodePoint;
             float       at[3]{};
             platform::CopyGuarded(at, point + kPointLocation, sizeof(at));
             const float d1 = Distance(at, one), d2 = Distance(at, two);
@@ -485,24 +487,24 @@ void Census(const std::uint8_t* mgr, const std::unordered_set<std::uint64_t>& it
             if (d1 < nearestOne)
             {
                 nearestOne    = d1;
-                nearestOneKey = ReadField<std::uint64_t>(point, kPointKey);
+                nearestOneKey = ReadField<std::uint64_t>(point, kFieldActionPointKey);
             }
             if (d2 < nearestTwo)
             {
                 nearestTwo    = d2;
-                nearestTwoKey = ReadField<std::uint64_t>(point, kPointKey);
+                nearestTwoKey = ReadField<std::uint64_t>(point, kFieldActionPointKey);
             }
             if (d1 > kNearCm && d2 > kNearCm)
             {
                 continue;
             }
             PointSeen seen;
-            seen.flags   = ReadField<std::uint32_t>(point, kPointFlags);
+            seen.flags   = ReadField<std::uint32_t>(point, kFieldActionPointFlags);
             seen.slot    = ReadField<std::uint8_t>(point, kPointSlot);
             seen.talk    = ReadField<std::uint8_t>(point, kPointTalk);
             seen.nearOne = d1 <= kNearCm;
             seen.nearTwo = d2 <= kNearCm;
-            nearby.push_back({ReadField<std::uint64_t>(point, kPointKey), seen, point, d1, d2});
+            nearby.push_back({ReadField<std::uint64_t>(point, kFieldActionPointKey), seen, point, d1, d2});
         }
     }
     // A summary every kRegistrarPeriodMs, so an empty census reads as "nothing near", not as a broken walk.
@@ -531,7 +533,7 @@ void Census(const std::uint8_t* mgr, const std::unordered_set<std::uint64_t>& it
                           L"flags 0x{:08X}): {:.1f} m from player 1, {:.1f} m from player 2",
                           Name(n.key), Name(ReadField<std::uint64_t>(n.point, kPointOwner)),
                           items.contains(n.key) ? L"WorldItem" : L"not a WorldItem", n.seen.talk,
-                          Name(ReadField<std::uint64_t>(n.point, kPointPreset)),
+                          Name(ReadField<std::uint64_t>(n.point, kFieldActionPointPreset)),
                           Name(ReadField<std::uint64_t>(n.point, kPointPreset2)),
                           Name(ReadField<std::uint64_t>(n.point, kPointPresetPlayer)), n.seen.slot,
                           ReadField<std::uint8_t>(n.point, kPointKind), ReadField<std::uint8_t>(n.point, kPointVariant),
@@ -564,7 +566,7 @@ void DryRun(const std::uint8_t* mgr, const std::unordered_set<std::uint64_t>& it
         return;
     }
     alignas(16) float box[8] = {two[0], two[1], two[2], 0.0f, kQueryExtent, kQueryExtent, kQueryExtent, 0.0f};
-    RawArray          found{g_found.data(), 0, kMaxPoints};  // the pool's size: the query never reallocates it
+    RawArray          found{g_found.data(), 0, kFieldActionMaxPoints};  // the pool's size: the query never reallocates
     void*             cap     = &found;
     auto*             octree  = const_cast<std::uint8_t*>(mgr) + kOctree;
     if (!platform::CallGuarded(g_query, static_cast<void*>(octree), std::int32_t{0}, static_cast<void*>(octree),
@@ -575,11 +577,11 @@ void DryRun(const std::uint8_t* mgr, const std::unordered_set<std::uint64_t>& it
         return;
     }
     std::vector<std::uint64_t> keys;
-    const int                  count = std::clamp(found.num, 0, kMaxPoints);
+    const int                  count = std::clamp(found.num, 0, kFieldActionMaxPoints);
     keys.reserve(static_cast<std::size_t>(count));
     for (int i = 0; i < count; ++i)
     {
-        keys.push_back(ReadField<std::uint64_t>(g_found[i], kPointKey));
+        keys.push_back(ReadField<std::uint64_t>(g_found[i], kFieldActionPointKey));
     }
     std::sort(keys.begin(), keys.end());
     if (keys == g_dryRunSeen)
@@ -591,11 +593,12 @@ void DryRun(const std::uint8_t* mgr, const std::unordered_set<std::uint64_t>& it
     for (int i = 0; i < count; ++i)
     {
         const auto* point = static_cast<const std::uint8_t*>(g_found[i]);
-        const auto  key   = ReadField<std::uint64_t>(point, kPointKey);
+        const auto  key   = ReadField<std::uint64_t>(point, kFieldActionPointKey);
         float       at[3]{};
         platform::CopyGuarded(at, point + kPointLocation, sizeof(at));
         line += std::format(L"{}{} ({}, {:.1f} m)", line.empty() ? L"" : L"; ", Name(key),
-                            items.contains(key) ? L"WorldItem" : Name(ReadField<std::uint64_t>(point, kPointPreset)),
+                            items.contains(key) ? L"WorldItem"
+                                                : Name(ReadField<std::uint64_t>(point, kFieldActionPointPreset)),
                             Distance(at, two) / 100.0f);
     }
     platform::LogDebug(L"interact: dry run around player 2's member: {} candidate(s){}{}", count, count != 0 ? L": " : L"",

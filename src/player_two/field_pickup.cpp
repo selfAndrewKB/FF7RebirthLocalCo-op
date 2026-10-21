@@ -2,6 +2,7 @@
 
 #include "facts/command_controller.h"
 #include "facts/controller.h"
+#include "facts/field_action.h"
 #include "facts/hud.h"
 #include "facts/world.h"
 #include "platform/call_redirect.h"
@@ -97,23 +98,23 @@ constexpr std::size_t kCopySize = [] {
 constexpr std::uint32_t kCandidateMax    = 0x29C;    // i32: 64 (the inline storage)
 constexpr std::uint32_t kTraceMapA       = 0x2D4;    // i32: 128 (as the ctor leaves it)
 constexpr std::uint32_t kTraceMapB       = 0x2D8;    // i32: -1
-constexpr std::uint32_t kSlotRows        = 0x483A8;  // 8 x FWeakObjectPtr {index, serial}
-constexpr std::uint32_t kSlotTargets     = 0x48608;  // 8 x FName
-constexpr std::uint32_t kSlotLatches     = 0x48730;  // held, pressed, executed: 3 x 8 bytes
-constexpr std::uint32_t kPendingFlag     = 0x487D0;  // u8
+using facts::kFieldActionSlotRows;
+using facts::kFieldActionSlotTargets;
+using facts::kFieldActionSlotHeld;
+using facts::kFieldActionPending;
 constexpr std::uint32_t kReExecuted      = 0x487E8;  // u8
 constexpr std::uint32_t kFieldEnterFlag  = 0x487E9;  // u8, shared: the field-enter reset's own flag
-constexpr std::uint32_t kPointList       = 0x48320;  // the live list's head node; node+0x08 next, point = node+0x18
-constexpr std::uint32_t kNodeNext        = 0x08;
-constexpr std::uint32_t kNodePoint       = 0x18;
-constexpr std::uint32_t kPointLock       = 0x487F0;  // SRWLOCK
-constexpr int           kSlots           = 8;
-constexpr int           kMaxPoints       = 1024;     // the pool's size
+using facts::kFieldActionPointList;
+using facts::kFieldActionNodeNext;
+using facts::kFieldActionNodePoint;
+using facts::kFieldActionPointLock;
+using facts::kFieldActionSlots;
+using facts::kFieldActionMaxPoints;
 
 // A point.
-constexpr std::uint32_t kPointKey       = 0x0C;   // FName
-constexpr std::uint32_t kPointPreset    = 0x44;   // FName: the point-side range preset (§10.4; rpaVendingMachine for vending)
-constexpr std::uint32_t kPointFlags     = 0x104;  // u8
+using facts::kFieldActionPointKey;
+using facts::kFieldActionPointPreset;
+using facts::kFieldActionPointFlags;
 constexpr std::uint8_t  kTargetBits     = 0x06;   // bit 1 slot target, bit 2 runner-up: carried per player (§12.3)
 constexpr std::uint8_t  kDisabledBit    = 0x10;   // the game's "point disabled": the candidate query skips it
 constexpr std::uint32_t kPointMarker    = 0x78;   // UFieldTargetWidget*, the point's marker: carried per player (§12.15)
@@ -198,7 +199,7 @@ constexpr std::uint8_t   kMarkByKeyBytes[] = {0x48, 0x89, 0x54, 0x24, 0x10, 0x53
 constexpr std::size_t    kMarkFirst       = 5;
 constexpr std::uintptr_t kAcquireCall     = 0x140DBE165;
 constexpr std::uintptr_t kAcquire         = 0x140C07A3C;  // (wim, entry); the caller ignores its result
-constexpr std::uint32_t  kEntryKeyBack    = 0x10;         // AcquireEntry's entry = element + 0x10
+using facts::kFieldActionEntryKeyBack;
 using MarkByKeyFn = std::uint8_t (*)(void* items, std::uint64_t key);
 using AcquireFn   = void (*)(void* items, void* entry);
 // UObjectBase's outer, and UWorld's ControllerList: TArray<TWeakObjectPtr<AController>> (8-byte entries).
@@ -320,7 +321,7 @@ std::vector<std::uintptr_t>                         g_oneMarkers;      // sorted
 std::vector<std::uintptr_t>                         g_twoShown;        // sorted: player 2's
 std::vector<std::uint64_t>                          g_markerKeys;      // scratch: player 2's marker keys, sorted
 std::vector<std::uint64_t>                          g_markerKeysLogged;
-std::array<std::uint64_t, kSlots>                   g_targetsLogged{};
+std::array<std::uint64_t, kFieldActionSlots>                   g_targetsLogged{};
 int                                                 g_hashChecked    = 0;
 int                                                 g_hashMismatches = 0;
 bool                                                g_hashTrusted    = true;
@@ -398,7 +399,8 @@ void Exchange(void* mgr) noexcept
 class SharedLock
 {
 public:
-    explicit SharedLock(void* mgr) noexcept : lock_(reinterpret_cast<PSRWLOCK>(static_cast<std::uint8_t*>(mgr) + kPointLock))
+    explicit SharedLock(void* mgr) noexcept
+        : lock_(reinterpret_cast<PSRWLOCK>(static_cast<std::uint8_t*>(mgr) + kFieldActionPointLock))
     {
         AcquireSRWLockShared(lock_);
     }
@@ -544,9 +546,9 @@ void FreshCopy(void* mgr) noexcept
     PutInCopy<std::int32_t>(kCandidateMax, 64);
     PutInCopy<std::int32_t>(kTraceMapA, 128);
     PutInCopy<std::int32_t>(kTraceMapB, -1);
-    for (int i = 0; i < kSlots; ++i)
+    for (int i = 0; i < kFieldActionSlots; ++i)
     {
-        PutInCopy<std::int32_t>(kSlotRows + 8 * i, -1);  // FWeakObjectPtr {index -1, serial 0}
+        PutInCopy<std::int32_t>(kFieldActionSlotRows + 8 * i, -1);  // FWeakObjectPtr {index -1, serial 0}
     }
     g_copyOf = mgr;
     g_twoBits.clear();
@@ -767,17 +769,17 @@ void Before(void* mgr, const std::uint8_t* items, const std::uint8_t* chests, bo
     }
     {
         const SharedLock lock(mgr);
-        const auto*      node = PointerAt(mgr, kPointList);
-        for (int n = 0; node != nullptr && n < kMaxPoints; ++n, node = PointerAt(node, kNodeNext))
+        const auto*      node = PointerAt(mgr, kFieldActionPointList);
+        for (int n = 0; node != nullptr && n < kFieldActionMaxPoints; ++n, node = PointerAt(node, kFieldActionNodeNext))
         {
-            auto*          point = const_cast<std::uint8_t*>(node) + kNodePoint;
-            const auto     key   = ReadField<std::uint64_t>(point, kPointKey);
-            std::uint8_t   flags = point[kPointFlags];
+            auto*          point = const_cast<std::uint8_t*>(node) + kFieldActionNodePoint;
+            const auto     key   = ReadField<std::uint64_t>(point, kFieldActionPointKey);
+            std::uint8_t   flags = point[kFieldActionPointFlags];
             const auto     two   = g_twoBits.find(key);
             const bool     worldItem = filter && InMap(items, kWorldItemMap, key);
             const bool     chest     = filter && !worldItem && InMap(chests, kChestMap, key);
             const bool     machine   = filter && !worldItem && !chest &&
-                                       vending::Admits(ReadField<std::uint64_t>(point, kPointPreset));
+                                       vending::Admits(ReadField<std::uint64_t>(point, kFieldActionPointPreset));
             const bool     keeper    = filter && !worldItem && !chest && !machine && shop_talk::Admits(key);
             const bool     disable   = filter && !worldItem && !chest && !machine && !keeper && (flags & kDisabledBit) == 0;
             std::uintptr_t oneMarker = 0;
@@ -802,7 +804,7 @@ void Before(void* mgr, const std::uint8_t* items, const std::uint8_t* chests, bo
             g_counts.filtered += disable ? 1 : 0;
             flags = static_cast<std::uint8_t>((flags & ~kTargetBits) | (two != g_twoBits.end() ? two->second : 0) |
                                               (disable ? kDisabledBit : 0));
-            point[kPointFlags] = flags;
+            point[kFieldActionPointFlags] = flags;
         }
     }
     for (const auto& [key, marker] : g_twoMarkers)
@@ -825,15 +827,15 @@ void After(void* mgr) noexcept
     g_oneMarkers.clear();
     {
         const SharedLock lock(mgr);
-        const auto*      node = PointerAt(mgr, kPointList);
-        for (int n = 0; node != nullptr && n < kMaxPoints; ++n, node = PointerAt(node, kNodeNext))
+        const auto*      node = PointerAt(mgr, kFieldActionPointList);
+        for (int n = 0; node != nullptr && n < kFieldActionMaxPoints; ++n, node = PointerAt(node, kFieldActionNodeNext))
         {
-            auto*      point = const_cast<std::uint8_t*>(node) + kNodePoint;
-            const auto key   = ReadField<std::uint64_t>(point, kPointKey);
+            auto*      point = const_cast<std::uint8_t*>(node) + kFieldActionNodePoint;
+            const auto key   = ReadField<std::uint64_t>(point, kFieldActionPointKey);
             const auto saved = std::lower_bound(g_saved.begin(), g_saved.end(), point,
                                                 [](const Saved& s, const std::uint8_t* p) { return s.point < p; });
             const bool known = saved != g_saved.end() && saved->point == point && saved->key == key;
-            std::uint8_t flags = point[kPointFlags];
+            std::uint8_t flags = point[kFieldActionPointFlags];
             if ((flags & kTargetBits) != 0)
             {
                 g_twoNow.emplace_back(key, static_cast<std::uint8_t>(flags & kTargetBits));
@@ -843,7 +845,7 @@ void After(void* mgr) noexcept
             {
                 flags = static_cast<std::uint8_t>(flags & ~kDisabledBit);
             }
-            point[kPointFlags] = flags;
+            point[kFieldActionPointFlags] = flags;
             if (known)
             {
                 saved->matched = true;
@@ -998,8 +1000,8 @@ bool InputStep(void* mgr, const std::uint8_t* root, float dt) noexcept
     {
         return true;  // the game runs no FieldAction input either
     }
-    std::uint8_t held[kSlots]{};
-    std::uint8_t pressed[kSlots]{};
+    std::uint8_t held[kFieldActionSlots]{};
+    std::uint8_t pressed[kFieldActionSlots]{};
     bool         slot0Only = false;
     bool         faulted   = false;
     if (PollGate(root, slot0Only, faulted))
@@ -1030,10 +1032,10 @@ void LogTargets() noexcept
     {
         return;  // each prompt change: Debug
     }
-    std::array<std::uint64_t, kSlots> now{};
-    for (int i = 0; i < kSlots; ++i)
+    std::array<std::uint64_t, kFieldActionSlots> now{};
+    for (int i = 0; i < kFieldActionSlots; ++i)
     {
-        now[i] = TakeFromCopy<std::uint64_t>(kSlotTargets + 8 * i);
+        now[i] = TakeFromCopy<std::uint64_t>(kFieldActionSlotTargets + 8 * i);
     }
     if (now == g_targetsLogged)
     {
@@ -1043,7 +1045,7 @@ void LogTargets() noexcept
     try
     {
         std::wstring slots;
-        for (int i = 0; i < kSlots; ++i)
+        for (int i = 0; i < kFieldActionSlots; ++i)
         {
             if (now[i] != 0)
             {
@@ -1150,11 +1152,11 @@ void AfterFieldReset(void* mgr, ResetFn reset, std::uint8_t flagSeen) noexcept
         Break(L"a field reset of player 2's copy");
         return;
     }
-    for (std::uint32_t i = 0; i < 3 * kSlots; ++i)
+    for (std::uint32_t i = 0; i < 3 * kFieldActionSlots; ++i)
     {
-        PutInCopy<std::uint8_t>(kSlotLatches + i, 0);
+        PutInCopy<std::uint8_t>(kFieldActionSlotHeld + i, 0);
     }
-    PutInCopy<std::uint8_t>(kPendingFlag, 0);
+    PutInCopy<std::uint8_t>(kFieldActionPending, 0);
     PutInCopy<std::uint8_t>(kReExecuted, 0);
     g_twoBits.clear();
     g_marked.clear();
@@ -1211,7 +1213,8 @@ std::uint8_t MarkByKey(void* items, std::uint64_t key) noexcept
 /// one, its only player read (the item-get rumble, §12.12 item 5).
 void Acquire(void* items, void* entry) noexcept
 {
-    const auto key       = ReadField<std::uint64_t>(static_cast<const std::uint8_t*>(entry) - kEntryKeyBack, 0);
+    const auto key =
+        ReadField<std::uint64_t>(static_cast<const std::uint8_t*>(entry) - kFieldActionEntryKeyBack, 0);
     const bool playerTwo = generation::OnGameThread() && TakeMarked(key);
     if (g_observer.granting != nullptr)
     {
@@ -1268,11 +1271,11 @@ void Install(const platform::GameImage& image) noexcept
         g_root     = *root;
         g_uiSystem = *ui;
         g_pauseKey = *pause;
-        g_saved.reserve(kMaxPoints);
-        g_twoNow.reserve(kMaxPoints);
-        g_twoMarkersNow.reserve(kMaxPoints);
-        g_oneMarkers.reserve(kMaxPoints);
-        g_doomed.reserve(3 * kMaxPoints);  // Before's, After's and KeepTwoMarkers' each at most one per point
+        g_saved.reserve(kFieldActionMaxPoints);
+        g_twoNow.reserve(kFieldActionMaxPoints);
+        g_twoMarkersNow.reserve(kFieldActionMaxPoints);
+        g_oneMarkers.reserve(kFieldActionMaxPoints);
+        g_doomed.reserve(3 * kFieldActionMaxPoints);  // Before's, After's and KeepTwoMarkers': one per point each
         resets = g_enterCall.InstallResearch(image, kFieldEnterCall, kFieldEnter.address,
                                              reinterpret_cast<std::uintptr_t>(&FieldEnter)) &&
                  g_exitCall.InstallResearch(image, kFieldExitCall, kFieldExit.address,
@@ -1361,9 +1364,9 @@ void RowWeaks(Weaks& out) noexcept
     {
         return;
     }
-    for (int i = 0; i < kSlots; ++i)
+    for (int i = 0; i < kFieldActionSlots; ++i)
     {
-        const auto weak = TakeFromCopy<std::uint64_t>(kSlotRows + 8 * i);
+        const auto weak = TakeFromCopy<std::uint64_t>(kFieldActionSlotRows + 8 * i);
         out[i]          = static_cast<std::int32_t>(weak) >= 0 ? weak : 0;
     }
 }
