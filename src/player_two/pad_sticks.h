@@ -23,6 +23,7 @@
 //     (player_two/member_movement.h).
 // Both act only on the game thread (player_two/generation.h); a call on any other thread is left alone.
 
+#include "dev/dev_switch.h"
 #include "player_two/stage_counters.h"
 #include "player_two/stick_select.h"
 
@@ -66,7 +67,7 @@ inline constexpr unsigned kPartPlayerOneDetect = 8;
 void SetMask(unsigned mask) noexcept;
 bool PartActs(unsigned part) noexcept;
 
-#if defined(LSS_DEV_TOOLS) && LSS_DEV_TOOLS
+#if LSS_DEV
 /// Logging (the Wheelie watch, a dev tool): pad `controllerId`'s own left and right trigger from the game's per-pad
 /// records (the most pressed over the banks the game merges), whatever any scope holds. False when no record could be
 /// read. Game thread.

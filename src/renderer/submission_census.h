@@ -16,9 +16,11 @@
 // Off at start: `census on` (control) or `census.txt` in the mod's folder at launch. The summary goes into the perf
 // log's 10 s window (Info, with `perf-log on`). Logging only; nothing the game does changes.
 
+#include "dev/dev_switch.h"
+
 namespace lss::renderer {
 
-#if defined(LSS_DEV_TOOLS) && LSS_DEV_TOOLS
+#if LSS_DEV
 
 /// Game thread: installs the hooks (logs what it found). True if the submit wrapper is in.
 bool InstallSubmissionCensus() noexcept;

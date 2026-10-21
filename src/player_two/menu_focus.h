@@ -10,13 +10,15 @@
 // class), the layers (widget, saved focus, priority) and the command controller's focus bytes when they change.
 // Game thread only.
 
+#include "dev/dev_switch.h"
+
 namespace lss::platform {
 class GameImage;
 }
 
 namespace lss::player_two::menu_focus {
 
-#if defined(LSS_DEV_TOOLS) && LSS_DEV_TOOLS
+#if LSS_DEV
 
 bool Install(const platform::GameImage& image) noexcept;
 void Remove() noexcept;

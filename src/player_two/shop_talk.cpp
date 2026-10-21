@@ -1,5 +1,6 @@
 #include "player_two/shop_talk.h"
 
+#include "dev/dev_switch.h"
 #include "player_two/field_rules.h"
 #include "platform/entry_redirect.h"
 #include "platform/guarded.h"
@@ -43,9 +44,12 @@ constexpr platform::FunctionFact kRequest{L"StateTrigger_Request", 0x140F7AA58, 
 constexpr std::uint8_t kAiEventBytes[] = {0x48, 0x89, 0x54, 0x24, 0x10, 0x48, 0x89, 0x4C, 0x24, 0x08, 0x55,
                                           0x53, 0x56, 0x57, 0x41, 0x56, 0x48, 0x8D, 0x6C, 0x24, 0xC9};
 constexpr platform::FunctionFact kAiEvent{L"ShopMenu_SendLeaderTargetAIEvent5", 0x14353E9C0, kAiEventBytes};
+#if LSS_DEV
+// The LEADER_ resolver, redirected to log (dev tools): who the greeting looks at while player 2's press is pending.
 constexpr std::uint8_t kLeaderNameBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x48, 0x89, 0x74, 0x24, 0x20,
                                              0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57};
 constexpr platform::FunctionFact kLeaderName{L"ResolveNamedPoint_LEADER_BATTLELEADER", 0x1408A95B8, kLeaderNameBytes};
+#endif
 constexpr std::uint8_t kFindObjectBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x54,
                                              0x24, 0x10, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
 constexpr platform::FunctionFact kFindObject{L"GS_FindObjectByKeyAndAttribute", 0x14087AD50, kFindObjectBytes};
@@ -90,7 +94,6 @@ constexpr auto        kRecheck      = std::chrono::seconds(5);   // a key that i
 constexpr auto        kShopRecheck  = std::chrono::seconds(60);  // a shop's verdict is confirmed again after this
 constexpr std::size_t kQueueSize    = 256;
 constexpr int         kWalksPerTick = 32;
-constexpr int         kLeaderLogs   = 6;  // LEADER_ resolutions logged per pending press
 
 enum class Verdict : std::uint8_t
 {
@@ -110,7 +113,7 @@ struct Known
 };
 constexpr auto kDuplicate = std::chrono::seconds(1);
 
-platform::EntryRedirect g_request, g_aiEvent, g_leaderName;
+platform::EntryRedirect g_request, g_aiEvent;
 FindFn                  g_findObject = nullptr;
 AccessorFn              g_stateRow   = nullptr;
 AccessorFn              g_actionRow  = nullptr;
@@ -122,9 +125,13 @@ bool                    g_admitting  = false;  // the walk's functions were foun
 std::unordered_map<std::uint64_t, Known> g_known;  // by point key (game thread)
 std::vector<std::uint64_t>               g_queue;  // reserved: Admits runs under the field manager's lock
 
-std::uint64_t g_pressKey      = 0;  // the pending press, for the LEADER_ log
-int           g_leaderLogged  = 0;
-unsigned      g_leaderCalls   = 0;
+std::uint64_t g_pressKey      = 0;  // the pending press (the LEADER_ log, and its end noted in Tick)
+#if LSS_DEV
+constexpr int           kLeaderLogs    = 6;  // LEADER_ resolutions logged per pending press
+platform::EntryRedirect g_leaderName;
+int                     g_leaderLogged = 0;
+unsigned                g_leaderCalls  = 0;
+#endif
 
 bool IsAdmitted(Verdict verdict) noexcept
 {
@@ -337,8 +344,10 @@ std::uint64_t Request(std::uint64_t trigger, std::uint64_t sender, float delay, 
             {
                 vending::PressedShopkeeper(sender);
                 g_pressKey     = sender;
+#if LSS_DEV
                 g_leaderLogged = 0;
                 g_leaderCalls  = 0;
+#endif
             }
             platform::Log(L"shop talk: player 2 pressed {} (trigger {}): {}", players::unreal::NameText(sender),
                           players::unreal::NameText(trigger),
@@ -377,6 +386,7 @@ std::uint64_t AiEvent(std::uint64_t a, std::uint64_t target, std::uint64_t c, st
     return result;
 }
 
+#if LSS_DEV
 /// Logging only: the game's LEADER_ resolver while player 2's shopkeeper press is pending (who the greeting looks at).
 std::uint64_t LeaderName(std::uint64_t a, std::uint64_t b, std::uint64_t c, std::uint64_t d) noexcept
 {
@@ -396,6 +406,7 @@ std::uint64_t LeaderName(std::uint64_t a, std::uint64_t b, std::uint64_t c, std:
     }
     return result;
 }
+#endif
 
 bool Place(const platform::GameImage& image, platform::EntryRedirect& redirect, const platform::FunctionFact& fact,
            std::uintptr_t replacement) noexcept
@@ -424,7 +435,13 @@ void Install(const platform::GameImage& image) noexcept
     const bool walk    = g_findObject != nullptr && g_stateRow != nullptr && g_actionRow != nullptr && g_gameRoot != nullptr;
     const bool presses = walk && Place(image, g_request, kRequest, reinterpret_cast<std::uintptr_t>(&Request));
     const bool events  = Place(image, g_aiEvent, kAiEvent, reinterpret_cast<std::uintptr_t>(&AiEvent));
-    const bool leaders = Place(image, g_leaderName, kLeaderName, reinterpret_cast<std::uintptr_t>(&LeaderName));
+#if LSS_DEV
+    const wchar_t* leaders = Place(image, g_leaderName, kLeaderName, reinterpret_cast<std::uintptr_t>(&LeaderName))
+                                 ? L"placed"
+                                 : L"NOT placed";
+#else
+    const wchar_t* leaders = L"off (dev tools)";
+#endif
     g_admitting        = walk && presses;
     platform::Log(L"shop talk: {} (the data walk {}{}, presses {}, the shop's AI event {}, the LEADER_ log {})",
                   g_admitting ? L"ready (player 2 uses shopkeepers through the game's own field prompt and shop)"
@@ -432,8 +449,7 @@ void Install(const platform::GameImage& image) noexcept
                   walk ? L"found" : L"NOT found",
                   g_groupRow != nullptr ? L"" : L" (action groups NOT found: names read as actions only)",
                   presses ? L"watched" : L"NOT watched",
-                  events ? L"for player 2's shop" : L"NOT placed (the NPC reacts to player 1's character)",
-                  leaders ? L"placed" : L"NOT placed");
+                  events ? L"for player 2's shop" : L"NOT placed (the NPC reacts to player 1's character)", leaders);
 }
 
 bool Admits(std::uint64_t key) noexcept
@@ -473,11 +489,13 @@ void Tick() noexcept
     }
     if (g_pressKey != 0 && !vending::ShopkeeperPending())
     {
+#if LSS_DEV
         if (g_leaderCalls != 0)
         {
             platform::LogDebug(L"shop talk: {} named-point resolution(s) while player 2's press of {} was pending",
                                g_leaderCalls, players::unreal::NameText(g_pressKey));
         }
+#endif
         g_pressKey = 0;
     }
     if (!generation::Active())

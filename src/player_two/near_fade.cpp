@@ -1,5 +1,6 @@
 #include "player_two/near_fade.h"
 
+#include "dev/dev_switch.h"
 #include "platform/call_redirect.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -45,6 +46,8 @@ constexpr std::uint32_t kFadeDisable   = 0xAC;  // u32 near-fade disable reasons
 constexpr std::uint32_t kFadeForce     = 0xB0;  // u32 near-fade force-enable reasons
 using FadeOfFn = void* (*)(void* iface);
 
+#if LSS_DEV
+// The fade-state line (dev tools): player 2's character's fade object, logged on change (Tick).
 struct FadeSeen
 {
     std::uint32_t reasons = 0, disable = 0, force = 0;
@@ -52,6 +55,7 @@ struct FadeSeen
     bool          read    = false;
 };
 FadeSeen g_fadeSeen;  // game thread
+#endif
 
 using GatherFn = void (*)(void* registry, const void* cameraLocation, void* unused, void* out);
 using KickFn   = void (*)(void* fadeManager, void* actor, void* unused, const void* cameraLocation);
@@ -211,6 +215,7 @@ void Install(const platform::GameImage& image) noexcept
 
 void Tick() noexcept
 {
+#if LSS_DEV
     void*       member = generation::OnGameThread() && generation::Active() ? generation::Member() : nullptr;
     const void* fade   = member != nullptr ? FadeOfMember(member) : nullptr;
     if (fade == nullptr)
@@ -238,6 +243,7 @@ void Tick() noexcept
                        L"force {:#x}, opacity toward {:.2f}{}",
                        now.reasons, (now.reasons & 0x10u) != 0 ? L" (the near fade)" : L"", now.disable, now.force,
                        now.target, g_dropping ? L"; this frame's near-fade list had it (taken out)" : L"");
+#endif
 }
 
 void Remove() noexcept

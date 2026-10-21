@@ -1,5 +1,7 @@
 #include "player_two/pad_buttons.h"
 
+#include "dev/dev_switch.h"
+
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/frame_watch.h"
@@ -71,10 +73,13 @@ struct TableFields
     const wchar_t* name;
 };
 constexpr std::array<TableFields, 2> kTables{{{0xF8, L"raw"}, {0x148, L"UI"}}};
-// The chocobo's Accel (R2) and Dash actions (RE-p2-chocobo-input.md §2.4): FName globals, traced frame by frame.
+#if LSS_DEV
+// The chocobo's Accel (R2) and Dash actions (RE-p2-chocobo-input.md §2.4): FName globals, traced frame by frame (dev
+// tools).
 constexpr std::uintptr_t kAccelKeyName = 0x1491E4550;
 constexpr std::uintptr_t kDashKeyName  = 0x1491E4580;
 constexpr unsigned       kTraceLines   = 3000;
+#endif
 
 constexpr std::uint32_t kTableNum        = 0x08;
 constexpr std::uint32_t kTableInlineBits = 0x10;
@@ -148,6 +153,7 @@ unsigned g_padOneDowns = 0;  // pad 1's action-downs kept from the UI while play
 int      g_menuPlayer  = 0;  // whose view the tables show outside player 2's calls, and whose presses reach the UI
                              // (1 while player 2's shop is up: SetMenuPlayer)
 std::atomic<unsigned> g_mask{kPartViews | kPartEvents};  // SetMask
+#if LSS_DEV
 const std::uint64_t*  g_traceKeys[2] = {};  // Accel, Dash (live addresses of the FName globals)
 std::array<std::array<std::uint64_t, 2>, 2> g_traceLast{};  // per table, per key: the last traced bytes
 unsigned              g_traceLines = 0;
@@ -190,6 +196,19 @@ void Trace(std::size_t which, const Element& element, const button_view::Views& 
         return;
     }
 }
+
+/// The two FName globals the trace compares keys with.
+void FindTraceKeys(const platform::GameImage& image) noexcept
+{
+    const auto accel = image.Rebase(kAccelKeyName, sizeof(std::uint64_t));
+    const auto dash  = image.Rebase(kDashKeyName, sizeof(std::uint64_t));
+    g_traceKeys[0]   = accel ? reinterpret_cast<const std::uint64_t*>(*accel) : nullptr;
+    g_traceKeys[1]   = dash ? reinterpret_cast<const std::uint64_t*>(*dash) : nullptr;
+}
+#else
+void Trace(std::size_t, const Element&, const button_view::Views&) {}
+void FindTraceKeys(const platform::GameImage&) noexcept {}
+#endif
 
 bool Acts(unsigned part) noexcept
 {
@@ -554,10 +573,7 @@ bool Install(const platform::GameImage& image) noexcept
     }
     g_inputOwner = reinterpret_cast<const std::byte* const*>(*owner);
     g_engineTick = reinterpret_cast<TickFn>(*engine);
-    const auto accel = image.Rebase(kAccelKeyName, sizeof(std::uint64_t));
-    const auto dash  = image.Rebase(kDashKeyName, sizeof(std::uint64_t));
-    g_traceKeys[0]   = accel ? reinterpret_cast<const std::uint64_t*>(*accel) : nullptr;
-    g_traceKeys[1]   = dash ? reinterpret_cast<const std::uint64_t*>(*dash) : nullptr;
+    FindTraceKeys(image);
     if (!platform::ReplaceSlot(image, kInputTick, reinterpret_cast<std::uintptr_t>(&Tick), g_tickSlot))
     {
         return false;

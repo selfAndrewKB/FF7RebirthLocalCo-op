@@ -1,5 +1,6 @@
 #include "player_two/traversal_camera.h"
 
+#include "dev/dev_switch.h"
 #include "player_two/world_rules.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
@@ -1371,8 +1372,9 @@ std::uint8_t HipTrackCall(const void* character) noexcept
     return held ? std::uint8_t{1} : answer;
 }
 
-// --- collision watch (game thread, per frame; lines on change) ------------------------------------------------------
+// --- collision watch (game thread, per frame; lines on change; dev tools) -------------------------------------------
 
+#if LSS_DEV
 /// One traversal camera's time on a player's slot 15: frames, and frames the collision pulled the camera in, with the
 /// climbing wall's hip framing off and on, then the frames after it left (the hand-over to the follow camera).
 struct CollisionWatch
@@ -1458,6 +1460,15 @@ void WatchCollision(int player, const void* cameraManager)
         w = CollisionWatch{};
     }
 }
+
+void ResetCollisionWatch() noexcept
+{
+    g_collision = {};
+}
+#else
+void WatchCollision(int, const void*) {}
+void ResetCollisionWatch() noexcept {}
+#endif
 
 // --- install ----------------------------------------------------------------------------------------------------------
 
@@ -1636,12 +1647,18 @@ void Install(const platform::GameImage& image) noexcept
                       g_squeezeExit != nullptr ? L"yes" : L"NO", g_cameraOff != nullptr ? L"yes" : L"NO",
                       g_oneShotLeavePlaced ? L"yes" : L"NO (player 2's one-shot camera ends at its own timer; the end "
                                                       L"can switch off player 1's slot 15)");
+#if LSS_DEV
+        const wchar_t* collision = g_climbingModuleVt != 0
+                                       ? L"on (Debug, a line per traversal camera)"
+                                       : L"for player 2's ladder only (the climbing module's vtable is not found)";
+#else
+        const wchar_t* collision = L"off (dev tools)";
+#endif
         platform::Log(L"traversal camera: player 2's ladder exit {}; climbing wall hip framing {}; collision watch {}",
                       g_requestCamExit != nullptr ? L"blends into the follow camera as player 1's (the game's request)"
                                                   : L"UNAVAILABLE (the request's bytes differ: a cut at the top)",
                       hip ? L"follows player 2's hold phases" : L"UNAVAILABLE (a call differs: player 2 climbs without it)",
-                      g_climbingModuleVt != 0 ? L"on (Debug, a line per traversal camera)"
-                                              : L"for player 2's ladder only (the climbing module's vtable is not found)");
+                      collision);
     }
     catch (...)
     {
@@ -1696,7 +1713,7 @@ void Tick() noexcept
     }
     if (!generation::Active())
     {
-        g_collision = {};
+        ResetCollisionWatch();
         g_ladderModule = nullptr;
         g_climbActor.store(nullptr, std::memory_order_release);
         g_memberNow.store(nullptr, std::memory_order_relaxed);

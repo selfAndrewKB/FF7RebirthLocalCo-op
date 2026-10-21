@@ -160,7 +160,7 @@ void SetMask(unsigned mask) noexcept
                   PartActs(kPartPlayerOneDetect));
 }
 
-#if defined(LSS_DEV_TOOLS) && LSS_DEV_TOOLS
+#if LSS_DEV
 bool PadTriggers(std::int32_t controllerId, float& left, float& right) noexcept
 {
     left = right     = 0.0f;

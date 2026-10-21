@@ -1,5 +1,6 @@
 #include "player_two/move_type_two.h"
 
+#include "dev/dev_switch.h"
 #include "platform/entry_redirect.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -26,10 +27,9 @@ namespace {
 // 1.004 addresses; 1.005 through replaced-walk-layer2.json (every slot and function read from both exes).
 
 // PrimaryPC_SetByte890(layer cl, value dl): the primary controller's +0x890[layer] (a leaf). Its entry instruction sits
-// inside one block in 1.005 only (1.004 %16 = 0xC): the log is 1.005's.
+// inside one block in 1.005 only (1.004 %16 = 0xC): the write log (dev tools) is 1.005's.
 constexpr std::uint8_t kSetterBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8};
 constexpr platform::FunctionFact kSetter{L"PrimaryPC_SetByte890", 0x1408A801C, kSetterBytes};
-constexpr std::size_t            kSetterFirst = 5;  // mov [rsp+8], rbx
 using SetterFn = void (*)(std::uint8_t layer, std::uint8_t value);
 
 // The game's own layer-2 clear (the event commands' too): SetByte890(2, 6) + SetByte8A4(2, 0) on the primary; its gate
@@ -59,7 +59,6 @@ constexpr std::uint32_t kLayerTwo        = 0x892;  // controller +0x890[2]
 constexpr std::uint8_t  kLayerEmpty      = 6;
 
 std::optional<platform::GameImage> g_image;
-platform::EntryRedirect            g_setter;
 platform::VTableEntry              g_phaseFour;
 platform::VTableEntry              g_redDoorEnd;
 bool                               g_phasePlaced = false;
@@ -83,8 +82,13 @@ std::atomic<bool>          g_moveToTwo{false};
 // so a queued clear for player 1's controller waits for it (its exit clears it natively).
 std::atomic<bool>          g_oneStepLive{false};
 SetterFn                   g_setByte = nullptr;  // the setter's live entry (through the log when it is placed)
-std::atomic<std::uint64_t> g_lastWrite{~0ull};  // the setter's last logged {caller, value, controller}
 int                        g_layerSeen = -1;    // game thread: player 2's controller's layer 2 last logged
+#if LSS_DEV
+// The layer-2 write log (dev tools): the setter's entry redirected, each write logged with its caller.
+constexpr std::size_t      kSetterFirst = 5;  // mov [rsp+8], rbx
+platform::EntryRedirect    g_setter;
+std::atomic<std::uint64_t> g_lastWrite{~0ull};  // the setter's last logged {caller, value, controller}
+#endif
 
 const wchar_t* ThreadText() noexcept
 {
@@ -131,6 +135,7 @@ bool PlayerTwosAction(const void* action) noexcept
     return ActionOf(action, g_memberWeak);
 }
 
+#if LSS_DEV
 /// The setter (any thread): layer-2 writes logged, then the game's write.
 void Setter(std::uint8_t layer, std::uint8_t value) noexcept
 {
@@ -154,6 +159,26 @@ void Setter(std::uint8_t layer, std::uint8_t value) noexcept
     }
     original(layer, value);
 }
+
+/// Places the write log on the setter's entry; what the install line says of it.
+const wchar_t* InstallWriteLog(const platform::GameImage& image) noexcept
+{
+    const std::span<const std::uint8_t> setterBytes(kSetterBytes);
+    const auto                          at = image.Rebase(kSetter.address);
+    const bool logged = at && image.BytesMatch(kSetter.address, setterBytes) &&
+                        g_setter.Install(*at, image.EntryInstruction(kSetter.address, setterBytes.first(kSetterFirst)),
+                                         reinterpret_cast<std::uintptr_t>(&Setter));
+    return logged ? L"on (Debug)" : L"unavailable in this build (the setter's entry crosses a block)";
+}
+
+bool RemoveWriteLog() noexcept
+{
+    return g_setter.IsInstalled() && !g_setter.Restore();  // true: left in place
+}
+#else
+const wchar_t* InstallWriteLog(const platform::GameImage&) noexcept { return L"off (dev tools)"; }
+bool           RemoveWriteLog() noexcept { return false; }
+#endif
 
 /// Player 2's action ended its walk cap on another controller than the cap is on: that one's clear follows.
 void AskClear(const wchar_t* what, int capOn, int clearedOn) noexcept
@@ -250,15 +275,9 @@ void Install(const platform::GameImage& image) noexcept
         g_redPlaced   = platform::ReplaceSlot(image, kRedDoorEnd, reinterpret_cast<std::uintptr_t>(&RedDoorEnd),
                                               g_redDoorEnd);
     }
-    const std::span<const std::uint8_t> setterBytes(kSetterBytes);
-    const auto                          at = image.Rebase(kSetter.address);
-    const bool logged = at && image.BytesMatch(kSetter.address, setterBytes) &&
-                        g_setter.Install(*at, image.EntryInstruction(kSetter.address, setterBytes.first(kSetterFirst)),
-                                         reinterpret_cast<std::uintptr_t>(&Setter));
     platform::Log(L"walk cap: player 2's walk step {}, chain door {} (their walk cap ends on player 2's controller, as "
                   L"player 1's does); layer-2 write log {}",
-                  g_phasePlaced ? L"yes" : L"NO", g_redPlaced ? L"yes" : L"NO",
-                  logged ? L"on (Debug)" : L"unavailable in this build (the setter's entry crosses a block)");
+                  g_phasePlaced ? L"yes" : L"NO", g_redPlaced ? L"yes" : L"NO", InstallWriteLog(image));
 }
 
 void Remove() noexcept
@@ -266,7 +285,7 @@ void Remove() noexcept
     bool kept = false;
     kept |= g_phasePlaced && !g_phaseFour.Restore();
     kept |= g_redPlaced && !g_redDoorEnd.Restore();
-    kept |= g_setter.IsInstalled() && !g_setter.Restore();
+    kept |= RemoveWriteLog();
     g_phasePlaced = g_redPlaced = false;
     g_clearFor.store(0, std::memory_order_release);
     g_moveToTwo.store(false, std::memory_order_release);

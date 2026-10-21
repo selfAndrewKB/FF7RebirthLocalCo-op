@@ -1,5 +1,6 @@
 #include "player_two/combat_rumble.h"
 
+#include "dev/dev_switch.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
@@ -84,7 +85,9 @@ constexpr std::array kNotifies = {
 };
 constexpr std::uint32_t kComponentOwner = 0xA0;  // UActorComponent::OwnerPrivate
 
-// The plays, for the log: EndFFBComp_PlayChannel (the dispatcher) and its classic path (also called directly).
+#if LSS_DEV
+// The plays, for the log (dev tools): EndFFBComp_PlayChannel (the dispatcher) and its classic path (also called
+// directly).
 constexpr std::uintptr_t kPlay               = 0x1411F71E8;
 constexpr std::uint8_t   kPlayBytes[]        = {0x48, 0x89, 0x5C, 0x24, 0x08};
 constexpr std::uintptr_t kPlayClassic        = 0x1411F7244;
@@ -114,6 +117,11 @@ constexpr Source kSources[] = {
     {0x1434AFE70, L"Niagara effect"},
     {0x1411F6EE1, L"minigame"},
 };
+// Six arguments, two on the stack (§10.12 item 7): rcx component, dl channel, r8 FName*, r9b, [rsp+0x28] u8,
+// [rsp+0x30] u8*. Returns a byte.
+using PlayFn = std::uint64_t (*)(void* component, std::uint64_t channel, const void* name, std::uint64_t r9,
+                                 std::uint64_t fifth, void* sixth);
+#endif
 
 constexpr int  kMaxLines    = 600;
 constexpr auto kStatusEvery = std::chrono::seconds(10);
@@ -124,17 +132,15 @@ using FallbackFn  = void* (*)();
 using FirstFn     = void* (*)(void* world);
 using Notify3Fn   = void (*)(void* notify, void* mesh, void* animation);
 using Notify4Fn   = void (*)(void* notify, void* mesh, void* animation, float value);
-// Six arguments, two on the stack (§10.12 item 7): rcx component, dl channel, r8 FName*, r9b, [rsp+0x28] u8,
-// [rsp+0x30] u8*. Returns a byte.
-using PlayFn = std::uint64_t (*)(void* component, std::uint64_t channel, const void* name, std::uint64_t r9,
-                                 std::uint64_t fifth, void* sixth);
 
 // Set once at install.
 platform::CallRedirect                                   g_gateCall, g_cameraCall, g_fallbackCall;
 std::array<platform::CallRedirect, kNotifies.size()>     g_firstCalls;
 std::array<std::uintptr_t, kNotifies.size()>             g_firstSites{};
 std::array<platform::VTableEntry, kNotifies.size()>      g_notifySlots;
+#if LSS_DEV
 platform::EntryRedirect                                  g_play, g_playClassic;
+#endif
 std::uintptr_t                                           g_firstController = 0;
 std::optional<platform::GameImage>                       g_image;      // live addresses as research IDA addresses
 bool                                                     g_sitesTried = false;
@@ -506,9 +512,10 @@ void* FirstController(void* world) noexcept
 }
 
 // ---------------------------------------------------------------------------------------------
-// Plays (log only)
+// Plays (log only; dev tools)
 // ---------------------------------------------------------------------------------------------
 
+#if LSS_DEV
 const wchar_t* SourceOf(std::uintptr_t returnAddress) noexcept
 {
     const auto ida = g_image ? g_image->ResearchAddress(returnAddress) : returnAddress;
@@ -566,6 +573,22 @@ std::uint64_t PlayClassic(void* component, std::uint64_t channel, const void* na
     }
     return reinterpret_cast<PlayFn>(g_playClassic.Original())(component, channel, name, r9, fifth, sixth);
 }
+
+/// Places the two play entries; what the install line says of them.
+const wchar_t* InstallPlays(const platform::GameImage& image) noexcept
+{
+    const auto play    = image.Rebase(kPlay);
+    const auto classic = image.Rebase(kPlayClassic);
+    const bool plays = play && classic && image.BytesMatch(kPlay, kPlayBytes) &&
+                       image.BytesMatch(kPlayClassic, kPlayClassicBytes) &&
+                       g_play.Install(*play, image.EntryInstruction(kPlay, kPlayBytes), reinterpret_cast<std::uintptr_t>(&Play)) &&
+                       g_playClassic.Install(*classic, image.EntryInstruction(kPlayClassic, kPlayClassicBytes),
+                                             reinterpret_cast<std::uintptr_t>(&PlayClassic));
+    return plays ? L"logged with their source" : L"NOT logged (an entry is not what the research read)";
+}
+#else
+const wchar_t* InstallPlays(const platform::GameImage&) noexcept { return L"not logged (dev tools)"; }
+#endif
 
 void LogStatus() noexcept
 {
@@ -649,20 +672,13 @@ void Install(const platform::GameImage& image) noexcept
         }
     }
 
-    const auto play    = image.Rebase(kPlay);
-    const auto classic = image.Rebase(kPlayClassic);
-    const bool plays = play && classic && image.BytesMatch(kPlay, kPlayBytes) &&
-                       image.BytesMatch(kPlayClassic, kPlayClassicBytes) &&
-                       g_play.Install(*play, image.EntryInstruction(kPlay, kPlayBytes), reinterpret_cast<std::uintptr_t>(&Play)) &&
-                       g_playClassic.Install(*classic, image.EntryInstruction(kPlayClassic, kPlayClassicBytes),
-                                             reinterpret_cast<std::uintptr_t>(&PlayClassic));
     platform::Log(L"combat rumble: battle hits {}; montage notifies wrapped {} of {}{}; plays {}",
                   hits          ? L"per player (player 2's member's hits ask the game's gate with player 2 as the leader)"
                   : g_hitsPending ? L"from the game thread's first tick (a call crosses a block; logged then)"
                                   : L"UNCHANGED (a call site is not what the research read)",
                   g_notifiesWrapped, kNotifies.size(),
                   g_firstController == 0 ? L" (GetFirstPlayerController is not what the research read)" : L"",
-                  plays ? L"logged with their source" : L"NOT logged (an entry is not what the research read)");
+                  InstallPlays(image));
 }
 
 void BeforeTick() noexcept

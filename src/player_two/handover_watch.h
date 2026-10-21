@@ -15,6 +15,8 @@
 //     held, those on change, and player 2's member's speed beside player 1's.
 // Changes nothing. Game thread only; inert unless player 2 is in.
 
+#include "dev/dev_switch.h"
+
 #include <cstdint>
 
 namespace lss::platform {
@@ -23,7 +25,7 @@ class GameImage;
 
 namespace lss::player_two::handover_watch {
 
-#if defined(LSS_DEV_TOOLS) && LSS_DEV_TOOLS
+#if LSS_DEV
 
 /// Finds the party reads; logged either way. False if a check failed (nothing is logged then).
 bool Install(const platform::GameImage& image) noexcept;

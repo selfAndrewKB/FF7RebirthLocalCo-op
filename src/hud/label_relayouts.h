@@ -16,6 +16,8 @@
 // else) and keeps the text and the reason. Every 5 s: one Debug summary line; an Info line when a block starts or stops
 // relaying out about every frame. Each relayout is a Trace line. Watches only while player 2 plays. Game thread.
 
+#include "dev/dev_switch.h"
+
 namespace lss::platform {
 class GameImage;
 }
@@ -40,7 +42,7 @@ struct Before
     bool          locked = false;    // +0x564: the relayout only marks itself pending
 };
 
-#if defined(LSS_DEV_TOOLS) && LSS_DEV_TOOLS
+#if LSS_DEV
 
 /// Replaces the text block's Tick slot. Logs either way; without it only SetText relayouts are counted.
 bool Install(const platform::GameImage& image) noexcept;

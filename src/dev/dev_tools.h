@@ -8,7 +8,9 @@
 // They are built only with the CMake option LSS_DEV_TOOLS (on by default). Without it, the calls below are empty, and
 // neither the tools' code nor their engine redirects are in the DLL. A watch a shipped module still calls (the
 // session's hand-over notes, the minimap's relayout scopes, the tag counts, the census summary) keeps empty stubs in
-// its own header under the same switch; the rest is reached from here alone.
+// its own header under the same switch (dev/dev_switch.h); the rest is reached from here alone.
+
+#include "dev/dev_switch.h"
 
 namespace lss::platform {
 class GameImage;
@@ -25,7 +27,7 @@ class SplitLayout;
 
 namespace lss::dev {
 
-#if defined(LSS_DEV_TOOLS) && LSS_DEV_TOOLS
+#if LSS_DEV
 
 /// Installs the watches and opens the control channel (the HUD trace and probe install on their first command).
 void Install(const platform::GameImage& image, player_two::Session& session, players::SplitLayout& layout,

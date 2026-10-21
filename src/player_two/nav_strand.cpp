@@ -1,5 +1,6 @@
 #include "player_two/nav_strand.h"
 
+#include "dev/dev_switch.h"
 #define RC_UNREAL_DISABLE_PROPERTY_DEPRECATION_WARNINGS
 #define RC_UNREAL_DISABLE_CLASS_DEPRECATION_WARNINGS
 #include <Unreal/CoreUObject/UObject/Class.hpp>
@@ -177,8 +178,10 @@ std::chrono::steady_clock::time_point g_lastTick{};
 bool          g_ticked      = false;
 bool          g_loggedOffThread = false;
 std::uint32_t g_loggedReadyNoNavmesh = 0;
-const void*   g_loggedState = nullptr;
+#if LSS_DEV
+const void*   g_loggedState = nullptr;  // the AI probe's last state (dev tools)
 std::uint8_t  g_loggedType  = 0xFF;
+#endif
 int           g_lines       = 0;
 
 template <class... A>
@@ -414,6 +417,7 @@ float MovedSinceStart() noexcept
                : -1.0f;
 }
 
+#if LSS_DEV
 /// The retained AI's current state, logged when it changes (and with `always`). Debug: nothing is read below it.
 void ProbeAi(const wchar_t* when, bool always) noexcept
 {
@@ -447,6 +451,9 @@ void ProbeAi(const wchar_t* when, bool always) noexcept
          when, ai, aiPawn, pause, state, type, follow ? L" (FOLLOW)" : L"", vtable == g_followStateVTable ? L"yes" : L"no",
          follow ? range : 0.0f, follow ? warping : std::uint8_t{0});
 }
+#else
+void ProbeAi(const wchar_t*, bool) noexcept {}  // the AI probe is a dev tool
+#endif
 
 std::chrono::steady_clock::time_point g_lastMounted{};
 bool                                  g_mountedQuiet = true;  // the last mounted line had nothing to report
@@ -629,8 +636,10 @@ void Forget() noexcept
     g_tickLongestMove.store(0.0f, std::memory_order_relaxed);
     g_tickFallRefusals.store(0, std::memory_order_relaxed);
     g_tickUnsafeChecks.store(0, std::memory_order_relaxed);
+#if LSS_DEV
     g_loggedState = nullptr;
     g_loggedType  = 0xFF;
+#endif
     g_ticked      = false;
     g_rideWatch.Reset();
     g_rideStrand  = {};

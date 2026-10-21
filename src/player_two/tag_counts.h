@@ -11,6 +11,8 @@
 //
 // Game thread only; the registry is resolved afresh on every read (it belongs to the world).
 
+#include "dev/dev_switch.h"
+
 #include <cstdint>
 #include <optional>
 
@@ -27,7 +29,7 @@ struct Counts
     std::optional<std::int32_t> trigger;
 };
 
-#if defined(LSS_DEV_TOOLS) && LSS_DEV_TOOLS
+#if LSS_DEV
 
 bool Install(const platform::GameImage& image) noexcept;
 bool Installed() noexcept;

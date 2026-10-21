@@ -1,5 +1,6 @@
 #include "player_two/camera_override.h"
 
+#include "dev/dev_switch.h"
 #include "platform/build_value.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -58,8 +59,6 @@ constexpr platform::FunctionFact kRemoved{L"NotifyOverride_OnSubjectCameraOverri
                                           kRemovedBytes};
 constexpr platform::FunctionFact kReleaseWeak{L"TRefCtrlTS__ReleaseWeakRef", 0x140887B00, kReleaseBytes};
 
-constexpr int kMaxLines = 300;
-
 struct Pair  // a TWeakPtr as the global holds it
 {
     std::uintptr_t object     = 0;
@@ -83,7 +82,6 @@ ReleaseFn      g_releaseWeak   = nullptr;
 // Game thread.
 Pair         g_playerTwo;          // player 2's camera's own module (one weak reference is the mod's)
 void*        g_member = nullptr;   // the member whose delegates hold the thunks
-int          g_lines = 0;
 
 template <class T>
 T Field(std::uintptr_t address) noexcept
@@ -179,6 +177,11 @@ void RestoreMember() noexcept
     }
     g_member = nullptr;
 }
+
+#if LSS_DEV
+// The snapshot (dev tools): both cameras' layer-4 modules and both characters' delegates, logged on change (Debug).
+constexpr int kMaxLines = 300;
+int           g_lines   = 0;  // game thread
 
 std::wstring DescribeCamera(void* controller)
 {
@@ -291,6 +294,9 @@ void Log(void* member)
                   g_playerTwo.object, DescribeCamera(playerOne), DescribeCamera(generation::PlayerTwoController()),
                   DescribeCharacter(oneChar), DescribeCharacter(reinterpret_cast<std::uintptr_t>(member)));
 }
+#else
+void Log(void*) {}
+#endif
 
 }  // namespace
 

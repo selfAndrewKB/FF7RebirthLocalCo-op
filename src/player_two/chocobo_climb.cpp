@@ -1,5 +1,6 @@
 #include "player_two/chocobo_climb.h"
 
+#include "dev/dev_switch.h"
 #include "platform/build_value.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -27,13 +28,16 @@ constexpr std::uintptr_t kTryBeginSlot = 0x1466F7698;  // AEndFieldActionChocobo
 constexpr std::uintptr_t kTryBegin     = 0x143665CE0;  // ChocoboClimbActor_TryBegin(actor, dt, pawn)
 constexpr std::uintptr_t kEnterSlot    = 0x1466F8C68;  // the climb executer's state table: row 1's enter
 constexpr std::uintptr_t kEnter        = 0x143654DE4;  // ChocoboClimbExecuter_State1_Enter(executer): the camera setup
-constexpr std::uintptr_t kIsRidden     = 0x1408A6A74;  // IsActiveRiddenVehicle(character): the primary PC rides it (log)
-constexpr std::uintptr_t kHolderState  = 0x1409F0FBC;  // CharCtrlHolder_GetResolvedStateByte68(holder) (log)
 // The pass calls the try-begin with the frame time in xmm1 and the pawn in r8 (both builds' disassembly).
 using TryBeginFn    = void (*)(void* actor, float dt, void* pawn);
 using EnterFn       = void (*)(void* executer);
+#if LSS_DEV
+// The game's own answers, read for the log alone (dev tools).
+constexpr std::uintptr_t kIsRidden     = 0x1408A6A74;  // IsActiveRiddenVehicle(character): the primary PC rides it
+constexpr std::uintptr_t kHolderState  = 0x1409F0FBC;  // CharCtrlHolder_GetResolvedStateByte68(holder)
 using IsRiddenFn    = bool (*)(const void* character);
 using HolderStateFn = std::uint8_t (*)(const void* holder);
+#endif
 
 // Fields (RE-p2-chocobo-climb.md §1.3-1.4; both builds unless per build).
 constexpr std::uint32_t kExecuterChocobo      = 0x74;   // FWeakObjectPtr: the climbing chocobo, as the camera setup reads it
@@ -45,19 +49,22 @@ constexpr std::uint32_t kModuleCurrent = 0xB60 + 0x18;  // the module's state ma
 constexpr std::uint32_t kModulePending = 0xB60 + 0x20;  // ... the requested entry (EndStateMachine_RequestStateById)
 constexpr int           kNone          = -1;
 
-constexpr auto kSummaryEvery = std::chrono::seconds(10);
-
 platform::VTableEntry g_trySlot;
 platform::VTableEntry g_enterSlot;
-IsRiddenFn            g_isRidden    = nullptr;  // null: not logged
-HolderStateFn         g_holderState = nullptr;
 
 // Game thread.
 struct Counts
 {
     unsigned tryTwo = 0, tryRefused = 0, enterTwo = 0, enterTwoRefused = 0, enterOthers = 0;
 };
-Counts                                g_counts;
+Counts g_counts;
+
+#if LSS_DEV
+// The logging half (dev tools): the game's answers around a start check, the 10 s summary, the module's state changes.
+constexpr auto kSummaryEvery = std::chrono::seconds(10);
+
+IsRiddenFn                            g_isRidden    = nullptr;  // null: not logged
+HolderStateFn                         g_holderState = nullptr;
 std::chrono::steady_clock::time_point g_summaryAt{};
 
 struct TryNote
@@ -72,6 +79,7 @@ TryNote     g_lastTry{};
 bool        g_tryNoted     = false;
 const void* g_moduleSeen   = nullptr;  // player 2's chocobo's module, and its last state (Debug on change)
 int         g_moduleState  = kNone;
+#endif
 
 /// The chocobo's ride camera module while its weak handle holds, or null.
 const void* ModuleOf(const void* chocobo) noexcept
@@ -88,18 +96,6 @@ int StateAt(const void* module, std::uint32_t field) noexcept
     return entry != nullptr ? static_cast<int>(ReadField<std::uint32_t>(entry, 0)) : kNone;
 }
 
-/// The chocobo's control state as the game resolves it, or kNone (logging only).
-int ControlState(const void* chocobo) noexcept
-{
-    const void*  holder = ReadPointer(chocobo, kControlHolder);
-    std::uint8_t state  = 0;
-    if (holder == nullptr || g_holderState == nullptr || !platform::CallGuarded(g_holderState, state, holder))
-    {
-        return kNone;
-    }
-    return state;
-}
-
 std::wstring StateText(int state)
 {
     return state == kNone ? std::wstring(L"none") : std::to_wstring(state);
@@ -111,13 +107,30 @@ struct TryCall
     void*      actor;
     float      dt;
     void*      pawn;
+#if LSS_DEV
     TryNote    note{};
     int        after = kNone;
+#endif
 };
+
+#if LSS_DEV
+/// The chocobo's control state as the game resolves it, or kNone (logging only).
+int ControlState(const void* chocobo) noexcept
+{
+    const void*  holder = ReadPointer(chocobo, kControlHolder);
+    std::uint8_t state  = 0;
+    if (holder == nullptr || g_holderState == nullptr || !platform::CallGuarded(g_holderState, state, holder))
+    {
+        return kNone;
+    }
+    return state;
+}
+#endif
 
 void RunTry(void* context) noexcept
 {
-    auto&      call = *static_cast<TryCall*>(context);
+    auto& call = *static_cast<TryCall*>(context);
+#if LSS_DEV
     const bool logs = platform::Enabled(platform::Level::Debug);
     if (logs)
     {
@@ -134,13 +147,17 @@ void RunTry(void* context) noexcept
                                                                     : 3;
         call.note.state = ControlState(call.pawn);
     }
+#endif
     call.fn(call.actor, call.dt, call.pawn);
+#if LSS_DEV
     if (logs)
     {
         call.after = ControlState(call.pawn);
     }
+#endif
 }
 
+#if LSS_DEV
 void NoteTry(const TryCall& call)
 {
     platform::LogTrace(L"chocobo climb: player 2's chocobo's start check ran in player 2's scope");
@@ -165,6 +182,9 @@ void NoteTry(const TryCall& call)
                            NameOf(call.actor), StateText(call.note.state), StateText(call.after));
     }
 }
+#else
+void NoteTry(const TryCall&) {}
+#endif
 
 /// The climb spot's try-begin (every climb spot on a controller's list, each frame, from the character's notify pass).
 void TryBegin(void* actor, float dt, void* pawn) noexcept
@@ -241,6 +261,7 @@ void Enter(void* executer) noexcept
                           L"scope was refused); no climb framing, as the game gives any rider but the leader; {}",
                           text);
         }
+#if LSS_DEV
         else if (two)
         {
             platform::LogDebug(L"chocobo climb: player 2's chocobo climbs; the camera setup ran in player 2's scope (player "
@@ -255,12 +276,14 @@ void Enter(void* executer) noexcept
                                                                                                         : L"another",
                                text);
         }
+#endif
     }
     catch (...)
     {
     }
 }
 
+#if LSS_DEV
 void LogSummary() noexcept
 {
     const auto now = std::chrono::steady_clock::now();
@@ -281,6 +304,20 @@ void LogSummary() noexcept
                        counts.enterOthers);
 }
 
+/// Finds the game's answers the log reads; what it says in the install line.
+const wchar_t* InstallLogging(const platform::GameImage& image) noexcept
+{
+    const auto isRidden = image.Rebase(kIsRidden);
+    const auto holder   = image.Rebase(kHolderState);
+    g_isRidden          = isRidden ? reinterpret_cast<IsRiddenFn>(*isRidden) : nullptr;
+    g_holderState       = holder ? reinterpret_cast<HolderStateFn>(*holder) : nullptr;
+    return g_isRidden != nullptr && g_holderState != nullptr ? L"complete" : L"without the game's answers";
+}
+#else
+void           LogSummary() noexcept {}
+const wchar_t* InstallLogging(const platform::GameImage&) noexcept { return L"off (dev tools)"; }
+#endif
+
 }  // namespace
 
 void Install(const platform::GameImage& image) noexcept
@@ -289,10 +326,7 @@ void Install(const platform::GameImage& image) noexcept
     const auto tryFn     = image.Rebase(kTryBegin);
     const auto enterSlot = image.Rebase(kEnterSlot, sizeof(void*));
     const auto enterFn   = image.Rebase(kEnter);
-    const auto isRidden  = image.Rebase(kIsRidden);
-    const auto holder    = image.Rebase(kHolderState);
-    g_isRidden           = isRidden ? reinterpret_cast<IsRiddenFn>(*isRidden) : nullptr;
-    g_holderState        = holder ? reinterpret_cast<HolderStateFn>(*holder) : nullptr;
+    const wchar_t* logging = InstallLogging(image);
     // Both or neither: a climb without its camera would leave player 2's ride framing against the wall.
     const bool enter = enterSlot && enterFn &&
                        g_enterSlot.Replace(*enterSlot, *enterFn, reinterpret_cast<std::uintptr_t>(&Enter));
@@ -306,7 +340,7 @@ void Install(const platform::GameImage& image) noexcept
                   start ? L"player 2's chocobo starts its climbs and its climb camera in player 2's scope (the spot's "
                           L"start check and the climb executer's camera setup)"
                         : L"NOT placed (a slot differs); player 2's chocobo cannot climb, as before",
-                  g_isRidden != nullptr && g_holderState != nullptr ? L"complete" : L"without the game's answers");
+                  logging);
 }
 
 void Remove() noexcept
@@ -328,6 +362,7 @@ void Tick() noexcept
         return;
     }
     LogSummary();
+#if LSS_DEV
     const void* chocobo = generation::Active() ? chocobo_ride::DrivenChocobo() : nullptr;
     const void* module  = chocobo != nullptr ? ModuleOf(chocobo) : nullptr;
     const int   state   = StateAt(module, kModuleCurrent);
@@ -351,6 +386,7 @@ void Tick() noexcept
         {
         }
     }
+#endif
 }
 
 }  // namespace lss::player_two::chocobo_climb

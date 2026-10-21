@@ -1,5 +1,6 @@
 #include "player_two/battle_camera.h"
 
+#include "dev/dev_switch.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -158,7 +159,8 @@ void Deactivate(void* battle, float blendTime, bool flag)
     }
 }
 
-/// What the watch logs of one camera manager, as raw values: compared each frame, formatted only
+#if LSS_DEV
+/// What the watch (dev tools) logs of one camera manager, as raw values: compared each frame, formatted only
 /// when it changes.
 struct CameraState
 {
@@ -221,6 +223,7 @@ std::wstring Describe(const CameraState& state)
 }
 
 std::array<CameraState, 2> g_logged{};  // game thread: both camera managers as last logged
+#endif
 
 }  // namespace
 
@@ -289,6 +292,7 @@ bool PlayerTwoBattleActive(void* cameraManager) noexcept
 
 void Watch() noexcept
 {
+#if LSS_DEV
     if (g_lines >= kMaxLines || !platform::Enabled(platform::Level::Debug) || !generation::OnGameThread() ||
         !generation::Active())
     {
@@ -309,6 +313,7 @@ void Watch() noexcept
     catch (...)
     {
     }
+#endif
 }
 
 }  // namespace lss::player_two::battle_camera
