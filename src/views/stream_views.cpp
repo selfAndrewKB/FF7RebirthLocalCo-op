@@ -4,6 +4,7 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/verified_code.h"
 #include "players/unreal_access.h"
 #include "views/player_view_point.h"
 #include "views/stream_view_math.h"
@@ -19,9 +20,10 @@ namespace lss::views {
 namespace {
 
 // End_AddViewSlaveLocation (RE-p2-distant-lod-swap.md, "Slave-location call facts"; this build).
-constexpr std::uintptr_t kAddViewSlaveLocation      = 0x140A97DE0;
 constexpr std::uint8_t   kAddViewSlaveLocationBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x70,
                                                          0x00, 0x00, 0x00, 0xE8, 0x40, 0x71, 0x61, 0x01};
+constexpr platform::FunctionFact kAddViewSlaveLocation{L"End_AddViewSlaveLocation", 0x140A97DE0,
+                                                       kAddViewSlaveLocationBytes};
 
 using AddViewSlaveLocationFn = char (*)(const float* location, const float* direction, float fovRadians,
                                         float mainPassScale, bool skipSlaveFrusta, float slaveFar, float shadowFar);
@@ -77,8 +79,8 @@ bool InstallStreamViews(const platform::GameImage& image, bool viewPointInstalle
                       L"installed); each view's scenery detail stays as the game's shared requests leave it");
         return false;
     }
-    const auto add = image.Rebase(kAddViewSlaveLocation);
-    if (!add || !image.BytesMatch(kAddViewSlaveLocation, kAddViewSlaveLocationBytes))
+    const auto add = platform::FindFunction(image, kAddViewSlaveLocation);
+    if (!add)
     {
         platform::Log(L"streaming views: the game's slave-location function is not what the research read; each "
                       L"view's scenery detail stays as the game's shared requests leave it");

@@ -7,6 +7,7 @@
 #include "platform/instruction_patch.h"
 #include "platform/log.h"
 #include "platform/module_folder.h"
+#include "platform/verified_code.h"
 
 #include <cstdint>
 #include <filesystem>
@@ -20,12 +21,13 @@ namespace {
 
 // `lea rax,[FRHICommandSubmitCommandsHint vtable]; mov [rcx],rax` where the parallel-pass dispatch builds its hint node.
 // Research build; 1.005 0x141018B78. The opcode is checked, and the displacement must reach kSubmitCommandsHintVTable.
-constexpr std::uintptr_t kHintNodeLea  = 0x14190784C;
 constexpr std::uint8_t   kLeaOpcode[]  = {0x48, 0x8D, 0x05};
+constexpr platform::FunctionFact kHintNodeLea{L"the parallel dispatch's hint-node lea", 0x14190784C, kLeaOpcode};
 using facts::kSubmitCommandsHintVTable;
 using facts::kSubmitCommandsHintExecute;
-constexpr std::uintptr_t kNullsub      = 0x14076B370;  // slot 0 of the vtable 8 bytes on; 1.005 0x140743B50
 constexpr std::uint8_t   kRetZero[]    = {0xC2, 0x00, 0x00};
+// slot 0 of the vtable 8 bytes on; 1.005 0x140743B50
+constexpr platform::FunctionFact kNullsub{L"the hint vtable's nullsub", 0x14076B370, kRetZero};
 constexpr std::uint8_t   kVtableStep   = 8;
 
 struct Site
@@ -41,12 +43,11 @@ bool                       g_skipping = false;
 
 std::optional<Site> Locate(const platform::GameImage& image) noexcept
 {
-    const auto lea     = image.Rebase(kHintNodeLea, sizeof(kLeaOpcode) + 4);
+    const auto lea     = image.Rebase(kHintNodeLea.address, sizeof(kLeaOpcode) + 4);
     const auto vtable  = image.Rebase(kSubmitCommandsHintVTable, 2 * sizeof(void*));
     const auto execute = image.Rebase(kSubmitCommandsHintExecute);
-    const auto nullsub = image.Rebase(kNullsub, sizeof(kRetZero));
-    if (!lea || !vtable || !execute || !nullsub || !image.BytesMatch(kHintNodeLea, kLeaOpcode) ||
-        !image.BytesMatch(kNullsub, kRetZero))
+    const auto nullsub = platform::FindFunction(image, kNullsub);
+    if (!lea || !vtable || !execute || !nullsub || !platform::FindFunction(image, kHintNodeLea))
     {
         return std::nullopt;
     }
@@ -54,7 +55,7 @@ std::optional<Site> Locate(const platform::GameImage& image) noexcept
     std::int32_t   displacement = 0;
     std::uintptr_t slots[2]     = {};
     const auto     lowByte      = *lea + sizeof(kLeaOpcode);
-    if (image.RipTarget(kHintNodeLea, kLeaOpcode) != vtable || !platform::Read(lowByte, displacement) ||
+    if (image.RipTarget(kHintNodeLea.address, kLeaOpcode) != vtable || !platform::Read(lowByte, displacement) ||
         !platform::Read(*vtable, slots) || slots[0] != *execute || slots[1] != *nullsub ||
         !platform::LowByteFits(displacement, kVtableStep))  // the +8 must stay in the low byte (one byte written)
     {

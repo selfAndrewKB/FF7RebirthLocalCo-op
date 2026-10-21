@@ -25,9 +25,9 @@ namespace {
 //
 // The game state through the game's own getter, which also checks its class (null otherwise): it
 // reads g_AEndGameMode 0x1490FF2B8 +0x288, takes no arguments, and changes nothing.
-constexpr std::uintptr_t kGetEndGameState      = 0x140A2E4B4;
 constexpr std::uint8_t   kGetEndGameStateBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8,
                                                     0x70, 0x0A, 0x68, 0x01, 0x48, 0x2B, 0xE0, 0x48};
+constexpr platform::FunctionFact kGetEndGameState{L"the EndGameState getter", 0x140A2E4B4, kGetEndGameStateBytes};
 constexpr std::uint32_t  kState    = 0x278;  // uint8: the EndGameState state (+0x279 is its history)
 constexpr std::uint32_t  kMenuKind = 0x3BC;  // uint8: EEndSystemPauseMenuKind
 
@@ -48,15 +48,16 @@ constexpr std::int32_t kSkippableSceneId = 12;
 // The job board (§7.1): EndUISystem's slot +0x1E8 (a static) points to the board's 8-byte FWeakObjectPtr;
 // the board's script command keeps running while the game's FWeakObjectPtr_IsValid says it is valid.
 constexpr std::uintptr_t kJobBoardSlot          = 0x1493498C8;
-constexpr std::uintptr_t kWeakIsValid           = 0x1418EB3D4;
 constexpr std::uint8_t   kWeakIsValidBytes[]    = {0x44, 0x8B, 0x49, 0x04, 0x45, 0x33, 0xC0, 0x45,
                                                    0x85, 0xC9, 0x74, 0x4F, 0x8B, 0x01, 0x85, 0xC0};
+constexpr platform::FunctionFact kWeakIsValid{L"FWeakObjectPtr_IsValid", 0x1418EB3D4, kWeakIsValidBytes};
 
 // The pause-menu family (RE-p2-menu-census.md E1, S-MENUEDGE): UEndMenuAPI::IsPauseMenuClosed, the game's own
 // EndUI_NoBlockingWidgetAlive thunk (bool fn(), true = closed). It only reads; its EndUISystem__Get would build the UI
 // system if it did not exist, so it is called only once the system's slot 27 (written by its constructor) is set.
-constexpr std::uintptr_t kPauseMenuClosed        = 0x140806908;
 constexpr std::uint8_t   kPauseMenuClosedBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8};
+constexpr platform::FunctionFact kPauseMenuClosed{L"UEndMenuAPI::IsPauseMenuClosed", 0x140806908,
+                                                  kPauseMenuClosedBytes};
 constexpr std::uintptr_t kUiSlot27               = 0x1493497B8;  // EndUISystem[27], the pause-menu widget's holder
 
 // The script menus with their own EndUISystem slot (E2): each static points at a heap holder; the weak pointers and
@@ -121,9 +122,9 @@ constexpr std::uint32_t  kLocation  = 0x304;  // the title's name: views/whole_s
 // check takes no arguments, writes nothing, and walks the manager's list on the game thread.
 constexpr std::uintptr_t kCutsceneManager     = 0x1490FEB30;
 constexpr std::uint32_t  kSkipping            = 0xA60;  // uint8: a cutscene skip under way
-constexpr std::uintptr_t kIsAnyPlaying        = 0x140A514AC;
 constexpr std::uint8_t   kIsAnyPlayingBytes[] = {0xB8, 0x38, 0x00, 0x00, 0x00, 0xE8, 0x7A, 0xDA,
                                                  0x65, 0x01, 0x48, 0x2B, 0xE0, 0xE8, 0x32, 0x00};
+constexpr platform::FunctionFact kIsAnyPlaying{L"the cutscene manager's IsAnyPlaying", 0x140A514AC, kIsAnyPlayingBytes};
 
 using GetEndGameStateFn = void* (*)();
 using IsAnyPlayingFn    = bool (*)();
@@ -467,12 +468,11 @@ void LogOnChange(const ScreenSignals& now) noexcept
 
 bool InstallWholeScreen(const platform::GameImage& image) noexcept
 {
-    const auto getState = image.Rebase(kGetEndGameState);
+    const auto getState = platform::FindFunction(image, kGetEndGameState);
     const auto root     = image.Rebase(kEndGameRoot, sizeof(std::uintptr_t));
     const auto manager  = image.Rebase(kCutsceneManager, sizeof(std::uintptr_t));
-    const auto playing  = image.Rebase(kIsAnyPlaying);
-    if (!getState || !root || !manager || !playing || !image.BytesMatch(kGetEndGameState, kGetEndGameStateBytes) ||
-        !image.BytesMatch(kIsAnyPlaying, kIsAnyPlayingBytes))
+    const auto playing  = platform::FindFunction(image, kIsAnyPlaying);
+    if (!getState || !root || !manager || !playing)
     {
         platform::Log(L"whole screen: the game's state or cutscene code is not what the research read; the screen "
                       L"stays split in menus and cutscenes (the single-view command still works)");
@@ -484,15 +484,15 @@ bool InstallWholeScreen(const platform::GameImage& image) noexcept
     g_isAnyPlaying    = reinterpret_cast<IsAnyPlayingFn>(*playing);
     g_installed       = true;
     const auto slot    = image.Rebase(kJobBoardSlot, sizeof(std::uintptr_t));
-    const auto isValid = image.Rebase(kWeakIsValid);
-    if (slot && isValid && image.BytesMatch(kWeakIsValid, kWeakIsValidBytes))
+    const auto isValid = platform::FindFunction(image, kWeakIsValid);
+    if (slot && isValid)
     {
         g_jobBoardSlot = *slot;
         g_weakIsValid  = reinterpret_cast<WeakIsValidFn>(*isValid);
     }
-    const auto pauseClosed = image.Rebase(kPauseMenuClosed);
+    const auto pauseClosed = platform::FindFunction(image, kPauseMenuClosed);
     const auto slot27      = image.Rebase(kUiSlot27, sizeof(std::uintptr_t));
-    if (pauseClosed && slot27 && image.BytesMatch(kPauseMenuClosed, kPauseMenuClosedBytes))
+    if (pauseClosed && slot27)
     {
         g_pauseClosed = reinterpret_cast<PauseClosedFn>(*pauseClosed);
         g_uiSlot27    = *slot27;

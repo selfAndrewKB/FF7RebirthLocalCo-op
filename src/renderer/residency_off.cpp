@@ -4,6 +4,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/module_folder.h"
+#include "platform/verified_code.h"
 #include "renderer/before_device.h"
 
 #include <cstdint>
@@ -21,8 +22,9 @@ constexpr std::uintptr_t kResidencyGate = 0x146FAA3B0;
 
 // FD3D12Adapter's device creation reads the setting and clears the gate: `cmp [rax+r9*4],r14d; jne +7;
 // mov byte [gate],r14b`. Research build; 1.005 0x1446B8BB3. Checked up to the store's displacement.
-constexpr std::uintptr_t kGateStoreSite    = 0x144924B9B;
 constexpr std::uint8_t   kGateStoreBytes[] = {0x46, 0x39, 0x34, 0x88, 0x75, 0x07, 0x44, 0x88, 0x35};
+constexpr platform::FunctionFact kGateStoreSite{L"the D3D12 adapter's residency-gate store", 0x144924B9B,
+                                                kGateStoreBytes};
 
 std::optional<std::uintptr_t> GateAddress(const platform::GameImage& image) noexcept
 {
@@ -31,8 +33,8 @@ std::optional<std::uintptr_t> GateAddress(const platform::GameImage& image) noex
     constexpr std::size_t kStoreOffset = sizeof(kGateStoreBytes) - 3;
     const auto            gate         = image.Rebase(kResidencyGate);
     const auto            store        = std::span(kGateStoreBytes).subspan(kStoreOffset);
-    if (!gate || !image.BytesMatch(kGateStoreSite, kGateStoreBytes) ||
-        image.RipTarget(kGateStoreSite + kStoreOffset, store) != gate)
+    if (!gate || !platform::FindFunction(image, kGateStoreSite) ||
+        image.RipTarget(kGateStoreSite.address + kStoreOffset, store) != gate)
     {
         return std::nullopt;
     }

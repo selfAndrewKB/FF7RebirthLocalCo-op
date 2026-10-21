@@ -7,6 +7,7 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
 #include "renderer/me_shadow_feedback_code.h"
 
@@ -30,28 +31,29 @@ namespace {
 // Facts read from the database (RE-p2-distant-lod-swap.md §9.4, §9.9; this build). Each function's first
 // bytes are checked before anything is redirected; the entry redirects replace one register save.
 constexpr std::uintptr_t kRenderEntry = 0x1457A6720;  // the scene renderer's vtable 0x1457A66F8, slot 5
-constexpr std::uintptr_t kRenderMain  = 0x140FDD1F0;  // SceneRenderer_Render_Main(renderer, RHI command list)
 constexpr std::uint8_t   kRenderMainBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 0x56, 0x57,
                                                0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57};
+// SceneRenderer_Render_Main(renderer, RHI command list)
+constexpr platform::FunctionFact kRenderMain{L"SceneRenderer_Render_Main", 0x140FDD1F0, kRenderMainBytes};
 
 // The gate's call of ME_Group_ProcessStreamingFeedbackReadbacks(group), its only caller.
 constexpr std::uintptr_t kProcessCall = 0x140915E38;
-constexpr std::uintptr_t kProcess     = 0x1409156B4;
 constexpr std::uint8_t   kProcessBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C,
                                             0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x57};
+constexpr platform::FunctionFact kProcess{L"ME_Group_ProcessStreamingFeedbackReadbacks", 0x1409156B4, kProcessBytes};
 
 // ME_MainPass_CopyStreamingFeedbackToReadback(builder, scene): its one call (0x14157B30C) crosses a
 // 16-byte block, so its entry is redirected; first instruction `mov [rsp+10h],rdx`.
-constexpr std::uintptr_t kCopy = 0x140915958;
 constexpr std::uint8_t   kCopyBytes[] = {0x48, 0x89, 0x54, 0x24, 0x10, 0x48, 0x89, 0x4C,
                                          0x24, 0x08, 0x55, 0x53, 0x56, 0x57, 0x41, 0x54};
+constexpr platform::FunctionFact kCopy{L"ME_MainPass_CopyStreamingFeedbackToReadback", 0x140915958, kCopyBytes};
 constexpr std::size_t    kCopyFirst   = 5;
 
 // ME_Scene_ComputeRequestedMips_HiddenComponents(renderer, command list, &Views[0]): the same; first
 // instruction `mov [rsp+18h],r8`.
-constexpr std::uintptr_t kHidden = 0x140CF05F8;
 constexpr std::uint8_t   kHiddenBytes[] = {0x4C, 0x89, 0x44, 0x24, 0x18, 0x48, 0x89, 0x54,
                                            0x24, 0x10, 0x55, 0x53, 0x56, 0x57, 0x41, 0x54};
+constexpr platform::FunctionFact kHidden{L"ME_Scene_ComputeRequestedMips_HiddenComponents", 0x140CF05F8, kHiddenBytes};
 constexpr std::size_t    kHiddenFirst   = 5;
 
 // Game version 1.005 (RE-1005-hud-2.md): the process call (0x140BC0ECC there) and both entries (0x14199FE6C,
@@ -68,9 +70,10 @@ constexpr std::uintptr_t kHiddenCall = 0x140FDD6EE;  // Render_Main's call of th
 // copy reads. The call lies inside one 16-byte block in both builds (1.005 0x140C8B5D4 -> 0x140CD1594). The async
 // variant's call (only with async compute and r.MassiveEnvironment.UsingAsyncComputeForMainPass) is not covered.
 constexpr std::uintptr_t kMipRequestsCall    = 0x140F10D4A;
-constexpr std::uintptr_t kMipRequests        = 0x140C9D2F0;
 constexpr std::uint8_t   kMipRequestsBytes[] = {0x40, 0x55, 0x53, 0x56, 0x57, 0x41, 0x54, 0x41,
                                                 0x55, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8D, 0xAC};
+constexpr platform::FunctionFact kMipRequests{L"ME_DispatchComputeRequestedMeshAndTextureMips", 0x140C9D2F0,
+                                              kMipRequestsBytes};
 
 // Option D of RE-perf-me-shadows.md (Phase 3): the shadow pass's streaming-feedback writes, skipped in player 2's family
 // by machine code at one instruction of ME_ChunkDraw_FullPipeline_cand (renderer/me_shadow_feedback_code.h). Research
@@ -332,13 +335,13 @@ void RemoveAll() noexcept
 }
 
 /// Game version 1.005 (kCopyCall above): the hidden pass's call now, Render, and the process and copy calls left to
-/// the render thread's first Render. The functions' first bytes were checked by the caller.
+/// the render thread's first Render. The functions were found (bytes checked) by the caller.
 bool Install1005(const platform::GameImage& image, std::uintptr_t entry, std::uintptr_t render, std::uintptr_t call,
                  std::uintptr_t process, std::uintptr_t copy, std::uintptr_t mipCall, std::uintptr_t mip) noexcept
 {
     const auto copyCall   = image.Rebase(kCopyCall, 5);
     const auto hiddenCall = image.Rebase(kHiddenCall, 5);
-    const auto hidden     = image.Rebase(kHidden);
+    const auto hidden     = platform::FindFunction(image, kHidden);
     if (!copyCall || !hiddenCall || !hidden)
     {
         platform::Log(L"stream feedback: the scenery streaming code is not what the research read; each family hands in "
@@ -375,18 +378,15 @@ bool Install1005(const platform::GameImage& image, std::uintptr_t entry, std::ui
 bool InstallMeFeedbackOnce(const platform::GameImage& image) noexcept
 {
     const auto entry   = image.Rebase(kRenderEntry, sizeof(void*));
-    const auto render  = image.Rebase(kRenderMain);
+    const auto render  = platform::FindFunction(image, kRenderMain);
     const auto call    = image.Rebase(kProcessCall, 5);
-    const auto process = image.Rebase(kProcess);
-    const auto copy    = image.Rebase(kCopy);
-    const auto hidden  = image.Rebase(kHidden);
+    const auto process = platform::FindFunction(image, kProcess);
+    const auto copy    = platform::FindFunction(image, kCopy);
+    const auto hidden  = platform::FindFunction(image, kHidden);
     const auto managers = image.Rebase(kStreamingManagers, sizeof(void*));
     const auto mipCall  = image.Rebase(kMipRequestsCall, 5);
-    const auto mip      = image.Rebase(kMipRequests);
-    if (!entry || !render || !call || !process || !copy || !hidden || !managers || !mipCall || !mip ||
-        !image.BytesMatch(kRenderMain, kRenderMainBytes) || !image.BytesMatch(kProcess, kProcessBytes) ||
-        !image.BytesMatch(kCopy, kCopyBytes) || !image.BytesMatch(kHidden, kHiddenBytes) ||
-        !image.BytesMatch(kMipRequests, kMipRequestsBytes))
+    const auto mip      = platform::FindFunction(image, kMipRequests);
+    if (!entry || !render || !call || !process || !copy || !hidden || !managers || !mipCall || !mip)
     {
         platform::Log(L"stream feedback: the scenery streaming code is not what the research read; each family hands in "
                       L"requests as before");
@@ -400,8 +400,9 @@ bool InstallMeFeedbackOnce(const platform::GameImage& image) noexcept
     // The skip points first: they pass everything through until Render marks a family.
     const bool installed =
         g_processCall.Install(*call, *process, reinterpret_cast<std::uintptr_t>(&Process)) &&
-        g_copyEntry.Install(*copy, image.EntryInstruction(kCopy, std::span(kCopyBytes, kCopyFirst)), reinterpret_cast<std::uintptr_t>(&Copy)) &&
-        g_hiddenEntry.Install(*hidden, image.EntryInstruction(kHidden, std::span(kHiddenBytes, kHiddenFirst)),
+        g_copyEntry.Install(*copy, image.EntryInstruction(kCopy.address, kCopy.entryBytes.first(kCopyFirst)),
+                            reinterpret_cast<std::uintptr_t>(&Copy)) &&
+        g_hiddenEntry.Install(*hidden, image.EntryInstruction(kHidden.address, kHidden.entryBytes.first(kHiddenFirst)),
                             reinterpret_cast<std::uintptr_t>(&HiddenPass)) &&
         g_mipRequestsCall.Install(*mipCall, *mip, reinterpret_cast<std::uintptr_t>(&MipRequestsCall)) &&
         g_render.Replace(*entry, *render, reinterpret_cast<std::uintptr_t>(&Render));

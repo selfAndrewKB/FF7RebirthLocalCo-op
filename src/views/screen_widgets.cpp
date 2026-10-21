@@ -7,6 +7,7 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/verified_code.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 
@@ -24,8 +25,8 @@ namespace {
 // RE-p2-menu-census.md E5 (S-MENUEDGE, both builds): UEndUserWidget__AddToRootOverlay_ZOrderPlus10(widget rcx, z edx),
 // returning a byte; it stores z at +0x2A8. First instruction mov [rsp+18h], rbx (5 bytes, position-independent, inside
 // one 16-byte block in both builds; 1.004's block also holds SetZOrder's tail jump to this entry).
-constexpr std::uintptr_t kAdd           = 0x140E68B98;
 constexpr std::uint8_t   kAddFirst[]    = {0x48, 0x89, 0x5C, 0x24, 0x18};
+constexpr platform::FunctionFact kAdd{L"UEndUserWidget__AddToRootOverlay_ZOrderPlus10", 0x140E68B98, kAddFirst};
 constexpr std::uint32_t  kZOrder        = 0x2A8;  // i32; -1 once RemoveFromParent took it off the overlay
 constexpr std::uint32_t  kVisibility    = 0xC3;   // UWidget::Visibility (ESlateVisibility; the UE4SS header dump, UMG.hpp)
 constexpr std::uint8_t   kCollapsed     = 1;
@@ -182,9 +183,10 @@ char Add(void* widget, std::int32_t z) noexcept
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto add       = image.Rebase(kAdd);
-    const bool installed = add && image.BytesMatch(kAdd, kAddFirst) &&
-                           g_add.Install(*add, image.EntryInstruction(kAdd, kAddFirst), reinterpret_cast<std::uintptr_t>(&Add));
+    const auto add       = platform::FindFunction(image, kAdd);
+    const bool installed = add &&
+                           g_add.Install(*add, image.EntryInstruction(kAdd.address, kAdd.entryBytes),
+                                         reinterpret_cast<std::uintptr_t>(&Add));
     platform::Log(L"screen widgets: {}",
                   installed ? L"the game's widget adds are logged; photo mode gives the single view"
                             : L"the widget add is not what the research read; Blueprint full-screen menus stay split");
