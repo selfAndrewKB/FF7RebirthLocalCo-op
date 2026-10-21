@@ -55,6 +55,9 @@ using SummonBodyFn = void (*)(void* state, float deltaTime);
 std::int64_t*          g_frames  = nullptr;
 double*                g_seconds = nullptr;
 std::int64_t*          g_ms      = nullptr;
+// The clock's three globals around player 2's member tick: the rewound values in, the game's saved, what the tick
+// left read back (defined at install, with g_frames).
+platform::ByteStore<3, 3 * sizeof(std::int64_t)> g_clock;
 std::byte*             g_leader  = nullptr;
 platform::CallRedirect g_summonCall;
 
@@ -106,11 +109,9 @@ double SecondsBefore(double target, float deltaTime) noexcept
     return field_rules::SecondsBefore(target, deltaTime, kNudges);
 }
 
-// Saved between a scope's construction and destruction (neither kind nests).
-std::int64_t                              g_savedFrames  = 0;
-double                                    g_savedSeconds = 0.0;
-std::int64_t                              g_savedMs      = 0;
-bool                                      g_rewound      = false;
+// Between a scope's construction and destruction (neither kind nests).
+std::int64_t                              g_writtenFrames = 0;  // the frame count the tick started from
+bool                                      g_rewound       = false;
 bool                                      g_inputOpen    = false;  // an InputScope holds the saved block
 bool                                      g_tickOpen     = false;  // a MemberTickScope holds the saved clock
 // The leader block around player 2's input: saved and put back whatever the input wrote (defined at install).
@@ -123,12 +124,19 @@ bool Install(const platform::GameImage& image) noexcept
     const auto frames  = image.Rebase(kClockFrames, sizeof(std::int64_t));
     const auto seconds = image.Rebase(kClockSeconds, sizeof(double));
     const auto ms      = image.Rebase(kClockMs, sizeof(std::int64_t));
+    using Range = platform::ByteContext::Range;
     if (frames && seconds && ms && platform::FindFunction(image, kClockIncrement) &&
         platform::FindFunction(image, kClockMsScale))
     {
-        g_frames  = reinterpret_cast<std::int64_t*>(*frames);
-        g_seconds = reinterpret_cast<double*>(*seconds);
-        g_ms      = reinterpret_cast<std::int64_t*>(*ms);
+        const Range clock[] = {{*frames, sizeof(std::int64_t), platform::ByteContext::Kind::Exchange},
+                               {*seconds, sizeof(double), platform::ByteContext::Kind::Exchange},
+                               {*ms, sizeof(std::int64_t), platform::ByteContext::Kind::Exchange}};
+        if (g_clock.Define(clock))
+        {
+            g_frames  = reinterpret_cast<std::int64_t*>(*frames);
+            g_seconds = reinterpret_cast<double*>(*seconds);
+            g_ms      = reinterpret_cast<std::int64_t*>(*ms);
+        }
     }
     if (const auto leader = image.Rebase(kLeaderBlock, kLeaderBlockSize))
     {
@@ -195,22 +203,31 @@ MemberTickScope::MemberTickScope(void* state, const void* playerTwoController, f
     }
     g_memberState = state;
     const void* component = ReadPointer(playerTwoController, facts::kControllerLeaderActions);
-    if (g_frames == nullptr || component == nullptr)
+    // With the fix off (diagnosis) the clock is left as the tick leaves it, as without this scope.
+    if (g_frames == nullptr || component == nullptr || !Acts(kFixClock))
     {
         return;
     }
-    g_savedFrames  = *g_frames;
-    g_savedSeconds = *g_seconds;
-    g_savedMs      = *g_ms;
-    clockHeld_     = true;
-    g_tickOpen     = true;
     // Set back one step only when the tick will advance it: player 2's component has not yet this frame.
-    g_rewound = Acts(kFixClock) && (ReadField<std::uint8_t>(component, kComponentGuard) & 1) == 0;
+    g_rewound             = (ReadField<std::uint8_t>(component, kComponentGuard) & 1) == 0;
+    std::int64_t  frames  = *g_frames;
+    double        seconds = *g_seconds;
+    std::int64_t  ms      = *g_ms;
     if (g_rewound)
     {
-        *g_frames  = g_savedFrames - 1;
-        *g_seconds = SecondsBefore(g_savedSeconds, deltaTime);
+        frames -= 1;
+        seconds = SecondsBefore(seconds, deltaTime);
     }
+    std::memcpy(g_clock.Value(0).data(), &frames, sizeof(frames));
+    std::memcpy(g_clock.Value(1).data(), &seconds, sizeof(seconds));
+    std::memcpy(g_clock.Value(2).data(), &ms, sizeof(ms));
+    if (!g_clock.Open())
+    {
+        return;
+    }
+    g_writtenFrames = frames;
+    clockHeld_      = true;
+    g_tickOpen      = true;
 }
 
 MemberTickScope::~MemberTickScope()
@@ -225,37 +242,22 @@ MemberTickScope::~MemberTickScope()
     }
     g_memberState = nullptr;
     g_tickOpen    = false;
-    const bool rewound = g_rewound;
-    const bool advanced = *g_frames != (rewound ? g_savedFrames - 1 : g_savedFrames);
-    if (!advanced)
+    g_clock.Close();  // the game's clock back; what the tick left is in the values
+    std::int64_t leftFrames  = 0;
+    double       leftSeconds = 0.0;
+    std::memcpy(&leftFrames, g_clock.Value(0).data(), sizeof(leftFrames));
+    std::memcpy(&leftSeconds, g_clock.Value(1).data(), sizeof(leftSeconds));
+    if (leftFrames == g_writtenFrames)
     {
-        if (rewound)
-        {
-            *g_frames  = g_savedFrames;  // the tick did not advance it: back as it was
-            *g_seconds = g_savedSeconds;
-            *g_ms      = g_savedMs;
-        }
-        return;
+        return;  // the tick did not advance it (rewound: back as it was)
     }
     ++g_counts.clockAdvanced;
-    if (!rewound)
+    if (!g_rewound)
     {
-        // With the fix off (diagnosis) the second advance stays, as without this scope. With it on, the
-        // guard bit said the tick would not advance the clock, and it did: counted, and put back.
-        if (!Acts(kFixClock))
-        {
-            return;
-        }
-        ++g_counts.clockMissed;
-        *g_frames  = g_savedFrames;
-        *g_seconds = g_savedSeconds;
-        *g_ms      = g_savedMs;
+        ++g_counts.clockMissed;  // the guard bit said the tick would not advance the clock, and it did: put back
         return;
     }
-    g_counts.clockInexact += *g_seconds != g_savedSeconds ? 1 : 0;
-    *g_frames  = g_savedFrames;
-    *g_seconds = g_savedSeconds;
-    *g_ms      = g_savedMs;
+    g_counts.clockInexact += leftSeconds != *g_seconds ? 1 : 0;  // ...onto seconds other than player 1's
     ++g_counts.clockPutBack;
 }
 

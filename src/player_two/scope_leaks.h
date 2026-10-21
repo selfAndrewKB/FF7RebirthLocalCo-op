@@ -10,7 +10,8 @@
 //     only player 1's component; the mod's tick of player 2's member ticks player 2's too, so the
 //     clock would advance twice. MemberTickScope sets the clock back one step before that tick, so
 //     the tick advances it onto the values player 1's tick produced this frame (player 2's press
-//     stamps then carry the same frame), and writes the saved values back after.
+//     stamps then carry the same frame), and writes the saved values back after (three Exchange
+//     ranges of platform/byte_scope.h: what the tick left is read back to tell whether it advanced).
 //   Leak 2, the leader transform: player 2's controller input (the component's vt+0x430) writes
 //     player 2's member's transform and motion into the one global block that follower AI reads as
 //     the leader's (its formation anchor). InputScope saves the block around player 2's input and
