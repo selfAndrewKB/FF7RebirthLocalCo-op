@@ -2,6 +2,7 @@
 
 #include "facts/controller.h"
 #include "facts/engine.h"
+#include "facts/traversal.h"
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
 #include "platform/every.h"
@@ -36,14 +37,8 @@ namespace {
 // 1.004 addresses (1.005 through replaced-traversal.json and replaced-chocobo-traversal.json). Every slot and entry was
 // read from both exes (tools/version_match/_traversal_check.py).
 
-// End2FieldActionActor OnTriggerEnter / OnTriggerLeave (actor vt+0x710 / +0x718; 1.005 +0x718 / +0x720), shared by
-// every field-action actor: (actor, const FName* key, AActor* other), `other` being the overlapping actor whose first
-// tag is the key (a controller's trigger actor). RE-p2-traversal.md §1.3. Both start `mov [rsp+10h], rbx` (5 bytes,
-// inside one 16-byte block in both builds: 1.004 +0x4 / +0x4, 1.005 +0x0 / +0x8). A fourth register is passed on too.
-constexpr std::uintptr_t kTriggerEnter  = 0x1409DC534;
-constexpr std::uintptr_t kTriggerLeave  = 0x1409DB844;
-constexpr std::uint8_t   kTriggerBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C,
-                                            0x24, 0x18, 0x48, 0x89, 0x74, 0x24, 0x20, 0x57};
+// End2FieldActionActor OnTriggerEnter / OnTriggerLeave (facts/traversal.h; RE-p2-traversal.md §1.3): the first
+// instruction, `mov [rsp+10h], rbx`, is 5 bytes.
 constexpr std::size_t    kFirstInstruction = 5;
 using TriggerFn = std::uintptr_t (*)(void* actor, void* key, void* other, void* fourth);
 
@@ -111,11 +106,6 @@ using StateEnterFn = std::uintptr_t (*)(void* state, void* param);
 using StateExitFn  = std::uintptr_t (*)(void* state);
 constexpr std::uint32_t kStateCharacter = 0x8;
 
-// Field-action actors, for naming (native vtables; Blueprint subclasses keep them).
-constexpr std::uintptr_t kLadderVt          = 0x145940748;
-constexpr std::uintptr_t kDoorVt            = 0x1459434F0;
-constexpr std::uintptr_t kChocoboClimbVt    = 0x1466F6F58;
-constexpr std::uintptr_t kChocoboJumpPadVt  = 0x1466F4DC8;
 
 constexpr std::uint32_t kControllerActorList = 0x618;  // TArray<FWeakObjectPtr>: data, then the count at +0x8
 constexpr std::uint32_t kActorEnteredFlag    = 0x2A1;  // u8, one per actor (not per player)
@@ -705,13 +695,12 @@ std::uintptr_t JetExit(void* state) noexcept
     return reinterpret_cast<StateExitFn>(g_jetExit.Original())(state);
 }
 
-bool Entry(const platform::GameImage& image, platform::EntryRedirect& redirect, std::uintptr_t address,
+bool Entry(const platform::GameImage& image, platform::EntryRedirect& redirect, const platform::FunctionFact& fact,
            std::uintptr_t replacement) noexcept
 {
-    const std::span<const std::uint8_t> bytes(kTriggerBytes);
-    const auto at = image.Rebase(address);
-    return at && image.BytesMatch(address, bytes) &&
-           redirect.Install(*at, image.EntryInstruction(address, bytes.first(kFirstInstruction)), replacement);
+    const auto at = platform::FindFunction(image, fact);
+    return at && redirect.Install(*at, image.EntryInstruction(fact.address, fact.entryBytes.first(kFirstInstruction)),
+                                  replacement);
 }
 
 bool Slot(const platform::GameImage& image, const platform::SlotFact& fact, std::uintptr_t replacement,
@@ -730,13 +719,15 @@ const wchar_t* Outcome(bool done) noexcept
 void Install(const platform::GameImage& image) noexcept
 {
     g_image    = image;
-    g_ladderVt = Live(image, kLadderVt);
-    g_doorVt   = Live(image, kDoorVt);
-    g_climbVt  = Live(image, kChocoboClimbVt);
-    g_jumpPadVt = Live(image, kChocoboJumpPadVt);
+    g_ladderVt  = Live(image, facts::kLadderVTable);
+    g_doorVt    = Live(image, facts::kDoorVTable);
+    g_climbVt   = Live(image, facts::kChocoboClimbVTable);
+    g_jumpPadVt = Live(image, facts::kChocoboJumpPadVTable);
 
-    const bool enter = Entry(image, g_enter, kTriggerEnter, reinterpret_cast<std::uintptr_t>(&TriggerEnter));
-    const bool leave = Entry(image, g_leave, kTriggerLeave, reinterpret_cast<std::uintptr_t>(&TriggerLeave));
+    const bool enter = Entry(image, g_enter, facts::kFieldActionTriggerEnter,
+                             reinterpret_cast<std::uintptr_t>(&TriggerEnter));
+    const bool leave = Entry(image, g_leave, facts::kFieldActionTriggerLeave,
+                             reinterpret_cast<std::uintptr_t>(&TriggerLeave));
     const auto site  = image.Rebase(kNotifyCall, 5);
     const auto pass  = platform::FindFunction(image, kNotifyPass);
     const bool notify = site && pass && g_notifyCall.Install(*site, *pass, reinterpret_cast<std::uintptr_t>(&NotifyPass));

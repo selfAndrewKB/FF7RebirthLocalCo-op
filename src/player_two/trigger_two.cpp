@@ -3,6 +3,7 @@
 #include "facts/controller.h"
 #include "facts/engine.h"
 #include "facts/party.h"
+#include "facts/traversal.h"
 #include "player_two/field_rules.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
@@ -96,25 +97,24 @@ struct AdmittedClass
 // slot past the others'. During a ride both players' members are possessed by their AI, so its register falls back to
 // the primary controller: player 2's inside the delivery's scope. 1.005 vtable through replaced-chocobo-traversal.json.
 constexpr AdmittedClass kAdmitted[] = {
-    {L"ladder", 0x145940748},
-    {L"climbing wall", 0x145832BE8},
-    {L"crawl", 0x1457D8960},
-    {L"squeeze", 0x1466E8B68},
-    {L"beam", 0x145872C88},
-    {L"monkey bars", 0x1466EF050},
-    {L"lifting rope", 0x1466FE5D0},
-    {L"spider move", 0x1467095F8},
-    {L"zip line", 0x1458BA188, 0, 0, true},
-    {L"pole slide", 0x1458B41F8, 0x758, 0x143642998},
-    {L"one-shot move", 0x14580EF00, 0x840, 0x141812E50, false, true},
-    {L"wall run", 0x146707D88},
-    {L"chocobo climb", 0x1466F6F58, 0x738, 0x143661AA8, false, false, {0x738, 0x740}, true},
+    {L"ladder", facts::kLadderVTable},
+    {L"climbing wall", facts::kClimbingWallVTable},
+    {L"crawl", facts::kCrawlVTable},
+    {L"squeeze", facts::kSqueezeVTable},
+    {L"beam", facts::kBeamVTable},
+    {L"monkey bars", facts::kMonkeyBarsVTable},
+    {L"lifting rope", facts::kLiftingRopeVTable},
+    {L"spider move", facts::kSpiderMoveVTable},
+    {L"zip line", facts::kZipLineVTable, 0, 0, true},
+    {L"pole slide", facts::kPoleSlideVTable, 0x758, 0x143642998},
+    {L"one-shot move", facts::kOneShotMoveVTable, 0x840, 0x141812E50, false, true},
+    {L"wall run", facts::kWallRunVTable},
+    {L"chocobo climb", facts::kChocoboClimbVTable, 0x738, 0x143661AA8, false, false, {0x738, 0x740}, true},
 };
 constexpr std::size_t   kClassCount     = std::size(kAdmitted);
 constexpr std::uint32_t kZiplineEnterEffect = 0x770;  // u8 bUseEnterEffect: set = starts on approach, else a button prompt
 constexpr std::uint32_t kOneShotUseA     = 0x848;  // OneShotMove fields its register resets [UNKNOWN meaning]: logged
 constexpr std::uint32_t kOneShotUseB     = 0x86C;
-constexpr std::uintptr_t kTriggerEnter   = 0x1409DC534;  // End2FieldActionActor_OnTriggerEnter (1.005 0x140D813D0)
 inline constexpr platform::PerBuild<std::uint32_t> kEnterSlot{0x710, 0x718};
 constexpr std::size_t   kVtableSpan = 0x750;  // the slots read below, the climb's unregister (1.005 +0x740) included
 constexpr std::uint64_t kNoWeak = 0x00000000FFFFFFFFull;  // FWeakObjectPtr reset: index -1, serial 0
@@ -812,7 +812,7 @@ void Install(const platform::GameImage& image) noexcept
     {
         switch_volume_two::Install(image);
     }
-    const auto liveEnter = image.Rebase(kTriggerEnter);
+    const auto liveEnter = image.Rebase(facts::kFieldActionTriggerEnter.address);
     std::wstring admitted, refused;
     for (std::size_t i = 0; i < kClassCount; ++i)
     {

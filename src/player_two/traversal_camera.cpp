@@ -4,6 +4,7 @@
 #include "facts/cameras.h"
 #include "facts/controller.h"
 #include "facts/move_state.h"
+#include "facts/traversal.h"
 #include "player_two/world_rules.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
@@ -112,23 +113,23 @@ struct ExecClass
 constexpr platform::SlotFact kNoSlot{L"", 0, {L"", 0, {}}};
 
 const ExecClass kExecClasses[] = {
-    {L"ladder", 0x145940748, 0x08, 0xB4, 0x760, 16, false, false, TickRule::LadderExit, kNoSlot, kNoSlot,
+    {L"ladder", facts::kLadderVTable, 0x08, 0xB4, 0x760, 16, false, false, TickRule::LadderExit, kNoSlot, kNoSlot,
      {L"the ladder executer's Tick slot (+0x20)", 0x1458125E0, {L"LadderExecuter_Tick_Vt20", 0x14132F658, kLadderTickBytes}}},
-    {L"squeeze", 0x1466E8B68, 0x58, 0x58, 0x808, 32, true, false, TickRule::MoveExit,
+    {L"squeeze", facts::kSqueezeVTable, 0x58, 0x58, 0x808, 32, true, false, TickRule::MoveExit,
      {L"the squeeze executer's Start slot", 0x145812470, {L"CrackExecuter_Start_Vt10", 0x141413D04, kCrackStartBytes}},
      {L"the squeeze executer's End slot", 0x145812478, {L"CrackExecuter_End_Vt18", 0x141413280, kCrackEndBytes}},
      {L"the squeeze executer's Tick slot", 0x145812480, {L"CrackExecuter_Tick_Vt20", 0x141330054, kCrackTickBytes}},
      0x80, ExitCall::SqueezeDelegate},
-    {L"crawl", 0x1457D8960, 0x08, 0xB0, 0, 0, false, false, TickRule::MoveExit,
+    {L"crawl", facts::kCrawlVTable, 0x08, 0xB0, 0, 0, false, false, TickRule::MoveExit,
      {L"the crawl executer's Start slot", 0x145812530, {L"CrouchedExecuter_Start_Vt10", 0x14151F3DC, kCrouchStartBytes}},
      {L"the crawl executer's End slot", 0x145812538, {L"CrouchedExecuter_End_Vt18", 0x14151F04C, kCrouchEndBytes}},
      {L"the crawl executer's Tick slot", 0x145812540, {L"CrouchedExecuter_Tick_Vt20", 0x141331314, kCrouchTickBytes}},
      0xB8, ExitCall::CrawlCameraOff},
-    {L"pole slide", 0x1458B41F8, 0x08, 0xB0, 0x760, 16, false, false, TickRule::Whole,
+    {L"pole slide", facts::kPoleSlideVTable, 0x08, 0xB0, 0x760, 16, false, false, TickRule::Whole,
      {L"the pole executer's Start slot", 0x1466ED7C0, {L"PoleSliderExecuter_Start_Vt10", 0x143635638, kPoleStartBytes}},
      {L"the pole executer's End slot", 0x1466ED7C8, {L"PoleSliderExecuter_End_Vt18", 0x143638D00, kPoleEndBytes}},
      {L"the pole executer's Tick slot", 0x1466ED7D0, {L"PoleSliderExecuter_Tick_Vt20", 0x143647374, kPoleTickBytes}}},
-    {L"lifting rope", 0x1466FE5D0, 0x58, 0x58, 0x7E8, 16, false, true, TickRule::Whole,
+    {L"lifting rope", facts::kLiftingRopeVTable, 0x58, 0x58, 0x7E8, 16, false, true, TickRule::Whole,
      {L"the rope executer's Start slot", 0x1466FF520, {L"LiftingRopeExecuter_Start_Vt10", 0x14366B55C, kRopeStartBytes}},
      {L"the rope executer's End slot", 0x1466FF528, {L"LiftingRopeExecuter_End_Vt18", 0x14366E374, kRopeEndBytes}},
      {L"the rope executer's Tick slot", 0x1466FF530, {L"FieldActionExecuter_Tick_Vt20_Shared", 0x1436827D0, kSharedTickBytes}}},
@@ -136,7 +137,7 @@ const ExecClass kExecClasses[] = {
     // camera (squeeze and crouch only) goes on in the Tick's phase update behind IsUCPC_Core, with no handle: the
     // actor's flag +0x88C records it. Start runs unscoped for the leader: its only leader read records a non-leader's
     // safe spot for the save file (RE-p2-traversal-cameras.md §11), and to the save player 2's member is a party member.
-    {L"one-shot move", 0x14580EF00, 0x58, 0x58, 0, 0, false, true, TickRule::Whole,
+    {L"one-shot move", facts::kOneShotMoveVTable, 0x58, 0x58, 0, 0, false, true, TickRule::Whole,
      {L"the one-shot executer's Start slot", 0x146706C50, {L"OneShotMoveExecuter_Start_Vt10", 0x143693618, kOneShotStartBytes}},
      {L"the one-shot executer's End slot", 0x146706C58, {L"OneShotMoveExecuter_End_Vt18", 0x143695630, kOneShotEndBytes}},
      {L"the one-shot executer's Tick slot", 0x146706C60, {L"FieldActionExecuter_Tick_Vt20_Shared", 0x1436827D0, kSharedTickBytes}},
@@ -245,12 +246,12 @@ struct MoveClass
 };
 
 const MoveClass kMoveClasses[] = {
-    {L"climbing wall", 0x145832BE8,
+    {L"climbing wall", facts::kClimbingWallVTable,
      {L"the climbing move's Begin slot", 0x145833800, {L"ClimbingMove_Begin_Vt98", 0x1414182B0, kClimbBeginBytes}}, 0},
-    {L"monkey bars", 0x1466EF050,
+    {L"monkey bars", facts::kMonkeyBarsVTable,
      {L"the monkey-bars move's Begin slot", 0x146695AA0, {L"MonkeyBarsMove_Begin_Vt98", 0x1432F0790, kBarsBeginBytes}},
      0x1432FAC10},
-    {L"spider wall", 0x1467095F8,
+    {L"spider wall", facts::kSpiderMoveVTable,
      {L"the spider move's Begin slot", 0x146696D80, {L"SpiderMoveMove_Begin_Vt98", 0x143304A90, kSpiderBeginBytes}},
      0x143312F31},
 };
