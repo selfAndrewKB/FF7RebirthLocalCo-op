@@ -16,6 +16,7 @@
 #include "player_two/object_fields.h"
 #include "player_two/party_member.h"
 #include "player_two/primary_controller.h"
+#include "player_two/rumble_list_code.h"
 #include "players/unreal_access.h"
 
 #include <Windows.h>
@@ -86,9 +87,6 @@ constexpr std::uintptr_t kGlideRunSlot    = 0x145CE5C40;  // ... its Execute (+0
 constexpr std::uintptr_t kGlideRun        = 0x142247D30;
 constexpr std::uintptr_t kJumpEnded       = 0x1422ADF00;  // the jump box's OnEnded TFunction invoker (often the worker)
 constexpr std::uint8_t   kJumpEndedBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00};  // mov eax,28h
-// 1.004 only: the jump box's add is inlined there; this is its list load, under the game's lock (1.005 calls PlayNamed).
-constexpr std::uintptr_t kJumpListLoad    = 0x1422AD981;
-constexpr std::uint8_t   kJumpListLoadBytes[] = {0x48, 0x8B, 0xB6, 0xB0, 0x03, 0x00, 0x00};  // mov rsi,[rsi+3B0h]
 constexpr std::uintptr_t kDriftSlot       = 0x146692AF0;  // the drift action's state 1 tick (state table; anim worker)
 constexpr std::uintptr_t kDrift           = 0x14328EFA4;
 constexpr std::uintptr_t kBrakeOneSlot    = 0x1470FCDE0;  // the brake move's phase 1 and 2 (phase table; anim worker)
@@ -1048,12 +1046,13 @@ void LogSummary() noexcept
 }
 
 /// The 1.004 jump box's list load, then: on the thread JumpEnded named (g_jumpThread, against the TEB's thread id at
-/// gs:[48h]), player 2's list when it exists. It runs under the game's lock, which DropList also takes to clear
-/// g_listTwo, so the list it takes is live for the whole add. No call, no stack use; rax, rcx and the flags are dead at
-/// that point (overwritten before any read: 0x1422AD988, 0x1422AD997, 0x1422AD99B). The code reads this DLL's globals,
+/// gs:[48h]), player 2's list when it exists (rumble_list_code.h). It runs under the game's lock, which DropList also
+/// takes to clear g_listTwo, so the list it takes is live for the whole add. rax, rcx and the flags are dead at that
+/// point (overwritten before any read: 0x1422AD988, 0x1422AD997, 0x1422AD99B). The code reads this DLL's globals,
 /// which stay mapped: the DLL is pinned (platform/module_pin.h).
 bool PlaceJumpListLoad(const platform::GameImage& image) noexcept
 {
+    using namespace rumble_list_code;
     if (platform::RunningBuild() != platform::BuildIndex::Research)
     {
         return false;
@@ -1063,21 +1062,7 @@ bool PlaceJumpListLoad(const platform::GameImage& image) noexcept
     {
         return false;
     }
-    const auto thread = reinterpret_cast<std::uint64_t>(&g_jumpThread);
-    const auto list   = reinterpret_cast<std::uint64_t>(&g_listTwo);
-    std::array<std::uint8_t, 49> code{
-        0x48, 0x8B, 0xB6, 0xB0, 0x03, 0x00, 0x00,        // mov rsi,[rsi+3B0h]  (the game's load)
-        0x65, 0x8B, 0x04, 0x25, 0x48, 0x00, 0x00, 0x00,  // mov eax,gs:[48h]    (this thread's id)
-        0x48, 0xB9, 0, 0, 0, 0, 0, 0, 0, 0,              // mov rcx,&g_jumpThread
-        0x3B, 0x01,                                      // cmp eax,[rcx]
-        0x75, 0x14,                                      // jne done
-        0x48, 0xB9, 0, 0, 0, 0, 0, 0, 0, 0,              // mov rcx,&g_listTwo
-        0x48, 0x8B, 0x09,                                // mov rcx,[rcx]
-        0x48, 0x85, 0xC9,                                // test rcx,rcx
-        0x48, 0x0F, 0x45, 0xF1,                          // cmovnz rsi,rcx
-    };                                                   // done: (the jump back follows)
-    std::memcpy(code.data() + 17, &thread, sizeof(thread));
-    std::memcpy(code.data() + 31, &list, sizeof(list));
+    const auto code = JumpListLoadCode(&g_jumpThread, &g_listTwo);
     return g_jumpListLoad.Install(*site, kJumpListLoadBytes, code, *site + sizeof(kJumpListLoadBytes));
 }
 
