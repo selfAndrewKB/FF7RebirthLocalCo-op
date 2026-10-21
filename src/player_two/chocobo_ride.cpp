@@ -1,5 +1,7 @@
 #include "player_two/chocobo_ride.h"
 
+#include "player_two/describe.h"
+#include "player_two/in_battle.h"
 #include "player_two/ride_rules.h"
 #define RC_UNREAL_DISABLE_PROPERTY_DEPRECATION_WARNINGS
 #define RC_UNREAL_DISABLE_CLASS_DEPRECATION_WARNINGS
@@ -118,7 +120,6 @@ struct Functions
     EndRideFn        endRide        = nullptr;
     SwitchAiFn       switchAi       = nullptr;
     ChocoboForFn     chocoboFor     = nullptr;
-    GlobalTestFn     inBattle       = nullptr;
 };
 
 Functions      g_fn;
@@ -211,12 +212,6 @@ int EntryState(const std::byte* manager, const void* member) noexcept
     return ReadField<std::uint8_t>(manager + kMemberEntries + kMemberEntrySize * *type, 0);
 }
 
-bool InBattle() noexcept
-{
-    std::uint8_t answer = 0;
-    return g_fn.inBattle != nullptr && platform::CallGuarded(g_fn.inBattle, answer) && answer != 0;
-}
-
 /// A chocobo coordinator's state id, or -1.
 std::int32_t CoordState(const void* coordinator) noexcept
 {
@@ -228,23 +223,6 @@ std::int32_t CoordState(const void* coordinator) noexcept
 bool CoordRiding(const void* coordinator) noexcept
 {
     return CoordState(coordinator) == static_cast<std::int32_t>(kCoordRiding) && ReadPointer(coordinator, kCoordPending) == nullptr;
-}
-
-std::wstring Who(const void* controller, const void* playerTwo)
-{
-    if (controller == nullptr)
-    {
-        return L"none";
-    }
-    if (controller == playerTwo)
-    {
-        return L"PC2";
-    }
-    if (controller == generation::PlayerOneController())
-    {
-        return L"PC1";
-    }
-    return std::format(L"{}", controller);
 }
 
 /// Player 2's camera's slot-15 module is a chocobo camera module (the ride framing).
@@ -264,10 +242,10 @@ std::wstring LeaseText(const Ride& ride)
     const void* pawn = ReadPointer(ride.playerTwo, facts::kControllerPawn);
     return std::format(L"member controller {} (effective {}); chocobo controller {} (effective {}); PC2's pawn {}, leader {}, "
                        L"active coordinator {} (state {}); player 2's camera ride subject {}, ride framing {}, view target {}",
-                       Who(ReadPointer(ride.member, facts::kPawnController), ride.playerTwo),
-                       Who(ReadPointer(ride.member, facts::kCharacterEffectiveController), ride.playerTwo),
-                       Who(ReadPointer(ride.chocobo, facts::kPawnController), ride.playerTwo),
-                       Who(ReadPointer(ride.chocobo, facts::kCharacterEffectiveController), ride.playerTwo),
+                       Who(ReadPointer(ride.member, facts::kPawnController)),
+                       Who(ReadPointer(ride.member, facts::kCharacterEffectiveController)),
+                       Who(ReadPointer(ride.chocobo, facts::kPawnController)),
+                       Who(ReadPointer(ride.chocobo, facts::kCharacterEffectiveController)),
                        pawn == ride.chocobo ? L"the chocobo" : pawn == ride.member ? L"the member" : pawn ? L"other" : L"none",
                        ReadPointer(ride.playerTwo, facts::kControllerLeader) == ride.member ? L"the member" : L"other",
                        ReadPointer(ride.playerTwo, kActiveVehicle) == ride.coordinator && ride.coordinator ? L"player 2's own"
@@ -481,7 +459,7 @@ void* SeatedChocobo(void* playerTwo, void* member) noexcept
         return nullptr;
     }
     switch (ride_rules::SeatedVerdict(ReadField<std::uint8_t>(chocobo, kChocoboRidden) != 0, g_heldBack == chocobo,
-                                      Attached(member), InBattle()))
+                                      Attached(member), facts::InBattle()))
     {
         case ride_rules::Seated::Unridden:
             if (g_heldBack == chocobo)
@@ -561,7 +539,7 @@ const wchar_t* EndReason(const Ride& ride, bool& getOff) noexcept
     if (!reads.gone)  // the rest is read only while the chocobo is still there
     {
         reads.ridden      = ReadField<std::uint8_t>(ride.chocobo, kChocoboRidden) != 0;
-        reads.inBattle    = InBattle();
+        reads.inBattle    = facts::InBattle();
         reads.entryRiding = EntryState(RideManager(), ride.member) == kEntryRiding;
         reads.attached    = Attached(ride.member);
         reads.holds       = ReadPointer(ride.playerTwo, facts::kControllerPawn) == ride.chocobo &&
@@ -655,7 +633,6 @@ bool Install(const platform::GameImage& image) noexcept
     g_fn.endRide        = reinterpret_cast<EndRideFn>(find(kEndRide));
     g_fn.switchAi       = reinterpret_cast<SwitchAiFn>(find(kSwitchAi));
     g_fn.chocoboFor     = reinterpret_cast<ChocoboForFn>(find(kChocoboFor));
-    g_fn.inBattle       = reinterpret_cast<GlobalTestFn>(find(facts::kIsInBattle));
     const auto root     = image.Rebase(charapop::kGameRoot, sizeof(void*));
     const auto key      = image.Rebase(kVehicleKeyName, sizeof(std::uint64_t));
     g_gameRoot          = root ? *root : 0;
@@ -665,7 +642,7 @@ bool Install(const platform::GameImage& image) noexcept
     g_componentVt       = rebase(kInputComponentVt);
     g_moduleVt          = rebase(kCameraModuleVt);
     g_installed = g_fn.getCoordinator != nullptr && g_fn.beginRide != nullptr && g_fn.endRide != nullptr &&
-                  g_fn.switchAi != nullptr && g_fn.chocoboFor != nullptr && g_fn.inBattle != nullptr && g_gameRoot != 0 &&
+                  g_fn.switchAi != nullptr && g_fn.chocoboFor != nullptr && facts::InBattleKnown() && g_gameRoot != 0 &&
                   g_vehicleKey != nullptr && g_coordVt != 0 && g_moveVt != 0 && g_componentVt != 0 && g_moduleVt != 0 &&
                   leader_scope::Install(image);
     platform::Log(L"chocobo ride: {}", g_installed ? L"installed (player 2 rides their own chocobo with their own coordinator)"
@@ -702,7 +679,8 @@ bool Tick(void* playerTwoController, void* member, const move_state::EngineTicks
     if (g_phase == Phase::GettingOff)
     {
         // The game's getoff animation detaches her; the end then gives player 2 the member back (§9.2, the end order).
-        const bool done = ride_rules::GetOffDone(Attached(member), InBattle(), Clock::now() - g_ride.getOffAt >= kGetOffWait,
+        const bool done = ride_rules::GetOffDone(Attached(member), facts::InBattle(),
+                                                 Clock::now() - g_ride.getOffAt >= kGetOffWait,
                                                  !leader_scope::StillNames(g_ride.weak, g_ride.chocobo));
         if (done)
         {

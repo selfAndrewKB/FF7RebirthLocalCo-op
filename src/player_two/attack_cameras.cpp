@@ -188,23 +188,6 @@ const wchar_t* PriorityText(std::uint8_t priority) noexcept
     }
 }
 
-std::wstring Who(const void* character) noexcept
-{
-    if (character == nullptr)
-    {
-        return L"none";
-    }
-    if (character == generation::Member())
-    {
-        return L"player 2's member";
-    }
-    if (character == ReadPointer(generation::PlayerOneController(), facts::kControllerPawn))
-    {
-        return L"player 1's character";
-    }
-    return NameOf(character);
-}
-
 /// Logs an entry that has just become active for one camera (Debug, once per sequence and camera).
 void LogStarted(const void* entry, const wchar_t* camera, float metresFromOne) noexcept
 {

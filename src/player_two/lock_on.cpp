@@ -12,6 +12,7 @@
 #include "player_two/engine_facts.h"
 #include "player_two/focus_scope.h"
 #include "player_two/generation.h"
+#include "player_two/in_battle.h"
 #include "player_two/leader_scope.h"
 #include "player_two/object_fields.h"
 #include "player_two/pad_buttons.h"
@@ -154,7 +155,6 @@ TestFn         g_menuSelect  = nullptr;
 TestFn         g_menuBusy    = nullptr;
 TestFn         g_targetList  = nullptr;  // optional: the log of player 2's target list
 ListImplFn     g_targetListImpl = nullptr;  // the same on 1.005 (the wrapper's body; see kTargetListImpl)
-TestFn         g_isInBattle  = nullptr;
 ReleaseFn      g_release     = nullptr;
 WeakReleaseFn  g_weakRelease = nullptr;
 CursorFn       g_cursorRelease = nullptr;
@@ -210,12 +210,6 @@ void Fail(const wchar_t* what) noexcept
 Pair PairAt(std::uintptr_t address) noexcept
 {
     return {ReadAt<std::uintptr_t>(address), ReadAt<std::uintptr_t>(address + 8)};
-}
-
-bool InBattle() noexcept
-{
-    std::uint8_t in = 0;
-    return g_isInBattle != nullptr && platform::CallGuarded(g_isInBattle, in) && in != 0;
 }
 
 std::uintptr_t BattleSystem() noexcept
@@ -665,7 +659,7 @@ TargetScope::TargetScope() noexcept
         return;
     }
     const std::uintptr_t system = BattleSystem();
-    if (system == 0 || !InBattle())
+    if (system == 0 || !facts::InBattle())
     {
         return;
     }
@@ -747,7 +741,6 @@ bool Install(const platform::GameImage& image) noexcept
     {
         g_targetList = reinterpret_cast<TestFn>(find(kTargetList));
     }
-    g_isInBattle    = reinterpret_cast<TestFn>(find(facts::kIsInBattle));
     g_release       = reinterpret_cast<ReleaseFn>(find(kRelease));
     g_weakRelease   = reinterpret_cast<WeakReleaseFn>(find(kWeakRelease));
     g_cursorRelease = reinterpret_cast<CursorFn>(find(kCursorRelease));
@@ -757,7 +750,8 @@ bool Install(const platform::GameImage& image) noexcept
     const auto ui     = image.Rebase(kEndUISystem, kBarManager + sizeof(void*));
     g_battleSystem    = system ? *system : 0;
     g_endUISystem     = ui ? *ui : 0;
-    g_installed = g_setLock && g_isInBattle && g_release && g_cursorRelease && g_deactivate && g_moduleOn && system;
+    g_installed = g_setLock && facts::InBattleKnown() && g_release && g_cursorRelease && g_deactivate && g_moduleOn &&
+                  system;
     if (!g_installed)
     {
         platform::Log(L"lock-on: UNAVAILABLE (a check failed); player 2 has no targeting of their own");
@@ -859,7 +853,7 @@ void AfterBattle() noexcept
         return;
     }
     if ((g_lock != 0 || g_displayed.controller != 0 || g_targetedKey.controller != 0 || g_cursor != 0 || g_freeTime != 0) &&
-        !InBattle())
+        !facts::InBattle())
     {
         EndOfBattle();
     }

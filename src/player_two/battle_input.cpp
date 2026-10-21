@@ -8,6 +8,7 @@
 #include "platform/verified_code.h"
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
+#include "player_two/in_battle.h"
 #include "player_two/leader_scope.h"
 #include "player_two/lock_on.h"
 #include "player_two/object_fields.h"
@@ -67,7 +68,6 @@ using GlobalTestFn   = std::uint8_t (*)();
 bool           g_installed = false;
 std::uintptr_t g_endUISystem   = 0;
 std::uintptr_t g_battlePlayerVTable = 0;
-GlobalTestFn   g_isInBattle    = nullptr;
 std::uintptr_t g_battleSystem  = 0;  // the address holding the battle system
 std::uintptr_t g_partyManager  = 0;  // the address holding the party manager
 
@@ -184,18 +184,6 @@ constexpr std::uint32_t kStillFrames = 30;
 using Requests = std::array<std::int32_t, kLoggedRequests.size()>;
 platform::SettledLog<Snapshot, Requests> g_log(kStillFrames);  // game thread
 
-std::uint8_t InBattleGuarded() noexcept
-{
-    __try
-    {
-        return g_isInBattle();
-    }
-    __except (platform::GuardFilter(GetExceptionCode()))
-    {
-        return 0;
-    }
-}
-
 std::uintptr_t BattleSystem() noexcept
 {
     return ReadAt<std::uintptr_t>(g_battleSystem);
@@ -209,12 +197,12 @@ bool Install(const platform::GameImage& image) noexcept
         const auto live = platform::FindFunction(image, fact);
         return live ? *live : std::uintptr_t{0};
     };
-    g_isInBattle    = reinterpret_cast<GlobalTestFn>(find(facts::kIsInBattle));
     const auto battleSystem = image.Rebase(kBattleSystem, sizeof(void*));
     const auto partyManager = image.Rebase(facts::kPartyManagerGlobal, sizeof(void*));
     const auto system = image.Rebase(kEndUISystem, kController + sizeof(void*));
     const auto vtable = image.Rebase(kBattlePlayerVTable, sizeof(void*));
-    g_installed = leader_scope::Install(image) && g_isInBattle && battleSystem && partyManager && system && vtable;
+    g_installed = leader_scope::Install(image) && facts::InBattleKnown() && battleSystem && partyManager && system &&
+                  vtable;
     g_battleSystem       = battleSystem ? *battleSystem : 0;
     g_partyManager       = partyManager ? *partyManager : 0;
     g_endUISystem        = system ? *system : 0;
@@ -243,7 +231,7 @@ void Watch(void* member, void* state) noexcept
         const std::uint64_t  memberWeak    = leader_scope::WeakOf(member);
         // In battle: the member tick's TargetScope already asked the game (lock_on::Held), else ask.
         const bool           targeting     = system != 0 && ReadAt<std::uint8_t>(system + kSkipTargeting) == 0 &&
-                                   (lock_on::Held() || InBattleGuarded() != 0);
+                                   (lock_on::Held() || facts::InBattle() != 0);
         // Player 2's soft target, lock, lock camera, switching and cursor: the game's targeting tick run
         // for player 2 (player_two/lock_on.h). Attack, unique, guard and dodge: player 2's command
         // controller (player_two/command_menu_tick.h).

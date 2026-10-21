@@ -1,5 +1,6 @@
 #include "player_two/wheelie_ride.h"
 
+#include "player_two/in_battle.h"
 #include "player_two/ride_rules.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
@@ -232,7 +233,6 @@ struct Functions
     GetOffPrimaryFn getOffPrimary = nullptr;
     CoordTickFn     coordTick     = nullptr;
     SwitchAiFn      switchAi      = nullptr;
-    IsRidingFn      inBattle      = nullptr;
 };
 
 Functions             g_fn;
@@ -312,12 +312,6 @@ const wchar_t* StateName(std::int32_t state) noexcept
     }
 }
 
-bool InBattle() noexcept
-{
-    std::uint8_t answer = 0;
-    return g_fn.inBattle != nullptr && platform::CallGuarded(g_fn.inBattle, answer) && answer != 0;
-}
-
 void* Coordinator(void* controller) noexcept
 {
     void* found = nullptr;
@@ -360,23 +354,6 @@ bool WarpWouldFire(void* scooter) noexcept
     return Between(PlayerOneBody(), scooter) > kWarpDistance;
 }
 
-std::wstring Who(const void* controller, const void* playerTwo)
-{
-    if (controller == nullptr)
-    {
-        return L"none";
-    }
-    if (controller == playerTwo)
-    {
-        return L"PC2";
-    }
-    if (controller == generation::PlayerOneController())
-    {
-        return L"PC1";
-    }
-    return L"its AI or other";
-}
-
 bool CameraModuleOn(const void* playerTwo) noexcept
 {
     const void* pcm     = ReadPointer(playerTwo, facts::kControllerCameraManager);
@@ -405,11 +382,11 @@ std::wstring LeaseText(const Ride& ride)
     return std::format(L"coordinator state {} ({}); member controller {} (effective {}), attached to {}; scooter {} controller {} "
                        L"(effective {}); PC2's pawn {}, active coordinator {}; player 2's camera slot-15 module {}; {} from player 1",
                        CoordState(ride.coordinator), StateName(CoordState(ride.coordinator)),
-                       Who(ReadPointer(ride.member, facts::kPawnController), ride.playerTwo),
-                       Who(ReadPointer(ride.member, facts::kCharacterEffectiveController), ride.playerTwo),
+                       Who(ReadPointer(ride.member, facts::kPawnController)),
+                       Who(ReadPointer(ride.member, facts::kCharacterEffectiveController)),
                        AttachText(ride.member, ride.scooter), NameOf(ride.scooter),
-                       Who(ReadPointer(ride.scooter, facts::kPawnController), ride.playerTwo),
-                       Who(ReadPointer(ride.scooter, facts::kCharacterEffectiveController), ride.playerTwo),
+                       Who(ReadPointer(ride.scooter, facts::kPawnController)),
+                       Who(ReadPointer(ride.scooter, facts::kCharacterEffectiveController)),
                        pawn == ride.scooter ? L"the scooter" : pawn == ride.member ? L"the member" : pawn ? L"other" : L"none",
                        active == ride.coordinator && active != nullptr ? L"player 2's own" : active ? L"other" : L"none",
                        CameraModuleOn(ride.playerTwo) ? L"present" : L"empty",
@@ -642,8 +619,8 @@ void End(const wchar_t* why) noexcept
         platform::Log(L"wheelie ride: {} while player 2's coordinator was {}: the game's instant getoff in player 2's scope {} "
                       L"(then {}; member controller {}, scooter controller {})",
                       why, StateName(state), ok ? L"ran" : L"COULD NOT RUN", StateName(CoordState(ride.coordinator)),
-                      Who(ReadPointer(ride.member, facts::kCharacterEffectiveController), ride.playerTwo),
-                      Who(ReadPointer(ride.scooter, facts::kCharacterEffectiveController), ride.playerTwo));
+                      Who(ReadPointer(ride.member, facts::kCharacterEffectiveController)),
+                      Who(ReadPointer(ride.scooter, facts::kCharacterEffectiveController)));
     }
     else if (state == kStateGettingOff)
     {
@@ -878,7 +855,6 @@ bool Install(const platform::GameImage& image) noexcept
     g_fn.getOffPrimary = reinterpret_cast<GetOffPrimaryFn>(find(kGetOffPrimary));
     g_fn.coordTick     = reinterpret_cast<CoordTickFn>(find(kCoordTick));
     g_fn.switchAi      = reinterpret_cast<SwitchAiFn>(find(kSwitchAi));
-    g_fn.inBattle      = reinterpret_cast<IsRidingFn>(find(facts::kIsInBattle));
     g_coordVt          = rebase(kCoordVt);
     g_scooterVt        = rebase(kScooterVt);
     g_moveVt           = rebase(kScooterMoveVt);
@@ -897,7 +873,7 @@ bool Install(const platform::GameImage& image) noexcept
                            g_fn.lookup != nullptr && g_fn.getOrCreate != nullptr && g_fn.dispatch != nullptr &&
                            g_fn.begin != nullptr && g_fn.flush != nullptr && g_fn.requestGetOff != nullptr &&
                            g_fn.getOffPrimary != nullptr && g_fn.coordTick != nullptr && g_fn.switchAi != nullptr &&
-                           g_fn.inBattle != nullptr && g_swapBackOriginal != nullptr && g_detachOriginal != nullptr &&
+                           facts::InBattleKnown() && g_swapBackOriginal != nullptr && g_detachOriginal != nullptr &&
                            g_resolveLeader != nullptr;
     g_installed = functions && g_coordVt != 0 && g_scooterVt != 0 && g_moveVt != 0 && leader_scope::Install(image) &&
                   platform::ReplaceSlot(image, kSwapBackSlot, reinterpret_cast<std::uintptr_t>(&SwapBack), g_swapBackSlot);
@@ -1217,7 +1193,7 @@ bool Tick(void* playerTwoController, void* member, const move_state::EngineTicks
             case ride_rules::CoordChange::None: break;
         }
     }
-    if (state == kStateRiding && InBattle())
+    if (state == kStateRiding && facts::InBattle())
     {
         const bool ok = GetOff(ride, true);
         platform::Log(L"wheelie ride: a battle started while player 2 rode: the game's instant getoff in player 2's scope {}",

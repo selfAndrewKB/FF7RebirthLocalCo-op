@@ -9,6 +9,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/vtable_entry.h"
+#include "player_two/describe.h"
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
@@ -185,31 +186,6 @@ bool Line() noexcept
 void* PlayerOnePawn() noexcept
 {
     return ReadPointer(generation::PlayerOneController(), facts::kControllerPawn);
-}
-
-const wchar_t* Who(const void* character) noexcept
-{
-    if (character == nullptr)
-    {
-        return L"none";
-    }
-    if (character == generation::Member())
-    {
-        return L"player 2's member";
-    }
-    if (character == PlayerOnePawn())
-    {
-        return L"player 1's character";
-    }
-    return L"another character";
-}
-
-const wchar_t* ControllerText(const void* controller) noexcept
-{
-    return controller == nullptr                         ? L"no controller"
-           : controller == generation::PlayerOneController() ? L"PC1"
-           : controller == generation::PlayerTwoController() ? L"PC2"
-                                                             : L"another controller";
 }
 
 /// Player 2's leader view (leader, leader type, primary controller) for one call; nothing held if any part refuses.
@@ -532,7 +508,7 @@ void LogPlay(const void* component, std::uint64_t channel, const void* name, std
         const auto*         source = SourceOf(returnAddress);
         const std::uint64_t key    = name != nullptr ? ReadField<std::uint64_t>(name, 0) : 0;
         platform::LogDebug(L"combat rumble: frame {}: play {} channel {} on {} from {}", platform::frame_watch::FrameIndex(),
-                      players::unreal::NameText(key), channel & 0xFF, ControllerText(controller),
+                      players::unreal::NameText(key), channel & 0xFF, Who(controller),
                       source != nullptr ? std::wstring(source) : std::format(L"0x{:X}", g_image ? g_image->ResearchAddress(returnAddress) : returnAddress));
     }
     catch (...)

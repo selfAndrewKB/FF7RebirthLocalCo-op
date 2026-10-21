@@ -6,6 +6,7 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "player_two/describe.h"
 #include "player_two/field_pickup.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
@@ -221,27 +222,6 @@ void* PrimaryController() noexcept
 {
     const auto* party = Party();
     return party != nullptr ? leader_scope::ObjectAt(party + kPartyController) : nullptr;
-}
-
-std::wstring Who(void* object)
-{
-    if (object == nullptr)
-    {
-        return L"none";
-    }
-    if (object == generation::PlayerOneController())
-    {
-        return L"player 1's controller";
-    }
-    if (object == generation::PlayerTwoController())
-    {
-        return L"player 2's controller";
-    }
-    if (object == generation::Member())
-    {
-        return L"player 2's member";
-    }
-    return std::format(L"0x{:X}", reinterpret_cast<std::uintptr_t>(object));
 }
 
 /// The leader and primary controller for the log: resolved only on the game thread (the weak-pointer resolve is

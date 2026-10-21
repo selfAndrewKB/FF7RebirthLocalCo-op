@@ -5,6 +5,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "player_two/engine_facts.h"
+#include "player_two/in_battle.h"
 #include "player_two/object_fields.h"
 #include "player_two/primary_controller.h"
 
@@ -48,7 +49,6 @@ struct Functions
     TypeFn            fieldLeaderType     = nullptr;
     TypeFn            defaultBattleLeader = nullptr;
     TypeTestFn        isBattleMember      = nullptr;
-    TypeFn            inBattle            = nullptr;  // UEndBattleAPI::IsInBattle, al only
 };
 Functions         g_fn;  // set once at install
 bool              g_installed    = false;
@@ -160,7 +160,7 @@ bool Install(const platform::GameImage& image) noexcept
     found      = Find(image, facts::kFieldLeaderType, g_fn.fieldLeaderType) && found;
     found      = Find(image, facts::kDefaultBattleLeaderType, g_fn.defaultBattleLeader) && found;
     found      = Find(image, facts::kIsBattleMember, g_fn.isBattleMember) && found;
-    found      = Find(image, facts::kIsInBattle, g_fn.inBattle) && found;
+    found      = facts::InBattleKnown() && found;  // the game's in-battle test, found at startup (in_battle.h)
     const auto optionHolder = image.Rebase(facts::kOptionHolderGlobal, sizeof(void*));
     const auto battleState  = image.Rebase(facts::kBattleStateGlobal, sizeof(void*));
     if (!optionHolder || !battleState)
@@ -299,7 +299,7 @@ bool FindPartnerLinkGuarded(std::uint8_t playerType, LinkRecordView& out) noexce
 {
     __try
     {
-        return g_fn.inBattle() != 0 &&
+        return facts::InBattle() &&
                FindLink(
             [playerType](const LinkRecordView& view) { return IsPartnerOf(view, playerType); },
             out);
@@ -345,7 +345,7 @@ void ReadSlot(void* playerOneController, SlotRead& out) noexcept
         out.ai        = ReadAi(character);
         // In battle only: synergy records come only from battle commands, and the battle teardown keeps a
         // record whose started member never ended (S-SYNGATEVERIFY §3), which must not hold player 2 after it.
-        out.linkBusy  = g_fn.inBattle() != 0 && FindBusyLink(type, out.link);
+        out.linkBusy  = facts::InBattle() && FindBusyLink(type, out.link);
         return;
     }
 }

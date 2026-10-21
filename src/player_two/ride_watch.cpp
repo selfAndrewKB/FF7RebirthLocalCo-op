@@ -12,6 +12,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "player_two/charapop_facts.h"
+#include "player_two/describe.h"
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
@@ -390,31 +391,13 @@ std::wstring RowsText(const std::array<std::uint8_t, std::size(kRowRequests)>& r
     return text.empty() ? std::wstring(L"none") : text;
 }
 
-/// "PC1" / "PC2" / "own AI" / the pointer, for a controller field.
-std::wstring Who(const void* controller, const void* playerOne, const void* playerTwo)
-{
-    if (controller == nullptr)
-    {
-        return L"none";
-    }
-    if (controller == playerOne)
-    {
-        return L"PC1";
-    }
-    if (controller == playerTwo)
-    {
-        return L"PC2";
-    }
-    return std::format(L"{}", controller);
-}
-
-void LogSample(const Sample& s, const void* playerOne, const void* playerTwo)
+void LogSample(const Sample& s)
 {
     Line(L"player 1's vehicle {} (state {}, body {} controlled by {}, rider {}, boarding {}, body's player-core test {}); "
          L"player 2's {} (coordinators {}); ride manager state {} (getoff {}, party {}, battle {}); in battle {}; player 2's "
          L"member type {} entry state {} (+0x1C {}, +0x1D {}, grace {}; the game's lookup {}); player 1's ride rows "
          L"{} (then in the riding line)",
-         KindName(s.kind), s.state, s.body, Who(s.bodyController, playerOne, playerTwo), s.rider, s.boarding,
+         KindName(s.kind), s.state, s.body, Who(s.bodyController), s.rider, s.boarding,
          s.oneCoreTest, s.twoVehicle, s.twoMap, s.manager, s.getOff, s.party, s.battle, s.inBattle, s.type, s.entry,
          s.entry1C, s.entry1D, s.entryGrace ? 1 : 0,
          s.lookup == 1 ? L"agrees" : s.lookup == 0 ? L"DIFFERS" : L"unread", RowsText(s.oneRows));
@@ -423,8 +406,8 @@ void LogSample(const Sample& s, const void* playerOne, const void* playerTwo)
         Line(L"player 2's chocobo {}: ridden {} (0x1920 {}, 0x1922 {}, mode {}, ride object {}); move state {}{}; "
              L"controller {}, requested {}, effective {}; AI state {}; input component {} (player-core test {}, type {})",
              s.chocobo, s.ridden, s.flag1920, s.flag1922, s.rideMode, s.rideObject ? 1 : 0, s.moveState ? L"yes" : L"none",
-             s.moveIsChocobo ? L" (the chocobo's)" : L"", Who(s.chocoboController, playerOne, playerTwo),
-             Who(s.chocoboRequested, playerOne, playerTwo), Who(s.chocoboEffective, playerOne, playerTwo), s.chocoboAi,
+             s.moveIsChocobo ? L" (the chocobo's)" : L"", Who(s.chocoboController),
+             Who(s.chocoboRequested), Who(s.chocoboEffective), s.chocoboAi,
              s.core, s.coreTest, s.chocoboType);
     }
     else
@@ -432,7 +415,7 @@ void LogSample(const Sample& s, const void* playerOne, const void* playerTwo)
         Line(L"player 2's member has no chocobo in the ride manager");
     }
     Line(L"player 2's member: attached to {}, controller {}, effective {}", s.attachedTo,
-         Who(s.memberController, playerOne, playerTwo), Who(s.memberEffective, playerOne, playerTwo));
+         Who(s.memberController), Who(s.memberEffective));
 }
 
 /// While a ride is on: the merged sticks and player 1's ride body's speed, once a second (test 3).
@@ -513,7 +496,7 @@ void LogSnapshot(const Sample& s, const void* member, const void* playerTwo)
 
 /// For the first seconds after player 2's chocobo is ridden, four lines a second: its speed, its distance to player 1's
 /// ride body and how fast that distance closes (the homing at a ride's start), who controls it and its AI state.
-void LogStartTrace(const Sample& s, const void* playerOne, const void* playerTwo)
+void LogStartTrace(const Sample& s)
 {
     const auto now = Clock::now();
     if (s.ridden != 0 && g_last.ridden == 0)
@@ -542,7 +525,7 @@ void LogStartTrace(const Sample& s, const void* playerOne, const void* playerTwo
     g_traceGap = gap;
     Line(L"start trace: player 2's chocobo {:.1f} m/s, {:.1f} m from player 1's ride body (closing {:+.1f} m/s); "
          L"controller {}, AI state {}, ridden {}; player 2's coordinator {}",
-         speed, gap, closing, Who(s.chocoboEffective, playerOne, playerTwo), s.chocoboAi, s.ridden, s.twoVehicle);
+         speed, gap, closing, Who(s.chocoboEffective), s.chocoboAi, s.ridden, s.twoVehicle);
 }
 
 void Run()
@@ -572,10 +555,10 @@ void Run()
     void* playerTwo = generation::PlayerTwoController();
     void* member    = generation::Member();
     const Sample s  = Read(playerOne, playerTwo, member);
-    LogStartTrace(s, playerOne, playerTwo);  // before g_last moves on: it starts on the ridden edge
+    LogStartTrace(s);  // before g_last moves on: it starts on the ridden edge
     if (!g_logged || !(Steady(s) == Steady(g_last)))
     {
-        LogSample(s, playerOne, playerTwo);
+        LogSample(s);
         g_last   = s;
         g_logged = true;
     }

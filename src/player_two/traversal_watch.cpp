@@ -264,19 +264,6 @@ std::wstring Whom(const void* actor)
     }
 }
 
-const wchar_t* ControllerText(const void* controller) noexcept
-{
-    if (controller == nullptr)
-    {
-        return L"no controller";
-    }
-    if (controller == generation::PlayerOneController())
-    {
-        return L"player 1's controller";
-    }
-    return controller == generation::PlayerTwoController() ? L"player 2's controller" : L"another controller";
-}
-
 std::wstring ActorText(const void* actor)
 {
     if (actor == nullptr)
@@ -529,7 +516,7 @@ void NotifyPass(void* character, float dt) noexcept
                 try
                 {
                     platform::LogDebug(L"traversal: {}'s notify pass walks {}'s list ({} actors)", Whom(character),
-                                       ControllerText(controller), std::get<2>(now));
+                                       Who(controller), std::get<2>(now));
                 }
                 catch (...)
                 {

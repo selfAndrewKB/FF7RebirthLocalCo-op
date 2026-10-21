@@ -36,6 +36,7 @@
 #include "platform/module_folder.h"
 #include "player_two/field_exit.h"
 #include "player_two/generation.h"
+#include "player_two/in_battle.h"
 #include "player_two/main_camera_shape.h"
 #include "player_two/camera_distance.h"
 #include "player_two/camera_repair.h"
@@ -337,6 +338,7 @@ public:
             Log(L"standing aside: nothing installed, the game runs unmodified");
             return;
         }
+        lss::player_two::facts::InstallInBattle(*image);  // the game's in-battle test, once, for the stages that ask it
         session_.emplace(*removeLocalPlayer);
         session_->InstallStages(*image);
         lss::renderer::InstallSubmitHintSkip();  // parallel passes without their own GPU submission (player 2 in)
