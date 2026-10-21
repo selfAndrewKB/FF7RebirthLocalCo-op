@@ -84,6 +84,9 @@
 //   third-view on|off                    a third full-size view (a third local player on player 1's camera,
 //                                         three columns) for the multi-monitor measurement; needs player 2 in
 //                                         (views/third_view.h)
+//   window-span on|off                   the game window across its row of equal monitors, one column per local
+//                                         player, through the engine's own window reshape; needs player 2 in
+//                                         (views/window_span.h)
 //   hud-trace <frames>                  log the order of the HUD's tick, marker placements, icon
 //                                         projections and render for 1-30 frames, and which player
 //                                         each placement and projection used (hud/hud_trace.h)
@@ -138,6 +141,7 @@ enum class CommandKind
     LogLevel,
     SingleView,
     ThirdView,
+    WindowSpan,
     StreamViews,
     StreamFovPlayerOne,
     StreamFeedback,

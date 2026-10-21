@@ -110,6 +110,7 @@
 #include "views/stream_views.h"
 #include "views/third_view.h"
 #include "views/view_shape.h"
+#include "views/window_span.h"
 #include "views/whole_screen.h"
 
 #include <cstdint>
@@ -130,7 +131,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.80.0-mm1";  // the multi-monitor-support branch, measurement build 1
+constexpr const wchar_t* kVersion = L"0.81.0-mm2";  // the multi-monitor-support branch: the span from inside the mod
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -381,6 +382,7 @@ public:
         wholeScreen_     = lss::views::InstallWholeScreen(*image);  // menus, the map, cutscenes: player 1's single view
         lss::views::InstallStreamViews(*image, viewPointInstalled_);  // each player's camera streams scenery detail
         lss::views::third_view::Install(*removeLocalPlayer);  // a third full-size view for the multi-monitor measurement
+        lss::views::window_span::Install(*image);  // the game window across its row of monitors (the engine's reshape)
         lss::player_two::party_warp::Install(*image);  // the game's follow warp, for a stranded player 2
         lss::player_two::nav_strand::Install(*image);  // player 2's member stranded off the loaded navmesh
         lss::player_two::camera_repair::Install(*image);  // a non-finite pose on player 2's camera: the game's camera reset
@@ -476,7 +478,8 @@ public:
         Log(L"ready: every engine check passed. Ctrl+F7 adds player 2, Ctrl+F8 removes player 2, Ctrl+F5 switches "
             L"top/bottom and side by side, Ctrl+F4 switches filled halves and 16:9 halves with bars. Player 2 starts on "
             L"their own camera and pad; for testing, Ctrl+F6 switches their half to player 1's camera and Ctrl+F9 "
-            L"merges the pads. Ctrl+F3 adds a third full-size view (the multi-monitor measurement)");
+            L"merges the pads. Ctrl+F3 adds a third full-size view (the multi-monitor measurement), Ctrl+F2 spans the "
+            L"window across the monitor row");
         const auto pool = lss::platform::CodePool();
         Log(L"code pool: {} piece(s), {} bytes of placed code in {} block(s) of 64 KiB (one search each)", pool.pieces,
             pool.bytes, pool.blocks);
@@ -572,6 +575,21 @@ private:
                     lss::views::third_view::Add();
                 }
                 break;
+            case lss::players::PlayerIntent::ToggleWindowSpan:
+                if (lss::views::window_span::In())
+                {
+                    lss::views::window_span::Leave(L"Ctrl+F2");
+                }
+                else if (session_->HasPlayerTwo())
+                {
+                    auto* players = lss::players::unreal::LocalPlayers(lss::players::unreal::GameInstance());
+                    lss::views::window_span::Enter(players == nullptr ? 0 : players->Num());
+                }
+                else
+                {
+                    Log(L"window span: player 2 is not in (Ctrl+F7 first)");
+                }
+                break;
             case lss::players::PlayerIntent::ToggleOwnCamera: ToggleOwnCamera(); break;
             case lss::players::PlayerIntent::ToggleLayout: LogLayoutChange(layout_.Toggle()); break;
             case lss::players::PlayerIntent::ToggleFill: ToggleFill(); break;
@@ -614,6 +632,7 @@ private:
         lss::dev::TickAfterSession();
         FollowPlayerTwo();
         lss::views::third_view::Tick(session_->HasPlayerTwo());  // leaves with player 2; follows player 1's view target
+        lss::views::window_span::Tick(session_->HasPlayerTwo());  // leaves with player 2; holds the window's rect
         lss::player_two::walk_limits::Tick();  // after the session's tick: a take's copy is overwritten this frame
         lss::player_two::handover_watch::Tick();
 

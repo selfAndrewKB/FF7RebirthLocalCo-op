@@ -14,6 +14,7 @@
 
 #include "platform/build_value.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <span>
 
@@ -151,6 +152,42 @@ inline constexpr std::uint32_t kThreePlayerSplitscreenLayoutOffset = 0x52;
 /// ULocalPlayer::AspectRatioAxisConstraint (a byte), read by GetProjectionData after GetViewPoint:
 /// `mov dl,[r14+94h]` at 0x140CC0B1D. Reflection data 0x1464B6818.
 inline constexpr std::uint32_t kAspectRatioAxisConstraintOffset = 0x94;
+
+// ---------------------------------------------------------------------------------------------
+// The game window (RE-game-window-reshape.md; views/window_span.h, the multi-monitor branch)
+// ---------------------------------------------------------------------------------------------
+//
+// Stock UE 4.26 throughout, the same offsets in 1.004 and 1.005. The chain the engine's own readers walk
+// (UKismetSystemLibrary::SetWindowTitle, UGameEngine::OnViewportResized, EndUI::GetWindowMonitorDpiScale):
+// GEngine -> UGameEngine::GameViewportWindow (TWeakPtr<SWindow>) -> SWindow::NativeWindow (TSharedPtr<FGenericWindow>)
+// -> the FWindowsWindow vtable, 37 entries in the stock order (GenericWindow.h).
+
+/// The GEngine global (data).
+inline constexpr std::uintptr_t kGEngine = 0x149117CC0;
+
+/// UKismetSystemLibrary::SetWindowTitle: the reader whose code proves the two offsets below. Its prologue.
+inline constexpr std::uintptr_t kSetWindowTitle           = 0x144FD5330;
+inline constexpr std::uint8_t   kSetWindowTitlePrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
+                                                             0x24, 0x18, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
+
+/// UGameEngine::GameViewportWindow: the SWindow pointer (the weak referencer follows at +0xE60).
+inline constexpr std::uint32_t kGameViewportWindowOffset = 0xE58;
+
+/// SWindow::NativeWindow: the FGenericWindow pointer (its reference controller follows at +0x930).
+inline constexpr std::uint32_t kSWindowNativeWindowOffset = 0x928;
+
+/// The FWindowsWindow vtable (data) and the slots the mod calls, with the functions they must hold.
+inline constexpr std::uintptr_t kWindowsWindowVTable                 = 0x1469594D8;
+inline constexpr std::size_t    kWindowsWindowSlotReshapeWindow      = 1;
+inline constexpr std::size_t    kWindowsWindowSlotGetWindowMode      = 13;
+inline constexpr std::size_t    kWindowsWindowSlotGetOSWindowHandle  = 24;
+inline constexpr std::uintptr_t kWindowsWindowReshapeWindow          = 0x1447CA234;  // WindowsWindow.cpp:411
+inline constexpr std::uint8_t   kWindowsWindowReshapeWindowPrologue[] = {0x40, 0x55, 0x53, 0x56, 0x57, 0x41, 0x54, 0x41,
+                                                                        0x56, 0x41, 0x57, 0x48, 0x8D, 0x6C, 0x24, 0xE1};
+inline constexpr std::uintptr_t kWindowsWindowGetWindowMode          = 0x1418D5940;  // mov eax,[rcx+38h]; ret
+inline constexpr std::uint8_t   kWindowsWindowGetWindowModePrologue[] = {0x8B, 0x41, 0x38, 0xC3};
+inline constexpr std::uintptr_t kWindowsWindowGetOSWindowHandle      = 0x1418D5220;  // mov rax,[rcx+28h]; ret
+inline constexpr std::uint8_t   kWindowsWindowGetOSWindowHandlePrologue[] = {0x48, 0x8B, 0x41, 0x28, 0xC3};
 
 // ---------------------------------------------------------------------------------------------
 // The startup check list

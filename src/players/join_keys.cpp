@@ -43,6 +43,7 @@ PlayerIntent JoinKeys::Poll() noexcept
     const bool centre = Pressed(active && IsDown(VK_F10), centreWasDown_);
     const bool detail = Pressed(active && IsDown(VK_F11), detailWasDown_);
     const bool third  = Pressed(active && IsDown(VK_F3), thirdWasDown_);
+    const bool span   = Pressed(active && IsDown(VK_F2), spanWasDown_);
 
     // Joining and leaving win over everything else pressed on the same tick; of the switches,
     // one per tick (the others are reported on their own presses).
@@ -75,6 +76,10 @@ PlayerIntent JoinKeys::Poll() noexcept
         if (third)
         {
             return PlayerIntent::ToggleThirdView;
+        }
+        if (span)
+        {
+            return PlayerIntent::ToggleWindowSpan;
         }
     }
     if (join && !leave)

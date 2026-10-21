@@ -32,6 +32,7 @@
 #include "views/player_view_point.h"
 #include "views/stream_views.h"
 #include "views/third_view.h"
+#include "views/window_span.h"
 
 namespace lss::control {
 
@@ -293,6 +294,31 @@ Outcome ModTarget::SetThirdView(bool on)
     }
     views::third_view::Remove(L"the third-view command");
     return views::third_view::In() ? Failed(L"the third local player could not be removed") : Outcome{};
+}
+
+Outcome ModTarget::SetWindowSpan(bool on)
+{
+    if (!views::window_span::Installed())
+    {
+        return Failed(L"the window span is not installed (see the startup log)");
+    }
+    if (on == views::window_span::In())
+    {
+        return {true, on ? L"the window is already spanned" : L"the window is not spanned"};
+    }
+    if (!on)
+    {
+        views::window_span::Leave(L"the window-span command");
+        return views::window_span::In() ? Failed(L"the window could not be put back") : Outcome{};
+    }
+    if (!session_.HasPlayerTwo())
+    {
+        return Failed(L"player 2 is not in");
+    }
+    auto* players = players::unreal::LocalPlayers(players::unreal::GameInstance());
+    const auto columns = players == nullptr ? 0 : players->Num();
+    return views::window_span::Enter(columns) ? Outcome{true, std::format(L"{} columns", columns)}
+                                              : Failed(L"the window could not be spanned (the log says why)");
 }
 
 Outcome ModTarget::SetSingleView(std::uint32_t mode)

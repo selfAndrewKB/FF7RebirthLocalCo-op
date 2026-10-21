@@ -404,6 +404,7 @@ ParsedLine ParseLine(std::wstring_view line)
     if (name == L"log-level") return ParseLogLevel(words);
     if (name == L"single-view") return ParseSingleView(words);
     if (name == L"third-view") return ParseSwitch(CommandKind::ThirdView, words, L"on", L"off");
+    if (name == L"window-span") return ParseSwitch(CommandKind::WindowSpan, words, L"on", L"off");
     if (name == L"stream-views") return ParseStreamViews(words);
     if (name == L"stream-fov-p1") return ParseStreamFov(words);
     if (name == L"stream-feedback") return ParseSwitch(CommandKind::StreamFeedback, words, L"p1", L"each");
@@ -452,6 +453,7 @@ std::wstring Describe(const Command& command)
         case CommandKind::BattleMask: return std::format(L"battle-mask {}", command.ticks);
         case CommandKind::PerfLog: return command.on ? L"perf-log on" : L"perf-log off";
         case CommandKind::ThirdView: return command.on ? L"third-view on" : L"third-view off";
+        case CommandKind::WindowSpan: return command.on ? L"window-span on" : L"window-span off";
         case CommandKind::LogLevel:
         {
             constexpr const wchar_t* kLevels[] = {L"error", L"warning", L"info", L"debug", L"trace"};

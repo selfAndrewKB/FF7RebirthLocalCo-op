@@ -189,8 +189,10 @@ add_library(LocalSplitScreen SHARED
     src/views/player_view_point.cpp
     src/views/stream_view_math.cpp
     src/views/stream_views.cpp
+    src/views/monitor_row.cpp
     src/views/third_view.cpp
     src/views/view_shape.cpp
+    src/views/window_span.cpp
     src/views/whole_screen.cpp
     src/views/screen_widgets.cpp
     src/views/whole_screen_reason.cpp
@@ -266,6 +268,14 @@ add_executable(SplitLayoutTests
 target_include_directories(SplitLayoutTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(SplitLayoutTests PRIVATE cxx_std_20)
 add_test(NAME split_layout COMMAND SplitLayoutTests)
+
+add_executable(MonitorRowTests
+    tests/monitor_row_test.cpp
+    src/views/monitor_row.cpp
+)
+target_include_directories(MonitorRowTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(MonitorRowTests PRIVATE cxx_std_20)
+add_test(NAME monitor_row COMMAND MonitorRowTests)
 
 add_executable(SingleViewTests
     tests/single_view_test.cpp

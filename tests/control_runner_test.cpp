@@ -64,6 +64,7 @@ public:
     Outcome SetLogLevel(std::uint32_t level) override { return Record(L"log-level " + std::to_wstring(level)); }
     Outcome SetSingleView(std::uint32_t mode) override { return Record(L"single-view " + std::to_wstring(mode)); }
     Outcome SetThirdView(bool on) override { return Record(on ? L"third-view on" : L"third-view off"); }
+    Outcome SetWindowSpan(bool on) override { return Record(on ? L"window-span on" : L"window-span off"); }
     Outcome SetStreamViews(std::uint32_t mode) override { return Record(L"stream-views " + std::to_wstring(mode)); }
     Outcome SetPlayerOneStreamFov(std::uint32_t degrees) override
     {
