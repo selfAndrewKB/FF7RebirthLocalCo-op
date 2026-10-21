@@ -217,6 +217,8 @@ inline constexpr std::uint32_t kActorOwner     = 0xE8;   // AActor::SetOwner sto
 inline constexpr std::uint32_t kActorTagsData  = 0x178;  // Tags.GetData()
 inline constexpr std::uint32_t kActorTagsCount = 0x180;  // Tags.Num()
 inline constexpr std::uint32_t kPawnController = 0x260;  // APawn::Controller
+// USceneComponent
+inline constexpr std::uint32_t kSceneComponentAttachParent = 0xC0;  // AttachParent (UE4SS's header dump)
 // ULocalPlayer
 inline constexpr std::uint32_t kLocalPlayerViewportClient = 0x70;
 inline constexpr std::uint32_t kLocalPlayerControllerId   = 0xB8;

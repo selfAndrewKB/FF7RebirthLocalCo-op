@@ -75,6 +75,10 @@ inline constexpr std::uint32_t kCharacterRequestedController = 0x578;
 inline constexpr std::uint32_t kCharacterEffectiveController = 0x580;
 inline constexpr std::uint32_t kCharacterRetainedAi          = 0x588;
 inline constexpr std::uint32_t kCharacterPlayerControlled    = 0x625;
+// The character's control holder (IsUCPC_Core: mov rcx,[rcx+638h]): its vt+0x40 gives the input component, its
+// vt+0x48 the BattlePlayer component (BattlePlayerControllerComp, whose vtable's +0x70 is the leader test above).
+inline constexpr std::uint32_t  kCharacterControlHolder      = 0x638;
+inline constexpr std::uintptr_t kBattlePlayerComponentVTable = 0x145795ED8;
 // 1.005: EndCharacter tick 0x140E8A44A mov rcx,[rdi+1770h] (1.004 0x14125B20A [rdi+1750h]); GetMoveState
 // 0x141985320.
 inline constexpr platform::PerBuild<std::uint32_t> kCharacterMoveState = {0x1750, 0x1770};
@@ -91,6 +95,19 @@ inline constexpr std::uint8_t kIsBattleActiveBytes[] = {
     0x48, 0x2B, 0xE0, 0x4C, 0x8B, 0xC1, 0x48, 0x85, 0xC9, 0x0F, 0x84, 0xA1};
 inline constexpr FunctionFact kIsBattleActive{L"Character_IsBattleActive_NotDeadNotPetrified", 0x140A401BC,
                                               kIsBattleActiveBytes};
+/// AEndCharacter::SwitchAIControl_Async(character, toPlayer, controller): on the game thread it possesses at once
+/// (S-SYNANYTHREAD Q1; the rides and the synergy partner call it).
+inline constexpr std::uint8_t kSwitchAiControlAsyncBytes[] = {
+    0x40, 0x55, 0x48, 0x8D, 0x6C, 0x24, 0xA9, 0xB8, 0x90, 0x00, 0x00, 0x00,
+    0xE8, 0x23, 0x93, 0x5B, 0x01, 0x48, 0x2B, 0xE0, 0x80, 0x3D, 0x3A, 0x72};
+inline constexpr FunctionFact kSwitchAiControlAsync{L"AEndCharacter::SwitchAIControl_Async", 0x140AF5BFC,
+                                                    kSwitchAiControlAsyncBytes};
+/// EndCharacter_GetPlayerTypeFromComponent: the player type of a character's battle component (al).
+inline constexpr std::uint8_t kPlayerTypeFromComponentBytes[] = {
+    0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xD6, 0xF0, 0x6B, 0x01, 0x48, 0x2B,
+    0xE0, 0x48, 0x8B, 0x89, 0x38, 0x06, 0x00, 0x00, 0x48, 0x85, 0xC9, 0x74};
+inline constexpr FunctionFact kPlayerTypeFromComponent{L"EndCharacter_GetPlayerTypeFromComponent", 0x1409EFE50,
+                                                       kPlayerTypeFromComponentBytes};
 
 // The AI: enemy controllers, the active brain and its state
 // Enemy AI controllers (EndAIControllerEnemyBase, both builds): an FWeakObjectPtr to the enemy character.

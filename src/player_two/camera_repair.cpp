@@ -57,7 +57,7 @@ constexpr std::uint32_t kCameraCutBit  = 0x400;
 // The ride framing (RE-p2-chocobo-warp-camera.md §3, §6): while a player rides, slot 15 holds the chocobo camera
 // module the boarding installed; the repair lines describe it (the former ride_framing_watch's describer; its
 // redirects answered their question, 2026-10-07).
-constexpr std::uintptr_t kChocoboModuleVt   = 0x145CE2C50;  // FEndChocoboCameraModule
+using facts::kChocoboCameraModuleVTable;
 constexpr std::uint32_t  kModuleOwner       = 0x50;         // the operator SetModuleSlot15 wrote
 constexpr std::uint32_t  kChocoboModuleBody = 0x540;        // FWeakObjectPtr: the ride body it follows
 constexpr std::uint32_t  kPcmRideSubject    = 0x2CC8;       // FWeakObjectPtr
@@ -289,7 +289,7 @@ void Install(const platform::GameImage& image) noexcept
 {
     const auto reset = platform::FindFunction(image, kReset);
     g_reset          = reset ? reinterpret_cast<ResetFn>(*reset) : nullptr;
-    const auto vt    = image.Rebase(kChocoboModuleVt);
+    const auto vt    = image.Rebase(kChocoboCameraModuleVTable);
     g_chocoboModuleVt = vt ? *vt : 0;
     platform::Log(L"camera repair: {}", g_reset != nullptr
                                             ? L"installed (a non-finite pose on player 2's camera gets the game's camera reset)"

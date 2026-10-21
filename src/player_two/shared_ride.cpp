@@ -1,6 +1,9 @@
 #include "player_two/shared_ride.h"
 
+#include "facts/controller.h"
+#include "facts/engine.h"
 #include "facts/party.h"
+#include "facts/vehicles.h"
 #include "player_two/ride_rules.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -22,11 +25,11 @@ namespace lss::player_two::shared_ride {
 namespace {
 
 // AEndPlayerController::ActiveVehicleCoordinator (SDK; RE-p2-control-mode-object.md).
-constexpr std::uint32_t kActiveVehicle = 0x5B8;
+using facts::kControllerActiveVehicle;
 // A coordinator's VehicleChara (the buggy, the boat).
-constexpr std::uint32_t kCoordBody = 0x30;
+using facts::kCoordinatorBody;
 // APawn::Controller, and AActor's bHidden bit (RE-p2-tiny-bronco.md logging plan).
-constexpr std::uint32_t kPawnController = 0x260;
+using facts::kPawnController;
 constexpr std::uint32_t kActorHidden    = 0x58;
 constexpr std::uint8_t  kHiddenBit      = 0x20;
 
@@ -39,8 +42,8 @@ struct Kind
     std::int32_t   gettingOff;
 };
 constexpr std::array<Kind, 2> kKinds = {{
-    {L"buggy", 0x145D77220, 0x1E8, 5},  // RE-p2-control-mode-object.md (states read live)
-    {L"bronco", 0x145D769B8, 0x70, 4},  // RE-p2-tiny-bronco.md
+    {L"buggy", facts::kBuggyCoordinatorVTable, 0x1E8, 5},  // RE-p2-control-mode-object.md (states read live)
+    {L"bronco", facts::kBroncoCoordinatorVTable, 0x70, 4},  // RE-p2-tiny-bronco.md
 }};
 constexpr std::int32_t kIdle = 0;
 
@@ -102,7 +105,7 @@ std::int32_t PartyBusy() noexcept
 /// The vehicle's state, and where the member player 2 gave back is against it: what the game does with it.
 void LogState(const void* coordinator, std::int32_t state)
 {
-    void*       body  = ReadPointer(coordinator, kCoordBody);
+    void*       body  = ReadPointer(coordinator, kCoordinatorBody);
     std::wstring member = L"no member was given back";
     if (g_given != nullptr && leader_scope::StillNames(g_givenWeak, g_given))
     {
@@ -123,7 +126,7 @@ void LogState(const void* coordinator, std::int32_t state)
 bool Run()
 {
     void*       playerOne   = generation::Active() ? generation::PlayerOneController() : nullptr;
-    const void* coordinator = ReadPointer(playerOne, kActiveVehicle);
+    const void* coordinator = ReadPointer(playerOne, kControllerActiveVehicle);
     const std::size_t  kind   = KindOf(coordinator);
     const std::int32_t state  = kind < kKinds.size() ? StateOf(coordinator, kKinds[kind]) : -1;
     const bool         riding = ride_rules::SharedRiding(kind < kKinds.size(), state, kIdle);
@@ -204,7 +207,7 @@ bool Rides(const void* playerOneController) noexcept
     {
         return false;
     }
-    const void*       coordinator = ReadPointer(playerOneController, kActiveVehicle);
+    const void*       coordinator = ReadPointer(playerOneController, kControllerActiveVehicle);
     const std::size_t kind        = KindOf(coordinator);
     return kind < kKinds.size() && StateOf(coordinator, kKinds[kind]) != kIdle;
 }

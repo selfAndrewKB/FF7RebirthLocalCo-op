@@ -1,6 +1,8 @@
 #include "player_two/wheelie_watch.h"
 
 #include "facts/controller.h"
+#include "facts/party.h"
+#include "facts/vehicles.h"
 #include "platform/build_value.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -28,15 +30,15 @@ namespace {
 
 // AEndPlayerController (SDK; RE-p2-control-mode-object.md): the active coordinator and the TMap<uint8, coordinator>
 // of every coordinator it owns (TSetElement<TPair<uint8, T*>>: key +0, value +8, then the hash links: 0x18 bytes).
-constexpr std::uint32_t kActiveVehicle   = 0x5B8;
+using facts::kControllerActiveVehicle;
 constexpr std::uint32_t kVehicleMap      = 0x5C0;
 constexpr std::uint32_t kMapElementSize  = 0x18;
 constexpr std::uint32_t kMapElementValue = 0x8;
 
 // UEndPlayerSBScooterCoordinator (RE-p2-wheelie-ride.md §1, §2, §4).
-constexpr std::uintptr_t kScooterCoordVt   = 0x145D76DF0;
-constexpr std::uint32_t  kCoordScooter     = 0x30;
-constexpr std::uint32_t  kCoordRider       = 0x38;
+using facts::kScooterCoordinatorVTable;
+using facts::kCoordinatorBody;
+using facts::kCoordinatorRider;
 constexpr std::uint32_t  kCoordShared      = 0x48;   // TSharedPtr object
 constexpr std::uint32_t  kCoordRiderTable  = 0x58;   // TSharedPtr object
 constexpr std::uint32_t  kCoordGetOffFast  = 0x182;  // u8: the getoff is instant
@@ -64,13 +66,13 @@ constexpr std::int32_t  kTableEntries    = 15;
 
 // AEndSelfBalancingScooterCharacter (SDK and §1.1): rider, ridden, parked, excluded; its control holder's accel and
 // brake as the move state's slot 11 writes them (§3.3).
-constexpr std::uintptr_t kScooterVt        = 0x14583F980;
+using facts::kScooterCharacterVTable;
 // 1.005 moved these Square Enix character fields by +0x20 (RE-1005-player-two.md).
 constexpr platform::PerBuild<std::uint32_t> kScooterRider    = {0x2210, 0x2230};
-constexpr platform::PerBuild<std::uint32_t> kScooterRidden   = {0x2318, 0x2338};
+using facts::kScooterRidden;
 constexpr platform::PerBuild<std::uint32_t> kScooterParked   = {0x2319, 0x2339};
-constexpr platform::PerBuild<std::uint32_t> kScooterExcluded = {0x231A, 0x233A};
-constexpr std::uint32_t  kControlHolder    = 0x638;
+using facts::kScooterExcluded;
+using facts::kCharacterControlHolder;
 constexpr std::uint32_t  kHolderAccel      = 0x2C0;
 constexpr std::uint32_t  kHolderBrake      = 0x2C4;
 
@@ -85,10 +87,6 @@ constexpr std::uint32_t                kRootOnOff      = 0x170;
 constexpr std::uint32_t                kOnOffBase      = 0x1A1238C;
 constexpr std::uint32_t                kOnOffAltBase   = 0x1A1263C;
 constexpr std::array<std::uint32_t, 3> kOnOffIds       = {152, 136, 4};
-
-// FWeakObjectPtr::Get (hud/hud_updates.cpp).
-constexpr std::uint8_t           kWeakGetBytes[] = {0x44, 0x8B, 0x49, 0x04, 0x45, 0x33, 0xC0, 0x45, 0x85, 0xC9, 0x74, 0x4F};
-constexpr platform::FunctionFact kWeakGet{L"FWeakObjectPtr::Get", 0x141905998, kWeakGetBytes};
 
 /// Ticks between reads, and reads between the riding lines (about one a second).
 constexpr std::uint32_t kEvery       = 10;
@@ -185,11 +183,11 @@ Snapshot Read(float& nearestFree)
         return s;
     }
     s.found              = true;
-    s.active             = ReadPointer(playerOne, kActiveVehicle) == coord;
+    s.active             = ReadPointer(playerOne, kControllerActiveVehicle) == coord;
     const void* statePtr = ReadPointer(coord, kCoordStatePtr);
     s.state              = statePtr != nullptr ? ReadField<std::int32_t>(statePtr, 0) : -1;
-    s.scooter            = ReadPointer(coord, kCoordScooter);
-    s.rider              = ReadPointer(coord, kCoordRider);
+    s.scooter            = ReadPointer(coord, kCoordinatorBody);
+    s.rider              = ReadPointer(coord, kCoordinatorRider);
     s.flags[0]           = ReadField<std::uint8_t>(coord, kCoordScripted);
     s.flags[1]           = ReadField<std::uint8_t>(coord, kCoordMiniGame);
     s.flags[2]           = ReadField<std::uint8_t>(coord, kCoordUiShown);
@@ -309,7 +307,7 @@ void LogRiding(const Snapshot& s)
     const auto pair   = [](bool read, const float (&value)[2]) {
         return read ? std::format(L"LT {:.2f} RT {:.2f}", value[0], value[1]) : std::wstring{L"unread"};
     };
-    const void* holder = ReadPointer(s.scooter, kControlHolder);
+    const void* holder = ReadPointer(s.scooter, kCharacterControlHolder);
     platform::LogDebug(L"wheelie watch: riding: merged triggers catch {:.2f} accel {:.2f} (other {:.2f}/{:.2f}); pad 1 {}, "
                        L"pad 2 {}; player 1's scooter accel {:.2f} brake {:.2f}",
                        merged[0], merged[1], merged[2], merged[3], pair(one, padOne), pair(two, padTwo),
@@ -337,8 +335,8 @@ void Run()
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto coord   = image.Rebase(kScooterCoordVt);
-    const auto scooter = image.Rebase(kScooterVt);
+    const auto coord   = image.Rebase(kScooterCoordinatorVTable);
+    const auto scooter = image.Rebase(kScooterCharacterVTable);
     const auto root    = image.Rebase(charapop::kGameRoot, sizeof(void*));
     const auto input   = image.Rebase(facts::kSquareInputGlobal, sizeof(void*));
     g_coordVt          = coord ? *coord : 0;

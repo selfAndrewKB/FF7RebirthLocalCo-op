@@ -1,10 +1,12 @@
 #include "player_two/chocobo_ride.h"
 
+#include "facts/cameras.h"
 #include "facts/controller.h"
 #include "facts/engine.h"
 #include "facts/in_battle.h"
 #include "facts/move_state.h"
 #include "facts/party.h"
+#include "facts/vehicles.h"
 #include "player_two/describe.h"
 #include "player_two/ride_rules.h"
 #define RC_UNREAL_DISABLE_PROPERTY_DEPRECATION_WARNINGS
@@ -40,9 +42,7 @@ using RC::Unreal::UObject;
 using Clock = std::chrono::steady_clock;
 
 // The game's functions (RE-p2-chocobo-ride.md §9.4, §7.1; entry bytes read in IDA).
-constexpr std::uint8_t kGetCoordinatorBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C, 0x24, 0x10, 0x56, 0x57,
-                                                 0x41, 0x56, 0xB8, 0x50, 0x00, 0x00, 0x00, 0xE8, 0x4C, 0x7F, 0xEA, 0x00};
-constexpr platform::FunctionFact kGetCoordinator{L"EndPC_GetOrCreateVehicleCoordinator", 0x141206FCC, kGetCoordinatorBytes};
+using facts::kGetOrCreateVehicleCoordinator;
 using GetCoordinatorFn = void* (*)(void* controller, std::uint8_t type);
 
 constexpr std::uint8_t kBeginRideBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x68, 0x10, 0x48,
@@ -68,45 +68,41 @@ struct alignas(8) GetOffParams
 };
 using EndRideFn = void (*)(void* coordinator, const GetOffParams* params, CharacterArray* out);
 
-constexpr std::uint8_t kSwitchAiBytes[] = {0x40, 0x55, 0x48, 0x8D, 0x6C, 0x24, 0xA9, 0xB8, 0x90, 0x00, 0x00, 0x00,
-                                           0xE8, 0x23, 0x93, 0x5B, 0x01, 0x48, 0x2B, 0xE0, 0x80, 0x3D, 0x3A, 0x72};
-constexpr platform::FunctionFact kSwitchAi{L"AEndCharacter::SwitchAIControl_Async", 0x140AF5BFC, kSwitchAiBytes};
+using facts::kSwitchAiControlAsync;
 using SwitchAiFn = void (*)(void* character, std::uint8_t toPlayer, void* controller);
 
-constexpr std::uint8_t kChocoboForBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xB8, 0xED, 0x3A, 0xFE,
-                                             0x48, 0x2B, 0xE0, 0x45, 0x33, 0xC0, 0x4C, 0x8B, 0xCA, 0x48, 0x8B, 0xD9};
-constexpr platform::FunctionFact kChocoboFor{L"ChocoboRideMgr_GetChocoboForCharacter", 0x143D0016C, kChocoboForBytes};
+using facts::kChocoboForCharacter;
 using ChocoboForFn = void* (*)(const void* manager, const void* character);
 using GlobalTestFn = std::uint8_t (*)();
 using GetterFn     = void* (*)(const void* object);
 
 // Objects and fields (§1.1, §9.4; this build).
-constexpr std::uint32_t  kRootRideManager   = 0x270;
-constexpr std::uint32_t  kManagerGetOff     = 0xEB0;   // u8
-constexpr std::uint32_t  kMemberEntries     = 0x40;
-constexpr std::uint32_t  kMemberEntrySize   = 0x2C;
-constexpr std::uint8_t   kPlayerTypes       = 15;
+using facts::kRootChocoboRideManager;
+using facts::kRideManagerGetOff;
+using facts::kRideManagerEntries;
+using facts::kRideManagerEntrySize;
+using facts::kRideManagerPlayerTypes;
 constexpr std::uint8_t   kEntryRiding       = 4;       // the member entry's state byte while she rides
 constexpr std::uint8_t   kChocoboType       = 1;       // the vehicle type of a chocobo coordinator
-constexpr std::uint32_t  kActiveVehicle     = 0x5B8;   // AEndPlayerController::ActiveVehicleCoordinator
+using facts::kControllerActiveVehicle;
 constexpr std::uint32_t  kCoordState        = 0x58;    // the coordinator's state machine: current row -> u32 id
 constexpr std::uint32_t  kCoordPending      = 0x60;    // ... pending row (null when none)
 constexpr std::uint32_t  kCoordIdle         = 0;
 constexpr std::uint32_t  kCoordRiding       = 2;
-constexpr platform::PerBuild<std::uint32_t> kChocoboRidden     = {0x1924, 0x1944};  // u8; 1.005: ChocoboCoordinator GetRideBody 0x143B13E00 / FinishGetOff 0x143B14F58 [rdi+1944h]
-constexpr platform::PerBuild<std::uint32_t> kChocoboRideObject = {0x1918, 0x1938};  // 1.005: Chocobo_ReleaseRideObject 0x1411903AC, chocobo tick 0x140A413DC [rbx+1938h]
-constexpr std::uint32_t  kControlHolder     = 0x638;   // its vt+0x40 gives the input component
+using facts::kChocoboRidden;
+using facts::kChocoboRideObject;
+using facts::kCharacterControlHolder;
 constexpr std::uint32_t  kHolderComponent   = 0x40;
-constexpr std::uint32_t  kAttachParent      = 0xC0;    // USceneComponent::AttachParent
-constexpr std::uint32_t  kViewTarget        = 0x1000;  // PCM ViewTarget.Target
+using facts::kSceneComponentAttachParent;
+using facts::kCameraManagerViewTarget;
 constexpr std::uint32_t  kRideSubjectField  = 0x2CC8;  // PCM, weak
-constexpr std::uint32_t  kFieldOperator     = 0x2CB0;  // PCM: the Field operator
+using facts::kCameraManagerFieldOperator;
 constexpr std::uint32_t  kOperatorModules   = 0x6E0;   // op: the module slots (16 bytes each)
 constexpr std::uint32_t  kModuleSlot15      = 15 * 16;
-constexpr std::uintptr_t kChocoboCoordVt    = 0x1467EB420;
-constexpr std::uintptr_t kChocoboMoveVt     = 0x1466B9E18;
-constexpr std::uintptr_t kInputComponentVt  = 0x145795ED8;  // BattlePlayerControllerComp
-constexpr std::uintptr_t kCameraModuleVt    = 0x145CE2C50;  // FEndChocoboCameraModule
+using facts::kChocoboCoordinatorVTable;
+using facts::kChocoboMoveStateVTable;
+using facts::kBattlePlayerComponentVTable;
+using facts::kChocoboCameraModuleVTable;
 constexpr std::uintptr_t kVehicleKeyName    = 0x1491E4538;  // FName "Vehicle": the getoff button
 // The chocobo move state's row request bytes (handle +0x48): the summon rows, then Dash, Dismount, Jet, Scent, Scour
 // (RE-p2-chocobo-rows.md §2); 1 = lit, 2 = dim.
@@ -195,24 +191,24 @@ const void* RootOf(void* actor) noexcept
 
 bool Attached(void* member) noexcept
 {
-    return ReadPointer(RootOf(member), kAttachParent) != nullptr;
+    return ReadPointer(RootOf(member), kSceneComponentAttachParent) != nullptr;
 }
 
 const std::byte* RideManager() noexcept
 {
     const void* root = ReadPointer(reinterpret_cast<const void*>(g_gameRoot), 0);
-    return static_cast<const std::byte*>(ReadPointer(root, kRootRideManager));
+    return static_cast<const std::byte*>(ReadPointer(root, kRootChocoboRideManager));
 }
 
 /// The member's entry state byte in the ride manager, or -1.
 int EntryState(const std::byte* manager, const void* member) noexcept
 {
     const auto type = party_member::PlayerTypeOf(member);
-    if (manager == nullptr || !type || *type >= kPlayerTypes)
+    if (manager == nullptr || !type || *type >= kRideManagerPlayerTypes)
     {
         return -1;
     }
-    return ReadField<std::uint8_t>(manager + kMemberEntries + kMemberEntrySize * *type, 0);
+    return ReadField<std::uint8_t>(manager + kRideManagerEntries + kRideManagerEntrySize * *type, 0);
 }
 
 /// A chocobo coordinator's state id, or -1.
@@ -232,7 +228,7 @@ bool CoordRiding(const void* coordinator) noexcept
 bool RideCameraOn(const void* playerTwo) noexcept
 {
     const void* pcm     = ReadPointer(playerTwo, facts::kControllerCameraManager);
-    const void* op      = ReadPointer(pcm, kFieldOperator);
+    const void* op      = ReadPointer(pcm, kCameraManagerFieldOperator);
     const void* modules = ReadPointer(op, kOperatorModules);
     const void* module  = modules != nullptr ? ReadPointer(modules, kModuleSlot15) : nullptr;
     return module != nullptr && VTableOf(module) == g_moduleVt;
@@ -251,16 +247,16 @@ std::wstring LeaseText(const Ride& ride)
                        Who(ReadPointer(ride.chocobo, facts::kCharacterEffectiveController)),
                        pawn == ride.chocobo ? L"the chocobo" : pawn == ride.member ? L"the member" : pawn ? L"other" : L"none",
                        ReadPointer(ride.playerTwo, facts::kControllerLeader) == ride.member ? L"the member" : L"other",
-                       ReadPointer(ride.playerTwo, kActiveVehicle) == ride.coordinator && ride.coordinator ? L"player 2's own"
-                       : ReadPointer(ride.playerTwo, kActiveVehicle) != nullptr                             ? L"other"
-                                                                                                            : L"none",
+                       ReadPointer(ride.playerTwo, kControllerActiveVehicle) == ride.coordinator && ride.coordinator
+                           ? L"player 2's own"
+                           : ReadPointer(ride.playerTwo, kControllerActiveVehicle) != nullptr ? L"other" : L"none",
                        CoordState(ride.coordinator),
                        leader_scope::ObjectAt(static_cast<const std::byte*>(pcm) + kRideSubjectField) == ride.chocobo
                            ? L"the chocobo"
                            : L"not the chocobo",
                        RideCameraOn(ride.playerTwo) ? L"on" : L"off",
-                       ReadPointer(pcm, kViewTarget) == ride.member    ? L"the member"
-                       : ReadPointer(pcm, kViewTarget) == ride.chocobo ? L"the chocobo"
+                       ReadPointer(pcm, kCameraManagerViewTarget) == ride.member    ? L"the member"
+                       : ReadPointer(pcm, kCameraManagerViewTarget) == ride.chocobo ? L"the chocobo"
                                                                        : L"the camera actor or other");
 }
 
@@ -278,7 +274,7 @@ void LogLine(const wchar_t* prefix, const Ride& ride) noexcept
 /// The chocobo's input component: its control holder's getter (+0x638 -> vt+0x40), checked by vtable.
 const void* InputComponentOf(const void* chocobo) noexcept
 {
-    const void* holder = ReadPointer(chocobo, kControlHolder);
+    const void* holder = ReadPointer(chocobo, kCharacterControlHolder);
     const void* vt     = reinterpret_cast<const void*>(VTableOf(holder));
     const auto  getter = vt != nullptr ? ReadField<GetterFn>(vt, kHolderComponent) : nullptr;
     void*       found  = nullptr;
@@ -433,14 +429,15 @@ void End(const wchar_t* why, bool force) noexcept
         platform::Log(L"WARNING chocobo ride: the game's end of player 2's coordinator raised {}; after it: coordinator "
                       L"state {}, player 2's active coordinator {}, the chocobo's controller {}, the member's {}",
                       platform::DescribeFault(call.fault).text, CoordState(ride.coordinator),
-                      ReadPointer(ride.playerTwo, kActiveVehicle) == ride.coordinator ? L"still it" : L"cleared",
+                      ReadPointer(ride.playerTwo, kControllerActiveVehicle) == ride.coordinator ? L"still it"
+                                                                                                 : L"cleared",
                       ReadPointer(ride.chocobo, facts::kPawnController) == ride.playerTwo ? L"PC2" : L"not PC2",
                       ReadPointer(ride.member, facts::kPawnController) == ride.playerTwo ? L"PC2" : L"not PC2");
     }
     const Ride ended  = ride;
     Finish(ended, why,
            !scoped   ? L"the game's end not run (no scope)"
-           : call.ok ? (ReadPointer(ended.playerTwo, kActiveVehicle) == nullptr ? L"the game's end ran"
+           : call.ok ? (ReadPointer(ended.playerTwo, kControllerActiveVehicle) == nullptr ? L"the game's end ran"
                                                                                 : L"the game's end ran, the coordinator is still active")
                      : L"the game's end FAULTED");
 }
@@ -455,7 +452,8 @@ void* SeatedChocobo(void* playerTwo, void* member) noexcept
     }
     const std::byte* manager = RideManager();
     void*            chocobo = nullptr;
-    if (manager == nullptr || ReadField<std::uint8_t>(manager, kManagerGetOff) != 0 || EntryState(manager, member) != kEntryRiding ||
+    if (manager == nullptr || ReadField<std::uint8_t>(manager, kRideManagerGetOff) != 0 ||
+        EntryState(manager, member) != kEntryRiding ||
         !platform::CallGuarded(g_fn.chocoboFor, chocobo, static_cast<const void*>(manager), static_cast<const void*>(member)) ||
         chocobo == nullptr)
     {
@@ -511,7 +509,8 @@ void Begin(void* playerTwo, void* member, void* chocobo) noexcept
     void* state      = ReadPointer(chocobo, facts::kCharacterMoveState);
     const bool owned = call.ok && ReadPointer(chocobo, facts::kCharacterEffectiveController) == playerTwo &&
                        ReadPointer(playerTwo, facts::kControllerPawn) == chocobo &&
-                       ReadPointer(playerTwo, kActiveVehicle) == call.coordinator && VTableOf(state) == g_moveVt;
+                       ReadPointer(playerTwo, kControllerActiveVehicle) == call.coordinator &&
+                       VTableOf(state) == g_moveVt;
     g_ride.component = owned ? InputComponentOf(chocobo) : nullptr;
     if (!owned || g_ride.component == nullptr)
     {
@@ -631,19 +630,19 @@ bool Install(const platform::GameImage& image) noexcept
         const auto live = image.Rebase(ida);
         return live ? *live : std::uintptr_t{0};
     };
-    g_fn.getCoordinator = reinterpret_cast<GetCoordinatorFn>(find(kGetCoordinator));
+    g_fn.getCoordinator = reinterpret_cast<GetCoordinatorFn>(find(kGetOrCreateVehicleCoordinator));
     g_fn.beginRide      = reinterpret_cast<BeginRideFn>(find(kBeginRide));
     g_fn.endRide        = reinterpret_cast<EndRideFn>(find(kEndRide));
-    g_fn.switchAi       = reinterpret_cast<SwitchAiFn>(find(kSwitchAi));
-    g_fn.chocoboFor     = reinterpret_cast<ChocoboForFn>(find(kChocoboFor));
+    g_fn.switchAi       = reinterpret_cast<SwitchAiFn>(find(kSwitchAiControlAsync));
+    g_fn.chocoboFor     = reinterpret_cast<ChocoboForFn>(find(kChocoboForCharacter));
     const auto root     = image.Rebase(charapop::kGameRoot, sizeof(void*));
     const auto key      = image.Rebase(kVehicleKeyName, sizeof(std::uint64_t));
     g_gameRoot          = root ? *root : 0;
     g_vehicleKey        = key ? reinterpret_cast<const std::uint64_t*>(*key) : nullptr;
-    g_coordVt           = rebase(kChocoboCoordVt);
-    g_moveVt            = rebase(kChocoboMoveVt);
-    g_componentVt       = rebase(kInputComponentVt);
-    g_moduleVt          = rebase(kCameraModuleVt);
+    g_coordVt           = rebase(kChocoboCoordinatorVTable);
+    g_moveVt            = rebase(kChocoboMoveStateVTable);
+    g_componentVt       = rebase(kBattlePlayerComponentVTable);
+    g_moduleVt          = rebase(kChocoboCameraModuleVTable);
     g_installed = g_fn.getCoordinator != nullptr && g_fn.beginRide != nullptr && g_fn.endRide != nullptr &&
                   g_fn.switchAi != nullptr && g_fn.chocoboFor != nullptr && facts::InBattleKnown() && g_gameRoot != 0 &&
                   g_vehicleKey != nullptr && g_coordVt != 0 && g_moveVt != 0 && g_componentVt != 0 && g_moduleVt != 0 &&

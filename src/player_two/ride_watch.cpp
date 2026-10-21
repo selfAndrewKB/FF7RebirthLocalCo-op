@@ -10,6 +10,7 @@
 #include "facts/engine.h"
 #include "facts/move_state.h"
 #include "facts/party.h"
+#include "facts/vehicles.h"
 #include "platform/build_value.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -38,56 +39,52 @@ using RC::Unreal::UObject;
 using Clock = std::chrono::steady_clock;
 
 // AEndPlayerController (SDK offsets, RE-p2-chocobo-ride.md §1.1, §4).
-constexpr std::uint32_t kActiveVehicle   = 0x5B8;  // ActiveVehicleCoordinator
+using facts::kControllerActiveVehicle;
 constexpr std::uint32_t kVehicleMapCount = 0x5C8;  // VehicleCoordinators (TMap) element count, i32
 // A vehicle coordinator: its body and rider; the chocobo's boarding flag; each kind's state machine.
-constexpr std::uint32_t kCoordBody          = 0x30;
-constexpr std::uint32_t kCoordRider         = 0x38;
+using facts::kCoordinatorBody;
+using facts::kCoordinatorRider;
 constexpr std::uint32_t kChocoboBoarding    = 0x155;  // u8
 constexpr std::uint32_t kChocoboStatePtr    = 0x58;   // -> u32 state id
 constexpr std::uint32_t kBuggyStatePtr      = 0x1E8;  // -> u32 state id
 // The coordinators' vtables (§4).
-constexpr std::uintptr_t kChocoboCoordVt = 0x1467EB420;
-constexpr std::uintptr_t kBuggyCoordVt   = 0x145D77220;
-constexpr std::uintptr_t kBroncoCoordVt  = 0x145D769B8;
-constexpr std::uintptr_t kScooterCoordVt = 0x145D76DF0;
+using facts::kChocoboCoordinatorVTable;
+using facts::kBuggyCoordinatorVTable;
+using facts::kBroncoCoordinatorVTable;
+using facts::kScooterCoordinatorVTable;
 
 // The chocobo ride manager [[game root]+0x270] (§1.1): state, getoff request, party ride, in battle; member
 // entries at +0x40 + 0x2C * player type (state byte +0, weak chocobo +0x20).
-constexpr std::uint32_t kRootRideManager = 0x270;
+using facts::kRootChocoboRideManager;
 constexpr std::uint32_t kManagerState    = 0x8;  // u8 (the next byte read the same value live: 0x0707 riding)
-constexpr std::uint32_t kManagerGetOff   = 0xEB0;
+using facts::kRideManagerGetOff;
 constexpr std::uint32_t kManagerParty    = 0xEB5;
 constexpr std::uint32_t kManagerBattle   = 0xEB6;
-constexpr std::uint32_t kMemberEntries   = 0x40;
-constexpr std::uint32_t kMemberEntrySize = 0x2C;
+using facts::kRideManagerEntries;
+using facts::kRideManagerEntrySize;
 constexpr std::uint32_t kEntryChocobo    = 0x20;
-constexpr std::uint8_t  kPlayerTypes     = 15;
+using facts::kRideManagerPlayerTypes;
 
 // AEndChocoboCharacter's native tail (§1.1) and the input component the player-core test reads (§3, lever 1).
 // 1.005 moved this tail by +0x20 (RE-1005-offsets-C.md): CreateRideObject 0x143B05BC3/0x143B05C10 (+0x1938, +0x1930),
 // 0x140A41434 `cmp byte [rbx+1940h]`, 0x143B06AF9 `cmp byte [rcx+1942h]`, 0x143B13E48 `mov al,[rdi+1944h]`.
 constexpr platform::PerBuild<std::uint32_t> kChocoboRideMode   = {0x1910, 0x1930};  // u8
-constexpr platform::PerBuild<std::uint32_t> kChocoboRideObject = {0x1918, 0x1938};  // pointer
+using facts::kChocoboRideObject;
 constexpr platform::PerBuild<std::uint32_t> kChocoboFlag1920   = {0x1920, 0x1940};  // u8
 constexpr platform::PerBuild<std::uint32_t> kChocoboFlag1922   = {0x1922, 0x1942};  // u8
-constexpr platform::PerBuild<std::uint32_t> kChocoboRidden     = {0x1924, 0x1944};  // u8
-constexpr std::uint32_t  kCoreComponent     = 0x638;   // IsUCPC_Core: mov rcx,[rcx+638h]
-constexpr std::uintptr_t kChocoboMoveVt     = 0x1466B9E18;
+using facts::kChocoboRidden;
+using facts::kCharacterControlHolder;
+using facts::kChocoboMoveStateVTable;
 
 // USceneComponent::AttachParent (as player_two/nav_strand.cpp reads it).
-constexpr std::uint32_t kAttachParent = 0xC0;
+using facts::kSceneComponentAttachParent;
 
 using CoreTestFn = std::uint8_t (*)(const void* character);
 
 // The game's read-only lookups (RE-p2-chocobo-ride.md §7.1; entry bytes read in IDA).
-constexpr std::uint8_t kChocoboForBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xB8, 0xED, 0x3A, 0xFE,
-                                             0x48, 0x2B, 0xE0, 0x45, 0x33, 0xC0, 0x4C, 0x8B, 0xCA, 0x48, 0x8B, 0xD9};
-constexpr platform::FunctionFact kChocoboFor{L"ChocoboRideMgr_GetChocoboForCharacter", 0x143D0016C, kChocoboForBytes};
+using facts::kChocoboForCharacter;
 using ChocoboForFn = void* (*)(const void* manager, const void* character);
-constexpr std::uint8_t kComponentTypeBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xD6, 0xF0, 0x6B, 0x01, 0x48, 0x2B,
-                                                0xE0, 0x48, 0x8B, 0x89, 0x38, 0x06, 0x00, 0x00, 0x48, 0x85, 0xC9, 0x74};
-constexpr platform::FunctionFact kComponentType{L"EndCharacter_GetPlayerTypeFromComponent", 0x1409EFE50, kComponentTypeBytes};
+using facts::kPlayerTypeFromComponent;
 using ComponentTypeFn = std::uint8_t (*)(const void* character);
 using GlobalTestFn    = std::uint8_t (*)();
 
@@ -301,32 +298,32 @@ const void* RootOf(void* actor) noexcept
 Sample Read(void* playerOne, void* playerTwo, void* member) noexcept
 {
     Sample s;
-    const void* coord = ReadPointer(playerOne, kActiveVehicle);
+    const void* coord = ReadPointer(playerOne, kControllerActiveVehicle);
     s.kind            = KindOf(coord);
     if (coord != nullptr)
     {
         s.state    = StateOf(coord, s.kind);
-        s.body     = ReadPointer(coord, kCoordBody);
-        s.rider    = ReadPointer(coord, kCoordRider);
+        s.body     = ReadPointer(coord, kCoordinatorBody);
+        s.rider    = ReadPointer(coord, kCoordinatorRider);
         s.boarding = s.kind == Kind::Chocobo ? ReadField<std::uint8_t>(coord, kChocoboBoarding) : 0;
         s.oneCoreTest = s.kind == Kind::Chocobo ? CoreTest(s.body) : -1;
         s.bodyController = ReadPointer(s.body, facts::kCharacterEffectiveController);
     }
-    s.twoVehicle = ReadPointer(playerTwo, kActiveVehicle);
+    s.twoVehicle = ReadPointer(playerTwo, kControllerActiveVehicle);
     s.twoMap     = playerTwo != nullptr ? ReadField<std::int32_t>(playerTwo, kVehicleMapCount) : 0;
 
     const void* root    = ReadPointer(reinterpret_cast<const void*>(g_gameRoot), 0);
-    const auto* manager = static_cast<const std::byte*>(ReadPointer(root, kRootRideManager));
+    const auto* manager = static_cast<const std::byte*>(ReadPointer(root, kRootChocoboRideManager));
     if (manager != nullptr)
     {
         s.manager = ReadField<std::uint8_t>(manager, kManagerState);
-        s.getOff  = ReadField<std::uint8_t>(manager, kManagerGetOff);
+        s.getOff  = ReadField<std::uint8_t>(manager, kRideManagerGetOff);
         s.party   = ReadField<std::uint8_t>(manager, kManagerParty);
         s.battle  = ReadField<std::uint8_t>(manager, kManagerBattle);
         const auto type = member != nullptr && party_member::Installed() ? party_member::PlayerTypeOf(member) : std::nullopt;
-        if (type && *type < kPlayerTypes)
+        if (type && *type < kRideManagerPlayerTypes)
         {
-            const std::byte* entry = manager + kMemberEntries + kMemberEntrySize * *type;
+            const std::byte* entry = manager + kRideManagerEntries + kRideManagerEntrySize * *type;
             s.type       = *type;
             s.entry      = ReadField<std::uint8_t>(entry, 0);
             s.entry1C    = ReadField<std::uint8_t>(entry, kEntry1C);
@@ -366,14 +363,14 @@ Sample Read(void* playerOne, void* playerTwo, void* member) noexcept
         s.chocoboRequested  = ReadPointer(c, facts::kCharacterRequestedController);
         s.chocoboEffective  = ReadPointer(c, facts::kCharacterEffectiveController);
         s.chocoboAi         = AiStateOf(c);
-        s.core              = ReadPointer(c, kCoreComponent);
+        s.core              = ReadPointer(c, kCharacterControlHolder);
         s.coreTest          = CoreTest(c);
         std::uint8_t ctype  = 0;
         s.chocoboType = g_componentType != nullptr && platform::CallGuarded(g_componentType, ctype, c) ? ctype : -1;
     }
     if (member != nullptr)
     {
-        s.attachedTo       = ReadPointer(RootOf(member), kAttachParent);
+        s.attachedTo       = ReadPointer(RootOf(member), kSceneComponentAttachParent);
         s.memberController = ReadPointer(member, facts::kPawnController);
         s.memberEffective  = ReadPointer(member, facts::kCharacterEffectiveController);
     }
@@ -536,7 +533,7 @@ void Run()
     void* playerOne = generation::PlayerOneController();
     // Mounting and dismounting are rare, real changes: Info, read cheaply whatever the level.
     // The state too (the buggy's 3 boarding, 4 riding, 5 getting off; the single-view signal, plan "Buggy: single view").
-    const void*        coordinator = ReadPointer(playerOne, kActiveVehicle);
+    const void*        coordinator = ReadPointer(playerOne, kControllerActiveVehicle);
     const Kind         kind        = KindOf(coordinator);
     const std::int32_t state       = kind == Kind::None ? -1 : StateOf(coordinator, kind);
     if (g_kindKnown && (kind != g_kind || state != g_state))
@@ -583,7 +580,8 @@ bool Install(const platform::GameImage& image) noexcept
     const auto root  = image.Rebase(charapop::kGameRoot, sizeof(void*));
     const auto input = image.Rebase(facts::kSquareInputGlobal, sizeof(void*));
     const auto test  = platform::FindFunction(image, facts::kIsPlayerCore);
-    const std::uintptr_t vts[] = {kChocoboCoordVt, kBuggyCoordVt, kBroncoCoordVt, kScooterCoordVt};
+    const std::uintptr_t vts[] = {kChocoboCoordinatorVTable, kBuggyCoordinatorVTable, kBroncoCoordinatorVTable,
+                                  kScooterCoordinatorVTable};
     bool vtsFound = true;
     for (int i = 0; i < 4; ++i)
     {
@@ -591,14 +589,14 @@ bool Install(const platform::GameImage& image) noexcept
         g_vt[i]       = vt ? *vt : 0;
         vtsFound      = vtsFound && vt.has_value();
     }
-    const auto move  = image.Rebase(kChocoboMoveVt);
+    const auto move  = image.Rebase(kChocoboMoveStateVTable);
     g_gameRoot       = root ? *root : 0;
     g_input          = input ? *input : 0;
     g_chocoboMoveVt  = move ? *move : 0;
     g_isCore         = test ? reinterpret_cast<CoreTestFn>(*test) : nullptr;
     // Optional reads: each logged as unread when its bytes differ.
-    const auto chocoboFor = platform::FindFunction(image, kChocoboFor);
-    const auto ctype      = platform::FindFunction(image, kComponentType);
+    const auto chocoboFor = platform::FindFunction(image, kChocoboForCharacter);
+    const auto ctype      = platform::FindFunction(image, kPlayerTypeFromComponent);
     const auto battle     = platform::FindFunction(image, facts::kIsInBattle);
     g_chocoboFor          = chocoboFor ? reinterpret_cast<ChocoboForFn>(*chocoboFor) : nullptr;
     g_componentType       = ctype ? reinterpret_cast<ComponentTypeFn>(*ctype) : nullptr;

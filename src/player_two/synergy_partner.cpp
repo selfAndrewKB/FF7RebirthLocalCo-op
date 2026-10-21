@@ -73,19 +73,14 @@ constexpr std::uintptr_t kEndLeaderTest   = 0x140F2AB8A;
 constexpr std::uintptr_t kEndPrimary      = 0x140F2ABBA;
 constexpr std::uintptr_t kPrimary         = 0x140A61D1C;
 // The type the give-back test compares: the same function, on the remembered character.
-constexpr std::uint8_t kComponentTypeBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xD6, 0xF0, 0x6B, 0x01, 0x48, 0x2B,
-                                                0xE0, 0x48, 0x8B, 0x89, 0x38, 0x06, 0x00, 0x00, 0x48, 0x85, 0xC9, 0x74};
-constexpr platform::FunctionFact kComponentType{L"EndCharacter_GetPlayerTypeFromComponent", 0x1409EFE50,
-                                                kComponentTypeBytes};
+using facts::kPlayerTypeFromComponent;
 // Classic mode (deferred): the game's Classic hand-over keeps the controller (AI pause reason 5), so it is left alone.
 constexpr std::uint8_t kClassicBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xBE, 0xBB, 0x74, 0x01, 0x48, 0x2B,
                                           0xE0, 0x48, 0x8B, 0x05, 0xDC, 0x89, 0xA3, 0x08, 0x48, 0x8B, 0x88, 0x00};
 constexpr platform::FunctionFact kClassic{L"Option_IsClassicMode_AutoPlayOn_NotHard", 0x140963368, kClassicBytes};
 // G: the give-back LinkMember_End calls, AEndCharacter::SwitchAIControl_Async(member, 1, controller); on the game thread
 // it possesses at once (S-SYNANYTHREAD Q1; also chocobo_ride, wheelie_ride).
-constexpr std::uint8_t kSwitchAiBytes[] = {0x40, 0x55, 0x48, 0x8D, 0x6C, 0x24, 0xA9, 0xB8, 0x90, 0x00, 0x00, 0x00,
-                                           0xE8, 0x23, 0x93, 0x5B, 0x01, 0x48, 0x2B, 0xE0, 0x80, 0x3D, 0x3A, 0x72};
-constexpr platform::FunctionFact kSwitchAi{L"AEndCharacter::SwitchAIControl_Async", 0x140AF5BFC, kSwitchAiBytes};
+using facts::kSwitchAiControlAsync;
 
 // W: a parry-window skill (S-SYNCOUNTER). LinkPartner_Start's 7th argument is the initiator's BattleAbility handle
 // (this vtable; +8 its row). The row's AnimationSelectType_Array (+0x90 data, +0x98 count; u8 kinds; a data word with
@@ -1099,11 +1094,11 @@ void Install(const platform::GameImage& image) noexcept
     g_sites.primary     = at(kPrimary);
     // Optional: without it a parry-window skill's human partner is handed over at the stance, as before.
     g_sites.abilityHandle = at(kAbilityHandleVtable, sizeof(void*));
-    const auto typeOf   = platform::FindFunction(image, kComponentType);
+    const auto typeOf   = platform::FindFunction(image, kPlayerTypeFromComponent);
     g_typeOf            = typeOf ? reinterpret_cast<TypeFn>(*typeOf) : nullptr;
     const auto classic  = platform::FindFunction(image, kClassic);
     g_classic           = classic ? reinterpret_cast<ClassicFn>(*classic) : nullptr;
-    const auto switchAi = platform::FindFunction(image, kSwitchAi);
+    const auto switchAi = platform::FindFunction(image, kSwitchAiControlAsync);
     g_switchAi          = switchAi ? reinterpret_cast<SwitchAiFn>(*switchAi) : nullptr;
     g_sites.ok = ok && g_sites.startFn != 0 && g_sites.startTest != 0 && g_classic != nullptr && g_switchAi != nullptr &&
                  image.BytesMatch(kStart, kStartBytes) && g_sites.requestAi != 0 && g_sites.requestTest != 0 && g_sites.leaderType != 0 &&

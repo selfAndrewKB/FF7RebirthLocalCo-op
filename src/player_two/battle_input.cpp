@@ -52,9 +52,9 @@ constexpr std::array<std::int32_t, 10> kLoggedRequests{5, 6, 12, 13, 25, 26, 32,
 
 // A party character's battle parts (§1.4, §1.5).
 constexpr platform::PerBuild<std::uint32_t> kCharacterHolder = {0x1758, 0x1778};  // holder whose +0 is the character; 1.005: vt+0xA18 getter 0x140896CC0 mov rax,[rcx+1778h], CreateMoveState 0x140D8255C
-constexpr std::uint32_t  kCharacterAiHolder = 0x638;   // its vt+0x48 gives the BattlePlayer component
+using facts::kCharacterControlHolder;
 constexpr std::uint32_t  kOwnerSlot         = 0x48;
-constexpr std::uintptr_t kBattlePlayerVTable = 0x145795ED8;
+using facts::kBattlePlayerComponentVTable;
 constexpr std::uint32_t  kCommandHandle     = 0x418;  // the component's handle; null: the actions do nothing
 constexpr std::uint32_t  kHandleMode        = 0x112;  // u8 in the handle's object
 constexpr std::array<std::uint32_t, 4> kStateBytes{0x49, 0x4A, 0x64, 0x65};
@@ -102,7 +102,8 @@ Parts PartsOf(std::uintptr_t character) noexcept
     Parts parts;
     std::uintptr_t first = 0, aiHolder = 0;
     if (character == 0 || !Read(character + kCharacterHolder, parts.holder) || parts.holder == 0 ||
-        !Read(parts.holder, first) || first != character || !Read(character + kCharacterAiHolder, aiHolder) || aiHolder == 0)
+        !Read(parts.holder, first) || first != character || !Read(character + kCharacterControlHolder, aiHolder) ||
+        aiHolder == 0)
     {
         return parts;
     }
@@ -200,7 +201,7 @@ bool Install(const platform::GameImage& image) noexcept
     const auto battleSystem = image.Rebase(kBattleSystem, sizeof(void*));
     const auto partyManager = image.Rebase(facts::kPartyManagerGlobal, sizeof(void*));
     const auto system = image.Rebase(facts::kEndUISystem, facts::kUICommandController + sizeof(void*));
-    const auto vtable = image.Rebase(kBattlePlayerVTable, sizeof(void*));
+    const auto vtable = image.Rebase(kBattlePlayerComponentVTable, sizeof(void*));
     g_installed = leader_scope::Install(image) && facts::InBattleKnown() && battleSystem && partyManager && system &&
                   vtable;
     g_battleSystem       = battleSystem ? *battleSystem : 0;

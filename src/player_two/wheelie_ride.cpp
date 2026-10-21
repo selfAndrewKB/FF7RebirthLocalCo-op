@@ -1,10 +1,12 @@
 #include "player_two/wheelie_ride.h"
 
+#include "facts/cameras.h"
 #include "facts/controller.h"
 #include "facts/engine.h"
 #include "facts/in_battle.h"
 #include "facts/move_state.h"
 #include "facts/party.h"
+#include "facts/vehicles.h"
 #include "player_two/ride_rules.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
@@ -57,9 +59,7 @@ constexpr std::uint8_t kLookupBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x8
                                          0x74, 0x24, 0x18, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x0E, 0xDE};
 constexpr platform::FunctionFact kLookup{L"EndPC_LookupMap5C0", 0x140A61108, kLookupBytes};
 
-constexpr std::uint8_t kGetOrCreateBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C, 0x24, 0x10, 0x56, 0x57,
-                                              0x41, 0x56, 0xB8, 0x50, 0x00, 0x00, 0x00, 0xE8, 0x4C, 0x7F, 0xEA, 0x00};
-constexpr platform::FunctionFact kGetOrCreate{L"EndPC_GetOrCreateVehicleCoordinator", 0x141206FCC, kGetOrCreateBytes};
+using facts::kGetOrCreateVehicleCoordinator;
 
 constexpr std::uint8_t kDispatchBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8,
                                            0x88, 0xC8, 0x3A, 0xFE, 0x48, 0x2B, 0xE0, 0x8A, 0x01, 0x48, 0x8B, 0xD9};
@@ -103,9 +103,7 @@ constexpr platform::SlotFact kDetachNotifySlot{
 constexpr std::uintptr_t kDetachLeaderSite = 0x14331A814;  // its field-leader test: call ResolveFieldLeaderCharOrLeader
 constexpr std::uintptr_t kResolveLeader    = 0x140A6085C;  // PartyManager_ResolveFieldLeaderCharOrLeader(selector)
 
-constexpr std::uint8_t kSwitchAiBytes[] = {0x40, 0x55, 0x48, 0x8D, 0x6C, 0x24, 0xA9, 0xB8, 0x90, 0x00, 0x00, 0x00,
-                                           0xE8, 0x23, 0x93, 0x5B, 0x01, 0x48, 0x2B, 0xE0, 0x80, 0x3D, 0x3A, 0x72};
-constexpr platform::FunctionFact kSwitchAi{L"AEndCharacter::SwitchAIControl_Async", 0x140AF5BFC, kSwitchAiBytes};
+using facts::kSwitchAiControlAsync;
 
 // The key-4 "should ride" request FieldSummonBody builds (§14.1), zeroed: type, character, world stick, FName out.
 struct alignas(16) RideAsk
@@ -153,11 +151,11 @@ using GetterFn        = void* (*)(const void* object);
 
 // Objects and fields (§14; this build).
 constexpr std::uint8_t   kScooterKey        = 4;
-constexpr std::uintptr_t kCoordVt           = 0x145D76DF0;  // UEndPlayerSBScooterCoordinator
-constexpr std::uintptr_t kScooterVt         = 0x14583F980;  // AEndSelfBalancingScooterCharacter
+using facts::kScooterCoordinatorVTable;
+using facts::kScooterCharacterVTable;
 constexpr std::uintptr_t kScooterMoveVt     = 0x1466B9D88;  // SBScooterMoveState
-constexpr std::uint32_t  kActiveVehicle     = 0x5B8;        // AEndPlayerController::ActiveVehicleCoordinator
-constexpr std::uint32_t  kCoordScooter      = 0x30;
+using facts::kControllerActiveVehicle;
+using facts::kCoordinatorBody;
 constexpr std::uint32_t  kCoordShared       = 0x48;         // TSharedPtr object: +0 target (weak), +8 list, +0x10 num
 constexpr std::uint32_t  kCoordInstant      = 0x11C;        // u8, from the request
 constexpr std::uint32_t  kCoordApplyNow     = 0x11E;        // u8, from the request
@@ -171,13 +169,13 @@ constexpr std::int32_t   kStateIdle = 0, kStateBoarding = 2, kStateRiding = 3, k
 // 1.005 moved these scooter fields by +0x20 (RE-1005-offsets-C.md): SetRider 0x1410E9D1B writes +0x2338 (1.004
 // 0x140DE02C7 +0x2318); FindNearestFreeScooter 0x140F3598D reads +0x233A (1.004 0x140AB2F71 +0x231A);
 // ShouldRideAuto_Vt2F8 0x140E8838D loads MovementSetting from +0x1890 (1.004 0x141258A71 +0x1870).
-constexpr platform::PerBuild<std::uint32_t> kScooterRidden   = {0x2318, 0x2338};  // u8
-constexpr platform::PerBuild<std::uint32_t> kScooterExcluded = {0x231A, 0x233A};  // u8
+using facts::kScooterRidden;
+using facts::kScooterExcluded;
 constexpr platform::PerBuild<std::uint32_t> kScooterSetting  = {0x1870, 0x1890};  // MovementSetting*: +0x394 distance, +0x398 max yaw, +0x39C min power
 constexpr std::uint32_t  kSettingDistance   = 0x394;
 constexpr std::uint32_t  kSettingMaxYaw     = 0x398;
 constexpr std::uint32_t  kSettingMinPower   = 0x39C;
-constexpr std::uint32_t  kControlHolder     = 0x638;        // the character's control holder; its vt+0x40 gives the input component
+using facts::kCharacterControlHolder;
 constexpr std::uint32_t  kHolderComponent   = 0x40;
 constexpr std::uint32_t  kHolderMoveRequest = 0x18;         // FVector: SetMoveInput's dir * scale
 constexpr std::uint32_t  kStateStickX       = 0x10;         // the on-foot state's stick pair (slot 11 TickInput)
@@ -187,8 +185,8 @@ constexpr float          kWarpDistance      = 5000.0f;      // the rental-return
 constexpr float          kNearTarget        = 300.0f;       // the ask's Debug line: player 2's member within 3 m of the mark
 constexpr std::uint32_t  kMeshOwner         = 0xA0;         // a component's owner (the notify's mesh -> the rider)
 constexpr std::uint32_t  kActorRoot         = 0x138;        // an actor's root component (§14.15)
-constexpr std::uint32_t  kAttachParent      = 0xC0;         // a scene component's attach parent
-constexpr std::uint32_t  kFieldOperator     = 0x2CB0;       // PCM: the Field operator
+using facts::kSceneComponentAttachParent;
+using facts::kCameraManagerFieldOperator;
 constexpr std::uint32_t  kOperatorModules   = 0x6E0;        // op: the module slots (16 bytes each)
 constexpr std::uint32_t  kModuleSlot15      = 15 * 16;
 
@@ -359,7 +357,7 @@ bool WarpWouldFire(void* scooter) noexcept
 bool CameraModuleOn(const void* playerTwo) noexcept
 {
     const void* pcm     = ReadPointer(playerTwo, facts::kControllerCameraManager);
-    const void* op      = ReadPointer(pcm, kFieldOperator);
+    const void* op      = ReadPointer(pcm, kCameraManagerFieldOperator);
     const void* modules = ReadPointer(op, kOperatorModules);
     return modules != nullptr && ReadPointer(modules, kModuleSlot15) != nullptr;
 }
@@ -367,7 +365,7 @@ bool CameraModuleOn(const void* playerTwo) noexcept
 /// The actor `actor`'s root is attached to (root +0x138 -> attach parent +0xC0 -> owner +0xA0), or null.
 const void* AttachedTo(const void* actor) noexcept
 {
-    return ReadPointer(ReadPointer(ReadPointer(actor, kActorRoot), kAttachParent), kMeshOwner);
+    return ReadPointer(ReadPointer(ReadPointer(actor, kActorRoot), kSceneComponentAttachParent), kMeshOwner);
 }
 
 const wchar_t* AttachText(const void* actor, const void* scooter) noexcept
@@ -379,7 +377,7 @@ const wchar_t* AttachText(const void* actor, const void* scooter) noexcept
 std::wstring LeaseText(const Ride& ride)
 {
     const void* pawn   = ReadPointer(ride.playerTwo, facts::kControllerPawn);
-    const void* active = ReadPointer(ride.playerTwo, kActiveVehicle);
+    const void* active = ReadPointer(ride.playerTwo, kControllerActiveVehicle);
     const float metres = Between(PlayerOneBody(), ride.scooter);
     return std::format(L"coordinator state {} ({}); member controller {} (effective {}), attached to {}; scooter {} controller {} "
                        L"(effective {}); PC2's pawn {}, active coordinator {}; player 2's camera slot-15 module {}; {} from player 1",
@@ -409,7 +407,7 @@ void LogLine(const wchar_t* prefix, const Ride& ride) noexcept
 /// The scooter's input component: its control holder's getter (+0x638 -> vt+0x40). Null if none.
 const void* InputComponentOf(const void* scooter) noexcept
 {
-    const void* holder = ReadPointer(scooter, kControlHolder);
+    const void* holder = ReadPointer(scooter, kCharacterControlHolder);
     const void* vt     = reinterpret_cast<const void*>(VTableOf(holder));
     const auto  getter = vt != nullptr ? ReadField<GetterFn>(vt, kHolderComponent) : nullptr;
     void*       found  = nullptr;
@@ -429,7 +427,7 @@ bool PlayerTwoHolds(const void* character, const void* playerTwo) noexcept
 /// holder's move request is not zero. False when it is zero (the game's request then carries no stick: no ride).
 bool WorldStick(const void* state, const void* member, float (&stick)[4]) noexcept
 {
-    const void* holder = ReadPointer(member, kControlHolder);
+    const void* holder = ReadPointer(member, kCharacterControlHolder);
     if (holder == nullptr)
     {
         return false;
@@ -849,16 +847,16 @@ bool Install(const platform::GameImage& image) noexcept
     g_fn.isRiding      = reinterpret_cast<IsRidingFn>(find(kIsRiding));
     g_fn.inputBasis    = reinterpret_cast<InputBasisFn>(find(kInputBasis));
     g_fn.lookup        = reinterpret_cast<LookupFn>(find(kLookup));
-    g_fn.getOrCreate   = reinterpret_cast<LookupFn>(find(kGetOrCreate));
+    g_fn.getOrCreate   = reinterpret_cast<LookupFn>(find(kGetOrCreateVehicleCoordinator));
     g_fn.dispatch      = reinterpret_cast<DispatchFn>(find(kDispatch));
     g_fn.begin         = reinterpret_cast<BeginFn>(find(kBegin));
     g_fn.flush         = reinterpret_cast<FlushFn>(find(kFlush));
     g_fn.requestGetOff = reinterpret_cast<RequestGetOffFn>(find(kRequestGetOff));
     g_fn.getOffPrimary = reinterpret_cast<GetOffPrimaryFn>(find(kGetOffPrimary));
     g_fn.coordTick     = reinterpret_cast<CoordTickFn>(find(kCoordTick));
-    g_fn.switchAi      = reinterpret_cast<SwitchAiFn>(find(kSwitchAi));
-    g_coordVt          = rebase(kCoordVt);
-    g_scooterVt        = rebase(kScooterVt);
+    g_fn.switchAi      = reinterpret_cast<SwitchAiFn>(find(kSwitchAiControlAsync));
+    g_coordVt          = rebase(kScooterCoordinatorVTable);
+    g_scooterVt        = rebase(kScooterCharacterVTable);
     g_moveVt           = rebase(kScooterMoveVt);
     for (std::size_t i = 0; i < kForcedSites.size(); ++i)
     {
@@ -988,7 +986,7 @@ void AfterMemberTick(void* playerTwoController, void* member) noexcept
     void* one     = Coordinator(generation::PlayerOneController());
     const std::int32_t oneState = CoordState(one);
     if (!leader_scope::StillNames(asked.weak, scooter) || !Free(scooter) ||
-        (ReadPointer(one, kCoordScooter) == scooter && oneState >= kStateBoarding))
+        (ReadPointer(one, kCoordinatorBody) == scooter && oneState >= kStateBoarding))
     {
         platform::Log(L"wheelie ride: player 2 walked into {}, but it was taken or gone before the boarding", NameOf(scooter));
         return;
@@ -1068,7 +1066,7 @@ void AfterMemberTick(void* playerTwoController, void* member) noexcept
     g_summary.Restart(Clock::now());
     const bool owned   = begun && flushed && g_ride.state == kStateBoarding &&
                        PlayerTwoHolds(scooter, playerTwoController) &&
-                       ReadPointer(playerTwoController, kActiveVehicle) == coordinator &&
+                       ReadPointer(playerTwoController, kControllerActiveVehicle) == coordinator &&
                        VTableOf(ReadPointer(scooter, facts::kCharacterMoveState)) == g_moveVt;
     g_ride.component = owned ? InputComponentOf(scooter) : nullptr;
     g_heldLogged     = nullptr;  // a later refusal (of any scooter) is logged again
@@ -1205,8 +1203,8 @@ bool Tick(void* playerTwoController, void* member, const move_state::EngineTicks
     // The field ticker runs the leader's ride body while it is the primary controller's active ride (§14.5): player 2's
     // scooter is ticked the same way, on the frames the ticker runs, while player 2's controller holds it.
     void*      state16 = ReadPointer(ride.scooter, facts::kCharacterMoveState);
-    const bool holds   = ReadPointer(playerTwoController, kActiveVehicle) == ride.coordinator &&
-                       ReadPointer(ride.coordinator, kCoordScooter) == ride.scooter &&
+    const bool holds   = ReadPointer(playerTwoController, kControllerActiveVehicle) == ride.coordinator &&
+                       ReadPointer(ride.coordinator, kCoordinatorBody) == ride.scooter &&
                        PlayerTwoHolds(ride.scooter, playerTwoController) && VTableOf(state16) == g_moveVt;
     if (!holds)
     {

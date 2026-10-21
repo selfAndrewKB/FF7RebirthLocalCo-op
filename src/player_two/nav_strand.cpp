@@ -2,6 +2,7 @@
 
 #include "dev/dev_switch.h"
 #include "facts/controller.h"
+#include "facts/engine.h"
 #include "facts/party.h"
 #define RC_UNREAL_DISABLE_PROPERTY_DEPRECATION_WARNINGS
 #define RC_UNREAL_DISABLE_CLASS_DEPRECATION_WARNINGS
@@ -109,7 +110,7 @@ constexpr std::uint32_t kStopReasonParked   = 1u << 5;
 // USceneComponent's world transform translation (the location the call site copies, +0x1D0).
 constexpr std::uint32_t kComponentWorldLocation = 0x1D0;
 // USceneComponent::AttachParent (UE4SS's header dump; read null live on a member walking on foot).
-constexpr std::uint32_t kComponentAttachParent = 0xC0;
+using facts::kSceneComponentAttachParent;
 
 // The nav streaming manager (a native singleton) and its current (leader) cell, three floats.
 constexpr std::uintptr_t kNavStreamManagerGlobal = 0x14939BCD8;
@@ -763,7 +764,7 @@ void Tick(bool splitShown) noexcept
                           Places());
             ProbeAi(L"at the warp", true);
             party_warp::Start(member, party_warp::Subject::Member,
-                              ReadPointer(RootOf(member), kComponentAttachParent) != nullptr,
+                              ReadPointer(RootOf(member), kSceneComponentAttachParent) != nullptr,
                               splitShown);  // logs its own outcome
             break;
         case StrandEvent::Ended:
