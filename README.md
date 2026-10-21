@@ -93,7 +93,8 @@ The first build compiles UE4SS and takes a while; later builds only compile this
 its own executable (`tests/<name>_test.cpp`, one `lss_test()` line in `CMakeLists.txt`); the
 `lss_tests` target builds them all, since ctest runs only what is built. `tools/build_locked.ps1
 -Tests` does both under the build lock. One test is a script: `tests/facts_once.py` walks `src/`
-and fails if an engine address is declared in two files (the facts rule).
+and fails if an engine address is declared in two files, or a module checks a function's bytes
+itself instead of declaring a `FunctionFact` and finding it (the facts rule).
 
 The development tools are built in by default: control scripts, the HUD trace, the position probe
 and the dump commands (`src/dev/dev_tools.h`). A player's build leaves them out:
