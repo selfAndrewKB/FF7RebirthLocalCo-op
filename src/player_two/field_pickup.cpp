@@ -17,6 +17,7 @@
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 #include "player_two/object_fields.h"
+#include "player_two/p2_scope.h"
 #include "player_two/pad_buttons.h"
 #include "player_two/pad_sticks.h"
 #include "player_two/party_member.h"
@@ -1126,25 +1127,16 @@ void LogStatus() noexcept
 /// The pass itself, with the scopes open (player 2 in, the copy belongs to `mgr`).
 void Pass(void* mgr, float dt) noexcept
 {
-    void*      member     = generation::Member();
-    const auto memberType = party_member::PlayerTypeOf(member);
-    const auto memberWeak = leader_scope::WeakOf(member);
-    if (!memberType || memberWeak == 0)
+    p2_scope::Args args;
+    if (!p2_scope::FillMember(args, generation::Member()))
     {
         ++g_counts.skips[kSkipMember];
         return;
     }
-    const pad_sticks::StickScope    sticks(pad_sticks::ControllerIdOf(generation::PlayerTwoController()));
-    const primary_controller::Scope primary;
-    if (!sticks.Held() || !primary.Held())
-    {
-        ++g_counts.skips[kSkipScopes];
-        return;
-    }
-    const pad_buttons::ButtonScope      buttons;
-    const leader_scope::LeaderScope     leader(memberWeak);
-    const leader_scope::LeaderTypeScope type(*memberType);
-    if (!buttons.Held() || !leader.Held() || !type.Held())
+    const p2_scope::P2Scope scopes(p2_scope::Sticks | p2_scope::Primary | p2_scope::Buttons | p2_scope::Leader |
+                                       p2_scope::LeaderType,
+                                   args);
+    if (!scopes.Held())
     {
         ++g_counts.skips[kSkipScopes];
         return;

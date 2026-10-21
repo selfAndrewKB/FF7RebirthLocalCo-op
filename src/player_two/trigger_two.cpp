@@ -16,6 +16,7 @@
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 #include "player_two/object_fields.h"
+#include "player_two/p2_scope.h"
 #include "player_two/primary_controller.h"
 #include "player_two/switch_volume_two.h"
 #include "player_two/traversal_watch.h"
@@ -552,14 +553,13 @@ std::uintptr_t Deliver(bool enter, FilterFn original, void* manager, std::uint64
         g_shadow.clear();
         g_shadowOwner = ownerWeak;
     }
-    const leader_scope::LeaderScope leader(memberWeak);
-    const primary_controller::Scope primary;
-    if (!leader.Held() || !primary.Held())
+    p2_scope::Args args;
+    args.memberWeak = memberWeak;
+    const p2_scope::P2Scope scopes(p2_scope::Primary | p2_scope::Leader, args);
+    if (!scopes.Held())
     {
         ++g_counts.refused;
-        LogEvent(enter, actor, passed,
-                 std::format(L"held back: {}", !leader.Held() ? L"the leader scope was refused"
-                                                              : primary_controller::Describe(primary.Why())));
+        LogEvent(enter, actor, passed, std::format(L"held back: a scope was refused ({})", scopes.Refusal()));
         return 0;
     }
     // A nested delivery would take the outer call's swapped-in shadow for player 1's flag and restore it [ASSUMPTION

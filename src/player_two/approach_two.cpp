@@ -7,6 +7,7 @@
 #include "platform/log.h"
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
+#include "player_two/p2_scope.h"
 #include "player_two/pad_sticks.h"
 #include "player_two/primary_controller.h"
 
@@ -134,6 +135,25 @@ void Note(Who who, const wchar_t* site, bool passed, int before, bool scoped, fl
                        scoped ? L"" : L" (the stick scope was refused: the merged stick)");
 }
 
+/// The check's scopes: the player's pad's sticks and, for player 2, the primary controller (the camera manager getter
+/// answers player 2's, the lock is theirs). The check runs with whatever opened; Scoped says whether all of it did.
+unsigned ScopesOf(Who who) noexcept
+{
+    return who == Who::Two ? p2_scope::Sticks | p2_scope::Primary : p2_scope::Sticks;
+}
+
+p2_scope::Args ArgsOf(Who who) noexcept
+{
+    p2_scope::Args args;
+    args.padId = PadOf(who);
+    return args;
+}
+
+bool Scoped(Who who, const p2_scope::P2Scope& scopes) noexcept
+{
+    return scopes.Holds<p2_scope::SticksPart>() && (who != Who::Two || scopes.Holds<p2_scope::PrimaryPart>());
+}
+
 template <std::size_t Index>
 bool DirCheck(void* character, const void* endTransform, void* outPoint, float forward, float back, float radius,
               float slack, float lift, float angle) noexcept
@@ -153,18 +173,9 @@ bool DirCheck(void* character, const void* endTransform, void* outPoint, float f
     bool passed = false;
     bool scoped = false;
     {
-        const pad_sticks::StickScope sticks(PadOf(who));
-        if (who == Who::Two)
-        {
-            const primary_controller::Scope primary;  // the camera manager getter answers player 2's, the lock is theirs
-            scoped = sticks.Held() && primary.Held();
-            passed = original(character, endTransform, outPoint, forward, back, radius, slack, lift, angle);
-        }
-        else
-        {
-            scoped = sticks.Held();
-            passed = original(character, endTransform, outPoint, forward, back, radius, slack, lift, angle);
-        }
+        const p2_scope::P2Scope scopes(ScopesOf(who), ScopesOf(who), ArgsOf(who));
+        scoped = Scoped(who, scopes);
+        passed = original(character, endTransform, outPoint, forward, back, radius, slack, lift, angle);
     }
     if (logs)
     {
@@ -184,18 +195,9 @@ bool BeamCheck(void* character, void* a2, void* a3, void* a4, void* a5, void* a6
     bool passed = false;
     bool scoped = false;
     {
-        const pad_sticks::StickScope sticks(PadOf(who));
-        if (who == Who::Two)
-        {
-            const primary_controller::Scope primary;
-            scoped = sticks.Held() && primary.Held();
-            passed = original(character, a2, a3, a4, a5, a6);
-        }
-        else
-        {
-            scoped = sticks.Held();
-            passed = original(character, a2, a3, a4, a5, a6);
-        }
+        const p2_scope::P2Scope scopes(ScopesOf(who), ScopesOf(who), ArgsOf(who));
+        scoped = Scoped(who, scopes);
+        passed = original(character, a2, a3, a4, a5, a6);
     }
     if (platform::Enabled(platform::Level::Debug))
     {

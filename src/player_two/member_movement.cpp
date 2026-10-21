@@ -21,6 +21,7 @@
 #include "player_two/generation.h"
 #include "player_two/move_state.h"
 #include "player_two/object_fields.h"
+#include "player_two/p2_scope.h"
 #include "player_two/pad_buttons.h"
 #include "player_two/pad_sticks.h"
 #include "player_two/party_member.h"
@@ -211,15 +212,17 @@ void ClearFieldActionRows(void* state) noexcept
 /// Ticks the member's state inside every scope, or not at all.
 void TickInScopes(void* playerTwoController, void* member, void* state, int type, float deltaTime) noexcept
 {
-    const pad_sticks::StickScope    sticks(pad_sticks::ControllerIdOf(playerTwoController));
-    const primary_controller::Scope primary;
-    if (!sticks.Held() || !primary.Held())
+    // Pad 2's sticks and player 2 as the primary controller, or no tick; player 2's own buttons (sprint, dodge,
+    // field actions) and, in battle, the target system's fields as player 2's.
+    p2_scope::Args args;
+    args.padId = pad_sticks::ControllerIdOf(playerTwoController);
+    const p2_scope::P2Scope scopes(p2_scope::Sticks | p2_scope::Primary | p2_scope::Buttons | p2_scope::Targets,
+                                   p2_scope::Buttons | p2_scope::Targets, args);
+    if (!scopes.Held())
     {
         g_counters.Refuse();
         return;
     }
-    const pad_buttons::ButtonScope   buttons;  // player 2's own buttons (sprint, dodge, field actions)
-    const lock_on::TargetScope       targets;  // in battle, the target system's fields player 2's own
     const LeaderAnswer               leader(type);
     const move_state::OwnTick        own;
     const scope_leaks::MemberTickScope leaks(state, playerTwoController, deltaTime);
@@ -403,14 +406,15 @@ RideTick TickRide(void* playerTwoController, void* member, void* state, const vo
     {
         return RideTick::Refused;
     }
-    const pad_sticks::StickScope    sticks(pad_sticks::ControllerIdOf(playerTwoController));
-    const primary_controller::Scope primary;
-    if (!sticks.Held() || !primary.Held())
+    p2_scope::Args args;
+    args.padId      = pad_sticks::ControllerIdOf(playerTwoController);
+    args.withoutKey = withoutKey;
+    const p2_scope::P2Scope scopes(p2_scope::Sticks | p2_scope::Primary | p2_scope::Buttons, p2_scope::Buttons, args);
+    if (!scopes.Held())
     {
         g_counters.Refuse();
         return RideTick::Refused;
     }
-    const pad_buttons::ButtonScope     buttons(withoutKey);
     const LeaderAnswer                 leader(type, component);
     const move_state::OwnTick          own;
     const scope_leaks::MemberTickScope leaks(state, playerTwoController, deltaTime);

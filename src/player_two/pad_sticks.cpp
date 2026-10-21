@@ -9,6 +9,7 @@
 #include "platform/vtable_entry.h"
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
+#include "player_two/p2_scope.h"
 #include "player_two/pad_buttons.h"
 #include "player_two/primary_controller.h"
 #include "player_two/scope_leaks.h"
@@ -77,17 +78,15 @@ void ProcessPlayerInput(void* controller, float deltaTime, bool gamePaused)
         g_engineProcessInput(controller, deltaTime, gamePaused);
         return;
     }
-    const StickScope sticks(ControllerIdOf(controller));
-    if (!isTwo)
-    {
-        sticks.Held() ? g_inputCounters.Act() : g_inputCounters.Refuse();
-        g_engineProcessInput(controller, deltaTime, gamePaused);
-        return;
-    }
-    // Player 2's input also sends camera events to "the primary" camera manager.
-    const primary_controller::Scope primary;
-    const pad_buttons::ButtonScope  buttons;  // player 2's own buttons (ResetCamera)
-    sticks.Held() && primary.Held() ? g_inputCounters.Act() : g_inputCounters.Refuse();
+    // The pad's own sticks; for player 2 also the primary controller (player 2's input sends camera events to "the
+    // primary" camera manager) and pad 2's own buttons (ResetCamera). The call runs with whatever opened; a refused
+    // stick or primary scope is counted.
+    p2_scope::Args args;
+    args.padId = ControllerIdOf(controller);
+    const unsigned          which = isTwo ? p2_scope::Sticks | p2_scope::Primary | p2_scope::Buttons : p2_scope::Sticks;
+    const p2_scope::P2Scope scopes(which, which, args);
+    const bool acted = scopes.Holds<p2_scope::SticksPart>() && (!isTwo || scopes.Holds<p2_scope::PrimaryPart>());
+    acted ? g_inputCounters.Act() : g_inputCounters.Refuse();
     g_engineProcessInput(controller, deltaTime, gamePaused);
 }
 
