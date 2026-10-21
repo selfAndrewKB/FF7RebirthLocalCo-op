@@ -122,7 +122,6 @@ add_library(LocalSplitScreen SHARED
     src/player_two/main_camera_shape.cpp
     src/player_two/command_locks.cpp
     src/player_two/battle_warp_two.cpp
-    src/player_two/target_census.cpp
     src/player_two/equal_targeting.cpp
     src/player_two/player_hits.cpp
     src/player_two/leader_reads.cpp
@@ -212,6 +211,7 @@ if(LSS_DEV_TOOLS)
         src/player_two/ride_watch.cpp
         src/player_two/rumble_watch.cpp
         src/player_two/tag_counts.cpp
+        src/player_two/target_census.cpp
         src/player_two/wheelie_watch.cpp
         src/renderer/submission_census.cpp
     )

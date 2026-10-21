@@ -5,6 +5,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "platform/vtable_entry.h"
 #include "player_two/engine_facts.h"
 #include "player_two/generation.h"
 #include "player_two/member_movement.h"
@@ -27,6 +28,13 @@ namespace {
 // 16-byte block (1.005: inside one). The target is checked by the redirect itself (the site must call it).
 constexpr std::uintptr_t kLeaderTypeCall = 0x140FA5E1F;
 constexpr std::uintptr_t kLeaderType     = 0x1408070C4;
+
+// The Condition select, bool(selector, u8 reason, UObject** out), in its vtable's slot +0x88 (the out is written on
+// every path; 0 keeps the current target). RE §8, S-TGTCENSUS; 1.005 through replaced-target-census.json.
+constexpr std::uint8_t kCondSelectBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x55, 0x56, 0x57,
+                                             0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57};
+constexpr platform::SlotFact kCondSelect{L"the Condition target selector's select slot (vt+0x88)", 0x14580C260,
+                                         {L"CondTargetSel_Select_Vt88", 0x140FA5230, kCondSelectBytes}};
 
 // Called, not hooked: the game's own rule for a candidate, as BuildCandidates applies it to each player type.
 constexpr std::uint8_t kCharacterByTypeBytes[] = {0x4C, 0x8B, 0x05, 0xA5, 0xA6, 0x96, 0x08, 0x44,
@@ -52,12 +60,14 @@ using ValidTargetFn     = std::uint8_t (*)(void* selector, void* character, std:
 
 // Set once at install.
 platform::CallRedirect g_leaderTypeCall;
+platform::VTableEntry  g_condSelect;
 CharacterByTypeFn      g_characterByType = nullptr;
 ValidTargetFn          g_validTarget     = nullptr;
 std::uintptr_t         g_partyManager    = 0;      // the pointer global's live address
 bool                   g_crossing        = false;  // the call crosses a block: never restored
 
-std::atomic<bool> g_on{false};
+std::atomic<bool>           g_on{false};
+std::atomic<SelectObserver> g_observer{nullptr};
 // Both players' types, written once per frame on the game thread: player 1's (the leader type) in bits 0-7, player
 // 2's member's in bits 8-15; kNoTypes without player 2's member.
 std::atomic<std::uint32_t> g_types{kNoTypes};
@@ -136,8 +146,8 @@ Answer AnswerFor(void* selector) noexcept
 /// leader test (kNoType: none). Both are put back in the __finally, which also runs when a structured exception
 /// unwinds through here (destructors would not, under /EHsc), so a thread never keeps a stale answer. No object here
 /// needs unwinding (the __try rule).
-std::uint64_t CallHolding(SelectFn select, std::uint64_t selector, std::uint64_t reason, std::uint64_t out,
-                          std::uint64_t d, Answer* answer, int onlyType) noexcept
+std::uint64_t CallHolding(Fn select, std::uint64_t selector, std::uint64_t reason, std::uint64_t out, std::uint64_t d,
+                          Answer* answer, int onlyType) noexcept
 {
     // Both set unconditionally: an untouched select nested in an answered one must not inherit the outer's leader test.
     Answer* const outer     = t_answer;
@@ -152,6 +162,20 @@ std::uint64_t CallHolding(SelectFn select, std::uint64_t selector, std::uint64_t
     {
         t_answer = outer;
         member_movement::ExchangeThreadOnlyLeader(outerOnly);
+    }
+    return result;
+}
+
+/// The Condition select's slot: the game's select with who it counts as the UCPC answered on this thread, for that
+/// call only; then the observer hears what was answered. Any thread.
+std::uint64_t CondSelect(std::uint64_t selector, std::uint64_t reason, std::uint64_t out, std::uint64_t d) noexcept
+{
+    Answer     answer = AnswerFor(reinterpret_cast<void*>(selector));
+    const auto result = CallHolding(reinterpret_cast<Fn>(g_condSelect.Original()), selector, reason, out, d, &answer,
+                                    answer.choice.ucpc == ucpc_choice::Ucpc::Untouched ? kNoType : answer.type);
+    if (const SelectObserver observer = g_observer.load(std::memory_order_relaxed); observer != nullptr)
+    {
+        observer(reinterpret_cast<void*>(selector), reason, out, result, answer);
     }
     return result;
 }
@@ -190,6 +214,18 @@ bool Install(const platform::GameImage& image) noexcept
                       L"own answer");
         return false;
     }
+    // The select slot: the one place the answer is held. Without it the leader-type redirect passes through (no
+    // answer is ever on a thread).
+    if (!platform::ReplaceSlot(image, kCondSelect, reinterpret_cast<std::uintptr_t>(&CondSelect), g_condSelect))
+    {
+        platform::Log(L"equal targeting: UNAVAILABLE (the Condition select's slot differs); Condition enemies keep the "
+                      L"game's own answer");
+        if (!g_crossing)
+        {
+            g_leaderTypeCall.Restore();
+        }
+        return false;
+    }
     g_coin.store(static_cast<std::uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count()),
                  std::memory_order_relaxed);
     g_on.store(true, std::memory_order_release);
@@ -201,6 +237,12 @@ bool Install(const platform::GameImage& image) noexcept
 void Remove() noexcept
 {
     g_on.store(false, std::memory_order_release);  // every select from now on keeps the game's own answer
+    g_observer.store(nullptr, std::memory_order_relaxed);
+    if (g_condSelect.Original() != 0 && !g_condSelect.Restore())
+    {
+        platform::Log(L"equal targeting: the Condition select's slot was changed after us; left in place (it passes "
+                      L"through)");
+    }
     if (!g_leaderTypeCall.IsInstalled())
     {
         return;
@@ -257,12 +299,9 @@ void Tick() noexcept
     }
 }
 
-std::uint64_t RunSelect(SelectFn select, std::uint64_t selector, std::uint64_t reason, std::uint64_t out,
-                        std::uint64_t d, Answer& answer) noexcept
+void SetSelectObserver(SelectObserver observer) noexcept
 {
-    answer = AnswerFor(reinterpret_cast<void*>(selector));
-    return CallHolding(select, selector, reason, out, d, &answer,
-                       answer.choice.ucpc == ucpc_choice::Ucpc::Untouched ? kNoType : answer.type);
+    g_observer.store(observer, std::memory_order_relaxed);
 }
 
 std::optional<PlayerTypes> Types() noexcept

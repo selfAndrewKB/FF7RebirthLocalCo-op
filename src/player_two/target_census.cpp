@@ -47,7 +47,8 @@ constexpr std::uintptr_t kDecide      = 0x1407FEB68;
 constexpr std::size_t    kDecideFirst = 5;
 
 // Each kind's select, bool(selector, u8 reason, UObject** out), in its vtable's slot +0x88 (the out is written on
-// every path; 0 from the Condition kind keeps the current target).
+// every path; 0 from the Condition kind keeps the current target). The Condition kind's slot is player_two/
+// equal_targeting's (it holds the answer there and tells this census); the Hate and None slots are watched here.
 constexpr std::uint8_t kHateSelectBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x55, 0x56, 0x57,
                                              0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57};
 constexpr std::uint8_t kCondSelectBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x55, 0x56, 0x57,
@@ -64,13 +65,13 @@ enum class Kind : std::uint8_t
     Unknown,
 };
 constexpr const wchar_t* kKindNames[] = {L"Hate", L"Condition", L"None", L"unknown"};
-constexpr std::size_t    kKinds       = 3;  // the hooked kinds
+constexpr std::size_t    kKinds       = 3;  // the kinds told apart
 
 constexpr platform::SlotFact kSelectSlots[kKinds] = {
     {L"the Hate target selector's select slot (vt+0x88)", 0x145CB40B0,
      {L"HateTargetSel_Select_Vt88", 0x140FA729C, kHateSelectBytes}},
     {L"the Condition target selector's select slot (vt+0x88)", 0x14580C260,
-     {L"CondTargetSel_Select_Vt88", 0x140FA5230, kCondSelectBytes}},
+     {L"CondTargetSel_Select_Vt88", 0x140FA5230, kCondSelectBytes}},  // its vtable only: the slot is equal_targeting's
     {L"the None target selector's select slot (vt+0x88)", 0x14580C318,
      {L"NoneTargetSel_Select_Vt88", 0x140CBA0C8, kNoneSelectBytes}},
 };
@@ -81,13 +82,6 @@ constexpr std::uint8_t kExclusionBytes[] = {0x45, 0x33, 0xD2, 0x45, 0x33, 0xC9, 
                                             0x78, 0x10, 0x00, 0x49, 0x8B, 0xC0, 0x49, 0x0F};
 constexpr platform::FunctionFact kExclusion{L"CondTargetSel_ApplyExclusion", 0x140FA5FE0, kExclusionBytes};
 constexpr std::uintptr_t         kExclusionCall = 0x140FA5570;
-
-// Lock groups: bool Pick(group*, FWeakObjectPtr* out), from the battle tick's re-pick and the Blueprint registration.
-constexpr std::uint8_t kPickBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 0x56, 0x57,
-                                       0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57};
-constexpr platform::FunctionFact kPick{L"LockGroup_PickTarget_PrioritizeUCPC", 0x1431EB200, kPickBytes};
-constexpr std::uintptr_t         kRepickCall   = 0x14295F387;  // in LockGroups_TickPruneAndRepick
-constexpr std::uintptr_t         kRegisterCall = 0x143E42D05;  // in execRegisterTargetLockGroup
 
 // Called, not hooked: the player type hate is credited to (u8; 14 guest, 16 none), and the target the enemy's control
 // component holds, which is what ApplyTarget wrote (after the Cait Sith decoy).
@@ -139,7 +133,7 @@ using HateTypeFn = std::uint8_t (*)(void* character);
 using AppliedFn  = void* (*)(void* controller);
 
 // Set once at install.
-platform::CallRedirect  g_createCall, g_exclusionCall, g_repickCall, g_registerCall;
+platform::CallRedirect  g_createCall, g_exclusionCall;
 platform::EntryRedirect g_decide;
 platform::VTableEntry   g_selectSlots[kKinds];
 std::uintptr_t          g_vtables[kKinds]{};  // each kind's live vtable (its select slot - 0x88)
@@ -463,43 +457,46 @@ void LogHateTable(const void* selector) noexcept
     platform::LogTrace(L"target census: hate table (type:hate, ! flagged):{}", table.empty() ? L" none engaged" : table);
 }
 
+/// What a select reported, into the decision's frame (if one is open for the selector on this thread).
+void NoteSelect(void* selector, Kind kind, std::uint64_t out, std::uint64_t result) noexcept
+{
+    if (Frame* const frame = FrameFor(selector); frame != nullptr)
+    {
+        frame->kind         = kind;
+        frame->selected     = true;
+        frame->selectResult = static_cast<std::uint8_t>(result);
+        frame->selectOut    = out != 0 ? ReadPointer(reinterpret_cast<const void*>(out), 0) : nullptr;
+    }
+}
+
+/// The Hate and None selects' slots: the game's select, passed through, and what it reported.
 template <Kind K>
 std::uint64_t Select(std::uint64_t selector, std::uint64_t reason, std::uint64_t out, std::uint64_t d) noexcept
 {
-    auto* const self  = reinterpret_cast<void*>(selector);
-    Frame*      frame = FrameFor(self);
+    auto* const self     = reinterpret_cast<void*>(selector);
     const auto  original = reinterpret_cast<Fn>(g_selectSlots[static_cast<std::size_t>(K)].Original());
     if constexpr (K == Kind::Hate)
     {
         LogHateTable(self);
     }
-    std::uint64_t result = 0;
-    if constexpr (K == Kind::Condition)
-    {
-        // Who this select counts as the UCPC (player_two/equal_targeting), held for the game's select only.
-        equal_targeting::Answer ucpc;
-        result = equal_targeting::RunSelect(original, selector, reason, out, d, ucpc);
-        if (ucpc.read)
-        {
-            Count(g_tally.ucpc[static_cast<std::size_t>(ucpc.choice.ucpc)][static_cast<std::size_t>(ucpc.choice.why)]);
-        }
-        if (frame != nullptr)
-        {
-            frame->ucpc = ucpc;
-        }
-    }
-    else
-    {
-        result = original(selector, reason, out, d);
-    }
-    if (frame != nullptr)
-    {
-        frame->kind         = K;
-        frame->selected     = true;
-        frame->selectResult = static_cast<std::uint8_t>(result);
-        frame->selectOut    = out != 0 ? ReadPointer(reinterpret_cast<const void*>(out), 0) : nullptr;
-    }
+    const std::uint64_t result = original(selector, reason, out, d);
+    NoteSelect(self, K, out, result);
     return result;
+}
+
+/// The Condition select, as equal_targeting ran it: who it counted as the UCPC, held for the game's select only.
+void OnConditionSelect(void* selector, std::uint64_t, std::uint64_t out, std::uint64_t result,
+                       const equal_targeting::Answer& ucpc) noexcept
+{
+    if (ucpc.read)
+    {
+        Count(g_tally.ucpc[static_cast<std::size_t>(ucpc.choice.ucpc)][static_cast<std::size_t>(ucpc.choice.why)]);
+    }
+    if (Frame* const frame = FrameFor(selector); frame != nullptr)
+    {
+        frame->ucpc = ucpc;
+    }
+    NoteSelect(selector, Kind::Condition, out, result);
 }
 
 /// The Condition select's draw: the element whose exclusions narrow the candidates.
@@ -652,16 +649,13 @@ std::uint64_t Decide(std::uint64_t selector, std::uint64_t reason, std::uint64_t
 
 // ---- Lock groups ----
 
-template <platform::CallRedirect& Call>
-std::uint64_t Pick(std::uint64_t group, std::uint64_t out, std::uint64_t c, std::uint64_t d) noexcept
+/// A lock-group pick, as lock_group_coin ran it (the picking enemy's coin named "the player"): the result logged.
+void OnPick(const void* group, std::uint64_t result, std::uint64_t out, bool first) noexcept
 {
-    // The pick itself runs through lock_group_coin (the picking enemy's coin names "the player"); this logs the result.
-    const auto result = lock_group_coin::Pick(reinterpret_cast<Fn>(Call.Original()), group, out, c, d,
-                                              &Call == &g_registerCall);
-    const auto* self  = reinterpret_cast<const std::byte*>(group);
+    const auto* self = static_cast<const std::byte*>(group);
     if (self == nullptr || (result & 0xFF) == 0)
     {
-        return result;
+        return;
     }
     void*       picked      = out != 0 ? leader_scope::ObjectAt(reinterpret_cast<const void*>(out)) : nullptr;
     const Whose whose       = WhoseIs(picked, Weak(PartyManager(), kPartyLeader));
@@ -676,12 +670,11 @@ std::uint64_t Pick(std::uint64_t group, std::uint64_t out, std::uint64_t c, std:
         platform::LogDebug(L"target census: lock group {} ({}; prioritise the UCPC {}, {} member(s), at most {} each, "
                            L"strong lock {}) picked {} (type {}); thread {}",
                            players::unreal::NameText(ReadField<std::uint64_t>(self + kGroupName, 0)),
-                           &Call == &g_repickCall ? L"re-pick" : L"first pick", YesNo(prioritized),
+                           first ? L"first pick" : L"re-pick", YesNo(prioritized),
                            ReadField<std::int32_t>(self, kGroupMembersNum), ReadField<std::int32_t>(self, kGroupMaxEach),
                            ReadField<std::uint8_t>(self, kGroupStrong), kWhoseNames[static_cast<std::size_t>(whose)],
                            TypeOf(picked), GetCurrentThreadId());
     }
-    return result;
 }
 
 bool Redirect(const platform::GameImage& image, platform::CallRedirect& call, std::uintptr_t site,
@@ -702,49 +695,51 @@ void Install(const platform::GameImage& image) noexcept
     g_applied          = reinterpret_cast<AppliedFn>(find(kApplied));
     if (g_partyManager == 0 || g_hateType == nullptr || g_applied == nullptr || !leader_scope::Install(image))
     {
-        platform::Log(L"target census: UNAVAILABLE (a check failed); Condition enemies keep the game's own UCPC");
+        platform::Log(L"target census: UNAVAILABLE (a check failed); enemies' targeting is not logged");
         return;
     }
-    // The selects first, the decision last: a decision never runs before the selects can report to it.
+    // The selects first, the decision last: a decision never runs before the selects can report to it. The Condition
+    // kind's vtable is read for KindOf; its slot is equal_targeting's, which reports through the observer.
     std::size_t selects = 0;
     for (std::size_t i = 0; i < kKinds; ++i)
     {
-        static constexpr Fn kSelects[kKinds] = {&Select<Kind::Hate>, &Select<Kind::Condition>, &Select<Kind::None>};
+        static constexpr Fn kSelects[kKinds] = {&Select<Kind::Hate>, nullptr, &Select<Kind::None>};
         const auto slot = image.Rebase(kSelectSlots[i].slot, sizeof(void*));
-        if (slot && platform::ReplaceSlot(image, kSelectSlots[i], reinterpret_cast<std::uintptr_t>(kSelects[i]), g_selectSlots[i]))
+        if (!slot)
         {
-            g_vtables[i] = *slot - kSelectSlot;
+            continue;
+        }
+        g_vtables[i] = *slot - kSelectSlot;
+        if (kSelects[i] != nullptr &&
+            platform::ReplaceSlot(image, kSelectSlots[i], reinterpret_cast<std::uintptr_t>(kSelects[i]), g_selectSlots[i]))
+        {
             ++selects;
         }
     }
+    equal_targeting::SetSelectObserver(&OnConditionSelect);
+    lock_group_coin::SetPickObserver(&OnPick);
     const bool draws    = Redirect(image, g_exclusionCall, kExclusionCall, find(kExclusion), &Exclusion);
-    const auto pick     = find(kPick);
-    const bool repicks  = Redirect(image, g_repickCall, kRepickCall, pick, &Pick<g_repickCall>);
-    const bool firsts   = Redirect(image, g_registerCall, kRegisterCall, pick, &Pick<g_registerCall>);
     const bool creation = Redirect(image, g_createCall, kCreateCall, find(kCreate), &Create);
     const auto decide   = image.Rebase(kDecide);
     const bool decisions =
         decide && image.BytesMatch(kDecide, kDecideBytes) &&
         g_decide.Install(*decide, image.EntryInstruction(kDecide, std::span(kDecideBytes).first(kDecideFirst)),
                          reinterpret_cast<std::uintptr_t>(&Decide));
-    // The Condition select's slot is the one place the equal-targeting answer is held (player_two/equal_targeting).
-    const bool equal =
-        g_selectSlots[static_cast<std::size_t>(Kind::Condition)].Original() != 0 && equal_targeting::Installed();
-    platform::Log(L"target census: decisions {}, selects {} of 3, Condition draws {}, lock-group picks {}, new selectors "
-                  L"{}; Condition selects {}",
+    platform::Log(L"target census: decisions {}, Hate and None selects {} of 2, Condition draws {}, new selectors {}; the "
+                  L"Condition selects and the lock-group picks reported by their owners",
                   decisions ? L"watched" : L"NOT watched", selects, draws ? L"watched" : L"NOT watched",
-                  repicks && firsts ? L"watched" : (repicks || firsts ? L"partly watched" : L"NOT watched"),
-                  creation ? L"watched" : L"NOT watched",
-                  equal ? L"hold the equal-targeting answer" : L"keep the game's own UCPC (equal targeting NOT held)");
+                  creation ? L"watched" : L"NOT watched");
 }
 
 void Remove() noexcept
 {
+    equal_targeting::SetSelectObserver(nullptr);
+    lock_group_coin::SetPickObserver(nullptr);
     if (g_decide.IsInstalled() && !g_decide.Restore())
     {
         platform::Log(L"target census: the decision's entry was changed after us; left in place (it passes through)");
     }
-    for (auto* call : {&g_createCall, &g_registerCall, &g_repickCall, &g_exclusionCall})
+    for (auto* call : {&g_createCall, &g_exclusionCall})
     {
         if (call->IsInstalled() && !call->Restore())
         {

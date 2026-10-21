@@ -31,6 +31,13 @@ constexpr std::uintptr_t kCountLeaderCall = 0x1431DFC57;  // in LockGroup_CountL
 // call crosses a block in both builds).
 constexpr std::uintptr_t kRebalanceCall = 0x14295F34C;  // in LockGroups_TickPruneAndRepick
 constexpr std::uintptr_t kRebalance     = 0x1431DAD5C;  // LockGroup_RebalanceLevelLocks
+// The pick, bool Pick(group*, FWeakObjectPtr* out), from the battle tick's re-pick and the Blueprint registration
+// (RE §8, S-TGTCENSUS; both sites fit one 16-byte block in both builds).
+constexpr std::uint8_t kPickBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 0x56, 0x57,
+                                       0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57};
+constexpr platform::FunctionFact kPick{L"LockGroup_PickTarget_PrioritizeUCPC", 0x1431EB200, kPickBytes};
+constexpr std::uintptr_t         kRepickCall   = 0x14295F387;  // in LockGroups_TickPruneAndRepick
+constexpr std::uintptr_t         kRegisterCall = 0x143E42D05;  // in execRegisterTargetLockGroup
 
 // Lock group (a TMap value, both builds): +0 TArray<member, 20 B> {data, num}; member +0 FWeakObjectPtr enemy,
 // +8 FWeakObjectPtr target (none: no lock); +0x24 u8 bPrioritizeUCPC.
@@ -42,10 +49,11 @@ using CallFn    = std::uint64_t (*)(std::uint64_t, std::uint64_t, std::uint64_t,
 using ResolveFn = void* (*)();
 
 // Set once at install.
-platform::CallRedirect g_pickLeader, g_countLeader, g_rebalance;
+platform::CallRedirect g_repickCall, g_registerCall, g_pickLeader, g_countLeader, g_rebalance;
 ResolveFn              g_resolveLeader = nullptr;  // ResolvePartyLeaderWeakPtr: player 1's character
 
-std::atomic<bool> g_on{false};
+std::atomic<bool>         g_on{false};
+std::atomic<PickObserver> g_observer{nullptr};
 
 // The character the two leader reads answer on this thread while one is held, else null (the game's leader).
 thread_local const void* t_player = nullptr;
@@ -150,58 +158,9 @@ std::uint64_t Rebalance(std::uint64_t group, std::uint64_t b, std::uint64_t c, s
     return CallHolding(original, two, group, b, c, d);
 }
 
-}  // namespace
-
-bool Install(const platform::GameImage& image) noexcept
-{
-    const auto resolver      = platform::FindFunction(image, facts::kResolvePartyLeader);
-    const auto rebalance     = image.Rebase(kRebalance);
-    const auto pickSite      = image.Rebase(kPickLeaderCall, 5);
-    const auto countSite     = image.Rebase(kCountLeaderCall, 5);
-    const auto rebalanceSite = image.Rebase(kRebalanceCall, 5);
-    if (!resolver || !rebalance || !pickSite || !countSite || !rebalanceSite || !leader_scope::Install(image))
-    {
-        platform::Log(L"lock group coin: UNAVAILABLE (a function or call site was not found); lock groups prefer "
-                      L"player 1");
-        return false;
-    }
-    g_resolveLeader = reinterpret_cast<ResolveFn>(*resolver);
-    // The three together or none: a pick naming player 2 without the rebalance's answer would let the game release and
-    // re-pick the group's locks every frame (RE §18.7.3). on_unreal_init: no battle yet, so no thread can be at the
-    // two crossing calls (InstallFromOwnThread's rule; a reload of the mod in the middle of a battle would break it, as
-    // for the sibling modules' crossing calls).
-    const bool picks =
-        g_pickLeader.Install(*pickSite, *resolver, reinterpret_cast<std::uintptr_t>(&LeaderRead<g_pickLeader>));
-    const bool counts = picks && g_countLeader.InstallFromOwnThread(
-                                     *countSite, *resolver, reinterpret_cast<std::uintptr_t>(&LeaderRead<g_countLeader>));
-    const bool rebalances =
-        counts && g_rebalance.InstallFromOwnThread(*rebalanceSite, *rebalance, reinterpret_cast<std::uintptr_t>(&Rebalance));
-    if (!rebalances)
-    {
-        // Whatever was placed passes through (no answer is ever held while off).
-        platform::Log(L"lock group coin: UNAVAILABLE (the {} call differs); lock groups prefer player 1",
-                      !picks ? L"pick's leader" : (!counts ? L"lock count's leader" : L"rebalance"));
-        return false;
-    }
-    g_on.store(true, std::memory_order_release);
-    platform::Log(L"lock group coin: lock groups that prefer the player prefer player 1 or player 2 by each enemy's "
-                  L"coin at its pick; the rebalance respreads only when neither player holds a lock");
-    return true;
-}
-
-void Remove() noexcept
-{
-    g_on.store(false, std::memory_order_release);  // from now on no answer is held: every call passes through
-    g_heldGroups.Clear();
-    if (g_pickLeader.IsInstalled() && !g_pickLeader.Restore())
-    {
-        platform::Log(L"lock group coin: the pick's leader call was changed after us; left in place (it passes through)");
-    }
-    // The lock count's read (on 1.005) and the rebalance call cross a block: put back only from the one thread that can
-    // run them, which unloading is not; they pass through once off.
-}
-
-std::uint64_t Pick(PickFn pick, std::uint64_t group, std::uint64_t out, std::uint64_t c, std::uint64_t d,
+/// One lock-group pick through the game's `pick`, with the picking enemy's coin naming "the player". `first`: the
+/// registration's first pick (else the battle tick's re-pick), for the log. Off or without player 2: `pick` once.
+std::uint64_t Pick(CallFn pick, std::uint64_t group, std::uint64_t out, std::uint64_t c, std::uint64_t d,
                    bool first) noexcept
 {
     const auto* const self = reinterpret_cast<const void*>(group);
@@ -249,6 +208,85 @@ std::uint64_t Pick(PickFn pick, std::uint64_t group, std::uint64_t out, std::uin
                        L"term (player 1) decides",
                        PickText(first), reinterpret_cast<std::uintptr_t>(enemy));
     return pick(group, out, c, d);
+}
+
+/// One of the two pick call sites: the pick with the coin, then the observer.
+template <platform::CallRedirect& Call, bool First>
+std::uint64_t PickCall(std::uint64_t group, std::uint64_t out, std::uint64_t c, std::uint64_t d) noexcept
+{
+    const auto result = Pick(reinterpret_cast<CallFn>(Call.Original()), group, out, c, d, First);
+    if (const PickObserver observer = g_observer.load(std::memory_order_relaxed); observer != nullptr)
+    {
+        observer(reinterpret_cast<const void*>(group), result, out, First);
+    }
+    return result;
+}
+
+}  // namespace
+
+bool Install(const platform::GameImage& image) noexcept
+{
+    const auto resolver      = platform::FindFunction(image, facts::kResolvePartyLeader);
+    const auto rebalance     = image.Rebase(kRebalance);
+    const auto pick          = platform::FindFunction(image, kPick);
+    const auto repickSite    = image.Rebase(kRepickCall, 5);
+    const auto registerSite  = image.Rebase(kRegisterCall, 5);
+    const auto pickSite      = image.Rebase(kPickLeaderCall, 5);
+    const auto countSite     = image.Rebase(kCountLeaderCall, 5);
+    const auto rebalanceSite = image.Rebase(kRebalanceCall, 5);
+    if (!resolver || !rebalance || !pick || !repickSite || !registerSite || !pickSite || !countSite || !rebalanceSite ||
+        !leader_scope::Install(image))
+    {
+        platform::Log(L"lock group coin: UNAVAILABLE (a function or call site was not found); lock groups prefer "
+                      L"player 1");
+        return false;
+    }
+    g_resolveLeader = reinterpret_cast<ResolveFn>(*resolver);
+    // All five together or none: a pick naming player 2 without the rebalance's answer would let the game release and
+    // re-pick the group's locks every frame (RE §18.7.3), and the coin acts only through the two pick calls.
+    // on_unreal_init: no battle yet, so no thread can be at the two crossing calls (InstallFromOwnThread's rule; a
+    // reload of the mod in the middle of a battle would break it, as for the sibling modules' crossing calls).
+    const bool pickCalls =
+        g_repickCall.Install(*repickSite, *pick, reinterpret_cast<std::uintptr_t>(&PickCall<g_repickCall, false>)) &&
+        g_registerCall.Install(*registerSite, *pick, reinterpret_cast<std::uintptr_t>(&PickCall<g_registerCall, true>));
+    const bool picks = pickCalls && g_pickLeader.Install(*pickSite, *resolver,
+                                                         reinterpret_cast<std::uintptr_t>(&LeaderRead<g_pickLeader>));
+    const bool counts = picks && g_countLeader.InstallFromOwnThread(
+                                     *countSite, *resolver, reinterpret_cast<std::uintptr_t>(&LeaderRead<g_countLeader>));
+    const bool rebalances =
+        counts && g_rebalance.InstallFromOwnThread(*rebalanceSite, *rebalance, reinterpret_cast<std::uintptr_t>(&Rebalance));
+    if (!rebalances)
+    {
+        // Whatever was placed passes through (no answer is ever held while off).
+        platform::Log(L"lock group coin: UNAVAILABLE (the {} call differs); lock groups prefer player 1",
+                      !pickCalls ? L"pick" : !picks ? L"pick's leader" : (!counts ? L"lock count's leader" : L"rebalance"));
+        return false;
+    }
+    g_on.store(true, std::memory_order_release);
+    platform::Log(L"lock group coin: lock groups that prefer the player prefer player 1 or player 2 by each enemy's "
+                  L"coin at its pick; the rebalance respreads only when neither player holds a lock");
+    return true;
+}
+
+void Remove() noexcept
+{
+    g_on.store(false, std::memory_order_release);  // from now on no answer is held: every call passes through
+    g_observer.store(nullptr, std::memory_order_relaxed);
+    g_heldGroups.Clear();
+    for (platform::CallRedirect* call : {&g_pickLeader, &g_repickCall, &g_registerCall})
+    {
+        if (call->IsInstalled() && !call->Restore())
+        {
+            platform::Log(L"lock group coin: a pick call was changed after us; left in place (it passes through)");
+        }
+    }
+    // The lock count's read (on 1.005) and the rebalance call cross a block: put back only from the one thread that can
+    // run them, which unloading is not; they pass through once off.
+}
+
+void SetPickObserver(PickObserver observer) noexcept
+{
+    g_observer.store(observer, std::memory_order_relaxed);
 }
 
 }  // namespace lss::player_two::lock_group_coin

@@ -19,8 +19,8 @@
 // Not touched: Hate and None enemies (no player term), lock groups, the opening target at battle start, and the
 // other player-1 terms listed in RE §10.11.
 //
-// The select's vtable slot belongs to player_two/target_census, whose wrapper runs the game's select through RunSelect
-// and logs the answers.
+// The Condition select's vtable slot is replaced here: the wrapper runs the game's select with the answer held for
+// that call, then tells the one observer (player_two/target_census, a dev tool) what it answered.
 
 #include "player_two/ucpc_choice.h"
 
@@ -54,14 +54,14 @@ struct Answer
     bool                read = false;  // the select built its candidates and read the answer
 };
 
-/// The Condition select's signature: bool(selector, u8 reason, UObject** out), passed through as four registers.
-using SelectFn = std::uint64_t (*)(std::uint64_t selector, std::uint64_t reason, std::uint64_t out, std::uint64_t d);
+/// What one Condition select reported, after the game's select ran: the selector, its reason and out arguments (the
+/// out holds the picked UObject*), the game's result (its low byte) and the answer held for it. Any thread, as the
+/// selects run on worker threads too.
+using SelectObserver = void (*)(void* selector, std::uint64_t reason, std::uint64_t out, std::uint64_t result,
+                                const Answer& answer) noexcept;
 
-/// Runs the game's Condition `select` with who it counts as the UCPC answered on this thread, for that call only;
-/// `answer` reports it. The answers are put back however the call leaves, also when a structured exception unwinds
-/// through it. Any thread.
-std::uint64_t RunSelect(SelectFn select, std::uint64_t selector, std::uint64_t reason, std::uint64_t out,
-                        std::uint64_t d, Answer& answer) noexcept;
+/// The one observer of the Condition selects (null: none). Set before any battle and cleared at unload.
+void SetSelectObserver(SelectObserver observer) noexcept;
 
 /// Both players' player types as Tick last saw them: player 1's (the leader's) and player 2's member's. Empty without
 /// player 2's member (or before Install). Any thread.

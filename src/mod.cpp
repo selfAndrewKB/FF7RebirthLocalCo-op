@@ -70,7 +70,6 @@
 #include "player_two/chocobo_ride.h"
 #include "player_two/nav_strand.h"
 #include "player_two/leave_watch.h"
-#include "player_two/target_census.h"
 #include "player_two/equal_targeting.h"
 #include "player_two/player_hits.h"
 #include "player_two/leader_reads.h"
@@ -220,7 +219,6 @@ public:
         lss::player_two::lock_group_coin::Remove();  // first: no lock-group answer is held from here on
         // Before the stages: the Condition selects stop taking the equal-targeting answer while member_movement's
         // leader-test slot (which answers half of it) is still in place (the reverse of the install order).
-        lss::player_two::target_census::Remove();
         lss::player_two::target_coin::Remove();
         lss::player_two::equal_targeting::Remove();
         lss::player_two::player_hits::Remove();
@@ -402,7 +400,6 @@ public:
         lss::player_two::shop_talk::Install(*image);       // player 2's shopkeepers: admit, press, the shop's AI event
         lss::player_two::interact_watch::Install(*image);  // field interactions (pickups) per player, logged (read-only)
         lss::player_two::equal_targeting::Install(*image);  // Condition enemies (bosses) count either player as the UCPC
-        lss::player_two::target_census::Install(*image);   // whom enemies target, and by which stage, logged; holds the above
         lss::player_two::player_hits::Install(*image);     // player 2's hits and the hits player 2 takes count as the player's
         lss::player_two::target_coin::Install(*image);     // each enemy aims at player 1 or 2, a coin per action
         lss::player_two::lock_group_coin::Install(*image);  // lock groups (Stun Ray) prefer player 1 or 2 by each pick's coin
