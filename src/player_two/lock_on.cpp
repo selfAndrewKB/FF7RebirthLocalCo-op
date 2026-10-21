@@ -666,25 +666,31 @@ TargetScope::TargetScope() noexcept
     {
         return;
     }
-    const Pair saved = PairAt(system + kDisplayed);
-    cursor_          = ReadAt<std::uintptr_t>(system + kCursor);
-    object_          = saved.object;
-    controller_      = saved.controller;
-    trace_           = ReadAt<std::uint64_t>(system + kTrace);
-    freeTime_        = ReadAt<std::uint32_t>(system + kFreeTime);
-    lock_            = ReadAt<std::uint8_t>(system + kLock);
-    latch_           = ReadAt<std::uint8_t>(system + kLatch);
-    twoLock_         = g_lock;
-    if (!WriteAt(system + kCursor, g_cursor) || !WriteAt(system + kDisplayed, g_displayed) ||
-        !WriteAt(system + kTrace, g_trace) || !WriteAt(system + kFreeTime, g_freeTime) ||
-        !WriteAt(system + kLock, g_lock) || !WriteAt(system + kLatch, g_latch))
+    // Player 2's fields in and player 1's saved: five Exchange ranges, then the lock byte.
+    const Range ranges[] = {{system + kCursor, sizeof(g_cursor), Kind::Exchange},
+                            {system + kDisplayed, sizeof(Pair), Kind::Exchange},
+                            {system + kTrace, sizeof(g_trace), Kind::Exchange},
+                            {system + kFreeTime, sizeof(g_freeTime), Kind::Exchange},
+                            {system + kLatch, sizeof(g_latch), Kind::Exchange}};
+    if (!fields_.Define(ranges))
     {
-        WriteAt(system + kCursor, cursor_);  // the fields are the game's heap: put back what was written
-        WriteAt(system + kDisplayed, saved);
-        WriteAt(system + kTrace, trace_);
-        WriteAt(system + kFreeTime, freeTime_);
-        WriteAt(system + kLock, lock_);
-        WriteAt(system + kLatch, latch_);
+        return;
+    }
+    std::memcpy(fields_.Value(0).data(), &g_cursor, sizeof(g_cursor));
+    std::memcpy(fields_.Value(1).data(), &g_displayed, sizeof(Pair));
+    std::memcpy(fields_.Value(2).data(), &g_trace, sizeof(g_trace));
+    std::memcpy(fields_.Value(3).data(), &g_freeTime, sizeof(g_freeTime));
+    fields_.Value(4)[0] = g_latch;
+    cursor_             = ReadAt<std::uintptr_t>(system + kCursor);
+    lock_               = ReadAt<std::uint8_t>(system + kLock);
+    twoLock_            = g_lock;
+    if (!fields_.Open())
+    {
+        return;
+    }
+    if (!WriteAt(system + kLock, g_lock))
+    {
+        fields_.Close();  // the fields are the game's heap: player 1's back (player 2's copies as they were)
         return;
     }
     system_ = system;
@@ -697,15 +703,14 @@ TargetScope::~TargetScope()
     {
         return;
     }
-    g_cursor    = ReadAt<std::uintptr_t>(system_ + kCursor);
-    g_displayed = PairAt(system_ + kDisplayed);
-    g_trace     = ReadAt<std::uint64_t>(system_ + kTrace);
-    g_freeTime  = ReadAt<std::uint32_t>(system_ + kFreeTime);
-    g_lock      = ReadAt<std::uint8_t>(system_ + kLock);
-    g_latch     = ReadAt<std::uint8_t>(system_ + kLatch);
-    bool restored = WriteAt(system_ + kCursor, cursor_) && WriteAt(system_ + kDisplayed, Pair{object_, controller_}) &&
-                    WriteAt(system_ + kTrace, trace_) && WriteAt(system_ + kFreeTime, freeTime_) &&
-                    WriteAt(system_ + kLatch, latch_);
+    g_lock = ReadAt<std::uint8_t>(system_ + kLock);  // player 2's lock as the game left it
+    fields_.Close();                                 // player 2's five fields read back, player 1's put back
+    std::memcpy(&g_cursor, fields_.Value(0).data(), sizeof(g_cursor));
+    std::memcpy(&g_displayed, fields_.Value(1).data(), sizeof(Pair));
+    std::memcpy(&g_trace, fields_.Value(2).data(), sizeof(g_trace));
+    std::memcpy(&g_freeTime, fields_.Value(3).data(), sizeof(g_freeTime));
+    g_latch       = fields_.Value(4)[0];
+    bool restored = !fields_.Faulted();
     // Player 2's toggle went through the game's lock setter, which also set Global.LockOn to player 2's
     // lock: player 1's lock goes back through the same setter, which sets the parameter back. The setter
     // touches only the lock byte and the parameter, so the scopes still open around this one (player 2

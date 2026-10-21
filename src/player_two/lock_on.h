@@ -30,6 +30,8 @@
 // (the menu's target select is player 1's widgets). Player 2's lock ends with the battle, as the
 // game's teardown ends player 1's. Every state change is logged. Game thread only.
 
+#include "platform/byte_scope.h"
+
 #include <cstdint>
 
 namespace lss::platform {
@@ -44,7 +46,9 @@ bool Install(const platform::GameImage& image) noexcept;
 void Remove() noexcept;
 
 /// In battle, player 2's target fields in the battle system while it lives (nested scopes do
-/// nothing). Player 2's are read back at its end and player 1's put back.
+/// nothing). Player 2's are read back at its end and player 1's put back: five Exchange ranges of
+/// platform/byte_scope.h, and the lock byte by hand (player 1's goes back through the game's setter
+/// when player 2's changed).
 class TargetScope
 {
 public:
@@ -59,15 +63,12 @@ public:
     std::uintptr_t OtherCursor() const noexcept { return cursor_; }
 
 private:
-    std::uintptr_t system_     = 0;
-    std::uintptr_t cursor_     = 0;
-    std::uintptr_t object_     = 0;
-    std::uintptr_t controller_ = 0;
-    std::uint64_t  trace_      = 0;
-    std::uint32_t  freeTime_   = 0;  // a float, moved as its bits
-    std::uint8_t   lock_       = 0;
-    std::uint8_t   latch_      = 0;
-    std::uint8_t   twoLock_    = 0;  // player 2's lock as the scope began
+    // The cursor, the displayed target, the trace handle, the rest timer and the switch latch.
+    platform::ByteStore<5, 8 + 16 + 8 + 4 + 1> fields_;
+    std::uintptr_t                             system_  = 0;
+    std::uintptr_t                             cursor_  = 0;  // player 1's, for the log
+    std::uint8_t                               lock_    = 0;  // player 1's
+    std::uint8_t                               twoLock_ = 0;  // player 2's lock as the scope began
 };
 
 /// Inside player 2's member tick scopes, every tick: out of battle, player 2's lock, displayed
