@@ -635,7 +635,7 @@ private:
         lss::player_two::camera_repair::Tick();
         lss::player_two::traversal_watch::Tick();
         lss::player_two::trigger_two::Tick();
-        lss::player_two::traversal_camera::Tick();  // the traversal cameras' collision watch (Debug, on change)
+        lss::player_two::traversal_camera::Tick();  // player 2's idle camera holders; the collision watch (dev)
         lss::player_two::near_fade::Tick();  // player 2's character's fade state (Debug, on change)
         lss::player_two::approach_two::Tick();  // the crossing walk-up calls, swapped once from here
         lss::player_two::move_type_two::Tick();  // player 2's deferred walk-cap clear, the layer-2 watch

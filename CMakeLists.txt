@@ -91,6 +91,8 @@ add_library(LocalSplitScreen SHARED
     src/player_two/move_type_two.cpp
     src/player_two/anim_two_views.cpp
     src/player_two/traversal_camera.cpp
+    src/player_two/traversal_exec.cpp
+    src/player_two/traversal_holders.cpp
     src/player_two/traversal_watch.cpp
     src/player_two/shop_talk.cpp
     src/player_two/switch_volume_two.cpp
@@ -223,6 +225,7 @@ if(LSS_DEV_TOOLS)
         src/player_two/rumble_watch.cpp
         src/player_two/tag_counts.cpp
         src/player_two/target_census.cpp
+        src/player_two/traversal_collision.cpp
         src/player_two/wheelie_watch.cpp
         src/renderer/submission_census.cpp
     )

@@ -26,6 +26,10 @@
 // The ladder executer's Start, End and UpdateInput slots belong to traversal_watch, which calls the functions below;
 // everything else is replaced here. Game thread, except the rotation gate, the holder getter and the one-shot leave
 // (any thread: plain compares and the game's own calls).
+//
+// Units: traversal_facts.h (the classes' tables), traversal_exec.cpp (the executer classes), traversal_holders.cpp
+// (the move classes and player 2's holders), traversal_collision.cpp (the collision watch, dev tools) and
+// traversal_shared.h (what they share); this file's Install, Remove and Tick compose them (traversal_camera.cpp).
 
 #include <cstdint>
 
@@ -40,7 +44,8 @@ void Install(const platform::GameImage& image) noexcept;
 
 void Remove() noexcept;
 
-/// Game thread, per frame: the collision watch of both players' traversal cameras (Debug, a line per camera).
+/// Game thread, per frame: an idle holder of player 2's is released (all of them with player 2 out); with the dev
+/// tools, the collision watch of both players' traversal cameras (Debug, a line per camera).
 void Tick() noexcept;
 
 using ExecFn = std::uintptr_t (*)(void* executer);
