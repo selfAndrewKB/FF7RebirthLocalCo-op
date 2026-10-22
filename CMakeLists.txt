@@ -276,6 +276,7 @@ lss_test(entry_redirect src/platform/entry_redirect.cpp src/platform/block_patch
 lss_test(code_memory src/platform/code_memory.cpp)
 lss_test(block_patch src/platform/block_patch.cpp src/platform/code_memory.cpp)
 lss_test(sparse_array src/platform/guarded.cpp)
+lss_test(tset_find src/platform/guarded.cpp)
 lss_test(overlay_band src/hud/overlay_band.cpp)
 lss_test(viewport_placement src/hud/viewport_placement.cpp)
 lss_test(entry_filter_code)

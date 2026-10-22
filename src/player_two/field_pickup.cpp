@@ -13,6 +13,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/sparse_array.h"
+#include "platform/tset_find.h"
 #include "platform/verified_code.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
@@ -121,28 +122,21 @@ constexpr std::uint8_t  kTargetBits     = 0x06;   // bit 1 slot target, bit 2 ru
 constexpr std::uint8_t  kDisabledBit    = 0x10;   // the game's "point disabled": the candidate query skips it
 constexpr std::uint32_t kPointMarker    = 0x78;   // UFieldTargetWidget*, the point's marker: carried per player (§12.15)
 
-// The two maps whose points player 2's pass admits, both a stock TMap keyed by the point's FName at element +0:
-// WorldItemMgr's items (§10.5, collectibles and materials) and TreasurePointMgr's chests (§13.1, the chest listener's
-// own test). Offsets of the map's fields, from its element array.
+// The two maps whose points player 2's pass admits, both a stock TMap keyed by the point's FName at element +0
+// (platform/tset_find.h): WorldItemMgr's items (§10.5, collectibles and materials) and TreasurePointMgr's chests
+// (§13.1, the chest listener's own test). Where the map sits in its owner, and its element's shape.
 struct MapShape
 {
     std::uint32_t elements;  // from the owner object
     std::uint32_t stride;
     std::uint32_t hashNext;  // i32, in an element
 };
-constexpr MapShape      kWorldItemMap{0x90, 0xD0, 0xC0};
+constexpr MapShape      kWorldItemMap{facts::kWorldItemMapElements, facts::kWorldItemMapStride,
+                                      facts::kWorldItemMapHashNext};
 constexpr MapShape      kChestMap{0x10, 0x70, 0x60};
 // TreasurePointMgr's second map, CharaPop key -> treasure key (24-byte elements; §14, the spawn handler's own lookup).
 constexpr MapShape      kChestByPopKeyMap{0x60, 0x18, 0x10};
 constexpr std::uint32_t kRootChests      = 0x298;  // TreasurePointMgr (not TreasureManager +0x280, the opened state)
-constexpr std::uint32_t kMapCount        = 0x08;  // i32 ArrayNum
-constexpr std::uint32_t kMapBitsInline   = 0x10;
-constexpr std::uint32_t kMapBitsHeap     = 0x20;
-constexpr std::uint32_t kMapFreeCount    = 0x34;  // i32 NumFreeIndices
-constexpr std::uint32_t kMapHashInline   = 0x38;
-constexpr std::uint32_t kMapHashHeap     = 0x40;
-constexpr std::uint32_t kMapHashSize     = 0x48;  // i32
-constexpr std::int32_t  kMaxItems        = 16384;
 constexpr int           kHashChecks     = 2000;  // lookups also checked against a walk of the map, then trusted
 
 // The game's functions (§12.12), each checked by its first bytes.
@@ -613,74 +607,26 @@ void DropCopy(bool clear) noexcept
     g_oneMarkers.clear();
 }
 
-/// Whether `key` is in the map of `owner` (shaped as `shape`), by the map's own hash (§10.5). The first lookups are also
-/// checked against a walk of the map; a mismatch switches to the walk for good (logged).
-bool HashFind(const std::uint8_t* owner, const MapShape& shape, std::uint64_t key) noexcept
-{
-    const std::uint8_t* map = owner + shape.elements;
-    if (ReadField<std::int32_t>(map, kMapCount) == ReadField<std::int32_t>(map, kMapFreeCount))
-    {
-        return false;
-    }
-    const auto* elements = PointerAt(map, 0);
-    const auto  size     = ReadField<std::int32_t>(map, kMapHashSize);
-    const auto* heap     = PointerAt(map, kMapHashHeap);
-    const auto* buckets  = heap != nullptr ? heap : map + kMapHashInline;
-    if (elements == nullptr || size <= 0 || (size & (size - 1)) != 0)
-    {
-        return false;
-    }
-    const auto index = static_cast<std::uint32_t>(key);
-    const auto lo    = index & 0xFFFF;
-    const auto hi    = index >> 16;
-    const auto hash  = static_cast<std::uint32_t>(key >> 32) + hi + lo + (lo >> 4) + ((lo + 8 * hi) << 16);
-    auto       i     = ReadField<std::int32_t>(buckets, 4 * (hash & static_cast<std::uint32_t>(size - 1)));
-    for (int steps = 0; i >= 0 && i < kMaxItems && steps < kMaxItems; ++steps)
-    {
-        const auto* element = elements + static_cast<std::size_t>(i) * shape.stride;
-        if (ReadField<std::uint64_t>(element, 0) == key)
-        {
-            return true;
-        }
-        i = ReadField<std::int32_t>(element, shape.hashNext);
-    }
-    return false;
-}
-
-bool WalkFind(const std::uint8_t* owner, const MapShape& shape, std::uint64_t key) noexcept
-{
-    const std::uint8_t* map      = owner + shape.elements;
-    const auto*         elements = PointerAt(map, 0);
-    const auto          count    = std::clamp(ReadField<std::int32_t>(map, kMapCount), 0, kMaxItems);
-    const auto*         heapBits = PointerAt(map, kMapBitsHeap);
-    const auto*         bits     = heapBits != nullptr ? heapBits : map + kMapBitsInline;
-    for (std::int32_t i = 0; elements != nullptr && i < count; ++i)
-    {
-        if ((ReadField<std::uint32_t>(bits, static_cast<std::size_t>(i / 32) * 4) >> (i % 32) & 1) != 0 &&
-            ReadField<std::uint64_t>(elements, static_cast<std::size_t>(i) * shape.stride) == key)
-        {
-            return true;
-        }
-    }
-    return false;
-}
-
-/// Whether `key` is in the map (both maps share the hash, so they share the trust in it).
+/// Whether `key` is in the map of `owner` (shaped as `shape`), by the map's own hash (§10.5; platform/tset_find.h). The
+/// first lookups are also checked against a walk of the map; a mismatch switches to the walk for good (logged). Both
+/// maps share the hash, so they share the trust in it.
 bool InMap(const std::uint8_t* owner, const MapShape& shape, std::uint64_t key) noexcept
 {
     if (owner == nullptr || key == 0)
     {
         return false;
     }
+    const auto               map = reinterpret_cast<std::uintptr_t>(owner + shape.elements);
+    const platform::SetShape set{shape.stride, shape.hashNext};
     if (!g_hashTrusted)
     {
-        return WalkFind(owner, shape, key);
+        return platform::WalkFind(map, set, key);
     }
-    const bool found = HashFind(owner, shape, key);
+    const bool found = platform::HashFind(map, set, key);
     if (g_hashChecked < kHashChecks)
     {
         ++g_hashChecked;
-        if (WalkFind(owner, shape, key) != found)
+        if (platform::WalkFind(map, set, key) != found)
         {
             ++g_hashMismatches;
             g_hashTrusted = false;

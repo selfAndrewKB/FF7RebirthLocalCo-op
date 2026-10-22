@@ -21,6 +21,11 @@ inline constexpr std::uint32_t  kRootGameState  = 0x170;  // the game state: the
 inline constexpr std::uint32_t  kRootCharaPop   = 0x180;  // the CharaPop manager (player_two/charapop_facts.h)
 inline constexpr std::uint32_t  kRootModeHolder = 0x1B8;  // the mode holder (the encounter manager; +0x3D558 its state)
 inline constexpr std::uint32_t  kRootWorldItems = 0x288;  // the WorldItemMgr
+/// WorldItemMgr's map of items (RE-p2-field-interact.md §10.5): a stock TMap keyed by the item's FName at element +0
+/// (platform/tset_find.h): where the map sits in the manager, its element's size and the chain index in it.
+inline constexpr std::uint32_t  kWorldItemMapElements = 0x90;
+inline constexpr std::uint32_t  kWorldItemMapStride   = 0xD0;
+inline constexpr std::uint32_t  kWorldItemMapHashNext = 0xC0;  // i32
 // +0x1A0 is the FieldActionMgr (player_two/field_pickup), +0x270 the chocobo ride manager (facts/vehicles.h).
 
 /// g_LocationVolumeManager (a pointer): the AEndLocationVolumes and the game's own containment test,

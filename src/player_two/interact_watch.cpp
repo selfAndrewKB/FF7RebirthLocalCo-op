@@ -9,6 +9,7 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/sparse_array.h"
 #include "platform/verified_code.h"
 #include "player_two/describe.h"
 #include "player_two/field_pickup.h"
@@ -83,12 +84,9 @@ constexpr std::uint32_t kPointKind          = 0xF0;   // u8
 constexpr std::uint32_t kPointVariant       = 0xF1;   // u8
 using facts::kFieldActionPointFlags;
 
-// WorldItemMgr's map of items (§10.E): a stock TMap, elements of 0xD0 bytes with the key FName at +0.
-constexpr std::uint32_t kItemElements   = 0x90;
-constexpr std::uint32_t kItemCount      = 0x98;  // i32
-constexpr std::uint32_t kItemBitsInline = 0xA0;
-constexpr std::uint32_t kItemBitsHeap   = 0xB0;
-constexpr std::uint32_t kItemStride     = 0xD0;
+// WorldItemMgr's map of items (§10.E): a stock TMap keyed by the item's FName at element +0 (facts/world.h).
+using facts::kWorldItemMapElements;
+using facts::kWorldItemMapStride;
 constexpr std::int32_t  kMaxItems       = 16384;
 using facts::kFieldActionEntryKeyBack;
 
@@ -437,26 +435,21 @@ void LogSlots(const std::uint8_t* mgr)
                   ReadField<std::int32_t>(mgr, kCandidateCount), now[at], LeaderText());
 }
 
-/// The keys in WorldItemMgr's map (allocated elements only).
+/// The keys in WorldItemMgr's map (allocated elements only; platform/sparse_array.h).
 std::unordered_set<std::uint64_t> WorldItemKeys(const std::uint8_t* items)
 {
     std::unordered_set<std::uint64_t> keys;
-    const auto*                       elements = PointerAt(items, kItemElements);
-    const auto                        count    = std::clamp(ReadField<std::int32_t>(items, kItemCount), 0, kMaxItems);
-    const auto*                       heapBits = PointerAt(items, kItemBitsHeap);
-    const auto* bits = heapBits != nullptr ? heapBits : items + kItemBitsInline;
-    if (elements == nullptr)
+    if (items == nullptr)
     {
         return keys;
     }
-    for (std::int32_t i = 0; i < count; ++i)
-    {
-        const auto word = ReadField<std::uint32_t>(bits, static_cast<std::size_t>(i / 32) * 4);
-        if ((word >> (i % 32) & 1) != 0)
-        {
-            keys.insert(ReadField<std::uint64_t>(elements, static_cast<std::size_t>(i) * kItemStride));
-        }
-    }
+    platform::ForEachSparseElement(
+        reinterpret_cast<std::uintptr_t>(items + kWorldItemMapElements), kWorldItemMapStride,
+        [&keys](std::uintptr_t element) {
+            keys.insert(ReadField<std::uint64_t>(reinterpret_cast<const void*>(element), 0));
+            return true;
+        },
+        kMaxItems);
     return keys;
 }
 
