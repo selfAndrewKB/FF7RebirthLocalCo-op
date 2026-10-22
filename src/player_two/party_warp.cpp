@@ -10,7 +10,9 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <format>
 #include <optional>
+#include <string>
 
 namespace lss::player_two::party_warp {
 
@@ -50,13 +52,14 @@ constexpr std::uint8_t kPartyIdleBytes[] = {0x48, 0x8B, 0x05, 0x99, 0x11, 0x88, 
                                             0x80, 0x38, 0x00, 0x0F, 0x94, 0xC0, 0xC3, 0xB0, 0x01, 0xC3, 0xCC, 0xCC};
 constexpr platform::FunctionFact kPartyIdle{L"PartyManager_IsIdle", 0x140B1AB40, kPartyIdleBytes};
 
-constexpr std::uint32_t kAiBrain          = 0x518;
 constexpr std::uint32_t kAiSkipsUpdate    = 0xAD8;  // the PLAYER update returns at once while set
-constexpr std::uint32_t kBrainState       = 0x20;
-constexpr std::uint32_t kStateType        = 0x18;
-constexpr std::uint32_t kStateForced      = 0x39D;  // forced teleport pending; cleared by the commit
 constexpr std::uint32_t kCharacterWarping = 0xB59;  // a warp request is queued on the character
-constexpr std::uint8_t  kStateFollow      = 7;
+// The AI's active brain, its state and the follow state's forced request: facts/party.h.
+using facts::kAiActiveBrain;
+using facts::kAiStateFollow;
+using facts::kAiStateType;
+using facts::kBrainState;
+using facts::kFollowStateForced;
 // The teleport query runner (RE-p2-party-warp.md §10): the result pointer and its status (1 = done).
 constexpr std::uint32_t kStateQueryResult = 0x540;
 constexpr std::uint32_t kQueryStatus      = 0x28;
@@ -144,16 +147,16 @@ const Variant* VariantOf(const void* state, Subject subject) noexcept
 }
 
 /// The pawn's retained AI's current state and its variant, if it is a checked follow state for `subject`.
-void* FollowStateOf(const void* pawn, Subject subject, const Variant** variantOut = nullptr,
-                    const void** aiOut = nullptr) noexcept
+void* FollowOf(const void* pawn, Subject subject, const Variant** variantOut = nullptr,
+               const void** aiOut = nullptr) noexcept
 {
     void* ai    = ReadPointer(pawn, facts::kCharacterRetainedAi);
-    void* state = ReadPointer(ReadPointer(ai, kAiBrain), kBrainState);
+    void* state = ReadPointer(ReadPointer(ai, kAiActiveBrain), kBrainState);
     if (aiOut != nullptr)
     {
         *aiOut = ai;
     }
-    const Variant* variant = ByteAt(state, kStateType) == kStateFollow ? VariantOf(state, subject) : nullptr;
+    const Variant* variant = ByteAt(state, kAiStateType) == kAiStateFollow ? VariantOf(state, subject) : nullptr;
     if (variantOut != nullptr)
     {
         *variantOut = variant;
@@ -254,6 +257,36 @@ bool Busy() noexcept
     return g_state != nullptr;
 }
 
+const void* FollowStateOf(const void* pawn, Subject subject) noexcept
+{
+    return FollowOf(pawn, subject);
+}
+
+std::wstring AiText(const void* pawn, Subject subject) noexcept
+{
+    const void*    ai      = nullptr;
+    const Variant* variant = nullptr;
+    const void*    state   = FollowOf(pawn, subject, &variant, &ai);
+    const void*    current = ReadPointer(ReadPointer(ai, kAiActiveBrain), kBrainState);
+    std::uint32_t  pause   = 0;
+    float          range   = 0.0f;
+    Read(ai, facts::kAiPauseMask, pause);
+    Read(current, facts::kFollowStateTeleportRange, range);
+    try
+    {
+        const std::wstring head = std::format(L"AI {} (pause mask {:#x}), state {} type {}", ai, pause, current,
+                                              ByteAt(current, kAiStateType));
+        return state != nullptr ? head + std::format(L" ({} follow: teleport range {:.0f}, forced warp pending {})",
+                                                     variant->fact->name, range, ByteAt(state, kFollowStateForced))
+                                : head + std::format(L" (vtable {:#x}, not a checked follow state)",
+                                                     IdaVtableOf(current));
+    }
+    catch (...)
+    {
+        return L"AI ?";
+    }
+}
+
 bool Start(void* pawn, Subject subject, bool attached, bool splitShown) noexcept
 {
     if (!g_installed || pawn == nullptr || !generation::OnGameThread())
@@ -267,7 +300,7 @@ bool Start(void* pawn, Subject subject, bool attached, bool splitShown) noexcept
     }
     const void*    ai      = nullptr;
     const Variant* variant = nullptr;
-    void*          state   = FollowStateOf(pawn, subject, &variant, &ai);
+    void*          state   = FollowOf(pawn, subject, &variant, &ai);
     bool           idle = false, battle = true;
     // A forced request skips the state's own can-teleport checks, so the game's other conditions for a party
     // warp are checked here. Riding: the game warps a rider's ride body, not the rider (RE-p2-party-warp.md §4), so a
@@ -275,7 +308,7 @@ bool Start(void* pawn, Subject subject, bool attached, bool splitShown) noexcept
     const wchar_t* refused = !splitShown                                      ? L"the split is not on screen"
                              : subject == Subject::Member && attached         ? L"she is attached to something (riding?)"
                              : state == nullptr                               ? L"its AI is not in a checked follow state"
-                             : ByteAt(state, kStateForced) != 0               ? L"a forced warp is already pending"
+                             : ByteAt(state, kFollowStateForced) != 0         ? L"a forced warp is already pending"
                              : variant->fact->skipGate && ByteAt(ai, kAiSkipsUpdate) != 0
                                  ? L"its AI skips the teleport update"
                              : ByteAt(pawn, kCharacterWarping) != 0           ? L"a warp is already queued on it"
@@ -286,9 +319,7 @@ bool Start(void* pawn, Subject subject, bool attached, bool splitShown) noexcept
                                                                               : nullptr;
     if (refused != nullptr)
     {
-        const void* current = ReadPointer(ReadPointer(ai, kAiBrain), kBrainState);
-        platform::Log(L"party warp: {} not started ({}); its AI {} state vtable {:#x} type {}", Who(subject), refused, ai,
-                      IdaVtableOf(current), ByteAt(current, kStateType));
+        platform::Log(L"party warp: {} not started ({}); its {}", Who(subject), refused, AiText(pawn, subject));
         return false;
     }
     const FollowTeleportParams params{};
@@ -305,7 +336,7 @@ bool Start(void* pawn, Subject subject, bool attached, bool splitShown) noexcept
     g_updates = 0;
     platform::Log(L"party warp: forced follow warp requested for {} ({} follow state, mode 0, fade), pending {}; its AI "
                   L"skip flag {}",
-                  Who(subject), variant->fact->name, ByteAt(state, kStateForced), ByteAt(ai, kAiSkipsUpdate));
+                  Who(subject), variant->fact->name, ByteAt(state, kFollowStateForced), ByteAt(ai, kAiSkipsUpdate));
     return true;
 }
 
@@ -324,12 +355,12 @@ void Tick(void* member, const void* chocobo, bool splitShown, float seconds) noe
         Stop();
         return;
     }
-    if (FollowStateOf(pawn, g_subject) != g_state)
+    if (FollowOf(pawn, g_subject) != g_state)
     {
         // The AI moved to another state under the same player. The follow state object stays in the brain
         // (it is the same one when it returns to following), so the game's finish-now still applies to it
         // and fades it back in, as long as it still is that state with the request pending.
-        if (VariantOf(g_state, g_subject) == g_variant && ByteAt(g_state, kStateForced) != 0)
+        if (VariantOf(g_state, g_subject) == g_variant && ByteAt(g_state, kFollowStateForced) != 0)
         {
             FinishNow(L"its AI left its follow state mid-warp");
         }
@@ -341,7 +372,7 @@ void Tick(void* member, const void* chocobo, bool splitShown, float seconds) noe
         }
         return;
     }
-    if (ByteAt(g_state, kStateForced) == 0)
+    if (ByteAt(g_state, kFollowStateForced) == 0)
     {
         platform::Log(L"party warp: {} done after {:.2f} s ({} update(s)), warp queued {}", Who(g_subject), g_elapsed,
                       g_updates, ByteAt(pawn, kCharacterWarping));

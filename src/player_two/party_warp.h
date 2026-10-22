@@ -15,6 +15,8 @@
 // completes it at the follow target, as the game does after a fast travel's wait. Game thread, outside every player-2
 // scope (a follow state run as the party leader clears its leader; a chocobo's would follow itself).
 
+#include <string>
+
 namespace lss::platform {
 class GameImage;
 }
@@ -43,5 +45,12 @@ void Tick(void* member, const void* chocobo, bool splitShown, float seconds) noe
 
 /// A warp is being driven.
 bool Busy() noexcept;
+
+/// The pawn's retained AI's current state, if it is a checked follow state for `subject` (null otherwise).
+const void* FollowStateOf(const void* pawn, Subject subject) noexcept;
+
+/// The pawn's retained AI for a log line: the controller and its pause mask, its state object and type, and whether
+/// that state is a checked follow variant (then its teleport range and whether a forced warp is pending).
+std::wstring AiText(const void* pawn, Subject subject) noexcept;
 
 }  // namespace lss::player_two::party_warp

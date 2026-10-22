@@ -35,6 +35,13 @@ struct StrandRules
     float cooldownSeconds = 2.0f;   // the game's follow-teleport cooldown
 };
 
+/// The failed safe-transform checks that count as a strand: only while the game holds the character parked (short of
+/// the park, the game return-warps it to its safe spot itself; RE-p2-party-leash.md §6b, §6d).
+constexpr std::uint32_t ParkChecks(std::uint32_t failedChecks, bool parked) noexcept
+{
+    return parked ? failedChecks : 0;
+}
+
 class StrandWatch
 {
 public:

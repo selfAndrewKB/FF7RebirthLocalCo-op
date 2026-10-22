@@ -125,6 +125,14 @@ void TestResetForgetsEverything()
     EXPECT(events.size() == 2 && events[1] == StrandEvent::Warp);
 }
 
+void TestParkChecksCountOnlyWhileParked()
+{
+    std::puts("strand: failed safe checks count only while the game holds the character parked");
+    EXPECT(lss::player_two::ParkChecks(3, true) == 3);
+    EXPECT(lss::player_two::ParkChecks(3, false) == 0);
+    EXPECT(lss::player_two::ParkChecks(0, true) == 0);
+}
+
 }  // namespace
 
 int main()
@@ -137,6 +145,7 @@ int main()
     TestLongGapRestartsTheHold();
     TestCooldownDelaysTheNextWarp();
     TestResetForgetsEverything();
+    TestParkChecksCountOnlyWhileParked();
 
     return lss::test::Report();
 }

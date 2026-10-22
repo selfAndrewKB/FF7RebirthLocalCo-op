@@ -122,7 +122,7 @@ inline constexpr FunctionFact kPlayerTypeFromComponent{L"EndCharacter_GetPlayerT
 
 // The AI: enemy controllers, the active brain and its state, the follow state
 /// The AI follow state's player-subject class (vtable, data): FollowState_TickTeleportEQS at its +0x58, ForceTeleport
-/// +0x270, FinishForcedTeleportNow +0x278 (player_two/party_warp, nav_strand).
+/// +0x270, FinishForcedTeleportNow +0x278 (player_two/party_warp).
 inline constexpr std::uintptr_t kFollowStatePlayerVTable = 0x14580C8F8;
 // Enemy AI controllers (EndAIControllerEnemyBase, both builds): an FWeakObjectPtr to the enemy character.
 inline constexpr std::uint32_t kEnemyControllerCharacter = 0x464;
@@ -131,6 +131,12 @@ inline constexpr std::uint32_t kAiActiveBrain = 0x518;
 inline constexpr std::uint32_t kBrainIndex    = 0x19;  // u8; 0 is the base brain
 inline constexpr std::uint32_t kBrainState    = 0x20;
 inline constexpr std::uint32_t kAiStateType   = 0x18;  // u8, EEndAIState
+inline constexpr std::uint8_t  kAiStateFollow = 7;     // EEndAIState FOLLOW, the party follow state
+inline constexpr std::uint32_t kAiPauseMask   = 0x460; // u32 (RE-p2-party-warp.md §1, the sampler table)
+// The follow state's teleport (RE-p2-party-warp.md §1): the range it allows, and its forced request pending (set by
+// ForceTeleport, cleared by the commit).
+inline constexpr std::uint32_t kFollowStateTeleportRange = 0x344;  // float
+inline constexpr std::uint32_t kFollowStateForced        = 0x39D;  // u8
 inline constexpr std::uint8_t kAiControllerComponentBytes[] = {
     0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x02, 0xF0, 0x6B, 0x01, 0x48, 0x2B,
     0xE0, 0x48, 0x8B, 0x89, 0x38, 0x06, 0x00, 0x00, 0x48, 0x85, 0xC9, 0x74};
