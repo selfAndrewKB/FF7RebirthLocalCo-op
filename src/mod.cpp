@@ -83,6 +83,7 @@
 #include "player_two/vault_camera.h"
 #include "player_two/party_warp.h"
 #include "player_two/session.h"
+#include "players/held_setting.h"
 #include "players/join_keys.h"
 #include "players/single_view.h"
 #include "players/split_layout.h"
@@ -103,6 +104,7 @@
 #include "views/window_span.h"
 #include "views/whole_screen.h"
 
+#include <array>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -175,6 +177,17 @@ std::optional<bool> ReadSplitSwitch() noexcept
 bool WriteSplitSwitch(bool disabled) noexcept
 {
     return lss::players::unreal::SetForceDisableSplitscreen(PlayerOneWorldContext(), disabled);
+}
+
+// The two-player layout is one fixed field: its held setting's name is for the log only.
+std::optional<std::uint8_t> ReadTwoPlayerLayout(const wchar_t*) noexcept
+{
+    return lss::players::unreal::ReadTwoPlayerSplitscreenLayout();
+}
+
+bool WriteTwoPlayerLayout(const wchar_t*, std::uint8_t value) noexcept
+{
+    return lss::players::unreal::WriteTwoPlayerSplitscreenLayout(value);
 }
 
 class LocalSplitScreenMod final : public RC::CppUserModBase
@@ -644,10 +657,9 @@ private:
         // The timing method before the gap recorder goes off, and back after it returns (SettingsOrder).
         for (const auto step : lss::players::SettingsOrder(playerTwoIn))
         {
-            auto& setting = step == lss::players::SettingsStep::Resolution ? settings_
-                            : step == lss::players::SettingsStep::Timing   ? timingSettings_
-                                                                            : gapSettings_;
-            LogSettingsChange(setting, setting.Update(playerTwoIn));
+            auto& setting = settings_[static_cast<std::size_t>(step)];
+            LogHeld(setting.Update(playerTwoIn, lss::players::SettingOf(step).value), L"split screen",
+                    setting.Name());
         }
         if (playerTwoIn != submitHintsSkipped_)
         {
@@ -727,9 +739,9 @@ private:
         }
     }
 
-    static void LogLayoutChange(const lss::players::LayoutChange& change) noexcept
+    void LogLayoutChange(const lss::players::HeldChange& change) const noexcept
     {
-        if (const auto text = lss::players::Describe(change); !text.empty())
+        if (const auto text = lss::players::Describe(layout_, change); !text.empty())
         {
             Log(L"{}", text);
         }
@@ -829,29 +841,29 @@ private:
         }
     }
 
-    static void LogSettingsChange(const lss::players::SplitScreenSettings& setting,
-                                  const lss::players::SettingsChange& change) noexcept
+    static void LogHeld(const lss::players::HeldChange& change, const wchar_t* label, const wchar_t* name) noexcept
     {
-        if (const auto text = lss::players::Describe(setting, change); !text.empty())
+        if (const auto text = lss::players::Describe(change, label, name); !text.empty())
         {
             Log(L"{}", text);
         }
     }
 
+    /// One held console setting, for the settings_ array (split_screen_settings.h, by SettingsStep).
+    static lss::players::HeldSetting<std::int32_t> ConsoleSettingOf(lss::players::SettingsStep step) noexcept
+    {
+        return {{&lss::players::unreal::ConsoleVariableInt, &lss::players::unreal::SetConsoleVariableInt},
+                lss::players::SettingOf(step).name};
+    }
+
     std::optional<lss::player_two::Session>   session_;
     lss::players::JoinKeys                    keys_;
     ULONGLONG                                 nextStatus_ = 0;
-    lss::players::SplitScreenSettings         settings_{
-        {&lss::players::unreal::ConsoleVariableInt, &lss::players::unreal::ExecuteConsoleCommand}};
-    lss::players::SplitScreenSettings         timingSettings_{
-        {&lss::players::unreal::ConsoleVariableInt, &lss::players::unreal::ExecuteConsoleCommand},
-        lss::players::SplitScreenSettings::kTimingMethod, lss::players::SplitScreenSettings::kTimestampQueries};
+    std::array<lss::players::HeldSetting<std::int32_t>, 3> settings_{
+        ConsoleSettingOf(lss::players::SettingsStep::Resolution), ConsoleSettingOf(lss::players::SettingsStep::Timing),
+        ConsoleSettingOf(lss::players::SettingsStep::Gap)};
     bool                                      submitHintsSkipped_ = false;  // the join/leave switch's last state
-    lss::players::SplitScreenSettings         gapSettings_{
-        {&lss::players::unreal::ConsoleVariableInt, &lss::players::unreal::ExecuteConsoleCommand},
-        lss::players::SplitScreenSettings::kGapRecorder, lss::players::SplitScreenSettings::kGapRecorderOff};
-    lss::players::SplitLayout                 layout_{{&lss::players::unreal::ReadTwoPlayerSplitscreenLayout,
-                                                       &lss::players::unreal::WriteTwoPlayerSplitscreenLayout}};
+    lss::players::SplitLayout                 layout_{{&ReadTwoPlayerLayout, &WriteTwoPlayerLayout}};
     lss::players::SingleView                  singleView_{{&ReadSplitSwitch, &WriteSplitSwitch}};
     bool                                      playerTwoWaited_ = false;  // as last logged
     lss::views::HalfShapeWatch                halfShape_;

@@ -13,6 +13,7 @@
 #include <Unreal/NameTypes.hpp>
 
 #include <algorithm>
+#include <cwchar>
 #include <iterator>
 #include <new>
 #include <vector>
@@ -402,6 +403,16 @@ std::optional<float> ConsoleVariableFloat(const wchar_t* variable) noexcept
         value = *reinterpret_cast<const float*>(frame + *result);
     });
     return value;
+}
+
+bool SetConsoleVariableInt(const wchar_t* variable, std::int32_t value) noexcept
+{
+    wchar_t command[96]{};
+    if (std::swprintf(command, std::size(command), L"%ls %d", variable, value) < 0)
+    {
+        return false;
+    }
+    return ExecuteConsoleCommand(command);
 }
 
 bool ExecuteConsoleCommand(const wchar_t* command) noexcept

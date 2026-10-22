@@ -72,8 +72,11 @@ bool ModTarget::PlayerTwoPlaying() const
 /// 2026-10-21 whose presses were thrown off by the game's start-up popups ran every script at the title).
 bool ModTarget::FieldReady() const
 {
+    // Playable: nothing over the field (a menu, a scene, the title). The engine refuses a join from the game's Main
+    // Menu (CreatePlayer returns without a player; seen 2026-10-22, the menu up after the load).
     return player_two::field_exit::FieldReady() && player_two::party_member::GameReady() &&
-           player_two::own_controller::Ready() && !views::ReadScreenSignals().title;
+           player_two::own_controller::Ready() &&
+           views::ReasonOf(views::ReadScreenSignals()) == views::WholeScreenReason::None;
 }
 
 Outcome ModTarget::Join()
@@ -129,14 +132,15 @@ Outcome ModTarget::SetPerPadSticks(bool on)
 
 Outcome ModTarget::SetLayout(bool sideBySide)
 {
-    using Kind         = players::LayoutChange::Kind;
+    using Kind         = players::HeldChange::Kind;
     const auto value   = static_cast<std::uint8_t>(sideBySide ? players::SplitLayoutKind::SideBySide
                                                               : players::SplitLayoutKind::TopBottom);
     const auto change  = layout_.Choose(value);
     const wchar_t* name = sideBySide ? L"side by side" : L"top/bottom";
     switch (change.kind)
     {
-        case Kind::Applied: return {true, name};
+        case Kind::Applied:
+        case Kind::AlreadySet: return {true, name};
         case Kind::Chosen: return {true, std::wstring(name) + L" from the next join"};
         case Kind::ApplyFailed: return Failed(L"TwoPlayerSplitscreenLayout could not be read or set");
         default: return Failed(L"unexpected layout outcome");

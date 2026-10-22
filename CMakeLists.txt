@@ -156,11 +156,11 @@ add_library(LocalSplitScreen SHARED
     src/player_two/view_target.cpp
     src/player_two/widget_owner.cpp
 
+    src/players/held_setting.cpp
     src/players/join_keys.cpp
     src/players/local_players.cpp
     src/players/single_view.cpp
     src/players/split_layout.cpp
-    src/players/split_screen_settings.cpp
     src/players/unreal_access.cpp
 
     src/renderer/additional_family_output.cpp
@@ -244,9 +244,9 @@ endfunction()
 
 lss_test(one_family_per_view src/renderer/one_family_per_view.cpp)
 lss_test(output_load_action src/platform/code_redirect.cpp src/platform/block_patch.cpp src/platform/code_memory.cpp tests/log_console.cpp)
-lss_test(split_screen_settings src/players/split_screen_settings.cpp)
+lss_test(held_setting src/players/held_setting.cpp)
 lss_test(view_shape src/views/view_shape.cpp)
-lss_test(split_layout src/players/split_layout.cpp)
+lss_test(split_layout src/players/split_layout.cpp src/players/held_setting.cpp)
 lss_test(monitor_row src/views/monitor_row.cpp)
 lss_test(single_view src/players/single_view.cpp)
 lss_test(whole_screen src/views/whole_screen_reason.cpp)

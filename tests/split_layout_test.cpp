@@ -3,7 +3,8 @@
 // The setting is a fake byte. The cases: the game's layout untouched until a layout is chosen; a
 // choice made without player 2 applied at the join; a switch with player 2 in applied at once;
 // the game's value put back on leave; switching back to the game's own leaves nothing to restore;
-// a value someone else set left alone; failures reported rather than assumed.
+// a value someone else set left alone; failures reported rather than assumed. The hold itself is
+// players::HeldSetting's (held_setting_test.cpp); here, the choice over it.
 
 #include "players/split_layout.h"
 
@@ -14,10 +15,10 @@
 
 namespace {
 
-using lss::players::LayoutAccess;
-using lss::players::LayoutChange;
+using lss::players::HeldChange;
+using lss::players::SettingAccess;
 using lss::players::SplitLayout;
-using Kind = LayoutChange::Kind;
+using Kind = HeldChange::Kind;
 
 constexpr std::uint8_t kTopBottom  = 0;
 constexpr std::uint8_t kSideBySide = 1;
@@ -30,12 +31,12 @@ struct FakeSetting
     int          writes     = 0;
 } g_setting;
 
-std::optional<std::uint8_t> Read() noexcept
+std::optional<std::uint8_t> Read(const wchar_t*) noexcept
 {
     return g_setting.readWorks ? std::optional<std::uint8_t>(g_setting.value) : std::nullopt;
 }
 
-bool Write(std::uint8_t value) noexcept
+bool Write(const wchar_t*, std::uint8_t value) noexcept
 {
     ++g_setting.writes;
     if (!g_setting.writeWorks)
@@ -50,7 +51,7 @@ SplitLayout Fresh(std::uint8_t gameValue)
 {
     g_setting       = FakeSetting{};
     g_setting.value = gameValue;
-    return SplitLayout(LayoutAccess{&Read, &Write});
+    return SplitLayout(SettingAccess<std::uint8_t>{&Read, &Write});
 }
 
 void TestGameLayoutUntilChosen()
@@ -68,11 +69,11 @@ void TestChoiceAppliedAtJoinAndRestored()
     std::puts("layout: chosen without player 2, applied at the join, the game's put back on leave");
     auto layout = Fresh(kTopBottom);
     const auto chosen = layout.Toggle();
-    EXPECT(chosen.kind == Kind::Chosen && chosen.value == kSideBySide);
+    EXPECT(chosen.kind == Kind::Chosen && chosen.held == kSideBySide);
     EXPECT(g_setting.writes == 0);  // no player 2: nothing written yet
 
     const auto joined = layout.Update(true);
-    EXPECT(joined.kind == Kind::Applied && joined.value == kSideBySide);
+    EXPECT(joined.kind == Kind::Applied && joined.held == kSideBySide && joined.value == kTopBottom);
     EXPECT(g_setting.value == kSideBySide);
 
     const auto left = layout.Update(false);
@@ -93,10 +94,20 @@ void TestSwitchWithPlayerTwoIn()
     EXPECT(g_setting.value == kSideBySide);
 
     const auto back = layout.Toggle();
-    EXPECT(back.kind == Kind::Applied && back.value == kTopBottom);
+    EXPECT(back.kind == Kind::Applied && back.held == kTopBottom);
     const int writes = g_setting.writes;
     EXPECT(layout.Update(false).kind == Kind::None);  // the game's value is already in place
     EXPECT(g_setting.writes == writes);
+
+    // Side, top, side, leave: the game's layout comes back (the regression's own sequence; missed on 2026-10-22).
+    layout.Update(true);
+    EXPECT(layout.Toggle().kind == Kind::Applied);
+    EXPECT(layout.Toggle().kind == Kind::Applied);
+    EXPECT(layout.Toggle().kind == Kind::Applied);
+    EXPECT(g_setting.value == kSideBySide);
+    const auto left = layout.Update(false);
+    EXPECT(left.kind == Kind::Restored && left.value == kTopBottom);
+    EXPECT(g_setting.value == kTopBottom);
 }
 
 void TestChooseAsksForAState()
@@ -104,14 +115,14 @@ void TestChooseAsksForAState()
     std::puts("layout: Choose sets a layout whatever is on screen; choosing it again changes nothing");
     auto layout = Fresh(kTopBottom);
     const auto chosen = layout.Choose(kSideBySide);
-    EXPECT(chosen.kind == Kind::Chosen && chosen.value == kSideBySide);
+    EXPECT(chosen.kind == Kind::Chosen && chosen.held == kSideBySide);
     EXPECT(g_setting.writes == 0);
 
     EXPECT(layout.Update(true).kind == Kind::Applied);
     EXPECT(g_setting.value == kSideBySide);
     const int writes = g_setting.writes;
     const auto again = layout.Choose(kSideBySide);
-    EXPECT(again.kind == Kind::Applied && again.value == kSideBySide);
+    EXPECT(again.kind == Kind::AlreadySet && again.held == kSideBySide);
     EXPECT(g_setting.writes == writes);  // already in place: not written again
 
     EXPECT(layout.Choose(kTopBottom).kind == Kind::Applied);
@@ -125,7 +136,7 @@ void TestGameAlreadySideBySide()
     auto layout = Fresh(kSideBySide);
     layout.Update(true);
     const auto change = layout.Toggle();
-    EXPECT(change.kind == Kind::Applied && change.value == kTopBottom);
+    EXPECT(change.kind == Kind::Applied && change.held == kTopBottom);
     EXPECT(layout.Update(false).kind == Kind::Restored);
     EXPECT(g_setting.value == kSideBySide);
 }
@@ -191,17 +202,23 @@ void TestFailuresReported()
 
 void TestDescribe()
 {
-    std::puts("layout: every change has text, None none; the applied line names the layout");
+    std::puts("layout: every change has text, None none; the lines name the layout");
     using lss::players::Describe;
-    EXPECT(Describe(LayoutChange{Kind::None, 0}).empty());
-    for (const auto kind : {Kind::Chosen, Kind::Unreadable, Kind::Applied, Kind::ApplyFailed, Kind::Restored, Kind::LeftAlone,
-                            Kind::RestoreFailed})
+    using lss::players::LayoutText;
+    const auto layout = Fresh(kTopBottom);
+    EXPECT(Describe(layout, HeldChange{Kind::None, 0, 0}).empty());
+    for (const auto kind : {Kind::Chosen, Kind::Unreadable, Kind::Applied, Kind::AlreadySet, Kind::ApplyFailed,
+                            Kind::Restored, Kind::LeftAlone, Kind::RestoreFailed})
     {
-        EXPECT(!Describe(LayoutChange{kind, kSideBySide}).empty());
+        EXPECT(!Describe(layout, HeldChange{kind, kTopBottom, kSideBySide}).empty());
     }
-    EXPECT(Describe(LayoutChange{Kind::Applied, kSideBySide}) == L"split layout: TwoPlayerSplitscreenLayout = 1 (side by side)");
-    EXPECT(Describe(LayoutChange{Kind::Restored, kTopBottom}).find(L"restored to 0 (top/bottom)") != std::wstring::npos);
-    EXPECT(Describe(LayoutChange{Kind::Chosen, 7}).find(L"another value") != std::wstring::npos);
+    EXPECT(Describe(layout, HeldChange{Kind::Applied, kTopBottom, kSideBySide}) ==
+           L"split layout: TwoPlayerSplitscreenLayout 0 (top/bottom) -> 1 (side by side) until the leave");
+    EXPECT(Describe(layout, HeldChange{Kind::Restored, kTopBottom, kSideBySide}) ==
+           L"split layout: TwoPlayerSplitscreenLayout restored to 0 (top/bottom)");
+    EXPECT(Describe(layout, HeldChange{Kind::Chosen, 0, 7}).find(L"7 (another value) from the next join") !=
+           std::wstring::npos);
+    EXPECT(LayoutText(1) == L"1 (side by side)");
 }
 
 }  // namespace

@@ -106,6 +106,10 @@ std::optional<std::int32_t> ConsoleVariableInt(const wchar_t* variable) noexcept
 /// UKismetSystemLibrary::GetConsoleVariableFloatValue, as ConsoleVariableInt.
 std::optional<float> ConsoleVariableFloat(const wchar_t* variable) noexcept;
 
+/// "<variable> <value>" through ExecuteConsoleCommand (a players::SettingAccess write). False if the command could
+/// not be run; whether it took is read back by the caller.
+bool SetConsoleVariableInt(const wchar_t* variable, std::int32_t value) noexcept;
+
 /// UKismetSystemLibrary::ExecuteConsoleCommand, through the first player's controller: the same
 /// path as a command typed into the game's console. Returns false if it could not be called; the
 /// engine reports no result, so callers read back what they changed.

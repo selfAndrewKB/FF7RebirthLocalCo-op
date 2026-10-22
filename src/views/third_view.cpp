@@ -4,6 +4,7 @@
 #include "player_two/generation.h"
 #include "player_two/own_controller.h"
 #include "player_two/view_target.h"
+#include "players/held_setting.h"
 #include "players/unreal_access.h"
 
 #include <optional>
@@ -17,18 +18,40 @@ using players::unreal::UObject;
 constexpr std::int32_t  kControllerId = 2;  // the third pad's id; no pad is expected on it
 constexpr std::uint8_t  kThreeColumns = 2;  // EThreePlayerSplitScreenType::Vertical
 constexpr std::uint32_t kStatusTicks  = 300;
+constexpr const wchar_t* kLayoutName  = L"ThreePlayerSplitscreenLayout";
 
-std::uintptr_t              g_removeLocalPlayer = 0;
-UObject*                    g_player            = nullptr;  // the third ULocalPlayer, only ever one this module created
-UObject*                    g_gameInstance      = nullptr;
-void*                       g_controller        = nullptr;
-std::optional<std::uint8_t> g_layoutBefore;  // the game's three-player layout, while the mod's is in place
-std::uint32_t               g_ticks  = 0;
-std::uint32_t               g_reaims = 0;
+// The three-player layout is one fixed field: its held setting's name is for the log only.
+std::optional<std::uint8_t> ReadLayout(const wchar_t*) noexcept
+{
+    return players::unreal::ReadThreePlayerSplitscreenLayout();
+}
+
+bool WriteLayout(const wchar_t*, std::uint8_t value) noexcept
+{
+    return players::unreal::WriteThreePlayerSplitscreenLayout(value);
+}
+
+std::uintptr_t g_removeLocalPlayer = 0;
+UObject*       g_player            = nullptr;  // the third ULocalPlayer, only ever one this module created
+UObject*       g_gameInstance      = nullptr;
+void*          g_controller        = nullptr;
+players::HeldSetting<std::uint8_t> g_layout{{&ReadLayout, &WriteLayout}, kLayoutName};  // columns while in
+std::uint32_t  g_ticks  = 0;
+std::uint32_t  g_reaims = 0;
 
 const wchar_t* YesNo(bool value) noexcept
 {
     return value ? L"yes" : L"no";
+}
+
+/// Logs a layout change; true if the mod's value is in place after it.
+bool LogLayout(const players::HeldChange& change) noexcept
+{
+    if (const auto text = players::Describe(change, L"third view", kLayoutName); !text.empty())
+    {
+        platform::Log(L"{}", text);
+    }
+    return change.kind == players::HeldChange::Kind::Applied || change.kind == players::HeldChange::Kind::AlreadySet;
 }
 
 bool Listed(RC::Unreal::TArray<UObject*>* players, UObject* player) noexcept
@@ -50,25 +73,6 @@ void Forget() noexcept
     g_controller   = nullptr;
     g_ticks        = 0;
     g_reaims       = 0;
-}
-
-void RestoreLayout() noexcept
-{
-    if (!g_layoutBefore)
-    {
-        return;
-    }
-    const auto current = players::unreal::ReadThreePlayerSplitscreenLayout();
-    if (current && *current == kThreeColumns && players::unreal::WriteThreePlayerSplitscreenLayout(*g_layoutBefore))
-    {
-        platform::Log(L"third view: ThreePlayerSplitscreenLayout restored to {}", *g_layoutBefore);
-    }
-    else
-    {
-        platform::Log(L"third view: ThreePlayerSplitscreenLayout left at {} (could not be put back to {})",
-                      current ? static_cast<int>(*current) : -1, *g_layoutBefore);
-    }
-    g_layoutBefore.reset();
 }
 
 }  // namespace
@@ -141,23 +145,16 @@ bool Add() noexcept
         return false;
     }
 
-    const auto layoutBefore = players::unreal::ReadThreePlayerSplitscreenLayout();
-    bool       columns      = layoutBefore && *layoutBefore == kThreeColumns;
-    if (layoutBefore && !columns && players::unreal::WriteThreePlayerSplitscreenLayout(kThreeColumns))
-    {
-        g_layoutBefore = layoutBefore;
-        columns        = true;
-    }
+    const bool columns = LogLayout(g_layout.Hold(kThreeColumns));
 
     void*      target = player_two::view_target::Current(playerOne);
     const bool aimed  = g_controller != nullptr && target != nullptr && player_two::view_target::AimAt(g_controller, target);
     platform::Log(L"third view: a third local player is in (controller id {}, controller {:#x}; camera manager handled {}, "
-                  L"owner filled {}, names swapped {}); ThreePlayerSplitscreenLayout {} (was {}); its camera manager "
-                  L"views {:#x} ({}player 1's view target {:#x})",
+                  L"owner filled {}, names swapped {}); {}; its camera manager views {:#x} ({}player 1's view "
+                  L"target {:#x})",
                   kControllerId, reinterpret_cast<std::uintptr_t>(g_controller), YesNo(report.cameraManager != nullptr),
                   YesNo(report.ownerFilled), YesNo(report.namesSwapped),
                   columns ? L"three columns" : L"NOT three columns (the setting could not be read or written)",
-                  layoutBefore ? static_cast<int>(*layoutBefore) : -1,
                   reinterpret_cast<std::uintptr_t>(player_two::view_target::Current(g_controller)),
                   aimed ? L"" : L"NOT ", reinterpret_cast<std::uintptr_t>(target));
     return true;
@@ -169,7 +166,7 @@ void Remove(const wchar_t* why) noexcept
     {
         return;
     }
-    RestoreLayout();
+    LogLayout(g_layout.Release());
     auto*      players = players::unreal::LocalPlayers(g_gameInstance);
     const bool listed  = Listed(players, g_player);
     bool       out     = !listed;
@@ -197,7 +194,7 @@ void Tick(bool playerTwoIn) noexcept
     {
         platform::Log(L"third view: the engine removed the third local player by itself");
         Forget();
-        g_layoutBefore.reset();
+        LogLayout(g_layout.Release());  // the game's layout back, as at a removal of the mod's own
         return;
     }
     if (!playerTwoIn)
