@@ -71,9 +71,9 @@ bool Register(const StreamCamera& camera, float aspect, float wantedFov) noexcep
 
 }  // namespace
 
-bool InstallStreamViews(const platform::GameImage& image, bool viewPointInstalled) noexcept
+bool InstallStreamViews(const platform::GameImage& image) noexcept
 {
-    if (!viewPointInstalled)
+    if (!ViewPointInstalled())
     {
         platform::Log(L"streaming views: off (the view point hook that records each player's drawn camera is not "
                       L"installed); each view's scenery detail stays as the game's shared requests leave it");

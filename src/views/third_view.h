@@ -20,12 +20,15 @@
 // player 2 is out. The split FOV rule is left to the stock one while it is in (the halves rule assumes two).
 // Game thread only. Logged at Info on change, at Debug every 5 s.
 
-#include <cstdint>
+namespace lss::platform {
+class GameImage;
+}
 
 namespace lss::views::third_view {
 
-/// `removeLocalPlayer`: the live address of UGameInstance::RemoveLocalPlayer, verified at startup.
-void Install(std::uintptr_t removeLocalPlayer) noexcept;
+/// Finds the live address of UGameInstance::RemoveLocalPlayer in the image (a startup fact, verified before any
+/// install).
+void Install(const platform::GameImage& image) noexcept;
 
 /// Adds the third local player, sets the three-column layout and aims its camera. False (logged) if it cannot.
 bool Add() noexcept;

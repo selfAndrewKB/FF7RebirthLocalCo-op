@@ -26,11 +26,14 @@ class GameImage;
 namespace lss::views {
 
 /// Installs the view-point entry. Call once, after every engine fact has been verified.
-/// Returns false, changing nothing, if the entry does not hold the engine's function.
+/// Returns false, changing nothing (logged), if the entry does not hold the engine's function.
 bool InstallPlayerViewPoint(const platform::GameImage& image) noexcept;
 
 /// Puts the engine's own function back (at mod uninstall).
 void RemovePlayerViewPoint() noexcept;
+
+/// Whether the entry holds the replacement: the filled halves, the camera choice and the streaming views need it.
+bool ViewPointInstalled() noexcept;
 
 /// What the view points follow, from the session (mod.cpp fills it each tick, and at a leave before the world
 /// changes).
@@ -72,7 +75,8 @@ bool SplitShown() noexcept;
 /// Switches whether split views fill their halves (on at start); returns the new state.
 bool ToggleFill() noexcept;
 
-/// True while split views fill their halves; false while they keep 16:9 with bars.
+/// True while split views fill their halves; false while they keep 16:9 with bars, and always false without the
+/// entry (nothing shapes the halves then; the main cameras keep their constraint).
 bool FillsHalves() noexcept;
 
 /// The FOV of filled halves (views/view_shape.h, SplitFov): the weight from 0 (keep the

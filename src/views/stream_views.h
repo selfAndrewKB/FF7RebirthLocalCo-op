@@ -32,8 +32,8 @@ enum class StreamViewsMode : std::uint8_t
 };
 
 /// Checks the game's function; false (logged, the call is never made) if it differs, or if the view
-/// point hook that records each player's drawn camera (`viewPointInstalled`) is not installed.
-bool InstallStreamViews(const platform::GameImage& image, bool viewPointInstalled) noexcept;
+/// point hook that records each player's drawn camera (views/player_view_point.h) is not installed.
+bool InstallStreamViews(const platform::GameImage& image) noexcept;
 bool StreamViewsInstalled() noexcept;
 
 /// Development: which cameras are registered (logged at the next update).

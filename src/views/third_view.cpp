@@ -1,5 +1,7 @@
 #include "views/third_view.h"
 
+#include "facts/engine.h"
+#include "platform/image.h"
 #include "platform/log.h"
 #include "player_two/generation.h"
 #include "player_two/own_controller.h"
@@ -63,10 +65,14 @@ void Forget() noexcept
 
 }  // namespace
 
-void Install(std::uintptr_t removeLocalPlayer) noexcept
+void Install(const platform::GameImage& image) noexcept
 {
-    g_players.emplace(removeLocalPlayer, kSeat);
-    platform::Log(L"third view: ready (Ctrl+F3 or 'third-view on' while player 2 is in; the multi-monitor measurement)");
+    if (const auto removeLocalPlayer = image.Rebase(facts::kRemoveLocalPlayer.address))
+    {
+        g_players.emplace(*removeLocalPlayer, kSeat);
+        platform::Log(L"third view: ready (Ctrl+F3 or 'third-view on' while player 2 is in; the multi-monitor "
+                      L"measurement)");
+    }
 }
 
 bool In() noexcept

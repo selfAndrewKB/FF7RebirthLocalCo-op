@@ -50,6 +50,7 @@ A file in the mod's folder keeps the game's behaviour:
 ```
 src/
   mod.cpp        the UE4SS entry point: verify, install, wire the modules together
+  modules.cpp    the module table: every module after the session, installed in order, removed in reverse
   facts/         the engine facts two or more modules share, one declaration per address
   platform/      the game image, the fact checks, the vtable entry, the log
   players/       player 2 joining and leaving, through UE's own local-player path

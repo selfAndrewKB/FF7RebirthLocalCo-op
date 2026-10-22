@@ -25,6 +25,7 @@ add_subdirectory("${UE4SS_ROOT}" "${CMAKE_BINARY_DIR}/RE-UE4SS")
 # ------------------------------------------------------------------------------------------------
 add_library(LocalSplitScreen SHARED
     src/mod.cpp
+    src/modules.cpp
 
     src/hud/hud_placement.cpp
     src/hud/hud_roots.cpp

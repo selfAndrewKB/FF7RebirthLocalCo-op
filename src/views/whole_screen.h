@@ -50,6 +50,9 @@ namespace lss::views {
 /// logged) if any differs.
 bool InstallWholeScreen(const platform::GameImage& image) noexcept;
 
+/// Whether the checks passed: the automatic single view and the streaming views' update read it.
+bool WholeScreenInstalled() noexcept;
+
 /// Game thread, once per engine tick: this tick's signals (zeroed if not installed).
 ScreenSignals ReadScreenSignals() noexcept;
 

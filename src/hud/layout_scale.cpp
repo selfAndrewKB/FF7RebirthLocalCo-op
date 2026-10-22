@@ -1,6 +1,7 @@
 #include "hud/layout_scale.h"
 
 #include "hud/layout_scale_code.h"
+#include "hud/overlay_layout.h"
 #include "platform/build_value.h"
 #include "platform/code_redirect.h"
 #include "platform/deferred_sites.h"
@@ -44,6 +45,12 @@ bool PlaceScale(const platform::GameImage&) noexcept
 
 bool InstallLayoutScale(const platform::GameImage& image) noexcept
 {
+    if (!OverlayLayoutInstalled())
+    {
+        platform::Log(L"HUD layout scale: off (the overlay layout is not installed; side-by-side halves keep the "
+                      L"game's height rule)");
+        return false;
+    }
     const bool deferred = platform::DeferredSites::Deferred();
     const auto site     = image.Rebase(deferred ? kContext.address : kSite, deferred ? kReplaced1005 : kReplaced);
     const auto resume   = image.Rebase(kResume);

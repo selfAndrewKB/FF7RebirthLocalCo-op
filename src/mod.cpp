@@ -1,9 +1,10 @@
 // LocalSplitScreen: the UE4SS entry point.
 //
-// This file wires the modules together and holds no logic of its own:
-//   1. verify every engine fact the mod relies on (platform/engine_addresses.h);
-//   2. if all hold, install the view-family submission (renderer/) and start listening for
-//      player intent on the game thread (players/); if any fails, install nothing.
+// This file wires the modules together:
+//   1. verify every engine fact the mod relies on (facts/engine.h); if any fails, install nothing;
+//   2. if all hold, install the renderer (one view family per player), the session (player 2's join and leave) and
+//      its stages, then the module table in order (modules.h), the dev tools and the engine callbacks;
+//   3. tick the modules once per engine tick, outside Draw; at unload, remove in reverse.
 // Design: Rebirth/Documentation/SPLITSCREEN-ARCHITECTURE.md
 
 #include <Mod/CppUserModBase.hpp>
@@ -13,87 +14,61 @@
 #include "dev/dev_tools.h"
 #include "facts/engine.h"
 #include "facts/in_battle.h"
-#include "hud/action_icon_base.h"
 #include "hud/hud_placement.h"
-#include "hud/layout_scale.h"
-#include "hud/minimap_once.h"
 #include "hud/minimap.h"
+#include "hud/minimap_once.h"
 #include "hud/overlay_layout.h"
-#include "hud/player_two_pass.h"
-#include "hud/area_icons_two.h"
-#include "hud/target_views.h"
-#include "hud/prompt_rows.h"
-#include "hud/field_markers.h"
-#include "hud/search_pins.h"
-#include "hud/root_overlay_render.h"
-#include "hud/second_image.h"
-#include "hud/user_widgets.h"
+#include "modules.h"
 #include "platform/code_memory.h"
 #include "platform/frame_watch.h"
-#include "platform/memory_watch.h"
 #include "platform/image.h"
 #include "platform/level_names.h"
 #include "platform/log.h"
+#include "platform/memory_watch.h"
 #include "platform/module_folder.h"
 #include "platform/thread_times.h"
 #include "platform/verified_code.h"
-#include "player_two/field_exit.h"
-#include "player_two/generation.h"
-#include "player_two/main_camera_shape.h"
-#include "player_two/camera_distance.h"
-#include "player_two/camera_repair.h"
-#include "player_two/location_rows.h"
-#include "player_two/shoulder_scale.h"
-#include "player_two/walk_limits.h"
-#include "player_two/field_pickup.h"
-#include "player_two/pad_rumble.h"
+#include "player_two/anim_two_views.h"
+#include "player_two/approach_two.h"
 #include "player_two/attack_cameras.h"
 #include "player_two/attack_framing.h"
-#include "player_two/synergy_partner.h"
-#include "player_two/camera_effects_two.h"
-#include "player_two/combat_rumble.h"
-#include "player_two/rumble_list_two.h"
-#include "player_two/ffb_manager_two.h"
 #include "player_two/audio_listener_two.h"
-#include "player_two/shop_talk.h"
-#include "player_two/vending.h"
-#include "player_two/chocobo_climb.h"
-#include "player_two/climb_context.h"
-#include "player_two/approach_two.h"
-#include "player_two/move_type_two.h"
-#include "player_two/near_fade.h"
-#include "player_two/anim_two_views.h"
-#include "player_two/charapop_near.h"
+#include "player_two/camera_distance.h"
+#include "player_two/camera_effects_two.h"
+#include "player_two/camera_repair.h"
 #include "player_two/charapop_centre.h"
-#include "player_two/weak_object.h"
-#include "player_two/world_actor_reach.h"
-#include "player_two/shared_ride.h"
-#include "player_two/wheelie_ride.h"
-#include "player_two/pad_sticks.h"
+#include "player_two/charapop_near.h"
+#include "player_two/chocobo_climb.h"
 #include "player_two/chocobo_ride.h"
-#include "player_two/nav_strand.h"
-#include "player_two/leave_watch.h"
+#include "player_two/climb_context.h"
+#include "player_two/combat_rumble.h"
 #include "player_two/equal_targeting.h"
-#include "player_two/player_hits.h"
-#include "player_two/leader_reads.h"
-#include "player_two/lock_group_coin.h"
+#include "player_two/ffb_manager_two.h"
+#include "player_two/field_exit.h"
+#include "player_two/generation.h"
+#include "player_two/leave_watch.h"
+#include "player_two/location_rows.h"
+#include "player_two/main_camera_shape.h"
+#include "player_two/move_type_two.h"
+#include "player_two/nav_strand.h"
+#include "player_two/near_fade.h"
+#include "player_two/pad_rumble.h"
+#include "player_two/pad_sticks.h"
+#include "player_two/rumble_list_two.h"
+#include "player_two/session.h"
+#include "player_two/shared_ride.h"
+#include "player_two/shop_talk.h"
+#include "player_two/shoulder_scale.h"
+#include "player_two/synergy_partner.h"
 #include "player_two/target_coin.h"
 #include "player_two/traversal_camera.h"
 #include "player_two/traversal_watch.h"
 #include "player_two/trigger_two.h"
 #include "player_two/vault_camera.h"
-#include "player_two/party_warp.h"
-#include "player_two/session.h"
-#include "player_two/battle_camera.h"
-#include "player_two/battle_warp_two.h"
-#include "player_two/camera_override.h"
-#include "player_two/command_locks.h"
-#include "player_two/command_menu_tick.h"
-#include "player_two/command_menu_two.h"
-#include "player_two/command_rules.h"
-#include "player_two/lock_on.h"
-#include "player_two/party_switch.h"
-#include "player_two/widget_owner.h"
+#include "player_two/vending.h"
+#include "player_two/walk_limits.h"
+#include "player_two/weak_object.h"
+#include "player_two/world_actor_reach.h"
 #include "players/console_access.h"
 #include "players/held_setting.h"
 #include "players/join_keys.h"
@@ -107,22 +82,20 @@
 #include "renderer/async_compute.h"
 #include "renderer/family_boundary.h"
 #include "renderer/me_feedback_once.h"
-#include "renderer/submit_hints.h"
 #include "renderer/residency_off.h"
+#include "renderer/submit_hints.h"
 #include "renderer/view_family_submission.h"
 #include "views/player_view_point.h"
 #include "views/stream_views.h"
 #include "views/third_view.h"
-#include "views/window_span.h"
 #include "views/whole_screen.h"
+#include "views/window_span.h"
 
 #include <array>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <string>
-#include <utility>
-#include <system_error>
 #include <optional>
 
 #ifndef WIN32_LEAN_AND_MEAN
@@ -241,64 +214,15 @@ public:
             Log(L"unloading with player 2 still in: the per-player rendering and player 2's stages stay installed");
             return;
         }
-        lss::player_two::leader_reads::Remove();     // first: no enemy leader-read answer is held from here on
-        lss::player_two::lock_group_coin::Remove();  // first: no lock-group answer is held from here on
-        // Before the stages: the Condition selects stop taking the equal-targeting answer while member_movement's
-        // leader-test slot (which answers half of it) is still in place (the reverse of the install order).
-        lss::player_two::target_coin::Remove();
-        lss::player_two::equal_targeting::Remove();
-        lss::player_two::player_hits::Remove();
-        lss::player_two::synergy_partner::Remove();  // the humans' synergy partners forgotten; its entry back
-        // The stages installed next to the session's, in the order the session removed them, before its own.
-        lss::player_two::widget_owner::Remove();
-        lss::player_two::command_menu_tick::Remove();
-        lss::player_two::command_locks::Remove();
-        lss::player_two::command_menu_two::Remove();
-        lss::player_two::battle_warp_two::Remove();
-        lss::player_two::command_rules::Remove();
-        lss::player_two::party_switch::Remove();
-        lss::player_two::lock_on::Remove();
-        lss::player_two::wheelie_ride::Remove();
-        lss::player_two::camera_distance::Remove();
-        lss::player_two::battle_camera::Remove();
+        // The reverse of the install order: the field-exit catch and the dev tools (installed after the table),
+        // the table (modules.cpp walks it backwards), the session's stages, the renderer.
+        lss::player_two::field_exit::Remove();
+        lss::dev::Remove();
+        lss::modules::Remove();
         if (session_)
         {
             session_->RemoveStages();
         }
-        if (viewPointInstalled_)
-        {
-            lss::views::RemovePlayerViewPoint();
-        }
-        lss::hud::RemoveRootOverlayRender();
-        lss::player_two::field_exit::Remove();
-        lss::player_two::nav_strand::Remove();
-        lss::player_two::trigger_two::Remove();
-        lss::player_two::chocobo_climb::Remove();
-        lss::player_two::traversal_camera::Remove();
-        lss::player_two::climb_context::Remove();
-        lss::player_two::near_fade::Remove();
-        lss::player_two::approach_two::Remove();
-        lss::player_two::move_type_two::Remove();
-        lss::player_two::anim_two_views::Remove();
-        lss::player_two::ffb_manager_two::Remove();
-        lss::player_two::rumble_list_two::Remove();
-        lss::player_two::audio_listener_two::Remove();
-        lss::player_two::traversal_watch::Remove();
-        lss::player_two::vault_camera::Remove();
-        lss::hud::target_views::Remove();
-        lss::hud::area_icons_two::Remove();
-        lss::hud::user_widgets::Remove();
-        lss::hud::minimap::Remove();
-        lss::hud::RemoveMinimapOnce();
-        lss::player_two::location_rows::Remove();
-        lss::player_two::shoulder_scale::Remove();
-        lss::hud::RemoveSecondImage();
-        lss::hud::RemovePlayerTwoPass();
-        lss::dev::Remove();
-        lss::hud::RemoveLayoutScale();
-        lss::hud::RemoveOverlayLayout();
-        lss::renderer::RemoveMeFeedbackOnce();
-        lss::renderer::RemoveSubmitHintSkip();
         if (rendererInstalled_)
         {
             lss::renderer::RemoveViewFamilySubmission();
@@ -381,97 +305,11 @@ public:
         lss::facts::InstallInBattle(*image);  // the game's in-battle test, once, for the stages that ask it
         session_.emplace(*removeLocalPlayer);
         session_->InstallStages(*image);
-        // Player 2's stages that are not the session's own, next to their siblings (each logs its own line).
-        lss::player_two::battle_camera::Install(*image);    // player 2's Battle operator follows player 1's (logged)
-        lss::player_two::camera_override::Install(*image);  // player 2's camera gets its own NotifyOverride module
-        lss::player_two::camera_distance::Install(*image);  // the Options camera distance reaches player 2's camera
-        lss::player_two::lock_on::Install(*image);       // player 2's targeting: the game's tick run again for player 2
-        lss::player_two::party_switch::Install(*image);  // player 1's switch skips player 2's member (logged)
-        lss::player_two::command_rules::Install(*image); // player 1 cannot command player 2's member (logged)
-        lss::player_two::battle_warp_two::Install(*image); // battles leave player 2's member where it is, start and end
-        lss::player_two::command_menu_two::Install(*image); // player 2's command controller: built, follows the game's
-        lss::player_two::command_locks::Install(*image);    // the battle's command locks reach it by the game's setters
-        lss::player_two::command_menu_tick::Install(*image); // ticked in battle; player 2's attack, guard and dodge
-        lss::player_two::widget_owner::Install(*image);      // party-list cells and key guide tick in player 2's view
-        lss::renderer::InstallSubmitHintSkip(*image);  // parallel passes without their own GPU submission (player 2 in)
-        lss::renderer::InstallMeFeedbackOnce(*image);  // one scenery-streaming hand-in per frame, player 1's family's
-
-        // The view-point entry serves the filled halves and the choice of player 2's camera. The
-        // split screen runs without it (halves kept 16:9 with bars, player 2 on its own camera);
-        // those keys then report that they are unavailable.
-        viewPointInstalled_ = lss::views::InstallPlayerViewPoint(*image);
-        if (!viewPointInstalled_)
-        {
-            Log(L"ULocalPlayer::GetViewPoint's entry does not hold the engine's function; filled halves and the "
-                L"camera choice are unavailable");
-        }
-        mainCameraShape_ = viewPointInstalled_ && lss::player_two::main_camera_shape::Install(*image);
-        wholeScreen_     = lss::views::InstallWholeScreen(*image);  // menus, the map, cutscenes: player 1's single view
-        lss::views::InstallStreamViews(*image, viewPointInstalled_);  // each player's camera streams scenery detail
-        lss::views::third_view::Install(*removeLocalPlayer);  // a third full-size view for the multi-monitor measurement
-        lss::views::window_span::Install(*image);  // the game window across its row of monitors (the engine's reshape)
-        lss::player_two::party_warp::Install(*image);  // the game's follow warp, for a stranded player 2
-        lss::player_two::nav_strand::Install(*image);  // player 2's member stranded off the loaded navmesh
-        lss::player_two::camera_repair::Install(*image);  // a non-finite pose on player 2's camera: the game's camera reset
-        lss::player_two::traversal_watch::Install(*image);  // ladders, climb spots, glide and jet for player 2 (logged)
-        lss::player_two::climb_context::Install(*image);  // climbs on the anim worker read their own climber's input (W5); before traversal_camera, whose holders need its Ticks
-        lss::player_two::traversal_camera::Install(*image);  // player 2's traversal gets the game's traversal cameras
-        lss::player_two::near_fade::Install(*image);  // player 1's camera never fades player 2's character out
-        lss::player_two::approach_two::Install(*image);  // walk-up traversals read player 2's stick in player 2's camera basis
-        lss::player_two::move_type_two::Install(*image);  // player 2's walk-step cap ends on player 2's controller
-        lss::player_two::anim_two_views::Install(*image);  // characters near player 2 animate by the nearer camera
-        lss::player_two::trigger_two::Install(*image);  // player 2's trigger read after player 1's; admitted actors' events delivered to player 2
-        lss::player_two::vault_camera::Install(*image);  // player 2's chocobo vaults without taking both ride framings
-        lss::player_two::chocobo_climb::Install(*image);  // player 2's chocobo climbs walls, with its own climb camera
-
-        // The HUD's layout in split views (hud/overlay_layout.h). Optional like the view point: without
-        // it the HUD keeps the game's full-screen layout, cropped to each half.
-        if (lss::hud::InstallOverlayLayout(*image))
-        {
-            lss::hud::InstallLayoutScale(*image);  // the contain rule; unchanged for 16:9
-        }
-        lss::hud::user_widgets::Install();          // HUD widgets as the engine constructs them
-        lss::hud::InstallSecondImage(*image);        // player 2's HUD image, on (the hud-image command switches it)
-        lss::hud::InstallMinimapOnce(*image);        // the minimap's map rendered by player 1's pass only
-        lss::hud::minimap::Install(*image);      // player 2's minimap in player 2's half
-        lss::player_two::location_rows::Install(*image);  // each camera's location rows from its own player
-        lss::player_two::shoulder_scale::Install(*image);  // each half's shoulder offset scaled to its width
-        lss::player_two::walk_limits::Install(*image);     // player 2's walk limits from player 2's own surroundings
-        lss::player_two::charapop_near::Install(*image);   // characters near player 2 keep the detail player 2's view gives them
-        lss::player_two::charapop_centre::Install(*image); // the NPC population follows both players (Ctrl+F10 compares)
-        lss::player_two::world_actor_reach::Install(*image); // world actors such as chests pop around player 2 too
-        lss::player_two::chocobo_ride::Install(*image);    // player 2 drives their own chocobo while the party rides
-        lss::player_two::shared_ride::Install(*image);     // the buggy and the bronco: player 2 stands aside, every pad drives
-        lss::player_two::wheelie_ride::Install(*image);    // player 2 boards a Wheelie of their own by walking into it
-        lss::player_two::field_pickup::Install(*image);    // player 2's pickups: a second pass of the game's prompts
-        lss::player_two::pad_rumble::Install(*image);      // each player's rumble on their own pad
-        lss::player_two::combat_rumble::Install(*image);   // player 2's combat rumble (hits, montage notifies) on player 2's pad
-        lss::player_two::rumble_list_two::Install(*image);  // the traversal rumble list per player (zip line, chocobo, ropes)
-        lss::player_two::ffb_manager_two::Install(*image);  // player 2's own force-feedback manager (its own channel tracks)
-        lss::player_two::audio_listener_two::Install(*image);  // player 2's sound: each SEAD sound from the nearer listener
-        lss::player_two::vending::Install(*image);         // player 2's vending machines: the shop's camera and pad
-        lss::player_two::shop_talk::Install(*image);       // player 2's shopkeepers: admit, press, the shop's AI event
-        lss::player_two::equal_targeting::Install(*image);  // Condition enemies (bosses) count either player as the UCPC
-        lss::player_two::player_hits::Install(*image);     // player 2's hits and the hits player 2 takes count as the player's
-        lss::player_two::target_coin::Install(*image);     // each enemy aims at player 1 or 2, a coin per action
-        lss::player_two::lock_group_coin::Install(*image);  // lock groups (Stun Ray) prefer player 1 or 2 by each pick's coin
-        lss::player_two::leader_reads::Install(*image);     // the game's own leader reads for an enemy follow its coin
-        lss::player_two::attack_cameras::Install(*image);   // battle camera sequences (grabs, specials) on each camera's own state
-        lss::player_two::attack_framing::Install(*image);   // enemy specials: the target's half only; leader shots on the coin player
-        lss::player_two::camera_effects_two::Install(*image);  // player 2's member's guard effect, shakes and chain pulls on player 2's camera
-        lss::player_two::synergy_partner::Install(*image);  // a synergy partner held by either human is handed to its AI and back
-        lss::hud::InstallPlayerTwoPass(*image);      // player 2's HUD content, on (the hud-levers command switches it)
-        lss::hud::InstallRootOverlayRender(*image);  // before the overlay renders: placement follow, trace
-        lss::hud::prompt_rows::Install(*image);      // each player's field prompt rows in their own half
-        lss::hud::field_markers::Install(*image);    // each player's point markers in their own half (after the opacity setter)
-        lss::hud::search_pins::Install(*image);      // each player's search pins (ranged lock-on, hookshot) in their own half
-        lss::hud::action_icon_base::Install(*image); // the prompt rows keep their corner by their own base
-        lss::hud::area_icons_two::Install(*image);   // player 2's own map icons and markers
-        lss::hud::target_views::Install(*image);     // each half's cursor and enemy gauges follow its player's target
+        lss::modules::Install(*image);  // every other module, in table order (modules.cpp); each logs its own line
 
         // The dev tools (built with LSS_DEV_TOOLS only): the control channel, the HUD trace and probe, and the watches
         // that only log (dev/dev_tools.h names them); a player's build has none of them.
-        lss::dev::Install(*image, *session_, layout_, singleView_, viewPointInstalled_);
+        lss::dev::Install(*image, *session_, layout_, singleView_, lss::views::ViewPointInstalled());
 
         const Hook::FCallbackOptions tickOptions{false, false, STR("LocalSplitScreen"), STR("player intent")};
         tickCallback_ = Hook::RegisterEngineTickPreCallback(
@@ -683,16 +521,14 @@ private:
         lss::player_two::world_actor_reach::Tick(session_->PlaysMember());
         lss::dev::TickWatches(splitShown);  // the dev-only watches, after the levers they observe (empty in a player's build)
         lss::hud::minimap::Tick(splitShown);  // outside the overlay render, before it
-        if (wholeScreen_)
+        if (lss::views::WholeScreenInstalled())
         {
             lss::views::UpdateStreamViews(splitShown);  // needs the game-state check whole_screen verified
         }
-        if (mainCameraShape_)
-        {
-            // Filled halves: each main camera's own 16:9 constraint, cleared once by the game's setter.
-            lss::player_two::main_camera_shape::Update(lss::player_two::generation::Active() && splitShown &&
-                                                       lss::views::FillsHalves());
-        }
+        // Filled halves: each main camera's own 16:9 constraint, cleared once by the game's setter. FillsHalves is
+        // false without the view-point entry (nothing shapes the halves then), so the cameras keep their constraint.
+        lss::player_two::main_camera_shape::Update(lss::player_two::generation::Active() && splitShown &&
+                                                   lss::views::FillsHalves());
         // The timing method before the gap recorder goes off, and back after it returns (SettingsOrder).
         for (const auto step : lss::players::SettingsOrder(playerTwoIn))
         {
@@ -734,7 +570,7 @@ private:
 
     void ToggleFill() noexcept
     {
-        if (!viewPointInstalled_)
+        if (!lss::views::ViewPointInstalled())
         {
             Log(L"filled halves unavailable (the view-point entry is not installed)");
             return;
@@ -759,7 +595,7 @@ private:
 
     void ToggleOwnCamera() noexcept
     {
-        if (!viewPointInstalled_)
+        if (!lss::views::ViewPointInstalled())
         {
             Log(L"camera choice unavailable (the view-point entry is not installed)");
             return;
@@ -784,7 +620,8 @@ private:
     /// is in and the automatic choice is on; each change is logged there.
     bool WholeScreenShown(bool playerTwoIn) const noexcept
     {
-        return playerTwoIn && wholeScreen_ && singleView_.Mode() == lss::players::SingleViewMode::Auto &&
+        return playerTwoIn && lss::views::WholeScreenInstalled() &&
+               singleView_.Mode() == lss::players::SingleViewMode::Auto &&
                lss::views::ReasonOf(lss::views::ReadScreenSignals()) != lss::views::WholeScreenReason::None;
     }
 
@@ -837,9 +674,6 @@ private:
     bool                                      playerTwoWaited_ = false;  // as last logged
     bool                                      tickSeen_           = false;
     bool                                      rendererInstalled_  = false;
-    bool                                      viewPointInstalled_ = false;
-    bool                                      mainCameraShape_    = false;
-    bool                                      wholeScreen_        = false;
     Hook::GlobalCallbackId                    tickCallback_       = Hook::ERROR_ID;
     Hook::GlobalCallbackId                    loadMapCallback_    = Hook::ERROR_ID;
 };

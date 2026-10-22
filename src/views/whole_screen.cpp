@@ -522,6 +522,11 @@ bool InstallWholeScreen(const platform::GameImage& image) noexcept
     return true;
 }
 
+bool WholeScreenInstalled() noexcept
+{
+    return g_installed;
+}
+
 bool GameStatePresent() noexcept
 {
     void* state = nullptr;

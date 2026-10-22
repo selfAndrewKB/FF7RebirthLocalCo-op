@@ -315,13 +315,22 @@ bool InstallPlayerViewPoint(const platform::GameImage& image) noexcept
     const auto entry    = image.Rebase(facts::kGetViewPointEntry, sizeof(void*));
     const auto engineFn = image.Rebase(facts::kGetViewPoint.address);
     const auto vtable   = image.Rebase(facts::kLocalPlayerVTable);
-    if (!entry || !engineFn || !vtable)
+    if (entry && engineFn && vtable)
     {
-        return false;
+        g_engineGetViewPoint = reinterpret_cast<GetViewPointFn>(*engineFn);
+        g_localPlayerVTable  = *vtable;
+        g_installed = g_entry.Replace(*entry, *engineFn, reinterpret_cast<std::uintptr_t>(&GetViewPoint));
     }
-    g_engineGetViewPoint = reinterpret_cast<GetViewPointFn>(*engineFn);
-    g_localPlayerVTable  = *vtable;
-    g_installed = g_entry.Replace(*entry, *engineFn, reinterpret_cast<std::uintptr_t>(&GetViewPoint));
+    if (!g_installed)
+    {
+        platform::Log(L"ULocalPlayer::GetViewPoint's entry does not hold the engine's function; filled halves and the "
+                      L"camera choice are unavailable");
+    }
+    return g_installed;
+}
+
+bool ViewPointInstalled() noexcept
+{
     return g_installed;
 }
 
@@ -489,7 +498,7 @@ bool SplitShown() noexcept
 
 bool FillsHalves() noexcept
 {
-    return g_fillOn.load(std::memory_order_relaxed);
+    return g_installed && g_fillOn.load(std::memory_order_relaxed);  // without the entry nothing shapes the halves
 }
 
 void SetSplitFovWeight(float weight) noexcept

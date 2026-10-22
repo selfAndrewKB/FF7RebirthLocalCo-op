@@ -22,7 +22,8 @@ class GameImage;
 namespace lss::hud {
 
 /// Checks the surrounding instructions and redirects the layout-scale instruction; false (nothing
-/// changed) if the code is not what the research read. Game version 1.005: its instruction crosses a 16-byte block,
+/// changed, logged) if the code is not what the research read or the overlay layout (hud/overlay_layout.h) is not
+/// installed. Game version 1.005: its instruction crosses a 16-byte block,
 /// so the two instructions before it are replaced instead, from the game thread outside the overlay render
 /// (platform/deferred_sites.h).
 bool InstallLayoutScale(const platform::GameImage& image) noexcept;
