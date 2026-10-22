@@ -91,15 +91,7 @@ bool PlaceGuarded(PlaceFn place, void* controller, void* canvas, void* widget, c
 /// The last placement the game made this frame for `key`, or null.
 const PopupPlacement* Recorded(std::uint64_t key) noexcept
 {
-    const std::uint32_t count = g_record.count < kPopupRecordCapacity ? g_record.count : kPopupRecordCapacity;
-    for (std::uint32_t i = count; i-- > 0;)
-    {
-        if (g_record.placements[i].key == key)
-        {
-            return &g_record.placements[i];
-        }
-    }
-    return nullptr;
+    return g_record.Last(key, [](const PopupPlacement& placement) { return placement.key; });
 }
 
 bool Alive(std::uintptr_t referenceController) noexcept
@@ -206,13 +198,14 @@ void Replay(bool playerTwo) noexcept
         return;
     }
     int counts[3]{};
-    g_record.replaying = 1;
-    for (std::size_t i = 0; i < std::size(kLists) && !g_failed; ++i)
     {
-        counts[i] = ReplayList(manager, kLists[i], canvas, controller);
-        g_failed  = counts[i] < 0;
+        const Replaying<PopupRecord> replaying(g_record);  // the mod's own placements are not recorded
+        for (std::size_t i = 0; i < std::size(kLists) && !g_failed; ++i)
+        {
+            counts[i] = ReplayList(manager, kLists[i], canvas, controller);
+            g_failed  = counts[i] < 0;
+        }
     }
-    g_record.replaying = 0;
     if (g_failed)
     {
         platform::Log(L"popups: a placement raised an exception; popups are no longer placed per view");
@@ -227,7 +220,7 @@ void Replay(bool playerTwo) noexcept
 
 void EndFrame() noexcept
 {
-    g_record.count = 0;
+    g_record.EndFrame();
 }
 
 }  // namespace lss::hud::popups

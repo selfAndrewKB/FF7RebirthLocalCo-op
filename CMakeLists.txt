@@ -279,6 +279,7 @@ lss_test(command_rules_code src/platform/code_redirect.cpp src/platform/block_pa
 lss_test(panel_gate_code src/platform/code_redirect.cpp src/platform/block_patch.cpp src/platform/code_memory.cpp tests/log_console.cpp)
 lss_test(centered_frame_code src/platform/code_redirect.cpp src/platform/block_patch.cpp src/platform/code_memory.cpp tests/log_console.cpp)
 lss_test(popups_code src/platform/code_redirect.cpp src/platform/block_patch.cpp src/platform/code_memory.cpp tests/log_console.cpp)
+lss_test(placement_record)
 lss_test(arrow_edge_code src/platform/code_redirect.cpp src/platform/block_patch.cpp src/platform/code_memory.cpp tests/log_console.cpp)
 lss_test(family_boundary_list)
 lss_test(button_view)

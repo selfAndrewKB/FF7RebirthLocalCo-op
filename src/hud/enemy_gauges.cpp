@@ -354,15 +354,8 @@ bool SetPositionGuarded(void* widget, std::uint64_t position) noexcept
 /// The last placement the game made this frame for `widget`, or null.
 const GaugePlacement* Recorded(const void* widget) noexcept
 {
-    const std::uint32_t count = g_record.count < kGaugeRecordCapacity ? g_record.count : kGaugeRecordCapacity;
-    for (std::uint32_t i = count; i-- > 0;)
-    {
-        if (g_record.placements[i].widget == reinterpret_cast<std::uint64_t>(widget))
-        {
-            return &g_record.placements[i];
-        }
-    }
-    return nullptr;
+    return g_record.Last(reinterpret_cast<std::uint64_t>(widget),
+                         [](const GaugePlacement& placement) { return placement.widget; });
 }
 
 /// The tick's test of this entry this frame, or its flags as they are now if it was not recorded.
@@ -763,15 +756,17 @@ void Replay(bool playerTwo) noexcept
     }
     int  replayed = 0, targeted = 0;
     bool ok       = true;
-    g_record.replaying = 1;
-    try
     {
-        ok = playerTwo && g_ownTargets ? ReplayPlayerTwo(manager, replayed, targeted) : ReplayPlayerOne(manager, replayed, targeted);
+        const Replaying<GaugeRecord> replaying(g_record);  // the mod's own placements are not recorded
+        try
+        {
+            ok = playerTwo && g_ownTargets ? ReplayPlayerTwo(manager, replayed, targeted)
+                                           : ReplayPlayerOne(manager, replayed, targeted);
+        }
+        catch (...)
+        {
+        }
     }
-    catch (...)
-    {
-    }
-    g_record.replaying = 0;
     if (!ok)
     {
         g_failed = true;
@@ -804,7 +799,7 @@ void EndPlayerTwoPass() noexcept
 void EndFrame() noexcept
 {
     EndPlayerTwoPass();  // in case player 2's pass did not reach its own end
-    g_record.count = 0;
+    g_record.EndFrame();
     g_captureCount = 0;
 }
 

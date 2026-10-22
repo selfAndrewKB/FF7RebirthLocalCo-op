@@ -11,15 +11,17 @@
 // projection is player 1's in both halves. Each wrapper's first instruction, `mov [rsp+10h], rbx`
 // (5 bytes inside one block), is replaced: the code appends {key, PC, *loc, offset, clamp} to a record
 // in this DLL (the key: the SWidget* at [r9] for the Slate wrapper, the UUserWidget* in r9 for the UMG
-// one), unless the record is full or the mod is replaying, then runs the replaced instruction.
+// one), unless the record is full or the mod is replaying, then runs the replaced instruction
+// (hud/placement_record.h: the head, the scale and the replaced instruction; the payload here).
 //
 // Only rax, r10, r11 and the flags change: none carries an argument at a function's entry. No
 // calls, no stack writes. Kept apart from the installer so the host tests can execute these bytes.
 
+#include "hud/placement_record.h"
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 
 namespace lss::hud {
 
@@ -38,19 +40,15 @@ static_assert(sizeof(PopupPlacement) == 48 && offsetof(PopupPlacement, location)
 
 inline constexpr std::uint32_t kPopupRecordCapacity = 96;  // a busy fight shows a few dozen popups
 
-struct alignas(16) PopupRecord
-{
-    std::uint32_t  count     = 0;
-    std::uint8_t   replaying = 0;
-    std::uint8_t   pad[11]{};
-    PopupPlacement placements[kPopupRecordCapacity];
-};
+using PopupRecord = PlacementRecord<PopupPlacement, kPopupRecordCapacity>;
 static_assert(offsetof(PopupRecord, replaying) == 4 && offsetof(PopupRecord, placements) == 16);
 
 /// The instruction replaced at both wrappers' entries.
 inline constexpr std::uint8_t kPopupEntryBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10};  // mov [rsp+10h], rbx
 
-inline constexpr std::size_t kPopupCodeSize = 93;
+inline constexpr std::size_t kPopupPayloadSize = 49;
+inline constexpr std::size_t kPopupCodeSize = kRecordHeadSize + kRecordScaleSize + kRecordAddSize + kPopupPayloadSize +
+                                              sizeof(kPopupEntryBytes);  // 93
 
 enum class PopupKey
 {
@@ -60,17 +58,8 @@ enum class PopupKey
 
 inline std::array<std::uint8_t, kPopupCodeSize> PopupCaptureCode(PopupRecord& record, PopupKey key) noexcept
 {
-    std::array<std::uint8_t, kPopupCodeSize> code = {
-        0x48, 0xB8, 0, 0, 0, 0, 0, 0, 0, 0,     //  0: mov  rax, &record
-        0x80, 0x78, 0x04, 0x00,                 // 10: cmp  byte [rax+4], 0      replaying: not the game's call
-        0x75, 0x48,                             // 14: jne  done (88)
-        0x44, 0x8B, 0x10,                       // 16: mov  r10d, [rax]          count
-        0x41, 0x83, 0xFA, kPopupRecordCapacity, // 19: cmp  r10d, capacity
-        0x73, 0x3F,                             // 23: jae  done (88)
-        0x45, 0x8D, 0x5A, 0x01,                 // 25: lea  r11d, [r10+1]
-        0x44, 0x89, 0x18,                       // 29: mov  [rax], r11d          count + 1
-        0x4D, 0x6B, 0xD2, 0x30,                 // 32: imul r10, r10, 30h        * sizeof(PopupPlacement)
-        0x4C, 0x01, 0xD0,                       // 36: add  rax, r10             (placements start at +10h)
+    // After the head (rax = &placements[count], count + 1 stored): the call's arguments into the placement.
+    std::uint8_t payload[kPopupPayloadSize] = {
         0x4D, 0x8B, 0x19,                       // 39: mov  r11, [r9]            the key (Umg: mov r11, r9)
         0x4C, 0x89, 0x58, 0x10,                 // 42: mov  [rax+10h], r11
         0x48, 0x89, 0x50, 0x18,                 // 46: mov  [rax+18h], rdx       PC
@@ -83,17 +72,15 @@ inline std::array<std::uint8_t, kPopupCodeSize> PopupCaptureCode(PopupRecord& re
         0x4C, 0x89, 0x58, 0x2C,                 // 75: mov  [rax+2Ch], r11
         0x44, 0x8A, 0x5C, 0x24, 0x38,           // 79: mov  r11b, [rsp+38h]      clamp
         0x44, 0x88, 0x58, 0x34,                 // 84: mov  [rax+34h], r11b
-        0x48, 0x89, 0x5C, 0x24, 0x10,           // 88: done: mov [rsp+10h], rbx (the replaced instruction)
-    };                                          // 93: (the jump back to the next instruction is appended here)
+    };                                          // 88: done
     if (key == PopupKey::Umg)
     {
-        code[39] = 0x4D;  // mov r11, r9
-        code[40] = 0x89;
-        code[41] = 0xCB;
+        payload[0] = 0x4D;  // mov r11, r9
+        payload[1] = 0x89;
+        payload[2] = 0xCB;
     }
-    const auto address = reinterpret_cast<std::uint64_t>(&record);
-    std::memcpy(&code[2], &address, sizeof(address));
-    return code;
+    constexpr std::array<std::uint8_t, kRecordScaleSize> kScale = {0x4D, 0x6B, 0xD2, 0x30};  // imul r10, r10, 30h
+    return RecordAppendCode(&record, kPopupRecordCapacity, kScale, payload, kPopupEntryBytes);
 }
 
 }  // namespace lss::hud
