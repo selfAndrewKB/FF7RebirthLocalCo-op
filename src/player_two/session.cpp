@@ -603,12 +603,34 @@ void Session::CheckHeldAi() noexcept
     Yield(L"put into LEAD by a story script (given back so the script can run; player 2 waits for it to follow again)");
 }
 
-/// The field running again (the entry steps done, the party rebuilt): a join before that would be
-/// undone by the entry's own unpossess of every non-leader (RE-p2-retry-reload.md §2.3). The same
-/// readiness for the rejoin after a map load and for the wait for a free member.
+/// The one readiness gate of a join: player 2's camera manager can be started safely, the game has started,
+/// and the field runs again (the entry steps done, the party rebuilt: a join before that would be undone by the
+/// entry's own unpossess of every non-leader, RE-p2-retry-reload.md §2.3). Null when ready, else why not, as the
+/// join's refusal line says it. The same gate for the join by the key, the rejoin after a map load and the wait
+/// for a free member.
+const wchar_t* Session::NotReadyToJoin() const noexcept
+{
+    if (!installed_.ownController || !own_controller::Ready())
+    {
+        return installed_.ownController
+                   ? L"player 2's camera manager cannot be started safely yet (player 1's camera names are not set "
+                     L"yet)"
+                   : L"player 2's camera manager cannot be started safely yet (its stage is not installed)";
+    }
+    if (installed_.member && !party_member::GameReady())
+    {
+        return L"the game has not started yet (the title, or early in a load)";
+    }
+    if (!field_exit::FieldReady())
+    {
+        return L"the field is still being entered (a join now would be undone by it)";
+    }
+    return nullptr;
+}
+
 bool Session::ReadyToJoinOutside() const noexcept
 {
-    return own_controller::Ready() && (!installed_.member || party_member::GameReady()) && field_exit::FieldReady();
+    return NotReadyToJoin() == nullptr;
 }
 
 /// Player 2 is out and wants back in (player_two/outside_join.h says when): the normal join once the new

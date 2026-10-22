@@ -84,6 +84,16 @@
 #include "player_two/vault_camera.h"
 #include "player_two/party_warp.h"
 #include "player_two/session.h"
+#include "player_two/battle_camera.h"
+#include "player_two/battle_warp_two.h"
+#include "player_two/camera_override.h"
+#include "player_two/command_locks.h"
+#include "player_two/command_menu_tick.h"
+#include "player_two/command_menu_two.h"
+#include "player_two/command_rules.h"
+#include "player_two/lock_on.h"
+#include "player_two/party_switch.h"
+#include "player_two/widget_owner.h"
 #include "players/held_setting.h"
 #include "players/join_keys.h"
 #include "players/single_view.h"
@@ -238,6 +248,18 @@ public:
         lss::player_two::equal_targeting::Remove();
         lss::player_two::player_hits::Remove();
         lss::player_two::synergy_partner::Remove();  // the humans' synergy partners forgotten; its entry back
+        // The stages installed next to the session's, in the order the session removed them, before its own.
+        lss::player_two::widget_owner::Remove();
+        lss::player_two::command_menu_tick::Remove();
+        lss::player_two::command_locks::Remove();
+        lss::player_two::command_menu_two::Remove();
+        lss::player_two::battle_warp_two::Remove();
+        lss::player_two::command_rules::Remove();
+        lss::player_two::party_switch::Remove();
+        lss::player_two::lock_on::Remove();
+        lss::player_two::wheelie_ride::Remove();
+        lss::player_two::camera_distance::Remove();
+        lss::player_two::battle_camera::Remove();
         if (session_)
         {
             session_->RemoveStages();
@@ -358,6 +380,18 @@ public:
         lss::facts::InstallInBattle(*image);  // the game's in-battle test, once, for the stages that ask it
         session_.emplace(*removeLocalPlayer);
         session_->InstallStages(*image);
+        // Player 2's stages that are not the session's own, next to their siblings (each logs its own line).
+        lss::player_two::battle_camera::Install(*image);    // player 2's Battle operator follows player 1's (logged)
+        lss::player_two::camera_override::Install(*image);  // player 2's camera gets its own NotifyOverride module
+        lss::player_two::camera_distance::Install(*image);  // the Options camera distance reaches player 2's camera
+        lss::player_two::lock_on::Install(*image);       // player 2's targeting: the game's tick run again for player 2
+        lss::player_two::party_switch::Install(*image);  // player 1's switch skips player 2's member (logged)
+        lss::player_two::command_rules::Install(*image); // player 1 cannot command player 2's member (logged)
+        lss::player_two::battle_warp_two::Install(*image); // battles leave player 2's member where it is, start and end
+        lss::player_two::command_menu_two::Install(*image); // player 2's command controller: built, follows the game's
+        lss::player_two::command_locks::Install(*image);    // the battle's command locks reach it by the game's setters
+        lss::player_two::command_menu_tick::Install(*image); // ticked in battle; player 2's attack, guard and dodge
+        lss::player_two::widget_owner::Install(*image);      // party-list cells and key guide tick in player 2's view
         lss::renderer::InstallSubmitHintSkip(*image);  // parallel passes without their own GPU submission (player 2 in)
         lss::renderer::InstallMeFeedbackOnce(*image);  // one scenery-streaming hand-in per frame, player 1's family's
 

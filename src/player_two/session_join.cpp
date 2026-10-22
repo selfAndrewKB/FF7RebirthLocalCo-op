@@ -9,18 +9,7 @@
 #include "player_two/describe.h"
 #include "player_two/field_camera.h"
 #include "player_two/generation.h"
-#include "player_two/battle_camera.h"
-#include "player_two/battle_warp_two.h"
-#include "player_two/camera_override.h"
-#include "player_two/command_locks.h"
-#include "player_two/command_menu_tick.h"
-#include "player_two/command_menu_two.h"
-#include "player_two/command_rules.h"
-#include "player_two/field_exit.h"
-#include "player_two/lock_on.h"
 #include "player_two/party_events.h"
-#include "player_two/party_switch.h"
-#include "player_two/camera_distance.h"
 #include "player_two/member_movement.h"
 #include "player_two/shared_ride.h"
 #include "player_two/move_state.h"
@@ -31,8 +20,6 @@
 #include "player_two/primary_controller.h"
 #include "player_two/scope_leaks.h"
 #include "player_two/view_target.h"
-#include "player_two/wheelie_ride.h"
-#include "player_two/widget_owner.h"
 
 #include <Unreal/CoreUObject/UObject/Class.hpp>
 
@@ -112,15 +99,12 @@ void Session::InstallStages(const platform::GameImage& image) noexcept
     installed_.primary       = primary_controller::Install(image);
     installed_.member        = installed_.primary && party_member::Install(image);
     installed_.fieldSettings = field_camera::InstallSettings(image);
-    installed_.cameraUpdate  = installed_.primary && field_camera::InstallUpdate(image);
-    battle_camera::Install(image);    // player 2's Battle operator follows player 1's (logged)
-    camera_override::Install(image);  // player 2's camera gets its own NotifyOverride module (logged)
-    camera_distance::Install(image);  // the Options camera distance reaches player 2's camera too (logged)
+    const bool cameraUpdate  = installed_.primary && field_camera::InstallUpdate(image);
     installed_.padSticks     = installed_.primary && pad_sticks::Install(image);
     installed_.moveTicks     = move_state::Install(image);
     installed_.viewTarget    = view_target::Install(image);
-    installed_.scopeLeaks    = scope_leaks::Install(image);
-    installed_.padButtons    = pad_buttons::Install(image);
+    const bool scopeLeaks    = scope_leaks::Install(image);
+    const bool padButtons    = pad_buttons::Install(image);
     installed_.memberMovement = installed_.member && installed_.padSticks && installed_.moveTicks &&
                                 member_movement::Install(image);  // the member tick runs on the game's recorded ticks
     installed_.partyEvents =
@@ -133,47 +117,28 @@ void Session::InstallStages(const platform::GameImage& image) noexcept
                                       },
                                       [](void* self) noexcept { static_cast<Session*>(self)->OnPartyApplied(); },
                                       this});
-    lock_on::Install(image);       // player 2's targeting: the game's tick run again for player 2 (logged)
-    party_switch::Install(image);  // player 1's switch skips player 2's member (logged)
-    command_rules::Install(image); // player 1 cannot command player 2's member (logged)
-    battle_warp_two::Install(image); // battles leave player 2's member where it is, start and end (logged)
-    command_menu_two::Install(image); // player 2's command controller, built; follows the game's Setup/ResetAll (logged)
-    command_locks::Install(image);    // the battle's command locks reach it through the game's setters (logged)
-    command_menu_tick::Install(image); // ticked in battle; player 2's attack, guard and dodge through it (logged)
-    widget_owner::Install(image);      // player 2's party-list cells and key guide tick in player 2's view (logged)
     LogStage(L"own controller", installed_.ownController);
     LogStage(L"primary-controller scope", installed_.primary);
     LogStage(L"own party member", installed_.member);
     LogStage(L"own camera view", installed_.viewTarget);
     LogStage(L"field camera settings", installed_.fieldSettings);
-    LogStage(L"own camera update", installed_.cameraUpdate);
+    LogStage(L"own camera update", cameraUpdate);
     LogStage(L"per-pad sticks (on; Ctrl+F9 switches)", installed_.padSticks);
     LogStage(L"member movement (with per-pad sticks)", installed_.memberMovement);
     LogStage(L"move-state ticks (the game's recorded; player 1's on pad 1)", installed_.moveTicks);
-    LogStage(L"scope leaks put back", installed_.scopeLeaks);
-    LogStage(L"per-pad buttons (the split views; pad 2 kept from the menus)", installed_.padButtons);
+    LogStage(L"scope leaks put back", scopeLeaks);
+    LogStage(L"per-pad buttons (the split views; pad 2 kept from the menus)", padButtons);
     LogStage(L"party events (the game's leader and status changes)", installed_.partyEvents);
 }
 
 void Session::RemoveStages() noexcept
 {
     party_events::Remove();
-    widget_owner::Remove();
-    command_menu_tick::Remove();
-    command_locks::Remove();
-    command_menu_two::Remove();
-    battle_warp_two::Remove();
-    command_rules::Remove();
-    party_switch::Remove();
-    lock_on::Remove();
-    wheelie_ride::Remove();
     member_movement::Remove();
     scope_leaks::Remove();
     pad_buttons::Remove();
     move_state::Remove();
     pad_sticks::Remove();
-    camera_distance::Remove();
-    battle_camera::Remove();
     field_camera::Remove();
     own_controller::Remove();
 }
@@ -185,20 +150,9 @@ bool Session::JoinAllowed(const players::LocalPlayers::PlayerOne& one) const noe
         Log(L"join refused: an earlier join raised an exception inside the engine; restart the game to join again");
         return false;
     }
-    if (!installed_.ownController || !own_controller::Ready())
+    if (const wchar_t* why = NotReadyToJoin())
     {
-        Log(L"join refused: player 2's camera manager cannot be started safely yet ({})",
-            installed_.ownController ? L"player 1's camera names are not set yet" : L"its stage is not installed");
-        return false;
-    }
-    if (installed_.member && !party_member::GameReady())
-    {
-        Log(L"join refused: the game has not started yet (the title, or early in a load)");
-        return false;
-    }
-    if (installed_.member && !field_exit::FieldReady())
-    {
-        Log(L"join refused: the field is still being entered (a join now would be undone by it)");
+        Log(L"join refused: {}", why);
         return false;
     }
     if (one.controller == nullptr)

@@ -31,7 +31,8 @@
 //   map load player 2 leaves before it, and joins again once the new map is in the field state
 //            and player 1's camera is ready.
 // Each stage is installed only if its engine checks pass; a stage that is not installed is
-// skipped, and the ones before it still work.
+// skipped, and the ones before it still work. The session installs its own stages only; player 2's other
+// modules are installed by mod.cpp next to their siblings.
 //
 // Game thread only, outside Draw.
 
@@ -138,6 +139,7 @@ private:
     void WatchOwnCamera() noexcept;
     void RetakeWhenFree() noexcept;
     bool MemberDestroyed() noexcept;
+    const wchar_t* NotReadyToJoin() const noexcept;  // null when a join may run, else why not
     bool ReadyToJoinOutside() const noexcept;
     void OutsideTick() noexcept;
     void LogGaveUp(outside_join::Reason reason) noexcept;
@@ -184,13 +186,10 @@ private:
         bool primary        = false;
         bool member         = false;
         bool fieldSettings  = false;
-        bool cameraUpdate   = false;
         bool moveTicks      = false;  // the game's move-state ticks recorded (member movement runs on them)
         bool padSticks      = false;
         bool viewTarget     = false;
         bool memberMovement = false;
-        bool scopeLeaks     = false;
-        bool padButtons     = false;
         bool partyEvents    = false;
     } installed_;
 };
