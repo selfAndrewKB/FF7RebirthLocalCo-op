@@ -9,6 +9,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "player_two/chocobo_ride.h"
+#include "player_two/camera_access.h"
 #include "player_two/generation.h"
 #include "player_two/member_movement.h"
 #include "player_two/object_fields.h"
@@ -36,7 +37,7 @@ constexpr std::uintptr_t kEndDeactivateCall = 0x1416EA304;
 constexpr std::uint32_t  kActionCharacter   = 0x450;   // the action's character, an FWeakObjectPtr {index, serial}
 constexpr std::uint32_t  kFieldOperator     = 0x2CB0;  // a camera manager's Field operator (a pointer to it)
 using facts::kOperatorModules;
-constexpr std::uint32_t  kModuleSlot15      = 15 * 16;
+constexpr std::uint32_t  kModuleSlot15      = 15;
 
 inline constexpr std::uint8_t kPrimaryDeactivateBytes[] = {
     0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xBC, 0x66, 0x9C, 0x00,
@@ -113,8 +114,8 @@ std::uintptr_t Research(std::uintptr_t live) noexcept
 
 std::uintptr_t Slot15Vtable(const void* op) noexcept
 {
-    const void* modules = ReadPointer(op, kOperatorModules);
-    return modules != nullptr ? Research(VTableOf(ReadPointer(modules, kModuleSlot15))) : 0;
+    const void* module = camera_access::ModuleAt(op, kModuleSlot15);
+    return module != nullptr ? Research(VTableOf(module)) : 0;
 }
 
 /// The vault End's deactivate (lever L2): the stub hands over the action from rbx. Any thread; the game's own End runs

@@ -24,6 +24,7 @@ using platform::SlotFact;
 // The classes (vtables stored by the native constructors at offset 0)
 inline constexpr std::uintptr_t kCameraManagerVTable       = 0x145D6FA30;
 inline constexpr std::uintptr_t kFieldOperatorVTable       = 0x1466B5CB8;
+inline constexpr std::uintptr_t kBattleOperatorVTable      = 0x1466B4928;  // FEndBattleCameraOperator (operator 11)
 inline constexpr std::uintptr_t kChocoboCameraModuleVTable = 0x145CE2C50;  // FEndChocoboCameraModule (a ride's slot 15)
 
 // Fields

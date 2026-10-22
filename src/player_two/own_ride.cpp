@@ -9,6 +9,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "player_two/camera_access.h"
 #include "player_two/chocobo_ride.h"
 #include "player_two/describe.h"
 #include "player_two/member_movement.h"
@@ -24,9 +25,8 @@ namespace {
 using facts::kCameraManagerFieldOperator;
 using facts::kCharacterControlHolder;
 using facts::kControllerActiveVehicle;
-using facts::kOperatorModules;
 constexpr std::uint32_t kHolderComponent = 0x40;
-constexpr std::uint32_t kModuleSlot15    = 15 * 16;
+constexpr std::uint32_t kModuleSlot15    = 15;
 
 using GetterFn = void* (*)(const void* object);
 
@@ -68,8 +68,7 @@ const void* CameraModule15(const void* playerTwo) noexcept
 {
     const void* pcm     = ReadPointer(playerTwo, facts::kControllerCameraManager);
     const void* op      = ReadPointer(pcm, kCameraManagerFieldOperator);
-    const void* modules = ReadPointer(op, kOperatorModules);
-    return modules != nullptr ? ReadPointer(modules, kModuleSlot15) : nullptr;
+    return camera_access::ModuleAt(op, kModuleSlot15);
 }
 
 const void* InputComponentOf(const void* vehicle) noexcept

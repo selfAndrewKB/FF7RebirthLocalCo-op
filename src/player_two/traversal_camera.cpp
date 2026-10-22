@@ -15,6 +15,7 @@
 #include "platform/vtable_entry.h"
 #include "player_two/climb_context.h"
 #include "player_two/describe.h"
+#include "player_two/camera_access.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 #include "player_two/member_movement.h"
@@ -223,8 +224,7 @@ constexpr std::uint32_t  kClimbHipBlend    = 0x488;        // float: eases towar
 constexpr std::uint32_t kPcmPulledIn = 0x2DE4;
 constexpr std::uint32_t kPcmHitActor = 0x2DC0;
 constexpr unsigned      kAfterFrames = 60;  // frames watched after a traversal module leaves slot 15 (the ladder top)
-using facts::kOperatorModules;
-constexpr std::uint32_t kSlotFifteen = 15 * 16;
+constexpr std::uint32_t kSlotFifteen = 15;  // the ride camera module's slot (player_two/camera_access.h)
 
 // --- move classes ---------------------------------------------------------------------------------------------------
 
@@ -1392,9 +1392,8 @@ std::array<CollisionWatch, 2> g_collision;
 
 const void* SlotFifteen(const void* cameraManager) noexcept
 {
-    const void* op      = ReadPointer(cameraManager, facts::kCameraManagerFieldOperator);
-    const void* modules = op != nullptr ? ReadPointer(op, kOperatorModules) : nullptr;
-    return modules != nullptr ? ReadPointer(modules, kSlotFifteen) : nullptr;
+    const void* op = ReadPointer(cameraManager, facts::kCameraManagerFieldOperator);
+    return camera_access::ModuleAt(op, kSlotFifteen);
 }
 
 void LogCollision(int player, const CollisionWatch& w)

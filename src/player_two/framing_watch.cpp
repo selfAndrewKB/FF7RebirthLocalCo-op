@@ -5,6 +5,7 @@
 #include "platform/guarded.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "player_two/camera_access.h"
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
 #include "players/unreal_access.h"
@@ -39,9 +40,7 @@ constexpr std::uint32_t kOpPoseFov       = 0x5C;
 constexpr std::uint32_t kOpPoseDistance  = 0x80;
 constexpr std::uint32_t kOpPoseHeight    = 0x94;
 constexpr std::uint32_t kOpPoseAim       = 0x84;   // the pose's AimOffset X, Y (lateral: the shoulder), Z
-using facts::kOperatorModules;
 constexpr std::uint32_t kModuleSlots     = 25;
-constexpr std::uint32_t kModuleStride    = 16;
 constexpr std::uint32_t kModuleActive    = 0x44;   // u8
 constexpr float         kAimStepCm       = 15.0f;  // an aim offset change this large writes a line
 constexpr std::uint64_t kMinChangeGapMs  = 250;
@@ -141,10 +140,9 @@ Framing Take(void* controller) noexcept
     Read(op, kOpPitchMin, f.pitchMin);
     Read(op, kOpPitchMax, f.pitchMax);
     Read(op, kOpPoseAim, f.poseAim);
-    const auto* modules = static_cast<const std::byte*>(ReadPointer(op, kOperatorModules));
-    for (std::uint32_t slot = 0; modules != nullptr && slot < kModuleSlots; ++slot)
+    for (std::uint32_t slot = 0; slot < kModuleSlots; ++slot)
     {
-        const void*  module = ReadPointer(modules + slot * kModuleStride, 0);
+        const void*  module = camera_access::ModuleAt(op, slot);
         std::uint8_t on     = 0;
         if (Read(module, kModuleActive, on) && on != 0)
         {

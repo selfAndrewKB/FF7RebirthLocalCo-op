@@ -8,6 +8,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "player_two/camera_access.h"
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
 #include "views/player_view_point.h"
@@ -31,7 +32,6 @@ constexpr std::uint8_t   kFinalizePoseBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0
                                                  0xC8, 0x22, 0x61, 0x01, 0x48, 0x2B, 0xE0};
 constexpr platform::FunctionFact kFinalizePose{L"the camera operator's FinalizePose", 0x140A9CC5C, kFinalizePoseBytes};
 constexpr std::uint32_t  kPoseAimY        = 0x88;  // op+0x40 pose, +0x48 AimOffset Y (lateral)
-using facts::kCameraManagerBattleOperator;
 constexpr float          kMinRatio = 0.25f, kMaxRatio = 4.0f;  // a ratio outside this is not trusted
 constexpr float          kMaxScale = 1.0f;  // only ever softened: a wider half keeps the game's offset (the user, 2026-10-01)
 
@@ -51,28 +51,14 @@ float Scale(int p) noexcept
     return world_rules::ShoulderScale(ratio, g_minimum.load(std::memory_order_relaxed), kMaxScale);
 }
 
-/// 0 or 1 for an operator of player 1's or player 2's camera manager, -1 otherwise.
-int PlayerOf(const void* op) noexcept
-{
-    void* const controllers[2] = {generation::PlayerOneController(), generation::PlayerTwoController()};
-    for (int p = 0; p < 2; ++p)
-    {
-        void* pcm = ReadPointer(controllers[p], facts::kControllerCameraManager);
-        if (pcm != nullptr && (ReadPointer(pcm, facts::kCameraManagerFieldOperator) == op ||
-                               ReadPointer(pcm, kCameraManagerBattleOperator) == op))
-        {
-            return p;
-        }
-    }
-    return -1;
-}
+using camera_access::PlayerOfOperator;  // 0 or 1 for an operator of player 1's or player 2's camera manager
 
 void Finalize(void* op, void* stick, float deltaTime) noexcept
 {
     if (g_on.load(std::memory_order_relaxed) && g_shown.load(std::memory_order_relaxed) && generation::Active() &&
         generation::OnGameThread())
     {
-        const int p = PlayerOf(op);
+        const int p = PlayerOfOperator(op);
         if (p >= 0)
         {
             const float ratio = Scale(p);

@@ -122,6 +122,7 @@ add_library(LocalSplitScreen SHARED
     src/player_two/attack_framing.cpp
     src/player_two/synergy_partner.cpp
     src/player_two/camera_effects_two.cpp
+    src/player_two/camera_access.cpp
     src/player_two/camera_distance.cpp
     src/player_two/main_camera_shape.cpp
     src/player_two/command_locks.cpp

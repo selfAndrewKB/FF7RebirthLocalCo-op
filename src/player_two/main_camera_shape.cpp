@@ -15,6 +15,7 @@
 #include "platform/build_value.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "player_two/camera_access.h"
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
 #include "platform/guarded.h"
@@ -66,7 +67,7 @@ constexpr std::int32_t kSetterFrameBytes = 16;
 constexpr std::size_t  kMaxChanged       = 4;  // two players, and a respawned camera each
 
 // Set once at install.
-std::uintptr_t g_cameraManagerVTable = 0;
+bool           g_installed = false;  // the camera lookups' check passed (player_two/camera_access.h)
 
 // Game thread.
 Reflection                         g_reflection;
@@ -75,17 +76,7 @@ bool                               g_reflectionFailed = false;
 std::array<Changed, kMaxChanged>   g_changed{};
 bool                               g_refusalLogged = false;
 
-void* CameraManagerOf(void* controller) noexcept
-{
-    void* cameraManager = ReadPointer(controller, facts::kControllerCameraManager);
-    if (cameraManager == nullptr ||
-        reinterpret_cast<std::uintptr_t>(ReadPointer(cameraManager, 0)) != g_cameraManagerVTable ||
-        ReadPointer(cameraManager, facts::kCameraManagerPcOwner) != controller)
-    {
-        return nullptr;
-    }
-    return cameraManager;
-}
+using camera_access::CameraManagerOf;
 
 bool FindReflection() noexcept
 {
@@ -227,14 +218,13 @@ void RestoreAll() noexcept
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto vtable = image.Rebase(facts::kCameraManagerVTable);
-    g_cameraManagerVTable = vtable ? *vtable : 0;
-    if (g_cameraManagerVTable == 0)
+    g_installed = camera_access::Install(image);
+    if (!g_installed)
     {
         platform::Log(L"main cameras: the camera manager's vtable is not where the research read it; split halves keep "
                       L"the game's 16:9 bars");
     }
-    return g_cameraManagerVTable != 0;
+    return g_installed;
 }
 
 void Update(bool fill) noexcept
@@ -250,7 +240,7 @@ void Update(bool fill) noexcept
             g_refusalLogged = false;
             return;
         }
-        if (g_cameraManagerVTable == 0 || !FindReflection())
+        if (!g_installed || !FindReflection())
         {
             return;
         }

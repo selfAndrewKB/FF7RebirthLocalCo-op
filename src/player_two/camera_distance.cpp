@@ -11,6 +11,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "player_two/call_site.h"
+#include "player_two/camera_access.h"
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
 #include "players/unreal_access.h"
@@ -75,7 +76,6 @@ platform::CallRedirect g_confirmCall;
 platform::EntryRedirect g_primaryEntry;      // 1.005: the option setter's call, heard at the entry
 std::uintptr_t          g_setterReturn = 0;  // 1.005: live return address of the option setter's call
 ManagerApplyFn         g_managerApply        = nullptr;
-std::uintptr_t         g_cameraManagerVTable = 0;
 
 // Game thread.
 
@@ -92,17 +92,7 @@ void Line(const std::wstring& text) noexcept
     platform::Log(L"camera distance: {}", text);
 }
 
-/// A controller's End camera manager, if it is one and names the controller as its owner.
-void* CameraManagerOf(void* controller) noexcept
-{
-    void* cameraManager = ReadPointer(controller, facts::kControllerCameraManager);
-    if (VTableOf(cameraManager) != g_cameraManagerVTable ||
-        ReadPointer(cameraManager, facts::kCameraManagerPcOwner) != controller)
-    {
-        return nullptr;
-    }
-    return cameraManager;
-}
+using camera_access::CameraManagerOf;
 
 /// The game's per-camera-manager apply for player 2's camera manager, after the game's own apply on
 /// `applied` (the primary camera manager).
@@ -217,7 +207,7 @@ void DriveTo(void* cameraManager, int player, std::uint8_t level, std::uint8_t b
 
 bool FramingAvailable() noexcept
 {
-    return g_managerApply != nullptr && g_optionData != nullptr && g_cameraManagerVTable != 0;
+    return g_managerApply != nullptr && g_optionData != nullptr && camera_access::Installed();
 }
 
 void SetLayoutOffsets(std::int32_t topBottom, std::int32_t sideBySide) noexcept
@@ -269,8 +259,7 @@ bool Install(const platform::GameImage& image) noexcept
 {
     const auto primary = platform::FindFunction(image, kPrimaryApply);
     const auto manager = platform::FindFunction(image, kManagerApply);
-    const auto vtable  = image.Rebase(facts::kCameraManagerVTable);
-    if (!primary || !manager || !vtable)
+    if (!primary || !manager || !camera_access::Install(image))
     {
         platform::Log(L"camera distance: UNAVAILABLE (a check failed); player 2's camera keeps the distance it started "
                       L"with");
@@ -279,7 +268,6 @@ bool Install(const platform::GameImage& image) noexcept
     g_managerApply        = reinterpret_cast<ManagerApplyFn>(*manager);
     const auto options    = platform::FindFunction(image, kOptionData);
     g_optionData          = options ? reinterpret_cast<OptionDataFn>(*options) : nullptr;
-    g_cameraManagerVTable = *vtable;
     const bool setter  = InstallSetter(image, *primary);
     const bool confirm = g_confirmCall.Install(image, kConfirmCall, *manager,
                                                reinterpret_cast<std::uintptr_t>(&ManagerApply));

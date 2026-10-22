@@ -9,6 +9,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/vtable_entry.h"
+#include "player_two/camera_access.h"
 #include "player_two/generation.h"
 #include "player_two/location_volumes.h"
 #include "player_two/object_fields.h"
@@ -114,24 +115,15 @@ void* CameraManager(void* controller) noexcept
 /// "player N's Field/Battle", or "another" for an operator of neither camera manager.
 std::wstring OperatorText(const void* op, bool& playerTwo) noexcept
 {
-    playerTwo = false;
-    void* const managers[2] = {CameraManager(generation::PlayerOneController()),
-                               generation::Active() ? CameraManager(generation::PlayerTwoController()) : nullptr};
-    for (int p = 0; p < 2; ++p)
+    const int p = camera_access::PlayerOfOperator(op);
+    playerTwo   = p == 1;
+    if (p < 0)
     {
-        if (managers[p] == nullptr)
-        {
-            continue;
-        }
-        const bool field  = ReadPointer(managers[p], facts::kCameraManagerFieldOperator) == op;
-        const bool battle = ReadPointer(managers[p], kCameraManagerBattleOperator) == op;
-        if (field || battle)
-        {
-            playerTwo = p == 1;
-            return std::format(L"player {}'s {}", p + 1, field ? L"Field" : L"Battle");
-        }
+        return L"another";
     }
-    return L"another";
+    void* const controller = p == 1 ? generation::PlayerTwoController() : generation::PlayerOneController();
+    const bool  field      = ReadPointer(CameraManager(controller), facts::kCameraManagerFieldOperator) == op;
+    return std::format(L"player {}'s {}", p + 1, field ? L"Field" : L"Battle");
 }
 
 /// The row arrives as an FName value (seen live: 0x90A03F, 0x101738), not a pointer to one.

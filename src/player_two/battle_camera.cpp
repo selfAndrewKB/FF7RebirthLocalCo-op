@@ -8,6 +8,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
+#include "player_two/camera_access.h"
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
 #include "player_two/primary_controller.h"
@@ -28,8 +29,6 @@ namespace lss::player_two::battle_camera {
 namespace {
 
 // Facts read from the database (RE-p2-battle-camera.md; this build).
-constexpr std::uintptr_t kBattleOperatorVTable = 0x1466B4928;
-using facts::kCameraManagerBattleOperator;
 constexpr std::uint32_t  kOperatorState        = 0xD0;    // u8 (the Field operator's active byte is at the same place)
 constexpr std::uint32_t  kOperatorActive       = 0xD1;    // u8: the update picks the lowest-numbered active operator
 constexpr std::uint32_t  kOperatorBytes        = 0x2CD0;  // current / previous operator bytes (+0x2CD0..+0x2CD3)
@@ -46,8 +45,6 @@ constexpr platform::SlotFact kDeactivate{L"the Battle operator's Deactivate slot
 // The operator's camera modules (EEndCameraModuleLayer): +0x6E0 points at 25 TSharedPtr entries (16
 // bytes each), each module's active bytes at +0x44/+0x45. Logged: battle offset, length, lock-on,
 // look-at, skill, command, leader change, scan.
-using facts::kOperatorModules;
-constexpr std::uint32_t kModuleEntry  = 16;
 constexpr std::uint32_t kModuleActive = 0x44;
 constexpr std::uint32_t kLoggedModules[] = {5, 6, 7, 16, 20, 21, 22, 23};
 
@@ -59,48 +56,17 @@ platform::VTableEntry g_activateSlot;
 platform::VTableEntry g_deactivateSlot;
 StateFn               g_engineActivate      = nullptr;
 StateFn               g_engineDeactivate    = nullptr;
-std::uintptr_t        g_battleVTable        = 0;
-std::uintptr_t        g_cameraManagerVTable = 0;
 
 // Game thread.
 
-struct Pair
-{
-    void* one;
-    void* two;
-};
+/// Player 1's and player 2's Battle operators, while player 2 holds a party member (player_two/camera_access.h).
+using Pair = camera_access::OperatorPair;
+using camera_access::CameraManagerOf;
+using camera_access::BattleOperatorOf;
 
-void* CameraManagerOf(void* controller) noexcept
-{
-    void* cameraManager = ReadPointer(controller, facts::kControllerCameraManager);
-    if (VTableOf(cameraManager) != g_cameraManagerVTable ||
-        ReadPointer(cameraManager, facts::kCameraManagerPcOwner) != controller)
-    {
-        return nullptr;
-    }
-    return cameraManager;
-}
-
-void* BattleOperatorOf(void* cameraManager) noexcept
-{
-    void* battle = ReadPointer(cameraManager, kCameraManagerBattleOperator);
-    return VTableOf(battle) == g_battleVTable ? battle : nullptr;
-}
-
-/// Both Battle operators, while player 2 holds a party member.
 std::optional<Pair> CurrentPair() noexcept
 {
-    if (!generation::OnGameThread() || !generation::Active() || generation::Member() == nullptr)
-    {
-        return std::nullopt;
-    }
-    void* one = BattleOperatorOf(CameraManagerOf(generation::PlayerOneController()));
-    void* two = BattleOperatorOf(CameraManagerOf(generation::PlayerTwoController()));
-    if (one == nullptr || two == nullptr || one == two)
-    {
-        return std::nullopt;
-    }
-    return Pair{one, two};
+    return camera_access::CurrentPair(&BattleOperatorOf);
 }
 
 std::uint8_t Active(const void* battle) noexcept
@@ -186,13 +152,10 @@ CameraState StateOf(void* cameraManager) noexcept
     Read(battleAt != 0 ? battleAt + kOperatorActive : 0, state.battle[1]);
     Read(fieldAt != 0 ? fieldAt + kOperatorState : 0, state.field[0]);
     Read(fieldAt != 0 ? fieldAt + kOperatorActive : 0, state.field[1]);
-    std::uintptr_t table = 0;
-    Read(battle != nullptr ? reinterpret_cast<std::uintptr_t>(battle) + kOperatorModules : 0, table);
     for (std::size_t i = 0; i < std::size(kLoggedModules); ++i)
     {
-        std::uintptr_t module = 0;
-        state.moduleRead[i] = Read(table != 0 ? table + kLoggedModules[i] * kModuleEntry : 0, module) &&
-                              Read(module != 0 ? module + kModuleActive : 0, state.modules[i]);
+        const auto module   = reinterpret_cast<std::uintptr_t>(camera_access::ModuleAt(battle, kLoggedModules[i]));
+        state.moduleRead[i] = Read(module != 0 ? module + kModuleActive : 0, state.modules[i]);
     }
     return state;
 }
@@ -223,9 +186,7 @@ bool Install(const platform::GameImage& image) noexcept
 {
     const auto activate   = platform::FindFunction(image, kActivate.target);
     const auto deactivate = platform::FindFunction(image, kDeactivate.target);
-    const auto battle     = image.Rebase(kBattleOperatorVTable);
-    const auto camera     = image.Rebase(facts::kCameraManagerVTable);
-    if (!activate || !deactivate || !battle || !camera || !primary_controller::Installed())
+    if (!activate || !deactivate || !camera_access::Install(image) || !primary_controller::Installed())
     {
         platform::Log(L"battle camera: the Battle operator is not what the research read; player 2's camera stays on "
                       L"the Field operator in battle");
@@ -233,8 +194,6 @@ bool Install(const platform::GameImage& image) noexcept
     }
     g_engineActivate      = reinterpret_cast<StateFn>(*activate);
     g_engineDeactivate    = reinterpret_cast<StateFn>(*deactivate);
-    g_battleVTable        = *battle;
-    g_cameraManagerVTable = *camera;
     const bool installed =
         platform::ReplaceSlot(image, kActivate, reinterpret_cast<std::uintptr_t>(&Activate), g_activateSlot) &&
         platform::ReplaceSlot(image, kDeactivate, reinterpret_cast<std::uintptr_t>(&Deactivate), g_deactivateSlot);
@@ -279,7 +238,7 @@ bool Seed() noexcept
 
 bool PlayerTwoBattleActive(void* cameraManager) noexcept
 {
-    return g_battleVTable != 0 && Active(BattleOperatorOf(cameraManager)) != 0;
+    return camera_access::Installed() && Active(BattleOperatorOf(cameraManager)) != 0;
 }
 
 void Watch() noexcept

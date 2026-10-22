@@ -17,6 +17,7 @@
 #include "platform/verified_code.h"
 #include "player_two/command_menu_two.h"
 #include "player_two/focus_scope.h"
+#include "player_two/camera_access.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 #include "player_two/object_fields.h"
@@ -114,8 +115,6 @@ constexpr std::uint32_t  kTargetedKey  = 0x140;
 // byte and cached target (logged).
 constexpr std::uint8_t   kLockOnLayer    = 7;
 using facts::kCameraManagerBattleOperator;
-using facts::kOperatorModules;
-constexpr std::uint32_t  kModuleEntry    = 16;
 constexpr std::uint32_t  kModuleActive   = 0x44;
 constexpr std::uint32_t  kModuleTarget   = 0x3F8;
 
@@ -334,8 +333,8 @@ LockCamera LockCameraOf(void* controller) noexcept
 {
     const auto camera = reinterpret_cast<std::uintptr_t>(ReadPointer(controller, facts::kControllerCameraManager));
     const auto op     = ReadAt<std::uintptr_t>(camera != 0 ? camera + kCameraManagerBattleOperator : 0);
-    const auto table  = ReadAt<std::uintptr_t>(op != 0 ? op + kOperatorModules : 0);
-    const auto module = ReadAt<std::uintptr_t>(table != 0 ? table + kLockOnLayer * kModuleEntry : 0);
+    const auto module =
+        reinterpret_cast<std::uintptr_t>(camera_access::ModuleAt(reinterpret_cast<const void*>(op), kLockOnLayer));
     if (module == 0)
     {
         return {};

@@ -10,6 +10,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "player_two/camera_access.h"
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
 #include "player_two/primary_controller.h"
@@ -32,8 +33,7 @@ namespace {
 // Facts read from the database (RE-p2-battle-camera.md §5; this build).
 constexpr std::uintptr_t kModuleGlobal   = 0x1491A4B78;  // TWeakPtr {object, reference controller}
 constexpr std::uintptr_t kModuleVTable   = 0x1466B70D0;  // FEndNotifyOverrideCameraModule
-using facts::kOperatorModules;
-constexpr std::uint32_t  kSlotFour       = 4 * 16;       // layer 4, NotifyOverride
+constexpr std::uint32_t  kSlotFour       = 4;            // layer 4, NotifyOverride (player_two/camera_access.h)
 constexpr std::uint32_t  kModuleOwner    = 0x50;         // the owner operator
 constexpr std::uint32_t  kModuleActive   = 0x44;         // entering / active bytes
 constexpr std::uint32_t  kModuleRequests = 0x3F8;        // int32: request count
@@ -195,8 +195,8 @@ std::wstring DescribeCamera(void* controller)
     for (const std::uint32_t op : {kCameraManagerBattleOperator, kFieldOperator})
     {
         const auto oper   = ReadAt<std::uintptr_t>(camera + op);
-        const auto slots  = oper != 0 ? ReadAt<std::uintptr_t>(oper + kOperatorModules) : 0;
-        const auto module = slots != 0 ? ReadAt<std::uintptr_t>(slots + kSlotFour) : 0;
+        const auto module =
+            reinterpret_cast<std::uintptr_t>(camera_access::ModuleAt(reinterpret_cast<const void*>(oper), kSlotFour));
         const auto owner  = module != 0 ? ReadAt<std::uintptr_t>(module + kModuleOwner) : 0;
         text += std::format(L" {} module {:#x} owner {} requests {} active {}{}",
                             op == kCameraManagerBattleOperator ? L"battle" : L"field", module,
@@ -252,8 +252,8 @@ Snapshot Take(void* member) noexcept
         {
             const auto oper =
                 ReadAt<std::uintptr_t>(camera + (k == 0 ? kCameraManagerBattleOperator : kFieldOperator));
-            const auto slots  = oper != 0 ? ReadAt<std::uintptr_t>(oper + kOperatorModules) : 0;
-            const auto module = slots != 0 ? ReadAt<std::uintptr_t>(slots + kSlotFour) : 0;
+            const auto module = reinterpret_cast<std::uintptr_t>(
+                camera_access::ModuleAt(reinterpret_cast<const void*>(oper), kSlotFour));
             now.cameras[i][k]  = module;
             now.owners[i][k]   = module != 0 ? ReadAt<std::uintptr_t>(module + kModuleOwner) : 0;
             now.requests[i][k] = module != 0 ? ReadAt<std::int32_t>(module + kModuleRequests) : 0;

@@ -7,6 +7,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "player_two/chocobo_ride.h"
+#include "player_two/camera_access.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
 #include "player_two/object_fields.h"
@@ -42,8 +43,6 @@ constexpr std::uint32_t kOpPose        = 0x40;  // the pose floats +0x40..+0x98;
 constexpr std::uint32_t kOpPoseFloats  = (0x98 - 0x40) / 4;
 constexpr std::uint32_t kOpPitch       = (0x50 - 0x40) / 4;
 constexpr std::uint32_t kOpCurrent     = 0xD1;   // u8: the operator the camera actor is written from
-using facts::kOperatorModules;
-constexpr std::uint32_t kModuleStride  = 16;
 constexpr std::uint32_t kResetSlot     = 10;     // FEndResetCameraModule
 constexpr std::uint32_t kSlotTwenty    = 20;     // its weight above 0 makes the Reset module stop without writing
 constexpr std::uint32_t kSlotFifteen   = 15;
@@ -126,11 +125,7 @@ Pose ReadPose(const void* op) noexcept
     return pose;
 }
 
-const void* Module(const void* op, std::uint32_t slot) noexcept
-{
-    const void* modules = ReadPointer(op, kOperatorModules);
-    return modules != nullptr ? ReadPointer(modules, slot * kModuleStride) : nullptr;
-}
+using camera_access::ModuleAt;
 
 std::wstring Metres(float cm)
 {
@@ -153,8 +148,8 @@ float CameraToMember(const void* cameraManager) noexcept
 /// The Reset module, slot 20's weight and the cut bit: what decides whether the reset writes a pose.
 std::wstring ResetInputs(const void* cameraManager, const void* op)
 {
-    const void* reset = Module(op, kResetSlot);
-    const void* twenty = Module(op, kSlotTwenty);
+    const void* reset = ModuleAt(op, kResetSlot);
+    const void* twenty = ModuleAt(op, kSlotTwenty);
     return std::format(L"Reset module (slot 10) {} active {} running {} pitch {:.1f} yaw {:.1f}; slot 20 weight {:.2f}; "
                        L"camera cut {}",
                        reset != nullptr ? L"present" : L"MISSING", ReadField<std::uint8_t>(reset, kModuleActive),
@@ -218,7 +213,7 @@ std::wstring Describe(const void* cameraManager)
     {
         return L"no Field operator";
     }
-    const void*  module = Module(op, kSlotFifteen);
+    const void*  module = ModuleAt(op, kSlotFifteen);
     std::wstring slot   = L"empty";
     if (module != nullptr)
     {
@@ -251,7 +246,7 @@ void FollowUp(const void* cameraManager, const void* op, const Pose& pose) noexc
         }
         else if (g_followUp >= kSettleFrames)
         {
-            const void* slot = Module(op, kSlotFifteen);
+            const void* slot = ModuleAt(op, kSlotFifteen);
             platform::Log(L"camera repair: after {} frames: {}: {}, camera→member {}; slot 15 {}; {}", g_followUp,
                           pose.finite ? L"REPAIRED" : L"NOT repaired", PoseText(pose), Metres(CameraToMember(cameraManager)),
                           slot == g_slotBefore ? L"unchanged" : L"CHANGED", Describe(cameraManager));
@@ -291,7 +286,7 @@ void Repair(void* cameraManager, const void* op, const Pose& pose) noexcept
     }
     ++g_inARow;
     ++g_repairs;
-    g_slotBefore = Module(op, kSlotFifteen);
+    g_slotBefore = ModuleAt(op, kSlotFifteen);
     try
     {
         platform::Log(L"camera repair: player 2's camera pose is not finite ({}); the game's player-warp camera reset "

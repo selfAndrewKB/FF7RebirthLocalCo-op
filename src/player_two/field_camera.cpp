@@ -7,6 +7,7 @@
 #include "platform/image.h"
 #include "player_two/attack_cameras.h"
 #include "player_two/battle_camera.h"
+#include "player_two/camera_access.h"
 #include "player_two/command_menu_two.h"
 #include "player_two/focus_scope.h"
 #include "player_two/leader_scope.h"
@@ -48,8 +49,6 @@ StateFn               g_engineActivate      = nullptr;
 StateFn               g_engineDeactivate    = nullptr;
 CopyFn                g_engineCopy          = nullptr;
 UpdateFn              g_engineUpdate        = nullptr;
-std::uintptr_t        g_fieldVTable         = 0;
-std::uintptr_t        g_cameraManagerVTable = 0;
 using facts::kCmdHudMode;
 std::atomic<unsigned> g_uiRefusals{0};  // battle updates that ran without player 2's UI context
 
@@ -63,45 +62,14 @@ StageCounters              g_settingsCounters;
 StageCounters              g_updateCounters;
 std::atomic<unsigned>      g_mismatches{0};
 
-/// Player 1's and player 2's Field operators.
-struct FieldPair
-{
-    void* one;
-    void* two;
-};
+/// Player 1's and player 2's Field operators, while player 2 holds a party member (player_two/camera_access.h).
+using FieldPair = camera_access::OperatorPair;
+using camera_access::CameraManagerOf;
+using camera_access::FieldOperatorOf;
 
-/// A controller's End camera manager, if it is one and names the controller as its owner.
-void* CameraManagerOf(void* controller) noexcept
-{
-    void* cameraManager = ReadPointer(controller, facts::kControllerCameraManager);
-    if (VTableOf(cameraManager) != g_cameraManagerVTable ||
-        ReadPointer(cameraManager, facts::kCameraManagerPcOwner) != controller)
-    {
-        return nullptr;
-    }
-    return cameraManager;
-}
-
-void* FieldOperatorOf(void* cameraManager) noexcept
-{
-    void* field = ReadPointer(cameraManager, facts::kCameraManagerFieldOperator);
-    return VTableOf(field) == g_fieldVTable ? field : nullptr;
-}
-
-/// Both Field operators, while player 2 holds a party member.
 std::optional<FieldPair> CurrentPair() noexcept
 {
-    if (!generation::OnGameThread() || !generation::Active() || generation::Member() == nullptr)
-    {
-        return std::nullopt;
-    }
-    void* one = FieldOperatorOf(CameraManagerOf(generation::PlayerOneController()));
-    void* two = FieldOperatorOf(CameraManagerOf(generation::PlayerTwoController()));
-    if (one == nullptr || two == nullptr || one == two)
-    {
-        return std::nullopt;
-    }
-    return FieldPair{one, two};
+    return camera_access::CurrentPair(&FieldOperatorOf);
 }
 
 const void* Command(const void* field) noexcept
@@ -269,19 +237,6 @@ void UpdateCamera(void* cameraManager, float deltaTime)
     RunAsPrimary(cameraManager, deltaTime);
 }
 
-bool CameraVTablesFound(const platform::GameImage& image) noexcept
-{
-    const auto field  = image.Rebase(facts::kFieldOperatorVTable);
-    const auto camera = image.Rebase(facts::kCameraManagerVTable);
-    if (!field || !camera)
-    {
-        return false;
-    }
-    g_fieldVTable         = *field;
-    g_cameraManagerVTable = *camera;
-    return true;
-}
-
 }  // namespace
 
 bool InstallSettings(const platform::GameImage& image) noexcept
@@ -289,7 +244,7 @@ bool InstallSettings(const platform::GameImage& image) noexcept
     const auto activate   = platform::FindFunction(image, facts::kFieldActivate.target);
     const auto deactivate = platform::FindFunction(image, facts::kFieldDeactivate.target);
     const auto copy       = platform::FindFunction(image, facts::kFieldCopyCommand.target);
-    if (!activate || !deactivate || !copy || !CameraVTablesFound(image))
+    if (!activate || !deactivate || !copy || !camera_access::Install(image))
     {
         return false;
     }
@@ -319,7 +274,7 @@ bool InstallSettings(const platform::GameImage& image) noexcept
 bool InstallUpdate(const platform::GameImage& image) noexcept
 {
     const auto update = platform::FindFunction(image, facts::kCameraUpdate.target);
-    if (!update || !CameraVTablesFound(image) || !primary_controller::Installed())
+    if (!update || !camera_access::Install(image) || !primary_controller::Installed())
     {
         return false;
     }
