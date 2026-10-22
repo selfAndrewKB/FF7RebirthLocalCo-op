@@ -142,6 +142,8 @@ add_library(LocalSplitScreen SHARED
     src/player_two/command_rules.cpp
     src/player_two/focus_scope.cpp
     src/player_two/command_menu_two.cpp
+    src/player_two/command_menu_view.cpp
+    src/player_two/shortcut_follow.cpp
     src/player_two/command_menu_tick.cpp
     src/player_two/menu_input_route.cpp
     src/player_two/menu_tint.cpp

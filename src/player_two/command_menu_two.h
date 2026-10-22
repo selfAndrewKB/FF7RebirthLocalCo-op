@@ -16,7 +16,11 @@
 // player 2's controller runs inside player 2's focus scope (player_two/focus_scope.h) and never touches
 // player 1's focus.
 //
-// Its menu widget stays at render opacity 0 until it is shown in player 2's pass only. Game thread only.
+// Its menu widget stays at render opacity 0 until it is shown in player 2's pass only (command_menu_view).
+// Game thread only.
+//
+// Units: this file's lifecycle (command_menu_two.cpp), the shortcut tables' follow (shortcut_follow), the widgets
+// per half (command_menu_view), and what they share (command_menu_two_shared.h).
 
 namespace lss::platform {
 class GameImage;
@@ -30,18 +34,6 @@ void Remove() noexcept;
 /// Each engine tick while player 2 plays: builds player 2's controller, runs the join Setup when it does
 /// not follow the game's current setup, and logs its bytes on change.
 void Tick() noexcept;
-
-/// Each engine tick, with or without player 2: player 2's menu widget kept at render opacity 0 (in
-/// battle something outside the controller shows every command widget; RE-p2-command-menu-input.md §12).
-void KeepHidden() noexcept;
-
-/// Before a pass of the overlay render (0 player 1, 1 player 2): in battle, player 2's pass shows player
-/// 2's command menu (at player 1's menu's render opacity) instead of player 1's; player 1's pass shows
-/// player 1's only. Out of battle player 2's stays hidden. Render thread = game thread.
-void ShowOnly(int player) noexcept;
-
-/// After the frame's passes: player 1's menu back to its own opacity, player 2's hidden.
-void Restore() noexcept;
 
 /// Player 2's key guide (a second KeyGuide53), or null if it could not be built.
 void* KeyGuide() noexcept;

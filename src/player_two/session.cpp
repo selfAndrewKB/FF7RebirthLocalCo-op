@@ -11,6 +11,7 @@
 #include "player_two/battle_camera.h"
 #include "player_two/camera_override.h"
 #include "player_two/command_menu_two.h"
+#include "player_two/command_menu_view.h"
 #include "player_two/command_rules.h"
 #include "player_two/menu_focus.h"
 #include "player_two/lock_on.h"
@@ -117,7 +118,7 @@ void Session::Tick() noexcept
     generation::SetGameThread();  // the engine-tick callback runs on the thread that ticks the world
     platform::game_thread_sites::Run();  // the 1.005 placements (platform/deferred_sites.h), outside the game's ticks
     command_rules::Update();      // which member player 1 may not command (none without player 2)
-    command_menu_two::KeepHidden();  // player 2's menu widget stays out of both halves
+    command_menu_view::KeepHidden();  // player 2's menu widget stays out of both halves
     if (!HasPlayerTwo())
     {
         OutsideTick();  // the rejoin after a map load, or the wait for a free party member

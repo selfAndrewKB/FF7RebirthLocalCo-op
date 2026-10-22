@@ -4,7 +4,7 @@
 #include "hud/prompt_rows.h"
 #include "hud/search_pins.h"
 #include "hud/widget_opacity.h"
-#include "player_two/command_menu_two.h"
+#include "player_two/command_menu_view.h"
 #include "player_two/weak_object.h"
 
 namespace lss::hud {
@@ -76,7 +76,7 @@ void ShowOnly(int player) noexcept
     prompt_rows::ShowOnly(player);
     field_markers::ShowOnly(player);
     search_pins::ShowOnly(player);
-    player_two::command_menu_two::ShowOnly(player);
+    player_two::command_menu_view::ShowOnly(player);
 }
 
 void RestoreAll() noexcept
@@ -84,7 +84,7 @@ void RestoreAll() noexcept
     prompt_rows::Restore();
     field_markers::Restore();
     search_pins::Restore();
-    player_two::command_menu_two::Restore();
+    player_two::command_menu_view::Restore();
 }
 
 }  // namespace pass_opacity
