@@ -25,6 +25,10 @@
 //   - the command rules are turned around for the pass: player 2 may not command player 1's leader.
 // Pad 2's presses reach player 2's menu in battle; a release follows its press (the capture map's rule).
 // Game thread only.
+//
+// Units: this file's tick, mirrors and shields (command_menu_tick.cpp); pad 2's presses and releases
+// (menu_input_route); the tactical tint and the wait sound (menu_tint); what they share, the pass in flight
+// above all (command_menu_tick_shared.h).
 
 namespace lss::platform {
 class GameImage;
@@ -34,6 +38,10 @@ namespace lss::player_two::command_menu_tick {
 
 bool Install(const platform::GameImage& image) noexcept;
 void Remove() noexcept;
+
+/// The pass in flight: 0 none, 1 the game's controller's tick, 2 player 2's controller's, 3 pad 2's press or
+/// release in player 2's UI. Game thread.
+int Pass() noexcept;
 
 /// The game's own calls that give the controller's command menu the UI focus of the focus context that is
 /// open (call it inside player 2's): FieldCommandCtrl_SetMenuFocusLayer783(controller, 0) while its layer

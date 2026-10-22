@@ -152,7 +152,7 @@ void FreedSlot()
 {
     std::puts("tset find: a freed slot is skipped by the walk");
     Fixture f({Name(1), Name(2), Name(3)});
-    f.set.inlineBits[0] &= ~(1u << 1);  // slot 1 freed: skipped whatever its bytes say (a live set keeps free links there)
+    f.set.inlineBits[0] &= ~(1u << 1);  // slot 1 freed: skipped whatever its bytes say (a live set's free links)
     f.set.numFree = 1;
     EXPECT(WalkFind(f.At(), kShape, Name(1)));
     EXPECT(!WalkFind(f.At(), kShape, Name(2)));

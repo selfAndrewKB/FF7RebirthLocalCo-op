@@ -26,6 +26,7 @@ inline constexpr std::uint32_t kCmdRequests         = 0x570;  // TArray<int32> {
 inline constexpr std::uint32_t kCmdOpenPending      = 0x5D0;  // i32: a menu open requested (>= 0), pushed 0.125 s
                                                                   // later; the field poll needs it < 0
 inline constexpr std::uint32_t kCmdReady            = 0x5E1;  // u8
+inline constexpr std::uint32_t kCmdWaitFilter       = 0x644;  // i32: the wait mode (the tactical tint's owner)
 inline constexpr std::uint32_t kCmdGuardLatch       = 0x760;  // i32: the guard mode, latched
 inline constexpr std::uint32_t kCmdSetupPending     = 0x775;  // u8: the tick re-runs Setup
 inline constexpr std::uint32_t kCmdSetupDone        = 0x777;  // u8: Setup sets it, only ResetAll clears it; while 0

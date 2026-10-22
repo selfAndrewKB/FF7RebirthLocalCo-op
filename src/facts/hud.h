@@ -35,6 +35,8 @@ inline constexpr std::uint32_t kFieldMarkerEntry           = 140;    // its elem
 inline constexpr std::uint32_t kUICommandController  = 0xB8;   // EndUISystem[23]: the field command controller
 inline constexpr std::uint32_t kUIEnemyStatus = 0xF8;   // the enemy-status manager (gauges, lock-on bars)
 inline constexpr std::uint32_t kUIAreaMap     = 0x108;  // the area-map manager (the compass, the navimap)
+inline constexpr std::uint32_t kUIFilterManager      = 0x148;  // EndUISystem[41]: the UI filter manager (the
+                                                                 // tactical tint's latch and count; menu_tint)
 inline constexpr std::uint32_t kUIKeyGuide           = 0x1A8;  // EndUISystem[53]: the key guide
 inline constexpr std::uint32_t kUIActionRows         = 0x208;  // -> the field-action icon list (TArray<FWeakObjectPtr>)
 /// Its byte marking a command-controller Setup deferred behind a fade. 1.005: MasterHUD_Tick 0x140F75A05 cmp byte
