@@ -113,7 +113,6 @@
 #include "views/player_view_point.h"
 #include "views/stream_views.h"
 #include "views/third_view.h"
-#include "views/view_shape.h"
 #include "views/window_span.h"
 #include "views/whole_screen.h"
 
@@ -538,11 +537,11 @@ private:
         }
         lss::views::third_view::Remove(why);  // first: it borrows player 2's join, and its controller is this world's
         const bool left = session_->LeaveNow();
-        FollowPlayerTwo();  // now, not at the next tick: the view module must not keep the old player 2
+        // Now, not at the next tick: the view points must not keep the old player 2.
+        lss::views::Follow(SplitFrameNow(false));
         // The viewport outlives the world: its split switch is cleared while player 1's controller
         // is still this world's.
         LogSingleViewChange(singleView_.Update(false, false));
-        lss::views::SetSplitShown(false);
         if (left)
         {
             Log(L"{}: player 2 left (and joins again once the field is ready)", why);
@@ -652,7 +651,6 @@ private:
         lss::player_two::climb_context::Tick();  // this frame's input copies for the climbs on the anim worker (W5)
         session_->Tick();
         lss::dev::TickAfterSession();
-        FollowPlayerTwo();
         lss::views::third_view::Tick(session_->HasPlayerTwo());  // leaves with player 2; follows player 1's view target
         lss::views::window_span::Tick(session_->HasPlayerTwo());  // leaves with player 2; holds the window's rect
         lss::player_two::walk_limits::Tick();  // after the session's tick: a take's copy is overwritten this frame
@@ -667,7 +665,6 @@ private:
             playerTwoIn,
             lss::players::SingleViewWanted(autoMode, WholeScreenShown(playerTwoIn), waits, session_->StandsAside())));
         const bool splitShown = playerTwoIn && !singleView_.Single();
-        lss::views::SetSplitShown(splitShown);
         lss::player_two::nav_strand::Tick(splitShown);  // a stranded player 2 is warped back to the party
         lss::player_two::camera_repair::Tick();
         lss::player_two::traversal_watch::Tick();
@@ -709,7 +706,7 @@ private:
             lss::renderer::SetSubmitHintSkip(playerTwoIn);
         }
         LogLayoutChange(layout_.Update(playerTwoIn));
-        UpdateHalfShape(splitShown);
+        lss::views::Follow(SplitFrameNow(splitShown));  // after the layout: the halves' shape reads it
         lss::hud::SetSplitActive(splitShown);
         lss::hud::UpdateHudPlacement(splitShown && lss::hud::BandEnabled());
 
@@ -728,40 +725,11 @@ private:
         }
     }
 
-    /// Keeps the views module's idea of the halves' shape current while player 2 is in: the
-    /// viewport size (it changes with the window) and the layout (it changes by key or script).
-    /// Read twice a second; until the first reading the split FOV leaves the stock rule in place.
-    void UpdateHalfShape(bool splitShown) noexcept
+    /// What the view points follow (views/player_view_point.h): the session's players and join count, and whether
+    /// the split is on screen.
+    lss::views::SplitFrame SplitFrameNow(bool splitShown) const noexcept
     {
-        // Three columns: the halves rule does not apply (stock FOV).
-        switch (halfShape_.Next(splitShown, lss::views::third_view::In()))
-        {
-            case lss::views::HalfShapeWatch::Step::Reset: lss::views::SetHalfShape({}); return;
-            case lss::views::HalfShapeWatch::Step::Skip: return;
-            case lss::views::HalfShapeWatch::Step::Read: break;
-        }
-        const lss::platform::frame_watch::Job job(L"half shape read");
-        auto*      playerOne  = static_cast<RC::Unreal::UObject*>(const_cast<void*>(session_->PlayerOne()));
-        auto**     controller = lss::players::unreal::ControllerField(playerOne);
-        const auto size   = controller != nullptr ? lss::players::unreal::ViewportSizeOf(*controller) : std::nullopt;
-        const auto layout = lss::players::split_settings::TwoPlayerLayout();
-        const auto half   = size && layout ? lss::views::HalfOf(size->width, size->height,
-                                                                *layout == static_cast<std::uint8_t>(
-                                                                               lss::players::SplitLayoutKind::SideBySide))
-                                           : lss::views::HalfShape{};
-        lss::views::SetHalfShape(half);
-        if (halfShape_.AspectChanged(half.aspect))
-        {
-            if (half.aspect > 0.0f)
-            {
-                Log(L"split halves: viewport {}x{}, layout {}, half aspect {:.3f}, height {:.2f} of the screen",
-                    size->width, size->height, *layout, half.aspect, half.heightRatio);
-            }
-            else
-            {
-                Log(L"split halves: the viewport size or layout cannot be read; the split FOV waits (stock rule meanwhile)");
-            }
-        }
+        return {session_->PlayerOne(), session_->PlayerTwo(), session_->JoinCount(), splitShown};
     }
 
     void ToggleFill() noexcept
@@ -786,47 +754,6 @@ private:
         if (const auto text = lss::players::Describe(layout_, change); !text.empty())
         {
             Log(L"{}", text);
-        }
-    }
-
-    /// Keeps the view-point module's idea of the players current, and describes the local players
-    /// when player 2 appears (a subclass with its own vtable would bypass the camera choice).
-    void FollowPlayerTwo() noexcept
-    {
-        const void*         playerTwo = session_->PlayerTwo();
-        const std::uint32_t joins     = session_->JoinCount();
-        if (playerTwo == followedPlayerTwo_ && joins == followedJoins_)
-        {
-            return;
-        }
-        followedPlayerTwo_ = playerTwo;
-        followedJoins_     = joins;
-        // The FOV rule's offset, confirmed by reflection before the first split frame uses it.
-        if (playerTwo != nullptr)
-        {
-            const auto axisOffset = lss::players::split_settings::AspectRatioAxisConstraintOffset();
-            lss::views::SetAxisConstraintOffset(axisOffset.value_or(0));
-            if (!axisOffset)
-            {
-                Log(L"ULocalPlayer::AspectRatioAxisConstraint not found where the engine reads it; split views keep "
-                    L"the game's FOV rule");
-            }
-        }
-        // Through null first: a new player 2 at the old one's address must still start fresh
-        // (on player 1's camera, first view point described).
-        lss::views::SetPlayers(nullptr, nullptr);
-        lss::views::SetPlayers(session_->PlayerOne(), playerTwo);
-        if (playerTwo == nullptr || !viewPointInstalled_)
-        {
-            return;
-        }
-        auto* players = lss::players::unreal::LocalPlayers(lss::players::unreal::GameInstance());
-        for (std::int32_t i = 0; players != nullptr && i < players->Num(); ++i)
-        {
-            auto* player = (*players)[i];
-            Log(L"local player {}: class {}, view point {}", i + 1, player->GetClassPrivate()->GetName(),
-                lss::views::UsesEngineViewPoint(player) ? L"through the engine's ULocalPlayer entry"
-                                                         : L"through ANOTHER vtable (the camera choice cannot reach it)");
         }
     }
 
@@ -908,14 +835,11 @@ private:
     lss::players::SplitLayout                 layout_{{&ReadTwoPlayerLayout, &WriteTwoPlayerLayout}};
     lss::players::SingleView                  singleView_{{&ReadSplitSwitch, &WriteSplitSwitch}};
     bool                                      playerTwoWaited_ = false;  // as last logged
-    lss::views::HalfShapeWatch                halfShape_;
     bool                                      tickSeen_           = false;
     bool                                      rendererInstalled_  = false;
     bool                                      viewPointInstalled_ = false;
     bool                                      mainCameraShape_    = false;
     bool                                      wholeScreen_        = false;
-    const void*                               followedPlayerTwo_  = nullptr;
-    std::uint32_t                             followedJoins_      = 0;
     Hook::GlobalCallbackId                    tickCallback_       = Hook::ERROR_ID;
     Hook::GlobalCallbackId                    loadMapCallback_    = Hook::ERROR_ID;
 };

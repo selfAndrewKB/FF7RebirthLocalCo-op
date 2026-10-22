@@ -2,13 +2,20 @@
 
 #include "facts/engine.h"
 #include "views/axis_records.h"
+#include "platform/frame_watch.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/settled_log.h"
 #include "platform/vtable_entry.h"
+#include "players/split_layout.h"
+#include "players/split_settings_access.h"
+#include "players/unreal_access.h"
 #include "views/minimal_view_info.h"
 #include "views/stream_view_math.h"
+#include "views/third_view.h"
 #include "views/view_shape.h"
+
+#include <Unreal/CoreUObject/UObject/Class.hpp>
 
 #include <atomic>
 #include <cmath>
@@ -28,8 +35,9 @@ using GetViewPointFn = void (*)(void* localPlayer, std::byte* viewInfo, std::int
 platform::VTableEntry g_entry;
 GetViewPointFn        g_engineGetViewPoint = nullptr;
 std::uintptr_t        g_localPlayerVTable  = 0;
+bool                  g_installed          = false;  // the entry holds the replacement
 
-// Written on the game thread by SetPlayers/ToggleOwnCamera/ToggleFill, read by the replacement.
+// Written on the game thread by Follow/ToggleOwnCamera/ToggleFill/SetSplitFovWeight, read by the replacement.
 // The engine calls GetViewPoint from Draw, also on the game thread; atomics keep that true if it
 // ever changes.
 std::atomic<const void*>   g_playerOne{nullptr};
@@ -313,7 +321,8 @@ bool InstallPlayerViewPoint(const platform::GameImage& image) noexcept
     }
     g_engineGetViewPoint = reinterpret_cast<GetViewPointFn>(*engineFn);
     g_localPlayerVTable  = *vtable;
-    return g_entry.Replace(*entry, *engineFn, reinterpret_cast<std::uintptr_t>(&GetViewPoint));
+    g_installed = g_entry.Replace(*entry, *engineFn, reinterpret_cast<std::uintptr_t>(&GetViewPoint));
+    return g_installed;
 }
 
 void RemovePlayerViewPoint() noexcept
@@ -325,14 +334,15 @@ void RemovePlayerViewPoint() noexcept
     }
 }
 
+namespace {
+
+/// A new player 2 (or none; the caller has seen the change): the FOV rule of every remaining player the mod changed
+/// put back, the new player 2 started on their own camera with their next view point described, the cameras last
+/// drawn forgotten.
 void SetPlayers(const void* playerOne, const void* playerTwo) noexcept
 {
     g_playerOne.store(playerTwo == nullptr ? nullptr : playerOne, std::memory_order_relaxed);
     const void* previous = g_playerTwo.exchange(playerTwo, std::memory_order_relaxed);
-    if (previous == playerTwo)
-    {
-        return;
-    }
     if (previous != nullptr)
     {
         RestoreAxisRules(previous);  // same thread as the replacement, so no call is in flight
@@ -344,9 +354,96 @@ void SetPlayers(const void* playerOne, const void* playerTwo) noexcept
     g_rendered[1].reset();
 }
 
-void SetAxisConstraintOffset(std::uint32_t offset) noexcept
+// The frame's follow (mod.cpp's until 2026-10-22). Game thread.
+HalfShapeWatch g_halfShape;
+const void*    g_followedPlayerTwo = nullptr;  // the players as last followed
+std::uint32_t  g_followedJoins     = 0;
+
+/// Keeps the players current, and describes the local players when player 2 appears (a subclass with its own
+/// vtable would bypass the camera choice).
+void FollowPlayers(const SplitFrame& frame) noexcept
 {
-    g_axisOffset.store(offset, std::memory_order_relaxed);
+    if (frame.playerTwo == g_followedPlayerTwo && frame.joinCount == g_followedJoins)
+    {
+        return;
+    }
+    g_followedPlayerTwo = frame.playerTwo;
+    g_followedJoins     = frame.joinCount;
+    // The FOV rule's offset, confirmed by reflection before the first split frame uses it.
+    if (frame.playerTwo != nullptr)
+    {
+        const auto axisOffset = players::split_settings::AspectRatioAxisConstraintOffset();
+        g_axisOffset.store(axisOffset.value_or(0), std::memory_order_relaxed);
+        if (!axisOffset)
+        {
+            platform::Log(L"ULocalPlayer::AspectRatioAxisConstraint not found where the engine reads it; split views "
+                          L"keep the game's FOV rule");
+        }
+    }
+    SetPlayers(frame.playerOne, frame.playerTwo);  // a new player 2 at the old one's address still starts fresh
+    if (frame.playerTwo == nullptr || !g_installed)
+    {
+        return;
+    }
+    auto* players = players::unreal::LocalPlayers(players::unreal::GameInstance());
+    for (std::int32_t i = 0; players != nullptr && i < players->Num(); ++i)
+    {
+        auto* player = (*players)[i];
+        platform::Log(L"local player {}: class {}, view point {}", i + 1, player->GetClassPrivate()->GetName(),
+                      UsesEngineViewPoint(player) ? L"through the engine's ULocalPlayer entry"
+                                                  : L"through ANOTHER vtable (the camera choice cannot reach it)");
+    }
+}
+
+void SetHalfShape(const HalfShape& half) noexcept
+{
+    const bool known = half.aspect > 0.0f && half.heightRatio > 0.0f;
+    g_halfAspect.store(known ? half.aspect : 0.0f, std::memory_order_relaxed);
+    g_halfHeightRatio.store(known ? half.heightRatio : 0.0f, std::memory_order_relaxed);
+}
+
+/// Keeps the halves' shape current while the split is shown: the viewport size (it changes with the window) and
+/// the layout (it changes by key or script). Read twice a second; until the first reading the split FOV leaves the
+/// stock rule in place.
+void FollowHalfShape(const SplitFrame& frame) noexcept
+{
+    // Three columns: the halves rule does not apply (stock FOV).
+    switch (g_halfShape.Next(frame.splitShown, third_view::In()))
+    {
+        case HalfShapeWatch::Step::Reset: SetHalfShape({}); return;
+        case HalfShapeWatch::Step::Skip: return;
+        case HalfShapeWatch::Step::Read: break;
+    }
+    const platform::frame_watch::Job job(L"half shape read");
+    auto*      playerOne  = static_cast<RC::Unreal::UObject*>(const_cast<void*>(frame.playerOne));
+    auto**     controller = players::unreal::ControllerField(playerOne);
+    const auto size   = controller != nullptr ? players::unreal::ViewportSizeOf(*controller) : std::nullopt;
+    const auto layout = players::split_settings::TwoPlayerLayout();
+    const bool sideBySide = layout && *layout == static_cast<std::uint8_t>(players::SplitLayoutKind::SideBySide);
+    const auto half       = size && layout ? HalfOf(size->width, size->height, sideBySide) : HalfShape{};
+    SetHalfShape(half);
+    if (g_halfShape.AspectChanged(half.aspect))
+    {
+        if (half.aspect > 0.0f)
+        {
+            platform::Log(L"split halves: viewport {}x{}, layout {}, half aspect {:.3f}, height {:.2f} of the screen",
+                          size->width, size->height, *layout, half.aspect, half.heightRatio);
+        }
+        else
+        {
+            platform::Log(L"split halves: the viewport size or layout cannot be read; the split FOV waits (stock rule "
+                          L"meanwhile)");
+        }
+    }
+}
+
+}  // namespace
+
+void Follow(const SplitFrame& frame) noexcept
+{
+    FollowPlayers(frame);
+    g_splitShown.store(frame.splitShown, std::memory_order_relaxed);
+    FollowHalfShape(frame);
 }
 
 bool ToggleOwnCamera() noexcept
@@ -385,11 +482,6 @@ std::optional<StreamCamera> RenderedCamera(bool playerTwo) noexcept
     return g_rendered[playerTwo ? 1 : 0];
 }
 
-void SetSplitShown(bool shown) noexcept
-{
-    g_splitShown.store(shown, std::memory_order_relaxed);
-}
-
 bool SplitShown() noexcept
 {
     return g_splitShown.load(std::memory_order_relaxed);
@@ -413,13 +505,6 @@ float SplitFovWeight() noexcept
 float SplitWidthRatio(bool isPlayerTwo) noexcept
 {
     return g_widthRatio[isPlayerTwo ? 1 : 0].load(std::memory_order_relaxed);
-}
-
-void SetHalfShape(const HalfShape& half) noexcept
-{
-    const bool known = half.aspect > 0.0f && half.heightRatio > 0.0f;
-    g_halfAspect.store(known ? half.aspect : 0.0f, std::memory_order_relaxed);
-    g_halfHeightRatio.store(known ? half.heightRatio : 0.0f, std::memory_order_relaxed);
 }
 
 bool UsesEngineViewPoint(const void* localPlayer) noexcept

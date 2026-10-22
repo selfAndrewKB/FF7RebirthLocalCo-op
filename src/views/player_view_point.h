@@ -3,7 +3,7 @@
 // Each local player's view point: its shape while the screen is split, and which camera player 2's
 // half shows.
 //
-// The mod replaces the ULocalPlayer vtable entry for GetViewPoint (engine_addresses.h) and calls
+// The mod replaces the ULocalPlayer vtable entry for GetViewPoint (facts/engine.h) and calls
 // the engine's function. With one player the result is exactly the engine's. While player 2 is in:
 //   - every player's view fills its half: the game's 16:9 constraint is cleared and the FOV rule
 //     becomes MaintainXFOV with the split FOV written in (views/view_shape.h, SplitFov), or the
@@ -32,14 +32,25 @@ bool InstallPlayerViewPoint(const platform::GameImage& image) noexcept;
 /// Puts the engine's own function back (at mod uninstall).
 void RemovePlayerViewPoint() noexcept;
 
-/// Player 1's and player 2's ULocalPlayer (player 2 null when there is none). Game thread. A new
-/// player 2 starts on their own camera, the FOV rule of every remaining player the mod changed is
-/// put back, and the next view point of the new player 2 is described in the log.
-void SetPlayers(const void* playerOne, const void* playerTwo) noexcept;
+/// What the view points follow, from the session (mod.cpp fills it each tick, and at a leave before the world
+/// changes).
+struct SplitFrame
+{
+    const void*   playerOne  = nullptr;  // player 1's ULocalPlayer
+    const void*   playerTwo  = nullptr;  // player 2's; null when there is none
+    std::uint32_t joinCount  = 0;        // the session's join count: a new player 2 at the old one's address is new
+    bool          splitShown = false;    // player 2 in and the screen split (players/single_view.h)
+};
 
-/// The offset of ULocalPlayer::AspectRatioAxisConstraint, once reflection has confirmed it
-/// (players/split_settings_access.h). Until then the split views fill without changing the FOV rule.
-void SetAxisConstraintOffset(std::uint32_t offset) noexcept;
+/// Game thread, once per tick after the layout is held (the halves' shape reads it), and at a leave before the
+/// world changes. A new player 2 (by address or join count): the FOV rule's offset confirmed by reflection
+/// (players/split_settings_access.h; until then the split views fill without changing the FOV rule), the FOV rule
+/// of every remaining player the mod changed put back, the new player 2 started on their own camera with their next
+/// view point described in the log, and each local player's vtable logged (a subclass would bypass the camera
+/// choice). The split's shown state: while it is not shown, player 1's view point is exactly the engine's (the
+/// camera choice for player 2's own view still applies). The halves' shape (views::HalfOf): read twice a second
+/// while the split is shown and no third view is in; the split FOV is applied only once it is known.
+void Follow(const SplitFrame& frame) noexcept;
 
 /// Switches player 2's half between player 1's camera and player 2's own; returns true when it
 /// now shows player 2's own (false, and player 1's, when there is no player 2).
@@ -55,10 +66,7 @@ std::optional<StreamCamera> RenderedCamera(bool playerTwo) noexcept;
 /// The split halves' width/height (views::HalfOf), or 0 until known.
 float HalfAspect() noexcept;
 
-/// Game thread, each tick: whether the split is on screen: player 2 is in and the screen is not player
-/// 1's view alone (players/single_view.h). While it is not, player 1's view point is exactly the
-/// engine's (the camera choice for player 2's own view still applies).
-void SetSplitShown(bool shown) noexcept;
+/// Whether the split is on screen, as last followed. Any thread.
 bool SplitShown() noexcept;
 
 /// Switches whether split views fill their halves (on at start); returns the new state.
@@ -78,10 +86,6 @@ float SplitFovWeight() noexcept;
 /// A player's half width against the game camera's own, as tan(half's horizontal FOV / 2) / tan(camera's / 2) from
 /// the last view drawn (1 when no split FOV is written). Any thread.
 float SplitWidthRatio(bool isPlayerTwo) noexcept;
-
-/// The halves' shape (views::HalfOf), kept current by the game thread while player 2 is in. The
-/// split FOV is applied only once this is known; until then the MajorAxisFOV rule is used.
-void SetHalfShape(const HalfShape& half) noexcept;
 
 /// True if `localPlayer`'s vtable is the engine's ULocalPlayer vtable, i.e. its view point goes
 /// through the installed entry. A different vtable (a subclass) would bypass the camera choice.
