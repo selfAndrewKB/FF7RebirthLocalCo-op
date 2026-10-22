@@ -80,6 +80,7 @@ add_library(LocalSplitScreen SHARED
     src/player_two/leave_sequence.cpp
     src/player_two/leftover_actors.cpp
     src/player_two/member_movement.cpp
+    src/player_two/leader_answer.cpp
     src/player_two/nav_strand.cpp
     src/player_two/camera_repair.cpp
     src/player_two/climb_context.cpp
@@ -271,6 +272,7 @@ lss_test(strand_watch src/player_two/strand_watch.cpp)
 lss_test(swap_window src/player_two/swap_window.cpp)
 lss_test(party_lease src/player_two/party_lease.cpp)
 lss_test(leave_sequence src/player_two/leave_sequence.cpp)
+lss_test(leader_answer)
 lss_test(control_script src/control/script.cpp)
 lss_test(control_runner src/control/runner.cpp src/control/script.cpp)
 lss_test(stick_select src/player_two/stick_select.cpp)

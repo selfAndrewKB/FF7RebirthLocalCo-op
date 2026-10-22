@@ -21,6 +21,7 @@
 #include "player_two/field_camera.h"
 #include "player_two/generation.h"
 #include "player_two/handover_watch.h"
+#include "player_two/leader_answer.h"
 #include "player_two/leader_scope.h"
 #include "player_two/leave_watch.h"
 #include "player_two/leftover_actors.h"
@@ -981,7 +982,7 @@ void Session::LogStatus() noexcept
     Log(L"  player 2's view: own camera {} (moved off it {} time(s) so far); member movement ticked {} skipped {} "
         L"refused {}, leader test answered yes {} time(s)",
         YesNo(view_target::OnOwnCamera(playerTwoController_)), viewTargetResets_, member.acted, member.passed,
-        member.refused, member_movement::TakeLeaderAnswers());
+        member.refused, leader_answer::TakeAnswers());
     scope_leaks::LogStatus();
     pad_buttons::LogStatus();
     move_census::Log();  // dev tools

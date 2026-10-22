@@ -9,7 +9,7 @@
 //   - player 2 as the primary player, so the tick takes its direction from player 2's camera
 //     (player_two/primary_controller.h);
 //   - a yes from the movement gate's party-leader test for the member's player type only
-//     (a replaced vtable slot that answers on the game thread, inside this tick, and nowhere else).
+//     (player_two/leader_answer.h: its slot answers on the game thread, inside this tick, and nowhere else).
 // It runs only while per-pad sticks are on. Afterwards the member's field-action rows (the party's
 // summons, which the tick asks for from whichever state it runs) are cleared with the game's own
 // handle clear, as for any character the game did not tick; otherwise they would show as extra dim
@@ -40,9 +40,6 @@ void Tick(void* playerTwoController, void* member) noexcept;
 /// or ticked the member itself. If the engine raises an exception inside the tick, the tick stops
 /// for the rest of the session (logged).
 StageCounters& Counters() noexcept;
-
-/// Times the leader test answered yes for the member since the last call.
-unsigned TakeLeaderAnswers() noexcept;
 
 /// The boarding gate of player 2's rides (chocobo_ride, wheelie_ride; RE-p2-chocobo-ride.md §7.2 item 2): the game's IsUCPC_Core(`character`) as player 2's chocobo swap
 /// would see it, inside the primary-controller scope and the member's leader answer, and the primary
@@ -97,42 +94,5 @@ struct HandlesTick
 };
 HandlesTick TickRideHandles(const void* member, void* state, const void* chocobo, const void* component, float deltaTime,
                             HandlesFn engine, bool sample) noexcept;
-
-/// Answers yes to the leader test on this thread only, for components of player type `type` (-1: none), while it
-/// lives; nesting keeps the outer answer. For the actions of player 2's ridden chocobo that tick on the anim worker
-/// (player_two/rumble_list_two): their gate asks whether the chocobo's rider is the player, and the rider is the member.
-/// Any thread.
-class ThreadLeaderAnswer
-{
-public:
-    explicit ThreadLeaderAnswer(int type) noexcept;
-    ~ThreadLeaderAnswer();
-    ThreadLeaderAnswer(const ThreadLeaderAnswer&)            = delete;
-    ThreadLeaderAnswer& operator=(const ThreadLeaderAnswer&) = delete;
-
-private:
-    int saved_;
-};
-
-/// The leader-test slot holds this module's test (Install succeeded and it was not removed): the thread answers below
-/// and above reach the game's IsUCPC_Core only then.
-bool LeaderTestReplaced() noexcept;
-
-/// Makes the leader test answer by type alone on this thread only: yes for components of player type `type`, no for
-/// every other, over every other answer (the climb's, the member tick's, the engine's); -1 ends it. Returns the
-/// previous value, which the caller puts back (nesting keeps the outer answer). A function rather than a scope object
-/// so the caller can put it back in a __finally, which also runs when a structured exception unwinds (the mod builds
-/// with /EHsc, where destructors would not). For an enemy's target choice, which must see exactly one
-/// player-controlled character (player_two/equal_targeting). Any thread.
-int ExchangeThreadOnlyLeader(int type) noexcept;
-
-/// ThreadLeaderAnswer as a function: yes to the leader test on this thread for components of player type `type` (-1
-/// ends it), the engine's own answers kept for every other. Returns the previous value, which the caller puts back in a
-/// __finally (see ExchangeThreadOnlyLeader for why). For a damage call in which player 2's character is the attacker
-/// or the victim (player_two/player_hits). Any thread.
-int ExchangeThreadLeaderAnswer(int type) noexcept;
-
-/// The player type `component` (a battle-control component) reports through its own type slot, or -1.
-int ComponentPlayerType(const void* component) noexcept;
 
 }  // namespace lss::player_two::member_movement

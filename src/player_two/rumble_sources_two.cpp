@@ -8,7 +8,7 @@
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
 #include "player_two/generation.h"
-#include "player_two/member_movement.h"
+#include "player_two/leader_answer.h"
 #include "player_two/object_fields.h"
 #include "player_two/rumble_list_code.h"
 #include "player_two/rumble_list_shared.h"
@@ -235,8 +235,8 @@ std::uint64_t Drift(void* action, double dt) noexcept
     }
     NoteSource(g_counts.driftTwo);
     NoteAction();
-    const OwnerTwo                               owner;
-    const member_movement::ThreadLeaderAnswer leader(g_memberType.load(std::memory_order_relaxed));
+    const OwnerTwo                   owner;
+    const leader_answer::ThreadScope leader(g_memberType.load(std::memory_order_relaxed));
     return original(action, dt);
 }
 
@@ -250,8 +250,8 @@ std::uint64_t Brake(platform::VTableEntry& slot, void* move, std::uint64_t event
     }
     NoteSource(g_counts.brakeTwo);
     NoteAction();
-    const OwnerTwo                               owner;
-    const member_movement::ThreadLeaderAnswer leader(g_memberType.load(std::memory_order_relaxed));
+    const OwnerTwo                   owner;
+    const leader_answer::ThreadScope leader(g_memberType.load(std::memory_order_relaxed));
     return original(move, event, xmm2, xmm3);
 }
 

@@ -19,6 +19,7 @@
 #include "player_two/climb_context.h"
 #include "player_two/lock_on.h"
 #include "player_two/generation.h"
+#include "player_two/leader_answer.h"
 #include "player_two/move_state.h"
 #include "player_two/object_fields.h"
 #include "player_two/p2_scope.h"
@@ -30,7 +31,6 @@
 #include "player_two/own_ride.h"
 #include "player_two/wheelie_ride.h"
 
-#include <atomic>
 #include <cstddef>
 
 namespace lss::player_two::member_movement {
@@ -42,95 +42,19 @@ using LeaderTestFn       = std::uint8_t (*)(const void* component);
 using PlayerTypeFn       = std::uint8_t (*)(const void* component);
 using HandleClearFn      = void (*)(void* handle);
 
-constexpr int kNoType = -1;
+using leader_answer::kNoType;
 
 // Set once at install.
-platform::VTableEntry g_leaderSlot;
 TickForCharacterFn    g_tickForCharacter = nullptr;
-LeaderTestFn          g_engineLeaderTest = nullptr;
 HandleClearFn         g_handleClear      = nullptr;  // null: player 2's field-action rows are left to show
 LeaderTestFn          g_isPlayerCore     = nullptr;  // IsUCPC_Core(character), for the ride logging only
 LeaderTestFn          g_isRiddenVehicle  = nullptr;  // IsActiveRiddenVehicle(character), for the ride logging only
 std::uintptr_t        g_moveStateVTable  = 0;
 
-// The player type the leader test says yes to; kNoType outside the member's tick. Written on the
-// game thread; the leader test is also called on other threads, which read kNoType.
-std::atomic<int>      g_leaderType{kNoType};
-// A second yes, by pointer: player 2's ridden chocobo's input component (every chocobo's has player type 16, player
-// 1's included, so it cannot be answered by type; RE-p2-chocobo-ride.md §7.0 item 2). Null outside the ride's tick.
-std::atomic<const void*> g_leaderComponent{nullptr};
-std::atomic<unsigned> g_leaderAnswers{0};
-// The player type the leader test says yes to on this thread only (ThreadLeaderAnswer), or kNoType.
-thread_local int      t_threadType = kNoType;
-// The only player type the leader test says yes to on this thread, every other type a no (ExchangeThreadOnlyLeader),
-// or kNoType.
-thread_local int      t_onlyType   = kNoType;
-
-// The leader-test slot holds LeaderTest (LeaderTestReplaced); any thread reads it.
-std::atomic<bool>     g_leaderReplaced{false};
-
 // Game thread only: set once the engine raised an exception inside the member's tick.
 bool g_stopped = false;
 
 StageCounters g_counters;
-
-int PlayerTypeOfComponent(const void* component) noexcept
-{
-    const auto vtable = reinterpret_cast<const void*>(VTableOf(component));
-    const auto fn     = vtable == nullptr ? nullptr : ReadField<PlayerTypeFn>(vtable, facts::kPlayerTypeSlotOffset);
-    return fn == nullptr ? kNoType : fn(component);  // an unreadable slot reads null
-}
-
-std::uint8_t LeaderTest(const void* component)
-{
-    // An enemy's target choice (ExchangeThreadOnlyLeader): exactly one player-controlled type, over every other answer. The
-    // engine's own test compares the same type byte with the party manager's leader type (RE-p2-enemy-target-bias.md
-    // §10.3), so this is that test with the chosen type as the leader's.
-    if (t_onlyType != kNoType)
-    {
-        return PlayerTypeOfComponent(component) == t_onlyType ? 1 : 0;
-    }
-    // Player 2's climb on the anim worker (climb_context.h), or player 2's chocobo's actions there (ThreadLeaderAnswer):
-    // this thread only, the member's type.
-    const int climbType = climb_context::LeaderTypeHere();
-    const int hereType  = climbType != kNoType ? climbType : t_threadType;
-    if (hereType != kNoType && PlayerTypeOfComponent(component) == hereType)
-    {
-        g_leaderAnswers.fetch_add(1, std::memory_order_relaxed);
-        return 1;
-    }
-    const int   type   = g_leaderType.load(std::memory_order_relaxed);
-    const void* extra  = g_leaderComponent.load(std::memory_order_relaxed);
-    if ((type != kNoType || extra != nullptr) && generation::OnGameThread() &&
-        ((extra != nullptr && component == extra) || (type != kNoType && PlayerTypeOfComponent(component) == type)))
-    {
-        g_leaderAnswers.fetch_add(1, std::memory_order_relaxed);
-        return 1;
-    }
-    return g_engineLeaderTest(component);
-}
-
-/// Answers yes to the leader test for one player type (and one component, if given) while it lives.
-class LeaderAnswer
-{
-public:
-    explicit LeaderAnswer(int type, const void* component = nullptr) noexcept
-        : savedType_(g_leaderType.exchange(type, std::memory_order_relaxed)),
-          savedComponent_(g_leaderComponent.exchange(component, std::memory_order_relaxed))
-    {
-    }
-    ~LeaderAnswer()  // what was answered before (none outside a scope): nesting keeps the outer answer
-    {
-        g_leaderType.store(savedType_, std::memory_order_relaxed);
-        g_leaderComponent.store(savedComponent_, std::memory_order_relaxed);
-    }
-    LeaderAnswer(const LeaderAnswer&)            = delete;
-    LeaderAnswer& operator=(const LeaderAnswer&) = delete;
-
-private:
-    int         savedType_;
-    const void* savedComponent_;
-};
 
 int MemberType(const void* member) noexcept
 {
@@ -224,7 +148,7 @@ void TickInScopes(void* playerTwoController, void* member, void* state, int type
         g_counters.Refuse();
         return;
     }
-    const LeaderAnswer               leader(type);
+    const leader_answer::Scope       leader(type);
     const move_state::OwnTick        own;
     const scope_leaks::MemberTickScope leaks(state, playerTwoController, deltaTime);
     g_counters.Act();
@@ -260,16 +184,15 @@ void* MoveStateToTick(void* playerTwoController, void* member) noexcept
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto tick       = platform::FindFunction(image, facts::kMoveStateTickForCharacter);
-    const auto leaderTest = platform::FindFunction(image, facts::kIsPartyLeader.target);
-    const auto vtable     = image.Rebase(facts::kMoveStateVTable);
-    if (!tick || !leaderTest || !vtable || !party_member::Installed() || !primary_controller::Installed() ||
-        !pad_sticks::Installed())
+    const auto tick   = platform::FindFunction(image, facts::kMoveStateTickForCharacter);
+    const auto vtable = image.Rebase(facts::kMoveStateVTable);
+    // The leader answer's slot last among the checks: its replacement is what makes the tick player 2's.
+    if (!tick || !vtable || !party_member::Installed() || !primary_controller::Installed() ||
+        !pad_sticks::Installed() || !leader_answer::Install(image))
     {
         return false;
     }
     g_tickForCharacter = reinterpret_cast<TickForCharacterFn>(*tick);
-    g_engineLeaderTest = reinterpret_cast<LeaderTestFn>(*leaderTest);
     g_moveStateVTable  = *vtable;
     const auto core    = platform::FindFunction(image, facts::kIsPlayerCore);
     g_isPlayerCore     = core ? reinterpret_cast<LeaderTestFn>(*core) : nullptr;
@@ -282,22 +205,12 @@ bool Install(const platform::GameImage& image) noexcept
         platform::Log(L"member movement: the field-action handle clear differs; player 2's member will add its own "
                       L"(dim) summon rows to the prompt list");
     }
-    const bool replaced = platform::ReplaceSlot(image, facts::kIsPartyLeader, reinterpret_cast<std::uintptr_t>(&LeaderTest),
-                                                g_leaderSlot);
-    g_leaderReplaced.store(replaced, std::memory_order_release);
-    return replaced;
+    return true;
 }
 
 void Remove() noexcept
 {
-    if (g_leaderSlot.Restore())
-    {
-        g_leaderReplaced.store(false, std::memory_order_release);
-    }
-    else
-    {
-        platform::Log(L"could not restore the leader-test slot; the replacement stays in place");
-    }
+    leader_answer::Remove();
 }
 
 void Tick(void* playerTwoController, void* member) noexcept
@@ -350,15 +263,10 @@ StageCounters& Counters() noexcept
     return g_counters;
 }
 
-unsigned TakeLeaderAnswers() noexcept
-{
-    return platform::Take(g_leaderAnswers);
-}
-
 std::uint8_t WithoutChocoboAnswer(std::uint8_t (*test)(const void* character), const void* character) noexcept
 {
     // The same type, no component: the guard restores both, as every other answer scope does.
-    const LeaderAnswer leader(g_leaderType.load(std::memory_order_relaxed));
+    const leader_answer::Scope leader(leader_answer::GameType());
     return test(character);
 }
 
@@ -374,7 +282,7 @@ bool InPrimaryScope(const void* member, void (*call)(void* context), void* conte
     {
         return false;
     }
-    const LeaderAnswer leader(type);
+    const leader_answer::Scope leader(type);
     call(context);
     return true;
 }
@@ -415,7 +323,7 @@ RideTick TickRide(void* playerTwoController, void* member, void* state, const vo
         g_counters.Refuse();
         return RideTick::Refused;
     }
-    const LeaderAnswer                 leader(type, component);
+    const leader_answer::Scope         leader(type, component);
     const move_state::OwnTick          own;
     const scope_leaks::MemberTickScope leaks(state, playerTwoController, deltaTime);
     g_counters.Act();
@@ -440,7 +348,7 @@ HandlesTick TickRideHandles(const void* member, void* state, const void* chocobo
     {
         return tick;  // counted by the ride (player_two/chocobo_ride), not as a member tick
     }
-    const LeaderAnswer leader(type, component);
+    const leader_answer::Scope leader(type, component);
     if (sample)
     {
         tick.riddenInside = RiddenTest(chocobo);
@@ -462,8 +370,8 @@ CoreAsPlayerTwo PlayerCoreAsPlayerTwo(const void* character, const void* member)
     {
         return result;
     }
-    const unsigned     before = g_leaderAnswers.load(std::memory_order_relaxed);
-    const LeaderAnswer leader(type);
+    const unsigned             before = leader_answer::Answers();
+    const leader_answer::Scope leader(type);
     result.primary      = primary_controller::Current();
     std::uint8_t answer = 0;
     if (platform::CallGuarded(g_isPlayerCore, answer, character))
@@ -471,43 +379,9 @@ CoreAsPlayerTwo PlayerCoreAsPlayerTwo(const void* character, const void* member)
         result.answer = answer;
     }
     // The answers counted here are not a tick's (game thread only, so nothing else counted meanwhile).
-    const unsigned after = g_leaderAnswers.load(std::memory_order_relaxed);
-    g_leaderAnswers.fetch_sub(after > before ? after - before : 0u, std::memory_order_relaxed);
+    const unsigned after = leader_answer::Answers();
+    leader_answer::Uncount(after > before ? after - before : 0u);
     return result;
-}
-
-ThreadLeaderAnswer::ThreadLeaderAnswer(int type) noexcept : saved_(t_threadType)
-{
-    t_threadType = type;
-}
-
-ThreadLeaderAnswer::~ThreadLeaderAnswer()
-{
-    t_threadType = saved_;
-}
-
-bool LeaderTestReplaced() noexcept
-{
-    return g_leaderReplaced.load(std::memory_order_acquire);
-}
-
-int ExchangeThreadOnlyLeader(int type) noexcept
-{
-    const int previous = t_onlyType;
-    t_onlyType         = type;
-    return previous;
-}
-
-int ExchangeThreadLeaderAnswer(int type) noexcept
-{
-    const int previous = t_threadType;
-    t_threadType       = type;
-    return previous;
-}
-
-int ComponentPlayerType(const void* component) noexcept
-{
-    return component == nullptr ? kNoType : PlayerTypeOfComponent(component);
 }
 
 }  // namespace lss::player_two::member_movement

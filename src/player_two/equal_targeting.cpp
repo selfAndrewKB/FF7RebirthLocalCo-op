@@ -8,7 +8,7 @@
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
 #include "player_two/generation.h"
-#include "player_two/member_movement.h"
+#include "player_two/leader_answer.h"
 #include "player_two/object_fields.h"
 #include "player_two/party_member.h"
 #include "player_two/thread_hold.h"
@@ -47,7 +47,7 @@ constexpr std::uint32_t kSelExcluded = 0x140, kSelExcludedHeap = 0x150, kSelExcl
 using facts::kPartyManagerLeaderType;
 constexpr std::uint8_t  kPartyTypes      = 15;     // candidate types 0..14
 constexpr std::uint32_t kNoTypes         = 0xFFFF;
-constexpr int           kNoType          = -1;  // no leader-test answer (member_movement)
+constexpr int           kNoType          = -1;  // no leader-test answer (leader_answer)
 
 using Fn                = std::uint64_t (*)(std::uint64_t, std::uint64_t, std::uint64_t, std::uint64_t);
 using CharacterByTypeFn = void* (*)(std::uint8_t lane, std::uint8_t type);
@@ -123,7 +123,7 @@ Answer AnswerFor(void* selector) noexcept
     Answer     answer;
     const auto types = g_types.load(std::memory_order_relaxed);
     if (selector == nullptr || types == kNoTypes || !g_on.load(std::memory_order_acquire) ||
-        !member_movement::LeaderTestReplaced())
+        !leader_answer::Replaced())
     {
         return answer;  // untouched: the game's own answers
     }
@@ -142,7 +142,7 @@ Answer AnswerFor(void* selector) noexcept
 std::uint64_t SelectWithOnlyLeader(Fn select, std::uint64_t selector, std::uint64_t reason, std::uint64_t out,
                                    std::uint64_t d, int onlyType) noexcept
 {
-    return thread_hold::HoldingExchange(&member_movement::ExchangeThreadOnlyLeader, onlyType, select, selector, reason,
+    return thread_hold::HoldingExchange(&leader_answer::ExchangeThreadOnly, onlyType, select, selector, reason,
                                         out, d);
 }
 
@@ -173,7 +173,7 @@ std::uint64_t CondSelect(std::uint64_t selector, std::uint64_t reason, std::uint
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    if (!member_movement::LeaderTestReplaced())
+    if (!leader_answer::Replaced())
     {
         platform::Log(L"equal targeting: UNAVAILABLE (the leader-test slot is not the mod's); Condition enemies keep "
                       L"the game's own answer");

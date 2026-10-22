@@ -37,7 +37,7 @@ class GameImage;
 namespace lss::player_two::player_hits {
 
 /// Replaces the damage slots and places the summon gauge's leader-read and the reaction-sensing redirects (logged).
-/// Needs member_movement's leader-test slot. Call from on_unreal_init: one reaction-sensing call crosses a 16-byte block
+/// Needs leader_answer's slot. Call from on_unreal_init: one reaction-sensing call crosses a 16-byte block
 /// in both builds, which is safe to change only while no thread can be running it.
 bool Install(const platform::GameImage& image) noexcept;
 

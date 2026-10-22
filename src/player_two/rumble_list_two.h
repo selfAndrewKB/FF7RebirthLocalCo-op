@@ -27,7 +27,7 @@
 // (hit and loop) and slot 8 (the loop's stop), the sky glide's rumble delegate, the jump box's OnEnded, and the drift
 // and brake actions. The last three often run on the anim worker. There the add goes to player 2's list under the game's
 // lock. The drift and brake gates ask whether the chocobo's rider is the player, and the leader test answers yes for
-// player 2's member on that thread (member_movement::ThreadLeaderAnswer). In 1.004 the jump box's add is inlined: a few
+// player 2's member on that thread (leader_answer::ThreadScope). In 1.004 the jump box's add is inlined: a few
 // bytes at its list load, under the game's lock, take player 2's list on the thread the invoker named. A stop of player
 // 2's on a worker is left (no source found does one; logged).
 //

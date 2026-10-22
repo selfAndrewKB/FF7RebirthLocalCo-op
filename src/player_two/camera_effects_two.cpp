@@ -9,7 +9,7 @@
 #include "platform/vtable_entry.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
-#include "player_two/member_movement.h"
+#include "player_two/leader_answer.h"
 #include "player_two/object_fields.h"
 #include "player_two/p2_scope.h"
 #include "player_two/party_member.h"
@@ -124,7 +124,7 @@ char Guard(void* component, const void* location) noexcept
     }
     void*      member = generation::Member();
     const auto type   = party_member::PlayerTypeOf(member);
-    if (!type || member_movement::ComponentPlayerType(component) != *type)
+    if (!type || leader_answer::ComponentPlayerType(component) != *type)
     {
         return original(component, location);
     }

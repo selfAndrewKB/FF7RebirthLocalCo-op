@@ -18,7 +18,7 @@
 #include "player_two/equal_targeting.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
-#include "player_two/member_movement.h"
+#include "player_two/leader_answer.h"
 #include "player_two/object_fields.h"
 #include "player_two/player_hits.h"
 #include "player_two/thread_hold.h"
@@ -256,7 +256,7 @@ void Exec(RC::Unreal::UObject* context, RC::Unreal::FFrame& frame, void* result)
         {
             // The game's IsUCPC / IsAIPC with only the player's type counting as the player on this thread, put
             // back afterwards.
-            thread_hold::HoldingExchange(&member_movement::ExchangeThreadOnlyLeader,
+            thread_hold::HoldingExchange(&leader_answer::ExchangeThreadOnly,
                                          player == Player::Two ? types->two : types->one, original, context,
                                          frame, result);
         }
@@ -381,7 +381,7 @@ void TrySwaps() noexcept
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    if (!equal_targeting::Installed() || !member_movement::LeaderTestReplaced())
+    if (!equal_targeting::Installed() || !leader_answer::Replaced())
     {
         platform::Log(L"target coin: UNAVAILABLE (equal targeting is not in place); enemies aim at player 1");
         return false;

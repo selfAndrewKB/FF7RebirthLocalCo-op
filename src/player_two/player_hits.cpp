@@ -8,7 +8,7 @@
 #include "platform/vtable_entry.h"
 #include "player_two/equal_targeting.h"
 #include "player_two/generation.h"
-#include "player_two/member_movement.h"
+#include "player_two/leader_answer.h"
 #include "player_two/thread_hold.h"
 
 #include <atomic>
@@ -128,7 +128,7 @@ Involvement Involved(std::uint64_t component, std::uint64_t attacker, bool victi
     }
     if (victimSlot)
     {
-        const int hit = member_movement::ComponentPlayerType(reinterpret_cast<const void*>(component));
+        const int hit = leader_answer::ComponentPlayerType(reinterpret_cast<const void*>(component));
         if (hit == types->two)
         {
             return {Human::PlayerTwo, false, types->two, member};
@@ -154,10 +154,10 @@ struct Held
 /// the reaction context. Restore puts the outer answers back, also when a structured exception unwinds the call.
 Held Hold(const Involvement& who) noexcept
 {
-    const Held outer{member_movement::ExchangeThreadLeaderAnswer(who.type), t_attacker, t_human};
+    const Held outer{leader_answer::ExchangeThread(who.type), t_attacker, t_human};
     if (who.human != Human::PlayerTwo)
     {
-        member_movement::ExchangeThreadLeaderAnswer(outer.type);  // player 1's calls keep any outer answer
+        leader_answer::ExchangeThread(outer.type);  // player 1's calls keep any outer answer
     }
     t_attacker = who.human == Human::PlayerTwo && who.attacks ? who.member : nullptr;  // null: a nested call's own
     t_human    = who.human;
@@ -168,7 +168,7 @@ void Restore(const Held& outer) noexcept
 {
     t_attacker = outer.attacker;
     t_human    = outer.human;
-    member_movement::ExchangeThreadLeaderAnswer(outer.type);
+    leader_answer::ExchangeThread(outer.type);
 }
 
 const wchar_t* HumanText(Human human) noexcept
@@ -239,7 +239,7 @@ constexpr DamageFn kWrappers[kSlots] = {&Damage<0>, &Damage<1>, &Damage<2>, &Dam
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    if (!member_movement::LeaderTestReplaced() || !equal_targeting::Installed())
+    if (!leader_answer::Replaced() || !equal_targeting::Installed())
     {
         platform::Log(L"player hits: UNAVAILABLE (the leader-test slot or equal targeting is not in place); player 2's "
                       L"hits count as an AI ally's");
