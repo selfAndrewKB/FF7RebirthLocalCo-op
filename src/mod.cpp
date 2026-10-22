@@ -4,7 +4,8 @@
 //   1. verify every engine fact the mod relies on (facts/engine.h); if any fails, install nothing;
 //   2. if all hold, install the renderer (one view family per player), the session (player 2's join and leave) and
 //      its stages, then the module table in order (modules.h), the dev tools and the engine callbacks;
-//   3. tick the modules once per engine tick, outside Draw; at unload, remove in reverse.
+//   3. tick the modules once per engine tick, outside Draw, in two phases around the session's tick (modules.h);
+//      at unload, remove in reverse.
 // Design: Rebirth/Documentation/SPLITSCREEN-ARCHITECTURE.md
 
 #include <Mod/CppUserModBase.hpp>
@@ -15,8 +16,6 @@
 #include "facts/engine.h"
 #include "facts/in_battle.h"
 #include "hud/hud_placement.h"
-#include "hud/minimap.h"
-#include "hud/minimap_once.h"
 #include "hud/overlay_layout.h"
 #include "modules.h"
 #include "platform/code_memory.h"
@@ -28,45 +27,16 @@
 #include "platform/module_folder.h"
 #include "platform/thread_times.h"
 #include "platform/verified_code.h"
-#include "player_two/anim_two_views.h"
-#include "player_two/approach_two.h"
-#include "player_two/attack_cameras.h"
-#include "player_two/attack_framing.h"
-#include "player_two/audio_listener_two.h"
-#include "player_two/camera_distance.h"
-#include "player_two/camera_effects_two.h"
-#include "player_two/camera_repair.h"
 #include "player_two/charapop_centre.h"
 #include "player_two/charapop_near.h"
-#include "player_two/chocobo_climb.h"
-#include "player_two/chocobo_ride.h"
 #include "player_two/climb_context.h"
-#include "player_two/combat_rumble.h"
-#include "player_two/equal_targeting.h"
 #include "player_two/ffb_manager_two.h"
 #include "player_two/field_exit.h"
 #include "player_two/generation.h"
-#include "player_two/leave_watch.h"
-#include "player_two/location_rows.h"
-#include "player_two/main_camera_shape.h"
-#include "player_two/move_type_two.h"
-#include "player_two/nav_strand.h"
-#include "player_two/near_fade.h"
-#include "player_two/pad_rumble.h"
 #include "player_two/pad_sticks.h"
 #include "player_two/rumble_list_two.h"
 #include "player_two/session.h"
 #include "player_two/shared_ride.h"
-#include "player_two/shop_talk.h"
-#include "player_two/shoulder_scale.h"
-#include "player_two/synergy_partner.h"
-#include "player_two/target_coin.h"
-#include "player_two/traversal_camera.h"
-#include "player_two/traversal_watch.h"
-#include "player_two/trigger_two.h"
-#include "player_two/vault_camera.h"
-#include "player_two/vending.h"
-#include "player_two/walk_limits.h"
 #include "player_two/weak_object.h"
 #include "player_two/world_actor_reach.h"
 #include "players/console_access.h"
@@ -81,12 +51,10 @@
 #include "renderer/additional_family_output.h"
 #include "renderer/async_compute.h"
 #include "renderer/family_boundary.h"
-#include "renderer/me_feedback_once.h"
 #include "renderer/residency_off.h"
 #include "renderer/submit_hints.h"
 #include "renderer/view_family_submission.h"
 #include "views/player_view_point.h"
-#include "views/stream_views.h"
 #include "views/third_view.h"
 #include "views/whole_screen.h"
 #include "views/window_span.h"
@@ -397,22 +365,7 @@ private:
     {
         lss::platform::frame_watch::OnFrameStart();
         const lss::platform::frame_watch::Charge charge(lss::platform::frame_watch::Part::EngineTick);
-        // The tick's identities (the member's and player 1's pawn's weaks, the driven chocobo) before any module's.
-        lss::player_two::generation::BeginTick(lss::player_two::chocobo_ride::DrivenChocobo());
-        lss::player_two::pad_rumble::BeforeTick();  // before the world tick: player 2's controller ordered after player 1's
-        lss::player_two::combat_rumble::BeforeTick();  // outside every notify: their call sites; the status line
-        lss::player_two::rumble_list_two::Tick();      // player 2's list made at join (dropped if player 2 went out another way)
-        lss::player_two::equal_targeting::Tick();      // both players' types for the Condition selects (no leader scope held here)
-        lss::player_two::target_coin::Tick();          // the blueprint natives' swaps once reflection is up; the summary
-        lss::player_two::ffb_manager_two::Tick();      // player 2's component on player 2's own manager, after its BeginPlay
-        lss::player_two::audio_listener_two::Tick();  // the controller listener slot; the listeners and the summary (Debug)
-        lss::player_two::leave_watch::Tick();          // the last leave's controller, followed until it is freed (logged)
-        lss::player_two::vending::Tick();              // a press that opened no shop; player 2 leaving with their shop up
-        lss::player_two::shop_talk::Tick();            // the shopkeeper verdicts queued by player 2's pass
-        lss::player_two::attack_cameras::Tick();       // the attack-camera status line (Debug)
-        lss::player_two::attack_framing::Tick();       // the attack-framing latches' clock and status line (Debug)
-        lss::player_two::camera_effects_two::Tick();   // the camera-effect status line (Debug)
-        lss::player_two::synergy_partner::Tick();      // humans' synergy partners: session, late give-back, status (Debug)
+        lss::modules::TickBeforeSession();  // the tick's identities, then each module's work before the keys
         if (!tickSeen_)
         {
             tickSeen_ = true;
@@ -469,11 +422,6 @@ private:
                 break;
             case lss::players::PlayerIntent::None: break;
         }
-        lss::renderer::PollFamilyBoundary();
-        lss::renderer::PollMeFeedbackOnce();
-        lss::hud::PollMinimapOnce();
-        lss::player_two::location_rows::Poll();
-        lss::player_two::location_rows::Tick();
         lss::player_two::field_exit::Watch();
         if (session_->HasPlayerTwo() && lss::player_two::field_exit::FieldLeft())
         {
@@ -489,10 +437,6 @@ private:
         lss::player_two::climb_context::Tick();  // this frame's input copies for the climbs on the anim worker (W5)
         session_->Tick();
         lss::dev::TickAfterSession();
-        lss::views::third_view::Tick(session_->HasPlayerTwo());  // leaves with player 2; follows player 1's view target
-        lss::views::window_span::Tick(session_->HasPlayerTwo());  // leaves with player 2; holds the window's rect
-        lss::player_two::walk_limits::Tick();  // after the session's tick: a take's copy is overwritten this frame
-
         // Player 1's single view for the game's whole-screen states (players/single_view.h), and while
         // player 2 waits for a member (only player 1 plays then; the user's decision, 2026-10-01): while
         // it holds, player 2 stays in but the split's presentation is off, as with one player.
@@ -503,32 +447,8 @@ private:
             playerTwoIn,
             lss::players::SingleViewWanted(autoMode, WholeScreenShown(playerTwoIn), waits, session_->StandsAside())));
         const bool splitShown = playerTwoIn && !singleView_.Single();
-        lss::player_two::nav_strand::Tick(splitShown);  // a stranded player 2 is warped back to the party
-        lss::player_two::camera_repair::Tick();
-        lss::player_two::traversal_watch::Tick();
-        lss::player_two::trigger_two::Tick();
-        lss::player_two::traversal_camera::Tick();  // player 2's idle camera holders; the collision watch (dev)
-        lss::player_two::near_fade::Tick();  // player 2's character's fade state (Debug, on change)
-        lss::player_two::approach_two::Tick();  // the crossing walk-up calls, swapped once from here
-        lss::player_two::move_type_two::Tick();  // player 2's deferred walk-cap clear, the layer-2 watch
-        lss::player_two::vault_camera::Tick();  // player 2's vault cameras end on player 2's camera (lever L2)
-        lss::player_two::chocobo_climb::Tick();  // player 2's climb camera's states and the summary (Debug)
-        lss::player_two::camera_distance::TickFraming(playerTwoIn);  // per-layout distance steps (roadmap 2b)
-        lss::player_two::shoulder_scale::Poll(splitShown);
-        lss::player_two::anim_two_views::Tick(splitShown);  // its frame count, before the world tick
-        lss::player_two::charapop_near::Tick(splitShown, session_->PlaysMember());
-        lss::player_two::charapop_centre::Tick(splitShown, session_->PlaysMember());
-        lss::player_two::world_actor_reach::Tick(session_->PlaysMember());
-        lss::dev::TickWatches(splitShown);  // the dev-only watches, after the levers they observe (empty in a player's build)
-        lss::hud::minimap::Tick(splitShown);  // outside the overlay render, before it
-        if (lss::views::WholeScreenInstalled())
-        {
-            lss::views::UpdateStreamViews(splitShown);  // needs the game-state check whole_screen verified
-        }
-        // Filled halves: each main camera's own 16:9 constraint, cleared once by the game's setter. FillsHalves is
-        // false without the view-point entry (nothing shapes the halves then), so the cameras keep their constraint.
-        lss::player_two::main_camera_shape::Update(lss::player_two::generation::Active() && splitShown &&
-                                                   lss::views::FillsHalves());
+        lss::modules::TickAfterSession({playerTwoIn, splitShown, session_->PlaysMember()});
+        lss::dev::TickWatches(splitShown);  // the dev watches, after the levers they observe
         // The timing method before the gap recorder goes off, and back after it returns (SettingsOrder).
         for (const auto step : lss::players::SettingsOrder(playerTwoIn))
         {
@@ -542,8 +462,8 @@ private:
             lss::renderer::SetSubmitHintSkip(playerTwoIn);
         }
         LogLayoutChange(layout_.Update(playerTwoIn));
-        lss::views::Follow(SplitFrameNow(splitShown));  // after the layout: the halves' shape reads it
-        lss::hud::SetSplitActive(splitShown);
+        lss::views::Follow(SplitFrameNow(splitShown));  // after the layout: the halves' shape reads it; the one
+                                                       // place "the split is shown" is kept (views::SplitShown)
         lss::hud::UpdateHudPlacement(splitShown && lss::hud::BandEnabled());
 
         const ULONGLONG now = GetTickCount64();

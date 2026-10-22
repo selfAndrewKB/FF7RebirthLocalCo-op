@@ -39,7 +39,9 @@
 #include "player_two/equal_targeting.h"
 #include "player_two/ffb_manager_two.h"
 #include "player_two/field_pickup.h"
+#include "player_two/generation.h"
 #include "player_two/leader_reads.h"
+#include "player_two/leave_watch.h"
 #include "player_two/location_rows.h"
 #include "player_two/lock_group_coin.h"
 #include "player_two/lock_on.h"
@@ -66,6 +68,7 @@
 #include "player_two/wheelie_ride.h"
 #include "player_two/widget_owner.h"
 #include "player_two/world_actor_reach.h"
+#include "renderer/family_boundary.h"
 #include "renderer/me_feedback_once.h"
 #include "renderer/submit_hints.h"
 #include "views/player_view_point.h"
@@ -341,6 +344,61 @@ void Remove() noexcept
             row->remove();
         }
     }
+}
+
+void TickBeforeSession() noexcept
+{
+    // The tick's identities (the member's and player 1's pawn's weaks, the driven chocobo) before any module's.
+    player_two::generation::BeginTick(player_two::chocobo_ride::DrivenChocobo());
+    player_two::pad_rumble::BeforeTick();    // before the world tick: player 2's controller ordered after player 1's
+    player_two::combat_rumble::BeforeTick();  // outside every notify: their call sites; the status line
+    player_two::rumble_list_two::Tick();      // player 2's list made at join (dropped if player 2 left another way)
+    player_two::equal_targeting::Tick();      // both players' types for the Condition selects (no leader scope held)
+    player_two::target_coin::Tick();          // the blueprint natives' swaps once reflection is up; the summary
+    player_two::ffb_manager_two::Tick();      // player 2's component on player 2's own manager, after its BeginPlay
+    player_two::audio_listener_two::Tick();   // the controller listener slot; the listeners and the summary (Debug)
+    player_two::leave_watch::Tick();          // the last leave's controller, followed until it is freed (logged)
+    player_two::vending::Tick();              // a press that opened no shop; player 2 leaving with their shop up
+    player_two::shop_talk::Tick();            // the shopkeeper verdicts queued by player 2's pass
+    player_two::attack_cameras::Tick();       // the attack-camera status line (Debug)
+    player_two::attack_framing::Tick();       // the attack-framing latches' clock and status line (Debug)
+    player_two::camera_effects_two::Tick();   // the camera-effect status line (Debug)
+    player_two::synergy_partner::Tick();      // humans' synergy partners: session, late give-back, status (Debug)
+    // The code placed from the game thread outside the overlay render (platform/deferred_sites.h): its polls.
+    renderer::PollFamilyBoundary();
+    renderer::PollMeFeedbackOnce();
+    hud::PollMinimapOnce();
+    player_two::location_rows::Poll();
+    player_two::location_rows::Tick();
+}
+
+void TickAfterSession(const Frame& frame) noexcept
+{
+    views::third_view::Tick(frame.playerTwoIn);   // leaves with player 2; follows player 1's view target
+    views::window_span::Tick(frame.playerTwoIn);  // leaves with player 2; holds the window's rect
+    player_two::walk_limits::Tick();  // after the session's tick: a take's copy is overwritten this frame
+    player_two::nav_strand::Tick(frame.splitShown);  // a stranded player 2 is warped back to the party
+    player_two::camera_repair::Tick();
+    player_two::traversal_watch::Tick();
+    player_two::trigger_two::Tick();
+    player_two::traversal_camera::Tick();  // player 2's idle camera holders; the collision watch (dev)
+    player_two::near_fade::Tick();         // player 2's character's fade state (Debug, on change)
+    player_two::approach_two::Tick();      // the crossing walk-up calls, swapped once from here
+    player_two::move_type_two::Tick();     // player 2's deferred walk-cap clear, the layer-2 watch
+    player_two::vault_camera::Tick();      // player 2's vault cameras end on player 2's camera (lever L2)
+    player_two::chocobo_climb::Tick();     // player 2's climb camera's states and the summary (Debug)
+    player_two::camera_distance::TickFraming(frame.playerTwoIn);  // per-layout distance steps (roadmap 2b)
+    player_two::shoulder_scale::Poll(frame.splitShown);
+    player_two::anim_two_views::Tick(frame.splitShown);  // its frame count, before the world tick
+    player_two::charapop_near::Tick(frame.splitShown, frame.playsMember);
+    player_two::charapop_centre::Tick(frame.splitShown, frame.playsMember);
+    player_two::world_actor_reach::Tick(frame.playsMember);
+    hud::minimap::Tick(frame.splitShown);  // outside the overlay render, before it
+    views::UpdateStreamViews(frame.splitShown);  // nothing until whole_screen's game-state check passed
+    // Filled halves: each main camera's own 16:9 constraint, cleared once by the game's setter. FillsHalves is
+    // false without the view-point entry (nothing shapes the halves then), so the cameras keep their constraint.
+    player_two::main_camera_shape::Update(player_two::generation::Active() && frame.splitShown &&
+                                          views::FillsHalves());
 }
 
 }  // namespace lss::modules

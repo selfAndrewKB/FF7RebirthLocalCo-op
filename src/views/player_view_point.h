@@ -69,7 +69,8 @@ std::optional<StreamCamera> RenderedCamera(bool playerTwo) noexcept;
 /// The split halves' width/height (views::HalfOf), or 0 until known.
 float HalfAspect() noexcept;
 
-/// Whether the split is on screen, as last followed. Any thread.
+/// Whether the split is on screen, as last followed: the one place it is kept (the overlay layout and the overlay
+/// render read it here). Any thread.
 bool SplitShown() noexcept;
 
 /// Switches whether split views fill their halves (on at start); returns the new state.

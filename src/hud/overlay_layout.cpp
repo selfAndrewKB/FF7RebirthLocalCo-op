@@ -15,6 +15,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "player_two/generation.h"
+#include "views/player_view_point.h"
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -55,7 +56,6 @@ ContainScaleFn         g_containScale     = nullptr;  // the game's UI scale of 
 std::uintptr_t         g_overlaySingleton = 0;  // live 0x1491D1948
 bool                   g_installed        = false;
 
-std::atomic<bool> g_splitActive{false};
 std::atomic<bool> g_bandEnabled{true};  // `hud-band off` turns it off for diagnosis
 
 // Whether this render's band applies: set by the rect call, whose rect the overlay stores as its UI
@@ -177,7 +177,7 @@ IntRect* OverlayLayoutRect(IntRect* out)
     g_pending.active   = false;
     g_bandApplies = 0;
     g_lastLayout  = kSoloLayout;
-    if (!g_splitActive.load(std::memory_order_relaxed) || out == nullptr || out->minX != 0 || out->minY != 0)
+    if (!views::SplitShown() || out == nullptr || out->minX != 0 || out->minY != 0)
     {
         return result;  // one player (or an unexpected rect): exactly the engine's result
     }
@@ -372,7 +372,6 @@ void RemoveOverlayLayout() noexcept
     }
     // Whatever stays in place afterwards must do nothing.
     g_bandEnabled.store(false, std::memory_order_relaxed);
-    g_splitActive.store(false, std::memory_order_relaxed);
     g_pending.active = false;
     g_submit.active  = false;
 
@@ -409,11 +408,6 @@ LayoutSize LastLayoutSize() noexcept
 bool OverlayLayoutInstalled() noexcept
 {
     return g_installed;
-}
-
-void SetSplitActive(bool active) noexcept
-{
-    g_splitActive.store(active, std::memory_order_relaxed);
 }
 
 void SetBandEnabled(bool enabled) noexcept
