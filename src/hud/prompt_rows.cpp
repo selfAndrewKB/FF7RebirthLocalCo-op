@@ -11,6 +11,7 @@
 
 #include "facts/hud.h"
 #include "facts/vehicles.h"
+#include "hud/action_rows.h"
 #include "hud/viewport_placement.h"
 #include "hud/widget_opacity.h"
 #include "platform/guarded.h"
@@ -40,7 +41,6 @@ using RC::Unreal::UFunction;
 using RC::Unreal::UObject;
 
 // RE-p2-field-prompts.md §1.2 and §4 (this build).
-constexpr std::uint32_t  kListNum           = 0x8;
 constexpr std::uint32_t  kLeaderActions     = 0x598;        // PC -> the leader-action component
 constexpr std::uint32_t  kComponentRowBytes = 0x9A8;        // + 12*i: request byte
 constexpr std::uint32_t  kComponentRowWeak  = 0x9AC;        // + 12*i: the row's weak widget
@@ -48,21 +48,11 @@ constexpr std::uint32_t  kRowStride         = 12;
 constexpr std::size_t    kComponentRows     = 14;
 constexpr std::uint32_t  kWidgetPriority    = 0x400;
 constexpr std::uint32_t  kWidgetRemoveState = 0x418;
-constexpr std::int32_t   kMaxRows           = 64;
-
-// FieldActionIconList__SortAndLayout (facts::kSortAndLayout).
-using SortAndLayoutFn = void (*)(void* list, void* placeNow);
+using action_rows::kMaxRows;
 
 // ESlateVisibility.
 constexpr std::uint8_t kCollapsed = 1;
 constexpr std::uint8_t kHidden    = 2;
-
-struct ListHeader  // a TArray as the layout reads it
-{
-    std::uint64_t* data = nullptr;
-    std::int32_t   num  = 0;
-    std::int32_t   max  = 0;
-};
 
 struct Row
 {
@@ -84,8 +74,6 @@ struct Hidden
 };
 
 // Set once at install.
-std::uintptr_t  g_endUISystem   = 0;
-SortAndLayoutFn g_sortAndLayout = nullptr;
 UFunction*      g_setOpacity    = nullptr;  // UWidget::SetRenderOpacity
 std::int32_t    g_visibilityOffset = -1;
 std::int32_t    g_opacityOffset    = -1;
@@ -110,33 +98,13 @@ float                                     g_againWidth  = 0.0f;
 float                                     g_againHeight = 0.0f;
 std::vector<const UObject*>               g_stillTwo;  // scratch, reused
 std::vector<std::pair<const UObject*, bool>> g_layoutNow;  // scratch, reused
+std::vector<action_rows::RowEntry>        g_listRows;   // scratch, reused: the game's list as last read
 
 using platform::Read;  // the guarded reads: platform/guarded.h
 
 UObject* Resolve(std::uint64_t weakValue) noexcept
 {
     return static_cast<UObject*>(player_two::weak_object::ObjectOf(weakValue));
-}
-
-bool LayoutGuarded(ListHeader* list, void* placeNow) noexcept
-{
-    __try
-    {
-        g_sortAndLayout(list, placeNow);
-        return true;
-    }
-    __except (platform::GuardFilter(GetExceptionCode()))
-    {
-        return false;
-    }
-}
-
-/// The row's viewport position (UUserWidget's viewport offsets Left, Top: what the game's slide sets).
-LayoutPoint PositionOf(const UObject* widget) noexcept
-{
-    LayoutPoint position;
-    Read(reinterpret_cast<std::uintptr_t>(widget) + facts::kUserWidgetViewportOffsets, position);
-    return position;
 }
 
 bool LaidOutBefore(const UObject* widget) noexcept
@@ -153,7 +121,7 @@ void LayOutPerPlayer()
     {
         g_layoutNow.emplace_back(row.widget, row.playerTwo);
     }
-    if (g_layoutNow == g_laidOut || g_sortAndLayout == nullptr)
+    if (g_layoutNow == g_laidOut || !action_rows::LayoutAvailable())
     {
         return;
     }
@@ -161,39 +129,25 @@ void LayOutPerPlayer()
     g_layOutAgain    = false;
     for (const bool playerTwo : {false, true})
     {
-        std::vector<std::uint64_t>  weaks;
-        std::vector<const UObject*> widgets;
-        const UObject*              placeNow = nullptr;
+        std::vector<std::uint64_t> weaks;
+        std::vector<void*>         widgets;
+        void*                      placeNow = nullptr;
         for (const Row& row : g_rows)
         {
             if (row.playerTwo == playerTwo)
             {
                 weaks.push_back(row.weak);
-                widgets.push_back(row.widget);
-                placeNow = placeNow == nullptr && row.remove == 0 && !LaidOutBefore(row.widget) ? row.widget : placeNow;
+                widgets.push_back(const_cast<UObject*>(row.widget));
+                const bool fresh = row.remove == 0 && !LaidOutBefore(row.widget);  // new since the last layout
+                placeNow         = placeNow == nullptr && fresh ? widgets.back() : placeNow;
             }
         }
-        ListHeader list{weaks.data(), static_cast<std::int32_t>(weaks.size()), static_cast<std::int32_t>(weaks.size())};
-        // Each call places the row it names at once and gives the others their slide target (the
-        // sort and the slots come out the same each time). After a base change, each row stranded
-        // outside the layout is named in a call of its own; the others slide.
-        bool laidOut = true;
-        bool named   = false;
-        for (const UObject* widget : again ? widgets : std::vector<const UObject*>{})
+        action_rows::ListHeader list{weaks.data(), static_cast<std::int32_t>(weaks.size()),
+                                     static_cast<std::int32_t>(weaks.size())};
+        // This player's rows by the game's layout (hud/action_rows.h): after a base change the rows stranded outside
+        // the layout are named in a call each; otherwise one call places the new row at once, the others slide.
+        if (!weaks.empty() && !action_rows::LayOut(&list, widgets, again, g_againWidth, g_againHeight, placeNow))
         {
-            if (OutsideLayout(PositionOf(widget), g_againWidth, g_againHeight))
-            {
-                named   = true;
-                laidOut = laidOut && LayoutGuarded(&list, const_cast<UObject*>(widget));
-            }
-        }
-        if (!named && !weaks.empty())
-        {
-            laidOut = LayoutGuarded(&list, const_cast<UObject*>(placeNow));
-        }
-        if (!laidOut)
-        {
-            g_sortAndLayout = nullptr;
             platform::Log(L"prompt rows: the game's layout raised an exception; rows keep the shared layout");
             return;
         }
@@ -302,13 +256,7 @@ void LogIfChanged(const std::array<std::uint8_t, kComponentRows>& bytes)
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto system = image.Rebase(facts::kEndUISystem, facts::kUIActionRows + sizeof(void*));
-    const auto layout = platform::FindFunction(image, facts::kSortAndLayout);
-    g_endUISystem     = system ? *system : 0;
-    if (layout)
-    {
-        g_sortAndLayout = reinterpret_cast<SortAndLayoutFn>(*layout);
-    }
+    action_rows::Install(image);  // the list and the game's layout, shared with the icons' base
     try
     {
         g_setOpacity = RC::Unreal::UObjectGlobals::StaticFindObject<UFunction*>(nullptr, nullptr,
@@ -319,15 +267,16 @@ bool Install(const platform::GameImage& image) noexcept
         g_setOpacity = nullptr;
     }
     const bool native = widget_opacity::Install(image);
-    platform::Log(L"prompt rows: per-player layout {}, per-half visibility {}", g_sortAndLayout ? L"ready" : L"UNAVAILABLE",
+    platform::Log(L"prompt rows: per-player layout {}, per-half visibility {}",
+                  action_rows::LayoutAvailable() ? L"ready" : L"UNAVAILABLE",
                   native ? L"ready (native setter)" : g_setOpacity ? L"ready (through reflection)" : L"UNAVAILABLE");
-    return g_endUISystem != 0;
+    return action_rows::ListKnown();
 }
 
 void Refresh() noexcept
 {
     const auto playerTwo = reinterpret_cast<std::uintptr_t>(player_two::generation::PlayerTwoController());
-    if (g_endUISystem == 0 || playerTwo == 0)
+    if (!action_rows::ListKnown() || playerTwo == 0)
     {
         return;
     }
@@ -364,24 +313,17 @@ void Refresh() noexcept
             pickupNamed[i] = pickupWeaks[i] != 0 ? Resolve(pickupWeaks[i]) : nullptr;
         }
 
-        std::uintptr_t list = 0;
-        std::uintptr_t data = 0;
-        std::int32_t   num  = 0;
         g_rows.clear();
-        if (!Read(g_endUISystem + facts::kUIActionRows, list) || list == 0 || !Read(list, data) ||
-            !Read(list + kListNum, num) || num < 0 || num > kMaxRows)
+        if (!action_rows::Rows(g_listRows))
         {
             return;
         }
         g_stillTwo.clear();
-        for (std::int32_t i = 0; i < num; ++i)
+        for (const action_rows::RowEntry& entry : g_listRows)
         {
             Row row;
-            if (!Read(data + sizeof(std::uint64_t) * static_cast<std::size_t>(i), row.weak) ||
-                (row.widget = Resolve(row.weak)) == nullptr)
-            {
-                continue;
-            }
+            row.weak   = entry.weak;
+            row.widget = static_cast<const UObject*>(entry.widget);
             for (std::size_t r = 0; r < kComponentRows; ++r)
             {
                 row.p2Row = named[r] == row.widget ? static_cast<int>(r) : row.p2Row;

@@ -9,6 +9,7 @@
 #include <Unreal/UObjectArray.hpp>
 
 #include "facts/hud.h"
+#include "hud/action_rows.h"
 #include "hud/prompt_rows.h"
 #include "hud/user_widgets.h"
 #include "hud/viewport_placement.h"
@@ -39,10 +40,6 @@ using RC::Unreal::UObject;
 
 // RE-p2-hud-view-levers.md §1 and RE-p2-field-prompts.md §4 (this build).
 constexpr std::int32_t   kBasePos     = 0x3C8;        // UEndFieldActionIcon._BasePosY, an FVector2D
-constexpr std::int32_t   kMaxRows     = 64;
-
-// FieldActionIconList__SortAndLayout (facts::kSortAndLayout).
-using SortAndLayoutFn = void (*)(void* list, void* placeNow);
 
 constexpr int kMaxOwnBaseLines = 20;
 
@@ -59,8 +56,7 @@ struct IconClass
 };
 
 // Set once at install.
-std::uintptr_t  g_endUISystem   = 0;
-SortAndLayoutFn g_sortAndLayout = nullptr;
+bool g_ready = false;  // the list and the game's layout were found (hud/action_rows.h)
 
 // Game thread.
 std::unordered_map<const void*, IconClass> g_classes;
@@ -83,19 +79,6 @@ bool WriteBase(UObject* object, const LayoutPoint& base) noexcept
 LayoutPoint BaseFor(const IconClass& type, const LayoutSize& layout) noexcept
 {
     return KeepDistanceFromAnchor(type.original, type.anchor, layout.width, layout.height);
-}
-
-bool LayoutGuarded(void* list, void* placeNow) noexcept
-{
-    __try
-    {
-        g_sortAndLayout(list, placeNow);
-        return true;
-    }
-    __except (platform::GuardFilter(GetExceptionCode()))
-    {
-        return false;
-    }
 }
 
 /// Moves `object`'s base from where `type`'s rule puts it for `from` to where it puts it for `to`.
@@ -185,46 +168,17 @@ IconClass* ClassOf(UObject* widget)
     return &g_classes.emplace(cls, type).first->second;
 }
 
-/// The game's list header, if readable.
-std::uintptr_t ListOf() noexcept
+/// The game's list's rows, resolved (hud/action_rows.h).
+std::vector<UObject*> RowsOf()
 {
-    std::uintptr_t list = 0;
-    return g_endUISystem != 0 && Read(g_endUISystem + facts::kUIActionRows, list) ? list : 0;
-}
-
-/// The list's rows, resolved.
-std::vector<UObject*> RowsOf(std::uintptr_t list)
-{
-    std::vector<UObject*> rows;
-    std::uintptr_t        data = 0;
-    std::int32_t          num  = 0;
-    if (list == 0 || !Read(list, data) || !Read(list + sizeof(void*), num) || num < 0 || num > kMaxRows)
+    static std::vector<action_rows::RowEntry> s_entries;  // scratch, reused
+    std::vector<UObject*>                     rows;
+    action_rows::Rows(s_entries);
+    for (const action_rows::RowEntry& entry : s_entries)
     {
-        return rows;
-    }
-    for (std::int32_t i = 0; i < num; ++i)
-    {
-        std::uint64_t weakValue = 0;
-        if (!Read(data + sizeof(std::uint64_t) * static_cast<std::size_t>(i), weakValue))
-        {
-            continue;
-        }
-        RC::Unreal::FWeakObjectPtr weak;
-        std::memcpy(&weak, &weakValue, sizeof(weakValue));
-        if (UObject* row = weak.Get())
-        {
-            rows.push_back(row);
-        }
+        rows.push_back(static_cast<UObject*>(entry.widget));
     }
     return rows;
-}
-
-/// The row's viewport position (UUserWidget's viewport offsets Left, Top: what the game's slide sets).
-LayoutPoint PositionOf(const UObject* row) noexcept
-{
-    LayoutPoint position;
-    Read(reinterpret_cast<std::uintptr_t>(row) + facts::kUserWidgetViewportOffsets, position);
-    return position;
 }
 
 /// The rows laid out again by the game's layout for `layout`: each player's through prompt_rows
@@ -239,24 +193,13 @@ void LayOutAgain(const LayoutSize& layout)
         prompt_rows::LayOutAgain(layout.width, layout.height);
         return;
     }
-    const std::uintptr_t list  = ListOf();
-    bool                 named = false;
-    bool                 ok    = true;
-    for (UObject* row : RowsOf(list))
-    {
-        if (g_sortAndLayout != nullptr && OutsideLayout(PositionOf(row), layout.width, layout.height))
-        {
-            named = true;
-            ok    = ok && LayoutGuarded(reinterpret_cast<void*>(list), row);
-        }
-    }
-    if (!named && list != 0 && g_sortAndLayout != nullptr)
-    {
-        ok = LayoutGuarded(reinterpret_cast<void*>(list), nullptr);
-    }
+    const std::vector<UObject*> rows = RowsOf();
+    const std::vector<void*>    widgets(rows.begin(), rows.end());
+    const bool ok = !action_rows::LayoutAvailable() ||
+                    action_rows::LayOut(reinterpret_cast<void*>(action_rows::List()), widgets, true, layout.width,
+                                        layout.height, nullptr);
     if (!ok)
     {
-        g_sortAndLayout = nullptr;
         platform::Log(L"field-action icons: the game's layout raised an exception; the rows keep their places until the "
                       L"game lays them out");
     }
@@ -267,7 +210,7 @@ void LayOutAgain(const LayoutSize& layout)
 void CheckRows()
 {
     bool newClass = false;
-    for (UObject* row : RowsOf(ListOf()))
+    for (UObject* row : RowsOf())
     {
         const bool      known = g_classes.contains(row->GetClassPrivate());
         const IconClass* type = ClassOf(row);
@@ -301,27 +244,17 @@ void CheckRows()
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto system = image.Rebase(facts::kEndUISystem, facts::kUIActionRows + sizeof(void*));
-    const auto layout = platform::FindFunction(image, facts::kSortAndLayout);
-    g_endUISystem     = system ? *system : 0;
-    if (layout)
-    {
-        g_sortAndLayout = reinterpret_cast<SortAndLayoutFn>(*layout);
-    }
-    const bool ready = g_endUISystem != 0 && g_sortAndLayout != nullptr;
+    const bool ready = action_rows::Install(image) && action_rows::LayoutAvailable();
+    g_ready          = ready;
     platform::Log(L"field-action icons: {}", ready ? L"their base follows the split layout (the game's layout places them)"
                                                    : L"the list or the game's layout is not what the research read; the "
                                                      L"icons keep the game's base");
-    if (!ready)
-    {
-        g_endUISystem = 0;
-    }
     return ready;
 }
 
 void Update(LayoutSize layout) noexcept
 {
-    if (g_endUISystem == 0)
+    if (!g_ready)
     {
         return;
     }
