@@ -6,8 +6,8 @@
 // no game path makes a second one: the slot reuse, the skipped submit and the draw filter are the
 // mod's, around the game's own render.
 //
-// Game thread, from the overlay render call (hud/root_overlay_render.h), each frame while player 2
-// is in and the image is on (the pass is hud/overlay_pass.h, set here; the slot hud/shared_slot.h):
+// Game thread, from the overlay render call (hud/root_overlay_render.h, the one driver of the passes, which
+// calls the steps below in order; the pass is hud/overlay_pass.h, set there; the slot hud/shared_slot.h):
 //   1. player 2's pass: SEndRootOverlay__RenderToCompositeLayer(overlay), with DeltaTime 0. Its
 //      slot acquire is the real one and is held; its layer entry is named for player 2
 //      (hud/overlay_layout.cpp asks EntryNameForPass); its submit is skipped;
@@ -38,13 +38,31 @@ bool SecondImageInstalled() noexcept;
 void SetSecondImage(bool on) noexcept;
 bool SecondImageOn() noexcept;
 
-/// Game thread, from the overlay render call: renders player 2's image first (if on and the split
-/// is on screen: player 2 in, and not player 1's single view), then marks the game's own call that
-/// follows as player 1's pass.
-void BeginOverlayRender(bool splitShown) noexcept;
+/// The frame's steps, game thread, from the overlay render call (hud/root_overlay_render.cpp) in this order:
+/// the slot's frame begins, unheld.
+void BeginFrame() noexcept;
 
-/// Game thread, after the game's own call.
-void EndOverlayRender() noexcept;
+/// Player 2's image renders this frame: on, the split on screen (player 2 in, and not player 1's single view),
+/// the names and the buffers ready (a wrong buffer kind refuses the image for good), the overlay with a window.
+bool PlayerTwoImageReady(bool splitShown) noexcept;
+
+/// Player 2's pass begins: the engine's DeltaTime held at 0 for its render, the slot held for its entry. Returns
+/// the frame's DeltaTime (for the updates run in the pass).
+double BeginPlayerTwoPass() noexcept;
+
+/// The game's overlay render for player 2's entry (SEndRootOverlay__RenderToCompositeLayer). False on a fault,
+/// which refuses the image for good.
+bool RenderPlayerTwo() noexcept;
+
+/// Player 2's pass ends: DeltaTime back.
+void EndPlayerTwoPass() noexcept;
+
+/// The game's own call follows: marks whether player 2's entry was rendered (the render thread reads it).
+void BeginPlayerOnePass() noexcept;
+bool ImageThisFrame() noexcept;
+
+/// After the game's own call: a slot player 1's pass did not take is submitted on its own (logged).
+void EndFrame() noexcept;
 
 /// For the overlay's layer-entry call: the FName to use for `slot` in this pass (player 2's for the held slot in
 /// player 2's pass, else `stockName` unchanged).

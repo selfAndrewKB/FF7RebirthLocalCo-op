@@ -32,8 +32,8 @@ bool MinimapOnceInstalled() noexcept;
 void SetMinimapOnce(bool on) noexcept;
 bool MinimapOnceOn() noexcept;
 
-/// Game thread, around player 2's overlay render (hud/second_image.cpp): the skip byte is set for it only, and not
-/// while player 2's pass paints player 2's minimap (hud/minimap.h).
+/// Game thread, around player 2's overlay render (hud/root_overlay_render.cpp): the skip byte is set for it only,
+/// and not while player 2's pass paints player 2's minimap (hud/minimap.h).
 void BeginMinimapPlayerTwoPass(bool playerTwoMinimap) noexcept;
 void EndMinimapPlayerTwoPass() noexcept;
 

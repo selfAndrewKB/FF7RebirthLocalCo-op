@@ -1,7 +1,7 @@
 #pragma once
 
 // Which pass of the overlay render is running: player 2's (the mod's extra render, hud/second_image.h), then the
-// game's own, player 1's; None outside the render. Set by second_image, the one module that runs the passes; read by
+// game's own, player 1's; None outside the render. Set by root_overlay_render, the one driver of the passes; read by
 // everything that paints into a menu-renderer slot during them (hud/shared_slot.h, hud/overlay_layout.cpp). Game
 // thread only.
 

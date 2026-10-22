@@ -1,21 +1,12 @@
 #include "hud/second_image.h"
 
 #include "facts/hud.h"
-#include "hud/area_icons_two.h"
-#include "hud/enemy_gauges.h"
-#include "hud/target_views.h"
 #include "hud/entry_filter_code.h"
-#include "hud/minimap_once.h"
-#include "hud/minimap.h"
-#include "hud/overlay_pass.h"
-#include "hud/player_two_pass.h"
-#include "hud/pass_opacity.h"
 #include "hud/shared_slot.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/code_redirect.h"
 #include "platform/entry_redirect.h"
-#include "platform/frame_watch.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -104,17 +95,10 @@ std::atomic<bool> g_on{false};
 std::atomic<bool> g_imageThisFrame{false};  // player 2's entry was rendered this frame (read by the render thread)
 std::atomic<std::uint64_t> g_stockName{0};  // as the game passes it; read by the render thread
 bool              g_refused       = false;    // a check failed: the image stays off until restart
+std::uintptr_t    g_overlayThisFrame = 0;     // the overlay with a window, found by PlayerTwoImageReady (0: none)
+double            g_deltaTimeSaved   = 0.0;   // the engine's DeltaTime while player 2's pass holds it at 0
 
 std::atomic<int> g_familyLogLines{0};
-
-// Render cost, logged every kRenderTimingFrames frames while player 2's image is on.
-constexpr std::uint32_t kRenderTimingFrames = 240;
-double        g_playerTwoSeconds   = 0.0;
-double        g_playerOneSeconds   = 0.0;
-double        g_playerOneStart     = 0.0;
-std::uint32_t g_renderTimedFrames  = 0;
-
-using platform::frame_watch::Now;
 
 using platform::CopyGuarded;
 
@@ -275,10 +259,13 @@ bool SecondImageOn() noexcept
     return g_on.load(std::memory_order_relaxed);
 }
 
-void BeginOverlayRender(bool splitShown) noexcept
+void BeginFrame() noexcept
 {
-    SetOverlayPass(OverlayPass::None);
     g_slot.BeginFrame(false);
+}
+
+bool PlayerTwoImageReady(bool splitShown) noexcept
+{
     bool image = splitShown && SecondImageOn() && g_stockName.load(std::memory_order_relaxed) != 0;
     if (image)
     {
@@ -291,71 +278,55 @@ void BeginOverlayRender(bool splitShown) noexcept
     }
     std::uintptr_t overlay = 0;
     std::uintptr_t window  = 0;
+    g_overlayThisFrame     = 0;
     if (image && CopyGuarded(&overlay, reinterpret_cast<const void*>(g_overlaySingleton), sizeof(overlay)) && overlay != 0 &&
         CopyGuarded(&window, reinterpret_cast<const void*>(overlay + kOverlayWindow), sizeof(window)) && window != 0)
     {
-        double deltaTime = 0.0;
-        std::memcpy(&deltaTime, reinterpret_cast<const void*>(g_deltaTime), sizeof(deltaTime));
-        const double still = 0.0;
-        std::memcpy(reinterpret_cast<void*>(g_deltaTime), &still, sizeof(still));
-        SetOverlayPass(OverlayPass::PlayerTwo);
-        g_slot.BeginFrame(true);
-        pass_opacity::ShowOnly(1);  // player 2's rows, markers, pins and command menu only (hud/pass_opacity.h)
-        target_views::BeforePass(1);  // player 1's cursor and gauges collapsed before player 2's updates read them
-        const bool content  = EnterPlayerTwo();  // player 2's levers and updates (hud/player_two_pass.h)
-        if (content)
-        {
-            area_icons_two::Tick(static_cast<float>(deltaTime));  // under player 2's view rect (hud/area_icons_two.h)
-        }
-        area_icons_two::ShowOnly(1);
-        const double start  = Now();
-        // Player 2's minimap (hud/minimap.h); without it, player 1's pass alone renders the minimap's map
-        // (hud/minimap_once.h).
-        BeginMinimapPlayerTwoPass(minimap::BeginPlayerTwoPaint());
-        // Guarded like every other engine call the mod makes: on a fault the minimap's target field and held slot
-        // are still put back below (a held pool-0 slot would hang its next acquire), and player 2's image stops.
-        const bool rendered = platform::CallGuarded(g_renderToLayer, reinterpret_cast<void*>(overlay));
-        EndMinimapPlayerTwoPass();
-        minimap::EndPlayerTwoPaint();
-        if (!rendered)
-        {
-            Refuse(L"player 2's overlay render raised an exception");
-        }
-        g_playerTwoSeconds += Now() - start;
-        enemy_gauges::EndPlayerTwoPass();  // each gauge's size back to player 1's before player 1's updates
-        target_views::BeforePass(0);  // player 2's, collapsed before player 1's updates (put back after the render)
-        if (content)
-        {
-            LeavePlayerTwo();
-        }
-        area_icons_two::ShowOnly(0);
-        pass_opacity::ShowOnly(0);  // player 1's rows, markers, pins and command menu for player 1's pass
-        std::memcpy(reinterpret_cast<void*>(g_deltaTime), &deltaTime, sizeof(deltaTime));
+        g_overlayThisFrame = overlay;
     }
-    g_imageThisFrame.store(g_slot.Held(), std::memory_order_relaxed);
-    SetOverlayPass(OverlayPass::PlayerOne);
-    g_playerOneStart = Now();
+    return g_overlayThisFrame != 0;
 }
 
-void EndOverlayRender() noexcept
+double BeginPlayerTwoPass() noexcept
 {
-    if (g_imageThisFrame.load(std::memory_order_relaxed))
+    double deltaTime = 0.0;
+    std::memcpy(&deltaTime, reinterpret_cast<const void*>(g_deltaTime), sizeof(deltaTime));
+    const double still = 0.0;
+    std::memcpy(reinterpret_cast<void*>(g_deltaTime), &still, sizeof(still));
+    g_deltaTimeSaved = deltaTime;
+    g_slot.BeginFrame(true);
+    return deltaTime;
+}
+
+bool RenderPlayerTwo() noexcept
+{
+    // Guarded like every other engine call the mod makes: on a fault the minimap's target field and held slot
+    // are still put back by the driver (a held pool-0 slot would hang its next acquire), and player 2's image stops.
+    const bool rendered = platform::CallGuarded(g_renderToLayer, reinterpret_cast<void*>(g_overlayThisFrame));
+    if (!rendered)
     {
-        g_playerOneSeconds += Now() - g_playerOneStart;
-        if (++g_renderTimedFrames >= kRenderTimingFrames)
-        {
-            if (platform::frame_watch::Detailed())  // the perf-log switch
-            {
-                const platform::frame_watch::Job job(L"HUD image timing log");
-                const double perFrame = 1000.0 / g_renderTimedFrames;
-                platform::Log(L"HUD image: overlay render ms per frame over {} frames: player 2's pass {:.3f}, player 1's pass {:.3f}",
-                              g_renderTimedFrames, g_playerTwoSeconds * perFrame, g_playerOneSeconds * perFrame);
-            }
-            g_playerTwoSeconds  = 0.0;
-            g_playerOneSeconds  = 0.0;
-            g_renderTimedFrames = 0;
-        }
+        Refuse(L"player 2's overlay render raised an exception");
     }
+    return rendered;
+}
+
+void EndPlayerTwoPass() noexcept
+{
+    std::memcpy(reinterpret_cast<void*>(g_deltaTime), &g_deltaTimeSaved, sizeof(g_deltaTimeSaved));
+}
+
+void BeginPlayerOnePass() noexcept
+{
+    g_imageThisFrame.store(g_slot.Held(), std::memory_order_relaxed);
+}
+
+bool ImageThisFrame() noexcept
+{
+    return g_imageThisFrame.load(std::memory_order_relaxed);
+}
+
+void EndFrame() noexcept
+{
     if (g_slot.SubmitIfLeft())
     {
         // Player 1's pass did not take the slot (its render returned early); it was submitted as the game's own
@@ -366,8 +337,6 @@ void EndOverlayRender() noexcept
                         L"HUD image: player 1's pass did not render this frame; player 2's slot submitted on its own");
         s_said = true;
     }
-    minimap::EndOverlayRender();  // the minimap's held pool-0 slot, if player 1's pass did not take it
-    SetOverlayPass(OverlayPass::None);
 }
 
 std::uintptr_t EntryNameForPass(const void* slot, std::uintptr_t stockName) noexcept
