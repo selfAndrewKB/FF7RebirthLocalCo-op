@@ -4,6 +4,7 @@
 #include "hud/arrow_edge_code.h"
 #include "hud/centered_frame_code.h"
 #include "hud/overlay_band.h"
+#include "hud/overlay_pass.h"
 #include "hud/second_image.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
@@ -152,7 +153,7 @@ void InstallArrowEdge(const platform::GameImage& image) noexcept
 void LogOnChange(const IntRect& image, float viewW, float viewH, const IntRect& band, float host, bool enabled,
                  bool applied) noexcept
 {
-    g_loggedPass         = SubmitInThisPass() ? 0 : 1;
+    g_loggedPass         = CurrentOverlayPass() == OverlayPass::PlayerTwo ? 1 : 0;
     LoggedLayout& logged = g_logged[g_loggedPass];
     if (image == logged.image && viewW == logged.viewW && viewH == logged.viewH && band == logged.band &&
         static_cast<int>(applied) == logged.applied)
@@ -211,7 +212,8 @@ IntRect* OverlayLayoutRect(IntRect* out)
 void* OverlayLayerEntry(void* slot, std::uintptr_t name, IntRect* rect, std::uintptr_t unused)
 {
     // Player 2's pass of the overlay render names its own entry (hud/second_image.h).
-    void* entry = reinterpret_cast<FindOrAddEntryFn>(g_entryCall.Original())(slot, EntryNameForPass(name), rect, unused);
+    void* entry = reinterpret_cast<FindOrAddEntryFn>(g_entryCall.Original())(slot, EntryNameForPass(slot, name), rect,
+                                                                               unused);
     if (!g_pending.active || g_pending.thread != GetCurrentThreadId() || entry == nullptr)
     {
         return entry;
@@ -290,7 +292,7 @@ void OverlaySubmit(void* renderer, std::uintptr_t pool, void* slot, std::uintptr
         g_submit.active = false;
         PlaceEntryMatrices(g_submit);
     }
-    if (!SubmitInThisPass())
+    if (!SubmitInThisPass(slot))
     {
         return;  // player 2's pass: player 1's pass submits the slot with both entries (hud/second_image.h)
     }

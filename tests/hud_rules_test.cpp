@@ -127,6 +127,35 @@ void TestGaugeClass()
 
 }  // namespace
 
+void TestSharedSlot()
+{
+    std::puts("shared slot: player 2's pass holds its acquire, player 1's takes it back; the held entry is player 2's");
+    using lss::hud::OverlayPass;
+    // Player 2's pass: the first acquire of an active slot is held; a second acquire in the same pass, or a slot that
+    // takes no part (the minimap not painting for player 2), is the game's own.
+    EXPECT(SlotActionFor(OverlayPass::PlayerTwo, true, false) == SlotAction::AcquireAndHold);
+    EXPECT(SlotActionFor(OverlayPass::PlayerTwo, true, true) == SlotAction::Acquire);
+    EXPECT(SlotActionFor(OverlayPass::PlayerTwo, false, false) == SlotAction::Acquire);
+    // Player 1's pass: the held slot comes back; nothing held (player 2's pass did not run) is a plain acquire.
+    EXPECT(SlotActionFor(OverlayPass::PlayerOne, true, true) == SlotAction::TakeBack);
+    EXPECT(SlotActionFor(OverlayPass::PlayerOne, false, true) == SlotAction::TakeBack);
+    EXPECT(SlotActionFor(OverlayPass::PlayerOne, true, false) == SlotAction::Acquire);
+    // Outside the render: always the game's own, even with a slot left held.
+    EXPECT(SlotActionFor(OverlayPass::None, true, true) == SlotAction::Acquire);
+    EXPECT(SlotActionFor(OverlayPass::None, true, false) == SlotAction::Acquire);
+    // The entry added to the held slot in player 2's pass is named for player 2 and its submit left to player 1's
+    // pass; any other slot or pass is the game's.
+    EXPECT(PlayerTwoEntry(OverlayPass::PlayerTwo, true));
+    EXPECT(!PlayerTwoEntry(OverlayPass::PlayerTwo, false));
+    EXPECT(!PlayerTwoEntry(OverlayPass::PlayerOne, true));
+    EXPECT(!PlayerTwoEntry(OverlayPass::None, true));
+    // The pass state itself: one setter, one reader.
+    lss::hud::SetOverlayPass(OverlayPass::PlayerTwo);
+    EXPECT(lss::hud::CurrentOverlayPass() == OverlayPass::PlayerTwo);
+    lss::hud::SetOverlayPass(OverlayPass::None);
+    EXPECT(lss::hud::CurrentOverlayPass() == OverlayPass::None);
+}
+
 int main()
 {
     TestPlacement();
@@ -134,6 +163,7 @@ int main()
     TestTimerSwap();
     TestUnloadAndGauges();
     TestGaugeClass();
+    TestSharedSlot();
 
     return lss::test::Report();
 }

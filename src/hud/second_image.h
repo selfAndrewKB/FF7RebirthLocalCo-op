@@ -7,11 +7,11 @@
 // mod's, around the game's own render.
 //
 // Game thread, from the overlay render call (hud/root_overlay_render.h), each frame while player 2
-// is in and the image is on:
+// is in and the image is on (the pass is hud/overlay_pass.h, set here; the slot hud/shared_slot.h):
 //   1. player 2's pass: SEndRootOverlay__RenderToCompositeLayer(overlay), with DeltaTime 0. Its
-//      slot acquire is the real one and is remembered; its layer entry is named for player 2
+//      slot acquire is the real one and is held; its layer entry is named for player 2
 //      (hud/overlay_layout.cpp asks EntryNameForPass); its submit is skipped;
-//   2. player 1's pass: the game's own call. Its acquire returns the remembered slot, its entry is
+//   2. player 1's pass: the game's own call. Its acquire returns the held slot, its entry is
 //      the stock one, and its submit sends the slot, now holding [player 2's, player 1's] entries.
 // Player 1 renders last, so everything the overlay keeps from its last pass (its rects, the
 // hit-test grid, the window size) is player 1's, as without player 2.
@@ -46,15 +46,12 @@ void BeginOverlayRender(bool splitShown) noexcept;
 /// Game thread, after the game's own call.
 void EndOverlayRender() noexcept;
 
-/// For the overlay's layer-entry call: the FName to use in this pass (player 2's in player 2's
-/// pass, else `stockName` unchanged).
-std::uintptr_t EntryNameForPass(std::uintptr_t stockName) noexcept;
+/// For the overlay's layer-entry call: the FName to use for `slot` in this pass (player 2's for the held slot in
+/// player 2's pass, else `stockName` unchanged).
+std::uintptr_t EntryNameForPass(const void* slot, std::uintptr_t stockName) noexcept;
 
-/// For the overlay's submit call: false in player 2's pass (the slot is submitted once, by
+/// For the overlay's submit call: false for the held slot in player 2's pass (the slot is submitted once, by
 /// player 1's pass).
-bool SubmitInThisPass() noexcept;
-
-/// The menu renderer (FEndMenuRenderer*) from the overlay's last slot acquire, or null before one. Game thread.
-void* MenuRenderer() noexcept;
+bool SubmitInThisPass(const void* slot) noexcept;
 
 }  // namespace lss::hud

@@ -1,21 +1,18 @@
 #include "hud/second_image.h"
 
-#define RC_UNREAL_DISABLE_PROPERTY_DEPRECATION_WARNINGS
-#define RC_UNREAL_DISABLE_CLASS_DEPRECATION_WARNINGS
-#include <Unreal/NameTypes.hpp>
-
 #include "facts/hud.h"
 #include "hud/area_icons_two.h"
 #include "hud/enemy_gauges.h"
 #include "hud/target_views.h"
 #include "hud/entry_filter_code.h"
-#include "hud/menu_buffers.h"
 #include "hud/minimap_once.h"
 #include "hud/minimap.h"
+#include "hud/overlay_pass.h"
 #include "hud/player_two_pass.h"
 #include "hud/field_markers.h"
 #include "hud/search_pins.h"
 #include "hud/prompt_rows.h"
+#include "hud/shared_slot.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/code_redirect.h"
@@ -26,7 +23,6 @@
 #include "platform/log.h"
 #include "platform/module_pin.h"
 #include "platform/verified_code.h"
-#include "player_two/generation.h"
 #include "player_two/command_menu_two.h"
 
 #include <atomic>
@@ -84,23 +80,12 @@ constexpr std::uintptr_t kDrawGateResume         = 0x140FC8E0A;
 constexpr std::uint32_t  kPoolTwoVertexBuffer = 0x90;
 constexpr std::uint32_t  kPoolTwoIndexBuffer  = 0xA8;
 
-constexpr const wchar_t* kPlayerTwoEntryName = L"SEndRootOverlay_P2";
-constexpr const wchar_t* kStockEntryName     = L"SEndRootOverlay";
 constexpr int            kFamilyLogLines     = 6;
 
 using RenderToCompositeLayerFn = void (*)(void* overlay);
-using AcquireFn                = void* (*)(void* renderer, std::uintptr_t pool);
 using AddCompositePassesFn     = void* (*)(void* module, void* builder, const void* views, void* texture, void* context);
-using SubmitLayerSlotFn        = void (*)(void* renderer, std::uintptr_t pool, void* slot, std::uintptr_t unused);
 
 constexpr std::uintptr_t kPoolTwo = 2;  // the root overlay's pool (the dl argument at 0x140C960A2 and 0x140C96258)
-
-enum class Pass
-{
-    None,
-    PlayerTwo,
-    PlayerOne,
-};
 
 // Installed once, then read.
 platform::CallRedirect g_acquireCall;
@@ -112,24 +97,15 @@ bool                   g_installed          = false;
 std::uintptr_t         g_overlaySingleton   = 0;
 std::uintptr_t         g_deltaTime          = 0;
 RenderToCompositeLayerFn g_renderToLayer    = nullptr;
-BeginInitResourceFn    g_beginInitResource  = nullptr;
-SubmitLayerSlotFn      g_submitLayerSlot    = nullptr;
-std::uintptr_t         g_vertexBufferVtable = 0;
-std::uintptr_t         g_indexBufferVtable  = 0;
 
-// Read by the render-thread code (hud/entry_filter_code.h) through their addresses.
-EntryFilterFields g_fields;
-MenuBufferSet     g_buffers;  // player 2's (hud/menu_buffers.h)
+// Player 2's entry in the overlay's pool-2 slot (hud/shared_slot.h).
+SharedLayerSlot g_slot{{L"HUD image", kPoolTwo, kPoolTwoVertexBuffer, kPoolTwoIndexBuffer, L"SEndRootOverlay",
+                        L"SEndRootOverlay_P2"}};
 
 // Game thread.
 std::atomic<bool> g_on{false};
 std::atomic<bool> g_imageThisFrame{false};  // player 2's entry was rendered this frame (read by the render thread)
-Pass              g_pass          = Pass::None;
-void*             g_renderer      = nullptr;  // from any acquire; the renderer is a long-lived singleton
-void*             g_slot          = nullptr;  // player 2's pass's slot, for player 1's pass
 std::atomic<std::uint64_t> g_stockName{0};  // as the game passes it; read by the render thread
-std::uint64_t     g_playerTwoName = 0;
-bool              g_buffersReady  = false;
 bool              g_refused       = false;    // a check failed: the image stays off until restart
 
 std::atomic<int> g_familyLogLines{0};
@@ -152,76 +128,18 @@ void Refuse(const wchar_t* why)
     platform::Log(L"HUD image: {}; player 2's image stays off", why);
 }
 
-/// Builds player 2's buffer set the way the renderer's ctor builds each pool's, once the renderer
-/// is known, and queues their initialisation. The vtables are the ones pool 2's own buffers carry.
-void QueueBuffers() noexcept
-{
-    if (g_buffersReady || g_renderer == nullptr)  // already queued, or no acquire seen yet
-    {
-        return;
-    }
-    if (!BuildMenuBuffers(g_renderer, kPoolTwoVertexBuffer, kPoolTwoIndexBuffer, g_vertexBufferVtable,
-                          g_indexBufferVtable, g_beginInitResource, g_buffers))
-    {
-        Refuse(L"pool 2's buffers are not the renderer's buffer kind the research read");
-        return;
-    }
-    g_buffersReady = true;
-    platform::Log(L"HUD image: player 2's vertex and index buffers created (capacity {} / {}); waiting for the render "
-                  L"thread to initialise them", kMenuVertexCapacity, kMenuIndexCapacity);
-}
-
-/// Player 2's buffers exist and are initialised; publishes them to the render-thread code once. The render thread
-/// runs up to a frame behind, so a slot holding player 2's entry must not be submitted before then: an
-/// earlier-queued consume would draw it with an uninitialised buffer (seen: "Tried to call DrawIndexedPrimitive
-/// with null IndexBuffer!").
-bool BuffersUsable() noexcept
-{
-    if (!g_buffersReady)
-    {
-        QueueBuffers();
-        return false;
-    }
-    if (!MenuBuffersInitialised(g_buffers))  // every frame (hud/menu_buffers.h)
-    {
-        return false;
-    }
-    if (g_fields.playerTwoName != 0)
-    {
-        return true;
-    }
-    g_fields.vertexBuffer = reinterpret_cast<std::uint64_t>(&g_buffers.vertex);
-    g_fields.indexBuffer  = reinterpret_cast<std::uint64_t>(&g_buffers.index);
-    g_fields.srmSlot      = reinterpret_cast<std::uint64_t>(&g_buffers.srm);
-    std::atomic_thread_fence(std::memory_order_release);
-    g_fields.playerTwoName = g_playerTwoName;  // last: the buffers code switches on this
-    platform::Log(L"HUD image: player 2's buffers are initialised; rendering player 2's image");
-    return true;
-}
-
 /// Replaces the overlay's call to AcquireLayerSlot.
 void* AcquireLayerSlot(void* renderer, std::uintptr_t pool) noexcept
 {
-    g_renderer = renderer;
-    if (g_pass == Pass::PlayerOne && g_slot != nullptr)
-    {
-        void* slot = g_slot;  // player 2's pass took this frame's slot
-        g_slot     = nullptr;
-        return slot;
-    }
-    void* slot = reinterpret_cast<AcquireFn>(g_acquireCall.Original())(renderer, pool);
-    if (g_pass == Pass::PlayerTwo)
-    {
-        g_slot = slot;
-    }
-    return slot;
+    return g_slot.Acquire(renderer, pool, reinterpret_cast<AcquireLayerSlotFn>(g_acquireCall.Original()));
 }
 
 /// Replaces the scene renderer's call that adds a family's composite passes (render thread):
 /// decides which entry this family draws, from its view's rect.
 void* AddCompositePasses(void* module, void* builder, const void* views, void* texture, void* context) noexcept
 {
-    std::uint64_t family = 0;
+    EntryFilterFields&  fields    = g_slot.Fields();
+    std::uint64_t       family    = 0;
     const std::uint64_t stockName = g_stockName.load(std::memory_order_acquire);
     if (g_imageThisFrame.load(std::memory_order_relaxed) && stockName != 0 && views != nullptr)
     {
@@ -235,7 +153,7 @@ void* AddCompositePasses(void* module, void* builder, const void* views, void* t
             CopyGuarded(rect, array.data + kViewUnscaledViewRect, sizeof(rect)))
         {
             const bool playerTwo = rect[0] > 0 || rect[1] > 0;  // player 1's half starts at the origin
-            family               = playerTwo ? g_fields.playerTwoName : stockName;
+            family               = playerTwo ? fields.playerTwoName : stockName;
             if (platform::Enabled(platform::Level::Debug) &&
                 g_familyLogLines.fetch_add(1, std::memory_order_relaxed) < kFamilyLogLines)
             {
@@ -244,7 +162,7 @@ void* AddCompositePasses(void* module, void* builder, const void* views, void* t
             }
         }
     }
-    g_fields.familyName = family;
+    fields.familyName = family;
     // The entry redirect's trampoline is set before its first call can arrive; only one of the two is ever installed.
     const std::uintptr_t original = g_familyEntry.Original() != 0 ? g_familyEntry.Original() : g_familyCall.Original();
     return reinterpret_cast<AddCompositePassesFn>(original)(module, builder, views, texture, context);
@@ -276,16 +194,14 @@ bool InstallSecondImage(const platform::GameImage& image) noexcept
         platform::Log(L"HUD image: the overlay's render code is not what the research read; no player-2 image");
         return false;
     }
-    g_renderToLayer      = reinterpret_cast<RenderToCompositeLayerFn>(*render);
-    g_beginInitResource  = reinterpret_cast<BeginInitResourceFn>(*init);
-    g_submitLayerSlot    = reinterpret_cast<SubmitLayerSlotFn>(*submit);
-    g_overlaySingleton   = *overlay;
-    g_deltaTime          = *delta;
-    g_vertexBufferVtable = *vbVtable;
-    g_indexBufferVtable  = *ibVtable;
+    g_renderToLayer    = reinterpret_cast<RenderToCompositeLayerFn>(*render);
+    g_overlaySingleton = *overlay;
+    g_deltaTime        = *delta;
+    g_slot.Install(*vbVtable, *ibVtable, reinterpret_cast<BeginInitResourceFn>(*init),
+                   reinterpret_cast<SubmitLayerSlotFn>(*submit));
 
-    const auto buffersCode = EntryBuffersCode(g_fields);
-    const auto gateCode    = EntryDrawGateCode(g_fields);
+    const auto buffersCode = EntryBuffersCode(g_slot.Fields());
+    const auto gateCode    = EntryDrawGateCode(g_slot.Fields());
     // The family decision: the call on the research build, the function's entry on 1.005 (kAddCompositePassesFirst).
     const auto familyRedirect = [&image, passes = *passes]() noexcept {
         if (platform::RunningBuild() != platform::BuildIndex::V1005)
@@ -310,7 +226,7 @@ bool InstallSecondImage(const platform::GameImage& image) noexcept
         platform::Log(L"HUD image: a site is not what the research read; no player-2 image");
         return false;
     }
-    // The render-thread code reads g_fields, which lives in this DLL: it must never unload while that
+    // The render-thread code reads the slot's fields, which live in this DLL: it must never unload while that
     // code can run. (The call redirects above pin it too; this does not rely on that.)
     if (!platform::PinThisModule())
     {
@@ -327,8 +243,7 @@ void RemoveSecondImage() noexcept
 {
     g_on.store(false, std::memory_order_relaxed);
     g_imageThisFrame.store(false, std::memory_order_relaxed);
-    g_fields.familyName    = 0;
-    g_fields.playerTwoName = 0;
+    g_slot.Unpublish();
     bool all = true;
     for (platform::CallRedirect* call : {&g_acquireCall, &g_familyCall})
     {
@@ -365,9 +280,18 @@ bool SecondImageOn() noexcept
 
 void BeginOverlayRender(bool splitShown) noexcept
 {
-    g_pass = Pass::None;
-    g_slot = nullptr;
-    const bool image = splitShown && SecondImageOn() && g_stockName.load(std::memory_order_relaxed) != 0 && BuffersUsable();
+    SetOverlayPass(OverlayPass::None);
+    g_slot.BeginFrame(false);
+    bool image = splitShown && SecondImageOn() && g_stockName.load(std::memory_order_relaxed) != 0;
+    if (image)
+    {
+        const auto buffers = g_slot.BuffersUsable();
+        if (buffers == SharedLayerSlot::Buffers::WrongKind)
+        {
+            Refuse(L"pool 2's buffers are not the renderer's buffer kind the research read");
+        }
+        image = buffers == SharedLayerSlot::Buffers::Usable;
+    }
     std::uintptr_t overlay = 0;
     std::uintptr_t window  = 0;
     if (image && CopyGuarded(&overlay, reinterpret_cast<const void*>(g_overlaySingleton), sizeof(overlay)) && overlay != 0 &&
@@ -377,7 +301,8 @@ void BeginOverlayRender(bool splitShown) noexcept
         std::memcpy(&deltaTime, reinterpret_cast<const void*>(g_deltaTime), sizeof(deltaTime));
         const double still = 0.0;
         std::memcpy(reinterpret_cast<void*>(g_deltaTime), &still, sizeof(still));
-        g_pass              = Pass::PlayerTwo;
+        SetOverlayPass(OverlayPass::PlayerTwo);
+        g_slot.BeginFrame(true);
         prompt_rows::ShowOnly(1);                 // player 2's prompt rows only (hud/prompt_rows.h)
         field_markers::ShowOnly(1);               // and player 2's point markers (hud/field_markers.h)
         search_pins::ShowOnly(1);                 // and player 2's search pins (hud/search_pins.h)
@@ -416,8 +341,8 @@ void BeginOverlayRender(bool splitShown) noexcept
         player_two::command_menu_two::ShowOnly(0);  // and player 1's command menu
         std::memcpy(reinterpret_cast<void*>(g_deltaTime), &deltaTime, sizeof(deltaTime));
     }
-    g_imageThisFrame.store(g_slot != nullptr, std::memory_order_relaxed);
-    g_pass           = Pass::PlayerOne;
+    g_imageThisFrame.store(g_slot.Held(), std::memory_order_relaxed);
+    SetOverlayPass(OverlayPass::PlayerOne);
     g_playerOneStart = Now();
 }
 
@@ -440,62 +365,39 @@ void EndOverlayRender() noexcept
             g_renderTimedFrames = 0;
         }
     }
-    if (g_slot != nullptr)
+    if (g_slot.SubmitIfLeft())
     {
-        // Player 1's pass did not take the slot (its render returned early). The acquire has
-        // already advanced the ring, so the slot is submitted as the game's own pass would have,
-        // holding player 2's entry alone.
-        g_submitLayerSlot(g_renderer, kPoolTwo, g_slot, 0);
-        // Info the first time (an unusual path), Debug after: a state that lasts (a cutscene) would repeat it per frame.
+        // Player 1's pass did not take the slot (its render returned early); it was submitted as the game's own
+        // pass would have, holding player 2's entry alone. Info the first time (an unusual path), Debug after: a
+        // state that lasts (a cutscene) would repeat it per frame.
         static bool s_said = false;
         platform::LogAt(s_said ? platform::Level::Debug : platform::Level::Info,
                         L"HUD image: player 1's pass did not render this frame; player 2's slot submitted on its own");
         s_said = true;
-        g_slot = nullptr;
     }
     minimap::EndOverlayRender();  // the minimap's held pool-0 slot, if player 1's pass did not take it
-    g_pass = Pass::None;
+    SetOverlayPass(OverlayPass::None);
 }
 
-std::uintptr_t EntryNameForPass(std::uintptr_t stockName) noexcept
+std::uintptr_t EntryNameForPass(const void* slot, std::uintptr_t stockName) noexcept
 {
-    if (g_pass != Pass::PlayerTwo)
+    if (!g_slot.NamesReady() && stockName != 0 && !g_refused)  // once: the first sight of the game's name
     {
-        if (g_stockName.load(std::memory_order_relaxed) == 0 && stockName != 0 && !g_refused)  // once, not per frame
+        if (g_slot.MakeNames(stockName))
         {
-            // First sight of the game's name: check that names built here match the engine's.
-            try
-            {
-                g_playerTwoName = EngineNameValue(kPlayerTwoEntryName, RC::Unreal::FNAME_Add);
-                if (EngineNameValue(kStockEntryName, RC::Unreal::FNAME_Find) != stockName || g_playerTwoName == 0 ||
-                    g_playerTwoName == stockName)
-                {
-                    Refuse(L"an FName built by the mod does not match the engine's layout");
-                }
-                else
-                {
-                    g_fields.stockName = stockName;  // before any family name can be set from g_stockName
-                    g_stockName.store(stockName, std::memory_order_release);
-                }
-            }
-            catch (...)
-            {
-                Refuse(L"the player-2 entry name could not be made");
-            }
+            g_stockName.store(stockName, std::memory_order_release);
         }
-        return stockName;
+        else
+        {
+            Refuse(L"an FName built by the mod does not match the engine's layout, or could not be made");
+        }
     }
-    return static_cast<std::uintptr_t>(g_playerTwoName);
+    return g_slot.NameFor(slot, stockName);
 }
 
-bool SubmitInThisPass() noexcept
+bool SubmitInThisPass(const void* slot) noexcept
 {
-    return g_pass != Pass::PlayerTwo;
-}
-
-void* MenuRenderer() noexcept
-{
-    return g_renderer;
+    return !g_slot.SkipSubmit(slot);
 }
 
 }  // namespace lss::hud

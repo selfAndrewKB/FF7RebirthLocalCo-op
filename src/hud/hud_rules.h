@@ -1,7 +1,10 @@
 #pragma once
 
-// The HUD modules' pure decisions (hud_placement, search_pins, marker_timers, minimap, target_views, enemy_gauges),
-// tested on the host (tests/hud_rules_test.cpp). The modules keep the engine reads, the passes and the log.
+// The HUD modules' pure decisions (hud_placement, search_pins, marker_timers, minimap, shared_slot, target_views,
+// enemy_gauges), tested on the host (tests/hud_rules_test.cpp). The modules keep the engine reads, the passes and
+// the log.
+
+#include "hud/overlay_pass.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -139,6 +142,36 @@ Unload UnloadVerdict(bool drop, bool otherCentreKnown, OtherFn&& dropForOther) n
         return Unload::GamesOwn;
     }
     return dropForOther() ? Unload::Dropped : Unload::KeptForOther;
+}
+
+// ---- shared_slot: player 2's entry beside the game's in one menu-renderer slot ----
+
+enum class SlotAction
+{
+    Acquire,         // the game's own acquire
+    AcquireAndHold,  // player 2's pass: the slot acquired is kept for player 1's pass
+    TakeBack,        // player 1's pass: the held slot instead of a second acquire
+};
+
+/// `active`: this slot takes part in player 2's pass (its widget paints for player 2 this frame).
+constexpr SlotAction SlotActionFor(OverlayPass pass, bool active, bool held) noexcept
+{
+    if (pass == OverlayPass::PlayerOne && held)
+    {
+        return SlotAction::TakeBack;
+    }
+    if (pass == OverlayPass::PlayerTwo && active && !held)
+    {
+        return SlotAction::AcquireAndHold;
+    }
+    return SlotAction::Acquire;
+}
+
+/// The entry added to the held slot in player 2's pass is player 2's: it gets player 2's name, and its submit is left
+/// to player 1's pass (which submits the slot with both entries).
+constexpr bool PlayerTwoEntry(OverlayPass pass, bool heldSlot) noexcept
+{
+    return pass == OverlayPass::PlayerTwo && heldSlot;
 }
 
 // ---- target_views: the gauge entries each pass takes out ----

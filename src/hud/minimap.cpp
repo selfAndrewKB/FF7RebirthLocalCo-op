@@ -13,6 +13,7 @@
 #include "hud/minimap_icons.h"
 #include "hud/menu_buffers.h"
 #include "hud/minimap_labels.h"
+#include "hud/shared_slot.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/code_redirect.h"
@@ -127,32 +128,21 @@ constexpr std::uint32_t  kResourceTarget   = 0x90;  // the render-target RHI the
 constexpr std::uint8_t   kFormatB8G8R8A8   = 2;
 constexpr std::uint32_t  kMaxTargetSize    = 4096;
 
-constexpr const wchar_t* kStockEntryName     = L"SEndNaviMapCircle";
-constexpr const wchar_t* kPlayerTwoEntryName = L"SEndNaviMapCircle_P2";
 constexpr ULONGLONG      kCountsPeriodMs     = 120'000;  // a safety submit is logged at once
 constexpr ULONGLONG      kCentrePeriodMs     = 120'000;
 
 using HolderUpdateFn = void (*)(void* holder, float deltaTime);
 using LeaderTypeFn   = std::uint8_t (*)();
-using AcquireFn      = void* (*)(void* renderer, std::uintptr_t pool);
 using FindOrAddFn    = void* (*)(void* slot, std::uintptr_t name, void* rect, std::uintptr_t unused);
-using SubmitFn       = void (*)(void* renderer, std::uintptr_t pool, void* slot, std::uintptr_t unused);
 using NewTargetFn    = void* (*)(void* outer);
 using InitFormatFn   = void (*)(void* target, std::uint32_t sizeX, std::uint32_t sizeY, std::uint8_t format,
                               std::uint8_t forceLinearGamma);
 using UpdateNowFn    = void (*)(void* target, std::uint8_t clear);
 using ShouldUnloadFn = bool (*)(const void* piece, const float* centre);
 
-enum class Pass
-{
-    None,
-    PlayerTwo,
-    PlayerOne,
-};
-
 struct Counts
 {
-    std::uint64_t held = 0, takenBack = 0, named = 0, submitSkipped = 0, safetySubmits = 0, runsTwo = 0, runsOne = 0;
+    std::uint64_t runsTwo = 0, runsOne = 0;
 };
 
 // Installed once, then read.
@@ -169,39 +159,30 @@ std::uintptr_t         g_acquireTarget      = 0;
 std::uintptr_t         g_stockNameStatic    = 0;
 std::uintptr_t         g_transientPackage   = 0;
 std::uintptr_t         g_circleVTable       = 0;
-std::uintptr_t         g_vertexBufferVtable = 0;
-std::uintptr_t         g_indexBufferVtable  = 0;
 HolderUpdateFn         g_holderUpdate       = nullptr;
 NewTargetFn            g_newTarget          = nullptr;
 InitFormatFn           g_initFormat         = nullptr;
 UpdateNowFn            g_updateNow          = nullptr;
-BeginInitResourceFn    g_beginInit          = nullptr;
 
-// Read by the render-thread consume code through their addresses (hud/entry_filter_code.h).
-EntryFilterFields g_fields;
-MenuBufferSet     g_buffers;  // player 2's (hud/menu_buffers.h)
+// Player 2's entry in the circle's pool-0 slot (hud/shared_slot.h): the hold, the names, the buffers.
+SharedLayerSlot g_slot{{L"minimap", 0, kPoolZeroVertexBuffer, kPoolZeroIndexBuffer, L"SEndNaviMapCircle",
+                        L"SEndNaviMapCircle_P2"}};
 
 // Game thread.
 platform::DeferredSites g_acquire;  // crosses a block on both builds: placed from the game thread, off the paint
 bool          g_refused       = false;  // a check failed: the earlier behaviour until restart
-bool          g_namesReady    = false;
-std::uint64_t g_playerTwoName = 0;
-void*         g_renderer      = nullptr;
-std::atomic<bool> g_buffersQueued {false};
 void*         g_target        = nullptr;  // player 2's render target (rooted, kept for the process)
 bool          g_frameActive   = false;
 bool          g_ranForTwo     = false;
 int           g_answerType    = -1;  // the leader type the holder update gets in player 2's run
-Pass          g_pass          = Pass::None;
-void*         g_held          = nullptr;
 void*         g_swappedSlate  = nullptr;
 void*         g_savedTarget   = nullptr;
 Counts        g_counts, g_loggedCounts;
+SlotCounts    g_loggedSlot;
 ULONGLONG     g_countsAt      = 0;
 ULONGLONG     g_centreAt      = 0;
 const wchar_t* g_lastWhy      = nullptr;
 float         g_centreTwo[2]  = {};
-std::atomic<std::uint64_t> g_offThread{0};
 std::uint64_t g_loggedOffThread = 0;
 bool          g_sizeDiffers     = false;
 
@@ -352,36 +333,15 @@ void LogPieces() noexcept
 /// The circle's AcquireLayerSlot: player 2's pass holds its slot; player 1's pass gets it back instead of a second.
 void* Acquire(void* renderer, std::uintptr_t pool) noexcept
 {
-    const auto original = reinterpret_cast<AcquireFn>(g_acquireCall.Original());
-    if (!generation::OnGameThread())
-    {
-        g_offThread.fetch_add(1, std::memory_order_relaxed);
-        return original(renderer, pool);
-    }
-    g_renderer = renderer;
-    if (g_pass == Pass::PlayerOne && g_held != nullptr)
-    {
-        void* slot = g_held;
-        g_held     = nullptr;
-        ++g_counts.takenBack;
-        return slot;
-    }
-    void* slot = original(renderer, pool);
-    if (g_pass == Pass::PlayerTwo && g_held == nullptr)
-    {
-        g_held = slot;
-        ++g_counts.held;
-    }
-    return slot;
+    return g_slot.Acquire(renderer, pool, reinterpret_cast<AcquireLayerSlotFn>(g_acquireCall.Original()));
 }
 
 /// The circle's FindOrAddNamedLayerEntry: player 2's entry in the held slot has its own name.
 void* FindOrAdd(void* slot, std::uintptr_t name, void* rect, std::uintptr_t unused) noexcept
 {
-    if (g_pass == Pass::PlayerTwo && slot != nullptr && slot == g_held && generation::OnGameThread())
+    if (generation::OnGameThread())
     {
-        name = static_cast<std::uintptr_t>(g_playerTwoName);
-        ++g_counts.named;
+        name = g_slot.NameFor(slot, name);
     }
     return reinterpret_cast<FindOrAddFn>(g_findCall.Original())(slot, name, rect, unused);
 }
@@ -389,12 +349,11 @@ void* FindOrAdd(void* slot, std::uintptr_t name, void* rect, std::uintptr_t unus
 /// The circle's SubmitLayerSlot: player 2's pass leaves the held slot for player 1's pass to submit.
 void Submit(void* renderer, std::uintptr_t pool, void* slot, std::uintptr_t unused) noexcept
 {
-    if (g_pass == Pass::PlayerTwo && slot != nullptr && slot == g_held && generation::OnGameThread())
+    if (generation::OnGameThread() && g_slot.SkipSubmit(slot))
     {
-        ++g_counts.submitSkipped;
         return;
     }
-    reinterpret_cast<SubmitFn>(g_submitCall.Original())(renderer, pool, slot, unused);
+    reinterpret_cast<SubmitLayerSlotFn>(g_submitCall.Original())(renderer, pool, slot, unused);
 }
 
 // --- Player 2's target and buffers ---
@@ -467,71 +426,28 @@ bool TargetReady() noexcept
            ReadPointer(resource, kResourceTexture) != nullptr;
 }
 
-/// Player 2's buffer set, built as the renderer's ctor builds pool 0's, once the renderer is known.
-void QueueBuffers() noexcept
-{
-    if (g_buffersQueued || g_renderer == nullptr)
-    {
-        return;
-    }
-    if (!BuildMenuBuffers(g_renderer, kPoolZeroVertexBuffer, kPoolZeroIndexBuffer, g_vertexBufferVtable,
-                          g_indexBufferVtable, g_beginInit, g_buffers))
-    {
-        Refuse(L"pool 0's buffers are not the renderer's buffer kind the research read");
-        return;
-    }
-    g_buffersQueued = true;
-    Line(L"player 2's minimap buffers created (capacity {} / {}); waiting for the render thread", kMenuVertexCapacity,
-         kMenuIndexCapacity);
-}
-
-/// True once the render thread has initialised both buffers (hud/menu_buffers.h, checked every frame); then
-/// publishes them to the consume code once.
+/// Player 2's buffers, built and initialised (hud/shared_slot.h); a wrong buffer kind refuses once.
 bool BuffersUsable() noexcept
 {
-    if (!g_buffersQueued)
+    const auto buffers = g_slot.BuffersUsable();
+    if (buffers == SharedLayerSlot::Buffers::WrongKind && !g_refused)
     {
-        QueueBuffers();
-        return false;
+        Refuse(L"pool 0's buffers are not the renderer's buffer kind the research read");
     }
-    if (!MenuBuffersInitialised(g_buffers))
-    {
-        return false;
-    }
-    if (g_fields.playerTwoName == 0)
-    {
-        g_fields.vertexBuffer = reinterpret_cast<std::uint64_t>(&g_buffers.vertex);
-        g_fields.indexBuffer  = reinterpret_cast<std::uint64_t>(&g_buffers.index);
-        g_fields.srmSlot      = reinterpret_cast<std::uint64_t>(&g_buffers.srm);
-        std::atomic_thread_fence(std::memory_order_release);
-        g_fields.playerTwoName = g_playerTwoName;  // last: the consume code switches on this
-        Line(L"player 2's minimap buffers are initialised");
-    }
-    return true;
+    return buffers == SharedLayerSlot::Buffers::Usable;
 }
 
 /// The game's entry name, checked against the engine's, and player 2's made once.
 void MakeNames() noexcept
 {
     std::uint64_t stock = 0;
-    if (g_namesReady || !Read(reinterpret_cast<const void*>(g_stockNameStatic), 0, stock) || stock == 0)
+    if (g_slot.NamesReady() || !Read(reinterpret_cast<const void*>(g_stockNameStatic), 0, stock) || stock == 0)
     {
         return;  // the game builds its static on the first paint
     }
-    try
+    if (!g_slot.MakeNames(stock))
     {
-        g_playerTwoName = EngineNameValue(kPlayerTwoEntryName, RC::Unreal::FNAME_Add);
-        if (EngineNameValue(kStockEntryName, RC::Unreal::FNAME_Find) != stock || g_playerTwoName == 0 ||
-            g_playerTwoName == stock)
-        {
-            Refuse(L"an FName built by the mod does not match the engine's layout");
-            return;
-        }
-        g_namesReady = true;
-    }
-    catch (...)
-    {
-        Refuse(L"the player-2 entry name could not be made");
+        Refuse(L"an FName built by the mod does not match the engine's layout, or could not be made");
     }
 }
 
@@ -554,7 +470,7 @@ const wchar_t* WhyNot(bool splitShown, const void* slate) noexcept
     {
         return L"no circle minimap on screen";
     }
-    if (!g_namesReady)
+    if (!g_slot.NamesReady())
     {
         return L"waiting for the game's entry name";
     }
@@ -572,28 +488,29 @@ const wchar_t* WhyNot(bool splitShown, const void* slate) noexcept
 void LogCounts() noexcept
 {
     const ULONGLONG     now       = GetTickCount64();
-    const std::uint64_t offThread = g_offThread.load(std::memory_order_relaxed);
+    const SlotCounts&   slot      = g_slot.Counts();
+    const std::uint64_t offThread = g_slot.OffThreadAcquires();
     // A safety submit or an acquire off the game thread is logged at once; the steady hand-over every 2 min.
-    const bool urgent  = g_counts.safetySubmits != g_loggedCounts.safetySubmits || offThread != g_loggedOffThread;
-    const bool changed = g_counts.held != g_loggedCounts.held || urgent;
+    const bool urgent  = slot.safetySubmits != g_loggedSlot.safetySubmits || offThread != g_loggedOffThread;
+    const bool changed = slot.held != g_loggedSlot.held || urgent;
     if (!changed || (!urgent && now < g_countsAt))
     {
         return;
     }
     g_loggedOffThread = offThread;
-    g_countsAt     = now + kCountsPeriodMs;
-    const Counts d = {g_counts.held - g_loggedCounts.held,           g_counts.takenBack - g_loggedCounts.takenBack,
-                      g_counts.named - g_loggedCounts.named,         g_counts.submitSkipped - g_loggedCounts.submitSkipped,
-                      g_counts.safetySubmits - g_loggedCounts.safetySubmits, g_counts.runsTwo - g_loggedCounts.runsTwo,
-                      g_counts.runsOne - g_loggedCounts.runsOne};
+    g_countsAt        = now + kCountsPeriodMs;
+    const Counts     d = {g_counts.runsTwo - g_loggedCounts.runsTwo, g_counts.runsOne - g_loggedCounts.runsOne};
+    const SlotCounts s = {slot.held - g_loggedSlot.held, slot.takenBack - g_loggedSlot.takenBack,
+                          slot.named - g_loggedSlot.named, slot.submitSkipped - g_loggedSlot.submitSkipped,
+                          slot.safetySubmits - g_loggedSlot.safetySubmits};
     g_loggedCounts = g_counts;
+    g_loggedSlot   = slot;
     // The steady hand-over is a periodic status line (Debug); a safety submit or an acquire off the game thread is Info.
     LineAt(urgent ? platform::Level::Info : platform::Level::Debug,
            L"since the last line: holder runs {} for player 2, {} for player 1; slots held {}, taken back by player 1's "
            L"pass {}, submitted alone {}; player 2's entries named {}, submits left to player 1 {}; acquires off the game "
            L"thread {}",
-           d.runsTwo, d.runsOne, d.held, d.takenBack, d.safetySubmits, d.named, d.submitSkipped,
-           g_offThread.load(std::memory_order_relaxed));
+           d.runsTwo, d.runsOne, s.held, s.takenBack, s.safetySubmits, s.named, s.submitSkipped, offThread);
 }
 
 /// The circle's acquire call, from the game thread outside the paint (its call crosses a block on both builds).
@@ -647,16 +564,15 @@ bool Install(const platform::GameImage& image) noexcept
     g_stockNameStatic    = *name;
     g_transientPackage   = *package;
     g_circleVTable       = *circle;
-    g_vertexBufferVtable = *vbVtable;
-    g_indexBufferVtable  = *ibVtable;
-    g_beginInit          = reinterpret_cast<BeginInitResourceFn>(*init);
     g_newTarget          = reinterpret_cast<NewTargetFn>(*newTarget);
     g_initFormat         = reinterpret_cast<InitFormatFn>(*format);
     g_updateNow          = reinterpret_cast<UpdateNowFn>(*update);
+    g_slot.Install(*vbVtable, *ibVtable, reinterpret_cast<BeginInitResourceFn>(*init),
+                   reinterpret_cast<SubmitLayerSlotFn>(*submit));
 
     // The consume code first: it does nothing until player 2's entry name is published with its buffers.
-    const auto code     = EntryBuffersCode(g_fields, kLoadPoolZeroVertexBufferBytes);
-    const auto code1005 = EntryBuffersStoreCode1005(g_fields);
+    const auto code     = EntryBuffersCode(g_slot.Fields(), kLoadPoolZeroVertexBufferBytes);
+    const auto code1005 = EntryBuffersStoreCode1005(g_slot.Fields());
     const bool consumed = v1005 ? g_consumeCode.Install(*consume, kStoreVertexBufferArgBytes1005, code1005, *resume)
                                 : g_consumeCode.Install(*consume, kLoadPoolZeroVertexBufferBytes, code, *resume);
     const bool installed =
@@ -699,8 +615,8 @@ void Remove() noexcept
     minimap_labels::Remove();  // player 1's label states back first (on the game thread)
     minimap_icons::Remove();
     g_acquire.Cancel();  // a placement still queued does nothing
-    g_frameActive          = false;
-    g_fields.playerTwoName = 0;
+    g_frameActive = false;
+    g_slot.Unpublish();
     bool all = true;
     for (platform::CallRedirect* call : {&g_leaderCall, &g_findCall, &g_submitCall, &g_unloadCall})
     {
@@ -724,7 +640,8 @@ void Tick(bool splitShown) noexcept
     }
     MakeNames();
     void* const slate = CircleSlate();
-    if (g_target == nullptr && !g_refused && slate != nullptr && splitShown && generation::Active() && g_namesReady)
+    if (g_target == nullptr && !g_refused && slate != nullptr && splitShown && generation::Active() &&
+        g_slot.NamesReady())
     {
         MakeTarget(slate);
     }
@@ -822,8 +739,7 @@ void RunHolder(bool playerTwo) noexcept
 bool BeginPlayerTwoPaint() noexcept
 {
     label_relayouts::SetScope(label_relayouts::Scope::PlayerTwoPaint);  // player 2's overlay render follows
-    g_pass = Pass::None;
-    g_held = nullptr;
+    g_slot.BeginFrame(false);
     if (!g_frameActive || !g_ranForTwo)
     {
         return false;
@@ -836,7 +752,7 @@ bool BeginPlayerTwoPaint() noexcept
     }
     g_swappedSlate = slate;
     g_savedTarget  = live;
-    g_pass         = Pass::PlayerTwo;
+    g_slot.BeginFrame(true);  // the circle paints for player 2 in this pass: its acquire is held
     return true;
 }
 
@@ -844,7 +760,6 @@ void EndPlayerTwoPaint() noexcept
 {
     label_relayouts::SetScope(label_relayouts::Scope::Other);
     minimap_labels::SwapBack();  // player 2's paint is done: every label holds player 1's state again
-    const bool painted = g_pass == Pass::PlayerTwo;
     if (g_swappedSlate != nullptr)
     {
         // Put the widget's own target back, unless the game replaced the field during the render.
@@ -857,20 +772,13 @@ void EndPlayerTwoPaint() noexcept
         g_swappedSlate = nullptr;
         g_savedTarget  = nullptr;
     }
-    g_pass = painted ? Pass::PlayerOne : Pass::None;
 }
 
 void EndOverlayRender() noexcept
 {
-    if (g_held != nullptr && g_renderer != nullptr)
-    {
-        // Player 1's pass did not paint the minimap: the held slot is submitted as the game's pass would have, with
-        // player 2's entry alone (a slot left acquired would hang its next acquire).
-        reinterpret_cast<SubmitFn>(g_submitCall.Original())(g_renderer, 0, g_held, 0);
-        ++g_counts.safetySubmits;
-    }
-    g_held      = nullptr;
-    g_pass      = Pass::None;
+    // Player 1's pass did not paint the minimap: the held slot is submitted as the game's pass would have, with
+    // player 2's entry alone (a slot left acquired would hang its next acquire). Counted; the status line says so.
+    g_slot.SubmitIfLeft();
     g_ranForTwo = false;
 }
 
