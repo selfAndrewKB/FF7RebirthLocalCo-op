@@ -3,6 +3,7 @@
 #include "facts/cameras.h"
 #include "facts/controller.h"
 #include "player_two/camera_access.h"
+#include "player_two/object_fields.h"
 #include "player_two/traversal_shared.h"
 #include "platform/log.h"
 
@@ -60,8 +61,8 @@ void WatchCollision(int player, const void* cameraManager)
     CollisionWatch& w      = g_collision[player];
     const void*     module = cameraManager != nullptr ? SlotFifteen(cameraManager) : nullptr;
     const auto      vt     = module != nullptr ? VTableOf(module) : 0;
-    // Only the traversal modules this file installs or watches: the climbing wall's and player 2's ladder's (any other
-    // slot-15 module, a ride framing or a cutscene, is left to its own watch).
+    // Only the traversal modules this watch follows: the climbing wall's (the holders unit installs it) and player 2's
+    // ladder's (any other slot-15 module, a ride framing or a cutscene, is left to its own watch).
     const bool traversal =
         module != nullptr && (vt == g_climbingModuleVt || (player == 1 && module == g_ladderModule));
     if (module != w.module && w.module != nullptr && w.after == 0)

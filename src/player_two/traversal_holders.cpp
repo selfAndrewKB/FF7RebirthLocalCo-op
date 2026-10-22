@@ -3,6 +3,7 @@
 #include "facts/move_state.h"
 #include "player_two/climb_context.h"
 #include "player_two/member_movement.h"
+#include "player_two/object_fields.h"
 #include "player_two/party_member.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"

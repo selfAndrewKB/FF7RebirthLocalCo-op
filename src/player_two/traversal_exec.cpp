@@ -4,6 +4,7 @@
 #include "player_two/traversal_shared.h"
 #include "player_two/climb_context.h"
 #include "player_two/member_movement.h"
+#include "player_two/object_fields.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
