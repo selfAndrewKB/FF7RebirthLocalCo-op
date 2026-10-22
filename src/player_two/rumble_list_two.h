@@ -38,6 +38,10 @@
 // would let player 2's copy play first and skip player 1's.
 //
 // Not routed: the hook rope and the hookshot (player 2 cannot start them). PS5 haptics stay single-target.
+//
+// Units: rumble_list_two.cpp (the add and the stop, the list tick, the zip line, player 2's list, the footsteps,
+// install, removal and tick), rumble_list_copy.cpp (the shared ride's copy), rumble_sources_two.cpp (the sources
+// outside player 2's scopes, placed from a table) and rumble_list_shared.h (what they share).
 
 namespace lss::platform {
 class GameImage;

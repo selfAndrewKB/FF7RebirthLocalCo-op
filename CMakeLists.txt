@@ -85,6 +85,8 @@ add_library(LocalSplitScreen SHARED
     src/player_two/climb_context.cpp
     src/player_two/near_fade.cpp
     src/player_two/rumble_list_two.cpp
+    src/player_two/rumble_list_copy.cpp
+    src/player_two/rumble_sources_two.cpp
     src/player_two/ffb_manager_two.cpp
     src/player_two/audio_listener_two.cpp
     src/player_two/approach_two.cpp
