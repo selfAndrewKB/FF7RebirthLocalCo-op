@@ -5,6 +5,7 @@
 #include "facts/in_battle.h"
 #include "facts/party.h"
 #include "hud/hud_rules.h"
+#include "hud/pass_opacity.h"
 #include "hud/widget_opacity.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
@@ -85,12 +86,6 @@ struct Pair  // a thread-safe TWeakPtr
     bool operator==(const Pair&) const = default;
 };
 
-struct Hidden
-{
-    std::uint64_t weak     = 0;     // the widget's FWeakObjectPtr
-    float         previous = 1.0f;  // its own render opacity
-};
-
 using CollectFn    = void (*)(void* out);
 using MainTargetFn = Pair* (*)(Pair* out, const Pair* in);
 using ReleaseFn    = void (*)(Pair* weak);
@@ -142,7 +137,7 @@ struct PassHides
 };
 
 // Game thread.
-std::vector<Hidden>         g_hidden;
+HiddenSet                   g_hidden;  // the other player's marks, transparent for a pass
 std::array<MainLookup, 4>   g_lookups{};      // this frame's main-target lookups (BeginFrame empties them)
 std::size_t                 g_lookupCount = 0;
 bool                        g_gaugesFound = false;  // this frame's walk done
@@ -282,26 +277,7 @@ void* WidgetOf(std::uint64_t weak) noexcept
 /// remembering its own opacity. True if it did.
 bool Hide(void* widget) noexcept
 {
-    const float previous = widget_opacity::Get(widget);
-    if (widget == nullptr || previous == 0.0f)
-    {
-        return false;  // not drawn anyway
-    }
-    std::uint64_t weak = 0;
-    if (!player_two::weak_object::Assign(&weak, widget) || !widget_opacity::Set(widget, 0.0f))
-    {
-        return false;
-    }
-    try
-    {
-        g_hidden.push_back({weak, previous});
-    }
-    catch (...)
-    {
-        widget_opacity::Set(widget, previous);  // not recorded: not left transparent
-        return false;
-    }
-    return true;
+    return g_hidden.Hide(widget);
 }
 
 /// Replaces the red ability label's gauge lookup. The lookup considers only the gauge of the bar
@@ -481,7 +457,7 @@ bool InstallSites(const platform::GameImage& image) noexcept
 void Remove() noexcept
 {
     g_placement.Cancel();  // a placement still queued does nothing
-    g_hidden.clear();  // no widget calls here: this may run off the game thread
+    g_hidden.Forget();  // no widget calls here: this may run off the game thread
     g_unionOn = false;
     for (auto* call : {&g_lookupCall, &g_syncCall, &g_createCall})
     {
@@ -548,20 +524,7 @@ void BeforePass(int player) noexcept
 void AfterPass() noexcept
 {
     g_currentPass = -1;
-    if (g_hidden.empty())
-    {
-        return;
-    }
-    for (const Hidden& hidden : g_hidden)
-    {
-        // Only while it is still transparent: an opacity the game set since is its own.
-        void* widget = player_two::weak_object::ObjectOf(hidden.weak);
-        if (widget != nullptr && widget_opacity::Get(widget) == 0.0f)
-        {
-            widget_opacity::Set(widget, hidden.previous);
-        }
-    }
-    g_hidden.clear();
+    g_hidden.RestoreAll();  // each mark while it is still transparent (an opacity the game set since is its own)
 }
 
 std::array<std::uintptr_t, 2> TargetAndMain(std::uintptr_t object, std::uintptr_t controller) noexcept

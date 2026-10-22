@@ -1,6 +1,7 @@
 #include "hud/field_markers.h"
 
 #include "facts/hud.h"
+#include "hud/pass_opacity.h"
 #include "hud/widget_opacity.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -24,12 +25,6 @@ namespace {
 // creation, +0x28 placed at the point, +0x30 animated. The game's destroy releases all four with the element (§12.15).
 constexpr std::uint32_t  kMarkerWidgets[] = {0x00, 0x08, 0x28, 0x30};
 
-struct Hidden
-{
-    std::uint64_t weak     = 0;
-    float         previous = 1.0f;  // the widget's own render opacity
-};
-
 struct Half
 {
     std::size_t markers = 0, widgets = 0;  // the other player's point markers hidden, and their widgets
@@ -38,7 +33,7 @@ struct Half
 
 std::uintptr_t      g_system = 0;  // set once at install
 // Game thread.
-std::vector<Hidden> g_hidden;
+HiddenSet           g_hidden;  // the other player's markers, transparent for a pass
 std::array<Half, 2> g_logged{{{static_cast<std::size_t>(-1), 0}, {static_cast<std::size_t>(-1), 0}}};
 
 void LogIfChanged(int player, const Half& now) noexcept
@@ -64,13 +59,7 @@ void Install(const platform::GameImage& image) noexcept
 {
     const auto system = image.Rebase(facts::kEndUISystem, facts::kUIFieldMarkers + sizeof(void*));
     g_system          = system ? *system : 0;
-    try
-    {
-        g_hidden.reserve(256);  // four widgets per marker; grows (guarded) past that
-    }
-    catch (...)
-    {
-    }
+    g_hidden.Reserve(256);  // four widgets per marker; grows (guarded) past that
     platform::Log(L"field markers: each half shows only its own player's point markers: {}",
                   g_system == 0                    ? L"UNAVAILABLE (no marker list)"
                   : !widget_opacity::Installed() ? L"UNAVAILABLE (the opacity setter is not what the research read)"
@@ -108,10 +97,8 @@ void ShowOnly(int player) noexcept
                 {
                     continue;
                 }
-                const float previous = widget_opacity::Get(widget);
-                if (previous != 0.0f && widget_opacity::Set(widget, 0.0f))
+                if (g_hidden.Hide(widget, weak))
                 {
-                    g_hidden.push_back({weak, previous});
                     ++half.widgets;
                 }
             }
@@ -127,14 +114,7 @@ void ShowOnly(int player) noexcept
 
 void Restore() noexcept
 {
-    for (const Hidden& hidden : g_hidden)
-    {
-        if (void* widget = player_two::weak_object::ObjectAt(&hidden.weak))
-        {
-            widget_opacity::Set(widget, hidden.previous);
-        }
-    }
-    g_hidden.clear();
+    g_hidden.RestoreAll();
 }
 
 }  // namespace lss::hud::field_markers

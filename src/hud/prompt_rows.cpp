@@ -12,6 +12,7 @@
 #include "facts/hud.h"
 #include "facts/vehicles.h"
 #include "hud/action_rows.h"
+#include "hud/pass_opacity.h"
 #include "hud/viewport_placement.h"
 #include "hud/widget_opacity.h"
 #include "platform/guarded.h"
@@ -23,7 +24,6 @@
 #include "player_two/field_pickup.h"
 #include "player_two/generation.h"
 #include "player_two/weak_object.h"
-#include "players/unreal_access.h"
 
 #include <algorithm>
 #include <array>
@@ -37,7 +37,6 @@ namespace lss::hud::prompt_rows {
 
 namespace {
 
-using RC::Unreal::UFunction;
 using RC::Unreal::UObject;
 
 // RE-p2-field-prompts.md §1.2 and §4 (this build).
@@ -49,10 +48,6 @@ constexpr std::size_t    kComponentRows     = 14;
 constexpr std::uint32_t  kWidgetPriority    = 0x400;
 constexpr std::uint32_t  kWidgetRemoveState = 0x418;
 using action_rows::kMaxRows;
-
-// ESlateVisibility.
-constexpr std::uint8_t kCollapsed = 1;
-constexpr std::uint8_t kHidden    = 2;
 
 struct Row
 {
@@ -66,17 +61,6 @@ struct Row
     std::int32_t   remove    = 0;
     bool operator==(const Row&) const = default;
 };
-
-struct Hidden
-{
-    std::uint64_t weak     = 0;
-    float         previous = 1.0f;  // the row's own render opacity
-};
-
-// Set once at install.
-UFunction*      g_setOpacity    = nullptr;  // UWidget::SetRenderOpacity
-std::int32_t    g_visibilityOffset = -1;
-std::int32_t    g_opacityOffset    = -1;
 
 // Game thread.
 std::vector<Row>                          g_rows;
@@ -92,7 +76,7 @@ constexpr std::uint32_t kRowStillFrames = 30;
 platform::SettledLog<RowsSteady, RowRemoves> g_rowLog(kRowStillFrames);
 std::vector<const UObject*>               g_playerTwoWidgets;  // player 2's until they leave the list
 std::vector<std::pair<const UObject*, bool>> g_laidOut;        // the list as last laid out per player
-std::vector<Hidden>                       g_hidden;
+HiddenSet                                 g_hidden;  // the other player's rows, transparent for a pass
 bool                                      g_layOutAgain = false;  // LayOutAgain: rows outside the layout placed at once
 float                                     g_againWidth  = 0.0f;
 float                                     g_againHeight = 0.0f;
@@ -155,53 +139,6 @@ void LayOutPerPlayer()
     g_laidOut = g_layoutNow;
 }
 
-std::uint8_t VisibilityOf(const UObject* widget) noexcept
-{
-    std::uint8_t visibility = 0;
-    Read(reinterpret_cast<std::uintptr_t>(widget) + static_cast<std::uint32_t>(g_visibilityOffset), visibility);
-    return visibility;
-}
-
-float OpacityOf(const UObject* widget) noexcept
-{
-    float opacity = 1.0f;
-    Read(reinterpret_cast<std::uintptr_t>(widget) + static_cast<std::uint32_t>(g_opacityOffset), opacity);
-    return opacity;
-}
-
-/// The game's native setter (hud/widget_opacity.h), or the same function through reflection when its
-/// entry could not be checked.
-bool SetOpacity(UObject* widget, float opacity)
-{
-    if (widget_opacity::Installed())
-    {
-        return widget_opacity::Set(widget, opacity);
-    }
-    struct
-    {
-        float opacity;
-    } params{opacity};
-    return g_setOpacity != nullptr && players::unreal::GuardedProcessEvent(widget, g_setOpacity, &params);
-}
-
-/// UWidget's Visibility (one byte) and RenderOpacity (a float) offsets, read by reflection once.
-bool FindOffsets(UObject* widget)
-{
-    if (g_visibilityOffset >= 0)
-    {
-        return true;
-    }
-    auto* visibility = widget->GetPropertyByNameInChain(STR("Visibility"));
-    auto* opacity    = widget->GetPropertyByNameInChain(STR("RenderOpacity"));
-    if (visibility == nullptr || visibility->GetSize() != 1 || opacity == nullptr || opacity->GetSize() != sizeof(float))
-    {
-        return false;
-    }
-    g_visibilityOffset = visibility->GetOffset_Internal();
-    g_opacityOffset    = opacity->GetOffset_Internal();
-    return true;
-}
-
 std::wstring Describe(const std::vector<Row>& rows)
 {
     std::wstring text;
@@ -257,19 +194,9 @@ void LogIfChanged(const std::array<std::uint8_t, kComponentRows>& bytes)
 bool Install(const platform::GameImage& image) noexcept
 {
     action_rows::Install(image);  // the list and the game's layout, shared with the icons' base
-    try
-    {
-        g_setOpacity = RC::Unreal::UObjectGlobals::StaticFindObject<UFunction*>(nullptr, nullptr,
-                                                                                 STR("/Script/UMG.Widget:SetRenderOpacity"));
-    }
-    catch (...)
-    {
-        g_setOpacity = nullptr;
-    }
     const bool native = widget_opacity::Install(image);
     platform::Log(L"prompt rows: per-player layout {}, per-half visibility {}",
-                  action_rows::LayoutAvailable() ? L"ready" : L"UNAVAILABLE",
-                  native ? L"ready (native setter)" : g_setOpacity ? L"ready (through reflection)" : L"UNAVAILABLE");
+                  action_rows::LayoutAvailable() ? L"ready" : L"UNAVAILABLE", native ? L"ready" : L"UNAVAILABLE");
     return action_rows::ListKnown();
 }
 
@@ -377,52 +304,18 @@ void LayOutAgain(float width, float height) noexcept
 void ShowOnly(int player) noexcept
 {
     Restore();
-    if (g_setOpacity == nullptr && !widget_opacity::Installed())
+    for (const Row& row : g_rows)
     {
-        return;
-    }
-    try
-    {
-        for (const Row& row : g_rows)
+        if (row.playerTwo != (player != 0))
         {
-            UObject* widget = Resolve(row.weak);
-            if (widget == nullptr || row.playerTwo == (player != 0) || !FindOffsets(widget))
-            {
-                continue;
-            }
-            const std::uint8_t visibility = VisibilityOf(widget);
-            const float        previous   = OpacityOf(widget);
-            if (visibility == kHidden || visibility == kCollapsed || previous == 0.0f)
-            {
-                continue;  // not drawn anyway
-            }
-            if (SetOpacity(widget, 0.0f))
-            {
-                g_hidden.push_back({row.weak, previous});
-            }
+            g_hidden.Hide(Resolve(row.weak), row.weak);  // the other player's: transparent for this pass
         }
-    }
-    catch (...)
-    {
     }
 }
 
 void Restore() noexcept
 {
-    try
-    {
-        for (const Hidden& hidden : g_hidden)
-        {
-            if (UObject* widget = Resolve(hidden.weak))
-            {
-                SetOpacity(widget, hidden.previous);
-            }
-        }
-    }
-    catch (...)
-    {
-    }
-    g_hidden.clear();
+    g_hidden.RestoreAll();
 }
 
 }  // namespace lss::hud::prompt_rows

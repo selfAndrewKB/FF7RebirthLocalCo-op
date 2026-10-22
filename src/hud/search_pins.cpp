@@ -3,6 +3,7 @@
 #include "facts/hud.h"
 #include "hud/hud_roots.h"
 #include "hud/hud_rules.h"
+#include "hud/pass_opacity.h"
 #include "hud/widget_opacity.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -57,12 +58,6 @@ constexpr platform::FunctionFact kPlaceHook{L"EndUI__M1B8_PlaceHookIcon_ByAngle"
 using PlacePinFn  = std::uint8_t (*)(void* manager, void* pin, const void* location, float* angle);
 using PlaceHookFn = void (*)(void* unused, void* hook, const float* angle);
 
-struct Hidden
-{
-    std::uint64_t weak     = 0;
-    float         previous = 1.0f;  // the widget's own render opacity
-};
-
 /// One player's component: the pins its interact points hold, and whether a point is active.
 struct Held
 {
@@ -95,8 +90,7 @@ struct Known
 };
 std::array<Known, kMaxHidden> g_known{};
 std::size_t                   g_knownCount = 0;
-std::array<Hidden, kMaxHidden> g_hidden{};
-std::size_t                    g_hiddenCount   = 0;
+HiddenSet                      g_hidden;  // the other player's pins and the compass, transparent for a pass
 unsigned                       g_compassOwners = 3;  // bit 0 player 1, bit 1 player 2 (both until known)
 bool                           g_placeFaulted  = false;
 std::array<Logged, 2>          g_logged{};
@@ -153,16 +147,7 @@ bool Holds(const Held& held, std::uint64_t pin) noexcept
 
 void Hide(std::uintptr_t weakField) noexcept
 {
-    void* widget = Resolve(weakField);
-    if (widget == nullptr || g_hiddenCount >= kMaxHidden)
-    {
-        return;
-    }
-    const float previous = widget_opacity::Get(widget);
-    if (previous != 0.0f && widget_opacity::Set(widget, 0.0f))
-    {
-        g_hidden[g_hiddenCount++] = {ReadAt<std::uint64_t>(weakField), previous};
-    }
+    g_hidden.Hide(Resolve(weakField), ReadAt<std::uint64_t>(weakField));
 }
 
 void LogIfChanged(int mine, const Logged& now, std::uintptr_t manager) noexcept
@@ -333,14 +318,7 @@ void ShowOnly(int player) noexcept
 
 void Restore() noexcept
 {
-    for (std::size_t i = 0; i < g_hiddenCount; ++i)
-    {
-        if (void* widget = player_two::weak_object::ObjectAt(&g_hidden[i].weak))
-        {
-            widget_opacity::Set(widget, g_hidden[i].previous);
-        }
-    }
-    g_hiddenCount = 0;
+    g_hidden.RestoreAll();
 }
 
 }  // namespace lss::hud::search_pins

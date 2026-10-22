@@ -9,8 +9,7 @@
 #include "hud/marker_timers.h"
 #include "hud/overlay_layout.h"
 #include "hud/popups.h"
-#include "hud/field_markers.h"
-#include "hud/search_pins.h"
+#include "hud/pass_opacity.h"
 #include "hud/prompt_rows.h"
 #include "hud/second_image.h"
 #include "platform/build_value.h"
@@ -21,7 +20,6 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "player_two/generation.h"
-#include "player_two/command_menu_two.h"
 #include "views/player_view_point.h"
 
 #include <cstdint>
@@ -86,10 +84,7 @@ void RenderRootOverlay(void* application) noexcept
             // pass. Player 2's rows stay painted (transparent), so their timers keep running.
             target_views::BeforePass(0);
             area_icons_two::ShowOnly(0);
-            prompt_rows::ShowOnly(0);
-            field_markers::ShowOnly(0);
-            search_pins::ShowOnly(0);
-            player_two::command_menu_two::ShowOnly(0);
+            pass_opacity::ShowOnly(0);  // the rows, markers, pins and the command menu (hud/pass_opacity.h)
         }
     }
     // The entry redirect's trampoline is set before its first call can arrive; only one of the two is ever installed.
@@ -99,11 +94,8 @@ void RenderRootOverlay(void* application) noexcept
         EndOverlayRender();
         enemy_gauges::EndFrame();  // the gauges' record, emptied for the next tick
         popups::EndFrame();
-        prompt_rows::Restore();  // every prompt row back to its own visibility
-        field_markers::Restore();  // every point marker back to its own opacity
-        search_pins::Restore();    // every search pin and the compass back to their own
-        player_two::command_menu_two::Restore();  // player 1's command menu back, player 2's hidden
-        target_views::AfterPass();  // every mark hidden for player 1's pass back
+        pass_opacity::RestoreAll();  // every row, marker, pin and the command menu back to their own
+        target_views::AfterPass();   // every mark hidden for player 1's pass back
         dev::AfterOverlayRender();
     }
 }
