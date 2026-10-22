@@ -29,7 +29,8 @@
 // A parry-window skill (Counterfire: its initiator's ability row has kind 26, the window that ends the link when the
 // parry fails; RE S-SYNCOUNTER) keeps a human's partner with its player at the start: the game asks for that partner
 // only when the counter animation opens the record's combination window, through the AI request, whose test then hands
-// it over as above; after a failed parry it never asks. The tick logs how each such stance ended.
+// it over as above; after a failed parry it never asks (confirmed live, v0.74.7: the follow-up that logged each
+// stance's end is retired).
 // Nothing else reads a changed leader: only those four calls inside the three functions are answered. Classic mode
 // (deferred) is left to the game: its Classic hand-over keeps the controller. Placed from the game thread
 // (game_thread_sites; some calls cross a 16-byte block), all or nothing.
@@ -51,6 +52,10 @@ namespace lss::player_two::synergy_partner {
 
 /// Resolves and checks the sites and queues their placement (logged when it runs).
 void Install(const platform::GameImage& image) noexcept;
+
+/// Switches the answers off, puts the member end's entry back and forgets the humans' partners. The call redirects
+/// stay (some cross a block, which only the game thread may change); each passes through once off.
+void Remove() noexcept;
 
 /// Game thread, once per engine tick: forgets characters of a finished session, warns about a partner the game has not
 /// given back after a while (Info), and the status line (Debug, every 10 s with activity).

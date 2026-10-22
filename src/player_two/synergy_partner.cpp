@@ -22,6 +22,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstddef>
@@ -131,7 +132,9 @@ struct Sites
     std::span<const std::uint8_t> memberEndFirst;  // this build's first instruction there (empty: the second is used)
     bool           ok = false;
 };
-Sites g_sites;
+Sites             g_sites;
+std::atomic<bool> g_on{false};       // every site placed; false from Remove on: the wrappers pass through (any thread)
+std::atomic<bool> g_pending{false};  // a placement queued and not yet run (Remove clears it: it then does nothing)
 
 // Game thread. The characters handed to their AI for an approach (synergy_rules.h Held).
 std::array<Held, kHeld> g_held{};
@@ -142,6 +145,40 @@ const void*    g_record    = nullptr;  // the link record of the start or AI req
 bool           g_window    = false;    // the start being run is a parry-window skill's (W): T1 keeps a human's partner
 const wchar_t* g_via       = L"";      // which call asks (for the log)
 const void*             g_session   = nullptr;  // player 2's controller the remembered characters belong to
+
+/// The call being run, for the tests inside it (T1 and T2 read the partner, the record and the window); restored on
+/// the way out, since the calls nest (a mode-1 start runs the AI request).
+class CallContext
+{
+public:
+    CallContext(const void* partner, const void* initiator, const void* record, bool window,
+                const wchar_t* via) noexcept
+        : partner_(g_partner), initiator_(g_initiator), record_(g_record), window_(g_window), via_(g_via)
+    {
+        g_partner   = partner;
+        g_initiator = initiator;
+        g_record    = record;
+        g_window    = window;
+        g_via       = via;
+    }
+    ~CallContext()
+    {
+        g_partner   = partner_;
+        g_initiator = initiator_;
+        g_record    = record_;
+        g_window    = window_;
+        g_via       = via_;
+    }
+    CallContext(const CallContext&)            = delete;
+    CallContext& operator=(const CallContext&) = delete;
+
+private:
+    const void*    partner_;
+    const void*    initiator_;
+    const void*    record_;
+    bool           window_;
+    const wchar_t* via_;
+};
 
 // The member end being run on this thread (T3 answers only on the game thread; off it T3 fails for player 2's member
 // and P never names player 2's controller).
@@ -433,93 +470,39 @@ std::wstring MemberText(std::uint8_t state, std::uint8_t started, std::uint8_t e
 // The hand-over: the AI request names its partner; its leader test answers a human's partner
 // ---------------------------------------------------------------------------------------------
 
-std::uint64_t Start(std::size_t site, void* manager, void* record, void* partner, void* initiator, void* a5, void* a6,
-                    void* a7, void* a8) noexcept
+/// The start call of site `Site` (S): the partner, the record and the window named for T1 inside it.
+template <std::size_t Site>
+std::uint64_t Start(void* manager, void* record, void* partner, void* initiator, void* a5, void* a6, void* a7,
+                    void* a8) noexcept
 {
-    const auto original = reinterpret_cast<StartFn>(g_startCalls[site].Original());
-    if (!Bound())
+    const auto original = reinterpret_cast<StartFn>(g_startCalls[Site].Original());
+    if (!g_on.load(std::memory_order_relaxed) || !Bound())
     {
         return original(manager, record, partner, initiator, a5, a6, a7, a8);
     }
     static constexpr const wchar_t* kVia[] = {L"the start (command)", L"the start (Cait Sith mounted)",
                                               L"the start (by type)"};
-    const void*    savedPartner   = g_partner;
-    const void*    savedInitiator = g_initiator;
-    const void*    savedRecord    = g_record;
-    const bool     savedWindow    = g_window;
-    const wchar_t* savedVia       = g_via;
-    g_partner                     = partner;
-    g_initiator                   = initiator;
-    g_record                      = record;
-    g_window                      = HasParryWindow(a7);  // before the call: it overwrites the handle on its way out
-    g_via                         = kVia[site];
-    const auto result             = original(manager, record, partner, initiator, a5, a6, a7, a8);  // al: started
-    g_partner                     = savedPartner;
-    g_initiator                   = savedInitiator;
-    g_record                      = savedRecord;
-    g_window                      = savedWindow;
-    g_via                         = savedVia;
-    return result;
+    // The window is read before the call: it overwrites the handle on its way out.
+    const CallContext context(partner, initiator, record, HasParryWindow(a7), kVia[Site]);
+    return original(manager, record, partner, initiator, a5, a6, a7, a8);  // al: started
 }
 
-std::uint64_t StartCommand(void* m, void* r, void* p, void* i, void* a5, void* a6, void* a7, void* a8) noexcept
+/// The AI request call of site `Site` (R): the partner and the record named for T2 inside it.
+template <std::size_t Site>
+std::uint64_t Request(void* unused, void* record, void* initiator, void* partner, void* partnerComp, void* weakA,
+                      void* weakB) noexcept
 {
-    return Start(0, m, r, p, i, a5, a6, a7, a8);
-}
-
-std::uint64_t StartMounted(void* m, void* r, void* p, void* i, void* a5, void* a6, void* a7, void* a8) noexcept
-{
-    return Start(1, m, r, p, i, a5, a6, a7, a8);
-}
-
-std::uint64_t StartForType(void* m, void* r, void* p, void* i, void* a5, void* a6, void* a7, void* a8) noexcept
-{
-    return Start(2, m, r, p, i, a5, a6, a7, a8);
-}
-
-std::uint64_t Request(std::size_t site, void* unused, void* record, void* initiator, void* partner, void* partnerComp,
-                      void* weakA, void* weakB) noexcept
-{
-    const auto original = reinterpret_cast<RequestFn>(g_requestCalls[site].Original());
-    if (!Bound())
+    const auto original = reinterpret_cast<RequestFn>(g_requestCalls[Site].Original());
+    if (!g_on.load(std::memory_order_relaxed) || !Bound())
     {
         return original(unused, record, initiator, partner, partnerComp, weakA, weakB);
     }
     ++g_counts.requests;
     static constexpr const wchar_t* kVia[] = {L"the window's AI request (modes 2/3)", L"the deferred AI request (mode 1)",
                                               L"the AI request at the start (mode 1)"};
-    const void*    savedPartner   = g_partner;
-    const void*    savedInitiator = g_initiator;
-    const void*    savedRecord    = g_record;
-    const bool     savedWindow    = g_window;
-    const wchar_t* savedVia       = g_via;
-    g_partner                     = partner;
-    g_initiator                   = initiator;
-    g_record                      = record;
-    g_window                      = false;  // the game asks for the partner now: T2 hands a human's partner over
-    g_via                         = kVia[site];
-    const auto result             = original(unused, record, initiator, partner, partnerComp, weakA, weakB);
-    g_partner                     = savedPartner;
-    g_initiator                   = savedInitiator;
-    g_record                      = savedRecord;
-    g_window                      = savedWindow;
-    g_via                         = savedVia;
-    return result;
-}
-
-std::uint64_t RequestTick(void* u, void* r, void* i, void* p, void* c, void* a, void* b) noexcept
-{
-    return Request(0, u, r, i, p, c, a, b);
-}
-
-std::uint64_t RequestDeferred(void* u, void* r, void* i, void* p, void* c, void* a, void* b) noexcept
-{
-    return Request(1, u, r, i, p, c, a, b);
-}
-
-std::uint64_t RequestAtStart(void* u, void* r, void* i, void* p, void* c, void* a, void* b) noexcept
-{
-    return Request(2, u, r, i, p, c, a, b);
+    // The game asks for the partner now: T2 hands a human's partner over (no parry window here).
+    const CallContext context(partner, initiator, record, false, kVia[Site]);
+    return original(unused, record, initiator, partner, partnerComp, weakA, weakB);
 }
 
 bool Classic() noexcept
@@ -648,7 +631,7 @@ Note NoteOf(const void* record, const void* member, std::uint64_t index) noexcep
 std::uint64_t MemberEnd(void* unused, void* record, void* member, std::uint64_t index) noexcept
 {
     const auto original = reinterpret_cast<MemberEndFn>(g_memberEnd.Original());
-    if (member == nullptr || !Session())
+    if (!g_on.load(std::memory_order_relaxed) || member == nullptr || !Session())
     {
         return original(unused, record, member, index);
     }
@@ -1024,6 +1007,10 @@ void RestoreAll() noexcept
 /// Game thread, from the session's tick (outside every link call): every site, or none.
 void Place() noexcept
 {
+    if (!g_pending.exchange(false))
+    {
+        return;  // removed before the session's first tick
+    }
     // The answers first, then what names their character: until the names are in, the answers pass through.
     bool ok = g_startTest.InstallFromOwnThread(g_sites.startTest, g_sites.leaderType,
                                                reinterpret_cast<std::uintptr_t>(&StartLeaderType)) &&
@@ -1034,15 +1021,15 @@ void Place() noexcept
               g_endPrimary.InstallFromOwnThread(g_sites.endPrimary, g_sites.primary,
                                                 reinterpret_cast<std::uintptr_t>(&EndPrimary));
     const std::array<std::uintptr_t, std::size(kRequestCalls)> requests{
-        reinterpret_cast<std::uintptr_t>(&RequestTick), reinterpret_cast<std::uintptr_t>(&RequestDeferred),
-        reinterpret_cast<std::uintptr_t>(&RequestAtStart)};
+        reinterpret_cast<std::uintptr_t>(&Request<0>), reinterpret_cast<std::uintptr_t>(&Request<1>),
+        reinterpret_cast<std::uintptr_t>(&Request<2>)};
     for (std::size_t i = 0; ok && i < requests.size(); ++i)
     {
         ok = g_requestCalls[i].InstallFromOwnThread(g_sites.request[i], g_sites.requestAi, requests[i]);
     }
-    const std::array<std::uintptr_t, std::size(kStartCalls)> starts{reinterpret_cast<std::uintptr_t>(&StartCommand),
-                                                                    reinterpret_cast<std::uintptr_t>(&StartMounted),
-                                                                    reinterpret_cast<std::uintptr_t>(&StartForType)};
+    const std::array<std::uintptr_t, std::size(kStartCalls)> starts{reinterpret_cast<std::uintptr_t>(&Start<0>),
+                                                                    reinterpret_cast<std::uintptr_t>(&Start<1>),
+                                                                    reinterpret_cast<std::uintptr_t>(&Start<2>)};
     for (std::size_t i = 0; ok && i < starts.size(); ++i)
     {
         ok = g_startCalls[i].InstallFromOwnThread(g_sites.start[i], g_sites.startFn, starts[i]);
@@ -1059,6 +1046,7 @@ void Place() noexcept
     {
         RestoreAll();
     }
+    g_on.store(ok, std::memory_order_release);
     platform::Log(L"synergy partner: {}",
                   ok ? L"a synergy partner held by player 1 or player 2 is handed to its AI for the approach and given "
                        L"back to its own player (skills and abilities)"
@@ -1117,12 +1105,30 @@ void Install(const platform::GameImage& image) noexcept
     {
         platform::Log(L"synergy partner: the sites are not what the research read; synergies keep the game's "
                       L"single-player hand-over");
+        return;
     }
-    else if (!platform::game_thread_sites::Queue(&Place))
+    g_pending = true;
+    if (!platform::game_thread_sites::Queue(&Place))
     {
+        g_pending = false;
         platform::Log(L"synergy partner: the game-thread placement queue is full; synergies keep the game's "
                       L"single-player hand-over");
     }
+}
+
+void Remove() noexcept
+{
+    g_on.store(false, std::memory_order_release);  // the start, the AI request and the member end pass through now
+    g_pending.store(false, std::memory_order_release);
+    if (g_memberEnd.IsInstalled() && !g_memberEnd.Restore())
+    {
+        platform::Log(L"synergy partner: the member end's entry was changed after us; left in place (it passes "
+                      L"through)");
+    }
+    // The call redirects stay: on 1.005 some cross a block, which only the one thread that runs them may put back,
+    // and unloading is not that thread (platform/call_redirect.h). Every one passes through once off.
+    ForgetAll();
+    g_session = nullptr;
 }
 
 void Tick() noexcept

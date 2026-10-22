@@ -237,6 +237,7 @@ public:
         lss::player_two::target_coin::Remove();
         lss::player_two::equal_targeting::Remove();
         lss::player_two::player_hits::Remove();
+        lss::player_two::synergy_partner::Remove();  // the humans' synergy partners forgotten; its entry back
         if (session_)
         {
             session_->RemoveStages();
