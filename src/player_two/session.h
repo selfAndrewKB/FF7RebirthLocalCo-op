@@ -84,7 +84,7 @@ public:
     /// the new state.
     void TogglePadSticks() noexcept;
 
-    bool HasPlayerTwo() const noexcept { return players_.HasPlayerTwo(); }
+    bool HasPlayerTwo() const noexcept { return players_.HasPlayer(); }
 
     /// Player 2 is in, past the take, and drives a party member.
     bool PlaysMember() const noexcept;
@@ -105,7 +105,7 @@ public:
     bool StandsAside() const noexcept { return HasPlayerTwo() && sharedRide_; }
 
     /// Player 2's and player 1's ULocalPlayer (null when player 2 is out).
-    const void* PlayerTwo() const noexcept { return players_.PlayerTwo(); }
+    const void* PlayerTwo() const noexcept { return players_.Player(); }
     const void* PlayerOne() const noexcept { return playerOne_; }
 
     std::uint32_t JoinCount() const noexcept { return players_.JoinCount(); }

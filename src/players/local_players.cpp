@@ -6,8 +6,6 @@ namespace lss::players {
 
 namespace {
 
-constexpr std::int32_t kPlayerTwoControllerId = 1;
-
 bool Contains(RC::Unreal::TArray<unreal::UObject*>& players, unreal::UObject* player) noexcept
 {
     for (std::int32_t i = 0; i < players.Num(); ++i)
@@ -22,14 +20,15 @@ bool Contains(RC::Unreal::TArray<unreal::UObject*>& players, unreal::UObject* pl
 
 }  // namespace
 
-LocalPlayers::PlayerOne LocalPlayers::SolePlayer(bool log) const noexcept
+LocalPlayers::PlayerOne LocalPlayers::FirstPlayer(bool log) const noexcept
 {
     auto* players = unreal::LocalPlayers(unreal::GameInstance());
-    if (players == nullptr || players->Num() != 1)
+    if (players == nullptr || players->Num() != seat_)
     {
         if (log)
         {
-            platform::Log(L"join refused: expected exactly one local player, found {}", players == nullptr ? -1 : players->Num());
+            platform::Log(L"join refused: expected exactly {} local player(s), found {}", seat_,
+                          players == nullptr ? -1 : players->Num());
         }
         return {};
     }
@@ -49,9 +48,9 @@ LocalPlayers::PlayerOne LocalPlayers::SolePlayer(bool log) const noexcept
 LocalPlayers::Added LocalPlayers::Add(unreal::UObject* playerOneController) noexcept
 {
     Added added;
-    if (HasPlayerTwo())
+    if (HasPlayer())
     {
-        platform::Log(L"player 2 is already in");
+        platform::Log(L"player {} is already in", seat_ + 1);
         return added;
     }
     unreal::UObject* gameInstance = unreal::GameInstance();
@@ -61,33 +60,33 @@ LocalPlayers::Added LocalPlayers::Add(unreal::UObject* playerOneController) noex
         return added;
     }
 
-    const auto created = unreal::CreatePlayerWithController(playerOneController, kPlayerTwoControllerId);
+    const auto created = unreal::CreatePlayerWithController(playerOneController, seat_);
     added.raised       = !created.called;
 
     // The engine's list decides what happened, not the call: an exception can be raised after the
     // engine already added the player, and such a player must still be removed before a map load.
-    if (players->Num() != 2)
+    if (players->Num() != seat_ + 1)
     {
         platform::Log(L"join failed: the engine did not add a local player ({}; count now {})",
                       created.called ? L"the call returned" : L"the call raised an exception", players->Num());
         return added;
     }
-    playerTwo_    = (*players)[1];  // the engine appends the new player
+    player_       = (*players)[seat_];  // the engine appends the new player
     gameInstance_ = gameInstance;
     ++joins_;
 
-    unreal::UObject** field = unreal::ControllerField(playerTwo_);
+    unreal::UObject** field = unreal::ControllerField(player_);
     added.controller        = field == nullptr ? nullptr : *field;
     if (created.called && created.controller != added.controller)
     {
-        platform::Log(L"WARNING: CreatePlayer returned a controller other than the one player 2 lists");
+        platform::Log(L"WARNING: CreatePlayer returned a controller other than the one player {} lists", seat_ + 1);
     }
     return added;
 }
 
 bool LocalPlayers::Remove() noexcept
 {
-    if (!HasPlayerTwo() || !StillListed())
+    if (!HasPlayer() || !StillListed())
     {
         return true;
     }
@@ -95,9 +94,9 @@ bool LocalPlayers::Remove() noexcept
 
     // RemoveLocalPlayer reports success even for a player it did not hold, so membership before
     // (checked above) and after (below) is the evidence.
-    if (!unreal::RemoveLocalPlayer(gameInstance_, playerTwo_, removeLocalPlayer_) || Contains(*players, playerTwo_))
+    if (!unreal::RemoveLocalPlayer(gameInstance_, player_, removeLocalPlayer_) || Contains(*players, player_))
     {
-        platform::Log(L"leave failed: the engine did not remove player 2");
+        platform::Log(L"leave failed: the engine did not remove player {}", seat_ + 1);
         return false;
     }
     Forget();
@@ -106,10 +105,10 @@ bool LocalPlayers::Remove() noexcept
 
 bool LocalPlayers::StillListed() noexcept
 {
-    // Reads only the engine's list, never player 2's object: if the engine removed player 2 on
+    // Reads only the engine's list, never the player's object: if the engine removed the player on
     // its own, the object may already have been freed.
     auto* players = unreal::LocalPlayers(gameInstance_);
-    if (players != nullptr && Contains(*players, playerTwo_))
+    if (players != nullptr && Contains(*players, player_))
     {
         return true;
     }
@@ -120,7 +119,7 @@ bool LocalPlayers::StillListed() noexcept
 void LocalPlayers::Forget() noexcept
 {
     // The engine's garbage collector frees the player; this mod must not touch it again.
-    playerTwo_    = nullptr;
+    player_       = nullptr;
     gameInstance_ = nullptr;
 }
 

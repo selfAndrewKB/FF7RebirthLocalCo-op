@@ -203,7 +203,7 @@ bool Session::JoinAllowed(const players::LocalPlayers::PlayerOne& one) const noe
     }
     if (one.controller == nullptr)
     {
-        return false;  // SolePlayer logged why
+        return false;  // FirstPlayer logged why
     }
     if (!own_controller::UsesNativeClasses(one.controller))
     {
@@ -221,7 +221,7 @@ void Session::Join() noexcept
         Log(L"player 2 is already in");
         return;
     }
-    const auto one = players_.SolePlayer();
+    const auto one = players_.FirstPlayer();
     if (!JoinAllowed(one))
     {
         return;

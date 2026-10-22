@@ -641,7 +641,7 @@ void Session::OutsideTick() noexcept
         return;
     }
     // Player 1 on a controller of another class for a moment is not ready either (the join would refuse).
-    const auto one = players_.SolePlayer(false);
+    const auto one = players_.FirstPlayer(false);
     if (one.controller == nullptr || !own_controller::UsesNativeClasses(one.controller))
     {
         return;
@@ -865,7 +865,7 @@ void Session::Teardown() noexcept
         LogTagCounts(L"after the give-back");
     }
     const auto actors = leftover_actors::Collect(playerTwoController_);
-    leave_watch::BeforeRemove(players_.PlayerTwo(), playerTwoController_, actors);  // logging only (S-PC2LEAK)
+    leave_watch::BeforeRemove(players_.Player(), playerTwoController_, actors);  // logging only (S-PC2LEAK)
     const bool out = players_.Remove();
     leave_watch::AfterRemove(out);
     leave_.Finish();
