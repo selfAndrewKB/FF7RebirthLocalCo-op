@@ -22,6 +22,7 @@
 #include "player_two/leader_scope.h"
 #include "player_two/member_movement.h"
 #include "player_two/object_fields.h"
+#include "player_two/own_ride.h"
 #include "player_two/party_member.h"
 #include "player_two/primary_controller.h"
 
@@ -147,7 +148,6 @@ using SwapBackFn      = std::uintptr_t (*)(void* coordinator, void* a2, void* a3
 using SwitchAiFn      = void (*)(void* character, std::uint8_t toPlayer, void* controller);
 using NotifyFn        = void (*)(void* notify, void* mesh, void* a3, void* a4);  // rcx, rdx; the rest passed on
 using ResolveLeaderFn = void* (*)(std::uint8_t selector);
-using GetterFn        = void* (*)(const void* object);
 
 // Objects and fields (§14; this build).
 constexpr std::uint8_t   kScooterKey        = 4;
@@ -176,7 +176,6 @@ constexpr std::uint32_t  kSettingDistance   = 0x394;
 constexpr std::uint32_t  kSettingMaxYaw     = 0x398;
 constexpr std::uint32_t  kSettingMinPower   = 0x39C;
 using facts::kCharacterControlHolder;
-constexpr std::uint32_t  kHolderComponent   = 0x40;
 constexpr std::uint32_t  kHolderMoveRequest = 0x18;         // FVector: SetMoveInput's dir * scale
 constexpr std::uint32_t  kStateStickX       = 0x10;         // the on-foot state's stick pair (slot 11 TickInput)
 constexpr std::uint32_t  kStateStickY       = 0x14;
@@ -186,9 +185,6 @@ constexpr float          kNearTarget        = 300.0f;       // the ask's Debug l
 constexpr std::uint32_t  kMeshOwner         = 0xA0;         // a component's owner (the notify's mesh -> the rider)
 constexpr std::uint32_t  kActorRoot         = 0x138;        // an actor's root component (§14.15)
 using facts::kSceneComponentAttachParent;
-using facts::kCameraManagerFieldOperator;
-using facts::kOperatorModules;
-constexpr std::uint32_t  kModuleSlot15      = 15 * 16;
 
 constexpr auto     kSummaryEvery = std::chrono::seconds(10);
 constexpr int      kIdleTicks    = 4;          // the coordinator's own ticks run to bring it to idle on a forced end
@@ -276,16 +272,12 @@ AskLog      g_askLog;
 const void* g_settingsLogged = nullptr;  // the scooter whose direct-ride settings were last logged
 const void* g_heldLogged     = nullptr;  // the scooter last refused as still on a player's controller
 
-struct Ride
+// The lease (player 2's controller, member, the scooter as `vehicle`, player 2's own scooter coordinator) is
+// player_two/own_ride's; the rest is this ride's.
+struct Ride : own_ride::Lease
 {
-    void*          playerTwo   = nullptr;
-    void*          member      = nullptr;
-    void*          scooter     = nullptr;
-    void*          coordinator = nullptr;  // player 2's own scooter coordinator
-    std::uint64_t  weak        = 0;        // the scooter
-    const void*    component   = nullptr;  // its input component (the leader answer's second yes)
     std::int32_t   state       = -1;       // the coordinator's state as last logged
-    std::uint32_t  ticks = 0, refused = 0, swapBacks = 0, reissued = 0;
+    std::uint32_t  swapBacks = 0, reissued = 0;
     std::uint32_t  detaches = 0, leaderAnswers = 0;  // her getoff motion's detach notify; its field-leader test
 };
 bool              g_active  = false;
@@ -295,8 +287,7 @@ platform::Every g_summary{kSummaryEvery};
 
 std::int32_t CoordState(const void* coordinator) noexcept
 {
-    const void* row = VTableOf(coordinator) == g_coordVt ? ReadPointer(coordinator, kCoordStatePtr) : nullptr;
-    return row != nullptr ? ReadField<std::int32_t>(row, 0) : -1;
+    return own_ride::CoordState(coordinator, g_coordVt, kCoordStatePtr);
 }
 
 const wchar_t* StateName(std::int32_t state) noexcept
@@ -356,10 +347,7 @@ bool WarpWouldFire(void* scooter) noexcept
 
 bool CameraModuleOn(const void* playerTwo) noexcept
 {
-    const void* pcm     = ReadPointer(playerTwo, facts::kControllerCameraManager);
-    const void* op      = ReadPointer(pcm, kCameraManagerFieldOperator);
-    const void* modules = ReadPointer(op, kOperatorModules);
-    return modules != nullptr && ReadPointer(modules, kModuleSlot15) != nullptr;
+    return own_ride::CameraModule15(playerTwo) != nullptr;
 }
 
 /// The actor `actor`'s root is attached to (root +0x138 -> attach parent +0xC0 -> owner +0xA0), or null.
@@ -376,20 +364,12 @@ const wchar_t* AttachText(const void* actor, const void* scooter) noexcept
 
 std::wstring LeaseText(const Ride& ride)
 {
-    const void* pawn   = ReadPointer(ride.playerTwo, facts::kControllerPawn);
-    const void* active = ReadPointer(ride.playerTwo, kControllerActiveVehicle);
-    const float metres = Between(PlayerOneBody(), ride.scooter);
-    return std::format(L"coordinator state {} ({}); member controller {} (effective {}), attached to {}; scooter {} controller {} "
-                       L"(effective {}); PC2's pawn {}, active coordinator {}; player 2's camera slot-15 module {}; {} from player 1",
+    const float metres = Between(PlayerOneBody(), ride.vehicle);
+    return std::format(L"coordinator state {} ({}); {}; the member attached to {}; the scooter {}; player 2's camera "
+                       L"slot-15 module {}; {} from player 1",
                        CoordState(ride.coordinator), StateName(CoordState(ride.coordinator)),
-                       Who(ReadPointer(ride.member, facts::kPawnController)),
-                       Who(ReadPointer(ride.member, facts::kCharacterEffectiveController)),
-                       AttachText(ride.member, ride.scooter), NameOf(ride.scooter),
-                       Who(ReadPointer(ride.scooter, facts::kPawnController)),
-                       Who(ReadPointer(ride.scooter, facts::kCharacterEffectiveController)),
-                       pawn == ride.scooter ? L"the scooter" : pawn == ride.member ? L"the member" : pawn ? L"other" : L"none",
-                       active == ride.coordinator && active != nullptr ? L"player 2's own" : active ? L"other" : L"none",
-                       CameraModuleOn(ride.playerTwo) ? L"present" : L"empty",
+                       own_ride::PossessionText(ride, L"scooter"), AttachText(ride.member, ride.vehicle),
+                       NameOf(ride.vehicle), CameraModuleOn(ride.playerTwo) ? L"present" : L"empty",
                        metres >= 0.0f ? std::format(L"{:.0f} m", metres / 100.0f) : std::wstring{L"(unread)"});
 }
 
@@ -404,22 +384,8 @@ void LogLine(const wchar_t* prefix, const Ride& ride) noexcept
     }
 }
 
-/// The scooter's input component: its control holder's getter (+0x638 -> vt+0x40). Null if none.
-const void* InputComponentOf(const void* scooter) noexcept
-{
-    const void* holder = ReadPointer(scooter, kCharacterControlHolder);
-    const void* vt     = reinterpret_cast<const void*>(VTableOf(holder));
-    const auto  getter = vt != nullptr ? ReadField<GetterFn>(vt, kHolderComponent) : nullptr;
-    void*       found  = nullptr;
-    return getter != nullptr && platform::CallGuarded(getter, found, holder) ? found : nullptr;
-}
-
-/// Player 2's controller holds `character` (the chocobo ride's test: its effective controller, and the controller's pawn).
-bool PlayerTwoHolds(const void* character, const void* playerTwo) noexcept
-{
-    return ReadField<void*>(character, facts::kCharacterEffectiveController) == playerTwo &&
-           ReadPointer(playerTwo, facts::kControllerPawn) == character;
-}
+using own_ride::InputComponentOf;
+using own_ride::PlayerTwoHolds;
 
 // ---- The question (Ask) ----
 
@@ -546,34 +512,13 @@ void DriveToIdle(const Ride& ride) noexcept
                   CoordState(ride.coordinator), StateName(CoordState(ride.coordinator)));
 }
 
-struct RestoreCall
-{
-    void* member    = nullptr;
-    void* playerTwo = nullptr;
-    bool  ok        = false;
-};
-
-void RunRestore(void* context)
-{
-    auto* call = static_cast<RestoreCall*>(context);
-    call->ok   = platform::CallGuarded(g_fn.switchAi, call->member, std::uint8_t{1}, call->playerTwo);
-}
-
 /// The ride is over for the mod: player 2's controller must hold the member again. If the game's getoff did not give
 /// her back, the game's possession call; if even that fails, stopped for the session.
 void Finish(const wchar_t* why) noexcept
 {
     const Ride ride = g_ride;
     g_active        = false;
-    bool held       = PlayerTwoHolds(ride.member, ride.playerTwo);
-    if (!held && ReadPointer(ride.member, facts::kPawnController) != ride.playerTwo)
-    {
-        RestoreCall restore{ride.member, ride.playerTwo};
-        member_movement::InPrimaryScope(ride.member, &RunRestore, &restore);
-        held = PlayerTwoHolds(ride.member, ride.playerTwo);
-        platform::Log(L"wheelie ride: the getoff left the member to her AI; the game's possession call {}",
-                      held ? L"gave her back to player 2" : L"DID NOT give her back");
-    }
+    const bool held = own_ride::GiveBack(ride, g_fn.switchAi, L"wheelie ride", L"the getoff");
     try
     {
         platform::Log(L"wheelie ride: player 2 is off the scooter ({}; {} ticks driven, {} refused, {} swap-back(s) in player "
@@ -591,8 +536,7 @@ void Finish(const wchar_t* why) noexcept
     if (!held)
     {
         g_stopped = true;
-        platform::Log(L"wheelie ride STOPPED: player 2's controller does not hold the member after the ride; player 2 does "
-                      L"not board again this session (the session's own checks take it from here)");
+        own_ride::LogNotHeld(L"wheelie ride");
     }
 }
 
@@ -606,7 +550,7 @@ void End(const wchar_t* why) noexcept
     }
     Ride&              ride  = g_ride;
     const std::int32_t state = CoordState(ride.coordinator);
-    if (!leader_scope::StillNames(ride.weak, ride.scooter))
+    if (!leader_scope::StillNames(ride.weak, ride.vehicle))
     {
         g_stopped = true;
         Finish(L"the scooter is gone; the game's getoff skipped, rides stopped for this session");
@@ -620,7 +564,7 @@ void End(const wchar_t* why) noexcept
                       L"(then {}; member controller {}, scooter controller {})",
                       why, StateName(state), ok ? L"ran" : L"COULD NOT RUN", StateName(CoordState(ride.coordinator)),
                       Who(ReadPointer(ride.member, facts::kCharacterEffectiveController)),
-                      Who(ReadPointer(ride.scooter, facts::kCharacterEffectiveController)));
+                      Who(ReadPointer(ride.vehicle, facts::kCharacterEffectiveController)));
     }
     else if (state == kStateGettingOff)
     {
@@ -706,7 +650,7 @@ std::uint8_t ForcedGetOff(const GetOffParams* params)
     const std::int32_t state = CoordState(g_ride.coordinator);
     const auto         plan  = ride_rules::ForcedGetOffPlanOf(
         type, state, kScooterKey, kStateRiding, params != nullptr && params->bytes[kGetOffInstant] != 0,
-        [] { return WarpWouldFire(g_ride.scooter); });
+        [] { return WarpWouldFire(g_ride.vehicle); });
     if (plan == ride_rules::ForcedGetOff::Skip)
     {
         platform::Log(L"wheelie ride: the game's forced getoff from {} not followed for player 2 (type {}, player 2's "
@@ -738,13 +682,14 @@ std::uint8_t ForcedGetOff(const GetOffParams* params)
 std::uint8_t OwnGetOff(const GetOffParams* params)
 {
     if (params != nullptr && g_active && generation::OnGameThread() && primary_controller::Is(g_ride.playerTwo) &&
-        params->bytes[kGetOffInstant] == 0 && CoordState(g_ride.coordinator) == kStateRiding && WarpWouldFire(g_ride.scooter))
+        params->bytes[kGetOffInstant] == 0 && CoordState(g_ride.coordinator) == kStateRiding &&
+        WarpWouldFire(g_ride.vehicle))
     {
         GetOffParams instant = *params;
         instant.bytes[kGetOffInstant] = 1;
         platform::Log(L"wheelie ride: player 2's getoff made instant: player 1 is {:.0f} m from the scooter (the rental-return "
                       L"warp would take it home during the animation)",
-                      Between(PlayerOneBody(), g_ride.scooter) / 100.0f);
+                      Between(PlayerOneBody(), g_ride.vehicle) / 100.0f);
         return g_fn.getOffPrimary(&instant);
     }
     return g_fn.getOffPrimary(params);
@@ -794,7 +739,7 @@ void DetachNotify(void* notify, void* mesh, void* a3, void* a4)
         const std::int32_t state = CoordState(ride.coordinator);
         if (state == kStateGettingOff)
         {
-            const wchar_t*      before  = AttachText(ride.member, ride.scooter);
+            const wchar_t*      before  = AttachText(ride.member, ride.vehicle);
             const std::uint32_t swaps   = ride.swapBacks;
             const std::uint32_t answers = ride.leaderAnswers;
             DetachCall          call{notify, mesh, a3, a4};
@@ -835,14 +780,8 @@ void DetachNotify(void* notify, void* mesh, void* a3, void* a4)
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto find = [&image](const platform::FunctionFact& fact) {
-        const auto live = platform::FindFunction(image, fact);
-        return live ? *live : std::uintptr_t{0};
-    };
-    const auto rebase = [&image](std::uintptr_t ida) {
-        const auto live = image.Rebase(ida);
-        return live ? *live : std::uintptr_t{0};
-    };
+    const auto find   = [&image](const platform::FunctionFact& fact) { return own_ride::FindOrZero(image, fact); };
+    const auto rebase = [&image](std::uintptr_t ida) { return own_ride::RebaseOrZero(image, ida); };
     g_fn.shouldRide    = reinterpret_cast<ShouldRideFn>(find(kShouldRide));
     g_fn.isRiding      = reinterpret_cast<IsRidingFn>(find(kIsRiding));
     g_fn.inputBasis    = reinterpret_cast<InputBasisFn>(find(kInputBasis));
@@ -1005,11 +944,8 @@ void AfterMemberTick(void* playerTwoController, void* member) noexcept
         return;
     }
     // The boarding's possession swap runs the game's player-core test on her: as player 2, it must pass.
-    const auto gate = member_movement::PlayerCoreAsPlayerTwo(member, member);
-    if (gate.answer != 1 || gate.primary != playerTwoController)
+    if (!own_ride::BoardingGateOpen(member, playerTwoController, L"wheelie ride"))
     {
-        platform::Log(L"wheelie ride: not boarded (the boarding's player-core test as player 2 reads {}, primary {})", gate.answer,
-                      gate.primary == playerTwoController ? L"PC2" : L"not PC2");
         return;
     }
     // Inside the member tick's scopes (primary = PC2, the member's leader answer) plus the party leader: the game's ride
@@ -1058,7 +994,7 @@ void AfterMemberTick(void* playerTwoController, void* member) noexcept
     g_ride             = {};
     g_ride.playerTwo   = playerTwoController;
     g_ride.member      = member;
-    g_ride.scooter     = scooter;
+    g_ride.vehicle     = scooter;
     g_ride.coordinator = coordinator;
     g_ride.weak        = asked.weak;
     g_ride.state       = CoordState(coordinator);
@@ -1165,7 +1101,7 @@ bool Tick(void* playerTwoController, void* member, const move_state::EngineTicks
         End(L"player 2's member changed");
         return false;
     }
-    if (!leader_scope::StillNames(ride.weak, ride.scooter))
+    if (!leader_scope::StillNames(ride.weak, ride.vehicle))
     {
         End(L"the scooter is gone");
         return false;
@@ -1202,28 +1138,26 @@ bool Tick(void* playerTwoController, void* member, const move_state::EngineTicks
     }
     // The field ticker runs the leader's ride body while it is the primary controller's active ride (§14.5): player 2's
     // scooter is ticked the same way, on the frames the ticker runs, while player 2's controller holds it.
-    void*      state16 = ReadPointer(ride.scooter, facts::kCharacterMoveState);
+    void*      state16 = ReadPointer(ride.vehicle, facts::kCharacterMoveState);
     const bool holds   = ReadPointer(playerTwoController, kControllerActiveVehicle) == ride.coordinator &&
-                       ReadPointer(ride.coordinator, kCoordinatorBody) == ride.scooter &&
-                       PlayerTwoHolds(ride.scooter, playerTwoController) && VTableOf(state16) == g_moveVt;
+                       ReadPointer(ride.coordinator, kCoordinatorBody) == ride.vehicle &&
+                       PlayerTwoHolds(ride.vehicle, playerTwoController) && VTableOf(state16) == g_moveVt;
     if (!holds)
     {
         return !PlayerTwoHolds(member, playerTwoController);  // the member's own tick once she is player 2's again
     }
-    if (engine.count == 0 && !engine.rideTicked)
+    switch (own_ride::TickVehicle(ride, state16, engine, 0))
     {
-        return true;  // the field ticker is idle (a menu, an event): player 2's scooter waits too
+        case own_ride::VehicleTick::Waiting: return true;  // the field ticker is idle: player 2's scooter waits too
+        case own_ride::VehicleTick::Faulted:
+            g_stopped = true;
+            platform::Log(L"wheelie ride STOPPED for this session: the engine raised an exception inside the scooter's "
+                          L"tick");
+            End(L"the engine raised an exception inside the scooter's tick");
+            return false;
+        case own_ride::VehicleTick::Ticked:
+        case own_ride::VehicleTick::Refused: break;
     }
-    const auto result = member_movement::TickRide(playerTwoController, member, state16, ride.component,
-                                                  engine.rideTicked ? engine.rideDeltaTime : engine.deltaTime, 0);
-    if (result == member_movement::RideTick::Faulted)
-    {
-        g_stopped = true;
-        platform::Log(L"wheelie ride STOPPED for this session: the engine raised an exception inside the scooter's tick");
-        End(L"the engine raised an exception inside the scooter's tick");
-        return false;
-    }
-    ++(result == member_movement::RideTick::Ticked ? ride.ticks : ride.refused);
     LogSummary();
     return true;
 }
@@ -1245,7 +1179,7 @@ void Release(const wchar_t* why) noexcept
 void* Forget() noexcept
 {
     g_asked       = {};
-    void* scooter = g_active ? g_ride.scooter : nullptr;
+    void* scooter = g_active ? g_ride.vehicle : nullptr;
     if (scooter != nullptr)
     {
         platform::Log(L"wheelie ride: the member was destroyed while player 2 rode; the ride is forgotten");

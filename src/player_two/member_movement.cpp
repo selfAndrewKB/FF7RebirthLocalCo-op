@@ -27,6 +27,7 @@
 #include "player_two/party_member.h"
 #include "player_two/primary_controller.h"
 #include "player_two/scope_leaks.h"
+#include "player_two/own_ride.h"
 #include "player_two/wheelie_ride.h"
 
 #include <atomic>
@@ -311,8 +312,7 @@ void Tick(void* playerTwoController, void* member) noexcept
         g_tickForCharacter == nullptr || g_stopped)
     {
         // A ride left un-ticked would hold player 2's controller on a chocobo nobody steers or ends: given back.
-        chocobo_ride::Release(L"the member's tick stopped (per-pad sticks switched off, or the tick stopped)");
-        wheelie_ride::Release(L"the member's tick stopped (per-pad sticks switched off, or the tick stopped)");
+        own_ride::Release(L"the member's tick stopped (per-pad sticks switched off, or the tick stopped)");
         return;
     }
     if (chocobo_ride::Tick(playerTwoController, member, engine))
