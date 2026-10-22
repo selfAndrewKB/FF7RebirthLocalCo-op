@@ -4,17 +4,11 @@
 #include "platform/frame_watch.h"
 #include "platform/image.h"
 #include "platform/log.h"
-#include "platform/thread_times.h"
-#include "renderer/submission_census.h"
 #include "platform/vtable_entry.h"
 #include "renderer/family_boundary.h"
 #include "renderer/one_family_per_view.h"
 #include "renderer/scene_view_family.h"
 
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <Windows.h>
 #include <intrin.h>
 
 #include <algorithm>
@@ -109,93 +103,50 @@ void LogFamilyOnChange(const std::byte* viewFamily) noexcept
 // Frame time: what rendering each view as its own family costs
 // ---------------------------------------------------------------------------------------------
 //
-// One line every 10 s: the mean interval between the game viewport's submissions, and the view
-// count. Comparing one player with two gives the cost of rendering each view as its own family.
-// Under it, one line per family: how long the game thread spent inside the engine's submission
-// of that family. A frame time much longer than those means the time goes elsewhere (render
-// thread or GPU); a family whose submission alone takes most of the frame means the engine
-// waits inside it.
+// At the end of each of the perf log's 10 s windows (platform/frame_watch.h): the mean frame time over the window's
+// frames and the view count. Comparing one player with two gives the cost of rendering each view as its own family.
+// Under it, one line per family: how long the game thread spent inside the engine's submission of that family. A
+// frame time much longer than those means the time goes elsewhere (render thread or GPU); a family whose submission
+// alone takes most of the frame means the engine waits inside it.
 
-constexpr double      kFrameTimeReportSeconds = 10.0;
-constexpr std::size_t kTimedFamilies          = 4;  // later families share the last slot
-
-LARGE_INTEGER g_frequency{};
-LARGE_INTEGER g_lastSubmit{};
-LARGE_INTEGER g_windowStart{};
-std::uint32_t g_framesInWindow = 0;
+constexpr std::size_t kTimedFamilies = 4;  // later families share the last slot
 
 std::size_t   g_familyInFrame = 0;  // which family of this frame the next submission is
-std::int64_t  g_submitTicks[kTimedFamilies]{};
+double        g_submitSeconds[kTimedFamilies]{};
 std::uint32_t g_submitCalls[kTimedFamilies]{};
-
-double TicksToMilliseconds(std::int64_t ticks) noexcept
-{
-    return 1000.0 * static_cast<double>(ticks) / static_cast<double>(g_frequency.QuadPart);
-}
 
 /// The engine's submission of one family, timed on the game thread.
 void TimedEngineSubmit(void* rendererModule, void* canvas, std::byte* viewFamily)
 {
-    LARGE_INTEGER start{};
-    LARGE_INTEGER end{};
-    QueryPerformanceCounter(&start);
+    const double start = platform::frame_watch::Now();
     g_engineSubmit(rendererModule, canvas, viewFamily);
-    QueryPerformanceCounter(&end);
+    const double end = platform::frame_watch::Now();
 
-    const auto slot = (std::min)(g_familyInFrame++, kTimedFamilies - 1);  // parenthesised: Windows.h's min macro
-    g_submitTicks[slot] += end.QuadPart - start.QuadPart;
+    const auto slot = (std::min)(g_familyInFrame++, kTimedFamilies - 1);  // parenthesised: a min macro may be in scope
+    g_submitSeconds[slot] += end - start;
     ++g_submitCalls[slot];
 }
 
-void ReportSubmissionTimes() noexcept
+/// The perf log's window report: the mean frame time and the view count, then one line per family. The per-family
+/// times start afresh either way.
+void ReportFrameTime(std::uint32_t frames, double seconds, bool log) noexcept
 {
-    for (std::size_t k = 0; k < kTimedFamilies; ++k)
-    {
-        if (g_submitCalls[k] != 0)
-        {
-            platform::Log(L"  family {}: {:.2f} ms per frame on the game thread inside the engine's submission",
-                          k + 1, TicksToMilliseconds(g_submitTicks[k]) / g_submitCalls[k]);
-        }
-        g_submitTicks[k] = 0;
-        g_submitCalls[k] = 0;
-    }
-}
-
-void RecordFrameTime(std::int32_t viewCount) noexcept
-{
-    LARGE_INTEGER now{};
-    QueryPerformanceCounter(&now);
-    if (g_lastSubmit.QuadPart == 0)
-    {
-        QueryPerformanceFrequency(&g_frequency);
-        g_windowStart = now;
-    }
-    g_lastSubmit = now;
-    ++g_framesInWindow;
-
-    const double windowSeconds =
-        static_cast<double>(now.QuadPart - g_windowStart.QuadPart) / static_cast<double>(g_frequency.QuadPart);
-    if (windowSeconds < kFrameTimeReportSeconds)
-    {
-        return;
-    }
-    if (platform::frame_watch::Detailed())  // the perf-log switch
+    if (log && frames > 0)
     {
         const platform::frame_watch::Job job(L"frame-time log");
-        platform::Log(L"frame time {:.2f} ms average over {} frames, {} view(s)",
-                      1000.0 * windowSeconds / g_framesInWindow, g_framesInWindow, viewCount);
-        ReportSubmissionTimes();
-        LogSubmissionCensus();
-        platform::thread_times::EndWindow(g_framesInWindow, true);
+        platform::Log(L"frame time {:.2f} ms average over {} frames, {} view(s)", 1000.0 * seconds / frames, frames,
+                      g_loggedViewCount);
+        for (std::size_t k = 0; k < kTimedFamilies; ++k)
+        {
+            if (g_submitCalls[k] != 0)
+            {
+                platform::Log(L"  family {}: {:.2f} ms per frame on the game thread inside the engine's submission",
+                              k + 1, 1000.0 * g_submitSeconds[k] / g_submitCalls[k]);
+            }
+        }
     }
-    else
-    {
-        platform::thread_times::EndWindow(g_framesInWindow, false);
-        std::fill(std::begin(g_submitTicks), std::end(g_submitTicks), 0);
-        std::fill(std::begin(g_submitCalls), std::end(g_submitCalls), 0u);
-    }
-    g_windowStart    = now;
-    g_framesInWindow = 0;
+    std::fill(std::begin(g_submitSeconds), std::end(g_submitSeconds), 0.0);
+    std::fill(std::begin(g_submitCalls), std::end(g_submitCalls), 0u);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -220,7 +171,6 @@ __declspec(noinline) void SubmitViewFamily(void* rendererModule, void* canvas, s
     }
 
     LogFamilyOnChange(viewFamily);
-    RecordFrameTime(g_loggedViewCount);
     g_familyInFrame = 0;
     if (!g_familySplit.load(std::memory_order_relaxed))
     {
@@ -246,7 +196,12 @@ bool InstallViewFamilySubmission(const platform::GameImage& image) noexcept
     // Both are set before the swap, so the replacement never runs without them.
     g_engineSubmit = reinterpret_cast<SubmitViewFamilyFn>(*engineFn);
     g_drawReturn   = *drawReturn;
-    return g_entry.Replace(*entry, *engineFn, reinterpret_cast<std::uintptr_t>(&SubmitViewFamily));
+    if (!g_entry.Replace(*entry, *engineFn, reinterpret_cast<std::uintptr_t>(&SubmitViewFamily)))
+    {
+        return false;
+    }
+    platform::frame_watch::AddWindowReport(&ReportFrameTime);
+    return true;
 }
 
 void SetFamilySplit(bool onePerView) noexcept

@@ -219,33 +219,54 @@ void WatchCell(std::uintptr_t cell, std::uintptr_t two) noexcept
          platform::Level::Debug);
 }
 
-/// Replaces the party-list cell's NativeTick: a cell of player 2's controller ticks in that controller's view.
-void CellTick(void* cell, const void* geometry, float deltaTime) noexcept
+/// Player 2's command controller while player 2 is in (game thread), else 0: the owner a widget's tick is checked
+/// against.
+std::uintptr_t PlayerTwoOwner() noexcept
 {
-    const auto original = reinterpret_cast<CellTickFn>(g_cellSlot.Original());
-    const auto two      = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller());
-    if (!g_cellsOn || two == 0 || !generation::OnGameThread() || !generation::Active() || OwnerOf(cell) != two)
-    {
-        return original(cell, geometry, deltaTime);
-    }
+    return generation::OnGameThread() && generation::Active()
+               ? reinterpret_cast<std::uintptr_t>(command_menu_two::Controller())
+               : 0;
+}
+
+/// Ticks `widget` (`what`, player 2's) through `original` in its owner's view (OwnerView), or in the shared view
+/// when that view cannot be entered. A fault inside the view clears `on`: the widget ticks in the shared view from
+/// then on. True if the tick ran in the owner's view.
+bool TickInOwnerView(CellTickFn original, void* widget, const void* geometry, float deltaTime, std::uintptr_t two,
+                     const wchar_t* what, bool& on) noexcept
+{
     std::optional<OwnerView> view(std::in_place, two, 0);
     if (!view->Held())
     {
         view.reset();
-        Refused(L"a cell of player 2's party list");
-        return original(cell, geometry, deltaTime);
+        Refused(what);
+        original(widget, geometry, deltaTime);
+        return false;
     }
     if (view->TypeRefused())
     {
         TypeRefused();
     }
-    const bool ran = platform::CallGuarded(original, cell, geometry, deltaTime);
+    const bool ran = platform::CallGuarded(original, widget, geometry, deltaTime);
     view.reset();
     if (!ran)
     {
-        g_cellsOn = false;
-        Line(L"FAILED: a cell of player 2's party list faulted in its owner's view; the cells tick in the shared view "
-             L"from now on");
+        on = false;
+        Line(std::format(L"FAILED: {} faulted in its owner's view; the shared view from now on", what));
+    }
+    return ran;
+}
+
+/// Replaces the party-list cell's NativeTick: a cell of player 2's controller ticks in that controller's view.
+void CellTick(void* cell, const void* geometry, float deltaTime) noexcept
+{
+    const auto original = reinterpret_cast<CellTickFn>(g_cellSlot.Original());
+    const auto two      = PlayerTwoOwner();
+    if (!g_cellsOn || two == 0 || OwnerOf(cell) != two)
+    {
+        return original(cell, geometry, deltaTime);
+    }
+    if (!TickInOwnerView(original, cell, geometry, deltaTime, two, L"a cell of player 2's party list", g_cellsOn))
+    {
         return;
     }
     if (PowerOfTen(++g_cellTicks) && DebugOn())
@@ -261,30 +282,14 @@ void CellTick(void* cell, const void* geometry, float deltaTime) noexcept
 void PaneTick(void* pane, const void* geometry, float deltaTime) noexcept
 {
     const auto original = reinterpret_cast<CellTickFn>(g_paneSlot.Original());
-    const auto two      = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller());
+    const auto two      = PlayerTwoOwner();
     const auto at       = reinterpret_cast<std::uintptr_t>(pane);
-    if (!g_panesOn || two == 0 || !generation::OnGameThread() || !generation::Active() ||
-        ReadAt<std::uintptr_t>(at + kPaneOwner) != two)
+    if (!g_panesOn || two == 0 || ReadAt<std::uintptr_t>(at + kPaneOwner) != two)
     {
         return original(pane, geometry, deltaTime);
     }
-    std::optional<OwnerView> view(std::in_place, two, 0);
-    if (!view->Held())
+    if (!TickInOwnerView(original, pane, geometry, deltaTime, two, L"player 2's synergy pane", g_panesOn))
     {
-        view.reset();
-        Refused(L"player 2's synergy pane");
-        return original(pane, geometry, deltaTime);
-    }
-    if (view->TypeRefused())
-    {
-        TypeRefused();
-    }
-    const bool ran = platform::CallGuarded(original, pane, geometry, deltaTime);
-    view.reset();
-    if (!ran)
-    {
-        g_panesOn = false;
-        Line(L"FAILED: player 2's synergy pane faulted in its owner's view; it ticks in the shared view from now on");
         return;
     }
     static std::uint8_t shown = 0xFF;
@@ -340,10 +345,10 @@ void GuideTick(void* keyGuide) noexcept
 {
     const auto original = reinterpret_cast<GuideTickFn>(g_guideCall.Original());
     original(keyGuide);
-    const auto two   = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller());
+    const auto two   = PlayerTwoOwner();
     const auto guide = reinterpret_cast<std::uintptr_t>(command_menu_two::KeyGuide());
     const auto one   = reinterpret_cast<std::uintptr_t>(keyGuide);
-    if (!g_guidesOn || two == 0 || guide == 0 || one == guide || !generation::OnGameThread() || !generation::Active())
+    if (!g_guidesOn || two == 0 || guide == 0 || one == guide)
     {
         return;
     }

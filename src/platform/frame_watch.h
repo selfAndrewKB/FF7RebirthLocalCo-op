@@ -7,9 +7,11 @@
 // time in that frame, by hook, the log lines written, and the periodic jobs that ran (a HUD root
 // scan, a timing log, the status line...). So a hitch the mod causes names its cause, and one it
 // does not shows the mod idle. Every 10 s a summary line gives the hitch count and the worst (with the
-// perf log on).
+// perf log on), and the modules' reports of that window run (the renderer's frame time, the frame
+// threads' CPU time, the census): one window, one clock.
 // Solo and split are both watched, so they can be compared.
 
+#include <cstddef>
 #include <cstdint>
 
 namespace lss::platform::frame_watch {
@@ -64,6 +66,13 @@ private:
 /// are counted either way.
 void SetDetailed(bool on) noexcept;
 bool Detailed() noexcept;
+
+/// A report at the end of each 10 s window (game thread): the window's `frames` and `seconds`, and `log`, the
+/// perf-log switch (a report starts its counts afresh either way and writes only with it on). Reports run in the
+/// order added, after the window's own summary; one added twice runs once. False once kMaxWindowReports are in.
+using WindowReport = void (*)(std::uint32_t frames, double seconds, bool log);
+constexpr std::size_t kMaxWindowReports = 4;
+bool AddWindowReport(WindowReport report) noexcept;
 
 /// A log line was written (any thread).
 void CountLogLine() noexcept;

@@ -46,6 +46,8 @@ double                                     g_worstMs      = 0.0;
 unsigned                                   g_frames       = 0;
 std::atomic<bool>                          g_detailed{false};
 std::uint64_t                              g_frameIndex = 0;  // frames started since the mod loaded (never reset)
+std::array<WindowReport, kMaxWindowReports> g_reports{};     // the window's reports, in the order added
+std::size_t                                g_reportCount = 0;
 
 struct JobTime
 {
@@ -166,6 +168,23 @@ bool Detailed() noexcept
     return g_detailed.load(std::memory_order_relaxed);
 }
 
+bool AddWindowReport(WindowReport report) noexcept
+{
+    for (std::size_t i = 0; i < g_reportCount; ++i)
+    {
+        if (g_reports[i] == report)
+        {
+            return true;
+        }
+    }
+    if (report == nullptr || g_reportCount == kMaxWindowReports)
+    {
+        return false;
+    }
+    g_reports[g_reportCount++] = report;
+    return true;
+}
+
 std::uint64_t FrameIndex() noexcept
 {
     return g_frameIndex;
@@ -217,9 +236,12 @@ void OnFrameStart() noexcept
     }
     else if (now - g_summaryStart >= kSummarySeconds)
     {
+        const std::uint32_t frames  = g_frames;
+        const double        seconds = now - g_summaryStart;
+        const bool          log     = Detailed();
         try
         {
-            if (Detailed())  // counted either way; written only with the perf log on
+            if (log)  // counted either way; written only with the perf log on
             {
                 std::wstring perFrame;
                 for (std::size_t i = 0; i < kParts; ++i)
@@ -240,7 +262,11 @@ void OnFrameStart() noexcept
         g_summaryStart = now;
         g_hitches = g_hitchLines = g_frames = 0;
         g_worstMs = 0.0;
-        g_logLines.store(0, std::memory_order_relaxed);  // the summary's own line is not the next frame's
+        for (std::size_t i = 0; i < g_reportCount; ++i)
+        {
+            g_reports[i](frames, seconds, log);  // the modules' reports of the window, after its own summary
+        }
+        g_logLines.store(0, std::memory_order_relaxed);  // the summary's and reports' lines are not the next frame's
     }
 }
 

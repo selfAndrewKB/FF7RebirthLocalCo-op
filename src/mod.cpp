@@ -35,6 +35,7 @@
 #include "platform/level_names.h"
 #include "platform/log.h"
 #include "platform/module_folder.h"
+#include "platform/thread_times.h"
 #include "platform/verified_code.h"
 #include "player_two/field_exit.h"
 #include "player_two/generation.h"
@@ -482,6 +483,10 @@ private:
             return false;
         }
         rendererInstalled_ = true;
+        // The perf log's window (platform/frame_watch.h): after the renderer's frame-time report, the frame threads'
+        // CPU time (the census, a dev tool, registers its own).
+        lss::platform::frame_watch::AddWindowReport(
+            [](std::uint32_t frames, double, bool log) { lss::platform::thread_times::EndWindow(frames, log); });
         Log(L"renderer: one view family per player; later families keep the screen (stock output rule restored)");
         return true;
     }

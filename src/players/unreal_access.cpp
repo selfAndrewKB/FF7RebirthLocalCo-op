@@ -55,6 +55,25 @@ struct CreatePlayerParams
 };
 static_assert(sizeof(CreatePlayerParams) == 24);
 
+/// A reflected static function (its path "/Script/Engine.<Class>:<Function>") and the class default object of
+/// `classPath` to call it on; empty when either is missing (callers test `function`).
+struct StaticCall
+{
+    UFunction* function      = nullptr;
+    UObject*   defaultObject = nullptr;
+};
+
+constexpr const wchar_t* kGameplayStatics     = STR("/Script/Engine.GameplayStatics");
+constexpr const wchar_t* kKismetSystemLibrary = STR("/Script/Engine.KismetSystemLibrary");
+
+StaticCall FindStatic(const wchar_t* classPath, const wchar_t* functionPath) noexcept
+{
+    auto*    function = UObjectGlobals::StaticFindObject<UFunction*>(nullptr, nullptr, functionPath);
+    auto*    owner    = UObjectGlobals::StaticFindObject<UClass*>(nullptr, nullptr, classPath);
+    UObject* object   = owner == nullptr ? nullptr : owner->GetClassDefaultObject();
+    return function == nullptr || object == nullptr ? StaticCall{} : StaticCall{function, object};
+}
+
 using RemoveLocalPlayerFn = bool (*)(UObject* gameInstance, UObject* localPlayer);
 
 // The two engine calls run inside structured-exception guards, so a fault inside the engine is
@@ -265,16 +284,9 @@ std::optional<std::uint32_t> AspectRatioAxisConstraintOffset() noexcept
 
 CreatedPlayer CreatePlayerWithController(UObject* worldContext, std::int32_t controllerId) noexcept
 {
-    auto* function = UObjectGlobals::StaticFindObject<UFunction*>(
-        nullptr, nullptr, STR("/Script/Engine.GameplayStatics:CreatePlayer"));
-    auto* statics = UObjectGlobals::StaticFindObject<UClass*>(nullptr, nullptr, STR("/Script/Engine.GameplayStatics"));
-    if (function == nullptr || statics == nullptr || worldContext == nullptr ||
-        function->GetParmsSize() != sizeof(CreatePlayerParams))
-    {
-        return {};
-    }
-    UObject* defaultObject = statics->GetClassDefaultObject();
-    if (defaultObject == nullptr)
+    const StaticCall call = FindStatic(kGameplayStatics, STR("/Script/Engine.GameplayStatics:CreatePlayer"));
+    if (call.function == nullptr || worldContext == nullptr ||
+        call.function->GetParmsSize() != sizeof(CreatePlayerParams))
     {
         return {};
     }
@@ -283,7 +295,7 @@ CreatedPlayer CreatePlayerWithController(UObject* worldContext, std::int32_t con
     params.WorldContextObject     = worldContext;
     params.ControllerId           = controllerId;
     params.bSpawnPlayerController = true;
-    const bool called             = GuardedProcessEvent(defaultObject, function, &params);
+    const bool called             = GuardedProcessEvent(call.defaultObject, call.function, &params);
     return {called, called ? params.ReturnValue : nullptr};
 }
 
@@ -319,28 +331,16 @@ std::optional<std::int32_t> ParamOffset(UFunction* function, const wchar_t* name
 namespace {
 
 /// A reflected UKismetSystemLibrary function and the class default object to call it on.
-struct KismetCall
+StaticCall FindKismet(const wchar_t* path) noexcept
 {
-    UFunction* function      = nullptr;
-    UObject*   defaultObject = nullptr;
-};
-
-KismetCall FindKismet(const wchar_t* path) noexcept
-{
-    auto* function = UObjectGlobals::StaticFindObject<UFunction*>(nullptr, nullptr, path);
-    auto* library  = UObjectGlobals::StaticFindObject<UClass*>(nullptr, nullptr, STR("/Script/Engine.KismetSystemLibrary"));
-    if (function == nullptr || library == nullptr)
-    {
-        return {};
-    }
-    return {function, library->GetClassDefaultObject()};
+    return FindStatic(kKismetSystemLibrary, path);
 }
 
 /// Calls `call` with a zeroed parameter frame in which `text` is placed as an FString at
 /// `stringOffset` and `fill` writes the other inputs; `read` then sees the frame before the
 /// string is released.
 template <class Fill, class Read>
-bool CallWithString(const KismetCall& call, std::int32_t stringOffset, const wchar_t* text, Fill&& fill,
+bool CallWithString(const StaticCall& call, std::int32_t stringOffset, const wchar_t* text, Fill&& fill,
                     Read&& read) noexcept
 {
     constexpr std::int32_t kMaxFrame = 64;
@@ -463,32 +463,28 @@ namespace {
 
 /// A reflected UGameplayStatics function and its class default object, if its world-context
 /// parameter and `name` (of `size` bytes) sit where they fit in a frame of at most kMaxFrame bytes.
-struct StaticsCall
+struct StaticsCall : StaticCall
 {
     static constexpr std::int32_t kMaxFrame = 16;
 
-    UFunction*   function      = nullptr;
-    UObject*     defaultObject = nullptr;
-    std::int32_t context       = -1;
-    std::int32_t value         = -1;
+    std::int32_t context = -1;
+    std::int32_t value   = -1;
 };
 
 StaticsCall FindStatics(const wchar_t* path, const wchar_t* name, std::int32_t size) noexcept
 {
-    auto* function = UObjectGlobals::StaticFindObject<UFunction*>(nullptr, nullptr, path);
-    auto* statics  = UObjectGlobals::StaticFindObject<UClass*>(nullptr, nullptr, STR("/Script/Engine.GameplayStatics"));
-    if (function == nullptr || statics == nullptr || function->GetParmsSize() > StaticsCall::kMaxFrame)
+    const StaticCall call = FindStatic(kGameplayStatics, path);
+    if (call.function == nullptr || call.function->GetParmsSize() > StaticsCall::kMaxFrame)
     {
         return {};
     }
-    const auto context = ParamOffset(function, STR("WorldContextObject"), sizeof(UObject*));
-    const auto value   = ParamOffset(function, name, size);
-    UObject*   object  = statics->GetClassDefaultObject();
-    if (!context || !value || object == nullptr)
+    const auto context = ParamOffset(call.function, STR("WorldContextObject"), sizeof(UObject*));
+    const auto value   = ParamOffset(call.function, name, size);
+    if (!context || !value)
     {
         return {};
     }
-    return {function, object, *context, *value};
+    return {call, *context, *value};
 }
 
 }  // namespace

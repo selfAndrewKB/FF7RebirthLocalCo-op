@@ -5,6 +5,7 @@
 #include "hud/hud_trace.h"
 #include "hud/label_relayouts.h"
 #include "hud/position_probe.h"
+#include "platform/frame_watch.h"
 #include "platform/log.h"
 #include "player_two/battle_input.h"
 #include "player_two/charapop_watch.h"
@@ -54,6 +55,12 @@ void Install(const platform::GameImage& image, player_two::Session& session, pla
                                           : L"NOT readable (a check failed); the session's counts are not logged");
     hud::label_relayouts::Install(image);        // which text blocks relayout, where and why (the minimap marks the scopes)
     renderer::InstallSubmissionCensusIfAsked();  // the GPU submission census: census.txt at launch, or `census on`
+    platform::frame_watch::AddWindowReport([](std::uint32_t, double, bool log) {
+        if (log)
+        {
+            renderer::LogSubmissionCensus();  // the census's summary of the perf log's window
+        }
+    });
     InstallControl(session, layout, singleView, viewPointInstalled);
 }
 

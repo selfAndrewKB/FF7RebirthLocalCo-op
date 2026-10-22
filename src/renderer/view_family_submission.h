@@ -6,6 +6,9 @@
 // reaches the renderer through that entry; only the game viewport's Draw (identified by its
 // return address) is split, and only when its family holds more than one view. Every other
 // submission, and every submission with one player, goes to the engine unchanged.
+//
+// With the perf log on, the renderer's report at the end of each 10 s window (platform/frame_watch.h) gives the
+// mean frame time, the view count and each family's time inside the engine's submission.
 
 namespace lss::platform {
 class GameImage;
