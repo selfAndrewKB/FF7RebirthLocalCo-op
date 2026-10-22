@@ -438,17 +438,7 @@ void LogOnChange(const ScreenSignals& now) noexcept
     {
         return;
     }
-    if (now.readable == g_logged.readable && now.gameState == g_logged.gameState && now.menuKind == g_logged.menuKind &&
-        now.scriptMenu == g_logged.scriptMenu && now.jobBoard == g_logged.jobBoard && now.cutscene == g_logged.cutscene &&
-        now.skippable == g_logged.skippable && now.skipping == g_logged.skipping && now.title == g_logged.title &&
-        now.pauseWidget == g_logged.pauseWidget && now.nativeMenus == g_logged.nativeMenus &&
-        now.screenWidget == g_logged.screenWidget && now.colosseumFlag == g_logged.colosseumFlag &&
-        now.miniGameMenu == g_logged.miniGameMenu && now.chadleyState == g_logged.chadleyState &&
-        now.exclusion == g_logged.exclusion && now.minigamePlaying == g_logged.minigamePlaying &&
-        now.minigameIds == g_logged.minigameIds &&
-        now.frogGuys == g_logged.frogGuys && now.inBattle == g_logged.inBattle && now.gbike == g_logged.gbike &&
-        now.fieldMinigame == g_logged.fieldMinigame &&
-        now.minigameMap == g_logged.minigameMap)
+    if (now == g_logged)
     {
         return;
     }

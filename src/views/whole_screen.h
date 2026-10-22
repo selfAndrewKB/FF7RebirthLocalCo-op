@@ -36,109 +36,15 @@
 //     outside battles and the VR / colosseum session. Plus the crash box's and cactus mission's own ids (139, 140),
 //     the frog manager's own state, G-Bike's manager and the minigame-only maps.
 //
-// The decision is pure, so it is tested on the host; the reads are in whole_screen.cpp.
+// The decision is in views/whole_screen_reason.h, tested on the host; the reads are in whole_screen.cpp.
 
-#include <cstdint>
-#include <string_view>
+#include "views/whole_screen_reason.h"
 
 namespace lss::platform {
 class GameImage;
 }
 
 namespace lss::views {
-
-/// The game's signals, as read this tick.
-struct ScreenSignals
-{
-    bool          readable   = false;  // the game state was found (false: nothing below is known)
-    std::uint8_t  gameState  = 0;      // EndGameState state
-    std::uint8_t  menuKind   = 0;      // EEndSystemPauseMenuKind
-    bool          scriptMenu = false;  // an on/off menu id is on (main menu, shop, map, skill tree...)
-    bool          jobBoard   = false;  // the job board's weak pointer is valid
-    bool          cutscene   = false;  // the cutscene manager plays a sequence of type 0 or 2
-    bool          skippable  = false;  // on/off id 12: a skippable dialogue or camera-planner scene
-    bool          skipping   = false;  // a cutscene skip is under way (the game holds black)
-    bool          title      = false;  // the current location is the title
-    bool          pauseWidget = false;  // a pause-family widget is alive (IsPauseMenuClosed is false)
-    std::uint16_t nativeMenus = 0;      // NativeMenu bits: script menus with their own EndUISystem slot open
-    bool          screenWidget = false; // a full-screen Blueprint menu is on screen (views/screen_widgets.h)
-    bool          colosseumFlag = false;  // on/off 153 ShowColosseumMenu: a VR or colosseum session (Begin to End)
-    // For the log only (candidates the open log is to settle, RE-p2-menu-census.md E6, RE-p2-vr-menu.md):
-    bool          miniGameMenu  = false;  // on/off 92 SoundCallEventMiniGameMenuInOut
-    std::int8_t   chadleyState  = -1;     // Chadley's manager state (0 idle, 1 greeting, 2 shop, 3 VR, 4 farewell, 5 end)
-    // The minigame inputs (RE-p2-minigames.md §7.6):
-    std::uint32_t exclusion   = 0;      // the field-exclusion mask (bit 21 minigame read; the rest logged)
-    bool          minigamePlaying = false;  // on/off 36 MiniGamePlaying
-    bool          fieldMinigame   = false;  // 36's setter is a field use (the chicken lure, the chocobo capture's
-                                            // chase): it does not count
-    bool          minigameIds     = false;  // on/off 139 crash box or 140 cactus mission (their own ids)
-    bool          frogGuys        = false;  // the frog-guys manager is in a game state (2..11: load to finish)
-    bool          inBattle    = false;  // the game's UEndBattleAPI::IsInBattle test
-    bool          gbike       = false;  // the G-Bike manager lives
-    bool          minigameMap = false;  // the location is a minigame-only map (chocobo race, coaster, G-Bike, Moogle)
-};
-
-/// The field-exclusion bits the minigame rule reads (UEnum EndFieldExclusion).
-inline constexpr std::uint32_t kExclusionMiniGame = 1u << 21;  // DisableController_MiniGame
-inline constexpr std::uint32_t kExclusionSecond   = 1u << 1;   // DisableController_2nd: not read (it flashes during
-                                                                // play); named for the tests of the uses that keep split
-
-/// Whether a VR or colosseum session shows its menu or result screen: on/off 153 with the minigame bit, outside a battle
-/// (RE-p2-minigames.md §7.2: the bit is on in the session's menu, intro and result states, off in the fight; the
-/// intro runs inside the battle).
-bool ArenaMenu(const ScreenSignals& signals) noexcept;
-
-/// Whether on/off 36's setter names a field use, where the party stays with player 1: exactly the native chicken lure or
-/// chocobo capture.
-bool FieldUseName(std::wstring_view setter) noexcept;
-
-/// Whether a minigame holds player 1: G-Bike or a minigame map; on/off 36 held by a minigame (not a field use); the crash
-/// box's or cactus mission's own id; the frog manager in a game state; or the minigame bit outside a battle and the
-/// VR / colosseum session (the entry prompts and the native flows' first states, before their 36).
-bool MinigameStage(const ScreenSignals& signals) noexcept;
-
-/// ScreenSignals::nativeMenus bits.
-enum NativeMenu : std::uint16_t
-{
-    kJukebox        = 1 << 0,
-    kCarriage       = 1 << 1,
-    kPointWarp      = 1 << 2,
-    kCardDeckNpc    = 1 << 3,
-    kChocoboStable  = 1 << 4,
-    kChocoboSelect  = 1 << 5,
-    kChocoboRace    = 1 << 6,
-    kCardChallenge  = 1 << 7,
-    kBrawlerSelect  = 1 << 8,
-    kBrawlerWinner  = 1 << 9,
-};
-
-enum class WholeScreenReason : std::uint8_t
-{
-    None,
-    PauseMenu,    // EndGameState 8
-    CinemaPause,  // EndGameState 7
-    ScriptMenu,
-    JobBoard,
-    PauseWidget,
-    NativeMenu,
-    ScreenWidget,
-    ArenaMenu,
-    Minigame,
-    Cutscene,
-    SkippableScene,
-    CutsceneSkip,
-    Title,
-};
-
-/// EndGameState states (the transition table, RE-p2-retry-reload.md §2 and RE-p2-single-view.md §2.1).
-inline constexpr std::uint8_t kStateCinemaPause = 7;
-inline constexpr std::uint8_t kStatePauseMenu   = 8;
-
-/// The first reason that holds, in the order above; None when nothing does or nothing is readable.
-WholeScreenReason ReasonOf(const ScreenSignals& signals) noexcept;
-
-/// For the log.
-const wchar_t* NameOf(WholeScreenReason reason) noexcept;
 
 /// Checks the game's code and data the reads rely on; false (the automatic single view stays off,
 /// logged) if any differs.

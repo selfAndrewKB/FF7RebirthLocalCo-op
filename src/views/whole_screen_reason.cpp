@@ -1,4 +1,4 @@
-#include "views/whole_screen.h"
+#include "views/whole_screen_reason.h"
 
 #include <array>
 

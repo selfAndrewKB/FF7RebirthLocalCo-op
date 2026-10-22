@@ -3,7 +3,7 @@
 // The cases: nothing known means no reason; each signal alone gives its reason; the pause-menu state
 // wins over the others; the other game states (the field running, a load) give none.
 
-#include "views/whole_screen.h"
+#include "views/whole_screen_reason.h"
 #include "views/whole_screen_rules.h"
 
 #include "expect.h"
@@ -35,6 +35,18 @@ void TestNothingKnown()
     signals.title     = true;
     EXPECT(ReasonOf(signals) == WholeScreenReason::None);
     EXPECT(ReasonOf(Readable()) == WholeScreenReason::None);
+}
+
+void TestSignalsCompare()
+{
+    std::puts("whole screen: the signals compare field by field (the log's change test)");
+    EXPECT(Readable() == Readable());
+    auto changed         = Readable();
+    changed.chadleyState = 2;
+    EXPECT(changed != Readable());
+    changed               = Readable();
+    changed.fieldMinigame = true;
+    EXPECT(changed != Readable());
 }
 
 void TestEachSignal()
@@ -329,6 +341,7 @@ void TestRules()
 int main()
 {
     TestNothingKnown();
+    TestSignalsCompare();
     TestEachSignal();
     TestMenuWidgets();
     TestMinigames();
