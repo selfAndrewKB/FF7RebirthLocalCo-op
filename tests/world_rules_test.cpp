@@ -150,6 +150,14 @@ void TestRepair()
     EXPECT(RepairVerdict(false, false, true, true, 4, 5, false) == Repair::Repair);
     EXPECT(RepairVerdict(false, false, true, true, 5, 5, false) == Repair::GiveUp);
     EXPECT(RepairVerdict(false, false, true, true, 5, 5, true) == Repair::None);
+
+    // The vectors' fourth lanes (+0x0C, +0x2C, +0x3C of the pose) are stack residue: not a camera value.
+    EXPECT(PoseFinite(0));
+    EXPECT(PoseFinite(1u << 15));             // the base point's lane alone (the buggy exit, 2026-10-21)
+    EXPECT(PoseFinite(kPoseLanes));
+    EXPECT(!PoseFinite(1u << 4));             // pitch (the chocobo warp, 2026-10-07)
+    EXPECT(!PoseFinite((1u << 15) | (1u << 4)));
+    EXPECT(!PoseFinite(1u << 16));            // distance
 }
 
 void TestTraversalAndCamera()

@@ -121,7 +121,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.86.1";  // phase-4 play check: a live-object check before a name read
+constexpr const wchar_t* kVersion = L"0.86.2";  // phase-4 play check: the camera repair skips the pose's stack lanes
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;

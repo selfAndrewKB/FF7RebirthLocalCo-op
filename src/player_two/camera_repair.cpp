@@ -37,7 +37,8 @@ constexpr platform::FunctionFact kReset{L"PrimaryPCM_ResetCameraToField", 0x1418
 using ResetFn = void (*)(std::uint8_t force);
 
 // The Field operator (camera manager +0x2CB0) and its modules (§5.1, §6).
-constexpr std::uint32_t kOpPose        = 0x40;  // the pose floats +0x40..+0x98; pitch, yaw, roll at +0x50
+constexpr std::uint32_t kOpPose        = 0x40;  // the pose floats +0x40..+0x98; pitch, yaw, roll at +0x50;
+                                                // three of them are stack residue (world_rules::kPoseLanes)
 constexpr std::uint32_t kOpPoseFloats  = (0x98 - 0x40) / 4;
 constexpr std::uint32_t kOpPitch       = (0x50 - 0x40) / 4;
 constexpr std::uint32_t kOpCurrent     = 0xD1;   // u8: the operator the camera actor is written from
@@ -69,20 +70,20 @@ constexpr unsigned kSettleFrames = 10;
 
 struct Pose
 {
-    bool          read = false, finite = true;
+    bool          read = false, finite = true;  // finite: where it counts (world_rules::PoseFinite)
     float         rotation[3]{};          // pitch, yaw, roll
     float         values[kOpPoseFloats]{};  // the whole block, for naming a non-finite float
-    std::uint32_t nonFinite = 0;          // bit i: values[i] is not finite
+    std::uint32_t nonFinite = 0;          // bit i: values[i] is not finite (the lanes included)
 };
 
 /// What the float at pose offset `4 * i` is (RE-p2-framing.md §1.3: the operator's 0x58-byte camera command).
 const wchar_t* PoseFloatName(std::uint32_t i) noexcept
 {
     constexpr const wchar_t* kNames[kOpPoseFloats] = {
-        L"location x",  L"location y",  L"location z",  L"+0x4C",         L"pitch",        L"yaw",
-        L"roll",        L"FOV",         L"pivot x",      L"pivot y",       L"pivot z",      L"+0x6C",
-        L"base x",      L"base y",      L"base z",       L"+0x7C",         L"distance",     L"aim offset x",
-        L"aim offset y", L"aim offset z", L"+0x90",      L"height"};
+        L"location x",   L"location y",   L"location z",   L"location's lane 4", L"pitch",    L"yaw",
+        L"roll",         L"FOV",          L"pivot x",      L"pivot y",           L"pivot z",  L"pivot's lane 4",
+        L"base x",       L"base y",       L"base z",       L"base's lane 4",     L"distance", L"aim offset x",
+        L"aim offset y", L"aim offset z", L"+0x90",        L"height"};
     return i < kOpPoseFloats ? kNames[i] : L"?";
 }
 
@@ -114,10 +115,10 @@ Pose ReadPose(const void* op) noexcept
     {
         if (!std::isfinite(pose.values[i]))
         {
-            pose.finite = false;
             pose.nonFinite |= 1u << i;
         }
     }
+    pose.finite = world_rules::PoseFinite(pose.nonFinite);
     for (std::uint32_t i = 0; i < 3; ++i)
     {
         pose.rotation[i] = pose.values[kOpPitch + i];
@@ -162,8 +163,9 @@ std::wstring ResetInputs(const void* cameraManager, const void* op)
                        (ReadField<std::uint32_t>(cameraManager, kPcmFlags) & kCameraCutBit) != 0 ? L"set" : L"clear");
 }
 
-/// "pose finite yes (pitch … yaw … roll …)", and when it is not, which floats of the block are not finite and
-/// what they hold: the rotation printed finite while the pose was called non-finite (the 2026-10-21 play check).
+/// "pose finite yes (pitch … yaw … roll …)", and which floats of the block are not finite and what they hold: the
+/// rotation printed finite while the pose was called non-finite (the 2026-10-21 play check: the base point's lane,
+/// stack residue, which is named but does not count).
 std::wstring PoseText(const Pose& pose)
 {
     std::wstring text = std::format(L"pose finite {} (pitch {:.1f} yaw {:.1f} roll {:.1f}",
@@ -172,7 +174,9 @@ std::wstring PoseText(const Pose& pose)
     {
         if ((pose.nonFinite & (1u << i)) != 0)
         {
-            text += std::format(L"; {} at +{:#x} = {}", PoseFloatName(i), kOpPose + 4 * i, pose.values[i]);
+            const bool lane = (world_rules::kPoseLanes & (1u << i)) != 0;
+            text += std::format(L"; {} at +{:#x} = {}{}", PoseFloatName(i), kOpPose + 4 * i, pose.values[i],
+                                lane ? L" (stack residue, not counted)" : L"");
         }
     }
     return text + L")";

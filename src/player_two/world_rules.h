@@ -273,6 +273,20 @@ constexpr Repair RepairVerdict(bool finite, bool following, bool opCurrent, bool
     return gaveUp ? Repair::None : Repair::GiveUp;
 }
 
+/// The pose floats that are no camera value: bit i for the float at pose offset 4 * i (RE-p2-framing.md §1.3). The
+/// location (+0x00), pivot (+0x20) and base point (+0x30) are three floats each, stored with one 16-byte move whose
+/// fourth lane is whatever the stack held (UpdateModules, 1.005 0x140D4FC94); the game reads the three floats back.
+/// A NaN in a lane is no lost camera: the base point's read -nan for a whole join after a buggy exit while the camera
+/// was right, and the game's reset cut the view every half second for nothing (the 2026-10-21 play check).
+constexpr std::uint32_t kPoseLanes = (1u << 3) | (1u << 11) | (1u << 15);
+
+/// Whether a pose is finite where it counts: `nonFinite` (bit i: the float at pose offset 4 * i is not finite)
+/// has no bit outside the lanes.
+constexpr bool PoseFinite(std::uint32_t nonFinite) noexcept
+{
+    return (nonFinite & ~kPoseLanes) == 0;
+}
+
 // ---- traversal_camera: the climb move's exit phases and the ladder exit's wait ----
 
 /// The climb move's exit phases: 3, 6, 10 switch the camera off in the Tick; 11, 12 only ask for the exit blend.

@@ -9,7 +9,8 @@
 // re-arms the Reset module; that module writes a fresh pitch and yaw straight into the pose. The follow warp never
 // calls it, because a follower is no camera's subject.
 //
-// Each engine tick, while player 2 plays a member and their Field operator is current: a pose that is not finite
+// Each engine tick, while player 2 plays a member and their Field operator is current: a pose whose camera values are
+// not finite (the three vectors' fourth lanes are stack residue and do not count; world_rules::kPoseLanes)
 // runs the game's PrimaryPCM_ResetCameraToField(1) inside player 2's primary scope (it resolves the primary camera
 // manager), so it lands on player 2's camera and player 1's is not touched. At most one try per 0.5 s and 5 in a row
 // until the pose is finite again. Each repair is logged with the camera's state before, after one frame and after
