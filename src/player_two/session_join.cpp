@@ -22,6 +22,9 @@
 #include "player_two/view_target.h"
 
 #include <Unreal/CoreUObject/UObject/Class.hpp>
+#include <Unreal/UObjectGlobals.hpp>
+
+#include <vector>
 
 namespace lss::player_two {
 
@@ -34,6 +37,21 @@ std::uint32_t InputModeOf(const void* localPlayer) noexcept
 {
     const void* viewport = ReadPointer(localPlayer, facts::kLocalPlayerViewportClient);
     return viewport == nullptr ? 0 : ReadField<std::uint32_t>(viewport, facts::kViewportInputModeBytes);
+}
+
+/// How many objects of `className` (and subclasses) exist.
+std::size_t CountObjects(const wchar_t* className) noexcept
+{
+    try
+    {
+        std::vector<RC::Unreal::UObject*> objects;
+        RC::Unreal::UObjectGlobals::FindAllOf(className, objects);
+        return objects.size();
+    }
+    catch (...)
+    {
+        return 0;  // only an allocation failure; a count is diagnostic
+    }
 }
 
 void LogStage(const wchar_t* stage, bool installed) noexcept
@@ -65,7 +83,7 @@ struct JoinWitness
 
     static JoinWitness Take(const void* playerOne) noexcept
     {
-        return {players::unreal::CountObjects(STR("HUD")), InputModeOf(playerOne)};
+        return {CountObjects(STR("HUD")), InputModeOf(playerOne)};
     }
 };
 

@@ -1,6 +1,9 @@
 #pragma once
 
-// The engine objects the players module works with, reached through UE4SS reflection.
+// The engine objects the players module works with, reached through UE4SS reflection: guarded calls, the
+// game instance and its local players, a reflected static function, a controller's viewport size, an FName's
+// text. The console is players/console_access.h; the split-screen settings players/split_settings_access.h; the
+// local player's add and remove are in players/local_players.cpp.
 //
 // Reflection finds fields and functions by name at runtime, so these helpers need no hard-coded
 // offsets. Where the mod also depends on a field's offset from outside reflection (the
@@ -44,43 +47,21 @@ bool ActorLocation(const void* actor, float (&out)[3]) noexcept;
 RC::Unreal::TArray<UObject*>* LocalPlayers(UObject* gameInstance) noexcept;
 
 /// The address of a local player's `PlayerController` field, or null if reflection cannot find
-/// it or finds it anywhere other than engine::kLocalPlayerControllerOffset.
+/// it or finds it anywhere other than facts::kLocalPlayerControllerOffset.
 UObject** ControllerField(UObject* localPlayer) noexcept;
 
-/// UGameMapsSettings::TwoPlayerSplitscreenLayout on the class default object (the value the
-/// engine reads every frame), or empty if reflection cannot find it where the engine reads it
-/// (engine::kTwoPlayerSplitscreenLayoutOffset, one byte).
-std::optional<std::uint8_t> ReadTwoPlayerSplitscreenLayout() noexcept;
-
-/// Writes it; false (writing nothing) under the same conditions.
-bool WriteTwoPlayerSplitscreenLayout(std::uint8_t value) noexcept;
-
-/// UGameMapsSettings::ThreePlayerSplitscreenLayout, as the two-player one
-/// (engine::kThreePlayerSplitscreenLayoutOffset): the layout the engine uses with three local players.
-std::optional<std::uint8_t> ReadThreePlayerSplitscreenLayout() noexcept;
-bool WriteThreePlayerSplitscreenLayout(std::uint8_t value) noexcept;
-
-/// The offset of ULocalPlayer::AspectRatioAxisConstraint as reflection reports it, if it is the
-/// one-byte field the engine reads (engine::kAspectRatioAxisConstraintOffset).
-std::optional<std::uint32_t> AspectRatioAxisConstraintOffset() noexcept;
-
-/// UGameplayStatics::CreatePlayer(worldContext, controllerId, bSpawnPlayerController = true): a
-/// local player with its own PlayerController. The login path's camera-manager BeginPlay faults for
-/// a second player unless player_two/own_controller.h is installed and a join scope is open.
-struct CreatedPlayer
+/// A reflected static function (its path "/Script/Engine.<Class>:<Function>") and the class default object of
+/// `classPath` to call it on; empty when either is missing (callers test `function`).
+struct StaticCall
 {
-    bool     called     = false;  // the function was found and the call returned without an exception
-    UObject* controller = nullptr;  // the new player's controller, as the call returned it
+    RC::Unreal::UFunction* function      = nullptr;
+    UObject*               defaultObject = nullptr;
 };
-CreatedPlayer CreatePlayerWithController(UObject* worldContext, std::int32_t controllerId) noexcept;
 
-/// How many objects of `className` (and subclasses) exist.
-std::size_t CountObjects(const wchar_t* className) noexcept;
+inline constexpr const wchar_t* kGameplayStatics     = L"/Script/Engine.GameplayStatics";
+inline constexpr const wchar_t* kKismetSystemLibrary = L"/Script/Engine.KismetSystemLibrary";
 
-/// Calls UGameInstance::RemoveLocalPlayer through the game instance's own vtable, after checking
-/// that the entry holds the function at `removeLocalPlayer` (a live address). Returns false,
-/// calling nothing, if it does not, or if the call raised an exception.
-bool RemoveLocalPlayer(UObject* gameInstance, UObject* localPlayer, std::uintptr_t removeLocalPlayer) noexcept;
+StaticCall FindStatic(const wchar_t* classPath, const wchar_t* functionPath) noexcept;
 
 /// APlayerController::GetViewportSize: the size in pixels of the whole game viewport (every
 /// player's part together), or empty if the function cannot be found or raised an exception.
@@ -90,30 +71,6 @@ struct ViewportSize
     std::int32_t height = 0;
 };
 std::optional<ViewportSize> ViewportSizeOf(UObject* playerController) noexcept;
-
-/// UGameplayStatics::IsSplitscreenForceDisabled: whether the game viewport's stock
-/// bDisableSplitScreenOverride is set (players/single_view.h), or empty if the call failed.
-std::optional<bool> SplitscreenForceDisabled(UObject* worldContext) noexcept;
-
-/// UGameplayStatics::SetForceDisableSplitscreen: sets or clears that switch; the engine lays the
-/// players out again in the same call. False if it could not be called.
-bool SetForceDisableSplitscreen(UObject* worldContext, bool disable) noexcept;
-
-/// UKismetSystemLibrary::GetConsoleVariableIntValue: a console variable's current value, or empty
-/// if the function cannot be found or raised an exception.
-std::optional<std::int32_t> ConsoleVariableInt(const wchar_t* variable) noexcept;
-
-/// UKismetSystemLibrary::GetConsoleVariableFloatValue, as ConsoleVariableInt.
-std::optional<float> ConsoleVariableFloat(const wchar_t* variable) noexcept;
-
-/// "<variable> <value>" through ExecuteConsoleCommand (a players::SettingAccess write). False if the command could
-/// not be run; whether it took is read back by the caller.
-bool SetConsoleVariableInt(const wchar_t* variable, std::int32_t value) noexcept;
-
-/// UKismetSystemLibrary::ExecuteConsoleCommand, through the first player's controller: the same
-/// path as a command typed into the game's console. Returns false if it could not be called; the
-/// engine reports no result, so callers read back what they changed.
-bool ExecuteConsoleCommand(const wchar_t* command) noexcept;
 
 /// An FName's text (8 bytes as the engine stores it: comparison index, then number), truncated to 127
 /// characters. A name read from game memory can index past the name pool, so the lookup runs under

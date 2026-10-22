@@ -14,7 +14,7 @@
 #include "player_two/camera_access.h"
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
-#include "players/unreal_access.h"
+#include "players/split_settings_access.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -243,7 +243,7 @@ void TickFraming(bool playerTwoIn) noexcept
     if (!g_wasIn || now - g_layoutReadAt >= kLayoutReadMs)
     {
         g_layoutReadAt = now;
-        if (const auto layout = players::unreal::ReadTwoPlayerSplitscreenLayout(); layout && *layout <= 1)
+        if (const auto layout = players::split_settings::TwoPlayerLayout(); layout && *layout <= 1)
         {
             g_layout = *layout;
         }

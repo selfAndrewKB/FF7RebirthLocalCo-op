@@ -6,6 +6,7 @@
 #include "player_two/view_target.h"
 #include "players/held_setting.h"
 #include "players/local_players.h"
+#include "players/split_settings_access.h"
 #include "players/unreal_access.h"
 
 #include <optional>
@@ -24,12 +25,12 @@ constexpr const wchar_t* kLayoutName   = L"ThreePlayerSplitscreenLayout";
 // The three-player layout is one fixed field: its held setting's name is for the log only.
 std::optional<std::uint8_t> ReadLayout(const wchar_t*) noexcept
 {
-    return players::unreal::ReadThreePlayerSplitscreenLayout();
+    return players::split_settings::ThreePlayerLayout();
 }
 
 bool WriteLayout(const wchar_t*, std::uint8_t value) noexcept
 {
-    return players::unreal::WriteThreePlayerSplitscreenLayout(value);
+    return players::split_settings::SetThreePlayerLayout(value);
 }
 
 std::optional<players::LocalPlayers> g_players;  // the third seat, once installed (players/local_players.h)
@@ -187,7 +188,7 @@ void Tick(bool playerTwoIn) noexcept
     if (++g_ticks % kStatusTicks == 0 && platform::Enabled(platform::Level::Debug))
     {
         const auto size   = playerOne == nullptr ? std::nullopt : players::unreal::ViewportSizeOf(static_cast<UObject*>(playerOne));
-        const auto layout = players::unreal::ReadThreePlayerSplitscreenLayout();
+        const auto layout = players::split_settings::ThreePlayerLayout();
         platform::LogDebug(L"third view: viewport {}x{}, ThreePlayerSplitscreenLayout {}, the third camera manager views "
                            L"{:#x}, player 1's {:#x}; re-aims {}",
                            size ? size->width : -1, size ? size->height : -1, layout ? static_cast<int>(*layout) : -1,

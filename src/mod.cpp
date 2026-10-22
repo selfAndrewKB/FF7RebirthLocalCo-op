@@ -94,11 +94,13 @@
 #include "player_two/lock_on.h"
 #include "player_two/party_switch.h"
 #include "player_two/widget_owner.h"
+#include "players/console_access.h"
 #include "players/held_setting.h"
 #include "players/join_keys.h"
 #include "players/single_view.h"
 #include "players/split_layout.h"
 #include "players/split_screen_settings.h"
+#include "players/split_settings_access.h"
 #include "players/tracked_object.h"
 #include "players/unreal_access.h"
 #include "renderer/additional_family_output.h"
@@ -182,23 +184,23 @@ RC::Unreal::UObject* PlayerOneWorldContext() noexcept
 
 std::optional<bool> ReadSplitSwitch() noexcept
 {
-    return lss::players::unreal::SplitscreenForceDisabled(PlayerOneWorldContext());
+    return lss::players::split_settings::ForceDisabled(PlayerOneWorldContext());
 }
 
 bool WriteSplitSwitch(bool disabled) noexcept
 {
-    return lss::players::unreal::SetForceDisableSplitscreen(PlayerOneWorldContext(), disabled);
+    return lss::players::split_settings::SetForceDisabled(PlayerOneWorldContext(), disabled);
 }
 
 // The two-player layout is one fixed field: its held setting's name is for the log only.
 std::optional<std::uint8_t> ReadTwoPlayerLayout(const wchar_t*) noexcept
 {
-    return lss::players::unreal::ReadTwoPlayerSplitscreenLayout();
+    return lss::players::split_settings::TwoPlayerLayout();
 }
 
 bool WriteTwoPlayerLayout(const wchar_t*, std::uint8_t value) noexcept
 {
-    return lss::players::unreal::WriteTwoPlayerSplitscreenLayout(value);
+    return lss::players::split_settings::SetTwoPlayerLayout(value);
 }
 
 class LocalSplitScreenMod final : public RC::CppUserModBase
@@ -742,7 +744,7 @@ private:
         auto*      playerOne  = static_cast<RC::Unreal::UObject*>(const_cast<void*>(session_->PlayerOne()));
         auto**     controller = lss::players::unreal::ControllerField(playerOne);
         const auto size   = controller != nullptr ? lss::players::unreal::ViewportSizeOf(*controller) : std::nullopt;
-        const auto layout = lss::players::unreal::ReadTwoPlayerSplitscreenLayout();
+        const auto layout = lss::players::split_settings::TwoPlayerLayout();
         const auto half   = size && layout ? lss::views::HalfOf(size->width, size->height,
                                                                 *layout == static_cast<std::uint8_t>(
                                                                                lss::players::SplitLayoutKind::SideBySide))
@@ -802,7 +804,7 @@ private:
         // The FOV rule's offset, confirmed by reflection before the first split frame uses it.
         if (playerTwo != nullptr)
         {
-            const auto axisOffset = lss::players::unreal::AspectRatioAxisConstraintOffset();
+            const auto axisOffset = lss::players::split_settings::AspectRatioAxisConstraintOffset();
             lss::views::SetAxisConstraintOffset(axisOffset.value_or(0));
             if (!axisOffset)
             {
@@ -892,7 +894,7 @@ private:
     /// One held console setting, for the settings_ array (split_screen_settings.h, by SettingsStep).
     static lss::players::HeldSetting<std::int32_t> ConsoleSettingOf(lss::players::SettingsStep step) noexcept
     {
-        return {{&lss::players::unreal::ConsoleVariableInt, &lss::players::unreal::SetConsoleVariableInt},
+        return {{&lss::players::console::VariableInt, &lss::players::console::SetVariableInt},
                 lss::players::SettingOf(step).name};
     }
 

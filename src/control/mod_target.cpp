@@ -24,6 +24,7 @@
 #include "player_two/pad_sticks.h"
 #include "player_two/scope_leaks.h"
 #include "player_two/session.h"
+#include "players/console_access.h"
 #include "players/single_view.h"
 #include "players/split_layout.h"
 #include "players/unreal_access.h"
@@ -572,8 +573,7 @@ void ModTarget::ReleaseSticks(std::int32_t player)
 Outcome ModTarget::Console(const std::wstring& command)
 {
     platform::Log(L"control: console command '{}'", command);
-    return players::unreal::ExecuteConsoleCommand(command.c_str()) ? Outcome{}
-                                                                    : Failed(L"the console command could not be called");
+    return players::console::Execute(command.c_str()) ? Outcome{} : Failed(L"the console command could not be called");
 }
 
 Outcome ModTarget::Quit()
@@ -583,8 +583,7 @@ Outcome ModTarget::Quit()
         return Failed(L"player 2 is still in ('leave' and 'wait-until out' first)");
     }
     platform::Log(L"control: quitting the game through the engine's quit command");
-    return players::unreal::ExecuteConsoleCommand(L"quit") ? Outcome{}
-                                                            : Failed(L"the quit command could not be called");
+    return players::console::Execute(L"quit") ? Outcome{} : Failed(L"the quit command could not be called");
 }
 
 Outcome ModTarget::Status()

@@ -38,7 +38,7 @@ void RemovePlayerViewPoint() noexcept;
 void SetPlayers(const void* playerOne, const void* playerTwo) noexcept;
 
 /// The offset of ULocalPlayer::AspectRatioAxisConstraint, once reflection has confirmed it
-/// (players/unreal_access.h). Until then the split views fill without changing the FOV rule.
+/// (players/split_settings_access.h). Until then the split views fill without changing the FOV rule.
 void SetAxisConstraintOffset(std::uint32_t offset) noexcept;
 
 /// Switches player 2's half between player 1's camera and player 2's own; returns true when it

@@ -1,0 +1,117 @@
+#include "players/console_access.h"
+
+#include "players/unreal_access.h"
+
+#include <Unreal/Core/Containers/FString.hpp>
+#include <Unreal/UFunction.hpp>
+
+#include <cwchar>
+#include <iterator>
+#include <new>
+
+namespace lss::players::console {
+
+namespace {
+
+using unreal::StaticCall;
+using unreal::UObject;
+
+/// A reflected UKismetSystemLibrary function and the class default object to call it on.
+StaticCall FindKismet(const wchar_t* path) noexcept
+{
+    return unreal::FindStatic(unreal::kKismetSystemLibrary, path);
+}
+
+/// Calls `call` with a zeroed parameter frame in which `text` is placed as an FString at
+/// `stringOffset` and `fill` writes the other inputs; `read` then sees the frame before the
+/// string is released.
+template <class Fill, class Read>
+bool CallWithString(const StaticCall& call, std::int32_t stringOffset, const wchar_t* text, Fill&& fill,
+                    Read&& read) noexcept
+{
+    constexpr std::int32_t kMaxFrame = 64;
+    if (call.defaultObject == nullptr || call.function->GetParmsSize() > kMaxFrame)
+    {
+        return false;
+    }
+    alignas(16) std::uint8_t frame[kMaxFrame]{};
+    auto* string = new (frame + stringOffset) RC::Unreal::FString(text);
+    fill(frame);
+    const bool called = unreal::GuardedProcessEvent(call.defaultObject, call.function, frame);
+    if (called)
+    {
+        read(frame);
+    }
+    string->~FString();
+    return called;
+}
+
+void NoInputs(std::uint8_t*) noexcept {}
+void NoOutputs(const std::uint8_t*) noexcept {}
+
+/// A console variable's value through `getter` (GetConsoleVariable<T>Value): the one shape of the int and float
+/// readers. Empty if the function cannot be found, its frame is not the one expected, or it raised an exception.
+template <class T>
+std::optional<T> Variable(const wchar_t* getter, const wchar_t* variable) noexcept
+{
+    const auto call = FindKismet(getter);
+    if (call.function == nullptr)
+    {
+        return std::nullopt;
+    }
+    const auto name   = unreal::ParamOffset(call.function, STR("VariableName"), sizeof(RC::Unreal::FString));
+    const auto result = unreal::ParamOffset(call.function, STR("ReturnValue"), sizeof(T));
+    if (!name || !result)
+    {
+        return std::nullopt;
+    }
+    std::optional<T> value;
+    CallWithString(call, *name, variable, NoInputs, [&](const std::uint8_t* frame) {
+        value = *reinterpret_cast<const T*>(frame + *result);
+    });
+    return value;
+}
+
+}  // namespace
+
+std::optional<std::int32_t> VariableInt(const wchar_t* variable) noexcept
+{
+    return Variable<std::int32_t>(STR("/Script/Engine.KismetSystemLibrary:GetConsoleVariableIntValue"), variable);
+}
+
+std::optional<float> VariableFloat(const wchar_t* variable) noexcept
+{
+    return Variable<float>(STR("/Script/Engine.KismetSystemLibrary:GetConsoleVariableFloatValue"), variable);
+}
+
+bool SetVariableInt(const wchar_t* variable, std::int32_t value) noexcept
+{
+    wchar_t command[96]{};
+    if (std::swprintf(command, std::size(command), L"%ls %d", variable, value) < 0)
+    {
+        return false;
+    }
+    return Execute(command);
+}
+
+bool Execute(const wchar_t* command) noexcept
+{
+    const auto call  = FindKismet(STR("/Script/Engine.KismetSystemLibrary:ExecuteConsoleCommand"));
+    UObject*   world = unreal::GameInstance();  // the world context; the engine picks player 1's controller
+    if (call.function == nullptr || world == nullptr)
+    {
+        return false;
+    }
+    const auto context = unreal::ParamOffset(call.function, STR("WorldContextObject"), sizeof(UObject*));
+    const auto text    = unreal::ParamOffset(call.function, STR("Command"), sizeof(RC::Unreal::FString));
+    if (!context || !text)
+    {
+        return false;
+    }
+    // SpecificPlayer stays null: the engine then uses player 1's controller, as the console does.
+    return CallWithString(
+        call, *text, command,
+        [&](std::uint8_t* frame) { *reinterpret_cast<UObject**>(frame + *context) = world; }, NoOutputs);
+}
+
+}  // namespace lss::players::console

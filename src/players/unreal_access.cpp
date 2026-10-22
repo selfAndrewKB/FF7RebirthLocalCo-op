@@ -3,7 +3,6 @@
 #include "facts/engine.h"
 #include "platform/guarded.h"
 
-#include <Unreal/Core/Containers/FString.hpp>
 #include <Unreal/CoreUObject/UObject/Class.hpp>
 #include <Unreal/CoreUObject/UObject/UnrealType.hpp>
 #include <Unreal/UFunction.hpp>
@@ -13,10 +12,7 @@
 #include <Unreal/NameTypes.hpp>
 
 #include <algorithm>
-#include <cwchar>
 #include <iterator>
-#include <new>
-#include <vector>
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -42,30 +38,6 @@ bool GuardedProcessEvent(UObject* target, UFunction* function, void* params) noe
     }
 }
 
-namespace {
-
-/// UGameplayStatics::CreatePlayer's parameter frame. Checked against the UFunction's own
-/// parameter size before every call, so a different engine layout is refused, not written.
-struct CreatePlayerParams
-{
-    UObject*     WorldContextObject;
-    std::int32_t ControllerId;
-    bool         bSpawnPlayerController;
-    UObject*     ReturnValue;  // the new player's controller: always null without spawning one
-};
-static_assert(sizeof(CreatePlayerParams) == 24);
-
-/// A reflected static function (its path "/Script/Engine.<Class>:<Function>") and the class default object of
-/// `classPath` to call it on; empty when either is missing (callers test `function`).
-struct StaticCall
-{
-    UFunction* function      = nullptr;
-    UObject*   defaultObject = nullptr;
-};
-
-constexpr const wchar_t* kGameplayStatics     = STR("/Script/Engine.GameplayStatics");
-constexpr const wchar_t* kKismetSystemLibrary = STR("/Script/Engine.KismetSystemLibrary");
-
 StaticCall FindStatic(const wchar_t* classPath, const wchar_t* functionPath) noexcept
 {
     auto*    function = UObjectGlobals::StaticFindObject<UFunction*>(nullptr, nullptr, functionPath);
@@ -73,36 +45,6 @@ StaticCall FindStatic(const wchar_t* classPath, const wchar_t* functionPath) noe
     UObject* object   = owner == nullptr ? nullptr : owner->GetClassDefaultObject();
     return function == nullptr || object == nullptr ? StaticCall{} : StaticCall{function, object};
 }
-
-using RemoveLocalPlayerFn = bool (*)(UObject* gameInstance, UObject* localPlayer);
-
-// The two engine calls run inside structured-exception guards, so a fault inside the engine is
-// reported as a failed call rather than ending the game. FF7R is known to raise one on a
-// CreatePlayer path (the login fault that bSpawnPlayerController = true triggers).
-//
-// The trade-off: a fault part-way through leaves the engine half-changed. That is why every
-// caller checks the engine's own list afterwards instead of trusting the call. A stack overflow
-// is never caught: the stack is unusable until the guard page is re-armed, so continuing would
-// only fault again somewhere less diagnosable.
-//
-// (platform/guarded.h has the rules for these guards.)
-
-using platform::GuardFilter;
-
-bool GuardedRemove(RemoveLocalPlayerFn remove, UObject* gameInstance, UObject* localPlayer) noexcept
-{
-    __try
-    {
-        remove(gameInstance, localPlayer);  // its bool result is always true, so it is not read
-        return true;
-    }
-    __except (GuardFilter(GetExceptionCode()))
-    {
-        return false;
-    }
-}
-
-}  // namespace
 
 UObject* GameInstance() noexcept
 {
@@ -196,123 +138,6 @@ UObject** ControllerField(UObject* localPlayer) noexcept
     return field != nullptr && offset == facts::kLocalPlayerControllerOffset ? field : nullptr;
 }
 
-namespace {
-
-UObject* ClassDefaultObject(const wchar_t* classPath) noexcept
-{
-    auto* type = UObjectGlobals::StaticFindObject<UClass*>(nullptr, nullptr, classPath);
-    return type == nullptr ? nullptr : type->GetClassDefaultObject();
-}
-
-/// The offset of `object`'s property `name`, if reflection finds it as one byte at `expected`.
-std::optional<std::uint32_t> ByteOffset(UObject* object, const wchar_t* name, std::uint32_t expected) noexcept
-{
-    if (object == nullptr)
-    {
-        return std::nullopt;
-    }
-    auto* property = object->GetPropertyByNameInChain(name);
-    if (property == nullptr || property->GetSize() != 1 ||
-        property->GetOffset_Internal() != static_cast<std::int32_t>(expected))
-    {
-        return std::nullopt;
-    }
-    return expected;
-}
-
-std::uint8_t* TwoPlayerSplitscreenLayoutField() noexcept
-{
-    UObject*   settings = ClassDefaultObject(STR("/Script/EngineSettings.GameMapsSettings"));
-    const auto offset   = ByteOffset(settings, STR("TwoPlayerSplitscreenLayout"),
-                                     facts::kTwoPlayerSplitscreenLayoutOffset);
-    return offset ? reinterpret_cast<std::uint8_t*>(settings) + *offset : nullptr;
-}
-
-}  // namespace
-
-std::optional<std::uint8_t> ReadTwoPlayerSplitscreenLayout() noexcept
-{
-    const auto* field = TwoPlayerSplitscreenLayoutField();
-    return field == nullptr ? std::nullopt : std::optional<std::uint8_t>(*field);
-}
-
-bool WriteTwoPlayerSplitscreenLayout(std::uint8_t value) noexcept
-{
-    auto* field = TwoPlayerSplitscreenLayoutField();
-    if (field == nullptr)
-    {
-        return false;
-    }
-    *field = value;  // game thread; the engine reads it on the same thread, in the next redraw
-    return true;
-}
-
-namespace {
-
-std::uint8_t* ThreePlayerSplitscreenLayoutField() noexcept
-{
-    UObject*   settings = ClassDefaultObject(STR("/Script/EngineSettings.GameMapsSettings"));
-    const auto offset   = ByteOffset(settings, STR("ThreePlayerSplitscreenLayout"),
-                                     facts::kThreePlayerSplitscreenLayoutOffset);
-    return offset ? reinterpret_cast<std::uint8_t*>(settings) + *offset : nullptr;
-}
-
-}  // namespace
-
-std::optional<std::uint8_t> ReadThreePlayerSplitscreenLayout() noexcept
-{
-    const auto* field = ThreePlayerSplitscreenLayoutField();
-    return field == nullptr ? std::nullopt : std::optional<std::uint8_t>(*field);
-}
-
-bool WriteThreePlayerSplitscreenLayout(std::uint8_t value) noexcept
-{
-    auto* field = ThreePlayerSplitscreenLayoutField();
-    if (field == nullptr)
-    {
-        return false;
-    }
-    *field = value;  // game thread, as the two-player one
-    return true;
-}
-
-std::optional<std::uint32_t> AspectRatioAxisConstraintOffset() noexcept
-{
-    return ByteOffset(ClassDefaultObject(STR("/Script/Engine.LocalPlayer")), STR("AspectRatioAxisConstraint"),
-                      facts::kAspectRatioAxisConstraintOffset);
-}
-
-CreatedPlayer CreatePlayerWithController(UObject* worldContext, std::int32_t controllerId) noexcept
-{
-    const StaticCall call = FindStatic(kGameplayStatics, STR("/Script/Engine.GameplayStatics:CreatePlayer"));
-    if (call.function == nullptr || worldContext == nullptr ||
-        call.function->GetParmsSize() != sizeof(CreatePlayerParams))
-    {
-        return {};
-    }
-
-    CreatePlayerParams params{};
-    params.WorldContextObject     = worldContext;
-    params.ControllerId           = controllerId;
-    params.bSpawnPlayerController = true;
-    const bool called             = GuardedProcessEvent(call.defaultObject, call.function, &params);
-    return {called, called ? params.ReturnValue : nullptr};
-}
-
-std::size_t CountObjects(const wchar_t* className) noexcept
-{
-    try
-    {
-        std::vector<UObject*> objects;
-        UObjectGlobals::FindAllOf(className, objects);
-        return objects.size();
-    }
-    catch (...)
-    {
-        return 0;  // only an allocation failure; a count is diagnostic
-    }
-}
-
 std::optional<std::int32_t> ParamOffset(UFunction* function, const wchar_t* name, std::int32_t size) noexcept
 {
     auto* property = function->FindProperty(RC::Unreal::FName(name, RC::Unreal::FNAME_Find));
@@ -326,113 +151,6 @@ std::optional<std::int32_t> ParamOffset(UFunction* function, const wchar_t* name
         return std::nullopt;
     }
     return offset;
-}
-
-namespace {
-
-/// A reflected UKismetSystemLibrary function and the class default object to call it on.
-StaticCall FindKismet(const wchar_t* path) noexcept
-{
-    return FindStatic(kKismetSystemLibrary, path);
-}
-
-/// Calls `call` with a zeroed parameter frame in which `text` is placed as an FString at
-/// `stringOffset` and `fill` writes the other inputs; `read` then sees the frame before the
-/// string is released.
-template <class Fill, class Read>
-bool CallWithString(const StaticCall& call, std::int32_t stringOffset, const wchar_t* text, Fill&& fill,
-                    Read&& read) noexcept
-{
-    constexpr std::int32_t kMaxFrame = 64;
-    if (call.defaultObject == nullptr || call.function->GetParmsSize() > kMaxFrame)
-    {
-        return false;
-    }
-    alignas(16) std::uint8_t frame[kMaxFrame]{};
-    auto* string = new (frame + stringOffset) RC::Unreal::FString(text);
-    fill(frame);
-    const bool called = GuardedProcessEvent(call.defaultObject, call.function, frame);
-    if (called)
-    {
-        read(frame);
-    }
-    string->~FString();
-    return called;
-}
-
-void NoInputs(std::uint8_t*) noexcept {}
-void NoOutputs(const std::uint8_t*) noexcept {}
-
-}  // namespace
-
-std::optional<std::int32_t> ConsoleVariableInt(const wchar_t* variable) noexcept
-{
-    const auto call = FindKismet(STR("/Script/Engine.KismetSystemLibrary:GetConsoleVariableIntValue"));
-    if (call.function == nullptr)
-    {
-        return std::nullopt;
-    }
-    const auto name   = ParamOffset(call.function, STR("VariableName"), sizeof(RC::Unreal::FString));
-    const auto result = ParamOffset(call.function, STR("ReturnValue"), sizeof(std::int32_t));
-    if (!name || !result)
-    {
-        return std::nullopt;
-    }
-    std::optional<std::int32_t> value;
-    CallWithString(call, *name, variable, NoInputs, [&](const std::uint8_t* frame) {
-        value = *reinterpret_cast<const std::int32_t*>(frame + *result);
-    });
-    return value;
-}
-
-std::optional<float> ConsoleVariableFloat(const wchar_t* variable) noexcept
-{
-    const auto call = FindKismet(STR("/Script/Engine.KismetSystemLibrary:GetConsoleVariableFloatValue"));
-    if (call.function == nullptr)
-    {
-        return std::nullopt;
-    }
-    const auto name   = ParamOffset(call.function, STR("VariableName"), sizeof(RC::Unreal::FString));
-    const auto result = ParamOffset(call.function, STR("ReturnValue"), sizeof(float));
-    if (!name || !result)
-    {
-        return std::nullopt;
-    }
-    std::optional<float> value;
-    CallWithString(call, *name, variable, NoInputs, [&](const std::uint8_t* frame) {
-        value = *reinterpret_cast<const float*>(frame + *result);
-    });
-    return value;
-}
-
-bool SetConsoleVariableInt(const wchar_t* variable, std::int32_t value) noexcept
-{
-    wchar_t command[96]{};
-    if (std::swprintf(command, std::size(command), L"%ls %d", variable, value) < 0)
-    {
-        return false;
-    }
-    return ExecuteConsoleCommand(command);
-}
-
-bool ExecuteConsoleCommand(const wchar_t* command) noexcept
-{
-    const auto call = FindKismet(STR("/Script/Engine.KismetSystemLibrary:ExecuteConsoleCommand"));
-    UObject*   world = GameInstance();  // the world context; the engine picks player 1's controller
-    if (call.function == nullptr || world == nullptr)
-    {
-        return false;
-    }
-    const auto context = ParamOffset(call.function, STR("WorldContextObject"), sizeof(UObject*));
-    const auto text    = ParamOffset(call.function, STR("Command"), sizeof(RC::Unreal::FString));
-    if (!context || !text)
-    {
-        return false;
-    }
-    // SpecificPlayer stays null: the engine then uses player 1's controller, as the console does.
-    return CallWithString(
-        call, *text, command,
-        [&](std::uint8_t* frame) { *reinterpret_cast<UObject**>(frame + *context) = world; }, NoOutputs);
 }
 
 std::optional<ViewportSize> ViewportSizeOf(UObject* playerController) noexcept
@@ -457,82 +175,6 @@ std::optional<ViewportSize> ViewportSizeOf(UObject* playerController) noexcept
     }
     return ViewportSize{*reinterpret_cast<const std::int32_t*>(frame + *sizeX),
                         *reinterpret_cast<const std::int32_t*>(frame + *sizeY)};
-}
-
-namespace {
-
-/// A reflected UGameplayStatics function and its class default object, if its world-context
-/// parameter and `name` (of `size` bytes) sit where they fit in a frame of at most kMaxFrame bytes.
-struct StaticsCall : StaticCall
-{
-    static constexpr std::int32_t kMaxFrame = 16;
-
-    std::int32_t context = -1;
-    std::int32_t value   = -1;
-};
-
-StaticsCall FindStatics(const wchar_t* path, const wchar_t* name, std::int32_t size) noexcept
-{
-    const StaticCall call = FindStatic(kGameplayStatics, path);
-    if (call.function == nullptr || call.function->GetParmsSize() > StaticsCall::kMaxFrame)
-    {
-        return {};
-    }
-    const auto context = ParamOffset(call.function, STR("WorldContextObject"), sizeof(UObject*));
-    const auto value   = ParamOffset(call.function, name, size);
-    if (!context || !value)
-    {
-        return {};
-    }
-    return {call, *context, *value};
-}
-
-}  // namespace
-
-std::optional<bool> SplitscreenForceDisabled(UObject* worldContext) noexcept
-{
-    const auto call = FindStatics(STR("/Script/Engine.GameplayStatics:IsSplitscreenForceDisabled"), STR("ReturnValue"), 1);
-    if (call.function == nullptr || worldContext == nullptr)
-    {
-        return std::nullopt;
-    }
-    alignas(16) std::uint8_t frame[StaticsCall::kMaxFrame]{};
-    *reinterpret_cast<UObject**>(frame + call.context) = worldContext;
-    if (!GuardedProcessEvent(call.defaultObject, call.function, frame))
-    {
-        return std::nullopt;
-    }
-    return frame[call.value] != 0;
-}
-
-bool SetForceDisableSplitscreen(UObject* worldContext, bool disable) noexcept
-{
-    const auto call = FindStatics(STR("/Script/Engine.GameplayStatics:SetForceDisableSplitscreen"), STR("bDisable"), 1);
-    if (call.function == nullptr || worldContext == nullptr)
-    {
-        return false;
-    }
-    alignas(16) std::uint8_t frame[StaticsCall::kMaxFrame]{};
-    *reinterpret_cast<UObject**>(frame + call.context) = worldContext;
-    frame[call.value] = disable ? 1 : 0;
-    return GuardedProcessEvent(call.defaultObject, call.function, frame);
-}
-
-bool RemoveLocalPlayer(UObject* gameInstance, UObject* localPlayer, std::uintptr_t removeLocalPlayer) noexcept
-{
-    if (gameInstance == nullptr || localPlayer == nullptr)
-    {
-        return false;
-    }
-    // The game instance's class decides which vtable is used; RE found no class overriding this
-    // entry, and this check makes that a precondition rather than an assumption.
-    const auto vtable = *reinterpret_cast<const std::uintptr_t* const*>(gameInstance);
-    const auto entry  = vtable[facts::kRemoveLocalPlayerVTableOffset / sizeof(std::uintptr_t)];
-    if (entry != removeLocalPlayer)
-    {
-        return false;
-    }
-    return GuardedRemove(reinterpret_cast<RemoveLocalPlayerFn>(entry), gameInstance, localPlayer);
 }
 
 namespace {

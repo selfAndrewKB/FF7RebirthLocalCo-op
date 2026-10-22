@@ -5,7 +5,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
-#include "players/unreal_access.h"
+#include "players/console_access.h"
 #include "views/player_view_point.h"
 #include "views/stream_view_math.h"
 #include "views/whole_screen.h"
@@ -120,7 +120,7 @@ void UpdateStreamViews(bool splitShown) noexcept
         g_loggedMode = wanted ? g_mode : StreamViewsMode::Off;
         g_loggedFov  = g_playerOneFov;
         // The mod never writes the margin (kMainPassScale 0), so this is the game's own value at every line.
-        const auto   margin = players::unreal::ConsoleVariableFloat(kMainPassMarginVariable);
+        const auto   margin = players::console::VariableFloat(kMainPassMarginVariable);
         std::wstring marginText;
         try
         {

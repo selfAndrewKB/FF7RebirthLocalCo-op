@@ -171,11 +171,13 @@ add_library(LocalSplitScreen SHARED
     src/player_two/view_target.cpp
     src/player_two/widget_owner.cpp
 
+    src/players/console_access.cpp
     src/players/held_setting.cpp
     src/players/join_keys.cpp
     src/players/local_players.cpp
     src/players/single_view.cpp
     src/players/split_layout.cpp
+    src/players/split_settings_access.cpp
     src/players/unreal_access.cpp
 
     src/renderer/additional_family_output.cpp
