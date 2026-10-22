@@ -8,6 +8,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "player_two/generation.h"
+#include "player_two/location_volumes.h"
 #include "player_two/object_fields.h"
 #include "player_two/primary_controller.h"
 #include "players/unreal_access.h"
@@ -35,7 +36,7 @@ constexpr std::uint8_t   kCreateNavAreaBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 
 constexpr platform::FunctionFact kCreateNavArea{L"PartyManager_SetPrimaryPC_CreateNavAreaComp", 0x143D00E00,
                                                 kCreateNavAreaBytes};
 constexpr std::uint32_t  kControllerNavArea  = 0x590;
-constexpr std::uint32_t  kNavAreaController  = 0xB0;
+using location_volumes::kNavAreaController;
 
 // §4.3.3: LocMoveTypeListener_Vt40_SetPrimaryPCLayer7(listener, LocationId, move, dash, enter) writes the primary
 // controller's layer 7 (+0x897 move, +0x8AB dash): {move, dash} on enter, {6, 0} on leave; nothing for LocationId 0.
@@ -48,24 +49,15 @@ constexpr std::uintptr_t kMoveTypeListener = 0x14939BCE8;
 constexpr std::uint32_t  kControllerLayer7Move = 0x890 + 7;
 constexpr std::uint32_t  kControllerLayer7Dash = 0x8A4 + 7;
 
-// §4.3.1: the location manager (a pointer), its volume array, lock, pause byte and move-type stack; each
-// AEndLocationVolume's fields; and the game's containment test LocationVolume_ContainsPoint(volume, &position, margin).
-using facts::kLocationVolumeManager;
-constexpr std::uint32_t  kManagerVolumes     = 0x08;
-constexpr std::uint32_t  kManagerVolumeCount = 0x10;
-constexpr std::uint32_t  kManagerStack       = 0xF8;   // {int32 refcount; u8 move; u8 dash; pad} entries
-constexpr std::uint32_t  kManagerStackCount  = 0x100;
-constexpr std::uint32_t  kManagerPaused      = 0x128;  // byte: the game's update does nothing while set
-constexpr std::uint32_t  kManagerLock        = 0x188;
-constexpr std::uint32_t  kVolumeLocationId   = 0x270;
-constexpr std::uint32_t  kVolumeUntouchMargin = 0x278;
-constexpr std::uint32_t  kVolumeFlags        = 0x280;
-constexpr std::uint32_t  kVolumeMoveType     = 0x2E9;  // EEndSpecificMoveType
-constexpr std::uint32_t  kVolumeDashType     = 0x2EA;  // EEndDashType
-constexpr std::uint32_t  kVolumeForcedOut    = 0x308;  // bool: never entered by position; a forced volume leaves
-constexpr std::uint32_t  kFlagDisabled = 0x1, kFlagForce = 0x2, kFlagChangeMovementType = 0x8000;
-constexpr std::int32_t   kMaxVolumes   = 4096;
-using facts::kLocationVolumeContainsPoint;
+// §4.3.1: the location manager's volumes, lock, pause byte and move-type stack, each volume's fields and the game's
+// containment test: player_two/location_volumes.h.
+using location_volumes::kFlagChangeMovementType;
+using location_volumes::kFlagDisabled;
+using location_volumes::kFlagForce;
+using location_volumes::kVolumeDashType;
+using location_volumes::kVolumeForcedOut;
+using location_volumes::kVolumeMoveType;
+using location_volumes::kVolumeUntouchMargin;
 
 constexpr int       kMaxInside  = 32;   // move-type volumes player 2 stands in at once (a handful in practice)
 constexpr ULONGLONG kRetryMs    = 250;  // a write the game's gate declined is tried again this often
@@ -74,14 +66,11 @@ constexpr ULONGLONG kStateMs    = 1000;
 using CreateNavAreaFn = void (*)(void* partyManager, void* controller);
 using SetLayer7Fn     = void (*)(void* listener, std::uint64_t location, std::uint8_t move, std::uint8_t dash,
                              std::uint8_t enter);
-using ContainsFn      = bool (*)(const void* volume, const float* position, float margin);
 
 CreateNavAreaFn g_createNavArea = nullptr;
 SetLayer7Fn     g_setLayer7     = nullptr;
-ContainsFn      g_contains      = nullptr;
 std::uintptr_t  g_partyManager  = 0;  // addresses of the globals holding the pointers
 std::uintptr_t  g_listener      = 0;
-std::uintptr_t  g_manager       = 0;
 
 /// {SpecificMoveType, DashType}; {6 Empty, 0 Enable} is no limit.
 struct Pair
@@ -197,108 +186,94 @@ struct Changes
     Pair   managerTop = kNoLimit;  // the game's own (player 1's) top, for the log
 };
 
+/// The move-type enter/leave over the walk's volumes (the game's rules: bForce and bDisabled honoured).
+struct Pass
+{
+    const float* position;
+    Changes*     changes;
+    bool         seen[kMaxInside] = {};
+};
+
+void Visit(void* context, const location_volumes::Volume& volume) noexcept
+{
+    auto* pass = static_cast<Pass*>(context);
+    if ((volume.flags & kFlagChangeMovementType) == 0 || volume.location == 0)
+    {
+        return;
+    }
+    const std::uint64_t location = volume.location;
+    g_state.gateLocation         = g_state.gateLocation != 0 ? g_state.gateLocation : location;
+    int current = -1;  // matched by LocationId as well as address: a streamed-in volume may reuse an address
+    for (int k = 0; k < g_state.insideCount; ++k)
+    {
+        if (g_state.inside[k].volume == volume.volume && g_state.inside[k].location == location)
+        {
+            current       = k;
+            pass->seen[k] = true;
+            break;
+        }
+    }
+    if ((volume.flags & kFlagDisabled) != 0)
+    {
+        return;  // the game's rule: no enter, no leave, the state kept
+    }
+    bool in = false;
+    if ((volume.flags & kFlagForce) != 0)
+    {
+        std::uint8_t forcedOut = 0;
+        if (!Read(volume.volume, kVolumeForcedOut, forcedOut))
+        {
+            return;
+        }
+        in = world_rules::ForcedInside(current >= 0, forcedOut);
+    }
+    else
+    {
+        float margin = 0.0f;
+        const float (&position)[3] = *reinterpret_cast<const float (*)[3]>(pass->position);
+        if ((current >= 0 && !Read(volume.volume, kVolumeUntouchMargin, margin)) ||
+            !location_volumes::Contains(volume.volume, position, current >= 0 ? margin : 0.0f, in))
+        {
+            return;  // unreadable: this volume's state is kept this tick
+        }
+    }
+    Changes& changes = *pass->changes;
+    if (current >= 0 && !in)
+    {
+        changes.leave[current] = true;
+        g_state.gateLocation   = location;
+    }
+    else if (current < 0 && in)
+    {
+        Inside here{volume.volume, location};
+        if (!Read(volume.volume, kVolumeMoveType, here.pair.move) ||
+            !Read(volume.volume, kVolumeDashType, here.pair.dash))
+        {
+            return;
+        }
+        if (changes.enterCount < kMaxInside)
+        {
+            changes.enter[changes.enterCount++] = here;
+            g_state.gateLocation                = location;
+        }
+    }
+}
+
 bool Walk(const float (&position)[3], Changes& changes) noexcept
 {
-    void* manager = ReadPointerAt(g_manager);
-    if (manager == nullptr)
+    Pass                    pass{&position[0], &changes};
+    location_volumes::Reads reads;
+    if (location_volumes::WalkVolumes(true, &Visit, &pass, reads) != location_volumes::WalkResult::Done)
     {
-        return false;
+        return false;  // busy, paused or unreadable: nothing changes this tick
     }
-    auto* lock    = reinterpret_cast<CRITICAL_SECTION*>(static_cast<std::byte*>(manager) + kManagerLock);
-    BOOL  entered = FALSE;
-    if (!platform::CallGuarded(&TryEnterCriticalSection, entered, lock) || !entered)
+    if (reads.hasTop)
     {
-        return false;
-    }
-    std::uint8_t paused  = 0;
-    void* const* volumes = nullptr;
-    std::int32_t count   = 0;
-    bool readable = Read(manager, kManagerPaused, paused) && paused == 0 && Read(manager, kManagerVolumes, volumes) &&
-                    Read(manager, kManagerVolumeCount, count) && count >= 0 && count <= kMaxVolumes &&
-                    (count == 0 || volumes != nullptr);
-    bool seen[kMaxInside] = {};
-    for (std::int32_t i = 0; readable && i < count; ++i)
-    {
-        const void*   volume   = nullptr;
-        std::uint32_t flags    = 0;
-        std::uint64_t location = 0;
-        if (!platform::CopyGuarded(&volume, volumes + i, sizeof(volume)) || volume == nullptr ||
-            !Read(volume, kVolumeFlags, flags) || (flags & kFlagChangeMovementType) == 0 ||
-            !Read(volume, kVolumeLocationId, location) || location == 0)
-        {
-            continue;
-        }
-        g_state.gateLocation = g_state.gateLocation != 0 ? g_state.gateLocation : location;
-        int current = -1;  // matched by LocationId as well as address: a streamed-in volume may reuse an address
-        for (int k = 0; k < g_state.insideCount; ++k)
-        {
-            if (g_state.inside[k].volume == volume && g_state.inside[k].location == location)
-            {
-                current = k;
-                seen[k] = true;
-                break;
-            }
-        }
-        if ((flags & kFlagDisabled) != 0)
-        {
-            continue;  // the game's rule: no enter, no leave, the state kept
-        }
-        bool in = false;
-        if ((flags & kFlagForce) != 0)
-        {
-            std::uint8_t forcedOut = 0;
-            if (!Read(volume, kVolumeForcedOut, forcedOut))
-            {
-                continue;
-            }
-            in = world_rules::ForcedInside(current >= 0, forcedOut);
-        }
-        else
-        {
-            float margin = 0.0f;
-            if ((current >= 0 && !Read(volume, kVolumeUntouchMargin, margin)) ||
-                !platform::CallGuarded(g_contains, in, volume, &position[0], current >= 0 ? margin : 0.0f))
-            {
-                continue;  // unreadable: this volume's state is kept this tick
-            }
-        }
-        if (current >= 0 && !in)
-        {
-            changes.leave[current] = true;
-            g_state.gateLocation   = location;
-        }
-        else if (current < 0 && in)
-        {
-            Inside here{volume, location};
-            if (!Read(volume, kVolumeMoveType, here.pair.move) || !Read(volume, kVolumeDashType, here.pair.dash))
-            {
-                continue;
-            }
-            if (changes.enterCount < kMaxInside)
-            {
-                changes.enter[changes.enterCount++] = here;
-                g_state.gateLocation                = location;
-            }
-        }
-    }
-    std::int32_t stackCount = 0;
-    const std::byte* stack  = nullptr;
-    if (readable && Read(manager, kManagerStackCount, stackCount) && stackCount > 0 && Read(manager, kManagerStack, stack))
-    {
-        Read(stack, 4, changes.managerTop.move);
-        Read(stack, 5, changes.managerTop.dash);
-    }
-    if (!platform::CallGuarded(&LeaveCriticalSection, lock))
-    {
-        readable = false;
-    }
-    if (!readable)
-    {
-        return false;
+        changes.managerTop = {reads.topMove, reads.topDash};
     }
     for (int k = 0; k < g_state.insideCount; ++k)
     {
-        changes.leave[k] = changes.leave[k] || !seen[k];  // gone from the list (streamed out): a leave
+        changes.leave[k] = changes.leave[k] || !pass.seen[k];  // gone from the list (streamed out): a leave
     }
     return true;
 }
@@ -399,19 +374,16 @@ bool Install(const platform::GameImage& image) noexcept
     const auto party    = image.Rebase(facts::kPartyManagerGlobal, sizeof(void*));
     const auto set      = platform::FindFunction(image, kSetLayer7);
     const auto listener = image.Rebase(kMoveTypeListener, sizeof(void*));
-    const auto manager  = image.Rebase(kLocationVolumeManager, sizeof(void*));
-    const auto contains = platform::FindFunction(image, kLocationVolumeContainsPoint);
+    const bool volumes  = location_volumes::Install(image);
     if (create && party && primary_controller::Installed())
     {
         g_createNavArea = reinterpret_cast<CreateNavAreaFn>(*create);
         g_partyManager  = *party;
     }
-    if (set && listener && manager && contains && primary_controller::Installed())
+    if (set && listener && volumes && primary_controller::Installed())
     {
         g_setLayer7 = reinterpret_cast<SetLayer7Fn>(*set);
         g_listener  = *listener;
-        g_manager   = *manager;
-        g_contains  = reinterpret_cast<ContainsFn>(*contains);
     }
     platform::Log(L"walk limits: player 2's nav-area component by the game's creation {}; player 2's location walk "
                   L"limit from player 2's own position {}",

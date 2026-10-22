@@ -95,6 +95,7 @@ add_library(LocalSplitScreen SHARED
     src/player_two/trigger_two.cpp
     src/player_two/vault_camera.cpp
     src/player_two/location_rows.cpp
+    src/player_two/location_volumes.cpp
     src/player_two/shoulder_scale.cpp
     src/player_two/walk_limits.cpp
     src/player_two/field_pickup.cpp
