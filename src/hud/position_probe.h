@@ -7,7 +7,7 @@
 // is redirected here (platform/call_redirect.h) to log, with the probe on, each widget's class,
 // the position and DPI flag it asked for, and its viewport-slot anchors, offsets and alignment.
 // It changes nothing: the call goes through exactly as it came. A dev tool, installed on the first `hud-probe on`
-// (control/mod_commands.cpp), not at every dev start.
+// (RegisterPositionProbeCommands), not at every dev start.
 
 namespace lss::platform {
 class GameImage;
@@ -21,5 +21,8 @@ bool PositionProbeInstalled() noexcept;
 
 /// The `hud-probe` switch (off at start). Each widget's new position is logged once.
 void SetPositionProbe(bool on) noexcept;
+
+/// The `hud-probe` command and reading; the command installs the probe on its first `on`. May throw (out of memory).
+void RegisterPositionProbeCommands();
 
 }  // namespace lss::hud

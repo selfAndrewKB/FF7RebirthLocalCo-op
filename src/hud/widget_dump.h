@@ -16,7 +16,7 @@ namespace lss::hud {
 /// functions cannot be found).
 int DumpWidgets() noexcept;
 
-/// `dump slots <Class>`: for each live UUserWidget of that class, walks its WidgetTree (RootWidget,
+/// `dump-slots <Class>`: for each live UUserWidget of that class, walks its WidgetTree (RootWidget,
 /// then panels' Slots, nested user widgets' trees, a few levels deep) through reflection and logs
 /// every panel slot: its class, its content, and for canvas slots the LayoutData (offsets,
 /// anchors, alignment) and bAutoSize. Returns the number of slots logged, negative on failure.
@@ -35,5 +35,8 @@ int DumpSlots(const std::wstring& className) noexcept;
 ///     holder's widget, the setup flags) and the stock per-player layer geometry each local player would get.
 /// Returns the number of lines logged, negative on failure.
 int DumpHudPlayers(const platform::GameImage& image) noexcept;
+
+/// The `dump` and `dump-slots` commands. May throw (out of memory).
+void RegisterDumpCommands();
 
 }  // namespace lss::hud

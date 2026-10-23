@@ -1,7 +1,9 @@
 #include "hud/hud_trace.h"
 
+#include "hud/passes/root_overlay_render.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
+#include "platform/command_registry.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
@@ -304,6 +306,36 @@ void StartHudTrace(std::int32_t frames) noexcept
     g_frame = {};
     g_framesLeft.store(frames < 1 ? 1 : frames > kMaxHudTraceFrames ? kMaxHudTraceFrames : frames, std::memory_order_relaxed);
     platform::Log(L"hud trace: logging {} frame(s)", g_framesLeft.load(std::memory_order_relaxed));
+}
+
+void RegisterHudTraceCommands()
+{
+    using control::Outcome;
+    using control::Value;
+    control::Register({.name  = L"hud-trace",
+                       .shape = control::Shape::Integer,
+                       .min   = 1,
+                       .max   = kMaxHudTraceFrames,
+                       .help  = L"log the order of the HUD's tick, marker placements, icon projections and render for "
+                                L"a number of frames, and which player each placement and projection used",
+                       .set   = [](const Value& v) {
+                           if (!RootOverlayRenderInstalled())
+                           {
+                               return Outcome{false, L"the overlay render hook is not installed (see the startup log)"};
+                           }
+                           // Installed by the first trace, not at every dev start (seven call redirects on the HUD's
+                           // hot path).
+                           if (!HudTraceInstalled())
+                           {
+                               const auto image = platform::GameImage::Locate();
+                               if (!image || !InstallHudTrace(*image))
+                               {
+                                   return Outcome{false, L"the HUD trace could not be installed (see the log)"};
+                               }
+                           }
+                           StartHudTrace(static_cast<std::int32_t>(std::get<std::int64_t>(v)));
+                           return Outcome{true, L"tracing (one log line per frame)"};
+                       }});
 }
 
 }  // namespace lss::hud

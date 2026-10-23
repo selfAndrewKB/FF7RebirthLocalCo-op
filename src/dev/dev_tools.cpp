@@ -35,7 +35,7 @@ control::CommandChannel            g_channel;
 
 void Install(const platform::GameImage& image, player_two::Session& session) noexcept
 {
-    // The HUD trace and the position probe are installed by their first command (control/mod_commands.cpp), not here:
+    // The HUD trace and the position probe are installed by their first command, not here:
     // their call redirects sit on the HUD's hot path and nearly every dev start never asks for them.
     // The watches: each reads and logs, changes nothing, and reports its own install (its header says what it reads).
     player_two::rumble_watch::Install(image);    // each controller's rumble, pad by pad

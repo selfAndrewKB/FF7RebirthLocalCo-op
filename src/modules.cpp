@@ -83,6 +83,9 @@
 
 #if LSS_DEV
 #include "control/mod_commands.h"
+#include "hud/hud_trace.h"
+#include "hud/position_probe.h"
+#include "hud/widget_dump.h"
 #include "platform/command_registry.h"
 #include "platform/frame_watch.h"
 #include "platform/log.h"
@@ -589,8 +592,16 @@ void RegisterCommands(player_two::Session& session, players::SplitLayout& layout
         player_two::RegisterCommands(session);
         views::RegisterViewPointCommands();
         views::RegisterStreamCommands();
+        hud::RegisterOverlayLayoutCommands();
+        hud::RegisterSecondImageCommands();
+        hud::RegisterPlayerTwoPassCommands();
+        hud::area_icons_two::RegisterCommands();
+        hud::RegisterMinimapOnceCommands();
+        hud::RegisterHudTraceCommands();
+        hud::RegisterPositionProbeCommands();
+        hud::RegisterDumpCommands();
         RegisterOwnCommands(session);
-        control::RegisterModCommands();  // the groups not moved yet (phase 8, rows 5 to 7)
+        control::RegisterModCommands();  // the groups not moved yet (phase 8, rows 6 and 7)
     }
     catch (...)
     {

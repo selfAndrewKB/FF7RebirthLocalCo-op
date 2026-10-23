@@ -31,6 +31,8 @@
 // and the "new marker" list are player 1's (§4 "still blocked").
 // Game thread only.
 
+#include "platform/dev_switch.h"
+
 namespace lss::platform {
 class GameImage;
 }
@@ -53,5 +55,11 @@ void PlayerTwoOut() noexcept;
 /// Diagnosis: which parts act (1 player 2's instance ticked, 2 its first controller is player 2's,
 /// 4 per-pass canvases, 8 ranged from player 2's member). All at start. Logged.
 void SetMask(unsigned mask) noexcept;
+unsigned Mask() noexcept;
+
+#if LSS_DEV
+/// The `icons-mask` command and reading. May throw (out of memory).
+void RegisterCommands();
+#endif
 
 }  // namespace lss::hud::area_icons_two

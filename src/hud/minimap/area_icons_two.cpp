@@ -8,6 +8,10 @@
 #include "platform/verified_code.h"
 #include "player_two/generation.h"
 
+#if LSS_DEV
+#include "platform/command_registry.h"
+#endif
+
 #include <array>
 #include <cstdint>
 #include <cstring>
@@ -651,5 +655,31 @@ void SetMask(unsigned mask) noexcept
                   L"player 2's member {})",
                   mask, Acts(kPartTick), Acts(kPartController), Acts(kPartCanvases), Acts(kPartLeader));
 }
+
+unsigned Mask() noexcept
+{
+    return g_mask;
+}
+
+#if LSS_DEV
+
+void RegisterCommands()
+{
+    using control::Outcome;
+    using control::Value;
+    control::Register({.name  = L"icons-mask",
+                       .shape = control::Shape::Integer,
+                       .max   = 15,
+                       .help  = L"diagnosis: which parts of player 2's own map icons act (1 its icon manager ticked, 2 "
+                                L"its first controller player 2's, 4 each half shows its own canvases, 8 ranged from "
+                                L"player 2's member)",
+                       .set   = [](const Value& v) {
+                           SetMask(static_cast<unsigned>(std::get<std::int64_t>(v)));
+                           return Outcome{true, L"icons mask set (see the log)"};
+                       },
+                       .get = [] { return Value{std::int64_t{Mask()}}; }});
+}
+
+#endif
 
 }  // namespace lss::hud::area_icons_two

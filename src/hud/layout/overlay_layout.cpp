@@ -17,6 +17,10 @@
 #include "player_two/generation.h"
 #include "views/player_view_point.h"
 
+#if LSS_DEV
+#include "platform/command_registry.h"
+#endif
+
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -419,5 +423,30 @@ bool BandEnabled() noexcept
 {
     return g_bandEnabled.load(std::memory_order_relaxed);
 }
+
+#if LSS_DEV
+
+void RegisterOverlayLayoutCommands()
+{
+    using control::Outcome;
+    using control::Value;
+    control::Register({.name  = L"hud-band",
+                       .shape = control::Shape::OnOff,
+                       .help  = L"lay the HUD out in the part of its image each half shows; off logs the values only",
+                       .set   = [](const Value& v) {
+                           if (!OverlayLayoutInstalled())
+                           {
+                               return Outcome{false, L"the HUD layout is not installed (see the startup log)"};
+                           }
+                           const bool on = std::get<bool>(v);
+                           SetBandEnabled(on);
+                           // What it sets is logged at the overlay's next render while split.
+                           return Outcome{true, on ? L"HUD laid out in each half's visible band (the default)"
+                                                   : L"HUD full-image layout until `hud-band on` (values logged only)"};
+                       },
+                       .get = [] { return Value{BandEnabled()}; }});
+}
+
+#endif
 
 }  // namespace lss::hud

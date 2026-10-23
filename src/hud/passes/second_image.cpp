@@ -13,6 +13,11 @@
 #include "platform/module_pin.h"
 #include "platform/verified_code.h"
 
+#if LSS_DEV
+#include "hud/passes/root_overlay_render.h"
+#include "platform/command_registry.h"
+#endif
+
 #include <atomic>
 #include <cstring>
 
@@ -359,5 +364,33 @@ bool SubmitInThisPass(const void* slot) noexcept
 {
     return !g_slot.SkipSubmit(slot);
 }
+
+#if LSS_DEV
+
+void RegisterSecondImageCommands()
+{
+    using control::Outcome;
+    using control::Value;
+    control::Register(
+        {.name  = L"hud-image",
+         .shape = control::Shape::OnOff,
+         .help  = L"player 2's HUD image: the overlay rendered a second time and drawn only in player 2's half",
+         .set   = [](const Value& v) {
+             if (!SecondImageInstalled() || !RootOverlayRenderInstalled())
+             {
+                 return Outcome{false, L"player 2's HUD image is not installed (see the startup log)"};
+             }
+             const bool on = std::get<bool>(v);
+             SetSecondImage(on);
+             if (on && !SecondImageOn())
+             {
+                 return Outcome{false, L"player 2's HUD image refused a check (see the log)"};
+             }
+             return Outcome{true, on ? L"player 2's HUD image on" : L"player 2's HUD image off"};
+         },
+         .get = [] { return Value{SecondImageOn()}; }});
+}
+
+#endif
 
 }  // namespace lss::hud

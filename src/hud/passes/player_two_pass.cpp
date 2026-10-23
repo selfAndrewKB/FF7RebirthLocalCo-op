@@ -24,6 +24,11 @@
 #include "platform/sparse_array.h"
 #include "player_two/scopes/primary_controller.h"
 
+#if LSS_DEV
+#include "hud/passes/second_image.h"
+#include "platform/command_registry.h"
+#endif
+
 #include <array>
 #include <atomic>
 #include <cstring>
@@ -449,6 +454,11 @@ void SetPlayerTwoLeversMask(unsigned mask) noexcept
                   Acts(kLeverUpdates), Acts(kLeverCompass), Acts(kLeverArrows), Acts(kLeverGauges), Acts(kLeverPopups));
 }
 
+unsigned PlayerTwoLeversMask() noexcept
+{
+    return g_mask;
+}
+
 bool PlayerTwoContentOn() noexcept
 {
     return g_on.load(std::memory_order_relaxed);
@@ -536,5 +546,48 @@ void LeavePlayerTwo() noexcept
         g_on.store(false, std::memory_order_relaxed);  // Refuse without its log line
     }
 }
+
+#if LSS_DEV
+
+void RegisterPlayerTwoPassCommands()
+{
+    using control::Outcome;
+    using control::Value;
+    control::Register(
+        {.name  = L"hud-levers",
+         .shape = control::Shape::OnOff,
+         .help  = L"player 2's image shows player 2's content: the game's player levers switched around player 2's "
+                  L"pass",
+         .set   = [](const Value& v) {
+             if (!PlayerTwoPassInstalled())
+             {
+                 return Outcome{false, L"player 2's HUD levers are not installed (see the startup log)"};
+             }
+             const bool on = std::get<bool>(v);
+             SetPlayerTwoContent(on);
+             if (on && !PlayerTwoContentOn())
+             {
+                 return Outcome{false, L"player 2's HUD levers refused a check (see the log)"};
+             }
+             return Outcome{true, !on              ? L"player 2's content off"
+                                  : SecondImageOn() ? L"player 2's content on"
+                                                    : L"player 2's content on (needs hud-image on)"};
+         },
+         .get = [] { return Value{PlayerTwoContentOn()}; }});
+    control::Register(
+        {.name  = L"hud-levers-mask",
+         .shape = control::Shape::Integer,
+         .max   = 511,
+         .help  = L"diagnosis: which levers act (1 contexts, 2 first player, 4 primary controller, 8 view rect, 16 "
+                  L"updates, 32 compass, 64 the arrows' own timers, 128 the enemy gauges per view, 256 the battle "
+                  L"popups per view)",
+         .set   = [](const Value& v) {
+             SetPlayerTwoLeversMask(static_cast<unsigned>(std::get<std::int64_t>(v)));
+             return Outcome{true, L"levers mask set (see the log)"};
+         },
+         .get = [] { return Value{std::int64_t{PlayerTwoLeversMask()}}; }});
+}
+
+#endif
 
 }  // namespace lss::hud

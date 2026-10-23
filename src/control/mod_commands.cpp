@@ -1,16 +1,6 @@
 #include "control/mod_commands.h"
 
-#include "hud/hud_trace.h"
-#include "hud/layout/overlay_layout.h"
-#include "hud/minimap/area_icons_two.h"
-#include "hud/minimap/minimap_once.h"
-#include "hud/passes/player_two_pass.h"
-#include "hud/passes/root_overlay_render.h"
-#include "hud/passes/second_image.h"
-#include "hud/position_probe.h"
-#include "hud/widget_dump.h"
 #include "platform/command_registry.h"
-#include "platform/image.h"
 #include "platform/log.h"
 #include "player_two/battle/lock_on.h"
 #include "player_two/camera/camera_distance.h"
@@ -63,144 +53,6 @@ void RegisterMask(const wchar_t* name, std::int64_t max, const wchar_t* help, co
               .set   = [set, done](const Value& v) {
                   set(static_cast<std::uint32_t>(Number(v)));
                   return Outcome{true, done};
-              }});
-}
-
-// ---- the HUD -------------------------------------------------------------------------------------------------------
-
-void RegisterHud()
-{
-    Register({.name = L"hud-band", .shape = Shape::OnOff,
-              .help = L"lay the HUD out in the part of its image each half shows; off logs the values only",
-              .set  = [](const Value& v) {
-                  if (!hud::OverlayLayoutInstalled())
-                  {
-                      return Failed(L"the HUD layout is not installed (see the startup log)");
-                  }
-                  hud::SetBandEnabled(On(v));
-                  // What it sets is logged by the HUD module at the overlay's next render while split.
-                  return Outcome{true, On(v) ? L"HUD laid out in each half's visible band (the default)"
-                                             : L"HUD full-image layout until `hud-band on` (values logged only)"};
-              }});
-    Register({.name = L"hud-image", .shape = Shape::OnOff,
-              .help = L"player 2's HUD image: the overlay rendered a second time and drawn only in player 2's half",
-              .set  = [](const Value& v) {
-                  if (!hud::SecondImageInstalled() || !hud::RootOverlayRenderInstalled())
-                  {
-                      return Failed(L"player 2's HUD image is not installed (see the startup log)");
-                  }
-                  hud::SetSecondImage(On(v));
-                  if (On(v) && !hud::SecondImageOn())
-                  {
-                      return Failed(L"player 2's HUD image refused a check (see the log)");
-                  }
-                  return Outcome{true, On(v) ? L"player 2's HUD image on" : L"player 2's HUD image off"};
-              }});
-    Register({.name = L"hud-levers", .shape = Shape::OnOff,
-              .help = L"player 2's image shows player 2's content: the game's player levers switched around player "
-                      L"2's pass",
-              .set  = [](const Value& v) {
-                  if (!hud::PlayerTwoPassInstalled())
-                  {
-                      return Failed(L"player 2's HUD levers are not installed (see the startup log)");
-                  }
-                  hud::SetPlayerTwoContent(On(v));
-                  if (On(v) && !hud::PlayerTwoContentOn())
-                  {
-                      return Failed(L"player 2's HUD levers refused a check (see the log)");
-                  }
-                  return Outcome{true, On(v) ? (hud::SecondImageOn() ? L"player 2's content on"
-                                                                     : L"player 2's content on (needs hud-image on)")
-                                             : L"player 2's content off"};
-              }});
-    RegisterMask(L"hud-levers-mask", 511,
-                 L"diagnosis: which levers act (1 contexts, 2 first player, 4 primary controller, 8 view rect, 16 "
-                 L"updates, 32 compass, 64 the arrows' own timers, 128 the enemy gauges per view, 256 the battle "
-                 L"popups per view)",
-                 L"levers mask set (see the log)", hud::SetPlayerTwoLeversMask);
-    RegisterMask(L"icons-mask", 15,
-                 L"diagnosis: which parts of player 2's own map icons act (1 its icon manager ticked, 2 its first "
-                 L"controller player 2's, 4 each half shows its own canvases, 8 ranged from player 2's member)",
-                 L"icons mask set (see the log)", hud::area_icons_two::SetMask);
-    Register({.name  = L"hud-trace",
-              .shape = Shape::Integer,
-              .min   = 1,
-              .max   = hud::kMaxHudTraceFrames,  // the trace's own limit
-              .help  = L"log the order of the HUD's tick, marker placements, icon projections and render for a number "
-                       L"of frames, and which player each placement and projection used",
-              .set   = [](const Value& v) {
-                  if (!hud::RootOverlayRenderInstalled())
-                  {
-                      return Failed(L"the overlay render hook is not installed (see the startup log)");
-                  }
-                  // Installed by the first trace, not at every dev start (seven call redirects on the HUD's hot path).
-                  if (!hud::HudTraceInstalled())
-                  {
-                      const auto image = platform::GameImage::Locate();
-                      if (!image || !hud::InstallHudTrace(*image))
-                      {
-                          return Failed(L"the HUD trace could not be installed (see the log)");
-                      }
-                  }
-                  hud::StartHudTrace(static_cast<std::int32_t>(Number(v)));
-                  return Outcome{true, L"tracing (one log line per frame)"};
-              }});
-    Register({.name = L"hud-probe", .shape = Shape::OnOff, .help = L"diagnosis: the HUD position probe",
-              .set  = [](const Value& v) {
-                  // Installed by the first switch-on, not at every dev start (its redirect sits on a Blueprint call
-                  // path).
-                  if (On(v) && !hud::PositionProbeInstalled())
-                  {
-                      const auto image = platform::GameImage::Locate();
-                      if (!image || !hud::InstallPositionProbe(*image))
-                      {
-                          return Failed(L"the HUD position probe could not be installed (see the log)");
-                      }
-                  }
-                  if (!hud::PositionProbeInstalled())
-                  {
-                      return Outcome{true, L"the HUD probe was never installed (it is off)"};
-                  }
-                  hud::SetPositionProbe(On(v));
-                  return Outcome{};
-              }});
-    Register({.name = L"minimap-once", .shape = Shape::OnOff,
-              .help = L"the minimap's map is rendered once per frame, by player 1's HUD pass (on, at start), or again "
-                      L"in player 2's",
-              .set  = [](const Value& v) {
-                  if (!hud::MinimapOnceInstalled())
-                  {
-                      return Failed(L"the minimap's single render is not installed (see the install log)");
-                  }
-                  hud::SetMinimapOnce(On(v));
-                  return Outcome{true, On(v) ? L"the minimap's map rendered once per frame, by player 1's pass"
-                                             : L"the minimap's map rendered in both players' passes"};
-              }});
-    Register({.name  = L"dump",
-              .shape = Shape::Word,
-              .words = {L"widgets", L"hud-players"},
-              .help  = L"log each visible HUD widget's desired size and geometry (widgets), or which player the HUD "
-                       L"roots and its global player reads name (hud-players)",
-              .set   = [](const Value& v) {
-                  const bool widgets = Word(v) == L"widgets";
-                  int        listed  = -1;
-                  if (widgets)
-                  {
-                      listed = hud::DumpWidgets();
-                  }
-                  else if (const auto image = platform::GameImage::Locate())
-                  {
-                      listed = hud::DumpHudPlayers(*image);
-                  }
-                  return listed >= 0 ? Outcome{true, std::to_wstring(listed) + (widgets ? L" widgets" : L" lines") +
-                                                         L" listed in the log"}
-                                     : Failed(L"nothing dumped (see the log)");
-              }});
-    Register({.name = L"dump-slots", .shape = Shape::Text, .help = L"log a widget class's viewport layout and slots",
-              .set  = [](const Value& v) {
-                  const int listed = hud::DumpSlots(Word(v));
-                  return listed >= 0 ? Outcome{true, std::to_wstring(listed) + L" slots listed in the log"}
-                                     : Failed(L"nothing dumped (see the log)");
               }});
 }
 
@@ -397,7 +249,6 @@ void RegisterPlayerTwo()
 
 void RegisterModCommands()
 {
-    RegisterHud();
     RegisterRenderer();
     RegisterPlayerTwo();
 }

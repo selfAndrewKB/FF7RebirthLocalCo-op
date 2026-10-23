@@ -20,6 +20,7 @@
 // can be checked in the log before anything changes on screen.
 
 #include "hud/layout/overlay_band.h"
+#include "platform/dev_switch.h"
 
 #include <cstdint>
 
@@ -45,5 +46,10 @@ bool OverlayLayoutInstalled() noexcept;
 /// The `hud-band` switch: lay the HUD out in the visible band while split (on at start).
 void SetBandEnabled(bool enabled) noexcept;
 bool BandEnabled() noexcept;
+
+#if LSS_DEV
+/// The `hud-band` command and reading. May throw (out of memory).
+void RegisterOverlayLayoutCommands();
+#endif
 
 }  // namespace lss::hud

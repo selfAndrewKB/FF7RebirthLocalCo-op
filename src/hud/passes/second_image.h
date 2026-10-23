@@ -22,6 +22,8 @@
 //
 // Player 2's own content in their pass comes from the levers of RE-p2-hud.md P8.6 (hud/passes/player_two_pass.h).
 
+#include "platform/dev_switch.h"
+
 #include <cstdint>
 
 namespace lss::platform {
@@ -71,5 +73,10 @@ std::uintptr_t EntryNameForPass(const void* slot, std::uintptr_t stockName) noex
 /// For the overlay's submit call: false for the held slot in player 2's pass (the slot is submitted once, by
 /// player 1's pass).
 bool SubmitInThisPass(const void* slot) noexcept;
+
+#if LSS_DEV
+/// The `hud-image` command and reading. May throw (out of memory).
+void RegisterSecondImageCommands();
+#endif
 
 }  // namespace lss::hud

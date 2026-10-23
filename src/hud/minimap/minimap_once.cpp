@@ -9,6 +9,10 @@
 #include "platform/module_pin.h"
 #include "platform/verified_code.h"
 
+#if LSS_DEV
+#include "platform/command_registry.h"
+#endif
+
 #include <cstdint>
 #include <span>
 
@@ -196,5 +200,31 @@ void PollMinimapOnce() noexcept
         g_logged[i] = counts[i];
     }
 }
+
+#if LSS_DEV
+
+void RegisterMinimapOnceCommands()
+{
+    using control::Outcome;
+    using control::Value;
+    control::Register({.name  = L"minimap-once",
+                       .shape = control::Shape::OnOff,
+                       .help  = L"the minimap's map is rendered once per frame, by player 1's HUD pass (on, at start), "
+                                L"or again in player 2's",
+                       .set   = [](const Value& v) {
+                           if (!MinimapOnceInstalled())
+                           {
+                               return Outcome{false, L"the minimap's single render is not installed (see the install "
+                                                     L"log)"};
+                           }
+                           const bool on = std::get<bool>(v);
+                           SetMinimapOnce(on);
+                           return Outcome{true, on ? L"the minimap's map rendered once per frame, by player 1's pass"
+                                                   : L"the minimap's map rendered in both players' passes"};
+                       },
+                       .get = [] { return Value{MinimapOnceOn()}; }});
+}
+
+#endif
 
 }  // namespace lss::hud

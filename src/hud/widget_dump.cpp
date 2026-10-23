@@ -16,6 +16,7 @@
 #include "facts/command_controller.h"
 #include "facts/hud.h"
 #include "platform/build_value.h"
+#include "platform/command_registry.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -737,6 +738,43 @@ int DumpHudPlayers(const platform::GameImage& image) noexcept
         platform::Log(L"hud players: failed (an exception while reading)");
         return -1;
     }
+}
+
+void RegisterDumpCommands()
+{
+    using control::Outcome;
+    using control::Value;
+    control::Register(
+        {.name  = L"dump",
+         .shape = control::Shape::Word,
+         .words = {L"widgets", L"hud-players"},
+         .help  = L"log each visible HUD widget's desired size and geometry (widgets), or which player the HUD roots "
+                  L"and its global player reads name (hud-players)",
+         .set   = [](const Value& v) {
+             const bool widgets = std::get<std::wstring>(v) == L"widgets";
+             int        listed  = -1;
+             if (widgets)
+             {
+                 listed = DumpWidgets();
+             }
+             else if (const auto image = platform::GameImage::Locate())
+             {
+                 listed = DumpHudPlayers(*image);
+             }
+             if (listed < 0)
+             {
+                 return Outcome{false, L"nothing dumped (see the log)"};
+             }
+             return Outcome{true, std::format(L"{} {} listed in the log", listed, widgets ? L"widgets" : L"lines")};
+         }});
+    control::Register({.name  = L"dump-slots",
+                       .shape = control::Shape::Text,
+                       .help  = L"log a widget class's viewport layout and slots",
+                       .set   = [](const Value& v) {
+                           const int listed = DumpSlots(std::get<std::wstring>(v));
+                           return listed >= 0 ? Outcome{true, std::format(L"{} slots listed in the log", listed)}
+                                              : Outcome{false, L"nothing dumped (see the log)"};
+                       }});
 }
 
 }  // namespace lss::hud

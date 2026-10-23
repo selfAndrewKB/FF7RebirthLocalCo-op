@@ -19,6 +19,8 @@
 // of pool 0's batch arrays that watched the leak was retired once the fix was confirmed (2026-10-21).
 // The switch (`minimap-once on|off`) is on from install.
 
+#include "platform/dev_switch.h"
+
 namespace lss::platform {
 class GameImage;
 }
@@ -37,7 +39,12 @@ bool MinimapOnceOn() noexcept;
 void BeginMinimapPlayerTwoPass(bool playerTwoMinimap) noexcept;
 void EndMinimapPlayerTwoPass() noexcept;
 
-/// Game thread, each engine tick: the per-period counts line and the batch-array reading.
+/// Game thread, each engine tick: the per-period counts line.
 void PollMinimapOnce() noexcept;
+
+#if LSS_DEV
+/// The `minimap-once` command and reading. May throw (out of memory).
+void RegisterMinimapOnceCommands();
+#endif
 
 }  // namespace lss::hud

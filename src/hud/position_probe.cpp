@@ -7,6 +7,7 @@
 
 #include "facts/hud.h"
 #include "platform/call_redirect.h"
+#include "platform/command_registry.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
@@ -141,6 +142,36 @@ void SetPositionProbe(bool on) noexcept
 {
     g_on.store(on, std::memory_order_relaxed);
     platform::Log(L"HUD probe: {}", on ? L"on" : L"off");
+}
+
+void RegisterPositionProbeCommands()
+{
+    using control::Outcome;
+    using control::Value;
+    control::Register({.name  = L"hud-probe",
+                       .shape = control::Shape::OnOff,
+                       .help  = L"diagnosis: the HUD position probe",
+                       .set   = [](const Value& v) {
+                           const bool on = std::get<bool>(v);
+                           // Installed by the first switch-on, not at every dev start (its redirect sits on a
+                           // Blueprint call path).
+                           if (on && !g_installed)
+                           {
+                               const auto image = platform::GameImage::Locate();
+                               if (!image || !InstallPositionProbe(*image))
+                               {
+                                   return Outcome{false, L"the HUD position probe could not be installed (see the "
+                                                         L"log)"};
+                               }
+                           }
+                           if (!g_installed)
+                           {
+                               return Outcome{true, L"the HUD probe was never installed (it is off)"};
+                           }
+                           SetPositionProbe(on);
+                           return Outcome{};
+                       },
+                       .get = [] { return Value{g_installed && g_on.load(std::memory_order_relaxed)}; }});
 }
 
 }  // namespace lss::hud

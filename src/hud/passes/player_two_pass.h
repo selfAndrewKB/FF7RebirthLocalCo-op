@@ -25,6 +25,8 @@
 // Not covered here: the compass's quest icons and the area icons (AreaMapIcon_FrameUpdate cannot run
 // twice; player 2 gets their own icon manager in step B3), and player 2's command menu.
 
+#include "platform/dev_switch.h"
+
 namespace lss::platform {
 class GameImage;
 }
@@ -43,6 +45,7 @@ bool PlayerTwoContentOn() noexcept;
 /// 16 updates, 32 compass, 64 the arrows' own timers, 128 the enemy gauges per view, 256 the battle popups per
 /// view). All at start.
 void SetPlayerTwoLeversMask(unsigned mask) noexcept;
+unsigned PlayerTwoLeversMask() noexcept;
 
 /// Game thread, just before player 2's overlay render. True if the levers are now player 2's
 /// (then LeavePlayerTwo must follow the render).
@@ -50,5 +53,10 @@ bool EnterPlayerTwo() noexcept;
 
 /// Game thread, just after player 2's overlay render: levers back to player 1, player 1's re-run.
 void LeavePlayerTwo() noexcept;
+
+#if LSS_DEV
+/// The `hud-levers` and `hud-levers-mask` commands and readings. May throw (out of memory).
+void RegisterPlayerTwoPassCommands();
+#endif
 
 }  // namespace lss::hud

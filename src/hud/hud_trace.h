@@ -15,7 +15,7 @@
 //      TraceAfterRender around it); each frame's line is logged there.
 // It also counts M and P by the player whose controller was passed.
 //
-// A dev tool, installed on the first `hud-trace` (control/mod_commands.cpp), not at every dev start: its seven call
+// A dev tool, installed on the first `hud-trace` (RegisterHudTraceCommands), not at every dev start: its seven call
 // redirects sit on the HUD's hot path.
 
 #include "platform/dev_switch.h"
@@ -42,6 +42,9 @@ void StartHudTrace(std::int32_t frames) noexcept;
 #if LSS_DEV
 void TraceBeforeRender() noexcept;
 void TraceAfterRender() noexcept;
+
+/// The `hud-trace` command, which installs the trace on its first use. May throw (out of memory).
+void RegisterHudTraceCommands();
 #else
 inline void TraceBeforeRender() noexcept {}
 inline void TraceAfterRender() noexcept {}
