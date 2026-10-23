@@ -223,7 +223,9 @@ const void*          g_registryWeak = nullptr;
 CRITICAL_SECTION*    g_overlapLock  = nullptr;
 const std::uint8_t*  g_sweepFlagA   = nullptr;
 const std::uint8_t*  g_sweepFlagB   = nullptr;
-FindActorFn          g_findActor    = nullptr;  // null: no class is admitted, every event of player 2's is held back
+// Null: no class is admitted; every event of player 2's but a switch volume's (switch_volume_two, named by the diff's
+// own actor) is held back.
+FindActorFn          g_findActor    = nullptr;
 std::uintptr_t       g_classVt[kClassCount] = {};  // live vtables of the admitted classes that passed their checks (0: not)
 platform::CallRedirect g_wallRunCall;
 const void*            g_wallRunPicked = nullptr;  // player 2's last camera pick, logged on change
@@ -803,15 +805,11 @@ void Install(const platform::GameImage& image) noexcept
     g_sweepFlagA   = reinterpret_cast<const std::uint8_t*>(*flagA);
     g_sweepFlagB   = reinterpret_cast<const std::uint8_t*>(*flagB);
     g_enterSite = *enterAt, g_leaveSite = *leaveAt, g_enterTarget = *enter, g_leaveTarget = *leave;
-    // Traversal L1: without the lookup, every event of player 2's stays held back. A class is admitted only if its live
-    // vtable's trigger slot holds the shared enter, and (for the classes that store a character) its unregister slot the
-    // expected override.
+    // Traversal L1: without the lookup, every event of player 2's but a switch volume's stays held back. A class is
+    // admitted only if its live vtable's trigger slot holds the shared enter, and (for the classes that store a
+    // character) its unregister slot the expected override.
     const auto findActor = platform::FindFunction(image, kFindActor);
     g_findActor          = findActor ? reinterpret_cast<FindActorFn>(*findActor) : nullptr;
-    if (g_findActor != nullptr)
-    {
-        switch_volume_two::Install(image);
-    }
     const auto liveEnter = image.Rebase(facts::kFieldActionTriggerEnter.address);
     std::wstring admitted, refused;
     for (std::size_t i = 0; i < kClassCount; ++i)
@@ -896,7 +894,6 @@ void Tick() noexcept
         platform::Log(L"trigger two: {}", g_filtersPlaced ? L"the diff's filter calls placed; player 2's pass runs"
                                                           : L"the diff's filter calls differ; player 2's pass stays off");
     }
-    switch_volume_two::Tick();
     if (!generation::Active())
     {
         g_lastCount = -1;

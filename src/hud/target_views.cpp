@@ -398,7 +398,7 @@ bool Install(const platform::GameImage& image) noexcept
     g_installed =
         g_mainTarget && g_release && g_enemyAi && player_two::weak_object::Known() && system &&
         facts::InBattleKnown() && ui &&
-        widget_opacity::Install(image);
+        widget_opacity::Installed();  // a row of the module table before this one
     g_battleSystem = system ? *system : 0;
     g_endUISystem  = ui ? *ui : 0;
     g_collect = collect;

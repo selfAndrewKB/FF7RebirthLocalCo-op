@@ -33,7 +33,8 @@ class GameImage;
 
 namespace lss::player_two::switch_volume_two {
 
-/// Finds the class, its overrides (checked at their slots) and the data; logged either way.
+/// Finds the class, its overrides (checked at their slots) and the data; logged either way. A row of the module table
+/// after trigger_two, whose filter delivers the events; without that filter it never fires.
 void Install(const platform::GameImage& image) noexcept;
 
 /// `actor` is a CharaPop switch volume (and the module is available).

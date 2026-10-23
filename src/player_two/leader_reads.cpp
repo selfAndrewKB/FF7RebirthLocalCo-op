@@ -475,7 +475,7 @@ bool Install(const platform::GameImage& image) noexcept
 {
     const auto leader          = platform::FindFunction(image, facts::kResolvePartyLeader);
     const auto characterByType = platform::FindFunction(image, facts::kCharacterByPlayerType);  // Reno's mines only
-    if (!leader || !leader_scope::Install(image))
+    if (!leader || !leader_scope::Installed())
     {
         platform::Log(L"leader reads: UNAVAILABLE (the leader resolver was not found); these enemy reads keep player 1");
         return false;

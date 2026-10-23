@@ -64,12 +64,16 @@ void Kept(const wchar_t* what) noexcept
 bool Install(const platform::GameImage& image) noexcept
 {
     const auto manager = image.Rebase(facts::kPartyManagerGlobal, sizeof(void*));
-    if (!weak_object::Known() || !manager)
-    {
-        return false;
-    }
-    g_partyManager = *manager;
-    return true;
+    g_partyManager     = weak_object::Known() && manager ? *manager : 0;
+    platform::Log(L"leader scope: {}",
+                  g_partyManager != 0 ? L"ready (player 2's member answers as the party leader inside the game's calls)"
+                                      : L"UNAVAILABLE (the party manager or the weak pointers were not found)");
+    return g_partyManager != 0;
+}
+
+bool Installed() noexcept
+{
+    return g_partyManager != 0;
 }
 
 LeaderScope::LeaderScope(std::uint64_t memberWeak) noexcept

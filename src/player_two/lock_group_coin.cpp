@@ -217,7 +217,7 @@ bool Install(const platform::GameImage& image) noexcept
     const auto countSite     = image.Rebase(kCountLeaderCall, 5);
     const auto rebalanceSite = image.Rebase(kRebalanceCall, 5);
     if (!resolver || !rebalance || !pick || !repickSite || !registerSite || !pickSite || !countSite || !rebalanceSite ||
-        !leader_scope::Install(image))
+        !leader_scope::Installed())
     {
         platform::Log(L"lock group coin: UNAVAILABLE (a function or call site was not found); lock groups prefer "
                       L"player 1");

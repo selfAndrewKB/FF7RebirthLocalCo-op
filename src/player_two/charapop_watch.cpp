@@ -550,7 +550,7 @@ bool Install(const platform::GameImage& image) noexcept
     const auto world = image.Rebase(kAnimWorldManager, sizeof(void*));
     g_gameRoot       = root ? *root : 0;
     g_animWorld      = world ? *world : 0;
-    g_installed      = leader_scope::Install(image) && g_gameRoot != 0;
+    g_installed      = leader_scope::Installed() && g_gameRoot != 0;
     const auto getter = platform::FindFunction(image, kInterfaceOf);
     g_interfaceOf    = getter ? reinterpret_cast<InterfaceOfFn>(*getter) : nullptr;
     const auto actorGetter = platform::FindFunction(image, kActorInterfaceOf);

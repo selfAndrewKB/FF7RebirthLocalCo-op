@@ -24,11 +24,8 @@ SetOpacityFn g_setOpacity = nullptr;  // set once at install
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    if (g_setOpacity == nullptr)
-    {
-        const auto live = platform::FindFunction(image, kSetOpacity);
-        g_setOpacity    = live ? reinterpret_cast<SetOpacityFn>(*live) : nullptr;
-    }
+    const auto live = platform::FindFunction(image, kSetOpacity);
+    g_setOpacity    = live ? reinterpret_cast<SetOpacityFn>(*live) : nullptr;
     return g_setOpacity != nullptr;
 }
 

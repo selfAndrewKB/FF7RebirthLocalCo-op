@@ -437,7 +437,7 @@ bool Install(const platform::GameImage& image) noexcept
     const auto setter = platform::FindFunction(image, kSetMinLevel);
     g_gameRoot        = root ? *root : 0;
     g_setMinLevel     = setter ? reinterpret_cast<SetMinLevelFn>(*setter) : nullptr;
-    g_installed       = leader_scope::Install(image) && g_gameRoot != 0 && g_setMinLevel != nullptr;
+    g_installed       = leader_scope::Installed() && g_gameRoot != 0 && g_setMinLevel != nullptr;
     platform::Log(L"charapop near: {}", g_installed ? L"installed (characters near player 2 keep the detail player 2's camera "
                                                       L"gives them, through the game's minimum level; logged)"
                                                     : L"UNAVAILABLE (a check failed)");

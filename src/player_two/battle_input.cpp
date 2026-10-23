@@ -203,7 +203,7 @@ bool Install(const platform::GameImage& image) noexcept
     const auto partyManager = image.Rebase(facts::kPartyManagerGlobal, sizeof(void*));
     const auto system = image.Rebase(facts::kEndUISystem, facts::kUICommandController + sizeof(void*));
     const auto vtable = image.Rebase(kBattlePlayerComponentVTable, sizeof(void*));
-    g_installed = leader_scope::Install(image) && facts::InBattleKnown() && battleSystem && partyManager && system &&
+    g_installed = leader_scope::Installed() && facts::InBattleKnown() && battleSystem && partyManager && system &&
                   vtable;
     g_battleSystem       = battleSystem ? *battleSystem : 0;
     g_partyManager       = partyManager ? *partyManager : 0;

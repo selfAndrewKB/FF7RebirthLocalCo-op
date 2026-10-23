@@ -41,6 +41,7 @@
 #include "player_two/field_pickup.h"
 #include "player_two/generation.h"
 #include "player_two/leader_reads.h"
+#include "player_two/leader_scope.h"
 #include "player_two/leave_watch.h"
 #include "player_two/location_rows.h"
 #include "player_two/lock_group_coin.h"
@@ -57,6 +58,7 @@
 #include "player_two/shared_ride.h"
 #include "player_two/shop_talk.h"
 #include "player_two/shoulder_scale.h"
+#include "player_two/switch_volume_two.h"
 #include "player_two/synergy_partner.h"
 #include "player_two/target_coin.h"
 #include "player_two/traversal_camera.h"
@@ -109,6 +111,10 @@ void Call(const platform::GameImage& image) noexcept
 
 // The table. The order is the install order; a row's comment says what the module does for the players.
 constexpr std::array kModules{
+    // The party leader answering player 2's member for one of the game's calls: first, so the modules that check it
+    // at their own install come after it; every other holder takes a scope at tick time (an unheld scope refuses).
+    Module{Call<&player_two::leader_scope::Install>, nullptr},
+
     // Player 2's stages that are not the session's own, next to their siblings.
     // player 2's Battle operator follows player 1's
     Module{Call<&player_two::battle_camera::Install>, &player_two::battle_camera::Remove},
@@ -175,6 +181,9 @@ constexpr std::array kModules{
     Module{Call<&player_two::anim_two_views::Install>, &player_two::anim_two_views::Remove},
     // player 2's trigger read after player 1's; admitted actors' events
     Module{Call<&player_two::trigger_two::Install>, &player_two::trigger_two::Remove},
+    // player 2 inside CharaPop switch volumes (the shopkeepers near player 2); its events come from trigger_two's
+    // filter
+    Module{Call<&player_two::switch_volume_two::Install>, nullptr},
     // player 2's chocobo vaults without taking both ride framings
     Module{Call<&player_two::vault_camera::Install>, &player_two::vault_camera::Remove},
     // player 2's chocobo climbs walls, with its own climb camera
@@ -313,6 +322,8 @@ constexpr bool EachOnce() noexcept
 // group's place after the session, and the dev watches' (target_census reads equal_targeting) after the whole table,
 // are the entry point's: it installs the session before the table and the dev tools after it.
 static_assert(EachOnce(), "a module is in the table twice");
+static_assert(IndexOf<&player_two::leader_scope::Install>() == 0,
+              "the leader scope first: the modules that check it at their own install come after it");
 static_assert(Ordered<&player_two::climb_context::Install, &player_two::traversal_camera::Install>(),
               "climb_context before traversal_camera: the camera holders need its Ticks");
 static_assert(Ordered<&views::InstallPlayerViewPoint, &views::InstallStreamViews>(),
@@ -381,6 +392,7 @@ void TickAfterSession(const Frame& frame) noexcept
     player_two::camera_repair::Tick();
     player_two::traversal_watch::Tick();
     player_two::trigger_two::Tick();
+    player_two::switch_volume_two::Tick();  // player 2's volumes left once player 2 is gone; the summary
     player_two::traversal_camera::Tick();  // player 2's idle camera holders; the collision watch (dev)
     player_two::near_fade::Tick();         // player 2's character's fade state (Debug, on change)
     player_two::approach_two::Tick();      // the crossing walk-up calls, swapped once from here

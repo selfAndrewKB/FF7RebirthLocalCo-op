@@ -603,7 +603,7 @@ bool Install(const platform::GameImage& image) noexcept
     g_componentType       = ctype ? reinterpret_cast<ComponentTypeFn>(*ctype) : nullptr;
     g_inBattle            = battle ? reinterpret_cast<GlobalTestFn>(*battle) : nullptr;
     g_installed      = g_gameRoot != 0 && g_input != 0 && g_isCore != nullptr && vtsFound && g_chocoboMoveVt != 0 &&
-                  leader_scope::Install(image);
+                  leader_scope::Installed();
     platform::Log(L"ride watch: {}", g_installed ? L"installed (chocobo and buggy rides logged while player 2 is in; read-only)"
                                                  : L"UNAVAILABLE (a check failed)");
     return g_installed;

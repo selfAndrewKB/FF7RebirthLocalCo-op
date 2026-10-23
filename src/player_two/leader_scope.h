@@ -20,7 +20,12 @@ class GameImage;
 
 namespace lss::player_two::leader_scope {
 
+/// Finds the party manager (after the weak pointers, player_two/weak_object.h); logged. The module table's first
+/// row: every module that holds a scope comes after it.
 bool Install(const platform::GameImage& image) noexcept;
+
+/// Whether Install found the party manager; the modules that hold a scope check it at their own install.
+bool Installed() noexcept;
 
 // The weak-pointer helpers under this namespace's names, for the modules that use them here; their home is
 // player_two/weak_object.h.

@@ -15,6 +15,7 @@ class GameImage;
 
 namespace lss::hud::widget_opacity {
 
+/// Finds the game's setter; a row of the module table before the modules that read it (they check Installed).
 bool Install(const platform::GameImage& image) noexcept;
 
 bool Installed() noexcept;

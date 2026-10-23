@@ -656,7 +656,7 @@ bool Install(const platform::GameImage& image) noexcept
     const auto forcedSite = image.Rebase(kForcedCall, 5);
     const auto forced     = platform::FindFunction(image, kForced);
     const auto yStep      = platform::FindFunction(image, kYStep);
-    const bool ownChecks  = forcedSite && forced && yStep && player_two::leader_scope::Install(image);
+    const bool ownChecks  = forcedSite && forced && yStep && player_two::leader_scope::Installed();
     const auto scaleStep  = platform::FindFunction(image, kScaleStep);
     const auto apply      = platform::FindFunction(image, kApplyTransform);
     const bool sizes      = scaleStep && apply;

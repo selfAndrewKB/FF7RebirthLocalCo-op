@@ -194,7 +194,7 @@ void LogIfChanged(const std::array<std::uint8_t, kComponentRows>& bytes)
 bool Install(const platform::GameImage& image) noexcept
 {
     action_rows::Install(image);  // the list and the game's layout, shared with the icons' base
-    const bool native = widget_opacity::Install(image);
+    const bool native = widget_opacity::Installed();  // a row of the module table before this one
     platform::Log(L"prompt rows: per-player layout {}, per-half visibility {}",
                   action_rows::LayoutAvailable() ? L"ready" : L"UNAVAILABLE", native ? L"ready" : L"UNAVAILABLE");
     return action_rows::ListKnown();

@@ -1265,7 +1265,6 @@ void Install(const platform::GameImage& image) noexcept
     bool hooks = false;
     if (resets)
     {
-        leader_scope::Install(image);  // the pass's leader scope (the targeting modules install it too)
         const auto markAt    = platform::FindFunction(image, kMarkByKey);
         const auto acquireAt = image.Rebase(kAcquireCall, 5);
         const auto acquire   = image.Rebase(kAcquire);

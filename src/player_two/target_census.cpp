@@ -682,7 +682,7 @@ void Install(const platform::GameImage& image) noexcept
     g_partyManager     = manager ? *manager : 0;
     g_hateType         = reinterpret_cast<HateTypeFn>(find(kHateType));
     g_applied          = reinterpret_cast<AppliedFn>(find(kApplied));
-    if (g_partyManager == 0 || g_hateType == nullptr || g_applied == nullptr || !leader_scope::Install(image))
+    if (g_partyManager == 0 || g_hateType == nullptr || g_applied == nullptr || !leader_scope::Installed())
     {
         platform::Log(L"target census: UNAVAILABLE (a check failed); enemies' targeting is not logged");
         return;

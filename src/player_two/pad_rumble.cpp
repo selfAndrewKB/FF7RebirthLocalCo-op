@@ -176,7 +176,7 @@ void Install(const platform::GameImage& image) noexcept
                                        image.EntryInstruction(kNoteLastDevice.address,
                                                               kNoteLastDevice.entryBytes.first(kNoteLastDeviceFirst)),
                                        reinterpret_cast<std::uintptr_t>(&Note));
-    const bool weaks = leader_scope::Install(image);  // the weak values that tell a new pair of controllers apart
+    const bool weaks = leader_scope::Installed();  // the weak values that tell a new pair of controllers apart
     try
     {
         g_addPrerequisite = RC::Unreal::UObjectGlobals::StaticFindObject<UFunction*>(

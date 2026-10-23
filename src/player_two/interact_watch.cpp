@@ -686,7 +686,7 @@ void Install(const platform::GameImage& image) noexcept
     g_image          = image;
     const auto root  = image.Rebase(kEndGameRoot, sizeof(void*));
     const auto party = image.Rebase(kPartyManagerGlobal, sizeof(void*));
-    if (!root || !party || !leader_scope::Install(image))
+    if (!root || !party || !leader_scope::Installed())
     {
         platform::Log(L"interact: the root or party manager is outside the image; not watched");
         return;
