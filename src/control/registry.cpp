@@ -25,9 +25,40 @@ std::optional<std::string> Ascii(std::wstring_view word)
     return out;
 }
 
-/// The whole word as a number in `base`, or nothing when anything is left over or it does not fit. from_chars takes no
-/// locale, leading space or '+'; it would take a '-' in any base for a signed type, so a mask's '-' is refused here.
-std::optional<std::int64_t> WholeNumber(std::wstring_view word, int base)
+std::wstring Alternatives(const std::vector<std::wstring>& words)
+{
+    std::wstring out;
+    for (const auto& word : words)
+    {
+        out += out.empty() ? word : L"|" + word;
+    }
+    return out;
+}
+
+/// The entry's named value the text spells (a number shape's `native`, `auto`), if any.
+std::optional<Value> NamedValue(const Entry& entry, std::wstring_view text)
+{
+    for (const auto& word : entry.words)
+    {
+        if (text == word)
+        {
+            return Value{word};
+        }
+    }
+    return std::nullopt;
+}
+
+/// ", or a|b" after a number shape's range when it has named values.
+std::wstring OrNamed(const Entry& entry)
+{
+    return entry.words.empty() ? std::wstring{} : L", or " + Alternatives(entry.words);
+}
+
+}  // namespace
+
+// from_chars takes no locale, leading space or '+'; it would take a '-' in any base for a signed type, so a mask's
+// '-' is refused here.
+std::optional<std::int64_t> ReadWhole(std::wstring_view word, int base)
 {
     const auto text = Ascii(word);
     if (!text || text->empty() || (base != 10 && text->front() == '-'))
@@ -43,7 +74,7 @@ std::optional<std::int64_t> WholeNumber(std::wstring_view word, int base)
     return value;
 }
 
-std::optional<double> Number(std::wstring_view word)
+std::optional<double> ReadReal(std::wstring_view word)
 {
     const auto text = Ascii(word);
     if (!text || text->empty())
@@ -58,18 +89,6 @@ std::optional<double> Number(std::wstring_view word)
     }
     return value;
 }
-
-std::wstring Alternatives(const std::vector<std::wstring>& words)
-{
-    std::wstring out;
-    for (const auto& word : words)
-    {
-        out += out.empty() ? word : L"|" + word;
-    }
-    return out;
-}
-
-}  // namespace
 
 std::wstring Format(const Entry& entry, const Value& value)
 {
@@ -106,17 +125,21 @@ ParsedValue ParseValue(const Entry& entry, std::wstring_view text)
         return {std::nullopt, entry.name + L" takes on or off"};
     case Shape::Integer:
     {
-        const auto value = WholeNumber(text, 10);
+        if (auto named = NamedValue(entry, text))
+        {
+            return {std::move(named), {}};
+        }
+        const auto value = ReadWhole(text, 10);
         if (!value || *value < entry.min || *value > entry.max)
         {
-            return {std::nullopt,
-                    std::format(L"{} takes a whole number from {} to {}", entry.name, entry.min, entry.max)};
+            return {std::nullopt, std::format(L"{} takes a whole number from {} to {}{}", entry.name, entry.min,
+                                              entry.max, OrNamed(entry))};
         }
         return {Value{*value}, {}};
     }
     case Shape::Hex:
     {
-        const auto value = WholeNumber(text, 16);
+        const auto value = ReadWhole(text, 16);
         if (!value || *value > entry.max)
         {
             return {std::nullopt, std::format(L"{} takes a hexadecimal mask up to {:X}", entry.name, entry.max)};
@@ -124,21 +147,22 @@ ParsedValue ParseValue(const Entry& entry, std::wstring_view text)
         return {Value{*value}, {}};
     }
     case Shape::Word:
-        for (const auto& word : entry.words)
+        if (auto named = NamedValue(entry, text))
         {
-            if (text == word)
-            {
-                return {Value{word}, {}};
-            }
+            return {std::move(named), {}};
         }
         return {std::nullopt, std::format(L"{} takes {}", entry.name, Alternatives(entry.words))};
     case Shape::Float:
     {
-        const auto value = Number(text);
+        if (auto named = NamedValue(entry, text))
+        {
+            return {std::move(named), {}};
+        }
+        const auto value = ReadReal(text);
         if (!value || *value < entry.minFloat || *value > entry.maxFloat)
         {
-            return {std::nullopt,
-                    std::format(L"{} takes a number from {} to {}", entry.name, entry.minFloat, entry.maxFloat)};
+            return {std::nullopt, std::format(L"{} takes a number from {} to {}{}", entry.name, entry.minFloat,
+                                              entry.maxFloat, OrNamed(entry))};
         }
         return {Value{*value}, {}};
     }

@@ -218,10 +218,11 @@ if(LSS_DEV_TOOLS)
     target_sources(LocalSplitScreen PRIVATE
         src/dev/dev_tools.cpp
         src/control/command_channel.cpp
-        src/control/mod_target.cpp
+        src/control/mod_commands.cpp
         src/control/registry.cpp
         src/control/runner.cpp
         src/control/script.cpp
+        src/control/stick_holds.cpp
         src/hud/hud_trace.cpp
         src/hud/position_probe.cpp
         src/hud/widget_dump.cpp
@@ -280,8 +281,8 @@ lss_test(party_lease src/player_two/session/party_lease.cpp)
 lss_test(leave_sequence src/player_two/session/leave_sequence.cpp)
 lss_test(leader_answer)
 lss_test(control_registry src/control/registry.cpp)
-lss_test(control_script src/control/script.cpp)
-lss_test(control_runner src/control/runner.cpp src/control/script.cpp)
+lss_test(control_script src/control/script.cpp src/control/registry.cpp)
+lss_test(control_runner src/control/runner.cpp src/control/script.cpp src/control/registry.cpp)
 lss_test(stick_select src/player_two/input/stick_select.cpp)
 lss_test(call_redirect src/platform/call_redirect.cpp src/platform/block_patch.cpp src/platform/module_pin.cpp
          src/platform/code_memory.cpp src/platform/image.cpp src/platform/build_translation.cpp)

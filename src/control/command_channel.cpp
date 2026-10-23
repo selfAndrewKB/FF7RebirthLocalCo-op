@@ -89,16 +89,30 @@ std::vector<std::wstring> Lines(const std::wstring& text)
     return lines;
 }
 
-std::wstring ResultText(const LineResult& result)
+/// One reply as the result file and the log write it, in the channel's line format of before the registry, so the
+/// regression's expectations (`layout side-by-side -> ok \(side by side\)`) read the same.
+std::wstring ResultText(std::uint64_t tick, const Reply& reply)
 {
-    const std::wstring verdict = result.outcome.ok ? L"ok" : L"FAILED";
-    const std::wstring detail  = result.outcome.detail.empty() ? L"" : L" (" + result.outcome.detail + L")";
-    return std::format(L"tick {} line {}: {} -> {}{}", result.tick, result.line, result.command, verdict, detail);
+    const std::wstring detail = reply.detail.empty() ? L"" : L" (" + reply.detail + L")";
+    switch (reply.kind)
+    {
+    case ReplyKind::Ok: return std::format(L"tick {} line {}: {} -> ok{}", tick, reply.line, reply.command, detail);
+    case ReplyKind::Failed:
+        return std::format(L"tick {} line {}: {} -> FAILED{}", tick, reply.line, reply.command, detail);
+    case ReplyKind::Dropped:
+        return std::format(L"tick {} line {}: {} -> dropped{}", tick, reply.line, reply.command, detail);
+    case ReplyKind::Rejected:
+        return std::format(L"tick {} line {}: {} -> rejected{}", tick, reply.line, reply.command, detail);
+    case ReplyKind::Value: return std::format(L"tick {}: value {} {}", tick, reply.command, reply.detail);
+    case ReplyKind::Help: return std::format(L"tick {}: help {}{}", tick, reply.command, reply.detail);
+    case ReplyKind::Note: return std::format(L"tick {} line {}: note {} -> ok", tick, reply.line, reply.detail);
+    }
+    return L"?";
 }
 
 }  // namespace
 
-bool CommandChannel::Open() noexcept
+bool CommandChannel::Open(Holds& holds) noexcept
 {
     try
     {
@@ -123,8 +137,14 @@ bool CommandChannel::Open() noexcept
         {
             return false;
         }
+        for (const auto& name : Global().Rejected())
+        {
+            Log(L"control: the command '{}' was refused by the registry (a taken name or a malformed entry)", name);
+        }
+        runner_.emplace(Global(), holds);
         open_ = true;
-        Log(L"control: command channel open; scripts go in {}", inbox_.wstring());
+        Log(L"control: command channel open ({} commands); scripts go in {}", Global().Entries().size(),
+            inbox_.wstring());
         return true;
     }
     catch (...)
@@ -134,7 +154,7 @@ bool CommandChannel::Open() noexcept
     }
 }
 
-void CommandChannel::Tick(Target& target) noexcept
+void CommandChannel::Tick() noexcept
 {
     if (!open_)
     {
@@ -143,19 +163,13 @@ void CommandChannel::Tick(Target& target) noexcept
     ++tick_;
     try
     {
-        if (!running_)
+        if (!running_ && tick_ % kScanTicks == 0)
         {
-            if (tick_ % kScanTicks == 0)
-            {
-                StartNext();
-            }
-            if (!running_)
-            {
-                return;
-            }
+            StartNext();  // its queries may answer at once
         }
-        Report(running_->runner.Step(target, tick_));
-        if (running_->runner.Finished())
+        runner_->Tick(tick_);
+        Report(runner_->TakeReplies());
+        if (running_ && !runner_->Busy(running_->client))
         {
             End();
         }
@@ -163,9 +177,15 @@ void CommandChannel::Tick(Target& target) noexcept
     catch (...)
     {
         Log(L"control: an exception stopped the command channel");
+        if (runner_)
+        {
+            runner_->Shutdown();  // every hold released
+        }
         if (running_)
         {
-            running_->runner.Abort(target);
+            // The sender waits for a `finished:` line; without one it would wait out its whole timeout.
+            Append(running_->results, L"an exception stopped the command channel");
+            Append(running_->results, L"finished: failed");
             running_.reset();
         }
         open_ = false;
@@ -244,21 +264,29 @@ void CommandChannel::StartNext()
         return;
     }
 
-    std::vector<ScriptLine> lines;
-    bool                    rejected = false;
-    std::uint32_t           number   = 0;
-    for (const auto& text : Lines(FromUtf8(bytes)))
+    // Every line is checked before any runs: a script with one bad line is rejected whole.
+    const std::vector<std::wstring> lines    = Lines(FromUtf8(bytes));
+    bool                            rejected = false;
+    std::size_t                     commands = 0;
+    for (std::size_t i = 0; i < lines.size(); ++i)
     {
-        ++number;
-        auto parsed = ParseLine(text);
-        if (parsed.command)
+        const auto parsed = ParseLine(Global(), lines[i]);
+        if (parsed.command && parsed.command->verb == Verb::Abort)
         {
-            lines.push_back({number, std::move(*parsed.command)});
+            // A script is submitted whole, so its abort would drop every line before it and report success; a
+            // script stops at its first failure instead. Abort is the console's, typed while something runs.
+            rejected = true;
+            Append(results, std::format(L"line {}: abort is for the console; a script stops at its first failure",
+                                        i + 1));
+        }
+        else if (parsed.command)
+        {
+            ++commands;
         }
         else if (!parsed.error.empty())
         {
             rejected = true;
-            Append(results, std::format(L"line {}: {}", number, parsed.error));
+            Append(results, std::format(L"line {}: {}", i + 1, parsed.error));
         }
     }
     if (rejected)
@@ -267,15 +295,30 @@ void CommandChannel::StartNext()
         Log(L"control: {} rejected (see {}); nothing ran", name, results.filename().wstring());
         return;
     }
-    Log(L"control: running {} ({} command(s))", name, lines.size());
-    running_.emplace(Running{Runner(std::move(lines)), results, name});
+    Log(L"control: running {} ({} command(s))", name, commands);
+    running_.emplace(Running{++scripts_, results, name});
+    for (const auto& line : lines)
+    {
+        runner_->Submit(running_->client, line);
+    }
 }
 
-void CommandChannel::Report(const std::vector<LineResult>& results)
+void CommandChannel::Report(const std::vector<Reply>& replies)
 {
-    for (const auto& result : results)
+    for (const auto& reply : replies)
     {
-        const auto text = ResultText(result);
+        if (!running_ || reply.client != running_->client)
+        {
+            continue;  // the inbox is the runner's only client: nothing else submits
+        }
+        if (reply.kind == ReplyKind::Note)
+        {
+            Log(L"control note: {}", reply.detail);
+        }
+        // A dropped line never ran, so the script did not do what it says, whatever dropped it.
+        running_->failed = running_->failed || reply.kind == ReplyKind::Failed || reply.kind == ReplyKind::Rejected ||
+                           reply.kind == ReplyKind::Dropped;
+        const auto text = ResultText(tick_, reply);
         Append(running_->results, text);
         Log(L"control {}: {}", running_->name, text);
     }
@@ -283,7 +326,8 @@ void CommandChannel::Report(const std::vector<LineResult>& results)
 
 void CommandChannel::End()
 {
-    const bool failed = running_->runner.Failed();
+    const bool failed = running_->failed;
+    runner_->ClientClosed(running_->client);  // nothing is queued or held by now
     Append(running_->results, failed ? L"finished: failed" : L"finished: ok");
     Log(L"control: {} finished {}", running_->name, failed ? L"with a failure" : L"ok");
     running_.reset();

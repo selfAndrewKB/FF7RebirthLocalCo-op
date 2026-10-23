@@ -5,11 +5,11 @@
 # expect-not: single view: the split switch could not be
 note regression: single view start
 join
-wait-until playing 1800
+wait-until p2.state == playing 1800
 single-view on
 wait 90
 single-view auto
 wait 90
 leave
-wait-until out 900
+wait-until p2.in == off 900
 note regression: single view done

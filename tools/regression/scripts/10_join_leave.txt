@@ -12,9 +12,9 @@
 # expect-not: could not be given back
 note regression: join/leave start
 join
-wait-until playing 1800
-status
+wait-until p2.state == playing 1800
+p2.log-status
 wait 120
 leave
-wait-until out 900
+wait-until p2.in == off 900
 note regression: join/leave done

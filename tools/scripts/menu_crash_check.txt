@@ -3,5 +3,5 @@
 # thread; with it the log's "family boundary" line counts one reset per frame and nothing crashes.
 note main-menu crash check: join, then pause-menu opens
 join
-wait-until playing
-status
+wait-until p2.state == playing
+p2.log-status

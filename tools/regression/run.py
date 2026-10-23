@@ -57,6 +57,11 @@ BUILDS = {
 }
 ALWAYS_EXPECT_NOT = [r"raised an exception", r"check failed:", r"an exception stopped the command channel"]
 
+# The harness's three waits as the mod's readings compare them (src/control/mod_commands.cpp): the control route
+# sends the comparison, the key route maps a script's comparison back to the log lines that end it.
+CONDITIONS = {"playing": "p2.state == playing", "out": "p2.in == off", "field": "field.ready == on"}
+CONDITION_OF = {text: name for name, text in CONDITIONS.items()}
+
 # A tick of `wait`/`wait-until` is one frame; the key route counts them at the slowest frame rate the game is played at,
 # so its waits are never shorter than the control route's.
 SECONDS_PER_TICK = 1.0 / 60.0
@@ -142,7 +147,7 @@ class Control:
         return proc.returncode, proc.stdout + proc.stderr
 
     def wait_until(self, what: str, ticks: int) -> tuple[bool, str]:
-        code, out = self.run(f"wait-until {what} {ticks}", timeout=ticks * SECONDS_PER_TICK + 60)
+        code, out = self.run(f"wait-until {CONDITIONS[what]} {ticks}", timeout=ticks * SECONDS_PER_TICK + 60)
         return code == 0, out
 
 
@@ -181,7 +186,8 @@ def field_reached(lines: list[str]) -> bool:
 
 class Keys:
     """The hotkey route: the commands a key expresses are pressed through tools/keys.ps1; the waits watch the log for
-    the mod's own lines; the rest (status, stick, split-fov, single-view, note, ...) is skipped and reported."""
+    the mod's own lines; the rest (p2.log-status, hold, split-fov, single-view, note, ...) is skipped and
+    reported."""
 
     name = "keys"
 
@@ -236,9 +242,9 @@ class Keys:
         if verb == "wait" and len(words) == 2:
             time.sleep(int(words[1]) * SECONDS_PER_TICK)
             return True, f"{line} -> waited"
-        if verb == "wait-until" and len(words) in (2, 3):
+        if verb == "wait-until" and len(words) in (4, 5) and " ".join(words[1:4]) in CONDITION_OF:
             # Over the lines since the last wait ended: the press before this wait has produced its lines already.
-            return self.wait_until(words[1], int(words[2]) if len(words) == 3 else 600)
+            return self.wait_until(CONDITION_OF[" ".join(words[1:4])], int(words[4]) if len(words) == 5 else 600)
         self.skipped.append(line)
         return True, f"{line} -> skipped (no key for it)"
 

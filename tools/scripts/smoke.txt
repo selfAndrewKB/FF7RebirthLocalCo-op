@@ -2,12 +2,12 @@
 # Start from a loaded save, in the field, with player 2 out.
 note smoke: start
 join
-wait-until playing 900
+wait-until p2.state == playing 900
 own-camera on
 sticks per-pad
-stick 2 0 1 0 0 120
+hold 2 stick 0 1 0 0 120
 wait 120
-status
+p2.log-status
 leave
-wait-until out 900
+wait-until p2.in == off 900
 note smoke: done

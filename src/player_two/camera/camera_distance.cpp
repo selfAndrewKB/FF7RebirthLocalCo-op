@@ -217,6 +217,11 @@ void SetLayoutOffsets(std::int32_t topBottom, std::int32_t sideBySide) noexcept
     FramingLine(L"layout offsets: top/bottom {:+}, side by side {:+} steps of the Options level", g_offsets[0], g_offsets[1]);
 }
 
+std::int32_t LayoutOffset(int layout) noexcept
+{
+    return layout == 0 || layout == 1 ? g_offsets[layout] : 0;
+}
+
 void TickFraming(bool playerTwoIn) noexcept
 {
     if (!FramingAvailable() || !generation::OnGameThread())

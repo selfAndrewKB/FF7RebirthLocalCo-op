@@ -7,7 +7,7 @@
 // is redirected here (platform/call_redirect.h) to log, with the probe on, each widget's class,
 // the position and DPI flag it asked for, and its viewport-slot anchors, offsets and alignment.
 // It changes nothing: the call goes through exactly as it came. A dev tool, installed on the first `hud-probe on`
-// (control/mod_target.cpp), not at every dev start.
+// (control/mod_commands.cpp), not at every dev start.
 
 namespace lss::platform {
 class GameImage;

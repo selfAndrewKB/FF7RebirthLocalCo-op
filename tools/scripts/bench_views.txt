@@ -18,7 +18,7 @@ wait 1800
 console t.MaxFPS 120
 console r.SetRes 2560x1440w
 join
-wait-until playing 1800
+wait-until p2.state == playing 1800
 layout side-by-side
 split-fov native
 console r.SetRes 5120x1440w
@@ -32,7 +32,7 @@ note bench views: three views 7680x1440
 wait 1800
 third-view off
 leave
-wait-until out 900
+wait-until p2.in == off 900
 console r.SetRes 2560x1440wf
 perf-log off
 note bench views: end

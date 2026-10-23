@@ -15,7 +15,7 @@
 //      TraceAfterRender around it); each frame's line is logged there.
 // It also counts M and P by the player whose controller was passed.
 //
-// A dev tool, installed on the first `hud-trace` (control/mod_target.cpp), not at every dev start: its seven call
+// A dev tool, installed on the first `hud-trace` (control/mod_commands.cpp), not at every dev start: its seven call
 // redirects sit on the HUD's hot path.
 
 #include "platform/dev_switch.h"

@@ -1,259 +1,403 @@
-// Host-side tests for control::Runner, run without the game, against a fake mod.
+// Host-side tests for control::Runner, run without the game, against a registry and holds of its own.
+// Taken from Remake's tests/control_runner_test.cpp; added: a query waits its turn behind its client's queue, Busy per
+// client, the structured replies.
 
 #include "control/runner.h"
 
 #include "expect.h"
 
+#include <algorithm>
 #include <cstdio>
-#include <format>
 #include <string>
 #include <vector>
 
 namespace {
 
-using lss::control::Command;
-using lss::control::LineResult;
-using lss::control::Outcome;
-using lss::control::ParseLine;
-using lss::control::Runner;
-using lss::control::ScriptLine;
+using namespace lss::control;
 
-/// Records every call; player 2's state is set by the test.
-class FakeMod final : public lss::control::Target
+/// The fake mod: a join that can be made to fail, a switch, a counter that scripts wait on.
+struct Fake final : Holds
 {
-public:
-    bool                      playerTwo = false;
-    bool                      playing   = false;
-    bool                      field     = false;
-    bool                      perPad    = true;
+    bool                      joinFails = false;
+    bool                      holdFails = false;
+    bool                      bars      = true;
+    std::int64_t              counter   = 0;
+    Value                     mode      = Value{0.5};  // a reading that is a number or a named value
     std::vector<std::wstring> calls;
+    std::vector<std::int32_t> held;  // players whose stick is held now
 
-    bool HasPlayerTwo() const override { return playerTwo; }
-    bool PlayerTwoPlaying() const override { return playing; }
-    bool FieldReady() const override { return field; }
-
-    Outcome Join() override { return Record(L"join"); }
-    Outcome Leave() override { return Record(L"leave"); }
-    Outcome SetOwnCamera(bool on) override { return Record(on ? L"own-camera on" : L"own-camera off"); }
-    Outcome SetPerPadSticks(bool on) override { return Record(on ? L"sticks per-pad" : L"sticks merged"); }
-    Outcome SetLayout(bool sideBySide) override { return Record(sideBySide ? L"side-by-side" : L"top-bottom"); }
-    Outcome SetBars(bool on) override { return Record(on ? L"bars on" : L"bars off"); }
-    Outcome SetSplitFov(float blend) override { return Record(L"split-fov " + std::to_wstring(blend)); }
-    Outcome SetHudBand(bool on) override { return Record(on ? L"hud-band on" : L"hud-band off"); }
-    Outcome SetNpcCentre(bool on) override { return Record(on ? L"npc-centre on" : L"npc-centre off"); }
-    Outcome SetNpcDetail(std::uint32_t level) override { return Record(std::format(L"npc-detail {}", level)); }
-    Outcome SetHudProbe(bool on) override { return Record(on ? L"hud-probe on" : L"hud-probe off"); }
-    Outcome TraceHud(std::int32_t frames) override { return Record(L"hud-trace " + std::to_wstring(frames)); }
-    Outcome SetHudImage(bool on) override { return Record(on ? L"hud-image on" : L"hud-image off"); }
-    Outcome SetHudLevers(bool on) override { return Record(on ? L"hud-levers on" : L"hud-levers off"); }
-    Outcome SetHudLeversMask(std::uint32_t mask) override { return Record(L"hud-levers-mask " + std::to_wstring(mask)); }
-    Outcome SetSticksMask(std::uint32_t mask) override { return Record(L"sticks-mask " + std::to_wstring(mask)); }
-    Outcome SetLeakFixes(std::uint32_t mask) override { return Record(L"leak-fixes " + std::to_wstring(mask)); }
-    Outcome SetButtonsMask(std::uint32_t mask) override { return Record(L"buttons-mask " + std::to_wstring(mask)); }
-    Outcome SetIconsMask(std::uint32_t mask) override { return Record(L"icons-mask " + std::to_wstring(mask)); }
-    Outcome SetBattleMask(std::uint32_t mask) override { return Record(L"battle-mask " + std::to_wstring(mask)); }
-    Outcome SetPerfLog(bool on) override { return Record(on ? L"perf-log on" : L"perf-log off"); }
-    Outcome SetLogLevel(std::uint32_t level) override { return Record(L"log-level " + std::to_wstring(level)); }
-    Outcome SetSingleView(std::uint32_t mode) override { return Record(L"single-view " + std::to_wstring(mode)); }
-    Outcome SetThirdView(bool on) override { return Record(on ? L"third-view on" : L"third-view off"); }
-    Outcome SetWindowSpan(bool on) override { return Record(on ? L"window-span on" : L"window-span off"); }
-    Outcome SetStreamViews(std::uint32_t mode) override { return Record(L"stream-views " + std::to_wstring(mode)); }
-    Outcome SetPlayerOneStreamFov(std::uint32_t degrees) override
+    Outcome HoldStick(std::int32_t player, const float (&)[4]) override
     {
-        return Record(L"stream-fov-p1 " + std::to_wstring(degrees));
-    }
-    Outcome SetCensus(bool on) override { return Record(on ? L"census on" : L"census off"); }
-    Outcome SetSubmitHints(bool skip) override { return Record(skip ? L"submit-hints skip" : L"submit-hints stock"); }
-    Outcome SetStreamFeedbackOnce(bool playerOneOnly) override
-    {
-        return Record(playerOneOnly ? L"stream-feedback p1" : L"stream-feedback each");
-    }
-    Outcome SetFeedbackMask(std::uint32_t mask) override { return Record(L"feedback-mask " + std::to_wstring(mask)); }
-    Outcome SetMinimapOnce(bool on) override { return Record(on ? L"minimap-once on" : L"minimap-once off"); }
-    Outcome SetFamilySplit(bool on) override { return Record(on ? L"family-split on" : L"family-split off"); }
-    Outcome SetShoulderScaleMinimum(float) override { return Record(L"shoulder-scale-min"); }
-    Outcome SetShoulderScale(bool on) override { return Record(on ? L"shoulder-scale on" : L"shoulder-scale off"); }
-    Outcome SetFramingOffsets(std::int32_t topBottom, std::int32_t sideBySide) override
-    {
-        return Record(L"framing-offset " + std::to_wstring(topBottom) + L" " + std::to_wstring(sideBySide));
-    }
-    Outcome Dump(const std::wstring& topic) override { return Record(L"dump " + topic); }
-    Outcome HoldSticks(std::int32_t player, const float (&axes)[4]) override
-    {
-        if (!perPad)
+        calls.push_back(L"hold " + std::to_wstring(player));
+        if (holdFails)
         {
             return {false, L"per-pad sticks are off"};
         }
-        return Record(L"hold " + std::to_wstring(player) + L" ly=" + std::to_wstring(static_cast<int>(axes[1])));
-    }
-    void    ReleaseSticks(std::int32_t player) override { Record(L"release " + std::to_wstring(player)); }
-    Outcome Console(const std::wstring& command) override { return Record(L"console " + command); }
-    Outcome Quit() override { return Record(L"quit"); }
-    Outcome Status() override { return Record(L"status"); }
-    Outcome Note(const std::wstring& text) override { return Record(L"note " + text); }
-
-private:
-    Outcome Record(std::wstring call)
-    {
-        calls.push_back(std::move(call));
+        held.push_back(player);
         return {};
+    }
+    void ReleaseStick(std::int32_t player) override
+    {
+        calls.push_back(L"release " + std::to_wstring(player));
+        std::erase(held, player);
+    }
+    bool Held(std::int32_t player) const override
+    {
+        return std::find(held.begin(), held.end(), player) != held.end();
+    }
+    /// The mod ends a hold on its own (a leave): no release call reaches it from the runner.
+    void EndOnItsOwn(std::int32_t player) { std::erase(held, player); }
+
+    Registry MakeRegistry()
+    {
+        Registry registry;
+        registry.Add({.name = L"join", .help = L"join", .set = [this](const Value&) {
+                          calls.push_back(L"join");
+                          return joinFails ? Outcome{false, L"no"} : Outcome{};
+                      }});
+        registry.Add({.name = L"leave", .help = L"leave", .set = [this](const Value&) {
+                          calls.push_back(L"leave");
+                          return Outcome{true, L"removed"};
+                      }});
+        registry.Add({.name = L"bars", .shape = Shape::OnOff, .help = L"bars",
+                      .set  = [this](const Value& v) { bars = std::get<bool>(v); return Outcome{}; },
+                      .get  = [this] { return Value{bars}; }});
+        registry.Add({.name = L"counter", .shape = Shape::Integer, .max = 1000, .help = L"counter",
+                      .get  = [this] { return Value{counter}; }});
+        registry.Add({.name = L"mode", .shape = Shape::Float, .minFloat = 0.0, .maxFloat = 1.0, .words = {L"native"},
+                      .help = L"mode", .get = [this] { return mode; }});
+        return registry;
     }
 };
 
-Runner Script(std::initializer_list<const wchar_t*> source)
+struct Harness
 {
-    std::vector<ScriptLine> lines;
-    std::uint32_t           number = 0;
-    for (const wchar_t* text : source)
+    Fake          fake;
+    Registry      registry = fake.MakeRegistry();
+    Runner        runner{registry, fake};
+    std::uint64_t tick = 0;
+
+    std::vector<std::wstring> Replies(ClientId client = 0)
     {
-        ++number;
-        if (auto parsed = ParseLine(text); parsed.command)
+        std::vector<std::wstring> out;
+        for (const auto& reply : runner.TakeReplies())
         {
-            lines.push_back({number, *parsed.command});
+            if (client == 0 || reply.client == client)
+            {
+                out.push_back(ConsoleText(reply));
+            }
+        }
+        return out;
+    }
+    void Ticks(int count)
+    {
+        for (int i = 0; i < count; ++i)
+        {
+            runner.Tick(++tick);
         }
     }
-    return Runner(std::move(lines));
+};
+
+void TestActionsAndReplies()
+{
+    std::puts("runner: actions run on the next tick, in order, each replying ok with its detail");
+    Harness h;
+    h.runner.Submit(1, L"join");
+    h.runner.Submit(1, L"leave");
+    EXPECT(h.Replies().empty());  // nothing runs before a tick
+    EXPECT(h.runner.Busy(1) && !h.runner.Busy(2));
+    h.Ticks(1);
+    const auto replies = h.Replies();
+    EXPECT(replies.size() == 2 && replies[0] == L"ok 1 join" && replies[1] == L"ok 2 leave -- removed");
+    EXPECT((h.fake.calls == std::vector<std::wstring>{L"join", L"leave"}));
+    EXPECT(h.runner.Idle() && !h.runner.Busy(1));
 }
 
-void TestRunsInOrderInOneTick()
+void TestStructuredReplies()
 {
-    std::puts("runner: commands with no wait all run in the first tick, in order");
-    FakeMod mod;
-    auto    runner = Script({L"join", L"note a", L"status"});
-    const auto done = runner.Step(mod, 1);
-    EXPECT(done.size() == 3);
-    EXPECT((mod.calls == std::vector<std::wstring>{L"join", L"note a", L"status"}));
-    EXPECT(runner.Finished() && !runner.Failed());
-    EXPECT(done.size() == 3 && done[2].line == 3 && done[2].tick == 1 && done[2].command == L"status");
+    std::puts("runner: a reply carries its kind, line, command and detail apart");
+    Harness h;
+    h.runner.Submit(7, L"leave");
+    h.Ticks(1);
+    const auto replies = h.runner.TakeReplies();
+    EXPECT(replies.size() == 1);
+    EXPECT(replies.size() == 1 && replies[0].client == 7 && replies[0].kind == ReplyKind::Ok && replies[0].line == 1 &&
+           replies[0].command == L"leave" && replies[0].detail == L"removed");
 }
 
-void TestWaitHoldsTheScriptBack()
+void TestRejectedAndQueries()
 {
-    std::puts("runner: wait 3 at tick 1 lets the next command run at tick 4");
-    FakeMod mod;
-    auto    runner = Script({L"wait 3", L"note after"});
-    runner.Step(mod, 1);
-    runner.Step(mod, 2);
-    runner.Step(mod, 3);
-    EXPECT(mod.calls.empty());
-    const auto done = runner.Step(mod, 4);
-    EXPECT((mod.calls == std::vector<std::wstring>{L"note after"}));
-    EXPECT(done.size() == 2 && done[0].command == L"wait 3" && done[0].tick == 4);
-    EXPECT(runner.Finished());
+    std::puts("runner: a bad line is rejected at once; a query on an empty queue answers at once");
+    Harness h;
+    h.runner.Submit(1, L"nonsense");
+    h.runner.Submit(1, L"get counter");
+    h.runner.Submit(1, L"note marker");
+    auto replies = h.Replies();
+    EXPECT(replies.size() == 4);  // rejected; value + ok; note
+    EXPECT(replies.size() == 4 && replies[0].starts_with(L"rejected 1 nonsense -- "));
+    EXPECT(replies.size() == 4 && replies[1] == L"value counter 0" && replies[2] == L"ok 2 get counter");
+    EXPECT(replies.size() == 4 && replies[3] == L"note 3 marker");
+    h.runner.Submit(1, L"status");
+    replies = h.Replies();
+    EXPECT(replies.size() == 4 && replies[0] == L"value bars on" && replies[1] == L"value counter 0" &&
+           replies[2] == L"value mode 0.5" && replies[3] == L"ok 4 status");
+    h.runner.Submit(1, L"help counter");
+    replies = h.Replies();
+    EXPECT(replies.size() == 2 && replies[0] == L"help counter <0..1000> -- (read only) counter");
+    h.runner.Submit(1, L"help");
+    replies = h.Replies();
+    EXPECT(replies.size() == 6 && replies[0] == L"help join -- (action) join" &&
+           replies[2] == L"help bars on|off -- bars" && replies[4] == L"help mode <0..1>|native -- (read only) mode");
 }
 
-void TestWaitUntilPassesOrTimesOut()
+void TestQueriesWaitTheirTurn()
 {
-    std::puts("runner: wait-until continues once the condition holds, and fails after its timeout");
-    FakeMod mod;
-    auto    runner = Script({L"wait-until playing 10", L"note playing"});
-    runner.Step(mod, 1);
-    EXPECT(mod.calls.empty() && !runner.Finished());
-    mod.playing = true;
-    runner.Step(mod, 2);
-    EXPECT((mod.calls == std::vector<std::wstring>{L"note playing"}));
-    EXPECT(runner.Finished() && !runner.Failed());
+    std::puts("runner: a script's query behind a wait answers after the wait, in its place");
+    Harness h;
+    h.runner.Submit(1, L"wait-until counter == 5 100");
+    h.runner.Submit(1, L"note after the wait");
+    h.runner.Submit(1, L"get counter");
+    h.runner.Submit(1, L"join");
+    EXPECT(h.Replies().empty());  // queued behind the wait, not answered at submit
+    h.Ticks(2);
+    EXPECT(h.Replies().empty());
+    h.fake.counter = 5;
+    h.Ticks(1);
+    const auto replies = h.Replies();
+    EXPECT(replies.size() == 5);
+    EXPECT(replies.size() == 5 && replies[0] == L"ok 1 wait-until counter == 5 100" &&
+           replies[1] == L"note 2 after the wait" && replies[2] == L"value counter 5" &&
+           replies[3] == L"ok 3 get counter" && replies[4] == L"ok 4 join");
 
-    FakeMod never;
-    auto    timeout = Script({L"wait-until out 2", L"note unreachable"});
-    never.playerTwo = true;
-    timeout.Step(never, 1);
-    timeout.Step(never, 2);
-    const auto done = timeout.Step(never, 3);
-    EXPECT(timeout.Finished() && timeout.Failed());
-    EXPECT(done.size() == 1 && !done[0].outcome.ok);
-    EXPECT(never.calls.empty());
-
-    FakeMod already;
-    auto    immediate = Script({L"wait-until out", L"note out"});
-    immediate.Step(already, 1);
-    EXPECT(immediate.Finished() && (already.calls == std::vector<std::wstring>{L"note out"}));
-
-    FakeMod loading;
-    auto    field = Script({L"wait-until field 5", L"note field"});
-    field.Step(loading, 1);
-    EXPECT(loading.calls.empty() && !field.Finished());
-    loading.field = true;
-    field.Step(loading, 2);
-    EXPECT(field.Finished() && !field.Failed() && (loading.calls == std::vector<std::wstring>{L"note field"}));
+    std::puts("runner: another client's query still answers during a wait");
+    h.runner.Submit(1, L"wait 3");
+    h.runner.Submit(2, L"get counter");
+    EXPECT(h.Replies(2).size() == 2);
 }
 
-void TestHoldsOverlapAndExpire()
+void TestWaitBlocks()
 {
-    std::puts("runner: two holds run alongside a wait, each released after its own ticks");
-    FakeMod mod;
-    auto    runner = Script({L"stick 1 0 1 0 0 2", L"stick 2 0 -1 0 0 3", L"wait 5"});
-    runner.Step(mod, 1);
-    EXPECT((mod.calls == std::vector<std::wstring>{L"hold 1 ly=1", L"hold 2 ly=-1"}));
-    runner.Step(mod, 2);
-    EXPECT(mod.calls.size() == 2);
-    runner.Step(mod, 3);
-    EXPECT(mod.calls.size() == 3 && mod.calls[2] == L"release 1");
-    runner.Step(mod, 4);
-    EXPECT(mod.calls.size() == 4 && mod.calls[3] == L"release 2");
-    runner.Step(mod, 5);
-    runner.Step(mod, 6);
-    EXPECT(runner.Finished() && mod.calls.size() == 4);
+    std::puts("runner: a wait of N ticks ends N ticks after the tick it started on");
+    Harness h;
+    h.runner.Submit(1, L"wait 3");
+    h.runner.Submit(1, L"join");
+    h.Ticks(3);
+    EXPECT(h.Replies().empty());
+    h.Ticks(1);
+    const auto replies = h.Replies();
+    EXPECT(replies.size() == 2 && replies[0] == L"ok 1 wait 3" && replies[1] == L"ok 2 join");
 }
 
-void TestFailureStopsAndReleases()
+void TestWaitUntil()
 {
-    std::puts("runner: a failed command stops the script and releases every hold");
-    FakeMod mod;
-    auto    runner = Script({L"stick 1 0 1 0 0 100", L"note before"});
-    runner.Step(mod, 1);
-    mod.perPad = false;
-    auto failing = Script({L"stick 2 0 1 0 0 10", L"note never"});
-    const auto done = failing.Step(mod, 1);
-    EXPECT(failing.Finished() && failing.Failed());
-    EXPECT(done.size() == 1 && !done[0].outcome.ok && done[0].outcome.detail == L"per-pad sticks are off");
-    EXPECT(mod.calls.back() != L"note never");
+    std::puts("runner: wait-until ends when the reading compares true, at once if it already does, else times out");
+    Harness h;
+    h.runner.Submit(1, L"wait-until counter >= 2 5");
+    h.runner.Submit(1, L"join");
+    h.Ticks(2);
+    EXPECT(h.Replies().empty());
+    h.fake.counter = 2;
+    h.Ticks(1);
+    auto replies = h.Replies();
+    EXPECT(replies.size() == 2 && replies[0] == L"ok 1 wait-until counter >= 2 5" && replies[1] == L"ok 2 join");
 
-    runner.Abort(mod);
-    EXPECT(runner.Finished() && mod.calls.back() == L"release 1");
+    h.runner.Submit(1, L"wait-until bars == on");
+    h.Ticks(1);
+    replies = h.Replies();
+    EXPECT(replies.size() == 1 && replies[0] == L"ok 3 wait-until bars == on 600");
+
+    h.runner.Submit(1, L"wait-until counter == 99 3");
+    h.runner.Submit(1, L"leave");
+    h.Ticks(3);
+    EXPECT(h.Replies().empty());
+    h.Ticks(1);
+    replies = h.Replies();
+    EXPECT(replies.size() == 2 && replies[0] == L"failed 4 wait-until counter == 99 3 -- timed out after 3 ticks" &&
+           replies[1] == L"dropped 5 leave -- after a failure");
+    EXPECT(h.runner.Idle());
 }
 
-void TestScriptEndsWhenItsHoldsDo()
+void TestHoldsRunAlongsideAndRelease()
 {
-    std::puts("runner: after its last command, a script lasts until its holds run out");
-    FakeMod mod;
-    auto    runner = Script({L"stick 2 0 1 0 0 3"});
-    runner.Step(mod, 1);
-    runner.Step(mod, 2);
-    runner.Step(mod, 3);
-    EXPECT(!runner.Finished() && mod.calls.size() == 1);
-    runner.Step(mod, 4);
-    EXPECT(runner.Finished() && !runner.Failed());
-    EXPECT((mod.calls == std::vector<std::wstring>{L"hold 2 ly=1", L"release 2"}));
+    std::puts("runner: a hold runs alongside the commands after it; the client stays busy until it ends");
+    Harness h;
+    h.runner.Submit(1, L"hold 2 stick 0 1 0 0 2");
+    h.runner.Submit(1, L"join");
+    h.Ticks(1);
+    auto replies = h.Replies();
+    EXPECT(replies.size() == 2 && replies[0] == L"ok 1 hold 2 stick 0 1 0 0 2" && replies[1] == L"ok 2 join");
+    EXPECT((h.fake.held == std::vector<std::int32_t>{2}));
+    EXPECT(!h.runner.Idle() && h.runner.Busy(1));
+    h.Ticks(2);
+    EXPECT(h.fake.held.empty());
+    EXPECT(h.runner.Idle() && !h.runner.Busy(1));
+
+    std::puts("runner: a failure releases the client's holds and drops what it queued");
+    h.fake.joinFails = true;
+    h.runner.Submit(1, L"hold 1 stick 1 0 0 0 100");
+    h.runner.Submit(1, L"join");
+    h.runner.Submit(1, L"leave");
+    h.Ticks(1);
+    replies = h.Replies();
+    EXPECT(replies.size() == 3 && replies[1] == L"failed 4 join -- no" &&
+           replies[2] == L"dropped 5 leave -- after a failure");
+    EXPECT(h.fake.held.empty());
 }
 
-void TestCommandsPerTickAreCapped()
+void TestClientsAreSeparate()
 {
-    std::puts("runner: at most kMaxCommandsPerTick commands run in one tick; the rest follow on the next");
-    FakeMod                  mod;
-    std::vector<ScriptLine> lines;
-    for (std::uint32_t i = 1; i <= Runner::kMaxCommandsPerTick + 5; ++i)
+    std::puts("runner: one client's failure and holds leave another's alone");
+    Harness h;
+    h.fake.joinFails = true;
+    h.runner.Submit(1, L"hold 1 stick 1 0 0 0 100");
+    h.runner.Submit(2, L"hold 2 stick 1 0 0 0 100");
+    h.runner.Submit(1, L"join");   // fails
+    h.runner.Submit(2, L"leave");  // another client's command still runs
+    h.runner.Submit(1, L"leave");  // dropped
+    h.Ticks(1);
+    const auto one = h.Replies(1);
+    EXPECT(one.size() == 3 && one[1] == L"failed 2 join -- no" && one[2] == L"dropped 3 leave -- after a failure");
+    EXPECT((h.fake.held == std::vector<std::int32_t>{2}));
+    EXPECT(!h.runner.Busy(1) && h.runner.Busy(2));
+    h.runner.ClientClosed(2);
+    EXPECT(h.fake.held.empty());
+}
+
+void TestClientsQueuesAreIndependent()
+{
+    std::puts("runner: a client's wait holds only its own queue; a client that leaves drops its queue");
+    Harness h;
+    h.runner.Submit(1, L"wait 100");
+    h.runner.Submit(1, L"leave");
+    h.runner.Submit(2, L"join");
+    h.Ticks(1);
+    const auto two = h.Replies(2);
+    EXPECT(two.size() == 1 && two[0] == L"ok 1 join");
+    EXPECT(h.Replies(1).empty());
+    h.runner.ClientClosed(1);
+    const auto one = h.Replies(1);
+    EXPECT(one.size() == 2 && one[0] == L"dropped 1 wait 100 -- the client went away" &&
+           one[1] == L"dropped 2 leave -- the client went away");
+    EXPECT(h.runner.Idle());
+}
+
+void TestAbortAndBudget()
+{
+    std::puts("runner: at most kMaxCommandsPerTick a tick; abort drops every queue at once");
+    Harness h;
+    for (int i = 0; i < 40; ++i)
     {
-        lines.push_back({i, *ParseLine(L"status").command});
+        h.runner.Submit(1, L"join");
     }
-    Runner runner(std::move(lines));
-    runner.Step(mod, 1);
-    EXPECT(mod.calls.size() == Runner::kMaxCommandsPerTick && !runner.Finished());
-    runner.Step(mod, 2);
-    EXPECT(mod.calls.size() == Runner::kMaxCommandsPerTick + 5 && runner.Finished());
+    h.Ticks(1);
+    EXPECT(h.Replies().size() == Runner::kMaxCommandsPerTick);
+    h.runner.Submit(2, L"wait 50");
+    h.runner.Submit(1, L"abort");  // client 1's 8 left and client 2's wait
+    const auto replies = h.Replies();
+    EXPECT(replies.size() == 10 && replies.back() == L"ok 41 abort");
+    EXPECT(h.runner.Idle());
+}
+
+void TestLineNumbersAreFileLines()
+{
+    std::puts("runner: blank lines and comments count, so a script's numbers are its file lines");
+    Harness h;
+    h.runner.Submit(1, L"# a comment");
+    h.runner.Submit(1, L"");
+    h.runner.Submit(1, L"join");
+    h.runner.Submit(1, L"nonsense");
+    const auto first = h.Replies();
+    EXPECT(first.size() == 1 && first[0].starts_with(L"rejected 4 nonsense -- "));
+    h.Ticks(1);
+    const auto replies = h.Replies();
+    EXPECT(replies.size() == 1 && replies[0] == L"ok 3 join");
+}
+
+void TestCrossKindWait()
+{
+    std::puts("runner: a number never equals a named value; != holds between them");
+    Harness h;
+    h.runner.Submit(1, L"wait-until mode != native 5");
+    h.Ticks(1);
+    auto replies = h.Replies();
+    EXPECT(replies.size() == 1 && replies[0] == L"ok 1 wait-until mode != native 5");
+    h.runner.Submit(1, L"wait-until mode == native 2");
+    h.Ticks(1);
+    EXPECT(h.Replies().empty());
+    h.fake.mode = Value{std::wstring(L"native")};
+    h.Ticks(1);
+    replies = h.Replies();
+    EXPECT(replies.size() == 1 && replies[0] == L"ok 2 wait-until mode == native 2");
+}
+
+void TestFailedHoldAndQueuedQuery()
+{
+    std::puts("runner: a refused hold fails the script, adds no hold and releases the client's others");
+    Harness h;
+    h.runner.Submit(1, L"hold 1 stick 1 0 0 0 100");
+    h.Ticks(1);
+    h.Replies();
+    h.fake.holdFails = true;
+    h.runner.Submit(1, L"hold 2 stick 0 1 0 0 100");
+    h.runner.Submit(1, L"get counter");  // queued behind the hold: dropped with it
+    h.Ticks(1);
+    const auto replies = h.Replies();
+    EXPECT(replies.size() == 2 && replies[0] == L"failed 2 hold 2 stick 0 1 0 0 100 -- per-pad sticks are off" &&
+           replies[1] == L"dropped 3 get counter -- after a failure");
+    EXPECT(h.fake.held.empty());  // player 1's earlier hold released with the failure
+    EXPECT(!h.runner.Busy(1));
+}
+
+void TestHoldEndedByTheMod()
+{
+    std::puts("runner: a hold the mod ended on its own no longer keeps its client busy");
+    Harness h;
+    h.runner.Submit(1, L"hold 2 stick 0 1 0 0 36000");
+    h.Ticks(1);
+    h.Replies();
+    EXPECT(h.runner.Busy(1));
+    h.fake.EndOnItsOwn(2);  // a leave: the session's hold layer released it
+    h.Ticks(1);
+    EXPECT(!h.runner.Busy(1) && h.runner.Idle());
+    EXPECT(h.fake.calls.back() == L"hold 2");  // no second release from the runner
+}
+
+void TestShutdown()
+{
+    std::puts("runner: shutting down drops every queue and releases every hold");
+    Harness h;
+    h.runner.Submit(1, L"hold 1 stick 1 0 0 0 100");
+    h.runner.Submit(1, L"wait 50");
+    h.runner.Submit(2, L"join");
+    h.Ticks(1);
+    h.Replies();
+    h.runner.Submit(2, L"wait 10");
+    h.runner.Shutdown();
+    const auto replies = h.Replies();
+    EXPECT(replies.size() == 2 && replies[0] == L"dropped 2 wait 50 -- the console closed" &&
+           replies[1] == L"dropped 2 wait 10 -- the console closed");
+    EXPECT(h.fake.held.empty() && h.runner.Idle());
 }
 
 }  // namespace
 
 int main()
 {
-    TestRunsInOrderInOneTick();
-    TestWaitHoldsTheScriptBack();
-    TestWaitUntilPassesOrTimesOut();
-    TestHoldsOverlapAndExpire();
-    TestFailureStopsAndReleases();
-    TestScriptEndsWhenItsHoldsDo();
-    TestCommandsPerTickAreCapped();
+    TestActionsAndReplies();
+    TestStructuredReplies();
+    TestRejectedAndQueries();
+    TestQueriesWaitTheirTurn();
+    TestWaitBlocks();
+    TestWaitUntil();
+    TestHoldsRunAlongsideAndRelease();
+    TestClientsAreSeparate();
+    TestClientsQueuesAreIndependent();
+    TestAbortAndBudget();
+    TestLineNumbersAreFileLines();
+    TestCrossKindWait();
+    TestFailedHoldAndQueuedQuery();
+    TestHoldEndedByTheMod();
+    TestShutdown();
 
     return lss::test::Report();
 }

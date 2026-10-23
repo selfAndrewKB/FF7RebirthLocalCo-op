@@ -1,7 +1,8 @@
 #include "dev/dev_tools.h"
 
 #include "control/command_channel.h"
-#include "control/mod_target.h"
+#include "control/mod_commands.h"
+#include "control/stick_holds.h"
 #include "hud/hud_trace.h"
 #include "hud/minimap/label_relayouts.h"
 #include "hud/position_probe.h"
@@ -28,15 +29,15 @@ namespace lss::dev {
 namespace {
 
 // Game thread only.
-std::optional<control::ModTarget> g_target;
-control::CommandChannel           g_channel;
+std::optional<control::StickHolds> g_holds;
+control::CommandChannel            g_channel;
 
 }  // namespace
 
 void Install(const platform::GameImage& image, player_two::Session& session, players::SplitLayout& layout,
              players::SingleView& singleView) noexcept
 {
-    // The HUD trace and the position probe are installed by their first command (control/mod_target.cpp), not here:
+    // The HUD trace and the position probe are installed by their first command (control/mod_commands.cpp), not here:
     // their call redirects sit on the HUD's hot path and nearly every dev start never asks for them.
     // The watches: each reads and logs, changes nothing, and reports its own install (its header says what it reads).
     player_two::rumble_watch::Install(image);    // each controller's rumble, pad by pad
@@ -67,9 +68,11 @@ void Install(const platform::GameImage& image, player_two::Session& session, pla
 void InstallControl(player_two::Session& session, players::SplitLayout& layout,
                     players::SingleView& singleView) noexcept
 {
-    // Control scripts drive the same actions as the keys, from files (control/command_channel.h).
-    g_target.emplace(session, layout, singleView);
-    g_channel.Open();
+    // Control scripts drive the same actions as the keys, from files (control/command_channel.h). Every command is
+    // registered before the channel opens, which logs the registry's refusals.
+    control::RegisterModCommands(session, layout, singleView);
+    g_holds.emplace(session);
+    g_channel.Open(*g_holds);
 }
 
 void Remove() noexcept
@@ -86,17 +89,14 @@ void Remove() noexcept
 
 void TickBeforeSession() noexcept
 {
-    if (g_target)
-    {
-        g_channel.Tick(*g_target);
-    }
+    g_channel.Tick();  // nothing while closed
 }
 
 void TickAfterSession() noexcept
 {
-    if (g_target)
+    if (g_holds)
     {
-        g_target->DropEndedHolds();
+        g_holds->DropEndedHolds();
     }
 }
 

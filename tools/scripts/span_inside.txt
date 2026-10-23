@@ -4,7 +4,7 @@
 note span-inside: begin
 perf-log on
 join
-wait-until playing 1800
+wait-until p2.state == playing 1800
 layout side-by-side
 split-fov native
 third-view on

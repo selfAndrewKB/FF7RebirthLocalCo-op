@@ -36,11 +36,11 @@ $control = "$PSScriptRoot\control.py"
 
 $game = Get-Process ff7rebirth_ -ErrorAction SilentlyContinue
 if ($game) {
-    $status = python $control --mod $modDir -c 'status' --timeout 20
-    if ($status -match 'player 2 is not in') {
+    $status = python $control --mod $modDir -c 'get p2.in' --timeout 20
+    if ($status -match 'value p2\.in off') {
         'player 2 is out'
     } else {
-        python $control --mod $modDir -c 'leave' -c 'wait-until out 900' --timeout 60 | Select-Object -Last 1
+        python $control --mod $modDir -c 'leave' -c 'wait-until p2.in == off 900' --timeout 60 | Select-Object -Last 1
     }
     python $control --mod $modDir -c 'quit' --timeout 30 | Select-Object -Last 1
     if (-not $game.WaitForExit(120000)) { throw 'the game did not exit within 2 minutes; not deploying' }

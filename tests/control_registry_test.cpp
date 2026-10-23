@@ -198,6 +198,29 @@ void TestWordFloatText()
     EXPECT(ParseValue(note, L"").error == L"console needs text");
 }
 
+void TestNamedValues()
+{
+    std::puts("registry: a number shape takes its named values as text, and says so when nothing fits");
+    const Entry blend{.name = L"split-fov", .shape = Shape::Float, .minFloat = 0.0, .maxFloat = 1.0,
+                      .words = {L"native"}, .set = Done};
+    EXPECT(std::get<std::wstring>(*ParseValue(blend, L"native").value) == L"native");
+    EXPECT(std::get<double>(*ParseValue(blend, L"0.5").value) == 0.5);
+    EXPECT(RoundTrip(blend, L"native") == L"native");
+    EXPECT(Refused(blend, L"Native") && Refused(blend, L"2"));
+    EXPECT(ParseValue(blend, L"2").error == L"split-fov takes a number from 0 to 1, or native");
+
+    const Entry degrees{.name = L"stream-fov-p1", .shape = Shape::Integer, .min = 1, .max = 170,
+                        .words = {L"auto"}, .set = Done};
+    EXPECT(std::get<std::wstring>(*ParseValue(degrees, L"auto").value) == L"auto");
+    EXPECT(std::get<std::int64_t>(*ParseValue(degrees, L"90").value) == 90);
+    EXPECT(ParseValue(degrees, L"0").error == L"stream-fov-p1 takes a whole number from 1 to 170, or auto");
+
+    std::puts("registry: ReadWhole and ReadReal, the readers the script shares");
+    EXPECT(lss::control::ReadWhole(L"36000", 10) == 36000 && !lss::control::ReadWhole(L"+1", 10));
+    EXPECT(lss::control::ReadWhole(L"-5", 10) == -5 && !lss::control::ReadWhole(L"-5", 16));
+    EXPECT(lss::control::ReadReal(L"-0.25") == -0.25 && !lss::control::ReadReal(L"inf"));
+}
+
 void TestFormatEmpty()
 {
     std::puts("registry: an empty value writes as nothing");
@@ -214,6 +237,7 @@ int main()
     TestInteger();
     TestHex();
     TestWordFloatText();
+    TestNamedValues();
     TestFormatEmpty();
 
     return lss::test::Report();

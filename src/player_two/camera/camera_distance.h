@@ -33,7 +33,9 @@ void Remove() noexcept;
 
 /// The field steps added in each layout (clamped to -2..5); 0 in both at start (the Options level).
 void SetLayoutOffsets(std::int32_t topBottom, std::int32_t sideBySide) noexcept;
-bool FramingAvailable() noexcept;
+/// One layout's steps as set: 0 top/bottom, 1 side by side (0 for any other).
+std::int32_t LayoutOffset(int layout) noexcept;
+bool         FramingAvailable() noexcept;
 
 /// Each engine tick, with whether player 2 is in.
 void TickFraming(bool playerTwoIn) noexcept;

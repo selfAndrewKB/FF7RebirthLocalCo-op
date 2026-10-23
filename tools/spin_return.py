@@ -59,7 +59,8 @@ def main():
     # The reference: the mean of a few frames, so the scene's own motion is averaged in.
     reference = np.mean([flicker.grab(box) for _ in range(5)], axis=0)
     p, r, t = args.player, args.rate, args.ticks
-    run_control(f'stick {p} 0 0 {r} 0 {t}', f'wait {t + 2}', f'stick {p} 0 0 {-r} 0 {t}', f'wait {t + args.settle}')
+    run_control(f'hold {p} stick 0 0 {r} 0 {t}', f'wait {t + 2}', f'hold {p} stick 0 0 {-r} 0 {t}',
+                f'wait {t + args.settle}')
 
     timeline, frames = [], []
     start = time.perf_counter()

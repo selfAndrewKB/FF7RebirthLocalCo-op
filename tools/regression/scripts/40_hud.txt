@@ -12,9 +12,9 @@
 # expect-not: safety submit
 note regression: hud start
 join
-wait-until playing 1800
+wait-until p2.state == playing 1800
 wait 360
-status
+p2.log-status
 leave
-wait-until out 900
+wait-until p2.in == off 900
 note regression: hud done

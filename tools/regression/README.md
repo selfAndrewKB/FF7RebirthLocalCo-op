@@ -37,14 +37,16 @@ Two routes drive the mod behind one interface in `run.py`:
 - **Keys** (the release build, which has no control channel): `join`, `leave`, `layout`, `bars`, `own-camera`, `sticks`
   and `third-view` are pressed as the mod's hotkeys through `tools/keys.ps1` (a switch is pressed only when the state
   asked for differs from the one held, starting from the mod's start-up states); `wait` sleeps the ticks at 60 fps;
-  `wait-until playing|out|field` watches the log for the mod's own lines (the take, the leave, the field settling after
-  a load). Commands with no key (`status`, `stick`, `split-fov`, `single-view`, `note`, ...) are skipped and listed in
-  the report. Expectations written for the control route's echo lines are `# expect-dev:`; what both routes must show
-  is the engine's readbacks (the half aspect, the HUD's pass, the restores).
+  `wait-until p2.state == playing`, `p2.in == off` and `field.ready == on` watch the log for the mod's own lines (the
+  take, the leave, the field settling after a load). Commands with no key (`p2.log-status`, `hold`, `split-fov`,
+  `single-view`, `note`, ...) are skipped and listed in the report. Expectations written for the control route's echo
+  lines are `# expect-dev:`; what both routes must show is the engine's readbacks (the half aspect, the HUD's pass, the
+  restores).
 
-Reaching the save: `continue_save.ps1` presses through the title, then `wait-until field` must hold (the field running,
-the game ready, player 1's controller on the End classes, and not the title: the title's scene is a field too; the key
-route reads the mod's "field step" lines: the title's settled field leaving at Continue, then a field settling). The game
+Reaching the save: `continue_save.ps1` presses through the title, then `wait-until field.ready == on` must hold (the
+field running, the game ready, player 1's controller on the End classes, and not the title: the title's scene is a
+field too; the key route reads the mod's "field step" lines: the title's settled field leaving at Continue, then a
+field settling). The game
 sometimes
 shows popups at start-up (seen when the two versions are launched one after the other), which swallow the fixed
 presses; the harness then presses one more Enter per round and waits again, four rounds, before giving up with "the

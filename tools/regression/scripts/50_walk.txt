@@ -3,19 +3,19 @@
 # needs: control
 # expect: own-camera on -> ok \(player 2's own camera\)
 # expect: sticks per-pad -> ok
-# expect: stick 2 0 1 0 0 180 -> ok \(controller id 1\)
+# expect: hold 2 stick 0 1 0 0 180 -> ok \(controller id 1\)
 # expect: per-pad sticks on \(input acted [1-9]\d* refused 0
 # expect: own camera yes .*member movement ticked [1-9]\d* skipped 0 refused 0
 # expect: move state of \S+ \(player 2's\): ticks \d+ \+ [1-9]\d* direct, [1-9]\d* of them by this mod
 # expect-not: member movement ticked 0 skipped
 note regression: walk start
 join
-wait-until playing 1800
+wait-until p2.state == playing 1800
 own-camera on
 sticks per-pad
-stick 2 0 1 0 0 180
+hold 2 stick 0 1 0 0 180
 wait 200
-status
+p2.log-status
 leave
-wait-until out 900
+wait-until p2.in == off 900
 note regression: walk done

@@ -3,5 +3,5 @@
 note menu crash A/B: hud-image off
 hud-image off
 join
-wait-until playing
-status
+wait-until p2.state == playing
+p2.log-status

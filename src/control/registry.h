@@ -18,7 +18,8 @@
 // Taken from Remake's control/registry (2026-10-23). Changed: an Integer argument may be negative (Rebirth's
 // framing offsets go below zero); the numbers are read with std::from_chars on an ASCII copy, so no locale, '+',
 // leading space or non-ASCII digit of the C library's conversions slips through; Add also refuses NaN float bounds
-// and a Hex floor (the parser checks a Hex mask against its maximum only).
+// and a Hex floor (the parser checks a Hex mask against its maximum only); an Integer or Float may also take named
+// values (`split-fov native`), which Remake's one shape per command could not say.
 
 #include <cstdint>
 #include <functional>
@@ -43,14 +44,15 @@ enum class Shape : std::uint8_t
 {
     None,     // no argument: an action (join), or a value that is only read
     OnOff,    // on | off
-    Integer,  // a whole number in [min, max], a leading '-' allowed
+    Integer,  // a whole number in [min, max], a leading '-' allowed, or one of `words` (named values, if any)
     Hex,      // a hexadecimal mask, at most max (e.g. 100A)
     Word,     // one of `words`
-    Float,    // a number in [minFloat, maxFloat]
+    Float,    // a number in [minFloat, maxFloat], or one of `words` (named values, if any)
     Text,     // the rest of the line (console, note)
 };
 
-/// An argument or a read value: a bool (OnOff), an integer (Integer, Hex), a double (Float) or text (Word, Text).
+/// An argument or a read value: a bool (OnOff), an integer (Integer, Hex), a double (Float) or text (Word, Text, and
+/// the named value of an Integer or Float: `split-fov native`, `stream-fov-p1 auto`).
 using Value = std::variant<std::monostate, bool, std::int64_t, double, std::wstring>;
 
 struct Entry
@@ -61,7 +63,7 @@ struct Entry
     std::int64_t              max      = 0;    // Integer, Hex
     double                    minFloat = 0.0;  // Float
     double                    maxFloat = 0.0;  // Float
-    std::vector<std::wstring> words;           // Word
+    std::vector<std::wstring> words;           // Word: the words; Integer, Float: named values besides a number
     std::wstring              help;
 
     /// Runs the command with its argument (an empty Value for Shape::None). Absent for a read-only value.
@@ -72,6 +74,13 @@ struct Entry
 
 /// The value as a script writes it: on/off, a decimal, a hex mask, or the text itself.
 std::wstring Format(const Entry& entry, const Value& value);
+
+/// The whole word as a number in `base` (10 or 16; a '-' only in base 10), or nothing when anything is left over, it
+/// does not fit, or any character is outside ASCII. The script's ticks are read with it too.
+std::optional<std::int64_t> ReadWhole(std::wstring_view word, int base);
+
+/// The whole word as a finite number, or nothing.
+std::optional<double> ReadReal(std::wstring_view word);
 
 /// Checks one argument word (or the rest of the line, for Text) against the entry's shape; the message says what the
 /// shape wants when it does not fit.

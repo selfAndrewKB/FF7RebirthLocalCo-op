@@ -2,17 +2,17 @@
 # (every 10 s) carry the mod's hooks per frame; compare the ones inside each phase between builds.
 note benchmark: begin
 join
-wait-until playing 1800
+wait-until p2.state == playing 1800
 perf-log on
 note benchmark: idle 1
 wait 600
 note benchmark: spin
-stick 1 0 0 1 0 1920
-stick 2 0 0 -1 0 1920
+hold 1 stick 0 0 1 0 1920
+hold 2 stick 0 0 -1 0 1920
 wait 1920
 note benchmark: idle 2
 wait 600
 perf-log off
 note benchmark: end
 leave
-wait-until out 900
+wait-until p2.in == off 900

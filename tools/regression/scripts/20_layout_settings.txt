@@ -19,7 +19,7 @@
 # expect-not: could not restore TwoPlayerSplitscreenLayout
 note regression: layout/settings start
 join
-wait-until playing 1800
+wait-until p2.state == playing 1800
 layout side-by-side
 wait 90
 layout top-bottom
@@ -27,6 +27,6 @@ wait 90
 layout side-by-side
 wait 90
 leave
-wait-until out 900
+wait-until p2.in == off 900
 layout top-bottom
 note regression: layout/settings done

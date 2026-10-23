@@ -1,7 +1,7 @@
 """Send a control script to the running mod and print its result.
 
     python tools/control.py script.txt            submit a file and wait for its result
-    python tools/control.py -c "join" -c "wait-until playing"
+    python tools/control.py -c "join" -c "wait-until p2.state == playing"
                                                   submit commands given on the command line
     python tools/control.py script.txt --no-wait  submit and return at once
 
