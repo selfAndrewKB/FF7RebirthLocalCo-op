@@ -10,6 +10,7 @@
 //
 // Pure logic with no engine access, tested on the host (tests/control_runner_test.cpp).
 
+#include "control/registry.h"
 #include "control/script.h"
 
 #include <array>
@@ -18,13 +19,6 @@
 #include <vector>
 
 namespace lss::control {
-
-/// What a command did. `detail` says why when it failed, and may add a fact when it succeeded.
-struct Outcome
-{
-    bool         ok = true;
-    std::wstring detail;
-};
 
 /// The mod as a script sees it. Game thread only.
 class Target
