@@ -468,4 +468,23 @@ void Install(const platform::GameImage& image) noexcept
     }
 }
 
+void Remove() noexcept
+{
+    g_vendingPreset = nullptr;  // Admits says no: the preset's name is not read again,
+    g_presetName    = 0;        // and the one already read is forgotten
+    bool restored   = g_cameraOff.Restore();
+    for (auto& call : g_cameraCalls)
+    {
+        restored = call.Restore() && restored;
+    }
+    for (platform::EntryRedirect* entry : {&g_camera, &g_end2Key})
+    {
+        restored = entry->Restore() && restored;
+    }
+    if (!restored)
+    {
+        platform::Log(L"vending: a call or entry was changed after us; left in place (it passes through)");
+    }
+}
+
 }  // namespace lss::player_two::vending

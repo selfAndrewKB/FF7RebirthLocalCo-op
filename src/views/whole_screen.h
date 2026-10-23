@@ -50,6 +50,9 @@ namespace lss::views {
 /// logged) if any differs.
 bool InstallWholeScreen(const platform::GameImage& image) noexcept;
 
+/// Puts back what screen_widgets redirected (at mod uninstall); the reads patch nothing.
+void RemoveWholeScreen() noexcept;
+
 /// Whether the checks passed: the automatic single view and the streaming views' update read it.
 bool WholeScreenInstalled() noexcept;
 

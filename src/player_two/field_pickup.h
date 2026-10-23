@@ -53,6 +53,9 @@ namespace lss::player_two::field_pickup {
 /// Finds the game's functions (each checked) and installs the field enter/exit redirects and the three hooks. Logged.
 void Install(const platform::GameImage& image) noexcept;
 
+/// Puts the game's code back (at mod uninstall, with player 2 out).
+void Remove() noexcept;
+
 /// Player 2's pass, right after the game's own selection update of `mgr` (the update hook calls it).
 void AfterUpdate(void* mgr, float dt) noexcept;
 

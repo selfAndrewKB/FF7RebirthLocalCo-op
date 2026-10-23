@@ -40,6 +40,9 @@ namespace lss::player_two::vending {
 /// Installs the hooks (each checked). Logged.
 void Install(const platform::GameImage& image) noexcept;
 
+/// Puts the game's code back (at mod uninstall, with player 2 out).
+void Remove() noexcept;
+
 /// Whether player 2's pass should leave a point with this point-side preset open: a vending machine's, while no shop is up.
 /// Game thread (inside the pass).
 bool Admits(std::uint64_t pointPreset) noexcept;

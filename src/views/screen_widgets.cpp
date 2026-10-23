@@ -214,4 +214,12 @@ bool FullScreenOpen() noexcept
     return open;
 }
 
+void Remove() noexcept
+{
+    if (!g_add.Restore())
+    {
+        platform::Log(L"screen widgets: the add's entry was changed after us; left in place (it passes through)");
+    }
+}
+
 }  // namespace lss::views::screen_widgets

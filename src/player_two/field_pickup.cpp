@@ -34,6 +34,7 @@
 #include <cstdint>
 #include <cstring>
 #include <format>
+#include <initializer_list>
 #include <optional>
 #include <span>
 #include <string>
@@ -1392,6 +1393,24 @@ bool TakeMarked(std::uint64_t key) noexcept
     }
     g_marked.erase(it);
     return true;
+}
+
+void Remove() noexcept
+{
+    g_ready       = false;  // the pass runs no more
+    bool restored = true;
+    for (platform::EntryRedirect* entry : {&g_request, &g_markByKey})
+    {
+        restored = entry->Restore() && restored;
+    }
+    for (platform::CallRedirect* call : {&g_acquireCall, &g_updateCall, &g_exitCall, &g_enterCall})
+    {
+        restored = call->Restore() && restored;
+    }
+    if (!restored)
+    {
+        platform::Log(L"field pickup: a call or entry was changed after us; left in place (it passes through)");
+    }
 }
 
 }  // namespace lss::player_two::field_pickup

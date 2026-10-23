@@ -583,4 +583,9 @@ ScreenSignals ReadScreenSignals() noexcept
     return signals;
 }
 
+void RemoveWholeScreen() noexcept
+{
+    screen_widgets::Remove();  // the reads above patch nothing
+}
+
 }  // namespace lss::views

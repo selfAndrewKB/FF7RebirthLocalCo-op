@@ -31,6 +31,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <format>
+#include <initializer_list>
 #include <optional>
 #include <span>
 #include <string>
@@ -144,7 +145,7 @@ platform::EntryRedirect                                  g_play, g_playClassic;
 #endif
 std::uintptr_t                                           g_firstController = 0;
 std::optional<platform::GameImage>                       g_image;      // live addresses as research IDA addresses
-bool                                                     g_sitesTried = false;
+std::atomic<bool>                                        g_sitesTried{false};  // the first-controller calls placed
 // 1.005: the battle-hit calls, installed by the first BeforeTick (sites and targets live; all three or none).
 struct HitSite
 {
@@ -660,6 +661,54 @@ void BeforeTick() noexcept
                       sites, g_notifiesWrapped);
     }
     LogStatus();
+}
+
+void Remove() noexcept
+{
+    g_hitsPending = false;  // a first tick after this installs nothing
+    g_sitesTried  = true;
+    const bool gameThread = generation::OnGameThread();
+    bool       restored   = true;
+    bool       left       = false;
+#if LSS_DEV
+    restored = g_playClassic.Restore() && restored;
+    restored = g_play.Restore() && restored;
+#endif
+    for (auto& call : g_firstCalls)
+    {
+        if (call.IsInstalled() && call.Crosses() && !gameThread)
+        {
+            left = true;  // a crossing call is restored only from the game thread (call_redirect.h)
+            continue;
+        }
+        restored = call.Restore() && restored;
+    }
+    for (auto& slot : g_notifySlots)
+    {
+        restored = slot.Restore() && restored;
+    }
+    // The hits placed from the game thread (1.005: the fallback crosses a block) go back all three or none, from
+    // that thread; the research build's, placed at install, from any.
+    if (g_hitsOwnThread.load(std::memory_order_relaxed) && !gameThread)
+    {
+        left = true;
+    }
+    else
+    {
+        for (platform::CallRedirect* call : {&g_fallbackCall, &g_cameraCall, &g_gateCall})
+        {
+            restored = call->Restore() && restored;
+        }
+    }
+    if (left)
+    {
+        platform::Log(L"combat rumble: the calls placed from the game thread are left in place (unloading is not that "
+                      L"thread; they pass through)");
+    }
+    if (!restored)
+    {
+        platform::Log(L"combat rumble: a call, slot or entry was changed after us; left in place (it passes through)");
+    }
 }
 
 }  // namespace lss::player_two::combat_rumble

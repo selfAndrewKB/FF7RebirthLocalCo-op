@@ -30,6 +30,10 @@ namespace lss::player_two::combat_rumble {
 /// The battle-hit sites, the notify slots and the play logging (each checked). Logged.
 void Install(const platform::GameImage& image) noexcept;
 
+/// Puts the game's code back (at mod uninstall, with player 2 out). The calls placed from the game thread are
+/// restored only from it, else left in place (they pass through); the first tick after this places nothing.
+void Remove() noexcept;
+
 /// Once per frame before the world tick (the engine-tick callback): on the first call installs the notifies' eight
 /// first-controller call sites (two cross a 16-byte block; the game thread is outside the notifies here), and writes the
 /// status line.

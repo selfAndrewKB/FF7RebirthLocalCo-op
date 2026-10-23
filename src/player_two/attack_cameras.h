@@ -34,6 +34,9 @@ namespace lss::player_two::attack_cameras {
 /// Finds the list and the cut call. Logged; a failed part stays off.
 void Install(const platform::GameImage& image) noexcept;
 
+/// Puts the game's code back (at mod uninstall, with player 2 out).
+void Remove() noexcept;
+
 /// Player 2's own per-camera state of the sequence list while it lives (inside player 2's camera update, its scopes
 /// held); player 1's put back when it ends. Does nothing if not installed, off the game thread, or there is no list.
 class PlayerTwoUpdate

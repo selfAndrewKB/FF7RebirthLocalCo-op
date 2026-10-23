@@ -19,6 +19,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <initializer_list>
 #include <optional>
 #include <utility>
 
@@ -332,6 +333,17 @@ void Tick() noexcept
                        L"states {}, chain-move pulls {}; player 2's view refused {}; calls off the game thread (the game's "
                        L"own) {}",
                        c.guards, c.shakes, c.shakeStates, c.steals, c.refused, offThread);
+}
+
+void Remove() noexcept
+{
+    for (platform::VTableEntry* slot : {&g_stealSlot, &g_shakeSlot, &g_shakeEndSlot, &g_shakeBeginSlot, &g_guardSlot})
+    {
+        if (!slot->Restore())
+        {
+            platform::Log(L"camera effects: a slot was changed after us; left in place (it passes through)");
+        }
+    }
 }
 
 }  // namespace lss::player_two::camera_effects_two

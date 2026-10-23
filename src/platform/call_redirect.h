@@ -70,6 +70,9 @@ public:
 
     bool IsInstalled() const noexcept { return patch_.IsApplied(); }
 
+    /// The site's five bytes cross into the next aligned block: installed, and restored, from its own thread only.
+    bool Crosses() const noexcept { return patch_.Crosses(); }
+
     /// The call's usual target, for the replacement to call.
     std::uintptr_t Original() const noexcept { return target_; }
 

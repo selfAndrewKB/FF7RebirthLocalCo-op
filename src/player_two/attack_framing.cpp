@@ -21,6 +21,7 @@
 #include "player_two/target_coin.h"
 
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -90,7 +91,8 @@ struct Sites
     std::uintptr_t characterByType = 0;
     bool           d1 = false, d2 = false;
 };
-Sites g_sites;
+Sites             g_sites;
+std::atomic<bool> g_pending{false};  // a placement queued and not yet run (Remove clears it)
 
 // Game thread.
 // D1: per sequence (its actor's weak) and camera, the decision: show (native) or keep off this camera.
@@ -319,6 +321,10 @@ void* CharacterR3(std::uint64_t lane, std::uint64_t type) noexcept
 /// Game thread, from the session's tick (outside every camera update): every site, each item whole or not at all.
 void Place() noexcept
 {
+    if (!g_pending.exchange(false))
+    {
+        return;  // removed before the session's first tick
+    }
     bool d1 = g_sites.d1 && g_activeCall.InstallFromOwnThread(g_sites.active, g_sites.isActive,
                                                                reinterpret_cast<std::uintptr_t>(&IsActive));
     bool d2 = g_sites.d2;
@@ -399,10 +405,15 @@ void Install(const platform::GameImage& image) noexcept
         platform::Log(L"attack framing: the sites are not what the research read; enemy specials keep the game's own "
                       L"framing");
     }
-    else if (!platform::game_thread_sites::Queue(&Place))
+    else
     {
-        platform::Log(L"attack framing: the game-thread placement queue is full; enemy specials keep the game's own "
-                      L"framing");
+        g_pending.store(true);
+        if (!platform::game_thread_sites::Queue(&Place))
+        {
+            g_pending.store(false);
+            platform::Log(L"attack framing: the game-thread placement queue is full; enemy specials keep the game's "
+                          L"own framing");
+        }
     }
 }
 
@@ -423,6 +434,44 @@ void Tick() noexcept
                        L"evaluations kept {}; leader-framing shots on player 1 {}, player 2 {}, the game's own {}; "
                        L"leader reads answered {}",
                        c.native, c.offOther, c.kept, c.coinOne, c.coinTwo, c.coinNone, c.answers);
+}
+
+void Remove() noexcept
+{
+    g_pending.store(false);  // a placement still queued installs nothing then
+    const bool gameThread = generation::OnGameThread();
+    bool       restored   = true;
+    bool       left       = false;
+    const auto restore    = [&](platform::CallRedirect& call) {
+        if (!call.IsInstalled())
+        {
+            return;
+        }
+        if (call.Crosses() && !gameThread)
+        {
+            left = true;  // a crossing call is restored only from the game thread (call_redirect.h)
+            return;
+        }
+        restored = call.Restore() && restored;
+    };
+    for (auto& call : g_updateCalls)
+    {
+        restore(call);
+    }
+    for (auto& call : g_leaderCalls)
+    {
+        restore(call);
+    }
+    restore(g_activeCall);
+    if (left)
+    {
+        platform::Log(L"attack framing: a call crossing two blocks is left in place (unloading is not the game thread; "
+                      L"it passes through)");
+    }
+    if (!restored)
+    {
+        platform::Log(L"attack framing: a call was changed after us; left in place (it passes through)");
+    }
 }
 
 }  // namespace lss::player_two::attack_framing

@@ -21,6 +21,9 @@ namespace lss::views::screen_widgets {
 /// Redirects the add; false (logged) if its first instruction is not what the research read.
 bool Install(const platform::GameImage& image) noexcept;
 
+/// Puts the add back (at mod uninstall; whole_screen's Remove calls it).
+void Remove() noexcept;
+
 /// Game thread, once per tick: whether a followed full-screen menu is on screen now. Logs each one closing.
 bool FullScreenOpen() noexcept;
 

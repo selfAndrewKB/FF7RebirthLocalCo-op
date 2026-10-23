@@ -30,6 +30,9 @@ namespace lss::player_two::rumble_watch {
 /// Wraps the two entries (each checked). Logged.
 void Install(const platform::GameImage& image) noexcept;
 
+/// Puts the game's code back (at mod uninstall, with player 2 out).
+void Remove() noexcept;
+
 /// The controller's active force-feedback effects (APlayerController::ActiveForceFeedbackEffects.Num), or -1.
 std::int32_t EffectCount(const void* controller) noexcept;
 

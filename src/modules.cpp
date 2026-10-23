@@ -91,7 +91,7 @@ namespace {
 struct Module
 {
     void (*install)(const platform::GameImage&) noexcept;
-    void (*remove)() noexcept;  // nullptr: it stays installed (its code stays valid: the DLL is pinned)
+    void (*remove)() noexcept;  // nullptr: it patches nothing (its state stays; the DLL is pinned)
 };
 
 /// The row's install call: a module's Install returns bool or void (its outcome is its own log line) and takes
@@ -149,7 +149,7 @@ constexpr std::array kModules{
     // filled halves: each main camera's own 16:9 constraint
     Module{Call<&player_two::main_camera_shape::Install>, nullptr},
     // menus, the map, cutscenes: player 1's single view
-    Module{Call<&views::InstallWholeScreen>, nullptr},
+    Module{Call<&views::InstallWholeScreen>, &views::RemoveWholeScreen},
     // each player's camera streams scenery detail (needs the view point)
     Module{Call<&views::InstallStreamViews>, nullptr},
     // a third full-size view for the multi-monitor measurement
@@ -224,11 +224,11 @@ constexpr std::array kModules{
     // player 2 boards a Wheelie of their own by walking into it
     Module{Call<&player_two::wheelie_ride::Install>, &player_two::wheelie_ride::Remove},
     // player 2's pickups: a second pass of the game's prompts
-    Module{Call<&player_two::field_pickup::Install>, nullptr},
+    Module{Call<&player_two::field_pickup::Install>, &player_two::field_pickup::Remove},
     // each player's rumble on their own pad
-    Module{Call<&player_two::pad_rumble::Install>, nullptr},
+    Module{Call<&player_two::pad_rumble::Install>, &player_two::pad_rumble::Remove},
     // player 2's combat rumble (hits, montage notifies) on player 2's pad
-    Module{Call<&player_two::combat_rumble::Install>, nullptr},
+    Module{Call<&player_two::combat_rumble::Install>, &player_two::combat_rumble::Remove},
     // the traversal rumble list per player
     Module{Call<&player_two::rumble_list_two::Install>, &player_two::rumble_list_two::Remove},
     // player 2's own force-feedback manager
@@ -236,9 +236,9 @@ constexpr std::array kModules{
     // each SEAD sound from the nearer listener
     Module{Call<&player_two::audio_listener_two::Install>, &player_two::audio_listener_two::Remove},
     // player 2's vending machines: the shop's camera and pad
-    Module{Call<&player_two::vending::Install>, nullptr},
+    Module{Call<&player_two::vending::Install>, &player_two::vending::Remove},
     // player 2's shopkeepers: admit, press, the shop's AI event
-    Module{Call<&player_two::shop_talk::Install>, nullptr},
+    Module{Call<&player_two::shop_talk::Install>, &player_two::shop_talk::Remove},
 
     // The enemies' view of two players, after the session: its removal must come before the stages' (the Condition
     // selects stop taking the equal-targeting answer while member_movement's leader-test slot is still in place).
@@ -253,11 +253,11 @@ constexpr std::array kModules{
     // the game's own leader reads for an enemy follow its coin
     Module{Call<&player_two::leader_reads::Install>, &player_two::leader_reads::Remove},
     // battle camera sequences (grabs, specials) on each camera's own state
-    Module{Call<&player_two::attack_cameras::Install>, nullptr},
+    Module{Call<&player_two::attack_cameras::Install>, &player_two::attack_cameras::Remove},
     // enemy specials: the target's half only; leader shots on the coin player
-    Module{Call<&player_two::attack_framing::Install>, nullptr},
+    Module{Call<&player_two::attack_framing::Install>, &player_two::attack_framing::Remove},
     // player 2's member's guard effect, shakes and chain pulls on player 2's camera
-    Module{Call<&player_two::camera_effects_two::Install>, nullptr},
+    Module{Call<&player_two::camera_effects_two::Install>, &player_two::camera_effects_two::Remove},
     // a synergy partner held by either human is handed to its AI and back
     Module{Call<&player_two::synergy_partner::Install>, &player_two::synergy_partner::Remove},
 

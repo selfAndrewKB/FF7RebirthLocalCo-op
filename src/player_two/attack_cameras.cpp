@@ -385,4 +385,12 @@ void Tick() noexcept
                        c.updates, c.entriesOne, c.entriesTwo, c.onlyTwo, c.cutsTwo, c.cutsOne, c.lists);
 }
 
+void Remove() noexcept
+{
+    if (!g_cutCall.Restore())
+    {
+        platform::Log(L"attack cameras: the cut call was changed after us; left in place (it passes through)");
+    }
+}
+
 }  // namespace lss::player_two::attack_cameras

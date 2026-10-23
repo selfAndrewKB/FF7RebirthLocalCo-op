@@ -35,6 +35,9 @@ namespace lss::player_two::interact_watch {
 /// After field_pickup. Logged.
 void Install(const platform::GameImage& image) noexcept;
 
+/// Puts the game's code back (at mod uninstall, with player 2 out).
+void Remove() noexcept;
+
 #else
 
 inline void Install(const platform::GameImage&) noexcept {}

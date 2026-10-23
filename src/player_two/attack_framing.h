@@ -30,6 +30,10 @@ namespace lss::player_two::attack_framing {
 /// Resolves and checks the sites and queues their placement (logged when it runs).
 void Install(const platform::GameImage& image) noexcept;
 
+/// Puts the game's code back (at mod uninstall, with player 2 out). A placement still queued then installs nothing; a
+/// call crossing two blocks is restored only from the game thread, else left in place (it passes through).
+void Remove() noexcept;
+
 /// Game thread, once per engine tick: the status line (Debug, every 10 s with activity).
 void Tick() noexcept;
 

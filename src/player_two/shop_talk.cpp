@@ -557,4 +557,19 @@ void Tick() noexcept
     g_queue.erase(g_queue.begin(), g_queue.begin() + static_cast<std::ptrdiff_t>(done));
 }
 
+void Remove() noexcept
+{
+    g_admitting   = false;
+    bool restored = true;
+#if LSS_DEV
+    restored = g_leaderName.Restore() && restored;
+#endif
+    restored = g_aiEvent.Restore() && restored;
+    restored = g_request.Restore() && restored;
+    if (!restored)
+    {
+        platform::Log(L"shop talk: an entry was changed after us; left in place (it passes through)");
+    }
+}
+
 }  // namespace lss::player_two::shop_talk

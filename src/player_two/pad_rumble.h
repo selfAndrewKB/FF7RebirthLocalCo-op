@@ -24,6 +24,9 @@ namespace lss::player_two::pad_rumble {
 /// Finds the UFunction and installs the last-device redirect (each checked). Logged.
 void Install(const platform::GameImage& image) noexcept;
 
+/// Puts the game's code back (at mod uninstall, with player 2 out).
+void Remove() noexcept;
+
 /// Once per frame before the world tick (the engine-tick callback): orders a new pair of controllers and follows
 /// player 2's pad.
 void BeforeTick() noexcept;

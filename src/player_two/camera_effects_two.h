@@ -30,6 +30,9 @@ namespace lss::player_two::camera_effects_two {
 /// Replaces the slots; each item installs whole or stays off (logged).
 void Install(const platform::GameImage& image) noexcept;
 
+/// Puts the game's code back (at mod uninstall, with player 2 out).
+void Remove() noexcept;
+
 /// Game thread, once per engine tick: the status line (Debug, every 10 s with activity).
 void Tick() noexcept;
 

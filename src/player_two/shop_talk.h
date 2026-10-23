@@ -34,6 +34,9 @@ namespace lss::player_two::shop_talk {
 /// Finds the game's accessors and places the redirects (each checked). Logged.
 void Install(const platform::GameImage& image) noexcept;
 
+/// Puts the game's code back (at mod uninstall, with player 2 out).
+void Remove() noexcept;
+
 /// Whether player 2's pass should leave the point with this key open: a shopkeeper's, while no shop is up or pending.
 /// Reads only the cached verdict (no allocation, no game call: the pass holds the manager's lock); an unknown key is
 /// queued for Tick. Game thread, inside the pass.

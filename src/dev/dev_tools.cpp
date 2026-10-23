@@ -77,9 +77,11 @@ void Remove() noexcept
     hud::RemovePositionProbe();  // each a no-op unless a command installed it
     hud::RemoveHudTrace();
     hud::label_relayouts::Remove();
+    player_two::interact_watch::Remove();  // its entries back; the pass tells no one
     player_two::menu_focus::Remove();
     player_two::target_census::Remove();  // its observers unregistered; its own hooks pass through
     renderer::RemoveSubmissionCensus();
+    player_two::rumble_watch::Remove();  // the first installed, the last out
 }
 
 void TickBeforeSession() noexcept

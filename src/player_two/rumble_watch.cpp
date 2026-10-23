@@ -17,6 +17,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <format>
+#include <initializer_list>
 #include <string>
 
 namespace lss::player_two::rumble_watch {
@@ -309,6 +310,17 @@ void Install(const platform::GameImage& image) noexcept
 std::int32_t EffectCount(const void* controller) noexcept
 {
     return controller == nullptr ? -1 : ReadField<std::int32_t>(controller, kEffectsNum);
+}
+
+void Remove() noexcept
+{
+    for (platform::VTableEntry* entry : {&g_pad, &g_send})
+    {
+        if (!entry->Restore())
+        {
+            platform::Log(L"rumble watch: an entry was changed after us; left in place (it passes through)");
+        }
+    }
 }
 
 }  // namespace lss::player_two::rumble_watch

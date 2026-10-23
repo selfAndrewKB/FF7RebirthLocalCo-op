@@ -24,8 +24,9 @@ namespace lss::modules {
 /// Installs every module in table order.
 void Install(const platform::GameImage& image) noexcept;
 
-/// Removes every module that has a Remove, in reverse table order. The rest stay installed: the DLL is pinned,
-/// so their code stays valid.
+/// Removes every module that has a Remove, in reverse table order. The rows without one patch nothing
+/// (charapop_centre puts its entry back in Release, before the unload's gate); their state stays, the DLL being
+/// pinned.
 void Remove() noexcept;
 
 /// What the modules read once per engine tick, after the session's tick; the entry point fills it from the

@@ -218,4 +218,13 @@ void BeforeTick() noexcept
     LogDevice();
 }
 
+void Remove() noexcept
+{
+    if (!g_note.Restore())
+    {
+        platform::Log(L"pad rumble: the last-device note's entry was changed after us; left in place (it passes "
+                      L"through)");
+    }
+}
+
 }  // namespace lss::player_two::pad_rumble

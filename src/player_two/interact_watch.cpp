@@ -740,4 +740,15 @@ void Install(const platform::GameImage& image) noexcept
     }
 }
 
+void Remove() noexcept
+{
+    field_pickup::SetHookObserver({});  // the pass tells no one
+    bool restored = g_executeSlot.Restore();
+    restored      = g_addPoint.Restore() && restored;
+    if (!restored)
+    {
+        platform::Log(L"interact: an entry was changed after us; left in place (it passes through)");
+    }
+}
+
 }  // namespace lss::player_two::interact_watch
