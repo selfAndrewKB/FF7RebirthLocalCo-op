@@ -3,6 +3,7 @@
 #include "facts/engine.h"
 #include "platform/build_value.h"
 #include "platform/code_memory.h"
+#include "platform/command_registry.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/instruction_patch.h"
@@ -581,6 +582,29 @@ void RemoveSubmissionCensus() noexcept
 bool SubmissionCensusInstalled() noexcept
 {
     return g_installed;
+}
+
+void RegisterSubmissionCensusCommands()
+{
+    using control::Outcome;
+    using control::Value;
+    control::Register({.name  = L"census",
+                       .shape = control::Shape::OnOff,
+                       .help  = L"diagnosis: the GPU submission census in the perf log's window (off at start; "
+                                L"census.txt: on)",
+                       .set   = [](const Value& v) {
+                           if (!std::get<bool>(v))
+                           {
+                               RemoveSubmissionCensus();
+                               return Outcome{true, L"submission census off"};
+                           }
+                           if (!InstallSubmissionCensus())
+                           {
+                               return Outcome{false, L"the submission census could not install (see the log)"};
+                           }
+                           return Outcome{true, L"submission census on (summary in the perf log)"};
+                       },
+                       .get = [] { return Value{SubmissionCensusInstalled()}; }});
 }
 
 void LogSubmissionCensus() noexcept

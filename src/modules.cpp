@@ -95,6 +95,8 @@
 #include "players/console_access.h"
 #include "players/single_view.h"
 #include "players/split_layout.h"
+#include "renderer/submission_census.h"
+#include "renderer/view_family_submission.h"
 #endif
 
 #include <array>
@@ -600,8 +602,12 @@ void RegisterCommands(player_two::Session& session, players::SplitLayout& layout
         hud::RegisterHudTraceCommands();
         hud::RegisterPositionProbeCommands();
         hud::RegisterDumpCommands();
+        renderer::RegisterMeFeedbackCommands();
+        renderer::RegisterSubmitHintCommands();
+        renderer::RegisterSubmissionCensusCommands();
+        renderer::RegisterViewFamilyCommands();
         RegisterOwnCommands(session);
-        control::RegisterModCommands();  // the groups not moved yet (phase 8, rows 6 and 7)
+        control::RegisterModCommands();  // the group not moved yet (phase 8, row 7)
     }
     catch (...)
     {

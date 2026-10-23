@@ -9,6 +9,10 @@
 #include "renderer/one_family_per_view.h"
 #include "renderer/scene_view_family.h"
 
+#if LSS_DEV
+#include "platform/command_registry.h"
+#endif
+
 #include <intrin.h>
 
 #include <algorithm>
@@ -211,6 +215,11 @@ void SetFamilySplit(bool onePerView) noexcept
                                                   : L"DIAGNOSIS: every view in one family (the engine's own multi-view render)");
 }
 
+bool FamilySplit() noexcept
+{
+    return g_familySplit.load(std::memory_order_relaxed);
+}
+
 void RemoveViewFamilySubmission() noexcept
 {
     if (!g_entry.Restore())
@@ -219,5 +228,26 @@ void RemoveViewFamilySubmission() noexcept
                       L"the submission stays installed and the mod stays loaded");
     }
 }
+
+#if LSS_DEV
+
+void RegisterViewFamilyCommands()
+{
+    using control::Outcome;
+    using control::Value;
+    control::Register({.name  = L"family-split",
+                       .shape = control::Shape::OnOff,
+                       .help  = L"diagnosis: one view family per player (on, at start), or both views in the engine's "
+                                L"one family (off; breaks the multi-view rules, so only with own-camera off)",
+                       .set   = [](const Value& v) {
+                           const bool on = std::get<bool>(v);
+                           SetFamilySplit(on);
+                           return Outcome{true, on ? L"one view family per player"
+                                                   : L"both views in one family (diagnosis)"};
+                       },
+                       .get = [] { return Value{FamilySplit()}; }});
+}
+
+#endif
 
 }  // namespace lss::renderer

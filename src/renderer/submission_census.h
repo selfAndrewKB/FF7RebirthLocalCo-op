@@ -36,6 +36,9 @@ bool SubmissionCensusInstalled() noexcept;
 /// Game thread, from the perf log's window: one summary of the window (per frame), then a new window.
 void LogSubmissionCensus() noexcept;
 
+/// The `census` command and reading. May throw (out of memory).
+void RegisterSubmissionCensusCommands();
+
 #else
 
 inline bool InstallSubmissionCensus() noexcept { return false; }

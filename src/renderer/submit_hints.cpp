@@ -9,6 +9,10 @@
 #include "platform/rip_relative.h"
 #include "platform/verified_code.h"
 
+#if LSS_DEV
+#include "platform/command_registry.h"
+#endif
+
 #include <cstdint>
 #include <filesystem>
 #include <optional>
@@ -115,6 +119,7 @@ void SetSubmitHintSkip(bool skip) noexcept
         // Someone else changed the block: stand aside for the session rather than write over them.
         platform::Log(L"GPU submissions: the submit hint's code changed under us; left alone from now on");
         g_site.reset();
+        g_skipping = false;  // the byte is no longer ours: the reading says stock
         return;
     }
     g_skipping = skip;
@@ -126,6 +131,11 @@ void SetSubmitHintSkip(bool skip) noexcept
     {
         platform::Log(L"GPU submissions: parallel passes submit at their hint again (the game's way)");
     }
+}
+
+bool SubmitHintSkipOn() noexcept
+{
+    return g_skipping;
 }
 
 void RemoveSubmitHintSkip() noexcept
@@ -141,5 +151,31 @@ void FollowPlayerTwo(bool playerTwoIn) noexcept
         SetSubmitHintSkip(playerTwoIn);
     }
 }
+
+#if LSS_DEV
+
+void RegisterSubmitHintCommands()
+{
+    using control::Outcome;
+    using control::Value;
+    control::Register({.name  = L"submit-hints",
+                       .shape = control::Shape::Word,
+                       .words = {L"skip", L"stock"},
+                       .help  = L"parallel passes without their own GPU submission (skip), or the game's; skip while "
+                                L"player 2 is in, set again at the next join or leave",
+                       .set   = [](const Value& v) {
+                           const bool skip = std::get<std::wstring>(v) == L"skip";
+                           if (!SubmitHintSkipInstalled())
+                           {
+                               return Outcome{false, L"the submit-hint skip is not installed (see the install log)"};
+                           }
+                           SetSubmitHintSkip(skip);
+                           return Outcome{true, skip ? L"parallel passes skip their submit hint"
+                                                     : L"the game's submit hints"};
+                       },
+                       .get = [] { return Value{std::wstring(SubmitHintSkipOn() ? L"skip" : L"stock")}; }});
+}
+
+#endif
 
 }  // namespace lss::renderer

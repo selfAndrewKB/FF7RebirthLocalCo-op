@@ -14,6 +14,8 @@
 // performance roadmap). Held while player 2 is in, so one-player play keeps the game's hints; `submit_hints_on.txt` or
 // `watch_only.txt` in the mod's folder keeps them always.
 
+#include "platform/dev_switch.h"
+
 namespace lss::platform {
 class GameImage;
 }
@@ -28,6 +30,7 @@ bool SubmitHintSkipInstalled() noexcept;
 
 /// Game thread: parallel passes skip their submit hint while `skip` is true. Acts and logs only on a change.
 void SetSubmitHintSkip(bool skip) noexcept;
+bool SubmitHintSkipOn() noexcept;
 
 /// Game thread, every tick: the skip follows player 2 in and out, set at each change of that; a command's choice
 /// (SetSubmitHintSkip) holds until the next join or leave.
@@ -35,5 +38,10 @@ void FollowPlayerTwo(bool playerTwoIn) noexcept;
 
 /// Game thread, on removal: the game's hints back.
 void RemoveSubmitHintSkip() noexcept;
+
+#if LSS_DEV
+/// The `submit-hints` command and reading. May throw (out of memory).
+void RegisterSubmitHintCommands();
+#endif
 
 }  // namespace lss::renderer

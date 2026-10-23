@@ -20,6 +20,8 @@
 // Each skipped and passed call is counted per family and summarised in the log.
 // The switch (`stream-feedback p1|each`) is on (p1) from install.
 
+#include "platform/dev_switch.h"
+
 #include <cstdint>
 
 namespace lss::platform {
@@ -40,8 +42,14 @@ bool MeFeedbackOnceOn() noexcept;
 /// processing, 2 the main pass's copy, 4 the hidden-component pass, 8 phase 8's mip-request dispatches, 16 the shadow
 /// pass's streaming-feedback writes (renderer/me_shadow_feedback_code.h). All at start.
 void SetMeFeedbackMask(std::uint32_t mask) noexcept;
+std::uint32_t MeFeedbackMask() noexcept;
 
 /// Game thread, each engine tick: writes the per-family counts line when its period is up.
 void PollMeFeedbackOnce() noexcept;
+
+#if LSS_DEV
+/// The `stream-feedback` and `feedback-mask` commands and readings. May throw (out of memory).
+void RegisterMeFeedbackCommands();
+#endif
 
 }  // namespace lss::renderer

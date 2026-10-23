@@ -11,6 +11,10 @@
 #include "platform/vtable_entry.h"
 #include "renderer/me_shadow_feedback_code.h"
 
+#if LSS_DEV
+#include "platform/command_registry.h"
+#endif
+
 #include <algorithm>
 #include <atomic>
 #include <cstdint>
@@ -458,6 +462,11 @@ void SetMeFeedbackMask(std::uint32_t mask) noexcept
                   (mask & 8) ? L"yes" : L"no", (mask & 16) ? L"yes" : L"no");
 }
 
+std::uint32_t MeFeedbackMask() noexcept
+{
+    return g_mask.load(std::memory_order_relaxed);
+}
+
 bool MeFeedbackOnceOn() noexcept
 {
     return g_on.load(std::memory_order_relaxed);
@@ -507,5 +516,49 @@ void PollMeFeedbackOnce() noexcept
                   line(Processes), line(Copies), line(Hidden), line(MipRequests), shadowLine,
                   g_shadowCode.IsInstalled() ? L"" : L" (not installed)", BudgetState());
 }
+
+#if LSS_DEV
+
+void RegisterMeFeedbackCommands()
+{
+    using control::Outcome;
+    using control::Value;
+    control::Register({.name  = L"stream-feedback",
+                       .shape = control::Shape::Word,
+                       .words = {L"p1", L"each"},
+                       .help  = L"which view families hand the game's scenery streaming their detail requests: player "
+                                L"1's only, as with one player (p1, at start), or each family",
+                       .set   = [](const Value& v) {
+                           const bool playerOneOnly = std::get<std::wstring>(v) == L"p1";
+                           if (!MeFeedbackOnceInstalled())
+                           {
+                               return Outcome{false, L"the one-copy streaming feedback is not installed (see the "
+                                                     L"install log)"};
+                           }
+                           SetMeFeedbackOnce(playerOneOnly);
+                           return Outcome{true, playerOneOnly ? L"player 1's family alone hands in streaming requests"
+                                                              : L"each family hands in streaming requests (the game's "
+                                                                L"code as it runs per family)"};
+                       },
+                       .get = [] { return Value{std::wstring(MeFeedbackOnceOn() ? L"p1" : L"each")}; }});
+    control::Register({.name  = L"feedback-mask",
+                       .shape = control::Shape::Integer,
+                       .max   = 31,
+                       .help  = L"diagnosis: which of player 2's skips under stream-feedback p1 act (1 the readback "
+                                L"processing, 2 the main pass's copy, 4 the hidden-component pass, 8 the phase 8 "
+                                L"mip-request dispatches, 16 the shadow pass's streaming writes)",
+                       .set   = [](const Value& v) {
+                           if (!MeFeedbackOnceInstalled())
+                           {
+                               return Outcome{false, L"the one-copy streaming feedback is not installed (see the "
+                                                     L"install log)"};
+                           }
+                           SetMeFeedbackMask(static_cast<std::uint32_t>(std::get<std::int64_t>(v)));
+                           return Outcome{true, L"feedback mask set (see the log)"};
+                       },
+                       .get = [] { return Value{std::int64_t{MeFeedbackMask()}}; }});
+}
+
+#endif
 
 }  // namespace lss::renderer

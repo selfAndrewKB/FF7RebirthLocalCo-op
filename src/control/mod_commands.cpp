@@ -10,10 +10,6 @@
 #include "player_two/scopes/scope_leaks.h"
 #include "player_two/world/charapop_centre.h"
 #include "player_two/world/charapop_near.h"
-#include "renderer/me_feedback_once.h"
-#include "renderer/submission_census.h"
-#include "renderer/submit_hints.h"
-#include "renderer/view_family_submission.h"
 
 #include <format>
 #include <string>
@@ -53,77 +49,6 @@ void RegisterMask(const wchar_t* name, std::int64_t max, const wchar_t* help, co
               .set   = [set, done](const Value& v) {
                   set(static_cast<std::uint32_t>(Number(v)));
                   return Outcome{true, done};
-              }});
-}
-
-// ---- the renderer -------------------------------------------------------------------------------------------
-
-void RegisterRenderer()
-{
-    Register({.name  = L"stream-feedback",
-              .shape = Shape::Word,
-              .words = {L"p1", L"each"},
-              .help  = L"which view families hand the game's scenery streaming their detail requests: player 1's only, "
-                       L"as with one player (p1, at start), or each family",
-              .set   = [](const Value& v) {
-                  const bool playerOneOnly = Word(v) == L"p1";
-                  if (!renderer::MeFeedbackOnceInstalled())
-                  {
-                      return Failed(L"the one-copy streaming feedback is not installed (see the install log)");
-                  }
-                  renderer::SetMeFeedbackOnce(playerOneOnly);
-                  return Outcome{true, playerOneOnly ? L"player 1's family alone hands in streaming requests"
-                                                     : L"each family hands in streaming requests (the game's code as "
-                                                       L"it runs per family)"};
-              }});
-    Register({.name  = L"submit-hints",
-              .shape = Shape::Word,
-              .words = {L"skip", L"stock"},
-              .help  = L"parallel passes without their own GPU submission (skip), or the game's; skip while player 2 "
-                       L"is in, set again at the next join or leave",
-              .set   = [](const Value& v) {
-                  const bool skip = Word(v) == L"skip";
-                  if (!renderer::SubmitHintSkipInstalled())
-                  {
-                      return Failed(L"the submit-hint skip is not installed (see the install log)");
-                  }
-                  renderer::SetSubmitHintSkip(skip);
-                  return Outcome{true, skip ? L"parallel passes skip their submit hint" : L"the game's submit hints"};
-              }});
-    Register({.name = L"census", .shape = Shape::OnOff,
-              .help = L"diagnosis: the GPU submission census in the perf log's window (off at start; census.txt: on)",
-              .set  = [](const Value& v) {
-                  if (!On(v))
-                  {
-                      renderer::RemoveSubmissionCensus();
-                      return Outcome{true, L"submission census off"};
-                  }
-                  if (!renderer::InstallSubmissionCensus())
-                  {
-                      return Failed(L"the submission census could not install (see the log)");
-                  }
-                  return Outcome{true, L"submission census on (summary in the perf log)"};
-              }});
-    Register({.name  = L"feedback-mask",
-              .shape = Shape::Integer,
-              .max   = 31,
-              .help  = L"diagnosis: which of player 2's skips under stream-feedback p1 act (1 the readback processing, "
-                       L"2 the main pass's copy, 4 the hidden-component pass, 8 the phase 8 mip-request dispatches, 16 "
-                       L"the shadow pass's streaming writes)",
-              .set   = [](const Value& v) {
-                  if (!renderer::MeFeedbackOnceInstalled())
-                  {
-                      return Failed(L"the one-copy streaming feedback is not installed (see the install log)");
-                  }
-                  renderer::SetMeFeedbackMask(static_cast<std::uint32_t>(Number(v)));
-                  return Outcome{true, L"feedback mask set (see the log)"};
-              }});
-    Register({.name = L"family-split", .shape = Shape::OnOff,
-              .help = L"diagnosis: one view family per player (on, at start), or both views in the engine's one family "
-                      L"(off; breaks the multi-view rules, so only with own-camera off)",
-              .set  = [](const Value& v) {
-                  renderer::SetFamilySplit(On(v));
-                  return Outcome{true, On(v) ? L"one view family per player" : L"both views in one family (diagnosis)"};
               }});
 }
 
@@ -249,7 +174,6 @@ void RegisterPlayerTwo()
 
 void RegisterModCommands()
 {
-    RegisterRenderer();
     RegisterPlayerTwo();
 }
 

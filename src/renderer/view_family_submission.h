@@ -10,6 +10,8 @@
 // With the perf log on, the renderer's report at the end of each 10 s window (platform/frame_watch.h) gives the
 // mean frame time, the view count and each family's time inside the engine's submission.
 
+#include "platform/dev_switch.h"
+
 namespace lss::platform {
 class GameImage;
 }
@@ -22,8 +24,14 @@ bool InstallViewFamilySubmission(const platform::GameImage& image) noexcept;
 
 /// Diagnosis (family-split): true, one family per view (at start); false, the engine's one multi-view family.
 void SetFamilySplit(bool onePerView) noexcept;
+bool FamilySplit() noexcept;
 
 /// Puts the engine's own function back in the entry (at mod uninstall).
 void RemoveViewFamilySubmission() noexcept;
+
+#if LSS_DEV
+/// The `family-split` command and reading. May throw (out of memory).
+void RegisterViewFamilyCommands();
+#endif
 
 }  // namespace lss::renderer
