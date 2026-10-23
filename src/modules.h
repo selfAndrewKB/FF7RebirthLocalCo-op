@@ -87,7 +87,7 @@ Result SetWindowSpan(const player_two::Session& session, bool on, const wchar_t*
 
 #if LSS_DEV
 /// Every control command (platform/command_registry.h), each owner's in turn, the shared actions' here: the one list,
-/// as the table above is for the installs. Game thread, once, before the command channel opens.
+/// as the table above is for the installs. Game thread, once, before the console opens (control/remote.h).
 void RegisterCommands(player_two::Session& session, players::SplitLayout& layout,
                       players::SingleView& singleView) noexcept;
 #endif

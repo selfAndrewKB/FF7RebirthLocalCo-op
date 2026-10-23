@@ -20,7 +20,7 @@
 // language, the runner and the channels above it are control/'s).
 //
 // Where they register: each owner has a RegisterCommands() under `#if LSS_DEV`, and one list calls them all in order
-// (modules::RegisterCommands, the module table's file), before the command channel opens. An owner's function is not
+// (modules::RegisterCommands, the module table's file), before the console opens. An owner's function is not
 // noexcept (building an entry allocates); the list catches, so a failure leaves the table short and logged.
 //
 // Taken from Remake's control/registry (2026-10-23). Changed: an Integer argument may be negative (Rebirth's

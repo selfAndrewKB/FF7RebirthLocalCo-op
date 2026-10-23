@@ -10,16 +10,17 @@
 //
 // A writer creates the script under another extension (say `.tmp`) and renames it to `.txt`, so the channel never
 // reads a half-written file. Scripts run one at a time, lowest file name first, each as one client of the runner
-// (control/runner.h). A script with any invalid line, or an `abort` (submitted whole, it would drop every line before
-// it), is rejected whole, before anything runs; a dropped line fails the script. While a script runs,
-// each reply is appended to its result file at once (and logged), so a result survives a `quit` or a crash; the
-// result file's last line is `finished: ok`, `finished: failed` or `finished: rejected`.
+// (control/runner.h) it shares with the console (control/remote.h owns both). A script with any invalid line, or an
+// `abort` (submitted whole, it would drop every line before it), is rejected whole, before anything runs; a dropped
+// line fails the script. While a script runs, each reply is appended to its result file at once (and logged), so a
+// result survives a `quit` or a crash; the result file's last line is `finished: ok`, `finished: failed` or
+// `finished: rejected`.
 //
 // Scripts already in the inbox when the channel opens were sent to an earlier game session (their sender timed out,
 // or the game closed first). They are retired unrun (`finished: skipped`): a stale `quit` would otherwise end the
 // next launch at startup.
 //
-// Game thread only: Tick runs from the engine-tick callback, before the world ticks.
+// Game thread only: the console's Tick calls BeforeRun, hands it its replies (Take), then AfterRun.
 
 #include "control/runner.h"
 
@@ -32,13 +33,28 @@ namespace lss::control {
 class CommandChannel
 {
 public:
-    /// Creates the folders next to the loaded DLL and the runner over the mod's registry, with `holds` for the
-    /// scripts' stick holds. Every command is registered by then (the registry's refusals are logged here). False
-    /// (logged) if the folders cannot be made; the channel then stays closed and Tick does nothing.
-    bool Open(Holds& holds) noexcept;
+    /// The scripts' client ids: from here up, so they never meet the console's (control/server.h counts from 1).
+    static constexpr ClientId kFirstClient = 0x8000'0000u;
 
-    /// Runs the current script's next tick, or looks for a new script every few ticks.
-    void Tick() noexcept;
+    /// Creates the folders next to the loaded DLL; scripts run on `runner`. False (logged) if the folders cannot be
+    /// made; the channel then stays closed and its calls do nothing.
+    bool Open(Runner& runner) noexcept;
+
+    /// Before the runner's tick: looks for a new script every few ticks while none runs.
+    void BeforeRun(std::uint64_t tick);
+
+    /// The reply belongs to a script (kFirstClient and up).
+    static bool Owns(ClientId client) noexcept { return client >= kFirstClient; }
+
+    /// One of the running script's replies: written to its result file and the log.
+    void Take(const Reply& reply);
+
+    /// After the runner's tick: the script ends once its client has nothing queued or held.
+    void AfterRun();
+
+    /// An exception stopped the console: the running script gets its `finished: failed` (its sender waits
+    /// for one) and the channel closes.
+    void Abandon() noexcept;
 
 private:
     struct Running
@@ -52,15 +68,14 @@ private:
     bool RetireLeftovers();
     void StartNext();
     void Append(const std::filesystem::path& file, const std::wstring& line) noexcept;
-    void Report(const std::vector<Reply>& replies);
     void End();
 
     std::filesystem::path  inbox_;
     std::filesystem::path  done_;
     bool                   open_    = false;
     std::uint64_t          tick_    = 0;
-    ClientId               scripts_ = 0;  // the last client id given: one per script
-    std::optional<Runner>  runner_;
+    ClientId               scripts_ = kFirstClient - 1;  // the last client id given: one per script
+    Runner*                runner_  = nullptr;
     std::optional<Running> running_;
 };
 

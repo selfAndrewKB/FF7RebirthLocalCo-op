@@ -1,6 +1,6 @@
 #include "dev/dev_tools.h"
 
-#include "control/command_channel.h"
+#include "control/remote.h"
 #include "control/stick_holds.h"
 #include "hud/hud_trace.h"
 #include "hud/minimap/label_relayouts.h"
@@ -27,9 +27,11 @@ namespace lss::dev {
 
 namespace {
 
-// Game thread only.
+// Game thread, but for Remove (the mod's destructor, which may run off it).
 std::optional<control::StickHolds> g_holds;
-control::CommandChannel            g_channel;
+// Never destroyed: a console still open at process exit (player 2 in, so Remove never ran) would otherwise close in
+// DllMain, under the loader lock, taking a mutex a killed thread may hold and calling WSACleanup there.
+control::Remote& g_remote = *new control::Remote;
 
 }  // namespace
 
@@ -65,15 +67,16 @@ void Install(const platform::GameImage& image, player_two::Session& session) noe
 
 void InstallControl(player_two::Session& session) noexcept
 {
-    // Control scripts drive the same actions as the keys, from files (control/command_channel.h). The commands are
+    // The console and the file inbox drive the same actions as the keys (control/remote.h). The commands are
     // registered by then (mod.cpp: modules::RegisterCommands, or the console's alone in the watch-only start); the
-    // channel logs the registry's refusals as it opens.
+    // console logs the registry's refusals as it opens.
     g_holds.emplace(session);
-    g_channel.Open(*g_holds);
+    g_remote.Open(*g_holds);
 }
 
 void Remove() noexcept
 {
+    g_remote.Close();  // the last installed: its socket thread joined first
     hud::RemovePositionProbe();  // each a no-op unless a command installed it
     hud::RemoveHudTrace();
     hud::label_relayouts::Remove();
@@ -86,7 +89,7 @@ void Remove() noexcept
 
 void TickBeforeSession() noexcept
 {
-    g_channel.Tick();  // nothing while closed
+    g_remote.Tick();  // nothing while closed
 }
 
 void TickAfterSession() noexcept

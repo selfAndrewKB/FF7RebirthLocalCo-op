@@ -55,7 +55,7 @@ BUILDS = {
     "dev": ROOT / "build" / "Game__Shipping__Win64" / "LocalSplitScreen.dll",
     "release": ROOT / "build-release" / "Game__Shipping__Win64" / "LocalSplitScreen.dll",
 }
-ALWAYS_EXPECT_NOT = [r"raised an exception", r"check failed:", r"an exception stopped the command channel"]
+ALWAYS_EXPECT_NOT = [r"raised an exception", r"check failed:", r"an exception stopped the (command channel|console)"]
 
 # The harness's three waits as the mod's readings compare them (p2.state and p2.in: src/player_two/session/session.cpp;
 # field.ready: src/modules.cpp): the control route sends the comparison, the key route maps a script's comparison back

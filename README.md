@@ -31,9 +31,10 @@ needs a key.
 | Ctrl+F3 | A third full-size view in and out (the multi-monitor measurement) |
 | Ctrl+F2 | The game window across its row of monitors, and back |
 
-Control scripts (`tools/control.py`, with the development tools built in) switch the rest for
-diagnosis, e.g. `hud-band off`, `hud-image off`, `hud-levers off`, `leak-fixes 0`
-(`src/control/script.h` lists them all).
+With the development tools built in, control commands switch the rest for diagnosis, e.g. `hud-band off`,
+`hud-image off`, `hud-levers off`, `leak-fixes 0` (`help` lists them all, each with its reading): typed in the console
+(`python tools/remote.py shell`, 127.0.0.1:4419), sent with `-c` or `run <file>`, or as script files through
+`tools/control.py` (`src/control/script.h` has the language).
 
 ## Performance
 

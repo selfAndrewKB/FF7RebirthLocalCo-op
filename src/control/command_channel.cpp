@@ -112,7 +112,7 @@ std::wstring ResultText(std::uint64_t tick, const Reply& reply)
 
 }  // namespace
 
-bool CommandChannel::Open(Holds& holds) noexcept
+bool CommandChannel::Open(Runner& runner) noexcept
 {
     try
     {
@@ -137,14 +137,9 @@ bool CommandChannel::Open(Holds& holds) noexcept
         {
             return false;
         }
-        for (const auto& name : Global().Rejected())
-        {
-            Log(L"control: the command '{}' was refused by the registry (a taken name or a malformed entry)", name);
-        }
-        runner_.emplace(Global(), holds);
-        open_ = true;
-        Log(L"control: command channel open ({} commands); scripts go in {}", Global().Entries().size(),
-            inbox_.wstring());
+        runner_ = &runner;
+        open_   = true;
+        Log(L"control: command channel open; scripts go in {}", inbox_.wstring());  // the harness waits on it
         return true;
     }
     catch (...)
@@ -154,42 +149,37 @@ bool CommandChannel::Open(Holds& holds) noexcept
     }
 }
 
-void CommandChannel::Tick() noexcept
+void CommandChannel::BeforeRun(std::uint64_t tick)
 {
     if (!open_)
     {
         return;
     }
-    ++tick_;
-    try
+    tick_ = tick;
+    if (!running_ && tick_ % kScanTicks == 0)
     {
-        if (!running_ && tick_ % kScanTicks == 0)
-        {
-            StartNext();  // its queries may answer at once
-        }
-        runner_->Tick(tick_);
-        Report(runner_->TakeReplies());
-        if (running_ && !runner_->Busy(running_->client))
-        {
-            End();
-        }
+        StartNext();  // its queries may answer at once
     }
-    catch (...)
+}
+
+void CommandChannel::AfterRun()
+{
+    if (open_ && running_ && !runner_->Busy(running_->client))
     {
-        Log(L"control: an exception stopped the command channel");
-        if (runner_)
-        {
-            runner_->Shutdown();  // every hold released
-        }
-        if (running_)
-        {
-            // The sender waits for a `finished:` line; without one it would wait out its whole timeout.
-            Append(running_->results, L"an exception stopped the command channel");
-            Append(running_->results, L"finished: failed");
-            running_.reset();
-        }
-        open_ = false;
+        End();
     }
+}
+
+void CommandChannel::Abandon() noexcept
+{
+    if (running_)
+    {
+        // The sender waits for a `finished:` line; without one it would wait out its whole timeout.
+        Append(running_->results, L"an exception stopped the console");
+        Append(running_->results, L"finished: failed");
+        running_.reset();
+    }
+    open_ = false;
 }
 
 bool CommandChannel::RetireLeftovers()
@@ -303,25 +293,22 @@ void CommandChannel::StartNext()
     }
 }
 
-void CommandChannel::Report(const std::vector<Reply>& replies)
+void CommandChannel::Take(const Reply& reply)
 {
-    for (const auto& reply : replies)
+    if (!running_ || reply.client != running_->client)
     {
-        if (!running_ || reply.client != running_->client)
-        {
-            continue;  // the inbox is the runner's only client: nothing else submits
-        }
-        if (reply.kind == ReplyKind::Note)
-        {
-            Log(L"control note: {}", reply.detail);
-        }
-        // A dropped line never ran, so the script did not do what it says, whatever dropped it.
-        running_->failed = running_->failed || reply.kind == ReplyKind::Failed || reply.kind == ReplyKind::Rejected ||
-                           reply.kind == ReplyKind::Dropped;
-        const auto text = ResultText(tick_, reply);
-        Append(running_->results, text);
-        Log(L"control {}: {}", running_->name, text);
+        return;  // one script runs at a time: a reply to an ended one has nowhere to go
     }
+    if (reply.kind == ReplyKind::Note)
+    {
+        Log(L"control note: {}", reply.detail);
+    }
+    // A dropped line never ran, so the script did not do what it says, whatever dropped it.
+    running_->failed = running_->failed || reply.kind == ReplyKind::Failed || reply.kind == ReplyKind::Rejected ||
+                       reply.kind == ReplyKind::Dropped;
+    const auto text = ResultText(tick_, reply);
+    Append(running_->results, text);
+    Log(L"control {}: {}", running_->name, text);
 }
 
 void CommandChannel::End()
