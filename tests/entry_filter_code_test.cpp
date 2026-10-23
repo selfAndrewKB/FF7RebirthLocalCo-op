@@ -1,12 +1,12 @@
 // Host-side tests for the player-2 entry buffers and the per-family draw gate, run without the game.
 //
-// The bytes the mod writes near the game (hud/entry_filter_code.h) are EXECUTED here, in small
+// The bytes the mod writes near the game (hud/passes/entry_filter_code.h) are EXECUTED here, in small
 // harnesses that recreate their surroundings in the game's consume loop:
 //   buffers: r9 = the entry, rdi = the renderer (pool 2's vertex buffer at +0x90), the index buffer
 //            and SRM slot arguments already stored at [rsp+28h] and [rsp+30h];
 //   gate:    rbx = the entry, r9 = its batch array (count at +8), followed by the stock jle.
 
-#include "hud/entry_filter_code.h"
+#include "hud/passes/entry_filter_code.h"
 #include "platform/x64_jump.h"
 
 #include "exec_page.h"

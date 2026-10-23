@@ -3,7 +3,7 @@
 // The release always comes before the teardown, the teardown waits for the release to complete,
 // and a release that never completes stops the leave instead of tearing down under it.
 
-#include "player_two/leave_sequence.h"
+#include "player_two/session/leave_sequence.h"
 
 #include "expect.h"
 

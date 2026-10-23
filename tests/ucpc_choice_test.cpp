@@ -3,7 +3,7 @@
 // Player 2 not in: untouched. Both eligible: the coin decides. One eligible: that one, whatever the coin. Neither:
 // player 1, as the game would.
 
-#include "player_two/ucpc_choice.h"
+#include "player_two/battle/ucpc_choice.h"
 
 #include "expect.h"
 

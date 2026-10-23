@@ -160,7 +160,7 @@ KEY_SWITCHES = {
 RESET_AT_JOIN = {"own-camera": "on"}
 RESET_AT_LEAVE = {"third-view": "off"}
 
-# The mod's own lines that end a `wait-until` (player_two/session.cpp, player_two/field_exit.cpp).
+# The mod's own lines that end a `wait-until` (player_two/session/session.cpp, player_two/session/field_exit.cpp).
 WAIT_LINES = {
     "playing": re.compile(r"player 2 took .+ after \d+ tick"),
     "out": re.compile(r"leave: player 2 left|player 2 was removed by the game"),

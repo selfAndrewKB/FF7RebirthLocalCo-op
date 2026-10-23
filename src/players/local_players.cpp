@@ -65,7 +65,7 @@ bool GuardedRemove(RemoveLocalPlayerFn remove, UObject* gameInstance, UObject* l
 
 /// UGameplayStatics::CreatePlayer(worldContext, controllerId, bSpawnPlayerController = true): a
 /// local player with its own PlayerController. The login path's camera-manager BeginPlay faults for
-/// a second player unless player_two/own_controller.h is installed and a join scope is open.
+/// a second player unless player_two/session/own_controller.h is installed and a join scope is open.
 struct CreatedPlayer
 {
     bool     called     = false;  // the function was found and the call returned without an exception

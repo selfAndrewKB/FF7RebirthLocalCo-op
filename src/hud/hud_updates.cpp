@@ -1,7 +1,7 @@
 #include "hud/hud_updates.h"
 
 #include "facts/hud.h"
-#include "hud/marker_timers.h"
+#include "hud/field/marker_timers.h"
 #include "platform/frame_watch.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -39,7 +39,8 @@ constexpr std::uint8_t kTick170[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0
 constexpr std::uint8_t kTick180[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x48, 0x89, 0x7C,
                                      0x24, 0x20, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0xB8, 0xB0, 0x01, 0x00, 0x00};
 
-constexpr std::uint32_t kMarkerListMember = 0x150;  // the off-screen enemy arrows among them (hud/marker_timers.h)
+// the off-screen enemy arrows among them (hud/field/marker_timers.h)
+constexpr std::uint32_t kMarkerListMember = 0x150;
 
 // In MasterHUD_Tick's order (pass 9, P9.1).
 constexpr std::array<SubTick, 6> kSubTicks{{
@@ -122,7 +123,7 @@ void* Member(std::uint32_t member) noexcept
     return object;
 }
 
-/// The marker list with player 2's own arrow timers and the real time step (hud/marker_timers.h).
+/// The marker list with player 2's own arrow timers and the real time step (hud/field/marker_timers.h).
 bool RunMarkerListOwnTimers(ObjectFn tick, void* list, const OwnArrowTimers& arrows) noexcept
 {
     const float still = 0.0f;

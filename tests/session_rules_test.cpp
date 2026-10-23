@@ -3,7 +3,7 @@
 // The holds of the session's Playing phase, which of them retake a member, and what a game leader change asks of
 // the session.
 
-#include "player_two/session_rules.h"
+#include "player_two/session/session_rules.h"
 
 #include "expect.h"
 

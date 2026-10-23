@@ -12,12 +12,12 @@
 //                                         1 its on-screen scale (views/view_shape.h, SplitFov;
 //                                         0.5 at start); native = the stock MajorAxisFOV rule
 //   hud-band on|off                       lay the HUD out in the part of its image each half shows
-//                                         (hud/overlay_layout.h); off logs the values only
+//                                         (hud/layout/overlay_layout.h); off logs the values only
 //   hud-image on|off                     player 2's HUD image: the overlay rendered a second time
-//                                         and drawn only in player 2's half (hud/second_image.h)
+//                                         and drawn only in player 2's half (hud/passes/second_image.h)
 //   hud-levers on|off                    player 2's image shows player 2's content: the game's
 //                                         player levers switched around player 2's pass
-//                                         (hud/player_two_pass.h)
+//                                         (hud/passes/player_two_pass.h)
 //   hud-levers-mask <0..511>             diagnosis: which levers act (1 contexts, 2 first player,
 //                                         4 primary controller, 8 view rect, 16 updates, 32 compass,
 //                                         64 the arrows' own timers, 128 the enemy gauges per view,
@@ -28,15 +28,15 @@
 //                                         and leader-action tick on pad 1); all at start
 //   leak-fixes <0..7>                    diagnosis: which put-backs of player 2's scope leaks act (1 the
 //                                         input clock, 2 the leader transform, 4 field summons skipped;
-//                                         player_two/scope_leaks.h); all at start
+//                                         player_two/scopes/scope_leaks.h); all at start
 //   buttons-mask <0..3>                  diagnosis: which parts of per-pad buttons act (1 the split views,
 //                                         2 pad 2 kept from menus and prompts); both at start
 //   icons-mask <0..15>                   diagnosis: which parts of player 2's own map icons act (1 its
 //                                         icon manager ticked, 2 its first controller player 2's, 4 each
 //                                         half shows its own canvases, 8 ranged from player 2's member;
-//                                         hud/area_icons_two.h); all at start
+//                                         hud/minimap/area_icons_two.h); all at start
 //   battle-mask <0..511>                 diagnosis: bit 8 runs player 2's targeting (the game's
-//                                         targeting tick for player 2; player_two/lock_on.h); the other
+//                                         targeting tick for player 2; player_two/battle/lock_on.h); the other
 //                                         bits are retired and ignored; on at start
 //   log-level error|warning|info|debug|trace
 //                                         the most detailed log level written (platform/log.h); info at
@@ -64,20 +64,20 @@
 //                                         the engine's one family (off; breaks the multi-view rules, so only
 //                                         with own-camera off; renderer/view_family_submission.h)
 //   minimap-once on|off                  the minimap's map is rendered once per frame, by player 1's HUD
-//                                         pass (on, at start), or again in player 2's (hud/minimap_once.h)
+//                                         pass (on, at start), or again in player 2's (hud/minimap/minimap_once.h)
 //   shoulder-scale on|off                 each half's camera shoulder offset scaled to its width (on at start;
-//                                         player_two/shoulder_scale.h)
+//                                         player_two/camera/shoulder_scale.h)
 //   shoulder-scale-min <0.25..1>          the smallest shoulder factor (0.7 at start; side by side's width alone
 //                                         gives 0.5)
 //   framing-offset <tb> <sbs>            field-camera distance steps added to the Options level while player 2
 //                                         is in, per layout (-2..5 each; 0 and 0 at start;
-//                                         player_two/camera_distance.h)
+//                                         player_two/camera/camera_distance.h)
 //   npc-centre on|off                    the NPC population follows both players while split (on at start),
-//                                         or the leader as the game alone does (player_two/charapop_centre.h)
+//                                         or the leader as the game alone does (player_two/world/charapop_centre.h)
 //   npc-detail full|reduced|off          characters near player 2 that player 1's camera does not keep get full
 //                                         detail within the game's distances from player 2's camera (full, at
 //                                         start; on means full), within half of them (reduced), or only what
-//                                         player 1's camera gives them (off; player_two/charapop_near.h)
+//                                         player 1's camera gives them (off; player_two/world/charapop_near.h)
 //   single-view auto|on|off              player 1's single view while player 2 is in: for the game's
 //                                         whole-screen states (auto, the default), always, or never
 //                                         (players/single_view.h)

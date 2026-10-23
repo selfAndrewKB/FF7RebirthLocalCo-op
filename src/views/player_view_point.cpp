@@ -1,7 +1,6 @@
 #include "views/player_view_point.h"
 
 #include "facts/engine.h"
-#include "views/axis_records.h"
 #include "platform/frame_watch.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -10,6 +9,7 @@
 #include "players/split_layout.h"
 #include "players/split_settings_access.h"
 #include "players/unreal_access.h"
+#include "views/axis_records.h"
 #include "views/minimal_view_info.h"
 #include "views/stream_view_math.h"
 #include "views/third_view.h"
@@ -113,7 +113,7 @@ void LogShapeOnChange(bool isPlayerTwo, const std::byte* viewInfo) noexcept
 // While player 2 is in, every player's view takes the mod's FOV rule
 // (ULocalPlayer::AspectRatioAxisConstraint), read by GetProjectionData after this function returns
 // (0x140CC0B1D) for a view without the 16:9 constraint. The constraint itself is the main camera's
-// own setting, cleared once per camera through the game's setter (player_two/main_camera_shape.h).
+// own setting, cleared once per camera through the game's setter (player_two/camera/main_camera_shape.h).
 //
 // The FOV rule is written once per player, at the player's first split frame (and again only if
 // the mod's own FOV mode changes), then left alone: the game's only writer, the level-sequence
@@ -181,7 +181,7 @@ platform::SettledLog<FovSteady, int> g_fovLog[2] = {platform::SettledLog<FovStea
                                                     platform::SettledLog<FovSteady, int>(kFovStillFrames)};
 
 /// Each player's half width against the camera's own (tan of the half-angles; 1 without a split FOV), for the
-/// camera code that places things across the view (player_two/shoulder_scale.h).
+/// camera code that places things across the view (player_two/camera/shoulder_scale.h).
 std::atomic<float> g_widthRatio[2] = {1.0f, 1.0f};
 
 /// With a weight chosen and the halves' shape known, writes the split FOV (views/view_shape.h,

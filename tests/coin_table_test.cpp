@@ -4,7 +4,7 @@
 // coin is evicted, never the one asked to keep; a clear forgets only the matching key; the fall-back turns player 2
 // into player 1 only while the coin says player 2; keys share the low bits with the player.
 
-#include "player_two/coin_table.h"
+#include "player_two/battle/coin_table.h"
 
 #include "expect.h"
 

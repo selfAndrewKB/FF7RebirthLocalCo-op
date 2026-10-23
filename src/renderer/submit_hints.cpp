@@ -1,12 +1,12 @@
 #include "renderer/submit_hints.h"
 
 #include "facts/engine.h"
-#include "platform/rip_relative.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/instruction_patch.h"
 #include "platform/log.h"
 #include "platform/module_folder.h"
+#include "platform/rip_relative.h"
 #include "platform/verified_code.h"
 
 #include <cstdint>

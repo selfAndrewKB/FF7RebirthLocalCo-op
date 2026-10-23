@@ -1,12 +1,12 @@
 // Host-side tests for the minimap skip code, run without the game.
 //
-// The bytes the mod writes near the game (hud/minimap_once_code.h) are EXECUTED here, in a harness that
+// The bytes the mod writes near the game (hud/minimap/minimap_once_code.h) are EXECUTED here, in a harness that
 // recreates what they rely on at each site: r15 = the circle widget (its +0x1C0 read by the replaced
 // instruction), stack room at [rsp+70h..7Fh] for the octagon's stores, and xmm13 non-zero beforehand.
 // The harness returns 0 when the code fell through to the replaced instruction (the stock path) and
 // 0x100 when it jumped past the submit with xmm13 cleared (anything else: the skip path is wrong).
 
-#include "hud/minimap_once_code.h"
+#include "hud/minimap/minimap_once_code.h"
 #include "platform/x64_jump.h"
 
 #include "exec_page.h"

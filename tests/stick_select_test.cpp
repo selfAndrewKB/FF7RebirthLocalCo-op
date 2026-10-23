@@ -3,7 +3,7 @@
 // Two pads in the XInput bank: pad 0 pushes left, pad 1 pushes up. Each pad must read only its own
 // record, per stick, and a merged stick of exactly zero must stay zero.
 
-#include "player_two/stick_select.h"
+#include "player_two/input/stick_select.h"
 
 #include "expect.h"
 

@@ -4,7 +4,7 @@
 // from the value the caller expects, restores it only if the replacement is still there, and a
 // window opened inside another one leaves both the slot and the outer window alone.
 
-#include "player_two/swap_window.h"
+#include "player_two/scopes/swap_window.h"
 
 #include "expect.h"
 

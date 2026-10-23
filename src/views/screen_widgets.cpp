@@ -9,7 +9,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "player_two/generation.h"
-#include "player_two/leader_scope.h"
+#include "player_two/scopes/leader_scope.h"
 
 #include <array>
 #include <cstdint>

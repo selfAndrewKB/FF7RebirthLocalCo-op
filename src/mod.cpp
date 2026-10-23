@@ -15,8 +15,8 @@
 #include "dev/dev_tools.h"
 #include "facts/engine.h"
 #include "facts/in_battle.h"
-#include "hud/hud_placement.h"
-#include "hud/overlay_layout.h"
+#include "hud/layout/hud_placement.h"
+#include "hud/layout/overlay_layout.h"
 #include "modules.h"
 #include "platform/code_memory.h"
 #include "platform/frame_watch.h"
@@ -27,18 +27,18 @@
 #include "platform/module_folder.h"
 #include "platform/thread_times.h"
 #include "platform/verified_code.h"
-#include "player_two/charapop_centre.h"
-#include "player_two/charapop_near.h"
-#include "player_two/climb_context.h"
-#include "player_two/ffb_manager_two.h"
-#include "player_two/field_exit.h"
+#include "player_two/feedback/ffb_manager_two.h"
+#include "player_two/feedback/rumble_list_two.h"
 #include "player_two/generation.h"
-#include "player_two/pad_sticks.h"
-#include "player_two/rumble_list_two.h"
-#include "player_two/session.h"
-#include "player_two/shared_ride.h"
+#include "player_two/input/climb_context.h"
+#include "player_two/input/pad_sticks.h"
+#include "player_two/rides/shared_ride.h"
+#include "player_two/session/field_exit.h"
+#include "player_two/session/session.h"
 #include "player_two/weak_object.h"
-#include "player_two/world_actor_reach.h"
+#include "player_two/world/charapop_centre.h"
+#include "player_two/world/charapop_near.h"
+#include "player_two/world/world_actor_reach.h"
 #include "players/console_access.h"
 #include "players/join_keys.h"
 #include "players/single_view.h"
@@ -411,8 +411,8 @@ private:
             LeaveBeforeWorldChange(L"the field stopped running (a field exit the redirected entry did not see)");
         }
         lss::dev::TickBeforeSession();
-        // The buggy and the bronco (player_two/shared_ride.h): player 2 stands aside, the game's merge reaches player 1
-        // from every pad.
+        // The buggy and the bronco (player_two/rides/shared_ride.h): player 2 stands aside, the game's merge reaches
+        // player 1 from every pad.
         const bool shared = lss::player_two::shared_ride::Tick();
         lss::player_two::rumble_list_two::CopyPlayerOne(shared && lss::player_two::ffb_manager_two::Attached());
         session_->SetSharedRide(shared);

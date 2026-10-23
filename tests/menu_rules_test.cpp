@@ -3,7 +3,7 @@
 // Pad 2's press gate and the taken-key set; the world-slow value and the wait sound shared by the two menus; the join
 // Setup's pacing and readiness; the follow rule.
 
-#include "player_two/menu_rules.h"
+#include "player_two/battle/menu_rules.h"
 
 #include "expect.h"
 

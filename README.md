@@ -2,8 +2,11 @@
 
 Two-player split-screen for FINAL FANTASY VII REBIRTH, as a UE4SS C++ mod.
 
-- **Why it is built this way:** `../Documentation/SPLITSCREEN-REBUILD-PHILOSOPHY.md`
-- **How it works, module by module:** `../Documentation/SPLITSCREEN-ARCHITECTURE.md`
+- **Plan and state:** `../Documentation/plan/README.md` (the front page; one file per topic in `plan/topics/`)
+- **Why it is built this way:** `../Documentation/SPLITSCREEN-REBUILD-PHILOSOPHY.md`; the rules in
+  `../Documentation/plan/rules.md`
+- **How it works, module by module:** `../Documentation/SPLITSCREEN-ARCHITECTURE.md`; the systems reversed in
+  `../Documentation/research/RE-*.md`
 
 ## What it does
 
@@ -23,6 +26,10 @@ needs a key.
 | Ctrl+F4 | Halves filled, or 16:9 halves with bars |
 | Ctrl+F6 | For testing: player 2's half shows player 1's camera |
 | Ctrl+F9 | For testing: every pad drives both players' sticks (the game's merge) |
+| Ctrl+F10 | For comparison: the NPC population follows the leader alone instead of both players |
+| Ctrl+F11 | For comparison: characters near player 2 take their detail from player 1's camera alone |
+| Ctrl+F3 | A third full-size view in and out (the multi-monitor measurement) |
+| Ctrl+F2 | The game window across its row of monitors, and back |
 
 Control scripts (`tools/control.py`, with the development tools built in) switch the rest for
 diagnosis, e.g. `hud-band off`, `hud-image off`, `hud-levers off`, `leak-fixes 0`
@@ -50,13 +57,23 @@ A file in the mod's folder keeps the game's behaviour:
 ```
 src/
   mod.cpp        the UE4SS entry point: verify, install, wire the modules together
-  modules.cpp    the module table: every module after the session, installed in order, removed in reverse
+  modules.cpp    the module table (installed in order, removed in reverse), the two tick phases, the shared actions
+  platform/      the game image, the fact checks, the redirects, the log, the dev switch
   facts/         the engine facts two or more modules share, one declaration per address
-  platform/      the game image, the fact checks, the vtable entry, the log
   players/       the engine's own paths: local players, reflection calls, console and settings access, a widget's
                  opacity; the held setting, the split layout and the single view over them
-  renderer/      one view family per player
+  player_two/    player 2's play, by game system: session/ (the join, the party member, the leave), scopes/ (one game
+                 call made as player 2), camera/, input/ (pads, sticks, movement), feedback/ (rumble and sound),
+                 battle/, traversal/, world/, rides/; the helpers every wrapper shares at the root
+  views/         the view points, the whole-screen states, the streaming views, the third view, the window span
+  hud/           the HUD in each half, by system: passes/ (player 2's HUD image), layout/ (the band), minimap/, field/
+                 (prompt rows, markers, pins), battle/ (targets, gauges, popups); the roots, the live widgets, the
+                 pure rules and the dev dumps at the root
+  renderer/      one view family per player, and the renderer's performance levers
+  control/       the control-script channel (built with the dev tools)
+  dev/           the dev tools: the control channel's install, the watches' install and ticks
 tests/           host-side tests of the logic that needs neither the game nor UE4SS
+tools/           the control scripts, the regression harness, the version match
 ```
 
 Engine facts (addresses, vtable slots, field offsets) are written as IDA shows them for the research

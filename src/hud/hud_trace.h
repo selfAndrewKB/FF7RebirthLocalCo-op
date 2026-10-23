@@ -11,7 +11,7 @@
 //      (0x140C8D620); the pc is the marker widget's own player (its PlayerContext);
 //   P  EndUI__ProjectWorldToRootOverlay(pc, ...), the compass and quest icons (four sites in
 //      AreaMapIcon_FrameUpdate and its helper); the pc is the world's first controller;
-//   R  the overlay render (hud/root_overlay_render.h, which calls TraceBeforeRender and
+//   R  the overlay render (hud/passes/root_overlay_render.h, which calls TraceBeforeRender and
 //      TraceAfterRender around it); each frame's line is logged there.
 // It also counts M and P by the player whose controller was passed.
 //
@@ -38,7 +38,7 @@ inline constexpr std::int32_t kMaxHudTraceFrames = 30;
 /// Logs the next `frames` frames (clamped to 1..kMaxHudTraceFrames).
 void StartHudTrace(std::int32_t frames) noexcept;
 
-/// Game thread, around the overlay render (hud/root_overlay_render.h); stubs without the dev tools.
+/// Game thread, around the overlay render (hud/passes/root_overlay_render.h); stubs without the dev tools.
 #if LSS_DEV
 void TraceBeforeRender() noexcept;
 void TraceAfterRender() noexcept;

@@ -1,11 +1,11 @@
-// Host-side tests for the command-menu gate (player_two/command_rules_code.h), run without the game.
+// Host-side tests for the command-menu gate (player_two/battle/command_rules_code.h), run without the game.
 //
 // The bytes the mod writes near the game are EXECUTED here, installed through platform::CodeRedirect
 // over a stand-in laid out like FieldCommandCtrl_IsMemberCommandable's entry: `mov [rsp+8], rbx` at
 // 4 bytes into a 16-byte block (0x140E77414 in the game), followed by a body that returns ordinal + 1.
 
 #include "platform/code_redirect.h"
-#include "player_two/command_rules_code.h"
+#include "player_two/battle/command_rules_code.h"
 
 #include "exec_page.h"
 #include "expect.h"

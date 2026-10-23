@@ -3,7 +3,7 @@
 // The shopkeeper name's suffix, the game's mapped pointers and row names, player 2's trigger route and verdict, and
 // the input clock's seconds-before.
 
-#include "player_two/field_rules.h"
+#include "player_two/world/field_rules.h"
 
 #include "expect.h"
 

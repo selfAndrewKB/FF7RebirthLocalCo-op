@@ -2,7 +2,7 @@
 //
 // The source bits are the ones seen live: pad 1 = 0x1, pad 2 = 0x2, keyboard slot 0 = 0x20000.
 
-#include "player_two/button_view.h"
+#include "player_two/input/button_view.h"
 
 #include "expect.h"
 

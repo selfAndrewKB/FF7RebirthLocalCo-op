@@ -3,7 +3,7 @@
 // The chocobo ride's end retry, seated verdict, end reasons in precedence order and getoff rule; the wheelie's forced
 // getoff plan, coordinator transitions and world stick; the shared ride's riding and change rules.
 
-#include "player_two/ride_rules.h"
+#include "player_two/rides/ride_rules.h"
 
 #include "expect.h"
 

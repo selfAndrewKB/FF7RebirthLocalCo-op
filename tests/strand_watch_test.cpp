@@ -1,6 +1,6 @@
 // Host-side tests for StrandWatch, run without the game.
 
-#include "player_two/strand_watch.h"
+#include "player_two/world/strand_watch.h"
 
 #include "expect.h"
 

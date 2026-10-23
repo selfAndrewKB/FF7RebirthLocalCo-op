@@ -4,7 +4,7 @@
 // it, also when a structured exception unwinds through the call and when holds nest; the exchange form puts the
 // previous answer back through the exchange function; the enter/leave form puts a module's own state back.
 
-#include "player_two/thread_hold.h"
+#include "player_two/scopes/thread_hold.h"
 
 #include "expect.h"
 

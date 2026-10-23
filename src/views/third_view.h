@@ -11,7 +11,7 @@
 // primary display; GameEngine.cpp DetermineGameWindowResolution, SceneViewport.cpp ResizeFrame).
 //
 // The third player is a measurement stand-in, not a player: it has no pad, no party member and no HUD pass.
-// Its camera manager is created through player 2's own join path (player_two/own_controller.h makes the End
+// Its camera manager is created through player 2's own join path (player_two/session/own_controller.h makes the End
 // camera manager's BeginPlay safe for a second player; it applies to any later one) and is aimed at player 1's
 // camera actor with the game's own SetViewTarget, so the third column shows player 1's view from player 1's
 // camera: the same scene cost as a player's view. Re-aimed whenever player 1's view target changes (cutscenes).

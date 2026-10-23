@@ -1,6 +1,6 @@
 // Host-side tests for hud::SplitLayoutFor and the field-action icons' base rule, run without the game.
 
-#include "hud/viewport_placement.h"
+#include "hud/layout/viewport_placement.h"
 
 #include "expect.h"
 

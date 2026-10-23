@@ -1,7 +1,8 @@
-// Host-side tests for player_two::leader_answer::Decide (player_two/leader_answer.h), run without the game: the five
+// Host-side tests for player_two::leader_answer::Decide (player_two/scopes/leader_answer.h), run without the game: the
+// five
 // answer sources' priority, the game-thread rule, the counting, and when the component's type is read.
 
-#include "player_two/leader_answer.h"
+#include "player_two/scopes/leader_answer.h"
 
 #include "expect.h"
 

@@ -21,7 +21,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "player_two/generation.h"
-#include "player_two/primary_controller.h"
+#include "player_two/scopes/primary_controller.h"
 #include "players/unreal_access.h"
 
 #include <algorithm>

@@ -5,7 +5,7 @@
 // the ladder is not held, the part names itself or gives its own words); an optional part that refuses is left
 // out, noted, and the ladder goes on, held.
 
-#include "player_two/scope_ladder.h"
+#include "player_two/scopes/scope_ladder.h"
 
 #include "expect.h"
 

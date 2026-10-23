@@ -4,7 +4,7 @@
 // the capacity, the two short jumps to `done`, the scale and the replaced instruction where the composed tables
 // put them. The composed bytes themselves are executed by popups_code_test and enemy_gauges_code_test.
 
-#include "hud/placement_record.h"
+#include "hud/battle/placement_record.h"
 
 #include "expect.h"
 

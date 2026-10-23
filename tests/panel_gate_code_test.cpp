@@ -1,4 +1,4 @@
-// Host-side tests for the target-panel gate (player_two/panel_gate_code.h), run without the game.
+// Host-side tests for the target-panel gate (player_two/battle/panel_gate_code.h), run without the game.
 //
 // The bytes the mod writes near the game are EXECUTED here, installed through platform::CodeRedirect
 // over a stand-in laid out like the panel request's cold chunk: a frame of 0x118 bytes, the replaced
@@ -7,7 +7,7 @@
 // gate skips to (returns 2).
 
 #include "platform/code_redirect.h"
-#include "player_two/panel_gate_code.h"
+#include "player_two/battle/panel_gate_code.h"
 
 #include "exec_page.h"
 #include "expect.h"

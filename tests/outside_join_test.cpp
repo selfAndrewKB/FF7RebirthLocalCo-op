@@ -4,7 +4,7 @@
 // for a free party member (untimed, a 30-tick slow check, a look window after a party change, 5 failed joins). The
 // session's member test and join are the caller's; here the schedule alone is pinned.
 
-#include "player_two/outside_join.h"
+#include "player_two/session/outside_join.h"
 
 #include "expect.h"
 

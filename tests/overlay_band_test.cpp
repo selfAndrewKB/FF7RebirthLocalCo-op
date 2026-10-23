@@ -4,7 +4,7 @@
 // image, a 2560x1440 window, halves of 2560x720 (top/bottom), 1280x1440 (side by side) and 1280x720
 // (16:9 with bars). Solo must reproduce the engine's own host scale, 1.333.
 
-#include "hud/overlay_band.h"
+#include "hud/layout/overlay_band.h"
 
 #include "expect.h"
 

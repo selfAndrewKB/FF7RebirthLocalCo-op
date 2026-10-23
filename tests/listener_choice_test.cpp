@@ -3,7 +3,7 @@
 // The nearer-listener choice with its hysteresis, the quaternion rotation the device's push uses, the clip, the LOD
 // and the missed-range rules.
 
-#include "player_two/listener_choice.h"
+#include "player_two/feedback/listener_choice.h"
 
 #include "expect.h"
 

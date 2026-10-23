@@ -5,7 +5,7 @@
 //
 // The game's cameras ask for 16:9 with bConstrainAspectRatio set, so the engine keeps each split
 // half 16:9 and fills the rest with bars. With the flag cleared on each main camera (through the
-// game's setter, player_two/main_camera_shape.h) the view takes its whole half; the field of view
+// game's setter, player_two/camera/main_camera_shape.h) the view takes its whole half; the field of view
 // then follows ULocalPlayer::AspectRatioAxisConstraint, which the mod sets (MajorAxisFOV, or
 // MaintainXFOV with the split FOV below). RE-vertical-split-and-fill.md.
 

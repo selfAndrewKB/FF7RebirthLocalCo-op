@@ -1,10 +1,11 @@
-// Host-side tests for the 1.004 jump box's list-load code (player_two/rumble_list_code.h), run without the game.
+// Host-side tests for the 1.004 jump box's list-load code (player_two/feedback/rumble_list_code.h), run without the
+// game.
 //
 // The bytes are EXECUTED in a harness that recreates the site: rsi = the jump box's owner (its list at +0x3B0), the
 // code, then rsi is returned. On the thread the route named, with player 2's list set, player 2's list is taken;
 // on any other thread, or with no list, the game's own.
 
-#include "player_two/rumble_list_code.h"
+#include "player_two/feedback/rumble_list_code.h"
 
 #include "exec_page.h"
 #include "expect.h"

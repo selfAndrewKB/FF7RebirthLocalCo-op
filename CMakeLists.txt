@@ -27,30 +27,30 @@ add_library(LocalSplitScreen SHARED
     src/mod.cpp
     src/modules.cpp
 
-    src/hud/hud_placement.cpp
+    src/hud/layout/hud_placement.cpp
     src/hud/hud_roots.cpp
     src/hud/hud_updates.cpp
-    src/hud/root_overlay_render.cpp
-    src/hud/second_image.cpp
-    src/hud/shared_slot.cpp
-    src/hud/minimap_once.cpp
-    src/hud/player_two_pass.cpp
-    src/hud/action_rows.cpp
-    src/hud/pass_opacity.cpp
-    src/hud/prompt_rows.cpp
-    src/hud/field_markers.cpp
-    src/hud/search_pins.cpp
-    src/hud/action_icon_base.cpp
-    src/hud/area_icons_two.cpp
-    src/hud/target_views.cpp
-    src/hud/enemy_gauges.cpp
-    src/hud/marker_timers.cpp
-    src/hud/popups.cpp
+    src/hud/passes/root_overlay_render.cpp
+    src/hud/passes/second_image.cpp
+    src/hud/passes/shared_slot.cpp
+    src/hud/minimap/minimap_once.cpp
+    src/hud/passes/player_two_pass.cpp
+    src/hud/field/action_rows.cpp
+    src/hud/passes/pass_opacity.cpp
+    src/hud/field/prompt_rows.cpp
+    src/hud/field/field_markers.cpp
+    src/hud/field/search_pins.cpp
+    src/hud/field/action_icon_base.cpp
+    src/hud/minimap/area_icons_two.cpp
+    src/hud/battle/target_views.cpp
+    src/hud/battle/enemy_gauges.cpp
+    src/hud/field/marker_timers.cpp
+    src/hud/battle/popups.cpp
     src/hud/user_widgets.cpp
-    src/hud/overlay_band.cpp
-    src/hud/overlay_layout.cpp
-    src/hud/viewport_placement.cpp
-    src/hud/layout_scale.cpp
+    src/hud/layout/overlay_band.cpp
+    src/hud/layout/overlay_layout.cpp
+    src/hud/layout/viewport_placement.cpp
+    src/hud/layout/layout_scale.cpp
 
     src/platform/block_patch.cpp
     src/platform/byte_scope.cpp
@@ -74,102 +74,102 @@ add_library(LocalSplitScreen SHARED
     src/platform/vtable_entry.cpp
 
     src/player_two/describe.cpp
-    src/player_two/field_camera.cpp
-    src/player_two/field_exit.cpp
+    src/player_two/camera/field_camera.cpp
+    src/player_two/session/field_exit.cpp
     src/player_two/generation.cpp
-    src/player_two/leave_sequence.cpp
-    src/player_two/leftover_actors.cpp
-    src/player_two/member_movement.cpp
-    src/player_two/leader_answer.cpp
-    src/player_two/nav_strand.cpp
-    src/player_two/camera_repair.cpp
-    src/player_two/climb_context.cpp
-    src/player_two/near_fade.cpp
-    src/player_two/rumble_list_two.cpp
-    src/player_two/rumble_list_copy.cpp
-    src/player_two/rumble_sources_two.cpp
-    src/player_two/ffb_manager_two.cpp
-    src/player_two/audio_listener_two.cpp
-    src/player_two/approach_two.cpp
-    src/player_two/move_type_two.cpp
-    src/player_two/anim_two_views.cpp
-    src/player_two/traversal_camera.cpp
-    src/player_two/traversal_exec.cpp
-    src/player_two/traversal_holders.cpp
-    src/player_two/traversal_watch.cpp
-    src/player_two/shop_talk.cpp
-    src/player_two/switch_volume_two.cpp
-    src/player_two/trigger_two.cpp
-    src/player_two/vault_camera.cpp
-    src/player_two/location_rows.cpp
-    src/player_two/location_volumes.cpp
-    src/player_two/shoulder_scale.cpp
-    src/player_two/walk_limits.cpp
-    src/player_two/field_pickup.cpp
-    src/player_two/pad_rumble.cpp
-    src/player_two/combat_rumble.cpp
-    src/player_two/vending.cpp
-    src/player_two/charapop_facts.cpp
-    src/player_two/charapop_near.cpp
-    src/player_two/charapop_centre.cpp
-    src/player_two/world_actor_reach.cpp
-    src/player_two/chocobo_ride.cpp
-    src/player_two/chocobo_climb.cpp
-    src/player_two/shared_ride.cpp
-    src/player_two/wheelie_ride.cpp
-    src/hud/minimap.cpp
-    src/hud/minimap_labels.cpp
-    src/hud/minimap_icons.cpp
-    src/hud/label_states.cpp
-    src/player_two/party_warp.cpp
-    src/player_two/strand_watch.cpp
-    src/player_two/battle_camera.cpp
-    src/player_two/camera_override.cpp
-    src/player_two/attack_cameras.cpp
-    src/player_two/attack_framing.cpp
-    src/player_two/synergy_partner.cpp
-    src/player_two/camera_effects_two.cpp
-    src/player_two/camera_access.cpp
-    src/player_two/camera_distance.cpp
-    src/player_two/main_camera_shape.cpp
-    src/player_two/command_locks.cpp
-    src/player_two/battle_warp_two.cpp
-    src/player_two/equal_targeting.cpp
-    src/player_two/player_hits.cpp
-    src/player_two/leader_reads.cpp
-    src/player_two/lock_group_coin.cpp
-    src/player_two/target_coin.cpp
-    src/player_two/leave_watch.cpp
-    src/player_two/command_rules.cpp
-    src/player_two/focus_scope.cpp
-    src/player_two/command_menu_two.cpp
-    src/player_two/command_menu_view.cpp
-    src/player_two/shortcut_follow.cpp
-    src/player_two/command_menu_tick.cpp
-    src/player_two/menu_input_route.cpp
-    src/player_two/menu_tint.cpp
-    src/player_two/leader_scope.cpp
-    src/player_two/lock_on.cpp
-    src/player_two/own_controller.cpp
-    src/player_two/party_events.cpp
-    src/player_two/party_lease.cpp
+    src/player_two/session/leave_sequence.cpp
+    src/player_two/session/leftover_actors.cpp
+    src/player_two/input/member_movement.cpp
+    src/player_two/scopes/leader_answer.cpp
+    src/player_two/world/nav_strand.cpp
+    src/player_two/camera/camera_repair.cpp
+    src/player_two/input/climb_context.cpp
+    src/player_two/camera/near_fade.cpp
+    src/player_two/feedback/rumble_list_two.cpp
+    src/player_two/feedback/rumble_list_copy.cpp
+    src/player_two/feedback/rumble_sources_two.cpp
+    src/player_two/feedback/ffb_manager_two.cpp
+    src/player_two/feedback/audio_listener_two.cpp
+    src/player_two/input/approach_two.cpp
+    src/player_two/input/move_type_two.cpp
+    src/player_two/world/anim_two_views.cpp
+    src/player_two/traversal/traversal_camera.cpp
+    src/player_two/traversal/traversal_exec.cpp
+    src/player_two/traversal/traversal_holders.cpp
+    src/player_two/traversal/traversal_watch.cpp
+    src/player_two/world/shop_talk.cpp
+    src/player_two/world/switch_volume_two.cpp
+    src/player_two/world/trigger_two.cpp
+    src/player_two/camera/vault_camera.cpp
+    src/player_two/camera/location_rows.cpp
+    src/player_two/camera/location_volumes.cpp
+    src/player_two/camera/shoulder_scale.cpp
+    src/player_two/input/walk_limits.cpp
+    src/player_two/world/field_pickup.cpp
+    src/player_two/feedback/pad_rumble.cpp
+    src/player_two/feedback/combat_rumble.cpp
+    src/player_two/world/vending.cpp
+    src/player_two/world/charapop_facts.cpp
+    src/player_two/world/charapop_near.cpp
+    src/player_two/world/charapop_centre.cpp
+    src/player_two/world/world_actor_reach.cpp
+    src/player_two/rides/chocobo_ride.cpp
+    src/player_two/traversal/chocobo_climb.cpp
+    src/player_two/rides/shared_ride.cpp
+    src/player_two/rides/wheelie_ride.cpp
+    src/hud/minimap/minimap.cpp
+    src/hud/minimap/minimap_labels.cpp
+    src/hud/minimap/minimap_icons.cpp
+    src/hud/minimap/label_states.cpp
+    src/player_two/world/party_warp.cpp
+    src/player_two/world/strand_watch.cpp
+    src/player_two/battle/battle_camera.cpp
+    src/player_two/camera/camera_override.cpp
+    src/player_two/camera/attack_cameras.cpp
+    src/player_two/camera/attack_framing.cpp
+    src/player_two/battle/synergy_partner.cpp
+    src/player_two/camera/camera_effects_two.cpp
+    src/player_two/camera/camera_access.cpp
+    src/player_two/camera/camera_distance.cpp
+    src/player_two/camera/main_camera_shape.cpp
+    src/player_two/battle/command_locks.cpp
+    src/player_two/battle/battle_warp_two.cpp
+    src/player_two/battle/equal_targeting.cpp
+    src/player_two/battle/player_hits.cpp
+    src/player_two/battle/leader_reads.cpp
+    src/player_two/battle/lock_group_coin.cpp
+    src/player_two/battle/target_coin.cpp
+    src/player_two/session/leave_watch.cpp
+    src/player_two/battle/command_rules.cpp
+    src/player_two/battle/focus_scope.cpp
+    src/player_two/battle/command_menu_two.cpp
+    src/player_two/battle/command_menu_view.cpp
+    src/player_two/battle/shortcut_follow.cpp
+    src/player_two/battle/command_menu_tick.cpp
+    src/player_two/battle/menu_input_route.cpp
+    src/player_two/battle/menu_tint.cpp
+    src/player_two/scopes/leader_scope.cpp
+    src/player_two/battle/lock_on.cpp
+    src/player_two/session/own_controller.cpp
+    src/player_two/session/party_events.cpp
+    src/player_two/session/party_lease.cpp
     src/facts/in_battle.cpp
     src/player_two/weak_object.cpp
-    src/player_two/party_member.cpp
-    src/player_two/party_switch.cpp
-    src/player_two/primary_controller.cpp
-    src/player_two/scope_leaks.cpp
-    src/player_two/move_state.cpp
-    src/player_two/pad_buttons.cpp
-    src/player_two/pad_sticks.cpp
-    src/player_two/outside_join.cpp
-    src/player_two/own_ride.cpp
-    src/player_two/session.cpp
-    src/player_two/session_join.cpp
-    src/player_two/stick_select.cpp
-    src/player_two/swap_window.cpp
-    src/player_two/view_target.cpp
-    src/player_two/widget_owner.cpp
+    src/player_two/session/party_member.cpp
+    src/player_two/session/party_switch.cpp
+    src/player_two/scopes/primary_controller.cpp
+    src/player_two/scopes/scope_leaks.cpp
+    src/player_two/input/move_state.cpp
+    src/player_two/input/pad_buttons.cpp
+    src/player_two/input/pad_sticks.cpp
+    src/player_two/session/outside_join.cpp
+    src/player_two/rides/own_ride.cpp
+    src/player_two/session/session.cpp
+    src/player_two/session/session_join.cpp
+    src/player_two/input/stick_select.cpp
+    src/player_two/scopes/swap_window.cpp
+    src/player_two/camera/view_target.cpp
+    src/player_two/battle/widget_owner.cpp
 
     src/players/console_access.cpp
     src/players/held_setting.cpp
@@ -224,20 +224,20 @@ if(LSS_DEV_TOOLS)
         src/hud/hud_trace.cpp
         src/hud/position_probe.cpp
         src/hud/widget_dump.cpp
-        src/hud/label_relayouts.cpp
-        src/player_two/battle_input.cpp
-        src/player_two/charapop_watch.cpp
-        src/player_two/framing_watch.cpp
-        src/player_two/handover_watch.cpp
-        src/player_two/interact_watch.cpp
-        src/player_two/menu_focus.cpp
-        src/player_two/move_census.cpp
-        src/player_two/ride_watch.cpp
-        src/player_two/rumble_watch.cpp
-        src/player_two/tag_counts.cpp
-        src/player_two/target_census.cpp
-        src/player_two/traversal_collision.cpp
-        src/player_two/wheelie_watch.cpp
+        src/hud/minimap/label_relayouts.cpp
+        src/player_two/battle/battle_input.cpp
+        src/player_two/world/charapop_watch.cpp
+        src/player_two/camera/framing_watch.cpp
+        src/player_two/session/handover_watch.cpp
+        src/player_two/world/interact_watch.cpp
+        src/player_two/battle/menu_focus.cpp
+        src/player_two/input/move_census.cpp
+        src/player_two/rides/ride_watch.cpp
+        src/player_two/feedback/rumble_watch.cpp
+        src/player_two/session/tag_counts.cpp
+        src/player_two/battle/target_census.cpp
+        src/player_two/traversal/traversal_collision.cpp
+        src/player_two/rides/wheelie_watch.cpp
         src/renderer/submission_census.cpp
     )
     target_compile_definitions(LocalSplitScreen PRIVATE LSS_DEV_TOOLS=1)
@@ -273,14 +273,14 @@ lss_test(single_view src/players/single_view.cpp)
 lss_test(whole_screen src/views/whole_screen_reason.cpp)
 lss_test(stream_view_math src/views/stream_view_math.cpp)
 lss_test(pool_bits src/platform/pool_bits.cpp)
-lss_test(strand_watch src/player_two/strand_watch.cpp)
-lss_test(swap_window src/player_two/swap_window.cpp)
-lss_test(party_lease src/player_two/party_lease.cpp)
-lss_test(leave_sequence src/player_two/leave_sequence.cpp)
+lss_test(strand_watch src/player_two/world/strand_watch.cpp)
+lss_test(swap_window src/player_two/scopes/swap_window.cpp)
+lss_test(party_lease src/player_two/session/party_lease.cpp)
+lss_test(leave_sequence src/player_two/session/leave_sequence.cpp)
 lss_test(leader_answer)
 lss_test(control_script src/control/script.cpp)
 lss_test(control_runner src/control/runner.cpp src/control/script.cpp)
-lss_test(stick_select src/player_two/stick_select.cpp)
+lss_test(stick_select src/player_two/input/stick_select.cpp)
 lss_test(call_redirect src/platform/call_redirect.cpp src/platform/block_patch.cpp src/platform/module_pin.cpp
          src/platform/code_memory.cpp src/platform/image.cpp src/platform/build_translation.cpp)
 lss_test(entry_redirect src/platform/entry_redirect.cpp src/platform/block_patch.cpp src/platform/module_pin.cpp src/platform/code_memory.cpp tests/log_console.cpp)
@@ -288,8 +288,8 @@ lss_test(code_memory src/platform/code_memory.cpp)
 lss_test(block_patch src/platform/block_patch.cpp src/platform/code_memory.cpp)
 lss_test(sparse_array src/platform/guarded.cpp)
 lss_test(tset_find src/platform/guarded.cpp)
-lss_test(overlay_band src/hud/overlay_band.cpp)
-lss_test(viewport_placement src/hud/viewport_placement.cpp)
+lss_test(overlay_band src/hud/layout/overlay_band.cpp)
+lss_test(viewport_placement src/hud/layout/viewport_placement.cpp)
 lss_test(entry_filter_code)
 lss_test(minimap_once_code)
 lss_test(first_player_code src/platform/code_redirect.cpp src/platform/block_patch.cpp src/platform/code_memory.cpp tests/log_console.cpp)
@@ -305,7 +305,7 @@ lss_test(button_view)
 lss_test(settled_log)
 lss_test(ucpc_choice)
 lss_test(charapop_rule)
-lss_test(label_states src/hud/label_states.cpp)
+lss_test(label_states src/hud/minimap/label_states.cpp)
 lss_test(build_translation src/platform/build_translation.cpp)
 lss_test(vtable_entry src/platform/vtable_entry.cpp src/platform/module_pin.cpp src/platform/image.cpp
          src/platform/build_translation.cpp tests/log_console.cpp)
@@ -326,11 +326,11 @@ lss_test(game_image src/platform/image.cpp src/platform/build_translation.cpp)
 lss_test(layout_scale_code)
 lss_test(shadow_feedback_code)
 lss_test(rumble_list_code)
-lss_test(outside_join src/player_two/outside_join.cpp)
+lss_test(outside_join src/player_two/session/outside_join.cpp)
 lss_test(session_rules)
 lss_test(coin_table)
 lss_test(lock_group_rules)
-lss_test(synergy_rules src/player_two/party_lease.cpp)
+lss_test(synergy_rules src/player_two/session/party_lease.cpp)
 lss_test(menu_rules)
 lss_test(seqlock)
 lss_test(listener_choice)

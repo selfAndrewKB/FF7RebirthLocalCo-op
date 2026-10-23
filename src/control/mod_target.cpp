@@ -1,30 +1,30 @@
 #include "control/mod_target.h"
 
-#include "hud/area_icons_two.h"
 #include "hud/hud_trace.h"
-#include "hud/minimap_once.h"
-#include "hud/overlay_layout.h"
-#include "hud/root_overlay_render.h"
-#include "hud/player_two_pass.h"
-#include "hud/second_image.h"
+#include "hud/layout/overlay_layout.h"
+#include "hud/minimap/area_icons_two.h"
+#include "hud/minimap/minimap_once.h"
+#include "hud/passes/player_two_pass.h"
+#include "hud/passes/root_overlay_render.h"
+#include "hud/passes/second_image.h"
 #include "hud/position_probe.h"
 #include "hud/widget_dump.h"
 #include "modules.h"
 #include "platform/frame_watch.h"
 #include "platform/image.h"
 #include "platform/log.h"
-#include "player_two/camera_distance.h"
-#include "player_two/charapop_centre.h"
-#include "player_two/charapop_near.h"
-#include "player_two/field_exit.h"
-#include "player_two/lock_on.h"
-#include "player_two/own_controller.h"
-#include "player_two/shoulder_scale.h"
+#include "player_two/battle/lock_on.h"
+#include "player_two/camera/camera_distance.h"
+#include "player_two/camera/shoulder_scale.h"
 #include "player_two/generation.h"
-#include "player_two/pad_buttons.h"
-#include "player_two/pad_sticks.h"
-#include "player_two/scope_leaks.h"
-#include "player_two/session.h"
+#include "player_two/input/pad_buttons.h"
+#include "player_two/input/pad_sticks.h"
+#include "player_two/scopes/scope_leaks.h"
+#include "player_two/session/field_exit.h"
+#include "player_two/session/own_controller.h"
+#include "player_two/session/session.h"
+#include "player_two/world/charapop_centre.h"
+#include "player_two/world/charapop_near.h"
 #include "players/console_access.h"
 #include "players/single_view.h"
 #include "players/split_layout.h"
@@ -283,8 +283,8 @@ Outcome ModTarget::SetIconsMask(std::uint32_t mask)
 
 Outcome ModTarget::SetBattleMask(std::uint32_t mask)
 {
-    // Bit 8 is player 2's targeting run (player_two/lock_on.h). The other bits (1, 2, 4, 16: the direct actions; 32,
-    // 64, 128, 256: the mod's own lock, switching, lock camera and cursor) are retired: the game's own handler and
+    // Bit 8 is player 2's targeting run (player_two/battle/lock_on.h). The other bits (1, 2, 4, 16: the direct actions;
+    // 32, 64, 128, 256: the mod's own lock, switching, lock camera and cursor) are retired: the game's own handler and
     // targeting tick do those for player 2.
     player_two::lock_on::SetEnabled((mask & 8u) != 0);
     return {true, L"battle mask set (see the log)"};

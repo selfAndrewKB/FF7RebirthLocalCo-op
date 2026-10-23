@@ -3,9 +3,10 @@
 // Sends execution at one verified spot in the game's code through a few bytes of our own, and
 // puts the original bytes back.
 //
-// The mod otherwise changes the game only through a vtable entry (vtable_entry.h). This exists for
-// the one decision that has no entry to replace: the final output pass deciding whether to clear
-// the screen (renderer/additional_family_output.h). The shape is kept as small as a redirect can be:
+// The mod's first choice is a vtable entry (vtable_entry.h), then a call site or a function entry
+// (call_redirect.h, entry_redirect.h); this is for a spot that is none of those, such as the final
+// output pass deciding whether to clear the screen (renderer/additional_family_output.h, the first
+// one). The shape is kept as small as a redirect can be:
 //   - the replaced bytes are compared against what the research read before anything is written;
 //   - they must lie inside one aligned 16-byte block, which is swapped in a single atomic store, so
 //     a thread running that code sees either the old bytes or the new ones, never a mix;

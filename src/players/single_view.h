@@ -64,8 +64,9 @@ struct SingleViewChange
 struct SingleViewInputs
 {
     bool wholeScreenShown = false;  // the game shows something that takes the whole screen (views/whole_screen.h)
-    bool waitsForMember   = false;  // player 2 is in without a member, waiting on the 2nd slot's (player_two/session.h)
-    bool standsAside      = false;  // a shared ride (player_two/shared_ride.h): player 2 stands aside
+    // player 2 is in without a member, waiting on the 2nd slot's (player_two/session/session.h)
+    bool waitsForMember   = false;
+    bool standsAside      = false;  // a shared ride (player_two/rides/shared_ride.h): player 2 stands aside
 };
 
 /// The screen is single while the automatic choice is on and the game shows something that takes the whole

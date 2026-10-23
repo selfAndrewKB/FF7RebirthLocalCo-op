@@ -5,7 +5,7 @@
 // second SetText in one run swaps nothing; a font reload resets player 2's state; a widget dying inside player 2's pass
 // or aside; releasing everything; refusals, a full table and faults; the weak references balance.
 
-#include "hud/label_states.h"
+#include "hud/minimap/label_states.h"
 
 #include "expect.h"
 

@@ -1,0 +1,332 @@
+#include "player_two/camera/field_camera.h"
+
+#include "facts/cameras.h"
+#include "facts/command_controller.h"
+#include "facts/controller.h"
+#include "platform/every.h"
+#include "platform/image.h"
+#include "platform/log.h"
+#include "platform/verified_code.h"
+#include "platform/vtable_entry.h"
+#include "player_two/battle/battle_camera.h"
+#include "player_two/battle/command_menu_two.h"
+#include "player_two/battle/focus_scope.h"
+#include "player_two/battle/lock_on.h"
+#include "player_two/camera/attack_cameras.h"
+#include "player_two/camera/camera_access.h"
+#include "player_two/generation.h"
+#include "player_two/object_fields.h"
+#include "player_two/scopes/leader_scope.h"
+#include "player_two/scopes/p2_scope.h"
+#include "player_two/scopes/primary_controller.h"
+#include "player_two/session/party_member.h"
+
+#include <atomic>
+#include <cstddef>
+#include <cstring>
+#include <optional>
+
+#include <intrin.h>
+
+#pragma intrinsic(_ReturnAddress)
+
+namespace lss::player_two::field_camera {
+
+namespace {
+
+/// FEndFieldCameraOperator Activate/Deactivate (vtable +0x10/+0x20), CopyCommand (+0x58), and
+/// AEndPlayerCameraManager::UpdateCamera (slot 211).
+using StateFn  = void (*)(void* fieldOperator, float blendTime, bool flag);
+using CopyFn   = void (*)(void* fieldOperator, const void* command);
+using UpdateFn = void (*)(void* cameraManager, float deltaTime);
+
+// Set once at install.
+platform::VTableEntry g_activateSlot;
+platform::VTableEntry g_deactivateSlot;
+platform::VTableEntry g_copySlot;
+platform::VTableEntry g_updateSlot;
+StateFn               g_engineActivate      = nullptr;
+StateFn               g_engineDeactivate    = nullptr;
+CopyFn                g_engineCopy          = nullptr;
+UpdateFn              g_engineUpdate        = nullptr;
+using facts::kCmdHudMode;
+std::atomic<unsigned> g_uiRefusals{0};  // battle updates that ran without player 2's UI context
+
+// UpdateCamera's call of the Field operator's Activate when a special camera (a shop's) first blends out: the resume
+// before it gave the Field operator that camera's last rotation (RE-p2-shop-camera-skip.md §5, §6). Its return address,
+// this build (0 when not found): logged, to settle whether the mirror below snaps player 2's camera to it.
+constexpr std::uintptr_t kBlendOutResume = 0x140E5629C;
+std::uintptr_t           g_blendOutResume = 0;
+
+StageCounters              g_settingsCounters;
+StageCounters              g_updateCounters;
+std::atomic<unsigned>      g_mismatches{0};
+
+/// Player 1's and player 2's Field operators, while player 2 holds a party member (player_two/camera/camera_access.h).
+using FieldPair = camera_access::OperatorPair;
+using camera_access::CameraManagerOf;
+using camera_access::FieldOperatorOf;
+
+std::optional<FieldPair> CurrentPair() noexcept
+{
+    return camera_access::CurrentPair(&FieldOperatorOf);
+}
+
+const void* Command(const void* field) noexcept
+{
+    return static_cast<const std::byte*>(field) + facts::kFieldOperatorCommand;
+}
+
+std::uint8_t ActiveState(const void* field) noexcept
+{
+    return ReadField<std::uint8_t>(field, facts::kFieldOperatorActive);
+}
+
+bool Matches(const FieldPair& pair) noexcept
+{
+    return std::memcmp(Command(pair.two), Command(pair.one), facts::kFieldCommandSize) == 0 &&
+           ActiveState(pair.two) == ActiveState(pair.one);
+}
+
+void CountResult(const FieldPair& pair) noexcept
+{
+    g_settingsCounters.Act();
+    if (!Matches(pair))
+    {
+        g_mismatches.fetch_add(1, std::memory_order_relaxed);
+    }
+}
+
+// The three Field-operator replacements: the engine's call first, then the same on player 2's
+// operator when `field` is player 1's.
+
+void Activate(void* field, float blendTime, bool flag)
+{
+    g_engineActivate(field, blendTime, flag);
+    const auto pair = CurrentPair();
+    if (!pair || field != pair->one)
+    {
+        g_settingsCounters.Pass();
+        return;
+    }
+    const auto twoWas = ActiveState(pair->two);
+    g_engineActivate(pair->two, blendTime, flag);
+    g_engineCopy(pair->two, Command(pair->one));  // after activation, which rewrites the command
+    CountResult(*pair);
+    const auto caller = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
+    if (g_blendOutResume != 0 && caller == g_blendOutResume)
+    {
+        platform::LogDebug(L"field camera: player 1's Field operator resumed after a special camera's blend-out (blend {:.2f} "
+                           L"s); player 2's mirrored with player 1's command (player 2's operator state was {})",
+                           blendTime, twoWas);
+    }
+}
+
+void Deactivate(void* field, float blendTime, bool flag)
+{
+    g_engineDeactivate(field, blendTime, flag);
+    const auto pair = CurrentPair();
+    if (!pair || field != pair->one)
+    {
+        g_settingsCounters.Pass();
+        return;
+    }
+    g_engineDeactivate(pair->two, blendTime, flag);
+    CountResult(*pair);
+}
+
+void CopyCommand(void* field, const void* command)
+{
+    g_engineCopy(field, command);
+    const auto pair = CurrentPair();
+    if (!pair || field != pair->one)
+    {
+        g_settingsCounters.Pass();
+        return;
+    }
+    g_engineCopy(pair->two, command);
+    CountResult(*pair);
+}
+
+/// Player 2's camera manager, when its update can run as the primary player's.
+bool ActsFor(void* cameraManager) noexcept
+{
+    if (!generation::OnGameThread() || !generation::Active() || generation::Member() == nullptr)
+    {
+        return false;
+    }
+    if (cameraManager != CameraManagerOf(generation::PlayerTwoController()))
+    {
+        return false;
+    }
+    // Its Field operator on, or in battle its Battle operator (player_two/battle/battle_camera.h).
+    void* field = FieldOperatorOf(cameraManager);
+    if ((field == nullptr || ActiveState(field) == 0) && !battle_camera::PlayerTwoBattleActive(cameraManager))
+    {
+        return false;
+    }
+    // Helpers in the update index the operator array with the current-operator byte and use the
+    // entry without a null check.
+    const auto current = ReadField<std::uint8_t>(cameraManager, facts::kCameraManagerCurrentOperator);
+    return current < facts::kCameraManagerOperatorCount &&
+           ReadPointer(cameraManager, facts::kCameraManagerOperators + current * std::uint32_t{sizeof(void*)}) != nullptr;
+}
+
+/// When a scope cannot be opened, player 2's update still runs, as the engine would run it: with
+/// player 1 as the primary player, so for that frame player 2's camera reads player 1's input.
+/// Skipping the update instead would freeze player 2's camera. The refusal is counted.
+///
+/// In battle the update also runs in player 2's UI context: the Command camera module (21), which
+/// player 2's command controller turns on for player 2's camera while its target list is open,
+/// frames the command menu's selected target (EndUISystem[23]'s provider, which reads the selected
+/// row from the focus path) and the party leader (RE-p2-target-select-views.md §6, §9). Without it,
+/// player 1's target list would move player 2's camera.
+void RunAsPrimary(void* cameraManager, float deltaTime)
+{
+    void*      controller = command_menu_two::Controller();
+    void*      member     = generation::Member();
+    const bool battle     = controller != nullptr && member != nullptr &&
+                            ReadField<std::uint8_t>(controller, kCmdHudMode) != 0;
+    // In battle player 2's UI context (counted and logged when refused), player 2 as the primary controller (refused:
+    // the update runs as player 1's, counted) and, in battle, the target fields the LockOn module reads: each as far
+    // as it opens, the update runs either way.
+    p2_scope::Args args;
+    args.controller      = controller;
+    const unsigned which = (battle ? p2_scope::Focus : 0u) | p2_scope::Primary | p2_scope::Targets;
+    const p2_scope::P2Scope scopes(which, which, args);
+    if (battle && !scopes.Holds<p2_scope::FocusPart>())
+    {
+        const unsigned refusals = g_uiRefusals.fetch_add(1, std::memory_order_relaxed) + 1;
+        if (refusals <= 5 || refusals % 600 == 0)
+        {
+            platform::Log(L"player 2's camera update ran without player 2's UI context: {} ({} time(s))",
+                          scopes.Noted() != nullptr ? scopes.Noted() : L"refused", refusals);
+        }
+    }
+    // In battle the leader view decides which camera an attack camera belongs to (the game's leader-keyed test of each
+    // battle camera sequence, RE-p2-attack-cameras.md §3.2), so it opens even when the UI context was refused.
+    std::optional<p2_scope::P2Scope> leader;
+    if (scopes.Holds<p2_scope::FocusPart>() ||
+        (member != nullptr && battle_camera::PlayerTwoBattleActive(cameraManager)))
+    {
+        if (member != nullptr && p2_scope::FillMember(args, member))
+        {
+            leader.emplace(p2_scope::Leader | p2_scope::LeaderType, p2_scope::Leader | p2_scope::LeaderType, args);
+        }
+    }
+    if (scopes.Holds<p2_scope::PrimaryPart>())
+    {
+        g_updateCounters.Act();
+    }
+    else
+    {
+        g_updateCounters.Refuse();
+    }
+    const attack_cameras::PlayerTwoUpdate attack;  // player 2's own state of the battle camera sequences (inside the scopes)
+    g_engineUpdate(cameraManager, deltaTime);
+}
+
+void UpdateCamera(void* cameraManager, float deltaTime)
+{
+    if (!ActsFor(cameraManager))
+    {
+        g_updateCounters.Pass();
+        g_engineUpdate(cameraManager, deltaTime);
+        return;
+    }
+    RunAsPrimary(cameraManager, deltaTime);
+}
+
+}  // namespace
+
+bool InstallSettings(const platform::GameImage& image) noexcept
+{
+    const auto activate   = platform::FindFunction(image, facts::kFieldActivate.target);
+    const auto deactivate = platform::FindFunction(image, facts::kFieldDeactivate.target);
+    const auto copy       = platform::FindFunction(image, facts::kFieldCopyCommand.target);
+    if (!activate || !deactivate || !copy || !camera_access::Install(image))
+    {
+        return false;
+    }
+    g_engineActivate   = reinterpret_cast<StateFn>(*activate);
+    const auto resume  = image.Rebase(kBlendOutResume);
+    g_blendOutResume   = resume ? *resume : 0;
+    g_engineDeactivate = reinterpret_cast<StateFn>(*deactivate);
+    g_engineCopy       = reinterpret_cast<CopyFn>(*copy);
+
+    const bool installed =
+        platform::ReplaceSlot(image, facts::kFieldActivate, reinterpret_cast<std::uintptr_t>(&Activate), g_activateSlot) &&
+        platform::ReplaceSlot(image, facts::kFieldDeactivate, reinterpret_cast<std::uintptr_t>(&Deactivate),
+                              g_deactivateSlot) &&
+        platform::ReplaceSlot(image, facts::kFieldCopyCommand, reinterpret_cast<std::uintptr_t>(&CopyCommand),
+                              g_copySlot);
+    if (!installed)
+    {
+        // All three or none: a mirror of activation without the command would leave player 2's
+        // operator re-initialised with no policy.
+        g_activateSlot.Restore();
+        g_deactivateSlot.Restore();
+        g_copySlot.Restore();
+    }
+    return installed;
+}
+
+bool InstallUpdate(const platform::GameImage& image) noexcept
+{
+    const auto update = platform::FindFunction(image, facts::kCameraUpdate.target);
+    if (!update || !camera_access::Install(image) || !primary_controller::Installed())
+    {
+        return false;
+    }
+    g_engineUpdate = reinterpret_cast<UpdateFn>(*update);
+    return platform::ReplaceSlot(image, facts::kCameraUpdate, reinterpret_cast<std::uintptr_t>(&UpdateCamera),
+                                 g_updateSlot);
+}
+
+void Remove() noexcept
+{
+    for (auto* slot : {&g_updateSlot, &g_copySlot, &g_deactivateSlot, &g_activateSlot})
+    {
+        if (!slot->Restore())
+        {
+            platform::Log(L"could not restore a player-2 camera slot; the replacement stays in place");
+        }
+    }
+}
+
+bool Seed() noexcept
+{
+    if (g_engineCopy == nullptr)
+    {
+        return false;
+    }
+    const auto pair = CurrentPair();
+    if (!pair)
+    {
+        return false;
+    }
+    if (ActiveState(pair->two) != ActiveState(pair->one))
+    {
+        const StateFn apply = ActiveState(pair->one) != 0 ? g_engineActivate : g_engineDeactivate;
+        apply(pair->two, 0.0f, false);
+    }
+    g_engineCopy(pair->two, Command(pair->one));
+    return Matches(*pair);
+}
+
+StageCounters& SettingsCounters() noexcept
+{
+    return g_settingsCounters;
+}
+
+StageCounters& UpdateCounters() noexcept
+{
+    return g_updateCounters;
+}
+
+unsigned TakeMismatches() noexcept
+{
+    return platform::Take(g_mismatches);
+}
+
+}  // namespace lss::player_two::field_camera

@@ -2,10 +2,11 @@
 
 // Replaces one entry of an engine vtable with a function of our own, and puts it back.
 //
-// This is the mod's preferred kind of change to the game (the one exception is code_redirect.h).
-// A vtable entry is data: one aligned 8-byte pointer. Replacing it with an ordinary compiled function needs no trampolines
-// or hand-written unwind info, because the compiler emits everything our function needs, and the
-// engine calls it exactly as it called the original.
+// This is the mod's preferred kind of change to the game; a call site, a function entry or a few bytes of code are
+// redirected only where no entry serves (call_redirect.h, entry_redirect.h, code_redirect.h). A vtable entry is data:
+// one aligned 8-byte pointer. Replacing it with an ordinary compiled function needs no trampolines or hand-written
+// unwind info, because the compiler emits everything our function needs, and the engine calls it exactly as it called
+// the original.
 //
 // The entry is only replaced if it still holds the function the research identified, so a game
 // patch or another mod that already changed it makes the replacement refuse rather than guess.

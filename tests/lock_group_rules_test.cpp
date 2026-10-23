@@ -2,7 +2,7 @@
 //
 // The rebalance's rule, and the set of held groups that reports only transitions.
 
-#include "player_two/lock_group_rules.h"
+#include "player_two/battle/lock_group_rules.h"
 
 #include "expect.h"
 

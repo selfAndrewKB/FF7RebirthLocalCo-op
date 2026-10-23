@@ -4,13 +4,13 @@
 #include "facts/in_battle.h"
 #include "facts/party.h"
 #include "facts/world.h"
-#include "platform/verified_code.h"
-#include "views/whole_screen_rules.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/verified_code.h"
 #include "players/unreal_access.h"
 #include "views/screen_widgets.h"
+#include "views/whole_screen_rules.h"
 
 #include <array>
 #include <cstdint>

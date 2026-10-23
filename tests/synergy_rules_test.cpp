@@ -3,7 +3,7 @@
 // The hand-over's answer (who the leader test names for a human's partner), the give-back's target, what the tick does
 // with a member end that ran off the game thread, and the two tables' slot choice and stance dedup.
 
-#include "player_two/synergy_rules.h"
+#include "player_two/battle/synergy_rules.h"
 
 #include "expect.h"
 

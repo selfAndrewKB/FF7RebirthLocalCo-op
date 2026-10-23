@@ -1,10 +1,10 @@
 // Host-side tests for the first-player answer (lever L2), run without the game.
 //
-// The bytes the mod writes near the game (hud/first_player_code.h) are EXECUTED here, installed
+// The bytes the mod writes near the game (hud/passes/first_player_code.h) are EXECUTED here, installed
 // through platform::CodeRedirect over a stand-in for the function's entry: `mov eax, 28h` followed
 // by the rest of a function that returns a marker value (as the game's returns its first player).
 
-#include "hud/first_player_code.h"
+#include "hud/passes/first_player_code.h"
 #include "platform/code_redirect.h"
 
 #include "exec_page.h"

@@ -1,4 +1,4 @@
-// Host-side tests for the overlay's layout-scale code (hud/layout_scale_code.h), run without the game.
+// Host-side tests for the overlay's layout-scale code (hud/layout/layout_scale_code.h), run without the game.
 //
 // The bytes the mod places over the overlay's layout-scale instruction are EXECUTED here: a harness takes the rect's
 // width in ecx and height in edx, as the game has them at the site, runs the code and returns xmm0. The result must be
@@ -6,7 +6,7 @@
 // exactly the game's own H/1080. The research build's code follows the game's two instructions before the site; the
 // 1.005 code carries those two itself.
 
-#include "hud/layout_scale_code.h"
+#include "hud/layout/layout_scale_code.h"
 
 #include "exec_page.h"
 #include "expect.h"

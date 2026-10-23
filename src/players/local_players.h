@@ -1,7 +1,8 @@
 #pragma once
 
 // A local player of the mod's, added to and removed from the engine's list of local players through UE's own path,
-// by seat: seat 1 is player 2 (player_two/session.h), seat 2 the third view (views/third_view.h). The controller id
+// by seat: seat 1 is player 2 (player_two/session/session.h), seat 2 the third view (views/third_view.h). The
+// controller id
 // is the seat, and the player takes the list's index `seat`, so the seats before it must be filled first.
 //
 // Adding uses the engine's CreatePlayer with a PlayerController of the player's own. The engine then

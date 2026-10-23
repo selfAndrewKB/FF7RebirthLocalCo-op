@@ -3,7 +3,7 @@
 // The copied-key set, which of player 1's loops a shared ride seeds, where an add and a stop go, and whose list the
 // component's tick plays.
 
-#include "player_two/rumble_rules.h"
+#include "player_two/feedback/rumble_rules.h"
 
 #include "expect.h"
 

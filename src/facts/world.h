@@ -18,7 +18,7 @@ using platform::FunctionFact;
 /// g_EndGameRoot: a pointer global the game mode fills, the root of the field's managers. Its slots (each a pointer):
 inline constexpr std::uintptr_t kEndGameRoot    = 0x1490FEDE8;
 inline constexpr std::uint32_t  kRootGameState  = 0x170;  // the game state: the on/off table's owner and its counters
-inline constexpr std::uint32_t  kRootCharaPop   = 0x180;  // the CharaPop manager (player_two/charapop_facts.h)
+inline constexpr std::uint32_t  kRootCharaPop   = 0x180;  // the CharaPop manager (player_two/world/charapop_facts.h)
 inline constexpr std::uint32_t  kRootModeHolder = 0x1B8;  // the mode holder (the encounter manager; +0x3D558 its state)
 inline constexpr std::uint32_t  kRootWorldItems = 0x288;  // the WorldItemMgr
 /// WorldItemMgr's map of items (RE-p2-field-interact.md §10.5): a stock TMap keyed by the item's FName at element +0

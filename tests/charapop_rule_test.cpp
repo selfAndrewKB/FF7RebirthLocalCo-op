@@ -2,7 +2,7 @@
 //
 // The live Middle parameters (log of 2026-10-02): FOV 75, draw 10000, in 6000, out 3000, should-tick 1000.
 
-#include "player_two/charapop_rule.h"
+#include "player_two/world/charapop_rule.h"
 
 #include "expect.h"
 

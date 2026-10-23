@@ -4,7 +4,7 @@
 // item widening's rules, the switch volume's enter, leave and player-1 changes, the camera repair's timer and verdict,
 // the climb exits, the distance level and the shoulder scale.
 
-#include "player_two/world_rules.h"
+#include "player_two/world/world_rules.h"
 
 #include "expect.h"
 

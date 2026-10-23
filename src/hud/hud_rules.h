@@ -4,7 +4,7 @@
 // enemy_gauges), tested on the host (tests/hud_rules_test.cpp). The modules keep the engine reads, the passes and
 // the log.
 
-#include "hud/overlay_pass.h"
+#include "hud/passes/overlay_pass.h"
 
 #include <algorithm>
 #include <cstddef>

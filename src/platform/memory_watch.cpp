@@ -1,9 +1,9 @@
 #include "platform/memory_watch.h"
 
-#include "platform/memory_alarm.h"
 #include "platform/binned_pools.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/memory_alarm.h"
 #include "platform/module_pin.h"
 
 #include <algorithm>
