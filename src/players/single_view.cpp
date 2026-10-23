@@ -18,6 +18,19 @@ SingleViewChange SingleView::Update(bool playerTwoIn, bool wholeScreenShown) noe
     return wanted ? SetSingle() : SetSplit();
 }
 
+SingleViewChange SingleView::Update(bool playerTwoIn, const SingleViewInputs& inputs) noexcept
+{
+    const bool waits  = inputs.waitsForMember && mode_ == SingleViewMode::Auto;
+    auto       change = Update(playerTwoIn, SingleViewWanted(mode_ == SingleViewMode::Auto, inputs.wholeScreenShown,
+                                                            inputs.waitsForMember, inputs.standsAside));
+    if (waits != waited_)
+    {
+        waited_      = waits;
+        change.waits = waits ? SingleViewChange::Waits::Began : SingleViewChange::Waits::Ended;
+    }
+    return change;
+}
+
 SingleViewChange SingleView::SetSingle() noexcept
 {
     const auto current = access_.read();
@@ -87,6 +100,18 @@ std::wstring Describe(const SingleViewChange& change)
             return L"single view: over; the split switch is not the mod's (or was cleared meanwhile), left as it is";
         case Kind::SplitFailed:
             return L"single view: the split switch could not be read or cleared; the screen stays single";
+    }
+    return {};
+}
+
+std::wstring DescribeWaits(const SingleViewChange& change)
+{
+    switch (change.waits)
+    {
+        case SingleViewChange::Waits::Same: return {};
+        case SingleViewChange::Waits::Began:
+            return L"player 2 waits for a party member: player 1's single view until player 2 takes one";
+        case SingleViewChange::Waits::Ended: return L"player 2 no longer waits for a party member";
     }
     return {};
 }

@@ -56,6 +56,10 @@ void RemoveWholeScreen() noexcept;
 /// Whether the checks passed: the automatic single view and the streaming views' update read it.
 bool WholeScreenInstalled() noexcept;
 
+/// Game thread: the game shows something that takes the whole screen now (a full-screen menu, the map screen, a
+/// cutscene), from this tick's signals; false if not installed. Each change of reason is logged by the read.
+bool WholeScreenShown() noexcept;
+
 /// Game thread, once per engine tick: this tick's signals (zeroed if not installed).
 ScreenSignals ReadScreenSignals() noexcept;
 

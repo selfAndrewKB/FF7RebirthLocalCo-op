@@ -527,6 +527,11 @@ bool WholeScreenInstalled() noexcept
     return g_installed;
 }
 
+bool WholeScreenShown() noexcept
+{
+    return g_installed && ReasonOf(ReadScreenSignals()) != WholeScreenReason::None;
+}
+
 bool GameStatePresent() noexcept
 {
     void* state = nullptr;

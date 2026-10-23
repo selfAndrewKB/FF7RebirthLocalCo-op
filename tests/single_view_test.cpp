@@ -177,6 +177,33 @@ void TestWantedAndDescribe()
     EXPECT(Describe(SingleViewChange{Kind::Split}).find(L"the split is back") != std::wstring::npos);
 }
 
+void TestInputsAndWaits()
+{
+    std::puts("single view: the request from its inputs; the waits edge noted once each way");
+    using lss::players::DescribeWaits;
+    using lss::players::SingleViewInputs;
+    using Waits = SingleViewChange::Waits;
+    auto view   = Fresh();
+    auto change = view.Update(true, SingleViewInputs{.waitsForMember = true});
+    EXPECT(change.kind == Kind::Single);
+    EXPECT(change.waits == Waits::Began);
+    EXPECT(DescribeWaits(change).find(L"waits for a party member") != std::wstring::npos);
+    change = view.Update(true, SingleViewInputs{.waitsForMember = true});
+    EXPECT(change.kind == Kind::None);
+    EXPECT(change.waits == Waits::Same);
+    EXPECT(DescribeWaits(change).empty());
+    change = view.Update(true, SingleViewInputs{.standsAside = true});  // the wait over, another reason holds
+    EXPECT(change.kind == Kind::None);
+    EXPECT(change.waits == Waits::Ended);
+    change = view.Update(true, SingleViewInputs{});
+    EXPECT(change.kind == Kind::Split);
+    EXPECT(change.waits == Waits::Same);
+    view.SetMode(SingleViewMode::Split);  // not automatic: a wait is not noted
+    change = view.Update(true, SingleViewInputs{.waitsForMember = true});
+    EXPECT(change.kind == Kind::None);
+    EXPECT(change.waits == Waits::Same);
+}
+
 }  // namespace
 
 int main()
@@ -189,6 +216,7 @@ int main()
     TestFailuresReportedOncePerRequest();
     TestModes();
     TestWantedAndDescribe();
+    TestInputsAndWaits();
 
     return lss::test::Report();
 }

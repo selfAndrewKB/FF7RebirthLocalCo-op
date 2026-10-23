@@ -178,6 +178,7 @@ add_library(LocalSplitScreen SHARED
     src/players/local_players.cpp
     src/players/single_view.cpp
     src/players/split_layout.cpp
+    src/players/split_screen_settings.cpp
     src/players/split_settings_access.cpp
     src/players/unreal_access.cpp
 
@@ -266,6 +267,7 @@ lss_test(output_load_action src/platform/code_redirect.cpp src/platform/block_pa
 lss_test(held_setting src/players/held_setting.cpp)
 lss_test(view_shape src/views/view_shape.cpp)
 lss_test(split_layout src/players/split_layout.cpp src/players/held_setting.cpp)
+lss_test(split_screen_settings src/players/split_screen_settings.cpp src/players/held_setting.cpp)
 lss_test(monitor_row src/views/monitor_row.cpp)
 lss_test(single_view src/players/single_view.cpp)
 lss_test(whole_screen src/views/whole_screen_reason.cpp)

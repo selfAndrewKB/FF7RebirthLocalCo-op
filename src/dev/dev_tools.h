@@ -31,12 +31,12 @@ namespace lss::dev {
 
 /// Installs the watches and opens the control channel (the HUD trace and probe install on their first command).
 void Install(const platform::GameImage& image, player_two::Session& session, players::SplitLayout& layout,
-             players::SingleView& singleView, bool viewPointInstalled) noexcept;
+             players::SingleView& singleView) noexcept;
 void Remove() noexcept;
 
 /// Opens the control channel alone: no engine redirects (the watch-only start uses it to be quit).
-void InstallControl(player_two::Session& session, players::SplitLayout& layout, players::SingleView& singleView,
-                    bool viewPointInstalled) noexcept;
+void InstallControl(player_two::Session& session, players::SplitLayout& layout,
+                    players::SingleView& singleView) noexcept;
 
 /// Game thread, once per engine tick: a control script's next step, before the session's tick.
 void TickBeforeSession() noexcept;
@@ -53,10 +53,10 @@ void AfterOverlayRender() noexcept;
 
 #else
 
-inline void Install(const platform::GameImage&, player_two::Session&, players::SplitLayout&, players::SingleView&,
-                    bool) noexcept {}
+inline void Install(const platform::GameImage&, player_two::Session&, players::SplitLayout&,
+                    players::SingleView&) noexcept {}
 inline void Remove() noexcept {}
-inline void InstallControl(player_two::Session&, players::SplitLayout&, players::SingleView&, bool) noexcept {}
+inline void InstallControl(player_two::Session&, players::SplitLayout&, players::SingleView&) noexcept {}
 inline void TickBeforeSession() noexcept {}
 inline void TickAfterSession() noexcept {}
 inline void TickWatches(bool) noexcept {}

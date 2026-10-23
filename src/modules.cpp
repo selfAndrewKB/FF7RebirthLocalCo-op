@@ -55,6 +55,7 @@
 #include "player_two/party_warp.h"
 #include "player_two/player_hits.h"
 #include "player_two/rumble_list_two.h"
+#include "player_two/session.h"
 #include "player_two/shared_ride.h"
 #include "player_two/shop_talk.h"
 #include "player_two/shoulder_scale.h"
@@ -70,6 +71,7 @@
 #include "player_two/wheelie_ride.h"
 #include "player_two/widget_owner.h"
 #include "player_two/world_actor_reach.h"
+#include "players/unreal_access.h"
 #include "renderer/family_boundary.h"
 #include "renderer/me_feedback_once.h"
 #include "renderer/submit_hints.h"
@@ -81,6 +83,8 @@
 
 #include <array>
 #include <cstddef>
+#include <format>
+#include <string>
 #include <type_traits>
 
 namespace lss::modules {
@@ -411,6 +415,88 @@ void TickAfterSession(const Frame& frame) noexcept
     // false without the view-point entry (nothing shapes the halves then), so the cameras keep their constraint.
     player_two::main_camera_shape::Update(player_two::generation::Active() && frame.splitShown &&
                                           views::FillsHalves());
+    renderer::FollowPlayerTwo(frame.playerTwoIn);  // the submit hints skipped while player 2 is in
+}
+
+void LeavePlayerTwo(player_two::Session& session, const wchar_t* why) noexcept
+{
+    views::third_view::Remove(why);
+    session.Leave();
+}
+
+Result SetOwnCamera(const player_two::Session& session, bool on) noexcept
+{
+    if (!views::ViewPointInstalled())
+    {
+        return {false, L"the view-point entry is not installed"};
+    }
+    if (!session.HasPlayerTwo())
+    {
+        return {false, L"player 2 is not in (Ctrl+F7 adds one)"};
+    }
+    if (views::ShowsOwnCamera() != on)
+    {
+        views::ToggleOwnCamera();
+    }
+    return {true, views::ShowsOwnCamera() ? L"player 2's own camera" : L"player 1's camera"};
+}
+
+Result SetFill(bool on) noexcept
+{
+    if (!views::ViewPointInstalled())
+    {
+        return {false, L"the view-point entry is not installed"};
+    }
+    if (views::FillsHalves() != on)
+    {
+        views::ToggleFill();
+    }
+    return {true, views::FillsHalves() ? L"halves filled" : L"16:9 halves with bars"};
+}
+
+Result SetThirdView(bool on, const wchar_t* why) noexcept
+{
+    if (on == views::third_view::In())
+    {
+        return {true, on ? L"the third view is already in" : L"the third view is not in"};
+    }
+    if (on)
+    {
+        return views::third_view::Add() ? Result{true, L"the third view is in"}
+                                        : Result{false, L"the third view could not be added (the log says why)"};
+    }
+    views::third_view::Remove(why);
+    return views::third_view::In() ? Result{false, L"the third local player could not be removed"}
+                                   : Result{true, L"the third view is out"};
+}
+
+Result SetWindowSpan(const player_two::Session& session, bool on, const wchar_t* why) noexcept
+{
+    if (!views::window_span::Installed())
+    {
+        return {false, L"the window span is not installed (see the startup log)"};
+    }
+    if (on == views::window_span::In())
+    {
+        return {true, on ? L"the window is already spanned" : L"the window is not spanned"};
+    }
+    if (!on)
+    {
+        views::window_span::Leave(why);
+        return views::window_span::In() ? Result{false, L"the window could not be put back"}
+                                        : Result{true, L"the window put back"};
+    }
+    if (!session.HasPlayerTwo())
+    {
+        return {false, L"player 2 is not in (Ctrl+F7 first)"};
+    }
+    auto*      players = players::unreal::LocalPlayers(players::unreal::GameInstance());
+    const auto columns = players == nullptr ? 0 : players->Num();
+    if (!views::window_span::Enter(columns))
+    {
+        return {false, L"the window could not be spanned (the log says why)"};
+    }
+    return {true, std::format(L"{} columns", columns)};
 }
 
 }  // namespace lss::modules

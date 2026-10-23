@@ -34,7 +34,7 @@ control::CommandChannel           g_channel;
 }  // namespace
 
 void Install(const platform::GameImage& image, player_two::Session& session, players::SplitLayout& layout,
-             players::SingleView& singleView, bool viewPointInstalled) noexcept
+             players::SingleView& singleView) noexcept
 {
     // The HUD trace and the position probe are installed by their first command (control/mod_target.cpp), not here:
     // their call redirects sit on the HUD's hot path and nearly every dev start never asks for them.
@@ -61,14 +61,14 @@ void Install(const platform::GameImage& image, player_two::Session& session, pla
             renderer::LogSubmissionCensus();  // the census's summary of the perf log's window
         }
     });
-    InstallControl(session, layout, singleView, viewPointInstalled);
+    InstallControl(session, layout, singleView);
 }
 
-void InstallControl(player_two::Session& session, players::SplitLayout& layout, players::SingleView& singleView,
-                    bool viewPointInstalled) noexcept
+void InstallControl(player_two::Session& session, players::SplitLayout& layout,
+                    players::SingleView& singleView) noexcept
 {
     // Control scripts drive the same actions as the keys, from files (control/command_channel.h).
-    g_target.emplace(session, layout, singleView, viewPointInstalled);
+    g_target.emplace(session, layout, singleView);
     g_channel.Open();
 }
 

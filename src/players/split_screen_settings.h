@@ -1,7 +1,7 @@
 #pragma once
 
 // Engine settings two-player rendering needs, held while player 2 is in and put back when they leave (each one a
-// players::HeldSetting over the console; mod.cpp holds them).
+// players::HeldSetting over the console; SplitScreenSettings holds the three, the entry point owns it).
 //
 // r.SceneRenderTargetResizeMethod (a stock engine setting): each player's family asks for scene
 // textures sized to its own part of the screen, and at the default (0, "resize to match requested
@@ -18,8 +18,11 @@
 // and dynamic resolution, if the player turned it on, keeps real GPU timings. Each setting is one object; the gap
 // recorder's goes off after the timing method's and comes back before it (SettingsOrder).
 
+#include "players/held_setting.h"
+
 #include <array>
 #include <cstdint>
+#include <string>
 
 namespace lss::players {
 
@@ -56,5 +59,19 @@ constexpr const ConsoleSetting& SettingOf(SettingsStep step) noexcept
 {
     return kSplitScreenSettings[static_cast<std::size_t>(step)];
 }
+
+/// The three settings as held settings, updated in SettingsOrder.
+class SplitScreenSettings
+{
+public:
+    explicit SplitScreenSettings(SettingAccess<std::int32_t> access) noexcept;
+
+    /// Game thread, every tick: holds the three while player 2 is in and puts them back when they leave, in
+    /// SettingsOrder; each change's line (held_setting.h's Describe) goes to `log`.
+    void Update(bool playerTwoIn, void (*log)(const std::wstring& line)) noexcept;
+
+private:
+    std::array<HeldSetting<std::int32_t>, 3> settings_;  // by SettingsStep
+};
 
 }  // namespace lss::players

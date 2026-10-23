@@ -40,26 +40,22 @@
 #include "player_two/weak_object.h"
 #include "player_two/world_actor_reach.h"
 #include "players/console_access.h"
-#include "players/held_setting.h"
 #include "players/join_keys.h"
 #include "players/single_view.h"
 #include "players/split_layout.h"
 #include "players/split_screen_settings.h"
 #include "players/split_settings_access.h"
 #include "players/tracked_object.h"
-#include "players/unreal_access.h"
 #include "renderer/additional_family_output.h"
 #include "renderer/async_compute.h"
 #include "renderer/family_boundary.h"
 #include "renderer/residency_off.h"
-#include "renderer/submit_hints.h"
 #include "renderer/view_family_submission.h"
 #include "views/player_view_point.h"
 #include "views/third_view.h"
 #include "views/whole_screen.h"
 #include "views/window_span.h"
 
-#include <array>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -240,7 +236,7 @@ public:
             if (const auto removeLocalPlayer = image ? VerifyEngine(*image) : std::nullopt)
             {
                 session_.emplace(*removeLocalPlayer);
-                lss::dev::InstallControl(*session_, layout_, singleView_, false);
+                lss::dev::InstallControl(*session_, layout_, singleView_);
             }
             const Hook::FCallbackOptions watchOptions{false, false, STR("LocalSplitScreen"), STR("frame watch")};
             tickCallback_ = Hook::RegisterEngineTickPreCallback(
@@ -277,7 +273,7 @@ public:
 
         // The dev tools (built with LSS_DEV_TOOLS only): the control channel, the HUD trace and probe, and the watches
         // that only log (dev/dev_tools.h names them); a player's build has none of them.
-        lss::dev::Install(*image, *session_, layout_, singleView_, lss::views::ViewPointInstalled());
+        lss::dev::Install(*image, *session_, layout_, singleView_);
 
         const Hook::FCallbackOptions tickOptions{false, false, STR("LocalSplitScreen"), STR("player intent")};
         tickCallback_ = Hook::RegisterEngineTickPreCallback(
@@ -347,7 +343,7 @@ private:
         lss::views::Follow(SplitFrameNow(false));
         // The viewport outlives the world: its split switch is cleared while player 1's controller
         // is still this world's.
-        LogSingleViewChange(singleView_.Update(false, false));
+        LogSingleViewChange(singleView_.Update(false, {}));
         if (left)
         {
             Log(L"{}: player 2 left (and joins again once the field is ready)", why);
@@ -375,37 +371,24 @@ private:
         {
             case lss::players::PlayerIntent::Join: session_->Join(); break;
             case lss::players::PlayerIntent::Leave:
-                lss::views::third_view::Remove(L"player 2 leaves (Ctrl+F8)");
-                session_->Leave();  // logs its own outcome
+                lss::modules::LeavePlayerTwo(*session_, L"player 2 leaves (Ctrl+F8)");  // logs its own outcome
                 break;
             case lss::players::PlayerIntent::ToggleThirdView:
-                if (lss::views::third_view::In())
-                {
-                    lss::views::third_view::Remove(L"Ctrl+F3");
-                }
-                else
-                {
-                    lss::views::third_view::Add();
-                }
+                LogAction(L"third view (Ctrl+F3)",
+                          lss::modules::SetThirdView(!lss::views::third_view::In(), L"Ctrl+F3"));
                 break;
             case lss::players::PlayerIntent::ToggleWindowSpan:
-                if (lss::views::window_span::In())
-                {
-                    lss::views::window_span::Leave(L"Ctrl+F2");
-                }
-                else if (session_->HasPlayerTwo())
-                {
-                    auto* players = lss::players::unreal::LocalPlayers(lss::players::unreal::GameInstance());
-                    lss::views::window_span::Enter(players == nullptr ? 0 : players->Num());
-                }
-                else
-                {
-                    Log(L"window span: player 2 is not in (Ctrl+F7 first)");
-                }
+                LogAction(L"window span (Ctrl+F2)",
+                          lss::modules::SetWindowSpan(*session_, !lss::views::window_span::In(), L"Ctrl+F2"));
                 break;
-            case lss::players::PlayerIntent::ToggleOwnCamera: ToggleOwnCamera(); break;
+            case lss::players::PlayerIntent::ToggleOwnCamera:
+                LogAction(L"camera choice (Ctrl+F6)",
+                          lss::modules::SetOwnCamera(*session_, !lss::views::ShowsOwnCamera()));
+                break;
             case lss::players::PlayerIntent::ToggleLayout: LogLayoutChange(layout_.Toggle()); break;
-            case lss::players::PlayerIntent::ToggleFill: ToggleFill(); break;
+            case lss::players::PlayerIntent::ToggleFill:
+                LogAction(L"split halves (Ctrl+F4)", lss::modules::SetFill(!lss::views::FillsHalves()));
+                break;
             case lss::players::PlayerIntent::TogglePadSticks: session_->TogglePadSticks(); break;
             case lss::players::PlayerIntent::ToggleNpcDetail:
                 if (lss::player_two::charapop_near::Installed())
@@ -442,25 +425,13 @@ private:
         // it holds, player 2 stays in but the split's presentation is off, as with one player.
         const bool playerTwoIn = session_->HasPlayerTwo();
         const bool autoMode    = singleView_.Mode() == lss::players::SingleViewMode::Auto;
-        const bool waits       = PlayerTwoWaits();
         LogSingleViewChange(singleView_.Update(
-            playerTwoIn,
-            lss::players::SingleViewWanted(autoMode, WholeScreenShown(playerTwoIn), waits, session_->StandsAside())));
+            playerTwoIn, {playerTwoIn && autoMode && lss::views::WholeScreenShown(),  // read only when it can matter
+                          session_->WaitsForMember(), session_->StandsAside()}));
         const bool splitShown = playerTwoIn && !singleView_.Single();
         lss::modules::TickAfterSession({playerTwoIn, splitShown, session_->PlaysMember()});
         lss::dev::TickWatches(splitShown);  // the dev watches, after the levers they observe
-        // The timing method before the gap recorder goes off, and back after it returns (SettingsOrder).
-        for (const auto step : lss::players::SettingsOrder(playerTwoIn))
-        {
-            auto& setting = settings_[static_cast<std::size_t>(step)];
-            LogHeld(setting.Update(playerTwoIn, lss::players::SettingOf(step).value), L"split screen",
-                    setting.Name());
-        }
-        if (playerTwoIn != submitHintsSkipped_)
-        {
-            submitHintsSkipped_ = playerTwoIn;
-            lss::renderer::SetSubmitHintSkip(playerTwoIn);
-        }
+        settings_.Update(playerTwoIn, [](const std::wstring& line) { Log(L"{}", line); });
         LogLayoutChange(layout_.Update(playerTwoIn));
         lss::views::Follow(SplitFrameNow(splitShown));  // after the layout: the halves' shape reads it; the one
                                                        // place "the split is shown" is kept (views::SplitShown)
@@ -488,21 +459,10 @@ private:
         return {session_->PlayerOne(), session_->PlayerTwo(), session_->JoinCount(), splitShown};
     }
 
-    void ToggleFill() noexcept
+    /// A key's action: what it did, or why not (the control commands return the same text).
+    static void LogAction(const wchar_t* key, const lss::modules::Result& result) noexcept
     {
-        if (!lss::views::ViewPointInstalled())
-        {
-            Log(L"filled halves unavailable (the view-point entry is not installed)");
-            return;
-        }
-        if (lss::views::ToggleFill())
-        {
-            Log(L"split halves fill the screen (no bars)");
-        }
-        else
-        {
-            Log(L"split halves kept 16:9 with bars (the game's own shape)");
-        }
+        Log(L"{}: {}", key, result.text);
     }
 
     void LogLayoutChange(const lss::players::HeldChange& change) const noexcept
@@ -513,85 +473,26 @@ private:
         }
     }
 
-    void ToggleOwnCamera() noexcept
-    {
-        if (!lss::views::ViewPointInstalled())
-        {
-            Log(L"camera choice unavailable (the view-point entry is not installed)");
-            return;
-        }
-        if (!session_->HasPlayerTwo())
-        {
-            Log(L"camera choice: no player 2 (Ctrl+F7 adds one)");
-            return;
-        }
-        if (lss::views::ToggleOwnCamera())
-        {
-            Log(L"player 2's half shows player 2's own camera");
-        }
-        else
-        {
-            Log(L"player 2's half shows player 1's camera");
-        }
-    }
-
-    /// Whether the game shows something that takes the whole screen (a full-screen menu, the map
-    /// screen, a cutscene), from the game's own state (views/whole_screen.h). Read only while player 2
-    /// is in and the automatic choice is on; each change is logged there.
-    bool WholeScreenShown(bool playerTwoIn) const noexcept
-    {
-        return playerTwoIn && lss::views::WholeScreenInstalled() &&
-               singleView_.Mode() == lss::players::SingleViewMode::Auto &&
-               lss::views::ReasonOf(lss::views::ReadScreenSignals()) != lss::views::WholeScreenReason::None;
-    }
-
-    /// Player 2 is in without a member, waiting on the 2nd slot's (player_two/session.h), with the
-    /// automatic choice on. Each change is logged.
-    bool PlayerTwoWaits() noexcept
-    {
-        const bool waits = session_->WaitsForMember() && singleView_.Mode() == lss::players::SingleViewMode::Auto;
-        if (waits != playerTwoWaited_)
-        {
-            playerTwoWaited_ = waits;
-            Log(L"{}", waits ? L"player 2 waits for a party member: player 1's single view until player 2 takes one"
-                             : L"player 2 no longer waits for a party member");
-        }
-        return waits;
-    }
-
+    /// The waits edge first (it explains the single view that follows), then the switch's change.
     static void LogSingleViewChange(const lss::players::SingleViewChange& change) noexcept
     {
+        if (const auto text = lss::players::DescribeWaits(change); !text.empty())
+        {
+            Log(L"{}", text);
+        }
         if (const auto text = lss::players::Describe(change); !text.empty())
         {
             Log(L"{}", text);
         }
     }
 
-    static void LogHeld(const lss::players::HeldChange& change, const wchar_t* label, const wchar_t* name) noexcept
-    {
-        if (const auto text = lss::players::Describe(change, label, name); !text.empty())
-        {
-            Log(L"{}", text);
-        }
-    }
-
-    /// One held console setting, for the settings_ array (split_screen_settings.h, by SettingsStep).
-    static lss::players::HeldSetting<std::int32_t> ConsoleSettingOf(lss::players::SettingsStep step) noexcept
-    {
-        return {{&lss::players::console::VariableInt, &lss::players::console::SetVariableInt},
-                lss::players::SettingOf(step).name};
-    }
-
     std::optional<lss::player_two::Session>   session_;
     lss::players::JoinKeys                    keys_;
     ULONGLONG                                 nextStatus_ = 0;
-    std::array<lss::players::HeldSetting<std::int32_t>, 3> settings_{
-        ConsoleSettingOf(lss::players::SettingsStep::Resolution), ConsoleSettingOf(lss::players::SettingsStep::Timing),
-        ConsoleSettingOf(lss::players::SettingsStep::Gap)};
-    bool                                      submitHintsSkipped_ = false;  // the join/leave switch's last state
+    lss::players::SplitScreenSettings         settings_{{&lss::players::console::VariableInt,
+                                                         &lss::players::console::SetVariableInt}};
     lss::players::SplitLayout                 layout_{{&ReadTwoPlayerLayout, &WriteTwoPlayerLayout}};
     lss::players::SingleView                  singleView_{{&ReadSplitSwitch, &WriteSplitSwitch}};
-    bool                                      playerTwoWaited_ = false;  // as last logged
     bool                                      tickSeen_           = false;
     bool                                      rendererInstalled_  = false;
     Hook::GlobalCallbackId                    tickCallback_       = Hook::ERROR_ID;

@@ -49,6 +49,23 @@ struct SingleViewChange
         SplitFailed,    // it could not be read or cleared; the screen stays single (until the request changes)
     };
     Kind kind = Kind::None;
+
+    /// Player 2 waiting for a party member under the automatic choice, as it changed (logged by DescribeWaits).
+    enum class Waits
+    {
+        Same,
+        Began,
+        Ended,
+    };
+    Waits waits = Waits::Same;
+};
+
+/// What the request is made of each tick, each known only while player 2 is in.
+struct SingleViewInputs
+{
+    bool wholeScreenShown = false;  // the game shows something that takes the whole screen (views/whole_screen.h)
+    bool waitsForMember   = false;  // player 2 is in without a member, waiting on the 2nd slot's (player_two/session.h)
+    bool standsAside      = false;  // a shared ride (player_two/shared_ride.h): player 2 stands aside
 };
 
 /// The screen is single while the automatic choice is on and the game shows something that takes the whole
@@ -62,15 +79,22 @@ constexpr bool SingleViewWanted(bool autoMode, bool wholeScreenShown, bool waits
 /// The change for the log (empty for None).
 std::wstring Describe(const SingleViewChange& change);
 
+/// The waits edge's line (empty for Same).
+std::wstring DescribeWaits(const SingleViewChange& change);
+
 class SingleView
 {
 public:
     explicit SingleView(SplitSwitchAccess access) noexcept : access_(access) {}
 
-    /// Call on the game thread every tick: whether player 2 is in, and whether the game now shows
-    /// something that takes the whole screen. Acts only when the resulting request changes (or a
-    /// failed request is asked for again after a change).
+    /// Call on the game thread every tick: whether player 2 is in, and whether a reason for the single view
+    /// holds (SingleViewWanted: the game takes the whole screen, a wait for a member, standing aside). Acts only
+    /// when the resulting request changes (or a failed request is asked for again after a change).
     SingleViewChange Update(bool playerTwoIn, bool wholeScreenShown) noexcept;
+
+    /// The same from the request's inputs (SingleViewWanted under the automatic choice), with the waits edge noted
+    /// in the change for the log.
+    SingleViewChange Update(bool playerTwoIn, const SingleViewInputs& inputs) noexcept;
 
     /// Development override of the automatic choice; applied at the next Update.
     void SetMode(SingleViewMode mode) noexcept { mode_ = mode; }
@@ -90,6 +114,7 @@ private:
     bool              owned_      = false;  // the mod set it, so the mod clears it
     bool              wanted_     = false;  // the last request
     bool              failed_     = false;  // the last request failed; not retried until it changes
+    bool              waited_     = false;  // player 2 waited for a member, as last noted
 };
 
 }  // namespace lss::players

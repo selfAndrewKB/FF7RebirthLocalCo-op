@@ -40,6 +40,7 @@ struct Site
 std::optional<Site>        g_site;
 platform::InstructionPatch g_patch;  // the byte, in while player 2 is in (platform/instruction_patch.h)
 bool                       g_skipping = false;
+bool                       g_followed = false;  // player 2 in, as last followed
 
 std::optional<Site> Locate(const platform::GameImage& image) noexcept
 {
@@ -130,6 +131,15 @@ void SetSubmitHintSkip(bool skip) noexcept
 void RemoveSubmitHintSkip() noexcept
 {
     SetSubmitHintSkip(false);
+}
+
+void FollowPlayerTwo(bool playerTwoIn) noexcept
+{
+    if (playerTwoIn != g_followed)
+    {
+        g_followed = playerTwoIn;
+        SetSubmitHintSkip(playerTwoIn);
+    }
 }
 
 }  // namespace lss::renderer

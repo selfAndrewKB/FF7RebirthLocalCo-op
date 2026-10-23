@@ -13,10 +13,17 @@
 //
 // The same file lists the modules' per-tick calls, in two phases around the session's tick (TickBeforeSession,
 // TickAfterSession(Frame)); the entry point keeps the keys, the session, the single view's choice, the view points'
-// frame, the held settings and the HUD placement between and after them.
+// frame, the held settings and the HUD placement between and after them. The actions a key and a control command
+// share (leave, own camera, fill, third view, window span) are here too, each once.
+
+#include <string>
 
 namespace lss::platform {
 class GameImage;
+}
+
+namespace lss::player_two {
+class Session;
 }
 
 namespace lss::modules {
@@ -45,5 +52,30 @@ void TickBeforeSession() noexcept;
 /// Game thread, once per engine tick, after the session's tick and the single view's choice: each module's work
 /// that reads the frame. The view points, the held settings and the HUD placement follow in the entry point.
 void TickAfterSession(const Frame& frame) noexcept;
+
+/// What an action did: the key logs the text, the control command returns it as its outcome.
+struct Result
+{
+    bool         ok;
+    std::wstring text;
+};
+
+// The actions a key and a control command share, each in one place. Game thread.
+
+/// Player 2 leaves: the third view first (it borrows player 2's join), then the session's leave (logged there).
+void LeavePlayerTwo(player_two::Session& session, const wchar_t* why) noexcept;
+
+/// Player 2's half on player 2's own camera or player 1's (views/player_view_point.h); refused without the
+/// view-point entry or player 2.
+Result SetOwnCamera(const player_two::Session& session, bool on) noexcept;
+
+/// The split halves filling the screen, or kept 16:9 with bars; refused without the view-point entry.
+Result SetFill(bool on) noexcept;
+
+/// The third full-size view in or out (views/third_view.h); `why` is logged by its leave.
+Result SetThirdView(bool on, const wchar_t* why) noexcept;
+
+/// The game window across its row of monitors or back (views/window_span.h); entering needs player 2.
+Result SetWindowSpan(const player_two::Session& session, bool on, const wchar_t* why) noexcept;
 
 }  // namespace lss::modules

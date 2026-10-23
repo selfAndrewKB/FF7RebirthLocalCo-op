@@ -9,6 +9,7 @@
 #include "hud/second_image.h"
 #include "hud/position_probe.h"
 #include "hud/widget_dump.h"
+#include "modules.h"
 #include "platform/frame_watch.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -27,16 +28,13 @@
 #include "players/console_access.h"
 #include "players/single_view.h"
 #include "players/split_layout.h"
-#include "players/unreal_access.h"
 #include "renderer/me_feedback_once.h"
 #include "renderer/submission_census.h"
 #include "renderer/submit_hints.h"
 #include "renderer/view_family_submission.h"
 #include "views/player_view_point.h"
 #include "views/stream_views.h"
-#include "views/third_view.h"
 #include "views/whole_screen.h"
-#include "views/window_span.h"
 
 namespace lss::control {
 
@@ -45,6 +43,12 @@ namespace {
 Outcome Failed(std::wstring why)
 {
     return {false, std::move(why)};
+}
+
+/// A shared action's result (modules.h) as the command's outcome.
+Outcome From(modules::Result done)
+{
+    return {done.ok, std::move(done.text)};
 }
 
 /// The controller id of player 1's or player 2's controller, or -1.
@@ -96,26 +100,13 @@ Outcome ModTarget::Leave()
     {
         return Failed(L"player 2 is not in");
     }
-    views::third_view::Remove(L"player 2 leaves (the leave command)");  // before: it borrows player 2's join
-    session_.Leave();  // completes over the following ticks (or stops a wait); `wait-until out` confirms it
-    return {};
+    modules::LeavePlayerTwo(session_, L"player 2 leaves (the leave command)");  // over the following ticks;
+    return {};                                                                  // `wait-until out` confirms it
 }
 
 Outcome ModTarget::SetOwnCamera(bool on)
 {
-    if (!viewPointInstalled_)
-    {
-        return Failed(L"the view-point entry is not installed");
-    }
-    if (!session_.HasPlayerTwo())
-    {
-        return Failed(L"player 2 is not in");
-    }
-    if (views::ShowsOwnCamera() != on)
-    {
-        views::ToggleOwnCamera();
-    }
-    return {true, views::ShowsOwnCamera() ? L"player 2's own camera" : L"player 1's camera"};
+    return From(modules::SetOwnCamera(session_, on));
 }
 
 Outcome ModTarget::SetPerPadSticks(bool on)
@@ -150,15 +141,7 @@ Outcome ModTarget::SetLayout(bool sideBySide)
 
 Outcome ModTarget::SetBars(bool on)
 {
-    if (!viewPointInstalled_)
-    {
-        return Failed(L"the view-point entry is not installed");
-    }
-    if (views::FillsHalves() == on)  // bars on means the halves do not fill
-    {
-        views::ToggleFill();
-    }
-    return {true, views::FillsHalves() ? L"halves filled" : L"16:9 halves with bars"};
+    return From(modules::SetFill(!on));  // bars on means the halves do not fill
 }
 
 Outcome ModTarget::SetHudBand(bool on)
@@ -323,41 +306,12 @@ Outcome ModTarget::SetPerfLog(bool on)
 
 Outcome ModTarget::SetThirdView(bool on)
 {
-    if (on == views::third_view::In())
-    {
-        return {true, on ? L"the third view is already in" : L"the third view is not in"};
-    }
-    if (on)
-    {
-        return views::third_view::Add() ? Outcome{} : Failed(L"the third view could not be added (the log says why)");
-    }
-    views::third_view::Remove(L"the third-view command");
-    return views::third_view::In() ? Failed(L"the third local player could not be removed") : Outcome{};
+    return From(modules::SetThirdView(on, L"the third-view command"));
 }
 
 Outcome ModTarget::SetWindowSpan(bool on)
 {
-    if (!views::window_span::Installed())
-    {
-        return Failed(L"the window span is not installed (see the startup log)");
-    }
-    if (on == views::window_span::In())
-    {
-        return {true, on ? L"the window is already spanned" : L"the window is not spanned"};
-    }
-    if (!on)
-    {
-        views::window_span::Leave(L"the window-span command");
-        return views::window_span::In() ? Failed(L"the window could not be put back") : Outcome{};
-    }
-    if (!session_.HasPlayerTwo())
-    {
-        return Failed(L"player 2 is not in");
-    }
-    auto* players = players::unreal::LocalPlayers(players::unreal::GameInstance());
-    const auto columns = players == nullptr ? 0 : players->Num();
-    return views::window_span::Enter(columns) ? Outcome{true, std::format(L"{} columns", columns)}
-                                              : Failed(L"the window could not be spanned (the log says why)");
+    return From(modules::SetWindowSpan(session_, on, L"the window-span command"));
 }
 
 Outcome ModTarget::SetSingleView(std::uint32_t mode)
@@ -514,7 +468,7 @@ Outcome ModTarget::Dump(const std::wstring& topic)
 
 Outcome ModTarget::SetSplitFov(float blend)
 {
-    if (!viewPointInstalled_)
+    if (!views::ViewPointInstalled())
     {
         return Failed(L"the view-point entry is not installed");
     }

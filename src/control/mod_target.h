@@ -23,9 +23,8 @@ namespace lss::control {
 class ModTarget final : public Target
 {
 public:
-    ModTarget(player_two::Session& session, players::SplitLayout& layout, players::SingleView& singleView,
-              bool viewPointInstalled) noexcept
-        : session_(session), layout_(layout), singleView_(singleView), viewPointInstalled_(viewPointInstalled)
+    ModTarget(player_two::Session& session, players::SplitLayout& layout, players::SingleView& singleView) noexcept
+        : session_(session), layout_(layout), singleView_(singleView)
     {
     }
 
@@ -86,7 +85,6 @@ private:
     player_two::Session&         session_;
     players::SplitLayout&        layout_;
     players::SingleView&         singleView_;
-    bool                        viewPointInstalled_;
     std::array<std::int32_t, 2>  heldIds_{-1, -1};  // per player: the controller id its stick hold is on
     std::array<std::uint32_t, 2> heldJoins_{};      // per player: the join its stick hold was made in
 };
