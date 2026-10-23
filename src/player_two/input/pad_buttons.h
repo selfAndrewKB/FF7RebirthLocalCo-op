@@ -28,6 +28,8 @@
 //
 // Changes to held state or sources are also logged while player 2 is in (capped per status line).
 
+#include "platform/dev_switch.h"
+
 #include <cstddef>
 #include <cstdint>
 
@@ -80,8 +82,14 @@ void SetPlayerTwoRoute(PlayerTwoRouteFn route) noexcept;
 inline constexpr unsigned kPartViews  = 1;
 inline constexpr unsigned kPartEvents = 2;
 void SetMask(unsigned mask) noexcept;
+unsigned Mask() noexcept;
 
 /// The status line: views written, scopes held, changes logged and dropped since the last call.
 void LogStatus() noexcept;
+
+#if LSS_DEV
+/// The `buttons-mask` command and reading. May throw (out of memory).
+void RegisterCommands();
+#endif
 
 }  // namespace lss::player_two::pad_buttons

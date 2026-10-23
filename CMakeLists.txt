@@ -218,7 +218,6 @@ if(LSS_DEV_TOOLS)
     target_sources(LocalSplitScreen PRIVATE
         src/dev/dev_tools.cpp
         src/control/command_channel.cpp
-        src/control/mod_commands.cpp
         src/platform/command_registry.cpp
         src/control/runner.cpp
         src/control/script.cpp

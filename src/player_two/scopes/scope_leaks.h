@@ -24,6 +24,8 @@
 //
 // All Square Enix End code. Game thread only; addresses are this build's, each checked at install.
 
+#include "platform/dev_switch.h"
+
 namespace lss::platform {
 class GameImage;
 }
@@ -42,6 +44,7 @@ void Remove() noexcept;
 
 /// Diagnosis: which fixes act (bits above). All at start. Logged.
 void SetMask(unsigned mask) noexcept;
+unsigned Mask() noexcept;
 
 /// Around player 2's controller input. Acts only for player 2's controller, on the game thread,
 /// while player 2 is in.
@@ -72,5 +75,10 @@ private:
 
 /// Writes one line of counts since the last call (the player 2 status line).
 void LogStatus() noexcept;
+
+#if LSS_DEV
+/// The `leak-fixes` command and reading. May throw (out of memory).
+void RegisterCommands();
+#endif
 
 }  // namespace lss::player_two::scope_leaks

@@ -16,6 +16,8 @@
 // accumulates.
 // Game thread; only while the split is shown.
 
+#include "platform/dev_switch.h"
+
 namespace lss::platform {
 class GameImage;
 }
@@ -28,12 +30,19 @@ bool Installed() noexcept;
 
 /// On at start; `shoulder-scale off` leaves the game's offset unscaled.
 void SetOn(bool on) noexcept;
+bool On() noexcept;
 
 /// The smallest factor (0.25..1; 0.7 at start): a narrow half's offset is softened no further than this.
 void SetMinimum(float minimum) noexcept;
+float Minimum() noexcept;
 
 /// Each engine tick: the halves' width ratios against the camera's (views::SplitWidthRatio, player 1's and player
 /// 2's), kept for the finalizer; a line when a player's factor changes.
 void Poll(bool splitShown, float ratioOne, float ratioTwo) noexcept;
+
+#if LSS_DEV
+/// The `shoulder-scale` and `shoulder-scale-min` commands and readings. May throw (out of memory).
+void RegisterCommands();
+#endif
 
 }  // namespace lss::player_two::shoulder_scale

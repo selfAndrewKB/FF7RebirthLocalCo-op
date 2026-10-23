@@ -82,13 +82,15 @@
 #include "views/window_span.h"
 
 #if LSS_DEV
-#include "control/mod_commands.h"
 #include "hud/hud_trace.h"
 #include "hud/position_probe.h"
 #include "hud/widget_dump.h"
 #include "platform/command_registry.h"
 #include "platform/frame_watch.h"
 #include "platform/log.h"
+#include "player_two/input/pad_buttons.h"
+#include "player_two/input/pad_sticks.h"
+#include "player_two/scopes/scope_leaks.h"
 #include "player_two/session/field_exit.h"
 #include "player_two/session/own_controller.h"
 #include "player_two/session/party_member.h"
@@ -592,6 +594,14 @@ void RegisterCommands(player_two::Session& session, players::SplitLayout& layout
         players::RegisterCommands(layout);
         players::RegisterCommands(singleView);
         player_two::RegisterCommands(session);
+        player_two::pad_sticks::RegisterCommands();
+        player_two::scope_leaks::RegisterCommands();
+        player_two::pad_buttons::RegisterCommands();
+        player_two::lock_on::RegisterCommands();
+        player_two::shoulder_scale::RegisterCommands();
+        player_two::camera_distance::RegisterCommands();
+        player_two::charapop_centre::RegisterCommands();
+        player_two::charapop_near::RegisterCommands();
         views::RegisterViewPointCommands();
         views::RegisterStreamCommands();
         hud::RegisterOverlayLayoutCommands();
@@ -607,7 +617,6 @@ void RegisterCommands(player_two::Session& session, players::SplitLayout& layout
         renderer::RegisterSubmissionCensusCommands();
         renderer::RegisterViewFamilyCommands();
         RegisterOwnCommands(session);
-        control::RegisterModCommands();  // the group not moved yet (phase 8, row 7)
     }
     catch (...)
     {

@@ -28,6 +28,10 @@
 #include "player_two/scopes/primary_controller.h"
 #include "player_two/session/party_member.h"
 
+#if LSS_DEV
+#include "platform/command_registry.h"
+#endif
+
 #include <atomic>
 #include <cstdint>
 #include <cstring>
@@ -874,6 +878,11 @@ void SetEnabled(bool on) noexcept
     platform::Log(L"lock-on: player 2's targeting run {}", on ? L"on" : L"off");
 }
 
+bool Enabled() noexcept
+{
+    return g_runReady && g_enabled && !g_failed;
+}
+
 void PlayerTwoOut() noexcept
 {
     if (!g_held)
@@ -912,5 +921,28 @@ std::uint32_t TargetListOpenings() noexcept
 {
     return g_listOpenings;
 }
+
+#if LSS_DEV
+
+void RegisterCommands()
+{
+    using control::Outcome;
+    using control::Value;
+    control::Register({.name  = L"battle-mask",
+                       .shape = control::Shape::Integer,
+                       .max   = 511,
+                       .help  = L"diagnosis: bit 8 runs player 2's targeting (the game's targeting tick for player "
+                                L"2); the other bits are retired and ignored; on at start",
+                       .set   = [](const Value& v) {
+                           // Bit 8 is player 2's targeting run. The other bits (1, 2, 4, 16: the direct actions;
+                           // 32, 64, 128, 256: the mod's own lock, switching, lock camera and cursor) are retired:
+                           // the game's own handler and targeting tick do those for player 2.
+                           SetEnabled((std::get<std::int64_t>(v) & 8) != 0);
+                           return Outcome{true, L"battle mask set (see the log)"};
+                       },
+                       .get = [] { return Value{std::int64_t{Enabled() ? 8 : 0}}; }});
+}
+
+#endif
 
 }  // namespace lss::player_two::lock_on

@@ -31,6 +31,7 @@
 // game's teardown ends player 1's. Every state change is logged. Game thread only.
 
 #include "platform/byte_scope.h"
+#include "platform/dev_switch.h"
 
 #include <cstdint>
 
@@ -77,6 +78,8 @@ void AfterBattle() noexcept;
 
 /// Diagnosis: player 2's targeting run on or off (on at start).
 void SetEnabled(bool on) noexcept;
+/// Player 2's targeting run acts: installed, switched on, and not turned off for the session by an exception.
+bool Enabled() noexcept;
 
 /// Player 2 is leaving: their displayed target, targeted key and cursor released, their lock cleared.
 void PlayerTwoOut() noexcept;
@@ -97,5 +100,10 @@ void* Cursor() noexcept;
 /// and how many times it has opened (a HUD module logs its pass afresh when this changes).
 bool          TargetListOpen() noexcept;
 std::uint32_t TargetListOpenings() noexcept;
+
+#if LSS_DEV
+/// The `battle-mask` command and reading. May throw (out of memory).
+void RegisterCommands();
+#endif
 
 }  // namespace lss::player_two::lock_on

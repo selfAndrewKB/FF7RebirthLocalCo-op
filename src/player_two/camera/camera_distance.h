@@ -19,6 +19,8 @@
 // operator's level differs from that target; when player 2 leaves, player 1's goes back to the Options level.
 // Game thread; inert unless player 2 is in.
 
+#include "platform/dev_switch.h"
+
 #include <cstdint>
 
 namespace lss::platform {
@@ -39,5 +41,10 @@ bool         FramingAvailable() noexcept;
 
 /// Each engine tick, with whether player 2 is in.
 void TickFraming(bool playerTwoIn) noexcept;
+
+#if LSS_DEV
+/// The `framing-offset.top-bottom` and `framing-offset.side-by-side` commands and readings. May throw (out of memory).
+void RegisterCommands();
+#endif
 
 }  // namespace lss::player_two::camera_distance

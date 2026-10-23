@@ -12,6 +12,10 @@
 #include "player_two/object_fields.h"
 #include "player_two/world/world_rules.h"
 
+#if LSS_DEV
+#include "platform/command_registry.h"
+#endif
+
 #include <atomic>
 #include <cmath>
 #include <cstddef>
@@ -109,11 +113,21 @@ void SetOn(bool on) noexcept
     platform::Log(L"shoulder scale: {}", on ? L"on" : L"off (the game's offset as it is)");
 }
 
+bool On() noexcept
+{
+    return g_on.load(std::memory_order_relaxed);
+}
+
 void SetMinimum(float minimum) noexcept
 {
     g_minimum.store(std::fmin(std::fmax(minimum, 0.25f), 1.0f), std::memory_order_relaxed);
     g_logged[0] = g_logged[1] = 0.0f;
     platform::Log(L"shoulder scale: at least x{:.2f}", g_minimum.load(std::memory_order_relaxed));
+}
+
+float Minimum() noexcept
+{
+    return g_minimum.load(std::memory_order_relaxed);
 }
 
 void Poll(bool splitShown, float ratioOne, float ratioTwo) noexcept
@@ -138,5 +152,45 @@ void Poll(bool splitShown, float ratioOne, float ratioTwo) noexcept
         }
     }
 }
+
+#if LSS_DEV
+
+void RegisterCommands()
+{
+    using control::Outcome;
+    using control::Value;
+    control::Register({.name  = L"shoulder-scale",
+                       .shape = control::Shape::OnOff,
+                       .help  = L"each half's camera shoulder offset scaled to its width (on at start)",
+                       .set   = [](const Value& v) {
+                           if (!Installed())
+                           {
+                               return Outcome{false, L"the shoulder scale is not installed (see the install log)"};
+                           }
+                           const bool on = std::get<bool>(v);
+                           SetOn(on);
+                           return Outcome{true, on ? L"each half's camera shoulder offset scaled to its width"
+                                                   : L"the game's shoulder offset as it is"};
+                       },
+                       .get = [] { return Value{Installed() && On()}; }});
+    control::Register({.name     = L"shoulder-scale-min",
+                       .shape    = control::Shape::Float,
+                       .minFloat = 0.25,
+                       .maxFloat = 1.0,
+                       .help     = L"the smallest shoulder factor (0.7 at start; side by side's width alone gives "
+                                   L"0.5)",
+                       .set      = [](const Value& v) {
+                           if (!Installed())
+                           {
+                               return Outcome{false, L"the shoulder scale is not installed (see the install log)"};
+                           }
+                           SetMinimum(static_cast<float>(std::get<double>(v)));
+                           return Outcome{true, L"the narrowest half's shoulder offset is softened no further than "
+                                                L"this"};
+                       },
+                       .get = [] { return Value{control::FloatReading(Minimum())}; }});
+}
+
+#endif
 
 }  // namespace lss::player_two::shoulder_scale

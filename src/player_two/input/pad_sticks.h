@@ -68,6 +68,7 @@ inline constexpr unsigned kPartPlayerOneMove   = 2;
 inline constexpr unsigned kPartMemberTick      = 4;
 inline constexpr unsigned kPartPlayerOneDetect = 8;
 void SetMask(unsigned mask) noexcept;
+unsigned Mask() noexcept;
 bool PartActs(unsigned part) noexcept;
 
 #if LSS_DEV
@@ -102,5 +103,10 @@ private:
 
 StageCounters& InputCounters() noexcept;
 StageCounters& MoveCounters() noexcept;
+
+#if LSS_DEV
+/// The `sticks-mask` command and reading. May throw (out of memory).
+void RegisterCommands();
+#endif
 
 }  // namespace lss::player_two::pad_sticks

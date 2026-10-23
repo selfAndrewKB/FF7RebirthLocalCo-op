@@ -24,6 +24,8 @@
 // entries the mod raised that still read 3. Everything raised is cleared when the split closes; the
 // record is dropped without calls when the map's CharaPop changes. Game thread only.
 
+#include "platform/dev_switch.h"
+
 #include <cstdint>
 
 namespace lss::platform {
@@ -57,5 +59,10 @@ bool Installed() noexcept;
 
 /// Clears every entry the mod raised (at mod uninstall, after the tick is unregistered; any thread).
 void Release() noexcept;
+
+#if LSS_DEV
+/// The `npc-detail` command and reading. May throw (out of memory).
+void RegisterCommands();
+#endif
 
 }  // namespace lss::player_two::charapop_near

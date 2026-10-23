@@ -11,6 +11,10 @@
 #include "player_two/generation.h"
 #include "player_two/world/charapop_facts.h"
 
+#if LSS_DEV
+#include "platform/command_registry.h"
+#endif
+
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -359,5 +363,32 @@ bool Installed() noexcept
 {
     return g_installed;
 }
+
+#if LSS_DEV
+
+void RegisterCommands()
+{
+    using control::Outcome;
+    using control::Value;
+    control::Register({.name  = L"npc-centre",
+                       .shape = control::Shape::OnOff,
+                       .help  = L"the NPC population follows both players while split (on at start), or the leader "
+                                L"as the game alone does",
+                       .set   = [](const Value& v) {
+                           if (!Installed())
+                           {
+                               return Outcome{false, L"the NPC centre is not installed (see the startup log)"};
+                           }
+                           const bool on = std::get<bool>(v);
+                           SetEnabled(on);  // logs the new state
+                           return Outcome{true, on ? L"the NPC population follows both players while split (the "
+                                                     L"default)"
+                                                   : L"the NPC population follows the leader, as the game alone "
+                                                     L"does"};
+                       },
+                       .get = [] { return Value{Installed() && Enabled()}; }});
+}
+
+#endif
 
 }  // namespace lss::player_two::charapop_centre

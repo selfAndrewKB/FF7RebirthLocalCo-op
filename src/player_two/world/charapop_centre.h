@@ -20,6 +20,8 @@
 // managed entries keep the game's single score. Nothing persistent is written. Game thread only (the score runs only
 // there, §3).
 
+#include "platform/dev_switch.h"
+
 #include <cstdint>
 
 namespace lss::platform {
@@ -42,5 +44,10 @@ bool Installed() noexcept;
 
 /// Puts the score's entry back (at mod uninstall; nothing else was written).
 void Release() noexcept;
+
+#if LSS_DEV
+/// The `npc-centre` command and reading. May throw (out of memory).
+void RegisterCommands();
+#endif
 
 }  // namespace lss::player_two::charapop_centre

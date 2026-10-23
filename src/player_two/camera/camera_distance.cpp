@@ -16,6 +16,10 @@
 #include "player_two/world/world_rules.h"
 #include "players/split_settings_access.h"
 
+#if LSS_DEV
+#include "platform/command_registry.h"
+#endif
+
 #include <algorithm>
 #include <cstdint>
 #include <format>
@@ -298,5 +302,40 @@ void Remove() noexcept
         platform::Log(L"camera distance: the primary apply's entry was changed after us; left in place (it passes through)");
     }
 }
+
+#if LSS_DEV
+
+void RegisterCommands()
+{
+    using control::Outcome;
+    using control::Value;
+    // The two layouts' framing offsets, one entry each (one argument per command): each sets its own and keeps the
+    // other layout's as it is.
+    for (const int layout : {0, 1})
+    {
+        control::Register({.name  = layout == 0 ? L"framing-offset.top-bottom" : L"framing-offset.side-by-side",
+                           .shape = control::Shape::Integer,
+                           .min   = -2,
+                           .max   = 5,
+                           .help  = layout == 0 ? L"field-camera distance steps added to the Options level while "
+                                                  L"player 2 is in and the screen splits top and bottom (0 at start)"
+                                                : L"field-camera distance steps added to the Options level while "
+                                                  L"player 2 is in and the screen splits side by side (0 at start)",
+                           .set   = [layout](const Value& v) {
+                               if (!FramingAvailable())
+                               {
+                                   return Outcome{false, L"split framing is not available (see the install log)"};
+                               }
+                               const auto steps = static_cast<std::int32_t>(std::get<std::int64_t>(v));
+                               SetLayoutOffsets(layout == 0 ? steps : LayoutOffset(0),
+                                                layout == 1 ? steps : LayoutOffset(1));
+                               return Outcome{true, L"each player's field camera follows the Options distance plus "
+                                                    L"the layout's steps while player 2 is in"};
+                           },
+                           .get = [layout] { return Value{std::int64_t{LayoutOffset(layout)}}; }});
+    }
+}
+
+#endif
 
 }  // namespace lss::player_two::camera_distance

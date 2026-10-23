@@ -11,6 +11,10 @@
 #include "player_two/rides/wheelie_ride.h"
 #include "player_two/world/field_rules.h"
 
+#if LSS_DEV
+#include "platform/command_registry.h"
+#endif
+
 #include <array>
 #include <atomic>
 #include <cmath>
@@ -171,6 +175,11 @@ void SetMask(unsigned mask) noexcept
                   Acts(kFixLeaderTransform), Acts(kFixSummonBody));
 }
 
+unsigned Mask() noexcept
+{
+    return g_mask.load(std::memory_order_relaxed);
+}
+
 InputScope::InputScope(bool playerTwo) noexcept
 {
     // With the fix off (diagnosis) the block is left as player 2's input writes it, as without this scope.
@@ -290,5 +299,25 @@ void LogStatus() noexcept
                   g_mask.load(std::memory_order_relaxed), Unavailable(), counts.clockAdvanced, counts.clockPutBack,
                   counts.clockInexact, counts.clockMissed, counts.leaderRewrites, counts.leaderPutBack, counts.summonSkips);
 }
+
+#if LSS_DEV
+
+void RegisterCommands()
+{
+    using control::Outcome;
+    using control::Value;
+    control::Register({.name  = L"leak-fixes",
+                       .shape = control::Shape::Integer,
+                       .max   = 7,
+                       .help  = L"diagnosis: which put-backs of player 2's scope leaks act (1 the input clock, 2 the "
+                                L"leader transform, 4 field summons skipped); all at start",
+                       .set   = [](const Value& v) {
+                           SetMask(static_cast<unsigned>(std::get<std::int64_t>(v)));
+                           return Outcome{true, L"leak fixes set (see the log)"};
+                       },
+                       .get = [] { return Value{std::int64_t{Mask()}}; }});
+}
+
+#endif
 
 }  // namespace lss::player_two::scope_leaks

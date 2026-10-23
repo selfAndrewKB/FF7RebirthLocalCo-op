@@ -17,6 +17,10 @@
 #include "player_two/input/pad_sticks.h"
 #include "players/unreal_access.h"
 
+#if LSS_DEV
+#include "platform/command_registry.h"
+#endif
+
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -694,6 +698,11 @@ void SetMask(unsigned mask) noexcept
                   Acts(kPartEvents));
 }
 
+unsigned Mask() noexcept
+{
+    return g_mask.load(std::memory_order_relaxed);
+}
+
 void LogStatus() noexcept
 {
     platform::Log(L"  buttons: split {} frame(s), player 2's view held {} time(s) ({} skipped: a table moved), pad 2's "
@@ -703,5 +712,25 @@ void LogStatus() noexcept
                   g_tables[0].elements.size(), g_tables[1].elements.size());
     g_framesSplit = g_scopes = g_scopeSkips = g_writeFaults = g_lines = g_padTwoDowns = 0;
 }
+
+#if LSS_DEV
+
+void RegisterCommands()
+{
+    using control::Outcome;
+    using control::Value;
+    control::Register({.name  = L"buttons-mask",
+                       .shape = control::Shape::Integer,
+                       .max   = 3,
+                       .help  = L"diagnosis: which parts of per-pad buttons act (1 the split views, 2 pad 2 kept from "
+                                L"menus and prompts); both at start",
+                       .set   = [](const Value& v) {
+                           SetMask(static_cast<unsigned>(std::get<std::int64_t>(v)));
+                           return Outcome{true, L"buttons mask set (see the log)"};
+                       },
+                       .get = [] { return Value{std::int64_t{Mask()}}; }});
+}
+
+#endif
 
 }  // namespace lss::player_two::pad_buttons

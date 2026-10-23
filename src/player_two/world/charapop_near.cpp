@@ -11,6 +11,10 @@
 #include "player_two/world/charapop_facts.h"
 #include "player_two/world/charapop_rule.h"
 
+#if LSS_DEV
+#include "platform/command_registry.h"
+#endif
+
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -513,5 +517,45 @@ void Release() noexcept
         ClearAll(L"the mod is unloading");
     }
 }
+
+#if LSS_DEV
+
+void RegisterCommands()
+{
+    using control::Outcome;
+    using control::Value;
+    control::Register({.name  = L"npc-detail",
+                       .shape = control::Shape::Word,
+                       .words = {L"full", L"reduced", L"off", L"on"},
+                       .help  = L"characters near player 2 that player 1's camera does not keep get full detail "
+                                L"within the game's distances from player 2's camera (full, at start; on means "
+                                L"full), within half of them (reduced), or only what player 1's camera gives them "
+                                L"(off)",
+                       .set   = [](const Value& v) {
+                           if (!Installed())
+                           {
+                               return Outcome{false, L"the NPC detail lever is not installed (see the startup "
+                                                     L"log)"};
+                           }
+                           const std::wstring& word   = std::get<std::wstring>(v);
+                           const Detail        detail = word == L"reduced" ? Detail::Reduced
+                                                        : word == L"off"   ? Detail::Off
+                                                                           : Detail::Full;
+                           SetDetail(detail);  // logs the new state
+                           return Outcome{true, detail == Detail::Full
+                                                    ? L"characters near player 2 keep full detail where player 1's "
+                                                      L"camera does not (the default)"
+                                                : detail == Detail::Reduced
+                                                    ? L"characters near player 2 keep full detail within half the "
+                                                      L"game's distances"
+                                                    : L"characters near player 2 get only what player 1's camera "
+                                                      L"gives them"};
+                       },
+                       .get = [] {
+                           return Value{std::wstring(Installed() ? DetailName(CurrentDetail()) : L"off")};
+                       }});
+}
+
+#endif
 
 }  // namespace lss::player_two::charapop_near

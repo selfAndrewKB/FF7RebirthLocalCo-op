@@ -15,6 +15,10 @@
 #include "player_two/scopes/primary_controller.h"
 #include "player_two/scopes/scope_leaks.h"
 
+#if LSS_DEV
+#include "platform/command_registry.h"
+#endif
+
 #include <array>
 #include <atomic>
 #include <cstring>
@@ -160,6 +164,11 @@ void SetMask(unsigned mask) noexcept
                   PartActs(kPartPlayerOneDetect));
 }
 
+unsigned Mask() noexcept
+{
+    return g_mask.load(std::memory_order_relaxed);
+}
+
 #if LSS_DEV
 bool PadTriggers(std::int32_t controllerId, float& left, float& right) noexcept
 {
@@ -269,5 +278,26 @@ StageCounters& MoveCounters() noexcept
 {
     return g_moveCounters;
 }
+
+#if LSS_DEV
+
+void RegisterCommands()
+{
+    using control::Outcome;
+    using control::Value;
+    control::Register({.name  = L"sticks-mask",
+                       .shape = control::Shape::Integer,
+                       .max   = 15,
+                       .help  = L"diagnosis: which parts of per-pad sticks act (1 player 2's input as the primary "
+                                L"player's, 2 player 1's move state on pad 1, 4 player 2's member ticked, 8 player 1's "
+                                L"input update and leader-action tick on pad 1); all at start",
+                       .set   = [](const Value& v) {
+                           SetMask(static_cast<unsigned>(std::get<std::int64_t>(v)));
+                           return Outcome{true, L"sticks mask set (see the log)"};
+                       },
+                       .get = [] { return Value{std::int64_t{Mask()}}; }});
+}
+
+#endif
 
 }  // namespace lss::player_two::pad_sticks
