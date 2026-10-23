@@ -22,7 +22,7 @@
 // (creation, the Condition draw). Decisions run on worker threads as well as the game thread (the census's own
 // finding), so nothing here assumes the game thread.
 
-#include "dev/dev_switch.h"
+#include "platform/dev_switch.h"
 
 namespace lss::platform {
 class GameImage;

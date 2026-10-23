@@ -6,11 +6,12 @@
 // the GPU submission census. They exist to observe the game and to drive it without keys; a player needs none of them.
 //
 // They are built only with the CMake option LSS_DEV_TOOLS (on by default). Without it, the calls below are empty, and
-// neither the tools' code nor their engine redirects are in the DLL. A watch a shipped module still calls (the
-// session's hand-over notes, the minimap's relayout scopes, the tag counts, the census summary) keeps empty stubs in
-// its own header under the same switch (dev/dev_switch.h); the rest is reached from here alone.
+// neither the tools' code nor their engine redirects are in the DLL. A tool a shipped module still calls (the
+// session's hand-over notes, the minimap's relayout scopes, the tag counts, the census summary, the HUD trace's
+// render calls) keeps empty stubs in its own header under the same switch (platform/dev_switch.h); the rest is
+// reached from here alone.
 
-#include "dev/dev_switch.h"
+#include "platform/dev_switch.h"
 
 namespace lss::platform {
 class GameImage;
@@ -47,10 +48,6 @@ void TickAfterSession() noexcept;
 /// Game thread, once per engine tick, after the levers the watches observe have ticked: the watches' ticks.
 void TickWatches(bool splitShown) noexcept;
 
-/// Game thread, around the overlay render (hud/root_overlay_render.h).
-void BeforeOverlayRender() noexcept;
-void AfterOverlayRender() noexcept;
-
 #else
 
 inline void Install(const platform::GameImage&, player_two::Session&, players::SplitLayout&,
@@ -60,8 +57,6 @@ inline void InstallControl(player_two::Session&, players::SplitLayout&, players:
 inline void TickBeforeSession() noexcept {}
 inline void TickAfterSession() noexcept {}
 inline void TickWatches(bool) noexcept {}
-inline void BeforeOverlayRender() noexcept {}
-inline void AfterOverlayRender() noexcept {}
 
 #endif
 

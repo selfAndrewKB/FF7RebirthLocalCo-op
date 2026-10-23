@@ -1,6 +1,6 @@
 #include "player_two/pad_buttons.h"
 
-#include "dev/dev_switch.h"
+#include "platform/dev_switch.h"
 #include "facts/controller.h"
 
 #include "platform/build_value.h"

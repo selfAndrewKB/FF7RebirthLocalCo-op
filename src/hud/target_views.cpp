@@ -6,7 +6,6 @@
 #include "facts/party.h"
 #include "hud/hud_rules.h"
 #include "hud/pass_opacity.h"
-#include "hud/widget_opacity.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/deferred_sites.h"
@@ -15,6 +14,7 @@
 #include "platform/log.h"
 #include "platform/sparse_array.h"
 #include "platform/verified_code.h"
+#include "players/widget_opacity.h"
 #include "player_two/generation.h"
 #include "player_two/lock_on.h"
 #include "player_two/weak_object.h"
@@ -398,7 +398,7 @@ bool Install(const platform::GameImage& image) noexcept
     g_installed =
         g_mainTarget && g_release && g_enemyAi && player_two::weak_object::Known() && system &&
         facts::InBattleKnown() && ui &&
-        widget_opacity::Installed();  // a row of the module table before this one
+        players::widget_opacity::Installed();  // a row of the module table before this one
     g_battleSystem = system ? *system : 0;
     g_endUISystem  = ui ? *ui : 0;
     g_collect = collect;

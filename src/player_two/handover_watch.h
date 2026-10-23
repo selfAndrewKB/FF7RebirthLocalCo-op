@@ -15,7 +15,7 @@
 //     held, those on change, and player 2's member's speed beside player 1's.
 // Changes nothing. Game thread only; inert unless player 2 is in.
 
-#include "dev/dev_switch.h"
+#include "platform/dev_switch.h"
 
 #include <cstdint>
 

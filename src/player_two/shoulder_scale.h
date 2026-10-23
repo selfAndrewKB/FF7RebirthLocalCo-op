@@ -32,7 +32,8 @@ void SetOn(bool on) noexcept;
 /// The smallest factor (0.25..1; 0.7 at start): a narrow half's offset is softened no further than this.
 void SetMinimum(float minimum) noexcept;
 
-/// Each engine tick: a line when a player's ratio changes.
-void Poll(bool splitShown) noexcept;
+/// Each engine tick: the halves' width ratios against the camera's (views::SplitWidthRatio, player 1's and player
+/// 2's), kept for the finalizer; a line when a player's factor changes.
+void Poll(bool splitShown, float ratioOne, float ratioTwo) noexcept;
 
 }  // namespace lss::player_two::shoulder_scale

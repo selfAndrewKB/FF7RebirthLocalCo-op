@@ -1,6 +1,6 @@
 #include "player_two/combat_rumble.h"
 
-#include "dev/dev_switch.h"
+#include "platform/dev_switch.h"
 #include "facts/controller.h"
 #include "facts/engine.h"
 #include "facts/party.h"

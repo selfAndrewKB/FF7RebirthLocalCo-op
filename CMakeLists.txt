@@ -43,7 +43,6 @@ add_library(LocalSplitScreen SHARED
     src/hud/action_icon_base.cpp
     src/hud/area_icons_two.cpp
     src/hud/target_views.cpp
-    src/hud/widget_opacity.cpp
     src/hud/enemy_gauges.cpp
     src/hud/marker_timers.cpp
     src/hud/popups.cpp
@@ -181,6 +180,7 @@ add_library(LocalSplitScreen SHARED
     src/players/split_screen_settings.cpp
     src/players/split_settings_access.cpp
     src/players/unreal_access.cpp
+    src/players/widget_opacity.cpp
 
     src/renderer/additional_family_output.cpp
     src/renderer/family_boundary.cpp

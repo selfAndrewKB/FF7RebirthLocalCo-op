@@ -16,7 +16,7 @@
 // else) and keeps the text and the reason. Every 5 s: one Debug summary line; an Info line when a block starts or stops
 // relaying out about every frame. Each relayout is a Trace line. Watches only while player 2 plays. Game thread.
 
-#include "dev/dev_switch.h"
+#include "platform/dev_switch.h"
 
 namespace lss::platform {
 class GameImage;

@@ -11,7 +11,6 @@
 #include "player_two/camera_access.h"
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
-#include "views/player_view_point.h"
 
 #include <atomic>
 #include <cmath>
@@ -43,11 +42,12 @@ std::atomic<bool>      g_on{true};
 std::atomic<float>     g_minimum{0.7f};  // the user's pick, 2026-10-01 (side by side ×0.7 rather than the width's ×0.5)
 std::atomic<bool>      g_shown{false};
 float                  g_logged[2] = {0.0f, 0.0f};
+std::atomic<float>     g_ratio[2]  = {1.0f, 1.0f};  // each half's width against the camera's, as last polled
 
 /// Player p's factor: the half's width against the camera's, kept within the minimum and 1 (only ever softened).
 float Scale(int p) noexcept
 {
-    const float ratio = views::SplitWidthRatio(p == 1);
+    const float ratio = g_ratio[p].load(std::memory_order_relaxed);
     return world_rules::ShoulderScale(ratio, g_minimum.load(std::memory_order_relaxed), kMaxScale);
 }
 
@@ -116,8 +116,10 @@ void SetMinimum(float minimum) noexcept
     platform::Log(L"shoulder scale: at least x{:.2f}", g_minimum.load(std::memory_order_relaxed));
 }
 
-void Poll(bool splitShown) noexcept
+void Poll(bool splitShown, float ratioOne, float ratioTwo) noexcept
 {
+    g_ratio[0].store(ratioOne, std::memory_order_relaxed);
+    g_ratio[1].store(ratioTwo, std::memory_order_relaxed);
     g_shown.store(splitShown, std::memory_order_relaxed);
     if (!g_installed || !splitShown || !g_on.load(std::memory_order_relaxed))
     {
@@ -131,7 +133,8 @@ void Poll(bool splitShown) noexcept
             g_logged[p] = ratio;
             platform::Log(L"shoulder scale: player {}'s camera shoulder offset x{:.2f} (its half's width against the camera's, "
                           L"x{:.2f}, kept within {:.2f}..1)",
-                          p + 1, ratio, views::SplitWidthRatio(p == 1), g_minimum.load(std::memory_order_relaxed));
+                          p + 1, ratio, g_ratio[p].load(std::memory_order_relaxed),
+                          g_minimum.load(std::memory_order_relaxed));
         }
     }
 }

@@ -56,6 +56,9 @@ inline bool Enabled(Level level) noexcept
 /// Writes one already-formatted line (the prefix and the newline are added here), whatever the level.
 void WriteLine(std::wstring_view line) noexcept;
 
+/// Lines written so far, any thread (platform/frame_watch.h counts a frame's by the difference).
+unsigned LinesWritten() noexcept;
+
 /// Writes one line of `level`, if that level is enabled. Error, Warning, Debug and Trace lines carry the level's
 /// name after the prefix; Info lines carry none.
 template <class... Args>

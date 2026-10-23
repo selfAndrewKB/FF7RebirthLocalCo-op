@@ -11,7 +11,7 @@
 //
 // Game thread only; the registry is resolved afresh on every read (it belongs to the world).
 
-#include "dev/dev_switch.h"
+#include "platform/dev_switch.h"
 
 #include <cstdint>
 #include <optional>

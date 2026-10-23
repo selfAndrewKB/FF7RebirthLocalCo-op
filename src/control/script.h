@@ -109,8 +109,6 @@
 //
 // Parsing is pure, so it is tested on the host (tests/control_script_test.cpp).
 
-#include "hud/hud_trace.h"
-
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -194,8 +192,8 @@ struct Command
 /// The longest a stick hold, wait or wait-until may last: 10 minutes at 60 ticks per second.
 inline constexpr std::uint32_t kMaxTicks = 36'000;
 
-/// The most frames one hud-trace logs.
-inline constexpr std::uint32_t kMaxTraceFrames = static_cast<std::uint32_t>(hud::kMaxHudTraceFrames);
+/// The most frames one hud-trace logs: the HUD trace's own limit (hud/hud_trace.h; mod_target.cpp checks they agree).
+inline constexpr std::uint32_t kMaxTraceFrames = 30;
 
 /// A wait-until's timeout when the script gives none.
 inline constexpr std::uint32_t kDefaultWaitUntilTicks = 600;

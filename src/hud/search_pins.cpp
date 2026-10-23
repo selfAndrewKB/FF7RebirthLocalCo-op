@@ -4,12 +4,12 @@
 #include "hud/hud_roots.h"
 #include "hud/hud_rules.h"
 #include "hud/pass_opacity.h"
-#include "hud/widget_opacity.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/sparse_array.h"
 #include "platform/verified_code.h"
+#include "players/widget_opacity.h"
 #include "player_two/describe.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
@@ -193,9 +193,10 @@ void Install(const platform::GameImage& image) noexcept
     platform::Log(L"search pins: each half's pins placed from its own camera: {}; each half shows only its own player's "
                   L"pins: {}",
                   g_system != 0 && g_placePin != nullptr && g_placeHook != nullptr ? L"ready" : L"UNAVAILABLE (a check failed)",
-                  g_system == 0                  ? L"UNAVAILABLE (no pin list)"
-                  : !widget_opacity::Installed() ? L"UNAVAILABLE (the opacity setter is not what the research read)"
-                                                 : L"ready");
+                  g_system == 0 ? L"UNAVAILABLE (no pin list)"
+                  : !players::widget_opacity::Installed()
+                      ? L"UNAVAILABLE (the opacity setter is not what the research read)"
+                      : L"ready");
 }
 
 void Adopt() noexcept
@@ -257,7 +258,7 @@ void ShowOnly(int player) noexcept
 {
     Restore();
     const auto manager = Manager();
-    if (manager == 0 || !widget_opacity::Installed())
+    if (manager == 0 || !players::widget_opacity::Installed())
     {
         return;
     }

@@ -10,7 +10,7 @@
 // class), the layers (widget, saved focus, priority) and the command controller's focus bytes when they change.
 // Game thread only.
 
-#include "dev/dev_switch.h"
+#include "platform/dev_switch.h"
 
 namespace lss::platform {
 class GameImage;

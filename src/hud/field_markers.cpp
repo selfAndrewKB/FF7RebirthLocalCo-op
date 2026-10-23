@@ -2,11 +2,11 @@
 
 #include "facts/hud.h"
 #include "hud/pass_opacity.h"
-#include "hud/widget_opacity.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/sparse_array.h"
+#include "players/widget_opacity.h"
 #include "player_two/field_pickup.h"
 #include "player_two/leader_scope.h"
 #include "player_two/weak_object.h"
@@ -61,16 +61,17 @@ void Install(const platform::GameImage& image) noexcept
     g_system          = system ? *system : 0;
     g_hidden.Reserve(256);  // four widgets per marker; grows (guarded) past that
     platform::Log(L"field markers: each half shows only its own player's point markers: {}",
-                  g_system == 0                    ? L"UNAVAILABLE (no marker list)"
-                  : !widget_opacity::Installed() ? L"UNAVAILABLE (the opacity setter is not what the research read)"
-                                                   : L"ready");
+                  g_system == 0 ? L"UNAVAILABLE (no marker list)"
+                  : !players::widget_opacity::Installed()
+                      ? L"UNAVAILABLE (the opacity setter is not what the research read)"
+                      : L"ready");
 }
 
 void ShowOnly(int player) noexcept
 {
     Restore();
     std::uintptr_t list = 0;
-    if (g_system == 0 || !widget_opacity::Installed() ||
+    if (g_system == 0 || !players::widget_opacity::Installed() ||
         !platform::CopyGuarded(&list, reinterpret_cast<const void*>(g_system + facts::kUIFieldMarkers), sizeof(list)) ||
         list == 0)
     {

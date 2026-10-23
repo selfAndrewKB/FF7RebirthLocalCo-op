@@ -38,6 +38,9 @@
 
 namespace lss::control {
 
+static_assert(kMaxTraceFrames == static_cast<std::uint32_t>(hud::kMaxHudTraceFrames),
+              "the script's trace limit is the HUD trace's");
+
 namespace {
 
 Outcome Failed(std::wstring why)

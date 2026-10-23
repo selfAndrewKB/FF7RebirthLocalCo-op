@@ -1,11 +1,11 @@
 #include "hud/root_overlay_render.h"
 
-#include "dev/dev_tools.h"
 #include "hud/action_icon_base.h"
 #include "hud/area_icons_two.h"
 #include "hud/enemy_gauges.h"
 #include "hud/target_views.h"
 #include "hud/hud_placement.h"
+#include "hud/hud_trace.h"
 #include "hud/marker_timers.h"
 #include "hud/minimap.h"
 #include "hud/minimap_once.h"
@@ -70,7 +70,7 @@ void RenderRootOverlay(void* application) noexcept
     const platform::frame_watch::Charge charge(platform::frame_watch::Part::OverlayRender);
     if (gameThread)
     {
-        dev::BeforeOverlayRender();  // the HUD trace, in a build with the development tools
+        TraceBeforeRender();  // the HUD trace (hud/hud_trace.h; a stub without the dev tools)
         target_views::BeginFrame();  // this frame's target lookups made afresh
         const bool splitShown = player_two::generation::Active() && views::SplitShown();  // not player 1's single view
         // The field-action icons' base for the split's layout (or the game's own), before the rows'
@@ -165,7 +165,7 @@ void RenderRootOverlay(void* application) noexcept
         popups::EndFrame();
         pass_opacity::RestoreAll();  // every row, marker, pin and the command menu back to their own
         target_views::AfterPass();   // every mark hidden for player 1's pass back
-        dev::AfterOverlayRender();
+        TraceAfterRender();
     }
 }
 

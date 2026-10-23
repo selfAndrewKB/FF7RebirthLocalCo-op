@@ -1,4 +1,4 @@
-// The mod's log for the host tests of code that logs (platform/log.h's three symbols): every level, to the console.
+// The mod's log for the host tests of code that logs (platform/log.h's four symbols): every level, to the console.
 // Linked by the tests that do not define these themselves.
 
 #include "platform/log.h"
@@ -11,9 +11,19 @@
 
 namespace lss::platform {
 
+namespace {
+std::atomic<unsigned> g_lines{0};
+}
+
 void WriteLine(std::wstring_view line) noexcept
 {
+    g_lines.fetch_add(1, std::memory_order_relaxed);
     std::printf("  log: %ls\n", std::wstring(line).c_str());
+}
+
+unsigned LinesWritten() noexcept
+{
+    return g_lines.load(std::memory_order_relaxed);
 }
 
 namespace detail {

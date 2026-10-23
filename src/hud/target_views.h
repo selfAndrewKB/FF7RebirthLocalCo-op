@@ -11,7 +11,7 @@
 // its list names.
 //
 // Per view: before each view's HUD updates and pass, the marks that belong only to the other player
-// get render opacity 0 (the game's own UWidget::SetRenderOpacity, hud/widget_opacity.h) and their
+// get render opacity 0 (the game's own UWidget::SetRenderOpacity, players/widget_opacity.h) and their
 // own opacity back after that pass. Still painted, so UMG keeps ticking them (fades and animations
 // advance; a Hidden or Collapsed widget would never tick, as player 2's pass runs with DeltaTime 0):
 //   - player 2's pass: player 1's cursor, and gauges only player 1's displayed target brought in;

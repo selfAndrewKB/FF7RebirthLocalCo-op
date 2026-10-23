@@ -16,7 +16,7 @@
 // Off at start: `census on` (control) or `census.txt` in the mod's folder at launch. The summary goes into the perf
 // log's 10 s window (Info, with `perf-log on`). Logging only; nothing the game does changes.
 
-#include "dev/dev_switch.h"
+#include "platform/dev_switch.h"
 
 namespace lss::renderer {
 

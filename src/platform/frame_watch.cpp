@@ -31,12 +31,12 @@ constexpr std::size_t kMaxNotes        = 6;
 constexpr std::size_t kParts           = static_cast<std::size_t>(Part::Count);
 constexpr const wchar_t* kPartNames[kParts] = {L"engine tick", L"overlay render", L"input", L"member tick"};
 
-// Game thread, except the log-line counter.
+// Game thread, except g_detailed (any thread reads it).
 std::array<double, kParts>                 g_partSeconds{};
 std::array<double, kParts>                 g_partTotals{};  // summed over the summary's frames (the per-frame average)
 std::array<const wchar_t*, kMaxNotes>      g_notes{};
 std::size_t                                g_noteCount = 0;
-std::atomic<unsigned>                      g_logLines{0};
+unsigned                                   g_linesCounted = 0;  // LinesWritten() as of the last frame start
 double                                     g_frameStart   = 0.0;
 HitchState                                 g_hitch;              // the running average and the hitch run
 double                                     g_summaryStart = 0.0;
@@ -190,16 +190,13 @@ std::uint64_t FrameIndex() noexcept
     return g_frameIndex;
 }
 
-void CountLogLine() noexcept
-{
-    g_logLines.fetch_add(1, std::memory_order_relaxed);
-}
-
 void OnFrameStart() noexcept
 {
     ++g_frameIndex;
     const double now      = Now();
-    const unsigned lines  = Take(g_logLines);
+    const unsigned written = LinesWritten();
+    const unsigned lines   = written - g_linesCounted;  // this frame's
+    g_linesCounted         = written;
     if (g_frameStart != 0.0)
     {
         const double frameMs = (now - g_frameStart) * 1000.0;
@@ -266,7 +263,7 @@ void OnFrameStart() noexcept
         {
             g_reports[i](frames, seconds, log);  // the modules' reports of the window, after its own summary
         }
-        g_logLines.store(0, std::memory_order_relaxed);  // the summary's and reports' lines are not the next frame's
+        g_linesCounted = LinesWritten();  // the summary's and reports' lines are not the next frame's
     }
 }
 

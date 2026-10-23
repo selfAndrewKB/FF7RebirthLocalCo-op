@@ -5,7 +5,7 @@
 // wall's hip framing off and on, then the hand-over to the follow camera after it left; a line per camera when it
 // ends. A dev tool: traversal_camera.cpp installs and ticks it, through the empty stubs below in a player's build.
 
-#include "dev/dev_switch.h"
+#include "platform/dev_switch.h"
 
 namespace lss::platform {
 class GameImage;

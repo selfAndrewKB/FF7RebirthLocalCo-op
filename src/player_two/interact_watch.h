@@ -21,7 +21,7 @@
 //     controller the rumble goes to, each controller's force-feedback effects around it).
 // Pad 2's FieldAction presses are logged by player_two/pad_buttons.
 
-#include "dev/dev_switch.h"
+#include "platform/dev_switch.h"
 
 namespace lss::platform {
 class GameImage;

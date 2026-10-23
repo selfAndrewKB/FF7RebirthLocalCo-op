@@ -1,6 +1,6 @@
 #include "player_two/move_type_two.h"
 
-#include "dev/dev_switch.h"
+#include "platform/dev_switch.h"
 #include "platform/entry_redirect.h"
 #include "platform/guarded.h"
 #include "platform/image.h"

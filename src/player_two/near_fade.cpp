@@ -1,6 +1,6 @@
 #include "player_two/near_fade.h"
 
-#include "dev/dev_switch.h"
+#include "platform/dev_switch.h"
 #include "facts/engine.h"
 #include "platform/call_redirect.h"
 #include "platform/guarded.h"

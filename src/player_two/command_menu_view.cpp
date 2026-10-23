@@ -2,8 +2,8 @@
 
 #include "facts/command_controller.h"
 #include "facts/hud.h"
-#include "hud/widget_opacity.h"
 #include "platform/log.h"
+#include "players/widget_opacity.h"
 #include "player_two/command_menu_two_shared.h"
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
@@ -79,9 +79,9 @@ void* WidgetOf(std::uintptr_t controller, std::uint32_t offset) noexcept
 
 void SetOpacity(void* widget, float opacity) noexcept
 {
-    if (widget != nullptr && hud::widget_opacity::Get(widget) != opacity)
+    if (widget != nullptr && players::widget_opacity::Get(widget) != opacity)
     {
-        hud::widget_opacity::Set(widget, opacity);
+        players::widget_opacity::Set(widget, opacity);
     }
 }
 
@@ -90,7 +90,7 @@ void SetOpacity(void* widget, float opacity) noexcept
 void ShowOnly(int player) noexcept
 {
     const auto two = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller());
-    if (two == 0 || command_menu_two::UiSystem() == 0 || !hud::widget_opacity::Installed() ||
+    if (two == 0 || command_menu_two::UiSystem() == 0 || !players::widget_opacity::Installed() ||
         !generation::OnGameThread())
     {
         return;
@@ -113,7 +113,7 @@ void ShowOnly(int player) noexcept
         }
         if (!g_swapped)
         {
-            g_oneSaved[i] = {ReadAt<std::uint64_t>(oneOwner + part.offset), hud::widget_opacity::Get(oneWidget)};
+            g_oneSaved[i] = {ReadAt<std::uint64_t>(oneOwner + part.offset), players::widget_opacity::Get(oneWidget)};
         }
         SetOpacity(twoWidget, part.borrowOpacity ? g_oneSaved[i].opacity : 1.0F);
         SetOpacity(oneWidget, 0.0F);
@@ -127,7 +127,7 @@ void Restore() noexcept
     {
         return;
     }
-    if (!hud::widget_opacity::Installed())
+    if (!players::widget_opacity::Installed())
     {
         return;
     }
@@ -150,18 +150,18 @@ void Restore() noexcept
 void KeepHidden() noexcept
 {
     const auto two = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller());
-    if (two == 0 || !weak_object::Known() || !hud::widget_opacity::Installed() || !generation::OnGameThread())
+    if (two == 0 || !weak_object::Known() || !players::widget_opacity::Installed() || !generation::OnGameThread())
     {
         return;
     }
     for (const Part& part : kParts)
     {
         void* widget = WidgetOf(OwnerOf(part, true, two), part.offset);
-        if (widget == nullptr || hud::widget_opacity::Get(widget) == 0.0F)
+        if (widget == nullptr || players::widget_opacity::Get(widget) == 0.0F)
         {
             continue;
         }
-        const bool hidden = hud::widget_opacity::Set(widget, 0.0F);
+        const bool hidden = players::widget_opacity::Set(widget, 0.0F);
         if (++g_hides <= 5 || g_hides % 100 == 0)
         {
             Line(std::format(L"widget +{:#x} {} (render opacity 0; {} time(s))", part.offset,

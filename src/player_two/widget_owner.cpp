@@ -2,7 +2,6 @@
 
 #include "facts/command_controller.h"
 #include "facts/hud.h"
-#include "hud/widget_opacity.h"
 #include "platform/byte_scope.h"
 #include "platform/call_redirect.h"
 #include "platform/guarded.h"
@@ -10,6 +9,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
+#include "players/widget_opacity.h"
 #include "player_two/command_menu_two.h"
 #include "player_two/generation.h"
 #include "player_two/leader_scope.h"
@@ -325,7 +325,7 @@ void WatchGuides(std::uintptr_t one, std::uintptr_t two) noexcept
         now[i]     = {ReadAt<std::uint8_t>(guide), ReadAt<std::uint8_t>(guide + 2), ReadAt<std::uint8_t>(guide + 3),
                       ReadAt<std::uint8_t>(guide + kGuideMode), static_cast<std::uint8_t>(widget != nullptr),
                       widget != nullptr ? ReadAt<std::uint8_t>(at + kVisibility) : std::uint8_t{0xFF}};
-        opacity[i] = widget != nullptr ? hud::widget_opacity::Get(widget) : -1.0F;
+        opacity[i] = widget != nullptr ? players::widget_opacity::Get(widget) : -1.0F;
     }
     if (now == seen && opacity == seenOpacity)
     {

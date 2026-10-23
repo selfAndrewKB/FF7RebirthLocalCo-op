@@ -18,6 +18,8 @@
 // A dev tool, installed on the first `hud-trace` (control/mod_target.cpp), not at every dev start: its seven call
 // redirects sit on the HUD's hot path.
 
+#include "platform/dev_switch.h"
+
 #include <cstdint>
 
 namespace lss::platform {
@@ -36,8 +38,13 @@ inline constexpr std::int32_t kMaxHudTraceFrames = 30;
 /// Logs the next `frames` frames (clamped to 1..kMaxHudTraceFrames).
 void StartHudTrace(std::int32_t frames) noexcept;
 
-/// Game thread, around the overlay render (hud/root_overlay_render.h).
+/// Game thread, around the overlay render (hud/root_overlay_render.h); stubs without the dev tools.
+#if LSS_DEV
 void TraceBeforeRender() noexcept;
 void TraceAfterRender() noexcept;
+#else
+inline void TraceBeforeRender() noexcept {}
+inline void TraceAfterRender() noexcept {}
+#endif
 
 }  // namespace lss::hud

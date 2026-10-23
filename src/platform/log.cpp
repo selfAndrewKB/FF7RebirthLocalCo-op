@@ -1,6 +1,5 @@
 #include "platform/log.h"
 
-#include "platform/frame_watch.h"
 #include "platform/level_names.h"
 
 #include <DynamicOutput/DynamicOutput.hpp>
@@ -27,6 +26,7 @@ namespace {
 // log while the process exits.
 SRWLOCK            g_writeLock = SRWLOCK_INIT;
 std::atomic<DWORD> g_writer{0};  // the thread inside the send
+std::atomic<unsigned> g_lines{0};  // lines written
 
 /// Sends one line under the lock. A line logged from inside the send on the same thread (re-entry) is
 /// dropped: the lock is not recursive.
@@ -79,12 +79,17 @@ void WriteLine(std::wstring_view line) noexcept
     // exception would end the game over a log line; a lost line is the lesser failure.
     try
     {
-        frame_watch::CountLogLine();
+        g_lines.fetch_add(1, std::memory_order_relaxed);
         SendLocked(line);
     }
     catch (...)
     {
     }
+}
+
+unsigned LinesWritten() noexcept
+{
+    return g_lines.load(std::memory_order_relaxed);
 }
 
 }  // namespace lss::platform

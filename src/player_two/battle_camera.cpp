@@ -1,6 +1,6 @@
 #include "player_two/battle_camera.h"
 
-#include "dev/dev_switch.h"
+#include "platform/dev_switch.h"
 #include "facts/cameras.h"
 #include "facts/controller.h"
 #include "platform/guarded.h"

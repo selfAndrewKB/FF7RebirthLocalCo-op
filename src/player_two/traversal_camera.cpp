@@ -1,6 +1,6 @@
 #include "player_two/traversal_camera.h"
 
-#include "dev/dev_switch.h"
+#include "platform/dev_switch.h"
 #include "player_two/generation.h"
 #include "player_two/traversal_collision.h"
 #include "player_two/traversal_shared.h"

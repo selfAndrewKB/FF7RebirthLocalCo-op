@@ -74,9 +74,6 @@ using WindowReport = void (*)(std::uint32_t frames, double seconds, bool log);
 constexpr std::size_t kMaxWindowReports = 4;
 bool AddWindowReport(WindowReport report) noexcept;
 
-/// A log line was written (any thread).
-void CountLogLine() noexcept;
-
 /// Once per frame, at the start of the engine tick (game thread): ends the last frame, logs it if it
 /// was a hitch, and every 10 s the summary.
 void OnFrameStart() noexcept;

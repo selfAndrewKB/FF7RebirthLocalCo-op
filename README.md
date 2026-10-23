@@ -53,7 +53,8 @@ src/
   modules.cpp    the module table: every module after the session, installed in order, removed in reverse
   facts/         the engine facts two or more modules share, one declaration per address
   platform/      the game image, the fact checks, the vtable entry, the log
-  players/       player 2 joining and leaving, through UE's own local-player path
+  players/       the engine's own paths: local players, reflection calls, console and settings access, a widget's
+                 opacity; the held setting, the split layout and the single view over them
   renderer/      one view family per player
 tests/           host-side tests of the logic that needs neither the game nor UE4SS
 ```

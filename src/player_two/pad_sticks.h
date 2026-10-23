@@ -24,7 +24,7 @@
 //     (player_two/member_movement.h).
 // Both act only on the game thread (player_two/generation.h); a call on any other thread is left alone.
 
-#include "dev/dev_switch.h"
+#include "platform/dev_switch.h"
 #include "platform/byte_scope.h"
 #include "player_two/stage_counters.h"
 #include "player_two/stick_select.h"

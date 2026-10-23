@@ -6,7 +6,7 @@
 // samples the five gate tests one by one, since the gate itself starts with a global test and its answer would not say
 // why a character is refused. A player's build has the empty stubs below.
 
-#include "dev/dev_switch.h"
+#include "platform/dev_switch.h"
 
 namespace lss::platform {
 class GameImage;

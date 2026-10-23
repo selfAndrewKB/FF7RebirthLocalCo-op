@@ -1,6 +1,6 @@
 #include "player_two/chocobo_climb.h"
 
-#include "dev/dev_switch.h"
+#include "platform/dev_switch.h"
 #include "facts/engine.h"
 #include "facts/move_state.h"
 #include "platform/build_value.h"

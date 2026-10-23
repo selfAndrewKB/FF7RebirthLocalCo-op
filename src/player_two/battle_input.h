@@ -12,7 +12,7 @@
 // Logged on change: player 1's command controller's gates and requests, both characters' battle preconditions and
 // move-state bytes, the target fields. Game thread only.
 
-#include "dev/dev_switch.h"
+#include "platform/dev_switch.h"
 
 namespace lss::platform {
 class GameImage;

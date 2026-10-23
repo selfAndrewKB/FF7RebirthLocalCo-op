@@ -15,7 +15,7 @@
 // A frame is logged when any value in it is non-zero, or when its shape (who sent, which pads were written, zero or
 // not) differs from the last frame logged; a status line every 10 s while player 2 is in. Game thread.
 
-#include "dev/dev_switch.h"
+#include "platform/dev_switch.h"
 
 #include <cstdint>
 

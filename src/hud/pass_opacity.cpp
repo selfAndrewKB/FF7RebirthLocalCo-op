@@ -3,7 +3,7 @@
 #include "hud/field_markers.h"
 #include "hud/prompt_rows.h"
 #include "hud/search_pins.h"
-#include "hud/widget_opacity.h"
+#include "players/widget_opacity.h"
 #include "player_two/command_menu_view.h"
 #include "player_two/weak_object.h"
 
@@ -26,7 +26,7 @@ bool HiddenSet::Hide(void* widget, std::uint64_t weak) noexcept
     {
         return false;
     }
-    const float previous = widget_opacity::Get(widget);
+    const float previous = players::widget_opacity::Get(widget);
     if (previous == 0.0f)
     {
         return false;  // not drawn anyway
@@ -35,7 +35,7 @@ bool HiddenSet::Hide(void* widget, std::uint64_t weak) noexcept
     {
         return false;
     }
-    if (!widget_opacity::Set(widget, 0.0f))
+    if (!players::widget_opacity::Set(widget, 0.0f))
     {
         return false;
     }
@@ -45,7 +45,7 @@ bool HiddenSet::Hide(void* widget, std::uint64_t weak) noexcept
     }
     catch (...)
     {
-        widget_opacity::Set(widget, previous);  // not remembered: not left transparent
+        players::widget_opacity::Set(widget, previous);  // not remembered: not left transparent
         return false;
     }
     return true;
@@ -56,9 +56,9 @@ void HiddenSet::RestoreAll() noexcept
     for (const Hidden& hidden : hidden_)
     {
         void* widget = player_two::weak_object::ObjectOf(hidden.weak);
-        if (widget != nullptr && widget_opacity::Get(widget) == 0.0f)
+        if (widget != nullptr && players::widget_opacity::Get(widget) == 0.0f)
         {
-            widget_opacity::Set(widget, hidden.previous);
+            players::widget_opacity::Set(widget, hidden.previous);
         }
     }
     hidden_.clear();

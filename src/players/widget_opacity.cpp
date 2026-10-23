@@ -1,4 +1,4 @@
-#include "hud/widget_opacity.h"
+#include "players/widget_opacity.h"
 
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -7,7 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace lss::hud::widget_opacity {
+namespace lss::players::widget_opacity {
 
 namespace {
 
@@ -46,4 +46,4 @@ bool Set(void* widget, float opacity) noexcept
     return g_setOpacity != nullptr && widget != nullptr && platform::CallGuarded(g_setOpacity, widget, opacity);
 }
 
-}  // namespace lss::hud::widget_opacity
+}  // namespace lss::players::widget_opacity

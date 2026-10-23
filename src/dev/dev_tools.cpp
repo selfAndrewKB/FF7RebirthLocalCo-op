@@ -109,14 +109,4 @@ void TickWatches(bool splitShown) noexcept
     player_two::handover_watch::Tick();
 }
 
-void BeforeOverlayRender() noexcept
-{
-    hud::TraceBeforeRender();
-}
-
-void AfterOverlayRender() noexcept
-{
-    hud::TraceAfterRender();
-}
-
 }  // namespace lss::dev

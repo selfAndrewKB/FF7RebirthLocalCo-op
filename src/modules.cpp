@@ -14,7 +14,6 @@
 #include "hud/second_image.h"
 #include "hud/target_views.h"
 #include "hud/user_widgets.h"
-#include "hud/widget_opacity.h"
 #include "player_two/anim_two_views.h"
 #include "player_two/approach_two.h"
 #include "player_two/attack_cameras.h"
@@ -72,6 +71,7 @@
 #include "player_two/widget_owner.h"
 #include "player_two/world_actor_reach.h"
 #include "players/unreal_access.h"
+#include "players/widget_opacity.h"
 #include "renderer/family_boundary.h"
 #include "renderer/me_feedback_once.h"
 #include "renderer/submit_hints.h"
@@ -271,7 +271,7 @@ constexpr std::array kModules{
     // before the overlay renders: placement follow, trace
     Module{Call<&hud::InstallRootOverlayRender>, &hud::RemoveRootOverlayRender},
     // the game's opacity setter, read by the rows, markers, pins, targets and the command menu's view
-    Module{Call<&hud::widget_opacity::Install>, nullptr},
+    Module{Call<&players::widget_opacity::Install>, nullptr},
     // each player's field prompt rows in their own half
     Module{Call<&hud::prompt_rows::Install>, nullptr},
     // each player's point markers in their own half
@@ -334,10 +334,10 @@ static_assert(Ordered<&views::InstallPlayerViewPoint, &views::InstallStreamViews
               "the view point before the streaming views: they read whether it is installed");
 static_assert(Ordered<&hud::InstallOverlayLayout, &hud::InstallLayoutScale>(),
               "the overlay layout before the layout scale: the contain rule needs the layout");
-static_assert(Ordered<&hud::widget_opacity::Install, &hud::prompt_rows::Install>() &&
-                  Ordered<&hud::widget_opacity::Install, &hud::field_markers::Install>() &&
-                  Ordered<&hud::widget_opacity::Install, &hud::search_pins::Install>() &&
-                  Ordered<&hud::widget_opacity::Install, &hud::target_views::Install>(),
+static_assert(Ordered<&players::widget_opacity::Install, &hud::prompt_rows::Install>() &&
+                  Ordered<&players::widget_opacity::Install, &hud::field_markers::Install>() &&
+                  Ordered<&players::widget_opacity::Install, &hud::search_pins::Install>() &&
+                  Ordered<&players::widget_opacity::Install, &hud::target_views::Install>(),
               "the opacity setter before the HUD modules that read it");
 
 }  // namespace
@@ -404,7 +404,7 @@ void TickAfterSession(const Frame& frame) noexcept
     player_two::vault_camera::Tick();      // player 2's vault cameras end on player 2's camera (lever L2)
     player_two::chocobo_climb::Tick();     // player 2's climb camera's states and the summary (Debug)
     player_two::camera_distance::TickFraming(frame.playerTwoIn);  // per-layout distance steps (roadmap 2b)
-    player_two::shoulder_scale::Poll(frame.splitShown);
+    player_two::shoulder_scale::Poll(frame.splitShown, views::SplitWidthRatio(false), views::SplitWidthRatio(true));
     player_two::anim_two_views::Tick(frame.splitShown);  // its frame count, before the world tick
     player_two::charapop_near::Tick(frame.splitShown, frame.playsMember);
     player_two::charapop_centre::Tick(frame.splitShown, frame.playsMember);

@@ -1,6 +1,6 @@
 #include "player_two/shop_talk.h"
 
-#include "dev/dev_switch.h"
+#include "platform/dev_switch.h"
 #include "facts/world.h"
 #include "player_two/field_rules.h"
 #include "platform/entry_redirect.h"

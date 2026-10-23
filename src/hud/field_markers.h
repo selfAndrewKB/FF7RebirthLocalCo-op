@@ -5,7 +5,7 @@
 // With player 2's own marker widget per point (player_two/field_pickup), both players' widgets sit in the one
 // marker list (EndUISystem+0x98) and both HUD runs project all of them (L1 gives the list player 2's context in
 // player 2's run). So before each half's render the other player's point markers get render opacity 0 through the
-// game's own setter (hud/widget_opacity.h), and their own opacity back after: the projection sets only Visibility,
+// game's own setter (players/widget_opacity.h), and their own opacity back after: the projection sets only Visibility,
 // so the two do not fight, and a widget kept painted keeps ticking. Markers that are not a point's (other owners'
 // own widgets) stay in both halves. Logged on change. Game thread only.
 
