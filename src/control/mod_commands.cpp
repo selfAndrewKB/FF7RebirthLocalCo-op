@@ -24,8 +24,6 @@
 #include "renderer/submission_census.h"
 #include "renderer/submit_hints.h"
 #include "renderer/view_family_submission.h"
-#include "views/player_view_point.h"
-#include "views/stream_views.h"
 
 #include <format>
 #include <string>
@@ -33,8 +31,6 @@
 namespace lss::control {
 
 namespace {
-
-constexpr std::int64_t kMaxStreamFov = 170;  // views::kMaxStreamFov
 
 Outcome Failed(std::wstring why)
 {
@@ -67,66 +63,6 @@ void RegisterMask(const wchar_t* name, std::int64_t max, const wchar_t* help, co
               .set   = [set, done](const Value& v) {
                   set(static_cast<std::uint32_t>(Number(v)));
                   return Outcome{true, done};
-              }});
-}
-
-// ---- the views --------------------------------------------------------------------------------------------------
-
-void RegisterViews()
-{
-    Register({.name     = L"split-fov",
-              .shape    = Shape::Float,
-              .minFloat = 0.0,
-              .maxFloat = 1.0,
-              .words    = {L"native"},
-              .help     = L"filled halves' FOV: 0 keeps the single-player framing, 1 its on-screen scale (0.5 at "
-                          L"start; views/view_shape.h); native = the stock MajorAxisFOV rule",
-              .set      = [](const Value& v) {
-                  if (!views::ViewPointInstalled())
-                  {
-                      return Failed(L"the view-point entry is not installed");
-                  }
-                  const bool  native = std::holds_alternative<std::wstring>(v);
-                  const float blend  = native ? -1.0f : static_cast<float>(std::get<double>(v));
-                  views::SetSplitFovWeight(blend);
-                  // The resulting FOV is logged by the views module when a filled split view first uses it.
-                  return Outcome{true, native ? L"stock MajorAxisFOV rule" : L"weight set; applies to filled halves"};
-              }});
-    Register({.name  = L"stream-views",
-              .shape = Shape::Word,
-              .words = {L"off", L"p2", L"both"},
-              .help  = L"which split players' cameras are registered with the game's own scenery streaming (both at "
-                       L"start)",
-              .set   = [](const Value& v) {
-                  const std::wstring& word = Word(v);
-                  if (!views::StreamViewsInstalled())
-                  {
-                      return Failed(L"streaming views are not installed (see the install log)");
-                  }
-                  const auto mode = word == L"off" ? views::StreamViewsMode::Off
-                                    : word == L"p2" ? views::StreamViewsMode::PlayerTwo
-                                                    : views::StreamViewsMode::Both;
-                  views::SetStreamViewsMode(mode);  // applied at the next tick, which logs it
-                  return Outcome{true, word == L"off" ? L"no streaming views (the game's own only)"
-                                       : word == L"p2" ? L"player 2's camera"
-                                                       : L"both players' cameras"};
-              }});
-    Register({.name  = L"stream-fov-p1",
-              .shape = Shape::Integer,
-              .min   = 1,
-              .max   = kMaxStreamFov,
-              .words = {L"auto"},
-              .help  = L"the horizontal FOV in degrees player 1's camera is registered with under both, or auto for "
-                       L"what its half covers (at start)",
-              .set   = [](const Value& v) {
-                  if (!views::StreamViewsInstalled())
-                  {
-                      return Failed(L"streaming views are not installed (see the install log)");
-                  }
-                  const std::int64_t degrees = std::holds_alternative<std::wstring>(v) ? 0 : Number(v);
-                  views::SetPlayerOneStreamFov(static_cast<float>(degrees));  // applied at the next tick, logged
-                  return Outcome{true, degrees == 0 ? std::wstring(L"player 1's camera as its half covers")
-                                                    : std::format(L"player 1's camera {} degrees wide", degrees)};
               }});
 }
 
@@ -461,7 +397,6 @@ void RegisterPlayerTwo()
 
 void RegisterModCommands()
 {
-    RegisterViews();
     RegisterHud();
     RegisterRenderer();
     RegisterPlayerTwo();

@@ -90,6 +90,10 @@ std::optional<std::int64_t> ReadWhole(std::wstring_view word, int base);
 /// The whole word as a finite number, or nothing.
 std::optional<double> ReadReal(std::wstring_view word);
 
+/// A float setting as a Float reading: the double with the float's shortest decimal (0.3f reads 0.3, not
+/// 0.30000001192092896), so a reading writes back as it was set and `wait-until x == 0.3` compares equal.
+double FloatReading(float value) noexcept;
+
 /// Checks one argument word (or the rest of the line, for Text) against the entry's shape; the message says what the
 /// shape wants when it does not fit.
 struct ParsedValue

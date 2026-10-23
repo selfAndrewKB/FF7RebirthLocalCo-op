@@ -219,6 +219,14 @@ void TestNamedValues()
     EXPECT(lss::control::ReadWhole(L"36000", 10) == 36000 && !lss::control::ReadWhole(L"+1", 10));
     EXPECT(lss::control::ReadWhole(L"-5", 10) == -5 && !lss::control::ReadWhole(L"-5", 16));
     EXPECT(lss::control::ReadReal(L"-0.25") == -0.25 && !lss::control::ReadReal(L"inf"));
+
+    std::puts("registry: a float setting reads back as the decimal it was set with");
+    const Entry fraction{.name = L"fraction", .shape = Shape::Float, .minFloat = 0.0, .maxFloat = 1.0, .set = Done};
+    EXPECT(lss::control::FloatReading(0.3f) == 0.3);
+    EXPECT(Format(fraction, Value{lss::control::FloatReading(0.3f)}) == L"0.3");
+    EXPECT(Format(fraction, Value{static_cast<double>(0.3f)}) != L"0.3");  // what the plain widening wrote
+    EXPECT(lss::control::FloatReading(0.5f) == 0.5 && lss::control::FloatReading(0.7f) == 0.7);
+    EXPECT(lss::control::FloatReading(-1.0f) == -1.0 && lss::control::FloatReading(0.0f) == 0.0);
 }
 
 void TestFormatEmpty()

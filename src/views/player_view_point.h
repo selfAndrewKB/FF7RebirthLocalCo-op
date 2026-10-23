@@ -14,6 +14,7 @@
 //     (and back). Starting on player 1's means a player-2 camera that is not set up yet (it sits
 //     at the world origin until it has a character) is never on screen by default.
 
+#include "platform/dev_switch.h"
 #include "views/stream_view_math.h"
 #include "views/view_shape.h"
 
@@ -87,6 +88,11 @@ void SetSplitFovWeight(float weight) noexcept;
 
 /// The weight in use, or a negative value for the MajorAxisFOV rule.
 float SplitFovWeight() noexcept;
+
+#if LSS_DEV
+/// The `split-fov` command and reading (a weight from 0 to 1, or native). May throw (out of memory).
+void RegisterViewPointCommands();
+#endif
 
 /// A player's half width against the game camera's own, as tan(half's horizontal FOV / 2) / tan(camera's / 2) from
 /// the last view drawn (1 when no split FOV is written). Any thread.

@@ -90,6 +90,20 @@ std::optional<double> ReadReal(std::wstring_view word)
     return value;
 }
 
+double FloatReading(float value) noexcept
+{
+    // to_chars without a precision gives the shortest text that reads back as the same float; read as a double, that
+    // text is the value a script would have written.
+    char       text[64];
+    const auto [end, error] = std::to_chars(text, text + sizeof(text), value);
+    double     out          = static_cast<double>(value);
+    if (error == std::errc{})
+    {
+        std::from_chars(text, end, out);
+    }
+    return out;
+}
+
 std::wstring Format(const Entry& entry, const Value& value)
 {
     if (const auto* on = std::get_if<bool>(&value))

@@ -587,8 +587,10 @@ void RegisterCommands(player_two::Session& session, players::SplitLayout& layout
         players::RegisterCommands(layout);
         players::RegisterCommands(singleView);
         player_two::RegisterCommands(session);
+        views::RegisterViewPointCommands();
+        views::RegisterStreamCommands();
         RegisterOwnCommands(session);
-        control::RegisterModCommands();  // the groups not moved yet (phase 8, rows 4 to 7)
+        control::RegisterModCommands();  // the groups not moved yet (phase 8, rows 5 to 7)
     }
     catch (...)
     {

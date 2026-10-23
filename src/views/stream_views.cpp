@@ -10,6 +10,12 @@
 #include "views/stream_view_math.h"
 #include "views/whole_screen.h"
 
+#if LSS_DEV
+#include "platform/command_registry.h"
+
+#include <cmath>
+#endif
+
 #include <cstdint>
 #include <format>
 #include <initializer_list>
@@ -111,6 +117,11 @@ void SetPlayerOneStreamFov(float degrees) noexcept
     g_playerOneFov = StreamFov(0.0f, degrees);
 }
 
+float PlayerOneStreamFov() noexcept
+{
+    return g_playerOneFov;
+}
+
 void UpdateStreamViews(bool splitShown) noexcept
 {
     const bool wanted = g_installed && !g_failed && splitShown && g_mode != StreamViewsMode::Off && GameStatePresent();
@@ -166,5 +177,65 @@ void UpdateStreamViews(bool splitShown) noexcept
         }
     }
 }
+
+#if LSS_DEV
+
+void RegisterStreamCommands()
+{
+    static_assert(kMaxStreamFov == static_cast<float>(static_cast<std::int64_t>(kMaxStreamFov)),
+                  "stream-fov-p1 is a whole number of degrees up to the cap");
+    using control::Outcome;
+    using control::Value;
+    control::Register(
+        {.name  = L"stream-views",
+         .shape = control::Shape::Word,
+         .words = {L"off", L"p2", L"both"},
+         .help  = L"which split players' cameras are registered with the game's own scenery streaming (both at start)",
+         .set   = [](const Value& v) {
+             const std::wstring& word = std::get<std::wstring>(v);
+             if (!StreamViewsInstalled())
+             {
+                 return Outcome{false, L"streaming views are not installed (see the install log)"};
+             }
+             const auto mode = word == L"off"  ? StreamViewsMode::Off
+                               : word == L"p2" ? StreamViewsMode::PlayerTwo
+                                               : StreamViewsMode::Both;
+             SetStreamViewsMode(mode);  // applied at the next tick, which logs it
+             return Outcome{true, word == L"off"  ? L"no streaming views (the game's own only)"
+                                  : word == L"p2" ? L"player 2's camera"
+                                                  : L"both players' cameras"};
+         },
+         .get = [] {
+             const StreamViewsMode mode = GetStreamViewsMode();
+             return Value{std::wstring(mode == StreamViewsMode::Off         ? L"off"
+                                       : mode == StreamViewsMode::PlayerTwo ? L"p2"
+                                                                            : L"both")};
+         }});
+    control::Register(
+        {.name  = L"stream-fov-p1",
+         .shape = control::Shape::Integer,
+         .min   = 1,
+         .max   = static_cast<std::int64_t>(kMaxStreamFov),
+         .words = {L"auto"},
+         .help  = L"the horizontal FOV in degrees player 1's camera is registered with under both, or auto for what "
+                  L"its half covers (at start)",
+         .set   = [](const Value& v) {
+             if (!StreamViewsInstalled())
+             {
+                 return Outcome{false, L"streaming views are not installed (see the install log)"};
+             }
+             const std::int64_t degrees = std::holds_alternative<std::wstring>(v) ? 0 : std::get<std::int64_t>(v);
+             SetPlayerOneStreamFov(static_cast<float>(degrees));  // applied at the next tick, which logs it
+             return Outcome{true, degrees == 0 ? std::wstring(L"player 1's camera as its half covers")
+                                               : std::format(L"player 1's camera {} degrees wide", degrees)};
+         },
+         .get = [] {
+             const float degrees = PlayerOneStreamFov();
+             return degrees <= 0.0f ? Value{std::wstring(L"auto")}
+                                    : Value{static_cast<std::int64_t>(std::lround(degrees))};
+         }});
+}
+
+#endif
 
 }  // namespace lss::views

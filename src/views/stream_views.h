@@ -16,6 +16,8 @@
 // slave frustum assumes), main-pass scale 0 (the game's own), 0 for the flag that would switch the slave
 // frustums off for good, far 0 (unbounded, as the rail camera), static-shadow far 0 (off).
 
+#include "platform/dev_switch.h"
+
 #include <cstdint>
 
 namespace lss::platform {
@@ -44,9 +46,16 @@ StreamViewsMode GetStreamViewsMode() noexcept;
 /// for the FOV its half covers. A wider camera also asks for the scenery just outside player 1's view,
 /// such as the casters of the shadows it shows (logged at the next update).
 void SetPlayerOneStreamFov(float degrees) noexcept;
+/// The FOV set (degrees, capped), or 0 for the FOV player 1's half covers.
+float PlayerOneStreamFov() noexcept;
 
 /// Game thread, every engine tick before the world ticks: registers the cameras while the split is
 /// on screen and the game state exists (the game's function needs it).
 void UpdateStreamViews(bool splitShown) noexcept;
+
+#if LSS_DEV
+/// The `stream-views` and `stream-fov-p1` commands and readings. May throw (out of memory).
+void RegisterStreamCommands();
+#endif
 
 }  // namespace lss::views

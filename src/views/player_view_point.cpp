@@ -15,6 +15,10 @@
 #include "views/third_view.h"
 #include "views/view_shape.h"
 
+#if LSS_DEV
+#include "platform/command_registry.h"
+#endif
+
 #include <Unreal/CoreUObject/UObject/Class.hpp>
 
 #include <atomic>
@@ -526,5 +530,39 @@ bool UsesEngineViewPoint(const void* localPlayer) noexcept
     std::memcpy(&vtable, localPlayer, sizeof(vtable));
     return vtable == g_localPlayerVTable;
 }
+
+#if LSS_DEV
+
+void RegisterViewPointCommands()
+{
+    using control::Outcome;
+    using control::Value;
+    control::Register({.name     = L"split-fov",
+                       .shape    = control::Shape::Float,
+                       .minFloat = 0.0,
+                       .maxFloat = 1.0,
+                       .words    = {L"native"},
+                       .help     = L"filled halves' FOV: 0 keeps the single-player framing, 1 its on-screen scale (0.5 "
+                                   L"at start; views/view_shape.h); native = the stock MajorAxisFOV rule",
+                       .set      = [](const Value& v) {
+                           if (!ViewPointInstalled())
+                           {
+                               return Outcome{false, L"the view-point entry is not installed"};
+                           }
+                           const bool  native = std::holds_alternative<std::wstring>(v);
+                           const float blend  = native ? -1.0f : static_cast<float>(std::get<double>(v));
+                           SetSplitFovWeight(blend);
+                           // The resulting FOV is logged here when a filled split view first uses it.
+                           return Outcome{true, native ? L"stock MajorAxisFOV rule"
+                                                       : L"weight set; applies to filled halves"};
+                       },
+                       .get = [] {
+                           const float weight = SplitFovWeight();
+                           return weight < 0.0f ? Value{std::wstring(L"native")}
+                                                : Value{control::FloatReading(weight)};
+                       }});
+}
+
+#endif
 
 }  // namespace lss::views
