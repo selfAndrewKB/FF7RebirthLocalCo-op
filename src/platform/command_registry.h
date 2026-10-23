@@ -15,6 +15,14 @@
 // (tests/control_registry_test.cpp). The control route is a development tool: the registrations sit behind the dev
 // switch (platform/dev_switch.h), so a player's build carries no table.
 //
+// In platform/ because it is the bottom layer and the table depends on nothing: a module of any layer registers its
+// own commands in its own file without an include pointing up the layers. The namespace stays lss::control (the
+// language, the runner and the channels above it are control/'s).
+//
+// Where they register: each owner has a RegisterCommands() under `#if LSS_DEV`, and one list calls them all in order
+// (modules::RegisterCommands, the module table's file), before the command channel opens. An owner's function is not
+// noexcept (building an entry allocates); the list catches, so a failure leaves the table short and logged.
+//
 // Taken from Remake's control/registry (2026-10-23). Changed: an Integer argument may be negative (Rebirth's
 // framing offsets go below zero); the numbers are read with std::from_chars on an ASCII copy, so no locale, '+',
 // leading space or non-ASCII digit of the C library's conversions slips through; Add also refuses NaN float bounds

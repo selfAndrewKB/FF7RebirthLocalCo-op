@@ -28,7 +28,7 @@
 // submitted line is numbered, blanks and comments included, so a script's numbers are its file lines; a hold the mod
 // ended on its own (Holds::Held) leaves the runner's count.
 
-#include "control/registry.h"
+#include "platform/command_registry.h"
 #include "control/script.h"
 
 #include <cstdint>

@@ -1,7 +1,7 @@
-// Host-side tests for the command registry (control/registry.h): the table's refusals, each shape's parsing and the
-// values written back, run without the game.
+// Host-side tests for the command registry (platform/command_registry.h): the table's refusals, each shape's parsing
+// and the values written back, run without the game.
 
-#include "control/registry.h"
+#include "platform/command_registry.h"
 
 #include "expect.h"
 

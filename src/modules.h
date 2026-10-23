@@ -16,6 +16,8 @@
 // frame, the held settings and the HUD placement between and after them. The actions a key and a control command
 // share (leave, own camera, fill, third view, window span) are here too, each once.
 
+#include "platform/dev_switch.h"
+
 #include <string>
 
 namespace lss::platform {
@@ -24,6 +26,11 @@ class GameImage;
 
 namespace lss::player_two {
 class Session;
+}
+
+namespace lss::players {
+class SingleView;
+class SplitLayout;
 }
 
 namespace lss::modules {
@@ -77,5 +84,12 @@ Result SetThirdView(bool on, const wchar_t* why) noexcept;
 
 /// The game window across its row of monitors or back (views/window_span.h); entering needs player 2.
 Result SetWindowSpan(const player_two::Session& session, bool on, const wchar_t* why) noexcept;
+
+#if LSS_DEV
+/// Every control command (platform/command_registry.h), each owner's in turn, the shared actions' here: the one list,
+/// as the table above is for the installs. Game thread, once, before the command channel opens.
+void RegisterCommands(player_two::Session& session, players::SplitLayout& layout,
+                      players::SingleView& singleView) noexcept;
+#endif
 
 }  // namespace lss::modules

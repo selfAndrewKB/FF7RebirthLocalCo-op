@@ -236,7 +236,18 @@ public:
             if (const auto removeLocalPlayer = image ? VerifyEngine(*image) : std::nullopt)
             {
                 session_.emplace(*removeLocalPlayer);
-                lss::dev::InstallControl(*session_, layout_, singleView_);
+#if LSS_DEV
+                // Nothing is installed to drive: the console and quit alone (no join on a session without stages).
+                try
+                {
+                    lss::players::console::RegisterCommands([this] { return session_->HasPlayerTwo(); });
+                }
+                catch (...)
+                {
+                    Log(L"control: registering the console's commands failed (out of memory?)");
+                }
+#endif
+                lss::dev::InstallControl(*session_);
             }
             const Hook::FCallbackOptions watchOptions{false, false, STR("LocalSplitScreen"), STR("frame watch")};
             tickCallback_ = Hook::RegisterEngineTickPreCallback(
@@ -272,8 +283,12 @@ public:
         lss::modules::Install(*image);  // every other module, in table order (modules.cpp); each logs its own line
 
         // The dev tools (built with LSS_DEV_TOOLS only): the control channel, the HUD trace and probe, and the watches
-        // that only log (dev/dev_tools.h names them); a player's build has none of them.
-        lss::dev::Install(*image, *session_, layout_, singleView_);
+        // that only log (dev/dev_tools.h names them); a player's build has none of them. Every control command is
+        // registered first, each owner's (modules.cpp lists them), so the channel opens on the whole table.
+#if LSS_DEV
+        lss::modules::RegisterCommands(*session_, layout_, singleView_);
+#endif
+        lss::dev::Install(*image, *session_);
 
         const Hook::FCallbackOptions tickOptions{false, false, STR("LocalSplitScreen"), STR("player intent")};
         tickCallback_ = Hook::RegisterEngineTickPreCallback(

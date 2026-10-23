@@ -2,6 +2,11 @@
 
 #include "players/unreal_access.h"
 
+#if LSS_DEV
+#include "platform/command_registry.h"
+#include "platform/log.h"
+#endif
+
 #include <Unreal/Core/Containers/FString.hpp>
 #include <Unreal/UFunction.hpp>
 
@@ -113,5 +118,35 @@ bool Execute(const wchar_t* command) noexcept
         call, *text, command,
         [&](std::uint8_t* frame) { *reinterpret_cast<UObject**>(frame + *context) = world; }, NoOutputs);
 }
+
+#if LSS_DEV
+
+void RegisterCommands(std::function<bool()> playerTwoIn)
+{
+    using control::Outcome;
+    using control::Value;
+    control::Register({.name  = L"console",
+                       .shape = control::Shape::Text,
+                       .help  = L"an engine console command, as typed in the console",
+                       .set   = [](const Value& v) {
+                           const std::wstring& command = std::get<std::wstring>(v);
+                           platform::Log(L"control: console command '{}'", command);
+                           return Execute(command.c_str()) ? Outcome{}
+                                                           : Outcome{false, L"the console command could not be called"};
+                       }});
+    control::Register(
+        {.name = L"quit",
+         .help = L"quit the game through the engine (player 2 must be out)",
+         .set  = [playerTwoIn = std::move(playerTwoIn)](const Value&) {
+             if (playerTwoIn())
+             {
+                 return Outcome{false, L"player 2 is still in ('leave' and 'wait-until p2.in == off' first)"};
+             }
+             platform::Log(L"control: quitting the game through the engine's quit command");
+             return Execute(L"quit") ? Outcome{} : Outcome{false, L"the quit command could not be called"};
+         }});
+}
+
+#endif
 
 }  // namespace lss::players::console

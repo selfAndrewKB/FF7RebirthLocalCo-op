@@ -1,5 +1,9 @@
 #include "players/single_view.h"
 
+#if LSS_DEV
+#include "platform/command_registry.h"
+#endif
+
 namespace lss::players {
 
 SingleViewChange SingleView::Update(bool playerTwoIn, bool wholeScreenShown) noexcept
@@ -115,5 +119,42 @@ std::wstring DescribeWaits(const SingleViewChange& change)
     }
     return {};
 }
+
+#if LSS_DEV
+
+void RegisterCommands(SingleView& singleView)
+{
+    using control::Outcome;
+    using control::Value;
+    control::Register({.name  = L"single-view",
+                       .shape = control::Shape::Word,
+                       .words = {L"auto", L"on", L"off"},
+                       .help  = L"player 1's single view while player 2 is in: for the game's whole-screen states "
+                                L"(auto, the default), always, or never",
+                       .set   = [&singleView](const Value& v) {
+                           const std::wstring& mode = std::get<std::wstring>(v);
+                           // Applied at the next tick, which logs the change.
+                           if (mode == L"on")
+                           {
+                               singleView.SetMode(SingleViewMode::Single);
+                               return Outcome{true, L"player 1's single view while player 2 is in"};
+                           }
+                           if (mode == L"off")
+                           {
+                               singleView.SetMode(SingleViewMode::Split);
+                               return Outcome{true, L"always split"};
+                           }
+                           singleView.SetMode(SingleViewMode::Auto);
+                           return Outcome{true, L"single view for the game's whole-screen states (auto)"};
+                       },
+                       .get = [&singleView] {
+                           const SingleViewMode mode = singleView.Mode();
+                           return Value{std::wstring(mode == SingleViewMode::Single  ? L"on"
+                                                     : mode == SingleViewMode::Split ? L"off"
+                                                                                     : L"auto")};
+                       }});
+}
+
+#endif
 
 }  // namespace lss::players

@@ -57,8 +57,9 @@ BUILDS = {
 }
 ALWAYS_EXPECT_NOT = [r"raised an exception", r"check failed:", r"an exception stopped the command channel"]
 
-# The harness's three waits as the mod's readings compare them (src/control/mod_commands.cpp): the control route
-# sends the comparison, the key route maps a script's comparison back to the log lines that end it.
+# The harness's three waits as the mod's readings compare them (p2.state and p2.in: src/player_two/session/session.cpp;
+# field.ready: src/modules.cpp): the control route sends the comparison, the key route maps a script's comparison back
+# to the log lines that end it.
 CONDITIONS = {"playing": "p2.state == playing", "out": "p2.in == off", "field": "field.ready == on"}
 CONDITION_OF = {text: name for name, text in CONDITIONS.items()}
 

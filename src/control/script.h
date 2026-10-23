@@ -1,8 +1,8 @@
 #pragma once
 
-// The control language: one command per line, UTF-8, '#' starts a comment. Registered commands (control/registry.h)
-// take their one argument in the entry's shape; `help` lists them with their shapes. The verbs below belong to the
-// runner itself:
+// The control language: one command per line, UTF-8, '#' starts a comment. Registered commands
+// (platform/command_registry.h) take their one argument in the entry's shape; `help` lists them with their shapes. The
+// verbs below belong to the runner itself:
 //
 //   <name> [<argument>]                  a registered action or switch (join, bars on, split-fov 0.5)
 //   get <name>                           the current value of a registered switch or reading
@@ -24,7 +24,7 @@
 // Taken from Remake's control/script (2026-10-23). Changed: two players for `hold` (Rebirth's seats), the numbers
 // read with from_chars as the registry reads them.
 
-#include "control/registry.h"
+#include "platform/command_registry.h"
 
 #include <cstdint>
 #include <optional>

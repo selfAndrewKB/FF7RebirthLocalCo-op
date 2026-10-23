@@ -4,6 +4,10 @@
 #include "platform/hitch_step.h"
 #include "platform/log.h"
 
+#if LSS_DEV
+#include "platform/command_registry.h"
+#endif
+
 #include <array>
 #include <atomic>
 #include <cstddef>
@@ -266,5 +270,22 @@ void OnFrameStart() noexcept
         g_linesCounted = LinesWritten();  // the summary's and reports' lines are not the next frame's
     }
 }
+
+#if LSS_DEV
+
+void RegisterCommands()
+{
+    control::Register({.name  = L"perf-log",
+                       .shape = control::Shape::OnOff,
+                       .help  = L"each hitch's own line, the 10 s hitch summary and the periodic timing lines (off at "
+                                L"start; perf_log.txt turns it on at launch)",
+                       .set   = [](const control::Value& v) {
+                           SetDetailed(std::get<bool>(v));
+                           return control::Outcome{true, std::get<bool>(v) ? L"perf log on" : L"perf log off"};
+                       },
+                       .get = [] { return control::Value{Detailed()}; }});
+}
+
+#endif
 
 }  // namespace lss::platform::frame_watch

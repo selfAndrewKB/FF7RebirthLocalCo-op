@@ -15,6 +15,8 @@
 // overwritten, a value someone else set is left alone, and a failure is reported once per request
 // rather than retried every tick.
 
+#include "platform/dev_switch.h"
+
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -117,5 +119,10 @@ private:
     bool              failed_     = false;  // the last request failed; not retried until it changes
     bool              waited_     = false;  // player 2 waited for a member, as last noted
 };
+
+#if LSS_DEV
+/// The `single-view` command and reading (auto, on, off).
+void RegisterCommands(SingleView& singleView);
+#endif
 
 }  // namespace lss::players

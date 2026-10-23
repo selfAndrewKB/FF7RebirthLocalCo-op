@@ -1,7 +1,5 @@
 #include "control/mod_commands.h"
 
-#include "control/registry.h"
-#include "control/script.h"
 #include "hud/hud_trace.h"
 #include "hud/layout/overlay_layout.h"
 #include "hud/minimap/area_icons_two.h"
@@ -11,10 +9,8 @@
 #include "hud/passes/second_image.h"
 #include "hud/position_probe.h"
 #include "hud/widget_dump.h"
-#include "modules.h"
-#include "platform/frame_watch.h"
+#include "platform/command_registry.h"
 #include "platform/image.h"
-#include "platform/level_names.h"
 #include "platform/log.h"
 #include "player_two/battle/lock_on.h"
 #include "player_two/camera/camera_distance.h"
@@ -22,21 +18,14 @@
 #include "player_two/input/pad_buttons.h"
 #include "player_two/input/pad_sticks.h"
 #include "player_two/scopes/scope_leaks.h"
-#include "player_two/session/field_exit.h"
-#include "player_two/session/own_controller.h"
-#include "player_two/session/session.h"
 #include "player_two/world/charapop_centre.h"
 #include "player_two/world/charapop_near.h"
-#include "players/console_access.h"
-#include "players/single_view.h"
-#include "players/split_layout.h"
 #include "renderer/me_feedback_once.h"
 #include "renderer/submission_census.h"
 #include "renderer/submit_hints.h"
 #include "renderer/view_family_submission.h"
 #include "views/player_view_point.h"
 #include "views/stream_views.h"
-#include "views/whole_screen.h"
 
 #include <format>
 #include <string>
@@ -50,12 +39,6 @@ constexpr std::int64_t kMaxStreamFov = 170;  // views::kMaxStreamFov
 Outcome Failed(std::wstring why)
 {
     return {false, std::move(why)};
-}
-
-/// A shared action's result (modules.h) as the command's outcome.
-Outcome From(modules::Result done)
-{
-    return {done.ok, std::move(done.text)};
 }
 
 bool On(const Value& value)
@@ -87,110 +70,10 @@ void RegisterMask(const wchar_t* name, std::int64_t max, const wchar_t* help, co
               }});
 }
 
-/// The same readiness the session's rejoin waits for: the field running (the entry steps done), the game's battle
-/// system and option data built, player 1's controller and camera manager on the End classes; and nothing over the
-/// field (a menu, a scene, the title: its scene is a field with a one-member party, which the first three tests
-/// accept; a run of 2026-10-21 ran every script at the title that way). The engine refuses a join from the game's
-/// Main Menu (CreatePlayer returns without a player; seen 2026-10-22, the menu up after the load).
-bool FieldReady()
-{
-    return player_two::field_exit::FieldReady() && player_two::party_member::GameReady() &&
-           player_two::own_controller::Ready() &&
-           views::ReasonOf(views::ReadScreenSignals()) == views::WholeScreenReason::None;
-}
+// ---- the views --------------------------------------------------------------------------------------------------
 
-std::wstring PlayerTwoState(const player_two::Session& session)
+void RegisterViews()
 {
-    if (session.HasPlayerTwo())
-    {
-        return session.PlaysMember() ? L"playing" : L"in";
-    }
-    return session.AwaitingMember() ? L"awaiting" : L"out";
-}
-
-// ---- the session and the players' switches --------------------------------------------------------------------
-
-void RegisterSession(player_two::Session& session, players::SplitLayout& layout, players::SingleView& singleView)
-{
-    Register({.name = L"join", .help = L"add player 2 (as Ctrl+F7); `wait-until p2.state == playing` confirms it",
-              .set  = [&session](const Value&) {
-                  if (session.HasPlayerTwo())
-                  {
-                      return Failed(L"player 2 is already in");
-                  }
-                  session.Join();  // logs its own outcome
-                  return Outcome{};
-              }});
-    Register({.name = L"leave", .help = L"remove player 2 (as Ctrl+F8); `wait-until p2.in == off` confirms it",
-              .set  = [&session](const Value&) {
-                  if (!session.HasPlayerTwo() && !session.AwaitingMember())
-                  {
-                      return Failed(L"player 2 is not in");
-                  }
-                  modules::LeavePlayerTwo(session, L"player 2 leaves (the leave command)");  // over the next ticks
-                  return Outcome{};
-              }});
-    Register({.name = L"p2.in", .shape = Shape::OnOff, .help = L"player 2's local player exists",
-              .get  = [&session] { return Value{session.HasPlayerTwo()}; }});
-    Register({.name  = L"p2.state",
-              .shape = Shape::Word,
-              .words = {L"out", L"awaiting", L"in", L"playing"},
-              .help  = L"player 2: out, awaiting a member, in without one, or playing their member",
-              .get   = [&session] { return Value{PlayerTwoState(session)}; }});
-    Register({.name = L"field.ready", .shape = Shape::OnOff,
-              .help = L"a save's field is loaded and playable, nothing over it (no menu, scene or title)",
-              .get  = [] { return Value{FieldReady()}; }});
-    Register({.name = L"p2.log-status", .help = L"write player 2's status line to the log",
-              .set  = [&session](const Value&) {
-                  if (!session.HasPlayerTwo())
-                  {
-                      platform::Log(L"control: status: player 2 is not in");
-                      return Outcome{true, L"player 2 is not in"};
-                  }
-                  session.LogStatus();
-                  return Outcome{};
-              }});
-    Register({.name = L"own-camera", .shape = Shape::OnOff,
-              .help = L"player 2's half shows their own camera (on), or player 1's",
-              .set  = [&session](const Value& v) { return From(modules::SetOwnCamera(session, On(v))); }});
-    Register({.name  = L"sticks",
-              .shape = Shape::Word,
-              .words = {L"per-pad", L"merged"},
-              .help  = L"each pad drives only its own player, or the game's merge",
-              .set   = [&session](const Value& v) {
-                  const bool on = Word(v) == L"per-pad";
-                  if (!player_two::pad_sticks::Installed())
-                  {
-                      return Failed(L"the per-pad sticks stage is not installed");
-                  }
-                  if (player_two::pad_sticks::SwitchedOn() != on)
-                  {
-                      session.TogglePadSticks();  // logs the new state
-                  }
-                  return player_two::pad_sticks::SwitchedOn() == on ? Outcome{} : Failed(L"the switch did not take");
-              }});
-    Register({.name  = L"layout",
-              .shape = Shape::Word,
-              .words = {L"top-bottom", L"side-by-side"},
-              .help  = L"how the screen is split (now, or from the next join)",
-              .set   = [&layout](const Value& v) {
-                  using Kind           = players::HeldChange::Kind;
-                  const bool sideBySide = Word(v) == L"side-by-side";
-                  const auto value      = static_cast<std::uint8_t>(sideBySide ? players::SplitLayoutKind::SideBySide
-                                                                               : players::SplitLayoutKind::TopBottom);
-                  const auto     change = layout.Choose(value);
-                  const wchar_t* name   = sideBySide ? L"side by side" : L"top/bottom";
-                  switch (change.kind)
-                  {
-                      case Kind::Applied:
-                      case Kind::AlreadySet: return Outcome{true, name};
-                      case Kind::Chosen: return Outcome{true, std::wstring(name) + L" from the next join"};
-                      case Kind::ApplyFailed: return Failed(L"TwoPlayerSplitscreenLayout could not be read or set");
-                      default: return Failed(L"unexpected layout outcome");
-                  }
-              }});
-    Register({.name = L"bars", .shape = Shape::OnOff, .help = L"split views keep 16:9 with bars, or fill their halves",
-              .set  = [](const Value& v) { return From(modules::SetFill(!On(v))); }});  // bars on: no fill
     Register({.name     = L"split-fov",
               .shape    = Shape::Float,
               .minFloat = 0.0,
@@ -208,42 +91,6 @@ void RegisterSession(player_two::Session& session, players::SplitLayout& layout,
                   views::SetSplitFovWeight(blend);
                   // The resulting FOV is logged by the views module when a filled split view first uses it.
                   return Outcome{true, native ? L"stock MajorAxisFOV rule" : L"weight set; applies to filled halves"};
-              }});
-    Register({.name  = L"single-view",
-              .shape = Shape::Word,
-              .words = {L"auto", L"on", L"off"},
-              .help  = L"player 1's single view while player 2 is in: for the game's whole-screen states (auto, the "
-                       L"default), always, or never",
-              .set   = [&singleView](const Value& v) {
-                  const std::wstring& mode = Word(v);
-                  if (mode == L"on")
-                  {
-                      singleView.SetMode(players::SingleViewMode::Single);  // applied at the next tick, which logs it
-                      return Outcome{true, L"player 1's single view while player 2 is in"};
-                  }
-                  if (mode == L"off")
-                  {
-                      singleView.SetMode(players::SingleViewMode::Split);
-                      return Outcome{true, L"always split"};
-                  }
-                  singleView.SetMode(players::SingleViewMode::Auto);
-                  return Outcome{true, L"single view for the game's whole-screen states (auto)"};
-              }});
-}
-
-// ---- the views --------------------------------------------------------------------------------------------------
-
-void RegisterViews(player_two::Session& session)
-{
-    Register({.name = L"third-view", .shape = Shape::OnOff,
-              .help = L"a third full-size view (a third local player on player 1's camera, three columns) for the "
-                      L"multi-monitor measurement; needs player 2 in",
-              .set  = [](const Value& v) { return From(modules::SetThirdView(On(v), L"the third-view command")); }});
-    Register({.name = L"window-span", .shape = Shape::OnOff,
-              .help = L"the game window across its row of equal monitors, one column per local player, through the "
-                      L"engine's own window reshape; needs player 2 in",
-              .set  = [&session](const Value& v) {
-                  return From(modules::SetWindowSpan(session, On(v), L"the window-span command"));
               }});
     Register({.name  = L"stream-views",
               .shape = Shape::Word,
@@ -421,7 +268,7 @@ void RegisterHud()
               }});
 }
 
-// ---- the renderer and the log -------------------------------------------------------------------------------------
+// ---- the renderer -------------------------------------------------------------------------------------------
 
 void RegisterRenderer()
 {
@@ -490,29 +337,6 @@ void RegisterRenderer()
                   renderer::SetFamilySplit(On(v));
                   return Outcome{true, On(v) ? L"one view family per player" : L"both views in one family (diagnosis)"};
               }});
-    Register({.name = L"perf-log", .shape = Shape::OnOff,
-              .help = L"each hitch's own line, the 10 s hitch summary and the periodic timing lines (off at start)",
-              .set  = [](const Value& v) {
-                  platform::frame_watch::SetDetailed(On(v));
-                  return Outcome{true, On(v) ? L"perf log on" : L"perf log off"};
-              }});
-    Register({.name  = L"log-level",
-              .shape = Shape::Word,
-              .words = {L"error", L"warning", L"info", L"debug", L"trace"},
-              .help  = L"the most detailed log level written (info at start; debug adds per-event diagnostics, trace "
-                       L"per-frame and per-input reports)",
-              .set   = [](const Value& v) {
-                  const auto level = platform::ParseLevel(Word(v));
-                  if (!level)
-                  {
-                      return Failed(L"no such log level");
-                  }
-                  platform::SetLevel(*level);
-                  platform::Log(L"log level: {} (lines up to it are written)",
-                                platform::LevelName(platform::CurrentLevel()));
-                  return Outcome{true, std::wstring(L"log level ") + platform::LevelName(platform::CurrentLevel())};
-              },
-              .get = [] { return Value{std::wstring(platform::LevelWord(platform::CurrentLevel()))}; }});
 }
 
 // ---- player 2's modules --------------------------------------------------------------------------------------------
@@ -633,45 +457,14 @@ void RegisterPlayerTwo()
               }});
 }
 
-// ---- the game ----------------------------------------------------------------------------------------------------
-
-void RegisterGame(player_two::Session& session)
-{
-    Register({.name = L"console", .shape = Shape::Text, .help = L"an engine console command, as typed in the console",
-              .set  = [](const Value& v) {
-                  platform::Log(L"control: console command '{}'", Word(v));
-                  return players::console::Execute(Word(v).c_str()) ? Outcome{}
-                                                                     : Failed(L"the console command could not be called");
-              }});
-    Register({.name = L"quit", .help = L"quit the game through the engine (player 2 must be out)",
-              .set  = [&session](const Value&) {
-                  if (session.HasPlayerTwo())
-                  {
-                      return Failed(L"player 2 is still in ('leave' and 'wait-until p2.in == off' first)");
-                  }
-                  platform::Log(L"control: quitting the game through the engine's quit command");
-                  return players::console::Execute(L"quit") ? Outcome{} : Failed(L"the quit command could not be called");
-              }});
-}
-
 }  // namespace
 
-void RegisterModCommands(player_two::Session& session, players::SplitLayout& layout,
-                         players::SingleView& singleView) noexcept
+void RegisterModCommands()
 {
-    try
-    {
-        RegisterSession(session, layout, singleView);
-        RegisterViews(session);
-        RegisterHud();
-        RegisterRenderer();
-        RegisterPlayerTwo();
-        RegisterGame(session);
-    }
-    catch (...)
-    {
-        platform::Log(L"control: registering the commands failed (out of memory?); the table is incomplete");
-    }
+    RegisterViews();
+    RegisterHud();
+    RegisterRenderer();
+    RegisterPlayerTwo();
 }
 
 }  // namespace lss::control

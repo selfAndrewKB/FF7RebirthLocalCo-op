@@ -18,6 +18,8 @@
 //     platform::LogDebug(L"hit by {}", name);                 // Debug
 //     if (platform::Enabled(platform::Level::Trace)) { ... }  // before building an expensive argument
 
+#include "platform/dev_switch.h"
+
 #include <atomic>
 #include <cstdint>
 #include <format>
@@ -42,6 +44,11 @@ Level CurrentLevel() noexcept;
 
 /// The level's name ("error" .. "trace").
 const wchar_t* LevelName(Level level) noexcept;
+
+#if LSS_DEV
+/// The `log-level` command and reading (error, warning, info, debug, trace).
+void RegisterLogCommands();
+#endif
 
 namespace detail {
 extern std::atomic<std::uint8_t> g_level;

@@ -1,4 +1,4 @@
-#include "control/registry.h"
+#include "platform/command_registry.h"
 
 #include <charconv>
 #include <cmath>

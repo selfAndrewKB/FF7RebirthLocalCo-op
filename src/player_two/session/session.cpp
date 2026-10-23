@@ -38,6 +38,10 @@
 #include "player_two/session/session_rules.h"
 #include "player_two/session/tag_counts.h"
 
+#if LSS_DEV
+#include "platform/command_registry.h"
+#endif
+
 #include <chrono>
 #include <format>
 #include <optional>
@@ -988,5 +992,73 @@ void Session::LogStatus() noexcept
     pad_buttons::LogStatus();
     move_census::Log();  // dev tools
 }
+
+#if LSS_DEV
+
+namespace {
+
+std::wstring PlayerTwoState(const Session& session)
+{
+    if (session.HasPlayerTwo())
+    {
+        return session.PlaysMember() ? L"playing" : L"in";
+    }
+    return session.AwaitingMember() ? L"awaiting" : L"out";
+}
+
+}  // namespace
+
+void RegisterCommands(Session& session)
+{
+    using control::Outcome;
+    using control::Register;
+    using control::Shape;
+    using control::Value;
+    Register({.name = L"join", .help = L"add player 2 (as Ctrl+F7); `wait-until p2.state == playing` confirms it",
+              .set  = [&session](const Value&) {
+                  if (session.HasPlayerTwo())
+                  {
+                      return Outcome{false, L"player 2 is already in"};
+                  }
+                  session.Join();  // logs its own outcome
+                  return Outcome{};
+              }});
+    Register({.name = L"p2.in", .shape = Shape::OnOff, .help = L"player 2's local player exists",
+              .get  = [&session] { return Value{session.HasPlayerTwo()}; }});
+    Register({.name  = L"p2.state",
+              .shape = Shape::Word,
+              .words = {L"out", L"awaiting", L"in", L"playing"},
+              .help  = L"player 2: out, awaiting a member, in without one, or playing their member",
+              .get   = [&session] { return Value{PlayerTwoState(session)}; }});
+    Register({.name = L"p2.log-status", .help = L"write player 2's status line to the log",
+              .set  = [&session](const Value&) {
+                  if (!session.HasPlayerTwo())
+                  {
+                      platform::Log(L"control: status: player 2 is not in");
+                      return Outcome{true, L"player 2 is not in"};
+                  }
+                  session.LogStatus();
+                  return Outcome{};
+              }});
+    Register({.name  = L"sticks",
+              .shape = Shape::Word,
+              .words = {L"per-pad", L"merged"},
+              .help  = L"each pad drives only its own player, or the game's merge",
+              .set   = [&session](const Value& v) {
+                  const bool on = std::get<std::wstring>(v) == L"per-pad";
+                  if (!pad_sticks::Installed())
+                  {
+                      return Outcome{false, L"the per-pad sticks stage is not installed"};
+                  }
+                  if (pad_sticks::SwitchedOn() != on)
+                  {
+                      session.TogglePadSticks();  // logs the new state
+                  }
+                  return pad_sticks::SwitchedOn() == on ? Outcome{} : Outcome{false, L"the switch did not take"};
+              },
+              .get = [] { return Value{std::wstring(pad_sticks::SwitchedOn() ? L"per-pad" : L"merged")}; }});
+}
+
+#endif
 
 }  // namespace lss::player_two

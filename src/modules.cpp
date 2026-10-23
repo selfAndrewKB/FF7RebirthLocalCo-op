@@ -81,6 +81,19 @@
 #include "views/whole_screen.h"
 #include "views/window_span.h"
 
+#if LSS_DEV
+#include "control/mod_commands.h"
+#include "platform/command_registry.h"
+#include "platform/frame_watch.h"
+#include "platform/log.h"
+#include "player_two/session/field_exit.h"
+#include "player_two/session/own_controller.h"
+#include "player_two/session/party_member.h"
+#include "players/console_access.h"
+#include "players/single_view.h"
+#include "players/split_layout.h"
+#endif
+
 #include <array>
 #include <cstddef>
 #include <format>
@@ -498,5 +511,91 @@ Result SetWindowSpan(const player_two::Session& session, bool on, const wchar_t*
     }
     return {true, std::format(L"{} columns", columns)};
 }
+
+#if LSS_DEV
+
+namespace {
+
+control::Outcome From(Result done)
+{
+    return {done.ok, std::move(done.text)};
+}
+
+/// The same readiness the session's rejoin waits for: the field running (the entry steps done), the game's battle
+/// system and option data built, player 1's controller and camera manager on the End classes; and nothing over the
+/// field (a menu, a scene, the title: its scene is a field with a one-member party, which the first three tests
+/// accept; a run of 2026-10-21 ran every script at the title that way). The engine refuses a join from the game's
+/// Main Menu (CreatePlayer returns without a player; seen 2026-10-22, the menu up after the load). Here because it
+/// reads player 2's modules and the views both.
+bool FieldReady() noexcept
+{
+    return player_two::field_exit::FieldReady() && player_two::party_member::GameReady() &&
+           player_two::own_controller::Ready() &&
+           views::ReasonOf(views::ReadScreenSignals()) == views::WholeScreenReason::None;
+}
+
+/// The commands of the shared actions above, and the field's readiness.
+void RegisterOwnCommands(player_two::Session& session)
+{
+    using control::Register;
+    using control::Shape;
+    using control::Value;
+    Register({.name = L"leave", .help = L"remove player 2 (as Ctrl+F8); `wait-until p2.in == off` confirms it",
+              .set  = [&session](const Value&) {
+                  if (!session.HasPlayerTwo() && !session.AwaitingMember())
+                  {
+                      return control::Outcome{false, L"player 2 is not in"};
+                  }
+                  LeavePlayerTwo(session, L"player 2 leaves (the leave command)");  // over the next ticks
+                  return control::Outcome{};
+              }});
+    Register({.name = L"own-camera", .shape = Shape::OnOff,
+              .help = L"player 2's half shows their own camera (on), or player 1's",
+              .set  = [&session](const Value& v) { return From(SetOwnCamera(session, std::get<bool>(v))); },
+              .get  = [] { return Value{views::ShowsOwnCamera()}; }});
+    Register({.name = L"bars", .shape = Shape::OnOff, .help = L"split views keep 16:9 with bars, or fill their halves",
+              .set  = [](const Value& v) { return From(SetFill(!std::get<bool>(v))); },  // bars on: no fill
+              .get  = [] { return Value{!views::FillsHalves()}; }});
+    Register({.name = L"third-view", .shape = Shape::OnOff,
+              .help = L"a third full-size view (a third local player on player 1's camera, three columns) for the "
+                      L"multi-monitor measurement; needs player 2 in",
+              .set  = [](const Value& v) { return From(SetThirdView(std::get<bool>(v), L"the third-view command")); },
+              .get  = [] { return Value{views::third_view::In()}; }});
+    Register({.name = L"window-span", .shape = Shape::OnOff,
+              .help = L"the game window across its row of equal monitors, one column per local player, through the "
+                      L"engine's own window reshape; needs player 2 in",
+              .set  = [&session](const Value& v) {
+                  return From(SetWindowSpan(session, std::get<bool>(v), L"the window-span command"));
+              },
+              .get = [] { return Value{views::window_span::In()}; }});
+    Register({.name = L"field.ready", .shape = Shape::OnOff,
+              .help = L"a save's field is loaded and playable, nothing over it (no menu, scene or title)",
+              .get  = [] { return Value{FieldReady()}; }});
+}
+
+}  // namespace
+
+void RegisterCommands(player_two::Session& session, players::SplitLayout& layout,
+                      players::SingleView& singleView) noexcept
+{
+    try
+    {
+        // Bottom layer first, so `help` lists the commands from the log level up to the game's modules.
+        platform::RegisterLogCommands();
+        platform::frame_watch::RegisterCommands();
+        players::console::RegisterCommands([&session] { return session.HasPlayerTwo(); });
+        players::RegisterCommands(layout);
+        players::RegisterCommands(singleView);
+        player_two::RegisterCommands(session);
+        RegisterOwnCommands(session);
+        control::RegisterModCommands();  // the groups not moved yet (phase 8, rows 4 to 7)
+    }
+    catch (...)
+    {
+        platform::Log(L"control: registering the commands failed (out of memory?); the table is incomplete");
+    }
+}
+
+#endif
 
 }  // namespace lss::modules

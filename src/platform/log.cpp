@@ -2,6 +2,10 @@
 
 #include "platform/level_names.h"
 
+#if LSS_DEV
+#include "platform/command_registry.h"
+#endif
+
 #include <DynamicOutput/DynamicOutput.hpp>
 
 #include <atomic>
@@ -91,5 +95,30 @@ unsigned LinesWritten() noexcept
 {
     return g_lines.load(std::memory_order_relaxed);
 }
+
+#if LSS_DEV
+
+void RegisterLogCommands()
+{
+    control::Register(
+        {.name  = L"log-level",
+         .shape = control::Shape::Word,
+         .words = {L"error", L"warning", L"info", L"debug", L"trace"},
+         .help  = L"the most detailed log level written (info at start; debug adds per-event diagnostics, trace "
+                  L"per-frame and per-input reports)",
+         .set   = [](const control::Value& v) {
+             const auto level = ParseLevel(std::get<std::wstring>(v));
+             if (!level)
+             {
+                 return control::Outcome{false, L"no such log level"};
+             }
+             SetLevel(*level);
+             Log(L"log level: {} (lines up to it are written)", LevelName(CurrentLevel()));
+             return control::Outcome{true, std::wstring(L"log level ") + LevelName(CurrentLevel())};
+         },
+         .get = [] { return control::Value{std::wstring(LevelWord(CurrentLevel()))}; }});
+}
+
+#endif
 
 }  // namespace lss::platform

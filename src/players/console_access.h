@@ -5,8 +5,14 @@
 // from a command, so callers read back what they changed. The backing of the held console settings
 // (players/held_setting.h over players/split_screen_settings.h). Game thread.
 
+#include "platform/dev_switch.h"
+
 #include <cstdint>
 #include <optional>
+
+#if LSS_DEV
+#include <functional>
+#endif
 
 namespace lss::players::console {
 
@@ -25,5 +31,11 @@ bool SetVariableInt(const wchar_t* variable, std::int32_t value) noexcept;
 /// path as a command typed into the game's console. Returns false if it could not be called; the
 /// engine reports no result, so callers read back what they changed.
 bool Execute(const wchar_t* command) noexcept;
+
+#if LSS_DEV
+/// The `console` and `quit` commands. `playerTwoIn` tells quit whether player 2 is still in (it refuses then); a
+/// function rather than the session, which sits above this layer. The watch-only start registers these alone.
+void RegisterCommands(std::function<bool()> playerTwoIn);
+#endif
 
 }  // namespace lss::players::console

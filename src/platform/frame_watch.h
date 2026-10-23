@@ -11,6 +11,8 @@
 // threads' CPU time, the census): one window, one clock.
 // Solo and split are both watched, so they can be compared.
 
+#include "platform/dev_switch.h"
+
 #include <cstddef>
 #include <cstdint>
 
@@ -80,5 +82,10 @@ void OnFrameStart() noexcept;
 
 /// Frames started since the mod loaded (OnFrameStart's count; game thread).
 std::uint64_t FrameIndex() noexcept;
+
+#if LSS_DEV
+/// The `perf-log` command and reading.
+void RegisterCommands();
+#endif
 
 }  // namespace lss::platform::frame_watch

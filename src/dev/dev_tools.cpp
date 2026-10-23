@@ -1,7 +1,6 @@
 #include "dev/dev_tools.h"
 
 #include "control/command_channel.h"
-#include "control/mod_commands.h"
 #include "control/stick_holds.h"
 #include "hud/hud_trace.h"
 #include "hud/minimap/label_relayouts.h"
@@ -34,8 +33,7 @@ control::CommandChannel            g_channel;
 
 }  // namespace
 
-void Install(const platform::GameImage& image, player_two::Session& session, players::SplitLayout& layout,
-             players::SingleView& singleView) noexcept
+void Install(const platform::GameImage& image, player_two::Session& session) noexcept
 {
     // The HUD trace and the position probe are installed by their first command (control/mod_commands.cpp), not here:
     // their call redirects sit on the HUD's hot path and nearly every dev start never asks for them.
@@ -62,15 +60,14 @@ void Install(const platform::GameImage& image, player_two::Session& session, pla
             renderer::LogSubmissionCensus();  // the census's summary of the perf log's window
         }
     });
-    InstallControl(session, layout, singleView);
+    InstallControl(session);
 }
 
-void InstallControl(player_two::Session& session, players::SplitLayout& layout,
-                    players::SingleView& singleView) noexcept
+void InstallControl(player_two::Session& session) noexcept
 {
-    // Control scripts drive the same actions as the keys, from files (control/command_channel.h). Every command is
-    // registered before the channel opens, which logs the registry's refusals.
-    control::RegisterModCommands(session, layout, singleView);
+    // Control scripts drive the same actions as the keys, from files (control/command_channel.h). The commands are
+    // registered by then (mod.cpp: modules::RegisterCommands, or the console's alone in the watch-only start); the
+    // channel logs the registry's refusals as it opens.
     g_holds.emplace(session);
     g_channel.Open(*g_holds);
 }

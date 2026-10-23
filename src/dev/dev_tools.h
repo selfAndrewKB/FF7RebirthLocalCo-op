@@ -21,23 +21,17 @@ namespace lss::player_two {
 class Session;
 }
 
-namespace lss::players {
-class SingleView;
-class SplitLayout;
-}
-
 namespace lss::dev {
 
 #if LSS_DEV
 
 /// Installs the watches and opens the control channel (the HUD trace and probe install on their first command).
-void Install(const platform::GameImage& image, player_two::Session& session, players::SplitLayout& layout,
-             players::SingleView& singleView) noexcept;
+void Install(const platform::GameImage& image, player_two::Session& session) noexcept;
 void Remove() noexcept;
 
-/// Opens the control channel alone: no engine redirects (the watch-only start uses it to be quit).
-void InstallControl(player_two::Session& session, players::SplitLayout& layout,
-                    players::SingleView& singleView) noexcept;
+/// Opens the control channel on the commands registered so far: no engine redirects (the watch-only start uses it,
+/// with the console's commands alone, to be quit).
+void InstallControl(player_two::Session& session) noexcept;
 
 /// Game thread, once per engine tick: a control script's next step, before the session's tick.
 void TickBeforeSession() noexcept;
@@ -50,10 +44,9 @@ void TickWatches(bool splitShown) noexcept;
 
 #else
 
-inline void Install(const platform::GameImage&, player_two::Session&, players::SplitLayout&,
-                    players::SingleView&) noexcept {}
+inline void Install(const platform::GameImage&, player_two::Session&) noexcept {}
 inline void Remove() noexcept {}
-inline void InstallControl(player_two::Session&, players::SplitLayout&, players::SingleView&) noexcept {}
+inline void InstallControl(player_two::Session&) noexcept {}
 inline void TickBeforeSession() noexcept {}
 inline void TickAfterSession() noexcept {}
 inline void TickWatches(bool) noexcept {}

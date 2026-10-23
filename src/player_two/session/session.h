@@ -39,6 +39,7 @@
 #include "player_two/session/leave_sequence.h"
 #include "player_two/session/outside_join.h"
 #include "player_two/session/party_member.h"
+#include "platform/dev_switch.h"
 #include "players/local_players.h"
 
 #include <chrono>
@@ -194,5 +195,11 @@ private:
         bool partyEvents    = false;
     } installed_;
 };
+
+#if LSS_DEV
+/// The session's control commands: join, sticks, p2.log-status and the readings p2.in and p2.state (out, awaiting,
+/// in, playing). The leave is the module table's (modules.h: it takes the third view first). Before the channel opens.
+void RegisterCommands(Session& session);
+#endif
 
 }  // namespace lss::player_two
