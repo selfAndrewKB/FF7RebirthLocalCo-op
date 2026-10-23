@@ -72,7 +72,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.88.0";  // phase 6 of the 2026-10 cleanup: the splits (moves, not rewrites)
+constexpr const wchar_t* kVersion = L"0.89.0";  // phase 7 of the 2026-10 cleanup: the wiring (the programme's last)
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
