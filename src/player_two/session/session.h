@@ -198,7 +198,7 @@ private:
 
 #if LSS_DEV
 /// The session's control commands: join, sticks, p2.log-status and the readings p2.in and p2.state (out, awaiting,
-/// in, playing). The leave is the module table's (modules.h: it takes the third view first). Before the channel opens.
+/// in, playing). The leave is the module table's (modules.h: it takes the third view first). Before the console opens.
 void RegisterCommands(Session& session);
 #endif
 

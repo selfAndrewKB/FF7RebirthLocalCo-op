@@ -6,20 +6,33 @@
     python tools/remote.py run script.txt           send a file line by line, stopping at the first failure
     python tools/remote.py status                   every readable value (exit 2 if the mod is not listening)
 
+    --timeout S        the longest wait for any one reply (default 120; a script's longest `wait` needs more)
+    --connect-wait S   keep trying to connect for S seconds (the game starting up); default: one try
+
+Exit status: 0 every line ok, 1 a line failed or was rejected (or the connection ended), 2 no reply within the timeout
+or the mod not listening.
+
 The mod listens on 127.0.0.1:4419 (src/control/remote.h): one command per line, UTF-8; every reply is one line
 starting with ok, failed, rejected, dropped, value, help or note (src/control/runner.h). `help` lists the commands
-the running build registered. Blank lines and # comments in a script are not sent.
+the running build registered. Blank lines and # comments in a script are not sent. A script is one client: its
+queue, waits and holds are its own, and when it ends (the connection closes) anything it still holds is released, so
+a script waits out its holds (`hold ... 180` then `wait 200`). `abort` drops every client's queue, so a script may not
+carry one (`run` refuses the file); it is the shell's, typed while something runs.
 
 Taken from Remake's tools/game.py (2026-10-23), its console part only: launching, quitting and deploying stay with
 tools/regression. Changed: the port (Remake's 4418 plus one, so both games' consoles can listen at once); `run`
 reads a UTF-8 file with or without a byte-order mark; the shell skips # lines (the mod never answers a comment, so
 Remake's shell waited out its timeout) and Ctrl+C at an empty prompt aborts nothing; a lost connection is reported,
-not a traceback.
+not a traceback. It replaces the file inbox's tools/control.py (the inbox retired with the harness's move, phase 8 of
+the cleanup). As the inbox did, `run` checks a script before any line runs, but by its commands' names only (against
+the running build's `help`): a bad argument still stops the script at its line. `run` sends the comments and blank
+lines too (the mod numbers them and never answers), so a reply's line number is the script's file line.
 """
 import argparse
 import pathlib
 import socket
 import sys
+import time
 
 HOST, PORT = "127.0.0.1", 4419
 
@@ -88,11 +101,16 @@ class Console:
                 return out
 
 
-def connect(timeout: float = 120.0) -> Console:
-    try:
-        return Console(timeout)
-    except OSError:
-        sys.exit(f"the mod is not listening on {HOST}:{PORT} (is the game running with a dev build of the mod?)")
+def connect(timeout: float = 120.0, wait: float = 0.0) -> Console:
+    deadline = time.monotonic() + wait
+    while True:
+        try:
+            return Console(timeout)
+        except OSError:
+            if time.monotonic() >= deadline:
+                print(f"the mod is not listening on {HOST}:{PORT} (is the game running with a dev build of the mod?)")
+                sys.exit(2)
+            time.sleep(1.0)
 
 
 def cmd_shell(args) -> int:
@@ -133,23 +151,48 @@ def cmd_shell(args) -> int:
     return 0
 
 
-def run_lines(lines, stop_on_failure: bool) -> int:
-    console = connect()
-    ok = True
+# The script words the runner itself answers (control/script.h); every other first word is a registered command.
+SCRIPT_WORDS = {"get", "status", "help", "wait", "wait-until", "hold", "note"}
+
+
+def unknown_lines(lines, timeout: float, wait: float) -> list:
+    """The lines whose first word the running build does not know, as (file line, word); asked on a connection of its
+    own, so the script's line numbers start at 1."""
+    console = connect(timeout, wait)
+    try:
+        known = set(console.names()) | SCRIPT_WORDS
+    finally:
+        console.close()
+    out = []
+    for number, line in enumerate(lines, 1):
+        words = line.split()
+        if words and not words[0].startswith("#") and words[0] not in known:
+            out.append((number, words[0]))
+    return out
+
+
+def run_lines(lines, stop_on_failure: bool, timeout: float, wait: float) -> int:
+    console = connect(timeout, wait)
+    code = 0
     try:
         for line in lines:
             line = line.strip()
             if not line or line.startswith("#"):
+                console.send(line)  # numbered by the mod, never answered: the replies keep the file's line numbers
                 continue
             if not console.command(line):
-                ok = False
+                code = 1
                 if stop_on_failure:
                     break
-    except (ConnectionError, socket.timeout) as error:
+    except socket.timeout:
+        print(f"no reply within {timeout:.0f} s")
+        code = 2
+    except ConnectionError as error:
         print(f"the connection ended: {error}")
-        ok = False
-    console.close()
-    return 0 if ok else 1
+        code = 1
+    finally:
+        console.close()
+    return code
 
 
 def cmd_status(args) -> int:
@@ -172,18 +215,35 @@ def cmd_status(args) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("-c", dest="command", action="append", help="a line to send (repeatable)")
+    parser.add_argument("--timeout", type=float, default=120.0, help="the longest wait for any one reply, seconds")
+    parser.add_argument("--connect-wait", type=float, default=0.0, help="keep trying to connect this long, seconds")
     sub = parser.add_subparsers(dest="verb")
     sub.add_parser("shell")
     sub.add_parser("run").add_argument("script")
     sub.add_parser("status")
     args = parser.parse_args()
     if args.command:
-        return run_lines(args.command, stop_on_failure=True)
+        return run_lines(args.command, True, args.timeout, args.connect_wait)
     if args.verb == "shell":
         return cmd_shell(args)
     if args.verb == "run":
-        text = pathlib.Path(args.script).read_text(encoding="utf-8-sig")
-        return run_lines(text.splitlines(), stop_on_failure=True)
+        lines = pathlib.Path(args.script).read_text(encoding="utf-8-sig").splitlines()
+        aborts = [n for n, line in enumerate(lines, 1) if line.split()[:1] == ["abort"]]
+        if aborts:
+            print(f"line {aborts[0]}: abort is the shell's (it drops every client's queue); a script stops at its "
+                  "first failure")
+            return 1
+        try:
+            unknown = unknown_lines(lines, args.timeout, args.connect_wait)
+        except (ConnectionError, socket.timeout) as error:
+            print(f"the connection ended: {error}")
+            return 1
+        if unknown:
+            for number, word in unknown:
+                print(f"line {number}: unknown command '{word}'")
+            print("nothing ran")
+            return 1
+        return run_lines(lines, True, args.timeout, args.connect_wait)
     if args.verb == "status":
         return cmd_status(args)
     parser.print_help()

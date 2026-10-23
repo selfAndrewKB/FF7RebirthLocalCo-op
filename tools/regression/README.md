@@ -19,22 +19,23 @@ Each script is a control script (`src/control/script.h`) whose comments carry it
 
 ```
 # expect: <regex>        at least one line of the script's log slice matches
-# expect-dev: <regex>    the same, checked on the dev build only (a line of the dev tools, e.g. the control channel)
+# expect-dev: <regex>    the same, checked on the dev build only (a line of the dev tools, e.g. the console's)
 # expect-not: <regex>    no line matches
 # scope: log             the checks run over the whole log of this launch (the startup script)
-# needs: control         runs only through the control channel; skipped on the key route
-# timeout: <seconds>     how long to wait for the script's result (300 by default)
+# needs: control         runs only through the console; skipped on the key route
+# timeout: <seconds>     the longest wait for any one of the script's replies (300 by default)
 ```
 
-Every script also gets three checks: no "raised an exception", no "check failed:", no command channel stop. A script
+Every script also gets three checks: no "raised an exception", no "check failed:", no console stop. A script
 must leave player 2 out; the harness quits the game at the end (through the mod, or by its window on the key route)
 and keeps the log under `ue4ss/logs/`.
 
 Two routes drive the mod behind one interface in `run.py`:
 
-- **Control** (the dev build): the file inbox through `tools/control.py`; every command, every `wait-until` answered by
-  the session itself. The control port's switch to TCP changes this class only.
-- **Keys** (the release build, which has no control channel): `join`, `leave`, `layout`, `bars`, `own-camera`, `sticks`
+- **Control** (the dev build): the console on 127.0.0.1:4419 through `tools/remote.py`, each script one client; every
+  command, every `wait-until` answered by the session itself. The console logs an action's reply as `control: to
+  console client <n>: ok <line> <command> -- <detail>`, the form the dev expectations match.
+- **Keys** (the release build, which has no console): `join`, `leave`, `layout`, `bars`, `own-camera`, `sticks`
   and `third-view` are pressed as the mod's hotkeys through `tools/keys.ps1` (a switch is pressed only when the state
   asked for differs from the one held, starting from the mod's start-up states); `wait` sleeps the ticks at 60 fps;
   `wait-until p2.state == playing`, `p2.in == off` and `field.ready == on` watch the log for the mod's own lines (the

@@ -47,7 +47,7 @@ constexpr float kShadowFar        = 0.0f;   // no static-shadow streaming around
 AddViewSlaveLocationFn g_add       = nullptr;
 bool                   g_installed = false;
 
-// Game thread (the control channel that sets the mode also runs there).
+// Game thread (the console that sets the mode also runs there).
 StreamViewsMode g_mode       = StreamViewsMode::Both;
 StreamViewsMode g_loggedMode  = StreamViewsMode::Off;
 bool            g_active      = false;  // cameras were registered on the last update

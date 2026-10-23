@@ -6,7 +6,7 @@ comes back to (almost) the same heading, so a scene that kept its detail matches
 
     python tools/spin_return.py --out DIR --player 2 [--ticks 40] [--rate 1] [--frames 40] [--layout top-bottom]
 
-Needs the mod's command channel (tools/control.py), per-pad sticks, and player 2 in. Writes
+Needs the mod's console (tools/remote.py), per-pad sticks, and player 2 in. Writes
 DIR/reference.png, DIR/after-NN.png (a few), DIR/diff-first.png (where the first frame after the return
 differs, brighter = more) and DIR/result.json with each half's mean difference per frame.
 """
@@ -26,10 +26,10 @@ TOOLS = Path(__file__).resolve().parent
 
 
 def run_control(*commands):
-    args = [sys.executable, str(TOOLS / 'control.py')]
+    args = [sys.executable, str(TOOLS / 'remote.py'), '--timeout', '60']
     for command in commands:
         args += ['-c', command]
-    result = subprocess.run(args + ['--timeout', '60'], capture_output=True, text=True)
+    result = subprocess.run(args, capture_output=True, text=True)
     if result.returncode != 0:
         raise SystemExit(result.stdout + result.stderr)
 

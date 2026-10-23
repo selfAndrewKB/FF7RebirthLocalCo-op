@@ -209,7 +209,7 @@ target_include_directories(LocalSplitScreen PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}
 target_compile_features(LocalSplitScreen PRIVATE cxx_std_20)
 target_link_libraries(LocalSplitScreen PUBLIC UE4SS)
 
-# Development tools (src/dev/dev_tools.h): the control-script channel, the HUD trace, the position
+# Development tools (src/dev/dev_tools.h): the console, the HUD trace, the position
 # probe, the dump commands, and the watches that only log (installed and ticked by dev_tools.cpp; a
 # header a shipped module includes carries empty stubs for the build without them). Off for a player's
 # build: -DLSS_DEV_TOOLS=OFF.
@@ -217,7 +217,6 @@ option(LSS_DEV_TOOLS "Build the development tools into the mod" ON)
 if(LSS_DEV_TOOLS)
     target_sources(LocalSplitScreen PRIVATE
         src/dev/dev_tools.cpp
-        src/control/command_channel.cpp
         src/control/remote.cpp
         src/platform/command_registry.cpp
         src/control/runner.cpp

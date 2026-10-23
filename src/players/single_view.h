@@ -33,7 +33,7 @@ struct SplitSwitchAccess
 enum class SingleViewMode : std::uint8_t
 {
     Auto,    // single while the game shows something that takes the whole screen (the default)
-    Single,  // always single while player 2 is in (development: the command channel)
+    Single,  // always single while player 2 is in (development: the console)
     Split,   // never single (development)
 };
 

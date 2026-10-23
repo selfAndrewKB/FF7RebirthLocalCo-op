@@ -12,8 +12,7 @@
 // holds, so a later player on the same pad never inherits one. `abort` does that for every client. Two clients
 // acting on the game at once interleave by tick.
 //
-// Every reply is structured (Reply), so each front end writes it its own way: the file inbox in its result-file
-// lines (control/command_channel.h), the console in one line per reply (ConsoleText):
+// Every reply is structured (Reply); the console (control/remote.h) writes each as one line (ConsoleText):
 //   ok <n> <command> [-- <detail>]      the client's n-th line completed (a wait: when it ended)
 //   failed <n> <command> -- <reason>
 //   rejected <n> <line> -- <reason>     the line did not parse; nothing ran

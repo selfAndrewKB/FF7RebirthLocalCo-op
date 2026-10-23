@@ -67,9 +67,9 @@ void Install(const platform::GameImage& image, player_two::Session& session) noe
 
 void InstallControl(player_two::Session& session) noexcept
 {
-    // The console and the file inbox drive the same actions as the keys (control/remote.h). The commands are
-    // registered by then (mod.cpp: modules::RegisterCommands, or the console's alone in the watch-only start); the
-    // console logs the registry's refusals as it opens.
+    // The console drives the same actions as the keys (control/remote.h). The commands are registered by then
+    // (mod.cpp: modules::RegisterCommands, or the console's alone in the watch-only start); the console logs the
+    // registry's refusals as it opens.
     g_holds.emplace(session);
     g_remote.Open(*g_holds);
 }

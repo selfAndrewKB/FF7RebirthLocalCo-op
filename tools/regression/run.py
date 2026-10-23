@@ -13,18 +13,19 @@ Every script in tools/regression/scripts/ is a control script (src/control/scrip
     # expect-dev: <regex>    the same, checked on the dev build only (a line of the dev tools)
     # expect-not: <regex>    no line matches
     # scope: log             the checks run over the whole log of this launch (the startup script)
-    # needs: control         the script runs only through the control channel (the dev build): it is skipped on
-                             the key route (the release build, which has no control channel)
-    # timeout: <seconds>     how long to wait for the script's result (300 by default)
-plus three checks every script gets: no "raised an exception", no "check failed:", no command channel stop. A script
+    # needs: control         the script runs only through the console (the dev build): it is skipped on the key
+                             route (the release build, which has no console)
+    # timeout: <seconds>     the longest wait for any one of the script's replies (300 by default)
+plus three checks every script gets: no "raised an exception", no "check failed:", no console stop. A script
 must leave player 2 out (the next one joins afresh; the last one is followed by `quit`).
 
 The report goes to tools/regression/out/<stamp>-<version>-<build>.md; the baseline kept under version control is
 tools/regression/baseline/<version>-<build>.md (copied there by hand after the run that defines it).
 
-Two routes drive the mod behind one interface (run_file, wait_until): Control is the file inbox through
-tools/control.py (the dev build); Keys presses the mod's hotkeys through tools/keys.ps1 and waits on the mod's own
-log lines (the release build). The control port's switch to TCP changes Control only.
+Two routes drive the mod behind one interface (run_file, wait_until): Control is the console on 127.0.0.1:4419
+through tools/remote.py (the dev build; each script one client); Keys presses the mod's hotkeys through
+tools/keys.ps1 and waits on the mod's own log lines (the release build). The console logs each reply of an action
+as `control: to console client <n>: ok <line> <command> -- <detail>`, which the dev expectations match.
 """
 import argparse
 import datetime as dt
@@ -55,7 +56,7 @@ BUILDS = {
     "dev": ROOT / "build" / "Game__Shipping__Win64" / "LocalSplitScreen.dll",
     "release": ROOT / "build-release" / "Game__Shipping__Win64" / "LocalSplitScreen.dll",
 }
-ALWAYS_EXPECT_NOT = [r"raised an exception", r"check failed:", r"an exception stopped the (command channel|console)"]
+ALWAYS_EXPECT_NOT = [r"raised an exception", r"check failed:", r"an exception stopped the console"]
 
 # The harness's three waits as the mod's readings compare them (p2.state and p2.in: src/player_two/session/session.cpp;
 # field.ready: src/modules.cpp): the control route sends the comparison, the key route maps a script's comparison back
@@ -88,7 +89,7 @@ def game_running() -> bool:
 
 
 def close_game_window(wait_seconds: float = 180) -> bool:
-    """A release build has no control channel: WM_CLOSE to the game window, as a player's close. Never a kill."""
+    """A release build has no console: WM_CLOSE to the game window, as a player's close. Never a kill."""
     subprocess.run(["pwsh", "-NoProfile", "-Command",
                     "Get-Process ff7rebirth_ -ErrorAction SilentlyContinue | ForEach-Object { [void]$_.CloseMainWindow() }"],
                    capture_output=True, text=True)
@@ -126,26 +127,30 @@ class Log:
 
 
 class Control:
-    """The control channel: the file inbox through tools/control.py (the dev build)."""
+    """The console through tools/remote.py (the dev build): a script is one client, its replies its output."""
 
     name = "control"
 
+    # The console opens with the dev tools at start-up; a first connection right after the ready line may come early.
+    CONNECT_WAIT_S = 60
+
     def __init__(self, game: pathlib.Path):
-        self.mod = mod_dir(game)
         self.log = Log(log_path(game))  # read by reach_the_field only: the field lines tell a menu from a popup
 
-    def run_file(self, script: pathlib.Path, timeout: float) -> tuple[int, str]:
-        proc = subprocess.run([sys.executable, str(TOOLS / "control.py"), str(script), "--mod", str(self.mod),
-                               "--timeout", str(timeout)], capture_output=True, text=True, encoding="utf-8", errors="replace")
+    def remote(self, *args: str, timeout: float) -> tuple[int, str]:
+        proc = subprocess.run([sys.executable, str(TOOLS / "remote.py"), "--timeout", str(timeout), "--connect-wait",
+                               str(self.CONNECT_WAIT_S), *args], capture_output=True, text=True, encoding="utf-8",
+                              errors="replace")
         return proc.returncode, proc.stdout + proc.stderr
+
+    def run_file(self, script: pathlib.Path, timeout: float) -> tuple[int, str]:
+        return self.remote("run", str(script), timeout=timeout)
 
     def run(self, *commands: str, timeout: float = 120) -> tuple[int, str]:
         args = []
         for command in commands:
             args += ["-c", command]
-        proc = subprocess.run([sys.executable, str(TOOLS / "control.py"), *args, "--mod", str(self.mod), "--timeout",
-                               str(timeout)], capture_output=True, text=True, encoding="utf-8", errors="replace")
-        return proc.returncode, proc.stdout + proc.stderr
+        return self.remote(*args, timeout=timeout)
 
     def wait_until(self, what: str, ticks: int) -> tuple[bool, str]:
         code, out = self.run(f"wait-until {CONDITIONS[what]} {ticks}", timeout=ticks * SECONDS_PER_TICK + 60)

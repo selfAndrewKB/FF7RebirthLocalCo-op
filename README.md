@@ -33,8 +33,8 @@ needs a key.
 
 With the development tools built in, control commands switch the rest for diagnosis, e.g. `hud-band off`,
 `hud-image off`, `hud-levers off`, `leak-fixes 0` (`help` lists them all, each with its reading): typed in the console
-(`python tools/remote.py shell`, 127.0.0.1:4419), sent with `-c` or `run <file>`, or as script files through
-`tools/control.py` (`src/control/script.h` has the language).
+(`python tools/remote.py shell`, 127.0.0.1:4419) or sent with `-c` or `run <file>` (`src/control/script.h` has the
+language).
 
 ## Performance
 
@@ -71,8 +71,8 @@ src/
                  (prompt rows, markers, pins), battle/ (targets, gauges, popups); the roots, the live widgets, the
                  pure rules and the dev dumps at the root
   renderer/      one view family per player, and the renderer's performance levers
-  control/       the control-script channel (built with the dev tools)
-  dev/           the dev tools: the control channel's install, the watches' install and ticks
+  control/       the console: the command language, the runner and the socket (built with the dev tools)
+  dev/           the dev tools: the console's install, the watches' install and ticks
 tests/           host-side tests of the logic that needs neither the game nor UE4SS
 tools/           the control scripts, the regression harness, the version match
 ```

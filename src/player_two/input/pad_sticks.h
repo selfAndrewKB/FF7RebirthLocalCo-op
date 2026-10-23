@@ -83,7 +83,7 @@ std::int32_t ControllerIdOf(const void* controller) noexcept;
 
 /// Replaces pad `controllerId`'s sticks with `sticks` in every StickScope for that pad, whatever the
 /// pad itself reports and whether or not the game window has focus; null puts the pad back. Used by
-/// control scripts (control/command_channel.h). Game thread only.
+/// control scripts (control/remote.h). Game thread only.
 void SetStickOverride(std::int32_t controllerId, const Sticks* sticks) noexcept;
 
 class StickScope

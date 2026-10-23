@@ -3,7 +3,7 @@
 # expect: \[LocalSplitScreen\] v\d+\.\d+\.\d+\S* starting
 # expect: ready: every engine check passed
 # expect: game version 1\.00[45]
-# expect-dev: command channel open
+# expect-dev: console listening on 127\.0\.0\.1:4419
 # expect-not: standing aside: nothing installed
 # expect-not: not what the research read(?!\): none)
 #   "(the code is not what the research read): none" is the interact watch's all-clear; a site named after the colon is

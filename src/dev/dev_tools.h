@@ -1,6 +1,6 @@
 #pragma once
 
-// The development tools, behind one switch: the control-script channel (control/), the HUD trace (hud/hud_trace.h),
+// The development tools, behind one switch: the console (control/), the HUD trace (hud/hud_trace.h),
 // the position probe (hud/position_probe.h), the dump commands, and the watches that only log: the rumble, ride,
 // Wheelie, framing, character-detail and hand-over watches, the menu focus, the tag counts, the label relayouts and
 // the GPU submission census. They exist to observe the game and to drive it without keys; a player needs none of them.
@@ -25,11 +25,11 @@ namespace lss::dev {
 
 #if LSS_DEV
 
-/// Installs the watches and opens the control channel (the HUD trace and probe install on their first command).
+/// Installs the watches and opens the console (the HUD trace and probe install on their first command).
 void Install(const platform::GameImage& image, player_two::Session& session) noexcept;
 void Remove() noexcept;
 
-/// Opens the control channel on the commands registered so far: no engine redirects (the watch-only start uses it,
+/// Opens the console on the commands registered so far: no engine redirects (the watch-only start uses it,
 /// with the console's commands alone, to be quit).
 void InstallControl(player_two::Session& session) noexcept;
 

@@ -32,17 +32,25 @@ $ErrorActionPreference = 'Stop'
 $gameDir = $GameDir
 $modDir  = "$gameDir\ue4ss\Mods\LocalSplitScreen"
 $log     = "$gameDir\ue4ss\UE4SS.log"
-$control = "$PSScriptRoot\control.py"
+# The mod's console (a dev build) on 127.0.0.1:4419: one per machine, so one game at a time (the 1.004 copy and the
+# live game would share the port; the second's console never opens).
+$remote  = "$PSScriptRoot\remote.py"
 
 $game = Get-Process ff7rebirth_ -ErrorAction SilentlyContinue
 if ($game) {
-    $status = python $control --mod $modDir -c 'get p2.in' --timeout 20
-    if ($status -match 'value p2\.in off') {
-        'player 2 is out'
+    $status = python $remote --timeout 20 -c 'get p2.in'
+    if ($LASTEXITCODE -eq 2) {
+        # No console answers (a release build): closed by its window, as a player's close. Never a kill.
+        'no console (a release build?): closing the game by its window'
+        [void]$game.CloseMainWindow()
     } else {
-        python $control --mod $modDir -c 'leave' -c 'wait-until p2.in == off 900' --timeout 60 | Select-Object -Last 1
+        if ($status -match 'value p2\.in off') {
+            'player 2 is out'
+        } else {
+            python $remote --timeout 60 -c 'leave' -c 'wait-until p2.in == off 900' | Select-Object -Last 1
+        }
+        python $remote --timeout 30 -c 'quit' | Select-Object -Last 1
     }
-    python $control --mod $modDir -c 'quit' --timeout 30 | Select-Object -Last 1
     if (-not $game.WaitForExit(120000)) { throw 'the game did not exit within 2 minutes; not deploying' }
     'game exited'
 }

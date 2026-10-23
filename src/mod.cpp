@@ -232,7 +232,7 @@ public:
         {
             Log(L"watch only (watch_only.txt): nothing installed except the frame-hitch watch; the game runs unmodified");
             lss::platform::frame_watch::SetDetailed(true);  // the hitch summary is this control's whole output
-            // The control channel alone (no engine redirects), so a script can still quit the game.
+            // The console alone (no engine redirects), so a script can still quit the game.
             if (const auto removeLocalPlayer = image ? VerifyEngine(*image) : std::nullopt)
             {
                 session_.emplace(*removeLocalPlayer);
@@ -282,9 +282,9 @@ public:
         session_->InstallStages(*image);
         lss::modules::Install(*image);  // every other module, in table order (modules.cpp); each logs its own line
 
-        // The dev tools (built with LSS_DEV_TOOLS only): the control channel, the HUD trace and probe, and the watches
+        // The dev tools (built with LSS_DEV_TOOLS only): the console, the HUD trace and probe, and the watches
         // that only log (dev/dev_tools.h names them); a player's build has none of them. Every control command is
-        // registered first, each owner's (modules.cpp lists them), so the channel opens on the whole table.
+        // registered first, each owner's (modules.cpp lists them), so the console opens on the whole table.
 #if LSS_DEV
         lss::modules::RegisterCommands(*session_, layout_, singleView_);
 #endif
