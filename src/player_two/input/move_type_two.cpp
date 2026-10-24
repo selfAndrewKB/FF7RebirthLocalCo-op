@@ -13,10 +13,14 @@
 
 #include <intrin.h>
 
+#include <array>
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
+#include <format>
 #include <optional>
 #include <span>
+#include <string>
 
 namespace lss::player_two::move_type_two {
 
@@ -63,22 +67,26 @@ bool                               g_phasePlaced = false;
 bool                               g_redPlaced   = false;
 ClearFn                            g_clear       = nullptr;
 
-// Written on the game thread each tick, read on any thread (compared only).
-std::atomic<const void*>   g_controllerOne{nullptr};
-std::atomic<const void*>   g_controllerTwo{nullptr};
+// By seat (index 0 player 1's where a record has one).
+using Atomics = std::array<std::atomic<int>, players::kMaxPlayers>;
 
-// Player 2's walk step: the controller its cap is on now (0 none, 1, 2). Its enter lands on player 2's controller from
-// Begin (game thread, scoped) or on player 1's from Advance (worker); its exit clears whichever controller is primary
-// then. When the two differ, the game tick clears the controller the cap is on (bit 1: player 1's, bit 2: player 2's)
-// and, for a cap on player 1's while player 2's step is live, puts it on player 2's with the game's setter.
-std::atomic<int>           g_stepOn{0};
-std::atomic<int>           g_clearFor{0};      // bits 1 << player
-std::atomic<bool>          g_moveToTwo{false};
+// Written on the game thread each tick, read on any thread (compared only): each player's controller, by seat.
+std::array<std::atomic<const void*>, players::kMaxPlayers> g_controller{};
+
+// A seat's walk step: the player number of the controller its cap is on now (0 none). Its enter lands on the seat's
+// controller from Begin (game thread, scoped) or on another's from Advance (worker: player 1's); its exit clears
+// whichever controller is primary then. When the two differ, the game tick clears the controller the cap is on and, for
+// a cap on another player's controller while the seat's step is live, puts it on the seat's own with the game's setter.
+Atomics                    g_stepOn{};       // by seat; index 0 unused
+std::atomic<int>           g_clearFor{0};    // ClearBit per player number
+Atomics                    g_moveFrom{};     // by seat: the player number a live step's cap is to move off (0 none)
 // Player 1's own walk step is live (between its enter and exit): its cap on player 1's controller is the game's own,
 // so a queued clear for player 1's controller waits for it (its exit clears it natively).
 std::atomic<bool>          g_oneStepLive{false};
 SetterFn                   g_setByte = nullptr;  // the setter's live entry (through the log when it is placed)
-int                        g_layerSeen = -1;    // game thread: player 2's controller's layer 2 last logged
+static_assert(players::kMaxPlayers == 3, "g_layerSeen's -1 initialiser names one value per player");
+std::array<int, players::kMaxPlayers> g_layerSeen{-1, -1, -1};  // game thread, by seat: its controller's layer 2 last
+                                                                 // logged
 #if LSS_DEV
 // The layer-2 write log (dev tools): the setter's entry redirected, each write logged with its caller.
 constexpr std::size_t      kSetterFirst = 5;  // mov [rsp+8], rbx
@@ -86,24 +94,33 @@ platform::EntryRedirect    g_setter;
 std::atomic<std::uint64_t> g_lastWrite{~0ull};  // the setter's last logged {caller, value, controller}
 #endif
 
+std::size_t Index(int seat) noexcept
+{
+    return static_cast<std::size_t>(seat);
+}
+
 const wchar_t* ThreadText() noexcept
 {
     return generation::OnGameThread() ? L"game" : L"worker";
 }
 
-/// 2: player 2's controller is the primary now, 1: player 1's, 0: another.
+/// The player number of the primary controller now: a seat's (its scope is open), player 1's (1), or 0 another.
 int PrimaryNow() noexcept
 {
-    if (primary_controller::Is(g_controllerTwo.load(std::memory_order_acquire)))
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        return 2;
+        if (primary_controller::Is(g_controller[Index(seat)].load(std::memory_order_acquire)))
+        {
+            return PlayerNumber(seat);
+        }
     }
-    return primary_controller::Is(g_controllerOne.load(std::memory_order_acquire)) ? 1 : 0;
+    return primary_controller::Is(g_controller[0].load(std::memory_order_acquire)) ? PlayerNumber(0) : 0;
 }
 
-const wchar_t* ControllerText(int who) noexcept
+std::wstring ControllerText(int player)
 {
-    return who == 2 ? L"player 2's controller" : who == 1 ? L"player 1's controller" : L"another controller";
+    const int seat = SeatOfPlayerNumber(player);
+    return seat >= 0 ? std::format(L"{}'s controller", players::SeatName(seat)) : std::wstring(L"another controller");
 }
 
 const wchar_t* GaitText(int value) noexcept
@@ -125,9 +142,12 @@ bool ActionOf(const void* action, std::uint64_t weak) noexcept
     return action != nullptr && weak != 0 && ReadField<std::uint64_t>(action, kActionCharacter) == weak;
 }
 
-bool PlayerTwosAction(const void* action) noexcept
+/// The built seat whose member the action's character is, or 0.
+int SeatOfAction(const void* action) noexcept
 {
-    return ActionOf(action, generation::MemberWeak());
+    const int seat = action != nullptr ? generation::SeatOfMemberWeak(ReadField<std::uint64_t>(action, kActionCharacter))
+                                       : -1;
+    return players::SeatBuilt(seat) ? seat : 0;
 }
 
 #if LSS_DEV
@@ -135,21 +155,27 @@ bool PlayerTwosAction(const void* action) noexcept
 void Setter(std::uint8_t layer, std::uint8_t value) noexcept
 {
     const auto original = reinterpret_cast<SetterFn>(g_setter.Original());
-    if (layer == 2 && generation::Active())
+    if (layer == 2 && generation::AnyActive())
     {
         const auto caller = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
         const auto where  = g_image ? g_image->ResearchAddress(caller) : caller;
         const int  who    = PrimaryNow();
         const auto key    = ((where & 0xFFFFFFFFFFull) << 16) | (std::uint64_t{value} << 8) | static_cast<std::uint64_t>(who);
-        if (g_lastWrite.exchange(key, std::memory_order_relaxed) != key)
+        try
         {
-            platform::LogDebug(L"walk cap: layer 2 := {} ({}) on {} from 0x{:X} ({} thread)", value, GaitText(value),
-                               ControllerText(who), where, ThreadText());
+            if (g_lastWrite.exchange(key, std::memory_order_relaxed) != key)
+            {
+                platform::LogDebug(L"walk cap: layer 2 := {} ({}) on {} from 0x{:X} ({} thread)", value, GaitText(value),
+                                   ControllerText(who), where, ThreadText());
+            }
+            else
+            {
+                platform::LogTrace(L"walk cap: layer 2 := {} on {} from 0x{:X} ({} thread)", value, ControllerText(who),
+                                   where, ThreadText());
+            }
         }
-        else
+        catch (...)
         {
-            platform::LogTrace(L"walk cap: layer 2 := {} on {} from 0x{:X} ({} thread)", value, ControllerText(who),
-                               where, ThreadText());
         }
     }
     original(layer, value);
@@ -175,13 +201,19 @@ const wchar_t* InstallWriteLog(const platform::GameImage&) noexcept { return L"o
 bool           RemoveWriteLog() noexcept { return false; }
 #endif
 
-/// Player 2's action ended its walk cap on another controller than the cap is on: that one's clear follows.
-void AskClear(const wchar_t* what, int capOn, int clearedOn) noexcept
+/// A seat's action ended its walk cap on another controller than the cap is on: that one's clear follows.
+void AskClear(int seat, const wchar_t* what, int capOn, int clearedOn) noexcept
 {
-    g_clearFor.fetch_or(1 << capOn, std::memory_order_acq_rel);
-    platform::LogDebug(L"walk cap: player 2's {} ends on the {} thread; the game's clear went to {}, the cap is on {}: "
-                       L"its clear follows on the next game tick",
-                       what, ThreadText(), ControllerText(clearedOn), ControllerText(capOn));
+    g_clearFor.fetch_or(ClearBit(capOn), std::memory_order_acq_rel);
+    try
+    {
+        platform::LogDebug(L"walk cap: {}'s {} ends on the {} thread; the game's clear went to {}, the cap is on {}: "
+                           L"its clear follows on the next game tick",
+                           players::SeatName(seat), what, ThreadText(), ControllerText(clearedOn), ControllerText(capOn));
+    }
+    catch (...)
+    {
+    }
 }
 
 /// The walk step's phase-4 handler (game thread at Begin, anim worker at Tick and End).
@@ -208,37 +240,54 @@ std::uintptr_t PhaseFour(void* move, std::uint32_t event, float dt, std::uintptr
         }
         return result;
     }
-    if (!PlayerTwosAction(move))
+    const int seat = SeatOfAction(move);
+    if (seat == 0)
     {
         return original(move, event, dt, fourth);
     }
     const int who = PrimaryNow();  // the primary does not change inside the call
+    const int own = PlayerNumber(seat);
     if (code == kPhaseEnter)
     {
-        g_stepOn.store(who, std::memory_order_release);
+        g_stepOn[Index(seat)].store(who, std::memory_order_release);
         if (who != 0)
         {
             // This step's cap is the live one now: a clear still queued for that controller would end it early.
-            g_clearFor.fetch_and(~(1 << who), std::memory_order_acq_rel);
+            g_clearFor.fetch_and(~ClearBit(who), std::memory_order_acq_rel);
         }
         const auto result = original(move, event, dt, fourth);
-        if (who == 1)  // after the write: the move clears player 1's controller
+        const bool moves  = who != 0 && who != own;
+        if (moves)  // after the write: the move clears the controller the cap went to
         {
-            g_moveToTwo.store(true, std::memory_order_release);
+            g_moveFrom[Index(seat)].store(who, std::memory_order_release);
         }
-        platform::LogDebug(L"walk cap: player 2's walk step starts ({} thread): its Walk cap went to {}{}", ThreadText(),
-                           ControllerText(who), who == 1 ? L"; it moves to player 2's on the next game tick" : L"");
+        try
+        {
+            platform::LogDebug(L"walk cap: {}'s walk step starts ({} thread): its Walk cap went to {}{}",
+                               players::SeatName(seat), ThreadText(), ControllerText(who),
+                               moves ? std::format(L"; it moves to {}'s on the next game tick", players::SeatName(seat))
+                                     : std::wstring());
+        }
+        catch (...)
+        {
+        }
         return result;
     }
     const auto result = original(move, event, dt, fourth);
-    const int  on     = g_stepOn.exchange(0, std::memory_order_acq_rel);
+    const int  on     = g_stepOn[Index(seat)].exchange(0, std::memory_order_acq_rel);
     if (on != 0 && on != who)
     {
-        AskClear(L"walk step", on, who);
+        AskClear(seat, L"walk step", on, who);
         return result;
     }
-    platform::LogDebug(L"walk cap: player 2's walk step ends ({} thread): its clear went to {}", ThreadText(),
-                       ControllerText(who));
+    try
+    {
+        platform::LogDebug(L"walk cap: {}'s walk step ends ({} thread): its clear went to {}", players::SeatName(seat),
+                           ThreadText(), ControllerText(who));
+    }
+    catch (...)
+    {
+    }
     return result;
 }
 
@@ -247,12 +296,148 @@ std::uintptr_t RedDoorEnd(void* action, std::uintptr_t second) noexcept
 {
     const auto original = reinterpret_cast<EndFn>(g_redDoorEnd.Original());
     const auto result   = original(action, second);
-    const int who = PlayerTwosAction(action) ? PrimaryNow() : 2;
-    if (who != 2)
+    const int  seat     = SeatOfAction(action);
+    if (seat == 0)
     {
-        AskClear(L"chain door", 2, who);  // its Begin runs on the game thread, in player 2's scope
+        return result;
+    }
+    const int own = PlayerNumber(seat);
+    const int who = PrimaryNow();
+    if (who != own)
+    {
+        AskClear(seat, L"chain door", own, who);  // its Begin runs on the game thread, in the seat's scope
     }
     return result;
+}
+
+/// A seat whose player is out: a cap of its step still on player 1's controller is cleared now (no exit of the seat's
+/// would clear it any more; only while that controller is the live primary), a cap on another seat's controller is
+/// queued for that seat's clear, and the seat's own records are reset.
+void SeatOut(int seat) noexcept
+{
+    const int  on        = g_stepOn[Index(seat)].load(std::memory_order_acquire);
+    const int  from      = g_moveFrom[Index(seat)].load(std::memory_order_acquire);
+    const bool oneCapped = (g_clearFor.load(std::memory_order_acquire) & ClearBit(1)) != 0 || on == 1 || from == 1;
+    const void* one      = g_controller[0].load(std::memory_order_acquire);  // the last active tick's
+    if (oneCapped && !g_oneStepLive.load(std::memory_order_acquire) && g_clear != nullptr && one != nullptr &&
+        primary_controller::Is(one) && ReadField<std::uint8_t>(one, kLayerTwo) != kLayerEmpty)
+    {
+        const int before = ReadField<std::uint8_t>(one, kLayerTwo);
+        if (platform::CallGuarded(g_clear))
+        {
+            platform::LogDebug(L"walk cap: {} left with their walk step's cap on player 1's controller; the "
+                               L"game's layer-2 clear ran on it: {} -> {}",
+                               players::SeatName(seat), GaitText(before), GaitText(ReadField<std::uint8_t>(one, kLayerTwo)));
+        }
+    }
+    for (const int other : {on, from})
+    {
+        if (other >= 2 && other != PlayerNumber(seat))
+        {
+            g_clearFor.fetch_or(ClearBit(other), std::memory_order_acq_rel);  // another seat's controller: its clear
+        }
+    }
+    g_controller[Index(seat)].store(nullptr, std::memory_order_release);
+    g_stepOn[Index(seat)].store(0, std::memory_order_release);
+    g_moveFrom[Index(seat)].store(0, std::memory_order_release);
+    g_clearFor.fetch_and(~ClearBit(PlayerNumber(seat)), std::memory_order_acq_rel);  // its controller goes with it
+    g_layerSeen[Index(seat)] = -1;
+}
+
+/// A seat's step capped another player's controller: that one is cleared, and the seat's step, if still live, gets its
+/// cap on the seat's own controller.
+void MoveCap(int seat) noexcept
+{
+    const int from = g_moveFrom[Index(seat)].exchange(0, std::memory_order_acq_rel);
+    if (from == 0)
+    {
+        return;
+    }
+    g_clearFor.fetch_or(ClearBit(from), std::memory_order_acq_rel);  // a seat's step never caps another's controller
+    if (g_setByte == nullptr || g_stepOn[Index(seat)].load(std::memory_order_acquire) != from)
+    {
+        return;
+    }
+    bool set = false;
+    {
+        const primary_controller::Scope scope(seat);
+        set = scope.Held() && platform::CallGuarded(g_setByte, std::uint8_t{2}, std::uint8_t{0});
+    }
+    int expected = from;
+    if (set)
+    {
+        g_stepOn[Index(seat)].compare_exchange_strong(expected, PlayerNumber(seat), std::memory_order_acq_rel);
+        platform::LogDebug(L"walk cap: {}'s live walk step's Walk cap put on {}'s controller", players::SeatName(seat),
+                           players::SeatName(seat));
+    }
+    else
+    {
+        g_moveFrom[Index(seat)].store(from, std::memory_order_release);  // a refused scope: again next tick
+        platform::Log(L"walk cap: {}'s walk step's cap could not move to {}'s controller this tick "
+                      L"(the primary scope was refused); retried next tick",
+                      players::SeatName(seat), players::SeatName(seat));
+    }
+}
+
+/// The queued clears, by player number: player 1's while player 1's controller is primary, a seat's in its scope.
+void RunClears() noexcept
+{
+    const int clearFor = g_clearFor.exchange(0, std::memory_order_acq_rel);
+    for (int player = 1; player <= PlayerNumber(players::kSeatsBuilt); ++player)
+    {
+        if ((clearFor & ClearBit(player)) == 0)
+        {
+            continue;
+        }
+        const int seat       = SeatOfPlayerNumber(player);
+        void*     controller = seat == 0                   ? generation::ControllerOf(0)
+                               : generation::Active(seat) ? generation::ControllerOf(seat)
+                                                          : nullptr;
+        const int before     = controller != nullptr ? ReadField<std::uint8_t>(controller, kLayerTwo) : kLayerEmpty;
+        if (before == kLayerEmpty)
+        {
+            platform::LogDebug(L"walk cap: player {}'s controller's layer 2 is already off; no clear needed", player);
+            continue;
+        }
+        // A live step owns this controller's cap now: player 1's own step on player 1's, or a seat's on its own. Its
+        // own exit clears it; the queued clear is dropped. Asked again right before the call (a worker's enter can land
+        // in between).
+        const auto owned = [player, seat] {
+            return seat == 0 ? g_oneStepLive.load(std::memory_order_acquire)
+                             : g_stepOn[Index(seat)].load(std::memory_order_acquire) == player;
+        };
+        bool ran     = false;
+        bool dropped = false;
+        if (seat != 0)
+        {
+            const primary_controller::Scope scope(seat);
+            dropped = owned();
+            ran     = !dropped && scope.Held() && g_clear != nullptr && platform::CallGuarded(g_clear);
+        }
+        else
+        {
+            dropped = owned();
+            ran     = !dropped && PrimaryNow() == 1 && g_clear != nullptr && platform::CallGuarded(g_clear);
+        }
+        if (dropped)
+        {
+            platform::LogDebug(L"walk cap: player {}'s controller's cap belongs to a live walk step now; the queued "
+                               L"clear is dropped (that step's exit clears it)",
+                               player);
+        }
+        else if (ran)
+        {
+            platform::LogDebug(L"walk cap: the game's layer-2 clear ran on player {}'s controller: {} -> {}", player,
+                               GaitText(before), GaitText(ReadField<std::uint8_t>(controller, kLayerTwo)));
+        }
+        else
+        {
+            g_clearFor.fetch_or(ClearBit(player), std::memory_order_acq_rel);  // again next tick
+            platform::Log(L"walk cap: player {}'s clear could not run this tick (the primary controller was not "
+                          L"theirs); retried next tick",
+                          player);
+        }
+    }
 }
 
 }  // namespace
@@ -283,8 +468,11 @@ void Remove() noexcept
     kept |= RemoveWriteLog();
     g_phasePlaced = g_redPlaced = false;
     g_clearFor.store(0, std::memory_order_release);
-    g_moveToTwo.store(false, std::memory_order_release);
-    g_stepOn.store(0, std::memory_order_release);
+    for (int seat = 0; seat < players::kMaxPlayers; ++seat)
+    {
+        g_moveFrom[Index(seat)].store(0, std::memory_order_release);
+        g_stepOn[Index(seat)].store(0, std::memory_order_release);
+    }
     g_oneStepLive.store(false, std::memory_order_release);
     if (kept)
     {
@@ -298,127 +486,54 @@ void Tick() noexcept
     {
         return;
     }
-    void* member = generation::Active() ? generation::Member() : nullptr;
-    void* two    = member != nullptr ? generation::PlayerTwoController() : nullptr;
-    if (member == nullptr || two == nullptr)
+    // Each seat out is cleaned up; each seat in has its controller published (player 1's last, below).
+    bool any = false;
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        // A cap of player 2's step still on player 1's controller when the generation ends: no exit of player 2's
-        // would clear it any more, so the game's clear runs now (only while that controller is the live primary).
-        const bool oneCapped = (g_clearFor.load(std::memory_order_acquire) & (1 << 1)) != 0 ||
-                               g_stepOn.load(std::memory_order_acquire) == 1 ||
-                               g_moveToTwo.load(std::memory_order_acquire);
-        const void* one = g_controllerOne.load(std::memory_order_acquire);  // the last active tick's
-        if (oneCapped && !g_oneStepLive.load(std::memory_order_acquire) && g_clear != nullptr && one != nullptr &&
-            primary_controller::Is(one) && ReadField<std::uint8_t>(one, kLayerTwo) != kLayerEmpty)
+        void* member = generation::Active(seat) ? generation::MemberOf(seat) : nullptr;
+        void* mine   = member != nullptr ? generation::ControllerOf(seat) : nullptr;
+        if (member == nullptr || mine == nullptr)
         {
-            const int before = ReadField<std::uint8_t>(one, kLayerTwo);
-            if (platform::CallGuarded(g_clear))
-            {
-                platform::LogDebug(L"walk cap: player 2 left with their walk step's cap on player 1's controller; the "
-                                   L"game's layer-2 clear ran on it: {} -> {}",
-                                   GaitText(before), GaitText(ReadField<std::uint8_t>(one, kLayerTwo)));
-            }
+            SeatOut(seat);
+            continue;
         }
+        any = true;
+        g_controller[Index(seat)].store(mine, std::memory_order_release);
+    }
+    if (!any)
+    {
+        // No seat's player in: player 1's step is not tracked (its pawn's weak reads 0), nothing is queued.
         g_oneStepLive.store(false, std::memory_order_release);
-        g_controllerTwo.store(nullptr, std::memory_order_release);
-        g_controllerOne.store(nullptr, std::memory_order_release);
-        g_stepOn.store(0, std::memory_order_release);
+        g_controller[0].store(nullptr, std::memory_order_release);
         g_clearFor.store(0, std::memory_order_release);
-        g_moveToTwo.store(false, std::memory_order_release);
-        g_layerSeen = -1;
         return;
     }
-    g_controllerTwo.store(two, std::memory_order_release);
-    g_controllerOne.store(generation::PlayerOneController(), std::memory_order_release);
-
-    void* one = generation::PlayerOneController();
-    // A cap of player 2's step on player 1's controller: player 1's is cleared, and player 2's step, if still live,
-    // gets its cap on player 2's controller.
-    if (g_moveToTwo.exchange(false, std::memory_order_acq_rel))
+    g_controller[0].store(generation::ControllerOf(0), std::memory_order_release);
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        g_clearFor.fetch_or(1 << 1, std::memory_order_acq_rel);  // player 2's step never caps player 1
-        if (g_setByte != nullptr && g_stepOn.load(std::memory_order_acquire) == 1)
+        if (g_controller[Index(seat)].load(std::memory_order_acquire) != nullptr)
         {
-            bool set = false;
-            {
-                const primary_controller::Scope scope(players::kPlayerTwoSeat);
-                set = scope.Held() && platform::CallGuarded(g_setByte, std::uint8_t{2}, std::uint8_t{0});
-            }
-            int expected = 1;
-            if (set)
-            {
-                g_stepOn.compare_exchange_strong(expected, 2, std::memory_order_acq_rel);
-                platform::LogDebug(L"walk cap: player 2's live walk step's Walk cap put on player 2's controller");
-            }
-            else
-            {
-                g_moveToTwo.store(true, std::memory_order_release);  // a refused scope: again next tick
-                platform::Log(L"walk cap: player 2's walk step's cap could not move to player 2's controller this tick "
-                              L"(the primary scope was refused); retried next tick");
-            }
+            MoveCap(seat);
         }
     }
-    const int clearFor = g_clearFor.exchange(0, std::memory_order_acq_rel);
-    for (int player = 1; player <= 2; ++player)
+    RunClears();
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        if ((clearFor & (1 << player)) == 0)
+        const void* mine = g_controller[Index(seat)].load(std::memory_order_acquire);
+        if (mine == nullptr)
         {
             continue;
         }
-        void*     controller = player == 2 ? two : one;
-        const int before     = controller != nullptr ? ReadField<std::uint8_t>(controller, kLayerTwo) : kLayerEmpty;
-        if (before == kLayerEmpty)
+        const int now = ReadField<std::uint8_t>(mine, kLayerTwo);
+        if (now != g_layerSeen[Index(seat)])
         {
-            platform::LogDebug(L"walk cap: player {}'s controller's layer 2 is already off; no clear needed", player);
-            continue;
+            if (g_layerSeen[Index(seat)] >= 0 || now != kLayerEmpty)
+            {
+                platform::LogDebug(L"walk cap: {}'s controller's layer 2 (action move type) now {}",
+                                   players::SeatName(seat), GaitText(now));
+            }
+            g_layerSeen[Index(seat)] = now;
         }
-        // A live step owns this controller's cap now: player 1's own step on player 1's, or player 2's on player 2's.
-        // Its own exit clears it; the queued clear is dropped. Asked again right before the call (a worker's enter can
-        // land in between).
-        const auto owned = [player] {
-            return player == 1 ? g_oneStepLive.load(std::memory_order_acquire)
-                               : g_stepOn.load(std::memory_order_acquire) == 2;
-        };
-        bool ran     = false;
-        bool dropped = false;
-        if (player == 2)
-        {
-            const primary_controller::Scope scope(players::kPlayerTwoSeat);
-            dropped = owned();
-            ran     = !dropped && scope.Held() && g_clear != nullptr && platform::CallGuarded(g_clear);
-        }
-        else
-        {
-            dropped = owned();
-            ran     = !dropped && PrimaryNow() == 1 && g_clear != nullptr && platform::CallGuarded(g_clear);
-        }
-        if (dropped)
-        {
-            platform::LogDebug(L"walk cap: player {}'s controller's cap belongs to a live walk step now; the queued "
-                               L"clear is dropped (that step's exit clears it)",
-                               player);
-        }
-        else if (ran)
-        {
-            platform::LogDebug(L"walk cap: the game's layer-2 clear ran on player {}'s controller: {} -> {}", player,
-                               GaitText(before), GaitText(ReadField<std::uint8_t>(controller, kLayerTwo)));
-        }
-        else
-        {
-            g_clearFor.fetch_or(1 << player, std::memory_order_acq_rel);  // again next tick
-            platform::Log(L"walk cap: player {}'s clear could not run this tick (the primary controller was not "
-                          L"theirs); retried next tick",
-                          player);
-        }
-    }
-    const int now = ReadField<std::uint8_t>(two, kLayerTwo);
-    if (now != g_layerSeen)
-    {
-        if (g_layerSeen >= 0 || now != kLayerEmpty)
-        {
-            platform::LogDebug(L"walk cap: player 2's controller's layer 2 (action move type) now {}", GaitText(now));
-        }
-        g_layerSeen = now;
     }
 }
 
