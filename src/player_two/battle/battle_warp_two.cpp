@@ -8,6 +8,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "player_two/generation.h"
+#include "players/seats.h"
 #include "players/unreal_access.h"
 
 #include <atomic>
@@ -48,13 +49,34 @@ struct Sites
 Sites                   g_sites;
 platform::DeferredSites g_placement;  // 1.005: the sites placed from the game thread (platform/deferred_sites.h)
 
-/// Player 2's member while player 2 plays, on the game thread; else null.
-void* PlayerTwoMember() noexcept
+/// The seat whose member `character` is, while that seat plays, on the game thread; else 0.
+int SeatPlaying(const void* character) noexcept
 {
-    return generation::OnGameThread() && generation::Active() ? generation::Member() : nullptr;
+    if (character == nullptr || !generation::OnGameThread())
+    {
+        return 0;
+    }
+    const int seat = generation::SeatOfMember(character);
+    return players::SeatBuilt(seat) && generation::Active(seat) ? seat : 0;
 }
 
-/// Player 2's member's distance from player 1's character in metres, or -1 if it cannot be read.
+/// The seat whose member the exclusion test's element names, while that seat plays, on the game thread; else 0. The
+/// element is read only on the game thread and while a seat plays a member (as before: only with player 2's member).
+int SeatOfElement(void* const* element) noexcept
+{
+    if (element == nullptr || !generation::OnGameThread())
+    {
+        return 0;
+    }
+    bool anyMember = false;
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        anyMember = anyMember || (generation::Active(seat) && generation::MemberOf(seat) != nullptr);
+    }
+    return anyMember ? SeatPlaying(*element) : 0;
+}
+
+/// A seat's member's distance from player 1's character in metres, or -1 if it cannot be read.
 float DistanceFromPlayerOne(void* member) noexcept
 {
     void* pawn = nullptr;
@@ -71,31 +93,29 @@ float DistanceFromPlayerOne(void* member) noexcept
     return std::sqrt(dx * dx + dy * dy + dz * dz) / 100.0f;
 }
 
-/// Replaces the battle-in queue's exclusion test: player 2's member reads as excluded, so the game skips her as it
-/// skips a vehicle rider (no warp entry, no fade, no AI pause; the next member takes her slot).
+/// Replaces the battle-in queue's exclusion test: a seat's member reads as excluded, so the game skips it as it
+/// skips a vehicle rider (no warp entry, no fade, no AI pause; the next member takes its slot).
 bool BattleInExcluded(void* set, void* const* element) noexcept
 {
-    void* member = PlayerTwoMember();
-    if (member != nullptr && element != nullptr && *element == member)
+    if (const int seat = SeatOfElement(element); seat != 0)
     {
-        platform::Log(L"battle warp: battle start leaves player 2's member where it is ({:.1f} m from player 1's "
+        platform::Log(L"battle warp: battle start leaves {}'s member where it is ({:.1f} m from player 1's "
                       L"character; -1: unknown)",
-                      DistanceFromPlayerOne(member));
+                      players::SeatName(seat), DistanceFromPlayerOne(*element));
         return true;
     }
     return reinterpret_cast<ContainsFn>(g_battleInCall.Original())(set, element);
 }
 
-/// Replaces the battle-finish queue's placement call: none for player 2's member (as the placement's own
+/// Replaces the battle-finish queue's placement call: none for a seat's member (as the placement's own
 /// early-outs: no entry, no AI pause).
 void BattleFinishPlace(void* context, void* character, void* location, bool extra) noexcept
 {
-    void* member = PlayerTwoMember();
-    if (member != nullptr && character == member)
+    if (const int seat = SeatPlaying(character); seat != 0)
     {
-        platform::Log(L"battle warp: battle end leaves player 2's member where it is ({:.1f} m from player 1's "
+        platform::Log(L"battle warp: battle end leaves {}'s member where it is ({:.1f} m from player 1's "
                       L"character; -1: unknown)",
-                      DistanceFromPlayerOne(member));
+                      players::SeatName(seat), DistanceFromPlayerOne(character));
         return;
     }
     reinterpret_cast<PlaceFn>(g_battleFinishCall.Original())(context, character, location, extra);
@@ -112,8 +132,10 @@ bool PlaceSites(const platform::GameImage&) noexcept
                      g_placement.Place(g_battleFinishCall, s.endSite, s.place,
                                        reinterpret_cast<std::uintptr_t>(&BattleFinishPlace));
     platform::Log(L"battle warp: battle start {}; battle end {}",
-                  start ? L"leaves player 2's member where it is" : L"UNAVAILABLE (a check failed): warps player 2's member in",
-                  end ? L"leaves player 2's member where it is" : L"UNAVAILABLE (a check failed): may warp player 2's member back");
+                  start ? L"leaves the further players' members where they are"
+                        : L"UNAVAILABLE (a check failed): warps the further players' members in",
+                  end ? L"leaves the further players' members where they are"
+                      : L"UNAVAILABLE (a check failed): may warp the further players' members back");
     return start || end;
 }
 

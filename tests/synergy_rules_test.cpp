@@ -4,6 +4,7 @@
 // with a member end that ran off the game thread, and the two tables' slot choice and stance dedup.
 
 #include "player_two/battle/synergy_rules.h"
+#include "players/seats.h"
 
 #include "expect.h"
 
@@ -82,6 +83,56 @@ void TestGiveBack()
     EXPECT(back.to == GiveBackTo::Player && back.player == 0);
 }
 
+/// The give-back as it stood at v0.91.0, verbatim: the reference for the per-seat rule.
+constexpr GiveBack OldDecideGiveBack(bool offThread, int endPlayer, bool originalIsPlayerTwos, bool hasPlayerOne,
+                                     bool playerTwosMember) noexcept
+{
+    if (offThread)
+    {
+        return {originalIsPlayerTwos ? GiveBackTo::PlayerOne : GiveBackTo::Original, 0};
+    }
+    if (endPlayer == kRefused)
+    {
+        return {originalIsPlayerTwos && hasPlayerOne && !playerTwosMember ? GiveBackTo::PlayerOne : GiveBackTo::Original,
+                0};
+    }
+    return {GiveBackTo::Player, endPlayer == 0 && playerTwosMember ? 2 : endPlayer};
+}
+
+void TestGiveBackAsBefore()
+{
+    std::puts("give-back: with two players the per-seat rule gives the old answer for every input (player 2's seat for "
+              "each yes)");
+    constexpr int kTwo = lss::players::kPlayerTwoSeat;
+    for (int bits = 0; bits < 16; ++bits)
+    {
+        const bool offThread = (bits & 1) != 0, original = (bits & 2) != 0, hasOne = (bits & 4) != 0,
+                   member = (bits & 8) != 0;
+        for (const int endPlayer : {kRefused, 0, 1, 2})
+        {
+            const auto old = OldDecideGiveBack(offThread, endPlayer, original, hasOne, member);
+            const auto now = DecideGiveBack(offThread, endPlayer, original ? kTwo : 0, hasOne, member ? kTwo : 0);
+            EXPECT(old.to == now.to && old.player == now.player);
+        }
+    }
+}
+
+void TestGiveBackOfThree()
+{
+    std::puts("give-back: three players, a seat's member to its own seat's player; a refused one never lands on another "
+              "seat's controller");
+    auto back = DecideGiveBack(false, 0, 1, true, 2);  // player 3's member, unknown end player: player 3
+    EXPECT(back.to == GiveBackTo::Player && back.player == 3);
+    back = DecideGiveBack(false, kRefused, 1, true, 2);  // refused, the primary names player 2's: not player 3's member's
+    EXPECT(back.to == GiveBackTo::PlayerOne);
+    back = DecideGiveBack(false, kRefused, 2, true, 2);  // refused, the primary names its own seat's: the game's own
+    EXPECT(back.to == GiveBackTo::Original);
+    back = DecideGiveBack(true, 3, 2, true, 2);  // off the game thread a seat's controller becomes player 1's
+    EXPECT(back.to == GiveBackTo::PlayerOne);
+    back = DecideGiveBack(false, 3, 0, true, 0);  // a remembered character goes to its player
+    EXPECT(back.to == GiveBackTo::Player && back.player == 3);
+}
+
 void TestNotes()
 {
     std::puts("notes: not remembered, stale, already held, the game's own give-back, or the tick's give-back");
@@ -121,6 +172,8 @@ int main()
 {
     TestHandOver();
     TestGiveBack();
+    TestGiveBackAsBefore();
+    TestGiveBackOfThree();
     TestNotes();
     TestSlots();
 

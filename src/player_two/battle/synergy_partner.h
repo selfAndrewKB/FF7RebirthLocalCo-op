@@ -43,6 +43,11 @@
 // SwitchAIControl_Async(member, 1, its player's controller), after the same ownership tests as T3, read live. Answering T3/P on the worker instead would let the game queue that possession with raw pointers
 // that nothing checks when it runs (S-SYNANYTHREAD Q1): it could outlive the player's ownership or controller. The tick
 // also watches each remembered partner's live link record and logs one that vanished with it still not given back.
+//
+// Per seat: written for player 2 above, every built seat's player is a human like player 2 (its member, its
+// controller); a remembered character carries its player's number (1 player 1, seat + 1 a seat's player), the seat
+// found from the controller that drives it or the member it is. A change of any seat's session forgets every
+// remembered character, as player 2's did.
 
 namespace lss::platform {
 class GameImage;

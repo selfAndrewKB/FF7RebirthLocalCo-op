@@ -16,6 +16,7 @@
 #include "player_two/object_fields.h"
 #include "player_two/scopes/leader_scope.h"
 #include "player_two/session/party_member.h"
+#include "players/seats.h"
 #include "players/unreal_access.h"
 
 #include <Windows.h>
@@ -144,7 +145,8 @@ const void*    g_initiator = nullptr;
 const void*    g_record    = nullptr;  // the link record of the start or AI request being run
 bool           g_window    = false;    // the start being run is a parry-window skill's (W): T1 keeps a human's partner
 const wchar_t* g_via       = L"";      // which call asks (for the log)
-const void*             g_session   = nullptr;  // player 2's controller the remembered characters belong to
+// Each seat's controller the remembered characters belong to (by seat; index 0 unused).
+std::array<const void*, players::kMaxPlayers> g_sessions{};
 
 /// The call being run, for the tests inside it (T1 and T2 read the partner, the record and the window); restored on
 /// the way out, since the calls nest (a mode-1 start runs the AI request).
@@ -257,10 +259,49 @@ bool Line() noexcept
     return platform::Enabled(platform::Level::Debug);
 }
 
-/// A player-2 session is running (any thread: the generation's atomics).
+/// A further player's session is running: a built seat active with its controller (any thread: the generation's
+/// atomics).
 bool Session() noexcept
 {
-    return generation::Active() && generation::PlayerTwoController() != nullptr;
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (generation::Active(seat) && generation::ControllerOf(seat) != nullptr)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+/// The player (1 player 1, seat + 1 a seat's player: Held.player's numbering) whose controller `controller` is, else
+/// 0. The seats' are compared first.
+int PlayerOfController(const void* controller) noexcept
+{
+    if (controller == nullptr)
+    {
+        return 0;
+    }
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (controller == generation::ControllerOf(seat))
+        {
+            return seat + 1;
+        }
+    }
+    return controller == generation::PlayerOneController() ? 1 : 0;
+}
+
+/// The built seat whose member `character` is, or 0.
+int SeatPlaying(const void* character) noexcept
+{
+    const int seat = generation::SeatOfMember(character);
+    return players::SeatBuilt(seat) ? seat : 0;
+}
+
+/// The seat a player number names (Held.player: 1 player 1, so seat 0).
+constexpr int SeatOfPlayer(int player) noexcept
+{
+    return player - 1;
 }
 
 /// The hand-over's wrappers and the game-thread member end act only here.
@@ -269,45 +310,46 @@ bool Bound() noexcept
     return generation::OnGameThread() && Session();
 }
 
-/// 1 or 2 if that player's controller drives `character` now, else 0.
+/// The player (1 player 1, seat + 1 a seat's player) whose controller drives `character` now, else 0.
 int PlayerHolding(const void* character) noexcept
 {
-    const void* driver = ReadPointer(character, facts::kCharacterEffectiveController);
-    if (driver == nullptr)
-    {
-        return 0;
-    }
-    return driver == generation::PlayerTwoController() ? 2 : driver == generation::PlayerOneController() ? 1 : 0;
+    return PlayerOfController(ReadPointer(character, facts::kCharacterEffectiveController));
 }
 
 const wchar_t* Holder(const void* character) noexcept
 {
     const void* driver = ReadPointer(character, facts::kCharacterEffectiveController);
-    return driver == nullptr                           ? L"nobody"
-           : driver == generation::PlayerOneController() ? L"player 1"
-           : driver == generation::PlayerTwoController() ? L"player 2"
-                                                         : L"its AI";
+    const int   player = PlayerOfController(driver);
+    return driver == nullptr ? L"nobody" : player != 0 ? players::SeatName(SeatOfPlayer(player)) : L"its AI";
 }
 
-/// Why `player` no longer owns `character` (nullptr: it does). Player 2 owns only the session's member
-/// (generation::Member(): cleared at once when player 2 gives it back, loses it or leaves, set again only by a take),
-/// player 1 every other character; neither owns one the other human's controller drives. The weak pointer of a
+/// Why `player` no longer owns `character` (nullptr: it does). A seat's player owns only its seat's member
+/// (generation::MemberOf: cleared at once when the seat gives it back, loses it or leaves, set again only by a take),
+/// player 1 every character no seat plays; none owns one another human's controller drives. The weak pointer of a
 /// remembered character proves only that it is the same object, not that its player still has it.
 const wchar_t* LostBy(int player, const void* character) noexcept
 {
-    const bool playerTwos = character == generation::Member();
-    if (player == 2 && !playerTwos)
+    static constexpr const wchar_t* kNotPlaying[players::kMaxPlayers] = {
+        L"", L"player 2 does not play it (a give-back, a lost member, a leave, or a take not finished)",
+        L"player 3 does not play it (a give-back, a lost member, a leave, or a take not finished)"};
+    static constexpr const wchar_t* kPlaysNow[players::kMaxPlayers] = {L"", L"player 2 plays it now",
+                                                                        L"player 3 plays it now"};
+    static constexpr const wchar_t* kDrives[players::kMaxPlayers] = {
+        L"player 1's controller drives it", L"player 2's controller drives it", L"player 3's controller drives it"};
+    static_assert(players::kMaxPlayers == 3, "LostBy's texts name every player");
+    const int memberSeat = SeatPlaying(character);
+    if (player >= 2 && player <= players::kMaxPlayers && memberSeat != SeatOfPlayer(player))
     {
-        return L"player 2 does not play it (a give-back, a lost member, a leave, or a take not finished)";
+        return kNotPlaying[SeatOfPlayer(player)];
     }
-    if (player == 1 && playerTwos)
+    if (player == 1 && memberSeat != 0)
     {
-        return L"player 2 plays it now";
+        return kPlaysNow[memberSeat];
     }
     const int holding = PlayerHolding(character);
     if (holding != 0 && holding != player)
     {
-        return holding == 1 ? L"player 1's controller drives it" : L"player 2's controller drives it";
+        return kDrives[SeatOfPlayer(holding)];
     }
     return nullptr;
 }
@@ -410,9 +452,10 @@ bool HasParryWindow(const void* handle) noexcept
     return std::find(bytes.begin(), bytes.begin() + count, kParryWindow) != bytes.begin() + count;
 }
 
+/// The controller of `player` (1 player 1, seat + 1 a seat's player), or null.
 void* ControllerOf(int player) noexcept
 {
-    return player == 2 ? generation::PlayerTwoController() : player == 1 ? generation::PlayerOneController() : nullptr;
+    return player >= 1 && player <= players::kSeatsBuilt + 1 ? generation::ControllerOf(SeatOfPlayer(player)) : nullptr;
 }
 
 /// The pawn `controller` plays instead of `character` (null if it plays nothing, or that character).
@@ -676,7 +719,7 @@ std::uint8_t EndLeaderType() noexcept
         // Player 2's member is never given back from a worker: the game would queue its possession by player 2's
         // controller with raw pointers that nothing checks when it runs. The game's compare fails; the tick gives a
         // remembered member back on the game thread. Atomics only.
-        if (member == generation::Member())
+        if (SeatPlaying(member) != 0)
         {
             t_heldBack = true;
             return kNoMatch;
@@ -752,17 +795,19 @@ void* EndPrimary() noexcept
     // swapped, would otherwise give it to player 1). A refused give-back never lands on player 2's controller, even
     // when the primary controller reads it (a member end inside a player-2 scope): the game's single-player target,
     // player 1's, or the game's own.
-    const auto decision = DecideGiveBack(offThread, t_endPlayer, original == generation::PlayerTwoController(),
-                                         generation::PlayerOneController() != nullptr, member == generation::Member());
+    const int  originalPlayer = PlayerOfController(original);
+    const int  originalSeat   = originalPlayer >= 2 ? SeatOfPlayer(originalPlayer) : 0;
+    const auto decision       = DecideGiveBack(offThread, t_endPlayer, originalSeat,
+                                               generation::PlayerOneController() != nullptr, SeatPlaying(member));
     switch (decision.to)
     {
         case GiveBackTo::Original: return original;
         case GiveBackTo::PlayerOne:
             if (!offThread && Line())
             {
-                platform::LogDebug(L"synergy partner: {} (refused) would go to player 2's controller as the primary; "
+                platform::LogDebug(L"synergy partner: {} (refused) would go to {}'s controller as the primary; "
                                    L"player 1's instead",
-                                   NameOf(member));
+                                   NameOf(member), players::SeatName(originalSeat));
             }
             return generation::PlayerOneController();
         case GiveBackTo::Player: break;
@@ -864,8 +909,8 @@ void TakeNotes() noexcept
             if (Line())
             {
                 // The game's queued give-back may not have run yet: "now" is this tick's holder.
-                const wchar_t* const what = note.heldBack ? L"no give-back (player 2's member is given back only on "
-                                                            L"the game thread)"
+                const wchar_t* const what = note.heldBack ? L"no give-back (a further player's member is given back "
+                                                            L"only on the game thread)"
                                             : note.gameGave ? L"the game queued its own give-back"
                                                             : L"no give-back (the game's own test failed)";
                 platform::LogDebug(L"synergy partner: member end of {} ran off the game thread (thread {}): not "
@@ -1048,7 +1093,7 @@ void Place() noexcept
     }
     g_on.store(ok, std::memory_order_release);
     platform::Log(L"synergy partner: {}",
-                  ok ? L"a synergy partner held by player 1 or player 2 is handed to its AI for the approach and given "
+                  ok ? L"a synergy partner held by any human player is handed to its AI for the approach and given "
                        L"back to its own player (skills and abilities)"
                      : L"UNCHANGED (a site did not install): synergies keep the game's single-player hand-over");
 }
@@ -1128,7 +1173,7 @@ void Remove() noexcept
     // The call redirects stay: on 1.005 some cross a block, which only the one thread that runs them may put back,
     // and unloading is not that thread (platform/call_redirect.h). Every one passes through once off.
     ForgetAll();
-    g_session = nullptr;
+    g_sessions = {};
 }
 
 void Tick() noexcept
@@ -1137,9 +1182,19 @@ void Tick() noexcept
     {
         return;
     }
-    // The remembered characters belong to one session of player 2: forgotten when it ends.
-    const void* session = generation::Active() ? generation::PlayerTwoController() : nullptr;
-    if (session != g_session)
+    // The remembered characters belong to one session of each seat: every one forgotten when any seat's ends or
+    // starts (as with player 2 alone).
+    std::array<const void*, players::kMaxPlayers> sessions{};
+    int                                           changed = 0;
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        sessions[static_cast<std::size_t>(seat)] = generation::Active(seat) ? generation::ControllerOf(seat) : nullptr;
+        if (changed == 0 && sessions[static_cast<std::size_t>(seat)] != g_sessions[static_cast<std::size_t>(seat)])
+        {
+            changed = seat;
+        }
+    }
+    if (changed != 0)
     {
         bool any = false;
         for (const Held& held : g_held)
@@ -1148,11 +1203,12 @@ void Tick() noexcept
         }
         if (any)
         {
-            platform::Log(L"synergy partner: player 2's session changed with a character still handed to its AI; "
-                          L"forgotten (the game's own give-back applies from now on)");
+            platform::Log(L"synergy partner: {}'s session changed with a character still handed to its AI; "
+                          L"forgotten (the game's own give-back applies from now on)",
+                          players::SeatName(changed));
         }
         ForgetAll();
-        g_session = session;
+        g_sessions = sessions;
     }
     TakeNotes();
     const auto now = Clock::now();

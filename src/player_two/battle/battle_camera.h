@@ -16,6 +16,12 @@
 // Seed brings player 2's operator to player 1's state when player 2 takes a member mid-battle.
 // Watch logs both camera managers' current operator and both Battle operators' state on change.
 // Game thread only.
+//
+// Per seat: every built seat's Battle operator follows player 1's switches, in seat order, each call with that seat as
+// the primary controller (one scope at a time). Seed takes the seat (the name without one is player 2's, for the
+// session); Watch is a dev tool and stays player 2's.
+
+#include "players/seats.h"
 
 namespace lss::platform {
 class GameImage;
@@ -28,11 +34,16 @@ bool Install(const platform::GameImage& image) noexcept;
 
 void Remove() noexcept;
 
-/// Player 2's Battle operator to player 1's active state. Game thread, after player 2 took a member.
-bool Seed() noexcept;
+/// `seat`'s Battle operator to player 1's active state. Game thread, after the seat took a member.
+bool Seed(int seat) noexcept;
+/// Player 2's (the session's call, until it is per seat).
+inline bool Seed() noexcept
+{
+    return Seed(players::kPlayerTwoSeat);
+}
 
-/// Whether player 2's camera manager's Battle operator is on (player 2's camera update may then run
-/// as the primary player's, as it does with the Field operator on).
+/// Whether `cameraManager`'s Battle operator is on (a seat's camera update may then run as the primary player's, as
+/// it does with the Field operator on). Whichever seat's camera manager it is.
 bool PlayerTwoBattleActive(void* cameraManager) noexcept;
 
 /// Logs, on change, both camera managers' operators (game thread, once per frame).

@@ -14,7 +14,8 @@
 // code, and escape tests only the field leader (RE §S-BTLWARP2).
 // Logged (Info): each skip, with player 2's member's distance from player 1's character. Game thread only; any other
 // thread, or no player 2, passes through. 1.005: the start's call crosses a 16-byte block, so the sites are placed
-// from the game thread.
+// from the game thread. Per seat: every built seat's member is skipped alike (the seat found from the character the
+// game hands the call).
 
 namespace lss::platform {
 class GameImage;

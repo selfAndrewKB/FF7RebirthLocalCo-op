@@ -20,7 +20,7 @@ using Clock = std::chrono::steady_clock;
 
 inline constexpr std::uint8_t kNoType  = 16;    // the game's "no character type"
 inline constexpr std::uint8_t kNoMatch = 0xFF;  // a leader type no character's type equals (types are 0..16)
-inline constexpr std::size_t  kHeld    = 4;     // characters handed to their AI at once: at most the two humans' (spare)
+inline constexpr std::size_t  kHeld    = 4;     // characters handed to their AI at once: at most the three humans' (spare)
 inline constexpr int          kRefused = -1;    // a member end's player: T3 refused a remembered character
 
 enum class EndSeen : std::uint8_t
@@ -34,7 +34,7 @@ struct Held
 {
     const void*       character  = nullptr;
     std::uint64_t     weak       = 0;
-    int               player     = 0;               // 1 or 2; 0 = free
+    int               player     = 0;               // 1 player 1, seat + 1 a seat's player (2 player 2); 0 = free
     std::uint8_t      type       = kNoType;         // its player type (the give-back test's answer)
     Clock::time_point since{};                      // the hand-over of this approach
     bool              warned     = false;
@@ -108,26 +108,29 @@ enum class GiveBackTo
 struct GiveBack
 {
     GiveBackTo to     = GiveBackTo::Original;
-    int        player = 0;
+    int        player = 0;  // as Held.player
 };
 
-/// `endPlayer`: the member end's player (kRefused, 0 unknown, 1 or 2). Off the game thread a primary read that names
-/// player 2's controller becomes player 1's. A refused give-back never lands on player 2's controller: player 1's
-/// instead, when there is one and the member is not player 2's. A remembered character goes to its player; player 2's
-/// member to player 2 in any case.
-constexpr GiveBack DecideGiveBack(bool offThread, int endPlayer, bool originalIsPlayerTwos, bool hasPlayerOne,
-                                  bool playerTwosMember) noexcept
+/// `endPlayer`: the member end's player (kRefused, 0 unknown, else as Held.player). `originalSeat`: the seat whose
+/// controller the primary read names (0: none, or player 1's). `memberSeat`: the seat whose member the member is (0:
+/// none). Off the game thread a primary read that names a seat's controller becomes player 1's. A refused give-back
+/// never lands on a seat's controller but its own member's: player 1's instead, when there is one. A remembered
+/// character goes to its player; a seat's member to its seat's player in any case. (Two players: a seat is player 2's,
+/// so `originalSeat` and `memberSeat` are 1 or 0, the old yes/no.)
+constexpr GiveBack DecideGiveBack(bool offThread, int endPlayer, int originalSeat, bool hasPlayerOne,
+                                  int memberSeat) noexcept
 {
     if (offThread)
     {
-        return {originalIsPlayerTwos ? GiveBackTo::PlayerOne : GiveBackTo::Original, 0};
+        return {originalSeat != 0 ? GiveBackTo::PlayerOne : GiveBackTo::Original, 0};
     }
     if (endPlayer == kRefused)
     {
-        return {originalIsPlayerTwos && hasPlayerOne && !playerTwosMember ? GiveBackTo::PlayerOne : GiveBackTo::Original,
+        return {originalSeat != 0 && hasPlayerOne && memberSeat != originalSeat ? GiveBackTo::PlayerOne
+                                                                                : GiveBackTo::Original,
                 0};
     }
-    return {GiveBackTo::Player, endPlayer == 0 && playerTwosMember ? 2 : endPlayer};
+    return {GiveBackTo::Player, endPlayer == 0 && memberSeat != 0 ? memberSeat + 1 : endPlayer};
 }
 
 // ---- the tick's notes: a member end that ran off the game thread ----

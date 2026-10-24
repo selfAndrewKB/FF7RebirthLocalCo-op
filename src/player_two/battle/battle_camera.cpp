@@ -12,6 +12,7 @@
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
 #include "player_two/scopes/primary_controller.h"
+#include "players/seats.h"
 
 #include <array>
 #include <cstdint>
@@ -59,14 +60,15 @@ StateFn               g_engineDeactivate    = nullptr;
 
 // Game thread.
 
-/// Player 1's and player 2's Battle operators, while player 2 holds a party member (player_two/camera/camera_access.h).
+/// Player 1's and a seat's Battle operators (player_two/camera/camera_access.h).
 using Pair = camera_access::OperatorPair;
 using camera_access::CameraManagerOf;
 using camera_access::BattleOperatorOf;
 
-std::optional<Pair> CurrentPair() noexcept
+/// Player 1's and `seat`'s Battle operators, while the seat holds a party member and the two are distinct. Game thread.
+std::optional<Pair> PairOf(int seat) noexcept
 {
-    return camera_access::CurrentPair(&BattleOperatorOf);
+    return camera_access::CurrentPair(seat, &BattleOperatorOf);
 }
 
 std::uint8_t Active(const void* battle) noexcept
@@ -87,37 +89,42 @@ bool CallGuarded(StateFn engine, void* battle, float blendTime, bool flag) noexc
     }
 }
 
-/// The engine's call on player 2's operator, with player 2 as the primary controller.
-void OnPlayerTwo(StateFn engine, void* battle, float blendTime, bool flag)
+/// The engine's call on `seat`'s operator, with the seat as the primary controller.
+void OnSeat(int seat, StateFn engine, void* battle, float blendTime, bool flag)
 {
-    const primary_controller::Scope scope(players::kPlayerTwoSeat);
+    const primary_controller::Scope scope(seat);
     const bool                      ok = CallGuarded(engine, battle, blendTime, flag);
-    platform::Log(L"battle camera: player 2's Battle operator {} (primary scope {}); active now {}{}",
+    platform::Log(L"battle camera: {}'s Battle operator {} (primary scope {}); active now {}{}", players::SeatName(seat),
                   engine == g_engineActivate ? L"activated" : L"deactivated", scope.Held() ? L"held" : L"REFUSED",
                   Active(battle), ok ? L"" : L"; the engine call RAISED an exception");
 }
 
-// The two replacements: the engine's call first, then the same on player 2's Battle operator when
-// `battle` is player 1's.
+/// The engine's call made again on every seat's Battle operator, in seat order, when `battle` is player 1's.
+void FollowOnSeats(StateFn engine, void* battle, float blendTime, bool flag)
+{
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        const auto pair = PairOf(seat);
+        if (pair && battle == pair->one)
+        {
+            OnSeat(seat, engine, pair->two, blendTime, flag);
+        }
+    }
+}
+
+// The two replacements: the engine's call first, then the same on each seat's Battle operator when `battle` is
+// player 1's.
 
 void Activate(void* battle, float blendTime, bool flag)
 {
     g_engineActivate(battle, blendTime, flag);
-    const auto pair = CurrentPair();
-    if (pair && battle == pair->one)
-    {
-        OnPlayerTwo(g_engineActivate, pair->two, blendTime, flag);
-    }
+    FollowOnSeats(g_engineActivate, battle, blendTime, flag);
 }
 
 void Deactivate(void* battle, float blendTime, bool flag)
 {
     g_engineDeactivate(battle, blendTime, flag);
-    const auto pair = CurrentPair();
-    if (pair && battle == pair->one)
-    {
-        OnPlayerTwo(g_engineDeactivate, pair->two, blendTime, flag);
-    }
+    FollowOnSeats(g_engineDeactivate, battle, blendTime, flag);
 }
 
 #if LSS_DEV
@@ -202,7 +209,7 @@ bool Install(const platform::GameImage& image) noexcept
         g_activateSlot.Restore();  // both or neither: an activation with no deactivation would never end
         g_deactivateSlot.Restore();
     }
-    platform::Log(L"battle camera: {}", installed ? L"player 2's Battle operator follows player 1's switches"
+    platform::Log(L"battle camera: {}", installed ? L"each further player's Battle operator follows player 1's switches"
                                                   : L"the slots could not be replaced; not installed");
     return installed;
 }
@@ -218,20 +225,20 @@ void Remove() noexcept
     }
 }
 
-bool Seed() noexcept
+bool Seed(int seat) noexcept
 {
     if (g_engineActivate == nullptr)
     {
         return false;
     }
-    const auto pair = CurrentPair();
+    const auto pair = PairOf(seat);
     if (!pair)
     {
         return false;
     }
     if (Active(pair->one) != Active(pair->two))
     {
-        OnPlayerTwo(Active(pair->one) != 0 ? g_engineActivate : g_engineDeactivate, pair->two, 0.0f, false);
+        OnSeat(seat, Active(pair->one) != 0 ? g_engineActivate : g_engineDeactivate, pair->two, 0.0f, false);
     }
     return Active(pair->one) == Active(pair->two);
 }
@@ -244,13 +251,14 @@ bool PlayerTwoBattleActive(void* cameraManager) noexcept
 void Watch() noexcept
 {
 #if LSS_DEV
+    // A dev tool: player 2's camera manager beside player 1's (it stays two-player).
     if (!platform::Enabled(platform::Level::Debug) || !generation::OnGameThread() ||
-        !generation::Active())
+        !generation::Active(players::kPlayerTwoSeat))
     {
         return;
     }
     const std::array<CameraState, 2> now{StateOf(CameraManagerOf(generation::PlayerOneController())),
-                                         StateOf(CameraManagerOf(generation::PlayerTwoController()))};
+                                         StateOf(CameraManagerOf(generation::ControllerOf(players::kPlayerTwoSeat)))};
     if (now == g_logged)
     {
         return;
