@@ -22,6 +22,10 @@
 // where the member player 2 gave back is (metres from the vehicle, hidden, its controller, its AI state), the vehicle's
 // controller, the party manager's idle byte and whether a battle runs; a battle starting or ending during a ride. Game
 // thread only.
+//
+// Per seat (players/seats.h): the ride is one fact, player 1's vehicle, read while any seat is in; every seat in stands
+// aside together. Its consumers loop the seats (the session's stand-aside, each seat's rumble copy in mod.cpp). The
+// members given back are logged per seat.
 
 namespace lss::platform {
 class GameImage;

@@ -14,6 +14,7 @@
 #include "player_two/rides/ride_rules.h"
 #include "player_two/scopes/leader_scope.h"
 #include "player_two/world/charapop_facts.h"
+#include "players/seats.h"
 
 #include <array>
 #include <cstdint>
@@ -60,8 +61,10 @@ std::size_t   g_kind       = 0;
 std::int32_t  g_state      = -1;       // the vehicle's state as last logged
 bool          g_gotOff     = false;    // the ride passed through its getting-off state
 std::int32_t  g_battle     = -1;       // as last logged during the ride
-void*         g_given      = nullptr;  // the member player 2 played when the ride began (to log where the game puts it)
-std::uint64_t g_givenWeak  = 0;        // its weak pointer: nothing is read once it no longer names that member
+// By seat (index 0 unused): the member the seat played when the ride began (to log where the game puts it), and its
+// weak pointer: nothing is read once it no longer names that member.
+void*         g_given[players::kMaxPlayers]     = {};
+std::uint64_t g_givenWeak[players::kMaxPlayers] = {};
 
 std::int32_t StateOf(const void* coordinator, const Kind& kind) noexcept
 {
@@ -102,21 +105,31 @@ std::int32_t PartyBusy() noexcept
     return manager != nullptr ? ReadField<std::uint8_t>(manager, 0) : -1;
 }
 
-/// The vehicle's state, and where the member player 2 gave back is against it: what the game does with it.
+/// The vehicle's state, and where each member a seat gave back is against it: what the game does with it.
 void LogState(const void* coordinator, std::int32_t state)
 {
-    void*       body  = ReadPointer(coordinator, kCoordinatorBody);
-    std::wstring member = L"no member was given back";
-    if (g_given != nullptr && leader_scope::StillNames(g_givenWeak, g_given))
+    void*        body   = ReadPointer(coordinator, kCoordinatorBody);
+    std::wstring member;
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
+        void* const given = g_given[seat];
+        if (given == nullptr || !leader_scope::StillNames(g_givenWeak[seat], given))
+        {
+            continue;
+        }
         float      at[3]{}, vehicle[3]{};
-        const bool both = charapop::ActorLocation(g_given, at) && body != nullptr && charapop::ActorLocation(body, vehicle);
-        member = std::format(L"the member player 2 gave back, {}, is {}, hidden {}; driven by {}, AI state {}", NameOf(g_given),
-                             both ? std::format(L"{:.1f} m from the {}", charapop::Distance(at, vehicle) / 100.0f,
-                                                kKinds[g_kind].name)
-                                  : std::wstring{L"at a position that cannot be read"},
-                             (ReadField<std::uint8_t>(g_given, kActorHidden) & kHiddenBit) != 0 ? 1 : 0,
-                             NameOf(ReadPointer(g_given, facts::kCharacterEffectiveController)), AiStateOf(g_given));
+        const bool both = charapop::ActorLocation(given, at) && body != nullptr && charapop::ActorLocation(body, vehicle);
+        member += std::format(L"{}the member {} gave back, {}, is {}, hidden {}; driven by {}, AI state {}",
+                              member.empty() ? L"" : L"; ", players::SeatName(seat), NameOf(given),
+                              both ? std::format(L"{:.1f} m from the {}", charapop::Distance(at, vehicle) / 100.0f,
+                                                 kKinds[g_kind].name)
+                                   : std::wstring{L"at a position that cannot be read"},
+                              (ReadField<std::uint8_t>(given, kActorHidden) & kHiddenBit) != 0 ? 1 : 0,
+                              NameOf(ReadPointer(given, facts::kCharacterEffectiveController)), AiStateOf(given));
+    }
+    if (member.empty())
+    {
+        member = L"no member was given back";
     }
     platform::Log(L"shared ride: {} state {}: {}; the {} {} is driven by {}; party busy {}, in battle {}", kKinds[g_kind].name,
                   state, member, kKinds[g_kind].name, NameOf(body), NameOf(ReadPointer(body, kPawnController)), PartyBusy(),
@@ -125,7 +138,8 @@ void LogState(const void* coordinator, std::int32_t state)
 
 bool Run()
 {
-    void*       playerOne   = generation::Active() ? generation::PlayerOneController() : nullptr;
+    // One fact for every seat: player 1's vehicle, read while any seat is in.
+    void*       playerOne   = generation::AnyActive() ? generation::PlayerOneController() : nullptr;
     const void* coordinator = ReadPointer(playerOne, kControllerActiveVehicle);
     const std::size_t  kind   = KindOf(coordinator);
     const std::int32_t state  = kind < kKinds.size() ? StateOf(coordinator, kKinds[kind]) : -1;
@@ -134,27 +148,49 @@ bool Run()
     {
         if (g_riding)
         {
-            platform::Log(L"shared ride: the {} ride is over ({}){}: player 2 takes the 2nd slot's member again; the split "
-                          L"and per-pad input come back",
+            // Each built seat takes its slot's member again (seat s the slot after player 1's s-th).
+            constexpr const wchar_t* kSlots[players::kMaxPlayers] = {L"1st", L"2nd", L"3rd"};
+            std::wstring             back;
+            for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+            {
+                back += std::format(L"{}{} takes the {} slot's member again", back.empty() ? L"" : L", ",
+                                    players::SeatName(seat), kSlots[seat]);
+            }
+            platform::Log(L"shared ride: the {} ride is over ({}){}: {}; the split and per-pad input come back",
                           kKinds[g_kind].name, g_gotOff ? L"through getting off" : L"immediately, without getting off",
-                          playerOne == nullptr ? L" (or player 2 left)" : L"");
+                          playerOne == nullptr
+                              ? (players::kSeatsBuilt == 1 ? L" (or player 2 left)" : L" (or the players left)")
+                              : L"",
+                          back);
         }
         g_riding = riding;
-        g_given  = nullptr;
-        g_givenWeak = 0;
+        for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)  // only a built seat's is recorded
+        {
+            g_given[seat]     = nullptr;
+            g_givenWeak[seat] = 0;
+        }
         g_state  = -1;
         g_gotOff = false;
         g_battle = -1;
         if (riding)
         {
-            g_kind      = kind;
-            g_given     = generation::Member();  // read before the session gives it back
-            g_givenWeak = g_given != nullptr ? leader_scope::WeakOf(g_given) : 0;
-            platform::Log(L"shared ride: player 1 rides the {}: player 2 stands aside ({}), player 1's view alone, every pad "
-                          L"drives",
-                          kKinds[kind].name,
-                          g_given != nullptr ? std::format(L"{} goes back to its AI", NameOf(g_given))
-                                             : std::wstring{L"no member held"});
+            g_kind = kind;
+            std::wstring aside;  // "player 2 stands aside (...)", a part per seat in
+            for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+            {
+                if (!generation::Active(seat))
+                {
+                    continue;
+                }
+                void* const given = generation::MemberOf(seat);  // read before the session gives it back
+                g_given[seat]     = given;
+                g_givenWeak[seat] = given != nullptr ? leader_scope::WeakOf(given) : 0;
+                aside += std::format(L"{}{} stands aside ({})", aside.empty() ? L"" : L", ", players::SeatName(seat),
+                                     given != nullptr ? std::format(L"{} goes back to its AI", NameOf(given))
+                                                      : std::wstring{L"no member held"});
+            }
+            platform::Log(L"shared ride: player 1 rides the {}: {}, player 1's view alone, every pad drives",
+                          kKinds[kind].name, aside);
         }
     }
     if (!riding)
