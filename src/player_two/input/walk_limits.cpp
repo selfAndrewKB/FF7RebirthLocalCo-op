@@ -13,6 +13,7 @@
 #include "player_two/world/world_rules.h"
 #include "players/unreal_access.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <format>
@@ -86,7 +87,8 @@ struct Inside
     std::uint64_t location = 0;
     Pair          pair;
 };
-/// Player 2's copy of the manager's per-volume "inside" bits and its move-type stack (index 0 = top).
+/// A seat's copy of the manager's per-volume "inside" bits and its move-type stack (index 0 = top), and the seat's
+/// retry and log state.
 struct State
 {
     void*         controller = nullptr;
@@ -95,13 +97,18 @@ struct State
     int           insideCount = 0;
     world_rules::PairStack<Pair, kMaxInside> stack;  // every entry is held by an inside volume, so never more
     std::uint64_t gateLocation = 0;  // a LocationId for the listener's "not 0" gate
+    ULONGLONG     nextRetry    = 0;
 };
-State     g_state;
-void*     g_navTried   = nullptr;  // the controller the nav-area creation ran (or was found) for
-ULONGLONG g_nextRetry  = 0;
-ULONGLONG g_nextState  = 0;
-bool      g_overflowed = false;
-std::wstring g_lastState, g_lastCall;
+/// One per seat (index 0 unused): the state, rebuilt on a take or leave, and what outlives it.
+struct SeatWalk
+{
+    State        state;
+    void*        navTried   = nullptr;  // the controller the nav-area creation ran (or was found) for
+    ULONGLONG    nextState  = 0;
+    bool         overflowed = false;
+    std::wstring lastState, lastCall;
+};
+std::array<SeatWalk, players::kMaxPlayers> g_seats{};
 
 /// A line of `level`.
 template <class... A>
@@ -131,29 +138,18 @@ std::wstring PairText(Pair pair)
     return pair == kNoLimit ? std::wstring(L"none") : std::format(L"{}/{}", pair.move, pair.dash);
 }
 
-/// The game's push: a pair already on the stack gains a reference; a new one goes to the front.
-void Push(Pair pair) noexcept
+/// Once per controller: the game creates the seat's nav-area component, run as the primary player's.
+void EnsureNavArea(int seat, SeatWalk& walk, void* controller) noexcept
 {
-    g_state.stack.Push(pair);
-}
-
-/// The game's pop: the pair loses a reference and goes at 0.
-void Pop(Pair pair) noexcept
-{
-    g_state.stack.Pop(pair);
-}
-
-/// Once per controller: the game creates player 2's nav-area component, run as the primary player's.
-void EnsureNavArea(void* controller) noexcept
-{
-    if (g_createNavArea == nullptr || g_navTried == controller)
+    if (g_createNavArea == nullptr || walk.navTried == controller)
     {
         return;
     }
+    const wchar_t* name = players::SeatName(seat);
     if (ReadPointer(controller, kControllerNavArea) != nullptr)
     {
-        g_navTried = controller;
-        Line(L"player 2's controller already has its nav-area component (kept)");
+        walk.navTried = controller;
+        Line(L"{}'s controller already has its nav-area component (kept)", name);
         return;
     }
     void* partyManager = ReadPointerAt(g_partyManager);
@@ -163,20 +159,21 @@ void EnsureNavArea(void* controller) noexcept
     }
     bool ran = false;
     {
-        const primary_controller::Scope scope(players::kPlayerTwoSeat);
+        const primary_controller::Scope scope(seat);
         if (!scope.Held())
         {
-            return;  // tried again next tick; never unscoped (it would make player 2 the primary player for good)
+            return;  // tried again next tick; never unscoped (it would make the seat's player the primary player for good)
         }
-        g_navTried = controller;
-        ran        = platform::CallGuarded(g_createNavArea, partyManager, controller);
+        walk.navTried = controller;
+        ran           = platform::CallGuarded(g_createNavArea, partyManager, controller);
     }
     void* component = ReadPointer(controller, kControllerNavArea);
-    Line(L"player 2's nav-area component by the game's own creation: {} (component {}, its controller is player 2's: {})",
-         ran ? L"ran" : L"FAULTED", component, component != nullptr && ReadPointer(component, kNavAreaController) == controller);
+    Line(L"{}'s nav-area component by the game's own creation: {} (component {}, its controller is {}'s: {})", name,
+         ran ? L"ran" : L"FAULTED", component, name,
+         component != nullptr && ReadPointer(component, kNavAreaController) == controller);
 }
 
-/// The leaves and enters player 2's member makes this tick, by the game's rules. False if the manager is busy,
+/// The leaves and enters a seat's member makes this tick, by the game's rules. False if the manager is busy,
 /// paused or unreadable (nothing changes then).
 struct Changes
 {
@@ -191,22 +188,24 @@ struct Pass
 {
     const float* position;
     Changes*     changes;
+    State*       state;  // the seat's
     bool         seen[kMaxInside] = {};
 };
 
 void Visit(void* context, const location_volumes::Volume& volume) noexcept
 {
-    auto* pass = static_cast<Pass*>(context);
+    auto*  pass  = static_cast<Pass*>(context);
+    State& state = *pass->state;
     if ((volume.flags & kFlagChangeMovementType) == 0 || volume.location == 0)
     {
         return;
     }
     const std::uint64_t location = volume.location;
-    g_state.gateLocation         = g_state.gateLocation != 0 ? g_state.gateLocation : location;
+    state.gateLocation           = state.gateLocation != 0 ? state.gateLocation : location;
     int current = -1;  // matched by LocationId as well as address: a streamed-in volume may reuse an address
-    for (int k = 0; k < g_state.insideCount; ++k)
+    for (int k = 0; k < state.insideCount; ++k)
     {
-        if (g_state.inside[k].volume == volume.volume && g_state.inside[k].location == location)
+        if (state.inside[k].volume == volume.volume && state.inside[k].location == location)
         {
             current       = k;
             pass->seen[k] = true;
@@ -241,7 +240,7 @@ void Visit(void* context, const location_volumes::Volume& volume) noexcept
     if (current >= 0 && !in)
     {
         changes.leave[current] = true;
-        g_state.gateLocation   = location;
+        state.gateLocation     = location;
     }
     else if (current < 0 && in)
     {
@@ -254,14 +253,14 @@ void Visit(void* context, const location_volumes::Volume& volume) noexcept
         if (changes.enterCount < kMaxInside)
         {
             changes.enter[changes.enterCount++] = here;
-            g_state.gateLocation                = location;
+            state.gateLocation                  = location;
         }
     }
 }
 
-bool Walk(const float (&position)[3], Changes& changes) noexcept
+bool Walk(State& state, const float (&position)[3], Changes& changes) noexcept
 {
-    Pass                    pass{&position[0], &changes};
+    Pass                    pass{&position[0], &changes, &state};
     location_volumes::Reads reads;
     if (location_volumes::WalkVolumes(true, &Visit, &pass, reads) != location_volumes::WalkResult::Done)
     {
@@ -271,42 +270,45 @@ bool Walk(const float (&position)[3], Changes& changes) noexcept
     {
         changes.managerTop = {reads.topMove, reads.topDash};
     }
-    for (int k = 0; k < g_state.insideCount; ++k)
+    for (int k = 0; k < state.insideCount; ++k)
     {
         changes.leave[k] = changes.leave[k] || !pass.seen[k];  // gone from the list (streamed out): a leave
     }
     return true;
 }
 
-/// The game's order: every leave of the tick, then every enter.
-void Apply(const Changes& changes) noexcept
+/// The game's order: every leave of the tick, then every enter (the game's pop: a pair loses a reference and goes at
+/// 0; its push: a pair already on the stack gains a reference, a new one goes to the front).
+void Apply(int seat, SeatWalk& walk, const Changes& changes) noexcept
 {
-    int kept = 0;
-    for (int k = 0; k < g_state.insideCount; ++k)
+    State& state = walk.state;
+    int    kept  = 0;
+    for (int k = 0; k < state.insideCount; ++k)
     {
         if (changes.leave[k])
         {
-            Pop(g_state.inside[k].pair);  // the pair stored at the enter, as for a volume gone from the list
+            state.stack.Pop(state.inside[k].pair);  // the pair stored at the enter, as for a volume gone from the list
         }
         else
         {
-            g_state.inside[kept++] = g_state.inside[k];
+            state.inside[kept++] = state.inside[k];
         }
     }
-    g_state.insideCount = kept;
+    state.insideCount = kept;
     for (int e = 0; e < changes.enterCount; ++e)
     {
-        if (g_state.insideCount >= kMaxInside)
+        if (state.insideCount >= kMaxInside)
         {
-            if (!g_overflowed)
+            if (!walk.overflowed)
             {
-                g_overflowed = true;
-                Line(L"player 2 stands in more than {} move-type volumes; the rest are not counted", kMaxInside);
+                walk.overflowed = true;
+                Line(L"{} stands in more than {} move-type volumes; the rest are not counted", players::SeatName(seat),
+                     kMaxInside);
             }
             break;
         }
-        g_state.inside[g_state.insideCount++] = changes.enter[e];
-        Push(changes.enter[e].pair);
+        state.inside[state.insideCount++] = changes.enter[e];
+        state.stack.Push(changes.enter[e].pair);
     }
 }
 
@@ -318,38 +320,40 @@ Pair ControllerLayer7(const void* controller) noexcept
     return pair;
 }
 
-/// Writes player 2's layer 7 with the game's own listener method, as the primary player's.
-void Write(void* controller, Pair want, Pair before) noexcept
+/// Writes the seat's layer 7 with the game's own listener method, as the primary player's.
+void Write(int seat, SeatWalk& walk, void* controller, Pair want, Pair before) noexcept
 {
-    const ULONGLONG now = GetTickCount64();
+    State&          state    = walk.state;
+    const ULONGLONG now      = GetTickCount64();
     void*           listener = ReadPointerAt(g_listener);
-    if (now < g_nextRetry || listener == nullptr || g_state.gateLocation == 0)
+    if (now < state.nextRetry || listener == nullptr || state.gateLocation == 0)
     {
         return;
     }
     bool ran = false, held = false;
     {
-        const primary_controller::Scope scope(players::kPlayerTwoSeat);
+        const primary_controller::Scope scope(seat);
         held = scope.Held();
         if (held)
         {
             const bool limit = !(want == kNoLimit);
-            ran = platform::CallGuarded(g_setLayer7, listener, g_state.gateLocation, want.move, want.dash,
+            ran = platform::CallGuarded(g_setLayer7, listener, state.gateLocation, want.move, want.dash,
                                         static_cast<std::uint8_t>(limit ? 1 : 0));
         }
     }
     const Pair after = ControllerLayer7(controller);
-    g_nextRetry      = after == want ? 0 : now + kRetryMs;
+    state.nextRetry  = after == want ? 0 : now + kRetryMs;
     try
     {
-        std::wstring call = std::format(L"player 2's layer 7 {} -> {}: {}", PairText(before), PairText(want),
+        std::wstring call = std::format(L"{}'s layer 7 {} -> {}: {}", players::SeatName(seat), PairText(before),
+                                        PairText(want),
                                         !held  ? L"not written (the primary scope was refused; tried again)"
                                         : !ran ? L"FAULTED"
                                         : after == want ? L"written by the game's listener method, as the primary player"
                                                         : L"the game's gate declined (the field leader is not ready; tried again)");
-        if (call != g_lastCall)
+        if (call != walk.lastCall)
         {
-            g_lastCall = call;
+            walk.lastCall = call;
             Line(L"{}", call);
         }
     }
@@ -358,12 +362,60 @@ void Write(void* controller, Pair want, Pair before) noexcept
     }
 }
 
-void Reset(void* controller, void* member) noexcept
+/// One seat's tick.
+void TickSeat(int seat) noexcept
 {
-    g_state            = {};
-    g_state.controller = controller;
-    g_state.member     = member;
-    g_nextRetry        = 0;
+    SeatWalk&   walk       = g_seats[static_cast<std::size_t>(seat)];
+    void* const controller = generation::Active(seat) ? generation::ControllerOf(seat) : nullptr;
+    void* const member     = controller != nullptr ? generation::MemberOf(seat) : nullptr;
+    if (controller != walk.state.controller || member != walk.state.member)
+    {
+        // Take, leave, rejoin or another member: rebuilt from the position next.
+        walk.state            = {};
+        walk.state.controller = controller;
+        walk.state.member     = member;
+    }
+    if (member == nullptr)
+    {
+        return;
+    }
+    EnsureNavArea(seat, walk, controller);
+    float position[3]{};
+    Changes changes;
+    if (g_setLayer7 == nullptr || !players::unreal::ActorLocation(member, position) || !Walk(walk.state, position, changes))
+    {
+        return;
+    }
+    Apply(seat, walk, changes);
+    const Pair want   = walk.state.stack.Count() > 0 ? walk.state.stack.At(0).pair : kNoLimit;
+    const Pair before = ControllerLayer7(controller);
+    if (!(before == want))
+    {
+        Write(seat, walk, controller, want, before);
+    }
+
+    const ULONGLONG now = GetTickCount64();
+    if (now >= walk.nextState && platform::Enabled(platform::Level::Debug))
+    {
+        walk.nextState = now + kStateMs;
+        try
+        {
+            std::wstring state = std::format(L"player 1's layer 7 {} (the game's top {}); {}'s {} (own top {}, {} "
+                                             L"volumes, {} stack entries)",
+                                             PairText(ControllerLayer7(generation::ControllerOf(0))),
+                                             PairText(changes.managerTop), players::SeatName(seat),
+                                             PairText(ControllerLayer7(controller)), PairText(want),
+                                             walk.state.insideCount, walk.state.stack.Count());
+            if (state != walk.lastState)
+            {
+                walk.lastState = state;
+                LineAt(platform::Level::Debug, L"{}", state);
+            }
+        }
+        catch (...)
+        {
+        }
+    }
 }
 
 }  // namespace
@@ -398,51 +450,9 @@ void Tick() noexcept
     {
         return;
     }
-    void* const controller = generation::Active() ? generation::PlayerTwoController() : nullptr;
-    void* const member     = controller != nullptr ? generation::Member() : nullptr;
-    if (controller != g_state.controller || member != g_state.member)
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        Reset(controller, member);  // take, leave, rejoin or another member: rebuilt from the position next
-    }
-    if (member == nullptr)
-    {
-        return;
-    }
-    EnsureNavArea(controller);
-    float position[3]{};
-    Changes changes;
-    if (g_setLayer7 == nullptr || !players::unreal::ActorLocation(member, position) || !Walk(position, changes))
-    {
-        return;
-    }
-    Apply(changes);
-    const Pair want   = g_state.stack.Count() > 0 ? g_state.stack.At(0).pair : kNoLimit;
-    const Pair before = ControllerLayer7(controller);
-    if (!(before == want))
-    {
-        Write(controller, want, before);
-    }
-
-    const ULONGLONG now = GetTickCount64();
-    if (now >= g_nextState && platform::Enabled(platform::Level::Debug))
-    {
-        g_nextState = now + kStateMs;
-        try
-        {
-            std::wstring state = std::format(L"player 1's layer 7 {} (the game's top {}); player 2's {} (own top {}, {} "
-                                             L"volumes, {} stack entries)",
-                                             PairText(ControllerLayer7(generation::PlayerOneController())),
-                                             PairText(changes.managerTop), PairText(ControllerLayer7(controller)),
-                                             PairText(want), g_state.insideCount, g_state.stack.Count());
-            if (state != g_lastState)
-            {
-                g_lastState = state;
-                LineAt(platform::Level::Debug, L"{}", state);
-            }
-        }
-        catch (...)
-        {
-        }
+        TickSeat(seat);
     }
 }
 
