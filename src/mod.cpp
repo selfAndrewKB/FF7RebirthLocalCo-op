@@ -454,7 +454,7 @@ private:
         frame.splitShown = splitShown;
         for (int seat = 1; seat <= lss::players::kSeatsBuilt; ++seat)
         {
-            frame.seats[static_cast<std::size_t>(seat)] = {session_->In(seat), session_->PlaysMember(seat)};
+            frame.seats[static_cast<std::size_t>(seat)].state = session_->State(seat);
         }
         lss::modules::TickAfterSession(frame);
         lss::dev::TickWatches(splitShown);  // the dev watches, after the levers they observe

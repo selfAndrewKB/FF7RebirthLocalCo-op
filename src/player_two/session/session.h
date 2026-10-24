@@ -37,8 +37,8 @@
 // modules are installed by mod.cpp next to their siblings.
 //
 // The modules a Seat calls that are not per seat yet (the camera seeds, the command controller, member movement, the
-// rides, the camera override's destroyed member) are player 2's; only the built seats exist (kSeatsBuilt), and step 3
-// of plan/seats.md moves those modules per seat. The log lines still say "player 2": seat 2's name them when it is
+// rides, the camera override's destroyed member) are player 2's; only the built seats exist (kSeatsBuilt), and step 6
+// of plan/seats.md moves those calls to the seat. The log lines still say "player 2": seat 2's name them when it is
 // wired (step 6).
 //
 // Game thread only, outside Draw.
@@ -48,6 +48,7 @@
 #include "player_two/session/party_member.h"
 #include "platform/dev_switch.h"
 #include "players/local_players.h"
+#include "players/seat_state.h"
 #include "players/seats.h"
 
 #include <array>
@@ -98,6 +99,18 @@ public:
 
     /// The seat's player was asked for but is out until a party member is free for it.
     bool AwaitingMember() const noexcept { return outside_.Current() == outside_join::Mode::Await; }
+
+    /// The seat's player was taken out by a map load and joins again once the new map is ready.
+    bool RejoinPending() const noexcept { return outside_.Current() == outside_join::Mode::Rejoin; }
+
+    /// The seat's state in one word (players/seat_state.h), from the flags below.
+    players::SeatState State() const noexcept;
+
+    /// After the seat's tick: logs the state when it changed since the last call (the one place a change is logged).
+    void NoteState() noexcept;
+
+    /// The member the seat's player plays (its name and slot of the party order), or why it has none.
+    std::wstring MemberReading() const;
 
     /// A map is about to load: the seat's player leaves now, without waiting for the member's release.
     /// Returns true if it is out.
@@ -205,6 +218,7 @@ private:
     bool                  waitingForSlot_   = false;    // in, without a member: the slot's is not free yet
     std::uint32_t         slotWaitLogged_   = 0;        // the wait's reason as last logged (logged on change)
     bool                  sharedRide_       = false;    // player 1 rides a shared vehicle: the seat takes no member
+    players::SeatState    loggedState_      = players::SeatState::Out;  // as NoteState last logged it
 
     party_member::PlayerOneBytes playerOneBytes_{};
 };
@@ -247,11 +261,17 @@ public:
     bool          In(int seat) const noexcept;
     bool          AnyIn() const noexcept;
     bool          AwaitingMember(int seat) const noexcept;
+    bool          RejoinPending(int seat) const noexcept;
     bool          PlaysMember(int seat) const noexcept;
     bool          WaitsForMember(int seat) const noexcept;
     bool          StandsAside(int seat) const noexcept;
     const void*   LocalPlayer(int seat) const noexcept;  // null while out
     std::uint32_t JoinCount(int seat) const noexcept;
+
+    /// The seat's state in one word (Seat::State); out for a seat not built.
+    players::SeatState State(int seat) const noexcept;
+    /// The member the seat's player plays, or why it has none (Seat::MemberReading).
+    std::wstring MemberReading(int seat) const;
 
     // ---- player 2's, by the names the callers not yet per seat use ----
     bool          HasPlayerTwo() const noexcept { return In(players::kPlayerTwoSeat); }
@@ -278,9 +298,10 @@ private:
 };
 
 #if LSS_DEV
-/// The session's control commands: join, sticks, p2.log-status and the readings p2.in and p2.state (out, awaiting,
-/// in, playing), player 2's. The leave is the module table's (modules.h: it takes the third view first). Before the
-/// console opens.
+/// The session's control commands. Per built seat, from one function: its join (`join` for player 2, `p3.join` for
+/// player 3) and its readings `p2.in`, `p2.state` (players/seat_state.h's words), `p2.member` and `p2.rejoin` (`p3.`
+/// for player 3). Shared: sticks and p2.log-status. Player 2's leave is the module table's (modules.h: it takes the
+/// third view first). Before the console opens.
 void RegisterCommands(Session& session);
 #endif
 

@@ -351,6 +351,7 @@ lss_test(seats)
 lss_test(camera_access)
 lss_test(attack_framing)
 lss_test(move_type_two)
+lss_test(seat_state)
 # The facts rule (tests/facts_once.py): no engine address declared in two files, no per-build pair with equal halves.
 add_test(NAME facts_once COMMAND python "${CMAKE_CURRENT_SOURCE_DIR}/tests/facts_once.py" "${CMAKE_CURRENT_SOURCE_DIR}/src")
 

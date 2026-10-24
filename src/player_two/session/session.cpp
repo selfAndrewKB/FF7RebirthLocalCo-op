@@ -55,7 +55,7 @@ using platform::Log;
 
 // A Seat calls modules that are still player 2's (own_ride, the camera seeds and the destroyed member's camera
 // override, member_movement under player 2's primary scope, handover_watch; command_menu_two is gated): raising the
-// built seats waits for them to take the seat (plan/seats.md step 3).
+// built seats waits for them to take the seat (plan/seats.md step 6).
 static_assert(players::kSeatsBuilt == 1, "a Seat still calls player 2's modules: see above");
 
 /// Ticks player 1's controller is watched after a join (it has been seen to name no pawn for one).
@@ -926,6 +926,71 @@ bool Seat::PlaysMember() const noexcept
     return In() && phase_ == Phase::Playing && generation::MemberOf(seat_) != nullptr;
 }
 
+players::SeatState Seat::State() const noexcept
+{
+    // A leave during a shared ride is a leave, not the ride's stand-aside.
+    return players::StateOf({.in            = In(),
+                             .playsMember   = PlaysMember(),
+                             .handed        = phase_ != Phase::Leaving && (WaitsForMember() || StandsAside()),
+                             .awaiting      = AwaitingMember(),
+                             .rejoinPending = RejoinPending()});
+}
+
+void Seat::NoteState() noexcept
+{
+    const players::SeatState now = State();
+    if (now != loggedState_)
+    {
+        Log(L"{} is {} (state {}, was {})", players::SeatName(seat_), players::StateMeaning(now),
+            players::StateName(now), players::StateName(loggedState_));
+        loggedState_ = now;
+    }
+}
+
+std::wstring Seat::MemberReading() const
+{
+    const int slot = seat_ + 1;  // the seat's slot of the party order (players/seats.h)
+    if (PlaysMember())
+    {
+        return std::format(L"{} (slot {} of the party order)", NameOf(generation::MemberOf(seat_)), slot);
+    }
+    if (!In())
+    {
+        return AwaitingMember() ? L"none: out until a party member is free"
+               : RejoinPending() ? L"none: joins again once the new map is ready"
+                                 : L"none: out";
+    }
+    if (phase_ == Phase::Leaving)
+    {
+        return L"none: leaving";
+    }
+    if (StandsAside())
+    {
+        return L"none: stands aside while player 1 rides a vehicle the whole party shares";
+    }
+    if (WaitsForMember())
+    {
+        return std::format(L"none: waits for the member in slot {} of the party order (a story script holds it, or "
+                           L"it is not free yet)",
+                           slot);
+    }
+    if (!installed_.member || !generation::Active(seat_))
+    {
+        return L"none: takes no member this time (its stage is not installed, or a fault stopped it; see the log)";
+    }
+    switch (phase_)
+    {
+        case Phase::SettlingPlayerOne:
+        case Phase::Taking:
+            return member_ != nullptr ? std::format(L"taking {}", NameOf(member_)) : L"none yet: joining";
+        case Phase::Swapping: return L"none: changing members";
+        case Phase::Leaving: return L"none: leaving";
+        case Phase::Playing:
+        case Phase::Out: return L"none: takes one as soon as one is free";
+    }
+    return L"none";
+}
+
 bool Seat::HoldsMember() const noexcept
 {
     return member_ != nullptr || ReadPointer(controller_, facts::kControllerLeader) != nullptr;
@@ -1043,6 +1108,7 @@ void Session::Tick() noexcept
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
         At(seat)->Tick();
+        At(seat)->NoteState();  // after the tick: a join, leave or key between ticks is logged here too
     }
 }
 
@@ -1118,6 +1184,24 @@ bool Session::AwaitingMember(int seat) const noexcept
     return s != nullptr && s->AwaitingMember();
 }
 
+bool Session::RejoinPending(int seat) const noexcept
+{
+    const Seat* s = At(seat);
+    return s != nullptr && s->RejoinPending();
+}
+
+players::SeatState Session::State(int seat) const noexcept
+{
+    const Seat* s = At(seat);
+    return s != nullptr ? s->State() : players::SeatState::Out;
+}
+
+std::wstring Session::MemberReading(int seat) const
+{
+    const Seat* s = At(seat);
+    return s != nullptr ? s->MemberReading() : std::wstring(L"none: the seat is not built");
+}
+
 bool Session::PlaysMember(int seat) const noexcept
 {
     const Seat* s = At(seat);
@@ -1157,13 +1241,48 @@ const void* Session::PlayerOne() const noexcept
 
 namespace {
 
-std::wstring PlayerTwoState(const Session& session)
+/// One seat's join and readings, named with `prefix` (`p2`, `p3`); `join` is the join command's name. Taken from
+/// Remake's RegisterSeatCommands (mod.cpp, 2026-10-24); its leave stays the module table's (modules.h).
+void RegisterSeatCommands(Session& session, int seat, const wchar_t* prefix, const wchar_t* join)
 {
-    if (session.HasPlayerTwo())
-    {
-        return session.PlaysMember() ? L"playing" : L"in";
-    }
-    return session.AwaitingMember() ? L"awaiting" : L"out";
+    using control::Outcome;
+    using control::Register;
+    using control::Shape;
+    using control::Value;
+    const std::wstring name = players::SeatName(seat);
+    Register({.name = join,
+              .help = std::format(L"add {}{}; `wait-until {}.state == playing` confirms it", name,
+                                  seat == players::kPlayerTwoSeat ? L" (as Ctrl+F7)" : L"", prefix),
+              .set  = [&session, seat, name](const Value&) {
+                  if (session.In(seat))
+                  {
+                      return Outcome{false, name + L" is already in"};
+                  }
+                  session.Join(seat);  // logs its own outcome
+                  return Outcome{};
+              }});
+    Register({.name = std::format(L"{}.in", prefix), .shape = Shape::OnOff,
+              .help = std::format(L"{}'s local player exists", name),
+              .get  = [&session, seat] { return Value{session.In(seat)}; }});
+    Register({.name  = std::format(L"{}.state", prefix),
+              .shape = Shape::Word,
+              .words = {L"out", L"awaiting", L"rejoining", L"in", L"playing", L"handed"},
+              .help  = std::format(L"{}: out, awaiting (out until a party member is free), rejoining (taken out by a "
+                                   L"map load, joins again once the new map is ready), in (without a member of its "
+                                   L"own: joining, changing members, leaving, or none to be taken; `{}.member` says "
+                                   L"which), playing (plays its member), or handed (in without its member while the "
+                                   L"game has it: a story script, a shared ride)",
+                                   name, prefix),
+              .get   = [&session, seat] { return Value{std::wstring(players::StateName(session.State(seat)))}; }});
+    Register({.name = std::format(L"{}.member", prefix), .shape = Shape::Text,
+              .help = std::format(L"the member {} plays (its name and slot of the party order), or why it has none",
+                                  name),
+              .get  = [&session, seat] { return Value{session.MemberReading(seat)}; }});
+    Register({.name = std::format(L"{}.rejoin", prefix), .shape = Shape::OnOff,
+              .help = std::format(L"{} was taken out by a map load and joins again once the new map is ready (the "
+                                  L"leave cancels it)",
+                                  name),
+              .get  = [&session, seat] { return Value{session.RejoinPending(seat)}; }});
 }
 
 }  // namespace
@@ -1174,22 +1293,12 @@ void RegisterCommands(Session& session)
     using control::Register;
     using control::Shape;
     using control::Value;
-    Register({.name = L"join", .help = L"add player 2 (as Ctrl+F7); `wait-until p2.state == playing` confirms it",
-              .set  = [&session](const Value&) {
-                  if (session.HasPlayerTwo())
-                  {
-                      return Outcome{false, L"player 2 is already in"};
-                  }
-                  session.Join(players::kPlayerTwoSeat);  // logs its own outcome
-                  return Outcome{};
-              }});
-    Register({.name = L"p2.in", .shape = Shape::OnOff, .help = L"player 2's local player exists",
-              .get  = [&session] { return Value{session.HasPlayerTwo()}; }});
-    Register({.name  = L"p2.state",
-              .shape = Shape::Word,
-              .words = {L"out", L"awaiting", L"in", L"playing"},
-              .help  = L"player 2: out, awaiting a member, in without one, or playing their member",
-              .get   = [&session] { return Value{PlayerTwoState(session)}; }});
+    // Player 3's (`p3.join`, `p3.state`, ...) appear with its seat (plan/seats.md step 6).
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        RegisterSeatCommands(session, seat, seat == players::kPlayerTwoSeat ? L"p2" : L"p3",
+                             seat == players::kPlayerTwoSeat ? L"join" : L"p3.join");
+    }
     Register({.name = L"p2.log-status", .help = L"write player 2's status line to the log",
               .set  = [&session](const Value&) {
                   if (!session.HasPlayerTwo())

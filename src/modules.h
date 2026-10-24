@@ -17,6 +17,7 @@
 // share (leave, own camera, fill, third view, window span) are here too, each once.
 
 #include "platform/dev_switch.h"
+#include "players/seat_state.h"
 #include "players/seats.h"
 
 #include <array>
@@ -51,8 +52,12 @@ struct Frame
 {
     struct Seat
     {
-        bool in          = false;  // the session holds the seat's player
-        bool playsMember = false;  // the seat's player plays a party member
+        players::SeatState state = players::SeatState::Out;  // the session's word for the seat (players/seat_state.h)
+
+        /// The session holds the seat's player (in, playing or handed).
+        constexpr bool In() const noexcept { return players::InGame(state); }
+        /// The seat's player plays a party member.
+        constexpr bool PlaysMember() const noexcept { return state == players::SeatState::Playing; }
     };
     std::array<Seat, players::kMaxPlayers> seats{};  // by seat (players/seats.h); index 0, player 1's, unused
     bool splitShown = false;  // player 2 in and the screen split (not player 1's single view)

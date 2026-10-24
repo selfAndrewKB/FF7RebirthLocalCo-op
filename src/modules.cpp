@@ -415,29 +415,30 @@ void TickBeforeSession() noexcept
 
 void TickAfterSession(const Frame& frame) noexcept
 {
-    // The modules below are player 2's until they are per seat or per column (plan/seats.md steps 3 to 5).
+    // The per-seat modules loop the built seats themselves. The per-column ones (the views, the framing, the shapes,
+    // the HUD, the renderer's hints) are player 2's until steps 4 and 5 of plan/seats.md: they read `two`.
     const Frame::Seat& two = frame.seats[players::kPlayerTwoSeat];
     // By seat, whether the seat's player plays a member (index 0 unused): the world modules' per-seat passes.
     std::array<bool, players::kMaxPlayers> plays{};
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        plays[seat] = frame.seats[seat].playsMember;
+        plays[seat] = frame.seats[seat].PlaysMember();
     }
-    views::third_view::Tick(two.in);   // leaves with player 2; follows player 1's view target
-    views::window_span::Tick(two.in);  // leaves with player 2; holds the window's rect
+    views::third_view::Tick(two.In());   // leaves with player 2; follows player 1's view target
+    views::window_span::Tick(two.In());  // leaves with player 2; holds the window's rect
     player_two::walk_limits::Tick();  // after the session's tick: a take's copy is overwritten this frame
-    player_two::nav_strand::Tick(frame.splitShown);  // a stranded player 2 is warped back to the party
+    player_two::nav_strand::Tick(frame.splitShown);  // a stranded player is warped back to the party
     player_two::camera_repair::Tick();
     player_two::traversal_watch::Tick();
     player_two::trigger_two::Tick();
-    player_two::switch_volume_two::Tick();  // player 2's volumes left once player 2 is gone; the summary
+    player_two::switch_volume_two::Tick();  // each seat's volumes left once it is gone; the summary
     player_two::traversal_camera::Tick();  // each seat's idle camera holders; the collision watch (dev)
-    player_two::near_fade::Tick();         // player 2's character's fade state (Debug, on change)
+    player_two::near_fade::Tick();         // each seat's character's fade state (Debug, on change)
     player_two::approach_two::Tick();      // the crossing walk-up calls, swapped once from here
-    player_two::move_type_two::Tick();     // player 2's deferred walk-cap clear, the layer-2 watch
-    player_two::vault_camera::Tick();      // player 2's vault cameras end on player 2's camera (lever L2)
+    player_two::move_type_two::Tick();     // each seat's deferred walk-cap clear, the layer-2 watch
+    player_two::vault_camera::Tick();      // each seat's vault cameras end on its own camera (lever L2)
     player_two::chocobo_climb::Tick();     // each seat's climb camera's states and the summary (Debug)
-    player_two::camera_distance::TickFraming(two.in);  // per-layout distance steps (roadmap 2b)
+    player_two::camera_distance::TickFraming(two.In());  // per-layout distance steps (roadmap 2b)
     player_two::shoulder_scale::Poll(frame.splitShown, views::SplitWidthRatio(false), views::SplitWidthRatio(true));
     player_two::anim_two_views::Tick(frame.splitShown);  // its frame count, before the world tick
     player_two::charapop_near::Tick(frame.splitShown, plays);
@@ -449,7 +450,7 @@ void TickAfterSession(const Frame& frame) noexcept
     // false without the view-point entry (nothing shapes the halves then), so the cameras keep their constraint.
     player_two::main_camera_shape::Update(player_two::generation::Active() && frame.splitShown &&
                                           views::FillsHalves());
-    renderer::FollowPlayerTwo(two.in);  // the submit hints skipped while player 2 is in
+    renderer::FollowPlayerTwo(two.In());  // the submit hints skipped while player 2 is in
 }
 
 void LeavePlayerTwo(player_two::Session& session, const wchar_t* why) noexcept
@@ -561,9 +562,13 @@ void RegisterOwnCommands(player_two::Session& session)
     using control::Register;
     using control::Shape;
     using control::Value;
+    // Player 2's leave; the session registers each seat's join and readings (player_two::RegisterCommands).
+    static_assert(players::kSeatsBuilt == 1, "step 6: register p3.leave here beside the session's p3.join");
     Register({.name = L"leave", .help = L"remove player 2 (as Ctrl+F8); `wait-until p2.in == off` confirms it",
               .set  = [&session](const Value&) {
-                  if (!session.HasPlayerTwo() && !session.AwaitingMember())
+                  // As Ctrl+F8: also stops a wait for a member or a rejoin after a map load.
+                  if (!session.HasPlayerTwo() && !session.AwaitingMember() &&
+                      !session.RejoinPending(players::kPlayerTwoSeat))
                   {
                       return control::Outcome{false, L"player 2 is not in"};
                   }

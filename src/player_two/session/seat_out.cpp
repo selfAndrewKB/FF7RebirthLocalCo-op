@@ -8,8 +8,8 @@
 
 namespace lss::player_two::seat_out {
 
-static_assert(players::kSeatsBuilt == 1, "the modules below are player 2's: each takes the seat before seat 2 is "
-                                         "built (plan/seats.md step 3)");
+static_assert(players::kSeatsBuilt == 1, "each module below takes the seat; LetGo still lets only player 2's through: "
+                                         "drop the gate when seat 2 is built (plan/seats.md step 6)");
 
 void LetGo(int seat) noexcept
 {
