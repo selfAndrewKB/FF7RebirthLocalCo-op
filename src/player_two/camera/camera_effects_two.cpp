@@ -18,9 +18,12 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
+#include <format>
 #include <initializer_list>
 #include <optional>
+#include <string>
 #include <utility>
 
 namespace lss::player_two::camera_effects_two {
@@ -65,13 +68,30 @@ struct Counts
 {
     std::uint32_t guards = 0, shakes = 0, shakeStates = 0, steals = 0, refused = 0;
 };
-Counts                     g_counts;
-// The meshes whose shake NotifyState Begin ran on player 2's camera: their End stops it there (the handle is per
-// component, so an End on the other camera could stop an unrelated shake; S-ATKCAMVERIFY 4b).
-std::array<const void*, 16> g_shakeMeshes{};
+std::array<Counts, players::kMaxPlayers> g_counts{};  // by seat; index 0 unused
+// The meshes whose shake NotifyState Begin ran on a seat's camera, with the seat: their End stops it there (the handle
+// is per component, so an End on another camera could stop an unrelated shake; S-ATKCAMVERIFY 4b).
+struct ShakeMesh
+{
+    const void* mesh = nullptr;
+    int         seat = 0;
+};
+std::array<ShakeMesh, 16>  g_shakeMeshes{};
 std::atomic<std::uint32_t> g_offThread{0};
 platform::Every g_status{kStatusEvery};
 
+Counts& CountsOf(int seat) noexcept
+{
+    return g_counts[static_cast<std::size_t>(seat)];
+}
+
+/// The seat's member while its player is in, or null.
+void* SeatMember(int seat) noexcept
+{
+    return generation::Active(seat) ? generation::MemberOf(seat) : nullptr;
+}
+
+/// On the game thread (counted otherwise) with a built seat's player in with a member.
 bool Ready() noexcept
 {
     if (!generation::OnGameThread())
@@ -79,7 +99,14 @@ bool Ready() noexcept
         g_offThread.fetch_add(1, std::memory_order_relaxed);
         return false;
     }
-    return generation::Active() && generation::Member() != nullptr;
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (SeatMember(seat) != nullptr)
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool Line() noexcept
@@ -87,14 +114,15 @@ bool Line() noexcept
     return platform::Enabled(platform::Level::Debug);
 }
 
-/// Player 2's leader view (leader, leader type, and with `primary` the primary controller) for one call; nothing held if
+/// A seat's leader view (leader, leader type, and with `primary` the primary controller) for one call; nothing held if
 /// any part refuses (the ladder's all-or-nothing rule).
 class PlayerTwoView
 {
 public:
-    PlayerTwoView(void* member, bool primary) noexcept
+    PlayerTwoView(int seat, void* member, bool primary) noexcept
     {
         p2_scope::Args args;
+        args.seat = seat;
         if (p2_scope::FillMember(args, member))
         {
             scopes_.emplace((primary ? p2_scope::Primary : 0u) | p2_scope::Leader | p2_scope::LeaderType, args);
@@ -123,24 +151,35 @@ char Guard(void* component, const void* location) noexcept
     {
         return original(component, location);
     }
-    void*      member = generation::Member();
-    const auto type   = party_member::PlayerTypeOf(member);
-    if (!type || leader_answer::ComponentPlayerType(component) != *type)
+    // The seat whose member's player type the component's is (the first in seat order).
+    int   seat   = 0;
+    void* member = nullptr;
+    for (int s = 1; s <= players::kSeatsBuilt && seat == 0; ++s)
+    {
+        void*      candidate = SeatMember(s);
+        const auto type      = candidate != nullptr ? party_member::PlayerTypeOf(candidate) : std::nullopt;
+        if (type && leader_answer::ComponentPlayerType(component) == *type)
+        {
+            seat   = s;
+            member = candidate;
+        }
+    }
+    if (seat == 0)
     {
         return original(component, location);
     }
-    const PlayerTwoView view(member, true);
+    const PlayerTwoView view(seat, member, true);
     if (!view.Held())
     {
-        ++g_counts.refused;
+        ++CountsOf(seat).refused;
         return original(component, location);
     }
-    ++g_counts.guards;
+    ++CountsOf(seat).guards;
     const char played = original(component, location);
     if (Line())
     {
-        platform::LogDebug(L"camera effects: player 2's member's guard camera effect {} player 2's camera",
-                           played != 0 ? L"on" : L"closed by the game's gate for");
+        platform::LogDebug(L"camera effects: {}'s member's guard camera effect {} {}'s camera", players::SeatName(seat),
+                           played != 0 ? L"on" : L"closed by the game's gate for", players::SeatName(seat));
     }
     return played;
 }
@@ -149,94 +188,111 @@ char Guard(void* component, const void* location) noexcept
 // Shake notifies
 // ---------------------------------------------------------------------------------------------
 
-/// Whether a notify on `mesh` is player 2's member's (the shake then runs in player 2's view).
-bool MembersMesh(const void* mesh) noexcept
+/// The seat whose member owns `mesh` (a shake then runs in that seat's view), or 0.
+int MeshSeat(const void* mesh) noexcept
 {
-    return Ready() && mesh != nullptr && OwnerOf(mesh) == generation::Member();
+    if (!Ready() || mesh == nullptr)
+    {
+        return 0;
+    }
+    const void* owner = OwnerOf(mesh);
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (owner != nullptr && owner == SeatMember(seat))
+        {
+            return seat;
+        }
+    }
+    return 0;
 }
 
 void Shake(void* notify, void* mesh, void* animation) noexcept
 {
     const auto original = reinterpret_cast<Notify3Fn>(g_shakeSlot.Original());
-    if (!MembersMesh(mesh))
+    const int  seat     = MeshSeat(mesh);
+    if (seat == 0)
     {
         original(notify, mesh, animation);
         return;
     }
-    const PlayerTwoView view(generation::Member(), true);
-    g_counts.shakes += view.Held() ? 1 : 0;
-    g_counts.refused += view.Held() ? 0 : 1;
+    const PlayerTwoView view(seat, generation::MemberOf(seat), true);
+    CountsOf(seat).shakes += view.Held() ? 1 : 0;
+    CountsOf(seat).refused += view.Held() ? 0 : 1;
     original(notify, mesh, animation);
 }
 
-void RememberShake(const void* mesh) noexcept
+void RememberShake(const void* mesh, int seat) noexcept
 {
-    for (const void* slot : g_shakeMeshes)
+    for (ShakeMesh& slot : g_shakeMeshes)
     {
-        if (slot == mesh)
+        if (slot.mesh == mesh)
         {
+            slot.seat = seat;
             return;
         }
     }
-    for (const void*& slot : g_shakeMeshes)
+    for (ShakeMesh& slot : g_shakeMeshes)
     {
-        if (slot == nullptr)
+        if (slot.mesh == nullptr)
         {
-            slot = mesh;
+            slot = {mesh, seat};
             return;
         }
     }
-    g_shakeMeshes[0] = mesh;  // full (an End never came): one entry goes
+    g_shakeMeshes[0] = {mesh, seat};  // full (an End never came): one entry goes
 }
 
-/// Forgets `mesh`; true if its Begin ran on player 2's camera.
-bool ForgetShake(const void* mesh) noexcept
+/// Forgets `mesh`; the seat on whose camera its Begin ran, or 0.
+int ForgetShake(const void* mesh) noexcept
 {
-    for (const void*& slot : g_shakeMeshes)
+    for (ShakeMesh& slot : g_shakeMeshes)
     {
-        if (slot == mesh)
+        if (slot.mesh == mesh)
         {
-            slot = nullptr;
-            return true;
+            const int seat = slot.seat;
+            slot           = {};
+            return seat;
         }
     }
-    return false;
+    return 0;
 }
 
 void ShakeBegin(void* notify, void* mesh, void* animation, float duration) noexcept
 {
     const auto original = reinterpret_cast<Notify4Fn>(g_shakeBeginSlot.Original());
-    if (!MembersMesh(mesh))
+    const int  seat     = MeshSeat(mesh);
+    if (seat == 0)
     {
         original(notify, mesh, animation, duration);
         return;
     }
-    const PlayerTwoView view(generation::Member(), true);
-    g_counts.shakeStates += view.Held() ? 1 : 0;
-    g_counts.refused += view.Held() ? 0 : 1;
+    const PlayerTwoView view(seat, generation::MemberOf(seat), true);
+    CountsOf(seat).shakeStates += view.Held() ? 1 : 0;
+    CountsOf(seat).refused += view.Held() ? 0 : 1;
     if (view.Held())
     {
-        RememberShake(mesh);
+        RememberShake(mesh, seat);
     }
     original(notify, mesh, animation, duration);
 }
 
-/// The End stops the component's shake handle on the primary camera: on player 2's camera exactly when its Begin ran
+/// The End stops the component's shake handle on the primary camera: on the seat's camera exactly when its Begin ran
 /// there.
 void ShakeEnd(void* notify, void* mesh, void* animation) noexcept
 {
     const auto original = reinterpret_cast<Notify3Fn>(g_shakeEndSlot.Original());
-    if (!generation::OnGameThread() || !ForgetShake(mesh))
+    const int  seat     = generation::OnGameThread() ? ForgetShake(mesh) : 0;
+    if (seat == 0)
     {
         original(notify, mesh, animation);
         return;
     }
-    if (!generation::Active() || generation::Member() == nullptr)
+    if (SeatMember(seat) == nullptr)
     {
-        return;  // player 2 left: the shake went with its camera manager; nothing of it to stop on player 1's
+        return;  // the seat's player left: the shake went with its camera manager; nothing of it to stop on player 1's
     }
-    const PlayerTwoView view(generation::Member(), true);
-    g_counts.refused += view.Held() ? 0 : 1;
+    const PlayerTwoView view(seat, generation::MemberOf(seat), true);
+    CountsOf(seat).refused += view.Held() ? 0 : 1;
     if (view.Held())
     {
         original(notify, mesh, animation);
@@ -255,32 +311,54 @@ void StealBegin(void* notify, void* mesh, void* animation, float duration) noexc
         original(notify, mesh, animation, duration);
         return;
     }
-    void*       member = generation::Member();
-    const void* owner  = OwnerOf(mesh);
+    const void* owner = OwnerOf(mesh);
     // Another party character (the game's own Begin wants an EndPlayerCharacter; the pair test reads character fields),
-    // in a chain pair with player 2's member by the game's own test.
-    char shares = 0;
-    if (owner == nullptr || owner == member || !party_member::PlayerTypeOf(owner) ||
-        !platform::CallGuarded(g_sharesKey, shares, owner, static_cast<const void*>(member)) || shares == 0)
+    // in a chain pair with a seat's member by the game's own test: the first seat in seat order.
+    int   seat      = 0;
+    void* member    = nullptr;
+    bool  typeKnown = false;
+    for (int s = 1; owner != nullptr && s <= players::kSeatsBuilt && seat == 0; ++s)
+    {
+        void* candidate = SeatMember(s);
+        char  shares    = 0;
+        if (candidate == nullptr || owner == candidate)
+        {
+            continue;  // the seat's member's own notify stays the game's
+        }
+        if (!typeKnown && !party_member::PlayerTypeOf(owner))
+        {
+            break;
+        }
+        typeKnown = true;
+        if (platform::CallGuarded(g_sharesKey, shares, owner, static_cast<const void*>(candidate)) && shares != 0)
+        {
+            seat   = s;
+            member = candidate;
+        }
+    }
+    if (seat == 0)
     {
         original(notify, mesh, animation, duration);
         return;
     }
-    const PlayerTwoView view(member, false);  // the stealer is the leader by type; no camera call inside Begin
+    const PlayerTwoView view(seat, member, false);  // the stealer is the leader by type; no camera call inside Begin
     if (!view.Held())
     {
-        ++g_counts.refused;
+        ++CountsOf(seat).refused;
         original(notify, mesh, animation, duration);
         return;
     }
-    ++g_counts.steals;
+    ++CountsOf(seat).steals;
     original(notify, mesh, animation, duration);
     if (Line())
     {
-        platform::LogDebug(L"camera effects: a chain move by {} with player 2's member: player 2's camera looks between "
-                           L"player 2's member and its partner (StealCamera with player 2 as the leader)",
-                           owner == ReadPointer(generation::PlayerOneController(), facts::kControllerPawn) ? L"player 1's character"
-                                                                                          : L"a party ally");
+        const wchar_t* name = players::SeatName(seat);
+        platform::LogDebug(L"camera effects: a chain move by {} with {}'s member: {}'s camera looks between "
+                           L"{}'s member and its partner (StealCamera with {} as the leader)",
+                           owner == ReadPointer(generation::ControllerOf(0), facts::kControllerPawn)
+                               ? L"player 1's character"
+                               : L"a party ally",
+                           name, name, name, name);
     }
 }
 
@@ -323,16 +401,33 @@ void Tick() noexcept
     {
         return;
     }
-    const Counts c = std::exchange(g_counts, {});
+    const auto counts    = std::exchange(g_counts, {});
     const auto offThread = platform::Take(g_offThread);
-    if (c.guards + c.shakes + c.shakeStates + c.steals + c.refused + offThread == 0)
+    std::uint32_t total  = offThread;
+    for (const Counts& c : counts)
+    {
+        total += c.guards + c.shakes + c.shakeStates + c.steals + c.refused;
+    }
+    if (total == 0)
     {
         return;
     }
-    platform::LogDebug(L"camera effects (10 s): on player 2's camera: guard effects {}, shake notifies {}, shake notify "
-                       L"states {}, chain-move pulls {}; player 2's view refused {}; calls off the game thread (the game's "
-                       L"own) {}",
-                       c.guards, c.shakes, c.shakeStates, c.steals, c.refused, offThread);
+    try
+    {
+        std::wstring seats;  // per built seat, as the line named player 2 alone
+        for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+        {
+            const Counts&  c    = counts[static_cast<std::size_t>(seat)];
+            const wchar_t* name = players::SeatName(seat);
+            seats += std::format(L"on {}'s camera: guard effects {}, shake notifies {}, shake notify states {}, "
+                                 L"chain-move pulls {}; {}'s view refused {}; ",
+                                 name, c.guards, c.shakes, c.shakeStates, c.steals, name, c.refused);
+        }
+        platform::LogDebug(L"camera effects (10 s): {}calls off the game thread (the game's own) {}", seats, offThread);
+    }
+    catch (...)
+    {
+    }
 }
 
 void Remove() noexcept
