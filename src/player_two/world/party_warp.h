@@ -14,7 +14,15 @@
 // are all the game's. If the request has not finished within kFinishAfterSeconds, the game's own "finish now" (+0x278)
 // completes it at the follow target, as the game does after a fast travel's wait. Game thread, outside every player-2
 // scope (a follow state run as the party leader clears its leader; a chocobo's would follow itself).
+//
+// Per seat (players/seats.h): any seat's member or ridden chocobo is a subject ("player 2" above). One warp is driven
+// at a time and owned by the seat that started it: another seat's Start is refused (logged) while it runs; nav_strand
+// holds that seat's request until the warp is over. This keeps two players' calls exactly as before; whether the game
+// takes two forced follow warps at once is an open question.
 
+#include "players/seats.h"
+
+#include <array>
 #include <string>
 
 namespace lss::platform {
@@ -23,28 +31,35 @@ class GameImage;
 
 namespace lss::player_two::party_warp {
 
-/// Whose follow state is driven: player 2's member on foot, or the chocobo player 2 rides (the member seated on it).
+/// Whose follow state is driven: a seat's member on foot, or the chocobo the seat's player rides (the member seated on
+/// it).
 enum class Subject
 {
     Member,
     Chocobo,
 };
 
+/// A pawn per seat (index 0 unused; null: none).
+using SeatPawns = std::array<const void*, players::kMaxPlayers>;
+
 /// Checks the PLAYER follow vtable's slots (required), the chocobo variants' (optional) and the two guards'
 /// functions; logged either way.
 bool Install(const platform::GameImage& image) noexcept;
 
-/// Starts the forced warp for `pawn` (the member, or the chocobo she rides) if every guard holds (logs which one did
-/// not). `attached`: the member's root component is attached to something (a ride; refused for Member only).
-/// `splitShown`: the split is on screen (no menu, map or cutscene owns it). Game thread.
-bool Start(void* pawn, Subject subject, bool attached, bool splitShown) noexcept;
+/// Starts `seat`'s forced warp for `pawn` (the member, or the chocobo she rides) if every guard holds and no warp is
+/// being driven (logs which one did not). `attached`: the member's root component is attached to something (a ride;
+/// refused for Member only). `splitShown`: the split is on screen (no menu, map or cutscene owns it). Game thread.
+bool Start(int seat, void* pawn, Subject subject, bool attached, bool splitShown) noexcept;
 
-/// Each engine tick: drives a started warp until the game clears it. `member`: player 2's member (null when none);
-/// `chocobo`: the chocobo player 2 rides seated (null when not riding). Game thread.
-void Tick(void* member, const void* chocobo, bool splitShown, float seconds) noexcept;
+/// Each engine tick: drives a started warp until the game clears it. By seat, `members`: each seat's member (null
+/// when none); `chocobos`: the chocobo each seat's player rides seated (null when not riding). Game thread.
+void Tick(const SeatPawns& members, const SeatPawns& chocobos, bool splitShown, float seconds) noexcept;
 
 /// A warp is being driven.
 bool Busy() noexcept;
+
+/// The seat whose warp is being driven, or -1.
+int BusySeat() noexcept;
 
 /// The pawn's retained AI's current state, if it is a checked follow state for `subject` (null otherwise).
 const void* FollowStateOf(const void* pawn, Subject subject) noexcept;

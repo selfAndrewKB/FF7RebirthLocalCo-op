@@ -7,6 +7,7 @@
 #include "platform/verified_code.h"
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
+#include "players/seats.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -106,10 +107,13 @@ TestFn         g_inBattle  = nullptr;
 std::optional<platform::GameImage> g_image;  // for research IDA addresses in the log
 bool           g_installed = false;
 
-// Game thread.
+// Game thread. One warp at a time, owned by a seat: a second seat's Start is refused while it runs, and nav_strand
+// holds that seat's request until the warp is over (the two-player order of calls kept; whether the game takes two
+// forced follow warps at once is not known).
 void*          g_state   = nullptr;  // the follow state being driven
 const Variant* g_variant = nullptr;  // its variant
 const void*    g_pawn    = nullptr;  // whose state it is (the member, or the chocobo)
+int            g_seat    = -1;       // whose warp it is (players/seats.h)
 Subject        g_subject = Subject::Member;
 float          g_elapsed = 0.0f;
 int            g_updates = 0;
@@ -123,9 +127,17 @@ std::uint8_t ByteAt(const void* object, std::uint32_t offset) noexcept
     return value;
 }
 
-const wchar_t* Who(Subject subject) noexcept
+const wchar_t* Who(int seat, Subject subject) noexcept
 {
-    return subject == Subject::Member ? L"player 2's member" : L"player 2's chocobo";
+    constexpr const wchar_t* kMembers[players::kMaxPlayers]  = {L"player 1's member", L"player 2's member",
+                                                                L"player 3's member"};
+    constexpr const wchar_t* kChocobos[players::kMaxPlayers] = {L"player 1's chocobo", L"player 2's chocobo",
+                                                                L"player 3's chocobo"};
+    if (seat < 0 || seat >= players::kMaxPlayers)
+    {
+        return subject == Subject::Member ? L"a player's member" : L"a player's chocobo";
+    }
+    return subject == Subject::Member ? kMembers[seat] : kChocobos[seat];
 }
 
 /// The checked variant `state`'s vtable is, for `subject`; null if none.
@@ -181,6 +193,7 @@ void Stop() noexcept
     g_state   = nullptr;
     g_variant = nullptr;
     g_pawn    = nullptr;
+    g_seat    = -1;
     g_elapsed = 0.0f;
     g_updates = 0;
 }
@@ -199,7 +212,8 @@ void FinishNow(const wchar_t* why) noexcept
     const int  query = QueryStatus();
     const bool ok    = platform::CallGuarded(g_variant->finish, g_state);
     platform::Log(L"party warp: {} ({}) {} after {:.2f} s ({} update(s), query status {}); the game's finish-now called{}",
-                  Who(g_subject), g_variant->fact->name, why, g_elapsed, g_updates, query, ok ? L"" : L" and FAULTED");
+                  Who(g_seat, g_subject), g_variant->fact->name, why, g_elapsed, g_updates, query,
+                  ok ? L"" : L" and FAULTED");
     Stop();
 }
 
@@ -239,22 +253,28 @@ bool Install(const platform::GameImage& image) noexcept
     const auto inBattle  = platform::FindFunction(image, facts::kIsInBattle);
     if (g_variants[0].vtable == 0 || !partyIdle || !inBattle)
     {
-        platform::Log(L"party warp: UNAVAILABLE (a check failed); a stranded player 2 is not brought back");
+        platform::Log(L"party warp: UNAVAILABLE (a check failed); a stranded {} is not brought back",
+                      players::kSeatsBuilt == 1 ? L"player 2" : L"further player");
         return false;
     }
     g_partyIdle = reinterpret_cast<TestFn>(*partyIdle);
     g_inBattle  = reinterpret_cast<TestFn>(*inBattle);
     g_image = image;
     g_installed = true;
-    platform::Log(L"party warp: a stranded player 2 is brought back by the game's follow warp (on foot; riding: {} of 3 "
+    platform::Log(L"party warp: a stranded {} is brought back by the game's follow warp (on foot; riding: {} of 3 "
                   L"chocobo follow variants checked)",
-                  chocoboVariants);
+                  players::kSeatsBuilt == 1 ? L"player 2" : L"further player", chocoboVariants);
     return true;
 }
 
 bool Busy() noexcept
 {
     return g_state != nullptr;
+}
+
+int BusySeat() noexcept
+{
+    return g_state != nullptr ? g_seat : -1;
 }
 
 const void* FollowStateOf(const void* pawn, Subject subject) noexcept
@@ -287,15 +307,16 @@ std::wstring AiText(const void* pawn, Subject subject) noexcept
     }
 }
 
-bool Start(void* pawn, Subject subject, bool attached, bool splitShown) noexcept
+bool Start(int seat, void* pawn, Subject subject, bool attached, bool splitShown) noexcept
 {
-    if (!g_installed || pawn == nullptr || !generation::OnGameThread())
+    if (!g_installed || pawn == nullptr || !players::SeatBuilt(seat) || !generation::OnGameThread())
     {
         return false;
     }
     if (g_state != nullptr)
     {
-        platform::Log(L"party warp: {} not started (a warp of {} is being driven)", Who(subject), Who(g_subject));
+        platform::Log(L"party warp: {} not started (a warp of {} is being driven)", Who(seat, subject),
+                      Who(g_seat, g_subject));
         return false;
     }
     const void*    ai      = nullptr;
@@ -319,39 +340,45 @@ bool Start(void* pawn, Subject subject, bool attached, bool splitShown) noexcept
                                                                               : nullptr;
     if (refused != nullptr)
     {
-        platform::Log(L"party warp: {} not started ({}); its {}", Who(subject), refused, AiText(pawn, subject));
+        platform::Log(L"party warp: {} not started ({}); its {}", Who(seat, subject), refused, AiText(pawn, subject));
         return false;
     }
     const FollowTeleportParams params{};
     if (!platform::CallGuarded(variant->force, state, &params))
     {
-        platform::Log(L"party warp: {}'s forced request FAULTED; not driven", Who(subject));
+        platform::Log(L"party warp: {}'s forced request FAULTED; not driven", Who(seat, subject));
         return false;
     }
     g_state   = state;
     g_variant = variant;
     g_pawn    = pawn;
+    g_seat    = seat;
     g_subject = subject;
     g_elapsed = 0.0f;
     g_updates = 0;
     platform::Log(L"party warp: forced follow warp requested for {} ({} follow state, mode 0, fade), pending {}; its AI "
                   L"skip flag {}",
-                  Who(subject), variant->fact->name, ByteAt(state, kFollowStateForced), ByteAt(ai, kAiSkipsUpdate));
+                  Who(seat, subject), variant->fact->name, ByteAt(state, kFollowStateForced), ByteAt(ai, kAiSkipsUpdate));
     return true;
 }
 
-void Tick(void* member, const void* chocobo, bool splitShown, float seconds) noexcept
+void Tick(const SeatPawns& members, const SeatPawns& chocobos, bool splitShown, float seconds) noexcept
 {
     if (g_state == nullptr || !generation::OnGameThread())
     {
         return;
     }
-    const void* pawn = g_subject == Subject::Member ? member : chocobo;
+    const void* member = members[static_cast<std::size_t>(g_seat)];
+    const void* pawn   = g_subject == Subject::Member ? member : chocobos[static_cast<std::size_t>(g_seat)];
     if (pawn != g_pawn || member == nullptr)
     {
-        // Player 2 left, changed members or got off: the AI takes the pawn back and its own tick finishes the request.
-        platform::Log(L"party warp: {} changed mid-warp after {:.2f} s ({}); left to its AI", Who(g_subject), g_elapsed,
-                      g_subject == Subject::Chocobo && member != nullptr ? L"player 2 got off" : L"member changed or left");
+        // The seat's player left, changed members or got off: the AI takes the pawn back and its own tick finishes the
+        // request.
+        constexpr const wchar_t* kGotOff[players::kMaxPlayers] = {L"player 1 got off", L"player 2 got off",
+                                                                  L"player 3 got off"};
+        platform::Log(L"party warp: {} changed mid-warp after {:.2f} s ({}); left to its AI", Who(g_seat, g_subject),
+                      g_elapsed,
+                      g_subject == Subject::Chocobo && member != nullptr ? kGotOff[g_seat] : L"member changed or left");
         Stop();
         return;
     }
@@ -367,14 +394,14 @@ void Tick(void* member, const void* chocobo, bool splitShown, float seconds) noe
         else
         {
             platform::Log(L"party warp: {}'s AI left its follow state mid-warp after {:.2f} s; nothing pending",
-                          Who(g_subject), g_elapsed);
+                          Who(g_seat, g_subject), g_elapsed);
             Stop();
         }
         return;
     }
     if (ByteAt(g_state, kFollowStateForced) == 0)
     {
-        platform::Log(L"party warp: {} done after {:.2f} s ({} update(s)), warp queued {}", Who(g_subject), g_elapsed,
+        platform::Log(L"party warp: {} done after {:.2f} s ({} update(s)), warp queued {}", Who(g_seat, g_subject), g_elapsed,
                       g_updates, ByteAt(pawn, kCharacterWarping));
         Stop();
         return;
@@ -398,7 +425,7 @@ void Tick(void* member, const void* chocobo, bool splitShown, float seconds) noe
     if (!platform::CallGuarded(g_variant->query, g_state, seconds) ||
         !platform::CallGuarded(g_variant->update, g_state, seconds))
     {
-        platform::Log(L"party warp: {}'s teleport update FAULTED ({}); finishing", Who(g_subject),
+        platform::Log(L"party warp: {}'s teleport update FAULTED ({}); finishing", Who(g_seat, g_subject),
                       platform::DescribeFault(platform::LastFault()).text);
         FinishNow(L"update fault");
         return;

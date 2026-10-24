@@ -24,6 +24,12 @@
 // as well as the game thread, so the redirects only count (atomics) and Tick, on the game thread, turns the
 // counts into events. Inert unless player 2 is in. The lines carry both players' positions and the leader's
 // nav cell; the AI probes and the once-a-second status line are dev tools.
+//
+// Per seat (players/seats.h): each seat has its two subjects (its member and its chocobo), their counts, strands and
+// tick clock; the redirects find the subject by its root among every seat's, and Tick steps the seats in order. One
+// warp at a time (party_warp.h): a seat whose strand reaches "warp" while another seat's warp runs waits (logged) and
+// asks once that warp is over, if its strand still holds. The chocobos come from chocobo_ride, which answers for
+// player 2 only until it is per seat.
 
 namespace lss::platform {
 class GameImage;
