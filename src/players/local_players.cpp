@@ -11,6 +11,18 @@
 
 namespace lss::players {
 
+std::int32_t LocalPlayerControllerId(const unreal::UObject* localPlayer) noexcept
+{
+    std::int32_t id = -1;
+    if (localPlayer == nullptr ||
+        !platform::CopyGuarded(&id, reinterpret_cast<const std::byte*>(localPlayer) + facts::kLocalPlayerControllerId,
+                               sizeof(id)))
+    {
+        return -1;
+    }
+    return id;
+}
+
 namespace {
 
 using unreal::UObject;
@@ -27,26 +39,12 @@ bool Contains(RC::Unreal::TArray<unreal::UObject*>& players, unreal::UObject* pl
     return false;
 }
 
-/// The controller id the engine gave `localPlayer` (ULocalPlayer::ControllerId), or -1 if unreadable (0 is player
-/// 1's, so a failed read must not give it).
-std::int32_t ControllerIdOf(const unreal::UObject* localPlayer) noexcept
-{
-    std::int32_t id = -1;
-    if (localPlayer == nullptr ||
-        !platform::CopyGuarded(&id, reinterpret_cast<const std::byte*>(localPlayer) + facts::kLocalPlayerControllerId,
-                               sizeof(id)))
-    {
-        return -1;
-    }
-    return id;
-}
-
 /// The controller id of a listed local player that is neither player 1 (0) nor a built seat nor `joining`, or -1.
 std::int32_t UnseatedId(RC::Unreal::TArray<unreal::UObject*>& players, std::int32_t joining) noexcept
 {
     for (std::int32_t i = 0; i < players.Num(); ++i)
     {
-        const std::int32_t id = ControllerIdOf(players[i]);
+        const std::int32_t id = LocalPlayerControllerId(players[i]);
         if (id > 0 && id != joining && !SeatBuilt(id))  // an unread id (-1) is no evidence
         {
             return id;
@@ -60,7 +58,7 @@ bool SeatListed(RC::Unreal::TArray<unreal::UObject*>& players, std::int32_t seat
 {
     for (std::int32_t i = 0; i < players.Num(); ++i)
     {
-        if (ControllerIdOf(players[i]) == seat)
+        if (LocalPlayerControllerId(players[i]) == seat)
         {
             return true;
         }
@@ -227,7 +225,7 @@ LocalPlayers::Added LocalPlayers::Add(unreal::UObject* playerOneController) noex
         return added;
     }
     player_ = (*players)[before];  // the engine appends the new player, after whoever is listed
-    if (const std::int32_t id = ControllerIdOf(player_); id != seat_)
+    if (const std::int32_t id = LocalPlayerControllerId(player_); id != seat_)
     {
         platform::Log(L"WARNING: the local player the engine appended has controller id {}, not {}", id, seat_);
     }

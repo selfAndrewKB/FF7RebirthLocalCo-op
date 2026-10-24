@@ -20,6 +20,10 @@
 
 namespace lss::players {
 
+/// The controller id the engine gave `localPlayer` (ULocalPlayer::ControllerId), which for the mod's players is the
+/// seat; -1 if unreadable (0 is player 1's, so a failed read must not give it).
+std::int32_t LocalPlayerControllerId(const unreal::UObject* localPlayer) noexcept;
+
 class LocalPlayers
 {
 public:
