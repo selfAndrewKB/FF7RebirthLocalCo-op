@@ -3,6 +3,9 @@
 #include "facts/engine.h"
 #include "platform/guarded.h"
 #include "platform/log.h"
+#include "players/seats.h"
+
+#include <cstddef>
 
 #include <Unreal/UFunction.hpp>
 
@@ -17,6 +20,47 @@ bool Contains(RC::Unreal::TArray<unreal::UObject*>& players, unreal::UObject* pl
     for (std::int32_t i = 0; i < players.Num(); ++i)
     {
         if (players[i] == player)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+/// The controller id the engine gave `localPlayer` (ULocalPlayer::ControllerId), or -1 if unreadable (0 is player
+/// 1's, so a failed read must not give it).
+std::int32_t ControllerIdOf(const unreal::UObject* localPlayer) noexcept
+{
+    std::int32_t id = -1;
+    if (localPlayer == nullptr ||
+        !platform::CopyGuarded(&id, reinterpret_cast<const std::byte*>(localPlayer) + facts::kLocalPlayerControllerId,
+                               sizeof(id)))
+    {
+        return -1;
+    }
+    return id;
+}
+
+/// The controller id of a listed local player that is neither player 1 (0) nor a built seat nor `joining`, or -1.
+std::int32_t UnseatedId(RC::Unreal::TArray<unreal::UObject*>& players, std::int32_t joining) noexcept
+{
+    for (std::int32_t i = 0; i < players.Num(); ++i)
+    {
+        const std::int32_t id = ControllerIdOf(players[i]);
+        if (id > 0 && id != joining && !SeatBuilt(id))  // an unread id (-1) is no evidence
+        {
+            return id;
+        }
+    }
+    return -1;
+}
+
+/// A listed local player already has controller id `seat`.
+bool SeatListed(RC::Unreal::TArray<unreal::UObject*>& players, std::int32_t seat) noexcept
+{
+    for (std::int32_t i = 0; i < players.Num(); ++i)
+    {
+        if (ControllerIdOf(players[i]) == seat)
         {
             return true;
         }
@@ -114,16 +158,35 @@ bool RemoveLocalPlayer(UObject* gameInstance, UObject* localPlayer, std::uintptr
 LocalPlayers::PlayerOne LocalPlayers::FirstPlayer(bool log) const noexcept
 {
     auto* players = unreal::LocalPlayers(unreal::GameInstance());
-    if (players == nullptr || players->Num() != seat_)
+    if (players == nullptr || players->Num() < 1 || players->Num() >= kMaxPlayers)
     {
         if (log)
         {
-            platform::Log(L"join refused: expected exactly {} local player(s), found {}", seat_,
+            platform::Log(L"join refused: expected 1 to {} local player(s) before the join, found {}", kMaxPlayers - 1,
                           players == nullptr ? -1 : players->Num());
         }
         return {};
     }
-    unreal::UObject*  localPlayer = (*players)[0];
+    // The seat is free when no listed player has its controller id (a list position names no seat: a leave closes
+    // the list up). A listed player with no seat's id (the third view's 2 while seat 2 is not built, left behind by
+    // a removal that failed) refuses the join too: the new player would take a column the mod gives another.
+    if (SeatListed(*players, seat_))
+    {
+        if (log)
+        {
+            platform::Log(L"join refused: a local player with controller id {} is listed already", seat_);
+        }
+        return {};
+    }
+    if (const std::int32_t stranger = UnseatedId(*players, seat_); stranger >= 0)
+    {
+        if (log)
+        {
+            platform::Log(L"join refused: a local player with controller id {} is listed, no built seat's", stranger);
+        }
+        return {};
+    }
+    unreal::UObject*  localPlayer = (*players)[0];  // player 1 is the list's first: no leave removes it
     unreal::UObject** controller  = unreal::ControllerField(localPlayer);
     if (controller == nullptr || *controller == nullptr)
     {
@@ -151,18 +214,23 @@ LocalPlayers::Added LocalPlayers::Add(unreal::UObject* playerOneController) noex
         return added;
     }
 
-    const auto created = CreatePlayerWithController(playerOneController, seat_);
-    added.raised       = !created.called;
+    const std::int32_t before  = players->Num();
+    const auto         created = CreatePlayerWithController(playerOneController, seat_);
+    added.raised               = !created.called;
 
     // The engine's list decides what happened, not the call: an exception can be raised after the
     // engine already added the player, and such a player must still be removed before a map load.
-    if (players->Num() != seat_ + 1)
+    if (players->Num() != before + 1)
     {
         platform::Log(L"join failed: the engine did not add a local player ({}; count now {})",
                       created.called ? L"the call returned" : L"the call raised an exception", players->Num());
         return added;
     }
-    player_       = (*players)[seat_];  // the engine appends the new player
+    player_ = (*players)[before];  // the engine appends the new player, after whoever is listed
+    if (const std::int32_t id = ControllerIdOf(player_); id != seat_)
+    {
+        platform::Log(L"WARNING: the local player the engine appended has controller id {}, not {}", id, seat_);
+    }
     gameInstance_ = gameInstance;
     ++joins_;
 

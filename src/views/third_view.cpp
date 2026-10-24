@@ -103,9 +103,18 @@ bool Add() noexcept
         platform::Log(L"third view: player 2's camera-manager stage is not ready");
         return false;
     }
+    // Player 2 listed beside player 1, not only its generation: the game may have removed player 2 this tick, before
+    // the session saw it, and the third view would then take player 2's column.
+    auto* listed = players::unreal::LocalPlayers(players::unreal::GameInstance());
+    if (listed == nullptr || listed->Num() != 2)
+    {
+        platform::Log(L"third view: expected exactly two local players, found {}",
+                      listed == nullptr ? -1 : listed->Num());
+        return false;
+    }
     if (g_players->FirstPlayer(true).controller == nullptr)
     {
-        return false;  // the seat's precondition (exactly two local players, player 1 with a controller) logged
+        return false;  // the seat's precondition (its controller id free, player 1 with a controller) logged
     }
 
     players::LocalPlayers::Added     added;

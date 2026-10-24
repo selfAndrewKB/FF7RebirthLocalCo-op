@@ -1,9 +1,10 @@
 #pragma once
 
 // A local player of the mod's, added to and removed from the engine's list of local players through UE's own path,
-// by seat: seat 1 is player 2 (player_two/session/session.h), seat 2 the third view (views/third_view.h). The
-// controller id
-// is the seat, and the player takes the list's index `seat`, so the seats before it must be filled first.
+// by seat (players/seats.h): seat 1 is player 2 (player_two/session/session.h), seat 2 the third view
+// (views/third_view.h). The controller id is the seat. The engine appends the player to its list, after whoever is
+// listed, and closes the list up when one leaves, so the list position is never taken for the seat: the new player
+// is the one appended, and a seat is free when no listed player has its controller id.
 //
 // Adding uses the engine's CreatePlayer with a PlayerController of the player's own. The engine then
 // lays out the split screen by itself, and the renderer module renders each player's view as its
@@ -23,7 +24,7 @@ class LocalPlayers
 {
 public:
     /// `removeLocalPlayer` is the live address of UGameInstance::RemoveLocalPlayer, verified at
-    /// startup against engine::kRemoveLocalPlayer's bytes. `seat`: the index the player takes (1 = player 2).
+    /// startup against engine::kRemoveLocalPlayer's bytes. `seat`: the player's controller id (1 = player 2).
     explicit LocalPlayers(std::uintptr_t removeLocalPlayer, std::int32_t seat = 1) noexcept
         : removeLocalPlayer_(removeLocalPlayer), seat_(seat)
     {
@@ -36,9 +37,10 @@ public:
         unreal::UObject* controller = nullptr;  // the player's controller as the engine lists it
     };
 
-    /// Player 1's local player and controller, when exactly `seat` local players are in (the seats before this one
-    /// filled, this one free) and player 1 has a controller; otherwise both null (and the reason is logged when
-    /// `log` is set).
+    /// Player 1's local player and controller, when the list has room for one more (1 to kMaxPlayers - 1 listed),
+    /// no listed player has the seat's controller id, and player 1 has a controller; otherwise both null (and the
+    /// reason is logged when `log` is set). A caller that needs another seat in first checks that itself (the third
+    /// view: player 2's generation).
     struct PlayerOne
     {
         unreal::UObject* localPlayer = nullptr;
