@@ -170,6 +170,41 @@ void TestSecondSlot()
     EXPECT(LeaderOrdinal(nullptr, 0, 0) == 0);
 }
 
+void TestSeatSlots()
+{
+    std::puts("slot: player 2 plays the 2nd slot, player 3 the 3rd, each stepping past player 1's");
+    const std::uint8_t squad[] = {0, 5, 3};  // Cloud (player 1's), Yuffie, Aerith
+    const auto playerOnes = [&](std::int32_t ordinal) { return squad[ordinal] == 0; };
+    EXPECT(SeatSlotOrdinal(0, 3, 1, playerOnes) == 1);   // player 2: Yuffie
+    EXPECT(SeatSlotOrdinal(0, 3, 2, playerOnes) == 2);   // player 3: Aerith
+    EXPECT(SeatSlotOrdinal(0, 3, 3, playerOnes) == -1);  // no 4th slot in three
+    // A story leader (Yuffie): the rows run from her, past player 1's Cloud.
+    const std::int32_t anchor = LeaderOrdinal(squad, 3, 5);
+    EXPECT(SeatSlotOrdinal(anchor, 3, 1, playerOnes) == 2);  // Aerith
+    EXPECT(SeatSlotOrdinal(anchor, 3, 2, playerOnes) == 1);  // Yuffie herself, the anchor's row last
+    // Player 1's character in the 2nd row (a reorder): both seats step past it.
+    const std::uint8_t reordered[] = {5, 0, 3, 2};
+    const auto reorderedOnes = [&](std::int32_t ordinal) { return reordered[ordinal] == 0; };
+    EXPECT(SeatSlotOrdinal(0, 4, 1, reorderedOnes) == 2);
+    EXPECT(SeatSlotOrdinal(0, 4, 2, reorderedOnes) == 3);
+    // Two members: player 3 has no slot; the 1-player party: neither.
+    const std::uint8_t pair[] = {0, 5};
+    const auto pairOnes = [&](std::int32_t ordinal) { return pair[ordinal] == 0; };
+    EXPECT(SeatSlotOrdinal(0, 2, 1, pairOnes) == 1 && SeatSlotOrdinal(0, 2, 2, pairOnes) == -1);
+    EXPECT(SeatSlotOrdinal(0, 1, 1, [](std::int32_t) { return true; }) == -1);
+    EXPECT(SeatSlotOrdinal(0, 0, 1, playerOnes) == -1 && SeatSlotOrdinal(0, 3, 0, playerOnes) == -1);
+    // The seat-1 rule is the old one: the first row below the leader that is not skipped.
+    for (std::int32_t lead = 0; lead < 3; ++lead)
+    {
+        std::int32_t first = -1;
+        for (std::int32_t step = 1; step <= 3 && first < 0; ++step)
+        {
+            first = playerOnes(OrdinalAfter(lead, step, 3)) ? -1 : OrdinalAfter(lead, step, 3);
+        }
+        EXPECT(SeatSlotOrdinal(lead, 3, 1, playerOnes) == first);
+    }
+}
+
 void TestAiReadiness()
 {
     std::puts("ai: only the base brain's FOLLOW (or BATTLE) is taken; LEAD is given back");
@@ -313,6 +348,7 @@ void TestTakeAndSwapOutcomes()
 int main()
 {
     TestSecondSlot();
+    TestSeatSlots();
     TestLinkPartnerBusy();
     TestAiReadiness();
     TestAiOwnedMemberIsEligible();
