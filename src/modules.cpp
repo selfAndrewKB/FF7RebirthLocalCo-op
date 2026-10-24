@@ -413,6 +413,12 @@ void TickAfterSession(const Frame& frame) noexcept
 {
     // The modules below are player 2's until they are per seat or per column (plan/seats.md steps 3 to 5).
     const Frame::Seat& two = frame.seats[players::kPlayerTwoSeat];
+    // By seat, whether the seat's player plays a member (index 0 unused): the world modules' per-seat passes.
+    std::array<bool, players::kMaxPlayers> plays{};
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        plays[seat] = frame.seats[seat].playsMember;
+    }
     views::third_view::Tick(two.in);   // leaves with player 2; follows player 1's view target
     views::window_span::Tick(two.in);  // leaves with player 2; holds the window's rect
     player_two::walk_limits::Tick();  // after the session's tick: a take's copy is overwritten this frame
@@ -431,7 +437,7 @@ void TickAfterSession(const Frame& frame) noexcept
     player_two::shoulder_scale::Poll(frame.splitShown, views::SplitWidthRatio(false), views::SplitWidthRatio(true));
     player_two::anim_two_views::Tick(frame.splitShown);  // its frame count, before the world tick
     player_two::charapop_near::Tick(frame.splitShown, two.playsMember);
-    player_two::charapop_centre::Tick(frame.splitShown, two.playsMember);
+    player_two::charapop_centre::Tick(frame.splitShown, plays);
     player_two::world_actor_reach::Tick(two.playsMember);
     hud::minimap::Tick(frame.splitShown);  // outside the overlay render, before it
     views::UpdateStreamViews(frame.splitShown);  // nothing until whole_screen's game-state check passed
