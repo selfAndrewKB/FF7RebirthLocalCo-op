@@ -15,13 +15,16 @@
 #include "player_two/describe.h"
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
+#include "players/seats.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <format>
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 
 #pragma intrinsic(_ReturnAddress)
 
@@ -84,12 +87,18 @@ void Line(const std::wstring& text) noexcept
     platform::Log(L"command menu two: {}", text);
 }
 
-/// The game's controller: the UI system's slot, or inside player 2's scope (the slot names player 2's) the one last
+/// The seat whose controller `controller` is, or -1 (the game's).
+int SeatOf(std::uintptr_t controller) noexcept
+{
+    return command_menu_two::SeatOfController(reinterpret_cast<const void*>(controller));
+}
+
+/// The game's controller: the UI system's slot, or inside a seat's scope (the slot names the seat's) the one last
 /// read outside it.
 std::uintptr_t GameController() noexcept
 {
     const auto slot = ReadAt<std::uintptr_t>(command_menu_two::UiSystem() + kUICommandController);
-    if (slot != 0 && slot != reinterpret_cast<std::uintptr_t>(command_menu_two::Controller()))
+    if (slot != 0 && SeatOf(slot) < 1)
     {
         g_lastGame = slot;
     }
@@ -119,15 +128,14 @@ std::wstring ShortcutIds(std::uintptr_t controller, int set, std::int32_t row) n
 /// The game's rebuild of `target`'s shortcut tables, after the game rebuilt `source`'s (`why`, called from
 /// `caller`). The rebuild reads the save and no leader or UI slot, so it needs no scope. Logged: both controllers'
 /// ids in the shown row, which must match afterwards.
-void FollowShortcuts(std::uintptr_t source, std::uintptr_t target, const wchar_t* why, std::uintptr_t caller) noexcept
+void FollowShortcuts(std::uintptr_t source, std::uintptr_t target, std::wstring_view why, std::uintptr_t caller) noexcept
 {
     if (g_ctrlShortcuts == nullptr || target == 0 || target == source)
     {
         return;
     }
     const bool log   = g_shortcutLines < kMaxShortcutLines && platform::Enabled(platform::Level::Debug);
-    const auto whose = target == reinterpret_cast<std::uintptr_t>(command_menu_two::Controller()) ? L"player 2"
-                                                                                                   : L"player 1";
+    const auto whose = players::SeatName(std::max(SeatOf(target), 0));  // a seat's, else player 1's (the game's)
     const auto row   = ReadAt<std::int32_t>(target + kShortcutTarget);
     const auto ids   = [row](std::uintptr_t c, int set) { return ShortcutIds(c, set, row); };
     const auto before = log ? ids(target, 0) + L" " + ids(target, 1) : std::wstring{};
@@ -149,53 +157,89 @@ void FollowShortcuts(std::uintptr_t source, std::uintptr_t target, const wchar_t
     }
 }
 
-/// Replaces EndUI23_RebuildShortcutTables: the game rebuilds its slot's controller, then the other controller is
-/// rebuilt too. Outside player 2's scope that is player 2's; inside it (an event in player 2's pass) the game's.
+/// After the game rebuilt `ran`'s tables: every other controller rebuilt too. When `ran` is the game's, each seat's
+/// that may follow it (`gameWhy`); when it is a seat's (an event in that seat's pass), the game's and then every other
+/// built seat's (`seatWhy`, a format whose every {} is the seat's name).
+void FollowFrom(std::uintptr_t ran, const wchar_t* gameWhy, const wchar_t* seatWhy, std::uintptr_t caller) noexcept
+{
+    const int owner = SeatOf(ran);
+    if (owner < 1)
+    {
+        for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+        {
+            if (command_menu_two::CanFollow(seat, reinterpret_cast<void*>(ran), false))
+            {
+                FollowShortcuts(ran, reinterpret_cast<std::uintptr_t>(command_menu_two::Controller(seat)), gameWhy,
+                                caller);
+            }
+        }
+        return;
+    }
+    if (!command_menu_two::Ready(owner) || !generation::OnGameThread())
+    {
+        return;
+    }
+    std::wstring why;
+    try
+    {
+        const std::wstring_view name = players::SeatName(owner);
+        why                          = std::vformat(seatWhy, std::make_wformat_args(name, name));
+    }
+    catch (...)
+    {
+    }
+    FollowShortcuts(ran, GameController(), why, caller);
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (seat != owner && command_menu_two::Ready(seat))
+        {
+            FollowShortcuts(ran, reinterpret_cast<std::uintptr_t>(command_menu_two::Controller(seat)), why, caller);
+        }
+    }
+}
+
+/// Replaces EndUI23_RebuildShortcutTables: the game rebuilds its slot's controller, then the others are rebuilt too.
+/// Outside every seat's scope those are the seats'; inside one (an event in a seat's pass) the game's and the other
+/// seats'.
 void RebuildShortcutsCall() noexcept
 {
     const auto caller = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
     const auto ran    = ReadAt<std::uintptr_t>(command_menu_two::UiSystem() + kUICommandController);
     reinterpret_cast<void (*)()>(g_rebuildShortcuts.Original())();
-    const auto two = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller());
-    if (command_menu_two::CanFollow(reinterpret_cast<void*>(ran), false))
+    if (ran != 0)
     {
-        FollowShortcuts(ran, two, L"the game rebuilt its shortcut tables", caller);
-    }
-    else if (ran != 0 && ran == two && command_menu_two::Ready() && generation::OnGameThread())
-    {
-        FollowShortcuts(two, GameController(), L"the game's shortcut rebuild ran in player 2's scope", caller);
+        FollowFrom(ran, L"the game rebuilt its shortcut tables", L"the game's shortcut rebuild ran in {}'s scope",
+                   caller);
     }
 }
 
 /// 1.004 only: replaces the status menu's call of the table builder (an inlined EndUI23_RebuildShortcutTables on the
-/// game's controller), then rebuilds player 2's.
+/// game's controller), then rebuilds each seat's.
 void StatusShortcutsCall(void* selecter) noexcept
 {
     const auto caller = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
     g_selecterShortcuts(selecter);
     const auto controller = reinterpret_cast<std::uintptr_t>(selecter) - kSelecter;
-    if (command_menu_two::CanFollow(reinterpret_cast<void*>(controller), false))
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        FollowShortcuts(controller, reinterpret_cast<std::uintptr_t>(command_menu_two::Controller()),
-                        L"the status menu rebuilt the game's shortcut tables", caller);
+        if (command_menu_two::CanFollow(seat, reinterpret_cast<void*>(controller), false))
+        {
+            FollowShortcuts(controller, reinterpret_cast<std::uintptr_t>(command_menu_two::Controller(seat)),
+                            L"the status menu rebuilt the game's shortcut tables", caller);
+        }
     }
 }
 
-/// Replaces the item use's rebuild of the executing controller's tables, then rebuilds the other's: the inventory is
-/// shared, so either player's item changes both players' shortcuts.
+/// Replaces the item use's rebuild of the executing controller's tables, then rebuilds the others: the inventory is
+/// shared, so any player's item changes every player's shortcuts.
 void ItemShortcutsCall(void* controller) noexcept
 {
     const auto caller = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
     g_ctrlShortcuts(controller);
     const auto ran = reinterpret_cast<std::uintptr_t>(controller);
-    const auto two = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller());
-    if (command_menu_two::CanFollow(controller, false))
+    if (ran != 0)
     {
-        FollowShortcuts(ran, two, L"an item use rebuilt the game's", caller);
-    }
-    else if (ran != 0 && ran == two && command_menu_two::Ready() && generation::OnGameThread())
-    {
-        FollowShortcuts(two, GameController(), L"player 2's item use rebuilt player 2's", caller);
+        FollowFrom(ran, L"an item use rebuilt the game's", L"{}'s item use rebuilt {}'s", caller);
     }
 }
 
@@ -234,8 +278,8 @@ void Place(const platform::GameImage& image, platform::DeferredSites& placement)
     const Sites& s = g_sites;
     if (g_ctrlShortcuts == nullptr || s.rebuildShortcuts == 0)
     {
-        platform::Log(L"command menu two: player 2's shortcut tables do NOT follow the game's rebuilds (a check failed); "
-                      L"they change at the next Members panel rebuild");
+        platform::Log(L"command menu two: the further players' shortcut tables do NOT follow the game's rebuilds (a "
+                      L"check failed); they change at the next Members panel rebuild");
         return;
     }
     const bool menus = g_rebuildShortcuts.Install(

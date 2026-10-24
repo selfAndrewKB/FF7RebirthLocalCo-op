@@ -29,6 +29,13 @@
 // Units: this file's tick, mirrors and shields (command_menu_tick.cpp); pad 2's presses and releases
 // (menu_input_route); the tactical tint and the wait sound (menu_tint); what they share, the pass in flight
 // above all (command_menu_tick_shared.h).
+//
+// Per seat: written for player 2 above, every built seat's controller ticks after the game's, in seat order, each
+// pass in the seat's own scopes, closed before the next seat's. The pass in flight names its kind and its seat; the
+// world slow written in a seat's pass is the smallest of this frame's values so far (player 1's and the earlier
+// seats'), so the last pass leaves the minimum over every menu. Every battle pass (this tick, the press route, the
+// targeting run) opens the ladder's ButtonsPart, which is still player 2's: the input group must make it per seat before
+// step 6.
 
 namespace lss::platform {
 class GameImage;
@@ -39,12 +46,15 @@ namespace lss::player_two::command_menu_tick {
 bool Install(const platform::GameImage& image) noexcept;
 void Remove() noexcept;
 
-/// The pass in flight: 0 none, 1 the game's controller's tick, 2 player 2's controller's, 3 pad 2's press or
-/// release in player 2's UI. Game thread.
+/// The pass in flight: 0 none, 1 the game's controller's tick, 2 a seat's controller's, 3 a seat's pad's press or
+/// release in that seat's UI. Game thread.
 int Pass() noexcept;
 
+/// The seat of the pass in flight (passes 2 and 3), else 0. Game thread.
+int PassSeat() noexcept;
+
 /// The game's own calls that give the controller's command menu the UI focus of the focus context that is
-/// open (call it inside player 2's): FieldCommandCtrl_SetMenuFocusLayer783(controller, 0) while its layer
+/// open (call it inside the seat's): FieldCommandCtrl_SetMenuFocusLayer783(controller, 0) while its layer
 /// byte (+0x783) still says the menu layer is up, then FieldCommandCtrl_ResumeHudInput(controller, 0),
 /// which turns battle input on and puts the layer back (its layer setter returns early while the byte is
 /// set). False if the stage is not installed or a call faulted.

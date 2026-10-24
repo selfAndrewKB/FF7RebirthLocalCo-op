@@ -7,6 +7,8 @@
 
 #include "expect.h"
 
+#include <algorithm>
+#include <cstdint>
 #include <cstdio>
 
 namespace {
@@ -70,6 +72,64 @@ void TestSharedState()
     EXPECT(!SkipWaitSoundOff(0, 1, 1));
 }
 
+/// The two-player rules as they stood at v0.91.0, verbatim: the references for the rules over every menu.
+constexpr float OldSlowWritten(bool playerOnesThisFrame, float playerOnes, float playerTwos) noexcept
+{
+    return playerOnesThisFrame ? std::min(playerOnes, playerTwos) : playerTwos;
+}
+constexpr bool OldSkipWaitSoundOff(int pass, std::int32_t waitOne, std::int32_t waitTwo) noexcept
+{
+    return (pass == 1 && (waitTwo == 1 || waitTwo == 5 || waitTwo == 4)) || (pass == 2 && (waitOne == 1 || waitOne == 5));
+}
+
+void TestMenusAsBefore()
+{
+    std::puts("menus: with two players the rules over every menu give the two-player answers for every input");
+    constexpr float kValues[] = {0.0f, 0.1f, 0.25f, 0.5f, 1.0f, 2.0f};
+    for (const bool thisFrame : {false, true})
+    {
+        for (const float one : kValues)
+        {
+            for (const float two : kValues)
+            {
+                const SlowValue earlier[1] = {{thisFrame, one}};
+                EXPECT(SlowWrittenAmong(earlier, 1, two) == OldSlowWritten(thisFrame, one, two));
+                EXPECT(SlowWritten(thisFrame, one, two) == OldSlowWritten(thisFrame, one, two));
+            }
+        }
+    }
+    for (int pass = -1; pass <= 4; ++pass)
+    {
+        for (std::int32_t one = -1; one <= 7; ++one)
+        {
+            for (std::int32_t two = -1; two <= 7; ++two)
+            {
+                EXPECT(SkipWaitSoundOff(pass, one, two) == OldSkipWaitSoundOff(pass, one, two));
+            }
+        }
+    }
+}
+
+void TestMenusOfThree()
+{
+    std::puts("menus: three players, the smallest slow of this frame's earlier menus; the wait sound waits for every "
+              "other menu (closing counts only for a later one)");
+    const SlowValue earlier[2] = {{true, 0.5f}, {true, 0.25f}};
+    EXPECT(SlowWrittenAmong(earlier, 2, 1.0f) == 0.25f);
+    const SlowValue stale[2] = {{true, 0.5f}, {false, 0.25f}};
+    EXPECT(SlowWrittenAmong(stale, 2, 1.0f) == 0.5f);
+    EXPECT(SlowWrittenAmong(stale, 0, 1.0f) == 1.0f);
+
+    const std::int32_t thirdWaits[3] = {0, 0, 1};
+    EXPECT(SkipWaitSoundOffAmong(0, thirdWaits, 3));  // player 3 still waits: player 1's sound off waits
+    EXPECT(SkipWaitSoundOffAmong(1, thirdWaits, 3));
+    EXPECT(!SkipWaitSoundOffAmong(2, thirdWaits, 3));  // its own state does not matter
+    const std::int32_t closing[3] = {4, 0, 4};
+    EXPECT(SkipWaitSoundOffAmong(1, closing, 3));   // player 3 closes later this frame: it plays the sound
+    EXPECT(!SkipWaitSoundOffAmong(2, closing, 3));  // the last to close plays it (player 1's 4 came earlier)
+    EXPECT(!SkipWaitSoundOffAmong(-1, thirdWaits, 3));
+}
+
 void TestJoinSetup()
 {
     std::puts("join setup: the first five tries on consecutive ticks, then every 30th tick, never given up; readiness");
@@ -123,6 +183,8 @@ int main()
     TestPressGate();
     TestTakenKeys();
     TestSharedState();
+    TestMenusAsBefore();
+    TestMenusOfThree();
     TestJoinSetup();
     TestCanFollow();
 

@@ -468,7 +468,7 @@ void SeatTargeting(int seat, TickFn engine, void* system, float deltaTime) noexc
     // (EndUISystem[23]) and, for an open target list, the list's selected row, which the list answers from the focus
     // path (RE-p2-target-select-views.md §9). The controller slot alone would read player 1's focus path, find no row
     // and clear the seat's target.
-    args.controller = command_menu_two::Controller();
+    args.controller = command_menu_two::Controller(seat);
     if (args.controller == nullptr)
     {
         return Refused(seat, L"the command controller does not exist");

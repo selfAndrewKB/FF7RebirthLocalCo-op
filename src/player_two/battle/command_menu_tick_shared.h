@@ -34,10 +34,11 @@ inline std::int32_t RequestOf(std::uintptr_t controller, std::int32_t index) noe
                : -1;
 }
 
-/// Sets the pass in flight (the route: 3 around pad 2's press or release in player 2's UI, 0 after).
-void SetPass(int pass) noexcept;
+/// Sets the pass in flight and its seat (the route: 3 around a seat's press or release in its UI, 0 after; the seat
+/// is kept for passes 2 and 3 only).
+void SetPass(int pass, int seat) noexcept;
 
-/// The stage is installed: its calls are placed and player 2's tick has not faulted.
+/// The stage is installed: its calls are placed and no seat's tick has faulted.
 bool Installed() noexcept;
 
 /// The live address of the EndUISystem object, and of the global holding the party manager (0 before Install).

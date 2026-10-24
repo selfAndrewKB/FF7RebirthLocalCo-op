@@ -12,8 +12,13 @@
 #include "player_two/battle/command_menu_two.h"
 #include "player_two/battle/menu_rules.h"
 #include "player_two/object_fields.h"
+#include "players/seats.h"
 
+#include <algorithm>
+#include <array>
 #include <cstdint>
+#include <format>
+#include <string>
 
 namespace lss::player_two::menu_tint {
 
@@ -64,8 +69,10 @@ struct Targets
 Targets g_targets;
 
 // Game thread.
-bool g_twoHoldsTint = false;  // player 2's menu holds one count of the tint (the game's own owner-byte pattern)
-int  g_tintLines    = 0;
+// Each seat's menu holds one count of the tint (the game's own owner-byte pattern); by seat, index 0 unused (player
+// 1's menu keeps the game's latch).
+std::array<bool, players::kMaxPlayers> g_holdsTint{};
+int                                    g_tintLines = 0;
 
 /// The tint's filter manager and, for the log, its latch and count for the tint type.
 std::uintptr_t FilterManager() noexcept
@@ -73,29 +80,56 @@ std::uintptr_t FilterManager() noexcept
     return ReadAt<std::uintptr_t>(command_menu_tick::UiSystem() + kUIFilterManager);
 }
 
-void TintLine(const wchar_t* what) noexcept
+/// Every menu's wait state, by seat (player 1's at 0; 0 for a seat without a controller).
+std::array<std::int32_t, players::kMaxPlayers> Waits() noexcept
+{
+    const auto wait = [](std::uintptr_t ctrl) { return ctrl != 0 ? ReadAt<std::int32_t>(ctrl + kCmdWaitFilter) : 0; };
+    std::array<std::int32_t, players::kMaxPlayers> waits{};
+    waits[0] = wait(ReadAt<std::uintptr_t>(command_menu_tick::UiSystem() + kUICommandController));
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        waits[static_cast<std::size_t>(seat)] =
+            wait(reinterpret_cast<std::uintptr_t>(command_menu_two::Controller(seat)));
+    }
+    return waits;
+}
+
+/// `seat`: the menu the line is about (0 player 1's).
+void TintLine(int seat, const wchar_t* what) noexcept
 {
     if (!platform::Enabled(platform::Level::Debug) || ++g_tintLines > 60)
     {
         return;
     }
-    const auto fm  = FilterManager();
-    const auto one = ReadAt<std::uintptr_t>(command_menu_tick::UiSystem() + kUICommandController);
-    const auto two = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller());
-    platform::LogDebug(L"command menu tick: tint {} (pass {}; wait P1 {} P2 {}; latch {} count {}; P2 holds {})", what,
-                  command_menu_tick::Pass(),
-                  one != 0 ? ReadAt<std::int32_t>(one + kCmdWaitFilter) : -1,
-                  two != 0 ? ReadAt<std::int32_t>(two + kCmdWaitFilter) : -1,
-                  ReadAt<std::uint8_t>(fm + kFilterLatch + kTintType),
-                  ReadAt<std::int32_t>(fm + kFilterCount + 4 * kTintType), g_twoHoldsTint ? 1 : 0);
+    try
+    {
+        const auto   fm  = FilterManager();
+        const auto   one = ReadAt<std::uintptr_t>(command_menu_tick::UiSystem() + kUICommandController);
+        std::wstring waits = std::format(L"P1 {}", one != 0 ? ReadAt<std::int32_t>(one + kCmdWaitFilter) : -1);
+        std::wstring holds;
+        for (int other = 1; other <= players::kSeatsBuilt; ++other)
+        {
+            const auto own = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller(other));
+            waits += std::format(L" P{} {}", other + 1, own != 0 ? ReadAt<std::int32_t>(own + kCmdWaitFilter) : -1);
+            holds += std::format(L"{}P{} holds {}", other == 1 ? L"" : L", ", other + 1,
+                                 g_holdsTint[static_cast<std::size_t>(other)] ? 1 : 0);
+        }
+        platform::LogDebug(L"command menu tick: tint {}{}{} (pass {}; wait {}; latch {} count {}; {})", what,
+                           seat >= 1 ? L" for " : L"", seat >= 1 ? players::SeatName(seat) : L"",
+                           command_menu_tick::Pass(), waits, ReadAt<std::uint8_t>(fm + kFilterLatch + kTintType),
+                           ReadAt<std::int32_t>(fm + kFilterCount + 4 * kTintType), holds);
+    }
+    catch (...)
+    {
+    }
 }
 
 }  // namespace
 
-/// Player 2's count of the tint given back (its menu closed, or it stops holding for another reason).
-void Release(const wchar_t* why) noexcept
+/// `seat`'s count of the tint given back (its menu closed, or it stops holding for another reason).
+void Release(int seat, const wchar_t* why) noexcept
 {
-    if (!g_twoHoldsTint)
+    if (!players::SeatIndex(seat) || !g_holdsTint[static_cast<std::size_t>(seat)])
     {
         return;
     }
@@ -104,57 +138,60 @@ void Release(const wchar_t* why) noexcept
     {
         platform::CallGuarded(g_refDec, reinterpret_cast<void*>(fm), kTintType);
     }
-    g_twoHoldsTint = false;
-    TintLine(why);
+    g_holdsTint[static_cast<std::size_t>(seat)] = false;
+    TintLine(seat, why);
 }
 
-bool Holds() noexcept
+bool Holds(int seat) noexcept
 {
-    return g_twoHoldsTint;
+    return players::SeatIndex(seat) && g_holdsTint[static_cast<std::size_t>(seat)];
 }
 
 namespace {
 
-/// Replaces the wait mode's filter on: player 1's menu takes the latch as the game does; player 2's
-/// takes a count of its own.
+/// Replaces the wait mode's filter on: player 1's menu takes the latch as the game does; a seat's takes a count of
+/// its own.
 void TintOn(void* world, std::uint8_t type) noexcept
 {
-    if (command_menu_tick::Pass() != 2)
+    const int seat = command_menu_tick::PassSeat();
+    if (command_menu_tick::Pass() != 2 || !players::SeatIndex(seat))
     {
         reinterpret_cast<FilterOnFn>(g_filterOnCall.Original())(world, type);
         return;
     }
     const auto fm = FilterManager();
-    if (!g_twoHoldsTint && fm != 0 && platform::CallGuarded(g_refInc, reinterpret_cast<void*>(fm), type))
+    auto&      holds = g_holdsTint[static_cast<std::size_t>(seat)];
+    if (!holds && fm != 0 && platform::CallGuarded(g_refInc, reinterpret_cast<void*>(fm), type))
     {
-        g_twoHoldsTint = true;
+        holds = true;
     }
-    TintLine(L"on for player 2's menu (a count)");
+    TintLine(seat, L"on (a count)");
 }
 
-/// Replaces the wait mode's filter off: player 2's gives back its count; player 1's drops the latch.
+/// Replaces the wait mode's filter off: a seat's menu gives back its count; player 1's drops the latch.
 void TintOff(std::uint8_t type) noexcept
 {
-    if (command_menu_tick::Pass() != 2)
+    const int seat = command_menu_tick::PassSeat();
+    if (command_menu_tick::Pass() != 2 || !players::SeatIndex(seat))
     {
         reinterpret_cast<FilterOffFn>(g_filterOffCall.Original())(type);
-        TintLine(L"off for player 1's menu (the latch)");
+        TintLine(0, L"off for player 1's menu (the latch)");
         return;
     }
-    Release(L"off for player 2's menu (its count)");
+    Release(seat, L"off (its count)");
 }
 
-/// Replaces the wait mode's sound off (event 13 and the audio mode cleared): skipped while the other
-/// menu is still in wait mode. Player 1's ticks first, so if both close in one frame player 2's plays it.
+/// Replaces the wait mode's sound off (event 13 and the audio mode cleared): skipped while another menu is still in
+/// wait mode. The menus tick in order (player 1's first, then each seat's), so if several close in one frame the last
+/// one plays it.
 void WaitSoundOff(std::uint8_t index) noexcept
 {
-    const auto one  = ReadAt<std::uintptr_t>(command_menu_tick::UiSystem() + kUICommandController);
-    const auto two  = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller());
-    const auto wait = [](std::uintptr_t ctrl) { return ctrl != 0 ? ReadAt<std::int32_t>(ctrl + kCmdWaitFilter) : 0; };
-    const auto s1 = wait(one), s2 = wait(two);
-    if (menu_rules::SkipWaitSoundOff(command_menu_tick::Pass(), s1, s2))
+    const int  pass  = command_menu_tick::Pass();
+    const int  me    = pass == 1 ? 0 : pass == 2 ? command_menu_tick::PassSeat() : -1;
+    const auto waits = Waits();
+    if (menu_rules::SkipWaitSoundOffAmong(me, waits.data(), 1 + players::kSeatsBuilt))
     {
-        TintLine(L"wait sound off skipped (the other menu is still in wait mode)");
+        TintLine(std::max(me, 0), L"wait sound off skipped (another menu is still in wait mode)");
         return;
     }
     reinterpret_cast<MenuSoundFn>(g_soundOffCall.Original())(index);
@@ -190,7 +227,10 @@ bool Place(const platform::GameImage& image, platform::DeferredSites& placement)
 
 void Remove() noexcept
 {
-    Release(L"released: the stage is removed");
+    for (int seat = 1; seat < players::kMaxPlayers; ++seat)
+    {
+        Release(seat, L"released: the stage is removed");
+    }
     for (auto* call : {&g_filterOnCall, &g_filterOffCall, &g_soundOffCall})
     {
         if (call->IsInstalled() && !call->Restore())

@@ -15,10 +15,12 @@
 #include "player_two/battle/focus_scope.h"
 #include "player_two/battle/menu_rules.h"
 #include "player_two/generation.h"
+#include "player_two/input/button_view.h"
 #include "player_two/input/pad_buttons.h"
 #include "player_two/input/pad_sticks.h"
 #include "player_two/object_fields.h"
 #include "player_two/scopes/p2_scope.h"
+#include "players/seats.h"
 #include "players/unreal_access.h"
 
 #include <array>
@@ -91,14 +93,42 @@ std::array<std::uintptr_t, kActions> g_keys{};
 std::uintptr_t                       g_commandMenuKey = 0;
 
 // Game thread.
-unsigned     g_routed      = 0;  // pad 2's presses dispatched in player 2's focus context
+unsigned     g_routed      = 0;  // the seats' presses dispatched in their focus contexts
 std::array<unsigned, 5> g_routedKnown{};  // per action the log counts on its own (KnownAction)
 bool         g_routeFailed = false;
-unsigned     g_upRouted    = 0;   // pad 2's releases routed to player 2's menu
-unsigned     g_upLost      = 0;   // pad 2's releases whose press went to player 2's UI but could not follow it
-const wchar_t* g_uiRefusal = L"";  // why InPlayerTwoUi last ran nothing (for the log)
+unsigned     g_upRouted    = 0;   // the seats' releases routed to their menus
+unsigned     g_upLost      = 0;   // releases whose press went to a seat's UI but could not follow it
+const wchar_t* g_uiRefusal = L"";  // why InSeatUi last ran nothing (for the log)
 std::int32_t g_upPad       = -1;  // the pad of the release being handled (key-up handler), or -1
-menu_rules::TakenKeys g_taken;  // pad 2's keys whose press went to player 2's UI
+// Each seat's keys whose press went to its UI (by seat; index 0 unused): two seats holding the same action keep apart.
+std::array<menu_rules::TakenKeys, players::kMaxPlayers> g_taken{};
+
+/// The seat whose pad the source bit belongs to (the seat's pad is its number: button_view::PadBits(seat), the same
+/// sources player_two/input/pad_buttons routes for player 2), or 0.
+int SeatOfSource(std::uint32_t sourceBit) noexcept
+{
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (((button_view::PadBits(seat) >> (sourceBit & 31)) & 1) != 0)
+        {
+            return seat;
+        }
+    }
+    return 0;
+}
+
+/// The seat whose controller has controller id `pad`, or 0.
+int SeatOfPad(std::int32_t pad) noexcept
+{
+    for (int seat = 1; pad >= 0 && seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (pad == pad_sticks::ControllerIdOf(generation::ControllerOf(seat)))
+        {
+            return seat;
+        }
+    }
+    return 0;
+}
 
 /// An event line of `level` (under the tick's name: the route is its).
 void Line(const std::wstring& text, platform::Level level = platform::Level::Info) noexcept
@@ -141,50 +171,51 @@ std::wstring KeyText(std::uint64_t key)
     return players::unreal::NameText(key);
 }
 
-/// What InPlayerTwoUi runs: a press (gated as below) or the release of a press that went to player 2's
-/// UI (ungated: the release goes to whoever took the press, as the game's capture map decides).
+/// What InSeatUi runs: a press (gated as below) or the release of a press that went to the seat's UI
+/// (ungated: the release goes to whoever took the press, as the game's capture map decides).
 enum class Route
 {
     kPress,
     kRelease
 };
 
-/// Runs `call` (a guarded game call, true when it did not fault) in player 2's UI: player 2's focus
-/// context and scopes. A press runs only in battle, with player 2's menu layer in place and player 1's
-/// top layer the command menu's own (a pause menu or popup keeps pad 2 out of both menus). False,
+/// Runs `call` (a guarded game call, true when it did not fault) in `seat`'s UI: the seat's focus
+/// context and scopes. A press runs only in battle, with the seat's menu layer in place and player 1's
+/// top layer the command menu's own (a pause menu or popup keeps the seat's pad out of every menu). False,
 /// running nothing, when those do not hold; true once it ran (a fault stops the route for the session).
 template <class Call>
-bool InPlayerTwoUi(Route route, const wchar_t* what, Call&& call) noexcept
+bool InSeatUi(int seat, Route route, const wchar_t* what, Call&& call) noexcept
 {
     const auto refuse = [](const wchar_t* why) {
         g_uiRefusal = why;
         return false;
     };
     if (!command_menu_tick::Installed() || g_routeFailed || command_menu_tick::Pass() != 0 ||
-        !generation::OnGameThread() || !generation::Active())
+        !generation::OnGameThread() || !players::SeatBuilt(seat) || !generation::Active(seat))
     {
-        return refuse(L"the route is off, inside a pass, or player 2 is out");
+        return refuse(L"the route is off, inside a pass, or the player is out");
     }
-    const auto two    = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller());
+    const auto two    = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller(seat));
     const auto one    = ReadAt<std::uintptr_t>(command_menu_tick::UiSystem() + kUICommandController);
-    void*      member = generation::Member();
+    void*      member = generation::MemberOf(seat);
     if (two == 0 || one == 0 || one == two || member == nullptr)
     {
-        return refuse(L"a controller or player 2's member is missing");
+        return refuse(L"a controller or the player's member is missing");
     }
     if (route == Route::kPress &&
         !menu_rules::PressAllowed(ReadAt<std::uint8_t>(two + kCmdHudMode), ReadAt<std::uint8_t>(two + kCmdMenuLayer),
                                   ReadAt<std::uint8_t>(one + kCmdBattleInput),
                                   ReadAt<std::uint8_t>(one + kCmdMenuLayer), focus_scope::PlayerOneTopIsCommandMenu()))
     {
-        return refuse(L"not in player 2's battle menu");
+        return refuse(L"not in the player's battle menu");
     }
     p2_scope::Args args;
+    args.seat          = seat;
     args.controller    = reinterpret_cast<void*>(two);
     const auto manager = ReadAt<std::uintptr_t>(command_menu_tick::PartyManager());
     if (!p2_scope::FillMember(args, member) || manager == 0)
     {
-        return refuse(L"player 2's member could not be read");
+        return refuse(L"the player's member could not be read");
     }
     args.leaderType = ReadAt<std::uint8_t>(manager + kPartyManagerLeaderType);
     // The menu's target-switch handler (a press) writes the target fields: player 2's, or no press. A
@@ -196,19 +227,20 @@ bool InPlayerTwoUi(Route route, const wchar_t* what, Call&& call) noexcept
     {
         return refuse(scopes.Refusal());
     }
-    command_menu_tick::SetPass(3);
+    command_menu_tick::SetPass(3, seat);
     const bool ran = call();
-    command_menu_tick::SetPass(0);
+    command_menu_tick::SetPass(0, 0);
     if (!ran)
     {
         scopes.Get<p2_scope::FocusPart>()->scope.Abandon();
         g_routeFailed = true;
-        Line(std::format(L"FAILED: pad 2's {} faulted in player 2's menu; pad 2 stays out of the menus", what));
+        Line(std::format(L"FAILED: pad {}'s {} faulted in {}'s menu; the further players' pads stay out of the menus",
+                         seat + 1, what, players::SeatName(seat)));
     }
     return true;
 }
 
-/// For the route log: player 2's battle input, its action requests, and player 1's capture map's count.
+/// For the route log: a seat's battle input, its action requests, and player 1's capture map's count.
 std::wstring RouteState(std::uintptr_t two)
 {
     const auto input = ReadAt<std::uintptr_t>(command_menu_tick::UiSystem() + kUIInput);
@@ -221,36 +253,40 @@ std::wstring RouteState(std::uintptr_t two)
                        ReadAt<std::int32_t>(input + 0xB0) - ReadAt<std::int32_t>(input + 0xDC));
 }
 
-/// Notes that pad 2's press of `key` went to player 2's UI: its release goes there too.
-void NoteTaken(std::uint64_t key) noexcept
+/// Notes that `seat`'s pad's press of `key` went to the seat's UI: its release goes there too.
+void NoteTaken(int seat, std::uint64_t key) noexcept
 {
-    if (g_taken.NoteTaken(key) == menu_rules::TakenKeys::Note::Full)
+    if (g_taken[static_cast<std::size_t>(seat)].NoteTaken(key) == menu_rules::TakenKeys::Note::Full)
     {
-        Line(L"WARNING: more pad-2 presses held in player 2's UI than noted; a release may reach player 1's route");
+        Line(std::format(L"WARNING: more pad-{} presses held in {}'s UI than noted; a release may reach player 1's "
+                         L"route",
+                         seat + 1, players::SeatName(seat)));
     }
 }
 
-/// True (and forgotten) if pad 2's press of `key` went to player 2's UI.
-bool TakeTaken(std::uint64_t key) noexcept
+/// True (and forgotten) if `seat`'s pad's press of `key` went to the seat's UI.
+bool TakeTaken(int seat, std::uint64_t key) noexcept
 {
-    return g_taken.Take(key);
+    return players::SeatIndex(seat) && g_taken[static_cast<std::size_t>(seat)].Take(key);
 }
 
-/// Pad 2's press through the game's own dispatcher in player 2's UI, so its route, list and
-/// command-menu handler act on player 2's menu (RE-p2-command-menu-input.md §3.3, §10 Stage 3d).
+/// A seat's pad's press through the game's own dispatcher in the seat's UI, so its route, list and
+/// command-menu handler act on the seat's menu (RE-p2-command-menu-input.md §3.3, §10 Stage 3d). The seat comes
+/// from the press's source bit.
 bool RoutePadTwo(pad_buttons::ActionDownFn dispatch, void* owner, void* unused, std::uint32_t sourceBit, void* event,
                  std::uint8_t alreadyHandled, char& result) noexcept
 {
     const auto key = ReadAt<std::uint64_t>(reinterpret_cast<std::uintptr_t>(event) + kEventKey);
-    if (key == 0)
+    const int  seat = SeatOfSource(sourceBit);
+    if (key == 0 || seat == 0)
     {
         return false;
     }
     char taken = 1;  // after a fault: not dispatched again in player 1's context
     const int  action = KnownAction(key);
-    const auto two    = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller());
+    const auto two    = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller(seat));
     std::wstring before;
-    const bool routed = InPlayerTwoUi(Route::kPress, L"press", [&] {
+    const bool routed = InSeatUi(seat, Route::kPress, L"press", [&] {
         const bool logIt = platform::Enabled(platform::Level::Trace) && action >= 0 &&
                            g_routedKnown[static_cast<std::size_t>(action)] < 10;
         if (logIt)
@@ -260,7 +296,8 @@ bool RoutePadTwo(pad_buttons::ActionDownFn dispatch, void* owner, void* unused, 
         const bool ran = platform::CallGuarded(dispatch, taken, owner, unused, sourceBit, event, alreadyHandled);
         if (logIt)
         {
-            Line(std::format(L"pad 2's {} in player 2's UI: before [{}] after [{}]", KeyText(key), before, RouteState(two)),
+            Line(std::format(L"pad {}'s {} in {}'s UI: before [{}] after [{}]", seat + 1, KeyText(key),
+                             players::SeatName(seat), before, RouteState(two)),
                  platform::Level::Trace);
         }
         return ran;
@@ -269,13 +306,13 @@ bool RoutePadTwo(pad_buttons::ActionDownFn dispatch, void* owner, void* unused, 
     {
         return false;
     }
-    NoteTaken(key);
+    NoteTaken(seat, key);
     result = taken;
     if (platform::Enabled(platform::Level::Trace) &&
         (action >= 0 ? ++g_routedKnown[static_cast<std::size_t>(action)] <= 10 : (++g_routed <= 20 || g_routed % 500 == 0)))
     {
-        Line(std::format(L"pad 2's {} went to player 2's menu (taken: {}; {} press(es))", KeyText(key), taken != 0 ? 1 : 0,
-                         g_routed),
+        Line(std::format(L"pad {}'s {} went to {}'s menu (taken: {}; {} press(es))", seat + 1, KeyText(key),
+                         players::SeatName(seat), taken != 0 ? 1 : 0, g_routed),
              platform::Level::Trace);
     }
     return true;
@@ -291,32 +328,33 @@ std::uint8_t KeyUp(void* self, void* application, const void* keyEvent) noexcept
     return answer;
 }
 
-/// Replaces the up route's call: the release of a pad-2 press that went to player 2's UI walks player
-/// 2's focus context, whatever is open now (a pause menu, a popup, the battle's end), so player 2's
-/// capture map hands it to the widget that took the press and its menu clears its own held requests, as
-/// the game's up handler does. Other releases keep the game's route, where their press went.
+/// Replaces the up route's call: the release of a seat's press that went to its UI walks the seat's focus context,
+/// whatever is open now (a pause menu, a popup, the battle's end), so the seat's capture map hands it to the widget
+/// that took the press and its menu clears its own held requests, as the game's up handler does. Other releases keep
+/// the game's route, where their press went. The seat comes from the release's pad.
 std::uint8_t UpRoute(void* owner, void* event) noexcept
 {
     const auto original = reinterpret_cast<UpRouteFn>(g_upRouteCall.Original());
-    const bool padTwo   = g_upPad >= 0 && g_upPad == pad_sticks::ControllerIdOf(generation::PlayerTwoController());
+    const int  seat     = SeatOfPad(g_upPad);
     const auto key      = ReadAt<std::uint64_t>(reinterpret_cast<std::uintptr_t>(event) + kEventKey);
-    if (!padTwo || !TakeTaken(key))
+    if (seat == 0 || !TakeTaken(seat, key))
     {
         return original(owner, event);
     }
     std::uint8_t answer = 0;
-    if (InPlayerTwoUi(Route::kRelease, L"release", [&] { return platform::CallGuarded(original, answer, owner, event); }))
+    if (InSeatUi(seat, Route::kRelease, L"release",
+                 [&] { return platform::CallGuarded(original, answer, owner, event); }))
     {
         ++g_upRouted;
         return answer;
     }
-    // Player 2's UI could not be entered (player 2 left, or a scope was refused): the release is not
-    // given to player 1's menu, which never took the press. The game's own paths clear player 2's held
-    // level: ClearOneShotRequests while its battle input is off, and the battle-entry HUD mode.
+    // The seat's UI could not be entered (the seat left, or a scope was refused): the release is not given to player
+    // 1's menu, which never took the press. The game's own paths clear the seat's held level: ClearOneShotRequests
+    // while its battle input is off, and the battle-entry HUD mode.
     if (++g_upLost <= 10 || g_upLost % 100 == 0)
     {
-        Line(std::format(L"pad 2's release of {} could not reach player 2's UI ({}); dropped ({} time(s))", KeyText(key),
-                         g_uiRefusal, g_upLost));
+        Line(std::format(L"pad {}'s release of {} could not reach {}'s UI ({}); dropped ({} time(s))", seat + 1,
+                         KeyText(key), players::SeatName(seat), g_uiRefusal, g_upLost));
     }
     return 0;
 }
@@ -345,7 +383,7 @@ bool Find(const platform::GameImage& image) noexcept
 
 void Install(const platform::GameImage& image) noexcept
 {
-    pad_buttons::SetPlayerTwoRoute(&RoutePadTwo);  // pad 2's presses to player 2's menu in battle
+    pad_buttons::SetPlayerTwoRoute(&RoutePadTwo);  // a seat's presses to its menu in battle
     // Pad 2's releases: the key-up slot wrapped (the pad of each release noted) and the up route's call redirected.
     const auto upRoute = platform::FindFunction(image, kUpRoute);
     const auto entry   = image.Rebase(kKeyUpEntry, sizeof(void*));
@@ -358,8 +396,8 @@ void Install(const platform::GameImage& image) noexcept
     {
         g_keyUpSlot.Restore();
     }
-    platform::Log(L"command menu tick: pad 2's releases {}", ok ? L"reach player 2's menu in battle"
-                                                                 : L"UNAVAILABLE (a check failed): they keep player 1's up route");
+    platform::Log(L"command menu tick: the further players' pads' releases {}",
+                  ok ? L"reach their menus in battle" : L"UNAVAILABLE (a check failed): they keep player 1's up route");
 }
 
 void Remove() noexcept

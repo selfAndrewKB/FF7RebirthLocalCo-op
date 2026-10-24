@@ -12,6 +12,7 @@
 #include "player_two/battle/command_menu_two.h"
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
+#include "players/seats.h"
 
 #include <atomic>
 #include <algorithm>
@@ -99,29 +100,29 @@ platform::Level FollowLevel(bool ok) noexcept
     return ok ? platform::Level::Debug : platform::Level::Info;
 }
 
-/// Player 2's controller if a game call may be followed on it now: it exists, we are on the game thread,
-/// and the UI system's slot names the game's controller (not player 2's: no player-2 scope is open). 0
-/// otherwise (logged when that is unexpected).
-std::uintptr_t FollowingController(const wchar_t* what) noexcept
+/// `seat`'s controller if a game call may be followed on it now: it exists, we are on the game thread, and the UI
+/// system's slot names the game's controller (no seat's: no seat's scope is open). 0 otherwise (logged when that is
+/// unexpected).
+std::uintptr_t FollowingController(int seat, const wchar_t* what) noexcept
 {
-    const auto two = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller());
-    if (!g_installed || two == 0)
+    const auto own = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller(seat));
+    if (!g_installed || own == 0)
     {
         return 0;  // not built yet: Sync() copies at its join
     }
     if (!generation::OnGameThread())
     {
-        Line(std::format(L"{} made off the game thread: NOT made on player 2's controller", what));
+        Line(std::format(L"{} made off the game thread: NOT made on {}'s controller", what, players::SeatName(seat)));
         return 0;
     }
     const auto one = ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController);
-    if (one == 0 || one == two)
+    if (one == 0 || command_menu_two::SeatOfController(reinterpret_cast<const void*>(one)) >= 1)
     {
         Line(std::format(L"{} made while the UI system's slot names {}: NOT followed", what,
-                         one == 0 ? L"no controller" : L"player 2's controller (inside a player-2 scope)"));
+                         one == 0 ? L"no controller" : L"a further player's controller (inside their scope)"));
         return 0;
     }
-    return two;
+    return own;
 }
 
 /// Runs `call` (a guarded game call) with the UI system's controller slot naming `two`, and puts the
@@ -143,20 +144,23 @@ bool WithSlot(std::uintptr_t two, Call&& call) noexcept
     return ran;
 }
 
-/// For BattleSystem_Tick's call of a lock setter: the game's controller, then player 2's.
+/// For BattleSystem_Tick's call of a lock setter: the game's controller, then each seat's in seat order.
 void Follow(const platform::CallRedirect& redirect, const wchar_t* what, std::uint32_t offset, std::uint8_t value) noexcept
 {
     const auto original = reinterpret_cast<LockFn>(redirect.Original());
     original(value);
-    const auto two = FollowingController(what);
-    if (two == 0)
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        return;
+        const auto own = FollowingController(seat, what);
+        if (own == 0)
+        {
+            continue;
+        }
+        const bool ran = WithSlot(own, [&] { return platform::CallGuarded(original, value); });
+        Line(std::format(L"{} {} -> {}'s controller too{} (now {})", what, value, players::SeatName(seat),
+                         ran ? L"" : L" (FAULTED)", ReadAt<std::uint8_t>(own + offset)),
+             FollowLevel(ran));
     }
-    const bool ran = WithSlot(two, [&] { return platform::CallGuarded(original, value); });
-    Line(std::format(L"{} {} -> player 2's controller too{} (now {})", what, value, ran ? L"" : L" (FAULTED)",
-                     ReadAt<std::uint8_t>(two + offset)),
-         FollowLevel(ran));
 }
 
 void CommandsEnabled(std::uint8_t value) noexcept
@@ -169,25 +173,28 @@ void CommandsLocked(std::uint8_t value) noexcept
     Follow(g_lockedCall, L"commands locked", kCommandsLocked, value);
 }
 
-/// Replaces the category setter's entry: the game's call, then the same call on player 2's controller
+/// Replaces the category setter's entry: the game's call, then the same call on each seat's controller in seat order
 /// (its global table store repeats the same value).
 void CategoryEnabled(std::uint8_t category, std::uint8_t enabled) noexcept
 {
     const auto original = reinterpret_cast<CategoryFn>(g_category.Original());
     original(category, enabled);
-    const auto two = FollowingController(L"command category lock");
-    if (two == 0)
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        return;
+        const auto own = FollowingController(seat, L"command category lock");
+        if (own == 0)
+        {
+            continue;
+        }
+        const bool ran = WithSlot(own, [&] { return platform::CallGuarded(original, category, enabled); });
+        Line(std::format(L"command category {} enabled {} -> {}'s controller too{}", category, enabled,
+                         players::SeatName(seat), ran ? L"" : L" (FAULTED)"),
+             FollowLevel(ran));
     }
-    const bool ran = WithSlot(two, [&] { return platform::CallGuarded(original, category, enabled); });
-    Line(std::format(L"command category {} enabled {} -> player 2's controller too{}", category, enabled,
-                     ran ? L"" : L" (FAULTED)"),
-         FollowLevel(ran));
 }
 
 /// Replaces the on/off table dispatcher's entry: it runs once (it consumes its queue and drives music,
-/// sounds and cameras); the bytes it changed on the game's controller are then stored on player 2's. Its
+/// sounds and cameras); the bytes it changed on the game's controller are then stored on each seat's. Its
 /// category cmds reach CategoryEnabled nested inside it.
 void Dispatch(void* fieldSystem, std::int32_t mode) noexcept
 {
@@ -202,18 +209,21 @@ void Dispatch(void* fieldSystem, std::int32_t mode) noexcept
     {
         return;
     }
-    std::uintptr_t two = 0;
-    for (std::size_t i = 0; i < kTableBytes.size(); ++i)
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        const auto after = ReadAt<std::uint8_t>(one + kTableBytes[i]);
-        if (after == before[i] || (two == 0 && (two = FollowingController(L"on/off table")) == 0))
+        std::uintptr_t own = 0;
+        for (std::size_t i = 0; i < kTableBytes.size(); ++i)
         {
-            continue;
+            const auto after = ReadAt<std::uint8_t>(one + kTableBytes[i]);
+            if (after == before[i] || (own == 0 && (own = FollowingController(seat, L"on/off table")) == 0))
+            {
+                continue;
+            }
+            const bool stored = WriteAt(own + kTableBytes[i], after);
+            Line(std::format(L"on/off table: +{:#x} {} -> {} on the game's controller; {}'s {}", kTableBytes[i],
+                             before[i], after, players::SeatName(seat), stored ? L"too" : L"NOT (write failed)"),
+                 FollowLevel(stored));
         }
-        const bool stored = WriteAt(two + kTableBytes[i], after);
-        Line(std::format(L"on/off table: +{:#x} {} -> {} on the game's controller; player 2's {}", kTableBytes[i],
-                         before[i], after, stored ? L"too" : L"NOT (write failed)"),
-             FollowLevel(stored));
     }
 }
 
@@ -238,8 +248,8 @@ bool PlaceSites(const platform::GameImage&) noexcept
         Remove();
     }
     platform::Log(L"command locks: {}",
-                  g_installed ? L"the battle's command locks, category locks and on/off-table bytes reach player 2's "
-                                L"controller through the game's setters (logged)"
+                  g_installed ? L"the battle's command locks, category locks and on/off-table bytes reach each further "
+                                L"player's controller through the game's setters (logged)"
                               : kUnavailable);
     return g_installed;
 }
@@ -301,9 +311,9 @@ void Remove() noexcept
     restore(g_enabledCall);
 }
 
-void Sync(void* playerTwoController) noexcept
+void Sync(int seat, void* controller) noexcept
 {
-    const auto two = reinterpret_cast<std::uintptr_t>(playerTwoController);
+    const auto two = reinterpret_cast<std::uintptr_t>(controller);
     const auto one = ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController);
     if (two == 0 || one == 0 || one == two)
     {
@@ -336,7 +346,7 @@ void Sync(void* playerTwoController) noexcept
     {
         text += std::format(L" | categories NOT copied (count {})", count);
     }
-    Line(L"join sync (the pushes made before player 2's controller followed):" + text);
+    Line(std::format(L"join sync (the pushes made before {}'s controller followed):", players::SeatName(seat)) + text);
 }
 
 }  // namespace lss::player_two::command_locks

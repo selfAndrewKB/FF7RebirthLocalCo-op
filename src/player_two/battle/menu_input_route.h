@@ -7,6 +7,10 @@
 // map's rule): the key-up handler notes which pad it came from, and the up route's call walks player 2's focus
 // context for a release whose press went there, whatever is open then. A unit of the command menu tick
 // (player_two/battle/command_menu_tick.h), which finds, installs and removes it. Game thread.
+//
+// Per seat: written for pad 2 above, a press goes to the UI of the seat whose pad its source bit is, a release to the
+// UI of the seat whose pad it came from; each seat keeps its own set of taken keys, so two seats holding the same
+// action keep apart.
 
 namespace lss::platform {
 class GameImage;

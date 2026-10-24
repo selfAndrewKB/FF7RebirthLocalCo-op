@@ -19,6 +19,10 @@
 //    setup (+0x3C8). Player 2's pane ticks with the leader type answering player 2's controller, so it
 //    keeps listing player 2's member's synergy skills (the controller's own tick already set it so).
 // Game thread only, while player 2 plays; everything else passes straight through.
+//
+// Per seat: written for player 2 above, a widget of any built seat's controller ticks in that seat's view (the seat
+// found from the widget's owner, the controller it names); the key guides tick after the game's, in seat order, each
+// view closed before the next seat's.
 
 namespace lss::platform {
 class GameImage;

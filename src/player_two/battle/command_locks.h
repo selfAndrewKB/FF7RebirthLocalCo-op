@@ -20,6 +20,9 @@
 // A written exception (RE §1.3, §3.3, §8): the game pushes these values only when they change, and player
 // 2's controller misses every push made before it follows (it is built later, and its creation Setup
 // resets +0x782). Sync() copies them once after each join Setup.
+//
+// Per seat: every built seat's controller follows each setter in seat order (the seat's controller is
+// player_two/battle/command_menu_two's); a seat's join Sync copies to that seat's only.
 
 namespace lss::platform {
 class GameImage;
@@ -30,8 +33,8 @@ namespace lss::player_two::command_locks {
 bool Install(const platform::GameImage& image) noexcept;
 void Remove() noexcept;
 
-/// After a join Setup of player 2's controller (not one made with the game's): the values the game pushed
-/// before player 2's controller followed its pushes, copied from the game's controller.
-void Sync(void* playerTwoController) noexcept;
+/// After a join Setup of `seat`'s controller `controller` (not one made with the game's): the values the game pushed
+/// before that controller followed its pushes, copied from the game's controller.
+void Sync(int seat, void* controller) noexcept;
 
 }  // namespace lss::player_two::command_locks

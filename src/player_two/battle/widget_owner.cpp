@@ -14,6 +14,7 @@
 #include "player_two/object_fields.h"
 #include "player_two/scopes/leader_scope.h"
 #include "player_two/weak_object.h"
+#include "players/seats.h"
 #include "players/widget_opacity.h"
 
 #include <array>
@@ -142,8 +143,8 @@ public:
         type_.reset();
         if (held_ && slots_.Close() != 0)
         {
-            platform::LogDebug(L"widget owner: the game wrote a UI system slot inside a widget tick in player 2's "
-                               L"view; the game's value kept");
+            platform::LogDebug(L"widget owner: the game wrote a UI system slot inside a widget tick in a further "
+                               L"player's view; the game's value kept");
         }
     }
     OwnerView(const OwnerView&)            = delete;
@@ -160,12 +161,13 @@ private:
     bool                                                typeRefused_ = false;
 };
 
-void TypeRefused() noexcept
+void TypeRefused(int seat) noexcept
 {
     static std::uint64_t count = 0;
     if (++count <= 5 || count % 3600 == 0)
     {
-        Line(std::format(L"the leader type could not answer player 2's controller for a widget tick ({} time(s))", count));
+        Line(std::format(L"the leader type could not answer {}'s controller for a widget tick ({} time(s))",
+                         players::SeatName(seat), count));
     }
 }
 
@@ -184,15 +186,16 @@ std::uintptr_t OwnerOf(const void* cell) noexcept
     return list != 0 ? ReadAt<std::uintptr_t>(list + kPartyListOwner) : 0;
 }
 
-/// Player 2's cells on change (by slot): what the cell tick left in them, and the leader types it compared.
-void WatchCell(std::uintptr_t cell, std::uintptr_t two) noexcept
+/// A seat's cells on change (by slot): what the cell tick left in them, and the leader types it compared.
+void WatchCell(int seat, std::uintptr_t cell, std::uintptr_t two) noexcept
 {
     struct Seen
     {
         std::uint8_t look = 0xFF, leader = 0xFF, type = 0xFF, answered = 0xFF;
         bool operator==(const Seen&) const = default;
     };
-    static std::array<Seen, kLoggedCells> seen{};
+    static std::array<std::array<Seen, kLoggedCells>, players::kMaxPlayers> seenBySeat{};  // index 0 unused
+    auto& seen = seenBySeat[static_cast<std::size_t>(seat)];
     if (!DebugOn())
     {
         return;
@@ -211,28 +214,32 @@ void WatchCell(std::uintptr_t cell, std::uintptr_t two) noexcept
     }
     before = now;
     const auto one = ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController);
-    Line(std::format(L"player 2's cell {:#x} (slot {}): type {} leader {} look {} at ({:.1f}, {:.1f}) | leader type "
-                     L"answered {} (player 1's controller's {}) | P2 battle HUD {}",
-                     cell, slot, now.type, now.leader, now.look, ReadAt<float>(cell + kCellPosition),
-                     ReadAt<float>(cell + kCellPosition + 4), now.answered,
-                     ReadAt<std::uint8_t>(one + kCmdStoredLeaderType), ReadAt<std::uint8_t>(two + kCmdHudMode)),
+    Line(std::format(L"{}'s cell {:#x} (slot {}): type {} leader {} look {} at ({:.1f}, {:.1f}) | leader type "
+                     L"answered {} (player 1's controller's {}) | P{} battle HUD {}",
+                     players::SeatName(seat), cell, slot, now.type, now.leader, now.look,
+                     ReadAt<float>(cell + kCellPosition), ReadAt<float>(cell + kCellPosition + 4), now.answered,
+                     ReadAt<std::uint8_t>(one + kCmdStoredLeaderType), seat + 1,
+                     ReadAt<std::uint8_t>(two + kCmdHudMode)),
          platform::Level::Debug);
 }
 
-/// Player 2's command controller while player 2 is in (game thread), else 0: the owner a widget's tick is checked
-/// against.
-std::uintptr_t PlayerTwoOwner() noexcept
+/// The seat whose command controller `controller` is, while that seat is in (game thread), else 0: a widget's owner
+/// is checked against every seat's ("ours" is any seat's).
+int SeatOwning(std::uintptr_t controller) noexcept
 {
-    return generation::OnGameThread() && generation::Active()
-               ? reinterpret_cast<std::uintptr_t>(command_menu_two::Controller())
-               : 0;
+    if (controller == 0 || !generation::OnGameThread())
+    {
+        return 0;
+    }
+    const int seat = command_menu_two::SeatOfController(reinterpret_cast<const void*>(controller));
+    return players::SeatBuilt(seat) && generation::Active(seat) ? seat : 0;
 }
 
-/// Ticks `widget` (`what`, player 2's) through `original` in its owner's view (OwnerView), or in the shared view
+/// Ticks `widget` (`what`, `seat`'s) through `original` in its owner's view (OwnerView), or in the shared view
 /// when that view cannot be entered. A fault inside the view clears `on`: the widget ticks in the shared view from
 /// then on. True if the tick ran in the owner's view.
-bool TickInOwnerView(CellTickFn original, void* widget, const void* geometry, float deltaTime, std::uintptr_t two,
-                     const wchar_t* what, bool& on) noexcept
+bool TickInOwnerView(int seat, CellTickFn original, void* widget, const void* geometry, float deltaTime,
+                     std::uintptr_t two, const wchar_t* what, bool& on) noexcept
 {
     std::optional<OwnerView> view(std::in_place, two, 0);
     if (!view->Held())
@@ -244,7 +251,7 @@ bool TickInOwnerView(CellTickFn original, void* widget, const void* geometry, fl
     }
     if (view->TypeRefused())
     {
-        TypeRefused();
+        TypeRefused(seat);
     }
     const bool ran = platform::CallGuarded(original, widget, geometry, deltaTime);
     view.reset();
@@ -256,61 +263,73 @@ bool TickInOwnerView(CellTickFn original, void* widget, const void* geometry, fl
     return ran;
 }
 
-/// Replaces the party-list cell's NativeTick: a cell of player 2's controller ticks in that controller's view.
+/// Replaces the party-list cell's NativeTick: a cell of a seat's controller ticks in that controller's view.
 void CellTick(void* cell, const void* geometry, float deltaTime) noexcept
 {
     const auto original = reinterpret_cast<CellTickFn>(g_cellSlot.Original());
-    const auto two      = PlayerTwoOwner();
-    if (!g_cellsOn || two == 0 || OwnerOf(cell) != two)
+    // The owner is read only on the game thread while a seat plays (as before: only while player 2 played).
+    const auto owner = g_cellsOn && generation::OnGameThread() && generation::AnyActive() ? OwnerOf(cell) : 0;
+    const int  seat     = SeatOwning(owner);
+    if (seat == 0)
     {
         return original(cell, geometry, deltaTime);
     }
-    if (!TickInOwnerView(original, cell, geometry, deltaTime, two, L"a cell of player 2's party list", g_cellsOn))
+    if (!TickInOwnerView(seat, original, cell, geometry, deltaTime, owner, L"a cell of a further player's party list",
+                         g_cellsOn))
     {
         return;
     }
     if (PowerOfTen(++g_cellTicks) && DebugOn())
     {
-        Line(std::format(L"{} tick(s) of player 2's party-list cells in player 2's view", g_cellTicks),
+        Line(std::format(L"{} tick(s) of the further players' party-list cells in their own views", g_cellTicks),
              platform::Level::Debug);
     }
-    WatchCell(reinterpret_cast<std::uintptr_t>(cell), two);
+    WatchCell(seat, reinterpret_cast<std::uintptr_t>(cell), owner);
 }
 
-/// Replaces the synergy pane's NativeTick: player 2's pane ticks in player 2's view, so its leader-type
-/// check answers player 2's member and the pane keeps player 2's synergy skills.
+/// Replaces the synergy pane's NativeTick: a seat's pane ticks in that seat's view, so its leader-type check answers
+/// the seat's member and the pane keeps that member's synergy skills.
 void PaneTick(void* pane, const void* geometry, float deltaTime) noexcept
 {
     const auto original = reinterpret_cast<CellTickFn>(g_paneSlot.Original());
-    const auto two      = PlayerTwoOwner();
     const auto at       = reinterpret_cast<std::uintptr_t>(pane);
-    if (!g_panesOn || two == 0 || ReadAt<std::uintptr_t>(at + kPaneOwner) != two)
+    const auto owner    = g_panesOn && generation::OnGameThread() && generation::AnyActive()
+                              ? ReadAt<std::uintptr_t>(at + kPaneOwner)
+                              : 0;
+    const int  seat     = SeatOwning(owner);
+    if (seat == 0)
     {
         return original(pane, geometry, deltaTime);
     }
-    if (!TickInOwnerView(original, pane, geometry, deltaTime, two, L"player 2's synergy pane", g_panesOn))
+    if (!TickInOwnerView(seat, original, pane, geometry, deltaTime, owner, L"a further player's synergy pane",
+                         g_panesOn))
     {
         return;
     }
-    static std::uint8_t shown = 0xFF;
-    const auto          type  = ReadAt<std::uint8_t>(at + kPaneType);
-    if ((PowerOfTen(++g_paneTicks) || type != shown) && DebugOn())
+    static std::array<std::uint8_t, players::kMaxPlayers> shown{0xFF, 0xFF, 0xFF};  // by seat; index 0 unused
+    const auto type = ReadAt<std::uint8_t>(at + kPaneType);
+    auto&      seen = shown[static_cast<std::size_t>(seat)];
+    if ((PowerOfTen(++g_paneTicks) || type != seen) && DebugOn())
     {
-        shown = type;
-        Line(std::format(L"player 2's synergy pane ticked in player 2's view ({} time(s)); it lists type {} (player 2's "
-                         L"controller's leader type {})",
-                         g_paneTicks, type, ReadAt<std::uint8_t>(two + kCmdStoredLeaderType)),
+        seen = type;
+        Line(std::format(L"{}'s synergy pane ticked in its own view ({} time(s)); it lists type {} (its controller's "
+                         L"leader type {})",
+                         players::SeatName(seat), g_paneTicks, type, ReadAt<std::uint8_t>(owner + kCmdStoredLeaderType)),
              platform::Level::Debug);
     }
 }
 
-/// Both key guides on change: active, the option's cache, shown, mode, and their widget's visibility and
-/// render opacity.
-void WatchGuides(std::uintptr_t one, std::uintptr_t two) noexcept
+/// Player 1's and `seat`'s key guides on change: active, the option's cache, shown, mode, and their widget's
+/// visibility and render opacity.
+void WatchGuides(int seat, std::uintptr_t one, std::uintptr_t two) noexcept
 {
     using State = std::array<std::uint8_t, 6>;
-    static std::array<State, 2> seen{};
-    static std::array<float, 2> seenOpacity{-1.0F, -1.0F};
+    static std::array<std::array<State, 2>, players::kMaxPlayers> seenBySeat{};  // index 0 unused
+    static std::array<std::array<float, 2>, players::kMaxPlayers> seenOpacityBySeat{
+        {{-1.0F, -1.0F}, {-1.0F, -1.0F}, {-1.0F, -1.0F}}};
+    static_assert(players::kMaxPlayers == 3, "seenOpacityBySeat's initialiser names every player");
+    auto& seen        = seenBySeat[static_cast<std::size_t>(seat)];
+    auto& seenOpacity = seenOpacityBySeat[static_cast<std::size_t>(seat)];
     if (!DebugOn())
     {
         return;
@@ -337,43 +356,54 @@ void WatchGuides(std::uintptr_t one, std::uintptr_t two) noexcept
         return std::format(L"active {} option {} shown {} mode {} widget {} visibility {} opacity {:.2f}", now[i][0],
                            now[i][1], now[i][2], now[i][3], now[i][4], now[i][5], opacity[i]);
     };
-    Line(std::format(L"key guides: P1 [{}] | P2 [{}]", side(0), side(1)), platform::Level::Debug);
+    Line(std::format(L"key guides: P1 [{}] | P{} [{}]", side(0), seat + 1, side(1)), platform::Level::Debug);
 }
 
-/// Replaces MasterHUD_Tick's key-guide tick: the game's key guide, then player 2's in player 2's view.
-void GuideTick(void* keyGuide) noexcept
+/// `seat`'s key guide ticked in the seat's view, after the game's own.
+void SeatGuideTick(int seat, GuideTickFn original, std::uintptr_t one) noexcept
 {
-    const auto original = reinterpret_cast<GuideTickFn>(g_guideCall.Original());
-    original(keyGuide);
-    const auto two   = PlayerTwoOwner();
-    const auto guide = reinterpret_cast<std::uintptr_t>(command_menu_two::KeyGuide());
-    const auto one   = reinterpret_cast<std::uintptr_t>(keyGuide);
-    if (!g_guidesOn || two == 0 || guide == 0 || one == guide)
+    const auto own   = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller(seat));
+    const auto guide = reinterpret_cast<std::uintptr_t>(command_menu_two::KeyGuide(seat));
+    if (!g_guidesOn || SeatOwning(own) != seat || guide == 0 || one == guide)
     {
         return;
     }
     {
-        const OwnerView view(two, guide);
+        const OwnerView view(own, guide);
         if (!view.Held())
         {
-            return Refused(L"player 2's key guide");
+            return Refused(L"a further player's key guide");
         }
         if (view.TypeRefused())
         {
-            TypeRefused();
+            TypeRefused(seat);
         }
         if (!platform::CallGuarded(original, reinterpret_cast<void*>(guide)))
         {
             g_guidesOn = false;
-            Line(L"FAILED: player 2's key guide faulted in its tick; it is not ticked from now on");
+            Line(std::format(L"FAILED: {}'s key guide faulted in its tick; the further players' key guides are not "
+                             L"ticked from now on",
+                             players::SeatName(seat)));
             return;
         }
     }
     if (PowerOfTen(++g_guideTicks) && DebugOn())
     {
-        Line(std::format(L"{} tick(s) of player 2's key guide", g_guideTicks), platform::Level::Debug);
+        Line(std::format(L"{} tick(s) of the further players' key guides", g_guideTicks), platform::Level::Debug);
     }
-    WatchGuides(one, guide);
+    WatchGuides(seat, one, guide);
+}
+
+/// Replaces MasterHUD_Tick's key-guide tick: the game's key guide, then each seat's in its own view, in seat order.
+void GuideTick(void* keyGuide) noexcept
+{
+    const auto original = reinterpret_cast<GuideTickFn>(g_guideCall.Original());
+    original(keyGuide);
+    const auto one = reinterpret_cast<std::uintptr_t>(keyGuide);
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        SeatGuideTick(seat, original, one);
+    }
 }
 
 }  // namespace
@@ -392,10 +422,10 @@ bool Install(const platform::GameImage& image) noexcept
     g_cellsOn     = platform::ReplaceSlot(image, kCellTick, reinterpret_cast<std::uintptr_t>(&CellTick), g_cellSlot);
     g_guidesOn    = guide && site && g_guideCall.Install(*site, *guide, reinterpret_cast<std::uintptr_t>(&GuideTick));
     g_panesOn     = platform::ReplaceSlot(image, kPaneTick, reinterpret_cast<std::uintptr_t>(&PaneTick), g_paneSlot);
-    platform::Log(L"widget owner: player 2's party-list cells {}; player 2's key guide {}; player 2's synergy pane {}",
-                  g_cellsOn ? L"tick in player 2's view" : L"UNAVAILABLE (a check failed; they tick in the shared view)",
-                  g_guidesOn ? L"is ticked in player 2's view" : L"UNAVAILABLE (a check failed; it is not ticked)",
-                  g_panesOn ? L"ticks in player 2's view" : L"UNAVAILABLE (a check failed; it ticks in the shared view)");
+    platform::Log(L"widget owner: the further players' party-list cells {}; their key guides {}; their synergy panes {}",
+                  g_cellsOn ? L"tick in their own views" : L"UNAVAILABLE (a check failed; they tick in the shared view)",
+                  g_guidesOn ? L"are ticked in their own views" : L"UNAVAILABLE (a check failed; they are not ticked)",
+                  g_panesOn ? L"tick in their own views" : L"UNAVAILABLE (a check failed; they tick in the shared view)");
     return g_cellsOn || g_guidesOn || g_panesOn;
 }
 

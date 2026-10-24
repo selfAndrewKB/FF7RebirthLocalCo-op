@@ -1,7 +1,9 @@
 #pragma once
 
 // The command menu's pure rules (player_two/battle/command_menu_tick.h, command_menu_two.h), tested on the host
-// (tests/menu_rules_test.cpp). The modules keep the engine reads and the redirects.
+// (tests/menu_rules_test.cpp). The modules keep the engine reads and the redirects. Written for player 2; the rules
+// over the menus (the world slow, the wait sound) take every player's, by seat (0 player 1), in the order the menus
+// tick: player 1's, then each seat's.
 
 #include <algorithm>
 #include <array>
@@ -19,8 +21,9 @@ constexpr bool PressAllowed(std::uint8_t hudModeTwo, std::uint8_t menuLayerTwo, 
     return hudModeTwo != 0 && menuLayerTwo != 0 && battleInputOne != 0 && menuLayerOne != 0 && playerOneTopIsCommandMenu;
 }
 
-/// Pad 2's keys whose press went to player 2's UI, so their release goes there too. A pad has fewer inputs (buttons,
-/// triggers, stick clicks and stick directions) than the capacity, so every held key fits.
+/// Pad 2's keys whose press went to player 2's UI, so their release goes there too (one set per seat: two seats
+/// holding the same action keep their own). A pad has fewer inputs (buttons, triggers, stick clicks and stick
+/// directions) than the capacity, so every held key fits.
 class TakenKeys
 {
 public:
@@ -73,11 +76,55 @@ constexpr float SlowWritten(bool playerOnesThisFrame, float playerOnes, float pl
     return playerOnesThisFrame ? std::min(playerOnes, playerTwos) : playerTwos;
 }
 
-/// The wait mode's sound off is skipped while the other menu is still in wait mode. Player 1's ticks first, so if both
-/// close in one frame player 2's plays it.
+/// One menu's world-slow value as a later pass sees it: whether it came this frame, and the value.
+struct SlowValue
+{
+    bool  thisFrame = false;
+    float value     = 1.0F;
+};
+
+/// The world-slow value written in a seat's pass, over the menus that ticked before it (player 1's, then the earlier
+/// seats'): either menu slows the world (policy A), so the smallest of its own and those that came this frame. With
+/// one earlier menu, SlowWritten.
+constexpr float SlowWrittenAmong(const SlowValue* earlier, int count, float mine) noexcept
+{
+    float written = mine;
+    for (int i = 0; i < count; ++i)
+    {
+        if (earlier[i].thisFrame)
+        {
+            written = std::min(earlier[i].value, written);
+        }
+    }
+    return written;
+}
+
+/// The wait mode's sound off is skipped while another menu is still in wait mode. The menus tick in order (player 1's
+/// first, then each seat's): one that ticks later still counts while closing (4), so if several close in one frame the
+/// last one plays it. `me`: the ticking menu's player (0 player 1, s a seat; negative outside a menu's tick); `waits`:
+/// every player's wait state, by seat, `players` of them.
+constexpr bool SkipWaitSoundOffAmong(int me, const std::int32_t* waits, int players) noexcept
+{
+    if (me < 0)
+    {
+        return false;
+    }
+    for (int other = 0; other < players; ++other)
+    {
+        const std::int32_t wait = waits[other];
+        if (other != me && (wait == 1 || wait == 5 || (other > me && wait == 4)))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+/// The two-player rule by pass (1 player 1's tick, 2 player 2's): SkipWaitSoundOffAmong over player 1 and player 2.
 constexpr bool SkipWaitSoundOff(int pass, std::int32_t waitOne, std::int32_t waitTwo) noexcept
 {
-    return (pass == 1 && (waitTwo == 1 || waitTwo == 5 || waitTwo == 4)) || (pass == 2 && (waitOne == 1 || waitOne == 5));
+    const std::int32_t waits[2] = {waitOne, waitTwo};
+    return SkipWaitSoundOffAmong(pass == 1 ? 0 : pass == 2 ? 1 : -1, waits, 2);
 }
 
 // ---- player 2's controller following the game's (command_menu_two) ----
@@ -100,13 +147,13 @@ constexpr bool GameSetUp(std::uintptr_t gameController, std::uint8_t setupDone, 
     return gameController != 0 && setupDone != 0 && setupPending == 0 && setupDeferred == 0;
 }
 
-/// The game's call may be made again on player 2's controller: it is built, we are on the game thread, the call was
-/// made on the game's controller (the UI system's slot names it) and, when the call needs player 2's member, player 2
-/// plays.
-constexpr bool CanFollow(bool installed, bool failed, bool built, bool onGameThread, bool needsPlayer, bool playerTwoPlays,
+/// The game's call may be made again on a seat's controller: it is built, we are on the game thread, the call was made
+/// on the game's controller (the UI system's slot names it; "ours" is any seat's controller) and, when the call needs
+/// the seat's member, the seat plays.
+constexpr bool CanFollow(bool installed, bool failed, bool built, bool onGameThread, bool needsPlayer, bool seatPlays,
                          bool gameControllerKnown, bool gameControllerIsOurs, bool namedByUiSystem) noexcept
 {
-    return installed && !failed && built && onGameThread && (!needsPlayer || playerTwoPlays) && gameControllerKnown &&
+    return installed && !failed && built && onGameThread && (!needsPlayer || seatPlays) && gameControllerKnown &&
            !gameControllerIsOurs && namedByUiSystem;
 }
 

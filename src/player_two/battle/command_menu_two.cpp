@@ -27,6 +27,7 @@
 #include "player_two/scopes/p2_scope.h"
 #include "player_two/session/party_member.h"
 #include "player_two/weak_object.h"
+#include "players/seats.h"
 
 #include <array>
 #include <cstddef>
@@ -147,18 +148,6 @@ Sites                              g_sites;
 platform::DeferredSites g_placement;  // 1.005: the calls placed from the game thread (platform/deferred_sites.h)
 constexpr const wchar_t* kUnavailable = L"UNAVAILABLE (a check failed)";
 
-// Game thread. The controller outlives the mod's stages, like the game's.
-void*         g_controller = nullptr;
-void*         g_keyGuide   = nullptr;  // player 2's key guide (built after the controller; kept like it)
-bool          g_installed  = false;
-bool          g_failed     = false;
-// Player 2's controller is set up for the game's current setup: its last Setup followed the game's (or
-// was the join Setup after it). The game's ResetAll clears it; so does a Setup of the game's that could
-// not be made again on player 2's (player 2 out, or a scope refused), and the join Setup then runs.
-bool          g_current    = false;
-int           g_tries      = 0;        // join Setup tries since g_current was last cleared, refusals included
-unsigned      g_waitTicks  = 0;        // ticks counted between the paced tries
-
 struct Snapshot
 {
     std::array<std::int32_t, 4>          members{};
@@ -173,10 +162,52 @@ struct Snapshot
                context.layerCount == other.context.layerCount;
     }
 };
-Snapshot g_logged{};
-bool     g_loggedOnce = false;
-std::array<std::uint8_t, 3> g_loggedLifecycle{0xFF, 0xFF, 0xFF};  // P1 setup done, deferred, P2 setup done
+
+// Game thread. A seat's controller outlives the mod's stages, like the game's.
+struct SeatMenu
+{
+    void* controller = nullptr;
+    void* keyGuide   = nullptr;  // the seat's key guide (built after the controller; kept like it)
+    bool  failed     = false;    // a game call faulted on this controller: it follows nothing more
+    // The seat's controller is set up for the game's current setup: its last Setup followed the game's (or
+    // was the join Setup after it). The game's ResetAll clears it; so does a Setup of the game's that could
+    // not be made again on the seat's (the seat out, or a scope refused), and the join Setup then runs.
+    bool     current   = false;
+    int      tries     = 0;  // join Setup tries since `current` was last cleared, refusals included
+    unsigned waitTicks = 0;  // ticks counted between the paced tries
+    Snapshot logged{};
+    bool     loggedOnce = false;
+    std::array<std::uint8_t, 3> loggedLifecycle{0xFF, 0xFF, 0xFF};  // P1 setup done, deferred, the seat's setup done
+};
+std::array<SeatMenu, players::kMaxPlayers> g_seats{};  // by seat; index 0 unused (player 1's is the game's own)
+bool           g_installed   = false;
 std::uintptr_t g_endUISystem = 0;
+
+/// `seat`'s record. Every caller has checked the seat; a bad one (a bug) gets a scratch record, cleared each time, and
+/// one warning, so no seat's record is touched.
+SeatMenu& SeatOf(int seat) noexcept
+{
+    if (players::SeatIndex(seat))
+    {
+        return g_seats[static_cast<std::size_t>(seat)];
+    }
+    static bool warned = false;
+    if (!warned)
+    {
+        warned = true;
+        platform::Log(L"command menu two: WARNING: a record was asked for seat {}, which does not exist; a scratch "
+                      L"record answered",
+                      seat);
+    }
+    static SeatMenu scratch;
+    scratch = {};
+    return scratch;
+}
+
+const wchar_t* Name(int seat) noexcept
+{
+    return players::SeatName(seat);
+}
 
 void Line(const std::wstring& text) noexcept
 {
@@ -220,16 +251,16 @@ enum class SetupResult
     Faulted
 };
 
-/// Runs `call` (a guarded game call on player 2's controller, true when it did not fault) in player 2's
-/// focus context (the UI system's controller and key guide slots name player 2's) and, when player 2's
-/// member is known, with the party leader answering player 2's member (Setup stores the leader's type in
-/// the controller).
+/// Runs `call` (a guarded game call on `seat`'s controller, true when it did not fault) in the seat's focus
+/// context (the UI system's controller and key guide slots name the seat's) and, when the seat's member is
+/// known, with the party leader answering that member (Setup stores the leader's type in the controller).
 template <class Call>
-SetupResult InPlayerTwoScopes(const wchar_t*& refusal, Call&& call) noexcept
+SetupResult InSeatScopes(int seat, const wchar_t*& refusal, Call&& call) noexcept
 {
-    void*          member = generation::Member();
+    void*          member = generation::MemberOf(seat);
     p2_scope::Args args;
-    args.controller = g_controller;
+    args.seat       = seat;
+    args.controller = SeatOf(seat).controller;
     // The leader pair when the member is known, and not required (the call runs without it, as before).
     const unsigned leader = member != nullptr && p2_scope::FillMember(args, member)
                                 ? p2_scope::Leader | p2_scope::LeaderType
@@ -248,25 +279,27 @@ SetupResult InPlayerTwoScopes(const wchar_t*& refusal, Call&& call) noexcept
     return SetupResult::Ran;
 }
 
-SetupResult RunSetup(void* world, std::uint8_t& result, const wchar_t*& refusal) noexcept
+SetupResult RunSetup(int seat, void* world, std::uint8_t& result, const wchar_t*& refusal) noexcept
 {
-    return InPlayerTwoScopes(refusal, [&] { return platform::CallGuarded(g_setup, result, g_controller, world); });
+    void* const controller = SeatOf(seat).controller;
+    return InSeatScopes(seat, refusal, [&] { return platform::CallGuarded(g_setup, result, controller, world); });
 }
 
-/// Logs the "setup done" bytes of both controllers and the deferred mark on change.
-void WatchLifecycle() noexcept
+/// Logs the "setup done" bytes of player 1's and `seat`'s controllers and the deferred mark on change.
+void WatchLifecycle(int seat) noexcept
 {
-    const auto one = ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController);
-    const auto two = reinterpret_cast<std::uintptr_t>(g_controller);
+    SeatMenu&  mine = SeatOf(seat);
+    const auto one  = ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController);
+    const auto own  = reinterpret_cast<std::uintptr_t>(mine.controller);
     const std::array<std::uint8_t, 3> lifecycle{ReadAt<std::uint8_t>(one + kCmdSetupDone),
                                                 ReadAt<std::uint8_t>(g_endUISystem + kUISetupDeferred),
-                                                two != 0 ? ReadAt<std::uint8_t>(two + kCmdSetupDone)
+                                                own != 0 ? ReadAt<std::uint8_t>(own + kCmdSetupDone)
                                                          : std::uint8_t{0xFF}};
-    if (lifecycle != g_loggedLifecycle)
+    if (lifecycle != mine.loggedLifecycle)
     {
-        g_loggedLifecycle = lifecycle;
-        Line(std::format(L"setup done: player 1 {} (a setup deferred: {}), player 2 {} (follows the game's: {})",
-                         lifecycle[0], lifecycle[1], lifecycle[2], YesNo(g_current)));
+        mine.loggedLifecycle = lifecycle;
+        Line(std::format(L"setup done: player 1 {} (a setup deferred: {}), {} {} (follows the game's: {})",
+                         lifecycle[0], lifecycle[1], Name(seat), lifecycle[2], YesNo(mine.current)));
     }
 }
 
@@ -280,20 +313,38 @@ void ReplayLine(const std::wstring& text) noexcept
 
 }  // namespace
 
-/// The game's call may be made again on player 2's controller: it is built, we are on the game thread, the
-/// call was made on the game's controller (the UI system's slot names it), and, when the call needs player
-/// 2's member (Setup stores the leader's type), player 2 plays.
-bool CanFollow(void* gameController, bool needsPlayer) noexcept
+int SeatOfController(const void* controller) noexcept
 {
-    return menu_rules::CanFollow(g_installed, g_failed, g_controller != nullptr, generation::OnGameThread(), needsPlayer,
-                                 generation::Active(), gameController != nullptr, gameController == g_controller,
+    for (int seat = 1; controller != nullptr && seat < players::kMaxPlayers; ++seat)
+    {
+        if (g_seats[static_cast<std::size_t>(seat)].controller == controller)
+        {
+            return seat;
+        }
+    }
+    return -1;
+}
+
+/// The game's call may be made again on `seat`'s controller: it is built, we are on the game thread, the call was
+/// made on the game's controller (the UI system's slot names it, and it is no seat's), and, when the call needs the
+/// seat's member (Setup stores the leader's type), the seat plays.
+bool CanFollow(int seat, void* gameController, bool needsPlayer) noexcept
+{
+    if (!players::SeatIndex(seat))
+    {
+        return false;
+    }
+    const SeatMenu& mine = SeatOf(seat);
+    return menu_rules::CanFollow(g_installed, mine.failed, mine.controller != nullptr, generation::OnGameThread(),
+                                 needsPlayer, generation::Active(seat), gameController != nullptr,
+                                 SeatOfController(gameController) >= 1,
                                  reinterpret_cast<std::uintptr_t>(gameController) ==
                                      ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController));
 }
 
-bool Ready() noexcept
+bool Ready(int seat) noexcept
 {
-    return g_installed && !g_failed;
+    return g_installed && players::SeatIndex(seat) && !SeatOf(seat).failed;
 }
 
 std::uintptr_t UiSystem() noexcept
@@ -310,127 +361,160 @@ RefreshFn RefreshFunction() noexcept
     return g_refreshFn != nullptr ? g_refreshFn : reinterpret_cast<RefreshFn>(g_refresh.Original());
 }
 
-/// The Members panel of player 2's controller rebuilt from the party, in player 2's scopes.
-void RefreshPlayerTwo(const wchar_t* why) noexcept
+/// The Members panel of `seat`'s controller rebuilt from the party, in the seat's scopes.
+void RefreshSeat(int seat, const wchar_t* why) noexcept
 {
-    const auto     refresh = RefreshFunction();
-    const wchar_t* refusal = nullptr;
-    switch (InPlayerTwoScopes(refusal, [&] { return platform::CallGuarded(refresh, g_controller); }))
+    const auto     refresh    = RefreshFunction();
+    void* const    controller = SeatOf(seat).controller;
+    const wchar_t* refusal    = nullptr;
+    switch (InSeatScopes(seat, refusal, [&] { return platform::CallGuarded(refresh, controller); }))
     {
         case SetupResult::Ran:
-            ReplayLine(std::format(L"player 2's Members panel rebuilt from the party ({})", why));
+            ReplayLine(std::format(L"{}'s Members panel rebuilt from the party ({})", Name(seat), why));
             break;
         case SetupResult::Refused:
-            ReplayLine(std::format(L"player 2's Members panel NOT rebuilt ({}): {}", why, refusal));
+            ReplayLine(std::format(L"{}'s Members panel NOT rebuilt ({}): {}", Name(seat), why, refusal));
             break;
         case SetupResult::Faulted:
-            Line(std::format(L"FAILED: rebuilding player 2's Members panel faulted ({})", why));
+            Line(std::format(L"FAILED: rebuilding {}'s Members panel faulted ({})", Name(seat), why));
             break;
     }
 }
 
-/// Replaces the Members panel's rebuild: the game's controller's, then player 2's (a rebuild of player 2's
-/// own, from its Setup or from us, runs once).
+/// Replaces the Members panel's rebuild: the game's controller's, then each seat's in seat order (a rebuild of a
+/// seat's own, from its Setup or from us, runs once).
 void RefreshCall(void* controller) noexcept
 {
     RefreshFunction()(controller);
-    if (CanFollow(controller, false))
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        RefreshPlayerTwo(L"the game rebuilt its own");
+        if (CanFollow(seat, controller, false))
+        {
+            RefreshSeat(seat, L"the game rebuilt its own");
+        }
     }
 }
 
-/// Replaces the squad switch's layout call: the game lays out its own panel, then player 2's is rebuilt
-/// from the party the switch just changed. (The switch is a field-menu key; pad 2's field presses go to
+/// Replaces the squad switch's layout call: the game lays out its own panel, then each seat's is rebuilt
+/// from the party the switch just changed. (The switch is a field-menu key; a seat's field presses go to
 /// player 1's menu, so the controller here is the game's.)
 void SquadLayoutCall(void* controller, std::uint8_t all, std::uint32_t first, std::uint8_t force) noexcept
 {
     g_layoutCells(controller, all, first, force);
-    if (CanFollow(controller, false))
+    if (const int owner = SeatOfController(controller); owner >= 1)
     {
-        RefreshPlayerTwo(L"the game's in-field squad switch");
+        Line(std::format(L"WARNING: the in-field squad switch ran on {}'s controller; the game's panel is not rebuilt",
+                         Name(owner)));
+        return;
     }
-    else if (controller != nullptr && controller == g_controller)
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        Line(L"WARNING: the in-field squad switch ran on player 2's controller; the game's panel is not rebuilt");
+        if (CanFollow(seat, controller, false))
+        {
+            RefreshSeat(seat, L"the game's in-field squad switch");
+        }
     }
 }
 
-/// Replaces the game's Setup call: the game's controller, then player 2's with the same world, in player 2's
-/// focus context and with the leader answering player 2's member.
-std::uint8_t SetupCall(void* controller, void* world) noexcept
+/// The game's Setup made again on `seat`'s controller with the same world, in the seat's focus context and with
+/// the leader answering the seat's member.
+void FollowSetup(int seat, void* controller, void* world) noexcept
 {
-    const std::uint8_t answer = reinterpret_cast<SetupFn>(g_setupCall.Original())(controller, world);
-    g_current = false;
-    g_tries   = 0;
-    if (!CanFollow(controller, true))
+    SeatMenu& mine = SeatOf(seat);
+    mine.current   = false;
+    mine.tries     = 0;
+    if (!CanFollow(seat, controller, true))
     {
-        ReplayLine(L"the game set up its controller; player 2's follows when player 2 plays (join Setup)");
-        return answer;
+        ReplayLine(std::format(L"the game set up its controller; {}'s follows when {} plays (join Setup)", Name(seat),
+                               Name(seat)));
+        return;
     }
     std::uint8_t   set     = 0;
     const wchar_t* refusal = nullptr;
-    switch (RunSetup(world, set, refusal))
+    switch (RunSetup(seat, world, set, refusal))
     {
         case SetupResult::Ran:
         {
-            g_current      = true;
-            const auto own = reinterpret_cast<std::uintptr_t>(g_controller);
-            ReplayLine(std::format(L"the game's Setup made on player 2's controller too (returned {}): 777={} 783={}", set,
-                                   ReadAt<std::uint8_t>(own + kCmdSetupDone),
+            mine.current   = true;
+            const auto own = reinterpret_cast<std::uintptr_t>(mine.controller);
+            ReplayLine(std::format(L"the game's Setup made on {}'s controller too (returned {}): 777={} 783={}",
+                                   Name(seat), set, ReadAt<std::uint8_t>(own + kCmdSetupDone),
                                    ReadAt<std::uint8_t>(own + kCmdMenuLayer)));
             break;
         }
         case SetupResult::Refused:
-            ReplayLine(std::format(L"the game's Setup NOT made on player 2's controller: {}; the join Setup follows", refusal));
+            ReplayLine(std::format(L"the game's Setup NOT made on {}'s controller: {}; the join Setup follows",
+                                   Name(seat), refusal));
             break;
         case SetupResult::Faulted:
-            g_failed = true;
-            Line(L"FAILED: the game's Setup faulted on player 2's controller; player 2's menu, attack, guard and dodge "
-                 L"stay off");
+            mine.failed = true;
+            Line(std::format(L"FAILED: the game's Setup faulted on {}'s controller; {}'s menu, attack, guard and dodge "
+                             L"stay off",
+                             Name(seat), Name(seat)));
             break;
+    }
+}
+
+/// Replaces the game's Setup call: the game's controller, then each seat's in seat order.
+std::uint8_t SetupCall(void* controller, void* world) noexcept
+{
+    const std::uint8_t answer = reinterpret_cast<SetupFn>(g_setupCall.Original())(controller, world);
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        FollowSetup(seat, controller, world);
     }
     return answer;
 }
 
-/// Replaces the game's ResetAll call: the game's controller, then player 2's, in player 2's focus context
-/// (ResetAll also resets the key guide the scope names, player 2's) and, when player 2 plays, with the
-/// leader answering player 2's member. ResetAll needs no member, so player 2's follows it even while player
-/// 2 is out (the field exit takes player 2 out first). Player 2's then waits for the game's next Setup, or
-/// the join Setup, as the game's waits for its own.
-void ResetAllCall(void* controller) noexcept
+/// The game's ResetAll made again on `seat`'s controller, in the seat's focus context (ResetAll also resets the key
+/// guide the scope names, the seat's) and, when the seat plays, with the leader answering its member. ResetAll needs
+/// no member, so the seat's follows it even while the seat is out (the field exit takes the seats out first). The
+/// seat's then waits for the game's next Setup, or the join Setup, as the game's waits for its own.
+void FollowResetAll(int seat, void* controller) noexcept
 {
-    reinterpret_cast<ResetAllFn>(g_resetAllCall.Original())(controller);
-    g_current = false;
-    g_tries   = 0;
-    if (!CanFollow(controller, false))
+    SeatMenu& mine = SeatOf(seat);
+    mine.current   = false;
+    mine.tries     = 0;
+    if (!CanFollow(seat, controller, false))
     {
-        ReplayLine(L"the game reset its controller; player 2's is not built yet");
+        ReplayLine(std::format(L"the game reset its controller; {}'s is not built yet", Name(seat)));
         return;
     }
     const auto     resetAll = reinterpret_cast<ResetAllFn>(g_resetAllCall.Original());
+    void* const    own      = mine.controller;
     const wchar_t* refusal  = nullptr;
-    switch (InPlayerTwoScopes(refusal, [&] { return platform::CallGuarded(resetAll, g_controller); }))
+    switch (InSeatScopes(seat, refusal, [&] { return platform::CallGuarded(resetAll, own); }))
     {
         case SetupResult::Ran:
-            ReplayLine(std::format(L"the game's ResetAll made on player 2's controller too: 777={}",
-                                   ReadAt<std::uint8_t>(reinterpret_cast<std::uintptr_t>(g_controller) +
-                                                        kCmdSetupDone)));
+            ReplayLine(std::format(L"the game's ResetAll made on {}'s controller too: 777={}", Name(seat),
+                                   ReadAt<std::uint8_t>(reinterpret_cast<std::uintptr_t>(own) + kCmdSetupDone)));
             break;
         case SetupResult::Refused:
-            ReplayLine(std::format(L"the game's ResetAll NOT made on player 2's controller: {}", refusal));
+            ReplayLine(std::format(L"the game's ResetAll NOT made on {}'s controller: {}", Name(seat), refusal));
             break;
         case SetupResult::Faulted:
-            g_failed = true;
-            Line(L"FAILED: the game's ResetAll faulted on player 2's controller; player 2's menu, attack, guard and dodge "
-                 L"stay off");
+            mine.failed = true;
+            Line(std::format(L"FAILED: the game's ResetAll faulted on {}'s controller; {}'s menu, attack, guard and "
+                             L"dodge stay off",
+                             Name(seat), Name(seat)));
             break;
     }
 }
 
-/// Allocates and constructs the controller, as EndUISystem__Ctor does for the game's.
-bool Build() noexcept
+/// Replaces the game's ResetAll call: the game's controller, then each seat's in seat order.
+void ResetAllCall(void* controller) noexcept
 {
+    reinterpret_cast<ResetAllFn>(g_resetAllCall.Original())(controller);
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        FollowResetAll(seat, controller);
+    }
+}
+
+/// Allocates and constructs `seat`'s controller, as EndUISystem__Ctor does for the game's.
+bool Build(int seat) noexcept
+{
+    SeatMenu& mine = SeatOf(seat);
     void* memory = nullptr;
     if (!platform::CallGuarded(g_malloc, memory, kControllerSize, std::uint32_t{0}) || memory == nullptr)
     {
@@ -442,9 +526,9 @@ bool Build() noexcept
     {
         return false;  // the memory is left: the ctor may have registered it before faulting
     }
-    g_controller = memory;
-    Line(std::format(L"built player 2's controller at {:#x}", reinterpret_cast<std::uintptr_t>(memory)));
-    // Player 2's key guide, as EndUISystem__Ctor builds the game's. Optional: without it player 2's controller
+    mine.controller = memory;
+    Line(std::format(L"built {}'s controller at {:#x}", Name(seat), reinterpret_cast<std::uintptr_t>(memory)));
+    // The seat's key guide, as EndUISystem__Ctor builds the game's. Optional: without it the seat's controller
     // leaves the shared one alone (player_two/command_menu_tick skips its key-guide writes).
     void* guide = nullptr;
     if (platform::CallGuarded(g_malloc, guide, kKeyGuideSize, std::uint32_t{0}) && guide != nullptr)
@@ -453,18 +537,19 @@ bool Build() noexcept
         void* built2 = nullptr;
         if (platform::CallGuarded(g_keyGuideCtor, built2, guide))
         {
-            g_keyGuide = guide;
-            focus_scope::SetKeyGuide(players::kPlayerTwoSeat, guide);
+            mine.keyGuide = guide;
+            focus_scope::SetKeyGuide(seat, guide);
         }
     }
-    Line(std::format(L"player 2's key guide {}", g_keyGuide != nullptr ? L"built" : L"NOT built (the shared one stays)"));
+    Line(std::format(L"{}'s key guide {}", Name(seat),
+                     mine.keyGuide != nullptr ? L"built" : L"NOT built (the shared one stays)"));
     return true;
 }
 
-Snapshot Read() noexcept
+Snapshot Read(int seat) noexcept
 {
     Snapshot   now;
-    const auto ctrl = reinterpret_cast<std::uintptr_t>(g_controller);
+    const auto ctrl = reinterpret_cast<std::uintptr_t>(SeatOf(seat).controller);
     for (std::size_t i = 0; i < now.members.size(); ++i)
     {
         now.members[i] = ReadAt<std::int32_t>(ctrl + kCmdMembers + i * 4);
@@ -476,28 +561,29 @@ Snapshot Read() noexcept
     now.widget = weak_object::ObjectOf(ReadAt<std::uint64_t>(ctrl + kCmdMenuWidget));
     now.widgetNamesUs = now.widget != nullptr &&
                         ReadAt<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(now.widget) + kWidgetCtrl) == ctrl;
-    now.context = focus_scope::ContextOf(players::kPlayerTwoSeat);
+    now.context = focus_scope::ContextOf(seat);
     return now;
 }
 
-void Watch() noexcept
+void Watch(int seat) noexcept
 {
     if (!platform::Enabled(platform::Level::Debug))
     {
         return;
     }
-    const Snapshot now = Read();
-    if (g_loggedOnce && now == g_logged)
+    SeatMenu&      mine = SeatOf(seat);
+    const Snapshot now  = Read(seat);
+    if (mine.loggedOnce && now == mine.logged)
     {
         return;
     }
-    g_logged     = now;
-    g_loggedOnce = true;
+    mine.logged     = now;
+    mine.loggedOnce = true;
     const auto& b = now.bytes;
     platform::LogDebug(L"command menu two: {}", std::format(L"members {} {} {} {} | menu {} (names this controller: {}) | 25C={} 258={} 777={} 783={} 5E1={} "
-                     L"540={} | player 2's focus: path {}, layers {}",
+                     L"540={} | {}'s focus: path {}, layers {}",
                      now.members[0], now.members[1], now.members[2], now.members[3], NameOf(now.widget),
-                     YesNo(now.widgetNamesUs), b[0], b[1], b[2], b[3], b[4], b[5], now.context.pathCount,
+                     YesNo(now.widgetNamesUs), b[0], b[1], b[2], b[3], b[4], b[5], Name(seat), now.context.pathCount,
                      now.context.layerCount));
 }
 
@@ -547,8 +633,9 @@ bool PlaceSites(const platform::GameImage& image) noexcept
     {
         shortcut_follow::Place(image, g_placement);
     }
-    platform::Log(L"command menu two: {}", g_installed ? L"player 2's command controller is built once player 2 plays and "
-                                                         L"follows the game's Setup, ResetAll and Members panel rebuild (logged)"
+    platform::Log(L"command menu two: {}", g_installed ? L"each further player's command controller is built once they "
+                                                         L"play and follows the game's Setup, ResetAll and Members panel "
+                                                         L"rebuild (logged)"
                                                        : kUnavailable);
     return g_installed;
 }
@@ -579,8 +666,11 @@ bool Install(const platform::GameImage& image) noexcept
     const auto setupAt = site(kSetupCall), resetAt = site(kResetAllCall);
     g_installed = malloc && ctor && setup && weak_object::Known() && g_worldClass != 0 && system && resetAll &&
                   refresh && setupAt && resetAt && focus_scope::Install(image);
-    g_current = false;
-    g_tries   = 0;
+    for (SeatMenu& seat : g_seats)
+    {
+        seat.current = false;
+        seat.tries   = 0;
+    }
     if (g_installed)
     {
         g_malloc  = reinterpret_cast<MallocFn>(*malloc);
@@ -629,20 +719,20 @@ void Remove() noexcept
     }
 }
 
-void* Controller() noexcept
+void* Controller(int seat) noexcept
 {
-    return g_controller;
+    return players::SeatIndex(seat) ? SeatOf(seat).controller : nullptr;
 }
 
-void* KeyGuide() noexcept
+void* KeyGuide(int seat) noexcept
 {
-    return g_keyGuide;
+    return players::SeatIndex(seat) ? SeatOf(seat).keyGuide : nullptr;
 }
 
 namespace {
 
-/// After the join Setup: player 2's command menu gets player 2's UI focus again through the game's own
-/// calls, in player 2's scopes, when the game's controller has battle input on. The game's
+/// After the join Setup: a seat's command menu gets its UI focus again through the game's own calls, in the
+/// seat's scopes, when the game's controller has battle input on (written for player 2 below). The game's
 /// ResumeHudInput(0) as its field starts keeps battle input on, with its menu's focus layer up, through the
 /// field and every battle. Player 2 missed it while out, and its controller outlives the leave with its
 /// flag and layer byte (+0x783) still set, while the layer itself went with the focus of the player who
@@ -651,43 +741,45 @@ namespace {
 /// reach nothing (the user's retry tests, v0.28.0). The layer setter's off call, then ResumeHudInput(0)
 /// (command_menu_tick::RefocusMenu). A written exception, as the lock sync: missed game calls made once at
 /// the join.
-void RefocusAtJoin(std::uintptr_t one) noexcept
+void RefocusAtJoin(int seat, std::uintptr_t one) noexcept
 {
     if (!command_menu_tick::BattleInputOn(reinterpret_cast<const void*>(one)))
     {
         return;
     }
-    const auto     layer   = ReadAt<std::uint8_t>(reinterpret_cast<std::uintptr_t>(g_controller) + kCmdMenuLayer);
+    void* const    own     = SeatOf(seat).controller;
+    const auto     layer   = ReadAt<std::uint8_t>(reinterpret_cast<std::uintptr_t>(own) + kCmdMenuLayer);
     const wchar_t* refusal = nullptr;
-    switch (InPlayerTwoScopes(refusal, [] { return command_menu_tick::RefocusMenu(g_controller); }))
+    switch (InSeatScopes(seat, refusal, [own] { return command_menu_tick::RefocusMenu(own); }))
     {
         case SetupResult::Ran:
-            Line(std::format(L"join: player 2's menu focus layer {}put up again through the game's calls (layer byte "
+            Line(std::format(L"join: {}'s menu focus layer {}put up again through the game's calls (layer byte "
                              L"was {}); battle input on",
-                             layer != 0 ? L"taken down and " : L"", layer));
+                             Name(seat), layer != 0 ? L"taken down and " : L"", layer));
             break;
         case SetupResult::Refused:
-            Line(std::format(L"join: player 2's menu focus NOT restored: {}", refusal));
+            Line(std::format(L"join: {}'s menu focus NOT restored: {}", Name(seat), refusal));
             break;
         case SetupResult::Faulted:
-            Line(L"join: restoring player 2's menu focus FAULTED");
+            Line(std::format(L"join: restoring {}'s menu focus FAULTED", Name(seat)));
             break;
     }
 }
 
-}  // namespace
-
-void Tick() noexcept
+/// One seat's tick: builds its controller, runs the join Setup when it does not follow the game's current setup,
+/// and logs its bytes on change.
+void SeatTick(int seat) noexcept
 {
-    if (!g_installed || g_failed || !generation::OnGameThread() || !generation::Active())
+    SeatMenu& mine = SeatOf(seat);
+    if (mine.failed || !generation::Active(seat))
     {
         return;
     }
-    WatchLifecycle();
-    shortcut_follow::NoteGameController();  // kept for a shortcut rebuild that runs in player 2's scope
-    if (g_current)
+    WatchLifecycle(seat);
+    shortcut_follow::NoteGameController();  // kept for a shortcut rebuild that runs in a seat's scope
+    if (mine.current)
     {
-        Watch();
+        Watch(seat);
         return;
     }
     // The join Setup: player 2's controller is built or set up when player 2 plays and it does not follow
@@ -705,46 +797,61 @@ void Tick() noexcept
     {
         return;
     }
-    if (!menu_rules::JoinTryDue(g_tries, g_waitTicks))
+    if (!menu_rules::JoinTryDue(mine.tries, mine.waitTicks))
     {
         return;  // refused so far: paced tries, never given up
     }
-    if (g_controller == nullptr && !Build())
+    if (mine.controller == nullptr && !Build(seat))
     {
-        g_failed = true;
-        Line(L"FAILED to build player 2's controller; player 2's menu, attack, guard and dodge stay off");
+        mine.failed = true;
+        Line(std::format(L"FAILED to build {}'s controller; {}'s menu, attack, guard and dodge stay off", Name(seat),
+                         Name(seat)));
         return;
     }
-    ++g_tries;
+    ++mine.tries;
     std::uint8_t   set     = 0;
     const wchar_t* refusal = nullptr;
-    const auto     setup   = RunSetup(world, set, refusal);
+    const auto     setup   = RunSetup(seat, world, set, refusal);
     if (setup == SetupResult::Refused)
     {
-        if (g_tries <= kSetupTries || g_tries % 20 == 0)
+        if (mine.tries <= kSetupTries || mine.tries % 20 == 0)
         {
-            Line(std::format(L"join setup waits: {} (try {})", refusal, g_tries));
+            Line(std::format(L"join setup waits: {} (try {})", refusal, mine.tries));
         }
         return;
     }
     if (setup == SetupResult::Faulted)
     {
-        g_failed = true;
-        Line(L"FAILED: the join setup faulted; player 2's menu, attack, guard and dodge stay off");
+        mine.failed = true;
+        Line(std::format(L"FAILED: the join setup faulted; {}'s menu, attack, guard and dodge stay off", Name(seat)));
         return;
     }
-    g_current    = true;
-    g_tries      = 0;
-    g_loggedOnce = false;
-    // After the game's Setup, field step 9 rebuilds the game's Members panel from the party; player 2's
-    // missed it (player 2 was out), so it runs now, in the game's order.
-    RefreshPlayerTwo(L"after the join Setup, as field step 9 follows the game's");
-    command_locks::Sync(g_controller);
-    RefocusAtJoin(one);
+    mine.current    = true;
+    mine.tries      = 0;
+    mine.loggedOnce = false;
+    // After the game's Setup, field step 9 rebuilds the game's Members panel from the party; the seat's missed it
+    // (the seat was out), so it runs now, in the game's order.
+    RefreshSeat(seat, L"after the join Setup, as field step 9 follows the game's");
+    command_locks::Sync(seat, mine.controller);
+    RefocusAtJoin(seat, one);
     // Only at a join (an object walk is slow): a second Setup must not leave extra menus behind.
     Line(std::format(L"join setup for world '{}' (returned {}); command menu widgets now: {}", NameOf(world), set,
                      CountMenus()));
-    Watch();
+    Watch(seat);
+}
+
+}  // namespace
+
+void Tick() noexcept
+{
+    if (!g_installed || !generation::OnGameThread())
+    {
+        return;
+    }
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        SeatTick(seat);
+    }
 }
 
 }  // namespace lss::player_two::command_menu_two
