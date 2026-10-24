@@ -161,7 +161,7 @@ void Seat::Tick() noexcept
             }
             if (phase_ == Phase::Playing && installed_.memberMovement && generation::MemberOf(seat_) != nullptr)
             {
-                member_movement::Tick(controller_, generation::MemberOf(seat_));
+                member_movement::Tick(seat_, controller_, generation::MemberOf(seat_));
             }
             break;
         case Phase::Swapping: AwaitSwap(); break;
@@ -977,7 +977,7 @@ void Seat::LogStatus() noexcept
         fault ? L" (fault: " + std::wstring(fault) + L")" : std::wstring(), settings.acted, settings.passed,
         field_camera::TakeMismatches(), update.acted, update.passed, update.refused,
         pad_sticks::Enabled() ? L"on" : L"off", input.acted, input.refused, move.acted, move.refused);
-    const auto member = member_movement::Counters().Take();
+    const auto member = member_movement::Counters(seat_).Take();
     Log(L"  player 2's view: own camera {} (moved off it {} time(s) so far); member movement ticked {} skipped {} "
         L"refused {}, leader test answered yes {} time(s)",
         YesNo(view_target::OnOwnCamera(controller_)), viewTargetResets_, member.acted, member.passed,

@@ -14,6 +14,10 @@
 #include "player_two/input/pad_sticks.h"
 #include "player_two/object_fields.h"
 #include "player_two/rides/chocobo_ride.h"
+#include "players/seats.h"
+
+#include <array>
+#include <cstddef>
 
 namespace lss::player_two::move_state {
 
@@ -43,12 +47,22 @@ TickFn                g_enginePlayerUpdateInput = nullptr;
 TickFn                g_engineLeaderActionTick  = nullptr;  // (component, dt)
 
 // Game thread only.
-bool        g_ownTick = false;
-EngineTicks g_engineTicks;
+bool                                          g_ownTick = false;
+std::array<EngineTicks, players::kMaxPlayers> g_engineTicks{};  // by seat; index 0 (player 1) unused
+
+/// Each built seat's record, for the ticks every seat sees alike.
+template <typename Fn>
+void EachSeatRecord(Fn&& fn) noexcept
+{
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        fn(seat, g_engineTicks[static_cast<std::size_t>(seat)]);
+    }
+}
 
 /// Runs one move-state tick. On the game thread it is counted, and the game's own ticks are
-/// recorded; with per-pad sticks on, player 1's character reads only player 1's pad. (Player 2's
-/// member is ticked by the mod with its scopes already open: player_two/input/member_movement.h.)
+/// recorded for every seat; with per-pad sticks on, player 1's character reads only player 1's pad.
+/// (A seat's member is ticked by the mod with its scopes already open: player_two/input/member_movement.h.)
 std::uintptr_t RunForOwner(TickFn engine, void* state, float deltaTime, bool viaTickInput) noexcept
 {
     if (!generation::OnGameThread())
@@ -58,16 +72,18 @@ std::uintptr_t RunForOwner(TickFn engine, void* state, float deltaTime, bool via
     void* character = ReadPointer(state, facts::kMoveStateCharacter);
     if (!g_ownTick)
     {
-        ++g_engineTicks.count;
-        g_engineTicks.deltaTime = deltaTime;
-        g_engineTicks.memberTicked |= character != nullptr && character == generation::Member();
+        EachSeatRecord([&](int seat, EngineTicks& ticks) {
+            ++ticks.count;
+            ticks.deltaTime = deltaTime;
+            ticks.memberTicked |= character != nullptr && character == generation::MemberOf(seat);
+        });
     }
     move_census::Count(state, character, viaTickInput, g_ownTick);  // the census (dev tools)
 
     const void* owner = ReadPointer(character, facts::kCharacterEffectiveController);
-    if (!pad_sticks::Enabled() || !pad_sticks::PartActs(pad_sticks::kPartPlayerOneMove) || !generation::Active() ||
+    if (!pad_sticks::Enabled() || !pad_sticks::PartActs(pad_sticks::kPartPlayerOneMove) || !generation::AnyActive() ||
         owner == nullptr ||
-        owner != generation::PlayerOneController())
+        owner != generation::ControllerOf(0))
     {
         return engine(state, deltaTime);
     }
@@ -76,16 +92,16 @@ std::uintptr_t RunForOwner(TickFn engine, void* state, float deltaTime, bool via
     return engine(state, deltaTime);
 }
 
-/// Runs ngine with player 1's pad as the only stick when owner is player 1's controller and
+/// Runs `engine` with player 1's pad as the only stick when owner is player 1's controller and
 /// per-pad sticks act on player 1's detection. Everything after slot 11 in player 1's tick reads the
 /// stick too: the input update's terrain detection turns its probes toward it, and the leader-action
 /// tick keeps its history (RE-p2-terrain-action-conflict.md §7). Unscoped, they read the merged stick,
-/// which is pad 2's whenever only player 2 moves. A scope already open (player 2's member, or slot 11
-/// inside slot 16) passes through.
+/// which is a seat's pad's whenever only that seat's player moves. A scope already open (a seat's
+/// member, or slot 11 inside slot 16) passes through.
 std::uintptr_t RunOnPlayerOnesPad(TickFn engine, void* object, float deltaTime, const void* owner) noexcept
 {
     if (!generation::OnGameThread() || !pad_sticks::Enabled() || !pad_sticks::PartActs(pad_sticks::kPartPlayerOneDetect) ||
-        !generation::Active() || owner == nullptr || owner != generation::PlayerOneController())
+        !generation::AnyActive() || owner == nullptr || owner != generation::ControllerOf(0))
     {
         return engine(object, deltaTime);
     }
@@ -111,8 +127,9 @@ std::uintptr_t PlayerUpdateInput(void* state, float deltaTime)
 
 /// Player 1's ridden chocobo or scooter: the field tick runs its move state for player 1 (PC1 possesses it,
 /// RE-p2-chocobo-ride.md §1.2, RE-p2-wheelie-ride.md §14.5); unscoped it read the merged stick, so pad 2 steered it
-/// (live 2026-10-02, the chocobo). Not counted as an engine tick; recorded as the ride tick, which player 2's member
-/// tick and own ride run on. A follower's chocobo (its own AI controller) and player 2's own ride pass through.
+/// (live 2026-10-02, the chocobo). Not counted as an engine tick; recorded as the ride tick (for every seat), which a
+/// seat's member tick and own ride run on. A follower's chocobo (its own AI controller) and a seat's own ride pass
+/// through.
 std::uintptr_t ChocoboFor(TickFn engine, void* state, float deltaTime, bool outer) noexcept
 {
     const void* chocobo = generation::OnGameThread() ? ReadPointer(state, facts::kMoveStateCharacter) : nullptr;
@@ -122,11 +139,13 @@ std::uintptr_t ChocoboFor(TickFn engine, void* state, float deltaTime, bool oute
         owner = ReadPointer(chocobo, facts::kPawnController);
     }
     // Recorded from slot 16 only (the field tick's call, with its delta time; slot 11 runs inside it).
-    if (outer && !g_ownTick && owner != nullptr && owner == generation::PlayerOneController() && deltaTime > 0.0f &&
+    if (outer && !g_ownTick && owner != nullptr && owner == generation::ControllerOf(0) && deltaTime > 0.0f &&
         deltaTime < 1.0f)
     {
-        g_engineTicks.rideTicked    = true;  // the field ticker ran player 1's ride body this frame
-        g_engineTicks.rideDeltaTime = deltaTime;
+        EachSeatRecord([&](int, EngineTicks& ticks) {
+            ticks.rideTicked    = true;  // the field ticker ran player 1's ride body this frame
+            ticks.rideDeltaTime = deltaTime;
+        });
     }
     return RunOnPlayerOnesPad(engine, state, deltaTime, owner);
 }
@@ -147,8 +166,8 @@ std::uintptr_t ScooterUpdateInput(void* state, float deltaTime)
 }
 
 /// Every chocobo move state's slot 1, run by the chocobo's own actor tick in game context (its handles and the anim
-/// sync). Player 2's ridden chocobo's runs inside player 2's scopes (player_two/rides/chocobo_ride.h, TickHandles); the
-/// rest pass through.
+/// sync). Player 2's ridden chocobo's runs inside player 2's scopes (player_two/rides/chocobo_ride.h, TickHandles, the
+/// rides' to make per seat); the rest pass through.
 std::uintptr_t ChocoboHandles(void* state, float deltaTime)
 {
     std::uintptr_t returned = 0;
@@ -257,10 +276,15 @@ void Remove() noexcept
     }
 }
 
-EngineTicks TakeEngineTicks() noexcept
+EngineTicks TakeEngineTicks(int seat) noexcept
 {
-    const EngineTicks taken = g_engineTicks;
-    g_engineTicks           = {};
+    if (!players::SeatBuilt(seat))
+    {
+        return {};
+    }
+    EngineTicks&      record = g_engineTicks[static_cast<std::size_t>(seat)];
+    const EngineTicks taken  = record;
+    record                   = {};
     return taken;
 }
 

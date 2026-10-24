@@ -31,6 +31,7 @@
 #include "player_two/scopes/scope_leaks.h"
 #include "player_two/session/party_member.h"
 
+#include <array>
 #include <cstddef>
 
 namespace lss::player_two::member_movement {
@@ -51,10 +52,16 @@ LeaderTestFn          g_isPlayerCore     = nullptr;  // IsUCPC_Core(character), 
 LeaderTestFn          g_isRiddenVehicle  = nullptr;  // IsActiveRiddenVehicle(character), for the ride logging only
 std::uintptr_t        g_moveStateVTable  = 0;
 
-// Game thread only: set once the engine raised an exception inside the member's tick.
-bool g_stopped = false;
+// Game thread only, by seat (index 0, player 1's, unused): set once the engine raised an exception inside the seat's
+// member's tick.
+std::array<bool, players::kMaxPlayers> g_stopped{};
 
-StageCounters g_counters;
+std::array<StageCounters, players::kMaxPlayers> g_counters{};  // by seat; index 0 unused
+
+// Inside a seat's member tick, the rides (chocobo_ride, wheelie_ride, own_ride), the battle target fields (lock_on's
+// Targets part and AfterBattle) and the dev watches are player 2's: Tick calls them for player 2's seat only.
+static_assert(players::kSeatsBuilt == 1, "the rides, lock_on and the target fields are player 2's: before seat 2 is "
+                                         "built their groups make them per seat and Tick calls them for every seat");
 
 int MemberType(const void* member) noexcept
 {
@@ -116,7 +123,7 @@ bool GuardedClear(void* handle) noexcept
 /// runs, and the character's own tick would then add them to the one shared prompt list as rows of
 /// their own (RE-p2-field-action-row.md). The requests are used only inside the tick, so clearing
 /// them afterwards changes the rows alone.
-void ClearFieldActionRows(void* state) noexcept
+void ClearFieldActionRows(int seat, void* state) noexcept
 {
     if (g_handleClear == nullptr)
     {
@@ -127,53 +134,64 @@ void ClearFieldActionRows(void* state) noexcept
         if (!GuardedClear(static_cast<std::byte*>(state) + offset))
         {
             g_handleClear = nullptr;
-            platform::Log(L"member movement: the engine raised an exception clearing player 2's field-action rows; "
-                          L"they are left to show this session");
+            platform::Log(L"member movement: the engine raised an exception clearing {}'s field-action rows; "
+                          L"they are left to show this session",
+                          players::SeatName(seat));
             return;
         }
     }
 }
 
-/// Ticks the member's state inside every scope, or not at all.
-void TickInScopes(void* playerTwoController, void* member, void* state, int type, float deltaTime) noexcept
+/// Ticks the seat's member's state inside every scope, or not at all.
+void TickInScopes(int seat, void* controller, void* member, void* state, int type, float deltaTime) noexcept
 {
-    // Pad 2's sticks and player 2 as the primary controller, or no tick; player 2's own buttons (sprint, dodge,
-    // field actions) and, in battle, the target system's fields as player 2's.
+    const bool playerTwo = seat == players::kPlayerTwoSeat;
+    // The seat's sticks and its player as the primary controller, or no tick; its own buttons (sprint, dodge, field
+    // actions) and, in battle, the target system's fields as player 2's (lock_on: player 2's only).
     p2_scope::Args args;
-    args.padId = pad_sticks::ControllerIdOf(playerTwoController);
-    const p2_scope::P2Scope scopes(p2_scope::Sticks | p2_scope::Primary | p2_scope::Buttons | p2_scope::Targets,
-                                   p2_scope::Buttons | p2_scope::Targets, args);
+    args.seat  = seat;
+    args.padId = pad_sticks::ControllerIdOf(controller);
+    const unsigned targets = playerTwo ? unsigned{p2_scope::Targets} : 0u;
+    const p2_scope::P2Scope scopes(p2_scope::Sticks | p2_scope::Primary | p2_scope::Buttons | targets,
+                                   p2_scope::Buttons | targets, args);
+    StageCounters& counters = g_counters[static_cast<std::size_t>(seat)];
     if (!scopes.Held())
     {
-        g_counters.Refuse();
+        counters.Refuse();
         return;
     }
     const leader_answer::Scope       leader(type);
     const move_state::OwnTick        own;
-    const scope_leaks::MemberTickScope leaks(state, playerTwoController, deltaTime);
-    g_counters.Act();
-    // Before the tick, inside every scope (player 2's camera manager is the primary one here):
-    camera_override::Tick(member);         // the member's animation camera overrides reach player 2's camera
-    lock_on::AfterBattle();                // out of battle, player 2's lock ends
-    battle_camera::Watch();                // both camera managers' operators, logged on change (dev tools)
-    battle_input::Watch(member, state);     // player 2's battle state, logged on change (dev tools)
+    const scope_leaks::MemberTickScope leaks(state, controller, deltaTime);
+    counters.Act();
+    // Before the tick, inside every scope (the seat's camera manager is the primary one here):
+    camera_override::Tick(member);         // the member's animation camera overrides reach the seat's camera
+    if (playerTwo)
+    {
+        lock_on::AfterBattle();                // out of battle, player 2's lock ends
+        battle_camera::Watch();                // both camera managers' operators, logged on change (dev tools)
+        battle_input::Watch(member, state);    // player 2's battle state, logged on change (dev tools)
+    }
     if (!GuardedTick(state, deltaTime))
     {
-        g_stopped = true;
+        g_stopped[static_cast<std::size_t>(seat)] = true;
         return;
     }
-    ClearFieldActionRows(state);
-    wheelie_ride::AfterMemberTick(playerTwoController, member);  // a Wheelie walk-in the tick answered yes to: boarded here
+    ClearFieldActionRows(seat, state);
+    if (playerTwo)
+    {
+        wheelie_ride::AfterMemberTick(controller, member);  // a Wheelie walk-in the tick answered yes to: boarded here
+    }
 }
 
-/// The member's move state, if the member is player 2's possessed character and the tick's
-/// unchecked reads hold (the controller's leader-action component).
-void* MoveStateToTick(void* playerTwoController, void* member) noexcept
+/// The member's move state, if the member is the seat's possessed character (by `controller`) and the
+/// tick's unchecked reads hold (the controller's leader-action component).
+void* MoveStateToTick(void* controller, void* member) noexcept
 {
     void* state = ReadPointer(member, facts::kCharacterMoveState);
     if (VTableOf(state) != g_moveStateVTable || ReadPointer(state, facts::kMoveStateCharacter) != member ||
-        ReadPointer(member, facts::kPawnController) != playerTwoController ||
-        ReadPointer(playerTwoController, facts::kControllerLeaderActions) == nullptr)
+        ReadPointer(member, facts::kPawnController) != controller ||
+        ReadPointer(controller, facts::kControllerLeaderActions) == nullptr)
     {
         return nullptr;
     }
@@ -213,54 +231,61 @@ void Remove() noexcept
     leader_answer::Remove();
 }
 
-void Tick(void* playerTwoController, void* member) noexcept
+void Tick(int seat, void* controller, void* member) noexcept
 {
     const platform::frame_watch::Charge charge(platform::frame_watch::Part::MemberTick);
-    if (!generation::OnGameThread())
+    if (!generation::OnGameThread() || !players::SeatBuilt(seat))
     {
         return;
     }
-    const auto engine = move_state::TakeEngineTicks();
-    if (!pad_sticks::Enabled() || !pad_sticks::PartActs(pad_sticks::kPartMemberTick) || !generation::Active() ||
-        g_tickForCharacter == nullptr || g_stopped)
+    const auto     engine    = move_state::TakeEngineTicks(seat);
+    const auto     index     = static_cast<std::size_t>(seat);
+    const bool     playerTwo = seat == players::kPlayerTwoSeat;
+    StageCounters& counters  = g_counters[index];
+    if (!pad_sticks::Enabled() || !pad_sticks::PartActs(pad_sticks::kPartMemberTick) || !generation::Active(seat) ||
+        g_tickForCharacter == nullptr || g_stopped[index])
     {
-        // A ride left un-ticked would hold player 2's controller on a chocobo nobody steers or ends: given back.
-        own_ride::Release(L"the member's tick stopped (per-pad sticks switched off, or the tick stopped)");
+        if (playerTwo)
+        {
+            // A ride left un-ticked would hold player 2's controller on a chocobo nobody steers or ends: given back.
+            own_ride::Release(L"the member's tick stopped (per-pad sticks switched off, or the tick stopped)");
+        }
         return;
     }
-    if (chocobo_ride::Tick(playerTwoController, member, engine))
+    if (playerTwo && chocobo_ride::Tick(controller, member, engine))
     {
         return;  // player 2 drives their chocobo: its move state was ticked instead of the member's
     }
-    if (wheelie_ride::Tick(playerTwoController, member, engine))
+    if (playerTwo && wheelie_ride::Tick(controller, member, engine))
     {
         return;  // player 2 rides a Wheelie: its move state was ticked instead of the member's
     }
     // While player 1 rides a scooter, the field ticker runs only its ride body (no on-foot state is counted): that ride
-    // tick is the frame's tick for player 2's member too (live 2026-10-06: she stood still while player 1 rode).
+    // tick is the frame's tick for the seat's member too (live 2026-10-06: she stood still while player 1 rode).
     if ((engine.count == 0 && !engine.rideTicked) || engine.memberTicked)
     {
-        g_counters.Pass();  // the game's field ticker is idle (a menu, an event), or ran the member itself
+        counters.Pass();  // the game's field ticker is idle (a menu, an event), or ran the member itself
         return;
     }
-    void*     state = MoveStateToTick(playerTwoController, member);
+    void*     state = MoveStateToTick(controller, member);
     const int type  = MemberType(member);
     if (state == nullptr || type == kNoType)
     {
-        g_counters.Refuse();
+        counters.Refuse();
         return;
     }
-    TickInScopes(playerTwoController, member, state, type, engine.count > 0 ? engine.deltaTime : engine.rideDeltaTime);
-    if (g_stopped)
+    TickInScopes(seat, controller, member, state, type, engine.count > 0 ? engine.deltaTime : engine.rideDeltaTime);
+    if (g_stopped[index])
     {
         platform::Log(L"member movement STOPPED: the engine raised an exception inside the member's move-state tick; "
-                      L"player 2's member is no longer ticked this session");
+                      L"{}'s member is no longer ticked this session",
+                      players::SeatName(seat));
     }
 }
 
-StageCounters& Counters() noexcept
+StageCounters& Counters(int seat) noexcept
 {
-    return g_counters;
+    return g_counters[players::SeatBuilt(seat) ? static_cast<std::size_t>(seat) : players::kPlayerTwoSeat];
 }
 
 std::uint8_t WithoutChocoboAnswer(std::uint8_t (*test)(const void* character), const void* character) noexcept
@@ -270,14 +295,14 @@ std::uint8_t WithoutChocoboAnswer(std::uint8_t (*test)(const void* character), c
     return test(character);
 }
 
-bool InPrimaryScope(const void* member, void (*call)(void* context), void* context) noexcept
+bool InPrimaryScope(int seat, const void* member, void (*call)(void* context), void* context) noexcept
 {
     const int type = MemberType(member);
     if (!generation::OnGameThread() || type == kNoType)
     {
         return false;
     }
-    const primary_controller::Scope primary(players::kPlayerTwoSeat);
+    const primary_controller::Scope primary(seat);
     if (!primary.Held())
     {
         return false;
@@ -299,39 +324,41 @@ void ClearRideRows(void* chocoboState) noexcept
         {
             g_handleClear = nullptr;
             platform::Log(L"member movement: the engine raised an exception clearing player 2's chocobo rows; rows are left "
-                          L"to show this session");
+                          L"to show this session");  // ClearRideRows is player 2's (the rides' call)
             return;
         }
     }
 }
 
-RideTick TickRide(void* playerTwoController, void* member, void* state, const void* component, float deltaTime,
+RideTick TickRide(int seat, void* controller, void* member, void* state, const void* component, float deltaTime,
                   std::uint64_t withoutKey) noexcept
 {
     const int type = MemberType(member);
-    if (!generation::OnGameThread() || g_tickForCharacter == nullptr || type == kNoType ||
-        ReadPointer(playerTwoController, facts::kControllerLeaderActions) == nullptr)
+    if (!players::SeatBuilt(seat) || !generation::OnGameThread() || g_tickForCharacter == nullptr || type == kNoType ||
+        ReadPointer(controller, facts::kControllerLeaderActions) == nullptr)
     {
         return RideTick::Refused;
     }
+    StageCounters& counters = g_counters[static_cast<std::size_t>(seat)];
     p2_scope::Args args;
-    args.padId      = pad_sticks::ControllerIdOf(playerTwoController);
+    args.seat       = seat;
+    args.padId      = pad_sticks::ControllerIdOf(controller);
     args.withoutKey = withoutKey;
     const p2_scope::P2Scope scopes(p2_scope::Sticks | p2_scope::Primary | p2_scope::Buttons, p2_scope::Buttons, args);
     if (!scopes.Held())
     {
-        g_counters.Refuse();
+        counters.Refuse();
         return RideTick::Refused;
     }
     const leader_answer::Scope         leader(type, component);
     const move_state::OwnTick          own;
-    const scope_leaks::MemberTickScope leaks(state, playerTwoController, deltaTime);
-    g_counters.Act();
+    const scope_leaks::MemberTickScope leaks(state, controller, deltaTime);
+    counters.Act();
     return GuardedTick(state, deltaTime) ? RideTick::Ticked : RideTick::Faulted;
 }
 
-HandlesTick TickRideHandles(const void* member, void* state, const void* chocobo, const void* component, float deltaTime,
-                            HandlesFn engine, bool sample) noexcept
+HandlesTick TickRideHandles(int seat, const void* member, void* state, const void* chocobo, const void* component,
+                            float deltaTime, HandlesFn engine, bool sample) noexcept
 {
     HandlesTick tick;
     const int   type = MemberType(member);
@@ -343,7 +370,7 @@ HandlesTick TickRideHandles(const void* member, void* state, const void* chocobo
     {
         tick.riddenOutside = RiddenTest(chocobo);
     }
-    const primary_controller::Scope primary(players::kPlayerTwoSeat);
+    const primary_controller::Scope primary(seat);
     if (!primary.Held())
     {
         return tick;  // counted by the ride (player_two/chocobo_ride), not as a member tick
@@ -357,7 +384,7 @@ HandlesTick TickRideHandles(const void* member, void* state, const void* chocobo
     return tick;
 }
 
-CoreAsPlayerTwo PlayerCoreAsPlayerTwo(const void* character, const void* member) noexcept
+CoreAsPlayerTwo PlayerCoreAsSeat(int seat, const void* character, const void* member) noexcept
 {
     CoreAsPlayerTwo result;
     const int       type = MemberType(member);
@@ -365,7 +392,7 @@ CoreAsPlayerTwo PlayerCoreAsPlayerTwo(const void* character, const void* member)
     {
         return result;
     }
-    const primary_controller::Scope primary(players::kPlayerTwoSeat);
+    const primary_controller::Scope primary(seat);
     if (!primary.Held())
     {
         return result;
