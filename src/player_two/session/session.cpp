@@ -290,7 +290,7 @@ void Seat::AwaitTake() noexcept
         if (installed_.fieldSettings)
         {
             Log(L"player 2's Field camera brought to player 1's settings: {}",
-                field_camera::Seed() ? L"matches" : L"DOES NOT MATCH");
+                field_camera::Seed(seat_) ? L"matches" : L"DOES NOT MATCH");
         }
         Log(L"player 2's Battle camera brought to player 1's state: {}",
             battle_camera::Seed() ? L"matches" : L"does not match (or not installed)");
@@ -966,8 +966,8 @@ void Seat::LogStatus() noexcept
     {
         return;
     }
-    const auto     settings = field_camera::SettingsCounters().Take();
-    const auto     update   = field_camera::UpdateCounters().Take();
+    const auto     settings = field_camera::SettingsCounters(seat_).Take();
+    const auto     update   = field_camera::UpdateCounters(seat_).Take();
     const auto     input    = pad_sticks::InputCounters().Take();
     const auto     move     = pad_sticks::MoveCounters().Take();
     const wchar_t* fault    = generation::FaultReason(seat_);
@@ -975,7 +975,7 @@ void Seat::LogStatus() noexcept
         L"refused {}; per-pad sticks {} (input acted {} refused {}, movement acted {} refused {})",
         NameOf(generation::MemberOf(seat_)), generation::Active(seat_) ? L"active" : L"withdrawn",
         fault ? L" (fault: " + std::wstring(fault) + L")" : std::wstring(), settings.acted, settings.passed,
-        field_camera::TakeMismatches(), update.acted, update.passed, update.refused,
+        field_camera::TakeMismatches(seat_), update.acted, update.passed, update.refused,
         pad_sticks::Enabled() ? L"on" : L"off", input.acted, input.refused, move.acted, move.refused);
     const auto member = member_movement::Counters(seat_).Take();
     Log(L"  player 2's view: own camera {} (moved off it {} time(s) so far); member movement ticked {} skipped {} "

@@ -21,6 +21,7 @@
 #include "player_two/scopes/primary_controller.h"
 #include "player_two/session/party_member.h"
 
+#include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstring>
@@ -58,18 +59,30 @@ std::atomic<unsigned> g_uiRefusals{0};  // battle updates that ran without playe
 constexpr std::uintptr_t kBlendOutResume = 0x140E5629C;
 std::uintptr_t           g_blendOutResume = 0;
 
-StageCounters              g_settingsCounters;
-StageCounters              g_updateCounters;
-std::atomic<unsigned>      g_mismatches{0};
+// By seat; index 0 (player 1) unused.
+std::array<StageCounters, players::kMaxPlayers>         g_settingsCounters{};
+std::array<StageCounters, players::kMaxPlayers>         g_updateCounters{};
+std::array<std::atomic<unsigned>, players::kMaxPlayers> g_mismatches{};
 
-/// Player 1's and player 2's Field operators, while player 2 holds a party member (player_two/camera/camera_access.h).
+// Player 2's command controller (command_menu_two) and target fields (lock_on) are the battle group's, still player 2's:
+// a seat's battle camera update opens them for player 2 only.
+static_assert(players::kSeatsBuilt == 1, "command_menu_two and lock_on are player 2's: before seat 2 is built they take "
+                                         "the seat and RunAsPrimary opens Focus and Targets for every seat");
+
+/// Player 1's and `seat`'s Field operators, while the seat's player holds a party member
+/// (player_two/camera/camera_access.h).
 using FieldPair = camera_access::OperatorPair;
 using camera_access::CameraManagerOf;
 using camera_access::FieldOperatorOf;
 
-std::optional<FieldPair> CurrentPair() noexcept
+std::optional<FieldPair> CurrentPair(int seat) noexcept
 {
-    return camera_access::CurrentPair(&FieldOperatorOf);
+    return camera_access::CurrentPair(seat, &FieldOperatorOf);
+}
+
+std::size_t Index(int seat) noexcept
+{
+    return static_cast<std::size_t>(seat);
 }
 
 const void* Command(const void* field) noexcept
@@ -88,111 +101,126 @@ bool Matches(const FieldPair& pair) noexcept
            ActiveState(pair.two) == ActiveState(pair.one);
 }
 
-void CountResult(const FieldPair& pair) noexcept
+void CountResult(int seat, const FieldPair& pair) noexcept
 {
-    g_settingsCounters.Act();
+    g_settingsCounters[Index(seat)].Act();
     if (!Matches(pair))
     {
-        g_mismatches.fetch_add(1, std::memory_order_relaxed);
+        g_mismatches[Index(seat)].fetch_add(1, std::memory_order_relaxed);
     }
 }
 
-// The three Field-operator replacements: the engine's call first, then the same on player 2's
-// operator when `field` is player 1's.
+// The three Field-operator replacements: the engine's call first, then the same on each seat's
+// operator, in seat order, when `field` is player 1's.
 
 void Activate(void* field, float blendTime, bool flag)
 {
     g_engineActivate(field, blendTime, flag);
-    const auto pair = CurrentPair();
-    if (!pair || field != pair->one)
-    {
-        g_settingsCounters.Pass();
-        return;
-    }
-    const auto twoWas = ActiveState(pair->two);
-    g_engineActivate(pair->two, blendTime, flag);
-    g_engineCopy(pair->two, Command(pair->one));  // after activation, which rewrites the command
-    CountResult(*pair);
     const auto caller = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
-    if (g_blendOutResume != 0 && caller == g_blendOutResume)
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        platform::LogDebug(L"field camera: player 1's Field operator resumed after a special camera's blend-out (blend {:.2f} "
-                           L"s); player 2's mirrored with player 1's command (player 2's operator state was {})",
-                           blendTime, twoWas);
+        const auto pair = CurrentPair(seat);
+        if (!pair || field != pair->one)
+        {
+            g_settingsCounters[Index(seat)].Pass();
+            continue;
+        }
+        const auto twoWas = ActiveState(pair->two);
+        g_engineActivate(pair->two, blendTime, flag);
+        g_engineCopy(pair->two, Command(pair->one));  // after activation, which rewrites the command
+        CountResult(seat, *pair);
+        if (g_blendOutResume != 0 && caller == g_blendOutResume)
+        {
+            platform::LogDebug(L"field camera: player 1's Field operator resumed after a special camera's blend-out "
+                               L"(blend {:.2f} s); {}'s mirrored with player 1's command ({}'s operator state was {})",
+                               blendTime, players::SeatName(seat), players::SeatName(seat), twoWas);
+        }
     }
 }
 
 void Deactivate(void* field, float blendTime, bool flag)
 {
     g_engineDeactivate(field, blendTime, flag);
-    const auto pair = CurrentPair();
-    if (!pair || field != pair->one)
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        g_settingsCounters.Pass();
-        return;
+        const auto pair = CurrentPair(seat);
+        if (!pair || field != pair->one)
+        {
+            g_settingsCounters[Index(seat)].Pass();
+            continue;
+        }
+        g_engineDeactivate(pair->two, blendTime, flag);
+        CountResult(seat, *pair);
     }
-    g_engineDeactivate(pair->two, blendTime, flag);
-    CountResult(*pair);
 }
 
 void CopyCommand(void* field, const void* command)
 {
     g_engineCopy(field, command);
-    const auto pair = CurrentPair();
-    if (!pair || field != pair->one)
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        g_settingsCounters.Pass();
-        return;
+        const auto pair = CurrentPair(seat);
+        if (!pair || field != pair->one)
+        {
+            g_settingsCounters[Index(seat)].Pass();
+            continue;
+        }
+        g_engineCopy(pair->two, command);
+        CountResult(seat, *pair);
     }
-    g_engineCopy(pair->two, command);
-    CountResult(*pair);
 }
 
-/// Player 2's camera manager, when its update can run as the primary player's.
-bool ActsFor(void* cameraManager) noexcept
+/// The seat whose camera manager `cameraManager` is, when its update can run as the primary player's; 0 otherwise.
+int ActsFor(void* cameraManager) noexcept
 {
-    if (!generation::OnGameThread() || !generation::Active() || generation::Member() == nullptr)
+    if (!generation::OnGameThread())
     {
-        return false;
+        return 0;
     }
-    if (cameraManager != CameraManagerOf(generation::PlayerTwoController()))
+    const int seat = camera_access::SeatOfCameraManager(cameraManager);  // active seats only
+    if (!players::SeatBuilt(seat) || generation::MemberOf(seat) == nullptr ||
+        cameraManager != CameraManagerOf(generation::ControllerOf(seat)))
     {
-        return false;
+        return 0;
     }
     // Its Field operator on, or in battle its Battle operator (player_two/battle/battle_camera.h).
     void* field = FieldOperatorOf(cameraManager);
     if ((field == nullptr || ActiveState(field) == 0) && !battle_camera::PlayerTwoBattleActive(cameraManager))
     {
-        return false;
+        return 0;
     }
     // Helpers in the update index the operator array with the current-operator byte and use the
     // entry without a null check.
     const auto current = ReadField<std::uint8_t>(cameraManager, facts::kCameraManagerCurrentOperator);
-    return current < facts::kCameraManagerOperatorCount &&
-           ReadPointer(cameraManager, facts::kCameraManagerOperators + current * std::uint32_t{sizeof(void*)}) != nullptr;
+    const bool operatorThere =
+        current < facts::kCameraManagerOperatorCount &&
+        ReadPointer(cameraManager, facts::kCameraManagerOperators + current * std::uint32_t{sizeof(void*)}) != nullptr;
+    return operatorThere ? seat : 0;
 }
 
-/// When a scope cannot be opened, player 2's update still runs, as the engine would run it: with
-/// player 1 as the primary player, so for that frame player 2's camera reads player 1's input.
-/// Skipping the update instead would freeze player 2's camera. The refusal is counted.
+/// When a scope cannot be opened, the seat's update still runs, as the engine would run it: with
+/// player 1 as the primary player, so for that frame the seat's camera reads player 1's input.
+/// Skipping the update instead would freeze the seat's camera. The refusal is counted.
 ///
 /// In battle the update also runs in player 2's UI context: the Command camera module (21), which
 /// player 2's command controller turns on for player 2's camera while its target list is open,
 /// frames the command menu's selected target (EndUISystem[23]'s provider, which reads the selected
 /// row from the focus path) and the party leader (RE-p2-target-select-views.md §6, §9). Without it,
 /// player 1's target list would move player 2's camera.
-void RunAsPrimary(void* cameraManager, float deltaTime)
+void RunAsPrimary(int seat, void* cameraManager, float deltaTime)
 {
-    void*      controller = command_menu_two::Controller();
-    void*      member     = generation::Member();
+    const bool playerTwo  = seat == players::kPlayerTwoSeat;
+    void*      controller = playerTwo ? command_menu_two::Controller() : nullptr;  // player 2's only (static_assert)
+    void*      member     = generation::MemberOf(seat);
     const bool battle     = controller != nullptr && member != nullptr &&
                             ReadField<std::uint8_t>(controller, kCmdHudMode) != 0;
-    // In battle player 2's UI context (counted and logged when refused), player 2 as the primary controller (refused:
-    // the update runs as player 1's, counted) and, in battle, the target fields the LockOn module reads: each as far
-    // as it opens, the update runs either way.
+    // In battle the seat's UI context (counted and logged when refused), the seat as the primary controller (refused:
+    // the update runs as player 1's, counted) and the target fields the LockOn module reads: each as far as it opens,
+    // the update runs either way.
     p2_scope::Args args;
+    args.seat            = seat;
     args.controller      = controller;
-    const unsigned which = (battle ? p2_scope::Focus : 0u) | p2_scope::Primary | p2_scope::Targets;
+    const unsigned which = (battle ? p2_scope::Focus : 0u) | p2_scope::Primary | (playerTwo ? p2_scope::Targets : 0u);
     const p2_scope::P2Scope scopes(which, which, args);
     if (battle && !scopes.Holds<p2_scope::FocusPart>())
     {
@@ -216,25 +244,32 @@ void RunAsPrimary(void* cameraManager, float deltaTime)
     }
     if (scopes.Holds<p2_scope::PrimaryPart>())
     {
-        g_updateCounters.Act();
+        g_updateCounters[Index(seat)].Act();
     }
     else
     {
-        g_updateCounters.Refuse();
+        g_updateCounters[Index(seat)].Refuse();
     }
-    const attack_cameras::PlayerTwoUpdate attack;  // player 2's own state of the battle camera sequences (inside the scopes)
+    const attack_cameras::PlayerTwoUpdate attack;  // player 2's own sequence state (inside the scopes)
     g_engineUpdate(cameraManager, deltaTime);
 }
 
 void UpdateCamera(void* cameraManager, float deltaTime)
 {
-    if (!ActsFor(cameraManager))
+    const int seat = ActsFor(cameraManager);
+    for (int other = 1; other <= players::kSeatsBuilt; ++other)
     {
-        g_updateCounters.Pass();
+        if (other != seat)
+        {
+            g_updateCounters[Index(other)].Pass();  // not this seat's update: passed, from that seat's view
+        }
+    }
+    if (seat == 0)
+    {
         g_engineUpdate(cameraManager, deltaTime);
         return;
     }
-    RunAsPrimary(cameraManager, deltaTime);
+    RunAsPrimary(seat, cameraManager, deltaTime);
 }
 
 }  // namespace
@@ -294,13 +329,13 @@ void Remove() noexcept
     }
 }
 
-bool Seed() noexcept
+bool Seed(int seat) noexcept
 {
     if (g_engineCopy == nullptr)
     {
         return false;
     }
-    const auto pair = CurrentPair();
+    const auto pair = CurrentPair(seat);
     if (!pair)
     {
         return false;
@@ -314,19 +349,19 @@ bool Seed() noexcept
     return Matches(*pair);
 }
 
-StageCounters& SettingsCounters() noexcept
+StageCounters& SettingsCounters(int seat) noexcept
 {
-    return g_settingsCounters;
+    return g_settingsCounters[players::SeatBuilt(seat) ? Index(seat) : players::kPlayerTwoSeat];
 }
 
-StageCounters& UpdateCounters() noexcept
+StageCounters& UpdateCounters(int seat) noexcept
 {
-    return g_updateCounters;
+    return g_updateCounters[players::SeatBuilt(seat) ? Index(seat) : players::kPlayerTwoSeat];
 }
 
-unsigned TakeMismatches() noexcept
+unsigned TakeMismatches(int seat) noexcept
 {
-    return platform::Take(g_mismatches);
+    return platform::Take(g_mismatches[players::SeatBuilt(seat) ? Index(seat) : players::kPlayerTwoSeat]);
 }
 
 }  // namespace lss::player_two::field_camera
