@@ -77,11 +77,60 @@ void TestGate()
     EXPECT(function.Call(2) == 3);  // restored: the gate no longer applies
 }
 
+void TestMaskGate()
+{
+    std::puts("command gate over a set (step 6, not installed): every masked ordinal reads not commandable, the others "
+              "pass through, 0 gates none, the same answers as the one-ordinal gate for one member, and restored");
+    const FunctionLike   function;
+    static std::uint32_t mask = 0;
+    static std::int32_t  gate = -1;  // the one-ordinal gate, for the side-by-side
+    const auto code = lss::player_two::CommandGateMaskCode(mask);
+    EXPECT(code.size() == lss::player_two::kCommandGateCodeSize);
+    lss::platform::CodeRedirect redirect;
+    EXPECT(redirect.Install(function.At(FunctionLike::kEntryOffset), lss::player_two::kCommandGateEntryBytes, code,
+                            function.At(FunctionLike::kResumeOffset)));
+
+    for (std::int32_t ordinal = 0; ordinal < 8; ++ordinal)
+    {
+        EXPECT(function.Call(ordinal) == static_cast<std::uint32_t>(ordinal + 1));  // mask 0: none refused
+    }
+    mask = (1u << 1) | (1u << 4);  // player 1 refusing two seats' members
+    for (std::int32_t ordinal = 0; ordinal < 8; ++ordinal)
+    {
+        const bool refused = ordinal == 1 || ordinal == 4;
+        EXPECT(function.Call(ordinal) == (refused ? 0u : static_cast<std::uint32_t>(ordinal + 1)));
+    }
+    EXPECT(function.Call(-2) == 0xFFFFFFFFu);  // -2 reads bit 30, never set: it passes through (-2 + 1)
+
+    // One refused member: the set gives the one-ordinal gate's answer for every ordinal 0..31 (the bytes'
+    // equivalence where both are defined; outside 0..31 the set reads the remainder's bit, see the header).
+    const FunctionLike          single;
+    lss::platform::CodeRedirect singleRedirect;
+    EXPECT(singleRedirect.Install(single.At(FunctionLike::kEntryOffset), lss::player_two::kCommandGateEntryBytes,
+                                  lss::player_two::CommandGateCode(gate), single.At(FunctionLike::kResumeOffset)));
+    for (std::int32_t member = -1; member < 8; ++member)
+    {
+        gate = member;
+        mask = member >= 0 ? 1u << member : 0u;
+        for (std::int32_t ordinal = 0; ordinal < 32; ++ordinal)
+        {
+            EXPECT(function.Call(ordinal) == single.Call(ordinal));
+        }
+    }
+    gate = -1;
+    EXPECT(singleRedirect.Restore());
+
+    mask = 1u << 2;
+    EXPECT(redirect.Restore());
+    EXPECT(function.Call(2) == 3);  // restored: the gate no longer applies
+}
+
 }  // namespace
 
 int main()
 {
     TestGate();
+    TestMaskGate();
 
     return lss::test::Report();
 }

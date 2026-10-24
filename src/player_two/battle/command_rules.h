@@ -15,6 +15,12 @@
 // The command test is gated at its own first instruction (player_two/battle/command_rules_code.h), which
 // covers all five of its callers. The member's type and menu ordinal are read once per engine tick
 // (Update), with guarded calls, not inside the menu's own tick. Game thread only.
+//
+// Player 2's only (players::kPlayerTwoSeat): the gate's machine code compares one ordinal. A set (player 1 refusing
+// every seat's member, a seat refusing player 1's leader and the other seats' members) fits the same bytes as a bit
+// test (command_rules_code.h, CommandGateMaskCode, host-tested, not installed), which reads ordinals modulo 32: step 6
+// installs it, with the HP lever widened alike, once IDA shows no caller passes an ordinal outside 0..31
+// (static_assert in command_rules.cpp).
 
 namespace lss::platform {
 class GameImage;

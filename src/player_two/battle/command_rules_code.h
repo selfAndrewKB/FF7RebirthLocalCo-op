@@ -41,4 +41,25 @@ inline std::array<std::uint8_t, kCommandGateCodeSize> CommandGateCode(const std:
     return code;
 }
 
+/// The same gate over a set, in the same 22 bytes, for the plan's step 6 (not installed yet): `mask` holds one bit per
+/// refused ordinal (bit n: ordinal n; 0 refuses none), so player 1 can refuse every seat's member and a seat player 1's
+/// leader and the other seats' members. `bt eax, edx` takes the ordinal modulo 32, so an ordinal outside 0..31 would
+/// read the bit of its remainder where the one-ordinal code compares exactly: the set code may replace it only once
+/// the five callers are shown (IDA) never to pass such an ordinal [UNKNOWN]. Only rax and the flags change before the
+/// replaced instruction, as above.
+inline std::array<std::uint8_t, kCommandGateCodeSize> CommandGateMaskCode(const std::uint32_t& mask) noexcept
+{
+    std::array<std::uint8_t, kCommandGateCodeSize> code = {
+        0xA1, 0, 0, 0, 0, 0, 0, 0, 0,  //  0: mov  eax, [&mask]  (moffs64)
+        0x0F, 0xA3, 0xD0,              //  9: bt   eax, edx       CF = bit (ordinal mod 32)
+        0x73, 0x03,                    // 12: jnc  17
+        0x31, 0xC0,                    // 14: xor  eax, eax       not commandable
+        0xC3,                          // 16: ret
+        0x48, 0x89, 0x5C, 0x24, 0x08,  // 17: mov  [rsp+8], rbx (the replaced instruction)
+    };                                 // 22: (the jump back to the next instruction is appended here)
+    const auto address = reinterpret_cast<std::uint64_t>(&mask);
+    std::memcpy(&code[1], &address, sizeof(address));
+    return code;
+}
+
 }  // namespace lss::player_two

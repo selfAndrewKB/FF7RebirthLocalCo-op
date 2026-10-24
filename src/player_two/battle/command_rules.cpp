@@ -10,6 +10,7 @@
 #include "player_two/battle/command_rules_code.h"
 #include "player_two/generation.h"
 #include "player_two/session/party_member.h"
+#include "players/seats.h"
 
 #include <atomic>
 #include <cstdint>
@@ -51,6 +52,16 @@ OrdinalTypeFn          g_ordinalType = nullptr;
 // SetGate: Remove may run off the game thread.
 std::int32_t g_gate = -1;
 
+// The rules are player 2's only. The gate's code compares one ordinal (22 bytes: `cmp edx, [gate]`); with a third
+// player, player 1 must refuse two members and each seat's pass player 1's leader and the other seat's member, so the
+// gate must hold a set. A set code fits the same 22 bytes (CommandGateMaskCode, host-tested) but reads an ordinal
+// modulo 32 where this one compares exactly, so it may replace this one only once IDA shows the five callers never
+// pass an ordinal outside 0..31; the HP lever must then refuse the same set (ally mode and the menu must agree).
+constexpr int kRulesSeat = players::kPlayerTwoSeat;
+static_assert(players::kSeatsBuilt == 1, "the command gate holds one ordinal (player 2's member): confirm the callers' "
+                                         "ordinal range in IDA, install CommandGateMaskCode with a mask per pass, and "
+                                         "widen the HP lever alike before seat 2 is built");
+
 // Game thread.
 bool          g_installed     = false;
 std::int32_t  g_forbiddenType = -1;  // player 2's member's type, or -1
@@ -70,7 +81,8 @@ std::int32_t Gate() noexcept
 /// plays one.
 std::optional<std::uint8_t> ForbiddenType() noexcept
 {
-    if (g_forbiddenType < 0 || !generation::OnGameThread() || !generation::Active() || generation::Member() == nullptr)
+    if (g_forbiddenType < 0 || !generation::OnGameThread() || !generation::Active(kRulesSeat) ||
+        generation::MemberOf(kRulesSeat) == nullptr)
     {
         return std::nullopt;
     }
@@ -167,8 +179,9 @@ void Remove() noexcept
 void Update() noexcept
 {
     // Read every tick: the member's menu ordinal moves when the party order changes.
-    const void* member =
-        g_installed && generation::OnGameThread() && generation::Active() ? generation::Member() : nullptr;
+    const void* member = g_installed && generation::OnGameThread() && generation::Active(kRulesSeat)
+                             ? generation::MemberOf(kRulesSeat)
+                             : nullptr;
     const auto         type    = member != nullptr ? party_member::PlayerTypeOf(member) : std::nullopt;
     const std::int32_t ordinal = type ? OrdinalOf(*type) : -1;
     const std::int32_t newType = type ? *type : -1;
