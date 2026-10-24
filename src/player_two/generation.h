@@ -2,6 +2,24 @@
 
 // The further players, as every wrapper sees them: one generation per seat (players/seats.h).
 //
+// This is the one record of each seat's game objects (plan/seats.md, the close of step 3): its controller, the member
+// it plays and the chocobo it drives, and the reverse lookups from an object the engine hands a wrapper to its seat.
+// The session writes the controller and member (Begin at the join, SetMember at the take and the give-back, Withdraw
+// and Fault to stop the wrappers, End at the removal) and keeps its own working copy in its Seat; the chocobo comes
+// each tick from chocobo_ride through BeginTick. The camera manager and operators are read from the controller each
+// time (player_two/camera/camera_access.h).
+//
+// Copies kept elsewhere, each for one activity and each checked (a step-6 audit of a seat's objects starts here):
+//   - primary_controller's binding: what it swaps into the game, which reads raw values; unbound at the removal;
+//   - vault_camera's operator: refreshed from here each tick for a callback that cannot ask; cleared when inactive;
+//   - camera_override's member per seat: cleared when the seat lets go or the session sees the member destroyed;
+//   - shared_ride's given member and traversal_holders' climb member: kept with their weak pointers;
+//   - own_ride's and chocobo_ride's ride objects: the rides' own, released by the session's leave (own_ride::Release).
+// Remake keeps its record as weak pairs (players/seat_objects.h): there only the camera module's copy of a seat's
+// controller was checked, and the session's record and the scopes' binding were not. Here End forgets a removed
+// controller before the collection frees it, and a member the game destroys is caught by its weak pointer each tick
+// (the session's MemberDestroyed; BeginTick's weaks for the wrappers on other threads).
+//
 // A seat's generation runs from the moment its player has its own controller until the leave begins. While it is
 // active, the wrappers act for that seat's objects; the moment it is withdrawn, every wrapper passes straight through
 // to the engine for it, so the leave works on stock behaviour only. A fault withdraws it the same way and remembers

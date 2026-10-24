@@ -22,7 +22,7 @@ using players::SeatIndex;
 std::atomic<DWORD> g_gameThread{0};
 
 /// One seat's generation. Index 0's controller is player 1's; its other fields stay unused.
-struct SeatState
+struct SeatRecord
 {
     std::atomic<bool>           active{false};
     std::atomic<void*>          controller{nullptr};
@@ -42,7 +42,7 @@ struct SeatState
     }
 };
 
-SeatState                  g_seats[kMaxPlayers];
+SeatRecord                 g_seats[kMaxPlayers];
 std::atomic<std::uint64_t> g_playerOnePawnWeak{0};
 
 /// Player 1's pawn is published while any seat is active (it is read only to tell a seat's member from it).
@@ -54,7 +54,7 @@ void ClearPlayerOneUnlessActive() noexcept
     }
 }
 
-void WithdrawSeat(SeatState& seat) noexcept
+void WithdrawSeat(SeatRecord& seat) noexcept
 {
     seat.active.store(false);
     seat.ClearIdentities();
@@ -68,7 +68,7 @@ void Begin(int seat, void* playerOneController, void* controller) noexcept
     {
         return;
     }
-    SeatState& state = g_seats[seat];
+    SeatRecord& state = g_seats[seat];
     state.active.store(false);  // wrappers see no half-written generation
     g_seats[0].controller.store(playerOneController);
     state.controller.store(controller);
@@ -84,7 +84,7 @@ void SetMember(int seat, void* member) noexcept
     {
         return;
     }
-    SeatState& state = g_seats[seat];
+    SeatRecord& state = g_seats[seat];
     state.member.store(member);
     state.memberWeak.store(member != nullptr && state.active.load() ? weak_object::WeakOf(member) : 0);
 }
@@ -218,7 +218,7 @@ void BeginTick(const void* const (&drivenChocobo)[kMaxPlayers]) noexcept
 {
     for (int seat = 1; seat < kMaxPlayers; ++seat)
     {
-        SeatState& state = g_seats[seat];
+        SeatRecord& state = g_seats[seat];
         if (!state.active.load())
         {
             state.ClearIdentities();
