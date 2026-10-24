@@ -13,6 +13,7 @@
 #include "player_two/scopes/leader_scope.h"
 #include "player_two/world/charapop_facts.h"
 #include "player_two/world/world_rules.h"
+#include "players/seats.h"
 #include "players/unreal_access.h"
 
 #include <algorithm>
@@ -58,14 +59,31 @@ constexpr std::uint32_t kRecordHide   = 0x20;
 constexpr std::int32_t  kMaxRecords   = 512;
 constexpr std::size_t   kMaxHeld      = 16;
 
+/// A volume one or more seats are inside: one record per volume, the seats in it as a mask (the volume's inside byte is
+/// one, shared by every player).
 struct Held
 {
     void*         volume    = nullptr;
     std::uint64_t weak      = 0;
     std::uint64_t tag       = 0;      // the record's tag, for the log
     bool          counts    = false;  // the game counts entries (+0x270)
-    std::int32_t  enters    = 0;      // player 2's enters called and not yet left (a counting volume's share)
+    std::uint8_t  seats     = 0;      // bit s: seat s is inside (players/seats.h)
+    std::int32_t  enters[players::kMaxPlayers] = {};  // by seat: its enters called and not yet left (a counting share)
     bool          playerOne = false;  // a brush-only volume player 1 is inside too
+
+    bool Has(int seat) const noexcept { return (seats & Bit(seat)) != 0; }
+    static std::uint8_t Bit(int seat) noexcept { return world_rules::VolumeSeatBit(seat); }
+
+    /// Forgets `seat`; the record goes with its last seat.
+    void Drop(int seat) noexcept
+    {
+        seats &= static_cast<std::uint8_t>(~Bit(seat));
+        enters[seat] = 0;
+        if (seats == 0)
+        {
+            *this = {};
+        }
+    }
 };
 
 struct Record
@@ -88,10 +106,25 @@ OverrideFn            g_enter     = nullptr;
 OverrideFn            g_leave     = nullptr;
 const std::uintptr_t* g_gameRoot  = nullptr;  // the pointer global holding the game root
 std::array<Held, kMaxHeld> g_held{};
-std::uint64_t         g_trigger   = 0;  // weak of player 2's trigger the held volumes belong to
-std::uint64_t         g_entrant   = 0;  // that trigger's Tags[0]
+// By seat (index 0, player 1's, unused): the weak of the seat's trigger its held volumes belong to, and its Tags[0].
+std::uint64_t         g_trigger[players::kMaxPlayers] = {};
+std::uint64_t         g_entrant[players::kMaxPlayers] = {};
 Counts                g_counts{};
 platform::Every       g_summary{std::chrono::seconds(10)};
+
+/// "player 2" for one seat's name, the seats inside a record for the log ("player 2 and player 3").
+std::wstring SeatsText(std::uint8_t seats)
+{
+    std::wstring text;
+    for (int seat = 1; seat < players::kMaxPlayers; ++seat)
+    {
+        if ((seats & Held::Bit(seat)) != 0)
+        {
+            text += std::format(L"{}{}", text.empty() ? L"" : L" and ", players::SeatName(seat));
+        }
+    }
+    return text;
+}
 
 void* Root() noexcept
 {
@@ -156,11 +189,12 @@ std::wstring Text(std::uint64_t name)
     return name != 0 ? players::unreal::NameText(name) : std::wstring(L"(no tag)");
 }
 
-/// Calls the volume's own override; false if it faulted. `result` gets the parent's answer.
-bool Call(bool enter, void* volume, std::uint8_t& result) noexcept
+/// Calls the volume's own override with `entrant` (a trigger's tag); false if it faulted. `result` gets the parent's
+/// answer.
+bool Call(bool enter, void* volume, std::uint64_t entrant, std::uint8_t& result) noexcept
 {
     result = 0;
-    return platform::CallGuarded(enter ? g_enter : g_leave, result, volume, g_entrant);
+    return platform::CallGuarded(enter ? g_enter : g_leave, result, volume, entrant);
 }
 
 std::uint8_t Inside(const void* volume) noexcept
@@ -180,35 +214,46 @@ Held* Find(const void* volume) noexcept
     return nullptr;
 }
 
-/// Leaves every volume player 2 is inside, by the same rules as player 2's own leave (without the on/off test: the
+/// `seat` is inside a volume.
+bool SeatInside(int seat) noexcept
+{
+    return std::any_of(g_held.begin(), g_held.end(), [seat](const Held& held) { return held.Has(seat); });
+}
+
+/// Leaves every volume `seat` is inside, by the same rules as the seat's own leave (without the on/off test: the
 /// player is gone, so nothing may stay inside for them).
-void LeaveAll(const wchar_t* why) noexcept
+void LeaveAll(int seat, const wchar_t* why) noexcept
 {
     for (Held& held : g_held)
     {
-        if (held.volume == nullptr)
+        if (!held.Has(seat))
         {
             continue;
         }
         if (leader_scope::StillNames(held.weak, held.volume))
         {
             const std::uint8_t before = Inside(held.volume);
-            std::int32_t       calls  = held.counts ? held.enters : (held.playerOne ? 0 : 1);
+            std::int32_t       calls  = world_rules::LeaveAllCalls(held.counts, held.enters[seat], held.seats, seat,
+                                                                   held.playerOne);
             std::uint8_t       result = 0;
             for (; calls > 0; --calls)
             {
-                Call(false, held.volume, result);
+                Call(false, held.volume, g_entrant[seat], result);
             }
             try
             {
-                platform::LogDebug(L"switch volume: player 2 left {} ({}): inside {} -> {}", Text(held.tag), why, before,
-                                   Inside(held.volume));
+                platform::LogDebug(L"switch volume: {} left {} ({}): inside {} -> {}", players::SeatName(seat),
+                                   Text(held.tag), why, before, Inside(held.volume));
             }
             catch (...)
             {
             }
+            held.Drop(seat);
         }
-        held = {};
+        else
+        {
+            held = {};  // destroyed with its level: nothing to leave, for any seat
+        }
     }
 }
 
@@ -234,8 +279,10 @@ void Install(const platform::GameImage& image) noexcept
     g_leave    = reinterpret_cast<OverrideFn>(*leave);
     g_gameRoot = reinterpret_cast<const std::uintptr_t*>(*root);
     g_ready    = true;
-    platform::Log(L"switch volume: installed (player 2 inside a CharaPop switch volume with a show list counts as inside, "
-                  L"the union of both players; volumes with a hide list stay player 1's)");
+    platform::Log(L"switch volume: installed ({} inside a CharaPop switch volume with a show list counts as inside, "
+                  L"the union of {}; volumes with a hide list stay player 1's)",
+                  players::kSeatsBuilt == 1 ? L"player 2" : L"a further player",
+                  players::kSeatsBuilt == 1 ? L"both players" : L"every player");
 }
 
 bool Is(const void* actor) noexcept
@@ -243,27 +290,28 @@ bool Is(const void* actor) noexcept
     return g_ready && actor != nullptr && ReadField<std::uintptr_t>(actor, 0) == g_vtable;
 }
 
-void PlayerTwoEvent(bool enter, void* volume, const void* trigger) noexcept
+void PlayerTwoEvent(int seat, bool enter, void* volume, const void* trigger) noexcept
 {
-    if (!g_ready || volume == nullptr || trigger == nullptr || !generation::OnGameThread())
+    if (!g_ready || volume == nullptr || trigger == nullptr || !players::SeatBuilt(seat) || !generation::OnGameThread())
     {
         return;
     }
     try
     {
-        const auto triggerWeak = leader_scope::WeakOf(const_cast<void*>(trigger));
-        if (triggerWeak != g_trigger)
+        const wchar_t* const who         = players::SeatName(seat);
+        const auto           triggerWeak = leader_scope::WeakOf(const_cast<void*>(trigger));
+        if (triggerWeak != g_trigger[seat])
         {
-            LeaveAll(L"player 2's trigger changed");
-            g_trigger = triggerWeak;
+            LeaveAll(seat, std::format(L"{}'s trigger changed", who).c_str());
+            g_trigger[seat] = triggerWeak;
         }
-        g_entrant = TagOf(trigger);
+        g_entrant[seat]     = TagOf(trigger);
         const auto   weak   = leader_scope::WeakOf(volume);
         const Record record = RecordOf(volume, weak);
         if (!record.found || record.hides > 0 || record.shows <= 0)
         {
             ++g_counts.refused;
-            platform::LogDebug(L"switch volume: player 2 {} {} ({}): held back, {}", enter ? L"enters" : L"leaves",
+            platform::LogDebug(L"switch volume: {} {} {} ({}): held back, {}", who, enter ? L"enters" : L"leaves",
                                Text(record.tag), NameOf(volume),
                                !record.found     ? L"CharaPop has no record of it"
                                : record.hides > 0 ? std::format(L"its hide list ({} entries) would despawn them near "
@@ -274,12 +322,13 @@ void PlayerTwoEvent(bool enter, void* volume, const void* trigger) noexcept
         }
         const bool         counts = ReadField<std::uint8_t>(volume, kCounts) != 0;
         const std::uint8_t before = Inside(volume);
-        Held*              held   = Find(volume);
+        Held*              held   = Find(volume);  // any seat's record of this volume
         std::uint8_t       result = 0;
         std::wstring       what;
         if (enter)
         {
-            const auto verdict = world_rules::EnterVerdict(OnOff(kDisableBox), OnOff(kDisableBoxInOut), counts, held != nullptr);
+            const auto verdict = world_rules::SeatEnterVerdict(OnOff(kDisableBox), OnOff(kDisableBoxInOut), counts,
+                                                               held != nullptr ? held->seats : std::uint8_t{0});
             if (verdict == world_rules::Enter::SkippedOnOff)
             {
                 ++g_counts.skippedOnOff;
@@ -287,6 +336,9 @@ void PlayerTwoEvent(bool enter, void* volume, const void* trigger) noexcept
             }
             else if (verdict == world_rules::Enter::AlreadyInside)
             {
+                // A brush-only volume a seat is inside already: this seat is noted inside too, nothing is called.
+                held->seats |= Held::Bit(seat);
+                held->enters[seat] = std::max(held->enters[seat], 1);
                 what = L"already inside";
             }
             else
@@ -297,50 +349,63 @@ void PlayerTwoEvent(bool enter, void* volume, const void* trigger) noexcept
                     if (slot == g_held.end())
                     {
                         ++g_counts.refused;
-                        platform::LogDebug(L"switch volume: player 2 enters {}: held back, already inside {} volumes",
+                        platform::LogDebug(L"switch volume: {} enters {}: held back, already inside {} volumes", who,
                                            Text(record.tag), kMaxHeld);
                         return;
                     }
-                    *slot = {volume, weak, record.tag, counts, 0, !counts && before != 0};
-                    held  = &*slot;
+                    // No seat inside yet: the byte set means player 1 is inside (only player 1's trigger sets it then).
+                    *slot           = {};
+                    slot->volume    = volume;
+                    slot->weak      = weak;
+                    slot->tag       = record.tag;
+                    slot->counts    = counts;
+                    slot->playerOne = !counts && before != 0;
+                    held            = &*slot;
                 }
-                Call(true, volume, result);
-                ++held->enters;
+                Call(true, volume, g_entrant[seat], result);
+                held->seats |= Held::Bit(seat);
+                ++held->enters[seat];
                 ++g_counts.enters;
                 what = std::format(L"the volume's enter called (returned {}){}", result,
                                    held->playerOne ? L"; player 1 is inside too" : L"");
             }
         }
-        else if (const auto verdict = world_rules::LeaveVerdict(held != nullptr, OnOff(kDisableBoxInOut),
-                                                                held != nullptr && held->counts,
-                                                                held != nullptr && held->playerOne);
-                 verdict == world_rules::Leave::NotEntered)
-        {
-            what = L"not called: player 2 was not entered here";
-        }
-        else if (verdict == world_rules::Leave::SkippedOnOff)
-        {
-            ++g_counts.skippedOnOff;
-            *held = {};
-            what  = L"not called: the game's DisableTriggerBox_InOut is on (as for player 1)";
-        }
-        else if (verdict == world_rules::Leave::KeptForPlayerOne)
-        {
-            ++g_counts.keptForPlayerOne;
-            *held = {};
-            what  = L"not called: player 1 is inside (a brush-only volume counts no one)";
-        }
         else
         {
-            Call(false, volume, result);
-            ++g_counts.leaves;
-            if (--held->enters <= 0)
+            const auto verdict = world_rules::SeatLeaveVerdict(held != nullptr ? held->seats : std::uint8_t{0}, seat,
+                                                               OnOff(kDisableBoxInOut), held != nullptr && held->counts,
+                                                               held != nullptr && held->playerOne);
+            if (verdict == world_rules::Leave::NotEntered)
             {
-                *held = {};
+                what = std::format(L"not called: {} was not entered here", who);
             }
-            what = std::format(L"the volume's leave called (returned {})", result);
+            else if (verdict == world_rules::Leave::SkippedOnOff)
+            {
+                ++g_counts.skippedOnOff;
+                held->Drop(seat);
+                what = L"not called: the game's DisableTriggerBox_InOut is on (as for player 1)";
+            }
+            else if (verdict == world_rules::Leave::KeptForPlayerOne)
+            {
+                ++g_counts.keptForPlayerOne;
+                what = held->playerOne
+                           ? std::wstring(L"not called: player 1 is inside (a brush-only volume counts no one)")
+                           : std::format(L"not called: {} is inside (a brush-only volume counts no one)",
+                                         SeatsText(held->seats & static_cast<std::uint8_t>(~Held::Bit(seat))));
+                held->Drop(seat);
+            }
+            else
+            {
+                Call(false, volume, g_entrant[seat], result);
+                ++g_counts.leaves;
+                if (--held->enters[seat] <= 0)
+                {
+                    held->Drop(seat);
+                }
+                what = std::format(L"the volume's leave called (returned {})", result);
+            }
         }
-        platform::LogDebug(L"switch volume: player 2 {} {} ({} {}, shows {} first {}): inside {} -> {}; {}",
+        platform::LogDebug(L"switch volume: {} {} {} ({} {}, shows {} first {}): inside {} -> {}; {}", who,
                            enter ? L"enters" : L"leaves", Text(record.tag), counts ? L"counting" : L"brush-only",
                            NameOf(volume), record.shows, Text(record.firstShow), before, Inside(volume), what);
     }
@@ -381,13 +446,16 @@ void AfterPlayerOne(bool enter, void* actor) noexcept
         }
         else
         {
+            // Once for the seats inside, with the lowest seat's tag (every trigger's tag is PlayerTrigger).
+            const int    first  = world_rules::ReenterSeat(held->seats);
             std::uint8_t result = 0;
-            Call(true, actor, result);
+            Call(true, actor, players::SeatIndex(first) ? g_entrant[first] : 0, result);
             ++g_counts.reentered;
-            what = std::format(L"the volume's enter called again for player 2 (returned {})", result);
+            what = std::format(L"the volume's enter called again for {} (returned {})", SeatsText(held->seats), result);
         }
-        platform::LogDebug(L"switch volume: player 1 {} {} while player 2 is inside: inside {} -> {}; {}",
-                           enter ? L"enters" : L"leaves", Text(held->tag), before, Inside(actor), what);
+        platform::LogDebug(L"switch volume: player 1 {} {} while {} is inside: inside {} -> {}; {}",
+                           enter ? L"enters" : L"leaves", Text(held->tag), SeatsText(held->seats), before, Inside(actor),
+                           what);
     }
     catch (...)
     {
@@ -400,13 +468,22 @@ void Tick() noexcept
     {
         return;
     }
-    if (!generation::Active())
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        if (Watching())
+        if (!generation::Active(seat))
         {
-            LeaveAll(L"player 2 left the session");
+            if (SeatInside(seat))
+            {
+                try
+                {
+                    LeaveAll(seat, std::format(L"{} left the session", players::SeatName(seat)).c_str());
+                }
+                catch (...)
+                {
+                }
+            }
+            g_trigger[seat] = 0;
         }
-        g_trigger = 0;
     }
     for (Held& held : g_held)
     {
@@ -426,10 +503,11 @@ void Tick() noexcept
         return;
     }
     const auto inside = std::count_if(g_held.begin(), g_held.end(), [](const Held& held) { return held.volume != nullptr; });
-    platform::LogDebug(L"switch volume (10 s): player 2's enters {}, leaves {}, leaves kept for player 1 {}, enters "
-                       L"again after player 1's leave {}, held back (no show list or a hide list) {}, skipped by the "
-                       L"game's on/off {}; player 2 inside {} now",
-                       c.enters, c.leaves, c.keptForPlayerOne, c.reentered, c.refused, c.skippedOnOff, inside);
+    const wchar_t* const who = players::kSeatsBuilt == 1 ? L"player 2" : L"the further players";
+    platform::LogDebug(L"switch volume (10 s): {}'s enters {}, leaves {}, leaves kept for player 1 {}, enters again "
+                       L"after player 1's leave {}, held back (no show list or a hide list) {}, skipped by the game's "
+                       L"on/off {}; {} inside {} now",
+                       who, c.enters, c.leaves, c.keptForPlayerOne, c.reentered, c.refused, c.skippedOnOff, who, inside);
 }
 
 }  // namespace lss::player_two::switch_volume_two

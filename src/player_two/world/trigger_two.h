@@ -22,6 +22,12 @@
 // slides, one-shot moves and chocobo climbs player 2's own stored character, swapped in for the call. The wall-run move state's camera
 // pick reads player 2's flags the same way. Every other event is logged and held back: the router would register it on
 // player 1's list, switch map layers or fire story triggers for player 2.
+//
+// Per seat (players/seats.h): "player 2" above is each active seat. After player 1's tracker each seat's tracker is
+// read and diffed in seat order, one pass completing before the next; each seat has its own shadow of the entered
+// flags (and stored characters), its counts and its wall-run camera pick; a delivery opens the seat's ladder (the
+// primary controller and the leader answer that seat). Deliveries never nest. The ridden chocobo comes from
+// chocobo_ride, which answers for player 2 only until it is per seat.
 
 #include "platform/image.h"
 

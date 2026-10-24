@@ -8,6 +8,7 @@
 #include "expect.h"
 
 #include <cstdio>
+#include <initializer_list>
 #include <string>
 
 namespace {
@@ -42,10 +43,27 @@ void TestMappedPointer()
 void TestTriggers()
 {
     std::puts("triggers: player 2's own, player 1's inside a switch volume, else the game's; the verdict");
-    EXPECT(TriggerRouteOf(true, false, false) == TriggerRoute::PlayerTwo);
-    EXPECT(TriggerRouteOf(false, true, true) == TriggerRoute::PlayerOne);
-    EXPECT(TriggerRouteOf(false, true, false) == TriggerRoute::Original);
-    EXPECT(TriggerRouteOf(false, false, true) == TriggerRoute::Original);
+    // By seat: the owner's seat routes the event, and names the seat. For two players (player 2's trigger = seat 1)
+    // every answer is the one before the seats (v0.91.0: player 2's own, then player 1's while watching, else the
+    // game's).
+    for (const bool two : {false, true})
+    {
+        for (const bool one : {false, true})
+        {
+            for (const bool watching : {false, true})
+            {
+                const TriggerRoute before = two ? TriggerRoute::PlayerTwo
+                                            : one && watching ? TriggerRoute::PlayerOne
+                                                              : TriggerRoute::Original;
+                EXPECT(TriggerRouteOf(two ? 1 : one ? 0 : -1, watching).route == before);
+            }
+        }
+    }
+    EXPECT(TriggerRouteOf(1, false).route == TriggerRoute::PlayerTwo && TriggerRouteOf(1, false).seat == 1);
+    EXPECT(TriggerRouteOf(2, true).route == TriggerRoute::PlayerTwo && TriggerRouteOf(2, true).seat == 2);
+    EXPECT(TriggerRouteOf(0, true).route == TriggerRoute::PlayerOne && TriggerRouteOf(0, true).seat == -1);
+    EXPECT(TriggerRouteOf(0, false).route == TriggerRoute::Original);
+    EXPECT(TriggerRouteOf(-1, true).route == TriggerRoute::Original && TriggerRouteOf(-1, true).seat == -1);
     EXPECT(TriggerVerdictOf(-1, false, 1) == TriggerVerdict::NotAdmitted);
     EXPECT(TriggerVerdictOf(2, true, 0) == TriggerVerdict::PromptZipLine);
     EXPECT(TriggerVerdictOf(2, true, 1) == TriggerVerdict::Deliver);

@@ -24,6 +24,12 @@
 //     1's own enter since.
 // Player 2's volumes are left (counted volumes always, brush-only ones unless player 1 is inside) when player 2 leaves
 // the session or its trigger changes. Game thread only.
+//
+// Per seat (players/seats.h): "player 2" above is any seat. One record per volume holds the mask of the seats inside
+// it, each seat's own count of enters and whether player 1 is inside; each seat has its own trigger and tag. A
+// brush-only volume calls its enter for the first player in only (a later seat is noted inside without a call) and its
+// leave for the last one out (player 1 or another seat inside keeps it). The volume's inside byte is one write shared
+// by every player.
 
 #include <cstdint>
 
@@ -40,17 +46,17 @@ void Install(const platform::GameImage& image) noexcept;
 /// `actor` is a CharaPop switch volume (and the module is available).
 bool Is(const void* actor) noexcept;
 
-/// Player 2's trigger's enter or leave of switch volume `volume` (trigger_two's filter, inside the diff).
-void PlayerTwoEvent(bool enter, void* volume, const void* trigger) noexcept;
+/// `seat`'s trigger's enter or leave of switch volume `volume` (trigger_two's filter, inside the diff).
+void PlayerTwoEvent(int seat, bool enter, void* volume, const void* trigger) noexcept;
 
-/// Player 2 is inside a volume: player 1's events must be seen (AfterPlayerOne).
+/// A seat is inside a volume: player 1's events must be seen (AfterPlayerOne).
 bool Watching() noexcept;
 
-/// After the game's filter ran player 1's event for `actor` (null or any class: only a volume player 2 is inside counts).
+/// After the game's filter ran player 1's event for `actor` (null or any class: only a volume a seat is inside counts).
 void AfterPlayerOne(bool enter, void* actor) noexcept;
 
-/// Each engine tick, game thread: leaves player 2's volumes once player 2 is gone, drops destroyed volumes, and writes
-/// the 10 s summary (Debug, with activity).
+/// Each engine tick, game thread: leaves each seat's volumes once that seat is gone, drops destroyed volumes, and
+/// writes the 10 s summary (Debug, with activity).
 void Tick() noexcept;
 
 }  // namespace lss::player_two::switch_volume_two

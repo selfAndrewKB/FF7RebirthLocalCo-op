@@ -21,6 +21,7 @@
 #include "player_two/weak_object.h"
 #include "player_two/world/field_rules.h"
 #include "player_two/world/switch_volume_two.h"
+#include "players/seats.h"
 
 #include <algorithm>
 #include <chrono>
@@ -228,7 +229,7 @@ const std::uint8_t*  g_sweepFlagB   = nullptr;
 FindActorFn          g_findActor    = nullptr;
 std::uintptr_t       g_classVt[kClassCount] = {};  // live vtables of the admitted classes that passed their checks (0: not)
 platform::CallRedirect g_wallRunCall;
-const void*            g_wallRunPicked = nullptr;  // player 2's last camera pick, logged on change
+const void*            g_wallRunPicked[players::kMaxPlayers] = {};  // by seat: its last camera pick, logged on change
 
 // Game thread only.
 struct Counts
@@ -237,18 +238,20 @@ struct Counts
     unsigned deliveredEnters = 0, deliveredLeaves = 0, refused = 0;
 };
 
-// Player 2's per-actor state, by the actor's weak value: the entered flag, and for classes that store a character the
+// A seat's per-actor state, by the actor's weak value: the entered flag, and for classes that store a character the
 // stored weak. Kept only while the flag is set. It belongs to one trigger's tracker (its last-pass list says which
-// actors it is inside), so it is dropped when player 2's trigger is another object.
+// actors it is inside), so it is dropped when the seat's trigger is another object. One shadow per seat (index 0,
+// player 1's, unused: player 1's flags are the actors' own).
 struct Shadow
 {
     std::uint8_t  flag   = 0;
     std::uint64_t stored = kNoWeak;
 };
-std::unordered_map<std::uint64_t, Shadow> g_shadow;
-std::uint64_t                                   g_shadowOwner = 0;
-bool                                            g_delivering  = false;  // inside the game's filter for player 2
-constexpr std::size_t                           kShadowPrune  = 32;  // past this, entries of destroyed actors go
+std::unordered_map<std::uint64_t, Shadow> g_shadow[players::kMaxPlayers];
+std::uint64_t                             g_shadowOwner[players::kMaxPlayers] = {};
+// Inside the game's filter for a seat (any seat's delivery: deliveries never nest, one seat's swap completes first).
+bool                                      g_delivering  = false;
+constexpr std::size_t                     kShadowPrune  = 32;  // past this, entries of destroyed actors go
 
 /// Holds g_delivering for one delivery; reset on every way out.
 struct Delivering
@@ -258,8 +261,8 @@ struct Delivering
     Delivering(const Delivering&)            = delete;
     Delivering& operator=(const Delivering&) = delete;
 };
-Counts                                g_counts{};
-std::int32_t                          g_lastCount = -1;
+Counts                                g_counts[players::kMaxPlayers]{};     // by seat
+std::int32_t                          g_lastCount[players::kMaxPlayers] = {-1, -1, -1};
 bool                                  g_skipLogged = false;
 bool                                  g_wallRunCapLogged = false;
 platform::Every                       g_summary{std::chrono::seconds(10)};
@@ -273,6 +276,40 @@ void* TrackerOf(const void* controller) noexcept
 {
     auto* trigger = static_cast<std::byte*>(TriggerOf(controller));
     return trigger != nullptr ? trigger + kTriggerTracker : nullptr;
+}
+
+/// The active seat whose controller's tracker is `tracker`, or -1.
+int SeatOfTracker(const void* tracker) noexcept
+{
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (generation::Active(seat) && tracker == TrackerOf(generation::ControllerOf(seat)))
+        {
+            return seat;
+        }
+    }
+    return -1;
+}
+
+/// Whose trigger `owner` is: an active seat's (1..), player 1's (0), or none (-1). The seats first, as before.
+int OwnerSeat(const void* owner) noexcept
+{
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (generation::Active(seat) && owner == TriggerOf(generation::ControllerOf(seat)))
+        {
+            return seat;
+        }
+    }
+    return owner == TriggerOf(generation::PlayerOneController()) ? 0 : -1;
+}
+
+// The chocobo a seat's player rides: chocobo_ride answers for player 2 only until the rides group makes it per seat.
+static_assert(players::kSeatsBuilt == 1, "trigger_two: chocobo_ride answers for player 2 only; take each seat's ridden "
+                                         "chocobo from it before seat 2 is built (plan/seats.md step 6)");
+const void* RiddenChocoboOf(int seat) noexcept
+{
+    return seat == players::kPlayerTwoSeat ? chocobo_ride::RiddenChocobo() : nullptr;
 }
 
 /// Room for `count` zeroed 24-byte results in `out`, in the game's memory (none for 0). False if the allocation failed.
@@ -400,22 +437,24 @@ bool ResetScratch(void* keys, void* set) noexcept
     return true;
 }
 
-void PlayerTwoPass(void* context, void* keys, void* set) noexcept
+void PlayerTwoPass(int seat, void* context, void* keys, void* set) noexcept
 {
-    void* tracker = TrackerOf(generation::PlayerTwoController());
+    void* tracker = TrackerOf(generation::ControllerOf(seat));
     if (tracker == nullptr || ReadField<std::uint8_t>(tracker, kTrackerEnabled) == 0)
     {
         return;
     }
-    ++g_counts.passes;
+    Counts& counts = g_counts[seat];
+    ++counts.passes;
     if (!ResetScratch(keys, set))
     {
-        ++g_counts.skipped;
+        ++counts.skipped;
         if (!g_skipLogged)
         {
             g_skipLogged = true;
-            platform::Log(L"trigger two: player 2's pass skipped: the field tick's scratch structures are in a state the "
-                          L"game resets by reallocating (logged once)");
+            platform::Log(L"trigger two: {}'s pass skipped: the field tick's scratch structures are in a state the game "
+                          L"resets by reallocating (logged once)",
+                          players::SeatName(seat));
         }
         return;
     }
@@ -423,10 +462,10 @@ void PlayerTwoPass(void* context, void* keys, void* set) noexcept
     const Read  read = ReadResult(tracker, results);
     if (read == Read::NoResult)
     {
-        ++g_counts.noResult;
+        ++counts.noResult;
         return;
     }
-    ++(read == Read::Sweep ? g_counts.sweepReads : g_counts.overlapReads);
+    ++(read == Read::Sweep ? counts.sweepReads : counts.overlapReads);
     const std::int32_t count = results.num;
     reinterpret_cast<DispatchFn>(g_dispatchCall.Original())(context, tracker, &results, keys, set);
     if (results.data != nullptr)
@@ -434,25 +473,32 @@ void PlayerTwoPass(void* context, void* keys, void* set) noexcept
         g_free(results.data);
     }
     traversal_watch::NoteDispatch(tracker, count);
-    if (count != g_lastCount)
+    if (count != g_lastCount[seat])
     {
-        g_lastCount = count;
-        platform::LogDebug(L"trigger two: player 2's trigger reads {} overlap(s) ({} result)", count,
+        g_lastCount[seat] = count;
+        platform::LogDebug(L"trigger two: {}'s trigger reads {} overlap(s) ({} result)", players::SeatName(seat), count,
                            read == Read::Sweep ? L"sweep" : L"overlap");
     }
 }
 
-/// The field tick's dispatch of a tracker. After the game's pass for player 1's tracker, player 2's in the same frame.
+/// The field tick's dispatch of a tracker. After the game's pass for player 1's tracker, each active seat's in the same
+/// frame, in seat order (each pass resets the scratch structures before it, as the field tick does per tracker).
 std::uintptr_t Dispatch(void* context, void* tracker, void* overlaps, void* keys, void* set) noexcept
 {
     // Counted before the diff, which may empty the array.
     const auto count  = ReadField<std::int32_t>(overlaps, 8);
     const auto result = reinterpret_cast<DispatchFn>(g_dispatchCall.Original())(context, tracker, overlaps, keys, set);
     traversal_watch::NoteDispatch(tracker, count);
-    if (g_ready && g_filtersPlaced && generation::Active() && generation::OnGameThread() &&
-        tracker == TrackerOf(generation::PlayerOneController()) && tracker != TrackerOf(generation::PlayerTwoController()))
+    if (g_ready && g_filtersPlaced && generation::AnyActive() && generation::OnGameThread() &&
+        tracker == TrackerOf(generation::PlayerOneController()) && SeatOfTracker(tracker) < 0)
     {
-        PlayerTwoPass(context, keys, set);
+        for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+        {
+            if (generation::Active(seat))
+            {
+                PlayerTwoPass(seat, context, keys, set);
+            }
+        }
     }
     return result;
 }
@@ -468,24 +514,26 @@ void* PassedActor(bool enter, void* actorArg) noexcept
     return enter ? weak_object::ObjectAt(actorArg) : actorArg;
 }
 
-Shadow ShadowOf(std::uint64_t weak) noexcept
+Shadow ShadowOf(int seat, std::uint64_t weak) noexcept
 {
-    const auto found = g_shadow.find(weak);
-    return found != g_shadow.end() ? found->second : Shadow{};
+    const auto& shadows = g_shadow[seat];
+    const auto  found   = shadows.find(weak);
+    return found != shadows.end() ? found->second : Shadow{};
 }
 
-void KeepShadow(std::uint64_t weak, const Shadow& shadow)
+void KeepShadow(int seat, std::uint64_t weak, const Shadow& shadow)
 {
+    auto& shadows = g_shadow[seat];
     if (shadow.flag == 0)
     {
-        g_shadow.erase(weak);
+        shadows.erase(weak);
         return;
     }
-    if (g_shadow.size() >= kShadowPrune)
+    if (shadows.size() >= kShadowPrune)
     {
-        std::erase_if(g_shadow, [](const auto& entry) { return leader_scope::ObjectAt(&entry.first) == nullptr; });
+        std::erase_if(shadows, [](const auto& entry) { return leader_scope::ObjectAt(&entry.first) == nullptr; });
     }
-    g_shadow[weak] = shadow;
+    shadows[weak] = shadow;
 }
 
 /// The admitted class `actor` belongs to (by its vtable), or -1.
@@ -502,7 +550,7 @@ int ClassOf(const void* actor) noexcept
     return -1;
 }
 
-void LogEvent(bool enter, const void* actor, const void* passed, std::wstring_view outcome)
+void LogEvent(int seat, bool enter, const void* actor, const void* passed, std::wstring_view outcome)
 {
     const wchar_t* match = passed == nullptr ? L"the diff passed none"
                          : passed == actor   ? L"the diff's own"
@@ -514,72 +562,78 @@ void LogEvent(bool enter, const void* actor, const void* passed, std::wstring_vi
         kind          = cls >= 0 ? std::wstring(kAdmitted[cls].name)
                                  : std::format(L"vt 0x{:X}", g_image ? g_image->ResearchAddress(VTableOf(actor)) : 0);
     }
-    platform::LogDebug(L"trigger two: player 2's trigger {} {} ({}; {}): {}", enter ? L"enters" : L"leaves",
+    platform::LogDebug(L"trigger two: {}'s trigger {} {} ({}; {}): {}", players::SeatName(seat),
+                       enter ? L"enters" : L"leaves",
                        actor != nullptr ? NameOf(actor) : std::wstring(L"(not in the tag registry)"), kind, match,
                        outcome);
 }
 
-/// Player 2's event for an admitted actor, run through the game's filter as player 2: the leader and the primary
-/// controller answer player 2 (the register and unregister use the leader's controller's list, the enter and leave
-/// checks the primary controller's tracker), and the entered flag is player 2's own.
-std::uintptr_t Deliver(bool enter, FilterFn original, void* manager, std::uint64_t key, void* owner, void* actorArg,
-                       void* actor, const void* passed, const AdmittedClass& cls)
+/// A seat's event for an admitted actor, run through the game's filter as that seat's player: the leader and the
+/// primary controller answer the seat (the register and unregister use the leader's controller's list, the enter and
+/// leave checks the primary controller's tracker), and the entered flag is the seat's own.
+std::uintptr_t Deliver(int seat, bool enter, FilterFn original, void* manager, std::uint64_t key, void* owner,
+                       void* actorArg, void* actor, const void* passed, const AdmittedClass& cls)
 {
-    void*       member     = generation::Member();
-    const auto  memberWeak = leader_scope::WeakOf(member);
-    void* const two        = generation::PlayerTwoController();
-    const bool  possessed  = member != nullptr && ReadPointer(member, facts::kPawnController) == two;
-    // The chocobo climb also while player 2 rides their own chocobo (the member then belongs to her AI), and for the
-    // leave of a spot player 2 entered, so a ride that ended inside it still takes the spot off player 2's list.
-    const void* chocobo = cls.rides ? chocobo_ride::RiddenChocobo() : nullptr;
+    const wchar_t* const who        = players::SeatName(seat);
+    Counts&              counts     = g_counts[seat];
+    void*                member     = generation::MemberOf(seat);
+    const auto           memberWeak = leader_scope::WeakOf(member);
+    void* const          two        = generation::ControllerOf(seat);
+    const bool           possessed  = member != nullptr && ReadPointer(member, facts::kPawnController) == two;
+    // The chocobo climb also while the seat's player rides their own chocobo (the member then belongs to her AI), and
+    // for the leave of a spot the seat entered, so a ride that ended inside it still takes the spot off its list.
+    const void* chocobo = cls.rides ? RiddenChocoboOf(seat) : nullptr;
     const bool  rides   = chocobo != nullptr && ReadPointer(chocobo, facts::kPawnController) == two;
-    const bool  entered = cls.rides && !enter && ShadowOf(leader_scope::WeakOf(actor)).flag != 0;
+    const bool  entered = cls.rides && !enter && ShadowOf(seat, leader_scope::WeakOf(actor)).flag != 0;
     if (member == nullptr || memberWeak == 0 || !(possessed || rides || entered))
     {
-        ++g_counts.refused;
-        LogEvent(enter, actor, passed,
-                 cls.rides ? L"held back: player 2 neither rides their own chocobo nor controls their member"
-                           : L"held back: player 2's member is not possessed by player 2's controller");
+        ++counts.refused;
+        LogEvent(seat, enter, actor, passed,
+                 cls.rides ? std::format(L"held back: {} neither rides their own chocobo nor controls their member", who)
+                           : std::format(L"held back: {}'s member is not possessed by {}'s controller", who, who));
         return 0;
     }
     const auto actorWeak = leader_scope::WeakOf(actor);
     const auto ownerWeak = leader_scope::WeakOf(owner);
     if (actorWeak == 0 || ownerWeak == 0)
     {
-        ++g_counts.refused;
-        LogEvent(enter, actor, passed, L"held back: no weak value for the actor or the trigger");
+        ++counts.refused;
+        LogEvent(seat, enter, actor, passed, L"held back: no weak value for the actor or the trigger");
         return 0;
     }
-    if (ownerWeak != g_shadowOwner)
+    if (ownerWeak != g_shadowOwner[seat])
     {
-        g_shadow.clear();
-        g_shadowOwner = ownerWeak;
+        g_shadow[seat].clear();
+        g_shadowOwner[seat] = ownerWeak;
     }
     p2_scope::Args args;
+    args.seat       = seat;
     args.memberWeak = memberWeak;
     const p2_scope::P2Scope scopes(p2_scope::Primary | p2_scope::Leader, args);
     if (!scopes.Held())
     {
-        ++g_counts.refused;
-        LogEvent(enter, actor, passed, std::format(L"held back: a scope was refused ({})", scopes.Refusal()));
+        ++counts.refused;
+        LogEvent(seat, enter, actor, passed, std::format(L"held back: a scope was refused ({})", scopes.Refusal()));
         return 0;
     }
     // A nested delivery would take the outer call's swapped-in shadow for player 1's flag and restore it [ASSUMPTION
     // that the game never re-enters the filter from inside it, RE-p2-traversal-L1.md §3.3]: held back instead.
     if (g_delivering)
     {
-        ++g_counts.refused;
-        LogEvent(enter, actor, passed, L"held back: inside another delivery of player 2's (the filter re-entered)");
+        ++counts.refused;
+        LogEvent(seat, enter, actor, passed,
+                 std::format(L"held back: inside another delivery of {}'s (the filter re-entered)",
+                             players::kSeatsBuilt == 1 ? who : L"a further player"));
         return 0;
     }
-    // Player 2's own state in place of player 1's for the call: the entered flag, and the stored character for the
+    // The seat's own state in place of player 1's for the call: the entered flag, and the stored character for the
     // classes whose unregister uses it (pole slides, one-shot moves), so player 1's leave never takes the spot off
-    // player 2's list and the reverse.
+    // the seat's list and the reverse.
     const Delivering delivering;
     const bool       stores = cls.storedWeak != 0;
     const Shadow real{ReadField<std::uint8_t>(actor, kEnteredFlag),
                       stores ? ReadField<std::uint64_t>(actor, cls.storedWeak) : kNoWeak};
-    const Shadow before = ShadowOf(actorWeak);
+    const Shadow before = ShadowOf(seat, actorWeak);
     const bool   oneShot = cls.logsUseFields;
     const auto   useA = oneShot ? ReadField<std::uint32_t>(actor, kOneShotUseA) : 0u;
     const auto   useB = oneShot ? ReadField<std::int32_t>(actor, kOneShotUseB) : 0;
@@ -603,27 +657,28 @@ std::uintptr_t Deliver(bool enter, FilterFn original, void* manager, std::uint64
             WriteField<std::uint64_t>(actor, cls.storedWeak, real.stored);
         }
     }
-    ++(enter ? g_counts.deliveredEnters : g_counts.deliveredLeaves);
+    ++(enter ? counts.deliveredEnters : counts.deliveredLeaves);
     try
     {
-        KeepShadow(actorWeak, after);
+        KeepShadow(seat, actorWeak, after);
         std::wstring extra;
         if (!possessed)
         {
-            extra = rides ? L"; through player 2's ride" : L"; the leave of a spot player 2 entered during a ride";
+            extra = rides ? std::format(L"; through {}'s ride", who)
+                          : std::format(L"; the leave of a spot {} entered during a ride", who);
         }
         if (stores)
         {
-            extra += std::format(L"; player 2's stored character 0x{:X} -> 0x{:X}, player 1's 0x{:X} kept", before.stored,
-                                 after.stored, real.stored);
+            extra += std::format(L"; {}'s stored character 0x{:X} -> 0x{:X}, player 1's 0x{:X} kept", who,
+                                 before.stored, after.stored, real.stored);
         }
         if (oneShot && alive)
         {
             extra += std::format(L"; +0x848 {} -> {}, +0x86C {} -> {}", useA, ReadField<std::uint32_t>(actor, kOneShotUseA),
                                  useB, ReadField<std::int32_t>(actor, kOneShotUseB));
         }
-        LogEvent(enter, actor, passed,
-                 std::format(L"delivered as player 2 (player 2's entered flag {} -> {}{}; player 1's {} kept{})",
+        LogEvent(seat, enter, actor, passed,
+                 std::format(L"delivered as {} ({}'s entered flag {} -> {}{}; player 1's {} kept{})", who, who,
                              before.flag, after.flag,
                              before.flag == after.flag ? L", unchanged: the game's check stopped it" : L"", real.flag,
                              extra));
@@ -634,41 +689,41 @@ std::uintptr_t Deliver(bool enter, FilterFn original, void* manager, std::uint64
     return result;
 }
 
-/// The diff's enter or leave filter. Player 2's trigger's events go to the game as player 2 for admitted classes
-/// (kAdmitted), and are held back otherwise.
+/// The diff's enter or leave filter. A seat's trigger's events go to the game as that seat's player for admitted
+/// classes (kAdmitted), and are held back otherwise.
 std::uintptr_t Filter(bool enter, void* manager, std::uint64_t key, void* owner, void* actorArg) noexcept
 {
     const auto original = reinterpret_cast<FilterFn>((enter ? g_enterCall : g_leaveCall).Original());
-    if (owner == nullptr || !generation::OnGameThread() || !generation::Active())
+    if (owner == nullptr || !generation::OnGameThread() || !generation::AnyActive())
     {
         return original(manager, key, owner, actorArg);
     }
-    const auto route = field_rules::TriggerRouteOf(owner == TriggerOf(generation::PlayerTwoController()),
-                                                   owner == TriggerOf(generation::PlayerOneController()),
-                                                   switch_volume_two::Watching());
-    if (route == field_rules::TriggerRoute::Original)
+    const field_rules::Route route = field_rules::TriggerRouteOf(OwnerSeat(owner), switch_volume_two::Watching());
+    if (route.route == field_rules::TriggerRoute::Original)
     {
         return original(manager, key, owner, actorArg);
     }
-    if (route == field_rules::TriggerRoute::PlayerOne)
+    if (route.route == field_rules::TriggerRoute::PlayerOne)
     {
-        // Player 1's event, seen while player 2 is inside a switch volume (its union with player 1's, switch_volume_two).
+        // Player 1's event, seen while a seat is inside a switch volume (its union with player 1's, switch_volume_two).
         // A switch volume's Tags[0] (its CharaPop row key) is not in the tag registry: the diff's own actor names it.
         void*      volume = PassedActor(enter, actorArg);
         const auto result = original(manager, key, owner, actorArg);
         switch_volume_two::AfterPlayerOne(enter, volume);
         return result;
     }
-    ++(enter ? g_counts.enters : g_counts.leaves);
+    const int seat = route.seat;
+    ++(enter ? g_counts[seat].enters : g_counts[seat].leaves);
     try
     {
         void*       actor  = g_findActor != nullptr ? g_findActor(&key) : nullptr;
         const void* passed = PassedActor(enter, actorArg);
-        // A CharaPop switch volume: only its own enter/leave override, for player 2 (switch_volume_two). Its Tags[0] (the
-        // CharaPop row key) is not in the tag registry, so the lookup gives null there: the diff's own actor names it.
+        // A CharaPop switch volume: only its own enter/leave override, for the seat (switch_volume_two). Its Tags[0]
+        // (the CharaPop row key) is not in the tag registry, so the lookup gives null there: the diff's own actor names
+        // it.
         if (switch_volume_two::Is(passed))
         {
-            switch_volume_two::PlayerTwoEvent(enter, const_cast<void*>(passed), owner);
+            switch_volume_two::PlayerTwoEvent(seat, enter, const_cast<void*>(passed), owner);
             return 0;
         }
         const int  cls     = actor != nullptr ? ClassOf(actor) : -1;
@@ -677,17 +732,17 @@ std::uintptr_t Filter(bool enter, void* manager, std::uint64_t key, void* owner,
             cls >= 0 && kAdmitted[cls].enterEffectOnly ? ReadField<std::uint8_t>(actor, kZiplineEnterEffect) : 1);
         if (verdict == field_rules::TriggerVerdict::NotAdmitted)
         {
-            LogEvent(enter, actor != nullptr ? actor : passed, passed, L"held back, its class is not admitted");
+            LogEvent(seat, enter, actor != nullptr ? actor : passed, passed, L"held back, its class is not admitted");
             return 0;
         }
         // A prompt zip line would put its FieldActionMgr point and press flag under both players' notifies (player 1's
-        // press could be lost), and player 2 has no prompt there: held back.
+        // press could be lost), and the seat has no prompt there: held back.
         if (verdict == field_rules::TriggerVerdict::PromptZipLine)
         {
-            LogEvent(enter, actor, passed, L"held back: a button-prompt zip line (only auto-start lines are admitted)");
+            LogEvent(seat, enter, actor, passed, L"held back: a button-prompt zip line (only auto-start lines are admitted)");
             return 0;
         }
-        return Deliver(enter, original, manager, key, owner, actorArg, actor, passed, kAdmitted[cls]);
+        return Deliver(seat, enter, original, manager, key, owner, actorArg, actor, passed, kAdmitted[cls]);
     }
     catch (...)
     {
@@ -705,14 +760,31 @@ std::uintptr_t LeaveFilter(void* manager, std::uint64_t key, void* owner, void* 
     return Filter(false, manager, key, owner, actorArg);
 }
 
-/// The wall-run move state's camera pick. For player 2's LeaderActionComp, the actors on its wall-run list show player
-/// 2's entered flags for the call (their real flags are player 1's), so player 2's camera follows player 2's own wall-run
+/// The active seat whose controller's LeaderActionComp is `leaderActionComp`, or -1.
+int SeatOfLeaderAction(const void* leaderActionComp) noexcept
+{
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (generation::Active(seat) &&
+            leaderActionComp == ReadPointer(generation::ControllerOf(seat), kControllerLeaderAction))
+        {
+            return seat;
+        }
+    }
+    return -1;
+}
+
+/// The wall-run move state's camera pick. For a seat's LeaderActionComp, the actors on its wall-run list show the
+/// seat's entered flags for the call (their real flags are player 1's), so the seat's camera follows its own wall-run
 /// volume. Every other call passes through.
 void* WallRunPick(void* leaderActionComp) noexcept
 {
     const auto original = reinterpret_cast<WallRunPickFn>(g_wallRunCall.Original());
-    if (leaderActionComp == nullptr || g_delivering || !generation::Active() || !generation::OnGameThread() ||
-        leaderActionComp != ReadPointer(generation::PlayerTwoController(), kControllerLeaderAction))
+    const int  seat     = leaderActionComp == nullptr || g_delivering || !generation::AnyActive() ||
+                         !generation::OnGameThread()
+                              ? -1
+                              : SeatOfLeaderAction(leaderActionComp);
+    if (seat < 0)
     {
         return original(leaderActionComp);
     }
@@ -724,9 +796,9 @@ void* WallRunPick(void* leaderActionComp) noexcept
         g_wallRunCapLogged = true;
         try
         {
-            platform::LogDebug(L"trigger two: player 2's wall-run list holds {} actors; past the first {} they keep "
-                               L"player 1's entered flags for the camera pick (logged once)",
-                               listed, kWallRunListMax);
+            platform::LogDebug(L"trigger two: {}'s wall-run list holds {} actors; past the first {} they keep player 1's "
+                               L"entered flags for the camera pick (logged once)",
+                               players::SeatName(seat), listed, kWallRunListMax);
         }
         catch (...)
         {
@@ -743,7 +815,7 @@ void* WallRunPick(void* leaderActionComp) noexcept
         {
             weaks[i] = ReadField<std::uint64_t>(weak, 0);
             real[i]  = ReadField<std::uint8_t>(actors[i], kEnteredFlag);
-            WriteField<std::uint8_t>(actors[i], kEnteredFlag, ShadowOf(weaks[i]).flag);
+            WriteField<std::uint8_t>(actors[i], kEnteredFlag, ShadowOf(seat, weaks[i]).flag);
         }
     }
     void* picked = original(leaderActionComp);
@@ -756,13 +828,14 @@ void* WallRunPick(void* leaderActionComp) noexcept
             WriteField<std::uint8_t>(actors[i], kEnteredFlag, real[i]);
         }
     }
-    if (picked != g_wallRunPicked)
+    if (picked != g_wallRunPicked[seat])
     {
-        g_wallRunPicked = picked;
+        g_wallRunPicked[seat] = picked;
         try
         {
-            platform::LogDebug(L"trigger two: player 2's wall-run camera pick: {} (of {} wall-run actor(s) near player 2)",
-                               picked != nullptr ? NameOf(picked) : std::wstring(L"none"), count);
+            platform::LogDebug(L"trigger two: {}'s wall-run camera pick: {} (of {} wall-run actor(s) near {})",
+                               players::SeatName(seat), picked != nullptr ? NameOf(picked) : std::wstring(L"none"),
+                               count, players::SeatName(seat));
         }
         catch (...)
         {
@@ -894,9 +967,15 @@ void Tick() noexcept
         platform::Log(L"trigger two: {}", g_filtersPlaced ? L"the diff's filter calls placed; player 2's pass runs"
                                                           : L"the diff's filter calls differ; player 2's pass stays off");
     }
-    if (!generation::Active())
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        g_lastCount = -1;
+        if (!generation::Active(seat))
+        {
+            g_lastCount[seat] = -1;
+        }
+    }
+    if (!generation::AnyActive())
+    {
         return;
     }
     const auto clock = std::chrono::steady_clock::now();
@@ -905,16 +984,20 @@ void Tick() noexcept
     {
         return;
     }
-    if (!first)
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        platform::LogDebug(L"trigger two (10 s): player 2's passes {} (overlap results {}, sweep {}, none last frame {}, "
-                           L"skipped {}); events: enters {}, leaves {}; delivered as player 2: enters {}, leaves {}; "
-                           L"refused by a scope or the member's controller {}; player 2's entered flags held {}",
-                           g_counts.passes, g_counts.overlapReads, g_counts.sweepReads, g_counts.noResult,
-                           g_counts.skipped, g_counts.enters, g_counts.leaves, g_counts.deliveredEnters,
-                           g_counts.deliveredLeaves, g_counts.refused, g_shadow.size());
+        const Counts& c   = g_counts[seat];
+        const auto    who = players::SeatName(seat);
+        if (!first && generation::Active(seat))
+        {
+            platform::LogDebug(L"trigger two (10 s): {}'s passes {} (overlap results {}, sweep {}, none last frame {}, "
+                               L"skipped {}); events: enters {}, leaves {}; delivered as {}: enters {}, leaves {}; "
+                               L"refused by a scope or the member's controller {}; {}'s entered flags held {}",
+                               who, c.passes, c.overlapReads, c.sweepReads, c.noResult, c.skipped, c.enters, c.leaves,
+                               who, c.deliveredEnters, c.deliveredLeaves, c.refused, who, g_shadow[seat].size());
+        }
+        g_counts[seat] = {};
     }
-    g_counts = {};
 }
 
 }  // namespace lss::player_two::trigger_two

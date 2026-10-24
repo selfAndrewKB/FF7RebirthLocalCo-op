@@ -54,22 +54,30 @@ constexpr bool IsRowName(std::wstring_view text) noexcept
     return true;
 }
 
-// ---- trigger_two: player 2's trigger events ----
+// ---- trigger_two: the seats' trigger events ----
 
 enum class TriggerRoute
 {
-    Original,   // not player 2's trigger: the game's filter as is
-    PlayerOne,  // player 1's event while player 2 is inside a switch volume: the game's filter, then the union
-    PlayerTwo,  // player 2's trigger: admitted classes go to the game as player 2
+    Original,   // no seat's trigger: the game's filter as is
+    PlayerOne,  // player 1's event while a seat is inside a switch volume: the game's filter, then the union
+    PlayerTwo,  // a seat's trigger (the route's seat): admitted classes go to the game as that seat's player
 };
 
-constexpr TriggerRoute TriggerRouteOf(bool ownerIsPlayerTwos, bool ownerIsPlayerOnes, bool watchingSwitchVolumes) noexcept
+/// Where a trigger event goes, and for a seat's trigger, which seat it is.
+struct Route
 {
-    if (ownerIsPlayerTwos)
+    TriggerRoute route = TriggerRoute::Original;
+    int          seat  = -1;  // PlayerTwo: the seat whose trigger it is; else -1
+};
+
+/// `ownerSeat`: the seat whose trigger raised the event (1.., players/seats.h), 0 for player 1's trigger, -1 for none.
+constexpr Route TriggerRouteOf(int ownerSeat, bool watchingSwitchVolumes) noexcept
+{
+    if (ownerSeat >= 1)
     {
-        return TriggerRoute::PlayerTwo;
+        return {TriggerRoute::PlayerTwo, ownerSeat};
     }
-    return ownerIsPlayerOnes && watchingSwitchVolumes ? TriggerRoute::PlayerOne : TriggerRoute::Original;
+    return {ownerSeat == 0 && watchingSwitchVolumes ? TriggerRoute::PlayerOne : TriggerRoute::Original, -1};
 }
 
 enum class TriggerVerdict
