@@ -1,0 +1,15 @@
+# A still picture of both views with player 2 in, taken after the HUD has settled, to compare two builds' HUDs
+# (tools/regression/compare_shots.py: an older build's picture against a newer one's). Both players stand where the
+# save starts, so the pictures differ only by what moves on its own (idle animations, effects) and by the HUD.
+# shot: joined regression: hud picture now
+# expect: player 2 joined with its own controller
+# expect: leave: player 2 left; \d+ leftover actor
+note regression: hud picture start
+join
+wait-until p2.state == playing 1800
+wait 600
+note regression: hud picture now
+wait 300
+leave
+wait-until p2.in == off 900
+note regression: hud picture done

@@ -24,8 +24,14 @@ Each script is a control script (`src/control/script.h`) whose comments carry it
 # scope: log             the checks run over the whole log of this launch (the startup script)
 # needs: control         runs only through the console; skipped on the key route
 # timeout: <seconds>     the longest wait for any one of the script's replies (300 by default)
+# shot: <name> <regex>   when a log line matches, a picture of the game window (out/<run>-<script>-<name>.png)
 ```
 
+Pictures: `45_hud_picture` stands both players still after a join and takes one picture of the game window (the
+harness brings it to the front first). The log checks say what the mod did; the picture shows what the screen showed.
+Two builds' pictures are compared with `compare_shots.py before.png after.png`: per player's view and per HUD corner,
+the mean pixel difference and the share of pixels that differ, plus side-by-side and difference pictures to look at.
+The scene moves a little between two launches, so the numbers are read against each other, not against a fixed bar.
 Every script also gets three checks: no "raised an exception", no "check failed:", no console stop. A script
 must leave player 2 out; the harness quits the game at the end (through the mod, or by its window on the key route)
 and keeps the log under `ue4ss/logs/`.

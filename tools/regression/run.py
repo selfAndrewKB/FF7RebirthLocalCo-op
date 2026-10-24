@@ -16,6 +16,9 @@ Every script in tools/regression/scripts/ is a control script (src/control/scrip
     # needs: control         the script runs only through the console (the dev build): it is skipped on the key
                              route (the release build, which has no console)
     # timeout: <seconds>     the longest wait for any one of the script's replies (300 by default)
+    # shot: <name> <regex>   when a log line matches, the game window is captured (tools/shot.ps1, brought to the front
+                             first) to out/<stamp>-<version>-<build>-<script>-<name>.png; compare two runs' pictures with
+                             tools/regression/compare_shots.py
 plus three checks every script gets: no "raised an exception", no "check failed:", no console stop. A script
 must leave player 2 out (the next one joins afresh; the last one is followed by `quit`).
 
@@ -34,6 +37,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -279,6 +283,7 @@ class Script:
         self.scope_log = False
         self.needs_control = False  # skipped on the key route
         self.timeout = 300.0
+        self.shots: list[tuple[str, str]] = []  # (name, regex): a picture of the game window when a line matches
         self.commands = 0
         for line in path.read_text(encoding="utf-8").splitlines():
             text = line.strip()
@@ -294,6 +299,9 @@ class Script:
                 self.needs_control = text[len("# needs:"):].strip() == "control"
             elif text.startswith("# timeout:"):
                 self.timeout = float(text[len("# timeout:"):].strip())
+            elif text.startswith("# shot:"):
+                name, _, pattern = text[len("# shot:"):].strip().partition(" ")
+                self.shots.append((name, pattern.strip()))
             elif text and not text.startswith("#"):
                 self.commands += 1
 
@@ -353,6 +361,43 @@ def check(script: Script, lines: list[str], result: Result, build: str = "dev",
         hit = next((line for line in lines if rx.search(line)), None)
         if hit is not None:
             result.present.append((pattern, hit))
+
+
+class ShotWatch:
+    """While a script runs: each of its `# shot:` patterns, when a new log line matches it, captures the game window
+    once (a second after the line, for the frame to show it). Its own read of the log, from where the script starts."""
+
+    SETTLE_S = 1.0
+
+    def __init__(self, script: Script, game: pathlib.Path, prefix: str):
+        self.pending = [(name, re.compile(pattern)) for name, pattern in script.shots]
+        self.log = Log(log_path(game))
+        self.log.skip_to_end()
+        self.prefix = prefix
+        self.taken: list[str] = []
+        self.stop = threading.Event()
+        self.thread = threading.Thread(target=self.watch, daemon=True)
+        if self.pending:
+            self.thread.start()
+
+    def watch(self) -> None:
+        while self.pending and not self.stop.is_set():
+            for line in self.log.new_lines():
+                for name, rx in list(self.pending):
+                    if rx.search(line):
+                        self.pending.remove((name, rx))
+                        time.sleep(self.SETTLE_S)
+                        out = OUT / f"{self.prefix}-{name}.png"
+                        shot = powershell(TOOLS / "shot.ps1", "-Out", str(out), "-Width", "0", "-Focus", timeout=60)
+                        said = (shot.stdout + shot.stderr).strip().splitlines()
+                        self.taken.append(f"shot {name}: " + (said[-1] if said else "no output"))
+            self.stop.wait(0.25)
+
+    def finish(self) -> list[str]:
+        self.stop.set()
+        if self.thread.is_alive():
+            self.thread.join(timeout=90)
+        return self.taken + [f"shot {name}: its line never came" for name, _ in self.pending]
 
 
 def deploy_and_launch(build: str, version: str, stamp: str, no_deploy: bool) -> tuple[bool, str, str | None]:
@@ -485,7 +530,9 @@ def main() -> int:
             log.skip_to_end()
         else:
             log.skip_to_end()
+            shots = ShotWatch(script, game["dir"], f"{stamp}-{args.version}-{args.build}-{script.name}")
             code, output = route.run_file(script.path, script.timeout)
+            notes += shots.finish()
             result.ran_ok, result.control_output = code == 0, output
             time.sleep(1.0)  # the last lines of the script land after its result
             check(script, log.new_lines(), result, args.build, log.all_lines())
