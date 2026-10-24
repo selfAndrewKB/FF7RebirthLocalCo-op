@@ -1,7 +1,8 @@
 // Host-side tests for player_two::ride_rules, run without the game.
 //
 // The chocobo ride's end retry, seated verdict, end reasons in precedence order and getoff rule; the wheelie's forced
-// getoff plan, coordinator transitions and world stick; the shared ride's riding and change rules.
+// getoff plan, coordinator transitions and world stick; the shared ride's riding and change rules; the end texts per
+// seat.
 
 #include "player_two/rides/ride_rules.h"
 
@@ -124,6 +125,25 @@ void TestSharedRide()
     EXPECT(RideChanged(true, 0, true, 1));
 }
 
+void TestEndTextPerSeat()
+{
+    std::puts("chocobo: the end texts per seat: player 2's as before, the lost possession naming the seat's controller");
+    for (const auto reason : {EndReason::None, EndReason::Gone, EndReason::Dismounted, EndReason::Battle,
+                              EndReason::ManagerEnded, EndReason::Detached, EndReason::LostPossession})
+    {
+        EXPECT(Describe(reason, lss::players::kPlayerTwoSeat) == Describe(reason));  // the same literal for player 2
+        if (reason != EndReason::LostPossession)
+        {
+            EXPECT(Describe(reason, 2) == Describe(reason));
+        }
+    }
+    EXPECT(std::wstring(Describe(EndReason::LostPossession, 2)) ==
+           L"player 3's controller no longer holds the chocobo");
+    EXPECT(std::wstring(Describe(EndReason::LostPossession, 7)) ==
+           L"the rider's controller no longer holds the chocobo");
+    static_assert(Describe(EndReason::Gone, 2) != nullptr);
+}
+
 }  // namespace
 
 int main()
@@ -132,6 +152,7 @@ int main()
     TestSeated();
     TestWheelie();
     TestSharedRide();
+    TestEndTextPerSeat();
 
     return lss::test::Report();
 }

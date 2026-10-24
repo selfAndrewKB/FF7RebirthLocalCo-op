@@ -15,10 +15,17 @@
 #include "player_two/object_fields.h"
 #include "player_two/rides/chocobo_ride.h"
 #include "player_two/rides/wheelie_ride.h"
+#include "players/seats.h"
 
 #include <format>
 
 namespace lss::player_two::own_ride {
+
+// H1: the scoped calls below (BoardingGateOpen's PlayerCoreAsPlayerTwo, GiveBack's InPrimaryScope, TickVehicle's
+// TickRide) open member_movement's scopes, which are player 2's (Scope(kPlayerTwoSeat), p2_scope::Args without a seat).
+static_assert(players::kSeatsBuilt == 1,
+              "own_ride: member_movement's scopes are player 2's: PlayerCoreAsPlayerTwo, InPrimaryScope and TickRide "
+              "(BoardingGateOpen, GiveBack, TickVehicle) must open the lease's seat before seat 2 is built");
 
 namespace {
 
@@ -86,15 +93,15 @@ bool PlayerTwoHolds(const void* character, const void* playerTwo) noexcept
            ReadPointer(playerTwo, facts::kControllerPawn) == character;
 }
 
-bool BoardingGateOpen(void* member, void* playerTwo, const wchar_t* label) noexcept
+bool BoardingGateOpen(int seat, void* member, void* playerTwo, const wchar_t* label) noexcept
 {
     const auto gate = member_movement::PlayerCoreAsPlayerTwo(member, member);
     if (gate.answer == 1 && gate.primary == playerTwo)
     {
         return true;
     }
-    platform::Log(L"{}: not boarded (the boarding's player-core test as player 2 reads {}, primary {})", label,
-                  gate.answer, gate.primary == playerTwo ? L"PC2" : L"not PC2");
+    platform::Log(L"{}: not boarded (the boarding's player-core test as {} reads {}, primary {}PC{})", label,
+                  players::SeatName(seat), gate.answer, gate.primary == playerTwo ? L"" : L"not ", seat + 1);
     return false;
 }
 
@@ -102,19 +109,21 @@ std::wstring PossessionText(const Lease& lease, const wchar_t* word)
 {
     const void* pawn   = ReadPointer(lease.playerTwo, facts::kControllerPawn);
     const void* active = ReadPointer(lease.playerTwo, kControllerActiveVehicle);
-    return std::format(L"member controller {} (effective {}); {} controller {} (effective {}); PC2's pawn {}, active "
-                       L"coordinator {}",
+    const bool own = active == lease.coordinator && active != nullptr;
+    return std::format(L"member controller {} (effective {}); {} controller {} (effective {}); PC{}'s pawn {}, active "
+                       L"coordinator {}{}",
                        Who(ReadPointer(lease.member, facts::kPawnController)),
                        Who(ReadPointer(lease.member, facts::kCharacterEffectiveController)), word,
                        Who(ReadPointer(lease.vehicle, facts::kPawnController)),
-                       Who(ReadPointer(lease.vehicle, facts::kCharacterEffectiveController)),
+                       Who(ReadPointer(lease.vehicle, facts::kCharacterEffectiveController)), lease.seat + 1,
                        pawn == lease.vehicle ? std::wstring(L"the ") + word
                        : pawn == lease.member ? std::wstring(L"the member")
                        : pawn != nullptr      ? std::wstring(L"other")
                                               : std::wstring(L"none"),
-                       active == lease.coordinator && active != nullptr ? L"player 2's own"
-                       : active != nullptr                              ? L"other"
-                                                                        : L"none");
+                       own                 ? players::SeatName(lease.seat)
+                       : active != nullptr ? L"other"
+                                           : L"none",
+                       own ? L"'s own" : L"");
 }
 
 bool GiveBack(const Lease& lease, SwitchAiFn switchAi, const wchar_t* label, const wchar_t* what) noexcept
@@ -125,17 +134,25 @@ bool GiveBack(const Lease& lease, SwitchAiFn switchAi, const wchar_t* label, con
         RestoreCall restore{lease.member, lease.playerTwo, switchAi};
         member_movement::InPrimaryScope(lease.member, &RunRestore, &restore);
         held = PlayerTwoHolds(lease.member, lease.playerTwo);
-        platform::Log(L"{}: {} left the member to her AI; the game's possession call {}", label, what,
-                      held ? L"gave her back to player 2" : L"DID NOT give her back");
+        if (held)
+        {
+            platform::Log(L"{}: {} left the member to her AI; the game's possession call gave her back to {}", label,
+                          what, players::SeatName(lease.seat));
+        }
+        else
+        {
+            platform::Log(L"{}: {} left the member to her AI; the game's possession call DID NOT give her back", label,
+                          what);
+        }
     }
     return held;
 }
 
-void LogNotHeld(const wchar_t* label) noexcept
+void LogNotHeld(int seat, const wchar_t* label) noexcept
 {
-    platform::Log(L"{} STOPPED: player 2's controller does not hold the member after the ride; player 2 stays a "
-                  L"passenger this session (the session's own checks take it from here)",
-                  label);
+    platform::Log(L"{} STOPPED: {}'s controller does not hold the member after the ride; {} stays a passenger this "
+                  L"session (the session's own checks take it from here)",
+                  label, players::SeatName(seat), players::SeatName(seat));
 }
 
 VehicleTick TickVehicle(Lease& lease, void* state, const move_state::EngineTicks& engine,
@@ -158,20 +175,20 @@ VehicleTick TickVehicle(Lease& lease, void* state, const move_state::EngineTicks
     return VehicleTick::Refused;
 }
 
-bool Riding() noexcept
+bool Riding(int seat) noexcept
 {
-    return chocobo_ride::Driving() || wheelie_ride::Riding();
+    return chocobo_ride::Driving(seat) || wheelie_ride::Riding(seat);
 }
 
-void Release(const wchar_t* why) noexcept
+void Release(int seat, const wchar_t* why) noexcept
 {
-    chocobo_ride::Release(why);
-    wheelie_ride::Release(why);
+    chocobo_ride::Release(seat, why);
+    wheelie_ride::Release(seat, why);
 }
 
-Forgotten Forget() noexcept
+Forgotten Forget(int seat) noexcept
 {
-    return {chocobo_ride::Forget(), wheelie_ride::Forget()};
+    return {chocobo_ride::Forget(seat), wheelie_ride::Forget(seat)};
 }
 
 }  // namespace lss::player_two::own_ride

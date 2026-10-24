@@ -19,8 +19,14 @@
 //
 // The mod's parts are the triggers, the tick of a body the field ticker does not select, and the getoff key kept
 // out of pad 2's view; every call is the game's own. Everything is logged. Game thread only.
+//
+// Per seat (players/seats.h): each seat's ride, its held-back chocobo and its "stopped for the session" are its own
+// (a record per seat, index 0 unused); the seat comes from the controller the member's tick hands in, or from the
+// chocobo or move state the engine hands a wrapper. The install's lookups and the reflection offset are shared. The
+// names without a seat at the end are player 2's, for the callers not yet per seat.
 
 #include "player_two/input/move_state.h"
+#include "players/seats.h"
 
 #include <cstdint>
 
@@ -33,43 +39,66 @@ namespace lss::player_two::chocobo_ride {
 /// Finds the game's functions; logged either way. False if a check failed (player 2 stays a passenger then).
 bool Install(const platform::GameImage& image) noexcept;
 
-/// From the member's tick while player 2 plays `member`, with the game's move-state ticks this frame. True while
-/// player 2 drives their chocobo: the member's own tick is skipped then.
+/// From the member's tick while a seat's player plays `member` with `playerTwoController` (the seat's controller: the
+/// seat is found from it), with the game's move-state ticks this frame. True while the seat's player drives their
+/// chocobo: the member's own tick is skipped then.
 bool Tick(void* playerTwoController, void* member, const move_state::EngineTicks& engine) noexcept;
 
-/// Player 2 drives their chocobo now.
-bool Driving() noexcept;
+/// `seat`'s player drives their chocobo now.
+bool Driving(int seat) noexcept;
 
-/// The chocobo player 2 rides (riding or getting off, and still alive), or null. Game thread.
-const void* DrivenChocobo() noexcept;
+/// The chocobo `seat`'s player rides (riding or getting off, and still alive), or null. Game thread.
+const void* DrivenChocobo(int seat) noexcept;
 
-/// The chocobo player 2 rides while seated (not getting off; still alive), or null. Game thread.
-const void* RiddenChocobo() noexcept;
+/// The chocobo `seat`'s player rides while seated (not getting off; still alive), or null. Game thread.
+const void* RiddenChocobo(int seat) noexcept;
 
-/// The move state of the chocobo player 2 drives (its prompt handles are player 2's rows; hud/field/prompt_rows.h), or
-/// null when not driving or it no longer checks out. Game thread.
-const void* DrivenMoveState() noexcept;
+/// The move state of the chocobo `seat`'s player drives (its prompt handles are the seat's rows;
+/// hud/field/prompt_rows.h), or null when not driving or it no longer checks out. Game thread.
+const void* DrivenMoveState(int seat) noexcept;
 
-/// When `chocobo` is the chocobo player 2 rides (seated), runs `call` inside player 2's primary scope and leader answer,
-/// as the game runs the chocobo player 1 rides, and returns true. False, calling nothing, for any other chocobo or
-/// when a scope is refused. Game thread.
+/// The built seat whose player rides `chocobo` seated (RiddenChocobo), or drives it (DrivenChocobo), or -1.
+int SeatRiding(const void* chocobo) noexcept;
+int SeatDriving(const void* chocobo) noexcept;
+
+/// When `chocobo` is the chocobo a seat's player rides (seated), runs `call` inside that seat's primary scope and
+/// leader answer, as the game runs the chocobo player 1 rides, and returns true. False, calling nothing, for any other
+/// chocobo or when a scope is refused. Game thread.
 bool RunAsRider(const void* chocobo, void (*call)(void* context), void* context) noexcept;
 
 /// From player_two/move_state's wrapper of the chocobo move state's slot 1 (every chocobo's, run by its own actor tick):
-/// when `state` is the move state of the chocobo player 2 rides, runs `engine` (the game's slot 1) inside player 2's
+/// when `state` is the move state of the chocobo a seat's player rides, runs `engine` (the game's slot 1) inside its
 /// primary scope and leader answer, as the game runs the chocobo player 1 rides, so the game's anim sync leaves the
-/// gait, speed and run timer to player 2's input (RE-p2-chocobo-run-refresh.md §4, lever 1). False, calling nothing,
+/// gait, speed and run timer to the seat's input (RE-p2-chocobo-run-refresh.md §4, lever 1). False, calling nothing,
 /// for any other state or when a scope is refused: the caller runs `engine` as the game would. `returned` gets the
 /// engine's rax. Logged. Game thread.
 bool TickHandles(void* state, float deltaTime, std::uintptr_t (*engine)(void* state, float deltaTime),
                  std::uintptr_t& returned) noexcept;
 
-/// Before the session gives the member back, withdraws player 2 or leaves: the swap back, while player 2's scopes
-/// still hold. Logged. Does nothing when player 2 is not driving.
-void Release(const wchar_t* why) noexcept;
+/// Before the session gives `seat`'s member back, withdraws the seat or it leaves: the swap back, while the seat's
+/// scopes still hold. Logged. Does nothing when the seat's player is not driving.
+void Release(int seat, const wchar_t* why) noexcept;
 
-/// The member was destroyed under player 2: the ride is forgotten without calls. Returns the chocobo player 2's
+/// The member was destroyed under `seat`'s player: the ride is forgotten without calls. Returns the chocobo the seat's
 /// controller possessed (null if not driving), so the session clears that controller field too.
-void* Forget() noexcept;
+void* Forget(int seat) noexcept;
+
+// Player 2's, for the callers not yet per seat (the prompt rows, the camera and world modules).
+inline bool Driving() noexcept
+{
+    return Driving(players::kPlayerTwoSeat);
+}
+inline const void* DrivenChocobo() noexcept
+{
+    return DrivenChocobo(players::kPlayerTwoSeat);
+}
+inline const void* RiddenChocobo() noexcept
+{
+    return RiddenChocobo(players::kPlayerTwoSeat);
+}
+inline const void* DrivenMoveState() noexcept
+{
+    return DrivenMoveState(players::kPlayerTwoSeat);
+}
 
 }  // namespace lss::player_two::chocobo_ride

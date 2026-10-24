@@ -384,8 +384,12 @@ void Remove() noexcept
 void TickBeforeSession() noexcept
 {
     // The tick's identities (the member's and player 1's pawn's weaks, the driven chocobo) before any module's.
-    // The driven chocobo by seat: player 2's until chocobo_ride is per seat (plan/seats.md step 3).
-    const void* const chocobos[players::kMaxPlayers] = {nullptr, player_two::chocobo_ride::DrivenChocobo()};
+    // The driven chocobo by seat, each built seat's (index 0, player 1's, unused).
+    const void* chocobos[players::kMaxPlayers] = {};
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        chocobos[seat] = player_two::chocobo_ride::DrivenChocobo(seat);
+    }
     player_two::generation::BeginTick(chocobos);
     player_two::pad_rumble::BeforeTick();    // before the world tick: player 2's controller ordered after player 1's
     player_two::combat_rumble::BeforeTick();  // outside every notify: their call sites; the status line

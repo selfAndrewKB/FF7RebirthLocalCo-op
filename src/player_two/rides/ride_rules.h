@@ -1,9 +1,11 @@
 #pragma once
 
 // The rides' pure decisions (player_two/rides/chocobo_ride.h, wheelie_ride.h, shared_ride.h), tested on the host
-// (tests/ride_rules_test.cpp). The modules keep the engine reads, the scopes and the log.
+// (tests/ride_rules_test.cpp). The modules keep the engine reads, the scopes and the log. The same rules serve every
+// seat; a text that names the rider takes the seat.
 
 #include "platform/angles.h"
+#include "players/seats.h"
 
 #include <array>
 #include <cmath>
@@ -13,7 +15,7 @@ namespace lss::player_two::ride_rules {
 
 // ---- chocobo ----
 
-/// The game's end of player 2's coordinator waits for it to reach riding: `tries` more ticks, unless forced.
+/// The game's end of the seat's coordinator waits for it to reach riding: `tries` more ticks, unless forced.
 constexpr bool EndRetryAllowed(bool force, std::uint32_t& tries, std::uint32_t limit) noexcept
 {
     return !force && ++tries < limit;
@@ -54,7 +56,7 @@ struct EndReads
     bool inBattle    = false;
     bool entryRiding = true;   // the ride manager's entry for the member
     bool attached    = true;
-    bool holds       = true;   // player 2's controller holds the chocobo and the chocobo names it back
+    bool holds       = true;   // the seat's controller holds the chocobo and the chocobo names it back
 };
 
 enum class EndReason
@@ -93,7 +95,7 @@ constexpr EndReason EndReasonOf(const EndReads& reads) noexcept
     return reads.holds ? EndReason::None : EndReason::LostPossession;
 }
 
-/// The reason's text for the log (null for None).
+/// The reason's text for the log (null for None), player 2's ride's.
 constexpr const wchar_t* Describe(EndReason reason) noexcept
 {
     switch (reason)
@@ -109,6 +111,20 @@ constexpr const wchar_t* Describe(EndReason reason) noexcept
     return nullptr;
 }
 
+/// The reason's text for `seat`'s ride (null for None): Describe's, with the lost possession naming the seat's
+/// controller. A literal: the ride keeps the pointer.
+constexpr const wchar_t* Describe(EndReason reason, int seat) noexcept
+{
+    if (reason != EndReason::LostPossession || seat == players::kPlayerTwoSeat)
+    {
+        return Describe(reason);
+    }
+    constexpr const wchar_t* kLost[players::kMaxPlayers] = {
+        L"player 1's controller no longer holds the chocobo", L"player 2's controller no longer holds the chocobo",
+        L"player 3's controller no longer holds the chocobo"};
+    return seat >= 0 && seat < players::kMaxPlayers ? kLost[seat] : L"the rider's controller no longer holds the chocobo";
+}
+
 /// The game's getoff animation is over: she is detached, a battle started, the animation's time ran out, or the
 /// chocobo is gone.
 constexpr bool GetOffDone(bool attached, bool inBattle, bool timedOut, bool gone) noexcept
@@ -120,7 +136,7 @@ constexpr bool GetOffDone(bool attached, bool inBattle, bool timedOut, bool gone
 
 enum class ForcedGetOff
 {
-    Skip,           // not a scooter getoff, or player 2's coordinator is not riding (the game ends rides only then)
+    Skip,           // not a scooter getoff, or the seat's coordinator is not riding (the game ends rides only then)
     Follow,         // the game's getoff, as it came
     FollowInstant,  // made instant: player 1 is far enough for the rental-return warp to take the scooter home
 };

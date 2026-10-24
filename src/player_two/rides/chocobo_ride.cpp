@@ -29,6 +29,7 @@
 #include "player_two/scopes/leader_scope.h"
 #include "player_two/session/party_member.h"
 #include "player_two/world/charapop_facts.h"
+#include "players/seats.h"
 
 #include <chrono>
 #include <cstddef>
@@ -37,6 +38,12 @@
 #include <string>
 
 namespace lss::player_two::chocobo_ride {
+
+// H1: Begin (RunBegin), End (RunEnd), RunAsRider and TickHandles run inside member_movement's scopes (InPrimaryScope,
+// TickRideHandles), which open player 2's primary scope whatever seat the member is.
+static_assert(players::kSeatsBuilt == 1,
+              "chocobo_ride: member_movement's scopes are player 2's: InPrimaryScope and TickRideHandles (Begin, End, "
+              "RunAsRider, TickHandles) must open the ride's seat before seat 2 is built");
 
 namespace {
 
@@ -125,17 +132,17 @@ bool           g_installed = false;
 enum class Phase
 {
     Idle,
-    Riding,      // player 2's coordinator rides; the mod ticks the chocobo
+    Riding,      // the seat's coordinator rides; the mod ticks the chocobo
     GettingOff,  // the game dismounted her; waiting for her getoff animation to detach her
-    Ending,      // ending, waiting for player 2's coordinator to reach riding (the game's end needs it)
+    Ending,      // ending, waiting for the seat's coordinator to reach riding (the game's end needs it)
 };
 
-// Game thread. The lease (player 2's controller, member, the chocobo as `vehicle`, player 2's own chocobo
+// Game thread. The lease (the seat's controller, member, the chocobo as `vehicle`, the seat's own chocobo
 // coordinator) is player_two/own_ride's; the rest is this ride's.
 struct Ride : own_ride::Lease
 {
     std::uint32_t rows        = 0;        // the row request values last logged
-    // Its slot 1 (the actor tick's handles and anim sync) in player 2's scope: counts, and the game's ridden-vehicle
+    // Its slot 1 (the actor tick's handles and anim sync) in the seat's scope: counts, and the game's ridden-vehicle
     // test outside/inside the scope as last sampled and as last logged (-1 not yet).
     std::uint32_t handles = 0, handlesRefused = 0;
     std::int32_t  riddenOutside = -1, riddenInside = -1, loggedOutside = -2, loggedInside = -2;
@@ -145,13 +152,31 @@ struct Ride : own_ride::Lease
     bool          rowsCleared = false;
     const wchar_t* endWhy     = nullptr;  // Ending: why
 };
-Phase             g_phase    = Phase::Idle;
-Ride              g_ride{};
-const void*       g_heldBack = nullptr;  // a chocobo not to board again until its ridden flag clears
-bool              g_stopped  = false;    // a ride failed: player 2 stays a passenger this session
-std::int32_t      g_rootOffset = -1;
-platform::Every g_summary{kSummaryEvery};
-CharacterArray    g_released{};          // reused for every EndRide: the game keeps one allocation in it
+
+/// One seat's ride and what it remembers between rides. Game thread.
+struct SeatRide
+{
+    Phase           phase    = Phase::Idle;
+    Ride            ride{};
+    const void*     heldBack = nullptr;  // a chocobo not to board again until its ridden flag clears
+    bool            stopped  = false;    // a ride failed: the seat's player stays a passenger this session
+    platform::Every summary{kSummaryEvery};
+};
+SeatRide       g_seats[players::kMaxPlayers];  // by seat (players/seats.h); index 0, player 1's, unused
+std::int32_t   g_rootOffset = -1;
+CharacterArray g_released{};  // reused for every EndRide, every seat's in turn: the game keeps one allocation in it
+
+/// The seat's ride record, or null for a number without one.
+SeatRide* RideOf(int seat) noexcept
+{
+    return players::SeatIndex(seat) ? &g_seats[seat] : nullptr;
+}
+
+/// A text kept by pointer (an end's reason, a log prefix) naming the seat: player 2's or player 3's literal.
+constexpr const wchar_t* BySeat(int seat, const wchar_t* two, const wchar_t* three) noexcept
+{
+    return seat == players::kPlayerTwoSeat ? two : three;
+}
 
 const void* RootOf(void* actor) noexcept
 {
@@ -213,7 +238,7 @@ bool CoordRiding(const void* coordinator) noexcept
     return CoordState(coordinator) == static_cast<std::int32_t>(kCoordRiding) && ReadPointer(coordinator, kCoordPending) == nullptr;
 }
 
-/// Player 2's camera's slot-15 module is a chocobo camera module (the ride framing).
+/// The seat's camera's slot-15 module is a chocobo camera module (the ride framing).
 bool RideCameraOn(const void* playerTwo) noexcept
 {
     const void* module = own_ride::CameraModule15(playerTwo);
@@ -224,9 +249,10 @@ bool RideCameraOn(const void* playerTwo) noexcept
 std::wstring LeaseText(const Ride& ride)
 {
     const void* pcm = ReadPointer(ride.playerTwo, facts::kControllerCameraManager);
-    return std::format(L"{} (state {}), leader {}; player 2's camera ride subject {}, ride framing {}, view target {}",
+    return std::format(L"{} (state {}), leader {}; {}'s camera ride subject {}, ride framing {}, view target {}",
                        own_ride::PossessionText(ride, L"chocobo"), CoordState(ride.coordinator),
                        ReadPointer(ride.playerTwo, facts::kControllerLeader) == ride.member ? L"the member" : L"other",
+                       players::SeatName(ride.seat),
                        leader_scope::ObjectAt(static_cast<const std::byte*>(pcm) + kRideSubjectField) == ride.vehicle
                            ? L"the chocobo"
                            : L"not the chocobo",
@@ -264,7 +290,7 @@ struct BeginCall
     bool  ok          = false;
 };
 
-/// Inside the primary scope (player 2): the game's coordinator for player 2's controller, then the leader's boarding
+/// Inside the primary scope (the seat's): the game's coordinator for the seat's controller, then the leader's boarding
 /// for her (instant, applied now: the boarding enter runs inside this call, so inside the scope; §9.2).
 void RunBegin(void* context)
 {
@@ -297,68 +323,71 @@ void RunEnd(void* context)
     }
 }
 
-/// The ride is over for the mod: player 2's controller must hold the member again. If the game's end did not give
+/// The ride is over for the mod: the seat's controller must hold the member again. If the game's end did not give
 /// her back (or could not run), the game's possession call; if even that fails, stopped for the session.
-void Finish(const Ride& ride, const wchar_t* why, const wchar_t* how) noexcept
+void Finish(SeatRide& s, const Ride& ride, const wchar_t* why, const wchar_t* how) noexcept
 {
-    g_phase    = Phase::Idle;
-    g_heldBack = ride.vehicle;
+    s.phase    = Phase::Idle;
+    s.heldBack = ride.vehicle;
     const bool held = own_ride::GiveBack(ride, g_fn.switchAi, L"chocobo ride", L"the end");
     try
     {
-        platform::Log(L"chocobo ride: player 2 is off their chocobo ({}; {}; {} ticks driven, {} refused): {}", why, how,
-                      ride.ticks, ride.refused, LeaseText(ride));
+        platform::Log(L"chocobo ride: {} is off their chocobo ({}; {}; {} ticks driven, {} refused): {}",
+                      players::SeatName(ride.seat), why, how, ride.ticks, ride.refused, LeaseText(ride));
     }
     catch (...)
     {
     }
     if (!held)
     {
-        g_stopped = true;
-        own_ride::LogNotHeld(L"chocobo ride");
+        s.stopped = true;
+        own_ride::LogNotHeld(ride.seat, L"chocobo ride");
     }
 }
 
-/// Ends player 2's ride with the game's own end (§9.2: the possession back, the ride object, the camera module and
+/// Ends the seat's ride with the game's own end (§9.2: the possession back, the ride object, the camera module and
 /// ride subject, the active coordinator cleared). `force`: now, whatever the coordinator's state (a give-back, a
 /// leave); otherwise a coordinator not riding yet is retried on the next ticks.
-void End(const wchar_t* why, bool force) noexcept
+void End(SeatRide& s, const wchar_t* why, bool force) noexcept
 {
-    if (g_phase == Phase::Idle)
+    if (s.phase == Phase::Idle)
     {
         return;
     }
-    Ride& ride = g_ride;
+    Ride& ride = s.ride;
     if (void* state = ReadPointer(ride.vehicle, facts::kCharacterMoveState);
         !ride.rowsCleared && leader_scope::StillNames(ride.weak, ride.vehicle) && VTableOf(state) == g_moveVt)
     {
-        member_movement::ClearRideRows(state);  // player 2's rows go with the ride
+        member_movement::ClearRideRows(state);  // the seat's rows go with the ride
         ride.rowsCleared = true;
     }
     if (!leader_scope::StillNames(ride.weak, ride.vehicle))
     {
-        // The game's end reads the coordinator's chocobo: not with a destroyed one. Player 2's coordinator stays as the
+        // The game's end reads the coordinator's chocobo: not with a destroyed one. The seat's coordinator stays as the
         // game left it, so no ride is begun again this session.
-        g_stopped = true;
-        Finish(ride, why, L"the chocobo is gone, the game's end skipped; rides stopped for this session");
+        s.stopped = true;
+        Finish(s, ride, why, L"the chocobo is gone, the game's end skipped; rides stopped for this session");
         return;
     }
     if (!CoordRiding(ride.coordinator))
     {
         if (ride_rules::EndRetryAllowed(force, ride.endTries, kEndRetryTicks))
         {
-            g_phase     = Phase::Ending;  // boarding's completion reaches riding on player 2's next input tick
+            s.phase     = Phase::Ending;  // boarding's completion reaches riding on the seat's next input tick
             ride.endWhy = why;
             return;
         }
-        // The game's end cannot run: player 2's coordinator stays half-boarded (its menu locks on, the chocobo without
+        // The game's end cannot run: the seat's coordinator stays half-boarded (its menu locks on, the chocobo without
         // its AI). Reached only by a forced end (a give-back, a leave, a map load) within the tick boarding takes, or
         // a coordinator that never reaches riding.
-        g_stopped = true;
-        platform::Log(L"WARNING chocobo ride: the game's end of player 2's coordinator could not run (state {}); its "
+        s.stopped = true;
+        platform::Log(L"WARNING chocobo ride: the game's end of {}'s coordinator could not run (state {}); its "
                       L"boarding is left as it was",
-                      CoordState(ride.coordinator));
-        Finish(ride, why, L"player 2's coordinator was not riding, the game's end skipped; rides stopped for this session");
+                      players::SeatName(ride.seat), CoordState(ride.coordinator));
+        Finish(s, ride, why,
+               ride.seat == players::kPlayerTwoSeat
+                   ? L"player 2's coordinator was not riding, the game's end skipped; rides stopped for this session"
+                   : L"player 3's coordinator was not riding, the game's end skipped; rides stopped for this session");
         return;
     }
     EndCall call{ride.coordinator};
@@ -367,25 +396,27 @@ void End(const wchar_t* why, bool force) noexcept
     {
         // Where the game's end stopped: the steps after the fault did not run (EndRide's order: rider detached, swap
         // back, ride object and camera subject cleared, active coordinator cleared, state 0 requested).
-        platform::Log(L"WARNING chocobo ride: the game's end of player 2's coordinator raised {}; after it: coordinator "
-                      L"state {}, player 2's active coordinator {}, the chocobo's controller {}, the member's {}",
-                      platform::DescribeFault(call.fault).text, CoordState(ride.coordinator),
+        platform::Log(L"WARNING chocobo ride: the game's end of {}'s coordinator raised {}; after it: coordinator "
+                      L"state {}, {}'s active coordinator {}, the chocobo's controller {}PC{}, the member's {}PC{}",
+                      players::SeatName(ride.seat), platform::DescribeFault(call.fault).text,
+                      CoordState(ride.coordinator), players::SeatName(ride.seat),
                       ReadPointer(ride.playerTwo, kControllerActiveVehicle) == ride.coordinator ? L"still it"
                                                                                                  : L"cleared",
-                      ReadPointer(ride.vehicle, facts::kPawnController) == ride.playerTwo ? L"PC2" : L"not PC2",
-                      ReadPointer(ride.member, facts::kPawnController) == ride.playerTwo ? L"PC2" : L"not PC2");
+                      ReadPointer(ride.vehicle, facts::kPawnController) == ride.playerTwo ? L"" : L"not ",
+                      ride.seat + 1, ReadPointer(ride.member, facts::kPawnController) == ride.playerTwo ? L"" : L"not ",
+                      ride.seat + 1);
     }
     const Ride ended  = ride;
-    Finish(ended, why,
+    Finish(s, ended, why,
            !scoped   ? L"the game's end not run (no scope)"
            : call.ok ? (ReadPointer(ended.playerTwo, kControllerActiveVehicle) == nullptr ? L"the game's end ran"
                                                                                 : L"the game's end ran, the coordinator is still active")
                      : L"the game's end FAULTED");
 }
 
-/// The game has seated player 2's member on her own chocobo (§9.3: her chocobo appears by her and she is seated where
+/// The game has seated the seat's member on her own chocobo (§9.3: her chocobo appears by her and she is seated where
 /// she stands; taken at once, before the chocobo's follow AI can pull it toward player 1). Null when not.
-void* SeatedChocobo(void* playerTwo, void* member) noexcept
+void* SeatedChocobo(SeatRide& s, void* playerTwo, void* member) noexcept
 {
     if (ReadPointer(member, facts::kPawnController) != playerTwo || ReadPointer(playerTwo, facts::kControllerLeader) != member)
     {
@@ -400,13 +431,13 @@ void* SeatedChocobo(void* playerTwo, void* member) noexcept
     {
         return nullptr;
     }
-    switch (ride_rules::SeatedVerdict(ReadField<std::uint8_t>(chocobo, kChocoboRidden) != 0, g_heldBack == chocobo,
+    switch (ride_rules::SeatedVerdict(ReadField<std::uint8_t>(chocobo, kChocoboRidden) != 0, s.heldBack == chocobo,
                                       Attached(member), facts::InBattle()))
     {
         case ride_rules::Seated::Unridden:
-            if (g_heldBack == chocobo)
+            if (s.heldBack == chocobo)
             {
-                g_heldBack = nullptr;  // that ride is over: the next mount may be boarded
+                s.heldBack = nullptr;  // that ride is over: the next mount may be boarded
             }
             return nullptr;
         case ride_rules::Seated::HeldBack:
@@ -417,53 +448,58 @@ void* SeatedChocobo(void* playerTwo, void* member) noexcept
     return chocobo;
 }
 
-void Begin(void* playerTwo, void* member, void* chocobo) noexcept
+void Begin(SeatRide& s, int seat, void* playerTwo, void* member, void* chocobo) noexcept
 {
-    // The boarding's swap runs the game's player-core test on her (§7.4): as player 2, it must pass.
-    if (!own_ride::BoardingGateOpen(member, playerTwo, L"chocobo ride"))
+    // The boarding's swap runs the game's player-core test on her (§7.4): as the seat's player, it must pass.
+    if (!own_ride::BoardingGateOpen(seat, member, playerTwo, L"chocobo ride"))
     {
-        g_heldBack = chocobo;  // player 2 stays a passenger for this ride
+        s.heldBack = chocobo;  // the seat's player stays a passenger for this ride
         return;
     }
     const void* oldObject = ReadPointer(chocobo, kChocoboRideObject);
     BeginCall   call{playerTwo, chocobo, member};
     member_movement::InPrimaryScope(member, &RunBegin, &call);
-    g_ride = {};
-    g_ride.playerTwo   = playerTwo;
-    g_ride.member      = member;
-    g_ride.vehicle     = chocobo;
-    g_ride.coordinator = call.coordinator;
-    g_ride.weak        = leader_scope::WeakOf(chocobo);
+    s.ride = {};
+    s.ride.seat        = seat;
+    s.ride.playerTwo   = playerTwo;
+    s.ride.member      = member;
+    s.ride.vehicle     = chocobo;
+    s.ride.coordinator = call.coordinator;
+    s.ride.weak        = leader_scope::WeakOf(chocobo);
     if (!call.called)
     {
-        g_heldBack = chocobo;
-        g_stopped  = true;
-        platform::Log(L"chocobo ride STOPPED for this session: player 2's coordinator {} (state {}); player 2 stays a passenger",
-                      call.coordinator == nullptr ? L"could not be made" : L"is not idle", CoordState(call.coordinator));
+        s.heldBack = chocobo;
+        s.stopped  = true;
+        platform::Log(L"chocobo ride STOPPED for this session: {}'s coordinator {} (state {}); {} stays a passenger",
+                      players::SeatName(seat), call.coordinator == nullptr ? L"could not be made" : L"is not idle",
+                      CoordState(call.coordinator), players::SeatName(seat));
         return;
     }
-    g_phase          = Phase::Riding;
+    s.phase          = Phase::Riding;
     void* state      = ReadPointer(chocobo, facts::kCharacterMoveState);
     const bool owned = call.ok && ReadPointer(chocobo, facts::kCharacterEffectiveController) == playerTwo &&
                        ReadPointer(playerTwo, facts::kControllerPawn) == chocobo &&
                        ReadPointer(playerTwo, kControllerActiveVehicle) == call.coordinator &&
                        VTableOf(state) == g_moveVt;
-    g_ride.component = owned ? InputComponentOf(chocobo) : nullptr;
-    if (!owned || g_ride.component == nullptr)
+    s.ride.component = owned ? InputComponentOf(chocobo) : nullptr;
+    if (!owned || s.ride.component == nullptr)
     {
-        LogLine(call.ok ? L"the boarding did not hand the chocobo to player 2; ending it" : L"the boarding FAULTED; ending it",
-                g_ride);
-        g_stopped = true;  // no new ride; this one ends with the game's end once the coordinator rides (Ending)
-        platform::Log(L"chocobo ride STOPPED for this session: player 2 stays a passenger");
-        End(L"the boarding did not complete", false);
+        LogLine(!call.ok                         ? L"the boarding FAULTED; ending it"
+                : seat == players::kPlayerTwoSeat ? L"the boarding did not hand the chocobo to player 2; ending it"
+                                                  : L"the boarding did not hand the chocobo to player 3; ending it",
+                s.ride);
+        s.stopped = true;  // no new ride; this one ends with the game's end once the coordinator rides (Ending)
+        platform::Log(L"chocobo ride STOPPED for this session: {} stays a passenger", players::SeatName(seat));
+        End(s, L"the boarding did not complete", false);
         return;
     }
-    g_summary.Restart(Clock::now());
+    s.summary.Restart(Clock::now());
     try
     {
-        platform::Log(L"chocobo ride: player 2 boards their chocobo with their own coordinator (the game's boarding, instant; "
+        platform::Log(L"chocobo ride: {} boards their chocobo with their own coordinator (the game's boarding, instant; "
                       L"ride object {}): {}",
-                      ReadPointer(chocobo, kChocoboRideObject) != oldObject ? L"replaced" : L"kept", LeaseText(g_ride));
+                      players::SeatName(seat), ReadPointer(chocobo, kChocoboRideObject) != oldObject ? L"replaced" : L"kept",
+                      LeaseText(s.ride));
     }
     catch (...)
     {
@@ -485,7 +521,7 @@ const wchar_t* EndReason(const Ride& ride, bool& getOff) noexcept
     }
     const auto reason = ride_rules::EndReasonOf(reads);
     getOff            = reason == ride_rules::EndReason::Dismounted;
-    return ride_rules::Describe(reason);
+    return ride_rules::Describe(reason, ride.seat);
 }
 
 void LogRows(Ride& ride, void* state) noexcept
@@ -516,33 +552,35 @@ void LogRows(Ride& ride, void* state) noexcept
                 text += std::format(L" {:X}:{}", kRowRequests[i], value);
             }
         }
-        platform::LogDebug(L"chocobo ride: player 2's chocobo asks for rows at{}", text.empty() ? L" none" : text.c_str());
+        platform::LogDebug(L"chocobo ride: {}'s chocobo asks for rows at{}", players::SeatName(ride.seat),
+                           text.empty() ? L" none" : text.c_str());
     }
     catch (...)
     {
     }
 }
 
-void LogSummary(const Ride& ride) noexcept
+void LogSummary(SeatRide& s) noexcept
 {
     if (!platform::Enabled(platform::Level::Debug))
     {
         return;  // a periodic status line: Debug
     }
     const auto now = Clock::now();
-    if (!g_summary.Due(now))
+    if (!s.summary.Due(now))
     {
         return;
     }
+    const Ride& ride = s.ride;
     float two[3]{}, one[3]{};
     const void* oneBody = ReadPointer(generation::PlayerOneController(), facts::kControllerPawn);
     const bool  read    = charapop::ActorLocation(ride.vehicle, two) &&
                           charapop::ActorLocation(const_cast<void*>(oneBody), one);
     try
     {
-        platform::LogDebug(L"chocobo ride: driving, {} ticks ({} refused); its own slot 1 in player 2's scope {} times ({} refused); "
+        platform::LogDebug(L"chocobo ride: driving, {} ticks ({} refused); its own slot 1 in {}'s scope {} times ({} refused); "
                       L"{:.0f} m from player 1's ride body; {}",
-                      ride.ticks, ride.refused, ride.handles, ride.handlesRefused,
+                      ride.ticks, ride.refused, players::SeatName(ride.seat), ride.handles, ride.handlesRefused,
                       read ? charapop::Distance(one, two) / 100.0f : -1.0f, LeaseText(ride));
     }
     catch (...)
@@ -589,147 +627,204 @@ bool Tick(void* playerTwoController, void* member, const move_state::EngineTicks
     {
         return false;
     }
-    if (g_phase == Phase::Idle)
+    // The seat from its controller (the member's tick hands the seat's own).
+    const int seat = generation::SeatOfController(playerTwoController);
+    SeatRide* const ride = RideOf(seat);
+    if (ride == nullptr)
     {
-        void* chocobo = g_stopped ? nullptr : SeatedChocobo(playerTwoController, member);
+        return false;
+    }
+    SeatRide& s = *ride;
+    if (s.phase == Phase::Idle)
+    {
+        void* chocobo = s.stopped ? nullptr : SeatedChocobo(s, playerTwoController, member);
         if (chocobo == nullptr)
         {
             return false;
         }
-        Begin(playerTwoController, member, chocobo);
-        return g_phase != Phase::Idle;
+        Begin(s, seat, playerTwoController, member, chocobo);
+        return s.phase != Phase::Idle;
     }
-    if (g_ride.member != member || g_ride.playerTwo != playerTwoController)
+    if (s.ride.member != member || s.ride.playerTwo != playerTwoController)
     {
-        End(L"player 2's member changed", true);
+        End(s, BySeat(seat, L"player 2's member changed", L"player 3's member changed"), true);
         return false;
     }
-    if (g_phase == Phase::Ending)
+    if (s.phase == Phase::Ending)
     {
-        End(g_ride.endWhy != nullptr ? g_ride.endWhy : L"ending", false);
-        return g_phase != Phase::Idle;
+        End(s, s.ride.endWhy != nullptr ? s.ride.endWhy : L"ending", false);
+        return s.phase != Phase::Idle;
     }
-    if (g_phase == Phase::GettingOff)
+    if (s.phase == Phase::GettingOff)
     {
-        // The game's getoff animation detaches her; the end then gives player 2 the member back (§9.2, the end order).
+        // The game's getoff animation detaches her; the end then gives the seat the member back (§9.2, the end order).
         const bool done = ride_rules::GetOffDone(Attached(member), facts::InBattle(),
-                                                 Clock::now() - g_ride.getOffAt >= kGetOffWait,
-                                                 !leader_scope::StillNames(g_ride.weak, g_ride.vehicle));
+                                                 Clock::now() - s.ride.getOffAt >= kGetOffWait,
+                                                 !leader_scope::StillNames(s.ride.weak, s.ride.vehicle));
         if (done)
         {
-            End(L"the game dismounted the party", false);
+            End(s, L"the game dismounted the party", false);
         }
-        return g_phase != Phase::Idle;
+        return s.phase != Phase::Idle;
     }
     bool getOff = false;
-    if (const wchar_t* why = EndReason(g_ride, getOff))
+    if (const wchar_t* why = EndReason(s.ride, getOff))
     {
         if (getOff)
         {
-            g_phase         = Phase::GettingOff;
-            g_ride.getOffAt = Clock::now();
-            if (void* state = ReadPointer(g_ride.vehicle, facts::kCharacterMoveState); VTableOf(state) == g_moveVt)
+            s.phase         = Phase::GettingOff;
+            s.ride.getOffAt = Clock::now();
+            if (void* state = ReadPointer(s.ride.vehicle, facts::kCharacterMoveState); VTableOf(state) == g_moveVt)
             {
                 member_movement::ClearRideRows(state);
-                g_ride.rowsCleared = true;
+                s.ride.rowsCleared = true;
             }
-            LogLine(L"the game dismounted the party; player 2 waits for the getoff", g_ride);
+            LogLine(BySeat(seat, L"the game dismounted the party; player 2 waits for the getoff",
+                           L"the game dismounted the party; player 3 waits for the getoff"),
+                    s.ride);
             return true;
         }
-        End(why, false);
-        return g_phase != Phase::Idle;
+        End(s, why, false);
+        return s.phase != Phase::Idle;
     }
-    if (g_ride.handlesFaulted)
+    if (s.ride.handlesFaulted)
     {
-        End(L"the engine raised an exception inside the chocobo's own slot 1", true);
-        g_stopped = true;
-        platform::Log(L"chocobo ride STOPPED for this session: player 2 stays a passenger");
+        End(s, L"the engine raised an exception inside the chocobo's own slot 1", true);
+        s.stopped = true;
+        platform::Log(L"chocobo ride STOPPED for this session: {} stays a passenger", players::SeatName(seat));
         return false;
     }
-    void* state = ReadPointer(g_ride.vehicle, facts::kCharacterMoveState);
+    void* state = ReadPointer(s.ride.vehicle, facts::kCharacterMoveState);
     if (VTableOf(state) != g_moveVt)
     {
-        End(L"the chocobo's move state changed", false);
-        return g_phase != Phase::Idle;
+        End(s, L"the chocobo's move state changed", false);
+        return s.phase != Phase::Idle;
     }
-    // Pad 2's Vehicle button is kept out while player 2 rides: player 1 owns mounting (it would dismount the party).
-    switch (own_ride::TickVehicle(g_ride, state, engine, VehicleKey()))
+    // The seat's pad's Vehicle button is kept out while it rides: player 1 owns mounting (it would dismount the party).
+    switch (own_ride::TickVehicle(s.ride, state, engine, VehicleKey()))
     {
-        case own_ride::VehicleTick::Waiting: return true;  // the field ticker is idle: player 2's chocobo waits too
+        case own_ride::VehicleTick::Waiting: return true;  // the field ticker is idle: the seat's chocobo waits too
         case own_ride::VehicleTick::Faulted:
-            End(L"the engine raised an exception inside the chocobo's tick", true);
-            g_stopped = true;
-            platform::Log(L"chocobo ride STOPPED for this session: player 2 stays a passenger");
+            End(s, L"the engine raised an exception inside the chocobo's tick", true);
+            s.stopped = true;
+            platform::Log(L"chocobo ride STOPPED for this session: {} stays a passenger", players::SeatName(seat));
             return false;
         case own_ride::VehicleTick::Ticked:
         case own_ride::VehicleTick::Refused: break;
     }
-    LogRows(g_ride, state);
-    LogSummary(g_ride);
+    LogRows(s.ride, state);
+    LogSummary(s);
     return true;
 }
 
-bool Driving() noexcept
+bool Driving(int seat) noexcept
 {
-    return g_phase != Phase::Idle;
+    const SeatRide* s = RideOf(seat);
+    return s != nullptr && s->phase != Phase::Idle;
 }
 
-const void* DrivenChocobo() noexcept
+const void* DrivenChocobo(int seat) noexcept
 {
-    const bool riding = g_phase == Phase::Riding || g_phase == Phase::GettingOff;
-    return riding && leader_scope::StillNames(g_ride.weak, g_ride.vehicle) ? g_ride.vehicle : nullptr;
-}
-
-const void* RiddenChocobo() noexcept
-{
-    return g_phase == Phase::Riding && leader_scope::StillNames(g_ride.weak, g_ride.vehicle) ? g_ride.vehicle : nullptr;
-}
-
-const void* DrivenMoveState() noexcept
-{
-    if (g_phase != Phase::Riding || !leader_scope::StillNames(g_ride.weak, g_ride.vehicle))
+    const SeatRide* s = RideOf(seat);
+    if (s == nullptr)
     {
         return nullptr;
     }
-    const void* state = ReadPointer(g_ride.vehicle, facts::kCharacterMoveState);
-    return VTableOf(state) == g_moveVt && ReadPointer(state, facts::kMoveStateCharacter) == g_ride.vehicle ? state
-                                                                                                          : nullptr;
+    const bool riding = s->phase == Phase::Riding || s->phase == Phase::GettingOff;
+    return riding && leader_scope::StillNames(s->ride.weak, s->ride.vehicle) ? s->ride.vehicle : nullptr;
+}
+
+const void* RiddenChocobo(int seat) noexcept
+{
+    const SeatRide* s = RideOf(seat);
+    return s != nullptr && s->phase == Phase::Riding && leader_scope::StillNames(s->ride.weak, s->ride.vehicle)
+               ? s->ride.vehicle
+               : nullptr;
+}
+
+const void* DrivenMoveState(int seat) noexcept
+{
+    const SeatRide* s = RideOf(seat);
+    if (s == nullptr || s->phase != Phase::Riding || !leader_scope::StillNames(s->ride.weak, s->ride.vehicle))
+    {
+        return nullptr;
+    }
+    const void* state = ReadPointer(s->ride.vehicle, facts::kCharacterMoveState);
+    return VTableOf(state) == g_moveVt && ReadPointer(state, facts::kMoveStateCharacter) == s->ride.vehicle ? state
+                                                                                                            : nullptr;
+}
+
+int SeatRiding(const void* chocobo) noexcept
+{
+    for (int seat = 1; chocobo != nullptr && seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (RiddenChocobo(seat) == chocobo)
+        {
+            return seat;
+        }
+    }
+    return -1;
+}
+
+int SeatDriving(const void* chocobo) noexcept
+{
+    for (int seat = 1; chocobo != nullptr && seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (DrivenChocobo(seat) == chocobo)
+        {
+            return seat;
+        }
+    }
+    return -1;
 }
 
 bool RunAsRider(const void* chocobo, void (*call)(void* context), void* context) noexcept
 {
-    if (!generation::OnGameThread() || chocobo == nullptr || chocobo != RiddenChocobo())
+    if (!generation::OnGameThread() || chocobo == nullptr)
     {
         return false;
     }
-    return member_movement::InPrimaryScope(g_ride.member, call, context);
+    const int seat = SeatRiding(chocobo);  // the seat from the chocobo it rides
+    return seat >= 1 && member_movement::InPrimaryScope(g_seats[seat].ride.member, call, context);
 }
 
 bool TickHandles(void* state, float deltaTime, std::uintptr_t (*engine)(void* state, float deltaTime),
                  std::uintptr_t& returned) noexcept
 {
-    if (!generation::OnGameThread() || state == nullptr || g_ride.handlesFaulted || state != DrivenMoveState())
+    if (!generation::OnGameThread() || state == nullptr)
     {
         return false;
     }
+    // The seat from the move state it drives.
+    int seat = -1;
+    for (int each = 1; each <= players::kSeatsBuilt && seat < 0; ++each)
+    {
+        seat = !g_seats[each].ride.handlesFaulted && state == DrivenMoveState(each) ? each : -1;
+    }
+    if (seat < 0)
+    {
+        return false;
+    }
+    Ride& ride = g_seats[seat].ride;
     // The game's ridden-vehicle test, outside and inside the scope, every 30th call: logged when it changes.
-    const bool sample = g_ride.handles % 30 == 0;
-    const auto tick   = member_movement::TickRideHandles(g_ride.member, state, g_ride.vehicle, g_ride.component,
-                                                         deltaTime, engine, sample);
+    const bool sample = ride.handles % 30 == 0;
+    const auto tick   = member_movement::TickRideHandles(ride.member, state, ride.vehicle, ride.component, deltaTime,
+                                                         engine, sample);
     if (sample)
     {
-        g_ride.riddenOutside = tick.riddenOutside;
-        g_ride.riddenInside  = tick.riddenInside;
-        if (g_ride.riddenOutside != g_ride.loggedOutside || g_ride.riddenInside != g_ride.loggedInside)
+        ride.riddenOutside = tick.riddenOutside;
+        ride.riddenInside  = tick.riddenInside;
+        if (ride.riddenOutside != ride.loggedOutside || ride.riddenInside != ride.loggedInside)
         {
-            g_ride.loggedOutside = g_ride.riddenOutside;
-            g_ride.loggedInside  = g_ride.riddenInside;
+            ride.loggedOutside = ride.riddenOutside;
+            ride.loggedInside  = ride.riddenInside;
             try
             {
-                platform::LogDebug(L"chocobo ride: the game's ridden-vehicle test for player 2's chocobo: {} outside player 2's "
-                              L"scope, {} inside (1 = the primary player's ridden chocobo: the game's anim sync leaves it "
-                              L"to the input)",
-                              g_ride.riddenOutside, g_ride.riddenInside);
+                platform::LogDebug(L"chocobo ride: the game's ridden-vehicle test for {}'s chocobo: {} outside {}'s "
+                                   L"scope, {} inside (1 = the primary player's ridden chocobo: the game's anim sync "
+                                   L"leaves it to the input)",
+                                   players::SeatName(seat), ride.riddenOutside, players::SeatName(seat),
+                                   ride.riddenInside);
             }
             catch (...)
             {
@@ -739,40 +834,49 @@ bool TickHandles(void* state, float deltaTime, std::uintptr_t (*engine)(void* st
     switch (tick.result)
     {
         case member_movement::RideTick::Ticked:
-            ++g_ride.handles;
+            ++ride.handles;
             returned = tick.returned;
             return true;
         case member_movement::RideTick::Faulted:
-            g_ride.handlesFaulted = true;  // the ride ends on the next mod tick, outside the chocobo's own tick
-            platform::Log(L"chocobo ride: the engine raised an exception inside the chocobo's own slot 1 in player 2's scope");
+            ride.handlesFaulted = true;  // the ride ends on the next mod tick, outside the chocobo's own tick
+            platform::Log(L"chocobo ride: the engine raised an exception inside the chocobo's own slot 1 in {}'s scope",
+                          players::SeatName(seat));
             returned = tick.returned;
             return true;  // it ran (up to the exception): not run again
         case member_movement::RideTick::Refused:
             break;
     }
-    ++g_ride.handlesRefused;
+    ++ride.handlesRefused;
     return false;
 }
 
-void Release(const wchar_t* why) noexcept
+void Release(int seat, const wchar_t* why) noexcept
 {
-    if (g_phase != Phase::Idle && generation::OnGameThread())
+    SeatRide* s = RideOf(seat);
+    if (s != nullptr && s->phase != Phase::Idle && generation::OnGameThread())
     {
-        End(why, true);
+        End(*s, why, true);
     }
 }
 
-void* Forget() noexcept
+void* Forget(int seat) noexcept
 {
-    void* chocobo = g_phase != Phase::Idle ? g_ride.vehicle : nullptr;
+    SeatRide* ride = RideOf(seat);
+    if (ride == nullptr)
+    {
+        return nullptr;
+    }
+    SeatRide& s       = *ride;
+    void*     chocobo = s.phase != Phase::Idle ? s.ride.vehicle : nullptr;
     if (chocobo != nullptr)
     {
-        platform::Log(L"chocobo ride: the member was destroyed while player 2 rode; the ride is forgotten");
-        g_stopped = true;  // player 2's coordinator is left as the game left it: no ride is begun again this session
+        platform::Log(L"chocobo ride: the member was destroyed while {} rode; the ride is forgotten",
+                      players::SeatName(seat));
+        s.stopped = true;  // the seat's coordinator is left as the game left it: no ride is begun again this session
     }
-    g_phase    = Phase::Idle;
-    g_ride     = {};
-    g_heldBack = nullptr;
+    s.phase    = Phase::Idle;
+    s.ride     = {};
+    s.heldBack = nullptr;
     return chocobo;
 }
 
