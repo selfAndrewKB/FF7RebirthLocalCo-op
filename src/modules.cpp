@@ -391,12 +391,12 @@ void TickBeforeSession() noexcept
         chocobos[seat] = player_two::chocobo_ride::DrivenChocobo(seat);
     }
     player_two::generation::BeginTick(chocobos);
-    player_two::pad_rumble::BeforeTick();    // before the world tick: player 2's controller ordered after player 1's
+    player_two::pad_rumble::BeforeTick();    // before the world tick: each seat's controller ordered after player 1's
     player_two::combat_rumble::BeforeTick();  // outside every notify: their call sites; the status line
-    player_two::rumble_list_two::Tick();      // player 2's list made at join (dropped if player 2 left another way)
+    player_two::rumble_list_two::Tick();      // each seat's list made at join (dropped if it left another way)
     player_two::equal_targeting::Tick();      // both players' types for the Condition selects (no leader scope held)
     player_two::target_coin::Tick();          // the blueprint natives' swaps once reflection is up; the summary
-    player_two::ffb_manager_two::Tick();      // player 2's component on player 2's own manager, after its BeginPlay
+    player_two::ffb_manager_two::Tick();      // each seat's component on its own manager, after its BeginPlay
     player_two::audio_listener_two::Tick();   // the controller listener slot; the listeners and the summary (Debug)
     player_two::leave_watch::Tick();          // the last leave's controller, followed until it is freed (logged)
     player_two::vending::Tick();              // a press that opened no shop; player 2 leaving with their shop up

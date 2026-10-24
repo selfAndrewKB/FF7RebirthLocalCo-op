@@ -5,6 +5,7 @@
 #include "platform/code_redirect.h"
 #include "platform/entry_redirect.h"
 #include "platform/image.h"
+#include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
 #include "player_two/feedback/rumble_list_code.h"
@@ -12,6 +13,7 @@
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
 #include "player_two/scopes/leader_answer.h"
+#include "players/seats.h"
 
 #include <array>
 #include <atomic>
@@ -22,12 +24,12 @@
 #include <span>
 #include <string>
 
-// The rumble sources that run outside player 2's scopes (player_two/feedback/rumble_list_two.h): the scooter move
-// state's
-// slots, the sky glide's delegate, the jump box's OnEnded, the drift and brake actions. Each names player 2 as the
-// owner of its adds and stops while it runs for player 2's scooter or chocobo (OwnerTwo); the drift and brake also
-// answer the leader test for player 2's member on their thread. Their slots are placed from one table, a source's
-// slots all or none; the jump box (an entry redirect, and 1.004's inline list load) is placed on its own.
+// The rumble sources that run outside the seats' scopes (player_two/feedback/rumble_list_two.h): the scooter move
+// state's slots, the sky glide's delegate, the jump box's OnEnded, the drift and brake actions. Each names a seat as
+// the owner of its adds and stops while it runs for the seat's scooter or chocobo (OwnerTwo; the seat from the
+// scooter's controller or the chocobo's weak pointer); the drift and brake also answer the leader test for the seat's
+// member on their thread. Their slots are placed from one table, a source's slots all or none; the jump box (an entry
+// redirect, and 1.004's inline list load) is placed on its own.
 
 namespace lss::player_two::rumble_list_two {
 
@@ -76,66 +78,85 @@ platform::VTableEntry   g_driftSlot;
 platform::VTableEntry   g_brakeOneSlot;
 platform::VTableEntry   g_brakeTwoSlot;
 
-/// Names player 2 as the owner of this thread's adds and stops while it lives (nesting keeps the outer owner).
+/// Names `seat` as the owner of this thread's adds and stops while it lives (nesting keeps the outer owner).
 class OwnerTwo
 {
 public:
-    OwnerTwo() noexcept : saved_(t_ownerTwo) { t_ownerTwo = true; }
-    ~OwnerTwo() { t_ownerTwo = saved_; }
+    explicit OwnerTwo(int seat) noexcept : saved_(t_ownerSeat) { t_ownerSeat = seat; }
+    ~OwnerTwo() { t_ownerSeat = saved_; }
     OwnerTwo(const OwnerTwo&)            = delete;
     OwnerTwo& operator=(const OwnerTwo&) = delete;
 
 private:
-    bool saved_;
+    int saved_;
 };
 
-/// Player 2's chocobo, by the weak the game keeps for it (any thread).
-bool ChocoboTwo(std::uint64_t weak) noexcept
+/// The built seat with a list whose chocobo the game's weak pointer `weak` names (this tick's), or 0. Any thread.
+int SeatOfChocoboWeak(std::uint64_t weak) noexcept
 {
-    const std::uint64_t two = generation::ChocoboWeak();
-    return two != 0 && weak == two && g_listTwo.load(std::memory_order_acquire) != nullptr;
+    for (int seat = 1; weak != 0 && seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (generation::ChocoboWeakOf(seat) == weak && g_listTwo[seat].load(std::memory_order_acquire) != nullptr)
+        {
+            return seat;
+        }
+    }
+    return 0;
 }
 
-/// Counts a source run as player 2's, and whether it ran off the game thread.
-void NoteSource(std::atomic<unsigned>& count) noexcept
+/// Counts a source run as `seat`'s, and whether it ran off the game thread.
+void NoteSource(int seat, std::atomic<unsigned> Counts::*count) noexcept
 {
-    count.fetch_add(1, std::memory_order_relaxed);
+    (g_counts[seat].*count).fetch_add(1, std::memory_order_relaxed);
     if (!generation::OnGameThread())
     {
-        g_counts.sourceWorker.fetch_add(1, std::memory_order_relaxed);
+        g_counts[seat].sourceWorker.fetch_add(1, std::memory_order_relaxed);
     }
 }
 
 /// Drift and brake are expected on the anim worker: the per-thread leader answer is then the worker's alone. Counted
 /// when one runs on the game thread instead (RE-p2-rumble-owner-chocobo.md §9.5, thread ASSUMPTION).
-void NoteAction() noexcept
+void NoteAction(int seat) noexcept
 {
     if (generation::OnGameThread())
     {
-        g_counts.actionsOnGame.fetch_add(1, std::memory_order_relaxed);
+        g_counts[seat].actionsOnGame.fetch_add(1, std::memory_order_relaxed);
     }
 }
 
-/// Player 2's scooter: its move state's scooter is possessed by player 2's controller (any thread).
-bool ScooterTwo(const void* state) noexcept
+/// The built seat with a list whose controller possesses the move state's scooter, or 0 (any thread).
+int SeatOfScooter(const void* state) noexcept
 {
-    const void* const two     = generation::PlayerTwoController();
-    const void* const scooter = two != nullptr ? ReadPointer(state, kStateOwner) : nullptr;
-    return scooter != nullptr && ReadPointer(scooter, facts::kPawnController) == two &&
-           g_listTwo.load(std::memory_order_acquire) != nullptr;
+    const void* scooter = nullptr;
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        const void* const controller = generation::ControllerOf(seat);
+        if (controller == nullptr)
+        {
+            continue;
+        }
+        scooter = scooter != nullptr ? scooter : ReadPointer(state, kStateOwner);
+        if (scooter != nullptr && ReadPointer(scooter, facts::kPawnController) == controller &&
+            g_listTwo[seat].load(std::memory_order_acquire) != nullptr)
+        {
+            return seat;
+        }
+    }
+    return 0;
 }
 
-/// The scooter move state's slot 1 (every scooter's, from its actor tick, outside every scope of the mod): player 2's
-/// scooter's hit and loop rumble, and the loop's stop, are player 2's.
+/// The scooter move state's slot 1 (every scooter's, from its actor tick, outside every scope of the mod): a seat's
+/// scooter's hit and loop rumble, and the loop's stop, are the seat's.
 std::uint64_t ScooterTick(void* state, float dt) noexcept
 {
     const auto original = reinterpret_cast<ScooterTickFn>(g_scooterTickSlot.Original());
-    if (!ScooterTwo(state))
+    const int  seat     = SeatOfScooter(state);
+    if (seat == 0)
     {
         return original(state, dt);
     }
-    NoteSource(g_counts.scooterTwo);
-    const OwnerTwo owner;
+    NoteSource(seat, &Counts::scooterTwo);
+    const OwnerTwo owner(seat);
     return original(state, dt);
 }
 
@@ -143,64 +164,97 @@ std::uint64_t ScooterTick(void* state, float dt) noexcept
 std::uint64_t ScooterOff(void* state) noexcept
 {
     const auto original = reinterpret_cast<ScooterOffFn>(g_scooterOffSlot.Original());
-    if (!ScooterTwo(state))
+    const int  seat     = SeatOfScooter(state);
+    if (seat == 0)
     {
         return original(state);
     }
-    NoteSource(g_counts.scooterTwo);
-    const OwnerTwo owner;
+    NoteSource(seat, &Counts::scooterTwo);
+    const OwnerTwo owner(seat);
     return original(state);
 }
 
-/// The sky glide's rumble delegate (the move owner's "back to normal movement" broadcast): player 2's chocobo's is
-/// player 2's. The chocobo is the weak at +8 of the glide state's move owner.
-bool GlideTwo(void* instance) noexcept
+/// The sky glide's rumble delegate (the move owner's "back to normal movement" broadcast): a seat's chocobo's is the
+/// seat's (0: no seat's). The chocobo is the weak at +8 of the glide state's move owner.
+int GlideSeat(void* instance) noexcept
 {
     const void* const state = ReadPointer(instance, kGlideState);
     const void* const mover = state != nullptr ? ReadPointer(state, kStateOwner) : nullptr;
-    return mover != nullptr && ChocoboTwo(ReadField<std::uint64_t>(mover, kOwnerWeak));
+    return mover != nullptr ? SeatOfChocoboWeak(ReadField<std::uint64_t>(mover, kOwnerWeak)) : 0;
 }
 
 bool GlideSafe(void* instance) noexcept
 {
     const auto original = reinterpret_cast<GlideSafeFn>(g_glideSafeSlot.Original());
-    if (!GlideTwo(instance))
+    const int  seat     = GlideSeat(instance);
+    if (seat == 0)
     {
         return original(instance);
     }
-    NoteSource(g_counts.glideTwo);
-    const OwnerTwo owner;
+    NoteSource(seat, &Counts::glideTwo);
+    const OwnerTwo owner(seat);
     return original(instance);
 }
 
 void GlideRun(void* instance) noexcept
 {
     const auto original = reinterpret_cast<GlideRunFn>(g_glideRunSlot.Original());
-    if (!GlideTwo(instance))
+    const int  seat     = GlideSeat(instance);
+    if (seat == 0)
     {
         original(instance);
         return;
     }
-    NoteSource(g_counts.glideTwo);
-    const OwnerTwo owner;
+    NoteSource(seat, &Counts::glideTwo);
+    const OwnerTwo owner(seat);
     original(instance);
 }
 
-/// 1.004: names this thread for the jump box's inline list load while it lives (the code there takes player 2's list).
+/// 1.004: names this thread and `seat`'s list for the jump box's inline list load while it lives (the code there takes
+/// the route's list). One route at a time across the seats: named under the game's lock, so the list it names is live
+/// (a list's drop clears the route's list under the same lock), and its list is cleared before its thread is released.
+/// A route refused because another thread holds it is logged; that landing's rumble goes to the game's list (two seats
+/// landing on different threads at once: open for step 6).
 class JumpRoute
 {
 public:
-    JumpRoute() noexcept
+    explicit JumpRoute(int seat) noexcept
     {
-        std::uint32_t none = 0;
-        named_ = g_jumpListLoad.IsInstalled() &&
-                 g_jumpThread.compare_exchange_strong(none, GetCurrentThreadId(), std::memory_order_relaxed);
+        if (!g_jumpListLoad.IsInstalled())
+        {
+            return;
+        }
+        bool refused = false;
+        {
+            const ListLock lock;
+            std::uint32_t  none = 0;
+            void* const    list = g_listTwo[seat].load(std::memory_order_acquire);
+            named_              = list != nullptr &&
+                     g_jumpThread.compare_exchange_strong(none, GetCurrentThreadId(), std::memory_order_acq_rel);
+            refused = list != nullptr && !named_;
+            if (named_)
+            {
+                g_jumpList.store(list, std::memory_order_release);
+            }
+        }
+        if (refused)
+        {
+            // Another landing (another seat's, on another thread) holds the one route: this one goes to the game's
+            // list. Info the first time, Debug after.
+            static std::atomic<unsigned> s_refusals{0};
+            const auto level = s_refusals.fetch_add(1, std::memory_order_relaxed) == 0 ? platform::Level::Info
+                                                                                      : platform::Level::Debug;
+            platform::LogAt(level, L"rumble list: {}'s jump box landing found the 1.004 route held by another thread; "
+                                   L"its rumble goes to the game's list",
+                            players::SeatName(seat));
+        }
     }
     ~JumpRoute()
     {
         if (named_)
         {
-            g_jumpThread.store(0, std::memory_order_relaxed);
+            g_jumpList.store(nullptr, std::memory_order_release);
+            g_jumpThread.store(0, std::memory_order_release);
         }
     }
     JumpRoute(const JumpRoute&)            = delete;
@@ -210,34 +264,36 @@ private:
     bool named_ = false;
 };
 
-/// The jump box's OnEnded (the jump action's finish or abort): player 2's chocobo's landing rumble is player 2's.
+/// The jump box's OnEnded (the jump action's finish or abort): a seat's chocobo's landing rumble is the seat's.
 void JumpEnded(void* payload) noexcept
 {
     const auto original = reinterpret_cast<JumpEndedFn>(g_jumpEnded.Original());
-    if (!ChocoboTwo(ReadField<std::uint64_t>(payload, kJumpWeak)))
+    const int  seat     = SeatOfChocoboWeak(ReadField<std::uint64_t>(payload, kJumpWeak));
+    if (seat == 0)
     {
         original(payload);
         return;
     }
-    NoteSource(g_counts.jumpTwo);
-    const OwnerTwo  owner;
-    const JumpRoute route;
+    NoteSource(seat, &Counts::jumpTwo);
+    const OwnerTwo  owner(seat);
+    const JumpRoute route(seat);
     original(payload);
 }
 
-/// The drift action's state 1 tick (anim worker): player 2's chocobo's drift is player 2's, and the game's gate (is the
-/// chocobo's rider the player?) answers yes for player 2's member on this thread.
+/// The drift action's state 1 tick (anim worker): a seat's chocobo's drift is the seat's, and the game's gate (is the
+/// chocobo's rider the player?) answers yes for the seat's member on this thread.
 std::uint64_t Drift(void* action, double dt) noexcept
 {
     const auto original = reinterpret_cast<DriftFn>(g_driftSlot.Original());
-    if (!ChocoboTwo(ReadField<std::uint64_t>(action, kDriftChocobo)))
+    const int  seat     = SeatOfChocoboWeak(ReadField<std::uint64_t>(action, kDriftChocobo));
+    if (seat == 0)
     {
         return original(action, dt);
     }
-    NoteSource(g_counts.driftTwo);
-    NoteAction();
-    const OwnerTwo                   owner;
-    const leader_answer::ThreadScope leader(g_memberType.load(std::memory_order_relaxed));
+    NoteSource(seat, &Counts::driftTwo);
+    NoteAction(seat);
+    const OwnerTwo                   owner(seat);
+    const leader_answer::ThreadScope leader(g_memberType[seat].load(std::memory_order_relaxed));
     return original(action, dt);
 }
 
@@ -245,14 +301,15 @@ std::uint64_t Drift(void* action, double dt) noexcept
 std::uint64_t Brake(platform::VTableEntry& slot, void* move, std::uint64_t event, double xmm2, double xmm3) noexcept
 {
     const auto original = reinterpret_cast<BrakeFn>(slot.Original());
-    if (!ChocoboTwo(ReadField<std::uint64_t>(move, kMoveCharacter)))
+    const int  seat     = SeatOfChocoboWeak(ReadField<std::uint64_t>(move, kMoveCharacter));
+    if (seat == 0)
     {
         return original(move, event, xmm2, xmm3);
     }
-    NoteSource(g_counts.brakeTwo);
-    NoteAction();
-    const OwnerTwo                   owner;
-    const leader_answer::ThreadScope leader(g_memberType.load(std::memory_order_relaxed));
+    NoteSource(seat, &Counts::brakeTwo);
+    NoteAction(seat);
+    const OwnerTwo                   owner(seat);
+    const leader_answer::ThreadScope leader(g_memberType[seat].load(std::memory_order_relaxed));
     return original(move, event, xmm2, xmm3);
 }
 
@@ -267,8 +324,9 @@ std::uint64_t BrakeTwo(void* move, std::uint64_t event, double xmm2, double xmm3
 }
 
 /// The 1.004 jump box's list load, then: on the thread JumpEnded named (g_jumpThread, against the TEB's thread id at
-/// gs:[48h]), player 2's list when it exists (rumble_list_code.h). It runs under the game's lock, which DropList also
-/// takes to clear g_listTwo, so the list it takes is live for the whole add. rax, rcx and the flags are dead at that
+/// gs:[48h]), the list it named for that thread's seat when it is set (g_jumpList; rumble_list_code.h). It runs under
+/// the game's lock, which DropList also takes to clear the route's list, so the list it takes is live for the whole
+/// add. rax, rcx and the flags are dead at that
 /// point (overwritten before any read: 0x1422AD988, 0x1422AD997, 0x1422AD99B). The code reads this DLL's globals,
 /// which stay mapped: the DLL is pinned (platform/module_pin.h).
 bool PlaceJumpListLoad(const platform::GameImage& image) noexcept
@@ -283,7 +341,7 @@ bool PlaceJumpListLoad(const platform::GameImage& image) noexcept
     {
         return false;
     }
-    const auto code = JumpListLoadCode(&g_jumpThread, &g_listTwo);
+    const auto code = JumpListLoadCode(&g_jumpThread, &g_jumpList);
     return g_jumpListLoad.Install(*site, kJumpListLoadBytes, code, *site + sizeof(kJumpListLoadBytes));
 }
 

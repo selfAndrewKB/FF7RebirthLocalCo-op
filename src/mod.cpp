@@ -431,7 +431,11 @@ private:
         // The buggy and the bronco (player_two/rides/shared_ride.h): player 2 stands aside, the game's merge reaches
         // player 1 from every pad.
         const bool shared = lss::player_two::shared_ride::Tick();
-        lss::player_two::rumble_list_two::CopyPlayerOne(shared && lss::player_two::ffb_manager_two::Attached());
+        for (int seat = 1; seat <= lss::players::kSeatsBuilt; ++seat)  // each seat with its own force-feedback manager
+        {
+            lss::player_two::rumble_list_two::CopyPlayerOne(seat,
+                                                            shared && lss::player_two::ffb_manager_two::Attached(seat));
+        }
         session_->SetSharedRide(shared);
         lss::player_two::pad_sticks::SetStoodDown(shared);
         lss::player_two::climb_context::Tick();  // this frame's input copies for the climbs on the anim worker (W5)

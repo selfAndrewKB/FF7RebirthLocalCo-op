@@ -1,9 +1,10 @@
 #pragma once
 
-// The bytes player_two/feedback/rumble_list_two.cpp places at the 1.004 jump box's inline list load
-// (PlaceJumpListLoad): after
-// the game's own load, on the thread the jump route named, player 2's rumble list replaces the leader's. Pure data, so
-// it is executed on the host (tests/rumble_list_code_test.cpp).
+// The bytes player_two/feedback/rumble_sources_two.cpp places at the 1.004 jump box's inline list load
+// (PlaceJumpListLoad): after the game's own load, on the thread the jump route named, the rumble list the route named
+// with it (the seat's whose chocobo landed) replaces the leader's. The code reads one thread id and one list pointer,
+// so it serves every seat unchanged: the route names one seat's at a time. Pure data, so it is executed on the host
+// (tests/rumble_list_code_test.cpp).
 
 #include <array>
 #include <cstddef>

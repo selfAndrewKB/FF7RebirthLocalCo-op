@@ -14,6 +14,9 @@
 //     player 1's.
 // Logged: the ordering call and the controller's prerequisite count, the device code on change, skips per minute.
 // Game thread.
+//
+// Per seat (players/seats.h): each seat's controller is ordered after player 1's (its own pair, once), and every
+// seat's pad is kept out of player 1's last device (a pad per seat; the skips counted per seat).
 
 namespace lss::platform {
 class GameImage;
@@ -27,8 +30,8 @@ void Install(const platform::GameImage& image) noexcept;
 /// Puts the game's code back (at mod uninstall, with player 2 out).
 void Remove() noexcept;
 
-/// Once per frame before the world tick (the engine-tick callback): orders a new pair of controllers and follows
-/// player 2's pad.
+/// Once per frame before the world tick (the engine-tick callback): orders each seat's new pair of controllers and
+/// follows each seat's pad.
 void BeforeTick() noexcept;
 
 }  // namespace lss::player_two::pad_rumble

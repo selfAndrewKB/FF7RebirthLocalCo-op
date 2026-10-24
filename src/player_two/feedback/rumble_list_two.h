@@ -39,9 +39,20 @@
 //
 // Not routed: the hook rope and the hookshot (player 2 cannot start them). PS5 haptics stay single-target.
 //
-// Units: rumble_list_two.cpp (the add and the stop, the list tick, the zip line, player 2's list, the footsteps,
+// Units: rumble_list_two.cpp (the add and the stop, the list tick, the zip line, the seats' lists, the footsteps,
 // install, removal and tick), rumble_list_copy.cpp (the shared ride's copy), rumble_sources_two.cpp (the sources
-// outside player 2's scopes, placed from a table) and rumble_list_shared.h (what they share).
+// outside the seats' scopes, placed from a table) and rumble_list_shared.h (what they share).
+//
+// Per seat (players/seats.h): what is described above for player 2 holds for each seat. Each seat has its own list,
+// made at its join and taken down at its leave; an add or a stop is the seat's whose source names it or, on the game
+// thread, the seat that is the primary player; a component ticks its own seat's list; the zip line and the sources
+// find the seat from their character, chocobo or scooter; the owner's list pointer is swapped to one seat's list at a
+// time. The shared ride's copy goes to each seat with its own force-feedback manager. 1.004's jump box names one thread
+// and that seat's list at a time (its code is unchanged: it reads the route's list). Two seats' jump-box landings on
+// different threads at once: the second is refused (logged) and its rumble goes to the game's list, played on the
+// primary player's pad [open question for step 6: can two chocobos' OnEnded run at once on different threads?].
+
+#include "players/seats.h"
 
 namespace lss::platform {
 class GameImage;
@@ -56,16 +67,22 @@ void Install(const platform::GameImage& image) noexcept;
 
 void Remove() noexcept;
 
-/// Game thread, once per engine tick: makes player 2's list once player 2 is in (and drops it if player 2 went out
-/// another way), the member's weak value for the zip line, and the Debug summary.
+/// Game thread, once per engine tick: for each built seat, makes its list once it is in (and drops it if it went out
+/// another way), its member's type for the sources, and the Debug summary.
 void Tick() noexcept;
 
-/// Game thread, while player 2 can still be the primary player (before the generation is withdrawn): stops player 2's
-/// channels on player 2's controller and destroys player 2's list.
-void PlayerTwoOut() noexcept;
+/// Game thread, while `seat` can still be the primary player (before its generation is withdrawn): stops the seat's
+/// channels on its controller and destroys its list.
+void PlayerTwoOut(int seat) noexcept;
 
-/// Game thread, once per engine tick: copy the game's list onto player 2's (a shared ride with player 2's own
-/// force-feedback manager) or not. Turning it off stops on player 2's list what was copied and not yet stopped.
-void CopyPlayerOne(bool on) noexcept;
+/// Game thread, once per engine tick per seat: copy the game's list onto `seat`'s (a shared ride with the seat's own
+/// force-feedback manager) or not. Turning it off stops on the seat's list what was copied and not yet stopped.
+void CopyPlayerOne(int seat, bool on) noexcept;
+
+/// Player 2's copy, for a caller not yet per seat.
+inline void CopyPlayerOne(bool on) noexcept
+{
+    CopyPlayerOne(players::kPlayerTwoSeat, on);
+}
 
 }  // namespace lss::player_two::rumble_list_two

@@ -20,6 +20,10 @@
 // Logged: every hit and notify that involves either player's character, every force-feedback play with its source
 // (from the return address) and the controller it lands on, and a status line every 10 s.
 // Game thread.
+//
+// Per seat (players/seats.h): a hit or a notify is the seat's whose member (or, for a notify, whose controller's pawn)
+// it involves; it runs in that seat's leader view and primary scope, and the hit's camera and fallback calls follow the
+// seat the gate passed for (one hit seat at a time). The counts are kept per seat.
 
 namespace lss::platform {
 class GameImage;

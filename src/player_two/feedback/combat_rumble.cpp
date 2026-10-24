@@ -20,6 +20,7 @@
 #include "player_two/scopes/p2_scope.h"
 #include "player_two/scopes/primary_controller.h"
 #include "player_two/session/party_member.h"
+#include "players/seats.h"
 #include "players/unreal_access.h"
 
 #include <intrin.h>
@@ -158,24 +159,43 @@ std::atomic<bool>      g_hitsOwnThread{false};  // installed with InstallFromOwn
 unsigned                                                 g_notifiesWrapped = 0;
 
 // Game thread.
-// The last gate ran for player 2's member and passed. Read by the same hit's camera and fallback calls, a few
-// instructions later; between the gate and them run only the target AI component's effect-name listeners
+// The seat whose member the last gate ran for, when it passed (0: none). Read by the same hit's camera and fallback
+// calls, a few instructions later; between the gate and them run only the target AI component's effect-name listeners
 // (0x14173EB94 before the camera, IsEndPlayerController before the fallback), which replace an effect name and are not
-// known to start another hit [ASSUMPTION, §10.12 item 4]. A nested hit there would overwrite the flag.
-bool  g_hitTwo           = false;
-void* g_notifyController = nullptr;  // player 2's controller while a notify for player 2 runs
+// known to start another hit [ASSUMPTION, §10.12 item 4]. A nested hit there would overwrite it.
+int   g_hitSeat          = 0;
+void* g_notifyController = nullptr;  // a seat's controller while a notify for the seat runs
 platform::Every g_status{kStatusEvery};
+// Per seat; index 0 holds player 1's counts (the One fields) and the plays on other controllers.
 struct Counts
 {
     std::uint32_t hitsOne = 0, hitsTwo = 0, gatesTwo = 0, camerasTwo = 0, fallbacksTwo = 0, hitSkips = 0;
     std::uint32_t notifiesOne = 0, notifiesTwo = 0, notifySkips = 0, answered = 0;
     std::uint32_t playsOne = 0, playsTwo = 0, playsOther = 0;
 };
-Counts g_counts;
+std::array<Counts, players::kMaxPlayers> g_counts{};
 
 bool Ready() noexcept
 {
-    return generation::OnGameThread() && generation::Active();
+    return generation::OnGameThread() && generation::AnyActive();
+}
+
+/// The built active seat whose member, or (with `pawns`) whose controller's pawn, is `actor`, or 0.
+int SeatOfCharacter(const void* actor, bool pawns) noexcept
+{
+    for (int seat = 1; actor != nullptr && seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (!generation::Active(seat))
+        {
+            continue;
+        }
+        if (actor == generation::MemberOf(seat) ||
+            (pawns && actor == ReadPointer(generation::ControllerOf(seat), facts::kControllerPawn)))
+        {
+            return seat;
+        }
+    }
+    return 0;
 }
 
 /// A Debug line may be written (the level is on).
@@ -189,15 +209,16 @@ void* PlayerOnePawn() noexcept
     return ReadPointer(generation::PlayerOneController(), facts::kControllerPawn);
 }
 
-/// Player 2's leader view (leader, leader type, primary controller) for one call; nothing held if any part refuses
-/// (the ladder's all-or-nothing rule).
+/// `seat`'s leader view (leader, leader type, primary controller) for one call; nothing held if any part refuses (the
+/// ladder's all-or-nothing rule).
 class PlayerTwoView
 {
 public:
-    explicit PlayerTwoView(bool primary) noexcept
+    PlayerTwoView(int seat, bool primary) noexcept
     {
         p2_scope::Args args;
-        if (p2_scope::FillMember(args, generation::Member()))
+        args.seat = seat;
+        if (p2_scope::FillMember(args, generation::MemberOf(seat)))
         {
             scopes_.emplace((primary ? p2_scope::Primary : 0u) | p2_scope::Leader | p2_scope::LeaderType, args);
         }
@@ -216,7 +237,7 @@ private:
 std::uint64_t Gate(std::uint64_t kind, void* attacker, void* target, void* functor) noexcept
 {
     const auto original = reinterpret_cast<GateFn>(g_gateCall.Original());
-    g_hitTwo            = false;
+    g_hitSeat           = 0;
     // On 1.005 the fallback call was changed on the understanding that only the game thread runs a hit (call_redirect.h).
     static std::atomic<unsigned> offThread{0};
     if (g_hitsOwnThread.load(std::memory_order_relaxed) && !generation::OnGameThread() &&
@@ -229,17 +250,22 @@ std::uint64_t Gate(std::uint64_t kind, void* attacker, void* target, void* funct
     {
         return original(kind, attacker, target, functor);
     }
-    void*      member = generation::Member();
     void*      one    = PlayerOnePawn();
     const bool isOne  = one != nullptr && (attacker == one || target == one);
-    // Player 1's character on either side keeps the game's own answer (party hits are enemy against party).
-    const bool isTwo  = !isOne && member != nullptr && (attacker == member || target == member);
-    if (!isTwo)
+    // Player 1's character on either side keeps the game's own answer (party hits are enemy against party). Else the
+    // seat whose member attacks, or is hit.
+    int seat = 0;
+    if (!isOne)
+    {
+        seat = SeatOfCharacter(attacker, false);
+        seat = seat != 0 ? seat : SeatOfCharacter(target, false);
+    }
+    if (seat == 0)
     {
         const auto result = original(kind, attacker, target, functor);
         if (isOne)
         {
-            ++g_counts.hitsOne;
+            ++g_counts[0].hitsOne;
             if (Line())
             {
                 platform::LogDebug(L"combat rumble: frame {}: battle hit (gate kind {}), attacker {}, target {}: player 1's, gate {}",
@@ -249,72 +275,89 @@ std::uint64_t Gate(std::uint64_t kind, void* attacker, void* target, void* funct
         }
         return result;
     }
-    ++g_counts.hitsTwo;
+    Counts& counts = g_counts[seat];
+    ++counts.hitsTwo;
     std::uint64_t result = 0;
     bool          held   = false;
     {
-        const PlayerTwoView view(false);  // the gate reads the leader and its type only
+        const PlayerTwoView view(seat, false);  // the gate reads the leader and its type only
         held   = view.Held();
         result = original(kind, attacker, target, functor);
     }
-    g_hitTwo = held && (result & 0xFF) != 0;
-    g_counts.gatesTwo += g_hitTwo ? 1 : 0;
-    g_counts.hitSkips += held ? 0 : 1;
+    g_hitSeat = held && (result & 0xFF) != 0 ? seat : 0;
+    counts.gatesTwo += g_hitSeat != 0 ? 1 : 0;
+    counts.hitSkips += held ? 0 : 1;
     if (Line())
     {
-        platform::LogDebug(L"combat rumble: frame {}: battle hit (gate kind {}), attacker {}, target {}: player 2's{}, gate {}",
-                      platform::frame_watch::FrameIndex(), kind & 0xFF, Who(attacker), Who(target),
-                      held ? L" (the gate asked with player 2's member as the leader)"
-                           : L" (player 2's leader view REFUSED: the game's own answer)",
-                      (result & 0xFF) != 0 ? L"passed" : L"closed");
+        // The seat's name as its own argument: nothing extra is built for the line.
+        const wchar_t* const name   = players::SeatName(seat);
+        const wchar_t* const passed = (result & 0xFF) != 0 ? L"passed" : L"closed";
+        if (held)
+        {
+            platform::LogDebug(L"combat rumble: frame {}: battle hit (gate kind {}), attacker {}, target {}: {}'s (the "
+                               L"gate asked with {}'s member as the leader), gate {}",
+                               platform::frame_watch::FrameIndex(), kind & 0xFF, Who(attacker), Who(target), name, name,
+                               passed);
+        }
+        else
+        {
+            platform::LogDebug(L"combat rumble: frame {}: battle hit (gate kind {}), attacker {}, target {}: {}'s ({}'s "
+                               L"leader view REFUSED: the game's own answer), gate {}",
+                               platform::frame_watch::FrameIndex(), kind & 0xFF, Who(attacker), Who(target), name, name,
+                               passed);
+        }
     }
     return result;
 }
 
 /// The hit's camera effect (PrimaryPCM_CameraEffect2DF0_Play: rcx the out handle, returned; rdx the location; r8 the
-/// effect's FName*), which finds "the" camera manager through the primary controller: player 2's for player 2's hit.
+/// effect's FName*), which finds "the" camera manager through the primary controller: the seat's for the seat's hit.
 void* Camera(void* handle, const void* location, const void* name) noexcept
 {
     const auto original = reinterpret_cast<CameraFn>(g_cameraCall.Original());
-    if (!g_hitTwo || !Ready())
+    const int  seat     = g_hitSeat;
+    if (seat == 0 || !Ready())
     {
         return original(handle, location, name);
     }
-    const primary_controller::Scope primary(players::kPlayerTwoSeat);
+    const primary_controller::Scope primary(seat);
     if (!primary.Held())
     {
-        ++g_counts.hitSkips;
+        ++g_counts[seat].hitSkips;
         return original(handle, location, name);
     }
     void* result = original(handle, location, name);
-    ++g_counts.camerasTwo;
+    ++g_counts[seat].camerasTwo;
     if (Line())
     {
         const bool played = handle != nullptr && ReadField<std::int32_t>(handle, 0) != -1;  // {-1, 0} when nothing plays
-        platform::LogDebug(L"combat rumble: frame {}: the hit's camera effect {} on player 2's camera manager{}",
-                      platform::frame_watch::FrameIndex(),
-                      players::unreal::NameText(name != nullptr ? ReadField<std::uint64_t>(name, 0) : 0),
-                      played ? L"" : L": NOTHING PLAYED (player 2's camera manager has no effect component?)");
+        const wchar_t* const who = players::SeatName(seat);
+        platform::LogDebug(L"combat rumble: frame {}: the hit's camera effect {} on {}'s camera manager{}{}{}",
+                           platform::frame_watch::FrameIndex(),
+                           players::unreal::NameText(name != nullptr ? ReadField<std::uint64_t>(name, 0) : 0), who,
+                           played ? L"" : L": NOTHING PLAYED (", played ? L"" : who,
+                           played ? L"" : L"'s camera manager has no effect component?)");
     }
     return result;
 }
 
 /// The hit's controller when the attacker has none (GetPrimaryEndPlayerController_FromPartyManager, no arguments):
-/// player 2's for player 2's hit.
+/// the seat's for the seat's hit.
 void* Fallback() noexcept
 {
     const auto original = reinterpret_cast<FallbackFn>(g_fallbackCall.Original());
-    if (!g_hitTwo || !Ready())
+    const int  seat     = g_hitSeat;
+    if (seat == 0 || !Ready())
     {
         return original();
     }
-    const primary_controller::Scope primary(players::kPlayerTwoSeat);
+    const primary_controller::Scope primary(seat);
     if (!primary.Held())
     {
-        ++g_counts.hitSkips;
+        ++g_counts[seat].hitSkips;
         return original();
     }
-    ++g_counts.fallbacksTwo;
+    ++g_counts[seat].fallbacksTwo;
     return original();
 }
 
@@ -322,27 +365,27 @@ void* Fallback() noexcept
 // Notifies
 // ---------------------------------------------------------------------------------------------
 
-/// Opens player 2's view around a notify on player 2's mesh, and makes its first-controller calls answer player 2's.
+/// Opens a seat's view around a notify on the seat's mesh (its member's, or its controller's pawn's: the seat from the
+/// mesh's owner), and makes its first-controller calls answer the seat's controller.
 class NotifyScope
 {
 public:
     NotifyScope(std::size_t index, void* mesh) noexcept : index_(index)
     {
-        // Without its first-controller call answering PC2, an open gate would play player 2's notify on player 1's pad.
+        // Without its first-controller call answering the seat's, an open gate would play the seat's notify on player
+        // 1's pad.
         if (!Ready() || !g_firstCalls[index].IsInstalled())
         {
             return;
         }
-        void*       owner   = ReadPointer(mesh, kComponentOwner);
-        void*       two     = generation::PlayerTwoController();
-        const void* twoPawn = ReadPointer(two, facts::kControllerPawn);
-        const bool  isTwo   = owner != nullptr && (owner == generation::Member() || owner == twoPawn);
-        const Phase phase   = kNotifies[index].phase;
-        if (!isTwo)
+        void*       owner = ReadPointer(mesh, kComponentOwner);
+        const int   seat  = SeatOfCharacter(owner, true);
+        const Phase phase = kNotifies[index].phase;
+        if (seat == 0)
         {
             if (owner != nullptr && owner == PlayerOnePawn())
             {
-                ++g_counts.notifiesOne;
+                ++g_counts[0].notifiesOne;
                 if (phase != Phase::Tick && Line())
                 {
                     platform::LogDebug(L"combat rumble: frame {}: {} {} on player 1's character's mesh: the game's own (PC1)",
@@ -352,24 +395,28 @@ public:
             }
             return;
         }
-        ++g_counts.notifiesTwo;
-        view_.emplace(true);
+        Counts& counts = g_counts[seat];
+        ++counts.notifiesTwo;
+        view_.emplace(seat, true);
         if (!view_->Held())
         {
             view_.reset();
-            ++g_counts.notifySkips;
+            ++counts.notifySkips;
             if (phase != Phase::Tick && Line())
             {
-                platform::LogDebug(L"combat rumble: frame {}: {} {} on player 2's mesh: player 2's leader view REFUSED (the "
-                              L"game's own: player 1's controller or none)",
-                              platform::frame_watch::FrameIndex(), kNotifies[index].what, kPhaseText[static_cast<int>(phase)]);
+                const wchar_t* const name = players::SeatName(seat);
+                platform::LogDebug(L"combat rumble: frame {}: {} {} on {}'s mesh: {}'s leader view REFUSED (the "
+                                   L"game's own: player 1's controller or none)",
+                                   platform::frame_watch::FrameIndex(), kNotifies[index].what,
+                                   kPhaseText[static_cast<int>(phase)], name, name);
             }
             return;
         }
         saved_             = g_notifyController;
-        g_notifyController = two;
-        answeredAt_        = g_counts.answered;
+        g_notifyController = generation::ControllerOf(seat);
+        answeredAt_        = counts.answered;
         owner_             = owner;
+        seat_              = seat;
         active_            = true;
     }
 
@@ -381,14 +428,27 @@ public:
         }
         g_notifyController = saved_;
         const Phase phase  = kNotifies[index_].phase;
-        const auto  calls  = g_counts.answered - answeredAt_;
+        const auto  calls  = g_counts[seat_].answered - answeredAt_;
         if (phase != Phase::Tick && Line())
         {
-            platform::LogDebug(L"combat rumble: frame {}: {} {} on {}'s mesh: {}", platform::frame_watch::FrameIndex(),
-                          kNotifies[index_].what, kPhaseText[static_cast<int>(phase)],
-                          owner_ == generation::Member() ? L"player 2's member" : L"player 2's ridden pawn",
-                          calls != 0 ? L"on player 2's controller (its first-controller call answered PC2)"
-                                     : L"nothing played (the notify's own gate closed with player 2 as the leader)");
+            try
+            {
+                const wchar_t* const name = players::SeatName(seat_);
+                platform::LogDebug(L"combat rumble: frame {}: {} {} on {}'s mesh: {}",
+                                   platform::frame_watch::FrameIndex(), kNotifies[index_].what,
+                                   kPhaseText[static_cast<int>(phase)],
+                                   owner_ == generation::MemberOf(seat_) ? std::format(L"{}'s member", name)
+                                                                         : std::format(L"{}'s ridden pawn", name),
+                                   calls != 0 ? std::format(L"on {}'s controller (its first-controller call answered "
+                                                            L"PC{})",
+                                                            name, seat_ + 1)
+                                              : std::format(L"nothing played (the notify's own gate closed with {} as "
+                                                            L"the leader)",
+                                                            name));
+            }
+            catch (...)
+            {
+            }
         }
     }
 
@@ -401,6 +461,7 @@ private:
     void*                        saved_      = nullptr;
     const void*                  owner_      = nullptr;
     std::uint32_t                answeredAt_ = 0;
+    int                          seat_       = 0;
     bool                         active_     = false;
 };
 
@@ -438,12 +499,13 @@ std::array<std::uintptr_t, sizeof...(I)> Wrappers(std::index_sequence<I...>) noe
     return {WrapperOf<I>()...};
 }
 
-/// A notify's GetFirstPlayerController call: player 2's controller while a notify for player 2 runs.
+/// A notify's GetFirstPlayerController call: a seat's controller while a notify for the seat runs.
 void* FirstController(void* world) noexcept
 {
     if (g_notifyController != nullptr && Ready())
     {
-        ++g_counts.answered;
+        const int seat = generation::SeatOfController(g_notifyController);
+        ++g_counts[seat >= 1 ? seat : 0].answered;
         return g_notifyController;
     }
     return reinterpret_cast<FirstFn>(g_firstController)(world);
@@ -474,9 +536,10 @@ void LogPlay(const void* component, std::uint64_t channel, const void* name, std
         return;
     }
     const void* controller = ReadPointer(component, kComponentController);
-    (controller == generation::PlayerOneController()   ? g_counts.playsOne
-     : controller == generation::PlayerTwoController() ? g_counts.playsTwo
-                                                       : g_counts.playsOther) += 1;
+    const int   seat       = generation::SeatOfController(controller);  // 0 player 1's, a seat's, or -1
+    (seat == 0  ? g_counts[0].playsOne
+     : seat > 0 ? g_counts[seat].playsTwo
+                : g_counts[0].playsOther) += 1;
     if (!Line())
     {
         return;
@@ -529,23 +592,32 @@ const wchar_t* InstallPlays(const platform::GameImage& image) noexcept
 const wchar_t* InstallPlays(const platform::GameImage&) noexcept { return L"not logged (dev tools)"; }
 #endif
 
+/// The status line: one per active seat, each with player 1's counts (taken once for all of them).
 void LogStatus() noexcept
 {
     const auto now = Clock::now();
-    if (!generation::Active() || !g_status.Due(now))
+    if (!generation::AnyActive() || !g_status.Due(now))
     {
         return;
     }
-    const Counts c = std::exchange(g_counts, {});
-    if (c.hitsOne + c.hitsTwo + c.notifiesOne + c.notifiesTwo + c.playsOne + c.playsTwo + c.playsOther == 0)
+    const auto    all = std::exchange(g_counts, {});
+    const Counts& one = all[0];
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        return;
+        const Counts& c = all[seat];
+        if (!generation::Active(seat) ||
+            one.hitsOne + c.hitsTwo + one.notifiesOne + c.notifiesTwo + one.playsOne + c.playsTwo + one.playsOther == 0)
+        {
+            continue;
+        }
+        const wchar_t* const name = players::SeatName(seat);
+        platform::LogDebug(L"combat rumble (10 s): battle hits player 1's {}, {}'s {} (gate passed {}, camera on {}'s "
+                           L"{}, fallback to {}'s controller {}, refused {}); notifies player 1's {}, {}'s {} (first-"
+                           L"controller calls answered PC{} {}, refused {}); plays on PC1 {}, PC{} {}, other {}",
+                           one.hitsOne, name, c.hitsTwo, c.gatesTwo, name, c.camerasTwo, name, c.fallbacksTwo,
+                           c.hitSkips, one.notifiesOne, name, c.notifiesTwo, seat + 1, c.answered, c.notifySkips,
+                           one.playsOne, seat + 1, c.playsTwo, one.playsOther);
     }
-    platform::LogDebug(L"combat rumble (10 s): battle hits player 1's {}, player 2's {} (gate passed {}, camera on player 2's "
-                  L"{}, fallback to player 2's controller {}, refused {}); notifies player 1's {}, player 2's {} (first-"
-                  L"controller calls answered PC2 {}, refused {}); plays on PC1 {}, PC2 {}, other {}",
-                  c.hitsOne, c.hitsTwo, c.gatesTwo, c.camerasTwo, c.fallbacksTwo, c.hitSkips, c.notifiesOne, c.notifiesTwo,
-                  c.answered, c.notifySkips, c.playsOne, c.playsTwo, c.playsOther);
 }
 
 }  // namespace

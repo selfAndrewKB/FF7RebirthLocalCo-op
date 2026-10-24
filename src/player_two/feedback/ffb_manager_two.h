@@ -24,6 +24,13 @@
 // reused at the next join.
 //
 // Game thread throughout.
+//
+// Per seat (players/seats.h): each seat's manager, its component's attachment and its logged states are its own (by
+// seat, index 0 unused); the Vibration option is repeated on every seat's manager and the stop-all on each attached
+// seat's, the seats in turn. Still player 2's: the component constructor's choice of the joining controller (the join
+// does not name its seat there yet).
+
+#include "players/seats.h"
 
 namespace lss::platform {
 class GameImage;
@@ -34,16 +41,22 @@ namespace lss::player_two::ffb_manager_two {
 /// Finds the game's functions and replaces the option setter's and the stop-all's entries (all or none; logged).
 void Install(const platform::GameImage& image) noexcept;
 
-/// Puts player 2's component back on the global manager (game thread) and restores the entries.
+/// Puts every seat's component back on the global manager (game thread) and restores the entries.
 void Remove() noexcept;
 
-/// Once per engine tick: gives player 2's component player 2's manager once player 2's controller has begun play.
+/// Once per engine tick: for each built seat, gives its component its manager once its controller has begun play.
 void Tick() noexcept;
 
-/// Player 2 leaves (while player 2's controller is still the generation's): the component goes back to the global.
-void PlayerTwoOut() noexcept;
+/// `seat` leaves (while its controller is still the generation's): its component goes back to the global.
+void PlayerTwoOut(int seat) noexcept;
 
-/// Player 2's component names player 2's manager now (game thread).
-bool Attached() noexcept;
+/// `seat`'s component names the seat's manager now (game thread).
+bool Attached(int seat) noexcept;
+
+/// Player 2's, for a caller not yet per seat.
+inline bool Attached() noexcept
+{
+    return Attached(players::kPlayerTwoSeat);
+}
 
 }  // namespace lss::player_two::ffb_manager_two

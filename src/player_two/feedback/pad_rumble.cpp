@@ -18,6 +18,7 @@
 #include "player_two/input/pad_sticks.h"
 #include "player_two/object_fields.h"
 #include "player_two/scopes/leader_scope.h"
+#include "players/seats.h"
 #include "players/unreal_access.h"
 
 #include <chrono>
@@ -58,14 +59,19 @@ UFunction*              g_addPrerequisite = nullptr;  // /Script/Engine.Actor:Ad
 std::uintptr_t          g_owner = 0;
 std::uintptr_t          g_app   = 0;
 
-// Game thread.
-std::int32_t      g_twoPad = -1;  // player 2's ControllerId while in (and not player 1's), else -1
-void*             g_orderedOne = nullptr;
-void*             g_orderedTwo = nullptr;
-std::uint64_t     g_orderedOneWeak = 0;
-std::uint64_t     g_orderedTwoWeak = 0;
+// Game thread. Per seat (index 0, player 1's, unused): the seat's pad while in, the pair of controllers last ordered,
+// the input events kept out of player 1's last device.
+struct SeatPad
+{
+    std::int32_t  pad            = -1;  // the seat's ControllerId while in (and not player 1's), else -1
+    void*         orderedOne     = nullptr;
+    void*         orderedTwo     = nullptr;
+    std::uint64_t orderedOneWeak = 0;
+    std::uint64_t orderedTwoWeak = 0;
+    std::uint32_t skips          = 0;
+};
+SeatPad           g_seats[players::kMaxPlayers];
 bool              g_orderBroken = false;
-std::uint32_t     g_skips  = 0;
 std::uint32_t     g_passes = 0;
 std::int32_t      g_codeLogged = 0;
 std::int32_t      g_padLogged  = -1;
@@ -77,31 +83,35 @@ const void* Pointee(std::uintptr_t global) noexcept
     return reinterpret_cast<const void*>(ReadField<std::uintptr_t>(reinterpret_cast<const void*>(global), 0));
 }
 
-/// The game's last-device note; an event from player 2's pad leaves player 1's last device as it is.
+/// The game's last-device note; an event from any seat's pad leaves player 1's last device as it is.
 void Note(void* owner, std::int32_t userIndex) noexcept
 {
     const bool gameThread = generation::OnGameThread();
-    if (gameThread && userIndex >= 0 && userIndex == g_twoPad)
+    for (int seat = 1; gameThread && userIndex >= 0 && seat <= players::kSeatsBuilt; ++seat)
     {
-        ++g_skips;
-        return;
+        if (userIndex == g_seats[seat].pad)
+        {
+            ++g_seats[seat].skips;
+            return;
+        }
     }
     g_passes += gameThread ? 1 : 0;  // the counters are the game thread's
     reinterpret_cast<NoteFn>(g_note.Original())(owner, userIndex);
 }
 
-bool Ordered(void* one, void* two) noexcept
+bool Ordered(const SeatPad& record, void* one, void* two) noexcept
 {
     const auto still = [](void* raw, std::uint64_t weak, void* now) {
         return raw == now && (weak == 0 || leader_scope::StillNames(weak, now));
     };
-    return still(g_orderedOne, g_orderedOneWeak, one) && still(g_orderedTwo, g_orderedTwoWeak, two);
+    return still(record.orderedOne, record.orderedOneWeak, one) && still(record.orderedTwo, record.orderedTwoWeak, two);
 }
 
-/// Lever A: player 2's controller ticks after player 1's (the engine's own prerequisite), once per pair.
-void Order(void* one, void* two) noexcept
+/// Lever A: `seat`'s controller ticks after player 1's (the engine's own prerequisite), once per pair.
+void Order(int seat, void* one, void* two) noexcept
 {
-    if (g_addPrerequisite == nullptr || g_orderBroken || Ordered(one, two))
+    SeatPad& record = g_seats[seat];
+    if (g_addPrerequisite == nullptr || g_orderBroken || Ordered(record, one, two))
     {
         return;
     }
@@ -112,23 +122,38 @@ void Order(void* one, void* two) noexcept
     } params{one};
     const bool called = players::unreal::GuardedProcessEvent(static_cast<UObject*>(two), g_addPrerequisite, &params);
     const auto after  = ReadField<std::int32_t>(two, kTickPrerequisites);
-    g_orderedOne      = one;
-    g_orderedTwo      = two;
-    g_orderedOneWeak  = leader_scope::WeakOf(one);
-    g_orderedTwoWeak  = leader_scope::WeakOf(two);
-    g_orderBroken     = !called;
+    record.orderedOne     = one;
+    record.orderedTwo     = two;
+    record.orderedOneWeak = leader_scope::WeakOf(one);
+    record.orderedTwoWeak = leader_scope::WeakOf(two);
+    g_orderBroken         = !called;
     try
     {
-        platform::Log(L"pad rumble: player 2's controller ticks after player 1's from now (the engine's "
+        platform::Log(L"pad rumble: {}'s controller ticks after player 1's from now (the engine's "
                       L"AddTickPrerequisiteActor{}; its tick prerequisites {} -> {})",
-                      called ? L"" : L" RAISED AN EXCEPTION: not called again", before, after);
+                      players::SeatName(seat), called ? L"" : L" RAISED AN EXCEPTION: not called again", before, after);
     }
     catch (...)
     {
     }
 }
 
-/// Player 1's device code and last XInput pad on change, and the skips once a minute (while player 2 is in).
+/// The note naming the seat whose pad player 1's last device code is (code -2-3k for XInput pad k), or "".
+const wchar_t* SeatPadNote(std::int32_t code) noexcept
+{
+    constexpr const wchar_t* kNotes[players::kMaxPlayers] = {L"", L": PLAYER 2'S PAD", L": PLAYER 3'S PAD"};
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (code == -2 - 3 * g_seats[seat].pad)
+        {
+            return kNotes[seat];
+        }
+    }
+    return L"";
+}
+
+/// Player 1's device code and last XInput pad on change, and the skips once a minute (while a seat is in): a line per
+/// seat in.
 void LogDevice() noexcept
 {
     const auto code = ReadField<std::int32_t>(Pointee(g_app), kPlatformAppDeviceCode);
@@ -142,18 +167,22 @@ void LogDevice() noexcept
             g_padLogged   = pad;
             platform::Log(L"pad rumble: player 1's last device: code {} (XInput pad k = -2-3k; -1 keyboard), last XInput "
                           L"pad {}{}",
-                          code, pad, code == -2 - 3 * g_twoPad ? L": PLAYER 2'S PAD" : L"");
+                          code, pad, SeatPadNote(code));
         }
         const auto now = Clock::now();
         if (g_status.Due(now))
         {
-            if (g_skips != 0 || g_passes != 0)
+            for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
             {
-                platform::LogDebug(L"pad rumble (60 s): {} input event(s) from player 2's pad (pad {}) kept out of player 1's "
-                              L"last device, {} passed",
-                              g_skips, g_twoPad, g_passes);
+                SeatPad& record = g_seats[seat];
+                if ((record.skips != 0 || g_passes != 0) && generation::Active(seat))
+                {
+                    platform::LogDebug(L"pad rumble (60 s): {} input event(s) from {}'s pad (pad {}) kept out of "
+                                       L"player 1's last device, {} passed",
+                                       record.skips, players::SeatName(seat), record.pad, g_passes);
+                }
+                record.skips = 0;
             }
-            g_skips  = 0;
             g_passes = 0;
         }
     }
@@ -204,18 +233,27 @@ void Install(const platform::GameImage& image) noexcept
 
 void BeforeTick() noexcept
 {
-    void* one = generation::PlayerOneController();
-    void* two = generation::PlayerTwoController();
-    if (!generation::OnGameThread() || !generation::Active() || one == nullptr || two == nullptr)
+    void* const one  = generation::PlayerOneController();
+    const bool  game = generation::OnGameThread();
+    bool        any  = false;
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)  // each seat's controller after player 1's, in seat order
     {
-        g_twoPad = -1;
-        return;
+        void* const two = generation::ControllerOf(seat);
+        if (!game || !generation::Active(seat) || one == nullptr || two == nullptr)
+        {
+            g_seats[seat].pad = -1;
+            continue;
+        }
+        const auto oneId  = pad_sticks::ControllerIdOf(one);
+        const auto twoId  = pad_sticks::ControllerIdOf(two);
+        g_seats[seat].pad = twoId >= 0 && twoId != oneId ? twoId : -1;
+        Order(seat, one, two);
+        any = true;
     }
-    const auto oneId = pad_sticks::ControllerIdOf(one);
-    const auto twoId = pad_sticks::ControllerIdOf(two);
-    g_twoPad         = twoId >= 0 && twoId != oneId ? twoId : -1;
-    Order(one, two);
-    LogDevice();
+    if (any)
+    {
+        LogDevice();
+    }
 }
 
 void Remove() noexcept

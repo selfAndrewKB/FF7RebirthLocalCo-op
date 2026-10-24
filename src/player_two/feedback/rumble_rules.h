@@ -1,8 +1,9 @@
 #pragma once
 
 // The rumble list's pure rules (player_two/feedback/rumble_list_two.h), tested on the host
-// (tests/rumble_rules_test.cpp). The
-// module keeps the lists, the lock, the engine calls and the log.
+// (tests/rumble_rules_test.cpp). The module keeps the lists, the lock, the engine calls and the log. The rules name a
+// seat's list as "player 2's" (Route::Two, ListTick::Two): each seat's own list, whichever seat the add, stop or tick
+// belongs to (SeatOfAdd, ListTickFor).
 
 #include <algorithm>
 #include <array>
@@ -73,6 +74,17 @@ enum class Route
     LeftOnWorker,  // a stop of player 2's on a worker: left alone (the owner's list is named only on the game thread)
 };
 
+/// Whose add or stop it is (a seat, or 0 for the game's list): the seat its source names (`ownerSeat`, any thread),
+/// else on the game thread the seat that is the primary player (`primarySeat`, 0 for player 1).
+constexpr int SeatOfAdd(int ownerSeat, bool gameThread, int primarySeat) noexcept
+{
+    if (ownerSeat >= 1)
+    {
+        return ownerSeat;
+    }
+    return gameThread && primarySeat >= 1 ? primarySeat : 0;
+}
+
 /// An add: player 2's list when it is player 2's and the list took it; else the game's, copied during a shared ride
 /// unless it was player 2's.
 constexpr Route AddRouteOf(bool two, bool added, bool copyOne) noexcept
@@ -121,6 +133,15 @@ constexpr ListTick ListTickChoice(bool hasList, bool tickOwnerIsTwo, bool primar
         return ListTick::Two;
     }
     return primaryIsTwo ? ListTick::Skip : ListTick::GameOne;
+}
+
+/// The choice with the seats: a seat's component (`ownerSeat` >= 1, active) ticks the seat's list when it has one
+/// (`ownerHasList`), else the game's; any other component (player 1's) ticks the game's list when some active seat has
+/// a list (`anyList`), skipped while a seat is the primary player (`primaryIsSeat`).
+constexpr ListTick ListTickFor(int ownerSeat, bool ownerHasList, bool anyList, bool primaryIsSeat) noexcept
+{
+    return ownerSeat >= 1 ? ListTickChoice(ownerHasList, true, primaryIsSeat)
+                          : ListTickChoice(anyList, false, primaryIsSeat);
 }
 
 }  // namespace lss::player_two::rumble_rules
