@@ -14,6 +14,7 @@
 #include "player_two/world/field_pickup.h"
 #include "player_two/world/field_rules.h"
 #include "player_two/world/vending.h"
+#include "players/seats.h"
 #include "players/unreal_access.h"
 
 #include <Unreal/NameTypes.hpp>
@@ -126,10 +127,12 @@ bool                    g_admitting  = false;  // the walk's functions were foun
 std::unordered_map<std::uint64_t, Known> g_known;  // by point key (game thread)
 std::vector<std::uint64_t>               g_queue;  // reserved: Admits runs under the field manager's lock
 
-std::uint64_t g_pressKey      = 0;  // the pending press (the LEADER_ log, and its end noted in Tick)
+// By seat (players/seats.h; index 0, player 1's, unused): the seat's pending press (the LEADER_ log, and its end noted
+// in Tick).
+std::uint64_t g_pressKey[players::kMaxPlayers] = {};
 #if LSS_DEV
 platform::EntryRedirect g_leaderName;
-unsigned                g_leaderCalls  = 0;
+unsigned                g_leaderCalls[players::kMaxPlayers] = {};
 #endif
 
 bool IsAdmitted(Verdict verdict) noexcept
@@ -327,29 +330,32 @@ Verdict Walk(std::uint64_t key, std::wstring& seen)
     return Verdict::NotShop;
 }
 
-/// The press: StateTrigger_Request. Player 2's press of a shopkeeper (DispatchKey's object branch inside player 2's
-/// pass) is kept for the shop it opens. Every call passes on unchanged.
+/// The press: StateTrigger_Request. A seat's press of a shopkeeper (DispatchKey's object branch inside the seat's pass)
+/// is kept for the shop it opens. Every call passes on unchanged.
 std::uint64_t Request(std::uint64_t trigger, std::uint64_t sender, float delay, std::uint8_t flags) noexcept
 {
     const auto returnAddress = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
-    if (generation::OnGameThread() && generation::Active() && field_pickup::InPass() && g_image &&
+    const int  seat          = generation::OnGameThread() ? field_pickup::PassSeat() : -1;
+    if (players::SeatBuilt(seat) && generation::Active(seat) && g_image &&
         g_image->ResearchAddress(returnAddress) == kDispatchReturn)
     {
         const auto known = g_known.find(sender);
         const bool shop  = known != g_known.end() && IsAdmitted(known->second.verdict);
         try
         {
+            const wchar_t* const who = players::SeatName(seat);
             if (shop)
             {
-                vending::PressedShopkeeper(sender);
-                g_pressKey     = sender;
+                vending::PressedShopkeeper(seat, sender);
+                g_pressKey[seat]    = sender;
 #if LSS_DEV
-                g_leaderCalls  = 0;
+                g_leaderCalls[seat] = 0;
 #endif
             }
-            platform::Log(L"shop talk: player 2 pressed {} (trigger {}): {}", players::unreal::NameText(sender),
+            platform::Log(L"shop talk: {} pressed {} (trigger {}): {}", who, players::unreal::NameText(sender),
                           players::unreal::NameText(trigger),
-                          shop ? L"the shop it opens is player 2's" : L"not a known shopkeeper (left to the game)");
+                          shop ? std::format(L"the shop it opens is {}'s", who)
+                               : std::wstring(L"not a known shopkeeper (left to the game)"));
         }
         catch (...)
         {
@@ -358,25 +364,28 @@ std::uint64_t Request(std::uint64_t trigger, std::uint64_t sender, float delay, 
     return reinterpret_cast<RequestFn>(g_request.Original())(trigger, sender, delay, flags);
 }
 
-/// The shop's AI event at its Begin (the NPC and the leader): player 2's member as the leader for player 2's shop.
+/// The shop's AI event at its Begin (the NPC and the leader): the owning seat's member as the leader for a seat's shop.
 std::uint64_t AiEvent(std::uint64_t a, std::uint64_t target, std::uint64_t c, std::uint64_t d) noexcept
 {
     const auto call = reinterpret_cast<Fn4>(g_aiEvent.Original());
-    if (!generation::OnGameThread() || !generation::Active() || !vending::PlayerTwosShop())
+    const int  seat = generation::OnGameThread() ? vending::ShopSeat() : -1;
+    if (!players::SeatBuilt(seat) || !generation::Active(seat))
     {
         return call(a, target, c, d);
     }
     std::uint64_t result = 0;
     bool          held   = false;
     {
-        const leader_scope::LeaderScope scope(leader_scope::WeakOf(generation::Member()));
+        const leader_scope::LeaderScope scope(leader_scope::WeakOf(generation::MemberOf(seat)));
         held   = scope.Held();
         result = call(a, target, c, d);
     }
     try
     {
         platform::Log(L"shop talk: the shop's AI event (target {}) ran with {} as the leader",
-                      players::unreal::NameText(target), held ? L"player 2's member" : L"player 1's character (the scope was refused)");
+                      players::unreal::NameText(target),
+                      held ? std::format(L"{}'s member", players::SeatName(seat))
+                           : std::wstring(L"player 1's character (the scope was refused)"));
     }
     catch (...)
     {
@@ -390,13 +399,20 @@ std::uint64_t LeaderName(std::uint64_t a, std::uint64_t b, std::uint64_t c, std:
 {
     const auto returnAddress = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
     const auto result        = reinterpret_cast<Fn4>(g_leaderName.Original())(a, b, c, d);
-    if (generation::OnGameThread() && g_pressKey != 0 && vending::ShopkeeperPending())
+    if (!generation::OnGameThread())
     {
-        ++g_leaderCalls;
-        platform::LogDebug(L"shop talk: the game resolved a named point (LEADER_ or BATTLE_LEADER_, result {}) while "
-                               L"player 2's press of {} is pending, from 0x{:X}; the leader is player 1's character",
-                               result & 0xFF, players::unreal::NameText(g_pressKey),
+        return result;
+    }
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (g_pressKey[seat] != 0 && vending::ShopkeeperPending(seat))
+        {
+            ++g_leaderCalls[seat];
+            platform::LogDebug(L"shop talk: the game resolved a named point (LEADER_ or BATTLE_LEADER_, result {}) while "
+                               L"{}'s press of {} is pending, from 0x{:X}; the leader is player 1's character",
+                               result & 0xFF, players::SeatName(seat), players::unreal::NameText(g_pressKey[seat]),
                                g_image ? g_image->ResearchAddress(returnAddress) : returnAddress);
+        }
     }
     return result;
 }
@@ -481,18 +497,22 @@ void Tick() noexcept
     {
         return;
     }
-    if (g_pressKey != 0 && !vending::ShopkeeperPending())
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-#if LSS_DEV
-        if (g_leaderCalls != 0)
+        if (g_pressKey[seat] != 0 && !vending::ShopkeeperPending(seat))
         {
-            platform::LogDebug(L"shop talk: {} named-point resolution(s) while player 2's press of {} was pending",
-                               g_leaderCalls, players::unreal::NameText(g_pressKey));
-        }
+#if LSS_DEV
+            if (g_leaderCalls[seat] != 0)
+            {
+                platform::LogDebug(L"shop talk: {} named-point resolution(s) while {}'s press of {} was pending",
+                                   g_leaderCalls[seat], players::SeatName(seat),
+                                   players::unreal::NameText(g_pressKey[seat]));
+            }
 #endif
-        g_pressKey = 0;
+            g_pressKey[seat] = 0;
+        }
     }
-    if (!generation::Active())
+    if (!generation::AnyActive())
     {
         g_known.clear();  // a new session (or map) reads every key again
         g_queue.clear();  // keeps its reserved capacity

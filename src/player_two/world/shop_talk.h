@@ -22,6 +22,10 @@
 //   - Logging only: during a pending press, the game's LEADER_ resolver (ResolveNamedPoint_LEADER_BATTLELEADER) is
 //     counted with its callers, to settle who the greeting looks at (§3 row 5) before any change there.
 // Game thread.
+//
+// Per seat (players/seats.h): "player 2" above is each seat. A press is the seat's whose pass is running (its pending
+// press and the dev LEADER_ log per seat); the AI event follows the seat whose shop is up (vending's one shop owner).
+// Shared: the verdicts by key (the game's data is one), read while any seat is in.
 
 #include <cstdint>
 

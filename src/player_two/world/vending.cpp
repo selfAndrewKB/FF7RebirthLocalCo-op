@@ -18,6 +18,7 @@
 #include "player_two/world/charapop_facts.h"
 #include "player_two/world/field_pickup.h"
 #include "player_two/world/field_rules.h"
+#include "players/seats.h"
 #include "players/unreal_access.h"
 
 #include <array>
@@ -25,6 +26,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cwctype>
+#include <format>
 #include <initializer_list>
 #include <optional>
 #include <span>
@@ -92,14 +94,11 @@ std::optional<platform::GameImage> g_image;  // for research IDA addresses in th
 using facts::kPartyManagerLeader;
 
 // Game thread.
-enum class Shop
-{
-    None,
-    PlayerOne,
-    PlayerTwo,
-};
 
-/// Player 2's press that should open a shop.
+/// Whose shop is up: none, player 1's, or a seat's (one shop at a time, the game has one).
+constexpr int kNoShop = -1;
+
+/// A seat's press that should open a shop.
 struct Press
 {
     bool              active = false;
@@ -107,13 +106,26 @@ struct Press
     std::uint64_t     frame = 0;
     std::uint64_t     point = 0;  // the pressed point's key
 };
-Press         g_press;
-Press         g_shopkeeper;  // player 2's press of a shopkeeper (player_two/shop_talk); point = the NPC's CharaPop key
-Shop          g_shop = Shop::None;
+// By seat (players/seats.h; index 0, player 1's, unused: player 1's presses open player 1's shops as the game does).
+Press         g_press[players::kMaxPlayers];
+Press         g_shopkeeper[players::kMaxPlayers];  // a seat's press of a shopkeeper (shop_talk); point = its CharaPop key
+int           g_shop = kNoShop;  // whose shop is up (0 player 1's, a seat's), or kNoShop
 Clock::time_point g_shopAt{};  // when the shop up now opened
-float         g_memberAt[3]{};  // player 2's member when player 2's shop opened
+float         g_memberAt[3]{};  // the owning seat's member when its shop opened
 bool          g_memberKnown = false;
 std::uint64_t g_presetName  = 0;  // the FName, once read (set by the game's static init)
+
+bool AnyShopkeeperPending() noexcept
+{
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (g_shopkeeper[seat].active)
+        {
+            return true;
+        }
+    }
+    return false;
+}
 
 std::uint64_t PresetName() noexcept
 {
@@ -133,13 +145,16 @@ std::uintptr_t CallerOf(const void* returnAddress) noexcept
 
 const wchar_t* Whose(const void* character) noexcept
 {
+    constexpr const wchar_t* kMembers[players::kMaxPlayers] = {L"player 1's member", L"player 2's member",
+                                                               L"player 3's member"};
     if (character == nullptr)
     {
         return L"nobody";
     }
-    if (character == generation::Member())
+    const int seat = generation::SeatOfMember(character);
+    if (players::SeatBuilt(seat))
     {
-        return L"player 2's member";
+        return kMembers[seat];
     }
     if (character == ReadPointer(generation::PlayerOneController(), facts::kControllerPawn))
     {
@@ -155,8 +170,8 @@ const void* Leader() noexcept
                               : nullptr;
 }
 
-/// Whether the shop camera's target names the machine of player 2's pending press (no target: a press is enough).
-bool NamesPressedMachine(std::uint64_t target) noexcept
+/// Whether the shop camera's target names the machine of `press` (no target: a press is enough).
+bool NamesPressedMachine(const Press& press, std::uint64_t target) noexcept
 {
     if (target == 0)
     {
@@ -164,7 +179,7 @@ bool NamesPressedMachine(std::uint64_t target) noexcept
     }
     try
     {
-        const std::wstring point = players::unreal::NameText(g_press.point);
+        const std::wstring point = players::unreal::NameText(press.point);
         const std::wstring name  = players::unreal::NameText(target);
         return !name.empty() && point.find(name) != std::wstring::npos;
     }
@@ -181,10 +196,10 @@ std::wstring AfterPrefix(const std::wstring& name)
     return field_rules::AfterPrefix(name);
 }
 
-/// Whether the shop camera's target names the NPC of player 2's pending shopkeeper press (the action passes the NPC's
+/// Whether the shop camera's target names the NPC of the pending shopkeeper `press` (the action passes the NPC's
 /// ActorName, §4.1). No target is never a shopkeeper's: some vending scripts pass none, and player 1's machine must not
-/// take player 2's pending press.
-bool NamesPressedShopkeeper(std::uint64_t target) noexcept
+/// take a seat's pending press.
+bool NamesPressedShopkeeper(const Press& press, std::uint64_t target) noexcept
 {
     if (target == 0)
     {
@@ -193,7 +208,7 @@ bool NamesPressedShopkeeper(std::uint64_t target) noexcept
     try
     {
         const std::wstring rest = AfterPrefix(players::unreal::NameText(target));
-        return !rest.empty() && rest == AfterPrefix(players::unreal::NameText(g_shopkeeper.point));
+        return !rest.empty() && rest == AfterPrefix(players::unreal::NameText(press.point));
     }
     catch (...)
     {
@@ -201,106 +216,133 @@ bool NamesPressedShopkeeper(std::uint64_t target) noexcept
     }
 }
 
-/// The End2 listener (the vending press path, and other End2 actors'): logged; player 2's successful press is kept for the
-/// shop it opens.
+/// The End2 listener (the vending press path, and other End2 actors'): logged; a seat's successful press, in its pass,
+/// is kept for the shop it opens.
 std::uint64_t End2Key(std::uint64_t mgr, std::uint64_t key, std::uint64_t r8, std::uint64_t r9) noexcept
 {
     const auto result = reinterpret_cast<Fn>(g_end2Key.Original())(mgr, key, r8, r9);
-    if (!generation::OnGameThread() || !generation::Active() || (result & 0xFF) == 0)
+    if (!generation::OnGameThread() || !generation::AnyActive() || (result & 0xFF) == 0)
     {
         return result;
     }
-    const bool inPass = field_pickup::InPass();
+    const int  seat   = field_pickup::PassSeat();
+    const bool inPass = players::SeatBuilt(seat);
     const auto point  = ReadAt<std::uint64_t>(key);
-    if (inPass)  // player 1's presses (any End2 action) leave player 2's pending press alone
+    if (inPass)  // player 1's presses (any End2 action) leave the seats' pending presses alone
     {
-        g_press = Press{true, Clock::now(), platform::frame_watch::FrameIndex(), point};
+        g_press[seat] = Press{true, Clock::now(), platform::frame_watch::FrameIndex(), point};
     }
-    platform::Log(L"vending: frame {}: field action {} pressed {}, leader {}", platform::frame_watch::FrameIndex(),
-                  players::unreal::NameText(point), inPass ? L"in player 2's pass" : L"in player 1's (the game's own) run",
-                  Whose(Leader()));
+    try
+    {
+        platform::Log(L"vending: frame {}: field action {} pressed {}, leader {}", platform::frame_watch::FrameIndex(),
+                      players::unreal::NameText(point),
+                      inPass ? std::format(L"in {}'s pass", players::SeatName(seat))
+                             : std::wstring(L"in player 1's (the game's own) run"),
+                      Whose(Leader()));
+    }
+    catch (...)
+    {
+    }
     return result;
 }
 
 /// The shop camera's activation (every shop path; the shop UI and OnOff 148 are already up): whose shop this is.
-/// Player 2's shop opens without it (the user, 2026-10-18: "When P2 initiates them, just disable the entire scripted
+/// A seat's shop opens without it (the user, 2026-10-18: "When P2 initiates them, just disable the entire scripted
 /// camera zoom action on P1's view"): the camera would run on player 1's camera manager, framing player 1's character
 /// and leaving player 1's camera at the shop's angle on close (RE-p2-shop-camera-skip.md). Nothing in the shop waits on
-/// it and no caller reads its result (§2, §3); its deactivation at the close still runs and does nothing (§4).
+/// it and no caller reads its result (§2, §3); its deactivation at the close still runs and does nothing (§4). The
+/// seats' pending presses are matched in seat order: machines first, then shopkeepers.
 std::uint64_t Camera(std::uint64_t target, std::uint64_t preset, std::uint64_t r8, std::uint64_t r9) noexcept
 {
     const auto caller = CallerOf(_ReturnAddress());
     const auto call   = reinterpret_cast<Fn>(g_cameraTarget != 0 ? g_cameraTarget : g_camera.Original());
-    if (!generation::OnGameThread() || !generation::Active())
+    if (!generation::OnGameThread() || !generation::AnyActive())
     {
         return call(target, preset, r8, r9);
     }
-    const auto frames  = platform::frame_watch::FrameIndex() - g_press.frame;
-    const bool machine = g_press.active && frames <= kPressFrames && NamesPressedMachine(target);
-    if (g_press.active && !machine)
+    int owner = kNoShop;  // the seat whose press opened this shop
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        platform::Log(L"vending: player 2's press of {} is not this shop's ({} frames since it, camera target {})",
-                      players::unreal::NameText(g_press.point), frames, players::unreal::NameText(target));
+        Press&     press   = g_press[seat];
+        const auto frames  = platform::frame_watch::FrameIndex() - press.frame;
+        const bool machine = owner == kNoShop && press.active && frames <= kPressFrames && NamesPressedMachine(press, target);
+        if (press.active && !machine)
+        {
+            platform::Log(L"vending: {}'s press of {} is not this shop's ({} frames since it, camera target {})",
+                          players::SeatName(seat), players::unreal::NameText(press.point), frames,
+                          players::unreal::NameText(target));
+        }
+        // A press stays pending through another shop (player 1's opened first, and the game queues the seat's behind
+        // it: the event runner waits while a shop's Exclusion bit is live, RE-p2-shopkeeper-talk.md §6) until its own
+        // shop names what was pressed; its window is paused while another shop is up and restarts when that shop closes
+        // (CameraOff).
+        if (machine)
+        {
+            press.active = false;
+            owner        = seat;
+        }
+        else if (press.active && frames > kPressFrames)
+        {
+            press.active = false;  // its shop would have come within the frames since the press (or the last close)
+        }
     }
-    // A press stays pending through another shop (player 1's opened first, and the game queues player 2's behind it:
-    // the event runner waits while a shop's Exclusion bit is live, RE-p2-shopkeeper-talk.md §6) until its own shop names
-    // what was pressed; its window is paused while another shop is up and restarts when that shop closes (CameraOff).
-    if (machine)
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        g_press.active = false;
+        Press&     press  = g_shopkeeper[seat];
+        const bool keeper = owner == kNoShop && press.active && NamesPressedShopkeeper(press, target);
+        if (press.active)
+        {
+            platform::Log(L"vending: {}'s press of shopkeeper {} {} ({:.1f} s, {} frames since it, camera target {})",
+                          players::SeatName(seat), players::unreal::NameText(press.point),
+                          keeper ? L"opened this shop" : L"is not this shop's",
+                          std::chrono::duration<double>(Clock::now() - press.at).count(),
+                          platform::frame_watch::FrameIndex() - press.frame, players::unreal::NameText(target));
+        }
+        if (keeper)
+        {
+            press.active = false;
+            owner        = seat;
+        }
     }
-    else if (g_press.active && frames > kPressFrames)
+    g_shopAt = Clock::now();
+    if (owner == kNoShop)
     {
-        g_press.active = false;  // its shop would have come within the frames since the press (or the last close)
-    }
-    const bool keeper = !machine && g_shopkeeper.active && NamesPressedShopkeeper(target);
-    if (g_shopkeeper.active)
-    {
-        platform::Log(L"vending: player 2's press of shopkeeper {} {} ({:.1f} s, {} frames since it, camera target {})",
-                      players::unreal::NameText(g_shopkeeper.point), keeper ? L"opened this shop" : L"is not this shop's",
-                      std::chrono::duration<double>(Clock::now() - g_shopkeeper.at).count(),
-                      platform::frame_watch::FrameIndex() - g_shopkeeper.frame, players::unreal::NameText(target));
-    }
-    if (keeper)
-    {
-        g_shopkeeper.active = false;
-    }
-    const bool twos = machine || keeper;
-    g_shopAt        = Clock::now();
-    if (!twos)
-    {
-        g_shop = Shop::PlayerOne;
+        g_shop = 0;
         platform::Log(L"vending: player 1's shop opened (camera target {}, preset {}, from 0x{:X})",
                       players::unreal::NameText(target), players::unreal::NameText(preset), caller);
         return call(target, preset, r8, r9);
     }
-    g_shop            = Shop::PlayerTwo;
-    void*      member = generation::Member();
-    const auto type   = party_member::PlayerTypeOf(member);
-    g_memberKnown     = member != nullptr && charapop::ActorLocation(member, g_memberAt);
-    pad_buttons::SetMenuPlayer(1);
+    // The menu pad by seat: pad_buttons numbers its players as the seats (0 player 1, then the seats).
+    g_shop                   = owner;
+    const wchar_t* const who = players::SeatName(owner);
+    void*      member        = generation::MemberOf(owner);
+    const auto type          = party_member::PlayerTypeOf(member);
+    g_memberKnown            = member != nullptr && charapop::ActorLocation(member, g_memberAt);
+    pad_buttons::SetMenuPlayer(owner);
     const bool chadley = g_chadleyReturn != 0 && reinterpret_cast<std::uintptr_t>(_ReturnAddress()) == g_chadleyReturn;
     if (!chadley)
     {
-        platform::Log(L"vending: player 2's shop opened (camera target {}, preset {}, from 0x{:X}); pad 2 drives it; the "
+        platform::Log(L"vending: {}'s shop opened (camera target {}, preset {}, from 0x{:X}); pad {} drives it; the "
                       L"shop camera is skipped (player 1's view stays as it is)",
-                      players::unreal::NameText(target), players::unreal::NameText(preset), caller);
+                      who, players::unreal::NameText(target), players::unreal::NameText(preset), caller, owner + 1);
         return 0;  // no caller reads it (RE-p2-shop-camera-skip.md §2)
     }
     std::uint64_t result = 0;
     if (type)
     {
-        const leader_scope::LeaderTypeScope scope(*type);  // the default preset by player 2's member's type (§15.3)
+        const leader_scope::LeaderTypeScope scope(*type);  // the default preset by the seat's member's type (§15.3)
         result = call(target, preset, r8, r9);
     }
     else
     {
         result = call(target, preset, r8, r9);
     }
-    platform::Log(L"vending: player 2's shop opened (Chadley's: its camera runs, target {}, preset {} by {}, from 0x{:X}); "
-                  L"pad 2 drives it",
-                  players::unreal::NameText(target), players::unreal::NameText(preset),
-                  type ? L"player 2's member's type" : L"player 1's type (no member type)", caller);
+    constexpr const wchar_t* kByType[players::kMaxPlayers] = {L"player 1's type", L"player 2's member's type",
+                                                              L"player 3's member's type"};
+    platform::Log(L"vending: {}'s shop opened (Chadley's: its camera runs, target {}, preset {} by {}, from 0x{:X}); "
+                  L"pad {} drives it",
+                  who, players::unreal::NameText(target), players::unreal::NameText(preset),
+                  type ? kByType[owner] : L"player 1's type (no member type)", caller, owner + 1);
     return result;
 }
 
@@ -312,32 +354,36 @@ std::uint64_t CameraOff(std::uint64_t a, std::uint64_t b, std::uint64_t c, std::
     {
         return result;
     }
-    if (g_shop == Shop::PlayerTwo)
+    if (players::SeatBuilt(g_shop))
     {
         pad_buttons::SetMenuPlayer(0);
         float      now[3]{};
-        void*      member = generation::Member();
+        void*      member = generation::MemberOf(g_shop);
         const bool known  = g_memberKnown && member != nullptr && charapop::ActorLocation(member, now);
-        platform::Log(L"vending: player 2's shop closed; pad 1 drives the menus again; player 2's member moved {:.1f} m while "
-                      L"it was up",
+        platform::Log(L"vending: {}'s shop closed; pad 1 drives the menus again; {}'s member moved {:.1f} m while it was "
+                      L"up",
+                      players::SeatName(g_shop), players::SeatName(g_shop),
                       known ? charapop::Distance(now, g_memberAt) / 100.0f : -1.0f);
     }
-    else if (g_shop == Shop::PlayerOne && generation::Active())
+    else if (g_shop == 0 && generation::AnyActive())
     {
         platform::Log(L"vending: player 1's shop closed");
     }
-    g_shop = Shop::None;
-    // A press of player 2's queued behind this shop: its window starts again now (the game opens the queued shop next).
+    g_shop = kNoShop;
+    // A seat's press queued behind this shop: its window starts again now (the game opens the queued shop next).
     const auto now   = Clock::now();
     const auto frame = platform::frame_watch::FrameIndex();
-    for (Press* press : {&g_press, &g_shopkeeper})
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        if (press->active)
+        for (Press* press : {&g_press[seat], &g_shopkeeper[seat]})
         {
-            press->at    = now;
-            press->frame = frame;
-            platform::Log(L"vending: player 2's press of {} still waits for its shop; its window starts again",
-                          players::unreal::NameText(press->point));
+            if (press->active)
+            {
+                press->at    = now;
+                press->frame = frame;
+                platform::Log(L"vending: {}'s press of {} still waits for its shop; its window starts again",
+                              players::SeatName(seat), players::unreal::NameText(press->point));
+            }
         }
     }
     return result;
@@ -384,27 +430,46 @@ bool CameraCalls(const platform::GameImage& image) noexcept
 
 bool Admits(std::uint64_t pointPreset) noexcept
 {
-    return pointPreset != 0 && g_shop == Shop::None && !g_shopkeeper.active && pointPreset == PresetName();
+    return pointPreset != 0 && g_shop == kNoShop && !AnyShopkeeperPending() && pointPreset == PresetName();
 }
 
-void PressedShopkeeper(std::uint64_t key) noexcept
+void PressedShopkeeper(int seat, std::uint64_t key) noexcept
 {
-    g_shopkeeper = Press{true, Clock::now(), platform::frame_watch::FrameIndex(), key};
+    if (players::SeatBuilt(seat))
+    {
+        g_shopkeeper[seat] = Press{true, Clock::now(), platform::frame_watch::FrameIndex(), key};
+    }
 }
 
 bool ShopIdle() noexcept
 {
-    return g_shop == Shop::None && !g_press.active && !g_shopkeeper.active;
+    if (g_shop != kNoShop)
+    {
+        return false;
+    }
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (g_press[seat].active || g_shopkeeper[seat].active)
+        {
+            return false;
+        }
+    }
+    return true;
 }
 
 bool ShopkeeperPending() noexcept
 {
-    return g_shopkeeper.active;
+    return AnyShopkeeperPending();
 }
 
-bool PlayerTwosShop() noexcept
+bool ShopkeeperPending(int seat) noexcept
 {
-    return g_shop == Shop::PlayerTwo;
+    return players::SeatBuilt(seat) && g_shopkeeper[seat].active;
+}
+
+int ShopSeat() noexcept
+{
+    return players::SeatBuilt(g_shop) ? g_shop : -1;
 }
 
 void Tick() noexcept
@@ -413,31 +478,39 @@ void Tick() noexcept
     {
         return;
     }
-    // A shop up holds the windows (a press of player 2's may be queued behind it; CameraOff restarts them).
-    const bool held = g_shop != Shop::None && generation::Active() && Clock::now() - g_shopAt < kHoldAtMost;
-    if (g_press.active && !held && Clock::now() - g_press.at > kPressWindow)
+    // A shop up holds the windows (a seat's press may be queued behind it; CameraOff restarts them).
+    const bool held = g_shop != kNoShop && generation::AnyActive() && Clock::now() - g_shopAt < kHoldAtMost;
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        g_press.active = false;
-        platform::Log(L"vending: player 2's press of {} opened no shop within {} s", players::unreal::NameText(g_press.point),
-                      std::chrono::duration_cast<std::chrono::seconds>(kPressWindow).count());
-    }
-    if (g_shopkeeper.active && !generation::Active())
-    {
-        g_shopkeeper.active = false;
-        platform::Log(L"vending: player 2 left with their press of shopkeeper {} pending", players::unreal::NameText(g_shopkeeper.point));
-    }
-    else if (g_shopkeeper.active && !held && Clock::now() - g_shopkeeper.at > kShopkeeperWindow)
-    {
-        g_shopkeeper.active = false;
-        platform::Log(L"vending: player 2's press of shopkeeper {} opened no shop within {} s",
-                      players::unreal::NameText(g_shopkeeper.point),
-                      std::chrono::duration_cast<std::chrono::seconds>(kShopkeeperWindow).count());
-    }
-    if (g_shop == Shop::PlayerTwo && !generation::Active())
-    {
-        g_shop = Shop::None;  // player 2 left with their shop up: the one pad again
-        pad_buttons::SetMenuPlayer(0);
-        platform::Log(L"vending: player 2 left while their shop was up; pad 1 drives the menus again");
+        const wchar_t* const who        = players::SeatName(seat);
+        Press&               press      = g_press[seat];
+        Press&               shopkeeper = g_shopkeeper[seat];
+        if (press.active && !held && Clock::now() - press.at > kPressWindow)
+        {
+            press.active = false;
+            platform::Log(L"vending: {}'s press of {} opened no shop within {} s", who,
+                          players::unreal::NameText(press.point),
+                          std::chrono::duration_cast<std::chrono::seconds>(kPressWindow).count());
+        }
+        if (shopkeeper.active && !generation::Active(seat))
+        {
+            shopkeeper.active = false;
+            platform::Log(L"vending: {} left with their press of shopkeeper {} pending", who,
+                          players::unreal::NameText(shopkeeper.point));
+        }
+        else if (shopkeeper.active && !held && Clock::now() - shopkeeper.at > kShopkeeperWindow)
+        {
+            shopkeeper.active = false;
+            platform::Log(L"vending: {}'s press of shopkeeper {} opened no shop within {} s", who,
+                          players::unreal::NameText(shopkeeper.point),
+                          std::chrono::duration_cast<std::chrono::seconds>(kShopkeeperWindow).count());
+        }
+        if (g_shop == seat && !generation::Active(seat))
+        {
+            g_shop = kNoShop;  // the seat's player left with their shop up: the one pad again
+            pad_buttons::SetMenuPlayer(0);
+            platform::Log(L"vending: {} left while their shop was up; pad 1 drives the menus again", who);
+        }
     }
 }
 

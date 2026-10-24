@@ -28,6 +28,11 @@
 // recorded here (PressedShopkeeper) and claims the first shop camera within 15 s whose target, the NPC's ActorName,
 // shares the pressed CharaPop key's text after its first '_' (Npc2100_shopweapon01 / oba2100_ShopWeapon01); the press
 // stays pending through any other shop.
+//
+// Per seat (players/seats.h): "player 2" above is each seat. Each seat has its own pending machine press and shopkeeper
+// press; a shop camera is claimed by the first seat, in seat order, whose machine press names it, else whose
+// shopkeeper press does. One shop is up at a time (the game has one), owned by player 1 or by a seat, and the owning
+// seat's pad drives it (pad_buttons numbers its players as the seats).
 
 #include <cstdint>
 
@@ -43,23 +48,25 @@ void Install(const platform::GameImage& image) noexcept;
 /// Puts the game's code back (at mod uninstall, with player 2 out).
 void Remove() noexcept;
 
-/// Whether player 2's pass should leave a point with this point-side preset open: a vending machine's, while no shop is up.
-/// Game thread (inside the pass).
+/// Whether a seat's pass should leave a point with this point-side preset open: a vending machine's, while no shop is
+/// up and no seat's shopkeeper press waits. Game thread (inside the pass).
 bool Admits(std::uint64_t pointPreset) noexcept;
 
-/// Player 2 pressed the shopkeeper with this CharaPop key (player_two/shop_talk, inside player 2's pass).
-void PressedShopkeeper(std::uint64_t key) noexcept;
+/// `seat` pressed the shopkeeper with this CharaPop key (player_two/shop_talk, inside the seat's pass).
+void PressedShopkeeper(int seat, std::uint64_t key) noexcept;
 
-/// No shop is up and no press of player 2's is pending (a vending machine's or a shopkeeper's).
+/// No shop is up and no seat's press is pending (a vending machine's or a shopkeeper's).
 bool ShopIdle() noexcept;
 
-/// Player 2's press of a shopkeeper waits for its shop.
+/// A seat's press of a shopkeeper waits for its shop (any seat's; with `seat`, that seat's).
 bool ShopkeeperPending() noexcept;
+bool ShopkeeperPending(int seat) noexcept;
 
-/// The shop up now is player 2's.
-bool PlayerTwosShop() noexcept;
+/// The seat whose shop is up now, or -1 (none, or player 1's).
+int ShopSeat() noexcept;
 
-/// Once per frame (the engine-tick callback): a press that opened no shop is dropped; player 2 leaving ends their shop's pad.
+/// Once per frame (the engine-tick callback): a press that opened no shop is dropped; a seat leaving ends its shop's
+/// pad.
 void Tick() noexcept;
 
 }  // namespace lss::player_two::vending
