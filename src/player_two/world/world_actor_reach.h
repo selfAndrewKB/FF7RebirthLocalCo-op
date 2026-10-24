@@ -21,6 +21,14 @@
 // Logged: start and stop (Info), each chest widened or put back (Info; other items Debug), each chest's state within
 // 150 m of either player as the game's tick moves it (Debug), a summary every 60 s (Debug).
 // Game thread.
+//
+// Per seat (players/seats.h): "player 2" above is every playing seat. An item is near when it is near any seat's
+// member, and the widening is the widest separation between player 1 and a playing seat, so one write per item serves
+// every seat. Shared: the widened items' record (one radius and extent per item, as the game has).
+
+#include "players/seats.h"
+
+#include <array>
 
 namespace lss::platform {
 class GameImage;
@@ -31,8 +39,8 @@ namespace lss::player_two::world_actor_reach {
 /// Finds the game root (checked). Logged.
 bool Install(const platform::GameImage& image) noexcept;
 
-/// Each engine tick, with whether player 2 plays a member.
-void Tick(bool playerTwoPlays) noexcept;
+/// Each engine tick, with, by seat, whether the seat's player plays a member (index 0 unused).
+void Tick(const std::array<bool, players::kMaxPlayers>& plays) noexcept;
 
 /// Puts the values back (at mod uninstall; on the game thread only, else logged).
 void Release() noexcept;

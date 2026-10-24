@@ -438,7 +438,7 @@ void TickAfterSession(const Frame& frame) noexcept
     player_two::anim_two_views::Tick(frame.splitShown);  // its frame count, before the world tick
     player_two::charapop_near::Tick(frame.splitShown, plays);
     player_two::charapop_centre::Tick(frame.splitShown, plays);
-    player_two::world_actor_reach::Tick(two.playsMember);
+    player_two::world_actor_reach::Tick(plays);
     hud::minimap::Tick(frame.splitShown);  // outside the overlay render, before it
     views::UpdateStreamViews(frame.splitShown);  // nothing until whole_screen's game-state check passed
     // Filled halves: each main camera's own 16:9 constraint, cleared once by the game's setter. FillsHalves is

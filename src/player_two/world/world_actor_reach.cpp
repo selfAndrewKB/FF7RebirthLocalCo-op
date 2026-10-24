@@ -12,13 +12,17 @@
 #include "player_two/world/charapop_facts.h"
 #include "player_two/world/field_pickup.h"
 #include "player_two/world/world_rules.h"
+#include "players/seats.h"
 #include "players/unreal_access.h"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <format>
+#include <string>
 #include <unordered_map>
 
 namespace lss::player_two::world_actor_reach {
@@ -58,7 +62,7 @@ constexpr std::int32_t   kMaxItems        = 65536;
 constexpr std::int32_t   kMaxOctrees      = 64;
 constexpr float          kStepCm          = 1000.0f;  // the widening moves in 10 m steps (each step reinserts in the octree)
 constexpr float          kCentreSlackCm   = 500.0f;   // the leader's bounding-box centre is not its root
-constexpr float          kLeaveSlackCm    = 500.0f;   // player 2 leaves an item 5 m past its radius
+constexpr float          kLeaveSlackCm    = 500.0f;   // a seat leaves an item 5 m past its radius
 constexpr std::uint32_t  kEvery           = 10;       // ticks between passes
 constexpr float          kChestLogCm      = 15000.0f; // Debug: chests within 150 m of either player log their state
 constexpr auto           kSummaryEvery    = std::chrono::seconds(60);
@@ -87,6 +91,46 @@ bool              g_vtableWarned = false;
 std::uint32_t     g_ticks        = 0;
 std::uint32_t     g_reinserts    = 0;  // since the last summary
 platform::Every   g_summary{kSummaryEvery};
+
+/// The playing seats' members' locations this pass, by seat (players/seats.h; index 0, player 1's, unused).
+struct Seats
+{
+    float        at[players::kMaxPlayers][3] = {};
+    std::uint8_t read = 0;  // bit s: seat s's member was read
+
+    bool Read(int seat) const noexcept { return (read & (1u << seat)) != 0; }
+
+    /// The nearest read seat's distance to `point` (a large value with none). A NaN distance passes through, as the
+    /// one-seat distance did.
+    float Nearest(const float (&point)[3]) const noexcept
+    {
+        float nearest = 1e30f;
+        for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+        {
+            const float to = Read(seat) ? charapop::Distance(point, at[seat]) : 1e30f;
+            if (!(nearest <= to))
+            {
+                nearest = to;
+            }
+        }
+        return nearest;
+    }
+
+    /// ", player 2 {d} m" for each seat in seat order (-1 m unread, or for every seat when `point` is null).
+    std::wstring Text(const float (*point)[3]) const
+    {
+        std::wstring text;
+        for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+        {
+            const float to = point != nullptr && Read(seat) ? charapop::Distance(*point, at[seat]) : -100.0f;
+            text += std::format(L", {} {:.1f} m", players::SeatName(seat), to / 100.0f);
+        }
+        return text;
+    }
+};
+
+/// "around player 2" with one seat; the seats' wording otherwise.
+constexpr const wchar_t* kAroundSeats = players::kSeatsBuilt == 1 ? L"player 2" : L"the further players";
 
 const std::byte* Manager() noexcept
 {
@@ -181,7 +225,9 @@ bool Set(const std::byte* manager, std::byte* item, float radius, float extent) 
     return added;
 }
 
-void LogItem(std::uint64_t key, const wchar_t* what, float radius, float extent, float toOne, float toTwo) noexcept
+/// `at`: the item's location (null: the distances read -1 m).
+void LogItem(std::uint64_t key, const wchar_t* what, float radius, float extent, float toOne, const Seats& seats,
+             const float (*at)[3]) noexcept
 {
     const bool chest = field_pickup::IsChestEntry(key);
     if (!chest && !platform::Enabled(platform::Level::Debug))
@@ -191,10 +237,10 @@ void LogItem(std::uint64_t key, const wchar_t* what, float radius, float extent,
     try
     {
         platform::LogAt(chest ? platform::Level::Info : platform::Level::Debug,
-                        L"world actor reach: {}{}: {} (pop radius {:.0f} m, box half-extent {:.0f} m); player 1 {:.1f} m, "
-                        L"player 2 {:.1f} m",
+                        L"world actor reach: {}{}: {} (pop radius {:.0f} m, box half-extent {:.0f} m); player 1 {:.1f} "
+                        L"m{}",
                         chest ? L"chest " : L"", players::unreal::NameText(key), what, radius / 100.0f, extent / 100.0f,
-                        toOne / 100.0f, toTwo / 100.0f);
+                        toOne / 100.0f, seats.Text(at));
     }
     catch (...)
     {
@@ -216,11 +262,11 @@ const wchar_t* StateText(std::int32_t state) noexcept
     }
 }
 
-/// Debug: a chest item's state as the game's tick moves it (armed, requested, spawned, removal), within 150 m of
-/// either player, when it changes.
-void LogChestState(std::uint64_t key, std::int32_t state, float toOne, float toTwo) noexcept
+/// Debug: a chest item's state as the game's tick moves it (armed, requested, spawned, removal), within 150 m of any
+/// player, when it changes.
+void LogChestState(std::uint64_t key, std::int32_t state, float toOne, const Seats& seats, const float (&at)[3]) noexcept
 {
-    if ((toOne > kChestLogCm && toTwo > kChestLogCm) || !field_pickup::IsChestEntry(key))
+    if ((toOne > kChestLogCm && seats.Nearest(at) > kChestLogCm) || !field_pickup::IsChestEntry(key))
     {
         return;
     }
@@ -232,16 +278,17 @@ void LogChestState(std::uint64_t key, std::int32_t state, float toOne, float toT
     g_chestStates[key] = state;
     try
     {
-        platform::LogDebug(L"world actor reach: chest {}: {} (state {}); player 1 {:.1f} m, player 2 {:.1f} m",
-                           players::unreal::NameText(key), StateText(state), state, toOne / 100.0f, toTwo / 100.0f);
+        platform::LogDebug(L"world actor reach: chest {}: {} (state {}); player 1 {:.1f} m{}",
+                           players::unreal::NameText(key), StateText(state), state, toOne / 100.0f, seats.Text(&at));
     }
     catch (...)
     {
     }
 }
 
-/// One pass over the live items. `by` < 0 puts every widened item back. Returns the number widened now.
-std::size_t Apply(const std::byte* manager, const float (&one)[3], const float (&two)[3], float by) noexcept
+/// One pass over the live items: an item near any read seat is widened by `by` (one write per item). `by` < 0 puts
+/// every widened item back. Returns the number widened now.
+std::size_t Apply(const std::byte* manager, const float (&one)[3], const Seats& seats, float by) noexcept
 {
     auto*       data    = static_cast<std::byte*>(const_cast<void*>(ReadPointer(manager, kItemsData)));
     const auto  num     = std::clamp(ReadField<std::int32_t>(manager, kItemsNum), 0, kMaxItems);
@@ -284,7 +331,7 @@ std::size_t Apply(const std::byte* manager, const float (&one)[3], const float (
             {
                 Set(manager, item, baseRadius, baseExtent);
                 g_items.erase(key);
-                LogItem(logKey, L"the game's values back", baseRadius, baseExtent, -100.0f, -100.0f);
+                LogItem(logKey, L"the game's values back", baseRadius, baseExtent, -100.0f, seats, nullptr);
             }
             continue;
         }
@@ -293,12 +340,12 @@ std::size_t Apply(const std::byte* manager, const float (&one)[3], const float (
         {
             continue;
         }
-        const float toTwo = charapop::Distance(at, two);
+        const float toSeat = seats.Nearest(at);
         if (logChests)
         {
-            LogChestState(logKey, state, charapop::Distance(at, one), toTwo);
+            LogChestState(logKey, state, charapop::Distance(at, one), seats, at);
         }
-        const bool  close = world_rules::ItemClose(state, kStateDisabled, kStatePending, toTwo, baseRadius, widenedNow,
+        const bool  close = world_rules::ItemClose(state, kStateDisabled, kStatePending, toSeat, baseRadius, widenedNow,
                                                    kLeaveSlackCm);
         if (close)
         {
@@ -309,8 +356,16 @@ std::size_t Apply(const std::byte* manager, const float (&one)[3], const float (
             g_items[key] = Widened{baseRadius, baseExtent, ReadField<float>(item, kItemRadius), ReadField<float>(item, kItemExtent)};
             if (!widenedNow)
             {
-                LogItem(logKey, boxed ? L"widened around player 2" : L"widened around player 2 (radius only: no octree)",
-                        wantRadius, boxed ? wantExtent : extent, charapop::Distance(at, one), toTwo);
+                try
+                {
+                    LogItem(logKey,
+                            std::format(L"widened around {}{}", kAroundSeats, boxed ? L"" : L" (radius only: no octree)")
+                                .c_str(),
+                            wantRadius, boxed ? wantExtent : extent, charapop::Distance(at, one), seats, &at);
+                }
+                catch (...)
+                {
+                }
             }
             ++widened;
         }
@@ -318,8 +373,10 @@ std::size_t Apply(const std::byte* manager, const float (&one)[3], const float (
         {
             Set(manager, item, baseRadius, baseExtent);
             g_items.erase(key);
-            LogItem(logKey, L"player 2 left it: the game's values back", baseRadius, baseExtent, charapop::Distance(at, one),
-                    toTwo);
+            LogItem(logKey,
+                    players::kSeatsBuilt == 1 ? L"player 2 left it: the game's values back"
+                                              : L"the further players left it: the game's values back",
+                    baseRadius, baseExtent, charapop::Distance(at, one), seats, &at);
         }
     }
     return widened;
@@ -348,7 +405,7 @@ void Stop(const wchar_t* why) noexcept
         return;
     }
     float none[3]{};
-    Apply(manager, none, none, -1.0f);
+    Apply(manager, none, Seats{}, -1.0f);
     // The walk put back every live item it widened (by its set key and the item vtable); a key it did not meet is no
     // longer in the set: it left with its field.
     g_items.clear();
@@ -356,24 +413,42 @@ void Stop(const wchar_t* why) noexcept
     platform::Log(L"world actor reach: back to the game's own (world actors pop around the leader only): {}", why);
 }
 
-void Pass() noexcept
+void Pass(const std::array<bool, players::kMaxPlayers>& playing) noexcept
 {
     const auto* manager = Manager();
-    float       one[3]{}, two[3]{};
+    float       one[3]{};
     const void* playerOne = ReadPointer(generation::PlayerOneController(), facts::kControllerPawn);
-    if (manager == nullptr || !CharacterAt(playerOne, one) || !CharacterAt(generation::Member(), two))
+    if (manager == nullptr || !CharacterAt(playerOne, one))
     {
         return;
     }
-    const float apart   = charapop::Distance(one, two);
+    Seats seats;
+    float apart = 0.0f;  // the widest distance between player 1 and a read seat
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (playing[seat] && CharacterAt(generation::MemberOf(seat), seats.at[seat]))
+        {
+            seats.read |= static_cast<std::uint8_t>(1u << seat);
+            // The widest; a NaN distance passes through, as the one-seat distance did.
+            const float to = charapop::Distance(one, seats.at[seat]);
+            if (!(to <= apart))
+            {
+                apart = to;
+            }
+        }
+    }
+    if (seats.read == 0)
+    {
+        return;
+    }
     const float by      = world_rules::WidenBy(apart, kCentreSlackCm, kStepCm);
-    const auto  widened = Apply(manager, one, two, by);
+    const auto  widened = Apply(manager, one, seats, by);
     if (!g_on)
     {
         g_on = true;
-        platform::Log(L"world actor reach: world actors near player 2 pop in by the game's own test from the leader, their "
+        platform::Log(L"world actor reach: world actors near {} pop in by the game's own test from the leader, their "
                       L"radius widened by the players' separation ({:.0f} m now, {} items)",
-                      by / 100.0f, widened);
+                      kAroundSeats, by / 100.0f, widened);
     }
     if (platform::Enabled(platform::Level::Debug) && g_summary.Due(Clock::now()))
     {
@@ -405,21 +480,29 @@ bool Install(const platform::GameImage& image) noexcept
     return g_installed;
 }
 
-void Tick(bool playerTwoPlays) noexcept
+void Tick(const std::array<bool, players::kMaxPlayers>& plays) noexcept
 {
     if (!g_installed || !generation::OnGameThread())
     {
         return;
     }
-    const bool enabled = charapop_centre::Enabled();
-    if (!playerTwoPlays || !generation::Active() || !enabled)
+    const bool                             enabled = charapop_centre::Enabled();
+    std::array<bool, players::kMaxPlayers> playing{};  // by seat: plays its member, its generation active
+    bool                                   anyPlays = false;
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        Stop(!enabled ? L"switched off" : L"player 2 stopped playing");
+        playing[seat] = plays[seat] && generation::Active(seat);
+        anyPlays      = anyPlays || playing[seat];
+    }
+    if (!anyPlays || !enabled)
+    {
+        Stop(!enabled ? L"switched off"
+                      : (players::kSeatsBuilt == 1 ? L"player 2 stopped playing" : L"no further player plays"));
         return;
     }
     if (++g_ticks % kEvery == 0)
     {
-        Pass();
+        Pass(playing);
     }
 }
 
