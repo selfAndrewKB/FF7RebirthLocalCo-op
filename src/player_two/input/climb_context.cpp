@@ -23,6 +23,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <format>
 #include <span>
 #include <string>
 #include <utility>
@@ -123,14 +124,28 @@ using KeyCopyFn        = void* (*)(void* out, const void* key);
 
 // --- this thread's climb ----------------------------------------------------------------------------------------------
 
+// The context names the climber by player number: 1 player 1, a seat's number plus one (2 player 2, 3 player 3), 0 none.
+// A per-seat record is indexed by the player number minus one, which is the seat (index 0 player 1's).
 struct Context
 {
-    int      player    = 0;      // 0 none, 1 or 2: whose move this thread is ticking
-    bool     suspended = false;  // player 2's identity (leader test, buttons) off for this call
+    int      player    = 0;      // 0 none, else whose move this thread is ticking (player number)
+    bool     suspended = false;  // a seat's identity (leader test, buttons) off for this call
     bool     climb     = false;  // the move is a climb (PlayerHere answers only for climbs)
-    unsigned cameraTwo = 0;      // times the camera manager getter answered player 2's in this context
+    unsigned cameraTwo = 0;      // times the camera manager getter answered the seat's in this context
 };
 thread_local Context t_climb;
+
+/// The seat of a player number (1 player 1 is seat 0).
+constexpr std::size_t IndexOfPlayer(int player) noexcept
+{
+    return static_cast<std::size_t>(player - 1);
+}
+
+/// The seat of this thread's context while it names a seat's climber (a player number of 2 or more), else 0.
+int SeatHere() noexcept
+{
+    return t_climb.player >= 2 ? t_climb.player - 1 : 0;
+}
 
 class InContext
 {
@@ -158,9 +173,12 @@ private:
 
 // --- written on the game thread, read on any ------------------------------------------------------------------------
 
+constexpr std::size_t kPlayers = players::kMaxPlayers;
+
 std::atomic<std::uint32_t> g_frame{0};  // engine ticks counted by Tick; 0 = none yet
-std::atomic<std::uint64_t> g_cameraTwoWeak{0};  // player 2's camera manager
-std::atomic<int>           g_memberType{-1};
+std::array<std::atomic<std::uint64_t>, kPlayers> g_cameraWeak{};  // by seat: its camera manager (index 0 unused)
+static_assert(kPlayers == 3, "the -1 initialisers below name one value per player");
+std::array<std::atomic<int>, kPlayers>           g_memberType{-1, -1, -1};  // by seat: its member's type
 std::atomic<const void*>   g_owner{nullptr};  // the input owner (the key-value getter's first argument)
 
 // Each player's copy of the owner's key fields, double-buffered: the game thread writes the back buffer, then publishes
@@ -169,31 +187,33 @@ struct alignas(16) OwnerCopy
 {
     std::byte bytes[kKeyFieldsEnd + 0xC]{};
 };
-std::array<std::array<OwnerCopy, 2>, 2>   g_copies{};  // [player - 1][buffer]
-std::array<std::atomic<int>, 2>           g_front{};
-std::array<std::atomic<std::uint32_t>, 2> g_copyFrame{};
+std::array<std::array<OwnerCopy, 2>, kPlayers>   g_copies{};  // [seat][buffer] (seat = player number - 1)
+std::array<std::atomic<int>, kPlayers>           g_front{};
+std::array<std::atomic<std::uint32_t>, kPlayers> g_copyFrame{};
 
-// Player 2's presses of the hold-select's actions this frame (bit per action), and the actions' FNames.
+// Each seat's presses of the hold-select's actions this frame (bit per action; index 0 unused), and the actions'
+// FNames.
 std::array<std::atomic<std::uint64_t>, kActionCount> g_actionNames{};
-std::atomic<std::uint32_t>                           g_pressedBits{0};
-std::atomic<std::uint32_t>                           g_pressedFrame{0};
+std::array<std::atomic<std::uint32_t>, kPlayers>     g_pressedBits{};
+std::array<std::atomic<std::uint32_t>, kPlayers>     g_pressedFrame{};
 
-// Written by the Ticks (any thread): the last frame each player's climb ticked, player 2's class.
-std::atomic<std::uint32_t> g_playerOneClimbFrame{0};
-std::atomic<std::uint32_t> g_playerTwoClimbFrame{0};
-std::atomic<int>           g_playerTwoClass{-1};
+// Written by the Ticks (any thread): the last frame each player's climb ticked (by seat, 0 player 1's), each seat's
+// class.
+std::array<std::atomic<std::uint32_t>, kPlayers> g_climbFrame{};
+std::array<std::atomic<int>, kPlayers>           g_climbClass{-1, -1, -1};  // (kPlayers == 3: static_assert above)
 
+// By seat (index 0 player 1's where it has one).
 struct Counts
 {
-    std::atomic<unsigned> ticks[2]{};      // contexts entered, per player
-    std::atomic<unsigned> leaderAsks{0};   // leader tests asked inside player 2's context
-    std::atomic<unsigned> cameraTwo{0};    // camera manager getter answered player 2's
-    std::atomic<unsigned> keys[2]{};       // key values read from a player's own copy
-    std::atomic<unsigned> buttons{0};      // hold-select actions answered with player 2's press
-    std::atomic<unsigned> holdOff{0};      // hold-selects run without player 2's identity
-    std::atomic<unsigned> finishOff{0};    // finishes run without player 2's identity
-    std::atomic<unsigned> staleCopies{0};  // a context found no fresh copy (the merged value read instead)
-    std::atomic<unsigned> edgeTicks[2]{};  // edge-stop action ticks, per player
+    std::atomic<unsigned> ticks[kPlayers]{};       // contexts entered
+    std::atomic<unsigned> leaderAsks[kPlayers]{};  // leader tests asked inside the seat's context
+    std::atomic<unsigned> cameraTwo[kPlayers]{};   // camera manager getter answered the seat's
+    std::atomic<unsigned> keys[kPlayers]{};        // key values read from a player's own copy
+    std::atomic<unsigned> buttons[kPlayers]{};     // hold-select actions answered with the seat's press
+    std::atomic<unsigned> holdOff[kPlayers]{};     // hold-selects run without the seat's identity
+    std::atomic<unsigned> finishOff[kPlayers]{};   // finishes run without the seat's identity
+    std::atomic<unsigned> staleCopies{0};          // a context found no fresh copy (the merged value read instead)
+    std::atomic<unsigned> edgeTicks[kPlayers]{};   // edge-stop action ticks
 };
 Counts g_counts;
 
@@ -206,7 +226,7 @@ struct EdgeSeen
     std::atomic<unsigned>      starts{0};
     std::atomic<bool>          reported{false};
 };
-std::array<EdgeSeen, 2> g_edge;
+std::array<EdgeSeen, kPlayers> g_edge;  // by seat (player number - 1)
 
 // --- set at install -----------------------------------------------------------------------------------------------------
 
@@ -225,11 +245,11 @@ std::array<const void*, kActionCount> g_actionKeys{};
 PressedFn                        g_pressedGlobal = nullptr;
 KeyCopyFn                        g_keyCopy       = nullptr;
 bool                             g_installed     = false;
-bool                             g_buttons       = false;  // player 2's presses recorded and answered
+bool                             g_buttons       = false;  // the seats' presses recorded and answered
 unsigned                         g_ticksPlaced   = 0;      // climb Tick slots placed (of kClimbCount)
 
 // Game thread only.
-bool                                  g_loggedOn = false;
+std::array<bool, kPlayers> g_loggedOn{};  // by seat (index 0 unused)
 platform::Every g_summary{kSummaryEvery};
 
 bool Fresh(std::uint32_t stamp) noexcept
@@ -237,7 +257,8 @@ bool Fresh(std::uint32_t stamp) noexcept
     return stamp != 0 && g_frame.load(std::memory_order_relaxed) - stamp <= kFreshFrames;
 }
 
-/// The player whose character `move` belongs to: 2 for player 2's member, 1 for player 1's pawn, else 0.
+/// The player number whose character `move` belongs to: a seat's member's (its seat + 1), 1 for player 1's pawn, else
+/// 0.
 int PlayerOf(const void* move) noexcept
 {
     const auto weak = ReadField<std::uint64_t>(move, kMoveCharacter);
@@ -245,9 +266,10 @@ int PlayerOf(const void* move) noexcept
     {
         return 0;
     }
-    if (weak == generation::MemberWeak())
+    const int seat = generation::SeatOfMemberWeak(weak);
+    if (players::SeatBuilt(seat))
     {
-        return 2;
+        return seat + 1;
     }
     return weak == generation::PlayerOnePawnWeak() ? 1 : 0;
 }
@@ -271,7 +293,7 @@ std::uint32_t EdgeStateOf(const void* move) noexcept
 /// (Info once per episode when the lean restarts kStutterStarts times within kStutterWindow).
 void NoteEdgeStop(int player, const void* move, unsigned cameraTwo) noexcept
 {
-    EdgeSeen&      seen   = g_edge[static_cast<std::size_t>(player - 1)];
+    EdgeSeen&      seen   = g_edge[IndexOfPlayer(player)];
     const auto     state  = EdgeStateOf(move);
     const unsigned phase  = (state >> 8) & 0xFFu;
     const unsigned sub    = state & 0xFFu;
@@ -283,9 +305,16 @@ void NoteEdgeStop(int player, const void* move, unsigned cameraTwo) noexcept
     {
         return;
     }
-    const wchar_t* basis   = player == 1        ? L"pad 1's stick in player 1's camera"
-                             : cameraTwo != 0u   ? L"pad 2's stick in player 2's camera"
-                                                 : L"pad 2's stick; no camera read on this tick";
+    std::wstring basis;  // pad N is player N's (a seat's pad is its player number's)
+    try
+    {
+        basis = player == 1 || cameraTwo != 0u
+                    ? std::format(L"pad {}'s stick in player {}'s camera", player, player)
+                    : std::format(L"pad {}'s stick; no camera read on this tick", player);
+    }
+    catch (...)
+    {
+    }
     if (phase == kLeanPhase && sub == kLeanEnd)
     {
         platform::LogDebug(L"edge stop: player {}'s ledge lean ends (stick released or turned away; tested as {}; the "
@@ -324,7 +353,7 @@ template <std::size_t Index>
 std::uintptr_t EdgeStopTick(void* move, void* arg, int player) noexcept
 {
     const auto original = reinterpret_cast<TickFn>(g_moves[Index].tick.Original());
-    g_counts.edgeTicks[player - 1].fetch_add(1, std::memory_order_relaxed);
+    g_counts.edgeTicks[IndexOfPlayer(player)].fetch_add(1, std::memory_order_relaxed);
     std::uintptr_t result    = 0;
     unsigned       cameraTwo = 0;
     {
@@ -351,45 +380,56 @@ std::uintptr_t MoveTick(void* move, void* arg) noexcept
         return EdgeStopTick<Index>(move, arg, player);
     }
     const auto frame = g_frame.load(std::memory_order_relaxed);
-    if (player == 2)
+    if (player >= 2)
     {
-        g_playerTwoClass.store(static_cast<int>(Index), std::memory_order_relaxed);
-        g_playerTwoClimbFrame.store(frame, std::memory_order_relaxed);
+        g_climbClass[IndexOfPlayer(player)].store(static_cast<int>(Index), std::memory_order_relaxed);
     }
-    else
-    {
-        g_playerOneClimbFrame.store(frame, std::memory_order_relaxed);
-    }
-    g_counts.ticks[player - 1].fetch_add(1, std::memory_order_relaxed);
+    g_climbFrame[IndexOfPlayer(player)].store(frame, std::memory_order_relaxed);
+    g_counts.ticks[IndexOfPlayer(player)].fetch_add(1, std::memory_order_relaxed);
     const InContext context(player, true);
     return original(move, arg);
 }
 
-/// Finish runs inside the Tick; its leader-action record would reach player 1's controller with player 2's identity.
+/// Finish runs inside the Tick; its leader-action record would reach player 1's controller with a seat's identity.
 template <std::size_t Index>
 std::uintptr_t MoveFinish(void* move) noexcept
 {
     const auto original = reinterpret_cast<FinishFn>(g_moves[Index].finish.Original());
-    if (t_climb.player != 2)
+    const int  seat     = SeatHere();
+    if (seat == 0)
     {
         return original(move);
     }
-    g_counts.finishOff.fetch_add(1, std::memory_order_relaxed);
+    g_counts.finishOff[static_cast<std::size_t>(seat)].fetch_add(1, std::memory_order_relaxed);
     const Suspended suspended;
     return original(move);
 }
 
-/// The climbing wall's hold-select: one global prompt point, so player 2's runs without player 2's identity while
-/// player 1 also climbs (player 2 then keeps the game's NPC answer there), and whenever player 2's presses were not
+/// Another player than `seat` climbs this frame (player 1, or another seat).
+bool OtherClimbs(int seat) noexcept
+{
+    for (int other = 0; other <= players::kSeatsBuilt; ++other)
+    {
+        if (other != seat && Fresh(g_climbFrame[static_cast<std::size_t>(other)].load(std::memory_order_relaxed)))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+/// The climbing wall's hold-select: one global prompt point, so a seat's runs without the seat's identity while
+/// another player also climbs (the seat then keeps the game's NPC answer there), and whenever the seat's presses were not
 /// recorded this frame (it would read player 1's buttons).
 void HoldSelect(void* move) noexcept
 {
     const auto original = reinterpret_cast<HoldSelectFn>(g_holdSelectCall.Original());
-    if (t_climb.player == 2 && !t_climb.suspended &&
-        (!g_buttons || !Fresh(g_pressedFrame.load(std::memory_order_acquire)) ||
-         Fresh(g_playerOneClimbFrame.load(std::memory_order_relaxed))))
+    const int  seat     = SeatHere();
+    if (seat != 0 && !t_climb.suspended &&
+        (!g_buttons || !Fresh(g_pressedFrame[static_cast<std::size_t>(seat)].load(std::memory_order_acquire)) ||
+         OtherClimbs(seat)))
     {
-        g_counts.holdOff.fetch_add(1, std::memory_order_relaxed);
+        g_counts.holdOff[static_cast<std::size_t>(seat)].fetch_add(1, std::memory_order_relaxed);
         const Suspended suspended;
         original(move);
         return;
@@ -400,12 +440,12 @@ void HoldSelect(void* move) noexcept
 void* CameraGetter() noexcept
 {
     const auto original = reinterpret_cast<CameraGetterFn>(g_cameraEntry.Original());
-    if (t_climb.player == 2)
+    if (const int seat = SeatHere(); seat != 0)
     {
-        const std::uint64_t weak = g_cameraTwoWeak.load(std::memory_order_relaxed);
+        const std::uint64_t weak = g_cameraWeak[static_cast<std::size_t>(seat)].load(std::memory_order_relaxed);
         if (void* two = weak != 0 ? leader_scope::ObjectAt(&weak) : nullptr)
         {
-            g_counts.cameraTwo.fetch_add(1, std::memory_order_relaxed);
+            g_counts.cameraTwo[static_cast<std::size_t>(seat)].fetch_add(1, std::memory_order_relaxed);
             ++t_climb.cameraTwo;
             return two;
         }
@@ -423,7 +463,7 @@ float KeyValue(const void* owner, void* key) noexcept
     {
         return original(owner, key);
     }
-    const auto index = static_cast<std::size_t>(player - 1);
+    const auto index = IndexOfPlayer(player);
     if (!Fresh(g_copyFrame[index].load(std::memory_order_acquire)))
     {
         g_counts.staleCopies.fetch_add(1, std::memory_order_relaxed);
@@ -434,13 +474,13 @@ float KeyValue(const void* owner, void* key) noexcept
     return original(g_copies[index][front].bytes, key);
 }
 
-/// The pressed test under the hold-select's actions: player 2's own press, recorded this frame. The game's function
+/// The pressed test under the hold-select's actions: the seat's own press, recorded this frame. The game's function
 /// still runs (it releases the key).
 std::uint8_t Pressed(void* key) noexcept
 {
     const auto original = reinterpret_cast<PressedFn>(g_pressedEntry.Original());
-    if (t_climb.player != 2 || t_climb.suspended || key == nullptr ||
-        !Fresh(g_pressedFrame.load(std::memory_order_acquire)))
+    const auto seat     = static_cast<std::size_t>(SeatHere());
+    if (seat == 0 || t_climb.suspended || key == nullptr || !Fresh(g_pressedFrame[seat].load(std::memory_order_acquire)))
     {
         return original(key);
     }
@@ -450,8 +490,8 @@ std::uint8_t Pressed(void* key) noexcept
         if (name != 0 && name == g_actionNames[i].load(std::memory_order_relaxed))
         {
             original(key);
-            g_counts.buttons.fetch_add(1, std::memory_order_relaxed);
-            return (g_pressedBits.load(std::memory_order_relaxed) >> i) & 1u;
+            g_counts.buttons[seat].fetch_add(1, std::memory_order_relaxed);
+            return (g_pressedBits[seat].load(std::memory_order_relaxed) >> i) & 1u;
         }
     }
     return original(key);
@@ -459,20 +499,28 @@ std::uint8_t Pressed(void* key) noexcept
 
 // --- game thread --------------------------------------------------------------------------------------------------------
 
-void Clear() noexcept
+/// A seat's this-frame values forgotten (its player out).
+void ClearSeat(std::size_t seat) noexcept
 {
-    g_cameraTwoWeak.store(0, std::memory_order_relaxed);
-    g_memberType.store(-1, std::memory_order_relaxed);
-    g_owner.store(nullptr, std::memory_order_relaxed);
-    for (auto& stamp : g_copyFrame)
-    {
-        stamp.store(0, std::memory_order_release);
-    }
-    g_pressedFrame.store(0, std::memory_order_release);
+    g_cameraWeak[seat].store(0, std::memory_order_relaxed);
+    g_memberType[seat].store(-1, std::memory_order_relaxed);
+    g_copyFrame[seat].store(0, std::memory_order_release);
+    g_pressedFrame[seat].store(0, std::memory_order_release);
 }
 
-/// Copies the owner's key fields as pad `controllerId`'s StickScope leaves them into player `index + 1`'s back buffer
-/// and publishes it.
+/// Every seat's and player 1's this-frame values forgotten (no seat's player in).
+void Clear() noexcept
+{
+    for (std::size_t seat = 1; seat < kPlayers; ++seat)
+    {
+        ClearSeat(seat);
+    }
+    g_owner.store(nullptr, std::memory_order_relaxed);
+    g_copyFrame[0].store(0, std::memory_order_release);
+}
+
+/// Copies the owner's key fields as pad `controllerId`'s StickScope leaves them into seat `index`'s back buffer (0
+/// player 1's) and publishes it.
 void CopyKeys(std::size_t index, std::int32_t controllerId, const std::byte* owner, std::uint32_t frame) noexcept
 {
     const pad_sticks::StickScope sticks(controllerId);
@@ -489,10 +537,10 @@ void CopyKeys(std::size_t index, std::int32_t controllerId, const std::byte* own
     g_copyFrame[index].store(frame, std::memory_order_release);
 }
 
-/// Player 2's presses of the hold-select's actions, by the game's own pressed test in player 2's button view.
-void RecordPresses(std::uint32_t frame) noexcept
+/// A seat's presses of the hold-select's actions, by the game's own pressed test in the seat's button view.
+void RecordPresses(int seat, std::uint32_t frame) noexcept
 {
-    const pad_buttons::ButtonScope buttons(players::kPlayerTwoSeat);
+    const pad_buttons::ButtonScope buttons(seat);
     if (!buttons.Held())
     {
         return;
@@ -507,46 +555,79 @@ void RecordPresses(std::uint32_t frame) noexcept
             bits |= 1u << i;
         }
     }
-    g_pressedBits.store(bits, std::memory_order_relaxed);
-    g_pressedFrame.store(frame, std::memory_order_release);
+    g_pressedBits[static_cast<std::size_t>(seat)].store(bits, std::memory_order_relaxed);
+    g_pressedFrame[static_cast<std::size_t>(seat)].store(frame, std::memory_order_release);
 }
 
 void LogChanges() noexcept
 {
-    const bool on = Fresh(g_playerTwoClimbFrame.load(std::memory_order_relaxed));
-    if (on != g_loggedOn)
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        g_loggedOn      = on;
-        const int index = g_playerTwoClass.load(std::memory_order_relaxed);
-        platform::LogDebug(L"climb context: player 2's {} {}", index >= 0 ? kMoves[index].name : L"climb",
-                           on ? L"ticks as player 2's (player 2's stick, buttons and camera basis)" : L"ended");
+        const auto s  = static_cast<std::size_t>(seat);
+        const bool on = Fresh(g_climbFrame[s].load(std::memory_order_relaxed));
+        if (on != g_loggedOn[s])
+        {
+            g_loggedOn[s]   = on;
+            const int index = g_climbClass[s].load(std::memory_order_relaxed);
+            const wchar_t* name = players::SeatName(seat);
+            try
+            {
+                platform::LogDebug(L"climb context: {}'s {} {}", name, index >= 0 ? kMoves[index].name : L"climb",
+                                   on ? std::format(L"ticks as {}'s ({}'s stick, buttons and camera basis)", name, name)
+                                      : std::wstring(L"ended"));
+            }
+            catch (...)
+            {
+            }
+        }
     }
     const auto now = std::chrono::steady_clock::now();
     if (!g_summary.Due(now))
     {
         return;
     }
-    const auto two  = platform::Take(g_counts.ticks[1]);
-    const auto one  = platform::Take(g_counts.ticks[0]);
-    const auto asks = platform::Take(g_counts.leaderAsks);
-    const auto cam  = platform::Take(g_counts.cameraTwo);
-    const auto k2   = platform::Take(g_counts.keys[1]);
-    const auto k1   = platform::Take(g_counts.keys[0]);
-    const auto btn  = platform::Take(g_counts.buttons);
-    const auto hold = platform::Take(g_counts.holdOff);
-    const auto fin  = platform::Take(g_counts.finishOff);
-    const auto old  = platform::Take(g_counts.staleCopies);
-    const auto e2   = platform::Take(g_counts.edgeTicks[1]);
-    const auto e1   = platform::Take(g_counts.edgeTicks[0]);
-    if (two == 0 && one == 0 && e2 == 0 && e1 == 0)
+    // Each seat's counts, and player 1's; the line as the two-player mod wrote it, a part per seat.
+    std::array<unsigned, kPlayers> ticks{}, edges{}, asks{}, cams{}, keys{}, presses{}, holds{}, finishes{};
+    unsigned                       any = 0;
+    for (std::size_t s = 0; s < kPlayers; ++s)
+    {
+        ticks[s]    = platform::Take(g_counts.ticks[s]);
+        edges[s]    = platform::Take(g_counts.edgeTicks[s]);
+        keys[s]     = platform::Take(g_counts.keys[s]);
+        asks[s]     = platform::Take(g_counts.leaderAsks[s]);
+        cams[s]     = platform::Take(g_counts.cameraTwo[s]);
+        presses[s]  = platform::Take(g_counts.buttons[s]);
+        holds[s]    = platform::Take(g_counts.holdOff[s]);
+        finishes[s] = platform::Take(g_counts.finishOff[s]);
+        any += ticks[s] + edges[s];
+    }
+    const auto old = platform::Take(g_counts.staleCopies);
+    if (any == 0)
     {
         return;
     }
-    platform::LogDebug(L"climb context ({} s): player 2's climb ticks {}, player 1's {}; edge-stop ticks player 2 {}, "
-                       L"player 1 {}; inside player 2's: leader tests asked {}, player 2's camera manager {}, keys from "
-                       L"pad 2 {}, hold-select presses {}, hold-selects without player 2's identity {}, finishes without "
-                       L"it {}; keys from pad 1 in player 1's {}; no fresh copy {}",
-                       kSummaryEvery.count(), two, one, e2, e1, asks, cam, k2, btn, hold, fin, k1, old);
+    try
+    {
+        std::wstring climbs, edgeTicks, inside;
+        for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+        {
+            const auto     s    = static_cast<std::size_t>(seat);
+            const wchar_t* name = players::SeatName(seat);
+            climbs += std::format(L"{}'s climb ticks {}, ", name, ticks[s]);
+            edgeTicks += std::format(L"{} {}, ", name, edges[s]);
+            inside += std::format(L"inside {}'s: leader tests asked {}, {}'s camera manager {}, keys from pad {} {}, "
+                                  L"hold-select presses {}, hold-selects without {}'s identity {}, finishes without it "
+                                  L"{}; ",
+                                  name, asks[s], name, cams[s], seat + 1, keys[s], presses[s], name, holds[s],
+                                  finishes[s]);
+        }
+        platform::LogDebug(L"climb context ({} s): {}player 1's {}; edge-stop ticks {}player 1 {}; {}keys from pad 1 in "
+                           L"player 1's {}; no fresh copy {}",
+                           kSummaryEvery.count(), climbs, ticks[0], edgeTicks, edges[0], inside, keys[0], old);
+    }
+    catch (...)
+    {
+    }
 }
 
 template <std::size_t Index>
@@ -676,24 +757,49 @@ void Tick() noexcept
     {
         frame = g_frame.fetch_add(1, std::memory_order_relaxed) + 1;  // 0 means "no stamp"
     }
-    void* member = generation::Member();
-    void* one    = generation::PlayerOneController();
-    void* two    = generation::PlayerTwoController();
-    if (!generation::Active() || member == nullptr || one == nullptr || two == nullptr)
+    void* one = generation::ControllerOf(0);
+    // The seats whose player is in with a member (seat order); the others' values forgotten.
+    std::array<bool, kPlayers> in{};
+    bool                       any = false;
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        const auto s = static_cast<std::size_t>(seat);
+        in[s] = one != nullptr && generation::Active(seat) && generation::MemberOf(seat) != nullptr &&
+                generation::ControllerOf(seat) != nullptr;
+        any   = any || in[s];
+    }
+    if (!any)
     {
         Clear();
         LogChanges();
         return;
     }
-    const auto type = party_member::PlayerTypeOf(member);
-    g_cameraTwoWeak.store(leader_scope::WeakOf(ReadPointer(two, facts::kControllerCameraManager)),
-                          std::memory_order_relaxed);
-    g_memberType.store(type ? *type : -1, std::memory_order_relaxed);
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        const auto s = static_cast<std::size_t>(seat);
+        if (!in[s])
+        {
+            ClearSeat(s);
+            continue;
+        }
+        const auto type = party_member::PlayerTypeOf(generation::MemberOf(seat));
+        g_cameraWeak[s].store(leader_scope::WeakOf(ReadPointer(generation::ControllerOf(seat),
+                                                               facts::kControllerCameraManager)),
+                              std::memory_order_relaxed);
+        g_memberType[s].store(type ? *type : -1, std::memory_order_relaxed);
+    }
     const auto* owner = static_cast<const std::byte*>(ReadPointer(reinterpret_cast<const void*>(g_ownerGlobal), 0));
     g_owner.store(owner, std::memory_order_relaxed);
     if (owner != nullptr && pad_sticks::Enabled())
     {
-        CopyKeys(1, pad_sticks::ControllerIdOf(two), owner, frame);
+        for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+        {
+            if (in[static_cast<std::size_t>(seat)])
+            {
+                CopyKeys(static_cast<std::size_t>(seat), pad_sticks::ControllerIdOf(generation::ControllerOf(seat)),
+                         owner, frame);
+            }
+        }
         if (pad_sticks::PartActs(pad_sticks::kPartPlayerOneMove))
         {
             CopyKeys(0, pad_sticks::ControllerIdOf(one), owner, frame);
@@ -704,7 +810,13 @@ void Tick() noexcept
             {
                 g_actionNames[i].store(ReadField<std::uint64_t>(g_actionKeys[i], 0), std::memory_order_relaxed);
             }
-            RecordPresses(frame);
+            for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+            {
+                if (in[static_cast<std::size_t>(seat)])
+                {
+                    RecordPresses(seat, frame);
+                }
+            }
         }
     }
     LogChanges();
@@ -712,12 +824,13 @@ void Tick() noexcept
 
 int LeaderTypeHere() noexcept
 {
-    if (t_climb.player != 2 || t_climb.suspended)
+    const int seat = SeatHere();
+    if (seat == 0 || t_climb.suspended)
     {
         return -1;
     }
-    g_counts.leaderAsks.fetch_add(1, std::memory_order_relaxed);
-    return g_memberType.load(std::memory_order_relaxed);
+    g_counts.leaderAsks[static_cast<std::size_t>(seat)].fetch_add(1, std::memory_order_relaxed);
+    return g_memberType[static_cast<std::size_t>(seat)].load(std::memory_order_relaxed);
 }
 
 int PlayerHere() noexcept
@@ -730,14 +843,18 @@ bool TicksPlaced() noexcept
     return g_ticksPlaced == kClimbCount;
 }
 
-bool WithPlayerTwoCamera(void (*call)(void*), void* context) noexcept
+bool WithSeatCamera(int seat, void (*call)(void*), void* context) noexcept
 {
-    const std::uint64_t weak = g_cameraTwoWeak.load(std::memory_order_relaxed);
+    if (!players::SeatBuilt(seat))
+    {
+        return false;
+    }
+    const std::uint64_t weak = g_cameraWeak[static_cast<std::size_t>(seat)].load(std::memory_order_relaxed);
     if (call == nullptr || !g_cameraEntry.IsInstalled() || weak == 0 || leader_scope::ObjectAt(&weak) == nullptr)
     {
         return false;
     }
-    const InContext inContext(2, true);
+    const InContext inContext(seat + 1, true);
     const Suspended suspended;
     call(context);
     return true;
