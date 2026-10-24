@@ -71,12 +71,12 @@ void HiddenSet::Forget() noexcept
 
 namespace pass_opacity {
 
-void ShowOnly(int player) noexcept
+void ShowOnly(int seat) noexcept
 {
-    prompt_rows::ShowOnly(player);
-    field_markers::ShowOnly(player);
-    search_pins::ShowOnly(player);
-    player_two::command_menu_view::ShowOnly(player);
+    prompt_rows::ShowOnly(seat);
+    field_markers::ShowOnly(seat);
+    search_pins::ShowOnly(seat);
+    player_two::command_menu_view::ShowOnly(seat);
 }
 
 void RestoreAll() noexcept

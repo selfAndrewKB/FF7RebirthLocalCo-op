@@ -8,11 +8,14 @@
 #include "platform/sparse_array.h"
 #include "platform/verified_code.h"
 #include "player_two/generation.h"
+#include "players/seats.h"
 
 #include <algorithm>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <format>
+#include <string>
 #include <vector>
 
 #ifndef WIN32_LEAN_AND_MEAN
@@ -75,26 +78,42 @@ platform::DeferredSites g_placement;  // the two calls cross a block: placed fro
 std::uintptr_t          g_updateSite = 0, g_updateTarget = 0, g_removeSite = 0, g_removeTarget = 0;
 
 // Game thread.
-std::atomic<bool>          g_active{false};    // player 2's minimap is on (Remove may write it off the game thread)
-int                        g_run    = 0;       // 1 inside the mod's player 2 run; 0 otherwise (player 1's centre)
-bool                       g_inModRun = false;
-std::vector<std::uint64_t> g_kept[2];          // the keys each player's last run kept
-bool                       g_keptValid[2] = {};
-std::vector<std::uint64_t> g_skippedThisRun;
-std::vector<std::uint64_t> g_reported;          // shown-anyway keys already logged
-Counts                     g_counts[2], g_logged[2];
-ULONGLONG                  g_countsAt     = 0;
-bool                       g_loggedFirst  = false;
-
-const wchar_t* RunName(int run) noexcept
-{
-    return run == 1 ? L"player 2" : L"player 1";
-}
+constexpr int kPlayers = players::kMaxPlayers;
 
 bool Contains(const std::vector<std::uint64_t>& keys, std::uint64_t key) noexcept
 {
     return std::find(keys.begin(), keys.end(), key) != keys.end();
 }
+
+std::atomic<bool>          g_active{false};    // a seat's minimap is on (Remove may write it off the game thread)
+int                        g_run    = 0;       // the seat inside the mod's seat run; 0 otherwise (player 1's centre)
+bool                       g_inModRun = false;
+std::vector<std::uint64_t> g_kept[kPlayers];   // the keys each player's last run kept, by seat
+bool                       g_keptValid[kPlayers] = {};
+std::vector<std::uint64_t> g_skippedThisRun;
+std::vector<std::uint64_t> g_reported;          // shown-anyway keys already logged
+Counts                     g_counts[kPlayers], g_logged[kPlayers];
+ULONGLONG                  g_countsAt     = 0;
+bool                       g_loggedFirst  = false;
+
+const wchar_t* RunName(int run) noexcept
+{
+    return players::SeatName(run);
+}
+
+/// Another player's last run kept `key` (-1: none did).
+int KeptByOther(int run, std::uint64_t key) noexcept
+{
+    for (int other = 0; other < kPlayers; ++other)
+    {
+        if (other != run && g_keptValid[other] && Contains(g_kept[other], key))
+        {
+            return other;
+        }
+    }
+    return -1;
+}
+
 
 /// The holder's AreaMapIcon_Update call: this run keeps `key` (the game's own tests passed).
 void Update(void* holder, std::uint64_t key, const void* source) noexcept
@@ -118,16 +137,16 @@ void Update(void* holder, std::uint64_t key, const void* source) noexcept
     original(holder, key, source);
 }
 
-/// The holder's remove call: skipped for a key the other player's last run kept.
+/// The holder's remove call: skipped for a key another player's last run kept.
 void RemoveIcon(void* holder, std::uint64_t key) noexcept
 {
     const auto original = reinterpret_cast<RemoveFn>(g_removeCall.Original());
     if (g_active && generation::OnGameThread())
     {
         const int run   = g_run;
-        const int other = 1 - run;
+        const int other = KeptByOther(run, key);
         ++g_counts[run].removes;
-        if (g_keptValid[other] && Contains(g_kept[other], key))
+        if (other >= 0)
         {
             ++g_counts[run].skipped;
             if (g_skippedThisRun.size() < kMaxKept)
@@ -189,9 +208,9 @@ void CheckShown(const void* holder) noexcept
                 if (!Contains(g_reported, key) && g_reported.size() < kMaxReported)
                 {
                     g_reported.push_back(key);
-                    platform::Log(L"minimap icons: an icon kept for {} is shown on {}'s map (key {:#x}, kind {}, "
-                                  L"visibility {:#x})",
-                                  RunName(1 - run), RunName(run), key, kind, visibility);
+                    platform::Log(L"minimap icons: an icon kept for another player is shown on {}'s map (key {:#x}, "
+                                  L"kind {}, visibility {:#x})",
+                                  RunName(run), key, kind, visibility);
                 }
                 return remaining != 0;
             });
@@ -209,28 +228,42 @@ void LogCounts() noexcept
         return;
     }
     g_countsAt = now + kCountsPeriodMs;
-    Counts d[2];
-    for (int i = 0; i < 2; ++i)
+    Counts d[kPlayers];
+    bool   any = false;
+    for (int i = 0; i < kPlayers; ++i)
     {
         d[i] = {g_counts[i].runs - g_logged[i].runs,       g_counts[i].kept - g_logged[i].kept,
                 g_counts[i].removes - g_logged[i].removes, g_counts[i].skipped - g_logged[i].skipped,
                 g_counts[i].shown - g_logged[i].shown};
         g_logged[i] = g_counts[i];
+        any         = any || d[i].removes != 0 || d[i].kept != 0;
     }
-    if (d[0].removes == 0 && d[1].removes == 0 && d[0].kept == 0 && d[1].kept == 0)
+    if (!any || !platform::Enabled(platform::Level::Debug))
     {
         return;
     }
-    platform::LogDebug(L"minimap icons (2 min): player 2's runs {}: kept {}, removes {}, skipped for player 1 {}, shown "
-                       L"anyway {}; player 1's centre: mod runs {}, kept {}, removes {}, skipped for player 2 {}, shown "
-                       L"anyway {}",
-                       d[1].runs, d[1].kept, d[1].removes, d[1].skipped, d[1].shown, d[0].runs, d[0].kept, d[0].removes,
-                       d[0].skipped, d[0].shown);
+    try
+    {
+        std::wstring runs;
+        for (int i = 0; i < kPlayers; ++i)
+        {
+            if (i == 0 || d[i].runs != 0)
+            {
+                runs += std::format(L"{}{}'s {} {}: kept {}, removes {}, skipped for another player {}, shown anyway {}",
+                                    i == 0 ? L"" : L"; ", RunName(i), i == 0 ? L"centre: mod runs" : L"runs",
+                                    d[i].runs, d[i].kept, d[i].removes, d[i].skipped, d[i].shown);
+            }
+        }
+        platform::LogDebug(L"minimap icons (2 min): {}", runs);
+    }
+    catch (...)
+    {
+    }
 }
 
 void Clear() noexcept
 {
-    for (int i = 0; i < 2; ++i)
+    for (int i = 0; i < kPlayers; ++i)
     {
         g_kept[i].clear();
         g_keptValid[i] = false;
@@ -300,16 +333,25 @@ void Remove() noexcept
     Clear();
 }
 
-void Tick(bool playerTwoMinimapOn) noexcept
+void Tick(unsigned seatsOn) noexcept
 {
     if (!g_removeCall.IsInstalled() || !generation::OnGameThread())
     {
         return;
     }
-    if (playerTwoMinimapOn != g_active)
+    const bool on = seatsOn != 0;
+    if (on != g_active)
     {
-        g_active = playerTwoMinimapOn;
-        Clear();  // off: the next run centred on player 1 removes player 2's icons, as the game does
+        g_active = on;
+        Clear();  // off: the next run centred on player 1 removes the seats' icons, as the game does
+    }
+    for (int seat = 1; on && seat < kPlayers; ++seat)
+    {
+        if ((seatsOn & (1u << seat)) == 0 && g_keptValid[seat])
+        {
+            g_kept[seat].clear();  // a seat whose minimap is off keeps nothing for the others
+            g_keptValid[seat] = false;
+        }
     }
     LogCounts();
 }
@@ -320,7 +362,7 @@ void BeginRun(int run) noexcept
     {
         return;
     }
-    g_run      = run == 1 ? 1 : 0;
+    g_run      = run >= 0 && run < kPlayers ? run : 0;
     g_inModRun = true;
     g_kept[g_run].clear();
     g_keptValid[g_run] = true;

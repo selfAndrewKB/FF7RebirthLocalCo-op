@@ -24,6 +24,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "player_two/generation.h"
+#include "players/seats.h"
 #include "views/player_view_point.h"
 
 #include <cstdint>
@@ -50,88 +51,118 @@ using RenderFn = void (*)(void* application);
 
 platform::CallRedirect  g_call;
 platform::EntryRedirect g_entry;  // 1.005, in place of g_call
-bool                   promptRowsKnown = false;  // game thread: player 2's prompt rows are being followed
+bool                   promptRowsKnown = false;  // game thread: the seats' prompt rows are being followed
+bool                   g_seatIn[players::kMaxPlayers] = {};  // game thread, by seat: in the game at the last render
 bool                   g_installed = false;
 
-// Render cost, logged every kRenderTimingFrames frames while player 2's image is on.
+// Render cost, logged every kRenderTimingFrames frames while a further player's image is on.
 constexpr std::uint32_t kRenderTimingFrames = 240;
-double        g_playerTwoSeconds   = 0.0;
+double        g_furtherSeconds     = 0.0;
 double        g_playerOneSeconds   = 0.0;
 double        g_playerOneStart     = 0.0;
 std::uint32_t g_renderTimedFrames  = 0;
 
 using platform::frame_watch::Now;
 
+/// A further seat's pass of the overlay render: its levers and updates, its own render into the entry named for it,
+/// everything put back for the next pass. Its image is ready (second_image's ImageReady).
+void FurtherPass(int seat) noexcept
+{
+    const double deltaTime = BeginFurtherPass();  // the engine's DeltaTime 0 for the render; the slot taking part
+    overlay_pass::Set(seat);
+    // the seat's rows, markers, pins and command menu only (hud/passes/pass_opacity.h)
+    pass_opacity::ShowOnly(seat);
+    target_views::BeforePass(seat);  // the other players' cursors and gauges collapsed before the seat's updates
+    const bool content = EnterSeat(seat);  // the seat's levers and updates (hud/passes/player_two_pass.h)
+    if (content)
+    {
+        area_icons_two::Tick(seat, static_cast<float>(deltaTime));  // under the seat's view rect
+    }
+    area_icons_two::ShowOnly(seat);
+    const double start = Now();
+    // The seat's minimap (hud/minimap/minimap.h); without it, player 1's pass alone renders the minimap's map
+    // (hud/minimap/minimap_once.h).
+    BeginMinimapPlayerTwoPass(minimap::BeginPaint(seat));
+    RenderFurther();  // on a fault the minimap's target field and held slot are still put back below
+    EndMinimapPlayerTwoPass();
+    minimap::EndPaint();
+    g_furtherSeconds += Now() - start;
+    enemy_gauges::EndSeatPass();  // each gauge's size back to player 1's before player 1's updates
+    target_views::BeforePass(0);  // the seat's, collapsed before player 1's updates (put back after the render)
+    if (content)
+    {
+        LeaveSeat(seat);
+    }
+    area_icons_two::ShowOnly(0);
+    pass_opacity::ShowOnly(0);  // player 1's rows, markers, pins and command menu for player 1's pass
+    EndFurtherPass();  // DeltaTime back
+}
+
 /// Replaces the call (entered from the game's code through a bare jump: nothing here may throw).
 void RenderRootOverlay(void* application) noexcept
 {
     const bool gameThread = player_two::generation::OnGameThread();
-    // The whole call: the game's overlay render, player 2's pass in it, and the mod's work around it.
+    // The whole call: the game's overlay render, the further passes before it, and the mod's work around it.
     const platform::frame_watch::Charge charge(platform::frame_watch::Part::OverlayRender);
     if (gameThread)
     {
         TraceBeforeRender();  // the HUD trace (hud/hud_trace.h; a stub without the dev tools)
         target_views::BeginFrame();  // this frame's target lookups made afresh
-        const bool splitShown = player_two::generation::Active() && views::SplitShown();  // not player 1's single view
+        const bool splitShown = player_two::generation::AnyActive() && views::SplitShown();  // not player 1's single view
         // The field-action icons' base for the split's layout (or the game's own), before the rows'
         // layout below, which then reads it.
         action_icon_base::Update(splitShown ? LastLayoutSize() : kSoloLayout);
-        if (player_two::generation::Active())
+        if (player_two::generation::AnyActive())
         {
             prompt_rows::Refresh();  // whose each prompt row is; each player's laid out on their own
             promptRowsKnown = true;
+            for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+            {
+                const bool in = player_two::generation::Active(seat);
+                if (g_seatIn[seat] && !in)  // a seat out while another is in: its own HUD state forgotten
+                {
+                    prompt_rows::Forget(seat);
+                    area_icons_two::SeatOut(seat);
+                    marker_timers::Forget(seat);
+                    enemy_gauges::SeatOut(seat);
+                }
+                g_seatIn[seat] = in;
+            }
         }
         else if (promptRowsKnown)
         {
             prompt_rows::Forget();
-            area_icons_two::PlayerTwoOut();
+            area_icons_two::AllOut();
             marker_timers::Forget();
             promptRowsKnown = false;
+            for (bool& in : g_seatIn)
+            {
+                in = false;
+            }
         }
         FollowHudPlacementBeforeRender();  // after the rows' layout, which can set a row's point
-        // Player 2's pass first, if its image is on (hud/passes/second_image.h holds the slot and renders; the levers
-        // and the per-pass opacities around its render are the modules' own calls, in this order).
-        SetOverlayPass(OverlayPass::None);
+        // The further seats' passes first, highest seat first, each whose image is on (hud/passes/second_image.h
+        // holds the slot and renders; the levers and the per-pass opacities around each render are the modules' own
+        // calls, in FurtherPass's order).
+        overlay_pass::Set(overlay_pass::kNone);
         BeginFrame();
-        if (PlayerTwoImageReady(splitShown))
+        minimap::BeginOverlayRender();
+        BeginPasses();
+        for (int seat = players::kSeatsBuilt; seat >= 1; --seat)
         {
-            const double deltaTime = BeginPlayerTwoPass();  // the engine's DeltaTime 0 for the render; the slot held
-            SetOverlayPass(OverlayPass::PlayerTwo);
-            // player 2's rows, markers, pins and command menu only (hud/passes/pass_opacity.h)
-            pass_opacity::ShowOnly(1);
-            target_views::BeforePass(1);  // player 1's cursor and gauges collapsed before player 2's updates read them
-            const bool content = EnterPlayerTwo();  // player 2's levers and updates (hud/passes/player_two_pass.h)
-            if (content)
+            if (player_two::generation::Active(seat) && ImageReady(seat, splitShown))
             {
-                area_icons_two::Tick(static_cast<float>(deltaTime));  // under player 2's view rect
+                FurtherPass(seat);
             }
-            area_icons_two::ShowOnly(1);
-            const double start = Now();
-            // Player 2's minimap (hud/minimap/minimap.h); without it, player 1's pass alone renders the minimap's map
-            // (hud/minimap/minimap_once.h).
-            BeginMinimapPlayerTwoPass(minimap::BeginPlayerTwoPaint());
-            RenderPlayerTwo();  // on a fault the minimap's target field and held slot are still put back below
-            EndMinimapPlayerTwoPass();
-            minimap::EndPlayerTwoPaint();
-            g_playerTwoSeconds += Now() - start;
-            enemy_gauges::EndPlayerTwoPass();  // each gauge's size back to player 1's before player 1's updates
-            target_views::BeforePass(0);  // player 2's, collapsed before player 1's updates (put back after the render)
-            if (content)
-            {
-                LeavePlayerTwo();
-            }
-            area_icons_two::ShowOnly(0);
-            pass_opacity::ShowOnly(0);  // player 1's rows, markers, pins and command menu for player 1's pass
-            EndPlayerTwoPass();  // DeltaTime back
         }
-        BeginPlayerOnePass();  // the game's own call follows: whether player 2's entry was rendered, for the families
-        SetOverlayPass(OverlayPass::PlayerOne);
+        BeginPlayerOnePass();  // the game's own call follows: whose entries were rendered, for the families
+        overlay_pass::Set(0);
         g_playerOneStart = Now();
-        if (player_two::generation::Active() && !splitShown)
+        if (player_two::generation::AnyActive() && !splitShown)
         {
-            // Player 1's single view (players/single_view.h): no image for player 2, and player 1's
-            // pass shows only player 1's own rows, marks, icons and command menu, as after player 2's
-            // pass. Player 2's rows stay painted (transparent), so their timers keep running.
+            // Player 1's single view (players/single_view.h): no image for the further players, and player 1's
+            // pass shows only player 1's own rows, marks, icons and command menu, as after a further pass. The
+            // seats' rows stay painted (transparent), so their timers keep running.
             target_views::BeforePass(0);
             area_icons_two::ShowOnly(0);
             pass_opacity::ShowOnly(0);  // the rows, markers, pins and the command menu (hud/passes/pass_opacity.h)
@@ -150,18 +181,18 @@ void RenderRootOverlay(void* application) noexcept
                 {
                     const platform::frame_watch::Job job(L"HUD image timing log");
                     const double perFrame = 1000.0 / g_renderTimedFrames;
-                    platform::Log(L"HUD image: overlay render ms per frame over {} frames: player 2's pass {:.3f}, "
-                                  L"player 1's pass {:.3f}",
-                                  g_renderTimedFrames, g_playerTwoSeconds * perFrame, g_playerOneSeconds * perFrame);
+                    platform::Log(L"HUD image: overlay render ms per frame over {} frames: the further players' passes "
+                                  L"{:.3f}, player 1's pass {:.3f}",
+                                  g_renderTimedFrames, g_furtherSeconds * perFrame, g_playerOneSeconds * perFrame);
                 }
-                g_playerTwoSeconds  = 0.0;
+                g_furtherSeconds    = 0.0;
                 g_playerOneSeconds  = 0.0;
                 g_renderTimedFrames = 0;
             }
         }
         EndFrame();                   // a slot player 1's pass did not take is submitted (logged)
         minimap::EndOverlayRender();  // the minimap's held pool-0 slot, if player 1's pass did not take it
-        SetOverlayPass(OverlayPass::None);
+        overlay_pass::Set(overlay_pass::kNone);
         enemy_gauges::EndFrame();  // the gauges' record, emptied for the next tick
         popups::EndFrame();
         pass_opacity::RestoreAll();  // every row, marker, pin and the command menu back to their own

@@ -19,12 +19,13 @@ namespace lss::hud::hud_updates {
 /// Checks every update's prologue and finds EndUISystem. False if any differs.
 bool Install(const platform::GameImage& image) noexcept;
 
-/// Player 2's run of the marker list with each view's own arrow timers (hud/field/marker_timers.h): the
+/// A seat's run of the marker list with each view's own arrow timers (hud/field/marker_timers.h): the
 /// game mode's HUD time step is `realStep` for that one list (`timeStep` is the field), 0 again after.
 struct OwnArrowTimers
 {
     float* timeStep = nullptr;
     float  realStep = 0.0f;
+    int    seat     = 0;  // whose timers
 };
 
 /// Runs the lists and the leader-target icon (if `lists`) and the compass (if `compass`) with a

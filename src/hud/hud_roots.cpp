@@ -10,8 +10,10 @@
 #include "hud/user_widgets.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
+#include "platform/log.h"
 #include "platform/verified_code.h"
 #include "player_two/scopes/primary_controller.h"
+#include "players/local_players.h"
 #include "players/unreal_access.h"
 
 #include <algorithm>
@@ -53,10 +55,10 @@ constexpr std::int32_t kNoOffset  = -1;
 
 // Game thread.
 std::vector<Root> g_roots;
-std::vector<char> g_swapped;  // per root: given player 2's context this frame (put back after)
+std::vector<char> g_swapped;  // per root: given a further seat's context in this pass (put back after)
 std::vector<char> g_selfPlacing;  // per root: shows or collapses itself in each run (marked per frame)
-std::size_t       g_hiddenSwapped = 0;  // self-placing roots given player 2's context while collapsed, this frame
-PlayerContext     g_contexts[2];
+std::size_t       g_hiddenSwapped = 0;  // self-placing roots given a seat's context while collapsed, last pass
+PlayerContext     g_contexts[players::kMaxPlayers];  // by seat; a seat with no local player has none
 Root              g_gameInstance;  // found once: FindFirstOf walks every UObject
 std::int32_t      g_slotOffset       = kNoOffset;  // UWidget::Slot and UWidget::Visibility, found once
 std::int32_t      g_visibilityOffset = kNoOffset;
@@ -142,8 +144,9 @@ bool Install(const platform::GameImage& image) noexcept
     return true;
 }
 
-bool LocalPlayers(UObject*& one, UObject*& two)
+bool LocalPlayers(LocalPlayerSet& bySeat)
 {
+    bySeat = {};
     if (g_gameInstance.object == nullptr || !user_widgets::Alive(g_gameInstance))
     {
         UObject* instance = players::unreal::GameInstance();
@@ -152,16 +155,26 @@ bool LocalPlayers(UObject*& one, UObject*& two)
                                                        instance->GetClassPrivate()};
     }
     auto* list = g_gameInstance.object == nullptr ? nullptr : players::unreal::LocalPlayers(g_gameInstance.object);
-    if (list == nullptr || list->Num() < 2)
+    for (std::int32_t i = 0; list != nullptr && i < list->Num(); ++i)
     {
-        return false;
+        // By the controller id, which is the seat: the list's order is the views' on screen, not the seats'.
+        const std::int32_t id = players::LocalPlayerControllerId((*list)[i]);
+        if (id >= 0 && id < players::kMaxPlayers && bySeat[static_cast<std::size_t>(id)] == nullptr)
+        {
+            bySeat[static_cast<std::size_t>(id)] = (*list)[i];
+        }
     }
-    one = (*list)[0];
-    two = (*list)[1];
-    return true;
+    static bool s_said = false;
+    if (bySeat[0] == nullptr && list != nullptr && list->Num() > 0 && !s_said)
+    {
+        s_said = true;
+        platform::Log(L"HUD roots: no listed local player has controller id 0 (player 1's); the further players' HUD "
+                      L"content stays off while that holds (logged once)");
+    }
+    return bySeat[0] != nullptr;
 }
 
-bool Scan(UObject* playerOne, UObject* playerTwo)
+bool Scan(const LocalPlayerSet& bySeat)
 {
     // Every root is back to player 1's context between frames, so nothing is lost by forgetting
     // which were swapped.
@@ -187,9 +200,17 @@ bool Scan(UObject* playerOne, UObject* playerTwo)
     }
     g_swapped.assign(g_roots.size(), 0);
     g_selfPlacing.assign(g_roots.size(), 0);
-    g_contexts[0] = {player_two::primary_controller::WeakValueOf(playerOne), world};
-    g_contexts[1] = {player_two::primary_controller::WeakValueOf(playerTwo), world};
-    return world != 0 && g_contexts[0].localPlayer != 0 && g_contexts[1].localPlayer != 0;
+    for (std::size_t seat = 0; seat < bySeat.size(); ++seat)
+    {
+        const std::uint64_t weak = bySeat[seat] == nullptr ? 0 : player_two::primary_controller::WeakValueOf(bySeat[seat]);
+        g_contexts[seat]         = weak == 0 ? PlayerContext{} : PlayerContext{weak, world};
+    }
+    return world != 0 && g_contexts[0].localPlayer != 0;
+}
+
+bool HasContext(int seat) noexcept
+{
+    return seat >= 0 && seat < players::kMaxPlayers && g_contexts[seat].localPlayer != 0;
 }
 
 void Adopt(UObject* widget)
@@ -219,13 +240,17 @@ bool AdoptSelfPlacing(UObject* widget)
     return false;
 }
 
-bool SetContexts(int player) noexcept
+bool SetContexts(int seat) noexcept
 {
-    // Player 2's context goes only to roots that are shown this frame (a hidden root is neither
+    // A further seat's context goes only to roots that are shown this frame (a hidden root is neither
     // ticked nor painted), and to the self-placing ones whatever their visibility (their run shows
     // or collapses them from the context's own projection); player 1's goes back to exactly those.
-    const bool           toTwo   = player != 0;
-    const PlayerContext& context = g_contexts[toTwo ? 1 : 0];
+    const bool toTwo = seat != 0;  // toward a further seat
+    if (!HasContext(seat))
+    {
+        return false;
+    }
+    const PlayerContext& context = g_contexts[seat];
     bool                 all     = true;
     if (toTwo)
     {

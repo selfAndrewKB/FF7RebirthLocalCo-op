@@ -17,6 +17,7 @@
 #include "player_two/battle/lock_on.h"
 #include "player_two/generation.h"
 #include "player_two/weak_object.h"
+#include "players/seats.h"
 #include "players/widget_opacity.h"
 
 #include <algorithm>
@@ -116,7 +117,7 @@ struct MainLookup
     std::array<std::uintptr_t, 2> out{};
 };
 
-/// A player-2 label lookup, for the log.
+/// A further seat's label lookup, for the log.
 struct LabelLog
 {
     std::uintptr_t character = 0, key = 0;
@@ -129,27 +130,31 @@ struct PassHides
 {
     bool           cursor = false;
     std::int32_t   gauges = 0;
-    std::uintptr_t hiddenCursor = 0;  // the cursor this pass takes out (the other player's)
+    std::int32_t   cursors      = 0;  // the other players' cursors this pass takes out
     std::uintptr_t ownCursor    = 0;  // this pass's own player's cursor
     std::int32_t   entries      = 0;  // the bar manager's gauges this frame
-    bool           list         = false;  // player 2's command target list open
+    bool           list         = false;  // a further player's command target list open
     bool operator==(const PassHides&) const = default;
 };
 
 // Game thread.
-HiddenSet                   g_hidden;  // the other player's marks, transparent for a pass
-std::array<MainLookup, 4>   g_lookups{};      // this frame's main-target lookups (BeginFrame empties them)
+using Seats = std::array<int, players::kMaxPlayers>;
+static_assert(players::kMaxPlayers == 3, "the logged counts below start with one -1 per player");
+
+HiddenSet                   g_hidden;  // the other players' marks, transparent for a pass
+std::array<MainLookup, 8>   g_lookups{};      // this frame's main-target lookups (BeginFrame empties them)
 std::size_t                 g_lookupCount = 0;
 bool                        g_gaugesFound = false;  // this frame's walk done
-std::array<std::vector<std::uint64_t>, 2> g_otherGauges;  // per pass (0 player 1's, 1 player 2's): the other player's
-                                                          // gauges, as their widgets' FWeakObjectPtr (resolved at use)
-int                         g_currentPass = -1;  // the view whose HUD updates and render run (0, 1), else -1
+// Per pass, by its seat ([0] player 1's): the gauges another player targets and this pass's does not, as their
+// widgets' FWeakObjectPtr (resolved at use).
+std::array<std::vector<std::uint64_t>, players::kMaxPlayers> g_otherGauges;
+int                         g_currentPass = -1;  // the seat whose view's HUD updates and render run, else -1
 bool                        g_failed = false;
-std::array<PassHides, 2>    g_loggedHides{};
+std::array<PassHides, players::kMaxPlayers> g_loggedHides{};
 std::array<LabelLog, 8>     g_loggedLabels{};  // per character, as last logged
 std::uint32_t               g_nextLabel = 0;   // the slot a newly seen character takes
-std::array<std::int32_t, 2> g_loggedUnion{-1, -1};
-std::uint32_t               g_listOpenings = 0;  // player 2's target list openings seen: each logs the hides afresh
+Seats                       g_loggedUnion{-1, -1, -1};  // the collection's count before the seats' runs, then after each
+std::uint32_t               g_listOpenings = 0;  // the seats' target list openings seen: each logs the hides afresh
 std::int32_t                g_entryCount   = 0;  // the bar manager's gauges, counted by this frame's walk (the log)
 
 using platform::ReadAt;  // the guarded reads: platform/guarded.h
@@ -174,32 +179,45 @@ std::int32_t Count(const void* list) noexcept
     return ReadAt<std::int32_t>(reinterpret_cast<std::uintptr_t>(list) + 8);
 }
 
-/// Replaces both collection calls: the game's collection, then again with player 2's target fields.
+/// Replaces both collection calls: the game's collection, then again with each seat's target fields (in turn, one
+/// TargetScope at a time). Each run only appends what is missing.
 void Collect(void* out) noexcept
 {
     const auto original = reinterpret_cast<CollectFn>(g_createCall.Original());
     original(out);
-    if (!g_unionOn || !player_two::generation::Active() || player_two::generation::Member() == nullptr ||
-        player_two::lock_on::DisplayedObject() == 0)
+    if (!g_unionOn)
     {
         return;
     }
-    const std::int32_t              before = Count(out);
-    const player_two::lock_on::TargetScope scope;
-    if (!scope.Held())
+    Seats counts{Count(out), -1, -1};
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (!player_two::generation::Active(seat) || player_two::generation::MemberOf(seat) == nullptr ||
+            player_two::lock_on::DisplayedObject(seat) == 0)
+        {
+            continue;
+        }
+        const player_two::lock_on::TargetScope scope(seat);
+        if (scope.Held())
+        {
+            original(out);
+            counts[static_cast<std::size_t>(seat)] = Count(out);
+        }
+    }
+    if (counts == Seats{counts[0], -1, -1} || !platform::Enabled(platform::Level::Debug) || counts == g_loggedUnion)
     {
         return;
     }
-    original(out);
-    const std::int32_t after = Count(out);
-    if (!platform::Enabled(platform::Level::Debug) || (before == g_loggedUnion[0] && after == g_loggedUnion[1]))
-    {
-        return;
-    }
-    g_loggedUnion = {before, after};
+    g_loggedUnion = counts;
     try
     {
-        Note(platform::Level::Debug, std::format(L"collected {} for player 1, {} with player 2's target", before, after));
+        std::wstring seats;
+        for (int seat = 1; seat < players::kMaxPlayers; ++seat)
+        {
+            const int count = counts[static_cast<std::size_t>(seat)];
+            seats += count < 0 ? L"" : std::format(L", {} with {}'s target", count, players::SeatName(seat));
+        }
+        Note(platform::Level::Debug, std::format(L"collected {} for player 1{}", counts[0], seats));
     }
     catch (...)
     {
@@ -282,18 +300,19 @@ bool Hide(void* widget) noexcept
 
 /// Replaces the red ability label's gauge lookup. The lookup considers only the gauge of the bar
 /// manager's targeted key (+0x140/+0x148, the locked-on target, player 1's; read locally at
-/// 0x140A68CC1 and 0x140A68E01): the label makes way only for that gauge. During player 2's
-/// updates the key holds player 2's displayed target for the length of this call, and player 1's
-/// is put back after, so player 2's label makes way for player 2's locked-on gauge only.
+/// 0x140A68CC1 and 0x140A68E01): the label makes way only for that gauge. During a seat's
+/// updates the key holds the seat's displayed target for the length of this call, and player 1's
+/// is put back after, so the seat's label makes way for the seat's locked-on gauge only.
 std::uint8_t LabelLookup(void* manager, float* point, float* scale, void* character) noexcept
 {
     const auto original = reinterpret_cast<LookupFn>(g_lookupCall.Original());
-    if (g_currentPass != 1 || manager == nullptr)
+    const int  seat     = g_currentPass;
+    if (!players::SeatIndex(seat) || manager == nullptr)
     {
         return original(manager, point, scale, character);  // player 1's view and the game's tick: its own key
     }
     Pair two;
-    player_two::lock_on::Displayed(two.object, two.controller);
+    player_two::lock_on::Displayed(seat, two.object, two.controller);
     const auto key   = reinterpret_cast<std::uintptr_t>(manager) + kTargetedKey;
     const Pair theirs{ReadAt<std::uintptr_t>(key), ReadAt<std::uintptr_t>(key + 8)};
     // A borrowed swap: the lookup pins the key with its own reference and releases it again.
@@ -334,8 +353,9 @@ std::uint8_t LabelLookup(void* manager, float* point, float* scale, void* charac
         *logged = now;
         try
         {
-            Note(level, std::format(L"player 2's view: a red label for {:#x} {} player 2's locked-on gauge ({:#x}){}", now.character,
-                                    now.found ? L"makes way for" : L"has no", now.key, now.ok ? L"" : L"; the lookup RAISED an exception"));
+            Note(level, std::format(L"{}'s view: a red label for {:#x} {} their locked-on gauge ({:#x}){}",
+                                    players::SeatName(seat), now.character, now.found ? L"makes way for" : L"has no",
+                                    now.key, now.ok ? L"" : L"; the lookup RAISED an exception"));
         }
         catch (...)
         {
@@ -344,36 +364,57 @@ std::uint8_t LabelLookup(void* manager, float* point, float* scale, void* charac
     return found;
 }
 
-/// Once per frame: the gauges each pass takes out (the other player's target's only, and not in
-/// both players' games).
+/// Once per frame: the gauges each pass takes out (another player's target's, not its own player's, and not in
+/// every player's game).
 void FindOtherGauges(std::uintptr_t system)
 {
     g_gaugesFound = true;
     g_entryCount  = 0;
-    g_otherGauges[0].clear();
-    g_otherGauges[1].clear();
+    for (auto& gauges : g_otherGauges)
+    {
+        gauges.clear();
+    }
     const std::uintptr_t manager = ReadAt<std::uintptr_t>(g_endUISystem + facts::kUIEnemyStatus);
     if (manager == 0 || system == 0)
     {
         return;
     }
-    Pair two;
-    player_two::lock_on::Displayed(two.object, two.controller);
-    const auto one  =
-        MainOf(Pair{ReadAt<std::uintptr_t>(system + kDisplayed), ReadAt<std::uintptr_t>(system + kDisplayed + 8)});
-    const auto mine = MainOf(two);
+    // Each player's displayed target and its main target ([0] player 1's, the battle system's own).
+    std::array<std::array<std::uintptr_t, 2>, players::kMaxPlayers> targets{};
+    targets[0] = MainOf(Pair{ReadAt<std::uintptr_t>(system + kDisplayed), ReadAt<std::uintptr_t>(system + kDisplayed + 8)});
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        Pair displayed;
+        player_two::lock_on::Displayed(seat, displayed.object, displayed.controller);
+        targets[static_cast<std::size_t>(seat)] = MainOf(displayed);
+    }
     if (g_failed)
     {
         return;
     }
     platform::ForEachSparseElement(manager + kEntries, kElement, [&](std::uintptr_t entry) {
         ++g_entryCount;
-        const auto source = ReadAt<std::uintptr_t>(entry);
-        const int  pass   = hud_rules::OtherGaugePass(Contains(one, source), Contains(mine, source));
-        if (pass >= 0 && !Shared(source, manager))
+        const auto source  = ReadAt<std::uintptr_t>(entry);
+        unsigned   holders = 0;
+        for (std::size_t s = 0; s < targets.size(); ++s)
         {
-            // Player 2's pass takes out player 1's only; player 1's pass player 2's only.
-            g_otherGauges[pass].push_back(ReadAt<std::uint64_t>(entry + kEntryWidget));
+            holders |= Contains(targets[s], source) ? 1u << s : 0u;
+        }
+        bool hiddenSomewhere = false;
+        for (int pass = 0; pass < players::kMaxPlayers; ++pass)
+        {
+            hiddenSomewhere = hiddenSomewhere || hud_rules::GaugeHiddenIn(holders, pass);
+        }
+        if (!hiddenSomewhere || Shared(source, manager))  // the game's calls only for a gauge some view would lose
+        {
+            return true;
+        }
+        for (int pass = 0; pass < players::kMaxPlayers; ++pass)
+        {
+            if (hud_rules::GaugeHiddenIn(holders, pass))  // another player's target, not this view's player's
+            {
+                g_otherGauges[static_cast<std::size_t>(pass)].push_back(ReadAt<std::uint64_t>(entry + kEntryWidget));
+            }
         }
         return true;
     });
@@ -445,7 +486,7 @@ bool InstallSites(const platform::GameImage& image) noexcept
         }
         g_unionOn = false;
     }
-    platform::Log(L"target views: {}; player 2's enemy gauges {}; red ability labels {}",
+    platform::Log(L"target views: {}; the further players' enemy gauges {}; red ability labels {}",
                   g_installed ? L"per-view marks ready" : L"UNAVAILABLE",
                   g_unionOn ? L"collected with player 1's" : L"NOT collected (a check failed)",
                   labels ? L"make way for each player's own locked-on gauge" : L"follow player 1's lock-on (a check failed)");
@@ -475,46 +516,64 @@ void BeginFrame() noexcept
     g_gaugesFound = false;
 }
 
-void BeforePass(int player) noexcept
+void BeforePass(int seat) noexcept
 {
     AfterPass();
-    if (!g_installed || g_failed || !player_two::generation::OnGameThread() || !player_two::generation::Active())
+    if (!g_installed || g_failed || !player_two::generation::OnGameThread() || !player_two::generation::AnyActive() ||
+        seat < 0 || seat >= players::kMaxPlayers)
     {
         return;
     }
     try
     {
-        if (const auto openings = player_two::lock_on::TargetListOpenings(); openings != g_listOpenings)
+        std::uint32_t openings = 0;
+        bool          list     = false;
+        for (int s = 1; s <= players::kSeatsBuilt; ++s)
         {
-            g_listOpenings = openings;  // player 2's target list opened: the hides are logged afresh
+            openings += player_two::lock_on::TargetListOpenings(s);
+            list = list || player_two::lock_on::TargetListOpen(s);
+        }
+        if (openings != g_listOpenings)
+        {
+            g_listOpenings = openings;  // a seat's target list opened: the hides are logged afresh
             g_loggedHides  = {};
         }
-        const std::uintptr_t system  = ReadAt<std::uintptr_t>(g_battleSystem);
-        const auto           oneCur  = ReadAt<std::uintptr_t>(system != 0 ? system + kCursor : 0);
-        const auto           twoCur  = reinterpret_cast<std::uintptr_t>(player_two::lock_on::Cursor());
-        PassHides            hides;
-        hides.hiddenCursor = player != 0 ? oneCur : twoCur;
-        hides.ownCursor    = player != 0 ? twoCur : oneCur;
-        hides.list         = player_two::lock_on::TargetListOpen();
-        hides.cursor       = Hide(reinterpret_cast<void*>(hides.hiddenCursor));
+        const std::uintptr_t system = ReadAt<std::uintptr_t>(g_battleSystem);
+        // Each player's cursor ([0] player 1's, the battle system's own): every one but this view's player's goes.
+        std::array<std::uintptr_t, players::kMaxPlayers> cursors{};
+        cursors[0] = ReadAt<std::uintptr_t>(system != 0 ? system + kCursor : 0);
+        for (int s = 1; s <= players::kSeatsBuilt; ++s)
+        {
+            cursors[static_cast<std::size_t>(s)] = reinterpret_cast<std::uintptr_t>(player_two::lock_on::Cursor(s));
+        }
+        PassHides hides;
+        hides.ownCursor = cursors[static_cast<std::size_t>(seat)];
+        hides.list      = list;
+        for (std::size_t s = 0; s < cursors.size(); ++s)
+        {
+            if (static_cast<int>(s) != seat)
+            {
+                hides.cursors += Hide(reinterpret_cast<void*>(cursors[s])) ? 1 : 0;
+            }
+        }
         if (!g_gaugesFound)
         {
             FindOtherGauges(system);
         }
         hides.entries = g_entryCount;
-        for (const std::uint64_t weak : g_otherGauges[player != 0 ? 1 : 0])
+        for (const std::uint64_t weak : g_otherGauges[static_cast<std::size_t>(seat)])
         {
             hides.gauges += Hide(WidgetOf(weak)) ? 1 : 0;
         }
-        g_currentPass = player != 0 ? 1 : 0;  // the label lookup in this view's updates skips those gauges
-        const std::size_t pass = player != 0 ? 1 : 0;
-        if (hides != g_loggedHides[pass] && platform::Enabled(platform::Level::Trace))
+        g_currentPass = seat;  // the label lookup in this view's updates skips those gauges
+        auto& logged  = g_loggedHides[static_cast<std::size_t>(seat)];
+        if (hides != logged && platform::Enabled(platform::Level::Trace))
         {
-            g_loggedHides[pass] = hides;
-            Note(platform::Level::Trace, std::format(L"{}'s pass takes out {} ({:#x}; its own {:#x}) and {} of {} gauge(s){}",
-                             player != 0 ? L"player 2" : L"player 1",
-                             hides.cursor ? L"the other player's cursor" : L"no cursor", hides.hiddenCursor, hides.ownCursor,
-                             hides.gauges, hides.entries, hides.list ? L" | player 2's target list open" : L""));
+            logged = hides;
+            Note(platform::Level::Trace,
+                 std::format(L"{}'s pass takes out {} other player's cursor(s) (its own {:#x}) and {} of {} gauge(s){}",
+                             players::SeatName(seat), hides.cursors, hides.ownCursor, hides.gauges, hides.entries,
+                             hides.list ? L" | a further player's target list open" : L""));
         }
     }
     catch (...)

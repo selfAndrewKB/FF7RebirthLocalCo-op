@@ -3,10 +3,12 @@
 #include "facts/command_controller.h"
 #include "facts/hud.h"
 #include "platform/log.h"
+#include "player_two/battle/command_menu_two.h"
 #include "player_two/battle/command_menu_two_shared.h"
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
 #include "player_two/weak_object.h"
+#include "players/seats.h"
 #include "players/widget_opacity.h"
 
 #include <array>
@@ -25,11 +27,11 @@ using facts::kCmdMenuWidget;
 using facts::kUICommandController;
 using facts::kUIKeyGuide;
 
-// A controller's widgets shown per half (RE-p2-command-menu-views.md §10.3, §10.5): the command
+// A controller's widgets shown per view (RE-p2-command-menu-views.md §10.3, §10.5): the command
 // menu, the field menu (the party list) and the wait-mode filter (the tactical-mode tint), each an
-// FWeakObjectPtr in the controller. In player 2's pass, player 2's command and field menus take player
+// FWeakObjectPtr in the controller. In a seat's pass, the seat's command and field menus take player
 // 1's own opacity (their fades), the filter its full opacity (its own content decides).
-// The key guide's widget (FWeakObjectPtr at +4 of a KeyGuide53; the game's guide at EndUISystem[53], player 2's own
+// The key guide's widget (FWeakObjectPtr at +4 of a KeyGuide53; the game's guide at EndUISystem[53], each seat's own
 // built with its controller) shows at full opacity: its own tick (player_two/widget_owner) sets its visibility and
 // plays its show and hide animations.
 constexpr std::uint32_t kWaitFilterWidget = 0x62C;  // FWeakObjectPtr: the controller's wait-mode filter
@@ -45,7 +47,7 @@ constexpr std::array<Part, 4> kParts{{{kCmdMenuWidget, true, false},
                                       {kWaitFilterWidget, false, false},
                                       {kKeyGuideWidget, false, true}}};
 // Render (game thread): player 1's widgets (FWeakObjectPtr, resolved again at each use: the game can
-// rebuild them) and their own opacity while player 2's pass shows player 2's.
+// rebuild them) and their own opacity while a seat's pass shows the seat's.
 struct Saved
 {
     std::uint64_t weak    = 0;
@@ -60,15 +62,21 @@ void Line(const std::wstring& text) noexcept
     platform::Log(L"command menu two: {}", text);
 }
 
-/// The owner of a part's widget for a player: the controller, or the key guide (the game's, or player 2's own).
-std::uintptr_t OwnerOf(const Part& part, bool playerTwo, std::uintptr_t controller) noexcept
+/// The owner of a part's widget for a player (`seat` 0 player 1): the controller, or the key guide (the game's, or the
+/// seat's own).
+std::uintptr_t OwnerOf(const Part& part, int seat, std::uintptr_t controller) noexcept
 {
     if (!part.guide)
     {
         return controller;
     }
-    return playerTwo ? reinterpret_cast<std::uintptr_t>(command_menu_two::KeyGuide())
+    return seat != 0 ? reinterpret_cast<std::uintptr_t>(command_menu_two::KeyGuide(seat))
                      : ReadAt<std::uintptr_t>(command_menu_two::UiSystem() + kUIKeyGuide);
+}
+
+std::uintptr_t ControllerOf(int seat) noexcept
+{
+    return reinterpret_cast<std::uintptr_t>(command_menu_two::Controller(seat));
 }
 
 /// A controller's widget (its FWeakObjectPtr at `offset`), or null.
@@ -85,26 +93,42 @@ void SetOpacity(void* widget, float opacity) noexcept
     }
 }
 
+/// Every seat's widgets but `except`'s at render opacity 0.
+void HideSeats(int except) noexcept
+{
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        const auto controller = ControllerOf(seat);
+        for (const Part& part : kParts)
+        {
+            if (seat != except && controller != 0)
+            {
+                SetOpacity(WidgetOf(OwnerOf(part, seat, controller), part.offset), 0.0F);
+            }
+        }
+    }
+}
+
 }  // namespace
 
-void ShowOnly(int player) noexcept
+void ShowOnly(int seat) noexcept
 {
-    const auto two = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller());
-    if (two == 0 || command_menu_two::UiSystem() == 0 || !players::widget_opacity::Installed() ||
-        !generation::OnGameThread())
+    const auto mine = players::SeatIndex(seat) ? ControllerOf(seat) : 0;
+    if (command_menu_two::UiSystem() == 0 || !players::widget_opacity::Installed() || !generation::OnGameThread())
     {
         return;
     }
     const auto one = ReadAt<std::uintptr_t>(command_menu_two::UiSystem() + kUICommandController);
-    if (player != 1 || ReadAt<std::uint8_t>(two + kCmdHudMode) == 0 || one == 0)
+    if (mine == 0 || ReadAt<std::uint8_t>(mine + kCmdHudMode) == 0 || one == 0)
     {
         return Restore();
     }
+    HideSeats(seat);  // a seat whose pass ran before this one
     for (std::size_t i = 0; i < kParts.size(); ++i)
     {
         const Part& part      = kParts[i];
-        const auto  oneOwner  = OwnerOf(part, false, one);
-        const auto  twoOwner  = OwnerOf(part, true, two);
+        const auto  oneOwner  = OwnerOf(part, 0, one);
+        const auto  twoOwner  = OwnerOf(part, seat, mine);
         void*       oneWidget = WidgetOf(oneOwner, part.offset);
         void*       twoWidget = WidgetOf(twoOwner, part.offset);
         if (oneWidget == nullptr || twoWidget == nullptr)
@@ -140,32 +164,31 @@ void Restore() noexcept
         }
         g_swapped = false;
     }
-    const auto two = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller());
-    for (const Part& part : kParts)
-    {
-        SetOpacity(WidgetOf(OwnerOf(part, true, two), part.offset), 0.0F);
-    }
+    HideSeats(0);
 }
 
 void KeepHidden() noexcept
 {
-    const auto two = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller());
-    if (two == 0 || !weak_object::Known() || !players::widget_opacity::Installed() || !generation::OnGameThread())
+    if (!weak_object::Known() || !players::widget_opacity::Installed() || !generation::OnGameThread())
     {
         return;
     }
-    for (const Part& part : kParts)
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        void* widget = WidgetOf(OwnerOf(part, true, two), part.offset);
-        if (widget == nullptr || players::widget_opacity::Get(widget) == 0.0F)
+        const auto controller = ControllerOf(seat);
+        for (const Part& part : kParts)
         {
-            continue;
-        }
-        const bool hidden = players::widget_opacity::Set(widget, 0.0F);
-        if (++g_hides <= 5 || g_hides % 100 == 0)
-        {
-            Line(std::format(L"widget +{:#x} {} (render opacity 0; {} time(s))", part.offset,
-                             hidden ? L"hidden" : L"could NOT be hidden", g_hides));
+            void* widget = controller != 0 ? WidgetOf(OwnerOf(part, seat, controller), part.offset) : nullptr;
+            if (widget == nullptr || players::widget_opacity::Get(widget) == 0.0F)
+            {
+                continue;
+            }
+            const bool hidden = players::widget_opacity::Set(widget, 0.0F);
+            if (++g_hides <= 5 || g_hides % 100 == 0)
+            {
+                Line(std::format(L"{}'s widget +{:#x} {} (render opacity 0; {} time(s))", players::SeatName(seat),
+                                 part.offset, hidden ? L"hidden" : L"could NOT be hidden", g_hides));
+            }
         }
     }
 }

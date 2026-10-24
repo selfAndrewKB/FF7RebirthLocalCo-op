@@ -123,15 +123,15 @@ void* Member(std::uint32_t member) noexcept
     return object;
 }
 
-/// The marker list with player 2's own arrow timers and the real time step (hud/field/marker_timers.h).
+/// The marker list with a seat's own arrow timers and the real time step (hud/field/marker_timers.h).
 bool RunMarkerListOwnTimers(ObjectFn tick, void* list, const OwnArrowTimers& arrows) noexcept
 {
     const float still = 0.0f;
-    marker_timers::SwapIn();
+    marker_timers::SwapIn(arrows.seat);
     platform::WriteGuarded(arrows.timeStep, &arrows.realStep, sizeof(float));
     const bool ran = CallGuarded(tick, list);
     platform::WriteGuarded(arrows.timeStep, &still, sizeof(float));
-    marker_timers::SwapOut();
+    marker_timers::SwapOut(arrows.seat);
     return ran;
 }
 

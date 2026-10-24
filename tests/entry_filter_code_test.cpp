@@ -1,4 +1,4 @@
-// Host-side tests for the player-2 entry buffers and the per-family draw gate, run without the game.
+// Host-side tests for the further seats' entry buffers and the per-family draw gate, run without the game.
 //
 // The bytes the mod writes near the game (hud/passes/entry_filter_code.h) are EXECUTED here, in small
 // harnesses that recreate their surroundings in the game's consume loop:
@@ -14,6 +14,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <initializer_list>
 #include <iterator>
 #include <vector>
 
@@ -161,7 +162,8 @@ int RunGate(void* page, std::uint64_t entryName, std::int32_t batchCount)
 }
 
 constexpr std::uint64_t kStockName     = 0x0000000000001234;
-constexpr std::uint64_t kPlayerTwoName = 0x0000000100001234;  // any other value: only equality is compared
+constexpr std::uint64_t kPlayerTwoName   = 0x0000000100001234;  // any other value: only equality is compared
+constexpr std::uint64_t kPlayerThreeName = 0x0000000200001234;
 constexpr std::uint64_t kMinimapName   = 0x0000000000005678;  // an entry of another pool ("SEndNaviMapCircle")
 
 template <bool PoolZero>
@@ -175,13 +177,31 @@ void TestBuffers()
         EXPECT(stock.vertexBuffer == 0x33 && stock.indexBuffer == 0x11 && stock.srmSlot == 0x22);
     });
 
-    fields.vertexBuffer  = 0xAA;
-    fields.indexBuffer   = 0xBB;
-    fields.srmSlot       = 0xCC;
-    fields.playerTwoName = kPlayerTwoName;
+    fields.Seat(1) = {kPlayerTwoName, 0xAA, 0xBB, 0xCC};
     WithPage(fields, BuffersHarnessCode<PoolZero>, [](void* page) {
         const auto own = RunBuffers(page, kPlayerTwoName);
         EXPECT(own.vertexBuffer == 0xAA && own.indexBuffer == 0xBB && own.srmSlot == 0xCC);
+        const auto stock = RunBuffers(page, kStockName);
+        EXPECT(stock.vertexBuffer == 0x33 && stock.indexBuffer == 0x11 && stock.srmSlot == 0x22);
+        const auto unset = RunBuffers(page, kPlayerThreeName);  // seat 2 has no entry yet
+        EXPECT(unset.vertexBuffer == 0x33 && unset.indexBuffer == 0x11 && unset.srmSlot == 0x22);
+    });
+
+    EntryFilterFields leftOne;  // player 2 left, player 3 stays: the walk passes the unset first entry
+    leftOne.Seat(2) = {kPlayerThreeName, 0xA3, 0xB3, 0xC3};
+    WithPage(leftOne, BuffersHarnessCode<PoolZero>, [](void* page) {
+        const auto three = RunBuffers(page, kPlayerThreeName);
+        EXPECT(three.vertexBuffer == 0xA3 && three.indexBuffer == 0xB3 && three.srmSlot == 0xC3);
+        const auto stock = RunBuffers(page, kPlayerTwoName);
+        EXPECT(stock.vertexBuffer == 0x33 && stock.indexBuffer == 0x11 && stock.srmSlot == 0x22);
+    });
+
+    fields.Seat(2) = {kPlayerThreeName, 0xA3, 0xB3, 0xC3};  // both seats: each entry its own seat's set
+    WithPage(fields, BuffersHarnessCode<PoolZero>, [](void* page) {
+        const auto two = RunBuffers(page, kPlayerTwoName);
+        EXPECT(two.vertexBuffer == 0xAA && two.indexBuffer == 0xBB && two.srmSlot == 0xCC);
+        const auto three = RunBuffers(page, kPlayerThreeName);
+        EXPECT(three.vertexBuffer == 0xA3 && three.indexBuffer == 0xB3 && three.srmSlot == 0xC3);
         const auto stock = RunBuffers(page, kStockName);
         EXPECT(stock.vertexBuffer == 0x33 && stock.indexBuffer == 0x11 && stock.srmSlot == 0x22);
     });
@@ -196,13 +216,13 @@ void TestBuffersStore1005()
         EXPECT(stock.vertexBuffer == 0x33 && stock.indexBuffer == 0x11 && stock.srmSlot == 0x22);
     });
 
-    fields.vertexBuffer  = 0xAA;
-    fields.indexBuffer   = 0xBB;
-    fields.srmSlot       = 0xCC;
-    fields.playerTwoName = kPlayerTwoName;
+    fields.Seat(1) = {kPlayerTwoName, 0xAA, 0xBB, 0xCC};
+    fields.Seat(2) = {kPlayerThreeName, 0xA3, 0xB3, 0xC3};
     WithPage(fields, BuffersStoreHarnessCode1005, [](void* page) {
         const auto own = RunBuffers(page, kPlayerTwoName);
         EXPECT(own.vertexBuffer == 0xAA && own.indexBuffer == 0xBB && own.srmSlot == 0xCC);
+        const auto three = RunBuffers(page, kPlayerThreeName);
+        EXPECT(three.vertexBuffer == 0xA3 && three.indexBuffer == 0xB3 && three.srmSlot == 0xC3);
         const auto stock = RunBuffers(page, kStockName);
         EXPECT(stock.vertexBuffer == 0x33 && stock.indexBuffer == 0x11 && stock.srmSlot == 0x22);
     });
@@ -212,8 +232,8 @@ void TestDrawGate()
 {
     std::puts("draw gate: a family skips only the other player's overlay entry; other entries, the game's gate alone");
     EntryFilterFields fields;
-    fields.stockName     = kStockName;
-    fields.playerTwoName = kPlayerTwoName;
+    fields.stockName    = kStockName;
+    fields.Seat(1).name = kPlayerTwoName;
     WithPage(fields, GateHarnessCode, [](void* page) {
         EXPECT(RunGate(page, kStockName, 3) == 1);      // no family set: drawn
         EXPECT(RunGate(page, kPlayerTwoName, 3) == 1);
@@ -235,7 +255,41 @@ void TestDrawGate()
         EXPECT(RunGate(page, kPlayerTwoName, 3) == 1);
         EXPECT(RunGate(page, kStockName, 3) == 0);
         EXPECT(RunGate(page, kMinimapName, 3) == 1);
+        EXPECT(RunGate(page, kPlayerThreeName, 3) == 1);  // seat 2 has no entry: not an overlay entry to this gate
     });
+
+    std::puts("draw gate, player 2 left and player 3 stays: player 3's family skips player 1's entry, and back");
+    {
+        EntryFilterFields leftOne;
+        leftOne.stockName    = kStockName;
+        leftOne.Seat(2).name = kPlayerThreeName;
+        leftOne.familyName   = kPlayerThreeName;
+        WithPage(leftOne, GateHarnessCode, [](void* page) {
+            EXPECT(RunGate(page, kPlayerThreeName, 3) == 1);
+            EXPECT(RunGate(page, kStockName, 3) == 0);
+            EXPECT(RunGate(page, kMinimapName, 3) == 1);
+        });
+        leftOne.familyName = kStockName;
+        WithPage(leftOne, GateHarnessCode, [](void* page) {
+            EXPECT(RunGate(page, kStockName, 3) == 1);
+            EXPECT(RunGate(page, kPlayerThreeName, 3) == 0);
+        });
+    }
+
+    std::puts("draw gate, three players: each family draws its own entry and skips the two others");
+    fields.Seat(2).name = kPlayerThreeName;
+    for (const std::uint64_t family : {kStockName, kPlayerTwoName, kPlayerThreeName})
+    {
+        fields.familyName = family;
+        WithPage(fields, GateHarnessCode, [family](void* page) {
+            for (const std::uint64_t entry : {kStockName, kPlayerTwoName, kPlayerThreeName})
+            {
+                EXPECT(RunGate(page, entry, 3) == (entry == family ? 1 : 0));
+            }
+            EXPECT(RunGate(page, kMinimapName, 3) == 1);
+            EXPECT(RunGate(page, family, 0) == 0);  // the game's own gate still applies
+        });
+    }
 }
 
 void TestSizes()

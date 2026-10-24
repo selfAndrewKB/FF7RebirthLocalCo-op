@@ -17,6 +17,7 @@
 #include "platform/verified_code.h"
 #include "player_two/battle/lock_on.h"
 #include "player_two/generation.h"
+#include "players/seats.h"
 #include "player_two/scopes/leader_scope.h"
 #include "player_two/weak_object.h"
 
@@ -133,8 +134,8 @@ struct Capture
     std::uint8_t   flags[3]{};
 };
 
-/// Player 2's copies of one gauge's y offset and size, keyed by the entry's source.
-struct PlayerTwoOffset
+/// A seat's copies of one gauge's y offset and size, keyed by the entry's source.
+struct SeatOffset
 {
     Key   key;
     float y     = 0.0f;
@@ -142,7 +143,7 @@ struct PlayerTwoOffset
     bool  seen  = false;
 };
 
-/// Player 1's size of a gauge, put back after player 2's render.
+/// Player 1's size of a gauge, put back after a seat's render.
 struct ScaleRestore
 {
     void*          widget = nullptr;
@@ -157,7 +158,7 @@ platform::CallRedirect g_targetedCall;
 platform::CallRedirect g_forcedCall;
 GaugeRecord            g_record;
 bool                   g_installed    = false;
-bool                   g_ownTargets   = false;  // player 2's pass classifies by player 2's target
+bool                   g_ownTargets   = false;  // a seat's pass classifies by the seat's target
 std::uintptr_t         g_endUISystem  = 0;
 ByWidgetFn             g_byWidget     = nullptr;
 YStepFn                g_yStep        = nullptr;
@@ -169,10 +170,10 @@ SetPositionFn          g_setPosition  = nullptr;
 // Game thread.
 std::array<Capture, kGaugeRecordCapacity> g_captures{};
 std::uint32_t                           g_captureCount = 0;
-std::vector<PlayerTwoOffset>            g_offsets;
-std::vector<ScaleRestore>               g_scaleRestores;  // player 2's pass: sizes to put back after its render
+std::array<std::vector<SeatOffset>, players::kMaxPlayers> g_offsets;  // by seat ([0] unused)
+std::vector<ScaleRestore>               g_scaleRestores;  // a seat's pass: sizes to put back after its render
 bool         g_failed = false;
-/// Player 2's target's gauge (or its main target's) as the log shows it, in tenths.
+/// A seat's target's gauge (or its main target's) as the log shows it, in tenths.
 struct TargetGauge
 {
     bool         own = false;
@@ -190,7 +191,10 @@ struct TargetSteady
     bool operator==(const TargetSteady&) const = default;
 };
 constexpr std::uint32_t kTargetStillFrames = 30;
-platform::SettledLog<TargetSteady, TargetGauges> g_targetLog(kTargetStillFrames);
+using TargetLog = platform::SettledLog<TargetSteady, TargetGauges>;
+static_assert(players::kMaxPlayers == 3, "one target log and one logged pass per player, listed below");
+std::array<TargetLog, players::kMaxPlayers> g_targetLogs{TargetLog(kTargetStillFrames), TargetLog(kTargetStillFrames),
+                                                         TargetLog(kTargetStillFrames)};  // by seat ([0] unused)
 std::int32_t g_loggedMismatches = -1;
 
 std::int32_t Tenths(float value) noexcept
@@ -201,7 +205,7 @@ std::int32_t Tenths(float value) noexcept
 using platform::Read;  // the guarded reads: platform/guarded.h
 using platform::ReadAt;
 
-/// One line of player 2's target gauges at `level` (Debug or Trace). Callers
+/// One line of a seat's target gauges at `level` (Debug or Trace). Callers
 /// check platform::Enabled(level) before building `text`.
 void Note(platform::Level level, const std::wstring& text)
 {
@@ -270,7 +274,7 @@ bool PlaceGuarded(std::uintptr_t manager, void* widget, bool targeted, const flo
     }
 }
 
-/// The game's y step `steps` times on player 2's offset: swapped into p+0x134 and back, player 1's
+/// The game's y step `steps` times on a seat's offset: swapped into p+0x134 and back, player 1's
 /// value always put back.
 bool StepGuarded(void* widget, std::uintptr_t p, float& offset, int steps) noexcept
 {
@@ -300,9 +304,9 @@ bool StepGuarded(void* widget, std::uintptr_t p, float& offset, int steps) noexc
     }
 }
 
-/// Player 2's size step on one gauge: player 1's size and render scale saved in `saved` first, then
-/// player 2's size put in and eased by the game's own step. Player 2's stays in place for the rest of
-/// player 2's pass (the red ability label reads it); RestoreScaleGuarded puts player 1's back.
+/// A seat's size step on one gauge: player 1's size and render scale saved in `saved` first, then
+/// the seat's size put in and eased by the game's own step. The seat's stays in place for the rest of
+/// its pass (the red ability label reads it); RestoreScaleGuarded puts player 1's back.
 bool ScaleGuarded(void* widget, void* owner, std::uintptr_t p, float& scale, std::uint8_t caseC, ScaleRestore& saved) noexcept
 {
     __try
@@ -413,9 +417,9 @@ float HalfSize(std::uintptr_t source) noexcept
                     bounds[2] * ReadAt<float>(c + kHalfScaleZ));
 }
 
-PlayerTwoOffset& OffsetFor(const Key& key, std::uintptr_t p, bool seedFromGame)
+SeatOffset& OffsetFor(std::vector<SeatOffset>& offsets, const Key& key, std::uintptr_t p, bool seedFromGame)
 {
-    for (PlayerTwoOffset& offset : g_offsets)
+    for (SeatOffset& offset : offsets)
     {
         if (offset.key.source == key.source && offset.key.controller == key.controller)
         {
@@ -423,10 +427,10 @@ PlayerTwoOffset& OffsetFor(const Key& key, std::uintptr_t p, bool seedFromGame)
             return offset;
         }
     }
-    // A key new to the walk is a new entry, which the game starts at 0; the first pass after player 2
+    // A key new to the walk is a new entry, which the game starts at 0; the first pass after the seat
     // arrives starts from the game's values instead. Its size starts from the game's.
-    g_offsets.push_back({key, seedFromGame ? ReadAt<float>(p + kYOffset) : 0.0f, ReadAt<float>(p + kScale), true});
-    return g_offsets.back();
+    offsets.push_back({key, seedFromGame ? ReadAt<float>(p + kYOffset) : 0.0f, ReadAt<float>(p + kScale), true});
+    return offsets.back();
 }
 
 /// Player 1's view: every recorded gauge placed again with the tick's arguments. Also checks the mod's
@@ -469,16 +473,17 @@ bool ReplayPlayerOne(std::uintptr_t manager, int& replayed, int& targeted)
     return ok;
 }
 
-/// Player 2's view: each recorded gauge classified by player 2's target and placed accordingly, with
-/// player 2's own y offset.
-bool ReplayPlayerTwo(std::uintptr_t manager, int& replayed, int& targeted)
+/// A seat's view: each recorded gauge classified by the seat's target and placed accordingly, with
+/// the seat's own y offset.
+bool ReplaySeat(int seat, std::uintptr_t manager, int& replayed, int& targeted)
 {
     std::uintptr_t object = 0, controller = 0;
-    player_two::lock_on::Displayed(object, controller);
+    player_two::lock_on::Displayed(seat, object, controller);
     const auto          two        = target_views::TargetAndMain(object, controller);
-    const std::uint64_t memberWeak = player_two::leader_scope::WeakOf(player_two::generation::Member());
-    const bool          seed       = g_offsets.empty();
-    for (PlayerTwoOffset& offset : g_offsets)
+    const std::uint64_t memberWeak = player_two::leader_scope::WeakOf(player_two::generation::MemberOf(seat));
+    auto&               offsets    = g_offsets[static_cast<std::size_t>(seat)];
+    const bool          seed       = offsets.empty();
+    for (SeatOffset& offset : offsets)
     {
         offset.seen = false;
     }
@@ -510,7 +515,7 @@ bool ReplayPlayerTwo(std::uintptr_t manager, int& replayed, int& targeted)
                 return false;
             }
         }
-        PlayerTwoOffset& offset = OffsetFor(key, p, seed);
+        SeatOffset&      offset = OffsetFor(offsets, key, p, seed);
         const float      before = offset.y;
         const float      theirs = ReadAt<float>(p + kYOffset);
         if ((target || AnyFlag(capture)) && !StepGuarded(widget, p, offset.y, gauge.steps))
@@ -521,7 +526,7 @@ bool ReplayPlayerTwo(std::uintptr_t manager, int& replayed, int& targeted)
         const float theirScale = ReadAt<float>(p + kScale);
         if (g_scaleStep != nullptr)
         {
-            // The size from the enemy's distance to player 2's member, player 2's own ease.
+            // The size from the enemy's distance to the seat's member, the seat's own ease.
             void*      owner = nullptr;
             const auto slot  =
                 reinterpret_cast<OwnerFn>(ReadAt<std::uintptr_t>(ReadAt<std::uintptr_t>(key.source) + kOwnerSlot));
@@ -554,7 +559,7 @@ bool ReplayPlayerTwo(std::uintptr_t manager, int& replayed, int& targeted)
     });
     if (ok)  // a walk stopped early did not see every live gauge
     {
-        std::erase_if(g_offsets, [](const PlayerTwoOffset& offset) { return !offset.seen; });
+        std::erase_if(offsets, [](const SeatOffset& offset) { return !offset.seen; });
     }
     // Which gauges, whose, and whether player 1's offset was kept log at once; the heights and sizes ease
     // every frame, so they log once they hold.
@@ -563,11 +568,12 @@ bool ReplayPlayerTwo(std::uintptr_t manager, int& replayed, int& targeted)
     {
         gauge.before = gauge.after = gauge.theirs = gauge.scale = gauge.theirScale = 0;
     }
+    TargetLog& log = g_targetLogs[static_cast<std::size_t>(seat)];
     if (!platform::Enabled(platform::Level::Debug))
     {
-        g_targetLog.Reset();  // off: the next line starts fresh
+        log.Reset();  // off: the next line starts fresh
     }
-    else if (g_targetLog.Offer(steady, targets))
+    else if (log.Offer(steady, targets))
     {
         std::wstring detail;
         for (std::int32_t i = 0; i < targetCount; ++i)
@@ -575,16 +581,18 @@ bool ReplayPlayerTwo(std::uintptr_t manager, int& replayed, int& targeted)
             const TargetGauge& gauge = targets[static_cast<std::size_t>(i)];
             detail += std::format(L" [{} targeted by {} half {} y {:.1f}->{:.1f} (player 1's {:.1f}{}) size {:.2f} (player "
                                   L"1's {:.2f})]",
-                                  gauge.own ? L"player 2's target" : L"its main target", gauge.own ? L"player 2" : L"its part",
+                                  gauge.own ? L"the player's target" : L"its main target",
+                                  gauge.own ? players::SeatName(seat) : L"its part",
                                   gauge.half / 10, gauge.before / 10.0, gauge.after / 10.0, gauge.theirs / 10.0,
                                   gauge.kept ? L", kept" : L", CHANGED", gauge.scale / 100.0, gauge.theirScale / 100.0);
         }
-        Note(platform::Level::Debug, std::format(L"player 2's view:{}", detail.empty() ? L" no gauge of player 2's target" : detail));
+        Note(platform::Level::Debug, std::format(L"{}'s view:{}", players::SeatName(seat),
+                                                 detail.empty() ? L" no gauge of their target" : detail));
     }
     return ok;
 }
 
-/// 1.005: what Install found for player 2's own targeted look, until the game thread places the forced-targeted call.
+/// 1.005: what Install found for the seats' own targeted look, until the game thread places the forced-targeted call.
 struct PendingOwnTargets
 {
     std::uintptr_t site = 0, forced = 0, yStep = 0, scaleStep = 0, apply = 0;  // the size step's two 0 if not checked out
@@ -592,7 +600,7 @@ struct PendingOwnTargets
 PendingOwnTargets g_pending;
 
 /// 1.005, on the game thread between its ticks: the forced-targeted call placed (it crosses a 16-byte block), then
-/// player 2's own targeted look and sizes turned on as at install on the research build.
+/// the seats' own targeted look and sizes turned on as at install on the research build.
 void PlaceOwnTargets() noexcept
 {
     const PendingOwnTargets pending = g_pending;
@@ -611,9 +619,9 @@ void PlaceOwnTargets() noexcept
         g_scaleStep = reinterpret_cast<ScaleStepFn>(pending.scaleStep);
         g_apply     = reinterpret_cast<ApplyFn>(pending.apply);
     }
-    platform::Log(L"enemy gauges: player 2's view {}, sizes {}",
-                  g_ownTargets ? L"marks player 2's own target" : L"marks player 1's target (a check failed)",
-                  g_scaleStep != nullptr ? L"from player 2's distance" : L"from player 1's distance (a check failed)");
+    platform::Log(L"enemy gauges: each further player's view {}, sizes {}",
+                  g_ownTargets ? L"marks their own target" : L"marks player 1's target (a check failed)",
+                  g_scaleStep != nullptr ? L"from their own distance" : L"from player 1's distance (a check failed)");
 }
 
 }  // namespace
@@ -652,7 +660,7 @@ bool Install(const platform::GameImage& image) noexcept
     }
     g_installed = true;
 
-    // Player 2's own targeted look: the forced-targeted capture, the y step, the leader scope.
+    // The seats' own targeted look: the forced-targeted capture, the y step, the leader scope.
     const auto forcedSite = image.Rebase(kForcedCall, 5);
     const auto forced     = platform::FindFunction(image, kForced);
     const auto yStep      = platform::FindFunction(image, kYStep);
@@ -667,7 +675,7 @@ bool Install(const platform::GameImage& image) noexcept
         g_pending = {*forcedSite, *forced, *yStep, sizes ? *scaleStep : 0, sizes ? *apply : 0};
         if (platform::game_thread_sites::Queue(&PlaceOwnTargets))
         {
-            platform::Log(L"enemy gauges: ready (each gauge placed again in each player's view; player 2's own targets follow "
+            platform::Log(L"enemy gauges: ready (each gauge placed again in each player's view; the seats' own targets follow "
                           L"once the game thread places their call (1.005: it crosses a 16-byte block))");
             return true;
         }
@@ -683,9 +691,9 @@ bool Install(const platform::GameImage& image) noexcept
         g_scaleStep = reinterpret_cast<ScaleStepFn>(*scaleStep);
         g_apply     = reinterpret_cast<ApplyFn>(*apply);
     }
-    platform::Log(L"enemy gauges: ready (each gauge placed again in each player's view; player 2's view {}, sizes {})",
-                  g_ownTargets ? L"marks player 2's own target" : L"marks player 1's target (a check failed)",
-                  g_scaleStep != nullptr ? L"from player 2's distance" : L"from player 1's distance (a check failed)");
+    platform::Log(L"enemy gauges: ready (each gauge placed again in each player's view; each further player's view {}, sizes {})",
+                  g_ownTargets ? L"marks their own target" : L"marks player 1's target (a check failed)",
+                  g_scaleStep != nullptr ? L"from their own distance" : L"from player 1's distance (a check failed)");
     return true;
 }
 
@@ -705,7 +713,7 @@ void Remove() noexcept
 
 namespace {
 
-/// Player 2's replay inputs and result, as the log shows them (on change).
+/// A seat's replay inputs and result, as the log shows them (on change).
 struct PassState
 {
     std::uint8_t gate = 0;
@@ -713,25 +721,28 @@ struct PassState
     bool         list = false;
     bool operator==(const PassState&) const = default;
 };
-PassState     g_loggedPass{0xFF};
-std::uint32_t g_listOpenings = 0;  // player 2's target list openings seen: each logs the pass afresh
+std::array<PassState, players::kMaxPlayers>     g_loggedPass{PassState{0xFF}, PassState{0xFF}, PassState{0xFF}};
+std::array<std::uint32_t, players::kMaxPlayers> g_listOpenings{};  // each seat's target list openings seen: each
+                                                                   // logs the pass afresh
 
-void LogPlayerTwoPass(const PassState& now) noexcept
+void LogSeatPass(int seat, const PassState& now) noexcept
 {
-    if (const auto openings = player_two::lock_on::TargetListOpenings(); openings != g_listOpenings)
+    const auto s = static_cast<std::size_t>(seat);
+    if (const auto openings = player_two::lock_on::TargetListOpenings(seat); openings != g_listOpenings[s])
     {
-        g_listOpenings = openings;
-        g_loggedPass   = PassState{0xFF};
+        g_listOpenings[s] = openings;
+        g_loggedPass[s]   = PassState{0xFF};
     }
-    if (!platform::Enabled(platform::Level::Trace) || now == g_loggedPass)
+    if (!platform::Enabled(platform::Level::Trace) || now == g_loggedPass[s])
     {
         return;
     }
-    g_loggedPass = now;
+    g_loggedPass[s] = now;
     try
     {
-        Note(platform::Level::Trace, std::format(L"player 2's pass: gate {} recorded {} placed {} ({} targeted){}", now.gate, now.recorded, now.replayed,
-                         now.targeted, now.list ? L" | player 2's target list open" : L""));
+        Note(platform::Level::Trace, std::format(L"{}'s pass: gate {} recorded {} placed {} ({} targeted){}",
+                                                 players::SeatName(seat), now.gate, now.recorded, now.replayed,
+                                                 now.targeted, now.list ? L" | their target list open" : L""));
     }
     catch (...)
     {
@@ -740,15 +751,16 @@ void LogPlayerTwoPass(const PassState& now) noexcept
 
 }  // namespace
 
-void Replay(bool playerTwo) noexcept
+void Replay(int seat) noexcept
 {
     std::uintptr_t manager = 0;
     std::uint8_t   gate    = 0;
     const bool     read    = Read(g_endUISystem + facts::kUIEnemyStatus, manager) && manager != 0 &&
                              Read(manager + kGate, gate);
-    if (playerTwo && g_installed && !g_failed && (!read || gate == 0 || g_record.count == 0))
+    const bool     further = players::SeatIndex(seat);
+    if (further && g_installed && !g_failed && (!read || gate == 0 || g_record.count == 0))
     {
-        LogPlayerTwoPass({gate, static_cast<std::int32_t>(g_record.count), 0, 0, player_two::lock_on::TargetListOpen()});
+        LogSeatPass(seat, {gate, static_cast<std::int32_t>(g_record.count), 0, 0, player_two::lock_on::TargetListOpen(seat)});
     }
     if (!g_installed || g_failed || g_record.count == 0 || !read || gate == 0)
     {
@@ -760,8 +772,8 @@ void Replay(bool playerTwo) noexcept
         const Replaying<GaugeRecord> replaying(g_record);  // the mod's own placements are not recorded
         try
         {
-            ok = playerTwo && g_ownTargets ? ReplayPlayerTwo(manager, replayed, targeted)
-                                           : ReplayPlayerOne(manager, replayed, targeted);
+            ok = further && g_ownTargets ? ReplaySeat(seat, manager, replayed, targeted)
+                                         : ReplayPlayerOne(manager, replayed, targeted);
         }
         catch (...)
         {
@@ -773,18 +785,19 @@ void Replay(bool playerTwo) noexcept
         platform::Log(L"enemy gauges: a placement raised an exception; gauges are no longer placed per view");
         return;
     }
-    if (playerTwo)
+    if (further)
     {
-        LogPlayerTwoPass({gate, static_cast<std::int32_t>(g_record.count), replayed, targeted, player_two::lock_on::TargetListOpen()});
+        LogSeatPass(seat, {gate, static_cast<std::int32_t>(g_record.count), replayed, targeted,
+                           player_two::lock_on::TargetListOpen(seat)});
     }
     if (replayed > 0 && platform::Enabled(platform::Level::Trace))  // every HUD pass: Trace (platform/log.h)
     {
-        platform::LogTrace(L"enemy gauges: {} placed again for player {}'s view ({} targeted) of {} recorded", replayed,
-                           playerTwo ? 2 : 1, targeted, g_record.count);
+        platform::LogTrace(L"enemy gauges: {} placed again for {}'s view ({} targeted) of {} recorded", replayed,
+                           players::SeatName(further ? seat : 0), targeted, g_record.count);
     }
 }
 
-void EndPlayerTwoPass() noexcept
+void EndSeatPass() noexcept
 {
     for (const ScaleRestore& saved : g_scaleRestores)
     {
@@ -796,9 +809,17 @@ void EndPlayerTwoPass() noexcept
     g_scaleRestores.clear();
 }
 
+void SeatOut(int seat) noexcept
+{
+    if (players::SeatIndex(seat))
+    {
+        g_offsets[static_cast<std::size_t>(seat)].clear();  // its next pass starts from the game's values
+    }
+}
+
 void EndFrame() noexcept
 {
-    EndPlayerTwoPass();  // in case player 2's pass did not reach its own end
+    EndSeatPass();  // in case a seat's pass did not reach its own end
     g_record.EndFrame();
     g_captureCount = 0;
 }

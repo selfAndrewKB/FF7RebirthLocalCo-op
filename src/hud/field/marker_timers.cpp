@@ -6,8 +6,10 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/sparse_array.h"
+#include "players/seats.h"
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <vector>
 
@@ -25,7 +27,8 @@ constexpr std::uint32_t  kTimer       = 0x14;
 
 // Game thread.
 std::uintptr_t       g_endUISystem = 0;
-hud_rules::TimerSwap g_timers;  // player 1's set aside during player 2's run; player 2's own between frames
+// By seat ([0] unused): player 1's set aside during the seat's run; the seat's own between frames.
+std::array<hud_rules::TimerSwap, players::kMaxPlayers> g_timers;
 
 using platform::Read;  // the guarded reads: platform/guarded.h
 
@@ -62,54 +65,75 @@ bool Install(const platform::GameImage& image) noexcept
     return g_endUISystem != 0;
 }
 
-void SwapIn() noexcept
+void SwapIn(int seat) noexcept
 {
+    if (!players::SeatIndex(seat))
+    {
+        return;
+    }
+    hud_rules::TimerSwap& timers = g_timers[static_cast<std::size_t>(seat)];
     try
     {
-        g_timers.BeginIn();
-        ForEachElement([](std::uintptr_t element, std::uint64_t key) {
+        timers.BeginIn();
+        ForEachElement([&timers](std::uintptr_t element, std::uint64_t key) {
             float mine = 0.0f;
             Read(element + kTimer, mine);
-            Write(element, g_timers.In(key, mine));
+            Write(element, timers.In(key, mine));
         });
     }
     catch (...)  // only the vectors allocate: player 1's timers are then left in place
     {
-        g_timers.Abandon();
+        timers.Abandon();
     }
 }
 
-void SwapOut() noexcept
+void SwapOut(int seat) noexcept
 {
+    if (!players::SeatIndex(seat))
+    {
+        return;
+    }
+    hud_rules::TimerSwap& timers = g_timers[static_cast<std::size_t>(seat)];
     try
     {
-        g_timers.BeginOut();
+        timers.BeginOut();
         int pinned = 0;
-        ForEachElement([&pinned](std::uintptr_t element, std::uint64_t key) {
+        ForEachElement([&pinned, &timers](std::uintptr_t element, std::uint64_t key) {
             float theirs = 0.0f;
             Read(element + kTimer, theirs);
-            if (const auto mine = g_timers.Out(key, theirs); mine)
+            if (const auto mine = timers.Out(key, theirs); mine)
             {
-                Write(element, *mine);  // an element new in player 2's run keeps what it has
+                Write(element, *mine);  // an element new in the seat's run keeps what it has
                 pinned += theirs != *mine;
             }
         });
-        g_timers.EndOut();  // player 2's own; arrows no longer in the list are dropped
+        timers.EndOut();  // the seat's own; arrows no longer in the list are dropped
         if (pinned > 0 && platform::Enabled(platform::Level::Trace))  // every HUD pass: Trace (platform/log.h)
         {
-            platform::LogTrace(L"marker timers: {} of {} arrows have their own timer in player 2's view", pinned,
-                               g_timers.TwoCount());
+            platform::LogTrace(L"marker timers: {} of {} arrows have their own timer in {}'s view", pinned,
+                               timers.TwoCount(), players::SeatName(seat));
         }
     }
     catch (...)
     {
     }
-    g_timers.Abandon();  // player 1's are back in place, or were never set aside
+    timers.Abandon();  // player 1's are back in place, or were never set aside
 }
 
 void Forget() noexcept
 {
-    g_timers.Forget();
+    for (hud_rules::TimerSwap& timers : g_timers)
+    {
+        timers.Forget();
+    }
+}
+
+void Forget(int seat) noexcept
+{
+    if (players::SeatIndex(seat))
+    {
+        g_timers[static_cast<std::size_t>(seat)].Forget();
+    }
 }
 
 }  // namespace lss::hud::marker_timers

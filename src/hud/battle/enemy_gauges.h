@@ -16,12 +16,12 @@
 //     recorded arguments, then given the tick's final y-offset position for the gauges the tick
 //     applies it to (the offset's ease is not advanced). It has every input of the tick, so it
 //     reproduces the tick's placement;
-//   - player 2's replay (player 2's context and view rect set): each gauge classified as targeted by
-//     player 2's own displayed target (or its main target), or by the view-independent cases the
+//   - a seat's replay (the seat's context and view rect set): each gauge classified as targeted by
+//     the seat's own displayed target (or its main target), or by the view-independent cases the
 //     tick recorded, and placed by the matching function; the targeted one inside a LeaderScope, as
 //     its clamp keeps the gauge clear of the leader. The "targeted" ease (a y offset toward -60 that
-//     each gauge keeps for its lifetime, p+0x134) is player 2's own: a copy per gauge, swapped in around
-//     the game's own step function, and player 1's value put back after.
+//     each gauge keeps for its lifetime, p+0x134) is the seat's own: a copy per gauge and seat, swapped in
+//     around the game's own step function, and player 1's value put back after.
 // The record is emptied after each frame's overlay render. Fading-out gauges are not replayed.
 // Game thread only.
 
@@ -34,12 +34,16 @@ namespace lss::hud::enemy_gauges {
 bool Install(const platform::GameImage& image) noexcept;
 void Remove() noexcept;
 
-/// With the view's levers set: every gauge the game placed this frame placed again for that view.
-void Replay(bool playerTwo) noexcept;
+/// With the view's levers set: every gauge the game placed this frame placed again for that view (`seat` 0 player
+/// 1's).
+void Replay(int seat) noexcept;
 
-/// After player 2's render: every gauge's size back to player 1's (player 2's stays in place
-/// through player 2's updates and render, where the red ability label reads it).
-void EndPlayerTwoPass() noexcept;
+/// After a seat's render: every gauge's size back to player 1's (the seat's stays in place
+/// through its updates and render, where the red ability label reads it).
+void EndSeatPass() noexcept;
+
+/// The seat is out: its own offsets and sizes forgotten, so a rejoin starts from the game's values.
+void SeatOut(int seat) noexcept;
 
 /// After the overlay render: the record emptied for the next tick.
 void EndFrame() noexcept;

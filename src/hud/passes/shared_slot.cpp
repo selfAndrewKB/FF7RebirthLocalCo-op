@@ -1,6 +1,6 @@
 #include "hud/passes/shared_slot.h"
 
-#include "hud/hud_rules.h"
+#include "hud/passes/overlay_pass.h"
 #include "platform/log.h"
 #include "player_two/generation.h"
 
@@ -17,22 +17,37 @@ void SharedLayerSlot::Install(std::uintptr_t vertexVtable, std::uintptr_t indexV
 
 void SharedLayerSlot::Unpublish() noexcept
 {
-    fields_.familyName    = 0;
-    fields_.playerTwoName = 0;
+    fields_.familyName = 0;
+    for (EntryFilterFields::SeatEntry& entry : fields_.seats)
+    {
+        entry.name = 0;
+    }
 }
 
 bool SharedLayerSlot::MakeNames(std::uint64_t stockName) noexcept
 {
     try
     {
-        const std::uint64_t playerTwo = EngineNameValue(setup_.playerTwoName, RC::Unreal::FNAME_Add);
-        if (EngineNameValue(setup_.stockName, RC::Unreal::FNAME_Find) != stockName || playerTwo == 0 ||
-            playerTwo == stockName)
+        if (EngineNameValue(setup_.stockName, RC::Unreal::FNAME_Find) != stockName)
         {
             return false;
         }
+        std::uint64_t names[kFurtherEntries] = {};
+        for (int seat = 1; seat < players::kMaxPlayers; ++seat)
+        {
+            const std::uint64_t name = EngineNameValue(setup_.seatNames[seat], RC::Unreal::FNAME_Add);
+            if (name == 0 || name == stockName || (seat > 1 && name == names[0]))
+            {
+                return false;
+            }
+            names[seat - 1] = name;
+        }
         fields_.stockName = stockName;  // before any family name can be set from it
-        playerTwoName_    = playerTwo;
+        for (int i = 0; i < kFurtherEntries; ++i)
+        {
+            seatNames_[i] = names[i];
+        }
+        namesReady_ = true;
         return true;
     }
     catch (...)
@@ -41,50 +56,60 @@ bool SharedLayerSlot::MakeNames(std::uint64_t stockName) noexcept
     }
 }
 
-SharedLayerSlot::Buffers SharedLayerSlot::BuffersUsable() noexcept
+SharedLayerSlot::Buffers SharedLayerSlot::BuffersUsable(int seat) noexcept
 {
     if (wrongKind_)
     {
         return Buffers::WrongKind;
     }
-    if (!buffersQueued_)
+    if (!players::SeatBuilt(seat))
+    {
+        return Buffers::Waiting;  // never built: the seat is not wired yet
+    }
+    const int      i       = seat - 1;
+    MenuBufferSet& buffers = buffers_[i];
+    if (!buffersQueued_[i])
     {
         if (renderer_ == nullptr)  // no acquire seen yet
         {
             return Buffers::Waiting;
         }
         if (!BuildMenuBuffers(renderer_, setup_.vertexBuffer, setup_.indexBuffer, vertexVtable_, indexVtable_,
-                              beginInit_, buffers_))
+                              beginInit_, buffers))
         {
             wrongKind_ = true;
             return Buffers::WrongKind;
         }
-        buffersQueued_ = true;
-        platform::Log(L"{}: player 2's vertex and index buffers created (capacity {} / {}); waiting for the render "
-                      L"thread to initialise them",
-                      setup_.label, kMenuVertexCapacity, kMenuIndexCapacity);
+        buffersQueued_[i] = true;
+        platform::Log(L"{}: {}'s vertex and index buffers created (capacity {} / {}); waiting for the render thread to "
+                      L"initialise them",
+                      setup_.label, players::SeatName(seat), kMenuVertexCapacity, kMenuIndexCapacity);
         return Buffers::Waiting;
     }
-    if (!MenuBuffersInitialised(buffers_))  // every frame (hud/passes/menu_buffers.h)
+    if (!MenuBuffersInitialised(buffers))  // every frame (hud/passes/menu_buffers.h)
     {
         return Buffers::Waiting;
     }
-    if (fields_.playerTwoName == 0)
+    EntryFilterFields::SeatEntry& entry = fields_.Seat(seat);
+    if (entry.name == 0)
     {
-        fields_.vertexBuffer = reinterpret_cast<std::uint64_t>(&buffers_.vertex);
-        fields_.indexBuffer  = reinterpret_cast<std::uint64_t>(&buffers_.index);
-        fields_.srmSlot      = reinterpret_cast<std::uint64_t>(&buffers_.srm);
+        entry.vertexBuffer = reinterpret_cast<std::uint64_t>(&buffers.vertex);
+        entry.indexBuffer  = reinterpret_cast<std::uint64_t>(&buffers.index);
+        entry.srmSlot      = reinterpret_cast<std::uint64_t>(&buffers.srm);
         std::atomic_thread_fence(std::memory_order_release);
-        fields_.playerTwoName = playerTwoName_;  // last: the render-thread code switches on this
-        platform::Log(L"{}: player 2's buffers are initialised; rendering player 2's entry", setup_.label);
+        entry.name = seatNames_[i];  // last: the render-thread code switches on this
+        platform::Log(L"{}: {}'s buffers are initialised; rendering {}'s entry", setup_.label, players::SeatName(seat),
+                      players::SeatName(seat));
     }
     return Buffers::Usable;
 }
 
-void SharedLayerSlot::BeginFrame(bool active) noexcept
+void SharedLayerSlot::BeginFrame() noexcept
 {
-    active_ = active;
-    held_   = nullptr;
+    active_     = false;
+    held_       = nullptr;
+    takenBy_    = -1;
+    entrySeats_ = 0;
 }
 
 void* SharedLayerSlot::Acquire(void* renderer, std::uintptr_t pool, AcquireLayerSlotFn original) noexcept
@@ -94,38 +119,48 @@ void* SharedLayerSlot::Acquire(void* renderer, std::uintptr_t pool, AcquireLayer
         offThread_.fetch_add(1, std::memory_order_relaxed);
         return original(renderer, pool);
     }
-    renderer_ = renderer;
-    switch (hud_rules::SlotActionFor(CurrentOverlayPass(), active_, held_ != nullptr))
+    renderer_      = renderer;
+    const int seat = overlay_pass::Seat();
+    switch (overlay_pass::AcquireAction(seat, active_, held_ != nullptr, held_ != nullptr && takenBy_ == seat))
     {
-        case hud_rules::SlotAction::TakeBack:
+        case overlay_pass::SlotAction::TakeBack:
         {
             void* slot = held_;
             held_      = nullptr;
+            takenBy_   = 0;
             ++counts_.takenBack;
             return slot;
         }
-        case hud_rules::SlotAction::AcquireAndHold:
-            held_ = original(renderer, pool);
+        case overlay_pass::SlotAction::TakeHeld:
+            takenBy_ = seat;
+            ++counts_.takenHeld;
+            return held_;
+        case overlay_pass::SlotAction::AcquireAndHold:
+            held_    = original(renderer, pool);
+            takenBy_ = seat;
             ++counts_.held;
             return held_;
-        case hud_rules::SlotAction::Acquire: break;
+        case overlay_pass::SlotAction::Acquire: break;
     }
     return original(renderer, pool);
 }
 
 std::uintptr_t SharedLayerSlot::NameFor(const void* slot, std::uintptr_t stockName) noexcept
 {
-    if (!hud_rules::PlayerTwoEntry(CurrentOverlayPass(), slot != nullptr && slot == held_))
+    const int seat = overlay_pass::Seat();
+    if (!overlay_pass::FurtherEntry(seat, slot != nullptr && slot == held_) || !players::SeatIndex(seat))
     {
         return stockName;
     }
     ++counts_.named;
-    return static_cast<std::uintptr_t>(playerTwoName_);
+    entrySeats_ |= 1u << seat;
+    return static_cast<std::uintptr_t>(seatNames_[seat - 1]);
 }
 
 bool SharedLayerSlot::SkipSubmit(const void* slot) noexcept
 {
-    if (!hud_rules::PlayerTwoEntry(CurrentOverlayPass(), slot != nullptr && slot == held_))
+    const int seat = overlay_pass::Seat();
+    if (!overlay_pass::FurtherEntry(seat, slot != nullptr && slot == held_) || !players::SeatIndex(seat))
     {
         return false;
     }
@@ -137,6 +172,7 @@ bool SharedLayerSlot::SubmitIfLeft() noexcept
 {
     void* slot = held_;
     held_      = nullptr;
+    takenBy_   = -1;
     if (slot == nullptr || renderer_ == nullptr || submit_ == nullptr)
     {
         return false;

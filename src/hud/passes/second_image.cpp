@@ -18,6 +18,7 @@
 #include "platform/command_registry.h"
 #endif
 
+#include <array>
 #include <atomic>
 #include <cstring>
 
@@ -56,6 +57,9 @@ constexpr std::uint8_t   kAddCompositePassesPrologue[] = {0x48, 0x89, 0x5C, 0x24
 constexpr platform::FunctionFact kAddCompositePasses{L"SceneRenderer_AddCompositePasses", 0x140D1791C,
                                                      kAddCompositePassesPrologue};
 constexpr std::uint32_t  kViewUnscaledViewRect = 0x238;  // FIntRect in FSceneView (FViewInfo is a copy)
+// FSceneView::PlayerIndex, an int32: the local player's controller id, which is the seat (players/seats.h); the view's
+// player whatever its place on screen (RE-scene-view-player-index.md).
+constexpr std::uint32_t  kViewPlayerIndex      = 0x228;
 // Game version 1.005 (RE-1005-hud-2.md): the call (0x140C1481D there) crosses a 16-byte block on the render thread, so
 // the function's entry is redirected instead; Render_Main's call is its only caller, so every call is still that one.
 // First instruction `mov [rsp+8],rbx`.
@@ -91,19 +95,23 @@ std::uintptr_t         g_overlaySingleton   = 0;
 std::uintptr_t         g_deltaTime          = 0;
 RenderToCompositeLayerFn g_renderToLayer    = nullptr;
 
-// Player 2's entry in the overlay's pool-2 slot (hud/passes/shared_slot.h).
+// Each further seat's entry in the overlay's pool-2 slot (hud/passes/shared_slot.h).
 SharedLayerSlot g_slot{{L"HUD image", kPoolTwo, kPoolTwoVertexBuffer, kPoolTwoIndexBuffer, L"SEndRootOverlay",
-                        L"SEndRootOverlay_P2"}};
+                        {nullptr, L"SEndRootOverlay_P2", L"SEndRootOverlay_P3"}}};
 
 // Game thread.
 std::atomic<bool> g_on{false};
-std::atomic<bool> g_imageThisFrame{false};  // player 2's entry was rendered this frame (read by the render thread)
+std::atomic<unsigned> g_imageSeats{0};      // bit `seat`: the seat's entry was rendered this frame (render thread reads)
 std::atomic<std::uint64_t> g_stockName{0};  // as the game passes it; read by the render thread
 bool              g_refused       = false;    // a check failed: the image stays off until restart
-std::uintptr_t    g_overlayThisFrame = 0;     // the overlay with a window, found by PlayerTwoImageReady (0: none)
-double            g_deltaTimeSaved   = 0.0;   // the engine's DeltaTime while player 2's pass holds it at 0
+std::uintptr_t    g_overlayThisFrame = 0;     // the overlay with a window, found by ImageReady (0: none)
+double            g_deltaTimeSaved   = 0.0;   // the engine's DeltaTime while a further pass holds it at 0
 
 std::atomic<int> g_familyLogLines{0};
+
+// Render thread: whose entry each player's view drew last (0 none, else the seat whose entry + 1), so each change is
+// logged once at Info: the regression checks that each view draws its own player's HUD. Reset while no seat has one.
+std::array<int, players::kMaxPlayers> g_viewDraws{};
 
 using platform::CopyGuarded;
 
@@ -111,7 +119,7 @@ void Refuse(const wchar_t* why)
 {
     g_refused = true;
     g_on.store(false, std::memory_order_relaxed);
-    platform::Log(L"HUD image: {}; player 2's image stays off", why);
+    platform::Log(L"HUD image: {}; the further players' HUD image stays off", why);
 }
 
 /// Replaces the overlay's call to AcquireLayerSlot.
@@ -121,13 +129,19 @@ void* AcquireLayerSlot(void* renderer, std::uintptr_t pool) noexcept
 }
 
 /// Replaces the scene renderer's call that adds a family's composite passes (render thread):
-/// decides which entry this family draws, from its view's rect.
+/// decides which entry this family draws, from its view's player: a seat with an entry this frame draws its own, every
+/// other view (player 1's, a view with no seat) player 1's.
 void* AddCompositePasses(void* module, void* builder, const void* views, void* texture, void* context) noexcept
 {
     EntryFilterFields&  fields    = g_slot.Fields();
     std::uint64_t       family    = 0;
     const std::uint64_t stockName = g_stockName.load(std::memory_order_acquire);
-    if (g_imageThisFrame.load(std::memory_order_relaxed) && stockName != 0 && views != nullptr)
+    const unsigned      seats     = g_imageSeats.load(std::memory_order_relaxed);
+    if (seats == 0)
+    {
+        g_viewDraws = {};  // the next image's views are logged afresh
+    }
+    if (seats != 0 && stockName != 0 && views != nullptr)
     {
         struct ViewArray
         {
@@ -135,16 +149,28 @@ void* AddCompositePasses(void* module, void* builder, const void* views, void* t
             std::int32_t        num;
         } array{};
         std::int32_t rect[4] = {};
+        std::int32_t player  = -1;
         if (CopyGuarded(&array, views, sizeof(array)) && array.num == 1 && array.data != nullptr &&
-            CopyGuarded(rect, array.data + kViewUnscaledViewRect, sizeof(rect)))
+            CopyGuarded(&player, array.data + kViewPlayerIndex, sizeof(player)))
         {
-            const bool playerTwo = rect[0] > 0 || rect[1] > 0;  // player 1's half starts at the origin
-            family               = playerTwo ? fields.playerTwoName : stockName;
-            if (platform::Enabled(platform::Level::Debug) &&
-                g_familyLogLines.fetch_add(1, std::memory_order_relaxed) < kFamilyLogLines)
+            const bool own = players::SeatIndex(player) && (seats & (1u << player)) != 0;
+            family         = own ? fields.Seat(player).name : stockName;
+            if (player >= 0 && player < players::kMaxPlayers)
             {
-                platform::LogDebug(L"HUD image: a family with view ({},{})-({},{}) draws player {}'s entry", rect[0],
-                                   rect[1], rect[2], rect[3], playerTwo ? 2 : 1);
+                const int draws = (own ? player : 0) + 1;
+                if (g_viewDraws[static_cast<std::size_t>(player)] != draws)
+                {
+                    g_viewDraws[static_cast<std::size_t>(player)] = draws;
+                    platform::Log(L"HUD image: {}'s view draws {}'s HUD", players::SeatName(player),
+                                  players::SeatName(draws - 1));
+                }
+            }
+            if (platform::Enabled(platform::Level::Debug) &&
+                g_familyLogLines.fetch_add(1, std::memory_order_relaxed) < kFamilyLogLines &&
+                CopyGuarded(rect, array.data + kViewUnscaledViewRect, sizeof(rect)))
+            {
+                platform::LogDebug(L"HUD image: a family with view ({},{})-({},{}), player index {}, draws {}'s entry",
+                                   rect[0], rect[1], rect[2], rect[3], player, players::SeatName(own ? player : 0));
             }
         }
     }
@@ -177,7 +203,8 @@ bool InstallSecondImage(const platform::GameImage& image) noexcept
     const auto ibVtable  = image.Rebase(facts::kIndexBufferVtable, sizeof(void*));
     if (!render || !passes || !acquire || !init || !submit || !overlay || !delta || !vbVtable || !ibVtable)
     {
-        platform::Log(L"HUD image: the overlay's render code is not what the research read; no player-2 image");
+        platform::Log(L"HUD image: the overlay's render code is not what the research read; no image for the further "
+                      L"players");
         return false;
     }
     g_renderToLayer    = reinterpret_cast<RenderToCompositeLayerFn>(*render);
@@ -199,7 +226,7 @@ bool InstallSecondImage(const platform::GameImage& image) noexcept
         return g_familyEntry.Install(passes, image.EntryInstruction(kAddCompositePasses.address, first),
                                      reinterpret_cast<std::uintptr_t>(&AddCompositePasses));
     };
-    // The render-thread sites first: they do nothing until a family name and player 2's buffers are set.
+    // The render-thread sites first: they do nothing until a family name and a seat's buffers are set.
     const bool installed =
         Patch(image, g_gateCode, kDrawGateSite, kDrawGateBytes, gateCode, kDrawGateResume) &&
         Patch(image, g_buffersCode, kLoadVertexBufferSite, kLoadVertexBufferBytes, buffersCode, kLoadVertexBufferResume) &&
@@ -209,7 +236,7 @@ bool InstallSecondImage(const platform::GameImage& image) noexcept
     if (!installed)
     {
         RemoveSecondImage();
-        platform::Log(L"HUD image: a site is not what the research read; no player-2 image");
+        platform::Log(L"HUD image: a site is not what the research read; no image for the further players");
         return false;
     }
     // The render-thread code reads the slot's fields, which live in this DLL: it must never unload while that
@@ -217,7 +244,7 @@ bool InstallSecondImage(const platform::GameImage& image) noexcept
     if (!platform::PinThisModule())
     {
         RemoveSecondImage();
-        platform::Log(L"HUD image: this DLL could not be pinned; no player-2 image");
+        platform::Log(L"HUD image: this DLL could not be pinned; no image for the further players");
         return false;
     }
     g_installed = true;
@@ -228,7 +255,7 @@ bool InstallSecondImage(const platform::GameImage& image) noexcept
 void RemoveSecondImage() noexcept
 {
     g_on.store(false, std::memory_order_relaxed);
-    g_imageThisFrame.store(false, std::memory_order_relaxed);
+    g_imageSeats.store(0, std::memory_order_relaxed);
     g_slot.Unpublish();
     bool all = true;
     for (platform::CallRedirect* call : {&g_acquireCall, &g_familyCall})
@@ -256,7 +283,7 @@ void SetSecondImage(bool on) noexcept
 {
     g_on.store(on && g_installed && !g_refused, std::memory_order_relaxed);
     g_familyLogLines.store(0, std::memory_order_relaxed);
-    platform::Log(L"HUD image: player 2's image {}", SecondImageOn() ? L"on" : on ? L"unavailable" : L"off");
+    platform::Log(L"HUD image: the further players' images {}", SecondImageOn() ? L"on" : on ? L"unavailable" : L"off");
 }
 
 bool SecondImageOn() noexcept
@@ -266,15 +293,16 @@ bool SecondImageOn() noexcept
 
 void BeginFrame() noexcept
 {
-    g_slot.BeginFrame(false);
+    g_slot.BeginFrame();
+    g_overlayThisFrame = 0;
 }
 
-bool PlayerTwoImageReady(bool splitShown) noexcept
+bool ImageReady(int seat, bool splitShown) noexcept
 {
     bool image = splitShown && SecondImageOn() && g_stockName.load(std::memory_order_relaxed) != 0;
     if (image)
     {
-        const auto buffers = g_slot.BuffersUsable();
+        const auto buffers = g_slot.BuffersUsable(seat);
         if (buffers == SharedLayerSlot::Buffers::WrongKind)
         {
             Refuse(L"pool 2's buffers are not the renderer's buffer kind the research read");
@@ -292,42 +320,43 @@ bool PlayerTwoImageReady(bool splitShown) noexcept
     return g_overlayThisFrame != 0;
 }
 
-double BeginPlayerTwoPass() noexcept
+double BeginFurtherPass() noexcept
 {
     double deltaTime = 0.0;
     std::memcpy(&deltaTime, reinterpret_cast<const void*>(g_deltaTime), sizeof(deltaTime));
     const double still = 0.0;
     std::memcpy(reinterpret_cast<void*>(g_deltaTime), &still, sizeof(still));
     g_deltaTimeSaved = deltaTime;
-    g_slot.BeginFrame(true);
+    g_slot.SetActive(true);
     return deltaTime;
 }
 
-bool RenderPlayerTwo() noexcept
+bool RenderFurther() noexcept
 {
     // Guarded like every other engine call the mod makes: on a fault the minimap's target field and held slot
-    // are still put back by the driver (a held pool-0 slot would hang its next acquire), and player 2's image stops.
+    // are still put back by the driver (a held pool-0 slot would hang its next acquire), and the images stop.
     const bool rendered = platform::CallGuarded(g_renderToLayer, reinterpret_cast<void*>(g_overlayThisFrame));
     if (!rendered)
     {
-        Refuse(L"player 2's overlay render raised an exception");
+        Refuse(L"a further player's overlay render raised an exception");
     }
     return rendered;
 }
 
-void EndPlayerTwoPass() noexcept
+void EndFurtherPass() noexcept
 {
     std::memcpy(reinterpret_cast<void*>(g_deltaTime), &g_deltaTimeSaved, sizeof(g_deltaTimeSaved));
+    g_slot.SetActive(false);
 }
 
 void BeginPlayerOnePass() noexcept
 {
-    g_imageThisFrame.store(g_slot.Held(), std::memory_order_relaxed);
+    g_imageSeats.store(g_slot.Held() ? g_slot.EntrySeats() : 0u, std::memory_order_relaxed);
 }
 
 bool ImageThisFrame() noexcept
 {
-    return g_imageThisFrame.load(std::memory_order_relaxed);
+    return g_imageSeats.load(std::memory_order_relaxed) != 0;
 }
 
 void EndFrame() noexcept
@@ -335,15 +364,15 @@ void EndFrame() noexcept
     if (g_slot.SubmitIfLeft())
     {
         // Player 1's pass did not take the slot (its render returned early); it was submitted as the game's own
-        // pass would have, holding player 2's entry alone. Info the first time (an unusual path), Debug after: a
-        // state that lasts (a cutscene) would repeat it per frame.
+        // pass would have, holding the further players' entries alone. Info the first time (an unusual path), Debug
+        // after: a state that lasts (a cutscene) would repeat it per frame.
         static bool s_said = false;
         platform::LogAt(s_said ? platform::Level::Debug : platform::Level::Info,
-                        L"HUD image: player 1's pass did not render this frame; player 2's slot submitted on its own");
+                        L"HUD image: player 1's pass did not render this frame; the further players' slot submitted on "
+                        L"its own");
         s_said = true;
     }
 }
-
 std::uintptr_t EntryNameForPass(const void* slot, std::uintptr_t stockName) noexcept
 {
     if (!g_slot.NamesReady() && stockName != 0 && !g_refused)  // once: the first sight of the game's name
@@ -374,19 +403,20 @@ void RegisterSecondImageCommands()
     control::Register(
         {.name  = L"hud-image",
          .shape = control::Shape::OnOff,
-         .help  = L"player 2's HUD image: the overlay rendered a second time and drawn only in player 2's half",
+         .help  = L"the further players' HUD images: the overlay rendered once more per further player and drawn "
+                  L"only in that player's view",
          .set   = [](const Value& v) {
              if (!SecondImageInstalled() || !RootOverlayRenderInstalled())
              {
-                 return Outcome{false, L"player 2's HUD image is not installed (see the startup log)"};
+                 return Outcome{false, L"the further players' HUD images are not installed (see the startup log)"};
              }
              const bool on = std::get<bool>(v);
              SetSecondImage(on);
              if (on && !SecondImageOn())
              {
-                 return Outcome{false, L"player 2's HUD image refused a check (see the log)"};
+                 return Outcome{false, L"the further players' HUD images refused a check (see the log)"};
              }
-             return Outcome{true, on ? L"player 2's HUD image on" : L"player 2's HUD image off"};
+             return Outcome{true, on ? L"the further players' HUD images on" : L"the further players' HUD images off"};
          },
          .get = [] { return Value{SecondImageOn()}; }});
 }

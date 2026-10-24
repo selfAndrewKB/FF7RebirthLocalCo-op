@@ -23,6 +23,7 @@
 #include "player_two/rides/chocobo_ride.h"
 #include "player_two/weak_object.h"
 #include "player_two/world/field_pickup.h"
+#include "players/seats.h"
 #include "players/widget_opacity.h"
 
 #include <algorithm>
@@ -51,15 +52,23 @@ using action_rows::kMaxRows;
 
 struct Row
 {
-    const UObject* widget    = nullptr;
-    std::uint64_t  weak      = 0;  // the list's FWeakObjectPtr, as stored
-    int            p2Row     = -1; // player 2's component row naming it now, or -1
-    int            p2Ride    = -1; // the handle of player 2's driven chocobo naming it now, or -1
-    int            p2Pickup  = -1; // the field-prompt slot of player 2's pass naming it now, or -1
-    bool           playerTwo = false;
-    std::int32_t   priority  = 0;
-    std::int32_t   remove    = 0;
+    const UObject* widget     = nullptr;
+    std::uint64_t  weak       = 0;  // the list's FWeakObjectPtr, as stored
+    int            seatRow    = -1; // the owning seat's component row naming it now, or -1
+    int            seatRide   = -1; // the handle of the owning seat's driven chocobo naming it now, or -1
+    int            seatPickup = -1; // the field-prompt slot of the owning seat's pass naming it now, or -1
+    int            owner      = 0;  // the seat whose row it is (0 player 1's)
+    std::int32_t   priority   = 0;
+    std::int32_t   remove     = 0;
     bool operator==(const Row&) const = default;
+};
+
+/// What names a seat's rows this frame.
+struct SeatNames
+{
+    std::array<const UObject*, kComponentRows>                                        component{};
+    std::array<const UObject*, std::size(facts::kChocoboMoveStateRowHandles)>         ride{};
+    std::array<const UObject*, std::tuple_size_v<player_two::field_pickup::Weaks>> pickup{};
 };
 
 // Game thread.
@@ -74,14 +83,15 @@ struct RowsSteady
 using RowRemoves = std::array<std::int32_t, kMaxRows>;
 constexpr std::uint32_t kRowStillFrames = 30;
 platform::SettledLog<RowsSteady, RowRemoves> g_rowLog(kRowStillFrames);
-std::vector<const UObject*>               g_playerTwoWidgets;  // player 2's until they leave the list
-std::vector<std::pair<const UObject*, bool>> g_laidOut;        // the list as last laid out per player
+std::array<std::vector<const UObject*>, players::kMaxPlayers> g_seatWidgets;  // each seat's until they leave the list
+std::vector<std::pair<const UObject*, int>> g_laidOut;  // the list as last laid out per player (widget, owner)
 HiddenSet                                 g_hidden;  // the other player's rows, transparent for a pass
 bool                                      g_layOutAgain = false;  // LayOutAgain: rows outside the layout placed at once
 float                                     g_againWidth  = 0.0f;
 float                                     g_againHeight = 0.0f;
-std::vector<const UObject*>               g_stillTwo;  // scratch, reused
-std::vector<std::pair<const UObject*, bool>> g_layoutNow;  // scratch, reused
+std::array<std::vector<const UObject*>, players::kMaxPlayers> g_stillSeat;  // scratch, reused
+std::vector<std::pair<const UObject*, int>> g_layoutNow;  // scratch, reused
+std::array<SeatNames, players::kMaxPlayers> g_names;      // scratch, reused ([0] unused)
 std::vector<action_rows::RowEntry>        g_listRows;   // scratch, reused: the game's list as last read
 
 using platform::Read;  // the guarded reads: platform/guarded.h
@@ -103,7 +113,7 @@ void LayOutPerPlayer()
     g_layoutNow.clear();
     for (const Row& row : g_rows)
     {
-        g_layoutNow.emplace_back(row.widget, row.playerTwo);
+        g_layoutNow.emplace_back(row.widget, row.owner);
     }
     if (g_layoutNow == g_laidOut || !action_rows::LayoutAvailable())
     {
@@ -111,14 +121,14 @@ void LayOutPerPlayer()
     }
     const bool again = g_layOutAgain;
     g_layOutAgain    = false;
-    for (const bool playerTwo : {false, true})
+    for (int owner = 0; owner < players::kMaxPlayers; ++owner)
     {
         std::vector<std::uint64_t> weaks;
         std::vector<void*>         widgets;
         void*                      placeNow = nullptr;
         for (const Row& row : g_rows)
         {
-            if (row.playerTwo == playerTwo)
+            if (row.owner == owner)
             {
                 weaks.push_back(row.weak);
                 widgets.push_back(const_cast<UObject*>(row.widget));
@@ -144,17 +154,18 @@ std::wstring Describe(const std::vector<Row>& rows)
     std::wstring text;
     for (const Row& row : rows)
     {
-        const std::wstring owner = row.p2Row >= 0    ? std::format(L"player 2 row {}", row.p2Row)
-                                   : row.p2Ride >= 0 ? std::format(L"player 2's chocobo row {}", row.p2Ride)
-                                   : row.p2Pickup >= 0 ? std::format(L"player 2's field prompt slot {}", row.p2Pickup)
-                                   : row.playerTwo   ? std::wstring(L"player 2 (leaving)")
-                                                   : std::wstring(L"player 1");
+        const wchar_t*     name  = players::SeatName(row.owner);
+        const std::wstring owner = row.seatRow >= 0      ? std::format(L"{} row {}", name, row.seatRow)
+                                   : row.seatRide >= 0   ? std::format(L"{}'s chocobo row {}", name, row.seatRide)
+                                   : row.seatPickup >= 0 ? std::format(L"{}'s field prompt slot {}", name, row.seatPickup)
+                                   : row.owner != 0      ? std::format(L"{} (leaving)", name)
+                                                         : std::wstring(L"player 1");
         text += std::format(L"{}[{} prio {} remove {}]", text.empty() ? L"" : L" ", owner, row.priority, row.remove);
     }
     return text.empty() ? L"none" : text;
 }
 
-void LogIfChanged(const std::array<std::uint8_t, kComponentRows>& bytes)
+void LogIfChanged(const std::array<std::uint8_t, kComponentRows>& bytes)  // player 2's requests
 {
     if (!platform::Enabled(platform::Level::Debug))
     {
@@ -189,55 +200,81 @@ void LogIfChanged(const std::array<std::uint8_t, kComponentRows>& bytes)
     platform::LogDebug(L"prompt rows: {}; player 2's requests:{}", Describe(g_rows), requests.empty() ? L" none" : requests);
 }
 
+/// The seat's component, ride and pickup rows this frame; `bytes` gets the component's request bytes.
+void ReadSeatNames(int seat, SeatNames& names, std::array<std::uint8_t, kComponentRows>& bytes)
+{
+    names = {};
+    bytes = {};
+    const auto controller = reinterpret_cast<std::uintptr_t>(player_two::generation::ControllerOf(seat));
+    if (controller == 0)
+    {
+        return;
+    }
+    // The seat's component: its row widgets and request bytes.
+    std::uintptr_t component = 0;
+    Read(controller + kLeaderActions, component);
+    for (std::size_t i = 0; component != 0 && i < kComponentRows; ++i)
+    {
+        std::uint64_t weak = 0;
+        Read(component + kComponentRowBytes + kRowStride * i, bytes[i]);
+        names.component[i] = Read(component + kComponentRowWeak + kRowStride * i, weak) ? Resolve(weak) : nullptr;
+    }
+    // The seat's driven chocobo's own handles (Dash, Dismount, Jet, Scent, Scour): its tick makes their rows in the
+    // one shared list, so they are the seat's the same way (RE-p2-chocobo-rows.md §4).
+    const auto ride = reinterpret_cast<std::uintptr_t>(player_two::chocobo_ride::DrivenMoveState(seat));
+    for (std::size_t i = 0; ride != 0 && i < names.ride.size(); ++i)
+    {
+        std::uint64_t weak = 0;
+        names.ride[i] = Read(ride + facts::kChocoboMoveStateRowHandles[i], weak) ? Resolve(weak) : nullptr;
+    }
+    // The seat's field prompts (pickups): FieldActionMgr's slot rows in the seat's copy of its slot block, made by the
+    // seat's pass of the game's own update (player_two/world/field_pickup.h).
+    player_two::field_pickup::Weaks pickupWeaks{};
+    player_two::field_pickup::RowWeaks(seat, pickupWeaks);
+    for (std::size_t i = 0; i < pickupWeaks.size(); ++i)
+    {
+        names.pickup[i] = pickupWeaks[i] != 0 ? Resolve(pickupWeaks[i]) : nullptr;
+    }
+}
+
+/// The index of `widget` among `named`, or -1.
+template <class Names>
+int IndexIn(const Names& named, const UObject* widget) noexcept
+{
+    for (std::size_t r = 0; widget != nullptr && r < named.size(); ++r)
+    {
+        if (named[r] == widget)
+        {
+            return static_cast<int>(r);
+        }
+    }
+    return -1;
+}
+
 }  // namespace
 
 bool Install(const platform::GameImage& image) noexcept
 {
     action_rows::Install(image);  // the list and the game's layout, shared with the icons' base
     const bool native = players::widget_opacity::Installed();  // a row of the module table before this one
-    platform::Log(L"prompt rows: per-player layout {}, per-half visibility {}",
+    platform::Log(L"prompt rows: per-player layout {}, per-view visibility {}",
                   action_rows::LayoutAvailable() ? L"ready" : L"UNAVAILABLE", native ? L"ready" : L"UNAVAILABLE");
     return action_rows::ListKnown();
 }
 
 void Refresh() noexcept
 {
-    const auto playerTwo = reinterpret_cast<std::uintptr_t>(player_two::generation::PlayerTwoController());
-    if (!action_rows::ListKnown() || playerTwo == 0)
+    if (!action_rows::ListKnown() || !player_two::generation::AnyActive())
     {
         return;
     }
     try
     {
-        // Player 2's component: its row widgets and request bytes.
-        std::uintptr_t component = 0;
-        Read(playerTwo + kLeaderActions, component);
-        std::array<const UObject*, kComponentRows> named{};
-        std::array<std::uint8_t, kComponentRows>   bytes{};
-        for (std::size_t i = 0; component != 0 && i < kComponentRows; ++i)
+        std::array<std::uint8_t, kComponentRows> bytes{}, playerTwoBytes{};
+        for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
         {
-            std::uint64_t weak = 0;
-            Read(component + kComponentRowBytes + kRowStride * i, bytes[i]);
-            named[i] = Read(component + kComponentRowWeak + kRowStride * i, weak) ? Resolve(weak) : nullptr;
-        }
-        // Player 2's driven chocobo's own handles (Dash, Dismount, Jet, Scent, Scour): its tick makes their rows in the
-        // one shared list, so they are player 2's the same way (RE-p2-chocobo-rows.md §4).
-        constexpr std::size_t kRideRows = std::size(facts::kChocoboMoveStateRowHandles);
-        std::array<const UObject*, kRideRows> rideNamed{};
-        const auto ride = reinterpret_cast<std::uintptr_t>(player_two::chocobo_ride::DrivenMoveState());
-        for (std::size_t i = 0; ride != 0 && i < kRideRows; ++i)
-        {
-            std::uint64_t weak = 0;
-            rideNamed[i] = Read(ride + facts::kChocoboMoveStateRowHandles[i], weak) ? Resolve(weak) : nullptr;
-        }
-        // Player 2's field prompts (pickups): FieldActionMgr's slot rows in player 2's copy of its slot block, made by
-        // player 2's pass of the game's own update (player_two/world/field_pickup.h).
-        player_two::field_pickup::Weaks pickupWeaks{};
-        player_two::field_pickup::RowWeaks(pickupWeaks);
-        std::array<const UObject*, std::tuple_size_v<player_two::field_pickup::Weaks>> pickupNamed{};
-        for (std::size_t i = 0; i < pickupWeaks.size(); ++i)
-        {
-            pickupNamed[i] = pickupWeaks[i] != 0 ? Resolve(pickupWeaks[i]) : nullptr;
+            ReadSeatNames(seat, g_names[static_cast<std::size_t>(seat)], bytes);
+            playerTwoBytes = seat == players::kPlayerTwoSeat ? bytes : playerTwoBytes;
         }
 
         g_rows.clear();
@@ -245,52 +282,65 @@ void Refresh() noexcept
         {
             return;
         }
-        g_stillTwo.clear();
+        for (auto& still : g_stillSeat)
+        {
+            still.clear();
+        }
         for (const action_rows::RowEntry& entry : g_listRows)
         {
             Row row;
             row.weak   = entry.weak;
             row.widget = static_cast<const UObject*>(entry.widget);
-            for (std::size_t r = 0; r < kComponentRows; ++r)
+            // The first seat naming the row owns it; a row a seat named before stays its own until it leaves the list.
+            for (int seat = 1; seat <= players::kSeatsBuilt && row.owner == 0; ++seat)
             {
-                row.p2Row = named[r] == row.widget ? static_cast<int>(r) : row.p2Row;
+                const SeatNames& names = g_names[static_cast<std::size_t>(seat)];
+                row.seatRow            = IndexIn(names.component, row.widget);
+                row.seatRide           = IndexIn(names.ride, row.widget);
+                row.seatPickup         = IndexIn(names.pickup, row.widget);
+                const auto& kept       = g_seatWidgets[static_cast<std::size_t>(seat)];
+                if (row.seatRow >= 0 || row.seatRide >= 0 || row.seatPickup >= 0 ||
+                    std::find(kept.begin(), kept.end(), row.widget) != kept.end())
+                {
+                    row.owner = seat;
+                }
             }
-            for (std::size_t r = 0; r < kRideRows; ++r)
+            if (row.owner != 0)
             {
-                row.p2Ride = rideNamed[r] != nullptr && rideNamed[r] == row.widget ? static_cast<int>(r) : row.p2Ride;
-            }
-            for (std::size_t r = 0; r < pickupNamed.size(); ++r)
-            {
-                row.p2Pickup = pickupNamed[r] != nullptr && pickupNamed[r] == row.widget ? static_cast<int>(r) : row.p2Pickup;
-            }
-            row.playerTwo = row.p2Row >= 0 || row.p2Ride >= 0 || row.p2Pickup >= 0 ||
-                            std::find(g_playerTwoWidgets.begin(), g_playerTwoWidgets.end(), row.widget) != g_playerTwoWidgets.end();
-            if (row.playerTwo)
-            {
-                g_stillTwo.push_back(row.widget);
+                g_stillSeat[static_cast<std::size_t>(row.owner)].push_back(row.widget);
             }
             const auto address = reinterpret_cast<std::uintptr_t>(row.widget);
             Read(address + kWidgetPriority, row.priority);
             Read(address + kWidgetRemoveState, row.remove);
             g_rows.push_back(row);
         }
-        g_playerTwoWidgets.swap(g_stillTwo);
+        g_seatWidgets.swap(g_stillSeat);
         LayOutPerPlayer();
-        LogIfChanged(bytes);
+        LogIfChanged(playerTwoBytes);
     }
     catch (...)
     {
         g_rows.clear();
     }
 }
-
 void Forget() noexcept
 {
     Restore();
     g_rows.clear();
-    g_playerTwoWidgets.clear();  // a later row at a reused address must not count as player 2's
+    for (auto& widgets : g_seatWidgets)
+    {
+        widgets.clear();  // a later row at a reused address must not count as a seat's
+    }
     g_laidOut.clear();
     g_rowLog.Reset();
+}
+
+void Forget(int seat) noexcept
+{
+    if (players::SeatIndex(seat))
+    {
+        g_seatWidgets[static_cast<std::size_t>(seat)].clear();  // a reused address must not count as the seat's
+    }
 }
 
 void LayOutAgain(float width, float height) noexcept
@@ -301,12 +351,12 @@ void LayOutAgain(float width, float height) noexcept
     g_againHeight = height;
 }
 
-void ShowOnly(int player) noexcept
+void ShowOnly(int seat) noexcept
 {
     Restore();
     for (const Row& row : g_rows)
     {
-        if (row.playerTwo != (player != 0))
+        if (row.owner != seat)
         {
             g_hidden.Hide(Resolve(row.weak), row.weak);  // the other player's: transparent for this pass
         }

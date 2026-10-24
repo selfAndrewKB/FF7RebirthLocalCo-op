@@ -1,59 +1,71 @@
 #pragma once
 
-// The machine code that gives player 2's HUD entry its own buffers and lets each view family draw
-// only its own player's entry (RE-p2-hud-second-image.md §3 and §5).
+// The machine code that gives each further seat's HUD entry its own buffers and lets each view family draw only its
+// own player's entry (RE-p2-hud-second-image.md §3 and §5; per seat since plan/seats.md step 4).
 //
-// With player 2's image, one pool-2 slot holds two layer entries, [player 2's, player 1's]. The
-// render thread consumes the slot once per view family. On a fresh consume it uploads each entry's
-// vertices and indices into the pool's ONE vertex/index buffer set, from offset 0, and draws. On a
-// re-use consume it only draws, from what that buffer set last received. So a second entry needs
-// its own buffer set, and a family must skip the other player's entry. Two sites in the consume
-// loop do that, each one whole instruction replaced through platform/code_redirect.h:
+// With the further seats' images, one pool-2 slot holds one layer entry per seat with an image, then player 1's:
+// [player 3's, player 2's, player 1's], the further seats highest first (hud/passes/overlay_pass.h). The render
+// thread consumes the slot once per view family. On a fresh consume it uploads each entry's vertices and indices into
+// the pool's ONE vertex/index buffer set, from offset 0, and draws. On a re-use consume it only draws, from what that
+// buffer set last received. So every further entry needs its own buffer set, and a family must skip every other
+// player's entry. Two sites in the consume loop do that, each one whole instruction replaced through
+// platform/code_redirect.h:
 //
 // Buffers (0x140FC8501, `mov rax,[rdi+90h]`, loading pool 2's vertex buffer for DrawLayerEntry;
 // r9 = the entry, whose FName is its first 8 bytes; the index buffer and the SRM slot are already
-// stored at [rsp+28h] and [rsp+30h]): for player 2's entry, player 2's vertex buffer, index buffer
-// and SRM slot are passed instead. Only rax, the two argument slots and the flags change; nothing
-// after it reads the flags before the call.
+// stored at [rsp+28h] and [rsp+30h]): for a further seat's entry, that seat's vertex buffer, index buffer and SRM
+// slot are passed instead (the seats' table, walked in order). Only rax, the two argument slots and the flags change;
+// nothing after it reads the flags before the call.
 //
-// Draw gate (0x140FC8E05, `cmp dword [r9+8],0` before `jle` past the draw; rbx = the entry): when a
-// family entry name is set and this entry is the OTHER player's overlay entry, ZF is forced so the
-// stock jle skips the draw. The entry has already uploaded, so a later re-use by the other family
-// still finds its geometry. rax is dead at this point on both paths.
+// Draw gate (0x140FC8E05, `cmp dword [r9+8],0` before `jle` past the draw; rbx = the entry): when a family entry
+// name is set and this entry is an overlay entry (player 1's or any seat's) other than the family's own, ZF is forced
+// so the stock jle skips the draw. The entry has already uploaded, so a later re-use by another family still finds
+// its geometry. rax is dead at this point on both paths.
 // The gate is in DrawLayerEntry, which every pool's consume calls (pool 0's at 0x140FC7C9D draws the
-// minimap's map into its own target, before the frame's families), so only the two overlay entries
+// minimap's map into its own target, before the frame's families), so only the overlay entries
 // are ever filtered; every other entry is drawn as the game draws it.
 //
 // The values are read through absolute addresses of 8-byte fields that the mod owns (patched in by
 // the builders below), so they can change while the code is installed. Kept apart from the
 // installer so the host tests can execute exactly these bytes.
 
+#include "players/seats.h"
+
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <initializer_list>
 
 namespace lss::hud {
+
+/// The further seats with a table entry: seats 1..kMaxPlayers-1, built or not (an unbuilt seat's entry stays unset).
+inline constexpr int kFurtherEntries = players::kMaxPlayers - 1;
 
 /// The fields the code reads. Each is an aligned 8-byte value (atomic on x64); a zero name means
 /// "not set".
 struct EntryFilterFields
 {
-    alignas(8) std::uint64_t playerTwoName = 0;  // player 2's entry FName; set only once its buffers are ready
-    alignas(8) std::uint64_t vertexBuffer  = 0;  // player 2's buffer set (object pointers)
-    alignas(8) std::uint64_t indexBuffer   = 0;
-    alignas(8) std::uint64_t srmSlot       = 0;
-    alignas(8) std::uint64_t familyName    = 0;  // the entry this family draws; 0 draws every entry
-    alignas(8) std::uint64_t stockName     = 0;  // player 1's (the game's) overlay entry FName
-};
+    struct SeatEntry
+    {
+        alignas(8) std::uint64_t name = 0;  // the seat's entry FName; set only once its buffers are ready
+        alignas(8) std::uint64_t vertexBuffer = 0;  // the seat's buffer set (object pointers)
+        alignas(8) std::uint64_t indexBuffer  = 0;
+        alignas(8) std::uint64_t srmSlot      = 0;
+    };
+    SeatEntry seats[kFurtherEntries];          // seat s at [s - 1]
+    alignas(8) std::uint64_t familyName = 0;  // the entry this family draws; 0 draws every entry
+    alignas(8) std::uint64_t stockName  = 0;  // player 1's (the game's) overlay entry FName
 
-inline constexpr std::size_t kEntryBuffersCodeSize = 81;
-inline constexpr std::size_t kEntryDrawGateCodeSize = 68;
+    SeatEntry&       Seat(int seat) noexcept { return seats[seat - 1]; }
+    const SeatEntry& Seat(int seat) const noexcept { return seats[seat - 1]; }
+};
 
 /// The instruction each site replaces, as the research read it.
 inline constexpr std::uint8_t kLoadVertexBufferBytes[] = {0x48, 0x8B, 0x87, 0x90, 0x00, 0x00, 0x00};  // mov rax,[rdi+90h]
 // The same load in pool 0's consume (0x140FC7C91, FEndMenuRenderer__OnRenderToTexture_ConsumePool0; r13 = the
 // renderer, r9 = the entry, the index buffer and SRM slot already at [rsp+28h]/[rsp+30h]; RE-p2-own-minimap.md §8):
-// the minimap's map entries, so player 2's minimap entry gets its own buffers the same way.
+// the minimap's map entries, so each seat's minimap entry gets its own buffers the same way.
 inline constexpr std::uint8_t kLoadPoolZeroVertexBufferBytes[] = {0x49, 0x8B, 0x85, 0x80, 0x00, 0x00, 0x00};  // mov rax,[r13+80h]
 inline constexpr std::uint8_t kDrawGateBytes[]         = {0x41, 0x83, 0x79, 0x08, 0x00};              // cmp dword [r9+8],0
 // Game version 1.005 (RE-1005-hud-2.md): pool 0's load (0x140A460ED) crosses a 16-byte block, so the site is the
@@ -61,45 +73,117 @@ inline constexpr std::uint8_t kDrawGateBytes[]         = {0x41, 0x83, 0x79, 0x08
 // DrawLayerEntry follows at 0x140A460F9). rax already holds pool 0's vertex buffer there, r9 the entry.
 inline constexpr std::uint8_t kStoreVertexBufferArgBytes1005[] = {0x48, 0x89, 0x44, 0x24, 0x20};  // mov [rsp+20h],rax
 
+// One seat's test and loads, the same length in both buffer builders (74 bytes), then the replaced instruction.
+inline constexpr std::size_t kEntryBuffersCodeSize          = 74 * kFurtherEntries + sizeof(kLoadVertexBufferBytes);
+inline constexpr std::size_t kEntryBuffersStoreCodeSize1005 =
+    74 * kFurtherEntries + sizeof(kStoreVertexBufferArgBytes1005);
+// The family test (23 bytes), one name test per overlay entry (23 bytes each: the seats', then player 1's), the
+// skip's tail (6 bytes), then the replaced instruction.
+inline constexpr std::size_t kEntryDrawGateCodeSize = 23 + 23 * (kFurtherEntries + 1) + 6 + sizeof(kDrawGateBytes);
+
+// Every jump is a short one (rel8, at most 127 bytes forward): the longest are the first seat's jump past the other
+// seats to the end, and the gate's first jump past every name test to the replaced instruction.
+static_assert(74 * (kFurtherEntries - 1) + sizeof(kLoadVertexBufferBytes) <= 127, "a buffers jump needs rel32");
+static_assert(74 * (kFurtherEntries - 1) <= 127, "a 1.005 store jump needs rel32");
+static_assert(5 + 23 * (kFurtherEntries + 1) + 6 <= 127, "a draw gate jump needs rel32");
+
 namespace detail {
-inline void PutAddress(std::uint8_t* at, const void* field) noexcept
+
+/// Writes the bytes in order and resolves forward 8-bit jumps.
+template <std::size_t Size>
+class Emitter
 {
-    const auto address = reinterpret_cast<std::uint64_t>(field);
-    std::memcpy(at, &address, sizeof(address));
-}
+public:
+    explicit Emitter(std::array<std::uint8_t, Size>& code) noexcept : code_(code) {}
+
+    // Every write stays inside the array: a size constant short of the code leaves the end unwritten, which the host
+    // tests see (each builder ends with the instruction it replaces).
+    void Bytes(std::initializer_list<std::uint8_t> bytes) noexcept
+    {
+        for (const std::uint8_t byte : bytes)
+        {
+            if (at_ < Size)
+            {
+                code_[at_] = byte;
+            }
+            ++at_;
+        }
+    }
+
+    void Bytes(const std::uint8_t* bytes, std::size_t count) noexcept
+    {
+        for (std::size_t i = 0; i < count; ++i)
+        {
+            Bytes({bytes[i]});
+        }
+    }
+
+    /// `mov rax, imm64` (48 B8) or `mov r10, imm64` (49 BA) with a field's address, then the load through it.
+    void LoadField(const void* field, bool r10 = false) noexcept
+    {
+        Bytes({r10 ? std::uint8_t{0x49} : std::uint8_t{0x48}, r10 ? std::uint8_t{0xBA} : std::uint8_t{0xB8}});
+        const auto address = reinterpret_cast<std::uint64_t>(field);
+        std::uint8_t bytes[sizeof(address)];
+        std::memcpy(bytes, &address, sizeof(address));
+        Bytes(bytes, sizeof(bytes));
+        if (r10)
+        {
+            Bytes({0x4D, 0x8B, 0x12});  // mov r10, [r10]
+        }
+        else
+        {
+            Bytes({0x48, 0x8B, 0x00});  // mov rax, [rax]
+        }
+    }
+
+    /// A short jump (`opcode` rel8) to a label resolved later; returns the place to resolve.
+    std::size_t Jump(std::uint8_t opcode) noexcept
+    {
+        Bytes({opcode, 0x00});
+        return at_;
+    }
+
+    /// The jump that ended at `after` lands here (forward, within the rel8 range the static_asserts above hold).
+    void Land(std::size_t after) noexcept { code_[after - 1] = static_cast<std::uint8_t>(at_ - after); }
+
+private:
+    std::array<std::uint8_t, Size>& code_;
+    std::size_t                     at_ = 0;
+};
+
 }  // namespace detail
 
 /// `stockLoad` is the site's own 7-byte vertex-buffer load, run for every other entry.
 inline std::array<std::uint8_t, kEntryBuffersCodeSize> EntryBuffersCode(
     const EntryFilterFields& fields, const std::uint8_t (&stockLoad)[7] = kLoadVertexBufferBytes) noexcept
 {
-    std::array<std::uint8_t, kEntryBuffersCodeSize> code = {
-        0x48, 0xB8, 0, 0, 0, 0, 0, 0, 0, 0,        //  0: mov  rax, &playerTwoName
-        0x48, 0x8B, 0x00,                          // 10: mov  rax, [rax]
-        0x48, 0x85, 0xC0,                          // 13: test rax, rax
-        0x74, 0x38,                                // 16: jz   stock               no player-2 entry yet
-        0x49, 0x3B, 0x01,                          // 18: cmp  rax, [r9]           this entry's FName
-        0x75, 0x33,                                // 21: jne  stock
-        0x48, 0xB8, 0, 0, 0, 0, 0, 0, 0, 0,        // 23: mov  rax, &indexBuffer
-        0x48, 0x8B, 0x00,                          // 33: mov  rax, [rax]
-        0x48, 0x89, 0x44, 0x24, 0x28,              // 36: mov  [rsp+28h], rax      the index buffer argument
-        0x48, 0xB8, 0, 0, 0, 0, 0, 0, 0, 0,        // 41: mov  rax, &srmSlot
-        0x48, 0x8B, 0x00,                          // 51: mov  rax, [rax]
-        0x48, 0x89, 0x44, 0x24, 0x30,              // 54: mov  [rsp+30h], rax      the SRM slot argument
-        0x48, 0xB8, 0, 0, 0, 0, 0, 0, 0, 0,        // 59: mov  rax, &vertexBuffer
-        0x48, 0x8B, 0x00,                          // 69: mov  rax, [rax]          the vertex buffer, as the stock load
-        0xEB, 0x07,                                // 72: jmp  done
-        0x48, 0x8B, 0x87, 0x90, 0x00, 0x00, 0x00,  // 74: stock: mov rax, [rdi+90h] (the replaced instruction)
-    };                                             // 81: done (the jump back is appended here)
-    detail::PutAddress(&code[2], &fields.playerTwoName);
-    detail::PutAddress(&code[25], &fields.indexBuffer);
-    detail::PutAddress(&code[43], &fields.srmSlot);
-    detail::PutAddress(&code[61], &fields.vertexBuffer);
-    std::memcpy(&code[74], stockLoad, sizeof(stockLoad));
+    std::array<std::uint8_t, kEntryBuffersCodeSize> code{};
+    detail::Emitter emit(code);
+    std::size_t     toDone[kFurtherEntries] = {};
+    for (int i = 0; i < kFurtherEntries; ++i)
+    {
+        const auto& entry = fields.seats[i];
+        emit.LoadField(&entry.name);              // mov rax, &name ; mov rax, [rax]
+        emit.Bytes({0x48, 0x85, 0xC0});           // test rax, rax          the seat has no entry yet
+        const auto unset = emit.Jump(0x74);       // jz   next
+        emit.Bytes({0x49, 0x3B, 0x01});           // cmp  rax, [r9]         this entry's FName
+        const auto other = emit.Jump(0x75);       // jne  next
+        emit.LoadField(&entry.indexBuffer);
+        emit.Bytes({0x48, 0x89, 0x44, 0x24, 0x28});  // mov [rsp+28h], rax   the index buffer argument
+        emit.LoadField(&entry.srmSlot);
+        emit.Bytes({0x48, 0x89, 0x44, 0x24, 0x30});  // mov [rsp+30h], rax   the SRM slot argument
+        emit.LoadField(&entry.vertexBuffer);      // the vertex buffer, in rax as the stock load leaves it
+        toDone[i] = emit.Jump(0xEB);              // jmp  done
+        emit.Land(unset);
+        emit.Land(other);
+    }
+    emit.Bytes(stockLoad, sizeof(stockLoad));     // stock: the replaced instruction
+    for (const std::size_t jump : toDone)
+    {
+        emit.Land(jump);                          // done (the jump back is appended here)
+    }
     return code;
 }
-
-inline constexpr std::size_t kEntryBuffersStoreCodeSize1005 = 77;
 
 /// Game version 1.005, pool 0: the same choice made at the store of the vertex-buffer argument. rax holds the stock
 /// vertex buffer and must survive for every other entry, so the code reads its fields through r10, which is volatile
@@ -108,54 +192,66 @@ inline constexpr std::size_t kEntryBuffersStoreCodeSize1005 = 77;
 inline std::array<std::uint8_t, kEntryBuffersStoreCodeSize1005> EntryBuffersStoreCode1005(
     const EntryFilterFields& fields) noexcept
 {
-    std::array<std::uint8_t, kEntryBuffersStoreCodeSize1005> code = {
-        0x49, 0xBA, 0, 0, 0, 0, 0, 0, 0, 0,        //  0: mov  r10, &playerTwoName
-        0x4D, 0x8B, 0x12,                          // 10: mov  r10, [r10]
-        0x4D, 0x85, 0xD2,                          // 13: test r10, r10
-        0x74, 0x36,                                // 16: jz   store               no player-2 entry yet
-        0x4D, 0x3B, 0x11,                          // 18: cmp  r10, [r9]           this entry's FName
-        0x75, 0x31,                                // 21: jne  store
-        0x49, 0xBA, 0, 0, 0, 0, 0, 0, 0, 0,        // 23: mov  r10, &indexBuffer
-        0x4D, 0x8B, 0x12,                          // 33: mov  r10, [r10]
-        0x4C, 0x89, 0x54, 0x24, 0x28,              // 36: mov  [rsp+28h], r10      the index buffer argument
-        0x49, 0xBA, 0, 0, 0, 0, 0, 0, 0, 0,        // 41: mov  r10, &srmSlot
-        0x4D, 0x8B, 0x12,                          // 51: mov  r10, [r10]
-        0x4C, 0x89, 0x54, 0x24, 0x30,              // 54: mov  [rsp+30h], r10      the SRM slot argument
-        0x48, 0xB8, 0, 0, 0, 0, 0, 0, 0, 0,        // 59: mov  rax, &vertexBuffer
-        0x48, 0x8B, 0x00,                          // 69: mov  rax, [rax]          player 2's vertex buffer
-        0x48, 0x89, 0x44, 0x24, 0x20,              // 72: store: mov [rsp+20h], rax (the replaced instruction)
-    };                                             // 77: (the jump back is appended here)
-    detail::PutAddress(&code[2], &fields.playerTwoName);
-    detail::PutAddress(&code[25], &fields.indexBuffer);
-    detail::PutAddress(&code[43], &fields.srmSlot);
-    detail::PutAddress(&code[61], &fields.vertexBuffer);
+    std::array<std::uint8_t, kEntryBuffersStoreCodeSize1005> code{};
+    detail::Emitter emit(code);
+    std::size_t     toStore[kFurtherEntries] = {};
+    for (int i = 0; i < kFurtherEntries; ++i)
+    {
+        const auto& entry = fields.seats[i];
+        emit.LoadField(&entry.name, true);        // mov r10, &name ; mov r10, [r10]
+        emit.Bytes({0x4D, 0x85, 0xD2});           // test r10, r10          the seat has no entry yet
+        const auto unset = emit.Jump(0x74);       // jz   next
+        emit.Bytes({0x4D, 0x3B, 0x11});           // cmp  r10, [r9]         this entry's FName
+        const auto other = emit.Jump(0x75);       // jne  next
+        emit.LoadField(&entry.indexBuffer, true);
+        emit.Bytes({0x4C, 0x89, 0x54, 0x24, 0x28});  // mov [rsp+28h], r10   the index buffer argument
+        emit.LoadField(&entry.srmSlot, true);
+        emit.Bytes({0x4C, 0x89, 0x54, 0x24, 0x30});  // mov [rsp+30h], r10   the SRM slot argument
+        emit.LoadField(&entry.vertexBuffer);      // mov rax, &vertexBuffer ; mov rax, [rax]   the seat's vertex buffer
+        toStore[i] = emit.Jump(0xEB);             // jmp  store
+        emit.Land(unset);
+        emit.Land(other);
+    }
+    for (const std::size_t jump : toStore)
+    {
+        emit.Land(jump);
+    }
+    // store: the replaced instruction (the jump back is appended)
+    emit.Bytes(kStoreVertexBufferArgBytes1005, sizeof(kStoreVertexBufferArgBytes1005));
     return code;
 }
 
 inline std::array<std::uint8_t, kEntryDrawGateCodeSize> EntryDrawGateCode(const EntryFilterFields& fields) noexcept
 {
-    std::array<std::uint8_t, kEntryDrawGateCodeSize> code = {
-        0x48, 0xB8, 0, 0, 0, 0, 0, 0, 0, 0,  //  0: mov  rax, &familyName
-        0x48, 0x8B, 0x00,                    // 10: mov  rax, [rax]
-        0x48, 0x85, 0xC0,                    // 13: test rax, rax
-        0x74, 0x2D,                          // 16: jz   stock          no filter: draw as the game does
-        0x48, 0x3B, 0x03,                    // 18: cmp  rax, [rbx]     this entry's FName
-        0x74, 0x28,                          // 21: je   stock          this family's entry
-        0x48, 0xB8, 0, 0, 0, 0, 0, 0, 0, 0,  // 23: mov  rax, &playerTwoName
-        0x48, 0x8B, 0x00,                    // 33: mov  rax, [rax]
-        0x48, 0x3B, 0x03,                    // 36: cmp  rax, [rbx]
-        0x74, 0x12,                          // 39: je   skip           player 2's entry, player 1's family
-        0x48, 0xB8, 0, 0, 0, 0, 0, 0, 0, 0,  // 41: mov  rax, &stockName
-        0x48, 0x8B, 0x00,                    // 51: mov  rax, [rax]
-        0x48, 0x3B, 0x03,                    // 54: cmp  rax, [rbx]
-        0x75, 0x04,                          // 57: jne  stock          not an overlay entry (the minimap's map, ...)
-        0x31, 0xC0,                          // 59: skip: xor eax, eax  ZF=1, SF=OF=0: the stock jle skips the draw
-        0xEB, 0x05,                          // 61: jmp  done
-        0x41, 0x83, 0x79, 0x08, 0x00,        // 63: stock: cmp dword [r9+8], 0 (the replaced instruction)
-    };                                       // 68: done (the jump back is appended here)
-    detail::PutAddress(&code[2], &fields.familyName);
-    detail::PutAddress(&code[25], &fields.playerTwoName);
-    detail::PutAddress(&code[43], &fields.stockName);
+    std::array<std::uint8_t, kEntryDrawGateCodeSize> code{};
+    detail::Emitter emit(code);
+    emit.LoadField(&fields.familyName);           // mov rax, &familyName ; mov rax, [rax]
+    emit.Bytes({0x48, 0x85, 0xC0});               // test rax, rax
+    const auto noFilter = emit.Jump(0x74);        // jz   stock             no filter: draw as the game does
+    emit.Bytes({0x48, 0x3B, 0x03});               // cmp  rax, [rbx]        this entry's FName
+    const auto own = emit.Jump(0x74);             // je   stock             this family's entry
+    std::size_t toSkip[kFurtherEntries + 1] = {};
+    for (int i = 0; i <= kFurtherEntries; ++i)    // every seat's entry name, then player 1's
+    {
+        emit.LoadField(i < kFurtherEntries ? &fields.seats[i].name : &fields.stockName);
+        emit.Bytes({0x48, 0x85, 0xC0});           // test rax, rax          no such entry
+        const auto unset = emit.Jump(0x74);       // jz   next
+        emit.Bytes({0x48, 0x3B, 0x03});           // cmp  rax, [rbx]
+        toSkip[i] = emit.Jump(0x74);              // je   skip              another player's overlay entry
+        emit.Land(unset);
+    }
+    const auto notOverlay = emit.Jump(0xEB);      // jmp  stock             not an overlay entry (the minimap's map)
+    for (const std::size_t jump : toSkip)
+    {
+        emit.Land(jump);
+    }
+    emit.Bytes({0x31, 0xC0});                     // skip: xor eax, eax     ZF=1, SF=OF=0: the stock jle skips the draw
+    const auto skipped = emit.Jump(0xEB);         // jmp  done
+    emit.Land(noFilter);
+    emit.Land(own);
+    emit.Land(notOverlay);
+    emit.Bytes(kDrawGateBytes, sizeof(kDrawGateBytes));  // stock: the replaced instruction
+    emit.Land(skipped);                                  // done (the jump back is appended here)
     return code;
 }
 

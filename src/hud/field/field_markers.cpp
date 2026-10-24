@@ -9,6 +9,7 @@
 #include "player_two/scopes/leader_scope.h"
 #include "player_two/weak_object.h"
 #include "player_two/world/field_pickup.h"
+#include "players/seats.h"
 #include "players/widget_opacity.h"
 
 #include <array>
@@ -25,28 +26,35 @@ namespace {
 // creation, +0x28 placed at the point, +0x30 animated. The game's destroy releases all four with the element (§12.15).
 constexpr std::uint32_t  kMarkerWidgets[] = {0x00, 0x08, 0x28, 0x30};
 
-struct Half
+struct Hidden
 {
-    std::size_t markers = 0, widgets = 0;  // the other player's point markers hidden, and their widgets
-    bool operator==(const Half&) const = default;
+    std::size_t markers = 0, widgets = 0;  // the other players' point markers hidden, and their widgets
+    bool operator==(const Hidden&) const = default;
 };
 
-std::uintptr_t      g_system = 0;  // set once at install
+std::uintptr_t g_system = 0;  // set once at install
 // Game thread.
-HiddenSet           g_hidden;  // the other player's markers, transparent for a pass
-std::array<Half, 2> g_logged{{{static_cast<std::size_t>(-1), 0}, {static_cast<std::size_t>(-1), 0}}};
+HiddenSet      g_hidden;  // the other players' markers, transparent for a pass
+std::array<Hidden, players::kMaxPlayers> g_logged = [] {
+    std::array<Hidden, players::kMaxPlayers> logged{};
+    for (Hidden& each : logged)
+    {
+        each.markers = static_cast<std::size_t>(-1);  // the first pass logs
+    }
+    return logged;
+}();
 
-void LogIfChanged(int player, const Half& now) noexcept
+void LogIfChanged(int seat, const Hidden& now) noexcept
 {
-    if (!platform::Enabled(platform::Level::Debug) || now == g_logged[player])
+    if (!platform::Enabled(platform::Level::Debug) || now == g_logged[static_cast<std::size_t>(seat)])
     {
         return;
     }
-    g_logged[player] = now;
+    g_logged[static_cast<std::size_t>(seat)] = now;
     try
     {
-        platform::LogDebug(L"field markers: player {}'s half hides {} of player {}'s point marker(s) ({} widget(s))", player + 1,
-                      now.markers, 2 - player, now.widgets);
+        platform::LogDebug(L"field markers: {}'s view hides {} of the other players' point marker(s) ({} widget(s))",
+                           players::SeatName(seat), now.markers, now.widgets);
     }
     catch (...)
     {
@@ -60,35 +68,34 @@ void Install(const platform::GameImage& image) noexcept
     const auto system = image.Rebase(facts::kEndUISystem, facts::kUIFieldMarkers + sizeof(void*));
     g_system          = system ? *system : 0;
     g_hidden.Reserve(256);  // four widgets per marker; grows (guarded) past that
-    platform::Log(L"field markers: each half shows only its own player's point markers: {}",
+    platform::Log(L"field markers: each view shows only its own player's point markers: {}",
                   g_system == 0 ? L"UNAVAILABLE (no marker list)"
                   : !players::widget_opacity::Installed()
                       ? L"UNAVAILABLE (the opacity setter is not what the research read)"
                       : L"ready");
 }
 
-void ShowOnly(int player) noexcept
+void ShowOnly(int seat) noexcept
 {
     Restore();
     std::uintptr_t list = 0;
-    if (g_system == 0 || !players::widget_opacity::Installed() ||
+    if (seat < 0 || seat >= players::kMaxPlayers || g_system == 0 || !players::widget_opacity::Installed() ||
         !platform::CopyGuarded(&list, reinterpret_cast<const void*>(g_system + facts::kUIFieldMarkers), sizeof(list)) ||
         list == 0)
     {
         return;
     }
-    const int mine = player != 0 ? 1 : 0;
-    Half      half;
+    Hidden hidden;
     try
     {
-        platform::ForEachSparseElement(list, facts::kFieldMarkerEntry, [mine, &half](std::uintptr_t entry) {
+        platform::ForEachSparseElement(list, facts::kFieldMarkerEntry, [seat, &hidden](std::uintptr_t entry) {
             const int owner = player_two::field_pickup::MarkerOwner(
                 player_two::weak_object::ObjectAt(reinterpret_cast<const void*>(entry)));
-            if (owner < 0 || owner == mine)
+            if (owner < 0 || owner == seat)
             {
-                return true;  // this half's own, or not a point's marker
+                return true;  // this view's own, or not a point's marker
             }
-            ++half.markers;
+            ++hidden.markers;
             for (const std::uint32_t at : kMarkerWidgets)
             {
                 std::uint64_t weak   = 0;
@@ -100,7 +107,7 @@ void ShowOnly(int player) noexcept
                 }
                 if (g_hidden.Hide(widget, weak))
                 {
-                    ++half.widgets;
+                    ++hidden.widgets;
                 }
             }
             return true;
@@ -110,7 +117,7 @@ void ShowOnly(int player) noexcept
     {
         // What was hidden before the throw is listed and comes back in Restore.
     }
-    LogIfChanged(mine, half);
+    LogIfChanged(seat, hidden);
 }
 
 void Restore() noexcept

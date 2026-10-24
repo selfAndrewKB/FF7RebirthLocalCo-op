@@ -10,6 +10,7 @@
 #include "platform/sparse_array.h"
 #include "platform/verified_code.h"
 #include "player_two/generation.h"
+#include "players/seats.h"
 #include "player_two/weak_object.h"
 
 #include <cstdint>
@@ -183,8 +184,9 @@ void Remove() noexcept
     }
 }
 
-void Replay(bool playerTwo) noexcept
+void Replay(int seat) noexcept
 {
+    const bool further = players::SeatIndex(seat);
     std::uintptr_t manager = 0;
     std::uintptr_t canvas[2]{};  // the manager's TSharedPtr, copied: the wrappers read only its object
     if (!g_installed || g_failed || g_record.count == 0 || !Read(g_endUISystem + kManager, manager) || manager == 0 ||
@@ -192,8 +194,8 @@ void Replay(bool playerTwo) noexcept
     {
         return;
     }
-    void* controller = playerTwo ? player_two::generation::PlayerTwoController() : nullptr;
-    if (playerTwo && controller == nullptr)
+    void* controller = further ? player_two::generation::ControllerOf(seat) : nullptr;
+    if (further && controller == nullptr)
     {
         return;
     }
@@ -210,11 +212,11 @@ void Replay(bool playerTwo) noexcept
     {
         platform::Log(L"popups: a placement raised an exception; popups are no longer placed per view");
     }
-    else if (playerTwo && counts[0] + counts[1] + counts[2] > 0 &&
+    else if (further && counts[0] + counts[1] + counts[2] > 0 &&
              platform::Enabled(platform::Level::Trace))  // every HUD pass: Trace (platform/log.h)
     {
-        platform::LogTrace(L"popups: placed again in player 2's view: {} numbers, {} texts, {} UMG ({} recorded)",
-                           counts[0], counts[1], counts[2], g_record.count);
+        platform::LogTrace(L"popups: placed again in {}'s view: {} numbers, {} texts, {} UMG ({} recorded)",
+                           players::SeatName(seat), counts[0], counts[1], counts[2], g_record.count);
     }
 }
 

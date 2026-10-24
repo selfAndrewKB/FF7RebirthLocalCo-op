@@ -25,6 +25,7 @@
 #include "platform/verified_code.h"
 #include "player_two/generation.h"
 #include "player_two/session/party_member.h"
+#include "players/seats.h"
 
 #include <atomic>
 #include <cstddef>
@@ -142,8 +143,10 @@ using ShouldUnloadFn = bool (*)(const void* piece, const float* centre);
 
 struct Counts
 {
-    std::uint64_t runsTwo = 0, runsOne = 0;
+    std::uint64_t runsSeats = 0, runsOne = 0;
 };
+
+constexpr int kPlayers = players::kMaxPlayers;
 
 // Installed once, then read.
 platform::CallRedirect g_acquireCall;
@@ -164,37 +167,53 @@ NewTargetFn            g_newTarget          = nullptr;
 InitFormatFn           g_initFormat         = nullptr;
 UpdateNowFn            g_updateNow          = nullptr;
 
-// Player 2's entry in the circle's pool-0 slot (hud/passes/shared_slot.h): the hold, the names, the buffers.
+// The further seats' entries in the circle's pool-0 slot (hud/passes/shared_slot.h): the hold, the names, the buffers.
 SharedLayerSlot g_slot{{L"minimap", 0, kPoolZeroVertexBuffer, kPoolZeroIndexBuffer, L"SEndNaviMapCircle",
-                        L"SEndNaviMapCircle_P2"}};
+                        {nullptr, L"SEndNaviMapCircle_P2", L"SEndNaviMapCircle_P3"}}};
 
 // Game thread.
 platform::DeferredSites g_acquire;  // crosses a block on both builds: placed from the game thread, off the paint
 bool          g_refused       = false;  // a check failed: the earlier behaviour until restart
-void*         g_target        = nullptr;  // player 2's render target (rooted, kept for the process)
-bool          g_frameActive   = false;
-bool          g_ranForTwo     = false;
-int           g_answerType    = -1;  // the leader type the holder update gets in player 2's run
+// By seat ([0] unused).
+void*          g_target[kPlayers]      = {};  // the seat's render target (rooted, kept for the process)
+bool           g_seatOn[kPlayers]      = {};  // the seat's minimap is used this frame
+bool           g_ranFor[kPlayers]      = {};  // the seat's holder run ran this frame
+const wchar_t* g_lastWhy[kPlayers]     = {};
+float          g_centre[kPlayers][2]   = {};  // the seat's run's map centre (logged)
+bool           g_sizeDiffers[kPlayers] = {};
+// One run or paint at a time.
+int           g_answerType    = -1;  // the leader type the holder update gets in a seat's run
+int           g_runSeat       = 0;   // the seat whose holder run runs (0: player 1's centre)
 void*         g_swappedSlate  = nullptr;
 void*         g_savedTarget   = nullptr;
 Counts        g_counts, g_loggedCounts;
 SlotCounts    g_loggedSlot;
 ULONGLONG     g_countsAt      = 0;
 ULONGLONG     g_centreAt      = 0;
-const wchar_t* g_lastWhy      = nullptr;
-float         g_centreTwo[2]  = {};
 std::uint64_t g_loggedOffThread = 0;
-bool          g_sizeDiffers     = false;
+
+/// Any seat's minimap is used this frame.
+bool AnySeatOn() noexcept
+{
+    for (int seat = 1; seat < kPlayers; ++seat)
+    {
+        if (g_seatOn[seat])
+        {
+            return true;
+        }
+    }
+    return false;
+}
 
 // The map pieces' unload test (game thread): each player's last centre as the holder update passed it (12 bytes from
-// its rdx), so a run can also ask about the other player's. Valid only while player 2's minimap is on.
+// its rdx), so a run can also ask about the other players'. Valid only while a seat's minimap is on.
 struct PieceCounts
 {
     std::uint64_t asked = 0, dropped = 0, keptForOther = 0;
 };
-float         g_pieceCentre[2][3] = {};  // [0] player 1's (the game's tick and player 1's run), [1] player 2's
-bool          g_pieceCentreKnown[2] = {};
-PieceCounts   g_pieces[2], g_loggedPieces[2];  // by the run asking: [0] player 1's centre, [1] player 2's
+float         g_pieceCentre[kPlayers][3] = {};  // [0] player 1's (the game's tick and player 1's run), then by seat
+bool          g_pieceCentreKnown[kPlayers] = {};
+PieceCounts   g_pieces[kPlayers], g_loggedPieces[kPlayers];  // by the run asking
 ULONGLONG     g_piecesAt        = 0;
 bool          g_loggedFirstKeep = false;
 
@@ -226,9 +245,12 @@ using platform::ReadPointer;
 
 void Refuse(const wchar_t* why) noexcept
 {
-    g_refused     = true;
-    g_frameActive = false;
-    Line(L"{}; the minimap keeps player 1's map in both halves", why);
+    g_refused = true;
+    for (bool& on : g_seatOn)
+    {
+        on = false;
+    }
+    Line(L"{}; the minimap keeps player 1's map in every view", why);
 }
 
 void* Holder() noexcept
@@ -256,7 +278,7 @@ bool CentreOf(const void* slate, float (&centre)[2]) noexcept
 
 // --- The game's calls, redirected ---
 
-/// The holder update's leader read: player 2's member's type in player 2's run.
+/// The holder update's leader read: the seat's member's type in the seat's run.
 std::uint8_t LeaderType() noexcept
 {
     if (g_answerType >= 0 && generation::OnGameThread())
@@ -267,37 +289,49 @@ std::uint8_t LeaderType() noexcept
 }
 
 /// The holder update's unload test for a shown map piece: the game's own test, asked for this run's centre and, while
-/// player 2's minimap is on, for the other player's last centre too. A piece is dropped only when it is out of range
-/// of both, so neither player's run drops the pieces the other's map shows. Any other time: the game's answer.
+/// a seat's minimap is on, for every other player's last centre too. A piece is dropped only when it is out of range
+/// of all of them, so no player's run drops the pieces another's map shows. Any other time: the game's answer.
 bool ShouldUnload(const void* piece, const float* centre) noexcept
 {
     const auto original = reinterpret_cast<ShouldUnloadFn>(g_unloadCall.Original());
     const bool drop     = original(piece, centre);
-    if (!g_frameActive || centre == nullptr || !generation::OnGameThread())
+    if (!AnySeatOn() || centre == nullptr || !generation::OnGameThread())
     {
         return drop;
     }
-    const int run   = g_answerType >= 0 ? 1 : 0;  // the leader answer is set only inside player 2's run
-    const int other = 1 - run;
+    const int run = g_answerType >= 0 ? g_runSeat : 0;  // the leader answer is set only inside a seat's run
     std::memcpy(g_pieceCentre[run], centre, sizeof(g_pieceCentre[run]));
     g_pieceCentreKnown[run] = true;
     ++g_pieces[run].asked;
-    const auto verdict = hud_rules::UnloadVerdict(drop, g_pieceCentreKnown[other],
-                                                  [&] { return original(piece, g_pieceCentre[other]); });
+    // The game's answer stands unless some other player's map shows the piece (hud_rules::UnloadVerdict per player).
+    auto verdict = hud_rules::Unload::GamesOwn;
+    int  keeper  = -1;
+    for (int other = 0; other < kPlayers && drop && keeper < 0; ++other)
+    {
+        if (other == run)
+        {
+            continue;
+        }
+        const auto answer = hud_rules::UnloadVerdict(drop, g_pieceCentreKnown[other],
+                                                     [&] { return original(piece, g_pieceCentre[other]); });
+        keeper  = answer == hud_rules::Unload::KeptForOther ? other : keeper;
+        verdict = answer == hud_rules::Unload::GamesOwn ? verdict : answer;
+    }
     if (verdict == hud_rules::Unload::GamesOwn)
     {
         g_pieces[run].dropped += drop ? 1 : 0;
         return drop;
     }
-    if (verdict == hud_rules::Unload::KeptForOther)
+    if (keeper >= 0)
     {
         ++g_pieces[run].keptForOther;
         if (!g_loggedFirstKeep)
         {
             g_loggedFirstKeep = true;
             LineAt(platform::Level::Debug,
-                   L"map pieces: {}'s run kept a piece the other player's map shows ({}; their centre ({:.0f}, {:.0f}))",
-                   run == 1 ? L"player 2" : L"player 1", piece, g_pieceCentre[other][0], g_pieceCentre[other][1]);
+                   L"map pieces: {}'s run kept a piece {}'s map shows ({}; their centre ({:.0f}, {:.0f}))",
+                   players::SeatName(run), players::SeatName(keeper), piece, g_pieceCentre[keeper][0],
+                   g_pieceCentre[keeper][1]);
         }
         return false;
     }
@@ -313,30 +347,46 @@ void LogPieces() noexcept
         return;
     }
     g_piecesAt = now + kCountsPeriodMs;
-    PieceCounts d[2];
-    for (int i = 0; i < 2; ++i)
+    PieceCounts d[kPlayers];
+    bool        any = false;
+    for (int i = 0; i < kPlayers; ++i)
     {
         d[i] = {g_pieces[i].asked - g_loggedPieces[i].asked, g_pieces[i].dropped - g_loggedPieces[i].dropped,
                 g_pieces[i].keptForOther - g_loggedPieces[i].keptForOther};
         g_loggedPieces[i] = g_pieces[i];
+        any               = any || d[i].asked != 0;
     }
-    if (d[0].asked == 0 && d[1].asked == 0)
+    if (!any || !platform::Enabled(platform::Level::Debug))
     {
         return;
     }
-    LineAt(platform::Level::Debug,
-           L"map pieces since the last line: player 1's centre asked {} times, dropped {}, kept for player 2 {}; player "
-           L"2's run asked {}, dropped {}, kept for player 1 {}",
-           d[0].asked, d[0].dropped, d[0].keptForOther, d[1].asked, d[1].dropped, d[1].keptForOther);
+    try
+    {
+        std::wstring runs;
+        for (int i = 0; i < kPlayers; ++i)
+        {
+            if (i == 0 || d[i].asked != 0)
+            {
+                runs += std::format(L"{}{}'s {} asked {} times, dropped {}, kept for another player {}",
+                                    i == 0 ? L"" : L"; ", players::SeatName(i), i == 0 ? L"centre" : L"run",
+                                    d[i].asked, d[i].dropped, d[i].keptForOther);
+            }
+        }
+        LineAt(platform::Level::Debug, L"map pieces since the last line: {}", runs);
+    }
+    catch (...)
+    {
+    }
 }
 
-/// The circle's AcquireLayerSlot: player 2's pass holds its slot; player 1's pass gets it back instead of a second.
+/// The circle's AcquireLayerSlot: the first further pass holds its slot, later ones take it; player 1's pass gets it
+/// back instead of a second.
 void* Acquire(void* renderer, std::uintptr_t pool) noexcept
 {
     return g_slot.Acquire(renderer, pool, reinterpret_cast<AcquireLayerSlotFn>(g_acquireCall.Original()));
 }
 
-/// The circle's FindOrAddNamedLayerEntry: player 2's entry in the held slot has its own name.
+/// The circle's FindOrAddNamedLayerEntry: a seat's entry in the held slot has its seat's name.
 void* FindOrAdd(void* slot, std::uintptr_t name, void* rect, std::uintptr_t unused) noexcept
 {
     if (generation::OnGameThread())
@@ -346,7 +396,7 @@ void* FindOrAdd(void* slot, std::uintptr_t name, void* rect, std::uintptr_t unus
     return reinterpret_cast<FindOrAddFn>(g_findCall.Original())(slot, name, rect, unused);
 }
 
-/// The circle's SubmitLayerSlot: player 2's pass leaves the held slot for player 1's pass to submit.
+/// The circle's SubmitLayerSlot: a further pass leaves the held slot for player 1's pass to submit.
 void Submit(void* renderer, std::uintptr_t pool, void* slot, std::uintptr_t unused) noexcept
 {
     if (generation::OnGameThread() && g_slot.SkipSubmit(slot))
@@ -356,7 +406,7 @@ void Submit(void* renderer, std::uintptr_t pool, void* slot, std::uintptr_t unus
     reinterpret_cast<SubmitLayerSlotFn>(g_submitCall.Original())(renderer, pool, slot, unused);
 }
 
-// --- Player 2's target and buffers ---
+// --- Each seat's target and buffers ---
 
 bool RootGuarded(void* object) noexcept
 {
@@ -371,8 +421,8 @@ bool RootGuarded(void* object) noexcept
     }
 }
 
-/// Player 2's target, made with the widget's own recipe at the live target's size.
-void MakeTarget(const void* slate) noexcept
+/// The seat's target, made with the widget's own recipe at the live target's size.
+void MakeTarget(int seat, const void* slate) noexcept
 {
     const void*   live  = ReadPointer(slate, kSlateTarget);
     std::uint32_t sizeX = 0, sizeY = 0;
@@ -390,12 +440,12 @@ void MakeTarget(const void* slate) noexcept
     void* target = nullptr;
     if (outer == nullptr || !platform::CallGuarded(g_newTarget, target, outer) || target == nullptr)
     {
-        Refuse(L"player 2's render target could not be made");
+        Refuse(L"a further player's render target could not be made");
         return;
     }
     if (!RootGuarded(target))
     {
-        Refuse(L"player 2's render target could not be rooted");
+        Refuse(L"a further player's render target could not be rooted");
         return;
     }
     auto*                  bytes = static_cast<std::byte*>(target);
@@ -410,26 +460,26 @@ void MakeTarget(const void* slate) noexcept
     if (!platform::CallGuarded(g_initFormat, target, sizeX, sizeY, kFormatB8G8R8A8, static_cast<std::uint8_t>(1)) ||
         !platform::CallGuarded(g_updateNow, target, static_cast<std::uint8_t>(1)))
     {
-        Refuse(L"player 2's render target could not be initialised");
+        Refuse(L"a further player's render target could not be initialised");
         return;
     }
-    g_target = target;
-    Line(L"player 2's render target made with the widget's recipe: {}x{} B8G8R8A8, SRGB, gamma 1 (the live target: "
+    g_target[seat] = target;
+    Line(L"{}'s render target made with the widget's recipe: {}x{} B8G8R8A8, SRGB, gamma 1 (the live target: "
          L"flags91 {:#x}, format {}, gamma {:.2f}) at {}",
-         sizeX, sizeY, flags, format, gamma, target);
+         players::SeatName(seat), sizeX, sizeY, flags, format, gamma, target);
 }
 
-bool TargetReady() noexcept
+bool TargetReady(int seat) noexcept
 {
-    const void* resource = ReadPointer(g_target, kTargetResource);
+    const void* resource = ReadPointer(g_target[seat], kTargetResource);
     return resource != nullptr && ReadPointer(resource, kResourceTarget) != nullptr &&
            ReadPointer(resource, kResourceTexture) != nullptr;
 }
 
-/// Player 2's buffers, built and initialised (hud/passes/shared_slot.h); a wrong buffer kind refuses once.
-bool BuffersUsable() noexcept
+/// The seat's buffers, built and initialised (hud/passes/shared_slot.h); a wrong buffer kind refuses once.
+bool BuffersUsable(int seat) noexcept
 {
-    const auto buffers = g_slot.BuffersUsable();
+    const auto buffers = g_slot.BuffersUsable(seat);
     if (buffers == SharedLayerSlot::Buffers::WrongKind && !g_refused)
     {
         Refuse(L"pool 0's buffers are not the renderer's buffer kind the research read");
@@ -437,7 +487,7 @@ bool BuffersUsable() noexcept
     return buffers == SharedLayerSlot::Buffers::Usable;
 }
 
-/// The game's entry name, checked against the engine's, and player 2's made once.
+/// The game's entry name, checked against the engine's, and the seats' made once.
 void MakeNames() noexcept
 {
     std::uint64_t stock = 0;
@@ -451,8 +501,8 @@ void MakeNames() noexcept
     }
 }
 
-/// Why player 2's minimap is not used this frame (null: it is).
-const wchar_t* WhyNot(bool splitShown, const void* slate) noexcept
+/// Why the seat's minimap is not used this frame (null: it is).
+const wchar_t* WhyNot(int seat, bool splitShown, const void* slate) noexcept
 {
     if (g_refused)
     {
@@ -462,9 +512,9 @@ const wchar_t* WhyNot(bool splitShown, const void* slate) noexcept
     {
         return L"the acquire redirect is not installed";
     }
-    if (!splitShown || !generation::Active() || generation::Member() == nullptr)
+    if (!splitShown || !generation::Active(seat) || generation::MemberOf(seat) == nullptr)
     {
-        return L"no split view with player 2 playing";
+        return L"no split view, or the player is not playing";
     }
     if (slate == nullptr)
     {
@@ -474,13 +524,13 @@ const wchar_t* WhyNot(bool splitShown, const void* slate) noexcept
     {
         return L"waiting for the game's entry name";
     }
-    if (g_target == nullptr || !TargetReady())
+    if (g_target[seat] == nullptr || !TargetReady(seat))
     {
-        return L"waiting for player 2's render target";
+        return L"waiting for the player's render target";
     }
-    if (!BuffersUsable())
+    if (!BuffersUsable(seat))
     {
-        return L"waiting for player 2's buffers";
+        return L"waiting for the player's buffers";
     }
     return nullptr;
 }
@@ -499,18 +549,22 @@ void LogCounts() noexcept
     }
     g_loggedOffThread = offThread;
     g_countsAt        = now + kCountsPeriodMs;
-    const Counts     d = {g_counts.runsTwo - g_loggedCounts.runsTwo, g_counts.runsOne - g_loggedCounts.runsOne};
-    const SlotCounts s = {slot.held - g_loggedSlot.held, slot.takenBack - g_loggedSlot.takenBack,
-                          slot.named - g_loggedSlot.named, slot.submitSkipped - g_loggedSlot.submitSkipped,
-                          slot.safetySubmits - g_loggedSlot.safetySubmits};
+    const Counts     d = {g_counts.runsSeats - g_loggedCounts.runsSeats, g_counts.runsOne - g_loggedCounts.runsOne};
+    const SlotCounts s = {.held          = slot.held - g_loggedSlot.held,
+                          .takenHeld     = slot.takenHeld - g_loggedSlot.takenHeld,
+                          .takenBack     = slot.takenBack - g_loggedSlot.takenBack,
+                          .named         = slot.named - g_loggedSlot.named,
+                          .submitSkipped = slot.submitSkipped - g_loggedSlot.submitSkipped,
+                          .safetySubmits = slot.safetySubmits - g_loggedSlot.safetySubmits};
     g_loggedCounts = g_counts;
     g_loggedSlot   = slot;
     // The steady hand-over is a periodic status line (Debug); a safety submit or an acquire off the game thread is Info.
     LineAt(urgent ? platform::Level::Info : platform::Level::Debug,
-           L"since the last line: holder runs {} for player 2, {} for player 1; slots held {}, taken back by player 1's "
-           L"pass {}, submitted alone {}; player 2's entries named {}, submits left to player 1 {}; acquires off the game "
-           L"thread {}",
-           d.runsTwo, d.runsOne, s.held, s.takenBack, s.safetySubmits, s.named, s.submitSkipped, offThread);
+           L"since the last line: holder runs {} for the further players, {} for player 1; slots held {}, taken by a "
+           L"later pass {}, taken back by player 1's pass {}, submitted alone {}; the further players' entries named {}, "
+           L"submits left to player 1 {}; acquires off the game thread {}",
+           d.runsSeats, d.runsOne, s.held, s.takenHeld, s.takenBack, s.safetySubmits, s.named, s.submitSkipped,
+           offThread);
 }
 
 /// The circle's acquire call, from the game thread outside the paint (its call crosses a block on both builds).
@@ -554,7 +608,7 @@ bool Install(const platform::GameImage& image) noexcept
         !submit || !name || !consume || !resume || !package || !circle || !vbVtable || !ibVtable || !init || !newTarget ||
         !format || !update || !platform::PinThisModule())
     {
-        platform::Log(L"minimap: the minimap's code is not what the research read; player 1's map in both halves");
+        platform::Log(L"minimap: the minimap's code is not what the research read; player 1's map in every view");
         return false;
     }
     g_system             = *system;
@@ -570,7 +624,7 @@ bool Install(const platform::GameImage& image) noexcept
     g_slot.Install(*vbVtable, *ibVtable, reinterpret_cast<BeginInitResourceFn>(*init),
                    reinterpret_cast<SubmitLayerSlotFn>(*submit));
 
-    // The consume code first: it does nothing until player 2's entry name is published with its buffers.
+    // The consume code first: it does nothing until a seat's entry name is published with its buffers.
     const auto code     = EntryBuffersCode(g_slot.Fields(), kLoadPoolZeroVertexBufferBytes);
     const auto code1005 = EntryBuffersStoreCode1005(g_slot.Fields());
     const bool consumed = v1005 ? g_consumeCode.Install(*consume, kStoreVertexBufferArgBytes1005, code1005, *resume)
@@ -583,7 +637,7 @@ bool Install(const platform::GameImage& image) noexcept
     if (!installed)
     {
         Remove();
-        platform::Log(L"minimap: a site is not what the research read; player 1's map in both halves");
+        platform::Log(L"minimap: a site is not what the research read; player 1's map in every view");
         return false;
     }
     g_installed       = true;
@@ -598,7 +652,7 @@ bool Install(const platform::GameImage& image) noexcept
                         g_unloadCall.Install(*unloadAt, *unload, reinterpret_cast<std::uintptr_t>(&ShouldUnload));
     if (pieces)
     {
-        platform::Log(L"minimap: map pieces are dropped only when out of range of both players' centres");
+        platform::Log(L"minimap: map pieces are dropped only when out of range of every player's centre");
     }
     else
     {
@@ -615,7 +669,10 @@ void Remove() noexcept
     minimap_labels::Remove();  // player 1's label states back first (on the game thread)
     minimap_icons::Remove();
     g_acquire.Cancel();  // a placement still queued does nothing
-    g_frameActive = false;
+    for (bool& on : g_seatOn)
+    {
+        on = false;
+    }
     g_slot.Unpublish();
     bool all = true;
     for (platform::CallRedirect* call : {&g_leaderCall, &g_findCall, &g_submitCall, &g_unloadCall})
@@ -640,84 +697,103 @@ void Tick(bool splitShown) noexcept
     }
     MakeNames();
     void* const slate = CircleSlate();
-    if (g_target == nullptr && !g_refused && slate != nullptr && splitShown && generation::Active() &&
-        g_slot.NamesReady())
+    unsigned    on    = 0;  // bit `seat`: the seat's minimap is used this frame
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        MakeTarget(slate);
-    }
-    if (g_target != nullptr && slate != nullptr)
-    {
-        // Player 2's target keeps the size it was made at; a widget with another NaviMapSize would stretch it.
-        std::uint32_t live[2] = {}, own[2] = {};
-        const bool    differs = Read(ReadPointer(slate, kSlateTarget), kTargetSizeX, live) &&
-                                Read(g_target, kTargetSizeX, own) && (live[0] != own[0] || live[1] != own[1]);
-        if (differs != g_sizeDiffers)
+        if (g_target[seat] == nullptr && !g_refused && slate != nullptr && splitShown && generation::Active(seat) &&
+            g_slot.NamesReady())
         {
-            g_sizeDiffers = differs;
-            Line(L"the live minimap target is {}x{}, player 2's {}x{}{}", live[0], live[1], own[0], own[1],
-                 differs ? L" (player 2's map is scaled to fit)" : L" (sizes match again)");
+            MakeTarget(seat, slate);
+        }
+        if (g_target[seat] != nullptr && slate != nullptr)
+        {
+            // The seat's target keeps the size it was made at; a widget with another NaviMapSize would stretch it.
+            std::uint32_t live[2] = {}, own[2] = {};
+            const bool    differs = Read(ReadPointer(slate, kSlateTarget), kTargetSizeX, live) &&
+                                    Read(g_target[seat], kTargetSizeX, own) && (live[0] != own[0] || live[1] != own[1]);
+            if (differs != g_sizeDiffers[seat])
+            {
+                g_sizeDiffers[seat] = differs;
+                Line(L"the live minimap target is {}x{}, {}'s {}x{}{}", live[0], live[1], players::SeatName(seat),
+                     own[0], own[1], differs ? L" (their map is scaled to fit)" : L" (sizes match again)");
+            }
+        }
+        const wchar_t* why = WhyNot(seat, splitShown, slate);
+        g_seatOn[seat]     = why == nullptr;
+        on |= g_seatOn[seat] ? 1u << seat : 0u;
+        if (!g_seatOn[seat])
+        {
+            g_pieceCentreKnown[seat] = false;  // its pieces are no longer kept for it
+        }
+        if (why != g_lastWhy[seat])
+        {
+            g_lastWhy[seat] = why;
+            Line(L"{} ({})", why == nullptr ? L"on" : why, players::SeatName(seat));
         }
     }
-    const wchar_t* why = WhyNot(splitShown, slate);
-    g_frameActive      = why == nullptr;
-    if (!g_frameActive)
+    if (on == 0)
     {
-        g_pieceCentreKnown[0] = g_pieceCentreKnown[1] = false;  // a later split starts from fresh centres
+        for (bool& known : g_pieceCentreKnown)
+        {
+            known = false;  // a later split starts from fresh centres
+        }
     }
-    minimap_labels::Tick(g_frameActive);  // with player 2's minimap off, every label keeps player 1's state only
-    label_relayouts::Tick(g_frameActive);  // the relayout watch (dev tools; empty in a player's build)
-    minimap_icons::Tick(g_frameActive);  // off: the icons only player 2 kept are removed by the next run, as the game does
-    if (why != g_lastWhy)
-    {
-        g_lastWhy = why;
-        Line(L"{}", why == nullptr ? L"on" : why);
-    }
+    minimap_labels::Tick(on);  // a seat whose minimap is off keeps player 1's label state only
+    label_relayouts::Tick(on != 0);  // the relayout watch (dev tools; empty in a player's build)
+    minimap_icons::Tick(on);  // off: the icons only the seats kept are removed by the next run, as the game does
     LogCounts();
     LogPieces();
 }
 
-void RunHolder(bool playerTwo) noexcept
+void RunHolder(int seat) noexcept
 {
-    if (!playerTwo)
+    const bool further = players::SeatIndex(seat);
+    if (!further)
     {
-        minimap_labels::SwapBack();  // normally done after player 2's paint already (EndPlayerTwoPaint)
-    }
-    if (!g_frameActive)
-    {
-        g_ranForTwo = false;
-        return;
+        minimap_labels::SwapBack();  // normally done after the seat's paint already (EndPaint)
     }
     void* holder = Holder();
-    if (holder == nullptr || (!playerTwo && !g_ranForTwo))
+    if (further)
     {
-        return;
-    }
-    if (playerTwo)
-    {
-        const auto type = party_member::PlayerTypeOf(generation::Member());
+        g_ranFor[seat] = false;
+        if (!g_seatOn[seat] || holder == nullptr)
+        {
+            return;
+        }
+        const auto type = party_member::PlayerTypeOf(generation::MemberOf(seat));
         if (!type)
         {
-            g_ranForTwo = false;
             return;
         }
         g_answerType = *type;
-        minimap_labels::BeginPlayerTwoRun();  // its label texts set into player 2's own label states
-        minimap_icons::BeginRun(1);           // the icons player 1's last run kept stay (hud/minimap/minimap_icons.h)
-        g_ranForTwo  = platform::CallGuarded(g_holderUpdate, holder, 0.0f);
+        g_runSeat    = seat;
+        minimap_labels::BeginRun(seat);  // its label texts set into the seat's own label states
+        minimap_icons::BeginRun(seat);   // the icons the other players' last runs kept stay (hud/minimap/minimap_icons.h)
+        g_ranFor[seat] = platform::CallGuarded(g_holderUpdate, holder, 0.0f);
         minimap_icons::EndRun(holder);
-        minimap_labels::EndPlayerTwoRun();
+        minimap_labels::EndRun();
         g_answerType = -1;
-        ++g_counts.runsTwo;
-        if (!g_ranForTwo)
+        g_runSeat    = 0;
+        ++g_counts.runsSeats;
+        if (!g_ranFor[seat])
         {
-            Refuse(L"the navimap holder update raised an exception in player 2's run");
+            Refuse(L"the navimap holder update raised an exception in a further player's run");
             return;
         }
-        CentreOf(CircleSlate(), g_centreTwo);
+        CentreOf(CircleSlate(), g_centre[seat]);
         return;
     }
+    bool anyRan = false;
+    for (int s = 1; s < kPlayers; ++s)
+    {
+        anyRan = anyRan || g_ranFor[s];
+    }
+    if (holder == nullptr || !anyRan)
+    {
+        return;  // player 1's own map is the game tick's: only a seat's run changed it
+    }
     label_relayouts::SetScope(label_relayouts::Scope::PlayerOneRun);
-    minimap_icons::BeginRun(0);  // the icons player 2's run kept this frame stay
+    minimap_icons::BeginRun(0);  // the icons the seats' runs kept this frame stay
     const bool ranForOne = platform::CallGuarded(g_holderUpdate, holder, 0.0f);
     minimap_icons::EndRun(holder);
     label_relayouts::SetScope(label_relayouts::Scope::Other);
@@ -728,44 +804,62 @@ void RunHolder(bool playerTwo) noexcept
     ++g_counts.runsOne;
     float centreOne[2] = {};
     const ULONGLONG now = GetTickCount64();
-    if (now >= g_centreAt && CentreOf(CircleSlate(), centreOne))
+    if (now >= g_centreAt && CentreOf(CircleSlate(), centreOne) && platform::Enabled(platform::Level::Debug))
     {
         g_centreAt = now + kCentrePeriodMs;
-        LineAt(platform::Level::Debug, L"map centres: player 2's run ({:.0f}, {:.0f}), player 1's run ({:.0f}, {:.0f})",
-               g_centreTwo[0], g_centreTwo[1], centreOne[0], centreOne[1]);
+        try
+        {
+            std::wstring seats;
+            for (int s = 1; s <= players::kSeatsBuilt; ++s)
+            {
+                seats += std::format(L"{}'s run ({:.0f}, {:.0f}), ", players::SeatName(s), g_centre[s][0], g_centre[s][1]);
+            }
+            LineAt(platform::Level::Debug, L"map centres: {}player 1's run ({:.0f}, {:.0f})", seats, centreOne[0],
+                   centreOne[1]);
+        }
+        catch (...)
+        {
+        }
     }
 }
 
-bool BeginPlayerTwoPaint() noexcept
+bool BeginPaint(int seat) noexcept
 {
-    label_relayouts::SetScope(label_relayouts::Scope::PlayerTwoPaint);  // player 2's overlay render follows
-    g_slot.BeginFrame(false);
-    if (!g_frameActive || !g_ranForTwo)
+    label_relayouts::SetScope(label_relayouts::Scope::PlayerTwoPaint);  // a further player's overlay render follows
+    g_slot.SetActive(false);
+    if (!players::SeatIndex(seat) || !g_seatOn[seat] || !g_ranFor[seat])
     {
         return false;
     }
     void* slate = CircleSlate();
     void* live  = ReadPointer(slate, kSlateTarget);
-    if (live == nullptr || !platform::WriteGuarded(static_cast<std::byte*>(slate) + kSlateTarget, &g_target, sizeof(g_target)))
+    if (live == nullptr ||
+        !platform::WriteGuarded(static_cast<std::byte*>(slate) + kSlateTarget, &g_target[seat], sizeof(void*)))
     {
         return false;
     }
     g_swappedSlate = slate;
     g_savedTarget  = live;
-    g_slot.BeginFrame(true);  // the circle paints for player 2 in this pass: its acquire is held
+    g_slot.SetActive(true);  // the circle paints for the seat in this pass: its acquire is held
     return true;
 }
 
-void EndPlayerTwoPaint() noexcept
+void EndPaint() noexcept
 {
     label_relayouts::SetScope(label_relayouts::Scope::Other);
-    minimap_labels::SwapBack();  // player 2's paint is done: every label holds player 1's state again
+    g_slot.SetActive(false);
+    minimap_labels::SwapBack();  // the seat's paint is done: every label holds player 1's state again
     if (g_swappedSlate != nullptr)
     {
         // Put the widget's own target back, unless the game replaced the field during the render.
-        if (ReadPointer(g_swappedSlate, kSlateTarget) == g_target &&
-            !platform::WriteGuarded(static_cast<std::byte*>(g_swappedSlate) + kSlateTarget, &g_savedTarget,
-                                    sizeof(g_savedTarget)))
+        void* const swappedIn = ReadPointer(g_swappedSlate, kSlateTarget);
+        bool        ours      = false;
+        for (void* const target : g_target)
+        {
+            ours = ours || (target != nullptr && target == swappedIn);
+        }
+        if (ours && !platform::WriteGuarded(static_cast<std::byte*>(g_swappedSlate) + kSlateTarget, &g_savedTarget,
+                                            sizeof(g_savedTarget)))
         {
             Refuse(L"the minimap's own render target could not be put back");
         }
@@ -773,13 +867,20 @@ void EndPlayerTwoPaint() noexcept
         g_savedTarget  = nullptr;
     }
 }
+void BeginOverlayRender() noexcept
+{
+    g_slot.BeginFrame();
+}
 
 void EndOverlayRender() noexcept
 {
     // Player 1's pass did not paint the minimap: the held slot is submitted as the game's pass would have, with
-    // player 2's entry alone (a slot left acquired would hang its next acquire). Counted; the status line says so.
+    // the seats' entries alone (a slot left acquired would hang its next acquire). Counted; the status line says so.
     g_slot.SubmitIfLeft();
-    g_ranForTwo = false;
+    for (bool& ran : g_ranFor)
+    {
+        ran = false;
+    }
 }
 
 }  // namespace lss::hud::minimap

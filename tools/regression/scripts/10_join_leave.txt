@@ -6,6 +6,10 @@
 # expect: player 2's Field camera brought to player 1's settings: matches
 # expect: HUD image: player 2's buffers are initialised
 # expect: HUD levers: player 2's pass with \d+ HUD root
+# expect: HUD image: player 1's view draws player 1's HUD
+# expect: HUD image: player 2's view draws player 2's HUD
+# expect-not: HUD image: player 1's view draws player [23]'s HUD
+# expect-not: HUD image: player 2's view draws player [13]'s HUD
 # expect: HUD layout \(player 2's pass\): UI image \d+x\d+, view \d+x\d+
 # expect: leave: player 2 left; \d+ leftover actor
 # expect-not: JOIN FAILED

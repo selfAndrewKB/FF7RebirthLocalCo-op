@@ -23,6 +23,7 @@
 #include "platform/module_pin.h"
 #include "platform/sparse_array.h"
 #include "player_two/scopes/primary_controller.h"
+#include "players/seats.h"
 
 #if LSS_DEV
 #include "hud/passes/second_image.h"
@@ -62,7 +63,7 @@ constexpr std::uint32_t  kFieldTargetWidgets[] = {0x00, 0x28, 0x30};
 // The overlay's cached player view rect (RE-p2-hud.md P2.5): min x/y and size, floats.
 constexpr std::array<std::uint32_t, 4> kOverlayRectFields{0x318, 0x31C, 0x328, 0x32C};
 
-// New roots (markers the game adds) get player 2's context within this many frames.
+// New roots (markers the game adds) get the seats' contexts within this many frames.
 constexpr std::uint32_t kRootScanFrames = 30;
 constexpr std::uint32_t kTimingFrames   = 240;
 
@@ -76,8 +77,8 @@ enum Part : std::size_t
     kScan,
     kParts,
 };
-constexpr const wchar_t* kPartNames[kParts] = {L"contexts to player 2", L"updates for player 2", L"contexts to player 1",
-                                               L"updates for player 1", L"root scan"};
+constexpr const wchar_t* kPartNames[kParts] = {L"contexts to the further players", L"updates for the further players",
+                                               L"contexts to player 1", L"updates for player 1", L"root scan"};
 
 enum Lever : unsigned
 {
@@ -87,7 +88,7 @@ enum Lever : unsigned
     kLeverRect        = 8,
     kLeverUpdates     = 16,
     kLeverCompass     = 32,
-    kLeverArrows      = 64,   // the off-screen arrows' own timers in player 2's view (hud/field/marker_timers.h)
+    kLeverArrows      = 64,   // the off-screen arrows' own timers in each seat's view (hud/field/marker_timers.h)
     kLeverGauges      = 128,  // the enemy gauges placed again per view (hud/battle/enemy_gauges.h)
     kLeverPopups      = 256,  // the battle popups placed again per view (hud/battle/popups.h)
 };
@@ -103,16 +104,21 @@ std::uintptr_t         g_endUISystem = 0;
 alignas(8) std::uint64_t g_firstPlayerAnswer = 0;
 
 // Game thread.
+using Rect = std::array<float, 4>;
+
 std::atomic<bool>                                    g_on{false};
 bool                                                 g_refused      = false;
 std::uint32_t                                        g_framesToScan = 0;
+bool                                                 g_rootsChecked = false;  // this frame's root scan check ran
+bool                                                 g_passedThisFrame = false;  // a seat's pass ran this frame
 std::optional<player_two::primary_controller::Scope> g_primary;
 float                                                g_savedTimeStep = 0.0f;
 float*                                               g_timeStep      = nullptr;  // saved in Enter, restored in Leave
-std::array<float, 4>                                 g_playerOneRect{};
-std::array<float, 4>                                 g_playerTwoRect{};
-bool                                                 g_playerTwoRectKnown = false;
-bool                                                 g_loggedEnter        = false;
+Rect                                                 g_playerOneRect{};
+// By seat ([0] unused): each seat's view rect as its last render computed it, and whether it is known yet.
+std::array<Rect, players::kMaxPlayers>               g_seatRect{};
+std::array<bool, players::kMaxPlayers>               g_seatRectKnown{};
+std::array<bool, players::kMaxPlayers>               g_loggedEnter{};
 struct FieldTargets
 {
     std::size_t entries = 0, roots = 0, hiddenSwapped = 0;
@@ -143,26 +149,28 @@ void Refuse(const wchar_t* why)
 {
     g_refused = true;
     g_on.store(false, std::memory_order_relaxed);
-    platform::Log(L"HUD levers: {}; player 2's content stays off", why);
+    platform::Log(L"HUD levers: {}; the further players' content stays off", why);
 }
 
-/// The updates for the view whose levers are set; player 2's run gives the arrows their own timers.
-bool RunUpdates(bool playerTwo) noexcept
+/// The updates for the view whose levers are set (`seat` 0 player 1's); a further seat's run gives the arrows their own
+/// timers.
+bool RunUpdates(int seat) noexcept
 {
+    const bool further = seat != 0;
     // The gauges first: the enemy attack names in the +0x180 list read each gauge's placed point
     // (RE-p2-battle-popups.md §1), so they must see this view's.
     if (Acts(kLeverGauges))
     {
-        enemy_gauges::Replay(playerTwo);
+        enemy_gauges::Replay(seat);
     }
     if (Acts(kLeverPopups))
     {
-        popups::Replay(playerTwo);
+        popups::Replay(seat);
     }
-    const hud_updates::OwnArrowTimers arrows{g_timeStep, g_savedTimeStep};
+    const hud_updates::OwnArrowTimers arrows{g_timeStep, g_savedTimeStep, seat};
     const bool ran = hud_updates::Run(Acts(kLeverUpdates), Acts(kLeverCompass),
-                                      playerTwo && Acts(kLeverArrows) && g_timeStep != nullptr ? &arrows : nullptr);
-    minimap::RunHolder(playerTwo);  // the minimap's content for this view, while player 2's minimap is on
+                                      further && Acts(kLeverArrows) && g_timeStep != nullptr ? &arrows : nullptr);
+    minimap::RunHolder(seat);  // the minimap's content for this view, while the seat's minimap is on
     return ran;
 }
 
@@ -209,7 +217,7 @@ std::uintptr_t Overlay() noexcept
     return overlay;
 }
 
-bool ReadRect(std::array<float, 4>& rect) noexcept
+bool ReadRect(Rect& rect) noexcept
 {
     const std::uintptr_t overlay = Overlay();
     for (std::size_t i = 0; overlay != 0 && i < rect.size(); ++i)
@@ -222,7 +230,7 @@ bool ReadRect(std::array<float, 4>& rect) noexcept
     return overlay != 0;
 }
 
-void WriteRect(const std::array<float, 4>& rect) noexcept
+void WriteRect(const Rect& rect) noexcept
 {
     const std::uintptr_t overlay = Overlay();
     for (std::size_t i = 0; overlay != 0 && i < rect.size(); ++i)
@@ -256,31 +264,41 @@ void RestoreTimeStep() noexcept
     }
 }
 
-/// Rescans the HUD roots every kRootScanFrames frames. False if a scan failed (retried next frame).
-bool KeepRootsCurrent(UObject* playerOne, UObject* playerTwo)
+/// Rescans the HUD roots every kRootScanFrames frames, checked once a frame (the first further pass). False if a scan
+/// failed (tried again by the next pass, this frame's or the next's) or the seat has no context (rescanned next frame).
+bool KeepRootsCurrent(const hud_roots::LocalPlayerSet& bySeat, int seat)
 {
-    if (g_framesToScan == 0)
+    if (!g_rootsChecked)
     {
-        const platform::frame_watch::Job job(L"HUD root scan");
-        const double start   = Now();
-        const bool   scanned = hud_roots::Scan(playerOne, playerTwo);
-        Charge(kScan, start);
-        if (!scanned)
+        if (g_framesToScan == 0)
         {
-            return false;
+            const platform::frame_watch::Job job(L"HUD root scan");
+            const double start   = Now();
+            const bool   scanned = hud_roots::Scan(bySeat);
+            Charge(kScan, start);
+            if (!scanned)
+            {
+                return false;
+            }
+            g_framesToScan = kRootScanFrames;
         }
-        g_framesToScan = kRootScanFrames;
+        --g_framesToScan;
+        g_rootsChecked = true;
     }
-    --g_framesToScan;
+    if (!hud_roots::HasContext(seat))
+    {
+        g_framesToScan = 0;  // the seat's context was not built: the next frame scans again
+        return false;
+    }
     return true;
 }
 
-/// L3: player 2 as the party manager's primary controller. False (logged) if it cannot be held.
-bool HoldPrimary()
+/// L3: the seat as the party manager's primary controller. False (logged) if it cannot be held.
+bool HoldPrimary(int seat)
 {
     if (Acts(kLeverPrimary))
     {
-        g_primary.emplace(players::kPlayerTwoSeat);
+        g_primary.emplace(seat);
     }
     if (g_primary && !g_primary->Held())
     {
@@ -316,8 +334,8 @@ void AdoptAbilityNames()
 
 /// The field-target markers (EndUISystem+0x98; one per field-action point, RE-p2-field-interact.md §12.14) are
 /// self-placing roots: their tick projects each through its own context and collapses it when that fails, so one
-/// collapsed by player 1's projection (an item off player 1's screen) must still get player 2's context in player
-/// 2's run, which shows it again from player 2's camera; player 1's re-run collapses it again for player 1's half.
+/// collapsed by player 1's projection (an item off player 1's screen) must still get a further seat's context in the
+/// seat's run, which shows it again from the seat's camera; player 1's re-run collapses it again for player 1's view.
 /// The widget at +0x00 is the one projected; +0x28 and +0x30 are placed and animated from it. Logged on change.
 void AdoptFieldTargets()
 {
@@ -346,7 +364,7 @@ void AdoptFieldTargets()
 }
 
 /// The field-target markers' line: how many there are, how many are roots (a marker that is not one never gets
-/// player 2's context), and how many player 2's context reached while collapsed. On change.
+/// a seat's context), and how many the last seat's context reached while collapsed. On change.
 void LogFieldTargets()
 {
     if (!platform::Enabled(platform::Level::Debug))
@@ -360,15 +378,15 @@ void LogFieldTargets()
     }
     g_fieldTargetsLogged = now;
     platform::LogDebug(L"HUD levers: field-target markers: {} in the list, {} of them roots; {} collapsed root(s) given "
-                       L"player 2's context (shown again if player 2's camera sees them)",
+                       L"a further player's context (shown again if that player's camera sees them)",
                        now.entries, now.roots, now.hiddenSwapped);
 }
 
-/// L1 to player 2; on failure, puts player 1's contexts back and refuses.
-bool ContextsToPlayerTwo()
+/// L1 to the seat; on failure, puts player 1's contexts back and refuses.
+bool ContextsToSeat(int seat)
 {
     const double start    = Now();
-    const bool   contexts = !Acts(kLeverContexts) || hud_roots::SetContexts(1);
+    const bool   contexts = !Acts(kLeverContexts) || hud_roots::SetContexts(seat);
     Charge(kContextsTwo, start);
     if (contexts)
     {
@@ -379,7 +397,7 @@ bool ContextsToPlayerTwo()
     g_primary.reset();
     Refuse(reverted ? L"SetPlayerContext raised an exception"
                     : L"SetPlayerContext raised an exception, and again putting player 1's back (some roots may keep "
-                      L"player 2's context until the next join)");
+                      L"a further player's context until the next join)");
     return false;
 }
 
@@ -396,7 +414,8 @@ bool InstallPlayerTwoPass(const platform::GameImage& image) noexcept
     const auto resume  = image.Rebase(kFirstGamePlayerResume);
     if (!parts || !mode || !overlay || !entry || !resume)
     {
-        platform::Log(L"HUD levers: the HUD's update code is not what the research read; player 2's content unavailable");
+        platform::Log(L"HUD levers: the HUD's update code is not what the research read; the further players' content "
+                      L"unavailable");
         return false;
     }
     g_gameMode = *mode;
@@ -408,8 +427,8 @@ bool InstallPlayerTwoPass(const platform::GameImage& image) noexcept
     const auto code = FirstPlayerCode(g_firstPlayerAnswer);
     if (!platform::PinThisModule() || !g_firstPlayerCode.Install(*entry, kFirstPlayerEntryBytes, code, *resume))
     {
-        platform::Log(L"HUD levers: the first-player function's entry could not be redirected; player 2's content "
-                      L"unavailable");
+        platform::Log(L"HUD levers: the first-player function's entry could not be redirected; the further players' "
+                      L"content unavailable");
         return false;
     }
     g_installed = true;
@@ -439,10 +458,11 @@ bool PlayerTwoPassInstalled() noexcept
 void SetPlayerTwoContent(bool on) noexcept
 {
     g_on.store(on && g_installed && !g_refused, std::memory_order_relaxed);
-    g_framesToScan       = 0;
-    g_playerTwoRectKnown = false;
-    g_loggedEnter        = false;
-    platform::Log(L"HUD levers: player 2's content {}", PlayerTwoContentOn() ? L"on" : on ? L"unavailable" : L"off");
+    g_framesToScan = 0;
+    g_seatRectKnown.fill(false);
+    g_loggedEnter.fill(false);
+    platform::Log(L"HUD levers: the further players' content {}",
+                  PlayerTwoContentOn() ? L"on" : on ? L"unavailable" : L"off");
 }
 
 void SetPlayerTwoLeversMask(unsigned mask) noexcept
@@ -464,62 +484,83 @@ bool PlayerTwoContentOn() noexcept
     return g_on.load(std::memory_order_relaxed);
 }
 
-bool EnterPlayerTwo() noexcept
+void BeginPasses() noexcept
+{
+    if (g_passedThisFrame)
+    {
+        try
+        {
+            LogTiming();  // once per frame that had a pass, whatever the number of passes in it
+        }
+        catch (...)
+        {
+        }
+    }
+    g_rootsChecked    = false;
+    g_passedThisFrame = false;
+}
+
+bool EnterSeat(int seat) noexcept
 {
     try
     {
-        UObject* playerOne = nullptr;
-        UObject* playerTwo = nullptr;
-        if (!PlayerTwoContentOn() || !hud_roots::LocalPlayers(playerOne, playerTwo) ||
-            !KeepRootsCurrent(playerOne, playerTwo) || !HoldPrimary())
+        hud_roots::LocalPlayerSet bySeat{};
+        if (!PlayerTwoContentOn() || !players::SeatIndex(seat) || !hud_roots::LocalPlayers(bySeat) ||
+            bySeat[static_cast<std::size_t>(seat)] == nullptr || !KeepRootsCurrent(bySeat, seat) || !HoldPrimary(seat))
         {
             return false;
         }
-        g_firstPlayerAnswer = Acts(kLeverFirstPlayer) ? reinterpret_cast<std::uint64_t>(playerTwo) : 0;  // L2
+        const auto s = static_cast<std::size_t>(seat);
+        g_firstPlayerAnswer = Acts(kLeverFirstPlayer) ? reinterpret_cast<std::uint64_t>(bySeat[s]) : 0;  // L2
         AdoptAbilityNames();
         AdoptFieldTargets();
         search_pins::Adopt();
-        if (!ContextsToPlayerTwo())                                                                       // L1
+        if (!ContextsToSeat(seat))                                                                       // L1
         {
             return false;
         }
         LogFieldTargets();
         HoldTimeStep();  // L6
         ReadRect(g_playerOneRect);
-        if (g_playerTwoRectKnown && Acts(kLeverRect))
+        if (g_seatRectKnown[s] && Acts(kLeverRect))
         {
-            WriteRect(g_playerTwoRect);  // what player 2's render computed last frame (via L2)
+            WriteRect(g_seatRect[s]);  // what the seat's render computed last frame (via L2)
         }
         const double start = Now();
-        const bool   runs  = RunUpdates(true);
-        search_pins::Place();  // the search pins from player 2's camera (hud/field/search_pins.h)
+        const bool   runs  = RunUpdates(seat);
+        search_pins::Place();  // the search pins from the seat's camera (hud/field/search_pins.h)
         Charge(kTicksTwo, start);
         if (!runs)
         {
-            Refuse(L"a HUD update raised an exception in player 2's run");
+            Refuse(L"a HUD update raised an exception in a further player's run");
         }
-        if (!g_loggedEnter)
+        if (!g_loggedEnter[s])
         {
-            g_loggedEnter = true;
-            platform::Log(L"HUD levers: player 2's pass with {} HUD root(s); player 2's view rect {}", hud_roots::Count(),
-                          g_playerTwoRectKnown ? L"from the last frame" : L"not known yet (first frame)");
+            g_loggedEnter[s] = true;
+            platform::Log(L"HUD levers: {}'s pass with {} HUD root(s); {}'s view rect {}", players::SeatName(seat),
+                          hud_roots::Count(), players::SeatName(seat),
+                          g_seatRectKnown[s] ? L"from the last frame" : L"not known yet (first frame)");
         }
         return true;
     }
     catch (...)
     {
         // Only the log lines allocate; whatever was switched before the throw is put back.
-        LeavePlayerTwo();
+        LeaveSeat(seat);
         g_on.store(false, std::memory_order_relaxed);
         return false;
     }
 }
 
-void LeavePlayerTwo() noexcept
+void LeaveSeat(int seat) noexcept
 {
     // Every lever is put back whatever happens to the others: each step is guarded on its own
     // (the engine calls by SEH inside the helpers), and nothing here allocates except the log.
-    g_playerTwoRectKnown = ReadRect(g_playerTwoRect);  // computed by player 2's render through L2
+    if (players::SeatIndex(seat))
+    {
+        const auto s      = static_cast<std::size_t>(seat);
+        g_seatRectKnown[s] = ReadRect(g_seatRect[s]);  // computed by the seat's render through L2
+    }
     g_firstPlayerAnswer  = 0;
     double     mark      = Now();
     const bool contexts  = !Acts(kLeverContexts) || hud_roots::SetContexts(0);
@@ -527,17 +568,17 @@ void LeavePlayerTwo() noexcept
     g_primary.reset();  // SwapWindow's close: a no-op unless it opened
     WriteRect(g_playerOneRect);
     mark             = Now();
-    const bool ticks = RunUpdates(false);  // player 1's positions again, before player 1's render
-    search_pins::Place();                  // and the search pins'
+    const bool ticks = RunUpdates(0);  // player 1's positions again, before the next pass's render
+    search_pins::Place();              // and the search pins'
     Charge(kTicksOne, mark);
     RestoreTimeStep();
+    g_passedThisFrame = true;
     try
     {
-        LogTiming();
         if (!contexts || !ticks)
         {
-            Refuse(!contexts ? L"SetPlayerContext raised an exception restoring player 1 (some roots may keep player 2's "
-                               L"context until the next join)"
+            Refuse(!contexts ? L"SetPlayerContext raised an exception restoring player 1 (some roots may keep a further "
+                               L"player's context until the next join)"
                              : L"a HUD update raised an exception in player 1's run");
         }
     }
@@ -546,7 +587,6 @@ void LeavePlayerTwo() noexcept
         g_on.store(false, std::memory_order_relaxed);  // Refuse without its log line
     }
 }
-
 #if LSS_DEV
 
 void RegisterPlayerTwoPassCommands()
@@ -556,22 +596,22 @@ void RegisterPlayerTwoPassCommands()
     control::Register(
         {.name  = L"hud-levers",
          .shape = control::Shape::OnOff,
-         .help  = L"player 2's image shows player 2's content: the game's player levers switched around player 2's "
-                  L"pass",
+         .help  = L"each further player's image shows their own content: the game's player levers switched around "
+                  L"their pass",
          .set   = [](const Value& v) {
              if (!PlayerTwoPassInstalled())
              {
-                 return Outcome{false, L"player 2's HUD levers are not installed (see the startup log)"};
+                 return Outcome{false, L"the HUD levers are not installed (see the startup log)"};
              }
              const bool on = std::get<bool>(v);
              SetPlayerTwoContent(on);
              if (on && !PlayerTwoContentOn())
              {
-                 return Outcome{false, L"player 2's HUD levers refused a check (see the log)"};
+                 return Outcome{false, L"the HUD levers refused a check (see the log)"};
              }
-             return Outcome{true, !on              ? L"player 2's content off"
-                                  : SecondImageOn() ? L"player 2's content on"
-                                                    : L"player 2's content on (needs hud-image on)"};
+             return Outcome{true, !on              ? L"the further players' content off"
+                                  : SecondImageOn() ? L"the further players' content on"
+                                                    : L"the further players' content on (needs hud-image on)"};
          },
          .get = [] { return Value{PlayerTwoContentOn()}; }});
     control::Register(

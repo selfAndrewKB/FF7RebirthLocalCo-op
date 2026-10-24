@@ -11,6 +11,9 @@
 // Roots come and go (the game adds markers as it needs them), so the list is rescanned from
 // hud/user_widgets.h, which needs no walk of every UObject. Game thread only.
 
+#include "players/seats.h"
+
+#include <array>
 #include <cstddef>
 
 namespace RC::Unreal {
@@ -26,34 +29,40 @@ namespace lss::hud::hud_roots {
 /// Checks SetPlayerContext's prologue. False (logged by the caller) if it differs.
 bool Install(const platform::GameImage& image) noexcept;
 
-/// The game instance's first two local players, or false while there are fewer. The game instance
-/// is found once and then only checked for liveness.
-bool LocalPlayers(RC::Unreal::UObject*& one, RC::Unreal::UObject*& two);
+/// Each seat's local player ([0] player 1's), null for a seat with none listed.
+using LocalPlayerSet = std::array<RC::Unreal::UObject*, players::kMaxPlayers>;
 
-/// Refreshes the root list and both players' contexts. False if a context cannot be built yet.
-bool Scan(RC::Unreal::UObject* playerOne, RC::Unreal::UObject* playerTwo);
+/// The game instance's local players by seat (their controller id; the list's order is the views', not the seats'),
+/// or false without player 1's. The game instance is found once and then only checked for liveness.
+bool LocalPlayers(LocalPlayerSet& bySeat);
+
+/// Refreshes the root list and every listed player's context. False if player 1's cannot be built yet.
+bool Scan(const LocalPlayerSet& bySeat);
+
+/// The last scan built the seat's context.
+bool HasContext(int seat) noexcept;
 
 /// Adds widget to the root list at once if it is a root not listed yet (a root the game made since
 /// the last scan and that is known now, e.g. an enemy's ability-name label), so this frame's context
-/// swap reaches it. Game thread, before SetContexts(1).
+/// swap reaches it. Game thread, before a further seat's SetContexts.
 void Adopt(RC::Unreal::UObject* widget);
 
 /// Adopt, and marks the root as self-placing for this frame: a widget its own run shows or collapses
-/// from its context's projection (the field-target markers, EndUI__M98_ProjectEntry). SetContexts(1)
-/// gives it player 2's context even while collapsed, else a marker collapsed by player 1's
-/// projection would be projected through player 1 again in player 2's run and never come back
-/// (RE-p2-field-interact.md §12.14). True if it is a root. Game thread, before SetContexts(1).
+/// from its context's projection (the field-target markers, EndUI__M98_ProjectEntry). A further seat's
+/// SetContexts gives it the seat's context even while collapsed, else a marker collapsed by player 1's
+/// projection would be projected through player 1 again in the seat's run and never come back
+/// (RE-p2-field-interact.md §12.14). True if it is a root. Game thread, before a further seat's SetContexts.
 bool AdoptSelfPlacing(RC::Unreal::UObject* widget);
 
-/// Gives player 2's context (1) to every live root shown this frame and to the self-placing ones,
-/// or player 1's (0) back to exactly the roots given player 2's (and clears the self-placing
-/// marks). False if the engine raised an exception inside SetPlayerContext.
-bool SetContexts(int player) noexcept;
+/// Gives a further seat's context to every live root shown this frame and to the self-placing ones,
+/// or player 1's (seat 0) back to exactly the roots given a seat's (and clears the self-placing
+/// marks). False if the engine raised an exception inside SetPlayerContext, or the seat has no context.
+bool SetContexts(int seat) noexcept;
 
 /// How many roots the last scan found.
 std::size_t Count() noexcept;
 
-/// How many self-placing roots the last SetContexts(1) gave player 2's context while collapsed.
+/// How many self-placing roots the last further seat's SetContexts gave its context while collapsed.
 std::size_t HiddenSwapped() noexcept;
 
 }  // namespace lss::hud::hud_roots

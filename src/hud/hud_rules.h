@@ -1,10 +1,10 @@
 #pragma once
 
-// The HUD modules' pure decisions (hud_placement, search_pins, marker_timers, minimap, shared_slot, target_views,
-// enemy_gauges), tested on the host (tests/hud_rules_test.cpp). The modules keep the engine reads, the passes and
-// the log.
+// The HUD modules' pure decisions (hud_placement, search_pins, marker_timers, minimap, target_views, enemy_gauges),
+// tested on the host (tests/hud_rules_test.cpp; the shared slot's are hud/passes/overlay_pass.h's, tested there too).
+// The modules keep the engine reads, the passes and the log.
 
-#include "hud/passes/overlay_pass.h"
+#include "players/seats.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -42,19 +42,29 @@ Restore RestoreVerdict(bool managed, bool unchanged, bool alive, NowFn&& nowIsAp
 
 // ---- search_pins: who owns the compass and each pin ----
 
-/// The compass: whoever had an active point while it was open; while it closes nobody does (kept); a new one starts
-/// as both players' (bit 1 player 1, bit 2 player 2).
-constexpr unsigned CompassOwners(bool compassOpen, bool activeOne, bool activeTwo, unsigned previous) noexcept
+/// Every player's bit (bit `seat`, player 1 bit 0): the owners of a compass nobody has claimed yet.
+inline constexpr unsigned kEveryPlayer = 0b111;
+static_assert(players::kMaxPlayers == 3, "kEveryPlayer has one bit per player");
+
+/// The compass: whoever had an active point while it was open (bit `seat` each); while it closes nobody does (kept); a
+/// new one starts as every player's.
+constexpr unsigned CompassOwners(bool compassOpen, unsigned active, unsigned previous) noexcept
 {
-    const unsigned active = (activeOne ? 1u : 0u) | (activeTwo ? 2u : 0u);
-    return !compassOpen ? 3u : active != 0 ? active : previous;
+    return !compassOpen ? kEveryPlayer : active != 0 ? active : previous;
 }
 
-/// A pin's owner by who holds it: 0 player 1, 1 player 2, -1 neither (a released pin, still animating out: the
-/// caller looks it up among the pins it knew).
-constexpr int PinOwnerOf(bool holdsOne, bool holdsTwo) noexcept
+/// A pin's owner by who holds it (bit `seat` each): the lowest seat holding it, player 1 first; -1 nobody (a released
+/// pin, still animating out: the caller looks it up among the pins it knew).
+constexpr int PinOwnerOf(unsigned holders) noexcept
 {
-    return holdsOne ? 0 : holdsTwo ? 1 : -1;
+    for (int seat = 0; seat < 32; ++seat)
+    {
+        if ((holders & (1u << seat)) != 0)
+        {
+            return seat;
+        }
+    }
+    return -1;
 }
 
 // ---- marker_timers: each player's own arrow timers ----
@@ -65,15 +75,15 @@ struct Timer
     float         t   = 0.0f;
 };
 
-/// Player 1's timers set aside during player 2's run, player 2's own kept between frames. The vectors may throw on
-/// growth; the caller's try wraps a whole swap.
+/// Player 1's timers set aside during a seat's run, the seat's own kept between frames (one swap per seat). The
+/// vectors may throw on growth; the caller's try wraps a whole swap.
 class TimerSwap
 {
 public:
-    /// Player 2's run starts.
+    /// The seat's run starts.
     void BeginIn() { one_.clear(); }
 
-    /// Records player 1's timer for `key` and gives player 2's: 0 for an arrow player 2's run has not seen.
+    /// Records player 1's timer for `key` and gives the seat's: 0 for an arrow the seat's run has not seen.
     float In(std::uint64_t key, float mine)
     {
         one_.push_back({key, mine});
@@ -81,11 +91,11 @@ public:
         return theirs != nullptr ? theirs->t : 0.0f;
     }
 
-    /// Player 2's run ends.
+    /// The seat's run ends.
     void BeginOut() { seen_.clear(); }
 
-    /// Records player 2's timer for `key` and gives player 1's back, if the element was there before player 2's run
-    /// (an element new in player 2's run keeps what it has).
+    /// Records the seat's timer for `key` and gives player 1's back, if the element was there before the seat's run
+    /// (an element new in the seat's run keeps what it has).
     std::optional<float> Out(std::uint64_t key, float theirs)
     {
         seen_.push_back({key, theirs});
@@ -93,7 +103,7 @@ public:
         return mine != nullptr ? std::optional<float>(mine->t) : std::nullopt;
     }
 
-    /// Player 2's own are what this run saw (arrows no longer in the list are dropped); player 1's are back in place.
+    /// The seat's own are what this run saw (arrows no longer in the list are dropped); player 1's are back in place.
     void EndOut() noexcept
     {
         two_.swap(seen_);
@@ -119,8 +129,8 @@ private:
         return found != timers.end() ? &*found : nullptr;
     }
 
-    std::vector<Timer> one_;   // set aside during player 2's run
-    std::vector<Timer> two_;   // player 2's own, between frames
+    std::vector<Timer> one_;   // set aside during the seat's run
+    std::vector<Timer> two_;   // the seat's own, between frames
     std::vector<Timer> seen_;  // scratch, reused
 };
 
@@ -144,57 +154,26 @@ Unload UnloadVerdict(bool drop, bool otherCentreKnown, OtherFn&& dropForOther) n
     return dropForOther() ? Unload::Dropped : Unload::KeptForOther;
 }
 
-// ---- shared_slot: player 2's entry beside the game's in one menu-renderer slot ----
-
-enum class SlotAction
-{
-    Acquire,         // the game's own acquire
-    AcquireAndHold,  // player 2's pass: the slot acquired is kept for player 1's pass
-    TakeBack,        // player 1's pass: the held slot instead of a second acquire
-};
-
-/// `active`: this slot takes part in player 2's pass (its widget paints for player 2 this frame).
-constexpr SlotAction SlotActionFor(OverlayPass pass, bool active, bool held) noexcept
-{
-    if (pass == OverlayPass::PlayerOne && held)
-    {
-        return SlotAction::TakeBack;
-    }
-    if (pass == OverlayPass::PlayerTwo && active && !held)
-    {
-        return SlotAction::AcquireAndHold;
-    }
-    return SlotAction::Acquire;
-}
-
-/// The entry added to the held slot in player 2's pass is player 2's: it gets player 2's name, and its submit is left
-/// to player 1's pass (which submits the slot with both entries).
-constexpr bool PlayerTwoEntry(OverlayPass pass, bool heldSlot) noexcept
-{
-    return pass == OverlayPass::PlayerTwo && heldSlot;
-}
-
 // ---- target_views: the gauge entries each pass takes out ----
 
-/// The pass that hides a gauge entry: player 2's pass (1) takes out player 1's only, player 1's pass (0) player 2's
-/// only; -1 for an entry both or neither show (the caller still leaves a shared source alone).
-constexpr int OtherGaugePass(bool inPlayerOnes, bool inPlayerTwos) noexcept
+/// Whether `pass`'s view (its seat, 0 player 1's) takes a gauge entry out: the entry is some player's target (bit
+/// `seat` each in `holders`) but not this view's player's. An entry nobody targets is the game's to show (the caller
+/// still leaves a shared source alone).
+constexpr bool GaugeHiddenIn(unsigned holders, int pass) noexcept
 {
-    const bool onlyOne = inPlayerOnes && !inPlayerTwos;
-    const bool onlyTwo = inPlayerTwos && !inPlayerOnes;
-    return onlyOne ? 1 : onlyTwo ? 0 : -1;
+    return holders != 0 && pass >= 0 && (holders & (1u << pass)) == 0;
 }
 
-// ---- enemy_gauges: player 2's placement of each gauge ----
+// ---- enemy_gauges: a seat's placement of each gauge ----
 
 struct GaugeClass
 {
-    bool own         = false;  // player 2's own target: two offset steps
-    bool main        = false;  // player 2's main target
+    bool own         = false;  // the seat's own target: two offset steps
+    bool main        = false;  // the seat's main target
     bool caseC       = false;  // the game's targeted-without-leader-clamp case: no leader scope
     bool target      = false;  // placed as a target
     int  steps       = 1;      // offset steps per pass
-    bool leaderScope = false;  // placed inside player 2's leader scope
+    bool leaderScope = false;  // placed inside the seat's leader scope
 };
 
 constexpr GaugeClass ClassifyGauge(std::uintptr_t source, std::uintptr_t twoOwn, std::uintptr_t twoMain, bool targeted,

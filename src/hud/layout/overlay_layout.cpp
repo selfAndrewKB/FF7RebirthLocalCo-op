@@ -15,6 +15,7 @@
 #include "platform/module_pin.h"
 #include "platform/verified_code.h"
 #include "player_two/generation.h"
+#include "players/seats.h"
 #include "views/player_view_point.h"
 
 #if LSS_DEV
@@ -97,8 +98,8 @@ struct Submit
 Submit g_submit;
 std::int32_t g_loggedMatrixCount = -1;
 
-// What the log last reported for each pass ([0] player 1's, [1] player 2's: the overlay renders once
-// for each player while the split is shown, and their views can differ), so each change is logged once.
+// What the log last reported for each pass, by its seat ([0] player 1's: the overlay renders once for each player
+// while the split is shown, and their views can differ), so each change is logged once.
 struct LoggedLayout
 {
     IntRect image{};
@@ -108,7 +109,7 @@ struct LoggedLayout
     int     applied = -1;
     bool    entry   = false;
 };
-LoggedLayout g_logged[2];
+LoggedLayout g_logged[players::kMaxPlayers];
 int          g_loggedPass = 0;  // the pass the rect call logged for, for the entry call that follows
 
 float ReadFloat(std::uintptr_t address) noexcept
@@ -157,7 +158,7 @@ void InstallArrowEdge(const platform::GameImage& image) noexcept
 void LogOnChange(const IntRect& image, float viewW, float viewH, const IntRect& band, float host, bool enabled,
                  bool applied) noexcept
 {
-    g_loggedPass         = CurrentOverlayPass() == OverlayPass::PlayerTwo ? 1 : 0;
+    g_loggedPass         = overlay_pass::Further() && overlay_pass::Seat() < players::kMaxPlayers ? overlay_pass::Seat() : 0;
     LoggedLayout& logged = g_logged[g_loggedPass];
     if (image == logged.image && viewW == logged.viewW && viewH == logged.viewH && band == logged.band &&
         static_cast<int>(applied) == logged.applied)
@@ -167,7 +168,7 @@ void LogOnChange(const IntRect& image, float viewW, float viewH, const IntRect& 
     logged = {image, band, viewW, viewH, applied ? 1 : 0, false};
     platform::Log(L"HUD layout ({}'s pass): UI image {}x{}, view {:.0f}x{:.0f}; visible band ({},{})-({},{}), marker "
                   L"host scale {:.4f}: {}",
-                  g_loggedPass == 0 ? L"player 1" : L"player 2", image.Width(), image.Height(), viewW, viewH, band.minX,
+                  players::SeatName(g_loggedPass), image.Width(), image.Height(), viewW, viewH, band.minX,
                   band.minY, band.maxX, band.maxY, host,
                   applied   ? L"applied"
                   : enabled ? L"NOT applied (unusable band or scale)"
@@ -215,7 +216,7 @@ IntRect* OverlayLayoutRect(IntRect* out)
 /// arguments; the fourth is passed through unread).
 void* OverlayLayerEntry(void* slot, std::uintptr_t name, IntRect* rect, std::uintptr_t unused)
 {
-    // Player 2's pass of the overlay render names its own entry (hud/passes/second_image.h).
+    // A further seat's pass of the overlay render names its own entry (hud/passes/second_image.h).
     void* entry = reinterpret_cast<FindOrAddEntryFn>(g_entryCall.Original())(slot, EntryNameForPass(slot, name), rect,
                                                                                unused);
     if (!g_pending.active || g_pending.thread != GetCurrentThreadId() || entry == nullptr)
@@ -298,7 +299,7 @@ void OverlaySubmit(void* renderer, std::uintptr_t pool, void* slot, std::uintptr
     }
     if (!SubmitInThisPass(slot))
     {
-        return;  // player 2's pass: player 1's pass submits the slot with both entries (hud/passes/second_image.h)
+        return;  // a further pass: player 1's pass submits the slot with every entry (hud/passes/second_image.h)
     }
     reinterpret_cast<SubmitLayerSlotFn>(g_submitCall.Original())(renderer, pool, slot, unused);
 }

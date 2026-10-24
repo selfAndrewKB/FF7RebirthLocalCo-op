@@ -13,6 +13,7 @@
 #include "player_two/generation.h"
 #include "player_two/scopes/leader_scope.h"
 #include "player_two/weak_object.h"
+#include "players/seats.h"
 #include "players/widget_opacity.h"
 
 #include <array>
@@ -72,8 +73,8 @@ struct Logged
     std::size_t  entries = 0, mine = 0, theirs = 0, nobody = 0;
     bool         compass = false;
     unsigned     compassOwners = 0;
-    bool         activeOne = false, activeTwo = false;
-    std::uint8_t shootingOne = 0, shootingTwo = 0;
+    unsigned     active = 0;  // bit `seat`: the seat's component has an active point
+    std::array<std::uint8_t, players::kMaxPlayers> shooting{};
     bool operator==(const Logged&) const = default;
 };
 
@@ -90,11 +91,11 @@ struct Known
 };
 std::array<Known, kMaxHidden> g_known{};
 std::size_t                   g_knownCount = 0;
-HiddenSet                      g_hidden;  // the other player's pins and the compass, transparent for a pass
-unsigned                       g_compassOwners = 3;  // bit 0 player 1, bit 1 player 2 (both until known)
+HiddenSet                      g_hidden;  // the other players' pins and the compass, transparent for a pass
+unsigned                       g_compassOwners = hud_rules::kEveryPlayer;  // bit `seat` (every player until known)
 bool                           g_placeFaulted  = false;
-std::array<Logged, 2>          g_logged{};
-bool                           g_loggedOnce[2] = {false, false};
+std::array<Logged, players::kMaxPlayers> g_logged{};
+std::array<bool, players::kMaxPlayers>   g_loggedOnce{};
 
 using platform::ReadAt;  // the guarded reads: platform/guarded.h
 
@@ -168,12 +169,17 @@ void LogIfChanged(int mine, const Logged& now, std::uintptr_t manager) noexcept
                                  player_two::NameOf(Resolve(entry + kPinHook)));
             return ++named < 3;
         });
-        platform::LogDebug(L"search pins: player {}'s half: {} pin(s) ({} its player's, {} hidden as the other's, {} "
-                           L"nobody's) [{}]; compass {} (owners {}); point active: player 1 {}, player 2 {}; ranged "
-                           L"state +0x4E0: player 1 {:#x}, player 2 {:#x}",
-                           mine + 1, now.entries, now.mine, now.theirs, now.nobody, names,
-                           now.compass ? L"open" : L"none", now.compassOwners, player_two::YesNo(now.activeOne),
-                           player_two::YesNo(now.activeTwo), now.shootingOne, now.shootingTwo);
+        std::wstring active;
+        for (int seat = 0; seat <= players::kSeatsBuilt; ++seat)
+        {
+            active += std::format(L"{}{} {} (ranged state +0x4E0 {:#x})", seat == 0 ? L"" : L", ",
+                                  players::SeatName(seat), player_two::YesNo((now.active & (1u << seat)) != 0),
+                                  now.shooting[static_cast<std::size_t>(seat)]);
+        }
+        platform::LogDebug(L"search pins: {}'s view: {} pin(s) ({} its player's, {} hidden as another's, {} nobody's) "
+                           L"[{}]; compass {} (owners {}); point active: {}",
+                           players::SeatName(mine), now.entries, now.mine, now.theirs, now.nobody, names,
+                           now.compass ? L"open" : L"none", now.compassOwners, active);
     }
     catch (...)
     {
@@ -190,7 +196,7 @@ void Install(const platform::GameImage& image) noexcept
     g_system          = system ? *system : 0;
     g_placePin        = pin ? reinterpret_cast<PlacePinFn>(*pin) : nullptr;
     g_placeHook       = hook ? reinterpret_cast<PlaceHookFn>(*hook) : nullptr;
-    platform::Log(L"search pins: each half's pins placed from its own camera: {}; each half shows only its own player's "
+    platform::Log(L"search pins: each view's pins placed from its own camera: {}; each view shows only its own player's "
                   L"pins: {}",
                   g_system != 0 && g_placePin != nullptr && g_placeHook != nullptr ? L"ready" : L"UNAVAILABLE (a check failed)",
                   g_system == 0 ? L"UNAVAILABLE (no pin list)"
@@ -254,23 +260,33 @@ void Place() noexcept
     }
 }
 
-void ShowOnly(int player) noexcept
+void ShowOnly(int seat) noexcept
 {
     Restore();
     const auto manager = Manager();
-    if (manager == 0 || !players::widget_opacity::Installed())
+    if (manager == 0 || !players::widget_opacity::Installed() || seat < 0 || seat >= players::kMaxPlayers)
     {
         return;
     }
-    const int  mine = player != 0 ? 1 : 0;
-    const Held one  = HeldBy(player_two::generation::PlayerOneController());
-    const Held two  = HeldBy(player_two::generation::PlayerTwoController());
+    const int mine = seat;
+    // Player 1's component and each built seat's ([0] player 1's).
+    std::array<Held, players::kMaxPlayers> held{};
+    held[0] = HeldBy(player_two::generation::PlayerOneController());
+    for (int s = 1; s <= players::kSeatsBuilt; ++s)
+    {
+        held[static_cast<std::size_t>(s)] = HeldBy(player_two::generation::ControllerOf(s));
+    }
+    Logged now{.compass = Resolve(manager + kCompass) != nullptr};
+    for (std::size_t s = 0; s < held.size(); ++s)
+    {
+        now.active |= held[s].active ? 1u << s : 0u;
+        now.shooting[s] = held[s].shooting;
+    }
     // The compass: whoever had an active point while it was open; while it closes nobody does (kept); a new one
-    // starts as both players'.
-    const bool compass = Resolve(manager + kCompass) != nullptr;
-    g_compassOwners    = hud_rules::CompassOwners(compass, one.active, two.active, g_compassOwners);
-    Logged now{.compass = compass, .compassOwners = g_compassOwners, .activeOne = one.active, .activeTwo = two.active,
-               .shootingOne = one.shooting, .shootingTwo = two.shooting};
+    // starts as every player's.
+    const bool compass = now.compass;
+    g_compassOwners    = hud_rules::CompassOwners(compass, now.active, g_compassOwners);
+    now.compassOwners  = g_compassOwners;
     std::array<Known, kMaxHidden> seen{};
     std::size_t                   seenCount = 0;
     try
@@ -278,7 +294,12 @@ void ShowOnly(int player) noexcept
         platform::ForEachSparseElement(manager + kPins, kPinEntry, [&](std::uintptr_t entry) {
             ++now.entries;
             const auto pin   = ReadAt<std::uint64_t>(entry + kPinWidget);
-            int        owner = hud_rules::PinOwnerOf(Holds(one, pin), Holds(two, pin));
+            unsigned holders = 0;
+            for (std::size_t s = 0; s < held.size(); ++s)
+            {
+                holders |= Holds(held[s], pin) ? 1u << s : 0u;
+            }
+            int owner = hud_rules::PinOwnerOf(holders);
             for (std::size_t i = 0; owner < 0 && i < g_knownCount; ++i)
             {
                 owner = g_known[i].pin == pin ? g_known[i].owner : -1;  // released, still animating out

@@ -11,7 +11,9 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "player_two/generation.h"
+#include "players/seats.h"
 
+#include <array>
 #include <atomic>
 #include <bit>
 #include <cstddef>
@@ -112,7 +114,7 @@ std::uintptr_t         g_callSite       = 0;
 std::uintptr_t         g_callTarget     = 0;
 bool                   g_installed      = false;
 bool                   g_refused        = false;  // a swap faulted: the labels as before until restart
-bool                   g_inRun          = false;  // inside the mod's player 2 holder run
+int                    g_runSeat        = 0;      // the seat whose holder run is inside (0: none)
 std::uintptr_t         g_textBlockVTable  = 0;
 std::uintptr_t         g_paintVTable      = 0;
 std::uintptr_t         g_gcObjectVTable   = 0;
@@ -126,7 +128,7 @@ const wchar_t*         g_lastRefusal    = nullptr;
 bool                   g_loggedRefusal  = false;
 bool                   g_loggedFirst    = false;
 bool                   g_loggedInvalidateFault = false;
-LabelCounts            g_loggedCounts;
+std::array<LabelCounts, players::kMaxPlayers> g_loggedCounts{};  // by seat ([0] unused)
 ULONGLONG              g_countsAt       = 0;
 
 using platform::Read;  // the guarded reads: platform/guarded.h
@@ -260,15 +262,23 @@ void FreeParked(Parked& parked) noexcept
     parked = label_states::EmptyState();
 }
 
-LabelBook g_book(LabelAccess{&Usable, &Alive, &Swap, &Invalidate, &Stamp, &HoldWeak, &ReleaseWeak, &FreeParked});
+constexpr LabelAccess kAccess{&Usable, &Alive, &Swap, &Invalidate, &Stamp, &HoldWeak, &ReleaseWeak, &FreeParked};
+// Each seat's label states, by seat ([0] unused): the seat's own text and layout per label.
+static_assert(players::kMaxPlayers == 3, "one label book per player, listed below");
+std::array<LabelBook, players::kMaxPlayers> g_books{LabelBook(kAccess), LabelBook(kAccess), LabelBook(kAccess)};
 
-void LogFirst(void* widget) noexcept
+LabelBook& BookOf(int seat) noexcept
+{
+    return g_books[static_cast<std::size_t>(seat)];
+}
+
+void LogFirst(int seat, void* widget) noexcept
 {
     g_loggedFirst = true;
     std::uintptr_t proxy = 0;
     Read(widget, kFastPathProxy, proxy);
-    platform::Log(L"minimap labels: player 2's first label state swapped in ({} labels; fast-path proxy {:#x})",
-                  g_book.Count(), proxy);
+    platform::Log(L"minimap labels: {}'s first label state swapped in ({} labels; fast-path proxy {:#x})",
+                  players::SeatName(seat), BookOf(seat).Count(), proxy);
 }
 
 void LogCounts() noexcept
@@ -278,19 +288,23 @@ void LogCounts() noexcept
     {
         return;
     }
-    g_countsAt            = now + kCountsPeriodMs;
-    const LabelCounts& c  = g_book.Counts();
-    const LabelCounts& l  = g_loggedCounts;
-    if (c.swapsIn == l.swapsIn && c.refused == l.refused && c.faults == l.faults && c.released == l.released)
+    g_countsAt = now + kCountsPeriodMs;
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        return;
+        const LabelCounts& c = BookOf(seat).Counts();
+        LabelCounts&       l = g_loggedCounts[static_cast<std::size_t>(seat)];
+        if (c.swapsIn == l.swapsIn && c.refused == l.refused && c.faults == l.faults && c.released == l.released)
+        {
+            continue;
+        }
+        platform::LogDebug(L"minimap labels (2 min), {}: swaps in {} / out {}; labels {} (new {}, font resets {}, died "
+                           L"in their pass {}, died aside {}, released {}); refused {}, table full {}, faults {}",
+                           players::SeatName(seat), c.swapsIn - l.swapsIn, c.swapsOut - l.swapsOut,
+                           BookOf(seat).Count(), c.created - l.created, c.fontResets - l.fontResets,
+                           c.diedInside - l.diedInside, c.diedAside - l.diedAside, c.released - l.released,
+                           c.refused - l.refused, c.full - l.full, c.faults - l.faults);
+        l = c;
     }
-    platform::LogDebug(L"minimap labels (2 min): swaps in {} / out {}; labels {} (new {}, font resets {}, died in player "
-                       L"2's pass {}, died aside {}, released {}); refused {}, table full {}, faults {}",
-                       c.swapsIn - l.swapsIn, c.swapsOut - l.swapsOut, g_book.Count(), c.created - l.created,
-                       c.fontResets - l.fontResets, c.diedInside - l.diedInside, c.diedAside - l.diedAside,
-                       c.released - l.released, c.refused - l.refused, c.full - l.full, c.faults - l.faults);
-    g_loggedCounts = c;
 }
 
 // --- The redirected call ---
@@ -298,30 +312,32 @@ void LogCounts() noexcept
 std::uint64_t SetText(void* textBlock, const void* text) noexcept
 {
     const auto original = reinterpret_cast<SetTextFn>(g_call.Original());
-    if (generation::OnGameThread() && g_inRun && !g_refused && textBlock != nullptr)
+    const int seat = g_runSeat;
+    if (generation::OnGameThread() && seat != 0 && !g_refused && textBlock != nullptr)
     {
-        const std::uint64_t refusedBefore = g_book.Counts().refused;
-        if (!g_book.BeforeSetText(textBlock, ControllerOf(textBlock)))
+        LabelBook&          book          = BookOf(seat);
+        const std::uint64_t refusedBefore = book.Counts().refused;
+        if (!book.BeforeSetText(textBlock, ControllerOf(textBlock)))
         {
             g_refused = true;
             platform::Log(L"minimap labels: a label state swap raised an exception ({}); the labels are laid out per "
                           L"pass as before",
                           platform::DescribeFault(platform::LastFault()).text);
         }
-        else if (g_book.Counts().refused != refusedBefore && !g_loggedRefusal)
+        else if (book.Counts().refused != refusedBefore && !g_loggedRefusal)
         {
             g_loggedRefusal = true;
             platform::Log(L"minimap labels: a label was left shared ({}; {})", textBlock,
                           g_lastRefusal != nullptr ? g_lastRefusal : L"the table is full or its block is going away");
         }
-        else if (!g_loggedFirst && g_book.Counts().swapsIn != 0)
+        else if (!g_loggedFirst && book.Counts().swapsIn != 0)
         {
-            LogFirst(textBlock);
+            LogFirst(seat, textBlock);
         }
     }
     // After the swap: what the game's own compare is about to see (hud/minimap/label_relayouts.h).
     const label_relayouts::Before before = label_relayouts::BeforeSetText(textBlock, text);
-    const bool playerTwoState = before.read && g_inRun && g_book.Holds(ControllerOf(textBlock));
+    const bool playerTwoState = before.read && seat != 0 && BookOf(seat).Holds(ControllerOf(textBlock));
     const std::uint64_t result = original(textBlock, text);
     label_relayouts::AfterSetText(textBlock, before, playerTwoState);
     return result;
@@ -397,29 +413,34 @@ void Remove() noexcept
     {
         platform::Log(L"minimap labels: the SetText call was changed after us; left in place (it passes through)");
     }
-    if (g_installed && generation::OnGameThread())
+    std::size_t left = 0;
+    for (LabelBook& book : g_books)
     {
-        g_book.ReleaseAll();
+        if (g_installed && generation::OnGameThread())
+        {
+            book.ReleaseAll();
+        }
+        left += book.Count();
     }
-    else if (g_book.Count() != 0)
+    if (left != 0)
     {
         // The counts are not thread-safe and the widgets are the game thread's: off it, the records are left (each
-        // widget holds player 1's state outside the passes; player 2's set-aside copies and weak references leak).
-        platform::Log(L"minimap labels: removed off the game thread; {} label record(s) left unreleased", g_book.Count());
+        // widget holds player 1's state outside the passes; the seats' set-aside copies and weak references leak).
+        platform::Log(L"minimap labels: removed off the game thread; {} label record(s) left unreleased", left);
     }
     g_installed = false;
-    g_inRun     = false;
+    g_runSeat   = 0;
 }
 
-void BeginPlayerTwoRun() noexcept
+void BeginRun(int seat) noexcept
 {
-    g_inRun = g_installed;
+    g_runSeat = g_installed && players::SeatIndex(seat) ? seat : 0;
     label_relayouts::SetScope(label_relayouts::Scope::PlayerTwoRun);
 }
 
-void EndPlayerTwoRun() noexcept
+void EndRun() noexcept
 {
-    g_inRun = false;
+    g_runSeat = 0;
     label_relayouts::SetScope(label_relayouts::Scope::Other);
 }
 
@@ -427,23 +448,30 @@ void SwapBack() noexcept
 {
     if (g_installed && generation::OnGameThread())
     {
-        g_book.SwapBack();
+        for (LabelBook& book : g_books)
+        {
+            book.SwapBack();  // only the book of the seat whose paint ran has states inside
+        }
     }
 }
 
-void Tick(bool playerTwoMinimapOn) noexcept
+void Tick(unsigned seatsOn) noexcept
 {
     if (!g_installed || !generation::OnGameThread())
     {
         return;
     }
-    if (playerTwoMinimapOn && !g_refused)
+    for (int seat = 1; seat < players::kMaxPlayers; ++seat)
     {
-        g_book.Sweep();
-    }
-    else if (g_book.Count() != 0)
-    {
-        g_book.ReleaseAll();
+        LabelBook& book = BookOf(seat);
+        if ((seatsOn & (1u << seat)) != 0 && !g_refused)
+        {
+            book.Sweep();
+        }
+        else if (book.Count() != 0)
+        {
+            book.ReleaseAll();
+        }
     }
     LogCounts();
 }
