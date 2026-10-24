@@ -163,7 +163,7 @@ void EnsureNavArea(void* controller) noexcept
     }
     bool ran = false;
     {
-        const primary_controller::Scope scope;
+        const primary_controller::Scope scope(players::kPlayerTwoSeat);
         if (!scope.Held())
         {
             return;  // tried again next tick; never unscoped (it would make player 2 the primary player for good)
@@ -329,7 +329,7 @@ void Write(void* controller, Pair want, Pair before) noexcept
     }
     bool ran = false, held = false;
     {
-        const primary_controller::Scope scope;
+        const primary_controller::Scope scope(players::kPlayerTwoSeat);
         held = scope.Held();
         if (held)
         {

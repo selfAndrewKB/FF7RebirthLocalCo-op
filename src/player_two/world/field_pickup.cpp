@@ -1200,7 +1200,7 @@ void Acquire(void* items, void* entry) noexcept
     std::optional<primary_controller::Scope> primary;
     if (playerTwo)
     {
-        primary.emplace();
+        primary.emplace(players::kPlayerTwoSeat);
     }
     reinterpret_cast<AcquireFn>(g_acquireCall.Original())(items, entry);
     if (g_observer.granted != nullptr)

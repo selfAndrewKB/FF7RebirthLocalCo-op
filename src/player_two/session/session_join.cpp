@@ -161,7 +161,7 @@ void Session::RemoveStages() noexcept
     own_controller::Remove();
 }
 
-bool Session::JoinAllowed(const players::LocalPlayers::PlayerOne& one) const noexcept
+bool Seat::JoinAllowed(const players::LocalPlayers::PlayerOne& one) const noexcept
 {
     if (refuseJoins_)
     {
@@ -186,9 +186,9 @@ bool Session::JoinAllowed(const players::LocalPlayers::PlayerOne& one) const noe
     return true;
 }
 
-void Session::Join() noexcept
+void Seat::Join() noexcept
 {
-    if (HasPlayerTwo())
+    if (In())
     {
         Log(L"player 2 is already in");
         return;
@@ -204,7 +204,7 @@ void Session::Join() noexcept
     const bool riding = shared_ride::Rides(one.controller);
     if (installed_.member && !riding && FreeMember(one.controller) == nullptr)
     {
-        party_member::ChooseSlot(one.controller);  // the 2nd slot's verdict, for the log
+        party_member::ChooseSlot(seat_, one.controller);  // the 2nd slot's verdict, for the log
         AwaitMember(L"the party's 2nd slot has no member free for player 2");
         return;
     }
@@ -222,14 +222,14 @@ void Session::Join() noexcept
         added  = players_.Add(one.controller);
         report = scope.Result();
     }
-    if (!HasPlayerTwo())
+    if (!In())
     {
         return;  // Add logged why
     }
     // Recorded before anything else, so any leave below works on the objects the engine created.
     playerOne_           = one.localPlayer;
     playerOneController_ = one.controller;
-    playerTwoController_ = added.controller;
+    controller_          = added.controller;
     phase_               = Phase::Playing;
     outside_.End();  // joined, by the key, the rejoin after a map load, or a member freed
 
@@ -255,27 +255,27 @@ void Session::Join() noexcept
     AimOwnCamera();
 }
 
-void Session::AimOwnCamera() noexcept
+void Seat::AimOwnCamera() noexcept
 {
     if (!installed_.viewTarget)
     {
         return;
     }
-    void* before = view_target::Current(playerTwoController_);
-    const bool aimed = view_target::Aim(playerTwoController_);
+    void* before = view_target::Current(controller_);
+    const bool aimed = view_target::Aim(controller_);
     Log(L"player 2's camera manager viewed {}; after aiming it at its camera actor it views {} ({}); auto-managed "
         L"view target: player 1 {}, player 2 {}",
-        NameOf(before), NameOf(view_target::Current(playerTwoController_)), aimed ? L"its own camera" : L"NOT its camera",
+        NameOf(before), NameOf(view_target::Current(controller_)), aimed ? L"its own camera" : L"NOT its camera",
         static_cast<unsigned>(ReadField<std::uint8_t>(playerOneController_, facts::kControllerAutoManageCamera)),
-        static_cast<unsigned>(ReadField<std::uint8_t>(playerTwoController_, facts::kControllerAutoManageCamera)));
+        static_cast<unsigned>(ReadField<std::uint8_t>(controller_, facts::kControllerAutoManageCamera)));
 }
 
-void Session::StartGeneration() noexcept
+void Seat::StartGeneration() noexcept
 {
-    generation::Begin(playerOneController_, playerTwoController_);
-    if (installed_.primary && !primary_controller::Bind(playerOneController_, playerTwoController_))
+    generation::Begin(seat_, playerOneController_, controller_);
+    if (installed_.primary && !primary_controller::Bind(seat_, playerOneController_, controller_))
     {
-        generation::Fault(L"player 2's controller could not be named as a weak pointer");
+        generation::Fault(seat_, L"player 2's controller could not be named as a weak pointer");
     }
     phase_            = Phase::SettlingPlayerOne;
     ticks_            = 0;

@@ -110,7 +110,7 @@ public:
     GlobalScope& operator=(const GlobalScope&) = delete;
 
 private:
-    const primary_controller::Scope      primary_;  // opened first, closed last
+    const primary_controller::Scope      primary_{players::kPlayerTwoSeat};  // opened first, closed last
     platform::ByteStore<1, sizeof(Pair)> context_;
     bool                                 held_ = false;
 };

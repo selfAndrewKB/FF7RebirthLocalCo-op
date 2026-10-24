@@ -402,7 +402,7 @@ void MuteAllHook(void* manager, std::uint8_t mute) noexcept
     {
         return;
     }
-    const primary_controller::Scope primary;
+    const primary_controller::Scope primary(players::kPlayerTwoSeat);
     if (!primary.Held())
     {
         return;

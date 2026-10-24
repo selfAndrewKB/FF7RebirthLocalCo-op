@@ -1,13 +1,15 @@
 #pragma once
 
-// Player 2's scope ladder over the modules' scope types (player_two/scopes/scope_ladder.h is the mechanism).
+// A further player's scope ladder over the modules' scope types (player_two/scopes/scope_ladder.h is the mechanism).
 //
 // The parts, in the order they open: Focus (player 2's UI context, focus_scope), Sticks (pad 2's
 // sticks, pad_sticks), Primary (player 2 as the primary controller, primary_controller), Buttons
 // (pad 2's buttons, pad_buttons), Targets (player 2's target fields, lock_on), Leader and LeaderType
 // (the party leader and its type answering player 2's member, leader_scope), Rules (the command
 // rules turned around, command_rules). `Which` names them: a site opens the ones its call reads,
-// required unless it says they are optional, and its own module-local scopes after the ladder.
+// required unless it says they are optional, and its own module-local scopes after the ladder. The ladder is a seat's
+// (Args::seat, player 2's unless a site names another): Primary and the member's pad follow it; the other parts are
+// still player 2's until their modules are per seat (plan/seats.md step 3).
 // Game thread only.
 
 #include "player_two/battle/command_rules.h"
@@ -20,6 +22,7 @@
 #include "player_two/scopes/primary_controller.h"
 #include "player_two/scopes/scope_ladder.h"
 #include "player_two/session/party_member.h"
+#include "players/seats.h"
 
 #include <cstdint>
 
@@ -40,6 +43,7 @@ enum Which : unsigned
 /// What the parts open with. A part not chosen needs nothing.
 struct Args
 {
+    int           seat       = players::kPlayerTwoSeat;  // whose ladder: Primary and FillMember's pad
     void*         controller = nullptr;  // Focus: player 2's command controller
     std::int32_t  padId      = -1;       // Sticks: the pad (pad_sticks::ControllerIdOf)
     std::uint64_t withoutKey = 0;        // Buttons: an action player 2's view shows as not held (0 none)
@@ -48,8 +52,8 @@ struct Args
     std::uint8_t  leaderType = 0;        // Rules: player 1's leader type
 };
 
-/// The member's weak value and type, and pad 2, filled in for `member` (player 2's). False, nothing filled,
-/// when the member or its type cannot be read.
+/// The member's weak value and type, and the seat's pad, filled in for `member` (`args.seat`'s). False, nothing
+/// filled, when the member or its type cannot be read.
 inline bool FillMember(Args& args, void* member) noexcept
 {
     const auto type = party_member::PlayerTypeOf(member);
@@ -60,7 +64,7 @@ inline bool FillMember(Args& args, void* member) noexcept
     }
     args.memberWeak = weak;
     args.memberType = *type;
-    args.padId      = pad_sticks::ControllerIdOf(generation::PlayerTwoController());
+    args.padId      = pad_sticks::ControllerIdOf(generation::ControllerOf(args.seat));
     return true;
 }
 
@@ -87,7 +91,7 @@ struct PrimaryPart
 {
     static constexpr unsigned       kBit  = Primary;
     static constexpr const wchar_t* kName = L"the primary controller";
-    explicit PrimaryPart(const Args&) noexcept {}
+    explicit PrimaryPart(const Args& args) noexcept : scope(args.seat) {}
     bool           Held() const noexcept { return scope.Held(); }
     const wchar_t* Refusal() const noexcept
     {

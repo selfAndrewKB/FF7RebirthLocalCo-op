@@ -341,7 +341,7 @@ void Tick() noexcept
         {
             bool set = false;
             {
-                const primary_controller::Scope scope;
+                const primary_controller::Scope scope(players::kPlayerTwoSeat);
                 set = scope.Held() && platform::CallGuarded(g_setByte, std::uint8_t{2}, std::uint8_t{0});
             }
             int expected = 1;
@@ -383,7 +383,7 @@ void Tick() noexcept
         bool dropped = false;
         if (player == 2)
         {
-            const primary_controller::Scope scope;
+            const primary_controller::Scope scope(players::kPlayerTwoSeat);
             dropped = owned();
             ran     = !dropped && scope.Held() && g_clear != nullptr && platform::CallGuarded(g_clear);
         }

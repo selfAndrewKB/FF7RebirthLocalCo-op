@@ -262,7 +262,8 @@ void FollowUp(const void* cameraManager, const void* op, const Pose& pose) noexc
 void Repair(void* cameraManager, const void* op, const Pose& pose) noexcept
 {
     g_nextTry = Clock::now() + kRetryGap;
-    const primary_controller::Scope scope;  // the reset resolves the primary camera manager and its operator
+    // The reset resolves the primary camera manager and its operator.
+    const primary_controller::Scope scope(players::kPlayerTwoSeat);
     if (!scope.Held())
     {
         if (!g_refusalLogged)

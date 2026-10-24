@@ -17,7 +17,9 @@
 // share (leave, own camera, fill, third view, window span) are here too, each once.
 
 #include "platform/dev_switch.h"
+#include "players/seats.h"
 
+#include <array>
 #include <string>
 
 namespace lss::platform {
@@ -47,9 +49,13 @@ void Remove() noexcept;
 /// session and the single view. (The shared ride is read before the session's tick, by the session itself.)
 struct Frame
 {
-    bool playerTwoIn;  // the session holds player 2
-    bool splitShown;   // player 2 in and the screen split (not player 1's single view)
-    bool playsMember;  // player 2 plays a party member
+    struct Seat
+    {
+        bool in          = false;  // the session holds the seat's player
+        bool playsMember = false;  // the seat's player plays a party member
+    };
+    std::array<Seat, players::kMaxPlayers> seats{};  // by seat (players/seats.h); index 0, player 1's, unused
+    bool splitShown = false;  // player 2 in and the screen split (not player 1's single view)
 };
 
 /// Game thread, once per engine tick, first: the tick's identities, then each module's work that runs before the
@@ -69,7 +75,8 @@ struct Result
 
 // The actions a key and a control command share, each in one place. Game thread.
 
-/// Player 2 leaves: the third view first (it borrows player 2's join), then the session's leave (logged there).
+/// Player 2 leaves: the third view first (it borrows player 2's join), then the session's leave of player 2's seat
+/// (logged there).
 void LeavePlayerTwo(player_two::Session& session, const wchar_t* why) noexcept;
 
 /// Player 2's half on player 2's own camera or player 1's (views/player_view_point.h); refused without the

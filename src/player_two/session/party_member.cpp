@@ -10,6 +10,7 @@
 #include "platform/verified_code.h"
 #include "player_two/object_fields.h"
 #include "player_two/scopes/primary_controller.h"
+#include "players/seats.h"
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -203,6 +204,12 @@ AiSnapshot ReadAi(const void* member) noexcept
 
 namespace {
 
+/// "2nd" for player 2's slot of the party order, "3rd" for player 3's (the log's name for it).
+const wchar_t* SlotName(int seat) noexcept
+{
+    return seat == 1 ? L"2nd" : seat == 2 ? L"3rd" : L"seat's";
+}
+
 /// What ChooseSlot reads from the game (plain values, so the read can run inside an SEH guard).
 struct SlotRead
 {
@@ -312,7 +319,7 @@ bool FindPartnerLinkGuarded(std::uint8_t playerType, LinkRecordView& out) noexce
     }
 }
 
-void ReadSlot(void* playerOneController, SlotRead& out) noexcept
+void ReadSlot(int seat, void* playerOneController, SlotRead& out) noexcept
 {
     std::uint8_t types[facts::kMaxRosterEntries]{};
     out.count = std::min(g_fn.rosterCount(), facts::kMaxRosterEntries);
@@ -326,39 +333,42 @@ void ReadSlot(void* playerOneController, SlotRead& out) noexcept
     }
     out.fieldLeader = g_fn.fieldLeaderType();
     out.anchor      = LeaderOrdinal(types, out.count, out.fieldLeader);
-    for (std::int32_t step = 1; step <= out.count; ++step)
-    {
-        const std::int32_t ordinal = OrdinalAfter(out.anchor, step, out.count);
-        const std::uint8_t type    = types[ordinal];
+    // Player 1's character is stepped past, as player 1's battle switch steps past its own leader. The chosen row is
+    // the last one read, so its snapshot is the last one kept.
+    void*          character = nullptr;
+    MemberSnapshot member{};
+    const std::int32_t ordinal = SeatSlotOrdinal(out.anchor, out.count, seat, [&](std::int32_t at) noexcept {
+        const std::uint8_t type = types[at];
         if (type >= facts::kNoPlayerType)
         {
-            continue;
+            return true;
         }
-        void*                character = g_fn.characterByType(facts::kFieldLane, type);
-        const MemberSnapshot member    = Snapshot(character, playerOneController, type);
-        if (member.isPlayerOnes)
-        {
-            continue;  // stepped past, as player 1's battle switch steps past its own leader
-        }
-        out.ordinal   = ordinal;
-        out.type      = type;
-        out.character = character;
-        out.member    = member;
-        out.ai        = ReadAi(character);
-        // In battle only: synergy records come only from battle commands, and the battle teardown keeps a
-        // record whose started member never ended (S-SYNGATEVERIFY §3), which must not hold player 2 after it.
-        out.linkBusy  = facts::InBattle() && FindBusyLink(type, out.link);
+        character = g_fn.characterByType(facts::kFieldLane, type);
+        member    = Snapshot(character, playerOneController, type);
+        return member.isPlayerOnes;
+    });
+    if (ordinal < 0)
+    {
         return;
     }
+    const std::uint8_t type = types[ordinal];
+    out.ordinal             = ordinal;
+    out.type                = type;
+    out.character           = character;
+    out.member              = member;
+    out.ai                  = ReadAi(character);
+    // In battle only: synergy records come only from battle commands, and the battle teardown keeps a
+    // record whose started member never ended (S-SYNGATEVERIFY §3), which must not hold a seat after it.
+    out.linkBusy = facts::InBattle() && FindBusyLink(type, out.link);
 }
 
 /// The party reads, guarded: during a reload the party's objects may be torn down under them. False
 /// (no slot this time) if they faulted.
-bool ReadSlotGuarded(void* playerOneController, SlotRead& out) noexcept
+bool ReadSlotGuarded(int seat, void* playerOneController, SlotRead& out) noexcept
 {
     __try
     {
-        ReadSlot(playerOneController, out);
+        ReadSlot(seat, playerOneController, out);
         return true;
     }
     __except (platform::GuardFilter(GetExceptionCode()))
@@ -374,7 +384,7 @@ bool FindPartnerLink(std::uint8_t playerType, LinkRecordView& out) noexcept
     return g_installed && *g_battleState != nullptr && FindPartnerLinkGuarded(playerType, out);
 }
 
-SlotChoice ChooseSlot(void* playerOneController, bool log) noexcept
+SlotChoice ChooseSlot(int seat, void* playerOneController, bool log) noexcept
 {
     SlotChoice choice;
     SlotRead   read;
@@ -382,7 +392,7 @@ SlotChoice ChooseSlot(void* playerOneController, bool log) noexcept
     {
         return choice;
     }
-    if (!ReadSlotGuarded(playerOneController, read))
+    if (!ReadSlotGuarded(seat, playerOneController, read))
     {
         if (log)
         {
@@ -395,9 +405,8 @@ SlotChoice ChooseSlot(void* playerOneController, bool log) noexcept
     {
         if (log)
         {
-            platform::Log(L"party slot: the party has {} member(s), none of them free of player 1; no 2nd slot for "
-                          L"player 2",
-                          read.count);
+            platform::Log(L"party slot: the party has {} member(s), none of them free of player 1; no {} slot for {}",
+                          read.count, SlotName(seat), players::SeatName(seat));
         }
         return choice;
     }
@@ -417,9 +426,10 @@ SlotChoice ChooseSlot(void* playerOneController, bool log) noexcept
     }
     if (log)
     {
-        platform::Log(L"party slot: field leader type {} at ordinal {}; the 2nd slot is ordinal {} (type {}): {}; its AI "
-                      L"brain {} state {}: {}{}",
-                      static_cast<unsigned>(read.fieldLeader), read.anchor, read.ordinal, static_cast<unsigned>(read.type),
+        platform::Log(L"party slot: field leader type {} at ordinal {}; the {} slot is ordinal {} (type {}): {}; its "
+                      L"AI brain {} state {}: {}{}",
+                      static_cast<unsigned>(read.fieldLeader), read.anchor, SlotName(seat), read.ordinal,
+                      static_cast<unsigned>(read.type),
                       Describe(choice.verdict), static_cast<unsigned>(choice.ai.brainIndex),
                       static_cast<unsigned>(choice.ai.state), Describe(readiness),
                       choice.wait == SlotWait::LinkPartner ? L"; a synergy partner the game has not given back yet" : L"");
@@ -541,26 +551,26 @@ std::optional<std::uint8_t> PlayerTypeOf(const void* character) noexcept
     return type < facts::kNoPlayerType ? std::optional<std::uint8_t>(type) : std::nullopt;
 }
 
-bool Take(void* playerTwoController, void* member) noexcept
+bool Take(int seat, void* controller, void* member) noexcept
 {
-    if (!g_installed || playerTwoController == nullptr || member == nullptr)
+    if (!g_installed || controller == nullptr || member == nullptr)
     {
         return false;
     }
     // The trigger is read from the controller afterwards: the function does not return it.
-    if (!GuardedEnsureTrigger(playerTwoController) || ReadPointer(playerTwoController, facts::kControllerTrigger) == nullptr)
+    if (!GuardedEnsureTrigger(controller) || ReadPointer(controller, facts::kControllerTrigger) == nullptr)
     {
-        platform::Log(L"take refused: player 2's trigger actor could not be created");
+        platform::Log(L"take refused: {}'s trigger actor could not be created", players::SeatName(seat));
         return false;
     }
-    const primary_controller::Scope scope;
+    const primary_controller::Scope scope(seat);
     if (!scope.Held())
     {
-        platform::Log(L"take refused: the primary controller could not be scoped to player 2 ({})",
+        platform::Log(L"take refused: the primary controller could not be scoped to {} ({})", players::SeatName(seat),
                       primary_controller::Describe(scope.Why()));
         return false;
     }
-    if (!GuardedSwitchLeader(playerTwoController, member))
+    if (!GuardedSwitchLeader(controller, member))
     {
         platform::Log(L"take failed: the switch raised an exception");
         return false;
@@ -568,20 +578,20 @@ bool Take(void* playerTwoController, void* member) noexcept
     return true;
 }
 
-bool GiveBack(void* playerTwoController) noexcept
+bool GiveBack(int seat, void* controller) noexcept
 {
-    if (!g_installed || ReadPointer(playerTwoController, facts::kControllerTrigger) == nullptr)
+    if (!g_installed || ReadPointer(controller, facts::kControllerTrigger) == nullptr)
     {
         return false;  // the switch writes through the trigger unconditionally
     }
     // The release writes nothing through the primary controller, so it runs even unscoped; the
-    // scope keeps every read inside it on player 2's objects.
-    const primary_controller::Scope scope;
+    // scope keeps every read inside it on the seat's objects.
+    const primary_controller::Scope scope(seat);
     if (!scope.Held())
     {
         platform::Log(L"give-back runs unscoped: {}", primary_controller::Describe(scope.Why()));
     }
-    if (!GuardedSwitchLeader(playerTwoController, nullptr))
+    if (!GuardedSwitchLeader(controller, nullptr))
     {
         platform::Log(L"give-back failed: the switch raised an exception");
         return false;

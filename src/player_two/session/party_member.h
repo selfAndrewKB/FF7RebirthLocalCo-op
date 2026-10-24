@@ -47,14 +47,14 @@ struct SlotChoice
     LinkRecordView link{};             // with LinkPartner: the game's link record that holds it
 };
 
-/// The member player 2 plays: the 2nd slot of the game's party order, the row after the field leader
-/// in the battle-member list the party panel shows and player 1's battle switch cycles, stepping past
-/// player 1's character as that cycle does (RE-p2-party-order.md §5). It is taken only when free by the
-/// battle switch's own member test and its AI is in the state the game hands players (FOLLOW, BATTLE),
-/// and not while it is a synergy partner the game has not given back yet (party_lease.h
-/// LinkPartnerBusy); otherwise player 2 waits on it and never falls through to the 3rd slot. Logged
-/// when `log` is set.
-SlotChoice ChooseSlot(void* playerOneController, bool log = true) noexcept;
+/// The member `seat`'s player plays: player 2 the 2nd slot of the game's party order, the row after the field
+/// leader in the battle-member list the party panel shows and player 1's battle switch cycles, stepping past
+/// player 1's character as that cycle does (RE-p2-party-order.md §5); player 3 the 3rd slot, the row after that
+/// (party_lease.h SeatSlotOrdinal). It is taken only when free by the battle switch's own member test and its AI is
+/// in the state the game hands players (FOLLOW, BATTLE), and not while it is a synergy partner the game has not
+/// given back yet (party_lease.h LinkPartnerBusy); otherwise the seat waits on it and never falls through to the
+/// next slot. Logged when `log` is set.
+SlotChoice ChooseSlot(int seat, void* playerOneController, bool log = true) noexcept;
 
 /// One of the game's link records (RE-p2-synergy-skills.md S-SYNTAKE §3, S-SYNSTUCK2 §1); every read guarded, so any
 /// thread that is running the record (an empty view for null).
@@ -86,13 +86,13 @@ const wchar_t* WhyNotPlayable(const void* member) noexcept;
 /// The party roster's player type of `character` (null if it is not on the field lane's roster).
 std::optional<std::uint8_t> PlayerTypeOf(const void* character) noexcept;
 
-/// Creates player 2's trigger actor if needed and hands `member` to player 2's controller.
-/// Returns false if the trigger could not be made, the primary controller could not be scoped, or
-/// the engine raised an exception; the caller then waits for nothing.
-bool Take(void* playerTwoController, void* member) noexcept;
+/// Creates the trigger actor of `seat`'s controller if needed and hands `member` to it (the switch runs with the
+/// primary controller scoped to the seat). Returns false if the trigger could not be made, the primary controller
+/// could not be scoped, or the engine raised an exception; the caller then waits for nothing.
+bool Take(int seat, void* controller, void* member) noexcept;
 
-/// Hands player 2's party member back to its AI. The trigger actor must still exist.
-bool GiveBack(void* playerTwoController) noexcept;
+/// Hands `seat`'s party member back to its AI. The trigger actor must still exist.
+bool GiveBack(int seat, void* controller) noexcept;
 
 /// The lease fields for `member` and player 2's controller.
 LeaseState ReadLease(const void* member, const void* playerTwoController) noexcept;

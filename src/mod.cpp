@@ -41,6 +41,7 @@
 #include "player_two/world/world_actor_reach.h"
 #include "players/console_access.h"
 #include "players/join_keys.h"
+#include "players/seats.h"
 #include "players/single_view.h"
 #include "players/split_layout.h"
 #include "players/split_screen_settings.h"
@@ -56,6 +57,7 @@
 #include "views/whole_screen.h"
 #include "views/window_span.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -384,7 +386,7 @@ private:
         }
         switch (keys_.Poll())
         {
-            case lss::players::PlayerIntent::Join: session_->Join(); break;
+            case lss::players::PlayerIntent::Join: session_->Join(lss::players::kPlayerTwoSeat); break;
             case lss::players::PlayerIntent::Leave:
                 lss::modules::LeavePlayerTwo(*session_, L"player 2 leaves (Ctrl+F8)");  // logs its own outcome
                 break;
@@ -444,7 +446,13 @@ private:
             playerTwoIn, {playerTwoIn && autoMode && lss::views::WholeScreenShown(),  // read only when it can matter
                           session_->WaitsForMember(), session_->StandsAside()}));
         const bool splitShown = playerTwoIn && !singleView_.Single();
-        lss::modules::TickAfterSession({playerTwoIn, splitShown, session_->PlaysMember()});
+        lss::modules::Frame frame;
+        frame.splitShown = splitShown;
+        for (int seat = 1; seat <= lss::players::kSeatsBuilt; ++seat)
+        {
+            frame.seats[static_cast<std::size_t>(seat)] = {session_->In(seat), session_->PlaysMember(seat)};
+        }
+        lss::modules::TickAfterSession(frame);
         lss::dev::TickWatches(splitShown);  // the dev watches, after the levers they observe
         settings_.Update(playerTwoIn, [](const std::wstring& line) { Log(L"{}", line); });
         LogLayoutChange(layout_.Update(playerTwoIn));

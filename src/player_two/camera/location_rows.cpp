@@ -163,7 +163,7 @@ void NavAreaTick(void* component, float deltaTime, std::uintptr_t tickType, void
     if (generation::Active() && controller != nullptr && controller == generation::PlayerTwoController())
     {
         Bump(kTicksTwo);
-        const primary_controller::Scope scope;
+        const primary_controller::Scope scope(players::kPlayerTwoSeat);
         Bump(scope.Held() ? kScoped : kRefused);  // refused: still the game's tick, with the game's primary player
         original(component, deltaTime, tickType, tickFunction);
         return;

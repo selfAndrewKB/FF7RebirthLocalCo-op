@@ -166,6 +166,7 @@ add_library(LocalSplitScreen SHARED
     src/player_two/rides/own_ride.cpp
     src/player_two/session/session.cpp
     src/player_two/session/session_join.cpp
+    src/player_two/session/seat_out.cpp
     src/player_two/input/stick_select.cpp
     src/player_two/scopes/swap_window.cpp
     src/player_two/camera/view_target.cpp

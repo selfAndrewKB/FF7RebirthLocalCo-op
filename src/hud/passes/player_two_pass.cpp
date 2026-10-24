@@ -280,7 +280,7 @@ bool HoldPrimary()
 {
     if (Acts(kLeverPrimary))
     {
-        g_primary.emplace();
+        g_primary.emplace(players::kPlayerTwoSeat);
     }
     if (g_primary && !g_primary->Held())
     {

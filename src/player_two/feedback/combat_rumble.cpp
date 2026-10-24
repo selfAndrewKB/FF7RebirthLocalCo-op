@@ -280,7 +280,7 @@ void* Camera(void* handle, const void* location, const void* name) noexcept
     {
         return original(handle, location, name);
     }
-    const primary_controller::Scope primary;
+    const primary_controller::Scope primary(players::kPlayerTwoSeat);
     if (!primary.Held())
     {
         ++g_counts.hitSkips;
@@ -308,7 +308,7 @@ void* Fallback() noexcept
     {
         return original();
     }
-    const primary_controller::Scope primary;
+    const primary_controller::Scope primary(players::kPlayerTwoSeat);
     if (!primary.Held())
     {
         ++g_counts.hitSkips;

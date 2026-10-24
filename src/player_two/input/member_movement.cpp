@@ -277,7 +277,7 @@ bool InPrimaryScope(const void* member, void (*call)(void* context), void* conte
     {
         return false;
     }
-    const primary_controller::Scope primary;
+    const primary_controller::Scope primary(players::kPlayerTwoSeat);
     if (!primary.Held())
     {
         return false;
@@ -343,7 +343,7 @@ HandlesTick TickRideHandles(const void* member, void* state, const void* chocobo
     {
         tick.riddenOutside = RiddenTest(chocobo);
     }
-    const primary_controller::Scope primary;
+    const primary_controller::Scope primary(players::kPlayerTwoSeat);
     if (!primary.Held())
     {
         return tick;  // counted by the ride (player_two/chocobo_ride), not as a member tick
@@ -365,7 +365,7 @@ CoreAsPlayerTwo PlayerCoreAsPlayerTwo(const void* character, const void* member)
     {
         return result;
     }
-    const primary_controller::Scope primary;
+    const primary_controller::Scope primary(players::kPlayerTwoSeat);
     if (!primary.Held())
     {
         return result;

@@ -1,6 +1,6 @@
 #pragma once
 
-// Running one engine call as if player 2 were the primary player.
+// Running one engine call as if a further player (a seat, players/seats.h) were the primary player.
 //
 // Square's party manager holds one "primary" player controller (+0x140, an FWeakObjectPtr), and a
 // large part of the game's camera and party code asks it for "the" player: the camera update reads
@@ -8,13 +8,16 @@
 // party-member switch writes two bytes to "the" controller. Called for player 2, that code would
 // read and write player 1's objects.
 //
-// A Scope points the field at player 2's controller for its lifetime and puts player 1's back
+// A Scope points the field at its seat's controller for its lifetime and puts player 1's back
 // afterwards (player_two/scopes/swap_window.h). It opens only if the field names player 1's controller
-// when it starts, and it restores only if the field still names player 2's when it ends; if the
-// engine wrote the field in between, that newer value is kept and the player-2 generation is
-// faulted, because the mod no longer knows who the primary player is.
+// when it starts (or the seat's, for a scope inside the seat's own), and it restores only if the field
+// still names the seat's when it ends; if the engine wrote the field in between, that newer value is
+// kept and every seat's generation is faulted, because the mod no longer knows who the primary player
+// is. Seats swap in turn, never one inside another's: a scope for one seat inside another seat's is
+// refused (NotPlayerOne).
 
 #include "player_two/scopes/swap_window.h"
+#include "players/seats.h"
 
 #include <cstdint>
 
@@ -29,10 +32,10 @@ bool Install(const platform::GameImage& image) noexcept;
 
 bool Installed() noexcept;
 
-/// Prepares scopes for these two controllers. False if player 2's weak value cannot be built.
-bool Bind(void* playerOneController, void* playerTwoController) noexcept;
+/// Prepares `seat`'s scopes for player 1's controller and the seat's. False if the seat's weak value cannot be built.
+bool Bind(int seat, void* playerOneController, void* controller) noexcept;
 
-void Unbind() noexcept;
+void Unbind(int seat) noexcept;
 
 /// The engine's FWeakObjectPtr value {ObjectIndex, SerialNumber} for `object`, made by the game's
 /// own FWeakObjectPtr::operator= (which gives the object a serial number if it has none), and
@@ -53,18 +56,19 @@ public:
         None,
         NotBound,
         NoPartyManager,
-        PlayerTwoStale,     // player 2's controller is no longer the object the weak value named
-        NotPlayerOne,       // the field named neither player
+        PlayerTwoStale,     // the seat's controller is no longer the object the weak value named
+        NotPlayerOne,       // the field named neither player 1 nor the seat (another seat's scope is open)
         Changed,            // the field changed between the check and the swap
         Misaligned,         // the field cannot be written atomically
     };
 
-    Scope() noexcept;
+    /// `seat`'s player as the primary player (players::kPlayerTwoSeat for a module not yet per seat).
+    explicit Scope(int seat) noexcept;
     ~Scope();
     Scope(const Scope&)            = delete;
     Scope& operator=(const Scope&) = delete;
 
-    /// True while the primary controller is player 2's (swapped here or by an enclosing scope).
+    /// True while the primary controller is the seat's (swapped here or by an enclosing scope).
     bool Held() const noexcept { return refusal_ == Refusal::None; }
     Refusal Why() const noexcept { return refusal_; }
 

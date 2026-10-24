@@ -1,38 +1,45 @@
 #pragma once
 
-// Player 2 as their own player: join, party member, camera, and leave, in that order.
+// The further players as their own players: join, party member, camera, and leave, in that order, per seat
+// (players/seats.h; seat 1 is player 2). A Seat is one player's record and its stages; the Session holds the built
+// seats, installs the stages once, hears the game's party funnels once and hands each event to every seat in turn.
 //
-//   join     CreatePlayer with player 2's own controller (player_two/session/own_controller.h makes its
+//   join     CreatePlayer with the seat's own controller (player_two/session/own_controller.h makes its
 //            camera manager's BeginPlay safe).
-//   member   once player 1's controller has settled after the join, player 2 takes the member in the
-//            2nd slot of the game's party order (player_two/session/party_member.h ChooseSlot), and success is
-//            read from the lease fields over the following ticks. While that member is not free (a story
-//            script holds its AI, or it is not following the party), player 2 stays in and waits on it;
-//            a menu reorder changes the slot. A script putting player 2's member into LEAD gets it back.
-//   camera   right after the join, player 2's camera manager is pointed at its own camera actor
+//   member   once player 1's controller has settled after the join, the seat takes the member in its slot of the
+//            game's party order (player 2 the 2nd, player 3 the 3rd: player_two/session/party_member.h ChooseSlot),
+//            and success is read from the lease fields over the following ticks. While that member is not free (a
+//            story script holds its AI, or it is not following the party), the seat stays in and waits on it;
+//            a menu reorder changes the slot. A script putting the seat's member into LEAD gets it back.
+//   camera   right after the join, the seat's camera manager is pointed at its own camera actor
 //            (player_two/camera/view_target.h), as the game's own spawn aimed it; a later move is logged,
 //            never re-aimed (no game code moves it). When the member is taken, player 2's
 //            Field camera is brought to player 1's settings and player 2's camera update starts
 //            running as the primary player's (player_two/camera/field_camera.h).
-//   movement with per-pad sticks on, the member's move state is ticked with player 2's pad
+//   movement with per-pad sticks on, the member's move state is ticked with the seat's pad
 //            (player_two/input/member_movement.h).
 //   leave    the member is given back first and awaited, then the leftover actors are destroyed
-//            and player 2 removed in one step (player_two/session/leave_sequence.h).
+//            and the seat's player removed in one step (player_two/session/leave_sequence.h).
 //   party    the game's party funnels are heard (player_two/session/party_events.h): before the game makes
-//            player 2's member player 1's leader, player 2 gives it back; after a status change, a
+//            the seat's member player 1's leader, the seat gives it back; after a status change, a
 //            member out of the deployed or battle party is given back and another chosen; after a party
-//            apply, a member no longer in the 2nd slot is given back and the slot's taken. A slow
+//            apply, a member no longer in the seat's slot is given back and the slot's taken. A slow
 //            check backs both up (story override party data passes neither funnel), and the battle
-//            controller component is checked every few ticks. A downed member stays player 2's.
-//   no member with none free (player 1's character alone in a story party), player 2 does not exist:
-//            a join creates nothing, and a player 2 whose member went leaves. The mod is then as
-//            with one player, and player 2 joins once the game's party changes free a member (a
+//            controller component is checked every few ticks. A downed member stays the seat's.
+//   no member with none free (player 1's character alone in a story party), the seat's player does not exist:
+//            a join creates nothing, and a seat whose member went leaves. The mod is then as
+//            with one player, and the seat joins once the game's party changes free a member (a
 //            slow check backs the funnels up). Ctrl+F8 stops the wait.
-//   map load player 2 leaves before it, and joins again once the new map is in the field state
+//   map load every seat leaves before it (the last first), and joins again once the new map is in the field state
 //            and player 1's camera is ready.
 // Each stage is installed only if its engine checks pass; a stage that is not installed is
-// skipped, and the ones before it still work. The session installs its own stages only; player 2's other
+// skipped, and the ones before it still work. The session installs its own stages only; the other
 // modules are installed by mod.cpp next to their siblings.
+//
+// The modules a Seat calls that are not per seat yet (the camera seeds, the command controller, member movement, the
+// rides, the camera override's destroyed member) are player 2's; only the built seats exist (kSeatsBuilt), and step 3
+// of plan/seats.md moves those modules per seat. The log lines still say "player 2": seat 2's name them when it is
+// wired (step 6).
 //
 // Game thread only, outside Draw.
 
@@ -41,9 +48,12 @@
 #include "player_two/session/party_member.h"
 #include "platform/dev_switch.h"
 #include "players/local_players.h"
+#include "players/seats.h"
 
+#include <array>
 #include <chrono>
 #include <cstdint>
+#include <optional>
 #include <string>
 
 namespace lss::platform {
@@ -52,75 +62,92 @@ class GameImage;
 
 namespace lss::player_two {
 
-class Session
+/// The stages the session installed, which every seat reads.
+struct SessionStages
+{
+    bool ownController  = false;
+    bool primary        = false;
+    bool member         = false;
+    bool fieldSettings  = false;
+    bool moveTicks      = false;  // the game's move-state ticks recorded (member movement runs on them)
+    bool padSticks      = false;
+    bool viewTarget     = false;
+    bool memberMovement = false;
+    bool partyEvents    = false;
+};
+
+/// One seat's player: its local player, its member, its leave, and its wait outside the game.
+class Seat
 {
 public:
-    explicit Session(std::uintptr_t removeLocalPlayer) noexcept : players_(removeLocalPlayer) {}
+    /// `refuseJoins` is the session's: a join that raised an exception refuses every later join.
+    Seat(int seat, std::uintptr_t removeLocalPlayer, const SessionStages& installed, bool& refuseJoins) noexcept
+        : seat_(seat), players_(removeLocalPlayer, seat), installed_(installed), refuseJoins_(refuseJoins)
+    {
+    }
+    Seat(const Seat&)            = delete;
+    Seat& operator=(const Seat&) = delete;
 
-    /// Installs every stage whose checks pass, and logs which. Call once at startup.
-    void InstallStages(const platform::GameImage& image) noexcept;
+    int Number() const noexcept { return seat_; }
 
-    /// Puts every replaced slot back (at mod uninstall, with player 2 out).
-    void RemoveStages() noexcept;
-
-    /// Adds player 2, or, with no party member free for it, waits outside the game for one.
+    /// Adds the seat's player, or, with no party member free for it, waits outside the game for one.
     void Join() noexcept;
 
     /// Starts a leave; it completes over the following ticks. Also stops a wait for a party member.
     void Leave() noexcept;
 
-    /// Player 2 was asked for but is out until a party member is free for it.
+    /// The seat's player was asked for but is out until a party member is free for it.
     bool AwaitingMember() const noexcept { return outside_.Current() == outside_join::Mode::Await; }
 
-    /// A map is about to load: player 2 leaves now, without waiting for the member's release.
-    /// Returns true if player 2 is out.
+    /// A map is about to load: the seat's player leaves now, without waiting for the member's release.
+    /// Returns true if it is out.
     bool LeaveNow() noexcept;
 
-    /// Once per tick.
+    /// Once per tick, after the session's shared work.
     void Tick() noexcept;
 
-    /// The periodic status line (every few seconds while player 2 is in).
+    /// The seat's lines of the periodic status (the session adds the shared modules' after every seat's).
     void LogStatus() noexcept;
 
-    /// Switches per-pad sticks (player_two/input/pad_sticks.h), and with them player 2's movement, and logs
-    /// the new state.
-    void TogglePadSticks() noexcept;
+    bool In() const noexcept { return players_.HasPlayer(); }
 
-    bool HasPlayerTwo() const noexcept { return players_.HasPlayer(); }
-
-    /// Player 2 is in, past the take, and drives a party member.
+    /// In, past the take, and driving a party member.
     bool PlaysMember() const noexcept;
 
-    /// Player 2 is in without a member, waiting on the 2nd slot's (a story script holds it, or it is not
-    /// free yet). Only player 1 plays meanwhile, so the screen shows player 1's single view.
+    /// In without a member, waiting on its slot's (a story script holds it, or it is not free yet). Only player 1
+    /// plays meanwhile, so the screen shows player 1's single view.
     bool WaitsForMember() const noexcept
     {
-        return HasPlayerTwo() && phase_ == Phase::Playing && member_ == nullptr && waitingForSlot_;
+        return In() && phase_ == Phase::Playing && member_ == nullptr && waitingForSlot_;
     }
 
     /// Player 1 rides a vehicle the whole party shares (the buggy or the bronco, player_two/rides/shared_ride.h), each
-    /// tick. While it
-    /// holds, player 2 gives the member back through the game's release and stays in without one, as the party is
-    /// in the one-player game; once it ends, player 2 takes the 2nd slot's member again. Logged on change.
+    /// tick. While it holds, the seat gives the member back through the game's release and stays in without one, as
+    /// the party is in the one-player game; once it ends, the seat takes its slot's member again. Logged on change.
     void SetSharedRide(bool on) noexcept;
 
-    /// Player 2 is in and stands aside for a shared ride (only player 1 plays: player 1's single view).
-    bool StandsAside() const noexcept { return HasPlayerTwo() && sharedRide_; }
+    /// In and standing aside for a shared ride (only player 1 plays: player 1's single view).
+    bool StandsAside() const noexcept { return In() && sharedRide_; }
 
-    /// Player 2's and player 1's ULocalPlayer (null when player 2 is out).
-    const void* PlayerTwo() const noexcept { return players_.Player(); }
+    /// The seat's and player 1's ULocalPlayer (null while the seat is out).
+    const void* LocalPlayer() const noexcept { return players_.Player(); }
     const void* PlayerOne() const noexcept { return playerOne_; }
 
     std::uint32_t JoinCount() const noexcept { return players_.JoinCount(); }
+
+    // The game's party funnels (player_two/session/party_events.h), heard by the session and handed to each seat.
+    void OnLeaderChanging(void* controller, void* character) noexcept;
+    void OnStatusChanged(std::uint8_t playerType, std::uint8_t before, std::uint8_t after) noexcept;
+    void OnPartyApplied() noexcept;
 
 private:
     enum class Phase
     {
         Out,
         SettlingPlayerOne,  // waiting for player 1's controller to name its pawn and leader again
-        Taking,             // the switch was called; waiting for the lease to show player 2
+        Taking,             // the switch was called; waiting for the lease to show the seat
         Playing,
-        Swapping,           // player 2's member stopped being playable: given back, then chosen again
+        Swapping,           // the seat's member stopped being playable: given back, then chosen again
         Leaving,
     };
 
@@ -152,53 +179,108 @@ private:
     void Yield(const wchar_t* why) noexcept;
     bool MemberHeld() const noexcept;  // taking or playing a member
     void EventLine(const std::wstring& text) noexcept;
-    void OnLeaderChanging(void* controller, void* character) noexcept;
-    void OnStatusChanged(std::uint8_t playerType, std::uint8_t before, std::uint8_t after) noexcept;
-    void OnPartyApplied() noexcept;
     void CheckAfterPartyChange(bool followSlot) noexcept;
     void FollowSlot(const wchar_t* when, bool log) noexcept;  // log: the slot's verdict as an Info line
     void WaitForSlot(const party_member::SlotChoice& choice) noexcept;
     void CheckHeldAi() noexcept;
 
+    const int             seat_;
     players::LocalPlayers players_;
+    const SessionStages&  installed_;
+    bool&                 refuseJoins_;                 // the session's: after an exception during a join
     LeaveSequence         leave_;
     Phase                 phase_            = Phase::Out;
     void*                 playerOne_        = nullptr;  // player 1's ULocalPlayer
     void*                 playerOneController_ = nullptr;
-    void*                 playerTwoController_ = nullptr;
-    void*                 member_           = nullptr;  // the member player 2 took (or was taking)
+    void*                 controller_          = nullptr;  // the seat's controller
+    void*                 member_           = nullptr;  // the member the seat took (or was taking)
     std::uint64_t         memberWeak_       = 0;        // its FWeakObjectPtr, to see it destroyed
     std::uint32_t         ticks_            = 0;        // in the current phase
     std::uint32_t         retakeLooks_      = 0;        // ticks left to look for a free member after a party change
     std::uint32_t         eventLines_       = 0;        // party-event lines logged
-    std::uint32_t         viewTargetResets_ = 0;        // times player 2's view was found moved off its camera
+    std::uint32_t         viewTargetResets_ = 0;        // times the seat's view was found moved off its camera
     bool                  viewOnOwnCamera_  = true;     // as last seen (a move is logged once per move)
     bool                  gateClosedLogged_ = false;
-    bool                  refuseJoins_      = false;    // after an exception during a join
     outside_join::OutsideJoin outside_;                 // out: the rejoin after a map load, or the wait for a member
-    bool                  waitingForSlot_   = false;    // in, without a member: the 2nd slot's is not free yet
+    bool                  waitingForSlot_   = false;    // in, without a member: the slot's is not free yet
     std::uint32_t         slotWaitLogged_   = 0;        // the wait's reason as last logged (logged on change)
-    bool                  sharedRide_       = false;    // player 1 rides a shared vehicle: player 2 takes no member
+    bool                  sharedRide_       = false;    // player 1 rides a shared vehicle: the seat takes no member
 
     party_member::PlayerOneBytes playerOneBytes_{};
+};
 
-    struct Installed
-    {
-        bool ownController  = false;
-        bool primary        = false;
-        bool member         = false;
-        bool fieldSettings  = false;
-        bool moveTicks      = false;  // the game's move-state ticks recorded (member movement runs on them)
-        bool padSticks      = false;
-        bool viewTarget     = false;
-        bool memberMovement = false;
-        bool partyEvents    = false;
-    } installed_;
+class Session
+{
+public:
+    explicit Session(std::uintptr_t removeLocalPlayer) noexcept;
+    Session(const Session&)            = delete;  // the seats hold references into it
+    Session& operator=(const Session&) = delete;
+
+    /// Installs every stage whose checks pass, and logs which. Call once at startup.
+    void InstallStages(const platform::GameImage& image) noexcept;
+
+    /// Puts every replaced slot back (at mod uninstall, with every seat out).
+    void RemoveStages() noexcept;
+
+    /// Adds `seat`'s player (Seat::Join); nothing for a seat not built.
+    void Join(int seat) noexcept;
+
+    /// Starts `seat`'s leave (Seat::Leave); nothing for a seat not built.
+    void Leave(int seat) noexcept;
+
+    /// A map is about to load: every seat leaves now, the last first. True if every seat is out.
+    bool LeaveNow() noexcept;
+
+    /// Once per tick: the shared work, then every seat's.
+    void Tick() noexcept;
+
+    /// The periodic status lines (every few seconds while a seat is in): each seat's, then the shared modules'.
+    void LogStatus() noexcept;
+
+    /// Switches per-pad sticks (player_two/input/pad_sticks.h), and with them the seats' movement, and logs the new
+    /// state.
+    void TogglePadSticks() noexcept;
+
+    /// Player 1 rides a vehicle the whole party shares, each tick: every seat stands aside together.
+    void SetSharedRide(bool on) noexcept;
+
+    bool          In(int seat) const noexcept;
+    bool          AnyIn() const noexcept;
+    bool          AwaitingMember(int seat) const noexcept;
+    bool          PlaysMember(int seat) const noexcept;
+    bool          WaitsForMember(int seat) const noexcept;
+    bool          StandsAside(int seat) const noexcept;
+    const void*   LocalPlayer(int seat) const noexcept;  // null while out
+    std::uint32_t JoinCount(int seat) const noexcept;
+
+    // ---- player 2's, by the names the callers not yet per seat use ----
+    bool          HasPlayerTwo() const noexcept { return In(players::kPlayerTwoSeat); }
+    bool          AwaitingMember() const noexcept { return AwaitingMember(players::kPlayerTwoSeat); }
+    bool          PlaysMember() const noexcept { return PlaysMember(players::kPlayerTwoSeat); }
+    bool          WaitsForMember() const noexcept { return WaitsForMember(players::kPlayerTwoSeat); }
+    bool          StandsAside() const noexcept { return StandsAside(players::kPlayerTwoSeat); }
+    const void*   PlayerTwo() const noexcept { return LocalPlayer(players::kPlayerTwoSeat); }
+    std::uint32_t JoinCount() const noexcept { return JoinCount(players::kPlayerTwoSeat); }
+    /// Player 1's ULocalPlayer as player 2's join recorded it (null while player 2 is out).
+    const void*   PlayerOne() const noexcept;
+
+private:
+    Seat*       At(int seat) noexcept;
+    const Seat* At(int seat) const noexcept;
+
+    void OnLeaderChanging(void* controller, void* character) noexcept;
+    void OnStatusChanged(std::uint8_t playerType, std::uint8_t before, std::uint8_t after) noexcept;
+    void OnPartyApplied() noexcept;
+
+    SessionStages installed_;
+    bool          refuseJoins_ = false;  // after an exception during any seat's join
+    std::array<std::optional<Seat>, players::kMaxPlayers> seats_;  // the built seats; index 0 (player 1) unused
 };
 
 #if LSS_DEV
 /// The session's control commands: join, sticks, p2.log-status and the readings p2.in and p2.state (out, awaiting,
-/// in, playing). The leave is the module table's (modules.h: it takes the third view first). Before the console opens.
+/// in, playing), player 2's. The leave is the module table's (modules.h: it takes the third view first). Before the
+/// console opens.
 void RegisterCommands(Session& session);
 #endif
 

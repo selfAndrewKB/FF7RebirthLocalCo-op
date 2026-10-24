@@ -68,7 +68,7 @@ platform::CallRedirect g_summonCall;
 std::atomic<unsigned> g_mask{kAllFixes};
 
 // Game thread.
-void* g_memberState = nullptr;  // player 2's member's state, inside the mod's tick only
+void* g_memberState = nullptr;  // the ticked seat's member's state, inside the mod's tick only
 
 struct Counts
 {
@@ -90,9 +90,11 @@ bool Acts(unsigned fix) noexcept
 /// The fixes whose facts did not hold at install, for the status line ("" if none).
 const wchar_t* Unavailable() noexcept;
 
+/// A further player's generation is active, on the game thread. The scopes below never nest, so the seats' ticks and
+/// inputs, run in turn, each save and put back the shared state alone, and g_memberState holds the one ticking.
 bool InPlayerTwoScope() noexcept
 {
-    return generation::OnGameThread() && generation::Active();
+    return generation::OnGameThread() && generation::AnyActive();
 }
 
 void SummonBody(void* state, float deltaTime) noexcept

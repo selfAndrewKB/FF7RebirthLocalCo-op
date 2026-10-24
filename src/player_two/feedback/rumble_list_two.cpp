@@ -203,7 +203,7 @@ void TickTwo(void* list, float dt) noexcept
     g_counts.ticksTwo.fetch_add(1, std::memory_order_relaxed);
     if (changed)
     {
-        const primary_controller::Scope primary;  // already held inside player 2's scopes
+        const primary_controller::Scope primary(players::kPlayerTwoSeat);  // already held inside player 2's scopes
         if (primary.Held())
         {
             g_apply(list, &set);
@@ -416,7 +416,7 @@ void DropList(const wchar_t* why) noexcept
     bool stopped = false;
     if (generation::Active())
     {
-        const primary_controller::Scope primary;
+        const primary_controller::Scope primary(players::kPlayerTwoSeat);
         if (primary.Held())
         {
             ChannelSet none;

@@ -384,7 +384,9 @@ void Remove() noexcept
 void TickBeforeSession() noexcept
 {
     // The tick's identities (the member's and player 1's pawn's weaks, the driven chocobo) before any module's.
-    player_two::generation::BeginTick(player_two::chocobo_ride::DrivenChocobo());
+    // The driven chocobo by seat: player 2's until chocobo_ride is per seat (plan/seats.md step 3).
+    const void* const chocobos[players::kMaxPlayers] = {nullptr, player_two::chocobo_ride::DrivenChocobo()};
+    player_two::generation::BeginTick(chocobos);
     player_two::pad_rumble::BeforeTick();    // before the world tick: player 2's controller ordered after player 1's
     player_two::combat_rumble::BeforeTick();  // outside every notify: their call sites; the status line
     player_two::rumble_list_two::Tick();      // player 2's list made at join (dropped if player 2 left another way)
@@ -409,8 +411,10 @@ void TickBeforeSession() noexcept
 
 void TickAfterSession(const Frame& frame) noexcept
 {
-    views::third_view::Tick(frame.playerTwoIn);   // leaves with player 2; follows player 1's view target
-    views::window_span::Tick(frame.playerTwoIn);  // leaves with player 2; holds the window's rect
+    // The modules below are player 2's until they are per seat or per column (plan/seats.md steps 3 to 5).
+    const Frame::Seat& two = frame.seats[players::kPlayerTwoSeat];
+    views::third_view::Tick(two.in);   // leaves with player 2; follows player 1's view target
+    views::window_span::Tick(two.in);  // leaves with player 2; holds the window's rect
     player_two::walk_limits::Tick();  // after the session's tick: a take's copy is overwritten this frame
     player_two::nav_strand::Tick(frame.splitShown);  // a stranded player 2 is warped back to the party
     player_two::camera_repair::Tick();
@@ -423,25 +427,25 @@ void TickAfterSession(const Frame& frame) noexcept
     player_two::move_type_two::Tick();     // player 2's deferred walk-cap clear, the layer-2 watch
     player_two::vault_camera::Tick();      // player 2's vault cameras end on player 2's camera (lever L2)
     player_two::chocobo_climb::Tick();     // player 2's climb camera's states and the summary (Debug)
-    player_two::camera_distance::TickFraming(frame.playerTwoIn);  // per-layout distance steps (roadmap 2b)
+    player_two::camera_distance::TickFraming(two.in);  // per-layout distance steps (roadmap 2b)
     player_two::shoulder_scale::Poll(frame.splitShown, views::SplitWidthRatio(false), views::SplitWidthRatio(true));
     player_two::anim_two_views::Tick(frame.splitShown);  // its frame count, before the world tick
-    player_two::charapop_near::Tick(frame.splitShown, frame.playsMember);
-    player_two::charapop_centre::Tick(frame.splitShown, frame.playsMember);
-    player_two::world_actor_reach::Tick(frame.playsMember);
+    player_two::charapop_near::Tick(frame.splitShown, two.playsMember);
+    player_two::charapop_centre::Tick(frame.splitShown, two.playsMember);
+    player_two::world_actor_reach::Tick(two.playsMember);
     hud::minimap::Tick(frame.splitShown);  // outside the overlay render, before it
     views::UpdateStreamViews(frame.splitShown);  // nothing until whole_screen's game-state check passed
     // Filled halves: each main camera's own 16:9 constraint, cleared once by the game's setter. FillsHalves is
     // false without the view-point entry (nothing shapes the halves then), so the cameras keep their constraint.
     player_two::main_camera_shape::Update(player_two::generation::Active() && frame.splitShown &&
                                           views::FillsHalves());
-    renderer::FollowPlayerTwo(frame.playerTwoIn);  // the submit hints skipped while player 2 is in
+    renderer::FollowPlayerTwo(two.in);  // the submit hints skipped while player 2 is in
 }
 
 void LeavePlayerTwo(player_two::Session& session, const wchar_t* why) noexcept
 {
     views::third_view::Remove(why);
-    session.Leave();
+    session.Leave(players::kPlayerTwoSeat);
 }
 
 Result SetOwnCamera(const player_two::Session& session, bool on) noexcept

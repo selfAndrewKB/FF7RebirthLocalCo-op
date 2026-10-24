@@ -3,6 +3,7 @@
 #include "facts/party.h"
 #include "platform/image.h"
 #include "platform/verified_code.h"
+#include "players/seats.h"
 #include "player_two/generation.h"
 #include "player_two/weak_object.h"
 
@@ -21,10 +22,14 @@ namespace {
 // Set once at install.
 void* const* g_partyManager = nullptr;  // the global that holds the party manager
 
-// Game thread: set by Bind.
-void*                    g_playerOne = nullptr;
-void*                    g_playerTwo = nullptr;
-alignas(8) std::uint64_t g_playerTwoWeak = 0;
+// Game thread: set by Bind, per seat (index 0 unused).
+struct Bound
+{
+    void*                    playerOne  = nullptr;
+    void*                    controller = nullptr;
+    alignas(8) std::uint64_t weak       = 0;
+};
+Bound g_bound[players::kMaxPlayers];
 
 std::uint64_t* PrimaryField() noexcept
 {
@@ -50,29 +55,28 @@ bool Installed() noexcept
     return g_partyManager != nullptr;
 }
 
-bool Bind(void* playerOneController, void* playerTwoController) noexcept
+bool Bind(int seat, void* playerOneController, void* controller) noexcept
 {
-    Unbind();
-    if (!Installed() || playerOneController == nullptr || playerTwoController == nullptr)
+    Unbind(seat);
+    if (!players::SeatIndex(seat) || !Installed() || playerOneController == nullptr || controller == nullptr)
     {
         return false;
     }
-    const std::uint64_t weak = weak_object::WeakOf(playerTwoController);
+    const std::uint64_t weak = weak_object::WeakOf(controller);
     if (weak == 0)
     {
         return false;
     }
-    g_playerTwoWeak = weak;
-    g_playerOne     = playerOneController;
-    g_playerTwo     = playerTwoController;
+    g_bound[seat] = {playerOneController, controller, weak};
     return true;
 }
 
-void Unbind() noexcept
+void Unbind(int seat) noexcept
 {
-    g_playerOne     = nullptr;
-    g_playerTwo     = nullptr;
-    g_playerTwoWeak = 0;
+    if (players::SeatIndex(seat))
+    {
+        g_bound[seat] = {};
+    }
 }
 
 std::uint64_t WeakValueOf(void* object) noexcept
@@ -91,30 +95,31 @@ void* Current() noexcept
     return weak_object::ObjectAt(field);
 }
 
-Scope::Scope() noexcept
+Scope::Scope(int seat) noexcept
 {
-    if (g_playerTwo == nullptr)
+    if (!players::SeatIndex(seat) || g_bound[seat].controller == nullptr)
     {
         return;  // refusal_ stays NotBound
     }
+    Bound&         bound = g_bound[seat];
     std::uint64_t* field = PrimaryField();
     if (field == nullptr)
     {
         refusal_ = Refusal::NoPartyManager;
         return;
     }
-    if (weak_object::ObjectAt(&g_playerTwoWeak) != g_playerTwo)
+    if (weak_object::ObjectAt(&bound.weak) != bound.controller)
     {
         refusal_ = Refusal::PlayerTwoStale;
         return;
     }
     const std::uint64_t current = std::atomic_ref<std::uint64_t>(*field).load();
-    if (current != g_playerTwoWeak && weak_object::ObjectAt(field) != g_playerOne)
+    if (current != bound.weak && weak_object::ObjectAt(field) != bound.playerOne)
     {
         refusal_ = Refusal::NotPlayerOne;
         return;
     }
-    switch (window_.Open(field, current, g_playerTwoWeak))
+    switch (window_.Open(field, current, bound.weak))
     {
         case SwapWindow::Opened::Swapped:
         case SwapWindow::Opened::AlreadyHeld: refusal_ = Refusal::None; break;
@@ -127,7 +132,7 @@ Scope::~Scope()
 {
     if (!window_.Close())
     {
-        generation::Fault(L"the party manager's primary controller changed while it named player 2");
+        generation::Fault(L"the party manager's primary controller changed while it named a further player");
     }
 }
 
@@ -136,10 +141,10 @@ const wchar_t* Describe(Scope::Refusal refusal) noexcept
     switch (refusal)
     {
         case Scope::Refusal::None: return L"held";
-        case Scope::Refusal::NotBound: return L"not bound to player 2";
+        case Scope::Refusal::NotBound: return L"not bound to the seat";
         case Scope::Refusal::NoPartyManager: return L"no party manager";
-        case Scope::Refusal::PlayerTwoStale: return L"player 2's controller is gone";
-        case Scope::Refusal::NotPlayerOne: return L"the primary controller is not player 1's";
+        case Scope::Refusal::PlayerTwoStale: return L"the seat's controller is gone";
+        case Scope::Refusal::NotPlayerOne: return L"the primary controller is neither player 1's nor the seat's";
         case Scope::Refusal::Changed: return L"the primary controller changed at the swap";
         case Scope::Refusal::Misaligned: return L"the primary-controller field is misaligned";
     }

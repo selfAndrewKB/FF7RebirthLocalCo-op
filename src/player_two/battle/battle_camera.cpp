@@ -90,7 +90,7 @@ bool CallGuarded(StateFn engine, void* battle, float blendTime, bool flag) noexc
 /// The engine's call on player 2's operator, with player 2 as the primary controller.
 void OnPlayerTwo(StateFn engine, void* battle, float blendTime, bool flag)
 {
-    const primary_controller::Scope scope;
+    const primary_controller::Scope scope(players::kPlayerTwoSeat);
     const bool                      ok = CallGuarded(engine, battle, blendTime, flag);
     platform::Log(L"battle camera: player 2's Battle operator {} (primary scope {}); active now {}{}",
                   engine == g_engineActivate ? L"activated" : L"deactivated", scope.Held() ? L"held" : L"REFUSED",

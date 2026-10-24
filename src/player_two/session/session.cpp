@@ -1,4 +1,4 @@
-// Session: player 2's party member, the leave, and the status line.
+// Session: a seat's party member, the leave, and the status line; the session's seats and shared tick.
 
 #include "player_two/session/session.h"
 
@@ -10,14 +10,11 @@
 #include "player_two/battle/command_menu_two.h"
 #include "player_two/battle/command_menu_view.h"
 #include "player_two/battle/command_rules.h"
-#include "player_two/battle/lock_on.h"
 #include "player_two/battle/menu_focus.h"
 #include "player_two/camera/camera_override.h"
 #include "player_two/camera/field_camera.h"
 #include "player_two/camera/view_target.h"
 #include "player_two/describe.h"
-#include "player_two/feedback/ffb_manager_two.h"
-#include "player_two/feedback/rumble_list_two.h"
 #include "player_two/generation.h"
 #include "player_two/input/member_movement.h"
 #include "player_two/input/move_census.h"
@@ -35,14 +32,17 @@
 #include "player_two/session/leave_watch.h"
 #include "player_two/session/leftover_actors.h"
 #include "player_two/session/own_controller.h"
+#include "player_two/session/seat_out.h"
 #include "player_two/session/session_rules.h"
 #include "player_two/session/tag_counts.h"
+#include "players/seats.h"
 
 #if LSS_DEV
 #include "platform/command_registry.h"
 #endif
 
 #include <chrono>
+#include <cstddef>
 #include <format>
 #include <optional>
 #include <string>
@@ -52,6 +52,11 @@ namespace lss::player_two {
 namespace {
 
 using platform::Log;
+
+// A Seat calls modules that are still player 2's (own_ride, the camera seeds and the destroyed member's camera
+// override, member_movement under player 2's primary scope, handover_watch; command_menu_two is gated): raising the
+// built seats waits for them to take the seat (plan/seats.md step 3).
+static_assert(players::kSeatsBuilt == 1, "a Seat still calls player 2's modules: see above");
 
 /// Ticks player 1's controller is watched after a join (it has been seen to name no pawn for one).
 constexpr std::uint32_t kPlayerOneWatchTicks = 3;
@@ -104,7 +109,7 @@ void Session::TogglePadSticks() noexcept
     }
 }
 
-void Session::LogTagCounts(const wchar_t* when) noexcept
+void Seat::LogTagCounts(const wchar_t* when) noexcept
 {
     if (!tag_counts::Installed() || !platform::Enabled(platform::Level::Debug))
     {
@@ -118,13 +123,9 @@ void Session::LogTagCounts(const wchar_t* when) noexcept
         text(counts.trigger));
 }
 
-void Session::Tick() noexcept
+void Seat::Tick() noexcept
 {
-    generation::SetGameThread();  // the engine-tick callback runs on the thread that ticks the world
-    platform::game_thread_sites::Run();  // the 1.005 placements (platform/deferred_sites.h), outside the game's ticks
-    command_rules::Update();      // which member player 1 may not command (none without player 2)
-    command_menu_view::KeepHidden();  // player 2's menu widget stays out of both halves
-    if (!HasPlayerTwo())
+    if (!In())
     {
         OutsideTick();  // the rejoin after a map load, or the wait for a free party member
         return;
@@ -136,7 +137,6 @@ void Session::Tick() noexcept
         return;
     }
     ++ticks_;
-    menu_focus::Watch();  // player 1's UI focus, logged on change (read-only)
     if (MemberDestroyed())  // every phase: the take, the swap and the leave read the member too
     {
         return;
@@ -150,34 +150,37 @@ void Session::Tick() noexcept
             // Before the member tick: the tick's scopes answer the party leader with player 2's member
             // (player_two/scopes/leader_scope.h), which CheckMemberPlayable's leader test must not see.
             RetakeWhenFree();
-            if (!HasPlayerTwo())
+            if (!In())
             {
                 break;  // left to wait for a free member
             }
             CheckMemberPlayable();
-            command_menu_two::Tick();  // player 2's command controller, built and set up per world
-            if (phase_ == Phase::Playing && installed_.memberMovement && generation::Member() != nullptr)
+            if (seat_ == players::kPlayerTwoSeat)
             {
-                member_movement::Tick(playerTwoController_, generation::Member());
+                command_menu_two::Tick();  // player 2's command controller, built and set up per world
+            }
+            if (phase_ == Phase::Playing && installed_.memberMovement && generation::MemberOf(seat_) != nullptr)
+            {
+                member_movement::Tick(controller_, generation::MemberOf(seat_));
             }
             break;
         case Phase::Swapping: AwaitSwap(); break;
         case Phase::Out: break;
     }
-    if (phase_ != Phase::Leaving && phase_ != Phase::Out && generation::Active())
+    if (phase_ != Phase::Leaving && phase_ != Phase::Out && generation::Active(seat_))
     {
         WatchOwnCamera();
     }
 }
 
-void Session::WatchOwnCamera() noexcept
+void Seat::WatchOwnCamera() noexcept
 {
     // Watch only (RE-p2-session-levers.md §2): the game writes player 2's view target once, at spawn
     // (InitializeFor; the join repeats that aim once), and no game code retargets a second player's
     // controller afterwards, so nothing re-aims it here. A move off its camera actor is logged, one
     // line per move for the first few; later ones are only counted on the status line.
     constexpr std::uint32_t kLoggedMoves = 3;
-    const bool              own          = !installed_.viewTarget || view_target::OnOwnCamera(playerTwoController_);
+    const bool              own          = !installed_.viewTarget || view_target::OnOwnCamera(controller_);
     if (own || !viewOnOwnCamera_)
     {
         viewOnOwnCamera_ = own;
@@ -188,18 +191,18 @@ void Session::WatchOwnCamera() noexcept
     if (viewTargetResets_ <= kLoggedMoves)
     {
         Log(L"WARNING: player 2's camera manager now views {}, not its camera actor (the game moved it; not re-aimed)",
-            NameOf(view_target::Current(playerTwoController_)));
+            NameOf(view_target::Current(controller_)));
     }
 }
 
-void Session::LogPlayerOneAfterJoin() noexcept
+void Seat::LogPlayerOneAfterJoin() noexcept
 {
     platform::LogDebug(L"after the join, tick {}: player 1's pawn {} and leader {}", ticks_,
         NameOf(ReadPointer(playerOneController_, facts::kControllerPawn)),
         NameOf(ReadPointer(playerOneController_, facts::kControllerLeader)));
 }
 
-void Session::Settle() noexcept
+void Seat::Settle() noexcept
 {
     if (ticks_ <= kPlayerOneWatchTicks)
     {
@@ -212,12 +215,12 @@ void Session::Settle() noexcept
     {
         return;
     }
-    if (!installed_.member || !generation::Active())
+    if (!installed_.member || !generation::Active(seat_))
     {
         Log(L"player 2 has its own controller; no party member is taken ({})",
-            !installed_.member                   ? L"the party-member stage is not installed"
-            : generation::FaultReason() != nullptr ? generation::FaultReason()
-                                                   : L"player 2's stages were withdrawn");
+            !installed_.member                          ? L"the party-member stage is not installed"
+            : generation::FaultReason(seat_) != nullptr ? generation::FaultReason(seat_)
+                                                        : L"player 2's stages were withdrawn");
         phase_ = Phase::Playing;
         return;
     }
@@ -238,7 +241,7 @@ void Session::Settle() noexcept
         return;
     }
     handover_watch::PartyOrder(L"choosing player 2's member", nullptr);
-    const auto choice = party_member::ChooseSlot(playerOneController_);
+    const auto choice = party_member::ChooseSlot(seat_, playerOneController_);
     member_           = choice.member;
     if (choice.wait == party_member::SlotWait::NoSlot)
     {
@@ -256,7 +259,7 @@ void Session::Settle() noexcept
     playerOneBytes_ = party_member::ReadPlayerOneBytes(playerOneController_);
     LogTagCounts(L"before the take");
     handover_watch::Snapshot(L"before the take", member_);
-    if (!party_member::Take(playerTwoController_, member_))
+    if (!party_member::Take(seat_, controller_, member_))
     {
         member_ = nullptr;
         phase_  = Phase::Playing;
@@ -269,10 +272,10 @@ void Session::Settle() noexcept
     ticks_ = 0;
 }
 
-void Session::AwaitTake() noexcept
+void Seat::AwaitTake() noexcept
 {
-    const auto lease   = party_member::ReadLease(member_, playerTwoController_);
-    const auto outcome = TakeOutcomeOf(Acquired(lease, member_, playerTwoController_), ticks_, kTakeTicks);
+    const auto lease   = party_member::ReadLease(member_, controller_);
+    const auto outcome = TakeOutcomeOf(Acquired(lease, member_, controller_), ticks_, kTakeTicks);
     if (outcome == TakeOutcome::Took)
     {
         const auto bytes = party_member::ReadPlayerOneBytes(playerOneController_);
@@ -281,7 +284,7 @@ void Session::AwaitTake() noexcept
             NameOf(member_), ticks_, playerOneBytes_.at897, playerOneBytes_.at8AB, bytes.at897, bytes.at8AB,
             bytes == playerOneBytes_ ? L"unchanged" : L"CHANGED");
         LogTagCounts(L"after the take");
-        generation::SetMember(member_);
+        generation::SetMember(seat_, member_);
         memberWeak_  = leader_scope::WeakOf(member_);
         retakeLooks_ = 0;  // a look window armed before the take would drain for nothing
         if (installed_.fieldSettings)
@@ -302,15 +305,15 @@ void Session::AwaitTake() noexcept
         L"player 2 stays in on its own controller",
         NameOf(member_), kTakeTicks, NameOf(lease.memberEffective), NameOf(lease.playerTwoPawn),
         NameOf(lease.playerTwoLeader));
-    generation::Fault(L"the party member was not handed over in time");
-    party_member::GiveBack(playerTwoController_);  // member_ stays recorded: the leave waits for this release
+    generation::Fault(seat_, L"the party member was not handed over in time");
+    party_member::GiveBack(seat_, controller_);  // member_ stays recorded: the leave waits for this release
     phase_ = Phase::Playing;
 }
 
 /// Player 2's member destroyed under player 2 (a retry or checkpoint reload rebuilt the party without a
 /// map load): nothing touches it from here on, and it is not given back (the give-back would reach
 /// a destroyed object). True if that happened this tick.
-bool Session::MemberDestroyed() noexcept
+bool Seat::MemberDestroyed() noexcept
 {
     if (member_ == nullptr || memberWeak_ == 0 || leader_scope::StillNames(memberWeak_, member_))
     {
@@ -318,7 +321,7 @@ bool Session::MemberDestroyed() noexcept
     }
     Log(L"player 2's member was destroyed under player 2 (the party was rebuilt without a field exit being seen); "
         L"player 2 lets go of it and joins again");
-    generation::SetMember(nullptr);  // player 2's member movement and scopes stop at once
+    generation::SetMember(seat_, nullptr);  // player 2's member movement and scopes stop at once
     // Riding, player 2's controller possessed the member's chocobo: its pawn field names that instead.
     const auto forgotten = own_ride::Forget();
     camera_override::MemberDestroyed();
@@ -326,11 +329,11 @@ bool Session::MemberDestroyed() noexcept
     // give-back nor the controller's unpossess reads it (RE-p2-retry-reload.md §3.2, recipe 3).
     for (const std::uint32_t field : {facts::kControllerLeader, facts::kControllerPawn})
     {
-        const void* named = ReadPointer(playerTwoController_, field);
+        const void* named = ReadPointer(controller_, field);
         const bool vehicle = named == forgotten.chocobo || named == forgotten.scooter;
         if (named == member_ || (field == facts::kControllerPawn && named != nullptr && vehicle))
         {
-            WriteField<void*>(playerTwoController_, field, nullptr);
+            WriteField<void*>(controller_, field, nullptr);
             Log(L"player 2's controller field {:#x} named the destroyed character; cleared", field);
         }
     }
@@ -345,7 +348,7 @@ bool Session::MemberDestroyed() noexcept
     return true;
 }
 
-std::uint32_t Session::BackstopTicks() const noexcept
+std::uint32_t Seat::BackstopTicks() const noexcept
 {
     return installed_.partyEvents ? kBackstopTicks : kBackstopTicksNoEvents;
 }
@@ -353,7 +356,7 @@ std::uint32_t Session::BackstopTicks() const noexcept
 /// Player 2 in without a character (its give-back ran out of time, or the take failed) takes a member
 /// as soon as one is free: looked for after each game party change, and by the slow backstop. When
 /// the backstop finds none, player 2 leaves and waits outside the game.
-void Session::RetakeWhenFree() noexcept
+void Seat::RetakeWhenFree() noexcept
 {
     const bool looking = retakeLooks_ > 0;
     if (looking && party_member::GameReady())
@@ -364,14 +367,14 @@ void Session::RetakeWhenFree() noexcept
     // never completed keeps it holding one). A wait on the 2nd slot is checked every few ticks: the
     // game frees it without an event (its script lets go of the member's AI).
     const bool due  = looking || ticks_ % (waitingForSlot_ ? kSlotWaitTicks : BackstopTicks()) == 0;
-    const auto hold = session_rules::HoldOf(member_, waitingForSlot_, sharedRide_, generation::Member(),
-                                            generation::Active());
+    const auto hold = session_rules::HoldOf(member_, waitingForSlot_, sharedRide_, generation::MemberOf(seat_),
+                                            generation::Active(seat_));
     if (!session_rules::MayRetake(hold) || !installed_.member || !due || !party_member::GameReady() ||
         !MemberReleased())
     {
         return;
     }
-    const auto choice = party_member::ChooseSlot(playerOneController_, false);
+    const auto choice = party_member::ChooseSlot(seat_, playerOneController_, false);
     void*      free   = choice.member;
     if (free == nullptr)
     {
@@ -395,14 +398,14 @@ void Session::RetakeWhenFree() noexcept
     ticks_ = kPlayerOneWatchTicks;  // player 1 is settled already: choose on the next tick
 }
 
-void Session::SetSharedRide(bool on) noexcept
+void Seat::SetSharedRide(bool on) noexcept
 {
     if (on == sharedRide_)
     {
         return;
     }
     sharedRide_ = on;
-    if (!HasPlayerTwo())
+    if (!In())
     {
         return;
     }
@@ -423,26 +426,26 @@ void Session::SetSharedRide(bool on) noexcept
 }
 
 /// Player 2 gives its member back through the game's release and chooses again once it is released.
-void Session::Yield(const wchar_t* why) noexcept
+void Seat::Yield(const wchar_t* why) noexcept
 {
     own_ride::Release(L"player 2 gives the member back");  // while player 2's scopes still hold
     Log(L"player 2's {} is {}: giving it back to choose again among the deployed party", NameOf(member_), why);
     handover_watch::Snapshot(L"the give-back", member_);
-    generation::SetMember(nullptr);  // player 2's member movement and scopes stop at once
+    generation::SetMember(seat_, nullptr);  // player 2's member movement and scopes stop at once
     phase_ = Phase::Swapping;        // before the game's switch runs: a party event inside it sees the swap
     ticks_ = 0;
-    if (!party_member::GiveBack(playerTwoController_))
+    if (!party_member::GiveBack(seat_, controller_))
     {
         Log(L"player 2's {} could not be given back (no trigger actor, or the switch faulted)", NameOf(member_));
     }
 }
 
-bool Session::MemberHeld() const noexcept
+bool Seat::MemberHeld() const noexcept
 {
     return member_ != nullptr && (phase_ == Phase::Playing || phase_ == Phase::Taking);
 }
 
-void Session::EventLine(const std::wstring& text) noexcept
+void Seat::EventLine(const std::wstring& text) noexcept
 {
     if (eventLines_ < kEventLines)
     {
@@ -454,18 +457,18 @@ void Session::EventLine(const std::wstring& text) noexcept
 /// The game is about to make `character` the leader of `controller` (player_two/session/party_events.h). If it
 /// is player 2's member and player 1's controller, player 2 lets go first, so the two controllers never
 /// both claim it; the game's switch then seats player 1 on it.
-void Session::OnLeaderChanging(void* controller, void* character) noexcept
+void Seat::OnLeaderChanging(void* controller, void* character) noexcept
 {
     using session_rules::LeaderEventAction;
-    const session_rules::LeaderEvent event{HasPlayerTwo(),
+    const session_rules::LeaderEvent event{In(),
                                            AwaitingMember(),
-                                           controller == playerTwoController_,
+                                           controller == controller_,
                                            controller == playerOneController_,
                                            character != nullptr && character == member_,
                                            MemberHeld(),
                                            member_ == nullptr};
     const auto action = session_rules::DecideLeaderEvent(event);
-    if (HasPlayerTwo())
+    if (In())
     {
         const void* before = ReadPointer(controller, facts::kControllerLeader);
         if (action == LeaderEventAction::Warn)
@@ -490,9 +493,9 @@ void Session::OnLeaderChanging(void* controller, void* character) noexcept
 
 /// The game changed a party member's status (player_two/session/party_events.h): player 2's member is checked
 /// against the deployed party at once, or, without one, player 2 looks for a free member.
-void Session::OnStatusChanged(std::uint8_t playerType, std::uint8_t before, std::uint8_t after) noexcept
+void Seat::OnStatusChanged(std::uint8_t playerType, std::uint8_t before, std::uint8_t after) noexcept
 {
-    if (!HasPlayerTwo() && !AwaitingMember())
+    if (!In() && !AwaitingMember())
     {
         return;
     }
@@ -505,9 +508,9 @@ void Session::OnStatusChanged(std::uint8_t playerType, std::uint8_t before, std:
 
 /// The game finished applying new party data (player_two/session/party_events.h): a squad or formation
 /// change, a load, a script, an equipment or costume change. Every character it needed exists now.
-void Session::OnPartyApplied() noexcept
+void Seat::OnPartyApplied() noexcept
 {
-    if (!HasPlayerTwo() && !AwaitingMember())
+    if (!In() && !AwaitingMember())
     {
         return;
     }
@@ -519,14 +522,14 @@ void Session::OnPartyApplied() noexcept
 /// After a game party change: player 2's member is checked against the deployed party at once (and,
 /// with `followSlot`, against the 2nd slot), or, without one (or waiting outside the game), player 2
 /// looks for a free member.
-void Session::CheckAfterPartyChange(bool followSlot) noexcept
+void Seat::CheckAfterPartyChange(bool followSlot) noexcept
 {
     if (member_ == nullptr)
     {
         retakeLooks_ = kRetakeLookTicks;  // used by RetakeWhenFree, or JoinWhenMemberFree while player 2 is out
         return;
     }
-    if (!MemberHeld() || !generation::Active())
+    if (!MemberHeld() || !generation::Active(seat_))
     {
         return;
     }
@@ -542,16 +545,17 @@ void Session::CheckAfterPartyChange(bool followSlot) noexcept
 
 /// Player 2 plays the 2nd slot: when it names another member, player 2's is given back and the slot's
 /// is taken (or waited on), even though player 2's is still in the party.
-void Session::FollowSlot(const wchar_t* when, bool log) noexcept
+void Seat::FollowSlot(const wchar_t* when, bool log) noexcept
 {
-    if (phase_ != Phase::Playing || member_ == nullptr || generation::Member() != member_ || !party_member::GameReady())
+    if (phase_ != Phase::Playing || member_ == nullptr || generation::MemberOf(seat_) != member_ ||
+        !party_member::GameReady())
     {
         return;
     }
     // Logged from the party-apply caller only: the party order after the game's apply is the one Info line a field
     // report needs for a hand-over question (the handover watch, which listed the whole order, is a dev tool now).
     // The slow slot check asks every kSlotCheckTicks and stays quiet (the v0.83.0 play check: a line per poll).
-    const auto choice = party_member::ChooseSlot(playerOneController_, log);
+    const auto choice = party_member::ChooseSlot(seat_, playerOneController_, log);
     const auto held   = party_member::PlayerTypeOf(member_);
     if (choice.wait == party_member::SlotWait::NoSlot || !held || choice.type == *held)
     {
@@ -564,7 +568,7 @@ void Session::FollowSlot(const wchar_t* when, bool log) noexcept
 
 /// Player 2 stays in without a member while the 2nd slot's is not free; the reason is logged when it
 /// changes.
-void Session::WaitForSlot(const party_member::SlotChoice& choice) noexcept
+void Seat::WaitForSlot(const party_member::SlotChoice& choice) noexcept
 {
     waitingForSlot_  = true;
     const auto key   = static_cast<std::uint32_t>(choice.type) | static_cast<std::uint32_t>(choice.wait) << 8 |
@@ -596,7 +600,7 @@ void Session::WaitForSlot(const party_member::SlotChoice& choice) noexcept
 }
 
 /// A story script that puts player 2's member into LEAD gets it back: the LEAD runs only under its AI.
-void Session::CheckHeldAi() noexcept
+void Seat::CheckHeldAi() noexcept
 {
     // While player 2 rides their chocobo or a Wheelie the member is her AI's for the ride
     // (player_two/rides/chocobo_ride.h,
@@ -614,7 +618,7 @@ void Session::CheckHeldAi() noexcept
 /// entry's own unpossess of every non-leader, RE-p2-retry-reload.md §2.3). Null when ready, else why not, as the
 /// join's refusal line says it. The same gate for the join by the key, the rejoin after a map load and the wait
 /// for a free member.
-const wchar_t* Session::NotReadyToJoin() const noexcept
+const wchar_t* Seat::NotReadyToJoin() const noexcept
 {
     if (!installed_.ownController || !own_controller::Ready())
     {
@@ -634,7 +638,7 @@ const wchar_t* Session::NotReadyToJoin() const noexcept
     return nullptr;
 }
 
-bool Session::ReadyToJoinOutside() const noexcept
+bool Seat::ReadyToJoinOutside() const noexcept
 {
     return NotReadyToJoin() == nullptr;
 }
@@ -643,7 +647,7 @@ bool Session::ReadyToJoinOutside() const noexcept
 /// map has been in the field state with player 1's camera ready for a few seconds; or, while player 2
 /// waits for a free party member, a free member is looked for every tick after a game party change and
 /// by a slow check otherwise, and player 2 joins when there is one.
-void Session::OutsideTick() noexcept
+void Seat::OutsideTick() noexcept
 {
     using outside_join::Action;
     using outside_join::Mode;
@@ -666,7 +670,7 @@ void Session::OutsideTick() noexcept
     {
         Log(L"the new map is ready: player 2 joins again (try {})", step.attempt);
         Join();
-        outside_.AfterJoin(Mode::Rejoin, HasPlayerTwo());
+        outside_.AfterJoin(Mode::Rejoin, In());
         return;
     }
     // Player 1 on a controller of another class for a moment is not ready either (the join would refuse).
@@ -684,11 +688,11 @@ void Session::OutsideTick() noexcept
     Log(L"{} ({}): player 2 joins", free ? L"a party member is free for player 2" : L"player 1 rides a shared vehicle",
         step.looking ? L"after the game's party change" : L"found by the slow check");
     Join();  // ends the wait once player 2 is in; a refused or failed join leaves it, and is counted
-    LogGaveUp(outside_.AfterJoin(Mode::Await, HasPlayerTwo()).reason);
+    LogGaveUp(outside_.AfterJoin(Mode::Await, In()).reason);
 }
 
 /// The line for a wait that ended without player 2 (nothing for Reason::None).
-void Session::LogGaveUp(outside_join::Reason reason) noexcept
+void Seat::LogGaveUp(outside_join::Reason reason) noexcept
 {
     using outside_join::Reason;
     switch (reason)
@@ -714,13 +718,13 @@ void Session::LogGaveUp(outside_join::Reason reason) noexcept
 }
 
 /// A party member player 2 could take, by the game's own member test (null if none). Quiet.
-void* Session::FreeMember(void* playerOneController) const noexcept
+void* Seat::FreeMember(void* playerOneController) const noexcept
 {
-    return party_member::GameReady() ? party_member::ChooseSlot(playerOneController, false).member : nullptr;
+    return party_member::GameReady() ? party_member::ChooseSlot(seat_, playerOneController, false).member : nullptr;
 }
 
 /// Player 2 is out, and waits for a party member to be free before it joins.
-void Session::AwaitMember(const wchar_t* why) noexcept
+void Seat::AwaitMember(const wchar_t* why) noexcept
 {
     if (refuseJoins_)
     {
@@ -742,7 +746,7 @@ void Session::AwaitMember(const wchar_t* why) noexcept
 
 /// Player 2 is in without a member and none is free: it leaves at once (nothing of player 2's is held
 /// by the party), and waits outside the game for one.
-void Session::LeaveToAwait(const wchar_t* why) noexcept
+void Seat::LeaveToAwait(const wchar_t* why) noexcept
 {
     if (LeaveNow())
     {
@@ -752,10 +756,10 @@ void Session::LeaveToAwait(const wchar_t* why) noexcept
 
 /// The slow backstop of the party checks (the game's party changes are heard as they happen), and the
 /// battle controller check, which no game event reports.
-void Session::CheckMemberPlayable() noexcept
+void Seat::CheckMemberPlayable() noexcept
 {
-    const auto hold = session_rules::HoldOf(member_, waitingForSlot_, sharedRide_, generation::Member(),
-                                            generation::Active());
+    const auto hold = session_rules::HoldOf(member_, waitingForSlot_, sharedRide_, generation::MemberOf(seat_),
+                                            generation::Active(seat_));
     if (hold != session_rules::Hold::Member || !party_member::GameReady())
     {
         return;
@@ -781,10 +785,10 @@ void Session::CheckMemberPlayable() noexcept
     }
 }
 
-void Session::AwaitSwap() noexcept
+void Seat::AwaitSwap() noexcept
 {
     const bool released = MemberReleased();
-    const auto lease    = party_member::ReadLease(member_, playerTwoController_);
+    const auto lease    = party_member::ReadLease(member_, controller_);
     switch (SwapOutcomeOf(released, lease, playerOneController_, ticks_, kTakeTicks))
     {
         case SwapOutcome::Wait: return;
@@ -812,7 +816,7 @@ void Session::AwaitSwap() noexcept
     phase_  = Phase::Playing;
 }
 
-void Session::Leave() noexcept
+void Seat::Leave() noexcept
 {
     const bool awaited = AwaitingMember();
     outside_.End();  // a leave asked for: no rejoin after a later map load, no wait for a member
@@ -820,58 +824,52 @@ void Session::Leave() noexcept
     {
         Log(L"player 2 no longer waits for a free party member");
     }
-    if (!HasPlayerTwo())
+    if (!In())
     {
         return;
     }
     own_ride::Release(L"player 2 leaves");  // before the withdraw: the swap back needs player 2's scopes
-    camera_override::PlayerTwoOut();  // the member's camera delegates back to the engine's, while it is still held
-    lock_on::PlayerTwoOut();
-    rumble_list_two::PlayerTwoOut();  // stops player 2's channels while player 2 can still be the primary player
-    ffb_manager_two::PlayerTwoOut();  // player 2's component back on the game's force-feedback manager
-    generation::Withdraw();  // every wrapper passes through from here on
+    seat_out::LetGo(seat_);
+    generation::Withdraw(seat_);  // every wrapper passes through from here on
     phase_ = Phase::Leaving;
     ticks_ = 0;
     Carry(leave_.Begin(HoldsMember()));
 }
 
-bool Session::LeaveNow() noexcept
+bool Seat::LeaveNow() noexcept
 {
-    if (!HasPlayerTwo())
+    if (!In())
     {
         return true;
     }
     // Player 2's hold on the old world's objects goes before it does, even if the removal below fails.
     own_ride::Release(L"a map load takes player 2 out");
-    camera_override::PlayerTwoOut();
-    lock_on::PlayerTwoOut();
-    rumble_list_two::PlayerTwoOut();  // stops player 2's channels while player 2 can still be the primary player
-    ffb_manager_two::PlayerTwoOut();
-    generation::Withdraw();
+    seat_out::LetGo(seat_);
+    generation::Withdraw(seat_);
     if (HoldsMember())
     {
         // A map load cannot wait for the release; the old world is torn down with it.
-        party_member::GiveBack(playerTwoController_);
-        const auto lease = party_member::ReadLease(member_, playerTwoController_);
+        party_member::GiveBack(seat_, controller_);
+        const auto lease = party_member::ReadLease(member_, controller_);
         Log(L"map load: {} given back without waiting (released already: {})", NameOf(member_),
             YesNo(Released(lease, member_)));
     }
     Teardown();
-    if (!HasPlayerTwo())
+    if (!In())
     {
         outside_.BeginRejoin(std::chrono::steady_clock::now());  // join again once the new map is ready
     }
-    return !HasPlayerTwo();
+    return !In();
 }
 
-void Session::Carry(LeaveAction action) noexcept
+void Seat::Carry(LeaveAction action) noexcept
 {
     switch (action)
     {
         case LeaveAction::None: break;
         case LeaveAction::Release:
             handover_watch::Snapshot(L"the leave's give-back", member_);
-            if (!party_member::GiveBack(playerTwoController_))
+            if (!party_member::GiveBack(seat_, controller_))
             {
                 Log(L"leave: {} could not be given back (no trigger actor, or the switch faulted)", NameOf(member_));
             }
@@ -884,7 +882,7 @@ void Session::Carry(LeaveAction action) noexcept
     }
 }
 
-void Session::Teardown() noexcept
+void Seat::Teardown() noexcept
 {
     if (member_ != nullptr)
     {
@@ -893,8 +891,8 @@ void Session::Teardown() noexcept
             bytes.at897, bytes.at8AB);
         LogTagCounts(L"after the give-back");
     }
-    const auto actors = leftover_actors::Collect(playerTwoController_);
-    leave_watch::BeforeRemove(players_.Player(), playerTwoController_, actors);  // logging only (S-PC2LEAK)
+    const auto actors = leftover_actors::Collect(controller_);
+    leave_watch::BeforeRemove(players_.Player(), controller_, actors);  // logging only (S-PC2LEAK)
     const bool out = players_.Remove();
     leave_watch::AfterRemove(out);
     leave_.Finish();
@@ -923,19 +921,19 @@ void Session::Teardown() noexcept
     }
 }
 
-bool Session::PlaysMember() const noexcept
+bool Seat::PlaysMember() const noexcept
 {
-    return HasPlayerTwo() && phase_ == Phase::Playing && generation::Member() != nullptr;
+    return In() && phase_ == Phase::Playing && generation::MemberOf(seat_) != nullptr;
 }
 
-bool Session::HoldsMember() const noexcept
+bool Seat::HoldsMember() const noexcept
 {
-    return member_ != nullptr || ReadPointer(playerTwoController_, facts::kControllerLeader) != nullptr;
+    return member_ != nullptr || ReadPointer(controller_, facts::kControllerLeader) != nullptr;
 }
 
-bool Session::MemberReleased() const noexcept
+bool Seat::MemberReleased() const noexcept
 {
-    const auto lease = party_member::ReadLease(member_, playerTwoController_);
+    const auto lease = party_member::ReadLease(member_, controller_);
     if (member_ == nullptr)
     {
         return lease.playerTwoPawn == nullptr && lease.playerTwoLeader == nullptr;
@@ -943,19 +941,16 @@ bool Session::MemberReleased() const noexcept
     return Released(lease, member_);
 }
 
-void Session::Forget() noexcept
+void Seat::Forget() noexcept
 {
-    camera_override::PlayerTwoOut();
-    lock_on::PlayerTwoOut();
-    rumble_list_two::PlayerTwoOut();  // stops player 2's channels while player 2 can still be the primary player
-    ffb_manager_two::PlayerTwoOut();
-    generation::End();  // player 2 is removed: its controller is freed at the next collection
-    primary_controller::Unbind();
+    seat_out::LetGo(seat_);
+    generation::End(seat_);  // the seat's player is removed: its controller is freed at the next collection
+    primary_controller::Unbind(seat_);
     leave_.Finish();
     phase_               = Phase::Out;
     playerOne_           = nullptr;
     playerOneController_ = nullptr;
-    playerTwoController_ = nullptr;
+    controller_          = nullptr;
     member_              = nullptr;
     ticks_               = 0;
     retakeLooks_         = 0;
@@ -965,10 +960,9 @@ void Session::Forget() noexcept
     viewOnOwnCamera_     = true;
 }
 
-void Session::LogStatus() noexcept
+void Seat::LogStatus() noexcept
 {
-    const platform::frame_watch::Job job(L"status line");
-    if (!HasPlayerTwo())
+    if (!In())
     {
         return;
     }
@@ -976,21 +970,187 @@ void Session::LogStatus() noexcept
     const auto     update   = field_camera::UpdateCounters().Take();
     const auto     input    = pad_sticks::InputCounters().Take();
     const auto     move     = pad_sticks::MoveCounters().Take();
-    const wchar_t* fault    = generation::FaultReason();
+    const wchar_t* fault    = generation::FaultReason(seat_);
     Log(L"player 2: member {}, generation {}{}; field settings mirrored {} passed {} mismatched {}; camera update as primary {} passed {} "
         L"refused {}; per-pad sticks {} (input acted {} refused {}, movement acted {} refused {})",
-        NameOf(generation::Member()), generation::Active() ? L"active" : L"withdrawn",
+        NameOf(generation::MemberOf(seat_)), generation::Active(seat_) ? L"active" : L"withdrawn",
         fault ? L" (fault: " + std::wstring(fault) + L")" : std::wstring(), settings.acted, settings.passed,
         field_camera::TakeMismatches(), update.acted, update.passed, update.refused,
         pad_sticks::Enabled() ? L"on" : L"off", input.acted, input.refused, move.acted, move.refused);
     const auto member = member_movement::Counters().Take();
     Log(L"  player 2's view: own camera {} (moved off it {} time(s) so far); member movement ticked {} skipped {} "
         L"refused {}, leader test answered yes {} time(s)",
-        YesNo(view_target::OnOwnCamera(playerTwoController_)), viewTargetResets_, member.acted, member.passed,
+        YesNo(view_target::OnOwnCamera(controller_)), viewTargetResets_, member.acted, member.passed,
         member.refused, leader_answer::TakeAnswers());
+}
+
+// ---- the session: the built seats ----
+
+Session::Session(std::uintptr_t removeLocalPlayer) noexcept
+{
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        seats_[static_cast<std::size_t>(seat)].emplace(seat, removeLocalPlayer, installed_, refuseJoins_);
+    }
+}
+
+Seat* Session::At(int seat) noexcept
+{
+    return players::SeatBuilt(seat) ? &*seats_[static_cast<std::size_t>(seat)] : nullptr;
+}
+
+const Seat* Session::At(int seat) const noexcept
+{
+    return players::SeatBuilt(seat) ? &*seats_[static_cast<std::size_t>(seat)] : nullptr;
+}
+
+void Session::Join(int seat) noexcept
+{
+    if (Seat* s = At(seat))
+    {
+        s->Join();
+    }
+}
+
+void Session::Leave(int seat) noexcept
+{
+    if (Seat* s = At(seat))
+    {
+        s->Leave();
+    }
+}
+
+bool Session::LeaveNow() noexcept
+{
+    bool out = true;
+    for (int seat = players::kSeatsBuilt; seat >= 1; --seat)  // the last first: the engine's list closes up behind
+    {
+        out = At(seat)->LeaveNow() && out;
+    }
+    return out;
+}
+
+void Session::Tick() noexcept
+{
+    generation::SetGameThread();  // the engine-tick callback runs on the thread that ticks the world
+    platform::game_thread_sites::Run();  // the 1.005 placements (platform/deferred_sites.h), outside the game's ticks
+    command_rules::Update();      // which member player 1 may not command (none without player 2)
+    command_menu_view::KeepHidden();  // player 2's menu widget stays out of both halves
+    if (AnyIn())
+    {
+        menu_focus::Watch();  // player 1's UI focus, logged on change (read-only)
+    }
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        At(seat)->Tick();
+    }
+}
+
+void Session::LogStatus() noexcept
+{
+    const platform::frame_watch::Job job(L"status line");
+    if (!AnyIn())
+    {
+        return;
+    }
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        At(seat)->LogStatus();
+    }
     scope_leaks::LogStatus();
     pad_buttons::LogStatus();
     move_census::Log();  // dev tools
+}
+
+void Session::SetSharedRide(bool on) noexcept
+{
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        At(seat)->SetSharedRide(on);
+    }
+}
+
+void Session::OnLeaderChanging(void* controller, void* character) noexcept
+{
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        At(seat)->OnLeaderChanging(controller, character);
+    }
+}
+
+void Session::OnStatusChanged(std::uint8_t playerType, std::uint8_t before, std::uint8_t after) noexcept
+{
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        At(seat)->OnStatusChanged(playerType, before, after);
+    }
+}
+
+void Session::OnPartyApplied() noexcept
+{
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        At(seat)->OnPartyApplied();
+    }
+}
+
+bool Session::In(int seat) const noexcept
+{
+    const Seat* s = At(seat);
+    return s != nullptr && s->In();
+}
+
+bool Session::AnyIn() const noexcept
+{
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (At(seat)->In())
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool Session::AwaitingMember(int seat) const noexcept
+{
+    const Seat* s = At(seat);
+    return s != nullptr && s->AwaitingMember();
+}
+
+bool Session::PlaysMember(int seat) const noexcept
+{
+    const Seat* s = At(seat);
+    return s != nullptr && s->PlaysMember();
+}
+
+bool Session::WaitsForMember(int seat) const noexcept
+{
+    const Seat* s = At(seat);
+    return s != nullptr && s->WaitsForMember();
+}
+
+bool Session::StandsAside(int seat) const noexcept
+{
+    const Seat* s = At(seat);
+    return s != nullptr && s->StandsAside();
+}
+
+const void* Session::LocalPlayer(int seat) const noexcept
+{
+    const Seat* s = At(seat);
+    return s != nullptr ? s->LocalPlayer() : nullptr;
+}
+
+std::uint32_t Session::JoinCount(int seat) const noexcept
+{
+    const Seat* s = At(seat);
+    return s != nullptr ? s->JoinCount() : 0;
+}
+
+const void* Session::PlayerOne() const noexcept
+{
+    return At(players::kPlayerTwoSeat)->PlayerOne();
 }
 
 #if LSS_DEV
@@ -1020,7 +1180,7 @@ void RegisterCommands(Session& session)
                   {
                       return Outcome{false, L"player 2 is already in"};
                   }
-                  session.Join();  // logs its own outcome
+                  session.Join(players::kPlayerTwoSeat);  // logs its own outcome
                   return Outcome{};
               }});
     Register({.name = L"p2.in", .shape = Shape::OnOff, .help = L"player 2's local player exists",
