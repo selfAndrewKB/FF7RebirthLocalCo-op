@@ -15,6 +15,7 @@
 #include "player_two/generation.h"
 #include "player_two/input/button_view.h"
 #include "player_two/input/pad_sticks.h"
+#include "players/seats.h"
 #include "players/unreal_access.h"
 
 #if LSS_DEV
@@ -124,7 +125,7 @@ struct Table
     std::vector<std::uint32_t>      loggedSources;
     std::vector<std::uint32_t>      words;  // scratch: the allocation bits
     std::vector<HeldBytes>          ones;   // scratch: player 1's bytes (restored after a ButtonScope)
-    std::vector<HeldBytes>          twos;   // scratch: player 2's bytes
+    std::vector<HeldBytes>          twos;   // scratch: the open ButtonScope's seat's bytes
 };
 
 // Set once at install.
@@ -140,20 +141,33 @@ platform::VTableEntry   g_tickSlot;
 TickFn                  g_engineTick = nullptr;
 const std::byte* const* g_inputOwner = nullptr;
 
-// Game thread (the Tick and player 2's calls run on it).
+// Game thread (the Tick and the seats' calls run on it).
+using PerSeat = std::array<unsigned, players::kMaxPlayers>;  // by seat; index 0 (player 1) unused
 std::array<Table, kTables.size()> g_tables;
-bool     g_active      = false;  // the views are current (per-pad input on, player 2 in)
-bool     g_scopeOpen   = false;
+bool     g_active      = false;  // the views are current (per-pad input on, a seat's player in)
+int      g_scopeSeat   = 0;      // the seat whose ButtonScope is open, 0 for none
 unsigned g_framesSplit = 0;
-unsigned g_scopes      = 0;
-unsigned g_scopeSkips  = 0;  // a table moved between the Tick and player 2's call
+PerSeat  g_scopes{};
+PerSeat  g_scopeSkips{};  // a table moved between the Tick and the seat's call
 unsigned g_writeFaults = 0;
 unsigned g_lines       = 0;
-unsigned g_padTwoDowns = 0;  // pad 2's action-downs kept from the UI and the menu core
-unsigned g_padOneDowns = 0;  // pad 1's action-downs kept from the UI while player 2 holds the menus
-int      g_menuPlayer  = 0;  // whose view the tables show outside player 2's calls, and whose presses reach the UI
-                             // (1 while player 2's shop is up: SetMenuPlayer)
+PerSeat  g_seatDowns{};    // a seated pad's action-downs kept from the UI and the menu core
+unsigned g_padOneDowns = 0;  // pad 1's action-downs kept from the UI while a seat holds the menus
+int      g_menuPlayer  = 0;  // whose view the tables show outside the seats' calls, and whose presses reach the UI:
+                             // 0 player 1, or the seat whose shop is up (SetMenuPlayer)
 std::atomic<unsigned> g_mask{kPartViews | kPartEvents};  // SetMask
+
+/// What each built seat sees, for a change or trace line: ", player 2 sees 1" per seat.
+std::wstring SeatViews(const button_view::Views& views)
+{
+    std::wstring text;
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        text += std::format(L", {} sees {}", players::SeatName(seat), views.now[seat] ? 1 : 0);
+    }
+    return text;
+}
+
 #if LSS_DEV
 const std::uint64_t*  g_traceKeys[2] = {};  // Accel, Dash (live addresses of the FName globals)
 std::array<std::array<std::uint64_t, 2>, 2> g_traceLast{};  // per table, per key: the last traced bytes
@@ -179,19 +193,23 @@ void Trace(std::size_t which, const Element& element, const button_view::Views& 
         {
             continue;
         }
-        const std::uint64_t packed = std::uint64_t{element.previous} | std::uint64_t{element.held} << 8 |
-                                     std::uint64_t{element.repeat} << 16 | std::uint64_t{element.latch} << 24 |
-                                     std::uint64_t{element.sources & 0x00FFFFFFu} << 32 | std::uint64_t{views.gameHeld} << 56 |
-                                     std::uint64_t{views.now[0]} << 60 | std::uint64_t{views.now[1]} << 61 | 1ull << 63;
+        std::uint64_t packed = std::uint64_t{element.previous} | std::uint64_t{element.held} << 8 |
+                               std::uint64_t{element.repeat} << 16 | std::uint64_t{element.latch} << 24 |
+                               std::uint64_t{element.sources & 0x00FFFFFFu} << 32 | std::uint64_t{views.gameHeld} << 56 |
+                               std::uint64_t{views.now[0]} << 60 | 1ull << 63;
+        for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+        {
+            packed |= std::uint64_t{views.now[seat]} << (60 + seat);  // the seats the line prints (SeatViews), bits 61-62
+        }
         if (packed == g_traceLast[which][k])
         {
             return;
         }
         g_traceLast[which][k] = packed;
         platform::LogTrace(L"buttons trace ({}): {} as the game left it: previous {} held {} repeat {} latch {} sources 0x{:08X}; "
-                      L"game held {}; player 1 sees {}, player 2 sees {}",
+                      L"game held {}; player 1 sees {}{}",
                       kTables[which].name, k == 0 ? L"Accel" : L"Dash", element.previous, element.held, element.repeat,
-                      element.latch, element.sources, views.gameHeld, views.now[0] ? 1 : 0, views.now[1] ? 1 : 0);
+                      element.latch, element.sources, views.gameHeld, views.now[0] ? 1 : 0, SeatViews(views));
         return;
     }
 }
@@ -216,7 +234,21 @@ bool Acts(unsigned part) noexcept
 
 bool ViewsWanted() noexcept
 {
-    return Acts(kPartViews) && pad_sticks::Enabled() && generation::Active() && generation::OnGameThread();
+    return Acts(kPartViews) && pad_sticks::Enabled() && generation::AnyActive() && generation::OnGameThread();
+}
+
+/// The built seats whose player is in now (button_view::SeatBit each): their pads are their own, the rest player 1's.
+unsigned SeatsIn() noexcept
+{
+    unsigned seats = 0;
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (generation::Active(seat))
+        {
+            seats |= button_view::SeatBit(seat);
+        }
+    }
+    return seats;
 }
 
 /// Writes previous/held into each element whose `write` flag is set.
@@ -304,9 +336,9 @@ void LogChange(const wchar_t* table, const Element& element, std::uint8_t wasHel
         return;
     }
     ++g_lines;
-    platform::LogTrace(L"buttons ({}): {} held {}->{} sources 0x{:08X}->0x{:08X}; player 1 sees {}, player 2 sees {}", table,
+    platform::LogTrace(L"buttons ({}): {} held {}->{} sources 0x{:08X}->0x{:08X}; player 1 sees {}{}", table,
                   players::unreal::NameText(element.name), wasHeld, views.gameHeld, wasSources,
-                  element.sources, views.now[0] ? 1 : 0, views.now[1] ? 1 : 0);
+                  element.sources, views.now[0] ? 1 : 0, SeatViews(views));
 }
 
 /// Fills `bytes` with one player's view of each element.
@@ -319,9 +351,9 @@ void ViewBytes(const Table& table, int player, std::vector<HeldBytes>& bytes) no
     }
 }
 
-/// Once per frame after the game's Tick: advances each view and writes the menu player's (player 1's, or player 2's
-/// while their shop is up).
-void SplitTable(const std::byte* owner, std::size_t which)
+/// Once per frame after the game's Tick: advances each view (with the seats in `seats`) and writes the menu player's
+/// (player 1's, or a seat's while its player's shop is up).
+void SplitTable(const std::byte* owner, std::size_t which, unsigned seats)
 {
     Table& table = g_tables[which];
     if (!Load(owner, table, kTables[which].offset))
@@ -340,7 +372,7 @@ void SplitTable(const std::byte* owner, std::size_t which)
             table.names[i] = element.name;  // a new key in this slot: its views start afresh
             table.views[i] = {};
         }
-        table.views[i].Advance(element.held, element.sources);
+        table.views[i].Advance(element.held, element.sources, seats);
         Trace(which, element, table.views[i]);
         if (table.views[i].gameHeld != table.loggedHeld[i] || element.sources != table.loggedSources[i])
         {
@@ -356,8 +388,8 @@ void SplitTable(const std::byte* owner, std::size_t which)
     }
 }
 
-/// Per-pad input off or player 2 out: gives each action back the game's own held state (no edge),
-/// so a hold only pad 2 kept is not left looking released, then forgets the views.
+/// Per-pad input off or every seat's player out: gives each action back the game's own held state (no
+/// edge), so a hold only a seat's pad kept is not left looking released, then forgets the views.
 void GiveBack() noexcept
 {
     for (std::size_t which = 0; which < kTables.size(); ++which)
@@ -406,9 +438,10 @@ void Tick(void* self, float deltaTime, void* application, void* cursor)
         {
             return;
         }
+        const unsigned seats = SeatsIn();
         for (std::size_t which = 0; which < kTables.size(); ++which)
         {
-            SplitTable(owner, which);
+            SplitTable(owner, which, seats);
         }
         g_active = true;
         ++g_framesSplit;
@@ -419,30 +452,42 @@ void Tick(void* self, float deltaTime, void* application, void* cursor)
     }
 }
 
-/// Pad 2's presses update the tables (player 2's polling reads them) but are passed as already
+// The route to a seat's own UI is player 2's (pad_buttons.h, PlayerTwoRouteFn): another seat's presses skip it.
+static_assert(players::kSeatsBuilt == 1, "the menu route is player 2's: before seat 2 is built, menu_input_route takes "
+                                         "the seat (by the press's pad) and ActionDown offers it every seat's press");
+
+/// A seated pad's presses update the tables (its player's polling reads them) but are passed as already
 /// handled: the game's own flag for "an earlier binding consumed this", so they never open a menu or
-/// run a field prompt, which belong to player 1's context.
+/// run a field prompt, which belong to player 1's context. The seat comes from the press's source bit.
 char ActionDown(void* owner, void* unused, std::uint32_t sourceBit, void* event, std::uint8_t alreadyHandled)
 {
-    const bool padTwo = ((button_view::PadBits(1) >> (sourceBit & 31)) & 1) != 0;
-    const bool split  = alreadyHandled == 0 && Acts(kPartEvents) && pad_sticks::Enabled() && generation::Active() &&
+    const bool split = alreadyHandled == 0 && Acts(kPartEvents) && pad_sticks::Enabled() && generation::AnyActive() &&
                        generation::OnGameThread();
-    if (split && g_menuPlayer == 1)
+    if (!split)
     {
-        // Player 2's shop is up: pad 2 is the menu pad, as the one pad is in single player; pad 1's presses update the
-        // tables but are passed as handled.
+        return g_actionDown(owner, unused, sourceBit, event, alreadyHandled);
+    }
+    const int seat = button_view::SeatOfSource(sourceBit, SeatsIn());
+    if (g_menuPlayer != 0)
+    {
+        // A seat's shop is up: its pad is the menu pad, as the one pad is in single player; pad 1's presses and any
+        // other seat's update the tables but are passed as handled.
         if (((button_view::PadBits(0) >> (sourceBit & 31)) & 1) != 0)
         {
             ++g_padOneDowns;
             alreadyHandled = 1;
         }
+        else if (seat != 0 && seat != g_menuPlayer)
+        {
+            alreadyHandled = 1;
+        }
         return g_actionDown(owner, unused, sourceBit, event, alreadyHandled);
     }
-    if (padTwo && split)
+    if (seat != 0)
     {
-        ++g_padTwoDowns;
+        ++g_seatDowns[seat];
         char result = 0;
-        if (g_playerTwoRoute != nullptr &&
+        if (seat == players::kPlayerTwoSeat && g_playerTwoRoute != nullptr &&
             g_playerTwoRoute(g_actionDown, owner, unused, sourceBit, event, alreadyHandled, result))
         {
             return result;  // player 2's own UI took it
@@ -470,9 +515,15 @@ char ExtraKeyDown(void* owner, void* unused, std::uint32_t sourceBit, void* even
         ++g_extraKeyLines;
         std::uint64_t key = 0;
         platform::CopyGuarded(&key, static_cast<const std::byte*>(event) + kActionEventKey, sizeof(key));
-        const bool padTwo = ((button_view::PadBits(1) >> (sourceBit & 31)) & 1) != 0;
+        unsigned built = 0;  // every built seat's pad, in or not (named as the line always named pad 2)
+        for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+        {
+            built |= button_view::SeatBit(seat);
+        }
+        const int seat = button_view::SeatOfSource(sourceBit, built);
         platform::LogTrace(L"buttons: extra key {} from {} (source bit {}, already handled {}) -> {}",
-                      players::unreal::NameText(key), padTwo ? L"pad 2" : L"pad 1 or another device",
+                      players::unreal::NameText(key),
+                      seat != 0 ? std::format(L"pad {}", seat + 1) : std::wstring(L"pad 1 or another device"),
                       sourceBit, alreadyHandled, static_cast<int>(result));
     }
     return result;
@@ -531,18 +582,19 @@ void InstallExtraKeyCalls() noexcept
 
 }  // namespace
 
-void SetMenuPlayer(int player) noexcept
+void SetMenuPlayer(int seat) noexcept
 {
-    const int menu = player == 1 ? 1 : 0;
+    const int menu = players::SeatBuilt(seat) ? seat : 0;
     if (menu == g_menuPlayer)
     {
         return;
     }
     g_menuPlayer = menu;
-    if (menu == 1)
+    if (menu != 0)
     {
-        platform::Log(L"buttons: pad 2 drives the menus now (player 2's view in the action tables, pad 1's presses kept from "
-                      L"the UI)");
+        platform::Log(L"buttons: pad {} drives the menus now ({}'s view in the action tables, pad 1's presses kept from "
+                      L"the UI)",
+                      menu + 1, players::SeatName(menu));
     }
     else
     {
@@ -634,24 +686,24 @@ void Remove() noexcept
     }
 }
 
-ButtonScope::ButtonScope(std::uint64_t withoutKey) noexcept
+ButtonScope::ButtonScope(int seat, std::uint64_t withoutKey) noexcept
 {
-    if (g_scopeOpen || !g_active || !ViewsWanted())
+    if (g_scopeSeat != 0 || !g_active || !players::SeatBuilt(seat) || !ViewsWanted() || !generation::Active(seat))
     {
-        return;
+        return;  // another seat's scope is open (seats take turns), or the seat's player is not in
     }
     for (std::size_t which = 0; which < kTables.size(); ++which)
     {
         if (!Fresh(g_tables[which], kTables[which].offset))
         {
-            ++g_scopeSkips;  // a table moved since the Tick: player 2's call keeps player 1's view
+            ++g_scopeSkips[seat];  // a table moved since the Tick: the seat's call keeps player 1's view
             return;
         }
     }
     for (Table& table : g_tables)
     {
         ViewBytes(table, g_menuPlayer, table.ones);  // what the Tick wrote: the menu player's view
-        ViewBytes(table, 1, table.twos);
+        ViewBytes(table, seat, table.twos);
         for (std::size_t i = 0; withoutKey != 0 && i < table.twos.size() && i < table.names.size(); ++i)
         {
             if (table.names[i] == withoutKey)
@@ -664,9 +716,9 @@ ButtonScope::ButtonScope(std::uint64_t withoutKey) noexcept
             ++g_writeFaults;
         }
     }
-    g_scopeOpen = true;
+    g_scopeSeat = seat;
     held_       = true;
-    ++g_scopes;
+    ++g_scopes[seat];
 }
 
 ButtonScope::~ButtonScope()
@@ -680,7 +732,7 @@ ButtonScope::~ButtonScope()
         Table& table = g_tables[which];
         if (!Fresh(table, kTables[which].offset))
         {
-            ++g_scopeSkips;  // moved during the call: the old storage is not written
+            ++g_scopeSkips[g_scopeSeat];  // moved during the call: the old storage is not written
             continue;
         }
         if (!WriteHeld(table.data, table.ones.data(), table.allocated.data(), table.ones.size()))
@@ -688,7 +740,7 @@ ButtonScope::~ButtonScope()
             ++g_writeFaults;
         }
     }
-    g_scopeOpen = false;
+    g_scopeSeat = 0;
 }
 
 void SetMask(unsigned mask) noexcept
@@ -705,12 +757,26 @@ unsigned Mask() noexcept
 
 void LogStatus() noexcept
 {
-    platform::Log(L"  buttons: split {} frame(s), player 2's view held {} time(s) ({} skipped: a table moved), pad 2's "
-                  L"presses kept from the UI {}, {} write fault(s); {} change line(s) logged; tables raw {} / "
-                  L"UI {} elements",
-                  g_framesSplit, g_scopes, g_scopeSkips, g_padTwoDowns, g_writeFaults, g_lines,
-                  g_tables[0].elements.size(), g_tables[1].elements.size());
-    g_framesSplit = g_scopes = g_scopeSkips = g_writeFaults = g_lines = g_padTwoDowns = 0;
+    try
+    {
+        std::wstring seats;  // per built seat, as the line named player 2 alone
+        for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+        {
+            seats += std::format(L"{}'s view held {} time(s) ({} skipped: a table moved), pad {}'s presses kept from the "
+                                 L"UI {}, ",
+                                 players::SeatName(seat), g_scopes[seat], g_scopeSkips[seat], seat + 1, g_seatDowns[seat]);
+        }
+        platform::Log(L"  buttons: split {} frame(s), {}{} write fault(s); {} change line(s) logged; tables raw {} / "
+                      L"UI {} elements",
+                      g_framesSplit, seats, g_writeFaults, g_lines, g_tables[0].elements.size(),
+                      g_tables[1].elements.size());
+    }
+    catch (...)
+    {
+        // Out of memory for the line: the counters still start afresh.
+    }
+    g_framesSplit = g_writeFaults = g_lines = 0;
+    g_scopes = g_scopeSkips = g_seatDowns = PerSeat{};
 }
 
 #if LSS_DEV

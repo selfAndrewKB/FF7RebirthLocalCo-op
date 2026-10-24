@@ -70,26 +70,34 @@ std::array<StickBank, 3> MergedBanks(const std::byte* input, std::size_t& count)
     return {bank(0), bank(facts::kXInputBank), bank(3)};
 }
 
+// The leader-transform leak scope (scope_leaks::InputScope) is player 2's: its bool names player 2's controller.
+static_assert(players::kSeatsBuilt == 1, "scope_leaks::InputScope is player 2's: it takes the seat (InputScope(seat)) "
+                                         "before seat 2 is built");
+
 void ProcessPlayerInput(void* controller, float deltaTime, bool gamePaused)
 {
-    const bool isOne = controller == generation::PlayerOneController();
-    const bool isTwo = controller == generation::PlayerTwoController();
-    const scope_leaks::InputScope leaks(isTwo);  // player 2's input writes the leader transform; put back after
-    if (!Enabled() || !generation::Active() || (!isOne && !isTwo) ||
-        (isTwo && !PartActs(kPartPlayerTwoInput)) || !generation::OnGameThread())
+    // The seat the controller is (player 1's is 0 only while a seat's player is in; a seat's while recorded).
+    const int  seat   = generation::SeatOfController(controller);
+    const bool isOne  = seat == 0;
+    const bool isSeat = players::SeatBuilt(seat) && generation::Active(seat);
+    const scope_leaks::InputScope leaks(seat == players::kPlayerTwoSeat);  // player 2's input writes the leader
+                                                                           // transform; put back after
+    if (!Enabled() || (!isOne && !isSeat) || (isSeat && !PartActs(kPartPlayerTwoInput)) ||
+        !generation::OnGameThread())
     {
         g_inputCounters.Pass();
         g_engineProcessInput(controller, deltaTime, gamePaused);
         return;
     }
-    // The pad's own sticks; for player 2 also the primary controller (player 2's input sends camera events to "the
-    // primary" camera manager) and pad 2's own buttons (ResetCamera). The call runs with whatever opened; a refused
-    // stick or primary scope is counted.
+    // The pad's own sticks; for a seat also the primary controller (its input sends camera events to "the primary"
+    // camera manager) and its pad's own buttons (ResetCamera). The call runs with whatever opened; a refused stick or
+    // primary scope is counted.
     p2_scope::Args args;
+    args.seat  = isSeat ? seat : players::kPlayerTwoSeat;  // player 1's call opens neither Primary nor Buttons
     args.padId = ControllerIdOf(controller);
-    const unsigned          which = isTwo ? p2_scope::Sticks | p2_scope::Primary | p2_scope::Buttons : p2_scope::Sticks;
+    const unsigned          which = isSeat ? p2_scope::Sticks | p2_scope::Primary | p2_scope::Buttons : p2_scope::Sticks;
     const p2_scope::P2Scope scopes(which, which, args);
-    const bool acted = scopes.Holds<p2_scope::SticksPart>() && (!isTwo || scopes.Holds<p2_scope::PrimaryPart>());
+    const bool acted = scopes.Holds<p2_scope::SticksPart>() && (!isSeat || scopes.Holds<p2_scope::PrimaryPart>());
     acted ? g_inputCounters.Act() : g_inputCounters.Refuse();
     g_engineProcessInput(controller, deltaTime, gamePaused);
 }

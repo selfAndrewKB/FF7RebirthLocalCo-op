@@ -8,8 +8,8 @@
 // (the party leader and its type answering player 2's member, leader_scope), Rules (the command
 // rules turned around, command_rules). `Which` names them: a site opens the ones its call reads,
 // required unless it says they are optional, and its own module-local scopes after the ladder. The ladder is a seat's
-// (Args::seat, player 2's unless a site names another): Primary and the member's pad follow it; the other parts are
-// still player 2's until their modules are per seat (plan/seats.md step 3).
+// (Args::seat, player 2's unless a site names another): Primary, Buttons and the member's pad follow it; the other
+// parts are still player 2's until their modules are per seat (plan/seats.md step 3).
 // Game thread only.
 
 #include "player_two/battle/command_rules.h"
@@ -46,7 +46,7 @@ struct Args
     int           seat       = players::kPlayerTwoSeat;  // whose ladder: Primary and FillMember's pad
     void*         controller = nullptr;  // Focus: player 2's command controller
     std::int32_t  padId      = -1;       // Sticks: the pad (pad_sticks::ControllerIdOf)
-    std::uint64_t withoutKey = 0;        // Buttons: an action player 2's view shows as not held (0 none)
+    std::uint64_t withoutKey = 0;        // Buttons: an action the seat's view shows as not held (0 none)
     std::uint64_t memberWeak = 0;        // Leader: player 2's member's weak value (leader_scope::WeakOf)
     std::uint8_t  memberType = 0;        // LeaderType: the member's player type
     std::uint8_t  leaderType = 0;        // Rules: player 1's leader type
@@ -104,7 +104,7 @@ struct ButtonsPart
 {
     static constexpr unsigned       kBit  = Buttons;
     static constexpr const wchar_t* kName = L"pad 2's buttons";
-    explicit ButtonsPart(const Args& args) noexcept : scope(args.withoutKey) {}
+    explicit ButtonsPart(const Args& args) noexcept : scope(args.seat, args.withoutKey) {}
     bool Held() const noexcept { return scope.Held(); }
     pad_buttons::ButtonScope scope;
 };

@@ -492,7 +492,7 @@ void CopyKeys(std::size_t index, std::int32_t controllerId, const std::byte* own
 /// Player 2's presses of the hold-select's actions, by the game's own pressed test in player 2's button view.
 void RecordPresses(std::uint32_t frame) noexcept
 {
-    const pad_buttons::ButtonScope buttons;
+    const pad_buttons::ButtonScope buttons(players::kPlayerTwoSeat);
     if (!buttons.Held())
     {
         return;
