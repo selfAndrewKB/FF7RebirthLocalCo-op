@@ -17,6 +17,10 @@
 // field-action character of player 2's controller, the chocobo's control state before and after); the camera setup
 // for either player (Debug: the module's state before and after); player 2's climb camera's state changes (Debug);
 // a 10 s summary (Debug). Game thread.
+//
+// Per seat (players/seats.h): the chocobo a seat rides names the seat (chocobo_ride::SeatRiding); the start check and
+// the camera setup run in that seat's scope with its member as the leader. The counts, the noted start check and the
+// watched module are kept per seat.
 
 namespace lss::platform {
 class GameImage;
@@ -29,7 +33,7 @@ void Install(const platform::GameImage& image) noexcept;
 
 void Remove() noexcept;
 
-/// Game thread, every engine tick: player 2's climb camera's state changes and the summary (Debug).
+/// Game thread, every engine tick: each seat's climb camera's state changes and the summary (Debug).
 void Tick() noexcept;
 
 }  // namespace lss::player_two::chocobo_climb

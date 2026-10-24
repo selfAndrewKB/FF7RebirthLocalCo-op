@@ -8,6 +8,7 @@
 #include "player_two/input/member_movement.h"
 #include "player_two/object_fields.h"
 #include "player_two/traversal/traversal_shared.h"
+#include "players/seats.h"
 
 #include <array>
 #include <atomic>
@@ -20,12 +21,19 @@
 #include <unordered_map>
 #include <utility>
 
-// The executer classes of player 2's traversal cameras (player_two/traversal/traversal_camera.h): Start, Tick and End
-// run with
-// player 2's camera handle in the actor and in player 2's scopes; the ladder's exit blend, the squeeze's and crawl's
-// exit, the one-shot actor's leave; the ladder's entry points for traversal_watch.
+// The executer classes of the seats' traversal cameras (player_two/traversal/traversal_camera.h): Start, Tick and End
+// run with the seat's camera handle in the actor and in the seat's scopes; the ladder's exit blend, the squeeze's and
+// crawl's exit, the one-shot actor's leave; the ladder's entry points for traversal_watch. The seat is the one whose
+// member the executer's character is; each seat keeps its own handles, ladder exit and logged states (by seat, index
+// 0 unused). The one-shot actor's leave stays player 2's (OneShotLeave).
 
 namespace lss::player_two::traversal_camera {
+
+// H1: RunAsPlayerTwo runs every executer step inside member_movement::InPrimaryScope, which opens player 2's primary
+// scope whatever seat the member is.
+static_assert(players::kSeatsBuilt == 1,
+              "traversal_exec: member_movement's scopes are player 2's: InPrimaryScope (RunAsPlayerTwo: the executers' "
+              "Start, Tick, End, exit calls) must open the executer's seat before seat 2 is built");
 
 namespace {
 
@@ -37,35 +45,36 @@ struct ExecLive
 };
 std::array<ExecLive, kExecCount> g_exec;
 
-// Player 2's camera handles per actor (by the actor's weak value), moved in and out of the actor, never copied, so the
-// reference counts stay the game's. An entry whose actor is gone keeps its weak reference (one small block); past
-// kHandlePrune entries those are dropped from the map.
+// Each seat's camera handles per actor (by seat, then by the actor's weak value: keyed by the seat and the actor),
+// moved in and out of the actor, never copied, so the reference counts stay the game's. An entry whose actor is gone
+// keeps its weak reference (one small block); past kHandlePrune entries in a seat's map those are dropped from it.
 using HandleBytes = std::array<std::uint64_t, kMaxHandle / 8>;
-constexpr std::size_t                          kHandlePrune = 32;
-std::unordered_map<std::uint64_t, HandleBytes> g_handles;
-const void*                                    g_exitLogged = nullptr;
+using HandleMap   = std::unordered_map<std::uint64_t, HandleBytes>;
+constexpr std::size_t kHandlePrune = 32;
+HandleMap             g_handles[players::kMaxPlayers];     // by seat; index 0 unused
+const void*           g_exitLogged[players::kMaxPlayers]{};  // by seat: the executer whose exit was last logged
 
-// Player 2's ladder exit (game thread): the executer whose exit blend was asked for, and the Ticks waited since.
+// A seat's ladder exit (game thread): the executer whose exit blend was asked for, and the Ticks waited since.
 struct LadderExit
 {
     const void* executer  = nullptr;
     bool        requested = false;
-    bool        scoped    = false;  // the exit's camera off ran in player 2's scopes (logged once)
+    bool        scoped    = false;  // the exit's camera off ran in the seat's scopes (logged once)
     unsigned    waited    = 0;
 };
-LadderExit g_ladderExit;
+LadderExit g_ladderExit[players::kMaxPlayers];  // by seat; index 0 unused
 RequestFn  g_requestCamExit = nullptr;
 
-// The one-shot actor's leave slot, and the actor player 2's one-shot camera went on, as a weak value (game thread writes;
-// the leave resolves it on any thread, so a freed actor whose memory is reused never matches).
+// The one-shot actor's leave slot, and the actor each seat's one-shot camera went on, as a weak value (game thread
+// writes; the leave resolves it on any thread, so a freed actor whose memory is reused never matches).
 platform::VTableEntry      g_oneShotLeave;
 bool                       g_oneShotLeavePlaced = false;
-std::atomic<std::uint64_t> g_oneShotTwoWeak{0};
+std::atomic<std::uint64_t> g_oneShotTwoWeak[players::kMaxPlayers]{};  // by seat; index 0 unused
 
-// The squeeze's and crawl's exit calls, and the executer whose exit ran (per class; reset at Start).
-OneArgFn                               g_squeezeExit = nullptr;
-OneArgFn                               g_cameraOff   = nullptr;
-std::array<const void*, kExecCount>    g_exitRan{};
+// The squeeze's and crawl's exit calls, and the executer whose exit ran (per seat and class; reset at Start).
+OneArgFn                                                  g_squeezeExit = nullptr;
+OneArgFn                                                  g_cameraOff   = nullptr;
+std::array<std::array<const void*, kExecCount>, players::kMaxPlayers> g_exitRan{};
 
 HandleBytes ReadHandle(const void* actor, const ExecClass& cls) noexcept
 {
@@ -101,7 +110,7 @@ const wchar_t* ModuleText(const HandleBytes& handle) noexcept
                                                                                                   : L"inactive";
 }
 
-/// The slide flag of a handle's module (player 2's own, or the ladder's), or -1 when it has no live module.
+/// The slide flag of a handle's module (a seat's own, or the ladder's), or -1 when it has no live module.
 int SlideFlag(const HandleBytes& handle) noexcept
 {
     const std::wstring_view state(ModuleText(handle));
@@ -110,17 +119,17 @@ int SlideFlag(const HandleBytes& handle) noexcept
                : ReadField<std::uint8_t>(reinterpret_cast<const void*>(handle[0]), kLadderSlide);
 }
 
-std::array<int, 2> g_slideSeen{-1, -1};  // game thread: each player's last logged slide flag
+std::array<int, players::kMaxPlayers> g_slideSeen{-1, -1, -1};  // game thread: by seat (0 player 1's), the last logged
 
-/// A line when a player's ladder camera's slide flag changes (W4).
-void NoteSlide(std::size_t player, int flag) noexcept
+/// A line when a player's ladder camera's slide flag changes (W4); `seat` 0 is player 1.
+void NoteSlide(int seat, int flag) noexcept
 {
-    if (flag < 0 || flag == g_slideSeen[player])
+    if (seat < 0 || seat >= players::kMaxPlayers || flag < 0 || flag == g_slideSeen[seat])
     {
         return;
     }
-    g_slideSeen[player] = flag;
-    platform::LogDebug(L"traversal camera: player {}'s ladder camera: slide view {}", player + 1,
+    g_slideSeen[seat] = flag;
+    platform::LogDebug(L"traversal camera: player {}'s ladder camera: slide view {}", seat + 1,
                        flag != 0 ? L"on (the wider slide framing)" : L"off");
 }
 
@@ -176,7 +185,7 @@ struct Outcome
     bool           rail   = false;
     bool           swapped = false;
     const void*    actor  = nullptr;
-    HandleBytes    after{};                          // player 2's handle
+    HandleBytes    after{};                          // the seat's handle
     const wchar_t* beforeText = L"(no handle)";      // its first module, read before the call
     const wchar_t* afterText  = L"(no handle)";      // the same after it
 };
@@ -191,14 +200,15 @@ const wchar_t* FlagText(const void* actor, const ExecClass& cls) noexcept
     return ReadField<std::uint8_t>(actor, cls.cameraFlag) != 0 ? L"on (the actor's flag)" : L"off (the actor's flag)";
 }
 
-/// Runs `call` for player 2's executer of class `index`: player 2's handle in the actor, the primary scope and the
+/// Runs `call` for `seat`'s executer of class `index`: the seat's handle in the actor, the primary scope and the
 /// leader answer, and a LeaderScope where the installer reads the leader. Unscoped (a scope refused), the game's own
-/// answer stands, still with player 2's handle in place.
-Outcome RunAsPlayerTwo(std::size_t index, Call& call) noexcept
+/// answer stands, still with the seat's handle in place.
+Outcome RunAsPlayerTwo(int seat, std::size_t index, Call& call) noexcept
 {
     const ExecClass& cls = kExecClasses[index];
     Outcome          out;
-    void*            member = generation::Member();
+    void*            member  = generation::MemberOf(seat);
+    HandleMap&       handles = g_handles[seat];
     void*            actor  = ObjectIn(call.executer, call.kind == Kind::Start ? cls.actorAtStart : cls.actorLater);
     if (actor == nullptr)
     {
@@ -216,12 +226,12 @@ Outcome RunAsPlayerTwo(std::size_t index, Call& call) noexcept
     {
         try
         {
-            if (g_handles.size() >= kHandlePrune && !g_handles.contains(actorWeak))
+            if (handles.size() >= kHandlePrune && !handles.contains(actorWeak))
             {
-                std::erase_if(g_handles,
+                std::erase_if(handles,
                               [](const auto& entry) { return leader_scope::ObjectAt(&entry.first) == nullptr; });
             }
-            mine = &g_handles[actorWeak];
+            mine = &handles[actorWeak];
         }
         catch (...)
         {
@@ -275,56 +285,62 @@ Outcome RunAsPlayerTwo(std::size_t index, Call& call) noexcept
     return out;
 }
 
-void LogStep(std::size_t index, const wchar_t* step, const Outcome& out)
+void LogStep(int seat, std::size_t index, const wchar_t* step, const Outcome& out)
 {
-    const ExecClass& cls = kExecClasses[index];
-    platform::LogDebug(L"traversal camera: player 2's {} on {} {}: {}{}; player 2's {} camera {} -> {}", cls.name,
+    if (!platform::Enabled(platform::Level::Debug))
+    {
+        return;
+    }
+    const ExecClass&     cls  = kExecClasses[index];
+    const wchar_t* const name = players::SeatName(seat);
+    platform::LogDebug(L"traversal camera: {}'s {} on {} {}: {}{}; {}'s {} camera {} -> {}", name, cls.name,
                        ActorName(out.actor), step,
-                       out.scoped ? L"as player 2" : L"a scope was refused, the game's answer stands",
-                       out.rail ? L" (rail camera)" : L"", cls.name,
-                       out.beforeText, out.afterText);
+                       out.scoped ? std::format(L"as {}", name)
+                                  : std::wstring(L"a scope was refused, the game's answer stands"),
+                       out.rail ? L" (rail camera)" : L"", name, cls.name, out.beforeText, out.afterText);
 }
 
-std::uintptr_t ExecStep(std::size_t index, Kind kind, Call& call)
+std::uintptr_t ExecStep(int seat, std::size_t index, Kind kind, Call& call)
 {
-    const Outcome out = RunAsPlayerTwo(index, call);
+    const Outcome out = RunAsPlayerTwo(seat, index, call);
     if (index == kOneShot && kind == Kind::Tick && out.scoped && out.actor != nullptr &&
         ReadField<std::uint8_t>(out.actor, kExecClasses[kOneShot].cameraFlag) != 0)
     {
-        g_oneShotTwoWeak.store(leader_scope::WeakOf(const_cast<void*>(out.actor)), std::memory_order_release);  // player 2's camera is on there
+        // The seat's camera is on there.
+        g_oneShotTwoWeak[seat].store(leader_scope::WeakOf(const_cast<void*>(out.actor)), std::memory_order_release);
     }
     try
     {
         if (kind == Kind::Start)
         {
-            g_exitLogged    = nullptr;
-            g_exitRan[index] = nullptr;
+            g_exitLogged[seat]     = nullptr;
+            g_exitRan[seat][index] = nullptr;
             if (index == kLadder)
             {
-                g_ladderExit  = LadderExit{};
-                g_ladderModule = reinterpret_cast<const void*>(out.after[0]);
+                g_ladderExit[seat]   = LadderExit{};
+                g_ladderModule[seat] = reinterpret_cast<const void*>(out.after[0]);
             }
-            LogStep(index, L"starts", out);
+            LogStep(seat, index, L"starts", out);
             if (index == kOneShot && out.rail)
             {
-                platform::Log(L"traversal camera: player 2's one-shot move on {} uses a rail camera: its off at the end "
+                platform::Log(L"traversal camera: {}'s one-shot move on {} uses a rail camera: its off at the end "
                               L"reaches the primary camera's rail operator (not covered yet)",
-                              ActorName(out.actor));
+                              players::SeatName(seat), ActorName(out.actor));
             }
         }
         else if (kind == Kind::End)
         {
-            LogStep(index,
-                    kExecClasses[index].tick == TickRule::MoveExit && g_exitRan[index] != call.executer
+            LogStep(seat, index,
+                    kExecClasses[index].tick == TickRule::MoveExit && g_exitRan[seat][index] != call.executer
                         ? L"ends (its move's exit was never seen at state 3: the End switched the camera off)"
                         : L"ends",
                     out);
         }
-        else if (index == kLadder ? g_exitLogged != call.executer
+        else if (index == kLadder ? g_exitLogged[seat] != call.executer
                                   : std::wstring_view(out.beforeText) != out.afterText)
         {
-            g_exitLogged = call.executer;
-            LogStep(index, index == kLadder ? L"reaches its exit" : L"changes its camera in the tick", out);
+            g_exitLogged[seat] = call.executer;
+            LogStep(seat, index, index == kLadder ? L"reaches its exit" : L"changes its camera in the tick", out);
         }
     }
     catch (...)
@@ -337,27 +353,29 @@ template <std::size_t Index>
 std::uintptr_t ExecStart(void* executer) noexcept
 {
     const auto original = reinterpret_cast<ExecFn>(g_exec[Index].start.Original());
-    if (g_inside || !PlayerTwos(executer))
+    const int  seat     = g_inside ? -1 : SeatOfExecuter(executer);
+    if (seat < 1)
     {
         return original(executer);
     }
     Call call{Kind::Start, original, nullptr, executer};
-    return ExecStep(Index, Kind::Start, call);
+    return ExecStep(seat, Index, Kind::Start, call);
 }
 
 template <std::size_t Index>
 std::uintptr_t ExecEnd(void* executer) noexcept
 {
     const auto original = reinterpret_cast<ExecFn>(g_exec[Index].end.Original());
-    if (g_inside || !PlayerTwos(executer))
+    const int  seat     = g_inside ? -1 : SeatOfExecuter(executer);
+    if (seat < 1)
     {
         return original(executer);
     }
     Call call{Kind::End, original, nullptr, executer};
-    return ExecStep(Index, Kind::End, call);
+    return ExecStep(seat, Index, Kind::End, call);
 }
 
-/// Player 2's ladder module's exit: its sub-state machine's current or pending entry is S2, or the module is off.
+/// A seat's ladder module's exit: its sub-state machine's current or pending entry is S2, or the module is off.
 struct ModuleExit
 {
     bool         blending = false;  // S2 current or pending
@@ -365,14 +383,15 @@ struct ModuleExit
     std::int32_t current = -1, pending = -1;
 };
 
-ModuleExit LadderModuleExit(const void* executer) noexcept
+ModuleExit LadderModuleExit(int seat, const void* executer) noexcept
 {
-    ModuleExit  out;
-    void*       actor = ObjectIn(executer, kExecClasses[kLadder].actorLater);
-    const auto  found = actor != nullptr && VTableOf(actor) == g_exec[kLadder].actorVt
-                            ? g_handles.find(leader_scope::WeakOf(actor))
-                            : g_handles.end();
-    if (found == g_handles.end() || std::wstring_view(ModuleText(found->second)) != L"active")
+    ModuleExit        out;
+    const HandleMap&  handles = g_handles[seat];
+    void*             actor   = ObjectIn(executer, kExecClasses[kLadder].actorLater);
+    const auto        found   = actor != nullptr && VTableOf(actor) == g_exec[kLadder].actorVt
+                                    ? handles.find(leader_scope::WeakOf(actor))
+                                    : handles.end();
+    if (found == handles.end() || std::wstring_view(ModuleText(found->second)) != L"active")
     {
         out.off = true;
         return out;
@@ -386,30 +405,36 @@ ModuleExit LadderModuleExit(const void* executer) noexcept
     return out;
 }
 
-/// Player 2's ladder Tick at an exit phase. Returns nothing to do (the caller runs the Tick unscoped) or runs it.
-std::optional<std::uintptr_t> LadderExitTick(Call& tick, std::uint8_t state) noexcept
+/// A seat's ladder Tick at an exit phase. Returns nothing to do (the caller runs the Tick unscoped) or runs it.
+std::optional<std::uintptr_t> LadderExitTick(int seat, Call& tick, std::uint8_t state) noexcept
 {
-    if (g_ladderExit.executer != tick.executer)
+    LadderExit&          exit = g_ladderExit[seat];
+    const wchar_t* const name = players::SeatName(seat);
+    if (exit.executer != tick.executer)
     {
-        g_ladderExit = LadderExit{tick.executer};
+        exit = LadderExit{tick.executer};
     }
-    if (!g_ladderExit.requested && g_requestCamExit != nullptr)
+    if (!exit.requested && g_requestCamExit != nullptr)
     {
-        g_ladderExit.requested = true;
+        exit.requested = true;
         Call request{Kind::Request};
         request.request        = g_requestCamExit;
         request.executer       = tick.executer;
         request.state          = state;
-        const Outcome    out   = RunAsPlayerTwo(kLadder, request);
-        const ModuleExit after = LadderModuleExit(tick.executer);
+        const Outcome    out   = RunAsPlayerTwo(seat, kLadder, request);
+        const ModuleExit after = LadderModuleExit(seat, tick.executer);
         try
         {
-            platform::LogDebug(L"traversal camera: player 2's ladder on {} reaches its exit (climb state {}): the game's "
-                               L"exit blend asked for {}; module {}, sub-state {} pending {} (the blend starts on the "
-                               L"game's task: this Tick runs unscoped)",
-                               ActorName(out.actor), state,
-                               out.scoped ? L"as player 2" : L"with a scope refused (the game's answer stands)",
-                               ModuleText(out.after), after.current, after.pending);
+            if (platform::Enabled(platform::Level::Debug))
+            {
+                platform::LogDebug(L"traversal camera: {}'s ladder on {} reaches its exit (climb state {}): the game's "
+                                   L"exit blend asked for {}; module {}, sub-state {} pending {} (the blend starts on the "
+                                   L"game's task: this Tick runs unscoped)",
+                                   name, ActorName(out.actor), state,
+                                   out.scoped ? std::format(L"as {}", name)
+                                              : std::wstring(L"with a scope refused (the game's answer stands)"),
+                                   ModuleText(out.after), after.current, after.pending);
+            }
         }
         catch (...)
         {
@@ -420,18 +445,18 @@ std::optional<std::uintptr_t> LadderExitTick(Call& tick, std::uint8_t state) noe
     {
         return std::nullopt;  // these exits switch no camera in the Tick: the blend does it all
     }
-    const ModuleExit now = LadderModuleExit(tick.executer);
-    if (world_rules::LadderExitWaits(g_requestCamExit != nullptr, now.blending, now.off, g_ladderExit.waited, kExitWait))
+    const ModuleExit now = LadderModuleExit(seat, tick.executer);
+    if (world_rules::LadderExitWaits(g_requestCamExit != nullptr, now.blending, now.off, exit.waited, kExitWait))
     {
-        ++g_ladderExit.waited;
+        ++exit.waited;
         return std::nullopt;
     }
-    if (!g_ladderExit.scoped)
+    if (!exit.scoped)
     {
-        g_ladderExit.scoped = true;
+        exit.scoped = true;
         try
         {
-            platform::LogDebug(L"traversal camera: player 2's ladder exit's camera off runs as player 2 {}",
+            platform::LogDebug(L"traversal camera: {}'s ladder exit's camera off runs as {} {}", name, name,
                                now.blending ? L"during the exit blend (it does nothing: the blend ends the camera)"
                                : now.off    ? L"with the camera already off"
                                             : L"WITHOUT the exit blend (the game's gate refused it): a cut, as player "
@@ -441,12 +466,13 @@ std::optional<std::uintptr_t> LadderExitTick(Call& tick, std::uint8_t state) noe
         {
         }
     }
-    return ExecStep(kLadder, Kind::Tick, tick);
+    return ExecStep(seat, kLadder, Kind::Tick, tick);
 }
 
-/// Player 2's squeeze or crawl reaches its move's exit: the camera off the worker's delegate refused, as player 2.
-void MoveExitCall(std::size_t index, void* executer) noexcept
+/// A seat's squeeze or crawl reaches its move's exit: the camera off the worker's delegate refused, as the seat.
+void MoveExitCall(int seat, std::size_t index, void* executer) noexcept
 {
+    const wchar_t* const name = players::SeatName(seat);
     const ExecClass& cls = kExecClasses[index];
     Call             call{Kind::OneArg};
     call.executer = executer;
@@ -463,7 +489,7 @@ void MoveExitCall(std::size_t index, void* executer) noexcept
     {
         try
         {
-            platform::LogDebug(L"traversal camera: player 2's {} reaches its exit: {}; its camera ends at the End",
+            platform::LogDebug(L"traversal camera: {}'s {} reaches its exit: {}; its camera ends at the End", name,
                                cls.name, call.one == nullptr ? L"the exit call is unavailable" : L"no actor at the exit");
         }
         catch (...)
@@ -471,14 +497,18 @@ void MoveExitCall(std::size_t index, void* executer) noexcept
         }
         return;
     }
-    const Outcome out = RunAsPlayerTwo(index, call);
+    const Outcome out = RunAsPlayerTwo(seat, index, call);
     try
     {
-        platform::LogDebug(L"traversal camera: player 2's {} on {} reaches its exit: the game's exit camera off ran {}; "
-                           L"player 2's {} camera {} -> {}",
-                           cls.name, ActorName(out.actor),
-                           out.scoped ? L"as player 2" : L"with a scope refused (the game's answer stands)", cls.name,
-                           out.beforeText, out.afterText);
+        if (platform::Enabled(platform::Level::Debug))
+        {
+            platform::LogDebug(L"traversal camera: {}'s {} on {} reaches its exit: the game's exit camera off ran {}; "
+                               L"{}'s {} camera {} -> {}",
+                               name, cls.name, ActorName(out.actor),
+                               out.scoped ? std::format(L"as {}", name)
+                                          : std::wstring(L"with a scope refused (the game's answer stands)"),
+                               name, cls.name, out.beforeText, out.afterText);
+        }
     }
     catch (...)
     {
@@ -489,18 +519,19 @@ template <std::size_t Index>
 std::uintptr_t ExecTick(void* executer, double dt, void* third, std::int64_t fourth) noexcept
 {
     const auto original = reinterpret_cast<TickFn>(g_exec[Index].tick.Original());
-    if (g_inside || !PlayerTwos(executer))
+    const int  seat     = g_inside ? -1 : SeatOfExecuter(executer);
+    if (seat < 1)
     {
         return original(executer, dt, third, fourth);
     }
     if (kExecClasses[Index].tick == TickRule::MoveExit)
     {
         const void* move = ReadPointer(executer, kExecClasses[Index].exitMove);
-        if (g_exitRan[Index] != executer && move != nullptr &&
+        if (g_exitRan[seat][Index] != executer && move != nullptr &&
             ReadField<std::uint8_t>(move, kMoveExitState) == kMoveAtExit)
         {
-            g_exitRan[Index] = executer;
-            MoveExitCall(Index, executer);
+            g_exitRan[seat][Index] = executer;
+            MoveExitCall(seat, Index, executer);
         }
         return original(executer, dt, third, fourth);
     }
@@ -513,10 +544,10 @@ std::uintptr_t ExecTick(void* executer, double dt, void* third, std::int64_t fou
         {
             return original(executer, dt, third, fourth);
         }
-        const auto ran = LadderExitTick(call, state);
+        const auto ran = LadderExitTick(seat, call, state);
         return ran ? *ran : original(executer, dt, third, fourth);
     }
-    return ExecStep(Index, Kind::Tick, call);
+    return ExecStep(seat, Index, Kind::Tick, call);
 }
 
 struct LeaveCall
@@ -534,15 +565,22 @@ void RunLeave(void* context)
 }
 
 /// The one-shot actor's leave (any thread): for player 2's member, or with no character the actor player 2's camera went
-/// on, the game's leave ends the camera on player 2's camera manager. Everyone else's is the game's.
+/// on, the game's leave ends the camera on player 2's camera manager. Everyone else's is the game's. Player 2's only:
+/// the leave has no seat of its own on the anim worker, and the camera context it runs in is climb_context's
+/// WithPlayerTwoCamera.
 std::uintptr_t OneShotLeave(void* actor, void* character) noexcept
 {
-    const auto  original = reinterpret_cast<LeaveSlotFn>(g_oneShotLeave.Original());
-    const void* member   = generation::Active() ? generation::Member() : nullptr;
+    static_assert(players::kSeatsBuilt == 1, "OneShotLeave ends player 2's one-shot camera through climb_context's "
+                                             "WithPlayerTwoCamera: give it the seat whose member or recorded actor "
+                                             "matches, and climb_context a camera context per seat, before seat 2 is "
+                                             "built");
+    constexpr int seat     = players::kPlayerTwoSeat;
+    const auto    original = reinterpret_cast<LeaveSlotFn>(g_oneShotLeave.Original());
+    const void*   member   = generation::Active(seat) ? generation::MemberOf(seat) : nullptr;
+    std::atomic<std::uint64_t>& weak = g_oneShotTwoWeak[seat];
     const bool  two      = member != nullptr && actor != nullptr &&
                      (character != nullptr ? character == member
-                                           : leader_scope::StillNames(g_oneShotTwoWeak.load(std::memory_order_acquire),
-                                                                      actor));
+                                           : leader_scope::StillNames(weak.load(std::memory_order_acquire), actor));
     if (!two)
     {
         return original(actor, character);
@@ -557,10 +595,10 @@ std::uintptr_t OneShotLeave(void* actor, void* character) noexcept
         // only, so a later leave of this actor cannot reach player 1's slot 15.
         WriteField<std::uint8_t>(actor, flag, 0);
     }
-    std::uint64_t recorded = g_oneShotTwoWeak.load(std::memory_order_acquire);
+    std::uint64_t recorded = weak.load(std::memory_order_acquire);
     if (leader_scope::StillNames(recorded, actor))
     {
-        g_oneShotTwoWeak.compare_exchange_strong(recorded, 0, std::memory_order_acq_rel);
+        weak.compare_exchange_strong(recorded, 0, std::memory_order_acq_rel);
     }
     try
     {
@@ -586,7 +624,7 @@ std::wstring PlaceExec(const platform::GameImage& image)
     ExecLive&        live = g_exec[Index];
     if (cls.handleSize > kMaxHandle || cls.handleSize % 8 != 0)
     {
-        return std::format(L"{} NO (its camera handle does not fit player 2's copy)", cls.name);
+        return std::format(L"{} NO (its camera handle does not fit the seats' copy)", cls.name);
     }
     live.actorVt          = Live(image, cls.actorVt, 0x740);
     if (cls.start.slot != 0)
@@ -653,16 +691,19 @@ bool Remove() noexcept
     }
     kept |= g_oneShotLeavePlaced && !g_oneShotLeave.Restore();
     g_oneShotLeavePlaced = false;
-    g_oneShotTwoWeak.store(0, std::memory_order_release);
+    for (auto& weak : g_oneShotTwoWeak)
+    {
+        weak.store(0, std::memory_order_release);
+    }
     return kept;
 }
 
-void Tick(bool active) noexcept
+void Tick(int seat, bool active) noexcept
 {
-    if (!active)
+    if (!active && players::SeatIndex(seat))
     {
-        g_ladderModule = nullptr;
-        g_oneShotTwoWeak.store(0, std::memory_order_release);
+        g_ladderModule[seat] = nullptr;
+        g_oneShotTwoWeak[seat].store(0, std::memory_order_release);
     }
 }
 
@@ -670,11 +711,12 @@ void Tick(bool active) noexcept
 
 std::uintptr_t LadderInput(LadderInputFn original, void* executer, float dt) noexcept
 {
-    if (g_exec[kLadder].actorVt == 0 || g_inside || !PlayerTwos(executer))
+    const int seat = g_exec[kLadder].actorVt == 0 || g_inside ? -1 : SeatOfExecuter(executer);
+    if (seat < 1)
     {
         const auto result = original(executer, dt);
         // Player 1's slide flag, for the log (both on one ladder: player 2's input must not change it).
-        void* one = generation::Active() && generation::OnGameThread() ? generation::PlayerOneController() : nullptr;
+        void* one = generation::AnyActive() && generation::OnGameThread() ? generation::PlayerOneController() : nullptr;
         if (one != nullptr && g_exec[kLadder].actorVt != 0 &&
             ObjectIn(executer, kExecCharacter) == ReadPointer(one, facts::kControllerPawn))
         {
@@ -687,14 +729,15 @@ std::uintptr_t LadderInput(LadderInputFn original, void* executer, float dt) noe
         return result;
     }
     // RE-p2-traversal-worker-gates.md W4: the input step sets the ladder module's slide flag (+0x434, a wider FOV while
-    // sliding) through the handle on the ladder. Window B already holds player 2's scopes; only player 2's handle is
-    // put in, so the write reaches player 2's camera and leaves player 1's flag alone.
-    const ExecClass& cls   = kExecClasses[kLadder];
-    void*            actor = ObjectIn(executer, cls.actorLater);
-    const auto       found = actor != nullptr && VTableOf(actor) == g_exec[kLadder].actorVt
-                                 ? g_handles.find(leader_scope::WeakOf(actor))
-                                 : g_handles.end();
-    if (found == g_handles.end())
+    // sliding) through the handle on the ladder. Window B already holds the seat's scopes (traversal_watch opens
+    // player 2's); only the seat's handle is put in, so the write reaches its camera and leaves player 1's flag alone.
+    const ExecClass& cls     = kExecClasses[kLadder];
+    HandleMap&       handles = g_handles[seat];
+    void*            actor   = ObjectIn(executer, cls.actorLater);
+    const auto       found   = actor != nullptr && VTableOf(actor) == g_exec[kLadder].actorVt
+                                   ? handles.find(leader_scope::WeakOf(actor))
+                                   : handles.end();
+    if (found == handles.end())
     {
         return original(executer, dt);
     }
@@ -715,28 +758,30 @@ std::uintptr_t LadderInput(LadderInputFn original, void* executer, float dt) noe
     {
         found->second = {};
     }
-    NoteSlide(1, SlideFlag(found->second));
+    NoteSlide(seat, SlideFlag(found->second));
     return result;
 }
 
 std::uintptr_t LadderStart(ExecFn original, void* executer) noexcept
 {
-    if (g_exec[kLadder].actorVt == 0 || g_inside || !PlayerTwos(executer))
+    const int seat = g_exec[kLadder].actorVt == 0 || g_inside ? -1 : SeatOfExecuter(executer);
+    if (seat < 1)
     {
         return original(executer);
     }
     Call call{Kind::Start, original, nullptr, executer};
-    return ExecStep(kLadder, Kind::Start, call);
+    return ExecStep(seat, kLadder, Kind::Start, call);
 }
 
 std::uintptr_t LadderEnd(ExecFn original, void* executer) noexcept
 {
-    if (g_exec[kLadder].actorVt == 0 || g_inside || !PlayerTwos(executer))
+    const int seat = g_exec[kLadder].actorVt == 0 || g_inside ? -1 : SeatOfExecuter(executer);
+    if (seat < 1)
     {
         return original(executer);
     }
     Call call{Kind::End, original, nullptr, executer};
-    return ExecStep(kLadder, Kind::End, call);
+    return ExecStep(seat, kLadder, Kind::End, call);
 }
 
 }  // namespace lss::player_two::traversal_camera

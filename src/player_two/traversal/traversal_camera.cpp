@@ -5,6 +5,7 @@
 #include "player_two/generation.h"
 #include "player_two/traversal/traversal_collision.h"
 #include "player_two/traversal/traversal_shared.h"
+#include "players/seats.h"
 
 namespace lss::player_two::traversal_camera {
 
@@ -65,10 +66,13 @@ void Tick() noexcept
     {
         return;
     }
-    const bool active = generation::Active();
-    executers::Tick(active);
-    holders::Tick(active);
-    collision::Tick(active);
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        const bool active = generation::Active(seat);
+        executers::Tick(seat, active);
+        holders::Tick(seat, active);
+    }
+    collision::Tick(generation::Active(players::kPlayerTwoSeat));  // a dev tool: player 1's and player 2's cameras
 }
 
 }  // namespace lss::player_two::traversal_camera

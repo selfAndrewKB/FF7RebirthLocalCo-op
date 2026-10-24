@@ -14,7 +14,9 @@
 #include "player_two/object_fields.h"
 #include "player_two/rides/chocobo_ride.h"
 #include "player_two/scopes/leader_scope.h"
+#include "players/seats.h"
 
+#include <array>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -54,12 +56,12 @@ constexpr int           kNone          = -1;
 platform::VTableEntry g_trySlot;
 platform::VTableEntry g_enterSlot;
 
-// Game thread.
+// Game thread, by seat: a seat's chocobo's counts at its index; index 0 holds the other chocobos' camera setups.
 struct Counts
 {
     unsigned tryTwo = 0, tryRefused = 0, enterTwo = 0, enterTwoRefused = 0, enterOthers = 0;
 };
-Counts g_counts;
+std::array<Counts, players::kMaxPlayers> g_counts{};
 
 #if LSS_DEV
 // The logging half (dev tools): the game's answers around a start check, the 10 s summary, the module's state changes.
@@ -77,10 +79,12 @@ struct TryNote
     int         state  = kNone;
     bool operator==(const TryNote&) const = default;
 };
-TryNote     g_lastTry{};
-bool        g_tryNoted     = false;
-const void* g_moduleSeen   = nullptr;  // player 2's chocobo's module, and its last state (Debug on change)
-int         g_moduleState  = kNone;
+// By seat (index 0 unused): the last start check noted, the seat's chocobo's module and its last state (Debug on
+// change).
+TryNote     g_lastTry[players::kMaxPlayers]{};
+bool        g_tryNoted[players::kMaxPlayers]{};
+const void* g_moduleSeen[players::kMaxPlayers]{};
+int         g_moduleState[players::kMaxPlayers] = {kNone, kNone, kNone};
 #endif
 
 /// The chocobo's ride camera module while its weak handle holds, or null.
@@ -105,6 +109,7 @@ std::wstring StateText(int state)
 
 struct TryCall
 {
+    int        seat;  // whose chocobo
     TryBeginFn fn;
     void*      actor;
     float      dt;
@@ -136,17 +141,17 @@ void RunTry(void* context) noexcept
     const bool logs = platform::Enabled(platform::Level::Debug);
     if (logs)
     {
-        // Logging only: the game's own answers, read inside player 2's scope.
+        // Logging only: the game's own answers, read inside the seat's scope.
         call.note.actor = call.actor;
         if (g_isRidden == nullptr || !platform::CallGuarded(g_isRidden, call.note.ridden, static_cast<const void*>(call.pawn)))
         {
             call.note.ridden = false;
         }
-        const void* character = ReadPointer(generation::PlayerTwoController(), kFieldActionCharacter);
-        call.note.who         = character == nullptr                ? 0
-                              : character == generation::Member()   ? 1
-                              : character == call.pawn              ? 2
-                                                                    : 3;
+        const void* character = ReadPointer(generation::ControllerOf(call.seat), kFieldActionCharacter);
+        call.note.who         = character == nullptr                          ? 0
+                              : character == generation::MemberOf(call.seat)  ? 1
+                              : character == call.pawn                        ? 2
+                                                                              : 3;
         call.note.state = ControlState(call.pawn);
     }
 #endif
@@ -162,25 +167,28 @@ void RunTry(void* context) noexcept
 #if LSS_DEV
 void NoteTry(const TryCall& call)
 {
-    platform::LogTrace(L"chocobo climb: player 2's chocobo's start check ran in player 2's scope");
+    const int            seat = call.seat;
+    const wchar_t* const name = players::SeatName(seat);
+    platform::LogTrace(L"chocobo climb: {}'s chocobo's start check ran in {}'s scope", name, name);
     if (!platform::Enabled(platform::Level::Debug))
     {
         return;
     }
-    if (!g_tryNoted || !(call.note == g_lastTry))
+    if (!g_tryNoted[seat] || !(call.note == g_lastTry[seat]))
     {
-        g_tryNoted = true;
-        g_lastTry  = call.note;
-        constexpr const wchar_t* kWho[] = {L"none", L"player 2's member", L"player 2's chocobo", L"another character"};
-        platform::LogDebug(L"chocobo climb: player 2's chocobo near {}: the game's start check runs in player 2's scope "
-                           L"(the ridden vehicle {}; player 2's controller's field-action character: {}; the chocobo's "
+        g_tryNoted[seat] = true;
+        g_lastTry[seat]  = call.note;
+        const std::wstring who[] = {L"none", std::format(L"{}'s member", name), std::format(L"{}'s chocobo", name),
+                                    L"another character"};
+        platform::LogDebug(L"chocobo climb: {}'s chocobo near {}: the game's start check runs in {}'s scope "
+                           L"(the ridden vehicle {}; {}'s controller's field-action character: {}; the chocobo's "
                            L"control state {})",
-                           NameOf(call.actor), call.note.ridden ? L"yes" : L"NO", kWho[call.note.who < 0 ? 0 : call.note.who],
-                           StateText(call.note.state));
+                           name, NameOf(call.actor), name, call.note.ridden ? L"yes" : L"NO", name,
+                           who[call.note.who < 0 ? 0 : call.note.who], StateText(call.note.state));
     }
     if (call.after != call.note.state && call.after != kNone)
     {
-        platform::LogDebug(L"chocobo climb: player 2's chocobo starts a climb at {} (its control state {} -> {})",
+        platform::LogDebug(L"chocobo climb: {}'s chocobo starts a climb at {} (its control state {} -> {})", name,
                            NameOf(call.actor), StateText(call.note.state), StateText(call.after));
     }
 }
@@ -192,12 +200,14 @@ void NoteTry(const TryCall&) {}
 void TryBegin(void* actor, float dt, void* pawn) noexcept
 {
     const auto original = reinterpret_cast<TryBeginFn>(g_trySlot.Original());
-    if (pawn != nullptr && generation::OnGameThread() && pawn == chocobo_ride::RiddenChocobo())
+    // The seat from the chocobo it rides.
+    const int seat = pawn != nullptr && generation::OnGameThread() ? chocobo_ride::SeatRiding(pawn) : -1;
+    if (seat >= 1)
     {
-        TryCall call{original, actor, dt, pawn};
+        TryCall call{seat, original, actor, dt, pawn};
         if (chocobo_ride::RunAsRider(pawn, &RunTry, &call))
         {
-            ++g_counts.tryTwo;
+            ++g_counts[seat].tryTwo;
             try
             {
                 NoteTry(call);
@@ -207,14 +217,16 @@ void TryBegin(void* actor, float dt, void* pawn) noexcept
             }
             return;
         }
-        ++g_counts.tryRefused;
-        platform::LogTrace(L"chocobo climb: player 2's chocobo's start check ran outside player 2's scope (refused)");
+        ++g_counts[seat].tryRefused;
+        platform::LogTrace(L"chocobo climb: {}'s chocobo's start check ran outside {}'s scope (refused)",
+                           players::SeatName(seat), players::SeatName(seat));
     }
     original(actor, dt, pawn);
 }
 
 struct EnterCall
 {
+    int     seat;  // whose chocobo
     EnterFn fn;
     void*   executer;
     bool    leader = false;
@@ -223,7 +235,7 @@ struct EnterCall
 void RunEnter(void* context) noexcept
 {
     auto&                           call = *static_cast<EnterCall*>(context);
-    const leader_scope::LeaderScope leader(leader_scope::WeakOf(generation::Member()));
+    const leader_scope::LeaderScope leader(leader_scope::WeakOf(generation::MemberOf(call.seat)));
     call.leader = leader.Held();
     call.fn(call.executer);
 }
@@ -238,17 +250,18 @@ void Enter(void* executer) noexcept
         return;
     }
     const void* chocobo = leader_scope::ObjectAt(static_cast<const std::byte*>(executer) + kExecuterChocobo);
-    const bool  two     = chocobo != nullptr && chocobo == chocobo_ride::RiddenChocobo();
+    const int   seat    = chocobo_ride::SeatRiding(chocobo);  // the seat from the climbing chocobo, or -1
+    const bool  two     = seat >= 1;
     const void* module  = chocobo != nullptr ? ModuleOf(chocobo) : nullptr;
     const int   state   = StateAt(module, kModuleCurrent);
     const int   pending = StateAt(module, kModulePending);
-    EnterCall   call{original, executer};
+    EnterCall   call{seat, original, executer};
     const bool  scoped = two && chocobo_ride::RunAsRider(chocobo, &RunEnter, &call);
     if (!scoped)
     {
         original(executer);
     }
-    ++(two ? (scoped ? g_counts.enterTwo : g_counts.enterTwoRefused) : g_counts.enterOthers);
+    ++(two ? (scoped ? g_counts[seat].enterTwo : g_counts[seat].enterTwoRefused) : g_counts[0].enterOthers);
     try
     {
         // The module is read again: the setup reads the chocobo's handle, it does not replace it [ASSUMPTION; logged].
@@ -259,15 +272,16 @@ void Enter(void* executer) noexcept
                                         StateText(StateAt(after, kModulePending)));
         if (two && !scoped)
         {
-            platform::Log(L"WARNING: chocobo climb: player 2's chocobo's climb camera setup ran outside player 2's scope (a "
+            platform::Log(L"WARNING: chocobo climb: {}'s chocobo's climb camera setup ran outside {}'s scope (a "
                           L"scope was refused); no climb framing, as the game gives any rider but the leader; {}",
-                          text);
+                          players::SeatName(seat), players::SeatName(seat), text);
         }
 #if LSS_DEV
         else if (two)
         {
-            platform::LogDebug(L"chocobo climb: player 2's chocobo climbs; the camera setup ran in player 2's scope (player "
-                               L"2's member as the leader: {}); {}",
+            platform::LogDebug(L"chocobo climb: {}'s chocobo climbs; the camera setup ran in {}'s scope ({}'s member as "
+                               L"the leader: {}); {}",
+                               players::SeatName(seat), players::SeatName(seat), players::SeatName(seat),
                                call.leader ? L"yes" : L"REFUSED", text);
         }
         else
@@ -293,15 +307,21 @@ void LogSummary() noexcept
     {
         return;
     }
-    const Counts counts = std::exchange(g_counts, {});
-    if (counts.tryTwo + counts.tryRefused + counts.enterTwo + counts.enterTwoRefused + counts.enterOthers == 0)
+    const auto     all    = std::exchange(g_counts, {});
+    const unsigned others = all[0].enterOthers;
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)  // a line per seat, each with the other chocobos' count
     {
-        return;
+        const Counts&        counts = all[seat];
+        const wchar_t* const name   = players::SeatName(seat);
+        if (counts.tryTwo + counts.tryRefused + counts.enterTwo + counts.enterTwoRefused + others == 0)
+        {
+            continue;
+        }
+        platform::LogDebug(L"chocobo climb ({} s): {}'s chocobo's start checks in {}'s scope {} (refused {}); "
+                           L"climb camera setups: {}'s in scope {} (refused {}), other chocobos' {}",
+                           kSummaryEvery.count(), name, name, counts.tryTwo, counts.tryRefused, name, counts.enterTwo,
+                           counts.enterTwoRefused, others);
     }
-    platform::LogDebug(L"chocobo climb ({} s): player 2's chocobo's start checks in player 2's scope {} (refused {}); "
-                       L"climb camera setups: player 2's in scope {} (refused {}), other chocobos' {}",
-                       kSummaryEvery.count(), counts.tryTwo, counts.tryRefused, counts.enterTwo, counts.enterTwoRefused,
-                       counts.enterOthers);
 }
 
 /// Finds the game's answers the log reads; what it says in the install line.
@@ -363,27 +383,30 @@ void Tick() noexcept
     }
     LogSummary();
 #if LSS_DEV
-    const void* chocobo = generation::Active() ? chocobo_ride::DrivenChocobo() : nullptr;
-    const void* module  = chocobo != nullptr ? ModuleOf(chocobo) : nullptr;
-    const int   state   = StateAt(module, kModuleCurrent);
-    if (module != g_moduleSeen)
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        g_moduleSeen  = module;
-        g_moduleState = state;
-        return;
-    }
-    if (module != nullptr && state != g_moduleState)
-    {
-        const int was = g_moduleState;
-        g_moduleState = state;
-        try
+        const void* chocobo = generation::Active(seat) ? chocobo_ride::DrivenChocobo(seat) : nullptr;
+        const void* module  = chocobo != nullptr ? ModuleOf(chocobo) : nullptr;
+        const int   state   = StateAt(module, kModuleCurrent);
+        if (module != g_moduleSeen[seat])
         {
-            platform::LogDebug(L"chocobo climb: player 2's ride camera module {} state {} -> {} (0 normal, 1 start, 2 "
-                               L"start down, 3 climb, 4 end climb, 5 swim)",
-                               module, StateText(was), StateText(state));
+            g_moduleSeen[seat]  = module;
+            g_moduleState[seat] = state;
+            continue;
         }
-        catch (...)
+        if (module != nullptr && state != g_moduleState[seat])
         {
+            const int was       = g_moduleState[seat];
+            g_moduleState[seat] = state;
+            try
+            {
+                platform::LogDebug(L"chocobo climb: {}'s ride camera module {} state {} -> {} (0 normal, 1 start, 2 "
+                                   L"start down, 3 climb, 4 end climb, 5 swim)",
+                                   players::SeatName(seat), module, StateText(was), StateText(state));
+            }
+            catch (...)
+            {
+            }
         }
     }
 #endif

@@ -431,12 +431,12 @@ void TickAfterSession(const Frame& frame) noexcept
     player_two::traversal_watch::Tick();
     player_two::trigger_two::Tick();
     player_two::switch_volume_two::Tick();  // player 2's volumes left once player 2 is gone; the summary
-    player_two::traversal_camera::Tick();  // player 2's idle camera holders; the collision watch (dev)
+    player_two::traversal_camera::Tick();  // each seat's idle camera holders; the collision watch (dev)
     player_two::near_fade::Tick();         // player 2's character's fade state (Debug, on change)
     player_two::approach_two::Tick();      // the crossing walk-up calls, swapped once from here
     player_two::move_type_two::Tick();     // player 2's deferred walk-cap clear, the layer-2 watch
     player_two::vault_camera::Tick();      // player 2's vault cameras end on player 2's camera (lever L2)
-    player_two::chocobo_climb::Tick();     // player 2's climb camera's states and the summary (Debug)
+    player_two::chocobo_climb::Tick();     // each seat's climb camera's states and the summary (Debug)
     player_two::camera_distance::TickFraming(two.in);  // per-layout distance steps (roadmap 2b)
     player_two::shoulder_scale::Poll(frame.splitShown, views::SplitWidthRatio(false), views::SplitWidthRatio(true));
     player_two::anim_two_views::Tick(frame.splitShown);  // its frame count, before the world tick

@@ -61,10 +61,11 @@ void WatchCollision(int player, const void* cameraManager)
     CollisionWatch& w      = g_collision[player];
     const void*     module = cameraManager != nullptr ? SlotFifteen(cameraManager) : nullptr;
     const auto      vt     = module != nullptr ? VTableOf(module) : 0;
-    // Only the traversal modules this watch follows: the climbing wall's (the holders unit installs it) and player 2's
-    // ladder's (any other slot-15 module, a ride framing or a cutscene, is left to its own watch).
+    // Only the traversal modules this watch follows (a dev tool: player 1's and player 2's): the climbing wall's (the
+    // holders unit installs it) and player 2's ladder's (any other slot-15 module, a ride framing or a cutscene, is left to its own watch).
     const bool traversal =
-        module != nullptr && (vt == g_climbingModuleVt || (player == 1 && module == g_ladderModule));
+        module != nullptr &&
+        (vt == g_climbingModuleVt || (player == 1 && module == g_ladderModule[players::kPlayerTwoSeat]));
     if (module != w.module && w.module != nullptr && w.after == 0)
     {
         w.after = 1;  // the traversal camera left: watch the hand-over

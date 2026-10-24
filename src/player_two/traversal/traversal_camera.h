@@ -28,8 +28,14 @@
 // (any thread: plain compares and the game's own calls).
 //
 // Units: traversal_facts.h (the classes' tables), traversal_exec.cpp (the executer classes), traversal_holders.cpp
-// (the move classes and player 2's holders), traversal_collision.cpp (the collision watch, dev tools) and
+// (the move classes and the seats' holders), traversal_collision.cpp (the collision watch, dev tools) and
 // traversal_shared.h (what they share); this file's Install, Remove and Tick compose them (traversal_camera.cpp).
+//
+// Per seat (players/seats.h): what is described above for player 2 is kept for each seat (the camera handle copies by
+// seat and actor, a holder pool per seat, the ladder exit, the installed move); the seat is the one whose member the
+// executer's or move's character is, or climb_context's climber on the anim worker. Still player 2's: the one-shot
+// actor's leave (climb_context's WithPlayerTwoCamera), and the ladder's UpdateInput window, whose scopes
+// traversal_watch opens for player 2. The collision watch is a dev tool and stays two-player.
 
 #include <cstdint>
 
@@ -44,8 +50,9 @@ void Install(const platform::GameImage& image) noexcept;
 
 void Remove() noexcept;
 
-/// Game thread, per frame: an idle holder of player 2's is released (all of them with player 2 out); with the dev
-/// tools, the collision watch of both players' traversal cameras (Debug, a line per camera).
+/// Game thread, per frame: for each built seat, an idle holder of the seat's is released (all of them with the seat
+/// out); with the dev tools, the collision watch of player 1's and player 2's traversal cameras (Debug, a line per
+/// camera).
 void Tick() noexcept;
 
 using ExecFn = std::uintptr_t (*)(void* executer);
@@ -56,8 +63,8 @@ std::uintptr_t LadderEnd(ExecFn original, void* executer) noexcept;
 
 using LadderInputFn = std::uintptr_t (*)(void* executer, float dt);
 
-/// The ladder executer's UpdateInput (window B, player 2's scopes held by the caller): player 2's executer runs with
-/// player 2's ladder camera handle in the ladder, so the slide flag lands on player 2's camera.
+/// The ladder executer's UpdateInput (window B, the seat's scopes held by the caller): a seat's executer runs with
+/// the seat's ladder camera handle in the ladder, so the slide flag lands on the seat's camera.
 std::uintptr_t LadderInput(LadderInputFn original, void* executer, float dt) noexcept;
 
 }  // namespace lss::player_two::traversal_camera

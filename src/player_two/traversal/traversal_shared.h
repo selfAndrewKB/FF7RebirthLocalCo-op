@@ -1,8 +1,12 @@
 #pragma once
 
 // The traversal camera's state its units share (player_two/traversal/traversal_camera.h): the "inside a scoped call"
-// flag, the executer and actor readers, player 2's last ladder module, and each unit's placement, removal and tick,
+// flag, the executer and actor readers, each seat's last ladder module, and each unit's placement, removal and tick,
 // which traversal_camera.cpp composes into the module's Install, Remove and Tick. Internal; not a public API.
+//
+// Per seat (players/seats.h): the ladder module and each unit's per-seat records, indexed by the seat (index 0, player
+// 1's, unused); the seat comes from the executer's or move's character (SeatOfExecuter) or, on the anim worker, from
+// climb_context's climber. One scoped call runs at a time on the game thread, whichever seat's: g_inside is one flag.
 
 #include "player_two/traversal/traversal_facts.h"
 
@@ -11,6 +15,7 @@
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
 #include "player_two/scopes/leader_scope.h"
+#include "players/seats.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -18,7 +23,7 @@
 
 namespace lss::player_two::traversal_camera {
 
-inline bool g_inside = false;  // inside a scoped call of player 2's (game thread)
+inline bool g_inside = false;  // inside a scoped call of a seat's (game thread)
 
 /// Holds g_inside for one scoped call; reset on every way out.
 struct Inside
@@ -29,20 +34,31 @@ struct Inside
     Inside& operator=(const Inside&) = delete;
 };
 
-// Player 2's last ladder Start's module (written by the executers on the game thread; the collision watch reads it).
-inline const void* g_ladderModule = nullptr;
+// Each seat's last ladder Start's module, by seat (written by the executers on the game thread; the collision watch,
+// a dev tool, reads player 2's).
+inline const void* g_ladderModule[players::kMaxPlayers] = {};
 
 inline void* ObjectIn(const void* object, std::uint32_t field) noexcept
 {
     return object != nullptr ? leader_scope::ObjectAt(static_cast<const std::byte*>(object) + field) : nullptr;
 }
 
-/// The executer's character is player 2's member (game thread).
-inline bool PlayerTwos(void* executer) noexcept
+/// The built seat whose active member is the executer's character, or -1 (game thread; -1 on any other).
+inline int SeatOfExecuter(void* executer) noexcept
 {
-    void* member = generation::Member();
-    return member != nullptr && generation::Active() && generation::OnGameThread() &&
-           ObjectIn(executer, kExecCharacter) == member;
+    if (!generation::OnGameThread())
+    {
+        return -1;
+    }
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        void* member = generation::MemberOf(seat);
+        if (member != nullptr && generation::Active(seat) && ObjectIn(executer, kExecCharacter) == member)
+        {
+            return seat;
+        }
+    }
+    return -1;
 }
 
 inline std::wstring ActorName(const void* actor)
@@ -74,8 +90,8 @@ Placement Place(const platform::GameImage& image);
 /// Restores the executers' slots; true when one was changed after us and is left in place.
 bool Remove() noexcept;
 
-/// Game thread, per frame: with player 2 out, the ladder module and the one-shot's actor are forgotten.
-void Tick(bool active) noexcept;
+/// Game thread, per frame, per built seat: with the seat out, its ladder module and one-shot actor are forgotten.
+void Tick(int seat, bool active) noexcept;
 
 }  // namespace executers
 
@@ -85,18 +101,18 @@ namespace holders {
 struct Placement
 {
     std::wstring classes;             // "climbing wall yes, monkey bars yes, ..."
-    bool         twoHolders = false;  // player 2's own holders are on (every hook placed)
-    bool         hip        = false;  // the climbing wall's hip calls answer for player 2
+    bool         twoHolders = false;  // the seats' own holders are on (every hook placed)
+    bool         hip        = false;  // the climbing wall's hip calls answer for each seat
 };
 
-/// Replaces the move classes' slots, the hip calls and player 2's holder redirects (each checked).
+/// Replaces the move classes' slots, the hip calls and the seats' holder redirects (each checked).
 Placement Place(const platform::GameImage& image);
 
-/// Releases player 2's holders and restores the slots; true when one was changed after us and is left in place.
+/// Releases every seat's holders and restores the slots; true when one was changed after us and is left in place.
 bool Remove() noexcept;
 
-/// Game thread, per frame: an idle holder of player 2's is released; with player 2 out, all of them.
-void Tick(bool active) noexcept;
+/// Game thread, per frame, per built seat: an idle holder of the seat's is released; with the seat out, all of them.
+void Tick(int seat, bool active) noexcept;
 
 }  // namespace holders
 
