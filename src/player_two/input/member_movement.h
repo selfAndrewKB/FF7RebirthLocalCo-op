@@ -16,9 +16,9 @@
 // rows in the one shared prompt list. Seats take turns: one seat's tick and its scopes end before the
 // next seat's begin.
 //
-// Per seat: the counters and the stop after an engine exception. The rides' calls inside the tick
-// (chocobo_ride, wheelie_ride, own_ride) and the battle target fields are still player 2's (their
-// modules' groups make them per seat). Game thread only.
+// Per seat: the counters and the stop after an engine exception, and the battle target fields opened around the tick.
+// The rides' calls inside the tick (chocobo_ride, wheelie_ride, own_ride) are still player 2's (the rides group makes
+// them per seat). Game thread only.
 
 #include "player_two/stage_counters.h"
 #include "players/seats.h"

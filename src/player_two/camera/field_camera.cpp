@@ -64,11 +64,6 @@ std::array<StageCounters, players::kMaxPlayers>         g_settingsCounters{};
 std::array<StageCounters, players::kMaxPlayers>         g_updateCounters{};
 std::array<std::atomic<unsigned>, players::kMaxPlayers> g_mismatches{};
 
-// Player 2's command controller (command_menu_two) and target fields (lock_on) are the battle group's, still player 2's:
-// a seat's battle camera update opens them for player 2 only.
-static_assert(players::kSeatsBuilt == 1, "command_menu_two and lock_on are player 2's: before seat 2 is built they take "
-                                         "the seat and RunAsPrimary opens Focus and Targets for every seat");
-
 /// Player 1's and `seat`'s Field operators, while the seat's player holds a party member
 /// (player_two/camera/camera_access.h).
 using FieldPair = camera_access::OperatorPair;
@@ -209,8 +204,7 @@ int ActsFor(void* cameraManager) noexcept
 /// player 1's target list would move player 2's camera.
 void RunAsPrimary(int seat, void* cameraManager, float deltaTime)
 {
-    const bool playerTwo  = seat == players::kPlayerTwoSeat;
-    void*      controller = playerTwo ? command_menu_two::Controller() : nullptr;  // player 2's only (static_assert)
+    void*      controller = command_menu_two::Controller(seat);
     void*      member     = generation::MemberOf(seat);
     const bool battle     = controller != nullptr && member != nullptr &&
                             ReadField<std::uint8_t>(controller, kCmdHudMode) != 0;
@@ -220,7 +214,7 @@ void RunAsPrimary(int seat, void* cameraManager, float deltaTime)
     p2_scope::Args args;
     args.seat            = seat;
     args.controller      = controller;
-    const unsigned which = (battle ? p2_scope::Focus : 0u) | p2_scope::Primary | (playerTwo ? p2_scope::Targets : 0u);
+    const unsigned which = (battle ? p2_scope::Focus : 0u) | p2_scope::Primary | p2_scope::Targets;
     const p2_scope::P2Scope scopes(which, which, args);
     if (battle && !scopes.Holds<p2_scope::FocusPart>())
     {

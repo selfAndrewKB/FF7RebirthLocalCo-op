@@ -58,10 +58,10 @@ std::array<bool, players::kMaxPlayers> g_stopped{};
 
 std::array<StageCounters, players::kMaxPlayers> g_counters{};  // by seat; index 0 unused
 
-// Inside a seat's member tick, the rides (chocobo_ride, wheelie_ride, own_ride), the battle target fields (lock_on's
-// Targets part and AfterBattle) and the dev watches are player 2's: Tick calls them for player 2's seat only.
-static_assert(players::kSeatsBuilt == 1, "the rides, lock_on and the target fields are player 2's: before seat 2 is "
-                                         "built their groups make them per seat and Tick calls them for every seat");
+// Inside a seat's member tick, the rides (chocobo_ride, wheelie_ride, own_ride) and the dev watches are player 2's:
+// Tick calls them for player 2's seat only.
+static_assert(players::kSeatsBuilt == 1, "the rides are player 2's: before seat 2 is built their group makes them per "
+                                         "seat and Tick calls them for every seat");
 
 int MemberType(const void* member) noexcept
 {
@@ -147,13 +147,12 @@ void TickInScopes(int seat, void* controller, void* member, void* state, int typ
 {
     const bool playerTwo = seat == players::kPlayerTwoSeat;
     // The seat's sticks and its player as the primary controller, or no tick; its own buttons (sprint, dodge, field
-    // actions) and, in battle, the target system's fields as player 2's (lock_on: player 2's only).
+    // actions) and, in battle, the target system's fields as the seat's.
     p2_scope::Args args;
     args.seat  = seat;
     args.padId = pad_sticks::ControllerIdOf(controller);
-    const unsigned targets = playerTwo ? unsigned{p2_scope::Targets} : 0u;
-    const p2_scope::P2Scope scopes(p2_scope::Sticks | p2_scope::Primary | p2_scope::Buttons | targets,
-                                   p2_scope::Buttons | targets, args);
+    const p2_scope::P2Scope scopes(p2_scope::Sticks | p2_scope::Primary | p2_scope::Buttons | p2_scope::Targets,
+                                   p2_scope::Buttons | p2_scope::Targets, args);
     StageCounters& counters = g_counters[static_cast<std::size_t>(seat)];
     if (!scopes.Held())
     {
@@ -166,9 +165,9 @@ void TickInScopes(int seat, void* controller, void* member, void* state, int typ
     counters.Act();
     // Before the tick, inside every scope (the seat's camera manager is the primary one here):
     camera_override::Tick(seat, member);   // the member's animation camera overrides reach the seat's camera
+    lock_on::AfterBattle(seat);            // out of battle, the seat's lock ends
     if (playerTwo)
     {
-        lock_on::AfterBattle();                // out of battle, player 2's lock ends
         battle_camera::Watch();                // both camera managers' operators, logged on change (dev tools)
         battle_input::Watch(member, state);    // player 2's battle state, logged on change (dev tools)
     }

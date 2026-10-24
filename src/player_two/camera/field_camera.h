@@ -17,8 +17,8 @@
 // seat's update with the primary controller scoped to the seat (player_two/scopes/primary_controller.h),
 // so it reads the seat's input and its own operators. It acts only once the seat's Field operator is
 // active and the camera manager's current operator index names an existing operator, since helpers
-// inside the update use both without checking. In battle, player 2's update also runs in player 2's UI
-// context and target fields (command_menu_two, lock_on: player 2's until the battle group's step).
+// inside the update use both without checking. In battle, a seat's update also runs in that seat's UI
+// context and target fields (command_menu_two, lock_on).
 //
 // Per seat: the counters and the mismatch count. Game thread.
 
