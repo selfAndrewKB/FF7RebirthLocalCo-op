@@ -74,7 +74,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.91.0";  // seats step 2: each player's state per player (plan/seats.md)
+constexpr const wchar_t* kVersion = L"0.92.0";  // seats step 3: each module per player (plan/seats.md)
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
