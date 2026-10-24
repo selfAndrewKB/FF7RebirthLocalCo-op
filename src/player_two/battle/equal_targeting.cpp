@@ -12,11 +12,14 @@
 #include "player_two/scopes/leader_answer.h"
 #include "player_two/scopes/thread_hold.h"
 #include "player_two/session/party_member.h"
+#include "players/seats.h"
 
 #include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <format>
+#include <string>
 
 namespace lss::player_two::equal_targeting {
 
@@ -46,8 +49,10 @@ constexpr std::uint8_t  kPartyLane = 0;  // the battle/field party's slots
 constexpr std::uint32_t kSelExcluded = 0x140, kSelExcludedHeap = 0x150, kSelExcludedNum = 0x158;
 using facts::kPartyManagerLeaderType;
 constexpr std::uint8_t  kPartyTypes      = 15;     // candidate types 0..14
-constexpr std::uint32_t kNoTypes         = 0xFFFF;
+constexpr std::uint32_t kNoTypes         = 0xFFFFFFFF;
+constexpr std::uint8_t  kNoByte          = 0xFF;  // a player's byte in g_types without a type
 constexpr int           kNoType          = -1;  // no leader-test answer (leader_answer)
+static_assert(players::kMaxPlayers <= 4, "every player's type fits in one 32-bit word");
 
 using Fn                = std::uint64_t (*)(std::uint64_t, std::uint64_t, std::uint64_t, std::uint64_t);
 using CharacterByTypeFn = void* (*)(std::uint8_t lane, std::uint8_t type);
@@ -63,21 +68,28 @@ bool                   g_crossing        = false;  // the call crosses a block: 
 
 std::atomic<bool>           g_on{false};
 std::atomic<SelectObserver> g_observer{nullptr};
-// Both players' types, written once per frame on the game thread: player 1's (the leader type) in bits 0-7, player
-// 2's member's in bits 8-15; kNoTypes without player 2's member.
+// Every player's type, one word written once per frame on the game thread so a reader on any thread sees one frame's
+// set: player p's in byte p (player 1's, the leader type, in bits 0-7; seat s's member's in byte s; kNoByte for a seat
+// without a member); kNoTypes while no seat has one.
 std::atomic<std::uint32_t> g_types{kNoTypes};
 std::atomic<std::uint64_t> g_coin{0};  // splitmix64 state; the game's own per-thread random stream is not touched
 
 // The answer of the select running on this thread (null outside one).
 thread_local Answer* t_answer = nullptr;
 
-bool Coin() noexcept
+constexpr std::uint8_t TypeByte(std::uint32_t types, int player) noexcept
+{
+    return static_cast<std::uint8_t>(types >> (8 * player));
+}
+
+/// One uniform 64-bit coin (ucpc_choice reads its high word; two eligible: its top bit).
+std::uint64_t Coin() noexcept
 {
     constexpr std::uint64_t kStep = 0x9E3779B97F4A7C15ull;
     std::uint64_t           x     = g_coin.fetch_add(kStep, std::memory_order_relaxed) + kStep;
     x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ull;
     x = (x ^ (x >> 27)) * 0x94D049BB133111EBull;
-    return ((x ^ (x >> 31)) >> 63) != 0;
+    return x ^ (x >> 31);
 }
 
 /// The game's candidate rule for `type` in this select: its party character (which must be `mustBe` when given), a
@@ -127,13 +139,25 @@ Answer AnswerFor(void* selector) noexcept
     {
         return answer;  // untouched: the game's own answers
     }
-    const auto  one         = static_cast<std::uint8_t>(types & 0xFF);
-    const auto  two         = static_cast<std::uint8_t>(types >> 8);
-    const void* member      = generation::Member();  // null once player 2 left (until the next Tick)
-    const bool  oneEligible = Eligible(selector, one, nullptr);
-    const bool  twoEligible = member != nullptr && Eligible(selector, two, member);
-    answer.choice = ucpc_choice::Choose(true, oneEligible, twoEligible, oneEligible && twoEligible && Coin());
-    answer.type   = answer.choice.ucpc == ucpc_choice::Ucpc::PlayerTwo ? two : one;
+    // Player 1 first, then the seats in seat order: the game's rule asked in the order it was before.
+    ucpc_choice::Players in       = ucpc_choice::Bit(0);
+    ucpc_choice::Players eligible = Eligible(selector, TypeByte(types, 0), nullptr) ? ucpc_choice::Bit(0) : 0;
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        const std::uint8_t type = TypeByte(types, seat);
+        if (type == kNoByte)
+        {
+            continue;
+        }
+        in |= ucpc_choice::Bit(seat);
+        const void* const member = generation::MemberOf(seat);  // null once the seat left (until the next Tick)
+        if (member != nullptr && Eligible(selector, type, member))
+        {
+            eligible |= ucpc_choice::Bit(seat);
+        }
+    }
+    answer.choice = ucpc_choice::Choose(in, eligible, ucpc_choice::NeedsCoin(in, eligible) ? Coin() : 0);
+    answer.type   = answer.choice.player >= 0 ? TypeByte(types, answer.choice.player) : kNoPlayerType;
     return answer;
 }
 
@@ -258,24 +282,46 @@ void Tick() noexcept
     {
         return;
     }
+    void* members[players::kMaxPlayers] = {};  // by seat; index 0 unused
+    bool  anyMember                     = false;
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        members[seat] = generation::Active(seat) ? generation::MemberOf(seat) : nullptr;
+        anyMember     = anyMember || members[seat] != nullptr;
+    }
     std::uint32_t types   = kNoTypes;
-    void* const   member  = generation::Active() ? generation::Member() : nullptr;
     void*         manager = nullptr;
     std::uint8_t  leader  = 16;
-    if (member != nullptr &&
+    if (anyMember &&
         platform::CopyGuarded(&manager, reinterpret_cast<const void*>(g_partyManager), sizeof(manager)) &&
         manager != nullptr &&
         platform::CopyGuarded(&leader, static_cast<const std::byte*>(manager) + kPartyManagerLeaderType,
                               sizeof(leader)))
     {
-        const auto memberType = party_member::PlayerTypeOf(member);
-        if (memberType && *memberType < kPartyTypes && leader < kPartyTypes && *memberType != leader)
+        // A seat's member counts only with a type of its own: not the leader's, nor an earlier seat's. Each member's type
+        // is read whatever the leader type (as before); a leader type that is no party type then counts no seat.
+        std::uint32_t built = leader;
+        bool          any   = false;
+        for (int seat = 1; seat < players::kMaxPlayers; ++seat)
         {
-            types = static_cast<std::uint32_t>(leader) | static_cast<std::uint32_t>(*memberType) << 8;
+            std::uint8_t byte = kNoByte;
+            if (members[seat] != nullptr)
+            {
+                const auto memberType = party_member::PlayerTypeOf(members[seat]);
+                bool       own        = memberType && *memberType < kPartyTypes;
+                for (int other = 0; own && other < seat; ++other)
+                {
+                    own = *memberType != TypeByte(built, other);
+                }
+                byte = own ? *memberType : kNoByte;
+                any  = any || own;
+            }
+            built |= static_cast<std::uint32_t>(byte) << (8 * seat);
         }
+        types = any && leader < kPartyTypes ? built : kNoTypes;
     }
     const auto before = g_types.exchange(types, std::memory_order_relaxed);
-    if (before != types)
+    if (before != types && platform::Enabled(platform::Level::Debug))
     {
         if (types == kNoTypes)
         {
@@ -283,8 +329,22 @@ void Tick() noexcept
         }
         else
         {
-            platform::LogDebug(L"equal targeting: the UCPC is player 1's type {} or player 2's member's type {}",
-                               types & 0xFF, types >> 8);
+            try
+            {
+                std::wstring seats;
+                for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+                {
+                    if (TypeByte(types, seat) != kNoByte)
+                    {
+                        seats += std::format(L" or {}'s member's type {}", players::SeatName(seat),
+                                             TypeByte(types, seat));
+                    }
+                }
+                platform::LogDebug(L"equal targeting: the UCPC is player 1's type {}{}", TypeByte(types, 0), seats);
+            }
+            catch (...)
+            {
+            }
         }
     }
 }
@@ -301,7 +361,13 @@ std::optional<PlayerTypes> Types() noexcept
     {
         return std::nullopt;
     }
-    return PlayerTypes{static_cast<std::uint8_t>(types & 0xFF), static_cast<std::uint8_t>(types >> 8)};
+    PlayerTypes found;
+    for (int player = 0; player < players::kMaxPlayers; ++player)
+    {
+        const std::uint8_t byte = TypeByte(types, player);
+        found.type[player]      = byte == kNoByte ? kNoPlayerType : byte;
+    }
+    return found;
 }
 
 Answer ChooseFor(void* selector) noexcept
@@ -309,11 +375,12 @@ Answer ChooseFor(void* selector) noexcept
     return AnswerFor(selector);
 }
 
-bool PlayerTwoEligible(void* selector) noexcept
+bool SeatEligible(int seat, void* selector) noexcept
 {
     const auto  types  = Types();
-    const void* member = generation::Member();
-    return selector != nullptr && types && member != nullptr && Eligible(selector, types->two, member);
+    const void* member = generation::MemberOf(seat);
+    return selector != nullptr && types && types->Has(seat) && member != nullptr &&
+           Eligible(selector, types->type[seat], member);
 }
 
 }  // namespace lss::player_two::equal_targeting

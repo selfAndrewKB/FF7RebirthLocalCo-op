@@ -22,11 +22,15 @@
 #include "player_two/scopes/leader_answer.h"
 #include "player_two/scopes/leader_scope.h"
 #include "player_two/scopes/thread_hold.h"
+#include "players/seats.h"
 
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <format>
+#include <string>
 
 namespace lss::player_two::target_coin {
 
@@ -124,23 +128,37 @@ std::atomic<bool> g_on{false};
 // The coins, keyed by the controller: the player each names and when it was tossed (player_two/battle/coin_table.h).
 coin_table::CoinTable g_coins;
 
+// The tallies, by seat (index 0 player 1's).
 struct Counts
 {
-    std::atomic<unsigned> tosses[2]{};      // player 1, player 2
-    std::atomic<unsigned> answers[2]{};     // coin answers given: player 1, player 2
-    std::atomic<unsigned> reactions[2]{};   // answers inside a damage or reaction call: player 1, player 2
-    std::atomic<unsigned> retosses{0};      // player 2 no longer a candidate
+    std::atomic<unsigned> tosses[players::kMaxPlayers]{};
+    std::atomic<unsigned> answers[players::kMaxPlayers]{};    // coin answers given
+    std::atomic<unsigned> reactions[players::kMaxPlayers]{};  // answers inside a damage or reaction call
+    std::atomic<unsigned> retosses{0};                        // a seat's player no longer a candidate
 };
 Counts                                g_counts;
 platform::Every                       g_swapRetry{std::chrono::seconds(1)};  // the swaps tried again
 platform::Every                       g_summary{std::chrono::seconds(60)};
 
-enum class Player : std::uint8_t
+// The player a coin or an answer names: its number (coin_table::PlayerNumber: 1 player 1, seat + 1 a seat's player),
+// kNone for the game's own answer.
+using Player                   = int;
+constexpr Player kNone         = 0;
+constexpr Player kPlayerOne    = coin_table::PlayerNumber(0);
+
+constexpr int SeatOf(Player player) noexcept
 {
-    None,  // the game's own answer
-    One,
-    Two,
-};
+    return coin_table::SeatOfNumber(player);
+}
+
+/// The reason a coin naming `seat` is tossed again (a literal: Toss logs it).
+const wchar_t* NoLongerCandidate(int seat) noexcept
+{
+    constexpr const wchar_t* kTexts[players::kMaxPlayers] = {L"", L"player 2 no longer a candidate",
+                                                             L"player 3 no longer a candidate"};
+    return players::SeatIndex(seat) ? kTexts[seat] : L"a seat's player no longer a candidate";
+}
+static_assert(players::kMaxPlayers == 3, "NoLongerCandidate names every seat");
 
 std::uint32_t Seconds() noexcept
 {
@@ -153,7 +171,7 @@ void* SelectorOf(const void* controller) noexcept
     return ReadPointer(ReadPointer(controller, kCtrlHolder), kHolderSelector);
 }
 
-/// Tosses `controller`'s coin by the Condition select's rule (no player 2: none) and keeps it.
+/// Tosses `controller`'s coin by the Condition select's rule (no seat's member: none) and keeps it.
 Player Toss(const void* controller, const wchar_t* when) noexcept
 {
     const auto key    = reinterpret_cast<std::uintptr_t>(controller);
@@ -161,75 +179,92 @@ Player Toss(const void* controller, const wchar_t* when) noexcept
     if (answer.choice.ucpc == ucpc_choice::Ucpc::Untouched)
     {
         g_coins.Clear(key);
-        return Player::None;
+        return kNone;
     }
-    const bool two = answer.choice.ucpc == ucpc_choice::Ucpc::PlayerTwo;
-    g_coins.Set(key, two ? 2 : 1, Seconds());
-    g_counts.tosses[two ? 1 : 0].fetch_add(1, std::memory_order_relaxed);
+    const Player player = coin_table::PlayerNumber(answer.choice.player);
+    g_coins.Set(key, player, Seconds());
+    g_counts.tosses[answer.choice.player].fetch_add(1, std::memory_order_relaxed);
     platform::LogDebug(L"target coin: enemy {:#x} counts player {} as the player until its next action ({}, {})", key,
-                       two ? 2 : 1, when,
-                       answer.choice.why == ucpc_choice::Why::Coin ? L"coin" : L"the only candidate");
-    return two ? Player::Two : Player::One;
+                       player, when, answer.choice.why == ucpc_choice::Why::Coin ? L"coin" : L"the only candidate");
+    return player;
 }
 
-/// `controller`'s held coin; tossed now if it has none, or if it names player 2 and player 2's character is no longer
-/// a candidate for it.
+/// `controller`'s held coin; tossed now if it has none, or if it names a seat's player whose character is no longer a
+/// candidate for it.
 Player CoinOf(const void* controller) noexcept
 {
     const auto key  = reinterpret_cast<std::uintptr_t>(controller);
     const int  held = g_coins.PlayerOf(key);
-    if (held == 0)
+    if (held == kNone)
     {
         return Toss(controller, L"first question");
     }
-    if (held == 2)
+    if (held > kPlayerOne)
     {
-        if (equal_targeting::PlayerTwoEligible(SelectorOf(controller)))
+        if (equal_targeting::SeatEligible(SeatOf(held), SelectorOf(controller)))
         {
-            return Player::Two;
+            return held;
         }
         g_counts.retosses.fetch_add(1, std::memory_order_relaxed);
-        return Toss(controller, L"player 2 no longer a candidate");
+        return Toss(controller, NoLongerCandidate(SeatOf(held)));
     }
-    return Player::One;
+    return kPlayerOne;
 }
 
-/// Whom a native called from `frame` answers as the player: none outside an enemy controller's blueprint or without
-/// player 2; the player a damage or reaction call is about; else the enemy's coin. `reaction` says which.
+/// Whom a native called from `frame` answers as the player: none outside an enemy controller's blueprint or without a
+/// seat's member; the player a damage or reaction call is about; else the enemy's coin. `reaction` says which.
 Player AnswerFor(const void* frame, bool& reaction) noexcept
 {
     reaction = false;
     if (!g_on.load(std::memory_order_acquire) || !equal_targeting::Types())
     {
-        return Player::None;
+        return kNone;
     }
     const auto* const caller = static_cast<const RC::Unreal::UObject*>(ReadPointer(frame, kFrameObject));
     const auto* const enemyClass = g_enemyClass.load(std::memory_order_acquire);
     if (caller == nullptr || enemyClass == nullptr || !caller->IsA(enemyClass))
     {
-        return Player::None;
+        return kNone;
     }
-    switch (player_hits::HumanInCall())
+    if (const int human = player_hits::HumanInCall(); human != player_hits::kNoHuman)
     {
-    case player_hits::Human::PlayerOne:
         reaction = true;
-        return Player::One;
-    case player_hits::Human::PlayerTwo:
-        reaction = true;
-        return Player::Two;
-    case player_hits::Human::None:
-        break;
+        return coin_table::PlayerNumber(human);
     }
     return CoinOf(caller);
 }
 
 void Count(Player player, bool reaction) noexcept
 {
-    if (player != Player::None)
+    if (player != kNone)
     {
-        (reaction ? g_counts.reactions : g_counts.answers)[player == Player::Two ? 1 : 0].fetch_add(
-            1, std::memory_order_relaxed);
+        (reaction ? g_counts.reactions : g_counts.answers)[SeatOf(player)].fetch_add(1, std::memory_order_relaxed);
     }
+}
+
+using Tally = std::array<unsigned, players::kMaxPlayers>;
+
+/// One tally of the summary taken (player 1 and the built seats; reset to 0), its sum added to `total`.
+Tally TakeTally(std::atomic<unsigned> (&counts)[players::kMaxPlayers], unsigned& total) noexcept
+{
+    Tally taken{};
+    for (int seat = 0; seat <= players::kSeatsBuilt; ++seat)
+    {
+        taken[static_cast<std::size_t>(seat)] = platform::Take(counts[seat]);
+        total += taken[static_cast<std::size_t>(seat)];
+    }
+    return taken;
+}
+
+/// "P1 a / P2 b" over a taken tally. Allocates (may throw): only for a line that is written.
+std::wstring TallyText(const Tally& tally)
+{
+    std::wstring text;
+    for (int seat = 0; seat <= players::kSeatsBuilt; ++seat)
+    {
+        text += std::format(L"{}P{} {}", seat == 0 ? L"" : L" / ", seat + 1, tally[static_cast<std::size_t>(seat)]);
+    }
+    return text;
 }
 
 template <std::size_t I>
@@ -239,7 +274,7 @@ void Exec(RC::Unreal::UObject* context, RC::Unreal::FFrame& frame, void* result)
     bool         reaction = false;
     const Player player   = AnswerFor(&frame, reaction);
     const auto   types    = equal_targeting::Types();
-    if (player == Player::None || !types)
+    if (player == kNone || !types)
     {
         original(context, frame, result);
         return;
@@ -256,16 +291,16 @@ void Exec(RC::Unreal::UObject* context, RC::Unreal::FFrame& frame, void* result)
         {
             // The game's IsUCPC / IsAIPC with only the player's type counting as the player on this thread, put
             // back afterwards.
-            thread_hold::HoldingExchange(&leader_answer::ExchangeThreadOnly,
-                                         player == Player::Two ? types->two : types->one, original, context,
-                                         frame, result);
+            thread_hold::HoldingExchange(&leader_answer::ExchangeThreadOnly, types->type[SeatOf(player)], original,
+                                         context, frame, result);
         }
     }
     else
     {
         original(context, frame, result);  // steps the frame as the game does; then the answer replaces the result
-        void* const member = player == Player::Two ? generation::Member() : nullptr;
-        if (player == Player::Two && member != nullptr && result != nullptr)
+        const int   seat   = SeatOf(player);
+        void* const member = seat >= 1 ? generation::MemberOf(seat) : nullptr;
+        if (seat >= 1 && member != nullptr && result != nullptr)
         {
             if constexpr (kNativeFacts[I].kind == Kind::Leader)
             {
@@ -273,11 +308,11 @@ void Exec(RC::Unreal::UObject* context, RC::Unreal::FFrame& frame, void* result)
             }
             else
             {
-                WriteField<std::uint8_t>(result, 0, types->two);
+                WriteField<std::uint8_t>(result, 0, types->type[seat]);
             }
         }
     }
-    platform::LogTrace(L"target coin: {} answered player {} ({})", kNativeFacts[I].path, player == Player::Two ? 2 : 1,
+    platform::LogTrace(L"target coin: {} answered player {} ({})", kNativeFacts[I].path, player,
                        reaction ? L"the player in this damage or reaction call" : L"the enemy's coin");
 }
 
@@ -442,16 +477,7 @@ int TossForLockPick(const void* controller) noexcept
     {
         return 0;
     }
-    switch (Toss(controller, L"lock-group pick"))
-    {
-    case Player::One:
-        return 1;
-    case Player::Two:
-        return 2;
-    case Player::None:
-        break;
-    }
-    return 0;
+    return Toss(controller, L"lock-group pick");
 }
 
 const void* ControllerOfEnemy(const void* enemy) noexcept
@@ -480,16 +506,7 @@ int CoinFor(const void* controller) noexcept
     {
         return 0;
     }
-    switch (CoinOf(controller))
-    {
-    case Player::One:
-        return 1;
-    case Player::Two:
-        return 2;
-    case Player::None:
-        break;
-    }
-    return 0;
+    return CoinOf(controller);
 }
 
 void ShareCoin(const void* from, const void* to) noexcept
@@ -508,24 +525,34 @@ void ShareCoin(const void* from, const void* to) noexcept
     {
         return;
     }
-    // The partner's own rule still holds: player 2 only while player 2's character is a candidate for its selector.
-    const bool two   = held == 2 && equal_targeting::PlayerTwoEligible(SelectorOf(to));
-    const auto toKey = reinterpret_cast<std::uintptr_t>(to);
-    g_coins.Set(toKey, two ? 2 : 1, Seconds(), found);  // never evicting `from`'s own coin
-    platform::LogDebug(L"target coin: enemy {:#x} takes enemy {:#x}'s coin, player {}, until its next action "
-                       L"(combination partner{})",
-                       toKey, fromKey, two ? 2 : 1,
-                       held == 2 && !two ? L"; player 2 is not a candidate for it" : L"");
+    // The partner's own rule still holds: a seat's player only while its character is a candidate for its selector.
+    const bool   seated = held > kPlayerOne && equal_targeting::SeatEligible(SeatOf(held), SelectorOf(to));
+    const Player player = seated ? held : kPlayerOne;
+    const auto   toKey  = reinterpret_cast<std::uintptr_t>(to);
+    g_coins.Set(toKey, player, Seconds(), found);  // never evicting `from`'s own coin
+    if (held > kPlayerOne && !seated)
+    {
+        platform::LogDebug(L"target coin: enemy {:#x} takes enemy {:#x}'s coin, player {}, until its next action "
+                           L"(combination partner; {} is not a candidate for it)",
+                           toKey, fromKey, player, players::SeatName(SeatOf(held)));
+    }
+    else
+    {
+        platform::LogDebug(L"target coin: enemy {:#x} takes enemy {:#x}'s coin, player {}, until its next action "
+                           L"(combination partner)",
+                           toKey, fromKey, player);
+    }
 }
 
 void LockPickFellBack(const void* controller) noexcept
 {
-    const auto key = reinterpret_cast<std::uintptr_t>(controller);
-    if (g_coins.FallBack(key))
+    const auto key  = reinterpret_cast<std::uintptr_t>(controller);
+    const int  from = g_coins.FallBack(key);  // the player the coin named when it fell back (0: it did not)
+    if (from != 0)
     {
         platform::LogDebug(L"target coin: enemy {:#x} counts player 1 as the player until its next action (its "
-                           L"lock-group pick could not take player 2)",
-                           key);
+                           L"lock-group pick could not take {})",
+                           key, players::SeatName(SeatOf(from)));
     }
 }
 
@@ -548,15 +575,23 @@ void Tick() noexcept
     {
         return;
     }
-    const unsigned t1 = platform::Take(g_counts.tosses[0]), t2 = platform::Take(g_counts.tosses[1]);
-    const unsigned a1 = platform::Take(g_counts.answers[0]), a2 = platform::Take(g_counts.answers[1]);
-    const unsigned r1 = platform::Take(g_counts.reactions[0]), r2 = platform::Take(g_counts.reactions[1]);
-    const unsigned again = platform::Take(g_counts.retosses);
-    if (t1 + t2 + a1 + a2 + r1 + r2 + again != 0)
+    unsigned       total     = 0;
+    const Tally    tosses    = TakeTally(g_counts.tosses, total);
+    const Tally    answers   = TakeTally(g_counts.answers, total);
+    const Tally    reactions = TakeTally(g_counts.reactions, total);
+    const unsigned again     = platform::Take(g_counts.retosses);
+    if (total + again != 0 && platform::Enabled(platform::Level::Debug))
     {
-        platform::LogDebug(L"target coin (60 s): tosses P1 {} / P2 {}; coin answers P1 {} / P2 {}; damage or reaction "
-                           L"answers P1 {} / P2 {}; re-tossed {} (player 2 no longer a candidate)",
-                           t1, t2, a1, a2, r1, r2, again);
+        try
+        {
+            platform::LogDebug(L"target coin (60 s): tosses {}; coin answers {}; damage or reaction answers {}; re-tossed "
+                               L"{} ({} no longer a candidate)",
+                               TallyText(tosses), TallyText(answers), TallyText(reactions), again,
+                               players::kSeatsBuilt == 1 ? L"player 2" : L"a seat's player");
+        }
+        catch (...)
+        {
+        }
     }
 }
 

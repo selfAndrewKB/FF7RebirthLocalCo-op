@@ -5,8 +5,8 @@
 // The story bosses, summon fights and VR Sephiroth choose targets with the Condition selector, whose lists weight "the
 // UCPC" (the user-controlled player character) 2:1 to 8:2 over the AI members. The game's UCPC is the party leader's
 // type, player 1's character, so in co-op these enemies chase player 1. For each of their selects this answers the
-// game's own two questions with one player, a coin between the two when both could be targeted
-// (player_two/battle/ucpc_choice.h):
+// game's own two questions with one player, a uniform coin among the players (player 1 and each seat playing a member)
+// whose characters could be targeted (player_two/battle/ucpc_choice.h):
 //   - "which player type is the UCPC": the select's one read of it (UEndPartyAPI_GetPartyLeaderType, called once by
 //     its candidate build) is redirected to the answer;
 //   - "is this character the UCPC": IsUCPC_Core, which the select's ContinuousLimit history asks, answers yes for that
@@ -14,7 +14,8 @@
 // Whether a player's character could be targeted is the game's own rule of the same select: its character for the
 // type, IsValidTarget for this enemy, and the selector's excluded types. Both answers are held on the select's own
 // thread for that select only: decisions run on worker threads as well as the game thread, and nothing is written to
-// the party manager. Without player 2 (or without a member) every select keeps the game's own answer.
+// the party manager. Without a seat's member every select keeps the game's own answer. Every player's type is one
+// word Tick writes on the game thread; the selects read it on any thread.
 //
 // Not touched: Hate and None enemies (no player term), lock groups, the opening target at battle start, and the
 // other player-1 terms listed in RE §10.11.
@@ -23,6 +24,7 @@
 // that call, then tells the one observer (player_two/target_census, a dev tool) what it answered.
 
 #include "player_two/battle/ucpc_choice.h"
+#include "players/seats.h"
 
 #include <cstdint>
 #include <optional>
@@ -49,7 +51,7 @@ void Tick() noexcept;
 /// One select's answer.
 struct Answer
 {
-    ucpc_choice::Choice choice;
+    ucpc_choice::Choice choice;        // choice.player: 0 player 1, s seat s
     std::uint8_t        type = 16;     // the player type answered as the UCPC (Untouched: not used)
     bool                read = false;  // the select built its candidates and read the answer
 };
@@ -63,21 +65,31 @@ using SelectObserver = void (*)(void* selector, std::uint64_t reason, std::uint6
 /// The one observer of the Condition selects (null: none). Set before any battle and cleared at unload.
 void SetSelectObserver(SelectObserver observer) noexcept;
 
-/// Both players' player types as Tick last saw them: player 1's (the leader's) and player 2's member's. Empty without
-/// player 2's member (or before Install). Any thread.
+/// A player type no player holds.
+inline constexpr std::uint8_t kNoPlayerType = 16;
+
+/// Every player's player type as Tick last saw them, one frame's set: player 1's (the leader's) at index 0, each
+/// seat's member's at its seat (kNoPlayerType for a seat without a member, or whose member's type is the leader's).
+/// Empty while no seat has a member (or before Install). Any thread.
 struct PlayerTypes
 {
-    std::uint8_t one = 16;
-    std::uint8_t two = 16;
+    std::uint8_t type[players::kMaxPlayers] = {kNoPlayerType, kNoPlayerType, kNoPlayerType};
+
+    /// `player` (0 player 1, s seat s) has a type this frame.
+    bool Has(int player) const noexcept
+    {
+        return player >= 0 && player < players::kMaxPlayers && type[player] != kNoPlayerType;
+    }
 };
+static_assert(players::kMaxPlayers == 3, "PlayerTypes' initialiser names every player");
 std::optional<PlayerTypes> Types() noexcept;
 
 /// Who an enemy with target selector `selector` counts as the player, by the rule of a Condition select: each player's
-/// character must be a candidate for that selector, a coin when both are. For player_two/target_coin's coin per enemy
-/// action. Untouched without player 2. Any thread.
+/// character must be a candidate for that selector, a uniform coin among them when two or more are. For
+/// player_two/target_coin's coin per enemy action. Untouched without a seat's member. Any thread.
 Answer ChooseFor(void* selector) noexcept;
 
-/// Whether player 2's member is still a candidate for `selector` (the same rule). Any thread.
-bool PlayerTwoEligible(void* selector) noexcept;
+/// Whether `seat`'s member is still a candidate for `selector` (the same rule). Any thread.
+bool SeatEligible(int seat, void* selector) noexcept;
 
 }  // namespace lss::player_two::equal_targeting

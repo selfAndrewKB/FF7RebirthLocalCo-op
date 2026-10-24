@@ -16,9 +16,10 @@
 //
 // The levers, all from the S-LEADERLEVERS table (both builds): a wrapper where the enemy is known records it in a
 // thread-local around the game's own call (a call redirect, an entry redirect or a vtable slot); a redirect of the leader
-// read inside answers player 2's member (or, for E7, player 2's type) while that enemy's coin names player 2, else the
-// game's own answer. E6's read answers the causer itself when it is player 2's member (the read is compared only for
-// equality with the causer). Nothing is written to game state; no player-1 pointer is built by hand.
+// read inside answers a seat's member (or, for E7, that member's type) while that enemy's coin names the seat, else the
+// game's own answer. E6's read answers the causer itself when it is a seat's member (the read is compared only for
+// equality with the causer). Nothing is written to game state; no player-1 pointer is built by hand. Every seat
+// playing a member is treated as player 2 is; the seat comes from the enemy's coin or from the causing character.
 //
 // Any thread (enemy AI runs on workers too): every context is thread-local. Logged: the install per item (Info), each
 // answer for the once-per-event items, the first answer per item with its thread (Debug), each E8 answer (Trace) and a

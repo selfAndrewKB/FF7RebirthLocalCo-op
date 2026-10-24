@@ -8,12 +8,14 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
+#include "player_two/battle/coin_table.h"
 #include "player_two/battle/equal_targeting.h"
 #include "player_two/battle/target_coin.h"
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
 #include "player_two/scopes/leader_scope.h"
 #include "player_two/scopes/thread_hold.h"
+#include "players/seats.h"
 
 #include <atomic>
 #include <cstddef>
@@ -146,10 +148,10 @@ std::atomic<bool> g_firstSeen[kItems]{};
 std::atomic<const void*> g_armAnswer[kArmReads]{};  // each arm read's last answer (for the Debug line on a change)
 
 // What a wrapper records for the read inside its call, on this thread (null: none, the read answers the game's own).
-thread_local const void* t_combination      = nullptr;  // E1: player 2's member when the initiator's coin names player 2
+thread_local const void* t_combination      = nullptr;  // E1: a seat's member when the initiator's coin names that seat
 thread_local const void* t_combinationEntry = nullptr;  // E2/E3: the combination entry being ticked
 thread_local const void* t_boss             = nullptr;  // E4/E5: the boss controller
-thread_local const void* t_causer           = nullptr;  // E6: the causer, when it is player 2's member
+thread_local const void* t_causer           = nullptr;  // E6: the causer, when it is a seat's member
 thread_local const void* t_mine             = nullptr;  // E7: set by the part getter, taken (once) by the type read
 thread_local const void* t_arms             = nullptr;  // E8: the arms state object
 
@@ -158,10 +160,33 @@ bool On(Item item) noexcept
     return g_on.load(std::memory_order_acquire) && g_itemOn[item].load(std::memory_order_relaxed);
 }
 
-/// The item may answer: on, and player 2 has a member and both players' types are known.
+/// The item may answer: on, and a seat has a member and the players' types are known.
 bool Active(Item item) noexcept
 {
-    return On(item) && generation::Member() != nullptr && equal_targeting::Types().has_value();
+    if (!On(item) || !equal_targeting::Types().has_value())
+    {
+        return false;
+    }
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (generation::MemberOf(seat) != nullptr)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+/// The seat a coin names (its player number; coin_table.h), or 0 for player 1 or no coin.
+int SeatOfCoin(int coin) noexcept
+{
+    return coin > 1 ? coin_table::SeatOfNumber(coin) : 0;
+}
+
+/// "player 1" / "player 2" / "player 3" for a coin naming a player (coin 1 or more).
+const wchar_t* CoinName(int coin) noexcept
+{
+    return players::SeatName(coin_table::SeatOfNumber(coin));
 }
 
 void NoteFirst(Item item) noexcept
@@ -174,14 +199,15 @@ void NoteFirst(Item item) noexcept
     }
 }
 
-/// The answer to a leader read made for `controller` (a checked enemy controller, or null): player 2's member while the
-/// enemy's coin names player 2, else the game's own.
+/// The answer to a leader read made for `controller` (a checked enemy controller, or null): a seat's member while the
+/// enemy's coin names that seat, else the game's own.
 std::uint64_t CoinAnswer(const void* controller, CallFn original, std::uint64_t a, std::uint64_t b, std::uint64_t c,
                          std::uint64_t d, int& coin) noexcept
 {
-    coin              = controller != nullptr ? target_coin::CoinFor(controller) : 0;
-    void* const two   = generation::Member();
-    return coin == 2 && two != nullptr ? reinterpret_cast<std::uint64_t>(two) : original(a, b, c, d);
+    coin                = controller != nullptr ? target_coin::CoinFor(controller) : 0;
+    const int   seat    = SeatOfCoin(coin);
+    void* const seated  = seat != 0 ? generation::MemberOf(seat) : nullptr;
+    return seated != nullptr ? reinterpret_cast<std::uint64_t>(seated) : original(a, b, c, d);
 }
 
 // ---- E1-E3 enemy combinations ----
@@ -202,23 +228,37 @@ std::uint64_t RegisterPair(std::uint64_t a, std::uint64_t enemyA, std::uint64_t 
     {
         target_coin::ShareCoin(initiator, partner);
     }
-    platform::LogDebug(L"leader reads: combination of enemies {:#x} and {:#x} registered: {}", enemyA, enemyB,
-                       coin == 0 ? L"no coin (the game's own leader)"
-                       : partner == nullptr ? (coin == 2 ? L"player 2; the partner's controller did not check out"
-                                                         : L"player 1; the partner's controller did not check out")
-                                            : (coin == 2 ? L"both count player 2 as the player" : L"both count player 1 as the player"));
-    void* const two = coin == 2 ? generation::Member() : nullptr;
-    return thread_hold::Holding(t_combination, two, original, a, enemyA, enemyB, request, target);
+    if (coin == 0)
+    {
+        platform::LogDebug(L"leader reads: combination of enemies {:#x} and {:#x} registered: no coin (the game's own "
+                           L"leader)",
+                           enemyA, enemyB);
+    }
+    else if (partner == nullptr)
+    {
+        platform::LogDebug(L"leader reads: combination of enemies {:#x} and {:#x} registered: {}; the partner's "
+                           L"controller did not check out",
+                           enemyA, enemyB, CoinName(coin));
+    }
+    else
+    {
+        platform::LogDebug(L"leader reads: combination of enemies {:#x} and {:#x} registered: both count {} as the player",
+                           enemyA, enemyB, CoinName(coin));
+    }
+    const int   seat   = SeatOfCoin(coin);
+    void* const seated = seat != 0 ? generation::MemberOf(seat) : nullptr;
+    return thread_hold::Holding(t_combination, seated, original, a, enemyA, enemyB, request, target);
 }
 
 /// The start's leader read (ForceTargetLeader rows): the registration's answer.
 std::uint64_t StartLeader(std::uint64_t a, std::uint64_t b, std::uint64_t c, std::uint64_t d) noexcept
 {
-    if (const void* const two = t_combination; two != nullptr)
+    if (const void* const seated = t_combination; seated != nullptr)
     {
         NoteFirst(kCombination);
-        platform::LogDebug(L"leader reads: a combination starts on player 2's member");
-        return reinterpret_cast<std::uint64_t>(two);
+        platform::LogDebug(L"leader reads: a combination starts on {}'s member",
+                           players::SeatName(generation::SeatOfMember(seated)));
+        return reinterpret_cast<std::uint64_t>(seated);
     }
     return reinterpret_cast<CallFn>(g_startLeader.Original())(a, b, c, d);
 }
@@ -263,10 +303,17 @@ std::uint64_t ModeLeader(std::uint64_t a, std::uint64_t b, std::uint64_t c, std:
         target_coin::ShareCoin(initiator, partner);
     }
     NoteFirst(kCombination);
-    platform::LogDebug(L"leader reads: combination of enemies {:#x} and {:#x} aims at {}",
-                       reinterpret_cast<std::uintptr_t>(enemyA), reinterpret_cast<std::uintptr_t>(enemyB),
-                       coin == 2 ? L"player 2 (the initiator's coin)"
-                                 : (coin == 1 ? L"player 1 (the initiator's coin)" : L"the game's own leader (no coin)"));
+    if (coin == 0)
+    {
+        platform::LogDebug(L"leader reads: combination of enemies {:#x} and {:#x} aims at the game's own leader (no coin)",
+                           reinterpret_cast<std::uintptr_t>(enemyA), reinterpret_cast<std::uintptr_t>(enemyB));
+    }
+    else
+    {
+        platform::LogDebug(L"leader reads: combination of enemies {:#x} and {:#x} aims at {} (the initiator's coin)",
+                           reinterpret_cast<std::uintptr_t>(enemyA), reinterpret_cast<std::uintptr_t>(enemyB),
+                           CoinName(coin));
+    }
     return answer;
 }
 
@@ -307,27 +354,35 @@ std::uint64_t PhaseLeader(std::uint64_t a, std::uint64_t b, std::uint64_t c, std
     int        coin   = 0;
     const auto answer = CoinAnswer(target_coin::CheckedController(boss), original, a, b, c, d, coin);
     NoteFirst(I);
-    platform::LogDebug(L"leader reads: {} for boss controller {:#x}: the reaction's source is {}", kItemNames[I],
-                       reinterpret_cast<std::uintptr_t>(boss),
-                       coin == 2 ? L"player 2 (the boss's coin)"
-                                 : (coin == 1 ? L"player 1 (the boss's coin)" : L"the game's own leader (no coin)"));
+    if (coin == 0)
+    {
+        platform::LogDebug(L"leader reads: {} for boss controller {:#x}: the reaction's source is the game's own leader "
+                           L"(no coin)",
+                           kItemNames[I], reinterpret_cast<std::uintptr_t>(boss));
+    }
+    else
+    {
+        platform::LogDebug(L"leader reads: {} for boss controller {:#x}: the reaction's source is {} (the boss's coin)",
+                           kItemNames[I], reinterpret_cast<std::uintptr_t>(boss), CoinName(coin));
+    }
     return answer;
 }
 
 // ---- E6 the reaction player-type filter ----
 
-/// One call of the filter: when the causer is player 2's member, the leader read answers the causer itself, so it
+/// One call of the filter: when the causer is a seat's member, the leader read answers the causer itself, so it
 /// passes "the player" (UCPC) and fails "an AI member" (AIPC), as player 1's attacks do.
 template <platform::CallRedirect& Call>
 std::uint64_t Filter(std::uint64_t manager, std::uint64_t causer, std::uint64_t info, std::uint64_t lists) noexcept
 {
-    const auto original = reinterpret_cast<CallFn>(Call.Original());
-    const auto* const two = generation::Member();
-    if (causer == 0 || reinterpret_cast<const void*>(causer) != two || !Active(kReactionFilter))
+    const auto        original = reinterpret_cast<CallFn>(Call.Original());
+    const auto* const by       = reinterpret_cast<const void*>(causer);
+    const int         seat     = generation::SeatOfMember(by);
+    if (causer == 0 || !players::SeatBuilt(seat) || !Active(kReactionFilter))
     {
         return original(manager, causer, info, lists);
     }
-    return thread_hold::Holding(t_causer, two, original, manager, causer, info, lists);
+    return thread_hold::Holding(t_causer, by, original, manager, causer, info, lists);
 }
 
 /// The filter's leader read (reached only past the filter's own early-outs): the held causer.
@@ -336,7 +391,8 @@ std::uint64_t FilterLeader(std::uint64_t a, std::uint64_t b, std::uint64_t c, st
     if (const void* const causer = t_causer; causer != nullptr)
     {
         NoteFirst(kReactionFilter);
-        platform::LogDebug(L"leader reads: a reaction filter tests player 2's member; it counts as the player");
+        platform::LogDebug(L"leader reads: a reaction filter tests {}'s member; it counts as the player",
+                           players::SeatName(generation::SeatOfMember(causer)));
         return reinterpret_cast<std::uint64_t>(causer);
     }
     return reinterpret_cast<CallFn>(g_filterLeader.Original())(a, b, c, d);
@@ -352,8 +408,9 @@ std::uint64_t MinePart(std::uint64_t mine, std::uint64_t b, std::uint64_t c, std
     return reinterpret_cast<CallFn>(g_minePart.Original())(mine, b, c, d);
 }
 
-/// The leader-type read of a mine without a target: player 2's type while the mine's own coin names player 2, and only
-/// when that type's character is player 2's live member (the game dereferences that character without a null check).
+/// The leader-type read of a mine without a target: a seat's member's type while the mine's own coin names that seat,
+/// and only when that type's character is the seat's live member (the game dereferences that character without a null
+/// check).
 std::uint64_t MineLeaderType(std::uint64_t a, std::uint64_t b, std::uint64_t c, std::uint64_t d) noexcept
 {
     const auto        original = reinterpret_cast<CallFn>(g_mineType.Original());
@@ -368,18 +425,31 @@ std::uint64_t MineLeaderType(std::uint64_t a, std::uint64_t b, std::uint64_t c, 
                                        ? target_coin::CheckedController(leader_scope::ObjectAt(object + kMineObjectController))
                                        : nullptr;
     const int  coin  = controller != nullptr ? target_coin::CoinFor(controller) : 0;
+    const int  seat  = SeatOfCoin(coin);
     const auto types = equal_targeting::Types();
     void*      found = nullptr;
-    const bool live  = coin == 2 && types && g_characterByType != nullptr &&
+    const bool live  = seat != 0 && types && types->Has(seat) && g_characterByType != nullptr &&
                       platform::CallGuarded(g_characterByType, found, std::uint8_t{0},
-                                            static_cast<std::uint8_t>(types->two)) &&
-                      found != nullptr && found == generation::Member();
+                                            static_cast<std::uint8_t>(types->type[seat])) &&
+                      found != nullptr && found == generation::MemberOf(seat);
     NoteFirst(kMine);
-    platform::LogDebug(L"leader reads: Reno's mine {:#x} heads for {}", reinterpret_cast<std::uintptr_t>(mine),
-                       live ? L"player 2 (its coin)"
-                            : (coin == 2 ? L"player 1 (its coin named player 2, whose member is not live)"
-                                         : (coin == 1 ? L"player 1 (its coin)" : L"the game's own leader (no coin)")));
-    return live ? static_cast<std::uint64_t>(static_cast<std::uint8_t>(types->two)) : original(a, b, c, d);
+    const auto at = reinterpret_cast<std::uintptr_t>(mine);
+    if (live)
+    {
+        platform::LogDebug(L"leader reads: Reno's mine {:#x} heads for {} (its coin)", at, players::SeatName(seat));
+    }
+    else if (seat != 0)
+    {
+        platform::LogDebug(L"leader reads: Reno's mine {:#x} heads for player 1 (its coin named {}, whose member is not "
+                           L"live)",
+                           at, players::SeatName(seat));
+    }
+    else
+    {
+        platform::LogDebug(L"leader reads: Reno's mine {:#x} heads for {}", at,
+                           coin == 1 ? L"player 1 (its coin)" : L"the game's own leader (no coin)");
+    }
+    return live ? static_cast<std::uint64_t>(types->type[seat]) : original(a, b, c, d);
 }
 
 // ---- E8 Crimson Mare's arms ----
@@ -433,9 +503,16 @@ std::uint64_t ArmLeader(std::uint64_t a, std::uint64_t b, std::uint64_t c, std::
     const void*       last = g_armAnswer[I].exchange(now, std::memory_order_relaxed);
     if (last != now)
     {
-        platform::LogDebug(L"leader reads: Crimson Mare's arm read {} now names {}", I + 1,
-                           coin == 2 ? L"player 2 (the boss's coin)"
-                                     : (coin == 1 ? L"player 1 (the boss's coin)" : L"the game's own leader (no coin)"));
+        if (coin == 0)
+        {
+            platform::LogDebug(L"leader reads: Crimson Mare's arm read {} now names the game's own leader (no coin)",
+                               I + 1);
+        }
+        else
+        {
+            platform::LogDebug(L"leader reads: Crimson Mare's arm read {} now names {} (the boss's coin)", I + 1,
+                               CoinName(coin));
+        }
     }
     platform::LogTrace(L"leader reads: Crimson Mare's arm read {}: coin {}", I + 1, coin);
     return answer;

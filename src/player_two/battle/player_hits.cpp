@@ -10,6 +10,7 @@
 #include "player_two/generation.h"
 #include "player_two/scopes/leader_answer.h"
 #include "player_two/scopes/thread_hold.h"
+#include "players/seats.h"
 
 #include <atomic>
 #include <cstddef>
@@ -92,75 +93,86 @@ ResolveFn              g_resolveLeader = nullptr;  // ResolvePartyLeaderWeakPtr:
 
 std::atomic<bool> g_on{false};
 
-// Player 2's character while its hit is applied on this thread (the summon gauge's leader read answers it), else null.
+// A seat's character while its hit is applied on this thread (the summon gauge's leader read answers it), else null.
 thread_local const void* t_attacker = nullptr;
-// The human the damage or reaction call running on this thread is about.
-thread_local Human t_human = Human::None;
+// The human the damage or reaction call running on this thread is about (0 player 1, s a seat, kNoHuman).
+thread_local int t_human = kNoHuman;
 
 /// Who a damage or reaction call is about, and the answer it holds.
 struct Involvement
 {
-    Human       human    = Human::None;
-    bool        attacks  = false;  // the human is the attacker (else the character hit)
-    int         type     = -1;     // player 2's member's player type: the leader test's extra yes (player 2 only)
-    const void* member   = nullptr;
+    int         human    = kNoHuman;  // 0 player 1, s seat s
+    bool        attacks  = false;     // the human is the attacker (else the character hit)
+    int         type     = -1;        // the seat's member's player type: the leader test's extra yes (a seat only)
+    const void* member   = nullptr;   // the seat's member (a seat only)
 };
 
-/// The human `attacker` is, or that `component` (on the battle-player slot only) belongs to: player 2's member, or
+/// The human `attacker` is, or that `component` (on the battle-player slot only) belongs to: a seat's member, or
 /// player 1's character (the party leader). Any thread: the types come from equal_targeting's per-frame copy.
 Involvement Involved(std::uint64_t component, std::uint64_t attacker, bool victimSlot) noexcept
 {
-    const auto types = equal_targeting::Types();
-    const void* const member = generation::Member();
-    if (!g_on.load(std::memory_order_acquire) || !types || member == nullptr)
+    const auto  types = equal_targeting::Types();
+    const void* members[players::kMaxPlayers] = {};  // by seat; index 0 unused
+    bool        anyMember                     = false;
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        members[seat] = generation::MemberOf(seat);
+        anyMember     = anyMember || members[seat] != nullptr;
+    }
+    if (!g_on.load(std::memory_order_acquire) || !types || !anyMember)
     {
         return {};
     }
     const auto* const by = reinterpret_cast<const void*>(attacker);
-    if (by == member)
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        return {Human::PlayerTwo, true, types->two, member};
+        if (members[seat] != nullptr && by == members[seat] && types->Has(seat))
+        {
+            return {seat, true, types->type[seat], members[seat]};
+        }
     }
     const void* const leader = g_resolveLeader != nullptr ? g_resolveLeader() : nullptr;
     if (by != nullptr && by == leader)
     {
-        return {Human::PlayerOne, true, -1, member};
+        return {0, true, -1, nullptr};
     }
     if (victimSlot)
     {
         const int hit = leader_answer::ComponentPlayerType(reinterpret_cast<const void*>(component));
-        if (hit == types->two)
+        for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
         {
-            return {Human::PlayerTwo, false, types->two, member};
+            if (members[seat] != nullptr && types->Has(seat) && hit == types->type[seat])
+            {
+                return {seat, false, types->type[seat], members[seat]};
+            }
         }
-        if (hit == types->one)
+        if (hit == types->type[0])
         {
-            return {Human::PlayerOne, false, -1, member};
+            return {0, false, -1, nullptr};
         }
     }
     return {};
 }
 
-/// Player 2's answers for one call, put back however it leaves.
+/// A seat's answers for one call, put back however it leaves.
 struct Held
 {
     int         type;
     const void* attacker;
-    Human       human;
+    int         human;
 };
 
-/// The call's answers held on this thread (player_two/scopes/thread_hold.h's enter): for player 2, the leader test's
-/// yes for
-/// player 2's type and player 2's character for the summon gauge's leader read when it attacks; for either human,
-/// the reaction context. Restore puts the outer answers back, also when a structured exception unwinds the call.
+/// The call's answers held on this thread (player_two/scopes/thread_hold.h's enter): for a seat, the leader test's yes
+/// for the seat's member's type and the seat's character for the summon gauge's leader read when it attacks; for any
+/// human, the reaction context. Restore puts the outer answers back, also when a structured exception unwinds the call.
 Held Hold(const Involvement& who) noexcept
 {
     const Held outer{leader_answer::ExchangeThread(who.type), t_attacker, t_human};
-    if (who.human != Human::PlayerTwo)
+    if (who.human < 1)
     {
         leader_answer::ExchangeThread(outer.type);  // player 1's calls keep any outer answer
     }
-    t_attacker = who.human == Human::PlayerTwo && who.attacks ? who.member : nullptr;  // null: a nested call's own
+    t_attacker = who.human >= 1 && who.attacks ? who.member : nullptr;  // null: a nested call's own
     t_human    = who.human;
     return outer;
 }
@@ -170,11 +182,6 @@ void Restore(const Held& outer) noexcept
     t_attacker = outer.attacker;
     t_human    = outer.human;
     leader_answer::ExchangeThread(outer.type);
-}
-
-const wchar_t* HumanText(Human human) noexcept
-{
-    return human == Human::PlayerTwo ? L"player 2's" : L"player 1's";
 }
 
 template <std::size_t I>
@@ -187,15 +194,15 @@ std::uint64_t Damage(std::uint64_t component, std::uint64_t attacker, std::uint6
         return original(component, attacker, hit, damage, e);
     }
     const Involvement who = Involved(component, attacker, I == kPlayerSlot);
-    if (who.human == Human::None)
+    if (who.human == kNoHuman)
     {
         return original(component, attacker, hit, damage, e);
     }
-    if (who.human == Human::PlayerTwo)
+    if (who.human >= 1)
     {
-        platform::LogDebug(L"player hits: player 2's character {} on {} {:#x}; player 2 counts as the player in this "
-                           L"call",
-                           who.attacks ? L"hits" : L"is hit", kSlotNames[I], component);
+        platform::LogDebug(L"player hits: {}'s character {} on {} {:#x}; {} counts as the player in this call",
+                           players::SeatName(who.human), who.attacks ? L"hits" : L"is hit", kSlotNames[I], component,
+                           players::SeatName(who.human));
     }
     else
     {
@@ -205,12 +212,13 @@ std::uint64_t Damage(std::uint64_t component, std::uint64_t attacker, std::uint6
     return thread_hold::HoldingBy(&Hold, &Restore, who, original, component, attacker, hit, damage, e);
 }
 
-/// The summon gauge's leader read: player 2's character while its hit is applied, else the game's leader.
+/// The summon gauge's leader read: a seat's character while its hit is applied, else the game's leader.
 std::uint64_t LeaderRead(std::uint64_t a, std::uint64_t b, std::uint64_t c, std::uint64_t d) noexcept
 {
     if (const void* const attacker = t_attacker; attacker != nullptr)
     {
-        platform::LogDebug(L"player hits: the summon gauge charges at the player's rate for player 2's hit");
+        platform::LogDebug(L"player hits: the summon gauge charges at the player's rate for {}'s hit",
+                           players::SeatName(t_human));
         return reinterpret_cast<std::uint64_t>(attacker);
     }
     return reinterpret_cast<LeaderFn>(g_leaderRead.Original())(a, b, c, d);
@@ -224,12 +232,19 @@ std::uint64_t Sensing(std::uint64_t controller, std::uint64_t causer, std::uint6
 {
     const auto        original = reinterpret_cast<DamageFn>(Call.Original());
     const Involvement who      = Involved(0, causer, false);
-    if (who.human == Human::None)
+    if (who.human == kNoHuman)
     {
         return original(controller, causer, handle, type, direction);
     }
-    platform::LogTrace(L"player hits: an enemy senses {} attack; {}", HumanText(who.human),
-                       who.human == Human::PlayerTwo ? L"player 2 counts as the player" : L"the game's own answers");
+    if (who.human >= 1)
+    {
+        platform::LogTrace(L"player hits: an enemy senses {}'s attack; {} counts as the player",
+                           players::SeatName(who.human), players::SeatName(who.human));
+    }
+    else
+    {
+        platform::LogTrace(L"player hits: an enemy senses player 1's attack; the game's own answers");
+    }
     return thread_hold::HoldingBy(&Hold, &Restore, who, original, controller, causer, handle, type, direction);
 }
 
@@ -312,7 +327,7 @@ void Remove() noexcept
     // unloading is not; it passes through once g_on is off.
 }
 
-Human HumanInCall() noexcept
+int HumanInCall() noexcept
 {
     return t_human;
 }

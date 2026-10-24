@@ -1,6 +1,8 @@
 #pragma once
 
-// Player 2's hits, and the hits player 2 takes, count as the player's (RE-p2-enemy-target-bias.md §12-§14).
+// The further players' hits, and the hits they take, count as the player's (RE-p2-enemy-target-bias.md §12-§14).
+// Written for player 2 below; every seat's member is treated alike, each call about the one seat whose member it
+// names (the seat found from the attacking or hit character).
 //
 // Every battle character takes damage through its battle-control component's damage slot (+0x380; 1.005 +0x388). The
 // enemy's override first adds the enemy's stagger build-up and the attacker's on-hit ATB; then the shared base applies
@@ -43,13 +45,10 @@ bool Install(const platform::GameImage& image) noexcept;
 
 void Remove() noexcept;
 
-/// The human a damage or reaction call running on this thread is about.
-enum class Human : std::uint8_t
-{
-    None,  // outside such a call, or one between enemies and AI members
-    PlayerOne,
-    PlayerTwo,
-};
-Human HumanInCall() noexcept;
+/// No human: outside a damage or reaction call, or in one between enemies and AI members.
+inline constexpr int kNoHuman = -1;
+
+/// The human a damage or reaction call running on this thread is about: 0 player 1, s seat s's player, or kNoHuman.
+int HumanInCall() noexcept;
 
 }  // namespace lss::player_two::player_hits

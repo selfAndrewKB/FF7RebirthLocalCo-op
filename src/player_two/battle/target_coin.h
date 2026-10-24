@@ -25,6 +25,9 @@
 // answer, and tossed anew once player 2's character is no longer a candidate. Nothing is written to the party
 // manager. Not covered (native reads of the leader): the opening target, lock groups (Stun Ray), the LEADER_ point.
 //
+// Every seat playing a member takes part as player 2 does below: the coin is a uniform pick among the eligible players
+// (player 1 and the seats), and a coin holds the player's number (player_two/battle/coin_table.h).
+//
 // Any thread: enemy AI may run on workers. The coins live in a lock-free table keyed by the controller.
 // Logged: the install and the UFunction swaps (Info), each toss (Debug), a summary every 60 s (Debug), each answer
 // (Trace).
@@ -45,8 +48,9 @@ void Remove() noexcept;
 void Tick() noexcept;
 
 /// A lock-group pick is a decision whose target holds until it dies (RE §18.4, §20): tosses `controller`'s coin now,
-/// by the same rule, and keeps it as the enemy's coin. 2 player 2, 1 player 1, 0 none (off, no player 2, or not an
-/// enemy controller; the caller must already have checked that `controller` is a live object). Any thread.
+/// by the same rule, and keeps it as the enemy's coin. The player's number (1 player 1, seat + 1 a seat's player:
+/// 2 player 2; coin_table::SeatOfNumber gives the seat), 0 none (off, no seat's member, or not an enemy controller; the
+/// caller must already have checked that `controller` is a live object). Any thread.
 int TossForLockPick(const void* controller) noexcept;
 
 /// `enemy`'s AI controller, only when the controller's own enemy pointer names `enemy` back (the game's path to it:
@@ -57,9 +61,9 @@ const void* ControllerOfEnemy(const void* enemy) noexcept;
 const void* CheckedController(const void* controller) noexcept;
 
 /// The coin `controller` holds now, for a native read of "the player" made for that enemy (RE-p2-leader-native-reads.md
-/// S-LEADERLEVERS): tossed if it has none, tossed again if it names player 2 and player 2 is no longer a candidate
-/// (the blueprint answers' rule). 2 player 2, 1 player 1, 0 none (off, no player 2, or not an enemy controller; the
-/// caller must already have checked that `controller` is a live object). Any thread.
+/// S-LEADERLEVERS): tossed if it has none, tossed again if it names a seat's player who is no longer a candidate (the
+/// blueprint answers' rule). The player's number as TossForLockPick gives it, 0 none (off, no seat's member, or not an
+/// enemy controller; the caller must already have checked that `controller` is a live object). Any thread.
 int CoinFor(const void* controller) noexcept;
 
 /// `to` takes the coin `from` holds now (a combination's partner aims where its initiator does), until its own next
@@ -67,9 +71,9 @@ int CoinFor(const void* controller) noexcept;
 /// Any thread.
 void ShareCoin(const void* from, const void* to) noexcept;
 
-/// After a lock-group pick whose coin named player 2 locked onto someone else (player 2 could not take it, so the
-/// game's own player-1 term decided): `controller`'s coin becomes player 1, so its blueprint answers agree with the
-/// game's single-player view of that pick. Any thread; nothing if the coin is no longer player 2.
+/// After a lock-group pick whose coin named a seat's player locked onto someone else (that player could not take it,
+/// so the game's own player-1 term decided): `controller`'s coin becomes player 1, so its blueprint answers agree with
+/// the game's single-player view of that pick. Any thread; nothing if the coin no longer names a seat's player.
 void LockPickFellBack(const void* controller) noexcept;
 
 }  // namespace lss::player_two::target_coin

@@ -5,6 +5,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "player_two/battle/coin_table.h"
 #include "player_two/battle/equal_targeting.h"
 #include "player_two/battle/lock_group_rules.h"
 #include "player_two/battle/target_coin.h"
@@ -12,6 +13,7 @@
 #include "player_two/object_fields.h"
 #include "player_two/scopes/leader_scope.h"
 #include "player_two/scopes/thread_hold.h"
+#include "players/seats.h"
 
 #include <atomic>
 #include <cstddef>
@@ -58,9 +60,22 @@ std::atomic<PickObserver> g_observer{nullptr};
 
 // The character the two leader reads answer on this thread while one is held, else null (the game's leader).
 thread_local const void* t_player = nullptr;
-// The groups whose rebalance now holds player 2 (game thread; for the Debug line on a change). A battle has one group
-// in Rebirth (Stun Ray's 'Default'); a fifth held group is still answered, only its changes go unlogged.
+// The groups whose rebalance now holds a seat's member (game thread; for the Debug line on a change). A battle has one
+// group in Rebirth (Stun Ray's 'Default'); a fifth held group is still answered, only its changes go unlogged.
 lock_group_rules::HeldGroups<4> g_heldGroups;
+
+/// Whether any built seat has a member now.
+bool AnySeatMember() noexcept
+{
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (generation::MemberOf(seat) != nullptr)
+        {
+            return true;
+        }
+    }
+    return false;
+}
 
 /// One of the two leader reads: the held character, else the game's leader.
 template <platform::CallRedirect& Call>
@@ -103,51 +118,67 @@ const wchar_t* PickText(bool first) noexcept
     return first ? L"first pick" : L"re-pick";
 }
 
-/// The rebalance: holds player 2's member for CountLocks' leader read when player 2 holds a lock in this group and
-/// player 1 holds none, so the leader-first respread runs only when neither human holds one. Game thread.
+/// The rebalance: holds a seat's member for CountLocks' leader read when that seat holds a lock in this group and player
+/// 1 holds none (the first such seat), so the leader-first respread runs only when no human holds one. Game thread.
 std::uint64_t Rebalance(std::uint64_t group, std::uint64_t b, std::uint64_t c, std::uint64_t d) noexcept
 {
     const auto        original = reinterpret_cast<CallFn>(g_rebalance.Original());
     const auto* const self     = reinterpret_cast<const void*>(group);
-    void* const       two      = generation::Member();
-    if (!g_on.load(std::memory_order_acquire) || self == nullptr || two == nullptr || !equal_targeting::Types() ||
+    if (!g_on.load(std::memory_order_acquire) || self == nullptr || !AnySeatMember() || !equal_targeting::Types() ||
         ReadField<std::uint8_t>(self, kGroupPrioritize) == 0)
     {
         return original(group, b, c, d);
     }
-    const void* const one     = g_resolveLeader != nullptr ? g_resolveLeader() : nullptr;
-    bool              twoHolds = false, oneHolds = false;
-    std::int32_t      num     = 0;
-    const auto* const data    = Members(self, num);
+    void* members[players::kMaxPlayers] = {};  // by seat; index 0 unused
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        members[seat] = generation::MemberOf(seat);
+    }
+    const void* const one          = g_resolveLeader != nullptr ? g_resolveLeader() : nullptr;
+    unsigned          seatsHolding = 0;
+    bool              oneHolds     = false;
+    std::int32_t      num          = 0;
+    const auto* const data         = Members(self, num);
     for (std::int32_t i = 0; data != nullptr && i < num; ++i)
     {
         const void* const target = leader_scope::ObjectAt(data + static_cast<std::size_t>(i) * kMemberSize + kMemberTarget);
-        twoHolds                 = twoHolds || target == two;
-        oneHolds                 = oneHolds || (target != nullptr && target == one);
+        for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+        {
+            seatsHolding |= members[seat] != nullptr && target == members[seat] ? 1u << seat : 0u;
+        }
+        oneHolds = oneHolds || (target != nullptr && target == one);
     }
-    const bool hold = lock_group_rules::RebalanceHoldsPlayerTwo(twoHolds, oneHolds);
+    const int  seat = lock_group_rules::RebalanceSeat(seatsHolding, oneHolds);
+    const bool hold = seat != 0;
     if (g_heldGroups.Note(self, hold))
     {
-        platform::LogDebug(L"lock group coin: group {:#x}: {}", group,
-                           hold ? L"player 2 holds a lock and player 1 none; the rebalance counts player 2 as the player"
-                                : L"the rebalance counts player 1 as the player again");
+        if (hold)
+        {
+            platform::LogDebug(L"lock group coin: group {:#x}: {} holds a lock and player 1 none; the rebalance counts {} "
+                               L"as the player",
+                               group, players::SeatName(seat), players::SeatName(seat));
+        }
+        else
+        {
+            platform::LogDebug(L"lock group coin: group {:#x}: the rebalance counts player 1 as the player again", group);
+        }
     }
     if (!hold)
     {
         return original(group, b, c, d);
     }
-    platform::LogTrace(L"lock group coin: group {:#x}: rebalance with player 2 as the player", group);
-    return thread_hold::Holding(t_player, two, original, group, b, c, d);  // the leader reads answer player 2's member
+    platform::LogTrace(L"lock group coin: group {:#x}: rebalance with {} as the player", group, players::SeatName(seat));
+    // The leader reads answer the seat's member.
+    return thread_hold::Holding(t_player, static_cast<const void*>(members[seat]), original, group, b, c, d);
 }
 
 /// One lock-group pick through the game's `pick`, with the picking enemy's coin naming "the player". `first`: the
-/// registration's first pick (else the battle tick's re-pick), for the log. Off or without player 2: `pick` once.
+/// registration's first pick (else the battle tick's re-pick), for the log. Off or without a seat's member: `pick` once.
 std::uint64_t Pick(CallFn pick, std::uint64_t group, std::uint64_t out, std::uint64_t c, std::uint64_t d,
                    bool first) noexcept
 {
     const auto* const self = reinterpret_cast<const void*>(group);
-    void* const       two  = generation::Member();
-    if (!g_on.load(std::memory_order_acquire) || self == nullptr || two == nullptr || !equal_targeting::Types() ||
+    if (!g_on.load(std::memory_order_acquire) || self == nullptr || !AnySeatMember() || !equal_targeting::Types() ||
         ReadField<std::uint8_t>(self, kGroupPrioritize) == 0)
     {
         return pick(group, out, c, d);
@@ -163,7 +194,8 @@ std::uint64_t Pick(CallFn pick, std::uint64_t group, std::uint64_t out, std::uin
     const void* const      enemy      = member != nullptr ? leader_scope::ObjectAt(member + kMemberEnemy) : nullptr;
     const void* const      controller = target_coin::ControllerOfEnemy(enemy);  // checked before anything calls into it
     const int              coin       = controller != nullptr ? target_coin::TossForLockPick(controller) : 0;
-    if (coin != 2)
+    const int              seat       = coin > 1 ? coin_table::SeatOfNumber(coin) : 0;
+    if (seat == 0)
     {
         platform::LogDebug(L"lock group coin: {} for enemy {:#x}: {}; the game's own term (player 1) decided",
                            PickText(first), reinterpret_cast<std::uintptr_t>(enemy),
@@ -174,21 +206,23 @@ std::uint64_t Pick(CallFn pick, std::uint64_t group, std::uint64_t out, std::uin
                                                    : L"no coin (not an enemy controller, or player 2 cannot be targeted)");
         return own;
     }
-    // Pick writes only `out` (RE §18.9), so it may run again: this time with player 2's member as "the player".
-    const std::uint64_t held = thread_hold::Holding(t_player, two, pick, group, out, c, d);
-    if ((held & 0xFF) != 0 && leader_scope::ObjectAt(reinterpret_cast<const void*>(out)) == two)
+    // Pick writes only `out` (RE §18.9), so it may run again: this time with the seat's member as "the player".
+    const void* const   seated = generation::MemberOf(seat);
+    const std::uint64_t held   = seated != nullptr ? thread_hold::Holding(t_player, seated, pick, group, out, c, d) : 0;
+    if ((held & 0xFF) != 0 && leader_scope::ObjectAt(reinterpret_cast<const void*>(out)) == seated)
     {
-        platform::LogDebug(L"lock group coin: {} for enemy {:#x}: its coin names player 2; it locks onto player 2's "
-                           L"member",
-                           PickText(first), reinterpret_cast<std::uintptr_t>(enemy));
+        platform::LogDebug(L"lock group coin: {} for enemy {:#x}: its coin names {}; it locks onto {}'s member",
+                           PickText(first), reinterpret_cast<std::uintptr_t>(enemy), players::SeatName(seat),
+                           players::SeatName(seat));
         return held;
     }
-    // Player 2 cannot take it (full, down, untargetable or not the least locked): the game's own pick stands, as single
-    // player would for an unavailable player, and the enemy's coin follows it (its blueprint answers player 1).
+    // The seat's player cannot take it (full, down, untargetable, not the least locked, or gone): the game's own pick
+    // stands, as single player would for an unavailable player, and the enemy's coin follows it (its blueprint answers
+    // player 1).
     target_coin::LockPickFellBack(controller);
-    platform::LogDebug(L"lock group coin: {} for enemy {:#x}: its coin named player 2, who cannot take it; the game's own "
+    platform::LogDebug(L"lock group coin: {} for enemy {:#x}: its coin named {}, who cannot take it; the game's own "
                        L"term (player 1) decides",
-                       PickText(first), reinterpret_cast<std::uintptr_t>(enemy));
+                       PickText(first), reinterpret_cast<std::uintptr_t>(enemy), players::SeatName(seat));
     return pick(group, out, c, d);
 }
 

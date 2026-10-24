@@ -3,25 +3,39 @@
 // The lock groups' rules (player_two/battle/lock_group_coin.h) as pure pieces, tested on the host
 // (tests/lock_group_rules_test.cpp).
 
+#include "players/seats.h"
+
 #include <array>
 #include <cstddef>
 
 namespace lss::player_two::lock_group_rules {
 
-/// The rebalance counts player 2 as the player when player 2 holds a lock in the group and player 1 holds none, so the
-/// leader-first respread runs only when neither human holds one.
-constexpr bool RebalanceHoldsPlayerTwo(bool playerTwoHoldsLock, bool playerOneHoldsLock) noexcept
+/// The seat the rebalance counts as the player: when player 1 holds no lock in the group, the first seat (in seat order)
+/// whose member holds one, so the leader-first respread runs only when no human holds one. 0: none (the game's own
+/// leader). `seatsHolding`: bit s set when seat s's member holds a lock.
+constexpr int RebalanceSeat(unsigned seatsHolding, bool playerOneHoldsLock) noexcept
 {
-    return playerTwoHoldsLock && !playerOneHoldsLock;
+    if (playerOneHoldsLock)
+    {
+        return 0;
+    }
+    for (int seat = 1; seat < players::kMaxPlayers; ++seat)
+    {
+        if ((seatsHolding & (1u << seat)) != 0)
+        {
+            return seat;
+        }
+    }
+    return 0;
 }
 
-/// The groups whose rebalance holds player 2 now, for the line on a change. A group past the capacity is still
+/// The groups whose rebalance holds a seat's member now, for the line on a change. A group past the capacity is still
 /// answered, only its changes go unrecorded.
 template <std::size_t N>
 class HeldGroups
 {
 public:
-    /// Records whether `group`'s rebalance holds player 2 now; true when that changed (and could be recorded).
+    /// Records whether `group`'s rebalance holds a seat's member now; true when that changed (and could be recorded).
     bool Note(const void* group, bool hold) noexcept
     {
         const void** free = nullptr;
