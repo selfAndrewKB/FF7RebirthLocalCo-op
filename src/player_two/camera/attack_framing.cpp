@@ -25,6 +25,8 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <format>
+#include <string>
 #include <utility>
 
 namespace lss::player_two::attack_framing {
@@ -95,20 +97,30 @@ Sites             g_sites;
 std::atomic<bool> g_pending{false};  // a placement queued and not yet run (Remove clears it)
 
 // Game thread.
-// D1: per sequence (its actor's weak) and camera, the decision: show (native) or keep off this camera.
-// D2: per shot (the camera actor's weak), the enemy's coin: 1 player 1, 2 player 2, 0 the game's own answer.
+// D1: per sequence (its actor's weak) and camera (LatchKey), the decision: show (native) or keep off this camera.
+// D2: per shot (the camera actor's weak), the enemy's coin: a player number (CoinPlayer), 0 the game's own answer.
 using world_rules::Latch;
 std::array<Latch, kLatches> g_d1{};
 std::array<Latch, kLatches> g_d2{};
 std::uint64_t               g_tick = 0;
 const void*                 g_shotCamera = nullptr;  // the camera actor being evaluated (game thread)
 
+// The coin's values are target_coin's (the battle group's): the player number, 1 player 1, 2 player 2, 3 player 3. A
+// coin c names the player in seat c - 1 here, for any built seat (a coin past the built seats is the game's answer).
+
 struct Counts
 {
-    std::uint32_t kept = 0, offOther = 0, native = 0, coinOne = 0, coinTwo = 0, coinNone = 0, answers = 0;
+    std::uint32_t kept = 0, offOther = 0, native = 0, coinNone = 0, answers = 0;
+    std::array<std::uint32_t, players::kMaxPlayers> coin{};  // leader-framing shots on each player, by seat
 };
 Counts            g_counts;
 platform::Every g_status{kStatusEvery};
+
+/// The seat a coin names (coin c: seat c - 1), or -1 for none (0, or a player not built).
+int CoinPlayer(int coin) noexcept
+{
+    return coin >= 1 && coin <= players::kSeatsBuilt + 1 ? coin - 1 : -1;
+}
 
 bool Line() noexcept
 {
@@ -126,9 +138,37 @@ void* PlayerOneCharacter() noexcept
     return ReadPointer(generation::PlayerOneController(), facts::kControllerPawn);
 }
 
+/// The seat's member while its player is in, or null.
+void* SeatMember(int seat) noexcept
+{
+    return generation::Active(seat) ? generation::MemberOf(seat) : nullptr;
+}
+
+/// On the game thread with a built seat's player in with a member.
 bool Bound() noexcept
 {
-    return generation::OnGameThread() && generation::Active() && generation::Member() != nullptr;
+    if (!generation::OnGameThread())
+    {
+        return false;
+    }
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (SeatMember(seat) != nullptr)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+/// Each player's character by seat: player 1's pawn, each seat's member while its player is in.
+void Humans(const void* (&humans)[players::kMaxPlayers]) noexcept
+{
+    humans[0] = PlayerOneCharacter();
+    for (int seat = 1; seat < players::kMaxPlayers; ++seat)
+    {
+        humans[seat] = players::SeatBuilt(seat) ? SeatMember(seat) : nullptr;
+    }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -165,17 +205,12 @@ std::uint8_t Decide(std::uint8_t priority, const void* camera) noexcept
     {
         return kUndecided;  // decided on a later frame, once there is a target
     }
-    void* const member = generation::Member();
-    void* const one    = PlayerOneCharacter();
-    if (target != member && target != one)
-    {
-        return kShow;  // the AI ally or an enemy: both cameras, as solo shows it
-    }
-    // The other player's target is off unless this camera is the viewer's own.
-    return world_rules::ShotShows(target, member, one, attack_cameras::InsidePlayerTwoUpdate(),
-                                  ReadPointer(camera, kBattleCameraOwner))
-               ? kShow
-               : kOff;
+    // The AI ally or an enemy: every camera, as solo shows it; another player's target is off unless this camera's
+    // player owns the shot (the camera: the seat whose update is open, 0 player 1's).
+    const void* humans[players::kMaxPlayers] = {};
+    Humans(humans);
+    return ShotShowsOn(target, humans, attack_cameras::InsideSeat(), ReadPointer(camera, kBattleCameraOwner)) ? kShow
+                                                                                                               : kOff;
 }
 
 bool IsActive(void* unused, void* entry) noexcept
@@ -195,7 +230,8 @@ bool IsActive(void* unused, void* entry) noexcept
     {
         return active;
     }
-    const std::uint64_t perCamera = key ^ (attack_cameras::InsidePlayerTwoUpdate() ? 0x8000000000000000ull : 0);
+    const int           seat      = attack_cameras::InsideSeat();  // this camera's (0 player 1's)
+    const std::uint64_t perCamera = LatchKey(key, seat);
     bool                made      = false;
     Latch&              latch     = Find(g_d1, perCamera, made);
     const void*         camera    = nullptr;
@@ -214,8 +250,7 @@ bool IsActive(void* unused, void* entry) noexcept
             if (latch.value == kOff && Line())
             {
                 platform::LogDebug(L"attack framing: {}'s shot (priority {}) targets the other player: not on {}'s camera",
-                                   NameOf(ReadPointer(camera, kBattleCameraOwner)), priority,
-                                   attack_cameras::InsidePlayerTwoUpdate() ? L"player 2" : L"player 1");
+                                   NameOf(ReadPointer(camera, kBattleCameraOwner)), priority, players::SeatName(seat));
             }
         }
     }
@@ -246,8 +281,9 @@ std::uint8_t CoinOf(const void* camera) noexcept
         const void* owner      = ReadPointer(camera, kBattleCameraOwner);
         const void* controller = owner != nullptr ? target_coin::ControllerOfEnemy(owner) : nullptr;
         const int   coin       = controller != nullptr ? target_coin::CoinFor(controller) : 0;
-        latch.value            = static_cast<std::uint8_t>(coin == 1 || coin == 2 ? coin : 0);
-        (latch.value == 1 ? g_counts.coinOne : latch.value == 2 ? g_counts.coinTwo : g_counts.coinNone) += 1;
+        const int   player     = CoinPlayer(coin);
+        latch.value            = static_cast<std::uint8_t>(player >= 0 ? coin : 0);
+        (player >= 0 ? g_counts.coin[static_cast<std::size_t>(player)] : g_counts.coinNone) += 1;
     }
     return latch.value;
 }
@@ -285,12 +321,12 @@ void* Character(std::size_t site, std::uint64_t lane, std::uint64_t type) noexce
     {
         return original(lane, type);
     }
-    const std::uint8_t coin = CoinOf(g_shotCamera);
-    if (coin == 0)
+    const int player = CoinPlayer(CoinOf(g_shotCamera));
+    if (player < 0)
     {
         return original(lane, type);
     }
-    const auto playerType = party_member::PlayerTypeOf(coin == 2 ? generation::Member() : PlayerOneCharacter());
+    const auto playerType = party_member::PlayerTypeOf(player != 0 ? generation::MemberOf(player) : PlayerOneCharacter());
     if (!playerType)
     {
         return original(lane, type);
@@ -425,15 +461,32 @@ void Tick() noexcept
     {
         return;
     }
-    const Counts c = std::exchange(g_counts, {});
-    if (c.kept + c.offOther + c.native + c.coinOne + c.coinTwo + c.coinNone + c.answers == 0)
+    const Counts  c     = std::exchange(g_counts, {});
+    std::uint32_t coins = 0;
+    for (const std::uint32_t n : c.coin)
+    {
+        coins += n;
+    }
+    if (c.kept + c.offOther + c.native + coins + c.coinNone + c.answers == 0)
     {
         return;
     }
-    platform::LogDebug(L"attack framing (10 s): shots decided native {}, kept off the other player's camera {}; "
-                       L"evaluations kept {}; leader-framing shots on player 1 {}, player 2 {}, the game's own {}; "
-                       L"leader reads answered {}",
-                       c.native, c.offOther, c.kept, c.coinOne, c.coinTwo, c.coinNone, c.answers);
+    try
+    {
+        std::wstring on;  // "player 1 N, player 2 N": player 1 and each built seat
+        for (int seat = 0; seat <= players::kSeatsBuilt; ++seat)
+        {
+            on += std::format(L"{}{} {}", seat > 0 ? L", " : L"", players::SeatName(seat),
+                              c.coin[static_cast<std::size_t>(seat)]);
+        }
+        platform::LogDebug(L"attack framing (10 s): shots decided native {}, kept off the other player's camera {}; "
+                           L"evaluations kept {}; leader-framing shots on {}, the game's own {}; "
+                           L"leader reads answered {}",
+                           c.native, c.offOther, c.kept, on, c.coinNone, c.answers);
+    }
+    catch (...)
+    {
+    }
 }
 
 void Remove() noexcept
