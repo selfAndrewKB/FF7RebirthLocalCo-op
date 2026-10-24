@@ -436,7 +436,7 @@ void TickAfterSession(const Frame& frame) noexcept
     player_two::camera_distance::TickFraming(two.in);  // per-layout distance steps (roadmap 2b)
     player_two::shoulder_scale::Poll(frame.splitShown, views::SplitWidthRatio(false), views::SplitWidthRatio(true));
     player_two::anim_two_views::Tick(frame.splitShown);  // its frame count, before the world tick
-    player_two::charapop_near::Tick(frame.splitShown, two.playsMember);
+    player_two::charapop_near::Tick(frame.splitShown, plays);
     player_two::charapop_centre::Tick(frame.splitShown, plays);
     player_two::world_actor_reach::Tick(two.playsMember);
     hud::minimap::Tick(frame.splitShown);  // outside the overlay render, before it

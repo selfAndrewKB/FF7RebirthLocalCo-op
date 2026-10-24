@@ -23,9 +23,15 @@
 // Never touches an entry whose minimum the game set (only entries reading 0 are raised), and clears only
 // entries the mod raised that still read 3. Everything raised is cleared when the split closes; the
 // record is dropped without calls when the map's CharaPop changes. Game thread only.
+//
+// Per seat (players/seats.h): each playing seat's camera is judged on its own ("player 2" above is any seat's);
+// an entry is raised when any seat's view needs it and kept while any does (the union). One record list and one
+// minimum level per entry, shared: the game has one.
 
 #include "platform/dev_switch.h"
+#include "players/seats.h"
 
+#include <array>
 #include <cstdint>
 
 namespace lss::platform {
@@ -46,8 +52,9 @@ enum class Detail : std::uint8_t
 /// Finds the game's setter; logged either way. False if a check failed (nothing is raised then).
 bool Install(const platform::GameImage& image) noexcept;
 
-/// Each engine tick, with whether the split is on screen and player 2 plays a member.
-void Tick(bool splitShown, bool playerTwoPlays) noexcept;
+/// Each engine tick, with whether the split is on screen and, by seat, whether the seat's player plays a member
+/// (index 0 unused).
+void Tick(bool splitShown, const std::array<bool, players::kMaxPlayers>& plays) noexcept;
 
 /// The comparison switch (Ctrl+F11 cycles full -> reduced -> off; `npc-detail full|reduced|off`). Off clears
 /// what was raised; reduced releases what is past its reach over the next second. Logged.

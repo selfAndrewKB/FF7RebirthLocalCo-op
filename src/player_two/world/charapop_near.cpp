@@ -10,6 +10,7 @@
 #include "player_two/scopes/leader_scope.h"
 #include "player_two/world/charapop_facts.h"
 #include "player_two/world/charapop_rule.h"
+#include "players/seats.h"
 
 #if LSS_DEV
 #include "platform/command_registry.h"
@@ -57,14 +58,14 @@ struct Raised
     std::uint64_t key       = 0;
     const void*   entry     = nullptr;
     std::uint8_t  baseLevel = 0;   // the entry's level before it was raised: picks Light or Middle
-    std::uint32_t outside   = 0;   // passes in a row it was not needed
+    std::uint32_t outside   = 0;   // passes in a row no seat's view needed it
     bool          seen      = false;
 };
 
 /// One pass's decisions, for the summary.
 struct PassCounts
 {
-    int needed  = 0;  // entries player 2's view keeps (raised or not)
+    int needed  = 0;  // entries a seat's view keeps (raised or not)
     int covered = 0;  // ... of which player 1's camera already keeps, so they were left to the game
 };
 
@@ -212,7 +213,16 @@ int Find(const void* entry) noexcept
     return -1;
 }
 
-void LogSummary(const charapop::Camera& one, const charapop::Camera& two, const PassCounts& counts, Detail detail)
+/// The seats whose camera was read this pass, by seat (players/seats.h; index 0, player 1's, unused).
+struct SeatCameras
+{
+    charapop::Camera camera[players::kMaxPlayers];
+    std::uint8_t     read = 0;  // bit s: seat s's camera was read (charapop::SeatBit)
+
+    bool Read(int seat) const noexcept { return (read & charapop::SeatBit(seat)) != 0; }
+};
+
+void LogSummary(const charapop::Camera& one, const SeatCameras& seats, const PassCounts& counts, Detail detail)
 {
     // Once a minute: each raise and clear has its own line, and busy scenes change the count each pass.
     const auto now = Clock::now();
@@ -220,12 +230,25 @@ void LogSummary(const charapop::Camera& one, const charapop::Camera& two, const 
     {
         return;
     }
-    g_skipSamples  = 0;
-    Line(L"{}: {} raised now (cameras {:.0f} m apart); this pass player 2's view needed {}, player 1's camera already "
-         L"keeps {} of them; so far {} raised, {} cleared ({} out of reach, {} kept by player 1, {} left the evaluated "
-         L"states), {} taken over by the game",
-         DetailName(detail), g_raisedCount,
-         one.read ? charapop::Distance(one.location, two.location) / 100.0f : -1.0f, counts.needed, counts.covered,
+    g_skipSamples = 0;
+    if (!platform::Enabled(platform::Level::Debug))
+    {
+        return;
+    }
+    // Player 1's camera to each seat's, in seat order ("/" between seats).
+    std::wstring apart;
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        apart += std::format(L"{}{:.0f}", seat == 1 ? L"" : L"/",
+                             one.read && seats.Read(seat)
+                                 ? charapop::Distance(one.location, seats.camera[seat].location) / 100.0f
+                                 : -1.0f);
+    }
+    Line(L"{}: {} raised now (cameras {} m apart); this pass {} view needed {}, player 1's camera already keeps {} of "
+         L"them; so far {} raised, {} cleared ({} out of reach, {} kept by player 1, {} left the evaluated states), {} "
+         L"taken over by the game",
+         DetailName(detail), g_raisedCount, apart,
+         players::kSeatsBuilt == 1 ? L"player 2's" : L"the further players'", counts.needed, counts.covered,
          g_raisedTotal, g_outOfReachTotal + g_coveredTotal + g_goneTotal, g_outOfReachTotal, g_coveredTotal, g_goneTotal,
          g_takenBack);
 }
@@ -244,19 +267,44 @@ std::wstring Where(const charapop::EntryView* view) noexcept
     }
 }
 
-/// One evaluated entry as both cameras see it.
+/// One evaluated entry as player 1's camera and each read seat's camera see it.
 struct Sighting
 {
     const std::byte*       entry = nullptr;
     void*                  actor = nullptr;
     std::uint8_t           level = 0;
-    charapop::EntryView    two;
+    charapop::EntryView    seat[players::kMaxPlayers];  // by seat; only the read seats' (SeatCameras::read)
+    std::uint8_t           read = 0;                    // the seats whose view is in `seat`
     charapop::EntryView    one;
     const charapop::EntryView* fromOne = nullptr;  // &one when player 1's camera was read
     charapop::LodDistances lod;
+
+    bool Read(int s) const noexcept { return (read & charapop::SeatBit(s)) != 0; }
 };
 
-/// An entry the mod raised: kept, or released after kReleasePasses unneeded passes (counted by reason).
+/// "player 2: {where}" for each read seat, in seat order ("; " between seats).
+std::wstring SeatsWhere(const Sighting& s) noexcept
+{
+    try
+    {
+        std::wstring text;
+        for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+        {
+            if (s.Read(seat))
+            {
+                text += std::format(L"{}{}: {}", text.empty() ? L"" : L"; ", players::SeatName(seat), Where(&s.seat[seat]));
+            }
+        }
+        return text;
+    }
+    catch (...)
+    {
+        return {};
+    }
+}
+
+/// An entry the mod raised: kept while any read seat's view needs it, or released after kReleasePasses passes no
+/// seat's view needed it (counted by reason).
 void HandleRaised(int index, const Sighting& s, float reach, PassCounts& counts)
 {
     using namespace charapop;
@@ -268,7 +316,15 @@ void HandleRaised(int index, const Sighting& s, float reach, PassCounts& counts)
         Drop(index);
         return;
     }
-    const Hold hold = HoldOf(s.lod, s.two, s.fromOne, reach);
+    SeatHolds holds;
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (s.Read(seat))
+        {
+            holds.Add(seat, HoldOf(s.lod, s.seat[seat], s.fromOne, reach));
+        }
+    }
+    const Hold hold = holds.Combined();
     if (hold != Hold::OutOfReach)
     {
         ++counts.needed;
@@ -282,8 +338,10 @@ void HandleRaised(int index, const Sighting& s, float reach, PassCounts& counts)
     const bool covered = hold == Hold::PlayerOneCovers;
     if (platform::Enabled(platform::Level::Debug))
     {
-        Line(L"cleared {} ({}; player 2: {}, player 1: {})", NameOf(s.actor),
-             covered ? L"player 1's camera keeps it" : L"out of player 2's reach", Where(&s.two), Where(s.fromOne));
+        Line(L"cleared {} ({}; {}, player 1: {})", NameOf(s.actor),
+             covered ? L"player 1's camera keeps it"
+                     : (players::kSeatsBuilt == 1 ? L"out of player 2's reach" : L"out of every further player's reach"),
+             SeatsWhere(s), Where(s.fromOne));
     }
     if (Clear(index))
     {
@@ -291,17 +349,27 @@ void HandleRaised(int index, const Sighting& s, float reach, PassCounts& counts)
     }
 }
 
-/// An entry not raised: raised when player 2's view needs it and player 1's camera does not keep it.
+/// An entry not raised: raised when a read seat's view needs it and player 1's camera does not keep it.
 void HandleCandidate(const Sighting& s, float reach, Detail detail, PassCounts& counts)
 {
     using namespace charapop;
-    if (!KeepsAwakeOrShown(s.lod, s.two, reach))
+    std::uint8_t needing = 0;  // the seats whose view keeps it
+    std::uint8_t raising = 0;  // ... and player 1's camera does not
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (s.Read(seat) && KeepsAwakeOrShown(s.lod, s.seat[seat], reach))
+        {
+            needing |= SeatBit(seat);
+            raising |= ShouldRaise(s.lod, s.seat[seat], s.fromOne, reach) ? SeatBit(seat) : std::uint8_t{0};
+        }
+    }
+    if (needing == 0)
     {
         return;
     }
     ++counts.needed;
     const auto logged = std::find(g_leftLogged.begin(), g_leftLogged.end(), s.entry);
-    if (!ShouldRaise(s.lod, s.two, s.fromOne, reach))
+    if (raising == 0)
     {
         ++counts.covered;
         // Each entry once (the same few were logged several times a second, live 2026-10-03).
@@ -309,8 +377,8 @@ void HandleCandidate(const Sighting& s, float reach, Detail detail, PassCounts& 
         {
             ++g_skipSamples;
             g_leftLogged[g_leftNext++ % g_leftLogged.size()] = s.entry;
-            Line(L"left to player 1's camera: {} (level {}; player 2: {}, player 1: {})", NameOf(s.actor), s.level,
-                 Where(&s.two), Where(s.fromOne));
+            Line(L"left to player 1's camera: {} (level {}; {}, player 1: {})", NameOf(s.actor), s.level, SeatsWhere(s),
+                 Where(s.fromOne));
         }
         return;
     }
@@ -323,9 +391,9 @@ void HandleCandidate(const Sighting& s, float reach, Detail detail, PassCounts& 
         if (!g_fullLogged)
         {
             g_fullLogged = true;
-            platform::Log(L"charapop near: {} entries raised, the most kept: further entries near player 2 are left as "
-                          L"the game has them",
-                          kMaxRaised);
+            platform::Log(L"charapop near: {} entries raised, the most kept: further entries near {} are left as the "
+                          L"game has them",
+                          kMaxRaised, players::kSeatsBuilt == 1 ? L"player 2" : L"the further players");
         }
         return;
     }
@@ -338,12 +406,12 @@ void HandleCandidate(const Sighting& s, float reach, Detail detail, PassCounts& 
     ++g_raisedTotal;
     if (platform::Enabled(platform::Level::Debug))
     {
-        Line(L"raised {} ({}, level {}; player 2: {}, player 1: {}, which does not keep it)", NameOf(s.actor),
-             DetailName(detail), s.level, Where(&s.two), Where(s.fromOne));
+        Line(L"raised {} ({}, level {}; {}, player 1: {}, which does not keep it)", NameOf(s.actor), DetailName(detail),
+             s.level, SeatsWhere(s), Where(s.fromOne));
     }
 }
 
-void Pass(Detail detail)
+void Pass(Detail detail, const std::array<bool, players::kMaxPlayers>& playing)
 {
     using namespace charapop;
     const Objects objects = ObjectsOf(g_gameRoot);
@@ -362,8 +430,16 @@ void Pass(Detail detail)
         return;
     }
     const Camera one = CameraOf(generation::PlayerOneController());
-    const Camera two = CameraOf(generation::PlayerTwoController());
-    if (!two.read)
+    SeatCameras  seats;
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (playing[seat])
+        {
+            seats.camera[seat] = CameraOf(generation::ControllerOf(seat));
+            seats.read |= seats.camera[seat].read ? SeatBit(seat) : std::uint8_t{0};
+        }
+    }
+    if (seats.read == 0)
     {
         return;
     }
@@ -405,7 +481,15 @@ void Pass(Detail detail)
         const auto category = ReadField<std::uint8_t>(s.entry, kEntryCategory);
         const bool hides    = category == 1;
         const bool enemy    = category == 4;
-        s.two = {Distance(at, two.location), AngleOff(two, at), hides, enemy};
+        for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+        {
+            if (seats.Read(seat))
+            {
+                const Camera& camera = seats.camera[seat];
+                s.seat[seat]         = {Distance(at, camera.location), AngleOff(camera, at), hides, enemy};
+            }
+        }
+        s.read = seats.read;
         if (one.read)
         {
             s.one     = {Distance(at, one.location), AngleOff(one, at), hides, enemy};
@@ -430,7 +514,7 @@ void Pass(Detail detail)
             ++g_goneTotal;
         }
     }
-    LogSummary(one, two, counts, detail);
+    LogSummary(one, seats, counts, detail);
 }
 
 }  // namespace
@@ -448,7 +532,7 @@ bool Install(const platform::GameImage& image) noexcept
     return g_installed;
 }
 
-void Tick(bool splitShown, bool playerTwoPlays) noexcept
+void Tick(bool splitShown, const std::array<bool, players::kMaxPlayers>& plays) noexcept
 {
     if (!g_installed || !generation::OnGameThread())
     {
@@ -460,9 +544,17 @@ void Tick(bool splitShown, bool playerTwoPlays) noexcept
         ClearAll(L"switched off");
         return;
     }
-    if (!splitShown || !playerTwoPlays || !generation::Active())
+    std::array<bool, players::kMaxPlayers> playing{};  // by seat: plays its member, its generation active
+    bool                                   anyPlays = false;
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        ClearAll(L"the split closed or player 2 stopped playing");
+        playing[seat] = plays[seat] && generation::Active(seat);
+        anyPlays      = anyPlays || playing[seat];
+    }
+    if (!splitShown || !anyPlays)
+    {
+        ClearAll(players::kSeatsBuilt == 1 ? L"the split closed or player 2 stopped playing"
+                                           : L"the split closed or no further player plays");
         return;
     }
     if (++g_ticks % kEvery != 0)
@@ -471,7 +563,7 @@ void Tick(bool splitShown, bool playerTwoPlays) noexcept
     }
     try
     {
-        Pass(detail);
+        Pass(detail, playing);
     }
     catch (...)
     {
