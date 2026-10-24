@@ -454,7 +454,7 @@ bool Build() noexcept
         if (platform::CallGuarded(g_keyGuideCtor, built2, guide))
         {
             g_keyGuide = guide;
-            focus_scope::SetKeyGuide(guide);
+            focus_scope::SetKeyGuide(players::kPlayerTwoSeat, guide);
         }
     }
     Line(std::format(L"player 2's key guide {}", g_keyGuide != nullptr ? L"built" : L"NOT built (the shared one stays)"));
@@ -476,7 +476,7 @@ Snapshot Read() noexcept
     now.widget = weak_object::ObjectOf(ReadAt<std::uint64_t>(ctrl + kCmdMenuWidget));
     now.widgetNamesUs = now.widget != nullptr &&
                         ReadAt<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(now.widget) + kWidgetCtrl) == ctrl;
-    now.context = focus_scope::PlayerTwoContext();
+    now.context = focus_scope::ContextOf(players::kPlayerTwoSeat);
     return now;
 }
 

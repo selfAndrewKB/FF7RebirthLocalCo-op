@@ -1,6 +1,9 @@
 #pragma once
 
-// Player 2's own UI focus context (RE-p2-command-menu-input.md §2, §3.3, §11, pass S-CMD2).
+// Each further player's own UI focus context (RE-p2-command-menu-input.md §2, §3.3, §11, pass S-CMD2). Written for
+// player 2 below; every seat has its own saved context and key guide (indexed by the seat, index 0 unused: player 1's
+// context is the game's own, in place outside a scope). One scope at a time, whichever seat's: the seats swap in turn,
+// never one inside another's.
 //
 // UI actions reach one focus path only, kept by Square's input object (EndUISystem[2]) with a stack of
 // focus layers; the game has one such context. Player 2's command menu (a second FieldCommandCtrl)
@@ -30,23 +33,23 @@ namespace lss::player_two::focus_scope {
 
 bool Install(const platform::GameImage& image) noexcept;
 
-// Player 2's context as copied: the path, the layers, the cause, the capture map and the owner byte; and the
+// A seat's context as copied: the path, the layers, the cause, the capture map and the owner byte; and the
 // menu-core delegate's size.
 inline constexpr std::size_t kContextSize  = 32 + 16 + 1 + 0x50 + 1;
 inline constexpr std::size_t kDelegateSize = 16;
 
-/// Player 2's key guide (a second KeyGuide53 built with the game's constructor), or null: while set, a scope
-/// also names it in the UI system's key guide slot (EndUISystem[53]), so player 2's controller drives its own.
-void SetKeyGuide(void* keyGuide) noexcept;
+/// `seat`'s key guide (another KeyGuide53 built with the game's constructor), or null: while set, the seat's scope
+/// also names it in the UI system's key guide slot (EndUISystem[53]), so the seat's controller drives its own.
+void SetKeyGuide(int seat, void* keyGuide) noexcept;
 
-/// Player 2's saved context: its path length and layer count (for the log).
+/// A seat's saved context: its path length and layer count (for the log).
 struct Summary
 {
     std::int32_t pathCount = 0, layerCount = 0;
 };
-Summary PlayerTwoContext() noexcept;
+Summary ContextOf(int seat) noexcept;
 
-/// The focus path length in the input object now (inside a scope: player 2's live one).
+/// The focus path length in the input object now (inside a scope: that seat's live one).
 std::int32_t LivePathCount() noexcept;
 
 /// Player 1's top focus layer is the command menu's own (priority -1000): no pause menu, popup or
@@ -56,8 +59,8 @@ bool PlayerOneTopIsCommandMenu() noexcept;
 class FocusScope
 {
 public:
-    /// Swaps in player 2's context with `controller` as the UI system's command controller.
-    explicit FocusScope(void* controller) noexcept;
+    /// Swaps in `seat`'s context with `controller` (the seat's command controller) as the UI system's.
+    FocusScope(int seat, void* controller) noexcept;
     ~FocusScope();
     FocusScope(const FocusScope&)            = delete;
     FocusScope& operator=(const FocusScope&) = delete;
@@ -65,13 +68,14 @@ public:
     bool Entered() const noexcept { return entered_; }
     /// Why the scope was refused (null when entered).
     const wchar_t* Refusal() const noexcept { return refusal_; }
-    /// Player 2's context is not kept at the end (it is reset to empty): the game faulted inside the
+    /// The seat's context is not kept at the end (it is reset to empty): the game faulted inside the
     /// scope, possibly mid-change. What it held is leaked, never replayed.
     void Abandon() noexcept { abandon_ = true; }
 
 private:
     // The five regions, the delegate, the controller slot and the key guide slot.
     platform::ByteStore<8, kContextSize + kDelegateSize + 2 * sizeof(std::uintptr_t)> context_;
+    int                                                                               seat_    = 0;
     bool                                                                              entered_ = false;
     bool                                                                              abandon_ = false;
     const wchar_t*                                                                    refusal_ = nullptr;

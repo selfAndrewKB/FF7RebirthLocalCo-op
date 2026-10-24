@@ -44,7 +44,7 @@ enum Which : unsigned
 struct Args
 {
     int           seat       = players::kPlayerTwoSeat;  // whose ladder: Primary and FillMember's pad
-    void*         controller = nullptr;  // Focus: player 2's command controller
+    void*         controller = nullptr;  // Focus: the seat's command controller
     std::int32_t  padId      = -1;       // Sticks: the pad (pad_sticks::ControllerIdOf)
     std::uint64_t withoutKey = 0;        // Buttons: an action the seat's view shows as not held (0 none)
     std::uint64_t memberWeak = 0;        // Leader: player 2's member's weak value (leader_scope::WeakOf)
@@ -72,7 +72,7 @@ struct FocusPart
 {
     static constexpr unsigned       kBit  = Focus;
     static constexpr const wchar_t* kName = L"player 2's UI context";
-    explicit FocusPart(const Args& args) noexcept : scope(args.controller) {}
+    explicit FocusPart(const Args& args) noexcept : scope(args.seat, args.controller) {}
     bool           Held() const noexcept { return scope.Entered(); }
     const wchar_t* Refusal() const noexcept { return scope.Refusal(); }
     focus_scope::FocusScope scope;

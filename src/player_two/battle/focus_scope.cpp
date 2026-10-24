@@ -6,6 +6,7 @@
 #include "platform/log.h"
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
+#include "players/seats.h"
 
 #include <array>
 #include <cstdint>
@@ -79,26 +80,31 @@ constexpr std::uint32_t kLayerSize         = 40;
 constexpr std::uint32_t kLayerPriority     = 0x20;
 constexpr std::int32_t  kCommandMenuLayer  = -1000;
 
-// Game thread.
-std::uintptr_t                         g_endUISystem = 0;
-std::array<std::uint8_t, kContextSize> g_playerTwo = EmptyContext();  // player 2's context between scopes
-bool                                   g_inside      = false;
-std::uintptr_t                         g_keyGuide    = 0;  // player 2's key guide, or 0
-int                                    g_layout      = 0;  // player 1's capture map checked: 0 not yet, 1 holds, -1 does not
+using Context = std::array<std::uint8_t, kContextSize>;
 
-/// Player 2's copy into the context's five Exchange values (before a scope), or out of them (after it).
-void CopyBetween(platform::ByteContext& context, bool intoContext) noexcept
+// Game thread. The per-seat records are indexed by the seat; index 0 (player 1, whose context is the game's own) is
+// unused.
+std::uintptr_t                                g_endUISystem = 0;
+std::array<Context, players::kMaxPlayers>     g_contexts{EmptyContext(), EmptyContext(), EmptyContext()};  // between scopes
+std::array<std::uintptr_t, players::kMaxPlayers> g_keyGuides{};  // each seat's key guide, or 0
+bool g_inside = false;  // one scope at a time, whichever seat's: the seats swap in turn
+int  g_layout = 0;      // player 1's capture map checked: 0 not yet, 1 holds, -1 does not
+static_assert(players::kMaxPlayers == 3, "g_contexts' initialiser names every player");
+
+/// `seat`'s copy into the context's five Exchange values (before a scope), or out of them (after it).
+void CopyBetween(int seat, platform::ByteContext& context, bool intoContext) noexcept
 {
-    std::size_t at = 0;
+    Context&    saved = g_contexts[static_cast<std::size_t>(seat)];
+    std::size_t at    = 0;
     for (std::size_t i = 0; i < kContext.size(); ++i)
     {
         if (intoContext)
         {
-            std::memcpy(context.Value(i).data(), g_playerTwo.data() + at, kContext[i].size);
+            std::memcpy(context.Value(i).data(), saved.data() + at, kContext[i].size);
         }
         else
         {
-            std::memcpy(g_playerTwo.data() + at, context.Value(i).data(), kContext[i].size);
+            std::memcpy(saved.data() + at, context.Value(i).data(), kContext[i].size);
         }
         at += kContext[i].size;
     }
@@ -114,16 +120,24 @@ bool Install(const platform::GameImage& image) noexcept
     return system.has_value();
 }
 
-void SetKeyGuide(void* keyGuide) noexcept
+void SetKeyGuide(int seat, void* keyGuide) noexcept
 {
-    g_keyGuide = reinterpret_cast<std::uintptr_t>(keyGuide);
+    if (players::SeatIndex(seat))
+    {
+        g_keyGuides[static_cast<std::size_t>(seat)] = reinterpret_cast<std::uintptr_t>(keyGuide);
+    }
 }
 
-Summary PlayerTwoContext() noexcept
+Summary ContextOf(int seat) noexcept
 {
     Summary summary;
-    std::memcpy(&summary.pathCount, &g_playerTwo[8], sizeof(std::int32_t));        // path: Widgets.Num
-    std::memcpy(&summary.layerCount, &g_playerTwo[32 + 8], sizeof(std::int32_t));  // layers: Num
+    if (!players::SeatIndex(seat))
+    {
+        return summary;
+    }
+    const Context& saved = g_contexts[static_cast<std::size_t>(seat)];
+    std::memcpy(&summary.pathCount, &saved[8], sizeof(std::int32_t));        // path: Widgets.Num
+    std::memcpy(&summary.layerCount, &saved[32 + 8], sizeof(std::int32_t));  // layers: Num
     return summary;
 }
 
@@ -148,10 +162,14 @@ bool PlayerOneTopIsCommandMenu() noexcept
            priority == kCommandMenuLayer;
 }
 
-FocusScope::FocusScope(void* controller) noexcept
+FocusScope::FocusScope(int seat, void* controller) noexcept : seat_(seat)
 {
     std::uintptr_t input = 0;
-    if (g_inside || !generation::OnGameThread())
+    if (!players::SeatIndex(seat))
+    {
+        refusal_ = L"not a seat";
+    }
+    else if (g_inside || !generation::OnGameThread())
     {
         refusal_ = L"inside another focus scope, or off the game thread";
     }
@@ -161,8 +179,8 @@ FocusScope::FocusScope(void* controller) noexcept
     }
     else if (g_layout == 0 && (g_layout = CaptureLayoutHolds(input) ? 1 : -1) < 0)
     {
-        platform::Log(L"focus scope: player 1's capture map does not have the TSet layout player 2's copy assumes; "
-                      L"player 2's UI stays off");
+        platform::Log(L"focus scope: player 1's capture map does not have the TSet layout the further players' copies "
+                      L"assume; their UI stays off");
     }
     if (refusal_ == nullptr && g_layout < 0)
     {
@@ -172,8 +190,9 @@ FocusScope::FocusScope(void* controller) noexcept
     {
         return;
     }
-    // The five regions exchanged with player 2's copy; the delegate unbound (zeros), the UI system's controller slot
-    // and, when player 2 has one, its key guide slot set.
+    // The five regions exchanged with the seat's copy; the delegate unbound (zeros), the UI system's controller slot
+    // and, when the seat has one, its key guide slot set.
+    const std::uintptr_t keyGuide = g_keyGuides[static_cast<std::size_t>(seat)];
     std::array<Range, 8> ranges{};
     std::size_t          count = 0;
     for (const Region& region : kContext)
@@ -182,24 +201,24 @@ FocusScope::FocusScope(void* controller) noexcept
     }
     ranges[count++] = {input + kDelegate, kDelegateSize, Kind::Set};
     ranges[count++] = {g_endUISystem + kUICommandController, sizeof(controller), Kind::Set};
-    if (g_keyGuide != 0)
+    if (keyGuide != 0)
     {
-        ranges[count++] = {g_endUISystem + kUIKeyGuide, sizeof(g_keyGuide), Kind::Set};
+        ranges[count++] = {g_endUISystem + kUIKeyGuide, sizeof(keyGuide), Kind::Set};
     }
     if (!context_.Define(std::span<const Range>(ranges.data(), count)))
     {
-        refusal_ = L"player 2's context could not be laid out";
+        refusal_ = L"the seat's context could not be laid out";
         return;
     }
-    CopyBetween(context_, true);
+    CopyBetween(seat, context_, true);
     std::memcpy(context_.Value(kContext.size() + 1).data(), &controller, sizeof(controller));
-    if (g_keyGuide != 0)
+    if (keyGuide != 0)
     {
-        std::memcpy(context_.Value(kContext.size() + 2).data(), &g_keyGuide, sizeof(g_keyGuide));
+        std::memcpy(context_.Value(kContext.size() + 2).data(), &keyGuide, sizeof(keyGuide));
     }
     if (!context_.Open())
     {
-        refusal_ = L"player 1's context could not be read, or player 2's not written (player 1's is in place)";
+        refusal_ = L"player 1's context could not be read, or the seat's not written (player 1's is in place)";
         return;
     }
     entered_ = true;
@@ -213,26 +232,28 @@ FocusScope::~FocusScope()
         return;
     }
     g_inside = false;
-    // Player 1's context back; what the game left in the five regions is player 2's now (the Exchange values).
+    // Player 1's context back; what the game left in the five regions is the seat's now (the Exchange values).
     const unsigned kept = context_.Close();
     if (abandon_)
     {
-        g_playerTwo = EmptyContext();
-        platform::Log(L"focus scope: player 2's context abandoned after a fault (reset to empty)");
+        g_contexts[static_cast<std::size_t>(seat_)] = EmptyContext();
+        platform::Log(L"focus scope: {}'s context abandoned after a fault (reset to empty)", players::SeatName(seat_));
     }
     else
     {
-        CopyBetween(context_, false);
+        CopyBetween(seat_, context_, false);
     }
     if (kept != 0)
     {
-        platform::LogDebug(L"focus scope: the game wrote the delegate or a UI system slot inside player 2's scope; the "
-                           L"game's value kept");
+        platform::LogDebug(L"focus scope: the game wrote the delegate or a UI system slot inside {}'s scope; the "
+                           L"game's value kept",
+                           players::SeatName(seat_));
     }
     if (context_.Faulted())
     {
-        platform::Log(L"focus scope: FAILED to put player 1's context back or keep player 2's (player 1's UI focus "
-                      L"may be wrong)");
+        platform::Log(L"focus scope: FAILED to put player 1's context back or keep {}'s (player 1's UI focus may be "
+                      L"wrong)",
+                      players::SeatName(seat_));
     }
 }
 
