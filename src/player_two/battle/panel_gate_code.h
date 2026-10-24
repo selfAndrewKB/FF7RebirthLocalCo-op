@@ -24,8 +24,8 @@
 
 namespace lss::player_two {
 
-/// The gate the code reads: skip set during player 2's targeting run; skipped counts the requests kept
-/// from player 1's panel.
+/// The gate the code reads: skip set during a further player's targeting run (any seat's: the gate is seat-neutral);
+/// skipped counts the requests kept from player 1's panel.
 struct PanelGate
 {
     std::uint8_t  skip = 0;

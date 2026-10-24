@@ -8,8 +8,8 @@
 // (the party leader and its type answering player 2's member, leader_scope), Rules (the command
 // rules turned around, command_rules). `Which` names them: a site opens the ones its call reads,
 // required unless it says they are optional, and its own module-local scopes after the ladder. The ladder is a seat's
-// (Args::seat, player 2's unless a site names another): Primary, Buttons and the member's pad follow it; the other
-// parts are still player 2's until their modules are per seat (plan/seats.md step 3).
+// (Args::seat, player 2's unless a site names another): Primary, Buttons, Focus, Targets and the member's pad follow
+// it; the other parts are still player 2's until their modules are per seat (plan/seats.md step 3).
 // Game thread only.
 
 #include "player_two/battle/command_rules.h"
@@ -113,7 +113,7 @@ struct TargetsPart
 {
     static constexpr unsigned       kBit  = Targets;
     static constexpr const wchar_t* kName = L"player 2's target fields";
-    explicit TargetsPart(const Args&) noexcept {}
+    explicit TargetsPart(const Args& args) noexcept : scope(args.seat) {}
     bool Held() const noexcept { return scope.Held(); }
     lock_on::TargetScope scope;
 };

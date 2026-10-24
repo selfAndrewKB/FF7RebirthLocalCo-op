@@ -27,11 +27,13 @@
 #include "player_two/scopes/p2_scope.h"
 #include "player_two/scopes/primary_controller.h"
 #include "player_two/session/party_member.h"
+#include "players/seats.h"
 
 #if LSS_DEV
 #include "platform/command_registry.h"
 #endif
 
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <cstring>
@@ -169,24 +171,50 @@ LayerTestFn    g_moduleOn    = nullptr;
 std::uintptr_t g_battleSystem = 0;  // the address holding the battle system
 std::uintptr_t g_endUISystem  = 0;
 
-// Game thread. Player 2's copies of the battle system's fields (the displayed target owns one weak
+// Game thread. A seat's copies of the battle system's fields (the displayed target owns one weak
 // reference) and of the bar manager's targeted key (one weak reference), read back at the end of
-// each scope.
-Pair          g_displayed;
-Pair          g_targetedKey;
-std::uintptr_t g_cursor   = 0;
-std::uint64_t g_trace     = 0;
-std::uint32_t g_freeTime  = 0;
-std::uint8_t  g_lock      = 0;
-std::uint8_t  g_latch     = 0;
-bool          g_held      = false;
-bool          g_run       = false;  // inside player 2's targeting run: the shared writes are skipped
+// each of its scopes.
+struct SeatTargets
+{
+    Pair           displayed;
+    Pair           targetedKey;
+    std::uintptr_t cursor   = 0;
+    std::uint64_t  trace    = 0;
+    std::uint32_t  freeTime = 0;
+    std::uint8_t   lock     = 0;
+    std::uint8_t   latch    = 0;
+    bool           listOpen = false;  // the seat's command target list, as last seen in its run
+    std::uint32_t  listOpenings = 0;
+};
+std::array<SeatTargets, players::kMaxPlayers> g_seats{};  // by seat; index 0 unused (player 1's are the game's own)
+
+bool          g_held      = false;  // a TargetScope holds (one at a time, whichever seat's)
+bool          g_run       = false;  // inside a seat's targeting run: the shared writes are skipped
 PanelGate     g_panelGate;          // the same, for the "cleared" request (player_two/battle/panel_gate_code.h)
 bool          g_enabled   = true;
-bool          g_listOpen  = false;  // player 2's command target list, as last seen in player 2's run
-std::uint32_t g_listOpenings = 0;
 bool          g_failed    = false;
 std::uint64_t g_runs = 0, g_refusals = 0, g_menuPauses = 0, g_panelSkips = 0, g_lockRestores = 0;
+
+/// `seat`'s fields. Every caller has checked the seat; a bad one (a bug) gets a scratch record, cleared each time, and
+/// one warning, so no seat's fields are touched (and no weak reference is released twice).
+SeatTargets& SeatOf(int seat) noexcept
+{
+    if (players::SeatIndex(seat))
+    {
+        return g_seats[static_cast<std::size_t>(seat)];
+    }
+    static bool warned = false;
+    if (!warned)
+    {
+        warned = true;
+        platform::Log(L"lock-on: WARNING: target fields were asked for seat {}, which does not exist; a scratch record "
+                      L"answered",
+                      seat);
+    }
+    static SeatTargets scratch;
+    scratch = {};
+    return scratch;
+}
 
 /// A line of `level`.
 void Note(const std::wstring& text, platform::Level level = platform::Level::Info) noexcept
@@ -210,7 +238,7 @@ bool PowerOfTen(std::uint64_t count) noexcept
 void Fail(const wchar_t* what) noexcept
 {
     g_failed = true;
-    platform::Log(L"lock-on: {} raised an exception; player 2's targeting is off this session", what);
+    platform::Log(L"lock-on: {} raised an exception; the further players' targeting is off this session", what);
 }
 
 Pair PairAt(std::uintptr_t address) noexcept
@@ -229,7 +257,7 @@ std::uintptr_t TargetedKeyAddress() noexcept
     return manager != 0 ? manager + kTargetedKey : 0;
 }
 
-/// A weak reference the mod holds for player 2, given back.
+/// A weak reference the mod holds for a seat, given back.
 void ReleasePair(Pair& pair) noexcept
 {
     if (pair.controller != 0 && g_release != nullptr && !platform::CallGuarded(g_release, pair.controller))
@@ -239,19 +267,19 @@ void ReleasePair(Pair& pair) noexcept
     pair = {};
 }
 
-/// Player 2's cursor, given back to the game's cursor manager.
-void ReleaseCursor() noexcept
+/// A seat's cursor, given back to the game's cursor manager.
+void ReleaseCursor(std::uintptr_t& cursor) noexcept
 {
-    if (g_cursor != 0 && g_cursorRelease != nullptr)
+    if (cursor != 0 && g_cursorRelease != nullptr)
     {
-        const auto released = g_cursor;
-        g_cursor            = 0;  // released widgets go to one shared reuse slot: never player 2's again
+        const auto released = cursor;
+        cursor              = 0;  // released widgets go to one shared reuse slot: never the seat's again
         if (!platform::CallGuarded(g_cursorRelease, reinterpret_cast<void*>(released)))
         {
             Fail(L"the cursor release");
         }
     }
-    g_cursor = 0;
+    cursor = 0;
 }
 
 /// Whether the command controller in the UI system's slot has its target list open: the game's wrapper, or on
@@ -275,12 +303,12 @@ bool MenuTargetSelect() noexcept
     return !platform::CallGuarded(g_menuSelect, open) || open != 0 || !platform::CallGuarded(g_menuBusy, busy) || busy != 0;
 }
 
-/// The bar manager's targeted key is player 2's while it lives (the weak reference moves with it): one Exchange
-/// range of platform/byte_scope.h over the pair, player 2's copy loaded in and read back at the end.
+/// The bar manager's targeted key is a seat's while it lives (the weak reference moves with it): one Exchange
+/// range of platform/byte_scope.h over the pair, the seat's copy loaded in and read back at the end.
 class TargetedKeyScope
 {
 public:
-    TargetedKeyScope() noexcept
+    explicit TargetedKeyScope(Pair& seatKey) noexcept : seatKey_(seatKey)
     {
         const std::uintptr_t address = TargetedKeyAddress();
         const Range          range{address, sizeof(Pair), Kind::Exchange};
@@ -288,7 +316,7 @@ public:
         {
             return;
         }
-        std::memcpy(context_.Value(0).data(), &g_targetedKey, sizeof(Pair));
+        std::memcpy(context_.Value(0).data(), &seatKey_, sizeof(Pair));
         held_ = context_.Open();
     }
     ~TargetedKeyScope()
@@ -296,7 +324,7 @@ public:
         if (held_)
         {
             context_.Close();
-            std::memcpy(&g_targetedKey, context_.Value(0).data(), sizeof(Pair));
+            std::memcpy(&seatKey_, context_.Value(0).data(), sizeof(Pair));
         }
     }
     TargetedKeyScope(const TargetedKeyScope&)            = delete;
@@ -305,18 +333,19 @@ public:
     bool Held() const noexcept { return held_; }
 
 private:
+    Pair&                                seatKey_;
     platform::ByteStore<1, sizeof(Pair)> context_;
     bool                                 held_ = false;
 };
 
-void Refused(const wchar_t* why) noexcept
+void Refused(int seat, const wchar_t* why) noexcept
 {
     ++g_refusals;
     if (g_refusals <= 5 || PowerOfTen(g_refusals))
     {
         try
         {
-            Note(std::format(L"player 2's targeting skipped: {} ({} time(s))", why, g_refusals));
+            Note(std::format(L"{}'s targeting skipped: {} ({} time(s))", players::SeatName(seat), why, g_refusals));
         }
         catch (...)
         {
@@ -352,46 +381,48 @@ std::wstring DescribeCamera(const LockCamera& camera)
     return camera.present ? std::format(L"{}{} target {:#x}", camera.active[0], camera.active[1], camera.target) : L"-";
 }
 
-/// What the log shows after each of player 2's runs, as raw values: compared, formatted on change.
+/// What the log shows after each of a seat's runs, as raw values: compared, formatted on change.
 struct Snapshot
 {
     std::uint8_t   lock = 0, latch = 0;
     bool           resting = false;
     std::uintptr_t displayed = 0, targeted = 0, cursor = 0;
-    LockCamera     cameras[2];
+    LockCamera     cameras[2];  // player 1's and the seat's
     bool operator==(const Snapshot&) const = default;
 };
 
-Snapshot g_snapshot;
+std::array<Snapshot, players::kMaxPlayers> g_snapshots{};  // by seat; index 0 unused
 
-void LogPlayerTwo() noexcept
+void LogSeat(int seat) noexcept
 {
+    Snapshot& logged = g_snapshots[static_cast<std::size_t>(seat)];
     if (!platform::Enabled(platform::Level::Debug))
     {
-        g_snapshot = Snapshot{};  // off: the next line starts fresh (as at start)
+        logged = Snapshot{};  // off: the next line starts fresh (as at start)
         return;
     }
-    float rest = 0.0f;
-    std::memcpy(&rest, &g_freeTime, sizeof(rest));
-    const Snapshot now{g_lock,
-                       g_latch,
+    const SeatTargets& mine = SeatOf(seat);
+    float              rest = 0.0f;
+    std::memcpy(&rest, &mine.freeTime, sizeof(rest));
+    const Snapshot now{mine.lock,
+                       mine.latch,
                        rest > 0.0f,
-                       g_displayed.object,
-                       g_targetedKey.object,
-                       g_cursor,
-                       {LockCameraOf(generation::PlayerOneController()), LockCameraOf(generation::PlayerTwoController())}};
-    if (now == g_snapshot)
+                       mine.displayed.object,
+                       mine.targetedKey.object,
+                       mine.cursor,
+                       {LockCameraOf(generation::PlayerOneController()), LockCameraOf(generation::ControllerOf(seat))}};
+    if (now == logged)
     {
         return;
     }
-    g_snapshot = now;
+    logged = now;
     try
     {
-        Note(std::format(L"P2 lock {} latch {} rest {} displayed {:#x} targeted {:#x} cursor {:#x} | lock camera P1 {} P2 {} "
-                         L"(runs {}, skipped {}, paused for the menu {}, panel requests skipped {})",
-                         now.lock, now.latch, now.resting ? 1 : 0, now.displayed, now.targeted, now.cursor,
-                         DescribeCamera(now.cameras[0]), DescribeCamera(now.cameras[1]), g_runs, g_refusals, g_menuPauses,
-                         g_panelSkips + g_panelGate.skipped),
+        Note(std::format(L"P{} lock {} latch {} rest {} displayed {:#x} targeted {:#x} cursor {:#x} | lock camera P1 {} "
+                         L"P{} {} (runs {}, skipped {}, paused for the menu {}, panel requests skipped {})",
+                         seat + 1, now.lock, now.latch, now.resting ? 1 : 0, now.displayed, now.targeted, now.cursor,
+                         DescribeCamera(now.cameras[0]), seat + 1, DescribeCamera(now.cameras[1]), g_runs, g_refusals,
+                         g_menuPauses, g_panelSkips + g_panelGate.skipped),
              platform::Level::Debug);
     }
     catch (...)
@@ -399,14 +430,14 @@ void LogPlayerTwo() noexcept
     }
 }
 
-/// The game's targeting tick once more, for player 2, inside player 2's scopes (S-TGT5 §4).
-void PlayerTwoTargeting(TickFn engine, void* system, float deltaTime) noexcept
+/// The game's targeting tick once more, for `seat`, inside the seat's scopes (S-TGT5 §4).
+void SeatTargeting(int seat, TickFn engine, void* system, float deltaTime) noexcept
 {
     if (!g_runReady || !g_enabled || g_failed || g_held)
     {
         return;
     }
-    void* member = generation::Member();
+    void* member = generation::MemberOf(seat);
     if (member == nullptr)
     {
         return;
@@ -418,8 +449,8 @@ void PlayerTwoTargeting(TickFn engine, void* system, float deltaTime) noexcept
         {
             try
             {
-                Note(std::format(L"player 2's targeting waits while player 1 picks a target in the menu ({} time(s))",
-                                 g_menuPauses));
+                Note(std::format(L"{}'s targeting waits while player 1 picks a target in the menu ({} time(s))",
+                                 players::SeatName(seat), g_menuPauses));
             }
             catch (...)
             {
@@ -428,30 +459,32 @@ void PlayerTwoTargeting(TickFn engine, void* system, float deltaTime) noexcept
         return;
     }
     p2_scope::Args args;
+    args.seat = seat;
     if (!p2_scope::FillMember(args, member))
     {
-        return Refused(L"player 2's member could not be read");
+        return Refused(seat, L"the member could not be read");
     }
-    // Player 2's UI context, as around player 2's command controller's own tick: the targeting reads the
-    // command controller (EndUISystem[23]) and, for an open target list, the list's selected row, which
-    // the list answers from the focus path (RE-p2-target-select-views.md §9). The controller slot alone
-    // would read player 1's focus path, find no row and clear player 2's target.
+    // The seat's UI context, as around its command controller's own tick: the targeting reads the command controller
+    // (EndUISystem[23]) and, for an open target list, the list's selected row, which the list answers from the focus
+    // path (RE-p2-target-select-views.md §9). The controller slot alone would read player 1's focus path, find no row
+    // and clear the seat's target.
     args.controller = command_menu_two::Controller();
     if (args.controller == nullptr)
     {
-        return Refused(L"player 2's command controller does not exist");
+        return Refused(seat, L"the command controller does not exist");
     }
     p2_scope::P2Scope scopes(p2_scope::Focus | p2_scope::Sticks | p2_scope::Primary | p2_scope::Buttons |
                                  p2_scope::Targets | p2_scope::Leader | p2_scope::LeaderType,
                              args);
     if (!scopes.Held())
     {
-        return Refused(scopes.Refusal());
+        return Refused(seat, scopes.Refusal());
     }
-    const TargetedKeyScope targeted;
+    SeatTargets&           mine = SeatOf(seat);
+    const TargetedKeyScope targeted(mine.targetedKey);
     if (!targeted.Held())
     {
-        return Refused(L"the targeted key");
+        return Refused(seat, L"the targeted key");
     }
     g_run            = true;
     g_panelGate.skip = 1;
@@ -462,23 +495,23 @@ void PlayerTwoTargeting(TickFn engine, void* system, float deltaTime) noexcept
     if (!ok)
     {
         scopes.Get<p2_scope::FocusPart>()->scope.Abandon();  // what it holds may be mid-change: leaked, never put back
-        Fail(L"player 2's targeting tick");
+        Fail(L"a further player's targeting tick");
     }
-    // The log: player 2's target list, read with player 2's controller still in the slot.
+    // The log: the seat's target list, read with the seat's controller still in the slot.
     std::uint8_t open = 0;
-    if (TargetListActive(open) && (open != 0) != g_listOpen)
+    if (TargetListActive(open) && (open != 0) != mine.listOpen)
     {
-        g_listOpen = open != 0;
-        if (g_listOpen)
+        mine.listOpen = open != 0;
+        if (mine.listOpen)
         {
-            ++g_listOpenings;
+            ++mine.listOpenings;
         }
         try
         {
             if (platform::Enabled(platform::Level::Debug))
             {
-                Note(std::format(L"player 2's command target list {} (displayed {:#x}, cursor {:#x}; player 1's cursor {:#x})",
-                                 g_listOpen ? L"OPENED" : L"closed",
+                Note(std::format(L"{}'s command target list {} (displayed {:#x}, cursor {:#x}; player 1's cursor {:#x})",
+                                 players::SeatName(seat), mine.listOpen ? L"OPENED" : L"closed",
                                  ReadAt<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(system) + kDisplayed),
                                  ReadAt<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(system) + kCursor),
                                  scopes.Get<p2_scope::TargetsPart>()->scope.OtherCursor()),
@@ -492,17 +525,17 @@ void PlayerTwoTargeting(TickFn engine, void* system, float deltaTime) noexcept
 }
 
 /// Replaces the battle tick's calls to the targeting tick: player 1's run (on pad 1's own right
-/// stick while player 2 plays), then player 2's.
+/// stick while a seat plays), then each seat's.
 void Targeting(void* system, float deltaTime) noexcept
 {
     const auto engine = reinterpret_cast<TickFn>(g_tickTargetingCalls[0].Original());
-    if (!generation::OnGameThread() || !generation::Active())
+    if (!generation::OnGameThread() || !generation::AnyActive())
     {
         return engine(system, deltaTime);
     }
     if (g_held)
     {
-        Note(L"WARNING: the targeting tick ran inside player 2's target scope; player 2's run skipped");
+        Note(L"WARNING: the targeting tick ran inside a further player's target scope; their run skipped");
         return engine(system, deltaTime);
     }
     if (pad_sticks::Enabled() && pad_sticks::PartActs(pad_sticks::kPartPlayerOneMove))
@@ -541,8 +574,17 @@ void Targeting(void* system, float deltaTime) noexcept
             }
         }
     }
-    PlayerTwoTargeting(engine, system, deltaTime);
-    LogPlayerTwo();
+    // The game's tick once more for each further player. Fixed to player 2 for now: whether the game's targeting tick
+    // stands a third run inside the battle tick's two gated calls is open (state the five copied fields do not cover,
+    // such as timers advanced per call, would advance three times), so step 6 must settle it in the game before seat 2
+    // runs here (then: for each built seat in seat order, each run's scopes closed before the next's).
+    static_assert(players::kSeatsBuilt == 1, "a third run of the targeting tick inside the two gated calls is "
+                                             "unproven: confirm it in the game, then run every built seat here");
+    if (generation::Active(players::kPlayerTwoSeat))
+    {
+        SeatTargeting(players::kPlayerTwoSeat, engine, system, deltaTime);
+        LogSeat(players::kPlayerTwoSeat);
+    }
 }
 
 /// Replaces the tick's request for player 1's target panel (the new target): skipped in player 2's
@@ -580,23 +622,24 @@ void MarkerName(void* owner) noexcept
     }
 }
 
-/// Player 2's displayed target, targeted key and cursor given back; their lock, switch latch, rest timer and
+/// A seat's displayed target, targeted key and cursor given back; its lock, switch latch, rest timer and
 /// trace handle cleared (outside a TargetScope).
-void ForgetPlayerTwoTargets() noexcept
+void ForgetTargets(int seat) noexcept
 {
-    ReleasePair(g_displayed);
-    ReleasePair(g_targetedKey);
-    ReleaseCursor();
-    g_lock     = 0;
-    g_latch    = 0;
-    g_freeTime = 0;
-    g_trace    = 0;
+    SeatTargets& mine = SeatOf(seat);
+    ReleasePair(mine.displayed);
+    ReleasePair(mine.targetedKey);
+    ReleaseCursor(mine.cursor);
+    mine.lock     = 0;
+    mine.latch    = 0;
+    mine.freeTime = 0;
+    mine.trace    = 0;
 }
 
-/// Player 2's lock ends with the battle, as the game's teardown ends player 1's: the lock camera
-/// off (inside the member tick, player 2's camera manager is the primary one), the displayed target,
+/// A seat's lock ends with the battle, as the game's teardown ends player 1's: the lock camera
+/// off (inside the seat's member tick, its camera manager is the primary one), the displayed target,
 /// the targeted key and the cursor given back, the lock and the rest timer cleared.
-void EndOfBattle() noexcept
+void EndOfBattle(int seat) noexcept
 {
     std::uint8_t on = 0;
     if (platform::CallGuarded(g_moduleOn, on, kLockOnLayer) && on != 0 &&
@@ -604,11 +647,11 @@ void EndOfBattle() noexcept
     {
         Fail(L"the lock camera call");
     }
-    const std::uint8_t lock = g_lock;
-    ForgetPlayerTwoTargets();
+    const std::uint8_t lock = SeatOf(seat).lock;
+    ForgetTargets(seat);
     try
     {
-        Note(std::format(L"battle over: player 2's lock {} cleared", lock));
+        Note(std::format(L"battle over: {}'s lock {} cleared", players::SeatName(seat), lock));
     }
     catch (...)
     {
@@ -659,42 +702,43 @@ bool PlaceSites(const platform::GameImage& image) noexcept;
 
 }  // namespace
 
-TargetScope::TargetScope() noexcept
+TargetScope::TargetScope(int seat) noexcept : seat_(seat)
 {
-    if (!g_installed || g_failed || g_held || !generation::OnGameThread())
+    if (!players::SeatIndex(seat) || !g_installed || g_failed || g_held || !generation::OnGameThread())
     {
         return;
     }
+    const SeatTargets& mine = SeatOf(seat);
     const std::uintptr_t system = BattleSystem();
     if (system == 0 || !facts::InBattle())
     {
         return;
     }
-    // Player 2's fields in and player 1's saved: five Exchange ranges, then the lock byte.
-    const Range ranges[] = {{system + kCursor, sizeof(g_cursor), Kind::Exchange},
+    // The seat's fields in and player 1's saved: five Exchange ranges, then the lock byte.
+    const Range ranges[] = {{system + kCursor, sizeof(mine.cursor), Kind::Exchange},
                             {system + kDisplayed, sizeof(Pair), Kind::Exchange},
-                            {system + kTrace, sizeof(g_trace), Kind::Exchange},
-                            {system + kFreeTime, sizeof(g_freeTime), Kind::Exchange},
-                            {system + kLatch, sizeof(g_latch), Kind::Exchange}};
+                            {system + kTrace, sizeof(mine.trace), Kind::Exchange},
+                            {system + kFreeTime, sizeof(mine.freeTime), Kind::Exchange},
+                            {system + kLatch, sizeof(mine.latch), Kind::Exchange}};
     if (!fields_.Define(ranges))
     {
         return;
     }
-    std::memcpy(fields_.Value(0).data(), &g_cursor, sizeof(g_cursor));
-    std::memcpy(fields_.Value(1).data(), &g_displayed, sizeof(Pair));
-    std::memcpy(fields_.Value(2).data(), &g_trace, sizeof(g_trace));
-    std::memcpy(fields_.Value(3).data(), &g_freeTime, sizeof(g_freeTime));
-    fields_.Value(4)[0] = g_latch;
+    std::memcpy(fields_.Value(0).data(), &mine.cursor, sizeof(mine.cursor));
+    std::memcpy(fields_.Value(1).data(), &mine.displayed, sizeof(Pair));
+    std::memcpy(fields_.Value(2).data(), &mine.trace, sizeof(mine.trace));
+    std::memcpy(fields_.Value(3).data(), &mine.freeTime, sizeof(mine.freeTime));
+    fields_.Value(4)[0] = mine.latch;
     cursor_             = ReadAt<std::uintptr_t>(system + kCursor);
     lock_               = ReadAt<std::uint8_t>(system + kLock);
-    twoLock_            = g_lock;
+    seatLock_           = mine.lock;
     if (!fields_.Open())
     {
         return;
     }
-    if (!WriteAt(system + kLock, g_lock))
+    if (!WriteAt(system + kLock, mine.lock))
     {
-        fields_.Close();  // the fields are the game's heap: player 1's back (player 2's copies as they were)
+        fields_.Close();  // the fields are the game's heap: player 1's back (the seat's copies as they were)
         return;
     }
     system_ = system;
@@ -707,20 +751,21 @@ TargetScope::~TargetScope()
     {
         return;
     }
-    g_lock = ReadAt<std::uint8_t>(system_ + kLock);  // player 2's lock as the game left it
-    fields_.Close();                                 // player 2's five fields read back, player 1's put back
-    std::memcpy(&g_cursor, fields_.Value(0).data(), sizeof(g_cursor));
-    std::memcpy(&g_displayed, fields_.Value(1).data(), sizeof(Pair));
-    std::memcpy(&g_trace, fields_.Value(2).data(), sizeof(g_trace));
-    std::memcpy(&g_freeTime, fields_.Value(3).data(), sizeof(g_freeTime));
-    g_latch       = fields_.Value(4)[0];
+    SeatTargets& mine = SeatOf(seat_);
+    mine.lock = ReadAt<std::uint8_t>(system_ + kLock);  // the seat's lock as the game left it
+    fields_.Close();                                    // the seat's five fields read back, player 1's put back
+    std::memcpy(&mine.cursor, fields_.Value(0).data(), sizeof(mine.cursor));
+    std::memcpy(&mine.displayed, fields_.Value(1).data(), sizeof(Pair));
+    std::memcpy(&mine.trace, fields_.Value(2).data(), sizeof(mine.trace));
+    std::memcpy(&mine.freeTime, fields_.Value(3).data(), sizeof(mine.freeTime));
+    mine.latch    = fields_.Value(4)[0];
     bool restored = !fields_.Faulted();
-    // Player 2's toggle went through the game's lock setter, which also set Global.LockOn to player 2's
+    // The seat's toggle went through the game's lock setter, which also set Global.LockOn to the seat's
     // lock: player 1's lock goes back through the same setter, which sets the parameter back. The setter
-    // touches only the lock byte and the parameter, so the scopes still open around this one (player 2
-    // as the primary controller, pad 2's sticks) do not matter to it.
+    // touches only the lock byte and the parameter, so the scopes still open around this one (the seat
+    // as the primary controller, its pad's sticks) do not matter to it.
     std::uint8_t previous = 0;
-    if (g_lock != twoLock_ && g_setLock != nullptr &&
+    if (mine.lock != seatLock_ && g_setLock != nullptr &&
         platform::CallGuarded(g_setLock, previous, reinterpret_cast<void*>(system_), lock_))
     {
         ++g_lockRestores;
@@ -732,7 +777,7 @@ TargetScope::~TargetScope()
     g_held = false;
     if (!restored)
     {
-        Fail(L"putting player 1's target fields back");  // player 2's stay off: the next scope would read them as player 1's
+        Fail(L"putting player 1's target fields back");  // the seats' stay off: the next scope would read them as player 1's
     }
 }
 
@@ -766,7 +811,7 @@ bool Install(const platform::GameImage& image) noexcept
                   system;
     if (!g_installed)
     {
-        platform::Log(L"lock-on: UNAVAILABLE (a check failed); player 2 has no targeting of their own");
+        platform::Log(L"lock-on: UNAVAILABLE (a check failed); the further players have no targeting of their own");
         return false;
     }
     // Both targeting calls and the "set" call cross a 16-byte block in 1.005: every site is placed from the game
@@ -859,16 +904,18 @@ bool PlaceSites(const platform::GameImage& image) noexcept
 
 }  // namespace
 
-void AfterBattle() noexcept
+void AfterBattle(int seat) noexcept
 {
-    if (!g_installed || g_held || !generation::OnGameThread())
+    if (!players::SeatIndex(seat) || !g_installed || g_held || !generation::OnGameThread())
     {
         return;
     }
-    if ((g_lock != 0 || g_displayed.controller != 0 || g_targetedKey.controller != 0 || g_cursor != 0 || g_freeTime != 0) &&
+    const SeatTargets& mine = SeatOf(seat);
+    if ((mine.lock != 0 || mine.displayed.controller != 0 || mine.targetedKey.controller != 0 || mine.cursor != 0 ||
+         mine.freeTime != 0) &&
         !facts::InBattle())
     {
-        EndOfBattle();
+        EndOfBattle(seat);
     }
 }
 
@@ -883,11 +930,11 @@ bool Enabled() noexcept
     return g_runReady && g_enabled && !g_failed;
 }
 
-void PlayerTwoOut() noexcept
+void PlayerTwoOut(int seat) noexcept
 {
-    if (!g_held)
+    if (!g_held && players::SeatIndex(seat))
     {
-        ForgetPlayerTwoTargets();
+        ForgetTargets(seat);
     }
 }
 
@@ -896,30 +943,31 @@ bool Held() noexcept
     return g_held;
 }
 
-std::uintptr_t DisplayedObject() noexcept
+std::uintptr_t DisplayedObject(int seat) noexcept
 {
-    return g_displayed.object;
+    return players::SeatIndex(seat) ? SeatOf(seat).displayed.object : 0;
 }
 
-void Displayed(std::uintptr_t& object, std::uintptr_t& controller) noexcept
+void Displayed(int seat, std::uintptr_t& object, std::uintptr_t& controller) noexcept
 {
-    object     = g_displayed.object;
-    controller = g_displayed.controller;
+    const Pair pair = players::SeatIndex(seat) ? SeatOf(seat).displayed : Pair{};
+    object          = pair.object;
+    controller      = pair.controller;
 }
 
-void* Cursor() noexcept
+void* Cursor(int seat) noexcept
 {
-    return reinterpret_cast<void*>(g_cursor);
+    return players::SeatIndex(seat) ? reinterpret_cast<void*>(SeatOf(seat).cursor) : nullptr;
 }
 
-bool TargetListOpen() noexcept
+bool TargetListOpen(int seat) noexcept
 {
-    return g_listOpen;
+    return players::SeatIndex(seat) && SeatOf(seat).listOpen;
 }
 
-std::uint32_t TargetListOpenings() noexcept
+std::uint32_t TargetListOpenings(int seat) noexcept
 {
-    return g_listOpenings;
+    return players::SeatIndex(seat) ? SeatOf(seat).listOpenings : 0;
 }
 
 #if LSS_DEV

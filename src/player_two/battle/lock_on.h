@@ -29,9 +29,16 @@
 // marker list's target owner name. Player 2's run pauses while player 1 picks a target in the menu
 // (the menu's target select is player 1's widgets). Player 2's lock ends with the battle, as the
 // game's teardown ends player 1's. Every state change is logged. Game thread only.
+//
+// Per seat: written for player 2 above, every seat has its own copy of the target fields and the targeted key
+// (indexed by the seat; index 0 unused, player 1's are the game's own), its own TargetScope and its own lock's end.
+// One TargetScope at a time, whichever seat's (the seats swap in turn). The run after the game's is player 2's only
+// (players::kPlayerTwoSeat in lock_on.cpp): whether the game's tick stands a third run inside its two gated calls is
+// open until step 6. The accessors without a seat are player 2's, for the HUD modules not yet per column (step 4).
 
 #include "platform/byte_scope.h"
 #include "platform/dev_switch.h"
+#include "players/seats.h"
 
 #include <cstdint>
 
@@ -46,60 +53,92 @@ bool Install(const platform::GameImage& image) noexcept;
 /// Player 1's targeting calls and the skipped writes back to the game's; no TargetScope holds after it.
 void Remove() noexcept;
 
-/// In battle, player 2's target fields in the battle system while it lives (nested scopes do
-/// nothing). Player 2's are read back at its end and player 1's put back: five Exchange ranges of
+/// In battle, a seat's target fields in the battle system while it lives (a scope inside another, whichever
+/// seat's, does nothing). The seat's are read back at its end and player 1's put back: five Exchange ranges of
 /// platform/byte_scope.h, and the lock byte by hand (player 1's goes back through the game's setter
-/// when player 2's changed).
+/// when the seat's changed).
 class TargetScope
 {
 public:
-    TargetScope() noexcept;
+    explicit TargetScope(int seat) noexcept;
+    /// Player 2's (the HUD's, until step 4).
+    TargetScope() noexcept : TargetScope(players::kPlayerTwoSeat) {}
     ~TargetScope();
     TargetScope(const TargetScope&)            = delete;
     TargetScope& operator=(const TargetScope&) = delete;
 
     bool Held() const noexcept { return system_ != 0; }
 
-    /// Player 1's target cursor, saved while player 2's is in the battle system (for the log).
+    /// Player 1's target cursor, saved while the seat's is in the battle system (for the log).
     std::uintptr_t OtherCursor() const noexcept { return cursor_; }
 
 private:
     // The cursor, the displayed target, the trace handle, the rest timer and the switch latch.
     platform::ByteStore<5, 8 + 16 + 8 + 4 + 1> fields_;
-    std::uintptr_t                             system_  = 0;
-    std::uintptr_t                             cursor_  = 0;  // player 1's, for the log
-    std::uint8_t                               lock_    = 0;  // player 1's
-    std::uint8_t                               twoLock_ = 0;  // player 2's lock as the scope began
+    std::uintptr_t                             system_   = 0;
+    std::uintptr_t                             cursor_   = 0;  // player 1's, for the log
+    int                                        seat_     = 0;
+    std::uint8_t                               lock_     = 0;  // player 1's
+    std::uint8_t                               seatLock_ = 0;  // the seat's lock as the scope began
 };
 
-/// Inside player 2's member tick scopes, every tick: out of battle, player 2's lock, displayed
+/// Inside `seat`'s member tick scopes, every tick: out of battle, the seat's lock, displayed
 /// target and cursor end, as the game's battle teardown ends player 1's.
-void AfterBattle() noexcept;
+void AfterBattle(int seat) noexcept;
+/// Player 2's (player_two/input/member_movement, until its tick is per seat).
+inline void AfterBattle() noexcept
+{
+    AfterBattle(players::kPlayerTwoSeat);
+}
 
 /// Diagnosis: player 2's targeting run on or off (on at start).
 void SetEnabled(bool on) noexcept;
-/// Player 2's targeting run acts: installed, switched on, and not turned off for the session by an exception.
+/// The further players' targeting run acts: installed, switched on, and not turned off for the session by an
+/// exception.
 bool Enabled() noexcept;
 
-/// Player 2 is leaving: their displayed target, targeted key and cursor released, their lock cleared.
-void PlayerTwoOut() noexcept;
+/// `seat`'s player is leaving: its displayed target, targeted key and cursor released, its lock cleared.
+void PlayerTwoOut(int seat) noexcept;
 
-/// Whether a TargetScope holds now (then the game is in battle).
+/// Whether a TargetScope holds now, whichever seat's (then the game is in battle).
 bool Held() noexcept;
 
-/// Player 2's displayed target object (outside a TargetScope), or 0.
-std::uintptr_t DisplayedObject() noexcept;
+/// `seat`'s displayed target object (outside a TargetScope), or 0.
+std::uintptr_t DisplayedObject(int seat) noexcept;
 
-/// Player 2's displayed target as a TWeakPtr {object, reference controller} (outside a TargetScope).
-void Displayed(std::uintptr_t& object, std::uintptr_t& controller) noexcept;
+/// `seat`'s displayed target as a TWeakPtr {object, reference controller} (outside a TargetScope).
+void Displayed(int seat, std::uintptr_t& object, std::uintptr_t& controller) noexcept;
 
-/// Player 2's target cursor widget (outside a TargetScope), or null.
-void* Cursor() noexcept;
+/// `seat`'s target cursor widget (outside a TargetScope), or null.
+void* Cursor(int seat) noexcept;
 
-/// For the log: whether player 2's command target list was open at player 2's last targeting run,
-/// and how many times it has opened (a HUD module logs its pass afresh when this changes).
-bool          TargetListOpen() noexcept;
-std::uint32_t TargetListOpenings() noexcept;
+/// For the log: whether `seat`'s command target list was open at its last targeting run, and how many times it has
+/// opened (a HUD module logs its pass afresh when this changes).
+bool          TargetListOpen(int seat) noexcept;
+std::uint32_t TargetListOpenings(int seat) noexcept;
+
+// ---- player 2's, for the HUD modules not yet per column (hud/battle/target_views, enemy_gauges; step 4) ----
+
+inline std::uintptr_t DisplayedObject() noexcept
+{
+    return DisplayedObject(players::kPlayerTwoSeat);
+}
+inline void Displayed(std::uintptr_t& object, std::uintptr_t& controller) noexcept
+{
+    Displayed(players::kPlayerTwoSeat, object, controller);
+}
+inline void* Cursor() noexcept
+{
+    return Cursor(players::kPlayerTwoSeat);
+}
+inline bool TargetListOpen() noexcept
+{
+    return TargetListOpen(players::kPlayerTwoSeat);
+}
+inline std::uint32_t TargetListOpenings() noexcept
+{
+    return TargetListOpenings(players::kPlayerTwoSeat);
+}
 
 #if LSS_DEV
 /// The `battle-mask` command and reading. May throw (out of memory).
