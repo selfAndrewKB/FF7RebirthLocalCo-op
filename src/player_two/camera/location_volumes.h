@@ -1,7 +1,8 @@
 #pragma once
 
-// The game's location volumes, walked for player 2 (player_two/camera/location_rows.h: the camera row player 2's
-// character stands in; player_two/input/walk_limits.h: the move-type volumes it stands in). One global location manager
+// The game's location volumes, walked for each seat (player_two/camera/location_rows.h: the camera row a seat's
+// character stands in; player_two/input/walk_limits.h: the move-type volumes it stands in). Nothing here is kept per
+// seat: the walk reads the game's one list for whichever seat's visitor asks. One global location manager
 // (g_LocationVolumeManager, a pointer) holds the volume array (+8 data, +0x10 count), its move-type stack, a pause byte
 // and the lock (+0x188, a CRITICAL_SECTION the game's update holds); each AEndLocationVolume carries its LocationId,
 // UntouchMargin, flags and the fields each rule reads; the game's own containment test

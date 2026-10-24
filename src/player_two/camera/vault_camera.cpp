@@ -15,11 +15,14 @@
 #include "player_two/rides/chocobo_ride.h"
 #include "player_two/scopes/primary_controller.h"
 
+#include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <format>
 #include <optional>
+#include <string>
 
 namespace lss::player_two::vault_camera {
 
@@ -60,14 +63,26 @@ platform::CallRedirect g_endCall;
 OperatorDeactivateFn   g_operatorDeactivate = nullptr;
 std::optional<platform::GameImage> g_image;
 
-// Written on the game thread each tick, read by the vault's End on the animation worker: player 2's Field operator
-// (the member's and the chocobo's weaks it compares the action's with are generation's).
-std::atomic<void*>         g_operatorTwo{nullptr};
+// Written on the game thread each tick, read by the vault's End on the animation worker: each seat's Field operator
+// (the members' and the chocobos' weaks it compares the action's with are generation's). By seat; index 0 unused.
+std::array<std::atomic<void*>, players::kMaxPlayers> g_seatOperator{};
 
-const wchar_t* ScopeText() noexcept
+// The Begin's chocobo test asks chocobo_ride, whose rides are player 2's (the rides group's step).
+static_assert(players::kSeatsBuilt == 1, "the vault Begin's chocobo test is player 2's (chocobo_ride): before seat 2 is "
+                                         "built it asks each seat's ride");
+
+std::wstring ScopeText(int seat)
 {
-    return primary_controller::Is(generation::PlayerTwoController()) ? L"in player 2's primary scope"
-                                                                      : L"outside player 2's scope";
+    const wchar_t* name = players::SeatName(seat);
+    return primary_controller::Is(generation::ControllerOf(seat)) ? std::format(L"in {}'s primary scope", name)
+                                                                  : std::format(L"outside {}'s scope", name);
+}
+
+/// The built seat whose member is `character` while its player is in, or 0.
+int MemberSeat(const void* character) noexcept
+{
+    const int seat = generation::SeatOfMember(character);
+    return players::SeatBuilt(seat) && generation::Active(seat) ? seat : 0;
 }
 
 // The game's own call at this site, passed through unguarded on purpose (no CallGuarded): the game makes it unguarded
@@ -75,35 +90,51 @@ const wchar_t* ScopeText() noexcept
 std::uint8_t VaultCoreTest(const void* character) noexcept
 {
     const auto engine = reinterpret_cast<CoreFn>(g_coreCall.Original());
-    if (!generation::OnGameThread() || !generation::Active() || character == nullptr)
+    if (!generation::OnGameThread() || !generation::AnyActive() || character == nullptr)
     {
         return engine(character);
     }
-    const bool chocobo = character == chocobo_ride::DrivenChocobo() || character == chocobo_ride::RiddenChocobo();
-    const bool member  = character == generation::Member();
+    const bool chocobo = generation::Active(players::kPlayerTwoSeat) &&
+                         (character == chocobo_ride::DrivenChocobo() || character == chocobo_ride::RiddenChocobo());
+    const int  member  = MemberSeat(character);
     if (!chocobo)
     {
         const auto answer = engine(character);
-        if (member)
+        try
         {
-            platform::Log(L"vault camera: player 2's member vaults on foot; the game's player-core test answers {} ({}){}",
-                          answer, ScopeText(),
-                          answer != 0 ? L": a vault camera goes on player 2's camera; its end deactivates it there (lever L2)"
-                                      : L"");
+            if (member != 0)
+            {
+                const wchar_t* name = players::SeatName(member);
+                platform::Log(L"vault camera: {}'s member vaults on foot; the game's player-core test answers {} ({}){}",
+                              name, answer, ScopeText(member),
+                              answer != 0 ? std::format(L": a vault camera goes on {}'s camera; its end deactivates it "
+                                                        L"there (lever L2)",
+                                                        name)
+                                          : std::wstring());
+            }
+            else if (character == ReadPointer(generation::ControllerOf(0), facts::kControllerPawn))
+            {
+                platform::LogDebug(L"vault camera: player 1's pawn vaults; the game's player-core test answers {} ({})",
+                                   answer, ScopeText(players::kPlayerTwoSeat));
+            }
         }
-        else if (character == ReadPointer(generation::PlayerOneController(), facts::kControllerPawn))
+        catch (...)
         {
-            platform::LogDebug(L"vault camera: player 1's pawn vaults; the game's player-core test answers {} ({})", answer,
-                               ScopeText());
         }
         return answer;
     }
     const auto answer = member_movement::WithoutChocoboAnswer(engine, character);
-    platform::Log(L"vault camera: player 2's chocobo vaults ({}); the game's player-core test answers {} without the "
-                  L"mod's ride answer for its input component: {}",
-                  ScopeText(), answer,
-                  answer == 0 ? L"no vault camera, as for player 1's chocobo; both ride framings stay"
-                              : L"a vault camera STILL goes on the primary camera (the ride framings may be lost)");
+    try
+    {
+        platform::Log(L"vault camera: player 2's chocobo vaults ({}); the game's player-core test answers {} without the "
+                      L"mod's ride answer for its input component: {}",
+                      ScopeText(players::kPlayerTwoSeat), answer,
+                      answer == 0 ? L"no vault camera, as for player 1's chocobo; both ride framings stay"
+                                  : L"a vault camera STILL goes on the primary camera (the ride framings may be lost)");
+    }
+    catch (...)
+    {
+    }
     return answer;
 }
 
@@ -119,18 +150,30 @@ std::uintptr_t Slot15Vtable(const void* op) noexcept
 }
 
 /// The vault End's deactivate (lever L2): the stub hands over the action from rbx. Any thread; the game's own End runs
-/// here on the animation worker. Player 2's member's or chocobo's vault camera is ended on player 2's camera, where its
-/// Begin put it (in player 2's primary scope); every other vault ends as the game ends it, on the primary camera.
+/// here on the animation worker. A seat's member's or chocobo's vault camera is ended on that seat's camera, where its
+/// Begin put it (in the seat's primary scope); every other vault ends as the game ends it, on the primary camera.
 void EndDeactivate(std::uint8_t slot, const void* action) noexcept
 {
     const auto primary = reinterpret_cast<PrimaryDeactivateFn>(g_endCall.Original());
     const auto weak    = ReadField<std::uint64_t>(action, kActionCharacter);
-    const bool member  = weak != 0 && weak == generation::MemberWeak();
-    const bool chocobo = !member && weak != 0 && weak == generation::ChocoboWeak();
-    // Active() first: a map-load leave withdraws the generation before its teardown, in the same game-thread call,
+    int        seat    = weak != 0 ? generation::SeatOfMemberWeak(weak) : -1;
+    const bool member  = players::SeatBuilt(seat);
+    bool       chocobo = false;
+    for (int s = 1; !member && weak != 0 && s <= players::kSeatsBuilt; ++s)
+    {
+        if (weak == generation::ChocoboWeakOf(s))
+        {
+            seat    = s;
+            chocobo = true;
+            break;
+        }
+    }
+    // Active(seat) first: a map-load leave withdraws the generation before its teardown, in the same game-thread call,
     // ahead of the next Tick that clears the cached operator. A camera manager destroyed by that teardown is only freed
     // by a later garbage collection, which runs on the game thread outside the frame's animation work.
-    void* two = generation::Active() ? g_operatorTwo.load(std::memory_order_acquire) : nullptr;
+    void* two = (member || chocobo) && generation::Active(seat)
+                    ? g_seatOperator[static_cast<std::size_t>(seat)].load(std::memory_order_acquire)
+                    : nullptr;
     if ((!member && !chocobo) || two == nullptr || g_operatorDeactivate == nullptr)
     {
         primary(slot);
@@ -156,18 +199,20 @@ void EndDeactivate(std::uint8_t slot, const void* action) noexcept
     const bool done   = tableHeld && platform::CallGuarded(g_operatorDeactivate, two, slot);
     try
     {
+        const wchar_t* name = players::SeatName(seat);
         if (done)
         {
-            platform::Log(L"vault camera: player 2's {} vault ends ({} thread): player 2's camera's slot {} deactivated "
+            platform::Log(L"vault camera: {}'s {} vault ends ({} thread): {}'s camera's slot {} deactivated "
                           L"(module vt 0x{:X}), where its Begin put it; player 1's camera untouched",
-                          member ? L"member's" : L"chocobo's", generation::OnGameThread() ? L"game" : L"animation", slot,
-                          before);
+                          name, member ? L"member's" : L"chocobo's", generation::OnGameThread() ? L"game" : L"animation",
+                          name, slot, before);
         }
         else
         {
-            platform::Log(L"vault camera: player 2's {} vault ends ({} thread): player 2's camera's slot {} NOT "
+            platform::Log(L"vault camera: {}'s {} vault ends ({} thread): {}'s camera's slot {} NOT "
                           L"deactivated: {}",
-                          member ? L"member's" : L"chocobo's", generation::OnGameThread() ? L"game" : L"animation", slot,
+                          name, member ? L"member's" : L"chocobo's", generation::OnGameThread() ? L"game" : L"animation",
+                          name, slot,
                           tableHeld ? platform::DescribeFault(platform::LastFault()).text
                                     : L"its operator's module table is gone since the last tick");
         }
@@ -242,16 +287,20 @@ void Tick() noexcept
     {
         return;
     }
-    if (!generation::Active())
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        g_operatorTwo.store(nullptr, std::memory_order_release);
-        return;
+        auto& cached = g_seatOperator[static_cast<std::size_t>(seat)];
+        if (!generation::Active(seat))
+        {
+            cached.store(nullptr, std::memory_order_release);
+            continue;
+        }
+        // The operator as the game's PrimaryPCM_FieldOp_DeactivateModule loads it (*(PCM+0x2CB0)), and only with its
+        // module table in place: the game's DeactivateModule reads the table unchecked.
+        void* op = ReadPointer(ReadPointer(generation::ControllerOf(seat), facts::kControllerCameraManager), kFieldOperator);
+        cached.store(op != nullptr && ReadPointer(op, kOperatorModules) != nullptr ? op : nullptr,
+                     std::memory_order_release);
     }
-    // The operator as the game's PrimaryPCM_FieldOp_DeactivateModule loads it (*(PCM+0x2CB0)), and only with its module
-    // table in place: the game's DeactivateModule reads the table unchecked.
-    void* op = ReadPointer(ReadPointer(generation::PlayerTwoController(), facts::kControllerCameraManager), kFieldOperator);
-    g_operatorTwo.store(op != nullptr && ReadPointer(op, kOperatorModules) != nullptr ? op : nullptr,
-                        std::memory_order_release);
 }
 
 }  // namespace lss::player_two::vault_camera
