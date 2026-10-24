@@ -2,7 +2,10 @@
 
 // The camera and world modules' pure decisions (attack_framing, location_rows, walk_limits, world_actor_reach,
 // switch_volume_two, camera_repair, party_warp, traversal_camera, camera_distance, shoulder_scale), tested on the
-// host (tests/world_rules_test.cpp). The modules keep the engine reads, the scopes and the log.
+// host (tests/world_rules_test.cpp). The modules keep the engine reads, the scopes and the log. The players are
+// numbered by seat (players/seats.h): 0 player 1, then the seats.
+
+#include "players/seats.h"
 
 #include <algorithm>
 #include <array>
@@ -46,19 +49,38 @@ Latch& LatchFor(std::array<Latch, N>& latches, std::uint64_t key, std::uint64_t 
     return *oldest;
 }
 
-/// Whether a shot of a target stays on this camera: a target that is neither human's character shows on both cameras
-/// (the AI ally or an enemy, as solo shows it); the other player's target is off unless this camera is the viewer's
-/// own. True: show.
-constexpr bool ShotShows(const void* target, const void* member, const void* one, bool insidePlayerTwo,
+/// Whether a shot of `target` (non-null: the caller decides nothing without one) stays on the camera of `viewer` (0
+/// player 1's, else a seat's). `humans[s]` is player s's character, by seat (players/seats.h; index 0 player 1's;
+/// null: no character for that seat). A target that is no human's character shows on every camera (the AI ally or an
+/// enemy, as solo shows it); the viewer's own target shows; another player's target is off unless this camera is the
+/// viewer's own (the shot's owner is the viewer's character). True: show.
+constexpr bool ShotShows(const void* target, const void* const (&humans)[players::kMaxPlayers], int viewer,
                          const void* owner) noexcept
 {
-    if (target != member && target != one)
+    int of = -1;
+    for (int seat = 0; seat < players::kMaxPlayers && of < 0; ++seat)
+    {
+        if (humans[seat] != nullptr && target == humans[seat])
+        {
+            of = seat;
+        }
+    }
+    if (of < 0 || of == viewer || viewer < 0 || viewer >= players::kMaxPlayers)
     {
         return true;
     }
-    const void* mine  = insidePlayerTwo ? member : one;
-    const void* other = insidePlayerTwo ? one : member;
-    return !(target == other && owner != mine);
+    return owner == humans[viewer];
+}
+
+/// The two-player form (tests/attack_framing_test.cpp checks attack_framing's own rule against it): player 2's member,
+/// player 1's character, and whether the camera is player 2's. The same answer as the two-player rule before the seats for every non-null target
+/// when the two characters are distinct (with one pointer for both, the per-seat form shows player 1's own target on
+/// player 1's camera where the old rule hid it; never the case in play).
+constexpr bool ShotShows(const void* target, const void* member, const void* one, bool insidePlayerTwo,
+                         const void* owner) noexcept
+{
+    const void* const humans[players::kMaxPlayers] = {one, member, nullptr};
+    return ShotShows(target, humans, insidePlayerTwo ? players::kPlayerTwoSeat : 0, owner);
 }
 
 // ---- location_rows: the camera location volume player 2 is in ----
@@ -141,19 +163,21 @@ constexpr bool ForcedInside(bool current, std::uint8_t forcedOut) noexcept
     return !current || forcedOut == 0;
 }
 
-// ---- world_actor_reach: widening the items' reach to player 2 ----
+// ---- world_actor_reach: widening the items' reach to the seats ----
 
-/// The widening in whole steps past the distance between the players, with the centre's slack.
+/// The widening in whole steps past `apart`, the widest distance between player 1 and a seat's member (one seat: the
+/// players' distance), with the centre's slack.
 inline float WidenBy(float apart, float centreSlack, float step) noexcept
 {
     return std::ceil((apart + centreSlack) / step) * step;
 }
 
-/// An item near player 2: not disabled or pending, within its base radius (plus the leave slack once widened).
-constexpr bool ItemClose(std::int32_t state, std::int32_t disabled, std::int32_t pending, float toTwo,
+/// An item near a seat's member: not disabled or pending, `toSeat` (the nearest seat's distance) within its base radius
+/// (plus the leave slack once widened).
+constexpr bool ItemClose(std::int32_t state, std::int32_t disabled, std::int32_t pending, float toSeat,
                          float baseRadius, bool widenedNow, float leaveSlack) noexcept
 {
-    return state != disabled && state != pending && toTwo <= baseRadius + (widenedNow ? leaveSlack : 0.0f);
+    return state != disabled && state != pending && toSeat <= baseRadius + (widenedNow ? leaveSlack : 0.0f);
 }
 
 /// The game rewrote an item we widened (registered again): its values are the game's.
@@ -162,15 +186,17 @@ constexpr bool Rewritten(float writtenRadius, float writtenExtent, float radius,
     return writtenRadius != radius || writtenExtent != extent;
 }
 
-// ---- switch_volume_two: player 2's enter and leave of a trigger volume ----
+// ---- switch_volume_two: a seat's enter and leave of a trigger volume ----
 
 enum class Enter
 {
     SkippedOnOff,   // the game's DisableTriggerBox is on (as for player 1)
-    AlreadyInside,  // a brush-only volume player 2 is inside already
+    AlreadyInside,  // a brush-only volume a seat (this one or another) is inside already: the seat is noted, no call
     Call,           // the volume's enter is called
 };
 
+/// `held`: a seat holds the volume already (any seat: a brush-only volume counts no one, so a second seat's enter
+/// calls nothing; with one seat, that seat).
 constexpr Enter EnterVerdict(bool disableBox, bool disableBoxInOut, bool counts, bool held) noexcept
 {
     if (disableBox || disableBoxInOut)
@@ -182,13 +208,14 @@ constexpr Enter EnterVerdict(bool disableBox, bool disableBoxInOut, bool counts,
 
 enum class Leave
 {
-    NotEntered,        // player 2 was not entered here
+    NotEntered,        // the seat was not entered here
     SkippedOnOff,      // DisableTriggerBox_InOut is on: forgotten, not called
-    KeptForPlayerOne,  // a brush-only volume player 1 is inside: forgotten, not called
+    KeptForPlayerOne,  // a brush-only volume another player (player 1 or another seat) is inside: forgotten, not called
     Call,              // the volume's leave is called
 };
 
-constexpr Leave LeaveVerdict(bool held, bool disableBoxInOut, bool counts, bool playerOneInside) noexcept
+/// `held`: the leaving seat holds the volume. `otherInside`: player 1 or another seat is inside it too.
+constexpr Leave LeaveVerdict(bool held, bool disableBoxInOut, bool counts, bool otherInside) noexcept
 {
     if (!held)
     {
@@ -198,7 +225,7 @@ constexpr Leave LeaveVerdict(bool held, bool disableBoxInOut, bool counts, bool 
     {
         return Leave::SkippedOnOff;
     }
-    return !counts && playerOneInside ? Leave::KeptForPlayerOne : Leave::Call;
+    return !counts && otherInside ? Leave::KeptForPlayerOne : Leave::Call;
 }
 
 enum class PlayerOneChange
@@ -206,7 +233,7 @@ enum class PlayerOneChange
     Entered,       // player 1 is inside too: noted
     StillInside,   // player 1 left and the volume still shows someone inside: nothing
     NotReentered,  // DisableTriggerBox is on: not entered again
-    Reenter,       // the volume's enter is called again for player 2
+    Reenter,       // the volume's enter is called again, once, for the seats inside
 };
 
 constexpr PlayerOneChange PlayerOneChangeOf(bool enter, bool insideBefore, bool disableBox, bool disableBoxInOut) noexcept
@@ -220,6 +247,62 @@ constexpr PlayerOneChange PlayerOneChangeOf(bool enter, bool insideBefore, bool 
         return PlayerOneChange::StillInside;
     }
     return disableBox || disableBoxInOut ? PlayerOneChange::NotReentered : PlayerOneChange::Reenter;
+}
+
+// ---- switch_volume_two: the seats inside one volume (a mask, bit s for seat s) ----
+
+/// A seat's bit in a volume's mask of the seats inside.
+constexpr std::uint8_t VolumeSeatBit(int seat) noexcept
+{
+    return seat >= 0 && seat < 8 ? static_cast<std::uint8_t>(1u << seat) : std::uint8_t{0};
+}
+
+/// Another player than `seat` is inside the volume: player 1, or another seat in `seatsInside`.
+constexpr bool OtherInside(std::uint8_t seatsInside, int seat, bool playerOneInside) noexcept
+{
+    return playerOneInside || (seatsInside & static_cast<std::uint8_t>(~VolumeSeatBit(seat))) != 0;
+}
+
+/// A seat's enter: the volume's enter is called unless the on/off skips it or the volume counts no one and a seat is
+/// inside already (any seat: then the seat is only noted inside). One seat: the seat itself held it.
+constexpr Enter SeatEnterVerdict(bool disableBox, bool disableBoxInOut, bool counts, std::uint8_t seatsInside) noexcept
+{
+    return EnterVerdict(disableBox, disableBoxInOut, counts, seatsInside != 0);
+}
+
+/// A seat's leave: called unless the seat was not entered, the on/off skips it, or the volume counts no one and
+/// another player (player 1 or another seat) is inside. One seat: today's leave by player 1's presence.
+constexpr Leave SeatLeaveVerdict(std::uint8_t seatsInside, int seat, bool disableBoxInOut, bool counts,
+                                 bool playerOneInside) noexcept
+{
+    const bool held = (seatsInside & VolumeSeatBit(seat)) != 0;
+    return LeaveVerdict(held, disableBoxInOut, held && counts, held && OtherInside(seatsInside, seat, playerOneInside));
+}
+
+/// The leave calls for a seat that is gone (its leave of every volume, without the on/off test): a counting volume's
+/// share of the seat's enters, else one call unless another player is inside.
+constexpr std::int32_t LeaveAllCalls(bool counts, std::int32_t seatEnters, std::uint8_t seatsInside, int seat,
+                                     bool playerOneInside) noexcept
+{
+    if (counts)
+    {
+        return seatEnters;
+    }
+    return OtherInside(seatsInside, seat, playerOneInside) ? 0 : 1;
+}
+
+/// The seat whose trigger's tag the enter called again after player 1's leave uses (once for every seat inside): the
+/// lowest seat inside, or -1 with none.
+constexpr int ReenterSeat(std::uint8_t seatsInside) noexcept
+{
+    for (int seat = 1; seat < 8; ++seat)
+    {
+        if ((seatsInside & VolumeSeatBit(seat)) != 0)
+        {
+            return seat;
+        }
+    }
+    return -1;
 }
 
 // ---- camera_repair: when a non-finite pose is repaired, and when the tries start over ----

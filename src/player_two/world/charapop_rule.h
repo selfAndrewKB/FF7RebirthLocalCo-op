@@ -10,6 +10,11 @@
 // The in-camera distance gains the enemy bonus for enemy entries. `scale` widens every distance and
 // `extraDegrees` the cone (1 and 0 for the game's own rule; more to keep an entry already raised, less to
 // ask whether player 1's camera keeps it with room to spare).
+//
+// Each seat's camera is judged on its own against player 1's ("player 2" below is any seat's view); an entry is
+// raised when any seat's view needs it and kept while any does (SeatHolds, the union over the seats).
+
+#include <cstdint>
 
 namespace lss::player_two::charapop {
 
@@ -102,5 +107,35 @@ constexpr Hold HoldOf(const LodDistances& lod, const EntryView& two, const Entry
     }
     return Hold::Keep;
 }
+
+// ---- the seats: one view per seat, the union kept ----
+
+/// A seat's bit in the raised record's mask (bit s for seat s, players/seats.h).
+constexpr std::uint8_t SeatBit(int seat) noexcept
+{
+    return seat >= 0 && seat < 8 ? static_cast<std::uint8_t>(1u << seat) : std::uint8_t{0};
+}
+
+/// The holds of the seats' views of one raised entry, gathered in seat order: the entry stays raised while any seat's
+/// view keeps it (the union); otherwise it is released as kept by player 1's camera when any seat's view found it so,
+/// else as out of reach. With one seat the combined hold is that seat's own.
+struct SeatHolds
+{
+    std::uint8_t keeping = 0;  // bit s: seat s's view still needs the entry (Hold::Keep)
+    bool         covered = false;
+    bool         any     = false;
+
+    constexpr void Add(int seat, Hold hold) noexcept
+    {
+        any = true;
+        keeping |= hold == Hold::Keep ? SeatBit(seat) : std::uint8_t{0};
+        covered = covered || hold == Hold::PlayerOneCovers;
+    }
+
+    constexpr Hold Combined() const noexcept
+    {
+        return keeping != 0 ? Hold::Keep : covered ? Hold::PlayerOneCovers : Hold::OutOfReach;
+    }
+};
 
 }  // namespace lss::player_two::charapop

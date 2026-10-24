@@ -7,6 +7,7 @@
 #include "expect.h"
 
 #include <cstdio>
+#include <initializer_list>
 
 namespace {
 
@@ -15,6 +16,8 @@ using lss::player_two::charapop::Hold;
 using lss::player_two::charapop::HoldOf;
 using lss::player_two::charapop::KeepsAwakeOrShown;
 using lss::player_two::charapop::LodDistances;
+using lss::player_two::charapop::SeatBit;
+using lss::player_two::charapop::SeatHolds;
 using lss::player_two::charapop::ShouldRaise;
 
 constexpr LodDistances kMiddle{75.0f, 1000.0f, 6000.0f, 3000.0f, 10000.0f, 2000.0f};
@@ -104,8 +107,34 @@ void TestHold()
     EXPECT(HoldOf(kMiddle, near, &oneClose, 1.0f) == Hold::PlayerOneCovers);
 }
 
-}  // namespace
+void TestSeatHolds()
+{
+    std::puts("seats: one seat's hold is its own; kept while any seat's view keeps it; released as covered if any seat "
+              "found player 1's camera keeping it");
+    for (const Hold hold : {Hold::Keep, Hold::OutOfReach, Hold::PlayerOneCovers})
+    {
+        SeatHolds one;
+        one.Add(1, hold);
+        EXPECT(one.Combined() == hold);
+        EXPECT(one.keeping == (hold == Hold::Keep ? SeatBit(1) : 0));
+    }
+    SeatHolds both;
+    both.Add(1, Hold::OutOfReach);
+    both.Add(2, Hold::Keep);
+    EXPECT(both.Combined() == Hold::Keep && both.keeping == SeatBit(2));
+    SeatHolds released;
+    released.Add(1, Hold::OutOfReach);
+    released.Add(2, Hold::PlayerOneCovers);
+    EXPECT(released.Combined() == Hold::PlayerOneCovers && released.keeping == 0);
+    SeatHolds far;
+    far.Add(1, Hold::OutOfReach);
+    far.Add(2, Hold::OutOfReach);
+    EXPECT(far.Combined() == Hold::OutOfReach);
+    EXPECT(!SeatHolds{}.any && SeatHolds{}.Combined() == Hold::OutOfReach);
+    EXPECT(SeatBit(0) == 1 && SeatBit(1) == 2 && SeatBit(2) == 4 && SeatBit(-1) == 0);
+}
 
+}  // namespace
 int main()
 {
     TestShouldTick();
@@ -116,5 +145,6 @@ int main()
     TestRaiseHidingEntries();
     TestReducedReach();
     TestHold();
+    TestSeatHolds();
     return lss::test::Report();
 }

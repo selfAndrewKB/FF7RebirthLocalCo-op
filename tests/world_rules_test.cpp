@@ -10,6 +10,7 @@
 
 #include <chrono>
 #include <cstdio>
+#include <initializer_list>
 
 namespace {
 
@@ -55,6 +56,58 @@ void TestShot()
     EXPECT(!ShotShows(&g_member, &g_member, &g_one, false, &g_member));
     EXPECT(ShotShows(&g_member, &g_member, &g_one, false, &g_one));
     EXPECT(ShotShows(&g_one, &g_member, &g_one, false, &g_member));
+}
+
+/// ShotShows as it was before the seats (v0.91.0), the reference the per-seat form must match for two players.
+constexpr bool ShotShowsTwoPlayer(const void* target, const void* member, const void* one, bool insidePlayerTwo,
+                                  const void* owner) noexcept
+{
+    if (target != member && target != one)
+    {
+        return true;
+    }
+    const void* mine  = insidePlayerTwo ? member : one;
+    const void* other = insidePlayerTwo ? one : member;
+    return !(target == other && owner != mine);
+}
+
+void TestShotSeats()
+{
+    std::puts("shot by seat: two players answer as before for every non-null target; a third player's target is off "
+              "on the other cameras unless the shot is the viewer's");
+    int         three = 0;
+    const void* targets[] = {&g_other, &g_one, &g_member, &three};
+    const void* members[] = {&g_member, nullptr};
+    const void* ones[]    = {&g_one, nullptr};
+    const void* owners[]  = {nullptr, &g_one, &g_member, &g_other, &three};
+    for (const void* target : targets)
+    {
+        for (const void* member : members)
+        {
+            for (const void* one : ones)
+            {
+                for (const bool inside : {false, true})
+                {
+                    for (const void* owner : owners)
+                    {
+                        EXPECT(ShotShows(target, member, one, inside, owner) ==
+                               ShotShowsTwoPlayer(target, member, one, inside, owner));
+                    }
+                }
+            }
+        }
+    }
+    const void* const humans[lss::players::kMaxPlayers] = {&g_one, &g_member, &three};
+    EXPECT(ShotShows(&g_other, humans, 2, nullptr));       // no human's target: every camera
+    EXPECT(ShotShows(&three, humans, 2, &g_one));        // player 3's own target on player 3's camera
+    EXPECT(!ShotShows(&three, humans, 0, &three));     // player 3's target on player 1's camera: off
+    EXPECT(!ShotShows(&three, humans, 1, &g_one));       // ... and on player 2's, the shot not player 2's
+    EXPECT(ShotShows(&three, humans, 1, &g_member));     // ... unless the shot is player 2's own
+    EXPECT(!ShotShows(&g_member, humans, 2, &g_member));   // player 2's target on player 3's camera: off
+    EXPECT(ShotShows(&g_one, humans, 2, &three));        // player 1's target in player 3's own shot
+    // One pointer for both characters (never in play): the documented difference, player 1's own camera shows it.
+    EXPECT(!ShotShowsTwoPlayer(&g_one, &g_one, &g_one, false, &g_other));
+    EXPECT(ShotShows(&g_one, &g_one, &g_one, false, &g_other));
 }
 
 void TestLocationAndStack()
@@ -128,6 +181,56 @@ void TestSwitchVolume()
     EXPECT(PlayerOneChangeOf(false, false, false, false) == PlayerOneChange::Reenter);
 }
 
+void TestSwitchVolumeSeats()
+{
+    std::puts("switch volume by seat: one seat answers as before; a second seat is noted without a call, a leave is "
+              "kept while another seat is inside, a gone seat calls nothing while another player is inside, the "
+              "re-enter takes the lowest seat");
+    const std::uint8_t one  = VolumeSeatBit(1);
+    const std::uint8_t two  = VolumeSeatBit(2);
+    const std::uint8_t both = static_cast<std::uint8_t>(one | two);
+    // One seat (seat 1): the same answers as the two-player rules, with `held` = seat 1 inside.
+    for (const bool box : {false, true})
+    {
+        for (const bool inOut : {false, true})
+        {
+            for (const bool counts : {false, true})
+            {
+                for (const bool held : {false, true})
+                {
+                    const std::uint8_t mask = held ? one : std::uint8_t{0};
+                    EXPECT(SeatEnterVerdict(box, inOut, counts, mask) == EnterVerdict(box, inOut, counts, held));
+                    for (const bool p1 : {false, true})
+                    {
+                        EXPECT(SeatLeaveVerdict(mask, 1, inOut, counts, p1) ==
+                               LeaveVerdict(held, inOut, held && counts, held && p1));
+                        if (held)
+                        {
+                            EXPECT(LeaveAllCalls(counts, 3, mask, 1, p1) == (counts ? 3 : (p1 ? 0 : 1)));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    EXPECT(ReenterSeat(one) == 1);
+    EXPECT(ReenterSeat(0) == -1);
+    // Two seats in a brush-only volume.
+    EXPECT(SeatEnterVerdict(false, false, false, one) == Enter::AlreadyInside);  // seat 2 noted, no call
+    EXPECT(SeatEnterVerdict(false, false, true, one) == Enter::Call);            // a counting volume counts it
+    EXPECT(OtherInside(both, 1, false) && OtherInside(both, 2, false));
+    EXPECT(!OtherInside(two, 2, false) && OtherInside(two, 2, true));
+    EXPECT(SeatLeaveVerdict(both, 1, false, false, false) == Leave::KeptForPlayerOne);  // seat 2 still inside
+    EXPECT(SeatLeaveVerdict(two, 2, false, false, false) == Leave::Call);              // the last one out
+    EXPECT(SeatLeaveVerdict(two, 1, false, false, false) == Leave::NotEntered);
+    EXPECT(SeatLeaveVerdict(both, 1, false, true, false) == Leave::Call);  // counting: the game's count decides
+    EXPECT(LeaveAllCalls(false, 1, both, 2, false) == 0);  // seat 2 gone, seat 1 inside: no call
+    EXPECT(LeaveAllCalls(false, 1, two, 2, true) == 0);    // player 1 inside: no call
+    EXPECT(LeaveAllCalls(false, 1, two, 2, false) == 1);
+    EXPECT(LeaveAllCalls(true, 2, both, 2, true) == 2);    // counting: its own enters
+    EXPECT(ReenterSeat(both) == 1 && ReenterSeat(two) == 2);
+}
+
 void TestRepair()
 {
     std::puts("repair: finite for 2 s resets the tries; a repair only when due with tries left, then one give-up");
@@ -192,9 +295,11 @@ int main()
 {
     TestLatches();
     TestShot();
+    TestShotSeats();
     TestLocationAndStack();
     TestReach();
     TestSwitchVolume();
+    TestSwitchVolumeSeats();
     TestRepair();
     TestTraversalAndCamera();
 
