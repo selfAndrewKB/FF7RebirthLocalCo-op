@@ -63,13 +63,14 @@ struct Command
     Value         value;         // Entry: the argument; WaitUntil: the value compared against
     Compare       compare = Compare::Equal;
     std::uint32_t ticks   = 0;   // Wait, WaitUntil, Hold
-    std::int32_t  player  = 0;   // Hold: 1 or 2
+    std::int32_t  player  = 0;   // Hold: 1 to kHoldPlayers
     float         axes[4] = {};  // Hold: LX, LY, RX, RY
     std::wstring  text;          // Note
 };
 
-/// The players a `hold` can name: player 1 and player 2.
-inline constexpr std::int32_t kHoldPlayers = 2;
+/// The players a `hold` can name: player 1, 2 and 3 (players/seats.h: player 3 is seat 2; its hold is refused
+/// until player 3 is in).
+inline constexpr std::int32_t kHoldPlayers = 3;
 
 /// The longest a hold, wait or wait-until may last: 10 minutes at 60 ticks per second.
 inline constexpr std::uint32_t kMaxTicks = 36'000;

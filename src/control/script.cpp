@@ -227,12 +227,13 @@ ParsedLine ParseLine(const Registry& registry, std::wstring_view line)
     }
     if (verb == L"hold")
     {
-        if (words.size() != 8 || (words[1] != L"1" && words[1] != L"2") || words[2] != L"stick")
+        const std::int32_t player = words.size() == 8 && words[1].size() == 1 ? words[1][0] - L'0' : 0;
+        if (player < 1 || player > kHoldPlayers || words[2] != L"stick")
         {
-            return Error(L"hold takes <player 1|2> stick <lx> <ly> <rx> <ry> <ticks>");
+            return Error(L"hold takes <player 1|2|3> stick <lx> <ly> <rx> <ry> <ticks>");
         }
         command.verb   = Verb::Hold;
-        command.player = words[1] == L"1" ? 1 : 2;
+        command.player = player;
         for (std::size_t i = 0; i < 4; ++i)
         {
             const auto axis = ParseAxis(words[3 + i]);

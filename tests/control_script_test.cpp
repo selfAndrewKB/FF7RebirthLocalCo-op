@@ -1,5 +1,5 @@
 // Host-side tests for the control language (control/script.h) against a registry of its own, run without the game.
-// Taken from Remake's tests/control_script_test.cpp; added: the named values of a number shape, two players for hold.
+// Taken from Remake's tests/control_script_test.cpp; added: the named values of a number shape, three players for hold.
 
 #include "control/script.h"
 
@@ -159,11 +159,14 @@ void TestWaits()
 
 void TestHold()
 {
-    std::puts("script: hold, for player 1 or 2");
+    std::puts("script: hold, for player 1, 2 or 3");
     const auto registry = FakeRegistry();
     EXPECT(RoundTrip(registry, L"hold 2 stick 0 1 0 0 120") == L"hold 2 stick 0 1 0 0 120");
     EXPECT(RoundTrip(registry, L"hold 1 stick -1 0.5 0 -0.25 1") == L"hold 1 stick -1 0.5 0 -0.25 1");
-    EXPECT(Rejected(registry, L"hold 3 stick 0 0 0 0 1"));
+    EXPECT(RoundTrip(registry, L"hold 3 stick 0 -1 0 0 60") == L"hold 3 stick 0 -1 0 0 60");
+    EXPECT(Rejected(registry, L"hold 4 stick 0 0 0 0 1"));
+    EXPECT(Rejected(registry, L"hold 12 stick 0 0 0 0 1"));
+    EXPECT(Rejected(registry, L"hold x stick 0 0 0 0 1"));
     EXPECT(Rejected(registry, L"hold 0 stick 0 0 0 0 1"));
     EXPECT(Rejected(registry, L"hold 2 button 0 0 0 0 1"));
     EXPECT(Rejected(registry, L"hold 2 stick 0 2 0 0 1"));

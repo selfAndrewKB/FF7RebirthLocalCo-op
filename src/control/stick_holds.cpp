@@ -3,17 +3,24 @@
 #include "player_two/generation.h"
 #include "player_two/input/pad_sticks.h"
 #include "player_two/session/session.h"
+#include "players/seats.h"
 
 namespace lss::control {
 
 namespace {
 
-/// The controller id of player 1's or player 2's controller, or -1.
+/// The controller id of a player's controller (player 1 is seat 0), or -1.
 std::int32_t ControllerIdOfPlayer(std::int32_t player) noexcept
 {
-    void* controller =
-        player == 1 ? player_two::generation::PlayerOneController() : player_two::generation::PlayerTwoController();
+    void* controller = player_two::generation::ControllerOf(player - 1);
     return controller == nullptr ? -1 : player_two::pad_sticks::ControllerIdOf(controller);
+}
+
+/// The seat whose generation a player's hold needs, and whose join it lasts for: player 1's, player 2's seat (the
+/// override is per pad only with a further player in); a further player's, its own.
+int SeatOfHold(std::int32_t player) noexcept
+{
+    return player == 1 ? players::kPlayerTwoSeat : player - 1;
 }
 
 }  // namespace
@@ -30,9 +37,9 @@ Outcome StickHolds::HoldStick(std::int32_t player, const float (&axes)[4])
                            ? L"per-pad input is stood down (player 1 rides the buggy or the bronco)"
                            : L"per-pad sticks are off (run 'sticks per-pad' first)"};
     }
-    if (!player_two::generation::Active())
+    if (!player_two::generation::Active(SeatOfHold(player)))
     {
-        return {false, L"player 2 is not in, so no stick is scoped per pad"};
+        return {false, player == 1 ? L"player 2 is not in, so no stick is scoped per pad" : L"that player is not in"};
     }
     const std::int32_t id = ControllerIdOfPlayer(player);
     if (id < 0)
@@ -43,7 +50,7 @@ Outcome StickHolds::HoldStick(std::int32_t player, const float (&axes)[4])
     const player_two::Sticks sticks{axes[0], axes[1], axes[2], axes[3]};
     player_two::pad_sticks::SetStickOverride(id, &sticks);
     heldIds_[static_cast<std::size_t>(player - 1)]   = id;
-    heldJoins_[static_cast<std::size_t>(player - 1)] = session_.JoinCount();
+    heldJoins_[static_cast<std::size_t>(player - 1)] = session_.JoinCount(SeatOfHold(player));
     return {true, L"controller id " + std::to_wstring(id)};
 }
 
@@ -69,12 +76,13 @@ bool StickHolds::Held(std::int32_t player) const
 
 void StickHolds::DropEndedHolds() noexcept
 {
-    const bool active = player_two::generation::Active();
     for (std::size_t i = 0; i < heldIds_.size(); ++i)
     {
-        if (heldIds_[i] >= 0 && (!active || heldJoins_[i] != session_.JoinCount()))
+        const std::int32_t player = static_cast<std::int32_t>(i + 1);
+        const int          seat   = SeatOfHold(player);
+        if (heldIds_[i] >= 0 && (!player_two::generation::Active(seat) || heldJoins_[i] != session_.JoinCount(seat)))
         {
-            ReleaseStick(static_cast<std::int32_t>(i + 1));
+            ReleaseStick(player);
         }
     }
 }
