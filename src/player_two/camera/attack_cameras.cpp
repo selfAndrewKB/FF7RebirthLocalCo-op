@@ -78,10 +78,12 @@ struct Copy
     std::uint8_t                              lastPriority = 0;
     std::array<std::byte, kSmoothingSize>     smoothing{};
 };
-const void* g_copyList = nullptr;  // the list player 2's copy belongs to (a new list seeds a new copy)
-Copy        g_copy;
-bool        g_inside   = false;    // inside player 2's update, with the copy in the list
-Copy        g_saved;               // player 1's, while g_inside
+// By seat (index 0 unused).
+std::array<const void*, players::kMaxPlayers> g_copyList{};  // the list the seat's copy belongs to (a new list seeds a
+                                                             // new copy)
+std::array<Copy, players::kMaxPlayers>        g_copy{};
+int                  g_inside = 0;         // the seat whose update is open, with its copy in the list; 0 none
+Copy                 g_saved;              // player 1's, while g_inside
 std::array<float, 3> g_playerOneCamera{};  // player 1's previous camera location, while g_inside (for the log)
 struct SavedFlag
 {
@@ -92,19 +94,43 @@ struct SavedFlag
 };
 std::array<SavedFlag, kMaxEntries> g_flags{};
 std::size_t                        g_flagCount = 0;
-// The entries player 2's camera found active at its last update, and player 1's (from the bytes saved before it).
-std::array<const void*, kMaxEntries> g_activeTwo{};
-std::size_t                          g_activeTwoCount = 0;
-std::array<const void*, kMaxEntries> g_activeOne{};
-std::size_t                          g_activeOneCount = 0;
-bool                                 g_capSaid        = false;  // the walk met its cap once (logged)
+// The entries each seat's camera found active at its last update (by seat), and player 1's (from the bytes saved before
+// the first seat's update).
+struct ActiveSet
+{
+    std::array<const void*, kMaxEntries> entries{};
+    std::size_t                          count = 0;
+};
+std::array<ActiveSet, players::kMaxPlayers> g_activeSeat{};
+ActiveSet                                   g_activeOne;
+bool                                        g_capSaid = false;  // the walk met its cap once (logged)
 
+// By seat; index 0 holds player 1's (entriesOne, cutsOne).
 struct Counts
 {
-    std::uint32_t updates = 0, entriesTwo = 0, entriesOne = 0, cutsTwo = 0, cutsOne = 0, lists = 0, onlyTwo = 0;
+    std::uint32_t updates = 0, entries = 0, cuts = 0, lists = 0, onlyTwo = 0;
 };
-Counts            g_counts;
+std::array<Counts, players::kMaxPlayers> g_counts{};
 platform::Every g_status{kStatusEvery};
+
+std::size_t Index(int seat) noexcept
+{
+    return static_cast<std::size_t>(seat);
+}
+
+/// The first built seat whose player is in: its update is the first after player 1's, so the bytes it finds are player
+/// 1's own.
+int FirstSeatIn() noexcept
+{
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (generation::Active(seat))
+        {
+            return seat;
+        }
+    }
+    return 0;
+}
 
 void* ListNow() noexcept
 {
@@ -193,7 +219,7 @@ const wchar_t* PriorityText(std::uint8_t priority) noexcept
 }
 
 /// Logs an entry that has just become active for one camera (Debug, once per sequence and camera).
-void LogStarted(const void* entry, const wchar_t* camera, float metresFromOne) noexcept
+void LogStarted(const void* entry, int seat, float metresFromOne) noexcept
 {
     if (!platform::Enabled(platform::Level::Debug))
     {
@@ -206,11 +232,12 @@ void LogStarted(const void* entry, const wchar_t* camera, float metresFromOne) n
         const void* shot     = ReadPointer(actor, kSequenceActorCamera);
         const std::wstring smoothing =
             metresFromOne < 0.0f ? std::wstring()
-                                 : std::format(L"; its smoothing starts from player 2's own camera ({:.1f} m from player 1's)",
-                                               metresFromOne);
+                                 : std::format(L"; its smoothing starts from {}'s own camera ({:.1f} m from player 1's)",
+                                               players::SeatName(seat), metresFromOne);
         platform::LogDebug(L"attack cameras: {}'s camera plays a battle camera sequence, priority {} {}, owner {}, explicit "
                            L"target {}{}",
-                           camera, priority, PriorityText(priority), Who(ReadPointer(shot, kBattleCameraOwner)),
+                           players::SeatName(seat), priority, PriorityText(priority),
+                           Who(ReadPointer(shot, kBattleCameraOwner)),
                            Who(ReadPointer(shot, kCameraTarget)), smoothing);
     }
     catch (...)
@@ -218,17 +245,17 @@ void LogStarted(const void* entry, const wchar_t* camera, float metresFromOne) n
     }
 }
 
-/// The game's cut call in BattleCamSeqList_AnyActive_ApplyCam: inside player 2's update, the game's own cut of the primary
-/// camera (player 2's there); otherwise the call as the game makes it.
+/// The game's cut call in BattleCamSeqList_AnyActive_ApplyCam: inside a seat's update (the call names no camera: the open
+/// update's seat), the game's own cut of the primary camera (the seat's there); otherwise the call as the game makes it.
 void Cut(std::uint64_t cut, std::uint64_t second) noexcept
 {
-    if (g_inside && g_primaryCut != nullptr && primary_controller::Is(generation::PlayerTwoController()))
+    if (g_inside != 0 && g_primaryCut != nullptr && primary_controller::Is(generation::ControllerOf(g_inside)))
     {
-        ++g_counts.cutsTwo;
+        ++g_counts[Index(g_inside)].cuts;
         g_primaryCut(cut, second);
         return;
     }
-    ++g_counts.cutsOne;
+    ++g_counts[0].cuts;
     reinterpret_cast<CutFn>(g_cutCall.Original())(cut, second);
 }
 
@@ -256,58 +283,73 @@ void Install(const platform::GameImage& image) noexcept
                       : L"shot changes cut player 1's camera as before (the cut call is not what the research read)");
 }
 
-PlayerTwoUpdate::PlayerTwoUpdate() noexcept
+PlayerTwoUpdate::PlayerTwoUpdate(int seat) noexcept
 {
-    if (g_battleSystem == 0 || g_inside || !generation::OnGameThread())
+    if (g_battleSystem == 0 || g_inside != 0 || !players::SeatBuilt(seat) || !generation::OnGameThread())
     {
         return;
     }
     void* list = ListNow();
+    const bool first = seat == FirstSeatIn();  // the update that reads player 1's own bytes keeps player 1's set
     if (list == nullptr)
     {
-        g_copyList       = nullptr;  // a list made later at the same address is a new one
-        g_activeOneCount = 0;
+        g_copyList.fill(nullptr);  // the battle system is gone for every camera: a list made later at the same address
+                                   // is a new one (each seat's active set stays, as the two-player mod kept player 2's)
+        if (first)
+        {
+            g_activeOne.count = 0;
+        }
         return;
     }
-    if (list != g_copyList)
+    if (list != g_copyList[Index(seat)])
     {
-        g_copyList       = list;
-        g_copy           = Read(list);  // seeded from the live state; player 2's own pose replaces it on its first idle frame
-        g_activeOneCount = 0;           // player 1's last active entries belonged to the old list
-        ++g_counts.lists;
-        platform::LogDebug(L"attack cameras: player 2's copy of the sequence list's camera state seeded (list {})", list);
+        g_copyList[Index(seat)] = list;
+        g_copy[Index(seat)]     = Read(list);  // seeded from the live state; the seat's own pose replaces it on its first
+                                               // idle frame
+        if (first)
+        {
+            g_activeOne.count = 0;  // player 1's last active entries belonged to the old list
+        }
+        ++g_counts[Index(seat)].lists;
+        platform::LogDebug(L"attack cameras: {}'s copy of the sequence list's camera state seeded (list {})",
+                           players::SeatName(seat), list);
     }
-    g_saved           = Read(list);
-    g_playerOneCamera = PreviousCamera(g_saved);
-    g_flagCount       = 0;
-    std::array<const void*, kMaxEntries> activeOne{};
-    std::size_t                          activeOneCount = 0;
+    g_saved                     = Read(list);
+    g_playerOneCamera           = PreviousCamera(g_saved);
+    g_flagCount                 = 0;
+    const ActiveSet& mine       = g_activeSeat[Index(seat)];
+    ActiveSet        activeOne;
     ForEachEntry(list, [&](void* entry) {
         const auto active       = ReadField<std::uint8_t>(entry, kEntryActive);
         g_flags[g_flagCount++] = Identity(entry, active);
         if (active != 0)
         {
-            activeOne[activeOneCount++] = entry;
+            activeOne.entries[activeOne.count++] = entry;
         }
-        // Player 2's own byte from its last update (the Skill module re-flags every entry first, RE §1.3; this keeps any
-        // reader before that on player 2's own history). A new entry starts inactive, as in the game.
-        WriteField<std::uint8_t>(entry, kEntryActive, Contains(g_activeTwo, g_activeTwoCount, entry) ? 1 : 0);
+        // The seat's own byte from its last update (the Skill module re-flags every entry first, RE §1.3; this keeps any
+        // reader before that on the seat's own history). A new entry starts inactive, as in the game.
+        WriteField<std::uint8_t>(entry, kEntryActive, Contains(mine.entries, mine.count, entry) ? 1 : 0);
     });
-    // Player 1's view of the entries, as its own update left them (the stock order updates player 1's camera first).
-    for (std::size_t i = 0; i < activeOneCount; ++i)
+    // Player 1's view of the entries, as its own update left them (the stock order updates player 1's camera first): read
+    // by the first seat's update only, which finds player 1's own bytes (a later seat finds them with the earlier seats'
+    // OR-ed in).
+    if (first)
     {
-        if (!Contains(g_activeOne, g_activeOneCount, activeOne[i]))
+        for (std::size_t i = 0; i < activeOne.count; ++i)
         {
-            ++g_counts.entriesOne;
-            LogStarted(activeOne[i], L"player 1", -1.0f);
+            if (!Contains(g_activeOne.entries, g_activeOne.count, activeOne.entries[i]))
+            {
+                ++g_counts[0].entries;
+                LogStarted(activeOne.entries[i], 0, -1.0f);
+            }
         }
+        g_activeOne = activeOne;
     }
-    g_activeOne      = activeOne;
-    g_activeOneCount = activeOneCount;
-    Write(list, g_copy);
+    Write(list, g_copy[Index(seat)]);
     list_    = list;
-    g_inside = true;
-    ++g_counts.updates;
+    seat_    = seat;
+    g_inside = seat;
+    ++g_counts[Index(seat)].updates;
 }
 
 PlayerTwoUpdate::~PlayerTwoUpdate()
@@ -316,25 +358,26 @@ PlayerTwoUpdate::~PlayerTwoUpdate()
     {
         return;
     }
-    g_inside = false;
+    g_inside = 0;
     if (ListNow() != list_)
     {
-        // The battle system went away during the update (it frees the list with itself): nothing to put back.
-        g_copyList = nullptr;
+        // The battle system went away during the update (it frees the list with itself): nothing to put back, and no
+        // seat's copy belongs to a live list any more.
+        g_copyList.fill(nullptr);
         return;
     }
-    g_copy   = Read(list_);
+    g_copy[Index(seat_)] = Read(list_);
     Write(list_, g_saved);
-    std::array<const void*, kMaxEntries> activeTwo{};
-    std::size_t                          activeTwoCount = 0;
+    Counts&   counts = g_counts[Index(seat_)];
+    ActiveSet active;
     ForEachEntry(list_, [&](void* entry) {
-        if (ReadField<std::uint8_t>(entry, kEntryActive) != 0 && activeTwoCount < kMaxEntries)
+        if (ReadField<std::uint8_t>(entry, kEntryActive) != 0 && active.count < kMaxEntries)
         {
-            activeTwo[activeTwoCount++] = entry;
+            active.entries[active.count++] = entry;
         }
-        // Entries still in the list after player 2's update hold "active on either camera": the readers outside the
+        // Entries still in the list after the seat's update hold "active on any camera": the readers outside the
         // updates (the stop by id, which defers the end of a sequence some camera still plays; the battle system's
-        // post-tick) then see a sequence player 2 plays as playing, as solo sees the one camera's (S-ATKCAMVERIFY 2e).
+        // post-tick) then see a sequence the seat plays as playing, as solo sees the one camera's (S-ATKCAMVERIFY 2e).
         // One the update removed is not touched (the walk finds only live entries).
         const auto two = ReadField<std::uint8_t>(entry, kEntryActive);
         for (std::size_t i = 0; i < g_flagCount; ++i)
@@ -342,27 +385,27 @@ PlayerTwoUpdate::~PlayerTwoUpdate()
             if (SameEntry(g_flags[i], entry))
             {
                 WriteField<std::uint8_t>(entry, kEntryActive, (g_flags[i].active != 0 || two != 0) ? 1 : 0);
-                g_counts.onlyTwo += g_flags[i].active == 0 && two != 0 ? 1 : 0;
+                counts.onlyTwo += g_flags[i].active == 0 && two != 0 ? 1 : 0;
                 break;
             }
         }
     });
-    for (std::size_t i = 0; i < activeTwoCount; ++i)
+    ActiveSet& previous = g_activeSeat[Index(seat_)];
+    for (std::size_t i = 0; i < active.count; ++i)
     {
-        if (!Contains(g_activeTwo, g_activeTwoCount, activeTwo[i]))
+        if (!Contains(previous.entries, previous.count, active.entries[i]))
         {
-            ++g_counts.entriesTwo;
-            const auto two = PreviousCamera(g_copy);
+            ++counts.entries;
+            const auto two = PreviousCamera(g_copy[Index(seat_)]);
             const float dx = two[0] - g_playerOneCamera[0], dy = two[1] - g_playerOneCamera[1],
                         dz = two[2] - g_playerOneCamera[2];
-            LogStarted(activeTwo[i], L"player 2", std::sqrt(dx * dx + dy * dy + dz * dz) / 100.0f);
+            LogStarted(active.entries[i], seat_, std::sqrt(dx * dx + dy * dy + dz * dz) / 100.0f);
         }
     }
-    g_activeTwo      = activeTwo;
-    g_activeTwoCount = activeTwoCount;
+    previous = active;
 }
 
-bool InsidePlayerTwoUpdate() noexcept
+int InsideSeat() noexcept
 {
     return g_inside;
 }
@@ -374,15 +417,40 @@ void Tick() noexcept
     {
         return;
     }
-    const Counts c = std::exchange(g_counts, {});
-    if (c.entriesOne + c.entriesTwo + c.cutsTwo + c.cutsOne + c.lists == 0)
+    const auto    counts = std::exchange(g_counts, {});
+    std::uint32_t total  = counts[0].entries + counts[0].cuts;
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        const Counts& c = counts[Index(seat)];
+        total += c.entries + c.cuts + c.lists;
+    }
+    if (total == 0)
     {
         return;
     }
-    platform::LogDebug(L"attack cameras (10 s): player 2's updates with its own sequence state {}; sequences started on "
-                       L"player 1's camera {}, on player 2's {}; entry-frames active on player 2's camera only {}; shot cuts on "
-                       L"player 2's camera {}, player 1's {}; lists seeded {}",
-                       c.updates, c.entriesOne, c.entriesTwo, c.onlyTwo, c.cutsTwo, c.cutsOne, c.lists);
+    try
+    {
+        // Per built seat, as the line named player 2 alone.
+        std::wstring updates, started, only, cuts;
+        std::uint32_t lists = 0;
+        for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+        {
+            const Counts&  c    = counts[Index(seat)];
+            const wchar_t* name = players::SeatName(seat);
+            const wchar_t* sep  = seat > 1 ? L", " : L"";
+            updates += std::format(L"{}{}'s updates with its own sequence state {}", sep, name, c.updates);
+            started += std::format(L"{}on {}'s {}", sep, name, c.entries);
+            only += std::format(L"{}entry-frames active on {}'s camera only {}", sep, name, c.onlyTwo);
+            cuts += std::format(L"{}shot cuts on {}'s camera {}", sep, name, c.cuts);
+            lists += c.lists;
+        }
+        platform::LogDebug(L"attack cameras (10 s): {}; sequences started on player 1's camera {}, {}; {}; {}, player 1's "
+                           L"{}; lists seeded {}",
+                           updates, counts[0].entries, started, only, cuts, counts[0].cuts, lists);
+    }
+    catch (...)
+    {
+    }
 }
 
 void Remove() noexcept

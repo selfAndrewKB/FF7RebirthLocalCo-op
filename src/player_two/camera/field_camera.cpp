@@ -250,7 +250,7 @@ void RunAsPrimary(int seat, void* cameraManager, float deltaTime)
     {
         g_updateCounters[Index(seat)].Refuse();
     }
-    const attack_cameras::PlayerTwoUpdate attack;  // player 2's own sequence state (inside the scopes)
+    const attack_cameras::PlayerTwoUpdate attack(seat);  // the seat's own sequence state (inside the scopes)
     g_engineUpdate(cameraManager, deltaTime);
 }
 

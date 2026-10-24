@@ -13,17 +13,23 @@
 //     held player 2's view near player 1's (the Titan report of 2026-10-15);
 //   - each entry's active byte (+0x14), which code outside the updates reads (a stop by id, the leader change, the Menu
 //     operator): after both updates it held player 2's view.
-// A PlayerTwoUpdate around player 2's update puts player 2's own copy of the smoothing and of the active bytes in the
-// list, and after it player 1's smoothing back and each entry's byte as "active on either camera" (what the readers
-// outside the updates need: a sequence one camera still plays is playing). Each camera reads only its own state (solo
-// in each half; the game's decision is untouched).
+// A PlayerTwoUpdate around a seat's update (players/seats.h) puts that seat's own copy of the smoothing and of the
+// active bytes in the list, and after it player 1's smoothing back and each entry's byte as "active on any camera" (what
+// the readers outside the updates need: a sequence one camera still plays is playing). Each camera reads only its own
+// state (solo in each view; the game's decision is untouched). Seats take turns: one seat's update closes before the
+// next opens, each OR-ing its own bytes into what it found [ASSUMPTION: the engine updates player 1's camera manager
+// before the seats', as the two-player mod relies on].
 //
 // The shot change: a sequence cut asks UWorld::GetFirstPlayerController's camera manager for a camera cut, so a cut in
-// player 2's update cut player 1's view (its TAA / motion-blur history) and left player 2's smeared. Inside player 2's
+// player 2's update cut player 1's view (its TAA / motion-blur history) and left player 2's smeared. Inside a seat's
 // update that call goes to the game's own "cut the primary camera" function instead, which the primary-controller scope
-// points at player 2's camera manager (§9.3).
+// points at that seat's camera manager (§9.3). The cut call names no camera: it reads the seat whose update is open
+// (InsideSeat, the "inside seat" context).
 //
-// Game thread only. Nothing is written outside player 2's update.
+// Per seat: the copy, its list and the entries its camera found active; the counts. Shared: the open update's saved
+// player-1 state (one update at a time). Game thread only. Nothing is written outside a seat's update.
+
+#include "players/seats.h"
 
 namespace lss::platform {
 class GameImage;
@@ -37,22 +43,31 @@ void Install(const platform::GameImage& image) noexcept;
 /// Puts the game's code back (at mod uninstall, with player 2 out).
 void Remove() noexcept;
 
-/// Player 2's own per-camera state of the sequence list while it lives (inside player 2's camera update, its scopes
-/// held); player 1's put back when it ends. Does nothing if not installed, off the game thread, or there is no list.
+/// `seat`'s own per-camera state of the sequence list while it lives (inside the seat's camera update, its scopes
+/// held); player 1's put back when it ends. Does nothing if not installed, off the game thread, inside another seat's
+/// update, or there is no list.
 class PlayerTwoUpdate
 {
 public:
-    PlayerTwoUpdate() noexcept;
+    explicit PlayerTwoUpdate(int seat) noexcept;
     ~PlayerTwoUpdate();
     PlayerTwoUpdate(const PlayerTwoUpdate&)            = delete;
     PlayerTwoUpdate& operator=(const PlayerTwoUpdate&) = delete;
 
 private:
     void* list_ = nullptr;
+    int   seat_ = 0;
 };
 
-/// Game thread: inside player 2's camera update (a PlayerTwoUpdate holds the list), so "this camera" is player 2's.
-bool InsidePlayerTwoUpdate() noexcept;
+/// Game thread: the seat whose camera update is open (a PlayerTwoUpdate holds the list), so "this camera" is that
+/// seat's; 0 outside every seat's update (player 1's camera).
+int InsideSeat() noexcept;
+
+/// Game thread: inside a seat's camera update.
+inline bool InsidePlayerTwoUpdate() noexcept
+{
+    return InsideSeat() != 0;
+}
 
 /// Game thread, once per engine tick: the status line (Debug, every 10 s with activity).
 void Tick() noexcept;
