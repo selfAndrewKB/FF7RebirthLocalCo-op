@@ -8,6 +8,7 @@
 
 #include "expect.h"
 
+#include <atomic>
 #include <cstdio>
 #include <vector>
 
@@ -96,7 +97,7 @@ void TestClearAndFallBack()
     EXPECT(table.PlayerOf(0x3000) == 0);
     EXPECT(table.PlayerOf(0x2000) == 2);
 
-    EXPECT(table.FallBack(0x2000));
+    EXPECT(table.FallBack(0x2000) == 2);  // it named player 2
     EXPECT(table.PlayerOf(0x2000) == 1);
     EXPECT(!table.FallBack(0x2000));  // player 1 already
     EXPECT(table.PlayerOf(0x2000) == 1);
@@ -106,6 +107,38 @@ void TestClearAndFallBack()
     EXPECT(!table.FallBack(0x2000));
 }
 
+/// The fall-back as it stood at v0.91.0, verbatim but for the table it reads: player 2 becomes player 1.
+bool OldFallBack(std::atomic<std::uintptr_t>& coin, std::uintptr_t key)
+{
+    std::uintptr_t held = coin.load(std::memory_order_relaxed);
+    return held == (key | 2u) && coin.compare_exchange_strong(held, key | 1u, std::memory_order_relaxed);
+}
+
+void TestPlayerThree()
+{
+    std::puts("coin table: player 3's number fits beside the key; the fall-back turns any seat's player into player 1, "
+              "as before for player 2");
+    static_assert(PlayerNumber(0) == 1 && PlayerNumber(lss::players::kPlayerTwoSeat) == 2 && PlayerNumber(2) == 3);
+    static_assert(SeatOfNumber(PlayerNumber(2)) == 2);
+    CoinTable table;
+    table.Set(0x4000, 3, 1);
+    EXPECT(table.PlayerOf(0x4000) == 3);
+    EXPECT(table.PlayerOf(0x4010) == 0);
+    EXPECT(table.FallBack(0x4000) == 3);  // it named player 3
+    EXPECT(table.PlayerOf(0x4000) == 1);
+    EXPECT(!table.FallBack(0x4000));
+
+    // Two players: the same answer and the same coin afterwards as the old rule, for each value a coin can hold.
+    for (int held = 1; held <= 2; ++held)
+    {
+        std::atomic<std::uintptr_t> old{0x5000u | static_cast<std::uintptr_t>(held)};
+        CoinTable                   now;
+        now.Set(0x5000, held, 1);
+        EXPECT(OldFallBack(old, 0x5000) == (now.FallBack(0x5000) != 0));
+        EXPECT(static_cast<int>(old.load() & kMask) == now.PlayerOf(0x5000));
+    }
+}
+
 }  // namespace
 
 int main()
@@ -113,6 +146,7 @@ int main()
     TestSetAndFind();
     TestEviction();
     TestClearAndFallBack();
+    TestPlayerThree();
 
     return lss::test::Report();
 }
