@@ -14,6 +14,7 @@
 #include "player_two/world/world_rules.h"
 #include "players/unreal_access.h"
 
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstddef>
@@ -90,16 +91,20 @@ const wchar_t* PoseFloatName(std::uint32_t i) noexcept
 ResetFn        g_reset           = nullptr;
 std::uintptr_t g_chocoboModuleVt = 0;  // live
 
-// Game thread.
-unsigned                         g_inARow        = 0;  // repairs since the pose was last healthy
-bool                             g_gaveUp        = false;
-bool                             g_refusalLogged = false;
-Clock::time_point                g_nextTry{};
-world_rules::HealthyTimer        g_healthy;            // the pose finite on every tick since: a new count after a while
-bool                             g_following     = false;  // the last repair's follow-up lines are due
-unsigned                         g_followUp      = 0;      // frames since the last repair
-const void*                      g_slotBefore    = nullptr;
-unsigned                         g_repairs       = 0;      // this process
+// Game thread, one per seat (index 0, player 1's, unused).
+struct SeatRepair
+{
+    unsigned                  inARow        = 0;  // repairs since the pose was last healthy
+    bool                      gaveUp        = false;
+    bool                      refusalLogged = false;
+    Clock::time_point         nextTry{};
+    world_rules::HealthyTimer healthy;            // the pose finite on every tick since: a new count after a while
+    bool                      following     = false;  // the last repair's follow-up lines are due
+    unsigned                  followUp      = 0;      // frames since the last repair
+    const void*               slotBefore    = nullptr;
+    unsigned                  repairs       = 0;      // this process
+};
+std::array<SeatRepair, players::kMaxPlayers> g_seats{};
 
 Pose ReadPose(const void* op) noexcept
 {
@@ -132,12 +137,12 @@ std::wstring Metres(float cm)
     return cm < 0.0f ? std::wstring(L"?") : std::format(L"{:.1f} m", cm / 100.0f);
 }
 
-/// The camera actor's distance from player 2's member, in cm (-1 if either is not read).
-float CameraToMember(const void* cameraManager) noexcept
+/// The camera actor's distance from `seat`'s member, in cm (-1 if either is not read).
+float CameraToMember(int seat, const void* cameraManager) noexcept
 {
     float camera[3]{}, member[3]{};
     if (!players::unreal::ActorLocation(ReadPointer(cameraManager, facts::kCameraManagerEndCameraActor), camera) ||
-        !players::unreal::ActorLocation(generation::Member(), member))
+        !players::unreal::ActorLocation(generation::MemberOf(seat), member))
     {
         return -1.0f;
     }
@@ -177,6 +182,10 @@ std::wstring PoseText(const Pose& pose)
     return text + L")";
 }
 
+// The chocobo Whom names is chocobo_ride's, player 2's (the rides group's step).
+static_assert(players::kSeatsBuilt == 1, "camera_repair's log names chocobo_ride's chocobo as player 2's: before seat 2 "
+                                         "is built it asks each seat's ride");
+
 /// Whom an actor is, for the log. Game thread.
 std::wstring Whom(const void* actor)
 {
@@ -184,23 +193,29 @@ std::wstring Whom(const void* actor)
     {
         return L"none";
     }
-    const void* one = generation::PlayerOneController();
-    const void* two = generation::PlayerTwoController();
+    const void* one = generation::ControllerOf(0);
     if (actor == chocobo_ride::RiddenChocobo() || actor == chocobo_ride::DrivenChocobo())
     {
-        return L"player 2's chocobo";
+        return L"player 2's chocobo";  // chocobo_ride is player 2's (the rides group's step)
     }
-    if (actor == generation::Member())
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        return L"player 2's member";
+        if (actor == generation::MemberOf(seat))
+        {
+            return std::format(L"{}'s member", players::SeatName(seat));
+        }
     }
     if (one != nullptr && actor == ReadPointer(one, facts::kControllerPawn))
     {
         return L"player 1's pawn";
     }
-    if (two != nullptr && actor == ReadPointer(two, facts::kControllerPawn))
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        return L"player 2's pawn";
+        const void* controller = generation::ControllerOf(seat);
+        if (controller != nullptr && actor == ReadPointer(controller, facts::kControllerPawn))
+        {
+            return std::format(L"{}'s pawn", players::SeatName(seat));
+        }
     }
     return std::format(L"another actor {}", actor);
 }
@@ -235,79 +250,133 @@ std::wstring Describe(const void* cameraManager)
 
 /// The repair's follow-up lines: after one frame (did the reset write the pose) and after ten (did the camera reach
 /// the member, and is the ride framing still there).
-void FollowUp(const void* cameraManager, const void* op, const Pose& pose) noexcept
+void FollowUp(int seat, const void* cameraManager, const void* op, const Pose& pose) noexcept
 {
-    ++g_followUp;
+    SeatRepair& s = g_seats[static_cast<std::size_t>(seat)];
+    ++s.followUp;
     try
     {
-        if (g_followUp == 1)
+        if (s.followUp == 1)
         {
             platform::Log(L"camera repair: after 1 frame: {}; {}", PoseText(pose), ResetInputs(cameraManager, op));
         }
-        else if (g_followUp >= kSettleFrames)
+        else if (s.followUp >= kSettleFrames)
         {
             const void* slot = ModuleAt(op, kSlotFifteen);
-            platform::Log(L"camera repair: after {} frames: {}: {}, camera→member {}; slot 15 {}; {}", g_followUp,
-                          pose.finite ? L"REPAIRED" : L"NOT repaired", PoseText(pose), Metres(CameraToMember(cameraManager)),
-                          slot == g_slotBefore ? L"unchanged" : L"CHANGED", Describe(cameraManager));
-            g_following = false;
+            platform::Log(L"camera repair: after {} frames: {}: {}, camera→member {}; slot 15 {}; {}", s.followUp,
+                          pose.finite ? L"REPAIRED" : L"NOT repaired", PoseText(pose),
+                          Metres(CameraToMember(seat, cameraManager)), slot == s.slotBefore ? L"unchanged" : L"CHANGED",
+                          Describe(cameraManager));
+            s.following = false;
         }
     }
     catch (...)
     {
-        g_following = false;
+        s.following = false;
     }
 }
 
-void Repair(void* cameraManager, const void* op, const Pose& pose) noexcept
+void Repair(int seat, void* cameraManager, const void* op, const Pose& pose) noexcept
 {
-    g_nextTry = Clock::now() + kRetryGap;
+    SeatRepair&    s    = g_seats[static_cast<std::size_t>(seat)];
+    const wchar_t* name = players::SeatName(seat);
+    s.nextTry           = Clock::now() + kRetryGap;
     // The reset resolves the primary camera manager and its operator.
-    const primary_controller::Scope scope(players::kPlayerTwoSeat);
+    const primary_controller::Scope scope(seat);
     if (!scope.Held())
     {
-        if (!g_refusalLogged)
+        if (!s.refusalLogged)
         {
-            g_refusalLogged = true;
-            platform::Log(L"camera repair: player 2's camera pose is not finite, but player 2's primary scope was refused "
+            s.refusalLogged = true;
+            platform::Log(L"camera repair: {}'s camera pose is not finite, but {}'s primary scope was refused "
                           L"({}); retried every 0.5 s",
-                          primary_controller::Describe(scope.Why()));
+                          name, name, primary_controller::Describe(scope.Why()));
         }
         return;
     }
     if (ReadPointer(primary_controller::Current(), facts::kControllerCameraManager) != cameraManager)
     {
-        if (!g_refusalLogged)  // the game would resolve another camera manager: never reset player 1's
+        if (!s.refusalLogged)  // the game would resolve another camera manager: never reset player 1's
         {
-            g_refusalLogged = true;
-            platform::Log(L"camera repair: player 2's camera pose is not finite, but in player 2's scope the primary "
-                          L"controller's camera manager is not player 2's; not reset (retried every 0.5 s)");
+            s.refusalLogged = true;
+            platform::Log(L"camera repair: {}'s camera pose is not finite, but in {}'s scope the primary "
+                          L"controller's camera manager is not {}'s; not reset (retried every 0.5 s)",
+                          name, name, name);
         }
         return;
     }
-    ++g_inARow;
-    ++g_repairs;
-    g_slotBefore = ModuleAt(op, kSlotFifteen);
+    ++s.inARow;
+    ++s.repairs;
+    s.slotBefore = ModuleAt(op, kSlotFifteen);
     try
     {
-        platform::Log(L"camera repair: player 2's camera pose is not finite ({}); the game's player-warp camera reset "
-                      L"(PrimaryPCM_ResetCameraToField, cut) on player 2's camera in player 2's primary scope, try {} of {} "
+        platform::Log(L"camera repair: {}'s camera pose is not finite ({}); the game's player-warp camera reset "
+                      L"(PrimaryPCM_ResetCameraToField, cut) on {}'s camera in {}'s primary scope, try {} of {} "
                       L"({} this session). Before: {}; {}; camera→member {}",
-                      PoseText(pose), g_inARow, kMaxInARow, g_repairs, Describe(cameraManager),
-                      ResetInputs(cameraManager, op), Metres(CameraToMember(cameraManager)));
+                      name, PoseText(pose), name, name, s.inARow, kMaxInARow, s.repairs, Describe(cameraManager),
+                      ResetInputs(cameraManager, op), Metres(CameraToMember(seat, cameraManager)));
     }
     catch (...)
     {
     }
     if (!platform::CallGuarded(g_reset, std::uint8_t{1}))
     {
-        g_inARow = kMaxInARow;  // never call it again while the pose stays broken
+        s.inARow = kMaxInARow;  // never call it again while the pose stays broken
         platform::Log(L"camera repair: the reset raised an exception ({}); no more tries until the pose is finite",
                       platform::DescribeFault(platform::LastFault()).text);
         return;
     }
-    g_following = true;
-    g_followUp  = 0;
+    s.following = true;
+    s.followUp  = 0;
+}
+
+/// One seat's tick: its pose read, the last repair's follow-up, and a repair or the give-up.
+void TickSeat(int seat) noexcept
+{
+    SeatRepair& s = g_seats[static_cast<std::size_t>(seat)];
+    if (!generation::Active(seat) || generation::MemberOf(seat) == nullptr)
+    {
+        s.following = false;
+        return;
+    }
+    void*       cameraManager = ReadPointer(generation::ControllerOf(seat), facts::kControllerCameraManager);
+    const void* op            = ReadPointer(cameraManager, facts::kCameraManagerFieldOperator);
+    const Pose  pose          = ReadPose(op);
+    if (!pose.read)
+    {
+        s.following = false;
+        return;
+    }
+    if (s.following)
+    {
+        FollowUp(seat, cameraManager, op, pose);
+    }
+    const auto now = Clock::now();
+    if (s.healthy.Observe(pose.finite, now, kHealthyFor))
+    {
+        s.inARow        = 0;  // a NaN that comes back at once counts toward the same 5 tries
+        s.gaveUp        = false;
+        s.refusalLogged = false;
+    }
+    // Not before the last repair's follow-up is written (below ~20 fps the 0.5 s gap is shorter than 10 frames).
+    const auto verdict = world_rules::RepairVerdict(pose.finite, s.following, ReadField<std::uint8_t>(op, kOpCurrent) != 0,
+                                                    now >= s.nextTry, s.inARow, kMaxInARow, s.gaveUp);
+    if (verdict == world_rules::Repair::Repair)
+    {
+        Repair(seat, cameraManager, op, pose);
+    }
+    else if (verdict == world_rules::Repair::GiveUp)
+    {
+        s.gaveUp = true;
+        try
+        {
+            platform::Log(L"camera repair: gave up after {} tries; the pose stays non-finite ({}); {}; {}", kMaxInARow,
+                          PoseText(pose), ResetInputs(cameraManager, op), Describe(cameraManager));
+        }
+        catch (...)
+        {
+        }
+    }
 }
 
 }  // namespace
@@ -325,48 +394,17 @@ void Install(const platform::GameImage& image) noexcept
 
 void Tick() noexcept
 {
-    if (g_reset == nullptr || !generation::OnGameThread() || !generation::Active() || generation::Member() == nullptr)
+    if (g_reset == nullptr || !generation::OnGameThread())
     {
-        g_following = false;
+        for (SeatRepair& s : g_seats)
+        {
+            s.following = false;
+        }
         return;
     }
-    void*       cameraManager = ReadPointer(generation::PlayerTwoController(), facts::kControllerCameraManager);
-    const void* op            = ReadPointer(cameraManager, facts::kCameraManagerFieldOperator);
-    const Pose  pose          = ReadPose(op);
-    if (!pose.read)
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        g_following = false;
-        return;
-    }
-    if (g_following)
-    {
-        FollowUp(cameraManager, op, pose);
-    }
-    const auto now = Clock::now();
-    if (g_healthy.Observe(pose.finite, now, kHealthyFor))
-    {
-        g_inARow        = 0;  // a NaN that comes back at once counts toward the same 5 tries
-        g_gaveUp        = false;
-        g_refusalLogged = false;
-    }
-    // Not before the last repair's follow-up is written (below ~20 fps the 0.5 s gap is shorter than 10 frames).
-    const auto verdict = world_rules::RepairVerdict(pose.finite, g_following, ReadField<std::uint8_t>(op, kOpCurrent) != 0,
-                                                    now >= g_nextTry, g_inARow, kMaxInARow, g_gaveUp);
-    if (verdict == world_rules::Repair::Repair)
-    {
-        Repair(cameraManager, op, pose);
-    }
-    else if (verdict == world_rules::Repair::GiveUp)
-    {
-        g_gaveUp = true;
-        try
-        {
-            platform::Log(L"camera repair: gave up after {} tries; the pose stays non-finite ({}); {}; {}", kMaxInARow,
-                          PoseText(pose), ResetInputs(cameraManager, op), Describe(cameraManager));
-        }
-        catch (...)
-        {
-        }
+        TickSeat(seat);
     }
 }
 
