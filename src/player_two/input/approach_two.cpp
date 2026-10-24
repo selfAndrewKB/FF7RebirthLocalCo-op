@@ -66,31 +66,28 @@ struct Pending
 Pending g_pending[kDirCount];
 bool    g_lateTried = false;
 
-enum class Who
-{
-    Other,
-    One,
-    Two,
-};
+constexpr int kOther = -1;  // a character of no player's
 
-Who WhoIs(const void* character) noexcept
+/// Whose character the check is for: a built seat's member (while its player is in), 0 player 1's pawn (while a seat's
+/// player is in), or kOther.
+int WhoIs(const void* character) noexcept
 {
-    if (character == nullptr || !generation::OnGameThread() || !generation::Active())
+    if (character == nullptr || !generation::OnGameThread() || !generation::AnyActive())
     {
-        return Who::Other;
+        return kOther;
     }
-    if (character == generation::Member())
+    const int seat = generation::SeatOfMember(character);
+    if (players::SeatBuilt(seat) && generation::Active(seat))
     {
-        return Who::Two;
+        return seat;
     }
-    void* one = generation::PlayerOneController();
-    return one != nullptr && character == ReadPointer(one, facts::kControllerPawn) ? Who::One : Who::Other;
+    void* one = generation::ControllerOf(0);
+    return one != nullptr && character == ReadPointer(one, facts::kControllerPawn) ? 0 : kOther;
 }
 
-std::int32_t PadOf(Who who) noexcept
+std::int32_t PadOf(int who) noexcept
 {
-    return pad_sticks::ControllerIdOf(who == Who::Two ? generation::PlayerTwoController()
-                                                      : generation::PlayerOneController());
+    return pad_sticks::ControllerIdOf(generation::ControllerOf(who));
 }
 
 /// The yaw (degrees) of the end transform's forward axis, the direction the game compares the stick with.
@@ -101,32 +98,32 @@ float ForwardYaw(const void* transform) noexcept
     return platform::QuaternionYawDegrees(x, y, z, w);
 }
 
-// Game thread: the last answer logged per player (Debug on change).
+// Game thread: the last answer logged per player, by seat (0 player 1's; Debug on change).
 struct Seen
 {
     const wchar_t* site    = nullptr;
     bool           passed  = false;
-    int            before  = -1;     // what the check answered in player 1's camera basis (player 2, Debug; -1 not run)
+    int            before  = -1;     // what the check answered in player 1's camera basis (a seat, Debug; -1 not run)
     bool           scoped  = false;
     bool           any     = false;
 };
-Seen g_seen[2];
+Seen g_seen[players::kMaxPlayers];
 
-void Note(Who who, const wchar_t* site, bool passed, int before, bool scoped, float limit, float yaw) noexcept
+void Note(int who, const wchar_t* site, bool passed, int before, bool scoped, float limit, float yaw) noexcept
 {
-    Seen& seen = g_seen[who == Who::Two ? 1 : 0];
-    platform::LogTrace(L"approach: player {}'s {} check: {} (limit {:.0f} deg, the end faces {:.0f} deg)",
-                       who == Who::Two ? 2 : 1, site, passed ? L"pass" : L"fail", limit, yaw);
+    Seen& seen = g_seen[who];
+    platform::LogTrace(L"approach: player {}'s {} check: {} (limit {:.0f} deg, the end faces {:.0f} deg)", who + 1,
+                       site, passed ? L"pass" : L"fail", limit, yaw);
     if (seen.any && seen.site == site && seen.passed == passed && seen.before == before && seen.scoped == scoped)
     {
         return;
     }
     seen = {site, passed, before, scoped, true};
-    if (who == Who::Two)
+    if (who != 0)
     {
-        platform::LogDebug(L"approach: player 2's {} check {} in player 2's camera basis{}{}; limit {:.0f} deg, the "
+        platform::LogDebug(L"approach: {}'s {} check {} in {}'s camera basis{}{}; limit {:.0f} deg, the "
                            L"end faces {:.0f} deg",
-                           site, passed ? L"passes" : L"fails",
+                           players::SeatName(who), site, passed ? L"passes" : L"fails", players::SeatName(who),
                            before < 0 ? L"" : before != 0 ? L" (player 1's would pass)" : L" (player 1's would fail)",
                            scoped ? L"" : L" — a scope was REFUSED, the game's basis was used", limit, yaw);
         return;
@@ -135,23 +132,24 @@ void Note(Who who, const wchar_t* site, bool passed, int before, bool scoped, fl
                        scoped ? L"" : L" (the stick scope was refused: the merged stick)");
 }
 
-/// The check's scopes: the player's pad's sticks and, for player 2, the primary controller (the camera manager getter
-/// answers player 2's, the lock is theirs). The check runs with whatever opened; Scoped says whether all of it did.
-unsigned ScopesOf(Who who) noexcept
+/// The check's scopes: the player's pad's sticks and, for a seat, the primary controller (the camera manager getter
+/// answers the seat's, the lock is theirs). The check runs with whatever opened; Scoped says whether all of it did.
+unsigned ScopesOf(int who) noexcept
 {
-    return who == Who::Two ? p2_scope::Sticks | p2_scope::Primary : p2_scope::Sticks;
+    return who != 0 ? p2_scope::Sticks | p2_scope::Primary : p2_scope::Sticks;
 }
 
-p2_scope::Args ArgsOf(Who who) noexcept
+p2_scope::Args ArgsOf(int who) noexcept
 {
     p2_scope::Args args;
+    args.seat  = who != 0 ? who : players::kPlayerTwoSeat;  // player 1's check opens no Primary
     args.padId = PadOf(who);
     return args;
 }
 
-bool Scoped(Who who, const p2_scope::P2Scope& scopes) noexcept
+bool Scoped(int who, const p2_scope::P2Scope& scopes) noexcept
 {
-    return scopes.Holds<p2_scope::SticksPart>() && (who != Who::Two || scopes.Holds<p2_scope::PrimaryPart>());
+    return scopes.Holds<p2_scope::SticksPart>() && (who == 0 || scopes.Holds<p2_scope::PrimaryPart>());
 }
 
 template <std::size_t Index>
@@ -159,15 +157,15 @@ bool DirCheck(void* character, const void* endTransform, void* outPoint, float f
               float slack, float lift, float angle) noexcept
 {
     const auto original = reinterpret_cast<DirCheckFn>(g_dirCalls[Index].Original());
-    const Who  who      = WhoIs(character);
-    if (who == Who::Other)
+    const int  who      = WhoIs(character);
+    if (who == kOther)
     {
         return original(character, endTransform, outPoint, forward, back, radius, slack, lift, angle);
     }
     const bool logs   = platform::Enabled(platform::Level::Debug);
     // What the game would answer without the scopes (only written to the closest point, which the scoped call below
     // writes again).
-    const int before = logs && who == Who::Two
+    const int before = logs && who != 0
                            ? original(character, endTransform, outPoint, forward, back, radius, slack, lift, angle)
                            : -1;
     bool passed = false;
@@ -187,8 +185,8 @@ bool DirCheck(void* character, const void* endTransform, void* outPoint, float f
 bool BeamCheck(void* character, void* a2, void* a3, void* a4, void* a5, void* a6) noexcept
 {
     const auto original = reinterpret_cast<BeamCheckFn>(g_beamCall.Original());
-    const Who  who      = WhoIs(character);
-    if (who == Who::Other)
+    const int  who      = WhoIs(character);
+    if (who == kOther)
     {
         return original(character, a2, a3, a4, a5, a6);
     }
@@ -311,8 +309,10 @@ void Remove() noexcept
     {
         platform::Log(L"approach: the beam's call was changed after us; left in place (it passes through)");
     }
-    g_seen[0] = {};
-    g_seen[1] = {};
+    for (Seen& seen : g_seen)
+    {
+        seen = {};
+    }
 }
 
 }  // namespace lss::player_two::approach_two
