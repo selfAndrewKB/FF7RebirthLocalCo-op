@@ -74,7 +74,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.92.1";  // seats step 3 closed: one status word per player (plan/seats.md)
+constexpr const wchar_t* kVersion = L"0.93.0";  // seats step 4: each player's own HUD pass (plan/seats.md)
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
