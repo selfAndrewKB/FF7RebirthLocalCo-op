@@ -17,7 +17,7 @@ void LetGo(int seat) noexcept
     {
         return;  // the modules below hold player 2's only
     }
-    camera_override::PlayerTwoOut();  // the member's camera delegates back to the engine's, while it is still held
+    camera_override::PlayerTwoOut(seat);  // the member's camera delegates back to the engine's, while it is still held
     lock_on::PlayerTwoOut();
     rumble_list_two::PlayerTwoOut();  // stops player 2's channels while player 2 can still be the primary player
     ffb_manager_two::PlayerTwoOut();  // player 2's component back on the game's force-feedback manager

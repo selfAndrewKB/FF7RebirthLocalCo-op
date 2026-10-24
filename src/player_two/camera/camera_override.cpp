@@ -79,24 +79,70 @@ AddedFn        g_engineAdded   = nullptr;
 RemovedFn      g_engineRemoved = nullptr;
 ReleaseFn      g_releaseWeak   = nullptr;
 
-// Game thread.
-Pair         g_playerTwo;          // player 2's camera's own module (one weak reference is the mod's)
-void*        g_member = nullptr;   // the member whose delegates hold the thunks
+// Game thread, by seat (index 0, player 1's, unused).
+std::array<Pair, players::kMaxPlayers>  g_seatModule{};  // the seat's camera's own module (one weak reference the mod's)
+std::array<void*, players::kMaxPlayers> g_member{};      // the member whose delegates hold the thunks
 
-/// Swaps player 2's module into the global for one engine call, with player 2 as the primary
-/// controller, and puts player 1's back after if the global is still player 2's (a Set range of
-/// platform/byte_scope.h: a module the game itself wrote inside the call is kept).
+std::size_t Index(int seat) noexcept
+{
+    return static_cast<std::size_t>(seat);
+}
+
+/// The seat whose member's delegate called a thunk with `payload`, or -1. The added delegate's payload is the member
+/// itself (Tick checks it before putting the thunk on); the removed delegate's is not checked.
+int SeatOfPayload(const void* payload) noexcept
+{
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (payload != nullptr && g_member[Index(seat)] == payload)
+        {
+            return seat;
+        }
+    }
+    return -1;
+}
+
+// A thunk whose payload names no seat's member (the removed delegate's payload is not checked to be the member) is
+// taken as player 2's, as the two-player mod did.
+static_assert(players::kSeatsBuilt == 1, "a removed-delegate payload that names no member is taken as player 2's: "
+                                         "before seat 2 is built, confirm the payload is the member (or check it in "
+                                         "Tick as the added one is)");
+
+int ThunkSeat(const void* payload) noexcept
+{
+    const int seat = SeatOfPayload(payload);
+    return seat > 0 ? seat : players::kPlayerTwoSeat;
+}
+
+// Game thread: the seat whose module the global holds now (0 none). Seats take turns: a thunk of another seat's member
+// inside a held scope calls the engine's handler unswapped (the global is never nested across seats).
+int g_globalSeat = 0;
+
+/// Another seat than `seat` holds the global now.
+bool HeldByOther(int seat) noexcept
+{
+    return g_globalSeat != 0 && g_globalSeat != seat;
+}
+
+/// Swaps the seat's module into the global for one engine call, with the seat's player as the primary
+/// controller, and puts player 1's back after if the global is still the seat's (a Set range of
+/// platform/byte_scope.h: a module the game itself wrote inside the call is kept). Its callers check HeldByOther first.
 class GlobalScope
 {
 public:
-    GlobalScope() noexcept
+    explicit GlobalScope(int seat) noexcept : primary_(seat)
     {
         using Range = platform::ByteContext::Range;
         const Range range{reinterpret_cast<std::uintptr_t>(g_global), sizeof(Pair), platform::ByteContext::Kind::Set};
         if (context_.Define(std::span<const Range>(&range, 1)))
         {
-            std::memcpy(context_.Value(0).data(), &g_playerTwo, sizeof(Pair));
+            std::memcpy(context_.Value(0).data(), &g_seatModule[Index(seat)], sizeof(Pair));
             held_ = context_.Open();
+        }
+        if (held_ && g_globalSeat == 0)
+        {
+            g_globalSeat = seat;  // the outermost scope owns it (the same seat's re-entry passes as before)
+            owner_       = true;
         }
     }
     ~GlobalScope()
@@ -105,42 +151,50 @@ public:
         {
             context_.Close();
         }
+        if (owner_)
+        {
+            g_globalSeat = 0;
+        }
     }
     GlobalScope(const GlobalScope&)            = delete;
     GlobalScope& operator=(const GlobalScope&) = delete;
 
 private:
-    const primary_controller::Scope      primary_{players::kPlayerTwoSeat};  // opened first, closed last
+    const primary_controller::Scope      primary_;  // opened first, closed last
     platform::ByteStore<1, sizeof(Pair)> context_;
-    bool                                 held_ = false;
+    bool                                 held_  = false;
+    bool                                 owner_ = false;
 };
 
 // The thunks the member's delegates call (same signatures as the engine's handlers).
 void* AddedThunk(void* out, void* payload, const void* params, const void* a4, const void* a5, const void* a6,
                  const void* a7)
 {
-    if (g_playerTwo.object == 0)
+    const int seat = ThunkSeat(payload);
+    if (g_seatModule[Index(seat)].object == 0 || HeldByOther(seat))
     {
         return g_engineAdded(out, payload, params, a4, a5, a6, a7);
     }
-    static bool logged = false;
-    if (!logged)
+    static bool logged[players::kMaxPlayers] = {};
+    if (!logged[Index(seat)])
     {
-        logged = true;  // written before the call, so a failure inside it is placed by the log
-        platform::Log(L"camera override: player 2's member's first camera override request, routed to player 2's module");
+        logged[Index(seat)] = true;  // written before the call, so a failure inside it is placed by the log
+        platform::Log(L"camera override: {}'s member's first camera override request, routed to {}'s module",
+                      players::SeatName(seat), players::SeatName(seat));
     }
-    const GlobalScope scope;
+    const GlobalScope scope(seat);
     return g_engineAdded(out, payload, params, a4, a5, a6, a7);
 }
 
 void RemovedThunk(void* payload, const void* id)
 {
-    if (g_playerTwo.object == 0)
+    const int seat = ThunkSeat(payload);
+    if (g_seatModule[Index(seat)].object == 0 || HeldByOther(seat))
     {
         g_engineRemoved(payload, id);
         return;
     }
-    const GlobalScope scope;
+    const GlobalScope scope(seat);
     g_engineRemoved(payload, id);
 }
 
@@ -162,27 +216,29 @@ void Write(void* member, std::uint32_t offset, std::uintptr_t value) noexcept
     platform::WriteGuarded(static_cast<std::byte*>(member) + offset, &value, sizeof(value));
 }
 
-/// The member's delegates back to the engine's handlers, where they still hold the thunks.
-void RestoreMember() noexcept
+/// The seat's member's delegates back to the engine's handlers, where they still hold the thunks.
+void RestoreMember(int seat) noexcept
 {
-    if (g_member == nullptr)
+    void*& member = g_member[Index(seat)];
+    if (member == nullptr)
     {
         return;
     }
-    const auto base = reinterpret_cast<std::uintptr_t>(g_member);
+    const auto base = reinterpret_cast<std::uintptr_t>(member);
     if (ReadAt<std::uintptr_t>(base + kAddedFn) == reinterpret_cast<std::uintptr_t>(&AddedThunk))
     {
-        Write(g_member, kAddedFn, reinterpret_cast<std::uintptr_t>(g_engineAdded));
+        Write(member, kAddedFn, reinterpret_cast<std::uintptr_t>(g_engineAdded));
     }
     if (ReadAt<std::uintptr_t>(base + kRemovedFn) == reinterpret_cast<std::uintptr_t>(&RemovedThunk))
     {
-        Write(g_member, kRemovedFn, reinterpret_cast<std::uintptr_t>(g_engineRemoved));
+        Write(member, kRemovedFn, reinterpret_cast<std::uintptr_t>(g_engineRemoved));
     }
-    g_member = nullptr;
+    member = nullptr;
 }
 
 #if LSS_DEV
-// The snapshot (dev tools): both cameras' layer-4 modules and both characters' delegates, logged on change (Debug).
+// The snapshot (dev tools, player 2's): both cameras' layer-4 modules and both characters' delegates, logged on change
+// (Debug).
 
 std::wstring DescribeCamera(void* controller)
 {
@@ -241,7 +297,7 @@ struct Snapshot
 
 Snapshot Take(void* member) noexcept
 {
-    Snapshot   now{g_global->object, g_playerTwo.object};
+    Snapshot   now{g_global->object, g_seatModule[players::kPlayerTwoSeat].object};
     void*      controllers[2] = {generation::PlayerOneController(), generation::PlayerTwoController()};
     const auto characters     = std::array<std::uintptr_t, 2>{
         reinterpret_cast<std::uintptr_t>(ReadPointer(controllers[0], facts::kControllerPawn)), reinterpret_cast<std::uintptr_t>(member)};
@@ -290,7 +346,8 @@ void Log(void* member)
     void*      playerOne = generation::PlayerOneController();
     const auto oneChar   = reinterpret_cast<std::uintptr_t>(ReadPointer(playerOne, facts::kControllerPawn));
     platform::LogDebug(L"camera override: global {:#x} P2's {:#x} | P1 camera{} | P2 camera{} | P1 {} | P2 {}", g_global->object,
-                  g_playerTwo.object, DescribeCamera(playerOne), DescribeCamera(generation::PlayerTwoController()),
+                  g_seatModule[players::kPlayerTwoSeat].object, DescribeCamera(playerOne),
+                  DescribeCamera(generation::PlayerTwoController()),
                   DescribeCharacter(oneChar), DescribeCharacter(reinterpret_cast<std::uintptr_t>(member)));
 }
 #else
@@ -320,17 +377,18 @@ bool Install(const platform::GameImage& image) noexcept
     return g_installed;
 }
 
-void BeginPlayWithOwnModule(void (*engineBeginPlay)(void*), void* cameraManager)
+void BeginPlayWithOwnModule(int seat, void (*engineBeginPlay)(void*), void* cameraManager)
 {
-    if (!g_installed)
+    if (!g_installed || !players::SeatBuilt(seat))
     {
         engineBeginPlay(cameraManager);
         return;
     }
-    if (g_playerTwo.controller != 0)
+    Pair& module = g_seatModule[Index(seat)];
+    if (module.controller != 0)
     {
-        ReleaseGuarded(g_playerTwo.controller);  // a module left from an earlier join
-        g_playerTwo = {};
+        ReleaseGuarded(module.controller);  // a module left from an earlier join
+        module = {};
     }
     const Pair saved = *g_global;
     *g_global        = {};
@@ -340,35 +398,36 @@ void BeginPlayWithOwnModule(void (*engineBeginPlay)(void*), void* cameraManager)
     }
     __finally
     {
-        // Player 2's operators built their own module and wrote it to the global: it is player 2's
+        // The seat's operators built their own module and wrote it to the global: it is the seat's
         // now (with the weak reference the global took), and player 1's goes back.
         const Pair built = *g_global;
         *g_global        = saved;
         const bool own   = built.object != 0 && ReadAt<std::uintptr_t>(built.object) == g_moduleVTable;
         if (own)
         {
-            g_playerTwo = built;
+            module = built;
         }
         else if (built.controller != 0)
         {
             ReleaseGuarded(built.controller);
         }
     }
-    platform::Log(L"camera override: player 2's camera {} its own NotifyOverride module {:#x} (player 1's {:#x})",
-                  g_playerTwo.object != 0 ? L"built" : L"did NOT build", g_playerTwo.object, saved.object);
+    platform::Log(L"camera override: {}'s camera {} its own NotifyOverride module {:#x} (player 1's {:#x})",
+                  players::SeatName(seat), module.object != 0 ? L"built" : L"did NOT build", module.object,
+                  saved.object);
 }
 
-void Tick(void* member) noexcept
+void Tick(int seat, void* member) noexcept
 {
-    if (!g_installed || !generation::OnGameThread())
+    if (!g_installed || !generation::OnGameThread() || !players::SeatBuilt(seat))
     {
         return;
     }
-    if (member != g_member)
+    if (member != g_member[Index(seat)])
     {
-        RestoreMember();  // a different member (or none): the old one's delegates back to the engine's
+        RestoreMember(seat);  // a different member (or none): the old one's delegates back to the engine's
     }
-    if (member != nullptr && g_playerTwo.object != 0)
+    if (member != nullptr && g_seatModule[Index(seat)].object != 0)
     {
         const auto base = reinterpret_cast<std::uintptr_t>(member);
         // The camera manager that follows the member binds these; a rebind puts the engine's back,
@@ -377,13 +436,17 @@ void Tick(void* member) noexcept
             ReadAt<std::uintptr_t>(base + kAddedPayload) == base)
         {
             Write(member, kAddedFn, reinterpret_cast<std::uintptr_t>(&AddedThunk));
-            g_member = member;
+            g_member[Index(seat)] = member;
         }
         if (ReadAt<std::uintptr_t>(base + kRemovedFn) == reinterpret_cast<std::uintptr_t>(g_engineRemoved))
         {
             Write(member, kRemovedFn, reinterpret_cast<std::uintptr_t>(&RemovedThunk));
-            g_member = member;
+            g_member[Index(seat)] = member;
         }
+    }
+    if (seat != players::kPlayerTwoSeat)
+    {
+        return;  // the snapshot is a dev tool, player 2's
     }
     try
     {
@@ -394,19 +457,27 @@ void Tick(void* member) noexcept
     }
 }
 
-void MemberDestroyed() noexcept
+void MemberDestroyed(int seat) noexcept
 {
-    g_member = nullptr;
+    if (players::SeatBuilt(seat))
+    {
+        g_member[Index(seat)] = nullptr;
+    }
 }
 
-void PlayerTwoOut() noexcept
+void PlayerTwoOut(int seat) noexcept
 {
-    RestoreMember();
-    if (g_playerTwo.controller != 0 && g_releaseWeak != nullptr)
+    if (!players::SeatBuilt(seat))
     {
-        ReleaseGuarded(g_playerTwo.controller);
+        return;
     }
-    g_playerTwo = {};
+    RestoreMember(seat);
+    Pair& module = g_seatModule[Index(seat)];
+    if (module.controller != 0 && g_releaseWeak != nullptr)
+    {
+        ReleaseGuarded(module.controller);
+    }
+    module = {};
 }
 
 }  // namespace lss::player_two::camera_override

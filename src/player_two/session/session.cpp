@@ -324,7 +324,7 @@ bool Seat::MemberDestroyed() noexcept
     generation::SetMember(seat_, nullptr);  // player 2's member movement and scopes stop at once
     // Riding, player 2's controller possessed the member's chocobo: its pawn field names that instead.
     const auto forgotten = own_ride::Forget();
-    camera_override::MemberDestroyed();
+    camera_override::MemberDestroyed(seat_);
     // Player 2's controller still names the destroyed character: cleared, so neither the game's
     // give-back nor the controller's unpossess reads it (RE-p2-retry-reload.md §3.2, recipe 3).
     for (const std::uint32_t field : {facts::kControllerLeader, facts::kControllerPawn})

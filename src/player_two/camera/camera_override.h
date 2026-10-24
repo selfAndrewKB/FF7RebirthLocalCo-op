@@ -11,13 +11,19 @@
 // character, player 1's. So player 2's attacks drove player 1's camera, and player 2's camera
 // played them framed around player 1.
 //
-// Step A: while player 2's camera manager's BeginPlay runs, the global is hidden, so the game's own
-// operator constructor builds player 2's camera a module of its own, owned by player 2's Battle
-// operator; the global is then put back. Step B: each frame, player 2's member's two override
-// delegates (added / removed) point at thunks that run the game's own handlers with the global
-// holding player 2's module and player 2 as the primary controller, then put it back. Both are put
-// back when player 2 leaves. The global, both cameras' layer-4 modules and both characters'
-// delegates are logged on change. Game thread only.
+// Step A: while a seat's camera manager's BeginPlay runs, the global is hidden, so the game's own
+// operator constructor builds that seat's camera a module of its own, owned by its Battle operator;
+// the global is then put back. Step B: each frame, the seat's member's two override delegates
+// (added / removed) point at thunks that run the game's own handlers with the global holding the
+// seat's module and the seat's player as the primary controller, then put it back. The thunks find
+// the seat from the delegate's payload (the member). Both are put back when the seat's player leaves.
+// The global, both cameras' layer-4 modules and both characters' delegates are logged on change
+// (player 2's, a dev tool).
+//
+// Per seat (players/seats.h): the module and the member holding the thunks. Shared: the global, swapped
+// in turn (one engine call at a time). Game thread only.
+
+#include "players/seats.h"
 
 namespace lss::platform {
 class GameImage;
@@ -27,19 +33,28 @@ namespace lss::player_two::camera_override {
 
 bool Install(const platform::GameImage& image) noexcept;
 
-/// Runs the engine's camera-manager BeginPlay for player 2's camera manager so that it builds its
-/// own NotifyOverride module (Step A). Called by player_two/own_controller inside its own wrapper.
-void BeginPlayWithOwnModule(void (*engineBeginPlay)(void*), void* cameraManager);
+/// Runs the engine's camera-manager BeginPlay for `seat`'s camera manager (the seat joining) so that it
+/// builds its own NotifyOverride module (Step A).
+void BeginPlayWithOwnModule(int seat, void (*engineBeginPlay)(void*), void* cameraManager);
 
-/// Once per frame while player 2 plays: player 2's member's delegates on the thunks (Step B); logs.
-void Tick(void* member) noexcept;
+/// Player 2's, as player_two/own_controller calls it inside its own wrapper: its join scope does not name the joining
+/// seat yet (the session's step).
+inline void BeginPlayWithOwnModule(void (*engineBeginPlay)(void*), void* cameraManager)
+{
+    static_assert(players::kSeatsBuilt == 1, "own_controller's join scope names no seat: before seat 2 is built it "
+                                             "passes the joining seat to BeginPlayWithOwnModule(seat, ...)");
+    BeginPlayWithOwnModule(players::kPlayerTwoSeat, engineBeginPlay, cameraManager);
+}
 
-/// Player 2 is leaving: the member's delegates back to the engine's handlers, player 2's module
+/// Once per frame while `seat`'s player plays: the seat's member's delegates on the thunks (Step B); logs.
+void Tick(int seat, void* member) noexcept;
+
+/// `seat`'s player is leaving: the member's delegates back to the engine's handlers, the seat's module
 /// released.
-void PlayerTwoOut() noexcept;
+void PlayerTwoOut(int seat) noexcept;
 
-/// Player 2's member was destroyed (a retry or checkpoint reload rebuilt the party): forgotten,
-/// with nothing written to it.
-void MemberDestroyed() noexcept;
+/// `seat`'s member was destroyed (a retry or checkpoint reload rebuilt the party): forgotten, with
+/// nothing written to it.
+void MemberDestroyed(int seat) noexcept;
 
 }  // namespace lss::player_two::camera_override

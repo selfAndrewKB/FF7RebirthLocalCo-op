@@ -165,7 +165,7 @@ void TickInScopes(int seat, void* controller, void* member, void* state, int typ
     const scope_leaks::MemberTickScope leaks(state, controller, deltaTime);
     counters.Act();
     // Before the tick, inside every scope (the seat's camera manager is the primary one here):
-    camera_override::Tick(member);         // the member's animation camera overrides reach the seat's camera
+    camera_override::Tick(seat, member);   // the member's animation camera overrides reach the seat's camera
     if (playerTwo)
     {
         lock_on::AfterBattle();                // out of battle, player 2's lock ends
