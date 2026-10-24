@@ -218,7 +218,7 @@ void Seat::Join() noexcept
     players::LocalPlayers::Added added;
     own_controller::Report       report;
     {
-        const own_controller::JoinScope scope(one.controller);
+        const own_controller::JoinScope scope(one.controller, seat_);
         added  = players_.Add(one.controller);
         report = scope.Result();
     }

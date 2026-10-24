@@ -245,18 +245,19 @@ void Settle(int seat, void* two)
 
 /// The component constructor, inside the AEndPlayerController constructor. For the controller a join's CreatePlayer
 /// constructs (a seat's), the component takes the seat's manager before BeginPlay, which then registers it there and
-/// sets its Vibration flag, as it does for player 1's on the game's manager. The joining seat is player 2's: the join
-/// does not name its seat here yet (own_controller's JoinScope holds player 1's controller only).
+/// sets its Vibration flag, as it does for player 1's on the game's manager. The seat is the one the join names
+/// (own_controller::JoiningSeat); a join of no seat's (the mirror view) keeps the game's manager.
 void* CompCtor(void* component, void* owner) noexcept
 {
-    static_assert(players::kSeatsBuilt == 1, "ffb_manager_two's CompCtor gives the controller a join constructs "
-                                             "player 2's manager: the join must name its seat (own_controller's "
-                                             "JoinScope) before seat 2 is built");
-    constexpr int seat     = players::kPlayerTwoSeat;
-    SeatManager&  record   = g_seats[seat];
-    void* const   result   = reinterpret_cast<CompCtorFn>(g_compCtorCall.Original())(component, owner);
-    void* const   one      = own_controller::JoiningPlayerOne();
-    if (one == nullptr || owner == one || record.failed || !generation::OnGameThread())
+    void* const result = reinterpret_cast<CompCtorFn>(g_compCtorCall.Original())(component, owner);
+    void* const one    = own_controller::JoiningPlayerOne();
+    const int   seat   = own_controller::JoiningSeat();
+    if (one == nullptr || owner == one || !players::SeatBuilt(seat) || !generation::OnGameThread())
+    {
+        return result;
+    }
+    SeatManager& record = g_seats[seat];
+    if (record.failed)
     {
         return result;
     }

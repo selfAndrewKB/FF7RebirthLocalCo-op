@@ -9,6 +9,7 @@
 #include "platform/vtable_entry.h"
 #include "player_two/camera/camera_override.h"
 #include "player_two/object_fields.h"
+#include "players/seats.h"
 
 #include <atomic>
 #include <cstdint>
@@ -30,6 +31,7 @@ std::uintptr_t        g_cameraManagerVTable    = 0;
 
 // Game thread: set by JoinScope for the length of CreatePlayer; the spawn runs inside it.
 std::atomic<void*> g_joiningPlayerOne{nullptr};
+std::atomic<int>   g_joiningSeat{kNoSeat};
 Report             g_report{};
 
 /// Fills PCOwner from Owner when it is still null. The owner must be an End player controller
@@ -64,7 +66,9 @@ void BeginPlayWithGeneratedNames(void* cameraManager)  // not noexcept: the exce
     {
         *g_endCameraName = facts::kNameNone;
         *g_compositeName = facts::kNameNone;
-        camera_override::BeginPlayWithOwnModule(g_engineBeginPlay, cameraManager);  // its own NotifyOverride module
+        // Its own NotifyOverride module, kept for the joining seat only.
+        camera_override::BeginPlayWithOwnModule(g_joiningSeat.load(std::memory_order_relaxed), g_engineBeginPlay,
+                                                cameraManager);
     }
     __finally
     {
@@ -140,15 +144,28 @@ void* JoiningPlayerOne() noexcept
     return g_joiningPlayerOne.load(std::memory_order_relaxed);
 }
 
-JoinScope::JoinScope(void* playerOneController) noexcept
+int JoiningSeat() noexcept
 {
+    return g_joiningSeat.load(std::memory_order_relaxed);
+}
+
+JoinScope::JoinScope(void* playerOneController, int seat) noexcept
+{
+    if (seat != kNoSeat && !players::SeatBuilt(seat))
+    {
+        // It would get a mirror view's treatment: no camera module of its own, the game's force-feedback manager.
+        platform::LogWarning(L"own controller: a join names seat {}, which is not built; its player gets nothing of a "
+                             L"seat's", seat);
+    }
     g_report = {};
+    g_joiningSeat.store(seat, std::memory_order_relaxed);
     g_joiningPlayerOne.store(playerOneController, std::memory_order_relaxed);
 }
 
 JoinScope::~JoinScope()
 {
     g_joiningPlayerOne.store(nullptr, std::memory_order_relaxed);
+    g_joiningSeat.store(kNoSeat, std::memory_order_relaxed);
 }
 
 Report JoinScope::Result() const noexcept

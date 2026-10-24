@@ -379,18 +379,20 @@ bool Install(const platform::GameImage& image) noexcept
 
 void BeginPlayWithOwnModule(int seat, void (*engineBeginPlay)(void*), void* cameraManager)
 {
-    if (!g_installed || !players::SeatBuilt(seat))
+    if (!g_installed)
     {
         engineBeginPlay(cameraManager);
         return;
     }
-    Pair& module = g_seatModule[Index(seat)];
-    if (module.controller != 0)
+    const bool seated = players::SeatBuilt(seat);
+    if (seated && g_seatModule[Index(seat)].controller != 0)
     {
-        ReleaseGuarded(module.controller);  // a module left from an earlier join
-        module = {};
+        ReleaseGuarded(g_seatModule[Index(seat)].controller);  // a module left from an earlier join
+        g_seatModule[Index(seat)] = {};
     }
     const Pair saved = *g_global;
+    Pair       built;  // what the joining camera's operators wrote to the global (trivially destructible: SEH allows it)
+    bool       own   = false;
     *g_global        = {};
     __try
     {
@@ -398,23 +400,30 @@ void BeginPlayWithOwnModule(int seat, void (*engineBeginPlay)(void*), void* came
     }
     __finally
     {
-        // The seat's operators built their own module and wrote it to the global: it is the seat's
-        // now (with the weak reference the global took), and player 1's goes back.
-        const Pair built = *g_global;
-        *g_global        = saved;
-        const bool own   = built.object != 0 && ReadAt<std::uintptr_t>(built.object) == g_moduleVTable;
-        if (own)
+        // The joining camera's operators built their own module and wrote it to the global: it is the seat's now
+        // (with the weak reference the global took), and player 1's goes back. For a camera of no seat's the mod
+        // drops the global's weak reference: the module lives on with the operators that hold it.
+        built     = *g_global;
+        *g_global = saved;
+        own       = built.object != 0 && ReadAt<std::uintptr_t>(built.object) == g_moduleVTable;
+        if (seated && own)
         {
-            module = built;
+            g_seatModule[Index(seat)] = built;
         }
         else if (built.controller != 0)
         {
             ReleaseGuarded(built.controller);
         }
     }
+    if (!seated)
+    {
+        platform::LogDebug(L"camera override: a camera of no seat's (the mirror view) built NotifyOverride module {:#x} "
+                           L"({}); the mod keeps no reference to it, player 1's {:#x} is the global again",
+                           built.object, own ? L"the module's own class" : L"not the module's class", saved.object);
+        return;
+    }
     platform::Log(L"camera override: {}'s camera {} its own NotifyOverride module {:#x} (player 1's {:#x})",
-                  players::SeatName(seat), module.object != 0 ? L"built" : L"did NOT build", module.object,
-                  saved.object);
+                  players::SeatName(seat), own ? L"built" : L"did NOT build", built.object, saved.object);
 }
 
 void Tick(int seat, void* member) noexcept

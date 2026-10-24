@@ -120,7 +120,7 @@ bool Add() noexcept
     players::LocalPlayers::Added     added;
     player_two::own_controller::Report report;
     {
-        const player_two::own_controller::JoinScope scope(playerOne);
+        const player_two::own_controller::JoinScope scope(playerOne, player_two::own_controller::kNoSeat);
         added  = g_players->Add(static_cast<UObject*>(playerOne));
         report = scope.Result();
     }

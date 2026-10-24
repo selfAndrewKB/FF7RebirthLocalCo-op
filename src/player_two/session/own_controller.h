@@ -40,7 +40,7 @@ bool Ready() noexcept;
 /// expected to share it, and this checks it on the running game before a join relies on it.
 bool UsesNativeClasses(const void* playerOneController) noexcept;
 
-/// What the replacement did for the most recent player-2 camera manager.
+/// What the replacement did for the most recent joining camera manager (a seat's or a mirror view's).
 struct Report
 {
     void* cameraManager = nullptr;
@@ -49,15 +49,22 @@ struct Report
     bool  namesSwapped  = false;
 };
 
-/// Game thread: player 1's controller while a join's CreatePlayer runs (player 2's controller is constructed inside
+/// Game thread: player 1's controller while a join's CreatePlayer runs (the joining controller is constructed inside
 /// it), else null.
 void* JoiningPlayerOne() noexcept;
 
-/// Marks a join as under way for its lifetime: only then does the replacement act.
+/// The local player a join under way creates: a seat (players/seats.h), or kNoSeat for a local player of no seat's
+/// (the mirror view, views/mirror_player.h). kNoSeat outside a join. Whatever a join builds for its player (the
+/// camera's NotifyOverride module, the force-feedback manager) goes to this seat only.
+inline constexpr int kNoSeat = -1;
+int JoiningSeat() noexcept;
+
+/// Marks a join as under way for its lifetime: only then does the replacement act. `seat`: whose local player the
+/// join creates (kNoSeat for the mirror view's). Not nested: the destructor sets kNoSeat back.
 class JoinScope
 {
 public:
-    explicit JoinScope(void* playerOneController) noexcept;
+    JoinScope(void* playerOneController, int seat) noexcept;
     ~JoinScope();
     JoinScope(const JoinScope&)            = delete;
     JoinScope& operator=(const JoinScope&) = delete;

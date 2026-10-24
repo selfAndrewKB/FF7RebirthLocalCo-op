@@ -33,18 +33,11 @@ namespace lss::player_two::camera_override {
 
 bool Install(const platform::GameImage& image) noexcept;
 
-/// Runs the engine's camera-manager BeginPlay for `seat`'s camera manager (the seat joining) so that it
-/// builds its own NotifyOverride module (Step A).
+/// Runs the engine's camera-manager BeginPlay for the camera manager a join creates (`seat`: the seat joining, as
+/// player_two/own_controller's join scope names it) so that it builds its own NotifyOverride module (Step A). A local
+/// player that is no built seat's (the mirror view, views/mirror_player.h) gets the same hidden global and the module
+/// its operators built is released: it plays no character, and player 1's global stays player 1's.
 void BeginPlayWithOwnModule(int seat, void (*engineBeginPlay)(void*), void* cameraManager);
-
-/// Player 2's, as player_two/own_controller calls it inside its own wrapper: its join scope does not name the joining
-/// seat yet (the session's step).
-inline void BeginPlayWithOwnModule(void (*engineBeginPlay)(void*), void* cameraManager)
-{
-    static_assert(players::kSeatsBuilt == 1, "own_controller's join scope names no seat: before seat 2 is built it "
-                                             "passes the joining seat to BeginPlayWithOwnModule(seat, ...)");
-    BeginPlayWithOwnModule(players::kPlayerTwoSeat, engineBeginPlay, cameraManager);
-}
 
 /// Once per frame while `seat`'s player plays: the seat's member's delegates on the thunks (Step B); logs.
 void Tick(int seat, void* member) noexcept;
