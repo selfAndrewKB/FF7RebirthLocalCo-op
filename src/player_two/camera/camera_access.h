@@ -2,11 +2,14 @@
 
 // The lookups every camera module makes, once: a controller's End camera manager (checked by vtable and by its
 // owner field naming the controller back), its Field and Battle operators (checked by vtable), the module in a slot
-// of an operator's module table (TSharedPtr entries, 16 bytes each), which player's camera manager an operator
-// belongs to, and both players' operators of one kind for the mirrors (player_two/camera/field_camera.h,
-// player_two/battle/battle_camera.h, camera_distance.h). The facts are facts/cameras.h; the vtables are rebased
-// once at install.
+// of an operator's module table (TSharedPtr entries, 16 bytes each), which seat's camera manager an operator or a
+// camera manager is (players/seats.h: 0 player 1, then the seats), and player 1's and a seat's operators of one kind
+// for the mirrors (player_two/camera/field_camera.h, player_two/battle/battle_camera.h, camera_distance.h). The facts
+// are facts/cameras.h; the vtables are rebased once at install. Nothing here is kept per seat: every seat lookup reads
+// the controllers' fields as they stand (player_two/generation.h).
 // Game thread, or any thread for the pure pointer walks (every read is guarded).
+
+#include "players/seats.h"
 
 #include <cstdint>
 #include <optional>
@@ -32,11 +35,40 @@ void* BattleOperatorOf(const void* cameraManager) noexcept;
 /// The module in `slot` of an operator's module table, or null (no operator, no table, an empty slot).
 const void* ModuleAt(const void* op, std::uint32_t slot) noexcept;
 
-/// Which player's camera manager owns `op` as its Field or Battle operator: 0 player 1, 1 player 2 (while player 2 is
-/// in), -1 neither. By the controllers' camera-manager fields as they stand (needs no Install).
-int PlayerOfOperator(const void* op) noexcept;
+/// The seat whose entry in `owners` (indexed by the seat, 0 player 1's) is `object`, or -1; a null object or entry
+/// never matches. Pure: the seat lookups below fill `owners` from the controllers.
+constexpr int SeatIn(const void* const (&owners)[players::kMaxPlayers], const void* object) noexcept
+{
+    if (object == nullptr)
+    {
+        return -1;
+    }
+    for (int seat = 0; seat < players::kMaxPlayers; ++seat)
+    {
+        if (owners[seat] == object)
+        {
+            return seat;
+        }
+    }
+    return -1;
+}
 
-/// Player 1's and player 2's operators of one kind.
+/// Which seat's camera manager `cameraManager` is: 0 player 1's, a built seat's while its generation is active, -1
+/// none. By the controllers' camera-manager fields as they stand (needs no Install).
+int SeatOfCameraManager(const void* cameraManager) noexcept;
+
+/// Which seat's camera manager owns `op` as its Field or Battle operator: 0 player 1's, a built seat's while its
+/// generation is active, -1 none. By the controllers' camera-manager fields as they stand (needs no Install).
+int SeatOfOperator(const void* op) noexcept;
+
+/// SeatOfOperator under its old name (a seat's number is its player's index: 0 player 1, 1 player 2), for the
+/// per-column modules not yet converted (shoulder_scale, plan/seats.md step 5).
+inline int PlayerOfOperator(const void* op) noexcept
+{
+    return SeatOfOperator(op);
+}
+
+/// Player 1's operator and one seat's, of one kind. `two` is the seat's (the name kept from the two-player mod).
 struct OperatorPair
 {
     void* one;
@@ -45,8 +77,15 @@ struct OperatorPair
 
 using OperatorOf = void* (*)(const void* cameraManager) noexcept;
 
-/// Both players' operators (`operatorOf`: FieldOperatorOf or BattleOperatorOf), while player 2 holds a party member
-/// and the two are distinct; empty otherwise (a mirror then leaves the engine's call alone). Game thread.
-std::optional<OperatorPair> CurrentPair(OperatorOf operatorOf) noexcept;
+/// Player 1's and `seat`'s operators (`operatorOf`: FieldOperatorOf or BattleOperatorOf), while the seat's generation
+/// is active, its player holds a party member and the two are distinct; empty otherwise (a mirror then leaves the
+/// engine's call alone for that seat). Game thread.
+std::optional<OperatorPair> CurrentPair(int seat, OperatorOf operatorOf) noexcept;
+
+/// Player 2's pair, for the modules not yet per seat (battle_camera).
+inline std::optional<OperatorPair> CurrentPair(OperatorOf operatorOf) noexcept
+{
+    return CurrentPair(players::kPlayerTwoSeat, operatorOf);
+}
 
 }  // namespace lss::player_two::camera_access

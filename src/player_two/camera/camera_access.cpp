@@ -71,35 +71,57 @@ const void* ModuleAt(const void* op, std::uint32_t slot) noexcept
     return modules != nullptr ? ReadPointer(modules, slot * kModuleEntry) : nullptr;
 }
 
-int PlayerOfOperator(const void* op) noexcept
+namespace {
+
+/// Each seat's camera manager as its controller's field stands (no vtable check: a caller may ask before any
+/// install): player 1's, then each built seat's while its generation is active; null elsewhere.
+void CameraManagers(const void* (&managers)[players::kMaxPlayers]) noexcept
+{
+    for (int seat = 0; seat < players::kMaxPlayers; ++seat)
+    {
+        const bool counted = seat == 0 || (players::SeatBuilt(seat) && generation::Active(seat));
+        managers[seat] = counted ? ReadPointer(generation::ControllerOf(seat), facts::kControllerCameraManager) : nullptr;
+    }
+}
+
+}  // namespace
+
+int SeatOfCameraManager(const void* cameraManager) noexcept
+{
+    const void* managers[players::kMaxPlayers] = {};
+    CameraManagers(managers);
+    return SeatIn(managers, cameraManager);
+}
+
+int SeatOfOperator(const void* op) noexcept
 {
     if (op == nullptr)
     {
         return -1;
     }
-    // The controller's camera manager as it stands (no vtable check: a caller may ask before any install).
-    const void* const controllers[2] = {generation::PlayerOneController(),
-                                        generation::Active() ? generation::PlayerTwoController() : nullptr};
-    for (int p = 0; p < 2; ++p)
+    const void* managers[players::kMaxPlayers] = {};
+    CameraManagers(managers);
+    for (int seat = 0; seat < players::kMaxPlayers; ++seat)
     {
-        const void* pcm = ReadPointer(controllers[p], facts::kControllerCameraManager);
+        const void* pcm = managers[seat];
         if (pcm != nullptr && (ReadPointer(pcm, facts::kCameraManagerFieldOperator) == op ||
                                ReadPointer(pcm, facts::kCameraManagerBattleOperator) == op))
         {
-            return p;
+            return seat;
         }
     }
     return -1;
 }
 
-std::optional<OperatorPair> CurrentPair(OperatorOf operatorOf) noexcept
+std::optional<OperatorPair> CurrentPair(int seat, OperatorOf operatorOf) noexcept
 {
-    if (!generation::OnGameThread() || !generation::Active() || generation::Member() == nullptr)
+    if (!players::SeatBuilt(seat) || !generation::OnGameThread() || !generation::Active(seat) ||
+        generation::MemberOf(seat) == nullptr)
     {
         return std::nullopt;
     }
-    void* one = operatorOf(CameraManagerOf(generation::PlayerOneController()));
-    void* two = operatorOf(CameraManagerOf(generation::PlayerTwoController()));
+    void* one = operatorOf(CameraManagerOf(generation::ControllerOf(0)));
+    void* two = operatorOf(CameraManagerOf(generation::ControllerOf(seat)));
     if (one == nullptr || two == nullptr || one == two)
     {
         return std::nullopt;
