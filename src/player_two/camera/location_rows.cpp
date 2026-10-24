@@ -17,6 +17,7 @@
 #include "players/unreal_access.h"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <format>
@@ -71,35 +72,41 @@ platform::VTableEntry g_listener;
 platform::VTableEntry g_navTick;
 bool                  g_volumes = false;  // the volume walk's checks passed (player_two/camera/location_volumes.h)
 
-/// Player 2's location as player 2's own camera holds it.
+/// A seat's location as its own camera holds it.
 struct Location
 {
     const void*   volume   = nullptr;
     std::uint64_t location = 0;
     std::uint64_t row      = 0;
 };
-Location g_playerTwo;  // game thread
+std::array<Location, players::kMaxPlayers> g_seatLocation{};  // game thread, by seat; index 0 unused
 
 // Bumped by the engine's callbacks (the listener broadcast, the nav-area tick) and read by Poll on the game thread:
-// atomic, should a callback ever run on another thread.
+// atomic, should a callback ever run on another thread. The counts a seat owns are kept per seat (index 0: player 1's
+// nav-area ticks); the others in index 0.
 enum Count
 {
-    kForwarded,
-    kWithheld,
-    kTicksOne,
-    kTicksTwo,
-    kTicksOther,
-    kScoped,
-    kRefused,
+    kForwarded,   // [0]
+    kWithheld,    // per seat
+    kTicks,       // per seat, [0] player 1's
+    kTicksOther,  // [0]
+    kScoped,      // per seat
+    kRefused,     // per seat
     kCountKinds
 };
-std::atomic<unsigned> g_counts[kCountKinds];
-unsigned              g_logged[kCountKinds] = {};
+constexpr int kCountSlots = kCountKinds * players::kMaxPlayers;
+std::atomic<unsigned> g_counts[kCountSlots];
+unsigned              g_logged[kCountSlots] = {};
 ULONGLONG             g_nextPoll            = 0;
 
-void Bump(Count count) noexcept
+constexpr int Slot(Count count, int seat = 0) noexcept
 {
-    g_counts[count].fetch_add(1, std::memory_order_relaxed);
+    return count * players::kMaxPlayers + seat;
+}
+
+void Bump(Count count, int seat = 0) noexcept
+{
+    g_counts[Slot(count, seat)].fetch_add(1, std::memory_order_relaxed);
 }
 
 void Line(const std::wstring& text) noexcept
@@ -112,18 +119,15 @@ void* CameraManager(void* controller) noexcept
     return ReadPointer(controller, facts::kControllerCameraManager);
 }
 
-/// "player N's Field/Battle", or "another" for an operator of neither camera manager.
-std::wstring OperatorText(const void* op, bool& playerTwo) noexcept
+/// "player N's Field/Battle", or "another" for an operator of no player's camera manager.
+std::wstring OperatorText(const void* op, int seat)
 {
-    const int p = camera_access::PlayerOfOperator(op);
-    playerTwo   = p == 1;
-    if (p < 0)
+    if (seat < 0)
     {
         return L"another";
     }
-    void* const controller = p == 1 ? generation::PlayerTwoController() : generation::PlayerOneController();
-    const bool  field      = ReadPointer(CameraManager(controller), facts::kCameraManagerFieldOperator) == op;
-    return std::format(L"player {}'s {}", p + 1, field ? L"Field" : L"Battle");
+    const bool field = ReadPointer(CameraManager(generation::ControllerOf(seat)), facts::kCameraManagerFieldOperator) == op;
+    return std::format(L"{}'s {}", players::SeatName(seat), field ? L"Field" : L"Battle");
 }
 
 /// The row arrives as an FName value (seen live: 0x90A03F, 0x101738), not a pointer to one.
@@ -135,49 +139,60 @@ std::wstring RowText(std::uintptr_t row)
 /// Replaces the listeners' slot 2.
 std::uintptr_t Forward(void* listener, std::uintptr_t location, std::uintptr_t row, std::uintptr_t enter) noexcept
 {
-    bool        playerTwo = false;
-    const void* op        = ReadPointer(listener, kListenerOperator);
+    const void* op     = ReadPointer(listener, kListenerOperator);
+    const int   seat   = camera_access::SeatOfOperator(op);
+    const bool  aSeats = players::SeatBuilt(seat);
     try
     {
-        const std::wstring who = OperatorText(op, playerTwo);
+        const std::wstring who = OperatorText(op, seat);
         Line(std::format(L"{} row {} for {} operator: {}", (enter & 0xFF) != 0 ? L"enter" : L"leave", RowText(row), who,
-                         playerTwo ? L"withheld (player 1's location, not player 2's)" : L"forwarded"));
+                         aSeats ? std::format(L"withheld (player 1's location, not {}'s)", players::SeatName(seat))
+                                : std::wstring(L"forwarded")));
     }
     catch (...)
     {
     }
-    if (playerTwo)
+    if (aSeats)
     {
-        Bump(kWithheld);
+        Bump(kWithheld, seat);
         return 0;
     }
     Bump(kForwarded);
     return reinterpret_cast<ForwardFn>(g_listener.Original())(listener, location, row, enter);
 }
 
-/// Replaces the nav-area component's tick: player 2's controller's runs as the primary player's.
+/// Replaces the nav-area component's tick: a seat's controller's runs as the primary player's.
 void NavAreaTick(void* component, float deltaTime, std::uintptr_t tickType, void* tickFunction) noexcept
 {
     const auto  original   = reinterpret_cast<TickFn>(g_navTick.Original());
     const void* controller = ReadPointer(component, kNavAreaController);
-    if (generation::Active() && controller != nullptr && controller == generation::PlayerTwoController())
+    const int   seat       = generation::SeatOfController(controller);
+    if (players::SeatBuilt(seat) && generation::Active(seat))
     {
-        Bump(kTicksTwo);
-        const primary_controller::Scope scope(players::kPlayerTwoSeat);
-        Bump(scope.Held() ? kScoped : kRefused);  // refused: still the game's tick, with the game's primary player
+        Bump(kTicks, seat);
+        const primary_controller::Scope scope(seat);
+        Bump(scope.Held() ? kScoped : kRefused, seat);  // refused: still the game's tick, with the game's primary player
         original(component, deltaTime, tickType, tickFunction);
         return;
     }
-    Bump(controller != nullptr && controller == generation::PlayerOneController() ? kTicksOne : kTicksOther);
+    if (controller != nullptr && controller == generation::ControllerOf(0))
+    {
+        Bump(kTicks, 0);
+    }
+    else
+    {
+        Bump(kTicksOther);
+    }
     original(component, deltaTime, tickType, tickFunction);
 }
 
 /// The camera-row pick over the walk's volumes.
 struct Pick
 {
-    const float* position;
-    Location     best;
-    std::uint8_t bestPriority = 0xFF;
+    const float*    position;
+    const Location* current;  // the seat's location as its camera holds it
+    Location        best;
+    std::uint8_t    bestPriority = 0xFF;
 };
 
 void Visit(void* context, const location_volumes::Volume& volume) noexcept
@@ -195,9 +210,9 @@ void Visit(void* context, const location_volumes::Volume& volume) noexcept
     {
         return;
     }
-    // The volume player 2 is in, matched by its LocationId as well as its address: a streamed-in volume may reuse
+    // The volume the seat is in, matched by its LocationId as well as its address: a streamed-in volume may reuse
     // a streamed-out one's address.
-    const bool current = volume.volume == g_playerTwo.volume && here.location == g_playerTwo.location;
+    const bool current = volume.volume == pick->current->volume && here.location == pick->current->location;
     if (!current || !Read(volume.volume, kVolumeUntouchMargin, margin))
     {
         margin = 0.0f;
@@ -213,23 +228,64 @@ void Visit(void* context, const location_volumes::Volume& volume) noexcept
     pick->bestPriority = priority;
 }
 
-/// The volume player 2's character is in, by the game's own test and rules: a volume that changes the camera and
-/// is not disabled; strictly inside to enter, within its UntouchMargin to stay in the current one; the lowest
+/// The volume a seat's character is in, by the game's own test and rules: a volume that changes the camera and
+/// is not disabled; strictly inside to enter, within its UntouchMargin to stay in `current`; the lowest
 /// CameraSettingPriority wins. Empty if the manager is busy or unreadable (then nothing changes this tick).
-std::optional<Location> PlayerTwoLocation(const float (&position)[3]) noexcept
+std::optional<Location> SeatLocation(const float (&position)[3], const Location& current) noexcept
 {
-    Pick                    pick{&position[0]};
+    Pick                    pick{&position[0], &current};
     location_volumes::Reads reads;
     const auto result = location_volumes::WalkVolumes(false, &Visit, &pick, reads);
     return result == location_volumes::WalkResult::Done ? std::optional<Location>(pick.best) : std::nullopt;
 }
 
-/// Calls one of player 2's operators' own location functions (vtable slot).
+/// Calls one of a seat's operators' own location functions (vtable slot).
 bool CallOperator(void* op, std::uint32_t slot, std::uint64_t location, std::uint64_t row) noexcept
 {
     void* vtable = ReadPointer(op, 0);
     void* fn     = ReadPointer(vtable, slot);
     return fn != nullptr && platform::CallGuarded(reinterpret_cast<LocationFn>(fn), op, location, row);
+}
+
+/// One seat's camera follows the location volume its character is in.
+void TickSeat(int seat) noexcept
+{
+    Location& held = g_seatLocation[static_cast<std::size_t>(seat)];
+    void*     pcm  = generation::Active(seat) ? CameraManager(generation::ControllerOf(seat)) : nullptr;
+    float     position[3]{};
+    if (pcm == nullptr || !players::unreal::ActorLocation(generation::MemberOf(seat), position))
+    {
+        held = {};  // the seat's player out (its operators go with its camera manager) or no member yet
+        return;
+    }
+    const auto now = SeatLocation(position, held);
+    if (!now || (now->volume == held.volume && now->location == held.location && now->row == held.row))
+    {
+        return;
+    }
+    void* const ops[2] = {ReadPointer(pcm, facts::kCameraManagerFieldOperator),
+                          ReadPointer(pcm, kCameraManagerBattleOperator)};
+    bool        ok     = true;
+    for (void* op : ops)
+    {
+        ok = op != nullptr && (now->volume != nullptr ? CallOperator(op, kOpSetLocation, now->location, now->row)
+                                                      : CallOperator(op, kOpClearLocation, held.location, held.row)) &&
+             ok;
+    }
+    try
+    {
+        const wchar_t* name = players::SeatName(seat);
+        Line(now->volume != nullptr
+                 ? std::format(L"{}'s character is in a camera location volume: row {} to {}'s camera{}", name,
+                               RowText(now->row), name, ok ? L"" : L" (FAILED for an operator)")
+                 : std::format(L"{}'s character left its camera location volume: row {} cleared from {}'s "
+                               L"camera{}",
+                               name, RowText(held.row), name, ok ? L"" : L" (FAILED for an operator)"));
+    }
+    catch (...)
+    {
+    }
+    held = *now;
 }
 
 }  // namespace
@@ -240,41 +296,10 @@ void Tick() noexcept
     {
         return;
     }
-    void* pcm = generation::Active() ? CameraManager(generation::PlayerTwoController()) : nullptr;
-    float position[3]{};
-    if (pcm == nullptr || !players::unreal::ActorLocation(generation::Member(), position))
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        g_playerTwo = {};  // player 2 out (its operators go with its camera manager) or no member yet
-        return;
+        TickSeat(seat);
     }
-    const auto now = PlayerTwoLocation(position);
-    if (!now ||
-        (now->volume == g_playerTwo.volume && now->location == g_playerTwo.location && now->row == g_playerTwo.row))
-    {
-        return;
-    }
-    void* const ops[2] = {ReadPointer(pcm, facts::kCameraManagerFieldOperator),
-                          ReadPointer(pcm, kCameraManagerBattleOperator)};
-    bool        ok     = true;
-    for (void* op : ops)
-    {
-        ok = op != nullptr && (now->volume != nullptr ? CallOperator(op, kOpSetLocation, now->location, now->row)
-                                                      : CallOperator(op, kOpClearLocation, g_playerTwo.location, g_playerTwo.row)) &&
-             ok;
-    }
-    try
-    {
-        Line(now->volume != nullptr
-                 ? std::format(L"player 2's character is in a camera location volume: row {} to player 2's camera{}",
-                               RowText(now->row), ok ? L"" : L" (FAILED for an operator)")
-                 : std::format(L"player 2's character left its camera location volume: row {} cleared from player 2's "
-                               L"camera{}",
-                               RowText(g_playerTwo.row), ok ? L"" : L" (FAILED for an operator)"));
-    }
-    catch (...)
-    {
-    }
-    g_playerTwo = *now;
 }
 
 bool Install(const platform::GameImage& image) noexcept
@@ -312,15 +337,20 @@ void Poll() noexcept
     {
         return;
     }
-    unsigned counts[kCountKinds];
-    for (int i = 0; i < kCountKinds; ++i)
+    unsigned counts[kCountSlots];
+    for (int i = 0; i < kCountSlots; ++i)
     {
         counts[i] = g_counts[i].load(std::memory_order_relaxed);
     }
-    // The nav-area ticks run every frame: a line for a forwarded, withheld or refused call, or when player 2's
+    // The nav-area ticks run every frame: a line for a forwarded, withheld or refused call, or when a seat's
     // component starts ticking, not for the frame counts alone.
-    const bool changed = counts[kForwarded] != g_logged[kForwarded] || counts[kWithheld] != g_logged[kWithheld] ||
-                         counts[kRefused] != g_logged[kRefused] || ((counts[kTicksTwo] != 0) != (g_logged[kTicksTwo] != 0));
+    bool changed = counts[Slot(kForwarded)] != g_logged[Slot(kForwarded)];
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        changed = changed || counts[Slot(kWithheld, seat)] != g_logged[Slot(kWithheld, seat)] ||
+                  counts[Slot(kRefused, seat)] != g_logged[Slot(kRefused, seat)] ||
+                  ((counts[Slot(kTicks, seat)] != 0) != (g_logged[Slot(kTicks, seat)] != 0));
+    }
     if (!changed)
     {
         return;
@@ -329,10 +359,16 @@ void Poll() noexcept
     std::copy(std::begin(counts), std::end(counts), std::begin(g_logged));
     try
     {
-        platform::Log(L"location rows: so far {} forwarded, {} withheld from player 2; nav-area ticks: player 1's {}, "
-                      L"player 2's {} ({} as the primary player, {} refused), other {}",
-                      counts[kForwarded], counts[kWithheld], counts[kTicksOne], counts[kTicksTwo], counts[kScoped],
-                      counts[kRefused], counts[kTicksOther]);
+        std::wstring withheld, ticks;  // per built seat, as the line named player 2 alone
+        for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+        {
+            const wchar_t* name = players::SeatName(seat);
+            withheld += std::format(L"{}{} withheld from {}", seat > 1 ? L", " : L"", counts[Slot(kWithheld, seat)], name);
+            ticks += std::format(L"{}'s {} ({} as the primary player, {} refused), ", name, counts[Slot(kTicks, seat)],
+                                 counts[Slot(kScoped, seat)], counts[Slot(kRefused, seat)]);
+        }
+        platform::Log(L"location rows: so far {} forwarded, {}; nav-area ticks: player 1's {}, {}other {}",
+                      counts[Slot(kForwarded)], withheld, counts[Slot(kTicks, 0)], ticks, counts[Slot(kTicksOther)]);
     }
     catch (...)
     {
