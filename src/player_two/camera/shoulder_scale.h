@@ -17,6 +17,9 @@
 // Game thread; only while the split is shown.
 
 #include "platform/dev_switch.h"
+#include "players/seats.h"
+
+#include <array>
 
 namespace lss::platform {
 class GameImage;
@@ -36,9 +39,9 @@ bool On() noexcept;
 void SetMinimum(float minimum) noexcept;
 float Minimum() noexcept;
 
-/// Each engine tick: the halves' width ratios against the camera's (views::SplitWidthRatio, player 1's and player
-/// 2's), kept for the finalizer; a line when a player's factor changes.
-void Poll(bool splitShown, float ratioOne, float ratioTwo) noexcept;
+/// Each engine tick: each player's view width ratio against its camera's (views::SplitWidthRatio, by seat), kept for
+/// the finalizer; a line when a player's factor changes.
+void Poll(bool splitShown, const std::array<float, players::kMaxPlayers>& ratios) noexcept;
 
 #if LSS_DEV
 /// The `shoulder-scale` and `shoulder-scale-min` commands and readings. May throw (out of memory).

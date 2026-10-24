@@ -1,4 +1,4 @@
-# Three equal 2560x1440 columns across the three-monitor row (no Surround): player 2 joins, third view on,
+# Three equal 2560x1440 columns across the three-monitor row (no Surround): player 2 joins, three columns held (the mirror view in the third),
 # the window set to 7680x1440 windowed by the game's own console path; the span itself comes from outside
 # (span_window.ps1) right after, as Resize Raccoon would.
 note span: begin
@@ -7,6 +7,6 @@ join
 wait-until p2.state == playing 1800
 layout side-by-side
 split-fov native
-third-view on
+view-columns 3
 console r.SetRes 7680x1440w
 note span: window 7680x1440 requested, spanning from outside next

@@ -42,10 +42,10 @@ PlayerIntent JoinKeys::Poll() noexcept
     const bool sticks = Pressed(active && IsDown(VK_F9), sticksWasDown_);
     const bool centre = Pressed(active && IsDown(VK_F10), centreWasDown_);
     const bool detail = Pressed(active && IsDown(VK_F11), detailWasDown_);
-    const bool third  = Pressed(active && IsDown(VK_F3), thirdWasDown_);
+    const bool monitors = Pressed(active && IsDown(VK_F3), monitorsWasDown_);
     const bool span   = Pressed(active && IsDown(VK_F2), spanWasDown_);
 
-    return ResolveIntent(join, leave, camera, layout, fill, sticks, centre, detail, third, span);
+    return ResolveIntent(join, leave, camera, layout, fill, sticks, centre, detail, monitors, span);
 }
 
 }  // namespace lss::players

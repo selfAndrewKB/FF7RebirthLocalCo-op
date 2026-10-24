@@ -27,7 +27,7 @@ void TestIntents()
     EXPECT(ResolveIntent(false, false, false, false, false, true, true, true, true, true) == PlayerIntent::TogglePadSticks);
     EXPECT(ResolveIntent(false, false, false, false, false, false, true, true, true, true) == PlayerIntent::ToggleNpcCentre);
     EXPECT(ResolveIntent(false, false, false, false, false, false, false, true, true, true) == PlayerIntent::ToggleNpcDetail);
-    EXPECT(ResolveIntent(false, false, false, false, false, false, false, false, true, true) == PlayerIntent::ToggleThirdView);
+    EXPECT(ResolveIntent(false, false, false, false, false, false, false, false, true, true) == PlayerIntent::ToggleMonitorMode);
     EXPECT(ResolveIntent(false, false, false, false, false, false, false, false, false, true) == PlayerIntent::ToggleWindowSpan);
 }
 

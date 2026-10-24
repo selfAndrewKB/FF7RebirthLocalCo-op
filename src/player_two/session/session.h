@@ -75,6 +75,10 @@ struct SessionStages
     bool viewTarget     = false;
     bool memberMovement = false;
     bool partyEvents    = false;
+    // Not a stage: set by mod.cpp (Session::SetClearMirrors). Takes the mirror views out of the engine's list right
+    // before a seat's CreatePlayer, so the seat lands in the column after the players in (views/mirror_player.h;
+    // they come back on the same tick); true when none is listed.
+    bool (*clearMirrors)() noexcept = nullptr;
 };
 
 /// One seat's player: its local player, its member, its leave, and its wait outside the game.
@@ -258,6 +262,9 @@ public:
     /// Player 1 rides a vehicle the whole party shares, each tick: every seat stands aside together.
     void SetSharedRide(bool on) noexcept;
 
+    /// What every seat's join calls right before its CreatePlayer (SessionStages::clearMirrors). Once, at startup.
+    void SetClearMirrors(bool (*clearMirrors)() noexcept) noexcept { installed_.clearMirrors = clearMirrors; }
+
     bool          In(int seat) const noexcept;
     bool          AnyIn() const noexcept;
     bool          AwaitingMember(int seat) const noexcept;
@@ -300,8 +307,8 @@ private:
 #if LSS_DEV
 /// The session's control commands. Per built seat, from one function: its join (`join` for player 2, `p3.join` for
 /// player 3) and its readings `p2.in`, `p2.state` (players/seat_state.h's words), `p2.member` and `p2.rejoin` (`p3.`
-/// for player 3). Shared: sticks and p2.log-status. Player 2's leave is the module table's (modules.h: it takes the
-/// third view first). Before the console opens.
+/// for player 3). Shared: sticks and p2.log-status. Player 2's leave is the module table's (modules.h).
+/// Before the console opens.
 void RegisterCommands(Session& session);
 #endif
 

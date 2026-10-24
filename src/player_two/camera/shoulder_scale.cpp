@@ -11,11 +11,13 @@
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
 #include "player_two/world/world_rules.h"
+#include "players/seats.h"
 
 #if LSS_DEV
 #include "platform/command_registry.h"
 #endif
 
+#include <array>
 #include <atomic>
 #include <cmath>
 #include <cstddef>
@@ -45,25 +47,25 @@ bool                   g_installed = false;
 std::atomic<bool>      g_on{true};
 std::atomic<float>     g_minimum{0.7f};  // the user's pick, 2026-10-01 (side by side ×0.7 rather than the width's ×0.5)
 std::atomic<bool>      g_shown{false};
-float                  g_logged[2] = {0.0f, 0.0f};
-std::atomic<float>     g_ratio[2]  = {1.0f, 1.0f};  // each half's width against the camera's, as last polled
+std::array<float, players::kMaxPlayers>              g_logged{};  // by seat (players/seats.h)
+static_assert(players::kMaxPlayers == 3, "one ratio per player below");
+std::array<std::atomic<float>, players::kMaxPlayers> g_ratio{1.0f, 1.0f, 1.0f};  // each view's width against its camera's
 
-/// Player p's factor: the half's width against the camera's, kept within the minimum and 1 (only ever softened).
+
+/// Seat p's factor: its view's width against the camera's, kept within the minimum and 1 (only ever softened).
 float Scale(int p) noexcept
 {
-    const float ratio = g_ratio[p].load(std::memory_order_relaxed);
+    const float ratio = g_ratio[static_cast<std::size_t>(p)].load(std::memory_order_relaxed);
     return world_rules::ShoulderScale(ratio, g_minimum.load(std::memory_order_relaxed), kMaxScale);
 }
 
-using camera_access::PlayerOfOperator;  // 0 or 1 for an operator of player 1's or player 2's camera manager
-
 void Finalize(void* op, void* stick, float deltaTime) noexcept
 {
-    if (g_on.load(std::memory_order_relaxed) && g_shown.load(std::memory_order_relaxed) && generation::Active() &&
+    if (g_on.load(std::memory_order_relaxed) && g_shown.load(std::memory_order_relaxed) && generation::AnyActive() &&
         generation::OnGameThread())
     {
-        const int p = PlayerOfOperator(op);
-        if (p >= 0)
+        const int p = camera_access::SeatOfOperator(op);  // player 1's, or a built seat's while it is active
+        if (p >= 0 && p < players::kMaxPlayers)
         {
             const float ratio = Scale(p);
             auto*       aimY  = reinterpret_cast<std::byte*>(op) + kPoseAimY;
@@ -109,7 +111,7 @@ bool Installed() noexcept
 void SetOn(bool on) noexcept
 {
     g_on.store(on, std::memory_order_relaxed);
-    g_logged[0] = g_logged[1] = 0.0f;
+    g_logged = {};
     platform::Log(L"shoulder scale: {}", on ? L"on" : L"off (the game's offset as it is)");
 }
 
@@ -121,7 +123,7 @@ bool On() noexcept
 void SetMinimum(float minimum) noexcept
 {
     g_minimum.store(std::fmin(std::fmax(minimum, 0.25f), 1.0f), std::memory_order_relaxed);
-    g_logged[0] = g_logged[1] = 0.0f;
+    g_logged = {};
     platform::Log(L"shoulder scale: at least x{:.2f}", g_minimum.load(std::memory_order_relaxed));
 }
 
@@ -130,24 +132,26 @@ float Minimum() noexcept
     return g_minimum.load(std::memory_order_relaxed);
 }
 
-void Poll(bool splitShown, float ratioOne, float ratioTwo) noexcept
+void Poll(bool splitShown, const std::array<float, players::kMaxPlayers>& ratios) noexcept
 {
-    g_ratio[0].store(ratioOne, std::memory_order_relaxed);
-    g_ratio[1].store(ratioTwo, std::memory_order_relaxed);
+    for (std::size_t p = 0; p < ratios.size(); ++p)
+    {
+        g_ratio[p].store(ratios[p], std::memory_order_relaxed);
+    }
     g_shown.store(splitShown, std::memory_order_relaxed);
     if (!g_installed || !splitShown || !g_on.load(std::memory_order_relaxed))
     {
         return;
     }
-    for (int p = 0; p < 2; ++p)
+    for (int p = 0; p <= players::kSeatsBuilt; ++p)
     {
         const float ratio = Scale(p);
-        if (std::fabs(ratio - g_logged[p]) > 0.01f)
+        if (std::fabs(ratio - g_logged[static_cast<std::size_t>(p)]) > 0.01f)
         {
-            g_logged[p] = ratio;
-            platform::Log(L"shoulder scale: player {}'s camera shoulder offset x{:.2f} (its half's width against the camera's, "
+            g_logged[static_cast<std::size_t>(p)] = ratio;
+            platform::Log(L"shoulder scale: {}'s camera shoulder offset x{:.2f} (its view's width against the camera's, "
                           L"x{:.2f}, kept within {:.2f}..1)",
-                          p + 1, ratio, g_ratio[p].load(std::memory_order_relaxed),
+                          players::SeatName(p), ratio, g_ratio[static_cast<std::size_t>(p)].load(std::memory_order_relaxed),
                           g_minimum.load(std::memory_order_relaxed));
         }
     }

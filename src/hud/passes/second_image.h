@@ -19,7 +19,7 @@
 // Render thread, per view family: the family's view names its player (FSceneView::PlayerIndex, the controller id,
 // which is the seat; read at the call that adds the composite passes, 0x140FDE3C1). A seat with an entry this frame
 // draws its own; every other view (player 1's, a view no seat fills) draws player 1's. So a view that is not a seat's
-// (the third view, the mirror of plan/seats.md step 5) must never carry a seat's controller id, or it would draw that
+// (the mirror view, views/mirror_player.h, plan/seats.md step 5) must never carry a seat's controller id, or it would draw that
 // seat's HUD; hud/hud_roots.cpp likewise takes the first listed player with each id as that seat's. The consume loop
 // then gives each seat's entry its own vertex/index buffers and draws only the family's own entry
 // (hud/passes/entry_filter_code.h).

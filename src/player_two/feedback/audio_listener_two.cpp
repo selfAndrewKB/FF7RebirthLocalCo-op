@@ -14,10 +14,12 @@
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
 #include "player_two/world/charapop_facts.h"
+#include "players/seats.h"
 
 #include <Windows.h>
 #include <intrin.h>
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -109,8 +111,8 @@ constexpr std::size_t   kChoiceBits          = 12;     // 4096 remembered choice
 template <std::size_t N>
 using Floats = platform::SeqFloats<N>;
 
-// The audio thread's view: the UE listener count, [0], [1] with its front and up as the device would push them, and
-// SEAD's position after the push.
+// The audio thread's view: 2 when player 2's listener was read (else the 0 or 1 of player 1's alone), [0], player 2's
+// (at its column) with its front and up as the device would push them, and SEAD's position after the push.
 enum ListenerField : std::size_t
 {
     kCount,
@@ -138,6 +140,7 @@ std::uintptr_t          g_clipReturn    = 0;
 std::uintptr_t          g_pcListenerFn  = 0;  // live; the slot's expected function
 std::atomic<std::uintptr_t> g_pcVTable{0};    // the controller vtable whose listener slot is ours
 std::atomic<void*>      g_device{nullptr};
+std::atomic<int>        g_columnTwo{-1};  // player 2's column: its UE listener's index (game thread writes)
 std::atomic<DWORD>      g_audioThread{0}, g_seadThread{0};
 
 // Player 2's SEAD listener: a copy of the game's listener object, set on SEAD's thread only.
@@ -226,8 +229,8 @@ const void* ListenerOne() noexcept
     return global != nullptr ? std::atomic_ref<void*>(*global).load(std::memory_order_relaxed) : nullptr;
 }
 
-/// Audio thread: the game's push of listener [0], then what it read, listener [1] as the push would send it, and what
-/// SEAD holds.
+/// Audio thread: the game's push of listener [0], then what it read, player 2's listener (at its column) as the push
+/// would send it, and what SEAD holds. Without player 2 listed, the count read is 1: player 2's listener stays off.
 std::uint64_t Push(void* device) noexcept
 {
     const auto result = reinterpret_cast<PushFn>(g_pushSlot.Original())(device);
@@ -237,16 +240,22 @@ std::uint64_t Push(void* device) noexcept
     std::array<float, kListenerFields> out{};
     const auto*  data  = static_cast<const std::byte*>(ReadPointer(device, kAudioListeners));
     const auto   count = data != nullptr ? ReadField<std::int32_t>(device, kAudioListeners + 8) : 0;
-    out[kCount]        = static_cast<float>(count);
-    for (std::int32_t i = 0; i < 2 && i < count; ++i)
+    const int    two   = g_columnTwo.load(std::memory_order_relaxed);
+    const bool   heard = two >= 1 && two < count;  // player 2 listed, and its column's listener pushed
+    out[kCount]        = heard ? 2.0f : std::min(static_cast<float>(count), 1.0f);
+    for (const std::int32_t i : {0, heard ? two : -1})
     {
+        if (i < 0 || i >= count)
+        {
+            continue;
+        }
         const auto* element = data + static_cast<std::size_t>(kAudioListenerStride) * i;
         const auto  at      = Read3(element, kTranslation);
         for (std::size_t k = 0; k < 3; ++k)
         {
             out[(i == 0 ? kZeroX : kOneX) + k] = at[k];
         }
-        if (i == 1)
+        if (i != 0)
         {
             // The device's two lines for [0]: front = Q·X, up = -(Q·Z).
             const float q[4] = {ReadField<float>(element, kRotation), ReadField<float>(element, kRotation + 4),
@@ -758,11 +767,12 @@ void LogSummary() noexcept
     std::wstring                       where = L"no push read";
     if (g_listeners.Read(seen))
     {
-        where = std::format(L"{:.0f} listener(s); SEAD's own listener {} from [0]", seen[kCount],
+        where = std::format(L"{}; SEAD's own listener {} from [0]",
+                            seen[kCount] >= 2.0f ? L"player 1's and player 2's listeners read" : L"player 1's listener read",
                             Metres(Distance(&seen[kSeadX], &seen[kZeroX])));
         if (seen[kCount] >= 2.0f)
         {
-            where += std::format(L"; [0] and [1] {} apart", Metres(Distance(&seen[kZeroX], &seen[kOneX])));
+            where += std::format(L"; the two {} apart", Metres(Distance(&seen[kZeroX], &seen[kOneX])));
         }
     }
     platform::LogDebug(L"audio listeners ({} s): {} push(es) on the audio thread (thread {}; {}); player 2's listener {}; "
@@ -878,12 +888,14 @@ void Remove() noexcept
     }
 }
 
-void Tick() noexcept
+void Tick(int columnTwo) noexcept
 {
     if (!generation::OnGameThread())
     {
         return;
     }
+    static_assert(players::kSeatsBuilt == 1, "step 6: a SEAD listener per seat, each from its own column");
+    g_columnTwo.store(columnTwo, std::memory_order_relaxed);
     try
     {
         PlaceControllerSlot();

@@ -162,18 +162,18 @@ class Control:
 
 
 # The mod's switches: the key, and the state the switch starts in at launch (players/join_keys.h). A `layout`, `bars`,
-# `own-camera`, `sticks` or `third-view` command presses the key only when the state it asks for is not the one held.
-# The chosen layout, the bars and the sticks persist across a leave; player 2's own camera is the start of every join
-# (views/player_view_point.h), and the third view leaves with player 2.
+# `own-camera`, `sticks` or `monitor-mode` command presses the key only when the state it asks for is not the one held.
+# The chosen layout, the bars, the sticks and the monitor mode persist across a leave; player 2's own camera is the
+# start of every join (views/player_view_point.h).
 KEY_SWITCHES = {
     "layout": ("Ctrl+F5", "top-bottom"),
     "bars": ("Ctrl+F4", "off"),
     "own-camera": ("Ctrl+F6", "on"),
     "sticks": ("Ctrl+F9", "per-pad"),
-    "third-view": ("Ctrl+F3", "off"),
+    "monitor-mode": ("Ctrl+F3", "off"),
 }
 RESET_AT_JOIN = {"own-camera": "on"}
-RESET_AT_LEAVE = {"third-view": "off"}
+RESET_AT_LEAVE: dict[str, str] = {}
 
 # The mod's own lines that end a `wait-until` (player_two/session/session.cpp, player_two/session/field_exit.cpp).
 WAIT_LINES = {

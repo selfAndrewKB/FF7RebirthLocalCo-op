@@ -143,12 +143,12 @@ void RemoveSubmitHintSkip() noexcept
     SetSubmitHintSkip(false);
 }
 
-void FollowPlayerTwo(bool playerTwoIn) noexcept
+void FollowViews(bool severalViews) noexcept
 {
-    if (playerTwoIn != g_followed)
+    if (severalViews != g_followed)
     {
-        g_followed = playerTwoIn;
-        SetSubmitHintSkip(playerTwoIn);
+        g_followed = severalViews;
+        SetSubmitHintSkip(severalViews);
     }
 }
 

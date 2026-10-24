@@ -32,9 +32,9 @@ bool SubmitHintSkipInstalled() noexcept;
 void SetSubmitHintSkip(bool skip) noexcept;
 bool SubmitHintSkipOn() noexcept;
 
-/// Game thread, every tick: the skip follows player 2 in and out, set at each change of that; a command's choice
-/// (SetSubmitHintSkip) holds until the next join or leave.
-void FollowPlayerTwo(bool playerTwoIn) noexcept;
+/// Game thread, every tick: the skip follows whether several views render (player 2 in, or a mirror view beside
+/// player 1), set at each change of that; a command's choice (SetSubmitHintSkip) holds until the next change.
+void FollowViews(bool severalViews) noexcept;
 
 /// Game thread, on removal: the game's hints back.
 void RemoveSubmitHintSkip() noexcept;

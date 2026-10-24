@@ -25,12 +25,12 @@ console r.SetRes 5120x1440w
 wait 300
 note bench views: two views 5120x1440
 wait 1800
-third-view on
+view-columns 3
 console r.SetRes 7680x1440w
 wait 300
 note bench views: three views 7680x1440
 wait 1800
-third-view off
+view-columns 0
 leave
 wait-until p2.in == off 900
 console r.SetRes 2560x1440wf

@@ -70,14 +70,20 @@
 #include "player_two/world/trigger_two.h"
 #include "player_two/world/vending.h"
 #include "player_two/world/world_actor_reach.h"
+#include "platform/log.h"
 #include "players/unreal_access.h"
 #include "players/widget_opacity.h"
 #include "renderer/family_boundary.h"
 #include "renderer/me_feedback_once.h"
 #include "renderer/submit_hints.h"
+#include "player_two/session/field_exit.h"
+#include "player_two/session/own_controller.h"
+#include "player_two/session/party_member.h"
+#include "players/local_players.h"
+#include "views/columns.h"
+#include "views/mirror_player.h"
 #include "views/player_view_point.h"
 #include "views/stream_views.h"
-#include "views/third_view.h"
 #include "views/whole_screen.h"
 #include "views/window_span.h"
 
@@ -87,13 +93,9 @@
 #include "hud/widget_dump.h"
 #include "platform/command_registry.h"
 #include "platform/frame_watch.h"
-#include "platform/log.h"
 #include "player_two/input/pad_buttons.h"
 #include "player_two/input/pad_sticks.h"
 #include "player_two/scopes/scope_leaks.h"
-#include "player_two/session/field_exit.h"
-#include "player_two/session/own_controller.h"
-#include "player_two/session/party_member.h"
 #include "players/console_access.h"
 #include "players/single_view.h"
 #include "players/split_layout.h"
@@ -101,6 +103,7 @@
 #include "renderer/view_family_submission.h"
 #endif
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <format>
@@ -176,8 +179,8 @@ constexpr std::array kModules{
     Module{Call<&views::InstallWholeScreen>, &views::RemoveWholeScreen},
     // each player's camera streams scenery detail (needs the view point)
     Module{Call<&views::InstallStreamViews>, nullptr},
-    // a third full-size view for the multi-monitor measurement
-    Module{Call<&views::third_view::Install>, nullptr},
+    // player 1's picture in every column no player has (the mirror views)
+    Module{Call<&views::mirror_player::Install>, nullptr},
     // the game window across its row of monitors (the engine's reshape)
     Module{Call<&views::window_span::Install>, nullptr},
 
@@ -360,6 +363,11 @@ static_assert(Ordered<&players::widget_opacity::Install, &hud::prompt_rows::Inst
                   Ordered<&players::widget_opacity::Install, &hud::target_views::Install>(),
               "the opacity setter before the HUD modules that read it");
 
+// Game thread: the columns as the last columns' tick read them (TickColumns), and whether player 2's view showed
+// player 1's picture (TickAfterSession), for the calls before them.
+views::columns::Map g_lastColumns;
+bool                g_lastOnPlayerOne = false;
+
 }  // namespace
 
 void Install(const platform::GameImage& image) noexcept
@@ -397,7 +405,9 @@ void TickBeforeSession() noexcept
     player_two::equal_targeting::Tick();      // both players' types for the Condition selects (no leader scope held)
     player_two::target_coin::Tick();          // the blueprint natives' swaps once reflection is up; the summary
     player_two::ffb_manager_two::Tick();      // each seat's component on its own manager, after its BeginPlay
-    player_two::audio_listener_two::Tick();   // the controller listener slot; the listeners and the summary (Debug)
+    // the controller listener slot; player 2's listener from its column (the last columns' tick), off while that column
+    // shows player 1's picture (as under the engine's single view, which leaves one listener); the summary (Debug)
+    player_two::audio_listener_two::Tick(g_lastOnPlayerOne ? -1 : g_lastColumns.columnOf[players::kPlayerTwoSeat]);
     player_two::leave_watch::Tick();          // the last leave's controller, followed until it is freed (logged)
     player_two::vending::Tick();              // a press that opened no shop; player 2 leaving with their shop up
     player_two::shop_talk::Tick();            // the shopkeeper verdicts queued by player 2's pass
@@ -415,17 +425,15 @@ void TickBeforeSession() noexcept
 
 void TickAfterSession(const Frame& frame) noexcept
 {
-    // The per-seat modules loop the built seats themselves. The per-column ones (the views, the framing, the shapes,
-    // the HUD, the renderer's hints) are player 2's until steps 4 and 5 of plan/seats.md: they read `two`.
-    const Frame::Seat& two = frame.seats[players::kPlayerTwoSeat];
+    // The per-seat modules loop the built seats themselves; the per-column ones (the framing, the shapes, the
+    // renderer's hints) read the frame's column count.
+    g_lastOnPlayerOne = frame.onPlayerOne;
     // By seat, whether the seat's player plays a member (index 0 unused): the world modules' per-seat passes.
     std::array<bool, players::kMaxPlayers> plays{};
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
         plays[seat] = frame.seats[seat].PlaysMember();
     }
-    views::third_view::Tick(two.In());   // leaves with player 2; follows player 1's view target
-    views::window_span::Tick(two.In());  // leaves with player 2; holds the window's rect
     player_two::walk_limits::Tick();  // after the session's tick: a take's copy is overwritten this frame
     player_two::nav_strand::Tick(frame.splitShown);  // a stranded player is warped back to the party
     player_two::camera_repair::Tick();
@@ -438,8 +446,13 @@ void TickAfterSession(const Frame& frame) noexcept
     player_two::move_type_two::Tick();     // each seat's deferred walk-cap clear, the layer-2 watch
     player_two::vault_camera::Tick();      // each seat's vault cameras end on its own camera (lever L2)
     player_two::chocobo_climb::Tick();     // each seat's climb camera's states and the summary (Debug)
-    player_two::camera_distance::TickFraming(two.In());  // per-layout distance steps (roadmap 2b)
-    player_two::shoulder_scale::Poll(frame.splitShown, views::SplitWidthRatio(false), views::SplitWidthRatio(true));
+    player_two::camera_distance::TickFraming(frame.columns);  // per-layout distance steps (roadmap 2b)
+    std::array<float, players::kMaxPlayers> ratios{};
+    for (int seat = 0; seat < players::kMaxPlayers; ++seat)
+    {
+        ratios[static_cast<std::size_t>(seat)] = views::SplitWidthRatio(seat);
+    }
+    player_two::shoulder_scale::Poll(frame.splitShown, ratios);
     player_two::anim_two_views::Tick(frame.splitShown);  // its frame count, before the world tick
     player_two::charapop_near::Tick(frame.splitShown, plays);
     player_two::charapop_centre::Tick(frame.splitShown, plays);
@@ -448,14 +461,83 @@ void TickAfterSession(const Frame& frame) noexcept
     views::UpdateStreamViews(frame.splitShown);  // nothing until whole_screen's game-state check passed
     // Filled halves: each main camera's own 16:9 constraint, cleared once by the game's setter. FillsHalves is
     // false without the view-point entry (nothing shapes the halves then), so the cameras keep their constraint.
-    player_two::main_camera_shape::Update(player_two::generation::Active() && frame.splitShown &&
+    player_two::main_camera_shape::Update(player_two::generation::AnyActive() && frame.splitShown &&
                                           views::FillsHalves());
-    renderer::FollowPlayerTwo(two.In());  // the submit hints skipped while player 2 is in
+    renderer::FollowViews(frame.columns > 1);  // the submit hints skipped while several views render
+}
+
+namespace {
+
+// Game thread: the console's `view-columns` (0: none), the columns held for the checks on one monitor.
+int  g_viewColumns = 0;
+bool g_rejoining   = false;  // a seat waits to rejoin after a world change (TickColumns)
+int  g_lastWanted  = 1;      // the columns the last columns' tick wanted
+
+/// What a join needs, as the scripts' readiness: the field running (the entry steps done), the game's battle system
+/// and option data built, player 1's camera manager ready for a join; and nothing over the field (a menu, a scene,
+/// the title: its scene is a field with a one-member party, which the first three tests accept; a run of 2026-10-21
+/// ran every script at the title that way). The engine refuses a join from the game's Main Menu (CreatePlayer returns
+/// without a player; seen 2026-10-22, the menu up after the load). Here because it reads player 2's modules and the
+/// views both.
+bool FieldReady() noexcept
+{
+    return player_two::field_exit::FieldReady() && player_two::party_member::GameReady() &&
+           player_two::own_controller::Ready() &&
+           views::ReasonOf(views::ReadScreenSignals()) == views::WholeScreenReason::None;
+}
+
+/// A mirror view may be added: the field ready, and no seat waiting to rejoin (its join would take the mirrors out
+/// again a few seconds later: three creates and two removals and the columns reshuffled after every load).
+bool MirrorReady() noexcept
+{
+    return !g_rejoining && FieldReady();
+}
+
+/// The engine's local player list as columns (views/columns.h): each listed player's controller id in list order.
+views::columns::Map ListedColumns() noexcept
+{
+    std::array<std::int32_t, views::columns::kMaxColumns> ids{};
+    std::size_t                                          n      = 0;
+    auto*                                                listed = players::unreal::LocalPlayers(players::unreal::GameInstance());
+    for (std::int32_t i = 0; listed != nullptr && i < listed->Num() && n < ids.size(); ++i)
+    {
+        ids[n++] = players::LocalPlayerControllerId((*listed)[i]);
+    }
+    return views::columns::MapOf(std::span<const std::int32_t>(ids.data(), n));
+}
+
+}  // namespace
+
+Columns TickColumns(bool rejoining) noexcept
+{
+    g_rejoining = rejoining;
+    Columns columns;
+    const int held    = std::max(views::window_span::HeldColumns(), g_viewColumns);
+    const int players = ListedColumns().PlayersListed();
+    columns.playersIn = std::max(players, 1);
+    columns.held      = held >= 2;
+    columns.wanted    = views::columns::Wanted(columns.playersIn, held);
+    views::mirror_player::Tick(columns.wanted - columns.playersIn, &MirrorReady);
+    columns.map   = ListedColumns();  // with this tick's mirror added or removed
+    g_lastColumns = columns.map;
+    g_lastWanted  = columns.wanted;
+    views::window_span::Tick(columns.wanted);
+    return columns;
+}
+
+void ClearMirrorsForWorldChange(const wchar_t* why) noexcept
+{
+    if (!views::mirror_player::Clear(why))
+    {
+        platform::LogWarning(L"{}: a mirror view could not be removed; a map load would spawn its controller again "
+                             L"outside a join (its camera manager's fixed-name spawns are expected to collide)",
+                             why);
+    }
 }
 
 void LeavePlayerTwo(player_two::Session& session, const wchar_t* why) noexcept
 {
-    views::third_view::Remove(why);
+    platform::LogDebug(L"{}", why);
     session.Leave(players::kPlayerTwoSeat);
 }
 
@@ -489,20 +571,22 @@ Result SetFill(bool on) noexcept
     return {true, views::FillsHalves() ? L"halves filled" : L"16:9 halves with bars"};
 }
 
-Result SetThirdView(bool on, const wchar_t* why) noexcept
+Result SetMonitorMode(bool on) noexcept
 {
-    if (on == views::third_view::In())
+    if (!views::window_span::Installed())
     {
-        return {true, on ? L"the third view is already in" : L"the third view is not in"};
+        return {false, L"the window span is not installed (see the startup log)"};
     }
-    if (on)
+    if (on == views::window_span::Held())
     {
-        return views::third_view::Add() ? Result{true, L"the third view is in"}
-                                        : Result{false, L"the third view could not be added (the log says why)"};
+        return {true, on ? L"the three-player monitor mode is already on" : L"the three-player monitor mode is off"};
     }
-    views::third_view::Remove(why);
-    return views::third_view::In() ? Result{false, L"the third local player could not be removed"}
-                                   : Result{true, L"the third view is out"};
+    if (!views::window_span::Hold(on))
+    {
+        return {false, L"the three-player monitor mode could not be switched on (the log says why)"};
+    }
+    return {true, on ? L"three monitors, player 1's picture in every column no player has"
+                     : L"the three-player monitor mode is off; the window put back"};
 }
 
 Result SetWindowSpan(const player_two::Session& session, bool on, const wchar_t* why) noexcept
@@ -525,8 +609,8 @@ Result SetWindowSpan(const player_two::Session& session, bool on, const wchar_t*
     {
         return {false, L"player 2 is not in (Ctrl+F7 first)"};
     }
-    auto*      players = players::unreal::LocalPlayers(players::unreal::GameInstance());
-    const auto columns = players == nullptr ? 0 : players->Num();
+    // The columns the frame shows (the last columns' tick): two with player 2, more while columns are held.
+    const auto columns = std::max(g_lastWanted, 2);
     if (!views::window_span::Enter(columns))
     {
         return {false, L"the window could not be spanned (the log says why)"};
@@ -541,19 +625,6 @@ namespace {
 control::Outcome From(Result done)
 {
     return {done.ok, std::move(done.text)};
-}
-
-/// The same readiness the session's rejoin waits for: the field running (the entry steps done), the game's battle
-/// system and option data built, player 1's controller and camera manager on the End classes; and nothing over the
-/// field (a menu, a scene, the title: its scene is a field with a one-member party, which the first three tests
-/// accept; a run of 2026-10-21 ran every script at the title that way). The engine refuses a join from the game's
-/// Main Menu (CreatePlayer returns without a player; seen 2026-10-22, the menu up after the load). Here because it
-/// reads player 2's modules and the views both.
-bool FieldReady() noexcept
-{
-    return player_two::field_exit::FieldReady() && player_two::party_member::GameReady() &&
-           player_two::own_controller::Ready() &&
-           views::ReasonOf(views::ReadScreenSignals()) == views::WholeScreenReason::None;
 }
 
 /// The commands of the shared actions above, and the field's readiness.
@@ -582,11 +653,31 @@ void RegisterOwnCommands(player_two::Session& session)
     Register({.name = L"bars", .shape = Shape::OnOff, .help = L"split views keep 16:9 with bars, or fill their halves",
               .set  = [](const Value& v) { return From(SetFill(!std::get<bool>(v))); },  // bars on: no fill
               .get  = [] { return Value{!views::FillsHalves()}; }});
-    Register({.name = L"third-view", .shape = Shape::OnOff,
-              .help = L"a third full-size view (a third local player on player 1's camera, three columns) for the "
-                      L"multi-monitor measurement; needs player 2 in",
-              .set  = [](const Value& v) { return From(SetThirdView(std::get<bool>(v), L"the third-view command")); },
-              .get  = [] { return Value{views::third_view::In()}; }});
+    Register({.name = L"monitor-mode", .shape = Shape::OnOff,
+              .help = L"the three-player monitor mode (as Ctrl+F3): the window over a row of three monitors whatever "
+                      L"the players, player 1's picture in every column no player has",
+              .set  = [](const Value& v) { return From(SetMonitorMode(std::get<bool>(v))); },
+              .get  = [] { return Value{views::window_span::Held()}; }});
+    Register({.name = L"view-columns", .shape = Shape::Integer, .min = 0, .max = views::columns::kMaxColumns,
+              .help = L"columns held without the span, for the checks on one monitor: 2 or 3 (the mirror views fill "
+                      L"the ones no player has); 0 for none",
+              .set  = [](const Value& v) {
+                  const auto columns = std::get<std::int64_t>(v);
+                  if (columns == 1)
+                  {
+                      return control::Outcome{false, L"0 (none), 2 or 3"};
+                  }
+                  g_viewColumns = static_cast<int>(columns);
+                  platform::Log(L"view columns: {} held (the console)", g_viewColumns);
+                  return control::Outcome{};
+              },
+              .get = [] { return Value{static_cast<std::int64_t>(g_viewColumns)}; }});
+    Register({.name = L"mirror-view.state", .shape = Shape::Text,
+              .help = L"the mirror views: wanted, in which columns with which controller ids, why one waits",
+              .get  = [] { return Value{views::mirror_player::Reading()}; }});
+    Register({.name = L"window-span.state", .shape = Shape::Text,
+              .help = L"the window span: out, lining up or in, its columns, the row, the window",
+              .get  = [] { return Value{views::window_span::Reading()}; }});
     Register({.name = L"window-span", .shape = Shape::OnOff,
               .help = L"the game window across its row of equal monitors, one column per local player, through the "
                       L"engine's own window reshape; needs player 2 in",

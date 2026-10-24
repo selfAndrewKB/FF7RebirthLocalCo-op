@@ -1,8 +1,8 @@
 #pragma once
 
 // A game setting held at the mod's value for a while, then put back: the console settings two-player rendering
-// needs (split_screen_settings.h), the two-player layout (split_layout.h) and the three-player layout (views/
-// third_view.cpp). One algorithm for all of them, written once:
+// needs (split_screen_settings.h), the two-player layout (split_layout.h) and the three-player layout (mod.cpp, while
+// three local players are listed). One algorithm for all of them, written once:
 //
 //   - Hold: the current value is read and remembered; the mod's is written and read back to confirm. A value that
 //     is already the mod's is left as it is. Once a write has RUN the previous value is remembered whatever the

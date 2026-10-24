@@ -6,6 +6,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "players/console_access.h"
+#include "players/seats.h"
 #include "views/player_view_point.h"
 #include "views/stream_view_math.h"
 #include "views/whole_screen.h"
@@ -60,8 +61,8 @@ const wchar_t* NameOf(StreamViewsMode mode) noexcept
     switch (mode)
     {
         case StreamViewsMode::Off: return L"off";
-        case StreamViewsMode::PlayerTwo: return L"player 2's camera";
-        case StreamViewsMode::Both: return L"both players' cameras";
+        case StreamViewsMode::PlayerTwo: return L"the further players' cameras";
+        case StreamViewsMode::Both: return L"every player's camera";
     }
     return L"?";
 }
@@ -160,15 +161,17 @@ void UpdateStreamViews(bool splitShown) noexcept
     {
         return;
     }
+    // Each player's camera as last drawn, the further seats first (player 1's, the game's own view, last). A mirror
+    // view shows player 1's camera, which player 1's registration covers.
     const float aspect = HalfAspect();
-    for (const bool playerTwo : {true, false})
+    for (int seat = players::kSeatsBuilt; seat >= 0; --seat)
     {
-        if (!playerTwo && g_mode != StreamViewsMode::Both)
+        if (seat == 0 && g_mode != StreamViewsMode::Both)
         {
             continue;
         }
-        const auto camera = RenderedCamera(playerTwo);
-        if (camera && !Register(*camera, aspect, playerTwo ? 0.0f : g_playerOneFov))
+        const auto camera = RenderedCamera(seat);
+        if (camera && !Register(*camera, aspect, seat != 0 ? 0.0f : g_playerOneFov))
         {
             g_failed = true;
             g_active = false;

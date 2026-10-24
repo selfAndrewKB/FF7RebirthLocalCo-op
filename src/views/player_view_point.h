@@ -1,23 +1,30 @@
 #pragma once
 
-// Each local player's view point: its shape while the screen is split, and which camera player 2's
-// half shows.
+// Each local player's view point: its shape while the screen is split, and which camera each further player's view
+// shows. Per seat (players/seats.h): player 1 and every further player; a mirror view (views/mirror_player.h) is
+// none of them and keeps the engine's result.
 //
 // The mod replaces the ULocalPlayer vtable entry for GetViewPoint (facts/engine.h) and calls
-// the engine's function. With one player the result is exactly the engine's. While player 2 is in:
+// the engine's function. With one player the result is exactly the engine's. While a further player is in:
 //   - every player's view fills its half: the game's 16:9 constraint is cleared and the FOV rule
 //     becomes MaintainXFOV with the split FOV written in (views/view_shape.h, SplitFov), or the
 //     stock MajorAxisFOV when the split FOV is switched off; Ctrl+F4 switches the fill off to
 //     compare with bars.
-//     Each player's own FOV rule is put back when player 2 leaves.
-//   - player 2's half shows player 2's own camera from the join; Ctrl+F6 switches it to player 1's (for testing)
-//     (and back). Starting on player 1's means a player-2 camera that is not set up yet (it sits
-//     at the world origin until it has a character) is never on screen by default.
+//     Each player's own FOV rule is put back when a further player leaves.
+//   - a further player's view shows their own camera from the join; Ctrl+F6 switches player 2's to player 1's (for
+//     testing) (and back). Starting on player 1's means a camera that is not set up yet (it sits at the world origin
+//     until it has a character) is never on screen by default.
+//   - while columns are held (the three-player monitor mode, views/window_span.h) the game's single-view moments (a
+//     menu, a cutscene, a further player waiting for a member or standing aside) keep the columns instead of the
+//     engine's single view: every further player's view shows player 1's camera then, as a mirror view does (the
+//     columns rule: a held column is never black), and draws player 1's HUD (no further pass runs then).
 
 #include "platform/dev_switch.h"
+#include "players/seats.h"
 #include "views/stream_view_math.h"
 #include "views/view_shape.h"
 
+#include <array>
 #include <cstdint>
 
 namespace lss::platform {
@@ -40,39 +47,48 @@ bool ViewPointInstalled() noexcept;
 /// changes).
 struct SplitFrame
 {
-    const void*   playerOne  = nullptr;  // player 1's ULocalPlayer
-    const void*   playerTwo  = nullptr;  // player 2's; null when there is none
-    std::uint32_t joinCount  = 0;        // the session's join count: a new player 2 at the old one's address is new
-    bool          splitShown = false;    // player 2 in and the screen split (players/single_view.h)
+    const void* playerOne = nullptr;  // player 1's ULocalPlayer
+    std::array<const void*, players::kMaxPlayers>   seats{};  // each seat's ULocalPlayer, null while out (index 0 unused)
+    std::array<std::uint32_t, players::kMaxPlayers> joins{};  // each seat's join count: a new player at an old address
+    bool splitShown  = false;  // a further player in and their own view on screen (players/single_view.h)
+    bool onPlayerOne = false;  // the further players' views show player 1's camera (a single-view moment, columns held)
+    bool viewsSplit  = false;  // more than one view on screen: the HUD is laid out for player 1's column
+    int  columns     = 1;      // local players listed, one column each (views/columns.h)
 };
 
 /// Game thread, once per tick after the layout is held (the halves' shape reads it), and at a leave before the
-/// world changes. A new player 2 (by address or join count): the FOV rule's offset confirmed by reflection
+/// world changes. A new further player (by address or join count): the FOV rule's offset confirmed by reflection
 /// (players/split_settings_access.h; until then the split views fill without changing the FOV rule), the FOV rule
-/// of every remaining player the mod changed put back, the new player 2 started on their own camera with their next
+/// of every remaining player the mod changed put back, the new player started on their own camera with their next
 /// view point described in the log, and each local player's vtable logged (a subclass would bypass the camera
 /// choice). The split's shown state: while it is not shown, player 1's view point is exactly the engine's (the
-/// camera choice for player 2's own view still applies). The halves' shape (views::HalfOf): read twice a second
-/// while the split is shown and no third view is in; the split FOV is applied only once it is known.
+/// camera choice for a further player's own view still applies). The halves' shape (views::HalfOf): read twice a
+/// second while the split is shown with two columns; the split FOV is applied only once it is known.
 void Follow(const SplitFrame& frame) noexcept;
 
-/// Switches player 2's half between player 1's camera and player 2's own; returns true when it
+/// Switches player 2's view between player 1's camera and player 2's own; returns true when it
 /// now shows player 2's own (false, and player 1's, when there is no player 2).
 bool ToggleOwnCamera() noexcept;
 
-/// True while player 2's half shows player 2's own camera.
+/// True while player 2's view is set to show player 2's own camera (player 1's still shows while the columns hold a
+/// single-view moment).
 bool ShowsOwnCamera() noexcept;
 
-/// Game thread: player 1's or player 2's camera as it was last drawn while player 2 is in (empty before
+/// Game thread: `seat`'s camera (0 player 1's) as it was last drawn while a further player is in (empty before
 /// the first split frame, after a change of players, or if the view info was unusable).
-std::optional<StreamCamera> RenderedCamera(bool playerTwo) noexcept;
+std::optional<StreamCamera> RenderedCamera(int seat) noexcept;
 
 /// The split halves' width/height (views::HalfOf), or 0 until known.
 float HalfAspect() noexcept;
 
-/// Whether the split is on screen, as last followed: the one place it is kept (the overlay layout and the overlay
-/// render read it here). Any thread.
+/// Whether a further player's own view is on screen, as last followed: the one place it is kept (the overlay render
+/// reads it here for the further players' HUD passes). Any thread.
 bool SplitShown() noexcept;
+
+/// Whether more than one view is on screen (two or three columns, not the engine's single view), as last followed:
+/// the HUD is laid out for player 1's column then (the overlay layout, the field-action icons' base). With no
+/// column held beyond the players it is SplitShown. Any thread.
+bool ViewsSplit() noexcept;
 
 /// Switches whether split views fill their halves (on at start); returns the new state.
 bool ToggleFill() noexcept;
@@ -94,9 +110,9 @@ float SplitFovWeight() noexcept;
 void RegisterViewPointCommands();
 #endif
 
-/// A player's half width against the game camera's own, as tan(half's horizontal FOV / 2) / tan(camera's / 2) from
-/// the last view drawn (1 when no split FOV is written). Any thread.
-float SplitWidthRatio(bool isPlayerTwo) noexcept;
+/// `seat`'s view width (0 player 1's) against the game camera's own, as tan(view's horizontal FOV / 2) /
+/// tan(camera's / 2) from the last view drawn (1 when no split FOV is written). Any thread.
+float SplitWidthRatio(int seat) noexcept;
 
 /// True if `localPlayer`'s vtable is the engine's ULocalPlayer vtable, i.e. its view point goes
 /// through the installed entry. A different vtable (a subclass) would bypass the camera choice.

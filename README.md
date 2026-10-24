@@ -28,7 +28,7 @@ needs a key.
 | Ctrl+F9 | For testing: every pad drives both players' sticks (the game's merge) |
 | Ctrl+F10 | For comparison: the NPC population follows the leader alone instead of both players |
 | Ctrl+F11 | For comparison: characters near player 2 take their detail from player 1's camera alone |
-| Ctrl+F3 | A third full-size view in and out (the multi-monitor measurement) |
+| Ctrl+F3 | The three-player monitor mode on and off: the window across a row of three monitors, player 1's picture in every column no player has |
 | Ctrl+F2 | The game window across its row of monitors, and back |
 
 With the development tools built in, control commands switch the rest for diagnosis, e.g. `hud-band off`,
@@ -66,7 +66,7 @@ src/
   player_two/    player 2's play, by game system: session/ (the join, the party member, the leave), scopes/ (one game
                  call made as player 2), camera/, input/ (pads, sticks, movement), feedback/ (rumble and sound),
                  battle/, traversal/, world/, rides/; the helpers every wrapper shares at the root
-  views/         the view points, the whole-screen states, the streaming views, the third view, the window span
+  views/         the view points, the whole-screen states, the streaming views, the columns and mirror views, the window span
   hud/           the HUD in each half, by system: passes/ (player 2's HUD image), layout/ (the band), minimap/, field/
                  (prompt rows, markers, pins), battle/ (targets, gauges, popups); the roots, the live widgets, the
                  pure rules and the dev dumps at the root

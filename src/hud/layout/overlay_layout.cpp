@@ -182,9 +182,9 @@ IntRect* OverlayLayoutRect(IntRect* out)
     g_pending.active   = false;
     g_bandApplies = 0;
     g_lastLayout  = kSoloLayout;
-    if (!views::SplitShown() || out == nullptr || out->minX != 0 || out->minY != 0)
+    if (!views::ViewsSplit() || out == nullptr || out->minX != 0 || out->minY != 0)
     {
-        return result;  // one player (or an unexpected rect): exactly the engine's result
+        return result;  // one view (or an unexpected rect): exactly the engine's result
     }
     std::uintptr_t overlay = 0;
     std::memcpy(&overlay, reinterpret_cast<const void*>(g_overlaySingleton), sizeof(overlay));

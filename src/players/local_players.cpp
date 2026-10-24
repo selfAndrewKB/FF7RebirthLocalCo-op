@@ -39,19 +39,34 @@ bool Contains(RC::Unreal::TArray<unreal::UObject*>& players, unreal::UObject* pl
     return false;
 }
 
-/// The controller id of a listed local player that is neither player 1 (0) nor a built seat nor `joining`, or -1.
+/// The controller id of a listed local player that is neither player 1 (0) nor a built seat nor a mirror view nor
+/// `joining`, or -1.
 std::int32_t UnseatedId(RC::Unreal::TArray<unreal::UObject*>& players, std::int32_t joining) noexcept
 {
     for (std::int32_t i = 0; i < players.Num(); ++i)
     {
         const std::int32_t id = LocalPlayerControllerId(players[i]);
-        if (id > 0 && id != joining && !SeatBuilt(id))  // an unread id (-1) is no evidence
+        if (id > 0 && id != joining && !SeatBuilt(id) && !IsMirrorId(id))  // an unread id (-1) is no evidence
         {
             return id;
         }
     }
     return -1;
 }
+
+/// The listed local players that are not mirror views (player 1, the seats, any other).
+std::int32_t PlayersListed(RC::Unreal::TArray<unreal::UObject*>& players) noexcept
+{
+    std::int32_t n = 0;
+    for (std::int32_t i = 0; i < players.Num(); ++i)
+    {
+        n += IsMirrorId(LocalPlayerControllerId(players[i])) ? 0 : 1;
+    }
+    return n;
+}
+
+// UGameViewportClient's MaxSplitscreenPlayers in stock UE 4.26: CreateLocalPlayer refuses a fifth.
+constexpr std::int32_t kEngineMaxLocalPlayers = 4;
 
 /// A listed local player already has controller id `seat`.
 bool SeatListed(RC::Unreal::TArray<unreal::UObject*>& players, std::int32_t seat) noexcept
@@ -156,18 +171,22 @@ bool RemoveLocalPlayer(UObject* gameInstance, UObject* localPlayer, std::uintptr
 LocalPlayers::PlayerOne LocalPlayers::FirstPlayer(bool log) const noexcept
 {
     auto* players = unreal::LocalPlayers(unreal::GameInstance());
-    if (players == nullptr || players->Num() < 1 || players->Num() >= kMaxPlayers)
+    // The room counts the players, not the mirror views: a seat's join takes the mirrors out right before its
+    // CreatePlayer (views/mirror_player.h), and a mirror's add is limited to the columns by its module.
+    const std::int32_t listed = players == nullptr ? -1 : PlayersListed(*players);
+    if (players == nullptr || listed < 1 || listed >= kMaxPlayers || players->Num() >= kEngineMaxLocalPlayers)
     {
         if (log)
         {
-            platform::Log(L"join refused: expected 1 to {} local player(s) before the join, found {}", kMaxPlayers - 1,
-                          players == nullptr ? -1 : players->Num());
+            platform::Log(L"join refused: expected 1 to {} player(s) before the join, found {} ({} local player(s) "
+                          L"listed with the mirror views)",
+                          kMaxPlayers - 1, listed, players == nullptr ? -1 : players->Num());
         }
         return {};
     }
     // The seat is free when no listed player has its controller id (a list position names no seat: a leave closes
-    // the list up). A listed player with no seat's id (the third view's 2 while seat 2 is not built, left behind by
-    // a removal that failed) refuses the join too: the new player would take a column the mod gives another.
+    // the list up). A listed player with no seat's id and no mirror's (an unbuilt seat's, left behind by a removal
+    // that failed) refuses the join too: the new player would take a column the mod gives another.
     if (SeatListed(*players, seat_))
     {
         if (log)
@@ -202,7 +221,7 @@ LocalPlayers::Added LocalPlayers::Add(unreal::UObject* playerOneController) noex
     Added added;
     if (HasPlayer())
     {
-        platform::Log(L"player {} is already in", seat_ + 1);
+        platform::Log(L"{} is already in", Name());
         return added;
     }
     unreal::UObject* gameInstance = unreal::GameInstance();
@@ -236,7 +255,7 @@ LocalPlayers::Added LocalPlayers::Add(unreal::UObject* playerOneController) noex
     added.controller        = field == nullptr ? nullptr : *field;
     if (created.called && created.controller != added.controller)
     {
-        platform::Log(L"WARNING: CreatePlayer returned a controller other than the one player {} lists", seat_ + 1);
+        platform::Log(L"WARNING: CreatePlayer returned a controller other than the one {} lists", Name());
     }
     return added;
 }
@@ -253,7 +272,7 @@ bool LocalPlayers::Remove() noexcept
     // (checked above) and after (below) is the evidence.
     if (!RemoveLocalPlayer(gameInstance_, player_, removeLocalPlayer_) || Contains(*players, player_))
     {
-        platform::Log(L"leave failed: the engine did not remove player {}", seat_ + 1);
+        platform::Log(L"leave failed: the engine did not remove {}", Name());
         return false;
     }
     Forget();
@@ -271,6 +290,11 @@ bool LocalPlayers::StillListed() noexcept
     }
     Forget();
     return false;
+}
+
+const wchar_t* LocalPlayers::Name() const noexcept
+{
+    return IsMirrorId(seat_) ? L"a mirror view" : SeatName(seat_);
 }
 
 void LocalPlayers::Forget() noexcept

@@ -42,7 +42,7 @@ Two routes drive the mod behind one interface in `run.py`:
   command, every `wait-until` answered by the session itself. The console logs an action's reply as `control: to
   console client <n>: ok <line> <command> -- <detail>`, the form the dev expectations match.
 - **Keys** (the release build, which has no console): `join`, `leave`, `layout`, `bars`, `own-camera`, `sticks`
-  and `third-view` are pressed as the mod's hotkeys through `tools/keys.ps1` (a switch is pressed only when the state
+  and `monitor-mode` are pressed as the mod's hotkeys through `tools/keys.ps1` (a switch is pressed only when the state
   asked for differs from the one held, starting from the mod's start-up states); `wait` sleeps the ticks at 60 fps;
   `wait-until p2.state == playing`, `p2.in == off` and `field.ready == on` watch the log for the mod's own lines (the
   take, the leave, the field settling after a load). Commands with no key (`p2.log-status`, `hold`, `split-fov`,

@@ -19,6 +19,7 @@
 #include "player_two/camera/camera_access.h"
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
+#include "players/seats.h"
 #include "players/tracked_object.h"
 #include "players/unreal_access.h"
 
@@ -64,7 +65,7 @@ struct Reflection
 };
 
 constexpr std::int32_t kSetterFrameBytes = 16;
-constexpr std::size_t  kMaxChanged       = 4;  // two players, and a respawned camera each
+constexpr std::size_t  kMaxChanged       = 2 * players::kMaxPlayers;  // every player, and a respawned camera each
 
 // Set once at install.
 bool           g_installed = false;  // the camera lookups' check passed (player_two/camera/camera_access.h)
@@ -244,8 +245,14 @@ void Update(bool fill) noexcept
         {
             return;
         }
-        ShapeMainCamera(generation::PlayerOneController(), L"player 1");
-        ShapeMainCamera(generation::PlayerTwoController(), L"player 2");
+        ShapeMainCamera(generation::PlayerOneController(), players::SeatName(0));
+        for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+        {
+            if (generation::Active(seat))
+            {
+                ShapeMainCamera(generation::ControllerOf(seat), players::SeatName(seat));
+            }
+        }
     }
     catch (...)
     {

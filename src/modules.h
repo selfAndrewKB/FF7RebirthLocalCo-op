@@ -14,11 +14,13 @@
 // The same file lists the modules' per-tick calls, in two phases around the session's tick (TickBeforeSession,
 // TickAfterSession(Frame)); the entry point keeps the keys, the session, the single view's choice, the view points'
 // frame, the held settings and the HUD placement between and after them. The actions a key and a control command
-// share (leave, own camera, fill, third view, window span) are here too, each once.
+// share (leave, own camera, fill, the monitor mode, window span) are here too, each once. So is the columns' tick (the
+// mirror views and the window span toward the columns the frame shows), right after the session's.
 
 #include "platform/dev_switch.h"
 #include "players/seat_state.h"
 #include "players/seats.h"
+#include "views/columns.h"
 
 #include <array>
 #include <string>
@@ -60,8 +62,28 @@ struct Frame
         constexpr bool PlaysMember() const noexcept { return state == players::SeatState::Playing; }
     };
     std::array<Seat, players::kMaxPlayers> seats{};  // by seat (players/seats.h); index 0, player 1's, unused
-    bool splitShown = false;  // player 2 in and the screen split (not player 1's single view)
+    bool splitShown = false;  // player 2 in and their own view on screen (not a single view, not player 1's picture)
+    int  columns    = 1;      // local players listed, one view each while the screen splits (views/columns.h)
+    bool onPlayerOne = false; // player 2's view shows player 1's picture (a single-view moment, columns held)
 };
+
+/// The columns of one tick (views/columns.h).
+struct Columns
+{
+    views::columns::Map map;            // the engine's list as columns, after the mirror views' tick
+    int                 playersIn = 1;  // player 1 and the seats listed
+    int                 wanted    = 1;  // the columns the frame shows
+    bool                held      = false;  // columns held beyond the players: the monitor mode or `view-columns`
+};
+
+/// Game thread, once per engine tick right after the session's: the columns wanted (the players listed, or the ones
+/// held), the mirror views toward them (views/mirror_player.h; none added while `rejoining`: a seat waits to rejoin
+/// after a world change), the window span to them (views/window_span.h).
+Columns TickColumns(bool rejoining) noexcept;
+
+/// Before the world changes (a map load, a retry, a reload): the mirror views out with the seats (a map load would
+/// spawn their controllers again outside a join); they come back once a join could run. `why` is logged.
+void ClearMirrorsForWorldChange(const wchar_t* why) noexcept;
 
 /// Game thread, once per engine tick, first: the tick's identities, then each module's work that runs before the
 /// keys and the session's tick (status lines, lists, the listeners, the deferred placements' polls).
@@ -80,8 +102,8 @@ struct Result
 
 // The actions a key and a control command share, each in one place. Game thread.
 
-/// Player 2 leaves: the third view first (it borrows player 2's join), then the session's leave of player 2's seat
-/// (logged there).
+/// Player 2 leaves: the session's leave of player 2's seat (logged there). A mirror view takes the column once it is
+/// free, if columns are held.
 void LeavePlayerTwo(player_two::Session& session, const wchar_t* why) noexcept;
 
 /// Player 2's half on player 2's own camera or player 1's (views/player_view_point.h); refused without the
@@ -91,8 +113,9 @@ Result SetOwnCamera(const player_two::Session& session, bool on) noexcept;
 /// The split halves filling the screen, or kept 16:9 with bars; refused without the view-point entry.
 Result SetFill(bool on) noexcept;
 
-/// The third full-size view in or out (views/third_view.h); `why` is logged by its leave.
-Result SetThirdView(bool on, const wchar_t* why) noexcept;
+/// The three-player monitor mode on or off (views/window_span.h Hold): three monitors whatever the players, the
+/// mirror views in the columns no player has.
+Result SetMonitorMode(bool on) noexcept;
 
 /// The game window across its row of monitors or back (views/window_span.h); entering needs player 2.
 Result SetWindowSpan(const player_two::Session& session, bool on, const wchar_t* why) noexcept;

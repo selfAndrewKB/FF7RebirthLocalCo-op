@@ -40,4 +40,19 @@ constexpr bool SeatBuilt(int seat) noexcept
     return seat >= 1 && seat <= kSeatsBuilt;
 }
 
+/// The mirror views' controller ids (views/mirror_player.h: a local player of the mod's that shows player 1's camera
+/// in a column no player has), at most one per column beside player 1's. Never a seat's id: a view draws the HUD of
+/// the seat its controller id names (hud/passes/second_image.h). And past XInput's four users (0 to 3): the engine
+/// routes pad N to controller id N, so no pad ever reaches a mirror's controller.
+inline constexpr int kXInputUsers   = 4;
+inline constexpr int kFirstMirrorId = kXInputUsers;
+static_assert(kFirstMirrorId >= kMaxPlayers, "a mirror's id is never a seat's");
+inline constexpr int kMirrorIds     = kMaxPlayers - 1;
+
+/// A mirror view's controller id.
+constexpr bool IsMirrorId(int id) noexcept
+{
+    return id >= kFirstMirrorId && id < kFirstMirrorId + kMirrorIds;
+}
+
 }  // namespace lss::players

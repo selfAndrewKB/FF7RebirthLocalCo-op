@@ -12,7 +12,6 @@
 #include "views/axis_records.h"
 #include "views/minimal_view_info.h"
 #include "views/stream_view_math.h"
-#include "views/third_view.h"
 #include "views/view_shape.h"
 
 #if LSS_DEV
@@ -21,6 +20,8 @@
 
 #include <Unreal/CoreUObject/UObject/Class.hpp>
 
+#include <algorithm>
+#include <array>
 #include <atomic>
 #include <cmath>
 #include <cstddef>
@@ -44,25 +45,54 @@ bool                  g_installed          = false;  // the entry holds the repl
 // Written on the game thread by Follow/ToggleOwnCamera/ToggleFill/SetSplitFovWeight, read by the replacement.
 // The engine calls GetViewPoint from Draw, also on the game thread; atomics keep that true if it
 // ever changes.
-std::atomic<const void*>   g_playerOne{nullptr};
-std::atomic<const void*>   g_playerTwo{nullptr};
-std::atomic<bool>          g_ownCamera{false};
-std::atomic<bool>          g_describePending{false};
+constexpr std::size_t kSeats = players::kMaxPlayers;  // the per-seat records' size (index 0, player 1's, where used)
+std::atomic<const void*>   g_playerOne{nullptr};  // set while a further player is in
+std::array<std::atomic<const void*>, kSeats> g_seat{};          // each further player's ULocalPlayer (index 0 unused)
+std::array<std::atomic<bool>, kSeats>        g_ownCamera{};     // the further player's view shows their own camera
+std::array<std::atomic<bool>, kSeats>        g_describePending{};
+std::atomic<bool>          g_onPlayerOne{false};  // every further player's view shows player 1's camera (columns held)
 std::atomic<bool>          g_fillOn{true};
-std::atomic<bool>          g_splitShown{false};  // player 2 in and the screen split (not player 1's alone)
+std::atomic<bool>          g_splitShown{false};  // a further player in and their own view on screen
+std::atomic<bool>          g_viewsSplit{false};  // more than one view on screen (the HUD per column)
 std::atomic<std::uint32_t> g_axisOffset{0};  // 0 until reflection has confirmed it
 std::atomic<float>         g_fovWeight{kDefaultSplitFovWeight};  // 0..1; negative: the MajorAxisFOV rule
 std::atomic<float>         g_halfAspect{0.0f};       // the split halves' width/height; 0 until known
 std::atomic<float>         g_halfHeightRatio{0.0f};  // their height as a fraction of the screen's
 
-/// Player 2's view point, the first time it is computed from a given camera.
-void DescribeViewPoint(const std::byte* viewInfo, bool ownCamera) noexcept
+/// A further player's view point, the first time it is computed from a given camera.
+void DescribeViewPoint(int seat, const std::byte* viewInfo, bool ownCamera) noexcept
 {
     float yaw = 0.0f;
     std::memcpy(&yaw, viewInfo + view_info::kYaw, sizeof(yaw));
     const auto previousSet = static_cast<unsigned>(*(viewInfo + view_info::kPreviousViewTransformSet));
-    platform::LogDebug(L"player 2's view point from {}: yaw {:.1f}; PreviousViewTransform set = {}",
-                       ownCamera ? L"player 2's own camera" : L"player 1's camera", yaw, previousSet);
+    platform::LogDebug(L"{}'s view point from {}: yaw {:.1f}; PreviousViewTransform set = {}", players::SeatName(seat),
+                       ownCamera ? L"their own camera" : L"player 1's camera", yaw, previousSet);
+}
+
+/// `localPlayer`'s seat: 0 player 1's, a further player's, or -1 (a mirror view, any other local player).
+int SeatOf(const void* localPlayer) noexcept
+{
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (localPlayer != nullptr && g_seat[static_cast<std::size_t>(seat)].load(std::memory_order_relaxed) == localPlayer)
+        {
+            return seat;
+        }
+    }
+    return localPlayer != nullptr && localPlayer == g_playerOne.load(std::memory_order_relaxed) ? 0 : -1;
+}
+
+/// A further player is in (their local player followed).
+bool AnyFurther() noexcept
+{
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (g_seat[static_cast<std::size_t>(seat)].load(std::memory_order_relaxed) != nullptr)
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -78,13 +108,13 @@ struct ViewShape
     bool operator==(const ViewShape&) const = default;
 };
 
-// Game thread only (GetViewPoint is called from Draw). Index 0: every player but player 2.
-ViewShape g_loggedShape[2]{};
-bool      g_shapeLogged[2]{};
+// Game thread only (GetViewPoint is called from Draw). By seat; index 0: player 1, a mirror view, any other.
+std::array<ViewShape, kSeats> g_loggedShape{};
+std::array<bool, kSeats>      g_shapeLogged{};
 
 /// Logs the shape the first time each player is seen and whenever the bars' inputs change. The
 /// FOV is logged with it but does not trigger a line, since the game's camera changes it often.
-void LogShapeOnChange(bool isPlayerTwo, const std::byte* viewInfo) noexcept
+void LogShapeOnChange(int slot, const std::byte* viewInfo) noexcept
 {
     if (!platform::Enabled(platform::Level::Debug))
     {
@@ -94,19 +124,19 @@ void LogShapeOnChange(bool isPlayerTwo, const std::byte* viewInfo) noexcept
     std::memcpy(&shape.aspectRatio, viewInfo + view_info::kAspectRatio, sizeof(shape.aspectRatio));
     shape.flags = static_cast<unsigned char>(*(viewInfo + view_info::kFlags)) & view_info::kKnownFlagBits;
 
-    const auto slot = isPlayerTwo ? 1 : 0;
-    if (g_shapeLogged[slot] && g_loggedShape[slot] == shape)
+    const auto at = static_cast<std::size_t>(slot);
+    if (g_shapeLogged[at] && g_loggedShape[at] == shape)
     {
         return;
     }
-    g_shapeLogged[slot] = true;
-    g_loggedShape[slot] = shape;
+    g_shapeLogged[at] = true;
+    g_loggedShape[at] = shape;
 
     float fov = 0.0f;
     std::memcpy(&fov, viewInfo + view_info::kFov, sizeof(fov));
     platform::LogDebug(L"{}'s view shape (engine): constrain aspect ratio = {} (flag bits 0x{:X}), aspect ratio {:.4f}, "
                        L"FOV {:.1f}",
-                       isPlayerTwo ? L"player 2" : L"player 1", (shape.flags & view_info::kConstrainAspectRatioBit) != 0,
+                       players::SeatName(slot), (shape.flags & view_info::kConstrainAspectRatioBit) != 0,
                        static_cast<unsigned>(shape.flags), shape.aspectRatio, fov);
 }
 
@@ -169,7 +199,7 @@ bool ApplyAxisRule(void* localPlayer, std::uint8_t rule) noexcept
     return true;
 }
 
-/// The split FOV's log, per player (index 1: player 2): at once for a new weight, half shape or camera
+/// The split FOV's log, per seat (index 0: player 1, a mirror view): at once for a new weight, half shape or camera
 /// aspect ratio; for a new camera FOV once it has held still (to 0.1 degree) for about half a second, so
 /// a zoom or a framing blend logs where it ends instead of every frame.
 struct FovSteady
@@ -181,23 +211,27 @@ struct FovSteady
     bool operator==(const FovSteady&) const = default;
 };
 constexpr std::uint32_t kFovStillFrames = 30;
-platform::SettledLog<FovSteady, int> g_fovLog[2] = {platform::SettledLog<FovSteady, int>(kFovStillFrames),
-                                                    platform::SettledLog<FovSteady, int>(kFovStillFrames)};
+static_assert(kSeats == 3, "one record per seat below");
+std::array<platform::SettledLog<FovSteady, int>, kSeats> g_fovLog = {platform::SettledLog<FovSteady, int>(kFovStillFrames),
+                                                                     platform::SettledLog<FovSteady, int>(kFovStillFrames),
+                                                                     platform::SettledLog<FovSteady, int>(kFovStillFrames)};
 
-/// Each player's half width against the camera's own (tan of the half-angles; 1 without a split FOV), for the
-/// camera code that places things across the view (player_two/camera/shoulder_scale.h).
-std::atomic<float> g_widthRatio[2] = {1.0f, 1.0f};
+/// Each player's view width against the camera's own (tan of the half-angles; 1 without a split FOV), for the
+/// camera code that places things across the view (player_two/camera/shoulder_scale.h). By seat.
+std::array<std::atomic<float>, kSeats> g_widthRatio{1.0f, 1.0f, 1.0f};
 
 /// With a weight chosen and the halves' shape known, writes the split FOV (views/view_shape.h,
-/// SplitFov) under the MaintainXFOV rule; otherwise leaves the FOV to the MajorAxisFOV rule.
-void ApplySplitFov(void* localPlayer, std::byte* viewInfo, bool isPlayerTwo) noexcept
+/// SplitFov) under the MaintainXFOV rule; otherwise leaves the FOV to the MajorAxisFOV rule. `slot`: the seat (0 for
+/// player 1, a mirror view).
+void ApplySplitFov(void* localPlayer, std::byte* viewInfo, int slot) noexcept
 {
+    const auto at = static_cast<std::size_t>(slot);
     const float     weight = g_fovWeight.load(std::memory_order_relaxed);
     const HalfShape half{g_halfAspect.load(std::memory_order_relaxed), g_halfHeightRatio.load(std::memory_order_relaxed)};
     if (weight < 0.0f || half.aspect <= 0.0f || half.heightRatio <= 0.0f)
     {
         ApplyAxisRule(localPlayer, kMajorAxisFov);
-        g_widthRatio[isPlayerTwo ? 1 : 0].store(1.0f, std::memory_order_relaxed);
+        g_widthRatio[at].store(1.0f, std::memory_order_relaxed);
         return;
     }
     if (!ApplyAxisRule(localPlayer, kMaintainXFov))
@@ -210,24 +244,24 @@ void ApplySplitFov(void* localPlayer, std::byte* viewInfo, bool isPlayerTwo) noe
     std::memcpy(&cameraRatio, viewInfo + view_info::kAspectRatio, sizeof(cameraRatio));
     const float split = SplitFov(fov, cameraRatio, half, weight);
     std::memcpy(viewInfo + view_info::kFov, &split, sizeof(split));
-    g_widthRatio[isPlayerTwo ? 1 : 0].store(WidthRatio(split, fov), std::memory_order_relaxed);
+    g_widthRatio[at].store(WidthRatio(split, fov), std::memory_order_relaxed);
 
     const FovSteady steady{weight, half.aspect, half.heightRatio, cameraRatio};
     if (!platform::Enabled(platform::Level::Debug))
     {
-        g_fovLog[isPlayerTwo ? 1 : 0].Reset();  // off: the next line starts fresh
+        g_fovLog[at].Reset();  // off: the next line starts fresh
     }
-    else if (g_fovLog[isPlayerTwo ? 1 : 0].Offer(steady, static_cast<int>(std::lround(fov * 10.0f))))
+    else if (g_fovLog[at].Offer(steady, static_cast<int>(std::lround(fov * 10.0f))))
     {
         const float vertical = VerticalFovDegrees(split, half.aspect);
         platform::LogDebug(L"split FOV ({}): weight {:.2f}, half aspect {:.3f} (height {:.2f} of the screen): camera "
                            L"{:.1f} deg wide at {:.3f} -> {:.1f} deg wide, {:.1f} deg tall",
-                           isPlayerTwo ? L"player 2" : L"player 1", weight, half.aspect, half.heightRatio, fov,
+                           players::SeatName(slot), weight, half.aspect, half.heightRatio, fov,
                            cameraRatio, split, vertical);
     }
 }
 
-void ShapeSplitView(void* localPlayer, std::byte* viewInfo, bool isPlayerTwo) noexcept
+void ShapeSplitView(void* localPlayer, std::byte* viewInfo, int slot) noexcept
 {
     if (!LooksLikeViewInfo(viewInfo))
     {
@@ -239,7 +273,7 @@ void ShapeSplitView(void* localPlayer, std::byte* viewInfo, bool isPlayerTwo) no
         }
         return;
     }
-    ApplySplitFov(localPlayer, viewInfo, isPlayerTwo);
+    ApplySplitFov(localPlayer, viewInfo, slot);
     if (!g_fillLogged)
     {
         g_fillLogged = true;
@@ -266,49 +300,53 @@ void RestoreAxisRules(const void* removedPlayer) noexcept
     g_fillLogged = false;
 }
 
-/// The engine's view point, then the camera choice and the split's shape.
-void GetViewPointShaped(void* localPlayer, std::byte* viewInfo, std::int32_t stereoPass)
+/// The engine's view point, then the camera choice and the split's shape. `seat`: SeatOf(localPlayer).
+void GetViewPointShaped(void* localPlayer, std::byte* viewInfo, std::int32_t stereoPass, int seat)
 {
-    const void* playerTwo   = g_playerTwo.load(std::memory_order_relaxed);
-    const void* playerOne   = g_playerOne.load(std::memory_order_relaxed);
-    const bool  isPlayerTwo = playerTwo != nullptr && localPlayer == playerTwo;
-    const bool  ownCamera   = g_ownCamera.load(std::memory_order_relaxed);
+    const void* playerOne = g_playerOne.load(std::memory_order_relaxed);
+    const bool  further   = seat >= 1;
+    const bool  ownCamera = further && g_ownCamera[static_cast<std::size_t>(seat)].load(std::memory_order_relaxed) &&
+                           !g_onPlayerOne.load(std::memory_order_relaxed);
 
-    // Until player 2's own camera is chosen, player 2's half shows player 1's camera.
-    void* source = isPlayerTwo && !ownCamera && playerOne != nullptr ? const_cast<void*>(playerOne) : localPlayer;
+    // Until a further player's own camera is chosen, and while the columns hold a single-view moment, the further
+    // player's view shows player 1's camera.
+    void* source = further && !ownCamera && playerOne != nullptr ? const_cast<void*>(playerOne) : localPlayer;
     g_engineGetViewPoint(source, viewInfo, stereoPass);
+    if (seat < 0)
+    {
+        // A mirror view (or any other local player): exactly the engine's result. Nothing is recorded for it, so
+        // nothing outlives it (its FOV rule is never changed; a record would be restored into a freed player).
+        return;
+    }
 
-    LogShapeOnChange(isPlayerTwo, viewInfo);
-    if (playerTwo == nullptr || !g_splitShown.load(std::memory_order_relaxed))
+    const int slot = seat;
+    LogShapeOnChange(slot, viewInfo);
+    if (!AnyFurther() || !g_splitShown.load(std::memory_order_relaxed))
     {
         return;  // one player, or player 1's single view: exactly the engine's result
     }
     if (g_fillOn.load(std::memory_order_relaxed))
     {
-        ShapeSplitView(localPlayer, viewInfo, isPlayerTwo);
+        ShapeSplitView(localPlayer, viewInfo, slot);
     }
-    if (!isPlayerTwo)
+    if (further && g_describePending[static_cast<std::size_t>(seat)].exchange(false, std::memory_order_relaxed))
     {
-        return;
-    }
-    if (g_describePending.exchange(false, std::memory_order_relaxed))
-    {
-        DescribeViewPoint(viewInfo, ownCamera);
+        DescribeViewPoint(seat, viewInfo, ownCamera);
     }
 }
 
-// Each split player's camera as it was last drawn (index 1: player 2), for the streaming views
-// (views/stream_views.h). Game thread (Draw).
-std::optional<StreamCamera> g_rendered[2];
+// Each player's camera as it was last drawn (by seat), for the streaming views (views/stream_views.h). Game thread
+// (Draw).
+std::array<std::optional<StreamCamera>, kSeats> g_rendered;
 
 /// Same signature as ULocalPlayer::GetViewPoint.
 void GetViewPoint(void* localPlayer, std::byte* viewInfo, std::int32_t stereoPass)
 {
-    GetViewPointShaped(localPlayer, viewInfo, stereoPass);
-    const void* playerTwo = g_playerTwo.load(std::memory_order_relaxed);
-    if (playerTwo != nullptr && (localPlayer == playerTwo || localPlayer == g_playerOne.load(std::memory_order_relaxed)))
+    const int seat = SeatOf(localPlayer);
+    GetViewPointShaped(localPlayer, viewInfo, stereoPass, seat);
+    if (seat >= 0 && AnyFurther())
     {
-        g_rendered[localPlayer == playerTwo ? 1 : 0] = CameraOf(viewInfo);
+        g_rendered[static_cast<std::size_t>(seat)] = CameraOf(viewInfo);
     }
 }
 
@@ -349,41 +387,57 @@ void RemovePlayerViewPoint() noexcept
 
 namespace {
 
-/// A new player 2 (or none; the caller has seen the change): the FOV rule of every remaining player the mod changed
-/// put back, the new player 2 started on their own camera with their next view point described, the cameras last
-/// drawn forgotten.
-void SetPlayers(const void* playerOne, const void* playerTwo) noexcept
+/// A new further player in `seat` (or none; the caller has seen the change): the FOV rule of every remaining player
+/// the mod changed put back, the new player started on their own camera with their next view point described.
+/// One seat at a time: the restore skips only this seat's removed player.
+void SetSeat(int seat, const void* localPlayer) noexcept
 {
-    g_playerOne.store(playerTwo == nullptr ? nullptr : playerOne, std::memory_order_relaxed);
-    const void* previous = g_playerTwo.exchange(playerTwo, std::memory_order_relaxed);
+    static_assert(players::kSeatsBuilt == 1, "step 6: two seats can leave in one Follow; collect every removed player "
+                                             "first and restore once, skipping all of them");
+    const auto  at       = static_cast<std::size_t>(seat);
+    const void* previous = g_seat[at].exchange(localPlayer, std::memory_order_relaxed);
     if (previous != nullptr)
     {
         RestoreAxisRules(previous);  // same thread as the replacement, so no call is in flight
     }
-    g_ownCamera.store(playerTwo != nullptr, std::memory_order_relaxed);  // each new player 2 starts on their own camera
-    g_describePending.store(playerTwo != nullptr, std::memory_order_relaxed);
-    g_shapeLogged[1] = false;  // a new player 2's shape is logged afresh
-    g_rendered[0].reset();
-    g_rendered[1].reset();
+    g_ownCamera[at].store(localPlayer != nullptr, std::memory_order_relaxed);  // each new player starts on their own camera
+    g_describePending[at].store(localPlayer != nullptr, std::memory_order_relaxed);
+    g_shapeLogged[at] = false;  // a new player's shape is logged afresh
 }
 
 // The frame's follow (mod.cpp's until 2026-10-22). Game thread.
-HalfShapeWatch g_halfShape;
-const void*    g_followedPlayerTwo = nullptr;  // the players as last followed
-std::uint32_t  g_followedJoins     = 0;
+HalfShapeWatch                                   g_halfShape;
+std::array<const void*, kSeats>                  g_followedSeat{};  // the players as last followed
+std::array<std::uint32_t, kSeats>                g_followedJoins{};
 
-/// Keeps the players current, and describes the local players when player 2 appears (a subclass with its own
-/// vtable would bypass the camera choice).
+/// Keeps the players current, and describes the local players when a further player appears (a subclass with its own
+/// vtable would bypass the camera choice). The frame's index 0 and unbuilt seats stay null (mod.cpp SplitFrameNow).
 void FollowPlayers(const SplitFrame& frame) noexcept
 {
-    if (frame.playerTwo == g_followedPlayerTwo && frame.joinCount == g_followedJoins)
+    if (frame.seats == g_followedSeat && frame.joins == g_followedJoins)
     {
         return;
     }
-    g_followedPlayerTwo = frame.playerTwo;
-    g_followedJoins     = frame.joinCount;
+    bool joined = false;
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        const auto at = static_cast<std::size_t>(seat);
+        if (frame.seats[at] != g_followedSeat[at] || frame.joins[at] != g_followedJoins[at])
+        {
+            SetSeat(seat, frame.seats[at]);  // a new player at the old one's address still starts fresh
+            joined = joined || frame.seats[at] != nullptr;
+        }
+    }
+    g_followedSeat  = frame.seats;
+    g_followedJoins = frame.joins;
+    const bool any  = AnyFurther();
+    g_playerOne.store(any ? frame.playerOne : nullptr, std::memory_order_relaxed);
+    for (auto& rendered : g_rendered)
+    {
+        rendered.reset();
+    }
     // The FOV rule's offset, confirmed by reflection before the first split frame uses it.
-    if (frame.playerTwo != nullptr)
+    if (joined)
     {
         const auto axisOffset = players::split_settings::AspectRatioAxisConstraintOffset();
         g_axisOffset.store(axisOffset.value_or(0), std::memory_order_relaxed);
@@ -393,8 +447,7 @@ void FollowPlayers(const SplitFrame& frame) noexcept
                           L"keep the game's FOV rule");
         }
     }
-    SetPlayers(frame.playerOne, frame.playerTwo);  // a new player 2 at the old one's address still starts fresh
-    if (frame.playerTwo == nullptr || !g_installed)
+    if (!joined || !g_installed)
     {
         return;
     }
@@ -421,7 +474,7 @@ void SetHalfShape(const HalfShape& half) noexcept
 void FollowHalfShape(const SplitFrame& frame) noexcept
 {
     // Three columns: the halves rule does not apply (stock FOV).
-    switch (g_halfShape.Next(frame.splitShown, third_view::In()))
+    switch (g_halfShape.Next(frame.splitShown, frame.columns > 2))
     {
         case HalfShapeWatch::Step::Reset: SetHalfShape({}); return;
         case HalfShapeWatch::Step::Skip: return;
@@ -456,25 +509,34 @@ void Follow(const SplitFrame& frame) noexcept
 {
     FollowPlayers(frame);
     g_splitShown.store(frame.splitShown, std::memory_order_relaxed);
+    g_viewsSplit.store(frame.viewsSplit, std::memory_order_relaxed);
+    if (g_onPlayerOne.exchange(frame.onPlayerOne, std::memory_order_relaxed) != frame.onPlayerOne)
+    {
+        for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+        {
+            g_describePending[static_cast<std::size_t>(seat)].store(true, std::memory_order_relaxed);
+        }
+    }
     FollowHalfShape(frame);
 }
 
 bool ToggleOwnCamera() noexcept
 {
-    if (g_playerTwo.load(std::memory_order_relaxed) == nullptr)
+    const auto two = static_cast<std::size_t>(players::kPlayerTwoSeat);
+    if (g_seat[two].load(std::memory_order_relaxed) == nullptr)
     {
-        g_ownCamera.store(false, std::memory_order_relaxed);
+        g_ownCamera[two].store(false, std::memory_order_relaxed);
         return false;
     }
-    const bool own = !g_ownCamera.load(std::memory_order_relaxed);
-    g_ownCamera.store(own, std::memory_order_relaxed);
-    g_describePending.store(true, std::memory_order_relaxed);
+    const bool own = !g_ownCamera[two].load(std::memory_order_relaxed);
+    g_ownCamera[two].store(own, std::memory_order_relaxed);
+    g_describePending[two].store(true, std::memory_order_relaxed);
     return own;
 }
 
 bool ShowsOwnCamera() noexcept
 {
-    return g_ownCamera.load(std::memory_order_relaxed);
+    return g_ownCamera[static_cast<std::size_t>(players::kPlayerTwoSeat)].load(std::memory_order_relaxed);
 }
 
 bool ToggleFill() noexcept
@@ -490,14 +552,19 @@ float HalfAspect() noexcept
     return g_halfAspect.load(std::memory_order_relaxed);
 }
 
-std::optional<StreamCamera> RenderedCamera(bool playerTwo) noexcept
+std::optional<StreamCamera> RenderedCamera(int seat) noexcept
 {
-    return g_rendered[playerTwo ? 1 : 0];
+    return seat >= 0 && seat < players::kMaxPlayers ? g_rendered[static_cast<std::size_t>(seat)] : std::nullopt;
 }
 
 bool SplitShown() noexcept
 {
     return g_splitShown.load(std::memory_order_relaxed);
+}
+
+bool ViewsSplit() noexcept
+{
+    return g_viewsSplit.load(std::memory_order_relaxed);
 }
 
 bool FillsHalves() noexcept
@@ -515,9 +582,10 @@ float SplitFovWeight() noexcept
     return g_fovWeight.load(std::memory_order_relaxed);
 }
 
-float SplitWidthRatio(bool isPlayerTwo) noexcept
+float SplitWidthRatio(int seat) noexcept
 {
-    return g_widthRatio[isPlayerTwo ? 1 : 0].load(std::memory_order_relaxed);
+    return seat >= 0 && seat < players::kMaxPlayers ? g_widthRatio[static_cast<std::size_t>(seat)].load(std::memory_order_relaxed)
+                                                    : 1.0f;
 }
 
 bool UsesEngineViewPoint(const void* localPlayer) noexcept

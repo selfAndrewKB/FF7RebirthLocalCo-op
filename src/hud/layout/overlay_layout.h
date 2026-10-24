@@ -4,7 +4,7 @@
 // whole HUD with its world markers on their objects (hud/layout/overlay_band.h has the arithmetic).
 //
 // Three calls of the overlay's own per-frame render (SEndRootOverlay__RenderToCompositeLayer, game
-// thread) are redirected (platform/call_redirect.h); all are inert unless the split is shown (views::SplitShown,
+// thread) are redirected (platform/call_redirect.h); all are inert unless more than one view shows (views::ViewsSplit,
 // the view points' flag, kept by views::Follow each tick) and the band is switched on:
 //   - EndUI__GetCompositeLayerRect returns the visible band instead of the whole image, so the
 //     widget tree lays itself out at the band's size and anchors (a native 32:9 or 8:9 screen);

@@ -109,9 +109,9 @@ void RenderRootOverlay(void* application) noexcept
         TraceBeforeRender();  // the HUD trace (hud/hud_trace.h; a stub without the dev tools)
         target_views::BeginFrame();  // this frame's target lookups made afresh
         const bool splitShown = player_two::generation::AnyActive() && views::SplitShown();  // not player 1's single view
-        // The field-action icons' base for the split's layout (or the game's own), before the rows'
-        // layout below, which then reads it.
-        action_icon_base::Update(splitShown ? LastLayoutSize() : kSoloLayout);
+        // The field-action icons' base for the columns' layout (or the game's own), before the rows' layout below,
+        // which then reads it.
+        action_icon_base::Update(views::ViewsSplit() ? LastLayoutSize() : kSoloLayout);
         if (player_two::generation::AnyActive())
         {
             prompt_rows::Refresh();  // whose each prompt row is; each player's laid out on their own

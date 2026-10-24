@@ -196,8 +196,9 @@ add_library(LocalSplitScreen SHARED
     src/views/player_view_point.cpp
     src/views/stream_view_math.cpp
     src/views/stream_views.cpp
+    src/views/display_align.cpp
+    src/views/mirror_player.cpp
     src/views/monitor_row.cpp
-    src/views/third_view.cpp
     src/views/view_shape.cpp
     src/views/window_span.cpp
     src/views/whole_screen.cpp
@@ -352,6 +353,7 @@ lss_test(camera_access)
 lss_test(attack_framing)
 lss_test(move_type_two)
 lss_test(seat_state)
+lss_test(columns)
 # The facts rule (tests/facts_once.py): no engine address declared in two files, no per-build pair with equal halves.
 add_test(NAME facts_once COMMAND python "${CMAKE_CURRENT_SOURCE_DIR}/tests/facts_once.py" "${CMAKE_CURRENT_SOURCE_DIR}/src")
 

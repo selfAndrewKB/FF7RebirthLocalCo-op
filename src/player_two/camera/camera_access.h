@@ -61,13 +61,6 @@ int SeatOfCameraManager(const void* cameraManager) noexcept;
 /// generation is active, -1 none. By the controllers' camera-manager fields as they stand (needs no Install).
 int SeatOfOperator(const void* op) noexcept;
 
-/// SeatOfOperator under its old name (a seat's number is its player's index: 0 player 1, 1 player 2), for the
-/// per-column modules not yet converted (shoulder_scale, plan/seats.md step 5).
-inline int PlayerOfOperator(const void* op) noexcept
-{
-    return SeatOfOperator(op);
-}
-
 /// Player 1's operator and one seat's, of one kind. `two` is the seat's (the name kept from the two-player mod).
 struct OperatorPair
 {

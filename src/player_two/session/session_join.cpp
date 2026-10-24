@@ -214,6 +214,14 @@ void Seat::Join() noexcept
         Log(L"player 1 rides a vehicle the whole party shares: player 2 joins standing aside");
     }
 
+    // The mirror views out first: the engine appends the seat's player after whoever is listed, and its column must
+    // follow the players'. They come back on this tick, after the session's (modules.cpp).
+    if (installed_.clearMirrors != nullptr && !installed_.clearMirrors())
+    {
+        Log(L"join refused: a mirror view could not be taken out of the engine's list (the seat would land after it); "
+            L"tried again with the next join");
+        return;
+    }
     const auto                   before = JoinWitness::Take(one.localPlayer);
     players::LocalPlayers::Added added;
     own_controller::Report       report;

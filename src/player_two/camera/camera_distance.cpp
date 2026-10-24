@@ -14,6 +14,7 @@
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
 #include "player_two/world/world_rules.h"
+#include "players/seats.h"
 #include "players/split_settings_access.h"
 
 #if LSS_DEV
@@ -67,6 +68,7 @@ constexpr std::uint32_t kOpLevel           = 0x738;
 constexpr std::int32_t  kMinOffset = -2, kMaxOffset = 5;
 constexpr std::int32_t  kMinLevel  = 1, kMaxLevel = 10;  // the factor is linear; the menu's own range is not read
 constexpr ULONGLONG     kLayoutReadMs = 1000;
+constexpr std::uint8_t  kThreeColumns = 2;  // g_layout's value for three columns: no offset (each a full 16:9 view)
 constexpr int           kMaxFramingLines = 200;
 
 using OptionDataFn = const std::uint8_t* (*)();
@@ -86,7 +88,7 @@ ManagerApplyFn         g_managerApply        = nullptr;
 // Split framing, game thread.
 OptionDataFn  g_optionData     = nullptr;
 std::int32_t  g_offsets[2]     = {0, 0};  // top/bottom, side by side: the Options level unless asked
-std::uint8_t  g_layout         = 0;       // players::SplitLayoutKind, read once a second while player 2 is in
+std::uint8_t  g_layout         = 0;       // players::SplitLayoutKind, read once a second while in; kThreeColumns
 ULONGLONG     g_layoutReadAt   = 0;
 bool          g_wasIn          = false;
 int           g_framingLines   = 0;
@@ -98,22 +100,25 @@ void Line(const std::wstring& text) noexcept
 
 using camera_access::CameraManagerOf;
 
-/// The game's per-camera-manager apply for player 2's camera manager, after the game's own apply on
+/// The game's per-camera-manager apply for each further player's camera manager, after the game's own apply on
 /// `applied` (the primary camera manager).
 void ApplyToPlayerTwo(const void* applied, std::uint8_t field, std::uint8_t battle) noexcept
 {
-    if (!generation::OnGameThread() || !generation::Active())
+    if (!generation::OnGameThread())
     {
         return;
     }
-    void* two = CameraManagerOf(generation::PlayerTwoController());
-    if (two == nullptr || two == applied)
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        return;
+        void* manager = generation::Active(seat) ? CameraManagerOf(generation::ControllerOf(seat)) : nullptr;
+        if (manager == nullptr || manager == applied)
+        {
+            continue;
+        }
+        const bool ok = platform::CallGuarded(g_managerApply, manager, field, battle);
+        Line(std::format(L"field {} battle {} applied to {}'s camera manager too{}", field, battle,
+                         players::SeatName(seat), ok ? L"" : L" (FAULTED)"));
     }
-    const bool ok = platform::CallGuarded(g_managerApply, two, field, battle);
-    Line(std::format(L"field {} battle {} applied to player 2's camera manager too{}", field, battle,
-                     ok ? L"" : L" (FAULTED)"));
 }
 
 /// Replaces the option setter's call of the primary camera manager's apply.
@@ -193,7 +198,7 @@ bool OptionLevels(std::uint8_t& field, std::uint8_t& battle) noexcept
 
 /// Drives one camera manager's field operator to level through the game's per-camera-manager setter,
 /// if the operator is initialised and holds another level.
-void DriveTo(void* cameraManager, int player, std::uint8_t level, std::uint8_t battle) noexcept
+void DriveTo(void* cameraManager, int seat, std::uint8_t level, std::uint8_t battle) noexcept
 {
     void* op = ReadPointer(cameraManager, facts::kCameraManagerFieldOperator);
     std::uint8_t initialized = 0, now = 0;
@@ -203,8 +208,8 @@ void DriveTo(void* cameraManager, int player, std::uint8_t level, std::uint8_t b
         return;
     }
     const bool ok = platform::CallGuarded(g_managerApply, cameraManager, level, battle);
-    FramingLine(L"player {}'s field camera distance level {} -> {} (battle {}){}", player, now, level, battle,
-                ok ? L"" : L" (FAULTED)");
+    FramingLine(L"{}'s field camera distance level {} -> {} (battle {}){}", players::SeatName(seat), now, level,
+                battle, ok ? L"" : L" (FAULTED)");
 }
 
 }  // namespace
@@ -226,13 +231,13 @@ std::int32_t LayoutOffset(int layout) noexcept
     return layout == 0 || layout == 1 ? g_offsets[layout] : 0;
 }
 
-void TickFraming(bool playerTwoIn) noexcept
+void TickFraming(int columns) noexcept
 {
     if (!FramingAvailable() || !generation::OnGameThread())
     {
         return;
     }
-    const bool in = playerTwoIn && generation::Active();
+    const bool in = columns >= 2 && generation::AnyActive();
     if (!in && !g_wasIn)
     {
         return;
@@ -244,12 +249,16 @@ void TickFraming(bool playerTwoIn) noexcept
     }
     if (!in)
     {
-        g_wasIn = false;  // player 2 left: player 1's camera back to the Options level
-        DriveTo(CameraManagerOf(generation::PlayerOneController()), 1, field, battle);
+        g_wasIn = false;  // the last further player left: player 1's camera back to the Options level
+        DriveTo(CameraManagerOf(generation::PlayerOneController()), 0, field, battle);
         return;
     }
     const ULONGLONG now = GetTickCount64();
-    if (!g_wasIn || now - g_layoutReadAt >= kLayoutReadMs)
+    if (columns >= 3)
+    {
+        g_layout = kThreeColumns;
+    }
+    else if (!g_wasIn || g_layout == kThreeColumns || now - g_layoutReadAt >= kLayoutReadMs)
     {
         g_layoutReadAt = now;
         if (const auto layout = players::split_settings::TwoPlayerLayout(); layout && *layout <= 1)
@@ -258,10 +267,17 @@ void TickFraming(bool playerTwoIn) noexcept
         }
     }
     g_wasIn = true;
-    const std::int32_t  target = world_rules::DistanceLevel(static_cast<std::int32_t>(field), g_offsets[g_layout], kMinLevel, kMaxLevel);
-    const std::uint8_t  level  = static_cast<std::uint8_t>(target);
-    DriveTo(CameraManagerOf(generation::PlayerOneController()), 1, level, battle);
-    DriveTo(CameraManagerOf(generation::PlayerTwoController()), 2, level, battle);
+    const std::int32_t offset = LayoutOffset(g_layout);
+    const std::int32_t target = world_rules::DistanceLevel(static_cast<std::int32_t>(field), offset, kMinLevel, kMaxLevel);
+    const std::uint8_t level  = static_cast<std::uint8_t>(target);
+    DriveTo(CameraManagerOf(generation::PlayerOneController()), 0, level, battle);
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (generation::Active(seat))
+        {
+            DriveTo(CameraManagerOf(generation::ControllerOf(seat)), seat, level, battle);
+        }
+    }
 }
 
 bool Install(const platform::GameImage& image) noexcept

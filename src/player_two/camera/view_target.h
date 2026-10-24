@@ -35,7 +35,7 @@ bool Aim(void* controller) noexcept;
 
 /// Makes the controller's End camera manager view `actor` (another player's camera actor, say), with the same
 /// call and arguments as Aim. True if it views the actor afterwards; false without a call under Aim's conditions.
-/// The multi-monitor branch's third view uses it: the third camera manager shows player 1's camera.
+/// The mirror views use it (views/mirror_player.h): a mirror's camera manager shows player 1's camera.
 bool AimAt(void* controller, void* actor) noexcept;
 
 }  // namespace lss::player_two::view_target

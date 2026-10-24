@@ -57,8 +57,8 @@ float VerticalFovDegrees(float horizontalFovDegrees, float aspect) noexcept;
 /// layout by key or script): twice a second at 60 ticks.
 inline constexpr std::uint32_t kHalfShapeIntervalTicks = 30;
 
-/// Keeps the half-shape reads paced and the aspect's log on change: reset while the split is not shown or a third
-/// view is in (the halves rule does not apply), a read every kHalfShapeIntervalTicks ticks otherwise.
+/// Keeps the half-shape reads paced and the aspect's log on change: reset while the split is not shown or three
+/// columns are (the halves rule does not apply), a read every kHalfShapeIntervalTicks ticks otherwise.
 class HalfShapeWatch
 {
 public:
@@ -69,9 +69,9 @@ public:
         Read,   // read the viewport and the layout
     };
 
-    Step Next(bool splitShown, bool thirdViewIn) noexcept
+    Step Next(bool splitShown, bool threeColumns) noexcept
     {
-        if (!splitShown || thirdViewIn)
+        if (!splitShown || threeColumns)
         {
             ticks_        = 0;
             loggedAspect_ = -1.0f;

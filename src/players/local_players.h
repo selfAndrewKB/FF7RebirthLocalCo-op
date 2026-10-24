@@ -1,10 +1,10 @@
 #pragma once
 
 // A local player of the mod's, added to and removed from the engine's list of local players through UE's own path,
-// by seat (players/seats.h): seat 1 is player 2 (player_two/session/session.h), seat 2 the third view
-// (views/third_view.h). The controller id is the seat. The engine appends the player to its list, after whoever is
-// listed, and closes the list up when one leaves, so the list position is never taken for the seat: the new player
-// is the one appended, and a seat is free when no listed player has its controller id.
+// by controller id: a seat's (players/seats.h; seat 1 is player 2, player_two/session/session.h), which is the seat, or
+// a mirror view's (players::IsMirrorId, views/mirror_player.h). The engine appends the player to its list, after
+// whoever is listed, and closes the list up when one leaves, so the list position is never taken for the seat: the
+// new player is the one appended, and a seat is free when no listed player has its controller id.
 //
 // Adding uses the engine's CreatePlayer with a PlayerController of the player's own. The engine then
 // lays out the split screen by itself, and the renderer module renders each player's view as its
@@ -41,10 +41,10 @@ public:
         unreal::UObject* controller = nullptr;  // the player's controller as the engine lists it
     };
 
-    /// Player 1's local player and controller, when the list has room for one more (1 to kMaxPlayers - 1 listed),
-    /// no listed player has the seat's controller id, and player 1 has a controller; otherwise both null (and the
-    /// reason is logged when `log` is set). A caller that needs another seat in first checks that itself (the third
-    /// view: player 2's generation).
+    /// Player 1's local player and controller, when the list has room for one more player (1 to kMaxPlayers - 1
+    /// listed beside the mirror views, and fewer than the engine's four local players), no listed player has this
+    /// controller id, none has an id that is no built seat's or mirror's, and player 1 has a controller; otherwise
+    /// both null (and the reason is logged when `log` is set).
     struct PlayerOne
     {
         unreal::UObject* localPlayer = nullptr;
@@ -69,6 +69,9 @@ public:
     unreal::UObject* Player() const noexcept { return player_; }
 
     std::int32_t Seat() const noexcept { return seat_; }
+
+    /// "player 2" for seat 1, "a mirror view" for a mirror's id: for the log.
+    const wchar_t* Name() const noexcept;
 
     /// Counts adds. A new player can be allocated at the address of the one that left, so
     /// observers tell joins apart by this, not by the address alone.

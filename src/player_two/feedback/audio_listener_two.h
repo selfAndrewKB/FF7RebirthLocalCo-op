@@ -3,12 +3,14 @@
 // Player 2's half has its own sound: each SEAD sound is measured from the nearer of the two players' listeners
 // (research/RE-p2-audio-listener.md §7).
 //
-// UE's stock viewport draw sets one audio listener per player view (FAudioDevice listeners [0] and [1]). Square Enix's
+// UE's stock viewport draw sets one audio listener per view, in the local player list's order (FAudioDevice listeners
+// [0], [1], ...: one per column, views/columns.h). Square Enix's
 // SEAD audio device pushes only listener [0] into SEAD's one listener (SQEX::Sd::Lay::Listener), which every SEAD sound
 // measures its audibility, gain, pan and doppler from, so a sound near player 2 and far from player 1 was never voiced.
 // Three levers, each running the game's own code for player 2:
 //   - L1, a second listener: a copy of the game's listener object, set every SEAD frame by the game's own setter from
-//     UE's listener [1] (player 2's camera, read where the device pushes [0]) and given its velocity by the game's own
+//     UE's listener at player 2's column (player 2's camera, read where the device pushes [0]; never a mirror view's,
+//     which sits on player 1's camera) and given its velocity by the game's own
 //     update. For each moving or placed sound the nearer listener is chosen (with hysteresis), and the game's
 //     audibility test and update (doppler, gain, pan, the voice's start and stop) run with SEAD's listener pointer
 //     swapped to it, then restored, all on SEAD's update thread. One voice per sound, as before.
@@ -35,7 +37,9 @@ void Install(const platform::GameImage& image) noexcept;
 
 void Remove() noexcept;
 
-/// Game thread, every engine tick: the controller slot, the state changes and the summary (Debug).
-void Tick() noexcept;
+/// Game thread, every engine tick: the controller slot, the state changes and the summary (Debug). `columnTwo`: player
+/// 2's column (its index in the engine's local player list, views/columns.h), -1 while player 2 is not listed: the
+/// listener the audio thread copies for player 2.
+void Tick(int columnTwo) noexcept;
 
 }  // namespace lss::player_two::audio_listener_two

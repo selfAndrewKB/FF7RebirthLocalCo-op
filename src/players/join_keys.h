@@ -8,7 +8,8 @@
 //   Ctrl+F9  each pad drives only its own player's sticks (on at start; off merges them, for testing)
 //   Ctrl+F10 the NPC population follows both players (on at start; off follows the leader, to compare)
 //   Ctrl+F11 characters near player 2 keep full detail (on at start; off: player 1's camera alone, to compare)
-//   Ctrl+F3  a third full-size view in and out (the multi-monitor measurement; views/third_view.h)
+//   Ctrl+F3  the three-player monitor mode on and off (three monitors, player 1's picture in the empty columns;
+//            views/window_span.h)
 //   Ctrl+F2  the game window across its row of monitors and back (views/window_span.h)
 // Keys never reach renderer internals; the renderer follows the player count.
 
@@ -25,14 +26,14 @@ enum class PlayerIntent
     TogglePadSticks,
     ToggleNpcCentre,
     ToggleNpcDetail,
-    ToggleThirdView,
+    ToggleMonitorMode,
     ToggleWindowSpan,
 };
 
 /// The intent of one tick's presses: joining and leaving win over everything else pressed on the same tick (and
 /// cancel each other); of the switches, one per tick, in this order (the others are reported on their own presses).
 constexpr PlayerIntent ResolveIntent(bool join, bool leave, bool camera, bool layout, bool fill, bool sticks, bool centre,
-                                     bool detail, bool third, bool span) noexcept
+                                     bool detail, bool monitors, bool span) noexcept
 {
     if (!join && !leave)
     {
@@ -60,9 +61,9 @@ constexpr PlayerIntent ResolveIntent(bool join, bool leave, bool camera, bool la
         {
             return PlayerIntent::ToggleNpcDetail;
         }
-        if (third)
+        if (monitors)
         {
-            return PlayerIntent::ToggleThirdView;
+            return PlayerIntent::ToggleMonitorMode;
         }
         if (span)
         {
@@ -96,7 +97,7 @@ private:
     bool sticksWasDown_ = false;
     bool centreWasDown_ = false;
     bool detailWasDown_ = false;
-    bool thirdWasDown_  = false;
+    bool monitorsWasDown_  = false;
     bool spanWasDown_   = false;
 };
 

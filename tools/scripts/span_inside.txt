@@ -1,5 +1,6 @@
-# Three equal columns across the three-monitor row from inside the mod: player 2 joins, third view on, then the
-# engine's own window reshape takes the window over the row (views/window_span.h). No console resolution, no
+# Three equal columns across the three-monitor row from inside the mod: player 2 joins, then the three-player monitor
+# mode: the engine's own window reshape takes the window over the row and the mirror view fills the third column
+# (views/window_span.h, views/mirror_player.h). No console resolution, no
 # outside tool: the game stays in its windowed fullscreen and the viewport follows the window.
 note span-inside: begin
 perf-log on
@@ -7,6 +8,5 @@ join
 wait-until p2.state == playing 1800
 layout side-by-side
 split-fov native
-third-view on
-window-span on
+monitor-mode on
 note span-inside: window spanned from inside the mod

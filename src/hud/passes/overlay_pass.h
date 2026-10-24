@@ -9,7 +9,7 @@
 //
 // Keyed by seat, not by column: each further pass draws one seat's content into an entry named for that seat, and the
 // render thread finds each view's seat from the view itself (hud/passes/second_image.cpp), so the HUD needs no map of
-// columns. A column with no seat (the third view, a mirror) draws player 1's entry.
+// columns. A column with no seat (a mirror view, views/mirror_player.h) draws player 1's entry.
 
 namespace lss::hud::overlay_pass {
 

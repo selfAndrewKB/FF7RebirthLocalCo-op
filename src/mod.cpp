@@ -53,7 +53,8 @@
 #include "renderer/residency_off.h"
 #include "renderer/view_family_submission.h"
 #include "views/player_view_point.h"
-#include "views/third_view.h"
+#include "views/display_align.h"
+#include "views/mirror_player.h"
 #include "views/whole_screen.h"
 #include "views/window_span.h"
 
@@ -141,6 +142,20 @@ bool WriteTwoPlayerLayout(const wchar_t*, std::uint8_t value) noexcept
     return lss::players::split_settings::SetTwoPlayerLayout(value);
 }
 
+// The three-player layout, held at three equal columns while three local players are listed (views/columns.h).
+constexpr std::uint8_t   kThreeColumns     = 2;  // EThreePlayerSplitScreenType::Vertical
+constexpr const wchar_t* kThreeLayoutName  = L"ThreePlayerSplitscreenLayout";
+
+std::optional<std::uint8_t> ReadThreePlayerLayout(const wchar_t*) noexcept
+{
+    return lss::players::split_settings::ThreePlayerLayout();
+}
+
+bool WriteThreePlayerLayout(const wchar_t*, std::uint8_t value) noexcept
+{
+    return lss::players::split_settings::SetThreePlayerLayout(value);
+}
+
 class LocalSplitScreenMod final : public RC::CppUserModBase
 {
 public:
@@ -175,9 +190,17 @@ public:
         lss::player_two::charapop_near::Release();
         lss::player_two::charapop_centre::Release();
         lss::player_two::world_actor_reach::Release();
-        if (session_ && session_->HasPlayerTwo())
+        // The monitors the span lined up go back for the Windows session (plain Win32, any thread); the window itself
+        // is the engine's, reshaped back only on the game thread.
+        if (lss::player_two::generation::OnGameThread())
         {
-            Log(L"unloading with player 2 still in: the per-player rendering and player 2's stages stay installed");
+            lss::views::window_span::Leave(L"the mod unloads");
+        }
+        lss::views::display_align::Restore();
+        if (session_ && (session_->HasPlayerTwo() || lss::views::mirror_player::Count() > 0))
+        {
+            Log(L"unloading with player 2 or a mirror view still in: the per-player rendering and the stages stay "
+                L"installed");
             return;
         }
         // The reverse of the install order: the field-exit catch and the dev tools (installed after the table),
@@ -282,6 +305,8 @@ public:
         lss::facts::InstallInBattle(*image);  // the game's in-battle test, once, for the stages that ask it
         session_.emplace(*removeLocalPlayer);
         session_->InstallStages(*image);
+        // A seat's join takes the mirror views out right before its CreatePlayer (views/mirror_player.h).
+        session_->SetClearMirrors([]() noexcept { return lss::views::mirror_player::Clear(L"a player joins"); });
         lss::modules::Install(*image);  // every other module, in table order (modules.cpp); each logs its own line
 
         // The dev tools (built with LSS_DEV_TOOLS only): the console, the HUD trace and probe, and the watches
@@ -314,8 +339,8 @@ public:
         Log(L"ready: every engine check passed. Ctrl+F7 adds player 2, Ctrl+F8 removes player 2, Ctrl+F5 switches "
             L"top/bottom and side by side, Ctrl+F4 switches filled halves and 16:9 halves with bars. Player 2 starts on "
             L"their own camera and pad; for testing, Ctrl+F6 switches their half to player 1's camera and Ctrl+F9 "
-            L"merges the pads. Ctrl+F3 adds a third full-size view (the multi-monitor measurement), Ctrl+F2 spans the "
-            L"window across the monitor row");
+            L"merges the pads. Ctrl+F2 spans the window across the monitor row, one monitor per player; Ctrl+F3 "
+            L"switches the three-player monitor mode (three monitors, player 1's picture in the empty columns)");
         const auto pool = lss::platform::CodePool();
         Log(L"code pool: {} piece(s), {} bytes of placed code in {} block(s) of 64 KiB (one search each)", pool.pieces,
             pool.bytes, pool.blocks);
@@ -350,14 +375,16 @@ private:
     /// for a retry, reload or load); the session joins again once the new field is ready.
     void LeaveBeforeWorldChange(const wchar_t* why) noexcept
     {
+        // The mirror views first, with or without player 2: their controllers are this world's, and a map load would
+        // spawn them again outside a join. They come back once a join could run.
+        lss::modules::ClearMirrorsForWorldChange(why);
         if (!session_->HasPlayerTwo())
         {
             return;
         }
-        lss::views::third_view::Remove(why);  // first: it borrows player 2's join, and its controller is this world's
         const bool left = session_->LeaveNow();
         // Now, not at the next tick: the view points must not keep the old player 2.
-        lss::views::Follow(SplitFrameNow(false));
+        lss::views::Follow(SplitFrameNow(false, false, false));
         // The viewport outlives the world: its split switch is cleared while player 1's controller
         // is still this world's.
         LogSingleViewChange(singleView_.Update(false, {}));
@@ -390,9 +417,9 @@ private:
             case lss::players::PlayerIntent::Leave:
                 lss::modules::LeavePlayerTwo(*session_, L"player 2 leaves (Ctrl+F8)");  // logs its own outcome
                 break;
-            case lss::players::PlayerIntent::ToggleThirdView:
-                LogAction(L"third view (Ctrl+F3)",
-                          lss::modules::SetThirdView(!lss::views::third_view::In(), L"Ctrl+F3"));
+            case lss::players::PlayerIntent::ToggleMonitorMode:
+                LogAction(L"three-player monitor mode (Ctrl+F3)",
+                          lss::modules::SetMonitorMode(!lss::views::window_span::Held()));
                 break;
             case lss::players::PlayerIntent::ToggleWindowSpan:
                 LogAction(L"window span (Ctrl+F2)",
@@ -423,7 +450,8 @@ private:
             case lss::players::PlayerIntent::None: break;
         }
         lss::player_two::field_exit::Watch();
-        if (session_->HasPlayerTwo() && lss::player_two::field_exit::FieldLeft())
+        if ((session_->HasPlayerTwo() || lss::views::mirror_player::Count() > 0) &&
+            lss::player_two::field_exit::FieldLeft())
         {
             LeaveBeforeWorldChange(L"the field stopped running (a field exit the redirected entry did not see)");
         }
@@ -440,29 +468,65 @@ private:
         lss::player_two::pad_sticks::SetStoodDown(shared);
         lss::player_two::climb_context::Tick();  // this frame's input copies for the climbs on the anim worker (W5)
         session_->Tick();
+        // The columns right after the session: the mirror views toward them, the window span to them.
+        bool rejoining = false;
+        for (int seat = 1; seat <= lss::players::kSeatsBuilt; ++seat)
+        {
+            rejoining = rejoining || session_->RejoinPending(seat);
+        }
+        const lss::modules::Columns columns = lss::modules::TickColumns(rejoining);
+        columnsListed_                      = columns.map.count;
         lss::dev::TickAfterSession();
         // Player 1's single view for the game's whole-screen states (players/single_view.h), and while
         // player 2 waits for a member (only player 1 plays then; the user's decision, 2026-10-01): while
-        // it holds, player 2 stays in but the split's presentation is off, as with one player.
+        // it holds, player 2 stays in but the split's presentation is off, as with one player. While columns are
+        // held (the three-player monitor mode), the same moments keep the columns instead (the columns rule: a held
+        // column is never black): player 2's view shows player 1's camera and HUD, as a mirror view does.
         const bool playerTwoIn = session_->HasPlayerTwo();
-        const bool autoMode    = singleView_.Mode() == lss::players::SingleViewMode::Auto;
-        LogSingleViewChange(singleView_.Update(
-            playerTwoIn, {playerTwoIn && autoMode && lss::views::WholeScreenShown(),  // read only when it can matter
-                          session_->WaitsForMember(), session_->StandsAside()}));
-        const bool splitShown = playerTwoIn && !singleView_.Single();
+        const auto mode        = singleView_.Mode();
+        const bool autoMode    = mode == lss::players::SingleViewMode::Auto;
+        const lss::players::SingleViewInputs inputs{
+            playerTwoIn && autoMode && lss::views::WholeScreenShown(),  // read only when it can matter
+            session_->WaitsForMember(), session_->StandsAside()};
+        LogSingleViewChange(singleView_.Update(playerTwoIn && !columns.held, inputs));
+        const bool onPlayerOne = playerTwoIn && columns.held &&
+                                 (mode == lss::players::SingleViewMode::Single ||
+                                  lss::players::SingleViewWanted(autoMode, inputs.wholeScreenShown,
+                                                                 inputs.waitsForMember, inputs.standsAside));
+        if (onPlayerOne != onPlayerOne_)
+        {
+            onPlayerOne_ = onPlayerOne;
+            Log(L"single view: {}", onPlayerOne ? L"the columns stay (columns held): player 2's view shows player 1's "
+                                                  L"camera and HUD"
+                                                : L"player 2's view is player 2's own again");
+        }
+        const bool splitShown = playerTwoIn && !singleView_.Single() && !onPlayerOne;
+        const bool viewsSplit = columns.map.count > 1 && !singleView_.Single();
         lss::modules::Frame frame;
         frame.splitShown = splitShown;
+        frame.columns    = columns.map.count;
+        frame.onPlayerOne = onPlayerOne;
         for (int seat = 1; seat <= lss::players::kSeatsBuilt; ++seat)
         {
             frame.seats[static_cast<std::size_t>(seat)].state = session_->State(seat);
         }
         lss::modules::TickAfterSession(frame);
         lss::dev::TickWatches(splitShown);  // the dev watches, after the levers they observe
-        settings_.Update(playerTwoIn, [](const std::wstring& line) { Log(L"{}", line); });
-        LogLayoutChange(layout_.Update(playerTwoIn));
-        lss::views::Follow(SplitFrameNow(splitShown));  // after the layout: the halves' shape reads it; the one
-                                                       // place "the split is shown" is kept (views::SplitShown)
-        lss::hud::UpdateHudPlacement(splitShown && lss::hud::BandEnabled());
+        // The settings several views need, while more than one view family renders (player 2, or a mirror view).
+        settings_.Update(columns.map.count > 1, [](const std::wstring& line) { Log(L"{}", line); });
+        // The layout by column count: the player's two-player choice with two local players (player 2, or a mirror
+        // beside player 1), the three equal columns with three.
+        LogLayoutChange(layout_.Update(columns.map.count == 2));
+        if (const auto text = lss::players::Describe(threeLayout_.Update(columns.map.count == 3, kThreeColumns),
+                                                      L"three columns", kThreeLayoutName);
+            !text.empty())
+        {
+            Log(L"{}", text);
+        }
+        // After the layout: the halves' shape reads it; the one place "the split is shown" is kept (views::SplitShown,
+        // views::ViewsSplit).
+        lss::views::Follow(SplitFrameNow(splitShown, onPlayerOne, viewsSplit));
+        lss::hud::UpdateHudPlacement(viewsSplit && lss::hud::BandEnabled());
 
         const ULONGLONG now = GetTickCount64();
         if (!session_->HasPlayerTwo() || !lss::platform::frame_watch::Detailed())  // perf-log: the periodic status
@@ -479,11 +543,22 @@ private:
         }
     }
 
-    /// What the view points follow (views/player_view_point.h): the session's players and join count, and whether
-    /// the split is on screen.
-    lss::views::SplitFrame SplitFrameNow(bool splitShown) const noexcept
+    /// What the view points follow (views/player_view_point.h): the session's players and join counts, and what is
+    /// on screen.
+    lss::views::SplitFrame SplitFrameNow(bool splitShown, bool onPlayerOne, bool viewsSplit) const noexcept
     {
-        return {session_->PlayerOne(), session_->PlayerTwo(), session_->JoinCount(), splitShown};
+        lss::views::SplitFrame frame;
+        frame.playerOne = session_->PlayerOne();
+        for (int seat = 1; seat <= lss::players::kSeatsBuilt; ++seat)
+        {
+            frame.seats[static_cast<std::size_t>(seat)] = session_->LocalPlayer(seat);
+            frame.joins[static_cast<std::size_t>(seat)] = session_->JoinCount(seat);
+        }
+        frame.splitShown  = splitShown;
+        frame.onPlayerOne = onPlayerOne;
+        frame.viewsSplit  = viewsSplit;
+        frame.columns     = columnsListed_;
+        return frame;
     }
 
     /// A key's action: what it did, or why not (the control commands return the same text).
@@ -520,6 +595,10 @@ private:
                                                          &lss::players::console::SetVariableInt}};
     lss::players::SplitLayout                 layout_{{&ReadTwoPlayerLayout, &WriteTwoPlayerLayout}};
     lss::players::SingleView                  singleView_{{&ReadSplitSwitch, &WriteSplitSwitch}};
+    lss::players::HeldSetting<std::uint8_t>   threeLayout_{{&ReadThreePlayerLayout, &WriteThreePlayerLayout},
+                                                           kThreeLayoutName};
+    int                                       columnsListed_      = 1;  // as the last columns' tick read them
+    bool                                      onPlayerOne_        = false;  // player 2's view on player 1's (columns held)
     bool                                      tickSeen_           = false;
     bool                                      rendererInstalled_  = false;
     Hook::GlobalCallbackId                    tickCallback_       = Hook::ERROR_ID;
