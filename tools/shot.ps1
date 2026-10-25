@@ -21,6 +21,7 @@ public static class LssWindow {
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
     [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
+    [DllImport("user32.dll")] public static extern IntPtr SetThreadDpiAwarenessContext(IntPtr context);
     // Windows lets a process take the foreground right after it has sent input: an Alt tap, as tools/keys.ps1 does.
     public static bool Focus(IntPtr h) {
         ShowWindow(h, 9);
@@ -30,6 +31,10 @@ public static class LssWindow {
     }
 }
 "@
+# Per-monitor DPI aware for this thread (-4: DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2), so the window's rect and the
+# copy are in physical pixels: unaware, a 3840x2160 window on a monitor scaled to 175 % read as 2194x1234 and only its
+# top-left 57 % was captured (every shot before 2026-10-24 evening).
+[void][LssWindow]::SetThreadDpiAwarenessContext([IntPtr]::new(-4))
 if ($Display) {
     $bounds = ([System.Windows.Forms.Screen]::AllScreens | Where-Object DeviceName -eq $Display).Bounds
 } elseif ($Title) {
