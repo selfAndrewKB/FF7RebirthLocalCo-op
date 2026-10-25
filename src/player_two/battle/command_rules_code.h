@@ -6,9 +6,10 @@
 // The test's signature is bool(ctrl* rcx, int ordinal edx, u8 flag r8b), and its five callers are all
 // in the command menu; one of their call sites straddles a code block, so the test itself is gated,
 // at its first instruction: `mov [rsp+8], rbx` (5 bytes at 0x140E77414, inside one block). The code
-// compares the ordinal asked about with a gate in this DLL; on a match it returns 0 (the game's own
-// answer for a member that cannot take a command), else it runs the replaced instruction and the test
-// continues as the game's. The gate holds the ordinal of player 2's member, or -1.
+// tests the ordinal asked about against a set in this DLL (CommandGateMaskCode, installed since plan/seats.md step 6:
+// every refused member's bit); on a match it returns 0 (the game's own answer for a member that cannot take a
+// command), else it runs the replaced instruction and the test continues as the game's. CommandGateCode, the
+// two-player gate that compared one ordinal, is kept for the host tests' side-by-side only.
 //
 // Only rax and the flags change before the replaced instruction: rax carries no argument at a
 // function's entry. No calls, no stack use. Kept apart from the installer so the host tests can
@@ -41,12 +42,11 @@ inline std::array<std::uint8_t, kCommandGateCodeSize> CommandGateCode(const std:
     return code;
 }
 
-/// The same gate over a set, in the same 22 bytes, for the plan's step 6 (not installed yet): `mask` holds one bit per
-/// refused ordinal (bit n: ordinal n; 0 refuses none), so player 1 can refuse every seat's member and a seat player 1's
-/// leader and the other seats' members. `bt eax, edx` takes the ordinal modulo 32, so an ordinal outside 0..31 would
-/// read the bit of its remainder where the one-ordinal code compares exactly: the set code may replace it only once
-/// the five callers are shown (IDA) never to pass such an ordinal [UNKNOWN]. Only rax and the flags change before the
-/// replaced instruction, as above.
+/// The same gate over a set, in the same 22 bytes (installed since the plan's step 6): `mask` holds one bit per refused
+/// ordinal (bit n: ordinal n; 0 refuses none), so player 1 can refuse every seat's member and a seat player 1's leader
+/// and the other seats' members. `bt eax, edx` takes the ordinal modulo 32; the five callers pass 0 to the party count
+/// less one (at most 16), or -1 for none, which reads bit 31, never set [CONFIRMED, RE-seats-step6-battle.md §2]. Only
+/// rax and the flags change before the replaced instruction, as above.
 inline std::array<std::uint8_t, kCommandGateCodeSize> CommandGateMaskCode(const std::uint32_t& mask) noexcept
 {
     std::array<std::uint8_t, kCommandGateCodeSize> code = {

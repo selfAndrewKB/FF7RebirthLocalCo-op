@@ -79,8 +79,8 @@ void TestGate()
 
 void TestMaskGate()
 {
-    std::puts("command gate over a set (step 6, not installed): every masked ordinal reads not commandable, the others "
-              "pass through, 0 gates none, the same answers as the one-ordinal gate for one member, and restored");
+    std::puts("command gate over a set (installed since step 6): every masked ordinal reads not commandable, the "
+              "others pass through, 0 gates none, the one-ordinal gate's answers for one member, restored");
     const FunctionLike   function;
     static std::uint32_t mask = 0;
     static std::int32_t  gate = -1;  // the one-ordinal gate, for the side-by-side

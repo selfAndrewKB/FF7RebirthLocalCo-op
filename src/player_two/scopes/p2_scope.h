@@ -9,7 +9,7 @@
 // rules turned around, command_rules). `Which` names them: a site opens the ones its call reads,
 // required unless it says they are optional, and its own module-local scopes after the ladder. The ladder is a seat's
 // (Args::seat, player 2's unless a site names another): Primary, Buttons, Focus, Targets and the member's pad follow
-// it; the other parts are still player 2's until their modules are per seat (plan/seats.md step 3).
+// it, and the Rules (the seat's refusals: player 1's leader and the other seats' members).
 // Game thread only.
 
 #include "player_two/battle/command_rules.h"
@@ -140,9 +140,9 @@ struct RulesPart
 {
     static constexpr unsigned       kBit  = Rules;
     static constexpr const wchar_t* kName = L"the command rules";
-    explicit RulesPart(const Args& args) noexcept : rules(args.leaderType) {}
+    explicit RulesPart(const Args& args) noexcept : rules(args.seat, args.leaderType) {}
     bool Held() const noexcept { return true; }
-    command_rules::PlayerTwoRules rules;
+    command_rules::SeatRules rules;
 };
 
 using P2Scope = Ladder<Args, FocusPart, SticksPart, PrimaryPart, ButtonsPart, TargetsPart, LeaderPart, LeaderTypePart,

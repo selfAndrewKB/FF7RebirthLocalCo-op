@@ -47,10 +47,9 @@
 // made at its join and taken down at its leave; an add or a stop is the seat's whose source names it or, on the game
 // thread, the seat that is the primary player; a component ticks its own seat's list; the zip line and the sources
 // find the seat from their character, chocobo or scooter; the owner's list pointer is swapped to one seat's list at a
-// time. The shared ride's copy goes to each seat with its own force-feedback manager. 1.004's jump box names one thread
-// and that seat's list at a time (its code is unchanged: it reads the route's list). Two seats' jump-box landings on
-// different threads at once: the second is refused (logged) and its rumble goes to the game's list, played on the
-// primary player's pad [open question for step 6: can two chocobos' OnEnded run at once on different threads?].
+// time. The shared ride's copy goes to each seat with its own force-feedback manager. 1.004's jump box names a thread
+// and that seat's list per landing in flight, one route slot per further player: two chocobos' landings run on
+// different animation workers at once (RE-seats-step6-camera-rumble.md §2), each taking its own slot.
 
 #include "players/seats.h"
 
@@ -78,11 +77,5 @@ void PlayerTwoOut(int seat) noexcept;
 /// Game thread, once per engine tick per seat: copy the game's list onto `seat`'s (a shared ride with the seat's own
 /// force-feedback manager) or not. Turning it off stops on the seat's list what was copied and not yet stopped.
 void CopyPlayerOne(int seat, bool on) noexcept;
-
-/// Player 2's copy, for a caller not yet per seat.
-inline void CopyPlayerOne(bool on) noexcept
-{
-    CopyPlayerOne(players::kPlayerTwoSeat, on);
-}
 
 }  // namespace lss::player_two::rumble_list_two

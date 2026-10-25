@@ -28,6 +28,7 @@
 #include <cstdint>
 #include <cstring>
 #include <optional>
+#include <span>
 
 namespace lss::views {
 
@@ -283,15 +284,14 @@ void ShapeSplitView(void* localPlayer, std::byte* viewInfo, int slot) noexcept
     }
 }
 
-/// Puts back the FOV rule of every player the mod changed, except `removedPlayer`, which the
+/// Puts back the FOV rule of every player the mod changed, except the `removedPlayers`, which the
 /// engine has already let go of and must not be touched, then forgets every record: this runs
-/// when player 2 changes, which ends the split for all players at once, and the next split
-/// frame records the originals afresh.
-void RestoreAxisRules(const void* removedPlayer) noexcept
+/// when a further player changes, and the next split frame records the originals afresh.
+void RestoreAxisRules(std::span<const void* const> removedPlayers) noexcept
 {
     const auto offset = g_axisOffset.load(std::memory_order_relaxed);
     g_axisRecords.Restore(
-        removedPlayer,
+        removedPlayers,
         [offset](const void* player) -> std::uint8_t* {
             return offset != 0 ? static_cast<std::uint8_t*>(const_cast<void*>(player)) + offset : nullptr;
         },
@@ -387,22 +387,17 @@ void RemovePlayerViewPoint() noexcept
 
 namespace {
 
-/// A new further player in `seat` (or none; the caller has seen the change): the FOV rule of every remaining player
-/// the mod changed put back, the new player started on their own camera with their next view point described.
-/// One seat at a time: the restore skips only this seat's removed player.
-void SetSeat(int seat, const void* localPlayer) noexcept
+/// A new further player in `seat` (or none; the caller has seen the change): the new player started on their own
+/// camera with their next view point described. Returns the player the seat held before (null for none): the caller
+/// puts the FOV rules back once, skipping every seat's removed player (two seats can leave in one frame).
+const void* SetSeat(int seat, const void* localPlayer) noexcept
 {
-    static_assert(players::kSeatsBuilt == 1, "step 6: two seats can leave in one Follow; collect every removed player "
-                                             "first and restore once, skipping all of them");
     const auto  at       = static_cast<std::size_t>(seat);
     const void* previous = g_seat[at].exchange(localPlayer, std::memory_order_relaxed);
-    if (previous != nullptr)
-    {
-        RestoreAxisRules(previous);  // same thread as the replacement, so no call is in flight
-    }
     g_ownCamera[at].store(localPlayer != nullptr, std::memory_order_relaxed);  // each new player starts on their own camera
     g_describePending[at].store(localPlayer != nullptr, std::memory_order_relaxed);
     g_shapeLogged[at] = false;  // a new player's shape is logged afresh
+    return previous;
 }
 
 // The frame's follow (mod.cpp's until 2026-10-22). Game thread.
@@ -418,15 +413,26 @@ void FollowPlayers(const SplitFrame& frame) noexcept
     {
         return;
     }
-    bool joined = false;
+    bool                                       joined = false;
+    std::array<const void*, players::kMaxPlayers> removed{};  // every changed seat's previous player
+    std::size_t                                removedCount = 0;
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
         const auto at = static_cast<std::size_t>(seat);
         if (frame.seats[at] != g_followedSeat[at] || frame.joins[at] != g_followedJoins[at])
         {
-            SetSeat(seat, frame.seats[at]);  // a new player at the old one's address still starts fresh
+            // A new player at the old one's address still starts fresh.
+            if (const void* previous = SetSeat(seat, frame.seats[at]); previous != nullptr)
+            {
+                removed[removedCount++] = previous;
+            }
             joined = joined || frame.seats[at] != nullptr;
         }
+    }
+    if (removedCount > 0)
+    {
+        // Once, skipping every removed player; same thread as the replacement, so no call is in flight.
+        RestoreAxisRules(std::span<const void* const>(removed.data(), removedCount));
     }
     g_followedSeat  = frame.seats;
     g_followedJoins = frame.joins;
@@ -522,21 +528,34 @@ void Follow(const SplitFrame& frame) noexcept
 
 bool ToggleOwnCamera() noexcept
 {
-    const auto two = static_cast<std::size_t>(players::kPlayerTwoSeat);
-    if (g_seat[two].load(std::memory_order_relaxed) == nullptr)
+    // Every further player's view together, to the opposite of the first one in.
+    const bool own = !ShowsOwnCamera();
+    bool       any = false;
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        g_ownCamera[two].store(false, std::memory_order_relaxed);
-        return false;
+        const auto at = static_cast<std::size_t>(seat);
+        const bool in = g_seat[at].load(std::memory_order_relaxed) != nullptr;
+        g_ownCamera[at].store(in && own, std::memory_order_relaxed);
+        if (in)
+        {
+            g_describePending[at].store(true, std::memory_order_relaxed);
+            any = true;
+        }
     }
-    const bool own = !g_ownCamera[two].load(std::memory_order_relaxed);
-    g_ownCamera[two].store(own, std::memory_order_relaxed);
-    g_describePending[two].store(true, std::memory_order_relaxed);
-    return own;
+    return any && own;
 }
 
 bool ShowsOwnCamera() noexcept
 {
-    return g_ownCamera[static_cast<std::size_t>(players::kPlayerTwoSeat)].load(std::memory_order_relaxed);
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        const auto at = static_cast<std::size_t>(seat);
+        if (g_seat[at].load(std::memory_order_relaxed) != nullptr)
+        {
+            return g_ownCamera[at].load(std::memory_order_relaxed);  // the first further player in
+        }
+    }
+    return false;
 }
 
 bool ToggleFill() noexcept

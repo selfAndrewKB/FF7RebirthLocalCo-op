@@ -4,9 +4,11 @@
 // and the value last seen (so each change the game makes is noted once). Pure over its table, with the engine byte
 // passed in, so it is tested on the host (tests/axis_records_test.cpp).
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <span>
 
 namespace lss::views {
 
@@ -67,15 +69,16 @@ public:
         return AxisApplied::First;
     }
 
-    /// Puts every player's original back, except `removedPlayer`'s (its object is gone), and only where the field still
-    /// holds a rule of the mod's (`isModRule`); `fieldOf(player)` gives the byte, or null to skip. `restored(original)`
-    /// is called for each put back. Every record is forgotten.
+    /// Puts every player's original back, except the `removed` players' (their objects are gone: two seats can leave
+    /// in one frame), and only where the field still holds a rule of the mod's (`isModRule`); `fieldOf(player)` gives
+    /// the byte, or null to skip. `restored(original)` is called for each put back. Every record is forgotten.
     template <class FieldFn, class ModRuleFn, class RestoredFn>
-    void Restore(const void* removedPlayer, FieldFn&& fieldOf, ModRuleFn&& isModRule, RestoredFn&& restored) noexcept
+    void Restore(std::span<const void* const> removed, FieldFn&& fieldOf, ModRuleFn&& isModRule,
+                 RestoredFn&& restored) noexcept
     {
         for (auto& record : records_)
         {
-            if (record.player != nullptr && record.player != removedPlayer)
+            if (record.player != nullptr && std::find(removed.begin(), removed.end(), record.player) == removed.end())
             {
                 if (std::uint8_t* field = fieldOf(record.player); field != nullptr && isModRule(*field))
                 {

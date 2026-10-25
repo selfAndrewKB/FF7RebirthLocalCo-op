@@ -88,30 +88,31 @@ std::size_t Index(int seat) noexcept
     return static_cast<std::size_t>(seat);
 }
 
-/// The seat whose member's delegate called a thunk with `payload`, or -1. The added delegate's payload is the member
-/// itself (Tick checks it before putting the thunk on); the removed delegate's is not checked.
-int SeatOfPayload(const void* payload) noexcept
+/// The seat whose thunk a delegate called with `payload`, or -1 for none. The game hands each handler the address of
+/// the delegate's own storage inside the character, not the character (RE-seats-step6-camera-rumble.md §1): the added
+/// delegate's at member+kAddedPayload (which holds the member: Tick checks it), the removed one's at
+/// member+kRemovedPayload (which holds nothing the handler reads). So the seat is the one whose member that storage is
+/// in. A payload in no seat's member (a delegate the game moved whole to another character keeps the thunk) goes to the
+/// one seat with a module, as the two-player mod sent every thunk to player 2's; with several, to none (the engine's
+/// handler unswapped).
+int ThunkSeat(const void* payload, std::uint32_t offset) noexcept
 {
+    const auto at    = reinterpret_cast<std::uintptr_t>(payload);
+    int        owner = -1, withModule = -1, modules = 0;
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        if (payload != nullptr && g_member[Index(seat)] == payload)
+        const auto member = reinterpret_cast<std::uintptr_t>(g_member[Index(seat)]);
+        if (member != 0 && at == member + offset)
         {
-            return seat;
+            owner = seat;
+        }
+        if (g_seatModule[Index(seat)].object != 0)
+        {
+            withModule = seat;
+            ++modules;
         }
     }
-    return -1;
-}
-
-// A thunk whose payload names no seat's member (the removed delegate's payload is not checked to be the member) is
-// taken as player 2's, as the two-player mod did.
-static_assert(players::kSeatsBuilt == 1, "a removed-delegate payload that names no member is taken as player 2's: "
-                                         "before seat 2 is built, confirm the payload is the member (or check it in "
-                                         "Tick as the added one is)");
-
-int ThunkSeat(const void* payload) noexcept
-{
-    const int seat = SeatOfPayload(payload);
-    return seat > 0 ? seat : players::kPlayerTwoSeat;
+    return owner > 0 ? owner : modules == 1 ? withModule : -1;
 }
 
 // Game thread: the seat whose module the global holds now (0 none). Seats take turns: a thunk of another seat's member
@@ -170,8 +171,8 @@ private:
 void* AddedThunk(void* out, void* payload, const void* params, const void* a4, const void* a5, const void* a6,
                  const void* a7)
 {
-    const int seat = ThunkSeat(payload);
-    if (g_seatModule[Index(seat)].object == 0 || HeldByOther(seat))
+    const int seat = ThunkSeat(payload, kAddedPayload);
+    if (seat < 1 || g_seatModule[Index(seat)].object == 0 || HeldByOther(seat))
     {
         return g_engineAdded(out, payload, params, a4, a5, a6, a7);
     }
@@ -188,8 +189,8 @@ void* AddedThunk(void* out, void* payload, const void* params, const void* a4, c
 
 void RemovedThunk(void* payload, const void* id)
 {
-    const int seat = ThunkSeat(payload);
-    if (g_seatModule[Index(seat)].object == 0 || HeldByOther(seat))
+    const int seat = ThunkSeat(payload, kRemovedPayload);
+    if (seat < 1 || g_seatModule[Index(seat)].object == 0 || HeldByOther(seat))
     {
         g_engineRemoved(payload, id);
         return;

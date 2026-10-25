@@ -10,6 +10,7 @@
 // owner's list pointer is shared game state: a seat's stop swaps its list in and out under the game's lock, one seat at
 // a time (StopTwo). The jump box's route names one thread and one list at a time.
 
+#include "player_two/feedback/rumble_list_code.h"
 #include "player_two/feedback/rumble_rules.h"
 #include "players/seats.h"
 #include "players/unreal_access.h"
@@ -66,16 +67,12 @@ inline bool AnyCopy() noexcept
 
 // Each seat's member's player type, for the sources on any thread (written each engine tick; -1 none).
 inline std::atomic<int> g_memberType[players::kMaxPlayers] = {-1, -1, -1};
-// 1.004's jump box: the thread whose inline add takes a seat's list at its list load (0: none), and that seat's list
-// (null: none). Read by the code at the load, under the game's lock, against the running thread's id; the route sets
-// both under the game's lock, a list's drop clears the list under it. One route at a time across the seats: a second
-// seat's JumpEnded on another thread while one is named is refused (logged), and its landing rumble goes to the
-// game's list (open for step 6).
-inline std::atomic<std::uint32_t> g_jumpThread{0};
-inline std::atomic<void*>         g_jumpList{nullptr};
-static_assert(sizeof(std::atomic<void*>) == sizeof(void*) && std::atomic<void*>::is_always_lock_free,
-              "the load's code reads g_jumpList as a plain pointer");
-static_assert(sizeof(std::atomic<std::uint32_t>) == sizeof(std::uint32_t));
+// 1.004's jump box: one route per landing in flight (rumble_list_code.h): the thread whose inline add takes a seat's
+// list at its list load (0: free), and that seat's list (null: none). Read by the code at the load, under the game's
+// lock, against the running thread's id; a route claims a free slot and sets its list under the game's lock, a list's
+// drop clears it from every slot under it. Two chocobos landing on two animation workers at once each name their own
+// slot (RE-seats-step6-camera-rumble.md §2).
+inline rumble_list_code::JumpSlots g_jumpSlots{};
 
 // The seat one of whose rumble sources this thread runs (OwnerTwo), or 0.
 inline thread_local int t_ownerSeat = 0;

@@ -210,11 +210,13 @@ void GlideRun(void* instance) noexcept
     original(instance);
 }
 
-/// 1.004: names this thread and `seat`'s list for the jump box's inline list load while it lives (the code there takes
-/// the route's list). One route at a time across the seats: named under the game's lock, so the list it names is live
-/// (a list's drop clears the route's list under the same lock), and its list is cleared before its thread is released.
-/// A route refused because another thread holds it is logged; that landing's rumble goes to the game's list (two seats
-/// landing on different threads at once: open for step 6).
+/// 1.004: names this thread and `seat`'s list in a free route slot for the jump box's inline list load while it lives
+/// (the code there takes the list of the slot naming its thread). Claimed under the game's lock, so the list it names
+/// is live (a list's drop clears it from every slot under the same lock); its list is cleared before its thread is
+/// released. One slot per further player, so two landings on two animation workers at once each have theirs
+/// (RE-seats-step6-camera-rumble.md §2). A landing inside another on the same thread takes over that thread's slot for
+/// its length and gives the outer one's list back after (the code reads the first slot naming the thread). With no
+/// slot free (not expected) the landing's rumble goes to the game's list, logged.
 class JumpRoute
 {
 public:
@@ -226,43 +228,74 @@ public:
         }
         bool refused = false;
         {
-            const ListLock lock;
-            std::uint32_t  none = 0;
-            void* const    list = g_listTwo[seat].load(std::memory_order_acquire);
-            named_              = list != nullptr &&
-                     g_jumpThread.compare_exchange_strong(none, GetCurrentThreadId(), std::memory_order_acq_rel);
-            refused = list != nullptr && !named_;
-            if (named_)
+            const ListLock      lock;
+            void* const         list   = g_listTwo[seat].load(std::memory_order_acquire);
+            const std::uint32_t thread = GetCurrentThreadId();
+            for (auto& slot : g_jumpSlots)
             {
-                g_jumpList.store(list, std::memory_order_release);
+                if (list != nullptr && slot.thread.load(std::memory_order_acquire) == thread)
+                {
+                    outer_ = slot.list.exchange(list, std::memory_order_acq_rel);  // nested on this thread
+                    slot_  = &slot;
+                    nested_ = true;
+                    break;
+                }
             }
+            for (auto& slot : g_jumpSlots)
+            {
+                std::uint32_t none = 0;
+                if (slot_ == nullptr && list != nullptr &&
+                    slot.thread.compare_exchange_strong(none, thread, std::memory_order_acq_rel))
+                {
+                    slot.list.store(list, std::memory_order_release);
+                    slot_ = &slot;
+                }
+            }
+            refused = list != nullptr && slot_ == nullptr;
         }
         if (refused)
         {
-            // Another landing (another seat's, on another thread) holds the one route: this one goes to the game's
-            // list. Info the first time, Debug after.
+            // Every slot names another landing in flight: this one goes to the game's list. Info the first time, Debug
+            // after.
             static std::atomic<unsigned> s_refusals{0};
             const auto level = s_refusals.fetch_add(1, std::memory_order_relaxed) == 0 ? platform::Level::Info
                                                                                       : platform::Level::Debug;
-            platform::LogAt(level, L"rumble list: {}'s jump box landing found the 1.004 route held by another thread; "
+            platform::LogAt(level, L"rumble list: {}'s jump box landing found every 1.004 route held by other threads; "
                                    L"its rumble goes to the game's list",
                             players::SeatName(seat));
         }
     }
     ~JumpRoute()
     {
-        if (named_)
+        if (slot_ == nullptr)
         {
-            g_jumpList.store(nullptr, std::memory_order_release);
-            g_jumpThread.store(0, std::memory_order_release);
+            return;
         }
+        if (nested_)
+        {
+            // The outer landing's list back, under the lock, only while it is still a seat's (a drop meanwhile left it
+            // cleared, and it stays so).
+            const ListLock lock;
+            bool           live = false;
+            for (int seat = 1; outer_ != nullptr && seat <= players::kSeatsBuilt; ++seat)
+            {
+                live = live || g_listTwo[seat].load(std::memory_order_acquire) == outer_;
+            }
+            slot_->list.store(live ? outer_ : nullptr, std::memory_order_release);
+            return;
+        }
+        slot_->list.store(nullptr, std::memory_order_release);
+        slot_->thread.store(0, std::memory_order_release);
     }
     JumpRoute(const JumpRoute&)            = delete;
     JumpRoute& operator=(const JumpRoute&) = delete;
 
 private:
-    bool named_ = false;
+    rumble_list_code::JumpSlot* slot_   = nullptr;
+    void*                       outer_  = nullptr;  // nested: the outer landing's list in the slot
+    bool                        nested_ = false;
 };
+static_assert(rumble_list_code::kJumpSlots == players::kMaxPlayers - 1, "one route slot per further player");
 
 /// The jump box's OnEnded (the jump action's finish or abort): a seat's chocobo's landing rumble is the seat's.
 void JumpEnded(void* payload) noexcept
@@ -323,8 +356,8 @@ std::uint64_t BrakeTwo(void* move, std::uint64_t event, double xmm2, double xmm3
     return Brake(g_brakeTwoSlot, move, event, xmm2, xmm3);
 }
 
-/// The 1.004 jump box's list load, then: on the thread JumpEnded named (g_jumpThread, against the TEB's thread id at
-/// gs:[48h]), the list it named for that thread's seat when it is set (g_jumpList; rumble_list_code.h). It runs under
+/// The 1.004 jump box's list load, then: on a thread a JumpEnded named (a slot of g_jumpSlots, against the TEB's thread
+/// id at gs:[48h]), the list it named for that thread's seat when it is set (rumble_list_code.h). It runs under
 /// the game's lock, which DropList also takes to clear the route's list, so the list it takes is live for the whole
 /// add. rax, rcx and the flags are dead at that
 /// point (overwritten before any read: 0x1422AD988, 0x1422AD997, 0x1422AD99B). The code reads this DLL's globals,
@@ -341,7 +374,7 @@ bool PlaceJumpListLoad(const platform::GameImage& image) noexcept
     {
         return false;
     }
-    const auto code = JumpListLoadCode(&g_jumpThread, &g_jumpList);
+    const auto code = JumpListLoadCode(&g_jumpSlots);
     return g_jumpListLoad.Install(*site, kJumpListLoadBytes, code, *site + sizeof(kJumpListLoadBytes));
 }
 

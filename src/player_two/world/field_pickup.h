@@ -89,9 +89,6 @@ void SetHookObserver(const HookObserver& observer) noexcept;
 using Weaks = std::array<std::uint64_t, 8>;
 void RowWeaks(int seat, Weaks& out) noexcept;
 
-/// Player 2's rows (players::kPlayerTwoSeat), for hud/prompt_rows until the HUD is per column.
-void RowWeaks(Weaks& out) noexcept;
-
 /// True while a seat's pass runs (game thread).
 bool InPass() noexcept;
 

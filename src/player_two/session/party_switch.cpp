@@ -9,6 +9,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "player_two/generation.h"
+#include "players/seats.h"
 
 #include <atomic>
 #include <cstdint>
@@ -58,58 +59,71 @@ std::uint32_t g_refusals       = 0;  // candidates the switch was told to skip
 std::uint32_t g_loggedRefusals = 0;
 bool          g_greyLogged     = false;
 
-/// Player 2's member while player 2 plays, else null.
-void* PlayerTwoMember() noexcept
+/// The seat whose player plays `character` (1..), or 0 for none: player 1 never switches onto a further player's member.
+int SeatPlaying(const void* character) noexcept
 {
-    return generation::OnGameThread() && generation::Active() ? generation::Member() : nullptr;
+    if (character == nullptr || !generation::OnGameThread())
+    {
+        return 0;
+    }
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (generation::Active(seat) && generation::MemberOf(seat) == character)
+        {
+            return seat;
+        }
+    }
+    return 0;
 }
 
 /// Logs the first refusals, then every 600th (a downed leader retries the switch every frame).
-void NoteRefusal(const wchar_t* where) noexcept
+void NoteRefusal(const wchar_t* where, int seat) noexcept
 {
     ++g_refusals;
     if (g_refusals <= 10 || g_refusals - g_loggedRefusals >= 600)
     {
         g_loggedRefusals = g_refusals;
-        platform::Log(L"party switch: {} skipped player 2's member ({} time(s) so far)", where, g_refusals);
+        platform::Log(L"party switch: {} skipped {}'s member ({} time(s) so far)", where, players::SeatName(seat),
+                      g_refusals);
     }
 }
 
-/// Replaces the cycle's component call: none for player 2's member (the game skips it).
+/// Replaces the cycle's component call: none for a further player's member (the game skips it).
 void* CycleComponent(void* character) noexcept
 {
-    void* member = PlayerTwoMember();
-    if (member != nullptr && character == member)
+    if (const int seat = SeatPlaying(character); seat != 0)
     {
-        NoteRefusal(L"the switch");
+        NoteRefusal(L"the switch", seat);
         return nullptr;
     }
     return reinterpret_cast<ComponentFn>(g_cycleCall.Original())(character);
 }
 
-/// Replaces CanSwitch's component call: player 2's member is not counted.
+/// Replaces CanSwitch's component call: a further player's member is not counted.
 void* CountedComponent(void* character) noexcept
 {
-    void* member = PlayerTwoMember();
-    if (member != nullptr && character == member)
+    if (SeatPlaying(character) != 0)
     {
         return nullptr;
     }
     return reinterpret_cast<ComponentFn>(g_canSwitchCall.Original())(character);
 }
 
-/// Replaces the widget's test: player 2's member's portrait reads as not switchable.
+/// Replaces the widget's test: a further player's member's portrait reads as not switchable.
 std::uint8_t SwitchDisabled(std::uint8_t type) noexcept
 {
-    void* member    = PlayerTwoMember();
     void* character = nullptr;
-    if (member != nullptr && platform::CallGuarded(g_byType, character, static_cast<void*>(nullptr), type) &&
-        character == member)
+    const int seat  = generation::OnGameThread() && generation::AnyActive() &&
+                             platform::CallGuarded(g_byType, character, static_cast<void*>(nullptr), type)
+                          ? SeatPlaying(character)
+                          : 0;
+    if (seat != 0)
     {
         if (!g_greyLogged)
         {
             g_greyLogged = true;
-            platform::Log(L"party switch: the switch widget greys player 2's member (type {})", type);
+            platform::Log(L"party switch: the switch widget greys {}'s member (type {})", players::SeatName(seat),
+                          type);
         }
         return 1;
     }
@@ -134,7 +148,7 @@ bool PlaceSites(const platform::GameImage&) noexcept
         }
         switching = false;
     }
-    // The widget greys player 2's member only when the switch really skips it.
+    // The widget greys a further player's member only when the switch really skips it.
     bool widget = switching && s.disabled != 0 && s.byType != 0;
     if (widget)
     {
@@ -156,9 +170,10 @@ bool PlaceSites(const platform::GameImage&) noexcept
         }
     }
     platform::Log(L"party switch: {}; the switch widget {}",
-                  switching ? L"player 1's switch skips player 2's member"
-                            : L"UNAVAILABLE (a check failed): player 1 can switch onto player 2's member",
-                  widget ? L"greys player 2's member" : L"shows player 2's member as switchable (a check failed)");
+                  switching ? L"player 1's switch skips every further player's member"
+                            : L"UNAVAILABLE (a check failed): player 1 can switch onto a further player's member",
+                  widget ? L"greys a further player's member"
+                         : L"shows a further player's member as switchable (a check failed)");
     return switching;
 }
 

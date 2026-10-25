@@ -16,11 +16,11 @@
 // covers all five of its callers. The member's type and menu ordinal are read once per engine tick
 // (Update), with guarded calls, not inside the menu's own tick. Game thread only.
 //
-// Player 2's only (players::kPlayerTwoSeat): the gate's machine code compares one ordinal. A set (player 1 refusing
-// every seat's member, a seat refusing player 1's leader and the other seats' members) fits the same bytes as a bit
-// test (command_rules_code.h, CommandGateMaskCode, host-tested, not installed), which reads ordinals modulo 32: step 6
-// installs it, with the HP lever widened alike, once IDA shows no caller passes an ordinal outside 0..31
-// (static_assert in command_rules.cpp).
+// Per seat: the refused members are a set, as bit masks (ordinals for the command test, member types for the HP lever:
+// ally mode and the menu agree). Player 1 refuses every playing seat's member; a seat's pass (SeatRules) refuses player
+// 1's leader and every other seat's member. The gate is a bit test (command_rules_code.h, CommandGateMaskCode): the
+// five callers pass an ordinal from 0 to the party count less one (at most 16), or -1 for none, which reads bit 31,
+// never set (RE-seats-step6-battle.md §2).
 
 namespace lss::platform {
 class GameImage;
@@ -31,22 +31,22 @@ namespace lss::player_two::command_rules {
 bool Install(const platform::GameImage& image) noexcept;
 void Remove() noexcept;
 
-/// Once per engine tick: player 2's member's type and command-menu ordinal read, or cleared when player
-/// 2 has none.
+/// Once per engine tick: every playing seat's member's type and command-menu ordinal read (player 1's refusals), or
+/// cleared when no seat plays one.
 void Update() noexcept;
 
-/// While alive (player 2's command controller ticks): the rules turned around, so the member that may
-/// not be commanded is player 1's leader (type `leaderType`), not player 2's member.
-class PlayerTwoRules
+/// While alive (`seat`'s command controller ticks): the rules turned around for that seat, so the members that may not
+/// be commanded are player 1's leader (type `leaderType`) and every other seat's member.
+class SeatRules
 {
 public:
-    explicit PlayerTwoRules(std::uint8_t leaderType) noexcept;
-    ~PlayerTwoRules();
-    PlayerTwoRules(const PlayerTwoRules&)            = delete;
-    PlayerTwoRules& operator=(const PlayerTwoRules&) = delete;
+    SeatRules(int seat, std::uint8_t leaderType) noexcept;
+    ~SeatRules();
+    SeatRules(const SeatRules&)            = delete;
+    SeatRules& operator=(const SeatRules&) = delete;
 
 private:
-    std::int32_t savedGate_ = -1, savedType_ = -1;
+    std::uint32_t savedOrdinals_ = 0, savedTypes_ = 0;
 };
 
 }  // namespace lss::player_two::command_rules

@@ -574,16 +574,16 @@ void Targeting(void* system, float deltaTime) noexcept
             }
         }
     }
-    // The game's tick once more for each further player. Fixed to player 2 for now: whether the game's targeting tick
-    // stands a third run inside the battle tick's two gated calls is open (state the five copied fields do not cover,
-    // such as timers advanced per call, would advance three times), so step 6 must settle it in the game before seat 2
-    // runs here (then: for each built seat in seat order, each run's scopes closed before the next's).
-    static_assert(players::kSeatsBuilt == 1, "a third run of the targeting tick inside the two gated calls is "
-                                             "unproven: confirm it in the game, then run every built seat here");
-    if (generation::Active(players::kPlayerTwoSeat))
+    // The game's tick once more for each further player, in seat order, each run's scopes closed before the next's. A
+    // third run is as safe as the second (RE-seats-step6-battle.md §1): the one timer the tick advances by frame time,
+    // the lock camera's rest (+0x90), is in each seat's copied fields, and its shared writes are the ones already gated.
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        SeatTargeting(players::kPlayerTwoSeat, engine, system, deltaTime);
-        LogSeat(players::kPlayerTwoSeat);
+        if (generation::Active(seat))
+        {
+            SeatTargeting(seat, engine, system, deltaTime);
+            LogSeat(seat);
+        }
     }
 }
 

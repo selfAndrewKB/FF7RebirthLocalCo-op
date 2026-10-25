@@ -497,9 +497,12 @@ void DropList(int seat, const wchar_t* why) noexcept
         if (list != nullptr)
         {
             WriteField<std::int32_t>(list, kListEntries + kArrayNum, 0);  // as the game's own clear
-            // The jump box's route stops naming it (its load reads the route's list under this lock).
-            void* routed = list;
-            g_jumpList.compare_exchange_strong(routed, nullptr, std::memory_order_acq_rel);
+            // The jump box's routes stop naming it (their load reads a route's list under this lock).
+            for (auto& slot : g_jumpSlots)
+            {
+                void* routed = list;
+                slot.list.compare_exchange_strong(routed, nullptr, std::memory_order_acq_rel);
+            }
         }
         g_copiedKeys[seat].Clear();  // the shared ride's copies go with the list
     }

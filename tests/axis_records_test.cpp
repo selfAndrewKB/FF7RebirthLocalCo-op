@@ -60,7 +60,8 @@ void TestRestore()
     const auto fieldOf = [&](const void* player) -> std::uint8_t* {
         return player == &g_a ? &fieldA : player == &g_b ? &fieldB : player == &g_c ? &fieldC : nullptr;
     };
-    records.Restore(&g_c, fieldOf, &IsModRule, [&](std::uint8_t original) { restored.push_back(original); });
+    const void* const removed[] = {&g_c};
+    records.Restore(removed, fieldOf, &IsModRule, [&](std::uint8_t original) { restored.push_back(original); });
     EXPECT(fieldA == 0);
     EXPECT(fieldB == 7);
     EXPECT(fieldC == 2);  // the removed player's object is gone: not touched
@@ -72,12 +73,31 @@ void TestRestore()
     EXPECT(records.Apply(&g_a, fieldA, 2) == AxisApplied::First);  // the next split records afresh
 }
 
+void TestRestoreTwoRemoved()
+{
+    std::puts("axis records: two players removed in one frame are both skipped");
+    AxisRecords<3>       records;
+    std::uint8_t         fieldA = 0, fieldB = 0, fieldC = 0;
+    std::vector<uint8_t> restored;
+    records.Apply(&g_a, fieldA, 2);
+    records.Apply(&g_b, fieldB, 2);
+    records.Apply(&g_c, fieldC, 2);
+    const auto fieldOf = [&](const void* player) -> std::uint8_t* {
+        return player == &g_a ? &fieldA : player == &g_b ? &fieldB : player == &g_c ? &fieldC : nullptr;
+    };
+    const void* const removed[] = {&g_b, &g_c};
+    records.Restore(removed, fieldOf, &IsModRule, [&](std::uint8_t original) { restored.push_back(original); });
+    EXPECT(fieldA == 0 && fieldB == 2 && fieldC == 2);
+    EXPECT(restored.size() == 1);
+}
+
 }  // namespace
 
 int main()
 {
     TestApply();
     TestRestore();
+    TestRestoreTwoRemoved();
 
     return lss::test::Report();
 }

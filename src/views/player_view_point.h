@@ -66,12 +66,12 @@ struct SplitFrame
 /// second while the split is shown with two columns; the split FOV is applied only once it is known.
 void Follow(const SplitFrame& frame) noexcept;
 
-/// Switches player 2's view between player 1's camera and player 2's own; returns true when it
-/// now shows player 2's own (false, and player 1's, when there is no player 2).
+/// Switches every further player's view between player 1's camera and their own, together; returns true when they
+/// now show their own (false, and player 1's, when no further player is in).
 bool ToggleOwnCamera() noexcept;
 
-/// True while player 2's view is set to show player 2's own camera (player 1's still shows while the columns hold a
-/// single-view moment).
+/// True while the further players' views are set to show their own cameras (the first one in's setting; player 1's
+/// still shows while the columns hold a single-view moment).
 bool ShowsOwnCamera() noexcept;
 
 /// Game thread: `seat`'s camera (0 player 1's) as it was last drawn while a further player is in (empty before

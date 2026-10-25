@@ -463,8 +463,9 @@ private:
 /// its position. Opens only when the list's first entry resolves to player 1's controller and a later one to the seat's
 /// (two Set ranges of platform/byte_scope.h, entry 0 and the seat's entry, each holding the other's), and restores only
 /// if the list is still where it was and names them swapped (a list the engine moved or changed in between is left
-/// alone). While only seat 1 is built it opens only with the seat's entry at entry 1, as v0.91.0 did; a seat found
-/// later in the list is logged once (Info) and refused. Game thread.
+/// alone). A join appends to the list and a leave closes it up in order, so a seat's place depends on who joined and
+/// left before it (player 1 always first); the call's one reader takes the first local player's entry and never looks
+/// further (RE-seats-step6-world-rides.md §1). Game thread.
 class FirstPlayerScope
 {
 public:
@@ -475,16 +476,6 @@ public:
         void*         two     = generation::ControllerOf(seat);
         auto*         entries = Entries(two);
         const auto    at      = entries != nullptr ? EntryOf(two, entries) : 0;
-        // The list's order with three players is unsettled: until step 6 settles it, only entry 1 is swapped, as
-        // v0.91.0 did; a seat found further down is noted once as evidence and refused.
-        static_assert(players::kSeatsBuilt == 1, "field_pickup: settle the player controller list's order with three "
-                                                 "players, then let FirstPlayerScope swap a seat's entry found past "
-                                                 "entry 1 (plan/seats.md step 6)");
-        if (at > 1)
-        {
-            NoteLaterEntry(seat, at);
-            return;
-        }
         std::uint64_t first = 0, mine = 0;
         if (one == nullptr || entries == nullptr || at <= 0 || leader_scope::ObjectAt(entries) != one ||
             !platform::CopyGuarded(&first, entries, sizeof(first)) ||
@@ -533,20 +524,6 @@ private:
     /// The most entries searched for a seat's controller (a bound on a list read from the game; it holds the player
     /// controllers, RE-p2-hud.md [ASSUMPTION that nothing else is in it]).
     static constexpr std::int32_t kMaxSearched = 16;
-
-    /// Logs once (Info) that a seat's controller sat past entry 1: evidence for the list's order (step 6).
-    static void NoteLaterEntry(int seat, std::int32_t at) noexcept
-    {
-        static bool logged = false;
-        if (logged)
-        {
-            return;
-        }
-        logged = true;
-        platform::Log(L"field pickup: {}'s controller is entry {} of the world's player controller list, not entry 1; "
-                      L"its pass keeps player 1 as the first local player (logged once)",
-                      players::SeatName(seat), at);
-    }
 
     /// The world's controller list entries (controller -> level -> world), or null when it has fewer than two.
     static std::uint8_t* Entries(const void* controller) noexcept
@@ -1495,14 +1472,6 @@ void RowWeaks(int seat, Weaks& out) noexcept
         const auto weak = TakeFromCopy<std::uint64_t>(p, kFieldActionSlotRows + 8 * i);
         out[i]          = static_cast<std::int32_t>(weak) >= 0 ? weak : 0;
     }
-}
-
-void RowWeaks(Weaks& out) noexcept
-{
-    static_assert(players::kSeatsBuilt == 1, "field_pickup: hud/prompt_rows reads player 2's rows only; give it each "
-                                             "column's seat (RowWeaks(seat, out)) before seat 2 is built (plan/seats.md "
-                                             "steps 4 and 6)");
-    RowWeaks(players::kPlayerTwoSeat, out);
 }
 
 bool InPass() noexcept

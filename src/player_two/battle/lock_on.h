@@ -32,9 +32,8 @@
 //
 // Per seat: written for player 2 above, every seat has its own copy of the target fields and the targeted key
 // (indexed by the seat; index 0 unused, player 1's are the game's own), its own TargetScope and its own lock's end.
-// One TargetScope at a time, whichever seat's (the seats swap in turn). The run after the game's is player 2's only
-// (players::kPlayerTwoSeat in lock_on.cpp): whether the game's tick stands a third run inside its two gated calls is
-// open until step 6. The accessors without a seat are player 2's, for the HUD modules not yet per column (step 4).
+// One TargetScope at a time, whichever seat's (the seats swap in turn). After the game's run, one run per seat in seat
+// order (a third run is as safe as the second: RE-seats-step6-battle.md §1).
 
 #include "platform/byte_scope.h"
 #include "platform/dev_switch.h"
@@ -61,8 +60,6 @@ class TargetScope
 {
 public:
     explicit TargetScope(int seat) noexcept;
-    /// Player 2's (the HUD's, until step 4).
-    TargetScope() noexcept : TargetScope(players::kPlayerTwoSeat) {}
     ~TargetScope();
     TargetScope(const TargetScope&)            = delete;
     TargetScope& operator=(const TargetScope&) = delete;
@@ -85,11 +82,6 @@ private:
 /// Inside `seat`'s member tick scopes, every tick: out of battle, the seat's lock, displayed
 /// target and cursor end, as the game's battle teardown ends player 1's.
 void AfterBattle(int seat) noexcept;
-/// Player 2's (player_two/input/member_movement, until its tick is per seat).
-inline void AfterBattle() noexcept
-{
-    AfterBattle(players::kPlayerTwoSeat);
-}
 
 /// Diagnosis: player 2's targeting run on or off (on at start).
 void SetEnabled(bool on) noexcept;
@@ -116,29 +108,6 @@ void* Cursor(int seat) noexcept;
 /// opened (a HUD module logs its pass afresh when this changes).
 bool          TargetListOpen(int seat) noexcept;
 std::uint32_t TargetListOpenings(int seat) noexcept;
-
-// ---- player 2's, for the HUD modules not yet per column (hud/battle/target_views, enemy_gauges; step 4) ----
-
-inline std::uintptr_t DisplayedObject() noexcept
-{
-    return DisplayedObject(players::kPlayerTwoSeat);
-}
-inline void Displayed(std::uintptr_t& object, std::uintptr_t& controller) noexcept
-{
-    Displayed(players::kPlayerTwoSeat, object, controller);
-}
-inline void* Cursor() noexcept
-{
-    return Cursor(players::kPlayerTwoSeat);
-}
-inline bool TargetListOpen() noexcept
-{
-    return TargetListOpen(players::kPlayerTwoSeat);
-}
-inline std::uint32_t TargetListOpenings() noexcept
-{
-    return TargetListOpenings(players::kPlayerTwoSeat);
-}
 
 #if LSS_DEV
 /// The `battle-mask` command and reading. May throw (out of memory).
