@@ -116,7 +116,8 @@ using ExecFn     = RC::Unreal::UnrealScriptFunction;
 // Set once at install.
 platform::VTableEntry  g_decisions[kDecisions];
 platform::CallRedirect g_actionCall;
-std::atomic<const RC::Unreal::UClass*> g_enemyClass{nullptr};  // set once on the game thread; read on any thread
+std::atomic<RC::Unreal::UClass*> g_enemyClass{nullptr};  // set once on the game thread; read on any thread (IsA takes
+                                                         // a non-const class)
 std::uintptr_t        g_execs[kNatives]{};     // live exec addresses
 std::atomic<ExecFn>   g_originals[kNatives]{};  // null until swapped
 UFunction*            g_functions[kNatives]{};  // game thread
@@ -221,7 +222,7 @@ Player AnswerFor(const void* frame, bool& reaction) noexcept
         return kNone;
     }
     const auto* const caller = static_cast<const RC::Unreal::UObject*>(ReadPointer(frame, kFrameObject));
-    const auto* const enemyClass = g_enemyClass.load(std::memory_order_acquire);
+    auto* const enemyClass = g_enemyClass.load(std::memory_order_acquire);
     if (caller == nullptr || enemyClass == nullptr || !caller->IsA(enemyClass))
     {
         return kNone;
@@ -355,8 +356,7 @@ void TrySwaps() noexcept
     if (g_enemyClass.load(std::memory_order_relaxed) == nullptr)
     {
         // Before any swap; read from any thread (an answering native, a lock-group pick).
-        const auto* const found =
-            UObjectGlobals::StaticFindObject<RC::Unreal::UClass*>(nullptr, nullptr, kEnemyControllerClass);
+        auto* const found = UObjectGlobals::StaticFindObject<RC::Unreal::UClass*>(nullptr, nullptr, kEnemyControllerClass);
         g_enemyClass.store(found, std::memory_order_release);
         if (found == nullptr)
         {
@@ -472,7 +472,7 @@ void Remove() noexcept
 int TossForLockPick(const void* controller) noexcept
 {
     const auto* const object     = static_cast<const RC::Unreal::UObject*>(controller);
-    const auto* const enemyClass = g_enemyClass.load(std::memory_order_acquire);
+    auto* const       enemyClass = g_enemyClass.load(std::memory_order_acquire);
     if (!Tossing() || object == nullptr || enemyClass == nullptr || !object->IsA(enemyClass))
     {
         return 0;
@@ -501,7 +501,7 @@ const void* CheckedController(const void* controller) noexcept
 int CoinFor(const void* controller) noexcept
 {
     const auto* const object     = static_cast<const RC::Unreal::UObject*>(controller);
-    const auto* const enemyClass = g_enemyClass.load(std::memory_order_acquire);
+    auto* const       enemyClass = g_enemyClass.load(std::memory_order_acquire);
     if (!Tossing() || object == nullptr || enemyClass == nullptr || !object->IsA(enemyClass))
     {
         return 0;
@@ -512,7 +512,7 @@ int CoinFor(const void* controller) noexcept
 void ShareCoin(const void* from, const void* to) noexcept
 {
     const auto* const object     = static_cast<const RC::Unreal::UObject*>(to);
-    const auto* const enemyClass = g_enemyClass.load(std::memory_order_acquire);
+    auto* const       enemyClass = g_enemyClass.load(std::memory_order_acquire);
     if (!Tossing() || from == nullptr || to == nullptr || from == to || enemyClass == nullptr ||
         !object->IsA(enemyClass))
     {

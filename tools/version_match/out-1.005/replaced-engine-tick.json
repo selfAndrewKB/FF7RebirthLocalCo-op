@@ -1,0 +1,26 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-10-25",
+  "doc": "Rebirth/Documentation/research/.ida-mcp/1004_UGameEngine_Tick.c, 1005_UGameEngine_Tick.c",
+  "facts": [
+    {
+      "name": "UGameEngine::Tick(float DeltaSeconds, bool bIdleMode)",
+      "old": "0x14109F840",
+      "new": "0x1409F1748",
+      "bytes": "44 88 44 24 18 48 89 4C 24 08 55 53",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The engine's per-frame tick (world ticks, then the viewport-client tick, then RedrawViewports in both builds). Named in both dbs; the live engine is a plain UGameEngine (object dumps), and the UEndGameEngine override is a thunk that jumps here. Entry bytes identical in both builds; the first instruction (5 bytes) sits inside one 16-byte block in both (1.004 entry mod 16 = 0, 1.005 = 8), no branch lands inside. src/engine_tick.cpp."
+    },
+    {
+      "name": "vtbl_UGameEngine's Tick entry (UE4SS UEngine slot 10 after the UObject virtuals: whole slot 87 in 1.004, 88 in 1.005)",
+      "old": "0x146B9A728",
+      "new": "0x1469FED38",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "vtbl_UGameEngine 0x146B9A470 (1.004) / 0x1469FEA78 (1.005); the slot holds UGameEngine::Tick in both. Read live by engine_tick::Install to confirm the function is the one the vtable dispatches to."
+    }
+  ]
+}

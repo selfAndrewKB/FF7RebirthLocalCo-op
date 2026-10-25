@@ -18,6 +18,7 @@
 #include "platform/build_value.h"
 #include "platform/command_registry.h"
 #include "platform/guarded.h"
+#include "players/object_slot.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
@@ -428,14 +429,15 @@ int LogMenuSettings()
     }
     int lines = 0;
     int named = 0;
-    for (FProperty* property :
-         RC::Unreal::TFieldRange<FProperty>(type, RC::Unreal::EFieldIterationFlags::IncludeSuper))
+    // This class's properties, then each super's (the loader's chain walk would go on to the metaclass's).
+    for (RC::Unreal::UStruct* owner = type; owner != nullptr; owner = owner->GetSuperStruct())
+    for (FProperty* property : owner->ForEachProperty())
     {
         if (!property->IsA<RC::Unreal::FStructProperty>())
         {
             continue;
         }
-        auto* structure = static_cast<RC::Unreal::FStructProperty*>(property)->GetStruct().Get();
+        auto* structure = static_cast<RC::Unreal::FStructProperty*>(property)->GetStruct();
         if (structure == nullptr || std::wstring(structure->GetName()) != L"SoftClassPath")
         {
             continue;
@@ -525,12 +527,14 @@ std::wstring DescribeWeak(std::uintptr_t address)
     {
         return L"(null)";
     }
-    auto* item = RC::Unreal::UObjectArray::IndexToObject(weak[0]);
-    if (item == nullptr || item->GetUObject() == nullptr || item->GetSerialNumber() != weak[1])
+    // The slot's object must be the slot's own (the walk moves past an unreachable slot) with the weak pointer's
+    // serial.
+    UObject* object = players::ObjectInSlot(weak[0]);
+    if (object == nullptr || object->GetInternalIndex() != weak[0] ||
+        players::SlotSerial(object->GetObjectItem()) != weak[1])
     {
         return std::format(L"(stale: index {}, serial {})", weak[0], weak[1]);
     }
-    UObject* object = item->GetUObject();
     const std::wstring who = object == player_two::generation::PlayerOneController()   ? L" = player 1's controller"
                              : object == player_two::generation::PlayerTwoController() ? L" = player 2's controller"
                                                                                        : L"";

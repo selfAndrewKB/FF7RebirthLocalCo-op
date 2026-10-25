@@ -3,6 +3,7 @@
 #include "facts/cameras.h"
 #include "facts/controller.h"
 #include "platform/guarded.h"
+#include "players/object_slot.h"
 #include "platform/log.h"
 #include "player_two/object_fields.h"
 #include "players/unreal_access.h"
@@ -58,11 +59,12 @@ void* AsActor(void* object) noexcept
 /// slot no longer holds `object` or it is rooted.
 bool MarkPendingKill(void* object) noexcept
 {
-    auto* item = RC::Unreal::UObjectArray::IndexToObject(static_cast<UObject*>(object)->GetInternalIndex());
-    if (item == nullptr || item->GetUObject() != object)
+    auto* candidate = static_cast<UObject*>(object);
+    if (players::ObjectInSlot(candidate->GetInternalIndex()) != candidate)
     {
         return false;
     }
+    auto* item = candidate->GetObjectItem();
     std::atomic_ref<std::int32_t> flags(*reinterpret_cast<std::int32_t*>(reinterpret_cast<std::uint8_t*>(item) + kItemFlags));
     // One compare-and-swap, as the engine's ThisThreadAtomicallySetFlag: the root-set test holds for the word written.
     std::int32_t now = flags.load(std::memory_order_relaxed);

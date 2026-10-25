@@ -2,6 +2,7 @@
 
 #include "facts/engine.h"
 #include "platform/log.h"
+#include "players/object_slot.h"
 #include "player_two/describe.h"
 #include "player_two/object_fields.h"
 
@@ -87,9 +88,12 @@ struct Leave
 };
 Leave g_leave;  // game thread
 
+/// The watched object's slot record while the slot holds it reachable; null once it is unreachable or gone (the
+/// loader's walk skips an unreachable slot, so the stage between pending kill and the purge reads as gone here).
 void* ItemOf(const Watched& watched) noexcept
 {
-    return watched.index >= 0 ? static_cast<void*>(RC::Unreal::UObjectArray::IndexToObject(watched.index)) : nullptr;
+    RC::Unreal::UObject* held = players::ObjectInSlot(watched.index);
+    return held != nullptr && held == watched.object ? static_cast<void*>(held->GetObjectItem()) : nullptr;
 }
 
 bool Alive(const Watched& watched) noexcept
@@ -206,7 +210,7 @@ void ListHolders() noexcept
             }
             // The object's own index: the walk's index argument may be within its chunk.
             const auto   index = ReadField<std::int32_t>(object, kObjectInternalIndex);
-            const void*  item  = RC::Unreal::UObjectArray::IndexToObject(index);
+            const void*  item  = players::ObjectInSlot(index) == object ? object->GetObjectItem() : nullptr;
             const std::int32_t flags = item != nullptr ? ReadField<std::int32_t>(item, kItemFlags) : 0;
             const bool         dying = (flags & (kPendingKill | kUnreachable)) != 0;
             rooted += (flags & 0x40000000) != 0 ? 1 : 0;

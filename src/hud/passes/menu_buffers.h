@@ -94,7 +94,7 @@ inline bool MenuBuffersInitialised(const MenuBufferSet& set) noexcept
 inline std::uint64_t EngineNameValue(const wchar_t* text, RC::Unreal::EFindName find)
 {
     const RC::Unreal::FName name(text, find);
-    const std::uint64_t index  = name.GetComparisonIndex().ToUnstableInt();
+    const std::uint64_t index  = name.GetComparisonIndex();
     const std::uint64_t number = static_cast<std::uint32_t>(name.GetNumber());
     return index | (number << 32);
 }

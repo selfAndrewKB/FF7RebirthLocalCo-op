@@ -228,7 +228,7 @@ const std::byte* Row(AccessorFn accessor, const std::wstring& name)
     try
     {
         const RC::Unreal::FName fname(name.c_str(), RC::Unreal::FNAME_Find);
-        value = fname.GetComparisonIndex().ToUnstableInt() | (static_cast<std::uint64_t>(static_cast<std::uint32_t>(fname.GetNumber())) << 32);
+        value = fname.GetComparisonIndex() | (static_cast<std::uint64_t>(static_cast<std::uint32_t>(fname.GetNumber())) << 32);
     }
     catch (...)
     {

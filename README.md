@@ -100,8 +100,12 @@ Adding a new build is described step by step in `tools/version_match/README.md`.
 
 ## Building
 
-This is its own CMake root. It builds RE-UE4SS from the existing checkout at
-`../_tools/UE4SS_CppMods/RE-UE4SS` (override with `-DUE4SS_ROOT=<path>`).
+This is its own CMake root. It builds RE-UE4SS from the checkout at
+`../_tools/UE4SS_CppMods/RE-UE4SS-c0a8d4c` (override with `-DUE4SS_ROOT=<path>`): the source of the UE4SS build
+players get from Nexus Mods (Git SHA `c0a8d4c`), so the mod loads under that loader and players install nothing
+else. `tools/ue4ss_nexus/README.md` makes that checkout and names what it holds; `tools/ue4ss_nexus/check_exports.py`
+checks a built DLL against the Nexus loader's exports. If the configure cannot pick a Rust toolchain for corrosion,
+add `-DRust_TOOLCHAIN=stable-x86_64-pc-windows-msvc`.
 
 ```
 cmake -S . -B build -G "Visual Studio 17 2022"
@@ -132,7 +136,9 @@ Copy `build/Game__Shipping__Win64/LocalSplitScreen.dll` to
 enable `LocalSplitScreen : 1`. Enable only one split-screen mod at a time. Close the game first:
 it holds the DLL open while running.
 
-Do not deploy the `UE4SS.dll` this build produces; the game keeps its installed UE4SS.
+Do not deploy the `UE4SS.dll` this build produces; the game keeps its installed UE4SS, which is the Nexus Mods
+"UE4SS-Rebirth_FFVII_ReMenu (1.005 Compatible)" upload with its own `UE4SS_Signatures` (`tools/ue4ss_nexus/README.md`:
+the loader refuses the signature scripts written for newer builds).
 
 ## Not to be confused with
 

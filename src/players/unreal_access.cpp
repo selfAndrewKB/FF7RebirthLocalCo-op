@@ -2,11 +2,11 @@
 
 #include "facts/engine.h"
 #include "platform/guarded.h"
+#include "players/object_slot.h"
 
 #include <Unreal/CoreUObject/UObject/Class.hpp>
 #include <Unreal/CoreUObject/UObject/UnrealType.hpp>
 #include <Unreal/UFunction.hpp>
-#include <Unreal/UObjectArray.hpp>
 #include <Unreal/UObjectGlobals.hpp>
 
 #include <Unreal/NameTypes.hpp>
@@ -57,10 +57,8 @@ UObject* GameInstance() noexcept
     static UClass*      keptClass = nullptr;
     if (kept != nullptr)
     {
-        auto* item = RC::Unreal::UObjectArray::IndexToObject(keptIndex);
         // `kept` is read (its class) only after its slot shows it live: keep that order if copied.
-        if (item != nullptr && item->GetUObject() == kept && !item->IsUnreachable() && !item->IsPendingKill() &&
-            kept->GetClassPrivate() == keptClass)
+        if (LiveInSlot(keptIndex, kept) && kept->GetClassPrivate() == keptClass)
         {
             return kept;
         }

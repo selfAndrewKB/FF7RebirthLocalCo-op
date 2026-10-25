@@ -4,11 +4,11 @@
 // it: its GUObjectArray slot must still hold this address, not collected. Game thread.
 
 #include <Unreal/UObject.hpp>
-#include <Unreal/UObjectArray.hpp>
 
 #include <cstdint>
 
 #include "platform/guarded.h"
+#include "players/object_slot.h"
 
 namespace lss::players {
 
@@ -29,8 +29,7 @@ inline bool IsLiveObject(RC::Unreal::UObject* object) noexcept
     {
         return false;
     }
-    auto* item = RC::Unreal::UObjectArray::IndexToObject(index);
-    return item != nullptr && item->GetUObject() == object && !item->IsUnreachable() && !item->IsPendingKill();
+    return LiveInSlot(index, object);
 }
 
 struct TrackedObject
@@ -44,11 +43,7 @@ struct TrackedObject
         return {live, static_cast<std::int32_t>(live->GetInternalIndex())};
     }
 
-    bool Alive() const noexcept
-    {
-        auto* item = object != nullptr ? RC::Unreal::UObjectArray::IndexToObject(index) : nullptr;
-        return item != nullptr && item->GetUObject() == object && !item->IsUnreachable() && !item->IsPendingKill();
-    }
+    bool Alive() const noexcept { return object != nullptr && LiveInSlot(index, object); }
 };
 
 }  // namespace lss::players

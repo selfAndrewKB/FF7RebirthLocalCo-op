@@ -3,6 +3,7 @@
 #include "facts/controller.h"
 #include "facts/engine.h"
 #include "platform/guarded.h"
+#include "players/object_slot.h"
 #include "player_two/generation.h"
 #include "player_two/object_fields.h"
 
@@ -16,10 +17,11 @@ namespace lss::player_two {
 
 namespace {
 
-/// Whether `object` is a live UObject: the GUObjectArray slot its index field names holds this very address and
-/// is not being collected. A pointer read out of a game field may name an object freed since (the buggy body's
-/// controller field right after a save reload named freed memory, and its name read faulted, 2026-10-21); the
-/// index is read under a guard since the memory may be unmapped by now.
+/// Whether `object` is a live UObject: the GUObjectArray slot its index field names holds this very address,
+/// reachable (an unreachable one, waiting for the collector's purge, counts as gone; a pending-kill one is still
+/// named). A pointer read out of a game field may name an object freed since (the buggy body's controller field
+/// right after a save reload named freed memory, and its name read faulted, 2026-10-21); the index is read under a
+/// guard since the memory may be unmapped by now.
 bool Live(const void* object) noexcept
 {
     std::int32_t index = -1;
@@ -28,8 +30,7 @@ bool Live(const void* object) noexcept
     {
         return false;
     }
-    const auto* item = RC::Unreal::UObjectArray::IndexToObject(index);
-    return item != nullptr && item->GetUObject() == object && !item->IsUnreachable();
+    return players::ObjectInSlot(index) == object;  // the slot's object, while it is reachable
 }
 
 }  // namespace

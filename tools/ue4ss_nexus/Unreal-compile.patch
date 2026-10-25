@@ -1,0 +1,15 @@
+diff --git a/include/Unreal/VirtualFunctionHelper.hpp b/include/Unreal/VirtualFunctionHelper.hpp
+index ef981dc..ac92a9f 100644
+--- a/include/Unreal/VirtualFunctionHelper.hpp
++++ b/include/Unreal/VirtualFunctionHelper.hpp
+@@ -76,7 +76,9 @@ public:
+         DispatcherFuncType DispatcherFunc = nullptr;
+         while (TypeAccessor::IsClassValid(ObjectClass))
+         {
+-            const auto Iterator = DispatchMap.template find<ObjectClassType>(ObjectClass);
++            // MSVC 14.44 rejects the explicit template argument on find (upstream made the same change later);
++            // the call is the same lookup.
++            const auto Iterator = DispatchMap.find(ObjectClass);
+             if (Iterator != DispatchMap.end())
+             {
+                 DispatcherFunc = Iterator->second;

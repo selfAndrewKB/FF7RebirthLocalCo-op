@@ -9,7 +9,12 @@ cmake_minimum_required(VERSION 3.18)
 # `UE4SS` target the mod links against. It is referenced where it already lives rather than copied.
 project(LocalSplitScreen CXX)
 
-set(UE4SS_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../_tools/UE4SS_CppMods/RE-UE4SS"
+# The UE4SS build the mod is built against is the one players get from Nexus Mods: UE4SS v3.0.1 Beta, Git SHA
+# c0a8d4c (upstream main of 2025-02-06), so a player installs the mod next to that loader and nothing else. That
+# commit built with xmake; the checkout is a worktree of the RE-UE4SS clone at that commit with the upstream CMake
+# build added back (tools/ue4ss_nexus/README.md makes it). The mod's imports are checked against the Nexus DLL's
+# exports after each build (tools/ue4ss_nexus/check_exports.py).
+set(UE4SS_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../_tools/UE4SS_CppMods/RE-UE4SS-c0a8d4c"
     CACHE PATH "Path to the RE-UE4SS checkout that provides the UE4SS target")
 
 if(NOT EXISTS "${UE4SS_ROOT}/CMakeLists.txt")
@@ -26,6 +31,7 @@ add_subdirectory("${UE4SS_ROOT}" "${CMAKE_BINARY_DIR}/RE-UE4SS")
 add_library(LocalSplitScreen SHARED
     src/mod.cpp
     src/modules.cpp
+    src/engine_tick.cpp
 
     src/hud/layout/hud_placement.cpp
     src/hud/hud_roots.cpp
@@ -206,8 +212,10 @@ add_library(LocalSplitScreen SHARED
     src/views/whole_screen_reason.cpp
 )
 
-# Includes are rooted at src/ so every #include names its module ("platform/log.h").
-target_include_directories(LocalSplitScreen PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+# Includes are rooted at src/ so every #include names its module ("platform/log.h"). src/ue4ss_compat maps the
+# UE4SS header names the modules use (the current upstream layout) onto the c0a8d4c tree's.
+target_include_directories(LocalSplitScreen PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src"
+                                                    "${CMAKE_CURRENT_SOURCE_DIR}/src/ue4ss_compat")
 target_compile_features(LocalSplitScreen PRIVATE cxx_std_20)
 target_link_libraries(LocalSplitScreen PUBLIC UE4SS)
 

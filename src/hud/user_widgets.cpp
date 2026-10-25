@@ -5,13 +5,14 @@
 #include <Unreal/CoreUObject/UObject/Class.hpp>
 #include <Unreal/Hooks/Hooks.hpp>
 #include <Unreal/UObject.hpp>
-#include <Unreal/UObjectArray.hpp>
 #include <Unreal/UObjectGlobals.hpp>
 
 #include "platform/frame_watch.h"
 #include "platform/log.h"
+#include "players/object_slot.h"
 
 #include <algorithm>
+#include <atomic>
 #include <mutex>
 
 namespace lss::hud::user_widgets {
@@ -23,7 +24,10 @@ using RC::Unreal::UObject;
 namespace Hook = RC::Unreal::Hook;
 
 UClass*                 g_userWidgetClass = nullptr;
-Hook::GlobalCallbackId  g_callback        = Hook::ERROR_ID;
+// UE4SS c0a8d4c keeps a construction callback for the session (it has no unregister), so it is registered once and
+// made inert by Remove; the DLL is pinned, so its code stays.
+bool                    g_registered = false;  // game thread
+std::atomic<bool>       g_active{false};       // read on the constructing thread
 std::mutex              g_lock;
 std::vector<Widget>     g_constructed;  // under g_lock
 std::vector<Widget>     g_live;         // game thread
@@ -62,21 +66,21 @@ bool Install() noexcept
             platform::Log(L"user widgets: /Script/UMG.UserWidget not found; HUD widgets are found by scanning instead");
             return false;
         }
-        const Hook::FCallbackOptions options{false, false, STR("LocalSplitScreen"), STR("user widget constructed")};
-        g_callback = Hook::RegisterStaticConstructObjectPostCallback(
-            [](auto& info, const RC::Unreal::FStaticConstructObjectParameters&) {
-                UObject* object = info.GetCurrentResolvedReturnValue();
-                if (object != nullptr && object->IsA(g_userWidgetClass))
-                {
-                    const std::lock_guard lock(g_lock);
-                    g_constructed.push_back(Record(object));
-                }
-            },
-            options);
-        if (g_callback == Hook::ERROR_ID)
+        if (!g_registered)
         {
-            return false;
+            Hook::RegisterStaticConstructObjectPostCallback(
+                [](const RC::Unreal::FStaticConstructObjectParameters&, UObject* constructed) -> UObject* {
+                    if (g_active.load(std::memory_order_acquire) && constructed != nullptr &&
+                        constructed->IsA(g_userWidgetClass))
+                    {
+                        const std::lock_guard lock(g_lock);
+                        g_constructed.push_back(Record(constructed));
+                    }
+                    return constructed;  // the game's object, unchanged (the last callback's answer is the one kept)
+                });
+            g_registered = true;
         }
+        g_active.store(true, std::memory_order_release);
         // The widgets made before the callback: one walk now, while the game loads, not at the
         // first join (it costs ~40 ms in play).
         Seed();
@@ -91,25 +95,19 @@ bool Install() noexcept
 
 void Remove() noexcept
 {
-    if (g_callback != Hook::ERROR_ID)
-    {
-        Hook::UnregisterCallback(g_callback);
-        g_callback = Hook::ERROR_ID;
-    }
+    g_active.store(false, std::memory_order_release);
 }
 
 bool Alive(const Widget& widget) noexcept
 {
-    auto* item = RC::Unreal::UObjectArray::IndexToObject(widget.index);
-    return item != nullptr && item->GetUObject() == widget.object && !item->IsUnreachable() && !item->IsPendingKill() &&
-           widget.object->GetClassPrivate() == widget.cls;
+    return players::LiveInSlot(widget.index, widget.object) && widget.object->GetClassPrivate() == widget.cls;
 }
 
 const std::vector<Widget>& Live() noexcept
 {
     try
     {
-        if (!g_seeded || g_callback == Hook::ERROR_ID)
+        if (!g_seeded || !g_active.load(std::memory_order_acquire))
         {
             Seed();  // once (or every time, without the callback): the widgets constructed before
         }

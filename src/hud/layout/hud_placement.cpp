@@ -15,6 +15,7 @@
 #include "hud/user_widgets.h"
 #include "platform/frame_watch.h"
 #include "platform/guarded.h"
+#include "players/object_slot.h"
 #include "platform/log.h"
 #include "players/unreal_access.h"
 
@@ -169,9 +170,7 @@ std::optional<ViewportLayout> ReadLayout(const UObject* widget) noexcept
 /// object; that object is live, so reading its class is safe).
 bool Alive(const Placed& placed) noexcept
 {
-    auto* item = RC::Unreal::UObjectArray::IndexToObject(placed.index);
-    return item != nullptr && item->GetUObject() == placed.widget && !item->IsUnreachable() &&
-           !item->IsPendingKill() && placed.widget->GetClassPrivate() == placed.cls;
+    return players::LiveInSlot(placed.index, placed.widget) && placed.widget->GetClassPrivate() == placed.cls;
 }
 
 /// Each widget class's placement (or none), found once per class: comparing class names for every

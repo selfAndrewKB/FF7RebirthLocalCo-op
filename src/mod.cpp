@@ -13,6 +13,7 @@
 #include <Unreal/Hooks/Hooks.hpp>
 
 #include "dev/dev_tools.h"
+#include "engine_tick.h"
 #include "facts/engine.h"
 #include "facts/in_battle.h"
 #include "hud/layout/hud_placement.h"
@@ -58,12 +59,14 @@
 #include "views/whole_screen.h"
 #include "views/window_span.h"
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <string>
 #include <optional>
+#include <utility>
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -75,7 +78,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.95.0";  // seats step 6: player 3 wired
+constexpr const wchar_t* kVersion = L"0.96.0";  // built against the Nexus UE4SS (c0a8d4c)
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -156,6 +159,12 @@ bool WriteThreePlayerLayout(const wchar_t*, std::uint8_t value) noexcept
     return lss::players::split_settings::SetThreePlayerLayout(value);
 }
 
+class LocalSplitScreenMod;
+
+/// The mod while it is set up, for the loader's map-load callback: UE4SS c0a8d4c keeps a callback for the session (no
+/// unregister), so it reads the mod through here and does nothing once the mod is gone.
+std::atomic<LocalSplitScreenMod*> g_instance{nullptr};
+
 class LocalSplitScreenMod final : public RC::CppUserModBase
 {
 public:
@@ -172,13 +181,8 @@ public:
 
     ~LocalSplitScreenMod() override
     {
-        for (const auto id : {tickCallback_, loadMapCallback_})
-        {
-            if (id != Hook::ERROR_ID)
-            {
-                Hook::UnregisterCallback(id);
-            }
-        }
+        g_instance.store(nullptr, std::memory_order_release);  // the map-load callback finds no mod from now on
+        lss::engine_tick::Stop();
 
         // With player 2 still in, the engine keeps rendering two views and calling player 2's
         // wrappers. Putting the engine's own submission back would render them in one family, the
@@ -274,13 +278,15 @@ public:
 #endif
                 lss::dev::InstallControl(*session_);
             }
-            const Hook::FCallbackOptions watchOptions{false, false, STR("LocalSplitScreen"), STR("frame watch")};
-            tickCallback_ = Hook::RegisterEngineTickPreCallback(
-                [](Hook::TCallbackIterationData<void>&, RC::Unreal::UEngine*, float, bool) {
-                    lss::platform::frame_watch::OnFrameStart();
-                    lss::dev::TickBeforeSession();
-                },
-                watchOptions);
+            if (image && lss::engine_tick::Install(*image))
+            {
+                lss::engine_tick::Start(
+                    [](void*) {
+                        lss::platform::frame_watch::OnFrameStart();
+                        lss::dev::TickBeforeSession();
+                    },
+                    nullptr);
+            }
             return;
         }
 
@@ -290,13 +296,17 @@ public:
                 image->Build()->research ? L" (the research build)" : L" (addresses translated from the research build)");
         }
         const auto removeLocalPlayer = image ? VerifyEngine(*image) : std::nullopt;
-        if (removeLocalPlayer)
+        // The heartbeat first (it passes the tick through until Start, below): without it nothing of the mod runs,
+        // so a failed check stands the whole mod aside like any other startup fact.
+        if (!removeLocalPlayer || !lss::engine_tick::Install(*image))
         {
-            // The game's end-of-frame state reset between two families (the main-menu crash's fix),
-            // before the submission that asks for it; logs its own outcome.
-            lss::renderer::InstallFamilyBoundary(*image);
+            Log(L"standing aside: nothing installed, the game runs unmodified");
+            return;
         }
-        if (!removeLocalPlayer || !InstallRenderer(*image))
+        // The game's end-of-frame state reset between two families (the main-menu crash's fix),
+        // before the submission that asks for it; logs its own outcome.
+        lss::renderer::InstallFamilyBoundary(*image);
+        if (!InstallRenderer(*image))
         {
             Log(L"standing aside: nothing installed, the game runs unmodified");
             return;
@@ -317,16 +327,17 @@ public:
 #endif
         lss::dev::Install(*image, *session_);
 
-        const Hook::FCallbackOptions tickOptions{false, false, STR("LocalSplitScreen"), STR("player intent")};
-        tickCallback_ = Hook::RegisterEngineTickPreCallback(
-            [this](Hook::TCallbackIterationData<void>&, RC::Unreal::UEngine*, float, bool) { OnEngineTick(); },
-            tickOptions);
-
         // Player 2 leaves before any map load: the new world would log player 2 in again, and its
-        // camera manager's fixed-name spawns would collide with player 1's outside a join.
-        const Hook::FCallbackOptions loadOptions{false, false, STR("LocalSplitScreen"), STR("leave before map load")};
-        loadMapCallback_ = Hook::RegisterLoadMapPreCallback(
-            [this](auto&, auto&&...) { LeaveBeforeWorldChange(L"a map is loading"); }, loadOptions);
+        // camera manager's fixed-name spawns would collide with player 1's outside a join. The loader's callback
+        // answers {false, false}: the game's LoadMap runs as it is.
+        Hook::RegisterLoadMapPreCallback([](RC::Unreal::UEngine*, RC::Unreal::FWorldContext&, RC::Unreal::FURL,
+                                            RC::Unreal::UPendingNetGame*, RC::Unreal::FString&) {
+            if (LocalSplitScreenMod* mod = g_instance.load(std::memory_order_acquire))
+            {
+                mod->LeaveBeforeWorldChange(L"a map is loading");
+            }
+            return std::pair<bool, bool>{false, false};
+        });
         // The same before a retry, reload or load leaves the field inside this world (no map load).
         if (!lss::player_two::field_exit::Install(
                 *image,
@@ -335,6 +346,11 @@ public:
         {
             Log(L"a retry, reload or load is caught only by the engine tick's check of the field running byte");
         }
+
+        // The heartbeat last, once everything it reaches is in place (this runs on the loader's thread; the ticks on
+        // the game's).
+        g_instance.store(this, std::memory_order_release);
+        lss::engine_tick::Start([](void* self) { static_cast<LocalSplitScreenMod*>(self)->OnEngineTick(); }, this);
 
         Log(L"ready: every engine check passed. Ctrl+F7 adds a player (2, then 3), Ctrl+F8 removes the last one in, Ctrl+F5 switches "
             L"top/bottom and side by side, Ctrl+F4 switches filled halves and 16:9 halves with bars. Player 2 starts on "
@@ -627,8 +643,6 @@ private:
     bool                                      onPlayerOne_        = false;  // player 2's view on player 1's (columns held)
     bool                                      tickSeen_           = false;
     bool                                      rendererInstalled_  = false;
-    Hook::GlobalCallbackId                    tickCallback_       = Hook::ERROR_ID;
-    Hook::GlobalCallbackId                    loadMapCallback_    = Hook::ERROR_ID;
 };
 
 }  // namespace
