@@ -46,12 +46,12 @@ void Remove() noexcept;
 void SetMask(unsigned mask) noexcept;
 unsigned Mask() noexcept;
 
-/// Around player 2's controller input. Acts only for player 2's controller, on the game thread,
-/// while player 2 is in.
+/// Around a further player's controller input (urtherPlayer: the controller is a seat's). Acts only for a seat's
+/// controller, on the game thread, while a seat's player is in. The seats' inputs run in turn, never nested.
 class InputScope
 {
 public:
-    explicit InputScope(bool playerTwo) noexcept;
+    explicit InputScope(bool furtherPlayer) noexcept;
     ~InputScope();
     InputScope(const InputScope&)            = delete;
     InputScope& operator=(const InputScope&) = delete;

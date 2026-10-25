@@ -58,11 +58,6 @@ std::array<bool, players::kMaxPlayers> g_stopped{};
 
 std::array<StageCounters, players::kMaxPlayers> g_counters{};  // by seat; index 0 unused
 
-// Inside a seat's member tick, the rides (chocobo_ride, wheelie_ride, own_ride) and the dev watches are player 2's:
-// Tick calls them for player 2's seat only.
-static_assert(players::kSeatsBuilt == 1, "the rides are player 2's: before seat 2 is built their group makes them per "
-                                         "seat and Tick calls them for every seat");
-
 int MemberType(const void* member) noexcept
 {
     const auto type = party_member::PlayerTypeOf(member);
@@ -145,7 +140,7 @@ void ClearFieldActionRows(int seat, void* state) noexcept
 /// Ticks the seat's member's state inside every scope, or not at all.
 void TickInScopes(int seat, void* controller, void* member, void* state, int type, float deltaTime) noexcept
 {
-    const bool playerTwo = seat == players::kPlayerTwoSeat;
+    const bool playerTwo = seat == players::kPlayerTwoSeat;  // the dev watches below are player 2's (plan step 7)
     // The seat's sticks and its player as the primary controller, or no tick; its own buttons (sprint, dodge, field
     // actions) and, in battle, the target system's fields as the seat's.
     p2_scope::Args args;
@@ -177,10 +172,7 @@ void TickInScopes(int seat, void* controller, void* member, void* state, int typ
         return;
     }
     ClearFieldActionRows(seat, state);
-    if (playerTwo)
-    {
-        wheelie_ride::AfterMemberTick(controller, member);  // a Wheelie walk-in the tick answered yes to: boarded here
-    }
+    wheelie_ride::AfterMemberTick(controller, member);  // a Wheelie walk-in the tick answered yes to: boarded here
 }
 
 /// The member's move state, if the member is the seat's possessed character (by `controller`) and the
@@ -239,25 +231,21 @@ void Tick(int seat, void* controller, void* member) noexcept
     }
     const auto     engine    = move_state::TakeEngineTicks(seat);
     const auto     index     = static_cast<std::size_t>(seat);
-    const bool     playerTwo = seat == players::kPlayerTwoSeat;
     StageCounters& counters  = g_counters[index];
     if (!pad_sticks::Enabled() || !pad_sticks::PartActs(pad_sticks::kPartMemberTick) || !generation::Active(seat) ||
         g_tickForCharacter == nullptr || g_stopped[index])
     {
-        if (playerTwo)
-        {
-            // A ride left un-ticked would hold player 2's controller on a chocobo nobody steers or ends: given back.
-            own_ride::Release(L"the member's tick stopped (per-pad sticks switched off, or the tick stopped)");
-        }
+        // A ride left un-ticked would hold the seat's controller on a chocobo nobody steers or ends: given back.
+        own_ride::Release(seat, L"the member's tick stopped (per-pad sticks switched off, or the tick stopped)");
         return;
     }
-    if (playerTwo && chocobo_ride::Tick(controller, member, engine))
+    if (chocobo_ride::Tick(controller, member, engine))
     {
-        return;  // player 2 drives their chocobo: its move state was ticked instead of the member's
+        return;  // the seat's player drives their chocobo: its move state was ticked instead of the member's
     }
-    if (playerTwo && wheelie_ride::Tick(controller, member, engine))
+    if (wheelie_ride::Tick(controller, member, engine))
     {
-        return;  // player 2 rides a Wheelie: its move state was ticked instead of the member's
+        return;  // the seat's player rides a Wheelie: its move state was ticked instead of the member's
     }
     // While player 1 rides a scooter, the field ticker runs only its ride body (no on-foot state is counted): that ride
     // tick is the frame's tick for the seat's member too (live 2026-10-06: she stood still while player 1 rode).
@@ -322,8 +310,8 @@ void ClearRideRows(void* chocoboState) noexcept
         if (!GuardedClear(static_cast<std::byte*>(chocoboState) + offset))
         {
             g_handleClear = nullptr;
-            platform::Log(L"member movement: the engine raised an exception clearing player 2's chocobo rows; rows are left "
-                          L"to show this session");  // ClearRideRows is player 2's (the rides' call)
+            platform::Log(L"member movement: the engine raised an exception clearing a further player's chocobo rows; "
+                          L"rows are left to show this session");
             return;
         }
     }
@@ -383,9 +371,9 @@ HandlesTick TickRideHandles(int seat, const void* member, void* state, const voi
     return tick;
 }
 
-CoreAsPlayerTwo PlayerCoreAsSeat(int seat, const void* character, const void* member) noexcept
+CoreAsSeat PlayerCoreAsSeat(int seat, const void* character, const void* member) noexcept
 {
-    CoreAsPlayerTwo result;
+    CoreAsSeat result;
     const int       type = MemberType(member);
     if (!generation::OnGameThread() || g_isPlayerCore == nullptr || character == nullptr || type == kNoType)
     {

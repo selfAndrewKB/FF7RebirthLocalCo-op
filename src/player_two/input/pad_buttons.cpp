@@ -452,10 +452,6 @@ void Tick(void* self, float deltaTime, void* application, void* cursor)
     }
 }
 
-// The route to a seat's own UI is player 2's (pad_buttons.h, PlayerTwoRouteFn): another seat's presses skip it.
-static_assert(players::kSeatsBuilt == 1, "the menu route is player 2's: before seat 2 is built, menu_input_route takes "
-                                         "the seat (by the press's pad) and ActionDown offers it every seat's press");
-
 /// A seated pad's presses update the tables (its player's polling reads them) but are passed as already
 /// handled: the game's own flag for "an earlier binding consumed this", so they never open a menu or
 /// run a field prompt, which belong to player 1's context. The seat comes from the press's source bit.
@@ -487,10 +483,11 @@ char ActionDown(void* owner, void* unused, std::uint32_t sourceBit, void* event,
     {
         ++g_seatDowns[seat];
         char result = 0;
-        if (seat == players::kPlayerTwoSeat && g_playerTwoRoute != nullptr &&
+        // The route finds the seat from the source bit itself (menu_input_route).
+        if (g_playerTwoRoute != nullptr &&
             g_playerTwoRoute(g_actionDown, owner, unused, sourceBit, event, alreadyHandled, result))
         {
-            return result;  // player 2's own UI took it
+            return result;  // the seat's own UI took it
         }
         alreadyHandled = 1;
     }

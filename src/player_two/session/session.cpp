@@ -53,10 +53,11 @@ namespace {
 
 using platform::Log;
 
-// A Seat calls modules that are still player 2's (own_ride, the camera seeds and the destroyed member's camera
-// override, member_movement under player 2's primary scope, handover_watch; command_menu_two is gated): raising the
-// built seats waits for them to take the seat (plan/seats.md step 6).
-static_assert(players::kSeatsBuilt == 1, "a Seat still calls player 2's modules: see above");
+/// The seat's slot of the party order after the field leader's, as the log names it (players/seats.h).
+const wchar_t* SlotWord(int seat) noexcept
+{
+    return seat == 2 ? L"3rd" : L"2nd";
+}
 
 /// Ticks player 1's controller is watched after a join (it has been seen to name no pawn for one).
 constexpr std::uint32_t kPlayerOneWatchTicks = 3;
@@ -123,7 +124,7 @@ void Seat::LogTagCounts(const wchar_t* when) noexcept
         text(counts.trigger));
 }
 
-void Seat::Tick() noexcept
+void Seat::Tick(bool& commandMenusTicked) noexcept
 {
     if (!In())
     {
@@ -132,7 +133,7 @@ void Seat::Tick() noexcept
     }
     if (!players_.StillListed())
     {
-        Log(L"player 2 was removed by the game; this mod has let go of it");
+        Log(L"{} was removed by the game; this mod has let go of it", Name());
         Forget();
         return;
     }
@@ -155,9 +156,10 @@ void Seat::Tick() noexcept
                 break;  // left to wait for a free member
             }
             CheckMemberPlayable();
-            if (seat_ == players::kPlayerTwoSeat)
+            if (!commandMenusTicked)
             {
-                command_menu_two::Tick();  // player 2's command controller, built and set up per world
+                commandMenusTicked = true;  // once per tick, by the first seat that reaches here
+                command_menu_two::Tick();   // every playing seat's command controller, built and set up per world
             }
             if (phase_ == Phase::Playing && installed_.memberMovement && generation::MemberOf(seat_) != nullptr)
             {
@@ -190,8 +192,8 @@ void Seat::WatchOwnCamera() noexcept
     ++viewTargetResets_;
     if (viewTargetResets_ <= kLoggedMoves)
     {
-        Log(L"WARNING: player 2's camera manager now views {}, not its camera actor (the game moved it; not re-aimed)",
-            NameOf(view_target::Current(controller_)));
+        Log(L"WARNING: {}'s camera manager now views {}, not its camera actor (the game moved it; not re-aimed)",
+            Name(), NameOf(view_target::Current(controller_)));
     }
 }
 
@@ -217,10 +219,10 @@ void Seat::Settle() noexcept
     }
     if (!installed_.member || !generation::Active(seat_))
     {
-        Log(L"player 2 has its own controller; no party member is taken ({})",
+        Log(L"{} has its own controller; no party member is taken ({})", Name(),
             !installed_.member                          ? L"the party-member stage is not installed"
             : generation::FaultReason(seat_) != nullptr ? generation::FaultReason(seat_)
-                                                        : L"player 2's stages were withdrawn");
+                                                        : L"the player's stages were withdrawn");
         phase_ = Phase::Playing;
         return;
     }
@@ -229,23 +231,23 @@ void Seat::Settle() noexcept
         if (!gateClosedLogged_)
         {
             gateClosedLogged_ = true;
-            Log(L"player 2 waits for the game to be ready (a load) to take a party member");
+            Log(L"{} waits for the game to be ready (a load) to take a party member", Name());
         }
         return;
     }
     if (sharedRide_)
     {
-        // Player 1 rides a vehicle the whole party shares: player 2 takes no member until it is over (RetakeWhenFree).
+        // Player 1 rides a vehicle the whole party shares: the seat takes no member until it is over (RetakeWhenFree).
         member_ = nullptr;
         phase_  = Phase::Playing;
         return;
     }
-    handover_watch::PartyOrder(L"choosing player 2's member", nullptr);
+    handover_watch::PartyOrder(L"choosing a further player's member", nullptr);
     const auto choice = party_member::ChooseSlot(seat_, playerOneController_);
     member_           = choice.member;
     if (choice.wait == party_member::SlotWait::NoSlot)
     {
-        LeaveToAwait(L"the party has no member for player 2 any more");
+        LeaveToAwait(L"the party has no member for the player any more");
         return;
     }
     if (member_ == nullptr)
@@ -267,7 +269,7 @@ void Seat::Settle() noexcept
     }
     handover_watch::Snapshot(L"just after the take's switch", member_);
     memberWeak_ = leader_scope::WeakOf(member_);  // watched from the take on
-    Log(L"player 2 is taking {}", NameOf(member_));
+    Log(L"{} is taking {}", Name(), NameOf(member_));
     phase_ = Phase::Taking;
     ticks_ = 0;
 }
@@ -279,9 +281,9 @@ void Seat::AwaitTake() noexcept
     if (outcome == TakeOutcome::Took)
     {
         const auto bytes = party_member::ReadPlayerOneBytes(playerOneController_);
-        Log(L"player 2 took {} after {} tick(s); player 1's controller bytes +0x897/+0x8AB {:#04x}/{:#04x} -> "
+        Log(L"{} took {} after {} tick(s); player 1's controller bytes +0x897/+0x8AB {:#04x}/{:#04x} -> "
             L"{:#04x}/{:#04x} ({})",
-            NameOf(member_), ticks_, playerOneBytes_.at897, playerOneBytes_.at8AB, bytes.at897, bytes.at8AB,
+            Name(), NameOf(member_), ticks_, playerOneBytes_.at897, playerOneBytes_.at8AB, bytes.at897, bytes.at8AB,
             bytes == playerOneBytes_ ? L"unchanged" : L"CHANGED");
         LogTagCounts(L"after the take");
         generation::SetMember(seat_, member_);
@@ -289,11 +291,11 @@ void Seat::AwaitTake() noexcept
         retakeLooks_ = 0;  // a look window armed before the take would drain for nothing
         if (installed_.fieldSettings)
         {
-            Log(L"player 2's Field camera brought to player 1's settings: {}",
+            Log(L"{}'s Field camera brought to player 1's settings: {}", Name(),
                 field_camera::Seed(seat_) ? L"matches" : L"DOES NOT MATCH");
         }
-        Log(L"player 2's Battle camera brought to player 1's state: {}",
-            battle_camera::Seed() ? L"matches" : L"does not match (or not installed)");
+        Log(L"{}'s Battle camera brought to player 1's state: {}", Name(),
+            battle_camera::Seed(seat_) ? L"matches" : L"does not match (or not installed)");
         phase_ = Phase::Playing;
         return;
     }
@@ -301,9 +303,9 @@ void Seat::AwaitTake() noexcept
     {
         return;
     }
-    Log(L"player 2 did not get {} within {} ticks (driven by {}, player 2's pawn {}, leader {}); giving it back, "
-        L"player 2 stays in on its own controller",
-        NameOf(member_), kTakeTicks, NameOf(lease.memberEffective), NameOf(lease.playerTwoPawn),
+    Log(L"{} did not get {} within {} ticks (driven by {}, the player's pawn {}, leader {}); giving it back, the "
+        L"player stays in on its own controller",
+        Name(), NameOf(member_), kTakeTicks, NameOf(lease.memberEffective), NameOf(lease.playerTwoPawn),
         NameOf(lease.playerTwoLeader));
     generation::Fault(seat_, L"the party member was not handed over in time");
     party_member::GiveBack(seat_, controller_);  // member_ stays recorded: the leave waits for this release
@@ -319,11 +321,12 @@ bool Seat::MemberDestroyed() noexcept
     {
         return false;
     }
-    Log(L"player 2's member was destroyed under player 2 (the party was rebuilt without a field exit being seen); "
-        L"player 2 lets go of it and joins again");
+    Log(L"{}'s member was destroyed under them (the party was rebuilt without a field exit being seen); they let "
+        L"go of it and join again",
+        Name());
     generation::SetMember(seat_, nullptr);  // player 2's member movement and scopes stop at once
     // Riding, player 2's controller possessed the member's chocobo: its pawn field names that instead.
-    const auto forgotten = own_ride::Forget();
+    const auto forgotten = own_ride::Forget(seat_);
     camera_override::MemberDestroyed(seat_);
     // Player 2's controller still names the destroyed character: cleared, so neither the game's
     // give-back nor the controller's unpossess reads it (RE-p2-retry-reload.md §3.2, recipe 3).
@@ -334,7 +337,7 @@ bool Seat::MemberDestroyed() noexcept
         if (named == member_ || (field == facts::kControllerPawn && named != nullptr && vehicle))
         {
             WriteField<void*>(controller_, field, nullptr);
-            Log(L"player 2's controller field {:#x} named the destroyed character; cleared", field);
+            Log(L"{}'s controller field {:#x} named the destroyed character; cleared", Name(), field);
         }
     }
     member_                 = nullptr;
@@ -384,13 +387,13 @@ void Seat::RetakeWhenFree() noexcept
         }
         else if (!looking)  // a member the game spawns joins a few ticks after its party change: not given up then
         {
-            LeaveToAwait(L"the party has no member for player 2");
+            LeaveToAwait(L"the party has no member for the player");
         }
         return;
     }
     retakeLooks_ = 0;
-    Log(L"a party member is free for player 2 again ({}; {}); taking it", NameOf(free),
-        waitingForSlot_          ? L"the 2nd slot's member is free now"
+    Log(L"a party member is free for {} again ({}; {}); taking it", Name(), NameOf(free),
+        waitingForSlot_          ? L"the slot's member is free now"
         : looking                ? L"after the game's party change"
         : installed_.partyEvents ? L"found by the slow check: no game party change was heard for it"
                                  : L"found by the party check");
@@ -411,7 +414,7 @@ void Seat::SetSharedRide(bool on) noexcept
     }
     if (!on)
     {
-        Log(L"the shared ride is over: player 2 takes the 2nd slot's member again once it is free");
+        Log(L"the shared ride is over: {} takes the {} slot's member again once it is free", Name(), SlotWord(seat_));
         retakeLooks_ = kRetakeLookTicks;
         return;
     }
@@ -421,22 +424,22 @@ void Seat::SetSharedRide(bool on) noexcept
     }
     else
     {
-        Log(L"player 2 stands aside (no member held): player 1 rides a vehicle the whole party shares");
+        Log(L"{} stands aside (no member held): player 1 rides a vehicle the whole party shares", Name());
     }
 }
 
 /// Player 2 gives its member back through the game's release and chooses again once it is released.
 void Seat::Yield(const wchar_t* why) noexcept
 {
-    own_ride::Release(L"player 2 gives the member back");  // while player 2's scopes still hold
-    Log(L"player 2's {} is {}: giving it back to choose again among the deployed party", NameOf(member_), why);
+    own_ride::Release(seat_, L"the player gives the member back");  // while the seat's scopes still hold
+    Log(L"{}'s {} is {}: giving it back to choose again among the deployed party", Name(), NameOf(member_), why);
     handover_watch::Snapshot(L"the give-back", member_);
     generation::SetMember(seat_, nullptr);  // player 2's member movement and scopes stop at once
     phase_ = Phase::Swapping;        // before the game's switch runs: a party event inside it sees the swap
     ticks_ = 0;
     if (!party_member::GiveBack(seat_, controller_))
     {
-        Log(L"player 2's {} could not be given back (no trigger actor, or the switch faulted)", NameOf(member_));
+        Log(L"{}'s {} could not be given back (no trigger actor, or the switch faulted)", Name(), NameOf(member_));
     }
 }
 
@@ -473,9 +476,9 @@ void Seat::OnLeaderChanging(void* controller, void* character) noexcept
         const void* before = ReadPointer(controller, facts::kControllerLeader);
         if (action == LeaderEventAction::Warn)
         {
-            Log(L"WARNING: party event: the game makes {} the leader of player 2's controller (was {}); a game leader "
-                L"change ran inside a player-2 scope. Not acted on",
-                NameOf(character), NameOf(before));
+            Log(L"WARNING: party event: the game makes {} the leader of {}'s controller (was {}); a game leader "
+                L"change ran inside a further player's scope. Not acted on",
+                NameOf(character), Name(), NameOf(before));
             return;
         }
         EventLine(std::format(L"the game makes {} the leader of {} (was {})", NameOf(character),
@@ -561,9 +564,9 @@ void Seat::FollowSlot(const wchar_t* when, bool log) noexcept
     {
         return;  // no slot: the party checks give player 2's member up if it left
     }
-    Log(L"the 2nd slot of the party order is now type {} ({}), not player 2's {} (type {})", choice.type, when,
-        NameOf(member_), *held);
-    Yield(L"no longer in the 2nd slot of the party order");
+    Log(L"the {} slot of the party order is now type {} ({}), not {}'s {} (type {})", SlotWord(seat_), choice.type,
+        when, Name(), NameOf(member_), *held);
+    Yield(L"no longer in the player's slot of the party order");
 }
 
 /// Player 2 stays in without a member while the 2nd slot's is not free; the reason is logged when it
@@ -582,17 +585,17 @@ void Seat::WaitForSlot(const party_member::SlotChoice& choice) noexcept
     if (choice.wait == party_member::SlotWait::LinkPartner)
     {
         // RE-p2-synergy-skills.md S-SYNTAKE: the game gives a partner back only at the link's member end.
-        Log(L"player 2 waits for party member type {} (the 2nd slot, ordinal {}): a synergy partner the game has not "
+        Log(L"{} waits for party member type {} (the {} slot, ordinal {}): a synergy partner the game has not "
             L"given back yet (its link: ability kind {} mode {}, partner state {}, started {} ended {}); taken once the "
             L"game ends its part of the link",
-            choice.type, choice.ordinal, choice.link.kind, choice.link.mode,
+            Name(), choice.type, SlotWord(seat_), choice.ordinal, choice.link.kind, choice.link.mode,
             choice.link.state[choice.link.partner], choice.link.started[choice.link.partner],
             choice.link.ended[choice.link.partner]);
         return;
     }
-    Log(L"player 2 waits for party member type {} (the 2nd slot, ordinal {}): {} (AI brain {} state {}); the game's "
-        L"party order chooses player 2's member, so a menu reorder ends the wait",
-        choice.type, choice.ordinal,
+    Log(L"{} waits for party member type {} (the {} slot, ordinal {}): {} (AI brain {} state {}); the game's "
+        L"party order chooses the player's member, so a menu reorder ends the wait",
+        Name(), choice.type, SlotWord(seat_), choice.ordinal,
         choice.wait == party_member::SlotWait::NotEligible ? Describe(choice.verdict)
         : choice.wait == party_member::SlotWait::Unread    ? L"the party could not be read"
                                                            : Describe(AssessAi(choice.ai)),
@@ -605,12 +608,13 @@ void Seat::CheckHeldAi() noexcept
     // While player 2 rides their chocobo or a Wheelie the member is her AI's for the ride
     // (player_two/rides/chocobo_ride.h,
     // player_two/rides/wheelie_ride.h).
-    if (own_ride::Riding() || ticks_ % kHeldAiTicks != 0 ||
+    if (own_ride::Riding(seat_) || ticks_ % kHeldAiTicks != 0 ||
         !AiTakesBack(party_member::ReadAi(member_)))
     {
         return;
     }
-    Yield(L"put into LEAD by a story script (given back so the script can run; player 2 waits for it to follow again)");
+    Yield(L"put into LEAD by a story script (given back so the script can run; the player waits for it to follow "
+          L"again)");
 }
 
 /// The one readiness gate of a join: player 2's camera manager can be started safely, the game has started,
@@ -623,9 +627,9 @@ const wchar_t* Seat::NotReadyToJoin() const noexcept
     if (!installed_.ownController || !own_controller::Ready())
     {
         return installed_.ownController
-                   ? L"player 2's camera manager cannot be started safely yet (player 1's camera names are not set "
-                     L"yet)"
-                   : L"player 2's camera manager cannot be started safely yet (its stage is not installed)";
+                   ? L"the player's camera manager cannot be started safely yet (player 1's camera names are not "
+                     L"set yet)"
+                   : L"the player's camera manager cannot be started safely yet (its stage is not installed)";
     }
     if (installed_.member && !party_member::GameReady())
     {
@@ -668,7 +672,7 @@ void Seat::OutsideTick() noexcept
     }
     if (mode == Mode::Rejoin)
     {
-        Log(L"the new map is ready: player 2 joins again (try {})", step.attempt);
+        Log(L"the new map is ready: {} joins again (try {})", Name(), step.attempt);
         Join();
         outside_.AfterJoin(Mode::Rejoin, In());
         return;
@@ -680,14 +684,14 @@ void Seat::OutsideTick() noexcept
         return;
     }
     const bool free   = FreeMember(one.controller) != nullptr;
-    const bool riding = !free && shared_ride::Rides(one.controller);  // player 2 joins standing aside (Join)
+    const bool riding = !free && shared_ride::Rides(one.controller);  // the seat joins standing aside (Join)
     if (!free && !riding)
     {
         return;
     }
-    Log(L"{} ({}): player 2 joins", free ? L"a party member is free for player 2" : L"player 1 rides a shared vehicle",
-        step.looking ? L"after the game's party change" : L"found by the slow check");
-    Join();  // ends the wait once player 2 is in; a refused or failed join leaves it, and is counted
+    Log(L"{} ({}): {} joins", free ? L"a party member is free for the player" : L"player 1 rides a shared vehicle",
+        step.looking ? L"after the game's party change" : L"found by the slow check", Name());
+    Join();  // ends the wait once the seat is in; a refused or failed join leaves it, and is counted
     LogGaveUp(outside_.AfterJoin(Mode::Await, In()).reason);
 }
 
@@ -699,20 +703,22 @@ void Seat::LogGaveUp(outside_join::Reason reason) noexcept
     {
         case Reason::None: break;
         case Reason::RejoinTimedOut:
-            Log(L"player 2 did not rejoin: the field did not become ready within {} s; press Ctrl+F7 to join",
+            Log(L"{} did not rejoin: the field did not become ready within {} s; press Ctrl+F7 to join", Name(),
                 outside_join::kRejoinWait.count());
             break;
         case Reason::RejoinRefused:
-            Log(L"player 2 does not rejoin after the map load: an earlier join raised an exception; restart the game to join");
+            Log(L"{} does not rejoin after the map load: an earlier join raised an exception; restart the game to join",
+                Name());
             break;
         case Reason::RejoinTriesExhausted:
-            Log(L"player 2 could not rejoin after the map load; press Ctrl+F7 to join");
+            Log(L"{} could not rejoin after the map load; press Ctrl+F7 to join", Name());
             break;
         case Reason::AwaitRefused:
-            Log(L"player 2 stops waiting for a party member: an earlier join raised an exception; restart the game to join");
+            Log(L"{} stops waiting for a party member: an earlier join raised an exception; restart the game to join",
+                Name());
             break;
         case Reason::AwaitTriesExhausted:
-            Log(L"player 2 could not join in {} tries (see above); press Ctrl+F7 to try again", outside_join::kTries);
+            Log(L"{} could not join in {} tries (see above); press Ctrl+F7 to try again", Name(), outside_join::kTries);
             break;
     }
 }
@@ -728,20 +734,20 @@ void Seat::AwaitMember(const wchar_t* why) noexcept
 {
     if (refuseJoins_)
     {
-        Log(L"{}: player 2 stays out and does not wait (an earlier join raised an exception; restart the game to join)",
-            why);
+        Log(L"{}: {} stays out and does not wait (an earlier join raised an exception; restart the game to join)",
+            why, Name());
         return;
     }
     if (AwaitingMember())
     {
-        Log(L"player 2 still waits for a free party member ({})", why);
+        Log(L"{} still waits for a free party member ({})", Name(), why);
         return;
     }
     outside_.BeginAwait();  // replaces a map load's rejoin, and has no time limit
     retakeLooks_ = 0;
-    Log(L"{}: player 2 stays out (the game runs as with one player) and joins once a party member is free "
+    Log(L"{}: {} stays out (the game runs as with one player) and joins once a party member is free "
         L"(Ctrl+F8 stops the wait)",
-        why);
+        why, Name());
 }
 
 /// Player 2 is in without a member and none is free: it leaves at once (nothing of player 2's is held
@@ -767,7 +773,8 @@ void Seat::CheckMemberPlayable() noexcept
     const wchar_t* why = ticks_ % BackstopTicks() == 0 ? party_member::WhyNotInParty(member_) : nullptr;
     if (why != nullptr && installed_.partyEvents)
     {
-        Log(L"the slow party check found player 2's {} {}: no game party change was heard for it", NameOf(member_), why);
+        Log(L"the slow party check found {}'s {} {}: no game party change was heard for it", Name(), NameOf(member_),
+            why);
     }
     if (why == nullptr && ticks_ % kControllerCheckTicks == 0 && !party_member::HasBattleController(member_))
     {
@@ -793,23 +800,23 @@ void Seat::AwaitSwap() noexcept
     {
         case SwapOutcome::Wait: return;
         case SwapOutcome::Released:
-            Log(L"player 2's {} is back with its AI after {} tick(s); choosing again", NameOf(member_), ticks_);
+            Log(L"{}'s {} is back with its AI after {} tick(s); choosing again", Name(), NameOf(member_), ticks_);
             member_ = nullptr;
             phase_  = Phase::SettlingPlayerOne;
             ticks_  = kPlayerOneWatchTicks;  // player 1 is settled already: choose on the next tick
             return;
         case SwapOutcome::PlayerOnes:
-            Log(L"player 2's {} is player 1's after {} tick(s), and player 2's controller holds nothing; choosing again",
-                NameOf(member_), ticks_);
+            Log(L"{}'s {} is player 1's after {} tick(s), and the player's controller holds nothing; choosing again",
+                Name(), NameOf(member_), ticks_);
             member_ = nullptr;
             phase_  = Phase::SettlingPlayerOne;
             ticks_  = kPlayerOneWatchTicks;
             return;
         case SwapOutcome::TimedOut: break;
     }
-    Log(L"player 2's {} did not return to its AI within {} ticks; player 2 stays without a character until "
-        L"player 2's controller holds none, then takes a free one (a leave still waits for the release)",
-        NameOf(member_), kTakeTicks);
+    Log(L"{}'s {} did not return to its AI within {} ticks; the player stays without a character until their "
+        L"controller holds none, then takes a free one (a leave still waits for the release)",
+        Name(), NameOf(member_), kTakeTicks);
     // Not player 2's member any more: a leave waits on player 2's controller holding nothing
     // (MemberReleased with no member), and RetakeWhenFree waits for the same.
     member_ = nullptr;
@@ -822,13 +829,13 @@ void Seat::Leave() noexcept
     outside_.End();  // a leave asked for: no rejoin after a later map load, no wait for a member
     if (awaited)
     {
-        Log(L"player 2 no longer waits for a free party member");
+        Log(L"{} no longer waits for a free party member", Name());
     }
     if (!In())
     {
         return;
     }
-    own_ride::Release(L"player 2 leaves");  // before the withdraw: the swap back needs player 2's scopes
+    own_ride::Release(seat_, L"the player leaves");  // before the withdraw: the swap back needs the seat's scopes
     seat_out::LetGo(seat_);
     generation::Withdraw(seat_);  // every wrapper passes through from here on
     phase_ = Phase::Leaving;
@@ -842,8 +849,8 @@ bool Seat::LeaveNow() noexcept
     {
         return true;
     }
-    // Player 2's hold on the old world's objects goes before it does, even if the removal below fails.
-    own_ride::Release(L"a map load takes player 2 out");
+    // The seat's hold on the old world's objects goes before it does, even if the removal below fails.
+    own_ride::Release(seat_, L"a map load takes the player out");
     seat_out::LetGo(seat_);
     generation::Withdraw(seat_);
     if (HoldsMember())
@@ -876,8 +883,8 @@ void Seat::Carry(LeaveAction action) noexcept
             break;
         case LeaveAction::Teardown: Teardown(); break;
         case LeaveAction::ReportStuck:
-            Log(L"leave stopped: {} did not return to its AI within {} ticks; player 2 stays in (Ctrl+F8 tries again)",
-                NameOf(member_), LeaveSequence::kReleaseTicks);
+            Log(L"leave stopped: {} did not return to its AI within {} ticks; {} stays in (Ctrl+F8 tries again)",
+                NameOf(member_), LeaveSequence::kReleaseTicks, Name());
             break;
     }
 }
@@ -899,13 +906,13 @@ void Seat::Teardown() noexcept
     if (out)
     {
         const auto result = leftover_actors::Destroy(actors);
-        Log(L"leave: player 2 left; {} leftover actor(s) destroyed ({} failed); PlayerInput {}", result.destroyed,
+        Log(L"leave: {} left; {} leftover actor(s) destroyed ({} failed); PlayerInput {}", Name(), result.destroyed,
             result.failed,
             actors.playerInput == nullptr ? L"none" : result.inputReleased ? L"marked pending kill" : L"NOT marked (rooted or moved)");
     }
     else
     {
-        Log(L"leave: player 2 could NOT be removed; their actors are kept");
+        Log(L"leave: {} could NOT be removed; their actors are kept", Name());
     }
     if (member_ != nullptr)
     {
@@ -1036,16 +1043,16 @@ void Seat::LogStatus() noexcept
     const auto     input    = pad_sticks::InputCounters().Take();
     const auto     move     = pad_sticks::MoveCounters().Take();
     const wchar_t* fault    = generation::FaultReason(seat_);
-    Log(L"player 2: member {}, generation {}{}; field settings mirrored {} passed {} mismatched {}; camera update as primary {} passed {} "
-        L"refused {}; per-pad sticks {} (input acted {} refused {}, movement acted {} refused {})",
-        NameOf(generation::MemberOf(seat_)), generation::Active(seat_) ? L"active" : L"withdrawn",
+    Log(L"{}: member {}, generation {}{}; field settings mirrored {} passed {} mismatched {}; camera update as primary "
+        L"{} passed {} refused {}; per-pad sticks {} (input acted {} refused {}, movement acted {} refused {})",
+        Name(), NameOf(generation::MemberOf(seat_)), generation::Active(seat_) ? L"active" : L"withdrawn",
         fault ? L" (fault: " + std::wstring(fault) + L")" : std::wstring(), settings.acted, settings.passed,
         field_camera::TakeMismatches(seat_), update.acted, update.passed, update.refused,
         pad_sticks::Enabled() ? L"on" : L"off", input.acted, input.refused, move.acted, move.refused);
     const auto member = member_movement::Counters(seat_).Take();
-    Log(L"  player 2's view: own camera {} (moved off it {} time(s) so far); member movement ticked {} skipped {} "
+    Log(L"  {}'s view: own camera {} (moved off it {} time(s) so far); member movement ticked {} skipped {} "
         L"refused {}, leader test answered yes {} time(s)",
-        YesNo(view_target::OnOwnCamera(controller_)), viewTargetResets_, member.acted, member.passed,
+        Name(), YesNo(view_target::OnOwnCamera(controller_)), viewTargetResets_, member.acted, member.passed,
         member.refused, leader_answer::TakeAnswers());
 }
 
@@ -1105,9 +1112,10 @@ void Session::Tick() noexcept
     {
         menu_focus::Watch();  // player 1's UI focus, logged on change (read-only)
     }
+    bool commandMenusTicked = false;
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        At(seat)->Tick();
+        At(seat)->Tick(commandMenusTicked);
         At(seat)->NoteState();  // after the tick: a join, leave or key between ticks is logged here too
     }
 }
@@ -1234,7 +1242,14 @@ std::uint32_t Session::JoinCount(int seat) const noexcept
 
 const void* Session::PlayerOne() const noexcept
 {
-    return At(players::kPlayerTwoSeat)->PlayerOne();
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (const void* one = At(seat)->PlayerOne())
+        {
+            return one;
+        }
+    }
+    return nullptr;
 }
 
 #if LSS_DEV
@@ -1251,8 +1266,9 @@ void RegisterSeatCommands(Session& session, int seat, const wchar_t* prefix, con
     using control::Value;
     const std::wstring name = players::SeatName(seat);
     Register({.name = join,
-              .help = std::format(L"add {}{}; `wait-until {}.state == playing` confirms it", name,
-                                  seat == players::kPlayerTwoSeat ? L" (as Ctrl+F7)" : L"", prefix),
+              .help = std::format(L"add {} (Ctrl+F7 adds the first player out); `wait-until {}.state == playing` "
+                                  L"confirms it",
+                                  name, prefix),
               .set  = [&session, seat, name](const Value&) {
                   if (session.In(seat))
                   {
@@ -1293,18 +1309,17 @@ void RegisterCommands(Session& session)
     using control::Register;
     using control::Shape;
     using control::Value;
-    // Player 3's (`p3.join`, `p3.state`, ...) appear with its seat (plan/seats.md step 6).
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
         RegisterSeatCommands(session, seat, seat == players::kPlayerTwoSeat ? L"p2" : L"p3",
                              seat == players::kPlayerTwoSeat ? L"join" : L"p3.join");
     }
-    Register({.name = L"p2.log-status", .help = L"write player 2's status line to the log",
+    Register({.name = L"p2.log-status", .help = L"write every further player's status lines to the log",
               .set  = [&session](const Value&) {
-                  if (!session.HasPlayerTwo())
+                  if (!session.AnyIn())
                   {
-                      platform::Log(L"control: status: player 2 is not in");
-                      return Outcome{true, L"player 2 is not in"};
+                      platform::Log(L"control: status: no further player is in");
+                      return Outcome{true, L"no further player is in"};
                   }
                   session.LogStatus();
                   return Outcome{};

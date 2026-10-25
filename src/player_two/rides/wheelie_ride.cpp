@@ -40,14 +40,6 @@
 
 namespace lss::player_two::wheelie_ride {
 
-// H1: GetOff, DriveToIdle, SwapBack, FollowForcedGetOff, DetachNotify and the boarding gate run inside
-// member_movement's scopes (InPrimaryScope, PlayerCoreAsPlayerTwo), which open player 2's primary scope whatever seat
-// the member is.
-static_assert(players::kSeatsBuilt == 1,
-              "wheelie_ride: member_movement's scopes are player 2's: InPrimaryScope and PlayerCoreAsPlayerTwo (GetOff, "
-              "DriveToIdle, SwapBack, FollowForcedGetOff, DetachNotify, AfterMemberTick's gate) must open the ride's "
-              "seat before seat 2 is built");
-
 namespace {
 
 using Clock = std::chrono::steady_clock;
@@ -529,7 +521,7 @@ bool GetOff(const Ride& ride, bool instant) noexcept
     GetOffCall call{ride.coordinator};
     call.params.bytes[kGetOffType]    = kScooterKey;
     call.params.bytes[kGetOffInstant] = instant ? 1 : 0;
-    return member_movement::InPrimaryScope(ride.member, &RunGetOff, &call) && call.ok;
+    return member_movement::InPrimaryScope(ride.seat, ride.member, &RunGetOff, &call) && call.ok;
 }
 
 struct IdleCall
@@ -553,7 +545,7 @@ void RunIdle(void* context)
 void DriveToIdle(const Ride& ride) noexcept
 {
     IdleCall call{ride.coordinator};
-    member_movement::InPrimaryScope(ride.member, &RunIdle, &call);
+    member_movement::InPrimaryScope(ride.seat, ride.member, &RunIdle, &call);
     platform::Log(L"wheelie ride: {}'s coordinator ticked {} time(s) toward idle: state {} ({})",
                   players::SeatName(ride.seat), call.ticks, CoordState(ride.coordinator),
                   StateName(CoordState(ride.coordinator)));
@@ -663,7 +655,7 @@ std::uintptr_t SwapBack(void* coordinator, void* a2, void* a3, void* a4)
         SeatRide&            s    = g_seats[seat];
         const wchar_t* const name = players::SeatName(seat);
         SwapCall             call{coordinator, a2, a3, a4};
-        if (member_movement::InPrimaryScope(s.ride.member, &RunSwapBack, &call))
+        if (member_movement::InPrimaryScope(seat, s.ride.member, &RunSwapBack, &call))
         {
             ++s.ride.swapBacks;
             if (!call.ok)
@@ -726,7 +718,7 @@ void FollowForcedGetOff(int seat, const GetOffParams* params, std::uintptr_t fro
     {
         call.params.bytes[kGetOffInstant] = 1;
     }
-    const bool ran = member_movement::InPrimaryScope(s.ride.member, &RunGetOff, &call) && call.ok;
+    const bool ran = member_movement::InPrimaryScope(seat, s.ride.member, &RunGetOff, &call) && call.ok;
     ++s.ride.reissued;
     platform::Log(L"wheelie ride: the game's forced getoff from {} (instant {}{}) followed for {}: {}", SiteName(from),
                   call.params.bytes[kGetOffInstant], warp ? L", made instant: player 1 is more than 50 m away" : L"",
@@ -845,7 +837,7 @@ void DetachNotify(void* notify, void* mesh, void* a3, void* a4)
             const std::uint32_t swaps   = ride.swapBacks;
             const std::uint32_t answers = ride.leaderAnswers;
             DetachCall          call{seat, notify, mesh, a3, a4};
-            const bool          held = member_movement::InPrimaryScope(ride.member, &RunDetach, &call);
+            const bool          held = member_movement::InPrimaryScope(seat, ride.member, &RunDetach, &call);
             ++ride.detaches;
             if (held && !call.ok)
             {
@@ -965,22 +957,18 @@ void Remove() noexcept
 void Ask(void* state) noexcept
 {
     // The walk-in question is asked of player 1's coordinator, whose one marked scooter is the free one nearest player
-    // 1's leader (option A): whether a further seat may ask about that mark too, or needs its own, is open (only the
-    // game answers it). Player 2's only until then.
-    static_assert(players::kSeatsBuilt == 1, "wheelie_ride::Ask asks player 1's coordinator about its one marked "
-                                             "scooter for player 2 only: settle a further seat's walk-in question "
-                                             "before seat 2 is built (plan/seats.md, the rides' open question)");
-    constexpr int seat = players::kPlayerTwoSeat;
-    SeatRide&     s    = g_seats[seat];
-    if (!g_installed || s.active || s.stopped || s.asked.valid || !generation::OnGameThread())
+    // 1's leader, re-picked each frame (option A). The question changes nothing and measures from whoever asks, so every
+    // seat may ask about that mark; two seats answered yes for one scooter are kept apart at the boarding
+    // (AfterMemberTick: the first boards, the second finds it held). RE-seats-step6-world-rides.md §2.
+    void*     member = ReadPointer(state, facts::kMoveStateCharacter);
+    const int seat   = member != nullptr ? generation::SeatOfMember(member) : -1;
+    SeatRide* record = RideOf(seat);
+    if (!g_installed || record == nullptr || record->active || record->stopped || record->asked.valid ||
+        !generation::OnGameThread())
     {
         return;
     }
-    void* member = ReadPointer(state, facts::kMoveStateCharacter);
-    if (member == nullptr || member != generation::MemberOf(seat))
-    {
-        return;
-    }
+    SeatRide& s = *record;
     // FieldSummonBody's one early-out before the key-4 question (in this scope it asks the seat's controller).
     std::uint8_t riding = 0;
     if (!platform::CallGuarded(g_fn.isRiding, riding) || riding != 0)
@@ -1046,6 +1034,16 @@ void AfterMemberTick(void* playerTwoController, void* member) noexcept
         platform::Log(L"wheelie ride: {} walked into {}, but it was taken or gone before the boarding", name,
                       NameOf(scooter));
         return;
+    }
+    // Another seat's ride on it (boarding, riding or getting off): the walk-in answered yes for both, the first boarded.
+    for (int other = 1; other <= players::kSeatsBuilt; ++other)
+    {
+        if (other != seat && g_seats[other].active && g_seats[other].ride.vehicle == scooter)
+        {
+            platform::Log(L"wheelie ride: {} walked into {}, but {} is already on it; not boarded", name,
+                          NameOf(scooter), players::SeatName(other));
+            return;
+        }
     }
     // A scooter a getoff left half-swapped (still on a player's controller) cannot be boarded again (live, v0.60.0).
     const void* holder     = ReadPointer(scooter, facts::kCharacterEffectiveController);

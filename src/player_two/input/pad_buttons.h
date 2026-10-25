@@ -73,10 +73,9 @@ private:
 /// 1 when the UI consumed the action.
 using ActionDownFn = char (*)(void* owner, void* unused, std::uint32_t sourceBit, void* event, std::uint8_t alreadyHandled);
 
-/// A route for pad 2's presses to player 2's own UI (player_two/battle/command_menu_tick.h): true when it
-/// took the press (its dispatch result in `result`); false leaves the press kept from the menus. Player 2's
-/// only until the route takes the seat (the battle group's menu_input_route; another seat's presses are
-/// kept from the menus meanwhile).
+/// A route for a seat's pad's presses to that seat's own UI (player_two/battle/menu_input_route.h finds the seat from
+/// the source bit): true when it took the press (its dispatch result in `result`); false leaves the press kept from
+/// the menus.
 using PlayerTwoRouteFn = bool (*)(ActionDownFn dispatch, void* owner, void* unused, std::uint32_t sourceBit, void* event,
                                   std::uint8_t alreadyHandled, char& result);
 /// Which player's pad drives the menus (0 player 1, the default; a built seat while a shop its player opened is up,

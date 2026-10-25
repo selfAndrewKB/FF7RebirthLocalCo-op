@@ -197,10 +197,10 @@ public:
             lss::views::window_span::Leave(L"the mod unloads");
         }
         lss::views::display_align::Restore();
-        if (session_ && (session_->HasPlayerTwo() || lss::views::mirror_player::Count() > 0))
+        if (session_ && (session_->AnyIn() || lss::views::mirror_player::Count() > 0))
         {
-            Log(L"unloading with player 2 or a mirror view still in: the per-player rendering and the stages stay "
-                L"installed");
+            Log(L"unloading with a further player or a mirror view still in: the per-player rendering and the stages "
+                L"stay installed");
             return;
         }
         // The reverse of the install order: the field-exit catch and the dev tools (installed after the table),
@@ -265,7 +265,7 @@ public:
                 // Nothing is installed to drive: the console and quit alone (no join on a session without stages).
                 try
                 {
-                    lss::players::console::RegisterCommands([this] { return session_->HasPlayerTwo(); });
+                    lss::players::console::RegisterCommands([this] { return session_->AnyIn(); });
                 }
                 catch (...)
                 {
@@ -336,7 +336,7 @@ public:
             Log(L"a retry, reload or load is caught only by the engine tick's check of the field running byte");
         }
 
-        Log(L"ready: every engine check passed. Ctrl+F7 adds player 2, Ctrl+F8 removes player 2, Ctrl+F5 switches "
+        Log(L"ready: every engine check passed. Ctrl+F7 adds a player (2, then 3), Ctrl+F8 removes the last one in, Ctrl+F5 switches "
             L"top/bottom and side by side, Ctrl+F4 switches filled halves and 16:9 halves with bars. Player 2 starts on "
             L"their own camera and pad; for testing, Ctrl+F6 switches their half to player 1's camera and Ctrl+F9 "
             L"merges the pads. Ctrl+F2 spans the window across the monitor row, one monitor per player; Ctrl+F3 "
@@ -375,27 +375,27 @@ private:
     /// for a retry, reload or load); the session joins again once the new field is ready.
     void LeaveBeforeWorldChange(const wchar_t* why) noexcept
     {
-        // The mirror views first, with or without player 2: their controllers are this world's, and a map load would
-        // spawn them again outside a join. They come back once a join could run.
+        // The mirror views first, with or without a further player: their controllers are this world's, and a map load
+        // would spawn them again outside a join. They come back once a join could run.
         lss::modules::ClearMirrorsForWorldChange(why);
-        if (!session_->HasPlayerTwo())
+        if (!session_->AnyIn())
         {
             return;
         }
         const bool left = session_->LeaveNow();
-        // Now, not at the next tick: the view points must not keep the old player 2.
+        // Now, not at the next tick: the view points must not keep the old further players.
         lss::views::Follow(SplitFrameNow(false, false, false));
         // The viewport outlives the world: its split switch is cleared while player 1's controller
         // is still this world's.
         LogSingleViewChange(singleView_.Update(false, {}));
         if (left)
         {
-            Log(L"{}: player 2 left (and joins again once the field is ready)", why);
+            Log(L"{}: the further players left (and join again once the field is ready)", why);
         }
         else
         {
-            Log(L"WARNING: {} and player 2 could not be removed; a new world would log player 2 in, and its camera "
-                L"manager's spawns are expected to collide with player 1's",
+            Log(L"WARNING: {} and a further player could not be removed; a new world would log them in, and their "
+                L"camera managers' spawns are expected to collide with player 1's",
                 why);
         }
     }
@@ -413,9 +413,24 @@ private:
         }
         switch (keys_.Poll())
         {
-            case lss::players::PlayerIntent::Join: session_->Join(lss::players::kPlayerTwoSeat); break;
+            case lss::players::PlayerIntent::Join:
+                // The first player not in joins (player 2, then player 3; one waiting to join is asked again); the
+                // join logs its own outcome.
+                if (const int seat = lss::modules::SeatToJoin(*session_); seat != 0)
+                {
+                    session_->Join(seat);
+                }
+                else
+                {
+                    Log(L"Ctrl+F7: every player is already in");
+                }
+                break;
             case lss::players::PlayerIntent::Leave:
-                lss::modules::LeavePlayerTwo(*session_, L"player 2 leaves (Ctrl+F8)");  // logs its own outcome
+                // The last player in leaves (player 3, then player 2); a wait to join counts as in.
+                if (const int seat = lss::modules::SeatToLeave(*session_); seat != 0)
+                {
+                    lss::modules::LeaveSeat(*session_, seat, L"a player leaves (Ctrl+F8)");  // logs its own outcome
+                }
                 break;
             case lss::players::PlayerIntent::ToggleMonitorMode:
                 LogAction(L"three-player monitor mode (Ctrl+F3)",
@@ -450,7 +465,7 @@ private:
             case lss::players::PlayerIntent::None: break;
         }
         lss::player_two::field_exit::Watch();
-        if ((session_->HasPlayerTwo() || lss::views::mirror_player::Count() > 0) &&
+        if ((session_->AnyIn() || lss::views::mirror_player::Count() > 0) &&
             lss::player_two::field_exit::FieldLeft())
         {
             LeaveBeforeWorldChange(L"the field stopped running (a field exit the redirected entry did not see)");
@@ -477,30 +492,41 @@ private:
         const lss::modules::Columns columns = lss::modules::TickColumns(rejoining);
         columnsListed_                      = columns.map.count;
         lss::dev::TickAfterSession();
-        // Player 1's single view for the game's whole-screen states (players/single_view.h), and while
-        // player 2 waits for a member (only player 1 plays then; the user's decision, 2026-10-01): while
-        // it holds, player 2 stays in but the split's presentation is off, as with one player. While columns are
-        // held (the three-player monitor mode), the same moments keep the columns instead (the columns rule: a held
-        // column is never black): player 2's view shows player 1's camera and HUD, as a mirror view does.
-        const bool playerTwoIn = session_->HasPlayerTwo();
+        // Player 1's single view for the game's whole-screen states (players/single_view.h), and while no further
+        // player plays (each one in waits for a member, or every one stands aside for a shared ride: only player 1
+        // plays then; the user's decision, 2026-10-01): while it holds, the further players stay in but the split's
+        // presentation is off, as with one player. While columns are held (the three-player monitor mode), the same
+        // moments keep the columns instead (the columns rule: a held column is never black): the further players'
+        // views show player 1's camera and HUD, as a mirror view does. One further player waiting while another plays
+        // keeps the split (the waiting one's view stays on its own camera).
+        bool furtherIn = false, allWait = true, aside = false;
+        for (int seat = 1; seat <= lss::players::kSeatsBuilt; ++seat)
+        {
+            if (session_->In(seat))
+            {
+                furtherIn = true;
+                allWait   = allWait && session_->WaitsForMember(seat);
+                aside     = aside || session_->StandsAside(seat);  // a shared ride stands every seat aside together
+            }
+        }
         const auto mode        = singleView_.Mode();
         const bool autoMode    = mode == lss::players::SingleViewMode::Auto;
         const lss::players::SingleViewInputs inputs{
-            playerTwoIn && autoMode && lss::views::WholeScreenShown(),  // read only when it can matter
-            session_->WaitsForMember(), session_->StandsAside()};
-        LogSingleViewChange(singleView_.Update(playerTwoIn && !columns.held, inputs));
-        const bool onPlayerOne = playerTwoIn && columns.held &&
+            furtherIn && autoMode && lss::views::WholeScreenShown(),  // read only when it can matter
+            furtherIn && allWait, aside};
+        LogSingleViewChange(singleView_.Update(furtherIn && !columns.held, inputs));
+        const bool onPlayerOne = furtherIn && columns.held &&
                                  (mode == lss::players::SingleViewMode::Single ||
                                   lss::players::SingleViewWanted(autoMode, inputs.wholeScreenShown,
                                                                  inputs.waitsForMember, inputs.standsAside));
         if (onPlayerOne != onPlayerOne_)
         {
             onPlayerOne_ = onPlayerOne;
-            Log(L"single view: {}", onPlayerOne ? L"the columns stay (columns held): player 2's view shows player 1's "
-                                                  L"camera and HUD"
-                                                : L"player 2's view is player 2's own again");
+            Log(L"single view: {}", onPlayerOne ? L"the columns stay (columns held): the further players' views show "
+                                                  L"player 1's camera and HUD"
+                                                : L"the further players' views are their own again");
         }
-        const bool splitShown = playerTwoIn && !singleView_.Single() && !onPlayerOne;
+        const bool splitShown = furtherIn && !singleView_.Single() && !onPlayerOne;
         const bool viewsSplit = columns.map.count > 1 && !singleView_.Single();
         lss::modules::Frame frame;
         frame.splitShown = splitShown;
@@ -529,7 +555,7 @@ private:
         lss::hud::UpdateHudPlacement(viewsSplit && lss::hud::BandEnabled());
 
         const ULONGLONG now = GetTickCount64();
-        if (!session_->HasPlayerTwo() || !lss::platform::frame_watch::Detailed())  // perf-log: the periodic status
+        if (!session_->AnyIn() || !lss::platform::frame_watch::Detailed())  // perf-log: the periodic status
         {
             nextStatus_ = now + kStatusIntervalMs;
         }

@@ -70,18 +70,13 @@ std::array<StickBank, 3> MergedBanks(const std::byte* input, std::size_t& count)
     return {bank(0), bank(facts::kXInputBank), bank(3)};
 }
 
-// The leader-transform leak scope (scope_leaks::InputScope) is player 2's: its bool names player 2's controller.
-static_assert(players::kSeatsBuilt == 1, "scope_leaks::InputScope is player 2's: it takes the seat (InputScope(seat)) "
-                                         "before seat 2 is built");
-
 void ProcessPlayerInput(void* controller, float deltaTime, bool gamePaused)
 {
     // The seat the controller is (player 1's is 0 only while a seat's player is in; a seat's while recorded).
     const int  seat   = generation::SeatOfController(controller);
     const bool isOne  = seat == 0;
     const bool isSeat = players::SeatBuilt(seat) && generation::Active(seat);
-    const scope_leaks::InputScope leaks(seat == players::kPlayerTwoSeat);  // player 2's input writes the leader
-                                                                           // transform; put back after
+    const scope_leaks::InputScope leaks(isSeat);  // a seat's input writes the leader transform; put back after
     if (!Enabled() || (!isOne && !isSeat) || (isSeat && !PartActs(kPartPlayerTwoInput)) ||
         !generation::OnGameThread())
     {

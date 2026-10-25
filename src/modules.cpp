@@ -368,6 +368,21 @@ static_assert(Ordered<&players::widget_opacity::Install, &hud::prompt_rows::Inst
 views::columns::Map g_lastColumns;
 bool                g_lastOnPlayerOne = false;
 
+/// The column the sound's second listener follows: the first further player listed (player 2's, else player 3's), or
+/// -1. One second listener for now: with three players in, sounds near player 3 are heard from the nearer of player 1
+/// and player 2 (a listener per seat is the plan's follow-up, plan/seats.md step 6).
+int SecondListenerColumn(const views::columns::Map& columns) noexcept
+{
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (columns.columnOf[static_cast<std::size_t>(seat)] >= 0)
+        {
+            return columns.columnOf[static_cast<std::size_t>(seat)];
+        }
+    }
+    return -1;
+}
+
 }  // namespace
 
 void Install(const platform::GameImage& image) noexcept
@@ -407,7 +422,7 @@ void TickBeforeSession() noexcept
     player_two::ffb_manager_two::Tick();      // each seat's component on its own manager, after its BeginPlay
     // the controller listener slot; player 2's listener from its column (the last columns' tick), off while that column
     // shows player 1's picture (as under the engine's single view, which leaves one listener); the summary (Debug)
-    player_two::audio_listener_two::Tick(g_lastOnPlayerOne ? -1 : g_lastColumns.columnOf[players::kPlayerTwoSeat]);
+    player_two::audio_listener_two::Tick(g_lastOnPlayerOne ? -1 : SecondListenerColumn(g_lastColumns));
     player_two::leave_watch::Tick();          // the last leave's controller, followed until it is freed (logged)
     player_two::vending::Tick();              // a press that opened no shop; player 2 leaving with their shop up
     player_two::shop_talk::Tick();            // the shopkeeper verdicts queued by player 2's pass
@@ -535,10 +550,40 @@ void ClearMirrorsForWorldChange(const wchar_t* why) noexcept
     }
 }
 
-void LeavePlayerTwo(player_two::Session& session, const wchar_t* why) noexcept
+bool SeatTaken(const player_two::Session& session, int seat) noexcept
+{
+    return session.In(seat) || session.AwaitingMember(seat) || session.RejoinPending(seat);
+}
+
+int SeatToJoin(const player_two::Session& session) noexcept
+{
+    // A seat waiting for a member or a rejoin is joined again, as Ctrl+F7 did for player 2 before player 3.
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (!session.In(seat))
+        {
+            return seat;
+        }
+    }
+    return 0;
+}
+
+int SeatToLeave(const player_two::Session& session) noexcept
+{
+    for (int seat = players::kSeatsBuilt; seat >= 1; --seat)
+    {
+        if (SeatTaken(session, seat))
+        {
+            return seat;
+        }
+    }
+    return 0;
+}
+
+void LeaveSeat(player_two::Session& session, int seat, const wchar_t* why) noexcept
 {
     platform::LogDebug(L"{}", why);
-    session.Leave(players::kPlayerTwoSeat);
+    session.Leave(seat);
 }
 
 Result SetOwnCamera(const player_two::Session& session, bool on) noexcept
@@ -547,15 +592,15 @@ Result SetOwnCamera(const player_two::Session& session, bool on) noexcept
     {
         return {false, L"the view-point entry is not installed"};
     }
-    if (!session.HasPlayerTwo())
+    if (!session.AnyIn())
     {
-        return {false, L"player 2 is not in (Ctrl+F7 adds one)"};
+        return {false, L"no further player is in (Ctrl+F7 adds one)"};
     }
     if (views::ShowsOwnCamera() != on)
     {
         views::ToggleOwnCamera();
     }
-    return {true, views::ShowsOwnCamera() ? L"player 2's own camera" : L"player 1's camera"};
+    return {true, views::ShowsOwnCamera() ? L"the further players' own cameras" : L"player 1's camera"};
 }
 
 Result SetFill(bool on) noexcept
@@ -605,11 +650,11 @@ Result SetWindowSpan(const player_two::Session& session, bool on, const wchar_t*
         return views::window_span::In() ? Result{false, L"the window could not be put back"}
                                         : Result{true, L"the window put back"};
     }
-    if (!session.HasPlayerTwo())
+    if (!session.AnyIn())
     {
-        return {false, L"player 2 is not in (Ctrl+F7 first)"};
+        return {false, L"no further player is in (Ctrl+F7 first)"};
     }
-    // The columns the frame shows (the last columns' tick): two with player 2, more while columns are held.
+    // The columns the frame shows (the last columns' tick): one per player in, more while columns are held.
     const auto columns = std::max(g_lastWanted, 2);
     if (!views::window_span::Enter(columns))
     {
@@ -633,21 +678,28 @@ void RegisterOwnCommands(player_two::Session& session)
     using control::Register;
     using control::Shape;
     using control::Value;
-    // Player 2's leave; the session registers each seat's join and readings (player_two::RegisterCommands).
-    static_assert(players::kSeatsBuilt == 1, "step 6: register p3.leave here beside the session's p3.join");
-    Register({.name = L"leave", .help = L"remove player 2 (as Ctrl+F8); `wait-until p2.in == off` confirms it",
-              .set  = [&session](const Value&) {
-                  // As Ctrl+F8: also stops a wait for a member or a rejoin after a map load.
-                  if (!session.HasPlayerTwo() && !session.AwaitingMember() &&
-                      !session.RejoinPending(players::kPlayerTwoSeat))
-                  {
-                      return control::Outcome{false, L"player 2 is not in"};
-                  }
-                  LeavePlayerTwo(session, L"player 2 leaves (the leave command)");  // over the next ticks
-                  return control::Outcome{};
-              }});
+    // Each seat's leave (`leave` player 2's, `p3.leave` player 3's); the session registers each seat's join and readings
+    // (player_two::RegisterCommands).
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        const std::wstring name   = players::SeatName(seat);
+        const std::wstring prefix = seat == players::kPlayerTwoSeat ? L"p2" : std::format(L"p{}", seat + 1);
+        Register({.name = seat == players::kPlayerTwoSeat ? std::wstring(L"leave") : prefix + L".leave",
+                  .help = std::format(L"remove {} (Ctrl+F8 removes the last player in); `wait-until {}.in == off` "
+                                      L"confirms it",
+                                      name, prefix),
+                  .set  = [&session, seat, name](const Value&) {
+                      // As Ctrl+F8: also stops a wait for a member or a rejoin after a map load.
+                      if (!SeatTaken(session, seat))
+                      {
+                          return control::Outcome{false, name + L" is not in"};
+                      }
+                      LeaveSeat(session, seat, L"a player leaves (the leave command)");  // over the next ticks
+                      return control::Outcome{};
+                  }});
+    }
     Register({.name = L"own-camera", .shape = Shape::OnOff,
-              .help = L"player 2's half shows their own camera (on), or player 1's",
+              .help = L"the further players' views show their own cameras (on), or player 1's",
               .set  = [&session](const Value& v) { return From(SetOwnCamera(session, std::get<bool>(v))); },
               .get  = [] { return Value{views::ShowsOwnCamera()}; }});
     Register({.name = L"bars", .shape = Shape::OnOff, .help = L"split views keep 16:9 with bars, or fill their halves",
@@ -700,7 +752,7 @@ void RegisterCommands(player_two::Session& session, players::SplitLayout& layout
         // Bottom layer first, so `help` lists the commands from the log level up to the game's modules.
         platform::RegisterLogCommands();
         platform::frame_watch::RegisterCommands();
-        players::console::RegisterCommands([&session] { return session.HasPlayerTwo(); });
+        players::console::RegisterCommands([&session] { return session.AnyIn(); });
         players::RegisterCommands(layout);
         players::RegisterCommands(singleView);
         player_two::RegisterCommands(session);

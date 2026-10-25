@@ -53,10 +53,4 @@ void PlayerTwoOut(int seat) noexcept;
 /// `seat`'s component names the seat's manager now (game thread).
 bool Attached(int seat) noexcept;
 
-/// Player 2's, for a caller not yet per seat.
-inline bool Attached() noexcept
-{
-    return Attached(players::kPlayerTwoSeat);
-}
-
 }  // namespace lss::player_two::ffb_manager_two

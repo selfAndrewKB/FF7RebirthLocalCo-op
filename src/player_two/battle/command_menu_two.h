@@ -24,9 +24,7 @@
 //
 // Per seat: written for player 2 above, every seat gets its own controller and key guide, built at its first join
 // and kept (indexed by the seat; index 0 unused, player 1's is the game's own). Each of the game's calls is made
-// again on every built seat's controller in seat order, each in its own scopes, closed before the next seat's. The
-// names without a seat are player 2's, for the modules not yet per seat (command_menu_view: step 4; the camera's
-// field_camera).
+// again on every built seat's controller in seat order, each in its own scopes, closed before the next seat's.
 
 #include "players/seats.h"
 
@@ -51,16 +49,5 @@ void* Controller(int seat) noexcept;
 
 /// The seat whose controller `controller` is, or -1 (player 1's, the game's, is no seat's): "ours" is any seat's.
 int SeatOfController(const void* controller) noexcept;
-
-// ---- player 2's, for the modules not yet per seat ----
-
-inline void* KeyGuide() noexcept
-{
-    return KeyGuide(players::kPlayerTwoSeat);
-}
-inline void* Controller() noexcept
-{
-    return Controller(players::kPlayerTwoSeat);
-}
 
 }  // namespace lss::player_two::command_menu_two

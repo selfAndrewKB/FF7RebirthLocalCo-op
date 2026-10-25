@@ -102,12 +102,22 @@ struct Result
 
 // The actions a key and a control command share, each in one place. Game thread.
 
-/// Player 2 leaves: the session's leave of player 2's seat (logged there). A mirror view takes the column once it is
-/// free, if columns are held.
-void LeavePlayerTwo(player_two::Session& session, const wchar_t* why) noexcept;
+/// A seat with a player in it, or waiting to be (for a free member, or to rejoin after a map load).
+bool SeatTaken(const player_two::Session& session, int seat) noexcept;
 
-/// Player 2's half on player 2's own camera or player 1's (views/player_view_point.h); refused without the
-/// view-point entry or player 2.
+/// The seat Ctrl+F7 adds: the lowest built seat not in (a seat waiting to join is asked again), or 0 when every seat
+/// is in.
+int SeatToJoin(const player_two::Session& session) noexcept;
+
+/// The seat Ctrl+F8 removes: the highest built seat taken, or 0 when none is.
+int SeatToLeave(const player_two::Session& session) noexcept;
+
+/// `seat`'s player leaves: the session's leave of that seat, which also stops a wait (logged there). A mirror view
+/// takes the column once it is free, if columns are held.
+void LeaveSeat(player_two::Session& session, int seat, const wchar_t* why) noexcept;
+
+/// The further players' views on their own cameras or player 1's (views/player_view_point.h); refused without the
+/// view-point entry or a further player in.
 Result SetOwnCamera(const player_two::Session& session, bool on) noexcept;
 
 /// The split halves filling the screen, or kept 16:9 with bars; refused without the view-point entry.
@@ -117,7 +127,7 @@ Result SetFill(bool on) noexcept;
 /// mirror views in the columns no player has.
 Result SetMonitorMode(bool on) noexcept;
 
-/// The game window across its row of monitors or back (views/window_span.h); entering needs player 2.
+/// The game window across its row of monitors or back (views/window_span.h); entering needs a further player in.
 Result SetWindowSpan(const player_two::Session& session, bool on, const wchar_t* why) noexcept;
 
 #if LSS_DEV

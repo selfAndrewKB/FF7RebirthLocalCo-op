@@ -37,9 +37,10 @@ void Install(const platform::GameImage& image) noexcept;
 
 void Remove() noexcept;
 
-/// Game thread, every engine tick: the controller slot, the state changes and the summary (Debug). `columnTwo`: player
-/// 2's column (its index in the engine's local player list, views/columns.h), -1 while player 2 is not listed: the
-/// listener the audio thread copies for player 2.
+/// Game thread, every engine tick: the controller slot, the state changes and the summary (Debug). `columnTwo`: the
+/// column of the further player the second listener follows (its index in the engine's local player list,
+/// views/columns.h; the first further player in, modules.cpp), -1 for none: the listener the audio thread copies.
+/// One second listener: with three players in, player 3's sounds are measured from player 1's or player 2's.
 void Tick(int columnTwo) noexcept;
 
 }  // namespace lss::player_two::audio_listener_two

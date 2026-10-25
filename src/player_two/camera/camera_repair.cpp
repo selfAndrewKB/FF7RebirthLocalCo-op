@@ -182,10 +182,6 @@ std::wstring PoseText(const Pose& pose)
     return text + L")";
 }
 
-// The chocobo Whom names is chocobo_ride's, player 2's (the rides group's step).
-static_assert(players::kSeatsBuilt == 1, "camera_repair's log names chocobo_ride's chocobo as player 2's: before seat 2 "
-                                         "is built it asks each seat's ride");
-
 /// Whom an actor is, for the log. Game thread.
 std::wstring Whom(const void* actor)
 {
@@ -194,9 +190,9 @@ std::wstring Whom(const void* actor)
         return L"none";
     }
     const void* one = generation::ControllerOf(0);
-    if (actor == chocobo_ride::RiddenChocobo() || actor == chocobo_ride::DrivenChocobo())
+    if (const int rider = chocobo_ride::SeatDriving(actor); rider >= 1)  // seated or getting off
     {
-        return L"player 2's chocobo";  // chocobo_ride is player 2's (the rides group's step)
+        return std::format(L"{}'s chocobo", players::SeatName(rider));
     }
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {

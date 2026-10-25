@@ -21,12 +21,6 @@
 
 namespace lss::player_two::own_ride {
 
-// H1: the scoped calls below (BoardingGateOpen's PlayerCoreAsPlayerTwo, GiveBack's InPrimaryScope, TickVehicle's
-// TickRide) open member_movement's scopes, which are player 2's (Scope(kPlayerTwoSeat), p2_scope::Args without a seat).
-static_assert(players::kSeatsBuilt == 1,
-              "own_ride: member_movement's scopes are player 2's: PlayerCoreAsPlayerTwo, InPrimaryScope and TickRide "
-              "(BoardingGateOpen, GiveBack, TickVehicle) must open the lease's seat before seat 2 is built");
-
 namespace {
 
 using facts::kCameraManagerFieldOperator;
@@ -95,7 +89,7 @@ bool PlayerTwoHolds(const void* character, const void* playerTwo) noexcept
 
 bool BoardingGateOpen(int seat, void* member, void* playerTwo, const wchar_t* label) noexcept
 {
-    const auto gate = member_movement::PlayerCoreAsPlayerTwo(member, member);
+    const auto gate = member_movement::PlayerCoreAsSeat(seat, member, member);
     if (gate.answer == 1 && gate.primary == playerTwo)
     {
         return true;
@@ -132,7 +126,7 @@ bool GiveBack(const Lease& lease, SwitchAiFn switchAi, const wchar_t* label, con
     if (!held && ReadPointer(lease.member, facts::kPawnController) != lease.playerTwo)
     {
         RestoreCall restore{lease.member, lease.playerTwo, switchAi};
-        member_movement::InPrimaryScope(lease.member, &RunRestore, &restore);
+        member_movement::InPrimaryScope(lease.seat, lease.member, &RunRestore, &restore);
         held = PlayerTwoHolds(lease.member, lease.playerTwo);
         if (held)
         {
@@ -163,8 +157,8 @@ VehicleTick TickVehicle(Lease& lease, void* state, const move_state::EngineTicks
         return VehicleTick::Waiting;
     }
     const float deltaTime = engine.rideTicked ? engine.rideDeltaTime : engine.deltaTime;
-    const auto  result    = member_movement::TickRide(lease.playerTwo, lease.member, state, lease.component, deltaTime,
-                                                      withoutKey);
+    const auto  result    = member_movement::TickRide(lease.seat, lease.playerTwo, lease.member, state, lease.component,
+                                                      deltaTime, withoutKey);
     switch (result)
     {
         case member_movement::RideTick::Faulted: return VehicleTick::Faulted;

@@ -239,9 +239,9 @@ std::wstring Whom(const void* actor)
     {
         return L"none";
     }
-    if (actor == chocobo_ride::DrivenChocobo() || actor == chocobo_ride::RiddenChocobo())
+    if (const int rider = chocobo_ride::SeatDriving(actor); rider >= 1)  // seated or getting off
     {
-        return L"player 2's chocobo";
+        return std::format(L"{}'s chocobo", players::SeatName(rider));
     }
     if (actor == generation::Member())
     {

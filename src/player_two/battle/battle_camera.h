@@ -18,8 +18,7 @@
 // Game thread only.
 //
 // Per seat: every built seat's Battle operator follows player 1's switches, in seat order, each call with that seat as
-// the primary controller (one scope at a time). Seed takes the seat (the name without one is player 2's, for the
-// session); Watch is a dev tool and stays player 2's.
+// the primary controller (one scope at a time). Seed takes the seat; Watch is a dev tool and stays player 2's.
 
 #include "players/seats.h"
 
@@ -36,11 +35,6 @@ void Remove() noexcept;
 
 /// `seat`'s Battle operator to player 1's active state. Game thread, after the seat took a member.
 bool Seed(int seat) noexcept;
-/// Player 2's (the session's call, until it is per seat).
-inline bool Seed() noexcept
-{
-    return Seed(players::kPlayerTwoSeat);
-}
 
 /// Whether `cameraManager`'s Battle operator is on (a seat's camera update may then run as the primary player's, as
 /// it does with the Field operator on). Whichever seat's camera manager it is.

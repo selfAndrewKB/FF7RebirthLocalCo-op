@@ -200,18 +200,15 @@ constexpr const wchar_t* kNotSeated[players::kMaxPlayers] = {
     L"player 1 is no longer seated on it, or rides another", L"player 2 is no longer seated on it, or rides another",
     L"player 3 is no longer seated on it, or rides another"};
 
-// The chocobos a seat's player drives (counted) and rides seated (watched). chocobo_ride answers for player 2 only
-// until the rides group makes it per seat.
-static_assert(players::kSeatsBuilt == 1, "nav_strand: chocobo_ride answers for player 2 only; take each seat's driven "
-                                         "and ridden chocobo from it before seat 2 is built (plan/seats.md step 6)");
+// The chocobos a seat's player drives (counted) and rides seated (watched).
 const void* DrivenChocoboOf(int seat) noexcept
 {
-    return seat == players::kPlayerTwoSeat ? chocobo_ride::DrivenChocobo() : nullptr;
+    return chocobo_ride::DrivenChocobo(seat);
 }
 
 const void* RiddenChocoboOf(int seat) noexcept
 {
-    return seat == players::kPlayerTwoSeat ? chocobo_ride::RiddenChocobo() : nullptr;
+    return chocobo_ride::RiddenChocobo(seat);
 }
 
 // For the whole session (logged as they grow):

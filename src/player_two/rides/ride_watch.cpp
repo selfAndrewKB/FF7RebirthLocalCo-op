@@ -463,8 +463,8 @@ void LogSnapshot(const Sample& s, const void* member, const void* playerTwo)
     }
     // The dry run of the chocobo swap's gate (RE-p2-chocobo-ride.md §7.2 item 2): the game's player-core test of the
     // member as the swap would see it (1 and PC2 expected), and of her chocobo (0 until the mod answers for it).
-    const auto dryMember  = member_movement::PlayerCoreAsPlayerTwo(member, member);
-    const auto dryChocobo = member_movement::PlayerCoreAsPlayerTwo(s.chocobo, member);
+    const auto dryMember  = member_movement::PlayerCoreAsSeat(players::kPlayerTwoSeat, member, member);
+    const auto dryChocobo = member_movement::PlayerCoreAsSeat(players::kPlayerTwoSeat, s.chocobo, member);
     const std::int32_t memberAi = AiStateOf(member);
     // Logged when what it shows changes (sticks to a quarter, speed to 1 m/s, the answers), or every 10 s.
     const auto quarter = [](float v) { return static_cast<int>(v * 4.0f + (v < 0.0f ? -0.5f : 0.5f)); };

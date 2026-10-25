@@ -182,13 +182,13 @@ std::vector<UObject*> RowsOf()
 }
 
 /// The rows laid out again by the game's layout for `layout`: each player's through prompt_rows
-/// while player 2 is in, the whole list otherwise. The rows slide to their new slots as the game
+/// while a further player is in, the whole list otherwise. The rows slide to their new slots as the game
 /// slides them. A row whose current place is outside the new layout is not painted there, so it is
 /// not ticked and would never slide: it is named in a layout call of its own, which places it at
 /// once, as the game places a row it adds (the sort and the slots come out the same each call).
 void LayOutAgain(const LayoutSize& layout)
 {
-    if (player_two::generation::Active())
+    if (player_two::generation::AnyActive())
     {
         prompt_rows::LayOutAgain(layout.width, layout.height);
         return;

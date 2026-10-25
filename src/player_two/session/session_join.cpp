@@ -87,7 +87,7 @@ struct JoinWitness
     }
 };
 
-/// Player 2's controller has a camera manager that began play completely: owned, with its camera.
+/// A seat's controller has a camera manager that began play completely: owned, with its camera.
 bool CameraManagerComplete(void* controller) noexcept
 {
     void* cameraManager = ReadPointer(controller, facts::kControllerCameraManager);
@@ -95,14 +95,14 @@ bool CameraManagerComplete(void* controller) noexcept
            ReadPointer(cameraManager, facts::kCameraManagerEndCameraActor) != nullptr;
 }
 
-void LogJoined(void* two, void* one, const own_controller::Report& report, const JoinWitness& before,
-               const JoinWitness& after) noexcept
+void LogJoined(const wchar_t* name, void* two, void* one, const own_controller::Report& report,
+               const JoinWitness& before, const JoinWitness& after) noexcept
 {
     void* cameraManager = ReadPointer(two, facts::kControllerCameraManager);
-    Log(L"player 2 joined with its own controller: {} (class {}), camera manager handled here: {} (owner filled: {}, "
+    Log(L"{} joined with its own controller: {} (class {}), camera manager handled here: {} (owner filled: {}, "
         L"names swapped: {}), camera actor '{}' (player 1's: '{}'); HUDs {} -> {}; viewport input mode {:#010x} -> "
         L"{:#010x}",
-        NameOf(two), ClassNameOf(two), YesNo(cameraManager != nullptr && cameraManager == report.cameraManager),
+        name, NameOf(two), ClassNameOf(two), YesNo(cameraManager != nullptr && cameraManager == report.cameraManager),
         YesNo(report.ownerFilled), YesNo(report.namesSwapped),
         NameOf(ReadPointer(cameraManager, facts::kCameraManagerEndCameraActor)),
         NameOf(ReadPointer(ReadPointer(one, facts::kControllerCameraManager), facts::kCameraManagerEndCameraActor)),
@@ -180,7 +180,8 @@ bool Seat::JoinAllowed(const players::LocalPlayers::PlayerOne& one) const noexce
     if (!own_controller::UsesNativeClasses(one.controller))
     {
         Log(L"join refused: player 1's controller or camera manager does not use the End classes' own vtable, so "
-            L"player 2's camera manager could not be told apart safely");
+            L"{}'s camera manager could not be told apart safely",
+            Name());
         return false;
     }
     return true;
@@ -190,7 +191,7 @@ void Seat::Join() noexcept
 {
     if (In())
     {
-        Log(L"player 2 is already in");
+        Log(L"{} is already in", Name());
         return;
     }
     const auto one = players_.FirstPlayer();
@@ -198,20 +199,20 @@ void Seat::Join() noexcept
     {
         return;
     }
-    // Player 2 exists only with a character to play: with none free, the game stays as with one player. A shared ride
-    // needs none: player 2 would stand aside in it anyway (the 2nd slot's member may sit in the vehicle on another AI
-    // brain, as in a save loaded mid-ride), and takes the member once the ride is over.
+    // A further player exists only with a character to play: with none free, the game stays as without them. A shared
+    // ride needs none: the player would stand aside in it anyway (the slot's member may sit in the vehicle on another
+    // AI brain, as in a save loaded mid-ride), and takes the member once the ride is over.
     const bool riding = shared_ride::Rides(one.controller);
     if (installed_.member && !riding && FreeMember(one.controller) == nullptr)
     {
-        party_member::ChooseSlot(seat_, one.controller);  // the 2nd slot's verdict, for the log
-        AwaitMember(L"the party's 2nd slot has no member free for player 2");
+        party_member::ChooseSlot(seat_, one.controller);  // the slot's verdict, for the log
+        AwaitMember(L"the player's slot of the party has no member free");
         return;
     }
     if (riding && !sharedRide_)
     {
-        sharedRide_ = true;  // before the first choice: player 2 takes no member until the ride is over
-        Log(L"player 1 rides a vehicle the whole party shares: player 2 joins standing aside");
+        sharedRide_ = true;  // before the first choice: the seat takes no member until the ride is over
+        Log(L"player 1 rides a vehicle the whole party shares: {} joins standing aside", Name());
     }
 
     // The mirror views out first: the engine appends the seat's player after whoever is listed, and its column must
@@ -244,19 +245,20 @@ void Seat::Join() noexcept
     if (added.raised)
     {
         refuseJoins_ = true;  // never carry on with a half-built player
-        Log(L"JOIN FAILED: the engine raised an exception while creating player 2 (camera manager handled: {}, owner "
-            L"filled: {}, owner refused: {}, names swapped: {}). Player 2 is being removed; no further joins this "
+        Log(L"JOIN FAILED: the engine raised an exception while creating {} (camera manager handled: {}, owner "
+            L"filled: {}, owner refused: {}, names swapped: {}). The player is being removed; no further joins this "
             L"session.",
-            YesNo(report.cameraManager != nullptr), YesNo(report.ownerFilled), YesNo(report.ownerRefused),
+            Name(), YesNo(report.cameraManager != nullptr), YesNo(report.ownerFilled), YesNo(report.ownerRefused),
             YesNo(report.namesSwapped));
         Leave();
         return;
     }
-    LogJoined(added.controller, one.controller, report, before, JoinWitness::Take(one.localPlayer));
+    LogJoined(Name(), added.controller, one.controller, report, before, JoinWitness::Take(one.localPlayer));
     if (!CameraManagerComplete(added.controller))
     {
-        Log(L"player 2's controller or camera manager is incomplete; player 2 stays on player 1's view and takes no "
-            L"party member (Ctrl+F8 removes player 2)");
+        Log(L"{}'s controller or camera manager is incomplete; the player stays on player 1's view and takes no "
+            L"party member (Ctrl+F8 removes them)",
+            Name());
         return;
     }
     StartGeneration();
@@ -271,9 +273,9 @@ void Seat::AimOwnCamera() noexcept
     }
     void* before = view_target::Current(controller_);
     const bool aimed = view_target::Aim(controller_);
-    Log(L"player 2's camera manager viewed {}; after aiming it at its camera actor it views {} ({}); auto-managed "
-        L"view target: player 1 {}, player 2 {}",
-        NameOf(before), NameOf(view_target::Current(controller_)), aimed ? L"its own camera" : L"NOT its camera",
+    Log(L"{}'s camera manager viewed {}; after aiming it at its camera actor it views {} ({}); auto-managed "
+        L"view target: player 1 {}, the seat {}",
+        Name(), NameOf(before), NameOf(view_target::Current(controller_)), aimed ? L"its own camera" : L"NOT its camera",
         static_cast<unsigned>(ReadField<std::uint8_t>(playerOneController_, facts::kControllerAutoManageCamera)),
         static_cast<unsigned>(ReadField<std::uint8_t>(controller_, facts::kControllerAutoManageCamera)));
 }
@@ -283,7 +285,7 @@ void Seat::StartGeneration() noexcept
     generation::Begin(seat_, playerOneController_, controller_);
     if (installed_.primary && !primary_controller::Bind(seat_, playerOneController_, controller_))
     {
-        generation::Fault(seat_, L"player 2's controller could not be named as a weak pointer");
+        generation::Fault(seat_, L"the seat's controller could not be named as a weak pointer");
     }
     phase_            = Phase::SettlingPlayerOne;
     ticks_            = 0;

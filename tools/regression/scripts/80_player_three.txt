@@ -1,0 +1,38 @@
+# Player 3 (plan/seats.md step 6): player 3 joins with player 2 in, takes the 3rd slot's member (Barret in the
+# regression save's party), gets the third column and its own HUD; player 2 leaves while player 3 stays (player 3
+# moves to the second column); player 3 leaves clean. Player 3 has no pad here: the console drives it.
+# needs: control
+# expect: player 3 joined with its own controller
+# expect: player 3 took .*Barret.* after \d+ tick
+# expect: player 3's Field camera brought to player 1's settings: matches
+# expect: three columns: ThreePlayerSplitscreenLayout \d+ -> 2 until the leave
+# expect: HUD image: player 3's view draws player 3's HUD
+# expect-not: HUD image: player 3's view draws player [12]'s HUD
+# Player 1 refuses both further players' members (Tifa type 2 and Barret type 1 in the regression save's party):
+# expect: command rules: player 1 may not command member types 0x6 \(menu ordinals 0x[0-9a-f]+\)
+# expect: leave: player 2 left; \d+ leftover actor
+# With player 2 gone, player 3 keeps a split view of their own (two views, top and bottom in the regression's layout):
+# expect: HUD layout \(player 3's pass\): UI image \d+x\d+, view 3840x1080
+# expect: leave: player 3 left; \d+ leftover actor
+# expect-not: JOIN FAILED
+# expect-not: could not be given back
+# expect-not: player 3 waits for party member
+# shot: three regression: three players
+# shot: three-alone regression: player 3 without player 2
+note regression: player three start
+join
+wait-until p2.state == playing 1800
+p3.join
+wait-until p3.state == playing 1800
+wait 240
+note regression: three players
+wait 600
+leave
+wait-until p2.in == off 900
+wait-until p3.state == playing 600
+wait 240
+note regression: player 3 without player 2
+wait 600
+p3.leave
+wait-until p3.in == off 900
+note regression: player three done

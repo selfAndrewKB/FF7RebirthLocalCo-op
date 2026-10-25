@@ -1,6 +1,6 @@
 # LocalSplitScreen
 
-Two-player split-screen for FINAL FANTASY VII REBIRTH, as a UE4SS C++ mod.
+Split-screen for up to three players for FINAL FANTASY VII REBIRTH, as a UE4SS C++ mod.
 
 - **Plan and state:** `../Documentation/plan/README.md` (the front page; one file per topic in `plan/topics/`)
 - **Why it is built this way:** `../Documentation/SPLITSCREEN-REBUILD-PHILOSOPHY.md`; the rules in
@@ -10,21 +10,22 @@ Two-player split-screen for FINAL FANTASY VII REBIRTH, as a UE4SS C++ mod.
 
 ## What it does
 
-Press **Ctrl+F7** to add player 2 and **Ctrl+F8** to remove player 2. When a second local player
-exists, the engine splits the screen by itself. This mod makes the split correct: each player's
+Press **Ctrl+F7** to add a player (player 2, then player 3, on pads 2 and 3) and **Ctrl+F8** to remove the last
+one in. When a further local player exists, the engine splits the screen by itself (two halves, or three equal
+columns with three players). This mod makes the split correct: each player's
 view is rendered by the engine as its own view family, so the game's meshlet renderer never has
 two views in one pass. With one player, the mod changes nothing except the D3D12 residency manager
 (see Performance).
 
-Player 2 starts on their own camera and their own pad (sticks and movement), and the HUD is laid out
-in each half as it is in single player, with player 2's half showing player 2's HUD. None of this
-needs a key.
+Each further player starts on their own camera and their own pad (sticks and movement) and plays their slot of the
+party order (player 2 the 2nd, player 3 the 3rd), and the HUD is laid out in each view as it is in single player, with
+each player's view showing their own HUD. None of this needs a key.
 
 | Keys | Switch |
 |------|--------|
 | Ctrl+F5 | Top/bottom or side by side |
 | Ctrl+F4 | Halves filled, or 16:9 halves with bars |
-| Ctrl+F6 | For testing: player 2's half shows player 1's camera |
+| Ctrl+F6 | For testing: the further players' views show player 1's camera |
 | Ctrl+F9 | For testing: every pad drives both players' sticks (the game's merge) |
 | Ctrl+F10 | For comparison: the NPC population follows the leader alone instead of both players |
 | Ctrl+F11 | For comparison: characters near player 2 take their detail from player 1's camera alone |

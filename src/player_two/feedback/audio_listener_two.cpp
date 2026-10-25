@@ -894,7 +894,6 @@ void Tick(int columnTwo) noexcept
     {
         return;
     }
-    static_assert(players::kSeatsBuilt == 1, "step 6: a SEAD listener per seat, each from its own column");
     g_columnTwo.store(columnTwo, std::memory_order_relaxed);
     try
     {

@@ -102,7 +102,7 @@ void SummonBody(void* state, float deltaTime) noexcept
     if (state != nullptr && state == g_memberState && Acts(kFixSummonBody) && generation::OnGameThread())
     {
         ++g_counts.summonSkips;
-        // Its key-4 part, the Wheelie walk-in question, asked for player 2 instead (player_two/rides/wheelie_ride.h).
+        // Its key-4 part, the Wheelie walk-in question, asked for the ticked seat instead (player_two/rides/wheelie_ride.h).
         wheelie_ride::Ask(state);
         return;  // as for any character the game does not tick
     }
@@ -182,10 +182,10 @@ unsigned Mask() noexcept
     return g_mask.load(std::memory_order_relaxed);
 }
 
-InputScope::InputScope(bool playerTwo) noexcept
+InputScope::InputScope(bool furtherPlayer) noexcept
 {
-    // With the fix off (diagnosis) the block is left as player 2's input writes it, as without this scope.
-    if (!playerTwo || g_leader == nullptr || g_inputOpen || !InPlayerTwoScope() || !Acts(kFixLeaderTransform) ||
+    // With the fix off (diagnosis) the block is left as a further player's input writes it, as without this scope.
+    if (!furtherPlayer || g_leader == nullptr || g_inputOpen || !InPlayerTwoScope() || !Acts(kFixLeaderTransform) ||
         !g_leaderBlock.Open())
     {
         return;  // (an open scope already holds the block: this one leaves it to it)

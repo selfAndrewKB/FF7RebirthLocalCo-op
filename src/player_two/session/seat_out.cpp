@@ -8,14 +8,11 @@
 
 namespace lss::player_two::seat_out {
 
-static_assert(players::kSeatsBuilt == 1, "each module below takes the seat; LetGo still lets only player 2's through: "
-                                         "drop the gate when seat 2 is built (plan/seats.md step 6)");
-
 void LetGo(int seat) noexcept
 {
-    if (seat != players::kPlayerTwoSeat)
+    if (!players::SeatBuilt(seat))
     {
-        return;  // the modules below hold player 2's only
+        return;
     }
     camera_override::PlayerTwoOut(seat);  // the member's camera delegates back to the engine's, while it is still held
     lock_on::PlayerTwoOut(seat);

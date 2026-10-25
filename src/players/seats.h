@@ -13,8 +13,8 @@ namespace lss::players {
 /// a record has one). Three, the engine's most split-screen views.
 inline constexpr int kMaxPlayers = 3;
 
-/// The further players built and wired: seats 1..kSeatsBuilt. Seat 2 is wired at the plan's step 6.
-inline constexpr int kSeatsBuilt = 1;
+/// The further players built and wired: seats 1..kSeatsBuilt (players 2 and 3, since the plan's step 6).
+inline constexpr int kSeatsBuilt = 2;
 static_assert(kSeatsBuilt >= 1 && kSeatsBuilt < kMaxPlayers, "the seats are numbered within the players");
 
 /// Player 2's seat. A module not yet per seat names it, so every place still fixed to player 2 is found by this name

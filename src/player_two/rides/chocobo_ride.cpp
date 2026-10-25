@@ -39,12 +39,6 @@
 
 namespace lss::player_two::chocobo_ride {
 
-// H1: Begin (RunBegin), End (RunEnd), RunAsRider and TickHandles run inside member_movement's scopes (InPrimaryScope,
-// TickRideHandles), which open player 2's primary scope whatever seat the member is.
-static_assert(players::kSeatsBuilt == 1,
-              "chocobo_ride: member_movement's scopes are player 2's: InPrimaryScope and TickRideHandles (Begin, End, "
-              "RunAsRider, TickHandles) must open the ride's seat before seat 2 is built");
-
 namespace {
 
 using RC::Unreal::UObject;
@@ -391,7 +385,7 @@ void End(SeatRide& s, const wchar_t* why, bool force) noexcept
         return;
     }
     EndCall call{ride.coordinator};
-    const bool scoped = member_movement::InPrimaryScope(ride.member, &RunEnd, &call);
+    const bool scoped = member_movement::InPrimaryScope(ride.seat, ride.member, &RunEnd, &call);
     if (scoped && !call.ok)
     {
         // Where the game's end stopped: the steps after the fault did not run (EndRide's order: rider detached, swap
@@ -458,7 +452,7 @@ void Begin(SeatRide& s, int seat, void* playerTwo, void* member, void* chocobo) 
     }
     const void* oldObject = ReadPointer(chocobo, kChocoboRideObject);
     BeginCall   call{playerTwo, chocobo, member};
-    member_movement::InPrimaryScope(member, &RunBegin, &call);
+    member_movement::InPrimaryScope(seat, member, &RunBegin, &call);
     s.ride = {};
     s.ride.seat        = seat;
     s.ride.playerTwo   = playerTwo;
@@ -785,7 +779,7 @@ bool RunAsRider(const void* chocobo, void (*call)(void* context), void* context)
         return false;
     }
     const int seat = SeatRiding(chocobo);  // the seat from the chocobo it rides
-    return seat >= 1 && member_movement::InPrimaryScope(g_seats[seat].ride.member, call, context);
+    return seat >= 1 && member_movement::InPrimaryScope(seat, g_seats[seat].ride.member, call, context);
 }
 
 bool TickHandles(void* state, float deltaTime, std::uintptr_t (*engine)(void* state, float deltaTime),
@@ -808,8 +802,8 @@ bool TickHandles(void* state, float deltaTime, std::uintptr_t (*engine)(void* st
     Ride& ride = g_seats[seat].ride;
     // The game's ridden-vehicle test, outside and inside the scope, every 30th call: logged when it changes.
     const bool sample = ride.handles % 30 == 0;
-    const auto tick   = member_movement::TickRideHandles(ride.member, state, ride.vehicle, ride.component, deltaTime,
-                                                         engine, sample);
+    const auto tick   = member_movement::TickRideHandles(seat, ride.member, state, ride.vehicle, ride.component,
+                                                         deltaTime, engine, sample);
     if (sample)
     {
         ride.riddenOutside = tick.riddenOutside;

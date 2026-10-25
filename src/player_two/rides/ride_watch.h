@@ -13,7 +13,7 @@
 // weak-pointer resolve and assign and its player-core test, guarded; the test reaches the mod's own leader slot
 // (member_movement), which answers as the game outside player 2's scope, so it changes nothing there. The one
 // exception to "read-only": once a second while riding, the dry run of the chocobo swap's gate
-// (member_movement::PlayerCoreAsPlayerTwo) opens the mod's primary-controller scope for one guarded test call, as
+// (member_movement::PlayerCoreAsSeat) opens the mod's primary-controller scope for one guarded test call, as
 // the member's tick does each frame; if the game moved the primary controller inside that call, the scope's close
 // faults the generation as everywhere else. Game thread only.
 

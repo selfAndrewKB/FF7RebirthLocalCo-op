@@ -34,8 +34,7 @@
 // pass in the seat's own scopes, closed before the next seat's. The pass in flight names its kind and its seat; the
 // world slow written in a seat's pass is the smallest of this frame's values so far (player 1's and the earlier
 // seats'), so the last pass leaves the minimum over every menu. Every battle pass (this tick, the press route, the
-// targeting run) opens the ladder's ButtonsPart, which is still player 2's: the input group must make it per seat before
-// step 6.
+// targeting run) opens the ladder's ButtonsPart with the pass's seat.
 
 namespace lss::platform {
 class GameImage;

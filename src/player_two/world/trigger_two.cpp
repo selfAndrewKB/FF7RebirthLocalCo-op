@@ -304,12 +304,10 @@ int OwnerSeat(const void* owner) noexcept
     return owner == TriggerOf(generation::PlayerOneController()) ? 0 : -1;
 }
 
-// The chocobo a seat's player rides: chocobo_ride answers for player 2 only until the rides group makes it per seat.
-static_assert(players::kSeatsBuilt == 1, "trigger_two: chocobo_ride answers for player 2 only; take each seat's ridden "
-                                         "chocobo from it before seat 2 is built (plan/seats.md step 6)");
+// The chocobo a seat's player rides.
 const void* RiddenChocoboOf(int seat) noexcept
 {
-    return seat == players::kPlayerTwoSeat ? chocobo_ride::RiddenChocobo() : nullptr;
+    return chocobo_ride::RiddenChocobo(seat);
 }
 
 /// Room for `count` zeroed 24-byte results in `out`, in the game's memory (none for 0). False if the allocation failed.

@@ -8,8 +8,7 @@
 // possession call when the end left the member to her AI), one frame of the vehicle's tick inside the seat's scopes,
 // and the session's view of both rides. Each ride keeps its own state machine and its Lease per seat (index 0, player
 // 1's, unused): the chocobo waits for the game's getoff and the end of its coordinator, the Wheelie has a swap back, a
-// detach notify and the game's forced getoffs. The names without a seat at the end are player 2's, for the callers
-// not yet per seat. Game thread only.
+// detach notify and the game's forced getoffs. Game thread only.
 
 #include "player_two/input/move_state.h"
 #include "players/seats.h"
@@ -42,7 +41,7 @@ bool PlayerTwoHolds(const void* character, const void* playerTwo) noexcept;
 
 /// The boarding's possession swap runs the game's player-core test on the member: as `seat`'s player it must pass.
 /// False, logged under `label`, when it does not (the ride is not taken). The test is member_movement's
-/// (PlayerCoreAsPlayerTwo), which opens player 2's primary scope until that module is per seat.
+/// (PlayerCoreAsSeat), inside the seat's primary scope.
 bool BoardingGateOpen(int seat, void* member, void* playerTwo, const wchar_t* label) noexcept;
 
 /// The lease every ride records, one per seat; each ride adds its own fields.
@@ -105,19 +104,5 @@ struct Forgotten
     const void* scooter = nullptr;
 };
 Forgotten Forget(int seat) noexcept;
-
-// Player 2's, for the session and member_movement (not yet per seat).
-inline bool Riding() noexcept
-{
-    return Riding(players::kPlayerTwoSeat);
-}
-inline void Release(const wchar_t* why) noexcept
-{
-    Release(players::kPlayerTwoSeat, why);
-}
-inline Forgotten Forget() noexcept
-{
-    return Forget(players::kPlayerTwoSeat);
-}
 
 }  // namespace lss::player_two::own_ride

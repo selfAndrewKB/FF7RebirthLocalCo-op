@@ -25,15 +25,9 @@
 // run with the seat's camera handle in the actor and in the seat's scopes; the ladder's exit blend, the squeeze's and
 // crawl's exit, the one-shot actor's leave; the ladder's entry points for traversal_watch. The seat is the one whose
 // member the executer's character is; each seat keeps its own handles, ladder exit and logged states (by seat, index
-// 0 unused). The one-shot actor's leave stays player 2's (OneShotLeave).
+// 0 unused). The one-shot actor's leave finds its seat by the member or the actor recorded (OneShotLeave).
 
 namespace lss::player_two::traversal_camera {
-
-// H1: RunAsPlayerTwo runs every executer step inside member_movement::InPrimaryScope, which opens player 2's primary
-// scope whatever seat the member is.
-static_assert(players::kSeatsBuilt == 1,
-              "traversal_exec: member_movement's scopes are player 2's: InPrimaryScope (RunAsPlayerTwo: the executers' "
-              "Start, Tick, End, exit calls) must open the executer's seat before seat 2 is built");
 
 namespace {
 
@@ -69,7 +63,7 @@ RequestFn  g_requestCamExit = nullptr;
 // writes; the leave resolves it on any thread, so a freed actor whose memory is reused never matches).
 platform::VTableEntry      g_oneShotLeave;
 bool                       g_oneShotLeavePlaced = false;
-std::atomic<std::uint64_t> g_oneShotTwoWeak[players::kMaxPlayers]{};  // by seat; index 0 unused
+std::atomic<std::uint64_t> g_oneShotWeak[players::kMaxPlayers]{};  // by seat; index 0 unused
 
 // The squeeze's and crawl's exit calls, and the executer whose exit ran (per seat and class; reset at Start).
 OneArgFn                                                  g_squeezeExit = nullptr;
@@ -203,7 +197,7 @@ const wchar_t* FlagText(const void* actor, const ExecClass& cls) noexcept
 /// Runs `call` for `seat`'s executer of class `index`: the seat's handle in the actor, the primary scope and the
 /// leader answer, and a LeaderScope where the installer reads the leader. Unscoped (a scope refused), the game's own
 /// answer stands, still with the seat's handle in place.
-Outcome RunAsPlayerTwo(int seat, std::size_t index, Call& call) noexcept
+Outcome RunAsSeat(int seat, std::size_t index, Call& call) noexcept
 {
     const ExecClass& cls = kExecClasses[index];
     Outcome          out;
@@ -258,7 +252,7 @@ Outcome RunAsPlayerTwo(int seat, std::size_t index, Call& call) noexcept
         {
             leader.emplace(leader_scope::WeakOf(member));
         }
-        out.scoped = member_movement::InPrimaryScope(member, &RunCall, &call);
+        out.scoped = member_movement::InPrimaryScope(seat, member, &RunCall, &call);
         if (!out.scoped)
         {
             call.result = call.Run();
@@ -302,12 +296,12 @@ void LogStep(int seat, std::size_t index, const wchar_t* step, const Outcome& ou
 
 std::uintptr_t ExecStep(int seat, std::size_t index, Kind kind, Call& call)
 {
-    const Outcome out = RunAsPlayerTwo(seat, index, call);
+    const Outcome out = RunAsSeat(seat, index, call);
     if (index == kOneShot && kind == Kind::Tick && out.scoped && out.actor != nullptr &&
         ReadField<std::uint8_t>(out.actor, kExecClasses[kOneShot].cameraFlag) != 0)
     {
         // The seat's camera is on there.
-        g_oneShotTwoWeak[seat].store(leader_scope::WeakOf(const_cast<void*>(out.actor)), std::memory_order_release);
+        g_oneShotWeak[seat].store(leader_scope::WeakOf(const_cast<void*>(out.actor)), std::memory_order_release);
     }
     try
     {
@@ -421,7 +415,7 @@ std::optional<std::uintptr_t> LadderExitTick(int seat, Call& tick, std::uint8_t 
         request.request        = g_requestCamExit;
         request.executer       = tick.executer;
         request.state          = state;
-        const Outcome    out   = RunAsPlayerTwo(seat, kLadder, request);
+        const Outcome    out   = RunAsSeat(seat, kLadder, request);
         const ModuleExit after = LadderModuleExit(seat, tick.executer);
         try
         {
@@ -497,7 +491,7 @@ void MoveExitCall(int seat, std::size_t index, void* executer) noexcept
         }
         return;
     }
-    const Outcome out = RunAsPlayerTwo(seat, index, call);
+    const Outcome out = RunAsSeat(seat, index, call);
     try
     {
         if (platform::Enabled(platform::Level::Debug))
@@ -564,34 +558,47 @@ void RunLeave(void* context)
     call->result = call->leave(call->actor, call->character);
 }
 
-/// The one-shot actor's leave (any thread): for player 2's member, or with no character the actor player 2's camera went
-/// on, the game's leave ends the camera on player 2's camera manager. Everyone else's is the game's. Player 2's only:
-/// the leave has no seat of its own on the anim worker, and the camera context it runs in is climb_context's
-/// WithPlayerTwoCamera.
+/// The seat whose one-shot move `actor` is leaving: by its member (`character`), or with no character by the actor the
+/// seat's camera went on. -1 for everyone else's. Any thread.
+int OneShotSeat(const void* actor, const void* character) noexcept
+{
+    for (int seat = 1; actor != nullptr && seat <= players::kSeatsBuilt; ++seat)
+    {
+        const void* member = generation::Active(seat) ? generation::MemberOf(seat) : nullptr;
+        if (member == nullptr)
+        {
+            continue;
+        }
+        const auto at = static_cast<std::size_t>(seat);
+        if (character != nullptr ? character == member
+                                 : leader_scope::StillNames(g_oneShotWeak[at].load(std::memory_order_acquire), actor))
+        {
+            return seat;
+        }
+    }
+    return -1;
+}
+
+/// The one-shot actor's leave (any thread): for a seat's member, or with no character the actor a seat's camera went
+/// on, the game's leave ends the camera on that seat's camera manager (climb_context's WithSeatCamera). Everyone
+/// else's is the game's.
 std::uintptr_t OneShotLeave(void* actor, void* character) noexcept
 {
-    static_assert(players::kSeatsBuilt == 1, "OneShotLeave ends player 2's one-shot camera through climb_context's "
-                                             "WithPlayerTwoCamera: give it the seat whose member or recorded actor "
-                                             "matches, and climb_context a camera context per seat, before seat 2 is "
-                                             "built");
-    constexpr int seat     = players::kPlayerTwoSeat;
-    const auto    original = reinterpret_cast<LeaveSlotFn>(g_oneShotLeave.Original());
-    const void*   member   = generation::Active(seat) ? generation::MemberOf(seat) : nullptr;
-    std::atomic<std::uint64_t>& weak = g_oneShotTwoWeak[seat];
-    const bool  two      = member != nullptr && actor != nullptr &&
-                     (character != nullptr ? character == member
-                                           : leader_scope::StillNames(weak.load(std::memory_order_acquire), actor));
-    if (!two)
+    const auto original = reinterpret_cast<LeaveSlotFn>(g_oneShotLeave.Original());
+    const int  seat     = OneShotSeat(actor, character);
+    if (seat < 0)
     {
         return original(actor, character);
     }
+    std::atomic<std::uint64_t>& weak = g_oneShotWeak[static_cast<std::size_t>(seat)];
+    const wchar_t* const        name = players::SeatName(seat);
     const auto flag = kExecClasses[kOneShot].cameraFlag;
     const bool was  = ReadField<std::uint8_t>(actor, flag) != 0;
     LeaveCall  call{original, actor, character};
-    const bool ran  = climb_context::WithPlayerTwoCamera(&RunLeave, &call);
+    const bool ran  = climb_context::WithSeatCamera(seat, &RunLeave, &call);
     if (!ran)
     {
-        // Player 2's camera manager is gone (player 2 left): no camera of theirs to end. The leave's own last step
+        // The seat's camera manager is gone (its player left): no camera of theirs to end. The leave's own last step
         // only, so a later leave of this actor cannot reach player 1's slot 15.
         WriteField<std::uint8_t>(actor, flag, 0);
     }
@@ -602,12 +609,12 @@ std::uintptr_t OneShotLeave(void* actor, void* character) noexcept
     }
     try
     {
-        platform::LogDebug(L"traversal camera: player 2's one-shot move ends ({} thread{}): {}",
+        platform::LogDebug(L"traversal camera: {}'s one-shot move ends ({} thread{}): {}", name,
                            generation::OnGameThread() ? L"game" : L"animation",
                            character == nullptr ? L", the actor's EndPlay" : L"",
                            !was  ? L"its camera flag was already off (no camera, or ended before)"
-                           : ran ? L"the game's leave ran on player 2's camera; player 1's untouched"
-                                 : L"player 2's camera manager is gone: the flag cleared, player 1's camera untouched");
+                           : ran ? L"the game's leave ran on the seat's own camera; player 1's untouched"
+                                 : L"the seat's camera manager is gone: the flag cleared, player 1's camera untouched");
     }
     catch (...)
     {
@@ -691,7 +698,7 @@ bool Remove() noexcept
     }
     kept |= g_oneShotLeavePlaced && !g_oneShotLeave.Restore();
     g_oneShotLeavePlaced = false;
-    for (auto& weak : g_oneShotTwoWeak)
+    for (auto& weak : g_oneShotWeak)
     {
         weak.store(0, std::memory_order_release);
     }
@@ -703,7 +710,7 @@ void Tick(int seat, bool active) noexcept
     if (!active && players::SeatIndex(seat))
     {
         g_ladderModule[seat] = nullptr;
-        g_oneShotTwoWeak[seat].store(0, std::memory_order_release);
+        g_oneShotWeak[seat].store(0, std::memory_order_release);
     }
 }
 

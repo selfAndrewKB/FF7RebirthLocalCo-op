@@ -30,9 +30,9 @@
 // Per seat (players/seats.h): each seat's walk-in answer, ride and "stopped for the session" are its own (a record per
 // seat, index 0 unused); the seat comes from the controller the member's tick hands in, the coordinator the swap back
 // is called for, the mesh owner of a detach notify, or the primary controller at the getoff button. A forced getoff is
-// followed for each riding seat in turn, in seat order. The walk-in question itself (Ask) stays player 2's: whether a
-// further seat may ask player 1's coordinator about its one marked scooter is open. The install, the slots and call
-// redirects are shared. The names without a seat at the end are player 2's, for the callers not yet per seat.
+// followed for each riding seat in turn, in seat order. Every seat asks player 1's coordinator the walk-in question
+// about its one marked scooter (the question changes nothing; RE-seats-step6-world-rides.md §2); a scooter one seat
+// is boarding is refused to the others. The install, the slots and call redirects are shared.
 
 #include "player_two/input/move_state.h"
 #include "players/seats.h"
@@ -50,9 +50,9 @@ bool Install(const platform::GameImage& image) noexcept;
 /// Puts the swap-back slot and the getoff call redirects back.
 void Remove() noexcept;
 
-/// From scope_leaks' skip of the field-summon step for player 2's member (`state`, its on-foot move state), inside
-/// the member tick's scopes: the game's ride question for player 2 (player 2's only: the header's open question).
-/// Records a yes for AfterMemberTick.
+/// From scope_leaks' skip of the field-summon step for a seat's member (`state`, its on-foot move state), inside the
+/// member tick's scopes: the game's ride question for that seat (found from the state's character). Records a yes for
+/// AfterMemberTick.
 void Ask(void* state) noexcept;
 
 /// From the member tick right after the game's tick, inside its scopes: boards the yes recorded for the seat whose
@@ -74,11 +74,5 @@ void Release(int seat, const wchar_t* why) noexcept;
 /// The member was destroyed under `seat`'s player: the ride is forgotten without calls. Returns the scooter the
 /// seat's controller possessed (null if none), so the session clears that controller field too.
 void* Forget(int seat) noexcept;
-
-// Player 2's, for the callers not yet per seat.
-inline bool Riding() noexcept
-{
-    return Riding(players::kPlayerTwoSeat);
-}
 
 }  // namespace lss::player_two::wheelie_ride

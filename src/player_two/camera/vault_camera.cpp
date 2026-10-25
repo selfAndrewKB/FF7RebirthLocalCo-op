@@ -67,15 +67,24 @@ std::optional<platform::GameImage> g_image;
 // (the members' and the chocobos' weaks it compares the action's with are generation's). By seat; index 0 unused.
 std::array<std::atomic<void*>, players::kMaxPlayers> g_seatOperator{};
 
-// The Begin's chocobo test asks chocobo_ride, whose rides are player 2's (the rides group's step).
-static_assert(players::kSeatsBuilt == 1, "the vault Begin's chocobo test is player 2's (chocobo_ride): before seat 2 is "
-                                         "built it asks each seat's ride");
-
 std::wstring ScopeText(int seat)
 {
     const wchar_t* name = players::SeatName(seat);
     return primary_controller::Is(generation::ControllerOf(seat)) ? std::format(L"in {}'s primary scope", name)
                                                                   : std::format(L"outside {}'s scope", name);
+}
+
+/// Whose primary scope is open now, for player 1's vault line: a seat's, or none.
+std::wstring OpenScopeText()
+{
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (primary_controller::Is(generation::ControllerOf(seat)))
+        {
+            return std::format(L"in {}'s primary scope", players::SeatName(seat));
+        }
+    }
+    return L"outside every further player's scope";
 }
 
 /// The built seat whose member is `character` while its player is in, or 0.
@@ -86,7 +95,7 @@ int MemberSeat(const void* character) noexcept
 }
 
 // The game's own call at this site, passed through unguarded on purpose (no CallGuarded): the game makes it unguarded
-// too. CallGuarded is for the extra calls the mod adds (member_movement's RiddenTest, PlayerCoreAsPlayerTwo).
+// too. CallGuarded is for the extra calls the mod adds (member_movement's RiddenTest, PlayerCoreAsSeat).
 std::uint8_t VaultCoreTest(const void* character) noexcept
 {
     const auto engine = reinterpret_cast<CoreFn>(g_coreCall.Original());
@@ -94,8 +103,8 @@ std::uint8_t VaultCoreTest(const void* character) noexcept
     {
         return engine(character);
     }
-    const bool chocobo = generation::Active(players::kPlayerTwoSeat) &&
-                         (character == chocobo_ride::DrivenChocobo() || character == chocobo_ride::RiddenChocobo());
+    const int  rider   = chocobo_ride::SeatDriving(character);  // seated or getting off
+    const bool chocobo = rider >= 1 && generation::Active(rider);
     const int  member  = MemberSeat(character);
     if (!chocobo)
     {
@@ -115,7 +124,7 @@ std::uint8_t VaultCoreTest(const void* character) noexcept
             else if (character == ReadPointer(generation::ControllerOf(0), facts::kControllerPawn))
             {
                 platform::LogDebug(L"vault camera: player 1's pawn vaults; the game's player-core test answers {} ({})",
-                                   answer, ScopeText(players::kPlayerTwoSeat));
+                                   answer, OpenScopeText());
             }
         }
         catch (...)
@@ -126,9 +135,9 @@ std::uint8_t VaultCoreTest(const void* character) noexcept
     const auto answer = member_movement::WithoutChocoboAnswer(engine, character);
     try
     {
-        platform::Log(L"vault camera: player 2's chocobo vaults ({}); the game's player-core test answers {} without the "
+        platform::Log(L"vault camera: {}'s chocobo vaults ({}); the game's player-core test answers {} without the "
                       L"mod's ride answer for its input component: {}",
-                      ScopeText(players::kPlayerTwoSeat), answer,
+                      players::SeatName(rider), ScopeText(rider), answer,
                       answer == 0 ? L"no vault camera, as for player 1's chocobo; both ride framings stay"
                                   : L"a vault camera STILL goes on the primary camera (the ride framings may be lost)");
     }

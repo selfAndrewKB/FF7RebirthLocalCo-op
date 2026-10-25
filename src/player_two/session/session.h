@@ -36,10 +36,8 @@
 // skipped, and the ones before it still work. The session installs its own stages only; the other
 // modules are installed by mod.cpp next to their siblings.
 //
-// The modules a Seat calls that are not per seat yet (the camera seeds, the command controller, member movement, the
-// rides, the camera override's destroyed member) are player 2's; only the built seats exist (kSeatsBuilt), and step 6
-// of plan/seats.md moves those calls to the seat. The log lines still say "player 2": seat 2's name them when it is
-// wired (step 6).
+// Every module a Seat calls takes the seat (plan/seats.md step 6); the command controllers' tick runs once per tick,
+// from the first seat that plays. The log lines name the seat's player (players::SeatName).
 //
 // Game thread only, outside Draw.
 
@@ -95,6 +93,9 @@ public:
 
     int Number() const noexcept { return seat_; }
 
+    /// "player 2" or "player 3", for the log.
+    const wchar_t* Name() const noexcept { return players::SeatName(seat_); }
+
     /// Adds the seat's player, or, with no party member free for it, waits outside the game for one.
     void Join() noexcept;
 
@@ -120,8 +121,9 @@ public:
     /// Returns true if it is out.
     bool LeaveNow() noexcept;
 
-    /// Once per tick, after the session's shared work.
-    void Tick() noexcept;
+    /// Once per tick, after the session's shared work. `commandMenusTicked`: the session's, false at each tick's start;
+    /// the first seat that plays ticks every seat's command controller and sets it.
+    void Tick(bool& commandMenusTicked) noexcept;
 
     /// The seat's lines of the periodic status (the session adds the shared modules' after every seat's).
     void LogStatus() noexcept;
@@ -280,15 +282,7 @@ public:
     /// The member the seat's player plays, or why it has none (Seat::MemberReading).
     std::wstring MemberReading(int seat) const;
 
-    // ---- player 2's, by the names the callers not yet per seat use ----
-    bool          HasPlayerTwo() const noexcept { return In(players::kPlayerTwoSeat); }
-    bool          AwaitingMember() const noexcept { return AwaitingMember(players::kPlayerTwoSeat); }
-    bool          PlaysMember() const noexcept { return PlaysMember(players::kPlayerTwoSeat); }
-    bool          WaitsForMember() const noexcept { return WaitsForMember(players::kPlayerTwoSeat); }
-    bool          StandsAside() const noexcept { return StandsAside(players::kPlayerTwoSeat); }
-    const void*   PlayerTwo() const noexcept { return LocalPlayer(players::kPlayerTwoSeat); }
-    std::uint32_t JoinCount() const noexcept { return JoinCount(players::kPlayerTwoSeat); }
-    /// Player 1's ULocalPlayer as player 2's join recorded it (null while player 2 is out).
+    /// Player 1's ULocalPlayer as the first seat in recorded it at its join (null while every seat is out).
     const void*   PlayerOne() const noexcept;
 
 private:

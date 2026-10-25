@@ -58,10 +58,8 @@ void Tick() noexcept;
 int LeaderTypeHere() noexcept;
 
 /// Whose climb this thread is ticking now, by player number (1 player 1, 2 player 2, 3 player 3: a seat's number plus
-/// one), or 0 outside every context. Any thread. (traversal_holders reads `== 2` as player 2's.)
+/// one), or 0 outside every context. Any thread. (traversal_holders reads a seat as PlayerHere() - 1.)
 int PlayerHere() noexcept;
-static_assert(players::kSeatsBuilt == 1, "traversal_holders reads PlayerHere() == 2 as player 2's: before seat 2 is "
-                                         "built it reads the player number as a seat (PlayerHere() - 1)");
 
 /// All three moves' Tick slots are placed (each climb's Tick names its player on its thread).
 bool TicksPlaced() noexcept;
@@ -71,10 +69,5 @@ bool TicksPlaced() noexcept;
 /// not run, when the getter is not redirected or the seat's camera manager is not known this frame.
 bool WithSeatCamera(int seat, void (*call)(void*), void* context) noexcept;
 
-/// Player 2's (traversal_exec, the rides group's, not yet per seat).
-inline bool WithPlayerTwoCamera(void (*call)(void*), void* context) noexcept
-{
-    return WithSeatCamera(players::kPlayerTwoSeat, call, context);
-}
 
 }  // namespace lss::player_two::climb_context

@@ -33,12 +33,6 @@
 
 namespace lss::player_two::traversal_camera {
 
-// H1: MoveBegin runs a seat's move Begin inside member_movement::InPrimaryScope, which opens player 2's primary scope
-// whatever seat the member is.
-static_assert(players::kSeatsBuilt == 1,
-              "traversal_holders: member_movement's scopes are player 2's: InPrimaryScope (MoveBegin) must open the "
-              "move's seat before seat 2 is built");
-
 namespace {
 
 struct MoveLive
@@ -97,7 +91,7 @@ std::atomic<const void*>                                g_climbActor[players::kM
 std::atomic<const void*>                                g_climbMember[players::kMaxPlayers]{};
 
 /// The seat whose climb this thread ticks now (climb_context's context), or -1. climb_context numbers its climbers as
-/// players (1 player 1, 2 player 2, 0 outside every context): a further player's number is its seat plus one.
+/// players (1 player 1, 2 player 2, 3 player 3, 0 outside every context): a further player's number is its seat plus one.
 int SeatHere() noexcept
 {
     const int player = climb_context::PlayerHere();
@@ -393,7 +387,7 @@ std::uintptr_t MoveBegin(void* move) noexcept
         {
             leader.emplace(memberWeak);
         }
-        scoped = member_movement::InPrimaryScope(member, &RunBegin, &call);
+        scoped = member_movement::InPrimaryScope(seat, member, &RunBegin, &call);
         if (!scoped)
         {
             call.result = original(move);

@@ -22,8 +22,7 @@
 //
 // Per seat (players/seats.h): each seat's ride, its held-back chocobo and its "stopped for the session" are its own
 // (a record per seat, index 0 unused); the seat comes from the controller the member's tick hands in, or from the
-// chocobo or move state the engine hands a wrapper. The install's lookups and the reflection offset are shared. The
-// names without a seat at the end are player 2's, for the callers not yet per seat.
+// chocobo or move state the engine hands a wrapper. The install's lookups and the reflection offset are shared.
 
 #include "player_two/input/move_state.h"
 #include "players/seats.h"
@@ -82,23 +81,5 @@ void Release(int seat, const wchar_t* why) noexcept;
 /// The member was destroyed under `seat`'s player: the ride is forgotten without calls. Returns the chocobo the seat's
 /// controller possessed (null if not driving), so the session clears that controller field too.
 void* Forget(int seat) noexcept;
-
-// Player 2's, for the callers not yet per seat (the prompt rows, the camera and world modules).
-inline bool Driving() noexcept
-{
-    return Driving(players::kPlayerTwoSeat);
-}
-inline const void* DrivenChocobo() noexcept
-{
-    return DrivenChocobo(players::kPlayerTwoSeat);
-}
-inline const void* RiddenChocobo() noexcept
-{
-    return RiddenChocobo(players::kPlayerTwoSeat);
-}
-inline const void* DrivenMoveState() noexcept
-{
-    return DrivenMoveState(players::kPlayerTwoSeat);
-}
 
 }  // namespace lss::player_two::chocobo_ride
