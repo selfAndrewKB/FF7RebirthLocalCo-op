@@ -75,7 +75,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.94.0";  // seats step 5: the views per column, the mirror views, the monitor mode
+constexpr const wchar_t* kVersion = L"0.95.0";  // seats step 6: player 3 wired
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
