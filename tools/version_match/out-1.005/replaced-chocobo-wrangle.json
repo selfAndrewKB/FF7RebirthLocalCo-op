@@ -1,0 +1,29 @@
+{
+ "build": "1.005",
+ "research_build": "1.004",
+ "date": "2026-10-26",
+ "doc": "RE-chocobo-wrangle-targets.md",
+ "facts": [
+  {
+   "old": "0x1490FEDC8",
+   "new": "0x148F32598",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "g_EndChocoboCaptureManager (data; +0x18 the capture controller): S-CHOCOBO-WRANGLE section 6; the 1.004 display shows qword_1490FEDB8, the encoded target is ..C8 (raw bytes at 0x14357CA92)."
+  },
+  {
+   "old": "0x14357CB40",
+   "new": "0x1432ACE18",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "ChocoboCapture__PlaceStatusIconAndArrow_PrimaryPC(entry): S-CHOCOBO-WRANGLE section 2, 6; the per-entry placer of the bubble, its small form and the arrow, stateless; the first 22 bytes identical in both exes (the agent's table)."
+  },
+  {
+   "old": "0x143BAD5E8",
+   "new": "0x1438FEDCC",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "EndUI__ProjectWorldToRootOverlay_PrimaryPC_EdgeAngle(FVector*, u8* edge, FVector2D* out, float margin): S-CHOCOBO-WRANGLE section 2, 6; reads PM+0x140; the first 19 bytes identical in both exes; its callers pass margin 0.0 in 1.004 and 50.0 in 1.005 (main session read, 2026-10-26)."
+  }
+ ]
+}

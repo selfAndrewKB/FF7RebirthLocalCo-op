@@ -10,6 +10,7 @@
 #include "hud/battle/popups.h"
 #include "hud/field/marker_timers.h"
 #include "hud/field/search_pins.h"
+#include "hud/field/wrangle_targets.h"
 #include "hud/hud_roots.h"
 #include "hud/hud_updates.h"
 #include "hud/minimap/minimap.h"
@@ -528,7 +529,8 @@ bool EnterSeat(int seat) noexcept
         }
         const double start = Now();
         const bool   runs  = RunUpdates(seat);
-        search_pins::Place();  // the search pins from the seat's camera (hud/field/search_pins.h)
+        search_pins::Place();         // the search pins from the seat's camera (hud/field/search_pins.h)
+        wrangle_targets::Place(seat);  // and the chocobo wrangle's targets (hud/field/wrangle_targets.h)
         Charge(kTicksTwo, start);
         if (!runs)
         {
@@ -570,6 +572,7 @@ void LeaveSeat(int seat) noexcept
     mark             = Now();
     const bool ticks = RunUpdates(0);  // player 1's positions again, before the next pass's render
     search_pins::Place();              // and the search pins'
+    wrangle_targets::Place(0);         // and the chocobo wrangle's targets'
     Charge(kTicksOne, mark);
     RestoreTimeStep();
     g_passedThisFrame = true;

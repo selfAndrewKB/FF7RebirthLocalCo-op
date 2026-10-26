@@ -5,6 +5,7 @@
 #include "hud/field/field_markers.h"
 #include "hud/field/prompt_rows.h"
 #include "hud/field/search_pins.h"
+#include "hud/field/wrangle_targets.h"
 #include "hud/layout/layout_scale.h"
 #include "hud/layout/overlay_layout.h"
 #include "hud/minimap/area_icons_two.h"
@@ -300,6 +301,8 @@ constexpr std::array kModules{
     Module{Call<&hud::field_markers::Install>, nullptr},
     // each player's search pins (ranged lock-on, hookshot) in their own half
     Module{Call<&hud::search_pins::Install>, nullptr},
+    // the chocobo wrangle's bubbles and reticle placed from each view's camera
+    Module{Call<&hud::wrangle_targets::Install>, nullptr},
     // the prompt rows keep their corner by their own base
     Module{Call<&hud::action_icon_base::Install>, nullptr},
     // player 2's own map icons and markers

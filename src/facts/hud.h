@@ -44,6 +44,16 @@ inline constexpr std::uint32_t kUIActionRows         = 0x208;  // -> the field-a
 /// SetupFieldCommandOrDefer 0x1413FBBE2 mov byte [..+2D9h],0 (a member was inserted after +0x2A8).
 inline constexpr platform::PerBuild<std::uint32_t> kUISetupDeferred = {0x2D1, 0x2D9};
 
+/// UWidget's render transform applied from its fields (+0x90/+0x94 the translation, +0x98/+0x9C the scale, +0xA8 the
+/// angle): the game's own call after it writes them (the enemy gauges' scale, RE-p2-enemy-markers.md §3.3; the chocobo
+/// wrangle's targets, RE-chocobo-wrangle-targets.md §2). Its 1.005 prologue differs (the translation table carries
+/// that build's bytes).
+inline constexpr std::uint8_t kApplyRenderTransformBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x10, 0x48,
+                                                              0x89, 0x70, 0x18, 0x48, 0x89, 0x78, 0x20, 0x55,
+                                                              0x41, 0x56, 0x41, 0x57, 0x48, 0x8D, 0x68, 0x98};
+inline constexpr FunctionFact  kApplyRenderTransform{L"UWidget's render transform applied", 0x14096ECAC,
+                                                    kApplyRenderTransformBytes};
+
 // ---------------------------------------------------------------------------------------------
 // The root overlay's render (SEndRootOverlay__RenderToCompositeLayer 0x140C95CC0)
 // ---------------------------------------------------------------------------------------------

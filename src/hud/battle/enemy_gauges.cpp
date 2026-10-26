@@ -101,10 +101,7 @@ constexpr std::uint8_t   kScaleStepPrologue[] = {0x48, 0x85, 0xD2, 0x0F, 0x84, 0
                                                  0x48, 0x89, 0x74, 0x24, 0x10, 0x57, 0xB8, 0x80, 0x00, 0x00, 0x00, 0xE8, 0xB6, 0x3F,
                                                  0x52, 0x01};
 constexpr platform::FunctionFact kScaleStep{L"EndUI__MF8_LeaderDistanceScaleLerp", 0x140B8AF5C, kScaleStepPrologue};
-constexpr std::uint8_t   kApplyTransformPrologue[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x10, 0x48, 0x89, 0x70, 0x18, 0x48,
-                                                      0x89, 0x78, 0x20, 0x55, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8D, 0x68, 0x98};
-constexpr platform::FunctionFact kApplyTransform{L"the gauge widget's render transform applied", 0x14096ECAC,
-                                                 kApplyTransformPrologue};
+// The render-transform apply after the scale write: facts::kApplyRenderTransform (shared with the wrangle targets).
 constexpr std::uint32_t  kScale       = 0x38;   // p: the gauge's size state
 constexpr std::uint32_t  kRenderScale = 0x98;   // widget: render scale x, y
 
@@ -666,7 +663,7 @@ bool Install(const platform::GameImage& image) noexcept
     const auto yStep      = platform::FindFunction(image, kYStep);
     const bool ownChecks  = forcedSite && forced && yStep && player_two::leader_scope::Installed();
     const auto scaleStep  = platform::FindFunction(image, kScaleStep);
-    const auto apply      = platform::FindFunction(image, kApplyTransform);
+    const auto apply      = platform::FindFunction(image, facts::kApplyRenderTransform);
     const bool sizes      = scaleStep && apply;
     if (ownChecks && platform::RunningBuild() == platform::BuildIndex::V1005)
     {
