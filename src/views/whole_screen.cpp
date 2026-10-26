@@ -538,6 +538,19 @@ bool GameStatePresent() noexcept
     return g_installed && !g_stateCallFailed && platform::CallGuarded(g_getEndGameState, state) && state != nullptr;
 }
 
+const wchar_t* LocalPlayerRefused() noexcept
+{
+    static constexpr wchar_t kPauseMenu[] = L"the pause menu owns the screen (the engine refuses a local player there)";
+    void*                    state        = nullptr;
+    if (!g_installed || g_stateCallFailed || !platform::CallGuarded(g_getEndGameState, state) || state == nullptr)
+    {
+        return nullptr;
+    }
+    std::uint8_t current = 0;
+    return Read(reinterpret_cast<std::uintptr_t>(state) + kState, current) && current == kStatePauseMenu ? kPauseMenu
+                                                                                                         : nullptr;
+}
+
 ScreenSignals ReadScreenSignals() noexcept
 {
     ScreenSignals signals;

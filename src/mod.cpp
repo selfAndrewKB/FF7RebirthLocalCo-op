@@ -79,7 +79,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.97.4";  // built against the Nexus UE4SS (c0a8d4c)
+constexpr const wchar_t* kVersion = L"0.97.5";  // built against the Nexus UE4SS (c0a8d4c)
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -328,21 +328,26 @@ public:
 #endif
         lss::dev::Install(*image, *session_);
 
-        // Player 2 leaves before any map load: the new world would log player 2 in again, and its
-        // camera manager's fixed-name spawns would collide with player 1's outside a join. The loader's callback
-        // answers {false, false}: the game's LoadMap runs as it is.
+        // The further players leave before any map load: the new world would log them in again, and their
+        // camera managers' fixed-name spawns would collide with player 1's outside a join. The loader's callback
+        // answers {false, false}: the game's LoadMap runs as it is. (No map load has been seen in play: the title's
+        // Continue, a save load, a retry and chapter select all leave the field inside the one world.)
         Hook::RegisterLoadMapPreCallback([](RC::Unreal::UEngine*, RC::Unreal::FWorldContext&, RC::Unreal::FURL,
                                             RC::Unreal::UPendingNetGame*, RC::Unreal::FString&) {
             if (LocalSplitScreenMod* mod = g_instance.load(std::memory_order_acquire))
             {
-                mod->LeaveBeforeWorldChange(L"a map is loading");
+                mod->LeaveBeforeWorldChange(L"a map is loading", true);
             }
             return std::pair<bool, bool>{false, false};
         });
-        // The same before a retry, reload or load leaves the field inside this world (no map load).
+        // The same for the seats before a retry, reload or load leaves the field inside this world (no map load);
+        // the mirror views stay in through it.
         if (!lss::player_two::field_exit::Install(
                 *image,
-                [](void* self) { static_cast<LocalSplitScreenMod*>(self)->LeaveBeforeWorldChange(L"the game leaves the field"); },
+                [](void* self) {
+                    auto* mod = static_cast<LocalSplitScreenMod*>(self);
+                    mod->LeaveBeforeWorldChange(L"the game leaves the field", false);
+                },
                 this))
         {
             Log(L"a retry, reload or load is caught only by the engine tick's check of the field running byte");
@@ -388,13 +393,23 @@ private:
         return true;
     }
 
-    /// Player 2 leaves before the world changes under it (a map load, or the game leaving the field
-    /// for a retry, reload or load); the session joins again once the new field is ready.
-    void LeaveBeforeWorldChange(const wchar_t* why) noexcept
+    /// The further players leave before the world changes under them (a map load, or the game leaving the field
+    /// for a retry, reload or load); the session joins again once the new field is ready. The mirror views leave
+    /// only for a map load (`mapLoad`): their controllers are this world's, and a new map would spawn them again
+    /// outside a join. Through a field exit inside the world they stay, so the loading screen is drawn in every
+    /// column (views/mirror_player.h; the field's re-entry leaves a controller without a member alone,
+    /// research/RE-mirror-loads.md).
+    void LeaveBeforeWorldChange(const wchar_t* why, bool mapLoad) noexcept
     {
-        // The mirror views first, with or without a further player: their controllers are this world's, and a map load
-        // would spawn them again outside a join. They come back once a join could run.
-        lss::modules::ClearMirrorsForWorldChange(why);
+        if (mapLoad)
+        {
+            lss::modules::ClearMirrorsForMapLoad(why);
+        }
+        else if (const int mirrors = lss::views::mirror_player::Count(); mirrors > 0)
+        {
+            Log(L"{}: {} mirror view(s) stay in through the load (the loading screen is drawn in every column)", why,
+                mirrors);
+        }
         if (!session_->AnyIn())
         {
             return;
@@ -484,10 +499,9 @@ private:
             case lss::players::PlayerIntent::None: break;
         }
         lss::player_two::field_exit::Watch();
-        if ((session_->AnyIn() || lss::views::mirror_player::Count() > 0) &&
-            lss::player_two::field_exit::FieldLeft())
+        if (session_->AnyIn() && lss::player_two::field_exit::FieldLeft())
         {
-            LeaveBeforeWorldChange(L"the field stopped running (a field exit the redirected entry did not see)");
+            LeaveBeforeWorldChange(L"the field stopped running (a field exit the redirected entry did not see)", false);
         }
         lss::dev::TickBeforeSession();
         // The buggy and the bronco (player_two/rides/shared_ride.h): player 2 stands aside, the game's merge reaches
@@ -503,12 +517,7 @@ private:
         lss::player_two::climb_context::Tick();  // this frame's input copies for the climbs on the anim worker (W5)
         session_->Tick();
         // The columns right after the session: the mirror views toward them, the window span to them.
-        bool rejoining = false;
-        for (int seat = 1; seat <= lss::players::kSeatsBuilt; ++seat)
-        {
-            rejoining = rejoining || session_->RejoinPending(seat);
-        }
-        const lss::modules::Columns columns = lss::modules::TickColumns(rejoining);
+        const lss::modules::Columns columns = lss::modules::TickColumns();
         columnsListed_                      = columns.map.count;
         lss::dev::TickAfterSession();
         // Where each column's view comes from this tick (views/column_source.h decides; this is the one place that

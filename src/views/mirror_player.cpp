@@ -23,7 +23,6 @@ using players::unreal::UObject;
 
 constexpr std::uint32_t kStatusTicks = 300;
 constexpr std::uint32_t kRetryTicks  = 30;  // a refused add or removal tried again twice a second at 60
-constexpr const wchar_t* kNoJoin     = L"no join could run now";
 
 /// One mirror: its list record (the controller id is kFirstMirrorId + its slot) and what it does while in.
 struct Mirror
@@ -142,8 +141,8 @@ void FollowList() noexcept
         if (!m.list->StillListed())
         {
             ++g_dropped;
-            platform::Log(L"mirror view: the engine dropped the mirror with controller id {} by itself (added again once "
-                          L"a join could run, while its column is held)",
+            platform::Log(L"mirror view: the engine dropped the mirror with controller id {} by itself (added again on "
+                          L"a later tick while its column is held)",
                           m.list->Seat());
             m.controller = nullptr;
             m.reaims     = 0;
@@ -160,6 +159,25 @@ void FollowList() noexcept
     }
 }
 
+/// Why no mirror can be created for `one` (player 1 as the list gives it) now, or null. One literal per reason: the
+/// waiting log compares them by address.
+const wchar_t* WhyNotAddable(const players::LocalPlayers::PlayerOne& one) noexcept
+{
+    if (one.controller == nullptr)
+    {
+        return L"the engine's list has no room, player 1 has no controller, or the id is a seat's";
+    }
+    if (!player_two::own_controller::Ready())
+    {
+        return L"player 1's camera names are not set yet (its camera manager has not run)";
+    }
+    if (!player_two::own_controller::UsesNativeClasses(one.controller))
+    {
+        return L"player 1's controller is not the End class";
+    }
+    return nullptr;
+}
+
 /// One mirror into the next column: the lowest free id, through the join scope, aimed at player 1's view target.
 void Add() noexcept
 {
@@ -168,12 +186,9 @@ void Add() noexcept
     {
         return;
     }
-    Mirror&         m   = *free;
-    const auto      one = m.list->FirstPlayer(false);
-    const wchar_t*  why = one.controller == nullptr                                   ? L"the engine's list has no room, or player 1 has no controller"
-                          : !player_two::own_controller::Ready()                      ? L"player 1's camera manager is not ready"
-                          : !player_two::own_controller::UsesNativeClasses(one.controller) ? L"player 1's controller is not the End class"
-                                                                                       : nullptr;
+    Mirror&        m   = *free;
+    const auto     one = m.list->FirstPlayer(false);
+    const wchar_t* why = WhyNotAddable(one);
     if (why != nullptr)
     {
         if (g_waiting != why)
@@ -259,7 +274,7 @@ void Install(const platform::GameImage& image) noexcept
                   players::kFirstMirrorId, players::kFirstMirrorId + columns::kMirrorsBuilt - 1);
 }
 
-void Tick(int wanted, bool (*ready)() noexcept) noexcept
+void Tick(int wanted, const wchar_t* (*hold)() noexcept) noexcept
 {
     if (!g_mirrors[0].list)
     {
@@ -279,19 +294,20 @@ void Tick(int wanted, bool (*ready)() noexcept) noexcept
     }
     if (Count() < g_wanted && g_ticks >= g_retryAt && !g_refused)
     {
-        if (ready != nullptr && ready())
+        const wchar_t* why = hold == nullptr ? nullptr : hold();
+        if (why == nullptr)
         {
             Add();
         }
-        else if (g_waiting != kNoJoin)
+        else if (g_waiting != why)
         {
-            g_waiting = kNoJoin;
-            platform::LogDebug(L"mirror view: waiting to fill a column: no join could run now (a load, a menu, a scene)");
+            g_waiting = why;
+            platform::LogDebug(L"mirror view: waiting to fill a column: {}", why);
         }
     }
-    else if (Count() >= g_wanted)
+    else if (Count() >= g_wanted || g_refused)
     {
-        g_waiting = nullptr;
+        g_waiting = nullptr;  // nothing waits: the columns are filled, or no add is made again this session
     }
     void* playerOne = Count() == 0 ? nullptr : PlayerOneController();
     for (Mirror& m : g_mirrors)

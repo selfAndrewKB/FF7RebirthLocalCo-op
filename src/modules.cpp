@@ -476,27 +476,29 @@ namespace {
 
 // Game thread: the console's `view-columns` (0: none), the columns held for the checks on one monitor.
 int  g_viewColumns = 0;
-bool g_rejoining   = false;  // a seat waits to rejoin after a world change (TickColumns)
-int  g_lastWanted  = 1;      // the columns the last columns' tick wanted
+int  g_lastWanted  = 1;  // the columns the last columns' tick wanted
 
-/// What a join needs, as the scripts' readiness: the field running (the entry steps done), the game's battle system
-/// and option data built, player 1's camera manager ready for a join; and nothing over the field (a menu, a scene,
-/// the title: its scene is a field with a one-member party, which the first three tests accept; a run of 2026-10-21
-/// ran every script at the title that way). The engine refuses a join from the game's Main Menu (CreatePlayer returns
-/// without a player; seen 2026-10-22, the menu up after the load). Here because it reads player 2's modules and the
-/// views both.
+#if LSS_DEV
+/// The `field.ready` reading, the scripts' readiness: the field running (the entry steps done), the game's battle
+/// system and option data built, player 1's camera manager ready for a join; and nothing over the field (a menu, a
+/// scene, the title: its scene is a field with a one-member party, which the first three tests accept; a run of
+/// 2026-10-21 ran every script at the title that way). Here because it reads player 2's modules and the views both.
 bool FieldReady() noexcept
 {
     return player_two::field_exit::FieldReady() && player_two::party_member::GameReady() &&
            player_two::own_controller::Ready() &&
            views::ReasonOf(views::ReadScreenSignals()) == views::WholeScreenReason::None;
 }
+#endif
 
-/// A mirror view may be added: the field ready, and no seat waiting to rejoin (its join would take the mirrors out
-/// again a few seconds later: three creates and two removals and the columns reshuffled after every load).
-bool MirrorReady() noexcept
+/// Why a mirror view may not be added now, or null. A mirror needs no member, no field and nothing clear of the
+/// screen (the title, a loading screen and a movie are exactly where it is wanted on the row); player 1's controller
+/// and camera manager are checked by the add itself (views/mirror_player.cpp). What holds it is the engine's own
+/// refusal (views::LocalPlayerRefused: the pause-family menu), so the add waits for that state to pass instead of
+/// failing twice a second.
+const wchar_t* MirrorHold() noexcept
 {
-    return !g_rejoining && FieldReady();
+    return views::LocalPlayerRefused();
 }
 
 /// The engine's local player list as columns (views/columns.h): each listed player's controller id in list order.
@@ -514,16 +516,15 @@ views::columns::Map ListedColumns() noexcept
 
 }  // namespace
 
-Columns TickColumns(bool rejoining) noexcept
+Columns TickColumns() noexcept
 {
-    g_rejoining = rejoining;
     Columns columns;
     const int held    = std::max(views::window_span::HeldColumns(), g_viewColumns);
     const int players = ListedColumns().PlayersListed();
     columns.playersIn = std::max(players, 1);
     columns.held      = held >= 2;
     columns.wanted    = views::columns::Wanted(columns.playersIn, held);
-    views::mirror_player::Tick(columns.wanted - columns.playersIn, &MirrorReady);
+    views::mirror_player::Tick(columns.wanted - columns.playersIn, &MirrorHold);
     columns.map   = ListedColumns();  // with this tick's mirror added or removed
     g_lastColumns = columns.map;
     g_lastWanted  = columns.wanted;
@@ -531,11 +532,11 @@ Columns TickColumns(bool rejoining) noexcept
     return columns;
 }
 
-void ClearMirrorsForWorldChange(const wchar_t* why) noexcept
+void ClearMirrorsForMapLoad(const wchar_t* why) noexcept
 {
     if (!views::mirror_player::Clear(why))
     {
-        platform::LogWarning(L"{}: a mirror view could not be removed; a map load would spawn its controller again "
+        platform::LogWarning(L"{}: a mirror view could not be removed; the map load would spawn its controller again "
                              L"outside a join (its camera manager's fixed-name spawns are expected to collide)",
                              why);
     }

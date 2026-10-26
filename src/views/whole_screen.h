@@ -67,4 +67,14 @@ ScreenSignals ReadScreenSignals() noexcept;
 /// False if not installed or the getter failed.
 bool GameStatePresent() noexcept;
 
+/// Game thread: why the engine would refuse a new local player now, or null. One case is known: while the
+/// pause-family menu owns the screen (EndGameState 8) CreatePlayer returned no player (seen 2026-10-22 for a seat's
+/// join). The creation chain is stock engine code that reads no game state (research/RE-mirror-anytime.md §2), so
+/// the state is the observed gate, not the reader; the likely cause is the game instance's world under the menu,
+/// which has no game mode [ASSUMPTION, §4 lists the log that would settle it]. The same gate for a seat's join and
+/// a mirror view's add, so neither tries a create the engine refuses (a seat's try would also take the mirrors out
+/// first). Null when the state is unreadable: the engine's own answer then decides. The reason is one literal,
+/// compared by address by its callers.
+const wchar_t* LocalPlayerRefused() noexcept;
+
 }  // namespace lss::views

@@ -80,13 +80,15 @@ struct Columns
 };
 
 /// Game thread, once per engine tick right after the session's: the columns wanted (the players listed, or the ones
-/// held), the mirror views toward them (views/mirror_player.h; none added while `rejoining`: a seat waits to rejoin
-/// after a world change), the window span to them (views/window_span.h).
-Columns TickColumns(bool rejoining) noexcept;
+/// held), the mirror views toward them (views/mirror_player.h: added whenever player 1's controller and camera
+/// manager are ready, through loading screens and the seats' rejoins alike, held only while the engine would refuse
+/// a local player, views::LocalPlayerRefused), the window span to them (views/window_span.h).
+Columns TickColumns() noexcept;
 
-/// Before the world changes (a map load, a retry, a reload): the mirror views out with the seats (a map load would
-/// spawn their controllers again outside a join); they come back once a join could run. `why` is logged.
-void ClearMirrorsForWorldChange(const wchar_t* why) noexcept;
+/// Before a map load (never a field exit inside the world: the mirrors stay through those, so the loading screen is
+/// drawn in every column): the mirror views out with the seats, since the new map would spawn their controllers
+/// again outside a join; they come back on the new map's first ticks. `why` is logged.
+void ClearMirrorsForMapLoad(const wchar_t* why) noexcept;
 
 /// Game thread, once per engine tick, first: the tick's identities, then each module's work that runs before the
 /// keys and the session's tick (status lines, lists, the listeners, the deferred placements' polls).

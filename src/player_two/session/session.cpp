@@ -36,6 +36,7 @@
 #include "player_two/session/session_rules.h"
 #include "player_two/session/tag_counts.h"
 #include "players/seats.h"
+#include "views/whole_screen.h"
 
 #if LSS_DEV
 #include "platform/command_registry.h"
@@ -639,7 +640,9 @@ const wchar_t* Seat::NotReadyToJoin() const noexcept
     {
         return L"the field is still being entered (a join now would be undone by it)";
     }
-    return nullptr;
+    // The engine's own refusal (the pause-family menu): tested here so the join neither counts a try nor takes the
+    // mirror views out before a create the engine returns nothing from.
+    return views::LocalPlayerRefused();
 }
 
 bool Seat::ReadyToJoinOutside() const noexcept
