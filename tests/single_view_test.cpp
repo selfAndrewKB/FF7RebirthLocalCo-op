@@ -3,7 +3,7 @@
 // The switch is a fake bool. The cases: nothing happens while the single view is not wanted; the mod sets the
 // switch and clears only its own; a switch found set is never cleared; a switch cleared by someone else is not
 // written again; failures reported once per request and retried when the request changes. Which moments want the
-// single view is views/column_picture.h's (tests/column_picture_test.cpp).
+// single view is views/column_source.h's (tests/column_source_test.cpp).
 
 #include "players/single_view.h"
 

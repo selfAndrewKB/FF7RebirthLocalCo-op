@@ -48,7 +48,7 @@ bool SecondImageOn() noexcept;
 void BeginFrame() noexcept;
 
 /// The seat's image renders this frame: `shown` (the seat's own view on screen: the split, not player 1's single view
-/// and not player 1's picture in the seat's column, views/column_picture.h), the names and the seat's buffers ready
+/// and not player 1's picture in the seat's column, views/column_source.h), the names and the seat's buffers ready
 /// (a wrong buffer kind refuses the images for good), the overlay with a window. `seat` is a built seat in the game.
 bool ImageReady(int seat, bool shown) noexcept;
 

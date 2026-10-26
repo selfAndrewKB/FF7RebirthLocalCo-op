@@ -210,7 +210,7 @@ add_library(LocalSplitScreen SHARED
     src/views/whole_screen.cpp
     src/views/screen_widgets.cpp
     src/views/whole_screen_reason.cpp
-    src/views/column_picture.cpp
+    src/views/column_source.cpp
 )
 
 # Includes are rooted at src/ so every #include names its module ("platform/log.h"). src/ue4ss_compat maps the
@@ -284,7 +284,7 @@ lss_test(split_screen_settings src/players/split_screen_settings.cpp src/players
 lss_test(monitor_row src/views/monitor_row.cpp)
 lss_test(single_view src/players/single_view.cpp)
 lss_test(whole_screen src/views/whole_screen_reason.cpp)
-lss_test(column_picture src/views/column_picture.cpp)
+lss_test(column_source src/views/column_source.cpp)
 lss_test(stream_view_math src/views/stream_view_math.cpp)
 lss_test(pool_bits src/platform/pool_bits.cpp)
 lss_test(strand_watch src/player_two/world/strand_watch.cpp)

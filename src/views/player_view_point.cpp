@@ -51,7 +51,7 @@ std::atomic<const void*>   g_playerOne{nullptr};  // set while a further player 
 std::array<std::atomic<const void*>, kSeats> g_seat{};          // each further player's ULocalPlayer (index 0 unused)
 std::array<std::atomic<bool>, kSeats>        g_ownCamera{};     // the further player's view shows their own camera
 std::array<std::atomic<bool>, kSeats>        g_describePending{};
-std::array<std::atomic<bool>, kSeats>        g_onPlayerOne{};     // the seat's view shows player 1's camera (column_picture)
+std::array<std::atomic<bool>, kSeats>        g_onPlayerOne{};     // the seat's column on player 1's camera (column_source)
 std::atomic<bool>          g_fillOn{true};
 std::atomic<bool>          g_splitShown{false};  // a further player in and their own view on screen
 std::atomic<bool>          g_viewsSplit{false};  // more than one view on screen (the HUD per column)
@@ -309,7 +309,7 @@ void GetViewPointShaped(void* localPlayer, std::byte* viewInfo, std::int32_t ste
                            !g_onPlayerOne[static_cast<std::size_t>(seat)].load(std::memory_order_relaxed);
 
     // Until a further player's own camera is chosen, and while their column shows player 1's picture
-    // (views/column_picture.h), the further player's view shows player 1's camera.
+    // (views/column_source.h), the further player's view shows player 1's camera.
     void* source = further && !ownCamera && playerOne != nullptr ? const_cast<void*>(playerOne) : localPlayer;
     g_engineGetViewPoint(source, viewInfo, stereoPass);
     if (seat < 0)

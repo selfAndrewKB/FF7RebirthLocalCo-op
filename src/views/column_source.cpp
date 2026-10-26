@@ -1,4 +1,4 @@
-#include "views/column_picture.h"
+#include "views/column_source.h"
 
 #if LSS_DEV
 #include "platform/command_registry.h"
@@ -6,7 +6,7 @@
 
 #include <format>
 
-namespace lss::views::column_picture {
+namespace lss::views::column_source {
 
 const wchar_t* NameOf(Why why) noexcept
 {
@@ -22,27 +22,28 @@ const wchar_t* NameOf(Why why) noexcept
     return L"?";
 }
 
-std::wstring Describe(int seat, const SeatPicture& before, const SeatPicture& after, bool single)
+std::wstring Describe(int seat, const SeatSource& before, const SeatSource& after)
 {
     if (before == after)
     {
         return {};
     }
     const wchar_t* name = players::SeatName(seat);
-    if (after.picture != Picture::PlayerOne)
+    if (after.source == Source::Self)
     {
         return std::format(L"{}'s view is their own again", name);
     }
+    const bool screen = after.source == Source::Screen;  // no column of theirs: the engine's single view
     if (after.why == Why::Handed)
     {
-        return single ? std::format(L"{} waits for a party member (the game has it): player 1's view alone until {} "
+        return screen ? std::format(L"{} waits for a party member (the game has it): player 1's view alone until {} "
                                     L"takes one",
                                     name, name)
                       : std::format(L"{}'s view shows player 1's picture while the game has their party member "
                                     L"(their column stays; the others play on)",
                                     name);
     }
-    return single ? std::format(L"{}'s view gives way to player 1's: {}", name, NameOf(after.why))
+    return screen ? std::format(L"{}'s view gives way to player 1's: {}", name, NameOf(after.why))
                   : std::format(L"{}'s view shows player 1's camera and HUD: {}", name, NameOf(after.why));
 }
 
@@ -82,4 +83,4 @@ void RegisterCommands(Override& choice)
 
 #endif
 
-}  // namespace lss::views::column_picture
+}  // namespace lss::views::column_source

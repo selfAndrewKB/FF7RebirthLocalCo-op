@@ -143,8 +143,10 @@ void RenderRootOverlay(void* application) noexcept
         FollowHudPlacementBeforeRender();  // after the rows' layout, which can set a row's point
         // The further seats' passes first, highest seat first, each whose image is on (hud/passes/second_image.h
         // holds the slot and renders; the levers and the per-pass opacities around each render are the modules' own
-        // calls, in FurtherPass's order). A seat whose view shows player 1's picture (views/column_picture.h: waiting
-        // for a party member while another plays) gets no pass: its view then draws player 1's HUD, as a mirror's.
+        // calls, in FurtherPass's order). A seat whose column shows player 1's camera (views/column_source.h
+        // Source::PlayerOne: a held column while the game takes the whole screen, a shared ride, every further player
+        // waiting or single-view on; or a lone waiting player) gets no pass: its view then draws player 1's HUD, as a
+        // mirror's.
         overlay_pass::Set(overlay_pass::kNone);
         BeginFrame();
         minimap::BeginOverlayRender();

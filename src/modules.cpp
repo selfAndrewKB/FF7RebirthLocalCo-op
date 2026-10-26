@@ -363,10 +363,10 @@ static_assert(Ordered<&players::widget_opacity::Install, &hud::prompt_rows::Inst
               "the opacity setter before the HUD modules that read it");
 
 // Game thread: the columns as the last columns' tick read them (TickColumns), and the column the sound's second
-// listener follows (TickAfterSession: the first further player's column showing their own view, views/column_picture.h,
-// or -1), for the calls before them. One second listener for now: with three players in, sounds near the second
-// further player are heard from the nearer of player 1's and the first's (a listener per seat is the plan's follow-up,
-// plan/seats.md step 6).
+// listener follows (TickAfterSession: the first further column not on player 1's camera, views/column_source.h
+// ListenerColumn, or -1), for the calls before them. One second listener for now: with three players in, sounds near
+// the second further player are heard from the nearer of player 1's and the first's (a listener per seat is the plan's
+// follow-up, plan/seats.md step 6).
 views::columns::Map g_lastColumns;
 int                 g_lastOwnColumn = -1;
 
@@ -407,8 +407,9 @@ void TickBeforeSession() noexcept
     player_two::equal_targeting::Tick();      // both players' types for the Condition selects (no leader scope held)
     player_two::target_coin::Tick();          // the blueprint natives' swaps once reflection is up; the summary
     player_two::ffb_manager_two::Tick();      // each seat's component on its own manager, after its BeginPlay
-    // the controller listener slot; the second listener from the first further player's own column (the last tick's
-    // picture), off while no column is a further player's own (as under the engine's single view); the summary (Debug)
+    // the controller listener slot; the second listener on the column Shown::ListenerColumn names (the last tick's
+    // sources: the first further column not on player 1's camera, Self or the single view's Screen), off (-1) while
+    // every further column is on player 1's camera; the summary (Debug)
     player_two::audio_listener_two::Tick(g_lastOwnColumn);
     player_two::leave_watch::Tick();          // the last leave's controller, followed until it is freed (logged)
     player_two::vending::Tick();              // a press that opened no shop; player 2 leaving with their shop up
@@ -732,7 +733,7 @@ void RegisterOwnCommands(player_two::Session& session)
 }  // namespace
 
 void RegisterCommands(player_two::Session& session, players::SplitLayout& layout,
-                      views::column_picture::Override& choice) noexcept
+                      views::column_source::Override& choice) noexcept
 {
     try
     {
@@ -741,7 +742,7 @@ void RegisterCommands(player_two::Session& session, players::SplitLayout& layout
         platform::frame_watch::RegisterCommands();
         players::console::RegisterCommands([&session] { return session.AnyIn(); });
         players::RegisterCommands(layout);
-        views::column_picture::RegisterCommands(choice);
+        views::column_source::RegisterCommands(choice);
         player_two::RegisterCommands(session);
         player_two::pad_sticks::RegisterCommands();
         player_two::scope_leaks::RegisterCommands();

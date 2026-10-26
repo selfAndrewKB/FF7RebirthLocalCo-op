@@ -14,7 +14,7 @@
 //   - a further player's view shows their own camera from the join; Ctrl+F6 switches player 2's to player 1's (for
 //     testing) (and back). Starting on player 1's means a camera that is not set up yet (it sits at the world origin
 //     until it has a character) is never on screen by default.
-//   - a further player's view shows player 1's camera instead while views/column_picture.h says so (the game takes
+//   - a further player's view shows player 1's camera instead while views/column_source.h says so (the game takes
 //     the whole screen or a shared ride while columns are held: a held column is never black; or that player alone
 //     waits for a party member while another plays), as a mirror view does, and draws player 1's HUD (no further
 //     pass runs for them then).
@@ -50,7 +50,7 @@ struct SplitFrame
     const void* playerOne = nullptr;  // player 1's ULocalPlayer
     std::array<const void*, players::kMaxPlayers>   seats{};  // each seat's ULocalPlayer, null while out (index 0 unused)
     std::array<std::uint32_t, players::kMaxPlayers> joins{};  // each seat's join count: a new player at an old address
-    bool splitShown  = false;  // a further player in and their own view on screen (views/column_picture.h)
+    bool splitShown  = false;  // a further player in and their own view on screen (views/column_source.h)
     std::array<bool, players::kMaxPlayers> onPlayerOne{};  // each seat's view shows player 1's camera (index 0 unused)
     bool viewsSplit  = false;  // more than one view on screen: the HUD is laid out for player 1's column
     int  columns     = 1;      // local players listed, one column each (views/columns.h)
@@ -71,7 +71,7 @@ void Follow(const SplitFrame& frame) noexcept;
 bool ToggleOwnCamera() noexcept;
 
 /// True while the further players' views are set to show their own cameras (the first one in's setting; player 1's
-/// still shows in a view views/column_picture.h puts on player 1's picture).
+/// still shows in a view views/column_source.h puts on player 1's picture).
 bool ShowsOwnCamera() noexcept;
 
 /// Game thread: `seat`'s camera (0 player 1's) as it was last drawn while a further player is in (empty before
@@ -85,7 +85,7 @@ float HalfAspect() noexcept;
 /// reads it here for the further players' HUD passes). Any thread.
 bool SplitShown() noexcept;
 
-/// Whether `seat`'s view shows player 1's camera (views/column_picture.h), as last followed: their HUD pass is skipped
+/// Whether `seat`'s view shows player 1's camera (views/column_source.h), as last followed: their HUD pass is skipped
 /// then, so their view draws player 1's HUD as a mirror view does (hud/passes/second_image.h). False for player 1 and
 /// for a seat out. Any thread.
 bool OnPlayerOne(int seat) noexcept;
