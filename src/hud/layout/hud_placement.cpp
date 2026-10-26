@@ -50,10 +50,12 @@ struct Placement
 // The field-action icons ("Call Chocobo") are not here: the game places them at points it computes
 // from each icon's own base, so they keep their corner through that base (hud/field/action_icon_base.h).
 constexpr Placement kPlacements[] = {
-    {L"Compass_C", 0.5f, 0.0f},     // top centre
-    {L"Command_C", 0.0f, 1.0f},     // bottom left: command menu and its prompt
-    {L"BasicGuide_C", 0.0f, 1.0f},  // bottom left: button prompts
-    {L"Status_C", 1.0f, 1.0f},      // bottom right: the Members panel
+    {L"Compass_C", 0.5f, 0.0f},           // top centre
+    {L"EventProgress_00_C", 0.0f, 0.0f},  // top left: the World Intel panel (its objective list and prompt)
+    {L"NaviMap_End2_C", 1.0f, 0.0f},      // top right: the minimap
+    {L"Command_C", 0.0f, 1.0f},           // bottom left: command menu and its prompt
+    {L"BasicGuide_C", 0.0f, 1.0f},        // bottom left: button prompts
+    {L"Status_C", 1.0f, 1.0f},            // bottom right: the Members panel
 };
 constexpr std::uint32_t kScanTicks = 30;
 

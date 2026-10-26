@@ -2,7 +2,9 @@
 
 // Where the HUD's main widgets sit in a split half: as in single player, each in its corner or edge
 // of the half (the user's reference, 2026-09-25): compass top centre, command menu and button
-// prompts bottom left, the Members panel bottom right.
+// prompts bottom left, the Members panel bottom right; and (the user, 2026-10-26) the World Intel
+// panel top left and the minimap top right, which the band layout alone kept at the corners of the
+// centred 16:9 band (plan/topics/hud.md Open, the regression's pictures).
 //
 // Each of these UUserWidgets is designed for a 1920x1080 frame (RE-p2-hud.md pass 6 and the slot
 // dumps): the command menu and prompts keep a centred 1920x1080 box, the compass anchors its parts

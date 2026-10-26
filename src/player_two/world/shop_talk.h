@@ -19,8 +19,12 @@
 //     drives it, the leader-type scope for its camera preset).
 //   - The shop's AI event (ShopMenu_SendLeaderTargetAIEvent5, the NPC reacting to the leader) runs with player 2's
 //     member as the leader (LeaderScope) for player 2's shop, as it does with the leader in single player.
-//   - Logging only: during a pending press, the game's LEADER_ resolver (ResolveNamedPoint_LEADER_BATTLELEADER) is
-//     counted with its callers, to settle who the greeting looks at (§3 row 5) before any change there.
+//   - The greeting (§3 row 5): the NPC's look-at and the member's turn to face it are a PlannerEvent line whose
+//     `LEADER_` the game resolves through ResolveNamedPoint_LEADER_BATTLELEADER, twice a frame from the press until
+//     the shop is up (the 2026-10-25 log: 821 reads in two visits, all player 1's character while player 3 talked).
+//     The resolver runs with the pressing seat's member as the leader (LeaderScope) while that seat's press is
+//     pending and while its shop is up, so the shopkeeper looks at, and is faced by, the player who talks to it.
+//     Logged once per window at Debug (the first read, with its caller), each read at Trace, the count at its end.
 // Game thread.
 //
 // Per seat (players/seats.h): "player 2" above is each seat. A press is the seat's whose pass is running (its pending

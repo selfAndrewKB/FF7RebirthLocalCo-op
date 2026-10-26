@@ -46,12 +46,11 @@ constexpr platform::FunctionFact kRequest{L"StateTrigger_Request", 0x140F7AA58, 
 constexpr std::uint8_t kAiEventBytes[] = {0x48, 0x89, 0x54, 0x24, 0x10, 0x48, 0x89, 0x4C, 0x24, 0x08, 0x55,
                                           0x53, 0x56, 0x57, 0x41, 0x56, 0x48, 0x8D, 0x6C, 0x24, 0xC9};
 constexpr platform::FunctionFact kAiEvent{L"ShopMenu_SendLeaderTargetAIEvent5", 0x14353E9C0, kAiEventBytes};
-#if LSS_DEV
-// The LEADER_ resolver, redirected to log (dev tools): who the greeting looks at while player 2's press is pending.
+// The LEADER_ resolver (§3 row 5; 'LEADER_' = the party manager's leader at +0x148), redirected to run with the talking
+// seat's member as the leader: the greeting's look-at, twice a frame from the press until the shop is up.
 constexpr std::uint8_t kLeaderNameBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x48, 0x89, 0x74, 0x24, 0x20,
                                              0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57};
 constexpr platform::FunctionFact kLeaderName{L"ResolveNamedPoint_LEADER_BATTLELEADER", 0x1408A95B8, kLeaderNameBytes};
-#endif
 constexpr std::uint8_t kFindObjectBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x54,
                                              0x24, 0x10, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
 constexpr platform::FunctionFact kFindObject{L"GS_FindObjectByKeyAndAttribute", 0x14087AD50, kFindObjectBytes};
@@ -127,13 +126,14 @@ bool                    g_admitting  = false;  // the walk's functions were foun
 std::unordered_map<std::uint64_t, Known> g_known;  // by point key (game thread)
 std::vector<std::uint64_t>               g_queue;  // reserved: Admits runs under the field manager's lock
 
-// By seat (players/seats.h; index 0, player 1's, unused): the seat's pending press (the LEADER_ log, and its end noted
-// in Tick).
-std::uint64_t g_pressKey[players::kMaxPlayers] = {};
-#if LSS_DEV
+// By seat (players/seats.h; index 0, player 1's, unused): the seat's pending press (its end noted in Tick), and the
+// greeting's LEADER_ reads answered with the seat's member: while the press is pending and while the seat's shop is
+// up (each window's count is logged at its end).
+std::uint64_t           g_pressKey[players::kMaxPlayers] = {};
 platform::EntryRedirect g_leaderName;
-unsigned                g_leaderCalls[players::kMaxPlayers] = {};
-#endif
+unsigned                g_leaderCalls[players::kMaxPlayers] = {};  // while the press was pending
+unsigned                g_leaderShop[players::kMaxPlayers]  = {};  // while the seat's shop was up
+int                     g_shopSeat                          = -1;  // vending::ShopSeat() as last seen in Tick
 
 bool IsAdmitted(Verdict verdict) noexcept
 {
@@ -348,9 +348,7 @@ std::uint64_t Request(std::uint64_t trigger, std::uint64_t sender, float delay, 
             {
                 vending::PressedShopkeeper(seat, sender);
                 g_pressKey[seat]    = sender;
-#if LSS_DEV
                 g_leaderCalls[seat] = 0;
-#endif
             }
             platform::Log(L"shop talk: {} pressed {} (trigger {}): {}", who, players::unreal::NameText(sender),
                           players::unreal::NameText(trigger),
@@ -393,30 +391,70 @@ std::uint64_t AiEvent(std::uint64_t a, std::uint64_t target, std::uint64_t c, st
     return result;
 }
 
-#if LSS_DEV
-/// Logging only: the game's LEADER_ resolver while player 2's shopkeeper press is pending (who the greeting looks at).
-std::uint64_t LeaderName(std::uint64_t a, std::uint64_t b, std::uint64_t c, std::uint64_t d) noexcept
+/// The seat whose member answers the greeting's LEADER_ now: the one whose shopkeeper press is pending (the greeting
+/// plays between the press and the shop), else the one whose shop is up; -1 for player 1's own talks and shops. A
+/// press is admitted only while no shop is up and none is pending (vending::ShopIdle), so the two do not overlap.
+struct Answering
 {
-    const auto returnAddress = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
-    const auto result        = reinterpret_cast<Fn4>(g_leaderName.Original())(a, b, c, d);
-    if (!generation::OnGameThread())
-    {
-        return result;
-    }
+    int  seat    = -1;
+    bool pending = false;
+};
+
+Answering AnsweringSeat() noexcept
+{
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
         if (g_pressKey[seat] != 0 && vending::ShopkeeperPending(seat))
         {
-            ++g_leaderCalls[seat];
-            platform::LogDebug(L"shop talk: the game resolved a named point (LEADER_ or BATTLE_LEADER_, result {}) while "
-                               L"{}'s press of {} is pending, from 0x{:X}; the leader is player 1's character",
-                               result & 0xFF, players::SeatName(seat), players::unreal::NameText(g_pressKey[seat]),
-                               g_image ? g_image->ResearchAddress(returnAddress) : returnAddress);
+            return {seat, true};
         }
+    }
+    return {vending::ShopSeat(), false};
+}
+
+/// The game's LEADER_ resolver (the greeting's look-at, twice a frame from the press to the shop): run with the
+/// talking seat's member as the leader, so the NPC looks at the player who pressed and their member turns to it.
+std::uint64_t LeaderName(std::uint64_t a, std::uint64_t b, std::uint64_t c, std::uint64_t d) noexcept
+{
+    const auto original = reinterpret_cast<Fn4>(g_leaderName.Original());
+    if (!generation::OnGameThread())
+    {
+        return original(a, b, c, d);
+    }
+    const Answering who = AnsweringSeat();
+    if (who.seat <= 0 || who.seat > players::kSeatsBuilt)
+    {
+        return original(a, b, c, d);
+    }
+    const auto returnAddress = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
+    const leader_scope::LeaderScope scope(leader_scope::WeakOf(generation::MemberOf(who.seat)));
+    const auto result = original(a, b, c, d);
+    unsigned&  count  = who.pending ? g_leaderCalls[who.seat] : g_leaderShop[who.seat];
+    try
+    {
+        const wchar_t* const leader =
+            scope.Held() ? L"'s member" : L"'s member NOT held (no member: player 1's character)";
+        const auto from = g_image ? g_image->ResearchAddress(returnAddress) : returnAddress;
+        if (count++ == 0)
+        {
+            const std::wstring what =
+                who.pending ? players::unreal::NameText(g_pressKey[who.seat]) : std::wstring(L"the shop");
+            platform::LogDebug(L"shop talk: the greeting's LEADER_ resolved (result {}) with {}{} as the leader while "
+                               L"{} ({}), from 0x{:X}",
+                               result & 0xFF, players::SeatName(who.seat), leader,
+                               who.pending ? L"their press is pending" : L"their shop is up", what, from);
+        }
+        else if (platform::Enabled(platform::Level::Trace))
+        {
+            platform::LogTrace(L"shop talk: LEADER_ resolved (result {}) with {}{}, from 0x{:X}", result & 0xFF,
+                               players::SeatName(who.seat), leader, from);
+        }
+    }
+    catch (...)
+    {
     }
     return result;
 }
-#endif
 
 bool Place(const platform::GameImage& image, platform::EntryRedirect& redirect, const platform::FunctionFact& fact,
            std::uintptr_t replacement) noexcept
@@ -445,15 +483,11 @@ void Install(const platform::GameImage& image) noexcept
     const bool walk    = g_findObject != nullptr && g_stateRow != nullptr && g_actionRow != nullptr && g_gameRoot != nullptr;
     const bool presses = walk && Place(image, g_request, kRequest, reinterpret_cast<std::uintptr_t>(&Request));
     const bool events  = Place(image, g_aiEvent, kAiEvent, reinterpret_cast<std::uintptr_t>(&AiEvent));
-#if LSS_DEV
     const wchar_t* leaders = Place(image, g_leaderName, kLeaderName, reinterpret_cast<std::uintptr_t>(&LeaderName))
-                                 ? L"placed"
-                                 : L"NOT placed";
-#else
-    const wchar_t* leaders = L"off (dev tools)";
-#endif
+                                 ? L"answered with the talking player's member"
+                                 : L"NOT placed (the NPC looks at player 1's character)";
     g_admitting        = walk && presses;
-    platform::Log(L"shop talk: {} (the data walk {}{}, presses {}, the shop's AI event {}, the LEADER_ log {})",
+    platform::Log(L"shop talk: {} (the data walk {}{}, presses {}, the shop's AI event {}, the greeting's LEADER_ {})",
                   g_admitting ? L"ready (player 2 uses shopkeepers through the game's own field prompt and shop)"
                               : L"UNAVAILABLE for player 2 (a check failed; shopkeepers stay player 1's)",
                   walk ? L"found" : L"NOT found",
@@ -501,16 +535,30 @@ void Tick() noexcept
     {
         if (g_pressKey[seat] != 0 && !vending::ShopkeeperPending(seat))
         {
-#if LSS_DEV
             if (g_leaderCalls[seat] != 0)
             {
-                platform::LogDebug(L"shop talk: {} named-point resolution(s) while {}'s press of {} was pending",
+                platform::LogDebug(L"shop talk: the greeting's LEADER_ resolved {} time(s) with {}'s member while "
+                                   L"their press of {} was pending",
                                    g_leaderCalls[seat], players::SeatName(seat),
                                    players::unreal::NameText(g_pressKey[seat]));
             }
-#endif
-            g_pressKey[seat] = 0;
+            g_pressKey[seat]    = 0;
+            g_leaderCalls[seat] = 0;
         }
+    }
+    // A seat's shop closing ends its window: how often the greeting's read ran while the shop was up (none expected:
+    // the look-at ends with the greeting; a count here says it does not).
+    const int shopSeat = vending::ShopSeat();
+    if (shopSeat != g_shopSeat)
+    {
+        if (players::SeatBuilt(g_shopSeat) && g_leaderShop[g_shopSeat] != 0)
+        {
+            platform::LogDebug(L"shop talk: the greeting's LEADER_ resolved {} time(s) with {}'s member while their "
+                               L"shop was up",
+                               g_leaderShop[g_shopSeat], players::SeatName(g_shopSeat));
+            g_leaderShop[g_shopSeat] = 0;
+        }
+        g_shopSeat = shopSeat;
     }
     if (!generation::AnyActive())
     {
@@ -581,11 +629,9 @@ void Remove() noexcept
 {
     g_admitting   = false;
     bool restored = true;
-#if LSS_DEV
-    restored = g_leaderName.Restore() && restored;
-#endif
-    restored = g_aiEvent.Restore() && restored;
-    restored = g_request.Restore() && restored;
+    restored      = g_leaderName.Restore() && restored;
+    restored      = g_aiEvent.Restore() && restored;
+    restored      = g_request.Restore() && restored;
     if (!restored)
     {
         platform::Log(L"shop talk: an entry was changed after us; left in place (it passes through)");

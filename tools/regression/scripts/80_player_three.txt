@@ -1,15 +1,16 @@
-# Player 3 (plan/seats.md step 6): player 3 joins with player 2 in, takes the 3rd slot's member (Barret in the
-# regression save's party), gets the third column and its own HUD; player 2 leaves while player 3 stays (player 3
-# moves to the second column); player 3 leaves clean. Player 3 has no pad here: the console drives it.
+# Player 3 (plan/seats.md step 6): player 3 joins with player 2 in, takes the 3rd slot's member (whoever the save's
+# party holds there: the game continues the last save, so the user's play sets the party; Barret until 2026-10-26,
+# Aerith after the chocobo wrangle session), gets the third column and its own HUD; player 2 leaves while player 3
+# stays (player 3 moves to the second column); player 3 leaves clean. Player 3 has no pad here: the console drives it.
 # needs: control
 # expect: player 3 joined with its own controller
-# expect: player 3 took .*Barret.* after \d+ tick
+# expect: player 3 took PC\d+_\d+_\w+ after \d+ tick
 # expect: player 3's Field camera brought to player 1's settings: matches
 # expect: three columns: ThreePlayerSplitscreenLayout \d+ -> 2 until the leave
 # expect: HUD image: player 3's view draws player 3's HUD
 # expect-not: HUD image: player 3's view draws player [12]'s HUD
-# Player 1 refuses both further players' members (Tifa type 2 and Barret type 1 in the regression save's party):
-# expect: command rules: player 1 may not command member types 0x6 \(menu ordinals 0x[0-9a-f]+\)
+# Player 1 refuses both further players' members: the 2nd and 3rd party slots (menu ordinals 0x6), whatever their types:
+# expect: command rules: player 1 may not command member types 0x[0-9a-f]+ \(menu ordinals 0x6\)
 # expect: leave: player 2 left; \d+ leftover actor
 # With player 2 gone, player 3 keeps a split view of their own (two views, top and bottom in the regression's layout).
 # The view is a top/bottom half either way: 3840x1080 in UI-image pixels (the v0.95.0 runs under UE4SS e31aaaa6), or
