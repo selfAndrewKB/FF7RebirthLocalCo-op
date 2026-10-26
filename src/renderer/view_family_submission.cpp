@@ -103,6 +103,37 @@ void LogFamilyOnChange(const std::byte* viewFamily) noexcept
     }
 }
 
+// The movie texture each view carries (renderer/scene_view_family.h view::kCompositeTexture): logged on change,
+// per view, so a movie shows whether the mirror views get the same texture as player 1's (RE-movie-view.md §6
+// check 1). Seen 2026-10-26: null in every view through the title and the field in both builds; the black columns
+// on the row were empty columns (no mirror view can exist before the field), not this texture (§10).
+const void*  g_loggedTextures[kRectLoggedViews]{};
+std::int32_t g_loggedTextureViews = 0;  // how many views the last line covered (a view that comes back is logged again)
+
+void LogCompositeTexturesOnChange(const std::byte* viewFamily) noexcept
+{
+    const auto count = *reinterpret_cast<const std::int32_t*>(viewFamily + family::kViewsCount);
+    const auto views = Views(viewFamily);
+    bool       same  = count == g_loggedTextureViews;
+    const void* now[kRectLoggedViews]{};
+    for (std::int32_t k = 0; views != nullptr && k < (std::min)(count, kRectLoggedViews); ++k)
+    {
+        std::memcpy(&now[k], views[k] + view::kCompositeTexture, sizeof(now[k]));
+        same = same && now[k] == g_loggedTextures[k];
+    }
+    if (same)
+    {
+        return;
+    }
+    g_loggedTextureViews = count;
+    for (std::int32_t k = 0; views != nullptr && k < (std::min)(count, kRectLoggedViews); ++k)
+    {
+        g_loggedTextures[k] = now[k];
+        platform::LogDebug(L"  view {}: composite texture {} (the movie's; null outside a movie or the title)", k,
+                           now[k]);
+    }
+}
+
 // ---------------------------------------------------------------------------------------------
 // Frame time: what rendering each view as its own family costs
 // ---------------------------------------------------------------------------------------------
@@ -175,6 +206,7 @@ __declspec(noinline) void SubmitViewFamily(void* rendererModule, void* canvas, s
     }
 
     LogFamilyOnChange(viewFamily);
+    LogCompositeTexturesOnChange(viewFamily);
     g_familyInFrame = 0;
     if (!g_familySplit.load(std::memory_order_relaxed))
     {

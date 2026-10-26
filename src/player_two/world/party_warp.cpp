@@ -292,6 +292,9 @@ std::wstring AiText(const void* pawn, Subject subject) noexcept
     float          range   = 0.0f;
     Read(ai, facts::kAiPauseMask, pause);
     Read(current, facts::kFollowStateTeleportRange, range);
+    // Without the animation budget's bit, which flips every frame on a throttled mesh (facts::kAiPauseAnimationBudget):
+    // the strand probe compares this text, and that bit is no change in the character's state.
+    pause &= ~facts::kAiPauseAnimationBudget;
     try
     {
         const std::wstring head = std::format(L"AI {} (pause mask {:#x}), state {} type {}", ai, pause, current,

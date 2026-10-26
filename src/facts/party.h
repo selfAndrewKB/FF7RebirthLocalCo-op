@@ -133,6 +133,10 @@ inline constexpr std::uint32_t kBrainState    = 0x20;
 inline constexpr std::uint32_t kAiStateType   = 0x18;  // u8, EEndAIState
 inline constexpr std::uint8_t  kAiStateFollow = 7;     // EEndAIState FOLLOW, the party follow state
 inline constexpr std::uint32_t kAiPauseMask   = 0x460; // u32 (RE-p2-party-warp.md §1, the sampler table)
+/// Its bit for pause reason 13, the animation budget's: a mesh the budget throttles to every other frame is told
+/// "tick / don't tick" on alternate frames and this bit follows it (RE-ai-pause-bit.md); no AI decision reads it on
+/// a possessed member. The probes read the mask without it.
+inline constexpr std::uint32_t kAiPauseAnimationBudget = 0x2000;
 // The follow state's teleport (RE-p2-party-warp.md §1): the range it allows, and its forced request pending (set by
 // ForceTeleport, cleared by the commit).
 inline constexpr std::uint32_t kFollowStateTeleportRange = 0x344;  // float

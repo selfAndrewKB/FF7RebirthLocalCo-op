@@ -1,0 +1,15 @@
+{
+ "build": "1.005",
+ "research_build": "1.004",
+ "date": "2026-10-26",
+ "doc": "RE-damage-numbers-per-view.md",
+ "facts": [
+  {
+   "old": "0x146FAA370",
+   "new": "0x146DDD224",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "GFrameNumber (data, uint32; sole increment PostRenderAllViewports 0x1416E2020 / 0x141758540): S-DMGNUM section 5. The generated data range around FApp::DeltaTime (0x146FAA330 -> 0x146DDD200) would translate it to 0x146DDD240, an unrelated pointer; this entry wins over the range."
+  }
+ ]
+}

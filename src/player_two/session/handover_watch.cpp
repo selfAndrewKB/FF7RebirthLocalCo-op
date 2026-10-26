@@ -42,7 +42,7 @@ using Clock = std::chrono::steady_clock;
 
 // The AI controller's brain stack and state (RE-p2-member-handover.md §3; this build).
 constexpr std::uint32_t kAiDefaultState = 0x340;  // u8, EEndAIState
-constexpr std::uint32_t kAiPauseMask    = 0x460;  // u32
+// The pause mask: facts::kAiPauseMask, read without the animation budget's every-other-frame bit.
 constexpr std::uint32_t kAiBrains       = 0x478;  // 20 pointers; index 0 is the base brain
 constexpr int           kBrainSlots     = 20;
 constexpr std::uint32_t kAiActiveBrain  = 0x518;
@@ -320,7 +320,7 @@ Ai ReadAi(const void* character) noexcept
     ai.brainMode      = brain == nullptr ? kUnread : ReadField<std::uint8_t>(brain, kBrainMode);
     ai.activeIndex    = ReadField<std::uint8_t>(ai.controller, kAiActiveIndex);
     ai.defaultState   = ReadField<std::uint8_t>(ai.controller, kAiDefaultState);
-    ai.pause          = ReadField<std::uint32_t>(ai.controller, kAiPauseMask);
+    ai.pause          = ReadField<std::uint32_t>(ai.controller, facts::kAiPauseMask) & ~facts::kAiPauseAnimationBudget;
     return ai;
 }
 

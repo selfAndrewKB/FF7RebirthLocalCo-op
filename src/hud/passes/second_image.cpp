@@ -1,5 +1,6 @@
 #include "hud/passes/second_image.h"
 
+#include "facts/engine.h"
 #include "facts/hud.h"
 #include "hud/passes/entry_filter_code.h"
 #include "hud/passes/shared_slot.h"
@@ -93,6 +94,7 @@ platform::CodeRedirect g_gateCode;
 bool                   g_installed          = false;
 std::uintptr_t         g_overlaySingleton   = 0;
 std::uintptr_t         g_deltaTime          = 0;
+std::uintptr_t         g_frameNumber        = 0;  // GFrameNumber (facts::kFrameNumber), held one back per further pass
 RenderToCompositeLayerFn g_renderToLayer    = nullptr;
 
 // Each further seat's entry in the overlay's pool-2 slot (hud/passes/shared_slot.h).
@@ -106,6 +108,7 @@ std::atomic<std::uint64_t> g_stockName{0};  // as the game passes it; read by th
 bool              g_refused       = false;    // a check failed: the image stays off until restart
 std::uintptr_t    g_overlayThisFrame = 0;     // the overlay with a window, found by ImageReady (0: none)
 double            g_deltaTimeSaved   = 0.0;   // the engine's DeltaTime while a further pass holds it at 0
+std::uint32_t     g_frameNumberSaved = 0;     // GFrameNumber while a further pass holds it one back
 
 std::atomic<int> g_familyLogLines{0};
 
@@ -199,9 +202,10 @@ bool InstallSecondImage(const platform::GameImage& image) noexcept
     const auto submit    = platform::FindFunction(image, facts::kSubmitLayerSlot);
     const auto overlay   = image.Rebase(facts::kRootOverlaySingleton, sizeof(void*));
     const auto delta     = image.Rebase(kDeltaTime, sizeof(double));
+    const auto frame     = image.Rebase(facts::kFrameNumber, sizeof(std::uint32_t));
     const auto vbVtable  = image.Rebase(facts::kVertexBufferVtable, sizeof(void*));
     const auto ibVtable  = image.Rebase(facts::kIndexBufferVtable, sizeof(void*));
-    if (!render || !passes || !acquire || !init || !submit || !overlay || !delta || !vbVtable || !ibVtable)
+    if (!render || !passes || !acquire || !init || !submit || !overlay || !delta || !frame || !vbVtable || !ibVtable)
     {
         platform::Log(L"HUD image: the overlay's render code is not what the research read; no image for the further "
                       L"players");
@@ -210,6 +214,7 @@ bool InstallSecondImage(const platform::GameImage& image) noexcept
     g_renderToLayer    = reinterpret_cast<RenderToCompositeLayerFn>(*render);
     g_overlaySingleton = *overlay;
     g_deltaTime        = *delta;
+    g_frameNumber      = *frame;
     g_slot.Install(*vbVtable, *ibVtable, reinterpret_cast<BeginInitResourceFn>(*init),
                    reinterpret_cast<SubmitLayerSlotFn>(*submit));
 
@@ -327,6 +332,16 @@ double BeginFurtherPass() noexcept
     const double still = 0.0;
     std::memcpy(reinterpret_cast<void*>(g_deltaTime), &still, sizeof(still));
     g_deltaTimeSaved = deltaTime;
+    // The frame number one back for the pass (RE-damage-numbers-per-view.md §5): every battle popup stamps the frame
+    // it was painted or caught up in, and the overlay's post-paint catch-up advances only the widgets whose stamp is
+    // not this frame's. A further pass stamping this frame would hide from player 1's catch-up (the real frame time,
+    // last) every number player 1 did not paint, which then neither rises nor expires while player 1 looks away. A
+    // worker thread reading the global inside the pass would see the frame before [ASSUMPTION: none acts on it].
+    std::uint32_t frame = 0;
+    std::memcpy(&frame, reinterpret_cast<const void*>(g_frameNumber), sizeof(frame));
+    g_frameNumberSaved       = frame;
+    const std::uint32_t back = frame - 1;
+    std::memcpy(reinterpret_cast<void*>(g_frameNumber), &back, sizeof(back));
     g_slot.SetActive(true);
     return deltaTime;
 }
@@ -346,6 +361,7 @@ bool RenderFurther() noexcept
 void EndFurtherPass() noexcept
 {
     std::memcpy(reinterpret_cast<void*>(g_deltaTime), &g_deltaTimeSaved, sizeof(g_deltaTimeSaved));
+    std::memcpy(reinterpret_cast<void*>(g_frameNumber), &g_frameNumberSaved, sizeof(g_frameNumberSaved));
     g_slot.SetActive(false);
 }
 

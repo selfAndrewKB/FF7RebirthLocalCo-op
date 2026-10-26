@@ -6262,7 +6262,7 @@ inline constexpr std::uint8_t kBytes_05301990[] = {
     0xC7, 0x48, 0x01, 0x7B, 0x20, 0xE8, 0x46, 0xF3, 0xCA, 0xFF, 0x48, 0x8D, 0x4C, 0x24, 0x20, 0xE8,
 };
 
-inline constexpr std::array<ReplacedAddress, 736> kReplaced{{
+inline constexpr std::array<ReplacedAddress, 737> kReplaced{{
     {0x0076B370, 0x00743B50, kBytes_0076B370, 0},
     {0x00786200, 0x00A6A1C8, kBytes_00786200, 3},
     {0x0078C2F4, 0x008DAE0C, kBytes_0078C2F4, 3},
@@ -6965,6 +6965,7 @@ inline constexpr std::array<ReplacedAddress, 736> kReplaced{{
     {0x06B9A728, 0x069FED38, {}},  // 0x146B9A728 -> 0x1469FED38 (replaced-engine-tick.json, CONFIRMED): vtbl_UGameEngine 0x146B9A470 (1.004) / 0x1469FEA78 (1.005); the slot holds UGameEngine::Tick in both
     {0x06BB33D8, 0x06A18768, {}},  // 0x146BB33D8 -> 0x146A18768 (replaced-core.json, CONFIRMED): ULocalPlayer vtable; referenced by code at 0x144DF8561.
     {0x06BB3650, 0x06A189E8, {}},  // 0x146BB3650 -> 0x146A189E8 (replaced-core.json, CONFIRMED): vtable + 0x280 (slot 80; 1.004 +0x278, slot 79): the UObject slot-19 insertion. Holds 0x1409D4708. S
+    {0x06FAA370, 0x06DDD224, {}},  // 0x146FAA370 -> 0x146DDD224 (replaced-damage-numbers.json, CONFIRMED): GFrameNumber (data, uint32; sole increment PostRenderAllViewports 0x1416E2020 / 0x141758540): S-DMGN
     {0x06FAA3B0, 0x06DDD290, {}},  // 0x146FAA3B0 -> 0x146DDD290 (replaced-perf.json, CONFIRMED): The D3D12 residency gate, 01 in both files. The only writer is the device creation's `mov byte [gate
     {0x070B98C0, 0x06EECA40, {}},  // 0x1470B98C0 -> 0x146EECA40 (replaced-walk-layer2.json, CONFIRMED): Read from both exes by the main session (tmp walk_l2_facts.py, 2026-10-10) after the IDA agent's mat
     {0x070B99A0, 0x06EECAE0, {}},  // 0x1470B99A0 -> 0x146EECAE0 (replaced-anim-tick-time.json, CONFIRMED): Read from both exes by the main session (scratchpad levert_facts.py, 2026-10-11): 60.0 in both; read

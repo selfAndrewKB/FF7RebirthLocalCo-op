@@ -38,4 +38,10 @@ namespace lss::renderer::view {
 /// [CONFIRMED: FSceneView constructor 0x140CCD22A — RE-multiview-rect-sources.md]
 inline constexpr std::size_t kUnscaledViewRect = 0x238;
 
+/// `UTexture*` the view's final composite pass draws over its picture: the movie's media texture during a movie
+/// and on the title (the screen-effect registry writes it into every view while the views are built), null
+/// otherwise. Read only, for the log (why the mirror columns show it black is open).
+/// [CONFIRMED: RE-movie-view.md §2, both builds]
+inline constexpr std::size_t kCompositeTexture = 0xF48;
+
 }  // namespace lss::renderer::view

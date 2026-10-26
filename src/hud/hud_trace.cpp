@@ -1,5 +1,7 @@
 #include "hud/hud_trace.h"
 
+#include "facts/engine.h"
+
 #include "hud/passes/root_overlay_render.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
@@ -48,7 +50,7 @@ constexpr std::array<std::uintptr_t, 4> kProjectCalls{{
     0x140860829,  // AreaMapIcon__ProjectIconElement
 }};
 
-constexpr std::uintptr_t kFrameNumber = 0x146FAA370;  // GFrameNumber, uint32
+// GFrameNumber: facts::kFrameNumber (facts/engine.h; per build, the 1.005 twin in the hand-found table).
 
 using HudTickFn  = void (*)(void* system, float deltaTime);
 using MarkerFn   = bool (*)(void* controller, void* marker, const void* location, float* inout);
@@ -198,7 +200,7 @@ bool InstallHudTrace(const platform::GameImage& image) noexcept
     const auto tick    = platform::FindFunction(image, kMasterHudTick);
     const auto marker  = platform::FindFunction(image, kPlaceMarker);
     const auto project = platform::FindFunction(image, kProject);
-    const auto frame   = image.Rebase(kFrameNumber, sizeof(std::uint32_t));
+    const auto frame   = image.Rebase(facts::kFrameNumber, sizeof(std::uint32_t));
     if (!tick || !marker || !project || !frame)
     {
         platform::Log(L"HUD trace: the functions are not what the research read; no trace");
