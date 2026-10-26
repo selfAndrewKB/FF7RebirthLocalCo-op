@@ -44,6 +44,7 @@
 #include "players/join_keys.h"
 #include "players/seats.h"
 #include "players/single_view.h"
+#include "views/column_picture.h"
 #include "players/split_layout.h"
 #include "players/split_screen_settings.h"
 #include "players/split_settings_access.h"
@@ -323,7 +324,7 @@ public:
         // that only log (dev/dev_tools.h names them); a player's build has none of them. Every control command is
         // registered first, each owner's (modules.cpp lists them), so the console opens on the whole table.
 #if LSS_DEV
-        lss::modules::RegisterCommands(*session_, layout_, singleView_);
+        lss::modules::RegisterCommands(*session_, layout_, singleViewChoice_);
 #endif
         lss::dev::Install(*image, *session_);
 
@@ -399,11 +400,13 @@ private:
             return;
         }
         const bool left = session_->LeaveNow();
-        // Now, not at the next tick: the view points must not keep the old further players.
-        lss::views::Follow(SplitFrameNow(false, false, false));
+        // Now, not at the next tick: the view points must not keep the old further players; every column's picture
+        // is its own again (the next tick decides afresh).
+        FollowShown(lss::views::column_picture::Shown{});
+        lss::views::Follow(SplitFrameNow(false, false));
         // The viewport outlives the world: its split switch is cleared while player 1's controller
         // is still this world's.
-        LogSingleViewChange(singleView_.Update(false, {}));
+        LogSingleViewChange(singleView_.Update(false));
         if (left)
         {
             Log(L"{}: the further players left (and join again once the field is ready)", why);
@@ -508,49 +511,44 @@ private:
         const lss::modules::Columns columns = lss::modules::TickColumns(rejoining);
         columnsListed_                      = columns.map.count;
         lss::dev::TickAfterSession();
-        // Player 1's single view for the game's whole-screen states (players/single_view.h), and while no further
-        // player plays (each one in waits for a member, or every one stands aside for a shared ride: only player 1
-        // plays then; the user's decision, 2026-10-01): while it holds, the further players stay in but the split's
-        // presentation is off, as with one player. While columns are held (the three-player monitor mode), the same
-        // moments keep the columns instead (the columns rule: a held column is never black): the further players'
-        // views show player 1's camera and HUD, as a mirror view does. One further player waiting while another plays
-        // keeps the split (the waiting one's view stays on its own camera).
-        bool furtherIn = false, allWait = true, aside = false;
+        // What each column shows this tick (views/column_picture.h decides; this is the one place that applies it):
+        // the engine's single view through its switch (players/single_view.h), a further player's view on player 1's
+        // camera through the view points, and their HUD pass skipped, through the frame.
+        lss::views::column_picture::Moment moment;
+        moment.columnsHeld = columns.held;
+        moment.sharedRide  = shared;
+        moment.choice      = singleViewChoice_;
+        moment.map         = columns.map;
+        bool furtherIn     = false;
         for (int seat = 1; seat <= lss::players::kSeatsBuilt; ++seat)
         {
-            if (session_->In(seat))
-            {
-                furtherIn = true;
-                allWait   = allWait && session_->WaitsForMember(seat);
-                aside     = aside || session_->StandsAside(seat);  // a shared ride stands every seat aside together
-            }
+            const auto state = session_->State(seat);
+            moment.seats[static_cast<std::size_t>(seat)] = state;
+            furtherIn = furtherIn || lss::players::InGame(state);
         }
-        const auto mode        = singleView_.Mode();
-        const bool autoMode    = mode == lss::players::SingleViewMode::Auto;
-        const lss::players::SingleViewInputs inputs{
-            furtherIn && autoMode && lss::views::WholeScreenShown(),  // read only when it can matter
-            furtherIn && allWait, aside};
-        LogSingleViewChange(singleView_.Update(furtherIn && !columns.held, inputs));
-        const bool onPlayerOne = furtherIn && columns.held &&
-                                 (mode == lss::players::SingleViewMode::Single ||
-                                  lss::players::SingleViewWanted(autoMode, inputs.wholeScreenShown,
-                                                                 inputs.waitsForMember, inputs.standsAside));
-        if (onPlayerOne != onPlayerOne_)
+        // Read only when it can matter (the read logs each change of reason).
+        moment.wholeScreen = furtherIn && moment.choice == lss::views::column_picture::Override::Auto &&
+                             lss::views::WholeScreenShown();
+        lss::views::column_picture::Shown shown = lss::views::column_picture::Decide(moment);
+        LogSingleViewChange(singleView_.Update(shown.single));
+        if (shown.single && !singleView_.Single())
         {
-            onPlayerOne_ = onPlayerOne;
-            Log(L"single view: {}", onPlayerOne ? L"the columns stay (columns held): the further players' views show "
-                                                  L"player 1's camera and HUD"
-                                                : L"the further players' views are their own again");
+            // The switch could not be set (or read): the columns stay on screen, so the same moment is answered as
+            // with columns held: player 1's picture in every further column (never a split with a menu over it).
+            moment.columnsHeld = true;
+            shown              = lss::views::column_picture::Decide(moment);
         }
-        const bool splitShown = furtherIn && !singleView_.Single() && !onPlayerOne;
-        const bool viewsSplit = columns.map.count > 1 && !singleView_.Single();
+        FollowShown(shown);
+        // A switch found set, or one the mod could not clear, is what is on screen: nothing per player shows then.
+        const bool splitShown = shown.SplitShown() && !singleView_.Single();
+        const bool viewsSplit = shown.ViewsSplit() && !singleView_.Single();
         lss::modules::Frame frame;
+        frame.shown      = shown;
         frame.splitShown = splitShown;
         frame.columns    = columns.map.count;
-        frame.onPlayerOne = onPlayerOne;
         for (int seat = 1; seat <= lss::players::kSeatsBuilt; ++seat)
         {
-            frame.seats[static_cast<std::size_t>(seat)].state = session_->State(seat);
+            frame.seats[static_cast<std::size_t>(seat)].state = moment.seats[static_cast<std::size_t>(seat)];
         }
         lss::modules::TickAfterSession(frame);
         lss::dev::TickWatches(splitShown);  // the dev watches, after the levers they observe
@@ -567,7 +565,7 @@ private:
         }
         // After the layout: the halves' shape reads it; the one place "the split is shown" is kept (views::SplitShown,
         // views::ViewsSplit).
-        lss::views::Follow(SplitFrameNow(splitShown, onPlayerOne, viewsSplit));
+        lss::views::Follow(SplitFrameNow(splitShown, viewsSplit));
         lss::hud::UpdateHudPlacement(viewsSplit && lss::hud::BandEnabled());
 
         const ULONGLONG now = GetTickCount64();
@@ -585,19 +583,41 @@ private:
         }
     }
 
+    /// The columns' picture as last decided (FollowShown keeps it): each seat's change is logged once, with its
+    /// reason, while the seat is in the game (a seat that left logs its leave, not a view it no longer has).
+    void FollowShown(const lss::views::column_picture::Shown& shown) noexcept
+    {
+        for (int seat = 1; seat <= lss::players::kSeatsBuilt; ++seat)
+        {
+            const auto at = static_cast<std::size_t>(seat);
+            if (!shown.seatIn[at])
+            {
+                continue;
+            }
+            if (const auto text = lss::views::column_picture::Describe(seat, shown_.seats[at], shown.seats[at],
+                                                                       shown.single);
+                !text.empty())
+            {
+                Log(L"{}", text);
+            }
+        }
+        shown_ = shown;
+    }
+
     /// What the view points follow (views/player_view_point.h): the session's players and join counts, and what is
-    /// on screen.
-    lss::views::SplitFrame SplitFrameNow(bool splitShown, bool onPlayerOne, bool viewsSplit) const noexcept
+    /// on screen (the columns' picture as last decided).
+    lss::views::SplitFrame SplitFrameNow(bool splitShown, bool viewsSplit) const noexcept
     {
         lss::views::SplitFrame frame;
         frame.playerOne = session_->PlayerOne();
         for (int seat = 1; seat <= lss::players::kSeatsBuilt; ++seat)
         {
-            frame.seats[static_cast<std::size_t>(seat)] = session_->LocalPlayer(seat);
-            frame.joins[static_cast<std::size_t>(seat)] = session_->JoinCount(seat);
+            const auto at = static_cast<std::size_t>(seat);
+            frame.seats[at]       = session_->LocalPlayer(seat);
+            frame.joins[at]       = session_->JoinCount(seat);
+            frame.onPlayerOne[at] = shown_.OnPlayerOne(seat);
         }
         frame.splitShown  = splitShown;
-        frame.onPlayerOne = onPlayerOne;
         frame.viewsSplit  = viewsSplit;
         frame.columns     = columnsListed_;
         return frame;
@@ -617,13 +637,9 @@ private:
         }
     }
 
-    /// The waits edge first (it explains the single view that follows), then the switch's change.
-    static void LogSingleViewChange(const lss::players::SingleViewChange& change) noexcept
+    /// The switch's change (the picture's change, logged before it by FollowShown, explains it).
+    static void LogSingleViewChange(lss::players::SingleViewChange change) noexcept
     {
-        if (const auto text = lss::players::DescribeWaits(change); !text.empty())
-        {
-            Log(L"{}", text);
-        }
         if (const auto text = lss::players::Describe(change); !text.empty())
         {
             Log(L"{}", text);
@@ -637,10 +653,11 @@ private:
                                                          &lss::players::console::SetVariableInt}};
     lss::players::SplitLayout                 layout_{{&ReadTwoPlayerLayout, &WriteTwoPlayerLayout}};
     lss::players::SingleView                  singleView_{{&ReadSplitSwitch, &WriteSplitSwitch}};
+    lss::views::column_picture::Override      singleViewChoice_ = lss::views::column_picture::Override::Auto;
+    lss::views::column_picture::Shown         shown_;  // what each column shows, as last decided (FollowShown)
     lss::players::HeldSetting<std::uint8_t>   threeLayout_{{&ReadThreePlayerLayout, &WriteThreePlayerLayout},
                                                            kThreeLayoutName};
     int                                       columnsListed_      = 1;  // as the last columns' tick read them
-    bool                                      onPlayerOne_        = false;  // player 2's view on player 1's (columns held)
     bool                                      tickSeen_           = false;
     bool                                      rendererInstalled_  = false;
 };

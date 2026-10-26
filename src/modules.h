@@ -12,14 +12,16 @@
 // catch (they take the session or a callback of the mod's) after it.
 //
 // The same file lists the modules' per-tick calls, in two phases around the session's tick (TickBeforeSession,
-// TickAfterSession(Frame)); the entry point keeps the keys, the session, the single view's choice, the view points'
-// frame, the held settings and the HUD placement between and after them. The actions a key and a control command
-// share (leave, own camera, fill, the monitor mode, window span) are here too, each once. So is the columns' tick (the
-// mirror views and the window span toward the columns the frame shows), right after the session's.
+// TickAfterSession(Frame)); the entry point keeps the keys, the session, the columns' picture (views/column_picture.h,
+// what each column shows), the view points' frame, the held settings and the HUD placement between and after them.
+// The actions a key and a control command share (leave, own camera, fill, the monitor mode, window span) are here too,
+// each once. So is the columns' tick (the mirror views and the window span toward the columns the frame shows), right
+// after the session's.
 
 #include "platform/dev_switch.h"
 #include "players/seat_state.h"
 #include "players/seats.h"
+#include "views/column_picture.h"
 #include "views/columns.h"
 
 #include <array>
@@ -34,7 +36,6 @@ class Session;
 }
 
 namespace lss::players {
-class SingleView;
 class SplitLayout;
 }
 
@@ -49,7 +50,7 @@ void Install(const platform::GameImage& image) noexcept;
 void Remove() noexcept;
 
 /// What the modules read once per engine tick, after the session's tick; the entry point fills it from the
-/// session and the single view. (The shared ride is read before the session's tick, by the session itself.)
+/// session and the columns' picture. (The shared ride is read before the session's tick, by the session itself.)
 struct Frame
 {
     struct Seat
@@ -62,9 +63,9 @@ struct Frame
         constexpr bool PlaysMember() const noexcept { return state == players::SeatState::Playing; }
     };
     std::array<Seat, players::kMaxPlayers> seats{};  // by seat (players/seats.h); index 0, player 1's, unused
-    bool splitShown = false;  // player 2 in and their own view on screen (not a single view, not player 1's picture)
+    views::column_picture::Shown shown;  // what each column shows this tick (views/column_picture.h)
+    bool splitShown = false;  // shown.SplitShown(): a further player in and their own view on screen
     int  columns    = 1;      // local players listed, one view each while the screen splits (views/columns.h)
-    bool onPlayerOne = false; // player 2's view shows player 1's picture (a single-view moment, columns held)
 };
 
 /// The columns of one tick (views/columns.h).
@@ -134,7 +135,7 @@ Result SetWindowSpan(const player_two::Session& session, bool on, const wchar_t*
 /// Every control command (platform/command_registry.h), each owner's in turn, the shared actions' here: the one list,
 /// as the table above is for the installs. Game thread, once, before the console opens (control/remote.h).
 void RegisterCommands(player_two::Session& session, players::SplitLayout& layout,
-                      players::SingleView& singleView) noexcept;
+                      views::column_picture::Override& choice) noexcept;
 #endif
 
 }  // namespace lss::modules

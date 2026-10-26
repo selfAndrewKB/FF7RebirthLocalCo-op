@@ -1,15 +1,9 @@
 #include "players/single_view.h"
 
-#if LSS_DEV
-#include "platform/command_registry.h"
-#endif
-
 namespace lss::players {
 
-SingleViewChange SingleView::Update(bool playerTwoIn, bool wholeScreenShown) noexcept
+SingleViewChange SingleView::Update(bool wanted) noexcept
 {
-    const bool wanted = playerTwoIn && (mode_ == SingleViewMode::Single ||
-                                        (mode_ == SingleViewMode::Auto && wholeScreenShown));
     if (wanted != wanted_)
     {
         wanted_ = wanted;
@@ -17,22 +11,9 @@ SingleViewChange SingleView::Update(bool playerTwoIn, bool wholeScreenShown) noe
     }
     if (failed_ || wanted == single_)
     {
-        return {};
+        return SingleViewChange::None;
     }
     return wanted ? SetSingle() : SetSplit();
-}
-
-SingleViewChange SingleView::Update(bool playerTwoIn, const SingleViewInputs& inputs) noexcept
-{
-    const bool waits  = inputs.waitsForMember && mode_ == SingleViewMode::Auto;
-    auto       change = Update(playerTwoIn, SingleViewWanted(mode_ == SingleViewMode::Auto, inputs.wholeScreenShown,
-                                                            inputs.waitsForMember, inputs.standsAside));
-    if (waits != waited_)
-    {
-        waited_      = waits;
-        change.waits = waits ? SingleViewChange::Waits::Began : SingleViewChange::Waits::Ended;
-    }
-    return change;
 }
 
 SingleViewChange SingleView::SetSingle() noexcept
@@ -41,23 +22,23 @@ SingleViewChange SingleView::SetSingle() noexcept
     if (!current)
     {
         failed_ = true;
-        return {SingleViewChange::Kind::SingleFailed};
+        return SingleViewChange::SingleFailed;
     }
     if (*current)
     {
         single_ = true;
         owned_  = false;  // someone else's: never cleared by the mod
-        return {SingleViewChange::Kind::AlreadySingle};
+        return SingleViewChange::AlreadySingle;
     }
     const auto after = access_.write(true) ? access_.read() : std::nullopt;
     if (!after || !*after)
     {
         failed_ = true;
-        return {SingleViewChange::Kind::SingleFailed};
+        return SingleViewChange::SingleFailed;
     }
     single_ = true;
     owned_  = true;
-    return {SingleViewChange::Kind::Single};
+    return SingleViewChange::Single;
 }
 
 SingleViewChange SingleView::SetSplit() noexcept
@@ -65,96 +46,47 @@ SingleViewChange SingleView::SetSplit() noexcept
     if (!owned_)
     {
         single_ = false;  // not the mod's switch: left as it was found
-        return {SingleViewChange::Kind::LeftAlone};
+        return SingleViewChange::LeftAlone;
     }
     const auto current = access_.read();
     if (!current)
     {
         failed_ = true;
-        return {SingleViewChange::Kind::SplitFailed};
+        return SingleViewChange::SplitFailed;
     }
     if (!*current)
     {
         single_ = owned_ = false;  // someone cleared it meanwhile
-        return {SingleViewChange::Kind::LeftAlone};
+        return SingleViewChange::LeftAlone;
     }
     const auto after = access_.write(false) ? access_.read() : std::nullopt;
     if (!after || *after)
     {
         failed_ = true;
-        return {SingleViewChange::Kind::SplitFailed};
+        return SingleViewChange::SplitFailed;
     }
     single_ = owned_ = false;
-    return {SingleViewChange::Kind::Split};
+    return SingleViewChange::Split;
 }
 
-std::wstring Describe(const SingleViewChange& change)
+std::wstring Describe(SingleViewChange change)
 {
-    using Kind = SingleViewChange::Kind;
-    switch (change.kind)
+    switch (change)
     {
-        case Kind::None: return {};
-        case Kind::Single:
-            return L"single view: player 1's view alone (SetForceDisableSplitscreen(true)); player 2 stays in";
-        case Kind::AlreadySingle:
+        case SingleViewChange::None: return {};
+        case SingleViewChange::Single:
+            return L"single view: player 1's view alone (SetForceDisableSplitscreen(true)); the further players stay in";
+        case SingleViewChange::AlreadySingle:
             return L"single view: the split was already force-disabled by someone else; used, and not cleared by the mod";
-        case Kind::SingleFailed: return L"single view: the split switch could not be read or set; the split stays";
-        case Kind::Split: return L"single view: over, the split is back (SetForceDisableSplitscreen(false))";
-        case Kind::LeftAlone:
+        case SingleViewChange::SingleFailed:
+            return L"single view: the split switch could not be read or set; the split stays";
+        case SingleViewChange::Split: return L"single view: over, the split is back (SetForceDisableSplitscreen(false))";
+        case SingleViewChange::LeftAlone:
             return L"single view: over; the split switch is not the mod's (or was cleared meanwhile), left as it is";
-        case Kind::SplitFailed:
+        case SingleViewChange::SplitFailed:
             return L"single view: the split switch could not be read or cleared; the screen stays single";
     }
     return {};
 }
-
-std::wstring DescribeWaits(const SingleViewChange& change)
-{
-    switch (change.waits)
-    {
-        case SingleViewChange::Waits::Same: return {};
-        case SingleViewChange::Waits::Began:
-            return L"player 2 waits for a party member: player 1's single view until player 2 takes one";
-        case SingleViewChange::Waits::Ended: return L"player 2 no longer waits for a party member";
-    }
-    return {};
-}
-
-#if LSS_DEV
-
-void RegisterCommands(SingleView& singleView)
-{
-    using control::Outcome;
-    using control::Value;
-    control::Register({.name  = L"single-view",
-                       .shape = control::Shape::Word,
-                       .words = {L"auto", L"on", L"off"},
-                       .help  = L"player 1's single view while player 2 is in: for the game's whole-screen states "
-                                L"(auto, the default), always, or never",
-                       .set   = [&singleView](const Value& v) {
-                           const std::wstring& mode = std::get<std::wstring>(v);
-                           // Applied at the next tick, which logs the change.
-                           if (mode == L"on")
-                           {
-                               singleView.SetMode(SingleViewMode::Single);
-                               return Outcome{true, L"player 1's single view while player 2 is in"};
-                           }
-                           if (mode == L"off")
-                           {
-                               singleView.SetMode(SingleViewMode::Split);
-                               return Outcome{true, L"always split"};
-                           }
-                           singleView.SetMode(SingleViewMode::Auto);
-                           return Outcome{true, L"single view for the game's whole-screen states (auto)"};
-                       },
-                       .get = [&singleView] {
-                           const SingleViewMode mode = singleView.Mode();
-                           return Value{std::wstring(mode == SingleViewMode::Single  ? L"on"
-                                                     : mode == SingleViewMode::Split ? L"off"
-                                                                                     : L"auto")};
-                       }});
-}
-
-#endif
 
 }  // namespace lss::players

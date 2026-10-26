@@ -1,8 +1,9 @@
 #pragma once
 
-// Player 1's single view while player 2 is in: for full-screen menus, the map screen and cutscenes
-// the screen goes back to player 1's view alone (the user's decision, 2026-09-28), and player 2
-// stays in (their controller, character and pad are untouched).
+// The engine's single view: the whole screen player 1's view alone while further players are in (their controllers,
+// characters and pads untouched). The one monitor outcome for the moments views/column_picture.h decides (a full-screen
+// menu, the map screen, a cutscene, a shared ride, every further player waiting for a member; the user's decision,
+// 2026-09-28); this class only holds the engine's switch to what it is told.
 //
 // The engine lays the local players out from one stock switch, UGameViewportClient::
 // bDisableSplitScreenOverride: while it is set the split type is None whatever the player count
@@ -15,9 +16,6 @@
 // overwritten, a value someone else set is left alone, and a failure is reported once per request
 // rather than retried every tick.
 
-#include "platform/dev_switch.h"
-
-#include <cstdint>
 #include <optional>
 #include <string>
 
@@ -29,82 +27,33 @@ struct SplitSwitchAccess
     bool (*write)(bool disabled) noexcept;        // false if the setter could not be called
 };
 
-/// Why the screen should be single, decided by the caller from the game's own state.
-enum class SingleViewMode : std::uint8_t
+/// What an Update did, for the caller to log.
+enum class SingleViewChange
 {
-    Auto,    // single while the game shows something that takes the whole screen (the default)
-    Single,  // always single while player 2 is in (development: the console)
-    Split,   // never single (development)
+    None,           // nothing to do
+    Single,         // the mod set the switch: player 1's view alone
+    AlreadySingle,  // the switch was already set by someone else; it will not be cleared by the mod
+    SingleFailed,   // it could not be read, set, or confirmed; the split stays (until the request changes)
+    Split,          // the mod cleared its switch: the split is back
+    LeftAlone,      // the split was asked back, but the switch is not the mod's (or someone cleared it)
+    SplitFailed,    // it could not be read or cleared; the screen stays single (until the request changes)
 };
-
-/// What an Update or SetMode did, for the caller to log.
-struct SingleViewChange
-{
-    enum class Kind
-    {
-        None,           // nothing to do
-        Single,         // the mod set the switch: player 1's view alone
-        AlreadySingle,  // the switch was already set by someone else; it will not be cleared by the mod
-        SingleFailed,   // it could not be read, set, or confirmed; the split stays (until the request changes)
-        Split,          // the mod cleared its switch: the split is back
-        LeftAlone,      // the split was asked back, but the switch is not the mod's (or someone cleared it)
-        SplitFailed,    // it could not be read or cleared; the screen stays single (until the request changes)
-    };
-    Kind kind = Kind::None;
-
-    /// Player 2 waiting for a party member under the automatic choice, as it changed (logged by DescribeWaits).
-    enum class Waits
-    {
-        Same,
-        Began,
-        Ended,
-    };
-    Waits waits = Waits::Same;
-};
-
-/// What the request is made of each tick, each known only while player 2 is in.
-struct SingleViewInputs
-{
-    bool wholeScreenShown = false;  // the game shows something that takes the whole screen (views/whole_screen.h)
-    // player 2 is in without a member, waiting on the 2nd slot's (player_two/session/session.h)
-    bool waitsForMember   = false;
-    bool standsAside      = false;  // a shared ride (player_two/rides/shared_ride.h): player 2 stands aside
-};
-
-/// The screen is single while the automatic choice is on and the game shows something that takes the whole
-/// screen, or player 2 waits for a party member, or player 2 stands aside for a shared ride (each already known
-/// only while player 2 is in).
-constexpr bool SingleViewWanted(bool autoMode, bool wholeScreenShown, bool waitsForMember, bool standsAside) noexcept
-{
-    return autoMode && (wholeScreenShown || waitsForMember || standsAside);
-}
 
 /// The change for the log (empty for None).
-std::wstring Describe(const SingleViewChange& change);
-
-/// The waits edge's line (empty for Same).
-std::wstring DescribeWaits(const SingleViewChange& change);
+std::wstring Describe(SingleViewChange change);
 
 class SingleView
 {
 public:
     explicit SingleView(SplitSwitchAccess access) noexcept : access_(access) {}
 
-    /// Call on the game thread every tick: whether player 2 is in, and whether a reason for the single view
-    /// holds (SingleViewWanted: the game takes the whole screen, a wait for a member, standing aside). Acts only
-    /// when the resulting request changes (or a failed request is asked for again after a change).
-    SingleViewChange Update(bool playerTwoIn, bool wholeScreenShown) noexcept;
-
-    /// The same from the request's inputs (SingleViewWanted under the automatic choice), with the waits edge noted
-    /// in the change for the log.
-    SingleViewChange Update(bool playerTwoIn, const SingleViewInputs& inputs) noexcept;
-
-    /// Development override of the automatic choice; applied at the next Update.
-    void SetMode(SingleViewMode mode) noexcept { mode_ = mode; }
-    SingleViewMode Mode() const noexcept { return mode_; }
+    /// Call on the game thread every tick with whether the single view is wanted (views/column_picture.h decides;
+    /// false once no further player is in). Acts only when the request changes (or a failed request is asked for
+    /// again after a change).
+    SingleViewChange Update(bool wanted) noexcept;
 
     /// True while the screen shows player 1's view alone through the switch (the mod's or one found
-    /// set). The split's per-player presentation (player 2's HUD image, the halves' layout) is off.
+    /// set). The split's per-player presentation (the further players' HUD images, the halves' layout) is off.
     bool Single() const noexcept { return single_; }
 
 private:
@@ -112,17 +61,10 @@ private:
     SingleViewChange SetSplit() noexcept;
 
     SplitSwitchAccess access_;
-    SingleViewMode    mode_       = SingleViewMode::Auto;
     bool              single_     = false;  // the switch is set (by the mod when owned_)
     bool              owned_      = false;  // the mod set it, so the mod clears it
     bool              wanted_     = false;  // the last request
     bool              failed_     = false;  // the last request failed; not retried until it changes
-    bool              waited_     = false;  // player 2 waited for a member, as last noted
 };
-
-#if LSS_DEV
-/// The `single-view` command and reading (auto, on, off).
-void RegisterCommands(SingleView& singleView);
-#endif
 
 }  // namespace lss::players

@@ -97,7 +97,6 @@
 #include "player_two/input/pad_sticks.h"
 #include "player_two/scopes/scope_leaks.h"
 #include "players/console_access.h"
-#include "players/single_view.h"
 #include "players/split_layout.h"
 #include "renderer/submission_census.h"
 #include "renderer/view_family_submission.h"
@@ -363,25 +362,13 @@ static_assert(Ordered<&players::widget_opacity::Install, &hud::prompt_rows::Inst
                   Ordered<&players::widget_opacity::Install, &hud::target_views::Install>(),
               "the opacity setter before the HUD modules that read it");
 
-// Game thread: the columns as the last columns' tick read them (TickColumns), and whether player 2's view showed
-// player 1's picture (TickAfterSession), for the calls before them.
+// Game thread: the columns as the last columns' tick read them (TickColumns), and the column the sound's second
+// listener follows (TickAfterSession: the first further player's column showing their own view, views/column_picture.h,
+// or -1), for the calls before them. One second listener for now: with three players in, sounds near the second
+// further player are heard from the nearer of player 1's and the first's (a listener per seat is the plan's follow-up,
+// plan/seats.md step 6).
 views::columns::Map g_lastColumns;
-bool                g_lastOnPlayerOne = false;
-
-/// The column the sound's second listener follows: the first further player listed (player 2's, else player 3's), or
-/// -1. One second listener for now: with three players in, sounds near player 3 are heard from the nearer of player 1
-/// and player 2 (a listener per seat is the plan's follow-up, plan/seats.md step 6).
-int SecondListenerColumn(const views::columns::Map& columns) noexcept
-{
-    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
-    {
-        if (columns.columnOf[static_cast<std::size_t>(seat)] >= 0)
-        {
-            return columns.columnOf[static_cast<std::size_t>(seat)];
-        }
-    }
-    return -1;
-}
+int                 g_lastOwnColumn = -1;
 
 }  // namespace
 
@@ -420,9 +407,9 @@ void TickBeforeSession() noexcept
     player_two::equal_targeting::Tick();      // both players' types for the Condition selects (no leader scope held)
     player_two::target_coin::Tick();          // the blueprint natives' swaps once reflection is up; the summary
     player_two::ffb_manager_two::Tick();      // each seat's component on its own manager, after its BeginPlay
-    // the controller listener slot; player 2's listener from its column (the last columns' tick), off while that column
-    // shows player 1's picture (as under the engine's single view, which leaves one listener); the summary (Debug)
-    player_two::audio_listener_two::Tick(g_lastOnPlayerOne ? -1 : SecondListenerColumn(g_lastColumns));
+    // the controller listener slot; the second listener from the first further player's own column (the last tick's
+    // picture), off while no column is a further player's own (as under the engine's single view); the summary (Debug)
+    player_two::audio_listener_two::Tick(g_lastOwnColumn);
     player_two::leave_watch::Tick();          // the last leave's controller, followed until it is freed (logged)
     player_two::vending::Tick();              // a press that opened no shop; player 2 leaving with their shop up
     player_two::shop_talk::Tick();            // the shopkeeper verdicts queued by player 2's pass
@@ -442,7 +429,7 @@ void TickAfterSession(const Frame& frame) noexcept
 {
     // The per-seat modules loop the built seats themselves; the per-column ones (the framing, the shapes, the
     // renderer's hints) read the frame's column count.
-    g_lastOnPlayerOne = frame.onPlayerOne;
+    g_lastOwnColumn = frame.shown.ListenerColumn();
     // By seat, whether the seat's player plays a member (index 0 unused): the world modules' per-seat passes.
     std::array<bool, players::kMaxPlayers> plays{};
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
@@ -745,7 +732,7 @@ void RegisterOwnCommands(player_two::Session& session)
 }  // namespace
 
 void RegisterCommands(player_two::Session& session, players::SplitLayout& layout,
-                      players::SingleView& singleView) noexcept
+                      views::column_picture::Override& choice) noexcept
 {
     try
     {
@@ -754,7 +741,7 @@ void RegisterCommands(player_two::Session& session, players::SplitLayout& layout
         platform::frame_watch::RegisterCommands();
         players::console::RegisterCommands([&session] { return session.AnyIn(); });
         players::RegisterCommands(layout);
-        players::RegisterCommands(singleView);
+        views::column_picture::RegisterCommands(choice);
         player_two::RegisterCommands(session);
         player_two::pad_sticks::RegisterCommands();
         player_two::scope_leaks::RegisterCommands();

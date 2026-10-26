@@ -47,10 +47,10 @@ bool SecondImageOn() noexcept;
 /// the slot's frame begins, unheld.
 void BeginFrame() noexcept;
 
-/// The seat's image renders this frame: on, the split on screen (and not player 1's single view), the names and the
-/// seat's buffers ready (a wrong buffer kind refuses the images for good), the overlay with a window. `seat` is a
-/// built seat in the game.
-bool ImageReady(int seat, bool splitShown) noexcept;
+/// The seat's image renders this frame: `shown` (the seat's own view on screen: the split, not player 1's single view
+/// and not player 1's picture in the seat's column, views/column_picture.h), the names and the seat's buffers ready
+/// (a wrong buffer kind refuses the images for good), the overlay with a window. `seat` is a built seat in the game.
+bool ImageReady(int seat, bool shown) noexcept;
 
 /// A further pass begins, for the seat ImageReady last answered for: the engine's DeltaTime held at 0 for its
 /// render, the slot taking part. Returns the frame's DeltaTime (for the updates run in the pass).

@@ -297,9 +297,9 @@ void BeginFrame() noexcept
     g_overlayThisFrame = 0;
 }
 
-bool ImageReady(int seat, bool splitShown) noexcept
+bool ImageReady(int seat, bool shown) noexcept
 {
-    bool image = splitShown && SecondImageOn() && g_stockName.load(std::memory_order_relaxed) != 0;
+    bool image = shown && SecondImageOn() && g_stockName.load(std::memory_order_relaxed) != 0;
     if (image)
     {
         const auto buffers = g_slot.BuffersUsable(seat);
