@@ -1,8 +1,9 @@
 // Host-side tests for views::AxisRecords, run without the game.
 //
 // The FOV rule table: the first split frame stores the original and writes the rule; a change of the mod's rule
-// rewrites; a value the game wrote is noted, not overwritten; a full table changes nothing; the restore skips the
-// removed player and only puts back a field that still holds a mod rule.
+// rewrites; a value the game wrote is noted, not overwritten, until the writer is done (RetakeAll), then written over
+// once; a full table changes nothing; the restore skips the removed player and only puts back a field that still
+// holds a mod rule.
 
 #include "views/axis_records.h"
 
@@ -91,6 +92,52 @@ void TestRestoreTwoRemoved()
     EXPECT(restored.size() == 1);
 }
 
+void TestRetake()
+{
+    std::puts("axis records: a value the game left is written over once the writer is done, once, per player");
+    AxisRecords<2> records;
+    std::uint8_t   fieldA = 0, fieldB = 0;
+    EXPECT(records.Apply(&g_a, fieldA, 2) == AxisApplied::First);
+    EXPECT(records.Apply(&g_b, fieldB, 2) == AxisApplied::First);
+
+    fieldA = 1;  // a scene's camera cut wrote the game's rule and never put the mod's back
+    EXPECT(records.Apply(&g_a, fieldA, 2) == AxisApplied::GameWrote);
+    EXPECT(records.Apply(&g_a, fieldA, 2) == AxisApplied::Unchanged);  // left while the scene may be at work
+    EXPECT(fieldA == 1);
+
+    records.RetakeAll();  // the split is back
+    EXPECT(records.Apply(&g_a, fieldA, 2) == AxisApplied::Retaken);
+    EXPECT(fieldA == 2 && records.Records()[0].seen == 2 && records.Records()[0].original == 0);
+    EXPECT(records.Apply(&g_a, fieldA, 2) == AxisApplied::Unchanged);  // written once
+    EXPECT(records.Apply(&g_b, fieldB, 2) == AxisApplied::Unchanged);  // nothing to retake: the field was the mod's
+    EXPECT(fieldB == 2);
+    fieldB = 1;  // that Apply used the flag up: a value the game writes later in a scene is left again
+    EXPECT(records.Apply(&g_b, fieldB, 2) == AxisApplied::GameWrote);
+    EXPECT(fieldB == 1);
+
+    fieldA = 1;  // the game wrote again after the retake was consumed: left again
+    EXPECT(records.Apply(&g_a, fieldA, 2) == AxisApplied::GameWrote);
+    EXPECT(fieldA == 1);
+
+    records.RetakeAll();  // a retake with the mod's own rule changed at the same time: the rule change wins
+    EXPECT(records.Apply(&g_a, fieldA, 1) == AxisApplied::RuleChanged);
+    EXPECT(fieldA == 1 && records.Records()[0].applied == 1);
+    fieldA = 0;  // the change used the flag up: the game's next value is left, not retaken
+    EXPECT(records.Apply(&g_a, fieldA, 1) == AxisApplied::GameWrote);
+    EXPECT(fieldA == 0);
+
+    const void* const removed[] = {&g_b};
+    std::uint8_t*     none      = nullptr;
+    records.RetakeAll();
+    records.Restore(removed, [&](const void*) { return none; }, &IsModRule, [](std::uint8_t) {});
+    for (const auto& record : records.Records())
+    {
+        EXPECT(record.player == nullptr && !record.retake);  // the restore forgot the retake with the record
+    }
+    records.RetakeAll();  // on an empty table marks nothing
+    EXPECT(records.Apply(&g_a, fieldA, 1) == AxisApplied::First && !records.Records()[0].retake);
+}
+
 }  // namespace
 
 int main()
@@ -98,6 +145,7 @@ int main()
     TestApply();
     TestRestore();
     TestRestoreTwoRemoved();
+    TestRetake();
 
     return lss::test::Report();
 }

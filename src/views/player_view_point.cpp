@@ -151,10 +151,14 @@ void LogShapeOnChange(int slot, const std::byte* viewInfo) noexcept
 // own setting, cleared once per camera through the game's setter (player_two/camera/main_camera_shape.h).
 //
 // The FOV rule is written once per player, at the player's first split frame (and again only if
-// the mod's own FOV mode changes), then left alone: the game's only writer, the level-sequence
-// camera cut, saves the value before it writes its own and puts that value back when the cut ends
-// (RE-p2-hud-view-levers.md §4), so the mod's value comes back by the game's own restore. A value
-// the game holds meanwhile is logged, not overwritten.
+// the mod's own FOV mode changes), then left alone while a scene may be at work: the game's only
+// writer, the level-sequence camera cut, saves the value before it writes its own and puts that
+// value back when the cut returns to the previous view target (RE-p2-hud-view-levers.md §4). A
+// value the game holds meanwhile is logged, not overwritten. A scene that ends without that
+// return leaves the game's rule in place (seen 2026-10-27: a skippable field scene left player 1's
+// column on MaintainXFOV, the picture zoomed out), so when the split comes back after player 1's
+// single view (every scene takes it) the rule is written again where the game left another value,
+// once, logged. The same when the fill is switched on again.
 //
 // The FOV rule is only read for a view without the constraint, so with the fill switched off
 // (bars) the value left in place makes no difference until it is restored at the leave.
@@ -174,15 +178,17 @@ bool IsModRule(std::uint8_t value) noexcept
 
 /// Gives `localPlayer` the FOV rule `rule` once: at its first split frame, or when the mod's rule
 /// changes. Returns true if the mod's rule was written for this player (false when the offset is
-/// unconfirmed or there is no room to remember the original, in which case nothing was changed).
-bool ApplyAxisRule(void* localPlayer, std::uint8_t rule) noexcept
+/// unconfirmed or there is no room to remember the original, in which case nothing was changed). `slot`: the seat,
+/// for the log.
+bool ApplyAxisRule(void* localPlayer, std::uint8_t rule, int slot) noexcept
 {
     const auto offset = g_axisOffset.load(std::memory_order_relaxed);
     if (offset == 0)
     {
         return false;  // not confirmed by reflection: the engine's rule stays
     }
-    auto* field = static_cast<std::uint8_t*>(localPlayer) + offset;
+    auto*              field  = static_cast<std::uint8_t*>(localPlayer) + offset;
+    const std::uint8_t before = *field;
     switch (g_axisRecords.Apply(localPlayer, *field, rule))
     {
         case AxisApplied::NoRoom: return false;  // no room to remember the original, so it is not changed
@@ -192,6 +198,10 @@ bool ApplyAxisRule(void* localPlayer, std::uint8_t rule) noexcept
         case AxisApplied::GameWrote:  // a value the game wrote over the mod's rule (a camera cut's), logged once per change
             platform::Log(L"a player's FOV rule is {} (the game's, e.g. a camera cut); left to the game",
                           static_cast<unsigned>(*field));
+            break;
+        case AxisApplied::Retaken:  // the game's writer (a scene's camera cut) is done and left its value
+            platform::Log(L"{}'s FOV rule set back to the mod's {} (the game had left {} in place)",
+                          players::SeatName(slot), static_cast<unsigned>(*field), static_cast<unsigned>(before));
             break;
         case AxisApplied::First:
         case AxisApplied::RuleChanged:
@@ -231,11 +241,11 @@ void ApplySplitFov(void* localPlayer, std::byte* viewInfo, int slot) noexcept
     const HalfShape half{g_halfAspect.load(std::memory_order_relaxed), g_halfHeightRatio.load(std::memory_order_relaxed)};
     if (weight < 0.0f || half.aspect <= 0.0f || half.heightRatio <= 0.0f)
     {
-        ApplyAxisRule(localPlayer, kMajorAxisFov);
+        ApplyAxisRule(localPlayer, kMajorAxisFov, slot);
         g_widthRatio[at].store(1.0f, std::memory_order_relaxed);
         return;
     }
-    if (!ApplyAxisRule(localPlayer, kMaintainXFov))
+    if (!ApplyAxisRule(localPlayer, kMaintainXFov, slot))
     {
         return;  // the rule could not be set, so a written FOV would be read under the wrong rule
     }
@@ -514,7 +524,10 @@ void FollowHalfShape(const SplitFrame& frame) noexcept
 void Follow(const SplitFrame& frame) noexcept
 {
     FollowPlayers(frame);
-    g_splitShown.store(frame.splitShown, std::memory_order_relaxed);
+    if (!g_splitShown.exchange(frame.splitShown, std::memory_order_relaxed) && frame.splitShown)
+    {
+        g_axisRecords.RetakeAll();  // the single view is over: a scene's camera cut may have left the game's rule
+    }
     g_viewsSplit.store(frame.viewsSplit, std::memory_order_relaxed);
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
@@ -564,6 +577,10 @@ bool ToggleFill() noexcept
     const bool on = !g_fillOn.load(std::memory_order_relaxed);
     g_fillOn.store(on, std::memory_order_relaxed);
     g_fillLogged = false;
+    if (on)
+    {
+        g_axisRecords.RetakeAll();  // a scene while the fill was off may have left the game's rule
+    }
     return on;
 }
 

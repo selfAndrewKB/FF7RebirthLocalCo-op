@@ -1,14 +1,17 @@
 #pragma once
 
 // The players whose FOV rule the mod wrote (views/player_view_point.h): the value to put back, the rule the mod wrote,
-// and the value last seen (so each change the game makes is noted once). Pure over its table, with the engine byte
-// passed in, so it is tested on the host (tests/axis_records_test.cpp).
+// and the value last seen (so each change the game makes is noted once). A value the game wrote (a scene's camera
+// cut's) is left while the game's writer may still be at work; once it is done (the split back after player 1's single
+// view: RetakeAll) the next Apply writes the rule again where the game left another value. Pure over its table, with
+// the engine byte passed in, so it is tested on the host (tests/axis_records_test.cpp).
 
 #include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <span>
+#include <utility>
 
 namespace lss::views {
 
@@ -18,6 +21,7 @@ struct AxisRecord
     std::uint8_t original = 0;
     std::uint8_t applied  = 0;
     std::uint8_t seen     = 0;
+    bool         retake   = false;  // the game's writer is done: the next Apply writes the rule again if need be
 };
 
 enum class AxisApplied
@@ -28,6 +32,7 @@ enum class AxisApplied
     Unchanged,    // the field holds what was last seen
     GameWrote,    // the game wrote another value (a camera cut's): noted, left to the game
     GamePutBack,  // the game put the mod's rule back: noted
+    Retaken,      // the game's writer is done and had left another value: the rule written again
 };
 
 template <std::size_t N>
@@ -35,7 +40,7 @@ class AxisRecords
 {
 public:
     /// Gives `player`'s `field` the rule `rule` once: at its first split frame, or when the mod's rule changes. A value
-    /// the game wrote over the rule is noted, not overwritten.
+    /// the game wrote over the rule is noted, not overwritten, until RetakeAll says the game's writer is done.
     AxisApplied Apply(const void* player, std::uint8_t& field, std::uint8_t rule) noexcept
     {
         AxisRecord* free = nullptr;
@@ -43,10 +48,16 @@ public:
         {
             if (record.player == player)
             {
+                const bool retake = std::exchange(record.retake, false);
                 if (record.applied != rule)  // the mod's own FOV mode changed
                 {
                     record.applied = record.seen = field = rule;
                     return AxisApplied::RuleChanged;
+                }
+                if (retake && field != rule)  // the game's writer left its value: the rule written again
+                {
+                    record.seen = field = rule;
+                    return AxisApplied::Retaken;
                 }
                 if (field == record.seen)
                 {
@@ -64,9 +75,20 @@ public:
         {
             return AxisApplied::NoRoom;
         }
-        *free = {player, field, rule, rule};
+        *free = {player, field, rule, rule, false};
         field = rule;
         return AxisApplied::First;
+    }
+
+    /// The game's writer is done (the split is back after player 1's single view, where a scene's camera cut wrote
+    /// its own rule and may not have put the mod's back): each player's next Apply writes the rule again if the field
+    /// holds another value.
+    void RetakeAll() noexcept
+    {
+        for (auto& record : records_)
+        {
+            record.retake = record.player != nullptr;
+        }
     }
 
     /// Puts every player's original back, except the `removed` players' (their objects are gone: two seats can leave
