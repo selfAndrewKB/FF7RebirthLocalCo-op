@@ -63,6 +63,8 @@ std::uintptr_t           g_blendOutResume = 0;
 std::array<StageCounters, players::kMaxPlayers>         g_settingsCounters{};
 std::array<StageCounters, players::kMaxPlayers>         g_updateCounters{};
 std::array<std::atomic<unsigned>, players::kMaxPlayers> g_mismatches{};
+std::array<std::atomic<unsigned>, players::kMaxPlayers> g_notMirrored{};  // commands under a cutscene camera
+bool                                                    g_underOther = false;  // as last logged (game thread)
 
 /// Player 1's and `seat`'s Field operators, while the seat's player holds a party member
 /// (player_two/camera/camera_access.h).
@@ -96,10 +98,51 @@ bool Matches(const FieldPair& pair) noexcept
            ActiveState(pair.two) == ActiveState(pair.one);
 }
 
+/// Player 1's Field operator is the top operator of player 1's camera manager, or the Battle operator is (the field
+/// camera's commands reach it under the battle as before). Under a cutscene or special camera the cut's own tick
+/// pushes its rotation into player 1's Field command every frame (RE-p2-shop-camera-skip.md section 12); those
+/// commands are the cut's, not the field's, so they are not mirrored: mirrored, they pinned the seat's camera to the
+/// cut's rotation, and the copy at the cut's end turned it to player 1's angle (the user's report 2026-10-27). Read once
+/// per engine call, after CurrentPair found player 1's camera manager (game thread). Logged on change.
+bool PlayerOneFieldCommanded() noexcept
+{
+    void* pcm = CameraManagerOf(generation::ControllerOf(0));
+    const auto current =
+        pcm != nullptr ? ReadField<std::uint8_t>(pcm, facts::kCameraManagerCurrentOperator) : facts::kFieldOperatorIndex;
+    const bool commanded = current == facts::kFieldOperatorIndex || current == facts::kBattleOperatorIndex;
+    if (g_underOther == commanded)
+    {
+        g_underOther = !commanded;
+        if (commanded)
+        {
+            platform::LogDebug(L"field camera: player 1's Field operator seen on top of its camera manager again (or "
+                               L"the battle's): the game's commands to it are mirrored to the other players' again");
+        }
+        else
+        {
+            platform::LogDebug(L"field camera: player 1's camera manager has its operator {} on top (a cutscene or "
+                               L"special camera): the game's commands to player 1's Field operator are not mirrored to "
+                               L"the other players' until the Field operator is on top again",
+                               current);
+        }
+    }
+    return commanded;
+}
+
 void CountResult(int seat, const FieldPair& pair) noexcept
 {
     g_settingsCounters[Index(seat)].Act();
     if (!Matches(pair))
+    {
+        g_mismatches[Index(seat)].fetch_add(1, std::memory_order_relaxed);
+    }
+}
+
+/// Under a cut only the state is mirrored, so only the state is compared.
+void CountState(int seat, const FieldPair& pair) noexcept
+{
+    g_settingsCounters[Index(seat)].Act();
+    if (ActiveState(pair.two) != ActiveState(pair.one))
     {
         g_mismatches[Index(seat)].fetch_add(1, std::memory_order_relaxed);
     }
@@ -111,7 +154,8 @@ void CountResult(int seat, const FieldPair& pair) noexcept
 void Activate(void* field, float blendTime, bool flag)
 {
     g_engineActivate(field, blendTime, flag);
-    const auto caller = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
+    const auto          caller = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
+    std::optional<bool> commanded;  // once per engine call, at the first seat
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
         const auto pair = CurrentPair(seat);
@@ -120,15 +164,27 @@ void Activate(void* field, float blendTime, bool flag)
             g_settingsCounters[Index(seat)].Pass();
             continue;
         }
+        if (!commanded)
+        {
+            commanded = PlayerOneFieldCommanded();
+        }
         const auto twoWas = ActiveState(pair->two);
         g_engineActivate(pair->two, blendTime, flag);
-        g_engineCopy(pair->two, Command(pair->one));  // after activation, which rewrites the command
-        CountResult(seat, *pair);
+        if (*commanded)
+        {
+            g_engineCopy(pair->two, Command(pair->one));  // after activation: the first one writes command defaults
+            CountResult(seat, *pair);
+        }
+        else
+        {
+            CountState(seat, *pair);  // the activation alone: under a cut the command is the seat's own
+        }
         if (g_blendOutResume != 0 && caller == g_blendOutResume)
         {
             platform::LogDebug(L"field camera: player 1's Field operator resumed after a special camera's blend-out "
-                               L"(blend {:.2f} s); {}'s mirrored with player 1's command ({}'s operator state was {})",
-                               blendTime, players::SeatName(seat), players::SeatName(seat), twoWas);
+                               L"(blend {:.2f} s); {}'s activated with it, its command {} ({}'s operator state was {})",
+                               blendTime, players::SeatName(seat), *commanded ? L"player 1's" : L"its own",
+                               players::SeatName(seat), twoWas);
         }
     }
 }
@@ -136,6 +192,7 @@ void Activate(void* field, float blendTime, bool flag)
 void Deactivate(void* field, float blendTime, bool flag)
 {
     g_engineDeactivate(field, blendTime, flag);
+    std::optional<bool> commanded;
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
         const auto pair = CurrentPair(seat);
@@ -145,18 +202,40 @@ void Deactivate(void* field, float blendTime, bool flag)
             continue;
         }
         g_engineDeactivate(pair->two, blendTime, flag);
-        CountResult(seat, *pair);
+        if (!commanded)
+        {
+            commanded = PlayerOneFieldCommanded();
+        }
+        if (*commanded)
+        {
+            CountResult(seat, *pair);
+        }
+        else
+        {
+            CountState(seat, *pair);  // under a cut player 1's command is the cut's: not compared
+        }
     }
 }
 
 void CopyCommand(void* field, const void* command)
 {
     g_engineCopy(field, command);
+    std::optional<bool> commanded;
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
         const auto pair = CurrentPair(seat);
         if (!pair || field != pair->one)
         {
+            g_settingsCounters[Index(seat)].Pass();
+            continue;
+        }
+        if (!commanded)
+        {
+            commanded = PlayerOneFieldCommanded();
+        }
+        if (!*commanded)
+        {
+            g_notMirrored[Index(seat)].fetch_add(1, std::memory_order_relaxed);  // a cut's per-frame rotation push
             g_settingsCounters[Index(seat)].Pass();
             continue;
         }
@@ -291,8 +370,7 @@ bool InstallSettings(const platform::GameImage& image) noexcept
                               g_copySlot);
     if (!installed)
     {
-        // All three or none: a mirror of activation without the command would leave player 2's
-        // operator re-initialised with no policy.
+        // All three or none: the activation, the deactivation and the command are one setup, mirrored whole or not.
         g_activateSlot.Restore();
         g_deactivateSlot.Restore();
         g_copySlot.Restore();
@@ -321,26 +399,50 @@ void Remove() noexcept
             platform::Log(L"could not restore a player-2 camera slot; the replacement stays in place");
         }
     }
+    g_underOther = false;
 }
 
-bool Seed(int seat) noexcept
+Seeded Seed(int seat) noexcept
 {
     if (g_engineCopy == nullptr)
     {
-        return false;
+        return Seeded::NoPair;
     }
     const auto pair = CurrentPair(seat);
     if (!pair)
     {
-        return false;
+        return Seeded::NoPair;
     }
     if (ActiveState(pair->two) != ActiveState(pair->one))
     {
         const StateFn apply = ActiveState(pair->one) != 0 ? g_engineActivate : g_engineDeactivate;
         apply(pair->two, 0.0f, false);
     }
+    if (!PlayerOneFieldCommanded())
+    {
+        return Seeded::PlayerOneUnderOther;  // player 1's command is the cut's this frame: the seat keeps its own
+    }
     g_engineCopy(pair->two, Command(pair->one));
-    return Matches(*pair);
+    return Matches(*pair) ? Seeded::Matches : Seeded::Mismatch;
+}
+
+const wchar_t* Describe(Seeded seeded) noexcept
+{
+    switch (seeded)
+    {
+        case Seeded::NoPair: return L"no operator pair (not installed, or the operators are not distinct)";
+        case Seeded::Matches: return L"matches";
+        case Seeded::Mismatch: return L"DOES NOT MATCH";
+        case Seeded::PlayerOneUnderOther:
+            return L"player 1's camera is under a cutscene or special camera: the state brought over, the command the "
+                   L"player's own until the cut ends";
+    }
+    return L"?";
+}
+
+unsigned TakeNotMirrored(int seat) noexcept
+{
+    return platform::Take(g_notMirrored[players::SeatBuilt(seat) ? Index(seat) : players::kPlayerTwoSeat]);
 }
 
 StageCounters& SettingsCounters(int seat) noexcept

@@ -303,7 +303,7 @@ void Seat::AwaitTake() noexcept
         if (installed_.fieldSettings)
         {
             Log(L"{}'s Field camera brought to player 1's settings: {}", Name(),
-                field_camera::Seed(seat_) ? L"matches" : L"DOES NOT MATCH");
+                field_camera::Describe(field_camera::Seed(seat_)));
         }
         Log(L"{}'s Battle camera brought to player 1's state: {}", Name(),
             battle_camera::Seed(seat_) ? L"matches" : L"does not match (or not installed)");
@@ -1108,12 +1108,13 @@ void Seat::LogStatus() noexcept
     const auto     input    = pad_sticks::InputCounters().Take();
     const auto     move     = pad_sticks::MoveCounters().Take();
     const wchar_t* fault    = generation::FaultReason(seat_);
-    Log(L"{}: member {}, generation {}{}; field settings mirrored {} passed {} mismatched {}; camera update as primary "
-        L"{} passed {} refused {}; per-pad sticks {} (input acted {} refused {}, movement acted {} refused {})",
+    Log(L"{}: member {}, generation {}{}; field settings mirrored {} passed {} mismatched {} (not mirrored under a "
+        L"cutscene camera {}); camera update as primary {} passed {} refused {}; per-pad sticks {} (input acted {} "
+        L"refused {}, movement acted {} refused {})",
         Name(), NameOf(generation::MemberOf(seat_)), generation::Active(seat_) ? L"active" : L"withdrawn",
         fault ? L" (fault: " + std::wstring(fault) + L")" : std::wstring(), settings.acted, settings.passed,
-        field_camera::TakeMismatches(seat_), update.acted, update.passed, update.refused,
-        pad_sticks::Enabled() ? L"on" : L"off", input.acted, input.refused, move.acted, move.refused);
+        field_camera::TakeMismatches(seat_), field_camera::TakeNotMirrored(seat_), update.acted, update.passed,
+        update.refused, pad_sticks::Enabled() ? L"on" : L"off", input.acted, input.refused, move.acted, move.refused);
     const auto member = member_movement::Counters(seat_).Take();
     Log(L"  {}'s view: own camera {} (moved off it {} time(s) so far); member movement ticked {} skipped {} "
         L"refused {}, leader test answered yes {} time(s)",

@@ -40,7 +40,9 @@ inline constexpr std::uint32_t kCameraManagerEndCameraActor    = 0x2DE8;
 // Any operator: its module table (TSharedPtr slots, 16 bytes each, the module pointer first)
 inline constexpr std::uint32_t kOperatorModules = 0x6E0;
 // Field camera operator
-inline constexpr std::uint32_t kFieldOperatorCommand = 0x40;
+inline constexpr std::uint32_t kBattleOperatorIndex  = 11;    // the operators' indices: on top when current
+inline constexpr std::uint32_t kFieldOperatorIndex   = 12;
+inline constexpr std::uint32_t kFieldOperatorCommand = 0x40;  // its layout: RE-p2-shop-camera-skip.md section 12
 inline constexpr std::uint32_t kFieldCommandSize     = 0x58;
 inline constexpr std::uint32_t kFieldOperatorActive  = 0xD0;
 
