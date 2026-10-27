@@ -9,8 +9,9 @@
 //   member   once player 1's controller has settled after the join, the seat takes the member in its slot of the
 //            game's party order (player 2 the 2nd, player 3 the 3rd: player_two/session/party_member.h ChooseSlot),
 //            and success is read from the lease fields over the following ticks. While that member is not free (a
-//            story script holds its AI, or it is not following the party), the seat stays in and waits on it;
-//            a menu reorder changes the slot. A script putting the seat's member into LEAD gets it back.
+//            story script holds its AI, or it is not following the party), the seat stays in and waits on it; on
+//            one monitor, after a short grace, it leaves and waits outside (session_rules::WaitOutside). A menu
+//            reorder changes the slot. A script putting the seat's member into LEAD gets it back.
 //   camera   right after the join, the seat's camera manager is pointed at its own camera actor
 //            (player_two/camera/view_target.h), as the game's own spawn aimed it; a later move is logged,
 //            never re-aimed (no game code moves it). When the member is taken, player 2's
@@ -81,9 +82,6 @@ struct SessionStages
     // beyond the players (the monitor row, the console's `view-columns`): a player waiting for their member stays in
     // then, their column on player 1's picture; on one monitor they leave and wait outside (session_rules::WaitOutside).
     bool columnsHeld = false;
-    // Not a stage: set by Session::Tick before the seats' ticks: the further players playing their member this tick.
-    // A player waiting for their member leaves to wait outside only while another plays (session_rules::WaitOutside).
-    int furtherPlaying = 0;
 };
 
 /// One seat's player: its local player, its member, its leave, and its wait outside the game.

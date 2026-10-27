@@ -91,6 +91,21 @@ constexpr std::uint32_t kSlotWaitTicks = 10;
 /// (session_rules::WaitOutside). The party swaps at a scene's end resolve within about a second.
 constexpr std::chrono::milliseconds kWaitOutsideGrace{1500};
 
+/// Why the game holds the player's member, for the wait-outside line.
+const wchar_t* WaitWords(party_member::SlotWait wait) noexcept
+{
+    switch (wait)
+    {
+        case party_member::SlotWait::AiNotReady: return L"a story script, or not following the party";
+        case party_member::SlotWait::LinkPartner: return L"a synergy partner the game has not given back yet";
+        case party_member::SlotWait::NotEligible: return L"not free by the game's own member test yet";
+        case party_member::SlotWait::Unread: return L"the party could not be read";
+        case party_member::SlotWait::None:
+        case party_member::SlotWait::NoSlot: break;
+    }
+    return L"the slot's member is not free";
+}
+
 /// While player 2 plays a member: ticks between checks of its AI (a story script putting it into
 /// LEAD gets it back) and of the 2nd slot (a reorder no party apply reported).
 constexpr std::uint32_t kHeldAiTicks    = 6;
@@ -787,11 +802,11 @@ std::chrono::milliseconds Seat::WaitedForSlot() const noexcept
     return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - *slotWaitSince_);
 }
 
-/// On one monitor a player whose member a story script holds leaves the game once the wait has lasted the grace while
-/// another further player plays, and waits outside for the member by the same slot test (OutsideTick, the first test
-/// on the next tick): their view leaves the screen and the others' fill it (the user, 2026-10-27). With columns held
-/// their column stays on player 1's picture (views/column_source.h). The grace counts only the time on one monitor and
-/// off a shared ride: the timer restarts while either holds.
+/// On one monitor a player whose member the game holds leaves the game once the wait has lasted the grace, with two
+/// players in or three, and waits outside for the member by the same slot test (OutsideTick, the first test on the
+/// next tick): their view leaves the screen and the others' fill it (the user, 2026-10-27). With columns held their
+/// column stays on player 1's picture (views/column_source.h). The grace counts only the time on one monitor and off a
+/// shared ride: the timer restarts while either holds.
 void Seat::LeaveToWaitOutside() noexcept
 {
     if (phase_ != Phase::Playing)
@@ -804,22 +819,19 @@ void Seat::LeaveToWaitOutside() noexcept
         return;
     }
     const session_rules::WaitOutsideFacts facts{
-        .hold         = session_rules::HoldOf(member_, waitingForSlot_, sharedRide_, generation::MemberOf(seat_),
-                                              generation::Active(seat_)),
-        .scriptHold   = slotWaitReason_ == party_member::SlotWait::AiNotReady,
-        .anotherPlays = installed_.furtherPlaying - (PlaysMember() ? 1 : 0) > 0,
-        .columnsHeld  = installed_.columnsHeld,
-        .waited       = WaitedForSlot(),
+        .hold        = session_rules::HoldOf(member_, waitingForSlot_, sharedRide_, generation::MemberOf(seat_),
+                                             generation::Active(seat_)),
+        .columnsHeld = installed_.columnsHeld,
+        .waited      = WaitedForSlot(),
     };
     if (!session_rules::WaitOutside(facts, kWaitOutsideGrace))
     {
         return;
     }
-    Log(L"a story script has held {}'s party member for {:.1f} s on one monitor while another player plays: their view "
-        L"leaves the screen until the member is free",
-        Name(), static_cast<double>(facts.waited.count()) / 1000.0);
-    LeaveToAwait(L"a story script holds the player's party member (one monitor: the view leaves the screen until it is "
-                 L"free)",
+    Log(L"the game has held {}'s party member for {:.1f} s on one monitor ({}): their view leaves the screen until the "
+        L"member is free",
+        Name(), static_cast<double>(facts.waited.count()) / 1000.0, WaitWords(slotWaitReason_));
+    LeaveToAwait(L"the game holds the player's party member (one monitor: the view leaves the screen until it is free)",
                  true);
 }
 
@@ -1179,11 +1191,6 @@ void Session::Tick() noexcept
         menu_focus::Watch();  // player 1's UI focus, logged on change (read-only)
     }
     bool commandMenusTicked = false;
-    installed_.furtherPlaying = 0;  // this tick's count, for the wait outside (session_rules::WaitOutside)
-    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
-    {
-        installed_.furtherPlaying += At(seat)->PlaysMember() ? 1 : 0;
-    }
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
         At(seat)->Tick(commandMenusTicked);

@@ -84,14 +84,10 @@ void TestLeaderEvents()
 
 void TestWaitOutside()
 {
-    std::puts("wait outside: the script hold on one monitor past the grace while another plays; never otherwise");
+    std::puts("wait outside: any slot wait on one monitor past the grace; never on the row or for another hold");
     using std::chrono::milliseconds;
     const milliseconds     grace{1500};
-    const WaitOutsideFacts leaves{.hold         = Hold::SlotWait,
-                                  .scriptHold   = true,
-                                  .anotherPlays = true,
-                                  .columnsHeld  = false,
-                                  .waited       = milliseconds{1500}};
+    const WaitOutsideFacts leaves{.hold = Hold::SlotWait, .columnsHeld = false, .waited = milliseconds{1500}};
     EXPECT(WaitOutside(leaves, grace));
     WaitOutsideFacts f = leaves;
     f.waited           = milliseconds{9000};
@@ -103,12 +99,6 @@ void TestWaitOutside()
 
     f             = leaves;
     f.columnsHeld = true;  // the row: the column stays
-    EXPECT(!WaitOutside(f, grace));
-    f              = leaves;
-    f.anotherPlays = false;  // nobody else plays: player 1's single view shows already
-    EXPECT(!WaitOutside(f, grace));
-    f            = leaves;
-    f.scriptHold = false;  // a synergy partner, the member test, an unread party: waited out in the game
     EXPECT(!WaitOutside(f, grace));
     for (const auto hold : {Hold::StandAside, Hold::Orphaned, Hold::Member, Hold::Faulted, Hold::Withdrawn})
     {

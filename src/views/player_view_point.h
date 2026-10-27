@@ -18,7 +18,8 @@
 //     until it has a character) is never on screen by default.
 //   - a further player's view shows player 1's camera instead while views/column_source.h says so (the game takes
 //     the whole screen or a shared ride while columns are held: a held column is never black; or that player alone
-//     waits for a party member while another plays), as a mirror view does, and draws player 1's HUD (no further
+//     waits for a party member: with columns held, or on one monitor during the short grace before they leave,
+//     player_two/session/session_rules.h WaitOutside), as a mirror view does, and draws player 1's HUD (no further
 //     pass runs for them then).
 
 #include "platform/dev_switch.h"

@@ -7,7 +7,9 @@
 // Taken from Remake's players/seat_state.h (2026-10-24), the same six words. Changed: "handed" is Rebirth's own case.
 // Remake's seat keeps its member while the game hands it to its AI; Rebirth's gives the member back to the game and
 // stays in without one until it is free again (a story script holds it, the game's party has not freed it yet, or
-// player 1 rides a vehicle the whole party shares). Either way the game has the member and the seat is kept.
+// player 1 rides a vehicle the whole party shares). Either way the game has the member and the seat is kept: on the
+// monitor row, or on one monitor for a ride and for the short grace before a waiting player leaves to wait outside
+// (player_two/session/session_rules.h WaitOutside), when the seat is Awaiting.
 
 namespace lss::players {
 
