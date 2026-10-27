@@ -7,6 +7,7 @@
 
 #include "expect.h"
 
+#include <chrono>
 #include <cstdio>
 
 namespace {
@@ -81,12 +82,49 @@ void TestLeaderEvents()
     EXPECT(DecideLeaderEvent(none) == LeaderEventAction::ArmLook);
 }
 
+void TestWaitOutside()
+{
+    std::puts("wait outside: the script hold on one monitor past the grace while another plays; never otherwise");
+    using std::chrono::milliseconds;
+    const milliseconds     grace{1500};
+    const WaitOutsideFacts leaves{.hold         = Hold::SlotWait,
+                                  .scriptHold   = true,
+                                  .anotherPlays = true,
+                                  .columnsHeld  = false,
+                                  .waited       = milliseconds{1500}};
+    EXPECT(WaitOutside(leaves, grace));
+    WaitOutsideFacts f = leaves;
+    f.waited           = milliseconds{9000};
+    EXPECT(WaitOutside(f, grace));
+    f.waited = milliseconds{1499};  // a party swap resolving within a second
+    EXPECT(!WaitOutside(f, grace));
+    f.waited = milliseconds{0};
+    EXPECT(!WaitOutside(f, grace));
+
+    f             = leaves;
+    f.columnsHeld = true;  // the row: the column stays
+    EXPECT(!WaitOutside(f, grace));
+    f              = leaves;
+    f.anotherPlays = false;  // nobody else plays: player 1's single view shows already
+    EXPECT(!WaitOutside(f, grace));
+    f            = leaves;
+    f.scriptHold = false;  // a synergy partner, the member test, an unread party: waited out in the game
+    EXPECT(!WaitOutside(f, grace));
+    for (const auto hold : {Hold::StandAside, Hold::Orphaned, Hold::Member, Hold::Faulted, Hold::Withdrawn})
+    {
+        f      = leaves;
+        f.hold = hold;  // a shared ride never leaves; the retake's own leave decides for an orphaned seat
+        EXPECT(!WaitOutside(f, grace));
+    }
+}
+
 }  // namespace
 
 int main()
 {
     TestHolds();
     TestLeaderEvents();
+    TestWaitOutside();
 
     return lss::test::Report();
 }

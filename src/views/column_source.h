@@ -22,7 +22,9 @@
 //   - a further player is in without their member while the game has it (players/seat_state.h Handed: waiting for a
 //     party member, or standing aside for the ride) — that player's column alone; while every further player in is
 //     handed, nobody but player 1 plays, so one monitor shows the engine's single view (the user's decision,
-//     2026-10-01);
+//     2026-10-01). On one monitor a player waiting for their member leaves the game after a short grace and waits
+//     outside (player_two/session, session_rules::WaitOutside; the user's decision, 2026-10-27), so their column goes
+//     with them and the others' views fill the screen; with columns held they stay, their column on player 1's picture;
 //   - the console's `single-view on` (always player 1's) and `single-view off` (never: the development overrides).
 // A column no seat fills (a mirror, a local player the mod does not know) shows player 1's by its nature.
 //

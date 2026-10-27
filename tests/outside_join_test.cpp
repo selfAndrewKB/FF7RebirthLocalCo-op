@@ -112,6 +112,24 @@ void TestAwaitSlowCheck()
     EXPECT(Is(Ticks(wait, kAwaitCheckTicks, looks), Action::TryJoin));
 }
 
+void TestAwaitFromTheField()
+{
+    std::puts("await from a running field: the member test runs on the next ready tick, then every 30th");
+    OutsideJoin   wait;
+    std::uint32_t looks = 0;
+    wait.BeginAwait(true);
+    EXPECT(wait.Current() == Mode::Await);
+    const Step first = Ticks(wait, 1, looks);
+    EXPECT(Is(first, Action::TryJoin) && !first.looking);
+    EXPECT(Is(Ticks(wait, kAwaitCheckTicks - 1, looks), Action::None));
+    EXPECT(Is(Ticks(wait, 1, looks), Action::TryJoin));
+    EXPECT(Is(wait.Tick(kT0, false, false, looks), Action::None));  // not ready after all: the settle runs in full
+    EXPECT(Is(Ticks(wait, kSettleTicks - 1, looks), Action::None));
+    EXPECT(Is(Ticks(wait, 1, looks), Action::None));
+    EXPECT(Is(Ticks(wait, kAwaitCheckTicks - 1, looks), Action::None));
+    EXPECT(Is(Ticks(wait, 1, looks), Action::TryJoin));
+}
+
 void TestAwaitLookWindow()
 {
     std::puts("await: a look window tries every tick and counts down only while ready");
@@ -187,6 +205,7 @@ int main()
     TestRejoinSettlesThenTries();
     TestRejoinEndsWhenInOrOnTime();
     TestAwaitSlowCheck();
+    TestAwaitFromTheField();
     TestAwaitLookWindow();
     TestAwaitEnds();
     TestJoinThatChangesTheWait();

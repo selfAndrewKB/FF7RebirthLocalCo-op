@@ -87,6 +87,10 @@ constexpr std::uint32_t kEventLines = 200;
 /// ticks between checks. A script lets go without an event; the check is a few reads.
 constexpr std::uint32_t kSlotWaitTicks = 10;
 
+/// The slot wait on one monitor: how long it lasts before the player leaves to wait outside the game
+/// (session_rules::WaitOutside). The party swaps at a scene's end resolve within about a second.
+constexpr std::chrono::milliseconds kWaitOutsideGrace{1500};
+
 /// While player 2 plays a member: ticks between checks of its AI (a story script putting it into
 /// LEAD gets it back) and of the 2nd slot (a reorder no party apply reported).
 constexpr std::uint32_t kHeldAiTicks    = 6;
@@ -152,6 +156,10 @@ void Seat::Tick(bool& commandMenusTicked) noexcept
             // Before the member tick: the tick's scopes answer the party leader with player 2's member
             // (player_two/scopes/leader_scope.h), which CheckMemberPlayable's leader test must not see.
             RetakeWhenFree();
+            if (In())
+            {
+                LeaveToWaitOutside();
+            }
             if (!In())
             {
                 break;  // left to wait for a free member
@@ -259,6 +267,8 @@ void Seat::Settle() noexcept
     }
     waitingForSlot_ = false;
     slotWaitLogged_ = 0;
+    slotWaitSince_.reset();
+    slotWaitReason_ = party_member::SlotWait::None;
     playerOneBytes_ = party_member::ReadPlayerOneBytes(playerOneController_);
     LogTagCounts(L"before the take");
     handover_watch::Snapshot(L"before the take", member_);
@@ -574,7 +584,12 @@ void Seat::FollowSlot(const wchar_t* when, bool log) noexcept
 /// changes.
 void Seat::WaitForSlot(const party_member::SlotChoice& choice) noexcept
 {
+    if (!waitingForSlot_ || !slotWaitSince_)
+    {
+        slotWaitSince_ = std::chrono::steady_clock::now();
+    }
     waitingForSlot_  = true;
+    slotWaitReason_  = choice.wait;
     const auto key   = static_cast<std::uint32_t>(choice.type) | static_cast<std::uint32_t>(choice.wait) << 8 |
                      static_cast<std::uint32_t>(choice.verdict) << 12 | static_cast<std::uint32_t>(choice.ai.state) << 16 |
                      static_cast<std::uint32_t>(choice.ai.brainIndex) << 24;
@@ -733,7 +748,7 @@ void* Seat::FreeMember(void* playerOneController) const noexcept
 }
 
 /// Player 2 is out, and waits for a party member to be free before it joins.
-void Seat::AwaitMember(const wchar_t* why) noexcept
+void Seat::AwaitMember(const wchar_t* why, bool fieldReady) noexcept
 {
     if (refuseJoins_)
     {
@@ -746,21 +761,66 @@ void Seat::AwaitMember(const wchar_t* why) noexcept
         Log(L"{} still waits for a free party member ({})", Name(), why);
         return;
     }
-    outside_.BeginAwait();  // replaces a map load's rejoin, and has no time limit
+    outside_.BeginAwait(fieldReady);  // replaces a map load's rejoin, and has no time limit
     retakeLooks_ = 0;
-    Log(L"{}: {} stays out (the game runs as with one player) and joins once a party member is free "
+    Log(L"{}: {} stays out (the game runs without them) and joins once a party member is free "
         L"(Ctrl+F8 stops the wait)",
         why, Name());
 }
 
 /// Player 2 is in without a member and none is free: it leaves at once (nothing of player 2's is held
 /// by the party), and waits outside the game for one.
-void Seat::LeaveToAwait(const wchar_t* why) noexcept
+void Seat::LeaveToAwait(const wchar_t* why, bool fieldReady) noexcept
 {
     if (LeaveNow())
     {
-        AwaitMember(why);
+        AwaitMember(why, fieldReady);
     }
+}
+
+std::chrono::milliseconds Seat::WaitedForSlot() const noexcept
+{
+    if (!waitingForSlot_ || !slotWaitSince_)
+    {
+        return std::chrono::milliseconds{0};
+    }
+    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - *slotWaitSince_);
+}
+
+/// On one monitor a player whose member a story script holds leaves the game once the wait has lasted the grace while
+/// another further player plays, and waits outside for the member by the same slot test (OutsideTick, the first test
+/// on the next tick): their view leaves the screen and the others' fill it (the user, 2026-10-27). With columns held
+/// their column stays on player 1's picture (views/column_source.h). The grace counts only the time on one monitor and
+/// off a shared ride: the timer restarts while either holds.
+void Seat::LeaveToWaitOutside() noexcept
+{
+    if (phase_ != Phase::Playing)
+    {
+        return;  // the retake just found the member free (SettlingPlayerOne): the wait is over
+    }
+    if (waitingForSlot_ && (installed_.columnsHeld || sharedRide_))
+    {
+        slotWaitSince_ = std::chrono::steady_clock::now();
+        return;
+    }
+    const session_rules::WaitOutsideFacts facts{
+        .hold         = session_rules::HoldOf(member_, waitingForSlot_, sharedRide_, generation::MemberOf(seat_),
+                                              generation::Active(seat_)),
+        .scriptHold   = slotWaitReason_ == party_member::SlotWait::AiNotReady,
+        .anotherPlays = installed_.furtherPlaying - (PlaysMember() ? 1 : 0) > 0,
+        .columnsHeld  = installed_.columnsHeld,
+        .waited       = WaitedForSlot(),
+    };
+    if (!session_rules::WaitOutside(facts, kWaitOutsideGrace))
+    {
+        return;
+    }
+    Log(L"a story script has held {}'s party member for {:.1f} s on one monitor while another player plays: their view "
+        L"leaves the screen until the member is free",
+        Name(), static_cast<double>(facts.waited.count()) / 1000.0);
+    LeaveToAwait(L"a story script holds the player's party member (one monitor: the view leaves the screen until it is "
+                 L"free)",
+                 true);
 }
 
 /// The slow backstop of the party checks (the game's party changes are heard as they happen), and the
@@ -1031,6 +1091,8 @@ void Seat::Forget() noexcept
     retakeLooks_         = 0;
     waitingForSlot_      = false;
     slotWaitLogged_      = 0;
+    slotWaitSince_.reset();
+    slotWaitReason_      = party_member::SlotWait::None;
     viewTargetResets_    = 0;
     viewOnOwnCamera_     = true;
 }
@@ -1116,6 +1178,11 @@ void Session::Tick() noexcept
         menu_focus::Watch();  // player 1's UI focus, logged on change (read-only)
     }
     bool commandMenusTicked = false;
+    installed_.furtherPlaying = 0;  // this tick's count, for the wait outside (session_rules::WaitOutside)
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        installed_.furtherPlaying += At(seat)->PlaysMember() ? 1 : 0;
+    }
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
         At(seat)->Tick(commandMenusTicked);

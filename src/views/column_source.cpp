@@ -40,7 +40,8 @@ std::wstring Describe(int seat, const SeatSource& before, const SeatSource& afte
                                     L"takes one",
                                     name, name)
                       : std::format(L"{}'s view shows player 1's picture while the game has their party member "
-                                    L"(their column stays; the others play on)",
+                                    L"(the others play on; their column stays on the row, and on one monitor their "
+                                    L"view leaves the screen after a moment)",
                                     name);
     }
     return screen ? std::format(L"{}'s view gives way to player 1's: {}", name, NameOf(after.why))

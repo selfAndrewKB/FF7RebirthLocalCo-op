@@ -68,8 +68,10 @@ public:
     /// A map load took player 2 out: join again once the new map is ready.
     void BeginRejoin(Clock::time_point now) noexcept;
 
-    /// Player 2 waits for a free party member. Replaces a rejoin (the wait has no time limit).
-    void BeginAwait() noexcept;
+    /// Player 2 waits for a free party member. Replaces a rejoin (the wait has no time limit). `fieldReady`: the
+    /// player left a running field for this wait (the one-monitor wait outside), so the settle is done already and the
+    /// first member test runs on the next ready tick.
+    void BeginAwait(bool fieldReady = false) noexcept;
 
     /// Player 2 joined, or a leave was asked for: no wait.
     void End() noexcept;

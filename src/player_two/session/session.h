@@ -77,6 +77,13 @@ struct SessionStages
     // before a seat's CreatePlayer, so the seat lands in the column after the players in (views/mirror_player.h;
     // they come back on the same tick); true when none is listed.
     bool (*clearMirrors)() noexcept = nullptr;
+    // Not a stage: set by mod.cpp each tick (Session::SetColumnsHeld), as the last columns' tick read it. Columns held
+    // beyond the players (the monitor row, the console's `view-columns`): a player waiting for their member stays in
+    // then, their column on player 1's picture; on one monitor they leave and wait outside (session_rules::WaitOutside).
+    bool columnsHeld = false;
+    // Not a stage: set by Session::Tick before the seats' ticks: the further players playing their member this tick.
+    // A player waiting for their member leaves to wait outside only while another plays (session_rules::WaitOutside).
+    int furtherPlaying = 0;
 };
 
 /// One seat's player: its local player, its member, its leave, and its wait outside the game.
@@ -192,8 +199,10 @@ private:
     void OutsideTick() noexcept;
     void LogGaveUp(outside_join::Reason reason) noexcept;
     void* FreeMember(void* playerOneController) const noexcept;
-    void AwaitMember(const wchar_t* why) noexcept;
-    void LeaveToAwait(const wchar_t* why) noexcept;
+    void AwaitMember(const wchar_t* why, bool fieldReady = false) noexcept;   // fieldReady: outside_join::BeginAwait
+    void LeaveToAwait(const wchar_t* why, bool fieldReady = false) noexcept;
+    void LeaveToWaitOutside() noexcept;  // the slot wait on one monitor, past the grace: leaves to wait outside
+    std::chrono::milliseconds WaitedForSlot() const noexcept;  // how long the slot wait has lasted (0 outside it)
     std::uint32_t BackstopTicks() const noexcept;
     void Yield(const wchar_t* why) noexcept;
     bool MemberHeld() const noexcept;  // taking or playing a member
@@ -223,6 +232,8 @@ private:
     outside_join::OutsideJoin outside_;                 // out: the rejoin after a map load, or the wait for a member
     bool                  waitingForSlot_   = false;    // in, without a member: the slot's is not free yet
     std::uint32_t         slotWaitLogged_   = 0;        // the wait's reason as last logged (logged on change)
+    std::optional<std::chrono::steady_clock::time_point> slotWaitSince_;  // when the slot wait began (on one monitor)
+    party_member::SlotWait slotWaitReason_ = party_member::SlotWait::None;  // the wait's reason as last chosen
     bool                  sharedRide_       = false;    // player 1 rides a shared vehicle: the seat takes no member
     players::SeatState    loggedState_      = players::SeatState::Out;  // as NoteState last logged it
 
@@ -263,6 +274,9 @@ public:
 
     /// Player 1 rides a vehicle the whole party shares, each tick: every seat stands aside together.
     void SetSharedRide(bool on) noexcept;
+
+    /// Columns held beyond the players (SessionStages::columnsHeld), each tick, as the last columns' tick read it.
+    void SetColumnsHeld(bool held) noexcept { installed_.columnsHeld = held; }
 
     /// What every seat's join calls right before its CreatePlayer (SessionStages::clearMirrors). Once, at startup.
     void SetClearMirrors(bool (*clearMirrors)() noexcept) noexcept { installed_.clearMirrors = clearMirrors; }

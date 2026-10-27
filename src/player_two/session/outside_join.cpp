@@ -10,12 +10,12 @@ void OutsideJoin::BeginRejoin(Clock::time_point now) noexcept
     asked_  = now;
 }
 
-void OutsideJoin::BeginAwait() noexcept
+void OutsideJoin::BeginAwait(bool fieldReady) noexcept
 {
     mode_   = Mode::Await;
-    settle_ = 0;
+    settle_ = fieldReady ? kSettleTicks : 0;
     tries_  = 0;
-    slow_   = 0;
+    slow_   = fieldReady ? kAwaitCheckTicks - 1 : 0;  // the first member test on the next ready tick
 }
 
 void OutsideJoin::End() noexcept

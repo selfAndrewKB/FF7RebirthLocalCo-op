@@ -79,7 +79,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.98.1";  // built against the Nexus UE4SS (c0a8d4c)
+constexpr const wchar_t* kVersion = L"0.99.0";  // built against the Nexus UE4SS (c0a8d4c)
 
 /// How often player 2's status line is written while player 2 is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -513,12 +513,14 @@ private:
                                                             shared && lss::player_two::ffb_manager_two::Attached(seat));
         }
         session_->SetSharedRide(shared);
+        session_->SetColumnsHeld(columnsHeld_);  // as the last columns' tick read it (the columns follow the session)
         lss::player_two::pad_sticks::SetStoodDown(shared);
         lss::player_two::climb_context::Tick();  // this frame's input copies for the climbs on the anim worker (W5)
         session_->Tick();
         // The columns right after the session: the mirror views toward them, the window span to them.
         const lss::modules::Columns columns = lss::modules::TickColumns();
         columnsListed_                      = columns.map.count;
+        columnsHeld_                        = columns.held;
         lss::dev::TickAfterSession();
         // Where each column's view comes from this tick (views/column_source.h decides; this is the one place that
         // applies it): the engine's single view through its switch (players/single_view.h), a further player's view on
@@ -666,6 +668,7 @@ private:
     lss::players::HeldSetting<std::uint8_t>   threeLayout_{{&ReadThreePlayerLayout, &WriteThreePlayerLayout},
                                                            kThreeLayoutName};
     int                                       columnsListed_      = 1;  // as the last columns' tick read them
+    bool                                      columnsHeld_        = false;  // ... and whether they are held beyond the players
     bool                                      tickSeen_           = false;
     bool                                      rendererInstalled_  = false;
 };
