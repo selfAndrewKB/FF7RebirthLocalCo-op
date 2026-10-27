@@ -78,27 +78,31 @@ constexpr bool Held(std::uint8_t mergedHeld, std::uint32_t sources, int player, 
 }
 
 /// One action's per-player held state, this frame and the one before, and the game's own merged
-/// held state as it would be without the mod.
+/// held state as it would be without the mod (this frame and the one before: the game's own previous
+/// and held bytes under its one-pad merge).
 ///
-/// The mod leaves player 1's view in the held byte between frames, so the byte it reads back is not
-/// the game's merged state: with pad 2 alone holding, it reads the 0 it wrote, and the game does not
-/// rewrite it until the next fresh press or full release (its repeat update needs held == 1). So the
-/// game's own held state is tracked here: released when no source holds the action; the byte's value
-/// when it differs from what the mod left (the game wrote it this frame); otherwise unchanged.
-/// The one case this cannot see is a game writer setting the byte to the same value the mod left
-/// (a press the UI consumed while only a seat's pad held it): that seat's player then keeps seeing it
-/// held until the release.
+/// The mod leaves a view in the held byte between frames (player 1's, or the game's merged state for
+/// the menu openers and while a menu owns input), so the byte it reads back is not always the game's
+/// merged state: with pad 2 alone holding, it reads the 0 it wrote, and the game does not rewrite it
+/// until the next fresh press or full release (its repeat update needs held == 1). So the game's own
+/// held state is tracked here: released when no source holds the action; the byte's value when it
+/// differs from what the mod left (the game wrote it this frame); otherwise unchanged. The one case
+/// this cannot see is a game writer setting the byte to the same value the mod left (a press the UI
+/// consumed while only a seat's pad held it): that seat's player then keeps seeing it held until the
+/// release.
 struct Views
 {
     bool         now[kPlayers]      = {};
     bool         previous[kPlayers] = {};
     std::uint8_t gameHeld           = 0;
-    std::uint8_t left               = 0;  // the byte the mod left for the game (player 1's view)
+    std::uint8_t gamePrevious       = 0;  // the game's merged held state the frame before (its previous byte)
+    std::uint8_t left               = 0;  // the byte the mod left for the game (player 1's view unless Wrote says)
     bool         wrote              = false;
 
     /// Once per frame, after the game's own advance. `byte` is the held byte as read now; `seats` the seats in.
     void Advance(std::uint8_t byte, std::uint32_t sources, unsigned seats) noexcept
     {
+        gamePrevious = gameHeld;
         if (sources == 0)
         {
             gameHeld = 0;
@@ -114,6 +118,13 @@ struct Views
         }
         left  = now[0] ? 1 : 0;
         wrote = true;
+    }
+
+    /// The held byte the mod wrote this frame when it is not player 1's view (the game's merged state): what the
+    /// next frame's Advance compares the byte with.
+    void Wrote(std::uint8_t byte) noexcept
+    {
+        left = byte;
     }
 };
 

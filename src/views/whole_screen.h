@@ -77,4 +77,9 @@ bool GameStatePresent() noexcept;
 /// compared by address by its callers.
 const wchar_t* LocalPlayerRefused() noexcept;
 
+/// Game thread: whether a pause-family menu owns the game's input now (the rule MenuOwnsInput(state, widget) in
+/// whole_screen_reason.h over the game state and the game's IsPauseMenuClosed). False if not installed or the state is
+/// unreadable. Read once per input tick by the per-pad buttons, before the signals above are read.
+bool MenuOwnsInput() noexcept;
+
 }  // namespace lss::views

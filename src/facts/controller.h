@@ -78,6 +78,11 @@ inline constexpr std::uintptr_t kKeyAttack        = 0x1491E44D8;
 inline constexpr std::uintptr_t kKeyUniqueAbility = 0x1491E4520;
 inline constexpr std::uintptr_t kKeyGuard         = 0x1491E4598;
 inline constexpr std::uintptr_t kKeyDodge         = 0x1491E45E0;
+/// The menu-opening actions the game's one pause poll reads on the merged tables (RE-pause-menu-any-pad.md §1.3):
+/// PauseMenu (Start; the field-action poll also needs it not held), MapMenu (the touch pad) and EnemyIntel.
+inline constexpr std::uintptr_t kPauseMenuKey     = 0x1491E44C0;
+inline constexpr std::uintptr_t kMapMenuKey       = 0x1491E45B0;
+inline constexpr std::uintptr_t kEnemyIntelKey    = 0x1491E45C8;
 /// InputKey24_CopyAddRef(out, key): copies a key, taking a reference on its name.
 inline constexpr std::uint8_t kInputKeyCopyBytes[] = {0x48, 0x8B, 0x02, 0x48, 0x89, 0x01, 0x48, 0x8B,
                                                       0x42, 0x08, 0x48, 0x89, 0x41, 0x08, 0x48, 0x8B};

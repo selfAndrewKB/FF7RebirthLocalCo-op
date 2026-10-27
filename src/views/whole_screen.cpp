@@ -551,6 +551,27 @@ const wchar_t* LocalPlayerRefused() noexcept
                                                                                                          : nullptr;
 }
 
+bool MenuOwnsInput() noexcept
+{
+    void* state = nullptr;
+    if (!g_installed || g_stateCallFailed)
+    {
+        return false;
+    }
+    if (!platform::CallGuarded(g_getEndGameState, state))
+    {
+        g_stateCallFailed = true;  // not called again this run (ReadScreenSignals logs the same fault the same way)
+        platform::Log(L"whole screen: the game-state getter raised an exception; menus no longer switch the view");
+        return false;
+    }
+    if (state == nullptr)
+    {
+        return false;
+    }
+    std::uint8_t current = 0;
+    return Read(reinterpret_cast<std::uintptr_t>(state) + kState, current) && MenuOwnsInput(current, PauseWidgetAlive());
+}
+
 ScreenSignals ReadScreenSignals() noexcept
 {
     ScreenSignals signals;

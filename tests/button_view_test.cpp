@@ -140,6 +140,65 @@ void TestThreePlayers()
     static_assert(SeatOfSource(1, SeatBit(1)) == 1, "constexpr");
 }
 
+void TestMergedViewWritten()
+{
+    std::puts("buttons: the game's merged state written back (a menu opener) keeps the game's own edges for any pad");
+    Views views;
+    Frame(views, kPadTwo, 1);  // pad 2 presses Start: the game writes 1
+    EXPECT(views.gamePrevious == 0 && views.gameHeld == 1);  // the game's own "pressed" for the pause poll
+    views.Wrote(views.gameHeld);                             // the mod wrote the merged state, not player 1's 0
+    EXPECT(views.left == 1);
+    Frame(views, kPadTwo);  // held: the game leaves the 1 the mod wrote (equal: not a game write)
+    EXPECT(views.gamePrevious == 1 && views.gameHeld == 1 && views.now[1] && !Pressed(views, 1));
+    views.Wrote(views.gameHeld);
+    Frame(views, kPadTwo, 0);  // a game writer clears held with the mask set (a consumed press): seen
+    EXPECT(views.gameHeld == 0 && views.gamePrevious == 1 && !views.now[1]);
+    views.Wrote(views.gameHeld);
+    Frame(views, 0, 0);  // the release
+    EXPECT(views.gameHeld == 0 && views.gamePrevious == 0);
+    Frame(views, kPadOne | kPadTwo, 1);  // both press at once: one game edge, both players' edges
+    EXPECT(views.gamePrevious == 0 && views.gameHeld == 1 && Pressed(views, 0) && Pressed(views, 1));
+    EXPECT(views.left == 1);  // player 1's view and the merged state agree: no Wrote needed
+}
+
+void TestMergedViewFlipsMidHold()
+{
+    std::puts("buttons: a hold that spans a menu opening and closing (merged state in, player 1's view out) has no false edge");
+    Views views;
+    Frame(views, kPadTwo, 1);  // pad 2 presses in the field: player 1's 0 is left in the byte
+    EXPECT(Pressed(views, 1) && views.left == 0);
+    Frame(views, kPadTwo);  // held in the field
+    EXPECT(views.now[1] && !Pressed(views, 1) && views.gameHeld == 1);
+    views.Wrote(1);  // a menu opens: the merged state (1) is written over the 0
+    Frame(views, kPadTwo);  // held under the menu: the byte reads the 1 the mod wrote, not a game write
+    EXPECT(views.gameHeld == 1 && views.gamePrevious == 1 && views.now[1] && !Pressed(views, 1) && !views.now[0]);
+    views.Wrote(1);
+    Frame(views, kPadTwo);  // the menu closes: player 1's view (0) is written again (left = 0 by Advance)
+    EXPECT(views.gameHeld == 1 && views.left == 0 && views.now[1] && !Pressed(views, 1));
+    Frame(views, kPadTwo);  // held in the field: the byte reads the mod's 0, no game write
+    EXPECT(views.gameHeld == 1 && views.now[1] && !Pressed(views, 1) && !views.previous[0] && !views.now[0]);
+    Frame(views, 0, 0);  // the release, seen once
+    EXPECT(!views.now[1] && views.previous[1] && views.gameHeld == 0);
+    Frame(views, 0, 0);
+    EXPECT(!views.now[1] && !views.previous[1]);
+}
+
+void TestShopSeatViewWritten()
+{
+    std::puts("buttons: pad 1's hold while a seat's view is written (its shop) stays held for player 1");
+    Views views;
+    Frame(views, kPadOne, 1);  // pad 1 presses: the game writes 1
+    EXPECT(Pressed(views, 0) && views.left == 1);
+    views.Wrote(0);  // the shop seat's view (0) is written instead of player 1's
+    Frame(views, kPadOne);  // the byte reads the 0 the mod wrote: no game write, the hold stays
+    EXPECT(views.gameHeld == 1 && views.now[0] && !Pressed(views, 0) && !views.now[1]);
+    views.Wrote(0);
+    Frame(views, kPadOne, 0);  // a game writer clears held (a consumed press): the same 0 as the mod's, unseen
+    EXPECT(views.gameHeld == 1 && views.now[0]);  // the one case the view cannot see (documented), until the release
+    Frame(views, 0, 0);
+    EXPECT(!views.now[0] && views.gameHeld == 0);
+}
+
 void TestThreePadsPressApart()
 {
     std::puts("buttons: pad 3's press while pads 1 and 2 hold is player 3's edge only");
@@ -166,5 +225,8 @@ int main()
     TestTwoPlayerSourcesUnchanged();
     TestThreePlayers();
     TestThreePadsPressApart();
+    TestMergedViewWritten();
+    TestMergedViewFlipsMidHold();
+    TestShopSeatViewWritten();
     return lss::test::Report();
 }

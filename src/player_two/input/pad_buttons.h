@@ -14,19 +14,30 @@
 // plays its own pad, seat s pad s+1):
 //   - after the game's Tick (its slot in the IInputProcessor vtable is replaced), every element's
 //     previous/held bytes are rewritten to player 1's view: pad 1, keyboard and the game's own
-//     synthetic keys, never a seated player's pad (player_two/input/button_view.h). Everything that
-//     reads buttons outside the seats' calls (player 1's input, the leader's move state, the menus,
-//     battle) sees player 1. The Tick takes no player: it advances every player's view at once, so it
-//     needs no seat.
+//     synthetic keys, never a seated player's pad (player_two/input/button_view.h), except where the
+//     game's own merge is meant (the menu openers, menu time: below). Everything that reads buttons
+//     outside the seats' calls (player 1's input, the leader's move state, the menus, battle) sees
+//     player 1. The Tick takes no player: it advances every player's view at once, so it needs no seat.
 //   - a seated pad's action-downs reach the tables (for its player's polling) but are passed to the
-//     game's dispatcher as already handled, its own flag, so that pad never opens a menu or runs a
-//     field prompt (or player 2's go to player 2's own UI through the route below). The seat comes
-//     from the press's source bit. This covers the XInput main loop, two DirectInput loops and, from
-//     the first input Tick, the XInput extra-key calls (the shortcut keys), whose call sites cross a
-//     code block and are changed from the game thread only;
+//     game's dispatcher as already handled, its own flag, so that pad never runs a field prompt (or
+//     player 2's go to player 2's own UI through the route below). The seat comes from the press's
+//     source bit. This covers the XInput main loop, two DirectInput loops and, from the first input
+//     Tick, the XInput extra-key calls (the shortcut keys), whose call sites cross a code block and
+//     are changed from the game thread only;
+//   - the pause menu is every pad's (RE-pause-menu-any-pad.md): the game's one open poll reads the
+//     merged tables with no pad in mind, and its menus are driven through the dispatcher's UI route.
+//     So the three menu-opening actions (PauseMenu, MapMenu, EnemyIntel) always get the game's own
+//     merged state written back, and a seated pad's press of one is passed to the dispatcher with the
+//     game's own flag; and while a pause-family menu owns the game's input (the game's pause states
+//     or a pause-family widget alive, views/whole_screen.h MenuOwnsInput) every element gets the
+//     merged state and every seated pad's press is passed as it came, outside the seat's own route:
+//     every pad is the game's pad then, as in an unmodded game. A seat's shop (not a pause-family
+//     menu) keeps its pad meanwhile. The merged stick already moves every menu cursor (pad_sticks
+//     swaps only inside a player's own calls); releases are the game's own (its tables carry a source
+//     mask per pad);
 //   - a ButtonScope, opened around one seat's calls (its controller input and its member's tick, next
-//     to the stick scope), writes that seat's view and puts player 1's back after. Seats take turns:
-//     a scope never opens inside another.
+//     to the stick scope), writes that seat's view and puts back what the Tick wrote after. Seats take
+//     turns: a scope never opens inside another.
 // The repeat, latch and source bytes are never written. The game's own writers keep working on
 // top: its press update (previous = held, held = 1) and release (when the mask empties) produce the
 // same bytes a one-pad game would hold, and the next Tick rewrites every view.

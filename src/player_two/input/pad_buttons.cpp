@@ -17,6 +17,7 @@
 #include "player_two/input/pad_sticks.h"
 #include "players/seats.h"
 #include "players/unreal_access.h"
+#include "views/whole_screen.h"
 
 #if LSS_DEV
 #include "platform/command_registry.h"
@@ -69,6 +70,13 @@ constexpr unsigned                      kExtraKeyLines = 40;
 constexpr std::size_t                   kActionEventKey = 0x18;  // the action event's key (FName)
 
 // ActionDownFn: pad_buttons.h.
+
+// The menu-opening actions (RE-pause-menu-any-pad.md §1.3): the FKey globals PauseMenu, MapMenu and EnemyIntel
+// (facts/controller.h), whose FNames the game's one pause poll reads pressed or held on the merged tables (and the
+// menus' close handlers read on the UI route). Read once the game has filled them (guarded, from the Tick), since the
+// globals are built by the game's own start-up, which may run after the mod installs.
+constexpr std::array<std::uintptr_t, 3> kOpenerKeyNames{facts::kPauseMenuKey, facts::kMapMenuKey, facts::kEnemyIntelKey};
+constexpr unsigned                      kOpenerReadFrames = 600;  // input ticks to wait for them before a warning
 
 // A TSet<element> in the input object, stock TSparseArray layout (§1.1): data, ArrayNum, the
 // allocation bits (4 inline dwords, a heap pointer, NumBits, MaxBits).
@@ -152,9 +160,16 @@ PerSeat  g_scopeSkips{};  // a table moved between the Tick and the seat's call
 unsigned g_writeFaults = 0;
 unsigned g_lines       = 0;
 PerSeat  g_seatDowns{};    // a seated pad's action-downs kept from the UI and the menu core
+PerSeat  g_openerDowns{};  // a seated pad's presses of a menu opener, passed to the game as they came
+PerSeat  g_menuDowns{};    // a seated pad's presses while a menu owns input, passed to the game as they came
 unsigned g_padOneDowns = 0;  // pad 1's action-downs kept from the UI while a seat holds the menus
 int      g_menuPlayer  = 0;  // whose view the tables show outside the seats' calls, and whose presses reach the UI:
                              // 0 player 1, or the seat whose shop is up (SetMenuPlayer)
+bool     g_menuTime    = false;  // a pause-family menu owns the game's input this frame (views::MenuOwnsInput)
+std::array<const std::uint64_t*, kOpenerKeyNames.size()> g_openerKeys{};  // live addresses (set at install; null: none)
+std::array<std::uint64_t, kOpenerKeyNames.size()>        g_openers{};     // the FNames, once read
+bool     g_openersRead   = false;  // all three read non-zero
+unsigned g_openerFrames  = 0;      // input ticks spent reading them
 std::atomic<unsigned> g_mask{kPartViews | kPartEvents};  // SetMask
 
 /// What each built seat sees, for a change or trace line: ", player 2 sees 1" per seat.
@@ -351,8 +366,79 @@ void ViewBytes(const Table& table, int player, std::vector<HeldBytes>& bytes) no
     }
 }
 
+/// Whether `key` names a menu-opening action (PauseMenu, MapMenu, EnemyIntel); false until they are read.
+bool Opener(std::uint64_t key) noexcept
+{
+    return g_openersRead && key != 0 && (key == g_openers[0] || key == g_openers[1] || key == g_openers[2]);
+}
+
+/// Reads the three menu openers' FNames from the game's FKey globals until all three are non-zero. Logged once found,
+/// a warning once if not after kOpenerReadFrames input ticks (a further pad's Start then opens nothing).
+void ReadOpeners() noexcept
+{
+    if (g_openersRead || g_openerFrames > kOpenerReadFrames)
+    {
+        return;
+    }
+    ++g_openerFrames;
+    unsigned found = 0;
+    for (std::size_t i = 0; i < kOpenerKeyNames.size(); ++i)
+    {
+        std::uint64_t key = 0;
+        if (g_openerKeys[i] != nullptr && platform::CopyGuarded(&key, g_openerKeys[i], sizeof(key)) && key != 0)
+        {
+            g_openers[i] = key;
+            ++found;
+        }
+    }
+    if (found == kOpenerKeyNames.size())
+    {
+        g_openersRead = true;
+        platform::Log(L"buttons: every pad's Start, map and enemy-intel presses reach the game's pause poll and menus; "
+                      L"while a menu owns the game's input every pad drives it (the game's own merged state in the "
+                      L"tables, its presses passed as they came)");
+    }
+    else if (g_openerFrames > kOpenerReadFrames)
+    {
+        platform::LogWarning(L"buttons: the menu-opening actions' names were not read after {} input ticks ({} of {} set); "
+                             L"a further pad's Start, map and enemy-intel presses stay its own player's (no pause from it)",
+                             kOpenerReadFrames, found, kOpenerKeyNames.size());
+    }
+}
+
+/// Whether every element shows the game's merged state this frame: a menu owns the game's input and no seat's shop is
+/// up (a shop is not a pause-family menu and keeps its seat's pad, RE-pause-menu-any-pad.md §3; its view wins while it
+/// is up, as its presses do in ActionDown).
+bool MergedEverywhere() noexcept
+{
+    return g_menuTime && g_menuPlayer == 0;
+}
+
+/// Fills `bytes` with what the Tick writes into each element: the game's own merged state (its previous and held bytes
+/// under its one-pad merge) for the three menu openers, and for every element while a menu owns the game's input
+/// (RE-pause-menu-any-pad.md §8); otherwise the menu player's view (player 1's, or a seat's while its player's shop is
+/// up).
+void WrittenBytes(const Table& table, std::vector<HeldBytes>& bytes) noexcept
+{
+    const bool merged = MergedEverywhere();
+    for (std::size_t i = 0; i < bytes.size() && i < table.views.size(); ++i)
+    {
+        const button_view::Views& views = table.views[i];
+        if (merged || (i < table.names.size() && Opener(table.names[i])))
+        {
+            bytes[i] = {views.gamePrevious, views.gameHeld};
+        }
+        else
+        {
+            bytes[i] = {static_cast<std::uint8_t>(views.previous[g_menuPlayer]),
+                        static_cast<std::uint8_t>(views.now[g_menuPlayer])};
+        }
+    }
+}
+
 /// Once per frame after the game's Tick: advances each view (with the seats in `seats`) and writes the menu player's
-/// (player 1's, or a seat's while its player's shop is up).
+/// (player 1's, or a seat's while its player's shop is up), or the game's merged state where every pad is the game's
+/// pad (WrittenBytes).
 void SplitTable(const std::byte* owner, std::size_t which, unsigned seats)
 {
     Table& table = g_tables[which];
@@ -381,10 +467,15 @@ void SplitTable(const std::byte* owner, std::size_t which, unsigned seats)
             table.loggedSources[i] = element.sources;
         }
     }
-    ViewBytes(table, g_menuPlayer, table.ones);
+    WrittenBytes(table, table.ones);
     if (!WriteHeld(table.data, table.ones.data(), table.allocated.data(), table.ones.size()))
     {
         ++g_writeFaults;
+        return;
+    }
+    for (std::size_t i = 0; i < table.ones.size() && i < table.views.size(); ++i)
+    {
+        table.views[i].Wrote(table.ones[i].held);  // what the next Tick compares the game's byte with
     }
 }
 
@@ -410,12 +501,54 @@ void GiveBack() noexcept
     }
     g_tables     = {};
     g_menuPlayer = 0;  // the game's merge: the one pad again
+    g_menuTime   = false;
+}
+
+/// Once per input tick while the views are written: whether a pause-family menu owns the game's input, from the game's
+/// own state (views/whole_screen.h). Logged on change.
+void ReadMenuTime() noexcept
+{
+    const bool menuTime = views::MenuOwnsInput();
+    if (menuTime == g_menuTime)
+    {
+        return;
+    }
+    g_menuTime = menuTime;
+    if (!platform::Enabled(platform::Level::Debug))
+    {
+        return;
+    }
+    if (menuTime && g_menuPlayer != 0)
+    {
+        platform::LogDebug(L"buttons: a menu owns the game's input while pad {}'s shop is up: the shop keeps its pad (its "
+                           L"view in the tables, its presses only)",
+                           g_menuPlayer + 1);
+    }
+    else if (menuTime)
+    {
+        platform::LogDebug(L"buttons: a menu owns the game's input: every pad drives it (the game's merged state in the "
+                           L"tables, every pad's presses passed as they came)");
+    }
+    else
+    {
+        platform::LogDebug(L"buttons: no menu owns the game's input: each pad its own player's again");
+    }
 }
 
 void InstallExtraKeyCalls() noexcept;
 
 void Tick(void* self, float deltaTime, void* application, void* cursor)
 {
+    if (generation::OnGameThread())
+    {
+        ReadOpeners();  // from the game's start, before any seat's first press
+        if (ViewsWanted() && g_inputOwner != nullptr)
+        {
+            // Before the game's Tick: its device polling sends presses through ActionDown, which must see this
+            // frame's menu time (the game state changes only in the world tick, so it holds for the write below).
+            ReadMenuTime();
+        }
+    }
     g_engineTick(self, deltaTime, application, cursor);
     const platform::frame_watch::Charge charge(platform::frame_watch::Part::InputTick);
     if (!g_extraKeysTried && g_actionDown != nullptr && generation::OnGameThread())
@@ -453,8 +586,11 @@ void Tick(void* self, float deltaTime, void* application, void* cursor)
 }
 
 /// A seated pad's presses update the tables (its player's polling reads them) but are passed as already
-/// handled: the game's own flag for "an earlier binding consumed this", so they never open a menu or
-/// run a field prompt, which belong to player 1's context. The seat comes from the press's source bit.
+/// handled: the game's own flag for "an earlier binding consumed this", so they never run a field prompt,
+/// which belongs to player 1's context. The seat comes from the press's source bit. Two presses are the
+/// game's own, passed as they came: a menu opener's (so the pause poll's UI-table variant and the menus'
+/// close handlers see the pad's Start as pad 1's), and every press while a menu owns the game's input
+/// (the menus are driven through this route; the seat's own route stays out, as its menu stops natively).
 char ActionDown(void* owner, void* unused, std::uint32_t sourceBit, void* event, std::uint8_t alreadyHandled)
 {
     const bool split = alreadyHandled == 0 && Acts(kPartEvents) && pad_sticks::Enabled() && generation::AnyActive() &&
@@ -481,6 +617,22 @@ char ActionDown(void* owner, void* unused, std::uint32_t sourceBit, void* event,
     }
     if (seat != 0)
     {
+        std::uint64_t key = 0;
+        const bool    opener = g_openersRead && event != nullptr &&
+                            platform::CopyGuarded(&key, static_cast<const std::byte*>(event) + kActionEventKey, sizeof(key)) &&
+                            Opener(key);
+        const bool merged = MergedEverywhere();
+        if (merged || opener)
+        {
+            ++(merged ? g_menuDowns : g_openerDowns)[seat];
+            if (opener && !merged && platform::Enabled(platform::Level::Debug))
+            {
+                platform::LogDebug(L"buttons: pad {}'s {} press goes to the game's pause poll and menus as it came (already "
+                                   L"handled {})",
+                                   seat + 1, players::unreal::NameText(key), alreadyHandled);
+            }
+            return g_actionDown(owner, unused, sourceBit, event, alreadyHandled);
+        }
         ++g_seatDowns[seat];
         char result = 0;
         // The route finds the seat from the source bit itself (menu_input_route).
@@ -642,6 +794,17 @@ bool Install(const platform::GameImage& image) noexcept
             g_extraKeySites[i] = site ? *site : 0;
         }
     }
+    for (std::size_t i = 0; i < kOpenerKeyNames.size(); ++i)
+    {
+        const auto key  = image.Rebase(kOpenerKeyNames[i], sizeof(std::uint64_t));
+        g_openerKeys[i] = key ? reinterpret_cast<const std::uint64_t*>(*key) : nullptr;
+    }
+    if (std::any_of(g_openerKeys.begin(), g_openerKeys.end(), [](const std::uint64_t* key) { return key == nullptr; }))
+    {
+        g_openerFrames = kOpenerReadFrames + 1;  // never read: nothing to wait for
+        platform::LogWarning(L"buttons: a menu-opening action's FKey global is not what the research read; a further pad's "
+                             L"Start, map and enemy-intel presses stay its own player's (no pause from it)");
+    }
     const auto late = std::count_if(g_lateActionDownSites.begin(), g_lateActionDownSites.end(),
                                     [](std::uintptr_t site) { return site != 0; });
     platform::Log(L"buttons: pad 2's presses kept from menus and prompts at {} of {} dispatch calls{}", calls,
@@ -699,7 +862,9 @@ ButtonScope::ButtonScope(int seat, std::uint64_t withoutKey) noexcept
     }
     for (Table& table : g_tables)
     {
-        ViewBytes(table, g_menuPlayer, table.ones);  // what the Tick wrote: the menu player's view
+        // table.ones still holds what the Tick wrote (the menu player's view, or the merged state): nothing else
+        // writes it between the Tick and a scope, and scopes do not nest. Recomputing it could differ (a shop opened
+        // since) from what Wrote recorded, and the next Tick would take the restore for a game write.
         ViewBytes(table, seat, table.twos);
         for (std::size_t i = 0; withoutKey != 0 && i < table.twos.size() && i < table.names.size(); ++i)
         {
@@ -760,8 +925,9 @@ void LogStatus() noexcept
         for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
         {
             seats += std::format(L"{}'s view held {} time(s) ({} skipped: a table moved), pad {}'s presses kept from the "
-                                 L"UI {}, ",
-                                 players::SeatName(seat), g_scopes[seat], g_scopeSkips[seat], seat + 1, g_seatDowns[seat]);
+                                 L"UI {} (menu openers passed {}, presses in a menu passed {}), ",
+                                 players::SeatName(seat), g_scopes[seat], g_scopeSkips[seat], seat + 1, g_seatDowns[seat],
+                                 g_openerDowns[seat], g_menuDowns[seat]);
         }
         platform::Log(L"  buttons: split {} frame(s), {}{} write fault(s); {} change line(s) logged; tables raw {} / "
                       L"UI {} elements",
@@ -773,7 +939,7 @@ void LogStatus() noexcept
         // Out of memory for the line: the counters still start afresh.
     }
     g_framesSplit = g_writeFaults = g_lines = 0;
-    g_scopes = g_scopeSkips = g_seatDowns = PerSeat{};
+    g_scopes = g_scopeSkips = g_seatDowns = g_openerDowns = g_menuDowns = PerSeat{};
 }
 
 #if LSS_DEV
@@ -786,7 +952,7 @@ void RegisterCommands()
                        .shape = control::Shape::Integer,
                        .max   = 3,
                        .help  = L"diagnosis: which parts of per-pad buttons act (1 the split views, 2 pad 2 kept from "
-                                L"menus and prompts); both at start",
+                                L"menus and prompts; the pause menu for every pad needs 1); both at start",
                        .set   = [](const Value& v) {
                            SetMask(static_cast<unsigned>(std::get<std::int64_t>(v)));
                            return Outcome{true, L"buttons mask set (see the log)"};

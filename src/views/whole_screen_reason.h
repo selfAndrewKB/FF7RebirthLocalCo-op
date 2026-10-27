@@ -97,6 +97,16 @@ enum class WholeScreenReason : std::uint8_t
 /// EndGameState states (the transition table, RE-p2-retry-reload.md §2 and RE-p2-single-view.md §2.1).
 inline constexpr std::uint8_t kStateCinemaPause = 7;
 inline constexpr std::uint8_t kStatePauseMenu   = 8;
+inline constexpr std::uint8_t kStateChapterPause = 10;  // PAUSE_IDLE_STARTCHAPTER: the cinema pause at a chapter start
+
+/// Whether a pause-family menu owns the game's input, by the game's own tests (RE-pause-menu-any-pad.md §3): one of
+/// the three pause states, or a pause-family widget alive (IsPauseMenuClosed false: the Blueprint-opened pause menus,
+/// the libra from the main menu). Every pad is the game's pad then, as in an unmodded game (player_two/input/pad_buttons.h).
+constexpr bool MenuOwnsInput(std::uint8_t gameState, bool pauseWidget) noexcept
+{
+    return gameState == kStateCinemaPause || gameState == kStatePauseMenu || gameState == kStateChapterPause ||
+           pauseWidget;
+}
 
 /// The first reason that holds, in the order above; None when nothing does or nothing is readable.
 WholeScreenReason ReasonOf(const ScreenSignals& signals) noexcept;

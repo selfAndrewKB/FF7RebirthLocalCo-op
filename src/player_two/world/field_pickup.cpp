@@ -66,7 +66,7 @@ constexpr std::uint32_t  kRootSlotHeldOwner = 0x210;        // -> +8: a u8 TickS
 constexpr std::uint32_t  kSlotHeldByte      = 0x08;
 using facts::kRootWorldItems;
 using facts::kCmdOpenPending;
-constexpr std::uintptr_t kPauseMenuKey      = 0x1491E44C0;  // InputKey24 "PauseMenu" (the poll needs it not held)
+using facts::kPauseMenuKey;  // InputKey24 "PauseMenu" (the poll needs it not held)
 
 // The input step's gate fields in GS (§12.12 item 2): i32 each.
 constexpr std::uint32_t kGsBlockA = 0x1A12288;

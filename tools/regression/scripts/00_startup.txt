@@ -4,6 +4,7 @@
 # expect: ready: every engine check passed
 # expect: game version 1\.00[45]
 # expect-dev: console listening on 127\.0\.0\.1:4419
+# expect: buttons: every pad's Start, map and enemy-intel presses reach the game's pause poll and menus
 # expect-not: standing aside: nothing installed
 # expect-not: not what the research read(?!\): none)
 #   "(the code is not what the research read): none" is the interact watch's all-clear; a site named after the colon is

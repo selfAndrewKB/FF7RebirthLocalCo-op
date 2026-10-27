@@ -336,6 +336,22 @@ void TestRules()
     EXPECT(EncounterInBattle(3) && EncounterInBattle(4) && !EncounterInBattle(2) && !EncounterInBattle(5));
 }
 
+void TestMenuOwnsInput()
+{
+    std::puts("menu time: the three pause states or a pause-family widget; the field, a load and the title are not");
+    using lss::views::MenuOwnsInput;
+    EXPECT(MenuOwnsInput(7, false) && MenuOwnsInput(8, false) && MenuOwnsInput(10, false));
+    EXPECT(MenuOwnsInput(6, true));   // a Blueprint-opened pause menu, no state change
+    EXPECT(MenuOwnsInput(8, true));   // both at once
+    EXPECT(!MenuOwnsInput(6, false));  // the field running
+    constexpr std::uint8_t kOthers[] = {0, 1, 5, 9, 11};
+    for (const std::uint8_t state : kOthers)
+    {
+        EXPECT(!MenuOwnsInput(state, false));
+    }
+    static_assert(MenuOwnsInput(8, false) && !MenuOwnsInput(6, false), "constexpr");
+}
+
 }  // namespace
 
 int main()
@@ -350,6 +366,7 @@ int main()
     TestOrder();
     TestOtherStates();
     TestRules();
+    TestMenuOwnsInput();
 
     return lss::test::Report();
 }
