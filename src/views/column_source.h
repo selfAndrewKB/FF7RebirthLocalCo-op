@@ -98,6 +98,8 @@ struct Shown
     /// By column (views/columns.h): the column's seat's source, player 1's for a column no seat fills.
     std::array<SeatSource, views::columns::kMaxColumns> columns{};
     int columnCount = 1;  // the columns listed
+    /// By seat, the column showing their own view (OwnColumn), -1 for none (index 0 unused).
+    std::array<int, players::kMaxPlayers> ownColumns{-1, -1, -1};
 
     /// The engine's single view: one view, player 1's, no columns (one monitor only): some further seat in the game
     /// has Screen (every one has it then, the moments above give it to all).
@@ -140,21 +142,12 @@ struct Shown
         return players::SeatIndex(seat) && seats[static_cast<std::size_t>(seat)].source == Source::PlayerOne;
     }
 
-    /// The column the sound's second listener follows: the first further column listed whose source is not PlayerOne
-    /// (Self, or Screen under the engine's single view), or -1 when none is (a column on player 1's camera hears as
-    /// player 1's view, as a mirror's does). Under the engine's single view that is the first further player's column,
-    /// as before step 6a: the engine lays the further views out at no size and keeps one listener itself, so the
-    /// mod's slot stays where it was.
-    constexpr int ListenerColumn() const noexcept
+    /// The column showing `seat`'s own view (Self, listed), or -1: the column whose engine listener is that player's
+    /// (player_two/feedback/sound_listeners.h). None for a column on player 1's picture (it hears as player 1's view,
+    /// as a mirror's does) and none under the engine's single view (one view, one listener: player 1's).
+    constexpr int OwnColumn(int seat) const noexcept
     {
-        for (int column = 1; column < columnCount; ++column)
-        {
-            if (columns[static_cast<std::size_t>(column)].source != Source::PlayerOne)
-            {
-                return column;
-            }
-        }
-        return -1;
+        return players::SeatIndex(seat) ? ownColumns[static_cast<std::size_t>(seat)] : -1;
     }
 
     bool operator==(const Shown&) const noexcept = default;
@@ -236,6 +229,15 @@ constexpr Shown Decide(const Moment& moment) noexcept
         else
         {
             shown.columns[at] = {Source::PlayerOne, Why::NoPlayer};
+        }
+    }
+    for (int seat = 1; seat < players::kMaxPlayers; ++seat)
+    {
+        const auto at     = static_cast<std::size_t>(seat);
+        const int  column = moment.map.columnOf[at];
+        if (shown.seatIn[at] && shown.seats[at].source == Source::Self && column >= 1 && column < shown.columnCount)
+        {
+            shown.ownColumns[at] = column;
         }
     }
     return shown;

@@ -1,0 +1,80 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-10-27",
+  "doc": "Rebirth/Documentation/research/RE-listener-per-seat.md",
+  "facts": [
+    {
+      "name": "slot: SQEX::Sd::Lay::SphericalWedgeSound vt+0x160 (UpdateAudible: PointSound's)",
+      "old": "0x1457DA250",
+      "new": "0x1456598D8",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (IDA, 2026-10-27) for the listener per player (RE-listener-per-seat.md sections 2.3 and 4.3): each slot holds the matched function in both builds, the call site calls the matched measure, the return address follows the measure's GetPosition call, and the functions' first 12 bytes are identical across builds; both update functions read xmm1 (the time step) at entry."
+    },
+    {
+      "name": "slot: SQEX::Sd::Lay::SphericalWedgeSound vt+0x58 (SEAD_LayObj_Update_Base)",
+      "old": "0x1457DA148",
+      "new": "0x1456597D0",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (IDA, 2026-10-27) for the listener per player (RE-listener-per-seat.md sections 2.3 and 4.3): each slot holds the matched function in both builds, the call site calls the matched measure, the return address follows the measure's GetPosition call, and the functions' first 12 bytes are identical across builds; both update functions read xmm1 (the time step) at entry."
+    },
+    {
+      "name": "slot: SQEX::Sd::Lay::PolygonSound vt+0x160 (UpdateAudible)",
+      "old": "0x1457DA410",
+      "new": "0x145659E18",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (IDA, 2026-10-27) for the listener per player (RE-listener-per-seat.md sections 2.3 and 4.3): each slot holds the matched function in both builds, the call site calls the matched measure, the return address follows the measure's GetPosition call, and the functions' first 12 bytes are identical across builds; both update functions read xmm1 (the time step) at entry."
+    },
+    {
+      "name": "slot: SQEX::Sd::Lay::CylindricalSectorSound vt+0x160 (UpdateAudible: PolygonSound's)",
+      "old": "0x1457DA090",
+      "new": "0x145659718",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (IDA, 2026-10-27) for the listener per player (RE-listener-per-seat.md sections 2.3 and 4.3): each slot holds the matched function in both builds, the call site calls the matched measure, the return address follows the measure's GetPosition call, and the functions' first 12 bytes are identical across builds; both update functions read xmm1 (the time step) at entry."
+    },
+    {
+      "name": "SEAD_LayPolygon_UpdateAudible",
+      "old": "0x14073F16C",
+      "new": "0x140857590",
+      "bytes": "48895c241048897424184889",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (IDA, 2026-10-27) for the listener per player (RE-listener-per-seat.md sections 2.3 and 4.3): each slot holds the matched function in both builds, the call site calls the matched measure, the return address follows the measure's GetPosition call, and the functions' first 12 bytes are identical across builds; both update functions read xmm1 (the time step) at entry."
+    },
+    {
+      "name": "call site: SeadAutoSeProc_Update_ClipAndLodFilter -> SeadAutoSeProc_AnalyzeFrame_ListenerDistSq (E8)",
+      "old": "0x140807F05",
+      "new": "0x140E7AFD1",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (IDA, 2026-10-27) for the listener per player (RE-listener-per-seat.md sections 2.3 and 4.3): each slot holds the matched function in both builds, the call site calls the matched measure, the return address follows the measure's GetPosition call, and the functions' first 12 bytes are identical across builds; both update functions read xmm1 (the time step) at entry."
+    },
+    {
+      "name": "SeadAutoSeProc_AnalyzeFrame_ListenerDistSq",
+      "old": "0x140808208",
+      "new": "0x140E7B2C8",
+      "bytes": "48895c241855565741544155",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (IDA, 2026-10-27) for the listener per player (RE-listener-per-seat.md sections 2.3 and 4.3): each slot holds the matched function in both builds, the call site calls the matched measure, the return address follows the measure's GetPosition call, and the functions' first 12 bytes are identical across builds; both update functions read xmm1 (the time step) at entry."
+    },
+    {
+      "name": "return address: SeadAutoSeProc_AnalyzeFrame_ListenerDistSq's GetPosition call (the rustle and swing range)",
+      "old": "0x140808365",
+      "new": "0x140E7B425",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Read from both exes by the main session (IDA, 2026-10-27) for the listener per player (RE-listener-per-seat.md sections 2.3 and 4.3): each slot holds the matched function in both builds, the call site calls the matched measure, the return address follows the measure's GetPosition call, and the functions' first 12 bytes are identical across builds; both update functions read xmm1 (the time step) at entry."
+    }
+  ]
+}

@@ -40,7 +40,7 @@
 #include "player_two/camera/near_fade.h"
 #include "player_two/camera/shoulder_scale.h"
 #include "player_two/camera/vault_camera.h"
-#include "player_two/feedback/audio_listener_two.h"
+#include "player_two/feedback/sound_listeners.h"
 #include "player_two/feedback/combat_rumble.h"
 #include "player_two/feedback/ffb_manager_two.h"
 #include "player_two/feedback/pad_rumble.h"
@@ -260,8 +260,8 @@ constexpr std::array kModules{
     Module{Call<&player_two::rumble_list_two::Install>, &player_two::rumble_list_two::Remove},
     // player 2's own force-feedback manager
     Module{Call<&player_two::ffb_manager_two::Install>, &player_two::ffb_manager_two::Remove},
-    // each SEAD sound from the nearer listener
-    Module{Call<&player_two::audio_listener_two::Install>, &player_two::audio_listener_two::Remove},
+    // each SEAD sound from the nearest player's listener
+    Module{Call<&player_two::sound_listeners::Install>, &player_two::sound_listeners::Remove},
     // player 2's vending machines: the shop's camera and pad
     Module{Call<&player_two::vending::Install>, &player_two::vending::Remove},
     // player 2's shopkeepers: admit, press, the shop's AI event
@@ -365,13 +365,11 @@ static_assert(Ordered<&players::widget_opacity::Install, &hud::prompt_rows::Inst
                   Ordered<&players::widget_opacity::Install, &hud::target_views::Install>(),
               "the opacity setter before the HUD modules that read it");
 
-// Game thread: the columns as the last columns' tick read them (TickColumns), and the column the sound's second
-// listener follows (TickAfterSession: the first further column not on player 1's camera, views/column_source.h
-// ListenerColumn, or -1), for the calls before them. One second listener for now: with three players in, sounds near
-// the second further player are heard from the nearer of player 1's and the first's (a listener per seat is the plan's
-// follow-up, plan/seats.md step 6).
-views::columns::Map g_lastColumns;
-int                 g_lastOwnColumn = -1;
+// Game thread: the columns as the last columns' tick read them (TickColumns), and by seat the column showing that
+// player's own view (TickAfterSession: views/column_source.h OwnColumn, -1 for none), for the calls before them: each
+// further player's sound listener follows it.
+views::columns::Map                   g_lastColumns;
+std::array<int, players::kMaxPlayers> g_ownColumns{-1, -1, -1};
 
 }  // namespace
 
@@ -410,10 +408,9 @@ void TickBeforeSession() noexcept
     player_two::equal_targeting::Tick();      // both players' types for the Condition selects (no leader scope held)
     player_two::target_coin::Tick();          // the blueprint natives' swaps once reflection is up; the summary
     player_two::ffb_manager_two::Tick();      // each seat's component on its own manager, after its BeginPlay
-    // the controller listener slot; the second listener on the column Shown::ListenerColumn names (the last tick's
-    // sources: the first further column not on player 1's camera, Self or the single view's Screen), off (-1) while
-    // every further column is on player 1's camera; the summary (Debug)
-    player_two::audio_listener_two::Tick(g_lastOwnColumn);
+    // the controller listener slot; each further player's listener on the column showing their own view (the last
+    // tick's sources, Shown::OwnColumn), off while they have none; the summary (Debug)
+    player_two::sound_listeners::Tick(g_ownColumns);
     player_two::leave_watch::Tick();          // the last leave's controller, followed until it is freed (logged)
     player_two::vending::Tick();              // a press that opened no shop; player 2 leaving with their shop up
     player_two::shop_talk::Tick();            // the shopkeeper verdicts queued by player 2's pass
@@ -433,7 +430,10 @@ void TickAfterSession(const Frame& frame) noexcept
 {
     // The per-seat modules loop the built seats themselves; the per-column ones (the framing, the shapes, the
     // renderer's hints) read the frame's column count.
-    g_lastOwnColumn = frame.shown.ListenerColumn();
+    for (int seat = 1; seat < players::kMaxPlayers; ++seat)
+    {
+        g_ownColumns[static_cast<std::size_t>(seat)] = frame.shown.OwnColumn(seat);
+    }
     // By seat, whether the seat's player plays a member (index 0 unused): the world modules' per-seat passes.
     std::array<bool, players::kMaxPlayers> plays{};
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)

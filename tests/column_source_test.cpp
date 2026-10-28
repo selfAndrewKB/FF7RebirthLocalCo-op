@@ -58,25 +58,27 @@ void TestFieldPlay()
         const Shown s = Decide(At(kTwoPlayers, SeatState::Playing, SeatState::Out));
         EXPECT(!s.Single() && s.SplitShown() && s.ViewsSplit() && s.columnCount == 2);
         EXPECT(s.seats[1] == kSelf && s.columns[1] == kSelf && !s.OnPlayerOne(1));
-        EXPECT(s.ListenerColumn() == 1);
+        EXPECT(s.OwnColumn(1) == 1 && s.OwnColumn(2) == -1);
     }
     {
         const Shown s = Decide(At(kThreePlayers, SeatState::Playing, SeatState::Playing));
         EXPECT(!s.Single() && s.SplitShown() && s.columnCount == 3);
         EXPECT(s.columns[1] == kSelf && s.columns[2] == kSelf);
+        EXPECT(s.OwnColumn(1) == 1 && s.OwnColumn(2) == 2);  // each player's listener on their own column
     }
     {
         // Columns held, two players and a mirror: the player's own, the mirror player 1's.
         const Shown s = Decide(At(kTwoAndMirror, SeatState::Playing, SeatState::Out, kHeld));
         EXPECT(!s.Single() && s.SplitShown() && s.ViewsSplit() && s.columnCount == 3);
         EXPECT(s.seats[1] == kSelf && s.columns[1] == kSelf && s.columns[2].why == Why::NoPlayer);
-        EXPECT(s.ListenerColumn() == 1);
+        EXPECT(s.OwnColumn(1) == 1 && s.OwnColumn(2) == -1);  // the mirror's column is no one's own
     }
     {
         // Player 1 alone: nothing to decide, one column.
         const Shown s = Decide(At(kOnePlayer, SeatState::Out, SeatState::Out));
         EXPECT(!s.Single() && !s.SplitShown() && !s.ViewsSplit() && s.columnCount == 1);
-        EXPECT(s.columns[0] == kSelf && s.ListenerColumn() == -1);
+        EXPECT(s.columns[0] == kSelf && s.OwnColumn(1) == -1 && s.OwnColumn(2) == -1);
+        EXPECT(s.OwnColumn(0) == -1 && s.OwnColumn(3) == -1);  // player 1 and no seat: none
     }
     {
         // A seat in but between members (joining, changing): their own view, as from the join.
@@ -94,7 +96,7 @@ void TestWholeScreenOneMonitor()
         EXPECT(s.Single() && !s.SplitShown() && !s.ViewsSplit());
         EXPECT(s.seats[1] == kScreenWhole && s.columns[1] == kScreenWhole);
         EXPECT(!s.OnPlayerOne(1));  // no column of theirs: the redirect and the HUD skip do not apply
-        EXPECT(s.ListenerColumn() == 1);  // the listener's slot stays on player 2's column (as before step 6a)
+        EXPECT(s.OwnColumn(1) == -1);  // one view, one listener: player 1's
     }
     {
         // A seat outside the game next to one in: the one in alone decides (every further player in waits).
@@ -125,11 +127,11 @@ void TestWholeScreenOneMonitor()
         EXPECT(!s.Single());
     }
     {
-        // An id the mod cannot read beside the player under the single view: its column is no one's, so the
-        // listener's slot skips it for the player's.
+        // An id the mod cannot read beside the player under the single view: its column is no one's, and the
+        // player's own is not on screen.
         const std::array<std::int32_t, 3> ids{0, -1, 1};
         const Shown s = Decide(At(ids, SeatState::Playing, SeatState::Out, false, true));
-        EXPECT(s.Single() && s.columns[1].why == Why::NoPlayer && s.ListenerColumn() == 2);
+        EXPECT(s.Single() && s.columns[1].why == Why::NoPlayer && s.OwnColumn(1) == -1);
     }
     static_assert(Decide(At(kTwoPlayers, SeatState::Playing, SeatState::Out, false, true)).Single(), "the screen");
 }
@@ -144,7 +146,7 @@ void TestWholeScreenColumnsHeld()
         EXPECT(s.OnPlayerOne(1));
         EXPECT(s.columns[1] == s.seats[1]);
         EXPECT(s.columns[2].source == Source::PlayerOne && s.columns[2].why == Why::NoPlayer);  // the mirror
-        EXPECT(s.ListenerColumn() == -1);
+        EXPECT(s.OwnColumn(1) == -1);
     }
     {
         const Shown s = Decide(At(kThreePlayers, SeatState::Playing, SeatState::Playing, kHeld, true));
@@ -198,25 +200,26 @@ void TestWaiting()
         EXPECT(s.seats[1] == kSelf && !s.OnPlayerOne(1));
         EXPECT(s.seats[2] == kColumnHanded && s.OnPlayerOne(2));
         EXPECT(s.columns[2] == s.seats[2]);
-        EXPECT(s.ListenerColumn() == 1);
+        EXPECT(s.OwnColumn(1) == 1 && s.OwnColumn(2) == -1);
     }
     {
-        // The other way round: player 2 waits, player 3 plays; the listener follows player 3's column.
+        // The other way round: player 2 waits, player 3 plays; player 3's listener on their column.
         const Shown s = Decide(At(kThreePlayers, SeatState::Handed, SeatState::Playing));
         EXPECT(!s.Single() && s.OnPlayerOne(1) && !s.OnPlayerOne(2));
-        EXPECT(s.ListenerColumn() == 2);
+        EXPECT(s.OwnColumn(1) == -1 && s.OwnColumn(2) == 2);
     }
     {
         // Columns held, one waits while the other plays: the waiting one's column on player 1's too (before step 6a
         // every seat needed a reason for any to show it).
         const Shown s = Decide(At(kThreePlayers, SeatState::Playing, SeatState::Handed, kHeld));
-        EXPECT(!s.Single() && !s.OnPlayerOne(1) && s.OnPlayerOne(2) && s.SplitShown() && s.ListenerColumn() == 1);
+        EXPECT(!s.Single() && !s.OnPlayerOne(1) && s.OnPlayerOne(2) && s.SplitShown() && s.OwnColumn(1) == 1);
+        EXPECT(s.OwnColumn(2) == -1);
     }
     {
-        // Player 3 listed before player 2 (player 2 rejoined) and waiting: the listener skips to player 2's column.
+        // Player 3 listed before player 2 (player 2 rejoined) and waiting: player 2's listener on their column 2.
         const std::array<std::int32_t, 3> ids{0, 2, 1};
         const Shown s = Decide(At(ids, SeatState::Playing, SeatState::Handed));
-        EXPECT(s.columns[1] == kColumnHanded && s.columns[2] == kSelf && s.ListenerColumn() == 2);
+        EXPECT(s.columns[1] == kColumnHanded && s.columns[2] == kSelf && s.OwnColumn(1) == 2 && s.OwnColumn(2) == -1);
     }
     {
         // Both wait, one monitor: the screen.
@@ -249,12 +252,13 @@ void TestMirrors()
         EXPECT(!s.Single() && !s.SplitShown() && s.ViewsSplit() && s.columnCount == 3);
         EXPECT(s.columns[0] == kSelf);
         EXPECT(s.columns[1].why == Why::NoPlayer && s.columns[2].why == Why::NoPlayer);
-        EXPECT(s.ListenerColumn() == -1);
+        EXPECT(s.OwnColumn(1) == -1 && s.OwnColumn(2) == -1);
     }
     {
         // Player 3 in with player 2 out (column 1 is seat 2's), a mirror in column 2.
         const Shown s = Decide(At(kThreeOutOfOrder, SeatState::Out, SeatState::Playing, kHeld));
-        EXPECT(s.columns[1] == kSelf && s.columns[2].why == Why::NoPlayer && s.ListenerColumn() == 1);
+        EXPECT(s.columns[1] == kSelf && s.columns[2].why == Why::NoPlayer && s.OwnColumn(2) == 1);
+        EXPECT(s.OwnColumn(1) == -1);
         EXPECT(s.seats[1] == kSelf && !s.seatIn[1]);  // out: no reason, not in
     }
     {

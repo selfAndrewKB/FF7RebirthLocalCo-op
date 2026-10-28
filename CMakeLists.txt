@@ -96,7 +96,7 @@ add_library(LocalSplitScreen SHARED
     src/player_two/feedback/rumble_list_copy.cpp
     src/player_two/feedback/rumble_sources_two.cpp
     src/player_two/feedback/ffb_manager_two.cpp
-    src/player_two/feedback/audio_listener_two.cpp
+    src/player_two/feedback/sound_listeners.cpp
     src/player_two/input/approach_two.cpp
     src/player_two/input/move_type_two.cpp
     src/player_two/world/anim_two_views.cpp
@@ -350,7 +350,7 @@ lss_test(lock_group_rules)
 lss_test(synergy_rules src/player_two/session/party_lease.cpp)
 lss_test(menu_rules)
 lss_test(seqlock)
-lss_test(listener_choice)
+lss_test(listener_rules)
 lss_test(rumble_rules)
 lss_test(ride_rules)
 lss_test(hud_rules)
