@@ -325,7 +325,7 @@ bool ImageReady(int seat, bool shown) noexcept
     return g_overlayThisFrame != 0;
 }
 
-double BeginFurtherPass() noexcept
+double HoldFrame() noexcept
 {
     double deltaTime = 0.0;
     std::memcpy(&deltaTime, reinterpret_cast<const void*>(g_deltaTime), sizeof(deltaTime));
@@ -342,6 +342,18 @@ double BeginFurtherPass() noexcept
     g_frameNumberSaved       = frame;
     const std::uint32_t back = frame - 1;
     std::memcpy(reinterpret_cast<void*>(g_frameNumber), &back, sizeof(back));
+    return deltaTime;
+}
+
+void ReleaseFrame() noexcept
+{
+    std::memcpy(reinterpret_cast<void*>(g_deltaTime), &g_deltaTimeSaved, sizeof(g_deltaTimeSaved));
+    std::memcpy(reinterpret_cast<void*>(g_frameNumber), &g_frameNumberSaved, sizeof(g_frameNumberSaved));
+}
+
+double BeginFurtherPass() noexcept
+{
+    const double deltaTime = HoldFrame();
     g_slot.SetActive(true);
     return deltaTime;
 }
@@ -360,8 +372,7 @@ bool RenderFurther() noexcept
 
 void EndFurtherPass() noexcept
 {
-    std::memcpy(reinterpret_cast<void*>(g_deltaTime), &g_deltaTimeSaved, sizeof(g_deltaTimeSaved));
-    std::memcpy(reinterpret_cast<void*>(g_frameNumber), &g_frameNumberSaved, sizeof(g_frameNumberSaved));
+    ReleaseFrame();
     g_slot.SetActive(false);
 }
 

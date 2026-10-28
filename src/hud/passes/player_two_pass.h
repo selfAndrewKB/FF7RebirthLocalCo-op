@@ -3,8 +3,9 @@
 // Each further seat's content in its HUD image (Stage B2; per seat since plan/seats.md step 4): around the seat's
 // overlay pass (hud/passes/second_image.h), the game's own answers to "which player" are switched to the seat, and the
 // game's own view-dependent HUD updates are run again for it (RE-p2-hud.md P8.6, pass 9 and pass 12). After the pass
-// everything is switched back and the same updates run again for player 1, whose render (or the next seat's pass)
-// follows in the same frame. Each seat keeps its own view rect between frames.
+// everything is switched back and the same updates run again for player 1, whose render follows in the same frame;
+// between two further passes the roots' contexts and player 1's re-run are left to the last one (hud/
+// context_owners.h). Each seat keeps its own view rect between frames.
 //
 // The levers, each the game's own:
 //   L1  each HUD root's owning player: UUserWidget::SetPlayerContext, which the marker list and
@@ -51,11 +52,22 @@ unsigned PlayerTwoLeversMask() noexcept;
 void BeginPasses() noexcept;
 
 /// Game thread, just before a further seat's overlay render. True if the levers are now the seat's
-/// (then LeaveSeat must follow the render).
+/// (then LeaveSeat must follow the render). False: player 1's levers and re-run (SettleSeats), so the pass
+/// renders player 1's content.
 bool EnterSeat(int seat) noexcept;
 
-/// Game thread, just after the seat's overlay render: levers back to player 1, player 1's re-run.
-void LeaveSeat(int seat) noexcept;
+/// Game thread, just after the seat's overlay render: levers back to player 1, player 1's re-run. With `another`
+/// (a further seat's pass follows in this frame) the HUD roots keep the seat's contexts and player 1's re-run waits:
+/// the next pass sets its own and does the way back.
+void LeaveSeat(int seat, bool another) noexcept;
+
+/// Game thread: player 1's contexts and re-run, if a pass left them for the next one (PlayerOneDue). From EnterSeat
+/// when the levers fail, and after the frame's further passes when a planned pass did not run (its image not ready;
+/// under second_image's HoldFrame there). Nothing otherwise.
+void SettleSeats() noexcept;
+
+/// A pass left the roots' contexts and player 1's re-run for the next further pass.
+bool PlayerOneDue() noexcept;
 
 #if LSS_DEV
 /// The `hud-levers` and `hud-levers-mask` commands and readings. May throw (out of memory).

@@ -64,9 +64,28 @@ std::uint32_t g_renderTimedFrames  = 0;
 
 using platform::frame_watch::Now;
 
+/// Whether a further seat below `seat` is expected to have a pass after it this frame (the loop's own test without the
+/// image's buffer check: a pass planned but not run is put back by SettleSeats after the loop).
+bool AnotherPassBelow(int seat, bool splitShown) noexcept
+{
+    if (!splitShown || !SecondImageOn() || !PlayerTwoContentOn())
+    {
+        return false;
+    }
+    for (int below = seat - 1; below >= 1; --below)
+    {
+        if (player_two::generation::Active(below) && !views::OnPlayerOne(below))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 /// A further seat's pass of the overlay render: its levers and updates, its own render into the entry named for it,
-/// everything put back for the next pass. Its image is ready (second_image's ImageReady).
-void FurtherPass(int seat) noexcept
+/// everything put back for the next pass (the roots' contexts and player 1's re-run only after the last further pass,
+/// `another` false). Its image is ready (second_image's ImageReady).
+void FurtherPass(int seat, bool another) noexcept
 {
     const double deltaTime = BeginFurtherPass();  // the engine's DeltaTime 0 for the render; the slot taking part
     overlay_pass::Set(seat);
@@ -91,7 +110,7 @@ void FurtherPass(int seat) noexcept
     target_views::BeforePass(0);  // the seat's, collapsed before player 1's updates (put back after the render)
     if (content)
     {
-        LeaveSeat(seat);
+        LeaveSeat(seat, another);
     }
     area_icons_two::ShowOnly(0);
     pass_opacity::ShowOnly(0);  // player 1's rows, markers, pins and command menu for player 1's pass
@@ -155,8 +174,14 @@ void RenderRootOverlay(void* application) noexcept
         {
             if (player_two::generation::Active(seat) && ImageReady(seat, splitShown && !views::OnPlayerOne(seat)))
             {
-                FurtherPass(seat);
+                FurtherPass(seat, AnotherPassBelow(seat, splitShown));
             }
+        }
+        if (PlayerOneDue())  // a pass planned after the last one that ran did not run: player 1's put back here,
+        {                    // under the frame a pass holds
+            HoldFrame();
+            SettleSeats();
+            ReleaseFrame();
         }
         BeginPlayerOnePass();  // the game's own call follows: whose entries were rendered, for the families
         overlay_pass::Set(0);

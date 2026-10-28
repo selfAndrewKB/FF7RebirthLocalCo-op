@@ -128,6 +128,10 @@ struct FieldTargets
 FieldTargets                                         g_fieldTargets;        // this frame's walk (hiddenSwapped unused)
 FieldTargets                                         g_fieldTargetsLogged{static_cast<std::size_t>(-1)};
 unsigned                                             g_mask               = 511;  // SetPlayerTwoLeversMask
+// A pass left its seat's contexts for the next further pass (LeaveSeat with another): player 1's contexts and
+// updates are due, from the next pass's LeaveSeat or SettleSeats.
+bool                                                 g_playerOneDue       = false;
+std::uint32_t                                        g_settledLate        = 0;  // since the census: SettleSeats did it
 std::array<double, kParts>                           g_partSeconds{};
 std::uint32_t                                        g_timedFrames     = 0;
 
@@ -185,6 +189,8 @@ void LogTiming()
     {
         g_partSeconds.fill(0.0);
         hud_updates::TakeTimings(g_timedFrames);
+        hud_roots::ResetCensus();
+        g_settledLate = 0;
         g_timedFrames = 0;
         return;
     }
@@ -197,7 +203,11 @@ void LogTiming()
     }
     platform::Log(L"HUD levers: ms per frame over {} frames: {}; updates (both runs):{}; {} user widgets live", g_timedFrames,
                   parts, hud_updates::TakeTimings(g_timedFrames), user_widgets::Live().size());
+    platform::LogDebug(L"HUD roots over {} frames: {}; player 1's put back outside a pass's own way back (a planned "
+                       L"pass not run, or one without the levers) {} time(s)",
+                       g_timedFrames, hud_roots::TakeCensus(g_timedFrames), g_settledLate);
     g_partSeconds.fill(0.0);
+    g_settledLate = 0;
     g_timedFrames = 0;
 }
 
@@ -501,7 +511,27 @@ void BeginPasses() noexcept
     g_passedThisFrame = false;
 }
 
-bool EnterSeat(int seat) noexcept
+namespace {
+
+/// The refusal for a failed way back to player 1 (LeaveSeat, SettleSeats). Allocates only for the log line.
+void RefuseWayBack(bool contexts, bool ticks) noexcept
+{
+    try
+    {
+        if (!contexts || !ticks)
+        {
+            Refuse(!contexts ? L"SetPlayerContext raised an exception restoring player 1 (some roots may keep a "
+                               L"further player's context until the next join)"
+                             : L"a HUD update raised an exception in player 1's run");
+        }
+    }
+    catch (...)
+    {
+        g_on.store(false, std::memory_order_relaxed);  // Refuse without its log line
+    }
+}
+
+bool EnterSeatLevers(int seat) noexcept
 {
     try
     {
@@ -548,48 +578,92 @@ bool EnterSeat(int seat) noexcept
     catch (...)
     {
         // Only the log lines allocate; whatever was switched before the throw is put back.
-        LeaveSeat(seat);
+        LeaveSeat(seat, false);
         g_on.store(false, std::memory_order_relaxed);
         return false;
     }
 }
 
-void LeaveSeat(int seat) noexcept
+}  // namespace
+
+bool EnterSeat(int seat) noexcept
+{
+    const bool entered = EnterSeatLevers(seat);
+    if (!entered)
+    {
+        SettleSeats();  // the pass renders player 1's content: an earlier pass's contexts and positions put back
+    }
+    return entered;
+}
+
+void LeaveSeat(int seat, bool another) noexcept
 {
     // Every lever is put back whatever happens to the others: each step is guarded on its own
     // (the engine calls by SEH inside the helpers), and nothing here allocates except the log.
+    // With another further pass to come, the roots' contexts and player 1's re-run wait for the
+    // last pass: the next seat's own contexts and updates replace this one's, and the roots go
+    // back to player 1 once (hud/context_owners.h).
     if (players::SeatIndex(seat))
     {
         const auto s      = static_cast<std::size_t>(seat);
         g_seatRectKnown[s] = ReadRect(g_seatRect[s]);  // computed by the seat's render through L2
     }
-    g_firstPlayerAnswer  = 0;
-    double     mark      = Now();
-    const bool contexts  = !Acts(kLeverContexts) || hud_roots::SetContexts(0);
-    mark                 = Charge(kContextsOne, mark);
+    g_firstPlayerAnswer = 0;
+    double mark         = Now();
+    bool   contexts     = true;
+    if (!another)
+    {
+        contexts = !Acts(kLeverContexts) || hud_roots::SetContexts(0);
+        mark     = Charge(kContextsOne, mark);
+    }
     g_primary.reset();  // SwapWindow's close: a no-op unless it opened
     WriteRect(g_playerOneRect);
-    mark             = Now();
-    const bool ticks = RunUpdates(0);  // player 1's positions again, before the next pass's render
-    search_pins::Place();              // and the search pins'
-    wrangle_targets::Place(0);         // and the chocobo wrangle's targets'
+    bool ticks = true;
+    mark       = Now();
+    if (!another)
+    {
+        ticks = RunUpdates(0);      // player 1's positions again, before player 1's render
+        search_pins::Place();       // and the search pins'
+        wrangle_targets::Place(0);  // and the chocobo wrangle's targets'
+    }
+    else
+    {
+        // The minimap's holder back to player 1's: the next seat's run skips it while that seat's minimap is off
+        // (just after a join), and its pass would paint this seat's map.
+        minimap::RunHolder(0);
+    }
     Charge(kTicksOne, mark);
     RestoreTimeStep();
+    g_playerOneDue    = another;
     g_passedThisFrame = true;
-    try
-    {
-        if (!contexts || !ticks)
-        {
-            Refuse(!contexts ? L"SetPlayerContext raised an exception restoring player 1 (some roots may keep a further "
-                               L"player's context until the next join)"
-                             : L"a HUD update raised an exception in player 1's run");
-        }
-    }
-    catch (...)
-    {
-        g_on.store(false, std::memory_order_relaxed);  // Refuse without its log line
-    }
+    RefuseWayBack(contexts, ticks);
 }
+
+void SettleSeats() noexcept
+{
+    if (!g_playerOneDue)
+    {
+        return;
+    }
+    g_playerOneDue = false;
+    ++g_settledLate;
+    HoldTimeStep();  // L6 for player 1's re-run, as inside a pass
+    double     mark     = Now();
+    const bool contexts = !Acts(kLeverContexts) || hud_roots::SetContexts(0);
+    mark                = Charge(kContextsOne, mark);
+    const bool ticks    = RunUpdates(0);
+    search_pins::Place();
+    wrangle_targets::Place(0);
+    Charge(kTicksOne, mark);
+    RestoreTimeStep();
+    RefuseWayBack(contexts, ticks);
+}
+
+bool PlayerOneDue() noexcept
+{
+    return g_playerOneDue;
+}
+
 #if LSS_DEV
 
 void RegisterPlayerTwoPassCommands()

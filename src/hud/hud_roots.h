@@ -15,6 +15,8 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
+#include <string>
 
 namespace RC::Unreal {
 class UObject;
@@ -54,10 +56,18 @@ void Adopt(RC::Unreal::UObject* widget);
 /// (RE-p2-field-interact.md §12.14). True if it is a root. Game thread, before a further seat's SetContexts.
 bool AdoptSelfPlacing(RC::Unreal::UObject* widget);
 
-/// Gives a further seat's context to every live root shown this frame and to the self-placing ones,
-/// or player 1's (seat 0) back to exactly the roots given a seat's (and clears the self-placing
-/// marks). False if the engine raised an exception inside SetPlayerContext, or the seat has no context.
+/// Gives a further seat's context to every live root shown in its pass and to the self-placing ones that do not
+/// carry it already (hud/context_owners.h), or player 1's (seat 0) back to every root a seat's reached (and clears
+/// the self-placing marks). A root a pass does not need keeps an earlier pass's context until the way back.
+/// False if the engine raised an exception inside SetPlayerContext, or the seat has no context.
 bool SetContexts(int seat) noexcept;
+
+/// The census since the last call, for the perf log: the setter's calls per frame each way, its time, and the
+/// costliest root classes. Counts start afresh. May throw (out of memory).
+std::wstring TakeCensus(std::uint32_t frames);
+
+/// The census's counts start afresh, unlogged (the perf log off).
+void ResetCensus() noexcept;
 
 /// How many roots the last scan found.
 std::size_t Count() noexcept;

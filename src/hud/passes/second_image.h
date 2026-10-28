@@ -52,15 +52,21 @@ void BeginFrame() noexcept;
 /// (a wrong buffer kind refuses the images for good), the overlay with a window. `seat` is a built seat in the game.
 bool ImageReady(int seat, bool shown) noexcept;
 
-/// A further pass begins, for the seat ImageReady last answered for: the engine's DeltaTime held at 0 for its
-/// render, the slot taking part. Returns the frame's DeltaTime (for the updates run in the pass).
+/// A further pass begins, for the seat ImageReady last answered for: the frame held (HoldFrame) for its render, the
+/// slot taking part. Returns the frame's DeltaTime (for the updates run in the pass).
 double BeginFurtherPass() noexcept;
+
+/// The engine's DeltaTime held at 0 and GFrameNumber one back, as for a further pass, without the slot: for player 1's
+/// re-run outside a pass (hud/passes/player_two_pass.h SettleSeats). Returns the frame's DeltaTime. ReleaseFrame
+/// must follow. Only once the images are installed (a pass ran this frame).
+double HoldFrame() noexcept;
+void   ReleaseFrame() noexcept;
 
 /// The game's overlay render for the pass's entry (SEndRootOverlay__RenderToCompositeLayer). False on a fault,
 /// which refuses the images for good.
 bool RenderFurther() noexcept;
 
-/// The further pass ends: DeltaTime back.
+/// The further pass ends: DeltaTime and the frame number back.
 void EndFurtherPass() noexcept;
 
 /// The game's own call follows: marks whose entries were rendered (the render thread reads it).
