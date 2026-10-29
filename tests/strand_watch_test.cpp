@@ -1,6 +1,6 @@
 // Host-side tests for StrandWatch, run without the game.
 
-#include "player_two/world/strand_watch.h"
+#include "world/strand_watch.h"
 
 #include "expect.h"
 
@@ -9,8 +9,8 @@
 
 namespace {
 
-using lss::player_two::StrandEvent;
-using lss::player_two::StrandWatch;
+using lss::world::StrandEvent;
+using lss::world::StrandWatch;
 
 constexpr float kTick = 1.0f / 60.0f;
 
@@ -76,7 +76,7 @@ void TestShortGapsAreOnePush()
 void TestFallBurstsAreOneStrand()
 {
     std::puts("strand: refused falls in bursts ~0.3 s apart (a fall edge, no stick) are one strand that warps");
-    StrandWatch watch{lss::player_two::StrandRules{.holdSeconds = 0.3f}};
+    StrandWatch watch{lss::world::StrandRules{.holdSeconds = 0.3f}};
     std::vector<StrandEvent> events;
     for (int cycle = 0; cycle < 6; ++cycle)
     {
@@ -128,9 +128,9 @@ void TestResetForgetsEverything()
 void TestParkChecksCountOnlyWhileParked()
 {
     std::puts("strand: failed safe checks count only while the game holds the character parked");
-    EXPECT(lss::player_two::ParkChecks(3, true) == 3);
-    EXPECT(lss::player_two::ParkChecks(3, false) == 0);
-    EXPECT(lss::player_two::ParkChecks(0, true) == 0);
+    EXPECT(lss::world::ParkChecks(3, true) == 3);
+    EXPECT(lss::world::ParkChecks(3, false) == 0);
+    EXPECT(lss::world::ParkChecks(0, true) == 0);
 }
 
 }  // namespace

@@ -1,8 +1,8 @@
-// Host-side tests for player_two::leader_answer::Decide (player_two/scopes/leader_answer.h), run without the game: the
+// Host-side tests for scopes::leader_answer::Decide (scopes/leader_answer.h), run without the game: the
 // five
 // answer sources' priority, the game-thread rule, the counting, and when the component's type is read.
 
-#include "player_two/scopes/leader_answer.h"
+#include "scopes/leader_answer.h"
 
 #include "expect.h"
 
@@ -10,10 +10,10 @@
 
 namespace {
 
-using lss::player_two::leader_answer::Answer;
-using lss::player_two::leader_answer::Decide;
-using lss::player_two::leader_answer::kNoType;
-using lss::player_two::leader_answer::Verdict;
+using lss::scopes::leader_answer::Answer;
+using lss::scopes::leader_answer::Decide;
+using lss::scopes::leader_answer::kNoType;
+using lss::scopes::leader_answer::Verdict;
 
 /// A component of player type `type`, counting how often Decide asked for it.
 struct Component

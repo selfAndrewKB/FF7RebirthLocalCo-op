@@ -7,7 +7,7 @@
 #include "platform/image.h"
 #include "platform/verified_code.h"
 
-#include "player_two/weak_object.h"
+#include "players/weak_object.h"
 
 #include <array>
 #include <cstdint>
@@ -159,7 +159,7 @@ bool RunLeaderTarget() noexcept
     std::int32_t count  = 0;
     if (leader != nullptr && platform::CopyGuarded(&count, leader + kLeaderTargetCount, sizeof(count)) && count != 0)
     {
-        if (void* target = player_two::weak_object::ObjectAt(leader + kLeaderTargetWeak);
+        if (void* target = players::weak_object::ObjectAt(leader + kLeaderTargetWeak);
             target != nullptr && !CallGuarded(g_leaderTarget, target))
         {
             return false;
@@ -187,7 +187,7 @@ bool RunCompass() noexcept
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    bool holds = player_two::weak_object::Known();
+    bool holds = players::weak_object::Known();
     for (std::size_t i = 0; holds && i < kSubTicks.size(); ++i)
     {
         const auto live = platform::FindFunction(image, kSubTicks[i].function);

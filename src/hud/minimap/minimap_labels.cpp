@@ -10,7 +10,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
-#include "player_two/generation.h"
+#include "players/generation.h"
 #include "players/seats.h"
 
 #include <array>
@@ -29,7 +29,7 @@ namespace lss::hud::minimap_labels {
 
 namespace {
 
-namespace generation = player_two::generation;
+namespace generation = players::generation;
 using label_states::LabelAccess;
 using label_states::LabelBook;
 using label_states::LabelCounts;

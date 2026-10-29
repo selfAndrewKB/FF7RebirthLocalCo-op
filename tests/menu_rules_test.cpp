@@ -1,9 +1,9 @@
-// Host-side tests for player_two::menu_rules, run without the game.
+// Host-side tests for battle::menu_rules, run without the game.
 //
 // Pad 2's press gate and the taken-key set; the world-slow value and the wait sound shared by the two menus; the join
 // Setup's pacing and readiness; the follow rule.
 
-#include "player_two/battle/menu_rules.h"
+#include "battle/menu_rules.h"
 
 #include "expect.h"
 
@@ -13,7 +13,7 @@
 
 namespace {
 
-using namespace lss::player_two::menu_rules;
+using namespace lss::battle::menu_rules;
 
 void TestPressGate()
 {

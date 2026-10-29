@@ -1,8 +1,8 @@
-// Host-side tests for the walk-cap numbering in player_two/input/move_type_two.h: player numbers (1 player 1, seat + 1
+// Host-side tests for the walk-cap numbering in input/move_type_two.h: player numbers (1 player 1, seat + 1
 // for a seat, 0 another controller) and their bits in the set of controllers to clear, which the two-player mod wrote
 // as `1 << player` with player 1 and 2.
 
-#include "player_two/input/move_type_two.h"
+#include "input/move_type_two.h"
 
 #include "expect.h"
 
@@ -10,7 +10,7 @@
 
 namespace {
 
-using namespace lss::player_two::move_type_two;
+using namespace lss::input::move_type_two;
 namespace players = lss::players;
 
 void TestTwoPlayerNumbersUnchanged()

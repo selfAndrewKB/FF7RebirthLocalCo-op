@@ -1,9 +1,9 @@
-// Host-side tests for player_two::field_rules, run without the game.
+// Host-side tests for world::field_rules, run without the game.
 //
 // The shopkeeper name's suffix, the game's mapped pointers and row names, player 2's trigger route and verdict, and
 // the input clock's seconds-before.
 
-#include "player_two/world/field_rules.h"
+#include "world/field_rules.h"
 
 #include "expect.h"
 
@@ -13,7 +13,7 @@
 
 namespace {
 
-using namespace lss::player_two::field_rules;
+using namespace lss::world::field_rules;
 
 void TestNames()
 {

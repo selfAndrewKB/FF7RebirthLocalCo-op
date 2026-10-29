@@ -7,7 +7,7 @@
 // and aliasing assumptions. Every offset passed here is one read in IDA at the instruction that uses
 // it (the modules' facts).
 //
-// No Windows.h here: this header reaches every module through player_two/object_fields.h, and
+// No Windows.h here: this header reaches every module through players/object_fields.h, and
 // Windows.h's macros (Yield, GetObject, min/max) must not. The two guards are declared, not included.
 
 #include <cstddef>

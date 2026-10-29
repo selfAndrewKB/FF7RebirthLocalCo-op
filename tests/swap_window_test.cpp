@@ -1,10 +1,10 @@
-// Host-side tests for player_two::SwapWindow, run without the game.
+// Host-side tests for scopes::SwapWindow, run without the game.
 //
 // The slot stands in for the party manager's primary-controller field. A window replaces it only
 // from the value the caller expects, restores it only if the replacement is still there, and a
 // window opened inside another one leaves both the slot and the outer window alone.
 
-#include "player_two/scopes/swap_window.h"
+#include "scopes/swap_window.h"
 
 #include "expect.h"
 
@@ -13,7 +13,7 @@
 
 namespace {
 
-using lss::player_two::SwapWindow;
+using lss::scopes::SwapWindow;
 using Opened = SwapWindow::Opened;
 
 constexpr std::uint64_t kPlayerOne = 0x0000000700001234;  // {serial 7, index 0x1234}

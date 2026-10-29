@@ -9,9 +9,9 @@
 #include "platform/module_pin.h"
 #include "platform/sparse_array.h"
 #include "platform/verified_code.h"
-#include "player_two/generation.h"
+#include "players/generation.h"
 #include "players/seats.h"
-#include "player_two/weak_object.h"
+#include "players/weak_object.h"
 
 #include <cstdint>
 #include <cstring>
@@ -110,7 +110,7 @@ int ReplayList(std::uintptr_t manager, const List& list, void* canvas, void* pla
         void*         widget = nullptr;  // the wrapper's r9: the entry's own TSharedPtr, or the UUserWidget
         if (list.umg)
         {
-            widget = player_two::weak_object::ObjectAt(reinterpret_cast<const void*>(element));
+            widget = players::weak_object::ObjectAt(reinterpret_cast<const void*>(element));
             key    = reinterpret_cast<std::uint64_t>(widget);
         }
         else
@@ -146,7 +146,7 @@ bool Install(const platform::GameImage& image) noexcept
     const auto system      = image.Rebase(facts::kEndUISystem, kManager + sizeof(void*));
     const auto slate       = platform::FindFunction(image, kPlaceSlate);
     const auto umg         = platform::FindFunction(image, kPlaceUmg);
-    if (!system || !slate || !umg || !player_two::weak_object::Known())
+    if (!system || !slate || !umg || !players::weak_object::Known())
     {
         platform::Log(L"popups: the placement code is not what the research read; popups stay player 1's in both halves");
         return false;
@@ -194,7 +194,7 @@ void Replay(int seat) noexcept
     {
         return;
     }
-    void* controller = further ? player_two::generation::ControllerOf(seat) : nullptr;
+    void* controller = further ? players::generation::ControllerOf(seat) : nullptr;
     if (further && controller == nullptr)
     {
         return;

@@ -4,7 +4,7 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/verified_code.h"
-#include "player_two/weak_object.h"
+#include "players/weak_object.h"
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -83,7 +83,7 @@ bool Rows(std::vector<RowEntry>& rows)
     {
         RowEntry row;
         if (!Read(data + sizeof(std::uint64_t) * static_cast<std::size_t>(i), row.weak) ||
-            (row.widget = player_two::weak_object::ObjectOf(row.weak)) == nullptr)
+            (row.widget = players::weak_object::ObjectOf(row.weak)) == nullptr)
         {
             continue;
         }

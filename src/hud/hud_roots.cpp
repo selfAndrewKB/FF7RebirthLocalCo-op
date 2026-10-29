@@ -14,9 +14,9 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
-#include "player_two/scopes/primary_controller.h"
 #include "players/local_players.h"
 #include "players/unreal_access.h"
+#include "scopes/primary_controller.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -295,7 +295,7 @@ bool Scan(const LocalPlayerSet& bySeat)
     g_selfPlacing.assign(g_roots.size(), 0);
     for (std::size_t seat = 0; seat < bySeat.size(); ++seat)
     {
-        const std::uint64_t weak = bySeat[seat] == nullptr ? 0 : player_two::primary_controller::WeakValueOf(bySeat[seat]);
+        const std::uint64_t weak = bySeat[seat] == nullptr ? 0 : scopes::primary_controller::WeakValueOf(bySeat[seat]);
         g_contexts[seat]         = weak == 0 ? PlayerContext{} : PlayerContext{weak, world};
     }
     return world != 0 && g_contexts[0].localPlayer != 0;

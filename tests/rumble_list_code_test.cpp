@@ -1,11 +1,11 @@
-// Host-side tests for the 1.004 jump box's list-load code (player_two/feedback/rumble_list_code.h), run without the
+// Host-side tests for the 1.004 jump box's list-load code (feedback/rumble_list_code.h), run without the
 // game.
 //
 // The bytes are EXECUTED in a harness that recreates the site: rsi = the jump box's owner (its list at +0x3B0), the
 // code, then rsi is returned. On a thread a route slot names, with that slot's list set, that list is taken; on any
 // other thread, or with no list, the game's own. Two slots: two landings on two threads each take their own seat's.
 
-#include "player_two/feedback/rumble_list_code.h"
+#include "feedback/rumble_list_code.h"
 
 #include "exec_page.h"
 #include "expect.h"
@@ -16,7 +16,7 @@
 
 namespace {
 
-using namespace lss::player_two::rumble_list_code;
+using namespace lss::feedback::rumble_list_code;
 
 /// void* harness(void* owner /*rcx*/): rsi after the code.
 using Harness = void* (*)(void* owner);

@@ -1,10 +1,10 @@
-// Host-side tests for player_two::listener_rules, run without the game.
+// Host-side tests for feedback::listener_rules, run without the game.
 //
 // The nearest-of-N choice with its hold and hand-over, the choice table between a sound's test and its update, the
 // gates' nearest listener, the quaternion rotation the device's push uses, the audibility compare and the LOD rules.
 // Remake's tests (audio/listener_rules_test.cpp) for the rules taken from it.
 
-#include "player_two/feedback/listener_rules.h"
+#include "feedback/listener_rules.h"
 
 #include "expect.h"
 
@@ -15,7 +15,7 @@
 
 namespace {
 
-namespace rules = lss::player_two::listener_rules;
+namespace rules = lss::feedback::listener_rules;
 
 bool Near(const rules::Vec3& a, const rules::Vec3& b)
 {

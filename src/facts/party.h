@@ -122,7 +122,7 @@ inline constexpr FunctionFact kPlayerTypeFromComponent{L"EndCharacter_GetPlayerT
 
 // The AI: enemy controllers, the active brain and its state, the follow state
 /// The AI follow state's player-subject class (vtable, data): FollowState_TickTeleportEQS at its +0x58, ForceTeleport
-/// +0x270, FinishForcedTeleportNow +0x278 (player_two/party_warp).
+/// +0x270, FinishForcedTeleportNow +0x278 (world/party_warp).
 inline constexpr std::uintptr_t kFollowStatePlayerVTable = 0x14580C8F8;
 // Enemy AI controllers (EndAIControllerEnemyBase, both builds): an FWeakObjectPtr to the enemy character.
 inline constexpr std::uint32_t kEnemyControllerCharacter = 0x464;
@@ -154,7 +154,7 @@ inline constexpr FunctionFact kValidateAiController{L"EndCharacter::ValidateAICo
 
 // The tag registry
 /// The tag registry: a weak pointer to the world's EndCharacterMovementActor (the trigger registry, FieldTick's `this`;
-/// player_two/trigger_two), whose +0x278 is a TMap<FName, int32> with 20-byte elements {FName, int32 count, ...}; and
+/// world/trigger_two), whose +0x278 is a TMap<FName, int32> with 20-byte elements {FName, int32 count, ...}; and
 /// the trigger actor's tag.
 inline constexpr std::uintptr_t kTagRegistryWeak         = 0x1470C94C0;
 inline constexpr std::uint32_t  kTagRegistryMap          = 0x278;
@@ -168,7 +168,7 @@ inline constexpr FunctionFact kTagSetFindId{L"the tag registry lookup", 0x140842
 
 // Battle targeting: the Condition target selector's select, bool(selector, u8 reason, UObject** out), in its vtable's
 // slot +0x88 (the out is written on every path; 0 keeps the current target). RE-p2-enemy-target-bias.md §8; the slot
-// is replaced by player_two/equal_targeting, watched by target_census.
+// is replaced by battle/equal_targeting, watched by target_census.
 inline constexpr std::uint8_t kCondTargetSelectBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x55, 0x56, 0x57,
                                                           0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57};
 inline constexpr SlotFact kCondTargetSelect{L"the Condition target selector's select slot (vt+0x88)", 0x14580C260,

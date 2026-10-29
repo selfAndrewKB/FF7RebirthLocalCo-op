@@ -6,9 +6,9 @@
 //
 // The engine's own levers, as views/third_view (the multi-monitor measurement, 2026-10-20) proved them: a local
 // player through UGameplayStatics::CreatePlayer (players/local_players.h), inside player 2's join scope
-// (player_two/session/own_controller.h makes its End camera manager's BeginPlay safe, naming no seat: nothing a join
+// (session/own_controller.h makes its End camera manager's BeginPlay safe, naming no seat: nothing a join
 // builds for a player goes to a mirror), whose camera manager is aimed at player 1's view target with the game's own
-// SetViewTarget (player_two/camera/view_target.h) and re-aimed whenever player 1's changes (cutscenes). The engine lays
+// SetViewTarget (camera/view_target.h) and re-aimed whenever player 1's changes (cutscenes). The engine lays
 // the columns out and renders the mirror's view as a player's (its own view family). A mirror has no pad (its
 // controller id is after the seats', players::IsMirrorId: no seat's HUD, no seat's pad), no member, no HUD pass of its
 // own: its view draws player 1's HUD (hud/passes/second_image.h).

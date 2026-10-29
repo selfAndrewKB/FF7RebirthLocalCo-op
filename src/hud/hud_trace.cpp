@@ -9,7 +9,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
-#include "player_two/generation.h"
+#include "players/generation.h"
 
 #include <array>
 #include <atomic>
@@ -95,11 +95,11 @@ std::size_t PlayerSlot(const void* controller) noexcept
     {
         return 3;
     }
-    if (controller == player_two::generation::PlayerOneController())
+    if (controller == players::generation::PlayerOneController())
     {
         return 0;
     }
-    return controller == player_two::generation::PlayerTwoController() ? 1 : 2;
+    return controller == players::generation::PlayerTwoController() ? 1 : 2;
 }
 
 void FlushRun()
@@ -137,7 +137,7 @@ std::wstring ByPlayer(const std::array<std::uint32_t, 4>& counts)
 
 bool Tracing() noexcept
 {
-    return g_framesLeft.load(std::memory_order_relaxed) > 0 && player_two::generation::OnGameThread();
+    return g_framesLeft.load(std::memory_order_relaxed) > 0 && players::generation::OnGameThread();
 }
 
 void LogFrame() noexcept
@@ -250,7 +250,7 @@ void RemoveHudTrace() noexcept
     };
     restore(g_tickCall);
     restore(g_markerCall);
-    const bool gameThread = player_two::generation::OnGameThread();
+    const bool gameThread = players::generation::OnGameThread();
     for (std::size_t i = 0; i < g_projectCalls.size(); ++i)
     {
         if (!g_projectCrosses[i] || gameThread)  // a crossing call: only from the game thread (else it passes through)
@@ -272,7 +272,7 @@ bool HudTraceInstalled() noexcept
 
 void TraceBeforeRender() noexcept
 {
-    if (g_installed && g_project != 0 && player_two::generation::OnGameThread())
+    if (g_installed && g_project != 0 && players::generation::OnGameThread())
     {
         // Here the game thread is outside AreaMapIcon's frame update, as InstallFromOwnThread requires.
         for (std::size_t i = 0; i < g_projectPending.size(); ++i)

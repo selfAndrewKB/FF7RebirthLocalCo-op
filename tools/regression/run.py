@@ -62,7 +62,7 @@ BUILDS = {
 }
 ALWAYS_EXPECT_NOT = [r"raised an exception", r"check failed:", r"an exception stopped the console"]
 
-# The harness's three waits as the mod's readings compare them (p2.state and p2.in: src/player_two/session/session.cpp;
+# The harness's three waits as the mod's readings compare them (p2.state and p2.in: src/session/session.cpp;
 # field.ready: src/modules.cpp): the control route sends the comparison, the key route maps a script's comparison back
 # to the log lines that end it.
 CONDITIONS = {"playing": "p2.state == playing", "out": "p2.in == off", "field": "field.ready == on"}
@@ -175,7 +175,7 @@ KEY_SWITCHES = {
 RESET_AT_JOIN = {"own-camera": "on"}
 RESET_AT_LEAVE: dict[str, str] = {}
 
-# The mod's own lines that end a `wait-until` (player_two/session/session.cpp, player_two/session/field_exit.cpp).
+# The mod's own lines that end a `wait-until` (session/session.cpp, session/field_exit.cpp).
 WAIT_LINES = {
     "playing": re.compile(r"player 2 took .+ after \d+ tick"),
     "out": re.compile(r"leave: player 2 left|player 2 was removed by the game"),

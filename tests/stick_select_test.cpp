@@ -1,9 +1,9 @@
-// Host-side tests for player_two::SelectPadSticks, run without the game.
+// Host-side tests for input::SelectPadSticks, run without the game.
 //
 // Two pads in the XInput bank: pad 0 pushes left, pad 1 pushes up. Each pad must read only its own
 // record, per stick, and a merged stick of exactly zero must stay zero.
 
-#include "player_two/input/stick_select.h"
+#include "input/stick_select.h"
 
 #include "expect.h"
 
@@ -12,9 +12,9 @@
 
 namespace {
 
-using lss::player_two::SelectPadSticks;
-using lss::player_two::StickBank;
-using lss::player_two::Sticks;
+using lss::input::SelectPadSticks;
+using lss::input::StickBank;
+using lss::input::Sticks;
 
 //                                        LX     LY    RX    RY    LT   RT
 constexpr std::array<float, 12> kXInput{-1.0f, 0.0f, 0.0f, 0.3f, 0.0f, 0.0f,   // pad 0

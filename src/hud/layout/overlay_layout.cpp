@@ -14,7 +14,7 @@
 #include "platform/log.h"
 #include "platform/module_pin.h"
 #include "platform/verified_code.h"
-#include "player_two/generation.h"
+#include "players/generation.h"
 #include "players/seats.h"
 #include "views/player_view_point.h"
 
@@ -385,7 +385,7 @@ void RemoveOverlayLayout() noexcept
     // A rect call crossing two blocks is restored only from the game thread; elsewhere it stays (band off: it passes
     // the engine's rect through).
     const bool rect   =
-        g_rect.FromGameThread() && !player_two::generation::OnGameThread() ? true : g_rectCall.Restore();
+        g_rect.FromGameThread() && !players::generation::OnGameThread() ? true : g_rectCall.Restore();
     const bool entry  = g_entryCall.Restore();
     const bool submit = g_submitCall.Restore();
     if (g_arrowEdgeCode.IsInstalled() && !g_arrowEdgeCode.Restore())

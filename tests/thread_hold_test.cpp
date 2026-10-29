@@ -1,10 +1,10 @@
-// Host-side tests for player_two/thread_hold, run without the game.
+// Host-side tests for scopes/thread_hold, run without the game.
 //
 // A game call with this thread's answer held: the slot holds the value during the call and the outer value after
 // it, also when a structured exception unwinds through the call and when holds nest; the exchange form puts the
 // previous answer back through the exchange function; the enter/leave form puts a module's own state back.
 
-#include "player_two/scopes/thread_hold.h"
+#include "scopes/thread_hold.h"
 
 #include "expect.h"
 
@@ -18,7 +18,7 @@
 
 namespace {
 
-using namespace lss::player_two::thread_hold;
+using namespace lss::scopes::thread_hold;
 
 thread_local const void* t_slot = nullptr;
 thread_local int         t_exchanged = -1;

@@ -1,9 +1,9 @@
-// Host-side tests for the party-member lease rules (player_two/session/party_lease.h), run without the game.
+// Host-side tests for the party-member lease rules (session/party_lease.h), run without the game.
 //
 // The objects are stand-in addresses. An AI-owned member is the shape the game has for a party
 // member nobody plays: every lease field names its AI controller, and the AI names it back.
 
-#include "player_two/session/party_lease.h"
+#include "session/party_lease.h"
 
 #include "expect.h"
 
@@ -12,7 +12,7 @@
 
 namespace {
 
-using namespace lss::player_two;
+using namespace lss::session;
 
 int g_member;
 int g_ai;

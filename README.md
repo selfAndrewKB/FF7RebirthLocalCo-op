@@ -63,10 +63,17 @@ src/
   platform/      the game image, the fact checks, the redirects, the log, the dev switch
   facts/         the engine facts two or more modules share, one declaration per address
   players/       the engine's own paths: local players, reflection calls, console and settings access, a widget's
-                 opacity; the held setting, the split layout and the single view over them
-  player_two/    player 2's play, by game system: session/ (the join, the party member, the leave), scopes/ (one game
-                 call made as player 2), camera/, input/ (pads, sticks, movement), feedback/ (rumble and sound),
-                 battle/, traversal/, world/, rides/; the helpers every wrapper shares at the root
+                 opacity; the held setting, the split layout and the single view over them; each player's member
+                 generation, the log descriptions and the field reads every module shares
+  session/       the further players' join, party member and leave
+  scopes/        one game call made as a further player
+  camera/        each player's cameras
+  input/         pads, sticks and movement
+  feedback/      rumble and sound
+  battle/        the further players' battle: menus, targets, the enemies' coin, synergies
+  traversal/     climbing, vaulting and the rest of traversal
+  world/         the world around each player: crowds, triggers, pickups, shops
+  rides/         chocobos, the wheelie and the shared rides
   views/         the view points, the whole-screen states, the streaming views, the columns and mirror views, the window span
   hud/           the HUD in each half, by system: passes/ (player 2's HUD image), layout/ (the band), minimap/, field/
                  (prompt rows, markers, pins), battle/ (targets, gauges, popups); the roots, the live widgets, the
@@ -77,6 +84,11 @@ src/
 tests/           host-side tests of the logic that needs neither the game nor UE4SS
 tools/           the control scripts, the regression harness, the version match
 ```
+
+`src/` is searched before UE4SS's include folders, and Windows ignores case, so a mod header named like a UE4SS one
+under a folder of the same name (`src/input/Handler.hpp` against UE4SS's `<Input/Handler.hpp>`) would replace it;
+and a file in `src/hud/` that includes `"battle/x.h"` finds `src/hud/battle/x.h` before `src/battle/x.h`. Keep the
+mod's headers `.h` and their names distinct from those.
 
 Engine facts (addresses, vtable slots, field offsets) are written as IDA shows them for the research
 build, each with the bytes that prove it and the research document that established it. The ones two

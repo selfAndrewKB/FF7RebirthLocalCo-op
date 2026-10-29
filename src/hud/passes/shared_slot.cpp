@@ -2,7 +2,7 @@
 
 #include "hud/passes/overlay_pass.h"
 #include "platform/log.h"
-#include "player_two/generation.h"
+#include "players/generation.h"
 
 namespace lss::hud {
 
@@ -114,7 +114,7 @@ void SharedLayerSlot::BeginFrame() noexcept
 
 void* SharedLayerSlot::Acquire(void* renderer, std::uintptr_t pool, AcquireLayerSlotFn original) noexcept
 {
-    if (!player_two::generation::OnGameThread())
+    if (!players::generation::OnGameThread())
     {
         offThread_.fetch_add(1, std::memory_order_relaxed);
         return original(renderer, pool);

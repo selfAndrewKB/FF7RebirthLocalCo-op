@@ -1,14 +1,14 @@
-// Host-side tests for player_two/generation's per-tick identities and its seats, run without the game.
+// Host-side tests for players/generation's per-tick identities and its seats, run without the game.
 //
-// The weak pointers need the engine's resolver (player_two/weak_object), which the host does not have: they read 0
+// The weak pointers need the engine's resolver (players/weak_object), which the host does not have: they read 0
 // here. What is tested is the publishing: the chocobo given to BeginTick is readable while the seat's generation is
 // active, and every identity is cleared the moment it is withdrawn, ended or faulted, or a tick finds it inactive;
 // and the seats are kept apart: one seat's withdraw or fault leaves the other's, a fault without a seat withdraws all.
 
-#include "player_two/generation.h"
+#include "players/generation.h"
 
 #include "expect.h"
-#include "player_two/weak_object.h"
+#include "players/weak_object.h"
 
 #include <array>
 #include <cstddef>
@@ -16,7 +16,7 @@
 
 namespace {
 
-namespace generation = lss::player_two::generation;
+namespace generation = lss::players::generation;
 using lss::players::kMaxPlayers;
 
 constexpr int kTwo   = 1;  // player 2's seat
@@ -49,7 +49,7 @@ void TestPublishedAndCleared()
     std::puts("generation: the tick's chocobo is published while active and cleared with the generation");
     std::array<std::byte, 0x2000> one{}, two{};  // stand-in controllers: every read of them finds zero
     std::byte                     member{}, chocobo{};
-    EXPECT(!lss::player_two::weak_object::Known());  // the host has no resolver: every weak reads 0
+    EXPECT(!lss::players::weak_object::Known());  // the host has no resolver: every weak reads 0
     generation::Begin(kTwo, one.data(), two.data());
     generation::SetMember(kTwo, &member);
     Tick(&chocobo);

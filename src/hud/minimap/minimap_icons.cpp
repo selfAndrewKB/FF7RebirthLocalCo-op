@@ -7,7 +7,7 @@
 #include "platform/log.h"
 #include "platform/sparse_array.h"
 #include "platform/verified_code.h"
-#include "player_two/generation.h"
+#include "players/generation.h"
 #include "players/seats.h"
 
 #include <algorithm>
@@ -27,7 +27,7 @@ namespace lss::hud::minimap_icons {
 
 namespace {
 
-namespace generation = player_two::generation;
+namespace generation = players::generation;
 
 // The holder update's icon loop (RE-p2-minimap-cost.md §10.2). Both calls take `mov rdx,[r15+r12]` (the source's
 // FName key, a qword) and `mov rcx,rdi` (the holder); neither result is read. Each call's five bytes cross a 16-byte

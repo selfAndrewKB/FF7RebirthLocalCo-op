@@ -1,9 +1,9 @@
-// Host-side tests for player_two::LeaveSequence, run without the game.
+// Host-side tests for session::LeaveSequence, run without the game.
 //
 // The release always comes before the teardown, the teardown waits for the release to complete,
 // and a release that never completes stops the leave instead of tearing down under it.
 
-#include "player_two/session/leave_sequence.h"
+#include "session/leave_sequence.h"
 
 #include "expect.h"
 
@@ -12,8 +12,8 @@
 
 namespace {
 
-using lss::player_two::LeaveAction;
-using lss::player_two::LeaveSequence;
+using lss::session::LeaveAction;
+using lss::session::LeaveSequence;
 
 void TestWithoutMemberTearsDownAtOnce()
 {

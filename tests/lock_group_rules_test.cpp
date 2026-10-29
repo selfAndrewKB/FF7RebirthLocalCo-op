@@ -1,8 +1,8 @@
-// Host-side tests for player_two::lock_group_rules, run without the game.
+// Host-side tests for battle::lock_group_rules, run without the game.
 //
 // The rebalance's rule, and the set of held groups that reports only transitions.
 
-#include "player_two/battle/lock_group_rules.h"
+#include "battle/lock_group_rules.h"
 
 #include "expect.h"
 
@@ -10,7 +10,7 @@
 
 namespace {
 
-using namespace lss::player_two::lock_group_rules;
+using namespace lss::battle::lock_group_rules;
 
 /// The two-player rule as it stood at v0.91.0, verbatim: the reference for the per-seat rule.
 constexpr bool OldRebalanceHoldsPlayerTwo(bool playerTwoHoldsLock, bool playerOneHoldsLock) noexcept

@@ -1,13 +1,13 @@
 #include "views/mirror_player.h"
 
+#include "camera/view_target.h"
 #include "facts/engine.h"
 #include "platform/image.h"
 #include "platform/log.h"
-#include "player_two/camera/view_target.h"
-#include "player_two/session/own_controller.h"
 #include "players/local_players.h"
 #include "players/seats.h"
 #include "players/unreal_access.h"
+#include "session/own_controller.h"
 #include "views/columns.h"
 
 #include <algorithm>
@@ -98,9 +98,9 @@ void* PlayerOneController() noexcept
 /// Aims the mirror's camera manager at player 1's view target when it views another; logged at Debug.
 void FollowPlayerOne(Mirror& m, void* playerOne) noexcept
 {
-    void* target = playerOne == nullptr ? nullptr : player_two::view_target::Current(playerOne);
-    void* viewed = m.controller == nullptr ? nullptr : player_two::view_target::Current(m.controller);
-    if (target != nullptr && viewed != target && player_two::view_target::AimAt(m.controller, target))
+    void* target = playerOne == nullptr ? nullptr : camera::view_target::Current(playerOne);
+    void* viewed = m.controller == nullptr ? nullptr : camera::view_target::Current(m.controller);
+    if (target != nullptr && viewed != target && camera::view_target::AimAt(m.controller, target))
     {
         ++m.reaims;
         platform::LogDebug(L"mirror view: id {} re-aimed at player 1's view target {:#x} (viewed {:#x})", m.list->Seat(),
@@ -167,11 +167,11 @@ const wchar_t* WhyNotAddable(const players::LocalPlayers::PlayerOne& one) noexce
     {
         return L"the engine's list has no room, player 1 has no controller, or the id is a seat's";
     }
-    if (!player_two::own_controller::Ready())
+    if (!session::own_controller::Ready())
     {
         return L"player 1's camera names are not set yet (its camera manager has not run)";
     }
-    if (!player_two::own_controller::UsesNativeClasses(one.controller))
+    if (!session::own_controller::UsesNativeClasses(one.controller))
     {
         return L"player 1's controller is not the End class";
     }
@@ -200,9 +200,9 @@ void Add() noexcept
     }
     g_waiting = nullptr;
     players::LocalPlayers::Added      added;
-    player_two::own_controller::Report report;
+    session::own_controller::Report report;
     {
-        const player_two::own_controller::JoinScope scope(one.controller, player_two::own_controller::kNoSeat);
+        const session::own_controller::JoinScope scope(one.controller, session::own_controller::kNoSeat);
         added  = m.list->Add(one.controller);
         report = scope.Result();
     }
@@ -226,14 +226,14 @@ void Add() noexcept
         return;
     }
     g_fault = nullptr;
-    void*      target = player_two::view_target::Current(one.controller);
+    void*      target = camera::view_target::Current(one.controller);
     const bool aimed  = m.controller != nullptr && target != nullptr &&
-                       player_two::view_target::AimAt(m.controller, target);
+                       camera::view_target::AimAt(m.controller, target);
     platform::Log(L"mirror view: in column {} (controller id {}, controller {:#x}; camera manager handled {}, owner "
                   L"filled {}, names swapped {}); its camera manager views {:#x} ({}player 1's view target {:#x})",
                   ColumnOf(m) + 1, m.list->Seat(), Address(m.controller), YesNo(report.cameraManager != nullptr),
                   YesNo(report.ownerFilled), YesNo(report.namesSwapped),
-                  Address(m.controller == nullptr ? nullptr : player_two::view_target::Current(m.controller)),
+                  Address(m.controller == nullptr ? nullptr : camera::view_target::Current(m.controller)),
                   aimed ? L"" : L"NOT ", Address(target));
 }
 

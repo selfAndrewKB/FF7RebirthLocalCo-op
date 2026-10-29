@@ -1,11 +1,11 @@
-// Host-side tests for the command-menu gate (player_two/battle/command_rules_code.h), run without the game.
+// Host-side tests for the command-menu gate (battle/command_rules_code.h), run without the game.
 //
 // The bytes the mod writes near the game are EXECUTED here, installed through platform::CodeRedirect
 // over a stand-in laid out like FieldCommandCtrl_IsMemberCommandable's entry: `mov [rsp+8], rbx` at
 // 4 bytes into a 16-byte block (0x140E77414 in the game), followed by a body that returns ordinal + 1.
 
+#include "battle/command_rules_code.h"
 #include "platform/code_redirect.h"
-#include "player_two/battle/command_rules_code.h"
 
 #include "exec_page.h"
 #include "expect.h"
@@ -55,9 +55,9 @@ void TestGate()
     static std::int32_t gate = -1;
     EXPECT(function.Call(2) == 3);
 
-    const auto code = lss::player_two::CommandGateCode(gate);
+    const auto code = lss::battle::CommandGateCode(gate);
     lss::platform::CodeRedirect redirect;
-    EXPECT(redirect.Install(function.At(FunctionLike::kEntryOffset), lss::player_two::kCommandGateEntryBytes, code,
+    EXPECT(redirect.Install(function.At(FunctionLike::kEntryOffset), lss::battle::kCommandGateEntryBytes, code,
                             function.At(FunctionLike::kResumeOffset)));
 
     EXPECT(function.Call(0) == 1);  // gate -1: none refused
@@ -84,10 +84,10 @@ void TestMaskGate()
     const FunctionLike   function;
     static std::uint32_t mask = 0;
     static std::int32_t  gate = -1;  // the one-ordinal gate, for the side-by-side
-    const auto code = lss::player_two::CommandGateMaskCode(mask);
-    EXPECT(code.size() == lss::player_two::kCommandGateCodeSize);
+    const auto code = lss::battle::CommandGateMaskCode(mask);
+    EXPECT(code.size() == lss::battle::kCommandGateCodeSize);
     lss::platform::CodeRedirect redirect;
-    EXPECT(redirect.Install(function.At(FunctionLike::kEntryOffset), lss::player_two::kCommandGateEntryBytes, code,
+    EXPECT(redirect.Install(function.At(FunctionLike::kEntryOffset), lss::battle::kCommandGateEntryBytes, code,
                             function.At(FunctionLike::kResumeOffset)));
 
     for (std::int32_t ordinal = 0; ordinal < 8; ++ordinal)
@@ -106,8 +106,8 @@ void TestMaskGate()
     // equivalence where both are defined; outside 0..31 the set reads the remainder's bit, see the header).
     const FunctionLike          single;
     lss::platform::CodeRedirect singleRedirect;
-    EXPECT(singleRedirect.Install(single.At(FunctionLike::kEntryOffset), lss::player_two::kCommandGateEntryBytes,
-                                  lss::player_two::CommandGateCode(gate), single.At(FunctionLike::kResumeOffset)));
+    EXPECT(singleRedirect.Install(single.At(FunctionLike::kEntryOffset), lss::battle::kCommandGateEntryBytes,
+                                  lss::battle::CommandGateCode(gate), single.At(FunctionLike::kResumeOffset)));
     for (std::int32_t member = -1; member < 8; ++member)
     {
         gate = member;

@@ -6,7 +6,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
-#include "player_two/generation.h"
+#include "players/generation.h"
 #include "players/seats.h"
 
 #if LSS_DEV
@@ -369,7 +369,7 @@ void SeedEventState(int seat, std::uintptr_t one) noexcept
 /// game's own clear for a hide. Game thread only (the clear's counts are not atomic).
 void FollowEvent(Event event, char flag) noexcept
 {
-    if (!player_two::generation::OnGameThread())
+    if (!players::generation::OnGameThread())
     {
         if (!g_offThreadLogged)
         {
@@ -594,8 +594,8 @@ void Tick(int seat, float deltaTime) noexcept
     {
         SeedEventState(seat, one);
     }
-    g_seatController  = Acts(kPartController) ? player_two::generation::ControllerOf(seat) : nullptr;
-    g_seatMember      = Acts(kPartLeader) ? player_two::generation::MemberOf(seat) : nullptr;
+    g_seatController  = Acts(kPartController) ? players::generation::ControllerOf(seat) : nullptr;
+    g_seatMember      = Acts(kPartLeader) ? players::generation::MemberOf(seat) : nullptr;
     const bool ticked = FrameUpdateGuarded(g_instance[seat], deltaTime);
     g_seatController  = nullptr;
     g_seatMember      = nullptr;

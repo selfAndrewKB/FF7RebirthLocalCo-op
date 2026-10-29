@@ -3,7 +3,7 @@
 #include "platform/entry_redirect.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
-#include "player_two/generation.h"
+#include "players/generation.h"
 
 #include <atomic>
 #include <cstdint>
@@ -92,7 +92,7 @@ void Stop() noexcept
     g_target.store(nullptr, std::memory_order_release);
     // A tick already inside the callback finishes before the caller tears the mod down (the unloader may run off
     // the game thread; on the game thread no tick can be in flight).
-    if (!player_two::generation::OnGameThread())
+    if (!players::generation::OnGameThread())
     {
         while (g_inFlight.load(std::memory_order_acquire) > 0)
         {

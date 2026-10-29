@@ -1,11 +1,11 @@
-// Host-side tests for player_two/scope_ladder, run without the game.
+// Host-side tests for scopes/scope_ladder, run without the game.
 //
 // Recording parts pin the ladder's rules: the chosen parts open in the pack's order and close in reverse; a
 // required part that refuses stops the ladder there (the parts before it close at once, nothing after it opens,
 // the ladder is not held, the part names itself or gives its own words); an optional part that refuses is left
 // out, noted, and the ladder goes on, held.
 
-#include "player_two/scopes/scope_ladder.h"
+#include "scopes/scope_ladder.h"
 
 #include "expect.h"
 
@@ -14,7 +14,7 @@
 
 namespace {
 
-using lss::player_two::Ladder;
+using lss::scopes::Ladder;
 
 struct Args
 {

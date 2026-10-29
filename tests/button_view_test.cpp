@@ -1,8 +1,8 @@
-// Host-side tests for player_two::button_view, run without the game.
+// Host-side tests for input::button_view, run without the game.
 //
 // The source bits are the ones seen live: pad 1 = 0x1, pad 2 = 0x2, keyboard slot 0 = 0x20000.
 
-#include "player_two/input/button_view.h"
+#include "input/button_view.h"
 
 #include "expect.h"
 
@@ -10,13 +10,13 @@
 
 namespace {
 
-using lss::player_two::button_view::Held;
-using lss::player_two::button_view::PlayerSources;
-using lss::player_two::button_view::SeatBit;
-using lss::player_two::button_view::SeatOfSource;
-using lss::player_two::button_view::SeatPads;
-using lss::player_two::button_view::PadBits;
-using lss::player_two::button_view::Views;
+using lss::input::button_view::Held;
+using lss::input::button_view::PlayerSources;
+using lss::input::button_view::SeatBit;
+using lss::input::button_view::SeatOfSource;
+using lss::input::button_view::SeatPads;
+using lss::input::button_view::PadBits;
+using lss::input::button_view::Views;
 
 constexpr std::uint32_t kPadOne   = 0x1;
 constexpr std::uint32_t kPadTwo   = 0x2;

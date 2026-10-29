@@ -1,7 +1,7 @@
-// Host-side tests for the pure seat lookup in player_two/camera/camera_access.h: the seat whose camera manager (or
+// Host-side tests for the pure seat lookup in camera/camera_access.h: the seat whose camera manager (or
 // controller) an object the engine hands a redirect is, from the per-seat owners as the controllers name them.
 
-#include "player_two/camera/camera_access.h"
+#include "camera/camera_access.h"
 
 #include "expect.h"
 
@@ -9,7 +9,7 @@
 
 namespace {
 
-using lss::player_two::camera_access::SeatIn;
+using lss::camera::camera_access::SeatIn;
 namespace players = lss::players;
 
 int g_objects[4];  // stand-ins for camera managers

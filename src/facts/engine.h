@@ -259,7 +259,7 @@ inline constexpr std::uint8_t kFreeBytes[] = {0x48, 0x85, 0xC9, 0x0F, 0x84, 0xA0
 inline constexpr FunctionFact kFree{L"FMemory::Free", 0x14079F8D0, kFreeBytes};
 
 /// The engine's array-data free (IDA: ME_FreeResourceBindingArray): `mov rcx,[rcx]; if (rcx) FMemory::Free(rcx)`
-/// for the TArray at rcx. hud/minimap_labels calls it; player_two/anim_two_views redirects a call to it.
+/// for the TArray at rcx. hud/minimap_labels calls it; world/anim_two_views redirects a call to it.
 inline constexpr std::uint8_t kFreeArrayDataBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x36, 0xF7,
                                                        0x90, 0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x09};
 inline constexpr FunctionFact kFreeArrayData{L"the array-data free (ME_FreeResourceBindingArray)", 0x14079F7F0,

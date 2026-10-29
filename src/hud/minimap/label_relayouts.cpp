@@ -6,7 +6,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
-#include "player_two/generation.h"
+#include "players/generation.h"
 
 #include <algorithm>
 #include <array>
@@ -29,7 +29,7 @@ namespace lss::hud::label_relayouts {
 
 namespace {
 
-namespace generation = player_two::generation;
+namespace generation = players::generation;
 
 // SEndTextBlock (RE-p2-minimap-cost.md §7.1). Tick, slot 1 of vtable 0x1457936F0: writes the allotted size to +0x558;
 // with wrap (+0x408), +0x498 or justification on and that width ≠ +0x560, stores it in +0x560 and sets +0x565; then, if

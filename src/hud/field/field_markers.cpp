@@ -6,11 +6,11 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/sparse_array.h"
-#include "player_two/scopes/leader_scope.h"
-#include "player_two/weak_object.h"
-#include "player_two/world/field_pickup.h"
 #include "players/seats.h"
+#include "players/weak_object.h"
 #include "players/widget_opacity.h"
+#include "scopes/leader_scope.h"
+#include "world/field_pickup.h"
 
 #include <array>
 #include <cstddef>
@@ -89,8 +89,8 @@ void ShowOnly(int seat) noexcept
     try
     {
         platform::ForEachSparseElement(list, facts::kFieldMarkerEntry, [seat, &hidden](std::uintptr_t entry) {
-            const int owner = player_two::field_pickup::MarkerOwner(
-                player_two::weak_object::ObjectAt(reinterpret_cast<const void*>(entry)));
+            const int owner = world::field_pickup::MarkerOwner(
+                players::weak_object::ObjectAt(reinterpret_cast<const void*>(entry)));
             if (owner < 0 || owner == seat)
             {
                 return true;  // this view's own, or not a point's marker
@@ -101,7 +101,7 @@ void ShowOnly(int seat) noexcept
                 std::uint64_t weak   = 0;
                 void*         widget = nullptr;
                 if (!platform::CopyGuarded(&weak, reinterpret_cast<const void*>(entry + at), sizeof(weak)) || weak == 0 ||
-                    (widget = player_two::weak_object::ObjectAt(reinterpret_cast<const void*>(entry + at))) == nullptr)
+                    (widget = players::weak_object::ObjectAt(reinterpret_cast<const void*>(entry + at))) == nullptr)
                 {
                     continue;
                 }

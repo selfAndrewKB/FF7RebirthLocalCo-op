@@ -17,7 +17,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
-#include "player_two/generation.h"
+#include "players/generation.h"
 #include "players/tracked_object.h"
 
 #include <algorithm>
@@ -188,7 +188,7 @@ std::vector<UObject*> RowsOf()
 /// once, as the game places a row it adds (the sort and the slots come out the same each call).
 void LayOutAgain(const LayoutSize& layout)
 {
-    if (player_two::generation::AnyActive())
+    if (players::generation::AnyActive())
     {
         prompt_rows::LayOutAgain(layout.width, layout.height);
         return;

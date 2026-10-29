@@ -19,12 +19,12 @@
 #include "platform/log.h"
 #include "platform/settled_log.h"
 #include "platform/verified_code.h"
-#include "player_two/generation.h"
-#include "player_two/rides/chocobo_ride.h"
-#include "player_two/weak_object.h"
-#include "player_two/world/field_pickup.h"
+#include "players/generation.h"
 #include "players/seats.h"
+#include "players/weak_object.h"
 #include "players/widget_opacity.h"
+#include "rides/chocobo_ride.h"
+#include "world/field_pickup.h"
 
 #include <algorithm>
 #include <array>
@@ -68,7 +68,7 @@ struct SeatNames
 {
     std::array<const UObject*, kComponentRows>                                        component{};
     std::array<const UObject*, std::size(facts::kChocoboMoveStateRowHandles)>         ride{};
-    std::array<const UObject*, std::tuple_size_v<player_two::field_pickup::Weaks>> pickup{};
+    std::array<const UObject*, std::tuple_size_v<world::field_pickup::Weaks>> pickup{};
 };
 
 // Game thread.
@@ -98,7 +98,7 @@ using platform::Read;  // the guarded reads: platform/guarded.h
 
 UObject* Resolve(std::uint64_t weakValue) noexcept
 {
-    return static_cast<UObject*>(player_two::weak_object::ObjectOf(weakValue));
+    return static_cast<UObject*>(players::weak_object::ObjectOf(weakValue));
 }
 
 bool LaidOutBefore(const UObject* widget) noexcept
@@ -205,7 +205,7 @@ void ReadSeatNames(int seat, SeatNames& names, std::array<std::uint8_t, kCompone
 {
     names = {};
     bytes = {};
-    const auto controller = reinterpret_cast<std::uintptr_t>(player_two::generation::ControllerOf(seat));
+    const auto controller = reinterpret_cast<std::uintptr_t>(players::generation::ControllerOf(seat));
     if (controller == 0)
     {
         return;
@@ -221,16 +221,16 @@ void ReadSeatNames(int seat, SeatNames& names, std::array<std::uint8_t, kCompone
     }
     // The seat's driven chocobo's own handles (Dash, Dismount, Jet, Scent, Scour): its tick makes their rows in the
     // one shared list, so they are the seat's the same way (RE-p2-chocobo-rows.md §4).
-    const auto ride = reinterpret_cast<std::uintptr_t>(player_two::chocobo_ride::DrivenMoveState(seat));
+    const auto ride = reinterpret_cast<std::uintptr_t>(rides::chocobo_ride::DrivenMoveState(seat));
     for (std::size_t i = 0; ride != 0 && i < names.ride.size(); ++i)
     {
         std::uint64_t weak = 0;
         names.ride[i] = Read(ride + facts::kChocoboMoveStateRowHandles[i], weak) ? Resolve(weak) : nullptr;
     }
     // The seat's field prompts (pickups): FieldActionMgr's slot rows in the seat's copy of its slot block, made by the
-    // seat's pass of the game's own update (player_two/world/field_pickup.h).
-    player_two::field_pickup::Weaks pickupWeaks{};
-    player_two::field_pickup::RowWeaks(seat, pickupWeaks);
+    // seat's pass of the game's own update (world/field_pickup.h).
+    world::field_pickup::Weaks pickupWeaks{};
+    world::field_pickup::RowWeaks(seat, pickupWeaks);
     for (std::size_t i = 0; i < pickupWeaks.size(); ++i)
     {
         names.pickup[i] = pickupWeaks[i] != 0 ? Resolve(pickupWeaks[i]) : nullptr;
@@ -264,7 +264,7 @@ bool Install(const platform::GameImage& image) noexcept
 
 void Refresh() noexcept
 {
-    if (!action_rows::ListKnown() || !player_two::generation::AnyActive())
+    if (!action_rows::ListKnown() || !players::generation::AnyActive())
     {
         return;
     }

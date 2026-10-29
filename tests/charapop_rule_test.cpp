@@ -2,7 +2,7 @@
 //
 // The live Middle parameters (log of 2026-10-02): FOV 75, draw 10000, in 6000, out 3000, should-tick 1000.
 
-#include "player_two/world/charapop_rule.h"
+#include "world/charapop_rule.h"
 
 #include "expect.h"
 
@@ -11,14 +11,14 @@
 
 namespace {
 
-using lss::player_two::charapop::EntryView;
-using lss::player_two::charapop::Hold;
-using lss::player_two::charapop::HoldOf;
-using lss::player_two::charapop::KeepsAwakeOrShown;
-using lss::player_two::charapop::LodDistances;
-using lss::player_two::charapop::SeatBit;
-using lss::player_two::charapop::SeatHolds;
-using lss::player_two::charapop::ShouldRaise;
+using lss::world::charapop::EntryView;
+using lss::world::charapop::Hold;
+using lss::world::charapop::HoldOf;
+using lss::world::charapop::KeepsAwakeOrShown;
+using lss::world::charapop::LodDistances;
+using lss::world::charapop::SeatBit;
+using lss::world::charapop::SeatHolds;
+using lss::world::charapop::ShouldRaise;
 
 constexpr LodDistances kMiddle{75.0f, 1000.0f, 6000.0f, 3000.0f, 10000.0f, 2000.0f};
 

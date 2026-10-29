@@ -23,8 +23,8 @@
 #include "platform/log.h"
 #include "platform/module_pin.h"
 #include "platform/sparse_array.h"
-#include "player_two/scopes/primary_controller.h"
 #include "players/seats.h"
+#include "scopes/primary_controller.h"
 
 #if LSS_DEV
 #include "hud/passes/second_image.h"
@@ -112,7 +112,7 @@ bool                                                 g_refused      = false;
 std::uint32_t                                        g_framesToScan = 0;
 bool                                                 g_rootsChecked = false;  // this frame's root scan check ran
 bool                                                 g_passedThisFrame = false;  // a seat's pass ran this frame
-std::optional<player_two::primary_controller::Scope> g_primary;
+std::optional<scopes::primary_controller::Scope> g_primary;
 float                                                g_savedTimeStep = 0.0f;
 float*                                               g_timeStep      = nullptr;  // saved in Enter, restored in Leave
 Rect                                                 g_playerOneRect{};
@@ -314,7 +314,7 @@ bool HoldPrimary(int seat)
     if (g_primary && !g_primary->Held())
     {
         platform::Log(L"HUD levers: the primary controller could not be switched ({}); this frame keeps player 1's content",
-                      player_two::primary_controller::Describe(g_primary->Why()));
+                      scopes::primary_controller::Describe(g_primary->Why()));
         g_primary.reset();
         return false;
     }

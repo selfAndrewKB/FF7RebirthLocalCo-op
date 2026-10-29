@@ -1,10 +1,10 @@
-// Host-side tests for player_two::outside_join, run without the game.
+// Host-side tests for session::outside_join, run without the game.
 //
 // The two waits of a player 2 who is out: the rejoin after a map load (timed, 180 ready ticks, 5 tries) and the wait
 // for a free party member (untimed, a 30-tick slow check, a look window after a party change, 5 failed joins). The
 // session's member test and join are the caller's; here the schedule alone is pinned.
 
-#include "player_two/session/outside_join.h"
+#include "session/outside_join.h"
 
 #include "expect.h"
 
@@ -13,7 +13,7 @@
 
 namespace {
 
-using namespace lss::player_two::outside_join;
+using namespace lss::session::outside_join;
 using namespace std::chrono_literals;
 
 using Clock = OutsideJoin::Clock;

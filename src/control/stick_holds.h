@@ -1,7 +1,7 @@
 #pragma once
 
 // The control runner's stick holds on the running mod: a scripted hold is a per-pad stick override
-// (player_two/input/pad_sticks.h) on the held player's controller id, so it takes a real pad's path. Needs per-pad
+// (input/pad_sticks.h) on the held player's controller id, so it takes a real pad's path. Needs per-pad
 // sticks on and a further player in (the override is per pad only then): for player 1, player 2; for player 2 or 3,
 // that player. Game thread only.
 
@@ -10,7 +10,7 @@
 #include <array>
 #include <cstdint>
 
-namespace lss::player_two {
+namespace lss::session {
 class Session;
 }
 
@@ -19,7 +19,7 @@ namespace lss::control {
 class StickHolds final : public Holds
 {
 public:
-    explicit StickHolds(player_two::Session& session) noexcept : session_(session) {}
+    explicit StickHolds(session::Session& session) noexcept : session_(session) {}
 
     Outcome HoldStick(std::int32_t player, const float (&axes)[4]) override;
     void    ReleaseStick(std::int32_t player) override;
@@ -30,7 +30,7 @@ public:
     void DropEndedHolds() noexcept;
 
 private:
-    player_two::Session&                    session_;
+    session::Session&                    session_;
     std::array<std::int32_t, kHoldPlayers>  heldIds_ = [] {  // per player: the controller id its hold is on (-1 none)
         std::array<std::int32_t, kHoldPlayers> ids{};
         ids.fill(-1);

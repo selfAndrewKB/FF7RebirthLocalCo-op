@@ -1,10 +1,10 @@
-// Host-side tests for player_two::ucpc_choice, run without the game.
+// Host-side tests for battle::ucpc_choice, run without the game.
 //
 // Player 2 not in: untouched. Both eligible: the coin decides. One eligible: that one, whatever the coin. Neither:
 // player 1, as the game would. The per-seat rule gives the two-way rule's answer for two players over every input and
 // coin (the reference kept verbatim below), and a uniform pick among the eligible for three.
 
-#include "player_two/battle/ucpc_choice.h"
+#include "battle/ucpc_choice.h"
 
 #include "expect.h"
 
@@ -12,7 +12,7 @@
 
 namespace {
 
-using namespace lss::player_two::ucpc_choice;
+using namespace lss::battle::ucpc_choice;
 
 constexpr bool kCoins[] = {false, true};
 

@@ -1,9 +1,9 @@
-// Host-side tests for the pure pieces of player_two/camera/attack_framing.h: the per-camera latch key (the seat in the
+// Host-side tests for the pure pieces of camera/attack_framing.h: the per-camera latch key (the seat in the
 // key) and the rule for which cameras a shot of a player's character stays on, checked against the two-player rule
 // (world_rules::ShotShows) it replaces.
 
-#include "player_two/camera/attack_framing.h"
-#include "player_two/world/world_rules.h"
+#include "camera/attack_framing.h"
+#include "world/world_rules.h"
 
 #include "expect.h"
 
@@ -12,8 +12,8 @@
 
 namespace {
 
-using lss::player_two::attack_framing::LatchKey;
-using lss::player_two::attack_framing::ShotShowsOn;
+using lss::camera::attack_framing::LatchKey;
+using lss::camera::attack_framing::ShotShowsOn;
 namespace players = lss::players;
 
 int g_chars[6];  // stand-ins: player 1, player 2's member, player 3's member, an ally, an enemy, nobody
@@ -59,7 +59,7 @@ void TestTwoPlayerRuleUnchanged()
                 for (int seat = 0; seat <= 1; ++seat)
                 {
                     EXPECT(ShotShowsOn(target, humans, seat, owner) ==
-                           lss::player_two::world_rules::ShotShows(target, member, one, seat == 1, owner));
+                           lss::world::world_rules::ShotShows(target, member, one, seat == 1, owner));
                 }
             }
         }

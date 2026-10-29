@@ -32,7 +32,7 @@ namespace lss::platform {
 class GameImage;
 }
 
-namespace lss::player_two {
+namespace lss::session {
 class Session;
 }
 
@@ -108,22 +108,22 @@ struct Result
 // The actions a key and a control command share, each in one place. Game thread.
 
 /// A seat with a player in it, or waiting to be (for a free member, or to rejoin after a map load).
-bool SeatTaken(const player_two::Session& session, int seat) noexcept;
+bool SeatTaken(const session::Session& session, int seat) noexcept;
 
 /// The seat Ctrl+F7 adds: the lowest built seat not in (a seat waiting to join is asked again), or 0 when every seat
 /// is in.
-int SeatToJoin(const player_two::Session& session) noexcept;
+int SeatToJoin(const session::Session& session) noexcept;
 
 /// The seat Ctrl+F8 removes: the highest built seat taken, or 0 when none is.
-int SeatToLeave(const player_two::Session& session) noexcept;
+int SeatToLeave(const session::Session& session) noexcept;
 
 /// `seat`'s player leaves: the session's leave of that seat, which also stops a wait (logged there). A mirror view
 /// takes the column once it is free, if columns are held.
-void LeaveSeat(player_two::Session& session, int seat, const wchar_t* why) noexcept;
+void LeaveSeat(session::Session& session, int seat, const wchar_t* why) noexcept;
 
 /// The further players' views on their own cameras or player 1's (views/player_view_point.h); refused without the
 /// view-point entry or a further player in.
-Result SetOwnCamera(const player_two::Session& session, bool on) noexcept;
+Result SetOwnCamera(const session::Session& session, bool on) noexcept;
 
 /// The split halves filling the screen, or kept 16:9 with bars; refused without the view-point entry.
 Result SetFill(bool on) noexcept;
@@ -133,12 +133,12 @@ Result SetFill(bool on) noexcept;
 Result SetMonitorMode(bool on) noexcept;
 
 /// The game window across its row of monitors or back (views/window_span.h); entering needs a further player in.
-Result SetWindowSpan(const player_two::Session& session, bool on, const wchar_t* why) noexcept;
+Result SetWindowSpan(const session::Session& session, bool on, const wchar_t* why) noexcept;
 
 #if LSS_DEV
 /// Every control command (platform/command_registry.h), each owner's in turn, the shared actions' here: the one list,
 /// as the table above is for the installs. Game thread, once, before the console opens (control/remote.h).
-void RegisterCommands(player_two::Session& session, players::SplitLayout& layout,
+void RegisterCommands(session::Session& session, players::SplitLayout& layout,
                       views::column_source::Override& choice) noexcept;
 #endif
 

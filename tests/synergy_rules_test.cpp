@@ -1,9 +1,9 @@
-// Host-side tests for player_two::synergy_rules, run without the game.
+// Host-side tests for battle::synergy_rules, run without the game.
 //
 // The hand-over's answer (who the leader test names for a human's partner), the give-back's target, what the tick does
 // with a member end that ran off the game thread, and the two tables' slot choice and stance dedup.
 
-#include "player_two/battle/synergy_rules.h"
+#include "battle/synergy_rules.h"
 #include "players/seats.h"
 
 #include "expect.h"
@@ -13,7 +13,7 @@
 
 namespace {
 
-using namespace lss::player_two::synergy_rules;
+using namespace lss::battle::synergy_rules;
 using namespace std::chrono_literals;
 
 int g_a, g_b, g_c, g_d, g_e;

@@ -18,12 +18,12 @@
 // The moments that take a further player's view away from them, each a game state the mod reads, never a guess:
 //   - the game shows something that takes the whole screen (views/whole_screen_reason.h: a full-screen menu, the map,
 //     a cutscene, a minigame that holds player 1, the title) — every further player's column;
-//   - player 1 rides a vehicle the whole party shares (player_two/rides/shared_ride.h) — every further player's;
+//   - player 1 rides a vehicle the whole party shares (rides/shared_ride.h) — every further player's;
 //   - a further player is in without their member while the game has it (players/seat_state.h Handed: waiting for a
 //     party member, or standing aside for the ride) — that player's column alone; while every further player in is
 //     handed, nobody but player 1 plays, so one monitor shows the engine's single view (the user's decision,
 //     2026-10-01). On one monitor a player waiting for their member leaves the game after a short grace and waits
-//     outside (player_two/session, session_rules::WaitOutside; the user's decision, 2026-10-27), so their column goes
+//     outside (session/session_rules.h WaitOutside; the user's decision, 2026-10-27), so their column goes
 //     with them and the others' views fill the screen; with columns held they stay, their column on player 1's picture;
 //   - the console's `single-view on` (always player 1's) and `single-view off` (never: the development overrides).
 // A column no seat fills (a mirror, a local player the mod does not know) shows player 1's by its nature.
@@ -143,7 +143,7 @@ struct Shown
     }
 
     /// The column showing `seat`'s own view (Self, listed), or -1: the column whose engine listener is that player's
-    /// (player_two/feedback/sound_listeners.h). None for a column on player 1's picture (it hears as player 1's view,
+    /// (feedback/sound_listeners.h). None for a column on player 1's picture (it hears as player 1's view,
     /// as a mirror's does) and none under the engine's single view (one view, one listener: player 1's).
     constexpr int OwnColumn(int seat) const noexcept
     {

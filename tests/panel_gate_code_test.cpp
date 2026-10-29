@@ -1,4 +1,4 @@
-// Host-side tests for the target-panel gate (player_two/battle/panel_gate_code.h), run without the game.
+// Host-side tests for the target-panel gate (battle/panel_gate_code.h), run without the game.
 //
 // The bytes the mod writes near the game are EXECUTED here, installed through platform::CodeRedirect
 // over a stand-in laid out like the panel request's cold chunk: a frame of 0x118 bytes, the replaced
@@ -6,8 +6,8 @@
 // path (returns what the replaced instruction stored, the request's stand-in) and, apart, the path the
 // gate skips to (returns 2).
 
+#include "battle/panel_gate_code.h"
 #include "platform/code_redirect.h"
-#include "player_two/battle/panel_gate_code.h"
 
 #include "exec_page.h"
 #include "expect.h"
@@ -64,12 +64,12 @@ void TestGate()
     std::puts("panel gate: open, the chunk runs as the game's (the replaced store included); set, it skips and "
               "counts; restored");
     const ChunkLike chunk;
-    static lss::player_two::PanelGate gate;
+    static lss::battle::PanelGate gate;
     EXPECT(chunk.Call(0x1234) == 0x1234);
 
-    const auto code = lss::player_two::PanelGateCode(gate, chunk.At(ChunkLike::kSkipOffset));
+    const auto code = lss::battle::PanelGateCode(gate, chunk.At(ChunkLike::kSkipOffset));
     lss::platform::CodeRedirect redirect;
-    EXPECT(redirect.Install(chunk.At(ChunkLike::kSiteOffset), lss::player_two::kPanelGateSiteBytes, code,
+    EXPECT(redirect.Install(chunk.At(ChunkLike::kSiteOffset), lss::battle::kPanelGateSiteBytes, code,
                             chunk.At(ChunkLike::kResumeOffset)));
 
     EXPECT(chunk.Call(0x5678) == 0x5678);  // open: the replaced store ran, the game's path went on

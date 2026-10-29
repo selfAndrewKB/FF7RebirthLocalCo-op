@@ -1,7 +1,7 @@
 #pragma once
 
 // A local player of the mod's, added to and removed from the engine's list of local players through UE's own path,
-// by controller id: a seat's (players/seats.h; seat 1 is player 2, player_two/session/session.h), which is the seat, or
+// by controller id: a seat's (players/seats.h; seat 1 is player 2, session/session.h), which is the seat, or
 // a mirror view's (players::IsMirrorId, views/mirror_player.h). The engine appends the player to its list, after
 // whoever is listed, and closes the list up when one leaves, so the list position is never taken for the seat: the
 // new player is the one appended, and a seat is free when no listed player has its controller id.

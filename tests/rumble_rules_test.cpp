@@ -1,9 +1,9 @@
-// Host-side tests for player_two::rumble_rules, run without the game.
+// Host-side tests for feedback::rumble_rules, run without the game.
 //
 // The copied-key set, which of player 1's loops a shared ride seeds, where an add and a stop go, and whose list the
 // component's tick plays; whose add it is and the list tick with the seats.
 
-#include "player_two/feedback/rumble_rules.h"
+#include "feedback/rumble_rules.h"
 
 #include "expect.h"
 
@@ -11,7 +11,7 @@
 
 namespace {
 
-using namespace lss::player_two::rumble_rules;
+using namespace lss::feedback::rumble_rules;
 
 void TestKeySet()
 {

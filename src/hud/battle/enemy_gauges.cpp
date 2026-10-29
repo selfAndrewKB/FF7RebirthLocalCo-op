@@ -1,5 +1,6 @@
 #include "hud/battle/enemy_gauges.h"
 
+#include "battle/lock_on.h"
 #include "facts/hud.h"
 #include "hud/battle/enemy_gauges_code.h"
 #include "hud/battle/target_views.h"
@@ -15,11 +16,10 @@
 #include "platform/settled_log.h"
 #include "platform/sparse_array.h"
 #include "platform/verified_code.h"
-#include "player_two/battle/lock_on.h"
-#include "player_two/generation.h"
+#include "players/generation.h"
 #include "players/seats.h"
-#include "player_two/scopes/leader_scope.h"
-#include "player_two/weak_object.h"
+#include "players/weak_object.h"
+#include "scopes/leader_scope.h"
 
 #include <algorithm>
 #include <array>
@@ -440,7 +440,7 @@ bool ReplayPlayerOne(std::uintptr_t manager, int& replayed, int& targeted)
     bool       ok         = true;
     platform::ForEachSparseElement(manager + kEntries, kElement, [&](std::uintptr_t entry) {
         const std::uintptr_t p      = entry + kEntryP;
-        void*                widget = player_two::weak_object::ObjectAt(reinterpret_cast<const void*>(p));
+        void*                widget = players::weak_object::ObjectAt(reinterpret_cast<const void*>(p));
         const GaugePlacement*  placed = widget != nullptr ? Recorded(widget) : nullptr;
         if (placed == nullptr)
         {
@@ -475,9 +475,9 @@ bool ReplayPlayerOne(std::uintptr_t manager, int& replayed, int& targeted)
 bool ReplaySeat(int seat, std::uintptr_t manager, int& replayed, int& targeted)
 {
     std::uintptr_t object = 0, controller = 0;
-    player_two::lock_on::Displayed(seat, object, controller);
+    battle::lock_on::Displayed(seat, object, controller);
     const auto          two        = target_views::TargetAndMain(object, controller);
-    const std::uint64_t memberWeak = player_two::leader_scope::WeakOf(player_two::generation::MemberOf(seat));
+    const std::uint64_t memberWeak = scopes::leader_scope::WeakOf(players::generation::MemberOf(seat));
     auto&               offsets    = g_offsets[static_cast<std::size_t>(seat)];
     const bool          seed       = offsets.empty();
     for (SeatOffset& offset : offsets)
@@ -489,7 +489,7 @@ bool ReplaySeat(int seat, std::uintptr_t manager, int& replayed, int& targeted)
     bool         ok          = true;
     platform::ForEachSparseElement(manager + kEntries, kElement, [&](std::uintptr_t entry) {
         const std::uintptr_t p      = entry + kEntryP;
-        void*                widget = player_two::weak_object::ObjectAt(reinterpret_cast<const void*>(p));
+        void*                widget = players::weak_object::ObjectAt(reinterpret_cast<const void*>(p));
         const GaugePlacement*  placed = widget != nullptr ? Recorded(widget) : nullptr;
         if (placed == nullptr)
         {
@@ -505,7 +505,7 @@ bool ReplaySeat(int seat, std::uintptr_t manager, int& replayed, int& targeted)
         const bool    target  = gauge.target;
         const float   half    = !target ? 0.0f : placed->targeted != 0 ? placed->halfSize : HalfSize(key.source);
         {
-            const player_two::leader_scope::LeaderScope leader(gauge.leaderScope ? memberWeak : 0);
+            const scopes::leader_scope::LeaderScope leader(gauge.leaderScope ? memberWeak : 0);
             if (!PlaceGuarded(manager, widget, target, placed->location, half, caseC ? 1 : 0, entry))
             {
                 ok = false;
@@ -531,7 +531,7 @@ bool ReplaySeat(int seat, std::uintptr_t manager, int& replayed, int& targeted)
             bool         stepped = false;
             if (platform::CallGuarded(slot, owner, reinterpret_cast<void*>(key.source)) && owner != nullptr)
             {
-                const player_two::leader_scope::LeaderScope leader(memberWeak);
+                const scopes::leader_scope::LeaderScope leader(memberWeak);
                 stepped = ScaleGuarded(widget, owner, p, offset.scale, caseC ? 1 : 0, saved);
             }
             if (saved.widget != nullptr)
@@ -633,7 +633,7 @@ bool Install(const platform::GameImage& image) noexcept
     const auto targeted = platform::FindFunction(image, kTargeted);
     const auto position = platform::FindFunction(image, facts::kSetPositionInViewport);
     if (!system || !byWidget || !site || !resume || !call || !targeted || !position ||
-        !player_two::weak_object::Known())
+        !players::weak_object::Known())
     {
         platform::Log(L"enemy gauges: the placement code is not what the research read; gauges stay player 1's in both halves");
         return false;
@@ -661,7 +661,7 @@ bool Install(const platform::GameImage& image) noexcept
     const auto forcedSite = image.Rebase(kForcedCall, 5);
     const auto forced     = platform::FindFunction(image, kForced);
     const auto yStep      = platform::FindFunction(image, kYStep);
-    const bool ownChecks  = forcedSite && forced && yStep && player_two::leader_scope::Installed();
+    const bool ownChecks  = forcedSite && forced && yStep && scopes::leader_scope::Installed();
     const auto scaleStep  = platform::FindFunction(image, kScaleStep);
     const auto apply      = platform::FindFunction(image, facts::kApplyRenderTransform);
     const bool sizes      = scaleStep && apply;
@@ -725,7 +725,7 @@ std::array<std::uint32_t, players::kMaxPlayers> g_listOpenings{};  // each seat'
 void LogSeatPass(int seat, const PassState& now) noexcept
 {
     const auto s = static_cast<std::size_t>(seat);
-    if (const auto openings = player_two::lock_on::TargetListOpenings(seat); openings != g_listOpenings[s])
+    if (const auto openings = battle::lock_on::TargetListOpenings(seat); openings != g_listOpenings[s])
     {
         g_listOpenings[s] = openings;
         g_loggedPass[s]   = PassState{0xFF};
@@ -757,7 +757,7 @@ void Replay(int seat) noexcept
     const bool     further = players::SeatIndex(seat);
     if (further && g_installed && !g_failed && (!read || gate == 0 || g_record.count == 0))
     {
-        LogSeatPass(seat, {gate, static_cast<std::int32_t>(g_record.count), 0, 0, player_two::lock_on::TargetListOpen(seat)});
+        LogSeatPass(seat, {gate, static_cast<std::int32_t>(g_record.count), 0, 0, battle::lock_on::TargetListOpen(seat)});
     }
     if (!g_installed || g_failed || g_record.count == 0 || !read || gate == 0)
     {
@@ -785,7 +785,7 @@ void Replay(int seat) noexcept
     if (further)
     {
         LogSeatPass(seat, {gate, static_cast<std::int32_t>(g_record.count), replayed, targeted,
-                           player_two::lock_on::TargetListOpen(seat)});
+                           battle::lock_on::TargetListOpen(seat)});
     }
     if (replayed > 0 && platform::Enabled(platform::Level::Trace))  // every HUD pass: Trace (platform/log.h)
     {

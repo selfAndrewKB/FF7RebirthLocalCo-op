@@ -7,7 +7,7 @@
 // target, enemies whose AI asks to always show status, and a sticky list), read by the gauge manager's
 // two steps that create and keep entries. Both calls are redirected: the game's collection runs, then
 // runs again on the same list once per further seat with that seat's target fields in place
-// (player_two/battle/lock_on.h's TargetScope, one at a time). It only appends what is missing, so the list is
+// (battle/lock_on.h's TargetScope, one at a time). It only appends what is missing, so the list is
 // every player's targets together and the game makes, keeps and fades each seat's gauge itself. Both sites or
 // neither: one keeps only what its list names.
 //
@@ -16,7 +16,7 @@
 // own opacity back after that pass. Still painted, so UMG keeps ticking them (fades and animations
 // advance; a Hidden or Collapsed widget would never tick, as a further pass runs with DeltaTime 0): each
 // view's pass takes out every other player's cursor (player 1's the battle system's, a seat's
-// player_two/battle/lock_on.h Cursor), and the gauges other players' displayed targets brought in that its own
+// battle/lock_on.h Cursor), and the gauges other players' displayed targets brought in that its own
 // player's did not.
 // The red ability label rises above an enemy's name and gauge only when that enemy is the locked-on
 // target: its lookup considers only the gauge of the bar manager's targeted key, player 1's. Its one

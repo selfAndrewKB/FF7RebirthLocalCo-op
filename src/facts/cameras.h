@@ -46,7 +46,7 @@ inline constexpr std::uint32_t kFieldOperatorCommand = 0x40;  // its layout: RE-
 inline constexpr std::uint32_t kFieldCommandSize     = 0x58;
 inline constexpr std::uint32_t kFieldOperatorActive  = 0xD0;
 
-// Battle level sequences (player_two/attack_cameras, attack_framing): the sequence list's entry {u8 priority +0,
+// Battle level sequences (camera/attack_cameras, attack_framing): the sequence list's entry {u8 priority +0,
 // FWeakObjectPtr sequence actor +4}; AEndBattleLevelSequenceActor's camera actor (1.005 +0x20); AEndBattleCameraActor's
 // owner (reflection, both builds).
 inline constexpr std::uint32_t                     kSequenceEntryPriority = 0x00;

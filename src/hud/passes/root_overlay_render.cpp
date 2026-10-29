@@ -23,7 +23,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
-#include "player_two/generation.h"
+#include "players/generation.h"
 #include "players/seats.h"
 #include "views/player_view_point.h"
 
@@ -74,7 +74,7 @@ bool AnotherPassBelow(int seat, bool splitShown) noexcept
     }
     for (int below = seat - 1; below >= 1; --below)
     {
-        if (player_two::generation::Active(below) && !views::OnPlayerOne(below))
+        if (players::generation::Active(below) && !views::OnPlayerOne(below))
         {
             return true;
         }
@@ -120,24 +120,24 @@ void FurtherPass(int seat, bool another) noexcept
 /// Replaces the call (entered from the game's code through a bare jump: nothing here may throw).
 void RenderRootOverlay(void* application) noexcept
 {
-    const bool gameThread = player_two::generation::OnGameThread();
+    const bool gameThread = players::generation::OnGameThread();
     // The whole call: the game's overlay render, the further passes before it, and the mod's work around it.
     const platform::frame_watch::Charge charge(platform::frame_watch::Part::OverlayRender);
     if (gameThread)
     {
         TraceBeforeRender();  // the HUD trace (hud/hud_trace.h; a stub without the dev tools)
         target_views::BeginFrame();  // this frame's target lookups made afresh
-        const bool splitShown = player_two::generation::AnyActive() && views::SplitShown();  // not player 1's single view
+        const bool splitShown = players::generation::AnyActive() && views::SplitShown();  // not player 1's single view
         // The field-action icons' base for the columns' layout (or the game's own), before the rows' layout below,
         // which then reads it.
         action_icon_base::Update(views::ViewsSplit() ? LastLayoutSize() : kSoloLayout);
-        if (player_two::generation::AnyActive())
+        if (players::generation::AnyActive())
         {
             prompt_rows::Refresh();  // whose each prompt row is; each player's laid out on their own
             promptRowsKnown = true;
             for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
             {
-                const bool in = player_two::generation::Active(seat);
+                const bool in = players::generation::Active(seat);
                 if (g_seatIn[seat] && !in)  // a seat out while another is in: its own HUD state forgotten
                 {
                     prompt_rows::Forget(seat);
@@ -172,7 +172,7 @@ void RenderRootOverlay(void* application) noexcept
         BeginPasses();
         for (int seat = players::kSeatsBuilt; seat >= 1; --seat)
         {
-            if (player_two::generation::Active(seat) && ImageReady(seat, splitShown && !views::OnPlayerOne(seat)))
+            if (players::generation::Active(seat) && ImageReady(seat, splitShown && !views::OnPlayerOne(seat)))
             {
                 FurtherPass(seat, AnotherPassBelow(seat, splitShown));
             }
@@ -186,7 +186,7 @@ void RenderRootOverlay(void* application) noexcept
         BeginPlayerOnePass();  // the game's own call follows: whose entries were rendered, for the families
         overlay_pass::Set(0);
         g_playerOneStart = Now();
-        if (player_two::generation::AnyActive() && !splitShown)
+        if (players::generation::AnyActive() && !splitShown)
         {
             // Player 1's single view (players/single_view.h): no image for the further players, and player 1's
             // pass shows only player 1's own rows, marks, icons and command menu, as after a further pass. The

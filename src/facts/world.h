@@ -18,7 +18,7 @@ using platform::FunctionFact;
 /// g_EndGameRoot: a pointer global the game mode fills, the root of the field's managers. Its slots (each a pointer):
 inline constexpr std::uintptr_t kEndGameRoot    = 0x1490FEDE8;
 inline constexpr std::uint32_t  kRootGameState  = 0x170;  // the game state: the on/off table's owner and its counters
-inline constexpr std::uint32_t  kRootCharaPop   = 0x180;  // the CharaPop manager (player_two/world/charapop_facts.h)
+inline constexpr std::uint32_t  kRootCharaPop   = 0x180;  // the CharaPop manager (world/charapop_facts.h)
 inline constexpr std::uint32_t  kRootModeHolder = 0x1B8;  // the mode holder (the encounter manager; +0x3D558 its state)
 inline constexpr std::uint32_t  kRootWorldItems = 0x288;  // the WorldItemMgr
 /// WorldItemMgr's map of items (RE-p2-field-interact.md §10.5): a stock TMap keyed by the item's FName at element +0
@@ -26,7 +26,7 @@ inline constexpr std::uint32_t  kRootWorldItems = 0x288;  // the WorldItemMgr
 inline constexpr std::uint32_t  kWorldItemMapElements = 0x90;
 inline constexpr std::uint32_t  kWorldItemMapStride   = 0xD0;
 inline constexpr std::uint32_t  kWorldItemMapHashNext = 0xC0;  // i32
-// +0x1A0 is the FieldActionMgr (player_two/field_pickup), +0x270 the chocobo ride manager (facts/vehicles.h).
+// +0x1A0 is the FieldActionMgr (world/field_pickup), +0x270 the chocobo ride manager (facts/vehicles.h).
 
 /// g_LocationVolumeManager (a pointer): the AEndLocationVolumes and the game's own containment test,
 /// LocationVolume_ContainsPoint(volume, &position, margin), a pure read (RE-p2-framing.md; walk_limits §4.3.1).

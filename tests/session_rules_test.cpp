@@ -1,9 +1,9 @@
-// Host-side tests for player_two::session_rules, run without the game.
+// Host-side tests for session::session_rules, run without the game.
 //
 // The holds of the session's Playing phase, which of them retake a member, and what a game leader change asks of
 // the session.
 
-#include "player_two/session/session_rules.h"
+#include "session/session_rules.h"
 
 #include "expect.h"
 
@@ -12,7 +12,7 @@
 
 namespace {
 
-using namespace lss::player_two::session_rules;
+using namespace lss::session::session_rules;
 
 int g_member;
 int g_other;

@@ -1,10 +1,10 @@
-// Host-side tests for player_two::world_rules, run without the game.
+// Host-side tests for world::world_rules, run without the game.
 //
 // The attack framing's latches and shot verdict, the location volume pick's rules, the move-type pair stack, the
 // item widening's rules, the switch volume's enter, leave and player-1 changes, the camera repair's timer and verdict,
 // the climb exits, the distance level and the shoulder scale.
 
-#include "player_two/world/world_rules.h"
+#include "world/world_rules.h"
 
 #include "expect.h"
 
@@ -14,7 +14,7 @@
 
 namespace {
 
-using namespace lss::player_two::world_rules;
+using namespace lss::world::world_rules;
 using namespace std::chrono_literals;
 
 int g_member, g_one, g_other;

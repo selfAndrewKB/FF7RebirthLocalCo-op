@@ -1,0 +1,115 @@
+#pragma once
+
+// Player 2 picks up collectibles and materials with the game's own field prompts (RE-p2-field-interact.md
+// §4.1, §12; plan, "Player 2 triggers field prompts").
+//
+// FieldActionMgr keeps every field prompt as a point and runs one selection per frame around one probe, the
+// party leader, with one slot block: the candidates, the visibility-trace handles, eight button slots with
+// their rows, records and latches. Nothing in it is per player. So right after the game's own update
+// (player 1's; its call in the game mode's tick is redirected here), the same game code runs once more as
+// player 2:
+//   - inside player 2's scopes: pad 2's sticks and buttons, player 2's controller as the primary one, player
+//     2's member as the leader (and its type). Every gate and the probe then resolve to player 2 (§12.7);
+//   - with player 2's copy of the manager's per-player ranges swapped in (§12.9; player 1's put back after),
+//     and of each point's carried target bits (+0x104 bits 1 and 2), kept by point key;
+//   - with the game's own "point disabled" bit (+0x104 bit 4, which the candidate query skips) set on every
+//     point that is neither one of WorldItemMgr's items, one of TreasurePointMgr's chests (§13; the chest listener's
+//     own test), a vending machine (its point preset rpaVendingMachine, §15.5; world/vending) nor a shopkeeper
+//     (the game's data names a shop action for its key; world/shop_talk), and cleared again after: player 2 is
+//     offered collectibles, materials, chests, vending machines and shopkeepers; talk, doors, scripts and menus stay
+//     player 1's. A chest or machine player 2 uses runs the game's own state (treasure, field action) on player 2's
+//     member (the listener asks for the leader, which the scope makes player 2's); a shopkeeper's press fires the NPC's
+//     own state trigger;
+//   - the input step's FieldAction part in the game's order (its gate, the slot poll into the mod's own
+//     buffers, the latch, the press/execute tick), then the selection update;
+//   - with player 2's controller first in the world's controller list for each visibility request the pass
+//     makes: the request's screen test projects the point through "the first local player" (§12.13), so the
+//     offer follows player 2's own screen, not player 1's;
+//   - with each point's marker widget (+0x78) swapped too, on every live point, player 2's kept by point key
+//     (§12.15): the game's own marker code makes, drives and sweeps player 2's own widget in the pass, so the
+//     two players no longer write one widget's state in turn. Player 2's widgets the game would not destroy
+//     (point gone between passes, field exit, player 2 leaving) go through its own destroy call.
+// Selection, traces, rows, markers, the look-at, the press and the grant are all the game's. The one global
+// byte the press tick writes (root+0x210 -> +8) is put back after. The game's field enter/exit resets run
+// on player 2's copy too, and its field-exit clear runs on it when player 2 leaves.
+//
+// Three more hooks carry the pass's edges: the game mode tick's call of the selection update (the pass runs right
+// after it), WorldItemMgr's mark by key (a key player 2's pass marks is noted) and the WorldItem tick's call of the
+// grant (run with player 2's controller as the primary one for a noted key: the item-get rumble's only player read,
+// §12.12 item 5). Each tells the one observer (world/interact_watch, a dev tool) what passed through it.
+//
+// Logged: the scopes or gates that stopped a pass (counted), player 2's slot targets and marker widgets on
+// change, each widget the mod destroys, a status line once a minute. Game thread only.
+//
+// Per seat (players/seats.h): "player 2" above is each seat. Each seat has its own pickup record (the copy of the five
+// ranges, the carried target bits and marker widgets by point key, the WorldItem keys its pass marked, its counts),
+// and the passes run in seat order after the game's own update, one seat's swap closed before the next one's opens.
+// The visibility request puts the seat's controller first in the world's controller list, its entry found by the
+// controller (never by its position). Shared: the scratch of a pass, player 1's markers as the last pass left them
+// and the doomed widgets.
+
+#include "players/seats.h"
+
+#include <array>
+#include <cstdint>
+
+namespace lss::platform {
+class GameImage;
+}
+
+namespace lss::world::field_pickup {
+
+/// Finds the game's functions (each checked) and installs the field enter/exit redirects and the three hooks. Logged.
+void Install(const platform::GameImage& image) noexcept;
+
+/// Puts the game's code back (at mod uninstall, with player 2 out).
+void Remove() noexcept;
+
+/// The seats' passes, right after the game's own selection update of `mgr` (the update hook calls it).
+void AfterUpdate(void* mgr, float dt) noexcept;
+
+/// What the three hooks tell the observer (each entry may be null): after the game's update and the seats' passes
+/// (game thread); a WorldItem key marked (the game's answer, the caller's return address, whether a seat's pass
+/// marked it; any thread); a grant, before the game's call and after it, inside the same scope (`playerTwo`: the
+/// grant ran with a seat's controller as the primary one). The observer is a dev tool: with two players "a seat" is
+/// player 2.
+struct HookObserver
+{
+    void (*afterUpdate)(void* mgr) noexcept                                                                 = nullptr;
+    void (*marked)(std::uint64_t key, std::uint8_t taken, std::uintptr_t caller, bool playerTwo) noexcept = nullptr;
+    void (*granting)(std::uint64_t key, bool playerTwo) noexcept                                           = nullptr;
+    void (*granted)(std::uint64_t key, bool playerTwo) noexcept                                            = nullptr;
+};
+
+/// The one observer (a copy is kept). Set before any field exists, cleared at unload.
+void SetHookObserver(const HookObserver& observer) noexcept;
+
+/// `seat`'s copy of the slot rows (FWeakObjectPtr values, 0 for none), for hud/prompt_rows: the rows the seat's
+/// pass made. All 0 while the seat has no copy, or inside a pass.
+using Weaks = std::array<std::uint64_t, 8>;
+void RowWeaks(int seat, Weaks& out) noexcept;
+
+/// True while a seat's pass runs (game thread).
+bool InPass() noexcept;
+
+/// The seat whose pass runs now, or -1 (game thread).
+int PassSeat() noexcept;
+
+/// Whether a CharaPop entry's key is one of TreasurePointMgr's chests (its CharaPop key -> treasure key map at +0x60,
+/// the spawn handler's own lookup). Game thread.
+bool IsChestEntry(std::uint64_t popKey) noexcept;
+
+/// A WorldItem key `seat`'s pass marked taken (the mark hook, inside the pass).
+void NoteMarked(int seat, std::uint64_t key) noexcept;
+
+/// The seat whose pass marked `key` (forgotten once asked), or -1: the grant then runs with that seat's controller
+/// as the primary one, so the item-get rumble plays on its pad (the only player read in the grant,
+/// RE-p2-field-interact.md §12.12 item 5).
+int TakeMarked(std::uint64_t key) noexcept;
+
+/// Whose point marker widget is (a UFieldTargetWidget at a point's +0x78), as of the seats' last passes: 0
+/// player 1's, a seat (1..) that seat's, -1 neither (another owner's marker, or no seat has a copy). For
+/// hud/field_markers, which shows each half only its own player's.
+int MarkerOwner(const void* widget) noexcept;
+
+}  // namespace lss::world::field_pickup

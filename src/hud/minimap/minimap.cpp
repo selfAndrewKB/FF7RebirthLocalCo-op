@@ -23,9 +23,9 @@
 #include "platform/log.h"
 #include "platform/module_pin.h"
 #include "platform/verified_code.h"
-#include "player_two/generation.h"
-#include "player_two/session/party_member.h"
+#include "players/generation.h"
 #include "players/seats.h"
+#include "session/party_member.h"
 
 #include <atomic>
 #include <cstddef>
@@ -44,8 +44,8 @@ namespace lss::hud::minimap {
 
 namespace {
 
-namespace generation   = player_two::generation;
-namespace party_member = player_two::party_member;
+namespace generation   = players::generation;
+namespace party_member = session::party_member;
 
 // RE-p2-own-minimap.md §1, §3 and §8 (this build). Every function's entry bytes are checked before use.
 

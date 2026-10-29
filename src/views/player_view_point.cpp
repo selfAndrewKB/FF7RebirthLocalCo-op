@@ -148,7 +148,7 @@ void LogShapeOnChange(int slot, const std::byte* viewInfo) noexcept
 // While player 2 is in, every player's view takes the mod's FOV rule
 // (ULocalPlayer::AspectRatioAxisConstraint), read by GetProjectionData after this function returns
 // (0x140CC0B1D) for a view without the 16:9 constraint. The constraint itself is the main camera's
-// own setting, cleared once per camera through the game's setter (player_two/camera/main_camera_shape.h).
+// own setting, cleared once per camera through the game's setter (camera/main_camera_shape.h).
 //
 // The FOV rule is written once per player, at the player's first split frame (and again only if
 // the mod's own FOV mode changes), then left alone while a scene may be at work: the game's only
@@ -228,7 +228,7 @@ std::array<platform::SettledLog<FovSteady, int>, kSeats> g_fovLog = {platform::S
                                                                      platform::SettledLog<FovSteady, int>(kFovStillFrames)};
 
 /// Each player's view width against the camera's own (tan of the half-angles; 1 without a split FOV), for the
-/// camera code that places things across the view (player_two/camera/shoulder_scale.h). By seat.
+/// camera code that places things across the view (camera/shoulder_scale.h). By seat.
 std::array<std::atomic<float>, kSeats> g_widthRatio{1.0f, 1.0f, 1.0f};
 
 /// With a weight chosen and the halves' shape known, writes the split FOV (views/view_shape.h,
@@ -289,7 +289,7 @@ void ShapeSplitView(void* localPlayer, std::byte* viewInfo, int slot) noexcept
     {
         g_fillLogged = true;
         platform::Log(L"split views: the FOV rule is the mod's{} (the halves fill by each main camera's own constraint "
-                      L"setting, player_two/main_camera_shape)",
+                      L"setting, camera/main_camera_shape)",
                       g_axisOffset.load(std::memory_order_relaxed) == 0 ? L" NOT: offset unconfirmed" : L"");
     }
 }

@@ -2,7 +2,7 @@
 
 // N floats one thread writes and another reads (Boehm's seqlock): the writer bumps the version to odd, stores the
 // values, bumps it to even; a reader retries while it sees an odd version or a version that changed under it. No
-// locks, so it serves the audio and render threads (player_two/feedback/sound_listeners, views/anim_two_views).
+// locks, so it serves the audio and render threads (feedback/sound_listeners, world/anim_two_views).
 // Tested on the host (tests/seqlock_test.cpp).
 
 #include <array>

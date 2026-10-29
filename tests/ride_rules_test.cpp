@@ -1,10 +1,10 @@
-// Host-side tests for player_two::ride_rules, run without the game.
+// Host-side tests for rides::ride_rules, run without the game.
 //
 // The chocobo ride's end retry, seated verdict, end reasons in precedence order and getoff rule; the wheelie's forced
 // getoff plan, coordinator transitions and world stick; the shared ride's riding and change rules; the end texts per
 // seat.
 
-#include "player_two/rides/ride_rules.h"
+#include "rides/ride_rules.h"
 
 #include "expect.h"
 
@@ -14,7 +14,7 @@
 
 namespace {
 
-using namespace lss::player_two::ride_rules;
+using namespace lss::rides::ride_rules;
 
 bool Near(float a, float b)
 {

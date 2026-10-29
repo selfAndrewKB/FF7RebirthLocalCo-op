@@ -8,8 +8,8 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
-#include "player_two/generation.h"
-#include "player_two/scopes/leader_scope.h"
+#include "players/generation.h"
+#include "scopes/leader_scope.h"
 
 #include <array>
 #include <cstdint>
@@ -111,7 +111,7 @@ enum class Presence
 Presence PresenceOf(const Followed& followed) noexcept
 {
     std::int32_t z = -1;
-    if (!player_two::leader_scope::StillNames(followed.weak, followed.widget) || !Read(followed.widget, kZOrder, z) ||
+    if (!scopes::leader_scope::StillNames(followed.weak, followed.widget) || !Read(followed.widget, kZOrder, z) ||
         z == -1)
     {
         return Presence::Gone;
@@ -131,7 +131,7 @@ void Follow(void* widget, const std::wstring& name, std::int32_t z)
             return;  // re-added (a new z): already followed
         }
     }
-    const std::uint64_t weak = player_two::leader_scope::WeakOf(widget);
+    const std::uint64_t weak = scopes::leader_scope::WeakOf(widget);
     for (Followed& followed : g_followed)
     {
         if (followed.widget == nullptr)
@@ -148,7 +148,7 @@ void Follow(void* widget, const std::wstring& name, std::int32_t z)
 char Add(void* widget, std::int32_t z) noexcept
 {
     const char result = reinterpret_cast<AddFn>(g_add.Original())(widget, z);
-    if (widget == nullptr || !player_two::generation::OnGameThread())
+    if (widget == nullptr || !players::generation::OnGameThread())
     {
         return result;
     }

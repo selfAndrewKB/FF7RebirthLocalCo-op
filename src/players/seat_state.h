@@ -9,7 +9,7 @@
 // stays in without one until it is free again (a story script holds it, the game's party has not freed it yet, or
 // player 1 rides a vehicle the whole party shares). Either way the game has the member and the seat is kept: on the
 // monitor row, or on one monitor for a ride and for the short grace before a waiting player leaves to wait outside
-// (player_two/session/session_rules.h WaitOutside), when the seat is Awaiting.
+// (session/session_rules.h WaitOutside), when the seat is Awaiting.
 
 namespace lss::players {
 

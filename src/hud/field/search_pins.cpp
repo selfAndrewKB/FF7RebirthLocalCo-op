@@ -9,12 +9,12 @@
 #include "platform/log.h"
 #include "platform/sparse_array.h"
 #include "platform/verified_code.h"
-#include "player_two/describe.h"
-#include "player_two/generation.h"
-#include "player_two/scopes/leader_scope.h"
-#include "player_two/weak_object.h"
+#include "players/describe.h"
+#include "players/generation.h"
 #include "players/seats.h"
+#include "players/weak_object.h"
 #include "players/widget_opacity.h"
+#include "scopes/leader_scope.h"
 
 #include <array>
 #include <cstddef>
@@ -101,7 +101,7 @@ using platform::ReadAt;  // the guarded reads: platform/guarded.h
 
 void* Resolve(std::uintptr_t weakField) noexcept
 {
-    return player_two::weak_object::ObjectAt(reinterpret_cast<const void*>(weakField));
+    return players::weak_object::ObjectAt(reinterpret_cast<const void*>(weakField));
 }
 
 std::uintptr_t Manager() noexcept
@@ -165,15 +165,15 @@ void LogIfChanged(int mine, const Logged& now, std::uintptr_t manager) noexcept
         std::wstring names;
         int          named = 0;
         platform::ForEachSparseElement(manager + kPins, kPinEntry, [&names, &named](std::uintptr_t entry) {
-            names += std::format(L"{}{} + {}", named != 0 ? L", " : L"", player_two::NameOf(Resolve(entry + kPinWidget)),
-                                 player_two::NameOf(Resolve(entry + kPinHook)));
+            names += std::format(L"{}{} + {}", named != 0 ? L", " : L"", players::NameOf(Resolve(entry + kPinWidget)),
+                                 players::NameOf(Resolve(entry + kPinHook)));
             return ++named < 3;
         });
         std::wstring active;
         for (int seat = 0; seat <= players::kSeatsBuilt; ++seat)
         {
             active += std::format(L"{}{} {} (ranged state +0x4E0 {:#x})", seat == 0 ? L"" : L", ",
-                                  players::SeatName(seat), player_two::YesNo((now.active & (1u << seat)) != 0),
+                                  players::SeatName(seat), players::YesNo((now.active & (1u << seat)) != 0),
                                   now.shooting[static_cast<std::size_t>(seat)]);
         }
         platform::LogDebug(L"search pins: {}'s view: {} pin(s) ({} its player's, {} hidden as another's, {} nobody's) "
@@ -271,10 +271,10 @@ void ShowOnly(int seat) noexcept
     const int mine = seat;
     // Player 1's component and each built seat's ([0] player 1's).
     std::array<Held, players::kMaxPlayers> held{};
-    held[0] = HeldBy(player_two::generation::PlayerOneController());
+    held[0] = HeldBy(players::generation::PlayerOneController());
     for (int s = 1; s <= players::kSeatsBuilt; ++s)
     {
-        held[static_cast<std::size_t>(s)] = HeldBy(player_two::generation::ControllerOf(s));
+        held[static_cast<std::size_t>(s)] = HeldBy(players::generation::ControllerOf(s));
     }
     Logged now{.compass = Resolve(manager + kCompass) != nullptr};
     for (std::size_t s = 0; s < held.size(); ++s)

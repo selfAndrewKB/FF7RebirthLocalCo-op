@@ -16,8 +16,12 @@
 #include "engine_tick.h"
 #include "facts/engine.h"
 #include "facts/in_battle.h"
+#include "feedback/ffb_manager_two.h"
+#include "feedback/rumble_list_two.h"
 #include "hud/layout/hud_placement.h"
 #include "hud/layout/overlay_layout.h"
+#include "input/climb_context.h"
+#include "input/pad_sticks.h"
 #include "modules.h"
 #include "platform/code_memory.h"
 #include "platform/frame_watch.h"
@@ -28,37 +32,33 @@
 #include "platform/module_folder.h"
 #include "platform/thread_times.h"
 #include "platform/verified_code.h"
-#include "player_two/feedback/ffb_manager_two.h"
-#include "player_two/feedback/rumble_list_two.h"
-#include "player_two/generation.h"
-#include "player_two/input/climb_context.h"
-#include "player_two/input/pad_sticks.h"
-#include "player_two/rides/shared_ride.h"
-#include "player_two/session/field_exit.h"
-#include "player_two/session/session.h"
-#include "player_two/weak_object.h"
-#include "player_two/world/charapop_centre.h"
-#include "player_two/world/charapop_near.h"
-#include "player_two/world/world_actor_reach.h"
 #include "players/console_access.h"
+#include "players/generation.h"
 #include "players/join_keys.h"
 #include "players/seats.h"
 #include "players/single_view.h"
-#include "views/column_source.h"
 #include "players/split_layout.h"
 #include "players/split_screen_settings.h"
 #include "players/split_settings_access.h"
 #include "players/tracked_object.h"
+#include "players/weak_object.h"
 #include "renderer/additional_family_output.h"
 #include "renderer/async_compute.h"
 #include "renderer/family_boundary.h"
 #include "renderer/residency_off.h"
 #include "renderer/view_family_submission.h"
-#include "views/player_view_point.h"
+#include "rides/shared_ride.h"
+#include "session/field_exit.h"
+#include "session/session.h"
+#include "views/column_source.h"
 #include "views/display_align.h"
 #include "views/mirror_player.h"
+#include "views/player_view_point.h"
 #include "views/whole_screen.h"
 #include "views/window_span.h"
+#include "world/charapop_centre.h"
+#include "world/charapop_near.h"
+#include "world/world_actor_reach.h"
 
 #include <atomic>
 #include <cstddef>
@@ -121,7 +121,7 @@ std::optional<std::uintptr_t> VerifyEngine(const lss::platform::GameImage& image
 /// Player 1's controller while it is a live object: the world context for the viewport's split switch.
 RC::Unreal::UObject* PlayerOneWorldContext() noexcept
 {
-    auto* controller = static_cast<RC::Unreal::UObject*>(lss::player_two::generation::PlayerOneController());
+    auto* controller = static_cast<RC::Unreal::UObject*>(lss::players::generation::PlayerOneController());
     return lss::players::IsLiveObject(controller) ? controller : nullptr;
 }
 
@@ -192,12 +192,12 @@ public:
         // thread. So everything stays installed; the DLL is pinned, so it stays valid. The characters
         // raised for player 2's view are given back either way (that setter runs from any thread), and the NPC
         // centre when this runs on the game thread.
-        lss::player_two::charapop_near::Release();
-        lss::player_two::charapop_centre::Release();
-        lss::player_two::world_actor_reach::Release();
+        lss::world::charapop_near::Release();
+        lss::world::charapop_centre::Release();
+        lss::world::world_actor_reach::Release();
         // The monitors the span lined up go back for the Windows session (plain Win32, any thread); the window itself
         // is the engine's, reshaped back only on the game thread.
-        if (lss::player_two::generation::OnGameThread())
+        if (lss::players::generation::OnGameThread())
         {
             lss::views::window_span::Leave(L"the mod unloads");
         }
@@ -210,7 +210,7 @@ public:
         }
         // The reverse of the install order: the field-exit catch and the dev tools (installed after the table),
         // the table (modules.cpp walks it backwards), the session's stages, the renderer.
-        lss::player_two::field_exit::Remove();
+        lss::session::field_exit::Remove();
         lss::dev::Remove();
         lss::modules::Remove();
         if (session_)
@@ -312,7 +312,7 @@ public:
             Log(L"standing aside: nothing installed, the game runs unmodified");
             return;
         }
-        lss::player_two::weak_object::Install(*image);    // the engine's weak pointers, once, for every module
+        lss::players::weak_object::Install(*image);    // the engine's weak pointers, once, for every module
         lss::facts::InstallInBattle(*image);  // the game's in-battle test, once, for the stages that ask it
         session_.emplace(*removeLocalPlayer);
         session_->InstallStages(*image);
@@ -342,7 +342,7 @@ public:
         });
         // The same for the seats before a retry, reload or load leaves the field inside this world (no map load);
         // the mirror views stay in through it.
-        if (!lss::player_two::field_exit::Install(
+        if (!lss::session::field_exit::Install(
                 *image,
                 [](void* self) {
                     auto* mod = static_cast<LocalSplitScreenMod*>(self);
@@ -484,38 +484,38 @@ private:
                 break;
             case lss::players::PlayerIntent::TogglePadSticks: session_->TogglePadSticks(); break;
             case lss::players::PlayerIntent::ToggleNpcDetail:
-                if (lss::player_two::charapop_near::Installed())
+                if (lss::world::charapop_near::Installed())
                 {
-                    lss::player_two::charapop_near::SetDetail(
-                        lss::player_two::charapop_near::NextDetail(lss::player_two::charapop_near::CurrentDetail()));
+                    lss::world::charapop_near::SetDetail(
+                        lss::world::charapop_near::NextDetail(lss::world::charapop_near::CurrentDetail()));
                 }
                 break;
             case lss::players::PlayerIntent::ToggleNpcCentre:
-                if (lss::player_two::charapop_centre::Installed())
+                if (lss::world::charapop_centre::Installed())
                 {
-                    lss::player_two::charapop_centre::SetEnabled(!lss::player_two::charapop_centre::Enabled());
+                    lss::world::charapop_centre::SetEnabled(!lss::world::charapop_centre::Enabled());
                 }
                 break;
             case lss::players::PlayerIntent::None: break;
         }
-        lss::player_two::field_exit::Watch();
-        if (session_->AnyIn() && lss::player_two::field_exit::FieldLeft())
+        lss::session::field_exit::Watch();
+        if (session_->AnyIn() && lss::session::field_exit::FieldLeft())
         {
             LeaveBeforeWorldChange(L"the field stopped running (a field exit the redirected entry did not see)", false);
         }
         lss::dev::TickBeforeSession();
-        // The buggy and the bronco (player_two/rides/shared_ride.h): player 2 stands aside, the game's merge reaches
+        // The buggy and the bronco (rides/shared_ride.h): player 2 stands aside, the game's merge reaches
         // player 1 from every pad.
-        const bool shared = lss::player_two::shared_ride::Tick();
+        const bool shared = lss::rides::shared_ride::Tick();
         for (int seat = 1; seat <= lss::players::kSeatsBuilt; ++seat)  // each seat with its own force-feedback manager
         {
-            lss::player_two::rumble_list_two::CopyPlayerOne(seat,
-                                                            shared && lss::player_two::ffb_manager_two::Attached(seat));
+            lss::feedback::rumble_list_two::CopyPlayerOne(seat,
+                                                            shared && lss::feedback::ffb_manager_two::Attached(seat));
         }
         session_->SetSharedRide(shared);
         session_->SetColumnsHeld(columnsHeld_);  // as the last columns' tick read it (the columns follow the session)
-        lss::player_two::pad_sticks::SetStoodDown(shared);
-        lss::player_two::climb_context::Tick();  // this frame's input copies for the climbs on the anim worker (W5)
+        lss::input::pad_sticks::SetStoodDown(shared);
+        lss::input::climb_context::Tick();  // this frame's input copies for the climbs on the anim worker (W5)
         session_->Tick();
         // The columns right after the session: the mirror views toward them, the window span to them.
         const lss::modules::Columns columns = lss::modules::TickColumns();
@@ -656,7 +656,7 @@ private:
         }
     }
 
-    std::optional<lss::player_two::Session>   session_;
+    std::optional<lss::session::Session>   session_;
     lss::players::JoinKeys                    keys_;
     ULONGLONG                                 nextStatus_ = 0;
     lss::players::SplitScreenSettings         settings_{{&lss::players::console::VariableInt,

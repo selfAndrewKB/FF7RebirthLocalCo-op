@@ -13,7 +13,7 @@
 //   L2  the overlay's "first game player" (the local player whose view rect it lays the HUD out in
 //       and caches for the marker math): GEngine__GetFirstGamePlayerForGameViewport answers the seat's
 //       local player while the pass runs (hud/passes/first_player_code.h);
-//   L3  the party manager's primary controller (player_two/scopes/primary_controller.h Scope), which the
+//   L3  the party manager's primary controller (scopes/primary_controller.h Scope), which the
 //       camera-manager helpers and the compass heading read;
 //   L6  the game mode's HUD time step (AEndGameMode+0x5D8), 0 during the re-runs, so timers do not
 //       advance twice (the overlay's own DeltaTime is L5, in hud/passes/second_image.cpp).

@@ -1,5 +1,6 @@
 #include "hud/battle/target_views.h"
 
+#include "battle/lock_on.h"
 #include "facts/engine.h"
 #include "facts/hud.h"
 #include "facts/in_battle.h"
@@ -14,10 +15,9 @@
 #include "platform/log.h"
 #include "platform/sparse_array.h"
 #include "platform/verified_code.h"
-#include "player_two/battle/lock_on.h"
-#include "player_two/generation.h"
-#include "player_two/weak_object.h"
+#include "players/generation.h"
 #include "players/seats.h"
+#include "players/weak_object.h"
 #include "players/widget_opacity.h"
 
 #include <algorithm>
@@ -192,12 +192,12 @@ void Collect(void* out) noexcept
     Seats counts{Count(out), -1, -1};
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        if (!player_two::generation::Active(seat) || player_two::generation::MemberOf(seat) == nullptr ||
-            player_two::lock_on::DisplayedObject(seat) == 0)
+        if (!players::generation::Active(seat) || players::generation::MemberOf(seat) == nullptr ||
+            battle::lock_on::DisplayedObject(seat) == 0)
         {
             continue;
         }
-        const player_two::lock_on::TargetScope scope(seat);
+        const battle::lock_on::TargetScope scope(seat);
         if (scope.Held())
         {
             original(out);
@@ -288,7 +288,7 @@ bool Shared(std::uintptr_t source, std::uintptr_t manager)
 /// A widget from its FWeakObjectPtr value, or null if it is gone.
 void* WidgetOf(std::uint64_t weak) noexcept
 {
-    return player_two::weak_object::ObjectOf(weak);
+    return players::weak_object::ObjectOf(weak);
 }
 
 /// Takes `widget` out of this pass's image (render opacity 0, so it stays painted and ticked),
@@ -312,7 +312,7 @@ std::uint8_t LabelLookup(void* manager, float* point, float* scale, void* charac
         return original(manager, point, scale, character);  // player 1's view and the game's tick: its own key
     }
     Pair two;
-    player_two::lock_on::Displayed(seat, two.object, two.controller);
+    battle::lock_on::Displayed(seat, two.object, two.controller);
     const auto key   = reinterpret_cast<std::uintptr_t>(manager) + kTargetedKey;
     const Pair theirs{ReadAt<std::uintptr_t>(key), ReadAt<std::uintptr_t>(key + 8)};
     // A borrowed swap: the lookup pins the key with its own reference and releases it again.
@@ -385,7 +385,7 @@ void FindOtherGauges(std::uintptr_t system)
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
         Pair displayed;
-        player_two::lock_on::Displayed(seat, displayed.object, displayed.controller);
+        battle::lock_on::Displayed(seat, displayed.object, displayed.controller);
         targets[static_cast<std::size_t>(seat)] = MainOf(displayed);
     }
     if (g_failed)
@@ -437,7 +437,7 @@ bool Install(const platform::GameImage& image) noexcept
     const auto system  = image.Rebase(kBattleStateGlobal, sizeof(void*));
     const auto ui      = image.Rebase(facts::kEndUISystem, facts::kUIEnemyStatus + sizeof(void*));
     g_installed =
-        g_mainTarget && g_release && g_enemyAi && player_two::weak_object::Known() && system &&
+        g_mainTarget && g_release && g_enemyAi && players::weak_object::Known() && system &&
         facts::InBattleKnown() && ui &&
         players::widget_opacity::Installed();  // a row of the module table before this one
     g_battleSystem = system ? *system : 0;
@@ -519,7 +519,7 @@ void BeginFrame() noexcept
 void BeforePass(int seat) noexcept
 {
     AfterPass();
-    if (!g_installed || g_failed || !player_two::generation::OnGameThread() || !player_two::generation::AnyActive() ||
+    if (!g_installed || g_failed || !players::generation::OnGameThread() || !players::generation::AnyActive() ||
         seat < 0 || seat >= players::kMaxPlayers)
     {
         return;
@@ -530,8 +530,8 @@ void BeforePass(int seat) noexcept
         bool          list     = false;
         for (int s = 1; s <= players::kSeatsBuilt; ++s)
         {
-            openings += player_two::lock_on::TargetListOpenings(s);
-            list = list || player_two::lock_on::TargetListOpen(s);
+            openings += battle::lock_on::TargetListOpenings(s);
+            list = list || battle::lock_on::TargetListOpen(s);
         }
         if (openings != g_listOpenings)
         {
@@ -544,7 +544,7 @@ void BeforePass(int seat) noexcept
         cursors[0] = ReadAt<std::uintptr_t>(system != 0 ? system + kCursor : 0);
         for (int s = 1; s <= players::kSeatsBuilt; ++s)
         {
-            cursors[static_cast<std::size_t>(s)] = reinterpret_cast<std::uintptr_t>(player_two::lock_on::Cursor(s));
+            cursors[static_cast<std::size_t>(s)] = reinterpret_cast<std::uintptr_t>(battle::lock_on::Cursor(s));
         }
         PassHides hides;
         hides.ownCursor = cursors[static_cast<std::size_t>(seat)];

@@ -1,10 +1,10 @@
-// Host-side tests for player_two::call_site, run without the game.
+// Host-side tests for players::call_site, run without the game.
 //
 // A page with one `call rel32` stands in for a caller in the game: the check recognises the call to its target and
 // nothing else (another target, another instruction, a null, memory that cannot be read), and the one-block rule is
 // the 16-byte arithmetic the call redirect applies.
 
-#include "player_two/call_site.h"
+#include "players/call_site.h"
 
 #include "exec_page.h"
 #include "expect.h"
@@ -14,8 +14,8 @@
 
 namespace {
 
-using lss::player_two::call_site::Calls;
-using lss::player_two::call_site::FitsOneBlock;
+using lss::players::call_site::Calls;
+using lss::players::call_site::FitsOneBlock;
 
 constexpr std::size_t kCallOffset   = 0x07;
 constexpr std::size_t kTargetOffset = 0x40;

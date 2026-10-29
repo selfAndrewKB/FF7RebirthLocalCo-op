@@ -18,13 +18,13 @@
 #include "platform/build_value.h"
 #include "platform/command_registry.h"
 #include "platform/guarded.h"
-#include "players/object_slot.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
-#include "player_two/generation.h"
-#include "player_two/scopes/primary_controller.h"
+#include "players/generation.h"
+#include "players/object_slot.h"
 #include "players/unreal_access.h"
+#include "scopes/primary_controller.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -250,8 +250,8 @@ class Players
 public:
     Players()
     {
-        controllers_[0] = static_cast<UObject*>(player_two::generation::PlayerOneController());
-        controllers_[1] = static_cast<UObject*>(player_two::generation::PlayerTwoController());
+        controllers_[0] = static_cast<UObject*>(players::generation::PlayerOneController());
+        controllers_[1] = static_cast<UObject*>(players::generation::PlayerTwoController());
         if (auto* list = players::unreal::LocalPlayers(players::unreal::GameInstance()))
         {
             for (std::int32_t i = 0; i < list->Num(); ++i)
@@ -350,13 +350,13 @@ int LogControllerOrder(const Players& players)
 
 int LogPrimaryController(const Players& players)
 {
-    if (!player_two::primary_controller::Installed())
+    if (!scopes::primary_controller::Installed())
     {
         platform::Log(L"hud players: primary controller not readable (the party manager was not found at startup)");
         return 1;
     }
     platform::Log(L"hud players: the party manager's primary controller: {}",
-                  players.Label(static_cast<UObject*>(player_two::primary_controller::Current())));
+                  players.Label(static_cast<UObject*>(scopes::primary_controller::Current())));
     return 1;
 }
 
@@ -535,8 +535,8 @@ std::wstring DescribeWeak(std::uintptr_t address)
     {
         return std::format(L"(stale: index {}, serial {})", weak[0], weak[1]);
     }
-    const std::wstring who = object == player_two::generation::PlayerOneController()   ? L" = player 1's controller"
-                             : object == player_two::generation::PlayerTwoController() ? L" = player 2's controller"
+    const std::wstring who = object == players::generation::PlayerOneController()   ? L" = player 1's controller"
+                             : object == players::generation::PlayerTwoController() ? L" = player 2's controller"
                                                                                        : L"";
     return std::format(L"{} '{}'{}", std::wstring(object->GetClassPrivate()->GetName()), std::wstring(object->GetName()), who);
 }

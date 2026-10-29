@@ -7,8 +7,8 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
-#include "player_two/weak_object.h"
 #include "players/seats.h"
+#include "players/weak_object.h"
 
 #include <array>
 #include <cstddef>
@@ -78,7 +78,7 @@ using platform::ReadAt;  // the guarded reads: platform/guarded_read.h
 
 void* Resolve(std::uintptr_t weakField) noexcept
 {
-    return player_two::weak_object::ObjectAt(reinterpret_cast<const void*>(weakField));
+    return players::weak_object::ObjectAt(reinterpret_cast<const void*>(weakField));
 }
 
 void Fault(std::uintptr_t ctl, const wchar_t* what) noexcept
