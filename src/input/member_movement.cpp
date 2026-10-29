@@ -26,15 +26,17 @@
 #include "rides/own_ride.h"
 #include "rides/wheelie_ride.h"
 #include "scopes/leader_answer.h"
-#include "scopes/p2_scope.h"
 #include "scopes/primary_controller.h"
 #include "scopes/scope_leaks.h"
+#include "scopes/seat_ladder.h"
 #include "session/party_member.h"
 
 #include <array>
 #include <cstddef>
 
 namespace lss::input::member_movement {
+
+namespace seat_ladder = scopes::seat_ladder;
 
 namespace {
 
@@ -143,11 +145,12 @@ void TickInScopes(int seat, void* controller, void* member, void* state, int typ
     const bool playerTwo = seat == players::kPlayerTwoSeat;  // the dev watches below are player 2's (plan step 7)
     // The seat's sticks and its player as the primary controller, or no tick; its own buttons (sprint, dodge, field
     // actions) and, in battle, the target system's fields as the seat's.
-    scopes::p2_scope::Args args;
+    seat_ladder::Args args;
     args.seat  = seat;
     args.padId = pad_sticks::ControllerIdOf(controller);
-    const scopes::p2_scope::P2Scope scopes(scopes::p2_scope::Sticks | scopes::p2_scope::Primary | scopes::p2_scope::Buttons | scopes::p2_scope::Targets,
-                                   scopes::p2_scope::Buttons | scopes::p2_scope::Targets, args);
+    const seat_ladder::P2Scope scopes(
+        seat_ladder::Sticks | seat_ladder::Primary | seat_ladder::Buttons | seat_ladder::Targets,
+        seat_ladder::Buttons | seat_ladder::Targets, args);
     players::StageCounters& counters = g_counters[static_cast<std::size_t>(seat)];
     if (!scopes.Held())
     {
@@ -327,11 +330,12 @@ RideTick TickRide(int seat, void* controller, void* member, void* state, const v
         return RideTick::Refused;
     }
     players::StageCounters& counters = g_counters[static_cast<std::size_t>(seat)];
-    scopes::p2_scope::Args args;
+    seat_ladder::Args args;
     args.seat       = seat;
     args.padId      = pad_sticks::ControllerIdOf(controller);
     args.withoutKey = withoutKey;
-    const scopes::p2_scope::P2Scope scopes(scopes::p2_scope::Sticks | scopes::p2_scope::Primary | scopes::p2_scope::Buttons, scopes::p2_scope::Buttons, args);
+    const seat_ladder::P2Scope scopes(seat_ladder::Sticks | seat_ladder::Primary | seat_ladder::Buttons,
+                                      seat_ladder::Buttons, args);
     if (!scopes.Held())
     {
         counters.Refuse();

@@ -19,8 +19,8 @@
 #include "players/seats.h"
 #include "players/unreal_access.h"
 #include "scopes/leader_scope.h"
-#include "scopes/p2_scope.h"
 #include "scopes/primary_controller.h"
+#include "scopes/seat_ladder.h"
 #include "session/party_member.h"
 
 #include <intrin.h>
@@ -39,6 +39,8 @@
 #include <utility>
 
 namespace lss::feedback::combat_rumble {
+
+namespace seat_ladder = scopes::seat_ladder;
 
 namespace {
 
@@ -216,18 +218,19 @@ class PlayerTwoView
 public:
     PlayerTwoView(int seat, bool primary) noexcept
     {
-        scopes::p2_scope::Args args;
+        seat_ladder::Args args;
         args.seat = seat;
-        if (scopes::p2_scope::FillMember(args, players::generation::MemberOf(seat)))
+        if (seat_ladder::FillMember(args, players::generation::MemberOf(seat)))
         {
-            scopes_.emplace((primary ? scopes::p2_scope::Primary : 0u) | scopes::p2_scope::Leader | scopes::p2_scope::LeaderType, args);
+            scopes_.emplace((primary ? seat_ladder::Primary : 0u) | seat_ladder::Leader | seat_ladder::LeaderType,
+                            args);
         }
     }
 
     bool Held() const noexcept { return scopes_ && scopes_->Held(); }
 
 private:
-    std::optional<scopes::p2_scope::P2Scope> scopes_;
+    std::optional<seat_ladder::P2Scope> scopes_;
 };
 
 // ---------------------------------------------------------------------------------------------

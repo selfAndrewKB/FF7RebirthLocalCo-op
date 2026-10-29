@@ -1,7 +1,7 @@
 #pragma once
 
 // The field command controller (FieldCommandCtrl, EndUISystem[23]): the game's one, and player 2's own, which the mod
-// builds the same way (battle/command_menu_two). The fields two or more modules read; each was read in IDA at an
+// builds the same way (battle/seat_command_menus). The fields two or more modules read; each was read in IDA at an
 // instruction that uses it.
 //
 // Research: Rebirth/Documentation/research/RE-p2-command-menu.md §1, RE-p2-command-menu-tick.md §1, §2, §7,

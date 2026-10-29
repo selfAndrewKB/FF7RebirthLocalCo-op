@@ -1,7 +1,7 @@
 #pragma once
 
 // The camera and world modules' pure decisions (attack_framing, location_rows, walk_limits, world_actor_reach,
-// switch_volume_two, camera_repair, party_warp, traversal_camera, camera_distance, shoulder_scale), tested on the
+// seat_switch_volumes, camera_repair, party_warp, traversal_camera, camera_distance, shoulder_scale), tested on the
 // host (tests/world_rules_test.cpp). The modules keep the engine reads, the scopes and the log. The players are
 // numbered by seat (players/seats.h): 0 player 1, then the seats.
 
@@ -186,7 +186,7 @@ constexpr bool Rewritten(float writtenRadius, float writtenExtent, float radius,
     return writtenRadius != radius || writtenExtent != extent;
 }
 
-// ---- switch_volume_two: a seat's enter and leave of a trigger volume ----
+// ---- seat_switch_volumes: a seat's enter and leave of a trigger volume ----
 
 enum class Enter
 {
@@ -249,7 +249,7 @@ constexpr PlayerOneChange PlayerOneChangeOf(bool enter, bool insideBefore, bool 
     return disableBox || disableBoxInOut ? PlayerOneChange::NotReentered : PlayerOneChange::Reenter;
 }
 
-// ---- switch_volume_two: the seats inside one volume (a mask, bit s for seat s) ----
+// ---- seat_switch_volumes: the seats inside one volume (a mask, bit s for seat s) ----
 
 /// A seat's bit in a volume's mask of the seats inside.
 constexpr std::uint8_t VolumeSeatBit(int seat) noexcept

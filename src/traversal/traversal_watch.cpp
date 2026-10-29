@@ -52,7 +52,7 @@ using NotifyFn = void (*)(void* character, float dt);
 
 // The field tick's trigger pass (FieldTick_StreamingThenLocationUpdate 0x140A55FCC; RE-p2-trigger-overlap.md §2.2):
 // the pending key PlayerTrigger is resolved to the PRIMARY controller's trigger (`call FWeakObjectPtr::Get(PM+0x140)`,
-// E8 inside one block in both builds). The tracker's dispatch call that follows belongs to world/trigger_two,
+// E8 inside one block in both builds). The tracker's dispatch call that follows belongs to world/seat_triggers,
 // which reports each pass here (NoteDispatch).
 constexpr std::uintptr_t kTriggerResolveCall = 0x140A56428;
 using ResolveFn = void* (*)(const void* weak);

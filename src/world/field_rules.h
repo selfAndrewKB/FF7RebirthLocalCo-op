@@ -1,6 +1,6 @@
 #pragma once
 
-// The field-interaction modules' pure pieces (vending, shop_talk, trigger_two, scope_leaks), tested on the host
+// The field-interaction modules' pure pieces (vending, shop_talk, seat_triggers, scope_leaks), tested on the host
 // (tests/field_rules_test.cpp).
 
 #include <cmath>
@@ -54,7 +54,7 @@ constexpr bool IsRowName(std::wstring_view text) noexcept
     return true;
 }
 
-// ---- trigger_two: the seats' trigger events ----
+// ---- seat_triggers: the seats' trigger events ----
 
 enum class TriggerRoute
 {

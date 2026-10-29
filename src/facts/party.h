@@ -154,7 +154,7 @@ inline constexpr FunctionFact kValidateAiController{L"EndCharacter::ValidateAICo
 
 // The tag registry
 /// The tag registry: a weak pointer to the world's EndCharacterMovementActor (the trigger registry, FieldTick's `this`;
-/// world/trigger_two), whose +0x278 is a TMap<FName, int32> with 20-byte elements {FName, int32 count, ...}; and
+/// world/seat_triggers), whose +0x278 is a TMap<FName, int32> with 20-byte elements {FName, int32 count, ...}; and
 /// the trigger actor's tag.
 inline constexpr std::uintptr_t kTagRegistryWeak         = 0x1470C94C0;
 inline constexpr std::uint32_t  kTagRegistryMap          = 0x278;

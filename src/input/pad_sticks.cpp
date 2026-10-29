@@ -11,9 +11,9 @@
 #include "platform/vtable_entry.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
-#include "scopes/p2_scope.h"
 #include "scopes/primary_controller.h"
 #include "scopes/scope_leaks.h"
+#include "scopes/seat_ladder.h"
 
 #if LSS_DEV
 #include "platform/command_registry.h"
@@ -25,6 +25,8 @@
 #include <optional>
 
 namespace lss::input::pad_sticks {
+
+namespace seat_ladder = scopes::seat_ladder;
 
 namespace {
 
@@ -87,12 +89,13 @@ void ProcessPlayerInput(void* controller, float deltaTime, bool gamePaused)
     // The pad's own sticks; for a seat also the primary controller (its input sends camera events to "the primary"
     // camera manager) and its pad's own buttons (ResetCamera). The call runs with whatever opened; a refused stick or
     // primary scope is counted.
-    scopes::p2_scope::Args args;
+    seat_ladder::Args args;
     args.seat  = isSeat ? seat : players::kPlayerTwoSeat;  // player 1's call opens neither Primary nor Buttons
     args.padId = ControllerIdOf(controller);
-    const unsigned          which = isSeat ? scopes::p2_scope::Sticks | scopes::p2_scope::Primary | scopes::p2_scope::Buttons : scopes::p2_scope::Sticks;
-    const scopes::p2_scope::P2Scope scopes(which, which, args);
-    const bool acted = scopes.Holds<scopes::p2_scope::SticksPart>() && (!isSeat || scopes.Holds<scopes::p2_scope::PrimaryPart>());
+    const unsigned which = isSeat ? seat_ladder::Sticks | seat_ladder::Primary | seat_ladder::Buttons
+                                  : seat_ladder::Sticks;
+    const seat_ladder::P2Scope scopes(which, which, args);
+    const bool acted = scopes.Holds<seat_ladder::SticksPart>() && (!isSeat || scopes.Holds<seat_ladder::PrimaryPart>());
     acted ? g_inputCounters.Act() : g_inputCounters.Refuse();
     g_engineProcessInput(controller, deltaTime, gamePaused);
 }

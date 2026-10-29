@@ -5,7 +5,7 @@
 //
 // UI actions reach one focus path only: the focused widget and its ancestors, kept by Square's input
 // object (EndUISystem[2]) with a priority-sorted stack of focus layers. The command menu is the bottom
-// layer (priority -1000); an open list focuses its item. Player 2's command menu (battle/command_menu_two.h)
+// layer (priority -1000); an open list focuses its item. Player 2's command menu (battle/seat_command_menus.h)
 // never touches this context; the log shows the path (each widget's Slate type, and a UMG host's user-widget
 // class), the layers (widget, saved focus, priority) and the command controller's focus bytes when they change.
 // Game thread only.

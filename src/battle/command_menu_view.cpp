@@ -1,7 +1,7 @@
 #include "battle/command_menu_view.h"
 
-#include "battle/command_menu_two.h"
-#include "battle/command_menu_two_shared.h"
+#include "battle/seat_command_menus.h"
+#include "battle/seat_command_menus_shared.h"
 #include "facts/command_controller.h"
 #include "facts/hud.h"
 #include "platform/log.h"
@@ -70,13 +70,13 @@ std::uintptr_t OwnerOf(const Part& part, int seat, std::uintptr_t controller) no
     {
         return controller;
     }
-    return seat != 0 ? reinterpret_cast<std::uintptr_t>(command_menu_two::KeyGuide(seat))
-                     : ReadAt<std::uintptr_t>(command_menu_two::UiSystem() + kUIKeyGuide);
+    return seat != 0 ? reinterpret_cast<std::uintptr_t>(seat_command_menus::KeyGuide(seat))
+                     : ReadAt<std::uintptr_t>(seat_command_menus::UiSystem() + kUIKeyGuide);
 }
 
 std::uintptr_t ControllerOf(int seat) noexcept
 {
-    return reinterpret_cast<std::uintptr_t>(command_menu_two::Controller(seat));
+    return reinterpret_cast<std::uintptr_t>(seat_command_menus::Controller(seat));
 }
 
 /// A controller's widget (its FWeakObjectPtr at `offset`), or null.
@@ -114,11 +114,12 @@ void HideSeats(int except) noexcept
 void ShowOnly(int seat) noexcept
 {
     const auto mine = players::SeatIndex(seat) ? ControllerOf(seat) : 0;
-    if (command_menu_two::UiSystem() == 0 || !players::widget_opacity::Installed() || !players::generation::OnGameThread())
+    if (seat_command_menus::UiSystem() == 0 || !players::widget_opacity::Installed() ||
+        !players::generation::OnGameThread())
     {
         return;
     }
-    const auto one = ReadAt<std::uintptr_t>(command_menu_two::UiSystem() + kUICommandController);
+    const auto one = ReadAt<std::uintptr_t>(seat_command_menus::UiSystem() + kUICommandController);
     if (mine == 0 || ReadAt<std::uint8_t>(mine + kCmdHudMode) == 0 || one == 0)
     {
         return Restore();

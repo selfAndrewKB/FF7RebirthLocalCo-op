@@ -1,7 +1,7 @@
 #pragma once
 
 // Player 2 climbs chocobo walls with their own chocobo (research/RE-p2-chocobo-climb.md, levers L-B and L-C; L-A, the
-// registration on player 2's controller, is trigger_two's "chocobo climb" class).
+// registration on player 2's controller, is seat_triggers' "chocobo climb" class).
 //
 // The climb spot's per-frame try-begin (its vtable slot, called by the character's field-action notify pass for each
 // spot on its controller's list) asks the primary controller whether the chocobo is the ridden vehicle and whether its

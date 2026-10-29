@@ -1,8 +1,8 @@
 #include "battle/menu_tint.h"
 
 #include "battle/command_menu_tick_shared.h"
-#include "battle/command_menu_two.h"
 #include "battle/menu_rules.h"
+#include "battle/seat_command_menus.h"
 #include "facts/command_controller.h"
 #include "facts/hud.h"
 #include "platform/call_redirect.h"
@@ -89,7 +89,7 @@ std::array<std::int32_t, players::kMaxPlayers> Waits() noexcept
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
         waits[static_cast<std::size_t>(seat)] =
-            wait(reinterpret_cast<std::uintptr_t>(command_menu_two::Controller(seat)));
+            wait(reinterpret_cast<std::uintptr_t>(seat_command_menus::Controller(seat)));
     }
     return waits;
 }
@@ -109,7 +109,7 @@ void TintLine(int seat, const wchar_t* what) noexcept
         std::wstring holds;
         for (int other = 1; other <= players::kSeatsBuilt; ++other)
         {
-            const auto own = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller(other));
+            const auto own = reinterpret_cast<std::uintptr_t>(seat_command_menus::Controller(other));
             waits += std::format(L" P{} {}", other + 1, own != 0 ? ReadAt<std::int32_t>(own + kCmdWaitFilter) : -1);
             holds += std::format(L"{}P{} holds {}", other == 1 ? L"" : L", ", other + 1,
                                  g_holdsTint[static_cast<std::size_t>(other)] ? 1 : 0);

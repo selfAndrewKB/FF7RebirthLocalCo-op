@@ -4,7 +4,7 @@
 // RE-p2-enemy-markers.md §7.5 and §7.7 B).
 //
 // The arrows belong to the marker list (EndUISystem+0x150), which each seat's pass already runs again
-// with the seat's levers (hud/passes/player_two_pass.h). One function places each arrow from its view, and
+// with the seat's levers (hud/passes/seat_hud_content.h). One function places each arrow from its view, and
 // its only state is a per-element float T (element +0x14): set to full while the enemy is off-screen,
 // run down by the HUD time step while it is on-screen, and while T is full the arrow stays pinned to
 // the screen edge. One T shared by two views, with a time step of 0 in the re-runs, pinned player 1's

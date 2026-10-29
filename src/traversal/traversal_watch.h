@@ -34,7 +34,7 @@ void Remove() noexcept;
 void Tick() noexcept;
 
 /// The field tick's dispatch of one trigger tracker, with its overlap count: counted for the 10 s summary and logged
-/// on change. Called by world/trigger_two, which owns that call. Game thread.
+/// on change. Called by world/seat_triggers, which owns that call. Game thread.
 void NoteDispatch(const void* tracker, std::int32_t overlaps) noexcept;
 
 }  // namespace lss::traversal::traversal_watch

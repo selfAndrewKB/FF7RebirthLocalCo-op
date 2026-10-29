@@ -1,6 +1,6 @@
 #pragma once
 
-// The HUD's root widgets and whose they are (lever L1 of hud/passes/player_two_pass.h).
+// The HUD's root widgets and whose they are (lever L1 of hud/passes/seat_hud_content.h).
 //
 // The HUD roots are the UUserWidgets that sit on the overlay itself (no slot) and belong to the
 // game instance. Each carries a player context (UUserWidget+0x248: weak local player, weak world),

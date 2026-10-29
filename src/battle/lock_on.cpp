@@ -1,8 +1,8 @@
 #include "battle/lock_on.h"
 
-#include "battle/command_menu_two.h"
 #include "battle/focus_scope.h"
 #include "battle/panel_gate_code.h"
+#include "battle/seat_command_menus.h"
 #include "camera/camera_access.h"
 #include "facts/cameras.h"
 #include "facts/controller.h"
@@ -25,8 +25,8 @@
 #include "players/object_fields.h"
 #include "players/seats.h"
 #include "scopes/leader_scope.h"
-#include "scopes/p2_scope.h"
 #include "scopes/primary_controller.h"
+#include "scopes/seat_ladder.h"
 #include "session/party_member.h"
 
 #if LSS_DEV
@@ -47,6 +47,8 @@
 #include <Windows.h>
 
 namespace lss::battle::lock_on {
+
+namespace seat_ladder = scopes::seat_ladder;
 
 namespace {
 
@@ -458,9 +460,9 @@ void SeatTargeting(int seat, TickFn engine, void* system, float deltaTime) noexc
         }
         return;
     }
-    scopes::p2_scope::Args args;
+    seat_ladder::Args args;
     args.seat = seat;
-    if (!scopes::p2_scope::FillMember(args, member))
+    if (!seat_ladder::FillMember(args, member))
     {
         return Refused(seat, L"the member could not be read");
     }
@@ -468,13 +470,13 @@ void SeatTargeting(int seat, TickFn engine, void* system, float deltaTime) noexc
     // (EndUISystem[23]) and, for an open target list, the list's selected row, which the list answers from the focus
     // path (RE-p2-target-select-views.md §9). The controller slot alone would read player 1's focus path, find no row
     // and clear the seat's target.
-    args.controller = command_menu_two::Controller(seat);
+    args.controller = seat_command_menus::Controller(seat);
     if (args.controller == nullptr)
     {
         return Refused(seat, L"the command controller does not exist");
     }
-    scopes::p2_scope::P2Scope scopes(scopes::p2_scope::Focus | scopes::p2_scope::Sticks | scopes::p2_scope::Primary | scopes::p2_scope::Buttons |
-                                 scopes::p2_scope::Targets | scopes::p2_scope::Leader | scopes::p2_scope::LeaderType,
+    seat_ladder::P2Scope scopes(seat_ladder::Focus | seat_ladder::Sticks | seat_ladder::Primary | seat_ladder::Buttons |
+                                 seat_ladder::Targets | seat_ladder::Leader | seat_ladder::LeaderType,
                              args);
     if (!scopes.Held())
     {
@@ -494,7 +496,8 @@ void SeatTargeting(int seat, TickFn engine, void* system, float deltaTime) noexc
     ++g_runs;
     if (!ok)
     {
-        scopes.Get<scopes::p2_scope::FocusPart>()->scope.Abandon();  // what it holds may be mid-change: leaked, never put back
+        // What it holds may be mid-change: leaked, never put back.
+        scopes.Get<seat_ladder::FocusPart>()->scope.Abandon();
         Fail(L"a further player's targeting tick");
     }
     // The log: the seat's target list, read with the seat's controller still in the slot.
@@ -514,7 +517,7 @@ void SeatTargeting(int seat, TickFn engine, void* system, float deltaTime) noexc
                                  players::SeatName(seat), mine.listOpen ? L"OPENED" : L"closed",
                                  ReadAt<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(system) + kDisplayed),
                                  ReadAt<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(system) + kCursor),
-                                 scopes.Get<scopes::p2_scope::TargetsPart>()->scope.OtherCursor()),
+                                 scopes.Get<seat_ladder::TargetsPart>()->scope.OtherCursor()),
                      platform::Level::Debug);
             }
         }

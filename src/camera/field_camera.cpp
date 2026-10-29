@@ -1,9 +1,9 @@
 #include "camera/field_camera.h"
 
 #include "battle/battle_camera.h"
-#include "battle/command_menu_two.h"
 #include "battle/focus_scope.h"
 #include "battle/lock_on.h"
+#include "battle/seat_command_menus.h"
 #include "camera/attack_cameras.h"
 #include "camera/camera_access.h"
 #include "facts/cameras.h"
@@ -17,8 +17,8 @@
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "scopes/leader_scope.h"
-#include "scopes/p2_scope.h"
 #include "scopes/primary_controller.h"
+#include "scopes/seat_ladder.h"
 #include "session/party_member.h"
 
 #include <array>
@@ -32,6 +32,8 @@
 #pragma intrinsic(_ReturnAddress)
 
 namespace lss::camera::field_camera {
+
+namespace seat_ladder = scopes::seat_ladder;
 
 namespace {
 
@@ -283,19 +285,19 @@ int ActsFor(void* cameraManager) noexcept
 /// player 1's target list would move player 2's camera.
 void RunAsPrimary(int seat, void* cameraManager, float deltaTime)
 {
-    void*      controller = battle::command_menu_two::Controller(seat);
+    void*      controller = battle::seat_command_menus::Controller(seat);
     void*      member     = players::generation::MemberOf(seat);
     const bool battle     = controller != nullptr && member != nullptr &&
                             ReadField<std::uint8_t>(controller, kCmdHudMode) != 0;
     // In battle the seat's UI context (counted and logged when refused), the seat as the primary controller (refused:
     // the update runs as player 1's, counted) and the target fields the LockOn module reads: each as far as it opens,
     // the update runs either way.
-    scopes::p2_scope::Args args;
+    seat_ladder::Args args;
     args.seat            = seat;
     args.controller      = controller;
-    const unsigned which = (battle ? scopes::p2_scope::Focus : 0u) | scopes::p2_scope::Primary | scopes::p2_scope::Targets;
-    const scopes::p2_scope::P2Scope scopes(which, which, args);
-    if (battle && !scopes.Holds<scopes::p2_scope::FocusPart>())
+    const unsigned which = (battle ? seat_ladder::Focus : 0u) | seat_ladder::Primary | seat_ladder::Targets;
+    const seat_ladder::P2Scope scopes(which, which, args);
+    if (battle && !scopes.Holds<seat_ladder::FocusPart>())
     {
         const unsigned refusals = g_uiRefusals.fetch_add(1, std::memory_order_relaxed) + 1;
         if (refusals <= 5 || refusals % 600 == 0)
@@ -306,16 +308,17 @@ void RunAsPrimary(int seat, void* cameraManager, float deltaTime)
     }
     // In battle the leader view decides which camera an attack camera belongs to (the game's leader-keyed test of each
     // battle camera sequence, RE-p2-attack-cameras.md §3.2), so it opens even when the UI context was refused.
-    std::optional<scopes::p2_scope::P2Scope> leader;
-    if (scopes.Holds<scopes::p2_scope::FocusPart>() ||
+    std::optional<seat_ladder::P2Scope> leader;
+    if (scopes.Holds<seat_ladder::FocusPart>() ||
         (member != nullptr && battle::battle_camera::PlayerTwoBattleActive(cameraManager)))
     {
-        if (member != nullptr && scopes::p2_scope::FillMember(args, member))
+        if (member != nullptr && seat_ladder::FillMember(args, member))
         {
-            leader.emplace(scopes::p2_scope::Leader | scopes::p2_scope::LeaderType, scopes::p2_scope::Leader | scopes::p2_scope::LeaderType, args);
+            leader.emplace(seat_ladder::Leader | seat_ladder::LeaderType, seat_ladder::Leader | seat_ladder::LeaderType,
+                           args);
         }
     }
-    if (scopes.Holds<scopes::p2_scope::PrimaryPart>())
+    if (scopes.Holds<seat_ladder::PrimaryPart>())
     {
         g_updateCounters[Index(seat)].Act();
     }

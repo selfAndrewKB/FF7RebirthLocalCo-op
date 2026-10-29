@@ -9,13 +9,13 @@
 #include "hud/hud_trace.h"
 #include "hud/layout/hud_placement.h"
 #include "hud/layout/overlay_layout.h"
-#include "hud/minimap/area_icons_two.h"
 #include "hud/minimap/minimap.h"
 #include "hud/minimap/minimap_once.h"
+#include "hud/minimap/seat_area_icons.h"
 #include "hud/passes/overlay_pass.h"
 #include "hud/passes/pass_opacity.h"
-#include "hud/passes/player_two_pass.h"
-#include "hud/passes/second_image.h"
+#include "hud/passes/seat_hud_content.h"
+#include "hud/passes/seat_hud_images.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
@@ -84,7 +84,7 @@ bool AnotherPassBelow(int seat, bool splitShown) noexcept
 
 /// A further seat's pass of the overlay render: its levers and updates, its own render into the entry named for it,
 /// everything put back for the next pass (the roots' contexts and player 1's re-run only after the last further pass,
-/// `another` false). Its image is ready (second_image's ImageReady).
+/// `another` false). Its image is ready (seat_hud_images' ImageReady).
 void FurtherPass(int seat, bool another) noexcept
 {
     const double deltaTime = BeginFurtherPass();  // the engine's DeltaTime 0 for the render; the slot taking part
@@ -92,12 +92,12 @@ void FurtherPass(int seat, bool another) noexcept
     // the seat's rows, markers, pins and command menu only (hud/passes/pass_opacity.h)
     pass_opacity::ShowOnly(seat);
     target_views::BeforePass(seat);  // the other players' cursors and gauges collapsed before the seat's updates
-    const bool content = EnterSeat(seat);  // the seat's levers and updates (hud/passes/player_two_pass.h)
+    const bool content = EnterSeat(seat);  // the seat's levers and updates (hud/passes/seat_hud_content.h)
     if (content)
     {
-        area_icons_two::Tick(seat, static_cast<float>(deltaTime));  // under the seat's view rect
+        seat_area_icons::Tick(seat, static_cast<float>(deltaTime));  // under the seat's view rect
     }
-    area_icons_two::ShowOnly(seat);
+    seat_area_icons::ShowOnly(seat);
     const double start = Now();
     // The seat's minimap (hud/minimap/minimap.h); without it, player 1's pass alone renders the minimap's map
     // (hud/minimap/minimap_once.h).
@@ -112,7 +112,7 @@ void FurtherPass(int seat, bool another) noexcept
     {
         LeaveSeat(seat, another);
     }
-    area_icons_two::ShowOnly(0);
+    seat_area_icons::ShowOnly(0);
     pass_opacity::ShowOnly(0);  // player 1's rows, markers, pins and command menu for player 1's pass
     EndFurtherPass();  // DeltaTime back
 }
@@ -141,7 +141,7 @@ void RenderRootOverlay(void* application) noexcept
                 if (g_seatIn[seat] && !in)  // a seat out while another is in: its own HUD state forgotten
                 {
                     prompt_rows::Forget(seat);
-                    area_icons_two::SeatOut(seat);
+                    seat_area_icons::SeatOut(seat);
                     marker_timers::Forget(seat);
                     enemy_gauges::SeatOut(seat);
                 }
@@ -151,7 +151,7 @@ void RenderRootOverlay(void* application) noexcept
         else if (promptRowsKnown)
         {
             prompt_rows::Forget();
-            area_icons_two::AllOut();
+            seat_area_icons::AllOut();
             marker_timers::Forget();
             promptRowsKnown = false;
             for (bool& in : g_seatIn)
@@ -160,7 +160,7 @@ void RenderRootOverlay(void* application) noexcept
             }
         }
         FollowHudPlacementBeforeRender();  // after the rows' layout, which can set a row's point
-        // The further seats' passes first, highest seat first, each whose image is on (hud/passes/second_image.h
+        // The further seats' passes first, highest seat first, each whose image is on (hud/passes/seat_hud_images.h
         // holds the slot and renders; the levers and the per-pass opacities around each render are the modules' own
         // calls, in FurtherPass's order). A seat whose column shows player 1's camera (views/column_source.h
         // Source::PlayerOne: a held column while the game takes the whole screen, a shared ride, every further player
@@ -192,7 +192,7 @@ void RenderRootOverlay(void* application) noexcept
             // pass shows only player 1's own rows, marks, icons and command menu, as after a further pass. The
             // seats' rows stay painted (transparent), so their timers keep running.
             target_views::BeforePass(0);
-            area_icons_two::ShowOnly(0);
+            seat_area_icons::ShowOnly(0);
             pass_opacity::ShowOnly(0);  // the rows, markers, pins and the command menu (hud/passes/pass_opacity.h)
         }
     }

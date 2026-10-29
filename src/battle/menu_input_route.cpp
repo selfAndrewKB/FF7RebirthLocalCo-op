@@ -1,9 +1,9 @@
 #include "battle/menu_input_route.h"
 
 #include "battle/command_menu_tick_shared.h"
-#include "battle/command_menu_two.h"
 #include "battle/focus_scope.h"
 #include "battle/menu_rules.h"
+#include "battle/seat_command_menus.h"
 #include "facts/command_controller.h"
 #include "facts/controller.h"
 #include "facts/hud.h"
@@ -21,7 +21,7 @@
 #include "players/object_fields.h"
 #include "players/seats.h"
 #include "players/unreal_access.h"
-#include "scopes/p2_scope.h"
+#include "scopes/seat_ladder.h"
 
 #include <array>
 #include <cstddef>
@@ -31,6 +31,8 @@
 #include <utility>
 
 namespace lss::battle::menu_input_route {
+
+namespace seat_ladder = scopes::seat_ladder;
 
 namespace {
 
@@ -195,7 +197,7 @@ bool InSeatUi(int seat, Route route, const wchar_t* what, Call&& call) noexcept
     {
         return refuse(L"the route is off, inside a pass, or the player is out");
     }
-    const auto two    = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller(seat));
+    const auto two    = reinterpret_cast<std::uintptr_t>(seat_command_menus::Controller(seat));
     const auto one    = ReadAt<std::uintptr_t>(command_menu_tick::UiSystem() + kUICommandController);
     void*      member = players::generation::MemberOf(seat);
     if (two == 0 || one == 0 || one == two || member == nullptr)
@@ -209,20 +211,20 @@ bool InSeatUi(int seat, Route route, const wchar_t* what, Call&& call) noexcept
     {
         return refuse(L"not in the player's battle menu");
     }
-    scopes::p2_scope::Args args;
+    seat_ladder::Args args;
     args.seat          = seat;
     args.controller    = reinterpret_cast<void*>(two);
     const auto manager = ReadAt<std::uintptr_t>(command_menu_tick::PartyManager());
-    if (!scopes::p2_scope::FillMember(args, member) || manager == 0)
+    if (!seat_ladder::FillMember(args, member) || manager == 0)
     {
         return refuse(L"the player's member could not be read");
     }
     args.leaderType = ReadAt<std::uint8_t>(manager + kPartyManagerLeaderType);
     // The menu's target-switch handler (a press) writes the target fields: player 2's, or no press. A
     // release needs none, and after a battle there are none to hold (the part is optional then).
-    scopes::p2_scope::P2Scope scopes(scopes::p2_scope::Focus | scopes::p2_scope::Primary | scopes::p2_scope::Targets | scopes::p2_scope::Leader |
-                                 scopes::p2_scope::LeaderType | scopes::p2_scope::Rules,
-                             route == Route::kPress ? 0u : scopes::p2_scope::Targets, args);
+    seat_ladder::P2Scope scopes(seat_ladder::Focus | seat_ladder::Primary | seat_ladder::Targets | seat_ladder::Leader |
+                                 seat_ladder::LeaderType | seat_ladder::Rules,
+                             route == Route::kPress ? 0u : seat_ladder::Targets, args);
     if (!scopes.Held())
     {
         return refuse(scopes.Refusal());
@@ -232,7 +234,7 @@ bool InSeatUi(int seat, Route route, const wchar_t* what, Call&& call) noexcept
     command_menu_tick::SetPass(0, 0);
     if (!ran)
     {
-        scopes.Get<scopes::p2_scope::FocusPart>()->scope.Abandon();
+        scopes.Get<seat_ladder::FocusPart>()->scope.Abandon();
         g_routeFailed = true;
         Line(std::format(L"FAILED: pad {}'s {} faulted in {}'s menu; the further players' pads stay out of the menus",
                          seat + 1, what, players::SeatName(seat)));
@@ -284,7 +286,7 @@ bool RoutePadTwo(input::pad_buttons::ActionDownFn dispatch, void* owner, void* u
     }
     char taken = 1;  // after a fault: not dispatched again in player 1's context
     const int  action = KnownAction(key);
-    const auto two    = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller(seat));
+    const auto two    = reinterpret_cast<std::uintptr_t>(seat_command_menus::Controller(seat));
     std::wstring before;
     const bool routed = InSeatUi(seat, Route::kPress, L"press", [&] {
         const bool logIt = platform::Enabled(platform::Level::Trace) && action >= 0 &&

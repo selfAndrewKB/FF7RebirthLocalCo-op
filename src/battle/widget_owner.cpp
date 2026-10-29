@@ -1,6 +1,6 @@
 #include "battle/widget_owner.h"
 
-#include "battle/command_menu_two.h"
+#include "battle/seat_command_menus.h"
 #include "facts/command_controller.h"
 #include "facts/hud.h"
 #include "platform/byte_scope.h"
@@ -231,7 +231,7 @@ int SeatOwning(std::uintptr_t controller) noexcept
     {
         return 0;
     }
-    const int seat = command_menu_two::SeatOfController(reinterpret_cast<const void*>(controller));
+    const int seat = seat_command_menus::SeatOfController(reinterpret_cast<const void*>(controller));
     return players::SeatBuilt(seat) && players::generation::Active(seat) ? seat : 0;
 }
 
@@ -362,8 +362,8 @@ void WatchGuides(int seat, std::uintptr_t one, std::uintptr_t two) noexcept
 /// `seat`'s key guide ticked in the seat's view, after the game's own.
 void SeatGuideTick(int seat, GuideTickFn original, std::uintptr_t one) noexcept
 {
-    const auto own   = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller(seat));
-    const auto guide = reinterpret_cast<std::uintptr_t>(command_menu_two::KeyGuide(seat));
+    const auto own   = reinterpret_cast<std::uintptr_t>(seat_command_menus::Controller(seat));
+    const auto guide = reinterpret_cast<std::uintptr_t>(seat_command_menus::KeyGuide(seat));
     if (!g_guidesOn || SeatOwning(own) != seat || guide == 0 || one == guide)
     {
         return;

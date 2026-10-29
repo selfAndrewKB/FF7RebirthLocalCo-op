@@ -5,7 +5,7 @@
 //
 // The game ticks its one command controller once per frame, from the game mode's phase-0 global tick
 // (call 0x140C92978). That call is redirected: the game's controller ticks as before, then, in
-// battle, player 2's controller (battle/command_menu_two.h) ticks inside player 2's scopes: its
+// battle, player 2's controller (battle/seat_command_menus.h) ticks inside player 2's scopes: its
 // focus context and the UI system's controller slot, the primary controller, the party leader
 // (weak pointer and type) answering player 2's member, player 2's target fields, and pad 2's sticks
 // and buttons. The controller's own sub-ticks then call the game's per-character attack, guard and

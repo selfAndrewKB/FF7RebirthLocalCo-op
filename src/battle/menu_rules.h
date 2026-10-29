@@ -1,6 +1,6 @@
 #pragma once
 
-// The command menu's pure rules (battle/command_menu_tick.h, command_menu_two.h), tested on the host
+// The command menu's pure rules (battle/command_menu_tick.h, seat_command_menus.h), tested on the host
 // (tests/menu_rules_test.cpp). The modules keep the engine reads and the redirects. Written for player 2; the rules
 // over the menus (the world slow, the wait sound) take every player's, by seat (0 player 1), in the order the menus
 // tick: player 1's, then each seat's.
@@ -127,7 +127,7 @@ constexpr bool SkipWaitSoundOff(int pass, std::int32_t waitOne, std::int32_t wai
     return SkipWaitSoundOffAmong(pass == 1 ? 0 : pass == 2 ? 1 : -1, waits, 2);
 }
 
-// ---- player 2's controller following the game's (command_menu_two) ----
+// ---- player 2's controller following the game's (seat_command_menus) ----
 
 /// A refused join Setup (player 2's focus scope could not be entered) is a wait, never a give-up: the first kSetupTries
 /// tries run on consecutive ticks, later ones every kWaitGap ticks, until one runs.

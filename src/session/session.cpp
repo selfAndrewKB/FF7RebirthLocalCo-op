@@ -3,10 +3,10 @@
 #include "session/session.h"
 
 #include "battle/battle_camera.h"
-#include "battle/command_menu_two.h"
 #include "battle/command_menu_view.h"
 #include "battle/command_rules.h"
 #include "battle/menu_focus.h"
+#include "battle/seat_command_menus.h"
 #include "camera/camera_override.h"
 #include "camera/field_camera.h"
 #include "camera/view_target.h"
@@ -183,7 +183,8 @@ void Seat::Tick(bool& commandMenusTicked) noexcept
             if (!commandMenusTicked)
             {
                 commandMenusTicked = true;  // once per tick, by the first seat that reaches here
-                battle::command_menu_two::Tick();   // every playing seat's command controller, built and set up per world
+                // Every playing seat's command controller, built and set up per world.
+                battle::seat_command_menus::Tick();
             }
             if (phase_ == Phase::Playing && installed_.memberMovement && players::generation::MemberOf(seat_) != nullptr)
             {

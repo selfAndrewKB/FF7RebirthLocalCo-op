@@ -2,7 +2,7 @@
 
 #include <intrin.h>
 
-#include "battle/command_menu_two_shared.h"
+#include "battle/seat_command_menus_shared.h"
 #include "facts/hud.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
@@ -90,14 +90,14 @@ void Line(const std::wstring& text) noexcept
 /// The seat whose controller `controller` is, or -1 (the game's).
 int SeatOf(std::uintptr_t controller) noexcept
 {
-    return command_menu_two::SeatOfController(reinterpret_cast<const void*>(controller));
+    return seat_command_menus::SeatOfController(reinterpret_cast<const void*>(controller));
 }
 
 /// The game's controller: the UI system's slot, or inside a seat's scope (the slot names the seat's) the one last
 /// read outside it.
 std::uintptr_t GameController() noexcept
 {
-    const auto slot = ReadAt<std::uintptr_t>(command_menu_two::UiSystem() + kUICommandController);
+    const auto slot = ReadAt<std::uintptr_t>(seat_command_menus::UiSystem() + kUICommandController);
     if (slot != 0 && SeatOf(slot) < 1)
     {
         g_lastGame = slot;
@@ -167,15 +167,15 @@ void FollowFrom(std::uintptr_t ran, const wchar_t* gameWhy, const wchar_t* seatW
     {
         for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
         {
-            if (command_menu_two::CanFollow(seat, reinterpret_cast<void*>(ran), false))
+            if (seat_command_menus::CanFollow(seat, reinterpret_cast<void*>(ran), false))
             {
-                FollowShortcuts(ran, reinterpret_cast<std::uintptr_t>(command_menu_two::Controller(seat)), gameWhy,
+                FollowShortcuts(ran, reinterpret_cast<std::uintptr_t>(seat_command_menus::Controller(seat)), gameWhy,
                                 caller);
             }
         }
         return;
     }
-    if (!command_menu_two::Ready(owner) || !players::generation::OnGameThread())
+    if (!seat_command_menus::Ready(owner) || !players::generation::OnGameThread())
     {
         return;
     }
@@ -191,9 +191,9 @@ void FollowFrom(std::uintptr_t ran, const wchar_t* gameWhy, const wchar_t* seatW
     FollowShortcuts(ran, GameController(), why, caller);
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        if (seat != owner && command_menu_two::Ready(seat))
+        if (seat != owner && seat_command_menus::Ready(seat))
         {
-            FollowShortcuts(ran, reinterpret_cast<std::uintptr_t>(command_menu_two::Controller(seat)), why, caller);
+            FollowShortcuts(ran, reinterpret_cast<std::uintptr_t>(seat_command_menus::Controller(seat)), why, caller);
         }
     }
 }
@@ -204,7 +204,7 @@ void FollowFrom(std::uintptr_t ran, const wchar_t* gameWhy, const wchar_t* seatW
 void RebuildShortcutsCall() noexcept
 {
     const auto caller = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
-    const auto ran    = ReadAt<std::uintptr_t>(command_menu_two::UiSystem() + kUICommandController);
+    const auto ran    = ReadAt<std::uintptr_t>(seat_command_menus::UiSystem() + kUICommandController);
     reinterpret_cast<void (*)()>(g_rebuildShortcuts.Original())();
     if (ran != 0)
     {
@@ -222,9 +222,9 @@ void StatusShortcutsCall(void* selecter) noexcept
     const auto controller = reinterpret_cast<std::uintptr_t>(selecter) - kSelecter;
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        if (command_menu_two::CanFollow(seat, reinterpret_cast<void*>(controller), false))
+        if (seat_command_menus::CanFollow(seat, reinterpret_cast<void*>(controller), false))
         {
-            FollowShortcuts(controller, reinterpret_cast<std::uintptr_t>(command_menu_two::Controller(seat)),
+            FollowShortcuts(controller, reinterpret_cast<std::uintptr_t>(seat_command_menus::Controller(seat)),
                             L"the status menu rebuilt the game's shortcut tables", caller);
         }
     }

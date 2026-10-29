@@ -22,8 +22,8 @@
 #include "players/seats.h"
 #include "players/unreal_access.h"
 #include "scopes/leader_scope.h"
-#include "scopes/p2_scope.h"
 #include "scopes/primary_controller.h"
+#include "scopes/seat_ladder.h"
 #include "session/party_member.h"
 #include "world/shop_talk.h"
 #include "world/vending.h"
@@ -52,6 +52,8 @@
 #include <Windows.h>
 
 namespace lss::world::field_pickup {
+
+namespace seat_ladder = scopes::seat_ladder;
 
 namespace {
 
@@ -1168,16 +1170,16 @@ void LogStatus() noexcept
 /// The seat's pass itself, with its scopes open (the seat's player in, the copy belongs to `mgr`).
 void Pass(Pickup& p, void* mgr, float dt) noexcept
 {
-    scopes::p2_scope::Args args;
+    seat_ladder::Args args;
     args.seat = p.seat;
-    if (!scopes::p2_scope::FillMember(args, players::generation::MemberOf(p.seat)))
+    if (!seat_ladder::FillMember(args, players::generation::MemberOf(p.seat)))
     {
         ++p.counts.skips[kSkipMember];
         return;
     }
-    const scopes::p2_scope::P2Scope scopes(scopes::p2_scope::Sticks | scopes::p2_scope::Primary | scopes::p2_scope::Buttons | scopes::p2_scope::Leader |
-                                       scopes::p2_scope::LeaderType,
-                                   args);
+    const seat_ladder::P2Scope scopes(seat_ladder::Sticks | seat_ladder::Primary | seat_ladder::Buttons |
+                                          seat_ladder::Leader | seat_ladder::LeaderType,
+                                      args);
     if (!scopes.Held())
     {
         ++p.counts.skips[kSkipScopes];

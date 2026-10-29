@@ -16,8 +16,8 @@
 #include "engine_tick.h"
 #include "facts/engine.h"
 #include "facts/in_battle.h"
-#include "feedback/ffb_manager_two.h"
-#include "feedback/rumble_list_two.h"
+#include "feedback/seat_ffb_managers.h"
+#include "feedback/traversal_rumble.h"
 #include "hud/layout/hud_placement.h"
 #include "hud/layout/overlay_layout.h"
 #include "input/climb_context.h"
@@ -509,8 +509,8 @@ private:
         const bool shared = lss::rides::shared_ride::Tick();
         for (int seat = 1; seat <= lss::players::kSeatsBuilt; ++seat)  // each seat with its own force-feedback manager
         {
-            lss::feedback::rumble_list_two::CopyPlayerOne(seat,
-                                                            shared && lss::feedback::ffb_manager_two::Attached(seat));
+            lss::feedback::traversal_rumble::CopyPlayerOne(seat,
+                                                            shared && lss::feedback::seat_ffb_managers::Attached(seat));
         }
         session_->SetSharedRide(shared);
         session_->SetColumnsHeld(columnsHeld_);  // as the last columns' tick read it (the columns follow the session)

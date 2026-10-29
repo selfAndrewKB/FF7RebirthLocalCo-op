@@ -1,35 +1,35 @@
 #include "modules.h"
 
 #include "battle/battle_camera.h"
-#include "battle/battle_warp_two.h"
+#include "battle/battle_warp_skip.h"
 #include "battle/command_locks.h"
 #include "battle/command_menu_tick.h"
-#include "battle/command_menu_two.h"
 #include "battle/command_rules.h"
 #include "battle/equal_targeting.h"
 #include "battle/leader_reads.h"
 #include "battle/lock_group_coin.h"
 #include "battle/lock_on.h"
 #include "battle/player_hits.h"
+#include "battle/seat_command_menus.h"
 #include "battle/synergy_partner.h"
 #include "battle/target_coin.h"
 #include "battle/widget_owner.h"
 #include "camera/attack_cameras.h"
 #include "camera/attack_framing.h"
 #include "camera/camera_distance.h"
-#include "camera/camera_effects_two.h"
 #include "camera/camera_override.h"
 #include "camera/camera_repair.h"
 #include "camera/location_rows.h"
 #include "camera/main_camera_shape.h"
 #include "camera/near_fade.h"
+#include "camera/seat_camera_effects.h"
 #include "camera/shoulder_scale.h"
 #include "camera/vault_camera.h"
 #include "feedback/combat_rumble.h"
-#include "feedback/ffb_manager_two.h"
 #include "feedback/pad_rumble.h"
-#include "feedback/rumble_list_two.h"
+#include "feedback/seat_ffb_managers.h"
 #include "feedback/sound_listeners.h"
+#include "feedback/traversal_rumble.h"
 #include "hud/battle/target_views.h"
 #include "hud/field/action_icon_base.h"
 #include "hud/field/field_markers.h"
@@ -38,16 +38,16 @@
 #include "hud/field/wrangle_targets.h"
 #include "hud/layout/layout_scale.h"
 #include "hud/layout/overlay_layout.h"
-#include "hud/minimap/area_icons_two.h"
 #include "hud/minimap/minimap.h"
 #include "hud/minimap/minimap_once.h"
-#include "hud/passes/player_two_pass.h"
+#include "hud/minimap/seat_area_icons.h"
 #include "hud/passes/root_overlay_render.h"
-#include "hud/passes/second_image.h"
+#include "hud/passes/seat_hud_content.h"
+#include "hud/passes/seat_hud_images.h"
 #include "hud/user_widgets.h"
-#include "input/approach_two.h"
+#include "input/approach_own_camera.h"
 #include "input/climb_context.h"
-#include "input/move_type_two.h"
+#include "input/seat_walk_cap.h"
 #include "input/walk_limits.h"
 #include "platform/log.h"
 #include "players/generation.h"
@@ -76,15 +76,15 @@
 #include "views/stream_views.h"
 #include "views/whole_screen.h"
 #include "views/window_span.h"
-#include "world/anim_two_views.h"
+#include "world/anim_every_view.h"
 #include "world/charapop_centre.h"
 #include "world/charapop_near.h"
 #include "world/field_pickup.h"
 #include "world/nav_strand.h"
 #include "world/party_warp.h"
+#include "world/seat_switch_volumes.h"
+#include "world/seat_triggers.h"
 #include "world/shop_talk.h"
-#include "world/switch_volume_two.h"
-#include "world/trigger_two.h"
 #include "world/vending.h"
 #include "world/world_actor_reach.h"
 
@@ -156,9 +156,9 @@ constexpr std::array kModules{
     // player 1 cannot command player 2's member
     Module{Call<&battle::command_rules::Install>, &battle::command_rules::Remove},
     // battles leave player 2's member where it is
-    Module{Call<&battle::battle_warp_two::Install>, &battle::battle_warp_two::Remove},
+    Module{Call<&battle::battle_warp_skip::Install>, &battle::battle_warp_skip::Remove},
     // player 2's command controller: built, follows the game's
-    Module{Call<&battle::command_menu_two::Install>, &battle::command_menu_two::Remove},
+    Module{Call<&battle::seat_command_menus::Install>, &battle::seat_command_menus::Remove},
     // the battle's command locks reach it by the game's setters
     Module{Call<&battle::command_locks::Install>, &battle::command_locks::Remove},
     // ticked in battle; player 2's attack, guard and dodge
@@ -201,16 +201,16 @@ constexpr std::array kModules{
     // player 1's camera never fades player 2's character out
     Module{Call<&camera::near_fade::Install>, &camera::near_fade::Remove},
     // walk-up traversals read player 2's stick in player 2's camera basis
-    Module{Call<&input::approach_two::Install>, &input::approach_two::Remove},
+    Module{Call<&input::approach_own_camera::Install>, &input::approach_own_camera::Remove},
     // player 2's walk-step cap ends on player 2's controller
-    Module{Call<&input::move_type_two::Install>, &input::move_type_two::Remove},
+    Module{Call<&input::seat_walk_cap::Install>, &input::seat_walk_cap::Remove},
     // characters near player 2 animate by the nearer camera
-    Module{Call<&world::anim_two_views::Install>, &world::anim_two_views::Remove},
+    Module{Call<&world::anim_every_view::Install>, &world::anim_every_view::Remove},
     // player 2's trigger read after player 1's; admitted actors' events
-    Module{Call<&world::trigger_two::Install>, &world::trigger_two::Remove},
-    // player 2 inside CharaPop switch volumes (the shopkeepers near player 2); its events come from trigger_two's
+    Module{Call<&world::seat_triggers::Install>, &world::seat_triggers::Remove},
+    // player 2 inside CharaPop switch volumes (the shopkeepers near player 2); its events come from seat_triggers'
     // filter
-    Module{Call<&world::switch_volume_two::Install>, nullptr},
+    Module{Call<&world::seat_switch_volumes::Install>, nullptr},
     // player 2's chocobo vaults without taking both ride framings
     Module{Call<&camera::vault_camera::Install>, &camera::vault_camera::Remove},
     // player 2's chocobo climbs walls, with its own climb camera
@@ -257,9 +257,9 @@ constexpr std::array kModules{
     // player 2's combat rumble (hits, montage notifies) on player 2's pad
     Module{Call<&feedback::combat_rumble::Install>, &feedback::combat_rumble::Remove},
     // the traversal rumble list per player
-    Module{Call<&feedback::rumble_list_two::Install>, &feedback::rumble_list_two::Remove},
+    Module{Call<&feedback::traversal_rumble::Install>, &feedback::traversal_rumble::Remove},
     // player 2's own force-feedback manager
-    Module{Call<&feedback::ffb_manager_two::Install>, &feedback::ffb_manager_two::Remove},
+    Module{Call<&feedback::seat_ffb_managers::Install>, &feedback::seat_ffb_managers::Remove},
     // each SEAD sound from the nearest player's listener
     Module{Call<&feedback::sound_listeners::Install>, &feedback::sound_listeners::Remove},
     // player 2's vending machines: the shop's camera and pad
@@ -284,7 +284,7 @@ constexpr std::array kModules{
     // enemy specials: the target's half only; leader shots on the coin player
     Module{Call<&camera::attack_framing::Install>, &camera::attack_framing::Remove},
     // player 2's member's guard effect, shakes and chain pulls on player 2's camera
-    Module{Call<&camera::camera_effects_two::Install>, &camera::camera_effects_two::Remove},
+    Module{Call<&camera::seat_camera_effects::Install>, &camera::seat_camera_effects::Remove},
     // a synergy partner held by either human is handed to its AI and back
     Module{Call<&battle::synergy_partner::Install>, &battle::synergy_partner::Remove},
 
@@ -306,7 +306,7 @@ constexpr std::array kModules{
     // the prompt rows keep their corner by their own base
     Module{Call<&hud::action_icon_base::Install>, nullptr},
     // player 2's own map icons and markers
-    Module{Call<&hud::area_icons_two::Install>, &hud::area_icons_two::Remove},
+    Module{Call<&hud::seat_area_icons::Install>, &hud::seat_area_icons::Remove},
     // each half's cursor and enemy gauges follow its player's target
     Module{Call<&hud::target_views::Install>, &hud::target_views::Remove},
 };
@@ -404,10 +404,10 @@ void TickBeforeSession() noexcept
     players::generation::BeginTick(chocobos);
     feedback::pad_rumble::BeforeTick();    // before the world tick: each seat's controller ordered after player 1's
     feedback::combat_rumble::BeforeTick();  // outside every notify: their call sites; the status line
-    feedback::rumble_list_two::Tick();      // each seat's list made at join (dropped if it left another way)
+    feedback::traversal_rumble::Tick();      // each seat's list made at join (dropped if it left another way)
     battle::equal_targeting::Tick();      // both players' types for the Condition selects (no leader scope held)
     battle::target_coin::Tick();          // the blueprint natives' swaps once reflection is up; the summary
-    feedback::ffb_manager_two::Tick();      // each seat's component on its own manager, after its BeginPlay
+    feedback::seat_ffb_managers::Tick();      // each seat's component on its own manager, after its BeginPlay
     // the controller listener slot; each further player's listener on the column showing their own view (the last
     // tick's sources, Shown::OwnColumn), off while they have none; the summary (Debug)
     feedback::sound_listeners::Tick(g_ownColumns);
@@ -416,7 +416,7 @@ void TickBeforeSession() noexcept
     world::shop_talk::Tick();            // the shopkeeper verdicts queued by player 2's pass
     camera::attack_cameras::Tick();       // the attack-camera status line (Debug)
     camera::attack_framing::Tick();       // the attack-framing latches' clock and status line (Debug)
-    camera::camera_effects_two::Tick();   // the camera-effect status line (Debug)
+    camera::seat_camera_effects::Tick();   // the camera-effect status line (Debug)
     battle::synergy_partner::Tick();      // humans' synergy partners: session, late give-back, status (Debug)
     // The code placed from the game thread outside the overlay render (platform/deferred_sites.h): its polls.
     renderer::PollFamilyBoundary();
@@ -444,12 +444,12 @@ void TickAfterSession(const Frame& frame) noexcept
     world::nav_strand::Tick(frame.splitShown);  // a stranded player is warped back to the party
     camera::camera_repair::Tick();
     traversal::traversal_watch::Tick();
-    world::trigger_two::Tick();
-    world::switch_volume_two::Tick();  // each seat's volumes left once it is gone; the summary
+    world::seat_triggers::Tick();
+    world::seat_switch_volumes::Tick();  // each seat's volumes left once it is gone; the summary
     traversal::traversal_camera::Tick();  // each seat's idle camera holders; the collision watch (dev)
     camera::near_fade::Tick();         // each seat's character's fade state (Debug, on change)
-    input::approach_two::Tick();      // the crossing walk-up calls, swapped once from here
-    input::move_type_two::Tick();     // each seat's deferred walk-cap clear, the layer-2 watch
+    input::approach_own_camera::Tick();      // the crossing walk-up calls, swapped once from here
+    input::seat_walk_cap::Tick();     // each seat's deferred walk-cap clear, the layer-2 watch
     camera::vault_camera::Tick();      // each seat's vault cameras end on its own camera (lever L2)
     traversal::chocobo_climb::Tick();     // each seat's climb camera's states and the summary (Debug)
     camera::camera_distance::TickFraming(frame.columns);  // per-layout distance steps (roadmap 2b)
@@ -459,7 +459,7 @@ void TickAfterSession(const Frame& frame) noexcept
         ratios[static_cast<std::size_t>(seat)] = views::SplitWidthRatio(seat);
     }
     camera::shoulder_scale::Poll(frame.splitShown, ratios);
-    world::anim_two_views::Tick(frame.splitShown);  // its frame count, before the world tick
+    world::anim_every_view::Tick(frame.splitShown);  // its frame count, before the world tick
     world::charapop_near::Tick(frame.splitShown, plays);
     world::charapop_centre::Tick(frame.splitShown, plays);
     world::world_actor_reach::Tick(plays);
@@ -761,7 +761,7 @@ void RegisterCommands(session::Session& session, players::SplitLayout& layout,
         hud::RegisterOverlayLayoutCommands();
         hud::RegisterSecondImageCommands();
         hud::RegisterPlayerTwoPassCommands();
-        hud::area_icons_two::RegisterCommands();
+        hud::seat_area_icons::RegisterCommands();
         hud::RegisterMinimapOnceCommands();
         hud::RegisterHudTraceCommands();
         hud::RegisterPositionProbeCommands();

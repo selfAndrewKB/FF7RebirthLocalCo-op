@@ -1,12 +1,12 @@
 #include "battle/command_menu_tick.h"
 
 #include "battle/command_menu_tick_shared.h"
-#include "battle/command_menu_two.h"
 #include "battle/command_rules.h"
 #include "battle/focus_scope.h"
 #include "battle/menu_input_route.h"
 #include "battle/menu_rules.h"
 #include "battle/menu_tint.h"
+#include "battle/seat_command_menus.h"
 #include "facts/command_controller.h"
 #include "facts/hud.h"
 #include "facts/party.h"
@@ -23,8 +23,8 @@
 #include "players/seats.h"
 #include "players/weak_object.h"
 #include "scopes/leader_scope.h"
-#include "scopes/p2_scope.h"
 #include "scopes/primary_controller.h"
+#include "scopes/seat_ladder.h"
 #include "session/party_member.h"
 
 #include <algorithm>
@@ -41,6 +41,8 @@
 // removes them with its own sites.
 
 namespace lss::battle::command_menu_tick {
+
+namespace seat_ladder = scopes::seat_ladder;
 
 namespace {
 
@@ -486,7 +488,7 @@ void Refused(int seat, const wchar_t* why) noexcept
 /// A seat's controller's tick, inside the seat's scopes (§13.2).
 void SeatPass(int seat, float deltaTime) noexcept
 {
-    const auto two    = reinterpret_cast<std::uintptr_t>(command_menu_two::Controller(seat));
+    const auto two    = reinterpret_cast<std::uintptr_t>(seat_command_menus::Controller(seat));
     const auto one    = ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController);
     void*      member = players::generation::MemberOf(seat);
     if (two == 0 || one == 0 || one == two || member == nullptr ||
@@ -495,11 +497,11 @@ void SeatPass(int seat, float deltaTime) noexcept
         menu_tint::Release(seat, L"released: the menu is not ticked (out of battle)");
         return;  // out of battle: the seat's controller has nothing to do yet
     }
-    scopes::p2_scope::Args args;
+    seat_ladder::Args args;
     args.seat          = seat;
     args.controller    = reinterpret_cast<void*>(two);
     const auto manager = ReadAt<std::uintptr_t>(g_partyManager);
-    if (!scopes::p2_scope::FillMember(args, member) || manager == 0)
+    if (!seat_ladder::FillMember(args, member) || manager == 0)
     {
         return Refused(seat, L"the member could not be read");
     }
@@ -509,9 +511,10 @@ void SeatPass(int seat, float deltaTime) noexcept
     args.leaderType   = static_cast<std::uint8_t>(before[2]);
     {
         // Every scope of the seat's, the rules last; the target fields only in battle (optional).
-        scopes::p2_scope::P2Scope scopes(scopes::p2_scope::Focus | scopes::p2_scope::Sticks | scopes::p2_scope::Primary | scopes::p2_scope::Buttons |
-                                     scopes::p2_scope::Targets | scopes::p2_scope::Leader | scopes::p2_scope::LeaderType | scopes::p2_scope::Rules,
-                                 scopes::p2_scope::Targets, args);
+        seat_ladder::P2Scope scopes(seat_ladder::Focus | seat_ladder::Sticks | seat_ladder::Primary |
+                                        seat_ladder::Buttons | seat_ladder::Targets | seat_ladder::Leader |
+                                        seat_ladder::LeaderType | seat_ladder::Rules,
+                                    seat_ladder::Targets, args);
         if (!scopes.Held())
         {
             return Refused(seat, scopes.Refusal());
@@ -536,7 +539,7 @@ void SeatPass(int seat, float deltaTime) noexcept
         }
         if (!ticked)
         {
-            scopes.Get<scopes::p2_scope::FocusPart>()->scope.Abandon();
+            scopes.Get<seat_ladder::FocusPart>()->scope.Abandon();
             menu_tint::Release(seat, L"released: the tick faulted");
             g_installed = false;
             Line(std::format(L"FAILED: {}'s controller's tick faulted; the further players' command controllers stop, "
@@ -633,7 +636,7 @@ std::uint8_t GuideShow(void* guide, std::uint8_t mode) noexcept
 {
     // With the seat's own key guide in the slot (battle/focus_scope), the seat's controller drives it
     // natively; without one, the seat's pass leaves the shared guide alone.
-    if (g_pass == 2 && command_menu_two::KeyGuide(g_passSeat) == nullptr)
+    if (g_pass == 2 && seat_command_menus::KeyGuide(g_passSeat) == nullptr)
     {
         ++g_guideSkips;
         if (platform::Enabled(platform::Level::Debug))
@@ -649,7 +652,7 @@ std::uint8_t GuideShow(void* guide, std::uint8_t mode) noexcept
 
 void GuideMode8() noexcept
 {
-    if (g_pass == 2 && command_menu_two::KeyGuide(g_passSeat) == nullptr)
+    if (g_pass == 2 && seat_command_menus::KeyGuide(g_passSeat) == nullptr)
     {
         ++g_guideSkips;
         if (platform::Enabled(platform::Level::Debug))

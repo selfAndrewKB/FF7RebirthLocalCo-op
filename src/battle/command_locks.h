@@ -22,7 +22,7 @@
 // resets +0x782). Sync() copies them once after each join Setup.
 //
 // Per seat: every built seat's controller follows each setter in seat order (the seat's controller is
-// battle/command_menu_two's); a seat's join Sync copies to that seat's only.
+// battle/seat_command_menus'); a seat's join Sync copies to that seat's only.
 
 namespace lss::platform {
 class GameImage;

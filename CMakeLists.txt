@@ -37,10 +37,10 @@ add_library(LocalSplitScreen SHARED
     src/hud/hud_roots.cpp
     src/hud/hud_updates.cpp
     src/hud/passes/root_overlay_render.cpp
-    src/hud/passes/second_image.cpp
+    src/hud/passes/seat_hud_images.cpp
     src/hud/passes/shared_slot.cpp
     src/hud/minimap/minimap_once.cpp
-    src/hud/passes/player_two_pass.cpp
+    src/hud/passes/seat_hud_content.cpp
     src/hud/field/action_rows.cpp
     src/hud/passes/pass_opacity.cpp
     src/hud/field/prompt_rows.cpp
@@ -48,7 +48,7 @@ add_library(LocalSplitScreen SHARED
     src/hud/field/search_pins.cpp
     src/hud/field/wrangle_targets.cpp
     src/hud/field/action_icon_base.cpp
-    src/hud/minimap/area_icons_two.cpp
+    src/hud/minimap/seat_area_icons.cpp
     src/hud/battle/target_views.cpp
     src/hud/battle/enemy_gauges.cpp
     src/hud/field/marker_timers.cpp
@@ -92,21 +92,21 @@ add_library(LocalSplitScreen SHARED
     src/camera/camera_repair.cpp
     src/input/climb_context.cpp
     src/camera/near_fade.cpp
-    src/feedback/rumble_list_two.cpp
-    src/feedback/rumble_list_copy.cpp
-    src/feedback/rumble_sources_two.cpp
-    src/feedback/ffb_manager_two.cpp
+    src/feedback/traversal_rumble.cpp
+    src/feedback/traversal_rumble_copy.cpp
+    src/feedback/traversal_rumble_sources.cpp
+    src/feedback/seat_ffb_managers.cpp
     src/feedback/sound_listeners.cpp
-    src/input/approach_two.cpp
-    src/input/move_type_two.cpp
-    src/world/anim_two_views.cpp
+    src/input/approach_own_camera.cpp
+    src/input/seat_walk_cap.cpp
+    src/world/anim_every_view.cpp
     src/traversal/traversal_camera.cpp
     src/traversal/traversal_exec.cpp
     src/traversal/traversal_holders.cpp
     src/traversal/traversal_watch.cpp
     src/world/shop_talk.cpp
-    src/world/switch_volume_two.cpp
-    src/world/trigger_two.cpp
+    src/world/seat_switch_volumes.cpp
+    src/world/seat_triggers.cpp
     src/camera/vault_camera.cpp
     src/camera/location_rows.cpp
     src/camera/location_volumes.cpp
@@ -135,12 +135,12 @@ add_library(LocalSplitScreen SHARED
     src/camera/attack_cameras.cpp
     src/camera/attack_framing.cpp
     src/battle/synergy_partner.cpp
-    src/camera/camera_effects_two.cpp
+    src/camera/seat_camera_effects.cpp
     src/camera/camera_access.cpp
     src/camera/camera_distance.cpp
     src/camera/main_camera_shape.cpp
     src/battle/command_locks.cpp
-    src/battle/battle_warp_two.cpp
+    src/battle/battle_warp_skip.cpp
     src/battle/equal_targeting.cpp
     src/battle/player_hits.cpp
     src/battle/leader_reads.cpp
@@ -149,7 +149,7 @@ add_library(LocalSplitScreen SHARED
     src/session/leave_watch.cpp
     src/battle/command_rules.cpp
     src/battle/focus_scope.cpp
-    src/battle/command_menu_two.cpp
+    src/battle/seat_command_menus.cpp
     src/battle/command_menu_view.cpp
     src/battle/shortcut_follow.cpp
     src/battle/command_menu_tick.cpp
@@ -342,7 +342,7 @@ lss_test(deferred_sites src/platform/deferred_sites.cpp src/platform/image.cpp s
 lss_test(game_image src/platform/image.cpp src/platform/build_translation.cpp)
 lss_test(layout_scale_code)
 lss_test(shadow_feedback_code)
-lss_test(rumble_list_code)
+lss_test(traversal_rumble_code)
 lss_test(outside_join src/session/outside_join.cpp)
 lss_test(session_rules)
 lss_test(coin_table)
@@ -352,7 +352,7 @@ lss_test(menu_rules)
 lss_test(seqlock)
 lss_test(listener_rules)
 lss_test(context_owners)
-lss_test(rumble_rules)
+lss_test(traversal_rumble_rules)
 lss_test(ride_rules)
 lss_test(hud_rules)
 lss_test(world_rules)
@@ -363,7 +363,7 @@ lss_test(field_rules)
 lss_test(seats)
 lss_test(camera_access)
 lss_test(attack_framing)
-lss_test(move_type_two)
+lss_test(seat_walk_cap)
 lss_test(seat_state)
 lss_test(columns)
 # The facts rule (tests/facts_once.py): no engine address declared in two files, no per-build pair with equal halves.

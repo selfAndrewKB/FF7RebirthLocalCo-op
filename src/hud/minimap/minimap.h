@@ -34,7 +34,7 @@ void Remove() noexcept;
 /// target and buffers when needed, decides which seats' minimaps this frame uses, and logs.
 void Tick(bool splitShown) noexcept;
 
-/// From the HUD levers' update runs (hud/passes/player_two_pass.h): the navimap holder update for that player's view
+/// From the HUD levers' update runs (hud/passes/seat_hud_content.h): the navimap holder update for that player's view
 /// (`seat` 0 player 1's, run only after a seat's).
 void RunHolder(int seat) noexcept;
 

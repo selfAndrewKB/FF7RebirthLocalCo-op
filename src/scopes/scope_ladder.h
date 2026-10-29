@@ -21,7 +21,7 @@
 // and may add `const wchar_t* Refusal() const` (why it did not open; null when it did).
 //
 // Pure: tests/scope_ladder_test.cpp pins the order and the all-or-nothing rule with recording parts.
-// scopes/p2_scope.h gives the parts over the modules' scope types.
+// scopes/seat_ladder.h gives the parts over the modules' scope types.
 
 #include <cstddef>
 #include <optional>
