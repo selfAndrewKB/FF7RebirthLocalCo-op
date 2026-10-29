@@ -703,6 +703,19 @@ void RegisterPlayerTwoPassCommands()
              return Outcome{true, L"levers mask set (see the log)"};
          },
          .get = [] { return Value{std::int64_t{PlayerTwoLeversMask()}}; }});
+    control::Register(
+        {.name  = L"hud-context-skip",
+         .shape = control::Shape::OnOff,
+         .help  = L"the command menu and the party status stay on player 1's context in the further players' passes "
+                  L"(they never read it); off switches them like the others, for a comparison in the census",
+         .set   = [](const Value& v) {
+             const bool on = std::get<bool>(v);
+             hud_roots::SetSkipContextFree(on);
+             platform::Log(L"HUD levers: the command menu and the party status {}",
+                           on ? L"left on player 1's context" : L"switched to each player's context");
+             return Outcome{true, on ? L"skip on" : L"skip off"};
+         },
+         .get = [] { return Value{hud_roots::SkipContextFree()}; }});
 }
 
 #endif

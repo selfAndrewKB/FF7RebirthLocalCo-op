@@ -23,6 +23,7 @@
 #include <format>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace lss::hud::hud_roots {
@@ -62,8 +63,10 @@ using context_owners::Owner;
 struct ClassCost
 {
     std::wstring  name;
-    std::uint64_t calls   = 0;
-    double        seconds = 0.0;
+    std::uint64_t calls       = 0;
+    double        seconds     = 0.0;
+    bool          contextFree = false;  // context_owners::IsContextFree(name)
+    std::int32_t  classIndex  = -1;     // the class's GUObjectArray index: a reused address is another class
 };
 
 // Game thread.
@@ -73,9 +76,11 @@ std::vector<char>          g_selfPlacing;  // per root: shows or collapses itsel
 std::vector<std::uint16_t> g_costOf;  // per root: its class's entry in g_costs
 std::vector<ClassCost>     g_costs;  // by class, in the order first seen; kept across scans
 std::unordered_map<const void*, std::uint16_t> g_costIndex;  // class -> entry in g_costs
-std::uint64_t              g_setsToSeats    = 0;  // since the last census: setter calls toward a further seat
-std::uint64_t              g_setsToOne      = 0;  // and back to player 1
-std::uint64_t              g_alreadyOwned   = 0;  // a pass needed the root, which carried that seat's context already
+std::uint64_t              g_setsToSeats     = 0;  // since the last census: setter calls toward a further seat
+std::uint64_t              g_setsToOne       = 0;  // and back to player 1
+std::uint64_t              g_alreadyOwned    = 0;  // a pass needed the root, which carried that seat's context already
+std::uint64_t              g_contextFreeKept = 0;  // a shown context-free root left on player 1's in a further pass
+bool                       g_skipContextFree = true;  // the hud-context-skip switch
 std::size_t       g_hiddenSwapped = 0;  // self-placing roots given a seat's context while collapsed, last pass
 PlayerContext     g_contexts[players::kMaxPlayers];  // by seat; a seat with no local player has none
 Root              g_gameInstance;  // found once: FindFirstOf walks every UObject
@@ -140,11 +145,22 @@ bool IsViewportRoot(UObject* widget)
     return owned;
 }
 
-/// The root's class entry in the census, made on first sight (the class name read then, every scan at most).
+/// The root's class entry in the census, made on first sight (the class name read then, every scan at most). An entry
+/// whose address a different class now has (the old one collected) is read afresh: its flag decides the switch.
 std::uint16_t CostEntry(const Root& root)
 {
-    if (const auto found = g_costIndex.find(root.cls); found != g_costIndex.end())
+    auto*              cls        = root.object->GetClassPrivate();
+    const std::int32_t classIndex = static_cast<std::int32_t>(cls->GetInternalIndex());
+    const auto         found      = g_costIndex.find(root.cls);
+    if (found != g_costIndex.end() && g_costs[found->second].classIndex == classIndex)
     {
+        return found->second;
+    }
+    std::wstring name(cls->GetName());
+    const bool   contextFree = context_owners::IsContextFree(name);
+    if (found != g_costIndex.end())
+    {
+        g_costs[found->second] = {std::move(name), 0, 0.0, contextFree, classIndex};
         return found->second;
     }
     const auto at = static_cast<std::uint16_t>(std::min<std::size_t>(g_costs.size(), 0xFFFF));
@@ -152,9 +168,25 @@ std::uint16_t CostEntry(const Root& root)
     {
         return at;  // past the table: uncounted (not reached: the HUD has some hundred classes)
     }
-    g_costs.push_back({std::wstring(root.object->GetClassPrivate()->GetName())});
+    g_costs.push_back({std::move(name), 0, 0.0, contextFree, classIndex});
     g_costIndex.emplace(root.cls, at);
     return at;
+}
+
+/// Room for one more element without a throw in the push that follows (geometric, unlike reserve(size + 1)).
+template <typename T>
+void MakeRoom(std::vector<T>& list)
+{
+    if (list.size() == list.capacity())
+    {
+        list.reserve(list.size() * 2 + 16);
+    }
+}
+
+/// The root's class never reads the player context while it ticks or paints (unknown classes do not count).
+bool ContextFree(std::size_t i) noexcept
+{
+    return i < g_costOf.size() && g_costOf[i] < g_costs.size() && g_costs[g_costOf[i]].contextFree;
 }
 
 /// One root's setter call, timed for the census.
@@ -241,6 +273,8 @@ bool Scan(const LocalPlayerSet& bySeat)
         {
             const Root root{live.object, live.index, live.cls};
             const auto cost = CostEntry(root);  // allocates: before the lists grow, so they stay in step
+            MakeRoom(g_roots);
+            MakeRoom(g_costOf);
             g_roots.push_back(root);
             g_costOf.push_back(cost);
         }
@@ -282,6 +316,10 @@ void Adopt(UObject* widget)
     }
     const Root root{widget, static_cast<std::int32_t>(widget->GetInternalIndex()), widget->GetClassPrivate()};
     const auto cost = CostEntry(root);  // allocates: before the lists grow, so they stay in step
+    MakeRoom(g_roots);  // and room in all four first: the pushes cannot throw between them
+    MakeRoom(g_owner);
+    MakeRoom(g_selfPlacing);
+    MakeRoom(g_costOf);
     g_roots.push_back(root);
     g_owner.push_back(0);  // made with player 1's context, as every root
     g_selfPlacing.push_back(0);
@@ -307,7 +345,8 @@ bool SetContexts(int seat) noexcept
     // A further seat's context goes only to roots that are shown in its pass (a hidden root is neither
     // ticked nor painted), and to the self-placing ones whatever their visibility (their run shows
     // or collapses them from the context's own projection), each only if it does not carry the seat's
-    // already; player 1's goes back to every root a seat's reached (hud/context_owners.h).
+    // already, and never to a context-free root while the skip is on; player 1's goes back to every
+    // root a seat's reached (hud/context_owners.h).
     const bool toSeat = seat != 0;  // toward a further seat
     if (!HasContext(seat))
     {
@@ -321,14 +360,17 @@ bool SetContexts(int seat) noexcept
     }
     for (std::size_t i = 0; i < g_roots.size() && i < g_owner.size() && i < g_selfPlacing.size(); ++i)
     {
-        const Root& root   = g_roots[i];
-        const bool  shown  = toSeat && Shown(root);
-        const bool  needed = shown || g_selfPlacing[i] != 0;
+        const Root& root        = g_roots[i];
+        const bool  shown       = toSeat && Shown(root);
+        const bool  contextFree = toSeat && ContextFree(i);
+        const bool  needed      = context_owners::NeededBySeat(shown, g_selfPlacing[i] != 0, contextFree,
+                                                               g_skipContextFree);
         const bool set = toSeat ? context_owners::SetForSeat(g_owner[i], seat, needed)
                                 : context_owners::SetForPlayerOne(g_owner[i]);
         if (!set)
         {
             g_alreadyOwned += toSeat && needed ? 1 : 0;
+            g_contextFreeKept += toSeat && shown && contextFree && !needed ? 1 : 0;
             continue;
         }
         g_hiddenSwapped += toSeat && !shown ? 1 : 0;
@@ -375,10 +417,12 @@ std::wstring TakeCensus(std::uint32_t frames)
     std::partial_sort(costliest.begin(), costliest.begin() + static_cast<std::ptrdiff_t>(shown), costliest.end(),
                       [](const ClassCost* a, const ClassCost* b) { return a->seconds > b->seconds; });
     std::wstring line = std::format(L"{} root(s), {} root class(es) seen; per frame {:.1f} call(s) toward the further "
-                                    L"players, {:.1f} back to player 1, {:.1f} needed but already that player's; the "
+                                    L"players, {:.1f} back to player 1, {:.1f} needed but already that player's, {:.1f} "
+                                    L"shown but left on player 1's (the command menu and party status, skip {}); the "
                                     L"setter {:.3f} ms per frame; the costliest:",
                                     g_roots.size(), g_costs.size(), g_setsToSeats * perFrame, g_setsToOne * perFrame,
-                                    g_alreadyOwned * perFrame, total * 1000.0 * perFrame);
+                                    g_alreadyOwned * perFrame, g_contextFreeKept * perFrame,
+                                    g_skipContextFree ? L"on" : L"off", total * 1000.0 * perFrame);
     for (std::size_t i = 0; i < shown; ++i)
     {
         line += std::format(L"{} {} {:.3f} ms ({:.1f} call(s))", i == 0 ? L"" : L",", costliest[i]->name,
@@ -395,7 +439,17 @@ void ResetCensus() noexcept
         cost.calls   = 0;
         cost.seconds = 0.0;
     }
-    g_setsToSeats = g_setsToOne = g_alreadyOwned = 0;
+    g_setsToSeats = g_setsToOne = g_alreadyOwned = g_contextFreeKept = 0;
+}
+
+void SetSkipContextFree(bool on) noexcept
+{
+    g_skipContextFree = on;
+}
+
+bool SkipContextFree() noexcept
+{
+    return g_skipContextFree;
 }
 
 std::size_t Count() noexcept

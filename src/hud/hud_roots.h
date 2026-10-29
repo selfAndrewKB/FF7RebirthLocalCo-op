@@ -6,7 +6,8 @@
 // game instance. Each carries a player context (UUserWidget+0x248: weak local player, weak world),
 // which the marker list and the world-anchored widgets read to choose the controller they project
 // with. All roots are player 1's (RE-p2-hud.md P8.10). UUserWidget::SetPlayerContext (stock UE4)
-// sets it, and walks the widget's child user widgets; it sends no events.
+// sets it, and walks the widget's child user widgets; it sends no events. The command menu and the party status never
+// read it while they tick or paint (RE-hud-context-readers.md), so they are left on player 1's (hud-context-skip).
 //
 // Roots come and go (the game adds markers as it needs them), so the list is rescanned from
 // hud/user_widgets.h, which needs no walk of every UObject. Game thread only.
@@ -58,7 +59,8 @@ bool AdoptSelfPlacing(RC::Unreal::UObject* widget);
 
 /// Gives a further seat's context to every live root shown in its pass and to the self-placing ones that do not
 /// carry it already (hud/context_owners.h), or player 1's (seat 0) back to every root a seat's reached (and clears
-/// the self-placing marks). A root a pass does not need keeps an earlier pass's context until the way back.
+/// the self-placing marks). A root a pass does not need keeps an earlier pass's context until the way back; a root of
+/// a context-free class keeps player 1's while the skip is on (SetSkipContextFree).
 /// False if the engine raised an exception inside SetPlayerContext, or the seat has no context.
 bool SetContexts(int seat) noexcept;
 
@@ -68,6 +70,12 @@ std::wstring TakeCensus(std::uint32_t frames);
 
 /// The census's counts start afresh, unlogged (the perf log off).
 void ResetCensus() noexcept;
+
+/// The `hud-context-skip` switch (on from the start): the roots of a context-free class (context_owners.h; the command
+/// menu and the party status) keep player 1's context through the further seats' passes. Takes effect from the next
+/// switch toward a seat; a root a seat's reached still goes back to player 1 with the others. Game thread.
+void SetSkipContextFree(bool on) noexcept;
+bool SkipContextFree() noexcept;
 
 /// How many roots the last scan found.
 std::size_t Count() noexcept;

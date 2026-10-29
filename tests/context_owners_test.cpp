@@ -90,6 +90,40 @@ void TestNoRepeatForTheSameSeat()
     EXPECT(owners::SetForPlayerOne(2));
 }
 
+void TestContextFreeClasses()
+{
+    std::printf("the command menu and the party status are context-free, by exact class name\n");
+    EXPECT(owners::IsContextFree(L"Command_C"));
+    EXPECT(owners::IsContextFree(L"Status_C"));
+    EXPECT(!owners::IsContextFree(L"Command_Cell_00_C"));  // a root of its own: not on the list
+    EXPECT(!owners::IsContextFree(L"FieldTarget_01_C"));   // may place itself through its context
+    EXPECT(!owners::IsContextFree(L"Status"));
+    EXPECT(!owners::IsContextFree(L""));
+}
+
+void TestNeededBySeat()
+{
+    std::printf("a context-free root is never needed by a further seat while the skip is on\n");
+    EXPECT(owners::NeededBySeat(true, false, false, true));
+    EXPECT(owners::NeededBySeat(false, true, false, true));
+    EXPECT(!owners::NeededBySeat(false, false, false, true));
+    EXPECT(!owners::NeededBySeat(true, false, true, true));  // shown, skipped
+    EXPECT(!owners::NeededBySeat(true, true, true, true));
+    EXPECT(owners::NeededBySeat(true, false, true, false));  // the skip off: switched like the others
+
+    // A frame with the skip on: the shown command menu costs no call either way.
+    owners::Owner menu = 0;
+    for (int seat : {2, 1})
+    {
+        if (owners::SetForSeat(menu, seat, owners::NeededBySeat(true, false, true, true)))
+        {
+            menu = static_cast<owners::Owner>(seat);
+        }
+    }
+    EXPECT(menu == 0);
+    EXPECT(!owners::SetForPlayerOne(menu));
+}
+
 }  // namespace
 
 int main()
@@ -97,6 +131,8 @@ int main()
     TestThreePlayerFrame();
     TestTwoPlayerFrame();
     TestNoRepeatForTheSameSeat();
+    TestContextFreeClasses();
+    TestNeededBySeat();
 
     return lss::test::Report();
 }
