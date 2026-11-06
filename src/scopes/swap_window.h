@@ -3,8 +3,8 @@
 // Temporarily replaces one 8-byte engine value for the length of one engine call, and puts it back
 // only if nothing else changed it meanwhile.
 //
-// Used for the party manager's primary-controller field: player 2's updates run with that field
-// naming player 2's controller, so the engine code inside them reads and writes player 2's objects
+// Used for the party manager's primary-controller field: a seat's updates run with that field
+// naming the seat's controller, so the engine code inside them reads and writes the seat's objects
 // instead of player 1's. The field is an aligned FWeakObjectPtr {index, serial}, so one atomic
 // 8-byte store replaces it whole, and a reader on another thread sees either value, never a mix.
 //

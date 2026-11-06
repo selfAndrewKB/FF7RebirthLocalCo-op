@@ -138,40 +138,40 @@ void Call(const platform::GameImage& image) noexcept
 
 // The table. The order is the install order; a row's comment says what the module does for the players.
 constexpr std::array kModules{
-    // The party leader answering player 2's member for one of the game's calls: first, so the modules that check it
+    // The party leader answering a seat's member for one of the game's calls: first, so the modules that check it
     // at their own install come after it; every other holder takes a scope at tick time (an unheld scope refuses).
     Module{Call<&scopes::leader_scope::Install>, nullptr},
 
-    // Player 2's stages that are not the session's own, next to their siblings.
-    // player 2's Battle operator follows player 1's
+    // The seats' stages that are not the session's own, next to their siblings.
+    // each seat's Battle operator follows player 1's
     Module{Call<&battle::battle_camera::Install>, &battle::battle_camera::Remove},
-    // player 2's camera gets its own NotifyOverride module
+    // each seat's camera gets its own NotifyOverride module
     Module{Call<&camera::camera_override::Install>, nullptr},
-    // the Options camera distance reaches player 2's camera
+    // the Options camera distance reaches every seat's camera
     Module{Call<&camera::camera_distance::Install>, &camera::camera_distance::Remove},
-    // player 2's targeting: the game's tick run again for player 2
+    // each seat's targeting: the game's tick run again for the seat
     Module{Call<&battle::lock_on::Install>, &battle::lock_on::Remove},
-    // player 1's switch skips player 2's member
+    // player 1's switch skips every seat's member
     Module{Call<&session::party_switch::Install>, &session::party_switch::Remove},
-    // player 1 cannot command player 2's member
+    // player 1 cannot command a seat's member
     Module{Call<&battle::command_rules::Install>, &battle::command_rules::Remove},
-    // battles leave player 2's member where it is
+    // battles leave a seat's member where it is
     Module{Call<&battle::battle_warp_skip::Install>, &battle::battle_warp_skip::Remove},
-    // player 2's command controller: built, follows the game's
+    // each seat's command controller: built, follows the game's
     Module{Call<&battle::command_menu::Install>, &battle::command_menu::Remove},
     // the battle's command locks reach it by the game's setters
     Module{Call<&battle::command_locks::Install>, &battle::command_locks::Remove},
-    // ticked in battle; player 2's attack, guard and dodge
+    // ticked in battle; each seat's attack, guard and dodge
     Module{Call<&battle::command_menu_tick::Install>, &battle::command_menu_tick::Remove},
-    // party-list cells and key guide tick in player 2's view
+    // party-list cells and key guide tick in their owner's view
     Module{Call<&battle::widget_owner::Install>, &battle::widget_owner::Remove},
-    // parallel passes without their own GPU submission (player 2 in)
+    // parallel passes without their own GPU submission (several views)
     Module{Call<&renderer::InstallSubmitHintSkip>, &renderer::RemoveSubmitHintSkip},
     // one scenery-streaming hand-in per frame, player 1's family's
     Module{Call<&renderer::InstallMeFeedbackOnce>, &renderer::RemoveMeFeedbackOnce},
 
-    // The view-point entry serves the filled halves and the choice of player 2's camera. The split screen runs
-    // without it (halves kept 16:9 with bars, player 2 on its own camera); those keys then say they are unavailable.
+    // The view-point entry serves the filled halves and the choice of the seats' cameras. The split screen runs
+    // without it (halves kept 16:9 with bars, each seat on its own camera); those keys then say they are unavailable.
     Module{Call<&views::InstallPlayerViewPoint>, &views::RemovePlayerViewPoint},
     // filled halves: each main camera's own 16:9 constraint
     Module{Call<&camera::main_camera_shape::Install>, nullptr},
@@ -184,36 +184,36 @@ constexpr std::array kModules{
     // the game window across its row of monitors (the engine's reshape)
     Module{Call<&views::window_span::Install>, nullptr},
 
-    // Player 2 in the world: strands, cameras, traversals.
-    // the game's follow warp, for a stranded player 2
+    // The further players in the world: strands, cameras, traversals.
+    // the game's follow warp, for a stranded further player
     Module{Call<&world::party_warp::Install>, nullptr},
-    // player 2's member stranded off the loaded navmesh
+    // a seat's member stranded off the loaded navmesh
     Module{Call<&world::nav_strand::Install>, &world::nav_strand::Remove},
-    // a non-finite pose on player 2's camera: the game's camera reset
+    // a non-finite pose on a seat's camera: the game's camera reset
     Module{Call<&camera::camera_repair::Install>, nullptr},
     // ladders, climb spots, glide and jet for player 2
     Module{Call<&traversal::traversal_watch::Install>, &traversal::traversal_watch::Remove},
     // climbs on the anim worker read their own climber's input (W5); before traversal_camera, whose holders need
     // these Ticks
     Module{Call<&input::climb_context::Install>, &input::climb_context::Remove},
-    // player 2's traversal gets the game's traversal cameras
+    // a seat's traversal gets the game's traversal cameras
     Module{Call<&traversal::traversal_camera::Install>, &traversal::traversal_camera::Remove},
-    // player 1's camera never fades player 2's character out
+    // player 1's camera never fades a seat's character out
     Module{Call<&camera::near_fade::Install>, &camera::near_fade::Remove},
-    // walk-up traversals read player 2's stick in player 2's camera basis
+    // walk-up traversals read a seat's stick in the seat's camera basis
     Module{Call<&input::approach_own_camera::Install>, &input::approach_own_camera::Remove},
-    // player 2's walk-step cap ends on player 2's controller
+    // a seat's walk-step cap ends on the seat's controller
     Module{Call<&input::seat_walk_cap::Install>, &input::seat_walk_cap::Remove},
-    // characters near player 2 animate by the nearer camera
+    // characters near a further player animate by the nearer camera
     Module{Call<&world::anim_views::Install>, &world::anim_views::Remove},
-    // player 2's trigger read after player 1's; admitted actors' events
+    // each seat's trigger read after player 1's; admitted actors' events
     Module{Call<&world::seat_triggers::Install>, &world::seat_triggers::Remove},
-    // player 2 inside CharaPop switch volumes (the shopkeepers near player 2); its events come from seat_triggers'
+    // a further player inside CharaPop switch volumes (the shopkeepers near them); its events come from seat_triggers'
     // filter
     Module{Call<&world::seat_switch_volumes::Install>, nullptr},
-    // player 2's chocobo vaults without taking both ride framings
+    // a seat's chocobo vaults without taking both ride framings
     Module{Call<&camera::vault_camera::Install>, &camera::vault_camera::Remove},
-    // player 2's chocobo climbs walls, with its own climb camera
+    // a seat's chocobo climbs walls, with its own climb camera
     Module{Call<&traversal::chocobo_climb::Install>, &traversal::chocobo_climb::Remove},
 
     // The HUD's layout in split views (hud/layout/overlay_layout.h). Optional like the view point: without it the HUD
@@ -222,60 +222,61 @@ constexpr std::array kModules{
     Module{Call<&hud::InstallLayoutScale>, &hud::RemoveLayoutScale},
     // HUD widgets as the engine constructs them
     Module{Call<&hud::user_widgets::Install>, &hud::user_widgets::Remove},
-    // player 2's HUD image, on (the hud-image command switches it)
+    // each seat's HUD image, on (the hud-image command switches it)
     Module{Call<&hud::InstallSecondImage>, &hud::RemoveSecondImage},
     // the minimap's map rendered by player 1's pass only
     Module{Call<&hud::InstallMinimapOnce>, &hud::RemoveMinimapOnce},
-    // player 2's minimap in player 2's half
+    // each seat's minimap in the seat's view
     Module{Call<&hud::minimap::Install>, &hud::minimap::Remove},
     // each camera's location rows from its own player
     Module{Call<&camera::location_rows::Install>, &camera::location_rows::Remove},
     // each half's shoulder offset scaled to its width
     Module{Call<&camera::shoulder_scale::Install>, &camera::shoulder_scale::Remove},
-    // player 2's walk limits from player 2's own surroundings
+    // each seat's walk limits from its own surroundings
     Module{Call<&input::walk_limits::Install>, nullptr},
 
-    // The world around player 2 (these three give the raised characters back at unload, before the table's walk).
-    // characters near player 2 keep the detail player 2's view gives them
+    // The world around the further players (these three give the raised characters back at unload, before the
+    // table's walk).
+    // characters near a further player keep the detail that player's view gives them
     Module{Call<&world::charapop_near::Install>, nullptr},
-    // the NPC population follows both players (Ctrl+F10 compares)
+    // the NPC population follows every player (Ctrl+F10 compares)
     Module{Call<&world::charapop_centre::Install>, nullptr},
-    // world actors such as chests pop around player 2 too
+    // world actors such as chests pop around a further player too
     Module{Call<&world::world_actor_reach::Install>, nullptr},
 
     // Rides, pickups, rumble, sound, shops.
-    // player 2 drives their own chocobo while the party rides
+    // each further player drives their own chocobo while the party rides
     Module{Call<&rides::chocobo_ride::Install>, nullptr},
-    // the buggy and the bronco: player 2 stands aside, every pad drives
+    // the buggy and the bronco: the further players stand aside, every pad drives
     Module{Call<&rides::shared_ride::Install>, nullptr},
-    // player 2 boards a Wheelie of their own by walking into it
+    // a further player boards a Wheelie of their own by walking into it
     Module{Call<&rides::wheelie_ride::Install>, &rides::wheelie_ride::Remove},
-    // player 2's pickups: a second pass of the game's prompts
+    // each seat's pickups: one more pass of the game's prompts
     Module{Call<&world::field_pickup::Install>, &world::field_pickup::Remove},
     // each player's rumble on their own pad
     Module{Call<&feedback::pad_rumble::Install>, &feedback::pad_rumble::Remove},
-    // player 2's combat rumble (hits, montage notifies) on player 2's pad
+    // a seat's combat rumble (hits, montage notifies) on the seat's pad
     Module{Call<&feedback::combat_rumble::Install>, &feedback::combat_rumble::Remove},
     // the traversal rumble list per player
     Module{Call<&feedback::traversal_rumble::Install>, &feedback::traversal_rumble::Remove},
-    // player 2's own force-feedback manager
+    // each seat's own force-feedback manager
     Module{Call<&feedback::seat_ffb_managers::Install>, &feedback::seat_ffb_managers::Remove},
     // each SEAD sound from the nearest player's listener
     Module{Call<&feedback::sound_listeners::Install>, &feedback::sound_listeners::Remove},
-    // player 2's vending machines: the shop's camera and pad
+    // a seat's vending machines: the shop's camera and pad
     Module{Call<&world::vending::Install>, &world::vending::Remove},
-    // player 2's shopkeepers: admit, press, the shop's AI event
+    // a seat's shopkeepers: admit, press, the shop's AI event
     Module{Call<&world::shop_talk::Install>, &world::shop_talk::Remove},
 
-    // The enemies' view of two players, after the session: its removal must come before the stages' (the Condition
+    // The enemies' view of several players, after the session: its removal must come before the stages' (the Condition
     // selects stop taking the equal-targeting answer while member_movement's leader-test slot is still in place).
-    // Condition enemies count either player as the UCPC
+    // Condition enemies count any player as the UCPC
     Module{Call<&battle::equal_targeting::Install>, &battle::equal_targeting::Remove},
-    // player 2's hits and the hits player 2 takes count as the player's
+    // the further players' hits and the hits they take count as the player's
     Module{Call<&battle::player_hits::Install>, &battle::player_hits::Remove},
-    // each enemy aims at player 1 or 2, a coin per action
+    // each enemy aims at one of the players, a coin per action
     Module{Call<&battle::target_coin::Install>, &battle::target_coin::Remove},
-    // lock groups (Stun Ray) prefer player 1 or 2 by each pick's coin
+    // lock groups (Stun Ray) prefer one of the players by each pick's coin
     Module{Call<&battle::lock_group_coin::Install>, &battle::lock_group_coin::Remove},
     // the game's own leader reads for an enemy follow its coin
     Module{Call<&battle::leader_reads::Install>, &battle::leader_reads::Remove},
@@ -283,13 +284,13 @@ constexpr std::array kModules{
     Module{Call<&camera::attack_cameras::Install>, &camera::attack_cameras::Remove},
     // enemy specials: the target's half only; leader shots on the coin player
     Module{Call<&camera::attack_framing::Install>, &camera::attack_framing::Remove},
-    // player 2's member's guard effect, shakes and chain pulls on player 2's camera
+    // a seat's member's guard effect, shakes and chain pulls on the seat's camera
     Module{Call<&camera::seat_camera_effects::Install>, &camera::seat_camera_effects::Remove},
     // a synergy partner held by either human is handed to its AI and back
     Module{Call<&battle::synergy_partner::Install>, &battle::synergy_partner::Remove},
 
-    // Player 2's HUD content, and each half's own prompts, markers, pins and targets.
-    // player 2's HUD content, on (the hud-levers command switches it)
+    // The seats' HUD content, and each half's own prompts, markers, pins and targets.
+    // each seat's HUD content, on (the hud-levers command switches it)
     Module{Call<&hud::InstallSeatHudContent>, &hud::RemoveSeatHudContent},
     // before the overlay renders: placement follow, trace
     Module{Call<&hud::InstallRootOverlayRender>, &hud::RemoveRootOverlayRender},
@@ -305,7 +306,7 @@ constexpr std::array kModules{
     Module{Call<&hud::wrangle_targets::Install>, nullptr},
     // the prompt rows keep their corner by their own base
     Module{Call<&hud::action_icon_base::Install>, nullptr},
-    // player 2's own map icons and markers
+    // each seat's own map icons and markers
     Module{Call<&hud::seat_area_icons::Install>, &hud::seat_area_icons::Remove},
     // each half's cursor and enemy gauges follow its player's target
     Module{Call<&hud::target_views::Install>, &hud::target_views::Remove},
@@ -405,15 +406,15 @@ void TickBeforeSession() noexcept
     feedback::pad_rumble::BeforeTick();    // before the world tick: each seat's controller ordered after player 1's
     feedback::combat_rumble::BeforeTick();  // outside every notify: their call sites; the status line
     feedback::traversal_rumble::Tick();      // each seat's list made at join (dropped if it left another way)
-    battle::equal_targeting::Tick();      // both players' types for the Condition selects (no leader scope held)
+    battle::equal_targeting::Tick();      // every player's types for the Condition selects (no leader scope held)
     battle::target_coin::Tick();          // the blueprint natives' swaps once reflection is up; the summary
     feedback::seat_ffb_managers::Tick();      // each seat's component on its own manager, after its BeginPlay
     // the controller listener slot; each further player's listener on the column showing their own view (the last
     // tick's sources, Shown::OwnColumn), off while they have none; the summary (Debug)
     feedback::sound_listeners::Tick(g_ownColumns);
     session::leave_watch::Tick();          // the last leave's controller, followed until it is freed (logged)
-    world::vending::Tick();              // a press that opened no shop; player 2 leaving with their shop up
-    world::shop_talk::Tick();            // the shopkeeper verdicts queued by player 2's pass
+    world::vending::Tick();              // a press that opened no shop; a further player leaving with their shop up
+    world::shop_talk::Tick();            // the shopkeeper verdicts queued by a seat's pass
     camera::attack_cameras::Tick();       // the attack-camera status line (Debug)
     camera::attack_framing::Tick();       // the attack-framing latches' clock and status line (Debug)
     camera::seat_camera_effects::Tick();   // the camera-effect status line (Debug)

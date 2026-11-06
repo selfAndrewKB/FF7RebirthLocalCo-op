@@ -5,7 +5,7 @@
 // Square's party manager holds one "primary" player controller (+0x140, an FWeakObjectPtr), and a
 // large part of the game's camera and party code asks it for "the" player: the camera update reads
 // the stick input through it, the camera helpers find "the" camera manager through it, and the
-// party-member switch writes two bytes to "the" controller. Called for player 2, that code would
+// party-member switch writes two bytes to "the" controller. Called for a further player, that code would
 // read and write player 1's objects.
 //
 // A Scope points the field at its seat's controller for its lifetime and puts player 1's back

@@ -14,8 +14,8 @@
 //            reorder changes the slot. A script putting the seat's member into LEAD gets it back.
 //   camera   right after the join, the seat's camera manager is pointed at its own camera actor
 //            (camera/view_target.h), as the game's own spawn aimed it; a later move is logged,
-//            never re-aimed (no game code moves it). When the member is taken, player 2's
-//            Field camera is brought to player 1's settings and player 2's camera update starts
+//            never re-aimed (no game code moves it). When the member is taken, the seat's
+//            Field camera is brought to player 1's settings and the seat's camera update starts
 //            running as the primary player's (camera/field_camera.h).
 //   movement with per-pad sticks on, the member's move state is ticked with the seat's pad
 //            (input/member_movement.h).

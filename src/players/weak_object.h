@@ -2,7 +2,7 @@
 
 // The engine's weak object pointers, resolved and made by its own functions.
 //
-// An FWeakObjectPtr is {object index, serial number}, 8 bytes. Player 2's modules keep weak pointers
+// An FWeakObjectPtr is {object index, serial number}, 8 bytes. The seats' modules keep weak pointers
 // to the objects they follow (a member, a chocobo, a widget) and read the game's own weak fields;
 // both go through FWeakObjectPtr::Get and its assignment (facts/engine.h: kWeakObjectGet,
 // kWeakObjectAssign), found here once at startup, before the stages, and called under a guard. A

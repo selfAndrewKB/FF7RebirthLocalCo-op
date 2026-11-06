@@ -1,11 +1,11 @@
 #pragma once
 
-// Player 2 takes a party member, and gives it back.
+// A seat takes a party member, and gives it back.
 //
 // Taking: the game's own per-controller switch, AEndPlayerController::SwitchLeaderInternal, called
-// for player 2's controller with a party member nobody plays. It needs player 2's trigger actor
+// for the seat's controller with a party member nobody plays. It needs the seat's trigger actor
 // (EnsureEndPlayerTrigger creates it), and it writes two bytes to "the primary player's"
-// controller, so it runs with the primary controller scoped to player 2
+// controller, so it runs with the primary controller scoped to the seat
 // (scopes/primary_controller.h); otherwise player 1's controller would take those writes.
 // The switch hands control over asynchronously, so success is read from the lease fields over the
 // following ticks (session/party_lease.h), never from the call. It moves control in the field and
@@ -33,14 +33,14 @@ bool Installed() noexcept;
 /// a load, when the party's objects cannot be relied on).
 bool GameReady() noexcept;
 
-/// Why player 2 has no member to take now (party_lease.h).
+/// Why the seat has no member to take now (party_lease.h).
 using SlotWait = session::SlotWait;
 
 struct SlotChoice
 {
     void*          member  = nullptr;  // the member to take; null while waiting
     SlotWait       wait    = SlotWait::NoSlot;
-    std::uint8_t   type    = 0xFF;     // the 2nd slot's player type (0xFF with no slot)
+    std::uint8_t   type    = 0xFF;     // the slot's player type (0xFF with no slot)
     std::int32_t   ordinal = -1;
     Eligibility    verdict = Eligibility::NoCharacter;
     AiSnapshot     ai{};
@@ -68,7 +68,7 @@ bool FindPartnerLink(std::uint8_t playerType, LinkRecordView& out) noexcept;
 /// `member`'s AI: its active brain and that brain's state. Game thread.
 AiSnapshot ReadAi(const void* member) noexcept;
 
-/// Why `member` is no longer in player 2's reach in the party: now the party leader (a story change
+/// Why `member` is no longer in a seat's reach in the party: now the party leader (a story change
 /// hands it to player 1), not one of the deployed party any more, or away from the battle party.
 /// Null while it is. Game thread.
 const wchar_t* WhyNotInParty(const void* member) noexcept;
@@ -78,7 +78,7 @@ bool HasBattleController(const void* member) noexcept;
 
 inline constexpr const wchar_t* kWithoutBattleController = L"without its battle controller";
 
-/// Why player 2 may no longer play `member`: WhyNotInParty, or without its battle controller
+/// Why a seat may no longer play `member`: WhyNotInParty, or without its battle controller
 /// component. A downed or petrified member stays playable, as player 1 stays on a downed leader.
 /// Null while it may. Game thread.
 const wchar_t* WhyNotPlayable(const void* member) noexcept;
@@ -94,7 +94,7 @@ bool Take(int seat, void* controller, void* member) noexcept;
 /// Hands `seat`'s party member back to its AI. The trigger actor must still exist.
 bool GiveBack(int seat, void* controller) noexcept;
 
-/// The lease fields for `member` and player 2's controller.
+/// The lease fields for `member` and the seat's controller.
 LeaseState ReadLease(const void* member, const void* seatController) noexcept;
 
 /// The two bytes on player 1's controller the switch would write without the scope.

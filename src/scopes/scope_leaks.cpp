@@ -59,7 +59,7 @@ using SummonBodyFn = void (*)(void* state, float deltaTime);
 std::int64_t*          g_frames  = nullptr;
 double*                g_seconds = nullptr;
 std::int64_t*          g_ms      = nullptr;
-// The clock's three globals around player 2's member tick: the rewound values in, the game's saved, what the tick
+// The clock's three globals around a seat's member tick: the rewound values in, the game's saved, what the tick
 // left read back (defined at install, with g_frames).
 platform::ByteStore<3, 3 * sizeof(std::int64_t)> g_clock;
 std::byte*             g_leader  = nullptr;
@@ -76,7 +76,7 @@ struct Counts
     unsigned clockInexact   = 0;  // ...onto seconds other than player 1's (the ms stamp may be 1 ms off)
     unsigned clockPutBack   = 0;
     unsigned clockMissed    = 0;  // advanced although the fix is on and the guard said it would not
-    unsigned leaderRewrites = 0;  // player 2's input changed the leader block
+    unsigned leaderRewrites = 0;  // a seat's input changed the leader block
     unsigned leaderPutBack  = 0;
     unsigned summonSkips    = 0;
 };
@@ -120,7 +120,7 @@ std::int64_t                              g_writtenFrames = 0;  // the frame cou
 bool                                      g_rewound       = false;
 bool                                      g_inputOpen    = false;  // an InputScope holds the saved block
 bool                                      g_tickOpen     = false;  // a MemberTickScope holds the saved clock
-// The leader block around player 2's input: saved and put back whatever the input wrote (defined at install).
+// The leader block around a seat's input: saved and put back whatever the input wrote (defined at install).
 platform::ByteStore<1, kLeaderBlockSize>  g_leaderBlock;
 
 }  // namespace
@@ -219,7 +219,7 @@ MemberTickScope::MemberTickScope(void* state, const void* controller, float delt
     {
         return;
     }
-    // Set back one step only when the tick will advance it: player 2's component has not yet this frame.
+    // Set back one step only when the tick will advance it: the seat's component has not yet this frame.
     g_rewound             = (ReadField<std::uint8_t>(component, kComponentGuard) & 1) == 0;
     std::int64_t  frames  = *g_frames;
     double        seconds = *g_seconds;

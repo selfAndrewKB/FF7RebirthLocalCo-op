@@ -49,7 +49,7 @@ std::uintptr_t GameMode() noexcept
     return ReadAt<std::uintptr_t>(g_gameMode);
 }
 
-/// Replaces the entry of the game's "leave the field" request: player 2 leaves first, while the
+/// Replaces the entry of the game's "leave the field" request: the further players leave first, while the
 /// party is still intact, then the game's request runs.
 void RequestExit() noexcept
 {

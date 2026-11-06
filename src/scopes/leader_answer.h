@@ -1,16 +1,16 @@
 #pragma once
 
-// The party-leader test answered for player 2 (RE-p2-enemy-target-bias.md §10.3, RE-p2-chocobo-ride.md §7.0 item 2,
+// The party-leader test answered for a seat (RE-p2-enemy-target-bias.md §10.3, RE-p2-chocobo-ride.md §7.0 item 2,
 // RE-p2-chocobo-run-refresh.md §4). The game's one test of "is this component the player's character" (the IsUCPC
-// slot, facts::kIsPartyLeader) compares a component's player type with the party leader's; player 2's member is never
+// slot, facts::kIsPartyLeader) compares a component's player type with the party leader's; a seat's member is never
 // the leader, so the slot holds this module's test, which answers from five sources, in priority order:
 //   1. one type counts as the player on this thread and every other as not (ExchangeThreadOnly: an enemy's target
 //      choice, battle/equal_targeting, battle/target_coin);
 //   2. the climb's type on the anim worker (input/climb_context);
-//   3. a type on this thread (ThreadScope, ExchangeThread: player 2's chocobo's actions on the anim worker, a damage
-//      call of player 2's);
+//   3. a type on this thread (ThreadScope, ExchangeThread: a seat's chocobo's actions on the anim worker, a damage
+//      call of a seat's);
 //   4. the member tick's type, on the game thread only (Scope: input/member_movement's ticks and scopes);
-//   5. one component, on the game thread only (Scope: player 2's ridden chocobo's input component, whose type is
+//   5. one component, on the game thread only (Scope: a seat's ridden chocobo's input component, whose type is
 //      every chocobo's).
 // A no is the engine's own answer unless source 1 says otherwise. Decide is that rule, pure and tested on the host
 // (tests/leader_answer_test.cpp); the module keeps the slot, the sources and the engine's own test.

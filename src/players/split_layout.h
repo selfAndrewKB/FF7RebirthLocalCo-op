@@ -5,8 +5,8 @@
 // The engine decides it every frame from one stock setting, UGameMapsSettings::
 // TwoPlayerSplitscreenLayout (0 top/bottom, 1 side by side), and uses it only while there are
 // exactly two local players (engine_addresses.h). So the mod does not lay anything
-// out itself: it holds that setting while player 2 is in, at the layout the player chose, and puts
-// the game's value back when player 2 leaves (players::HeldSetting). Until a layout is chosen, the game's own is
+// out itself: it holds that setting while there are two local players, at the layout the player chose,
+// and puts the game's value back when that ends (players::HeldSetting). Until a layout is chosen, the game's own is
 // used. The choice itself is this module's: it is remembered across leaves and applied at each join.
 
 #include "platform/dev_switch.h"
@@ -34,13 +34,13 @@ public:
 
     explicit SplitLayout(SettingAccess<std::uint8_t> access) noexcept : held_(access, kName) {}
 
-    /// Call on the game thread every tick with whether player 2 is in. Acts only when that changes.
+    /// Call on the game thread every tick with whether two columns are listed. Acts only when that changes.
     HeldChange Update(bool twoColumns) noexcept;
 
-    /// Switches to the other layout: now if player 2 is in, otherwise at the next join.
+    /// Switches to the other layout: now if two columns are listed, otherwise at the next join.
     HeldChange Toggle() noexcept;
 
-    /// Chooses a layout (a SplitLayoutKind value): now if player 2 is in, otherwise at the next join.
+    /// Chooses a layout (a SplitLayoutKind value): now if two columns are listed, otherwise at the next join.
     HeldChange Choose(std::uint8_t value) noexcept;
 
     /// The player's choice (a SplitLayoutKind value), or empty while the game's own layout is used.

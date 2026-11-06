@@ -2,7 +2,7 @@
 //
 // This file wires the modules together:
 //   1. verify every engine fact the mod relies on (facts/engine.h); if any fails, install nothing;
-//   2. if all hold, install the renderer (one view family per player), the session (player 2's join and leave) and
+//   2. if all hold, install the renderer (one view family per player), the session (each seat's join and leave) and
 //      its stages, then the module table in order (modules.h), the dev tools and the engine callbacks;
 //   3. tick the modules once per engine tick, outside Draw, in two phases around the session's tick (modules.h);
 //      at unload, remove in reverse.
@@ -81,7 +81,7 @@ using lss::platform::Log;
 
 constexpr const wchar_t* kVersion = L"0.100.2";  // built against the Nexus UE4SS (c0a8d4c)
 
-/// How often player 2's status line is written while player 2 is in.
+/// How often the seats' status lines are written while a further player is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
 
 /// Checks every startup fact against the running game; each failure is logged with the fact's name.
@@ -185,12 +185,12 @@ public:
         g_instance.store(nullptr, std::memory_order_release);  // the map-load callback finds no mod from now on
         lss::engine_tick::Stop();
 
-        // With player 2 still in, the engine keeps rendering two views and calling player 2's
+        // With a further player still in, the engine keeps rendering several views and calling the seats'
         // wrappers. Putting the engine's own submission back would render them in one family, the
-        // configuration this mod exists to avoid, and player 2's camera manager depends on its
-        // wrappers. Removing player 2 here is not an option: the destructor may run off the game
+        // configuration this mod exists to avoid, and a further player's camera manager depends on its
+        // wrappers. Removing a player here is not an option: the destructor may run off the game
         // thread. So everything stays installed; the DLL is pinned, so it stays valid. The characters
-        // raised for player 2's view are given back either way (that setter runs from any thread), and the NPC
+        // raised for the seats' views are given back either way (that setter runs from any thread), and the NPC
         // centre when this runs on the game thread.
         lss::world::charapop_near::Release();
         lss::world::charapop_centre::Release();
@@ -504,7 +504,7 @@ private:
             LeaveBeforeWorldChange(L"the field stopped running (a field exit the redirected entry did not see)", false);
         }
         lss::dev::TickBeforeSession();
-        // The buggy and the bronco (rides/shared_ride.h): player 2 stands aside, the game's merge reaches
+        // The buggy and the bronco (rides/shared_ride.h): every seat stands aside, the game's merge reaches
         // player 1 from every pad.
         const bool shared = lss::rides::shared_ride::Tick();
         for (int seat = 1; seat <= lss::players::kSeatsBuilt; ++seat)  // each seat with its own force-feedback manager
@@ -563,10 +563,10 @@ private:
         }
         lss::modules::TickAfterSession(frame);
         lss::dev::TickWatches(splitShown);  // the dev watches, after the levers they observe
-        // The settings several views need, while more than one view family renders (player 2, or a mirror view).
+        // The settings several views need, while more than one view family renders (a further player or a mirror view).
         settings_.Update(columns.map.count > 1, [](const std::wstring& line) { Log(L"{}", line); });
-        // The layout by column count: the player's two-player choice with two local players (player 2, or a mirror
-        // beside player 1), the three equal columns with three.
+        // The layout by column count: the player's two-player choice with two local players (a further player, or a
+        // mirror beside player 1), the three equal columns with three.
         LogLayoutChange(layout_.Update(columns.map.count == 2));
         if (const auto text = lss::players::Describe(threeLayout_.Update(columns.map.count == 3, kThreeColumns),
                                                       L"three columns", kThreeLayoutName);

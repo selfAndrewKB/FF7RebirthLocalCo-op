@@ -1,10 +1,10 @@
 #pragma once
 
-// Player 2's scopes opened in one order for one game call, all or nothing.
+// A seat's scopes opened in one order for one game call, all or nothing.
 //
-// Every "run this engine call as player 2" site opens the same ladder of scopes: the UI focus context
-// first, then pad 2's sticks, player 2 as the primary controller, pad 2's buttons, player 2's target
-// fields, the party leader and its type, and last the rules the call runs under. Each site used to
+// Every "run this engine call as a further player" site opens the same ladder of scopes: the UI focus context
+// first, then the seat's pad's sticks, the seat's player as the primary controller, the pad's buttons, the seat's
+// target fields, the party leader and its type, and last the rules the call runs under. Each site used to
 // write the ladder out by hand (the 2026-10 audit's D-3, E1-3 and C-10: seven copies and three
 // bundles), each with its own order and refusal text. A Ladder opens the parts chosen by `which` in
 // the order its parameter pack gives; at the first required part that does not hold it closes the

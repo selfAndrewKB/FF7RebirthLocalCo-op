@@ -1,10 +1,10 @@
 #pragma once
 
-// Player 2's own PlayerController: the camera manager's BeginPlay, made safe for a second player.
+// A further player's own PlayerController: the camera manager's BeginPlay, made safe for a player beyond the first.
 //
 // When a player joins during play, the engine spawns its controller and camera manager, and the
 // camera manager's BeginPlay (AEndPlayerCameraManager, vtable slot 103) runs inside that spawn.
-// For a second player it fails three ways:
+// For a further player it fails three ways:
 //   - its owning controller (PCOwner, +0x228) is not set yet, and SetViewTarget reads through it;
 //   - it spawns two actors with fixed names ("EndCameraActor", "CompositeCollisionActor"), and
 //     the spawn treats a name that already exists (player 1's) as a fatal error.
@@ -32,11 +32,11 @@ void Remove() noexcept;
 
 /// True if a join can run now: the slot is installed and both names are initialised. The second
 /// name is set lazily by player 1's camera manager; a join before that would have the engine set
-/// it during player 2's call, after the swap, and collide.
+/// it during the joining player's call, after the swap, and collide.
 bool Ready() noexcept;
 
 /// True if player 1's controller and its camera manager carry the native End classes' vtables.
-/// The replacement recognises player 2's controller by that vtable; Blueprint subclasses are
+/// The replacement recognises the joining controller by that vtable; Blueprint subclasses are
 /// expected to share it, and this checks it on the running game before a join relies on it.
 bool UsesNativeClasses(const void* playerOneController) noexcept;
 

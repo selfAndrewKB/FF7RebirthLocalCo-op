@@ -1,4 +1,4 @@
-// Session: installing the stages, and player 2's join.
+// Session: installing the stages, and a seat's join.
 
 #include "session/session.h"
 

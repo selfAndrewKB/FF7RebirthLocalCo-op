@@ -4,7 +4,7 @@
 //   leader   the one call of AEndPlayerController::SwitchLeaderInternal, inside OnLeaderTransition.
 //            Every leader change of the game's controller passes it (party switches, scripts, quests,
 //            vehicles, battle start and end, KO switches, party data applies). The listener hears it
-//            before the game's call runs, so player 2 can let go of a member the game is about to
+//            before the game's call runs, so a seat can let go of a member the game is about to
 //            make player 1's leader.
 //   status   the one call of PartyManager_OnPlayerStatusChanged, from the party manager's status
 //            commit. Every deployment change passes it (joined, reserve, away from battle). The

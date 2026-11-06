@@ -1,6 +1,6 @@
 #pragma once
 
-// Engine settings two-player rendering needs, held while player 2 is in and put back when they leave (each one a
+// Engine settings several views need, held while more than one view renders and put back then (each one a
 // players::HeldSetting over the console; SplitScreenSettings holds the three, the entry point owns it).
 //
 // r.SceneRenderTargetResizeMethod (a stock engine setting): each player's family asks for scene
@@ -8,8 +8,8 @@
 // render size") the engine re-creates them for every family, twice a frame, which stalls the
 // frame (roughly 70-85 ms against 15 ms). At 2 ("expands to encompass the largest requested render
 // dimension") they are created once and shared. With one player the largest request is the full
-// screen the game already uses, so 2 costs no memory there; it is still only set while player 2 is
-// in, so one-player play keeps the game's own value. If it cannot be set, rendering stays correct but slower.
+// screen the game already uses, so 2 costs no memory there; it is still only set while several views
+// render, so one-player play keeps the game's own value. If it cannot be set, rendering stays correct but slower.
 //
 // D3D12.EnableGapRecorder 0 (performance, RE-perf-submission-path.md; measured 2026-10-08: -0.31 ms per frame in split):
 // the gap recorder's per-command-list timestamps, resolves and two extra submissions per frame only feed
@@ -26,7 +26,7 @@
 
 namespace lss::players {
 
-/// One console setting and the value held while player 2 is in.
+/// One console setting and the value held while several views render.
 struct ConsoleSetting
 {
     const wchar_t* name;
@@ -66,7 +66,7 @@ class SplitScreenSettings
 public:
     explicit SplitScreenSettings(SettingAccess<std::int32_t> access) noexcept;
 
-    /// Game thread, every tick: holds the three while player 2 is in and puts them back when they leave, in
+    /// Game thread, every tick: holds the three while more than one view renders and puts them back then, in
     /// SettingsOrder; each change's line (held_setting.h's Describe) goes to `log`.
     void Update(bool splitShown, void (*log)(const std::wstring& line)) noexcept;
 

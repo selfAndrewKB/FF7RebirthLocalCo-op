@@ -2,7 +2,7 @@
 
 // A game call made with this thread's answer held.
 //
-// Several of player 2's redirects answer a game read (the leader type, the UCPC test, a coin's pick)
+// Several of the further players' redirects answer a game read (the leader type, the UCPC test, a coin's pick)
 // for the one call they wrap: the answer goes into a thread-local slot, or into one of
 // input/member_movement.h's Exchange* functions, or a module's own set of slots, and must come out again
 // on every way out of the call. These functions make that call: the outer value is put back in a

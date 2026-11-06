@@ -1,6 +1,6 @@
 #pragma once
 
-// The actors player 2's objects leave behind, destroyed by exact pointer once player 2 is removed.
+// The actors a seat's objects leave behind, destroyed by exact pointer once its player is removed.
 //
 // Removing a local player destroys its controller, and the controller destroys its camera manager,
 // but nothing destroys these (the engine's own EndPlay/Destroyed of these classes do not):
@@ -10,7 +10,7 @@
 //   - the collision actor the camera manager spawns, found as the owner (outer) of the collision
 //     component the camera manager keeps (+0x2D48).
 // Collect reads them while the controller and camera manager are still live; the caller removes
-// player 2, and only if that worked calls Destroy (AActor::K2_DestroyActor on each) in the same
+// the seat's player, and only if that worked calls Destroy (AActor::K2_DestroyActor on each) in the same
 // game-thread step. Destroying first would leave a camera manager that is still updating with a
 // destroyed camera actor, which its update reads without a null check, if the removal then failed.
 //
@@ -32,7 +32,7 @@ struct Actors
     void* playerInput       = nullptr;  // not an actor: marked PendingKill
 };
 
-/// Reads player 2's leftover actors and PlayerInput. Game thread.
+/// Reads the seat's leftover actors and PlayerInput. Game thread.
 Actors Collect(void* seatController) noexcept;
 
 /// How many actors were destroyed, how many calls raised an exception, and whether the PlayerInput
@@ -45,7 +45,7 @@ struct Result
 };
 
 /// Destroys every actor in `actors` and marks the PlayerInput PendingKill. Game thread, in the same
-/// step as (after) player 2's removal.
+/// step as (after) the removal of the seat's player.
 Result Destroy(const Actors& actors) noexcept;
 
 }  // namespace lss::session::leftover_actors

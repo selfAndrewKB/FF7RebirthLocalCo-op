@@ -66,7 +66,7 @@ constexpr std::uint32_t kPlayerOneWatchTicks = 3;
 /// Ticks to wait for the switch to hand the member over before giving it back.
 constexpr std::uint32_t kTakeTicks = 120;
 
-/// How often, in ticks, player 2's member is checked for its battle controller component: character
+/// How often, in ticks, the seat's member is checked for its battle controller component: character
 /// state that no party funnel reports (RE-p2-session-levers.md §3.2).
 constexpr std::uint32_t kControllerCheckTicks = 30;
 
@@ -76,14 +76,14 @@ constexpr std::uint32_t kControllerCheckTicks = 30;
 constexpr std::uint32_t kBackstopTicks        = 600;
 constexpr std::uint32_t kBackstopTicksNoEvents = 30;
 
-/// After a game party change while player 2 has no character: ticks during which player 2 looks for
+/// After a game party change while the seat has no character: ticks during which the seat looks for
 /// a free member every tick (the game spawns a member that joins on a later tick than its status).
 constexpr std::uint32_t kRetakeLookTicks = 600;
 
 /// Lines logged for the game's party changes heard (a yield or a retake is always logged).
 constexpr std::uint32_t kEventLines = 200;
 
-/// Player 2 in, waiting on the 2nd slot's member (its AI held by a story script, or not free yet):
+/// The seat in, waiting on its slot's member (its AI held by a story script, or not free yet):
 /// ticks between checks. A script lets go without an event; the check is a few reads.
 constexpr std::uint32_t kSlotWaitTicks = 10;
 
@@ -106,8 +106,8 @@ const wchar_t* WaitWords(party_member::SlotWait wait) noexcept
     return L"the slot's member is not free";
 }
 
-/// While player 2 plays a member: ticks between checks of its AI (a story script putting it into
-/// LEAD gets it back) and of the 2nd slot (a reorder no party apply reported).
+/// While the seat plays a member: ticks between checks of its AI (a story script putting it into
+/// LEAD gets it back) and of the seat's slot (a reorder no party apply reported).
 constexpr std::uint32_t kHeldAiTicks    = 6;
 constexpr std::uint32_t kSlotCheckTicks = 60;
 
@@ -168,7 +168,7 @@ void Seat::Tick(bool& commandMenusTicked) noexcept
         case Phase::Taking: AwaitTake(); break;
         case Phase::Leaving: Carry(leave_.Next(MemberReleased())); break;
         case Phase::Playing:
-            // Before the member tick: the tick's scopes answer the party leader with player 2's member
+            // Before the member tick: the tick's scopes answer the party leader with the seat's member
             // (scopes/leader_scope.h), which CheckMemberPlayable's leader test must not see.
             RetakeWhenFree();
             if (In())
@@ -202,8 +202,8 @@ void Seat::Tick(bool& commandMenusTicked) noexcept
 
 void Seat::WatchOwnCamera() noexcept
 {
-    // Watch only (RE-p2-session-levers.md §2): the game writes player 2's view target once, at spawn
-    // (InitializeFor; the join repeats that aim once), and no game code retargets a second player's
+    // Watch only (RE-p2-session-levers.md §2): the game writes the seat's view target once, at spawn
+    // (InitializeFor; the join repeats that aim once), and no game code retargets a further player's
     // controller afterwards, so nothing re-aims it here. A move off its camera actor is logged, one
     // line per move for the first few; later ones are only counted on the status line.
     constexpr std::uint32_t kLoggedMoves = 3;
@@ -339,7 +339,7 @@ void Seat::AwaitTake() noexcept
     phase_ = Phase::Playing;
 }
 
-/// Player 2's member destroyed under player 2 (a retry or checkpoint reload rebuilt the party without a
+/// The seat's member destroyed under its player (a retry or checkpoint reload rebuilt the party without a
 /// map load): nothing touches it from here on, and it is not given back (the give-back would reach
 /// a destroyed object). True if that happened this tick.
 bool Seat::MemberDestroyed() noexcept
@@ -351,11 +351,11 @@ bool Seat::MemberDestroyed() noexcept
     Log(L"{}'s member was destroyed under them (the party was rebuilt without a field exit being seen); they let "
         L"go of it and join again",
         Name());
-    players::generation::SetMember(seat_, nullptr);  // player 2's member movement and scopes stop at once
-    // Riding, player 2's controller possessed the member's chocobo: its pawn field names that instead.
+    players::generation::SetMember(seat_, nullptr);  // the seat's member movement and scopes stop at once
+    // Riding, the seat's controller possessed the member's chocobo: its pawn field names that instead.
     const auto forgotten = rides::own_ride::Forget(seat_);
     camera::camera_override::MemberDestroyed(seat_);
-    // Player 2's controller still names the destroyed character: cleared, so neither the game's
+    // The seat's controller still names the destroyed character: cleared, so neither the game's
     // give-back nor the controller's unpossess reads it (RE-p2-retry-reload.md §3.2, recipe 3).
     for (const std::uint32_t field : {facts::kControllerLeader, facts::kControllerPawn})
     {
@@ -383,9 +383,9 @@ std::uint32_t Seat::BackstopTicks() const noexcept
     return installed_.partyEvents ? kBackstopTicks : kBackstopTicksNoEvents;
 }
 
-/// Player 2 in without a character (its give-back ran out of time, or the take failed) takes a member
+/// The seat in without a character (its give-back ran out of time, or the take failed) takes a member
 /// as soon as one is free: looked for after each game party change, and by the slow backstop. When
-/// the backstop finds none, player 2 leaves and waits outside the game.
+/// the backstop finds none, the seat leaves and waits outside the game.
 void Seat::RetakeWhenFree() noexcept
 {
     const bool looking = retakeLooks_ > 0;
@@ -393,8 +393,8 @@ void Seat::RetakeWhenFree() noexcept
     {
         --retakeLooks_;  // the window runs only while the game is ready: no member is taken during a load
     }
-    // MemberReleased with no member: player 2's controller holds no pawn or leader (a give-back that
-    // never completed keeps it holding one). A wait on the 2nd slot is checked every few ticks: the
+    // MemberReleased with no member: the seat's controller holds no pawn or leader (a give-back that
+    // never completed keeps it holding one). A wait on the seat's slot is checked every few ticks: the
     // game frees it without an event (its script lets go of the member's AI).
     const bool due  = looking || ticks_ % (waitingForSlot_ ? kSlotWaitTicks : BackstopTicks()) == 0;
     const auto hold = session_rules::HoldOf(member_, waitingForSlot_, sharedRide_, players::generation::MemberOf(seat_),
@@ -455,13 +455,13 @@ void Seat::SetSharedRide(bool on) noexcept
     }
 }
 
-/// Player 2 gives its member back through the game's release and chooses again once it is released.
+/// The seat gives its member back through the game's release and chooses again once it is released.
 void Seat::Yield(const wchar_t* why) noexcept
 {
     rides::own_ride::Release(seat_, L"the player gives the member back");  // while the seat's scopes still hold
     Log(L"{}'s {} is {}: giving it back to choose again among the deployed party", Name(), players::NameOf(member_), why);
     handover_watch::Snapshot(L"the give-back", member_);
-    players::generation::SetMember(seat_, nullptr);  // player 2's member movement and scopes stop at once
+    players::generation::SetMember(seat_, nullptr);  // the seat's member movement and scopes stop at once
     phase_ = Phase::Swapping;        // before the game's switch runs: a party event inside it sees the swap
     ticks_ = 0;
     if (!party_member::GiveBack(seat_, controller_))
@@ -485,7 +485,7 @@ void Seat::EventLine(const std::wstring& text) noexcept
 }
 
 /// The game is about to make `character` the leader of `controller` (session/party_events.h). If it
-/// is player 2's member and player 1's controller, player 2 lets go first, so the two controllers never
+/// is the seat's member and player 1's controller, the seat lets go first, so the two controllers never
 /// both claim it; the game's switch then seats player 1 on it.
 void Seat::OnLeaderChanging(void* controller, void* character) noexcept
 {
@@ -521,8 +521,8 @@ void Seat::OnLeaderChanging(void* controller, void* character) noexcept
     }
 }
 
-/// The game changed a party member's status (session/party_events.h): player 2's member is checked
-/// against the deployed party at once, or, without one, player 2 looks for a free member.
+/// The game changed a party member's status (session/party_events.h): the seat's member is checked
+/// against the deployed party at once, or, without one, the seat looks for a free member.
 void Seat::OnStatusChanged(std::uint8_t playerType, std::uint8_t before, std::uint8_t after) noexcept
 {
     if (!In() && !AwaitingMember())
@@ -549,14 +549,14 @@ void Seat::OnPartyApplied() noexcept
     CheckAfterPartyChange(true);
 }
 
-/// After a game party change: player 2's member is checked against the deployed party at once (and,
-/// with `followSlot`, against the 2nd slot), or, without one (or waiting outside the game), player 2
+/// After a game party change: the seat's member is checked against the deployed party at once (and,
+/// with `followSlot`, against its slot), or, without one (or waiting outside the game), the seat
 /// looks for a free member.
 void Seat::CheckAfterPartyChange(bool followSlot) noexcept
 {
     if (member_ == nullptr)
     {
-        retakeLooks_ = kRetakeLookTicks;  // used by RetakeWhenFree, or JoinWhenMemberFree while player 2 is out
+        retakeLooks_ = kRetakeLookTicks;  // used by RetakeWhenFree, or the outside wait while the seat is out
         return;
     }
     if (!MemberHeld() || !players::generation::Active(seat_))
@@ -573,8 +573,8 @@ void Seat::CheckAfterPartyChange(bool followSlot) noexcept
     }
 }
 
-/// Player 2 plays the 2nd slot: when it names another member, player 2's is given back and the slot's
-/// is taken (or waited on), even though player 2's is still in the party.
+/// The seat plays its slot: when the slot names another member, the seat's is given back and the slot's
+/// is taken (or waited on), even though the seat's is still in the party.
 void Seat::FollowSlot(const wchar_t* when, bool log) noexcept
 {
     if (phase_ != Phase::Playing || member_ == nullptr || players::generation::MemberOf(seat_) != member_ ||
@@ -589,14 +589,14 @@ void Seat::FollowSlot(const wchar_t* when, bool log) noexcept
     const auto held   = party_member::PlayerTypeOf(member_);
     if (choice.wait == party_member::SlotWait::NoSlot || !held || choice.type == *held)
     {
-        return;  // no slot: the party checks give player 2's member up if it left
+        return;  // no slot: the party checks give the seat's member up if it left
     }
     Log(L"the {} slot of the party order is now type {} ({}), not {}'s {} (type {})", SlotWord(seat_), choice.type,
         when, Name(), players::NameOf(member_), *held);
     Yield(L"no longer in the player's slot of the party order");
 }
 
-/// Player 2 stays in without a member while the 2nd slot's is not free; the reason is logged when it
+/// The seat stays in without a member while its slot's is not free; the reason is logged when it
 /// changes.
 void Seat::WaitForSlot(const party_member::SlotChoice& choice) noexcept
 {
@@ -634,10 +634,10 @@ void Seat::WaitForSlot(const party_member::SlotChoice& choice) noexcept
         choice.ai.brainIndex, choice.ai.state);
 }
 
-/// A story script that puts player 2's member into LEAD gets it back: the LEAD runs only under its AI.
+/// A story script that puts the seat's member into LEAD gets it back: the LEAD runs only under its AI.
 void Seat::CheckHeldAi() noexcept
 {
-    // While player 2 rides their chocobo or a Wheelie the member is her AI's for the ride
+    // While the seat's player rides their chocobo or a Wheelie the member is her AI's for the ride
     // (rides/chocobo_ride.h,
     // rides/wheelie_ride.h).
     if (rides::own_ride::Riding(seat_) || ticks_ % kHeldAiTicks != 0 ||
@@ -649,7 +649,7 @@ void Seat::CheckHeldAi() noexcept
           L"again)");
 }
 
-/// The one readiness gate of a join: player 2's camera manager can be started safely, the game has started,
+/// The one readiness gate of a join: the seat's camera manager can be started safely, the game has started,
 /// and the field runs again (the entry steps done, the party rebuilt: a join before that would be undone by the
 /// entry's own unpossess of every non-leader, RE-p2-retry-reload.md §2.3). Null when ready, else why not, as the
 /// join's refusal line says it. The same gate for the join by the key, the rejoin after a map load and the wait
@@ -681,10 +681,10 @@ bool Seat::ReadyToJoinOutside() const noexcept
     return NotReadyToJoin() == nullptr;
 }
 
-/// Player 2 is out and wants back in (session/outside_join.h says when): the normal join once the new
-/// map has been in the field state with player 1's camera ready for a few seconds; or, while player 2
+/// The seat is out and wants back in (session/outside_join.h says when): the normal join once the new
+/// map has been in the field state with player 1's camera ready for a few seconds; or, while the seat
 /// waits for a free party member, a free member is looked for every tick after a game party change and
-/// by a slow check otherwise, and player 2 joins when there is one.
+/// by a slow check otherwise, and the seat joins when there is one.
 void Seat::OutsideTick() noexcept
 {
     using outside_join::Action;
@@ -729,7 +729,7 @@ void Seat::OutsideTick() noexcept
     LogGaveUp(outside_.AfterJoin(Mode::Await, In()).reason);
 }
 
-/// The line for a wait that ended without player 2 (nothing for Reason::None).
+/// The line for a wait that ended without the seat's player (nothing for Reason::None).
 void Seat::LogGaveUp(outside_join::Reason reason) noexcept
 {
     using outside_join::Reason;
@@ -757,13 +757,13 @@ void Seat::LogGaveUp(outside_join::Reason reason) noexcept
     }
 }
 
-/// A party member player 2 could take, by the game's own member test (null if none). Quiet.
+/// A party member the seat could take, by the game's own member test (null if none). Quiet.
 void* Seat::FreeMember(void* playerOneController) const noexcept
 {
     return party_member::GameReady() ? party_member::ChooseSlot(seat_, playerOneController, false).member : nullptr;
 }
 
-/// Player 2 is out, and waits for a party member to be free before it joins.
+/// The seat is out, and waits for a party member to be free before it joins.
 void Seat::AwaitMember(const wchar_t* why, bool fieldReady) noexcept
 {
     if (refuseJoins_)
@@ -784,7 +784,7 @@ void Seat::AwaitMember(const wchar_t* why, bool fieldReady) noexcept
         why, Name());
 }
 
-/// Player 2 is in without a member and none is free: it leaves at once (nothing of player 2's is held
+/// The seat is in without a member and none is free: it leaves at once (nothing of the seat's is held
 /// by the party), and waits outside the game for one.
 void Seat::LeaveToAwait(const wchar_t* why, bool fieldReady) noexcept
 {
@@ -893,7 +893,7 @@ void Seat::AwaitSwap() noexcept
     Log(L"{}'s {} did not return to its AI within {} ticks; the player stays without a character until their "
         L"controller holds none, then takes a free one (a leave still waits for the release)",
         Name(), players::NameOf(member_), kTakeTicks);
-    // Not player 2's member any more: a leave waits on player 2's controller holding nothing
+    // Not the seat's member any more: a leave waits on the seat's controller holding nothing
     // (MemberReleased with no member), and RetakeWhenFree waits for the same.
     member_ = nullptr;
     phase_  = Phase::Playing;
@@ -1185,8 +1185,8 @@ void Session::Tick() noexcept
 {
     players::generation::SetGameThread();  // the engine-tick callback runs on the thread that ticks the world
     platform::game_thread_sites::Run();  // the 1.005 placements (platform/deferred_sites.h), outside the game's ticks
-    battle::command_rules::Update();      // which member player 1 may not command (none without player 2)
-    battle::command_menu_view::KeepHidden();  // player 2's menu widget stays out of both halves
+    battle::command_rules::Update();      // which members player 1 may not command (none without a further player)
+    battle::command_menu_view::KeepHidden();  // each seat's menu widgets stay out of every view
     if (AnyIn())
     {
         battle::menu_focus::Watch();  // player 1's UI focus, logged on change (read-only)

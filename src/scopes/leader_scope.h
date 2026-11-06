@@ -1,11 +1,11 @@
 #pragma once
 
-// The party leader answering player 2's member for one engine call (RE-p2-targeting.md §5.2, §5.3).
+// The party leader answering a seat's member for one engine call (RE-p2-targeting.md §5.2, §5.3).
 //
 // ResolvePartyLeaderWeakPtr reads the party manager's leader, an FWeakObjectPtr {index, serial} at
-// +0x148. While a LeaderScope lives it holds player 2's member (built and checked with the game's
+// +0x148. While a LeaderScope lives it holds the seat's member (built and checked with the game's
 // own weak pointer functions; a zero serial is never written), so the game's leader-bound code picks,
-// corrects, clamps or tests around player 2's member. Player 1's leader is put back when it ends,
+// corrects, clamps or tests around the seat's member. Player 1's leader is put back when it ends,
 // unless the game itself wrote the field inside the call: then the game's newer value is kept and
 // noted (a Set range of platform/byte_scope.h). Game thread only.
 

@@ -2,10 +2,10 @@
 
 // A further player's scope ladder over the modules' scope types (scopes/scope_ladder.h is the mechanism).
 //
-// The parts, in the order they open: Focus (player 2's UI context, focus_scope), Sticks (pad 2's
-// sticks, pad_sticks), Primary (player 2 as the primary controller, primary_controller), Buttons
-// (pad 2's buttons, pad_buttons), Targets (player 2's target fields, lock_on), Leader and LeaderType
-// (the party leader and its type answering player 2's member, leader_scope), Rules (the command
+// The parts, in the order they open: Focus (the seat's UI context, focus_scope), Sticks (the seat's pad's
+// sticks, pad_sticks), Primary (the seat's player as the primary controller, primary_controller), Buttons
+// (the seat's pad's buttons, pad_buttons), Targets (the seat's target fields, lock_on), Leader and LeaderType
+// (the party leader and its type answering the seat's member, leader_scope), Rules (the command
 // rules turned around, command_rules). `Which` names them: a site opens the ones its call reads,
 // required unless it says they are optional, and its own module-local scopes after the ladder. The ladder is a seat's
 // (Args::seat, player 2's unless a site names another): Primary, Buttons, Focus, Targets and the member's pad follow
@@ -47,7 +47,7 @@ struct Args
     void*         controller = nullptr;  // Focus: the seat's command controller
     std::int32_t  padId      = -1;       // Sticks: the pad (input::pad_sticks::ControllerIdOf)
     std::uint64_t withoutKey = 0;        // Buttons: an action the seat's view shows as not held (0 none)
-    std::uint64_t memberWeak = 0;        // Leader: player 2's member's weak value (leader_scope::WeakOf)
+    std::uint64_t memberWeak = 0;        // Leader: the seat's member's weak value (leader_scope::WeakOf)
     std::uint8_t  memberType = 0;        // LeaderType: the member's player type
     std::uint8_t  leaderType = 0;        // Rules: player 1's leader type
 };

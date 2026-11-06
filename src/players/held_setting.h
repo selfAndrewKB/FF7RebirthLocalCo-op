@@ -7,7 +7,7 @@
 //   - Hold: the current value is read and remembered; the mod's is written and read back to confirm. A value that
 //     is already the mod's is left as it is. Once a write has RUN the previous value is remembered whatever the
 //     read-back says: the setting may have changed even when confirming it failed. The previous value is kept
-//     across the mod's own later writes (a layout toggled while player 2 is in still goes back to the game's own),
+//     across the mod's own later writes (a layout toggled while it is held still goes back to the game's own),
 //     so what is remembered is the last value the mod did not write; a write back to the previous value ends the
 //     hold, and the next write starts a new one from whatever is in the slot then.
 //   - Release: the remembered value is written back if the mod's is still in place. A value that cannot be read is

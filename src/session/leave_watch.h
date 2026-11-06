@@ -1,9 +1,9 @@
 #pragma once
 
-// Logging only: what becomes of player 2's controller after a leave (RE-p2-controller-after-leave.md, S-PC2LEAK,
+// Logging only: what becomes of a seat's controller after a leave (RE-p2-controller-after-leave.md, S-PC2LEAK,
 // "Logging step").
 //
-// The game's force-feedback registry grows by one per leave, so old player 2 controllers are never freed. The leave
+// The game's force-feedback registry grows by one per leave, so the seats' old controllers are never freed. The leave
 // destroys each one by the engine's own path (RemoveLocalPlayer, stock UE 4.26), and the garbage collector should
 // then free it; something reachable must hold it. This watch names what, read-only:
 //   A. around RemoveLocalPlayer, in the leave's own step: the local player still names the controller, its role, and
@@ -25,7 +25,7 @@ namespace lss::session::leave_watch {
 /// Game thread, in the leave's step, right before RemoveLocalPlayer.
 void BeforeRemove(void* localPlayer, void* controller, const leftover_actors::Actors& actors) noexcept;
 
-/// Game thread, right after it; `removed`: the engine no longer lists player 2.
+/// Game thread, right after it; `removed`: the engine no longer lists the seat's player.
 void AfterRemove(bool removed) noexcept;
 
 /// Game thread, each tick: follows the last leave's objects (B, then C once).

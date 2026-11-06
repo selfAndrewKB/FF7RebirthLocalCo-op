@@ -3,21 +3,21 @@
 // The session's pure decisions (session/session.h), as functions over values read from the game, tested on
 // the host (tests/session_rules_test.cpp).
 //
-// Playing is one phase of the session with several holds, told apart by what player 2's member fields say: the
+// Playing is one phase of the session with several holds, told apart by what the seat's member fields say: the
 // retake and the member checks act on the hold, not on the fields one by one.
 
 #include <chrono>
 
 namespace lss::session::session_rules {
 
-/// What player 2 holds while its session phase is Playing.
+/// What the seat holds while its session phase is Playing.
 enum class Hold
 {
-    Withdrawn,   // player 2's stages were withdrawn (a fault): nothing is taken or checked
+    Withdrawn,   // the seat's stages were withdrawn (a fault): nothing is taken or checked
     Member,      // plays its member (the generation names it)
     Faulted,     // a member is recorded but the generation does not name it (a take that timed out)
     StandAside,  // no member: player 1 rides a vehicle the whole party shares
-    SlotWait,    // no member: waits on the 2nd slot's (a story script holds it, or it is not free yet)
+    SlotWait,    // no member: waits on its slot's (a story script holds it, or it is not free yet)
     Orphaned,    // no member: its give-back timed out, or the take failed; takes one as soon as one is free
 };
 
@@ -39,7 +39,7 @@ constexpr Hold HoldOf(const void* member, bool waitingForSlot, bool sharedRide, 
     return waitingForSlot ? Hold::SlotWait : Hold::Orphaned;
 }
 
-/// The holds in which player 2 takes a member as soon as one is free (RetakeWhenFree).
+/// The holds in which the seat takes a member as soon as one is free (RetakeWhenFree).
 constexpr bool MayRetake(Hold hold) noexcept
 {
     return hold == Hold::SlotWait || hold == Hold::Orphaned;
@@ -70,20 +70,20 @@ constexpr bool WaitOutside(const WaitOutsideFacts& facts, std::chrono::milliseco
 struct LeaderEvent
 {
     bool seatIn                = false;
-    bool awaitingMember        = false;  // player 2 is out, waiting for a free party member
-    bool controllerIsSeat      = false;  // the controller is player 2's
+    bool awaitingMember        = false;  // the seat is out, waiting for a free party member
+    bool controllerIsSeat      = false;  // the controller is the seat's
     bool controllerIsPlayerOne = false;  // ... player 1's
-    bool memberIsSeat          = false;  // the character is player 2's member (not null)
+    bool memberIsSeat          = false;  // the character is the seat's member (not null)
     bool memberHeld            = false;  // taking or playing a member
-    bool noMember              = false;  // player 2 is in without a member
+    bool noMember              = false;  // the seat is in without a member
 };
 
 enum class LeaderEventAction
 {
     None,
     ArmLook,  // the member the game moved off may be free: look for one every tick for a while
-    Warn,     // the game changes player 2's controller's leader: a game leader change ran inside a player-2 scope
-    Yield,    // player 2's member is about to become player 1's leader: given back first
+    Warn,     // the game changes the seat's controller's leader: a game leader change ran inside a seat's scope
+    Yield,    // the seat's member is about to become player 1's leader: given back first
 };
 
 constexpr LeaderEventAction DecideLeaderEvent(const LeaderEvent& event) noexcept

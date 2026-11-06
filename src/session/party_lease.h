@@ -1,6 +1,6 @@
 #pragma once
 
-// The rules for lending a party member to player 2's controller, as pure functions over values
+// The rules for lending a party member to a seat's controller, as pure functions over values
 // read from the game (tested on the host: tests/party_lease_test.cpp).
 //
 // A field party member that nobody plays is driven by its own AI controller. Square's character
@@ -9,8 +9,8 @@
 //   +0x580 the controller that drives it now
 //   +0x588 the AI controller it returns to
 //   +0x260 its Unreal controller (APawn::Controller)
-// and the AI controller's own pawn field (+0x258) names the character back. The player-2 switch
-// (AEndPlayerController::SwitchLeaderInternal) moves +0x578/+0x580/+0x260 to player 2's
+// and the AI controller's own pawn field (+0x258) names the character back. The seat's switch
+// (AEndPlayerController::SwitchLeaderInternal) moves +0x578/+0x580/+0x260 to the seat's
 // controller and back; a character is only offered to it while every field says "AI-owned".
 
 #include <cstdint>
@@ -52,7 +52,7 @@ Eligibility Assess(const MemberSnapshot& member) noexcept;
 
 const wchar_t* Describe(Eligibility eligibility) noexcept;
 
-// ---- the member player 2 plays: the 2nd slot of the party order (RE-p2-party-order.md §5) ----
+// ---- the member a seat plays: its slot of the party order (RE-p2-party-order.md §5) ----
 
 /// The field leader's ordinal in the battle-member list, the party panel's top row (0 if absent).
 std::int32_t LeaderOrdinal(const std::uint8_t* types, std::int32_t count, std::uint8_t fieldLeader) noexcept;
@@ -111,7 +111,7 @@ enum class AiReadiness
     NotFollow,    // the base brain, in another state
 };
 
-/// Whether player 2 may take a member whose AI is `ai`. Only FOLLOW's hand-over cleanup removes the
+/// Whether a seat may take a member whose AI is `ai`. Only FOLLOW's hand-over cleanup removes the
 /// AI's catch-up modifiers, so nothing else is taken.
 AiReadiness AssessAi(const AiSnapshot& ai) noexcept;
 
@@ -121,20 +121,20 @@ const wchar_t* Describe(AiReadiness readiness) noexcept;
 /// waits on, and does not run while a player holds the member.
 bool AiTakesBack(const AiSnapshot& ai) noexcept;
 
-/// The fields that show whether player 2's controller holds the member.
+/// The fields that show whether the seat's controller holds the member.
 struct LeaseState
 {
     const void* memberEffective  = nullptr;  // member +0x580
     const void* memberRetainedAi = nullptr;  // member +0x588
     const void* aiPawn           = nullptr;  // (member +0x588) +0x258
-    const void* seatPawn         = nullptr;  // player 2's controller +0x258
-    const void* seatLeader       = nullptr;  // player 2's controller +0x5A0
+    const void* seatPawn         = nullptr;  // the seat's controller +0x258
+    const void* seatLeader       = nullptr;  // the seat's controller +0x5A0
 };
 
-/// Player 2's controller drives the member, and names it as both its pawn and its leader.
+/// The seat's controller drives the member, and names it as both its pawn and its leader.
 bool Acquired(const LeaseState& state, const void* member, const void* seatController) noexcept;
 
-/// The member is back with its own AI, and player 2's controller names nothing.
+/// The member is back with its own AI, and the seat's controller names nothing.
 bool Released(const LeaseState& state, const void* member) noexcept;
 
 // ---- a synergy partner the game has not given back yet (RE-p2-synergy-skills.md S-SYNTAKE §3, §5) ----
@@ -142,7 +142,7 @@ bool Released(const LeaseState& state, const void* member) noexcept;
 // The game hands a synergy partner to its AI for the approach and gives it back only in
 // LinkMember_End (the sync start, the record end, or a mode-2 partner's own command end). No leader
 // switch path of the game tests the link, so a deliberate switch onto an approaching partner stalls
-// the approach; player 2's take is automatic, not a press, so it waits for the game's give-back as the
+// the approach; a seat's take is automatic, not a press, so it waits for the game's give-back as the
 // game's own command menu treats an awaited partner as busy.
 
 inline constexpr std::uint32_t kLinkRecordSize = 264;
@@ -173,20 +173,20 @@ bool LinkPartnerBusy(const LinkRecordView& record, std::uint8_t playerType) noex
 /// `playerType` is this record's partner and has not ended there (the record to read for LinkPartnerBusy).
 bool IsPartnerOf(const LinkRecordView& record, std::uint8_t playerType) noexcept;
 
-// ---- the 2nd slot's member: whether player 2 takes it now, or waits on it ----
+// ---- the member in the seat's slot: whether the seat takes it now, or waits on it ----
 
-/// Why player 2 has no member to take now.
+/// Why the seat has no member to take now.
 enum class SlotWait
 {
     None,         // `member` is the one to take
     NoSlot,       // the party has no member but player 1's (a solo story party): nothing to wait on here
-    NotEligible,  // the 2nd slot's member is not free by the switch's own member test (yet)
-    AiNotReady,   // the 2nd slot's member is held by a story script, or not following the party
-    LinkPartner,  // the 2nd slot's member is a synergy partner the game has not given back yet (`link`)
+    NotEligible,  // the slot's member is not free by the switch's own member test (yet)
+    AiNotReady,   // the slot's member is held by a story script, or not following the party
+    LinkPartner,  // the slot's member is a synergy partner the game has not given back yet (`link`)
     Unread,       // the party reads faulted (objects torn down under them, as in a reload)
 };
 
-/// The 2nd slot's member is taken only when free by the switch's own member test, with its AI in a state the game
+/// The slot's member is taken only when free by the switch's own member test, with its AI in a state the game
 /// hands players, and not while it is a synergy partner the game has not given back: None, or the first reason
 /// in that order.
 SlotWait SlotWaitOf(Eligibility verdict, AiReadiness readiness, bool linkBusy) noexcept;
@@ -196,8 +196,8 @@ SlotWait SlotWaitOf(Eligibility verdict, AiReadiness readiness, bool linkBusy) n
 enum class TakeOutcome
 {
     Wait,
-    Took,      // player 2's controller holds the member
-    TimedOut,  // not within `takeTicks`: given back; player 2 stays in on its own controller
+    Took,      // the seat's controller holds the member
+    TimedOut,  // not within `takeTicks`: given back; the seat stays in on its own controller
 };
 
 /// The take's state this tick: acquired wins at any tick, the timeout only after it.
@@ -207,11 +207,11 @@ enum class SwapOutcome
 {
     Wait,
     Released,    // back with its AI: choose again
-    PlayerOnes,  // the game made it player 1's leader and player 2's controller holds nothing: choose again
-    TimedOut,    // not back within `takeTicks`: player 2 stays without a character
+    PlayerOnes,  // the game made it player 1's leader and the seat's controller holds nothing: choose again
+    TimedOut,    // not back within `takeTicks`: the seat stays without a character
 };
 
-/// The give-back's state this tick: released first; then player 1's with player 2's controller empty; then the timeout.
+/// The give-back's state this tick: released first; then player 1's with the seat's controller empty; then the timeout.
 SwapOutcome SwapOutcomeOf(bool released, const LeaseState& lease, const void* playerOneController, std::uint32_t ticks,
                           std::uint32_t takeTicks) noexcept;
 
