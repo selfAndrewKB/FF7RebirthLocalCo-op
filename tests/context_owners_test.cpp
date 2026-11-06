@@ -103,7 +103,7 @@ void TestContextFreeClasses()
 
 void TestNeededBySeat()
 {
-    std::printf("a context-free root is never needed by a further seat while the skip is on\n");
+    std::printf("a context-free root is never needed by player 2 or 3 while the skip is on\n");
     EXPECT(owners::NeededBySeat(true, false, false, true));
     EXPECT(owners::NeededBySeat(false, true, false, true));
     EXPECT(!owners::NeededBySeat(false, false, false, true));

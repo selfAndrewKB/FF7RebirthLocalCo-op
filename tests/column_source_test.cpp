@@ -185,7 +185,7 @@ void TestSharedRide()
 
 void TestWaiting()
 {
-    std::puts("column source: a further player waiting for a member: their column shows player 1's; everyone "
+    std::puts("column source: player 2 or 3 waiting for a member: their column shows player 1's; everyone "
               "waiting: the screen on one monitor");
     {
         // Two players, player 2 waits: nobody but player 1 plays: the engine's single view (as before step 6a).
@@ -276,7 +276,7 @@ void TestMirrors()
 
 void TestOverrides()
 {
-    std::puts("column source: single-view on/off override the automatic choice while a further player is in");
+    std::puts("column source: single-view on/off override the automatic choice while player 2 or 3 is in");
     {
         const Shown s = Decide(At(kTwoPlayers, SeatState::Playing, SeatState::Out, false, false, false,
                                   Override::Single));

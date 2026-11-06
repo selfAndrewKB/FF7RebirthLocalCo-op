@@ -140,7 +140,7 @@ void TestGaugeClass()
 
 void TestSharedSlot()
 {
-    std::puts("shared slot: the first further pass holds its acquire, later ones take it, player 1's takes it back");
+    std::puts("shared slot: the first of players 2 and 3's passes holds its acquire, later ones take it, player 1's takes it back");
     using lss::hud::overlay_pass::AcquireAction;
     using lss::hud::overlay_pass::IsSeatEntry;
     using lss::hud::overlay_pass::SlotAction;

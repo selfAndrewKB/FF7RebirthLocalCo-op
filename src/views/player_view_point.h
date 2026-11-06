@@ -18,9 +18,9 @@
 //     until it has a character) is never on screen by default.
 //   - a seat's view shows player 1's camera instead while views/column_source.h says so (the game takes
 //     the whole screen or a shared ride while columns are held: a held column is never black; or that seat's player
-//     alone waits for a party member: with columns held, or on one monitor during the short grace before its player leaves,
-//     session/session_rules.h WaitOutside), as a mirror view does, and draws player 1's HUD (the seat's
-//     pass does not run then).
+//     alone waits for a party member: with columns held, or on one monitor during the short grace before its player
+//     leaves, session/session_rules.h WaitOutside), as a mirror view does, and draws player 1's HUD (the seat's pass
+//     does not run then).
 
 #include "platform/dev_switch.h"
 #include "players/seats.h"
