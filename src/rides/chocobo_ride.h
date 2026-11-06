@@ -1,24 +1,24 @@
 #pragma once
 
-// Player 2 rides their own chocobo (plan §3, "Player 2 rides their own chocobo"; RE-p2-chocobo-ride.md §7, Lever 1).
+// Each further player rides their own chocobo (plan §3, "Player 2 rides their own chocobo"; RE-p2-chocobo-ride.md §7,
+// Lever 1).
 //
 // When player 1 mounts, the game mounts the whole party: player 1's chocobo is boarded through player 1's own
 // chocobo coordinator (possessed by player 1's controller, the ride camera module on player 1's camera, the ride
 // state that lets it run and dash); the others' chocobos appear by them, they are seated, and the chocobos follow
-// player 1 under their own AI. The game never boards a member. On the first tick the game has seated player 2's
-// member, this gives player 2's controller its own chocobo coordinator with the game's creator and runs the game's
-// own boarding on it for her, instant (RE-p2-chocobo-ride.md §9, Lever 2): player 2's controller possesses the
-// chocobo, the chocobo camera module goes on player 2's camera, and the ride status the gait reads is player 2's.
-// Each frame the game's field ticker runs player 1's ride; player 2's chocobo's move state is ticked with the game's
-// own per-character tick inside player 2's scopes (input/member_movement.h; player 2's controller's input
-// pass
-// ticks the coordinator). Pad 2's getoff button is kept out (player 1 owns mounting: it would dismount the party).
-// When the game dismounts the party, player 2 waits for the game's getoff animation to detach her, then the game's
-// own end of player 2's coordinator gives the member back; a battle, a give-back, a leave, the member detached or
+// player 1 under their own AI. The game never boards a member. On the first tick the game has seated a seat's
+// member, this gives the seat's controller its own chocobo coordinator with the game's creator and runs the game's
+// own boarding on it for her, instant (RE-p2-chocobo-ride.md §9, Lever 2): the seat's controller possesses the
+// chocobo, the chocobo camera module goes on the seat's camera, and the ride status the gait reads is the seat's.
+// Each frame the game's field ticker runs player 1's ride; the seat's chocobo's move state is ticked with the game's
+// own per-character tick inside the seat's scopes (input/member_movement.h; the seat's controller's input pass
+// ticks the coordinator). The seat's getoff button is kept out (player 1 owns mounting: it would dismount the party).
+// When the game dismounts the party, the ride waits for the game's getoff animation to detach her, then the game's
+// own end of the seat's coordinator gives the member back; a battle, a give-back, a leave, the member detached or
 // the chocobo gone end it at once.
 //
 // The mod's parts are the triggers, the tick of a body the field ticker does not select, and the getoff key kept
-// out of pad 2's view; every call is the game's own. Everything is logged. Game thread only.
+// out of the seat's pad's view; every call is the game's own. Everything is logged. Game thread only.
 //
 // Per seat (players/seats.h): each seat's ride, its held-back chocobo and its "stopped for the session" are its own
 // (a record per seat, index 0 unused); the seat comes from the controller the member's tick hands in, or from the
@@ -35,7 +35,7 @@ class GameImage;
 
 namespace lss::rides::chocobo_ride {
 
-/// Finds the game's functions; logged either way. False if a check failed (player 2 stays a passenger then).
+/// Finds the game's functions; logged either way. False if a check failed (a further player stays a passenger then).
 bool Install(const platform::GameImage& image) noexcept;
 
 /// From the member's tick while a seat's player plays `member` with `controller` (the seat's controller: the

@@ -4,9 +4,9 @@
 // research/RE-p2-attack-cameras.md §2, §9.4-§9.6).
 //
 // Three game paths play a camera effect for "the leader" on "the primary camera" (GetEndPlayerCameraManager, the
-// party manager's primary controller). For player 2's member they ran with player 1 as both, so:
+// party manager's primary controller). For a seat's member they ran with player 1 as both, so:
 //   - the guard camera effect (the battle-player component's PlayCameraEffectIfEnabled, gated on the leader test)
-//     shook player 1's camera when player 2's member guarded;
+//     shook player 1's camera when a seat's member guarded;
 //   - the camera-shake notifies of the member's montages (UEndBattleCameraShakeNotify / ...NotifyState, gated on the
 //     leader test) never played at all;
 //   - StealCamera (chain / synergy moves: "the leader's camera looks between the leader and the acting partner")
@@ -32,7 +32,7 @@ namespace lss::camera::seat_camera_effects {
 /// Replaces the slots; each item installs whole or stays off (logged).
 void Install(const platform::GameImage& image) noexcept;
 
-/// Puts the game's code back (at mod uninstall, with player 2 out).
+/// Puts the game's code back (at mod uninstall, with every further player out).
 void Remove() noexcept;
 
 /// Game thread, once per engine tick: the status line (Debug, every 10 s with activity).

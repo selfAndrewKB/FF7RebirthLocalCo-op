@@ -83,7 +83,7 @@ struct MoveClass
     platform::SlotFact tick;
     platform::SlotFact finish;
     bool               holdSelect;  // its Tick calls the hold-select (its redirect is required)
-    bool               climb;       // a climb: player 2's identity (leader test, buttons) and the climb camera's holder
+    bool               climb;       // a climb: a seat's identity (leader test, buttons) and the climb camera's holder
 };
 const MoveClass kMoves[] = {
     {L"climbing wall",
@@ -348,7 +348,7 @@ void NoteEdgeStop(int player, const void* move, unsigned seatCameras) noexcept
 }
 
 /// The edge-stop action's Tick: the player's stick and camera basis, the game's identity (the context is suspended for
-/// player 2, so the leader test and the buttons stay the game's).
+/// a seat, so the leader test and the buttons stay the game's).
 template <std::size_t Index>
 std::uintptr_t EdgeStopTick(void* move, void* arg, int player) noexcept
 {
@@ -639,7 +639,7 @@ std::wstring PlaceMove(const platform::GameImage& image, bool holdSelect)
     {
         return std::wstring(cls.name) + L" NO (its hold-select call differs)";
     }
-    // Finish first: a Tick in context without it would let player 2's finish record into player 1's controller.
+    // Finish first: a Tick in context without it would let a seat's finish record into player 1's controller.
     const bool finish =
         platform::ReplaceSlot(image, cls.finish, reinterpret_cast<std::uintptr_t>(&MoveFinish<Index>), live.finish);
     const bool tick = finish &&

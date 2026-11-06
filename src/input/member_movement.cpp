@@ -49,7 +49,7 @@ using scopes::leader_answer::kNoType;
 
 // Set once at install.
 TickForCharacterFn    g_tickForCharacter = nullptr;
-HandleClearFn         g_handleClear      = nullptr;  // null: player 2's field-action rows are left to show
+HandleClearFn         g_handleClear      = nullptr;  // null: the seats' field-action rows are left to show
 LeaderTestFn          g_isPlayerCore     = nullptr;  // IsUCPC_Core(character), for the ride logging only
 LeaderTestFn          g_isRiddenVehicle  = nullptr;  // IsActiveRiddenVehicle(character), for the ride logging only
 std::uintptr_t        g_moveStateVTable  = 0;
@@ -198,7 +198,7 @@ bool Install(const platform::GameImage& image) noexcept
 {
     const auto tick   = platform::FindFunction(image, facts::kMoveStateTickForCharacter);
     const auto vtable = image.Rebase(facts::kMoveStateVTable);
-    // The leader answer's slot last among the checks: its replacement is what makes the tick player 2's.
+    // The leader answer's slot last among the checks: its replacement is what makes the tick a further player's.
     if (!tick || !vtable || !session::party_member::Installed() || !scopes::primary_controller::Installed() ||
         !pad_sticks::Installed() || !scopes::leader_answer::Install(image))
     {

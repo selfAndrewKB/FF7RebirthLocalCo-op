@@ -5,10 +5,10 @@
 //
 // Move-type layer 2 (ActionPlayerMoveType) on "the" primary controller caps a character's gait. A behavior action's
 // walk-only step (the leader action's type 4, phase 4) sets it to Walk on its phase enter and back to 6 on its phase
-// exit, both through the primary setters. For player 2's member the enter runs on the game thread from Begin (inside
-// player 2's primary scope: player 2's controller is capped) or on the anim worker from Advance (player 1's is capped),
-// and the exit runs mostly on the worker, outside every scope (player 1's is cleared): player 2, or player 1, stayed
-// walking. Red XIII's chain-door action has the same split (Begin, End).
+// exit, both through the primary setters. For a seat's member the enter runs on the game thread from Begin (inside
+// the seat's primary scope: the seat's controller is capped) or on the anim worker from Advance (player 1's is capped),
+// and the exit runs mostly on the worker, outside every scope (player 1's is cleared): the seat's player, or player 1,
+// stayed walking. Red XIII's chain-door action has the same split (Begin, End).
 //
 // The mod tracks the controller each seat's steps capped (the seat comes from the action's character). A cap on
 // another player's controller moves to the seat's own (the game's setter, in the seat's scope) while the step is live;

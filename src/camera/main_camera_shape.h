@@ -8,10 +8,10 @@
 // true at 16:9, and no game code clears it (RE-p2-hud-view-levers.md §3). That flag is what keeps a
 // split half 16:9 with bars.
 //
-// While the halves fill (player 2 in, filled halves chosen), each player's main camera gets the
+// While the halves fill (a further player in, filled halves chosen), each player's main camera gets the
 // stock Blueprint setter UCameraComponent::SetConstraintAspectRatio(false) once, the same store the
 // game would make. The flag's original value is remembered and set back through the same setter
-// when the halves stop filling. A new main camera (a new camera manager, e.g. player 2's) is found
+// when the halves stop filling. A new main camera (a new camera manager, e.g. a further player's) is found
 // and set on the tick it appears. AspectRatio stays 16:9: the FOV rule reads it.
 //
 // Cameras other than the main camera (level-sequence and dialogue cutscene cameras) keep their own

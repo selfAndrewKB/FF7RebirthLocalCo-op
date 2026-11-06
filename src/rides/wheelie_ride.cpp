@@ -911,7 +911,7 @@ bool Install(const platform::GameImage& image) noexcept
                            g_resolveLeader != nullptr;
     g_installed = functions && g_coordVt != 0 && g_scooterVt != 0 && g_moveVt != 0 && scopes::leader_scope::Installed() &&
                   platform::ReplaceSlot(image, kSwapBackSlot, reinterpret_cast<std::uintptr_t>(&SwapBack), g_swapBackSlot);
-    // The animated getoff's swap back for player 2 (§14.15): without it the member, the scooter and player 2's camera are
+    // The animated getoff's swap back for a seat (§14.15): without it the member, the scooter and the seat's camera are
     // left on the ride, so no ride is offered.
     g_installed = g_installed && platform::ReplaceSlot(image, kDetachNotifySlot, reinterpret_cast<std::uintptr_t>(&DetachNotify),
                                                        g_detachSlot);

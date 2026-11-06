@@ -4,8 +4,8 @@
 // research/RE-p2-traversal-climb-context.md).
 //
 // These moves tick on the anim worker, outside every scope of the mod. There the game asks "is this the player?" (the
-// leader test, no for player 2's member), takes its stick from the merged input (whichever pad pushes harder) and its
-// basis from the primary camera manager (player 1's). Player 2's member then runs the NPC route: she climbs by herself
+// leader test, no for a seat's member), takes its stick from the merged input (whichever pad pushes harder) and its
+// basis from the primary camera manager (player 1's). A seat's member then runs the NPC route: she climbs by herself
 // toward player 1.
 //
 // A per-thread context, set by each move's Tick slot for the length of one Tick, names the climber's player (by the
@@ -24,7 +24,7 @@
 //
 // The edge-stop action (ledge lean, the step after an edge stop, the walk step; research/RE-p2-ledge-peek.md) ticks the
 // same way. Its lean holds only while the stick, turned by the primary camera's yaw, points within 60 degrees of the
-// edge, so player 2's lean ended and restarted every few frames (a stutter) unless player 1's camera faced the ledge. Its
+// edge, so a seat's lean ended and restarted every few frames (a stutter) unless player 1's camera faced the ledge. Its
 // Tick runs in the player's context with the identity suspended: only the key values and the camera manager getter
 // answer (a seat: its pad and its camera; player 1: pad 1). It is not a climb (PlayerHere and TicksPlaced leave it
 // out). Logged: Debug per action change, Trace per Tick, and Info when a lean restarts 3 times within 2 s.

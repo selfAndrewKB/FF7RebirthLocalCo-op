@@ -20,7 +20,7 @@
 //     player 1. The Tick takes no player: it advances every player's view at once, so it needs no seat.
 //   - a seated pad's action-downs reach the tables (for its player's polling) but are passed to the
 //     game's dispatcher as already handled, its own flag, so that pad never runs a field prompt (or
-//     player 2's go to player 2's own UI through the route below). The seat comes from the press's
+//     the seat's go to the seat's own UI through the route below). The seat comes from the press's
 //     source bit. This covers the XInput main loop, two DirectInput loops and, from the first input
 //     Tick, the XInput extra-key calls (the shortcut keys), whose call sites cross a code block and
 //     are changed from the game thread only;
@@ -98,8 +98,8 @@ void SetMenuPlayer(int seat) noexcept;
 /// Sets the route (null: none). Game thread.
 void SetSeatRoute(SeatRouteFn route) noexcept;
 
-/// Diagnosis: which parts act (bits: 1 the split views, player 1's after the Tick and player 2's in
-/// their calls; 2 pad 2's presses kept from menus and prompts). Both at start. Logged.
+/// Diagnosis: which parts act (bits: 1 the split views, player 1's after the Tick and the seats' in
+/// their calls; 2 a seated pad's presses kept from menus and prompts). Both at start. Logged.
 inline constexpr unsigned kPartViews  = 1;
 inline constexpr unsigned kPartEvents = 2;
 void SetMask(unsigned mask) noexcept;

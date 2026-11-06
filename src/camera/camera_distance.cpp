@@ -129,7 +129,7 @@ void PrimaryApply(std::uint8_t field, std::uint8_t battle) noexcept
 }
 
 /// 1.005: every call of the primary camera manager's apply, at its entry; the option setter's (by its return address)
-/// reaches player 2's camera manager too, exactly as PrimaryApply does.
+/// reaches each further player's camera manager too, exactly as PrimaryApply does.
 void PrimaryApplyEntry(std::uint8_t field, std::uint8_t battle) noexcept
 {
     const bool setter = reinterpret_cast<std::uintptr_t>(_ReturnAddress()) == g_setterReturn;

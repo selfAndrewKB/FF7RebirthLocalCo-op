@@ -52,7 +52,7 @@ constexpr platform::SlotFact kNavAreaTickSlot{L"UEndPlayerExistNavAreaComponent'
 using location_volumes::kNavAreaController;
 using facts::kCameraManagerBattleOperator;
 
-// Player 2's own location rows (§2.3, a documented recreation of the manager's enter/leave bookkeeping only): the
+// A seat's own location rows (§2.3, a documented recreation of the manager's enter/leave bookkeeping only): the
 // game's volume list, containment test and the volume's row and priority (camera/location_volumes.h).
 using location_volumes::kFlagChangeCamera;
 using location_volumes::kFlagDisabled;
@@ -309,7 +309,7 @@ bool Install(const platform::GameImage& image) noexcept
     const bool nav      = scopes::primary_controller::Installed() &&
                           platform::ReplaceSlot(image, kNavAreaTickSlot, reinterpret_cast<std::uintptr_t>(&NavAreaTick),
                                                 g_navTick);
-    // Player 2's own rows check the volume walk's two facts only (the gate above is a separate lever).
+    // The seats' own rows check the volume walk's two facts only (the gate above is a separate lever).
     g_volumes = location_volumes::Install(image);
     platform::Log(L"location rows: a further player's camera takes location rows from that player's own character {}",
                   g_volumes ? L"yes" : L"NO (a check failed)");

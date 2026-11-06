@@ -3,7 +3,7 @@
 // No seat's character (players/seats.h) is ever faded by the game's proximity fades
 // (research/RE-p2-camera-near-fade.md).
 //
-// The fades are on the character, so a fade meant for player 1's view hid player 2's own character in both halves:
+// The fades are on the character, so a fade meant for player 1's view hid a seat's own character in every view:
 // - Near-camera fade: every frame the game gathers the characters within 5 m of player 1's camera and fades out (hidden
 //   reason bit 0x10, over 0.2 s) those closer than their near-fade distance. The gather's result is filtered: every
 //   seat's member is taken out of the list, and the game's own diff then never fades it (or fades it back in). The

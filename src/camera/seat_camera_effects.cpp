@@ -370,7 +370,7 @@ void StealBegin(void* notify, void* mesh, void* animation, float duration) noexc
 void Install(const platform::GameImage& image) noexcept
 {
     const bool guard = g_guardSlot.Replace(image, kGuardSlot, kGuard, reinterpret_cast<std::uintptr_t>(&Guard));
-    // The shakes as one item: a Begin played on player 2's camera must be stopped there by its End.
+    // The shakes as one item: a Begin played on a seat's camera must be stopped there by its End.
     bool shakes = g_shakeBeginSlot.Replace(image, kShakeBeginSlot, kShakeBegin,
                                            reinterpret_cast<std::uintptr_t>(&ShakeBegin));
     shakes      = shakes && g_shakeEndSlot.Replace(image, kShakeEndSlot, kShakeEnd,

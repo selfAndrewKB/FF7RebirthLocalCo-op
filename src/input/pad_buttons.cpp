@@ -47,7 +47,7 @@ using TickFn = void (*)(void* self, float deltaTime, void* application, void* cu
 
 // The action-down dispatcher (§9): updates the tables and, unless its alreadyHandled byte is set,
 // hands the action to the UI handler stack and the menu core's delegate (menus, field prompts,
-// battle commands). Its callers that can carry pad 2's presses and whose call fits one aligned
+// battle commands). Its callers that can carry a further pad's presses and whose call fits one aligned
 // block: the XInput main loop (every bound action) and two DirectInput loops.
 constexpr std::uint8_t   kActionDownBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55,
                                                0x41, 0x56, 0x41, 0x57, 0xB8, 0x00, 0x01, 0x00, 0x00, 0xE8, 0x6A, 0xB1};
@@ -821,7 +821,7 @@ void Remove() noexcept
         platform::Log(L"buttons: the input Tick slot was changed after us; left in place (it passes the call through)");
     }
     // The extra-key calls (and on 1.005 a dispatch call that crosses a block) are restored only from the game thread
-    // (call_redirect.h). Off it, they stay ours; the DLL is pinned, and with player 2 out they pass every press through.
+    // (call_redirect.h). Off it, they stay ours; the DLL is pinned, and with no seat in they pass every press through.
     const bool gameThread = players::generation::OnGameThread();
     for (std::size_t i = 0; i < g_actionDownCalls.size(); ++i)
     {

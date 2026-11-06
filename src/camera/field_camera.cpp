@@ -53,11 +53,11 @@ StateFn               g_engineDeactivate    = nullptr;
 CopyFn                g_engineCopy          = nullptr;
 UpdateFn              g_engineUpdate        = nullptr;
 using facts::kCmdHudMode;
-std::atomic<unsigned> g_uiRefusals{0};  // battle updates that ran without player 2's UI context
+std::atomic<unsigned> g_uiRefusals{0};  // battle updates that ran without the seat's UI context
 
 // UpdateCamera's call of the Field operator's Activate when a special camera (a shop's) first blends out: the resume
 // before it gave the Field operator that camera's last rotation (RE-p2-shop-camera-skip.md §5, §6). Its return address,
-// this build (0 when not found): logged, to settle whether the mirror below snaps player 2's camera to it.
+// this build (0 when not found): logged, to settle whether the mirror below snaps a seat's camera to it.
 constexpr std::uintptr_t kBlendOutResume = 0x140E5629C;
 std::uintptr_t           g_blendOutResume = 0;
 
@@ -279,11 +279,11 @@ int ActsFor(void* cameraManager) noexcept
 /// player 1 as the primary player, so for that frame the seat's camera reads player 1's input.
 /// Skipping the update instead would freeze the seat's camera. The refusal is counted.
 ///
-/// In battle the update also runs in player 2's UI context: the Command camera module (21), which
-/// player 2's command controller turns on for player 2's camera while its target list is open,
+/// In battle the update also runs in the seat's UI context: the Command camera module (21), which
+/// the seat's command controller turns on for the seat's camera while its target list is open,
 /// frames the command menu's selected target (EndUISystem[23]'s provider, which reads the selected
 /// row from the focus path) and the party leader (RE-p2-target-select-views.md §6, §9). Without it,
-/// player 1's target list would move player 2's camera.
+/// player 1's target list would move the seat's camera.
 void RunAsPrimary(int seat, void* cameraManager, float deltaTime)
 {
     void*      controller = battle::command_menu::Controller(seat);

@@ -60,7 +60,7 @@ using camera::location_volumes::kVolumeForcedOut;
 using camera::location_volumes::kVolumeMoveType;
 using camera::location_volumes::kVolumeUntouchMargin;
 
-constexpr int       kMaxInside  = 32;   // move-type volumes player 2 stands in at once (a handful in practice)
+constexpr int       kMaxInside  = 32;   // move-type volumes a seat's member stands in at once (a handful in practice)
 constexpr ULONGLONG kRetryMs    = 250;  // a write the game's gate declined is tried again this often
 constexpr ULONGLONG kStateMs    = 1000;
 

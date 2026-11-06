@@ -4,15 +4,15 @@
 // (research/RE-p2-attack-cameras.md §1, §9).
 //
 // The game keeps one list of playing sequences (the battle system's +0x50), and every camera manager's Skill module
-// (slot 20 of its Battle and Field operators) tests each entry against "the party leader" during its own update. Player
-// 2's update runs in player 2's leader view (field_camera RunAsPrimary), so the game already decides per player which
+// (slot 20 of its Battle and Field operators) tests each entry against "the party leader" during its own update. A
+// seat's update runs in its own leader view (field_camera RunAsPrimary), so the game already decides per player which
 // camera a grab belongs to. What leaked is the list's own per-camera state, kept once because solo has one camera:
 //   - the smoothing (+0x70 previous focus point, +0x80 previous camera location, +0x48 the last active priority): a
 //     camera with no active entry writes its own pose there each frame, and a camera with one lerps from there toward
-//     the shot. With both cameras on the one copy, player 2's grab shot started from player 1's camera every frame and
-//     held player 2's view near player 1's (the Titan report of 2026-10-15);
+//     the shot. With every camera on the one copy, a seat's grab shot started from player 1's camera every frame and
+//     held that seat's view near player 1's (the Titan report of 2026-10-15);
 //   - each entry's active byte (+0x14), which code outside the updates reads (a stop by id, the leader change, the Menu
-//     operator): after both updates it held player 2's view.
+//     operator): after the updates it held the last seat's view.
 // A SeatUpdate around a seat's update (players/seats.h) puts that seat's own copy of the smoothing and of the
 // active bytes in the list, and after it player 1's smoothing back and each entry's byte as "active on any camera" (what
 // the readers outside the updates need: a sequence one camera still plays is playing). Each camera reads only its own
@@ -21,7 +21,7 @@
 // before the seats', as the two-player mod relies on].
 //
 // The shot change: a sequence cut asks UWorld::GetFirstPlayerController's camera manager for a camera cut, so a cut in
-// player 2's update cut player 1's view (its TAA / motion-blur history) and left player 2's smeared. Inside a seat's
+// a seat's update cut player 1's view (its TAA / motion-blur history) and left that seat's smeared. Inside a seat's
 // update that call goes to the game's own "cut the primary camera" function instead, which the primary-controller scope
 // points at that seat's camera manager (§9.3). The cut call names no camera: it reads the seat whose update is open
 // (InsideSeat, the "inside seat" context).
@@ -40,7 +40,7 @@ namespace lss::camera::attack_cameras {
 /// Finds the list and the cut call. Logged; a failed part stays off.
 void Install(const platform::GameImage& image) noexcept;
 
-/// Puts the game's code back (at mod uninstall, with player 2 out).
+/// Puts the game's code back (at mod uninstall, with every further player out).
 void Remove() noexcept;
 
 /// `seat`'s own per-camera state of the sequence list while it lives (inside the seat's camera update, its scopes

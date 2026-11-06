@@ -30,13 +30,13 @@ std::uintptr_t RebaseOrZero(const platform::GameImage& image, std::uintptr_t ida
 /// A coordinator's state id: its current state row (`rowField` -> u32 id) when its vtable is `coordVt`; -1 otherwise.
 std::int32_t CoordState(const void* coordinator, std::uintptr_t coordVt, std::uint32_t rowField) noexcept;
 
-/// The camera's slot-15 module (the ride framing) of the controller `controller` (a seat's), or null.
+/// The slot-15 module (the ride framing) of the camera of a seat's controller `controller`, or null.
 const void* CameraModule15(const void* controller) noexcept;
 
 /// `vehicle`'s input component: its control holder's getter (+0x638 -> vt+0x40), or null.
 const void* InputComponentOf(const void* vehicle) noexcept;
 
-/// The controller `controller` (a seat's) holds `character`: its effective controller, and the controller's pawn.
+/// A seat's controller `controller` holds `character`: its effective controller, and the controller's pawn.
 bool ControllerHolds(const void* character, const void* controller) noexcept;
 
 /// The boarding's possession swap runs the game's player-core test on the member: as `seat`'s player it must pass.

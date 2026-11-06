@@ -126,7 +126,7 @@ std::uintptr_t PlayerUpdateInput(void* state, float deltaTime)
 }
 
 /// Player 1's ridden chocobo or scooter: the field tick runs its move state for player 1 (PC1 possesses it,
-/// RE-p2-chocobo-ride.md §1.2, RE-p2-wheelie-ride.md §14.5); unscoped it read the merged stick, so pad 2 steered it
+/// RE-p2-chocobo-ride.md §1.2, RE-p2-wheelie-ride.md §14.5); unscoped it read the merged stick, so any pad steered it
 /// (live 2026-10-02, the chocobo). Not counted as an engine tick; recorded as the ride tick (for every seat), which a
 /// seat's member tick and own ride run on. A follower's chocobo (its own AI controller) and a seat's own ride pass
 /// through.
@@ -166,8 +166,8 @@ std::uintptr_t ScooterUpdateInput(void* state, float deltaTime)
 }
 
 /// Every chocobo move state's slot 1, run by the chocobo's own actor tick in game context (its handles and the anim
-/// sync). Player 2's ridden chocobo's runs inside player 2's scopes (rides/chocobo_ride.h, TickHandles, the
-/// rides' to make per seat); the rest pass through.
+/// sync). A seat's ridden chocobo's runs inside the seat's scopes (rides/chocobo_ride.h, TickHandles); the rest pass
+/// through.
 std::uintptr_t ChocoboHandles(void* state, float deltaTime)
 {
     std::uintptr_t returned = 0;
@@ -226,7 +226,7 @@ void InstallDetectionScopes(const platform::GameImage& image) noexcept
                   installed, std::size(wraps));
 }
 
-/// The chocobo move state's slot 1, for player 2's own ride (RE-p2-chocobo-run-refresh.md §4, lever 1; logged).
+/// The chocobo move state's slot 1, for a seat's own ride (RE-p2-chocobo-run-refresh.md §4, lever 1; logged).
 void InstallChocoboHandles(const platform::GameImage& image) noexcept
 {
     const auto live          = platform::FindFunction(image, facts::kChocoboMoveStateHandles.target);

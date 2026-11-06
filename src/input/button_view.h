@@ -83,7 +83,7 @@ constexpr bool Held(std::uint8_t mergedHeld, std::uint32_t sources, int player, 
 ///
 /// The mod leaves a view in the held byte between frames (player 1's, or the game's merged state for
 /// the menu openers and while a menu owns input), so the byte it reads back is not always the game's
-/// merged state: with pad 2 alone holding, it reads the 0 it wrote, and the game does not rewrite it
+/// merged state: with a seat's pad alone holding, it reads the 0 it wrote, and the game does not rewrite it
 /// until the next fresh press or full release (its repeat update needs held == 1). So the game's own
 /// held state is tracked here: released when no source holds the action; the byte's value when it
 /// differs from what the mod left (the game wrote it this frame); otherwise unchanged. The one case
