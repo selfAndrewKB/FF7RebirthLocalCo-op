@@ -21,10 +21,10 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 FAMILIES = {
     "PlayerTwo": r"\w*[Pp]layerTwo\w*",
-    "Two": r"\w*Two(?![a-z])\w*|\btwo(?![a-z])\w*",
+    "Two": r"\w*Two(?![a-z])\w*|\btwo(?![a-z])\w*|\w+_two(?![a-z])\w*",
     "Second": r"\w*[Ss]econd(?:Image|Player|View|Pass|Family)\w*",
     "P2": r"\w*P2\w*|\bp2\w*|\w+_p2\w*",
-    "Three": r"\w*Three(?![a-z])\w*|\bthree(?![a-z])\w*",
+    "Three": r"\w*Three(?![a-z])\w*|\bthree(?![a-z])\w*|\w+_three(?![a-z])\w*",
 }
 
 # Names that do not mean a player: the engine's own, or a "second"/"two" of something else. Each says why.
@@ -42,9 +42,18 @@ KEEP = {
     "kTwoPlayerLayout": "a count", "kThreePlayerLayout": "a count",
     "kThreeLayoutName": "a count", "threeLayout_": "a count",
     "kTwoPlayerSplitscreenLayoutOffset": "the engine's field", "kThreePlayerSplitscreenLayoutOffset": "the engine's field",
-    "kThreeColumns": "a count of columns", "threeColumns": "a count of columns",
+    "kThreeColumns": "a count of columns", "threeColumns": "a count of columns", "twoColumns": "a count of columns",
     "kPoolTwo": "render pool 2, not a player",
     "kPoolTwoVertexBuffer": "render pool 2", "kPoolTwoIndexBuffer": "render pool 2",
+    "kBrakeTwo": "the brake move's second phase", "kBrakeTwoSlot": "the brake move's second phase",
+    "g_brakeTwoSlot": "the brake move's second phase", "BrakeTwo": "the brake move's second phase",
+    "kMeasureFirstTwo": "the measure's first two instructions: a count",
+}
+
+# The same, for a name that means a player elsewhere: kept in the one file named with it.
+KEEP_IN = {
+    ("src/hud/passes/menu_buffers.h", "two"): "the number 2 the game's constructor writes",
+    ("src/platform/memory_watch.cpp", "three"): "the adapter's interface, version 3",
 }
 
 # The folder groups the rename is split into.
@@ -144,6 +153,8 @@ def scan():
                         continue
                     seen.add(match.start())
                     name = match.group(0)
+                    if (rel, name) in KEEP_IN:
+                        continue
                     entry = names.setdefault(name, {"family": family, "files": {}, "sites": 0})
                     entry["sites"] += 1
                     entry["files"][rel] = entry["files"].get(rel, 0) + 1
@@ -193,6 +204,8 @@ def ledger(names, comment_hits, string_hits, prose, strs) -> str:
     for name, why in sorted(KEEP.items()):
         if name in names:
             lines.append(f"- `{name}`: {why} ({names[name]['sites']} sites).")
+    for (rel, name), why in sorted(KEEP_IN.items()):
+        lines.append(f"- `{name}` in {short(rel)}: {why}.")
     return "\n".join(lines) + "\n"
 
 

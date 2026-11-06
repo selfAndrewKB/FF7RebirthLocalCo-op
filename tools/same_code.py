@@ -14,6 +14,9 @@ a longer or shorter function name shifts everything after it. The order stays, s
 reads another global gets another rank. If a build ever changed the order, every function would read as different:
 the comparison would fail, not pass wrongly.
 
+Compare builds linked from scratch (remove the build's .ilk file first). A dev build links incrementally, and after
+many patched links it can carry a jump stub more than a fresh link has, which reads as one differing block.
+
     python -I tools/same_code.py A.dll B.dll       exit 0 if the code is the same; else lists what differs
     python -I tools/same_code.py A.dll B.dll --globals-by-offset
                                                    stricter: a global is its distance from the start of its section
