@@ -77,15 +77,15 @@ bool HasKey(const void* list, std::uint64_t key) noexcept
 /// otherwise stay off its pad until the game re-adds it. Skipped: one-shots (they would replay from the start), entries
 /// already stopping or ending (their stop has run; a copy would never stop), and keys the seat's list has. Returns how
 /// many were seeded; their names go to `names`.
-std::size_t SeedTwo(int seat, std::array<std::uint64_t, 16>& names) noexcept
+std::size_t SeedSeat(int seat, std::array<std::uint64_t, 16>& names) noexcept
 {
     const ListLock lock;
-    void* const    two   = g_listTwo[seat].load(std::memory_order_acquire);
+    void* const    list  = g_seatList[seat].load(std::memory_order_acquire);
     void* const    owner = ReadPointer(reinterpret_cast<const void*>(g_listOwner), 0);
     void* const    game  = owner != nullptr ? ReadPointer(owner, kOwnerList) : nullptr;
-    g_copyOne[seat].store(two != nullptr, std::memory_order_release);
+    g_copyOne[seat].store(list != nullptr, std::memory_order_release);
     std::size_t seeded = 0;
-    if (two == nullptr || game == nullptr || game == two)
+    if (list == nullptr || game == nullptr || game == list)
     {
         return seeded;
     }
@@ -96,7 +96,7 @@ std::size_t SeedTwo(int seat, std::array<std::uint64_t, 16>& names) noexcept
         const auto          flags = ReadField<std::uint8_t>(entry, kEntryFlags);
         const auto          state = ReadField<std::uint8_t>(entry, kEntryState);
         const auto          key   = ReadField<std::uint64_t>(entry, kEntryKey);
-        if (!traversal_rumble_rules::SeedsLoop(flags, state) || HasKey(two, key))
+        if (!traversal_rumble_rules::SeedsLoop(flags, state) || HasKey(list, key))
         {
             continue;
         }
@@ -106,7 +106,7 @@ std::size_t SeedTwo(int seat, std::array<std::uint64_t, 16>& names) noexcept
         params.slot     = ReadField<std::uint8_t>(entry, kEntrySlot);
         params.duration = ReadField<float>(entry, kEntryDuration);
         params.loop     = 1;
-        g_addOrUpdate(two, key, &params, 1);
+        g_addOrUpdate(list, key, &params, 1);
         names[seeded++] = key;
         g_copiedKeys[seat].Insert(key);
     }
@@ -126,12 +126,12 @@ namespace copy {
 
 /// A shared ride's copy of an add to the game's list, into each copying seat's list in seat order (any thread, under
 /// the game's lock). The key is kept until its stop is copied too, so the ride's end can stop what is left.
-void CopyTwo(std::uint64_t key, const void* params, std::uint8_t flag) noexcept
+void CopyToSeats(std::uint64_t key, const void* params, std::uint8_t flag) noexcept
 {
     const ListLock lock;
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        void* const list = g_listTwo[seat].load(std::memory_order_acquire);
+        void* const list = g_seatList[seat].load(std::memory_order_acquire);
         // Read again under the lock: the ride's end clears the flag before it takes the lock to stop what was copied,
         // so a copy that saw the flag set outside the lock cannot land after that cleanup (and play on with nothing to
         // stop it).
@@ -140,7 +140,7 @@ void CopyTwo(std::uint64_t key, const void* params, std::uint8_t flag) noexcept
             continue;
         }
         g_addOrUpdate(list, key, params, flag);
-        g_counts[seat].copiesTwo.fetch_add(1, std::memory_order_relaxed);
+        g_counts[seat].seatCopies.fetch_add(1, std::memory_order_relaxed);
         if (g_copiedKeys[seat].Insert(key))
         {
             platform::LogDebug(L"rumble list: shared ride: {} copied into {}'s list", KeyText(key),
@@ -151,7 +151,7 @@ void CopyTwo(std::uint64_t key, const void* params, std::uint8_t flag) noexcept
 
 /// A shared ride's copy of a stop on the game's list, on each copying seat's list in seat order (game thread: the
 /// owner's list is named only there).
-void CopyStopTwo(StopNamedFn original, std::uint64_t key, bool game) noexcept
+void CopyStopToSeats(StopNamedFn original, std::uint64_t key, bool game) noexcept
 {
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
@@ -164,9 +164,9 @@ void CopyStopTwo(StopNamedFn original, std::uint64_t key, bool game) noexcept
             g_counts[seat].copyStopsLeft.fetch_add(1, std::memory_order_relaxed);
             continue;
         }
-        if (StopTwo(seat, original, key))
+        if (StopOnSeat(seat, original, key))
         {
-            g_counts[seat].copyStopsTwo.fetch_add(1, std::memory_order_relaxed);
+            g_counts[seat].seatCopyStops.fetch_add(1, std::memory_order_relaxed);
             ForgetCopied(seat, key);
             platform::LogDebug(L"rumble list: shared ride: {} stopped on {}'s list too", KeyText(key),
                                players::SeatName(seat));
@@ -183,7 +183,7 @@ void CopyPlayerOne(int seat, bool on) noexcept
         return;
     }
     const wchar_t* const name = players::SeatName(seat);
-    on = on && g_listTwo[seat].load(std::memory_order_acquire) != nullptr;
+    on = on && g_seatList[seat].load(std::memory_order_acquire) != nullptr;
     if (g_copyOne[seat].load(std::memory_order_relaxed) == on)
     {
         return;
@@ -191,7 +191,7 @@ void CopyPlayerOne(int seat, bool on) noexcept
     if (on)
     {
         std::array<std::uint64_t, 16> seeded{};
-        const std::size_t             count = SeedTwo(seat, seeded);
+        const std::size_t             count = SeedSeat(seat, seeded);
         try
         {
             std::wstring names;
@@ -222,7 +222,7 @@ void CopyPlayerOne(int seat, bool on) noexcept
     const StopNamedFn original = StopNamedOriginal();
     for (std::size_t i = 0; i < count; ++i)
     {
-        StopTwo(seat, original, left[i]);
+        StopOnSeat(seat, original, left[i]);
     }
     try
     {
@@ -233,7 +233,7 @@ void CopyPlayerOne(int seat, bool on) noexcept
         }
         platform::Log(L"rumble list: shared ride over: copies {}, their stops {} (on a worker, not copied {}); stopped "
                       L"now on {}'s list: {}",
-                      platform::Take(g_counts[seat].copiesTwo), platform::Take(g_counts[seat].copyStopsTwo),
+                      platform::Take(g_counts[seat].seatCopies), platform::Take(g_counts[seat].seatCopyStops),
                       platform::Take(g_counts[seat].copyStopsLeft), name, names.empty() ? L"none" : names);
     }
     catch (...)

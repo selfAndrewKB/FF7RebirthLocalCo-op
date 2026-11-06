@@ -2,7 +2,7 @@
 
 // The rumble list's pure rules (feedback/traversal_rumble.h), tested on the host
 // (tests/traversal_rumble_rules_test.cpp). The module keeps the lists, the lock, the engine calls and the log. The
-// rules name a seat's list as "player 2's" (Route::Two, ListTick::Two): each seat's own list, whichever seat the add,
+// rules name a seat's list as "player 2's" (Route::Seat, ListTick::Seat): each seat's own list, whichever seat the add,
 // stop or tick belongs to (SeatOfAdd, ListTickFor).
 
 #include <algorithm>
@@ -68,7 +68,7 @@ constexpr bool SeedsLoop(std::uint8_t flags, std::uint8_t state) noexcept
 
 enum class Route
 {
-    Two,           // player 2's list took it
+    Seat,          // player 2's list took it
     Game,          // the game's list
     GameAndCopy,   // the game's list, copied onto player 2's (a shared ride)
     LeftOnWorker,  // a stop of player 2's on a worker: left alone (the owner's list is named only on the game thread)
@@ -87,29 +87,30 @@ constexpr int SeatOfAdd(int ownerSeat, bool gameThread, int primarySeat) noexcep
 
 /// An add: player 2's list when it is player 2's and the list took it; else the game's, copied during a shared ride
 /// unless it was player 2's.
-constexpr Route AddRouteOf(bool two, bool added, bool copyOne) noexcept
+constexpr Route AddRouteOf(bool further, bool added, bool copyOne) noexcept
 {
-    if (two && added)
+    if (further && added)
     {
-        return Route::Two;
+        return Route::Seat;
     }
-    return !two && copyOne ? Route::GameAndCopy : Route::Game;
+    return !further && copyOne ? Route::GameAndCopy : Route::Game;
 }
 
 /// A stop: left when player 2's source stops on a worker while player 2 has a list; player 2's list when it is player
 /// 2's, on the game thread, and the list stopped it; else the game's, copied during a shared ride unless it was
 /// player 2's.
-constexpr Route StopRouteOf(bool owner, bool gameThread, bool hasList, bool two, bool stopped, bool copyOne) noexcept
+constexpr Route StopRouteOf(bool owner, bool gameThread, bool hasList, bool further, bool stopped,
+                            bool copyOne) noexcept
 {
     if (owner && !gameThread && hasList)
     {
         return Route::LeftOnWorker;
     }
-    if (two && gameThread && stopped)
+    if (further && gameThread && stopped)
     {
-        return Route::Two;
+        return Route::Seat;
     }
-    return !two && copyOne ? Route::GameAndCopy : Route::Game;
+    return !further && copyOne ? Route::GameAndCopy : Route::Game;
 }
 
 // ---- the component's list tick ----
@@ -117,22 +118,22 @@ constexpr Route StopRouteOf(bool owner, bool gameThread, bool hasList, bool two,
 enum class ListTick
 {
     Game,     // no list of player 2's: the game's tick
-    Two,      // player 2's component ticks player 2's list
+    Seat,     // player 2's component ticks player 2's list
     Skip,     // player 2 is the primary player: the game's list never plays on player 2's pad
     GameOne,  // player 1's tick of the game's list (counted)
 };
 
-constexpr ListTick ListTickChoice(bool hasList, bool tickOwnerIsTwo, bool primaryIsTwo) noexcept
+constexpr ListTick ListTickChoice(bool hasList, bool tickOwnerIsSeat, bool primaryIsSeat) noexcept
 {
     if (!hasList)
     {
         return ListTick::Game;
     }
-    if (tickOwnerIsTwo)
+    if (tickOwnerIsSeat)
     {
-        return ListTick::Two;
+        return ListTick::Seat;
     }
-    return primaryIsTwo ? ListTick::Skip : ListTick::GameOne;
+    return primaryIsSeat ? ListTick::Skip : ListTick::GameOne;
 }
 
 /// The choice with the seats: a seat's component (`ownerSeat` >= 1, active) ticks the seat's list when it has one

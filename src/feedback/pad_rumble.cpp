@@ -63,12 +63,12 @@ std::uintptr_t          g_app   = 0;
 // the input events kept out of player 1's last device.
 struct SeatPad
 {
-    std::int32_t  pad            = -1;  // the seat's ControllerId while in (and not player 1's), else -1
-    void*         orderedOne     = nullptr;
-    void*         orderedTwo     = nullptr;
-    std::uint64_t orderedOneWeak = 0;
-    std::uint64_t orderedTwoWeak = 0;
-    std::uint32_t skips          = 0;
+    std::int32_t  pad             = -1;  // the seat's ControllerId while in (and not player 1's), else -1
+    void*         orderedOne      = nullptr;
+    void*         orderedSeat     = nullptr;
+    std::uint64_t orderedOneWeak  = 0;
+    std::uint64_t orderedSeatWeak = 0;
+    std::uint32_t skips           = 0;
 };
 SeatPad           g_seats[players::kMaxPlayers];
 bool              g_orderBroken = false;
@@ -99,34 +99,36 @@ void Note(void* owner, std::int32_t userIndex) noexcept
     reinterpret_cast<NoteFn>(g_note.Original())(owner, userIndex);
 }
 
-bool Ordered(const SeatPad& record, void* one, void* two) noexcept
+bool Ordered(const SeatPad& record, void* one, void* controller) noexcept
 {
     const auto still = [](void* raw, std::uint64_t weak, void* now) {
         return raw == now && (weak == 0 || scopes::leader_scope::StillNames(weak, now));
     };
-    return still(record.orderedOne, record.orderedOneWeak, one) && still(record.orderedTwo, record.orderedTwoWeak, two);
+    return still(record.orderedOne, record.orderedOneWeak, one) &&
+           still(record.orderedSeat, record.orderedSeatWeak, controller);
 }
 
 /// Lever A: `seat`'s controller ticks after player 1's (the engine's own prerequisite), once per pair.
-void Order(int seat, void* one, void* two) noexcept
+void Order(int seat, void* one, void* controller) noexcept
 {
     SeatPad& record = g_seats[seat];
-    if (g_addPrerequisite == nullptr || g_orderBroken || Ordered(record, one, two))
+    if (g_addPrerequisite == nullptr || g_orderBroken || Ordered(record, one, controller))
     {
         return;
     }
-    const auto before = ReadField<std::int32_t>(two, kTickPrerequisites);
+    const auto before = ReadField<std::int32_t>(controller, kTickPrerequisites);
     struct
     {
         void* prerequisite;
     } params{one};
-    const bool called = players::unreal::GuardedProcessEvent(static_cast<UObject*>(two), g_addPrerequisite, &params);
-    const auto after  = ReadField<std::int32_t>(two, kTickPrerequisites);
-    record.orderedOne     = one;
-    record.orderedTwo     = two;
-    record.orderedOneWeak = scopes::leader_scope::WeakOf(one);
-    record.orderedTwoWeak = scopes::leader_scope::WeakOf(two);
-    g_orderBroken         = !called;
+    const bool called = players::unreal::GuardedProcessEvent(static_cast<UObject*>(controller), g_addPrerequisite,
+                                                             &params);
+    const auto after  = ReadField<std::int32_t>(controller, kTickPrerequisites);
+    record.orderedOne      = one;
+    record.orderedSeat     = controller;
+    record.orderedOneWeak  = scopes::leader_scope::WeakOf(one);
+    record.orderedSeatWeak = scopes::leader_scope::WeakOf(controller);
+    g_orderBroken          = !called;
     try
     {
         platform::Log(L"pad rumble: {}'s controller ticks after player 1's from now (the engine's "
@@ -238,16 +240,16 @@ void BeforeTick() noexcept
     bool        any  = false;
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)  // each seat's controller after player 1's, in seat order
     {
-        void* const two = players::generation::ControllerOf(seat);
-        if (!game || !players::generation::Active(seat) || one == nullptr || two == nullptr)
+        void* const controller = players::generation::ControllerOf(seat);
+        if (!game || !players::generation::Active(seat) || one == nullptr || controller == nullptr)
         {
             g_seats[seat].pad = -1;
             continue;
         }
         const auto oneId  = input::pad_sticks::ControllerIdOf(one);
-        const auto twoId  = input::pad_sticks::ControllerIdOf(two);
-        g_seats[seat].pad = twoId >= 0 && twoId != oneId ? twoId : -1;
-        Order(seat, one, two);
+        const auto seatId = input::pad_sticks::ControllerIdOf(controller);
+        g_seats[seat].pad = seatId >= 0 && seatId != oneId ? seatId : -1;
+        Order(seat, one, controller);
         any = true;
     }
     if (any)

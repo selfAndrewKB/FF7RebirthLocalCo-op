@@ -171,9 +171,9 @@ platform::Every g_status{kStatusEvery};
 // Per seat; index 0 holds player 1's counts (the One fields) and the plays on other controllers.
 struct Counts
 {
-    std::uint32_t hitsOne = 0, hitsTwo = 0, gatesTwo = 0, camerasTwo = 0, fallbacksTwo = 0, hitSkips = 0;
-    std::uint32_t notifiesOne = 0, notifiesTwo = 0, notifySkips = 0, answered = 0;
-    std::uint32_t playsOne = 0, playsTwo = 0, playsOther = 0;
+    std::uint32_t hitsOne = 0, seatHits = 0, seatGates = 0, seatCameras = 0, seatFallbacks = 0, hitSkips = 0;
+    std::uint32_t notifiesOne = 0, seatNotifies = 0, notifySkips = 0, answered = 0;
+    std::uint32_t playsOne = 0, seatPlays = 0, playsOther = 0;
 };
 std::array<Counts, players::kMaxPlayers> g_counts{};
 
@@ -213,10 +213,10 @@ void* PlayerOnePawn() noexcept
 
 /// `seat`'s leader view (leader, leader type, primary controller) for one call; nothing held if any part refuses (the
 /// ladder's all-or-nothing rule).
-class PlayerTwoView
+class SeatView
 {
 public:
-    PlayerTwoView(int seat, bool primary) noexcept
+    SeatView(int seat, bool primary) noexcept
     {
         seat_ladder::Args args;
         args.seat = seat;
@@ -279,16 +279,16 @@ std::uint64_t Gate(std::uint64_t kind, void* attacker, void* target, void* funct
         return result;
     }
     Counts& counts = g_counts[seat];
-    ++counts.hitsTwo;
+    ++counts.seatHits;
     std::uint64_t result = 0;
     bool          held   = false;
     {
-        const PlayerTwoView view(seat, false);  // the gate reads the leader and its type only
+        const SeatView view(seat, false);  // the gate reads the leader and its type only
         held   = view.Held();
         result = original(kind, attacker, target, functor);
     }
     g_hitSeat = held && (result & 0xFF) != 0 ? seat : 0;
-    counts.gatesTwo += g_hitSeat != 0 ? 1 : 0;
+    counts.seatGates += g_hitSeat != 0 ? 1 : 0;
     counts.hitSkips += held ? 0 : 1;
     if (Line())
     {
@@ -330,7 +330,7 @@ void* Camera(void* handle, const void* location, const void* name) noexcept
         return original(handle, location, name);
     }
     void* result = original(handle, location, name);
-    ++g_counts[seat].camerasTwo;
+    ++g_counts[seat].seatCameras;
     if (Line())
     {
         const bool played = handle != nullptr && ReadField<std::int32_t>(handle, 0) != -1;  // {-1, 0} when nothing plays
@@ -360,7 +360,7 @@ void* Fallback() noexcept
         ++g_counts[seat].hitSkips;
         return original();
     }
-    ++g_counts[seat].fallbacksTwo;
+    ++g_counts[seat].seatFallbacks;
     return original();
 }
 
@@ -399,7 +399,7 @@ public:
             return;
         }
         Counts& counts = g_counts[seat];
-        ++counts.notifiesTwo;
+        ++counts.seatNotifies;
         view_.emplace(seat, true);
         if (!view_->Held())
         {
@@ -459,13 +459,13 @@ public:
     NotifyScope& operator=(const NotifyScope&) = delete;
 
 private:
-    std::size_t                  index_      = 0;
-    std::optional<PlayerTwoView> view_;
-    void*                        saved_      = nullptr;
-    const void*                  owner_      = nullptr;
-    std::uint32_t                answeredAt_ = 0;
-    int                          seat_       = 0;
-    bool                         active_     = false;
+    std::size_t             index_      = 0;
+    std::optional<SeatView> view_;
+    void*                   saved_      = nullptr;
+    const void*             owner_      = nullptr;
+    std::uint32_t           answeredAt_ = 0;
+    int                     seat_       = 0;
+    bool                    active_     = false;
 };
 
 template <std::size_t I>
@@ -541,7 +541,7 @@ void LogPlay(const void* component, std::uint64_t channel, const void* name, std
     const void* controller = ReadPointer(component, kComponentController);
     const int   seat       = players::generation::SeatOfController(controller);  // 0 player 1's, a seat's, or -1
     (seat == 0  ? g_counts[0].playsOne
-     : seat > 0 ? g_counts[seat].playsTwo
+     : seat > 0 ? g_counts[seat].seatPlays
                 : g_counts[0].playsOther) += 1;
     if (!Line())
     {
@@ -609,7 +609,8 @@ void LogStatus() noexcept
     {
         const Counts& c = all[seat];
         if (!players::generation::Active(seat) ||
-            one.hitsOne + c.hitsTwo + one.notifiesOne + c.notifiesTwo + one.playsOne + c.playsTwo + one.playsOther == 0)
+            one.hitsOne + c.seatHits + one.notifiesOne + c.seatNotifies + one.playsOne + c.seatPlays + one.playsOther ==
+                0)
         {
             continue;
         }
@@ -617,9 +618,9 @@ void LogStatus() noexcept
         platform::LogDebug(L"combat rumble (10 s): battle hits player 1's {}, {}'s {} (gate passed {}, camera on {}'s "
                            L"{}, fallback to {}'s controller {}, refused {}); notifies player 1's {}, {}'s {} (first-"
                            L"controller calls answered PC{} {}, refused {}); plays on PC1 {}, PC{} {}, other {}",
-                           one.hitsOne, name, c.hitsTwo, c.gatesTwo, name, c.camerasTwo, name, c.fallbacksTwo,
-                           c.hitSkips, one.notifiesOne, name, c.notifiesTwo, seat + 1, c.answered, c.notifySkips,
-                           one.playsOne, seat + 1, c.playsTwo, one.playsOther);
+                           one.hitsOne, name, c.seatHits, c.seatGates, name, c.seatCameras, name, c.seatFallbacks,
+                           c.hitSkips, one.notifiesOne, name, c.seatNotifies, seat + 1, c.answered, c.notifySkips,
+                           one.playsOne, seat + 1, c.seatPlays, one.playsOther);
     }
 }
 

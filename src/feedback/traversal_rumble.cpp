@@ -29,8 +29,8 @@
 // The rumble list's core (feedback/traversal_rumble.h): the add and the stop by name, the component's list tick, the
 // zip line's gate and add, each seat's list's life, the chocobo's footsteps, the summary, and the module's install,
 // removal and tick. The shared-ride copy and the sources outside the seats' scopes are their own units. The seat of an
-// add or a stop is its source's (OwnerTwo) or the primary player's (traversal_rumble_rules::SeatOfAdd); of a list tick,
-// its component's controller's; of the zip line, its move's character; of a footstep, the chocobo the seat rides.
+// add or a stop is its source's (SeatOwner) or the primary player's (traversal_rumble_rules::SeatOfAdd); of a list
+// tick, its component's controller's; of the zip line, its move's character; of a footstep, the chocobo the seat rides.
 
 namespace lss::feedback::traversal_rumble {
 
@@ -111,8 +111,8 @@ thread_local const void* t_tickOwner = nullptr;  // the controller whose compone
 thread_local int         t_zipSeat   = 0;        // the zip line's rumble block runs for this seat's member (0: none)
 
 // By seat (index 0 unused): the last effect key added for the seat (Debug on change), and stopped for it (game thread).
-std::atomic<std::uint64_t> g_lastKeyTwo[players::kMaxPlayers]{};
-std::uint64_t              g_lastStopTwo[players::kMaxPlayers]{};
+std::atomic<std::uint64_t> g_seatLastKey[players::kMaxPlayers]{};
+std::uint64_t              g_seatLastStop[players::kMaxPlayers]{};
 platform::Every            g_summary{kSummaryEvery};
 
 /// The built active seat that is the primary player now, or 0 (player 1's, or none). Game thread.
@@ -154,14 +154,14 @@ const wchar_t* LeavesText(int seat) noexcept
 }  // namespace
 
 /// `seat`'s add, as the game's add does it, into the seat's list. False if the seat has no list now.
-bool AddTwo(int seat, std::uint64_t key, const void* params, std::uint8_t flag) noexcept
+bool AddToSeat(int seat, std::uint64_t key, const void* params, std::uint8_t flag) noexcept
 {
     if (!players::SeatIndex(seat))
     {
         return false;
     }
     const ListLock lock;
-    void* const    list = g_listTwo[seat].load(std::memory_order_acquire);
+    void* const    list = g_seatList[seat].load(std::memory_order_acquire);
     if (list == nullptr)
     {
         return false;
@@ -174,14 +174,14 @@ bool AddTwo(int seat, std::uint64_t key, const void* params, std::uint8_t flag) 
 /// lock inside nests), the owner names the seat's list for the length of the call. Every other reader of the owner's
 /// list is under that lock or on this thread (RE-p2-zipline-rumble-hook-who.md §4.2), so no one else sees the swap; one
 /// seat's swap is put back before the next seat's begins. False if the seat has no list now. Game thread.
-bool StopTwo(int seat, StopNamedFn original, std::uint64_t key) noexcept
+bool StopOnSeat(int seat, StopNamedFn original, std::uint64_t key) noexcept
 {
     if (!players::SeatIndex(seat))
     {
         return false;
     }
     const ListLock lock;
-    void* const    list  = g_listTwo[seat].load(std::memory_order_acquire);
+    void* const    list  = g_seatList[seat].load(std::memory_order_acquire);
     void* const    owner = ReadPointer(reinterpret_cast<const void*>(g_listOwner), 0);
     void* const    game  = owner != nullptr ? ReadPointer(owner, kOwnerList) : nullptr;
     if (list == nullptr || game == nullptr)
@@ -207,7 +207,7 @@ StopNamedFn StopNamedOriginal() noexcept
 
 namespace {
 
-/// The add by name: a seat's add goes to the seat's list. It is a seat's when its source names the seat (OwnerTwo, any
+/// The add by name: a seat's add goes to the seat's list. It is a seat's when its source names the seat (SeatOwner, any
 /// thread), or on the game thread while the seat is the primary player (the seat's scopes). During a shared ride an
 /// add to the game's list is copied into each copying seat's list too.
 void PlayNamed(std::uint64_t key, const void* params, std::uint8_t flag) noexcept
@@ -216,24 +216,25 @@ void PlayNamed(std::uint64_t key, const void* params, std::uint8_t flag) noexcep
     const int  owner    = t_ownerSeat;
     const bool game     = owner == 0 && players::generation::OnGameThread();
     const int  seat     = traversal_rumble_rules::SeatOfAdd(owner, game, game ? PrimarySeat() : 0);
-    const bool two      = seat >= 1;
-    const bool added    = two && AddTwo(seat, key, params, flag);
-    const auto route    = traversal_rumble_rules::AddRouteOf(two, added, AnyCopy());
-    if (route != traversal_rumble_rules::Route::Two)
+    const bool further  = seat >= 1;
+    const bool added    = further && AddToSeat(seat, key, params, flag);
+    const auto route    = traversal_rumble_rules::AddRouteOf(further, added, AnyCopy());
+    if (route != traversal_rumble_rules::Route::Seat)
     {
         g_counts[0].addsOne.fetch_add(1, std::memory_order_relaxed);
         original(key, params, flag);
         if (route == traversal_rumble_rules::Route::GameAndCopy)
         {
-            copy::CopyTwo(key, params, flag);
+            copy::CopyToSeats(key, params, flag);
         }
         return;
     }
     Counts&              counts = g_counts[seat];
     const wchar_t* const name   = players::SeatName(seat);
-    (owner != 0 ? counts.ownerAddsTwo : counts.addsTwo).fetch_add(1, std::memory_order_relaxed);
+    (owner != 0 ? counts.seatOwnerAdds : counts.seatAdds).fetch_add(1, std::memory_order_relaxed);
     platform::LogTrace(L"rumble list: {} added to {}'s list", KeyText(key), name);
-    if (g_lastKeyTwo[seat].exchange(key, std::memory_order_relaxed) != key && platform::Enabled(platform::Level::Debug))
+    if (g_seatLastKey[seat].exchange(key, std::memory_order_relaxed) != key &&
+        platform::Enabled(platform::Level::Debug))
     {
         // The seat's name as its own argument: nothing is built for a line that is off.
         const std::uint64_t effect = params != nullptr ? ReadField<std::uint64_t>(params, 0) : 0;
@@ -251,7 +252,7 @@ void PlayNamed(std::uint64_t key, const void* params, std::uint8_t flag) noexcep
 }
 
 /// Plays `seat`'s list on the seat's controller, as the game's list tick plays the global one (game thread).
-void TickTwo(int seat, void* list, float dt) noexcept
+void TickSeat(int seat, void* list, float dt) noexcept
 {
     Counts&    counts = g_counts[seat];
     ChannelSet set;
@@ -260,14 +261,14 @@ void TickTwo(int seat, void* list, float dt) noexcept
         const ListLock lock;
         changed = g_buildSet(list, dt, &set);
     }
-    counts.ticksTwo.fetch_add(1, std::memory_order_relaxed);
+    counts.seatTicks.fetch_add(1, std::memory_order_relaxed);
     if (changed)
     {
         const scopes::primary_controller::Scope primary(seat);  // already held inside the seat's scopes
         if (primary.Held())
         {
             g_apply(list, &set);
-            counts.appliedTwo.fetch_add(1, std::memory_order_relaxed);
+            counts.seatApplied.fetch_add(1, std::memory_order_relaxed);
         }
         else
         {
@@ -288,17 +289,17 @@ void ListTick(float dt) noexcept
     // The component's seat (by its controller) and the active seats' lists, on the game thread only.
     int ownerSeat = game && t_tickOwner != nullptr ? players::generation::SeatOfController(t_tickOwner) : -1;
     ownerSeat     = ownerSeat >= 1 && players::generation::Active(ownerSeat) ? ownerSeat : -1;
-    void* const ownerList = ownerSeat >= 1 ? g_listTwo[ownerSeat].load(std::memory_order_acquire) : nullptr;
+    void* const ownerList = ownerSeat >= 1 ? g_seatList[ownerSeat].load(std::memory_order_acquire) : nullptr;
     bool        anyList   = false;
     for (int seat = 1; game && seat <= players::kSeatsBuilt; ++seat)
     {
-        anyList = anyList || (players::generation::Active(seat) && g_listTwo[seat].load(std::memory_order_acquire) != nullptr);
+        anyList = anyList || (players::generation::Active(seat) && g_seatList[seat].load(std::memory_order_acquire) != nullptr);
     }
     const int primary = game ? PrimarySeat() : 0;
     switch (traversal_rumble_rules::ListTickFor(ownerSeat, ownerList != nullptr, anyList, primary >= 1))
     {
         case traversal_rumble_rules::ListTick::Game: original(dt); return;
-        case traversal_rumble_rules::ListTick::Two: TickTwo(ownerSeat, ownerList, dt); return;
+        case traversal_rumble_rules::ListTick::Seat: TickSeat(ownerSeat, ownerList, dt); return;
         case traversal_rumble_rules::ListTick::Skip:
             // The game's list never plays on a seat's pad.
             g_counts[primary].skippedOne.fetch_add(1, std::memory_order_relaxed);
@@ -330,7 +331,7 @@ bool ZipGate(void* move) noexcept
     {
         const std::uint64_t member = players::generation::MemberWeakOf(seat);
         t_zipSeat = member != 0 && ReadField<std::uint64_t>(move, kMoveCharacter) == member &&
-                            g_listTwo[seat].load(std::memory_order_acquire) != nullptr
+                            g_seatList[seat].load(std::memory_order_acquire) != nullptr
                         ? seat
                         : 0;
     }
@@ -341,9 +342,9 @@ void ZipAdd(std::uint64_t key, const void* params, std::uint8_t flag) noexcept
 {
     const int seat = t_zipSeat;
     t_zipSeat      = 0;
-    if (seat >= 1 && AddTwo(seat, key, params, flag))
+    if (seat >= 1 && AddToSeat(seat, key, params, flag))
     {
-        g_counts[seat].zipAddsTwo.fetch_add(1, std::memory_order_relaxed);
+        g_counts[seat].seatZipAdds.fetch_add(1, std::memory_order_relaxed);
         return;
     }
     g_counts[0].zipAddsOne.fetch_add(1, std::memory_order_relaxed);
@@ -360,10 +361,10 @@ void StopNamed(std::uint64_t key) noexcept
     const int  owner    = t_ownerSeat;
     const bool game     = players::generation::OnGameThread();
     const int  seat     = traversal_rumble_rules::SeatOfAdd(owner, game, owner == 0 && game ? PrimarySeat() : 0);
-    const bool two      = seat >= 1;
-    const bool hasList  = two && g_listTwo[seat].load(std::memory_order_acquire) != nullptr;
-    const bool stopped  = two && game && StopTwo(seat, original, key);
-    const auto route    = traversal_rumble_rules::StopRouteOf(owner != 0, game, hasList, two, stopped, AnyCopy());
+    const bool further  = seat >= 1;
+    const bool hasList  = further && g_seatList[seat].load(std::memory_order_acquire) != nullptr;
+    const bool stopped  = further && game && StopOnSeat(seat, original, key);
+    const auto route    = traversal_rumble_rules::StopRouteOf(owner != 0, game, hasList, further, stopped, AnyCopy());
     if (route == traversal_rumble_rules::Route::LeftOnWorker)
     {
         // A source of a seat's stopping on a worker: the owner's list can be named only on the game thread, and no
@@ -376,23 +377,23 @@ void StopNamed(std::uint64_t key) noexcept
         }
         return;
     }
-    if (route != traversal_rumble_rules::Route::Two)
+    if (route != traversal_rumble_rules::Route::Seat)
     {
         g_counts[0].stopsOne.fetch_add(1, std::memory_order_relaxed);
         original(key);
         if (route == traversal_rumble_rules::Route::GameAndCopy)
         {
-            copy::CopyStopTwo(original, key, game);
+            copy::CopyStopToSeats(original, key, game);
         }
         return;
     }
     Counts&              counts = g_counts[seat];
     const wchar_t* const name   = players::SeatName(seat);
-    (owner != 0 ? counts.ownerStopsTwo : counts.stopsTwo).fetch_add(1, std::memory_order_relaxed);
+    (owner != 0 ? counts.seatOwnerStops : counts.seatStops).fetch_add(1, std::memory_order_relaxed);
     platform::LogTrace(L"rumble list: {} stopped on {}'s list", KeyText(key), name);
-    if (key != g_lastStopTwo[seat])
+    if (key != g_seatLastStop[seat])
     {
-        g_lastStopTwo[seat] = key;
+        g_seatLastStop[seat] = key;
         if (owner != 0)
         {
             platform::LogDebug(L"rumble list: {} stops on {}'s list (its source is {}'s)", KeyText(key), name, name);
@@ -417,9 +418,9 @@ struct FootCall
 void RunFoot(void* context) noexcept
 {
     auto&      call   = *static_cast<FootCall*>(context);
-    const auto before = g_counts[call.seat].addsTwo.load(std::memory_order_relaxed);
+    const auto before = g_counts[call.seat].seatAdds.load(std::memory_order_relaxed);
     call.result       = call.fn(call.chocobo);
-    call.added        = g_counts[call.seat].addsTwo.load(std::memory_order_relaxed) != before;
+    call.added        = g_counts[call.seat].seatAdds.load(std::memory_order_relaxed) != before;
 }
 
 /// The chocobo's footstep slot (every chocobo's; game thread). The footsteps of the chocobo a seat rides run inside the
@@ -432,7 +433,7 @@ double FootImpact(void* chocobo) noexcept
     if (!players::generation::OnGameThread())
     {
         // Logging only: the game's gate returns at once on a worker.
-        (driver >= 1 ? g_counts[driver].footWorkerTwo : g_counts[0].footWorkerOther)
+        (driver >= 1 ? g_counts[driver].seatFootWorker : g_counts[0].footWorkerOther)
             .fetch_add(1, std::memory_order_relaxed);
         return original(chocobo);
     }
@@ -442,10 +443,10 @@ double FootImpact(void* chocobo) noexcept
     }
     const int rider = rides::chocobo_ride::SeatRiding(chocobo);  // the seat riding it seated, or -1
     FootCall  call{rider, original, chocobo};
-    if (rider >= 1 && g_listTwo[rider].load(std::memory_order_acquire) != nullptr &&
+    if (rider >= 1 && g_seatList[rider].load(std::memory_order_acquire) != nullptr &&
         rides::chocobo_ride::RunAsRider(chocobo, &RunFoot, &call))
     {
-        g_counts[rider].footTwo.fetch_add(1, std::memory_order_relaxed);
+        g_counts[rider].seatFoot.fetch_add(1, std::memory_order_relaxed);
         platform::LogTrace(L"rumble list: {}'s chocobo's footsteps ran in {}'s scope (added {})",
                            players::SeatName(rider), players::SeatName(rider), call.added ? 1 : 0);
         return call.result;
@@ -477,23 +478,23 @@ void MakeList(int seat) noexcept
     }
     {
         const ListLock lock;
-        g_listTwo[seat].store(list, std::memory_order_release);
+        g_seatList[seat].store(list, std::memory_order_release);
     }
-    g_lastKeyTwo[seat] = 0;
+    g_seatLastKey[seat] = 0;
     platform::Log(L"rumble list: {} has their own rumble list (traversal rumble per pad)", players::SeatName(seat));
 }
 
 /// Game thread: stops `seat`'s channels (when the seat can still be the primary player) and destroys its list.
 void DropList(int seat, const wchar_t* why) noexcept
 {
-    if (g_listTwo[seat].load(std::memory_order_acquire) == nullptr)
+    if (g_seatList[seat].load(std::memory_order_acquire) == nullptr)
     {
         return;  // only this thread makes or drops the list
     }
     void* list = nullptr;
     {
         const ListLock lock;
-        list = g_listTwo[seat].exchange(nullptr, std::memory_order_acq_rel);
+        list = g_seatList[seat].exchange(nullptr, std::memory_order_acq_rel);
         if (list != nullptr)
         {
             WriteField<std::int32_t>(list, kListEntries + kArrayNum, 0);  // as the game's own clear
@@ -555,19 +556,19 @@ void LogSummary() noexcept
     const auto footWorkerOther = platform::Take(game.footWorkerOther);
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        Counts&              counts        = g_counts[seat];
-        const wchar_t* const name          = players::SeatName(seat);
-        const auto           a2            = platform::Take(counts.addsTwo);
-        const auto           z2            = platform::Take(counts.zipAddsTwo);
-        const auto           t2            = platform::Take(counts.ticksTwo);
-        const auto           p2            = platform::Take(counts.appliedTwo);
-        const auto           skip          = platform::Take(counts.skippedOne);
-        const auto           ref           = platform::Take(counts.refused);
-        const auto           s2            = platform::Take(counts.stopsTwo);
-        const auto           foot          = platform::Take(counts.footTwo);
-        const auto           footRefused   = platform::Take(counts.footRefused);
-        const auto           footWorkerTwo = platform::Take(counts.footWorkerTwo);
-        if (a1 + a2 + z1 + z2 + t1 + t2 == 0 || g_listTwo[seat].load(std::memory_order_relaxed) == nullptr)
+        Counts&              counts      = g_counts[seat];
+        const wchar_t* const name        = players::SeatName(seat);
+        const auto           a2          = platform::Take(counts.seatAdds);
+        const auto           z2          = platform::Take(counts.seatZipAdds);
+        const auto           t2          = platform::Take(counts.seatTicks);
+        const auto           played      = platform::Take(counts.seatApplied);
+        const auto           skip        = platform::Take(counts.skippedOne);
+        const auto           ref         = platform::Take(counts.refused);
+        const auto           s2          = platform::Take(counts.seatStops);
+        const auto           foot        = platform::Take(counts.seatFoot);
+        const auto           footRefused = platform::Take(counts.footRefused);
+        const auto           footWorker  = platform::Take(counts.seatFootWorker);
+        if (a1 + a2 + z1 + z2 + t1 + t2 == 0 || g_seatList[seat].load(std::memory_order_relaxed) == nullptr)
         {
             continue;
         }
@@ -577,15 +578,15 @@ void LogSummary() noexcept
                            L"the game's list {}, of {}'s {} (played on {}'s controller {}, refused {}); the game's "
                            L"list skipped inside {}'s scope {}",
                            kSummaryEvery.count(), a1, z1, name, a2 + z2, z2, s1, name, s2, name, name, foot,
-                           footRefused, footWorkerTwo, footOther, footWorkerOther, t1, name, t2, name, p2, ref, name,
+                           footRefused, footWorker, footOther, footWorkerOther, t1, name, t2, name, played, ref, name,
                            skip);
-        const auto scooter = platform::Take(counts.scooterTwo);
-        const auto glide   = platform::Take(counts.glideTwo);
-        const auto jump    = platform::Take(counts.jumpTwo);
-        const auto drift   = platform::Take(counts.driftTwo);
-        const auto brake   = platform::Take(counts.brakeTwo);
-        const auto oa      = platform::Take(counts.ownerAddsTwo);
-        const auto os      = platform::Take(counts.ownerStopsTwo);
+        const auto scooter = platform::Take(counts.seatScooter);
+        const auto glide   = platform::Take(counts.seatGlide);
+        const auto jump    = platform::Take(counts.seatJump);
+        const auto drift   = platform::Take(counts.seatDrift);
+        const auto brake   = platform::Take(counts.seatBrake);
+        const auto oa      = platform::Take(counts.seatOwnerAdds);
+        const auto os      = platform::Take(counts.seatOwnerStops);
         const auto left    = platform::Take(counts.ownerStopsLeft);
         const auto worker  = platform::Take(counts.sourceWorker);
         const auto onGame  = platform::Take(counts.actionsOnGame);
@@ -712,7 +713,7 @@ void Remove() noexcept
         {
             DropList(seat, L"the mod is removed");
         }
-        else if (g_listTwo[seat].load(std::memory_order_acquire) != nullptr)
+        else if (g_seatList[seat].load(std::memory_order_acquire) != nullptr)
         {
             platform::Log(L"WARNING: rumble list: removed off the game thread; {}'s list is left allocated",
                           players::SeatName(seat));
@@ -743,7 +744,7 @@ void Tick() noexcept
         void* const member = players::generation::MemberOf(seat);
         const auto  type   = member != nullptr ? session::party_member::PlayerTypeOf(member) : std::nullopt;
         g_memberType[seat].store(type ? static_cast<int>(*type) : -1, std::memory_order_relaxed);
-        if (g_listTwo[seat].load(std::memory_order_relaxed) == nullptr && players::generation::ControllerOf(seat) != nullptr)
+        if (g_seatList[seat].load(std::memory_order_relaxed) == nullptr && players::generation::ControllerOf(seat) != nullptr)
         {
             MakeList(seat);
         }

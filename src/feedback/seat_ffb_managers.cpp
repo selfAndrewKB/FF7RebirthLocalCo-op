@@ -109,7 +109,7 @@ bool                    g_installed = false;
 // Game thread. One seat's manager and its state (by seat; index 0, player 1's, unused: player 1 keeps the game's).
 struct SeatManager
 {
-    std::atomic<void*> two{nullptr};       // the seat's manager, made once and kept for the session
+    std::atomic<void*> manager{nullptr};   // the seat's manager, made once and kept for the session
     void*              attached = nullptr;  // the controller whose component names the seat's manager (null: none)
     bool               failed   = false;    // making the seat's manager failed: not tried again
     bool               settled  = false;    // the seat's manager has run the game's state 1 (outside the constructor)
@@ -205,42 +205,42 @@ std::int64_t Microseconds(std::chrono::steady_clock::duration d) noexcept
 /// play never meets an empty track array. Its state 1 (the resident sounds, the ready flag) runs on the next tick.
 void* MakeInConstructor(int seat)
 {
-    const wchar_t* const name   = players::SeatName(seat);
-    const auto           start  = std::chrono::steady_clock::now();
-    void* const          memory = g_malloc(kManagerSize);
-    void* const          two    = memory != nullptr ? g_ctor(memory) : nullptr;
-    if (two == nullptr)
+    const wchar_t* const name    = players::SeatName(seat);
+    const auto           start   = std::chrono::steady_clock::now();
+    void* const          memory  = g_malloc(kManagerSize);
+    void* const          manager = memory != nullptr ? g_ctor(memory) : nullptr;
+    if (manager == nullptr)
     {
         platform::Log(L"WARNING: ffb manager two: {}'s force-feedback manager could not be made; both pads keep "
                       L"the game's one manager",
                       name);
         return nullptr;
     }
-    g_buildTracks(two);
-    const bool built = Count(two, kTracks) == kTrackCount;
+    g_buildTracks(manager);
+    const bool built = Count(manager, kTracks) == kTrackCount;
     platform::Log(L"ffb manager two: {}'s force-feedback manager made at 0x{:X} inside {}'s controller's "
                   L"constructor ({} us): {} effects (the game's {}), {} tracks, PS5 haptic mode {}{}",
-                  name, reinterpret_cast<std::uintptr_t>(two), name,
-                  Microseconds(std::chrono::steady_clock::now() - start), Count(two, kEffects),
-                  Count(Global(), kEffects), Count(two, kTracks), ReadField<std::uint8_t>(two, kDeviceMode),
+                  name, reinterpret_cast<std::uintptr_t>(manager), name,
+                  Microseconds(std::chrono::steady_clock::now() - start), Count(manager, kEffects),
+                  Count(Global(), kEffects), Count(manager, kTracks), ReadField<std::uint8_t>(manager, kDeviceMode),
                   built ? std::wstring() : std::format(L"; TRACKS NOT BUILT: {} stays on the game's manager", name));
-    return built ? two : nullptr;
+    return built ? manager : nullptr;
 }
 
 /// `seat`'s manager runs the game's state 1 (outside every constructor, as the game's own runs at map loads): the
 /// resident sounds, the tracks it lacks (none), the ready flag, then state 2.
-void Settle(int seat, void* two)
+void Settle(int seat, void* manager)
 {
     g_seats[seat].settled = true;
     const auto start      = std::chrono::steady_clock::now();
-    const bool asked      = g_request(static_cast<std::byte*>(two) + kMachine, kLoadState);
-    g_tick(two, 0.0f);  // enters state 1 and runs its tick, which requests state 2
-    g_tick(two, 0.0f);  // enters state 2, where the game's manager rests
+    const bool asked      = g_request(static_cast<std::byte*>(manager) + kMachine, kLoadState);
+    g_tick(manager, 0.0f);  // enters state 1 and runs its tick, which requests state 2
+    g_tick(manager, 0.0f);  // enters state 2, where the game's manager rests
     platform::Log(L"ffb manager two: {}'s manager ran the game's state 1 ({} us): asked {}, state {}, ready {}, "
                   L"{} tracks",
-                  players::SeatName(seat), Microseconds(std::chrono::steady_clock::now() - start), asked, StateOf(two),
-                  ReadField<std::uint8_t>(two, kReady), Count(two, kTracks));
-    platform::LogDebug(L"ffb manager two: {}'s tracks: {}", players::SeatName(seat), TrackNames(two));
+                  players::SeatName(seat), Microseconds(std::chrono::steady_clock::now() - start), asked,
+                  StateOf(manager), ReadField<std::uint8_t>(manager, kReady), Count(manager, kTracks));
+    platform::LogDebug(L"ffb manager two: {}'s tracks: {}", players::SeatName(seat), TrackNames(manager));
 }
 
 /// The component constructor, inside the AEndPlayerController constructor. For the controller a join's CreatePlayer
@@ -263,18 +263,18 @@ void* CompCtor(void* component, void* owner) noexcept
     }
     try
     {
-        void* two = record.two.load(std::memory_order_relaxed);
-        if (two == nullptr)
+        void* manager = record.manager.load(std::memory_order_relaxed);
+        if (manager == nullptr)
         {
-            two = MakeInConstructor(seat);
-            if (two == nullptr)
+            manager = MakeInConstructor(seat);
+            if (manager == nullptr)
             {
                 record.failed = true;
                 return result;
             }
-            record.two.store(two, std::memory_order_release);
+            record.manager.store(manager, std::memory_order_release);
         }
-        WriteField<void*>(component, kManager, two);  // the field the constructor just set to the game's manager
+        WriteField<void*>(component, kManager, manager);  // the field the constructor just set to the game's manager
         platform::LogDebug(L"ffb manager two: {}'s controller 0x{:X} is constructed: its component takes {}'s manager",
                            players::SeatName(seat), reinterpret_cast<std::uintptr_t>(owner), players::SeatName(seat));
     }
@@ -293,22 +293,22 @@ void Attach(int seat, void* controller)
     void* const          component = static_cast<std::byte*>(controller) + kComponent;
     void* const          current   = ReadPointer(component, kManager);
     void* const          global    = Global();
-    void* const          two       = record.two.load(std::memory_order_relaxed);
-    if (current != nullptr && current == two)
+    void* const          manager   = record.manager.load(std::memory_order_relaxed);
+    if (current != nullptr && current == manager)
     {
         void* const registered = component;
-        if (!g_contains(Registry(two), &registered))
+        if (!g_contains(Registry(manager), &registered))
         {
             return;  // BeginPlay has not run yet
         }
         record.attached = controller;
         platform::Log(L"ffb manager two: {}'s component plays through {}'s own manager (components: the "
                       L"game's {}, {}'s {}; Vibration {})",
-                      name, name, Count(global, kRegistry), name, Count(two, kRegistry),
-                      ReadField<std::uint8_t>(two, kEnabled));
+                      name, name, Count(global, kRegistry), name, Count(manager, kRegistry),
+                      ReadField<std::uint8_t>(manager, kEnabled));
         return;
     }
-    if (two == nullptr)
+    if (manager == nullptr)
     {
         if (!record.noneLogged)
         {
@@ -343,14 +343,15 @@ void Attach(int seat, void* controller)
         return;
     }
     RemoveFrom(global, component);
-    WriteField<void*>(component, kManager, two);
-    AddUnique(two, component);
-    SetEnabled()(two, ReadField<std::uint8_t>(global, kEnabled));  // as BeginPlay sets it: resets the seat's component
+    WriteField<void*>(component, kManager, manager);
+    AddUnique(manager, component);
+    SetEnabled()(manager, ReadField<std::uint8_t>(global, kEnabled));  // as BeginPlay sets it: resets the seat's
+                                                                       // component
     record.attached = controller;
     platform::Log(L"ffb manager two: {}'s component moved onto {}'s own manager (components: the game's "
                   L"{}, {}'s {}; Vibration {})",
-                  name, name, Count(global, kRegistry), name, Count(two, kRegistry),
-                  ReadField<std::uint8_t>(two, kEnabled));
+                  name, name, Count(global, kRegistry), name, Count(manager, kRegistry),
+                  ReadField<std::uint8_t>(manager, kEnabled));
 }
 
 /// `seat`'s component back on the game's manager, as BeginPlay left it (game thread).
@@ -364,7 +365,7 @@ void Detach(int seat, const wchar_t* why)
     {
         return;
     }
-    void* const two = record.two.load(std::memory_order_relaxed);
+    void* const manager = record.manager.load(std::memory_order_relaxed);
     if (controller != players::generation::ControllerOf(seat))
     {
         // The controller cannot be shown to be live: its component, if it is ever destroyed, leaves the seat's
@@ -376,16 +377,16 @@ void Detach(int seat, const wchar_t* why)
     }
     void* const component = static_cast<std::byte*>(controller) + kComponent;
     void* const global    = Global();
-    if (global == nullptr || ReadPointer(component, kManager) != two)
+    if (global == nullptr || ReadPointer(component, kManager) != manager)
     {
         return;
     }
-    RemoveFrom(two, component);
+    RemoveFrom(manager, component);
     WriteField<void*>(component, kManager, global);
     AddUnique(global, component);
     platform::Log(L"ffb manager two: {}: {}'s component is back on the game's manager (components: the game's {}, "
                   L"{}'s {}; option mirrors {}, stop-all mirrors {})",
-                  why, name, Count(global, kRegistry), name, Count(two, kRegistry), g_optionMirrors, g_muteMirrors);
+                  why, name, Count(global, kRegistry), name, Count(manager, kRegistry), g_optionMirrors, g_muteMirrors);
 }
 
 /// The Vibration option's setter: on the game's manager, then the same on each seat's, in seat order.
@@ -399,7 +400,7 @@ void SetEnabledHook(void* manager, std::uint8_t on) noexcept
     int first = 0, count = 0;  // the first built seat with a manager, and how many have one
     for (int seat = players::kSeatsBuilt; seat >= 1; --seat)
     {
-        const bool has = g_seats[seat].two.load(std::memory_order_acquire) != nullptr;
+        const bool has = g_seats[seat].manager.load(std::memory_order_acquire) != nullptr;
         first          = has ? seat : first;
         count += has ? 1 : 0;
     }
@@ -420,12 +421,12 @@ void SetEnabledHook(void* manager, std::uint8_t on) noexcept
     }
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        void* const two = g_seats[seat].two.load(std::memory_order_acquire);
-        if (two == nullptr)
+        void* const theirs = g_seats[seat].manager.load(std::memory_order_acquire);
+        if (theirs == nullptr)
         {
             continue;
         }
-        SetEnabled()(two, on);
+        SetEnabled()(theirs, on);
         ++g_optionMirrors;
         platform::LogDebug(L"ffb manager two: Vibration {} on the game's manager, repeated on {}'s", on,
                            players::SeatName(seat));
@@ -444,9 +445,9 @@ void MuteAllHook(void* manager, std::uint8_t mute) noexcept
     }
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        void* const two = g_seats[seat].two.load(std::memory_order_acquire);
-        if (two == nullptr || g_seats[seat].attached == nullptr || !players::generation::Active(seat) ||
-            Count(two, kRegistry) == 0)
+        void* const theirs = g_seats[seat].manager.load(std::memory_order_acquire);
+        if (theirs == nullptr || g_seats[seat].attached == nullptr || !players::generation::Active(seat) ||
+            Count(theirs, kRegistry) == 0)
         {
             continue;
         }
@@ -455,7 +456,7 @@ void MuteAllHook(void* manager, std::uint8_t mute) noexcept
         {
             continue;
         }
-        MuteAll()(two, mute);
+        MuteAll()(theirs, mute);
         ++g_muteMirrors;
         platform::LogDebug(L"ffb manager two: stop-all ({}) repeated on {}'s controller", mute ? L"mute" : L"unmute",
                            players::SeatName(seat));
@@ -562,11 +563,11 @@ void Tick() noexcept
     {
         try
         {
-            SeatManager& record = g_seats[seat];
-            void* const  two    = record.two.load(std::memory_order_relaxed);
-            if (two != nullptr && !record.settled)
+            SeatManager& record  = g_seats[seat];
+            void* const  manager = record.manager.load(std::memory_order_relaxed);
+            if (manager != nullptr && !record.settled)
             {
-                Settle(seat, two);  // the tick after the constructor made it
+                Settle(seat, manager);  // the tick after the constructor made it
             }
             void* const controller = players::generation::Active(seat) ? players::generation::ControllerOf(seat) : nullptr;
             if (controller == nullptr)

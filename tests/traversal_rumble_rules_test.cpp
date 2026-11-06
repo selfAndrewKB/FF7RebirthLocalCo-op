@@ -56,7 +56,7 @@ void TestRoutes()
 {
     std::puts("routes: player 2's list when its own and taken; else the game's, copied during a shared ride; a stop of "
               "player 2's on a worker is left");
-    EXPECT(AddRouteOf(true, true, true) == Route::Two);
+    EXPECT(AddRouteOf(true, true, true) == Route::Seat);
     EXPECT(AddRouteOf(true, false, true) == Route::Game);  // player 2's, but the list did not take it: never copied
     EXPECT(AddRouteOf(false, false, false) == Route::Game);
     EXPECT(AddRouteOf(false, false, true) == Route::GameAndCopy);
@@ -64,8 +64,8 @@ void TestRoutes()
     EXPECT(StopRouteOf(true, false, true, true, false, true) == Route::LeftOnWorker);
     EXPECT(StopRouteOf(true, false, false, true, false, true) == Route::Game);  // no list: the game's
     EXPECT(StopRouteOf(false, false, true, false, false, true) == Route::GameAndCopy);
-    EXPECT(StopRouteOf(true, true, true, true, true, true) == Route::Two);
-    EXPECT(StopRouteOf(false, true, true, true, true, false) == Route::Two);  // player 2 the primary player
+    EXPECT(StopRouteOf(true, true, true, true, true, true) == Route::Seat);
+    EXPECT(StopRouteOf(false, true, true, true, true, false) == Route::Seat);  // player 2 the primary player
     EXPECT(StopRouteOf(false, true, true, true, false, true) == Route::Game);  // not stopped there: never copied
     EXPECT(StopRouteOf(false, true, true, false, false, false) == Route::Game);
 }
@@ -74,8 +74,8 @@ void TestListTick()
 {
     std::puts("list tick: no list means the game's; player 2's component ticks its own; the game's never plays on pad 2");
     EXPECT(ListTickChoice(false, true, true) == ListTick::Game);
-    EXPECT(ListTickChoice(true, true, false) == ListTick::Two);
-    EXPECT(ListTickChoice(true, true, true) == ListTick::Two);
+    EXPECT(ListTickChoice(true, true, false) == ListTick::Seat);
+    EXPECT(ListTickChoice(true, true, true) == ListTick::Seat);
     EXPECT(ListTickChoice(true, false, true) == ListTick::Skip);
     EXPECT(ListTickChoice(true, false, false) == ListTick::GameOne);
 }
@@ -106,7 +106,7 @@ void TestSeats()
     }
     // Three players: player 3's component without a list ticks the game's, even with player 2's list made.
     EXPECT(ListTickFor(2, false, true, false) == ListTick::Game);
-    EXPECT(ListTickFor(2, true, true, true) == ListTick::Two);
+    EXPECT(ListTickFor(2, true, true, true) == ListTick::Seat);
     // Player 1's component: the game's list skipped while any seat is primary, counted otherwise.
     EXPECT(ListTickFor(-1, false, true, true) == ListTick::Skip);
     EXPECT(ListTickFor(-1, false, true, false) == ListTick::GameOne);

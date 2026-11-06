@@ -26,7 +26,7 @@
 
 // The rumble sources that run outside the seats' scopes (feedback/traversal_rumble.h): the scooter move
 // state's slots, the sky glide's delegate, the jump box's OnEnded, the drift and brake actions. Each names a seat as
-// the owner of its adds and stops while it runs for the seat's scooter or chocobo (OwnerTwo; the seat from the
+// the owner of its adds and stops while it runs for the seat's scooter or chocobo (SeatOwner; the seat from the
 // scooter's controller or the chocobo's weak pointer); the drift and brake also answer the leader test for the seat's
 // member on their thread. Their slots are placed from one table, a source's slots all or none; the jump box (an entry
 // redirect, and 1.004's inline list load) is placed on its own.
@@ -79,13 +79,13 @@ platform::VTableEntry   g_brakeOneSlot;
 platform::VTableEntry   g_brakeTwoSlot;
 
 /// Names `seat` as the owner of this thread's adds and stops while it lives (nesting keeps the outer owner).
-class OwnerTwo
+class SeatOwner
 {
 public:
-    explicit OwnerTwo(int seat) noexcept : saved_(t_ownerSeat) { t_ownerSeat = seat; }
-    ~OwnerTwo() { t_ownerSeat = saved_; }
-    OwnerTwo(const OwnerTwo&)            = delete;
-    OwnerTwo& operator=(const OwnerTwo&) = delete;
+    explicit SeatOwner(int seat) noexcept : saved_(t_ownerSeat) { t_ownerSeat = seat; }
+    ~SeatOwner() { t_ownerSeat = saved_; }
+    SeatOwner(const SeatOwner&)            = delete;
+    SeatOwner& operator=(const SeatOwner&) = delete;
 
 private:
     int saved_;
@@ -96,7 +96,7 @@ int SeatOfChocoboWeak(std::uint64_t weak) noexcept
 {
     for (int seat = 1; weak != 0 && seat <= players::kSeatsBuilt; ++seat)
     {
-        if (players::generation::ChocoboWeakOf(seat) == weak && g_listTwo[seat].load(std::memory_order_acquire) != nullptr)
+        if (players::generation::ChocoboWeakOf(seat) == weak && g_seatList[seat].load(std::memory_order_acquire) != nullptr)
         {
             return seat;
         }
@@ -137,7 +137,7 @@ int SeatOfScooter(const void* state) noexcept
         }
         scooter = scooter != nullptr ? scooter : ReadPointer(state, kStateOwner);
         if (scooter != nullptr && ReadPointer(scooter, facts::kPawnController) == controller &&
-            g_listTwo[seat].load(std::memory_order_acquire) != nullptr)
+            g_seatList[seat].load(std::memory_order_acquire) != nullptr)
         {
             return seat;
         }
@@ -155,8 +155,8 @@ std::uint64_t ScooterTick(void* state, float dt) noexcept
     {
         return original(state, dt);
     }
-    NoteSource(seat, &Counts::scooterTwo);
-    const OwnerTwo owner(seat);
+    NoteSource(seat, &Counts::seatScooter);
+    const SeatOwner owner(seat);
     return original(state, dt);
 }
 
@@ -169,8 +169,8 @@ std::uint64_t ScooterOff(void* state) noexcept
     {
         return original(state);
     }
-    NoteSource(seat, &Counts::scooterTwo);
-    const OwnerTwo owner(seat);
+    NoteSource(seat, &Counts::seatScooter);
+    const SeatOwner owner(seat);
     return original(state);
 }
 
@@ -191,8 +191,8 @@ bool GlideSafe(void* instance) noexcept
     {
         return original(instance);
     }
-    NoteSource(seat, &Counts::glideTwo);
-    const OwnerTwo owner(seat);
+    NoteSource(seat, &Counts::seatGlide);
+    const SeatOwner owner(seat);
     return original(instance);
 }
 
@@ -205,8 +205,8 @@ void GlideRun(void* instance) noexcept
         original(instance);
         return;
     }
-    NoteSource(seat, &Counts::glideTwo);
-    const OwnerTwo owner(seat);
+    NoteSource(seat, &Counts::seatGlide);
+    const SeatOwner owner(seat);
     original(instance);
 }
 
@@ -229,7 +229,7 @@ public:
         bool refused = false;
         {
             const ListLock      lock;
-            void* const         list   = g_listTwo[seat].load(std::memory_order_acquire);
+            void* const         list   = g_seatList[seat].load(std::memory_order_acquire);
             const std::uint32_t thread = GetCurrentThreadId();
             for (auto& slot : g_jumpSlots)
             {
@@ -279,7 +279,7 @@ public:
             bool           live = false;
             for (int seat = 1; outer_ != nullptr && seat <= players::kSeatsBuilt; ++seat)
             {
-                live = live || g_listTwo[seat].load(std::memory_order_acquire) == outer_;
+                live = live || g_seatList[seat].load(std::memory_order_acquire) == outer_;
             }
             slot_->list.store(live ? outer_ : nullptr, std::memory_order_release);
             return;
@@ -307,8 +307,8 @@ void JumpEnded(void* payload) noexcept
         original(payload);
         return;
     }
-    NoteSource(seat, &Counts::jumpTwo);
-    const OwnerTwo  owner(seat);
+    NoteSource(seat, &Counts::seatJump);
+    const SeatOwner owner(seat);
     const JumpRoute route(seat);
     original(payload);
 }
@@ -323,9 +323,9 @@ std::uint64_t Drift(void* action, double dt) noexcept
     {
         return original(action, dt);
     }
-    NoteSource(seat, &Counts::driftTwo);
+    NoteSource(seat, &Counts::seatDrift);
     NoteAction(seat);
-    const OwnerTwo                   owner(seat);
+    const SeatOwner                  owner(seat);
     const scopes::leader_answer::ThreadScope leader(g_memberType[seat].load(std::memory_order_relaxed));
     return original(action, dt);
 }
@@ -339,9 +339,9 @@ std::uint64_t Brake(platform::VTableEntry& slot, void* move, std::uint64_t event
     {
         return original(move, event, xmm2, xmm3);
     }
-    NoteSource(seat, &Counts::brakeTwo);
+    NoteSource(seat, &Counts::seatBrake);
     NoteAction(seat);
-    const OwnerTwo                   owner(seat);
+    const SeatOwner                  owner(seat);
     const scopes::leader_answer::ThreadScope leader(g_memberType[seat].load(std::memory_order_relaxed));
     return original(move, event, xmm2, xmm3);
 }

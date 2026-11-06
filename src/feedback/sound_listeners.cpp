@@ -1414,12 +1414,12 @@ void Tick(const std::array<int, players::kMaxPlayers>& ownColumns) noexcept
             std::array<float, kListenerFields> seen{};
             if (g_listeners.Read(seen))
             {
-                const std::size_t one = kColumnX + kPerColumn, two = kColumnX + 2 * kPerColumn;
+                const std::size_t base1 = kColumnX + kPerColumn, base2 = kColumnX + 2 * kPerColumn;
                 platform::LogTrace(L"sound listeners: SEAD ({:.0f}, {:.0f}, {:.0f}); engine {} listener(s): [0] ({:.0f}, "
                                    L"{:.0f}, {:.0f}) [1] ({:.0f}, {:.0f}, {:.0f}) [2] ({:.0f}, {:.0f}, {:.0f})",
                                    seen[kSeadX], seen[kSeadX + 1], seen[kSeadX + 2], static_cast<int>(seen[kCount]),
-                                   seen[kColumnX], seen[kColumnX + 1], seen[kColumnX + 2], seen[one], seen[one + 1],
-                                   seen[one + 2], seen[two], seen[two + 1], seen[two + 2]);
+                                   seen[kColumnX], seen[kColumnX + 1], seen[kColumnX + 2], seen[base1], seen[base1 + 1],
+                                   seen[base1 + 2], seen[base2], seen[base2 + 1], seen[base2 + 2]);
             }
         }
 
