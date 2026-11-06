@@ -57,7 +57,7 @@ struct Entry
     std::uint32_t              blocked     = 0;  // state +0x91
     std::uint32_t              cooling     = 0;  // state +0x94 > 0
 };
-std::array<Entry, 4> g_entries;
+std::array<Entry, players::kMaxPlayers + 2> g_entries;  // the characters of interest (OfInterest), and one to spare
 
 Entry* EntryFor(void* character) noexcept
 {
@@ -77,13 +77,13 @@ Entry* EntryFor(void* character) noexcept
     return nullptr;
 }
 
-/// Player 2's member and player 1's pawn and leader: the only characters counted.
+/// The seats' members and player 1's pawn and leader: the only characters counted.
 bool OfInterest(const void* character) noexcept
 {
     void* one = players::generation::PlayerOneController();
     return character != nullptr &&
-           (character == players::generation::Member() || character == ReadPointer(one, facts::kControllerPawn) ||
-            character == ReadPointer(one, facts::kControllerLeader));
+           (players::SeatIndex(players::generation::SeatOfMember(character)) ||
+            character == ReadPointer(one, facts::kControllerPawn) || character == ReadPointer(one, facts::kControllerLeader));
 }
 
 /// Evaluates the per-character and per-state gate tests one by one.
@@ -105,7 +105,8 @@ void Sample(Entry& entry, const void* state, const void* character) noexcept
 
 const wchar_t* RoleOf(const void* character) noexcept
 {
-    return character == players::generation::Member() ? L"player 2's" : L"player 1's";
+    const int seat = players::generation::SeatOfMember(character);
+    return players::SeatIndex(seat) ? players::BySeat(seat, L"player 2's", L"player 3's") : L"player 1's";
 }
 
 template <class Fn>

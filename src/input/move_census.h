@@ -2,7 +2,7 @@
 
 // The movement census (a dev tool): which characters' move states run, how often, and how the movement gate's
 // per-character tests answer for each (input/move_state.h counts into it from both tick slots; the session's
-// status line writes it). Every 30th tick of a character of interest (player 2's member, player 1's pawn and leader)
+// status line writes it). Every 30th tick of a character of interest (the seats' members, player 1's pawn and leader)
 // samples the five gate tests one by one, since the gate itself starts with a global test and its answer would not say
 // why a character is refused. A player's build has the empty stubs below.
 

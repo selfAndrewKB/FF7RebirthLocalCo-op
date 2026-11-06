@@ -30,7 +30,7 @@ struct CollisionWatch
     std::wstring   firstHit[3];
     unsigned       after = 0;  // frames counted since the module left (0: none)
 };
-std::array<CollisionWatch, 2> g_collision;
+std::array<CollisionWatch, players::kMaxPlayers> g_collision;  // by player: 0 player 1's camera, then each seat's
 
 const void* SlotFifteen(const void* cameraManager) noexcept
 {
@@ -51,7 +51,7 @@ void LogCollision(int player, const CollisionWatch& w)
         text += std::format(L"{}{}: pulled in {} of {} frame(s){}", text.empty() ? L"" : L"; ", kBucket[b], w.pulled[b],
                             w.frames[b], w.firstHit[b].empty() ? L"" : L", first hit " + w.firstHit[b]);
     }
-    platform::LogDebug(L"traversal camera: player {}'s {} camera (vt 0x{:X}) collision: {}", player + 1,
+    platform::LogDebug(L"traversal camera: {}'s {} camera (vt 0x{:X}) collision: {}", players::SeatName(player),
                        w.vtable == kClimbingModuleVt ? L"climbing wall" : L"traversal", w.vtable,
                        text.empty() ? std::wstring(L"no frames") : text);
 }
@@ -61,11 +61,10 @@ void WatchCollision(int player, const void* cameraManager)
     CollisionWatch& w      = g_collision[player];
     const void*     module = cameraManager != nullptr ? SlotFifteen(cameraManager) : nullptr;
     const auto      vt     = module != nullptr ? VTableOf(module) : 0;
-    // Only the traversal modules this watch follows (a dev tool: player 1's and player 2's): the climbing wall's (the
-    // holders unit installs it) and player 2's ladder's (any other slot-15 module, a ride framing or a cutscene, is left to its own watch).
+    // Only the traversal modules this watch follows (a dev tool): the climbing wall's (the holders unit installs it)
+    // and a seat's ladder's (any other slot-15 module, a ride framing or a cutscene, is left to its own watch).
     const bool traversal =
-        module != nullptr &&
-        (vt == g_climbingModuleVt || (player == 1 && module == g_ladderModule[players::kFirstSeat]));
+        module != nullptr && (vt == g_climbingModuleVt || (player >= 1 && module == g_ladderModule[player]));
     if (module != w.module && w.module != nullptr && w.after == 0)
     {
         w.after = 1;  // the traversal camera left: watch the hand-over
@@ -130,11 +129,21 @@ void Tick(bool active) noexcept
     }
     try
     {
-        void* const controllers[2] = {players::generation::PlayerOneController(), players::generation::PlayerTwoController()};
-        for (int p = 0; p < 2; ++p)
+        // Player 1's camera, and the camera of each seat whose player is in (a seat that is out has none to watch).
+        for (int p = 0; p < players::kMaxPlayers; ++p)
         {
-            WatchCollision(p, controllers[p] != nullptr ? ReadPointer(controllers[p], facts::kControllerCameraManager)
-                                                        : nullptr);
+            if (p != 0 && !players::generation::Active(p))
+            {
+                CollisionWatch& w = g_collision[static_cast<std::size_t>(p)];
+                if (w.module != nullptr)
+                {
+                    LogCollision(p, w);  // the seat's player left mid-camera: its line, then a fresh record
+                }
+                w = CollisionWatch{};
+                continue;
+            }
+            void* const controller = players::generation::ControllerOf(p);
+            WatchCollision(p, controller != nullptr ? ReadPointer(controller, facts::kControllerCameraManager) : nullptr);
         }
     }
     catch (...)

@@ -184,22 +184,57 @@ platform::VTableEntry              g_glideEnter, g_glideExit, g_jetEnter, g_jetE
 std::optional<platform::GameImage> g_image;
 std::uintptr_t                     g_ladderVt = 0, g_doorVt = 0, g_climbVt = 0, g_jumpPadVt = 0;
 
+// The records by player: 0 player 1's, then each seat's. One more slot counts every other controller or tracker.
+constexpr std::size_t kPlayers = players::kMaxPlayers;
+constexpr std::size_t kAnother = kPlayers;
+// The characters followed (Tracked): each player's pawn, then each seat's member while its pawn is something else.
+constexpr std::size_t kTracked = 2 * kPlayers;
+
 // Game thread.
-bool                                         g_listSeen = false;
-List                                         g_lists[2];
-std::array<bool, 3>                          g_passSeen{};
-std::array<std::tuple<const void*, const void*, std::int32_t>, 3> g_pass{};  // character, controller, list count
-std::array<std::tuple<const void*, std::uint8_t>, 3>              g_offer{};  // ladder, its answer
-std::array<bool, 3>                          g_offerSeen{};
+std::array<bool, kPlayers>                   g_listSeen{};
+List                                         g_lists[kPlayers];
+std::array<bool, kTracked>                   g_passSeen{};
+std::array<std::tuple<const void*, const void*, std::int32_t>, kTracked> g_pass{};  // character, controller, list count
+std::array<std::tuple<const void*, std::uint8_t>, kTracked>              g_offer{};  // ladder, its answer
+std::array<bool, kTracked>                   g_offerSeen{};
 std::array<Climb, 4>                         g_climbs{};
-std::array<TriggerState, 2>                  g_triggers{};
-std::array<TrackerState, 2>                  g_trackers{};
-std::array<bool, 2>                          g_trackerSeen{};
-std::array<std::uint32_t, 2>                 g_trackerFrames{};
+std::array<TriggerState, kPlayers>           g_triggers{};
+std::array<TrackerState, kPlayers>           g_trackers{};
+std::array<bool, kPlayers>                   g_trackerSeen{};
+std::array<std::uint32_t, kPlayers>          g_trackerFrames{};
 platform::CallRedirect                       g_resolveCall;
-std::array<TrackerPasses, 3>                 g_dispatches{};  // player 1's tracker, player 2's, another
-std::array<unsigned, 3>                      g_resolves{};    // the key resolved to player 1's controller, 2's, another
+std::array<TrackerPasses, kPlayers + 1>      g_dispatches{};  // each player's tracker, then another
+std::array<unsigned, kPlayers + 1>           g_resolves{};    // the key resolved to each player's controller, then another
 platform::Every                              g_summary{std::chrono::seconds(10)};
+
+/// Whose `controller` is: 0 player 1's, a seat's number, kAnother for any other (or none).
+std::size_t PlayerOf(const void* controller) noexcept
+{
+    if (controller == nullptr)
+    {
+        return kAnother;
+    }
+    if (controller == players::generation::PlayerOneController())
+    {
+        return 0;
+    }
+    const int seat = players::generation::SeatOfController(controller);
+    return players::SeatIndex(seat) ? static_cast<std::size_t>(seat) : kAnother;
+}
+
+/// The seat whose primary scope is open (its controller is the game's primary one now), or 0. Game thread.
+int ScopedSeat() noexcept
+{
+    for (int seat = 1; seat < players::kMaxPlayers; ++seat)
+    {
+        if (const void* controller = players::generation::ControllerOf(seat);
+            controller != nullptr && scopes::primary_controller::Is(controller))
+        {
+            return seat;
+        }
+    }
+    return 0;
+}
 
 std::uintptr_t Live(const platform::GameImage& image, std::uintptr_t research) noexcept
 {
@@ -212,25 +247,23 @@ std::uintptr_t Research(std::uintptr_t live) noexcept
     return g_image ? g_image->ResearchAddress(live) : live;
 }
 
-/// The characters this watch follows: 0 player 1's pawn, 1 player 2's pawn (the member, or the chocobo they drive),
-/// 2 player 2's member when player 2's pawn is something else. -1 for any other.
+/// The characters this watch follows: p for player p's pawn (0 player 1's; a seat's is its member, or the chocobo
+/// its player drives), kPlayers + s for seat s's member when the seat's pawn is something else. -1 for any other.
 int Tracked(const void* character) noexcept
 {
     if (character == nullptr)
     {
         return -1;
     }
-    const void* onePawn = ReadPointer(players::generation::PlayerOneController(), facts::kControllerPawn);
-    const void* twoPawn = ReadPointer(players::generation::PlayerTwoController(), facts::kControllerPawn);
-    if (character == onePawn)
+    for (int p = 0; p < players::kMaxPlayers; ++p)
     {
-        return 0;
+        if (character == ReadPointer(players::generation::ControllerOf(p), facts::kControllerPawn))
+        {
+            return p;
+        }
     }
-    if (character == twoPawn)
-    {
-        return 1;
-    }
-    return character == players::generation::Member() ? 2 : -1;
+    const int seat = players::generation::SeatOfMember(character);
+    return players::SeatIndex(seat) ? static_cast<int>(kPlayers) + seat : -1;
 }
 
 std::wstring Whom(const void* actor)
@@ -243,16 +276,15 @@ std::wstring Whom(const void* actor)
     {
         return std::format(L"{}'s chocobo", players::SeatName(rider));
     }
-    if (actor == players::generation::Member())
+    if (const int seat = players::generation::SeatOfMember(actor); players::SeatIndex(seat))
     {
-        return L"player 2's member";
+        return std::format(L"{}'s member", players::SeatName(seat));
     }
-    switch (Tracked(actor))
+    if (const int player = Tracked(actor); player >= 0 && player < players::kMaxPlayers)
     {
-    case 0: return L"player 1's pawn";
-    case 1: return L"player 2's pawn";
-    default: return std::format(L"another character {}", actor);
+        return std::format(L"{}'s pawn", players::SeatName(player));
     }
+    return std::format(L"another character {}", actor);
 }
 
 std::wstring ActorText(const void* actor)
@@ -342,12 +374,17 @@ TrackerState ReadTracker(int player, const void* controller) noexcept
     return state;
 }
 
-int WhoseTracker(const void* tracker) noexcept
+/// Whose trigger tracker `tracker` is: a player (0 player 1), or kAnother.
+std::size_t WhoseTracker(const void* tracker) noexcept
 {
-    return tracker == nullptr                                          ? 2
-           : tracker == TrackerOf(players::generation::PlayerOneController()) ? 0
-           : tracker == TrackerOf(players::generation::PlayerTwoController()) ? 1
-                                                                      : 2;
+    for (int p = 0; tracker != nullptr && p < players::kMaxPlayers; ++p)
+    {
+        if (tracker == TrackerOf(players::generation::ControllerOf(p)))
+        {
+            return static_cast<std::size_t>(p);
+        }
+    }
+    return kAnother;
 }
 
 /// The field tick's resolve of the PlayerTrigger key (logging only: the game's answer is returned unchanged).
@@ -356,9 +393,7 @@ void* TriggerResolve(const void* weak) noexcept
     void* controller = reinterpret_cast<ResolveFn>(g_resolveCall.Original())(weak);
     if (Watching())
     {
-        ++g_resolves[controller == players::generation::PlayerOneController()   ? 0
-                     : controller == players::generation::PlayerTwoController() ? 1
-                                                                       : 2];
+        ++g_resolves[PlayerOf(controller)];
     }
     return controller;
 }
@@ -370,25 +405,23 @@ void CountDispatch(const void* tracker, std::int32_t count) noexcept
     {
         return;
     }
-    const int whose = WhoseTracker(tracker);
-    auto&     seen  = g_dispatches[whose];
+    const std::size_t whose = WhoseTracker(tracker);
+    auto&             seen  = g_dispatches[whose];
     ++seen.passes;
     if (count != seen.lastCount)
     {
         seen.lastCount = count;
         try
         {
-            static constexpr const wchar_t* kWhose[] = {L"player 1's", L"player 2's", L"another"};
             // Every other tracker shares the "another" count, so it changes on most calls: Trace, not Debug.
-            if (whose == 2)
+            if (whose == kAnother)
             {
-                platform::LogTrace(L"traversal: the field tick dispatches {} trigger tracker with {} overlap(s)",
-                                   kWhose[whose], count);
+                platform::LogTrace(L"traversal: the field tick dispatches another trigger tracker with {} overlap(s)", count);
             }
             else
             {
-                platform::LogDebug(L"traversal: the field tick dispatches {} trigger tracker with {} overlap(s)",
-                                   kWhose[whose], count);
+                platform::LogDebug(L"traversal: the field tick dispatches {}'s trigger tracker with {} overlap(s)",
+                                   players::SeatName(static_cast<int>(whose)), count);
             }
         }
         catch (...)
@@ -414,8 +447,9 @@ const wchar_t* ScopeText() noexcept
     {
         return L"off the game thread";
     }
-    return scopes::primary_controller::Is(players::generation::PlayerTwoController()) ? L"in player 2's primary scope"
-                                                                      : L"outside player 2's scope";
+    const int seat = ScopedSeat();
+    return seat == 0 ? L"outside players 2 and 3's primary scopes"
+                     : players::BySeat(seat, L"in player 2's primary scope", L"in player 3's primary scope");
 }
 
 /// Which player's camera manager GetEndPlayerCameraManager() would give now: the primary controller's. Game thread.
@@ -430,12 +464,13 @@ const wchar_t* PrimaryCameraText() noexcept
     {
         return L"player 1's";
     }
-    return primary == players::generation::PlayerTwoController() ? L"player 2's" : L"another controller's";
+    const int seat = players::generation::SeatOfController(primary);
+    return players::SeatIndex(seat) ? players::BySeat(seat, L"player 2's", L"player 3's") : L"another controller's";
 }
 
 bool Watching() noexcept
 {
-    return players::generation::Active() && players::generation::OnGameThread();
+    return players::generation::AnyActive() && players::generation::OnGameThread();
 }
 
 // --- trigger enter / leave ---
@@ -447,30 +482,44 @@ std::uintptr_t Trigger(bool enter, void* actor, void* key, void* other, void* fo
     {
         return original(actor, key, other, fourth);
     }
-    const void* one  = players::generation::PlayerOneController();
-    const void* two  = players::generation::PlayerTwoController();
-    const int   whose = other == nullptr                                 ? 0
-                        : other == ReadPointer(one, facts::kControllerTrigger) ? 1
-                        : other == ReadPointer(two, facts::kControllerTrigger) ? 2
-                                                                              : 0;
-    if (whose == 0)
+    // Whose trigger `other` is: a player's (0 player 1), or -1.
+    const void* controllers[kPlayers]{};
+    int         whose = -1;
+    for (int p = 0; p < players::kMaxPlayers; ++p)
+    {
+        controllers[p] = p == 0 || players::generation::Active(p) ? players::generation::ControllerOf(p) : nullptr;
+        if (other != nullptr && controllers[p] != nullptr && other == ReadPointer(controllers[p], facts::kControllerTrigger))
+        {
+            whose = p;
+        }
+    }
+    if (whose < 0)
     {
         return original(actor, key, other, fourth);
     }
     const auto flagBefore = ReadField<std::uint8_t>(actor, kActorEnteredFlag);
-    const bool oneBefore  = ReadList(one).Contains(actor);
-    const bool twoBefore  = ReadList(two).Contains(actor);
-    const bool scoped     = scopes::primary_controller::Is(two);
-    const auto result     = original(actor, key, other, fourth);
+    bool       before[kPlayers]{};
+    for (std::size_t p = 0; p < kPlayers; ++p)
+    {
+        before[p] = controllers[p] != nullptr && ReadList(controllers[p]).Contains(actor);
+    }
+    const wchar_t* const scope  = ScopeText();
+    const auto           result = original(actor, key, other, fourth);
     try
     {
-        const bool oneAfter = ReadList(one).Contains(actor);
-        const bool twoAfter = ReadList(two).Contains(actor);
-        platform::LogDebug(L"traversal: player {}'s trigger {} {}: entered flag {} -> {}; on player 1's list {} -> {}, "
-                           L"on player 2's list {} -> {} ({})",
-                           whose, enter ? L"entered" : L"left", ActorText(actor), flagBefore,
-                           ReadField<std::uint8_t>(actor, kActorEnteredFlag), players::YesNo(oneBefore), players::YesNo(oneAfter),
-                           players::YesNo(twoBefore), players::YesNo(twoAfter), scoped ? L"in player 2's primary scope" : L"outside it");
+        std::wstring lists;  // the actor on every player's list, before and after
+        for (std::size_t p = 0; p < kPlayers; ++p)
+        {
+            if (controllers[p] != nullptr)
+            {
+                lists += std::format(L"{}on {}'s list {} -> {}", lists.empty() ? L"" : L", ",
+                                     players::SeatName(static_cast<int>(p)), players::YesNo(before[p]),
+                                     players::YesNo(ReadList(controllers[p]).Contains(actor)));
+            }
+        }
+        platform::LogDebug(L"traversal: {}'s trigger {} {}: entered flag {} -> {}; {} ({})", players::SeatName(whose),
+                           enter ? L"entered" : L"left", ActorText(actor), flagBefore,
+                           ReadField<std::uint8_t>(actor, kActorEnteredFlag), lists, scope);
     }
     catch (...)
     {
@@ -573,9 +622,9 @@ std::wstring ExecuterCharacter(void* executer)
 
 std::uintptr_t ExecStart(void* executer) noexcept
 {
-    // The game's Start, through player 2's ladder camera (which passes every other climb straight through).
+    // The game's Start, through the seats' ladder camera (which passes every other climb straight through).
     const auto result = traversal_camera::LadderStart(reinterpret_cast<ExecFn>(g_execStart.Original()), executer);
-    if (players::generation::Active())
+    if (players::generation::AnyActive())
     {
         if (players::generation::OnGameThread())
         {
@@ -604,18 +653,18 @@ std::uintptr_t ExecEnd(void* executer) noexcept
     Climb climb;
     if (players::generation::OnGameThread())
     {
-        if (Climb* known = ClimbOf(executer))  // freed whether or not player 2 is still in
+        if (Climb* known = ClimbOf(executer))  // freed whether or not a seat's player is still in
         {
             climb  = *known;
             *known = Climb{};
         }
     }
-    if (players::generation::Active())
+    if (players::generation::AnyActive())
     {
         try
         {
             platform::LogDebug(L"traversal: a ladder climb ends for {} (executer {}; {}); {} input updates, {} of them in "
-                               L"player 2's primary scope",
+                               L"player 2's or 3's primary scope",
                                ExecuterCharacter(executer), executer, ScopeText(), climb.updates, climb.inScope);
         }
         catch (...)
@@ -627,17 +676,17 @@ std::uintptr_t ExecEnd(void* executer) noexcept
 
 std::uintptr_t ExecInput(void* executer, float dt) noexcept
 {
-    if (players::generation::Active() && players::generation::OnGameThread())
+    if (Watching())
     {
         if (Climb* climb = ClimbOf(executer))
         {
-            const bool scoped = scopes::primary_controller::Is(players::generation::PlayerTwoController());
+            const bool scoped = ScopedSeat() != 0;
             if (climb->updates++ == 0)
             {
                 try
                 {
                     platform::LogDebug(L"traversal: the climb's first input update for {} ran {}", ExecuterCharacter(executer),
-                                       scoped ? L"in player 2's primary scope" : L"outside player 2's scope");
+                                       ScopeText());
                 }
                 catch (...)
                 {
@@ -653,7 +702,7 @@ std::uintptr_t ExecInput(void* executer, float dt) noexcept
 
 void LogState(const wchar_t* state, const wchar_t* step, void* object) noexcept
 {
-    if (!players::generation::Active())
+    if (!players::generation::AnyActive())
     {
         return;
     }
@@ -746,7 +795,7 @@ void Install(const platform::GameImage& image) noexcept
     platform::Log(L"traversal watch (logging only, Debug): trigger enters {}, leaves {}; notify passes {}; ladder offers {}; "
                   L"ladder climbs {}; chocobo glide {}, water jet {}; the field tick's trigger key {} (its tracker passes come "
                   L"from the triggers module); "
-                  L"both controllers' lists and trigger trackers on change; actor names: ladder {}, door {}, chocobo "
+                  L"every player's controller's list and trigger tracker on change; actor names: ladder {}, door {}, chocobo "
                   L"climb {}, launch pad {}",
                   Outcome(enter), Outcome(leave), Outcome(notify), Outcome(ladder), Outcome(climb), Outcome(glide),
                   Outcome(jet), Outcome(resolve), g_ladderVt != 0 ? L"yes" : L"no",
@@ -768,38 +817,59 @@ void Tick() noexcept
 {
     if (!Watching())
     {
-        g_listSeen  = false;
+        g_listSeen    = {};
         g_triggers    = {};
         g_trackerSeen = {};
         g_passSeen  = {};
         g_offerSeen = {};
         if (players::generation::OnGameThread())
         {
-            g_climbs = {};  // player 2 left: no climb's End will be counted against these records
+            g_climbs = {};  // every seat's player left: no climb's End will be counted against these records
         }
         return;
     }
-    const void* controllers[2] = {players::generation::PlayerOneController(), players::generation::PlayerTwoController()};
-    for (int p = 0; p < 2; ++p)
+    // Player 1's controller, and the controller of each seat whose player is in (a seat that is out starts afresh).
+    const void* controllers[kPlayers]{};
+    for (std::size_t p = 0; p < kPlayers; ++p)
     {
+        const int player = static_cast<int>(p);
+        if (p == 0 || players::generation::Active(player))
+        {
+            controllers[p] = players::generation::ControllerOf(player);
+            continue;
+        }
+        g_listSeen[p]    = false;
+        g_triggers[p]    = {};
+        g_trackerSeen[p] = false;
+    }
+    for (std::size_t p = 0; p < kPlayers; ++p)
+    {
+        if (controllers[p] == nullptr)
+        {
+            continue;
+        }
         const List now = ReadList(controllers[p]);
-        if (g_listSeen && now == g_lists[p])
+        if (g_listSeen[p] && now == g_lists[p])
         {
             continue;
         }
         try
         {
-            platform::LogDebug(L"traversal: player {}'s controller's list {}: {}", p + 1, g_listSeen ? L"changed" : L"now",
-                               ListText(now));
+            platform::LogDebug(L"traversal: {}'s controller's list {}: {}", players::SeatName(static_cast<int>(p)),
+                               g_listSeen[p] ? L"changed" : L"now", ListText(now));
         }
         catch (...)
         {
         }
-        g_lists[p] = now;
+        g_lists[p]    = now;
+        g_listSeen[p] = true;
     }
-    g_listSeen = true;
-    for (int p = 0; p < 2; ++p)
+    for (std::size_t p = 0; p < kPlayers; ++p)
     {
+        if (controllers[p] == nullptr)
+        {
+            continue;
+        }
         const TriggerState now = ReadTrigger(controllers[p]);
         if (now == g_triggers[p])
         {
@@ -809,9 +879,10 @@ void Tick() noexcept
         try
         {
             static constexpr const wchar_t* kReach[] = {L"under 1 m", L"1-3 m", L"3-10 m", L"over 10 m"};
-            platform::LogDebug(L"traversal: player {}'s trigger {}: {} tag(s), the first {}the trigger tag; attached to {}; "
+            platform::LogDebug(L"traversal: {}'s trigger {}: {} tag(s), the first {}the trigger tag; attached to {}; "
                                L"{} from {}",
-                               p + 1, now.trigger, now.tags, now.firstIsTriggerTag ? L"" : L"NOT ",
+                               players::SeatName(static_cast<int>(p)), now.trigger, now.tags,
+                               now.firstIsTriggerTag ? L"" : L"NOT ",
                                now.parentOwner != nullptr ? Whom(now.parentOwner) + L" (" + players::NameOf(now.parentOwner) + L")"
                                                           : std::wstring(L"nothing"),
                                now.reach >= 0 ? kReach[now.reach] : L"unknown distance",
@@ -821,9 +892,13 @@ void Tick() noexcept
         {
         }
     }
-    for (int p = 0; p < 2; ++p)
+    for (std::size_t p = 0; p < kPlayers; ++p)
     {
-        const TrackerState now = ReadTracker(p, controllers[p]);
+        if (controllers[p] == nullptr)
+        {
+            continue;
+        }
+        const TrackerState now = ReadTracker(static_cast<int>(p), controllers[p]);
         if (g_trackerSeen[p] && now == g_trackers[p])
         {
             continue;
@@ -832,10 +907,10 @@ void Tick() noexcept
         g_trackers[p]    = now;
         try
         {
-            platform::LogDebug(L"traversal: player {}'s trigger tracker: enabled {}, issuing {}; overlaps {} (last pass: {} "
+            platform::LogDebug(L"traversal: {}'s trigger tracker: enabled {}, issuing {}; overlaps {} (last pass: {} "
                                L"key(s), {} field-action actor(s)); channel {}; capsule overlap events bit {}",
-                               p + 1, now.enabled, players::YesNo(now.issuing), now.overlaps, now.prevKeys, now.prevActors,
-                               now.channel, now.capsuleOverlapBit);
+                               players::SeatName(static_cast<int>(p)), now.enabled, players::YesNo(now.issuing), now.overlaps,
+                               now.prevKeys, now.prevActors, now.channel, now.capsuleOverlapBit);
         }
         catch (...)
         {
@@ -849,11 +924,16 @@ void Tick() noexcept
         {
             try
             {
-                platform::LogDebug(L"traversal (10 s): the field tick resolved the PlayerTrigger key to player 1's "
-                                   L"controller {} time(s), player 2's {}, another {}; it dispatched player 1's tracker "
-                                   L"{} time(s), player 2's {}, another {}",
-                                   g_resolves[0], g_resolves[1], g_resolves[2], g_dispatches[0].passes,
-                                   g_dispatches[1].passes, g_dispatches[2].passes);
+                std::wstring resolved, dispatched;  // by player, then every other controller's and tracker's
+                for (std::size_t p = 0; p < kPlayers; ++p)
+                {
+                    const wchar_t* who = players::SeatName(static_cast<int>(p));
+                    resolved += std::format(L"{}'s controller {}, ", who, g_resolves[p]);
+                    dispatched += std::format(L"{}'s tracker {}, ", who, g_dispatches[p].passes);
+                }
+                platform::LogDebug(L"traversal (10 s): the field tick resolved the PlayerTrigger key (times): {}another {}; "
+                                   L"it dispatched (times): {}another {}",
+                                   resolved, g_resolves[kAnother], dispatched, g_dispatches[kAnother].passes);
             }
             catch (...)
             {
