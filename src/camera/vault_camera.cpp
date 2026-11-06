@@ -180,10 +180,10 @@ void EndDeactivate(std::uint8_t slot, const void* action) noexcept
     // Active(seat) first: a map-load leave withdraws the generation before its teardown, in the same game-thread call,
     // ahead of the next Tick that clears the cached operator. A camera manager destroyed by that teardown is only freed
     // by a later garbage collection, which runs on the game thread outside the frame's animation work.
-    void* two = (member || chocobo) && players::generation::Active(seat)
-                    ? g_seatOperator[static_cast<std::size_t>(seat)].load(std::memory_order_acquire)
-                    : nullptr;
-    if ((!member && !chocobo) || two == nullptr || g_operatorDeactivate == nullptr)
+    void* seatOperator = (member || chocobo) && players::generation::Active(seat)
+                             ? g_seatOperator[static_cast<std::size_t>(seat)].load(std::memory_order_acquire)
+                             : nullptr;
+    if ((!member && !chocobo) || seatOperator == nullptr || g_operatorDeactivate == nullptr)
     {
         primary(slot);
         try
@@ -201,11 +201,11 @@ void EndDeactivate(std::uint8_t slot, const void* action) noexcept
     // call. So the module table is read again here (guarded), and the game's call, an extra call the mod adds on this
     // operator, is guarded: a table gone since the tick skips the deactivate, logged, instead of ending the game.
     void* table = nullptr;
-    const bool tableHeld = platform::CopyGuarded(&table, static_cast<const std::byte*>(two) + kOperatorModules,
+    const bool tableHeld = platform::CopyGuarded(&table, static_cast<const std::byte*>(seatOperator) + kOperatorModules,
                                                  sizeof(table)) &&
                            table != nullptr;
-    const auto before = tableHeld ? Slot15Vtable(two) : 0;
-    const bool done   = tableHeld && platform::CallGuarded(g_operatorDeactivate, two, slot);
+    const auto before = tableHeld ? Slot15Vtable(seatOperator) : 0;
+    const bool done   = tableHeld && platform::CallGuarded(g_operatorDeactivate, seatOperator, slot);
     try
     {
         const wchar_t* name = players::SeatName(seat);

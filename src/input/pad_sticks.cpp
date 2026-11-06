@@ -41,7 +41,7 @@ const std::uint8_t*       g_directInputOnly    = nullptr;  // nonzero: the game 
 
 std::atomic<bool>     g_enabled{false};
 std::atomic<bool>     g_stoodDown{false};  // SetStoodDown
-std::atomic<unsigned> g_mask{kPartPlayerTwoInput | kPartPlayerOneMove | kPartMemberTick | kPartPlayerOneDetect};
+std::atomic<unsigned> g_mask{kPartSeatInput | kPartPlayerOneMove | kPartMemberTick | kPartPlayerOneDetect};
 bool                  g_scopeOpen = false;  // game thread only
 
 // Per controller id, set by control scripts; game thread only.
@@ -79,7 +79,7 @@ void ProcessPlayerInput(void* controller, float deltaTime, bool gamePaused)
     const bool isOne  = seat == 0;
     const bool isSeat = players::SeatBuilt(seat) && players::generation::Active(seat);
     const scopes::scope_leaks::InputScope leaks(isSeat);  // a seat's input writes the leader transform; put back after
-    if (!Enabled() || (!isOne && !isSeat) || (isSeat && !PartActs(kPartPlayerTwoInput)) ||
+    if (!Enabled() || (!isOne && !isSeat) || (isSeat && !PartActs(kPartSeatInput)) ||
         !players::generation::OnGameThread())
     {
         g_inputCounters.Pass();
@@ -166,7 +166,7 @@ void SetMask(unsigned mask) noexcept
     g_mask.store(mask, std::memory_order_relaxed);
     platform::Log(L"per-pad sticks: mask {} (player 2's input as primary {}, player 1's move state on pad 1 {}, "
                   L"player 2's member ticked {}, player 1's detection and ridden chocobo on pad 1 {})",
-                  mask, PartActs(kPartPlayerTwoInput), PartActs(kPartPlayerOneMove), PartActs(kPartMemberTick),
+                  mask, PartActs(kPartSeatInput), PartActs(kPartPlayerOneMove), PartActs(kPartMemberTick),
                   PartActs(kPartPlayerOneDetect));
 }
 

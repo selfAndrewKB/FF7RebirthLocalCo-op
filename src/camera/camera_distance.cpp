@@ -102,7 +102,7 @@ using camera_access::CameraManagerOf;
 
 /// The game's per-camera-manager apply for each further player's camera manager, after the game's own apply on
 /// `applied` (the primary camera manager).
-void ApplyToPlayerTwo(const void* applied, std::uint8_t field, std::uint8_t battle) noexcept
+void ApplyToSeats(const void* applied, std::uint8_t field, std::uint8_t battle) noexcept
 {
     if (!players::generation::OnGameThread())
     {
@@ -125,7 +125,7 @@ void ApplyToPlayerTwo(const void* applied, std::uint8_t field, std::uint8_t batt
 void PrimaryApply(std::uint8_t field, std::uint8_t battle) noexcept
 {
     reinterpret_cast<PrimaryApplyFn>(g_setterCall.Original())(field, battle);
-    ApplyToPlayerTwo(CameraManagerOf(players::generation::PlayerOneController()), field, battle);
+    ApplyToSeats(CameraManagerOf(players::generation::PlayerOneController()), field, battle);
 }
 
 /// 1.005: every call of the primary camera manager's apply, at its entry; the option setter's (by its return address)
@@ -136,7 +136,7 @@ void PrimaryApplyEntry(std::uint8_t field, std::uint8_t battle) noexcept
     reinterpret_cast<PrimaryApplyFn>(g_primaryEntry.Original())(field, battle);
     if (setter)
     {
-        ApplyToPlayerTwo(CameraManagerOf(players::generation::PlayerOneController()), field, battle);
+        ApplyToSeats(CameraManagerOf(players::generation::PlayerOneController()), field, battle);
     }
 }
 
@@ -168,7 +168,7 @@ bool InstallSetter(const platform::GameImage& image, std::uintptr_t primary) noe
 void ManagerApply(void* cameraManager, std::uint8_t field, std::uint8_t battle) noexcept
 {
     reinterpret_cast<ManagerApplyFn>(g_confirmCall.Original())(cameraManager, field, battle);
-    ApplyToPlayerTwo(cameraManager, field, battle);
+    ApplyToSeats(cameraManager, field, battle);
 }
 
 template <class... Args>

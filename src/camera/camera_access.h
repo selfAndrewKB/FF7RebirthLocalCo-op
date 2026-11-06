@@ -61,11 +61,11 @@ int SeatOfCameraManager(const void* cameraManager) noexcept;
 /// generation is active, -1 none. By the controllers' camera-manager fields as they stand (needs no Install).
 int SeatOfOperator(const void* op) noexcept;
 
-/// Player 1's operator and one seat's, of one kind. `two` is the seat's (the name kept from the two-player mod).
+/// Player 1's operator and one seat's, of one kind. `own` is the seat's.
 struct OperatorPair
 {
     void* one;
-    void* two;
+    void* own;
 };
 
 using OperatorOf = void* (*)(const void* cameraManager) noexcept;

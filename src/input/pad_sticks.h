@@ -63,7 +63,7 @@ void SetStoodDown(bool on) noexcept;
 /// as the primary player's, 2 player 1's move state reads pad 1, 4 player 2's member is ticked, 8
 /// player 1's input update (terrain detection), leader-action tick and ridden chocobo read pad 1). All at
 /// start. Logged.
-inline constexpr unsigned kPartPlayerTwoInput  = 1;
+inline constexpr unsigned kPartSeatInput       = 1;
 inline constexpr unsigned kPartPlayerOneMove   = 2;
 inline constexpr unsigned kPartMemberTick      = 4;
 inline constexpr unsigned kPartPlayerOneDetect = 8;

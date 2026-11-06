@@ -128,10 +128,10 @@ using KeyCopyFn        = void* (*)(void* out, const void* key);
 // A per-seat record is indexed by the player number minus one, which is the seat (index 0 player 1's).
 struct Context
 {
-    int      player    = 0;      // 0 none, else whose move this thread is ticking (player number)
-    bool     suspended = false;  // a seat's identity (leader test, buttons) off for this call
-    bool     climb     = false;  // the move is a climb (PlayerHere answers only for climbs)
-    unsigned cameraTwo = 0;      // times the camera manager getter answered the seat's in this context
+    int      player      = 0;      // 0 none, else whose move this thread is ticking (player number)
+    bool     suspended   = false;  // a seat's identity (leader test, buttons) off for this call
+    bool     climb       = false;  // the move is a climb (PlayerHere answers only for climbs)
+    unsigned seatCameras = 0;      // times the camera manager getter answered the seat's in this context
 };
 thread_local Context t_climb;
 
@@ -205,15 +205,15 @@ std::array<std::atomic<int>, kPlayers>           g_climbClass{-1, -1, -1};  // (
 // By seat (index 0 player 1's where it has one).
 struct Counts
 {
-    std::atomic<unsigned> ticks[kPlayers]{};       // contexts entered
-    std::atomic<unsigned> leaderAsks[kPlayers]{};  // leader tests asked inside the seat's context
-    std::atomic<unsigned> cameraTwo[kPlayers]{};   // camera manager getter answered the seat's
-    std::atomic<unsigned> keys[kPlayers]{};        // key values read from a player's own copy
-    std::atomic<unsigned> buttons[kPlayers]{};     // hold-select actions answered with the seat's press
-    std::atomic<unsigned> holdOff[kPlayers]{};     // hold-selects run without the seat's identity
-    std::atomic<unsigned> finishOff[kPlayers]{};   // finishes run without the seat's identity
-    std::atomic<unsigned> staleCopies{0};          // a context found no fresh copy (the merged value read instead)
-    std::atomic<unsigned> edgeTicks[kPlayers]{};   // edge-stop action ticks
+    std::atomic<unsigned> ticks[kPlayers]{};        // contexts entered
+    std::atomic<unsigned> leaderAsks[kPlayers]{};   // leader tests asked inside the seat's context
+    std::atomic<unsigned> seatCameras[kPlayers]{};  // camera manager getter answered the seat's
+    std::atomic<unsigned> keys[kPlayers]{};         // key values read from a player's own copy
+    std::atomic<unsigned> buttons[kPlayers]{};      // hold-select actions answered with the seat's press
+    std::atomic<unsigned> holdOff[kPlayers]{};      // hold-selects run without the seat's identity
+    std::atomic<unsigned> finishOff[kPlayers]{};    // finishes run without the seat's identity
+    std::atomic<unsigned> staleCopies{0};           // a context found no fresh copy (the merged value read instead)
+    std::atomic<unsigned> edgeTicks[kPlayers]{};    // edge-stop action ticks
 };
 Counts g_counts;
 
@@ -291,7 +291,7 @@ std::uint32_t EdgeStateOf(const void* move) noexcept
 
 /// After a player's edge-stop Tick (that player's thread): Trace per Tick, Debug on change, and the stutter detector
 /// (Info once per episode when the lean restarts kStutterStarts times within kStutterWindow).
-void NoteEdgeStop(int player, const void* move, unsigned cameraTwo) noexcept
+void NoteEdgeStop(int player, const void* move, unsigned seatCameras) noexcept
 {
     EdgeSeen&      seen   = g_edge[IndexOfPlayer(player)];
     const auto     state  = EdgeStateOf(move);
@@ -308,7 +308,7 @@ void NoteEdgeStop(int player, const void* move, unsigned cameraTwo) noexcept
     std::wstring basis;  // pad N is player N's (a seat's pad is its player number's)
     try
     {
-        basis = player == 1 || cameraTwo != 0u
+        basis = player == 1 || seatCameras != 0u
                     ? std::format(L"pad {}'s stick in player {}'s camera", player, player)
                     : std::format(L"pad {}'s stick; no camera read on this tick", player);
     }
@@ -354,15 +354,15 @@ std::uintptr_t EdgeStopTick(void* move, void* arg, int player) noexcept
 {
     const auto original = reinterpret_cast<TickFn>(g_moves[Index].tick.Original());
     g_counts.edgeTicks[IndexOfPlayer(player)].fetch_add(1, std::memory_order_relaxed);
-    std::uintptr_t result    = 0;
-    unsigned       cameraTwo = 0;
+    std::uintptr_t result      = 0;
+    unsigned       seatCameras = 0;
     {
         const InContext context(player, false);
         const Suspended suspended;
-        result    = original(move, arg);
-        cameraTwo = t_climb.cameraTwo;
+        result      = original(move, arg);
+        seatCameras = t_climb.seatCameras;
     }
-    NoteEdgeStop(player, move, cameraTwo);  // the caller still holds the action after its Tick
+    NoteEdgeStop(player, move, seatCameras);  // the caller still holds the action after its Tick
     return result;
 }
 
@@ -443,11 +443,11 @@ void* CameraGetter() noexcept
     if (const int seat = SeatHere(); seat != 0)
     {
         const std::uint64_t weak = g_cameraWeak[static_cast<std::size_t>(seat)].load(std::memory_order_relaxed);
-        if (void* two = weak != 0 ? scopes::leader_scope::ObjectAt(&weak) : nullptr)
+        if (void* cameraManager = weak != 0 ? scopes::leader_scope::ObjectAt(&weak) : nullptr)
         {
-            g_counts.cameraTwo[static_cast<std::size_t>(seat)].fetch_add(1, std::memory_order_relaxed);
-            ++t_climb.cameraTwo;
-            return two;
+            g_counts.seatCameras[static_cast<std::size_t>(seat)].fetch_add(1, std::memory_order_relaxed);
+            ++t_climb.seatCameras;
+            return cameraManager;
         }
     }
     return original();
@@ -595,7 +595,7 @@ void LogChanges() noexcept
         edges[s]    = platform::Take(g_counts.edgeTicks[s]);
         keys[s]     = platform::Take(g_counts.keys[s]);
         asks[s]     = platform::Take(g_counts.leaderAsks[s]);
-        cams[s]     = platform::Take(g_counts.cameraTwo[s]);
+        cams[s]     = platform::Take(g_counts.seatCameras[s]);
         presses[s]  = platform::Take(g_counts.buttons[s]);
         holds[s]    = platform::Take(g_counts.holdOff[s]);
         finishes[s] = platform::Take(g_counts.finishOff[s]);

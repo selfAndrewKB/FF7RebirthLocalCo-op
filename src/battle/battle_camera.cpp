@@ -107,7 +107,7 @@ void FollowOnSeats(StateFn engine, void* battle, float blendTime, bool flag)
         const auto pair = PairOf(seat);
         if (pair && battle == pair->one)
         {
-            OnSeat(seat, engine, pair->two, blendTime, flag);
+            OnSeat(seat, engine, pair->own, blendTime, flag);
         }
     }
 }
@@ -236,11 +236,11 @@ bool Seed(int seat) noexcept
     {
         return false;
     }
-    if (Active(pair->one) != Active(pair->two))
+    if (Active(pair->one) != Active(pair->own))
     {
-        OnSeat(seat, Active(pair->one) != 0 ? g_engineActivate : g_engineDeactivate, pair->two, 0.0f, false);
+        OnSeat(seat, Active(pair->one) != 0 ? g_engineActivate : g_engineDeactivate, pair->own, 0.0f, false);
     }
-    return Active(pair->one) == Active(pair->two);
+    return Active(pair->one) == Active(pair->own);
 }
 
 bool SeatBattleActive(void* cameraManager) noexcept

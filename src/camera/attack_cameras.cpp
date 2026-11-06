@@ -108,7 +108,7 @@ bool                                        g_capSaid = false;  // the walk met 
 // By seat; index 0 holds player 1's (entriesOne, cutsOne).
 struct Counts
 {
-    std::uint32_t updates = 0, entries = 0, cuts = 0, lists = 0, onlyTwo = 0;
+    std::uint32_t updates = 0, entries = 0, cuts = 0, lists = 0, onlySeat = 0;
 };
 std::array<Counts, players::kMaxPlayers> g_counts{};
 platform::Every g_status{kStatusEvery};
@@ -283,7 +283,7 @@ void Install(const platform::GameImage& image) noexcept
                       : L"shot changes cut player 1's camera as before (the cut call is not what the research read)");
 }
 
-PlayerTwoUpdate::PlayerTwoUpdate(int seat) noexcept
+SeatUpdate::SeatUpdate(int seat) noexcept
 {
     if (g_battleSystem == 0 || g_inside != 0 || !players::SeatBuilt(seat) || !players::generation::OnGameThread())
     {
@@ -352,7 +352,7 @@ PlayerTwoUpdate::PlayerTwoUpdate(int seat) noexcept
     ++g_counts[Index(seat)].updates;
 }
 
-PlayerTwoUpdate::~PlayerTwoUpdate()
+SeatUpdate::~SeatUpdate()
 {
     if (list_ == nullptr)
     {
@@ -379,13 +379,13 @@ PlayerTwoUpdate::~PlayerTwoUpdate()
         // updates (the stop by id, which defers the end of a sequence some camera still plays; the battle system's
         // post-tick) then see a sequence the seat plays as playing, as solo sees the one camera's (S-ATKCAMVERIFY 2e).
         // One the update removed is not touched (the walk finds only live entries).
-        const auto two = ReadField<std::uint8_t>(entry, kEntryActive);
+        const auto seatActive = ReadField<std::uint8_t>(entry, kEntryActive);
         for (std::size_t i = 0; i < g_flagCount; ++i)
         {
             if (SameEntry(g_flags[i], entry))
             {
-                WriteField<std::uint8_t>(entry, kEntryActive, (g_flags[i].active != 0 || two != 0) ? 1 : 0);
-                counts.onlyTwo += g_flags[i].active == 0 && two != 0 ? 1 : 0;
+                WriteField<std::uint8_t>(entry, kEntryActive, (g_flags[i].active != 0 || seatActive != 0) ? 1 : 0);
+                counts.onlySeat += g_flags[i].active == 0 && seatActive != 0 ? 1 : 0;
                 break;
             }
         }
@@ -396,9 +396,9 @@ PlayerTwoUpdate::~PlayerTwoUpdate()
         if (!Contains(previous.entries, previous.count, active.entries[i]))
         {
             ++counts.entries;
-            const auto two = PreviousCamera(g_copy[Index(seat_)]);
-            const float dx = two[0] - g_playerOneCamera[0], dy = two[1] - g_playerOneCamera[1],
-                        dz = two[2] - g_playerOneCamera[2];
+            const auto seatCamera = PreviousCamera(g_copy[Index(seat_)]);
+            const float dx = seatCamera[0] - g_playerOneCamera[0], dy = seatCamera[1] - g_playerOneCamera[1],
+                        dz = seatCamera[2] - g_playerOneCamera[2];
             LogStarted(active.entries[i], seat_, std::sqrt(dx * dx + dy * dy + dz * dz) / 100.0f);
         }
     }
@@ -440,7 +440,7 @@ void Tick() noexcept
             const wchar_t* sep  = seat > 1 ? L", " : L"";
             updates += std::format(L"{}{}'s updates with its own sequence state {}", sep, name, c.updates);
             started += std::format(L"{}on {}'s {}", sep, name, c.entries);
-            only += std::format(L"{}entry-frames active on {}'s camera only {}", sep, name, c.onlyTwo);
+            only += std::format(L"{}entry-frames active on {}'s camera only {}", sep, name, c.onlySeat);
             cuts += std::format(L"{}shot cuts on {}'s camera {}", sep, name, c.cuts);
             lists += c.lists;
         }

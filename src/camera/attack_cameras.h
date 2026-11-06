@@ -13,7 +13,7 @@
 //     held player 2's view near player 1's (the Titan report of 2026-10-15);
 //   - each entry's active byte (+0x14), which code outside the updates reads (a stop by id, the leader change, the Menu
 //     operator): after both updates it held player 2's view.
-// A PlayerTwoUpdate around a seat's update (players/seats.h) puts that seat's own copy of the smoothing and of the
+// A SeatUpdate around a seat's update (players/seats.h) puts that seat's own copy of the smoothing and of the
 // active bytes in the list, and after it player 1's smoothing back and each entry's byte as "active on any camera" (what
 // the readers outside the updates need: a sequence one camera still plays is playing). Each camera reads only its own
 // state (solo in each view; the game's decision is untouched). Seats take turns: one seat's update closes before the
@@ -46,25 +46,25 @@ void Remove() noexcept;
 /// `seat`'s own per-camera state of the sequence list while it lives (inside the seat's camera update, its scopes
 /// held); player 1's put back when it ends. Does nothing if not installed, off the game thread, inside another seat's
 /// update, or there is no list.
-class PlayerTwoUpdate
+class SeatUpdate
 {
 public:
-    explicit PlayerTwoUpdate(int seat) noexcept;
-    ~PlayerTwoUpdate();
-    PlayerTwoUpdate(const PlayerTwoUpdate&)            = delete;
-    PlayerTwoUpdate& operator=(const PlayerTwoUpdate&) = delete;
+    explicit SeatUpdate(int seat) noexcept;
+    ~SeatUpdate();
+    SeatUpdate(const SeatUpdate&)            = delete;
+    SeatUpdate& operator=(const SeatUpdate&) = delete;
 
 private:
     void* list_ = nullptr;
     int   seat_ = 0;
 };
 
-/// Game thread: the seat whose camera update is open (a PlayerTwoUpdate holds the list), so "this camera" is that
+/// Game thread: the seat whose camera update is open (a SeatUpdate holds the list), so "this camera" is that
 /// seat's; 0 outside every seat's update (player 1's camera).
 int InsideSeat() noexcept;
 
 /// Game thread: inside a seat's camera update.
-inline bool InsidePlayerTwoUpdate() noexcept
+inline bool InsideSeatUpdate() noexcept
 {
     return InsideSeat() != 0;
 }

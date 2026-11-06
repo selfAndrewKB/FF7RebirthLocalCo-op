@@ -142,7 +142,7 @@ void ClearFieldActionRows(int seat, void* state) noexcept
 /// Ticks the seat's member's state inside every scope, or not at all.
 void TickInScopes(int seat, void* controller, void* member, void* state, int type, float deltaTime) noexcept
 {
-    const bool playerTwo = seat == players::kFirstFurtherSeat;  // the dev watches below are player 2's (plan step 7)
+    const bool firstFurther = seat == players::kFirstFurtherSeat;  // the dev watches below are player 2's (plan step 7)
     // The seat's sticks and its player as the primary controller, or no tick; its own buttons (sprint, dodge, field
     // actions) and, in battle, the target system's fields as the seat's.
     seat_ladder::Args args;
@@ -164,7 +164,7 @@ void TickInScopes(int seat, void* controller, void* member, void* state, int typ
     // Before the tick, inside every scope (the seat's camera manager is the primary one here):
     camera::camera_override::Tick(seat, member);   // the member's animation camera overrides reach the seat's camera
     battle::lock_on::AfterBattle(seat);            // out of battle, the seat's lock ends
-    if (playerTwo)
+    if (firstFurther)
     {
         battle::battle_camera::Watch();                // both camera managers' operators, logged on change (dev tools)
         battle::battle_input::Watch(member, state);    // player 2's battle state, logged on change (dev tools)

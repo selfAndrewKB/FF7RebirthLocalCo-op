@@ -118,10 +118,10 @@ bool Line() noexcept
 
 /// A seat's leader view (leader, leader type, and with `primary` the primary controller) for one call; nothing held if
 /// any part refuses (the ladder's all-or-nothing rule).
-class PlayerTwoView
+class SeatView
 {
 public:
-    PlayerTwoView(int seat, void* member, bool primary) noexcept
+    SeatView(int seat, void* member, bool primary) noexcept
     {
         seat_ladder::Args args;
         args.seat = seat;
@@ -171,7 +171,7 @@ char Guard(void* component, const void* location) noexcept
     {
         return original(component, location);
     }
-    const PlayerTwoView view(seat, member, true);
+    const SeatView view(seat, member, true);
     if (!view.Held())
     {
         ++CountsOf(seat).refused;
@@ -218,7 +218,7 @@ void Shake(void* notify, void* mesh, void* animation) noexcept
         original(notify, mesh, animation);
         return;
     }
-    const PlayerTwoView view(seat, players::generation::MemberOf(seat), true);
+    const SeatView view(seat, players::generation::MemberOf(seat), true);
     CountsOf(seat).shakes += view.Held() ? 1 : 0;
     CountsOf(seat).refused += view.Held() ? 0 : 1;
     original(notify, mesh, animation);
@@ -269,7 +269,7 @@ void ShakeBegin(void* notify, void* mesh, void* animation, float duration) noexc
         original(notify, mesh, animation, duration);
         return;
     }
-    const PlayerTwoView view(seat, players::generation::MemberOf(seat), true);
+    const SeatView view(seat, players::generation::MemberOf(seat), true);
     CountsOf(seat).shakeStates += view.Held() ? 1 : 0;
     CountsOf(seat).refused += view.Held() ? 0 : 1;
     if (view.Held())
@@ -294,7 +294,7 @@ void ShakeEnd(void* notify, void* mesh, void* animation) noexcept
     {
         return;  // the seat's player left: the shake went with its camera manager; nothing of it to stop on player 1's
     }
-    const PlayerTwoView view(seat, players::generation::MemberOf(seat), true);
+    const SeatView view(seat, players::generation::MemberOf(seat), true);
     CountsOf(seat).refused += view.Held() ? 0 : 1;
     if (view.Held())
     {
@@ -344,7 +344,7 @@ void StealBegin(void* notify, void* mesh, void* animation, float duration) noexc
         original(notify, mesh, animation, duration);
         return;
     }
-    const PlayerTwoView view(seat, member, false);  // the stealer is the leader by type; no camera call inside Begin
+    const SeatView view(seat, member, false);  // the stealer is the leader by type; no camera call inside Begin
     if (!view.Held())
     {
         ++CountsOf(seat).refused;
