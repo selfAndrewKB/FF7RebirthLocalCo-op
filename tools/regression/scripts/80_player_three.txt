@@ -13,10 +13,10 @@
 # expect: command rules: player 1 may not command member types 0x[0-9a-f]+ \(menu ordinals 0x6\)
 # expect: leave: player 2 left; \d+ leftover actor
 # With player 2 gone, player 3 keeps a split view of their own (two views, top and bottom in the regression's layout).
-# The view is a top/bottom half either way: 3840x1080 in UI-image pixels (the v0.95.0 runs under UE4SS e31aaaa6), or
-# 3440x720 in screen pixels (under the Nexus UE4SS c0a8d4c since v0.96.0, as player 2's layout lines already read);
-# which figure the layout pass reports was not traced (the pictures agree, 2026-10-25).
-# expect: HUD layout \(player 3's pass\): UI image \d+x\d+, view (3840x1080|3440x720)
+# The view is the top or bottom half of the game window, full width and half height: 3440x720 on a 3440x1440 window,
+# 1920x540 on a 1920x1080 one (the size depends on the monitor the game opens on), or 3840x1080 where the pass reports
+# the pixels of a 3840x2160 UI image instead of the screen's.
+# expect: HUD layout \(player 3's pass\): UI image \d+x\d+, view (3840x1080|3440x720|1920x540)
 # expect: leave: player 3 left; \d+ leftover actor
 # expect-not: JOIN FAILED
 # expect-not: could not be given back

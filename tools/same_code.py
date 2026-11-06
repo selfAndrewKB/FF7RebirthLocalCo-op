@@ -3,11 +3,22 @@
 A rename changes no behaviour, but it can change the order of a file's functions, so the raw bytes of .text differ.
 This disassembles both DLLs (MSVC's dumpbin), splits the code into functions by the function table, and replaces every
 address by what it points at: an offset inside the function, the called function (following the incremental linker's
-jump thunks), a string's text, or a place in a data section. Two builds with the same functions, counted with their
-repeats, hold the same code. A rename that picked up the wrong variable changes a stack offset or a register and shows
-as a differing function.
+jump thunks), a string's text, or a global. Two builds with the same functions, counted with their repeats, hold the
+same code. A rename that picked up the wrong variable changes a stack offset, a register or the global and shows as a
+differing function.
+
+A global is named by its rank: its place in the order of every data address the code refers to. Its distance from the
+start of .data would not do, because a rename moves the globals. The name of a lambda's type holds the name of the
+function around it, and where the lambda is kept in a std::function that name is stored as text among the globals, so
+a longer or shorter function name shifts everything after it. The order stays, so the ranks stay; a function that
+reads another global gets another rank. If a build ever changed the order, every function would read as different:
+the comparison would fail, not pass wrongly.
 
     python -I tools/same_code.py A.dll B.dll       exit 0 if the code is the same; else lists what differs
+    python -I tools/same_code.py A.dll B.dll --globals-by-offset
+                                                   stricter: a global is its distance from the start of its section
+    python -I tools/same_code.py A.dll B.dll --ignore-data-layout
+                                                   a diagnosis: a global is its section alone
 """
 import collections
 import hashlib
@@ -116,7 +127,10 @@ def blocks(image: Image, path: pathlib.Path):
     return out
 
 
-def fingerprints(path: pathlib.Path) -> tuple[collections.Counter, dict]:
+def fingerprints(path: pathlib.Path, globals_by: str = "rank") -> tuple[collections.Counter, dict]:
+    """The count of each block's hash, and one block per hash. `globals_by` says how a place in .data or .tls is named:
+    "rank" (its place in the order of all the places the code refers to), "offset" (its distance from the section's
+    start) or "section" (the section alone: a function that reads the wrong global no longer shows)."""
     image = Image(path)
     code = blocks(image, path)
     start_of = {block[0][0]: i for i, block in enumerate(code)}
@@ -129,6 +143,16 @@ def fingerprints(path: pathlib.Path) -> tuple[collections.Counter, dict]:
                 break
             rva = thunk[rva]
         return rva
+
+    referred = set()
+    for block in code:
+        for _, _, operands in block:
+            for match in ADDRESS.finditer(operands):
+                target = resolve(int(match.group(1), 16) - image.base)
+                section = image.section_of(target)
+                if section is not None and section[0] in (".data", ".tls"):
+                    referred.add(target)
+    rank = {target: place for place, target in enumerate(sorted(referred))}
 
     def round_of(previous):
         hashes = []
@@ -153,7 +177,10 @@ def fingerprints(path: pathlib.Path) -> tuple[collections.Counter, dict]:
                     if text is not None:
                         return f"S{text}"
                     if section[0] in (".data", ".tls"):
-                        return f"{section[0]}+{target - section[1]:x}"
+                        if globals_by == "rank":
+                            return f"{section[0]}#{rank[target]}"
+                        if globals_by == "offset":
+                            return f"{section[0]}+{target - section[1]:x}"
                     return section[0]
                 digest.update(f"{mnemonic} {ADDRESS.sub(replace, operands)}\n".encode())
             hashes.append(digest.hexdigest()[:16])
@@ -170,9 +197,13 @@ def fingerprints(path: pathlib.Path) -> tuple[collections.Counter, dict]:
 
 
 def main() -> int:
-    a_path, b_path = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
-    a, a_where = fingerprints(a_path)
-    b, b_where = fingerprints(b_path)
+    globals_by = ("section" if "--ignore-data-layout" in sys.argv
+                  else "offset" if "--globals-by-offset" in sys.argv else "rank")
+    a_path, b_path = (pathlib.Path(arg) for arg in sys.argv[1:] if not arg.startswith("--"))
+    a, a_where = fingerprints(a_path, globals_by)
+    b, b_where = fingerprints(b_path, globals_by)
+    if globals_by == "section":
+        print("globals compared by section only: this run cannot show a function that reads the wrong global")
     only_a = a - b
     only_b = b - a
     print(f"{a_path.name}: {sum(a.values())} blocks; {b_path.name}: {sum(b.values())} blocks")

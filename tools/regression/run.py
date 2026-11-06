@@ -518,6 +518,14 @@ def main() -> int:
         if not ok:
             notes.append("the field did not become ready after Continue: the scripts that need it were skipped")
             wanted = [s for s in wanted if s.scope_log]
+            # What the key presses and the waits said, and what the game showed: without them a stall at the title
+            # cannot be told from a press that never reached the window.
+            stalled = OUT / f"{stamp}-{args.version}-{args.build}-reach"
+            stalled.with_suffix(".txt").write_text(text, encoding="utf-8")
+            shot = powershell(TOOLS / "shot.ps1", "-Out", str(stalled.with_suffix(".png")), "-Focus", timeout=60)
+            said = (shot.stdout + shot.stderr).strip().splitlines()
+            notes.append(f"what reaching the field said: {stalled.name}.txt; the game window then: "
+                         + (said[-1] if said else "no output"))
     results: list[Result] = []
     for script in wanted:
         result = Result(script)
