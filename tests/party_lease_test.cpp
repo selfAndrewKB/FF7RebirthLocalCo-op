@@ -119,8 +119,8 @@ void TestAcquired()
     LeaseState state{&g_playerTwo, &g_ai, nullptr, &g_member, &g_member};
     EXPECT(Acquired(state, &g_member, &g_playerTwo));
 
-    auto partial          = state;
-    partial.playerTwoPawn = nullptr;  // the leader is published but Unreal possession has not happened
+    auto partial     = state;
+    partial.seatPawn = nullptr;  // the leader is published but Unreal possession has not happened
     EXPECT(!Acquired(partial, &g_member, &g_playerTwo));
 
     partial                 = state;
@@ -145,8 +145,8 @@ void TestReleased()
     partial.aiPawn = nullptr;  // the AI has not re-possessed yet
     EXPECT(!Released(partial, &g_member));
 
-    partial                 = state;
-    partial.playerTwoLeader = &g_member;
+    partial            = state;
+    partial.seatLeader = &g_member;
     EXPECT(!Released(partial, &g_member));
 
     partial                  = state;
@@ -335,12 +335,12 @@ void TestTakeAndSwapOutcomes()
     EXPECT(SwapOutcomeOf(false, lease, &playerOne, 0, 120) == SwapOutcome::PlayerOnes);
     EXPECT(SwapOutcomeOf(true, lease, &playerOne, 0, 120) == SwapOutcome::Released);  // released first
     EXPECT(SwapOutcomeOf(false, lease, &playerOne, 500, 120) == SwapOutcome::PlayerOnes);  // before the timeout
-    lease.playerTwoPawn = &g_member;  // player 2's controller still holds it: not yet
+    lease.seatPawn = &g_member;  // player 2's controller still holds it: not yet
     EXPECT(SwapOutcomeOf(false, lease, &playerOne, 0, 120) == SwapOutcome::Wait);
-    lease.playerTwoPawn   = nullptr;
-    lease.playerTwoLeader = &g_member;
+    lease.seatPawn   = nullptr;
+    lease.seatLeader = &g_member;
     EXPECT(SwapOutcomeOf(false, lease, &playerOne, 0, 120) == SwapOutcome::Wait);
-    lease.playerTwoLeader = nullptr;
+    lease.seatLeader      = nullptr;
     lease.memberEffective = &g_other;  // another controller's: wait for the release
     EXPECT(SwapOutcomeOf(false, lease, &playerOne, 0, 120) == SwapOutcome::Wait);
 }

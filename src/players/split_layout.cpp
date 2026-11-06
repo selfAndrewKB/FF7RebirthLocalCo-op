@@ -19,9 +19,9 @@ std::uint8_t Other(std::uint8_t layout) noexcept
 
 }  // namespace
 
-HeldChange SplitLayout::Update(bool playerTwoIn) noexcept
+HeldChange SplitLayout::Update(bool twoColumns) noexcept
 {
-    return held_.Update(playerTwoIn, chosen_);  // nothing chosen: the game's layout stays
+    return held_.Update(twoColumns, chosen_);  // nothing chosen: the game's layout stays
 }
 
 HeldChange SplitLayout::Toggle() noexcept

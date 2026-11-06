@@ -127,12 +127,12 @@ struct LeaseState
     const void* memberEffective  = nullptr;  // member +0x580
     const void* memberRetainedAi = nullptr;  // member +0x588
     const void* aiPawn           = nullptr;  // (member +0x588) +0x258
-    const void* playerTwoPawn    = nullptr;  // player 2's controller +0x258
-    const void* playerTwoLeader  = nullptr;  // player 2's controller +0x5A0
+    const void* seatPawn         = nullptr;  // player 2's controller +0x258
+    const void* seatLeader       = nullptr;  // player 2's controller +0x5A0
 };
 
 /// Player 2's controller drives the member, and names it as both its pawn and its leader.
-bool Acquired(const LeaseState& state, const void* member, const void* playerTwoController) noexcept;
+bool Acquired(const LeaseState& state, const void* member, const void* seatController) noexcept;
 
 /// The member is back with its own AI, and player 2's controller names nothing.
 bool Released(const LeaseState& state, const void* member) noexcept;

@@ -95,7 +95,7 @@ bool Take(int seat, void* controller, void* member) noexcept;
 bool GiveBack(int seat, void* controller) noexcept;
 
 /// The lease fields for `member` and player 2's controller.
-LeaseState ReadLease(const void* member, const void* playerTwoController) noexcept;
+LeaseState ReadLease(const void* member, const void* seatController) noexcept;
 
 /// The two bytes on player 1's controller the switch would write without the scope.
 struct PlayerOneBytes

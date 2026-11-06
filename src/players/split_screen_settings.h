@@ -48,10 +48,10 @@ constexpr std::array<ConsoleSetting, 3> kSplitScreenSettings{{
 
 /// The order they are updated in: joining, the timing method before the gap recorder goes off; leaving, the gap
 /// recorder back before the timing method.
-constexpr std::array<SettingsStep, 3> SettingsOrder(bool playerTwoIn) noexcept
+constexpr std::array<SettingsStep, 3> SettingsOrder(bool splitShown) noexcept
 {
-    return playerTwoIn ? std::array<SettingsStep, 3>{SettingsStep::Resolution, SettingsStep::Timing, SettingsStep::Gap}
-                       : std::array<SettingsStep, 3>{SettingsStep::Resolution, SettingsStep::Gap, SettingsStep::Timing};
+    return splitShown ? std::array<SettingsStep, 3>{SettingsStep::Resolution, SettingsStep::Timing, SettingsStep::Gap}
+                      : std::array<SettingsStep, 3>{SettingsStep::Resolution, SettingsStep::Gap, SettingsStep::Timing};
 }
 
 /// The setting of a step.
@@ -68,7 +68,7 @@ public:
 
     /// Game thread, every tick: holds the three while player 2 is in and puts them back when they leave, in
     /// SettingsOrder; each change's line (held_setting.h's Describe) goes to `log`.
-    void Update(bool playerTwoIn, void (*log)(const std::wstring& line)) noexcept;
+    void Update(bool splitShown, void (*log)(const std::wstring& line)) noexcept;
 
 private:
     std::array<HeldSetting<std::int32_t>, 3> settings_;  // by SettingsStep

@@ -599,7 +599,7 @@ bool GiveBack(int seat, void* controller) noexcept
     return true;
 }
 
-LeaseState ReadLease(const void* member, const void* playerTwoController) noexcept
+LeaseState ReadLease(const void* member, const void* seatController) noexcept
 {
     LeaseState state;
     if (member != nullptr)
@@ -608,8 +608,8 @@ LeaseState ReadLease(const void* member, const void* playerTwoController) noexce
         state.memberRetainedAi = ReadPointer(member, facts::kCharacterRetainedAi);
         state.aiPawn           = ReadPointer(state.memberRetainedAi, facts::kControllerPawn);
     }
-    state.playerTwoPawn   = ReadPointer(playerTwoController, facts::kControllerPawn);
-    state.playerTwoLeader = ReadPointer(playerTwoController, facts::kControllerLeader);
+    state.seatPawn   = ReadPointer(seatController, facts::kControllerPawn);
+    state.seatLeader = ReadPointer(seatController, facts::kControllerLeader);
     return state;
 }
 

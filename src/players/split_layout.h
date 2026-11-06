@@ -35,7 +35,7 @@ public:
     explicit SplitLayout(SettingAccess<std::uint8_t> access) noexcept : held_(access, kName) {}
 
     /// Call on the game thread every tick with whether player 2 is in. Acts only when that changes.
-    HeldChange Update(bool playerTwoIn) noexcept;
+    HeldChange Update(bool twoColumns) noexcept;
 
     /// Switches to the other layout: now if player 2 is in, otherwise at the next join.
     HeldChange Toggle() noexcept;

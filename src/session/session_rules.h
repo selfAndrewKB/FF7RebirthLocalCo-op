@@ -69,13 +69,13 @@ constexpr bool WaitOutside(const WaitOutsideFacts& facts, std::chrono::milliseco
 /// sees it.
 struct LeaderEvent
 {
-    bool hasPlayerTwo         = false;
-    bool awaitingMember       = false;  // player 2 is out, waiting for a free party member
-    bool playerTwosController = false;  // the controller is player 2's
-    bool playerOnesController = false;  // ... player 1's
-    bool playerTwosMember     = false;  // the character is player 2's member (not null)
-    bool memberHeld           = false;  // taking or playing a member
-    bool noMember             = false;  // player 2 is in without a member
+    bool seatIn                = false;
+    bool awaitingMember        = false;  // player 2 is out, waiting for a free party member
+    bool controllerIsSeat      = false;  // the controller is player 2's
+    bool controllerIsPlayerOne = false;  // ... player 1's
+    bool memberIsSeat          = false;  // the character is player 2's member (not null)
+    bool memberHeld            = false;  // taking or playing a member
+    bool noMember              = false;  // player 2 is in without a member
 };
 
 enum class LeaderEventAction
@@ -88,15 +88,15 @@ enum class LeaderEventAction
 
 constexpr LeaderEventAction DecideLeaderEvent(const LeaderEvent& event) noexcept
 {
-    if (!event.hasPlayerTwo)
+    if (!event.seatIn)
     {
         return event.awaitingMember ? LeaderEventAction::ArmLook : LeaderEventAction::None;
     }
-    if (event.playerTwosController)
+    if (event.controllerIsSeat)
     {
         return LeaderEventAction::Warn;
     }
-    if (event.playerOnesController && event.playerTwosMember && event.memberHeld)
+    if (event.controllerIsPlayerOne && event.memberIsSeat && event.memberHeld)
     {
         return LeaderEventAction::Yield;
     }

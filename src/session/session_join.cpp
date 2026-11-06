@@ -95,14 +95,15 @@ bool CameraManagerComplete(void* controller) noexcept
            ReadPointer(cameraManager, facts::kCameraManagerEndCameraActor) != nullptr;
 }
 
-void LogJoined(const wchar_t* name, void* two, void* one, const own_controller::Report& report,
+void LogJoined(const wchar_t* name, void* seatController, void* one, const own_controller::Report& report,
                const JoinWitness& before, const JoinWitness& after) noexcept
 {
-    void* cameraManager = ReadPointer(two, facts::kControllerCameraManager);
+    void* cameraManager = ReadPointer(seatController, facts::kControllerCameraManager);
     Log(L"{} joined with its own controller: {} (class {}), camera manager handled here: {} (owner filled: {}, "
         L"names swapped: {}), camera actor '{}' (player 1's: '{}'); HUDs {} -> {}; viewport input mode {:#010x} -> "
         L"{:#010x}",
-        name, players::NameOf(two), ClassNameOf(two), players::YesNo(cameraManager != nullptr && cameraManager == report.cameraManager),
+        name, players::NameOf(seatController), ClassNameOf(seatController),
+        players::YesNo(cameraManager != nullptr && cameraManager == report.cameraManager),
         players::YesNo(report.ownerFilled), players::YesNo(report.namesSwapped),
         players::NameOf(ReadPointer(cameraManager, facts::kCameraManagerEndCameraActor)),
         players::NameOf(ReadPointer(ReadPointer(one, facts::kControllerCameraManager), facts::kCameraManagerEndCameraActor)),

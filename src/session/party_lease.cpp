@@ -110,17 +110,17 @@ bool AiTakesBack(const AiSnapshot& ai) noexcept
     return ai.read && ai.state == kAiStateLead;
 }
 
-bool Acquired(const LeaseState& state, const void* member, const void* playerTwoController) noexcept
+bool Acquired(const LeaseState& state, const void* member, const void* seatController) noexcept
 {
-    return member != nullptr && playerTwoController != nullptr && state.memberEffective == playerTwoController &&
-           state.playerTwoPawn == member && state.playerTwoLeader == member;
+    return member != nullptr && seatController != nullptr && state.memberEffective == seatController &&
+           state.seatPawn == member && state.seatLeader == member;
 }
 
 bool Released(const LeaseState& state, const void* member) noexcept
 {
     const void* ai = state.memberRetainedAi;
     return member != nullptr && ai != nullptr && state.memberEffective == ai && state.aiPawn == member &&
-           state.playerTwoPawn == nullptr && state.playerTwoLeader == nullptr;
+           state.seatPawn == nullptr && state.seatLeader == nullptr;
 }
 
 bool LinkPartnerBusy(const LinkRecordView& record, std::uint8_t playerType) noexcept
@@ -186,7 +186,7 @@ SwapOutcome SwapOutcomeOf(bool released, const LeaseState& lease, const void* pl
         return SwapOutcome::Released;
     }
     // Given back as the game made it player 1's leader: it never returns to its AI.
-    if (lease.memberEffective == playerOneController && lease.playerTwoPawn == nullptr && lease.playerTwoLeader == nullptr)
+    if (lease.memberEffective == playerOneController && lease.seatPawn == nullptr && lease.seatLeader == nullptr)
     {
         return SwapOutcome::PlayerOnes;
     }

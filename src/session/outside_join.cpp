@@ -97,14 +97,14 @@ Step OutsideJoin::Tick(Clock::time_point now, bool refuseJoins, bool ready, std:
     return step;
 }
 
-Step OutsideJoin::AfterJoin(Mode wasMode, bool hasPlayerTwo) noexcept
+Step OutsideJoin::AfterJoin(Mode wasMode, bool seatIn) noexcept
 {
     Step step;
     if (mode_ != wasMode)
     {
         return step;  // the join changed the wait
     }
-    if (hasPlayerTwo)
+    if (seatIn)
     {
         mode_ = Mode::None;
         return step;

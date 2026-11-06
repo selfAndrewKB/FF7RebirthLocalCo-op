@@ -332,8 +332,8 @@ void Seat::AwaitTake() noexcept
     }
     Log(L"{} did not get {} within {} ticks (driven by {}, the player's pawn {}, leader {}); giving it back, the "
         L"player stays in on its own controller",
-        Name(), players::NameOf(member_), kTakeTicks, players::NameOf(lease.memberEffective), players::NameOf(lease.playerTwoPawn),
-        players::NameOf(lease.playerTwoLeader));
+        Name(), players::NameOf(member_), kTakeTicks, players::NameOf(lease.memberEffective), players::NameOf(lease.seatPawn),
+        players::NameOf(lease.seatLeader));
     players::generation::Fault(seat_, L"the party member was not handed over in time");
     party_member::GiveBack(seat_, controller_);  // member_ stays recorded: the leave waits for this release
     phase_ = Phase::Playing;
@@ -509,7 +509,7 @@ void Seat::OnLeaderChanging(void* controller, void* character) noexcept
             return;
         }
         EventLine(std::format(L"the game makes {} the leader of {} (was {})", players::NameOf(character),
-                              event.playerOnesController ? L"player 1's controller" : L"a controller that is not player 1's",
+                              event.controllerIsPlayerOne ? L"player 1's controller" : L"a controller that is not player 1's",
                               players::NameOf(before)));
     }
     switch (action)
@@ -1084,7 +1084,7 @@ bool Seat::MemberReleased() const noexcept
     const auto lease = party_member::ReadLease(member_, controller_);
     if (member_ == nullptr)
     {
-        return lease.playerTwoPawn == nullptr && lease.playerTwoLeader == nullptr;
+        return lease.seatPawn == nullptr && lease.seatLeader == nullptr;
     }
     return Released(lease, member_);
 }

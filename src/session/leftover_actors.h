@@ -33,7 +33,7 @@ struct Actors
 };
 
 /// Reads player 2's leftover actors and PlayerInput. Game thread.
-Actors Collect(void* playerTwoController) noexcept;
+Actors Collect(void* seatController) noexcept;
 
 /// How many actors were destroyed, how many calls raised an exception, and whether the PlayerInput
 /// was marked PendingKill.

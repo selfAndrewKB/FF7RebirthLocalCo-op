@@ -80,18 +80,18 @@ bool MarkPendingKill(void* object) noexcept
 
 }  // namespace
 
-Actors Collect(void* playerTwoController) noexcept
+Actors Collect(void* seatController) noexcept
 {
     Actors actors;
-    if (playerTwoController == nullptr)
+    if (seatController == nullptr)
     {
         return actors;
     }
-    void* cameraManager = ReadPointer(playerTwoController, facts::kControllerCameraManager);
-    actors.trigger      = AsActor(ReadPointer(playerTwoController, facts::kControllerTrigger));
-    actors.battleTalk   = AsActor(ReadPointer(playerTwoController, facts::kControllerBattleTalkActor));
+    void* cameraManager = ReadPointer(seatController, facts::kControllerCameraManager);
+    actors.trigger      = AsActor(ReadPointer(seatController, facts::kControllerTrigger));
+    actors.battleTalk   = AsActor(ReadPointer(seatController, facts::kControllerBattleTalkActor));
     actors.cameraActor  = AsActor(ReadPointer(cameraManager, facts::kCameraManagerEndCameraActor));
-    actors.playerInput  = AsA(ReadPointer(playerTwoController, facts::kControllerPlayerInput), STR("/Script/Engine.PlayerInput"));
+    actors.playerInput  = AsA(ReadPointer(seatController, facts::kControllerPlayerInput), STR("/Script/Engine.PlayerInput"));
 
     auto* component = static_cast<UObject*>(ReadPointer(cameraManager, facts::kCameraManagerCollisionComponent));
     if (component != nullptr)

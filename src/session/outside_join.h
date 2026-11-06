@@ -83,7 +83,7 @@ public:
     /// After a TryJoin's join: Rejoin ends once player 2 is in; Await counts a join that did not add player 2 and gives
     /// up at kTries. `wasMode` is the mode the TryJoin came from: a join that changed the wait (a rejoin's join found no
     /// free member and started an Await; a failed join asked for a leave) counts nothing.
-    Step AfterJoin(Mode wasMode, bool hasPlayerTwo) noexcept;
+    Step AfterJoin(Mode wasMode, bool seatIn) noexcept;
 
 private:
     Mode              mode_   = Mode::None;

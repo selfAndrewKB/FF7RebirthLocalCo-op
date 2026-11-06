@@ -47,38 +47,38 @@ void TestLeaderEvents()
     EXPECT(DecideLeaderEvent(out) == LeaderEventAction::None);
     out.awaitingMember = true;
     EXPECT(DecideLeaderEvent(out) == LeaderEventAction::ArmLook);
-    out.playerTwosController = true;  // out: no controller is player 2's, whatever the flags say
+    out.controllerIsSeat = true;  // out: no controller is player 2's, whatever the flags say
     EXPECT(DecideLeaderEvent(out) == LeaderEventAction::ArmLook);
 
     LeaderEvent in;
-    in.hasPlayerTwo = true;
+    in.seatIn = true;
     EXPECT(DecideLeaderEvent(in) == LeaderEventAction::None);
 
-    auto twos                 = in;
-    twos.playerTwosController = true;
-    twos.playerTwosMember     = true;
-    twos.memberHeld           = true;
+    auto twos             = in;
+    twos.controllerIsSeat = true;
+    twos.memberIsSeat     = true;
+    twos.memberHeld       = true;
     EXPECT(DecideLeaderEvent(twos) == LeaderEventAction::Warn);  // never acted on
 
-    auto yield                 = in;
-    yield.playerOnesController = true;
-    yield.playerTwosMember     = true;
-    yield.memberHeld           = true;
+    auto yield                  = in;
+    yield.controllerIsPlayerOne = true;
+    yield.memberIsSeat          = true;
+    yield.memberHeld            = true;
     EXPECT(DecideLeaderEvent(yield) == LeaderEventAction::Yield);
     auto notHeld       = yield;
     notHeld.memberHeld = false;  // a swap in flight: the member is recorded, not held
     EXPECT(DecideLeaderEvent(notHeld) == LeaderEventAction::None);
-    auto another                 = yield;
-    another.playerOnesController = false;  // a controller that is not player 1's
+    auto another                  = yield;
+    another.controllerIsPlayerOne = false;  // a controller that is not player 1's
     EXPECT(DecideLeaderEvent(another) == LeaderEventAction::None);
-    auto othersCharacter             = yield;
-    othersCharacter.playerTwosMember = false;
+    auto othersCharacter         = yield;
+    othersCharacter.memberIsSeat = false;
     EXPECT(DecideLeaderEvent(othersCharacter) == LeaderEventAction::None);
 
     auto none     = in;
     none.noMember = true;
     EXPECT(DecideLeaderEvent(none) == LeaderEventAction::ArmLook);
-    none.playerOnesController = true;
+    none.controllerIsPlayerOne = true;
     EXPECT(DecideLeaderEvent(none) == LeaderEventAction::ArmLook);
 }
 
