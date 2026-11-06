@@ -274,7 +274,8 @@ void CellTick(void* cell, const void* geometry, float deltaTime) noexcept
     {
         return original(cell, geometry, deltaTime);
     }
-    if (!TickInOwnerView(seat, original, cell, geometry, deltaTime, owner, L"a cell of player 2's or 3's party list",
+    if (!TickInOwnerView(seat, original, cell, geometry, deltaTime, owner,
+                         players::BySeat(seat, L"a cell of player 2's party list", L"a cell of player 3's party list"),
                          g_cellsOn))
     {
         return;
@@ -301,8 +302,8 @@ void PaneTick(void* pane, const void* geometry, float deltaTime) noexcept
     {
         return original(pane, geometry, deltaTime);
     }
-    if (!TickInOwnerView(seat, original, pane, geometry, deltaTime, owner, L"player 2's or 3's synergy pane",
-                         g_panesOn))
+    if (!TickInOwnerView(seat, original, pane, geometry, deltaTime, owner,
+                         players::BySeat(seat, L"player 2's synergy pane", L"player 3's synergy pane"), g_panesOn))
     {
         return;
     }
@@ -372,7 +373,7 @@ void SeatGuideTick(int seat, GuideTickFn original, std::uintptr_t one) noexcept
         const OwnerView view(own, guide);
         if (!view.Held())
         {
-            return Refused(L"player 2's or 3's key guide");
+            return Refused(players::BySeat(seat, L"player 2's key guide", L"player 3's key guide"));
         }
         if (view.TypeRefused())
         {

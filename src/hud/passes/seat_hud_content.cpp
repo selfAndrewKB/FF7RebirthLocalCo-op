@@ -407,8 +407,11 @@ bool ContextsToSeat(int seat)
     const bool reverted = hud_roots::SetContexts(0);
     g_primary.reset();
     Refuse(reverted ? L"SetPlayerContext raised an exception"
-                    : L"SetPlayerContext raised an exception, and again putting player 1's back (some roots may keep "
-                      L"player 2's or 3's context until the next join)");
+                    : players::BySeat(seat,
+                                      L"SetPlayerContext raised an exception, and again putting player 1's back (some "
+                                      L"roots may keep player 2's context until the next join)",
+                                      L"SetPlayerContext raised an exception, and again putting player 1's back (some "
+                                      L"roots may keep player 3's context until the next join)"));
     return false;
 }
 
@@ -564,7 +567,8 @@ bool EnterSeatLevers(int seat) noexcept
         Charge(kTicksSeat, start);
         if (!runs)
         {
-            Refuse(L"a HUD update raised an exception in player 2's or 3's run");
+            Refuse(players::BySeat(seat, L"a HUD update raised an exception in player 2's run",
+                                   L"a HUD update raised an exception in player 3's run"));
         }
         if (!g_loggedEnter[s])
         {

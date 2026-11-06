@@ -115,11 +115,13 @@ std::uintptr_t FollowingController(int seat, const wchar_t* what) noexcept
         Line(std::format(L"{} made off the game thread: NOT made on {}'s controller", what, players::SeatName(seat)));
         return 0;
     }
-    const auto one = ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController);
-    if (one == 0 || command_menu::SeatOfController(reinterpret_cast<const void*>(one)) >= 1)
+    const auto one      = ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController);
+    const int  slotSeat = one != 0 ? command_menu::SeatOfController(reinterpret_cast<const void*>(one)) : 0;
+    if (one == 0 || slotSeat >= 1)
     {
         Line(std::format(L"{} made while the UI system's slot names {}: NOT followed", what,
-                         one == 0 ? L"no controller" : L"player 2's or 3's controller (inside their scope)"));
+                         one == 0 ? std::wstring(L"no controller")
+                                  : std::format(L"{}'s controller (inside their scope)", players::SeatName(slotSeat))));
         return 0;
     }
     return own;

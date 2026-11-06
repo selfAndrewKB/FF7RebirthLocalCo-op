@@ -499,7 +499,7 @@ void SeatTargeting(int seat, TickFn engine, void* system, float deltaTime) noexc
     {
         // What it holds may be mid-change: leaked, never put back.
         scopes.Get<seat_ladder::FocusPart>()->scope.Abandon();
-        Fail(L"player 2's or 3's targeting tick");
+        Fail(players::BySeat(seat, L"player 2's targeting tick", L"player 3's targeting tick"));
     }
     // The log: the seat's target list, read with the seat's controller still in the slot.
     std::uint8_t open = 0;
