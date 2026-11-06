@@ -593,7 +593,7 @@ void SeatOut(int seat) noexcept
     {
         try
         {
-            Detach(seat, seat == players::kFirstSeat ? L"player 2 leaves" : L"player 3 leaves");
+            Detach(seat, players::BySeat(seat, L"player 2 leaves", L"player 3 leaves"));
         }
         catch (...)
         {

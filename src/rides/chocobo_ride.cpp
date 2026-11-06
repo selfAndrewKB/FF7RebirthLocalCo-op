@@ -166,11 +166,7 @@ SeatRide* RideOf(int seat) noexcept
     return players::SeatIndex(seat) ? &g_seats[seat] : nullptr;
 }
 
-/// A text kept by pointer (an end's reason, a log prefix) naming the seat: player 2's or player 3's literal.
-constexpr const wchar_t* BySeat(int seat, const wchar_t* two, const wchar_t* three) noexcept
-{
-    return seat == players::kFirstSeat ? two : three;
-}
+using players::BySeat;  // a text kept by pointer (an end's reason, a log prefix) naming the seat's player
 
 const void* RootOf(void* actor) noexcept
 {
@@ -379,9 +375,9 @@ void End(SeatRide& s, const wchar_t* why, bool force) noexcept
                       L"boarding is left as it was",
                       players::SeatName(ride.seat), CoordState(ride.coordinator));
         Finish(s, ride, why,
-               ride.seat == players::kFirstSeat
-                   ? L"player 2's coordinator was not riding, the game's end skipped; rides stopped for this session"
-                   : L"player 3's coordinator was not riding, the game's end skipped; rides stopped for this session");
+               BySeat(ride.seat,
+                      L"player 2's coordinator was not riding, the game's end skipped; rides stopped for this session",
+                      L"player 3's coordinator was not riding, the game's end skipped; rides stopped for this session"));
         return;
     }
     EndCall call{ride.coordinator};
@@ -479,9 +475,9 @@ void Begin(SeatRide& s, int seat, void* controller, void* member, void* chocobo)
     s.ride.component = owned ? InputComponentOf(chocobo) : nullptr;
     if (!owned || s.ride.component == nullptr)
     {
-        LogLine(!call.ok                      ? L"the boarding FAULTED; ending it"
-                : seat == players::kFirstSeat ? L"the boarding did not hand the chocobo to player 2; ending it"
-                                              : L"the boarding did not hand the chocobo to player 3; ending it",
+        LogLine(!call.ok ? L"the boarding FAULTED; ending it"
+                         : BySeat(seat, L"the boarding did not hand the chocobo to player 2; ending it",
+                                  L"the boarding did not hand the chocobo to player 3; ending it"),
                 s.ride);
         s.stopped = true;  // no new ride; this one ends with the game's end once the coordinator rides (Ending)
         platform::Log(L"chocobo ride STOPPED for this session: {} stays a passenger", players::SeatName(seat));

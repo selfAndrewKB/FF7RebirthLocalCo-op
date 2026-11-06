@@ -28,6 +28,14 @@ constexpr const wchar_t* SeatName(int seat) noexcept
     return seat >= 0 && seat < kMaxPlayers ? kNames[seat] : L"a player";
 }
 
+/// A text kept by pointer that names the seat's player (an end's reason, a log prefix), where a formatted SeatName
+/// cannot be kept: `two` for seat 1 (player 2), `three` for seat 2 (player 3).
+constexpr const wchar_t* BySeat(int seat, const wchar_t* two, const wchar_t* three) noexcept
+{
+    return seat == 1 ? two : three;
+}
+static_assert(kMaxPlayers == 3, "BySeat has a text for each seat");
+
 /// A seat has room in the per-seat records (1..kMaxPlayers-1), built or not.
 constexpr bool SeatIndex(int seat) noexcept
 {

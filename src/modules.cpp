@@ -676,8 +676,8 @@ void RegisterOwnCommands(session::Session& session)
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
         const std::wstring name   = players::SeatName(seat);
-        const std::wstring prefix = seat == players::kFirstSeat ? L"p2" : std::format(L"p{}", seat + 1);
-        Register({.name = seat == players::kFirstSeat ? std::wstring(L"leave") : prefix + L".leave",
+        const std::wstring prefix = std::format(L"p{}", seat + 1);
+        Register({.name = players::BySeat(seat, L"leave", L"p3.leave"),
                   .help = std::format(L"remove {} (Ctrl+F8 removes the last player in); `wait-until {}.in == off` "
                                       L"confirms it",
                                       name, prefix),

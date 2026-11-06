@@ -314,11 +314,7 @@ int ActiveSeatWhere(Pick&& pick) noexcept
     return -1;
 }
 
-/// A text kept by pointer (an end's reason) naming the seat: player 2's or player 3's literal.
-constexpr const wchar_t* BySeat(int seat, const wchar_t* two, const wchar_t* three) noexcept
-{
-    return seat == players::kFirstSeat ? two : three;
-}
+using players::BySeat;  // a text kept by pointer (an end's reason) naming the seat's player
 
 std::int32_t CoordState(const void* coordinator) noexcept
 {
@@ -794,7 +790,7 @@ void* NotifyLeader(std::uint8_t selector)
 
 struct DetachCall
 {
-    int   seat   = players::kFirstSeat;  // whose member's notify
+    int   seat   = 0;  // whose member's notify
     void* notify = nullptr;
     void* mesh   = nullptr;
     void* a3     = nullptr;

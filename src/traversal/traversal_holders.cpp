@@ -759,7 +759,7 @@ void Tick(int seat, bool active) noexcept
         for (SeatHolder& holder : g_seatHolders[seat])
         {
             ReleaseSeatHolder(seat, holder,
-                              seat == players::kFirstSeat ? L"player 2 is out" : L"player 3 is out");
+                              players::BySeat(seat, L"player 2 is out", L"player 3 is out"));
         }
         return;
     }
