@@ -115,7 +115,7 @@ constexpr const wchar_t* Describe(EndReason reason) noexcept
 /// controller. A literal: the ride keeps the pointer.
 constexpr const wchar_t* Describe(EndReason reason, int seat) noexcept
 {
-    if (reason != EndReason::LostPossession || seat == players::kFirstSeat)
+    if (reason != EndReason::LostPossession)
     {
         return Describe(reason);
     }

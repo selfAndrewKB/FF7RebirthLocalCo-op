@@ -26,9 +26,7 @@
 // why, so a half-working stage never keeps acting. A fault named without a seat (a scope that lost track of the
 // primary controller) withdraws every seat.
 //
-// Seat 0's controller is player 1's, recorded by every Begin. The names without a seat (Active, PlayerTwoController,
-// Member, ...) are player 2's (players::kFirstSeat), kept so the modules not yet per seat read as before
-// (plan/seats.md step 3 moves them to the seat-taking names).
+// Seat 0's controller is player 1's, recorded by every Begin.
 //
 // Written on the game thread (join, possession, leave); read by the wrappers, which the engine calls on the game
 // thread. The values are atomics so a wrapper reached from another thread still reads whole values.
@@ -105,39 +103,10 @@ std::uint64_t PlayerOnePawnWeak() noexcept;
 const void*   ChocoboOf(int seat) noexcept;
 std::uint64_t ChocoboWeakOf(int seat) noexcept;
 
-// ---- player 2's, by the names the modules not yet per seat use ----
-
-inline bool Active() noexcept
-{
-    return Active(players::kFirstSeat);
-}
+/// Player 1's controller (seat 0's record).
 inline void* PlayerOneController() noexcept
 {
     return ControllerOf(0);
-}
-inline void* PlayerTwoController() noexcept
-{
-    return ControllerOf(players::kFirstSeat);
-}
-inline void* Member() noexcept
-{
-    return MemberOf(players::kFirstSeat);
-}
-inline std::uint64_t MemberWeak() noexcept
-{
-    return MemberWeakOf(players::kFirstSeat);
-}
-inline const void* Chocobo() noexcept
-{
-    return ChocoboOf(players::kFirstSeat);
-}
-inline std::uint64_t ChocoboWeak() noexcept
-{
-    return ChocoboWeakOf(players::kFirstSeat);
-}
-inline const wchar_t* FaultReason() noexcept
-{
-    return FaultReason(players::kFirstSeat);
 }
 
 }  // namespace lss::players::generation

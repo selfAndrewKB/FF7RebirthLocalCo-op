@@ -444,24 +444,30 @@ const wchar_t* Describe(Seeded seeded) noexcept
     return L"?";
 }
 
+/// The index of `seat`'s counters; a number that is no built seat's reads the first seat's, never out of range.
+std::size_t CounterIndex(int seat) noexcept
+{
+    return Index(players::SeatBuilt(seat) ? seat : 1);
+}
+
 unsigned TakeNotMirrored(int seat) noexcept
 {
-    return platform::Take(g_notMirrored[players::SeatBuilt(seat) ? Index(seat) : players::kFirstSeat]);
+    return platform::Take(g_notMirrored[CounterIndex(seat)]);
 }
 
 players::StageCounters& SettingsCounters(int seat) noexcept
 {
-    return g_settingsCounters[players::SeatBuilt(seat) ? Index(seat) : players::kFirstSeat];
+    return g_settingsCounters[CounterIndex(seat)];
 }
 
 players::StageCounters& UpdateCounters(int seat) noexcept
 {
-    return g_updateCounters[players::SeatBuilt(seat) ? Index(seat) : players::kFirstSeat];
+    return g_updateCounters[CounterIndex(seat)];
 }
 
 unsigned TakeMismatches(int seat) noexcept
 {
-    return platform::Take(g_mismatches[players::SeatBuilt(seat) ? Index(seat) : players::kFirstSeat]);
+    return platform::Take(g_mismatches[CounterIndex(seat)]);
 }
 
 }  // namespace lss::camera::field_camera

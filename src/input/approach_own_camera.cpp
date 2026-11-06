@@ -144,7 +144,10 @@ unsigned ScopesOf(int who) noexcept
 seat_ladder::Args ArgsOf(int who) noexcept
 {
     seat_ladder::Args args;
-    args.seat  = who != 0 ? who : players::kFirstSeat;  // player 1's check opens no Primary
+    if (who != 0)
+    {
+        args.seat = who;  // player 1's check opens Sticks alone, which reads no seat
+    }
     args.padId = PadOf(who);
     return args;
 }

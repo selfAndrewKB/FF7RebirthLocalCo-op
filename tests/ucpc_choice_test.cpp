@@ -24,7 +24,7 @@ bool Is(Choice choice, Ucpc ucpc, Why why)
 /// The per-seat rule asked the two-player question: player 2 in or not, each eligible or not, the coin's top bit.
 constexpr Choice TwoWay(bool playerTwoIn, bool oneEligible, bool twoEligible, bool coin) noexcept
 {
-    constexpr Players kTwo = Bit(lss::players::kFirstSeat);
+    constexpr Players kTwo = Bit(1);
     return Choose(static_cast<Players>(Bit(0) | (playerTwoIn ? kTwo : 0)),
                   static_cast<Players>((oneEligible ? Bit(0) : 0) | (twoEligible ? kTwo : 0)),
                   coin ? ~std::uint64_t{0} : 0);
@@ -112,7 +112,7 @@ void TestTwoPlayersAsBefore()
 {
     std::puts("ucpc choice: with two players the per-seat rule gives the two-way coin's answer for every input and "
               "coin (its top bit)");
-    constexpr Players kTwo = Bit(lss::players::kFirstSeat);
+    constexpr Players kTwo = Bit(1);
     for (int bits = 0; bits < 8; ++bits)
     {
         const bool    in       = (bits & 1) != 0;
@@ -132,7 +132,7 @@ void TestTwoPlayersAsBefore()
             EXPECT(now.ucpc == old.ucpc && now.why == old.why);
             EXPECT(shortc.ucpc == old.ucpc && shortc.why == old.why && shortc.player == now.player);
             EXPECT(now.player == (old.ucpc == Ucpc::Untouched ? kUntouched
-                                  : old.ucpc == Ucpc::Seat    ? lss::players::kFirstSeat
+                                  : old.ucpc == Ucpc::Seat    ? 1
                                                               : 0));
         }
     }

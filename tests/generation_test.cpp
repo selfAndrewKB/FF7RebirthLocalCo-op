@@ -24,7 +24,7 @@ constexpr int kThree = 2;  // player 3's seat
 
 bool NoWeaks()
 {
-    return generation::MemberWeak() == 0 && generation::PlayerOnePawnWeak() == 0 && generation::ChocoboWeak() == 0;
+    return generation::MemberWeakOf(kTwo) == 0 && generation::PlayerOnePawnWeak() == 0 && generation::ChocoboWeakOf(kTwo) == 0;
 }
 
 void Tick(const void* two, const void* three = nullptr)
@@ -38,7 +38,7 @@ void TestInactive()
     std::puts("generation: nothing is published while inactive");
     std::byte chocobo{};
     Tick(&chocobo, &chocobo);
-    EXPECT(generation::Chocobo() == nullptr);
+    EXPECT(generation::ChocoboOf(kTwo) == nullptr);
     EXPECT(generation::ChocoboOf(kThree) == nullptr);
     EXPECT(!generation::AnyActive());
     EXPECT(NoWeaks());
@@ -53,36 +53,36 @@ void TestPublishedAndCleared()
     generation::Begin(kTwo, one.data(), two.data());
     generation::SetMember(kTwo, &member);
     Tick(&chocobo);
-    EXPECT(generation::Active());
-    EXPECT(generation::Chocobo() == &chocobo);
-    EXPECT(generation::PlayerOneController() == one.data() && generation::PlayerTwoController() == two.data());
+    EXPECT(generation::Active(kTwo));
+    EXPECT(generation::ChocoboOf(kTwo) == &chocobo);
+    EXPECT(generation::PlayerOneController() == one.data() && generation::ControllerOf(kTwo) == two.data());
     EXPECT(NoWeaks());
     Tick(nullptr);
-    EXPECT(generation::Chocobo() == nullptr);
+    EXPECT(generation::ChocoboOf(kTwo) == nullptr);
     Tick(&chocobo);
     generation::Withdraw(kTwo);
-    EXPECT(generation::Chocobo() == nullptr);
+    EXPECT(generation::ChocoboOf(kTwo) == nullptr);
 
     generation::Begin(kTwo, one.data(), two.data());
     Tick(&chocobo);
-    EXPECT(generation::Chocobo() == &chocobo);
+    EXPECT(generation::ChocoboOf(kTwo) == &chocobo);
     generation::Fault(kTwo, L"a test fault");
-    EXPECT(generation::Chocobo() == nullptr);
-    EXPECT(!generation::Active());
-    EXPECT(generation::FaultReason() != nullptr);
+    EXPECT(generation::ChocoboOf(kTwo) == nullptr);
+    EXPECT(!generation::Active(kTwo));
+    EXPECT(generation::FaultReason(kTwo) != nullptr);
 
     generation::Begin(kTwo, one.data(), two.data());
-    EXPECT(generation::FaultReason() == nullptr);  // a new generation forgets the last one's fault
+    EXPECT(generation::FaultReason(kTwo) == nullptr);  // a new generation forgets the last one's fault
     Tick(&chocobo);
     generation::End(kTwo);
-    EXPECT(generation::Chocobo() == nullptr && generation::PlayerTwoController() == nullptr);
+    EXPECT(generation::ChocoboOf(kTwo) == nullptr && generation::ControllerOf(kTwo) == nullptr);
     EXPECT(generation::PlayerOneController() == one.data());  // player 1's lives on
 
     generation::Begin(kTwo, one.data(), two.data());
     Tick(&chocobo);
     generation::Withdraw(kTwo);
     Tick(&chocobo);  // an inactive tick publishes nothing
-    EXPECT(generation::Chocobo() == nullptr);
+    EXPECT(generation::ChocoboOf(kTwo) == nullptr);
     generation::End(kTwo);
 }
 

@@ -127,16 +127,18 @@ void TestSharedRide()
 
 void TestEndTextPerSeat()
 {
-    std::puts("chocobo: the end texts per seat: player 2's as before, the lost possession naming the seat's controller");
+    std::puts("chocobo: the end texts per seat: the reason's own, the lost possession naming the seat's controller");
     for (const auto reason : {EndReason::None, EndReason::Gone, EndReason::Dismounted, EndReason::Battle,
                               EndReason::ManagerEnded, EndReason::Detached, EndReason::LostPossession})
     {
-        EXPECT(Describe(reason, lss::players::kFirstSeat) == Describe(reason));  // the same literal for player 2
         if (reason != EndReason::LostPossession)
         {
+            EXPECT(Describe(reason, 1) == Describe(reason));  // the same literal for every seat
             EXPECT(Describe(reason, 2) == Describe(reason));
         }
     }
+    EXPECT(std::wstring(Describe(EndReason::LostPossession, 1)) ==
+           L"player 2's controller no longer holds the chocobo");
     EXPECT(std::wstring(Describe(EndReason::LostPossession, 2)) ==
            L"player 3's controller no longer holds the chocobo");
     EXPECT(std::wstring(Describe(EndReason::LostPossession, 7)) ==

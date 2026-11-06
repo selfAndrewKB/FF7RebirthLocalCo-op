@@ -90,7 +90,10 @@ void ProcessPlayerInput(void* controller, float deltaTime, bool gamePaused)
     // camera manager) and its pad's own buttons (ResetCamera). The call runs with whatever opened; a refused stick or
     // primary scope is counted.
     seat_ladder::Args args;
-    args.seat  = isSeat ? seat : players::kFirstSeat;  // player 1's call opens neither Primary nor Buttons
+    if (isSeat)
+    {
+        args.seat = seat;  // player 1's call opens Sticks alone, which reads no seat
+    }
     args.padId = ControllerIdOf(controller);
     const unsigned which = isSeat ? seat_ladder::Sticks | seat_ladder::Primary | seat_ladder::Buttons
                                   : seat_ladder::Sticks;
