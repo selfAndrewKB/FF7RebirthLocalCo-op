@@ -1,7 +1,7 @@
 #pragma once
 
 // Each further seat's content in its HUD image (Stage B2; per seat since plan/seats.md step 4): around the seat's
-// overlay pass (hud/passes/seat_hud_images.h), the game's own answers to "which player" are switched to the seat, and
+// overlay pass (hud/passes/second_image.h), the game's own answers to "which player" are switched to the seat, and
 // the game's own view-dependent HUD updates are run again for it (RE-p2-hud.md P8.6, pass 9 and pass 12). After the
 // pass everything is switched back and the same updates run again for player 1, whose render follows in the same frame;
 // between two further passes the roots' contexts and player 1's re-run are left to the last one (hud/
@@ -16,7 +16,7 @@
 //   L3  the party manager's primary controller (scopes/primary_controller.h Scope), which the
 //       camera-manager helpers and the compass heading read;
 //   L6  the game mode's HUD time step (AEndGameMode+0x5D8), 0 during the re-runs, so timers do not
-//       advance twice (the overlay's own DeltaTime is L5, in hud/passes/seat_hud_images.cpp).
+//       advance twice (the overlay's own DeltaTime is L5, in hud/passes/second_image.cpp).
 // The updates run again (pass 9's re-runnable set, in the game's order): the lists at
 // EndUISystem+0x98, +0xB0, +0x150 (markers), +0x188, +0x170, +0x180, and the leader-target icon at
 // +0x140, and the compass holder's update (its heading follows L3). The marker math reads the
@@ -63,7 +63,7 @@ void LeaveSeat(int seat, bool another) noexcept;
 
 /// Game thread: player 1's contexts and re-run, if a pass left them for the next one (PlayerOneDue). From EnterSeat
 /// when the levers fail, and after the frame's further passes when a planned pass did not run (its image not ready;
-/// under seat_hud_images' HoldFrame there). Nothing otherwise.
+/// under second_image's HoldFrame there). Nothing otherwise.
 void SettleSeats() noexcept;
 
 /// A pass left the roots' contexts and player 1's re-run for the next further pass.

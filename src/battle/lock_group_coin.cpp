@@ -65,7 +65,7 @@ thread_local const void* t_player = nullptr;
 lock_group_rules::HeldGroups<4> g_heldGroups;
 
 /// Whether any built seat has a member now.
-bool AnySeatMember() noexcept
+bool AnyFurtherMember() noexcept
 {
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
@@ -124,7 +124,7 @@ std::uint64_t Rebalance(std::uint64_t group, std::uint64_t b, std::uint64_t c, s
 {
     const auto        original = reinterpret_cast<CallFn>(g_rebalance.Original());
     const auto* const self     = reinterpret_cast<const void*>(group);
-    if (!g_on.load(std::memory_order_acquire) || self == nullptr || !AnySeatMember() || !equal_targeting::Types() ||
+    if (!g_on.load(std::memory_order_acquire) || self == nullptr || !AnyFurtherMember() || !equal_targeting::Types() ||
         ReadField<std::uint8_t>(self, kGroupPrioritize) == 0)
     {
         return original(group, b, c, d);
@@ -178,7 +178,7 @@ std::uint64_t Pick(CallFn pick, std::uint64_t group, std::uint64_t out, std::uin
                    bool first) noexcept
 {
     const auto* const self = reinterpret_cast<const void*>(group);
-    if (!g_on.load(std::memory_order_acquire) || self == nullptr || !AnySeatMember() || !equal_targeting::Types() ||
+    if (!g_on.load(std::memory_order_acquire) || self == nullptr || !AnyFurtherMember() || !equal_targeting::Types() ||
         ReadField<std::uint8_t>(self, kGroupPrioritize) == 0)
     {
         return pick(group, out, c, d);

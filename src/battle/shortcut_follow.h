@@ -5,7 +5,7 @@
 // only, item use the executing controller's only. Each rebuild is made again on the other controllers (every seat's
 // after the game's, in seat order; the game's and the other seats' after one that ran in a seat's scope), so every
 // player's shortcuts follow menu edits and item use. A unit of the further players' command menus
-// (battle/seat_command_menus.h), which finds, places and removes it. Game thread.
+// (battle/command_menu.h), which finds, places and removes it. Game thread.
 
 namespace lss::platform {
 class DeferredSites;

@@ -1,14 +1,14 @@
-#include "battle/seat_command_menus.h"
+#include "battle/command_menu.h"
 
 #include <Unreal/CoreUObject/UObject/Class.hpp>
 #include <Unreal/UObject.hpp>
 #include <Unreal/UObjectGlobals.hpp>
 
 #include "battle/command_locks.h"
+#include "battle/command_menu_shared.h"
 #include "battle/command_menu_tick.h"
 #include "battle/focus_scope.h"
 #include "battle/menu_rules.h"
-#include "battle/seat_command_menus_shared.h"
 #include "battle/shortcut_follow.h"
 #include "facts/command_controller.h"
 #include "facts/engine.h"
@@ -38,12 +38,12 @@
 #include <string>
 #include <vector>
 
-// The controller's lifecycle (battle/seat_command_menus.h): its build, the game's Setup and ResetAll made
+// The controller's lifecycle (battle/command_menu.h): its build, the game's Setup and ResetAll made
 // again on
 // it, the Members panel rebuild and the squad switch followed, the join Setup, the placement and removal. The
 // shortcut tables' follow is battle/shortcut_follow, the widgets per half battle/command_menu_view.
 
-namespace lss::battle::seat_command_menus {
+namespace lss::battle::command_menu {
 
 namespace seat_ladder = scopes::seat_ladder;
 
@@ -856,4 +856,4 @@ void Tick() noexcept
     }
 }
 
-}  // namespace lss::battle::seat_command_menus
+}  // namespace lss::battle::command_menu

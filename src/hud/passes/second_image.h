@@ -35,13 +35,13 @@ class GameImage;
 
 namespace lss::hud {
 
-bool InstallSeatHudImages(const platform::GameImage& image) noexcept;
-void RemoveSeatHudImages() noexcept;
-bool SeatHudImagesInstalled() noexcept;
+bool InstallSecondImage(const platform::GameImage& image) noexcept;
+void RemoveSecondImage() noexcept;
+bool SecondImageInstalled() noexcept;
 
 /// The `hud-image` switch: the further players' HUD images on or off (on from a successful install).
-void SetSeatHudImages(bool on) noexcept;
-bool SeatHudImagesOn() noexcept;
+void SetSecondImage(bool on) noexcept;
+bool SecondImageOn() noexcept;
 
 /// The frame's steps, game thread, from the overlay render call (hud/passes/root_overlay_render.cpp) in this order:
 /// the slot's frame begins, unheld.
@@ -86,7 +86,7 @@ std::uintptr_t EntryNameForPass(const void* slot, std::uintptr_t stockName) noex
 bool SubmitInThisPass(const void* slot) noexcept;
 #if LSS_DEV
 /// The `hud-image` command and reading. May throw (out of memory).
-void RegisterSeatHudImagesCommands();
+void RegisterSecondImageCommands();
 #endif
 
 }  // namespace lss::hud

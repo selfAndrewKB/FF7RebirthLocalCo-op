@@ -5,7 +5,7 @@
 #include "hud/layout/centered_frame_code.h"
 #include "hud/layout/overlay_band.h"
 #include "hud/passes/overlay_pass.h"
-#include "hud/passes/seat_hud_images.h"
+#include "hud/passes/second_image.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/code_redirect.h"
@@ -216,7 +216,7 @@ IntRect* OverlayLayoutRect(IntRect* out)
 /// arguments; the fourth is passed through unread).
 void* OverlayLayerEntry(void* slot, std::uintptr_t name, IntRect* rect, std::uintptr_t unused)
 {
-    // A further seat's pass of the overlay render names its own entry (hud/passes/seat_hud_images.h).
+    // A further seat's pass of the overlay render names its own entry (hud/passes/second_image.h).
     void* entry = reinterpret_cast<FindOrAddEntryFn>(g_entryCall.Original())(slot, EntryNameForPass(slot, name), rect,
                                                                                unused);
     if (!g_pending.active || g_pending.thread != GetCurrentThreadId() || entry == nullptr)
@@ -299,7 +299,7 @@ void OverlaySubmit(void* renderer, std::uintptr_t pool, void* slot, std::uintptr
     }
     if (!SubmitInThisPass(slot))
     {
-        return;  // a further pass: player 1's pass submits the slot with every entry (hud/passes/seat_hud_images.h)
+        return;  // a further pass: player 1's pass submits the slot with every entry (hud/passes/second_image.h)
     }
     reinterpret_cast<SubmitLayerSlotFn>(g_submitCall.Original())(renderer, pool, slot, unused);
 }

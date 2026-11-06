@@ -105,9 +105,9 @@ void FollowOnSeats(StateFn engine, void* battle, float blendTime, bool flag)
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
         const auto pair = PairOf(seat);
-        if (pair && battle == pair->one)
+        if (pair && battle == pair->operatorOne)
         {
-            OnSeat(seat, engine, pair->own, blendTime, flag);
+            OnSeat(seat, engine, pair->seatOperator, blendTime, flag);
         }
     }
 }
@@ -236,11 +236,12 @@ bool Seed(int seat) noexcept
     {
         return false;
     }
-    if (Active(pair->one) != Active(pair->own))
+    if (Active(pair->operatorOne) != Active(pair->seatOperator))
     {
-        OnSeat(seat, Active(pair->one) != 0 ? g_engineActivate : g_engineDeactivate, pair->own, 0.0f, false);
+        OnSeat(seat, Active(pair->operatorOne) != 0 ? g_engineActivate : g_engineDeactivate, pair->seatOperator, 0.0f,
+               false);
     }
-    return Active(pair->one) == Active(pair->own);
+    return Active(pair->operatorOne) == Active(pair->seatOperator);
 }
 
 bool SeatBattleActive(void* cameraManager) noexcept

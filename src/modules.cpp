@@ -3,6 +3,7 @@
 #include "battle/battle_camera.h"
 #include "battle/battle_warp_skip.h"
 #include "battle/command_locks.h"
+#include "battle/command_menu.h"
 #include "battle/command_menu_tick.h"
 #include "battle/command_rules.h"
 #include "battle/equal_targeting.h"
@@ -10,7 +11,6 @@
 #include "battle/lock_group_coin.h"
 #include "battle/lock_on.h"
 #include "battle/player_hits.h"
-#include "battle/seat_command_menus.h"
 #include "battle/synergy_partner.h"
 #include "battle/target_coin.h"
 #include "battle/widget_owner.h"
@@ -43,7 +43,7 @@
 #include "hud/minimap/seat_area_icons.h"
 #include "hud/passes/root_overlay_render.h"
 #include "hud/passes/seat_hud_content.h"
-#include "hud/passes/seat_hud_images.h"
+#include "hud/passes/second_image.h"
 #include "hud/user_widgets.h"
 #include "input/approach_own_camera.h"
 #include "input/climb_context.h"
@@ -76,7 +76,7 @@
 #include "views/stream_views.h"
 #include "views/whole_screen.h"
 #include "views/window_span.h"
-#include "world/anim_every_view.h"
+#include "world/anim_views.h"
 #include "world/charapop_centre.h"
 #include "world/charapop_near.h"
 #include "world/field_pickup.h"
@@ -158,7 +158,7 @@ constexpr std::array kModules{
     // battles leave player 2's member where it is
     Module{Call<&battle::battle_warp_skip::Install>, &battle::battle_warp_skip::Remove},
     // player 2's command controller: built, follows the game's
-    Module{Call<&battle::seat_command_menus::Install>, &battle::seat_command_menus::Remove},
+    Module{Call<&battle::command_menu::Install>, &battle::command_menu::Remove},
     // the battle's command locks reach it by the game's setters
     Module{Call<&battle::command_locks::Install>, &battle::command_locks::Remove},
     // ticked in battle; player 2's attack, guard and dodge
@@ -205,7 +205,7 @@ constexpr std::array kModules{
     // player 2's walk-step cap ends on player 2's controller
     Module{Call<&input::seat_walk_cap::Install>, &input::seat_walk_cap::Remove},
     // characters near player 2 animate by the nearer camera
-    Module{Call<&world::anim_every_view::Install>, &world::anim_every_view::Remove},
+    Module{Call<&world::anim_views::Install>, &world::anim_views::Remove},
     // player 2's trigger read after player 1's; admitted actors' events
     Module{Call<&world::seat_triggers::Install>, &world::seat_triggers::Remove},
     // player 2 inside CharaPop switch volumes (the shopkeepers near player 2); its events come from seat_triggers'
@@ -223,7 +223,7 @@ constexpr std::array kModules{
     // HUD widgets as the engine constructs them
     Module{Call<&hud::user_widgets::Install>, &hud::user_widgets::Remove},
     // player 2's HUD image, on (the hud-image command switches it)
-    Module{Call<&hud::InstallSeatHudImages>, &hud::RemoveSeatHudImages},
+    Module{Call<&hud::InstallSecondImage>, &hud::RemoveSecondImage},
     // the minimap's map rendered by player 1's pass only
     Module{Call<&hud::InstallMinimapOnce>, &hud::RemoveMinimapOnce},
     // player 2's minimap in player 2's half
@@ -459,7 +459,7 @@ void TickAfterSession(const Frame& frame) noexcept
         ratios[static_cast<std::size_t>(seat)] = views::SplitWidthRatio(seat);
     }
     camera::shoulder_scale::Poll(frame.splitShown, ratios);
-    world::anim_every_view::Tick(frame.splitShown);  // its frame count, before the world tick
+    world::anim_views::Tick(frame.splitShown);  // its frame count, before the world tick
     world::charapop_near::Tick(frame.splitShown, plays);
     world::charapop_centre::Tick(frame.splitShown, plays);
     world::world_actor_reach::Tick(plays);
@@ -759,7 +759,7 @@ void RegisterCommands(session::Session& session, players::SplitLayout& layout,
         views::RegisterViewPointCommands();
         views::RegisterStreamCommands();
         hud::RegisterOverlayLayoutCommands();
-        hud::RegisterSeatHudImagesCommands();
+        hud::RegisterSecondImageCommands();
         hud::RegisterSeatHudContentCommands();
         hud::seat_area_icons::RegisterCommands();
         hud::RegisterMinimapOnceCommands();

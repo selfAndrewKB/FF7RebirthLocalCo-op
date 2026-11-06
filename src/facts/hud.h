@@ -108,7 +108,7 @@ inline constexpr FunctionFact kSubmitLayerSlot{L"FEndMenuRenderer::SubmitLayerSl
                                                kSubmitLayerSlotPrologue};
 
 // FEndMenuRenderer__AcquireLayerSlot(renderer, pool): rcx = the renderer, dl = the pool, the slot in rax. The root
-// overlay's render takes pool 2 (its call at 0x140C960A2, hud/passes/seat_hud_images), the navimap circle's paint pool
+// overlay's render takes pool 2 (its call at 0x140C960A2, hud/passes/second_image), the navimap circle's paint pool
 // 0.
 inline constexpr std::uint8_t kAcquireLayerSlotPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00,
                                                              0x00};

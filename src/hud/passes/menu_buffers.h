@@ -1,7 +1,7 @@
 #pragma once
 
 // A second set of the menu renderer's vertex and index buffers, for a layer entry drawn beside the game's own in one
-// slot (hud/passes/seat_hud_images.h: the overlay's pool 2; hud/minimap/minimap.h: the minimap's pool 0). Built as
+// slot (hud/passes/second_image.h: the overlay's pool 2; hud/minimap/minimap.h: the minimap's pool 0). Built as
 // FEndMenuRenderer's ctor builds each pool's (RE-p2-hud-second-image.md §5; RE-p2-own-minimap.md §8.3): a 0x20-byte
 // FRenderResource with the pool's own vtable, +8 = -1 (not listed yet), +0xC = 2, the capacity at +0x18, then queued
 // for initialisation on the render thread. The SRM slot is a zeroed 0x20-byte block. Also the FName value helper both

@@ -1,9 +1,9 @@
 #include "camera/field_camera.h"
 
 #include "battle/battle_camera.h"
+#include "battle/command_menu.h"
 #include "battle/focus_scope.h"
 #include "battle/lock_on.h"
-#include "battle/seat_command_menus.h"
 #include "camera/attack_cameras.h"
 #include "camera/camera_access.h"
 #include "facts/cameras.h"
@@ -96,8 +96,8 @@ std::uint8_t ActiveState(const void* field) noexcept
 
 bool Matches(const FieldPair& pair) noexcept
 {
-    return std::memcmp(Command(pair.own), Command(pair.one), facts::kFieldCommandSize) == 0 &&
-           ActiveState(pair.own) == ActiveState(pair.one);
+    return std::memcmp(Command(pair.seatOperator), Command(pair.operatorOne), facts::kFieldCommandSize) == 0 &&
+           ActiveState(pair.seatOperator) == ActiveState(pair.operatorOne);
 }
 
 /// Player 1's Field operator is the top operator of player 1's camera manager, or the Battle operator is (the field
@@ -144,7 +144,7 @@ void CountResult(int seat, const FieldPair& pair) noexcept
 void CountState(int seat, const FieldPair& pair) noexcept
 {
     g_settingsCounters[Index(seat)].Act();
-    if (ActiveState(pair.own) != ActiveState(pair.one))
+    if (ActiveState(pair.seatOperator) != ActiveState(pair.operatorOne))
     {
         g_mismatches[Index(seat)].fetch_add(1, std::memory_order_relaxed);
     }
@@ -161,7 +161,7 @@ void Activate(void* field, float blendTime, bool flag)
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
         const auto pair = CurrentPair(seat);
-        if (!pair || field != pair->one)
+        if (!pair || field != pair->operatorOne)
         {
             g_settingsCounters[Index(seat)].Pass();
             continue;
@@ -170,11 +170,12 @@ void Activate(void* field, float blendTime, bool flag)
         {
             commanded = PlayerOneFieldCommanded();
         }
-        const auto seatWas = ActiveState(pair->own);
-        g_engineActivate(pair->own, blendTime, flag);
+        const auto seatWas = ActiveState(pair->seatOperator);
+        g_engineActivate(pair->seatOperator, blendTime, flag);
         if (*commanded)
         {
-            g_engineCopy(pair->own, Command(pair->one));  // after activation: the first one writes command defaults
+            // After activation: the first one writes command defaults.
+            g_engineCopy(pair->seatOperator, Command(pair->operatorOne));
             CountResult(seat, *pair);
         }
         else
@@ -198,12 +199,12 @@ void Deactivate(void* field, float blendTime, bool flag)
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
         const auto pair = CurrentPair(seat);
-        if (!pair || field != pair->one)
+        if (!pair || field != pair->operatorOne)
         {
             g_settingsCounters[Index(seat)].Pass();
             continue;
         }
-        g_engineDeactivate(pair->own, blendTime, flag);
+        g_engineDeactivate(pair->seatOperator, blendTime, flag);
         if (!commanded)
         {
             commanded = PlayerOneFieldCommanded();
@@ -226,7 +227,7 @@ void CopyCommand(void* field, const void* command)
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
         const auto pair = CurrentPair(seat);
-        if (!pair || field != pair->one)
+        if (!pair || field != pair->operatorOne)
         {
             g_settingsCounters[Index(seat)].Pass();
             continue;
@@ -241,7 +242,7 @@ void CopyCommand(void* field, const void* command)
             g_settingsCounters[Index(seat)].Pass();
             continue;
         }
-        g_engineCopy(pair->own, command);
+        g_engineCopy(pair->seatOperator, command);
         CountResult(seat, *pair);
     }
 }
@@ -285,7 +286,7 @@ int ActsFor(void* cameraManager) noexcept
 /// player 1's target list would move player 2's camera.
 void RunAsPrimary(int seat, void* cameraManager, float deltaTime)
 {
-    void*      controller = battle::seat_command_menus::Controller(seat);
+    void*      controller = battle::command_menu::Controller(seat);
     void*      member     = players::generation::MemberOf(seat);
     const bool battle     = controller != nullptr && member != nullptr &&
                             ReadField<std::uint8_t>(controller, kCmdHudMode) != 0;
@@ -416,16 +417,16 @@ Seeded Seed(int seat) noexcept
     {
         return Seeded::NoPair;
     }
-    if (ActiveState(pair->own) != ActiveState(pair->one))
+    if (ActiveState(pair->seatOperator) != ActiveState(pair->operatorOne))
     {
-        const StateFn apply = ActiveState(pair->one) != 0 ? g_engineActivate : g_engineDeactivate;
-        apply(pair->own, 0.0f, false);
+        const StateFn apply = ActiveState(pair->operatorOne) != 0 ? g_engineActivate : g_engineDeactivate;
+        apply(pair->seatOperator, 0.0f, false);
     }
     if (!PlayerOneFieldCommanded())
     {
         return Seeded::PlayerOneUnderOther;  // player 1's command is the cut's this frame: the seat keeps its own
     }
-    g_engineCopy(pair->own, Command(pair->one));
+    g_engineCopy(pair->seatOperator, Command(pair->operatorOne));
     return Matches(*pair) ? Seeded::Matches : Seeded::Mismatch;
 }
 

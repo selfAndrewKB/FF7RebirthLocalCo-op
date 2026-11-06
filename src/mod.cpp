@@ -530,15 +530,15 @@ private:
         moment.sharedRide  = shared;
         moment.choice      = singleViewChoice_;
         moment.map         = columns.map;
-        bool furtherIn     = false;
+        bool furtherPlayerIn = false;
         for (int seat = 1; seat <= lss::players::kSeatsBuilt; ++seat)
         {
             const auto state = session_->State(seat);
             moment.seats[static_cast<std::size_t>(seat)] = state;
-            furtherIn = furtherIn || lss::players::InGame(state);
+            furtherPlayerIn = furtherPlayerIn || lss::players::InGame(state);
         }
         // Read only when it can matter (the read logs each change of reason).
-        moment.wholeScreen = furtherIn && moment.choice == lss::views::column_source::Override::Auto &&
+        moment.wholeScreen = furtherPlayerIn && moment.choice == lss::views::column_source::Override::Auto &&
                              lss::views::WholeScreenShown();
         lss::views::column_source::Shown shown = lss::views::column_source::Decide(moment);
         LogSingleViewChange(singleView_.Update(shown.Single()));

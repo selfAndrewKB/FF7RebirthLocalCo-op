@@ -89,7 +89,7 @@ float HalfAspect() noexcept;
 bool SplitShown() noexcept;
 
 /// Whether `seat`'s view shows player 1's camera (views/column_source.h), as last followed: their HUD pass is skipped
-/// then, so their view draws player 1's HUD as a mirror view does (hud/passes/seat_hud_images.h). False for player 1
+/// then, so their view draws player 1's HUD as a mirror view does (hud/passes/second_image.h). False for player 1
 /// and for a seat out. Any thread.
 bool OnPlayerOne(int seat) noexcept;
 

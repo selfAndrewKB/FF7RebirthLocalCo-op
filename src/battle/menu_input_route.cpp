@@ -1,9 +1,9 @@
 #include "battle/menu_input_route.h"
 
+#include "battle/command_menu.h"
 #include "battle/command_menu_tick_shared.h"
 #include "battle/focus_scope.h"
 #include "battle/menu_rules.h"
-#include "battle/seat_command_menus.h"
 #include "facts/command_controller.h"
 #include "facts/controller.h"
 #include "facts/hud.h"
@@ -197,7 +197,7 @@ bool InSeatUi(int seat, Route route, const wchar_t* what, Call&& call) noexcept
     {
         return refuse(L"the route is off, inside a pass, or the player is out");
     }
-    const auto own    = reinterpret_cast<std::uintptr_t>(seat_command_menus::Controller(seat));
+    const auto own    = reinterpret_cast<std::uintptr_t>(command_menu::Controller(seat));
     const auto one    = ReadAt<std::uintptr_t>(command_menu_tick::UiSystem() + kUICommandController);
     void*      member = players::generation::MemberOf(seat);
     if (own == 0 || one == 0 || one == own || member == nullptr)
@@ -286,7 +286,7 @@ bool RouteSeatPad(input::pad_buttons::ActionDownFn dispatch, void* owner, void* 
     }
     char taken = 1;  // after a fault: not dispatched again in player 1's context
     const int  action = KnownAction(key);
-    const auto own    = reinterpret_cast<std::uintptr_t>(seat_command_menus::Controller(seat));
+    const auto own    = reinterpret_cast<std::uintptr_t>(command_menu::Controller(seat));
     std::wstring before;
     const bool routed = InSeatUi(seat, Route::kPress, L"press", [&] {
         const bool logIt = platform::Enabled(platform::Level::Trace) && action >= 0 &&

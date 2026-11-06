@@ -120,13 +120,13 @@ std::optional<OperatorPair> CurrentPair(int seat, OperatorOf operatorOf) noexcep
     {
         return std::nullopt;
     }
-    void* one          = operatorOf(CameraManagerOf(players::generation::ControllerOf(0)));
+    void* operatorOne  = operatorOf(CameraManagerOf(players::generation::ControllerOf(0)));
     void* seatOperator = operatorOf(CameraManagerOf(players::generation::ControllerOf(seat)));
-    if (one == nullptr || seatOperator == nullptr || one == seatOperator)
+    if (operatorOne == nullptr || seatOperator == nullptr || operatorOne == seatOperator)
     {
         return std::nullopt;
     }
-    return OperatorPair{one, seatOperator};
+    return OperatorPair{operatorOne, seatOperator};
 }
 
 }  // namespace lss::camera::camera_access

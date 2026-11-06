@@ -121,7 +121,7 @@ bool Execute(const wchar_t* command) noexcept
 
 #if LSS_DEV
 
-void RegisterCommands(std::function<bool()> furtherIn)
+void RegisterCommands(std::function<bool()> furtherPlayerIn)
 {
     using control::Outcome;
     using control::Value;
@@ -137,8 +137,8 @@ void RegisterCommands(std::function<bool()> furtherIn)
     control::Register(
         {.name = L"quit",
          .help = L"quit the game through the engine (every further player must be out)",
-         .set  = [furtherIn = std::move(furtherIn)](const Value&) {
-             if (furtherIn())
+         .set  = [furtherPlayerIn = std::move(furtherPlayerIn)](const Value&) {
+             if (furtherPlayerIn())
              {
                  return Outcome{false, L"a further player is still in ('leave', 'p3.leave' and their 'wait-until' first)"};
              }

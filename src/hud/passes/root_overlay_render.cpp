@@ -15,7 +15,7 @@
 #include "hud/passes/overlay_pass.h"
 #include "hud/passes/pass_opacity.h"
 #include "hud/passes/seat_hud_content.h"
-#include "hud/passes/seat_hud_images.h"
+#include "hud/passes/second_image.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
@@ -68,7 +68,7 @@ using platform::frame_watch::Now;
 /// image's buffer check: a pass planned but not run is put back by SettleSeats after the loop).
 bool AnotherPassBelow(int seat, bool splitShown) noexcept
 {
-    if (!splitShown || !SeatHudImagesOn() || !SeatHudContentOn())
+    if (!splitShown || !SecondImageOn() || !SeatHudContentOn())
     {
         return false;
     }
@@ -84,7 +84,7 @@ bool AnotherPassBelow(int seat, bool splitShown) noexcept
 
 /// A further seat's pass of the overlay render: its levers and updates, its own render into the entry named for it,
 /// everything put back for the next pass (the roots' contexts and player 1's re-run only after the last further pass,
-/// `another` false). Its image is ready (seat_hud_images' ImageReady).
+/// `another` false). Its image is ready (second_image's ImageReady).
 void FurtherPass(int seat, bool another) noexcept
 {
     const double deltaTime = BeginFurtherPass();  // the engine's DeltaTime 0 for the render; the slot taking part
@@ -160,7 +160,7 @@ void RenderRootOverlay(void* application) noexcept
             }
         }
         FollowHudPlacementBeforeRender();  // after the rows' layout, which can set a row's point
-        // The further seats' passes first, highest seat first, each whose image is on (hud/passes/seat_hud_images.h
+        // The further seats' passes first, highest seat first, each whose image is on (hud/passes/second_image.h
         // holds the slot and renders; the levers and the per-pass opacities around each render are the modules' own
         // calls, in FurtherPass's order). A seat whose column shows player 1's camera (views/column_source.h
         // Source::PlayerOne: a held column while the game takes the whole screen, a shared ride, every further player

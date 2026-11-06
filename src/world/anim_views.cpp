@@ -1,4 +1,4 @@
-#include "world/anim_every_view.h"
+#include "world/anim_views.h"
 
 #include "facts/controller.h"
 #include "facts/engine.h"
@@ -34,7 +34,7 @@
 #include <utility>
 #include <vector>
 
-namespace lss::world::anim_every_view {
+namespace lss::world::anim_views {
 
 namespace {
 
@@ -653,4 +653,4 @@ void Tick(bool splitShown) noexcept
     g_counts = {};
 }
 
-}  // namespace lss::world::anim_every_view
+}  // namespace lss::world::anim_views

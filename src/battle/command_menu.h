@@ -19,8 +19,8 @@
 // Its menu widget stays at render opacity 0 until it is shown in player 2's pass only (command_menu_view).
 // Game thread only.
 //
-// Units: this file's lifecycle (seat_command_menus.cpp), the shortcut tables' follow (shortcut_follow), the widgets
-// per half (command_menu_view), and what they share (seat_command_menus_shared.h).
+// Units: this file's lifecycle (command_menu.cpp), the shortcut tables' follow (shortcut_follow), the widgets
+// per half (command_menu_view), and what they share (command_menu_shared.h).
 //
 // Per seat: written for player 2 above, every seat gets its own controller and key guide, built at its first join
 // and kept (indexed by the seat; index 0 unused, player 1's is the game's own). Each of the game's calls is made
@@ -32,7 +32,7 @@ namespace lss::platform {
 class GameImage;
 }
 
-namespace lss::battle::seat_command_menus {
+namespace lss::battle::command_menu {
 
 bool Install(const platform::GameImage& image) noexcept;
 void Remove() noexcept;
@@ -50,4 +50,4 @@ void* Controller(int seat) noexcept;
 /// The seat whose controller `controller` is, or -1 (player 1's, the game's, is no seat's): "ours" is any seat's.
 int SeatOfController(const void* controller) noexcept;
 
-}  // namespace lss::battle::seat_command_menus
+}  // namespace lss::battle::command_menu

@@ -37,7 +37,7 @@ add_library(LocalSplitScreen SHARED
     src/hud/hud_roots.cpp
     src/hud/hud_updates.cpp
     src/hud/passes/root_overlay_render.cpp
-    src/hud/passes/seat_hud_images.cpp
+    src/hud/passes/second_image.cpp
     src/hud/passes/shared_slot.cpp
     src/hud/minimap/minimap_once.cpp
     src/hud/passes/seat_hud_content.cpp
@@ -99,7 +99,7 @@ add_library(LocalSplitScreen SHARED
     src/feedback/sound_listeners.cpp
     src/input/approach_own_camera.cpp
     src/input/seat_walk_cap.cpp
-    src/world/anim_every_view.cpp
+    src/world/anim_views.cpp
     src/traversal/traversal_camera.cpp
     src/traversal/traversal_exec.cpp
     src/traversal/traversal_holders.cpp
@@ -149,7 +149,7 @@ add_library(LocalSplitScreen SHARED
     src/session/leave_watch.cpp
     src/battle/command_rules.cpp
     src/battle/focus_scope.cpp
-    src/battle/seat_command_menus.cpp
+    src/battle/command_menu.cpp
     src/battle/command_menu_view.cpp
     src/battle/shortcut_follow.cpp
     src/battle/command_menu_tick.cpp

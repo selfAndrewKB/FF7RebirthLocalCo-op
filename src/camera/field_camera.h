@@ -25,7 +25,7 @@
 // so it reads the seat's input and its own operators. It acts only once the seat's Field operator is
 // active and the camera manager's current operator index names an existing operator, since helpers
 // inside the update use both without checking. In battle, a seat's update also runs in that seat's UI
-// context and target fields (seat_command_menus, lock_on).
+// context and target fields (command_menu, lock_on).
 //
 // Per seat: the counters, the mismatch count and the count of commands not mirrored under a cut. Game thread.
 

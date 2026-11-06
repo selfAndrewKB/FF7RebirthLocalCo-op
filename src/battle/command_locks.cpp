@@ -1,6 +1,6 @@
 #include "battle/command_locks.h"
 
-#include "battle/seat_command_menus.h"
+#include "battle/command_menu.h"
 #include "facts/hud.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
@@ -105,7 +105,7 @@ platform::Level FollowLevel(bool ok) noexcept
 /// unexpected).
 std::uintptr_t FollowingController(int seat, const wchar_t* what) noexcept
 {
-    const auto own = reinterpret_cast<std::uintptr_t>(seat_command_menus::Controller(seat));
+    const auto own = reinterpret_cast<std::uintptr_t>(command_menu::Controller(seat));
     if (!g_installed || own == 0)
     {
         return 0;  // not built yet: Sync() copies at its join
@@ -116,7 +116,7 @@ std::uintptr_t FollowingController(int seat, const wchar_t* what) noexcept
         return 0;
     }
     const auto one = ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController);
-    if (one == 0 || seat_command_menus::SeatOfController(reinterpret_cast<const void*>(one)) >= 1)
+    if (one == 0 || command_menu::SeatOfController(reinterpret_cast<const void*>(one)) >= 1)
     {
         Line(std::format(L"{} made while the UI system's slot names {}: NOT followed", what,
                          one == 0 ? L"no controller" : L"a further player's controller (inside their scope)"));

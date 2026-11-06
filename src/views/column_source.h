@@ -6,7 +6,7 @@
 //
 // A column (views/columns.h) shows one of three things, one mechanism each:
 //   - Self: the player's own view, their own camera (views/player_view_point.h) and their own HUD
-//     (hud/passes/seat_hud_images.h);
+//     (hud/passes/second_image.h);
 //   - PlayerOne: the column stays and the mod puts player 1's camera and HUD in it, as a mirror view shows them
 //     (views/mirror_player.h): the further player's view point is redirected to player 1's camera and no HUD pass
 //     runs for them;
@@ -162,7 +162,7 @@ constexpr Shown Decide(const Moment& moment) noexcept
     {
         shown.columnCount = columns::kMaxColumns;  // a map built by MapOf never is; the field is open
     }
-    bool furtherIn = false;
+    bool furtherPlayerIn = false;
     bool allHanded = true;
     for (int seat = 1; seat < players::kMaxPlayers; ++seat)
     {
@@ -171,7 +171,7 @@ constexpr Shown Decide(const Moment& moment) noexcept
         shown.seatIn[at] = in;
         if (in)
         {
-            furtherIn = true;
+            furtherPlayerIn = true;
             allHanded = allHanded && moment.seats[at] == players::SeatState::Handed;
         }
     }
@@ -191,7 +191,7 @@ constexpr Shown Decide(const Moment& moment) noexcept
     {
         all = Why::SharedRide;
     }
-    else if (automatic && furtherIn && allHanded)
+    else if (automatic && furtherPlayerIn && allHanded)
     {
         all = Why::Handed;
     }

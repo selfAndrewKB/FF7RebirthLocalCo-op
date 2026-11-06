@@ -1,12 +1,12 @@
 #include "battle/command_menu_tick.h"
 
+#include "battle/command_menu.h"
 #include "battle/command_menu_tick_shared.h"
 #include "battle/command_rules.h"
 #include "battle/focus_scope.h"
 #include "battle/menu_input_route.h"
 #include "battle/menu_rules.h"
 #include "battle/menu_tint.h"
-#include "battle/seat_command_menus.h"
 #include "facts/command_controller.h"
 #include "facts/hud.h"
 #include "facts/party.h"
@@ -488,7 +488,7 @@ void Refused(int seat, const wchar_t* why) noexcept
 /// A seat's controller's tick, inside the seat's scopes (§13.2).
 void SeatPass(int seat, float deltaTime) noexcept
 {
-    const auto own    = reinterpret_cast<std::uintptr_t>(seat_command_menus::Controller(seat));
+    const auto own    = reinterpret_cast<std::uintptr_t>(command_menu::Controller(seat));
     const auto one    = ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController);
     void*      member = players::generation::MemberOf(seat);
     if (own == 0 || one == 0 || one == own || member == nullptr ||
@@ -636,7 +636,7 @@ std::uint8_t GuideShow(void* guide, std::uint8_t mode) noexcept
 {
     // With the seat's own key guide in the slot (battle/focus_scope), the seat's controller drives it
     // natively; without one, the seat's pass leaves the shared guide alone.
-    if (g_pass == 2 && seat_command_menus::KeyGuide(g_passSeat) == nullptr)
+    if (g_pass == 2 && command_menu::KeyGuide(g_passSeat) == nullptr)
     {
         ++g_guideSkips;
         if (platform::Enabled(platform::Level::Debug))
@@ -652,7 +652,7 @@ std::uint8_t GuideShow(void* guide, std::uint8_t mode) noexcept
 
 void GuideMode8() noexcept
 {
-    if (g_pass == 2 && seat_command_menus::KeyGuide(g_passSeat) == nullptr)
+    if (g_pass == 2 && command_menu::KeyGuide(g_passSeat) == nullptr)
     {
         ++g_guideSkips;
         if (platform::Enabled(platform::Level::Debug))

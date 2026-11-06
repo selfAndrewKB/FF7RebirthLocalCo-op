@@ -28,7 +28,7 @@ namespace lss::platform {
 class GameImage;
 }
 
-namespace lss::world::anim_every_view {
+namespace lss::world::anim_views {
 
 /// Replaces the two calls and finds the game's functions (each checked; logged).
 void Install(const platform::GameImage& image) noexcept;
@@ -39,4 +39,4 @@ void Remove() noexcept;
 /// shown, and the Debug summary.
 void Tick(bool splitShown) noexcept;
 
-}  // namespace lss::world::anim_every_view
+}  // namespace lss::world::anim_views

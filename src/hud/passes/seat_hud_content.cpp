@@ -27,7 +27,7 @@
 #include "scopes/primary_controller.h"
 
 #if LSS_DEV
-#include "hud/passes/seat_hud_images.h"
+#include "hud/passes/second_image.h"
 #include "platform/command_registry.h"
 #endif
 
@@ -686,9 +686,9 @@ void RegisterSeatHudContentCommands()
              {
                  return Outcome{false, L"the HUD levers refused a check (see the log)"};
              }
-             return Outcome{true, !on                ? L"the further players' content off"
-                                  : SeatHudImagesOn() ? L"the further players' content on"
-                                                      : L"the further players' content on (needs hud-image on)"};
+             return Outcome{true, !on              ? L"the further players' content off"
+                                  : SecondImageOn() ? L"the further players' content on"
+                                                    : L"the further players' content on (needs hud-image on)"};
          },
          .get = [] { return Value{SeatHudContentOn()}; }});
     control::Register(

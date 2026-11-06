@@ -1,4 +1,4 @@
-#include "hud/passes/seat_hud_images.h"
+#include "hud/passes/second_image.h"
 
 #include "facts/engine.h"
 #include "facts/hud.h"
@@ -193,7 +193,7 @@ bool Patch(const platform::GameImage& image, platform::CodeRedirect& redirect, s
 
 }  // namespace
 
-bool InstallSeatHudImages(const platform::GameImage& image) noexcept
+bool InstallSecondImage(const platform::GameImage& image) noexcept
 {
     const auto render    = platform::FindFunction(image, kRenderToCompositeLayer);
     const auto passes    = platform::FindFunction(image, kAddCompositePasses);
@@ -240,7 +240,7 @@ bool InstallSeatHudImages(const platform::GameImage& image) noexcept
                                       reinterpret_cast<std::uintptr_t>(&AcquireLayerSlot));
     if (!installed)
     {
-        RemoveSeatHudImages();
+        RemoveSecondImage();
         platform::Log(L"HUD image: a site is not what the research read; no image for the further players");
         return false;
     }
@@ -248,7 +248,7 @@ bool InstallSeatHudImages(const platform::GameImage& image) noexcept
     // code can run. (The call redirects above pin it too; this does not rely on that.)
     if (!platform::PinThisModule())
     {
-        RemoveSeatHudImages();
+        RemoveSecondImage();
         platform::Log(L"HUD image: this DLL could not be pinned; no image for the further players");
         return false;
     }
@@ -257,7 +257,7 @@ bool InstallSeatHudImages(const platform::GameImage& image) noexcept
     return true;
 }
 
-void RemoveSeatHudImages() noexcept
+void RemoveSecondImage() noexcept
 {
     g_on.store(false, std::memory_order_relaxed);
     g_imageSeats.store(0, std::memory_order_relaxed);
@@ -279,20 +279,20 @@ void RemoveSeatHudImages() noexcept
     g_installed = false;
 }
 
-bool SeatHudImagesInstalled() noexcept
+bool SecondImageInstalled() noexcept
 {
     return g_installed;
 }
 
-void SetSeatHudImages(bool on) noexcept
+void SetSecondImage(bool on) noexcept
 {
     g_on.store(on && g_installed && !g_refused, std::memory_order_relaxed);
     g_familyLogLines.store(0, std::memory_order_relaxed);
     platform::Log(L"HUD image: the further players' images {}",
-                  SeatHudImagesOn() ? L"on" : on ? L"unavailable" : L"off");
+                  SecondImageOn() ? L"on" : on ? L"unavailable" : L"off");
 }
 
-bool SeatHudImagesOn() noexcept
+bool SecondImageOn() noexcept
 {
     return g_on.load(std::memory_order_relaxed);
 }
@@ -305,7 +305,7 @@ void BeginFrame() noexcept
 
 bool ImageReady(int seat, bool shown) noexcept
 {
-    bool image = shown && SeatHudImagesOn() && g_stockName.load(std::memory_order_relaxed) != 0;
+    bool image = shown && SecondImageOn() && g_stockName.load(std::memory_order_relaxed) != 0;
     if (image)
     {
         const auto buffers = g_slot.BuffersUsable(seat);
@@ -424,7 +424,7 @@ bool SubmitInThisPass(const void* slot) noexcept
 
 #if LSS_DEV
 
-void RegisterSeatHudImagesCommands()
+void RegisterSecondImageCommands()
 {
     using control::Outcome;
     using control::Value;
@@ -434,19 +434,19 @@ void RegisterSeatHudImagesCommands()
          .help  = L"the further players' HUD images: the overlay rendered once more per further player and drawn "
                   L"only in that player's view",
          .set   = [](const Value& v) {
-             if (!SeatHudImagesInstalled() || !RootOverlayRenderInstalled())
+             if (!SecondImageInstalled() || !RootOverlayRenderInstalled())
              {
                  return Outcome{false, L"the further players' HUD images are not installed (see the startup log)"};
              }
              const bool on = std::get<bool>(v);
-             SetSeatHudImages(on);
-             if (on && !SeatHudImagesOn())
+             SetSecondImage(on);
+             if (on && !SecondImageOn())
              {
                  return Outcome{false, L"the further players' HUD images refused a check (see the log)"};
              }
              return Outcome{true, on ? L"the further players' HUD images on" : L"the further players' HUD images off"};
          },
-         .get = [] { return Value{SeatHudImagesOn()}; }});
+         .get = [] { return Value{SecondImageOn()}; }});
 }
 
 #endif

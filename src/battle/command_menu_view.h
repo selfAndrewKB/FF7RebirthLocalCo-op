@@ -4,7 +4,7 @@
 // step 4). A controller's command menu, its field menu (the party list) and its wait-mode filter (the tactical-mode
 // tint), and the key guide's widget (the game's at EndUISystem[53], each seat's own), are each an FWeakObjectPtr; the
 // seats' stay at render opacity 0 until the seat's pass of the overlay render shows its own instead of player 1's. A
-// unit of the seats' command menus (battle/seat_command_menus.h). Game thread (the render passes run on it).
+// unit of the seats' command menus (battle/command_menu.h). Game thread (the render passes run on it).
 
 namespace lss::battle::command_menu_view {
 

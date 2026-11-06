@@ -42,7 +42,7 @@ inline constexpr std::uintptr_t kBeginRenderingViewFamily = 0x140BEE184;
 inline constexpr std::uintptr_t kBeginRenderingViewFamilyEntry = 0x14698B4D0;
 
 /// GFrameNumber (data, uint32): stepped once per frame by PostRenderAllViewports. Read by the HUD trace's frame line
-/// and held one back for the further HUD passes (hud/passes/seat_hud_images, RE-damage-numbers-per-view.md §5). Its
+/// and held one back for the further HUD passes (hud/passes/second_image, RE-damage-numbers-per-view.md §5). Its
 /// 1.005 twin is 0x146DDD224, carried by the hand-found table: the generated data range around FApp::DeltaTime
 /// would put it 0x1C bytes off (S-DMGNUM, 2026-10-26).
 inline constexpr std::uintptr_t kFrameNumber = 0x146FAA370;
@@ -259,7 +259,7 @@ inline constexpr std::uint8_t kFreeBytes[] = {0x48, 0x85, 0xC9, 0x0F, 0x84, 0xA0
 inline constexpr FunctionFact kFree{L"FMemory::Free", 0x14079F8D0, kFreeBytes};
 
 /// The engine's array-data free (IDA: ME_FreeResourceBindingArray): `mov rcx,[rcx]; if (rcx) FMemory::Free(rcx)`
-/// for the TArray at rcx. hud/minimap_labels calls it; world/anim_every_view redirects a call to it.
+/// for the TArray at rcx. hud/minimap_labels calls it; world/anim_views redirects a call to it.
 inline constexpr std::uint8_t kFreeArrayDataBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x36, 0xF7,
                                                        0x90, 0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x09};
 inline constexpr FunctionFact kFreeArrayData{L"the array-data free (ME_FreeResourceBindingArray)", 0x14079F7F0,

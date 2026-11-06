@@ -1,7 +1,7 @@
 #pragma once
 
 // Each further seat's layer entry beside the game's own in one menu-renderer slot: the root overlay's pool 2
-// (hud/passes/seat_hud_images.h) and the navimap circle's pool 0 (hud/minimap/minimap.h), one instance each. The engine
+// (hud/passes/second_image.h) and the navimap circle's pool 0 (hud/minimap/minimap.h), one instance each. The engine
 // keeps one image per slot, so the mod reuses the slot across the passes of the overlay render (hud/passes/
 // overlay_pass.h, which holds the rule):
 //   - the first further pass the slot takes part in acquires it and holds it; each later further pass takes the held
