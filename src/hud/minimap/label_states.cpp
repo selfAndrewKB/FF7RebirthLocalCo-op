@@ -69,7 +69,7 @@ bool LabelBook::BeforeSetText(void* widget, void* controller) noexcept
     Record* record = Find(controller);
     if (record != nullptr && record->inside)
     {
-        return true;  // a second SetText on it in the same run: player 2's state is already in
+        return true;  // a second SetText on it in the same run: the seat's state is already in
     }
     const std::uint64_t stamp = access_.stamp(widget);
     if (record == nullptr)
@@ -89,12 +89,12 @@ bool LabelBook::BeforeSetText(void* widget, void* controller) noexcept
         record->controller = controller;
         record->stamp      = stamp;
         record->inside     = false;
-        record->parked     = EmptyState();  // the first SetText lays player 2's state out from the empty one
+        record->parked     = EmptyState();  // the first SetText lays the seat's state out from the empty one
         ++counts_.created;
     }
     else if (stamp != record->stamp)
     {
-        // A language or font change relaid player 1's state out; player 2's aside still has the old one.
+        // A language or font change relaid player 1's state out; the seat's aside still has the old one.
         access_.freeParked(record->parked);
         record->parked = EmptyState();
         record->stamp  = stamp;
@@ -129,12 +129,12 @@ void LabelBook::SwapBack() noexcept
                 access_.invalidate(record.widget);
                 continue;
             }
-            // The widget keeps player 2's state; the game's next SetText for player 1 lays player 1's out again.
+            // The widget keeps the seat's state; the game's next SetText for player 1 lays player 1's out again.
             ++counts_.faults;
         }
         else
         {
-            ++counts_.diedInside;  // its destructor freed player 2's state; player 1's, aside, is freed here
+            ++counts_.diedInside;  // its destructor freed the seat's state; player 1's, aside, is freed here
         }
         Drop(i);
     }

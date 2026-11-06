@@ -1,6 +1,6 @@
 // Host-side tests for world::field_rules, run without the game.
 //
-// The shopkeeper name's suffix, the game's mapped pointers and row names, player 2's trigger route and verdict, and
+// The shopkeeper name's suffix, the game's mapped pointers and row names, a seat's trigger route and verdict, and
 // the input clock's seconds-before.
 
 #include "world/field_rules.h"

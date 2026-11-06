@@ -1,8 +1,8 @@
 // Host-side tests for hud::label_states::LabelBook, run without the game.
 //
 // A fake widget's "state" is a number standing for its text and layout (0: the empty state the constructor writes).
-// The cases: the bootstrap from the empty state; later frames swap player 2's own state in and player 1's back; a
-// second SetText in one run swaps nothing; a font reload resets player 2's state; a widget dying inside player 2's pass
+// The cases: the bootstrap from the empty state; later frames swap the seat's own state in and player 1's back; a
+// second SetText in one run swaps nothing; a font reload resets the seat's state; a widget dying inside the seat's pass
 // or aside; releasing everything; refusals, a full table and faults; the weak references balance.
 
 #include "hud/minimap/label_states.h"

@@ -1,15 +1,15 @@
 #pragma once
 
-// Player 2's own copy of each minimap label's text and layout (RE-p2-minimap-cost.md §7).
+// A further player's own copy of each minimap label's text and layout, one book per seat (RE-p2-minimap-cost.md §7).
 //
 // A minimap icon's distance label is one Square Enix text block (SEndTextBlock) shared by both views. The game sets its
 // text through SetText, which compares the new text with the block's current text and lays the text out again only when
 // it differs. With one block and two players' distances, every pass changed the text: two relayouts a frame (~0.95 ms
 // each: the measurer copies the font's whole glyph table per line). Here the block keeps one state per player instead:
-// - in player 2's holder run, just before the game's SetText on a block, player 2's last state is swapped into it
-//   (player 1's is set aside). The game's own compare then finds player 2's text and skips the relayout, or, when
-//   player 2's value changed, the game's relayout writes player 2's new state;
-// - after player 2's paint, player 1's state goes back in (player 2's is set aside until the next pass).
+// - in the seat's holder run, just before the game's SetText on a block, the seat's last state is swapped into it
+//   (player 1's is set aside). The game's own compare then finds the seat's text and skips the relayout, or, when
+//   the seat's value changed, the game's relayout writes the seat's new state;
+// - after the seat's paint, player 1's state goes back in (the seat's is set aside until the next pass).
 // The bytes are the game's own relayout output, moved bitwise as the game itself moves these headers; nothing is laid out
 // or drawn by the mod. A copy set aside is freed with the game's own destructor helpers.
 //
@@ -71,22 +71,22 @@ public:
 
     explicit LabelBook(LabelAccess access) noexcept : access_(access) {}
 
-    /// In player 2's holder run, before the game's SetText on `widget` (its controller block is `controller`): puts
-    /// player 2's state in. False only if the swap faulted (the caller then stops the feature).
+    /// In the seat's holder run, before the game's SetText on `widget` (its controller block is `controller`): puts
+    /// the seat's state in. False only if the swap faulted (the caller then stops the feature).
     bool BeforeSetText(void* widget, void* controller) noexcept;
 
-    /// After player 2's paint: player 1's state back into every block that has player 2's.
+    /// After the seat's paint: player 1's state back into every block that has the seat's.
     void SwapBack() noexcept;
 
     /// Outside the passes: drops the records of widgets that died (their set-aside state freed).
     void Sweep() noexcept;
 
-    /// Player 2's minimap off, or the mod leaving: player 1's state in every block, every record freed.
+    /// The seat's minimap off, or the mod leaving: player 1's state in every block, every record freed.
     void ReleaseAll() noexcept;
 
     std::size_t        Count() const noexcept { return count_; }
     bool               AnyInside() const noexcept;
-    /// Player 2's state is in the block whose controller is `controller` (logging).
+    /// The seat's state is in the block whose controller is `controller` (logging).
     bool               Holds(const void* controller) const noexcept;
     const LabelCounts& Counts() const noexcept { return counts_; }
 
@@ -96,7 +96,7 @@ private:
         void*         widget     = nullptr;
         void*         controller = nullptr;
         std::uint64_t stamp      = 0;
-        bool          inside     = false;  // player 2's state is in the widget, player 1's in `parked`
+        bool          inside     = false;  // the seat's state is in the widget, player 1's in `parked`
         Parked        parked{};
     };
 

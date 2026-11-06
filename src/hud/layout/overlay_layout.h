@@ -38,7 +38,7 @@ LayoutSize LastLayoutSize() noexcept;
 /// (hud/layout/centered_frame_code.h, hud/layout/arrow_edge_code.h), or none.
 bool InstallOverlayLayout(const platform::GameImage& image) noexcept;
 
-/// Puts the engine's calls back (at mod uninstall, with player 2 out).
+/// Puts the engine's calls back (at mod uninstall, with every further player out).
 void RemoveOverlayLayout() noexcept;
 
 bool OverlayLayoutInstalled() noexcept;

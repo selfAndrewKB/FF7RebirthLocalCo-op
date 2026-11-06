@@ -1,7 +1,7 @@
 #pragma once
 
-// The machine code that lets player 2's overlay pass ask "the first game player" and get player 2
-// (lever L2 of RE-p2-hud.md P8.6; facts in pass 12).
+// The machine code that lets a further seat's overlay pass ask "the first game player" and get the
+// seat's player (lever L2 of RE-p2-hud.md P8.6; facts in pass 12).
 //
 // SEndRootOverlay__RenderToCompositeLayer asks GEngine__GetFirstGamePlayerForGameViewport
 // (0x140CCF8E4) once per render for the local player whose view rect it lays the HUD out in and
@@ -9,7 +9,7 @@
 // the function's first instruction is replaced instead (`mov eax,28h`, the size for its stack
 // probe, 5 bytes inside one block): while the field names a local player, the function returns it
 // at once, before it has touched the stack or any state; otherwise the replaced instruction runs
-// and the function continues as the game's. The field is set only during player 2's pass on the
+// and the function continues as the game's. The field is set only during a seat's pass on the
 // game thread; none of the function's other callers runs then (pass 12).
 //
 // Only rax and the flags change on the early path (rax is the return value; flags are not kept

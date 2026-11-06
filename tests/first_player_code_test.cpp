@@ -56,7 +56,7 @@ void TestAnswer()
                             function.At(FunctionLike::kResumeOffset)));
     EXPECT(function.Call() == FunctionLike::kGameAnswer);  // field 0: the game's answer
     answer = 0x1234567890;
-    EXPECT(function.Call() == 0x1234567890);               // player 2's pass
+    EXPECT(function.Call() == 0x1234567890);               // a seat's pass
     answer = 0;
     EXPECT(function.Call() == FunctionLike::kGameAnswer);
     EXPECT(redirect.Restore());

@@ -1,8 +1,8 @@
 // Host-side tests for battle::coin_table, run without the game.
 //
 // The enemies' coins: a key's own slot is reused; an empty slot is preferred; within a key's four slots the oldest
-// coin is evicted, never the one asked to keep; a clear forgets only the matching key; the fall-back turns player 2
-// into player 1 only while the coin says player 2; keys share the low bits with the player.
+// coin is evicted, never the one asked to keep; a clear forgets only the matching key; the fall-back turns a seat's
+// player into player 1 only while the coin names that player; keys share the low bits with the player.
 
 #include "battle/coin_table.h"
 

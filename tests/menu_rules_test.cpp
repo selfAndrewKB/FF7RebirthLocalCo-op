@@ -1,7 +1,7 @@
 // Host-side tests for battle::menu_rules, run without the game.
 //
-// Pad 2's press gate and the taken-key set; the world-slow value and the wait sound shared by the two menus; the join
-// Setup's pacing and readiness; the follow rule.
+// A seat's pad's press gate and the taken-key set; the world-slow value and the wait sound shared by the two menus;
+// the join Setup's pacing and readiness; the follow rule.
 
 #include "battle/menu_rules.h"
 

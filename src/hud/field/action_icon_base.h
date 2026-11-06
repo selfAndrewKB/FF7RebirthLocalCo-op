@@ -15,7 +15,7 @@
 //   - on every live icon whose base is its class's (an icon with a base of its own is logged and
 //     left alone), and on the class default object, so icons created during the split inherit it;
 //   - then the rows are laid out again with the game's layout (each player's rows through
-//     hud/field/prompt_rows.h while player 2 is in, the whole list otherwise), and they slide there.
+//     hud/field/prompt_rows.h while a further player is in, the whole list otherwise), and they slide there.
 // When the split ends, the same step puts every base back (layout 1920x1080). Nothing is written
 // per frame; each frame only the list's rows are checked, and a row whose base is not what this
 // module left (e.g. a Blueprint graph wrote it) is logged once.

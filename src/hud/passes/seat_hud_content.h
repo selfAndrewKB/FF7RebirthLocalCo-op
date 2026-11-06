@@ -24,7 +24,7 @@
 // player 1's rect is put back after.
 //
 // Not covered here: the compass's quest icons and the area icons (AreaMapIcon_FrameUpdate cannot run
-// twice; player 2 gets their own icon manager in step B3), and player 2's command menu.
+// twice; a further player gets their own icon manager in step B3), and a further player's command menu.
 
 #include "platform/dev_switch.h"
 

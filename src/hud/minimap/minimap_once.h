@@ -6,13 +6,13 @@
 // (SEndNaviMapCircle) renders the map into its own render target through the menu renderer's pool 0,
 // which runs a 3-slot ring; a slot's batch arrays go back to their free lists only in a later RHI-thread
 // command, while the game thread may reuse the slot before that command runs, and every array of that
-// frame is then stranded for good. Player 2's HUD image (hud/passes/second_image.h) paints the overlay a second
-// time each frame, so the ring turns twice as fast and the 32 KB pool fills in minutes (confirmed live:
+// frame is then stranded for good. Each further player's HUD image (hud/passes/second_image.h) paints the overlay
+// once more each frame, so the ring turns that much faster and the 32 KB pool fills in minutes (confirmed live:
 // hud-image off stops the climb, on brings it back).
 //
-// Both passes paint the same widget into the same render target, player 2's first, and the overlay is
-// drawn only after player 1's pass, so player 2's map render is overwritten before anything shows it.
-// In player 2's pass this skips that render (see the .cpp for the exact sites); player 2's minimap shows
+// Every pass paints the same widget into the same render target, the further players' first, and the overlay is
+// drawn only after player 1's pass, so a further player's map render is overwritten before anything shows it.
+// In a further player's pass this skips that render (see the .cpp for the exact sites); that player's minimap shows
 // the map player 1's pass rendered, as it already did. The minimap stays a copy of player 1's.
 //
 // Logged (Debug, once a minute while a minimap is up): each widget's map renders and skips per period. The reading
@@ -34,8 +34,8 @@ bool MinimapOnceInstalled() noexcept;
 void SetMinimapOnce(bool on) noexcept;
 bool MinimapOnceOn() noexcept;
 
-/// Game thread, around player 2's overlay render (hud/passes/root_overlay_render.cpp): the skip byte is set for it
-/// only, and not while player 2's pass paints player 2's minimap (hud/minimap/minimap.h).
+/// Game thread, around a seat's overlay render (hud/passes/root_overlay_render.cpp): the skip byte is set for it
+/// only, and not while the seat's pass paints the seat's minimap (hud/minimap/minimap.h).
 void BeginMinimapSeatPass(bool seatMinimap) noexcept;
 void EndMinimapSeatPass() noexcept;
 

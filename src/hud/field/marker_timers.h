@@ -8,7 +8,7 @@
 // its only state is a per-element float T (element +0x14): set to full while the enemy is off-screen,
 // run down by the HUD time step while it is on-screen, and while T is full the arrow stays pinned to
 // the screen edge. One T shared by two views, with a time step of 0 in the re-runs, pinned player 1's
-// off-screen arrows to the edge of player 2's half (and back).
+// off-screen arrows to the edge of a further player's half (and back).
 //
 // So each view keeps its own T per arrow (keyed by the element's weak widget): around a seat's run
 // of the list, player 1's T values are set aside and the seat's put in (0 for an arrow the seat has

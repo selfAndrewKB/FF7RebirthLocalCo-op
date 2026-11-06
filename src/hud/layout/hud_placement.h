@@ -28,8 +28,8 @@
 
 namespace lss::hud {
 
-/// Game thread, every tick: whether the HUD is laid out in split halves (player 2 in and the band
-/// on). Places new instances of the widgets while active, and restores every placed one when not.
+/// Game thread, every tick: whether the HUD is laid out in split halves (more than one view shown and the
+/// band on). Places new instances of the widgets while active, and restores every placed one when not.
 void UpdateHudPlacement(bool splitLayout) noexcept;
 
 /// Game thread, each frame just before the HUD overlay renders (hud/passes/root_overlay_render.h): places
