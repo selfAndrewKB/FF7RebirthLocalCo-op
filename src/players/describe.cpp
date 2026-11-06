@@ -66,13 +66,13 @@ std::wstring Who(const void* object) noexcept
     {
         return L"player 1's controller";
     }
-    if (object == generation::PlayerTwoController())
+    if (const int seat = generation::SeatOfController(object); SeatIndex(seat))
     {
-        return L"player 2's controller";
+        return std::wstring(SeatName(seat)) + L"'s controller";
     }
-    if (object == generation::Member())
+    if (const int seat = generation::SeatOfMember(object); SeatIndex(seat))
     {
-        return L"player 2's member";
+        return std::wstring(SeatName(seat)) + L"'s member";
     }
     if (object == ReadPointer(playerOne, facts::kControllerPawn))
     {

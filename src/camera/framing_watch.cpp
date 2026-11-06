@@ -109,7 +109,7 @@ ScaleFn  g_scale[3]    = {};
 bool     g_scalesLogged = false;
 bool     g_wasShown     = false;
 std::uint64_t g_lastLineMs = 0;
-Framing  g_last[2];
+Framing  g_last[players::kMaxPlayers];  // by player: 0 player 1's, then each seat's
 
 Framing Take(void* controller) noexcept
 {
@@ -226,7 +226,7 @@ void Install(const platform::GameImage& image) noexcept
 
 void Tick(bool splitShown) noexcept
 {
-    if (!players::generation::OnGameThread() || !players::generation::Active() || !splitShown)
+    if (!players::generation::OnGameThread() || !players::generation::AnyActive() || !splitShown)
     {
         g_wasShown = false;
         return;
@@ -240,16 +240,23 @@ void Tick(bool splitShown) noexcept
         g_wasShown = false;  // the watch's lines are Debug: read nothing; a raised level starts with a full line
         return;
     }
-    void* const controllers[2] = {players::generation::PlayerOneController(), players::generation::PlayerTwoController()};
-    Framing     now[2];
-    const bool  wasShown = g_wasShown;
-    bool        changedOne[2];
-    for (int p = 0; p < 2; ++p)
+    Framing    now[players::kMaxPlayers];
+    const bool wasShown = g_wasShown;
+    bool       playing[players::kMaxPlayers]{};  // player 1, and each seat whose player is in
+    bool       changedOne[players::kMaxPlayers]{};
+    bool       changed = false;
+    for (int p = 0; p < players::kMaxPlayers; ++p)
     {
-        now[p]        = Take(controllers[p]);
+        playing[p] = p == 0 || players::generation::Active(p);
+        if (!playing[p])
+        {
+            g_last[p] = Framing{};  // a seat's player who joins later starts with a change line
+            continue;
+        }
+        now[p]        = Take(players::generation::ControllerOf(p));
         changedOne[p] = !g_wasShown || !now[p].SameRowsAs(g_last[p]);
+        changed       = changed || changedOne[p];
     }
-    const bool changed = changedOne[0] || changedOne[1];
     g_wasShown = true;
     const std::uint64_t nowMs = GetTickCount64();
     if ((!changed && nowMs - g_lastLineMs < kHeartbeatMs) || (changed && wasShown && nowMs - g_lastLineMs < kMinChangeGapMs))
@@ -259,13 +266,13 @@ void Tick(bool splitShown) noexcept
     g_lastLineMs = nowMs;
     try
     {
-        for (int p = 0; p < 2; ++p)
+        for (int p = 0; p < players::kMaxPlayers; ++p)
         {
-            if (changed && !changedOne[p])
+            if (!playing[p] || (changed && !changedOne[p]))
             {
-                continue;  // a change line for the player whose framing changed; the heartbeat has both
+                continue;  // a change line for the player whose framing changed; the heartbeat has every player
             }
-            platform::LogDebug(L"framing: player {} {}: {}", p + 1, changed ? L"changed" : L"now", Describe(now[p]));
+            platform::LogDebug(L"framing: {} {}: {}", players::SeatName(p), changed ? L"changed" : L"now", Describe(now[p]));
             g_last[p] = now[p];
         }
     }

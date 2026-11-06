@@ -29,8 +29,8 @@ namespace {
 
 // Game thread, but for Remove (the mod's destructor, which may run off it).
 std::optional<control::StickHolds> g_holds;
-// Never destroyed: a console still open at process exit (player 2 in, so Remove never ran) would otherwise close in
-// DllMain, under the loader lock, taking a mutex a killed thread may hold and calling WSACleanup there.
+// Never destroyed: a console still open at process exit (a seat's player in, so Remove never ran) would otherwise
+// close in DllMain, under the loader lock, taking a mutex a killed thread may hold and calling WSACleanup there.
 control::Remote& g_remote = *new control::Remote;
 
 }  // namespace
@@ -44,13 +44,13 @@ void Install(const platform::GameImage& image, session::Session& session) noexce
     rides::ride_watch::Install(image);      // the chocobo rides and the vehicle coordinators
     rides::wheelie_watch::Install(image);   // the Wheelie system
     camera::framing_watch::Install(image);   // each player's field-camera framing
-    world::charapop_watch::Install(image);  // the character detail near player 2
+    world::charapop_watch::Install(image);  // the character detail near the seats' players
     session::handover_watch::Install(image);  // the party order and the members' AI at hand-overs
     battle::menu_focus::Install(image);      // player 1's UI focus, on change
-    battle::battle_input::Install(image);    // player 2's battle state inside the member tick, on change (Trace)
+    battle::battle_input::Install(image);    // each seat's battle state inside its member tick, on change (Trace)
     input::move_census::Install(image);     // the move-state ticks and gate tests per character (the status line)
     battle::target_census::Install(image);   // whom enemies target, and by which stage (after the targeting group)
-    world::interact_watch::Install(image);  // the field interactions around player 2's pickups (after field_pickup)
+    world::interact_watch::Install(image);  // the field interactions around the seats' pickups (after field_pickup)
     const bool tags = session::tag_counts::Install(image);  // the actor-tag registry (the session's Debug counts)
     platform::Log(L"tag counts: {}", tags ? L"readable (the session's take and leave counts, Debug)"
                                           : L"NOT readable (a check failed); the session's counts are not logged");

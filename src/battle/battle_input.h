@@ -1,13 +1,13 @@
 #pragma once
 
-// Player 2's battle state, read and logged inside player 2's member tick scopes, before the tick (a dev tool: Trace,
+// A seat's battle state, read and logged inside the seat's member tick scopes, before the tick (a dev tool: Trace,
 // on change; dev/dev_tools.h installs it, input/member_movement.h calls it; a player's build has the stubs
 // below).
 //
-// Nothing here drives player 2's battle: attack, the unique ability, guard and dodge go through player
-// 2's own command controller and the game's own handler (battle/command_menu_tick.h); the soft
+// Nothing here drives a seat's battle: attack, the unique ability, guard and dodge go through the seat's
+// own command controller and the game's own handler (battle/command_menu_tick.h); the soft
 // target, lock, lock camera, switching and cursor come from the game's own targeting tick run for
-// player 2 (battle/lock_on.h). The direct calls and the mod's own targeting this module once ran
+// the seat (battle/lock_on.h). The direct calls and the mod's own targeting this module once ran
 // (RE-p2-battle-input.md §5.1) were recreations and are retired.
 //
 // Logged on change: player 1's command controller's gates and requests, both characters' battle preconditions and
@@ -25,13 +25,13 @@ namespace lss::battle::battle_input {
 
 bool Install(const platform::GameImage& image) noexcept;
 
-/// Inside player 2's member tick scopes, before the tick: the battle state, logged on change.
-void Watch(void* member, void* state) noexcept;
+/// Inside `seat`'s member tick scopes, before the tick: the battle state, logged on change.
+void Watch(int seat, void* member, void* state) noexcept;
 
 #else
 
 inline bool Install(const platform::GameImage&) noexcept { return false; }
-inline void Watch(void*, void*) noexcept {}
+inline void Watch(int, void*, void*) noexcept {}
 
 #endif
 

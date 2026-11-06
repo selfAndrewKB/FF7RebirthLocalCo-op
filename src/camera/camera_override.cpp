@@ -238,8 +238,8 @@ void RestoreMember(int seat) noexcept
 }
 
 #if LSS_DEV
-// The snapshot (dev tools, player 2's): both cameras' layer-4 modules and both characters' delegates, logged on change
-// (Debug).
+// The snapshot (dev tools), per seat: player 1's and the seat's cameras' layer-4 modules and their characters'
+// delegates, logged on change (Debug).
 
 std::wstring DescribeCamera(void* controller)
 {
@@ -285,9 +285,9 @@ std::wstring DescribeCharacter(std::uintptr_t character)
 /// The raw values the log shows, compared each frame; the text is built only when they change.
 struct Snapshot
 {
-    std::uintptr_t global    = 0;
-    std::uintptr_t playerTwo = 0;
-    std::uintptr_t cameras[2][2]{};     // each controller's battle / field layer-4 module
+    std::uintptr_t global     = 0;
+    std::uintptr_t seatModule = 0;
+    std::uintptr_t cameras[2][2]{};     // player 1's and the seat's controller: its battle / field layer-4 module
     std::uintptr_t owners[2][2]{};
     std::int32_t   requests[2][2]{};
     std::uint16_t  active[2][2]{};
@@ -296,10 +296,10 @@ struct Snapshot
     bool operator==(const Snapshot&) const = default;
 };
 
-Snapshot Take(void* member) noexcept
+Snapshot Take(int seat, void* member) noexcept
 {
-    Snapshot   now{g_global->object, g_seatModule[players::kFirstSeat].object};
-    void*      controllers[2] = {players::generation::PlayerOneController(), players::generation::PlayerTwoController()};
+    Snapshot   now{g_global->object, g_seatModule[Index(seat)].object};
+    void*      controllers[2] = {players::generation::PlayerOneController(), players::generation::ControllerOf(seat)};
     const auto characters     = std::array<std::uintptr_t, 2>{
         reinterpret_cast<std::uintptr_t>(ReadPointer(controllers[0], facts::kControllerPawn)), reinterpret_cast<std::uintptr_t>(member)};
     for (int i = 0; i < 2; ++i)
@@ -329,30 +329,33 @@ Snapshot Take(void* member) noexcept
     return now;
 }
 
-Snapshot g_snapshot;  // game thread: as last logged
+Snapshot g_snapshot[players::kMaxPlayers];  // game thread, by seat: as last logged
 
-void Log(void* member)
+/// `seat`'s module, camera and member beside player 1's, written when any of them changes.
+void Log(int seat, void* member)
 {
+    Snapshot& last = g_snapshot[Index(seat)];
     if (!platform::Enabled(platform::Level::Debug))
     {
-        g_snapshot = Snapshot{};  // off: the next line starts fresh (as at start)
+        last = Snapshot{};  // off: the next line starts fresh (as at start)
         return;
     }
-    const Snapshot now = Take(member);
-    if (now == g_snapshot)
+    const Snapshot now = Take(seat, member);
+    if (now == last)
     {
         return;
     }
-    g_snapshot                 = now;
-    void*      playerOne = players::generation::PlayerOneController();
-    const auto oneChar   = reinterpret_cast<std::uintptr_t>(ReadPointer(playerOne, facts::kControllerPawn));
-    platform::LogDebug(L"camera override: global {:#x} P2's {:#x} | P1 camera{} | P2 camera{} | P1 {} | P2 {}", g_global->object,
-                  g_seatModule[players::kFirstSeat].object, DescribeCamera(playerOne),
-                  DescribeCamera(players::generation::PlayerTwoController()),
-                  DescribeCharacter(oneChar), DescribeCharacter(reinterpret_cast<std::uintptr_t>(member)));
+    last                    = now;
+    void*          playerOne = players::generation::PlayerOneController();
+    const auto     oneChar   = reinterpret_cast<std::uintptr_t>(ReadPointer(playerOne, facts::kControllerPawn));
+    const wchar_t* who       = players::SeatName(seat);
+    platform::LogDebug(L"camera override: global {:#x} {}'s {:#x} | player 1 camera{} | {} camera{} | player 1 {} | {} {}",
+                       g_global->object, who, g_seatModule[Index(seat)].object, DescribeCamera(playerOne), who,
+                       DescribeCamera(players::generation::ControllerOf(seat)), DescribeCharacter(oneChar), who,
+                       DescribeCharacter(reinterpret_cast<std::uintptr_t>(member)));
 }
 #else
-void Log(void*) {}
+void Log(int, void*) {}
 #endif
 
 }  // namespace
@@ -454,13 +457,9 @@ void Tick(int seat, void* member) noexcept
             g_member[Index(seat)] = member;
         }
     }
-    if (seat != players::kFirstSeat)
-    {
-        return;  // the snapshot is a dev tool, player 2's
-    }
     try
     {
-        Log(member);
+        Log(seat, member);
     }
     catch (...)
     {

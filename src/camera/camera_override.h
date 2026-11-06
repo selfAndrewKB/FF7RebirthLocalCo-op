@@ -17,8 +17,8 @@
 // (added / removed) point at thunks that run the game's own handlers with the global holding the
 // seat's module and the seat's player as the primary controller, then put it back. The thunks find
 // the seat from the delegate's payload (the member). Both are put back when the seat's player leaves.
-// The global, both cameras' layer-4 modules and both characters' delegates are logged on change
-// (player 2's, a dev tool).
+// Per seat, the global, player 1's and the seat's cameras' layer-4 modules and their characters' delegates are logged
+// on change (a dev tool).
 //
 // Per seat (players/seats.h): the module and the member holding the thunks. Shared: the global, swapped
 // in turn (one engine call at a time). Game thread only.

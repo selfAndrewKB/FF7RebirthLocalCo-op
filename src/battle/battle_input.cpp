@@ -166,25 +166,29 @@ std::wstring DescribeCharacter(const wchar_t* who, const CharacterState& charact
     return text + std::format(L" pending {}", character.pending);
 }
 
-std::wstring Describe(const Snapshot& now)
+std::wstring Describe(int seat, const Snapshot& now)
 {
+    const wchar_t* who = players::SeatName(seat);
     std::wstring line = std::format(L"ctrl hud {} blocked {} ready {} guardMode {} req", now.hud ? 1 : 0, now.blocked ? 1 : 0,
                                     now.ready ? 1 : 0, now.guardMode);
     for (std::size_t i = 0; i < kLoggedRequests.size(); ++i)
     {
         line += std::format(L" {}:{}", kLoggedRequests[i], now.requests[i]);
     }
-    line += L" | " + DescribeCharacter(L"P1", now.characters[0]);
-    line += L" | " + DescribeCharacter(L"P2", now.characters[1]);
-    return line + std::format(L" | targeting {} lock {} latch {} displayed {:#x} P1 target {:#x} P2 target {:#x} leader {:#x} "
-                              L"member {:#x}",
-                              now.targeting ? 1 : 0, now.lock, now.latch, now.displayed, now.targets[0], now.targets[1],
+    line += L" | " + DescribeCharacter(L"player 1", now.characters[0]);
+    line += L" | " + DescribeCharacter(who, now.characters[1]);
+    return line + std::format(L" | targeting {} lock {} latch {} displayed {:#x} player 1 target {:#x} {} target {:#x} leader "
+                              L"{:#x} member {:#x}",
+                              now.targeting ? 1 : 0, now.lock, now.latch, now.displayed, now.targets[0], who, now.targets[1],
                               now.leaderWeak, now.memberWeak);
 }
 
 constexpr std::uint32_t kStillFrames = 30;
 using Requests = std::array<std::int32_t, kLoggedRequests.size()>;
-platform::SettledLog<Snapshot, Requests> g_log(kStillFrames);  // game thread
+using SeatLog = platform::SettledLog<Snapshot, Requests>;
+// Game thread, by seat.
+SeatLog g_log[players::kMaxPlayers] = {SeatLog(kStillFrames), SeatLog(kStillFrames), SeatLog(kStillFrames)};
+static_assert(players::kMaxPlayers == 3, "g_log's initialiser names every player");
 
 std::uintptr_t BattleSystem() noexcept
 {
@@ -209,16 +213,17 @@ bool Install(const platform::GameImage& image) noexcept
     g_partyManager       = partyManager ? *partyManager : 0;
     g_endUISystem        = system ? *system : 0;
     g_battlePlayerVTable = vtable ? *vtable : 0;
-    platform::Log(L"battle input: {}", g_installed ? L"ready (logs player 2's battle state)" : L"UNAVAILABLE (a check failed)");
+    platform::Log(L"battle input: {}", g_installed ? L"ready (logs player 2's and 3's battle states)" : L"UNAVAILABLE (a check failed)");
     return g_installed;
 }
 
-void Watch(void* member, void* state) noexcept
+void Watch(int seat, void* member, void* state) noexcept
 {
-    if (!g_installed || member == nullptr || state == nullptr)
+    if (!g_installed || !players::SeatIndex(seat) || member == nullptr || state == nullptr)
     {
         return;
     }
+    SeatLog& log = g_log[seat];
     try
     {
         std::uintptr_t controller = 0;
@@ -228,23 +233,23 @@ void Watch(void* member, void* state) noexcept
         const bool ready      = controller != 0 && (ReadAt<std::uint8_t>(controller + kCmdReady) != 0 ||
                                                ReadAt<std::uint8_t>(controller + kCmdReadyB) != 0);
         const auto           memberAddress = reinterpret_cast<std::uintptr_t>(member);
-        const Parts          two           = PartsOf(memberAddress);
+        const Parts          parts         = PartsOf(memberAddress);
         const std::uintptr_t system        = BattleSystem();
         const std::uint64_t  memberWeak    = scopes::leader_scope::WeakOf(member);
         // In battle: the member tick's TargetScope already asked the game (lock_on::Held), else ask.
         const bool           targeting     = system != 0 && ReadAt<std::uint8_t>(system + kSkipTargeting) == 0 &&
                                    (lock_on::Held() || facts::InBattle() != 0);
-        // Player 2's soft target, lock, lock camera, switching and cursor: the game's targeting tick run
-        // for player 2 (battle/lock_on.h). Attack, unique, guard and dodge: player 2's command
+        // The seat's soft target, lock, lock camera, switching and cursor: the game's targeting tick run
+        // for the seat (battle/lock_on.h). Attack, unique, guard and dodge: the seat's command
         // controller (battle/command_menu_tick.h).
 
         if (!platform::Enabled(platform::Level::Trace))
         {
-            g_log.Reset();  // off: the next line starts fresh
+            log.Reset();  // off: the next line starts fresh
             return;
         }
-        // The log: player 1's controller, both characters, the targets; raw values compared each frame,
-        // the text built only when they change.
+        // The log: player 1's controller, player 1's and the seat's characters, the targets; raw values compared each
+        // frame, the text built only when they change.
         Snapshot now;
         now.hud       = battleHud;
         now.blocked   = blocked;
@@ -270,7 +275,7 @@ void Watch(void* member, void* state) noexcept
                                        : 0;
         const Parts oneParts = PartsOf(one);
         now.characters[0]    = CharacterOf(oneState, oneParts);
-        now.characters[1]    = CharacterOf(reinterpret_cast<std::uintptr_t>(state), two);
+        now.characters[1]    = CharacterOf(reinterpret_cast<std::uintptr_t>(state), parts);
         if (const auto manager = ReadAt<std::uintptr_t>(g_partyManager); manager != 0)
         {
             Read(manager + kPartyManagerLeader, now.leaderWeak);
@@ -280,13 +285,13 @@ void Watch(void* member, void* state) noexcept
         now.latch      = system != 0 ? ReadAt<std::uint8_t>(system + kSwitchLatch) : 0;
         now.displayed  = system != 0 ? ReadAt<std::uintptr_t>(system + kDisplayed) : 0;
         now.targets[0] = oneParts.owner != 0 ? ReadAt<std::uintptr_t>(oneParts.owner + kTargetSlot) : 0;
-        now.targets[1] = two.owner != 0 ? ReadAt<std::uintptr_t>(two.owner + kTargetSlot) : 0;
+        now.targets[1] = parts.owner != 0 ? ReadAt<std::uintptr_t>(parts.owner + kTargetSlot) : 0;
         now.memberWeak = memberWeak;
         Snapshot steady = now;
         steady.requests = {};  // the action requests flip with each press: logged once they hold
-        if (g_log.Offer(steady, now.requests))
+        if (log.Offer(steady, now.requests))
         {
-            platform::LogTrace(L"battle input: {}", Describe(now));
+            platform::LogTrace(L"battle input: {}", Describe(seat, now));
         }
     }
     catch (...)

@@ -33,7 +33,7 @@ enum class Ucpc : std::uint8_t
 {
     Untouched,  // the game's own answer (no seat is in)
     PlayerOne,
-    Seat,       // a seat's character (player 2's while one seat is built; the dev census counts it so)
+    Seat,       // a seat's character (Choice::player names the seat)
 };
 
 enum class Why : std::uint8_t

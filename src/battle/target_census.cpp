@@ -139,18 +139,30 @@ std::uintptr_t          g_partyManager = 0;   // the pointer global's live addre
 HateTypeFn              g_hateType     = nullptr;
 AppliedFn               g_applied      = nullptr;
 
-/// Whose character a target is.
+/// Whose character a target is. The players come first, by seat (0 player 1), so a seat's number is its value.
 enum class Whose : std::uint8_t
 {
     PlayerOne,
     PlayerTwo,
+    PlayerThree,
     AiParty,
     Other,
     Nobody,
 };
-constexpr const wchar_t* kWhoseNames[] = {L"player 1's character", L"player 2's member", L"an AI party member",
-                                          L"another actor", L"nobody"};
+static_assert(players::kMaxPlayers == 3 && static_cast<int>(Whose::AiParty) == players::kMaxPlayers,
+              "Whose and the summary line name every player");
+constexpr const wchar_t* kWhoseNames[] = {L"player 1's character", L"player 2's member", L"player 3's member",
+                                          L"an AI party member",   L"another actor",     L"nobody"};
 constexpr std::size_t kWhose = std::size(kWhoseNames);
+
+/// The row of the UCPC tally a Condition select's answer counts in: 0 the game's own, then one per player.
+constexpr std::size_t kUcpcRows = 1 + players::kMaxPlayers;
+constexpr std::size_t UcpcRow(const ucpc_choice::Choice& choice) noexcept
+{
+    const bool named = choice.ucpc != ucpc_choice::Ucpc::Untouched && choice.player >= 0 &&
+                       choice.player < players::kMaxPlayers;
+    return named ? 1 + static_cast<std::size_t>(choice.player) : 0;
+}
 
 /// What chose a decision's target.
 enum class Stage : std::uint8_t
@@ -174,7 +186,7 @@ struct Tally
     std::atomic<std::uint32_t> draws[3]{};                     // Condition draws by element class: UCPC, AIPC, ALL
     std::atomic<std::uint32_t> groupPicks{0}, prioritizedWhose[kWhose]{};
     std::atomic<std::uint32_t> selectors[kKinds + 1]{};  // new selectors by kind
-    std::atomic<std::uint32_t> ucpc[3][4]{};  // Condition selects that read the UCPC: by ucpc_choice::Ucpc and Why
+    std::atomic<std::uint32_t> ucpc[kUcpcRows][4]{};  // Condition selects that read the UCPC: by UcpcRow and Why
 };
 Tally                     g_tally;
 std::atomic<std::int64_t> g_windowStart{0};  // steady_clock ticks; 0: no window yet
@@ -249,10 +261,9 @@ Whose WhoseIs(void* target, const void* leader) noexcept
     {
         return Whose::Nobody;
     }
-    const void* member = players::generation::Member();
-    if (member != nullptr && target == member)
+    if (const int seat = players::generation::SeatOfMember(target); players::SeatIndex(seat))
     {
-        return Whose::PlayerTwo;
+        return static_cast<Whose>(seat);
     }
     if (target == leader)
     {
@@ -303,28 +314,29 @@ void MaybeSummarize() noexcept
     const auto newHate = platform::Take(t.selectors[0]), newCond = platform::Take(t.selectors[1]),
                newNone = platform::Take(t.selectors[2]),
                newOther = platform::Take(t.selectors[3]);
-    std::uint32_t ucpc[3][4]{};
-    for (std::size_t u = 0; u < 3; ++u)
+    std::uint32_t ucpc[kUcpcRows][4]{};
+    for (std::size_t u = 0; u < kUcpcRows; ++u)
     {
         for (std::size_t w = 0; w < 4; ++w)
         {
             ucpc[u][w] = platform::Take(t.ucpc[u][w]);
         }
     }
-    // Rows: Untouched, PlayerOne, Seat; columns: NoSeat, Coin, OnlyEligible, NeitherEligible.
+    // Rows: the game's own, then player 1, 2 and 3; columns: NoSeat, Coin, OnlyEligible, NeitherEligible.
     const auto untouched = ucpc[0][0] + ucpc[0][1] + ucpc[0][2] + ucpc[0][3];
     platform::Log(L"target census (last {} s): {} decision(s) ({} off the game thread); targets: player 1's character {}, "
-                  L"player 2's member {}, AI party {}, other {}, none {}; chosen by select {}, lock {}, redirect {}, "
-                  L"decoy {}, kept {}; by kind (P1/P2/AI): Hate {}/{}/{}, Condition {}/{}/{}, None {}/{}/{}; Condition "
-                  L"draws UCPC {}, AIPC {}, ALL {}; Condition UCPC: player 1 by coin {}, alone eligible {}, neither "
-                  L"eligible {}, player 2 by coin {}, alone eligible {}, game's own {}; lock-group picks {} (prioritising "
-                  L"the UCPC: P1 {}, P2 {}, AI {}); new selectors Hate {}, Condition {}, None {}, unknown {}",
+                  L"player 2's member {}, player 3's member {}, AI party {}, other {}, none {}; chosen by select {}, lock "
+                  L"{}, redirect {}, decoy {}, kept {}; by kind (P1/P2/P3/AI): Hate {}/{}/{}/{}, Condition {}/{}/{}/{}, "
+                  L"None {}/{}/{}/{}; Condition draws UCPC {}, AIPC {}, ALL {}; Condition UCPC: player 1 by coin {}, alone "
+                  L"eligible {}, neither eligible {}, player 2 by coin {}, alone eligible {}, player 3 by coin {}, alone "
+                  L"eligible {}, game's own {}; lock-group picks {} (prioritising the UCPC: P1 {}, P2 {}, P3 {}, AI {}); "
+                  L"new selectors Hate {}, Condition {}, None {}, unknown {}",
                   std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::duration(now - start)).count(),
-                  decisions, off, whose[0], whose[1], whose[2], whose[3], whose[4], stages[0], stages[1], stages[2],
-                  stages[3], stages[4], kinds[0][0], kinds[0][1], kinds[0][2], kinds[1][0], kinds[1][1], kinds[1][2],
-                  kinds[2][0], kinds[2][1], kinds[2][2], ucpcDraws, aipc, all, ucpc[1][1], ucpc[1][2], ucpc[1][3],
-                  ucpc[2][1], ucpc[2][2], untouched, picks, prioritized[0], prioritized[1],
-                  prioritized[2], newHate, newCond, newNone, newOther);
+                  decisions, off, whose[0], whose[1], whose[2], whose[3], whose[4], whose[5], stages[0], stages[1],
+                  stages[2], stages[3], stages[4], kinds[0][0], kinds[0][1], kinds[0][2], kinds[0][3], kinds[1][0],
+                  kinds[1][1], kinds[1][2], kinds[1][3], kinds[2][0], kinds[2][1], kinds[2][2], kinds[2][3], ucpcDraws, aipc,
+                  all, ucpc[1][1], ucpc[1][2], ucpc[1][3], ucpc[2][1], ucpc[2][2], ucpc[3][1], ucpc[3][2], untouched, picks,
+                  prioritized[0], prioritized[1], prioritized[2], prioritized[3], newHate, newCond, newNone, newOther);
 }
 
 // ---- Creation: the census of one selector ----
@@ -486,7 +498,7 @@ void OnConditionSelect(void* selector, std::uint64_t, std::uint64_t out, std::ui
 {
     if (ucpc.read)
     {
-        Count(g_tally.ucpc[static_cast<std::size_t>(ucpc.choice.ucpc)][static_cast<std::size_t>(ucpc.choice.why)]);
+        Count(g_tally.ucpc[UcpcRow(ucpc.choice)][static_cast<std::size_t>(ucpc.choice.why)]);
     }
     if (Frame* const frame = FrameFor(selector); frame != nullptr)
     {
@@ -546,11 +558,12 @@ std::wstring UcpcText(const equal_targeting::Answer& answer)
     }
     if (answer.choice.ucpc == Ucpc::Untouched)
     {
-        return L"the game's own (no player 2 member)";
+        return L"the game's own (no other player's member)";
     }
     constexpr const wchar_t* kWhy[] = {L"", L"coin", L"only one eligible", L"neither eligible"};
-    return std::format(L"{} type {} ({})", answer.choice.ucpc == Ucpc::Seat ? L"player 2's member" : L"player 1's",
-                       answer.type, kWhy[static_cast<std::size_t>(answer.choice.why)]);
+    return std::format(L"{}'s{} type {} ({})", players::SeatName(answer.choice.player),
+                       answer.choice.ucpc == Ucpc::Seat ? L" member" : L"", answer.type,
+                       kWhy[static_cast<std::size_t>(answer.choice.why)]);
 }
 
 std::wstring Draws(const Frame& frame) noexcept

@@ -184,7 +184,7 @@ std::wstring Describe(const CameraState& state)
                        state.field[0], state.field[1], modules);
 }
 
-std::array<CameraState, 2> g_logged{};  // game thread: both camera managers as last logged
+std::array<CameraState, players::kMaxPlayers> g_logged{};  // game thread, by player: the camera managers as last logged
 #endif
 
 }  // namespace
@@ -252,14 +252,22 @@ bool SeatBattleActive(void* cameraManager) noexcept
 void Watch() noexcept
 {
 #if LSS_DEV
-    // A dev tool: player 2's camera manager beside player 1's (it stays two-player).
+    // A dev tool: the camera manager of every seat's player beside player 1's.
     if (!platform::Enabled(platform::Level::Debug) || !players::generation::OnGameThread() ||
-        !players::generation::Active(players::kFirstSeat))
+        !players::generation::AnyActive())
     {
         return;
     }
-    const std::array<CameraState, 2> now{StateOf(CameraManagerOf(players::generation::PlayerOneController())),
-                                         StateOf(CameraManagerOf(players::generation::ControllerOf(players::kFirstSeat)))};
+    std::array<CameraState, players::kMaxPlayers> now{};
+    bool                                          playing[players::kMaxPlayers]{};
+    for (int p = 0; p < players::kMaxPlayers; ++p)
+    {
+        playing[p] = p == 0 || players::generation::Active(p);
+        if (playing[p])
+        {
+            now[p] = StateOf(CameraManagerOf(players::generation::ControllerOf(p)));
+        }
+    }
     if (now == g_logged)
     {
         return;
@@ -267,7 +275,15 @@ void Watch() noexcept
     g_logged = now;
     try
     {
-        platform::LogDebug(L"battle camera: P1 {} | P2 {}", Describe(now[0]), Describe(now[1]));
+        std::wstring line;
+        for (int p = 0; p < players::kMaxPlayers; ++p)
+        {
+            if (playing[p])
+            {
+                line += std::format(L"{}{} {}", line.empty() ? L"" : L" | ", players::SeatName(p), Describe(now[p]));
+            }
+        }
+        platform::LogDebug(L"battle camera: {}", line);
     }
     catch (...)
     {

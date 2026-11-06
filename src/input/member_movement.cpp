@@ -142,7 +142,6 @@ void ClearFieldActionRows(int seat, void* state) noexcept
 /// Ticks the seat's member's state inside every scope, or not at all.
 void TickInScopes(int seat, void* controller, void* member, void* state, int type, float deltaTime) noexcept
 {
-    const bool firstSeat = seat == players::kFirstSeat;  // the dev watches below are player 2's (plan step 7)
     // The seat's sticks and its player as the primary controller, or no tick; its own buttons (sprint, dodge, field
     // actions) and, in battle, the target system's fields as the seat's.
     seat_ladder::Args args;
@@ -164,11 +163,8 @@ void TickInScopes(int seat, void* controller, void* member, void* state, int typ
     // Before the tick, inside every scope (the seat's camera manager is the primary one here):
     camera::camera_override::Tick(seat, member);   // the member's animation camera overrides reach the seat's camera
     battle::lock_on::AfterBattle(seat);            // out of battle, the seat's lock ends
-    if (firstSeat)
-    {
-        battle::battle_camera::Watch();                // both camera managers' operators, logged on change (dev tools)
-        battle::battle_input::Watch(member, state);    // player 2's battle state, logged on change (dev tools)
-    }
+    battle::battle_camera::Watch();                   // every camera manager's operators, logged on change (dev tools)
+    battle::battle_input::Watch(seat, member, state);  // the seat's battle state, logged on change (dev tools)
     if (!GuardedTick(state, deltaTime))
     {
         g_stopped[static_cast<std::size_t>(seat)] = true;
@@ -275,7 +271,7 @@ void Tick(int seat, void* controller, void* member) noexcept
 
 players::StageCounters& Counters(int seat) noexcept
 {
-    return g_counters[players::SeatBuilt(seat) ? static_cast<std::size_t>(seat) : players::kFirstSeat];
+    return g_counters[players::SeatBuilt(seat) ? static_cast<std::size_t>(seat) : 1];  // never out of range
 }
 
 std::uint8_t WithoutChocoboAnswer(std::uint8_t (*test)(const void* character), const void* character) noexcept

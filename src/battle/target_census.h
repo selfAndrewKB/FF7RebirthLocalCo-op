@@ -9,11 +9,11 @@
 // each tells the census what it did through an observer):
 //   - each new selector (Info): the enemy, its kind (Hate, Condition, None) and, for every kind, the enemy
 //     controller's TargetSelectConditions (how many elements name the UCPC, the AIPC or all);
-//   - each decision (Debug): the reason, the target, whose character it is (player 1's, player 2's member, an AI
+//   - each decision (Debug): the reason, the target, whose character it is (player 1's, a seat's member, an AI
 //     party member, other), and the stage that chose it (the kind's select, a lock slot, the redirect pair, the
 //     Cait Sith decoy, or the current target kept), with the thread;
 //   - each Condition draw (Debug): the drawn element's character class and condition, and whom the select counted
-//     as "the UCPC" (player 1's or player 2's character, and why: coin, only one eligible, neither, or the game's own);
+//     as "the UCPC" (player 1's or a seat's character, and why: coin, only one eligible, neither, or the game's own);
 //   - each lock-group pick (Debug): the group, bPrioritizeUCPC, and whose character it picked;
 //   - the Hate table at each Hate select (Trace);
 //   - a summary every 60 s with decisions (Info): the shares per player, per stage and per kind, and the Condition

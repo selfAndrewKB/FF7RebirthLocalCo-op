@@ -14,11 +14,11 @@
 // reads the primary camera manager's pose). The Battle operator then switches on its own modules
 // (the battle offset and length) for the seat's character, which the seat's camera already follows.
 // Seed brings a seat's operator to player 1's state when its player takes a member mid-battle.
-// Watch logs both camera managers' current operator and both Battle operators' state on change.
+// Watch logs every player's camera manager's operators and its Battle operator's state on change.
 // Game thread only.
 //
 // Per seat: every built seat's Battle operator follows player 1's switches, in seat order, each call with that seat as
-// the primary controller (one scope at a time). Seed takes the seat; Watch is a dev tool and stays player 2's.
+// the primary controller (one scope at a time). Seed takes the seat; Watch is a dev tool.
 
 #include "players/seats.h"
 
@@ -40,7 +40,7 @@ bool Seed(int seat) noexcept;
 /// it does with the Field operator on). Whichever seat's camera manager it is.
 bool SeatBattleActive(void* cameraManager) noexcept;
 
-/// Logs, on change, both camera managers' operators (game thread, once per frame).
+/// Logs, on change, every player's camera manager's operators (game thread, called from each seat's member tick).
 void Watch() noexcept;
 
 }  // namespace lss::battle::battle_camera
