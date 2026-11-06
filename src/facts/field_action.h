@@ -1,7 +1,7 @@
 #pragma once
 
 // The FieldActionMgr ([g_EndGameRoot]+0x1A0): the point registry's live list and lock, the eight slots' rows, targets
-// and latches, the pending flag, and a point's key, preset and flags. Read by world/field_pickup (player 2's own
+// and latches, the pending flag, and a point's key, preset and flags. Read by world/field_pickup (each seat's own
 // pass over the registry) and world/interact_watch (its hooks and log). Each offset was read in IDA at an
 // instruction that uses it.
 //

@@ -42,9 +42,9 @@ struct Site
 };
 
 std::optional<Site>        g_site;
-platform::InstructionPatch g_patch;  // the byte, in while player 2 is in (platform/instruction_patch.h)
+platform::InstructionPatch g_patch;  // the byte, in while several views render (platform/instruction_patch.h)
 bool                       g_skipping = false;
-bool                       g_followed = false;  // player 2 in, as last followed
+bool                       g_followed = false;  // several views render, as last followed
 
 std::optional<Site> Locate(const platform::GameImage& image) noexcept
 {

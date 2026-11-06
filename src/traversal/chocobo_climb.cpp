@@ -347,7 +347,7 @@ void Install(const platform::GameImage& image) noexcept
     const auto enterSlot = image.Rebase(kEnterSlot, sizeof(void*));
     const auto enterFn   = image.Rebase(kEnter);
     const wchar_t* logging = InstallLogging(image);
-    // Both or neither: a climb without its camera would leave player 2's ride framing against the wall.
+    // Both or neither: a climb without its camera would leave a seat's ride framing against the wall.
     const bool enter = enterSlot && enterFn &&
                        g_enterSlot.Replace(*enterSlot, *enterFn, reinterpret_cast<std::uintptr_t>(&Enter));
     const bool start = enter && trySlot && tryFn &&

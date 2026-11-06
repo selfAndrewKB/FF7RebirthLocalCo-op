@@ -2,7 +2,7 @@
 
 // The rumble list's pure rules (feedback/traversal_rumble.h), tested on the host
 // (tests/traversal_rumble_rules_test.cpp). The module keeps the lists, the lock, the engine calls and the log. The
-// rules name a seat's list as "player 2's" (Route::Seat, ListTick::Seat): each seat's own list, whichever seat the add,
+// rules call a seat's list the seat's (Route::Seat, ListTick::Seat): each seat's own list, whichever seat the add,
 // stop or tick belongs to (SeatOfAdd, ListTickFor).
 
 #include <algorithm>
@@ -57,8 +57,8 @@ private:
 inline constexpr std::uint8_t kFlagLoop   = 0x02;
 inline constexpr std::uint8_t kFlagEnding = 0x04 | 0x08 | 0x10;
 
-/// An entry of player 1's list that player 2's list takes at a shared ride's start: a loop that is not ending and not
-/// in states 6 or 7 (the caller skips keys player 2's list already has).
+/// An entry of player 1's list that a seat's list takes at a shared ride's start: a loop that is not ending and not
+/// in states 6 or 7 (the caller skips keys the seat's list already has).
 constexpr bool SeedsLoop(std::uint8_t flags, std::uint8_t state) noexcept
 {
     return (flags & kFlagLoop) != 0 && (flags & kFlagEnding) == 0 && state != 6 && state != 7;
@@ -68,10 +68,10 @@ constexpr bool SeedsLoop(std::uint8_t flags, std::uint8_t state) noexcept
 
 enum class Route
 {
-    Seat,          // player 2's list took it
+    Seat,          // the seat's list took it
     Game,          // the game's list
-    GameAndCopy,   // the game's list, copied onto player 2's (a shared ride)
-    LeftOnWorker,  // a stop of player 2's on a worker: left alone (the owner's list is named only on the game thread)
+    GameAndCopy,   // the game's list, copied onto the seats' (a shared ride)
+    LeftOnWorker,  // a stop of a seat's on a worker: left alone (the owner's list is named only on the game thread)
 };
 
 /// Whose add or stop it is (a seat, or 0 for the game's list): the seat its source names (`ownerSeat`, any thread),
@@ -85,8 +85,8 @@ constexpr int SeatOfAdd(int ownerSeat, bool gameThread, int primarySeat) noexcep
     return gameThread && primarySeat >= 1 ? primarySeat : 0;
 }
 
-/// An add: player 2's list when it is player 2's and the list took it; else the game's, copied during a shared ride
-/// unless it was player 2's.
+/// An add: that seat's list when the add is a seat's and the list took it; else the game's, copied during a shared ride
+/// unless it was a seat's.
 constexpr Route AddRouteOf(bool further, bool added, bool copyOne) noexcept
 {
     if (further && added)
@@ -96,9 +96,9 @@ constexpr Route AddRouteOf(bool further, bool added, bool copyOne) noexcept
     return !further && copyOne ? Route::GameAndCopy : Route::Game;
 }
 
-/// A stop: left when player 2's source stops on a worker while player 2 has a list; player 2's list when it is player
-/// 2's, on the game thread, and the list stopped it; else the game's, copied during a shared ride unless it was
-/// player 2's.
+/// A stop: left when a seat's source stops on a worker while the seat has a list; the seat's list when it is a
+/// seat's, on the game thread, and the list stopped it; else the game's, copied during a shared ride unless it was
+/// a seat's.
 constexpr Route StopRouteOf(bool owner, bool gameThread, bool hasList, bool further, bool stopped,
                             bool copyOne) noexcept
 {
@@ -117,9 +117,9 @@ constexpr Route StopRouteOf(bool owner, bool gameThread, bool hasList, bool furt
 
 enum class ListTick
 {
-    Game,     // no list of player 2's: the game's tick
-    Seat,     // player 2's component ticks player 2's list
-    Skip,     // player 2 is the primary player: the game's list never plays on player 2's pad
+    Game,     // no list of a seat's: the game's tick
+    Seat,     // a seat's component ticks the seat's list
+    Skip,     // a seat is the primary player: the game's list never plays on the seat's pad
     GameOne,  // player 1's tick of the game's list (counted)
 };
 

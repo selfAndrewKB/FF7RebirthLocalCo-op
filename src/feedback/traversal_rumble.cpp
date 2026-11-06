@@ -686,12 +686,12 @@ void Install(const platform::GameImage& image) noexcept
     {
         RemoveRedirects();  // all or none: an add into a seat's list needs the tick that plays it and the stop
     }
-    // The chocobo's footsteps (optional: without it, player 2's footsteps play on the primary player's pad as before).
+    // The chocobo's footsteps (optional: without it, a seat's footsteps play on the primary player's pad as before).
     const auto footSlot = image.Rebase(kFootSlot, sizeof(void*));
     const auto foot     = image.Rebase(kFootImpact);
     const bool feet     = g_installed && footSlot && foot &&
                       g_footSlot.Replace(*footSlot, *foot, reinterpret_cast<std::uintptr_t>(&FootImpact));
-    // The sources outside player 2's scopes (each optional: without one, its rumble plays on pad 1 as before).
+    // The sources outside the seats' scopes (each optional: without one, its rumble plays on pad 1 as before).
     const std::wstring sources = g_installed ? sources::Install(image) : std::wstring{};
     platform::Log(L"rumble list: {}{}{}{}",
                   g_installed ? L"each player's traversal rumble (zip line, chocobo, ropes, gimmicks) plays and stops on "

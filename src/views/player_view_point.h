@@ -13,7 +13,7 @@
 //     Each player's own FOV rule is put back when a further player leaves. A scene's camera cut writes the
 //     game's rule over the mod's and may not put the mod's back; the rule is written again when the split
 //     returns after player 1's single view (views/axis_records.h RetakeAll).
-//   - a further player's view shows their own camera from the join; Ctrl+F6 switches player 2's to player 1's (for
+//   - a further player's view shows their own camera from the join; Ctrl+F6 switches these views to player 1's (for
 //     testing) (and back). Starting on player 1's means a camera that is not set up yet (it sits at the world origin
 //     until it has a character) is never on screen by default.
 //   - a further player's view shows player 1's camera instead while views/column_source.h says so (the game takes

@@ -41,7 +41,7 @@ struct MoveLive
     platform::VTableEntry  begin;
     platform::CallRedirect gate;
     platform::VTableEntry  validate;
-    platform::VTableEntry  leave;    // player 2's own holder: the leave and EndPlay slots
+    platform::VTableEntry  leave;    // a seat's own holder: the leave and EndPlay slots
     platform::VTableEntry  endPlay;
     bool                   beginPlaced    = false;
     bool                   validatePlaced = false;
@@ -654,8 +654,8 @@ bool PlaceHipCalls(const platform::GameImage& image, std::uintptr_t core, std::i
     return (place(I, reinterpret_cast<std::uintptr_t>(&HipTrackCall<I>)) & ...);
 }
 
-/// Player 2's own holders: the two entry redirects and the game's leave and validate, on only with every move class's
-/// slots and climb_context's Ticks placed (without the Tick context the module getter cannot tell player 2's climb).
+/// The seats' own holders: the two entry redirects and the game's leave and validate, on only with every move class's
+/// slots and climb_context's Ticks placed (without the Tick context the module getter cannot tell a seat's climb).
 bool PlaceSeatHolders(const platform::GameImage& image) noexcept
 {
     bool slots = input::climb_context::TicksPlaced();

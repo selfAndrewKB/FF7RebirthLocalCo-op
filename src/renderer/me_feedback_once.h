@@ -5,16 +5,16 @@
 //
 // ME keeps one set of detail requests per scenery chunk. Each scene render processes the last readback
 // and copies its own requests for the next one. The game renders one family per frame and so alternates
-// process and copy; with one family per player (renderer/one_family_per_view.h) both families do both,
+// process and copy; with one family per player (renderer/one_family_per_view.h) every family does both,
 // and their copies overwrite each other: a shadow caster outside player 1's view flips between detail
 // levels several times a second. The game has no switch for one family only (its MassiveEnvironment
-// show flag turns off all ME work, picture included), so while player 2's family renders (the scene
+// show flag turns off all ME work, picture included), so while an additional family renders (the scene
 // renderer's copy of bAdditionalViewFamily, renderer+0x84, set by the mod on later families only) this
 // skips four game calls: the readback processing in the visibility gate, the main pass's copy, the
 // hidden-component pass, and (performance, RE-perf-family-duplication.md §3.1) phase 8's per-chunk mip-request
 // dispatches for the slave frustums, whose marks only the skipped copy reads; and (RE-perf-me-shadows.md Phase 3,
-// option D) the shadow pass's streaming-feedback writes, through machine code. Player 2's family still draws ME and
-// its shadows; player 2's detail requests reach player 1's family through player 2's slave view
+// option D) the shadow pass's streaming-feedback writes, through machine code. An additional family still draws ME and
+// its shadows; its player's detail requests reach player 1's family through that player's slave view
 // (views/stream_views.h). A skip of game calls, not a game lever: recorded in the plan as such.
 //
 // Each skipped and passed call is counted per family and summarised in the log.
@@ -31,7 +31,7 @@ class GameImage;
 namespace lss::renderer {
 
 bool InstallMeFeedbackOnce(const platform::GameImage& image) noexcept;
-void RemoveMeFeedbackOnce() noexcept;  // only while one family renders per frame (player 2 out)
+void RemoveMeFeedbackOnce() noexcept;  // only while one family renders per frame (every seat out)
 bool MeFeedbackOnceInstalled() noexcept;
 
 /// True: player 1's family alone hands in requests. False: every family runs the game's calls.

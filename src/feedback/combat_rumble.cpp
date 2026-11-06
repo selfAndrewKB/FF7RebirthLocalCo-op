@@ -656,7 +656,7 @@ void Install(const platform::GameImage& image) noexcept
                                                                      reinterpret_cast<std::uintptr_t>(&Fallback));
         if (gate && (!camera || !fallback))
         {
-            // All three or none: a gate passing for player 2 must not shake player 1's camera or play on player 1's pad.
+            // All three or none: a gate passing for a seat must not shake player 1's camera or play on player 1's pad.
             g_cameraCall.Restore();
             g_fallbackCall.Restore();
             g_gateCall.Restore();

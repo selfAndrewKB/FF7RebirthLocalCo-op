@@ -1,6 +1,6 @@
 #pragma once
 
-// The field command controller (FieldCommandCtrl, EndUISystem[23]): the game's one, and player 2's own, which the mod
+// The field command controller (FieldCommandCtrl, EndUISystem[23]): the game's one, and each seat's own, which the mod
 // builds the same way (battle/command_menu). The fields two or more modules read; each was read in IDA at an
 // instruction that uses it.
 //

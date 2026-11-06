@@ -11,8 +11,8 @@
 // 8 bytes further on, whose first slot is an engine `ret 0`, so the node stays in the list and does nothing. Only the
 // parallel passes' hints change; the engine's explicit flushes (transitions, fences, DLSS, Present, the end of the
 // frame) and the other hint producers do not. Performance work, authorized as a change to game behaviour (the plan's
-// performance roadmap). Held while player 2 is in, so one-player play keeps the game's hints; `submit_hints_on.txt` or
-// `watch_only.txt` in the mod's folder keeps them always.
+// performance roadmap). Held while a further player is in, so one-player play keeps the game's hints;
+// `submit_hints_on.txt` or `watch_only.txt` in the mod's folder keeps them always.
 
 #include "platform/dev_switch.h"
 
@@ -32,8 +32,8 @@ bool SubmitHintSkipInstalled() noexcept;
 void SetSubmitHintSkip(bool skip) noexcept;
 bool SubmitHintSkipOn() noexcept;
 
-/// Game thread, every tick: the skip follows whether several views render (player 2 in, or a mirror view beside
-/// player 1), set at each change of that; a command's choice (SetSubmitHintSkip) holds until the next change.
+/// Game thread, every tick: the skip follows whether several views render (a further player in, or a mirror view
+/// beside player 1), set at each change of that; a command's choice (SetSubmitHintSkip) holds until the next change.
 void FollowViews(bool severalViews) noexcept;
 
 /// Game thread, on removal: the game's hints back.

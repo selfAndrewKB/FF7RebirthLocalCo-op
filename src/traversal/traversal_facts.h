@@ -3,7 +3,7 @@
 // The traversal cameras' facts and tables (traversal/traversal_camera.h): the executer classes (ladder,
 // squeeze,
 // crawl, pole slide, lifting rope, one-shot move) with the fields and exits the mod reads on them, the move classes
-// (climbing wall, monkey bars, spider wall) with player 2's own holder's four game functions, the climbing wall's hip
+// (climbing wall, monkey bars, spider wall) with the seats' own holders' four game functions, the climbing wall's hip
 // calls and the collision watch's reads. Internal to the traversal camera's units (traversal_exec.cpp,
 // traversal_holders.cpp, traversal_collision.cpp); nothing here is a public API.
 //
@@ -56,16 +56,16 @@ enum class TickRule : std::uint8_t
 {
     None,        // the Tick has no camera call: not replaced
     LadderExit,  // only the climb move's exit phases (3, 6, 10) switch the camera off
-    Whole,       // the camera goes on or off inside the Tick: every frame of player 2's executer
+    Whole,       // the camera goes on or off inside the Tick: every frame of a seat's executer
     MoveExit,    // the move's exit (state 3) switches the camera off from a worker delegate: replayed once, scoped
 };
 
-// What player 2's executer runs at its move's exit (RE-p2-traversal-worker-gates.md W2, W3): the move fires an exit
-// delegate on the anim worker whose camera off sits behind IsUCPC, so player 2's camera stayed on until the End.
+// What a seat's executer runs at its move's exit (RE-p2-traversal-worker-gates.md W2, W3): the move fires an exit
+// delegate on the anim worker whose camera off sits behind IsUCPC, so the seat's camera stayed on until the End.
 enum class ExitCall : std::uint8_t
 {
     None,
-    SqueezeDelegate,  // the delegate body itself (executer**): its test and its camera off, on player 2's handles
+    SqueezeDelegate,  // the delegate body itself (executer**): its test and its camera off, on the seat's handles
     CrawlCameraOff,   // only the camera off of the actor at exec+0xB0: the body's other work already ran on the worker
 };
 
@@ -115,7 +115,7 @@ inline constexpr ExecClass kExecClasses[] = {
     // Every one-shot type (squeeze, crouch, door steps, point to point) is this one class (type at actor+0x710); the
     // camera (squeeze and crouch only) goes on in the Tick's phase update behind IsUCPC_Core, with no handle: the
     // actor's flag +0x88C records it. Start runs unscoped for the leader: its only leader read records a non-leader's
-    // safe spot for the save file (RE-p2-traversal-cameras.md §11), and to the save player 2's member is a party member.
+    // safe spot for the save file (RE-p2-traversal-cameras.md §11), and to the save a seat's member is a party member.
     {L"one-shot move", facts::kOneShotMoveVTable, 0x58, 0x58, 0, 0, false, true, TickRule::Whole,
      {L"the one-shot executer's Start slot", 0x146706C50, {L"OneShotMoveExecuter_Start_Vt10", 0x143693618, kOneShotStartBytes}},
      {L"the one-shot executer's End slot", 0x146706C58, {L"OneShotMoveExecuter_End_Vt18", 0x143695630, kOneShotEndBytes}},
@@ -129,9 +129,9 @@ inline constexpr std::size_t kOneShot   = 5;
 // The one-shot's camera off (RE-p2-traversal-cameras.md §10): the actor's leave (vt+0x8F8; 1.005 +0x900) tests and
 // deactivates slot 15 of the camera manager GetEndPlayerCameraManager answers, then clears +0x88C. The action's end
 // delegate reaches it with the leaving character (exec+0x10): on the anim worker at a normal finish, on the game thread
-// from the executer End's abort; EndPlay calls it with no character. For player 2's member (or, with no character, the
-// actor player 2's camera went on) the game's own leave runs inside climb_context's camera context, where the getter
-// answers player 2's camera manager on that thread. Rail one-shots switch op 7 off before the slot (not covered; logged).
+// from the executer End's abort; EndPlay calls it with no character. For a seat's member (or, with no character, the
+// actor a seat's camera went on) the game's own leave runs inside climb_context's camera context, where the getter
+// answers the seat's camera manager on that thread. Rail one-shots switch op 7 off before the slot (not covered; logged).
 inline constexpr std::uint8_t kOneShotLeaveBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00};  // then E8 __chkstk
 inline constexpr platform::SlotFact kOneShotLeaveSlot{L"the one-shot actor's leave slot (+0x8F8)", 0x14580F7F8,
                                            {L"OneShotMove_Vt8F8_PrimaryPCM_DeactSlot15_If88C", 0x1436A9130,
@@ -152,8 +152,8 @@ inline constexpr std::size_t   kMaxHandle         = 32;
 // The ladder's smooth exit (RE-p2-traversal-ladder-exit.md §2, §6): the climb move's state delegate (anim worker) asks,
 // through IsUCPC_Core and a global count, for the ladder module's exit state S2, a 1 s blend into the follow camera
 // after which the module switches itself off; the executer's camera off then finds S2 and does nothing. Off the game
-// thread the member's answer is the engine's no, and the ladder holds player 1's handle, so player 2 had a cut instead.
-// The mod calls the same delegate body for player 2's executer at its first exit Tick, with player 2's handle in and the
+// thread the member's answer is the engine's no, and the ladder holds player 1's handle, so a seat had a cut instead.
+// The mod calls the same delegate body for a seat's executer at its first exit Tick, with the seat's handle in and the
 // scopes open; that Tick runs unscoped (the queued task must set S2 before a camera off), later ones scoped once S2
 // shows, or after kExitWait Ticks (the game's gate refused: player 1 would get the cut then too).
 inline constexpr std::uint8_t kRequestCamExitBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74,
@@ -170,7 +170,7 @@ inline constexpr unsigned      kExitWait           = 4;
 
 // The squeeze's and crawl's exits (RE-p2-traversal-worker-gates.md W2, W3): the move's state handler sets +0x4E0 = 3 near
 // the far end and fires the executer's exit delegate (anim worker), which switches the camera off behind IsUCPC. For
-// player 2 the mod runs the same off once, at the first Tick that sees state 3, in player 2's scopes.
+// a seat the mod runs the same off once, at the first Tick that sees state 3, in the seat's scopes.
 inline constexpr std::uint8_t kSqueezeExitBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
 inline constexpr platform::FunctionFact kSqueezeExit{L"CrackExecuter_ExitDelegate_UCPC_CameraOff", 0x1422A92E0,
                                               kSqueezeExitBytes};
@@ -191,8 +191,8 @@ inline bool ExitState(std::uint8_t state) noexcept
 // The climbing wall's hip framing (RE-p2-traversal-camera-collision.md §3, §6): entering phase 3 (on the wall, between
 // holds) sets the holder's module +0x484, which moves the camera's look-at, the start of the collision sweep, onto the
 // hip raised by CameraDefaultSweepOffsetZ; leaving it clears the flag. Both are behind IsUCPC_Core(character), on the
-// anim worker, where player 2's member is the engine's no: player 2 never had the hip framing. The two calls answer yes
-// for player 2's member while player 2's Begin holds the wall's holder.
+// anim worker, where a seat's member is the engine's no: a seat never had the hip framing. The two calls answer yes
+// for a seat's member while the seat's Begin holds the wall's holder.
 // enter, exit (`mov rcx, rdi; call IsUCPC_Core`)
 inline constexpr std::uintptr_t kHipCalls[]     = {0x14141C056, 0x14141B946};
 inline constexpr const wchar_t* kHipCallNames[] = {L"enters", L"leaves"};
@@ -244,8 +244,8 @@ inline constexpr std::size_t kClimbingWall = 0;
 
 // The holders' check (RE-p2-traversal-worker-gates.md W1): every field-actor manager tick (game thread, outside the mod's
 // scopes) the actor's vt+0x790 (1.005 +0x798) keeps the holder's camera only if its installer is a user of the actor
-// AND has the party leader's type (PM+0x150); else it leaves, one tick after player 2's install. For a holder player
-// 2's member installed, the check runs with the leader type answering the member's. Same order as kMoveClasses.
+// AND has the party leader's type (PM+0x150); else it leaves, one tick after a seat's install. For a holder a seat's
+// member installed, the check runs with the leader type answering the member's. Same order as kMoveClasses.
 inline constexpr std::uint8_t kValidateBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
                                            0x24, 0x10, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
 inline constexpr platform::FunctionFact kValidateFn{L"StateManagedActor_Vt790_CanDeactivate_ValidatesHolder",
@@ -267,11 +267,11 @@ inline constexpr std::uint32_t kMoveActor     = 0x458;  // FWeakObjectPtr
 inline constexpr std::uint32_t kHolder        = 0x6D0;
 inline constexpr std::uint32_t kHolderOwner   = 0x6D4;
 
-// Player 2's own holder per actor (RE-p2-traversal-climb-holder.md): the actor's holder records one installer, and a
-// second install evicts the first (player 1 getting on a wall player 2 climbs switched player 2's camera off). Player 2
-// gets a holder of the same layout, owned here, which the game's own four holder functions run on for player 2's calls:
-// the install (player 2's Begin), the module getter (player 2's Begin and player 2's climb Tick, climb_context), the
-// leave (keyed by the leaving character) and the validate. The actor's holder is never written for player 2.
+// A seat's own holder per actor (RE-p2-traversal-climb-holder.md): the actor's holder records one installer, and a
+// second install evicts the first (player 1 getting on a wall a seat climbs switched the seat's camera off). A seat
+// gets a holder of the same layout, owned here, which the game's own four holder functions run on for the seat's calls:
+// the install (the seat's Begin), the module getter (the seat's Begin and the seat's climb Tick, climb_context), the
+// leave (keyed by the leaving character) and the validate. The actor's holder is never written for a seat.
 inline constexpr std::uint32_t kHolderSize    = 0x28;
 inline constexpr std::uint32_t kHolderActorAt = 0x20;  // the owning actor (the install registers it with the manager)
 inline constexpr std::size_t   kSeatHolders   = 4;

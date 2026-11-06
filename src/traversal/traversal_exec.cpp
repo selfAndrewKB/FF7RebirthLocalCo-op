@@ -722,7 +722,7 @@ std::uintptr_t LadderInput(LadderInputFn original, void* executer, float dt) noe
     if (seat < 1)
     {
         const auto result = original(executer, dt);
-        // Player 1's slide flag, for the log (both on one ladder: player 2's input must not change it).
+        // Player 1's slide flag, for the log (a seat on the same ladder: the seat's input must not change it).
         void* one = players::generation::AnyActive() && players::generation::OnGameThread() ? players::generation::PlayerOneController() : nullptr;
         if (one != nullptr && g_exec[kLadder].actorVt != 0 &&
             ObjectIn(executer, kExecCharacter) == ReadPointer(one, facts::kControllerPawn))

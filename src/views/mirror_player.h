@@ -5,7 +5,7 @@
 // while the three-player monitor mode is on, and then player 1's picture in an empty one).
 //
 // The engine's own levers, as views/third_view (the multi-monitor measurement, 2026-10-20) proved them: a local
-// player through UGameplayStatics::CreatePlayer (players/local_players.h), inside player 2's join scope
+// player through UGameplayStatics::CreatePlayer (players/local_players.h), inside a seat's join scope
 // (session/own_controller.h makes its End camera manager's BeginPlay safe, naming no seat: nothing a join
 // builds for a player goes to a mirror), whose camera manager is aimed at player 1's view target with the game's own
 // SetViewTarget (camera/view_target.h) and re-aimed whenever player 1's changes (cutscenes). The engine lays

@@ -31,7 +31,7 @@ constexpr std::uintptr_t kGlobal       = 0x1490FEE18;  // g_EndFFBMgr: the singl
 constexpr std::uint8_t   kCtorBytes[]  = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
 constexpr platform::FunctionFact kCtor{L"EndFFBMgr_Ctor", 0x1437DBAE0, kCtorBytes};  // EndFFBMgr_Ctor(memory) -> memory
 // The component constructor's only call, in the AEndPlayerController constructor. The manager's constructor loads its
-// effect list with FObjectFinder, which only a constructor may use: player 2's manager is made inside this call.
+// effect list with FObjectFinder, which only a constructor may use: a seat's manager is made inside this call.
 constexpr std::uintptr_t kCompCtorCall = 0x143D05AB7;
 constexpr std::uintptr_t kCompCtor     = 0x1437DBC78;  // EndFFBComp_Ctor_PC758(component, owner) -> component
 constexpr std::uint8_t   kBuildTracksBytes[] = {0x48, 0x89, 0x5C, 0x24};
@@ -512,7 +512,7 @@ void Install(const platform::GameImage& image) noexcept
                            Find(image, kRemoveAll, g_removeAll) && Find(image, kBuildTracks, g_buildTracks);
     const auto site      = image.Rebase(kCompCtorCall, 5);
     const auto ctor      = image.Rebase(kCompCtor);
-    // The option and the stop-all first: a component on player 2's manager must never miss them.
+    // The option and the stop-all first: a component on a seat's manager must never miss them.
     g_installed = functions && site && ctor &&
                   Entry(image, g_setEnabledEntry, kSetEnabled, reinterpret_cast<std::uintptr_t>(&SetEnabledHook)) &&
                   Entry(image, g_muteAllEntry, kMuteAll, reinterpret_cast<std::uintptr_t>(&MuteAllHook)) &&

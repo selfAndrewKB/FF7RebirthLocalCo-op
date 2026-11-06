@@ -23,7 +23,7 @@ enum class Part
     EngineTick,     // the mod's engine-tick callback
     OverlayRender,  // the mod's work around the overlay render (the HUD passes)
     InputTick,      // the button views after the input Tick
-    MemberTick,     // player 2's member's move-state tick (engine work the mod adds)
+    MemberTick,     // each seat's member's move-state tick (engine work the mod adds)
     Count,
 };
 
@@ -64,7 +64,7 @@ private:
 };
 
 /// The `perf-log` switch (off at start, on in the watch-only control): the 10 s hitch summary, each
-/// hitch's own line, the modules' periodic timing lines and player 2's 10 s status block. Hitches
+/// hitch's own line, the modules' periodic timing lines and the further players' 10 s status block. Hitches
 /// are counted either way.
 void SetDetailed(bool on) noexcept;
 bool Detailed() noexcept;

@@ -79,9 +79,9 @@ constexpr std::uint8_t   kMipRequestsBytes[] = {0x40, 0x55, 0x53, 0x56, 0x57, 0x
 constexpr platform::FunctionFact kMipRequests{L"ME_DispatchComputeRequestedMeshAndTextureMips", 0x140C9D2F0,
                                               kMipRequestsBytes};
 
-// Option D of RE-perf-me-shadows.md (Phase 3): the shadow pass's streaming-feedback writes, skipped in player 2's family
-// by machine code at one instruction of ME_ChunkDraw_FullPipeline_cand (renderer/me_shadow_feedback_code.h). Research
-// build; 1.005 0x140C882B7 (site), 0x140C882BD, 0x140C883D9 and 0x140C88A01.
+// Option D of RE-perf-me-shadows.md (Phase 3): the shadow pass's streaming-feedback writes, skipped in an additional
+// family by machine code at one instruction of ME_ChunkDraw_FullPipeline_cand (renderer/me_shadow_feedback_code.h).
+// Research build; 1.005 0x140C882B7 (site), 0x140C882BD, 0x140C883D9 and 0x140C88A01.
 constexpr std::uintptr_t kShadowSite   = 0x140F0DC3A;  // jbe over the pre-transition loop (count 0)
 constexpr std::uintptr_t kShadowResume = 0x140F0DC40;  // the instruction after it
 constexpr std::uintptr_t kShadowEmpty  = 0x140F0DD5C;  // the jbe's target
@@ -127,9 +127,9 @@ std::uintptr_t          g_managers = 0;  // live address of the static
 
 enum Family : int
 {
-    PlayerOne = 0,          // player 1's family (or any render that is not player 2's)
-    AdditionalPassed = 1,   // player 2's family, switch off
-    AdditionalSkipped = 2,  // player 2's family, the call skipped
+    PlayerOne = 0,          // player 1's family (or any render that is not an additional family's)
+    AdditionalPassed = 1,   // an additional family, switch off
+    AdditionalSkipped = 2,  // an additional family, the call skipped
     kFamilies = 3,
 };
 
@@ -195,7 +195,7 @@ void InstallShadowSkip(const platform::GameImage& image) noexcept
                   installed ? L"skip" : L"still record (the site could not be redirected)");
 }
 
-/// True if this stage's call is skipped: player 2's family under stream-feedback p1, with the stage's mask bit set.
+/// True if this stage's call is skipped: an additional family under stream-feedback p1, with the stage's mask bit set.
 bool Skips(Stage stage, Family family) noexcept
 {
     return family == AdditionalSkipped && (g_mask.load(std::memory_order_relaxed) & (1u << (stage - 1))) != 0;
@@ -227,7 +227,7 @@ void InstallOnRenderThread() noexcept
                   copy ? L"installed" : L"FAILED (the further players' families still copy their feedback)");
 }
 
-/// Replaces the scene renderer's Render (vtable slot): marks player 2's family for its length.
+/// Replaces the scene renderer's Render (vtable slot): marks an additional family for its length.
 void Render(void* renderer, void* commandList, void* a3, void* a4) noexcept
 {
     InstallOnRenderThread();  // once, on 1.005

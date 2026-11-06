@@ -145,7 +145,7 @@ void LogShapeOnChange(int slot, const std::byte* viewInfo) noexcept
 // Split players fill their half
 // ---------------------------------------------------------------------------------------------
 //
-// While player 2 is in, every player's view takes the mod's FOV rule
+// While a further player is in, every player's view takes the mod's FOV rule
 // (ULocalPlayer::AspectRatioAxisConstraint), read by GetProjectionData after this function returns
 // (0x140CC0B1D) for a view without the 16:9 constraint. The constraint itself is the main camera's
 // own setting, cleared once per camera through the game's setter (camera/main_camera_shape.h).

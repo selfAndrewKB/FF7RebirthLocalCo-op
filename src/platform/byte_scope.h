@@ -4,7 +4,7 @@
 //
 // Square Enix's code keeps one copy of state that is really per player: the party manager's leader and its
 // type, the UI system's command controller and key guide, the input object's focus context and merged sticks,
-// the battle system's target fields. The mod makes the game's own calls for player 2 with player 2's values in
+// the battle system's target fields. The mod makes the game's own calls for a further player with their values in
 // those slots and the game's values put back after. A ByteContext is one player's values for a set of live byte
 // ranges; a ByteScope writes them in on construction and puts the game's back on destruction. Three kinds of
 // range:
