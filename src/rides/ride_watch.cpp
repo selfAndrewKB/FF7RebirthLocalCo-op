@@ -134,10 +134,10 @@ struct Sample
     const void*   body      = nullptr;
     const void*   rider     = nullptr;
     std::uint8_t  boarding  = 0;
-    // Player 2's controller (expected empty).
-    const void*   twoVehicle = nullptr;
-    std::int32_t  twoMap     = 0;
-    // The ride manager and player 2's member's entry.
+    // The seat's controller (expected empty).
+    const void*   seatVehicle = nullptr;
+    std::int32_t  seatMap     = 0;
+    // The ride manager and the seat's member's entry.
     std::int32_t  manager   = -1;
     std::uint8_t  getOff    = 0, party = 0, battle = 0;
     std::int32_t  type      = -1;
@@ -148,7 +148,7 @@ struct Sample
     std::int32_t  inBattle   = -1;
     std::int32_t  chocoboType = -1;     // the chocobo's component player type (16 expected once it has one)
     std::array<std::uint8_t, std::size(kRowRequests)> oneRows{};  // player 1's chocobo state's row requests
-    // Player 2's member's chocobo.
+    // The seat's member's chocobo.
     const void*   chocobo    = nullptr;
     std::uint8_t  ridden     = 0, flag1920 = 0, flag1922 = 0, rideMode = 0;
     bool          rideObject = false;
@@ -159,7 +159,7 @@ struct Sample
     std::int32_t  coreTest   = -1;  // IsUCPC_Core(chocobo): -1 unread
     std::int32_t  oneCoreTest = -1;  // IsUCPC_Core(player 1's ride body)
     const void*   bodyController = nullptr;  // player 1's ride body's effective controller (PC1 once possessed)
-    // Player 2's member.
+    // The seat's member.
     const void*   attachedTo = nullptr;
     const void*   memberController = nullptr, *memberEffective = nullptr;
 
@@ -186,24 +186,38 @@ GlobalTestFn   g_inBattle = nullptr;         // null: not read
 bool           g_installed = false;
 
 // Game thread.
-Sample            g_last{};
-bool              g_logged = false;
 std::uint32_t     g_ticks  = 0;
 std::int32_t      g_rootOffset = -1;
-Clock::time_point g_lastSnapshot{};
-float             g_oneAt[3]{};
-bool              g_oneAtValid = false;
-float             g_twoAt[3]{};
-bool              g_twoAtValid = false;
-std::array<int, 14> g_lastShown{};
-Clock::time_point g_lastShownAt{};
-// The start trace: player 2's chocobo for the first seconds after it is ridden (the homing seen at a ride's start).
+// The start trace: a seat's chocobo for the first seconds after it is ridden (the homing seen at a ride's start).
 constexpr auto    kTraceFor   = std::chrono::seconds(8);
 constexpr auto    kTraceEvery = std::chrono::milliseconds(250);
-Clock::time_point g_traceUntil{};
-Clock::time_point g_lastTrace{};
-float             g_traceAt[3]{};
-float             g_traceGap = -1.0f;  // metres to player 1's ride body at the last trace line
+
+/// What the watch keeps for one seat between its samples (game thread).
+struct SeatWatch
+{
+    Sample              last{};
+    bool                logged = false;
+    Clock::time_point   lastSnapshot{};
+    float               oneAt[3]{};   // player 1's ride body at the last snapshot
+    bool                oneAtValid = false;
+    float               seatAt[3]{};  // the seat's chocobo at the last snapshot
+    bool                seatAtValid = false;
+    std::array<int, 14> lastShown{};
+    Clock::time_point   lastShownAt{};
+    Clock::time_point   traceUntil{};
+    Clock::time_point   lastTrace{};
+    float               traceAt[3]{};
+    float               traceGap = -1.0f;  // metres to player 1's ride body at the last trace line
+
+    /// The next sample is logged whole, and the speeds start again.
+    void Forget() noexcept
+    {
+        logged      = false;
+        oneAtValid  = false;
+        seatAtValid = false;
+    }
+};
+SeatWatch g_watch[players::kMaxPlayers];  // by seat (index 0 unused)
 
 // The vehicle kind player 1 rides and its coordinator's state, for the Info line on a change (game thread).
 Kind         g_kind      = Kind::None;
@@ -296,7 +310,8 @@ const void* RootOf(void* actor) noexcept
     return g_rootOffset < 0 ? nullptr : ReadPointer(actor, static_cast<std::uint32_t>(g_rootOffset));
 }
 
-Sample Read(void* playerOne, void* playerTwo, void* member) noexcept
+/// Player 1's ride, and `seatController`'s and its `member`'s side of it.
+Sample Read(void* playerOne, void* seatController, void* member) noexcept
 {
     Sample s;
     const void* coord = ReadPointer(playerOne, kControllerActiveVehicle);
@@ -310,8 +325,8 @@ Sample Read(void* playerOne, void* playerTwo, void* member) noexcept
         s.oneCoreTest = s.kind == Kind::Chocobo ? CoreTest(s.body) : -1;
         s.bodyController = ReadPointer(s.body, facts::kCharacterEffectiveController);
     }
-    s.twoVehicle = ReadPointer(playerTwo, kControllerActiveVehicle);
-    s.twoMap     = playerTwo != nullptr ? ReadField<std::int32_t>(playerTwo, kVehicleMapCount) : 0;
+    s.seatVehicle = ReadPointer(seatController, kControllerActiveVehicle);
+    s.seatMap     = seatController != nullptr ? ReadField<std::int32_t>(seatController, kVehicleMapCount) : 0;
 
     const void* root    = ReadPointer(reinterpret_cast<const void*>(g_gameRoot), 0);
     const auto* manager = static_cast<const std::byte*>(ReadPointer(root, kRootChocoboRideManager));
@@ -392,50 +407,52 @@ std::wstring RowsText(const std::array<std::uint8_t, std::size(kRowRequests)>& r
     return text.empty() ? std::wstring(L"none") : text;
 }
 
-void LogSample(const Sample& s)
+void LogSample(int seat, const Sample& s)
 {
+    const wchar_t* who = players::SeatName(seat);
     Line(L"player 1's vehicle {} (state {}, body {} controlled by {}, rider {}, boarding {}, body's player-core test {}); "
-         L"player 2's {} (coordinators {}); ride manager state {} (getoff {}, party {}, battle {}); in battle {}; player 2's "
+         L"{}'s {} (coordinators {}); ride manager state {} (getoff {}, party {}, battle {}); in battle {}; {}'s "
          L"member type {} entry state {} (+0x1C {}, +0x1D {}, grace {}; the game's lookup {}); player 1's ride rows "
          L"{} (then in the riding line)",
          KindName(s.kind), s.state, s.body, players::Who(s.bodyController), s.rider, s.boarding,
-         s.oneCoreTest, s.twoVehicle, s.twoMap, s.manager, s.getOff, s.party, s.battle, s.inBattle, s.type, s.entry,
+         s.oneCoreTest, who, s.seatVehicle, s.seatMap, s.manager, s.getOff, s.party, s.battle, s.inBattle, who, s.type, s.entry,
          s.entry1C, s.entry1D, s.entryGrace ? 1 : 0,
          s.lookup == 1 ? L"agrees" : s.lookup == 0 ? L"DIFFERS" : L"unread", RowsText(s.oneRows));
     if (s.chocobo != nullptr)
     {
-        Line(L"player 2's chocobo {}: ridden {} (0x1920 {}, 0x1922 {}, mode {}, ride object {}); move state {}{}; "
+        Line(L"{}'s chocobo {}: ridden {} (0x1920 {}, 0x1922 {}, mode {}, ride object {}); move state {}{}; "
              L"controller {}, requested {}, effective {}; AI state {}; input component {} (player-core test {}, type {})",
-             s.chocobo, s.ridden, s.flag1920, s.flag1922, s.rideMode, s.rideObject ? 1 : 0, s.moveState ? L"yes" : L"none",
+             who, s.chocobo, s.ridden, s.flag1920, s.flag1922, s.rideMode, s.rideObject ? 1 : 0, s.moveState ? L"yes" : L"none",
              s.moveIsChocobo ? L" (the chocobo's)" : L"", players::Who(s.chocoboController),
              players::Who(s.chocoboRequested), players::Who(s.chocoboEffective), s.chocoboAi,
              s.core, s.coreTest, s.chocoboType);
     }
     else
     {
-        Line(L"player 2's member has no chocobo in the ride manager");
+        Line(L"{}'s member has no chocobo in the ride manager", who);
     }
-    Line(L"player 2's member: attached to {}, controller {}, effective {}", s.attachedTo,
+    Line(L"{}'s member: attached to {}, controller {}, effective {}", who, s.attachedTo,
          players::Who(s.memberController), players::Who(s.memberEffective));
 }
 
 /// While a ride is on: the merged sticks and player 1's ride body's speed, once a second (test 3).
-void LogSnapshot(const Sample& s, const void* member, const void* playerTwo)
+void LogSnapshot(int seat, SeatWatch& w, const Sample& s, const void* member, const void* seatController)
 {
     if (!platform::Enabled(platform::Level::Trace))
     {
         // The riding line follows the sticks: a per-input report (Trace). Nothing is read or dry-run below it.
-        g_oneAtValid = false;
-        g_twoAtValid = false;
+        w.oneAtValid = false;
+        w.seatAtValid = false;
         return;
     }
-    const auto now = Clock::now();
-    if (now - g_lastSnapshot < kSnapshotEvery)
+    const wchar_t* who = players::SeatName(seat);
+    const auto     now = Clock::now();
+    if (now - w.lastSnapshot < kSnapshotEvery)
     {
         return;
     }
-    const float seconds = std::chrono::duration<float>(now - g_lastSnapshot).count();
-    g_lastSnapshot      = now;
+    const float seconds = std::chrono::duration<float>(now - w.lastSnapshot).count();
+    w.lastSnapshot      = now;
     float sticks[4]{};
     const void* input = ReadPointer(reinterpret_cast<const void*>(g_input), 0);
     if (input != nullptr)
@@ -444,27 +461,29 @@ void LogSnapshot(const Sample& s, const void* member, const void* playerTwo)
     }
     float at[3]{};
     const bool  moved = s.body != nullptr && world::charapop::ActorLocation(const_cast<void*>(s.body), at);
-    const float speed = moved && g_oneAtValid && seconds > 0.0f ? world::charapop::Distance(at, g_oneAt) / 100.0f / seconds : -1.0f;
-    g_oneAtValid      = moved;
+    const float speed = moved && w.oneAtValid && seconds > 0.0f ? world::charapop::Distance(at, w.oneAt) / 100.0f / seconds : -1.0f;
+    w.oneAtValid      = moved;
     for (int i = 0; i < 3; ++i)
     {
-        g_oneAt[i] = at[i];
+        w.oneAt[i] = at[i];
     }
-    // Player 2's chocobo the same way (the gait reached: walk, jog or sprint), and how far it is from player 1's.
-    float twoAt[3]{};
-    const bool  twoMoved = s.chocobo != nullptr && world::charapop::ActorLocation(const_cast<void*>(s.chocobo), twoAt);
-    const float twoSpeed =
-        twoMoved && g_twoAtValid && seconds > 0.0f ? world::charapop::Distance(twoAt, g_twoAt) / 100.0f / seconds : -1.0f;
-    const float gap = twoMoved && moved ? world::charapop::Distance(twoAt, at) / 100.0f : -1.0f;
-    g_twoAtValid    = twoMoved;
+    // The seat's chocobo the same way (the gait reached: walk, jog or sprint), and how far it is from player 1's.
+    float chocoboAt[3]{};
+    const bool  chocoboMoved = s.chocobo != nullptr && world::charapop::ActorLocation(const_cast<void*>(s.chocobo), chocoboAt);
+    const float chocoboSpeed = chocoboMoved && w.seatAtValid && seconds > 0.0f
+                                   ? world::charapop::Distance(chocoboAt, w.seatAt) / 100.0f / seconds
+                                   : -1.0f;
+    const float gap = chocoboMoved && moved ? world::charapop::Distance(chocoboAt, at) / 100.0f : -1.0f;
+    w.seatAtValid    = chocoboMoved;
     for (int i = 0; i < 3; ++i)
     {
-        g_twoAt[i] = twoAt[i];
+        w.seatAt[i] = chocoboAt[i];
     }
     // The dry run of the chocobo swap's gate (RE-p2-chocobo-ride.md §7.2 item 2): the game's player-core test of the
-    // member as the swap would see it (1 and PC2 expected), and of her chocobo (0 until the mod answers for it).
-    const auto dryMember  = input::member_movement::PlayerCoreAsSeat(players::kFirstSeat, member, member);
-    const auto dryChocobo = input::member_movement::PlayerCoreAsSeat(players::kFirstSeat, s.chocobo, member);
+    // member as the swap would see it (1 and the seat's controller expected), and of her chocobo (0 until the mod
+    // answers for it).
+    const auto dryMember  = input::member_movement::PlayerCoreAsSeat(seat, member, member);
+    const auto dryChocobo = input::member_movement::PlayerCoreAsSeat(seat, s.chocobo, member);
     const std::int32_t memberAi = AiStateOf(member);
     // Logged when what it shows changes (sticks to a quarter, speed to 1 m/s, the answers), or every 10 s.
     const auto quarter = [](float v) { return static_cast<int>(v * 4.0f + (v < 0.0f ? -0.5f : 0.5f)); };
@@ -476,57 +495,58 @@ void LogSnapshot(const Sample& s, const void* member, const void* playerTwo)
     const std::array<int, 14> shown{quarter(sticks[0]), quarter(sticks[1]), quarter(sticks[2]), quarter(sticks[3]),
                                     speed < 0.0f ? -1 : static_cast<int>(speed + 0.5f), s.oneCoreTest * 1000 + s.coreTest,
                                     s.chocoboAi, s.ridden, memberAi, dryMember.answer * 10 + dryChocobo.answer,
-                                    dryMember.primary == playerTwo ? 1 : 0, rowBits,
-                                    twoSpeed < 0.0f ? -1 : static_cast<int>(twoSpeed + 0.5f),
+                                    dryMember.primary == seatController ? 1 : 0, rowBits,
+                                    chocoboSpeed < 0.0f ? -1 : static_cast<int>(chocoboSpeed + 0.5f),
                                     gap < 0.0f ? -1 : static_cast<int>(gap / 10.0f)};
-    if (shown == g_lastShown && now - g_lastShownAt < kSnapshotHeartbeat)
+    if (shown == w.lastShown && now - w.lastShownAt < kSnapshotHeartbeat)
     {
         return;
     }
-    g_lastShown   = shown;
-    g_lastShownAt = now;
+    w.lastShown   = shown;
+    w.lastShownAt = now;
     LineAt(platform::Level::Trace, L"riding ({} state {}): merged sticks L ({:.2f}, {:.2f}) R ({:.2f}, {:.2f}); player 1's ride body {:.1f} m/s "
-         L"(player-core test {}); player 2's chocobo {:.1f} m/s, {:.0f} m from player 1's, ridden {}, AI state {}, "
-         L"player-core test {}; player 2's member's AI state {}; dry run as player 2 (primary {}): member {}, chocobo {}; "
+         L"(player-core test {}); {}'s chocobo {:.1f} m/s, {:.0f} m from player 1's, ridden {}, AI state {}, "
+         L"player-core test {}; {}'s member's AI state {}; dry run as {} (primary {}): member {}, chocobo {}; "
          L"player 1's ride rows {}",
-         KindName(s.kind), s.state, sticks[0], sticks[1], sticks[2], sticks[3], speed, s.oneCoreTest, twoSpeed, gap,
-         s.ridden, s.chocoboAi, s.coreTest, memberAi,
-         dryMember.primary == playerTwo ? L"PC2" : dryMember.primary ? L"other" : L"none", dryMember.answer,
+         KindName(s.kind), s.state, sticks[0], sticks[1], sticks[2], sticks[3], speed, s.oneCoreTest, who, chocoboSpeed, gap,
+         s.ridden, s.chocoboAi, s.coreTest, who, memberAi, who,
+         dryMember.primary == seatController ? L"their controller" : dryMember.primary ? L"other" : L"none", dryMember.answer,
          dryChocobo.answer, RowsText(s.oneRows));
 }
 
-/// For the first seconds after player 2's chocobo is ridden, four lines a second: its speed, its distance to player 1's
+/// For the first seconds after a seat's chocobo is ridden, four lines a second: its speed, its distance to player 1's
 /// ride body and how fast that distance closes (the homing at a ride's start), who controls it and its AI state.
-void LogStartTrace(const Sample& s)
+void LogStartTrace(int seat, SeatWatch& w, const Sample& s)
 {
-    const auto now = Clock::now();
-    if (s.ridden != 0 && g_last.ridden == 0)
+    const wchar_t* who = players::SeatName(seat);
+    const auto     now = Clock::now();
+    if (s.ridden != 0 && w.last.ridden == 0)
     {
-        g_traceUntil = now + kTraceFor;
-        g_lastTrace  = {};
-        g_traceGap   = -1.0f;
-        Line(L"start trace: player 2's chocobo ridden; tracing it for {} s", kTraceFor.count());
+        w.traceUntil = now + kTraceFor;
+        w.lastTrace  = {};
+        w.traceGap   = -1.0f;
+        Line(L"start trace: {}'s chocobo ridden; tracing it for {} s", who, kTraceFor.count());
     }
-    if (now >= g_traceUntil || now - g_lastTrace < kTraceEvery || s.chocobo == nullptr)
+    if (now >= w.traceUntil || now - w.lastTrace < kTraceEvery || s.chocobo == nullptr)
     {
         return;
     }
-    const float seconds = g_lastTrace == Clock::time_point{} ? 0.0f : std::chrono::duration<float>(now - g_lastTrace).count();
-    g_lastTrace         = now;
-    float two[3]{}, one[3]{};
-    const bool twoRead = world::charapop::ActorLocation(const_cast<void*>(s.chocobo), two);
+    const float seconds = w.lastTrace == Clock::time_point{} ? 0.0f : std::chrono::duration<float>(now - w.lastTrace).count();
+    w.lastTrace         = now;
+    float at[3]{}, one[3]{};
+    const bool read    = world::charapop::ActorLocation(const_cast<void*>(s.chocobo), at);
     const bool oneRead = s.body != nullptr && world::charapop::ActorLocation(const_cast<void*>(s.body), one);
-    const float gap    = twoRead && oneRead ? world::charapop::Distance(two, one) / 100.0f : -1.0f;
-    const float speed  = twoRead && seconds > 0.0f ? world::charapop::Distance(two, g_traceAt) / 100.0f / seconds : -1.0f;
-    const float closing = gap >= 0.0f && g_traceGap >= 0.0f && seconds > 0.0f ? (g_traceGap - gap) / seconds : 0.0f;
+    const float gap    = read && oneRead ? world::charapop::Distance(at, one) / 100.0f : -1.0f;
+    const float speed  = read && seconds > 0.0f ? world::charapop::Distance(at, w.traceAt) / 100.0f / seconds : -1.0f;
+    const float closing = gap >= 0.0f && w.traceGap >= 0.0f && seconds > 0.0f ? (w.traceGap - gap) / seconds : 0.0f;
     for (int i = 0; i < 3; ++i)
     {
-        g_traceAt[i] = two[i];
+        w.traceAt[i] = at[i];
     }
-    g_traceGap = gap;
-    Line(L"start trace: player 2's chocobo {:.1f} m/s, {:.1f} m from player 1's ride body (closing {:+.1f} m/s); "
-         L"controller {}, AI state {}, ridden {}; player 2's coordinator {}",
-         speed, gap, closing, players::Who(s.chocoboEffective), s.chocoboAi, s.ridden, s.twoVehicle);
+    w.traceGap = gap;
+    Line(L"start trace: {}'s chocobo {:.1f} m/s, {:.1f} m from player 1's ride body (closing {:+.1f} m/s); "
+         L"controller {}, AI state {}, ridden {}; {}'s coordinator {}",
+         who, speed, gap, closing, players::Who(s.chocoboEffective), s.chocoboAi, s.ridden, who, s.seatVehicle);
 }
 
 void Run()
@@ -545,32 +565,34 @@ void Run()
     g_kind      = kind;
     g_state     = state;
     g_kindKnown = true;
-    if (!platform::Enabled(platform::Level::Debug))
+    for (int seat = 1; seat < players::kMaxPlayers; ++seat)
     {
-        // The rest is Debug (and Trace): nothing is sampled below that level.
-        g_logged     = false;
-        g_oneAtValid = false;
-        g_twoAtValid = false;
-        return;
-    }
-    void* playerTwo = players::generation::PlayerTwoController();
-    void* member    = players::generation::Member();
-    const Sample s  = Read(playerOne, playerTwo, member);
-    LogStartTrace(s);  // before g_last moves on: it starts on the ridden edge
-    if (!g_logged || !(Steady(s) == Steady(g_last)))
-    {
-        LogSample(s);
-        g_last   = s;
-        g_logged = true;
-    }
-    if (s.kind != Kind::None || s.ridden != 0)
-    {
-        LogSnapshot(s, member, playerTwo);
-    }
-    else
-    {
-        g_oneAtValid = false;
-        g_twoAtValid = false;
+        SeatWatch& w = g_watch[seat];
+        // The rest is Debug (and Trace): nothing is sampled below that level, nor for a seat whose player is out.
+        if (!platform::Enabled(platform::Level::Debug) || !players::generation::Active(seat))
+        {
+            w.Forget();
+            continue;
+        }
+        void* seatController = players::generation::ControllerOf(seat);
+        void* member         = players::generation::MemberOf(seat);
+        const Sample s       = Read(playerOne, seatController, member);
+        LogStartTrace(seat, w, s);  // before the last sample moves on: it starts on the ridden edge
+        if (!w.logged || !(Steady(s) == Steady(w.last)))
+        {
+            LogSample(seat, s);
+            w.last   = s;
+            w.logged = true;
+        }
+        if (s.kind != Kind::None || s.ridden != 0)
+        {
+            LogSnapshot(seat, w, s, member, seatController);
+        }
+        else
+        {
+            w.oneAtValid = false;
+            w.seatAtValid = false;
+        }
     }
 }
 
@@ -604,7 +626,7 @@ bool Install(const platform::GameImage& image) noexcept
     g_inBattle            = battle ? reinterpret_cast<GlobalTestFn>(*battle) : nullptr;
     g_installed      = g_gameRoot != 0 && g_input != 0 && g_isCore != nullptr && vtsFound && g_chocoboMoveVt != 0 &&
                   scopes::leader_scope::Installed();
-    platform::Log(L"ride watch: {}", g_installed ? L"installed (chocobo and buggy rides logged while player 2 is in; read-only)"
+    platform::Log(L"ride watch: {}", g_installed ? L"installed (chocobo and buggy rides logged while player 2 or 3 is in; read-only)"
                                                  : L"UNAVAILABLE (a check failed)");
     return g_installed;
 }
@@ -615,12 +637,13 @@ void Tick() noexcept
     {
         return;
     }
-    if (!players::generation::Active())
+    if (!players::generation::AnyActive())
     {
-        g_kindKnown  = false;
-        g_logged     = false;
-        g_oneAtValid = false;
-        g_twoAtValid = false;
+        g_kindKnown = false;
+        for (SeatWatch& w : g_watch)
+        {
+            w.Forget();
+        }
         return;
     }
     if (++g_ticks % kEvery != 0)

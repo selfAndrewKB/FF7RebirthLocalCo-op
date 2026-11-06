@@ -119,9 +119,10 @@ struct Snapshot
     std::int32_t free        = 0;
     std::int32_t ridden      = 0;
     std::int32_t excluded    = 0;
-    const void*  twoCoord    = nullptr;  // player 2's key-4 coordinator
-    const void*  member      = nullptr;
-    std::int32_t memberType  = -1;
+    // By seat (index 0 unused): the seat's key-4 coordinator, its member and the member's player type (-1: none).
+    const void*  seatCoord[players::kMaxPlayers]  = {};
+    const void*  member[players::kMaxPlayers]     = {};
+    std::int32_t memberType[players::kMaxPlayers] = {};
     std::int32_t onOff[6]    = {};
 
     bool operator==(const Snapshot&) const = default;
@@ -160,17 +161,26 @@ float DistanceMetres(void* a, void* b) noexcept
                : -1.0f;
 }
 
-Snapshot Read(float& nearestFree)
+/// `nearestFree[seat]`: metres from the seat's member to the nearest free scooter (-1: none or unread).
+Snapshot Read(float (&nearestFree)[players::kMaxPlayers])
 {
     Snapshot s;
-    nearestFree           = -1.0f;
     void*       playerOne = players::generation::PlayerOneController();
     const void* coord     = ScooterCoordinatorOf(playerOne);
-    s.twoCoord            = ScooterCoordinatorOf(players::generation::PlayerTwoController());
-    s.member              = players::generation::Member();
-    if (const auto type = s.member != nullptr ? session::party_member::PlayerTypeOf(s.member) : std::nullopt)
+    for (int seat = 1; seat < players::kMaxPlayers; ++seat)
     {
-        s.memberType = *type;
+        nearestFree[seat]  = -1.0f;
+        s.memberType[seat] = -1;
+        if (!players::generation::Active(seat))
+        {
+            continue;
+        }
+        s.seatCoord[seat] = ScooterCoordinatorOf(players::generation::ControllerOf(seat));
+        s.member[seat]    = players::generation::MemberOf(seat);
+        if (const auto type = s.member[seat] != nullptr ? session::party_member::PlayerTypeOf(s.member[seat]) : std::nullopt)
+        {
+            s.memberType[seat] = *type;
+        }
     }
     const void* root  = ReadPointer(reinterpret_cast<const void*>(g_gameRoot), 0);
     const void* onOff = ReadPointer(root, kRootGameState);
@@ -221,10 +231,13 @@ Snapshot Read(float& nearestFree)
                 continue;
             }
             ++s.free;
-            const float metres = DistanceMetres(const_cast<void*>(s.member), scooter);
-            if (metres >= 0.0f && (nearestFree < 0.0f || metres < nearestFree))
+            for (int seat = 1; seat < players::kMaxPlayers; ++seat)
             {
-                nearestFree = metres;
+                const float metres = DistanceMetres(const_cast<void*>(s.member[seat]), scooter);
+                if (metres >= 0.0f && (nearestFree[seat] < 0.0f || metres < nearestFree[seat]))
+                {
+                    nearestFree[seat] = metres;
+                }
             }
         }
     }
@@ -261,29 +274,45 @@ const wchar_t* AnimSetOf(std::int32_t type) noexcept
                                                                                       : L"has no Wheelie anim set";
 }
 
-void LogSnapshot(const Snapshot& s, float nearestFree)
+void LogSnapshot(const Snapshot& s, const float (&nearestFree)[players::kMaxPlayers])
 {
+    // Each seat whose player is in: its coordinator, its member, and (with player 1's coordinator) the nearest free
+    // scooter.
+    std::wstring seats;
+    for (int seat = 1; seat < players::kMaxPlayers; ++seat)
+    {
+        if (!players::generation::Active(seat))
+        {
+            continue;
+        }
+        const wchar_t* who = players::SeatName(seat);
+        if (!s.found)
+        {
+            seats += std::format(L"; {}'s {}", who, s.seatCoord[seat] != nullptr ? L"exists" : L"none");
+            continue;
+        }
+        seats += std::format(L"; {}'s coordinator {}; {}'s member {} (type {}, {}), nearest free scooter {}", who,
+                             s.seatCoord[seat] != nullptr ? players::NameOf(s.seatCoord[seat]) : std::wstring{L"none"}, who,
+                             players::NameOf(s.member[seat]), s.memberType[seat], AnimSetOf(s.memberType[seat]),
+                             nearestFree[seat] >= 0.0f ? std::format(L"{:.1f} m", nearestFree[seat])
+                                                       : std::wstring{L"(none or unread)"});
+    }
     if (!s.found)
     {
-        platform::Log(L"wheelie watch: player 1 has no scooter coordinator (no parked Wheelie registered here); player 2's {}; "
+        platform::Log(L"wheelie watch: player 1 has no scooter coordinator (no parked Wheelie registered here){}; "
                       L"on/off 152/136/4 {}/{}/{} (alt {}/{}/{})",
-                      s.twoCoord != nullptr ? L"exists" : L"none", s.onOff[0], s.onOff[1], s.onOff[2], s.onOff[3],
-                      s.onOff[4], s.onOff[5]);
+                      seats, s.onOff[0], s.onOff[1], s.onOff[2], s.onOff[3], s.onOff[4], s.onOff[5]);
         return;
     }
     platform::Log(L"wheelie watch: player 1's coordinator {} state {} ({}), scooter {} rider {}; scripted {} minigame {} UI {} "
                   L"instant {} getoff-instant {} enabled {} disabled {}; shared: {} scooters, requested {} idle {} "
                   L"parking {} colours {:#04x}; "
-                  L"scooters free {}, ridden {}, excluded {}; nearest free to player 2's member {}; rider table state {} "
-                  L"num {} named {}; player 2's coordinator {}; player 2's member {} (type {}, {}); on/off 152/136/4 "
+                  L"scooters free {}, ridden {}, excluded {}; rider table state {} num {} named {}{}; on/off 152/136/4 "
                   L"{}/{}/{} (alt {}/{}/{})",
                   s.active ? L"ACTIVE" : L"idle", s.state, StateName(s.state), players::NameOf(s.scooter), players::NameOf(s.rider),
                   s.flags[0], s.flags[1], s.flags[2], s.flags[3], s.flags[4], s.flags[5], s.flags[6], s.listNum, s.shared[0], s.shared[1],
-                  s.shared[2], s.shared[3], s.free, s.ridden, s.excluded,
-                  nearestFree >= 0.0f ? std::format(L"{:.1f} m", nearestFree) : std::wstring{L"(none or unread)"},
-                  s.tableState, s.tableNum, s.tableNamed, s.twoCoord != nullptr ? players::NameOf(s.twoCoord) : std::wstring{L"none"},
-                  players::NameOf(s.member), s.memberType, AnimSetOf(s.memberType), s.onOff[0], s.onOff[1], s.onOff[2], s.onOff[3],
-                  s.onOff[4], s.onOff[5]);
+                  s.shared[2], s.shared[3], s.free, s.ridden, s.excluded, s.tableState, s.tableNum, s.tableNamed, seats,
+                  s.onOff[0], s.onOff[1], s.onOff[2], s.onOff[3], s.onOff[4], s.onOff[5]);
 }
 
 /// While player 1 rides: the triggers the scooter reads, each pad's own, and what player 1's scooter made of them.
@@ -302,24 +331,36 @@ void LogRiding(const Snapshot& s)
         merged[2] = ReadField<float>(input, kInputCatchOther);
         merged[3] = ReadField<float>(input, kInputAccelOther);
     }
-    float      padOne[2]{}, padTwo[2]{};
-    const bool one    = input::pad_sticks::PadTriggers(0, padOne[0], padOne[1]);
-    const bool two    = input::pad_sticks::PadTriggers(1, padTwo[0], padTwo[1]);
-    const auto pair   = [](bool read, const float (&value)[2]) {
-        return read ? std::format(L"LT {:.2f} RT {:.2f}", value[0], value[1]) : std::wstring{L"unread"};
-    };
+    std::wstring pads;  // player 1's pad, and the pad of each seat whose player is in
+    for (int p = 0; p < players::kMaxPlayers; ++p)
+    {
+        if (p != 0 && !players::generation::Active(p))
+        {
+            continue;
+        }
+        // The pad by its controller id (player 1's is 0; a seat's is read from its controller).
+        const std::int32_t id = p == 0 ? 0 : input::pad_sticks::ControllerIdOf(players::generation::ControllerOf(p));
+        if (id < 0)
+        {
+            continue;
+        }
+        float      value[2]{};
+        const bool read = input::pad_sticks::PadTriggers(id, value[0], value[1]);
+        pads += std::format(L"{}pad {} {}", pads.empty() ? L"" : L", ", id + 1,
+                            read ? std::format(L"LT {:.2f} RT {:.2f}", value[0], value[1]) : std::wstring{L"unread"});
+    }
     const void* holder = ReadPointer(s.scooter, kCharacterControlHolder);
-    platform::LogDebug(L"wheelie watch: riding: merged triggers catch {:.2f} accel {:.2f} (other {:.2f}/{:.2f}); pad 1 {}, "
-                       L"pad 2 {}; player 1's scooter accel {:.2f} brake {:.2f}",
-                       merged[0], merged[1], merged[2], merged[3], pair(one, padOne), pair(two, padTwo),
+    platform::LogDebug(L"wheelie watch: riding: merged triggers catch {:.2f} accel {:.2f} (other {:.2f}/{:.2f}); {}; "
+                       L"player 1's scooter accel {:.2f} brake {:.2f}",
+                       merged[0], merged[1], merged[2], merged[3], pads,
                        holder != nullptr ? ReadField<float>(holder, kHolderAccel) : -1.0f,
                        holder != nullptr ? ReadField<float>(holder, kHolderBrake) : -1.0f);
 }
 
 void Run()
 {
-    float          nearestFree = -1.0f;
-    const Snapshot s           = Read(nearestFree);
+    float          nearestFree[players::kMaxPlayers]{};
+    const Snapshot s = Read(nearestFree);
     if (!g_logged || !(s == g_last))
     {
         LogSnapshot(s, nearestFree);
@@ -345,7 +386,7 @@ bool Install(const platform::GameImage& image) noexcept
     g_gameRoot         = root ? *root : 0;
     g_input            = input ? *input : 0;
     const bool ok      = g_coordVt != 0 && g_scooterVt != 0 && g_gameRoot != 0 && g_input != 0 && players::weak_object::Known();
-    platform::Log(L"wheelie watch: {}", ok ? L"installed (the Wheelie system logged while player 2 is in; read-only)"
+    platform::Log(L"wheelie watch: {}", ok ? L"installed (the Wheelie system logged while player 2 or 3 is in; read-only)"
                                            : L"UNAVAILABLE (a check failed)");
     if (!ok)
     {
@@ -360,7 +401,7 @@ void Tick() noexcept
     {
         return;
     }
-    if (!players::generation::Active())
+    if (!players::generation::AnyActive())
     {
         g_logged      = false;
         g_ridingReads = 0;
