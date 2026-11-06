@@ -257,7 +257,7 @@ bool Install(const platform::GameImage& image) noexcept
 {
     if (!scopes::leader_answer::Replaced() || !equal_targeting::Installed())
     {
-        platform::Log(L"player hits: UNAVAILABLE (the leader-test slot or equal targeting is not in place); player 2's "
+        platform::Log(L"player hits: UNAVAILABLE (the leader-test slot or equal targeting is not in place); the further players' "
                       L"hits count as an AI ally's");
         return false;
     }
@@ -294,11 +294,11 @@ bool Install(const platform::GameImage& image) noexcept
     if (slots == 0 && !senses && !takes)
     {
         g_on.store(false, std::memory_order_release);
-        platform::Log(L"player hits: UNAVAILABLE (no damage slot or reaction call could be changed); player 2's hits "
+        platform::Log(L"player hits: UNAVAILABLE (no damage slot or reaction call could be changed); the further players' hits "
                       L"count as an AI ally's");
         return false;
     }
-    platform::Log(L"player hits: player 2's hits and the hits player 2 takes count as the player's ({} of {} damage "
+    platform::Log(L"player hits: the further players' hits and the hits they take count as the player's ({} of {} damage "
                   L"slots); summon gauge at the player's rate {}; reaction sensing {}",
                   slots, kSlots, gauge ? L"on" : L"UNAVAILABLE (the leader read differs)",
                   senses && takes ? L"on" : (senses || takes ? L"partly on" : L"UNAVAILABLE"));

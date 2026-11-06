@@ -1393,15 +1393,15 @@ void Install(const platform::GameImage& image) noexcept
                                    reinterpret_cast<std::uintptr_t>(&RequestVisibility));
     }
     platform::Log(L"field pickup: {}; the screen test {}; marker widgets {}",
-                  g_ready ? L"ready (player 2 picks up collectibles and materials, opens chests, uses vending machines and shopkeepers "
+                  g_ready ? L"ready (a further player picks up collectibles and materials, opens chests, uses vending machines and shopkeepers "
                             L"through the game's own field prompts, a second pass of its selection and press)"
                   : resets ? L"UNAVAILABLE (a hook is not what the research read: the update's call, the mark's entry or the grant's call)"
                            : L"UNAVAILABLE (a check failed: the root, the UI system, a function or a field reset's call site)",
-                  screen ? L"sees player 2's view in player 2's pass"
-                         : L"is NOT redirected (the request's entry is not what the research read): player 2's offers follow "
+                  screen ? L"sees a further player's view in that player's pass"
+                         : L"is NOT redirected (the request's entry is not what the research read): the further players' offers follow "
                            L"player 1's screen",
-                  g_destroy != nullptr ? L"per player (each point's widget swapped too; player 2's destroyed by the game's own call)"
-                                       : L"SHARED (the game's destroy is not what the research read): both players write one "
+                  g_destroy != nullptr ? L"per player (each point's widget swapped too; a further player's destroyed by the game's own call)"
+                                       : L"SHARED (the game's destroy is not what the research read): every player writes one "
                                          L"widget per point");
 }
 

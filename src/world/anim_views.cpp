@@ -527,8 +527,8 @@ void Install(const platform::GameImage& image) noexcept
     if (!world || !cls || !iface || !meas || grow == 0 || !growMapped || grow != *growMapped ||
         g_items.capacity() < 4096)
     {
-        platform::Log(L"anim two views: NOT installed (a function, global or the game's grow call differs); characters "
-                      L"near player 2 keep player 1's camera's animation rate");
+        platform::Log(L"anim views: NOT installed (a function, global or the game's grow call differs); characters "
+                      L"near a further player keep player 1's camera's animation rate");
         return;
     }
     g_worldGlobal = *world;
@@ -562,9 +562,9 @@ void Install(const platform::GameImage& image) noexcept
             g_measure = reinterpret_cast<MeasureFn>(g_measureEntry.Original());
         }
     }
-    platform::Log(L"anim two views: {}; at tick time, {}",
-                  eval ? L"characters near player 2 animate by the nearer of the two cameras (the game's own pair list)"
-                       : L"NOT installed (a call differs); characters near player 2 keep player 1's camera's rate",
+    platform::Log(L"anim views: {}; at tick time, {}",
+                  eval ? L"characters near a further player animate by the nearest camera (the game's own pair list)"
+                       : L"NOT installed (a call differs); characters near a further player keep player 1's camera's rate",
                   tickTime ? L"meshes refresh their bones and bone physics by the nearer camera too"
                            : L"bone refresh and bone physics STILL follow player 1's camera (the measure differs)");
 }
@@ -573,13 +573,13 @@ void Remove() noexcept
 {
     if (g_measureEntry.IsInstalled() && !g_measureEntry.Restore())
     {
-        platform::Log(L"anim two views: the measure was changed after us; left in place (it passes through)");
+        platform::Log(L"anim views: the measure was changed after us; left in place (it passes through)");
     }
     for (platform::CallRedirect* redirect : {&g_evalCall, &g_clearCall})
     {
         if (redirect->IsInstalled() && !redirect->Restore())
         {
-            platform::Log(L"anim two views: a call was changed after us; left in place (it passes through)");
+            platform::Log(L"anim views: a call was changed after us; left in place (it passes through)");
         }
     }
 }
@@ -640,7 +640,7 @@ void Tick(bool splitShown) noexcept
     {
         const double frames = g_counts.frames != 0 ? g_counts.frames : 1;
         const wchar_t* const who = players::kSeatsBuilt == 1 ? L"player 2" : L"the further players";
-        platform::LogDebug(L"anim two views ({} s): {} frame(s) with {}'s pairs ({} skipped; {} evaluation(s), {} "
+        platform::LogDebug(L"anim views ({} s): {} frame(s) with {}'s pairs ({} skipped; {} evaluation(s), {} "
                            L"refill(s) of the game's lists, the refill's frame lagging {:.2f} on average); per frame {:.0f} "
                            L"registered actor(s), {:.0f} near {}'s camera, {:.0f} pair(s) added; {:.3f} ms per frame "
                            L"(worst {:.3f})",

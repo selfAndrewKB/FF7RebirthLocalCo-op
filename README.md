@@ -26,9 +26,9 @@ each player's view showing their own HUD. None of this needs a key.
 | Ctrl+F5 | Top/bottom or side by side |
 | Ctrl+F4 | Halves filled, or 16:9 halves with bars |
 | Ctrl+F6 | For testing: the further players' views show player 1's camera |
-| Ctrl+F9 | For testing: every pad drives both players' sticks (the game's merge) |
-| Ctrl+F10 | For comparison: the NPC population follows the leader alone instead of both players |
-| Ctrl+F11 | For comparison: characters near player 2 take their detail from player 1's camera alone |
+| Ctrl+F9 | For testing: every pad drives every player's sticks (the game's merge) |
+| Ctrl+F10 | For comparison: the NPC population follows the leader alone instead of every player |
+| Ctrl+F11 | For comparison: characters near a further player take their detail from player 1's camera alone |
 | Ctrl+F3 | The three-player monitor mode on and off: the window across a row of three monitors, player 1's picture in every column no player has |
 | Ctrl+F2 | The game window across its row of monitors, and back |
 
@@ -46,9 +46,9 @@ A file in the mod's folder keeps the game's behaviour:
 | Change | When | Keep the game's way |
 |--------|------|---------------------|
 | D3D12 residency manager off (one GPU wait per submission less) | whole session | `residency_on.txt` |
-| GPU frame-time gap recorder off (timing method 1 for dynamic resolution) | player 2 in | — |
-| Parallel passes without their own GPU submission | player 2 in | `submit_hints_on.txt` |
-| Player 2's duplicate scenery-streaming work skipped | player 2 in | `stream-feedback each` (control) |
+| GPU frame-time gap recorder off (timing method 1 for dynamic resolution) | a further player in | — |
+| Parallel passes without their own GPU submission | a further player in | `submit_hints_on.txt` |
+| The further players' duplicate scenery-streaming work skipped | a further player in | `stream-feedback each` (control) |
 | D3D12 async compute (measured slower; off) | opt-in | `async_compute_on.txt` turns it on |
 
 `watch_only.txt` runs the game unmodified for comparisons. `perf_log.txt` turns the perf log on from launch, and
@@ -75,9 +75,9 @@ src/
   world/         the world around each player: crowds, triggers, pickups, shops
   rides/         chocobos, the wheelie and the shared rides
   views/         the view points, the whole-screen states, the streaming views, the columns and mirror views, the window span
-  hud/           the HUD in each half, by system: passes/ (player 2's HUD image), layout/ (the band), minimap/, field/
-                 (prompt rows, markers, pins), battle/ (targets, gauges, popups); the roots, the live widgets, the
-                 pure rules and the dev dumps at the root
+  hud/           the HUD in each view, by system: passes/ (the further players' HUD images), layout/ (the band),
+                 minimap/, field/ (prompt rows, markers, pins), battle/ (targets, gauges, popups); the roots, the
+                 live widgets, the pure rules and the dev dumps at the root
   renderer/      one view family per player, and the renderer's performance levers
   control/       the console: the command language, the runner and the socket (built with the dev tools)
   dev/           the dev tools: the console's install, the watches' install and ticks

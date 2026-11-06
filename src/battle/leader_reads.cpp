@@ -601,7 +601,7 @@ bool Install(const platform::GameImage& image) noexcept
     }
     g_on.store(on != 0, std::memory_order_release);
     platform::Log(L"leader reads: {} of {} enemy leader reads follow the enemy's coin (combinations, damage-phase "
-                  L"reactions, the reaction player-type filter: both players count, Reno's mines, Crimson Mare's arms)",
+                  L"reactions, the reaction player-type filter: every player counts, Reno's mines, Crimson Mare's arms)",
                   on, static_cast<std::size_t>(kItems));
     return on != 0;
 }

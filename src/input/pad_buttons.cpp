@@ -712,7 +712,7 @@ void InstallExtraKeyCalls() noexcept
     }
     if (late != 0)
     {
-        platform::Log(L"buttons: pad 2's presses kept from menus and prompts at {} of {} more dispatch call(s) (crossing a "
+        platform::Log(L"buttons: the further pads' presses kept from menus and prompts at {} of {} more dispatch call(s) (crossing a "
                       L"block; changed from the game thread)",
                       lateCalls, late);
     }
@@ -725,7 +725,7 @@ void InstallExtraKeyCalls() noexcept
                      ? 1
                      : 0;
     }
-    platform::Log(L"buttons: pad 2's extra keys (the shortcut keys) take the same route at {} of {} extra-key calls",
+    platform::Log(L"buttons: the further pads' extra keys (the shortcut keys) take the same route at {} of {} extra-key calls",
                   calls, g_extraKeyCalls.size());
 }
 
@@ -807,7 +807,7 @@ bool Install(const platform::GameImage& image) noexcept
     }
     const auto late = std::count_if(g_lateActionDownSites.begin(), g_lateActionDownSites.end(),
                                     [](std::uintptr_t site) { return site != 0; });
-    platform::Log(L"buttons: pad 2's presses kept from menus and prompts at {} of {} dispatch calls{}", calls,
+    platform::Log(L"buttons: the further pads' presses kept from menus and prompts at {} of {} dispatch calls{}", calls,
                   kActionDownCalls.size(),
                   late != 0 ? std::format(L" ({} more from the first input tick: crossing a block)", late) : std::wstring());
     return true;
@@ -840,7 +840,7 @@ void Remove() noexcept
     {
         if (call.IsInstalled() && (!gameThread || !call.Restore()))
         {
-            platform::Log(L"buttons: an extra-key call left in place ({}); it passes presses through with player 2 out",
+            platform::Log(L"buttons: an extra-key call left in place ({}); it passes presses through with the further players out",
                           gameThread ? L"changed after us" : L"removed off the game thread");
         }
     }
@@ -908,7 +908,7 @@ ButtonScope::~ButtonScope()
 void SetMask(unsigned mask) noexcept
 {
     g_mask.store(mask, std::memory_order_relaxed);
-    platform::Log(L"buttons: mask {} (split views {}, pad 2 kept from menus and prompts {})", mask, Acts(kPartViews),
+    platform::Log(L"buttons: mask {} (split views {}, the further pads kept from menus and prompts {})", mask, Acts(kPartViews),
                   Acts(kPartEvents));
 }
 
@@ -951,7 +951,7 @@ void RegisterCommands()
     control::Register({.name  = L"buttons-mask",
                        .shape = control::Shape::Integer,
                        .max   = 3,
-                       .help  = L"diagnosis: which parts of per-pad buttons act (1 the split views, 2 pad 2 kept from "
+                       .help  = L"diagnosis: which parts of per-pad buttons act (1 the split views, 2 the further pads kept from "
                                 L"menus and prompts; the pause menu for every pad needs 1); both at start",
                        .set   = [](const Value& v) {
                            SetMask(static_cast<unsigned>(std::get<std::int64_t>(v)));

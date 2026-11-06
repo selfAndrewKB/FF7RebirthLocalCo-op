@@ -158,7 +158,7 @@ bool Install(const platform::GameImage& image) noexcept
                         g_summonCall.Install(*site, *target, reinterpret_cast<std::uintptr_t>(&SummonBody));
     platform::Log(L"scope leaks: clock {}, leader transform {}, field summons {}",
                   g_frames != nullptr ? L"put back" : L"UNAVAILABLE (bytes differ)",
-                  g_leader != nullptr ? L"put back" : L"UNAVAILABLE", summon ? L"skipped for player 2" : L"UNAVAILABLE");
+                  g_leader != nullptr ? L"put back" : L"UNAVAILABLE", summon ? L"skipped for the further players" : L"UNAVAILABLE");
     return g_frames != nullptr || g_leader != nullptr || summon;
 }
 
@@ -295,8 +295,8 @@ void LogStatus() noexcept
 {
     const Counts counts = g_counts;
     g_counts            = {};
-    platform::Log(L"  scope leaks (mask {}{}): player 2's member's tick advanced the clock {} time(s), put back {} ({} "
-                  L"inexact, {} advanced past the guard); player 2's input rewrote the leader transform {} time(s), put "
+    platform::Log(L"  scope leaks (mask {}{}): the further players' members' ticks advanced the clock {} time(s), put back {} ({} "
+                  L"inexact, {} advanced past the guard); their input rewrote the leader transform {} time(s), put "
                   L"back {}; field summons skipped {} time(s)",
                   g_mask.load(std::memory_order_relaxed), Unavailable(), counts.clockAdvanced, counts.clockPutBack,
                   counts.clockInexact, counts.clockMissed, counts.leaderRewrites, counts.leaderPutBack, counts.summonSkips);
@@ -311,7 +311,7 @@ void RegisterCommands()
     control::Register({.name  = L"leak-fixes",
                        .shape = control::Shape::Integer,
                        .max   = 7,
-                       .help  = L"diagnosis: which put-backs of player 2's scope leaks act (1 the input clock, 2 the "
+                       .help  = L"diagnosis: which put-backs of the further players' scope leaks act (1 the input clock, 2 the "
                                 L"leader transform, 4 field summons skipped); all at start",
                        .set   = [](const Value& v) {
                            SetMask(static_cast<unsigned>(std::get<std::int64_t>(v)));

@@ -84,7 +84,7 @@ Sites g_sites;
 /// A line under the command menu's name: the follow is its.
 void Line(const std::wstring& text) noexcept
 {
-    platform::Log(L"command menu two: {}", text);
+    platform::Log(L"command menu: {}", text);
 }
 
 /// The seat whose controller `controller` is, or -1 (the game's).
@@ -148,7 +148,7 @@ void FollowShortcuts(std::uintptr_t source, std::uintptr_t target, std::wstring_
     {
         ++g_shortcutLines;
         const auto source0 = ids(source, 0), source1 = ids(source, 1), after0 = ids(target, 0), after1 = ids(target, 1);
-        platform::LogDebug(L"command menu two: {}'s shortcut tables rebuilt too ({}, from 0x{:X}): row {}: the rebuilt "
+        platform::LogDebug(L"command menu: {}'s shortcut tables rebuilt too ({}, from 0x{:X}): row {}: the rebuilt "
                            L"one {} {} (was {}), the other {} {} (match: {}); +0x280={}",
                            whose, why, g_image ? g_image->ResearchAddress(caller) : caller, row, after0, after1,
                            before, source0,
@@ -278,7 +278,7 @@ void Place(const platform::GameImage& image, platform::DeferredSites& placement)
     const Sites& s = g_sites;
     if (g_ctrlShortcuts == nullptr || s.rebuildShortcuts == 0)
     {
-        platform::Log(L"command menu two: the further players' shortcut tables do NOT follow the game's rebuilds (a "
+        platform::Log(L"command menu: the further players' shortcut tables do NOT follow the game's rebuilds (a "
                       L"check failed); they change at the next Members panel rebuild");
         return;
     }
@@ -293,7 +293,7 @@ void Place(const platform::GameImage& image, platform::DeferredSites& placement)
     const bool items = s.itemAt != 0 &&
                        Redirect(placement, g_itemShortcutsCall, s.itemAt,
                                 reinterpret_cast<std::uintptr_t>(g_ctrlShortcuts), &ItemShortcutsCall);
-    platform::Log(L"command menu two: the shortcut tables follow the game's rebuilds: menus and character events {}, the "
+    platform::Log(L"command menu: the shortcut tables follow the game's rebuilds: menus and character events {}, the "
                   L"status menu's inlined one {}, item use {} (logged at Debug)",
                   menus ? L"yes" : L"NO", platform::RunningBuild() == platform::BuildIndex::V1005 ? L"(1.005 calls the wrapper)"
                                                                                                  : (status ? L"yes" : L"NO"),
@@ -309,13 +309,13 @@ void Remove() noexcept
 {
     if (g_rebuildShortcuts.IsInstalled() && !g_rebuildShortcuts.Restore())
     {
-        platform::Log(L"command menu two: the shortcut rebuild was changed after us; left in place (it passes through)");
+        platform::Log(L"command menu: the shortcut rebuild was changed after us; left in place (it passes through)");
     }
     for (auto* call : {&g_statusShortcutsCall, &g_itemShortcutsCall})
     {
         if (call->IsInstalled() && !call->Restore())
         {
-            platform::Log(L"command menu two: a call was changed after us; left in place (it passes through)");
+            platform::Log(L"command menu: a call was changed after us; left in place (it passes through)");
         }
     }
 }

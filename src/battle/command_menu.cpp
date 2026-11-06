@@ -197,7 +197,7 @@ SeatMenu& SeatOf(int seat) noexcept
     if (!warned)
     {
         warned = true;
-        platform::Log(L"command menu two: WARNING: a record was asked for seat {}, which does not exist; a scratch "
+        platform::Log(L"command menu: WARNING: a record was asked for seat {}, which does not exist; a scratch "
                       L"record answered",
                       seat);
     }
@@ -213,7 +213,7 @@ const wchar_t* Name(int seat) noexcept
 
 void Line(const std::wstring& text) noexcept
 {
-    platform::Log(L"command menu two: {}", text);
+    platform::Log(L"command menu: {}", text);
 }
 
 /// The world player 1's controller is in (the first outer of class UWorld; guarded reads), or null.
@@ -309,7 +309,7 @@ void ReplayLine(const std::wstring& text) noexcept
 {
     if (platform::Enabled(platform::Level::Debug))
     {
-        platform::LogDebug(L"command menu two: {}", text);
+        platform::LogDebug(L"command menu: {}", text);
     }
 }
 
@@ -582,7 +582,7 @@ void Watch(int seat) noexcept
     mine.logged     = now;
     mine.loggedOnce = true;
     const auto& b = now.bytes;
-    platform::LogDebug(L"command menu two: {}", std::format(L"members {} {} {} {} | menu {} (names this controller: {}) | 25C={} 258={} 777={} 783={} 5E1={} "
+    platform::LogDebug(L"command menu: {}", std::format(L"members {} {} {} {} | menu {} (names this controller: {}) | 25C={} 258={} 777={} 783={} 5E1={} "
                      L"540={} | {}'s focus: path {}, layers {}",
                      now.members[0], now.members[1], now.members[2], now.members[3], players::NameOf(now.widget),
                      players::YesNo(now.widgetNamesUs), b[0], b[1], b[2], b[3], b[4], b[5], Name(seat), now.context.pathCount,
@@ -635,7 +635,7 @@ bool PlaceSites(const platform::GameImage& image) noexcept
     {
         shortcut_follow::Place(image, g_placement);
     }
-    platform::Log(L"command menu two: {}", g_installed ? L"each further player's command controller is built once they "
+    platform::Log(L"command menu: {}", g_installed ? L"each further player's command controller is built once they "
                                                          L"play and follows the game's Setup, ResetAll and Members panel "
                                                          L"rebuild (logged)"
                                                        : kUnavailable);
@@ -683,7 +683,7 @@ bool Install(const platform::GameImage& image) noexcept
     }
     if (!g_installed)
     {
-        platform::Log(L"command menu two: {}", kUnavailable);
+        platform::Log(L"command menu: {}", kUnavailable);
         return false;
     }
     // A squad layout call crosses a 16-byte block in 1.005, and the rebuild's entry too: every site is placed from
@@ -695,7 +695,7 @@ bool Install(const platform::GameImage& image) noexcept
     const bool placed = g_placement.Install(image, &PlaceSites);
     if (g_placement.FromGameThread())
     {
-        platform::Log(L"command menu two: {}",
+        platform::Log(L"command menu: {}",
                       placed ? L"its calls are placed from the game thread (1.005: two cross a 16-byte block)"
                              : L"UNAVAILABLE (no room to place its calls from the game thread)");
     }
@@ -708,7 +708,7 @@ void Remove() noexcept
     g_placement.Cancel();  // a placement still queued does nothing
     if (g_refresh.IsInstalled() && !g_refresh.Restore())
     {
-        platform::Log(L"command menu two: the Members panel rebuild was changed after us; left in place (it passes through)");
+        platform::Log(L"command menu: the Members panel rebuild was changed after us; left in place (it passes through)");
     }
     shortcut_follow::Remove();
     for (auto* call : {&g_squadLayoutCalls[0], &g_squadLayoutCalls[1], &g_setupCall, &g_resetAllCall, &g_refreshTailCall,
@@ -716,7 +716,7 @@ void Remove() noexcept
     {
         if (call->IsInstalled() && !call->Restore())
         {
-            platform::Log(L"command menu two: a call was changed after us; left in place (it passes through)");
+            platform::Log(L"command menu: a call was changed after us; left in place (it passes through)");
         }
     }
 }

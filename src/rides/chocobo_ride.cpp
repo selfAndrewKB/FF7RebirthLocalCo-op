@@ -611,8 +611,8 @@ bool Install(const platform::GameImage& image) noexcept
                   g_fn.switchAi != nullptr && g_fn.chocoboFor != nullptr && facts::InBattleKnown() && g_gameRoot != 0 &&
                   g_vehicleKey != nullptr && g_coordVt != 0 && g_moveVt != 0 && g_componentVt != 0 && g_moduleVt != 0 &&
                   scopes::leader_scope::Installed();
-    platform::Log(L"chocobo ride: {}", g_installed ? L"installed (player 2 rides their own chocobo with their own coordinator)"
-                                                   : L"UNAVAILABLE (a check failed; player 2 stays a passenger)");
+    platform::Log(L"chocobo ride: {}", g_installed ? L"installed (a further player rides their own chocobo with their own coordinator)"
+                                                   : L"UNAVAILABLE (a check failed; the further players stay passengers)");
     return g_installed;
 }
 

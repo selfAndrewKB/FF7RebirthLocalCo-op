@@ -126,7 +126,7 @@ void Session::TogglePadSticks() noexcept
     }
     else
     {
-        Log(L"per-pad sticks OFF: every pad drives both players' sticks (the game's own merge)");
+        Log(L"per-pad sticks OFF: every pad drives every player's sticks (the game's own merge)");
     }
 }
 

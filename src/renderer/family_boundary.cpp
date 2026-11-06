@@ -226,7 +226,7 @@ bool InstallFamilyBoundary(const platform::GameImage& image) noexcept
     const auto list       = image.Rebase(kImmediateList, kImmediateListSize);
     if (!queue || !grow || !clearState || !submit || !vtable || !list || !slot || *slot != *submit)
     {
-        platform::Log(L"family boundary: UNAVAILABLE (a check failed); two families share the state cache as before");
+        platform::Log(L"family boundary: UNAVAILABLE (a check failed); the families share the state cache as before");
         return false;
     }
     if (!platform::PinThisModule())

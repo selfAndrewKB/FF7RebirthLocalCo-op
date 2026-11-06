@@ -286,7 +286,7 @@ bool Install(const platform::GameImage& image) noexcept
     const auto manager = platform::FindFunction(image, kManagerApply);
     if (!primary || !manager || !camera_access::Install(image))
     {
-        platform::Log(L"camera distance: UNAVAILABLE (a check failed); player 2's camera keeps the distance it started "
+        platform::Log(L"camera distance: UNAVAILABLE (a check failed); the further players' cameras keep the distance they started "
                       L"with");
         return false;
     }
@@ -296,7 +296,7 @@ bool Install(const platform::GameImage& image) noexcept
     const bool setter  = InstallSetter(image, *primary);
     const bool confirm = g_confirmCall.Install(image, kConfirmCall, *manager,
                                                reinterpret_cast<std::uintptr_t>(&ManagerApply));
-    platform::Log(L"camera distance: the Options distance reaches player 2's camera from the option setter {} and the "
+    platform::Log(L"camera distance: the Options distance reaches the further players' cameras from the option setter {} and the "
                   L"confirm key {}",
                   setter ? L"yes" : L"NO (check failed)", confirm ? L"yes" : L"NO (check failed)");
     platform::Log(L"framing: split framing through the per-camera-manager distance setter {} (top/bottom {:+}, side by side {:+} steps)",
@@ -334,9 +334,9 @@ void RegisterCommands()
                            .min   = -2,
                            .max   = 5,
                            .help  = layout == 0 ? L"field-camera distance steps added to the Options level while "
-                                                  L"player 2 is in and the screen splits top and bottom (0 at start)"
+                                                  L"a further player is in and the screen splits top and bottom (0 at start)"
                                                 : L"field-camera distance steps added to the Options level while "
-                                                  L"player 2 is in and the screen splits side by side (0 at start)",
+                                                  L"a further player is in and the screen splits side by side (0 at start)",
                            .set   = [layout](const Value& v) {
                                if (!FramingAvailable())
                                {
@@ -346,7 +346,7 @@ void RegisterCommands()
                                SetLayoutOffsets(layout == 0 ? steps : LayoutOffset(0),
                                                 layout == 1 ? steps : LayoutOffset(1));
                                return Outcome{true, L"each player's field camera follows the Options distance plus "
-                                                    L"the layout's steps while player 2 is in"};
+                                                    L"the layout's steps while a further player is in"};
                            },
                            .get = [layout] { return Value{std::int64_t{LayoutOffset(layout)}}; }});
     }

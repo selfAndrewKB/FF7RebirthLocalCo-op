@@ -106,7 +106,7 @@ constexpr const wchar_t* Describe(EndReason reason) noexcept
         case EndReason::Battle: return L"a battle started";
         case EndReason::ManagerEnded: return L"the ride manager ended her ride";
         case EndReason::Detached: return L"the member was detached";
-        case EndReason::LostPossession: return L"player 2's controller no longer holds the chocobo";
+        case EndReason::LostPossession: return L"the rider's controller no longer holds the chocobo";
     }
     return nullptr;
 }

@@ -242,8 +242,8 @@ bool Install(const platform::GameImage& image) noexcept
     g_coin.store(static_cast<std::uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count()),
                  std::memory_order_relaxed);
     g_on.store(true, std::memory_order_release);
-    platform::Log(L"equal targeting: Condition enemies (story bosses, summons, VR) count player 1's or player 2's "
-                  L"character as the player-controlled one, a coin per select when both can be targeted");
+    platform::Log(L"equal targeting: Condition enemies (story bosses, summons, VR) count player 1's or a further player's "
+                  L"character as the player-controlled one, a coin per select when more than one of them can be targeted");
     return true;
 }
 
@@ -325,7 +325,7 @@ void Tick() noexcept
     {
         if (types == kNoTypes)
         {
-            platform::LogDebug(L"equal targeting: no player 2 member; Condition enemies keep the game's own UCPC");
+            platform::LogDebug(L"equal targeting: no further player's member; Condition enemies keep the game's own UCPC");
         }
         else
         {

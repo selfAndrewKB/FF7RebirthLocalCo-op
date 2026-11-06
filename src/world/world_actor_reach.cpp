@@ -474,7 +474,7 @@ bool Install(const platform::GameImage& image) noexcept
     g_octreeVtable    = vtable && slots ? *vtable : 0;
     g_itemVtable      = items ? *items : 0;
     g_installed       = g_rootGlobal != 0 && g_octreeVtable != 0 && g_itemVtable != 0;
-    platform::Log(L"world actor reach: {}", g_installed ? L"installed (world actors such as chests pop around player 2 too, "
+    platform::Log(L"world actor reach: {}", g_installed ? L"installed (world actors such as chests pop around the further players too, "
                                                           L"with the NPC centre's switch)"
                                                         : L"UNAVAILABLE (a check failed; world actors pop around player 1 only)");
     return g_installed;

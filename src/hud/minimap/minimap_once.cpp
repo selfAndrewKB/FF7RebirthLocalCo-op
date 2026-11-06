@@ -81,13 +81,13 @@ bool Install(const platform::GameImage& image, platform::CodeRedirect& redirect,
     if (!site || !platform::FindFunction(image, widget.acquireCall) ||
         !platform::FindFunction(image, widget.submitCall))
     {
-        platform::Log(L"minimap once: the {}'s paint is not what the research read; its map renders in both passes",
+        platform::Log(L"minimap once: the {}'s paint is not what the research read; its map renders in every pass",
                       widget.name);
         return false;
     }
     if (!redirect.Install(*site, widget.siteBytes, code, *site + widget.siteBytes.size()))
     {
-        platform::Log(L"minimap once: the {}'s site could not be redirected; its map renders in both passes", widget.name);
+        platform::Log(L"minimap once: the {}'s site could not be redirected; its map renders in every pass", widget.name);
         return false;
     }
     return true;
@@ -100,7 +100,7 @@ bool InstallMinimapOnce(const platform::GameImage& image) noexcept
     // The installed code reads g_fields, which lives in this DLL: it must never unload while that code can run.
     if (!platform::PinThisModule())
     {
-        platform::Log(L"minimap once: this DLL could not be pinned; the minimap renders in both passes");
+        platform::Log(L"minimap once: this DLL could not be pinned; the minimap renders in every pass");
         return false;
     }
     const auto circleAfter  = platform::FindFunction(image, kCircle.afterSubmit);
@@ -114,7 +114,7 @@ bool InstallMinimapOnce(const platform::GameImage& image) noexcept
     g_on        = g_installed;
     if (g_installed)
     {
-        platform::Log(L"minimap once: installed (circle {}, octagon {}); player 2's HUD pass skips the minimap's own map "
+        platform::Log(L"minimap once: installed (circle {}, octagon {}); the further players' HUD passes skip the minimap's own map "
                       L"render, player 1's pass renders it once per frame",
                       circle ? L"yes" : L"no", octagon ? L"yes" : L"no");
     }
@@ -149,7 +149,7 @@ void SetMinimapOnce(bool on) noexcept
 {
     g_on = on && g_installed;
     platform::Log(L"minimap once: {}", g_on ? L"on (player 1's pass alone renders the map)"
-                                             : L"off (the map renders in both passes, as the game code runs)");
+                                             : L"off (the map renders in every pass, as the game code runs)");
 }
 
 bool MinimapOnceOn() noexcept
@@ -191,7 +191,7 @@ void PollMinimapOnce() noexcept
     if (platform::Enabled(platform::Level::Debug))
     {
         platform::LogDebug(L"minimap once ({}): in the last period the circle's map rendered {} and skipped {} times, the "
-                           L"octagon's rendered {} and skipped {}; player 2's HUD passes {}",
+                           L"octagon's rendered {} and skipped {}; the further players' HUD passes {}",
                            g_on ? L"on" : L"off", counts[0] - g_logged[0], counts[1] - g_logged[1],
                            counts[2] - g_logged[2], counts[3] - g_logged[3], counts[4] - g_logged[4]);
     }
@@ -210,7 +210,7 @@ void RegisterMinimapOnceCommands()
     control::Register({.name  = L"minimap-once",
                        .shape = control::Shape::OnOff,
                        .help  = L"the minimap's map is rendered once per frame, by player 1's HUD pass (on, at start), "
-                                L"or again in player 2's",
+                                L"or again in each further player's",
                        .set   = [](const Value& v) {
                            if (!MinimapOnceInstalled())
                            {
@@ -220,7 +220,7 @@ void RegisterMinimapOnceCommands()
                            const bool on = std::get<bool>(v);
                            SetMinimapOnce(on);
                            return Outcome{true, on ? L"the minimap's map rendered once per frame, by player 1's pass"
-                                                   : L"the minimap's map rendered in both players' passes"};
+                                                   : L"the minimap's map rendered in every player's pass"};
                        },
                        .get = [] { return Value{MinimapOnceOn()}; }});
 }

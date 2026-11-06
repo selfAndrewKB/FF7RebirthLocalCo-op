@@ -724,7 +724,7 @@ void RegisterOwnCommands(session::Session& session)
               .get  = [] { return Value{views::window_span::Reading()}; }});
     Register({.name = L"window-span", .shape = Shape::OnOff,
               .help = L"the game window across its row of equal monitors, one column per local player, through the "
-                      L"engine's own window reshape; needs player 2 in",
+                      L"engine's own window reshape; needs a further player in",
               .set  = [&session](const Value& v) {
                   return From(SetWindowSpan(session, std::get<bool>(v), L"the window-span command"));
               },

@@ -156,7 +156,7 @@ struct Targets
 };
 Targets                            g_targets;
 platform::DeferredSites g_placement;  // 1.005: the calls placed from the game thread (platform/deferred_sites.h)
-constexpr const wchar_t* kUnavailable = L"UNAVAILABLE (a check failed): player 2 has no attack, guard or dodge";
+constexpr const wchar_t* kUnavailable = L"UNAVAILABLE (a check failed): the further players have no attack, guard or dodge";
 
 bool PlaceSites(const platform::GameImage& image) noexcept;
 HudModeFn      g_hudMode   = nullptr;

@@ -635,7 +635,7 @@ bool Install(const platform::GameImage& image) noexcept
     if (!system || !byWidget || !site || !resume || !call || !targeted || !position ||
         !players::weak_object::Known())
     {
-        platform::Log(L"enemy gauges: the placement code is not what the research read; gauges stay player 1's in both halves");
+        platform::Log(L"enemy gauges: the placement code is not what the research read; gauges stay player 1's in every view");
         return false;
     }
     g_endUISystem = *system;
@@ -646,7 +646,7 @@ bool Install(const platform::GameImage& image) noexcept
     const auto code = GaugeCaptureCode(g_record);
     if (!platform::PinThisModule() || !g_byWidgetCode.Install(*site, kGaugeEntryBytes, code, *resume))
     {
-        platform::Log(L"enemy gauges: the untargeted placement could not be followed; gauges stay player 1's in both halves");
+        platform::Log(L"enemy gauges: the untargeted placement could not be followed; gauges stay player 1's in every view");
         return false;
     }
     if (!g_targetedCall.Install(*call, *targeted, reinterpret_cast<std::uintptr_t>(&Targeted)))

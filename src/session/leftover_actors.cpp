@@ -109,7 +109,7 @@ Result Destroy(const Actors& actors) noexcept
         UObjectGlobals::StaticFindObject<UFunction*>(nullptr, nullptr, STR("/Script/Engine.Actor:K2_DestroyActor"));
     if (destroy == nullptr || destroy->GetParmsSize() != 0)
     {
-        platform::Log(L"AActor::K2_DestroyActor not found as expected; player 2's leftover actors stay");
+        platform::Log(L"AActor::K2_DestroyActor not found as expected; the leaving player's leftover actors stay");
         return result;
     }
     for (void* actor : {actors.trigger, actors.battleTalk, actors.cameraActor, actors.collisionActor})

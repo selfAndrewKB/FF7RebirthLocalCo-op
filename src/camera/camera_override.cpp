@@ -373,7 +373,7 @@ bool Install(const platform::GameImage& image) noexcept
         g_engineRemoved = reinterpret_cast<RemovedFn>(*removed);
         g_releaseWeak   = reinterpret_cast<ReleaseFn>(*release);
     }
-    platform::Log(L"camera override: {}", g_installed ? L"ready (player 2's camera gets its own NotifyOverride module)"
+    platform::Log(L"camera override: {}", g_installed ? L"ready (each further player's camera gets its own NotifyOverride module)"
                                                      : L"UNAVAILABLE (a check failed); the players' cameras share one");
     return g_installed;
 }

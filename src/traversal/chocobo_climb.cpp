@@ -357,9 +357,9 @@ void Install(const platform::GameImage& image) noexcept
         g_enterSlot.Restore();
     }
     platform::Log(L"chocobo climb: {}; logging {}",
-                  start ? L"player 2's chocobo starts its climbs and its climb camera in player 2's scope (the spot's "
+                  start ? L"a further player's chocobo starts its climbs and its climb camera in that player's scope (the spot's "
                           L"start check and the climb executer's camera setup)"
-                        : L"NOT placed (a slot differs); player 2's chocobo cannot climb, as before",
+                        : L"NOT placed (a slot differs); a further player's chocobo cannot climb, as before",
                   logging);
 }
 

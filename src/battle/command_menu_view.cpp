@@ -59,7 +59,7 @@ int                              g_hides   = 0;  // times the menu widget was fo
 
 void Line(const std::wstring& text) noexcept
 {
-    platform::Log(L"command menu two: {}", text);
+    platform::Log(L"command menu: {}", text);
 }
 
 /// The owner of a part's widget for a player (`seat` 0 player 1): the controller, or the key guide (the game's, or the

@@ -699,8 +699,8 @@ void Install(const platform::GameImage& image) noexcept
                               : L"UNCHANGED, the game's one list plays on the primary player's pad (a function or call "
                                 L"is not what the research read)",
                   !g_installed ? L""
-                  : feet       ? L"; player 2's chocobo's footsteps run in player 2's scope"
-                               : L"; the chocobo's footstep slot is not what the research read: player 2's footsteps stay "
+                  : feet       ? L"; a further player's chocobo's footsteps run in that player's scope"
+                               : L"; the chocobo's footstep slot is not what the research read: the further players' footsteps stay "
                                  L"on the primary player's pad",
                   sources.empty() ? L"" : L"; ", sources);
 }

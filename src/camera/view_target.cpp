@@ -82,8 +82,8 @@ bool Aim(void* controller) noexcept
     if (!GuardedSetViewTarget(cameraManager, cameraActor))
     {
         g_stopped = true;
-        platform::Log(L"own camera view STOPPED: the engine raised an exception inside SetViewTarget; player 2's "
-                      L"camera manager is no longer aimed this session");
+        platform::Log(L"own camera view STOPPED: the engine raised an exception inside SetViewTarget; the further players' "
+                      L"camera managers are no longer aimed this session");
         return false;
     }
     return OnOwnCamera(controller);

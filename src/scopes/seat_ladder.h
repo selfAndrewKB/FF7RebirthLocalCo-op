@@ -71,7 +71,7 @@ inline bool FillMember(Args& args, void* member) noexcept
 struct FocusPart
 {
     static constexpr unsigned       kBit  = Focus;
-    static constexpr const wchar_t* kName = L"player 2's UI context";
+    static constexpr const wchar_t* kName = L"the player's UI context";
     explicit FocusPart(const Args& args) noexcept : scope(args.seat, args.controller) {}
     bool           Held() const noexcept { return scope.Entered(); }
     const wchar_t* Refusal() const noexcept { return scope.Refusal(); }
@@ -81,7 +81,7 @@ struct FocusPart
 struct SticksPart
 {
     static constexpr unsigned       kBit  = Sticks;
-    static constexpr const wchar_t* kName = L"pad 2's sticks";
+    static constexpr const wchar_t* kName = L"the player's sticks";
     explicit SticksPart(const Args& args) noexcept : scope(args.padId) {}
     bool Held() const noexcept { return scope.Held(); }
     input::pad_sticks::StickScope scope;
@@ -103,7 +103,7 @@ struct PrimaryPart
 struct ButtonsPart
 {
     static constexpr unsigned       kBit  = Buttons;
-    static constexpr const wchar_t* kName = L"pad 2's buttons";
+    static constexpr const wchar_t* kName = L"the player's buttons";
     explicit ButtonsPart(const Args& args) noexcept : scope(args.seat, args.withoutKey) {}
     bool Held() const noexcept { return scope.Held(); }
     input::pad_buttons::ButtonScope scope;
@@ -112,7 +112,7 @@ struct ButtonsPart
 struct TargetsPart
 {
     static constexpr unsigned       kBit  = Targets;
-    static constexpr const wchar_t* kName = L"player 2's target fields";
+    static constexpr const wchar_t* kName = L"the player's target fields";
     explicit TargetsPart(const Args& args) noexcept : scope(args.seat) {}
     bool Held() const noexcept { return scope.Held(); }
     battle::lock_on::TargetScope scope;

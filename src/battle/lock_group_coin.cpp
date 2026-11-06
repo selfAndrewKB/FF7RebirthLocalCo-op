@@ -203,7 +203,7 @@ std::uint64_t Pick(CallFn pick, std::uint64_t group, std::uint64_t out, std::uin
                            : member == nullptr     ? L"no member without a target"
                            : enemy == nullptr      ? L"the member's enemy is gone"
                            : controller == nullptr ? L"its controller did not check out"
-                                                   : L"no coin (not an enemy controller, or player 2 cannot be targeted)");
+                                                   : L"no coin (not an enemy controller, or no further player can be targeted)");
         return own;
     }
     // Pick writes only `out` (RE §18.9), so it may run again: this time with the seat's member as "the player".
@@ -279,8 +279,8 @@ bool Install(const platform::GameImage& image) noexcept
         return false;
     }
     g_on.store(true, std::memory_order_release);
-    platform::Log(L"lock group coin: lock groups that prefer the player prefer player 1 or player 2 by each enemy's "
-                  L"coin at its pick; the rebalance respreads only when neither player holds a lock");
+    platform::Log(L"lock group coin: lock groups that prefer the player prefer player 1 or a further player by each enemy's "
+                  L"coin at its pick; the rebalance respreads only when no player holds a lock");
     return true;
 }
 

@@ -305,7 +305,7 @@ void AfterRemove(bool removed) noexcept
     if (!removed || !Alive(c))
     {
         platform::Log(L"leave watch: leave {}: after RemoveLocalPlayer: {}", g_leave.number,
-                      removed ? L"the controller's slot no longer holds it (freed at once)" : L"player 2 was not removed");
+                      removed ? L"the controller's slot no longer holds it (freed at once)" : L"the player was not removed");
         c.gone = true;
         return;
     }

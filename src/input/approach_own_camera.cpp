@@ -250,7 +250,7 @@ void Install(const platform::GameImage& image) noexcept
     const bool beam = g_beamCall.InstallResearch(image, kBeamSite.call, kBeamCheck,
                                                  reinterpret_cast<std::uintptr_t>(&BeamCheck));
     platform::Log(L"approach: {} walk-up checks (ladder, crawl, squeeze, climbing wall, pole slide, hook rope, lifting "
-                  L"rope) read player 2's stick in player 2's camera basis, {} more (one-shot move, monkey bars, zip "
+                  L"rope) read a further player's stick in that player's camera basis, {} more (one-shot move, monkey bars, zip "
                   L"line, spider wall) from the game thread's first tick{}{}; balance beam {}",
                   placed, late, missing.empty() ? L"" : L"; NOT placed:", missing, beam ? L"yes" : L"NO");
 }

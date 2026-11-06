@@ -303,7 +303,7 @@ void RunAsPrimary(int seat, void* cameraManager, float deltaTime)
         const unsigned refusals = g_uiRefusals.fetch_add(1, std::memory_order_relaxed) + 1;
         if (refusals <= 5 || refusals % 600 == 0)
         {
-            platform::Log(L"player 2's camera update ran without player 2's UI context: {} ({} time(s))",
+            platform::Log(L"{}'s camera update ran without its UI context: {} ({} time(s))", players::SeatName(seat),
                           scopes.Noted() != nullptr ? scopes.Noted() : L"refused", refusals);
         }
     }

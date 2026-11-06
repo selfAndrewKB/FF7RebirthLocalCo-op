@@ -164,8 +164,8 @@ void SetStoodDown(bool on) noexcept
 void SetMask(unsigned mask) noexcept
 {
     g_mask.store(mask, std::memory_order_relaxed);
-    platform::Log(L"per-pad sticks: mask {} (player 2's input as primary {}, player 1's move state on pad 1 {}, "
-                  L"player 2's member ticked {}, player 1's detection and ridden chocobo on pad 1 {})",
+    platform::Log(L"per-pad sticks: mask {} (the further players' input as primary {}, player 1's move state on pad 1 {}, "
+                  L"the further players' members ticked {}, player 1's detection and ridden chocobo on pad 1 {})",
                   mask, PartActs(kPartSeatInput), PartActs(kPartPlayerOneMove), PartActs(kPartMemberTick),
                   PartActs(kPartPlayerOneDetect));
 }
@@ -294,8 +294,8 @@ void RegisterCommands()
     control::Register({.name  = L"sticks-mask",
                        .shape = control::Shape::Integer,
                        .max   = 15,
-                       .help  = L"diagnosis: which parts of per-pad sticks act (1 player 2's input as the primary "
-                                L"player's, 2 player 1's move state on pad 1, 4 player 2's member ticked, 8 player 1's "
+                       .help  = L"diagnosis: which parts of per-pad sticks act (1 the further players' input as the primary "
+                                L"player's, 2 player 1's move state on pad 1, 4 the further players' members ticked, 8 player 1's "
                                 L"input update and leader-action tick on pad 1); all at start",
                        .set   = [](const Value& v) {
                            SetMask(static_cast<unsigned>(std::get<std::int64_t>(v)));

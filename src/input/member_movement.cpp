@@ -214,7 +214,7 @@ bool Install(const platform::GameImage& image) noexcept
     g_handleClear      = clear ? reinterpret_cast<HandleClearFn>(*clear) : nullptr;
     if (!clear)
     {
-        platform::Log(L"member movement: the field-action handle clear differs; player 2's member will add its own "
+        platform::Log(L"member movement: the field-action handle clear differs; a further player's member will add its own "
                       L"(dim) summon rows to the prompt list");
     }
     return true;

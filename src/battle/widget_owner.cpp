@@ -415,7 +415,7 @@ bool Install(const platform::GameImage& image) noexcept
     const auto site    = image.Rebase(kGuideTickCall, 5);
     if (!system)
     {
-        platform::Log(L"widget owner: UNAVAILABLE (a check failed): player 2's widgets tick in the shared view");
+        platform::Log(L"widget owner: UNAVAILABLE (a check failed): the further players' widgets tick in the shared view");
         return false;
     }
     g_endUISystem = *system;

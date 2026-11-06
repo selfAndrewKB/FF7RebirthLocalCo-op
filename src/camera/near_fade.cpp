@@ -243,7 +243,7 @@ void Install(const platform::GameImage& image) noexcept
                                                   reinterpret_cast<std::uintptr_t>(&HitActor));
     const bool overlap = g_overlapCall.InstallResearch(image, kOverlapPlayerCall, kIsPlayerChar,
                                                        reinterpret_cast<std::uintptr_t>(&OverlapPlayerTest));
-    platform::Log(L"near fade: player 2's character {} by player 1's camera's near fade; the cameras' immediate fade "
+    platform::Log(L"near fade: a further player's character {} by player 1's camera's near fade; the cameras' immediate fade "
                   L"{}; the occluder traces {}; the climbing overlap fade {}",
                   gather ? L"is never faded" : L"is STILL faded (the gather call differs)",
                   kick ? L"skips it too" : L"is not guarded (its call differs)",

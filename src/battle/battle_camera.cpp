@@ -195,7 +195,7 @@ bool Install(const platform::GameImage& image) noexcept
     const auto deactivate = platform::FindFunction(image, kDeactivate.target);
     if (!activate || !deactivate || !camera::camera_access::Install(image) || !scopes::primary_controller::Installed())
     {
-        platform::Log(L"battle camera: the Battle operator is not what the research read; player 2's camera stays on "
+        platform::Log(L"battle camera: the Battle operator is not what the research read; the further players' cameras stay on "
                       L"the Field operator in battle");
         return false;
     }

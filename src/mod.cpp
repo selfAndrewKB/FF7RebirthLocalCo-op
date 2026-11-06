@@ -359,8 +359,8 @@ public:
         lss::engine_tick::Start([](void* self) { static_cast<LocalSplitScreenMod*>(self)->OnEngineTick(); }, this);
 
         Log(L"ready: every engine check passed. Ctrl+F7 adds a player (2, then 3), Ctrl+F8 removes the last one in, Ctrl+F5 switches "
-            L"top/bottom and side by side, Ctrl+F4 switches filled halves and 16:9 halves with bars. Player 2 starts on "
-            L"their own camera and pad; for testing, Ctrl+F6 switches their half to player 1's camera and Ctrl+F9 "
+            L"top/bottom and side by side, Ctrl+F4 switches filled halves and 16:9 halves with bars. Each further player starts on "
+            L"their own camera and pad; for testing, Ctrl+F6 switches their views to player 1's camera and Ctrl+F9 "
             L"merges the pads. Ctrl+F2 spans the window across the monitor row, one monitor per player; Ctrl+F3 "
             L"switches the three-player monitor mode (three monitors, player 1's picture in the empty columns)");
         const auto pool = lss::platform::CodePool();

@@ -288,7 +288,7 @@ bool PlaceCalls(const platform::GameImage&) noexcept
                       L"player's icons as before");
         return false;
     }
-    platform::Log(L"minimap icons: installed (each player's minimap keeps the icons the other player's has in range)");
+    platform::Log(L"minimap icons: installed (each player's minimap keeps the icons another player's has in range)");
     return true;
 }
 
@@ -305,7 +305,7 @@ bool Prepare(const platform::GameImage& image) noexcept
     if (!sites || !updateAt || !update || !removeAt || !remove)
     {
         platform::Log(L"minimap icons: the holder's icon calls are not what the research read; each run removes the "
-                      L"other player's icons as before");
+                      L"other players' icons as before");
         return false;
     }
     g_updateSite   = *updateAt;

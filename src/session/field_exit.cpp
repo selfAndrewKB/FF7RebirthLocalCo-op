@@ -57,7 +57,7 @@ void RequestExit() noexcept
     if (gameMode != 0 && ReadAt<std::uint8_t>(gameMode + kRunning) != 0 && g_leave != nullptr &&
         players::generation::OnGameThread())
     {
-        platform::Log(L"field exit: the game leaves the field (step {}); player 2 leaves first",
+        platform::Log(L"field exit: the game leaves the field (step {}); the further players leave first",
                       ReadAt<std::uint8_t>(gameMode + kFieldStep));
         g_leave(g_context);
     }
@@ -81,7 +81,7 @@ bool Install(const platform::GameImage& image, LeaveFn leave, void* context) noe
         ok             = g_entry.Install(*target, image.EntryInstruction(kRequestExit.address, std::span<const std::uint8_t>(kRequestExitBytes, kFirstInstruction)),
                                          reinterpret_cast<std::uintptr_t>(&RequestExit));
     }
-    platform::Log(L"field exit: {}", ok ? L"player 2 leaves before a retry, reload, load or Blueprint exit leaves the field"
+    platform::Log(L"field exit: {}", ok ? L"the further players leave before a retry, reload, load or Blueprint exit leaves the field"
                                         : L"UNAVAILABLE (a check failed); only the running-byte check catches a field exit");
     return ok;
 }

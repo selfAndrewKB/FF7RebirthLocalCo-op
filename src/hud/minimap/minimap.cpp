@@ -573,7 +573,7 @@ bool PlaceAcquire(const platform::GameImage&) noexcept
     const bool ok =
         g_acquire.Place(g_acquireCall, g_acquireSite, g_acquireTarget, reinterpret_cast<std::uintptr_t>(&Acquire));
     Line(L"the circle's acquire redirect {}",
-         ok ? L"installed from the game thread" : L"FAILED (player 1's map in both halves)");
+         ok ? L"installed from the game thread" : L"FAILED (player 1's map in every view)");
     return ok;
 }
 

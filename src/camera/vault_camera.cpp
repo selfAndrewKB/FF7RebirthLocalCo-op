@@ -252,9 +252,9 @@ void Install(const platform::GameImage& image) noexcept
     const auto site = image.Rebase(kCoreCall, 5);
     const auto core = platform::FindFunction(image, facts::kIsPlayerCore);
     const bool done = site && core && g_coreCall.Install(*site, *core, reinterpret_cast<std::uintptr_t>(&VaultCoreTest));
-    platform::Log(L"vault camera: {}", done ? L"installed (player 2's chocobo vaults without a vault camera, as player 1's "
-                                              L"does; each vault by player 2 logged)"
-                                            : L"UNAVAILABLE (the vault's call differs; player 2's chocobo vault can still "
+    platform::Log(L"vault camera: {}", done ? L"installed (a further player's chocobo vaults without a vault camera, as player 1's "
+                                              L"does; each such vault logged)"
+                                            : L"UNAVAILABLE (the vault's call differs; a further player's chocobo vault can still "
                                               L"take both ride framings)");
 
     // L2: the End's call, checked to be followed by `and byte [rbx+4A0h], 0FDh` (rbx is the action there).
@@ -272,10 +272,10 @@ void Install(const platform::GameImage& image) noexcept
     }
     const bool ended = stub != 0 && g_endCall.Install(*end, *primary, stub);
     platform::Log(L"vault camera: {}",
-                  ended ? L"the vault's end installed (player 2's vault cameras end on player 2's camera, as the game "
+                  ended ? L"the vault's end installed (a further player's vault cameras end on that player's camera, as the game "
                           L"ends player 1's on his; each logged)"
-                        : L"the vault's end UNAVAILABLE (its call or the action register differs; player 2's on-foot "
-                          L"vault camera stays on player 2's camera, and its end clears player 1's slot 15)");
+                        : L"the vault's end UNAVAILABLE (its call or the action register differs; a further player's on-foot "
+                          L"vault camera stays on that player's camera, and its end clears player 1's slot 15)");
 }
 
 void Remove() noexcept

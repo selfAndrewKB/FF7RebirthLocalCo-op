@@ -457,7 +457,7 @@ void RegisterCommands()
     using control::Value;
     control::Register({.name  = L"npc-centre",
                        .shape = control::Shape::OnOff,
-                       .help  = L"the NPC population follows both players while split (on at start), or the leader "
+                       .help  = L"the NPC population follows every player while split (on at start), or the leader "
                                 L"as the game alone does",
                        .set   = [](const Value& v) {
                            if (!Installed())
@@ -466,7 +466,7 @@ void RegisterCommands()
                            }
                            const bool on = std::get<bool>(v);
                            SetEnabled(on);  // logs the new state
-                           return Outcome{true, on ? L"the NPC population follows both players while split (the "
+                           return Outcome{true, on ? L"the NPC population follows every player while split (the "
                                                      L"default)"
                                                    : L"the NPC population follows the leader, as the game alone "
                                                      L"does"};

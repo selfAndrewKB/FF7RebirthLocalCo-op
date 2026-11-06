@@ -826,7 +826,7 @@ bool Install(const platform::GameImage& image) noexcept
         platform::Log(L"lock-on: {}",
                       placed ? L"the targeting calls are placed from the game thread (1.005: they cross a 16-byte "
                                L"block)"
-                             : L"player 2's targeting run UNAVAILABLE (no room to place its calls from the game "
+                             : L"the further players' targeting run UNAVAILABLE (no room to place its calls from the game "
                                L"thread)");
     }
     return placed;
@@ -894,8 +894,8 @@ bool PlaceSites(const platform::GameImage& image) noexcept
         RestoreCall(g_markerNameCall);
     }
     g_runReady = ok;
-    platform::Log(L"lock-on: {}", ok ? L"player 2's targeting is the game's own tick, run again in player 2's scopes (logged)"
-                                     : L"player 2's targeting run UNAVAILABLE (a check failed); player 2 has no lock-on");
+    platform::Log(L"lock-on: {}", ok ? L"the further players' targeting is the game's own tick, run again in each one's scopes (logged)"
+                                     : L"the further players' targeting run UNAVAILABLE (a check failed); they have no lock-on");
     if (!ok)
     {
         platform::Log(L"lock-on: checks: targeting calls {}, panel 'cleared' {} {}, panel 'set' call {}, marker name call {}",
@@ -926,7 +926,7 @@ void AfterBattle(int seat) noexcept
 void SetEnabled(bool on) noexcept
 {
     g_enabled = on;
-    platform::Log(L"lock-on: player 2's targeting run {}", on ? L"on" : L"off");
+    platform::Log(L"lock-on: the further players' targeting run {}", on ? L"on" : L"off");
 }
 
 bool Enabled() noexcept
@@ -983,8 +983,8 @@ void RegisterCommands()
     control::Register({.name  = L"battle-mask",
                        .shape = control::Shape::Integer,
                        .max   = 511,
-                       .help  = L"diagnosis: bit 8 runs player 2's targeting (the game's targeting tick for player "
-                                L"2); the other bits are retired and ignored; on at start",
+                       .help  = L"diagnosis: bit 8 runs the further players' targeting (the game's targeting tick for each of "
+                                L"them); the other bits are retired and ignored; on at start",
                        .set   = [](const Value& v) {
                            // Bit 8 is player 2's targeting run. The other bits (1, 2, 4, 16: the direct actions;
                            // 32, 64, 128, 256: the mod's own lock, switching, lock camera and cursor) are retired:

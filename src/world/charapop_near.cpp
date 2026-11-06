@@ -526,7 +526,7 @@ bool Install(const platform::GameImage& image) noexcept
     g_gameRoot        = root ? *root : 0;
     g_setMinLevel     = setter ? reinterpret_cast<SetMinLevelFn>(*setter) : nullptr;
     g_installed       = scopes::leader_scope::Installed() && g_gameRoot != 0 && g_setMinLevel != nullptr;
-    platform::Log(L"charapop near: {}", g_installed ? L"installed (characters near player 2 keep the detail player 2's camera "
+    platform::Log(L"charapop near: {}", g_installed ? L"installed (characters near a further player keep the detail that player's camera "
                                                       L"gives them, through the game's minimum level; logged)"
                                                     : L"UNAVAILABLE (a check failed)");
     return g_installed;
@@ -573,10 +573,10 @@ void Tick(bool splitShown, const std::array<bool, players::kMaxPlayers>& plays) 
 void SetDetail(Detail detail) noexcept
 {
     g_detail.store(detail, std::memory_order_relaxed);
-    const wchar_t* what = detail == Detail::Full    ? L"keep the detail player 2's camera gives them, where player 1's does not"
-                          : detail == Detail::Reduced ? L"keep it within half the game's distances from player 2's camera"
+    const wchar_t* what = detail == Detail::Full    ? L"keep the detail that player's camera gives them, where player 1's does not"
+                          : detail == Detail::Reduced ? L"keep it within half the game's distances from that player's camera"
                                                       : L"get only what player 1's camera gives them";
-    platform::Log(L"charapop near: detail {} (characters near player 2 {})", DetailName(detail), what);
+    platform::Log(L"charapop near: detail {} (characters near a further player {})", DetailName(detail), what);
 }
 
 Detail CurrentDetail() noexcept
@@ -619,8 +619,8 @@ void RegisterCommands()
     control::Register({.name  = L"npc-detail",
                        .shape = control::Shape::Word,
                        .words = {L"full", L"reduced", L"off", L"on"},
-                       .help  = L"characters near player 2 that player 1's camera does not keep get full detail "
-                                L"within the game's distances from player 2's camera (full, at start; on means "
+                       .help  = L"characters near a further player that player 1's camera does not keep get full detail "
+                                L"within the game's distances from that player's camera (full, at start; on means "
                                 L"full), within half of them (reduced), or only what player 1's camera gives them "
                                 L"(off)",
                        .set   = [](const Value& v) {
@@ -635,12 +635,12 @@ void RegisterCommands()
                                                                            : Detail::Full;
                            SetDetail(detail);  // logs the new state
                            return Outcome{true, detail == Detail::Full
-                                                    ? L"characters near player 2 keep full detail where player 1's "
+                                                    ? L"characters near a further player keep full detail where player 1's "
                                                       L"camera does not (the default)"
                                                 : detail == Detail::Reduced
-                                                    ? L"characters near player 2 keep full detail within half the "
+                                                    ? L"characters near a further player keep full detail within half the "
                                                       L"game's distances"
-                                                    : L"characters near player 2 get only what player 1's camera "
+                                                    : L"characters near a further player get only what player 1's camera "
                                                       L"gives them"};
                        },
                        .get = [] {

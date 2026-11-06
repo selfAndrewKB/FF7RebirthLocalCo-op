@@ -920,9 +920,9 @@ bool Install(const platform::GameImage& image) noexcept
         (void)g_swapBackSlot.Restore();  // nothing uses them without a ride (they pass everything through anyway)
         (void)g_detachSlot.Restore();
     }
-    platform::Log(L"wheelie ride: {}", g_installed ? L"installed (player 2 boards a Wheelie by walking into player 1's marked "
+    platform::Log(L"wheelie ride: {}", g_installed ? L"installed (a further player boards a Wheelie by walking into player 1's marked "
                                                      L"scooter, with their own coordinator)"
-                                                   : L"UNAVAILABLE (a check failed; player 2 cannot board, as before)");
+                                                   : L"UNAVAILABLE (a check failed; the further players cannot board, as before)");
     return g_installed;
 }
 
@@ -1164,7 +1164,7 @@ void InstallSites() noexcept
     }
     const bool own = g_ownSite != 0 && g_ownCall.InstallFromOwnThread(g_ownSite, reinterpret_cast<std::uintptr_t>(g_fn.getOffPrimary),
                                                                       reinterpret_cast<std::uintptr_t>(&OwnGetOff));
-    platform::Log(L"wheelie ride: the game's forced getoffs followed for player 2 at {} of {} callers; player 2's getoff "
+    platform::Log(L"wheelie ride: the game's forced getoffs followed for the further players at {} of {} callers; their getoff "
                   L"button {}",
                   forced, kForcedSites.size(),
                   own ? L"made instant when player 1 is more than 50 m away (the rental-return warp)"
@@ -1173,10 +1173,10 @@ void InstallSites() noexcept
     const bool leader = g_detachLeaderSite != 0 &&
                         g_detachLeaderCall.InstallFromOwnThread(g_detachLeaderSite, reinterpret_cast<std::uintptr_t>(g_resolveLeader),
                                                                 reinterpret_cast<std::uintptr_t>(&NotifyLeader));
-    platform::Log(L"wheelie ride: player 2's animated getoff: the getoff motion's End DetachFromSBScooter notify runs in "
-                  L"player 2's scope, its field-leader test {}",
-                  leader ? L"answers player 2's member for her own notify"
-                         : L"UNCHANGED (player 2's animated getoff will not swap back: the mod's fallback gives her back)");
+    platform::Log(L"wheelie ride: a further player's animated getoff: the getoff motion's End DetachFromSBScooter notify runs in "
+                  L"that player's scope, its field-leader test {}",
+                  leader ? L"answers that player's member for her own notify"
+                         : L"UNCHANGED (a further player's animated getoff will not swap back: the mod's fallback gives her back)");
 }
 
 void LogSummary(SeatRide& s) noexcept

@@ -148,7 +148,7 @@ bool Install(const platform::GameImage& image) noexcept
     const auto umg         = platform::FindFunction(image, kPlaceUmg);
     if (!system || !slate || !umg || !players::weak_object::Known())
     {
-        platform::Log(L"popups: the placement code is not what the research read; popups stay player 1's in both halves");
+        platform::Log(L"popups: the placement code is not what the research read; popups stay player 1's in every view");
         return false;
     }
     g_endUISystem = *system;
@@ -160,13 +160,13 @@ bool Install(const platform::GameImage& image) noexcept
     const auto umgCode   = PopupCaptureCode(g_record, PopupKey::Umg);
     if (!platform::PinThisModule() || !g_slateCode.Install(*slate, kPopupEntryBytes, slateCode, *slate + kEntryLength))
     {
-        platform::Log(L"popups: the Slate placement could not be followed; popups stay player 1's in both halves");
+        platform::Log(L"popups: the Slate placement could not be followed; popups stay player 1's in every view");
         return false;
     }
     if (!g_umgCode.Install(*umg, kPopupEntryBytes, umgCode, *umg + kEntryLength))
     {
         g_slateCode.Restore();
-        platform::Log(L"popups: the UMG placement could not be followed; popups stay player 1's in both halves");
+        platform::Log(L"popups: the UMG placement could not be followed; popups stay player 1's in every view");
         return false;
     }
     g_installed = true;

@@ -54,7 +54,7 @@ bool OpenSet(platform::ByteContext& context, std::uint32_t offset, const T& valu
 /// A Set range the game wrote inside the call keeps the game's newer value (platform/byte_scope.h): noted.
 void Kept(const wchar_t* what) noexcept
 {
-    platform::LogDebug(L"leader scope: the game wrote the party manager's {} inside player 2's call; the game's value "
+    platform::LogDebug(L"leader scope: the game wrote the party manager's {} inside a further player's call; the game's value "
                        L"kept",
                        what);
 }
@@ -66,7 +66,7 @@ bool Install(const platform::GameImage& image) noexcept
     const auto manager = image.Rebase(facts::kPartyManagerGlobal, sizeof(void*));
     g_partyManager     = players::weak_object::Known() && manager ? *manager : 0;
     platform::Log(L"leader scope: {}",
-                  g_partyManager != 0 ? L"ready (player 2's member answers as the party leader inside the game's calls)"
+                  g_partyManager != 0 ? L"ready (a further player's member answers as the party leader inside the game's calls)"
                                       : L"UNAVAILABLE (the party manager or the weak pointers were not found)");
     return g_partyManager != 0;
 }

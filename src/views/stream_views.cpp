@@ -205,8 +205,8 @@ void RegisterStreamCommands()
                                                : StreamViewsMode::Both;
              SetStreamViewsMode(mode);  // applied at the next tick, which logs it
              return Outcome{true, word == L"off"  ? L"no streaming views (the game's own only)"
-                                  : word == L"p2" ? L"player 2's camera"
-                                                  : L"both players' cameras"};
+                                  : word == L"p2" ? L"the further players' cameras"
+                                                  : L"every player's camera"};
          },
          .get = [] {
              const StreamViewsMode mode = GetStreamViewsMode();

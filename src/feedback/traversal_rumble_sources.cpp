@@ -474,7 +474,7 @@ std::wstring Install(const platform::GameImage& image) noexcept
     auto part = [](bool placed) { return placed ? L"on" : L"OFF (not what the research read)"; };
     try
     {
-        return std::format(L"player 2's sources outside their scopes: scooter {}, glide {}, jump box {}{}, drift {}, "
+        return std::format(L"the further players' sources outside their scopes: scooter {}, glide {}, jump box {}{}, drift {}, "
                            L"brake {}",
                            part(on[kScooterAt]), part(on[kGlideAt]), part(jump),
                            research && jump ? L" (1.004: its inline add's list load)" : L"", part(on[kDriftAt]),

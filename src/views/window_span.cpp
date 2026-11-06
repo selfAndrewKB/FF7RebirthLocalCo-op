@@ -437,7 +437,7 @@ bool Install(const platform::GameImage& image) noexcept
     g_viewportWindowOffset = facts::kGameViewportWindowOffset;
     g_nativeWindowOffset   = facts::kSWindowNativeWindowOffset;
     g_installed            = true;
-    platform::Log(L"window span: ready (Ctrl+F2 or 'window-span on' while player 2 is in: one monitor per column; "
+    platform::Log(L"window span: ready (Ctrl+F2 or 'window-span on' while a further player is in: one monitor per column; "
                   L"Ctrl+F3 or 'monitor-mode on': the three-player monitor mode, three monitors whatever the players; "
                   L"the engine's own window reshape; GameViewportWindow at +{:#x}, NativeWindow at +{:#x})",
                   g_viewportWindowOffset, g_nativeWindowOffset);
@@ -560,7 +560,7 @@ void Tick(std::int32_t wanted) noexcept
     }
     if (!g_held && wanted < 2)
     {
-        Leave(L"one column is left (player 2 is out)");
+        Leave(L"one column is left (no further player is in)");
         return;
     }
     if (wanted >= 2 && wanted != g_columns && wanted <= columns::kMaxColumns)

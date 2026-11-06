@@ -81,7 +81,7 @@ struct Sites
 Sites                   g_sites;
 platform::DeferredSites g_placement;  // 1.005: the calls placed from the game thread (platform/deferred_sites.h)
 constexpr const wchar_t* kUnavailable =
-    L"UNAVAILABLE (a check failed): player 2's command menu keeps the values of its last join";
+    L"UNAVAILABLE (a check failed): a further player's command menu keeps the values of its last join";
 
 // Game thread.
 

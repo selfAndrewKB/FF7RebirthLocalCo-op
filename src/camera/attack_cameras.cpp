@@ -279,7 +279,7 @@ void Install(const platform::GameImage& image) noexcept
     platform::Log(L"attack cameras: {}; {}",
                   g_battleSystem != 0 ? L"each camera keeps its own smoothing of the game's battle camera sequences"
                                       : L"the sequence list is NOT found (the cameras share its smoothing, as before)",
-                  cut ? L"a shot change inside player 2's update cuts player 2's camera (the game's own primary cut)"
+                  cut ? L"a shot change inside a further player's update cuts that player's camera (the game's own primary cut)"
                       : L"shot changes cut player 1's camera as before (the cut call is not what the research read)");
 }
 

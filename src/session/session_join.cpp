@@ -146,7 +146,7 @@ void Session::InstallStages(const platform::GameImage& image) noexcept
     LogStage(L"member movement (with per-pad sticks)", installed_.memberMovement);
     LogStage(L"move-state ticks (the game's recorded; player 1's on pad 1)", installed_.moveTicks);
     LogStage(L"scope leaks put back", scopeLeaks);
-    LogStage(L"per-pad buttons (the split views; pad 2 kept from the menus)", padButtons);
+    LogStage(L"per-pad buttons (the split views; the further pads kept from the menus)", padButtons);
     LogStage(L"party events (the game's leader and status changes)", installed_.partyEvents);
 }
 
