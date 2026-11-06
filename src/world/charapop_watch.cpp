@@ -27,6 +27,7 @@
 #include <cstdint>
 #include <cstring>
 #include <format>
+#include <limits>
 #include <string>
 
 namespace lss::world::charapop_watch {
@@ -146,8 +147,10 @@ struct Sample
 {
     const void*   entry = nullptr;
     void*         actor = nullptr;
-    float         d1 = 0.0f, d2 = 0.0f;  // cm, to each camera
-    float         a1 = 0.0f, a2 = 0.0f;  // degrees off each camera's forward
+    bool          seen[players::kMaxPlayers]{};  // by player (0 player 1): that player's camera was read
+    float         d[players::kMaxPlayers]{};     // cm, to each camera read
+    float         a[players::kMaxPlayers]{};     // degrees off each camera's forward
+    float         nearSeat = 0.0f;               // cm, to the nearest seat's camera: the watch keeps the nearest
     EntrySteady   steady{};
     float         meshDistance = 0.0f, meshAngle = 0.0f;
     float         lastRender = 0.0f, opacity = 0.0f;
@@ -365,16 +368,24 @@ void LogSample(const Sample& sample, bool first)
                                              sample.opacity, s.fadeTarget)
                                : std::wstring(L"none"),
                     sample.score, sample.useCount, s.keep, s.flags, s.spawnHidden);
-    Line(L"{} {:#x}{}: player 1 {:.0f} m at {:.0f} deg, player 2 {:.0f} m at {:.0f} deg | level {} (min {}) state {} "
-         L"(requested {}, lock {}) pause flag {} want {} paused {} | {} | {}",
+    std::wstring where;  // the entry from every camera read
+    for (int p = 0; p < players::kMaxPlayers; ++p)
+    {
+        if (sample.seen[p])
+        {
+            where += std::format(L"{}{} {:.0f} m at {:.0f} deg", where.empty() ? L"" : L", ", players::SeatName(p),
+                                 sample.d[p] / 100.0f, sample.a[p]);
+        }
+    }
+    Line(L"{} {:#x}{}: {} | level {} (min {}) state {} (requested {}, lock {}) pause flag {} want {} paused {} | {} | {}",
          first ? L"watching" : L"changed", reinterpret_cast<std::uintptr_t>(sample.entry),
          first ? std::format(L" ({}, id {}, category {}, key {:#x})", NameOf(sample.actor),
                              ReadField<std::int32_t>(sample.entry, kEntryId),
                              ReadField<std::uint8_t>(sample.entry, kEntryCategory),
                              ReadField<std::uint64_t>(sample.entry, kEntryKey))
                : std::wstring(),
-         sample.d1 / 100.0f, sample.a1, sample.d2 / 100.0f, sample.a2, s.level, s.minLevel, s.state, s.requested, s.lock,
-         s.pauseFlag, s.pauseWant, s.paused == kUnread ? std::wstring(L"?") : std::to_wstring(s.paused), mesh, shown);
+         where, s.level, s.minLevel, s.state, s.requested, s.lock, s.pauseFlag, s.pauseWant,
+         s.paused == kUnread ? std::wstring(L"?") : std::to_wstring(s.paused), mesh, shown);
 }
 
 /// Logs the sample on its first sighting and on each change of its steady parts.
@@ -426,8 +437,26 @@ void Remember(Sample& sample)
     }
 }
 
+/// Every player's camera, by seat (index 0 player 1's); `read` is false for a seat whose player is out.
+using Cameras = Camera[players::kMaxPlayers];
+
+/// `point`'s distance to every camera read: "12 m from player 1's camera, 30 m from player 2's camera".
+std::wstring FromCameras(const float (&point)[3], const Cameras& cameras)
+{
+    std::wstring text;
+    for (int p = 0; p < players::kMaxPlayers; ++p)
+    {
+        if (cameras[p].read)
+        {
+            text += std::format(L"{}{:.0f} m from {}'s camera", text.empty() ? L"" : L", ",
+                                Distance(point, cameras[p].location) / 100.0f, players::SeatName(p));
+        }
+    }
+    return text;
+}
+
 /// Which centre the population follows, and its distance to each camera.
-std::wstring CentreText(const std::byte* manager, const Camera& one, const Camera& two)
+std::wstring CentreText(const std::byte* manager, const Cameras& cameras)
 {
     const bool overridden = ReadField<std::uint8_t>(manager, kOverrideOn) != 0;
     if (!overridden && ReadField<std::uint8_t>(manager, kLeaderOn) == 0)
@@ -436,11 +465,10 @@ std::wstring CentreText(const std::byte* manager, const Camera& one, const Camer
     }
     float centre[3]{};
     platform::CopyGuarded(centre, manager + (overridden ? kOverrideCentre : kLeaderCentre), sizeof(centre));
-    return std::format(L"{} ({:.0f} m from player 1's camera, {:.0f} from player 2's)", overridden ? L"override" : L"leader",
-                       Distance(centre, one.location) / 100.0f, Distance(centre, two.location) / 100.0f);
+    return std::format(L"{} ({})", overridden ? L"override" : L"leader", FromCameras(centre, cameras));
 }
 
-void LogSummary(const std::byte* manager, const std::byte* pop, const Camera& one, const Camera& two, std::int32_t count)
+void LogSummary(const std::byte* manager, const std::byte* pop, const Cameras& cameras, std::int32_t count)
 {
     SummarySteady steady;
     platform::CopyGuarded(steady.params.data(), manager + kManagerParams, steady.params.size());
@@ -463,18 +491,26 @@ void LogSummary(const std::byte* manager, const std::byte* pop, const Camera& on
     const auto* world = static_cast<const std::byte*>(ReadPointer(reinterpret_cast<const void*>(g_animWorld), 0));
     const bool  shot  = world != nullptr && ReadField<std::uint8_t>(world, kSnapshotValid) != 0 &&
                       platform::CopyGuarded(snapshot, world + kSnapshotLocation, sizeof(snapshot));
-    Line(L"{} entries (cursor {}, force-all {}, queued {}); cameras {:.0f} m apart; anim snapshot {} ({:.0f} m from "
-         L"player 1's camera, {:.0f} from player 2's; speed {:.0f} turn {:.2f} faster {}/{}) | params: FOV {:.0f}, Light draw "
+    std::wstring apart;  // each seat's camera from player 1's
+    for (int seat = 1; seat < players::kMaxPlayers; ++seat)
+    {
+        if (cameras[seat].read)
+        {
+            apart += std::format(L"{}{}'s {:.0f} m from player 1's", apart.empty() ? L"" : L", ", players::SeatName(seat),
+                                 Distance(cameras[0].location, cameras[seat].location) / 100.0f);
+        }
+    }
+    Line(L"{} entries (cursor {}, force-all {}, queued {}); cameras: {}; anim snapshot {} ({}; speed {:.0f} turn {:.2f} "
+         L"faster {}/{}) | params: FOV {:.0f}, Light draw "
          L"{:.0f} in {:.0f} out {:.0f} tick {:.0f}, Middle draw {:.0f} in {:.0f} out {:.0f} tick {:.0f}, split {}, enemy +{:.0f} "
          L"audience +{:.0f}; overrides draw {:.0f} ({}) in {:.0f} ({}) out {:.0f} ({}) | population centre: {}; threshold {}",
          count, ReadField<std::int32_t>(pop, kPopCursor), ReadField<std::int32_t>(pop, kPopForceAll),
-         ReadField<std::int32_t>(pop, kPopQueueCount), Distance(one.location, two.location) / 100.0f,
-         shot ? L"read" : L"not read", Distance(snapshot, one.location) / 100.0f,
-         Distance(snapshot, two.location) / 100.0f, ReadField<float>(world, kSnapshotSpeed),
+         ReadField<std::int32_t>(pop, kPopQueueCount), apart, shot ? L"read" : L"not read",
+         FromCameras(snapshot, cameras), ReadField<float>(world, kSnapshotSpeed),
          ReadField<float>(world, kSnapshotTurn), ReadField<std::uint8_t>(world, kSnapshotFaster),
          ReadField<std::uint8_t>(world, kSnapshotFaster + 1), f(0x1148), f(0x114C), f(0x1150), f(0x1154), f(0x1158),
          f(0x115C), f(0x1160), f(0x1164), f(0x1168), split, f(0x1170), f(0x1174), f(0x1178), b(0x117C), f(0x1180),
-         b(0x1184), f(0x1188), b(0x118C), CentreText(manager, one, two),
+         b(0x1184), f(0x1188), b(0x118C), CentreText(manager, cameras),
          ReadField<std::int32_t>(ReadPointer(manager, kManagerSelect), kThreshold));
 }
 
@@ -485,15 +521,25 @@ void SampleNow()
     {
         return;  // no CharaPop in this map (or not the shape the research read)
     }
-    const Camera one = CameraOf(players::generation::PlayerOneController());
-    const Camera two = CameraOf(players::generation::PlayerTwoController());
-    if (!one.read || !two.read)
+    Cameras cameras;  // player 1's, and the camera of each seat whose player is in
+    cameras[0]   = CameraOf(players::generation::PlayerOneController());
+    bool anySeat = false;
+    for (int seat = 1; seat < players::kMaxPlayers; ++seat)
+    {
+        if (players::generation::Active(seat))
+        {
+            cameras[seat] = CameraOf(players::generation::ControllerOf(seat));
+            anySeat       = anySeat || cameras[seat].read;
+        }
+    }
+    if (!cameras[0].read || !anySeat)
     {
         return;
     }
+    const Camera&    one   = cameras[0];
     std::int32_t     count = 0;
     const std::byte* list  = EntryList(objects.pop, count);
-    LogSummary(objects.manager, objects.pop, one, two, count);
+    LogSummary(objects.manager, objects.pop, cameras, count);
 
     std::array<Sample, kWatched> nearest{};
     int                          kept = 0;
@@ -507,27 +553,37 @@ void SampleNow()
             continue;
         }
         const float d1 = Distance(at, one.location);
-        const float d2 = Distance(at, two.location);
-        if (kept == kWatched && d2 >= nearest[kWatched - 1].d2)
+        Sample      sample;
+        float       nearSeat = std::numeric_limits<float>::max();
+        for (int seat = 1; seat < players::kMaxPlayers; ++seat)
+        {
+            if (cameras[seat].read)
+            {
+                sample.seen[seat] = true;
+                sample.d[seat]    = Distance(at, cameras[seat].location);
+                sample.a[seat]    = AngleOff(cameras[seat], at);
+                nearSeat          = std::min(nearSeat, sample.d[seat]);
+            }
+        }
+        if (kept == kWatched && nearSeat >= nearest[kWatched - 1].nearSeat)
         {
             continue;
         }
         // Far from player 1, or near but outside player 1's anim cone (the anim optimisation's out-of-camera case:
-        // live 2026-10-07, NPCs in player 2's view froze when player 1 turned their back).
+        // live 2026-10-07, NPCs in a seat's view froze when player 1 turned their back).
         const float a1 = AngleOff(one, at);
         if (d1 <= kFarFromOneCm && a1 <= kAnimConeDegrees)
         {
             continue;
         }
-        Sample sample;
-        sample.entry = entry;
-        sample.actor = actor;
-        sample.d1    = d1;
-        sample.d2    = d2;
-        sample.a1    = a1;
-        sample.a2    = AngleOff(two, at);
-        int place    = kept < kWatched ? kept++ : kWatched - 1;
-        while (place > 0 && nearest[static_cast<std::size_t>(place - 1)].d2 > d2)
+        sample.entry    = entry;
+        sample.actor    = actor;
+        sample.seen[0]  = true;
+        sample.d[0]     = d1;
+        sample.a[0]     = a1;
+        sample.nearSeat = nearSeat;
+        int place       = kept < kWatched ? kept++ : kWatched - 1;
+        while (place > 0 && nearest[static_cast<std::size_t>(place - 1)].nearSeat > nearSeat)
         {
             nearest[static_cast<std::size_t>(place)] = nearest[static_cast<std::size_t>(place - 1)];
             --place;
@@ -555,7 +611,7 @@ bool Install(const platform::GameImage& image) noexcept
     g_interfaceOf    = getter ? reinterpret_cast<InterfaceOfFn>(*getter) : nullptr;
     const auto actorGetter = platform::FindFunction(image, kActorInterfaceOf);
     g_actorInterfaceOf     = actorGetter ? reinterpret_cast<InterfaceOfFn>(*actorGetter) : nullptr;
-    platform::Log(L"charapop: {}", g_installed ? L"watch installed (read-only; logs the characters near player 2 while split)"
+    platform::Log(L"charapop: {}", g_installed ? L"watch installed (read-only; logs the characters near players 2 and 3 while split)"
                                                : L"UNAVAILABLE (a check failed)");
     return g_installed;
 }
@@ -564,7 +620,7 @@ void Tick(bool splitShown) noexcept
 {
     // The watch only logs, and its lines are Debug: nothing is sampled below that level.
     if (!g_installed || !splitShown || !platform::Enabled(platform::Level::Debug) || !players::generation::OnGameThread() ||
-        !players::generation::Active())
+        !players::generation::AnyActive())
     {
         g_wasShown = false;
         return;

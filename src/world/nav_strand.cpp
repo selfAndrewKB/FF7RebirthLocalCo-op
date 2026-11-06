@@ -767,8 +767,16 @@ void Tick(bool splitShown) noexcept
         ready >= g_loggedReadyNoNavmesh + 600 && platform::Enabled(platform::Level::Debug))
     {
         g_loggedReadyNoNavmesh = ready;  // advanced only by a written line
+        std::wstring places;  // of each seat whose player is in
+        for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+        {
+            if (players::generation::Active(seat))
+            {
+                places += (places.empty() ? L"" : L"; ") + Places(seat);
+            }
+        }
         Line(L"{} of {}'s characters' moves found no navmesh where the world was ready (not refused so far); {}", ready,
-             players::kSeatsBuilt == 1 ? L"player 2" : L"players 2 and 3", Places(players::kFirstSeat));
+             players::kSeatsBuilt == 1 ? L"player 2" : L"players 2 and 3", places);
     }
 #endif
 }

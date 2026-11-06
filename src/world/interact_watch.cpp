@@ -115,7 +115,7 @@ constexpr std::uint8_t   kQueryBytes[] = {0x41, 0x55, 0x41, 0x56, 0xB8, 0x28, 0x
 constexpr platform::FunctionFact kQuery{L"the octree's candidate query", 0x1422BA490, kQueryBytes};
 constexpr float          kQueryExtent  = 10.0f;  // as the update's call (cm)
 
-constexpr float     kNearCm         = 2000.0f;  // the census: points within 20 m of either player
+constexpr float     kNearCm         = 2000.0f;  // the census: points within 20 m of any player
 constexpr ULONGLONG kCensusPeriodMs = 500;
 constexpr ULONGLONG kRegistrarPeriodMs = 30'000;
 
@@ -146,7 +146,7 @@ const std::uint64_t*    g_scooterKey = nullptr;  // live address of the ride-on 
 SRWLOCK                                     g_addLock = SRWLOCK_INIT;
 std::unordered_map<std::uintptr_t, std::uint64_t> g_addsByRegistrar;  // IDA return address -> count since summary
 thread_local int                            t_marksInExecute = -1;  // -1 outside ExecuteSlot
-thread_local std::int32_t                   t_effectsBefore[2] = {0, 0};  // each controller's effects before a grant
+thread_local std::int32_t                   t_effectsBefore[players::kMaxPlayers]{};  // by player: effects before a grant
 
 // Game thread (the update hook).
 std::array<std::uint8_t, 8 * kFieldActionSlots + kFieldActionSlots * 8 + 3 * kFieldActionSlots + 1> g_slotSeen{};
@@ -157,11 +157,11 @@ struct PointSeen
 {
     std::uint32_t flags = 0;
     std::uint8_t  slot = 0, talk = 0;
-    bool          nearOne = false, nearTwo = false;
+    bool          nearTo[players::kMaxPlayers]{};  // by player (0 player 1): within kNearCm of their character
     bool operator==(const PointSeen&) const = default;
 };
 std::unordered_map<std::uint64_t, PointSeen> g_points;  // key -> last logged
-std::vector<std::uint64_t>                   g_dryRunSeen;
+std::vector<std::uint64_t>                   g_dryRunSeen[players::kMaxPlayers];  // by seat: the keys last logged
 std::array<void*, kFieldActionMaxPoints>                g_found{};
 bool                                         g_wasIn = false;
 
@@ -336,7 +336,7 @@ void ExecuteSlot(void* mgr, std::uint8_t slot) noexcept
 }
 
 /// The pass's mark hook (world/field_pickup): a WorldItem key marked.
-void OnMarked(std::uint64_t key, std::uint8_t taken, std::uintptr_t returnAddress, bool playerTwo) noexcept
+void OnMarked(std::uint64_t key, std::uint8_t taken, std::uintptr_t returnAddress, int seat) noexcept
 {
     if (t_marksInExecute >= 0 && taken != 0)
     {
@@ -351,7 +351,7 @@ void OnMarked(std::uint64_t key, std::uint8_t taken, std::uintptr_t returnAddres
         const auto caller = Ida(returnAddress);
         platform::LogDebug(L"interact: WorldItem mark {} -> {} ({}, from 0x{:X}){}", Name(key), taken,
                            caller == kMarkFromListener ? L"the key listener" : L"another caller", caller,
-                           playerTwo ? L", in player 2's pass" : L"");
+                           seat != 0 ? std::format(L", in {}'s pass", players::SeatName(seat)) : std::wstring());
     }
     catch (...)
     {
@@ -360,18 +360,20 @@ void OnMarked(std::uint64_t key, std::uint8_t taken, std::uintptr_t returnAddres
 
 /// The pass's grant hook, before the game's grant: each controller's active force-feedback effects (RE-p2-rumble.md §6
 /// item 4: expect +1 on the primary one). The grant's line is Debug: its reads are made only when it is written.
-void OnGranting(std::uint64_t, bool) noexcept
+void OnGranting(std::uint64_t, int) noexcept
 {
     if (!platform::Enabled(platform::Level::Debug))
     {
         return;
     }
-    t_effectsBefore[0] = feedback::rumble_watch::EffectCount(players::generation::PlayerOneController());
-    t_effectsBefore[1] = feedback::rumble_watch::EffectCount(players::generation::PlayerTwoController());
+    for (int p = 0; p < players::kMaxPlayers; ++p)
+    {
+        t_effectsBefore[p] = feedback::rumble_watch::EffectCount(players::generation::ControllerOf(p));
+    }
 }
 
 /// ... and after it, inside the grant's scope: who the rumble went to.
-void OnGranted(std::uint64_t key, bool playerTwo) noexcept
+void OnGranted(std::uint64_t key, int seat) noexcept
 {
     if (!platform::Enabled(platform::Level::Debug))
     {
@@ -379,11 +381,19 @@ void OnGranted(std::uint64_t key, bool playerTwo) noexcept
     }
     try
     {
+        std::wstring effects;  // every controller there is: its effects before and after
+        for (int p = 0; p < players::kMaxPlayers; ++p)
+        {
+            if (const void* controller = players::generation::ControllerOf(p); controller != nullptr)
+            {
+                effects += std::format(L"{}{}'s controller {} -> {}", effects.empty() ? L"" : L", ", players::SeatName(p),
+                                       t_effectsBefore[p], feedback::rumble_watch::EffectCount(controller));
+            }
+        }
         platform::LogDebug(L"interact: WorldItem grant {}{} (the item-get rumble goes to the primary controller: {}; "
-                           L"force-feedback effects: player 1's controller {} -> {}, player 2's {} -> {})",
-                           Name(key), playerTwo ? L" (player 2's pickup)" : L"", PrimaryText(), t_effectsBefore[0],
-                           feedback::rumble_watch::EffectCount(players::generation::PlayerOneController()), t_effectsBefore[1],
-                           feedback::rumble_watch::EffectCount(players::generation::PlayerTwoController()));
+                           L"force-feedback effects: {})",
+                           Name(key), seat != 0 ? std::format(L" ({}'s pickup)", players::SeatName(seat)) : std::wstring(),
+                           PrimaryText(), effects);
     }
     catch (...)
     {
@@ -453,23 +463,44 @@ std::unordered_set<std::uint64_t> WorldItemKeys(const std::uint8_t* items)
     return keys;
 }
 
-/// The points within kNearCm of either player, each logged when it first comes near, when its flags,
+/// Where every player's character stands, by seat (index 0 player 1's); `in` is false for a seat with no member.
+struct Characters
+{
+    bool  in[players::kMaxPlayers]{};
+    float at[players::kMaxPlayers][3]{};
+};
+
+/// "3.0 m from player 1, 12.5 m from player 2": `d` (cm, by player) for every player in.
+std::wstring FromPlayers(const Characters& who, const float (&d)[players::kMaxPlayers])
+{
+    std::wstring text;
+    for (int p = 0; p < players::kMaxPlayers; ++p)
+    {
+        if (who.in[p])
+        {
+            text += std::format(L"{}{:.1f} m from {}", text.empty() ? L"" : L", ", d[p] / 100.0f, players::SeatName(p));
+        }
+    }
+    return text;
+}
+
+/// The points within kNearCm of any player, each logged when it first comes near, when its flags,
 /// slot or nearness change, and when it leaves.
-void Census(const std::uint8_t* mgr, const std::unordered_set<std::uint64_t>& items, const float (&one)[3],
-            const float (&two)[3])
+void Census(const std::uint8_t* mgr, const std::unordered_set<std::uint64_t>& items, const Characters& who)
 {
     struct Near
     {
         std::uint64_t key;
         PointSeen     seen;
         const std::uint8_t* point;
-        float         d1, d2;
+        float         d[players::kMaxPlayers];
     };
     std::vector<Near> nearby;
     nearby.reserve(kFieldActionMaxPoints);  // nothing allocates while the game's lock is held
     int           walked = 0;
-    float         nearestOne = 1e30f, nearestTwo = 1e30f;
-    std::uint64_t nearestOneKey = 0, nearestTwoKey = 0;
+    float         nearest[players::kMaxPlayers];
+    std::uint64_t nearestKey[players::kMaxPlayers]{};
+    std::fill(std::begin(nearest), std::end(nearest), 1e30f);
     {
         const SharedLock lock(reinterpret_cast<PSRWLOCK>(const_cast<std::uint8_t*>(mgr) + kFieldActionPointLock));
         const auto* node = PointerAt(mgr, kFieldActionPointList);
@@ -478,39 +509,49 @@ void Census(const std::uint8_t* mgr, const std::unordered_set<std::uint64_t>& it
             const auto* point = node + kFieldActionNodePoint;
             float       at[3]{};
             platform::CopyGuarded(at, point + kPointLocation, sizeof(at));
-            const float d1 = Distance(at, one), d2 = Distance(at, two);
             ++walked;
-            if (d1 < nearestOne)
+            Near found{ReadField<std::uint64_t>(point, kFieldActionPointKey), PointSeen{}, point, {}};
+            bool anyNear = false;
+            for (int p = 0; p < players::kMaxPlayers; ++p)
             {
-                nearestOne    = d1;
-                nearestOneKey = ReadField<std::uint64_t>(point, kFieldActionPointKey);
+                if (!who.in[p])
+                {
+                    continue;
+                }
+                found.d[p] = Distance(at, who.at[p]);
+                if (found.d[p] < nearest[p])
+                {
+                    nearest[p]    = found.d[p];
+                    nearestKey[p] = found.key;
+                }
+                found.seen.nearTo[p] = found.d[p] <= kNearCm;
+                anyNear             = anyNear || found.seen.nearTo[p];
             }
-            if (d2 < nearestTwo)
-            {
-                nearestTwo    = d2;
-                nearestTwoKey = ReadField<std::uint64_t>(point, kFieldActionPointKey);
-            }
-            if (d1 > kNearCm && d2 > kNearCm)
+            if (!anyNear)
             {
                 continue;
             }
-            PointSeen seen;
-            seen.flags   = ReadField<std::uint32_t>(point, kFieldActionPointFlags);
-            seen.slot    = ReadField<std::uint8_t>(point, kPointSlot);
-            seen.talk    = ReadField<std::uint8_t>(point, kPointTalk);
-            seen.nearOne = d1 <= kNearCm;
-            seen.nearTwo = d2 <= kNearCm;
-            nearby.push_back({ReadField<std::uint64_t>(point, kFieldActionPointKey), seen, point, d1, d2});
+            found.seen.flags = ReadField<std::uint32_t>(point, kFieldActionPointFlags);
+            found.seen.slot  = ReadField<std::uint8_t>(point, kPointSlot);
+            found.seen.talk  = ReadField<std::uint8_t>(point, kPointTalk);
+            nearby.push_back(found);
         }
     }
     // A summary every kRegistrarPeriodMs, so an empty census reads as "nothing near", not as a broken walk.
     if (const ULONGLONG now = GetTickCount64(); now >= g_censusSummaryAt)
     {
         g_censusSummaryAt = now + kRegistrarPeriodMs;
-        platform::LogDebug(L"interact: census: {} point(s) registered, {} within 20 m of a player; nearest to player 1 {} at "
-                      L"{:.1f} m, to player 2 {} at {:.1f} m",
-                      walked, nearby.size(), Name(nearestOneKey), nearestOne / 100.0f, Name(nearestTwoKey),
-                      nearestTwo / 100.0f);
+        std::wstring nearestText;
+        for (int p = 0; p < players::kMaxPlayers; ++p)
+        {
+            if (who.in[p])
+            {
+                nearestText += std::format(L"{}to {} {} at {:.1f} m", nearestText.empty() ? L"" : L", ", players::SeatName(p),
+                                           Name(nearestKey[p]), nearest[p] / 100.0f);
+            }
+        }
+        platform::LogDebug(L"interact: census: {} point(s) registered, {} within 20 m of a player; nearest {}", walked,
+                           nearby.size(), nearestText);
     }
     std::unordered_set<std::uint64_t> present;
     for (const Near& n : nearby)
@@ -526,20 +567,19 @@ void Census(const std::uint8_t* mgr, const std::unordered_set<std::uint64_t>& it
         if (first)
         {
             platform::LogDebug(L"interact: near {} (owner {}, {}, talk {}, presets {} / {} / {}, slot {}, kind {}, variant {}, "
-                          L"flags 0x{:08X}): {:.1f} m from player 1, {:.1f} m from player 2",
+                          L"flags 0x{:08X}): {}",
                           Name(n.key), Name(ReadField<std::uint64_t>(n.point, kPointOwner)),
                           items.contains(n.key) ? L"WorldItem" : L"not a WorldItem", n.seen.talk,
                           Name(ReadField<std::uint64_t>(n.point, kFieldActionPointPreset)),
                           Name(ReadField<std::uint64_t>(n.point, kPointPreset2)),
                           Name(ReadField<std::uint64_t>(n.point, kPointPresetPlayer)), n.seen.slot,
                           ReadField<std::uint8_t>(n.point, kPointKind), ReadField<std::uint8_t>(n.point, kPointVariant),
-                          n.seen.flags, n.d1 / 100.0f, n.d2 / 100.0f);
+                          n.seen.flags, FromPlayers(who, n.d));
         }
         else
         {
-            platform::LogDebug(L"interact: {} now slot {}, flags 0x{:08X}{}: {:.1f} m from player 1, {:.1f} m from player 2",
-                          Name(n.key), n.seen.slot, n.seen.flags,
-                          (n.seen.flags & 2) != 0 ? L" (player 1's slot target)" : L"", n.d1 / 100.0f, n.d2 / 100.0f);
+            platform::LogDebug(L"interact: {} now slot {}, flags 0x{:08X}{}: {}", Name(n.key), n.seen.slot, n.seen.flags,
+                               (n.seen.flags & 2) != 0 ? L" (player 1's slot target)" : L"", FromPlayers(who, n.d));
         }
     }
     for (auto it = g_points.begin(); it != g_points.end();)
@@ -549,19 +589,19 @@ void Census(const std::uint8_t* mgr, const std::unordered_set<std::uint64_t>& it
             ++it;
             continue;
         }
-        platform::LogDebug(L"interact: {} is no longer near either player (or was removed)", Name(it->first));
+        platform::LogDebug(L"interact: {} is no longer near any player (or was removed)", Name(it->first));
         it = g_points.erase(it);
     }
 }
 
-/// The game's candidate query around player 2's member, into the mod's own array (writes nothing else).
-void DryRun(const std::uint8_t* mgr, const std::unordered_set<std::uint64_t>& items, const float (&two)[3])
+/// The game's candidate query around `seat`'s member (at `member`), into the mod's own array (writes nothing else).
+void DryRun(const std::uint8_t* mgr, const std::unordered_set<std::uint64_t>& items, int seat, const float (&member)[3])
 {
     if (g_query == nullptr)
     {
         return;
     }
-    alignas(16) float box[8] = {two[0], two[1], two[2], 0.0f, kQueryExtent, kQueryExtent, kQueryExtent, 0.0f};
+    alignas(16) float box[8] = {member[0], member[1], member[2], 0.0f, kQueryExtent, kQueryExtent, kQueryExtent, 0.0f};
     RawArray          found{g_found.data(), 0, kFieldActionMaxPoints};  // the pool's size: the query never reallocates
     void*             cap     = &found;
     auto*             octree  = const_cast<std::uint8_t*>(mgr) + kOctree;
@@ -580,11 +620,11 @@ void DryRun(const std::uint8_t* mgr, const std::unordered_set<std::uint64_t>& it
         keys.push_back(ReadField<std::uint64_t>(g_found[i], kFieldActionPointKey));
     }
     std::sort(keys.begin(), keys.end());
-    if (keys == g_dryRunSeen)
+    if (keys == g_dryRunSeen[seat])
     {
         return;
     }
-    g_dryRunSeen = keys;
+    g_dryRunSeen[seat] = keys;
     std::wstring line;
     for (int i = 0; i < count; ++i)
     {
@@ -595,10 +635,10 @@ void DryRun(const std::uint8_t* mgr, const std::unordered_set<std::uint64_t>& it
         line += std::format(L"{}{} ({}, {:.1f} m)", line.empty() ? L"" : L"; ", Name(key),
                             items.contains(key) ? L"WorldItem"
                                                 : Name(ReadField<std::uint64_t>(point, kFieldActionPointPreset)),
-                            Distance(at, two) / 100.0f);
+                            Distance(at, member) / 100.0f);
     }
-    platform::LogDebug(L"interact: dry run around player 2's member: {} candidate(s){}{}", count, count != 0 ? L": " : L"",
-                  line);
+    platform::LogDebug(L"interact: dry run around {}'s member: {} candidate(s){}{}", players::SeatName(seat), count,
+                       count != 0 ? L": " : L"", line);
 }
 
 /// The registrations since the last summary, per registrar (the return address into the caller).
@@ -637,12 +677,19 @@ void AfterUpdate(const std::uint8_t* mgr)
     {
         LogRegistrars();
     }
-    const bool in = players::generation::Active() && players::generation::Member() != nullptr;
+    bool in = false;  // a seat's player holds a member
+    for (int seat = 1; seat < players::kMaxPlayers; ++seat)
+    {
+        in = in || (players::generation::Active(seat) && players::generation::MemberOf(seat) != nullptr);
+    }
     if (in != g_wasIn)
     {
         g_wasIn = in;
         g_points.clear();
-        g_dryRunSeen.clear();
+        for (auto& seen : g_dryRunSeen)
+        {
+            seen.clear();
+        }
     }
     const ULONGLONG now = GetTickCount64();
     if (!debug || !in || now < g_censusAt)
@@ -650,19 +697,36 @@ void AfterUpdate(const std::uint8_t* mgr)
         return;
     }
     g_censusAt = now + kCensusPeriodMs;
-    float one[3]{}, two[3]{};
-    void* leader = Leader();
-    if (leader == nullptr || !players::unreal::ActorLocation(leader, one) ||
-        !players::unreal::ActorLocation(players::generation::Member(), two))
+    Characters who;
+    void*      leader = Leader();
+    who.in[0]         = leader != nullptr && players::unreal::ActorLocation(leader, who.at[0]);
+    bool anySeat      = false;
+    for (int seat = 1; seat < players::kMaxPlayers; ++seat)
+    {
+        void* member = players::generation::Active(seat) ? players::generation::MemberOf(seat) : nullptr;
+        who.in[seat] = member != nullptr && players::unreal::ActorLocation(member, who.at[seat]);
+        anySeat      = anySeat || who.in[seat];
+    }
+    if (!who.in[0] || !anySeat)
     {
         return;
     }
     const auto items = WorldItemKeys(PointerAt(Root(), kRootWorldItems));
-    Census(mgr, items, one, two);
-    DryRun(mgr, items, two);
+    Census(mgr, items, who);
+    for (int seat = 1; seat < players::kMaxPlayers; ++seat)
+    {
+        if (who.in[seat])
+        {
+            DryRun(mgr, items, seat, who.at[seat]);
+        }
+        else
+        {
+            g_dryRunSeen[seat].clear();  // a seat's player who comes back starts with a line
+        }
+    }
 }
 
-/// The pass's update hook (game thread): after the game's own update and player 2's pass.
+/// The pass's update hook (game thread): after the game's own update and the seats' passes.
 void OnUpdate(void* mgr) noexcept
 {
     try

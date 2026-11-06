@@ -1286,7 +1286,7 @@ std::uint8_t MarkByKey(void* items, std::uint64_t key) noexcept
     }
     if (g_observer.marked != nullptr)
     {
-        g_observer.marked(key, taken, caller, isSeat);
+        g_observer.marked(key, taken, caller, isSeat ? seat : 0);
     }
     return taken;
 }
@@ -1301,7 +1301,7 @@ void Acquire(void* items, void* entry) noexcept
     const bool isSeat  = seat >= 1;
     if (g_observer.granting != nullptr)
     {
-        g_observer.granting(key, isSeat);
+        g_observer.granting(key, isSeat ? seat : 0);
     }
     std::optional<scopes::primary_controller::Scope> primary;
     if (isSeat)
@@ -1311,7 +1311,7 @@ void Acquire(void* items, void* entry) noexcept
     reinterpret_cast<AcquireFn>(g_acquireCall.Original())(items, entry);
     if (g_observer.granted != nullptr)
     {
-        g_observer.granted(key, isSeat);  // inside the scope: the observer may read who the rumble went to
+        g_observer.granted(key, isSeat ? seat : 0);  // inside the scope: the observer may read who the rumble went to
     }
 }
 

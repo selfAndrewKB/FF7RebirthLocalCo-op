@@ -69,16 +69,15 @@ void Remove() noexcept;
 void AfterUpdate(void* mgr, float dt) noexcept;
 
 /// What the three hooks tell the observer (each entry may be null): after the game's update and the seats' passes
-/// (game thread); a WorldItem key marked (the game's answer, the caller's return address, whether a seat's pass
-/// marked it; any thread); a grant, before the game's call and after it, inside the same scope (`isSeat`: the
-/// grant ran with a seat's controller as the primary one). The observer is a dev tool: with two players "a seat" is
-/// player 2.
+/// (game thread); a WorldItem key marked (the game's answer, the caller's return address, and the seat whose pass
+/// marked it, 0 for none; any thread); a grant, before the game's call and after it, inside the same scope (`seat`:
+/// the seat whose controller the grant ran with as the primary one, 0 for none). The observer is a dev tool.
 struct HookObserver
 {
-    void (*afterUpdate)(void* mgr) noexcept                                                               = nullptr;
-    void (*marked)(std::uint64_t key, std::uint8_t taken, std::uintptr_t caller, bool isSeat) noexcept = nullptr;
-    void (*granting)(std::uint64_t key, bool isSeat) noexcept                                           = nullptr;
-    void (*granted)(std::uint64_t key, bool isSeat) noexcept                                            = nullptr;
+    void (*afterUpdate)(void* mgr) noexcept                                                          = nullptr;
+    void (*marked)(std::uint64_t key, std::uint8_t taken, std::uintptr_t caller, int seat) noexcept = nullptr;
+    void (*granting)(std::uint64_t key, int seat) noexcept                                           = nullptr;
+    void (*granted)(std::uint64_t key, int seat) noexcept                                            = nullptr;
 };
 
 /// The one observer (a copy is kept). Set before any field exists, cleared at unload.
