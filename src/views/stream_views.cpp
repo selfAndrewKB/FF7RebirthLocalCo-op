@@ -61,7 +61,7 @@ const wchar_t* NameOf(StreamViewsMode mode) noexcept
     switch (mode)
     {
         case StreamViewsMode::Off: return L"off";
-        case StreamViewsMode::PlayerTwo: return L"the further players' cameras";
+        case StreamViewsMode::Seat: return L"the further players' cameras";
         case StreamViewsMode::Both: return L"every player's camera";
     }
     return L"?";
@@ -201,7 +201,7 @@ void RegisterStreamCommands()
                  return Outcome{false, L"streaming views are not installed (see the install log)"};
              }
              const auto mode = word == L"off"  ? StreamViewsMode::Off
-                               : word == L"p2" ? StreamViewsMode::PlayerTwo
+                               : word == L"p2" ? StreamViewsMode::Seat
                                                : StreamViewsMode::Both;
              SetStreamViewsMode(mode);  // applied at the next tick, which logs it
              return Outcome{true, word == L"off"  ? L"no streaming views (the game's own only)"
@@ -210,9 +210,9 @@ void RegisterStreamCommands()
          },
          .get = [] {
              const StreamViewsMode mode = GetStreamViewsMode();
-             return Value{std::wstring(mode == StreamViewsMode::Off         ? L"off"
-                                       : mode == StreamViewsMode::PlayerTwo ? L"p2"
-                                                                            : L"both")};
+             return Value{std::wstring(mode == StreamViewsMode::Off    ? L"off"
+                                       : mode == StreamViewsMode::Seat ? L"p2"
+                                                                       : L"both")};
          }});
     control::Register(
         {.name  = L"stream-fov-p1",

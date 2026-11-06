@@ -71,8 +71,8 @@ constexpr std::uint32_t kTimingFrames   = 240;
 /// What each part of the pass costs, for the periodic log line.
 enum Part : std::size_t
 {
-    kContextsTwo,
-    kTicksTwo,
+    kContextsSeat,
+    kTicksSeat,
     kContextsOne,
     kTicksOne,
     kScan,
@@ -127,7 +127,7 @@ struct FieldTargets
 };
 FieldTargets                                         g_fieldTargets;        // this frame's walk (hiddenSwapped unused)
 FieldTargets                                         g_fieldTargetsLogged{static_cast<std::size_t>(-1)};
-unsigned                                             g_mask               = 511;  // SetPlayerTwoLeversMask
+unsigned                                             g_mask               = 511;  // SetSeatLeversMask
 // A pass left its seat's contexts for the next further pass (LeaveSeat with another): player 1's contexts and
 // updates are due, from the next pass's LeaveSeat or SettleSeats.
 bool                                                 g_playerOneDue       = false;
@@ -398,7 +398,7 @@ bool ContextsToSeat(int seat)
 {
     const double start    = Now();
     const bool   contexts = !Acts(kLeverContexts) || hud_roots::SetContexts(seat);
-    Charge(kContextsTwo, start);
+    Charge(kContextsSeat, start);
     if (contexts)
     {
         return true;
@@ -461,22 +461,22 @@ void RemoveSeatHudContent() noexcept
     g_installed = false;
 }
 
-bool PlayerTwoPassInstalled() noexcept
+bool SeatHudContentInstalled() noexcept
 {
     return g_installed;
 }
 
-void SetPlayerTwoContent(bool on) noexcept
+void SetSeatHudContent(bool on) noexcept
 {
     g_on.store(on && g_installed && !g_refused, std::memory_order_relaxed);
     g_framesToScan = 0;
     g_seatRectKnown.fill(false);
     g_loggedEnter.fill(false);
     platform::Log(L"HUD levers: the further players' content {}",
-                  PlayerTwoContentOn() ? L"on" : on ? L"unavailable" : L"off");
+                  SeatHudContentOn() ? L"on" : on ? L"unavailable" : L"off");
 }
 
-void SetPlayerTwoLeversMask(unsigned mask) noexcept
+void SetSeatLeversMask(unsigned mask) noexcept
 {
     g_mask = mask;
     platform::Log(L"HUD levers: mask {} (contexts {}, first player {}, primary {}, rect {}, updates {}, compass {}, arrows {}, "
@@ -485,12 +485,12 @@ void SetPlayerTwoLeversMask(unsigned mask) noexcept
                   Acts(kLeverUpdates), Acts(kLeverCompass), Acts(kLeverArrows), Acts(kLeverGauges), Acts(kLeverPopups));
 }
 
-unsigned PlayerTwoLeversMask() noexcept
+unsigned SeatLeversMask() noexcept
 {
     return g_mask;
 }
 
-bool PlayerTwoContentOn() noexcept
+bool SeatHudContentOn() noexcept
 {
     return g_on.load(std::memory_order_relaxed);
 }
@@ -536,7 +536,7 @@ bool EnterSeatLevers(int seat) noexcept
     try
     {
         hud_roots::LocalPlayerSet bySeat{};
-        if (!PlayerTwoContentOn() || !players::SeatIndex(seat) || !hud_roots::LocalPlayers(bySeat) ||
+        if (!SeatHudContentOn() || !players::SeatIndex(seat) || !hud_roots::LocalPlayers(bySeat) ||
             bySeat[static_cast<std::size_t>(seat)] == nullptr || !KeepRootsCurrent(bySeat, seat) || !HoldPrimary(seat))
         {
             return false;
@@ -561,7 +561,7 @@ bool EnterSeatLevers(int seat) noexcept
         const bool   runs  = RunUpdates(seat);
         search_pins::Place();         // the search pins from the seat's camera (hud/field/search_pins.h)
         wrangle_targets::Place(seat);  // and the chocobo wrangle's targets (hud/field/wrangle_targets.h)
-        Charge(kTicksTwo, start);
+        Charge(kTicksSeat, start);
         if (!runs)
         {
             Refuse(L"a HUD update raised an exception in a further player's run");
@@ -676,21 +676,21 @@ void RegisterSeatHudContentCommands()
          .help  = L"each further player's image shows their own content: the game's player levers switched around "
                   L"their pass",
          .set   = [](const Value& v) {
-             if (!PlayerTwoPassInstalled())
+             if (!SeatHudContentInstalled())
              {
                  return Outcome{false, L"the HUD levers are not installed (see the startup log)"};
              }
              const bool on = std::get<bool>(v);
-             SetPlayerTwoContent(on);
-             if (on && !PlayerTwoContentOn())
+             SetSeatHudContent(on);
+             if (on && !SeatHudContentOn())
              {
                  return Outcome{false, L"the HUD levers refused a check (see the log)"};
              }
-             return Outcome{true, !on              ? L"the further players' content off"
-                                  : SecondImageOn() ? L"the further players' content on"
-                                                    : L"the further players' content on (needs hud-image on)"};
+             return Outcome{true, !on                ? L"the further players' content off"
+                                  : SeatHudImagesOn() ? L"the further players' content on"
+                                                      : L"the further players' content on (needs hud-image on)"};
          },
-         .get = [] { return Value{PlayerTwoContentOn()}; }});
+         .get = [] { return Value{SeatHudContentOn()}; }});
     control::Register(
         {.name  = L"hud-levers-mask",
          .shape = control::Shape::Integer,
@@ -699,10 +699,10 @@ void RegisterSeatHudContentCommands()
                   L"updates, 32 compass, 64 the arrows' own timers, 128 the enemy gauges per view, 256 the battle "
                   L"popups per view)",
          .set   = [](const Value& v) {
-             SetPlayerTwoLeversMask(static_cast<unsigned>(std::get<std::int64_t>(v)));
+             SetSeatLeversMask(static_cast<unsigned>(std::get<std::int64_t>(v)));
              return Outcome{true, L"levers mask set (see the log)"};
          },
-         .get = [] { return Value{std::int64_t{PlayerTwoLeversMask()}}; }});
+         .get = [] { return Value{std::int64_t{SeatLeversMask()}}; }});
     control::Register(
         {.name  = L"hud-context-skip",
          .shape = control::Shape::OnOff,

@@ -36,8 +36,8 @@ bool MinimapOnceOn() noexcept;
 
 /// Game thread, around player 2's overlay render (hud/passes/root_overlay_render.cpp): the skip byte is set for it
 /// only, and not while player 2's pass paints player 2's minimap (hud/minimap/minimap.h).
-void BeginMinimapPlayerTwoPass(bool playerTwoMinimap) noexcept;
-void EndMinimapPlayerTwoPass() noexcept;
+void BeginMinimapSeatPass(bool seatMinimap) noexcept;
+void EndMinimapSeatPass() noexcept;
 
 /// Game thread, each engine tick: the per-period counts line.
 void PollMinimapOnce() noexcept;

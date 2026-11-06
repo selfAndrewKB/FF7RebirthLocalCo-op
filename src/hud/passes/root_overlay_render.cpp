@@ -68,7 +68,7 @@ using platform::frame_watch::Now;
 /// image's buffer check: a pass planned but not run is put back by SettleSeats after the loop).
 bool AnotherPassBelow(int seat, bool splitShown) noexcept
 {
-    if (!splitShown || !SecondImageOn() || !PlayerTwoContentOn())
+    if (!splitShown || !SeatHudImagesOn() || !SeatHudContentOn())
     {
         return false;
     }
@@ -101,9 +101,9 @@ void FurtherPass(int seat, bool another) noexcept
     const double start = Now();
     // The seat's minimap (hud/minimap/minimap.h); without it, player 1's pass alone renders the minimap's map
     // (hud/minimap/minimap_once.h).
-    BeginMinimapPlayerTwoPass(minimap::BeginPaint(seat));
+    BeginMinimapSeatPass(minimap::BeginPaint(seat));
     RenderFurther();  // on a fault the minimap's target field and held slot are still put back below
-    EndMinimapPlayerTwoPass();
+    EndMinimapSeatPass();
     minimap::EndPaint();
     g_furtherSeconds += Now() - start;
     enemy_gauges::EndSeatPass();  // each gauge's size back to player 1's before player 1's updates

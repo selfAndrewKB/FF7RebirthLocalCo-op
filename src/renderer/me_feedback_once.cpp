@@ -117,7 +117,7 @@ platform::CallRedirect  g_hiddenCall;  // 1.005, in place of g_hiddenEntry
 platform::CallRedirect  g_mipRequestsCall;
 platform::CodeRedirect  g_shadowCode;
 ShadowFeedbackFields    g_shadowFields;
-std::uint64_t           g_shadowLogged[3] = {};  // skipped, passedOne, passedTwo at the last log
+std::uint64_t           g_shadowLogged[3] = {};  // skipped, passedOne, passedAdditional at the last log
 std::atomic<bool>       g_renderThreadPending{false};  // 1.005: the process and copy calls wait for the render thread
 std::uintptr_t          g_processSite = 0, g_processTarget = 0, g_copySite = 0, g_copyTarget = 0;  // set before it
 std::atomic<bool>       g_installed{false};
@@ -127,9 +127,9 @@ std::uintptr_t          g_managers = 0;  // live address of the static
 
 enum Family : int
 {
-    PlayerOne = 0,   // player 1's family (or any render that is not player 2's)
-    TwoPassed = 1,   // player 2's family, switch off
-    TwoSkipped = 2,  // player 2's family, the call skipped
+    PlayerOne = 0,          // player 1's family (or any render that is not player 2's)
+    AdditionalPassed = 1,   // player 2's family, switch off
+    AdditionalSkipped = 2,  // player 2's family, the call skipped
     kFamilies = 3,
 };
 
@@ -198,7 +198,7 @@ void InstallShadowSkip(const platform::GameImage& image) noexcept
 /// True if this stage's call is skipped: player 2's family under stream-feedback p1, with the stage's mask bit set.
 bool Skips(Stage stage, Family family) noexcept
 {
-    return family == TwoSkipped && (g_mask.load(std::memory_order_relaxed) & (1u << (stage - 1))) != 0;
+    return family == AdditionalSkipped && (g_mask.load(std::memory_order_relaxed) & (1u << (stage - 1))) != 0;
 }
 
 void Count(Stage stage, Family family) noexcept
@@ -235,8 +235,8 @@ void Render(void* renderer, void* commandList, void* a3, void* a4) noexcept
     platform::CopyGuarded(&additional, static_cast<const std::uint8_t*>(renderer) + kRendererAdditionalFamily, 1);
     const Family previous = t_family;  // a render nested inside another on this thread restores the outer one
     t_family              = additional == 0                            ? PlayerOne
-                            : g_on.load(std::memory_order_relaxed)     ? TwoSkipped
-                                                                       : TwoPassed;
+                            : g_on.load(std::memory_order_relaxed)     ? AdditionalSkipped
+                                                                       : AdditionalPassed;
     Count(Renders, t_family);
     reinterpret_cast<RenderFn>(g_render.Original())(renderer, commandList, a3, a4);
     t_family = previous;
@@ -485,7 +485,7 @@ void PollMeFeedbackOnce() noexcept
     }
     g_logAt = now + kLogPeriodMs;
     std::uint64_t delta[kStages][kFamilies] = {};
-    bool          familyTwo                 = false;
+    bool          additionalRendered        = false;
     for (int s = 0; s < kStages; ++s)
     {
         for (int f = 0; f < kFamilies; ++f)
@@ -495,17 +495,17 @@ void PollMeFeedbackOnce() noexcept
             g_logged[s][f]            = count;
         }
     }
-    familyTwo = delta[Renders][TwoPassed] + delta[Renders][TwoSkipped] != 0;
-    if (!familyTwo || !platform::Enabled(platform::Level::Debug))
+    additionalRendered = delta[Renders][AdditionalPassed] + delta[Renders][AdditionalSkipped] != 0;
+    if (!additionalRendered || !platform::Enabled(platform::Level::Debug))
     {
         return;  // one family per frame: nothing to report (or the periodic Debug line is not written)
     }
     auto line = [&](Stage stage) {
-        return std::format(L"{} / {} passed / {} skipped", delta[stage][PlayerOne], delta[stage][TwoPassed],
-                           delta[stage][TwoSkipped]);
+        return std::format(L"{} / {} passed / {} skipped", delta[stage][PlayerOne], delta[stage][AdditionalPassed],
+                           delta[stage][AdditionalSkipped]);
     };
     const std::uint64_t shadow[3] = {ShadowCount(g_shadowFields.skipped), ShadowCount(g_shadowFields.passedOne),
-                                     ShadowCount(g_shadowFields.passedTwo)};
+                                     ShadowCount(g_shadowFields.passedAdditional)};
     const auto shadowLine = std::format(L"{} / {} passed / {} skipped", shadow[1] - g_shadowLogged[1],
                                         shadow[2] - g_shadowLogged[2], shadow[0] - g_shadowLogged[0]);
     std::copy(std::begin(shadow), std::end(shadow), g_shadowLogged);

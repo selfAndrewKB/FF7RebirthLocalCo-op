@@ -111,7 +111,7 @@ void SwapOut(int seat) noexcept
         if (pinned > 0 && platform::Enabled(platform::Level::Trace))  // every HUD pass: Trace (platform/log.h)
         {
             platform::LogTrace(L"marker timers: {} of {} arrows have their own timer in {}'s view", pinned,
-                               timers.TwoCount(), players::SeatName(seat));
+                               timers.SeatTimerCount(), players::SeatName(seat));
         }
     }
     catch (...)

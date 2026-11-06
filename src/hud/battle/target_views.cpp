@@ -311,12 +311,12 @@ std::uint8_t LabelLookup(void* manager, float* point, float* scale, void* charac
     {
         return original(manager, point, scale, character);  // player 1's view and the game's tick: its own key
     }
-    Pair two;
-    battle::lock_on::Displayed(seat, two.object, two.controller);
+    Pair displayed;
+    battle::lock_on::Displayed(seat, displayed.object, displayed.controller);
     const auto key   = reinterpret_cast<std::uintptr_t>(manager) + kTargetedKey;
     const Pair theirs{ReadAt<std::uintptr_t>(key), ReadAt<std::uintptr_t>(key + 8)};
     // A borrowed swap: the lookup pins the key with its own reference and releases it again.
-    if (!platform::WriteGuarded(reinterpret_cast<void*>(key), &two, sizeof(two)))
+    if (!platform::WriteGuarded(reinterpret_cast<void*>(key), &displayed, sizeof(displayed)))
     {
         if (!platform::WriteGuarded(reinterpret_cast<void*>(key), &theirs, sizeof(theirs)))  // put back what was written
         {
@@ -327,7 +327,7 @@ std::uint8_t LabelLookup(void* manager, float* point, float* scale, void* charac
     }
     std::uint8_t found = 0;
     const bool   ok    = CallGuarded(original, found, manager, point, scale, character);
-    if (Pair{ReadAt<std::uintptr_t>(key), ReadAt<std::uintptr_t>(key + 8)} == two &&
+    if (Pair{ReadAt<std::uintptr_t>(key), ReadAt<std::uintptr_t>(key + 8)} == displayed &&
         !platform::WriteGuarded(reinterpret_cast<void*>(key), &theirs, sizeof(theirs)))
     {
         g_failed = true;  // the per-view marks stop; the game rewrites its key next frame
@@ -340,7 +340,7 @@ std::uint8_t LabelLookup(void* manager, float* point, float* scale, void* charac
     {
         return found;
     }
-    const LabelLog now{reinterpret_cast<std::uintptr_t>(character), two.object, found != 0, ok};
+    const LabelLog now{reinterpret_cast<std::uintptr_t>(character), displayed.object, found != 0, ok};
     auto logged = std::find_if(g_loggedLabels.begin(), g_loggedLabels.end(),
                                [&now](const LabelLog& label) { return label.character == now.character; });
     if (logged == g_loggedLabels.end())

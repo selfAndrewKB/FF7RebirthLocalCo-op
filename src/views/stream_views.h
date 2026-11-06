@@ -28,9 +28,9 @@ namespace lss::views {
 
 enum class StreamViewsMode : std::uint8_t
 {
-    Off,        // stock: the renders race (for comparison)
-    PlayerTwo,  // the further players' cameras only (`p2` at the console)
-    Both,       // every player's (the default)
+    Off,   // stock: the renders race (for comparison)
+    Seat,  // the further players' cameras only (`p2` at the console)
+    Both,  // every player's (the default)
 };
 
 /// Checks the game's function; false (logged, the call is never made) if it differs, or if the view

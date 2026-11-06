@@ -87,7 +87,7 @@ public:
     float In(std::uint64_t key, float mine)
     {
         one_.push_back({key, mine});
-        const Timer* theirs = Find(two_, key);
+        const Timer* theirs = Find(seatTimers_, key);
         return theirs != nullptr ? theirs->t : 0.0f;
     }
 
@@ -106,7 +106,7 @@ public:
     /// The seat's own are what this run saw (arrows no longer in the list are dropped); player 1's are back in place.
     void EndOut() noexcept
     {
-        two_.swap(seen_);
+        seatTimers_.swap(seen_);
         one_.clear();
     }
 
@@ -116,10 +116,10 @@ public:
     void Forget() noexcept
     {
         one_.clear();
-        two_.clear();
+        seatTimers_.clear();
     }
 
-    std::size_t TwoCount() const noexcept { return two_.size(); }
+    std::size_t SeatTimerCount() const noexcept { return seatTimers_.size(); }
 
 private:
     static const Timer* Find(const std::vector<Timer>& timers, std::uint64_t key) noexcept
@@ -129,9 +129,9 @@ private:
         return found != timers.end() ? &*found : nullptr;
     }
 
-    std::vector<Timer> one_;   // set aside during the seat's run
-    std::vector<Timer> two_;   // the seat's own, between frames
-    std::vector<Timer> seen_;  // scratch, reused
+    std::vector<Timer> one_;         // set aside during the seat's run
+    std::vector<Timer> seatTimers_;  // the seat's own, between frames
+    std::vector<Timer> seen_;        // scratch, reused
 };
 
 // ---- minimap: a map piece's unload, asked for both players ----
@@ -176,12 +176,12 @@ struct GaugeClass
     bool leaderScope = false;  // placed inside the seat's leader scope
 };
 
-constexpr GaugeClass ClassifyGauge(std::uintptr_t source, std::uintptr_t twoOwn, std::uintptr_t twoMain, bool targeted,
-                                   bool skipLeaderClamp, bool forced) noexcept
+constexpr GaugeClass ClassifyGauge(std::uintptr_t source, std::uintptr_t seatOwn, std::uintptr_t seatMain,
+                                   bool targeted, bool skipLeaderClamp, bool forced) noexcept
 {
     GaugeClass gauge;
-    gauge.own         = source != 0 && source == twoOwn;
-    gauge.main        = source != 0 && source == twoMain;
+    gauge.own         = source != 0 && source == seatOwn;
+    gauge.main        = source != 0 && source == seatMain;
     gauge.caseC       = targeted && skipLeaderClamp;
     gauge.target      = gauge.own || gauge.main || gauge.caseC || forced;
     gauge.steps       = gauge.own ? 2 : 1;

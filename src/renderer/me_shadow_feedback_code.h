@@ -32,12 +32,12 @@ namespace lss::renderer {
 struct ShadowFeedbackFields
 {
     alignas(8) std::uint64_t skip = 0;  // +0x00: nonzero while player 2's family skips (stream-feedback p1, mask bit 16)
-    std::uint64_t skipped       = 0;    // +0x08: player 2's family, region skipped (per shadow batch)
-    std::uint64_t passedOne     = 0;    // +0x10: player 1's family (or any non-additional one), the game's code
-    std::uint64_t passedTwo     = 0;    // +0x18: player 2's family with the switch off
+    std::uint64_t skipped          = 0;    // +0x08: player 2's family, region skipped (per shadow batch)
+    std::uint64_t passedOne        = 0;    // +0x10: player 1's family (or any non-additional one), the game's code
+    std::uint64_t passedAdditional = 0;    // +0x18: player 2's family with the switch off
 };
 static_assert(offsetof(ShadowFeedbackFields, skipped) == 0x08 && offsetof(ShadowFeedbackFields, passedOne) == 0x10 &&
-              offsetof(ShadowFeedbackFields, passedTwo) == 0x18);
+              offsetof(ShadowFeedbackFields, passedAdditional) == 0x18);
 
 /// The instruction the site replaces (`jbe rel32`, +0x11C in both builds), and the compare just before it.
 inline constexpr std::uint8_t kShadowFeedbackSiteBytes[]        = {0x0F, 0x86, 0x1C, 0x01, 0x00, 0x00};
@@ -70,7 +70,7 @@ inline std::array<std::uint8_t, kShadowFeedbackCodeSize> ShadowFeedbackCode(cons
         0x41, 0xBF, 0x30, 0x00, 0x00, 0x00,        // 30: mov  r15d, 30h           the allocator offset, set there
         0xFF, 0x25, 0x00, 0x00, 0x00, 0x00,        // 36: jmp  [rip+0]             the array's free
         0, 0, 0, 0, 0, 0, 0, 0,                    // 42: skipTo
-        0xF0, 0x48, 0xFF, 0x40, 0x18,              // 50: two: lock inc qword [rax+18h]  passedTwo
+        0xF0, 0x48, 0xFF, 0x40, 0x18,              // 50: two: lock inc qword [rax+18h]  passedAdditional
         0xEB, 0x05,                                // 55: jmp  compare (62)
         0xF0, 0x48, 0xFF, 0x40, 0x10,              // 57: one: lock inc qword [rax+10h]  passedOne
         0x41, 0x83, 0x7E, 0x18, 0x00,              // 62: compare: cmp dword [r14+18h], 0  (the replaced test)
@@ -101,7 +101,7 @@ inline std::array<std::uint8_t, kShadowFeedbackCodeSize1005> ShadowFeedbackCode1
         0x31, 0xFF,                                // 34: xor  edi, edi
         0xFF, 0x25, 0x00, 0x00, 0x00, 0x00,        // 36: jmp  [rip+0]             the array's free
         0, 0, 0, 0, 0, 0, 0, 0,                    // 42: skipTo
-        0xF0, 0x48, 0xFF, 0x40, 0x18,              // 50: two: lock inc qword [rax+18h]  passedTwo
+        0xF0, 0x48, 0xFF, 0x40, 0x18,              // 50: two: lock inc qword [rax+18h]  passedAdditional
         0xEB, 0x05,                                // 55: jmp  compare (62)
         0xF0, 0x48, 0xFF, 0x40, 0x10,              // 57: one: lock inc qword [rax+10h]  passedOne
         0x41, 0x83, 0x7E, 0x18, 0x00,              // 62: compare: cmp dword [r14+18h], 0  (the replaced test)

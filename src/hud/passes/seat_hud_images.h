@@ -37,11 +37,11 @@ namespace lss::hud {
 
 bool InstallSeatHudImages(const platform::GameImage& image) noexcept;
 void RemoveSeatHudImages() noexcept;
-bool SecondImageInstalled() noexcept;
+bool SeatHudImagesInstalled() noexcept;
 
 /// The `hud-image` switch: the further players' HUD images on or off (on from a successful install).
-void SetSecondImage(bool on) noexcept;
-bool SecondImageOn() noexcept;
+void SetSeatHudImages(bool on) noexcept;
+bool SeatHudImagesOn() noexcept;
 
 /// The frame's steps, game thread, from the overlay render call (hud/passes/root_overlay_render.cpp) in this order:
 /// the slot's frame begins, unheld.

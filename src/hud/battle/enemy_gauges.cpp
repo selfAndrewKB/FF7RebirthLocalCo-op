@@ -476,7 +476,7 @@ bool ReplaySeat(int seat, std::uintptr_t manager, int& replayed, int& targeted)
 {
     std::uintptr_t object = 0, controller = 0;
     battle::lock_on::Displayed(seat, object, controller);
-    const auto          two        = target_views::TargetAndMain(object, controller);
+    const auto          ownTarget  = target_views::TargetAndMain(object, controller);
     const std::uint64_t memberWeak = scopes::leader_scope::WeakOf(players::generation::MemberOf(seat));
     auto&               offsets    = g_offsets[static_cast<std::size_t>(seat)];
     const bool          seed       = offsets.empty();
@@ -497,7 +497,7 @@ bool ReplaySeat(int seat, std::uintptr_t manager, int& replayed, int& targeted)
         }
         const Capture capture = Captured(p);
         const Key     key{ReadAt<std::uintptr_t>(entry), ReadAt<std::uintptr_t>(entry + 8)};
-        const auto    gauge   = hud_rules::ClassifyGauge(key.source, two[0], two[1], placed->targeted != 0,
+        const auto    gauge   = hud_rules::ClassifyGauge(key.source, ownTarget[0], ownTarget[1], placed->targeted != 0,
                                                          placed->skipLeaderClamp != 0, capture.forced != 0);
         const bool    own     = gauge.own;
         const bool    main    = gauge.main;

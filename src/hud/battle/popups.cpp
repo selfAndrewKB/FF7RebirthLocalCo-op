@@ -102,7 +102,7 @@ bool Alive(std::uintptr_t referenceController) noexcept
 }
 
 /// Places again every popup of `list` recorded this frame. Returns how many; -1 on an exception.
-int ReplayList(std::uintptr_t manager, const List& list, void* canvas, void* playerTwo) noexcept
+int ReplayList(std::uintptr_t manager, const List& list, void* canvas, void* seatController) noexcept
 {
     int placed = 0;
     platform::ForEachSparseElement(manager + list.member, list.element, [&](std::uintptr_t element) {
@@ -127,7 +127,7 @@ int ReplayList(std::uintptr_t manager, const List& list, void* canvas, void* pla
         {
             return true;  // not placed by the game this frame
         }
-        void* controller = playerTwo != nullptr ? playerTwo : reinterpret_cast<void*>(recorded->controller);
+        void* controller = seatController != nullptr ? seatController : reinterpret_cast<void*>(recorded->controller);
         if (!PlaceGuarded(list.umg ? g_placeUmg : g_placeSlate, controller, canvas, widget, *recorded))
         {
             placed = -1;

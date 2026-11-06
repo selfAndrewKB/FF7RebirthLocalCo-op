@@ -279,19 +279,20 @@ void RemoveSeatHudImages() noexcept
     g_installed = false;
 }
 
-bool SecondImageInstalled() noexcept
+bool SeatHudImagesInstalled() noexcept
 {
     return g_installed;
 }
 
-void SetSecondImage(bool on) noexcept
+void SetSeatHudImages(bool on) noexcept
 {
     g_on.store(on && g_installed && !g_refused, std::memory_order_relaxed);
     g_familyLogLines.store(0, std::memory_order_relaxed);
-    platform::Log(L"HUD image: the further players' images {}", SecondImageOn() ? L"on" : on ? L"unavailable" : L"off");
+    platform::Log(L"HUD image: the further players' images {}",
+                  SeatHudImagesOn() ? L"on" : on ? L"unavailable" : L"off");
 }
 
-bool SecondImageOn() noexcept
+bool SeatHudImagesOn() noexcept
 {
     return g_on.load(std::memory_order_relaxed);
 }
@@ -304,7 +305,7 @@ void BeginFrame() noexcept
 
 bool ImageReady(int seat, bool shown) noexcept
 {
-    bool image = shown && SecondImageOn() && g_stockName.load(std::memory_order_relaxed) != 0;
+    bool image = shown && SeatHudImagesOn() && g_stockName.load(std::memory_order_relaxed) != 0;
     if (image)
     {
         const auto buffers = g_slot.BuffersUsable(seat);
@@ -433,19 +434,19 @@ void RegisterSeatHudImagesCommands()
          .help  = L"the further players' HUD images: the overlay rendered once more per further player and drawn "
                   L"only in that player's view",
          .set   = [](const Value& v) {
-             if (!SecondImageInstalled() || !RootOverlayRenderInstalled())
+             if (!SeatHudImagesInstalled() || !RootOverlayRenderInstalled())
              {
                  return Outcome{false, L"the further players' HUD images are not installed (see the startup log)"};
              }
              const bool on = std::get<bool>(v);
-             SetSecondImage(on);
-             if (on && !SecondImageOn())
+             SetSeatHudImages(on);
+             if (on && !SeatHudImagesOn())
              {
                  return Outcome{false, L"the further players' HUD images refused a check (see the log)"};
              }
              return Outcome{true, on ? L"the further players' HUD images on" : L"the further players' HUD images off"};
          },
-         .get = [] { return Value{SecondImageOn()}; }});
+         .get = [] { return Value{SeatHudImagesOn()}; }});
 }
 
 #endif

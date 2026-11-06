@@ -337,9 +337,9 @@ std::uint64_t SetText(void* textBlock, const void* text) noexcept
     }
     // After the swap: what the game's own compare is about to see (hud/minimap/label_relayouts.h).
     const label_relayouts::Before before = label_relayouts::BeforeSetText(textBlock, text);
-    const bool playerTwoState = before.read && seat != 0 && BookOf(seat).Holds(ControllerOf(textBlock));
+    const bool seatState = before.read && seat != 0 && BookOf(seat).Holds(ControllerOf(textBlock));
     const std::uint64_t result = original(textBlock, text);
-    label_relayouts::AfterSetText(textBlock, before, playerTwoState);
+    label_relayouts::AfterSetText(textBlock, before, seatState);
     return result;
 }
 

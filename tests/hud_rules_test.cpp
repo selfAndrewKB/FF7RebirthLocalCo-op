@@ -66,7 +66,7 @@ void TestTimerSwap()
     EXPECT(swap.Out(2, 0.7f) == std::optional<float>(6.0f));
     EXPECT(!swap.Out(3, 0.9f).has_value());  // new in player 2's run: keeps what it has
     swap.EndOut();
-    EXPECT(swap.TwoCount() == 3);
+    EXPECT(swap.SeatTimerCount() == 3);
 
     swap.BeginIn();
     EXPECT(swap.In(1, 5.1f) == 0.5f);  // player 2's own timer
@@ -76,7 +76,7 @@ void TestTimerSwap()
     EXPECT(swap.Out(1, 0.6f) == std::optional<float>(5.1f));
     EXPECT(swap.Out(4, 0.1f) == std::optional<float>(2.0f));
     swap.EndOut();  // key 2 and 3 are gone from the list: dropped
-    EXPECT(swap.TwoCount() == 2);
+    EXPECT(swap.SeatTimerCount() == 2);
     swap.BeginIn();
     EXPECT(swap.In(3, 1.0f) == 0.0f);
     swap.Abandon();
@@ -84,7 +84,7 @@ void TestTimerSwap()
     EXPECT(!swap.Out(3, 0.2f).has_value());  // abandoned: player 1's were left in place, nothing to give back
     swap.EndOut();
     swap.Forget();
-    EXPECT(swap.TwoCount() == 0);
+    EXPECT(swap.SeatTimerCount() == 0);
 }
 
 void TestUnloadAndGauges()

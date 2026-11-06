@@ -65,9 +65,9 @@ bool                   g_installed = false;
 bool                   g_on        = false;
 
 // Game thread.
-std::uint64_t g_playerTwoPasses = 0;
-std::uint64_t g_logged[5]       = {};  // the fields' four counters and the passes, at the last line
-ULONGLONG     g_logAt           = 0;
+std::uint64_t g_seatPasses = 0;
+std::uint64_t g_logged[5]  = {};  // the fields' four counters and the passes, at the last line
+ULONGLONG     g_logAt      = 0;
 
 std::uint64_t Counter(const std::uint64_t& field) noexcept
 {
@@ -157,13 +157,13 @@ bool MinimapOnceOn() noexcept
     return g_on;
 }
 
-void BeginMinimapPlayerTwoPass(bool playerTwoMinimap) noexcept
+void BeginMinimapSeatPass(bool seatMinimap) noexcept
 {
-    ++g_playerTwoPasses;
-    reinterpret_cast<volatile std::uint64_t&>(g_fields.skip) = g_on && !playerTwoMinimap ? 1 : 0;
+    ++g_seatPasses;
+    reinterpret_cast<volatile std::uint64_t&>(g_fields.skip) = g_on && !seatMinimap ? 1 : 0;
 }
 
-void EndMinimapPlayerTwoPass() noexcept
+void EndMinimapSeatPass() noexcept
 {
     reinterpret_cast<volatile std::uint64_t&>(g_fields.skip) = 0;
 }
@@ -181,7 +181,7 @@ void PollMinimapOnce() noexcept
     }
     g_logAt = now + kLogPeriodMs;
     const std::uint64_t counts[5] = {Counter(g_fields.circlePainted), Counter(g_fields.circleSkipped),
-                                     Counter(g_fields.octagonPainted), Counter(g_fields.octagonSkipped), g_playerTwoPasses};
+                                     Counter(g_fields.octagonPainted), Counter(g_fields.octagonSkipped), g_seatPasses};
     const bool painted = counts[0] != g_logged[0] || counts[1] != g_logged[1] || counts[2] != g_logged[2] ||
                          counts[3] != g_logged[3];
     if (!painted)

@@ -113,23 +113,23 @@ void TestPaths(const char* build, bool v1005)
     g_fields = {};
 
     EXPECT(site.Run(false, 0, 5) == kFellThrough);
-    EXPECT(g_fields.passedOne == 1 && g_fields.passedTwo == 0 && g_fields.skipped == 0);
+    EXPECT(g_fields.passedOne == 1 && g_fields.passedAdditional == 0 && g_fields.skipped == 0);
     EXPECT(site.Run(false, 0, 0) == kEmpty);
     EXPECT(g_fields.passedOne == 2);
     EXPECT(site.Run(false, 1, 5) == kFellThrough);  // the switch does not touch player 1's family
     EXPECT(g_fields.passedOne == 3 && g_fields.skipped == 0);
 
     EXPECT(site.Run(true, 0, 5) == kFellThrough);
-    EXPECT(g_fields.passedTwo == 1 && g_fields.skipped == 0);
+    EXPECT(g_fields.passedAdditional == 1 && g_fields.skipped == 0);
     EXPECT(site.Run(true, 0, 0) == kEmpty);
-    EXPECT(g_fields.passedTwo == 2);
+    EXPECT(g_fields.passedAdditional == 2);
 
     EXPECT(site.Run(true, 1, 5) == skipValue);
-    EXPECT(g_fields.skipped == 1 && g_fields.passedTwo == 2 && g_fields.passedOne == 3);
+    EXPECT(g_fields.skipped == 1 && g_fields.passedAdditional == 2 && g_fields.passedOne == 3);
     EXPECT(site.Run(true, 1, 0) == skipValue);  // skipped whatever the count
     EXPECT(g_fields.skipped == 2);
     EXPECT(site.Run(true, 0x100, 5) == kFellThrough);  // only the switch's low byte is read
-    EXPECT(g_fields.passedTwo == 3 && g_fields.skipped == 2);
+    EXPECT(g_fields.passedAdditional == 3 && g_fields.skipped == 2);
 }
 
 void TestTheBytes()
