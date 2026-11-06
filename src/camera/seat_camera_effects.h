@@ -32,7 +32,7 @@ namespace lss::camera::seat_camera_effects {
 /// Replaces the slots; each item installs whole or stays off (logged).
 void Install(const platform::GameImage& image) noexcept;
 
-/// Puts the game's code back (at mod uninstall, with every further player out).
+/// Puts the game's code back (at mod uninstall, with every seat out).
 void Remove() noexcept;
 
 /// Game thread, once per engine tick: the status line (Debug, every 10 s with activity).

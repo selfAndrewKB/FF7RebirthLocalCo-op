@@ -1,11 +1,11 @@
 #pragma once
 
-// A further player inside CharaPop switch volumes (research/RE-p2-shop-npcs-near-p2.md §2, §6, §10).
+// A seat's player inside CharaPop switch volumes (research/RE-p2-shop-npcs-near-p2.md §2, §6, §10).
 //
 // Some town NPCs (Costa del Sol's and Under Junon's shopkeepers) are on the show list of an AEndCharaPopSwitchVolume:
 // CharaPop's spawn score excludes them (-999999) unless one of their volumes is "inside". The volume's own trigger enter
 // and leave overrides set and clear that byte, and the game calls them only from the trigger filter, for the tracker it
-// reads: player 1's trigger. So a shopkeeper, and the head icon bound to her, appeared near a further player only once
+// reads: player 1's trigger. So a shopkeeper, and the head icon bound to her, appeared near a seat's player only once
 // player 1 came by.
 //
 // seat_triggers hands a seat's events of this class here, and the volume's own override is called with that seat's

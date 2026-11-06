@@ -17,7 +17,7 @@
 // A row is a seat's while the seat's component names it, and stays so until it leaves the list
 // (its removal animation runs after the component has let go of it).
 //
-// Once per frame before the overlay renders (while a further player is in):
+// Once per frame before the overlay renders (while a seat is in):
 //   - Refresh reads and classifies the list. When it changed, each player's rows are laid out on
 //     their own with the game's own layout (FieldActionIconList__SortAndLayout on a list of that
 //     player's rows), so each half stacks only its own rows from the top slot; the game lays out the
@@ -25,7 +25,7 @@
 //     Changes are logged.
 //   - Around each overlay pass, ShowOnly makes the other players' rows fully transparent
 //     (UWidget::SetRenderOpacity 0) and Restore puts back each row's own opacity. Not Hidden: a
-//     UMG widget is ticked only while it is painted, and a further pass runs with DeltaTime 0, so a
+//     UMG widget is ticked only while it is painted, and a seat's pass runs with DeltaTime 0, so a
 //     row hidden in player 1's pass would never advance its slide and fade-out timers and would
 //     never be removed (seen in v0.12.3: player 2's rows stayed on screen). A transparent row is
 //     still painted and ticked in player 1's pass, with the real DeltaTime.
@@ -39,7 +39,7 @@ namespace lss::hud::prompt_rows {
 
 bool Install(const platform::GameImage& image) noexcept;
 
-/// Before the overlay renders, while a further player is in.
+/// Before the overlay renders, while a seat is in.
 void Refresh() noexcept;
 
 /// Before an overlay pass: only the seat's rows (0 player 1's) stay shown.
@@ -48,7 +48,7 @@ void ShowOnly(int seat) noexcept;
 /// After the passes: every row made transparent here gets its own opacity back.
 void Restore() noexcept;
 
-/// Every further player is out: forgets every row and owner (widgets are remembered by address).
+/// Every seat is out: forgets every row and owner (widgets are remembered by address).
 void Forget() noexcept;
 
 /// The seat is out while another stays: the rows it owned are forgotten.

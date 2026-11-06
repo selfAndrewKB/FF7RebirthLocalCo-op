@@ -1,6 +1,6 @@
 #pragma once
 
-// Pointing a further player's camera manager at its own camera actor.
+// Pointing a seat's camera manager at its own camera actor.
 //
 // The End camera manager's BeginPlay spawns a camera actor and makes it the view target, and the
 // Field operator positions that actor behind the followed character. For a camera manager spawned

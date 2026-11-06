@@ -1,6 +1,6 @@
 #pragma once
 
-// A further player uses vending machines with the game's own field action and shop (RE-p2-field-interact.md §15; plan,
+// A seat's player uses vending machines with the game's own field action and shop (RE-p2-field-interact.md §15; plan,
 // "Player 2 triggers field prompts").
 //
 // A seat's field pass (world/field_pickup) admits a vending machine's point (its point-side preset is the FName
@@ -45,7 +45,7 @@ namespace lss::world::vending {
 /// Installs the hooks (each checked). Logged.
 void Install(const platform::GameImage& image) noexcept;
 
-/// Puts the game's code back (at mod uninstall, with the further players out).
+/// Puts the game's code back (at mod uninstall, with every seat out).
 void Remove() noexcept;
 
 /// Whether a seat's pass should leave a point with this point-side preset open: a vending machine's, while no shop is

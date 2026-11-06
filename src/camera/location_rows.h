@@ -5,8 +5,8 @@
 //
 // Location volumes (towns, shops) change the camera through one global location manager. It tests the party
 // leader's position, player 1's character, and sends the volume's camera row to every listener; every camera
-// operator registers one in its constructor, so a further player's Field and Battle operators took player 1's indoor
-// row while that player stood outside. Gate: the listeners' shared vtable slot is replaced, and a call whose
+// operator registers one in its constructor, so a seat's Field and Battle operators took player 1's indoor
+// row while its player stood outside. Gate: the listeners' shared vtable slot is replaced, and a call whose
 // operator is one of a seat's camera manager's (players/seats.h) is not forwarded (a skipped game call;
 // nothing recreated).
 // A seat's own rows: the game has no per-player route for this layer (the manager follows one character and

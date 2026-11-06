@@ -1,10 +1,10 @@
 #pragma once
 
-// Each further seat's layer entry beside the game's own in one menu-renderer slot: the root overlay's pool 2
+// Each seat's layer entry beside the game's own in one menu-renderer slot: the root overlay's pool 2
 // (hud/passes/column_hud_images.h) and the navimap circle's pool 0 (hud/minimap/minimap.h), one instance each. The engine
 // keeps one image per slot, so the mod reuses the slot across the passes of the overlay render (hud/passes/
 // overlay_pass.h, which holds the rule):
-//   - the first further pass the slot takes part in acquires it and holds it; each later further pass takes the held
+//   - the first seat pass the slot takes part in acquires it and holds it; each later seat's pass takes the held
 //     slot; each adds an entry named for its seat, and their submits are skipped;
 //   - player 1's pass gets the held slot back instead of a second acquire, adds the stock entry and submits them all;
 //   - a slot still held after player 1's pass (its render returned early) is submitted on its own, as the game's pass
@@ -32,8 +32,8 @@ using SubmitLayerSlotFn  = void (*)(void* renderer, std::uintptr_t pool, void* s
 /// What the slot did, for a status line (hud/minimap/minimap.cpp logs its deltas).
 struct SlotCounts
 {
-    std::uint64_t held          = 0;  // a further pass held its acquire
-    std::uint64_t takenHeld     = 0;  // a later further pass took the held slot
+    std::uint64_t held          = 0;  // a seat's pass held its acquire
+    std::uint64_t takenHeld     = 0;  // a later seat's pass took the held slot
     std::uint64_t takenBack     = 0;  // player 1's pass took the held slot
     std::uint64_t named         = 0;  // entries named for a seat
     std::uint64_t submitSkipped = 0;  // submits left to player 1's pass
@@ -50,7 +50,7 @@ public:
         std::uint32_t  vertexBuffer;                    // the pool's buffer objects in the renderer
         std::uint32_t  indexBuffer;                     //   (hud/passes/menu_buffers.h)
         const wchar_t* stockName;                       // the game's entry name
-        const wchar_t* seatNames[players::kMaxPlayers];  // each further seat's ([0] unused)
+        const wchar_t* seatNames[players::kMaxPlayers];  // each seat's ([0] unused)
     };
 
     explicit SharedLayerSlot(Setup setup) noexcept : setup_(setup) {}
@@ -82,13 +82,13 @@ public:
     /// Before the overlay render: nothing held, no seat's entry in the slot.
     void BeginFrame() noexcept;
 
-    /// Before each further pass: whether this slot takes part in it (its widget paints for the pass's seat).
+    /// Before each seat's pass: whether this slot takes part in it (its widget paints for the pass's seat).
     void SetActive(bool active) noexcept { active_ = active; }
 
     /// The widget's acquire, in any pass (overlay_pass::AcquireAction; off the game thread: the game's own).
     void* Acquire(void* renderer, std::uintptr_t pool, AcquireLayerSlotFn original) noexcept;
 
-    /// The widget's entry name for `slot`: the pass's seat's for the held slot in a further pass, else `stockName`.
+    /// The widget's entry name for `slot`: the pass's seat's for the held slot in a seat's pass, else `stockName`.
     std::uintptr_t NameFor(const void* slot, std::uintptr_t stockName) noexcept;
 
     /// Whether the widget's submit of `slot` is left to player 1's pass.
@@ -122,7 +122,7 @@ private:
     bool          wrongKind_     = false;
     bool          active_        = false;
     void*         renderer_      = nullptr;  // from any acquire; the renderer is a long-lived singleton
-    void*         held_          = nullptr;  // the further passes' slot, for player 1's pass
+    void*         held_          = nullptr;  // the slot the seats' passes hold, for player 1's pass
     int           takenBy_       = -1;       // the seat whose pass last had the held slot
     unsigned      entrySeats_    = 0;        // bit `seat`: an entry named for the seat this frame
     SlotCounts    counts_;

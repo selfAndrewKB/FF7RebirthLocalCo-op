@@ -1,6 +1,6 @@
 #pragma once
 
-// A further player climbs chocobo walls with their own chocobo (research/RE-p2-chocobo-climb.md, levers L-B and L-C;
+// A seat's player climbs chocobo walls with their own chocobo (research/RE-p2-chocobo-climb.md, levers L-B and L-C;
 // L-A, the registration on the seat's controller, is seat_triggers' "chocobo climb" class).
 //
 // The climb spot's per-frame try-begin (its vtable slot, called by the character's field-action notify pass for each

@@ -8,7 +8,7 @@
 // the menu's chooser walks the members and skips one with no HP (knocked out) or petrified, and a
 // second test (the member can take a command: has usable commands, not stopped, asleep, petrified or
 // blocked) guards the strict path, the ally pick and the ally-mode portraits. The portrait greying
-// alone blocks nothing. Player 1 must not command the member a further player plays, so both levers answer
+// alone blocks nothing. Player 1 must not command the member a seat's player plays, so both levers answer
 // for that member as for a knocked-out ally: the chooser's HP call reads 0, and the command test
 // reads "no". The greyed portrait (session/party_switch.h) then means what it shows.
 //

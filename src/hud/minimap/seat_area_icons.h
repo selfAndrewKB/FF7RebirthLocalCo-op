@@ -1,6 +1,6 @@
 #pragma once
 
-// Each further player's own area-map icon manager (Stage B3; RE-p2-hud-icon-manager.md §4 and §8; per seat since
+// Each seat's own area-map icon manager (Stage B3; RE-p2-hud-icon-manager.md §4 and §8; per seat since
 // plan/seats.md step 4).
 //
 // The on-screen map icons and the quest and party markers belong to one Square Enix object, the
@@ -52,7 +52,7 @@ void ShowOnly(int seat) noexcept;
 /// The seat is out: its instance cleared and its canvases hidden.
 void SeatOut(int seat) noexcept;
 
-/// Every further player is out: player 1's canvases shown, every seat's instance cleared and hidden.
+/// Every seat is out: player 1's canvases shown, every seat's instance cleared and hidden.
 void AllOut() noexcept;
 
 /// Diagnosis: which parts act (1 each seat's instance ticked, 2 its first controller is the seat's,

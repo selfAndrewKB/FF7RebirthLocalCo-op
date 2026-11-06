@@ -1,6 +1,6 @@
 #pragma once
 
-// A further player's own copy of each minimap label's text and layout, one book per seat (RE-p2-minimap-cost.md §7).
+// A seat's own copy of each minimap label's text and layout, one book per seat (RE-p2-minimap-cost.md §7).
 //
 // A minimap icon's distance label is one Square Enix text block (SEndTextBlock) shared by both views. The game sets its
 // text through SetText, which compares the new text with the block's current text and lays the text out again only when

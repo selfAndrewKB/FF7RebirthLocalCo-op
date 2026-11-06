@@ -1,6 +1,6 @@
 #pragma once
 
-// The further players, as every wrapper sees them: one generation per seat (players/seats.h).
+// The seats' players, as every wrapper sees them: one generation per seat (players/seats.h).
 //
 // This is the one record of each seat's game objects (plan/seats.md, the close of step 3): its controller, the member
 // it plays and the chocobo it drives, and the reverse lookups from an object the engine hands a wrapper to its seat.

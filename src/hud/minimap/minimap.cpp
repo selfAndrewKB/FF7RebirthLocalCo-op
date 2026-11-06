@@ -167,7 +167,7 @@ NewTargetFn            g_newTarget          = nullptr;
 InitFormatFn           g_initFormat         = nullptr;
 UpdateNowFn            g_updateNow          = nullptr;
 
-// The further seats' entries in the circle's pool-0 slot (hud/passes/shared_slot.h): the hold, the names, the buffers.
+// The seats' entries in the circle's pool-0 slot (hud/passes/shared_slot.h): the hold, the names, the buffers.
 SharedLayerSlot g_slot{{L"minimap", 0, kPoolZeroVertexBuffer, kPoolZeroIndexBuffer, L"SEndNaviMapCircle",
                         {nullptr, L"SEndNaviMapCircle_P2", L"SEndNaviMapCircle_P3"}}};
 
@@ -379,7 +379,7 @@ void LogPieces() noexcept
     }
 }
 
-/// The circle's AcquireLayerSlot: the first further pass holds its slot, later ones take it; player 1's pass gets it
+/// The circle's AcquireLayerSlot: the first seat pass holds its slot, later ones take it; player 1's pass gets it
 /// back instead of a second.
 void* Acquire(void* renderer, std::uintptr_t pool) noexcept
 {
@@ -396,7 +396,7 @@ void* FindOrAdd(void* slot, std::uintptr_t name, void* rect, std::uintptr_t unus
     return reinterpret_cast<FindOrAddFn>(g_findCall.Original())(slot, name, rect, unused);
 }
 
-/// The circle's SubmitLayerSlot: a further pass leaves the held slot for player 1's pass to submit.
+/// The circle's SubmitLayerSlot: a seat's pass leaves the held slot for player 1's pass to submit.
 void Submit(void* renderer, std::uintptr_t pool, void* slot, std::uintptr_t unused) noexcept
 {
     if (generation::OnGameThread() && g_slot.SkipSubmit(slot))
@@ -825,7 +825,7 @@ void RunHolder(int seat) noexcept
 
 bool BeginPaint(int seat) noexcept
 {
-    label_relayouts::SetScope(label_relayouts::Scope::PlayerTwoPaint);  // a further player's overlay render follows
+    label_relayouts::SetScope(label_relayouts::Scope::PlayerTwoPaint);  // a seat's overlay render follows
     g_slot.SetActive(false);
     if (!players::SeatIndex(seat) || !g_seatOn[seat] || !g_ranFor[seat])
     {

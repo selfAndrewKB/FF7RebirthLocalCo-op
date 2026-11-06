@@ -1,6 +1,6 @@
 #pragma once
 
-// Each further player's minimap: their centre, rotation and icons, in their view (RE-p2-own-minimap.md,
+// Each seat's own minimap: its centre, rotation and icons, in its view (RE-p2-own-minimap.md,
 // "Recommended design" and §8; per seat since plan/seats.md step 4).
 //
 // The minimap widget (SEndNaviMapCircle) renders its map into a render target through the menu renderer's pool 0,
@@ -12,7 +12,7 @@
 // - Target: one more UTextureRenderTarget2D per seat, made with the game's own calls (NewObject, InitCustomFormat,
 //   UpdateResourceImmediate) at the live target's size and rooted. It is swapped into the widget's target field
 //   around the seat's overlay render only, which moves the entry's target and the HUD element that samples it.
-// - Pool 0: one acquire and one submit per frame, as with one player. The first further pass acquires and holds the
+// - Pool 0: one acquire and one submit per frame, as with one player. The first seat pass acquires and holds the
 //   slot, each later one takes it; each names its entry for its seat ("SEndNaviMapCircle_P2", "_P3") and skips its
 //   submit; player 1's pass gets the held slot back, adds the stock entry and submits them all; the consume draws each
 //   entry into its own target. If player 1's pass does not paint the minimap, the held slot is submitted after it with

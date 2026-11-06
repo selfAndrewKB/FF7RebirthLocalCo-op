@@ -1,6 +1,6 @@
 #pragma once
 
-// The game's world actors (chests and the other WorldActorMgr items) pop in around a further player too
+// The game's world actors (chests and the other WorldActorMgr items) pop in around a seat's player too
 // (RE-p2-world-streaming.md §9.12; plan, "Chest render distance").
 //
 // Square Enix's WorldActorMgr (*(root+0x190)) holds one item per world actor TreasurePointMgr and others registered, each
@@ -8,7 +8,7 @@
 // (+0x20; 100 m). Each frame its tick (WorldActorMgr_Tick_LeaderProximitySpawn) requests a type-2 CharaPop spawn for an
 // armed item whose octree box overlaps the party leader's bounding box and whose location is within R of the leader's box
 // centre, and removes a spawned one beyond R. It takes one actor, the leader: there is no centre or override to set, so a
-// chest near a further player and far from player 1 never pops.
+// chest near a seat's player and far from player 1 never pops.
 //
 // While a seat plays (and the NPC centre's switch is on, Ctrl+F10), every 10 ticks on the game thread: each item whose
 // location is within its own R of a seat's character gets R and E widened by the players' separation (in 10 m steps,

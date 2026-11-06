@@ -200,7 +200,7 @@ void Seat::Join() noexcept
     {
         return;
     }
-    // A further player exists only with a character to play: with none free, the game stays as without them. A shared
+    // A seat's player exists only with a character to play: with none free, the game stays as without them. A shared
     // ride needs none: the player would stand aside in it anyway (the slot's member may sit in the vehicle on another
     // AI brain, as in a save loaded mid-ride), and takes the member once the ride is over.
     const bool riding = rides::shared_ride::Rides(one.controller);

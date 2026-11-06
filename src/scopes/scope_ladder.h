@@ -2,7 +2,7 @@
 
 // A seat's scopes opened in one order for one game call, all or nothing.
 //
-// Every "run this engine call as a further player" site opens the same ladder of scopes: the UI focus context
+// Every "run this engine call as a seat's player" site opens the same ladder of scopes: the UI focus context
 // first, then the seat's pad's sticks, the seat's player as the primary controller, the pad's buttons, the seat's
 // target fields, the party leader and its type, and last the rules the call runs under. Each site used to
 // write the ladder out by hand (the 2026-10 audit's D-3, E1-3 and C-10: seven copies and three

@@ -1,13 +1,13 @@
 #pragma once
 
-// Lock groups prefer player 1 or a further player by each picking enemy's coin (RE-p2-enemy-target-bias.md §18, §20).
+// Lock groups prefer player 1 or a seat's player by each picking enemy's coin (RE-p2-enemy-target-bias.md §18, §20).
 //
 // A lock group (RegisterTargetLockGroup; in Rebirth only the Temple of the Ancients Stun Ray) spreads its enemies over
 // the party, at most N on each target, and with bPrioritizeUCPC prefers "the player": Pick takes the party leader when
 // the leader holds fewer locks than every other target, and the rebalance releases every lock and picks again,
 // leader first, when no target holds more than one and the leader holds none. Both read the leader pointer, so in
 // co-op the group prefers player 1 only. The user's rule (2026-10-15, "one on a human"): each pick prefers player 1 or
-// a further player by the picking enemy's coin, and the rebalance respreads only when no human holds a lock.
+// a seat's player by the picking enemy's coin, and the rebalance respreads only when no human holds a lock.
 //
 // The levers: Pick's leader read and CountLocks' leader read (whose "is the leader" byte only the rebalance uses)
 // answer a thread-local character while one is held; a pick whose coin names a seat holds that seat's member for one

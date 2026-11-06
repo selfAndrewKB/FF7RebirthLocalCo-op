@@ -7,7 +7,7 @@
 // lock-on on a breakable box (`FieldShootingLockOn`, Barret and Yuffie) and the hookshot points. Each pin is a
 // FieldTargetSearchIconWidget plus a hook icon in one list (EndUISystem[55], +0x1B8), and the first active point
 // opens the whole-screen search compass. The list's tick runs once, in the world tick, and places every pin through
-// its widget's context (player 1's), so a further player's half drew player 1's pins at player 1's screen spots
+// its widget's context (player 1's), so a seat's half drew player 1's pins at player 1's screen spots
 // (the user, 2026-10-18: "It leaks from P1's view to P2").
 //
 // Two levers, both the game's own:
@@ -32,7 +32,7 @@ namespace lss::hud::search_pins {
 void Install(const platform::GameImage& image) noexcept;
 
 /// Every pin and hook icon made since the last root scan becomes a HUD root at once, so this frame's context swap
-/// reaches it. Before a further seat's SetContexts.
+/// reaches it. Before a seat's SetContexts.
 void Adopt() noexcept;
 
 /// Every pin placed again through its current context (after SetContexts, in each half's pass).

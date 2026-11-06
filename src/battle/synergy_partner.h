@@ -7,7 +7,7 @@
 // character" to its AI (AEndCharacter::SwitchAIControl_Async(partner, 1, nullptr)) and gives it back to the primary
 // player controller when the paired action starts or the link ends. Its only test for "the player's character" is the
 // partner's type against the party leader type (PM+0x150), and the only controller it gives back to is PM+0x140. With
-// further players that is one slot for all the humans:
+// seats in, that is one slot for all the humans:
 //   - a seat's member as the partner of player 1's synergy was never handed over (its AI stays paused by the seat's
 //     possession), so it never joined;
 //   - player 1's character as the partner of a seat's synergy was handed over only when the request ran outside

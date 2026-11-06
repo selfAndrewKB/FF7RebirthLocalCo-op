@@ -161,7 +161,7 @@ void UpdateStreamViews(bool splitShown) noexcept
     {
         return;
     }
-    // Each player's camera as last drawn, the further seats first (player 1's, the game's own view, last). A mirror
+    // Each player's camera as last drawn, the seats' cameras first (player 1's, the game's own view, last). A mirror
     // view shows player 1's camera, which player 1's registration covers.
     const float aspect = HalfAspect();
     for (int seat = players::kSeatsBuilt; seat >= 0; --seat)

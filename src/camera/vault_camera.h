@@ -1,6 +1,6 @@
 #pragma once
 
-// A further player's chocobo vaulting off a ledge no longer takes that player's and player 1's ride framing
+// A seat's chocobo vaulting off a ledge no longer takes that seat's and player 1's ride framing
 // (research/RE-p2-chocobo-jump-camera.md, lever L1b).
 //
 // A vault (control state 10) pushes FEndBehaviorVaultExtraAction. Its Begin, on the game thread, installs an

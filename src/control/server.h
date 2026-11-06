@@ -51,7 +51,7 @@ public:
     /// Queues one reply line (the newline is added) for the thread to write. Any thread.
     void Send(ClientId client, std::string line) noexcept;
 
-    /// The most clients served at once; a further connection is refused.
+    /// The most clients served at once; one more connection is refused.
     static constexpr std::size_t kMaxClients = 8;
 
     /// A line longer than this closes its client (a wrong protocol, not a script).

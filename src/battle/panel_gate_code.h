@@ -1,6 +1,6 @@
 #pragma once
 
-// The machine code that keeps a further player's targeting run out of player 1's target panel, at the one
+// The machine code that keeps a seat's targeting run out of player 1's target panel, at the one
 // panel request whose call site straddles a code block (RE-p2-targeting-scoped-tick.md §2, §4.3).
 //
 // The displayed-target update posts "old target cleared" to the target panel from a cold chunk entered
@@ -24,7 +24,7 @@
 
 namespace lss::battle {
 
-/// The gate the code reads: skip set during a further player's targeting run (any seat's: the gate is seat-neutral);
+/// The gate the code reads: skip set during a seat's targeting run (any seat's: the gate is seat-neutral);
 /// skipped counts the requests kept from player 1's panel.
 struct PanelGate
 {

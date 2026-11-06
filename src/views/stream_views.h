@@ -29,7 +29,7 @@ namespace lss::views {
 enum class StreamViewsMode : std::uint8_t
 {
     Off,   // stock: the renders race (for comparison)
-    Seat,  // the further players' cameras only (`p2` at the console)
+    Seat,  // the seats' cameras only (`p2` at the console)
     Both,  // every player's (the default)
 };
 

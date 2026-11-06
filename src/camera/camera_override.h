@@ -8,8 +8,8 @@
 // that character, into the NotifyOverride camera module (layer 4). That module is one global
 // instance (g_NotifyOverrideCameraModuleWeak): the first camera operator built creates it and every
 // later operator of every camera manager shares it, and it frames around its owner operator's
-// character, player 1's. So a further player's attacks drove player 1's camera, and that
-// player's camera played them framed around player 1.
+// character, player 1's. So a seat's attacks drove player 1's camera, and that
+// seat's camera played them framed around player 1.
 //
 // Step A: while a seat's camera manager's BeginPlay runs, the global is hidden, so the game's own
 // operator constructor builds that seat's camera a module of its own, owned by its Battle operator;

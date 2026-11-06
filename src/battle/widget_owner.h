@@ -1,6 +1,6 @@
 #pragma once
 
-// Each further player's widgets tick in their owner's view (RE-p2-party-list-views.md §8, pass S-CMD8).
+// Each seat's widgets tick in their owner's view (RE-p2-party-list-views.md §8, pass S-CMD8).
 //
 // A few of the game's per-frame widget ticks were written for one command controller: they read the UI
 // system's slots (EndUISystem[23] the controller, [53] the key guide) and the party leader's type

@@ -1,6 +1,6 @@
 #pragma once
 
-// Brings a further player back to the party through the game's own follow warp (RE-p2-party-warp.md §1, §3, §9;
+// Brings a seat's player back to the party through the game's own follow warp (RE-p2-party-warp.md §1, §3, §9;
 // RE-p2-chocobo-warp.md §2 and §4 for the ridden chocobo).
 //
 // An AI follower's follow state (EEndAIState FOLLOW) holds the game's party warp: a forced request (vtable +0x270)

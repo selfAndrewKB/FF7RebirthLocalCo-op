@@ -144,7 +144,7 @@ void TestSharedSlot()
     using lss::hud::overlay_pass::AcquireAction;
     using lss::hud::overlay_pass::IsSeatEntry;
     using lss::hud::overlay_pass::SlotAction;
-    // A further pass (seat 2, then seat 1): the first acquire of an active slot is held; a later further pass takes the
+    // A seat's pass (seat 2, then seat 1): the first acquire of an active slot is held; a later seat's pass takes the
     // held slot; a second acquire in one pass, or a slot that takes no part (the minimap not painting for the seat), is
     // the game's own.
     EXPECT(AcquireAction(2, true, false, false) == SlotAction::AcquireAndHold);
@@ -153,14 +153,14 @@ void TestSharedSlot()
     EXPECT(AcquireAction(1, true, true, true) == SlotAction::Acquire);
     EXPECT(AcquireAction(1, false, false, false) == SlotAction::Acquire);
     EXPECT(AcquireAction(1, false, true, false) == SlotAction::Acquire);
-    // Player 1's pass: the held slot comes back; nothing held (no further pass ran) is a plain acquire.
+    // Player 1's pass: the held slot comes back; nothing held (no seat's pass ran) is a plain acquire.
     EXPECT(AcquireAction(0, true, true, false) == SlotAction::TakeBack);
     EXPECT(AcquireAction(0, false, true, true) == SlotAction::TakeBack);
     EXPECT(AcquireAction(0, true, false, false) == SlotAction::Acquire);
     // Outside the render: always the game's own, even with a slot left held.
     EXPECT(AcquireAction(lss::hud::overlay_pass::kNone, true, true, false) == SlotAction::Acquire);
     EXPECT(AcquireAction(lss::hud::overlay_pass::kNone, true, false, false) == SlotAction::Acquire);
-    // The entry added to the held slot in a further pass is the seat's, its submit left to player 1's pass; any other
+    // The entry added to the held slot in a seat's pass is the seat's, its submit left to player 1's pass; any other
     // slot or pass is the game's.
     EXPECT(IsSeatEntry(1, true));
     EXPECT(IsSeatEntry(2, true));

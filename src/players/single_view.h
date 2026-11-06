@@ -1,8 +1,8 @@
 #pragma once
 
-// The engine's single view: the whole screen player 1's view alone while further players are in (their controllers,
+// The engine's single view: the whole screen player 1's view alone while the seats' players are in (their controllers,
 // characters and pads untouched). The one monitor outcome for the moments views/column_source.h decides (a full-screen
-// menu, the map screen, a cutscene, a shared ride, every further player waiting for a member; the user's decision,
+// menu, the map screen, a cutscene, a shared ride, every seat's player waiting for a member; the user's decision,
 // 2026-09-28); this class only holds the engine's switch to what it is told.
 //
 // The engine lays the local players out from one stock switch, UGameViewportClient::
@@ -48,12 +48,12 @@ public:
     explicit SingleView(SplitSwitchAccess access) noexcept : access_(access) {}
 
     /// Call on the game thread every tick with whether the single view is wanted (views/column_source.h decides;
-    /// false once no further player is in). Acts only when the request changes (or a failed request is asked for
+    /// false once every seat is out). Acts only when the request changes (or a failed request is asked for
     /// again after a change).
     SingleViewChange Update(bool wanted) noexcept;
 
     /// True while the screen shows player 1's view alone through the switch (the mod's or one found
-    /// set). The split's per-player presentation (the further players' HUD images, the halves' layout) is off.
+    /// set). The split's per-player presentation (the seats' HUD images, the halves' layout) is off.
     bool Single() const noexcept { return single_; }
 
 private:

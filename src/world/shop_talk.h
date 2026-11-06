@@ -1,6 +1,6 @@
 #pragma once
 
-// A further player uses a shopkeeper's shop with the game's own field prompt and shop (RE-p2-shopkeeper-talk.md;
+// A seat's player uses a shopkeeper's shop with the game's own field prompt and shop (RE-p2-shopkeeper-talk.md;
 // the user, 2026-10-18: "extend shop keeper interaction to P2 as well, similar to the vending machine").
 //
 // A shopkeeper is a CharaPop ObjectActor NPC with an ordinary field-action point (key = the CharaPop key, e.g.
@@ -42,7 +42,7 @@ namespace lss::world::shop_talk {
 /// Finds the game's accessors and places the redirects (each checked). Logged.
 void Install(const platform::GameImage& image) noexcept;
 
-/// Puts the game's code back (at mod uninstall, with the further players out).
+/// Puts the game's code back (at mod uninstall, with every seat out).
 void Remove() noexcept;
 
 /// Whether a seat's pass should leave the point with this key open: a shopkeeper's, while no shop is up or pending.

@@ -47,20 +47,20 @@ bool                  g_installed          = false;  // the entry holds the repl
 // The engine calls GetViewPoint from Draw, also on the game thread; atomics keep that true if it
 // ever changes.
 constexpr std::size_t kSeats = players::kMaxPlayers;  // the per-seat records' size (index 0, player 1's, where used)
-std::atomic<const void*>   g_playerOne{nullptr};  // set while a further player is in
-std::array<std::atomic<const void*>, kSeats> g_seat{};          // each further player's ULocalPlayer (index 0 unused)
-std::array<std::atomic<bool>, kSeats>        g_ownCamera{};     // the further player's view shows their own camera
+std::atomic<const void*>   g_playerOne{nullptr};  // set while a seat is in
+std::array<std::atomic<const void*>, kSeats> g_seat{};          // each seat's ULocalPlayer (index 0 unused)
+std::array<std::atomic<bool>, kSeats>        g_ownCamera{};     // the seat's view shows its own camera
 std::array<std::atomic<bool>, kSeats>        g_describePending{};
 std::array<std::atomic<bool>, kSeats>        g_onPlayerOne{};     // the seat's column on player 1's camera (column_source)
 std::atomic<bool>          g_fillOn{true};
-std::atomic<bool>          g_splitShown{false};  // a further player in and their own view on screen
+std::atomic<bool>          g_splitShown{false};  // a seat in and its own view on screen
 std::atomic<bool>          g_viewsSplit{false};  // more than one view on screen (the HUD per column)
 std::atomic<std::uint32_t> g_axisOffset{0};  // 0 until reflection has confirmed it
 std::atomic<float>         g_fovWeight{kDefaultSplitFovWeight};  // 0..1; negative: the MajorAxisFOV rule
 std::atomic<float>         g_halfAspect{0.0f};       // the split halves' width/height; 0 until known
 std::atomic<float>         g_halfHeightRatio{0.0f};  // their height as a fraction of the screen's
 
-/// A further player's view point, the first time it is computed from a given camera.
+/// A seat's view point, the first time it is computed from a given camera.
 void DescribeViewPoint(int seat, const std::byte* viewInfo, bool ownCamera) noexcept
 {
     float yaw = 0.0f;
@@ -70,7 +70,7 @@ void DescribeViewPoint(int seat, const std::byte* viewInfo, bool ownCamera) noex
                        ownCamera ? L"their own camera" : L"player 1's camera", yaw, previousSet);
 }
 
-/// `localPlayer`'s seat: 0 player 1's, a further player's, or -1 (a mirror view, any other local player).
+/// `localPlayer`'s seat (0 player 1's), or -1 (a mirror view, any other local player).
 int SeatOf(const void* localPlayer) noexcept
 {
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
@@ -83,7 +83,7 @@ int SeatOf(const void* localPlayer) noexcept
     return localPlayer != nullptr && localPlayer == g_playerOne.load(std::memory_order_relaxed) ? 0 : -1;
 }
 
-/// A further player is in (their local player followed).
+/// A seat is in (its local player followed).
 bool AnySeat() noexcept
 {
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
@@ -145,7 +145,7 @@ void LogShapeOnChange(int slot, const std::byte* viewInfo) noexcept
 // Split players fill their half
 // ---------------------------------------------------------------------------------------------
 //
-// While a further player is in, every player's view takes the mod's FOV rule
+// While a seat is in, every player's view takes the mod's FOV rule
 // (ULocalPlayer::AspectRatioAxisConstraint), read by GetProjectionData after this function returns
 // (0x140CC0B1D) for a view without the 16:9 constraint. The constraint itself is the main camera's
 // own setting, cleared once per camera through the game's setter (camera/main_camera_shape.h).
@@ -296,7 +296,7 @@ void ShapeSplitView(void* localPlayer, std::byte* viewInfo, int slot) noexcept
 
 /// Puts back the FOV rule of every player the mod changed, except the `removedPlayers`, which the
 /// engine has already let go of and must not be touched, then forgets every record: this runs
-/// when a further player changes, and the next split frame records the originals afresh.
+/// when a seat's player changes, and the next split frame records the originals afresh.
 void RestoreAxisRules(std::span<const void* const> removedPlayers) noexcept
 {
     const auto offset = g_axisOffset.load(std::memory_order_relaxed);
@@ -318,8 +318,8 @@ void GetViewPointShaped(void* localPlayer, std::byte* viewInfo, std::int32_t ste
     const bool  ownCamera = isSeat && g_ownCamera[static_cast<std::size_t>(seat)].load(std::memory_order_relaxed) &&
                            !g_onPlayerOne[static_cast<std::size_t>(seat)].load(std::memory_order_relaxed);
 
-    // Until a further player's own camera is chosen, and while their column shows player 1's picture
-    // (views/column_source.h), the further player's view shows player 1's camera.
+    // Until a seat's own camera is chosen, and while its column shows player 1's picture
+    // (views/column_source.h), the seat's view shows player 1's camera.
     void* source = isSeat && !ownCamera && playerOne != nullptr ? const_cast<void*>(playerOne) : localPlayer;
     g_engineGetViewPoint(source, viewInfo, stereoPass);
     if (seat < 0)
@@ -397,7 +397,7 @@ void RemovePlayerViewPoint() noexcept
 
 namespace {
 
-/// A new further player in `seat` (or none; the caller has seen the change): the new player started on their own
+/// A new player in `seat` (or none; the caller has seen the change): the new player started on their own
 /// camera with their next view point described. Returns the player the seat held before (null for none): the caller
 /// puts the FOV rules back once, skipping every seat's removed player (two seats can leave in one frame).
 const void* SetSeat(int seat, const void* localPlayer) noexcept
@@ -415,7 +415,7 @@ HalfShapeWatch                                   g_halfShape;
 std::array<const void*, kSeats>                  g_followedSeat{};  // the players as last followed
 std::array<std::uint32_t, kSeats>                g_followedJoins{};
 
-/// Keeps the players current, and describes the local players when a further player appears (a subclass with its own
+/// Keeps the players current, and describes the local players when a seat's player appears (a subclass with its own
 /// vtable would bypass the camera choice). The frame's index 0 and unbuilt seats stay null (mod.cpp SplitFrameNow).
 void FollowPlayers(const SplitFrame& frame) noexcept
 {
@@ -542,7 +542,7 @@ void Follow(const SplitFrame& frame) noexcept
 
 bool ToggleOwnCamera() noexcept
 {
-    // Every further player's view together, to the opposite of the first one in.
+    // Every seat's view together, to the opposite of the first one in.
     const bool own = !ShowsOwnCamera();
     bool       any = false;
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
@@ -566,7 +566,7 @@ bool ShowsOwnCamera() noexcept
         const auto at = static_cast<std::size_t>(seat);
         if (g_seat[at].load(std::memory_order_relaxed) != nullptr)
         {
-            return g_ownCamera[at].load(std::memory_order_relaxed);  // the first further player in
+            return g_ownCamera[at].load(std::memory_order_relaxed);  // the first seat in
         }
     }
     return false;

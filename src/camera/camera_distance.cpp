@@ -100,7 +100,7 @@ void Line(const std::wstring& text) noexcept
 
 using camera_access::CameraManagerOf;
 
-/// The game's per-camera-manager apply for each further player's camera manager, after the game's own apply on
+/// The game's per-camera-manager apply for each seat's camera manager, after the game's own apply on
 /// `applied` (the primary camera manager).
 void ApplyToSeats(const void* applied, std::uint8_t field, std::uint8_t battle) noexcept
 {
@@ -129,7 +129,7 @@ void PrimaryApply(std::uint8_t field, std::uint8_t battle) noexcept
 }
 
 /// 1.005: every call of the primary camera manager's apply, at its entry; the option setter's (by its return address)
-/// reaches each further player's camera manager too, exactly as PrimaryApply does.
+/// reaches each seat's camera manager too, exactly as PrimaryApply does.
 void PrimaryApplyEntry(std::uint8_t field, std::uint8_t battle) noexcept
 {
     const bool setter = reinterpret_cast<std::uintptr_t>(_ReturnAddress()) == g_setterReturn;
@@ -249,7 +249,7 @@ void TickFraming(int columns) noexcept
     }
     if (!in)
     {
-        g_wasIn = false;  // the last further player left: player 1's camera back to the Options level
+        g_wasIn = false;  // the last seat is out: player 1's camera back to the Options level
         DriveTo(CameraManagerOf(players::generation::PlayerOneController()), 0, field, battle);
         return;
     }

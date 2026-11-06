@@ -40,7 +40,7 @@ namespace lss::camera::attack_cameras {
 /// Finds the list and the cut call. Logged; a failed part stays off.
 void Install(const platform::GameImage& image) noexcept;
 
-/// Puts the game's code back (at mod uninstall, with every further player out).
+/// Puts the game's code back (at mod uninstall, with every seat out).
 void Remove() noexcept;
 
 /// `seat`'s own per-camera state of the sequence list while it lives (inside the seat's camera update, its scopes

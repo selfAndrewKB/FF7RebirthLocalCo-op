@@ -1,6 +1,6 @@
 #pragma once
 
-// The machine code that lets a further seat's overlay pass ask "the first game player" and get the
+// The machine code that lets a seat's overlay pass ask "the first game player" and get the
 // seat's player (lever L2 of RE-p2-hud.md P8.6; facts in pass 12).
 //
 // SEndRootOverlay__RenderToCompositeLayer asks GEngine__GetFirstGamePlayerForGameViewport

@@ -39,7 +39,7 @@ namespace {
 
 using listener_rules::Vec3;
 
-constexpr int kSeats     = players::kSeatsBuilt;          // the further players, seats 1..kSeats
+constexpr int kSeats     = players::kSeatsBuilt;          // the seats, 1..kSeats
 constexpr int kListeners = kSeats + 1;                    // 0: player 1's (SEAD's own), then each seat's copy
 constexpr int kColumns   = views::columns::kMaxColumns;   // the engine listeners read: one per column
 
@@ -266,7 +266,7 @@ thread_local Answer t_answer;
 thread_local const void* t_clipFrame = nullptr;
 // Inside the gate C measure: its frame, whose point it measures (null outside it).
 thread_local const void* t_measureFrame = nullptr;
-// A further player's LOD pass: the controller the PC listener slot answers for (null outside it).
+// A seat's LOD pass: the controller the PC listener slot answers for (null outside it).
 thread_local void* t_lodController = nullptr;
 
 struct KindCounts
@@ -297,7 +297,7 @@ struct Counts
     std::array<std::atomic<unsigned>, kListeners> measureFrom{};         //   ... answered with seat k's listener
     std::atomic<unsigned>                         lods{0};               // gate B: levels asked
     std::array<std::atomic<unsigned>, kListeners> lodAsked{};            //   ... asked again for seat k
-    std::atomic<unsigned>                         lodLowered{0};         //   ... lowered by a further player's level
+    std::atomic<unsigned>                         lodLowered{0};         //   ... lowered by a seat's level
     std::atomic<unsigned>                         lodElsewhere{0};       //   ... off the game thread
 };
 Counts           g_counts;
@@ -452,7 +452,7 @@ std::uint64_t Push(void* device) noexcept
         std::copy(front.begin(), front.end(), out.begin() + base + kFrontAt);
         std::copy(up.begin(), up.end(), out.begin() + base + kUpAt);
     }
-    // SEAD's own listener, never during a swap (the pointer names a further player's copy then): left unread.
+    // SEAD's own listener, never during a swap (the pointer names a seat's copy then): left unread.
     const auto swap = g_swap.load(std::memory_order_acquire);
     if (const void* listener = ListenerOne(); listener != nullptr && (swap & 1u) == 0)
     {
@@ -709,8 +709,8 @@ std::uint64_t Measure(void* record, void* analysis, void* third, void* fourth) n
 }
 
 /// A gate's read, on whichever thread AutoSe runs (live 2026-10-27: not the game thread, and more than one): the
-/// nearest player's listener to the frame's point at `offset` (player 1's, the game's answer in `out`, unless a further
-/// player's is nearer). Further players' places come from the game thread's check of this tick (g_checked; NaN while
+/// nearest player's listener to the frame's point at `offset` (player 1's, the game's answer in `out`, unless a seat's
+/// is nearer). The seats' places come from the game thread's check of this tick (g_checked; NaN while
 /// off) and go through AutoSe's own converter, as the getter sends the singleton's. Returns the listener answered.
 int NearestForGate(void* out, const void* frame, std::uint32_t offset) noexcept
 {
@@ -828,7 +828,7 @@ std::uint8_t Position(void* out) noexcept
     return result;
 }
 
-/// The footstep detection's LOD level: the game's level from player 1's listener, then from each further player's
+/// The footstep detection's LOD level: the game's level from player 1's listener, then from each seat's
 /// whose listener is on; the lowest.
 std::uint64_t Lod(void* callback, void* character) noexcept
 {
@@ -881,7 +881,7 @@ std::uint64_t Lod(void* callback, void* character) noexcept
     return kept;
 }
 
-/// The player controller's GetAudioListenerPosition: in a further player's LOD pass, that player's controller answers.
+/// The player controller's GetAudioListenerPosition: in a seat's LOD pass, that seat's controller answers.
 void PcListener(void* controller, void* location, void* front, void* right) noexcept
 {
     void* const other = t_lodController;
@@ -1310,7 +1310,7 @@ void Install(const platform::GameImage& image) noexcept
     g_pcListenerFn = pc ? *pc : 0;
     const bool lod = g_pcListenerFn != 0 && Place(image, g_lodSlot, kLodSlot, kLod, reinterpret_cast<void*>(&Lod));
 
-    // Last, the further players' listeners themselves: the SEAD frame that sets them turns the choice on.
+    // Last, the seats' listeners themselves: the SEAD frame that sets them turns the choice on.
     g_seatsAllowed.store(settable, std::memory_order_relaxed);
     const bool frame = settable &&
                        g_velocityCall.Install(*site, *velocity, reinterpret_cast<std::uintptr_t>(&Velocity));
@@ -1382,7 +1382,7 @@ void Tick(const std::array<int, players::kMaxPlayers>& ownColumns) noexcept
         PlaceControllerSlot();
         LogThreads();
 
-        // The game thread's listeners (the viewport's SetListener copy): the further players' listeners, and the gaps.
+        // The game thread's listeners (the viewport's SetListener copy): the seats' listeners, and the gaps.
         std::array<Vec3, kColumns> entries{};
         for (auto& entry : entries)
         {

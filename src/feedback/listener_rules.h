@@ -93,7 +93,7 @@ inline int ChooseNearest(int current, std::span<const float> distances, float ra
 }
 
 /// The footstep LOD (gate B): the game's level from player 1's listener is kept when it is the finest already (or no
-/// filter); otherwise a further player's level replaces it only when it is lower.
+/// filter); otherwise a seat's level replaces it only when it is lower.
 constexpr bool LodKeepsFirst(int one) noexcept
 {
     return one <= 0;

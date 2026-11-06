@@ -1,11 +1,11 @@
 #pragma once
 
-// The seats: the further human players the mod adds (Documentation/plan/seats.md). Seat 0 is player 1, the game's
-// own player; seat 1 is player 2, seat 2 player 3. A seat's number is at once its controller id, its pad (XInput user
-// `seat`) and its slot of the party order after the field leader's (seat 1 the 2nd slot, seat 2 the 3rd). Its column
-// (its view's place on screen) is its local player's index in the engine's list, which a join appends to and a leave
-// closes up: with player 2 out, player 3 is in column 1. Nothing may take a list index for a seat. Pure constants and
-// names, no game.
+// The seats: the human players the mod adds (Documentation/plan/seats.md): seat 1 is player 2, seat 2 player 3. The
+// number 0 stands for player 1, the game's own player, wherever a value is "a seat, or player 1". A seat's number is
+// at once its controller id, its pad (XInput user `seat`) and its slot of the party order after the field leader's
+// (seat 1 the 2nd slot, seat 2 the 3rd). Its column (its view's place on screen) is its local player's index in the
+// engine's list, which a join appends to and a leave closes up: with player 2 out, player 3 is in column 1. Nothing
+// may take a list index for a seat. Pure constants and names, no game.
 
 namespace lss::players {
 
@@ -13,7 +13,7 @@ namespace lss::players {
 /// a record has one). Three, the engine's most split-screen views.
 inline constexpr int kMaxPlayers = 3;
 
-/// The further players built and wired: seats 1..kSeatsBuilt (players 2 and 3, since the plan's step 6).
+/// The seats built and wired: seats 1..kSeatsBuilt (players 2 and 3, since the plan's step 6).
 inline constexpr int kSeatsBuilt = 2;
 static_assert(kSeatsBuilt >= 1 && kSeatsBuilt < kMaxPlayers, "the seats are numbered within the players");
 

@@ -76,10 +76,10 @@ std::vector<char>          g_selfPlacing;  // per root: shows or collapses itsel
 std::vector<std::uint16_t> g_costOf;  // per root: its class's entry in g_costs
 std::vector<ClassCost>     g_costs;  // by class, in the order first seen; kept across scans
 std::unordered_map<const void*, std::uint16_t> g_costIndex;  // class -> entry in g_costs
-std::uint64_t              g_setsToSeats     = 0;  // since the last census: setter calls toward a further seat
+std::uint64_t              g_setsToSeats     = 0;  // since the last census: setter calls toward a seat
 std::uint64_t              g_setsToOne       = 0;  // and back to player 1
 std::uint64_t              g_alreadyOwned    = 0;  // a pass needed the root, which carried that seat's context already
-std::uint64_t              g_contextFreeKept = 0;  // a shown context-free root left on player 1's in a further pass
+std::uint64_t              g_contextFreeKept = 0;  // a shown context-free root left on player 1's in a seat's pass
 bool                       g_skipContextFree = true;  // the hud-context-skip switch
 std::size_t       g_hiddenSwapped = 0;  // self-placing roots given a seat's context while collapsed, last pass
 PlayerContext     g_contexts[players::kMaxPlayers];  // by seat; a seat with no local player has none
@@ -259,7 +259,7 @@ bool LocalPlayers(LocalPlayerSet& bySeat)
 bool Scan(const LocalPlayerSet& bySeat)
 {
     // Every root is back to player 1's context between frames, and a scan runs before the frame's first switch, so
-    // no root carries a further seat's here. Defensive: one that did is put back before the list is forgotten (the
+    // no root carries a seat's here. Defensive: one that did is put back before the list is forgotten (the
     // result is the way back's own; a fault there is not retried).
     if (std::any_of(g_owner.begin(), g_owner.end(), [](Owner owner) { return owner != 0; }))
     {
@@ -342,12 +342,12 @@ bool AdoptSelfPlacing(UObject* widget)
 
 bool SetContexts(int seat) noexcept
 {
-    // A further seat's context goes only to roots that are shown in its pass (a hidden root is neither
+    // A seat's context goes only to roots that are shown in its pass (a hidden root is neither
     // ticked nor painted), and to the self-placing ones whatever their visibility (their run shows
     // or collapses them from the context's own projection), each only if it does not carry the seat's
     // already, and never to a context-free root while the skip is on; player 1's goes back to every
     // root a seat's reached (hud/context_owners.h).
-    const bool toSeat = seat != 0;  // toward a further seat
+    const bool toSeat = seat != 0;  // toward a seat
     if (!HasContext(seat))
     {
         return false;

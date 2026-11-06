@@ -737,7 +737,7 @@ std::uint8_t ForcedGetOff(const GetOffParams* params)
     {
         return result;
     }
-    // Called inside a seat's scope (a further player is the primary one): the game's call reached that seat's ride and
+    // Called inside a seat's scope (a seat's player is the primary one): the game's call reached that seat's ride and
     // player 1's was not ended, so no other seat follows (the old rule's meaning).
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {

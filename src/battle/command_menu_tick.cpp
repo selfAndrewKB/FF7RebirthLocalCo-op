@@ -245,7 +245,7 @@ namespace {
 /// handler (the pad's presses and releases dispatched in the seat's UI): the press sets the request and
 /// the release clears it, as for player 1; a suspend clears them through the tick's own
 /// ClearOneShotRequests (the mirrored SuspendHudInput turns +0x25C off first). Here only the
-/// leader-switch requests are cleared: a written exception (a further player's d-pad never switches the party
+/// leader-switch requests are cleared: a written exception (a seat's d-pad never switches the party
 /// leader; the game's only switch path, BattleLeader_CycleSwitch, changes player 1's leader and no
 /// per-player switch exists; RE-p2-command-menu-levers.md §15).
 void WriteRequests(std::uintptr_t own) noexcept

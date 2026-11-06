@@ -1,6 +1,6 @@
 #pragma once
 
-// Each further player's own battle command menu: another FieldCommandCtrl (RE-p2-command-menu.md §5.1, §10;
+// Each seat's own battle command menu: another FieldCommandCtrl (RE-p2-command-menu.md §5.1, §10;
 // RE-p2-command-menu-input.md §4.1, §10 Stage 3a; passes S-CMD1, S-CMD2).
 //
 // The game owns one command controller (EndUISystem[23]) and builds it with three plain calls:

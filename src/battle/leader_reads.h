@@ -10,7 +10,7 @@
 //   - E4 a boss's timed damage-phase reaction and E5 the damage-phase gate a boss re-runs after a party summon's cut
 //     scene: the leader is the reaction's source; the boss's coin;
 //   - E6 the reaction player-type filter (counters, avoids and guards that only "the player's" attacks provoke, 23
-//     definitions): every human counts, so a further player's attacks provoke them too;
+//     definitions): every human counts, so a seat's attacks provoke them too;
 //   - E7 Reno's mines without a target head for the leader type's character: each mine's own coin;
 //   - E8 Crimson Mare's rocket-punch arms: the boss's coin.
 //

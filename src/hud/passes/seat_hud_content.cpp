@@ -128,7 +128,7 @@ struct FieldTargets
 FieldTargets                                         g_fieldTargets;        // this frame's walk (hiddenSwapped unused)
 FieldTargets                                         g_fieldTargetsLogged{static_cast<std::size_t>(-1)};
 unsigned                                             g_mask               = 511;  // SetSeatLeversMask
-// A pass left its seat's contexts for the next further pass (LeaveSeat with another): player 1's contexts and
+// A pass left its seat's contexts for the next seat's pass (LeaveSeat with another): player 1's contexts and
 // updates are due, from the next pass's LeaveSeat or SettleSeats.
 bool                                                 g_playerOneDue       = false;
 std::uint32_t                                        g_settledLate        = 0;  // since the census: SettleSeats did it
@@ -157,7 +157,7 @@ void Refuse(const wchar_t* why)
     platform::Log(L"HUD levers: {}; players 2 and 3's content stays off", why);
 }
 
-/// The updates for the view whose levers are set (`seat` 0 player 1's); a further seat's run gives the arrows their own
+/// The updates for the view whose levers are set (`seat` 0 player 1's); a seat's run gives the arrows their own
 /// timers.
 bool RunUpdates(int seat) noexcept
 {
@@ -275,7 +275,7 @@ void RestoreTimeStep() noexcept
     }
 }
 
-/// Rescans the HUD roots every kRootScanFrames frames, checked once a frame (the first further pass). False if a scan
+/// Rescans the HUD roots every kRootScanFrames frames, checked once a frame (the first seat pass). False if a scan
 /// failed (tried again by the next pass, this frame's or the next's) or the seat has no context (rescanned next frame).
 bool KeepRootsCurrent(const hud_roots::LocalPlayerSet& bySeat, int seat)
 {
@@ -345,7 +345,7 @@ void AdoptAbilityNames()
 
 /// The field-target markers (EndUISystem+0x98; one per field-action point, RE-p2-field-interact.md §12.14) are
 /// self-placing roots: their tick projects each through its own context and collapses it when that fails, so one
-/// collapsed by player 1's projection (an item off player 1's screen) must still get a further seat's context in the
+/// collapsed by player 1's projection (an item off player 1's screen) must still get a seat's context in the
 /// seat's run, which shows it again from the seat's camera; player 1's re-run collapses it again for player 1's view.
 /// The widget at +0x00 is the one projected; +0x28 and +0x30 are placed and animated from it. Logged on change.
 void AdoptFieldTargets()
@@ -600,7 +600,7 @@ void LeaveSeat(int seat, bool another) noexcept
 {
     // Every lever is put back whatever happens to the others: each step is guarded on its own
     // (the engine calls by SEH inside the helpers), and nothing here allocates except the log.
-    // With another further pass to come, the roots' contexts and player 1's re-run wait for the
+    // With another seat's pass to come, the roots' contexts and player 1's re-run wait for the
     // last pass: the next seat's own contexts and updates replace this one's, and the roots go
     // back to player 1 once (hud/context_owners.h).
     if (players::SeatIndex(seat))

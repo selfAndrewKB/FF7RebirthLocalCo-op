@@ -4,7 +4,7 @@
 // character) for one select (RE-p2-enemy-target-bias.md §5.1, §10). Pure logic, tested on the host.
 //
 // In the single-player game the UCPC is the one character the player controls, and the story bosses' condition
-// lists weight it 2:1 to 8:2 over the AI members. With further players each select names one of them, so every
+// lists weight it 2:1 to 8:2 over the AI members. With seats in, each select names one player, so every
 // player gets the player's weight equally:
 //   - no seat in (or none playing a member): the game's own answer, untouched;
 //   - two or more players' characters eligible (the game's own rule: a valid target and not excluded): a uniform

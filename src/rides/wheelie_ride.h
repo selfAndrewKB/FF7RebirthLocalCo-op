@@ -1,6 +1,6 @@
 #pragma once
 
-// Each further player rides a Wheelie (SB scooter) of their own (plan §3, "Wheelie"; RE-p2-wheelie-ride.md §13, §14,
+// Each seat's player rides a Wheelie (SB scooter) of their own (plan §3, "Wheelie"; RE-p2-wheelie-ride.md §13, §14,
 // option A).
 //
 // The game boards by walking: the on-foot move state's field-summon step asks the primary controller's scooter
@@ -45,7 +45,7 @@ class GameImage;
 namespace lss::rides::wheelie_ride {
 
 /// Finds the game's functions and replaces the coordinator's swap-back slot; logged either way. False if a check
-/// failed (a further player then cannot board, as before).
+/// failed (a seat's player then cannot board, as before).
 bool Install(const platform::GameImage& image) noexcept;
 
 /// Puts the swap-back slot and the getoff call redirects back.

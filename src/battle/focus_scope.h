@@ -1,6 +1,6 @@
 #pragma once
 
-// Each further player's own UI focus context (RE-p2-command-menu-input.md §2, §3.3, §11, pass S-CMD2). Every
+// Each seat's own UI focus context (RE-p2-command-menu-input.md §2, §3.3, §11, pass S-CMD2). Every
 // seat has its own saved context and key guide (indexed by the seat, index 0 unused: player 1's
 // context is the game's own, in place outside a scope). One scope at a time, whichever seat's: the seats swap in turn,
 // never one inside another's.
@@ -12,7 +12,7 @@
 // capture map (the held actions' capturers: each player's own, as the command menu captures every held
 // Attack, Unique and Guard) and the menu owner byte (+0x64, per-pad input state the member selecter
 // writes) are exchanged with the seat's saved copy (empty at first), the input
-// object's menu-core delegate is unbound (a further player never runs player 1's cinema handler), and the UI
+// object's menu-core delegate is unbound (a seat never runs player 1's cinema handler), and the UI
 // system's command controller slot names the seat's. Weak-pointer counts travel with the bytes, so
 // nothing is added or released. The scope is refused inside another scope or without the input
 // object. One byte context (platform/byte_scope.h) holds it all: the five regions as Exchange

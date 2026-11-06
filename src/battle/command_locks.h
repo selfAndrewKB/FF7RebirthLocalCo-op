@@ -1,6 +1,6 @@
 #pragma once
 
-// Each further player's command controller gets the battle's command values through the game's own setters
+// Each seat's command controller gets the battle's command values through the game's own setters
 // (RE-p2-command-menu-levers.md §1, §3; IDA passes S-CMD9, S-CMD10).
 //
 // The game writes these into its one command controller only (EndUISystem[23]); they are battle-wide,

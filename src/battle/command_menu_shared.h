@@ -1,6 +1,6 @@
 #pragma once
 
-// What the further players' command menus' units share (battle/command_menu.h): whether a game call may
+// What the seats' command menus' units share (battle/command_menu.h): whether a game call may
 // be made again on a seat's controller, whether its stage is live, and the UI system's address. Internal; not a public
 // API.
 

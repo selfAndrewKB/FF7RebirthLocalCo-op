@@ -203,7 +203,7 @@ void Seat::Tick(bool& commandMenusTicked) noexcept
 void Seat::WatchOwnCamera() noexcept
 {
     // Watch only (RE-p2-session-levers.md §2): the game writes the seat's view target once, at spawn
-    // (InitializeFor; the join repeats that aim once), and no game code retargets a further player's
+    // (InitializeFor; the join repeats that aim once), and no game code retargets a seat's
     // controller afterwards, so nothing re-aims it here. A move off its camera actor is logged, one
     // line per move for the first few; later ones are only counted on the status line.
     constexpr std::uint32_t kLoggedMoves = 3;
@@ -1185,7 +1185,7 @@ void Session::Tick() noexcept
 {
     players::generation::SetGameThread();  // the engine-tick callback runs on the thread that ticks the world
     platform::game_thread_sites::Run();  // the 1.005 placements (platform/deferred_sites.h), outside the game's ticks
-    battle::command_rules::Update();      // which members player 1 may not command (none without a further player)
+    battle::command_rules::Update();      // which members player 1 may not command (none with every seat out)
     battle::command_menu_view::KeepHidden();  // each seat's menu widgets stay out of every view
     if (AnyIn())
     {

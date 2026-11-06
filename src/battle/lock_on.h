@@ -1,6 +1,6 @@
 #pragma once
 
-// Each further player's targeting: the game's own targeting tick run again, for that player
+// Each seat's targeting: the game's own targeting tick run again, for that seat
 // (RE-p2-targeting-scoped-tick.md, pass S-TGT5; the fields in RE-p2-lock-on.md, S-TGT2).
 //
 // The game keeps one set of target fields in the battle system: the target cursor (+0x68), the
@@ -18,7 +18,7 @@
 // update and the seat's HUD collection.
 //
 // Both targeting calls are redirected: the game's call runs for player 1 (on pad 1's own right stick
-// while a further player plays; the merged stick is whichever pad is pushed furthest), then the same call runs
+// while a seat plays; the merged stick is whichever pad is pushed furthest), then the same call runs
 // again for each seat inside that seat's scopes: the seat's UI context (battle/focus_scope.h: the
 // command controller slot answers the seat's command controller, and the focus path is the seat's, from
 // which an open target list answers its selected row), the seat's pad's sticks and buttons, the seat as the primary
@@ -83,9 +83,9 @@ private:
 /// target and cursor end, as the game's battle teardown ends player 1's.
 void AfterBattle(int seat) noexcept;
 
-/// Diagnosis: the further players' targeting run on or off (on at start).
+/// Diagnosis: the seats' targeting run on or off (on at start).
 void SetEnabled(bool on) noexcept;
-/// The further players' targeting run acts: installed, switched on, and not turned off for the session by an
+/// The seats' targeting run acts: installed, switched on, and not turned off for the session by an
 /// exception.
 bool Enabled() noexcept;
 

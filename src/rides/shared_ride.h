@@ -13,7 +13,7 @@
 //     end request in state 2 leaves `0x5B8` naming an idle (0) coordinator, which must not hold the seats aside
 //     (RE-p2-tiny-bronco.md).
 // While it holds, the caller (mod.cpp):
-//   - has every further player stand aside (Session::SetSharedRide): the member goes back to its AI, as in the
+//   - has every seat stand aside (Session::SetSharedRide): the member goes back to its AI, as in the
 //     one-player game, and the player stays in without one; the member of their slot is taken again once the
 //     ride is over;
 //   - shows player 1's single view;

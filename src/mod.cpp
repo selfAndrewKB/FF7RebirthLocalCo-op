@@ -81,7 +81,7 @@ using lss::platform::Log;
 
 constexpr const wchar_t* kVersion = L"0.100.2";  // built against the Nexus UE4SS (c0a8d4c)
 
-/// How often the seats' status lines are written while a further player is in.
+/// How often the seats' status lines are written while a seat is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
 
 /// Checks every startup fact against the running game; each failure is logged with the fact's name.
@@ -185,9 +185,9 @@ public:
         g_instance.store(nullptr, std::memory_order_release);  // the map-load callback finds no mod from now on
         lss::engine_tick::Stop();
 
-        // With a further player still in, the engine keeps rendering several views and calling the seats'
+        // With a seat still in, the engine keeps rendering several views and calling the seats'
         // wrappers. Putting the engine's own submission back would render them in one family, the
-        // configuration this mod exists to avoid, and a further player's camera manager depends on its
+        // configuration this mod exists to avoid, and a seat's camera manager depends on its
         // wrappers. Removing a player here is not an option: the destructor may run off the game
         // thread. So everything stays installed; the DLL is pinned, so it stays valid. The characters
         // raised for the seats' views are given back either way (that setter runs from any thread), and the NPC
@@ -328,7 +328,7 @@ public:
 #endif
         lss::dev::Install(*image, *session_);
 
-        // The further players leave before any map load: the new world would log them in again, and their
+        // The seats' players leave before any map load: the new world would log them in again, and their
         // camera managers' fixed-name spawns would collide with player 1's outside a join. The loader's callback
         // answers {false, false}: the game's LoadMap runs as it is. (No map load has been seen in play: the title's
         // Continue, a save load, a retry and chapter select all leave the field inside the one world.)
@@ -393,7 +393,7 @@ private:
         return true;
     }
 
-    /// The further players leave before the world changes under them (a map load, or the game leaving the field
+    /// The seats' players leave before the world changes under them (a map load, or the game leaving the field
     /// for a retry, reload or load); the session joins again once the new field is ready. The mirror views leave
     /// only for a map load (`mapLoad`): their controllers are this world's, and a new map would spawn them again
     /// outside a join. Through a field exit inside the world they stay, so the loading screen is drawn in every
@@ -415,7 +415,7 @@ private:
             return;
         }
         const bool left = session_->LeaveNow();
-        // Now, not at the next tick: the view points must not keep the old further players; every column is its
+        // Now, not at the next tick: the view points must not keep the seats' old players; every column is its
         // player's own again (the next tick decides afresh).
         FollowShown(lss::views::column_source::Shown{});
         lss::views::Follow(SplitFrameNow(false, false));
@@ -523,8 +523,8 @@ private:
         columnsHeld_                        = columns.held;
         lss::dev::TickAfterSession();
         // Where each column's view comes from this tick (views/column_source.h decides; this is the one place that
-        // applies it): the engine's single view through its switch (players/single_view.h), a further player's view on
-        // player 1's camera through the view points, and their HUD pass skipped, through the frame.
+        // applies it): the engine's single view through its switch (players/single_view.h), a seat's view on
+        // player 1's camera through the view points, and its HUD pass skipped, through the frame.
         lss::views::column_source::Moment moment;
         moment.columnsHeld = columns.held;
         moment.sharedRide  = shared;
@@ -545,7 +545,7 @@ private:
         if (shown.Single() && !singleView_.Single())
         {
             // The switch could not be set (or read): the columns stay on screen, so the same moment is answered as
-            // with columns held: player 1's camera and HUD in every further column (never a split with a menu over it).
+            // with columns held: player 1's camera and HUD in every other column (never a split with a menu over it).
             moment.columnsHeld = true;
             shown              = lss::views::column_source::Decide(moment);
         }
@@ -563,9 +563,9 @@ private:
         }
         lss::modules::TickAfterSession(frame);
         lss::dev::TickWatches(splitShown);  // the dev watches, after the levers they observe
-        // The settings several views need, while more than one view family renders (a further player or a mirror view).
+        // The settings several views need, while more than one view family renders (a seat's view or a mirror view).
         settings_.Update(columns.map.count > 1, [](const std::wstring& line) { Log(L"{}", line); });
-        // The layout by column count: the player's two-player choice with two local players (a further player, or a
+        // The layout by column count: the player's two-player choice with two local players (a seat's player, or a
         // mirror beside player 1), the three equal columns with three.
         LogLayoutChange(layout_.Update(columns.map.count == 2));
         if (const auto text = lss::players::Describe(threeLayout_.Update(columns.map.count == 3, kThreeColumns),

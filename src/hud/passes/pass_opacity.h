@@ -4,7 +4,7 @@
 // markers (hud/field/field_markers.h), search pins (hud/field/search_pins.h), target marks (hud/battle/target_views.h)
 // and command menu (battle/command_menu_view.h) are made transparent through the game's own setter
 // (players/widget_opacity.h) and given their own opacity back after the pass. Not Hidden: a UMG widget is ticked only
-// while it is painted, and a further pass runs with DeltaTime 0, so a row hidden in player 1's pass would never
+// while it is painted, and a seat's pass runs with DeltaTime 0, so a row hidden in player 1's pass would never
 // advance its timers (seen in v0.12.3). Each module keeps what it hid in a HiddenSet and decides whose each widget is;
 // the participants' ShowOnly and Restore run from the one pass driver (hud/passes/root_overlay_render.cpp) through the
 // two functions here, in one order. Game thread.

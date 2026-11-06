@@ -55,7 +55,7 @@ bool                   promptRowsKnown = false;  // game thread: the seats' prom
 bool                   g_seatIn[players::kMaxPlayers] = {};  // game thread, by seat: in the game at the last render
 bool                   g_installed = false;
 
-// Render cost, logged every kRenderTimingFrames frames while a further player's image is on.
+// Render cost, logged every kRenderTimingFrames frames while a seat's image is on.
 constexpr std::uint32_t kRenderTimingFrames = 240;
 double        g_seatSeconds        = 0.0;
 double        g_playerOneSeconds   = 0.0;
@@ -64,7 +64,7 @@ std::uint32_t g_renderTimedFrames  = 0;
 
 using platform::frame_watch::Now;
 
-/// Whether a further seat below `seat` is expected to have a pass after it this frame (the loop's own test without the
+/// Whether a seat below `seat` is expected to have a pass after it this frame (the loop's own test without the
 /// image's buffer check: a pass planned but not run is put back by SettleSeats after the loop).
 bool AnotherPassBelow(int seat, bool splitShown) noexcept
 {
@@ -82,8 +82,8 @@ bool AnotherPassBelow(int seat, bool splitShown) noexcept
     return false;
 }
 
-/// A further seat's pass of the overlay render: its levers and updates, its own render into the entry named for it,
-/// everything put back for the next pass (the roots' contexts and player 1's re-run only after the last further pass,
+/// A seat's pass of the overlay render: its levers and updates, its own render into the entry named for it,
+/// everything put back for the next pass (the roots' contexts and player 1's re-run only after the last seat pass,
 /// `another` false). Its image is ready (column_hud_images's ImageReady).
 void SeatPass(int seat, bool another) noexcept
 {
@@ -121,7 +121,7 @@ void SeatPass(int seat, bool another) noexcept
 void RenderRootOverlay(void* application) noexcept
 {
     const bool gameThread = players::generation::OnGameThread();
-    // The whole call: the game's overlay render, the further passes before it, and the mod's work around it.
+    // The whole call: the game's overlay render, the seats' passes before it, and the mod's work around it.
     const platform::frame_watch::Charge charge(platform::frame_watch::Part::OverlayRender);
     if (gameThread)
     {
@@ -160,10 +160,10 @@ void RenderRootOverlay(void* application) noexcept
             }
         }
         FollowHudPlacementBeforeRender();  // after the rows' layout, which can set a row's point
-        // The further seats' passes first, highest seat first, each whose image is on (hud/passes/column_hud_images.h
+        // The seats' passes first, highest seat first, each whose image is on (hud/passes/column_hud_images.h
         // holds the slot and renders; the levers and the per-pass opacities around each render are the modules' own
         // calls, in SeatPass's order). A seat whose column shows player 1's camera (views/column_source.h
-        // Source::PlayerOne: a held column while the game takes the whole screen, a shared ride, every further player
+        // Source::PlayerOne: a held column while the game takes the whole screen, a shared ride, every seat's player
         // waiting or single-view on; or a lone waiting player) gets no pass: its view then draws player 1's HUD, as a
         // mirror's.
         overlay_pass::Set(overlay_pass::kNone);
@@ -188,8 +188,8 @@ void RenderRootOverlay(void* application) noexcept
         g_playerOneStart = Now();
         if (players::generation::AnyActive() && !splitShown)
         {
-            // Player 1's single view (players/single_view.h): no image for the further players, and player 1's
-            // pass shows only player 1's own rows, marks, icons and command menu, as after a further pass. The
+            // Player 1's single view (players/single_view.h): no image for the seats, and player 1's
+            // pass shows only player 1's own rows, marks, icons and command menu, as after a seat's pass. The
             // seats' rows stay painted (transparent), so their timers keep running.
             target_views::BeforePass(0);
             seat_area_icons::ShowOnly(0);

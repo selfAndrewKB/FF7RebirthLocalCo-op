@@ -6,7 +6,7 @@
 // Enemy gauges: which enemies have a name and HP gauge is decided by one collection (the displayed
 // target, enemies whose AI asks to always show status, and a sticky list), read by the gauge manager's
 // two steps that create and keep entries. Both calls are redirected: the game's collection runs, then
-// runs again on the same list once per further seat with that seat's target fields in place
+// runs again on the same list once per seat with that seat's target fields in place
 // (battle/lock_on.h's TargetScope, one at a time). It only appends what is missing, so the list is
 // every player's targets together and the game makes, keeps and fades each seat's gauge itself. Both sites or
 // neither: one keeps only what its list names.
@@ -14,7 +14,7 @@
 // Per view: before each view's HUD updates and pass, the marks that belong only to the other player
 // get render opacity 0 (the game's own UWidget::SetRenderOpacity, players/widget_opacity.h) and their
 // own opacity back after that pass. Still painted, so UMG keeps ticking them (fades and animations
-// advance; a Hidden or Collapsed widget would never tick, as a further pass runs with DeltaTime 0): each
+// advance; a Hidden or Collapsed widget would never tick, as a seat's pass runs with DeltaTime 0): each
 // view's pass takes out every other player's cursor (player 1's the battle system's, a seat's
 // battle/lock_on.h Cursor), and the gauges other players' displayed targets brought in that its own
 // player's did not.

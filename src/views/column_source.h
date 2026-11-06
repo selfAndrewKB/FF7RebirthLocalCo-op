@@ -8,19 +8,19 @@
 //   - Self: the player's own view, their own camera (views/player_view_point.h) and their own HUD
 //     (hud/passes/column_hud_images.h);
 //   - PlayerOne: the column stays and the mod puts player 1's camera and HUD in it, as a mirror view shows them
-//     (views/mirror_player.h): the further player's view point is redirected to player 1's camera and no HUD pass
+//     (views/mirror_player.h): the seat's view point is redirected to player 1's camera and no HUD pass
 //     runs for them;
 //   - Screen: no column at all; the whole screen is the engine's single view, player 1's (players/single_view.h: the
 //     engine's split switch), and the mod does nothing per seat. One monitor only: a held column is never black (the
 //     user's columns rule, 2026-10-23), so under the three-player monitor mode or the console's `view-columns` the
 //     same moments keep the columns and give them PlayerOne instead.
 //
-// The moments that take a further player's view away from them, each a game state the mod reads, never a guess:
+// The moments that take a seat's view away from its player, each a game state the mod reads, never a guess:
 //   - the game shows something that takes the whole screen (views/whole_screen_reason.h: a full-screen menu, the map,
-//     a cutscene, a minigame that holds player 1, the title) — every further player's column;
-//   - player 1 rides a vehicle the whole party shares (rides/shared_ride.h) — every further player's;
-//   - a further player is in without their member while the game has it (players/seat_state.h Handed: waiting for a
-//     party member, or standing aside for the ride) — that player's column alone; while every further player in is
+//     a cutscene, a minigame that holds player 1, the title) — every seat's column;
+//   - player 1 rides a vehicle the whole party shares (rides/shared_ride.h) — every seat's;
+//   - a seat's player is in without their member while the game has it (players/seat_state.h Handed: waiting for a
+//     party member, or standing aside for the ride) — that player's column alone; while every seat in the game is
 //     handed, nobody but player 1 plays, so one monitor shows the engine's single view (the user's decision,
 //     2026-10-01). On one monitor a player waiting for their member leaves the game after a short grace and waits
 //     outside (session/session_rules.h WaitOutside; the user's decision, 2026-10-27), so their column goes
@@ -65,7 +65,7 @@ enum class Why : std::uint8_t
 enum class Override : std::uint8_t
 {
     Auto,    // by the moments above (the default)
-    Single,  // always player 1's while a further player is in (development)
+    Single,  // always player 1's while a seat is in (development)
     Split,   // never (development)
 };
 
@@ -101,7 +101,7 @@ struct Shown
     /// By seat, the column showing their own view (OwnColumn), -1 for none (index 0 unused).
     std::array<int, players::kMaxPlayers> ownColumns{-1, -1, -1};
 
-    /// The engine's single view: one view, player 1's, no columns (one monitor only): some further seat in the game
+    /// The engine's single view: one view, player 1's, no columns (one monitor only): some seat in the game
     /// has Screen (every one has it then, the moments above give it to all).
     constexpr bool Single() const noexcept
     {
@@ -116,7 +116,7 @@ struct Shown
         return false;
     }
 
-    /// A further player's own view is on screen: some further seat in the game shows their own. The split's
+    /// A seat's own view is on screen: some seat in the game shows its own. The split's
     /// per-player presentation (the HUD images, the halves' shape) runs then.
     constexpr bool SplitShown() const noexcept
     {
@@ -136,7 +136,7 @@ struct Shown
     constexpr bool ViewsSplit() const noexcept { return columnCount > 1 && !Single(); }
 
     /// Whether `seat`'s column shows player 1's camera and HUD by the mod (false for player 1, a seat out, and under
-    /// the engine's single view, where the further column does not exist).
+    /// the engine's single view, where the seat's column does not exist).
     constexpr bool OnPlayerOne(int seat) const noexcept
     {
         return players::SeatIndex(seat) && seats[static_cast<std::size_t>(seat)].source == Source::PlayerOne;
@@ -175,7 +175,7 @@ constexpr Shown Decide(const Moment& moment) noexcept
             allHanded = allHanded && moment.seats[at] == players::SeatState::Handed;
         }
     }
-    // Every further player's column, or the whole screen: the console's word, else the game's whole-screen state,
+    // Every seat's column, or the whole screen: the console's word, else the game's whole-screen state,
     // the shared ride, or nobody but player 1 playing.
     const bool automatic = moment.choice == Override::Auto;
     Why        all       = Why::None;

@@ -1,6 +1,6 @@
 #pragma once
 
-// Each further player's command controller ticked at the game's own spot, and that player's battle actions driven
+// Each seat's command controller ticked at the game's own spot, and that seat's battle actions driven
 // through it (RE-p2-command-menu-tick.md §13, pass S-CMD3; RE-p2-command-menu.md §5.1).
 //
 // The game ticks its one command controller once per frame, from the game mode's phase-0 global tick
@@ -11,22 +11,22 @@
 // and buttons. The controller's own sub-ticks then call the game's per-character attack, guard and
 // dodge functions on the seat's member, so the seat's Attack, Unique, Guard and Dodge are written
 // into its request array from the seat's pad (levels, as the game's input handler and up route leave them).
-// This is the only path for a further player's actions; if it cannot run, the log says why.
+// This is the only path for a seat's actions; if it cannot run, the log says why.
 //
 // What a second tick would change for player 1 is handled:
 //   - the world slow (slot 0, written by every tick): either menu slows the world (policy A, the
 //     smaller of the two values is written);
 //   - the per-type command snapshot: a seat's pass does not write it (its one reader cancels a
 //     pending command on the game's controller); the key guide is the seat's own inside the scope;
-//   - the leader-switch requests: cleared before each tick (a written exception: a further player's d-pad
+//   - the leader-switch requests: cleared before each tick (a written exception: a seat's d-pad
 //     never switches player 1's leader);
 //   - the battle HUD mode, battle input and party-list input follow player 1's through the game's
 //     own setters on the seat's controller, never the global ones;
-//   - the command rules are turned around for the pass: a further player may not command player 1's leader.
+//   - the command rules are turned around for the pass: a seat's player may not command player 1's leader.
 // A seat's pad's presses reach that seat's menu in battle; a release follows its press (the capture map's rule).
 // Game thread only.
 //
-// Units: this file's tick, mirrors and shields (command_menu_tick.cpp); the further pads' presses and releases
+// Units: this file's tick, mirrors and shields (command_menu_tick.cpp); the seats' pads' presses and releases
 // (menu_input_route); the tactical tint and the wait sound (menu_tint); what they share, the pass in flight
 // above all (command_menu_tick_shared.h).
 //

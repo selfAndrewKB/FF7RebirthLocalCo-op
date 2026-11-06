@@ -184,8 +184,8 @@ constexpr std::array kModules{
     // the game window across its row of monitors (the engine's reshape)
     Module{Call<&views::window_span::Install>, nullptr},
 
-    // The further players in the world: strands, cameras, traversals.
-    // the game's follow warp, for a stranded further player
+    // The seats' players in the world: strands, cameras, traversals.
+    // the game's follow warp, for a seat's stranded player
     Module{Call<&world::party_warp::Install>, nullptr},
     // a seat's member stranded off the loaded navmesh
     Module{Call<&world::nav_strand::Install>, &world::nav_strand::Remove},
@@ -204,11 +204,11 @@ constexpr std::array kModules{
     Module{Call<&input::approach_own_camera::Install>, &input::approach_own_camera::Remove},
     // a seat's walk-step cap ends on the seat's controller
     Module{Call<&input::seat_walk_cap::Install>, &input::seat_walk_cap::Remove},
-    // characters near a further player animate by the nearer camera
+    // characters near a seat's player animate by the nearer camera
     Module{Call<&world::anim_views::Install>, &world::anim_views::Remove},
     // each seat's trigger read after player 1's; admitted actors' events
     Module{Call<&world::seat_triggers::Install>, &world::seat_triggers::Remove},
-    // a further player inside CharaPop switch volumes (the shopkeepers near them); its events come from seat_triggers'
+    // a seat's player inside CharaPop switch volumes (the shopkeepers near them); its events come from seat_triggers'
     // filter
     Module{Call<&world::seat_switch_volumes::Install>, nullptr},
     // a seat's chocobo vaults without taking both ride framings
@@ -235,21 +235,21 @@ constexpr std::array kModules{
     // each seat's walk limits from its own surroundings
     Module{Call<&input::walk_limits::Install>, nullptr},
 
-    // The world around the further players (these three give the raised characters back at unload, before the
+    // The world around the seats' players (these three give the raised characters back at unload, before the
     // table's walk).
-    // characters near a further player keep the detail that player's view gives them
+    // characters near a seat's player keep the detail that player's view gives them
     Module{Call<&world::charapop_near::Install>, nullptr},
     // the NPC population follows every player (Ctrl+F10 compares)
     Module{Call<&world::charapop_centre::Install>, nullptr},
-    // world actors such as chests pop around a further player too
+    // world actors such as chests pop around a seat's player too
     Module{Call<&world::world_actor_reach::Install>, nullptr},
 
     // Rides, pickups, rumble, sound, shops.
-    // each further player drives their own chocobo while the party rides
+    // each seat's player drives their own chocobo while the party rides
     Module{Call<&rides::chocobo_ride::Install>, nullptr},
-    // the buggy and the bronco: the further players stand aside, every pad drives
+    // the buggy and the bronco: the seats' players stand aside, every pad drives
     Module{Call<&rides::shared_ride::Install>, nullptr},
-    // a further player boards a Wheelie of their own by walking into it
+    // a seat's player boards a Wheelie of their own by walking into it
     Module{Call<&rides::wheelie_ride::Install>, &rides::wheelie_ride::Remove},
     // each seat's pickups: one more pass of the game's prompts
     Module{Call<&world::field_pickup::Install>, &world::field_pickup::Remove},
@@ -272,7 +272,7 @@ constexpr std::array kModules{
     // selects stop taking the equal-targeting answer while member_movement's leader-test slot is still in place).
     // Condition enemies count any player as the UCPC
     Module{Call<&battle::equal_targeting::Install>, &battle::equal_targeting::Remove},
-    // the further players' hits and the hits they take count as the player's
+    // the seats' players' hits and the hits they take count as the player's
     Module{Call<&battle::player_hits::Install>, &battle::player_hits::Remove},
     // each enemy aims at one of the players, a coin per action
     Module{Call<&battle::target_coin::Install>, &battle::target_coin::Remove},
@@ -368,7 +368,7 @@ static_assert(Ordered<&players::widget_opacity::Install, &hud::prompt_rows::Inst
 
 // Game thread: the columns as the last columns' tick read them (TickColumns), and by seat the column showing that
 // player's own view (TickAfterSession: views/column_source.h OwnColumn, -1 for none), for the calls before them: each
-// further player's sound listener follows it.
+// seat's sound listener follows it.
 views::columns::Map                   g_lastColumns;
 std::array<int, players::kMaxPlayers> g_ownColumns{-1, -1, -1};
 
@@ -409,11 +409,11 @@ void TickBeforeSession() noexcept
     battle::equal_targeting::Tick();      // every player's types for the Condition selects (no leader scope held)
     battle::target_coin::Tick();          // the blueprint natives' swaps once reflection is up; the summary
     feedback::seat_ffb_managers::Tick();      // each seat's component on its own manager, after its BeginPlay
-    // the controller listener slot; each further player's listener on the column showing their own view (the last
-    // tick's sources, Shown::OwnColumn), off while they have none; the summary (Debug)
+    // the controller listener slot; each seat's listener on the column showing its own view (the last
+    // tick's sources, Shown::OwnColumn), off while it has none; the summary (Debug)
     feedback::sound_listeners::Tick(g_ownColumns);
     session::leave_watch::Tick();          // the last leave's controller, followed until it is freed (logged)
-    world::vending::Tick();              // a press that opened no shop; a further player leaving with their shop up
+    world::vending::Tick();              // a press that opened no shop; a seat's player leaving with their shop up
     world::shop_talk::Tick();            // the shopkeeper verdicts queued by a seat's pass
     camera::attack_cameras::Tick();       // the attack-camera status line (Debug)
     camera::attack_framing::Tick();       // the attack-framing latches' clock and status line (Debug)

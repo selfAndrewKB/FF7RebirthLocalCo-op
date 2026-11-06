@@ -117,7 +117,7 @@ struct MainLookup
     std::array<std::uintptr_t, 2> out{};
 };
 
-/// A further seat's label lookup, for the log.
+/// A seat's label lookup, for the log.
 struct LabelLog
 {
     std::uintptr_t character = 0, key = 0;
@@ -133,7 +133,7 @@ struct PassHides
     std::int32_t   cursors      = 0;  // the other players' cursors this pass takes out
     std::uintptr_t ownCursor    = 0;  // this pass's own player's cursor
     std::int32_t   entries      = 0;  // the bar manager's gauges this frame
-    bool           list         = false;  // a further player's command target list open
+    bool           list         = false;  // a seat's command target list open
     bool operator==(const PassHides&) const = default;
 };
 

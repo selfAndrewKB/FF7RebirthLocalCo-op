@@ -1,12 +1,12 @@
 #pragma once
 
-// Each further player's battle camera (RE-p2-battle-camera.md).
+// Each seat's battle camera (RE-p2-battle-camera.md).
 //
 // Each End camera manager owns 13 camera operators (EEndCameraOperatorType); each frame its update
 // renders the lowest-numbered active one, so the Battle operator (11, +0x2CA8) takes over from the
 // Field operator (12) while it is on. The battle state machine switches the Battle operator on at
 // battle start and off at battle end, but through "the primary camera manager": player 1's only. So
-// a further player's camera stayed on the Field operator in battle.
+// a seat's camera stayed on the Field operator in battle.
 //
 // As camera/field_camera does for the Field operator, the Battle operator's Activate and
 // Deactivate (vtable +0x10 / +0x20) are replaced: after the engine's call on player 1's operator, the

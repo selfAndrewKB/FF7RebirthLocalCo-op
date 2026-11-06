@@ -21,7 +21,7 @@ namespace lss::battle::menu_input_route {
 /// Finds the action keys the route and its log compare an event's key with (each checked). False: unavailable.
 bool Find(const platform::GameImage& image) noexcept;
 
-/// Sets the further pads' route for presses, and wraps the key-up handler and the up route's call for releases
+/// Sets the seats' pads' route for presses, and wraps the key-up handler and the up route's call for releases
 /// (optional: without it their releases keep running player 1's up route). Logged.
 void Install(const platform::GameImage& image) noexcept;
 

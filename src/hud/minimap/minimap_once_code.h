@@ -1,12 +1,12 @@
 #pragma once
 
-// The machine code that lets a further player's HUD pass skip the minimap's own map render
+// The machine code that lets a seat's HUD pass skip the minimap's own map render
 // (RE-oom-path.md, "Player 2's minimap paint: hook facts and the skip").
 //
 // Each minimap widget's OnPaint renders its map into its render target through the menu renderer's
 // pool 0 (acquire a slot, paint the map into a layer entry, submit), then adds the element that shows
 // that render target in the HUD. One whole instruction before the acquire block is replaced through
-// platform/code_redirect.h. While the skip byte is set (a further seat's pass), the code jumps over the
+// platform/code_redirect.h. While the skip byte is set (a seat's pass), the code jumps over the
 // block to the instruction after the submit, doing first what that code needs from the block:
 //
 // Circle (SEndNaviMapCircle, site 0x140FC6C95 `mov rcx,[r15+1C0h]`, to 0x140FC6F18): xmm13 = 0. rcx is
@@ -36,7 +36,7 @@ namespace lss::hud {
 /// The fields the code reads and counts into, at fixed offsets (the code addresses them from one base).
 struct MinimapOnceFields
 {
-    alignas(8) std::uint64_t skip = 0;  // +0x00: nonzero during a further seat's pass with the switch on
+    alignas(8) std::uint64_t skip = 0;  // +0x00: nonzero during a seat's pass with the switch on
     std::uint64_t circleSkipped   = 0;  // +0x08
     std::uint64_t octagonSkipped  = 0;  // +0x10
     std::uint64_t circlePainted   = 0;  // +0x18: the stock path (the map rendered)

@@ -66,7 +66,7 @@ struct Frame
     };
     std::array<Seat, players::kMaxPlayers> seats{};  // by seat (players/seats.h); index 0, player 1's, unused
     views::column_source::Shown shown;  // what each column shows this tick (views/column_source.h)
-    bool splitShown = false;  // shown.SplitShown(): a further player in and their own view on screen
+    bool splitShown = false;  // shown.SplitShown(): a seat in and its own view on screen
     int  columns    = 1;      // local players listed, one view each while the screen splits (views/columns.h)
 };
 
@@ -121,8 +121,8 @@ int SeatToLeave(const session::Session& session) noexcept;
 /// takes the column once it is free, if columns are held.
 void LeaveSeat(session::Session& session, int seat, const wchar_t* why) noexcept;
 
-/// The further players' views on their own cameras or player 1's (views/player_view_point.h); refused without the
-/// view-point entry or a further player in.
+/// The seats' views on their own cameras or player 1's (views/player_view_point.h); refused without the
+/// view-point entry or a seat in.
 Result SetOwnCamera(const session::Session& session, bool on) noexcept;
 
 /// The split halves filling the screen, or kept 16:9 with bars; refused without the view-point entry.
@@ -132,7 +132,7 @@ Result SetFill(bool on) noexcept;
 /// mirror views in the columns no player has.
 Result SetMonitorMode(bool on) noexcept;
 
-/// The game window across its row of monitors or back (views/window_span.h); entering needs a further player in.
+/// The game window across its row of monitors or back (views/window_span.h); entering needs a seat in.
 Result SetWindowSpan(const session::Session& session, bool on, const wchar_t* why) noexcept;
 
 #if LSS_DEV

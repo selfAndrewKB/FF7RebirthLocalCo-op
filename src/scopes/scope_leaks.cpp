@@ -90,7 +90,7 @@ bool Acts(unsigned fix) noexcept
 /// The fixes whose facts did not hold at install, for the status line ("" if none).
 const wchar_t* Unavailable() noexcept;
 
-/// A further player's generation is active, on the game thread. The scopes below never nest, so the seats' ticks and
+/// A seat's generation is active, on the game thread. The scopes below never nest, so the seats' ticks and
 /// inputs, run in turn, each save and put back the shared state alone, and g_memberState holds the one ticking.
 bool InSeatScope() noexcept
 {
@@ -184,7 +184,7 @@ unsigned Mask() noexcept
 
 InputScope::InputScope(bool isSeat) noexcept
 {
-    // With the fix off (diagnosis) the block is left as a further player's input writes it, as without this scope.
+    // With the fix off (diagnosis) the block is left as a seat's input writes it, as without this scope.
     if (!isSeat || g_leader == nullptr || g_inputOpen || !InSeatScope() || !Acts(kFixLeaderTransform) ||
         !g_leaderBlock.Open())
     {

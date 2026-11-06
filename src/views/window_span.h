@@ -17,7 +17,7 @@
 // Windowed mode only). In the Windowed mode the border stays (the engine's own rule); exclusive fullscreen refuses.
 //
 // Two ways in:
-// - Ctrl+F2 / `window-span on` with a further player in: one monitor per column shown, the window following the
+// - Ctrl+F2 / `window-span on` with a seat in: one monitor per column shown, the window following the
 //   columns (two with player 2, three under `view-columns 3`), and left when one column is left (every seat out).
 // - The three-player monitor mode, Ctrl+F3 / `monitor-mode on` (plan/seats.md step 5; the user's columns rule,
 //   2026-10-23): the span held over a row of three monitors whatever the players, so the mirror views

@@ -259,7 +259,7 @@ bool Line() noexcept
     return platform::Enabled(platform::Level::Debug);
 }
 
-/// A further player's session is running: a built seat active with its controller (any thread: the generation's
+/// A seat's session is running: a built seat active with its controller (any thread: the generation's
 /// atomics).
 bool Session() noexcept
 {

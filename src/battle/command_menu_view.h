@@ -8,7 +8,7 @@
 
 namespace lss::battle::command_menu_view {
 
-/// Each engine tick, with or without the further players: each seat's menu widgets kept at render opacity 0 (in
+/// Each engine tick, with or without a seat in: each seat's menu widgets kept at render opacity 0 (in
 /// battle something outside the controller shows every command widget; RE-p2-command-menu-input.md §12).
 void KeepHidden() noexcept;
 

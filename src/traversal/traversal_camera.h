@@ -1,6 +1,6 @@
 #pragma once
 
-// The further players' traversal cameras (research/RE-p2-traversal-L3-ladder-camera.md, RE-p2-traversal-cameras.md).
+// The seats' traversal cameras (research/RE-p2-traversal-L3-ladder-camera.md, RE-p2-traversal-cameras.md).
 //
 // Every traversal camera goes on the PRIMARY camera's slot 15 and only for "the player" (IsUCPC_Core, or the move
 // gate FieldActionMove_IsPlayerChar). For a seat's member the game answers no outside the mod's scopes, so the seat's

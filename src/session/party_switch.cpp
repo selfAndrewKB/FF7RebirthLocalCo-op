@@ -59,7 +59,7 @@ std::uint32_t g_refusals       = 0;  // candidates the switch was told to skip
 std::uint32_t g_loggedRefusals = 0;
 bool          g_greyLogged     = false;
 
-/// The seat whose player plays `character` (1..), or 0 for none: player 1 never switches onto a further player's member.
+/// The seat whose player plays `character` (1..), or 0 for none: player 1 never switches onto a seat's member.
 int SeatPlaying(const void* character) noexcept
 {
     if (character == nullptr || !players::generation::OnGameThread())
@@ -88,7 +88,7 @@ void NoteRefusal(const wchar_t* where, int seat) noexcept
     }
 }
 
-/// Replaces the cycle's component call: none for a further player's member (the game skips it).
+/// Replaces the cycle's component call: none for a seat's member (the game skips it).
 void* CycleComponent(void* character) noexcept
 {
     if (const int seat = SeatPlaying(character); seat != 0)
@@ -99,7 +99,7 @@ void* CycleComponent(void* character) noexcept
     return reinterpret_cast<ComponentFn>(g_cycleCall.Original())(character);
 }
 
-/// Replaces CanSwitch's component call: a further player's member is not counted.
+/// Replaces CanSwitch's component call: a seat's member is not counted.
 void* CountedComponent(void* character) noexcept
 {
     if (SeatPlaying(character) != 0)
@@ -109,7 +109,7 @@ void* CountedComponent(void* character) noexcept
     return reinterpret_cast<ComponentFn>(g_canSwitchCall.Original())(character);
 }
 
-/// Replaces the widget's test: a further player's member's portrait reads as not switchable.
+/// Replaces the widget's test: a seat's member's portrait reads as not switchable.
 std::uint8_t SwitchDisabled(std::uint8_t type) noexcept
 {
     void* character = nullptr;
@@ -148,7 +148,7 @@ bool PlaceSites(const platform::GameImage&) noexcept
         }
         switching = false;
     }
-    // The widget greys a further player's member only when the switch really skips it.
+    // The widget greys a seat's member only when the switch really skips it.
     bool widget = switching && s.disabled != 0 && s.byType != 0;
     if (widget)
     {

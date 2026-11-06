@@ -5,7 +5,7 @@
 // Trigger events come from each AEndPlayerTrigger's own tracker (+0x230): it queries the capsule's overlaps every tick
 // and adds the key PlayerTrigger to the trigger registry's pending set. The field tick resolves that key to the PRIMARY
 // controller's trigger only, reads that tracker's query result and hands it to TriggerTracker_DiffAndDispatchEnterLeave,
-// which raises the enters and leaves. A further player's tracker queries every tick, but nothing reads its result.
+// which raises the enters and leaves. A seat's tracker queries every tick, but nothing reads its result.
 //
 // The game has no path for a second PlayerTrigger, so this is a documented recreation of the field tick's per-tracker
 // body (about 20 lines): right after the game's dispatch of player 1's tracker, in the same frame and with the field

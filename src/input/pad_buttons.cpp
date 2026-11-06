@@ -47,7 +47,7 @@ using TickFn = void (*)(void* self, float deltaTime, void* application, void* cu
 
 // The action-down dispatcher (§9): updates the tables and, unless its alreadyHandled byte is set,
 // hands the action to the UI handler stack and the menu core's delegate (menus, field prompts,
-// battle commands). Its callers that can carry a further pad's presses and whose call fits one aligned
+// battle commands). Its callers that can carry a seat's pad's presses and whose call fits one aligned
 // block: the XInput main loop (every bound action) and two DirectInput loops.
 constexpr std::uint8_t   kActionDownBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55,
                                                0x41, 0x56, 0x41, 0x57, 0xB8, 0x00, 0x01, 0x00, 0x00, 0xE8, 0x6A, 0xB1};
@@ -373,7 +373,7 @@ bool Opener(std::uint64_t key) noexcept
 }
 
 /// Reads the three menu openers' FNames from the game's FKey globals until all three are non-zero. Logged once found,
-/// a warning once if not after kOpenerReadFrames input ticks (a further pad's Start then opens nothing).
+/// a warning once if not after kOpenerReadFrames input ticks (a seat's pad's Start then opens nothing).
 void ReadOpeners() noexcept
 {
     if (g_openersRead || g_openerFrames > kOpenerReadFrames)

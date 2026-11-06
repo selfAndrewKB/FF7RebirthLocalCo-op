@@ -94,10 +94,10 @@ platform::CodeRedirect g_gateCode;
 bool                   g_installed          = false;
 std::uintptr_t         g_overlaySingleton   = 0;
 std::uintptr_t         g_deltaTime          = 0;
-std::uintptr_t         g_frameNumber        = 0;  // GFrameNumber (facts::kFrameNumber), held one back per further pass
+std::uintptr_t         g_frameNumber        = 0;  // GFrameNumber (facts::kFrameNumber), held one back in a seat's pass
 RenderToCompositeLayerFn g_renderToLayer    = nullptr;
 
-// Each further seat's entry in the overlay's pool-2 slot (hud/passes/shared_slot.h).
+// Each seat's entry in the overlay's pool-2 slot (hud/passes/shared_slot.h).
 SharedLayerSlot g_slot{{L"HUD image", kPoolTwo, kPoolTwoVertexBuffer, kPoolTwoIndexBuffer, L"SEndRootOverlay",
                         {nullptr, L"SEndRootOverlay_P2", L"SEndRootOverlay_P3"}}};
 
@@ -107,8 +107,8 @@ std::atomic<unsigned> g_imageSeats{0};      // bit `seat`: the seat's entry was 
 std::atomic<std::uint64_t> g_stockName{0};  // as the game passes it; read by the render thread
 bool              g_refused       = false;    // a check failed: the image stays off until restart
 std::uintptr_t    g_overlayThisFrame = 0;     // the overlay with a window, found by ImageReady (0: none)
-double            g_deltaTimeSaved   = 0.0;   // the engine's DeltaTime while a further pass holds it at 0
-std::uint32_t     g_frameNumberSaved = 0;     // GFrameNumber while a further pass holds it one back
+double            g_deltaTimeSaved   = 0.0;   // the engine's DeltaTime while a seat's pass holds it at 0
+std::uint32_t     g_frameNumberSaved = 0;     // GFrameNumber while a seat's pass holds it one back
 
 std::atomic<int> g_familyLogLines{0};
 
@@ -335,7 +335,7 @@ double HoldFrame() noexcept
     g_deltaTimeSaved = deltaTime;
     // The frame number one back for the pass (RE-damage-numbers-per-view.md §5): every battle popup stamps the frame
     // it was painted or caught up in, and the overlay's post-paint catch-up advances only the widgets whose stamp is
-    // not this frame's. A further pass stamping this frame would hide from player 1's catch-up (the real frame time,
+    // not this frame's. A seat's pass stamping this frame would hide from player 1's catch-up (the real frame time,
     // last) every number player 1 did not paint, which then neither rises nor expires while player 1 looks away. A
     // worker thread reading the global inside the pass would see the frame before [ASSUMPTION: none acts on it].
     std::uint32_t frame = 0;
@@ -392,7 +392,7 @@ void EndFrame() noexcept
     if (g_slot.SubmitIfLeft())
     {
         // Player 1's pass did not take the slot (its render returned early); it was submitted as the game's own
-        // pass would have, holding the further players' entries alone. Info the first time (an unusual path), Debug
+        // pass would have, holding the seats' entries alone. Info the first time (an unusual path), Debug
         // after: a state that lasts (a cutscene) would repeat it per frame.
         static bool s_said = false;
         platform::LogAt(s_said ? platform::Level::Debug : platform::Level::Info,

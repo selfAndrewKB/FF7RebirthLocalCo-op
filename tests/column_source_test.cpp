@@ -1,7 +1,7 @@
 // Host-side tests for views/column_source.h: where each column's view comes from, per moment and per surface (the
 // table in plan/topics/multi-monitor.md, "What each column shows"). Surfaces: one monitor with two or three players,
 // the held columns (the three-player monitor mode, or `view-columns` on one monitor). Moments: field play, the game
-// taking the whole screen, a shared ride, a further player waiting for a member (one, or every one), the console's
+// taking the whole screen, a shared ride, a seat's player waiting for a member (one, or every one), the console's
 // override.
 
 #include "views/column_source.h"
@@ -99,7 +99,7 @@ void TestWholeScreenOneMonitor()
         EXPECT(s.OwnColumn(1) == -1);  // one view, one listener: player 1's
     }
     {
-        // A seat outside the game next to one in: the one in alone decides (every further player in waits).
+        // A seat outside the game next to one in: the one in alone decides (every seat in waits).
         const Shown s = Decide(At(kTwoPlayers, SeatState::Handed, SeatState::Awaiting));
         EXPECT(s.Single() && s.seats[1] == kScreenHanded && !s.seatIn[2]);
         EXPECT(s.seats[2] == kSelf);  // out: no source but the default, no reason
@@ -247,7 +247,7 @@ void TestMirrors()
 {
     std::puts("column source: a column no seat fills shows player 1's; a seat's column is read by its seat");
     {
-        // The monitor mode with player 1 alone: two mirrors, nothing single, no split of a further player.
+        // The monitor mode with player 1 alone: two mirrors, nothing single, no split of a seat's view.
         const Shown s = Decide(At(kOneAndMirrors, SeatState::Out, SeatState::Out, kHeld));
         EXPECT(!s.Single() && !s.SplitShown() && s.ViewsSplit() && s.columnCount == 3);
         EXPECT(s.columns[0] == kSelf);
@@ -303,7 +303,7 @@ void TestOverrides()
         EXPECT(m.columns[2].why == Why::NoPlayer && m.columns[1] == kSelf);
     }
     {
-        // On with no further player: nothing (the game's own screen).
+        // On with every seat out: nothing (the game's own screen).
         const Shown s = Decide(At(kOnePlayer, SeatState::Out, SeatState::Out, false, false, false,
                                   Override::Single));
         EXPECT(!s.Single());

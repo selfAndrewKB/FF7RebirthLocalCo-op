@@ -1,6 +1,6 @@
 #pragma once
 
-// Each further player's own force-feedback manager (research/RE-p2-ffb-manager-per-pc.md).
+// Each seat's own force-feedback manager (research/RE-p2-ffb-manager-per-pc.md).
 //
 // Each controller embeds a force-feedback component (`PC+0x758`) that plays on its owner's pad, but every component
 // names the same manager: a lazy singleton whose 16 tracks remember the effect each channel plays now. The game's apply

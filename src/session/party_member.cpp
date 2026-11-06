@@ -89,7 +89,7 @@ bool GuardedSwitchLeader(void* controller, void* character) noexcept
 
 /// Player 1's battle switch's own member test T, the game's function (RE-p2-party-switch.md §1.2): the
 /// member is live, has its battle controller component, and is neither dead nor petrified. The first
-/// rule for a further player is to be bound by it the way player 1 is.
+/// rule for a seat's player is to be bound by it the way player 1 is.
 bool BattleReady(const void* character) noexcept
 {
     __try

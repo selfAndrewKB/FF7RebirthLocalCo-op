@@ -2,7 +2,7 @@
 
 // The bytes feedback/traversal_rumble_sources.cpp places at the 1.004 jump box's inline list load
 // (PlaceJumpListLoad): after the game's own load, on a thread a jump route named, the rumble list the route named with
-// it (the seat's whose chocobo landed) replaces the leader's. Two routes, one per further player: two chocobos' landings
+// it (the seat's whose chocobo landed) replaces the leader's. Two routes, one per seat: two chocobos' landings
 // run on different animation workers at once (RE-seats-step6-camera-rumble.md §2), so each landing names its own slot.
 // Pure data, so it is executed on the host (tests/traversal_rumble_code_test.cpp).
 
@@ -31,7 +31,7 @@ static_assert(sizeof(std::atomic<std::uint32_t>) == sizeof(std::uint32_t) &&
               "the code reads the slots' atomics as plain words");
 static_assert(sizeof(JumpSlot) == 16 && offsetof(JumpSlot, list) == 8, "the code's slot layout");
 
-/// The routes: one per further player (players::kMaxPlayers - 1; the code below walks exactly this many).
+/// The routes: one per seat (players::kMaxPlayers - 1; the code below walks exactly this many).
 inline constexpr std::size_t kJumpSlots = 2;
 using JumpSlots                         = std::array<JumpSlot, kJumpSlots>;
 

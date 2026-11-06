@@ -1,6 +1,6 @@
 #pragma once
 
-// Logs when a further player's character is stranded off the loaded navmesh and asks the game's follow warp to bring
+// Logs when a seat's character is stranded off the loaded navmesh and asks the game's follow warp to bring
 // it back (RE-p2-party-leash.md, RE-p2-party-warp.md; the ridden chocobo: RE-p2-chocobo-warp.md §1, §4).
 //
 // Field characters may walk only on navmesh, and the navmesh is streamed in a 3x3 block of 120 m cells
@@ -17,12 +17,12 @@
 // ready" counts only while the game's park bit (stop reason 5) is set, since short of the park the game
 // return-warps the character to its safe spot itself.
 //
-// Two characters are watched, each its own subject with the same step: a further player's member on foot, and the
-// chocobo that player rides (its moves go through the same three calls). StrandWatch (world/strand_watch.h)
+// Two characters are watched, each its own subject with the same step: a seat's member on foot, and the
+// chocobo its player rides (its moves go through the same three calls). StrandWatch (world/strand_watch.h)
 // turns a subject's refusals into began / warp / ended; at "warp" its own follow warp brings it back
 // (world/party_warp.h; the chocobo's, with that player seated). The game moves characters on worker threads
 // as well as the game thread, so the redirects only count (atomics) and Tick, on the game thread, turns the
-// counts into events. Inert unless a further player is in. The lines carry both players' positions and the leader's
+// counts into events. Inert unless a seat is in. The lines carry both players' positions and the leader's
 // nav cell; the AI probes and the once-a-second status line are dev tools.
 //
 // Per seat (players/seats.h): each seat has its two subjects (its member and its chocobo), their counts, strands and

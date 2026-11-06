@@ -17,7 +17,7 @@ std::int32_t ControllerIdOfPlayer(std::int32_t player) noexcept
 }
 
 /// The seat whose generation a player's hold needs, and whose join it lasts for: player 1's, player 2's seat (the
-/// override is per pad only with a further player in); a further player's, its own.
+/// override is per pad only with a seat in); player 2's or 3's, its own.
 int SeatOfHold(std::int32_t player) noexcept
 {
     return player == 1 ? players::kFirstSeat : player - 1;

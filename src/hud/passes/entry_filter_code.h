@@ -1,19 +1,19 @@
 #pragma once
 
-// The machine code that gives each further seat's HUD entry its own buffers and lets each view family draw only its
+// The machine code that gives each seat's HUD entry its own buffers and lets each view family draw only its
 // own player's entry (RE-p2-hud-second-image.md §3 and §5; per seat since plan/seats.md step 4).
 //
-// With the further seats' images, one pool-2 slot holds one layer entry per seat with an image, then player 1's:
-// [player 3's, player 2's, player 1's], the further seats highest first (hud/passes/overlay_pass.h). The render
+// With the seats' images, one pool-2 slot holds one layer entry per seat with an image, then player 1's:
+// [player 3's, player 2's, player 1's], the seats highest first (hud/passes/overlay_pass.h). The render
 // thread consumes the slot once per view family. On a fresh consume it uploads each entry's vertices and indices into
 // the pool's ONE vertex/index buffer set, from offset 0, and draws. On a re-use consume it only draws, from what that
-// buffer set last received. So every further entry needs its own buffer set, and a family must skip every other
+// buffer set last received. So every seat's entry needs its own buffer set, and a family must skip every other
 // player's entry. Two sites in the consume loop do that, each one whole instruction replaced through
 // platform/code_redirect.h:
 //
 // Buffers (0x140FC8501, `mov rax,[rdi+90h]`, loading pool 2's vertex buffer for DrawLayerEntry;
 // r9 = the entry, whose FName is its first 8 bytes; the index buffer and the SRM slot are already
-// stored at [rsp+28h] and [rsp+30h]): for a further seat's entry, that seat's vertex buffer, index buffer and SRM
+// stored at [rsp+28h] and [rsp+30h]): for a seat's entry, that seat's vertex buffer, index buffer and SRM
 // slot are passed instead (the seats' table, walked in order). Only rax, the two argument slots and the flags change;
 // nothing after it reads the flags before the call.
 //
@@ -39,7 +39,7 @@
 
 namespace lss::hud {
 
-/// The further seats with a table entry: seats 1..kMaxPlayers-1, built or not (an unbuilt seat's entry stays unset).
+/// The seats with a table entry: seats 1..kMaxPlayers-1, built or not (an unbuilt seat's entry stays unset).
 inline constexpr int kSeatEntries = players::kMaxPlayers - 1;
 
 /// The fields the code reads. Each is an aligned 8-byte value (atomic on x64); a zero name means

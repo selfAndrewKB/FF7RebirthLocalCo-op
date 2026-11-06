@@ -42,7 +42,7 @@ inline constexpr std::uintptr_t kBeginRenderingViewFamily = 0x140BEE184;
 inline constexpr std::uintptr_t kBeginRenderingViewFamilyEntry = 0x14698B4D0;
 
 /// GFrameNumber (data, uint32): stepped once per frame by PostRenderAllViewports. Read by the HUD trace's frame line
-/// and held one back for the further HUD passes (hud/passes/column_hud_images, RE-damage-numbers-per-view.md §5). Its
+/// and held one back for the seats' HUD passes (hud/passes/column_hud_images, RE-damage-numbers-per-view.md §5). Its
 /// 1.005 twin is 0x146DDD224, carried by the hand-found table: the generated data range around FApp::DeltaTime
 /// would put it 0x1C bytes off (S-DMGNUM, 2026-10-26).
 inline constexpr std::uintptr_t kFrameNumber = 0x146FAA370;
@@ -138,7 +138,7 @@ inline constexpr platform::PerBuild<std::uint32_t> kRemoveLocalPlayerVTableOffse
 /// Right after the probe call: `sub rsp,rax; mov rsi,rcx; mov [rsp+20h],rdx;
 /// mov rcx,[rdx+30h]; mov rbx,rdx; test rcx,rcx; jz` (the jz is at 0x144F56217). It reads the
 /// player's PlayerController at +0x30 and skips all controller cleanup when it is null.
-/// That skip is what makes removing a further player safe once its borrowed controller is cleared.
+/// That skip is what makes removing a seat's player safe once its borrowed controller is cleared.
 inline constexpr std::uint8_t kRemoveLocalPlayerControllerTestBytes[] = {
     0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xF1, 0x48, 0x89, 0x54, 0x24, 0x20,
     0x48, 0x8B, 0x4A, 0x30, 0x48, 0x8B, 0xDA, 0x48, 0x85, 0xC9, 0x74};

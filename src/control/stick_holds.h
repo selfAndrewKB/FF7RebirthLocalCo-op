@@ -2,7 +2,7 @@
 
 // The control runner's stick holds on the running mod: a scripted hold is a per-pad stick override
 // (input/pad_sticks.h) on the held player's controller id, so it takes a real pad's path. Needs per-pad
-// sticks on and a further player in (the override is per pad only then): for player 1, player 2; for player 2 or 3,
+// sticks on and a seat in (the override is per pad only then): for player 1, player 2; for player 2 or 3,
 // that player. Game thread only.
 
 #include "control/runner.h"

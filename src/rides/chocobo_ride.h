@@ -1,6 +1,6 @@
 #pragma once
 
-// Each further player rides their own chocobo (plan §3, "Player 2 rides their own chocobo"; RE-p2-chocobo-ride.md §7,
+// Each seat's player rides their own chocobo (plan §3, "Player 2 rides their own chocobo"; RE-p2-chocobo-ride.md §7,
 // Lever 1).
 //
 // When player 1 mounts, the game mounts the whole party: player 1's chocobo is boarded through player 1's own
@@ -35,7 +35,7 @@ class GameImage;
 
 namespace lss::rides::chocobo_ride {
 
-/// Finds the game's functions; logged either way. False if a check failed (a further player stays a passenger then).
+/// Finds the game's functions; logged either way. False if a check failed (a seat's player stays a passenger then).
 bool Install(const platform::GameImage& image) noexcept;
 
 /// From the member's tick while a seat's player plays `member` with `controller` (the seat's controller: the

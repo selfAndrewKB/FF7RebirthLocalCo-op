@@ -66,7 +66,7 @@ constexpr bool ShotShowsOn(const void* target, const void* const (&humans)[playe
 /// Resolves and checks the sites and queues their placement (logged when it runs).
 void Install(const platform::GameImage& image) noexcept;
 
-/// Puts the game's code back (at mod uninstall, with every further player out). A placement still queued then installs
+/// Puts the game's code back (at mod uninstall, with every seat out). A placement still queued then installs
 /// nothing; a call crossing two blocks is restored only from the game thread, else left in place (it passes through).
 void Remove() noexcept;
 

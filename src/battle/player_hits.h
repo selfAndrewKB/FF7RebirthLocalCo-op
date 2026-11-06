@@ -1,6 +1,6 @@
 #pragma once
 
-// The further players' hits, and the hits they take, count as the player's (RE-p2-enemy-target-bias.md §12-§14).
+// The seats' hits, and the hits they take, count as the player's (RE-p2-enemy-target-bias.md §12-§14).
 // Every seat's member is treated alike, each call about the one seat whose member it
 // names (the seat found from the attacking or hit character).
 //

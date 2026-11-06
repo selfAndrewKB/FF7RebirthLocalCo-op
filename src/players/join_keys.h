@@ -4,10 +4,10 @@
 //   Ctrl+F7  add a player (2, then 3)   Ctrl+F8  remove the last one in
 //   Ctrl+F5  top/bottom <-> side by side
 //   Ctrl+F4  halves that fill <-> halves kept 16:9 with bars
-//   Ctrl+F6  the further players' views: their own cameras (at join) <-> player 1's camera (testing)
+//   Ctrl+F6  the seats' views: their own cameras (at join) <-> player 1's camera (testing)
 //   Ctrl+F9  each pad drives only its own player's sticks (on at start; off merges them, for testing)
 //   Ctrl+F10 the NPC population follows every player (on at start; off follows the leader, to compare)
-//   Ctrl+F11 characters near a further player keep full detail (on at start; off: player 1's camera alone, to compare)
+//   Ctrl+F11 characters near a seat's player keep full detail (on at start; off: player 1's camera alone, to compare)
 //   Ctrl+F3  the three-player monitor mode on and off (three monitors, player 1's picture in the empty columns;
 //            views/window_span.h)
 //   Ctrl+F2  the game window across its row of monitors and back (views/window_span.h)

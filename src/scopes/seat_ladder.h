@@ -1,6 +1,6 @@
 #pragma once
 
-// A further player's scope ladder over the modules' scope types (scopes/scope_ladder.h is the mechanism).
+// A seat's scope ladder over the modules' scope types (scopes/scope_ladder.h is the mechanism).
 //
 // The parts, in the order they open: Focus (the seat's UI context, focus_scope), Sticks (the seat's pad's
 // sticks, pad_sticks), Primary (the seat's player as the primary controller, primary_controller), Buttons

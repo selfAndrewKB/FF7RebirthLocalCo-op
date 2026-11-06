@@ -18,7 +18,7 @@
 //
 // The game's stop by name follows the add (RE-p2-rumble-owner-chocobo.md §3.2): on the game thread while a seat is the
 // primary player, the list's owner names the seat's list for the length of the game's stop, under the game's lock. The
-// footsteps of the chocobo a further player rides (the chocobo's own virtual, called outside every scope) run inside
+// footsteps of the chocobo a seat's player rides (the chocobo's own virtual, called outside every scope) run inside
 // that seat's primary scope, as the game runs the chocobo player 1 rides, so the game's gate asks the seat's
 // coordinator and the add goes to the seat's list.
 //
@@ -31,13 +31,13 @@
 // bytes at its list load, under the game's lock, take the seat's list on the thread the invoker named. A stop of a
 // seat's on a worker is left (no source found does one; logged).
 //
-// Shared rides (player 1 drives the buggy or the bronco, a further player stands aside): while that seat's component
+// Shared rides (player 1 drives the buggy or the bronco, a seat's player stands aside): while that seat's component
 // has a force-feedback manager of its own (seat_ffb_managers.h), every add and stop on the game's list is copied onto
 // the seat's list, so both pads play the ride (the vehicles add and stop by name, on the game thread). The ride's end
 // stops on the seat's list whatever copy is left. Without the seat's own manager there is no copy: the shared
 // manager's tracks would let the seat's copy play first and skip player 1's.
 //
-// Not routed: the hook rope and the hookshot (a further player cannot start them). PS5 haptics stay single-target.
+// Not routed: the hook rope and the hookshot (a seat's player cannot start them). PS5 haptics stay single-target.
 //
 // Units: traversal_rumble.cpp (the add and the stop, the list tick, the zip line, the seats' lists, the footsteps,
 // install, removal and tick), traversal_rumble_copy.cpp (the shared ride's copy), traversal_rumble_sources.cpp (the
@@ -48,7 +48,7 @@
 // thread, the seat that is the primary player; a component ticks its own seat's list; the zip line and the sources
 // find the seat from their character, chocobo or scooter; the owner's list pointer is swapped to one seat's list at a
 // time. The shared ride's copy goes to each seat with its own force-feedback manager. 1.004's jump box names a thread
-// and that seat's list per landing in flight, one route slot per further player: two chocobos' landings run on
+// and that seat's list per landing in flight, one route slot per seat: two chocobos' landings run on
 // different animation workers at once (RE-seats-step6-camera-rumble.md §2), each taking its own slot.
 
 #include "players/seats.h"

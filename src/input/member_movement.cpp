@@ -198,7 +198,7 @@ bool Install(const platform::GameImage& image) noexcept
 {
     const auto tick   = platform::FindFunction(image, facts::kMoveStateTickForCharacter);
     const auto vtable = image.Rebase(facts::kMoveStateVTable);
-    // The leader answer's slot last among the checks: its replacement is what makes the tick a further player's.
+    // The leader answer's slot last among the checks: its replacement is what makes the tick a seat's.
     if (!tick || !vtable || !session::party_member::Installed() || !scopes::primary_controller::Installed() ||
         !pad_sticks::Installed() || !scopes::leader_answer::Install(image))
     {

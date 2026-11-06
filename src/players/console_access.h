@@ -33,7 +33,7 @@ bool SetVariableInt(const wchar_t* variable, std::int32_t value) noexcept;
 bool Execute(const wchar_t* command) noexcept;
 
 #if LSS_DEV
-/// The `console` and `quit` commands. `anySeatIn` tells quit whether a further player is still in (it refuses
+/// The `console` and `quit` commands. `anySeatIn` tells quit whether a seat is still in (it refuses
 /// then); a function rather than the session, which sits above this layer. The watch-only start registers these alone.
 void RegisterCommands(std::function<bool()> anySeatIn);
 #endif

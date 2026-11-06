@@ -1,6 +1,6 @@
 #pragma once
 
-// A further player picks up collectibles and materials with the game's own field prompts (RE-p2-field-interact.md
+// A seat's player picks up collectibles and materials with the game's own field prompts (RE-p2-field-interact.md
 // §4.1, §12; plan, "Player 2 triggers field prompts").
 //
 // FieldActionMgr keeps every field prompt as a point and runs one selection per frame around one probe, the
@@ -62,7 +62,7 @@ namespace lss::world::field_pickup {
 /// Finds the game's functions (each checked) and installs the field enter/exit redirects and the three hooks. Logged.
 void Install(const platform::GameImage& image) noexcept;
 
-/// Puts the game's code back (at mod uninstall, with the further players out).
+/// Puts the game's code back (at mod uninstall, with every seat out).
 void Remove() noexcept;
 
 /// The seats' passes, right after the game's own selection update of `mgr` (the update hook calls it).
@@ -70,7 +70,7 @@ void AfterUpdate(void* mgr, float dt) noexcept;
 
 /// What the three hooks tell the observer (each entry may be null): after the game's update and the seats' passes
 /// (game thread); a WorldItem key marked (the game's answer, the caller's return address, whether a seat's pass
-/// marked it; any thread); a grant, before the game's call and after it, inside the same scope (`further`: the
+/// marked it; any thread); a grant, before the game's call and after it, inside the same scope (`isSeat`: the
 /// grant ran with a seat's controller as the primary one). The observer is a dev tool: with two players "a seat" is
 /// player 2.
 struct HookObserver

@@ -91,7 +91,7 @@ std::atomic<const void*>                                g_climbActor[players::kM
 std::atomic<const void*>                                g_climbMember[players::kMaxPlayers]{};
 
 /// The seat whose climb this thread ticks now (climb_context's context), or -1. climb_context numbers its climbers as
-/// players (1 player 1, 2 player 2, 3 player 3, 0 outside every context): a further player's number is its seat plus one.
+/// players (1 player 1, 2 player 2, 3 player 3, 0 outside every context): a seat's player number is its seat plus one.
 int SeatHere() noexcept
 {
     const int player = input::climb_context::PlayerHere();

@@ -1,10 +1,10 @@
 #pragma once
 
-// Each further seat's content in its HUD image (Stage B2; per seat since plan/seats.md step 4): around the seat's
+// Each seat's content in its HUD image (Stage B2; per seat since plan/seats.md step 4): around the seat's
 // overlay pass (hud/passes/column_hud_images.h), the game's own answers to "which player" are switched to the seat, and
 // the game's own view-dependent HUD updates are run again for it (RE-p2-hud.md P8.6, pass 9 and pass 12). After the
 // pass everything is switched back and the same updates run again for player 1, whose render follows in the same frame;
-// between two further passes the roots' contexts and player 1's re-run are left to the last one (hud/
+// between two seats' passes the roots' contexts and player 1's re-run are left to the last one (hud/
 // context_owners.h). Each seat keeps its own view rect between frames.
 //
 // The levers, each the game's own:
@@ -24,7 +24,7 @@
 // player 1's rect is put back after.
 //
 // Not covered here: the compass's quest icons and the area icons (AreaMapIcon_FrameUpdate cannot run
-// twice; a further player gets their own icon manager in step B3), and a further player's command menu.
+// twice; a seat gets its own icon manager in step B3), and a seat's command menu.
 
 #include "platform/dev_switch.h"
 
@@ -38,7 +38,7 @@ bool InstallSeatHudContent(const platform::GameImage& image) noexcept;
 void RemoveSeatHudContent() noexcept;
 bool SeatHudContentInstalled() noexcept;
 
-/// The `hud-levers` switch: each further player's image shows their own content (on from a successful install).
+/// The `hud-levers` switch: each seat's image shows its own content (on from a successful install).
 void SetSeatHudContent(bool on) noexcept;
 bool SeatHudContentOn() noexcept;
 
@@ -48,25 +48,25 @@ bool SeatHudContentOn() noexcept;
 void SetSeatLeversMask(unsigned mask) noexcept;
 unsigned SeatLeversMask() noexcept;
 
-/// Game thread, once a frame before the further passes: the roots' rescan is checked by the frame's first pass.
+/// Game thread, once a frame before the seats' passes: the roots' rescan is checked by the frame's first pass.
 void BeginPasses() noexcept;
 
-/// Game thread, just before a further seat's overlay render. True if the levers are now the seat's
+/// Game thread, just before a seat's overlay render. True if the levers are now the seat's
 /// (then LeaveSeat must follow the render). False: player 1's levers and re-run (SettleSeats), so the pass
 /// renders player 1's content.
 bool EnterSeat(int seat) noexcept;
 
 /// Game thread, just after the seat's overlay render: levers back to player 1, player 1's re-run. With `another`
-/// (a further seat's pass follows in this frame) the HUD roots keep the seat's contexts and player 1's re-run waits:
+/// (another seat's pass follows in this frame) the HUD roots keep the seat's contexts and player 1's re-run waits:
 /// the next pass sets its own and does the way back.
 void LeaveSeat(int seat, bool another) noexcept;
 
 /// Game thread: player 1's contexts and re-run, if a pass left them for the next one (PlayerOneDue). From EnterSeat
-/// when the levers fail, and after the frame's further passes when a planned pass did not run (its image not ready;
+/// when the levers fail, and after the seats' passes when a planned pass did not run (its image not ready;
 /// under column_hud_images's HoldFrame there). Nothing otherwise.
 void SettleSeats() noexcept;
 
-/// A pass left the roots' contexts and player 1's re-run for the next further pass.
+/// A pass left the roots' contexts and player 1's re-run for the next seat's pass.
 bool PlayerOneDue() noexcept;
 
 #if LSS_DEV

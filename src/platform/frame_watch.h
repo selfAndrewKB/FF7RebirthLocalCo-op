@@ -64,7 +64,7 @@ private:
 };
 
 /// The `perf-log` switch (off at start, on in the watch-only control): the 10 s hitch summary, each
-/// hitch's own line, the modules' periodic timing lines and the further players' 10 s status block. Hitches
+/// hitch's own line, the modules' periodic timing lines and the seats' 10 s status block. Hitches
 /// are counted either way.
 void SetDetailed(bool on) noexcept;
 bool Detailed() noexcept;

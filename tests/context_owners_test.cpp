@@ -1,6 +1,6 @@
 // Host-side tests for hud::context_owners, run without the game.
 //
-// A frame's switches with three players: the roots shown in both further passes, in one, in the other and in none,
+// A frame's switches with three players: the roots shown in both seats' passes, in one, in the other and in none,
 // each followed through player 3's pass, player 2's and the way back to player 1, counting the setter's calls.
 
 #include "hud/context_owners.h"

@@ -1,6 +1,6 @@
 #pragma once
 
-// Battles do not warp a further player's member (the user, 2026-10-12): that player stays where they are when a
+// Battles do not warp a seat's member (the user, 2026-10-12): the seat's player stays where they are when a
 // battle starts or ends, and walks to the fight themselves (RE-p2-battle-gather-warp.md, S-BTLWARP and S-BTLWARP2).
 //
 // At battle start the game's PartyBattleAIMgr queues a fade-in warp next to the field leader for every battle

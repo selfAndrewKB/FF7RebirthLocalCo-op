@@ -213,7 +213,7 @@ void GlideRun(void* instance) noexcept
 /// 1.004: names this thread and `seat`'s list in a free route slot for the jump box's inline list load while it lives
 /// (the code there takes the list of the slot naming its thread). Claimed under the game's lock, so the list it names
 /// is live (a list's drop clears it from every slot under the same lock); its list is cleared before its thread is
-/// released. One slot per further player, so two landings on two animation workers at once each have theirs
+/// released. One slot per seat, so two landings on two animation workers at once each have theirs
 /// (RE-seats-step6-camera-rumble.md §2). A landing inside another on the same thread takes over that thread's slot for
 /// its length and gives the outer one's list back after (the code reads the first slot naming the thread). With no
 /// slot free (not expected) the landing's rumble goes to the game's list, logged.

@@ -3,7 +3,7 @@
 // What each of the seats' wrappers did, counted for the periodic status line.
 //
 // A wrapper runs every frame, so it never logs; it counts. `acted` is a call where it changed
-// something for a further player, `passed` a call it left to the engine unchanged, and `refused` a call
+// something for a seat's player, `passed` a call it left to the engine unchanged, and `refused` a call
 // where it would have acted but a precondition did not hold (the reason is counted by the stage).
 
 #include "platform/every.h"

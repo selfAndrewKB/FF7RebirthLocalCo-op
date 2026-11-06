@@ -1,23 +1,23 @@
 #pragma once
 
-// The characters a further player is near keep the detail the game would give them from that player's own camera
+// The characters a seat's player is near keep the detail the game would give them from that player's own camera
 // (plan §3 item 7, the user's choice of 2026-10-02; RE-p2-charapop-per-view.md §1.5, §1.8 lever 2).
 //
 // The game's character LOD (CharaPop) judges every entry from player 1's camera only and has no path for a
-// second view; running its evaluation again for a further player would flip each entry between the two results.
+// second view; running its evaluation again for a seat's view would flip each entry between the two results.
 // Its own per-entry lever is the minimum level: CharaPop_SetEntryMinLODLevel_ByKey, which event and
 // cutscene scripts call with 3 to keep a character awake and shown and 0 to clear it. While the split is on
-// screen the mod calls it the same way for the entries a further player's view needs.
+// screen the mod calls it the same way for the entries a seat's view needs.
 //
-// The one recreated piece, recorded in the plan as the rule requires: which entries a further player's view
+// The one recreated piece, recorded in the plan as the rule requires: which entries a seat's view
 // needs. It is the evaluator's own rule (Light or Middle by the entry's level: awake within the
 // should-tick distance, or within the in-camera distance inside the FOV cone and the out-of-camera
 // distance outside it; shown within the draw distance for the entries that hide), with the game's own
-// parameters and overrides read from the manager, applied to a further player's camera pose instead of player
+// parameters and overrides read from the manager, applied to a seat's camera pose instead of player
 // 1's. Only entries player 1's camera does not already keep are raised (the same rule applied to player
 // 1's camera, which is the one the game itself uses), so with the players together almost nothing is: the
-// game alone already gives those characters what a further player's view needs. A raised entry is released once
-// it has been outside that player's distances, or well inside player 1's, by a margin for a while, so an entry
+// game alone already gives those characters what a seat's view needs. A raised entry is released once
+// it has been outside that seat's distances, or well inside player 1's, by a margin for a while, so an entry
 // on the edge does not toggle.
 //
 // Never touches an entry whose minimum the game set (only entries reading 0 are raised), and clears only
@@ -40,8 +40,8 @@ class GameImage;
 
 namespace lss::world::charapop_near {
 
-/// How far a further player's view reaches: the game's distances (full, at start), half of them (reduced, for
-/// performance), or not at all (off: characters near a further player get only what player 1's camera gives them).
+/// How far a seat's view reaches: the game's distances (full, at start), half of them (reduced, for
+/// performance), or not at all (off: characters near a seat's player get only what player 1's camera gives them).
 enum class Detail : std::uint8_t
 {
     Off,

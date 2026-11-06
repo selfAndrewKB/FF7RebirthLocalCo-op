@@ -1,6 +1,6 @@
 #pragma once
 
-// The further players as their own players: join, party member, camera, and leave, in that order, per seat
+// The seats' players as their own players: join, party member, camera, and leave, in that order, per seat
 // (players/seats.h; seat 1 is player 2). A Seat is one player's record and its stages; the Session holds the built
 // seats, installs the stages once, hears the game's party funnels once and hands each event to every seat in turn.
 //

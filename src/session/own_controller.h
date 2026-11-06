@@ -1,10 +1,10 @@
 #pragma once
 
-// A further player's own PlayerController: the camera manager's BeginPlay, made safe for a player beyond the first.
+// A seat's own PlayerController: the camera manager's BeginPlay, made safe for a player beyond the first.
 //
 // When a player joins during play, the engine spawns its controller and camera manager, and the
 // camera manager's BeginPlay (AEndPlayerCameraManager, vtable slot 103) runs inside that spawn.
-// For a further player it fails three ways:
+// For a seat's player it fails three ways:
 //   - its owning controller (PCOwner, +0x228) is not set yet, and SetViewTarget reads through it;
 //   - it spawns two actors with fixed names ("EndCameraActor", "CompositeCollisionActor"), and
 //     the spawn treats a name that already exists (player 1's) as a fatal error.

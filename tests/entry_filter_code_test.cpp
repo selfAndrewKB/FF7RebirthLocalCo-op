@@ -1,4 +1,4 @@
-// Host-side tests for the further seats' entry buffers and the per-family draw gate, run without the game.
+// Host-side tests for the seats' entry buffers and the per-family draw gate, run without the game.
 //
 // The bytes the mod writes near the game (hud/passes/entry_filter_code.h) are EXECUTED here, in small
 // harnesses that recreate their surroundings in the game's consume loop:

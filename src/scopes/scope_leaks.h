@@ -1,6 +1,6 @@
 #pragma once
 
-// Putting back what the mod's two "as a further player" calls change outside that player's own objects
+// Putting back what the mod's two "as a seat's player" calls change outside that player's own objects
 // (RE-p2-scope-leak-audit.md, leaks 1, 2 and 5). The game runs this code for one player; after each
 // call, the shared state is left as the game leaves it with one player.
 //
@@ -46,7 +46,7 @@ void Remove() noexcept;
 void SetMask(unsigned mask) noexcept;
 unsigned Mask() noexcept;
 
-/// Around a further player's controller input (`isSeat`: the controller belongs to a seat). Acts only for a seat's
+/// Around a seat's controller input (`isSeat`: the controller belongs to a seat). Acts only for a seat's
 /// controller, on the game thread, while a seat's player is in. The seats' inputs run in turn, never nested.
 class InputScope
 {

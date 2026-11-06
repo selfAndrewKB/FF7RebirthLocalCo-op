@@ -578,7 +578,7 @@ void Targeting(void* system, float deltaTime) noexcept
             }
         }
     }
-    // The game's tick once more for each further player, in seat order, each run's scopes closed before the next's. A
+    // The game's tick once more for each seat, in seat order, each run's scopes closed before the next's. A
     // third run is as safe as the second (RE-seats-step6-battle.md §1): the one timer the tick advances by frame time,
     // the lock camera's rest (+0x90), is in each seat's copied fields, and its shared writes are the ones already gated.
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)

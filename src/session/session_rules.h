@@ -59,7 +59,7 @@ struct WaitOutsideFacts
 /// player's view goes until their character is back), once the wait has lasted `grace`: a party swap that resolves
 /// within a second keeps the player in. With columns held (the monitor row, the console's `view-columns`) the player
 /// stays in and their column shows player 1's picture on their own monitor (views/column_source.h). Standing aside for
-/// a shared ride never leaves: every further player stands aside together, and player 1's single view follows.
+/// a shared ride never leaves: every seat's player stands aside together, and player 1's single view follows.
 constexpr bool WaitOutside(const WaitOutsideFacts& facts, std::chrono::milliseconds grace) noexcept
 {
     return facts.hold == Hold::SlotWait && !facts.columnsHeld && facts.waited >= grace;
