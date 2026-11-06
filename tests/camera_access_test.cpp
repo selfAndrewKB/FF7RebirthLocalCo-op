@@ -19,7 +19,7 @@ void TestEachSeatFound()
     std::puts("camera access: each seat's camera manager names its seat, player 1's seat 0");
     const void* owners[players::kMaxPlayers] = {&g_objects[0], &g_objects[1], &g_objects[2]};
     EXPECT(SeatIn(owners, &g_objects[0]) == 0);
-    EXPECT(SeatIn(owners, &g_objects[1]) == players::kPlayerTwoSeat);
+    EXPECT(SeatIn(owners, &g_objects[1]) == players::kFirstFurtherSeat);
     EXPECT(SeatIn(owners, &g_objects[2]) == 2);
     EXPECT(SeatIn(owners, &g_objects[3]) == -1);  // nobody's
 }

@@ -274,7 +274,7 @@ void Refresh() noexcept
         for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
         {
             ReadSeatNames(seat, g_names[static_cast<std::size_t>(seat)], bytes);
-            playerTwoBytes = seat == players::kPlayerTwoSeat ? bytes : playerTwoBytes;
+            playerTwoBytes = seat == players::kFirstFurtherSeat ? bytes : playerTwoBytes;
         }
 
         g_rows.clear();

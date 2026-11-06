@@ -17,9 +17,9 @@ inline constexpr int kMaxPlayers = 3;
 inline constexpr int kSeatsBuilt = 2;
 static_assert(kSeatsBuilt >= 1 && kSeatsBuilt < kMaxPlayers, "the seats are numbered within the players");
 
-/// Player 2's seat. A module not yet per seat names it, so every place still fixed to player 2 is found by this name
-/// (plan/seats.md step 3).
-inline constexpr int kPlayerTwoSeat = 1;
+/// The first further player's seat: player 2's. A module not yet per seat names it, so every place still fixed to
+/// player 2 is found by this name (plan/seats.md step 3).
+inline constexpr int kFirstFurtherSeat = 1;
 
 /// "player 2" for seat 1: the name a seat's log lines use, so three players read apart in the log.
 constexpr const wchar_t* SeatName(int seat) noexcept

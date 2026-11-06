@@ -1177,9 +1177,9 @@ void Pass(Pickup& p, void* mgr, float dt) noexcept
         ++p.counts.skips[kSkipMember];
         return;
     }
-    const seat_ladder::P2Scope scopes(seat_ladder::Sticks | seat_ladder::Primary | seat_ladder::Buttons |
-                                          seat_ladder::Leader | seat_ladder::LeaderType,
-                                      args);
+    const seat_ladder::SeatScopes scopes(seat_ladder::Sticks | seat_ladder::Primary | seat_ladder::Buttons |
+                                             seat_ladder::Leader | seat_ladder::LeaderType,
+                                         args);
     if (!scopes.Held())
     {
         ++p.counts.skips[kSkipScopes];

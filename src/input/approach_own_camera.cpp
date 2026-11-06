@@ -144,12 +144,12 @@ unsigned ScopesOf(int who) noexcept
 seat_ladder::Args ArgsOf(int who) noexcept
 {
     seat_ladder::Args args;
-    args.seat  = who != 0 ? who : players::kPlayerTwoSeat;  // player 1's check opens no Primary
+    args.seat  = who != 0 ? who : players::kFirstFurtherSeat;  // player 1's check opens no Primary
     args.padId = PadOf(who);
     return args;
 }
 
-bool Scoped(int who, const seat_ladder::P2Scope& scopes) noexcept
+bool Scoped(int who, const seat_ladder::SeatScopes& scopes) noexcept
 {
     return scopes.Holds<seat_ladder::SticksPart>() && (who == 0 || scopes.Holds<seat_ladder::PrimaryPart>());
 }
@@ -173,7 +173,7 @@ bool DirCheck(void* character, const void* endTransform, void* outPoint, float f
     bool passed = false;
     bool scoped = false;
     {
-        const seat_ladder::P2Scope scopes(ScopesOf(who), ScopesOf(who), ArgsOf(who));
+        const seat_ladder::SeatScopes scopes(ScopesOf(who), ScopesOf(who), ArgsOf(who));
         scoped = Scoped(who, scopes);
         passed = original(character, endTransform, outPoint, forward, back, radius, slack, lift, angle);
     }
@@ -195,7 +195,7 @@ bool BeamCheck(void* character, void* a2, void* a3, void* a4, void* a5, void* a6
     bool passed = false;
     bool scoped = false;
     {
-        const seat_ladder::P2Scope scopes(ScopesOf(who), ScopesOf(who), ArgsOf(who));
+        const seat_ladder::SeatScopes scopes(ScopesOf(who), ScopesOf(who), ArgsOf(who));
         scoped = Scoped(who, scopes);
         passed = original(character, a2, a3, a4, a5, a6);
     }

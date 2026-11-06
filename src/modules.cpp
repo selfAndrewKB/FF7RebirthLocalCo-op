@@ -223,7 +223,7 @@ constexpr std::array kModules{
     // HUD widgets as the engine constructs them
     Module{Call<&hud::user_widgets::Install>, &hud::user_widgets::Remove},
     // player 2's HUD image, on (the hud-image command switches it)
-    Module{Call<&hud::InstallSecondImage>, &hud::RemoveSecondImage},
+    Module{Call<&hud::InstallSeatHudImages>, &hud::RemoveSeatHudImages},
     // the minimap's map rendered by player 1's pass only
     Module{Call<&hud::InstallMinimapOnce>, &hud::RemoveMinimapOnce},
     // player 2's minimap in player 2's half
@@ -290,7 +290,7 @@ constexpr std::array kModules{
 
     // Player 2's HUD content, and each half's own prompts, markers, pins and targets.
     // player 2's HUD content, on (the hud-levers command switches it)
-    Module{Call<&hud::InstallPlayerTwoPass>, &hud::RemovePlayerTwoPass},
+    Module{Call<&hud::InstallSeatHudContent>, &hud::RemoveSeatHudContent},
     // before the overlay renders: placement follow, trace
     Module{Call<&hud::InstallRootOverlayRender>, &hud::RemoveRootOverlayRender},
     // the game's opacity setter, read by the rows, markers, pins, targets and the command menu's view
@@ -675,8 +675,8 @@ void RegisterOwnCommands(session::Session& session)
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
         const std::wstring name   = players::SeatName(seat);
-        const std::wstring prefix = seat == players::kPlayerTwoSeat ? L"p2" : std::format(L"p{}", seat + 1);
-        Register({.name = seat == players::kPlayerTwoSeat ? std::wstring(L"leave") : prefix + L".leave",
+        const std::wstring prefix = seat == players::kFirstFurtherSeat ? L"p2" : std::format(L"p{}", seat + 1);
+        Register({.name = seat == players::kFirstFurtherSeat ? std::wstring(L"leave") : prefix + L".leave",
                   .help = std::format(L"remove {} (Ctrl+F8 removes the last player in); `wait-until {}.in == off` "
                                       L"confirms it",
                                       name, prefix),
@@ -759,8 +759,8 @@ void RegisterCommands(session::Session& session, players::SplitLayout& layout,
         views::RegisterViewPointCommands();
         views::RegisterStreamCommands();
         hud::RegisterOverlayLayoutCommands();
-        hud::RegisterSecondImageCommands();
-        hud::RegisterPlayerTwoPassCommands();
+        hud::RegisterSeatHudImagesCommands();
+        hud::RegisterSeatHudContentCommands();
         hud::seat_area_icons::RegisterCommands();
         hud::RegisterMinimapOnceCommands();
         hud::RegisterHudTraceCommands();

@@ -87,8 +87,8 @@ using ActionDownFn = char (*)(void* owner, void* unused, std::uint32_t sourceBit
 /// A route for a seat's pad's presses to that seat's own UI (battle/menu_input_route.h finds the seat from
 /// the source bit): true when it took the press (its dispatch result in `result`); false leaves the press kept from
 /// the menus.
-using PlayerTwoRouteFn = bool (*)(ActionDownFn dispatch, void* owner, void* unused, std::uint32_t sourceBit, void* event,
-                                  std::uint8_t alreadyHandled, char& result);
+using SeatRouteFn = bool (*)(ActionDownFn dispatch, void* owner, void* unused, std::uint32_t sourceBit, void* event,
+                             std::uint8_t alreadyHandled, char& result);
 /// Which player's pad drives the menus (0 player 1, the default; a built seat while a shop its player opened is up,
 /// world/vending): that player's view is the one the tables show outside the seats' calls, and the other pads'
 /// presses are passed to the game's dispatcher as handled. Anything else than a built seat is player 1. Stick
@@ -96,7 +96,7 @@ using PlayerTwoRouteFn = bool (*)(ActionDownFn dispatch, void* owner, void* unus
 void SetMenuPlayer(int seat) noexcept;
 
 /// Sets the route (null: none). Game thread.
-void SetPlayerTwoRoute(PlayerTwoRouteFn route) noexcept;
+void SetSeatRoute(SeatRouteFn route) noexcept;
 
 /// Diagnosis: which parts act (bits: 1 the split views, player 1's after the Tick and player 2's in
 /// their calls; 2 pad 2's presses kept from menus and prompts). Both at start. Logged.

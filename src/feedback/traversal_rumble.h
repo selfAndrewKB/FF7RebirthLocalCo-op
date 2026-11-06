@@ -72,7 +72,7 @@ void Tick() noexcept;
 
 /// Game thread, while `seat` can still be the primary player (before its generation is withdrawn): stops the seat's
 /// channels on its controller and destroys its list.
-void PlayerTwoOut(int seat) noexcept;
+void SeatOut(int seat) noexcept;
 
 /// Game thread, once per engine tick per seat: copy the game's list onto `seat`'s (a shared ride with the seat's own
 /// force-feedback manager) or not. Turning it off stops on the seat's list what was copied and not yet stopped.

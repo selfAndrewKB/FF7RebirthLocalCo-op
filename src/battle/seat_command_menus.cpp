@@ -267,7 +267,7 @@ SetupResult InSeatScopes(int seat, const wchar_t*& refusal, Call&& call) noexcep
     const unsigned leader = member != nullptr && seat_ladder::FillMember(args, member)
                                 ? seat_ladder::Leader | seat_ladder::LeaderType
                                 : 0u;
-    seat_ladder::P2Scope scopes(seat_ladder::Focus | leader, leader, args);
+    seat_ladder::SeatScopes scopes(seat_ladder::Focus | leader, leader, args);
     if (!scopes.Held())
     {
         refusal = scopes.Refusal();

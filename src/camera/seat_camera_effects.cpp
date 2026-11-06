@@ -135,7 +135,7 @@ public:
     bool Held() const noexcept { return scopes_ && scopes_->Held(); }
 
 private:
-    std::optional<seat_ladder::P2Scope> scopes_;
+    std::optional<seat_ladder::SeatScopes> scopes_;
 };
 
 void* OwnerOf(const void* mesh) noexcept

@@ -14,11 +14,11 @@ void LetGo(int seat) noexcept
     {
         return;
     }
-    camera::camera_override::PlayerTwoOut(seat);  // the member's camera delegates back to the engine's, while it is still held
-    battle::lock_on::PlayerTwoOut(seat);
+    camera::camera_override::SeatOut(seat);  // the member's camera delegates back to the engine's, while it is still held
+    battle::lock_on::SeatOut(seat);
     // Stops the seat's channels while it can still be the primary player.
-    feedback::traversal_rumble::PlayerTwoOut(seat);
-    feedback::seat_ffb_managers::PlayerTwoOut(seat);  // the seat's component back on the game's force-feedback manager
+    feedback::traversal_rumble::SeatOut(seat);
+    feedback::seat_ffb_managers::SeatOut(seat);  // the seat's component back on the game's force-feedback manager
 }
 
 }  // namespace lss::session::seat_out

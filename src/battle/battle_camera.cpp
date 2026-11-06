@@ -243,7 +243,7 @@ bool Seed(int seat) noexcept
     return Active(pair->one) == Active(pair->two);
 }
 
-bool PlayerTwoBattleActive(void* cameraManager) noexcept
+bool SeatBattleActive(void* cameraManager) noexcept
 {
     return camera::camera_access::Installed() && Active(BattleOperatorOf(cameraManager)) != 0;
 }
@@ -253,12 +253,12 @@ void Watch() noexcept
 #if LSS_DEV
     // A dev tool: player 2's camera manager beside player 1's (it stays two-player).
     if (!platform::Enabled(platform::Level::Debug) || !players::generation::OnGameThread() ||
-        !players::generation::Active(players::kPlayerTwoSeat))
+        !players::generation::Active(players::kFirstFurtherSeat))
     {
         return;
     }
     const std::array<CameraState, 2> now{StateOf(CameraManagerOf(players::generation::PlayerOneController())),
-                                         StateOf(CameraManagerOf(players::generation::ControllerOf(players::kPlayerTwoSeat)))};
+                                         StateOf(CameraManagerOf(players::generation::ControllerOf(players::kFirstFurtherSeat)))};
     if (now == g_logged)
     {
         return;

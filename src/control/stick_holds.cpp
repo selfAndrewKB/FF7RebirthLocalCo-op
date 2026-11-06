@@ -20,7 +20,7 @@ std::int32_t ControllerIdOfPlayer(std::int32_t player) noexcept
 /// override is per pad only with a further player in); a further player's, its own.
 int SeatOfHold(std::int32_t player) noexcept
 {
-    return player == 1 ? players::kPlayerTwoSeat : player - 1;
+    return player == 1 ? players::kFirstFurtherSeat : player - 1;
 }
 
 }  // namespace

@@ -90,7 +90,7 @@ void SetEnabled(bool on) noexcept;
 bool Enabled() noexcept;
 
 /// `seat`'s player is leaving: its displayed target, targeted key and cursor released, its lock cleared.
-void PlayerTwoOut(int seat) noexcept;
+void SeatOut(int seat) noexcept;
 
 /// Whether a TargetScope holds now, whichever seat's (then the game is in battle).
 bool Held() noexcept;

@@ -142,13 +142,13 @@ void ClearFieldActionRows(int seat, void* state) noexcept
 /// Ticks the seat's member's state inside every scope, or not at all.
 void TickInScopes(int seat, void* controller, void* member, void* state, int type, float deltaTime) noexcept
 {
-    const bool playerTwo = seat == players::kPlayerTwoSeat;  // the dev watches below are player 2's (plan step 7)
+    const bool playerTwo = seat == players::kFirstFurtherSeat;  // the dev watches below are player 2's (plan step 7)
     // The seat's sticks and its player as the primary controller, or no tick; its own buttons (sprint, dodge, field
     // actions) and, in battle, the target system's fields as the seat's.
     seat_ladder::Args args;
     args.seat  = seat;
     args.padId = pad_sticks::ControllerIdOf(controller);
-    const seat_ladder::P2Scope scopes(
+    const seat_ladder::SeatScopes scopes(
         seat_ladder::Sticks | seat_ladder::Primary | seat_ladder::Buttons | seat_ladder::Targets,
         seat_ladder::Buttons | seat_ladder::Targets, args);
     players::StageCounters& counters = g_counters[static_cast<std::size_t>(seat)];
@@ -275,7 +275,7 @@ void Tick(int seat, void* controller, void* member) noexcept
 
 players::StageCounters& Counters(int seat) noexcept
 {
-    return g_counters[players::SeatBuilt(seat) ? static_cast<std::size_t>(seat) : players::kPlayerTwoSeat];
+    return g_counters[players::SeatBuilt(seat) ? static_cast<std::size_t>(seat) : players::kFirstFurtherSeat];
 }
 
 std::uint8_t WithoutChocoboAnswer(std::uint8_t (*test)(const void* character), const void* character) noexcept
@@ -334,8 +334,8 @@ RideTick TickRide(int seat, void* controller, void* member, void* state, const v
     args.seat       = seat;
     args.padId      = pad_sticks::ControllerIdOf(controller);
     args.withoutKey = withoutKey;
-    const seat_ladder::P2Scope scopes(seat_ladder::Sticks | seat_ladder::Primary | seat_ladder::Buttons,
-                                      seat_ladder::Buttons, args);
+    const seat_ladder::SeatScopes scopes(seat_ladder::Sticks | seat_ladder::Primary | seat_ladder::Buttons,
+                                         seat_ladder::Buttons, args);
     if (!scopes.Held())
     {
         counters.Refuse();

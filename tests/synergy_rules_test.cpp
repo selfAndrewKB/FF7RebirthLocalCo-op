@@ -103,7 +103,7 @@ void TestGiveBackAsBefore()
 {
     std::puts("give-back: with two players the per-seat rule gives the old answer for every input (player 2's seat for "
               "each yes)");
-    constexpr int kTwo = lss::players::kPlayerTwoSeat;
+    constexpr int kTwo = lss::players::kFirstFurtherSeat;
     for (int bits = 0; bits < 16; ++bits)
     {
         const bool offThread = (bits & 1) != 0, original = (bits & 2) != 0, hasOne = (bits & 4) != 0,

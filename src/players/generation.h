@@ -27,7 +27,7 @@
 // primary controller) withdraws every seat.
 //
 // Seat 0's controller is player 1's, recorded by every Begin. The names without a seat (Active, PlayerTwoController,
-// Member, ...) are player 2's (players::kPlayerTwoSeat), kept so the modules not yet per seat read as before
+// Member, ...) are player 2's (players::kFirstFurtherSeat), kept so the modules not yet per seat read as before
 // (plan/seats.md step 3 moves them to the seat-taking names).
 //
 // Written on the game thread (join, possession, leave); read by the wrappers, which the engine calls on the game
@@ -109,7 +109,7 @@ std::uint64_t ChocoboWeakOf(int seat) noexcept;
 
 inline bool Active() noexcept
 {
-    return Active(players::kPlayerTwoSeat);
+    return Active(players::kFirstFurtherSeat);
 }
 inline void* PlayerOneController() noexcept
 {
@@ -117,27 +117,27 @@ inline void* PlayerOneController() noexcept
 }
 inline void* PlayerTwoController() noexcept
 {
-    return ControllerOf(players::kPlayerTwoSeat);
+    return ControllerOf(players::kFirstFurtherSeat);
 }
 inline void* Member() noexcept
 {
-    return MemberOf(players::kPlayerTwoSeat);
+    return MemberOf(players::kFirstFurtherSeat);
 }
 inline std::uint64_t MemberWeak() noexcept
 {
-    return MemberWeakOf(players::kPlayerTwoSeat);
+    return MemberWeakOf(players::kFirstFurtherSeat);
 }
 inline const void* Chocobo() noexcept
 {
-    return ChocoboOf(players::kPlayerTwoSeat);
+    return ChocoboOf(players::kFirstFurtherSeat);
 }
 inline std::uint64_t ChocoboWeak() noexcept
 {
-    return ChocoboWeakOf(players::kPlayerTwoSeat);
+    return ChocoboWeakOf(players::kFirstFurtherSeat);
 }
 inline const wchar_t* FaultReason() noexcept
 {
-    return FaultReason(players::kPlayerTwoSeat);
+    return FaultReason(players::kFirstFurtherSeat);
 }
 
 }  // namespace lss::players::generation

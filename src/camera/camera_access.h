@@ -78,7 +78,7 @@ std::optional<OperatorPair> CurrentPair(int seat, OperatorOf operatorOf) noexcep
 /// Player 2's pair, for the modules not yet per seat (battle_camera).
 inline std::optional<OperatorPair> CurrentPair(OperatorOf operatorOf) noexcept
 {
-    return CurrentPair(players::kPlayerTwoSeat, operatorOf);
+    return CurrentPair(players::kFirstFurtherSeat, operatorOf);
 }
 
 }  // namespace lss::camera::camera_access

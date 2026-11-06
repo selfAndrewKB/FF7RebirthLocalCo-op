@@ -48,7 +48,7 @@ void Remove() noexcept;
 void Tick() noexcept;
 
 /// `seat` leaves (while its controller is still the generation's): its component goes back to the global.
-void PlayerTwoOut(int seat) noexcept;
+void SeatOut(int seat) noexcept;
 
 /// `seat`'s component names the seat's manager now (game thread).
 bool Attached(int seat) noexcept;

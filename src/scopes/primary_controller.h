@@ -62,7 +62,7 @@ public:
         Misaligned,         // the field cannot be written atomically
     };
 
-    /// `seat`'s player as the primary player (players::kPlayerTwoSeat for a module not yet per seat).
+    /// `seat`'s player as the primary player (players::kFirstFurtherSeat for a module not yet per seat).
     explicit Scope(int seat) noexcept;
     ~Scope();
     Scope(const Scope&)            = delete;

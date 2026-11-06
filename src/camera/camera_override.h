@@ -44,7 +44,7 @@ void Tick(int seat, void* member) noexcept;
 
 /// `seat`'s player is leaving: the member's delegates back to the engine's handlers, the seat's module
 /// released.
-void PlayerTwoOut(int seat) noexcept;
+void SeatOut(int seat) noexcept;
 
 /// `seat`'s member was destroyed (a retry or checkpoint reload rebuilt the party): forgotten, with
 /// nothing written to it.

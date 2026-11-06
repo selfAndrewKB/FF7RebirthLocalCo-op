@@ -1390,8 +1390,8 @@ void RegisterCommands(Session& session)
     using control::Value;
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        RegisterSeatCommands(session, seat, seat == players::kPlayerTwoSeat ? L"p2" : L"p3",
-                             seat == players::kPlayerTwoSeat ? L"join" : L"p3.join");
+        RegisterSeatCommands(session, seat, seat == players::kFirstFurtherSeat ? L"p2" : L"p3",
+                             seat == players::kFirstFurtherSeat ? L"join" : L"p3.join");
     }
     Register({.name = L"p2.log-status", .help = L"write every further player's status lines to the log",
               .set  = [&session](const Value&) {

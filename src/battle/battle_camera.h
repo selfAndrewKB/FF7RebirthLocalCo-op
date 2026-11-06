@@ -38,7 +38,7 @@ bool Seed(int seat) noexcept;
 
 /// Whether `cameraManager`'s Battle operator is on (a seat's camera update may then run as the primary player's, as
 /// it does with the Field operator on). Whichever seat's camera manager it is.
-bool PlayerTwoBattleActive(void* cameraManager) noexcept;
+bool SeatBattleActive(void* cameraManager) noexcept;
 
 /// Logs, on change, both camera managers' operators (game thread, once per frame).
 void Watch() noexcept;

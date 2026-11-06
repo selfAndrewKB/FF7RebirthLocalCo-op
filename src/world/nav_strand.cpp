@@ -767,7 +767,7 @@ void Tick(bool splitShown) noexcept
     {
         g_loggedReadyNoNavmesh = ready;  // advanced only by a written line
         Line(L"{} of {}'s characters' moves found no navmesh where the world was ready (not refused so far); {}", ready,
-             players::kSeatsBuilt == 1 ? L"player 2" : L"the further players", Places(players::kPlayerTwoSeat));
+             players::kSeatsBuilt == 1 ? L"player 2" : L"the further players", Places(players::kFirstFurtherSeat));
     }
 #endif
 }

@@ -511,10 +511,10 @@ void SeatPass(int seat, float deltaTime) noexcept
     args.leaderType   = static_cast<std::uint8_t>(before[2]);
     {
         // Every scope of the seat's, the rules last; the target fields only in battle (optional).
-        seat_ladder::P2Scope scopes(seat_ladder::Focus | seat_ladder::Sticks | seat_ladder::Primary |
-                                        seat_ladder::Buttons | seat_ladder::Targets | seat_ladder::Leader |
-                                        seat_ladder::LeaderType | seat_ladder::Rules,
-                                    seat_ladder::Targets, args);
+        seat_ladder::SeatScopes scopes(seat_ladder::Focus | seat_ladder::Sticks | seat_ladder::Primary |
+                                           seat_ladder::Buttons | seat_ladder::Targets | seat_ladder::Leader |
+                                           seat_ladder::LeaderType | seat_ladder::Rules,
+                                       seat_ladder::Targets, args);
         if (!scopes.Held())
         {
             return Refused(seat, scopes.Refusal());

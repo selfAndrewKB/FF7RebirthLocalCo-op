@@ -261,7 +261,7 @@ int ActsFor(void* cameraManager) noexcept
     }
     // Its Field operator on, or in battle its Battle operator (battle/battle_camera.h).
     void* field = FieldOperatorOf(cameraManager);
-    if ((field == nullptr || ActiveState(field) == 0) && !battle::battle_camera::PlayerTwoBattleActive(cameraManager))
+    if ((field == nullptr || ActiveState(field) == 0) && !battle::battle_camera::SeatBattleActive(cameraManager))
     {
         return 0;
     }
@@ -296,7 +296,7 @@ void RunAsPrimary(int seat, void* cameraManager, float deltaTime)
     args.seat            = seat;
     args.controller      = controller;
     const unsigned which = (battle ? seat_ladder::Focus : 0u) | seat_ladder::Primary | seat_ladder::Targets;
-    const seat_ladder::P2Scope scopes(which, which, args);
+    const seat_ladder::SeatScopes scopes(which, which, args);
     if (battle && !scopes.Holds<seat_ladder::FocusPart>())
     {
         const unsigned refusals = g_uiRefusals.fetch_add(1, std::memory_order_relaxed) + 1;
@@ -308,9 +308,9 @@ void RunAsPrimary(int seat, void* cameraManager, float deltaTime)
     }
     // In battle the leader view decides which camera an attack camera belongs to (the game's leader-keyed test of each
     // battle camera sequence, RE-p2-attack-cameras.md §3.2), so it opens even when the UI context was refused.
-    std::optional<seat_ladder::P2Scope> leader;
+    std::optional<seat_ladder::SeatScopes> leader;
     if (scopes.Holds<seat_ladder::FocusPart>() ||
-        (member != nullptr && battle::battle_camera::PlayerTwoBattleActive(cameraManager)))
+        (member != nullptr && battle::battle_camera::SeatBattleActive(cameraManager)))
     {
         if (member != nullptr && seat_ladder::FillMember(args, member))
         {
@@ -445,22 +445,22 @@ const wchar_t* Describe(Seeded seeded) noexcept
 
 unsigned TakeNotMirrored(int seat) noexcept
 {
-    return platform::Take(g_notMirrored[players::SeatBuilt(seat) ? Index(seat) : players::kPlayerTwoSeat]);
+    return platform::Take(g_notMirrored[players::SeatBuilt(seat) ? Index(seat) : players::kFirstFurtherSeat]);
 }
 
 players::StageCounters& SettingsCounters(int seat) noexcept
 {
-    return g_settingsCounters[players::SeatBuilt(seat) ? Index(seat) : players::kPlayerTwoSeat];
+    return g_settingsCounters[players::SeatBuilt(seat) ? Index(seat) : players::kFirstFurtherSeat];
 }
 
 players::StageCounters& UpdateCounters(int seat) noexcept
 {
-    return g_updateCounters[players::SeatBuilt(seat) ? Index(seat) : players::kPlayerTwoSeat];
+    return g_updateCounters[players::SeatBuilt(seat) ? Index(seat) : players::kFirstFurtherSeat];
 }
 
 unsigned TakeMismatches(int seat) noexcept
 {
-    return platform::Take(g_mismatches[players::SeatBuilt(seat) ? Index(seat) : players::kPlayerTwoSeat]);
+    return platform::Take(g_mismatches[players::SeatBuilt(seat) ? Index(seat) : players::kFirstFurtherSeat]);
 }
 
 }  // namespace lss::camera::field_camera

@@ -34,8 +34,8 @@ class GameImage;
 
 namespace lss::hud {
 
-bool InstallPlayerTwoPass(const platform::GameImage& image) noexcept;
-void RemovePlayerTwoPass() noexcept;
+bool InstallSeatHudContent(const platform::GameImage& image) noexcept;
+void RemoveSeatHudContent() noexcept;
 bool PlayerTwoPassInstalled() noexcept;
 
 /// The `hud-levers` switch: each further player's image shows their own content (on from a successful install).
@@ -71,7 +71,7 @@ bool PlayerOneDue() noexcept;
 
 #if LSS_DEV
 /// The `hud-levers` and `hud-levers-mask` commands and readings. May throw (out of memory).
-void RegisterPlayerTwoPassCommands();
+void RegisterSeatHudContentCommands();
 #endif
 
 }  // namespace lss::hud

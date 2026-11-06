@@ -758,7 +758,7 @@ void Tick(int seat, bool active) noexcept
         g_climbActor[seat].store(nullptr, std::memory_order_release);
         for (TwoHolder& two : g_twoHolders[seat])
         {
-            ReleaseTwoHolder(seat, two, seat == players::kPlayerTwoSeat ? L"player 2 is out" : L"player 3 is out");
+            ReleaseTwoHolder(seat, two, seat == players::kFirstFurtherSeat ? L"player 2 is out" : L"player 3 is out");
         }
         return;
     }

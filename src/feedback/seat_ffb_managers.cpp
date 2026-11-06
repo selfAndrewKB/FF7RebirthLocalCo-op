@@ -586,13 +586,13 @@ void Tick() noexcept
     }
 }
 
-void PlayerTwoOut(int seat) noexcept
+void SeatOut(int seat) noexcept
 {
     if (g_installed && players::generation::OnGameThread() && players::SeatIndex(seat))
     {
         try
         {
-            Detach(seat, seat == players::kPlayerTwoSeat ? L"player 2 leaves" : L"player 3 leaves");
+            Detach(seat, seat == players::kFirstFurtherSeat ? L"player 2 leaves" : L"player 3 leaves");
         }
         catch (...)
         {

@@ -193,7 +193,7 @@ bool Patch(const platform::GameImage& image, platform::CodeRedirect& redirect, s
 
 }  // namespace
 
-bool InstallSecondImage(const platform::GameImage& image) noexcept
+bool InstallSeatHudImages(const platform::GameImage& image) noexcept
 {
     const auto render    = platform::FindFunction(image, kRenderToCompositeLayer);
     const auto passes    = platform::FindFunction(image, kAddCompositePasses);
@@ -240,7 +240,7 @@ bool InstallSecondImage(const platform::GameImage& image) noexcept
                                       reinterpret_cast<std::uintptr_t>(&AcquireLayerSlot));
     if (!installed)
     {
-        RemoveSecondImage();
+        RemoveSeatHudImages();
         platform::Log(L"HUD image: a site is not what the research read; no image for the further players");
         return false;
     }
@@ -248,7 +248,7 @@ bool InstallSecondImage(const platform::GameImage& image) noexcept
     // code can run. (The call redirects above pin it too; this does not rely on that.)
     if (!platform::PinThisModule())
     {
-        RemoveSecondImage();
+        RemoveSeatHudImages();
         platform::Log(L"HUD image: this DLL could not be pinned; no image for the further players");
         return false;
     }
@@ -257,7 +257,7 @@ bool InstallSecondImage(const platform::GameImage& image) noexcept
     return true;
 }
 
-void RemoveSecondImage() noexcept
+void RemoveSeatHudImages() noexcept
 {
     g_on.store(false, std::memory_order_relaxed);
     g_imageSeats.store(0, std::memory_order_relaxed);
@@ -423,7 +423,7 @@ bool SubmitInThisPass(const void* slot) noexcept
 
 #if LSS_DEV
 
-void RegisterSecondImageCommands()
+void RegisterSeatHudImagesCommands()
 {
     using control::Outcome;
     using control::Value;

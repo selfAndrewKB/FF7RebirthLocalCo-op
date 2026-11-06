@@ -414,7 +414,7 @@ bool ContextsToSeat(int seat)
 
 }  // namespace
 
-bool InstallPlayerTwoPass(const platform::GameImage& image) noexcept
+bool InstallSeatHudContent(const platform::GameImage& image) noexcept
 {
     const bool parts   = hud_roots::Install(image) && hud_updates::Install(image) && marker_timers::Install(image);
     enemy_gauges::Install(image);  // optional: without it the gauges keep player 1's placement in both halves
@@ -447,7 +447,7 @@ bool InstallPlayerTwoPass(const platform::GameImage& image) noexcept
     return true;
 }
 
-void RemovePlayerTwoPass() noexcept
+void RemoveSeatHudContent() noexcept
 {
     g_on.store(false, std::memory_order_relaxed);
     g_firstPlayerAnswer = 0;
@@ -666,7 +666,7 @@ bool PlayerOneDue() noexcept
 
 #if LSS_DEV
 
-void RegisterPlayerTwoPassCommands()
+void RegisterSeatHudContentCommands()
 {
     using control::Outcome;
     using control::Value;

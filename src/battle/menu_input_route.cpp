@@ -222,9 +222,9 @@ bool InSeatUi(int seat, Route route, const wchar_t* what, Call&& call) noexcept
     args.leaderType = ReadAt<std::uint8_t>(manager + kPartyManagerLeaderType);
     // The menu's target-switch handler (a press) writes the target fields: player 2's, or no press. A
     // release needs none, and after a battle there are none to hold (the part is optional then).
-    seat_ladder::P2Scope scopes(seat_ladder::Focus | seat_ladder::Primary | seat_ladder::Targets | seat_ladder::Leader |
-                                 seat_ladder::LeaderType | seat_ladder::Rules,
-                             route == Route::kPress ? 0u : seat_ladder::Targets, args);
+    seat_ladder::SeatScopes scopes(seat_ladder::Focus | seat_ladder::Primary | seat_ladder::Targets |
+                                       seat_ladder::Leader | seat_ladder::LeaderType | seat_ladder::Rules,
+                                   route == Route::kPress ? 0u : seat_ladder::Targets, args);
     if (!scopes.Held())
     {
         return refuse(scopes.Refusal());
@@ -385,7 +385,7 @@ bool Find(const platform::GameImage& image) noexcept
 
 void Install(const platform::GameImage& image) noexcept
 {
-    input::pad_buttons::SetPlayerTwoRoute(&RoutePadTwo);  // a seat's presses to its menu in battle
+    input::pad_buttons::SetSeatRoute(&RoutePadTwo);  // a seat's presses to its menu in battle
     // Pad 2's releases: the key-up slot wrapped (the pad of each release noted) and the up route's call redirected.
     const auto upRoute = platform::FindFunction(image, kUpRoute);
     const auto entry   = image.Rebase(kKeyUpEntry, sizeof(void*));
@@ -404,7 +404,7 @@ void Install(const platform::GameImage& image) noexcept
 
 void Remove() noexcept
 {
-    input::pad_buttons::SetPlayerTwoRoute(nullptr);
+    input::pad_buttons::SetSeatRoute(nullptr);
     if (g_keyUpSlot.Original() != 0 && !g_keyUpSlot.Restore())
     {
         platform::Log(L"command menu tick: the key-up slot was changed after us; left in place (it passes through)");

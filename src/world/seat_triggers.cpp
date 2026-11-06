@@ -609,7 +609,7 @@ std::uintptr_t Deliver(int seat, bool enter, FilterFn original, void* manager, s
     seat_ladder::Args args;
     args.seat       = seat;
     args.memberWeak = memberWeak;
-    const seat_ladder::P2Scope scopes(seat_ladder::Primary | seat_ladder::Leader, args);
+    const seat_ladder::SeatScopes scopes(seat_ladder::Primary | seat_ladder::Leader, args);
     if (!scopes.Held())
     {
         ++counts.refused;

@@ -475,9 +475,10 @@ void SeatTargeting(int seat, TickFn engine, void* system, float deltaTime) noexc
     {
         return Refused(seat, L"the command controller does not exist");
     }
-    seat_ladder::P2Scope scopes(seat_ladder::Focus | seat_ladder::Sticks | seat_ladder::Primary | seat_ladder::Buttons |
-                                 seat_ladder::Targets | seat_ladder::Leader | seat_ladder::LeaderType,
-                             args);
+    seat_ladder::SeatScopes scopes(seat_ladder::Focus | seat_ladder::Sticks | seat_ladder::Primary |
+                                       seat_ladder::Buttons | seat_ladder::Targets | seat_ladder::Leader |
+                                       seat_ladder::LeaderType,
+                                   args);
     if (!scopes.Held())
     {
         return Refused(seat, scopes.Refusal());
@@ -933,7 +934,7 @@ bool Enabled() noexcept
     return g_runReady && g_enabled && !g_failed;
 }
 
-void PlayerTwoOut(int seat) noexcept
+void SeatOut(int seat) noexcept
 {
     if (!g_held && players::SeatIndex(seat))
     {

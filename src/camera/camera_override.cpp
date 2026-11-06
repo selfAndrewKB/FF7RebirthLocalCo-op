@@ -298,7 +298,7 @@ struct Snapshot
 
 Snapshot Take(void* member) noexcept
 {
-    Snapshot   now{g_global->object, g_seatModule[players::kPlayerTwoSeat].object};
+    Snapshot   now{g_global->object, g_seatModule[players::kFirstFurtherSeat].object};
     void*      controllers[2] = {players::generation::PlayerOneController(), players::generation::PlayerTwoController()};
     const auto characters     = std::array<std::uintptr_t, 2>{
         reinterpret_cast<std::uintptr_t>(ReadPointer(controllers[0], facts::kControllerPawn)), reinterpret_cast<std::uintptr_t>(member)};
@@ -347,7 +347,7 @@ void Log(void* member)
     void*      playerOne = players::generation::PlayerOneController();
     const auto oneChar   = reinterpret_cast<std::uintptr_t>(ReadPointer(playerOne, facts::kControllerPawn));
     platform::LogDebug(L"camera override: global {:#x} P2's {:#x} | P1 camera{} | P2 camera{} | P1 {} | P2 {}", g_global->object,
-                  g_seatModule[players::kPlayerTwoSeat].object, DescribeCamera(playerOne),
+                  g_seatModule[players::kFirstFurtherSeat].object, DescribeCamera(playerOne),
                   DescribeCamera(players::generation::PlayerTwoController()),
                   DescribeCharacter(oneChar), DescribeCharacter(reinterpret_cast<std::uintptr_t>(member)));
 }
@@ -454,7 +454,7 @@ void Tick(int seat, void* member) noexcept
             g_member[Index(seat)] = member;
         }
     }
-    if (seat != players::kPlayerTwoSeat)
+    if (seat != players::kFirstFurtherSeat)
     {
         return;  // the snapshot is a dev tool, player 2's
     }
@@ -475,7 +475,7 @@ void MemberDestroyed(int seat) noexcept
     }
 }
 
-void PlayerTwoOut(int seat) noexcept
+void SeatOut(int seat) noexcept
 {
     if (!players::SeatBuilt(seat))
     {

@@ -35,8 +35,8 @@ class GameImage;
 
 namespace lss::hud {
 
-bool InstallSecondImage(const platform::GameImage& image) noexcept;
-void RemoveSecondImage() noexcept;
+bool InstallSeatHudImages(const platform::GameImage& image) noexcept;
+void RemoveSeatHudImages() noexcept;
 bool SecondImageInstalled() noexcept;
 
 /// The `hud-image` switch: the further players' HUD images on or off (on from a successful install).
@@ -86,7 +86,7 @@ std::uintptr_t EntryNameForPass(const void* slot, std::uintptr_t stockName) noex
 bool SubmitInThisPass(const void* slot) noexcept;
 #if LSS_DEV
 /// The `hud-image` command and reading. May throw (out of memory).
-void RegisterSecondImageCommands();
+void RegisterSeatHudImagesCommands();
 #endif
 
 }  // namespace lss::hud

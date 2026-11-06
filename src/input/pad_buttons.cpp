@@ -144,7 +144,7 @@ std::array<std::uintptr_t, kActionDownCalls.size()>         g_lateActionDownSite
 bool                    g_extraKeysTried = false;  // game thread
 unsigned                g_extraKeyLines  = 0;      // game thread
 ActionDownFn            g_actionDown = nullptr;
-PlayerTwoRouteFn        g_playerTwoRoute = nullptr;  // game thread
+SeatRouteFn             g_seatRoute = nullptr;  // game thread
 platform::VTableEntry   g_tickSlot;
 TickFn                  g_engineTick = nullptr;
 const std::byte* const* g_inputOwner = nullptr;
@@ -636,8 +636,8 @@ char ActionDown(void* owner, void* unused, std::uint32_t sourceBit, void* event,
         ++g_seatDowns[seat];
         char result = 0;
         // The route finds the seat from the source bit itself (menu_input_route).
-        if (g_playerTwoRoute != nullptr &&
-            g_playerTwoRoute(g_actionDown, owner, unused, sourceBit, event, alreadyHandled, result))
+        if (g_seatRoute != nullptr &&
+            g_seatRoute(g_actionDown, owner, unused, sourceBit, event, alreadyHandled, result))
         {
             return result;  // the seat's own UI took it
         }
@@ -753,9 +753,9 @@ void SetMenuPlayer(int seat) noexcept
     g_padOneDowns = 0;
 }
 
-void SetPlayerTwoRoute(PlayerTwoRouteFn route) noexcept
+void SetSeatRoute(SeatRouteFn route) noexcept
 {
-    g_playerTwoRoute = route;
+    g_seatRoute = route;
 }
 
 bool Install(const platform::GameImage& image) noexcept
@@ -815,7 +815,7 @@ bool Install(const platform::GameImage& image) noexcept
 
 void Remove() noexcept
 {
-    g_playerTwoRoute = nullptr;  // no route outlives the buttons' redirects
+    g_seatRoute = nullptr;  // no route outlives the buttons' redirects
     if (!g_tickSlot.Restore())
     {
         platform::Log(L"buttons: the input Tick slot was changed after us; left in place (it passes the call through)");

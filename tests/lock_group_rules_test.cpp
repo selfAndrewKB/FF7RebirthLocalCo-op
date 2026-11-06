@@ -21,7 +21,7 @@ constexpr bool OldRebalanceHoldsPlayerTwo(bool playerTwoHoldsLock, bool playerOn
 void TestRebalance()
 {
     std::puts("lock group: the rebalance counts player 2 only while player 2 holds a lock and player 1 none");
-    constexpr int kTwo = lss::players::kPlayerTwoSeat;
+    constexpr int kTwo = lss::players::kFirstFurtherSeat;
     EXPECT(RebalanceSeat(1u << kTwo, false) == kTwo);
     EXPECT(RebalanceSeat(1u << kTwo, true) == 0);
     EXPECT(RebalanceSeat(0, false) == 0);

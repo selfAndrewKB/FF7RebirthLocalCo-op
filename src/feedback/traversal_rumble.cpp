@@ -144,11 +144,11 @@ int SeatOfChocobo(const void* chocobo) noexcept
 /// The reasons a seat's list drop logs at its leave (literals, by seat).
 const wchar_t* OutText(int seat) noexcept
 {
-    return seat == players::kPlayerTwoSeat ? L"player 2 is out" : L"player 3 is out";
+    return seat == players::kFirstFurtherSeat ? L"player 2 is out" : L"player 3 is out";
 }
 const wchar_t* LeavesText(int seat) noexcept
 {
-    return seat == players::kPlayerTwoSeat ? L"player 2 leaves" : L"player 3 leaves";
+    return seat == players::kFirstFurtherSeat ? L"player 2 leaves" : L"player 3 leaves";
 }
 
 }  // namespace
@@ -754,7 +754,7 @@ void Tick() noexcept
     }
 }
 
-void PlayerTwoOut(int seat) noexcept
+void SeatOut(int seat) noexcept
 {
     if (g_installed && players::generation::OnGameThread() && players::SeatIndex(seat))
     {

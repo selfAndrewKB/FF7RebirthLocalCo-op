@@ -72,7 +72,7 @@ void Tick() noexcept
         executers::Tick(seat, active);
         holders::Tick(seat, active);
     }
-    collision::Tick(players::generation::Active(players::kPlayerTwoSeat));  // a dev tool: player 1's and player 2's cameras
+    collision::Tick(players::generation::Active(players::kFirstFurtherSeat));  // a dev tool: player 1's and player 2's cameras
 }
 
 }  // namespace lss::traversal::traversal_camera
