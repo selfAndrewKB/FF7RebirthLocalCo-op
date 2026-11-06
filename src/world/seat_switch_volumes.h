@@ -47,7 +47,7 @@ void Install(const platform::GameImage& image) noexcept;
 bool Is(const void* actor) noexcept;
 
 /// `seat`'s trigger's enter or leave of switch volume `volume` (seat_triggers' filter, inside the diff).
-void PlayerTwoEvent(int seat, bool enter, void* volume, const void* trigger) noexcept;
+void SeatEvent(int seat, bool enter, void* volume, const void* trigger) noexcept;
 
 /// A seat is inside a volume: player 1's events must be seen (AfterPlayerOne).
 bool Watching() noexcept;

@@ -126,7 +126,7 @@ bool AnySeatRead() noexcept
 /// The replacement: the game's own score, and for each seat that plays the same score with its member as the
 /// override centre, in seat order, one call at a time; the nearest player's (highest) wins. An event's centre, a
 /// cleared leader centre or an externally managed entry keep the game's single result.
-std::int32_t ScoreTwo(void* entry) noexcept
+std::int32_t ScoreEveryCentre(void* entry) noexcept
 {
     const std::int32_t one = g_score(entry);
     if (!g_active || !AnySeatRead() || entry == nullptr || !players::generation::OnGameThread())
@@ -364,7 +364,7 @@ bool Install(const platform::GameImage& image) noexcept
     if (g_gameRoot != 0 && g_setCentre != nullptr && score)
     {
         const std::span<const std::uint8_t> bytes(kScoreBytes);
-        const auto replacement = reinterpret_cast<std::uintptr_t>(&ScoreTwo);
+        const auto replacement = reinterpret_cast<std::uintptr_t>(&ScoreEveryCentre);
         placed = g_scoreEntry.Install(*score, image.EntryInstruction(kScore.address, bytes.first(kFirstInstruction)),
                                       replacement) ||
                  g_scoreEntry.InstallAtSecondInstruction(*score, bytes.first(kFirstInstruction),

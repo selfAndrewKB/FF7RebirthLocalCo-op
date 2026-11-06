@@ -305,7 +305,7 @@ struct Saved
     std::uintptr_t oneMarker;  // player 1's marker widget
     bool          matched;   // found again after the pass (same node, same key)
 };
-struct TwoMarker
+struct SeatMarker
 {
     std::uintptr_t widget;
     std::uint64_t  weak;    // its FWeakObjectPtr value: put back in only while it still names the widget
@@ -326,7 +326,7 @@ struct Counts
 {
     std::uint32_t passes = 0, polled = 0, filtered = 0, worldItems = 0, chests = 0, vending = 0, shopkeepers = 0, executed = 0,
                   fieldResets = 0;
-    std::uint32_t requests = 0, requestsAsTwo = 0;  // visibility requests in the pass; those with the seat first
+    std::uint32_t requests = 0, requestsSeatFirst = 0;  // visibility requests in the pass; those with the seat first
     std::uint32_t markersMade = 0, markersGone = 0, markersDestroyed = 0;  // the seat's made; gone by the game; the mod's
     std::array<std::uint32_t, kSkipCount> skips{};
     bool operator==(const Counts&) const = default;
@@ -343,7 +343,7 @@ struct Pickup
     bool                                            broken = false;    // a game call raised: the seat's pass is off
     std::unordered_map<std::uint64_t, std::uint8_t> bits;              // carried target bits, by point key
     std::vector<std::uint64_t>                      marked;            // WorldItem keys its pass marked, until granted
-    std::unordered_map<std::uint64_t, TwoMarker>    markers;           // its marker widgets, by point key
+    std::unordered_map<std::uint64_t, SeatMarker>   markers;           // its marker widgets, by point key
     std::vector<std::uintptr_t>                     shown;             // sorted: its marker widgets
     std::vector<std::uint64_t>                      markerKeysLogged;
     std::array<std::uint64_t, kFieldActionSlots>    targetsLogged{};
@@ -354,9 +354,9 @@ Pickup g_pickups[players::kMaxPlayers] = {{0}, {1}, {2}};  // the byte stores ca
 int g_passSeat = -1;  // the seat whose pass runs now (-1: none); the hooks inside the pass read it
 
 std::vector<Saved>                                  g_saved;    // scratch, reserved: nothing allocates under the game's lock
-std::vector<std::pair<std::uint64_t, std::uint8_t>> g_twoNow;   // scratch, reserved
-std::unordered_map<std::uint64_t, TwoMarker>        g_twoMarkersNext;  // scratch: the map After builds
-std::vector<std::pair<std::uint64_t, std::uintptr_t>> g_twoMarkersNow; // scratch, reserved
+std::vector<std::pair<std::uint64_t, std::uint8_t>> g_seatBitsNow; // scratch, reserved
+std::unordered_map<std::uint64_t, SeatMarker>       g_seatMarkersNext; // scratch: the map After builds
+std::vector<std::pair<std::uint64_t, std::uintptr_t>> g_seatMarkersNow; // scratch, reserved
 std::vector<Doomed>                                 g_doomed;          // for the game's destroy after the walk, reserved
 std::vector<std::uintptr_t>                         g_oneMarkers;      // sorted: player 1's point markers after a pass
 std::vector<std::uint64_t>                          g_markerKeys;      // scratch: a seat's marker keys, sorted
@@ -474,10 +474,10 @@ public:
     explicit FirstPlayerScope(int seat) noexcept
     {
         using Range = platform::ByteContext::Range;
-        void*         one     = players::generation::PlayerOneController();
-        void*         two     = players::generation::ControllerOf(seat);
-        auto*         entries = Entries(two);
-        const auto    at      = entries != nullptr ? EntryOf(two, entries) : 0;
+        void*         one        = players::generation::PlayerOneController();
+        void*         controller = players::generation::ControllerOf(seat);
+        auto*         entries    = Entries(controller);
+        const auto    at         = entries != nullptr ? EntryOf(controller, entries) : 0;
         std::uint64_t first = 0, mine = 0;
         if (one == nullptr || entries == nullptr || at <= 0 || scopes::leader_scope::ObjectAt(entries) != one ||
             !platform::CopyGuarded(&first, entries, sizeof(first)) ||
@@ -493,10 +493,10 @@ public:
         }
         std::memcpy(context_.Value(0).data(), &mine, sizeof(mine));
         std::memcpy(context_.Value(1).data(), &first, sizeof(first));
-        one_  = one;
-        two_  = two;
-        at_   = at;
-        held_ = context_.Open();
+        one_        = one;
+        controller_ = controller;
+        at_         = at;
+        held_       = context_.Open();
     }
     ~FirstPlayerScope()
     {
@@ -506,9 +506,9 @@ public:
         }
         // The list as it is now (the call may have changed it): put back only if it is the same list and still
         // names them swapped; else forgotten (nothing of the old order written anywhere).
-        auto* entries = Entries(two_);
+        auto* entries = Entries(controller_);
         if (reinterpret_cast<std::uintptr_t>(entries) == context_.RangeAt(0).live &&
-            scopes::leader_scope::ObjectAt(entries) == two_ && scopes::leader_scope::ObjectAt(entries + 8 * at_) == one_)
+            scopes::leader_scope::ObjectAt(entries) == controller_ && scopes::leader_scope::ObjectAt(entries + 8 * at_) == one_)
         {
             context_.Close();
         }
@@ -554,10 +554,10 @@ private:
     }
 
     platform::ByteStore<2, 2 * sizeof(std::uint64_t)> context_;
-    void*                                             one_  = nullptr;
-    void*                                             two_  = nullptr;
-    std::int32_t                                      at_   = 0;  // the seat's entry
-    bool                                              held_ = false;
+    void*                                             one_        = nullptr;
+    void*                                             controller_ = nullptr;
+    std::int32_t                                      at_         = 0;  // the seat's entry
+    bool                                              held_       = false;
 };
 
 /// The game's visibility request; inside a seat's pass its screen test sees that seat's view (§12.13).
@@ -571,14 +571,14 @@ std::uint64_t RequestVisibility(void* system, void* record) noexcept
     Counts& counts = PickupOf(g_passSeat).counts;
     ++counts.requests;
     const FirstPlayerScope first(g_passSeat);
-    counts.requestsAsTwo += first.Held() ? 1 : 0;
+    counts.requestsSeatFirst += first.Held() ? 1 : 0;
     return original(system, record);
 }
 
 void Before(Pickup& p, void* mgr, const std::uint8_t* items, const std::uint8_t* chests, bool filter) noexcept;
 void After(Pickup& p, void* mgr) noexcept;
 void DestroyDoomed() noexcept;
-void DestroyAllTwo(Pickup& p, Why why) noexcept;
+void DestroySeatMarkers(Pickup& p, Why why) noexcept;
 
 /// Runs a game function on the seat's copy: swapped in with each point's carried bits and marker widget (the resets
 /// read the candidates' widgets, §12.15), the shared field-enter flag showing `flagSeen` (the value the game's own call
@@ -635,7 +635,7 @@ void Break(Pickup& p, Step step) noexcept
     catch (...)
     {
     }
-    DestroyAllTwo(p, kWhyStopped);
+    DestroySeatMarkers(p, kWhyStopped);
     g_oneMarkers.clear();  // the halves show every marker again
 }
 
@@ -680,7 +680,7 @@ void DropCopy(Pickup& p, bool clear) noexcept
     {
         Break(p, Step::FieldExitClear);
     }
-    DestroyAllTwo(p, kWhyLeft);
+    DestroySeatMarkers(p, kWhyLeft);
     p.copyOf = nullptr;
     p.bits.clear();
     p.marked.clear();
@@ -766,10 +766,10 @@ void DestroyDoomed() noexcept
 
 /// The seat's marker widgets as the pass left them in the points, kept by key (with a weak value, made once per
 /// widget); made and game-destroyed ones counted. May throw (the map); the caller then drops them all.
-void KeepTwoMarkers(Pickup& p)
+void KeepSeatMarkers(Pickup& p)
 {
-    g_twoMarkersNext.clear();
-    for (const auto& [key, widget] : g_twoMarkersNow)
+    g_seatMarkersNext.clear();
+    for (const auto& [key, widget] : g_seatMarkersNow)
     {
         const auto before = p.markers.find(key);
         const bool same   = before != p.markers.end() && before->second.widget == widget;
@@ -779,7 +779,7 @@ void KeepTwoMarkers(Pickup& p)
             Doom(p, widget, 0, key, kWhyNoWeak);
             continue;
         }
-        const auto [at, added] = g_twoMarkersNext.try_emplace(key, TwoMarker{widget, weak, false});
+        const auto [at, added] = g_seatMarkersNext.try_emplace(key, SeatMarker{widget, weak, false});
         if (!added)
         {
             if (at->second.widget != widget)
@@ -793,10 +793,10 @@ void KeepTwoMarkers(Pickup& p)
     for (const auto& [key, marker] : p.markers)
     {
         // A widget that left its point inside the pass is the game's to account for: the sweep or a removal destroyed it.
-        const auto now = g_twoMarkersNext.find(key);
-        p.counts.markersGone += marker.placed && (now == g_twoMarkersNext.end() || now->second.widget != marker.widget) ? 1 : 0;
+        const auto now = g_seatMarkersNext.find(key);
+        p.counts.markersGone += marker.placed && (now == g_seatMarkersNext.end() || now->second.widget != marker.widget) ? 1 : 0;
     }
-    p.markers.swap(g_twoMarkersNext);
+    p.markers.swap(g_seatMarkersNext);
     p.shown.clear();
     for (const auto& [key, marker] : p.markers)
     {
@@ -806,7 +806,7 @@ void KeepTwoMarkers(Pickup& p)
 }
 
 /// Every one of the seat's marker widgets to the game's destroy (none of the game's code would destroy them).
-void DestroyAllTwo(Pickup& p, Why why) noexcept
+void DestroySeatMarkers(Pickup& p, Why why) noexcept
 {
     for (const auto& [key, marker] : p.markers)
     {
@@ -835,26 +835,26 @@ void Before(Pickup& p, void* mgr, const std::uint8_t* items, const std::uint8_t*
             auto*          point = const_cast<std::uint8_t*>(node) + kFieldActionNodePoint;
             const auto     key   = ReadField<std::uint64_t>(point, kFieldActionPointKey);
             std::uint8_t   flags = point[kFieldActionPointFlags];
-            const auto     two   = p.bits.find(key);
-            const bool     worldItem = filter && InMap(items, kWorldItemMap, key);
-            const bool     chest     = filter && !worldItem && InMap(chests, kChestMap, key);
-            const bool     machine   = filter && !worldItem && !chest &&
-                                       vending::Admits(ReadField<std::uint64_t>(point, kFieldActionPointPreset));
-            const bool     keeper    = filter && !worldItem && !chest && !machine && shop_talk::Admits(key);
-            const bool     disable   = filter && !worldItem && !chest && !machine && !keeper && (flags & kDisabledBit) == 0;
-            std::uintptr_t oneMarker = 0;
-            std::uintptr_t twoMarker = 0;
+            const auto     carried    = p.bits.find(key);
+            const bool     worldItem  = filter && InMap(items, kWorldItemMap, key);
+            const bool     chest      = filter && !worldItem && InMap(chests, kChestMap, key);
+            const bool     machine    = filter && !worldItem && !chest &&
+                                        vending::Admits(ReadField<std::uint64_t>(point, kFieldActionPointPreset));
+            const bool     keeper     = filter && !worldItem && !chest && !machine && shop_talk::Admits(key);
+            const bool     disable    = filter && !worldItem && !chest && !machine && !keeper && (flags & kDisabledBit) == 0;
+            std::uintptr_t oneMarker  = 0;
+            std::uintptr_t seatMarker = 0;
             if (g_destroy != nullptr)
             {
                 std::memcpy(&oneMarker, point + kPointMarker, sizeof(oneMarker));
                 if (const auto mine = p.markers.find(key); mine != p.markers.end() && !mine->second.placed)
                 {
                     mine->second.placed = true;
-                    twoMarker = scopes::leader_scope::StillNames(mine->second.weak, reinterpret_cast<const void*>(mine->second.widget))
-                                    ? mine->second.widget
-                                    : 0;
+                    seatMarker = scopes::leader_scope::StillNames(mine->second.weak, reinterpret_cast<const void*>(mine->second.widget))
+                                     ? mine->second.widget
+                                     : 0;
                 }
-                std::memcpy(point + kPointMarker, &twoMarker, sizeof(twoMarker));
+                std::memcpy(point + kPointMarker, &seatMarker, sizeof(seatMarker));
             }
             g_saved.push_back({point, key, static_cast<std::uint8_t>(flags & kTargetBits), disable, oneMarker, false});
             p.counts.worldItems += worldItem ? 1 : 0;
@@ -862,7 +862,7 @@ void Before(Pickup& p, void* mgr, const std::uint8_t* items, const std::uint8_t*
             p.counts.vending += machine ? 1 : 0;
             p.counts.shopkeepers += keeper ? 1 : 0;
             p.counts.filtered += disable ? 1 : 0;
-            flags = static_cast<std::uint8_t>((flags & ~kTargetBits) | (two != p.bits.end() ? two->second : 0) |
+            flags = static_cast<std::uint8_t>((flags & ~kTargetBits) | (carried != p.bits.end() ? carried->second : 0) |
                                               (disable ? kDisabledBit : 0));
             point[kFieldActionPointFlags] = flags;
         }
@@ -882,8 +882,8 @@ void Before(Pickup& p, void* mgr, const std::uint8_t* items, const std::uint8_t*
 void After(Pickup& p, void* mgr) noexcept
 {
     std::sort(g_saved.begin(), g_saved.end(), [](const Saved& a, const Saved& b) { return a.point < b.point; });
-    g_twoNow.clear();
-    g_twoMarkersNow.clear();
+    g_seatBitsNow.clear();
+    g_seatMarkersNow.clear();
     g_oneMarkers.clear();
     {
         const SharedLock lock(mgr);
@@ -898,7 +898,7 @@ void After(Pickup& p, void* mgr) noexcept
             std::uint8_t flags = point[kFieldActionPointFlags];
             if ((flags & kTargetBits) != 0)
             {
-                g_twoNow.emplace_back(key, static_cast<std::uint8_t>(flags & kTargetBits));
+                g_seatBitsNow.emplace_back(key, static_cast<std::uint8_t>(flags & kTargetBits));
             }
             flags = static_cast<std::uint8_t>((flags & ~kTargetBits) | (known ? saved->oneBits : 0));
             if (known && saved->disabled)
@@ -912,11 +912,11 @@ void After(Pickup& p, void* mgr) noexcept
             }
             if (g_destroy != nullptr)
             {
-                std::uintptr_t twoMarker = 0;
-                std::memcpy(&twoMarker, point + kPointMarker, sizeof(twoMarker));
-                if (twoMarker != 0)
+                std::uintptr_t seatMarker = 0;
+                std::memcpy(&seatMarker, point + kPointMarker, sizeof(seatMarker));
+                if (seatMarker != 0)
                 {
-                    g_twoMarkersNow.emplace_back(key, twoMarker);
+                    g_seatMarkersNow.emplace_back(key, seatMarker);
                 }
                 const std::uintptr_t oneMarker = known ? saved->oneMarker : 0;
                 std::memcpy(point + kPointMarker, &oneMarker, sizeof(oneMarker));
@@ -938,7 +938,7 @@ void After(Pickup& p, void* mgr) noexcept
     try
     {
         p.bits.clear();
-        for (const auto& [key, bits] : g_twoNow)
+        for (const auto& [key, bits] : g_seatBitsNow)
         {
             p.bits[key] = bits;
         }
@@ -949,12 +949,12 @@ void After(Pickup& p, void* mgr) noexcept
     }
     try
     {
-        KeepTwoMarkers(p);
+        KeepSeatMarkers(p);
     }
     catch (...)
     {
         // The seat's widgets as the pass left them, all to the game's destroy: none is lost in the list.
-        for (const auto& [key, widget] : g_twoMarkersNow)
+        for (const auto& [key, widget] : g_seatMarkersNow)
         {
             Doom(p, widget, 0, key, kWhyStopped);
         }
@@ -1150,7 +1150,7 @@ void LogStatus() noexcept
                           L"skipped: scopes {}, member {}; WorldItem and chest lookups by {} ({} checked, {} mismatch(es)); {}'s "
                           L"marker widgets: {} now, {} made and {} destroyed by the game's own code, {} by the mod's call of "
                           L"its destroy; player 1's point markers now {}",
-                          c.passes, c.polled, c.executed, who, c.fieldResets, who, c.requests, c.requestsAsTwo, who,
+                          c.passes, c.polled, c.executed, who, c.fieldResets, who, c.requests, c.requestsSeatFirst, who,
                           c.passes != 0 ? c.worldItems / c.passes : 0,
                           c.passes != 0 ? c.chests / c.passes : 0,
                           c.passes != 0 ? c.vending / c.passes : 0,
@@ -1243,7 +1243,7 @@ void AfterFieldReset(void* mgr, ResetFn reset, std::uint8_t flagSeen) noexcept
         if (reset == g_fieldExit)
         {
             // The field's points are removed by their owners, whose removal destroys only the widget in place (player 1's).
-            DestroyAllTwo(p, kWhyFieldExit);
+            DestroySeatMarkers(p, kWhyFieldExit);
         }
         ++p.counts.fieldResets;
     }
@@ -1276,17 +1276,17 @@ void UpdateCall(void* mgr, float dt) noexcept
 /// WorldItemMgr's mark by key: a key a seat's pass marks is noted for its grant, as that seat's.
 std::uint8_t MarkByKey(void* items, std::uint64_t key) noexcept
 {
-    const auto caller    = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
-    const auto taken     = reinterpret_cast<MarkByKeyFn>(g_markByKey.Original())(items, key);
-    const int  seat      = taken != 0 && players::generation::OnGameThread() ? PassSeat() : -1;
-    const bool playerTwo = seat >= 1;
-    if (playerTwo)
+    const auto caller  = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
+    const auto taken   = reinterpret_cast<MarkByKeyFn>(g_markByKey.Original())(items, key);
+    const int  seat    = taken != 0 && players::generation::OnGameThread() ? PassSeat() : -1;
+    const bool further = seat >= 1;
+    if (further)
     {
         NoteMarked(seat, key);
     }
     if (g_observer.marked != nullptr)
     {
-        g_observer.marked(key, taken, caller, playerTwo);
+        g_observer.marked(key, taken, caller, further);
     }
     return taken;
 }
@@ -1297,21 +1297,21 @@ void Acquire(void* items, void* entry) noexcept
 {
     const auto key =
         ReadField<std::uint64_t>(static_cast<const std::uint8_t*>(entry) - kFieldActionEntryKeyBack, 0);
-    const int  seat      = players::generation::OnGameThread() ? TakeMarked(key) : -1;
-    const bool playerTwo = seat >= 1;
+    const int  seat    = players::generation::OnGameThread() ? TakeMarked(key) : -1;
+    const bool further = seat >= 1;
     if (g_observer.granting != nullptr)
     {
-        g_observer.granting(key, playerTwo);
+        g_observer.granting(key, further);
     }
     std::optional<scopes::primary_controller::Scope> primary;
-    if (playerTwo)
+    if (further)
     {
         primary.emplace(seat);
     }
     reinterpret_cast<AcquireFn>(g_acquireCall.Original())(items, entry);
     if (g_observer.granted != nullptr)
     {
-        g_observer.granted(key, playerTwo);  // inside the scope: the observer may read who the rumble went to
+        g_observer.granted(key, further);  // inside the scope: the observer may read who the rumble went to
     }
 }
 
@@ -1355,10 +1355,10 @@ void Install(const platform::GameImage& image) noexcept
         g_uiSystem = *ui;
         g_pauseKey = *pause;
         g_saved.reserve(kFieldActionMaxPoints);
-        g_twoNow.reserve(kFieldActionMaxPoints);
-        g_twoMarkersNow.reserve(kFieldActionMaxPoints);
+        g_seatBitsNow.reserve(kFieldActionMaxPoints);
+        g_seatMarkersNow.reserve(kFieldActionMaxPoints);
         g_oneMarkers.reserve(kFieldActionMaxPoints);
-        g_doomed.reserve(3 * kFieldActionMaxPoints);  // Before's, After's and KeepTwoMarkers': one per point each
+        g_doomed.reserve(3 * kFieldActionMaxPoints);  // Before's, After's and KeepSeatMarkers': one per point each
         resets = g_enterCall.InstallResearch(image, kFieldEnterCall, kFieldEnter.address,
                                              reinterpret_cast<std::uintptr_t>(&FieldEnter)) &&
                  g_exitCall.InstallResearch(image, kFieldExitCall, kFieldExit.address,

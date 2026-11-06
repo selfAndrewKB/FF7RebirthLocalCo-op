@@ -52,15 +52,15 @@ void TestTriggers()
         {
             for (const bool watching : {false, true})
             {
-                const TriggerRoute before = two ? TriggerRoute::PlayerTwo
+                const TriggerRoute before = two ? TriggerRoute::Seat
                                             : one && watching ? TriggerRoute::PlayerOne
                                                               : TriggerRoute::Original;
                 EXPECT(TriggerRouteOf(two ? 1 : one ? 0 : -1, watching).route == before);
             }
         }
     }
-    EXPECT(TriggerRouteOf(1, false).route == TriggerRoute::PlayerTwo && TriggerRouteOf(1, false).seat == 1);
-    EXPECT(TriggerRouteOf(2, true).route == TriggerRoute::PlayerTwo && TriggerRouteOf(2, true).seat == 2);
+    EXPECT(TriggerRouteOf(1, false).route == TriggerRoute::Seat && TriggerRouteOf(1, false).seat == 1);
+    EXPECT(TriggerRouteOf(2, true).route == TriggerRoute::Seat && TriggerRouteOf(2, true).seat == 2);
     EXPECT(TriggerRouteOf(0, true).route == TriggerRoute::PlayerOne && TriggerRouteOf(0, true).seat == -1);
     EXPECT(TriggerRouteOf(0, false).route == TriggerRoute::Original);
     EXPECT(TriggerRouteOf(-1, true).route == TriggerRoute::Original && TriggerRouteOf(-1, true).seat == -1);

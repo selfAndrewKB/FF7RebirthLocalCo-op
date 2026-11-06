@@ -64,9 +64,9 @@ constexpr bool KeepsAwakeOrShown(const LodDistances& lod, const EntryView& view,
 
 /// True when player 1's camera already gives the entry everything player 2's camera asks for, so the game
 /// alone keeps it as player 2 needs and raising it would add only cost.
-constexpr bool Covers(const Keeps& one, const Keeps& two) noexcept
+constexpr bool Covers(const Keeps& one, const Keeps& forSeat) noexcept
 {
-    return (!two.awake || one.awake) && (!two.shown || one.shown);
+    return (!forSeat.awake || one.awake) && (!forSeat.shown || one.shown);
 }
 
 // The margins that keep an entry from toggling on the edge: a raised entry stays raised until it is this far
@@ -76,14 +76,15 @@ inline constexpr float kKeepDegrees = 5.0f;
 
 /// Whether to raise an entry not raised yet: player 2's view, at `reach` times the game's distances, keeps
 /// it, and player 1's camera (when read) does not already.
-constexpr bool ShouldRaise(const LodDistances& lod, const EntryView& two, const EntryView* one, float reach) noexcept
+constexpr bool ShouldRaise(const LodDistances& lod, const EntryView& seatView, const EntryView* one,
+                           float reach) noexcept
 {
-    const Keeps forTwo = KeepsOf(lod, two, reach);
-    if (!forTwo.awake && !forTwo.shown)
+    const Keeps forSeat = KeepsOf(lod, seatView, reach);
+    if (!forSeat.awake && !forSeat.shown)
     {
         return false;
     }
-    return one == nullptr || !Covers(KeepsOf(lod, *one), forTwo);
+    return one == nullptr || !Covers(KeepsOf(lod, *one), forSeat);
 }
 
 enum class Hold
@@ -94,14 +95,14 @@ enum class Hold
 };
 
 /// For an entry the mod raised: whether it is still needed, and why not.
-constexpr Hold HoldOf(const LodDistances& lod, const EntryView& two, const EntryView* one, float reach) noexcept
+constexpr Hold HoldOf(const LodDistances& lod, const EntryView& seatView, const EntryView* one, float reach) noexcept
 {
-    const Keeps forTwo = KeepsOf(lod, two, reach * kKeepScale, kKeepDegrees);
-    if (!forTwo.awake && !forTwo.shown)
+    const Keeps forSeat = KeepsOf(lod, seatView, reach * kKeepScale, kKeepDegrees);
+    if (!forSeat.awake && !forSeat.shown)
     {
         return Hold::OutOfReach;
     }
-    if (one != nullptr && Covers(KeepsOf(lod, *one, 1.0f / kKeepScale, -kKeepDegrees), forTwo))
+    if (one != nullptr && Covers(KeepsOf(lod, *one, 1.0f / kKeepScale, -kKeepDegrees), forSeat))
     {
         return Hold::PlayerOneCovers;
     }

@@ -437,7 +437,7 @@ bool ResetScratch(void* keys, void* set) noexcept
     return true;
 }
 
-void PlayerTwoPass(int seat, void* context, void* keys, void* set) noexcept
+void SeatPass(int seat, void* context, void* keys, void* set) noexcept
 {
     void* tracker = TrackerOf(players::generation::ControllerOf(seat));
     if (tracker == nullptr || ReadField<std::uint8_t>(tracker, kTrackerEnabled) == 0)
@@ -496,7 +496,7 @@ std::uintptr_t Dispatch(void* context, void* tracker, void* overlaps, void* keys
         {
             if (players::generation::Active(seat))
             {
-                PlayerTwoPass(seat, context, keys, set);
+                SeatPass(seat, context, keys, set);
             }
         }
     }
@@ -578,12 +578,12 @@ std::uintptr_t Deliver(int seat, bool enter, FilterFn original, void* manager, s
     Counts&              counts     = g_counts[seat];
     void*                member     = players::generation::MemberOf(seat);
     const auto           memberWeak = scopes::leader_scope::WeakOf(member);
-    void* const          two        = players::generation::ControllerOf(seat);
-    const bool           possessed  = member != nullptr && ReadPointer(member, facts::kPawnController) == two;
+    void* const          controller = players::generation::ControllerOf(seat);
+    const bool           possessed  = member != nullptr && ReadPointer(member, facts::kPawnController) == controller;
     // The chocobo climb also while the seat's player rides their own chocobo (the member then belongs to her AI), and
     // for the leave of a spot the seat entered, so a ride that ended inside it still takes the spot off its list.
     const void* chocobo = cls.rides ? RiddenChocoboOf(seat) : nullptr;
-    const bool  rides   = chocobo != nullptr && ReadPointer(chocobo, facts::kPawnController) == two;
+    const bool  rides   = chocobo != nullptr && ReadPointer(chocobo, facts::kPawnController) == controller;
     const bool  entered = cls.rides && !enter && ShadowOf(seat, scopes::leader_scope::WeakOf(actor)).flag != 0;
     if (member == nullptr || memberWeak == 0 || !(possessed || rides || entered))
     {
@@ -724,7 +724,7 @@ std::uintptr_t Filter(bool enter, void* manager, std::uint64_t key, void* owner,
         // it.
         if (seat_switch_volumes::Is(passed))
         {
-            seat_switch_volumes::PlayerTwoEvent(seat, enter, const_cast<void*>(passed), owner);
+            seat_switch_volumes::SeatEvent(seat, enter, const_cast<void*>(passed), owner);
             return 0;
         }
         const int  cls     = actor != nullptr ? ClassOf(actor) : -1;

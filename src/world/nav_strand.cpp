@@ -415,19 +415,20 @@ std::wstring AtText(const void* pawn) noexcept
 
 std::wstring PlacesText(int seat)
 {
-    float one[3]{}, two[3]{}, cell[3]{};
-    const void* leader = ReadPointer(players::generation::PlayerOneController(), facts::kControllerPawn);
-    const bool  hasOne = LocationOf(leader, one);
-    const bool  hasTwo = LocationOf(g_members[seat].pawn, two);
+    float one[3]{}, member[3]{}, cell[3]{};
+    const void* leader    = ReadPointer(players::generation::PlayerOneController(), facts::kControllerPawn);
+    const bool  hasOne    = LocationOf(leader, one);
+    const bool  hasMember = LocationOf(g_members[seat].pawn, member);
     const void* manager = nullptr;
     const bool  hasCell = Read(reinterpret_cast<const void*>(g_navStreamManager), manager) &&
                          Read(At(manager, kNavStreamLeaderCell), cell);
-    std::wstring text = hasTwo ? std::format(L"P{} ({:.0f}, {:.0f}, {:.0f})", seat + 1, two[0], two[1], two[2])
-                               : std::format(L"P{} ?", seat + 1);
+    std::wstring text = hasMember ? std::format(L"P{} ({:.0f}, {:.0f}, {:.0f})", seat + 1, member[0], member[1],
+                                                member[2])
+                                  : std::format(L"P{} ?", seat + 1);
     text += hasOne ? std::format(L", P1 ({:.0f}, {:.0f}, {:.0f})", one[0], one[1], one[2]) : L", P1 ?";
-    if (hasOne && hasTwo)
+    if (hasOne && hasMember)
     {
-        text += std::format(L", apart {:.0f} m", std::hypot(two[0] - one[0], two[1] - one[1]) / 100.0f);
+        text += std::format(L", apart {:.0f} m", std::hypot(member[0] - one[0], member[1] - one[1]) / 100.0f);
     }
     text += hasCell ? std::format(L", leader nav cell ({:.0f}, {:.0f}, {:.0f})", cell[0], cell[1], cell[2])
                     : L", leader nav cell ?";

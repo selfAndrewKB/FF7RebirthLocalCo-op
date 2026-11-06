@@ -60,14 +60,14 @@ enum class TriggerRoute
 {
     Original,   // no seat's trigger: the game's filter as is
     PlayerOne,  // player 1's event while a seat is inside a switch volume: the game's filter, then the union
-    PlayerTwo,  // a seat's trigger (the route's seat): admitted classes go to the game as that seat's player
+    Seat,       // a seat's trigger (the route's seat): admitted classes go to the game as that seat's player
 };
 
 /// Where a trigger event goes, and for a seat's trigger, which seat it is.
 struct Route
 {
     TriggerRoute route = TriggerRoute::Original;
-    int          seat  = -1;  // PlayerTwo: the seat whose trigger it is; else -1
+    int          seat  = -1;  // Seat: the seat whose trigger it is; else -1
 };
 
 /// `ownerSeat`: the seat whose trigger raised the event (1.., players/seats.h), 0 for player 1's trigger, -1 for none.
@@ -75,7 +75,7 @@ constexpr Route TriggerRouteOf(int ownerSeat, bool watchingSwitchVolumes) noexce
 {
     if (ownerSeat >= 1)
     {
-        return {TriggerRoute::PlayerTwo, ownerSeat};
+        return {TriggerRoute::Seat, ownerSeat};
     }
     return {ownerSeat == 0 && watchingSwitchVolumes ? TriggerRoute::PlayerOne : TriggerRoute::Original, -1};
 }

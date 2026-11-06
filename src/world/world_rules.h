@@ -76,11 +76,11 @@ constexpr bool ShotShows(const void* target, const void* const (&humans)[players
 /// player 1's character, and whether the camera is player 2's. The same answer as the two-player rule before the seats for every non-null target
 /// when the two characters are distinct (with one pointer for both, the per-seat form shows player 1's own target on
 /// player 1's camera where the old rule hid it; never the case in play).
-constexpr bool ShotShows(const void* target, const void* member, const void* one, bool insidePlayerTwo,
+constexpr bool ShotShows(const void* target, const void* member, const void* one, bool cameraIsSeat,
                          const void* owner) noexcept
 {
     const void* const humans[players::kMaxPlayers] = {one, member, nullptr};
-    return ShotShows(target, humans, insidePlayerTwo ? players::kFirstFurtherSeat : 0, owner);
+    return ShotShows(target, humans, cameraIsSeat ? players::kFirstFurtherSeat : 0, owner);
 }
 
 // ---- location_rows: the camera location volume player 2 is in ----

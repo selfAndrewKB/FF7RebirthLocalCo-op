@@ -290,7 +290,7 @@ bool Is(const void* actor) noexcept
     return g_ready && actor != nullptr && ReadField<std::uintptr_t>(actor, 0) == g_vtable;
 }
 
-void PlayerTwoEvent(int seat, bool enter, void* volume, const void* trigger) noexcept
+void SeatEvent(int seat, bool enter, void* volume, const void* trigger) noexcept
 {
     if (!g_ready || volume == nullptr || trigger == nullptr || !players::SeatBuilt(seat) || !players::generation::OnGameThread())
     {

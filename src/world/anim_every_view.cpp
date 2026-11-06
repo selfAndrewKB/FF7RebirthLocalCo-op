@@ -138,7 +138,7 @@ const float*            g_cameraDiff = nullptr;  // the game's cvar, degrees
 // snapshot). Written by the game thread once per engine tick, read by the workers that tick the meshes (live
 // 2026-10-11: every measure from player 1's snapshot runs on a worker). A seqlock per seat: the version is odd while
 // the game thread writes, and a reader that sees it odd or changed keeps the answer without that seat.
-struct TwoCamera
+struct SeatCamera
 {
     std::atomic<std::uint32_t>        version{0};
     std::atomic<bool>                 valid{false};
@@ -147,7 +147,7 @@ struct TwoCamera
     std::atomic<const void*>          member{nullptr};
     std::atomic<const void*>          mount{nullptr};
 };
-std::array<TwoCamera, players::kMaxPlayers> g_seatCameras;
+std::array<SeatCamera, players::kMaxPlayers> g_seatCameras;
 
 // A reader's copy.
 struct CameraCopy
@@ -177,17 +177,18 @@ std::array<Watched, 8> g_watched{};
 std::mutex             g_watchedLock;  // the workers note, the game thread clears
 
 /// Game thread: publishes `seat`'s camera (or none) for the workers' measures.
-void PublishTwoCamera(int seat, bool valid, const charapop::Camera& two, const void* member, const void* mount) noexcept
+void PublishSeatCamera(int seat, bool valid, const charapop::Camera& pose, const void* member,
+                       const void* mount) noexcept
 {
-    TwoCamera& camera  = g_seatCameras[static_cast<std::size_t>(seat)];
-    const auto version = camera.version.load(std::memory_order_relaxed);
+    SeatCamera& camera  = g_seatCameras[static_cast<std::size_t>(seat)];
+    const auto  version = camera.version.load(std::memory_order_relaxed);
     camera.version.store(version + 1, std::memory_order_relaxed);
     std::atomic_thread_fence(std::memory_order_release);
     camera.valid.store(valid, std::memory_order_relaxed);
     for (std::size_t i = 0; i < std::size(charapop::Camera{}.location); ++i)
     {
-        camera.location[i].store(two.location[i], std::memory_order_relaxed);
-        camera.forward[i].store(two.forward[i], std::memory_order_relaxed);
+        camera.location[i].store(pose.location[i], std::memory_order_relaxed);
+        camera.forward[i].store(pose.forward[i], std::memory_order_relaxed);
     }
     camera.member.store(member, std::memory_order_relaxed);
     camera.mount.store(mount, std::memory_order_relaxed);
@@ -195,9 +196,9 @@ void PublishTwoCamera(int seat, bool valid, const charapop::Camera& two, const v
 }
 
 /// Any thread: `seat`'s camera as last published. False if there is none, or the game thread kept writing it.
-bool ReadTwoCamera(int seat, CameraCopy& out) noexcept
+bool ReadSeatCamera(int seat, CameraCopy& out) noexcept
 {
-    const TwoCamera& camera = g_seatCameras[static_cast<std::size_t>(seat)];
+    const SeatCamera& camera = g_seatCameras[static_cast<std::size_t>(seat)];
     for (int attempt = 0; attempt < 4; ++attempt)
     {
         const auto before = camera.version.load(std::memory_order_acquire);
@@ -234,11 +235,12 @@ void NoteMesh(void* mesh, float angleOne, float angleNow, const CameraCopy (&cam
     bool        mount = false;
     for (int s = 1; s <= players::kSeatsBuilt && owner != nullptr && seat < 0; ++s)
     {
-        const CameraCopy& two = cameras[s];
-        if ((read & (1u << s)) != 0 && (owner == two.member || (owner == two.mount && two.mount != two.member)))
+        const CameraCopy& camera = cameras[s];
+        if ((read & (1u << s)) != 0 &&
+            (owner == camera.member || (owner == camera.mount && camera.mount != camera.member)))
         {
             seat  = s;
-            mount = owner != two.member;
+            mount = owner != camera.member;
         }
     }
     if (seat < 0)
@@ -279,7 +281,7 @@ void NoteMesh(void* mesh, float angleOne, float angleNow, const CameraCopy (&cam
 /// The game's measure of a mesh's distance and angle. Called by a mesh tick from player 1's snapshot, it measures
 /// again from each seat's camera, in seat order, and keeps the minimum of each value (any thread: the workers tick the
 /// meshes).
-void MeasureTwoViews(void* mesh, const float* location, const float* forward) noexcept
+void MeasureEveryView(void* mesh, const float* location, const float* forward) noexcept
 {
     const auto original = reinterpret_cast<MeasureFn>(g_measureEntry.Original());
     original(mesh, location, forward);
@@ -294,7 +296,7 @@ void MeasureTwoViews(void* mesh, const float* location, const float* forward) no
     std::uint8_t read = 0;
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        read |= ReadTwoCamera(seat, cameras[seat]) ? static_cast<std::uint8_t>(1u << seat) : std::uint8_t{0};
+        read |= ReadSeatCamera(seat, cameras[seat]) ? static_cast<std::uint8_t>(1u << seat) : std::uint8_t{0};
     }
     if (read == 0)
     {
@@ -343,7 +345,7 @@ std::uintptr_t Refilled(void* a, std::uintptr_t b, std::uintptr_t c, std::uintpt
 /// seat order (game thread, before the parallel evaluation: nothing else touches the lists or the meshes' two fields
 /// now). The evaluation takes the minimum over the whole list (it walks Num entries, RE-p2-anim-optimisation-two-views.md
 /// §1.2), and the list grows through the game's own grow, so a pair per seat fits.
-void AppendPlayerTwo() noexcept
+void AppendSeatPairs() noexcept
 {
     charapop::Camera cameras[players::kMaxPlayers];
     std::uint8_t     read = 0;  // bit s: seat s's camera was read
@@ -428,9 +430,9 @@ void AppendPlayerTwo() noexcept
             {
                 continue;
             }
-            const charapop::Camera& two         = cameras[seat];
-            const float             location[4] = {two.location[0], two.location[1], two.location[2], 0.0f};
-            const float             forward[4]  = {two.forward[0], two.forward[1], two.forward[2], 0.0f};
+            const charapop::Camera& camera      = cameras[seat];
+            const float             location[4] = {camera.location[0], camera.location[1], camera.location[2], 0.0f};
+            const float             forward[4]  = {camera.forward[0], camera.forward[1], camera.forward[2], 0.0f};
             // The game's measure writes the mesh's two fields; they are put back (the evaluation recomputes them anyway).
             const auto savedDist  = ReadField<float>(it->mesh, distAt);
             const auto savedAngle = ReadField<float>(it->mesh, angleAt);
@@ -475,7 +477,7 @@ std::uintptr_t Evaluate(void* a, std::uintptr_t b, std::uintptr_t c, std::uintpt
         {
             LARGE_INTEGER start{}, stop{}, rate{};
             QueryPerformanceCounter(&start);
-            AppendPlayerTwo();
+            AppendSeatPairs();
             QueryPerformanceCounter(&stop);
             QueryPerformanceFrequency(&rate);
             const double micros = rate.QuadPart > 0 ? 1e6 * double(stop.QuadPart - start.QuadPart) / double(rate.QuadPart) : 0;
@@ -549,7 +551,7 @@ void Install(const platform::GameImage& image) noexcept
     {
         g_cameraDiff = reinterpret_cast<const float*>(*diff);
         const std::span<const std::uint8_t> bytes(kMeasureFirstTwo);
-        const auto replacement = reinterpret_cast<std::uintptr_t>(&MeasureTwoViews);
+        const auto replacement = reinterpret_cast<std::uintptr_t>(&MeasureEveryView);
         tickTime = g_measureEntry.Install(*meas, image.EntryInstruction(kMeasure.address, bytes.first(kFirstInstruction)),
                                           replacement) ||
                    g_measureEntry.InstallAtSecondInstruction(*meas, bytes.first(kFirstInstruction),
@@ -596,14 +598,14 @@ void Tick(bool splitShown) noexcept
         if (splitShown && players::generation::Active(seat))
         {
             void* const            controller = players::generation::ControllerOf(seat);
-            const charapop::Camera two        = charapop::CameraOf(controller);
-            PublishTwoCamera(seat, two.read, two, players::generation::MemberOf(seat),
-                             ReadPointer(controller, facts::kControllerPawn));
+            const charapop::Camera camera     = charapop::CameraOf(controller);
+            PublishSeatCamera(seat, camera.read, camera, players::generation::MemberOf(seat),
+                              ReadPointer(controller, facts::kControllerPawn));
             published = true;
         }
         else
         {
-            PublishTwoCamera(seat, false, charapop::Camera{}, nullptr, nullptr);
+            PublishSeatCamera(seat, false, charapop::Camera{}, nullptr, nullptr);
         }
     }
     if (!published)
