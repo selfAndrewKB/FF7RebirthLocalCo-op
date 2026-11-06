@@ -110,7 +110,7 @@ Scope::Scope(int seat) noexcept
     }
     if (players::weak_object::ObjectAt(&bound.weak) != bound.controller)
     {
-        refusal_ = Refusal::PlayerTwoStale;
+        refusal_ = Refusal::SeatStale;
         return;
     }
     const std::uint64_t current = std::atomic_ref<std::uint64_t>(*field).load();
@@ -143,7 +143,7 @@ const wchar_t* Describe(Scope::Refusal refusal) noexcept
         case Scope::Refusal::None: return L"held";
         case Scope::Refusal::NotBound: return L"not bound to the seat";
         case Scope::Refusal::NoPartyManager: return L"no party manager";
-        case Scope::Refusal::PlayerTwoStale: return L"the seat's controller is gone";
+        case Scope::Refusal::SeatStale: return L"the seat's controller is gone";
         case Scope::Refusal::NotPlayerOne: return L"the primary controller is neither player 1's nor the seat's";
         case Scope::Refusal::Changed: return L"the primary controller changed at the swap";
         case Scope::Refusal::Misaligned: return L"the primary-controller field is misaligned";

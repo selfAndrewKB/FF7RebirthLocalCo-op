@@ -187,7 +187,7 @@ std::uintptr_t OwnerOf(const void* cell) noexcept
 }
 
 /// A seat's cells on change (by slot): what the cell tick left in them, and the leader types it compared.
-void WatchCell(int seat, std::uintptr_t cell, std::uintptr_t two) noexcept
+void WatchCell(int seat, std::uintptr_t cell, std::uintptr_t owner) noexcept
 {
     struct Seen
     {
@@ -206,7 +206,7 @@ void WatchCell(int seat, std::uintptr_t cell, std::uintptr_t two) noexcept
         return;
     }
     const Seen now{ReadAt<std::uint8_t>(cell + kCellLook), ReadAt<std::uint8_t>(cell + kCellLeader),
-                   ReadAt<std::uint8_t>(cell + kCellType), ReadAt<std::uint8_t>(two + kCmdStoredLeaderType)};
+                   ReadAt<std::uint8_t>(cell + kCellType), ReadAt<std::uint8_t>(owner + kCmdStoredLeaderType)};
     auto& before = seen[static_cast<std::size_t>(slot)];
     if (now == before)
     {
@@ -219,7 +219,7 @@ void WatchCell(int seat, std::uintptr_t cell, std::uintptr_t two) noexcept
                      players::SeatName(seat), cell, slot, now.type, now.leader, now.look,
                      ReadAt<float>(cell + kCellPosition), ReadAt<float>(cell + kCellPosition + 4), now.answered,
                      ReadAt<std::uint8_t>(one + kCmdStoredLeaderType), seat + 1,
-                     ReadAt<std::uint8_t>(two + kCmdHudMode)),
+                     ReadAt<std::uint8_t>(owner + kCmdHudMode)),
          platform::Level::Debug);
 }
 
@@ -239,9 +239,9 @@ int SeatOwning(std::uintptr_t controller) noexcept
 /// when that view cannot be entered. A fault inside the view clears `on`: the widget ticks in the shared view from
 /// then on. True if the tick ran in the owner's view.
 bool TickInOwnerView(int seat, CellTickFn original, void* widget, const void* geometry, float deltaTime,
-                     std::uintptr_t two, const wchar_t* what, bool& on) noexcept
+                     std::uintptr_t owner, const wchar_t* what, bool& on) noexcept
 {
-    std::optional<OwnerView> view(std::in_place, two, 0);
+    std::optional<OwnerView> view(std::in_place, owner, 0);
     if (!view->Held())
     {
         view.reset();
@@ -321,7 +321,7 @@ void PaneTick(void* pane, const void* geometry, float deltaTime) noexcept
 
 /// Player 1's and `seat`'s key guides on change: active, the option's cache, shown, mode, and their widget's
 /// visibility and render opacity.
-void WatchGuides(int seat, std::uintptr_t one, std::uintptr_t two) noexcept
+void WatchGuides(int seat, std::uintptr_t one, std::uintptr_t own) noexcept
 {
     using State = std::array<std::uint8_t, 6>;
     static std::array<std::array<State, 2>, players::kMaxPlayers> seenBySeat{};  // index 0 unused
@@ -338,7 +338,7 @@ void WatchGuides(int seat, std::uintptr_t one, std::uintptr_t two) noexcept
     std::array<float, 2> opacity{};
     for (std::size_t i = 0; i < 2; ++i)
     {
-        const auto guide  = i == 0 ? one : two;
+        const auto guide  = i == 0 ? one : own;
         void*      widget = players::weak_object::ObjectOf(ReadAt<std::uint64_t>(guide + kGuideWidget));
         const auto at     = reinterpret_cast<std::uintptr_t>(widget);
         now[i]     = {ReadAt<std::uint8_t>(guide), ReadAt<std::uint8_t>(guide + 2), ReadAt<std::uint8_t>(guide + 3),

@@ -84,12 +84,12 @@ float DistanceFromPlayerOne(void* member) noexcept
     {
         platform::CopyGuarded(&pawn, reinterpret_cast<const void*>(controller + kControllerPawn), sizeof(pawn));
     }
-    float two[3]{}, one[3]{};
-    if (pawn == nullptr || !players::unreal::ActorLocation(member, two) || !players::unreal::ActorLocation(pawn, one))
+    float own[3]{}, one[3]{};
+    if (pawn == nullptr || !players::unreal::ActorLocation(member, own) || !players::unreal::ActorLocation(pawn, one))
     {
         return -1.0f;
     }
-    const float dx = two[0] - one[0], dy = two[1] - one[1], dz = two[2] - one[2];
+    const float dx = own[0] - one[0], dy = own[1] - one[1], dz = own[2] - one[2];
     return std::sqrt(dx * dx + dy * dy + dz * dz) / 100.0f;
 }
 

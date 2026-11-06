@@ -64,7 +64,7 @@ private:
 class MemberTickScope
 {
 public:
-    MemberTickScope(void* state, const void* playerTwoController, float deltaTime) noexcept;
+    MemberTickScope(void* state, const void* controller, float deltaTime) noexcept;
     ~MemberTickScope();
     MemberTickScope(const MemberTickScope&)            = delete;
     MemberTickScope& operator=(const MemberTickScope&) = delete;

@@ -33,12 +33,12 @@ enum class Ucpc : std::uint8_t
 {
     Untouched,  // the game's own answer (no seat is in)
     PlayerOne,
-    PlayerTwo,  // a seat's character (player 2's while one seat is built; the dev census counts it so)
+    Seat,       // a seat's character (player 2's while one seat is built; the dev census counts it so)
 };
 
 enum class Why : std::uint8_t
 {
-    NoPlayerTwo,      // no seat in
+    NoSeat,           // no seat in
     Coin,             // two or more eligible
     OnlyEligible,     // just this one eligible
     NeitherEligible,  // none eligible: player 1, as the game would
@@ -47,7 +47,7 @@ enum class Why : std::uint8_t
 struct Choice
 {
     Ucpc ucpc   = Ucpc::Untouched;
-    Why  why    = Why::NoPlayerTwo;
+    Why  why    = Why::NoSeat;
     int  player = kUntouched;  // 0 player 1, s seat s; kUntouched with Ucpc::Untouched
 };
 
@@ -106,7 +106,7 @@ constexpr Choice Choose(Players in, Players eligible, std::uint64_t coin) noexce
 {
     if ((in & ~Bit(0)) == 0)
     {
-        return {Ucpc::Untouched, Why::NoPlayerTwo, kUntouched};
+        return {Ucpc::Untouched, Why::NoSeat, kUntouched};
     }
     const Players candidates = Candidates(in, eligible);
     const int     count      = Count(candidates);
@@ -120,7 +120,7 @@ constexpr Choice Choose(Players in, Players eligible, std::uint64_t coin) noexce
         player = Nth(candidates, 0);
     }
     const Why why = count >= 2 ? Why::Coin : count == 1 ? Why::OnlyEligible : Why::NeitherEligible;
-    return {player == 0 ? Ucpc::PlayerOne : Ucpc::PlayerTwo, why, player};
+    return {player == 0 ? Ucpc::PlayerOne : Ucpc::Seat, why, player};
 }
 
 }  // namespace lss::battle::ucpc_choice

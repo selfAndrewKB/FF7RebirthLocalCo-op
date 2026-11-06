@@ -35,7 +35,7 @@ void TestNoPlayerTwo()
     std::puts("ucpc choice: without player 2 the game's answer is untouched");
     for (int bits = 0; bits < 8; ++bits)
     {
-        EXPECT(Is(TwoWay(false, bits & 1, bits & 2, bits & 4), Ucpc::Untouched, Why::NoPlayerTwo));
+        EXPECT(Is(TwoWay(false, bits & 1, bits & 2, bits & 4), Ucpc::Untouched, Why::NoSeat));
     }
 }
 
@@ -43,7 +43,7 @@ void TestBothEligible()
 {
     std::puts("ucpc choice: both eligible, the coin decides");
     EXPECT(Is(TwoWay(true, true, true, false), Ucpc::PlayerOne, Why::Coin));
-    EXPECT(Is(TwoWay(true, true, true, true), Ucpc::PlayerTwo, Why::Coin));
+    EXPECT(Is(TwoWay(true, true, true, true), Ucpc::Seat, Why::Coin));
 }
 
 void TestOneEligible()
@@ -52,7 +52,7 @@ void TestOneEligible()
     for (const bool coin : kCoins)
     {
         EXPECT(Is(TwoWay(true, true, false, coin), Ucpc::PlayerOne, Why::OnlyEligible));
-        EXPECT(Is(TwoWay(true, false, true, coin), Ucpc::PlayerTwo, Why::OnlyEligible));
+        EXPECT(Is(TwoWay(true, false, true, coin), Ucpc::Seat, Why::OnlyEligible));
     }
 }
 
@@ -65,7 +65,7 @@ void TestNeitherEligible()
     }
 }
 
-static_assert(TwoWay(true, true, true, true).ucpc == Ucpc::PlayerTwo);
+static_assert(TwoWay(true, true, true, true).ucpc == Ucpc::Seat);
 
 // ---- the per-seat rule against the two-way coin it replaced ----
 
@@ -75,15 +75,15 @@ constexpr Choice OldChoose(bool playerTwoIn, bool oneEligible, bool twoEligible,
 {
     if (!playerTwoIn)
     {
-        return {Ucpc::Untouched, Why::NoPlayerTwo};
+        return {Ucpc::Untouched, Why::NoSeat};
     }
     if (oneEligible && twoEligible)
     {
-        return {coin ? Ucpc::PlayerTwo : Ucpc::PlayerOne, Why::Coin};
+        return {coin ? Ucpc::Seat : Ucpc::PlayerOne, Why::Coin};
     }
     if (oneEligible || twoEligible)
     {
-        return {twoEligible ? Ucpc::PlayerTwo : Ucpc::PlayerOne, Why::OnlyEligible};
+        return {twoEligible ? Ucpc::Seat : Ucpc::PlayerOne, Why::OnlyEligible};
     }
     return {Ucpc::PlayerOne, Why::NeitherEligible};
 }
@@ -131,9 +131,9 @@ void TestTwoPlayersAsBefore()
             const Choice        shortc = TwoWay(in, one, two, in && one && two && bit);
             EXPECT(now.ucpc == old.ucpc && now.why == old.why);
             EXPECT(shortc.ucpc == old.ucpc && shortc.why == old.why && shortc.player == now.player);
-            EXPECT(now.player == (old.ucpc == Ucpc::Untouched   ? kUntouched
-                                  : old.ucpc == Ucpc::PlayerTwo ? lss::players::kFirstFurtherSeat
-                                                                : 0));
+            EXPECT(now.player == (old.ucpc == Ucpc::Untouched ? kUntouched
+                                  : old.ucpc == Ucpc::Seat    ? lss::players::kFirstFurtherSeat
+                                                              : 0));
         }
     }
 }

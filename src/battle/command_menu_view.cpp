@@ -127,12 +127,12 @@ void ShowOnly(int seat) noexcept
     HideSeats(seat);  // a seat whose pass ran before this one
     for (std::size_t i = 0; i < kParts.size(); ++i)
     {
-        const Part& part      = kParts[i];
-        const auto  oneOwner  = OwnerOf(part, 0, one);
-        const auto  twoOwner  = OwnerOf(part, seat, mine);
-        void*       oneWidget = WidgetOf(oneOwner, part.offset);
-        void*       twoWidget = WidgetOf(twoOwner, part.offset);
-        if (oneWidget == nullptr || twoWidget == nullptr)
+        const Part& part       = kParts[i];
+        const auto  oneOwner   = OwnerOf(part, 0, one);
+        const auto  seatOwner  = OwnerOf(part, seat, mine);
+        void*       oneWidget  = WidgetOf(oneOwner, part.offset);
+        void*       seatWidget = WidgetOf(seatOwner, part.offset);
+        if (oneWidget == nullptr || seatWidget == nullptr)
         {
             continue;
         }
@@ -140,7 +140,7 @@ void ShowOnly(int seat) noexcept
         {
             g_oneSaved[i] = {ReadAt<std::uint64_t>(oneOwner + part.offset), players::widget_opacity::Get(oneWidget)};
         }
-        SetOpacity(twoWidget, part.borrowOpacity ? g_oneSaved[i].opacity : 1.0F);
+        SetOpacity(seatWidget, part.borrowOpacity ? g_oneSaved[i].opacity : 1.0F);
         SetOpacity(oneWidget, 0.0F);
     }
     g_swapped = true;

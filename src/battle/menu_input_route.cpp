@@ -197,15 +197,15 @@ bool InSeatUi(int seat, Route route, const wchar_t* what, Call&& call) noexcept
     {
         return refuse(L"the route is off, inside a pass, or the player is out");
     }
-    const auto two    = reinterpret_cast<std::uintptr_t>(seat_command_menus::Controller(seat));
+    const auto own    = reinterpret_cast<std::uintptr_t>(seat_command_menus::Controller(seat));
     const auto one    = ReadAt<std::uintptr_t>(command_menu_tick::UiSystem() + kUICommandController);
     void*      member = players::generation::MemberOf(seat);
-    if (two == 0 || one == 0 || one == two || member == nullptr)
+    if (own == 0 || one == 0 || one == own || member == nullptr)
     {
         return refuse(L"a controller or the player's member is missing");
     }
     if (route == Route::kPress &&
-        !menu_rules::PressAllowed(ReadAt<std::uint8_t>(two + kCmdHudMode), ReadAt<std::uint8_t>(two + kCmdMenuLayer),
+        !menu_rules::PressAllowed(ReadAt<std::uint8_t>(own + kCmdHudMode), ReadAt<std::uint8_t>(own + kCmdMenuLayer),
                                   ReadAt<std::uint8_t>(one + kCmdBattleInput),
                                   ReadAt<std::uint8_t>(one + kCmdMenuLayer), focus_scope::PlayerOneTopIsCommandMenu()))
     {
@@ -213,7 +213,7 @@ bool InSeatUi(int seat, Route route, const wchar_t* what, Call&& call) noexcept
     }
     seat_ladder::Args args;
     args.seat          = seat;
-    args.controller    = reinterpret_cast<void*>(two);
+    args.controller    = reinterpret_cast<void*>(own);
     const auto manager = ReadAt<std::uintptr_t>(command_menu_tick::PartyManager());
     if (!seat_ladder::FillMember(args, member) || manager == 0)
     {
@@ -243,15 +243,15 @@ bool InSeatUi(int seat, Route route, const wchar_t* what, Call&& call) noexcept
 }
 
 /// For the route log: a seat's battle input, its action requests, and player 1's capture map's count.
-std::wstring RouteState(std::uintptr_t two)
+std::wstring RouteState(std::uintptr_t own)
 {
     const auto input = ReadAt<std::uintptr_t>(command_menu_tick::UiSystem() + kUIInput);
     return std::format(L"25C {} req 6:{} 7:{} 12:{} 13:{} 26:{} 32:{} 37:{} | members {} {} {} | captures {}",
-                       ReadAt<std::uint8_t>(two + kCmdBattleInput), RequestOf(two, 6), RequestOf(two, 7),
-                       RequestOf(two, kReqAttack), RequestOf(two, kReqUnique), RequestOf(two, 26),
-                       RequestOf(two, kReqGuardDodge), RequestOf(two, kReqGuard),
-                       ReadAt<std::int32_t>(two + kCmdMembers), ReadAt<std::int32_t>(two + kCmdMembers + 4),
-                       ReadAt<std::int32_t>(two + kCmdMembers + 8),
+                       ReadAt<std::uint8_t>(own + kCmdBattleInput), RequestOf(own, 6), RequestOf(own, 7),
+                       RequestOf(own, kReqAttack), RequestOf(own, kReqUnique), RequestOf(own, 26),
+                       RequestOf(own, kReqGuardDodge), RequestOf(own, kReqGuard),
+                       ReadAt<std::int32_t>(own + kCmdMembers), ReadAt<std::int32_t>(own + kCmdMembers + 4),
+                       ReadAt<std::int32_t>(own + kCmdMembers + 8),
                        ReadAt<std::int32_t>(input + 0xB0) - ReadAt<std::int32_t>(input + 0xDC));
 }
 
@@ -275,8 +275,8 @@ bool TakeTaken(int seat, std::uint64_t key) noexcept
 /// A seat's pad's press through the game's own dispatcher in the seat's UI, so its route, list and
 /// command-menu handler act on the seat's menu (RE-p2-command-menu-input.md §3.3, §10 Stage 3d). The seat comes
 /// from the press's source bit.
-bool RoutePadTwo(input::pad_buttons::ActionDownFn dispatch, void* owner, void* unused, std::uint32_t sourceBit, void* event,
-                 std::uint8_t alreadyHandled, char& result) noexcept
+bool RouteSeatPad(input::pad_buttons::ActionDownFn dispatch, void* owner, void* unused, std::uint32_t sourceBit, void* event,
+                  std::uint8_t alreadyHandled, char& result) noexcept
 {
     const auto key = ReadAt<std::uint64_t>(reinterpret_cast<std::uintptr_t>(event) + kEventKey);
     const int  seat = SeatOfSource(sourceBit);
@@ -286,20 +286,20 @@ bool RoutePadTwo(input::pad_buttons::ActionDownFn dispatch, void* owner, void* u
     }
     char taken = 1;  // after a fault: not dispatched again in player 1's context
     const int  action = KnownAction(key);
-    const auto two    = reinterpret_cast<std::uintptr_t>(seat_command_menus::Controller(seat));
+    const auto own    = reinterpret_cast<std::uintptr_t>(seat_command_menus::Controller(seat));
     std::wstring before;
     const bool routed = InSeatUi(seat, Route::kPress, L"press", [&] {
         const bool logIt = platform::Enabled(platform::Level::Trace) && action >= 0 &&
                            g_routedKnown[static_cast<std::size_t>(action)] < 10;
         if (logIt)
         {
-            before = RouteState(two);
+            before = RouteState(own);
         }
         const bool ran = platform::CallGuarded(dispatch, taken, owner, unused, sourceBit, event, alreadyHandled);
         if (logIt)
         {
             Line(std::format(L"pad {}'s {} in {}'s UI: before [{}] after [{}]", seat + 1, KeyText(key),
-                             players::SeatName(seat), before, RouteState(two)),
+                             players::SeatName(seat), before, RouteState(own)),
                  platform::Level::Trace);
         }
         return ran;
@@ -385,7 +385,7 @@ bool Find(const platform::GameImage& image) noexcept
 
 void Install(const platform::GameImage& image) noexcept
 {
-    input::pad_buttons::SetSeatRoute(&RoutePadTwo);  // a seat's presses to its menu in battle
+    input::pad_buttons::SetSeatRoute(&RouteSeatPad);  // a seat's presses to its menu in battle
     // Pad 2's releases: the key-up slot wrapped (the pad of each release noted) and the up route's call redirected.
     const auto upRoute = platform::FindFunction(image, kUpRoute);
     const auto entry   = image.Rebase(kKeyUpEntry, sizeof(void*));

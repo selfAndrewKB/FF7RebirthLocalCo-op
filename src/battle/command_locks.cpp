@@ -125,14 +125,14 @@ std::uintptr_t FollowingController(int seat, const wchar_t* what) noexcept
     return own;
 }
 
-/// Runs `call` (a guarded game call) with the UI system's controller slot naming `two`, and puts the
+/// Runs `call` (a guarded game call) with the UI system's controller slot naming `own`, and puts the
 /// game's controller back.
 template <class Call>
-bool WithSlot(std::uintptr_t two, Call&& call) noexcept
+bool WithSlot(std::uintptr_t own, Call&& call) noexcept
 {
     const auto slot = g_endUISystem + kUICommandController;
     const auto one  = ReadAt<std::uintptr_t>(slot);
-    if (!WriteAt(slot, two))
+    if (!WriteAt(slot, own))
     {
         return false;
     }
@@ -313,9 +313,9 @@ void Remove() noexcept
 
 void Sync(int seat, void* controller) noexcept
 {
-    const auto two = reinterpret_cast<std::uintptr_t>(controller);
+    const auto own = reinterpret_cast<std::uintptr_t>(controller);
     const auto one = ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController);
-    if (two == 0 || one == 0 || one == two)
+    if (own == 0 || one == 0 || one == own)
     {
         return;
     }
@@ -324,17 +324,17 @@ void Sync(int seat, void* controller) noexcept
          {kCommandsEnabled, kCommandsLocked, kTableBytes[0], kTableBytes[1], kTableBytes[2], kTableBytes[3]})
     {
         const auto value = ReadAt<std::uint8_t>(one + offset);
-        text += std::format(L" +{:#x} {}->{}", offset, ReadAt<std::uint8_t>(two + offset), value);
-        WriteAt(two + offset, value);
+        text += std::format(L" +{:#x} {}->{}", offset, ReadAt<std::uint8_t>(own + offset), value);
+        WriteAt(own + offset, value);
     }
     const auto oneLocks = ReadAt<std::uintptr_t>(one + kCategoryLocks);
-    const auto twoLocks = ReadAt<std::uintptr_t>(two + kCategoryLocks);
+    const auto ownLocks = ReadAt<std::uintptr_t>(own + kCategoryLocks);
     const auto count    = std::min(
-        {ReadAt<std::int32_t>(one + kCategoryCount), ReadAt<std::int32_t>(two + kCategoryCount), kMaxCategories});
+        {ReadAt<std::int32_t>(one + kCategoryCount), ReadAt<std::int32_t>(own + kCategoryCount), kMaxCategories});
     std::array<std::uint8_t, kMaxCategories> locks{};
-    if (oneLocks != 0 && twoLocks != 0 && count > 0 &&
+    if (oneLocks != 0 && ownLocks != 0 && count > 0 &&
         platform::CopyGuarded(locks.data(), reinterpret_cast<const void*>(oneLocks), static_cast<std::size_t>(count)) &&
-        platform::WriteGuarded(reinterpret_cast<void*>(twoLocks), locks.data(), static_cast<std::size_t>(count)))
+        platform::WriteGuarded(reinterpret_cast<void*>(ownLocks), locks.data(), static_cast<std::size_t>(count)))
     {
         text += L" | categories";
         for (std::int32_t i = 0; i < count; ++i)

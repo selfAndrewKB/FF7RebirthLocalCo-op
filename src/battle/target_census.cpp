@@ -311,7 +311,7 @@ void MaybeSummarize() noexcept
             ucpc[u][w] = platform::Take(t.ucpc[u][w]);
         }
     }
-    // Rows: Untouched, PlayerOne, PlayerTwo; columns: NoPlayerTwo, Coin, OnlyEligible, NeitherEligible.
+    // Rows: Untouched, PlayerOne, Seat; columns: NoSeat, Coin, OnlyEligible, NeitherEligible.
     const auto untouched = ucpc[0][0] + ucpc[0][1] + ucpc[0][2] + ucpc[0][3];
     platform::Log(L"target census (last {} s): {} decision(s) ({} off the game thread); targets: player 1's character {}, "
                   L"player 2's member {}, AI party {}, other {}, none {}; chosen by select {}, lock {}, redirect {}, "
@@ -549,7 +549,7 @@ std::wstring UcpcText(const equal_targeting::Answer& answer)
         return L"the game's own (no player 2 member)";
     }
     constexpr const wchar_t* kWhy[] = {L"", L"coin", L"only one eligible", L"neither eligible"};
-    return std::format(L"{} type {} ({})", answer.choice.ucpc == Ucpc::PlayerTwo ? L"player 2's member" : L"player 1's",
+    return std::format(L"{} type {} ({})", answer.choice.ucpc == Ucpc::Seat ? L"player 2's member" : L"player 1's",
                        answer.type, kWhy[static_cast<std::size_t>(answer.choice.why)]);
 }
 

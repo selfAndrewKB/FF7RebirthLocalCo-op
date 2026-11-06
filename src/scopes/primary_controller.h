@@ -56,7 +56,7 @@ public:
         None,
         NotBound,
         NoPartyManager,
-        PlayerTwoStale,     // the seat's controller is no longer the object the weak value named
+        SeatStale,          // the seat's controller is no longer the object the weak value named
         NotPlayerOne,       // the field named neither player 1 nor the seat (another seat's scope is open)
         Changed,            // the field changed between the check and the swap
         Misaligned,         // the field cannot be written atomically

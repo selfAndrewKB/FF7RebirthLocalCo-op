@@ -15,10 +15,10 @@ namespace lss::battle::menu_rules {
 
 /// A pad-2 press runs in player 2's UI only in battle, with player 2's menu layer in place and player 1's top layer
 /// the command menu's own (a pause menu or popup keeps pad 2 out of both menus).
-constexpr bool PressAllowed(std::uint8_t hudModeTwo, std::uint8_t menuLayerTwo, std::uint8_t battleInputOne,
+constexpr bool PressAllowed(std::uint8_t hudModeSeat, std::uint8_t menuLayerSeat, std::uint8_t battleInputOne,
                             std::uint8_t menuLayerOne, bool playerOneTopIsCommandMenu) noexcept
 {
-    return hudModeTwo != 0 && menuLayerTwo != 0 && battleInputOne != 0 && menuLayerOne != 0 && playerOneTopIsCommandMenu;
+    return hudModeSeat != 0 && menuLayerSeat != 0 && battleInputOne != 0 && menuLayerOne != 0 && playerOneTopIsCommandMenu;
 }
 
 /// Pad 2's keys whose press went to player 2's UI, so their release goes there too (one set per seat: two seats
@@ -71,9 +71,9 @@ private:
 
 /// The world-slow value written in player 2's pass: either menu slows the world (policy A), so the smaller of the two
 /// when player 1's came this frame.
-constexpr float SlowWritten(bool playerOnesThisFrame, float playerOnes, float playerTwos) noexcept
+constexpr float SlowWritten(bool playerOnesThisFrame, float playerOnes, float mine) noexcept
 {
-    return playerOnesThisFrame ? std::min(playerOnes, playerTwos) : playerTwos;
+    return playerOnesThisFrame ? std::min(playerOnes, mine) : mine;
 }
 
 /// One menu's world-slow value as a later pass sees it: whether it came this frame, and the value.
@@ -121,9 +121,9 @@ constexpr bool SkipWaitSoundOffAmong(int me, const std::int32_t* waits, int play
 }
 
 /// The two-player rule by pass (1 player 1's tick, 2 player 2's): SkipWaitSoundOffAmong over player 1 and player 2.
-constexpr bool SkipWaitSoundOff(int pass, std::int32_t waitOne, std::int32_t waitTwo) noexcept
+constexpr bool SkipWaitSoundOff(int pass, std::int32_t waitOne, std::int32_t waitSeat) noexcept
 {
-    const std::int32_t waits[2] = {waitOne, waitTwo};
+    const std::int32_t waits[2] = {waitOne, waitSeat};
     return SkipWaitSoundOffAmong(pass == 1 ? 0 : pass == 2 ? 1 : -1, waits, 2);
 }
 

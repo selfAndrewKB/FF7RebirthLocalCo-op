@@ -92,7 +92,7 @@ const wchar_t* Unavailable() noexcept;
 
 /// A further player's generation is active, on the game thread. The scopes below never nest, so the seats' ticks and
 /// inputs, run in turn, each save and put back the shared state alone, and g_memberState holds the one ticking.
-bool InPlayerTwoScope() noexcept
+bool InSeatScope() noexcept
 {
     return players::generation::OnGameThread() && players::generation::AnyActive();
 }
@@ -185,7 +185,7 @@ unsigned Mask() noexcept
 InputScope::InputScope(bool furtherPlayer) noexcept
 {
     // With the fix off (diagnosis) the block is left as a further player's input writes it, as without this scope.
-    if (!furtherPlayer || g_leader == nullptr || g_inputOpen || !InPlayerTwoScope() || !Acts(kFixLeaderTransform) ||
+    if (!furtherPlayer || g_leader == nullptr || g_inputOpen || !InSeatScope() || !Acts(kFixLeaderTransform) ||
         !g_leaderBlock.Open())
     {
         return;  // (an open scope already holds the block: this one leaves it to it)
@@ -206,14 +206,14 @@ InputScope::~InputScope()
     g_counts.leaderPutBack += rewrote;
 }
 
-MemberTickScope::MemberTickScope(void* state, const void* playerTwoController, float deltaTime) noexcept
+MemberTickScope::MemberTickScope(void* state, const void* controller, float deltaTime) noexcept
 {
-    if (g_tickOpen || !InPlayerTwoScope())
+    if (g_tickOpen || !InSeatScope())
     {
         return;
     }
     g_memberState = state;
-    const void* component = ReadPointer(playerTwoController, facts::kControllerLeaderActions);
+    const void* component = ReadPointer(controller, facts::kControllerLeaderActions);
     // With the fix off (diagnosis) the clock is left as the tick leaves it, as without this scope.
     if (g_frames == nullptr || component == nullptr || !Acts(kFixClock))
     {
