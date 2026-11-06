@@ -75,10 +75,4 @@ using OperatorOf = void* (*)(const void* cameraManager) noexcept;
 /// engine's call alone for that seat). Game thread.
 std::optional<OperatorPair> CurrentPair(int seat, OperatorOf operatorOf) noexcept;
 
-/// Player 2's pair, for the modules not yet per seat (battle_camera).
-inline std::optional<OperatorPair> CurrentPair(OperatorOf operatorOf) noexcept
-{
-    return CurrentPair(players::kFirstSeat, operatorOf);
-}
-
 }  // namespace lss::camera::camera_access

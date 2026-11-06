@@ -43,19 +43,28 @@ void TestLatches()
     EXPECT(made);  // 0xB was evicted
 }
 
+/// Two players through the per-seat rule: player 2's member, player 1's character, and whether the camera is
+/// player 2's.
+constexpr bool ShotShowsOfTwo(const void* target, const void* member, const void* one, bool cameraIsPlayerTwos,
+                              const void* owner) noexcept
+{
+    const void* const humans[lss::players::kMaxPlayers] = {one, member, nullptr};
+    return ShotShows(target, humans, cameraIsPlayerTwos ? 1 : 0, owner);
+}
+
 void TestShot()
 {
     std::puts("shot: a target that is no human's shows; the other player's target is off unless the camera is the viewer's");
-    EXPECT(ShotShows(&g_other, &g_member, &g_one, false, &g_one));
-    EXPECT(ShotShows(nullptr, &g_member, &g_one, true, nullptr));
+    EXPECT(ShotShowsOfTwo(&g_other, &g_member, &g_one, false, &g_one));
+    EXPECT(ShotShowsOfTwo(nullptr, &g_member, &g_one, true, nullptr));
     // Inside player 2's update: mine = member, other = player 1's.
-    EXPECT(!ShotShows(&g_one, &g_member, &g_one, true, &g_one));     // player 1's target, their camera: off
-    EXPECT(ShotShows(&g_one, &g_member, &g_one, true, &g_member));   // player 1's target on player 2's own camera
-    EXPECT(ShotShows(&g_member, &g_member, &g_one, true, &g_one));   // player 2's own target
+    EXPECT(!ShotShowsOfTwo(&g_one, &g_member, &g_one, true, &g_one));     // player 1's target, their camera: off
+    EXPECT(ShotShowsOfTwo(&g_one, &g_member, &g_one, true, &g_member));   // player 1's target on player 2's own camera
+    EXPECT(ShotShowsOfTwo(&g_member, &g_member, &g_one, true, &g_one));   // player 2's own target
     // Player 1's update: mine = player 1's, other = member.
-    EXPECT(!ShotShows(&g_member, &g_member, &g_one, false, &g_member));
-    EXPECT(ShotShows(&g_member, &g_member, &g_one, false, &g_one));
-    EXPECT(ShotShows(&g_one, &g_member, &g_one, false, &g_member));
+    EXPECT(!ShotShowsOfTwo(&g_member, &g_member, &g_one, false, &g_member));
+    EXPECT(ShotShowsOfTwo(&g_member, &g_member, &g_one, false, &g_one));
+    EXPECT(ShotShowsOfTwo(&g_one, &g_member, &g_one, false, &g_member));
 }
 
 /// ShotShows as it was before the seats (v0.91.0), the reference the per-seat form must match for two players.
@@ -90,7 +99,7 @@ void TestShotSeats()
                 {
                     for (const void* owner : owners)
                     {
-                        EXPECT(ShotShows(target, member, one, inside, owner) ==
+                        EXPECT(ShotShowsOfTwo(target, member, one, inside, owner) ==
                                ShotShowsTwoPlayer(target, member, one, inside, owner));
                     }
                 }
@@ -105,9 +114,10 @@ void TestShotSeats()
     EXPECT(ShotShows(&three, humans, 1, &g_member));     // ... unless the shot is player 2's own
     EXPECT(!ShotShows(&g_member, humans, 2, &g_member));   // player 2's target on player 3's camera: off
     EXPECT(ShotShows(&g_one, humans, 2, &three));        // player 1's target in player 3's own shot
-    // One pointer for both characters (never in play): the documented difference, player 1's own camera shows it.
+    // One pointer for both characters (never in play): the one difference, the per-seat rule shows player 1's own
+    // target on player 1's camera where the two-player rule hid it.
     EXPECT(!ShotShowsTwoPlayer(&g_one, &g_one, &g_one, false, &g_other));
-    EXPECT(ShotShows(&g_one, &g_one, &g_one, false, &g_other));
+    EXPECT(ShotShowsOfTwo(&g_one, &g_one, &g_one, false, &g_other));
 }
 
 void TestLocationAndStack()

@@ -63,12 +63,6 @@ private:
 /// seat's; 0 outside every seat's update (player 1's camera).
 int InsideSeat() noexcept;
 
-/// Game thread: inside a seat's camera update.
-inline bool InsideSeatUpdate() noexcept
-{
-    return InsideSeat() != 0;
-}
-
 /// Game thread, once per engine tick: the status line (Debug, every 10 s with activity).
 void Tick() noexcept;
 

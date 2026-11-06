@@ -72,17 +72,6 @@ constexpr bool ShotShows(const void* target, const void* const (&humans)[players
     return owner == humans[viewer];
 }
 
-/// The two-player form (tests/attack_framing_test.cpp checks attack_framing's own rule against it): player 2's member,
-/// player 1's character, and whether the camera is player 2's. The same answer as the two-player rule before the seats for every non-null target
-/// when the two characters are distinct (with one pointer for both, the per-seat form shows player 1's own target on
-/// player 1's camera where the old rule hid it; never the case in play).
-constexpr bool ShotShows(const void* target, const void* member, const void* one, bool cameraIsSeat,
-                         const void* owner) noexcept
-{
-    const void* const humans[players::kMaxPlayers] = {one, member, nullptr};
-    return ShotShows(target, humans, cameraIsSeat ? players::kFirstSeat : 0, owner);
-}
-
 // ---- location_rows: the camera location volume a seat's character is in ----
 
 /// A volume the pick considers: one that changes the camera and is not disabled.

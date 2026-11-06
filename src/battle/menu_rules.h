@@ -69,13 +69,6 @@ private:
 
 // ---- the two menus' shared engine state (command_menu_tick) ----
 
-/// The world-slow value written in player 2's pass: either menu slows the world (policy A), so the smaller of the two
-/// when player 1's came this frame.
-constexpr float SlowWritten(bool playerOnesThisFrame, float playerOnes, float mine) noexcept
-{
-    return playerOnesThisFrame ? std::min(playerOnes, mine) : mine;
-}
-
 /// One menu's world-slow value as a later pass sees it: whether it came this frame, and the value.
 struct SlowValue
 {
@@ -84,8 +77,7 @@ struct SlowValue
 };
 
 /// The world-slow value written in a seat's pass, over the menus that ticked before it (player 1's, then the earlier
-/// seats'): either menu slows the world (policy A), so the smallest of its own and those that came this frame. With
-/// one earlier menu, SlowWritten.
+/// seats'): any menu slows the world (policy A), so the smallest of its own and those that came this frame.
 constexpr float SlowWrittenAmong(const SlowValue* earlier, int count, float mine) noexcept
 {
     float written = mine;
@@ -118,13 +110,6 @@ constexpr bool SkipWaitSoundOffAmong(int me, const std::int32_t* waits, int play
         }
     }
     return false;
-}
-
-/// The two-player rule by pass (1 player 1's tick, 2 player 2's): SkipWaitSoundOffAmong over player 1 and player 2.
-constexpr bool SkipWaitSoundOff(int pass, std::int32_t waitOne, std::int32_t waitSeat) noexcept
-{
-    const std::int32_t waits[2] = {waitOne, waitSeat};
-    return SkipWaitSoundOffAmong(pass == 1 ? 0 : pass == 2 ? 1 : -1, waits, 2);
 }
 
 // ---- a seat's controller following the game's (command_menu) ----

@@ -49,27 +49,40 @@ void TestTakenKeys()
     EXPECT(taken.Take(0x99));
 }
 
+/// Two players through the rules over every menu: player 1's menu, then player 2's.
+constexpr float SlowOfTwo(bool playerOnesThisFrame, float playerOnes, float mine) noexcept
+{
+    const SlowValue earlier[1] = {{playerOnesThisFrame, playerOnes}};
+    return SlowWrittenAmong(earlier, 1, mine);
+}
+/// By pass: 1 player 1's tick, 2 player 2's.
+constexpr bool SkipOfTwo(int pass, std::int32_t waitOne, std::int32_t waitTwo) noexcept
+{
+    const std::int32_t waits[2] = {waitOne, waitTwo};
+    return SkipWaitSoundOffAmong(pass == 1 ? 0 : pass == 2 ? 1 : -1, waits, 2);
+}
+
 void TestSharedState()
 {
     std::puts("slow value: the smaller when player 1's came this frame; wait sound: skipped while the other menu waits");
-    EXPECT(SlowWritten(true, 0.5f, 1.0f) == 0.5f);
-    EXPECT(SlowWritten(true, 1.0f, 0.25f) == 0.25f);
-    EXPECT(SlowWritten(false, 0.5f, 1.0f) == 1.0f);
+    EXPECT(SlowOfTwo(true, 0.5f, 1.0f) == 0.5f);
+    EXPECT(SlowOfTwo(true, 1.0f, 0.25f) == 0.25f);
+    EXPECT(SlowOfTwo(false, 0.5f, 1.0f) == 1.0f);
 
     for (const std::int32_t other : {1, 4, 5})
     {
-        EXPECT(SkipWaitSoundOff(1, 0, other));
+        EXPECT(SkipOfTwo(1, 0, other));
     }
-    EXPECT(!SkipWaitSoundOff(1, 0, 0));
-    EXPECT(!SkipWaitSoundOff(1, 0, 2));
-    EXPECT(!SkipWaitSoundOff(1, 5, 0));  // player 1's own state does not matter in its pass
+    EXPECT(!SkipOfTwo(1, 0, 0));
+    EXPECT(!SkipOfTwo(1, 0, 2));
+    EXPECT(!SkipOfTwo(1, 5, 0));  // player 1's own state does not matter in its pass
     for (const std::int32_t other : {1, 5})
     {
-        EXPECT(SkipWaitSoundOff(2, other, 0));
+        EXPECT(SkipOfTwo(2, other, 0));
     }
-    EXPECT(!SkipWaitSoundOff(2, 4, 0));  // player 1's 4 does not hold player 2's sound
-    EXPECT(!SkipWaitSoundOff(2, 0, 5));
-    EXPECT(!SkipWaitSoundOff(0, 1, 1));
+    EXPECT(!SkipOfTwo(2, 4, 0));  // player 1's 4 does not hold player 2's sound
+    EXPECT(!SkipOfTwo(2, 0, 5));
+    EXPECT(!SkipOfTwo(0, 1, 1));
 }
 
 /// The two-player rules as they stood at v0.91.0, verbatim: the references for the rules over every menu.
@@ -92,9 +105,7 @@ void TestMenusAsBefore()
         {
             for (const float two : kValues)
             {
-                const SlowValue earlier[1] = {{thisFrame, one}};
-                EXPECT(SlowWrittenAmong(earlier, 1, two) == OldSlowWritten(thisFrame, one, two));
-                EXPECT(SlowWritten(thisFrame, one, two) == OldSlowWritten(thisFrame, one, two));
+                EXPECT(SlowOfTwo(thisFrame, one, two) == OldSlowWritten(thisFrame, one, two));
             }
         }
     }
@@ -104,7 +115,7 @@ void TestMenusAsBefore()
         {
             for (std::int32_t two = -1; two <= 7; ++two)
             {
-                EXPECT(SkipWaitSoundOff(pass, one, two) == OldSkipWaitSoundOff(pass, one, two));
+                EXPECT(SkipOfTwo(pass, one, two) == OldSkipWaitSoundOff(pass, one, two));
             }
         }
     }

@@ -23,7 +23,7 @@ void TestLatchKeyKeepsTwoPlayerValue()
     std::puts("attack framing: player 1's key is the weak value, player 2's has bit 63 flipped (as before)");
     constexpr std::uint64_t key = 0x0000123400000056ull;
     static_assert(LatchKey(key, 0) == key, "player 1's camera: the weak value");
-    EXPECT(LatchKey(key, players::kFirstSeat) == (key ^ 0x8000000000000000ull));
+    EXPECT(LatchKey(key, 1) == (key ^ 0x8000000000000000ull));
 }
 
 void TestLatchKeysApart()
@@ -59,7 +59,7 @@ void TestTwoPlayerRuleUnchanged()
                 for (int seat = 0; seat <= 1; ++seat)
                 {
                     EXPECT(ShotShowsOn(target, humans, seat, owner) ==
-                           lss::world::world_rules::ShotShows(target, member, one, seat == 1, owner));
+                           lss::world::world_rules::ShotShows(target, humans, seat, owner));
                 }
             }
         }
