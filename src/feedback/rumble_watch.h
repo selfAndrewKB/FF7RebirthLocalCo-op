@@ -7,13 +7,13 @@
 // The stock path is per controller: each PC's ProcessForceFeedbackAndHaptics sends its own values with its own
 // ControllerId through the PC's vt+0xC90 send. Square's platform layer then turns ControllerId 0 into the "last active
 // device" code (app+0x1E0, XInput pad k = -2-3k), and the XInput device, given such a code, plays that pad and writes
-// zero to every other pad. Which of the two players' writes reaches pad 2 last in a frame decides whether player 2's
-// pad rumbles. Two vtable entries are wrapped, read-only (each passes straight to the game's function):
+// zero to every other pad. Which player's write reaches a seat's pad last in a frame decides whether that pad
+// rumbles. Two vtable entries are wrapped, read-only (each passes straight to the game's function):
 //   - AEndPlayerController's send (vt+0xC90): which PC, the id it sends, the device code, its values, its effects;
 //   - the XInput device's SetChannelValues (slot 6): every pad write, in order (the negative code's per-pad writes
 //     come back through the same slot).
 // A frame is logged when any value in it is non-zero, or when its shape (who sent, which pads were written, zero or
-// not) differs from the last frame logged; a status line every 10 s while player 2 is in. Game thread.
+// not) differs from the last frame logged; a status line every 10 s while a seat's player is in. Game thread.
 
 #include "platform/dev_switch.h"
 
@@ -30,7 +30,7 @@ namespace lss::feedback::rumble_watch {
 /// Wraps the two entries (each checked). Logged.
 void Install(const platform::GameImage& image) noexcept;
 
-/// Puts the game's code back (at mod uninstall, with player 2 out).
+/// Puts the game's code back (at mod uninstall, with every seat out).
 void Remove() noexcept;
 
 /// The controller's active force-feedback effects (APlayerController::ActiveForceFeedbackEffects.Num), or -1.

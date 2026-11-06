@@ -71,13 +71,16 @@ struct SeatNames
     std::array<const UObject*, std::tuple_size_v<world::field_pickup::Weaks>> pickup{};
 };
 
+/// Each seat's component's request bytes, by seat (index 0 unused).
+using SeatBytes = std::array<std::array<std::uint8_t, kComponentRows>, players::kMaxPlayers>;
+
 // Game thread.
 std::vector<Row>                          g_rows;
 struct RowsSteady
 {
     std::array<Row, kMaxRows>                rows{};  // the first `count`, each remove state 0
     std::size_t                              count = 0;
-    std::array<std::uint8_t, kComponentRows> bytes{};
+    SeatBytes                                bytes{};
     bool operator==(const RowsSteady&) const = default;
 };
 using RowRemoves = std::array<std::int32_t, kMaxRows>;
@@ -165,14 +168,14 @@ std::wstring Describe(const std::vector<Row>& rows)
     return text.empty() ? L"none" : text;
 }
 
-void LogIfChanged(const std::array<std::uint8_t, kComponentRows>& bytes)  // player 2's requests
+void LogIfChanged(const SeatBytes& bytes)  // each seat's requests
 {
     if (!platform::Enabled(platform::Level::Debug))
     {
         g_rowLog.Reset();  // off: the next line starts fresh
         return;
     }
-    // Which rows, whose, and player 2's requests log at once; a row's remove state steps through its fade
+    // Which rows, whose, and the seats' requests log at once; a row's remove state steps through its fade
     // over a few frames, so it logs once it holds.
     RowsSteady steady;
     RowRemoves removes{};
@@ -192,12 +195,22 @@ void LogIfChanged(const std::array<std::uint8_t, kComponentRows>& bytes)  // pla
     {
         return;
     }
-    std::wstring requests;
-    for (std::size_t i = 0; i < kComponentRows; ++i)
+    std::wstring requests;  // of each seat whose player is in
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        requests += bytes[i] != 0 ? std::format(L" {}:{:#04x}", i, bytes[i]) : L"";
+        if (!players::generation::Active(seat))
+        {
+            continue;
+        }
+        std::wstring own;
+        for (std::size_t i = 0; i < kComponentRows; ++i)
+        {
+            const std::uint8_t byte = bytes[static_cast<std::size_t>(seat)][i];
+            own += byte != 0 ? std::format(L" {}:{:#04x}", i, byte) : L"";
+        }
+        requests += std::format(L"; {}'s requests:{}", players::SeatName(seat), own.empty() ? L" none" : own);
     }
-    platform::LogDebug(L"prompt rows: {}; player 2's requests:{}", Describe(g_rows), requests.empty() ? L" none" : requests);
+    platform::LogDebug(L"prompt rows: {}{}", Describe(g_rows), requests);
 }
 
 /// The seat's component, ride and pickup rows this frame; `bytes` gets the component's request bytes.
@@ -270,11 +283,10 @@ void Refresh() noexcept
     }
     try
     {
-        std::array<std::uint8_t, kComponentRows> bytes{}, firstSeatBytes{};
+        SeatBytes bytes{};
         for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
         {
-            ReadSeatNames(seat, g_names[static_cast<std::size_t>(seat)], bytes);
-            firstSeatBytes = seat == players::kFirstSeat ? bytes : firstSeatBytes;
+            ReadSeatNames(seat, g_names[static_cast<std::size_t>(seat)], bytes[static_cast<std::size_t>(seat)]);
         }
 
         g_rows.clear();
@@ -316,7 +328,7 @@ void Refresh() noexcept
         }
         g_seatWidgets.swap(g_stillSeat);
         LayOutPerPlayer();
-        LogIfChanged(firstSeatBytes);
+        LogIfChanged(bytes);
     }
     catch (...)
     {

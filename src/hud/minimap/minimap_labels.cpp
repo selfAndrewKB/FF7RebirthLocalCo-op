@@ -435,7 +435,7 @@ void Remove() noexcept
 void BeginRun(int seat) noexcept
 {
     g_runSeat = g_installed && players::SeatIndex(seat) ? seat : 0;
-    label_relayouts::SetScope(label_relayouts::Scope::PlayerTwoRun);
+    label_relayouts::SetScope(label_relayouts::Scope::Run, seat);
 }
 
 void EndRun() noexcept

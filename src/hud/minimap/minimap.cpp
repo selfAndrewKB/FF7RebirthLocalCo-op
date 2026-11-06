@@ -440,12 +440,14 @@ void MakeTarget(int seat, const void* slate) noexcept
     void* target = nullptr;
     if (outer == nullptr || !platform::CallGuarded(g_newTarget, target, outer) || target == nullptr)
     {
-        Refuse(L"player 2's or 3's render target could not be made");
+        Refuse(players::BySeat(seat, L"player 2's render target could not be made",
+                               L"player 3's render target could not be made"));
         return;
     }
     if (!RootGuarded(target))
     {
-        Refuse(L"player 2's or 3's render target could not be rooted");
+        Refuse(players::BySeat(seat, L"player 2's render target could not be rooted",
+                               L"player 3's render target could not be rooted"));
         return;
     }
     auto*                  bytes = static_cast<std::byte*>(target);
@@ -460,7 +462,8 @@ void MakeTarget(int seat, const void* slate) noexcept
     if (!platform::CallGuarded(g_initFormat, target, sizeX, sizeY, kFormatB8G8R8A8, static_cast<std::uint8_t>(1)) ||
         !platform::CallGuarded(g_updateNow, target, static_cast<std::uint8_t>(1)))
     {
-        Refuse(L"player 2's or 3's render target could not be initialised");
+        Refuse(players::BySeat(seat, L"player 2's render target could not be initialised",
+                               L"player 3's render target could not be initialised"));
         return;
     }
     g_target[seat] = target;
@@ -777,7 +780,8 @@ void RunHolder(int seat) noexcept
         ++g_counts.runsSeats;
         if (!g_ranFor[seat])
         {
-            Refuse(L"the navimap holder update raised an exception in player 2's or 3's run");
+            Refuse(players::BySeat(seat, L"the navimap holder update raised an exception in player 2's run",
+                                   L"the navimap holder update raised an exception in player 3's run"));
             return;
         }
         CentreOf(CircleSlate(), g_centre[seat]);
@@ -792,7 +796,7 @@ void RunHolder(int seat) noexcept
     {
         return;  // player 1's own map is the game tick's: only a seat's run changed it
     }
-    label_relayouts::SetScope(label_relayouts::Scope::PlayerOneRun);
+    label_relayouts::SetScope(label_relayouts::Scope::Run, 0);
     minimap_icons::BeginRun(0);  // the icons the seats' runs kept this frame stay
     const bool ranForOne = platform::CallGuarded(g_holderUpdate, holder, 0.0f);
     minimap_icons::EndRun(holder);
@@ -825,7 +829,7 @@ void RunHolder(int seat) noexcept
 
 bool BeginPaint(int seat) noexcept
 {
-    label_relayouts::SetScope(label_relayouts::Scope::PlayerTwoPaint);  // a seat's overlay render follows
+    label_relayouts::SetScope(label_relayouts::Scope::Paint, seat);  // a seat's overlay render follows
     g_slot.SetActive(false);
     if (!players::SeatIndex(seat) || !g_seatOn[seat] || !g_ranFor[seat])
     {

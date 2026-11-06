@@ -250,8 +250,10 @@ class Players
 public:
     Players()
     {
-        controllers_[0] = static_cast<UObject*>(players::generation::PlayerOneController());
-        controllers_[1] = static_cast<UObject*>(players::generation::PlayerTwoController());
+        for (int p = 0; p < players::kMaxPlayers; ++p)
+        {
+            controllers_[p] = static_cast<UObject*>(players::generation::ControllerOf(p));
+        }
         if (auto* list = players::unreal::LocalPlayers(players::unreal::GameInstance()))
         {
             for (std::int32_t i = 0; i < list->Num(); ++i)
@@ -269,11 +271,11 @@ public:
         {
             return L"(none)";
         }
-        for (int i = 0; i < 2; ++i)
+        for (int p = 0; p < players::kMaxPlayers; ++p)
         {
-            if (object == controllers_[i])
+            if (object == controllers_[p])
             {
-                return std::format(L"player {}'s controller", i + 1);
+                return std::format(L"{}'s controller", players::SeatName(p));
             }
         }
         for (std::size_t i = 0; i < localPlayers_.size(); ++i)
@@ -287,7 +289,7 @@ public:
     }
 
 private:
-    UObject*              controllers_[2] = {};
+    UObject*              controllers_[players::kMaxPlayers] = {};  // by player: 0 player 1's, then each seat's
     std::vector<UObject*> localPlayers_;
 };
 
@@ -535,9 +537,12 @@ std::wstring DescribeWeak(std::uintptr_t address)
     {
         return std::format(L"(stale: index {}, serial {})", weak[0], weak[1]);
     }
-    const std::wstring who = object == players::generation::PlayerOneController()   ? L" = player 1's controller"
-                             : object == players::generation::PlayerTwoController() ? L" = player 2's controller"
-                                                                                       : L"";
+    const int          seat = object == players::generation::PlayerOneController()
+                                  ? 0
+                                  : players::generation::SeatOfController(object);
+    const std::wstring who  = seat == 0 || players::SeatIndex(seat)
+                                  ? std::format(L" = {}'s controller", players::SeatName(seat))
+                                  : std::wstring();
     return std::format(L"{} '{}'{}", std::wstring(object->GetClassPrivate()->GetName()), std::wstring(object->GetName()), who);
 }
 

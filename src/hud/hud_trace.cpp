@@ -69,6 +69,11 @@ bool                                   g_installed        = false;
 std::uintptr_t                         g_frameNumber      = 0;
 std::atomic<std::int32_t>              g_framesLeft{0};
 
+/// Counts by whose controller a call used: each player's (0 player 1's, then the seats'), another's, none.
+constexpr std::size_t kOtherSlot = players::kMaxPlayers;
+constexpr std::size_t kNoneSlot  = kOtherSlot + 1;
+using ByPlayerCounts = std::array<std::uint32_t, kNoneSlot + 1>;
+
 /// What one frame did, game thread only.
 struct Frame
 {
@@ -77,8 +82,8 @@ struct Frame
     std::uint32_t run   = 0;
     std::uint32_t ticks = 0;
     float         deltaTime = 0.0f;
-    std::array<std::uint32_t, 4> markers{};  // by player: 1, 2, other, none
-    std::array<std::uint32_t, 4> projections{};
+    ByPlayerCounts markers{};
+    ByPlayerCounts projections{};
 };
 Frame g_frame;
 
@@ -93,13 +98,14 @@ std::size_t PlayerSlot(const void* controller) noexcept
 {
     if (controller == nullptr)
     {
-        return 3;
+        return kNoneSlot;
     }
     if (controller == players::generation::PlayerOneController())
     {
         return 0;
     }
-    return controller == players::generation::PlayerTwoController() ? 1 : 2;
+    const int seat = players::generation::SeatOfController(controller);
+    return players::SeatIndex(seat) ? static_cast<std::size_t>(seat) : kOtherSlot;
 }
 
 void FlushRun()
@@ -130,9 +136,14 @@ void Note(wchar_t event) noexcept
     }
 }
 
-std::wstring ByPlayer(const std::array<std::uint32_t, 4>& counts)
+std::wstring ByPlayer(const ByPlayerCounts& counts)
 {
-    return std::format(L"player 1 {}, player 2 {}, other {}, none {}", counts[0], counts[1], counts[2], counts[3]);
+    std::wstring text;
+    for (int p = 0; p < players::kMaxPlayers; ++p)
+    {
+        text += std::format(L"{} {}, ", players::SeatName(p), counts[static_cast<std::size_t>(p)]);
+    }
+    return text + std::format(L"other {}, none {}", counts[kOtherSlot], counts[kNoneSlot]);
 }
 
 bool Tracing() noexcept

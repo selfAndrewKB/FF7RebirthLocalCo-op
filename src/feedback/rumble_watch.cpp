@@ -55,7 +55,7 @@ using PadFn  = std::uint64_t (*)(void* device, std::int32_t id, const void* valu
 struct Event
 {
     bool                 send   = false;  // a PC's send; else a pad write
-    int                  who    = 0;      // the send's PC: 1, 2, or 0 (another)
+    int                  who    = 0;      // the send's PC by player number (1, then the seats' 2 and 3), or 0 (another)
     std::int32_t         id     = 0;
     std::int32_t         code   = 0;      // the send: the device code then
     std::int32_t         effects = -1;    // the send: the PC's active effects
@@ -115,7 +115,8 @@ int               g_depth = 0;
 platform::Every g_status{kStatusEvery};
 struct Counts
 {
-    std::uint32_t frames = 0, sendsOne = 0, sendsTwo = 0, sendsOther = 0, padWrites = 0, nonZeroFrames = 0;
+    std::uint32_t frames = 0, sendsOther = 0, padWrites = 0, nonZeroFrames = 0;
+    std::uint32_t sends[players::kMaxPlayers]{};  // by player: 0 player 1's controller, then each seat's
 };
 std::atomic<std::uint32_t> g_offThread{0};  // calls off the game thread (counted from any thread)
 
@@ -191,29 +192,38 @@ void Flush() noexcept
 void LogStatus() noexcept
 {
     const auto now = Clock::now();
-    if (!players::generation::Active() || !platform::Enabled(platform::Level::Debug) || !g_status.Due(now))
+    if (!players::generation::AnyActive() || !platform::Enabled(platform::Level::Debug) || !g_status.Due(now))
     {
         return;
     }
     const auto offThread = platform::Take(g_offThread);
-    const void* one = players::generation::PlayerOneController();
-    const void* two = players::generation::PlayerTwoController();
     const auto* app = reinterpret_cast<const std::uint8_t*>(ReadAt<std::uintptr_t>(g_app));
     try
     {
-        platform::LogDebug(L"rumble (10 s): {} frame(s), {} with a non-zero value; sends PC1 {}, PC2 {}, other {}; {} pad write(s)"
-                      L"{}; device code now {}; PC1 feedback {} scale {:.2f} effects {}; PC2 feedback {} scale {:.2f} "
-                      L"effects {}, PlayerInput {}",
-                      g_counts.frames, g_counts.nonZeroFrames, g_counts.sendsOne, g_counts.sendsTwo, g_counts.sendsOther,
-                      g_counts.padWrites,
-                      offThread != 0 ? std::format(L", {} call(s) off the game thread", offThread)
-                                              : std::wstring(),
-                      ReadField<std::int32_t>(app, kPlatformAppDeviceCode),
-                      (ReadField<std::uint8_t>(one, kFlags) & kFeedbackOn) != 0 ? L"on" : L"OFF",
-                      ReadField<float>(one, kFeedbackScale), EffectCount(one),
-                      (ReadField<std::uint8_t>(two, kFlags) & kFeedbackOn) != 0 ? L"on" : L"OFF",
-                      ReadField<float>(two, kFeedbackScale), EffectCount(two),
-                      ReadField<std::uintptr_t>(two, kPlayerInput) != 0 ? L"present" : L"MISSING");
+        // Player 1's controller, then the controller of each seat whose player is in.
+        std::wstring sends, controllers;
+        for (int p = 0; p < players::kMaxPlayers; ++p)
+        {
+            const void* controller = players::generation::ControllerOf(p);
+            if (p != 0 && !players::generation::Active(p))
+            {
+                continue;
+            }
+            sends += std::format(L"PC{} {}, ", p + 1, g_counts.sends[p]);
+            controllers += std::format(L"; PC{} feedback {} scale {:.2f} effects {}", p + 1,
+                                       (ReadField<std::uint8_t>(controller, kFlags) & kFeedbackOn) != 0 ? L"on" : L"OFF",
+                                       ReadField<float>(controller, kFeedbackScale), EffectCount(controller));
+            if (p != 0)
+            {
+                controllers += std::format(L", PlayerInput {}",
+                                           ReadField<std::uintptr_t>(controller, kPlayerInput) != 0 ? L"present" : L"MISSING");
+            }
+        }
+        platform::LogDebug(L"rumble (10 s): {} frame(s), {} with a non-zero value; sends {}other {}; {} pad write(s){}; device "
+                           L"code now {}{}",
+                           g_counts.frames, g_counts.nonZeroFrames, sends, g_counts.sendsOther, g_counts.padWrites,
+                           offThread != 0 ? std::format(L", {} call(s) off the game thread", offThread) : std::wstring(),
+                           ReadField<std::int32_t>(app, kPlatformAppDeviceCode), controllers);
     }
     catch (...)
     {
@@ -256,9 +266,8 @@ std::uint64_t Send(void* controller, void* input, std::int32_t id) noexcept
     Begin();
     Event event;
     event.send    = true;
-    event.who     = controller == players::generation::PlayerOneController()   ? 1
-                    : controller == players::generation::PlayerTwoController() ? 2
-                                                                      : 0;
+    const int seat = players::generation::SeatOfController(controller);
+    event.who     = controller == players::generation::PlayerOneController() ? 1 : players::SeatIndex(seat) ? seat + 1 : 0;
     event.id      = id;
     event.code    = ReadField<std::int32_t>(input, kPlatformAppDeviceCode - 0x80);
     event.effects = EffectCount(controller);
@@ -268,7 +277,7 @@ std::uint64_t Send(void* controller, void* input, std::int32_t id) noexcept
     {
         event.values = {};  // what the send passes then
     }
-    (event.who == 1 ? g_counts.sendsOne : event.who == 2 ? g_counts.sendsTwo : g_counts.sendsOther) += 1;
+    (event.who != 0 ? g_counts.sends[event.who - 1] : g_counts.sendsOther) += 1;
     Add(event);
     return original(controller, input, id);
 }

@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <cstring>
 #include <format>
+#include <initializer_list>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -54,14 +55,20 @@ constexpr ULONGLONG    kWindowMs      = 5'000;
 
 using TickFn = void (*)(void* self, const void* geometry, double currentTime, float deltaTime);
 
+// The places counted apart: elsewhere, then each player's minimap run (0 player 1's), then each seat's paint.
+constexpr std::size_t kRunPlace   = 1;                                  // + the player
+constexpr std::size_t kPaintPlace = kRunPlace + players::kMaxPlayers;   // + the seat
+constexpr std::size_t kPlaces     = kPaintPlace + players::kMaxPlayers;
+using ByPlace = std::array<std::uint32_t, kPlaces>;
+
 struct Block
 {
-    std::array<std::uint32_t, 4> setText{};  // relayouts through SetText, per Scope
-    std::array<std::uint32_t, 4> paint{};    // relayouts in Tick, per Scope
+    ByPlace       setText{};  // relayouts through SetText, per place
+    ByPlace       paint{};    // relayouts in Tick, per place
     std::uint32_t total          = 0;
     std::uint32_t sameText       = 0;  // SetText relayouts with the same text (too long for the game's compare)
     std::uint32_t changedText    = 0;
-    std::uint32_t playerTwoState = 0;  // SetText relayouts on player 2's own state (minimap_labels)
+    std::uint32_t seatState      = 0;  // SetText relayouts on a seat's own label state (minimap_labels)
     std::uint32_t pending        = 0;  // Tick relayouts that found one pending
     std::uint32_t widthChanged   = 0;  // Tick relayouts after a width change
     std::uint32_t locked         = 0;  // relayouts that only marked themselves pending
@@ -73,20 +80,21 @@ struct Block
 
 platform::VTableEntry g_tickSlot;
 std::atomic<bool>     g_watching{false};  // written on the game thread (and by Remove), read in the Tick slot
-Scope                 g_scope     = Scope::Other;
+std::size_t           g_place     = 0;  // where the frame is: an index of ByPlace
 ULONGLONG             g_windowEnd = 0;
 std::uint64_t         g_windowFrame = 0;
 std::uint32_t         g_untracked = 0;  // relayouts of blocks past kMaxBlocks this window
 std::unordered_map<std::uintptr_t, Block> g_blocks;
 
-const wchar_t* ScopeName(std::size_t scope) noexcept
+std::wstring PlaceName(std::size_t place)
 {
-    switch (static_cast<Scope>(scope))
+    if (place >= kPaintPlace && place < kPlaces)
     {
-    case Scope::PlayerTwoRun:   return L"player 2's minimap run";
-    case Scope::PlayerOneRun:   return L"player 1's minimap run";
-    case Scope::PlayerTwoPaint: return L"player 2's paint";
-    case Scope::Other:          break;
+        return std::format(L"{}'s paint", players::SeatName(static_cast<int>(place - kPaintPlace)));
+    }
+    if (place >= kRunPlace && place < kPaintPlace)
+    {
+        return std::format(L"{}'s minimap run", players::SeatName(static_cast<int>(place - kRunPlace)));
     }
     return L"elsewhere";
 }
@@ -178,7 +186,7 @@ void TickSlot(void* self, const void* geometry, double currentTime, float deltaT
     {
         return;
     }
-    ++block->paint[static_cast<std::size_t>(g_scope)];
+    ++block->paint[g_place];
     ++block->total;
     block->pending += pendingBefore != 0 ? 1u : 0u;
     block->locked += locked != 0 ? 1u : 0u;
@@ -192,7 +200,7 @@ void TickSlot(void* self, const void* geometry, double currentTime, float deltaT
     if (platform::Enabled(platform::Level::Trace))
     {
         platform::LogTrace(L"label relayouts: {} '{}' relaid out in its Tick in {} ({}; allotted width {:.1f}{})", self,
-                           block->text, ScopeName(static_cast<std::size_t>(g_scope)),
+                           block->text, PlaceName(g_place),
                            pendingBefore != 0 ? L"one was pending" : L"its width changed", width,
                            locked != 0 ? L"; locked: marked pending again" : L"");
     }
@@ -205,14 +213,14 @@ std::wstring Describe(const Block& b)
     {
         if (b.setText[s] != 0)
         {
-            where += std::format(L"{}SetText in {} {}", where.empty() ? L"" : L", ", ScopeName(s), b.setText[s]);
+            where += std::format(L"{}SetText in {} {}", where.empty() ? L"" : L", ", PlaceName(s), b.setText[s]);
         }
     }
     for (std::size_t s = 0; s < b.paint.size(); ++s)
     {
         if (b.paint[s] != 0)
         {
-            where += std::format(L"{}Tick in {} {}", where.empty() ? L"" : L", ", ScopeName(s), b.paint[s]);
+            where += std::format(L"{}Tick in {} {}", where.empty() ? L"" : L", ", PlaceName(s), b.paint[s]);
         }
     }
     std::wstring why;
@@ -224,9 +232,9 @@ std::wstring Describe(const Block& b)
     {
         why += std::format(L"; text changed {}", b.changedText);
     }
-    if (b.playerTwoState != 0)
+    if (b.seatState != 0)
     {
-        why += std::format(L"; on player 2's own label state {}", b.playerTwoState);
+        why += std::format(L"; on the run's player's own label state {}", b.seatState);
     }
     if (b.pending != 0)
     {
@@ -245,11 +253,11 @@ std::wstring Describe(const Block& b)
 
 void Report(std::uint64_t frames)
 {
-    std::array<std::uint64_t, 4> setText{}, paint{};
+    std::array<std::uint64_t, kPlaces> setText{}, paint{};
     std::vector<std::pair<std::uintptr_t, const Block*>> listed;
     for (auto& [key, block] : g_blocks)
     {
-        for (std::size_t s = 0; s < 4; ++s)
+        for (std::size_t s = 0; s < kPlaces; ++s)
         {
             setText[s] += block.setText[s];
             paint[s] += block.paint[s];
@@ -280,11 +288,19 @@ void Report(std::uint64_t frames)
         {
             blocks += std::format(L"\n    {:#x} x{}: {}", listed[i].first, listed[i].second->total, Describe(*listed[i].second));
         }
-        platform::LogDebug(L"label relayouts (5 s, {} frames): {} block(s){}; SetText in player 2's run {}, player 1's run "
-                           L"{}, player 2's paint {}, elsewhere {}; Tick in player 2's paint {}, player 2's run {}, player "
-                           L"1's run {}, elsewhere {}{}",
-                           frames, listed.size(), g_untracked != 0 ? std::format(L" (+{} relayouts untracked)", g_untracked) : L"",
-                           setText[1], setText[2], setText[3], setText[0], paint[3], paint[1], paint[2], paint[0], blocks);
+        std::wstring totals;  // every place with a relayout this window
+        for (const bool viaSetText : {true, false})
+        {
+            for (std::size_t s = 0; s < kPlaces; ++s)
+            {
+                if (const std::uint64_t count = viaSetText ? setText[s] : paint[s]; count != 0)
+                {
+                    totals += std::format(L"; {} in {} {}", viaSetText ? L"SetText" : L"Tick", PlaceName(s), count);
+                }
+            }
+        }
+        platform::LogDebug(L"label relayouts (5 s, {} frames): {} block(s){}{}{}", frames, listed.size(),
+                           g_untracked != 0 ? std::format(L" (+{} relayouts untracked)", g_untracked) : L"", totals, blocks);
     }
     // Next window: the counts start again; a block reported every frame keeps its record (and its flag).
     for (auto it = g_blocks.begin(); it != g_blocks.end();)
@@ -329,9 +345,15 @@ void Remove() noexcept
     }
 }
 
-void SetScope(Scope scope) noexcept
+void SetScope(Scope scope, int player) noexcept
 {
-    g_scope = scope;
+    const bool named = player >= (scope == Scope::Paint ? 1 : 0) && player < players::kMaxPlayers;
+    if (scope == Scope::Other || !named)
+    {
+        g_place = 0;
+        return;
+    }
+    g_place = (scope == Scope::Run ? kRunPlace : kPaintPlace) + static_cast<std::size_t>(player);
 }
 
 Before BeforeSetText(const void* textBlock, const void* text) noexcept
@@ -352,7 +374,7 @@ Before BeforeSetText(const void* textBlock, const void* text) noexcept
     return before;
 }
 
-void AfterSetText(const void* textBlock, const Before& before, bool playerTwoState) noexcept
+void AfterSetText(const void* textBlock, const Before& before, bool seatState) noexcept
 {
     const void* data = nullptr;
     int         num  = 0;
@@ -372,15 +394,15 @@ void AfterSetText(const void* textBlock, const Before& before, bool playerTwoSta
         ++block->locked;  // the relayout only marked itself pending: its Tick lays it out and is counted there
         return;
     }
-    ++block->setText[static_cast<std::size_t>(g_scope)];
+    ++block->setText[g_place];
     ++block->total;
     ++(before.same ? block->sameText : block->changedText);
-    block->playerTwoState += playerTwoState ? 1u : 0u;
+    block->seatState += seatState ? 1u : 0u;
     if (platform::Enabled(platform::Level::Trace))
     {
         platform::LogTrace(L"label relayouts: {} '{}' relaid out by SetText in {} ({}{}{})", textBlock, block->text,
-                           ScopeName(static_cast<std::size_t>(g_scope)), before.same ? L"same text" : L"text changed",
-                           playerTwoState ? L"; player 2's own state" : L"", before.locked ? L"; locked" : L"");
+                           PlaceName(g_place), before.same ? L"same text" : L"text changed",
+                           seatState ? L"; the run's player's own state" : L"", before.locked ? L"; locked" : L"");
     }
 }
 
