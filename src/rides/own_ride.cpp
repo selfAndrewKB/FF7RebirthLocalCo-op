@@ -33,16 +33,16 @@ using GetterFn = void* (*)(const void* object);
 
 struct RestoreCall
 {
-    void*      member    = nullptr;
-    void*      playerTwo = nullptr;
-    SwitchAiFn switchAi  = nullptr;
-    bool       ok        = false;
+    void*      member     = nullptr;
+    void*      controller = nullptr;
+    SwitchAiFn switchAi   = nullptr;
+    bool       ok         = false;
 };
 
 void RunRestore(void* context)
 {
     auto* call = static_cast<RestoreCall*>(context);
-    call->ok   = platform::CallGuarded(call->switchAi, call->member, std::uint8_t{1}, call->playerTwo);
+    call->ok   = platform::CallGuarded(call->switchAi, call->member, std::uint8_t{1}, call->controller);
 }
 
 }  // namespace
@@ -65,9 +65,9 @@ std::int32_t CoordState(const void* coordinator, std::uintptr_t coordVt, std::ui
     return row != nullptr ? ReadField<std::int32_t>(row, 0) : -1;
 }
 
-const void* CameraModule15(const void* playerTwo) noexcept
+const void* CameraModule15(const void* controller) noexcept
 {
-    const void* pcm     = ReadPointer(playerTwo, facts::kControllerCameraManager);
+    const void* pcm     = ReadPointer(controller, facts::kControllerCameraManager);
     const void* op      = ReadPointer(pcm, kCameraManagerFieldOperator);
     return camera::camera_access::ModuleAt(op, kModuleSlot15);
 }
@@ -81,28 +81,28 @@ const void* InputComponentOf(const void* vehicle) noexcept
     return getter != nullptr && platform::CallGuarded(getter, found, holder) ? found : nullptr;
 }
 
-bool PlayerTwoHolds(const void* character, const void* playerTwo) noexcept
+bool ControllerHolds(const void* character, const void* controller) noexcept
 {
-    return ReadPointer(character, facts::kCharacterEffectiveController) == playerTwo &&
-           ReadPointer(playerTwo, facts::kControllerPawn) == character;
+    return ReadPointer(character, facts::kCharacterEffectiveController) == controller &&
+           ReadPointer(controller, facts::kControllerPawn) == character;
 }
 
-bool BoardingGateOpen(int seat, void* member, void* playerTwo, const wchar_t* label) noexcept
+bool BoardingGateOpen(int seat, void* member, void* controller, const wchar_t* label) noexcept
 {
     const auto gate = input::member_movement::PlayerCoreAsSeat(seat, member, member);
-    if (gate.answer == 1 && gate.primary == playerTwo)
+    if (gate.answer == 1 && gate.primary == controller)
     {
         return true;
     }
     platform::Log(L"{}: not boarded (the boarding's player-core test as {} reads {}, primary {}PC{})", label,
-                  players::SeatName(seat), gate.answer, gate.primary == playerTwo ? L"" : L"not ", seat + 1);
+                  players::SeatName(seat), gate.answer, gate.primary == controller ? L"" : L"not ", seat + 1);
     return false;
 }
 
 std::wstring PossessionText(const Lease& lease, const wchar_t* word)
 {
-    const void* pawn   = ReadPointer(lease.playerTwo, facts::kControllerPawn);
-    const void* active = ReadPointer(lease.playerTwo, kControllerActiveVehicle);
+    const void* pawn   = ReadPointer(lease.controller, facts::kControllerPawn);
+    const void* active = ReadPointer(lease.controller, kControllerActiveVehicle);
     const bool own = active == lease.coordinator && active != nullptr;
     return std::format(L"member controller {} (effective {}); {} controller {} (effective {}); PC{}'s pawn {}, active "
                        L"coordinator {}{}",
@@ -122,12 +122,12 @@ std::wstring PossessionText(const Lease& lease, const wchar_t* word)
 
 bool GiveBack(const Lease& lease, SwitchAiFn switchAi, const wchar_t* label, const wchar_t* what) noexcept
 {
-    bool held = PlayerTwoHolds(lease.member, lease.playerTwo);
-    if (!held && ReadPointer(lease.member, facts::kPawnController) != lease.playerTwo)
+    bool held = ControllerHolds(lease.member, lease.controller);
+    if (!held && ReadPointer(lease.member, facts::kPawnController) != lease.controller)
     {
-        RestoreCall restore{lease.member, lease.playerTwo, switchAi};
+        RestoreCall restore{lease.member, lease.controller, switchAi};
         input::member_movement::InPrimaryScope(lease.seat, lease.member, &RunRestore, &restore);
-        held = PlayerTwoHolds(lease.member, lease.playerTwo);
+        held = ControllerHolds(lease.member, lease.controller);
         if (held)
         {
             platform::Log(L"{}: {} left the member to her AI; the game's possession call gave her back to {}", label,
@@ -157,7 +157,7 @@ VehicleTick TickVehicle(Lease& lease, void* state, const input::move_state::Engi
         return VehicleTick::Waiting;
     }
     const float deltaTime = engine.rideTicked ? engine.rideDeltaTime : engine.deltaTime;
-    const auto  result    = input::member_movement::TickRide(lease.seat, lease.playerTwo, lease.member, state, lease.component,
+    const auto  result    = input::member_movement::TickRide(lease.seat, lease.controller, lease.member, state, lease.component,
                                                       deltaTime, withoutKey);
     switch (result)
     {

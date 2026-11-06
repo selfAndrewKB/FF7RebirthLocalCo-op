@@ -30,25 +30,25 @@ std::uintptr_t RebaseOrZero(const platform::GameImage& image, std::uintptr_t ida
 /// A coordinator's state id: its current state row (`rowField` -> u32 id) when its vtable is `coordVt`; -1 otherwise.
 std::int32_t CoordState(const void* coordinator, std::uintptr_t coordVt, std::uint32_t rowField) noexcept;
 
-/// The camera's slot-15 module (the ride framing) of the controller `playerTwo` (a seat's), or null.
-const void* CameraModule15(const void* playerTwo) noexcept;
+/// The camera's slot-15 module (the ride framing) of the controller `controller` (a seat's), or null.
+const void* CameraModule15(const void* controller) noexcept;
 
 /// `vehicle`'s input component: its control holder's getter (+0x638 -> vt+0x40), or null.
 const void* InputComponentOf(const void* vehicle) noexcept;
 
-/// The controller `playerTwo` (a seat's) holds `character`: its effective controller, and the controller's pawn.
-bool PlayerTwoHolds(const void* character, const void* playerTwo) noexcept;
+/// The controller `controller` (a seat's) holds `character`: its effective controller, and the controller's pawn.
+bool ControllerHolds(const void* character, const void* controller) noexcept;
 
 /// The boarding's possession swap runs the game's player-core test on the member: as `seat`'s player it must pass.
 /// False, logged under `label`, when it does not (the ride is not taken). The test is member_movement's
 /// (PlayerCoreAsSeat), inside the seat's primary scope.
-bool BoardingGateOpen(int seat, void* member, void* playerTwo, const wchar_t* label) noexcept;
+bool BoardingGateOpen(int seat, void* member, void* controller, const wchar_t* label) noexcept;
 
 /// The lease every ride records, one per seat; each ride adds its own fields.
 struct Lease
 {
     int           seat        = 0;        // whose ride (players/seats.h): set when the ride begins; 0 none
-    void*         playerTwo   = nullptr;  // the seat's controller
+    void*         controller  = nullptr;  // the seat's controller
     void*         member      = nullptr;
     void*         vehicle     = nullptr;  // the chocobo or the scooter
     void*         coordinator = nullptr;  // the seat's own coordinator for it

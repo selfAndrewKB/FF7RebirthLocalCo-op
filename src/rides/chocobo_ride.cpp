@@ -233,24 +233,24 @@ bool CoordRiding(const void* coordinator) noexcept
 }
 
 /// The seat's camera's slot-15 module is a chocobo camera module (the ride framing).
-bool RideCameraOn(const void* playerTwo) noexcept
+bool RideCameraOn(const void* controller) noexcept
 {
-    const void* module = own_ride::CameraModule15(playerTwo);
+    const void* module = own_ride::CameraModule15(controller);
     return module != nullptr && VTableOf(module) == g_moduleVt;
 }
 
 /// The possession and ride fields, for the log.
 std::wstring LeaseText(const Ride& ride)
 {
-    const void* pcm = ReadPointer(ride.playerTwo, facts::kControllerCameraManager);
+    const void* pcm = ReadPointer(ride.controller, facts::kControllerCameraManager);
     return std::format(L"{} (state {}), leader {}; {}'s camera ride subject {}, ride framing {}, view target {}",
                        own_ride::PossessionText(ride, L"chocobo"), CoordState(ride.coordinator),
-                       ReadPointer(ride.playerTwo, facts::kControllerLeader) == ride.member ? L"the member" : L"other",
+                       ReadPointer(ride.controller, facts::kControllerLeader) == ride.member ? L"the member" : L"other",
                        players::SeatName(ride.seat),
                        scopes::leader_scope::ObjectAt(static_cast<const std::byte*>(pcm) + kRideSubjectField) == ride.vehicle
                            ? L"the chocobo"
                            : L"not the chocobo",
-                       RideCameraOn(ride.playerTwo) ? L"on" : L"off",
+                       RideCameraOn(ride.controller) ? L"on" : L"off",
                        ReadPointer(pcm, kCameraManagerViewTarget) == ride.member    ? L"the member"
                        : ReadPointer(pcm, kCameraManagerViewTarget) == ride.vehicle ? L"the chocobo"
                                                                        : L"the camera actor or other");
@@ -276,7 +276,7 @@ const void* InputComponentOf(const void* chocobo) noexcept
 
 struct BeginCall
 {
-    void* playerTwo   = nullptr;
+    void* controller  = nullptr;
     void* chocobo     = nullptr;
     void* member      = nullptr;
     void* coordinator = nullptr;
@@ -289,7 +289,7 @@ struct BeginCall
 void RunBegin(void* context)
 {
     auto* call = static_cast<BeginCall*>(context);
-    if (!platform::CallGuarded(g_fn.getCoordinator, call->coordinator, call->playerTwo, kChocoboType) ||
+    if (!platform::CallGuarded(g_fn.getCoordinator, call->coordinator, call->controller, kChocoboType) ||
         call->coordinator == nullptr || CoordState(call->coordinator) != static_cast<std::int32_t>(kCoordIdle))
     {
         return;
@@ -394,25 +394,26 @@ void End(SeatRide& s, const wchar_t* why, bool force) noexcept
                       L"state {}, {}'s active coordinator {}, the chocobo's controller {}PC{}, the member's {}PC{}",
                       players::SeatName(ride.seat), platform::DescribeFault(call.fault).text,
                       CoordState(ride.coordinator), players::SeatName(ride.seat),
-                      ReadPointer(ride.playerTwo, kControllerActiveVehicle) == ride.coordinator ? L"still it"
-                                                                                                 : L"cleared",
-                      ReadPointer(ride.vehicle, facts::kPawnController) == ride.playerTwo ? L"" : L"not ",
-                      ride.seat + 1, ReadPointer(ride.member, facts::kPawnController) == ride.playerTwo ? L"" : L"not ",
+                      ReadPointer(ride.controller, kControllerActiveVehicle) == ride.coordinator ? L"still it"
+                                                                                                  : L"cleared",
+                      ReadPointer(ride.vehicle, facts::kPawnController) == ride.controller ? L"" : L"not ",
+                      ride.seat + 1,
+                      ReadPointer(ride.member, facts::kPawnController) == ride.controller ? L"" : L"not ",
                       ride.seat + 1);
     }
     const Ride ended  = ride;
     Finish(s, ended, why,
            !scoped   ? L"the game's end not run (no scope)"
-           : call.ok ? (ReadPointer(ended.playerTwo, kControllerActiveVehicle) == nullptr ? L"the game's end ran"
+           : call.ok ? (ReadPointer(ended.controller, kControllerActiveVehicle) == nullptr ? L"the game's end ran"
                                                                                 : L"the game's end ran, the coordinator is still active")
                      : L"the game's end FAULTED");
 }
 
 /// The game has seated the seat's member on her own chocobo (§9.3: her chocobo appears by her and she is seated where
 /// she stands; taken at once, before the chocobo's follow AI can pull it toward player 1). Null when not.
-void* SeatedChocobo(SeatRide& s, void* playerTwo, void* member) noexcept
+void* SeatedChocobo(SeatRide& s, void* controller, void* member) noexcept
 {
-    if (ReadPointer(member, facts::kPawnController) != playerTwo || ReadPointer(playerTwo, facts::kControllerLeader) != member)
+    if (ReadPointer(member, facts::kPawnController) != controller || ReadPointer(controller, facts::kControllerLeader) != member)
     {
         return nullptr;
     }
@@ -442,20 +443,20 @@ void* SeatedChocobo(SeatRide& s, void* playerTwo, void* member) noexcept
     return chocobo;
 }
 
-void Begin(SeatRide& s, int seat, void* playerTwo, void* member, void* chocobo) noexcept
+void Begin(SeatRide& s, int seat, void* controller, void* member, void* chocobo) noexcept
 {
     // The boarding's swap runs the game's player-core test on her (§7.4): as the seat's player, it must pass.
-    if (!own_ride::BoardingGateOpen(seat, member, playerTwo, L"chocobo ride"))
+    if (!own_ride::BoardingGateOpen(seat, member, controller, L"chocobo ride"))
     {
         s.heldBack = chocobo;  // the seat's player stays a passenger for this ride
         return;
     }
     const void* oldObject = ReadPointer(chocobo, kChocoboRideObject);
-    BeginCall   call{playerTwo, chocobo, member};
+    BeginCall   call{controller, chocobo, member};
     input::member_movement::InPrimaryScope(seat, member, &RunBegin, &call);
     s.ride = {};
     s.ride.seat        = seat;
-    s.ride.playerTwo   = playerTwo;
+    s.ride.controller  = controller;
     s.ride.member      = member;
     s.ride.vehicle     = chocobo;
     s.ride.coordinator = call.coordinator;
@@ -471,9 +472,9 @@ void Begin(SeatRide& s, int seat, void* playerTwo, void* member, void* chocobo) 
     }
     s.phase          = Phase::Riding;
     void* state      = ReadPointer(chocobo, facts::kCharacterMoveState);
-    const bool owned = call.ok && ReadPointer(chocobo, facts::kCharacterEffectiveController) == playerTwo &&
-                       ReadPointer(playerTwo, facts::kControllerPawn) == chocobo &&
-                       ReadPointer(playerTwo, kControllerActiveVehicle) == call.coordinator &&
+    const bool owned = call.ok && ReadPointer(chocobo, facts::kCharacterEffectiveController) == controller &&
+                       ReadPointer(controller, facts::kControllerPawn) == chocobo &&
+                       ReadPointer(controller, kControllerActiveVehicle) == call.coordinator &&
                        VTableOf(state) == g_moveVt;
     s.ride.component = owned ? InputComponentOf(chocobo) : nullptr;
     if (!owned || s.ride.component == nullptr)
@@ -511,7 +512,7 @@ const wchar_t* EndReason(const Ride& ride, bool& getOff) noexcept
         reads.inBattle    = facts::InBattle();
         reads.entryRiding = EntryState(RideManager(), ride.member) == kEntryRiding;
         reads.attached    = Attached(ride.member);
-        reads.holds       = own_ride::PlayerTwoHolds(ride.vehicle, ride.playerTwo);
+        reads.holds       = own_ride::ControllerHolds(ride.vehicle, ride.controller);
     }
     const auto reason = ride_rules::EndReasonOf(reads);
     getOff            = reason == ride_rules::EndReason::Dismounted;
@@ -566,16 +567,16 @@ void LogSummary(SeatRide& s) noexcept
         return;
     }
     const Ride& ride = s.ride;
-    float two[3]{}, one[3]{};
+    float seatAt[3]{}, oneAt[3]{};
     const void* oneBody = ReadPointer(players::generation::PlayerOneController(), facts::kControllerPawn);
-    const bool  read    = world::charapop::ActorLocation(ride.vehicle, two) &&
-                          world::charapop::ActorLocation(const_cast<void*>(oneBody), one);
+    const bool  read    = world::charapop::ActorLocation(ride.vehicle, seatAt) &&
+                          world::charapop::ActorLocation(const_cast<void*>(oneBody), oneAt);
     try
     {
         platform::LogDebug(L"chocobo ride: driving, {} ticks ({} refused); its own slot 1 in {}'s scope {} times ({} refused); "
                       L"{:.0f} m from player 1's ride body; {}",
                       ride.ticks, ride.refused, players::SeatName(ride.seat), ride.handles, ride.handlesRefused,
-                      read ? world::charapop::Distance(one, two) / 100.0f : -1.0f, LeaseText(ride));
+                      read ? world::charapop::Distance(oneAt, seatAt) / 100.0f : -1.0f, LeaseText(ride));
     }
     catch (...)
     {
@@ -615,14 +616,14 @@ bool Install(const platform::GameImage& image) noexcept
     return g_installed;
 }
 
-bool Tick(void* playerTwoController, void* member, const input::move_state::EngineTicks& engine) noexcept
+bool Tick(void* controller, void* member, const input::move_state::EngineTicks& engine) noexcept
 {
     if (!g_installed || !players::generation::OnGameThread())
     {
         return false;
     }
     // The seat from its controller (the member's tick hands the seat's own).
-    const int seat = players::generation::SeatOfController(playerTwoController);
+    const int seat = players::generation::SeatOfController(controller);
     SeatRide* const ride = RideOf(seat);
     if (ride == nullptr)
     {
@@ -631,15 +632,15 @@ bool Tick(void* playerTwoController, void* member, const input::move_state::Engi
     SeatRide& s = *ride;
     if (s.phase == Phase::Idle)
     {
-        void* chocobo = s.stopped ? nullptr : SeatedChocobo(s, playerTwoController, member);
+        void* chocobo = s.stopped ? nullptr : SeatedChocobo(s, controller, member);
         if (chocobo == nullptr)
         {
             return false;
         }
-        Begin(s, seat, playerTwoController, member, chocobo);
+        Begin(s, seat, controller, member, chocobo);
         return s.phase != Phase::Idle;
     }
-    if (s.ride.member != member || s.ride.playerTwo != playerTwoController)
+    if (s.ride.member != member || s.ride.controller != controller)
     {
         End(s, BySeat(seat, L"player 2's member changed", L"player 3's member changed"), true);
         return false;

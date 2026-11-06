@@ -19,7 +19,7 @@ void Install(const platform::GameImage& image) noexcept
                       L"camera for player 2)",
                       executers.classes, moves.classes);
         platform::Log(L"traversal camera: climbing walls, monkey bars and spider walls {}",
-                      moves.twoHolders
+                      moves.seatHolders
                           ? L"keep a camera holder per player (neither player's climb evicts the other's)"
                           : L"keep the game's one holder (a hook or climb_context's Ticks are missing): the "
                             L"first climber keeps the camera, player 2's is evicted by player 1's");

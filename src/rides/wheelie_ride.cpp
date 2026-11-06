@@ -380,9 +380,9 @@ bool WarpWouldFire(void* scooter) noexcept
     return Between(PlayerOneBody(), scooter) > kWarpDistance;
 }
 
-bool CameraModuleOn(const void* playerTwo) noexcept
+bool CameraModuleOn(const void* controller) noexcept
 {
-    return own_ride::CameraModule15(playerTwo) != nullptr;
+    return own_ride::CameraModule15(controller) != nullptr;
 }
 
 /// The actor `actor`'s root is attached to (root +0x138 -> attach parent +0xC0 -> owner +0xA0), or null.
@@ -405,7 +405,7 @@ std::wstring LeaseText(const Ride& ride)
                        CoordState(ride.coordinator), StateName(CoordState(ride.coordinator)),
                        own_ride::PossessionText(ride, L"scooter"), AttachText(ride.member, ride.vehicle),
                        players::NameOf(ride.vehicle), players::SeatName(ride.seat),
-                       CameraModuleOn(ride.playerTwo) ? L"present" : L"empty",
+                       CameraModuleOn(ride.controller) ? L"present" : L"empty",
                        metres >= 0.0f ? std::format(L"{:.0f} m", metres / 100.0f) : std::wstring{L"(unread)"});
 }
 
@@ -421,7 +421,7 @@ void LogLine(const wchar_t* prefix, const Ride& ride) noexcept
 }
 
 using own_ride::InputComponentOf;
-using own_ride::PlayerTwoHolds;
+using own_ride::ControllerHolds;
 
 // ---- The question (Ask) ----
 
@@ -762,7 +762,7 @@ std::uint8_t ForcedGetOff(const GetOffParams* params)
 std::uint8_t OwnGetOff(const GetOffParams* params)
 {
     const int seat = params != nullptr && players::generation::OnGameThread()
-                         ? ActiveSeatWhere([](const Ride& ride) { return scopes::primary_controller::Is(ride.playerTwo); })
+                         ? ActiveSeatWhere([](const Ride& ride) { return scopes::primary_controller::Is(ride.controller); })
                          : -1;
     if (seat >= 1 && params->bytes[kGetOffInstant] == 0 && CoordState(g_seats[seat].ride.coordinator) == kStateRiding &&
         WarpWouldFire(g_seats[seat].ride.vehicle))
@@ -1008,10 +1008,10 @@ void Ask(void* state) noexcept
     s.asked = {true, member, target, scopes::leader_scope::WeakOf(target), ask.out};
 }
 
-void AfterMemberTick(void* playerTwoController, void* member) noexcept
+void AfterMemberTick(void* controller, void* member) noexcept
 {
     // The seat from its controller (the member's tick hands the seat's own).
-    const int seat = players::generation::SeatOfController(playerTwoController);
+    const int seat = players::generation::SeatOfController(controller);
     SeatRide* const record = RideOf(seat);
     if (record == nullptr || !record->asked.valid)
     {
@@ -1060,7 +1060,7 @@ void AfterMemberTick(void* playerTwoController, void* member) noexcept
         return;
     }
     // The boarding's possession swap runs the game's player-core test on her: as the seat's player, it must pass.
-    if (!own_ride::BoardingGateOpen(seat, member, playerTwoController, L"wheelie ride"))
+    if (!own_ride::BoardingGateOpen(seat, member, controller, L"wheelie ride"))
     {
         return;
     }
@@ -1069,15 +1069,15 @@ void AfterMemberTick(void* playerTwoController, void* member) noexcept
     // scripted branch do it.
     const scopes::leader_scope::LeaderScope leader(scopes::leader_scope::WeakOf(member));
     void* coordinator = nullptr;
-    if (!leader.Held() || !scopes::primary_controller::Is(playerTwoController) ||
-        !platform::CallGuarded(g_fn.getOrCreate, coordinator, playerTwoController, kScooterKey) ||
+    if (!leader.Held() || !scopes::primary_controller::Is(controller) ||
+        !platform::CallGuarded(g_fn.getOrCreate, coordinator, controller, kScooterKey) ||
         VTableOf(coordinator) != g_coordVt)
     {
         s.stopped = true;
         platform::Log(L"wheelie ride STOPPED for this session: {}'s scooter coordinator could not be made (leader scope "
                       L"{}, primary {}PC{})",
                       name, leader.Held() ? L"held" : L"refused",
-                      scopes::primary_controller::Is(playerTwoController) ? L"" : L"not ", seat + 1);
+                      scopes::primary_controller::Is(controller) ? L"" : L"not ", seat + 1);
         return;
     }
     if (CoordState(coordinator) != kStateIdle || ReadPointer(coordinator, kCoordPending) != nullptr ||
@@ -1111,7 +1111,7 @@ void AfterMemberTick(void* playerTwoController, void* member) noexcept
                                                          coordinator);
     s.ride             = {};
     s.ride.seat        = seat;
-    s.ride.playerTwo   = playerTwoController;
+    s.ride.controller  = controller;
     s.ride.member      = member;
     s.ride.vehicle     = scooter;
     s.ride.coordinator = coordinator;
@@ -1120,8 +1120,8 @@ void AfterMemberTick(void* playerTwoController, void* member) noexcept
     s.active           = true;
     s.summary.Restart(Clock::now());
     const bool owned   = begun && flushed && s.ride.state == kStateBoarding &&
-                       PlayerTwoHolds(scooter, playerTwoController) &&
-                       ReadPointer(playerTwoController, kControllerActiveVehicle) == coordinator &&
+                       ControllerHolds(scooter, controller) &&
+                       ReadPointer(controller, kControllerActiveVehicle) == coordinator &&
                        VTableOf(ReadPointer(scooter, facts::kCharacterMoveState)) == g_moveVt;
     s.ride.component = owned ? InputComponentOf(scooter) : nullptr;
     s.heldLogged     = nullptr;  // a later refusal (of any scooter) is logged again
@@ -1201,7 +1201,7 @@ void LogSummary(SeatRide& s) noexcept
 
 }  // namespace
 
-bool Tick(void* playerTwoController, void* member, const input::move_state::EngineTicks& engine) noexcept
+bool Tick(void* controller, void* member, const input::move_state::EngineTicks& engine) noexcept
 {
     if (!g_installed || !players::generation::OnGameThread())
     {
@@ -1212,7 +1212,7 @@ bool Tick(void* playerTwoController, void* member, const input::move_state::Engi
         InstallSites();
     }
     // The seat from its controller (the member's tick hands the seat's own).
-    const int seat = players::generation::SeatOfController(playerTwoController);
+    const int seat = players::generation::SeatOfController(controller);
     SeatRide* const record = RideOf(seat);
     if (record == nullptr || !record->active)
     {
@@ -1221,7 +1221,7 @@ bool Tick(void* playerTwoController, void* member, const input::move_state::Engi
     SeatRide&            s    = *record;
     const wchar_t* const name = players::SeatName(seat);
     Ride&                ride = s.ride;
-    if (ride.member != member || ride.playerTwo != playerTwoController)
+    if (ride.member != member || ride.controller != controller)
     {
         End(s, BySeat(seat, L"player 2's member changed", L"player 3's member changed"));
         return false;
@@ -1259,17 +1259,17 @@ bool Tick(void* playerTwoController, void* member, const input::move_state::Engi
         const bool ok = GetOff(ride, true);
         platform::Log(L"wheelie ride: a battle started while {} rode: the game's instant getoff in {}'s scope {}", name,
                       name, ok ? L"ran" : L"COULD NOT RUN");
-        return !PlayerTwoHolds(member, playerTwoController);
+        return !ControllerHolds(member, controller);
     }
     // The field ticker runs the leader's ride body while it is the primary controller's active ride (§14.5): the seat's
     // scooter is ticked the same way, on the frames the ticker runs, while the seat's controller holds it.
     void*      state16 = ReadPointer(ride.vehicle, facts::kCharacterMoveState);
-    const bool holds   = ReadPointer(playerTwoController, kControllerActiveVehicle) == ride.coordinator &&
+    const bool holds   = ReadPointer(controller, kControllerActiveVehicle) == ride.coordinator &&
                        ReadPointer(ride.coordinator, kCoordinatorBody) == ride.vehicle &&
-                       PlayerTwoHolds(ride.vehicle, playerTwoController) && VTableOf(state16) == g_moveVt;
+                       ControllerHolds(ride.vehicle, controller) && VTableOf(state16) == g_moveVt;
     if (!holds)
     {
-        return !PlayerTwoHolds(member, playerTwoController);  // the member's own tick once she is the seat's again
+        return !ControllerHolds(member, controller);  // the member's own tick once she is the seat's again
     }
     switch (own_ride::TickVehicle(ride, state16, engine, 0))
     {

@@ -59,7 +59,7 @@ platform::VTableEntry g_enterSlot;
 // Game thread, by seat: a seat's chocobo's counts at its index; index 0 holds the other chocobos' camera setups.
 struct Counts
 {
-    unsigned tryTwo = 0, tryRefused = 0, enterTwo = 0, enterTwoRefused = 0, enterOthers = 0;
+    unsigned tryScoped = 0, tryRefused = 0, enterScoped = 0, enterRefused = 0, enterOthers = 0;
 };
 std::array<Counts, players::kMaxPlayers> g_counts{};
 
@@ -207,7 +207,7 @@ void TryBegin(void* actor, float dt, void* pawn) noexcept
         TryCall call{seat, original, actor, dt, pawn};
         if (rides::chocobo_ride::RunAsRider(pawn, &RunTry, &call))
         {
-            ++g_counts[seat].tryTwo;
+            ++g_counts[seat].tryScoped;
             try
             {
                 NoteTry(call);
@@ -251,17 +251,17 @@ void Enter(void* executer) noexcept
     }
     const void* chocobo = scopes::leader_scope::ObjectAt(static_cast<const std::byte*>(executer) + kExecuterChocobo);
     const int   seat    = rides::chocobo_ride::SeatRiding(chocobo);  // the seat from the climbing chocobo, or -1
-    const bool  two     = seat >= 1;
+    const bool  further = seat >= 1;
     const void* module  = chocobo != nullptr ? ModuleOf(chocobo) : nullptr;
     const int   state   = StateAt(module, kModuleCurrent);
     const int   pending = StateAt(module, kModulePending);
     EnterCall   call{seat, original, executer};
-    const bool  scoped = two && rides::chocobo_ride::RunAsRider(chocobo, &RunEnter, &call);
+    const bool  scoped = further && rides::chocobo_ride::RunAsRider(chocobo, &RunEnter, &call);
     if (!scoped)
     {
         original(executer);
     }
-    ++(two ? (scoped ? g_counts[seat].enterTwo : g_counts[seat].enterTwoRefused) : g_counts[0].enterOthers);
+    ++(further ? (scoped ? g_counts[seat].enterScoped : g_counts[seat].enterRefused) : g_counts[0].enterOthers);
     try
     {
         // The module is read again: the setup reads the chocobo's handle, it does not replace it [ASSUMPTION; logged].
@@ -270,14 +270,14 @@ void Enter(void* executer) noexcept
                                         L"down)",
                                         after, StateText(state), StateText(pending), StateText(StateAt(after, kModuleCurrent)),
                                         StateText(StateAt(after, kModulePending)));
-        if (two && !scoped)
+        if (further && !scoped)
         {
             platform::Log(L"WARNING: chocobo climb: {}'s chocobo's climb camera setup ran outside {}'s scope (a "
                           L"scope was refused); no climb framing, as the game gives any rider but the leader; {}",
                           players::SeatName(seat), players::SeatName(seat), text);
         }
 #if LSS_DEV
-        else if (two)
+        else if (further)
         {
             platform::LogDebug(L"chocobo climb: {}'s chocobo climbs; the camera setup ran in {}'s scope ({}'s member as "
                                L"the leader: {}); {}",
@@ -313,14 +313,14 @@ void LogSummary() noexcept
     {
         const Counts&        counts = all[seat];
         const wchar_t* const name   = players::SeatName(seat);
-        if (counts.tryTwo + counts.tryRefused + counts.enterTwo + counts.enterTwoRefused + others == 0)
+        if (counts.tryScoped + counts.tryRefused + counts.enterScoped + counts.enterRefused + others == 0)
         {
             continue;
         }
         platform::LogDebug(L"chocobo climb ({} s): {}'s chocobo's start checks in {}'s scope {} (refused {}); "
                            L"climb camera setups: {}'s in scope {} (refused {}), other chocobos' {}",
-                           kSummaryEvery.count(), name, name, counts.tryTwo, counts.tryRefused, name, counts.enterTwo,
-                           counts.enterTwoRefused, others);
+                           kSummaryEvery.count(), name, name, counts.tryScoped, counts.tryRefused, name,
+                           counts.enterScoped, counts.enterRefused, others);
     }
 }
 

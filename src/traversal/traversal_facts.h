@@ -274,7 +274,7 @@ inline constexpr std::uint32_t kHolderOwner   = 0x6D4;
 // leave (keyed by the leaving character) and the validate. The actor's holder is never written for player 2.
 inline constexpr std::uint32_t kHolderSize    = 0x28;
 inline constexpr std::uint32_t kHolderActorAt = 0x20;  // the owning actor (the install registers it with the manager)
-inline constexpr std::size_t   kTwoHolders    = 4;
+inline constexpr std::size_t   kSeatHolders   = 4;
 
 inline constexpr std::uint8_t kInstallBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10};
 // CameraModuleHolder_InstallSharedModule

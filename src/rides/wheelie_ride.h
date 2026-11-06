@@ -56,12 +56,12 @@ void Remove() noexcept;
 void Ask(void* state) noexcept;
 
 /// From the member tick right after the game's tick, inside its scopes: boards the yes recorded for the seat whose
-/// controller `playerTwoController` is.
-void AfterMemberTick(void* playerTwoController, void* member) noexcept;
+/// controller `controller` is.
+void AfterMemberTick(void* controller, void* member) noexcept;
 
-/// From the member's tick while a seat's player plays `member` with `playerTwoController` (the seat's controller: the
+/// From the member's tick while a seat's player plays `member` with `controller` (the seat's controller: the
 /// seat is found from it). True while the scooter's move state was ticked (or is waiting) instead of the member's own.
-bool Tick(void* playerTwoController, void* member, const input::move_state::EngineTicks& engine) noexcept;
+bool Tick(void* controller, void* member, const input::move_state::EngineTicks& engine) noexcept;
 
 /// `seat`'s coordinator has a ride (boarding, riding or getting off).
 bool Riding(int seat) noexcept;

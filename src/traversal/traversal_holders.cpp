@@ -53,36 +53,36 @@ struct MoveLive
 };
 std::array<MoveLive, kMoveCount> g_move;
 
-// Each seat's holders, a pool of kTwoHolders per seat (by seat; index 0, player 1's, unused: player 1 uses the
+// Each seat's holders, a pool of kSeatHolders per seat (by seat; index 0, player 1's, unused: player 1 uses the
 // actor's own). A slot is claimed and released on the game thread; `actor` is published last (release) and read on any
 // thread (acquire), the holder's own bytes are the game's to read and write.
-struct TwoHolder
+struct SeatHolder
 {
     alignas(16) std::byte    bytes[kHolderSize]{};
     std::atomic<const void*> actor{nullptr};
     bool                     loggedActive = false;  // game thread: the last logged state
 };
-using HolderPool = std::array<TwoHolder, kTwoHolders>;
-HolderPool                         g_twoHolders[players::kMaxPlayers];
+using HolderPool = std::array<SeatHolder, kSeatHolders>;
+HolderPool                         g_seatHolders[players::kMaxPlayers];
 platform::EntryRedirect            g_installEntry;
 platform::EntryRedirect            g_getModuleEntry;
 HolderLeaveFn                      g_holderLeave    = nullptr;
 HolderValidateFn                   g_holderValidate = nullptr;
-bool                               g_twoHoldersOn   = false;  // every hook placed (set at install)
+bool                               g_seatHoldersOn  = false;  // every hook placed (set at install)
 thread_local int                   t_beginSeat      = -1;     // inside this seat's move Begin (game thread), else -1
 
 /// Holds t_beginSeat for one Begin.
-struct TwoBegin
+struct SeatBegin
 {
-    explicit TwoBegin(int seat) noexcept { t_beginSeat = seat; }
-    ~TwoBegin() { t_beginSeat = -1; }
-    TwoBegin(const TwoBegin&)            = delete;
-    TwoBegin& operator=(const TwoBegin&) = delete;
+    explicit SeatBegin(int seat) noexcept { t_beginSeat = seat; }
+    ~SeatBegin() { t_beginSeat = -1; }
+    SeatBegin(const SeatBegin&)            = delete;
+    SeatBegin& operator=(const SeatBegin&) = delete;
 };
 
 // Each seat's move whose holder camera the seat installed, for the per-frame rotation gate (read on the anim worker).
-std::atomic<const void*>   g_playerTwoMove[players::kMaxPlayers]{};
-std::atomic<std::uint64_t> g_playerTwoMemberWeak[players::kMaxPlayers]{};
+std::atomic<const void*>   g_seatMove[players::kMaxPlayers]{};
+std::atomic<std::uint64_t> g_seatMemberWeak[players::kMaxPlayers]{};
 
 // The climbing wall each seat's Begin installed its camera on, and the seat's member then (written on the game thread,
 // read by the hip calls on the anim worker).
@@ -120,17 +120,17 @@ bool HeldBy(const void* actor, std::uint64_t weak) noexcept
 }
 
 /// `seat`'s holder for `actor`, or null. Any thread.
-std::byte* TwoHolderOf(int seat, const void* actor) noexcept
+std::byte* SeatHolderOf(int seat, const void* actor) noexcept
 {
     if (actor == nullptr || !players::SeatIndex(seat))
     {
         return nullptr;
     }
-    for (TwoHolder& two : g_twoHolders[seat])
+    for (SeatHolder& holder : g_seatHolders[seat])
     {
-        if (two.actor.load(std::memory_order_acquire) == actor)
+        if (holder.actor.load(std::memory_order_acquire) == actor)
         {
-            return two.bytes;
+            return holder.bytes;
         }
     }
     return nullptr;
@@ -155,28 +155,28 @@ bool HolderNames(const std::byte* holder, std::uint64_t weak) noexcept
 }
 
 /// `seat`'s member installed a camera on `actor`: on the seat's own holder, or on the actor's (the fallback).
-bool HeldByTwo(int seat, const void* actor, std::uint64_t weak) noexcept
+bool HeldBySeat(int seat, const void* actor, std::uint64_t weak) noexcept
 {
-    return HolderNames(TwoHolderOf(seat, actor), weak) || HeldBy(actor, weak);
+    return HolderNames(SeatHolderOf(seat, actor), weak) || HeldBy(actor, weak);
 }
 
 /// Claims `seat`'s holder for `actor` (game thread): the existing one, or a free slot of the seat's pool set up as the
 /// game's BeginPlay sets the actor's (zeroed, the owning actor at +0x20). Null when all are in use.
-std::byte* ClaimTwoHolder(int seat, void* actor) noexcept
+std::byte* ClaimSeatHolder(int seat, void* actor) noexcept
 {
-    if (std::byte* held = TwoHolderOf(seat, actor))
+    if (std::byte* held = SeatHolderOf(seat, actor))
     {
         return held;
     }
-    for (TwoHolder& two : g_twoHolders[seat])
+    for (SeatHolder& holder : g_seatHolders[seat])
     {
-        if (two.actor.load(std::memory_order_relaxed) == nullptr)
+        if (holder.actor.load(std::memory_order_relaxed) == nullptr)
         {
-            std::memset(two.bytes, 0, sizeof(two.bytes));
-            std::memcpy(two.bytes + kHolderActorAt, &actor, sizeof(actor));
-            two.loggedActive = false;
-            two.actor.store(actor, std::memory_order_release);
-            return two.bytes;
+            std::memset(holder.bytes, 0, sizeof(holder.bytes));
+            std::memcpy(holder.bytes + kHolderActorAt, &actor, sizeof(actor));
+            holder.loggedActive = false;
+            holder.actor.store(actor, std::memory_order_release);
+            return holder.bytes;
         }
     }
     return nullptr;
@@ -185,22 +185,22 @@ std::byte* ClaimTwoHolder(int seat, void* actor) noexcept
 /// Releases a holder slot of `seat`'s (game thread), leaving its camera first with the game's forced leave (as EndPlay
 /// leaves the actor's). The leave reaches the module only while its shared count is above zero, so it is safe after
 /// the seat's camera manager is gone.
-void ReleaseTwoHolder(int seat, TwoHolder& two, const wchar_t* why) noexcept
+void ReleaseSeatHolder(int seat, SeatHolder& holder, const wchar_t* why) noexcept
 {
-    const void* actor = two.actor.load(std::memory_order_relaxed);
+    const void* actor = holder.actor.load(std::memory_order_relaxed);
     if (actor == nullptr)
     {
         return;
     }
-    const bool active = HolderActive(two.bytes);
+    const bool active = HolderActive(holder.bytes);
     if (active && g_holderLeave != nullptr)
     {
-        g_holderLeave(two.bytes, nullptr, 1);
+        g_holderLeave(holder.bytes, nullptr, 1);
     }
-    two.actor.store(nullptr, std::memory_order_release);
+    holder.actor.store(nullptr, std::memory_order_release);
     // The seat's move whose camera this was: the rotation gate stops naming it (its move may be freed and reused).
-    g_playerTwoMove[seat].store(nullptr, std::memory_order_release);
-    g_playerTwoMemberWeak[seat].store(0, std::memory_order_relaxed);
+    g_seatMove[seat].store(nullptr, std::memory_order_release);
+    g_seatMemberWeak[seat].store(0, std::memory_order_relaxed);
     platform::LogDebug(L"traversal camera: {}'s own holder for actor 0x{:X} released ({}){}", players::SeatName(seat),
                        reinterpret_cast<std::uintptr_t>(actor), why, active ? L"; its camera left first" : L"");
 }
@@ -215,8 +215,8 @@ std::uintptr_t HolderInstall(void* holder, void* module, void* args) noexcept
     {
         return original(holder, module, args);
     }
-    std::byte* two = TwoHolderOf(seat, static_cast<const std::byte*>(holder) - kHolder);
-    return original(two != nullptr ? static_cast<void*>(two) : holder, module, args);
+    std::byte* own = SeatHolderOf(seat, static_cast<const std::byte*>(holder) - kHolder);
+    return original(own != nullptr ? static_cast<void*>(own) : holder, module, args);
 }
 
 /// The holder's module getter (game thread in the installers, anim worker in the per-frame setters). Inside a seat's
@@ -230,9 +230,9 @@ void* HolderModule(void* holder) noexcept
     {
         return original(holder);
     }
-    if (std::byte* two = TwoHolderOf(seat, static_cast<const std::byte*>(holder) - kHolder))
+    if (std::byte* own = SeatHolderOf(seat, static_cast<const std::byte*>(holder) - kHolder))
     {
-        return original(two);
+        return original(own);
     }
     return HolderNames(static_cast<const std::byte*>(holder), players::generation::MemberWeakOf(seat))
                ? original(holder)
@@ -250,9 +250,9 @@ std::uintptr_t HolderLeave(void* actor, void* character) noexcept
     {
         if (players::generation::Active(seat) && character == players::generation::MemberOf(seat))
         {
-            if (std::byte* two = TwoHolderOf(seat, actor))
+            if (std::byte* own = SeatHolderOf(seat, actor))
             {
-                g_holderLeave(two, character, 0);
+                g_holderLeave(own, character, 0);
             }
             break;
         }
@@ -269,11 +269,11 @@ std::uintptr_t HolderEndPlay(void* actor, std::uintptr_t reason) noexcept
     {
         for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)  // only a built seat claims a holder
         {
-            for (TwoHolder& two : g_twoHolders[seat])
+            for (SeatHolder& holder : g_seatHolders[seat])
             {
-                if (two.actor.load(std::memory_order_relaxed) == actor)
+                if (holder.actor.load(std::memory_order_relaxed) == actor)
                 {
-                    ReleaseTwoHolder(seat, two, L"the actor ends play");
+                    ReleaseSeatHolder(seat, holder, L"the actor ends play");
                 }
             }
         }
@@ -313,24 +313,24 @@ std::uintptr_t MoveBegin(void* move) noexcept
     {
         // Anyone else's Begin: with the seats' own holders it never touches a seat's camera. Without (the fallback, on
         // the actor's holder), if it takes over a holder a seat's camera held, that seat's rotation stops with it.
-        if (g_twoHoldersOn)
+        if (g_seatHoldersOn)
         {
             return original(move);
         }
         std::uint64_t weaks[players::kMaxPlayers]{};
-        bool          heldByTwo[players::kMaxPlayers]{};
+        bool          heldBySeat[players::kMaxPlayers]{};
         for (int each = 1; each <= players::kSeatsBuilt; ++each)
         {
-            void* member    = players::generation::Active(each) ? players::generation::MemberOf(each) : nullptr;
-            weaks[each]     = member != nullptr ? scopes::leader_scope::WeakOf(member) : 0;
-            heldByTwo[each] = HeldBy(actor, weaks[each]);
+            void* member     = players::generation::Active(each) ? players::generation::MemberOf(each) : nullptr;
+            weaks[each]      = member != nullptr ? scopes::leader_scope::WeakOf(member) : 0;
+            heldBySeat[each] = HeldBy(actor, weaks[each]);
         }
         const auto result = original(move);
         for (int each = 1; each <= players::kSeatsBuilt; ++each)
         {
-            if (heldByTwo[each] && !HeldBy(actor, weaks[each]))
+            if (heldBySeat[each] && !HeldBy(actor, weaks[each]))
             {
-                g_playerTwoMove[each].store(nullptr, std::memory_order_release);
+                g_seatMove[each].store(nullptr, std::memory_order_release);
                 try
                 {
                     platform::LogDebug(L"traversal camera: another character's {} on {} took the camera holder from {}",
@@ -349,8 +349,8 @@ std::uintptr_t MoveBegin(void* move) noexcept
     // The seat's new move: the hip calls follow only a climbing wall this Begin installs the seat's camera on.
     g_climbActor[seat].store(nullptr, std::memory_order_release);
     // The seat's own holder for this actor; without one (every slot in use, or the hooks are not placed), the actor's.
-    const std::byte* own = g_twoHoldersOn && actor != nullptr ? ClaimTwoHolder(seat, actor) : nullptr;
-    if (g_twoHoldersOn && actor != nullptr && own == nullptr)
+    const std::byte* own = g_seatHoldersOn && actor != nullptr ? ClaimSeatHolder(seat, actor) : nullptr;
+    if (g_seatHoldersOn && actor != nullptr && own == nullptr)
     {
         try
         {
@@ -381,7 +381,7 @@ std::uintptr_t MoveBegin(void* move) noexcept
     bool       scoped = false;
     {
         const Inside                             inside;
-        const TwoBegin                           twoBegin(seat);
+        const SeatBegin                          seatBegin(seat);
         std::optional<scopes::leader_scope::LeaderScope> leader;
         if (rail)
         {
@@ -393,11 +393,11 @@ std::uintptr_t MoveBegin(void* move) noexcept
             call.result = original(move);
         }
     }
-    const bool installed = HeldByTwo(seat, actor, memberWeak);
+    const bool installed = HeldBySeat(seat, actor, memberWeak);
     if (installed)
     {
-        g_playerTwoMemberWeak[seat].store(memberWeak, std::memory_order_relaxed);
-        g_playerTwoMove[seat].store(move, std::memory_order_release);
+        g_seatMemberWeak[seat].store(memberWeak, std::memory_order_relaxed);
+        g_seatMove[seat].store(move, std::memory_order_release);
         if (Index == kClimbingWall)
         {
             g_climbMember[seat].store(member, std::memory_order_relaxed);
@@ -435,9 +435,9 @@ std::uint8_t MoveGateCall(const void* move) noexcept
     }
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        if (move == g_playerTwoMove[seat].load(std::memory_order_acquire))
+        if (move == g_seatMove[seat].load(std::memory_order_acquire))
         {
-            const auto weak = g_playerTwoMemberWeak[seat].load(std::memory_order_relaxed);
+            const auto weak = g_seatMemberWeak[seat].load(std::memory_order_relaxed);
             return weak != 0 && ReadField<std::uint64_t>(move, kMoveCharacter) == weak ? std::uint8_t{1} : answer;
         }
     }
@@ -477,7 +477,7 @@ std::uintptr_t ValidateHolder(void* actor) noexcept
         SeatCheck& check = checks[seat];
         check.member     = players::generation::MemberOf(seat);
         check.weak       = check.member != nullptr ? scopes::leader_scope::WeakOf(check.member) : 0;
-        check.own        = TwoHolderOf(seat, actor);
+        check.own        = SeatHolderOf(seat, actor);
         check.ownOn      = HolderActive(check.own);
         check.wall       = HeldBy(actor, check.weak);
         wallSeat         = check.wall && wallSeat < 0 ? seat : wallSeat;
@@ -570,14 +570,14 @@ std::uint8_t HipTrackCall(const void* character) noexcept
         return answer;
     }
     const void* actor = g_climbActor[seat].load(std::memory_order_acquire);
-    const auto  weak  = g_playerTwoMemberWeak[seat].load(std::memory_order_relaxed);
+    const auto  weak  = g_seatMemberWeak[seat].load(std::memory_order_relaxed);
     struct
     {
         std::uint8_t  active;
         std::uint8_t  pad[3];
         std::uint32_t ownerLow, ownerHigh;  // the installer's FWeakObjectPtr at +0x4 (unaligned for a u64)
     } holder{};
-    const std::byte* own  = TwoHolderOf(seat, actor);  // the seat's own holder, else the wall's
+    const std::byte* own  = SeatHolderOf(seat, actor);  // the seat's own holder, else the wall's
     const bool       held = actor != nullptr && weak != 0 && players::generation::Active(seat) &&
                       platform::CopyGuarded(&holder, own != nullptr ? own : static_cast<const std::byte*>(actor) + kHolder,
                                             sizeof(holder)) &&
@@ -656,7 +656,7 @@ bool PlaceHipCalls(const platform::GameImage& image, std::uintptr_t core, std::i
 
 /// Player 2's own holders: the two entry redirects and the game's leave and validate, on only with every move class's
 /// slots and climb_context's Ticks placed (without the Tick context the module getter cannot tell player 2's climb).
-bool PlaceTwoHolders(const platform::GameImage& image) noexcept
+bool PlaceSeatHolders(const platform::GameImage& image) noexcept
 {
     bool slots = input::climb_context::TicksPlaced();
     for (const MoveLive& live : g_move)
@@ -709,8 +709,8 @@ Placement Place(const platform::GameImage& image)
     const auto core = platform::FindFunction(image, facts::kIsPlayerCore);
     out.hip         = core && g_move[kClimbingWall].beginPlaced &&
               PlaceHipCalls(image, *core, std::make_index_sequence<std::size(kHipCalls)>{});
-    g_twoHoldersOn  = PlaceTwoHolders(image);
-    out.twoHolders  = g_twoHoldersOn;
+    g_seatHoldersOn = PlaceSeatHolders(image);
+    out.seatHolders = g_seatHoldersOn;
     return out;
 }
 
@@ -719,12 +719,12 @@ bool Remove() noexcept
     bool kept = false;
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)  // only a built seat claims a holder
     {
-        for (TwoHolder& two : g_twoHolders[seat])
+        for (SeatHolder& holder : g_seatHolders[seat])
         {
-            ReleaseTwoHolder(seat, two, L"the mod is removed");
+            ReleaseSeatHolder(seat, holder, L"the mod is removed");
         }
     }
-    g_twoHoldersOn = false;
+    g_seatHoldersOn = false;
     kept |= g_getModuleEntry.IsInstalled() && !g_getModuleEntry.Restore();
     kept |= g_installEntry.IsInstalled() && !g_installEntry.Restore();
     for (MoveLive& live : g_move)
@@ -756,24 +756,25 @@ void Tick(int seat, bool active) noexcept
     if (!active)
     {
         g_climbActor[seat].store(nullptr, std::memory_order_release);
-        for (TwoHolder& two : g_twoHolders[seat])
+        for (SeatHolder& holder : g_seatHolders[seat])
         {
-            ReleaseTwoHolder(seat, two, seat == players::kFirstFurtherSeat ? L"player 2 is out" : L"player 3 is out");
+            ReleaseSeatHolder(seat, holder,
+                              seat == players::kFirstFurtherSeat ? L"player 2 is out" : L"player 3 is out");
         }
         return;
     }
     // The seat's holders: a line when one's camera goes on or off; an idle one is released (a new Begin claims again).
-    for (TwoHolder& two : g_twoHolders[seat])
+    for (SeatHolder& holder : g_seatHolders[seat])
     {
-        const void* actor = two.actor.load(std::memory_order_relaxed);
+        const void* actor = holder.actor.load(std::memory_order_relaxed);
         if (actor == nullptr)
         {
             continue;
         }
-        const bool active = HolderActive(two.bytes);
-        if (active != two.loggedActive)
+        const bool active = HolderActive(holder.bytes);
+        if (active != holder.loggedActive)
         {
-            two.loggedActive = active;
+            holder.loggedActive = active;
             try
             {
                 const wchar_t* const name = players::SeatName(seat);
@@ -789,7 +790,7 @@ void Tick(int seat, bool active) noexcept
         }
         if (!active)
         {
-            ReleaseTwoHolder(seat, two, L"idle");
+            ReleaseSeatHolder(seat, holder, L"idle");
         }
     }
 }

@@ -100,9 +100,9 @@ namespace holders {
 /// What the move classes' placement found, for traversal_camera.cpp's lines.
 struct Placement
 {
-    std::wstring classes;             // "climbing wall yes, monkey bars yes, ..."
-    bool         twoHolders = false;  // the seats' own holders are on (every hook placed)
-    bool         hip        = false;  // the climbing wall's hip calls answer for each seat
+    std::wstring classes;              // "climbing wall yes, monkey bars yes, ..."
+    bool         seatHolders = false;  // the seats' own holders are on (every hook placed)
+    bool         hip         = false;  // the climbing wall's hip calls answer for each seat
 };
 
 /// Replaces the move classes' slots, the hip calls and the seats' holder redirects (each checked).

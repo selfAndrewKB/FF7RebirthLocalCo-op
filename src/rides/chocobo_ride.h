@@ -38,10 +38,10 @@ namespace lss::rides::chocobo_ride {
 /// Finds the game's functions; logged either way. False if a check failed (player 2 stays a passenger then).
 bool Install(const platform::GameImage& image) noexcept;
 
-/// From the member's tick while a seat's player plays `member` with `playerTwoController` (the seat's controller: the
+/// From the member's tick while a seat's player plays `member` with `controller` (the seat's controller: the
 /// seat is found from it), with the game's move-state ticks this frame. True while the seat's player drives their
 /// chocobo: the member's own tick is skipped then.
-bool Tick(void* playerTwoController, void* member, const input::move_state::EngineTicks& engine) noexcept;
+bool Tick(void* controller, void* member, const input::move_state::EngineTicks& engine) noexcept;
 
 /// `seat`'s player drives their chocobo now.
 bool Driving(int seat) noexcept;
