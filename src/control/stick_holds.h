@@ -2,7 +2,7 @@
 
 // The control runner's stick holds on the running mod: a scripted hold is a per-pad stick override
 // (input/pad_sticks.h) on the held player's controller id, so it takes a real pad's path. Needs per-pad
-// sticks on and a seat in (the override is per pad only then): for player 1, player 2; for player 2 or 3,
+// sticks on and a seat in (the override is per pad only then): for player 1, any seat's player; for player 2 or 3,
 // that player. Game thread only.
 
 #include "control/runner.h"
@@ -25,7 +25,7 @@ public:
     void    ReleaseStick(std::int32_t player) override;
     bool    Held(std::int32_t player) const override;
 
-    /// Clears every hold made during a join that has since ended (a leave by key, a map load), so a later player 2
+    /// Clears every hold made during a join that has since ended (a leave by key, a map load), so a later player
     /// on the same pad never inherits it. Once per tick, after the session's tick and before the world's input runs.
     void DropEndedHolds() noexcept;
 
@@ -36,7 +36,8 @@ private:
         ids.fill(-1);
         return ids;
     }();
-    std::array<std::uint32_t, kHoldPlayers> heldJoins_{};      // per player: the join its hold was made in
+    std::array<int, kHoldPlayers>           heldSeats_{};      // per player: the seat whose join its hold lasts for
+    std::array<std::uint32_t, kHoldPlayers> heldJoins_{};      // per player: that seat's join the hold was made in
 };
 
 }  // namespace lss::control

@@ -267,7 +267,8 @@ void Seat::Settle() noexcept
         phase_  = Phase::Playing;
         return;
     }
-    handover_watch::PartyOrder(L"choosing player 2's or 3's member", nullptr);
+    handover_watch::PartyOrder(players::BySeat(seat_, L"choosing player 2's member", L"choosing player 3's member"), seat_,
+                               nullptr);
     const auto choice = party_member::ChooseSlot(seat_, playerOneController_);
     member_           = choice.member;
     if (choice.wait == party_member::SlotWait::NoSlot)
@@ -530,7 +531,7 @@ void Seat::OnStatusChanged(std::uint8_t playerType, std::uint8_t before, std::ui
         return;
     }
     EventLine(std::format(L"the game changed party member type {}'s status {} -> {}", playerType, before, after));
-    handover_watch::PartyOrder(L"after a party status change", MemberHeld() ? member_ : nullptr);
+    handover_watch::PartyOrder(L"after a party status change", seat_, MemberHeld() ? member_ : nullptr);
     // Not the slot: a squad change commits its statuses one by one and orders the list afterwards
     // (the chapter 7 log), so the order is final only at the party apply.
     CheckAfterPartyChange(false);
@@ -545,7 +546,7 @@ void Seat::OnPartyApplied() noexcept
         return;
     }
     EventLine(L"the game applied the party data (its party stream finished)");
-    handover_watch::PartyOrder(L"after the game's party apply", MemberHeld() ? member_ : nullptr);
+    handover_watch::PartyOrder(L"after the game's party apply", seat_, MemberHeld() ? member_ : nullptr);
     CheckAfterPartyChange(true);
 }
 
@@ -1390,8 +1391,7 @@ void RegisterCommands(Session& session)
     using control::Value;
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        RegisterSeatCommands(session, seat, seat == players::kFirstSeat ? L"p2" : L"p3",
-                             seat == players::kFirstSeat ? L"join" : L"p3.join");
+        RegisterSeatCommands(session, seat, players::BySeat(seat, L"p2", L"p3"), players::BySeat(seat, L"join", L"p3.join"));
     }
     Register({.name = L"p2.log-status", .help = L"write every other player's status lines to the log",
               .set  = [&session](const Value&) {

@@ -18,6 +18,7 @@
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "scopes/leader_scope.h"
+#include "session/party_lease.h"
 #include "session/party_member.h"
 
 #include <algorithm>
@@ -167,15 +168,15 @@ struct Held
     Clock::time_point lastSpeed{};
     Clock::time_point lastSpeedLine{};
     int               speedLinePercent = -1;
-    float             two[3]{};
-    float             one[3]{};
+    float             at[3]{};   // the held member's place at the last speed read
+    float             one[3]{};  // player 1's character's
     bool              placed = false;
 };
 
 Order                                      g_lastOrder{};
 std::array<Watched, facts::kNoPlayerType>  g_members{};
 std::array<Pending, kPending>              g_pending{};
-Held                                       g_held{};
+std::array<Held, players::kMaxPlayers>     g_held{};  // by seat (index 0 unused)
 platform::Every g_watch{kWatchEvery};
 std::int32_t                               g_rootOffset = -1;
 
@@ -240,32 +241,30 @@ Order ReadOrder() noexcept
     return order;
 }
 
-/// The 2nd slot from the field leader, stepping past player 1's character like the game's cycle
-/// (RE-p2-party-order.md §5.1, §5.2). -1 if none.
-std::int32_t SlotRule(const Order& order, std::optional<std::uint8_t> playerOnes, std::int32_t& anchor) noexcept
+/// The field leader's ordinal in the order (0 if absent): the row the seats' slots are counted from.
+std::int32_t AnchorOf(const Order& order) noexcept
 {
-    anchor = 0;
     for (std::int32_t ordinal = 0; ordinal < order.count; ++ordinal)
     {
         if (order.types[static_cast<std::size_t>(ordinal)] == order.fieldLeader)
         {
-            anchor = ordinal;
-            break;
+            return ordinal;
         }
     }
+    return 0;
+}
+
+/// `seat`'s slot of the order: the seat-th row after the field leader's, stepping past player 1's character like
+/// the game's cycle (RE-p2-party-order.md §5.1, §5.2; the session's rule without its checks of the row). -1 if none.
+std::int32_t SlotRule(const Order& order, std::optional<std::uint8_t> playerOnes, int seat, std::int32_t anchor) noexcept
+{
     if (order.count < 2)
     {
         return -1;
     }
-    for (std::int32_t step = 1; step <= order.count; ++step)
-    {
-        const std::int32_t slot = (anchor + step) % order.count;
-        if (!playerOnes || order.types[static_cast<std::size_t>(slot)] != *playerOnes)
-        {
-            return slot;
-        }
-    }
-    return -1;
+    return SeatSlotOrdinal(anchor, order.count, seat, [&order, &playerOnes](std::int32_t slot) {
+        return playerOnes && order.types[static_cast<std::size_t>(slot)] == *playerOnes;
+    });
 }
 
 std::wstring OrderText(const Order& order)
@@ -284,23 +283,33 @@ std::wstring TypeText(std::optional<std::uint8_t> type)
     return type ? std::format(L"{} {}", *type, TypeName(*type)) : std::wstring(L"none");
 }
 
-void LogOrder(const wchar_t* why, const Order& order, const void* playerTwoMember)
+/// The order's line. For every seat whose player is in: the member the slot rule gives it, beside the member it
+/// holds. `seat` (0: none) and `member`: one seat's member as the caller holds it, in place of the record's.
+void LogOrder(const wchar_t* why, const Order& order, int seat, const void* member)
 {
     const auto playerOnes = party_member::PlayerTypeOf(ReadPointer(players::generation::PlayerOneController(), facts::kControllerPawn));
-    const auto playerTwos = party_member::PlayerTypeOf(playerTwoMember);
-    std::int32_t anchor = 0;
-    const std::int32_t slot = SlotRule(order, playerOnes, anchor);
-    const std::optional<std::uint8_t> ruled =
-        slot < 0 ? std::nullopt : std::optional<std::uint8_t>(order.types[static_cast<std::size_t>(slot)]);
+    const std::int32_t anchor = AnchorOf(order);
+    std::wstring       seats;
+    for (int s = 1; s < players::kMaxPlayers; ++s)
+    {
+        if (s != seat && !players::generation::Active(s))
+        {
+            continue;
+        }
+        const void* const  held     = s == seat ? member : players::generation::MemberOf(s);
+        const auto         heldType = party_member::PlayerTypeOf(held);
+        const std::int32_t slot     = SlotRule(order, playerOnes, s, anchor);
+        const std::optional<std::uint8_t> ruled =
+            slot < 0 ? std::nullopt : std::optional<std::uint8_t>(order.types[static_cast<std::size_t>(slot)]);
+        seats += std::format(L"; the slot rule gives {} {}{}, who holds {}{}", players::SeatName(s),
+                             slot < 0 ? std::wstring(L"nobody") : std::format(L"ordinal {} = ", slot),
+                             slot < 0 ? std::wstring() : TypeText(ruled), TypeText(heldType),
+                             held == nullptr ? L"" : ruled == heldType ? L" (same)" : L" (DIFFERENT)");
+    }
     // A party order change is rare and real (a reorder, a join, a hand-over): Info, not the watch's Debug lines.
-    platform::Log(L"handover: party order ({}): {}, field leader {}, default battle leader {}, player 1 plays {}; the "
-                  L"2nd-slot rule (anchor {}) gives {}{}; player 2 holds {}{}",
-                  why, OrderText(order), order.fieldLeader, order.defaultLeader, TypeText(playerOnes), anchor,
-                  slot < 0 ? std::wstring(L"nobody") : std::format(L"ordinal {} = ", slot),
-                  slot < 0 ? std::wstring() : TypeText(ruled), TypeText(playerTwos),
-                  playerTwoMember == nullptr ? L""
-                  : ruled == playerTwos      ? L" (same)"
-                                             : L" (DIFFERENT)");
+    platform::Log(L"handover: party order ({}): {}, field leader {} (ordinal {}), default battle leader {}, player 1 plays "
+                  L"{}{}",
+                  why, OrderText(order), order.fieldLeader, anchor, order.defaultLeader, TypeText(playerOnes), seats);
 }
 
 // ---- one member --------------------------------------------------------------------------------
@@ -534,9 +543,9 @@ void LogSnapshot(const wchar_t* when, const void* character)
 
 std::wstring Whose(const void* character)
 {
-    if (character != nullptr && character == players::generation::Member())
+    if (const int seat = players::generation::SeatOfMember(character); players::SeatIndex(seat))
     {
-        return L" (player 2's)";
+        return std::format(L" ({}'s)", players::SeatName(seat));
     }
     if (character != nullptr && character == ReadPointer(players::generation::PlayerOneController(), facts::kControllerPawn))
     {
@@ -599,62 +608,63 @@ void WatchMember(std::uint8_t type, const Clock::time_point now)
     std::copy(std::begin(at), std::end(at), seen.lastStillAt);
 }
 
-/// Player 2's member while held: its AI and modifiers on change, and its speed beside player 1's.
-void WatchHeld(const Clock::time_point now)
+/// `seat`'s member while held: its AI and modifiers on change, and its speed beside player 1's.
+void WatchHeld(int seat, const Clock::time_point now)
 {
-    const void* character = players::generation::Member();
-    if (character != g_held.character)
+    Held&       held      = g_held[static_cast<std::size_t>(seat)];
+    const void* character = players::generation::Active(seat) ? players::generation::MemberOf(seat) : nullptr;
+    if (character != held.character)
     {
-        g_held           = {};
-        g_held.character = character;
+        held           = {};
+        held.character = character;
     }
     if (character == nullptr)
     {
         return;
     }
     const void* anim = AnimOf(character);
-    if (now - g_held.lastCheck >= kHeldEvery)
+    if (now - held.lastCheck >= kHeldEvery)
     {
-        g_held.lastCheck  = now;
+        held.lastCheck    = now;
         const Ai ai       = ReadAi(character);
         const int root    = anim == nullptr ? -1 : Percent(ReadField<float>(anim, kAnimRootMotionScale));
         const int rotation = anim == nullptr ? -1 : Percent(ReadField<float>(anim, kAnimRotationScale));
-        if (ai.state != g_held.ai.state || ai.brain != g_held.ai.brain || ai.pause != g_held.ai.pause ||
-            root != g_held.rootPercent || rotation != g_held.rotationPercent)
+        if (ai.state != held.ai.state || ai.brain != held.ai.brain || ai.pause != held.ai.pause ||
+            root != held.rootPercent || rotation != held.rotationPercent)
         {
-            LogSnapshot(L"player 2's member changed while held", character);
-            g_held.ai              = ai;
-            g_held.rootPercent     = root;
-            g_held.rotationPercent = rotation;
+            LogSnapshot(players::BySeat(seat, L"player 2's member changed while held", L"player 3's member changed while held"),
+                        character);
+            held.ai              = ai;
+            held.rootPercent     = root;
+            held.rotationPercent = rotation;
         }
     }
-    if (now - g_held.lastSpeed < kSpeedEvery)
+    if (now - held.lastSpeed < kSpeedEvery)
     {
         return;
     }
-    float two[3]{}, one[3]{};
-    const bool placed = LocationOf(character, two) &&
+    float at[3]{}, one[3]{};
+    const bool placed = LocationOf(character, at) &&
                         LocationOf(ReadPointer(players::generation::PlayerOneController(), facts::kControllerPawn), one);
-    if (placed && g_held.placed)
+    if (placed && held.placed)
     {
-        const float seconds  = std::chrono::duration<float>(now - g_held.lastSpeed).count();
-        const float twoSpeed = Apart(two, g_held.two) / seconds;
-        const float oneSpeed = Apart(one, g_held.one) / seconds;
-        const int   root     = anim == nullptr ? -1 : Percent(ReadField<float>(anim, kAnimRootMotionScale));
-        if (twoSpeed >= kMovingCmPerSecond &&
-            (now - g_held.lastSpeedLine >= kSpeedLineEvery || root != g_held.speedLinePercent))
+        const float seconds   = std::chrono::duration<float>(now - held.lastSpeed).count();
+        const float heldSpeed = Apart(at, held.at) / seconds;
+        const float oneSpeed  = Apart(one, held.one) / seconds;
+        const int   root      = anim == nullptr ? -1 : Percent(ReadField<float>(anim, kAnimRootMotionScale));
+        if (heldSpeed >= kMovingCmPerSecond && (now - held.lastSpeedLine >= kSpeedLineEvery || root != held.speedLinePercent))
         {
-            g_held.lastSpeedLine    = now;
-            g_held.speedLinePercent = root;
-            Line(L"speed: player 2's {} {:.0f} cm/s, player 1's {:.0f} cm/s; player 2's root-motion scale {}",
-                 NameOf(character), twoSpeed, oneSpeed,
+            held.lastSpeedLine    = now;
+            held.speedLinePercent = root;
+            Line(L"speed: {}'s {} {:.0f} cm/s, player 1's {:.0f} cm/s; the member's root-motion scale {}",
+                 players::SeatName(seat), NameOf(character), heldSpeed, oneSpeed,
                  root < 0 ? std::wstring(L"unread") : std::format(L"{:.2f}", root / 100.0f));
         }
     }
-    g_held.lastSpeed = now;
-    g_held.placed    = placed;
-    std::copy(std::begin(two), std::end(two), g_held.two);
-    std::copy(std::begin(one), std::end(one), g_held.one);
+    held.lastSpeed = now;
+    held.placed    = placed;
+    std::copy(std::begin(at), std::end(at), held.at);
+    std::copy(std::begin(one), std::end(one), held.one);
 }
 
 void RunPending(const Clock::time_point now)
@@ -694,12 +704,12 @@ bool Install(const platform::GameImage& image) noexcept
     found      = find(facts::kDefaultBattleLeaderType, g_fn.defaultLeader) && found;
     found      = find(facts::kCharacterByPlayerType, g_fn.characterByType) && found;
     g_installed = found;
-    platform::Log(L"handover watch: {}", found ? L"logging the party order, the members' AI states and player 2's hand-overs (read-only)"
+    platform::Log(L"handover watch: {}", found ? L"logging the party order, the members' AI states and players 2 and 3's hand-overs (read-only)"
                                                : L"UNAVAILABLE (a check failed); the party order and hand-overs are not logged");
     return found;
 }
 
-void PartyOrder(const wchar_t* why, const void* playerTwoMember) noexcept
+void PartyOrder(const wchar_t* why, int seat, const void* member) noexcept
 {
     if (!g_installed || !party_member::GameReady())
     {
@@ -708,7 +718,7 @@ void PartyOrder(const wchar_t* why, const void* playerTwoMember) noexcept
     try
     {
         g_lastOrder = ReadOrder();
-        LogOrder(why, g_lastOrder, playerTwoMember);
+        LogOrder(why, g_lastOrder, seat, member);
     }
     catch (...)
     {
@@ -744,7 +754,7 @@ void Tick() noexcept
     {
         return;
     }
-    if (!players::generation::Active() || !party_member::GameReady())
+    if (!players::generation::AnyActive() || !party_member::GameReady())
     {
         g_members = {};
         g_held    = {};
@@ -764,7 +774,10 @@ void Tick() noexcept
         if (debug)
         {
             RunPending(now);
-            WatchHeld(now);
+            for (int seat = 1; seat < players::kMaxPlayers; ++seat)
+            {
+                WatchHeld(seat, now);
+            }
         }
         if (!g_watch.Due(now))
         {
@@ -774,7 +787,7 @@ void Tick() noexcept
         if (order != g_lastOrder)
         {
             g_lastOrder = order;
-            LogOrder(L"the watch saw it change", order, players::generation::Member());
+            LogOrder(L"the watch saw it change", order, 0, nullptr);
         }
         for (std::int32_t ordinal = 0; debug && ordinal < order.count; ++ordinal)
         {
