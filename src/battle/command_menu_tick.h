@@ -1,36 +1,36 @@
 #pragma once
 
-// Player 2's command controller ticked at the game's own spot, and player 2's battle actions driven
+// Each further player's command controller ticked at the game's own spot, and that player's battle actions driven
 // through it (RE-p2-command-menu-tick.md §13, pass S-CMD3; RE-p2-command-menu.md §5.1).
 //
 // The game ticks its one command controller once per frame, from the game mode's phase-0 global tick
 // (call 0x140C92978). That call is redirected: the game's controller ticks as before, then, in
-// battle, player 2's controller (battle/command_menu.h) ticks inside player 2's scopes: its
+// battle, each seat's controller (battle/command_menu.h) ticks inside that seat's scopes: its
 // focus context and the UI system's controller slot, the primary controller, the party leader
-// (weak pointer and type) answering player 2's member, player 2's target fields, and pad 2's sticks
+// (weak pointer and type) answering the seat's member, the seat's target fields, and the seat's pad's sticks
 // and buttons. The controller's own sub-ticks then call the game's per-character attack, guard and
-// dodge functions on player 2's member, so player 2's Attack, Unique, Guard and Dodge are written
-// into its request array from pad 2 (levels, as the game's input handler and up route leave them).
-// This is the only path for player 2's actions; if it cannot run, the log says why.
+// dodge functions on the seat's member, so the seat's Attack, Unique, Guard and Dodge are written
+// into its request array from the seat's pad (levels, as the game's input handler and up route leave them).
+// This is the only path for a further player's actions; if it cannot run, the log says why.
 //
 // What a second tick would change for player 1 is handled:
 //   - the world slow (slot 0, written by every tick): either menu slows the world (policy A, the
 //     smaller of the two values is written);
-//   - the per-type command snapshot: player 2's pass does not write it (its one reader cancels a
-//     pending command on the game's controller); the key guide is player 2's own inside the scope;
-//   - the leader-switch requests: cleared before each tick (a written exception: player 2's d-pad
+//   - the per-type command snapshot: a seat's pass does not write it (its one reader cancels a
+//     pending command on the game's controller); the key guide is the seat's own inside the scope;
+//   - the leader-switch requests: cleared before each tick (a written exception: a further player's d-pad
 //     never switches player 1's leader);
 //   - the battle HUD mode, battle input and party-list input follow player 1's through the game's
-//     own setters on player 2's controller, never the global ones;
-//   - the command rules are turned around for the pass: player 2 may not command player 1's leader.
-// Pad 2's presses reach player 2's menu in battle; a release follows its press (the capture map's rule).
+//     own setters on the seat's controller, never the global ones;
+//   - the command rules are turned around for the pass: a further player may not command player 1's leader.
+// A seat's pad's presses reach that seat's menu in battle; a release follows its press (the capture map's rule).
 // Game thread only.
 //
-// Units: this file's tick, mirrors and shields (command_menu_tick.cpp); pad 2's presses and releases
+// Units: this file's tick, mirrors and shields (command_menu_tick.cpp); the further pads' presses and releases
 // (menu_input_route); the tactical tint and the wait sound (menu_tint); what they share, the pass in flight
 // above all (command_menu_tick_shared.h).
 //
-// Per seat: written for player 2 above, every built seat's controller ticks after the game's, in seat order, each
+// Per seat: every built seat's controller ticks after the game's, in seat order, each
 // pass in the seat's own scopes, closed before the next seat's. The pass in flight names its kind and its seat; the
 // world slow written in a seat's pass is the smallest of this frame's values so far (player 1's and the earlier
 // seats'), so the last pass leaves the minimum over every menu. Every battle pass (this tick, the press route, the

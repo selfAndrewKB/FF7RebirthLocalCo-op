@@ -182,13 +182,13 @@ private:
     const wchar_t* via_;
 };
 
-// The member end being run on this thread (T3 answers only on the game thread; off it T3 fails for player 2's member
-// and P never names player 2's controller).
+// The member end being run on this thread (T3 answers only on the game thread; off it T3 fails for a seat's member
+// and P never names a seat's controller).
 thread_local const void* t_ending    = nullptr;  // the member of the member end being run
 thread_local int         t_endPlayer = 0;        // the player whose character that member end gives back (T3's answer)
 thread_local bool        t_gameGave  = false;    // off the game thread: the game's own test passed and P ran (it queued
                                                  // its own give-back)
-thread_local bool        t_heldBack  = false;    // off the game thread: T3 failed for player 2's member (no give-back)
+thread_local bool        t_heldBack  = false;    // off the game thread: T3 failed for a seat's member (no give-back)
 
 /// One member end's scope, restored on the way out (member ends nest: a record end runs several).
 class EndScope
@@ -226,7 +226,7 @@ struct Note
     Clock::time_point at{};             // when it ran: a note older than the character's hand-over is not its end
     std::uint32_t     thread   = 0;
     bool              gameGave = false;  // the game's own test passed: it queued its own give-back
-    bool              heldBack = false;  // T3 failed for player 2's member: no give-back by the game
+    bool              heldBack = false;  // T3 failed for a seat's member: no give-back by the game
     std::uint8_t      state    = 0;      // the record at the member's index, before the member end
     std::uint8_t      started  = 0;
     std::uint8_t      ended    = 0;
@@ -579,8 +579,8 @@ std::uint8_t PartnerLeaderType(std::uint8_t original) noexcept
             }
             return original;
         case HandOver::Lost:
-            // Player 2's controller still drives a member the session gave up (its give-back is under way): the game's
-            // own answer, as before player 2 had it.
+            // A seat's controller still drives a member the session gave up (its give-back is under way): the game's
+            // own answer, as before that seat had it.
             if (Line())
             {
                 platform::LogDebug(L"synergy partner: {}'s partner {} is driven by player {} but not owned ({}): the game's "
@@ -647,7 +647,7 @@ std::uint8_t RequestLeaderType() noexcept
 // member's own command end, wherever that member's command executor finishes. A mode-2 synergy skill's partner plays
 // its own half and is given back only there, and the executor's finish is written for worker threads
 // (RE-p2-synergy-skills.md S-SYNSTUCK, S-SYNSTUCK2). On the game thread T3 and P answer for a remembered character.
-// Off it T3 fails for player 2's member and P never names player 2's controller, and the member end is noted: the next
+// Off it T3 fails for a seat's member and P never names a seat's controller, and the member end is noted: the next
 // tick gives a remembered character back on the game thread with the game's own call, SwitchAIControl_Async(member, 1,
 // its player's controller), after checking that its player still owns it and plays nothing else. The game's own
 // off-thread give-back would queue that possession with raw pointers and check nothing when it runs (S-SYNANYTHREAD
@@ -682,7 +682,7 @@ std::uint64_t MemberEnd(void* unused, void* record, void* member, std::uint64_t 
     {
         Note       note = NoteOf(record, member, index);
         EndScope   scope(member);
-        const auto result = original(unused, record, member, index);  // T3 / P: nothing for player 2 here
+        const auto result = original(unused, record, member, index);  // T3 / P: nothing for a seat here
         note.gameGave     = t_gameGave;
         note.heldBack     = t_heldBack;
         AddNote(note);  // the tick gives a remembered character back
@@ -716,7 +716,7 @@ std::uint8_t EndLeaderType() noexcept
     }
     if (!players::generation::OnGameThread())
     {
-        // Player 2's member is never given back from a worker: the game would queue its possession by player 2's
+        // A seat's member is never given back from a worker: the game would queue its possession by the seat's
         // controller with raw pointers that nothing checks when it runs. The game's compare fails; the tick gives a
         // remembered member back on the game thread. Atomics only.
         if (SeatPlaying(member) != 0)
@@ -731,7 +731,7 @@ std::uint8_t EndLeaderType() noexcept
     {
         return original;
     }
-    // Only while its player still owns it: player 2 may have given it back during the approach (a party change, the
+    // Only while its player still owns it: a seat may have given it back during the approach (a party change, the
     // game making it player 1's leader); re-possessing it then would undo that. Tested here as well as in Tick: the
     // give-back and the member end can run in one frame. The game's own test then decides (player 1's new leader goes
     // to player 1; a character nobody holds stays with its AI, as a non-leader partner in single player).
@@ -783,17 +783,17 @@ void* EndPrimary() noexcept
     const bool offThread = !players::generation::OnGameThread();
     if (offThread)
     {
-        // The game's own give-back of a character not player 2's (T3 passed by its own test: the leader type; T3 fails
-        // for player 2's member here). The primary controller it reads may catch a player-2 scope of the game thread's;
-        // its queued possession is never by player 2's controller: player 1's instead, or none (its AI keeps it).
+        // The game's own give-back of a character not a seat's (T3 passed by its own test: the leader type; T3 fails
+        // for a seat's member here). The primary controller it reads may catch a seat's scope of the game thread's;
+        // its queued possession is never by a seat's controller: player 1's instead, or none (its AI keeps it).
         // Atomics only. That queued possession is the game's single-player path for player 1's character; the tick does
         // not give the character back again.
         t_gameGave = true;
     }
-    // A remembered character goes back to its player; player 2's member to player 2 in any case (a member end that
-    // ran with player 2's member as the leader type, inside player 2's command window, without the primary controller
-    // swapped, would otherwise give it to player 1). A refused give-back never lands on player 2's controller, even
-    // when the primary controller reads it (a member end inside a player-2 scope): the game's single-player target,
+    // A remembered character goes back to its player; a seat's member to that seat in any case (a member end that
+    // ran with the seat's member as the leader type, inside the seat's command window, without the primary controller
+    // swapped, would otherwise give it to player 1). A refused give-back never lands on a seat's controller, even
+    // when the primary controller reads it (a member end inside a seat's scope): the game's single-player target,
     // player 1's, or the game's own.
     const int  originalPlayer = PlayerOfController(original);
     const int  originalSeat   = originalPlayer >= 2 ? SeatOfPlayer(originalPlayer) : 0;

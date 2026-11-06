@@ -71,7 +71,7 @@ platform::EntryRedirect g_rebuildShortcuts;
 platform::CallRedirect  g_statusShortcutsCall, g_itemShortcutsCall;
 ShortcutsFn             g_ctrlShortcuts     = nullptr;  // the game's rebuild of one controller's tables
 SelecterShortcutsFn     g_selecterShortcuts = nullptr;  // 1.004: the status-menu call's target
-std::uintptr_t          g_lastGame          = 0;        // the game's controller, as last read outside player 2's scope
+std::uintptr_t          g_lastGame          = 0;        // the game's controller, as last read outside a seat's scope
 int                     g_shortcutLines     = 0;
 std::optional<platform::GameImage> g_image;  // for the logged return addresses
 /// What Find found, for the redirects (placed at once, or on 1.005 from the game thread).

@@ -24,10 +24,10 @@ namespace lss::battle::menu_tint {
 
 namespace {
 
-// The tactical-mode tint (UI filter type 0) and the wait-mode sound, shared by both controllers' menus
+// The tactical-mode tint (UI filter type 0) and the wait-mode sound, shared by every controller's menu
 // (RE-p2-command-menu-tint.md). EnableType/DisableType are a latch over a real reference count, so two
 // owners cancel each other; the game's other menus share a filter through the count itself
-// (EndUIFilter_RefInc/RefDec on EndUISystem[41], keeping their own "holds it" byte). Player 2's menu does
+// (EndUIFilter_RefInc/RefDec on EndUISystem[41], keeping their own "holds it" byte). Each seat's menu does
 // the same; player 1's keeps the latch. The wait sound's off is one mode slot: it is skipped while the
 // other menu is still in wait mode.
 constexpr std::uint8_t kFilterOnBytes[]  = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xE8, 0xD3, 0xEB, 0x00};

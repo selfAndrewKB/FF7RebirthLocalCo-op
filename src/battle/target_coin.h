@@ -1,6 +1,6 @@
 #pragma once
 
-// Enemies aim their moves at player 1 or player 2, one coin per enemy action (RE-p2-enemy-target-bias.md §12, §16).
+// Enemies aim their moves at one of the players, one coin per enemy action (RE-p2-enemy-target-bias.md §12, §16).
 //
 // Enemy blueprints name "the player" with a few native functions: GetPartyLeader (the summons' signature lock-ons,
 // distances and angles to the leader, lists that drop the leader), IsUCPC / IsAIPC (is this character the player, an
@@ -21,11 +21,11 @@
 //     (FFrame::Object) that is an EndAIControllerEnemyBase (BossBase and every enemy AI blueprint, the summon fights'
 //     included; party summons, party AI, UI and level blueprints are not), and passes everything else through.
 // Who may be "the player" is the Condition select's rule (battle/equal_targeting): each player's character must be
-// a candidate for that enemy's target selector; a coin when both are. A coin naming player 2 is checked again at each
-// answer, and tossed anew once player 2's character is no longer a candidate. Nothing is written to the party
+// a candidate for that enemy's target selector; a coin when several are. A coin naming a seat is checked again at each
+// answer, and tossed anew once the seat's character is no longer a candidate. Nothing is written to the party
 // manager. Not covered (native reads of the leader): the opening target, lock groups (Stun Ray), the LEADER_ point.
 //
-// Every seat playing a member takes part as player 2 does below: the coin is a uniform pick among the eligible players
+// Every seat playing a member takes part: the coin is a uniform pick among the eligible players
 // (player 1 and the seats), and a coin holds the player's number (battle/coin_table.h).
 //
 // Any thread: enemy AI may run on workers. The coins live in a lock-free table keyed by the controller.

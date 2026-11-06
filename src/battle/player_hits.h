@@ -1,7 +1,7 @@
 #pragma once
 
 // The further players' hits, and the hits they take, count as the player's (RE-p2-enemy-target-bias.md §12-§14).
-// Written for player 2 below; every seat's member is treated alike, each call about the one seat whose member it
+// Every seat's member is treated alike, each call about the one seat whose member it
 // names (the seat found from the attacking or hit character).
 //
 // Every battle character takes damage through its battle-control component's damage slot (+0x380; 1.005 +0x388). The
@@ -9,20 +9,20 @@
 // the scripted HP floors and fires the enemy's Blueprint events (OnPreTakeDamage, OnTakeDamage, HPFirst, OnGiveDamage,
 // OnKilled, the damage phase's OnExtraCondition); then the override charges the summon gauge. Each step asks whether
 // the attacker (or the victim) is the player: the leader test (IsUCPC_Core) everywhere but the summon gauge, which
-// compares the attacker with the party leader pointer. Player 2's melee and projectile hits are applied in the damage
-// source's tick and the battle system's tick, outside every player-2 scope, so the game answered "an AI ally" for
+// compares the attacker with the party leader pointer. A seat's melee and projectile hits are applied in the damage
+// source's tick and the battle system's tick, outside every seat's scope, so the game answered "an AI ally" for
 // them: no player-only reactions, the AI stagger rate, no on-hit ATB from normal attacks, the summon gauge's guest rate.
 //
-// For one damage call in which player 2's character is the attacker (any slot) or the victim (the battle-player slot),
-// this holds the leader test's yes for player 2's member type on this thread; player 1 keeps the game's own yes. That
-// is the single-player answer in each half: both players count. With player 2 as the attacker, the summon gauge's one
-// leader read answers player 2's character. Nothing is written to the party manager: the leader pointer and type stay
+// For one damage call in which a seat's character is the attacker (any slot) or the victim (the battle-player slot),
+// this holds the leader test's yes for the seat's member type on this thread; player 1 keeps the game's own yes. That
+// is the single-player answer in each half: every player counts. With the seat attacking, the summon gauge's one
+// leader read answers the seat's character. Nothing is written to the party manager: the leader pointer and type stay
 // player 1's, so `GetPartyLeader` and the other pointer reads are unchanged (§14.1).
 //
 // The ten damage slots (every vtable holding one of the seven damage functions) are replaced. Game thread only: every
 // root of the damage call found is the game thread (§14.3); a call on another thread passes straight through.
 //
-// The same answer is held when an enemy senses player 2's attack starting (OnReactionSensing and its TakeAbility
+// The same answer is held when an enemy senses a seat's attack starting (OnReactionSensing and its TakeAbility
 // variant, whose argument is the attacking character; §16.4): any thread, since enemy AI may tick on workers.
 //
 // Each damage or reaction call also records which human it is about (the attacker, or the character hit), the

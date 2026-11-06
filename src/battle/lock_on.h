@@ -1,6 +1,6 @@
 #pragma once
 
-// Player 2's targeting: the game's own targeting tick run a second time, for player 2
+// Each further player's targeting: the game's own targeting tick run again, for that player
 // (RE-p2-targeting-scoped-tick.md, pass S-TGT5; the fields in RE-p2-lock-on.md, S-TGT2).
 //
 // The game keeps one set of target fields in the battle system: the target cursor (+0x68), the
@@ -10,27 +10,27 @@
 // battle tick, each behind the game's own gates (in battle; time stopped only for the menu's target
 // select; the suspend byte +0x96 inside).
 //
-// Player 2 gets their own copy of those fields. A TargetScope puts player 2's into the battle system
+// Each seat gets its own copy of those fields. A TargetScope puts a seat's into the battle system
 // for as long as it lives and takes them back out at its end (the displayed target's weak reference
-// moves with it), with player 1's put back; if player 2's lock changed inside, player 1's is put back
+// moves with it), with player 1's put back; if the seat's lock changed inside, player 1's is put back
 // through the game's own lock setter, which also sets the game-wide Global.LockOn parameter back to
-// player 1's. It is held around player 2's member tick, player 2's menu input, player 2's camera
-// update and player 2's HUD collection.
+// player 1's. It is held around the seat's member tick, the seat's menu input, the seat's camera
+// update and the seat's HUD collection.
 //
 // Both targeting calls are redirected: the game's call runs for player 1 (on pad 1's own right stick
-// while player 2 plays; the merged stick is whichever pad is pushed furthest), then the same call runs
-// again for player 2 inside player 2's scopes: player 2's UI context (battle/focus_scope.h: the
-// command controller slot answers player 2's command controller, and the focus path is player 2's, from
-// which an open target list answers its selected row), pad 2's sticks and buttons, player 2 as the primary controller (so the lock
-// camera is player 2's camera manager's), the party leader and its type answering player 2's member,
-// a TargetScope, and the bar manager's targeted key (EndUISystem[31] +0x140) as player 2's. Three
-// writes of the tick have one copy for both players and are skipped in player 2's run: the two
+// while a further player plays; the merged stick is whichever pad is pushed furthest), then the same call runs
+// again for each seat inside that seat's scopes: the seat's UI context (battle/focus_scope.h: the
+// command controller slot answers the seat's command controller, and the focus path is the seat's, from
+// which an open target list answers its selected row), the seat's pad's sticks and buttons, the seat as the primary
+// controller (so the lock camera is the seat's camera manager's), the party leader and its type answering the seat's
+// member, a TargetScope, and the bar manager's targeted key (EndUISystem[31] +0x140) as the seat's. Three
+// writes of the tick have one copy for all players and are skipped in a seat's run: the two
 // requests for player 1's target panel (their weak reference released as the request would) and the
-// marker list's target owner name. Player 2's run pauses while player 1 picks a target in the menu
-// (the menu's target select is player 1's widgets). Player 2's lock ends with the battle, as the
+// marker list's target owner name. A seat's run pauses while player 1 picks a target in the menu
+// (the menu's target select is player 1's widgets). A seat's lock ends with the battle, as the
 // game's teardown ends player 1's. Every state change is logged. Game thread only.
 //
-// Per seat: written for player 2 above, every seat has its own copy of the target fields and the targeted key
+// Per seat: every seat has its own copy of the target fields and the targeted key
 // (indexed by the seat; index 0 unused, player 1's are the game's own), its own TargetScope and its own lock's end.
 // One TargetScope at a time, whichever seat's (the seats swap in turn). After the game's run, one run per seat in seat
 // order (a third run is as safe as the second: RE-seats-step6-battle.md §1).
@@ -83,7 +83,7 @@ private:
 /// target and cursor end, as the game's battle teardown ends player 1's.
 void AfterBattle(int seat) noexcept;
 
-/// Diagnosis: player 2's targeting run on or off (on at start).
+/// Diagnosis: the further players' targeting run on or off (on at start).
 void SetEnabled(bool on) noexcept;
 /// The further players' targeting run acts: installed, switched on, and not turned off for the session by an
 /// exception.

@@ -283,7 +283,7 @@ void Exec(RC::Unreal::UObject* context, RC::Unreal::FFrame& frame, void* result)
     Count(player, reaction);
     if constexpr (kNativeFacts[I].kind == Kind::Ucpc)
     {
-        // Inside a damage or reaction call the call's own answers stand (player 2's hits: both count).
+        // Inside a damage or reaction call the call's own answers stand (a seat's hits: every human counts).
         if (reaction)
         {
             original(context, frame, result);

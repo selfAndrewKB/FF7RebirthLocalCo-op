@@ -1,7 +1,7 @@
 #pragma once
 
 // The command menu's pure rules (battle/command_menu_tick.h, command_menu.h), tested on the host
-// (tests/menu_rules_test.cpp). The modules keep the engine reads and the redirects. Written for player 2; the rules
+// (tests/menu_rules_test.cpp). The modules keep the engine reads and the redirects. The rules
 // over the menus (the world slow, the wait sound) take every player's, by seat (0 player 1), in the order the menus
 // tick: player 1's, then each seat's.
 
@@ -11,17 +11,17 @@
 
 namespace lss::battle::menu_rules {
 
-// ---- pad 2's route into player 2's menu (command_menu_tick) ----
+// ---- a seat's pad's route into the seat's menu (command_menu_tick) ----
 
-/// A pad-2 press runs in player 2's UI only in battle, with player 2's menu layer in place and player 1's top layer
-/// the command menu's own (a pause menu or popup keeps pad 2 out of both menus).
+/// A seat's press runs in the seat's UI only in battle, with the seat's menu layer in place and player 1's top layer
+/// the command menu's own (a pause menu or popup keeps the seat's pad out of every menu).
 constexpr bool PressAllowed(std::uint8_t hudModeSeat, std::uint8_t menuLayerSeat, std::uint8_t battleInputOne,
                             std::uint8_t menuLayerOne, bool playerOneTopIsCommandMenu) noexcept
 {
     return hudModeSeat != 0 && menuLayerSeat != 0 && battleInputOne != 0 && menuLayerOne != 0 && playerOneTopIsCommandMenu;
 }
 
-/// Pad 2's keys whose press went to player 2's UI, so their release goes there too (one set per seat: two seats
+/// A seat's pad's keys whose press went to the seat's UI, so their release goes there too (one set per seat: two seats
 /// holding the same action keep their own). A pad has fewer inputs (buttons, triggers, stick clicks and stick
 /// directions) than the capacity, so every held key fits.
 class TakenKeys
@@ -51,7 +51,7 @@ public:
         return Note::Noted;
     }
 
-    /// True (and forgotten) if `key`'s press went to player 2's UI.
+    /// True (and forgotten) if `key`'s press went to the seat's UI.
     bool Take(std::uint64_t key) noexcept
     {
         const auto it = std::find(keys_.begin(), keys_.end(), key);
@@ -127,9 +127,9 @@ constexpr bool SkipWaitSoundOff(int pass, std::int32_t waitOne, std::int32_t wai
     return SkipWaitSoundOffAmong(pass == 1 ? 0 : pass == 2 ? 1 : -1, waits, 2);
 }
 
-// ---- player 2's controller following the game's (command_menu) ----
+// ---- a seat's controller following the game's (command_menu) ----
 
-/// A refused join Setup (player 2's focus scope could not be entered) is a wait, never a give-up: the first kSetupTries
+/// A refused join Setup (the seat's focus scope could not be entered) is a wait, never a give-up: the first kSetupTries
 /// tries run on consecutive ticks, later ones every kWaitGap ticks, until one runs.
 inline constexpr int kSetupTries = 5;
 inline constexpr int kWaitGap    = 30;
@@ -140,7 +140,7 @@ constexpr bool JoinTryDue(int tries, unsigned& waitTicks) noexcept
     return tries < kSetupTries || ++waitTicks % kWaitGap == 0;
 }
 
-/// The game's controller is set up and no Setup of its own is pending or deferred: player 2's may follow it.
+/// The game's controller is set up and no Setup of its own is pending or deferred: a seat's may follow it.
 constexpr bool GameSetUp(std::uintptr_t gameController, std::uint8_t setupDone, std::uint8_t setupPending,
                          std::uint8_t setupDeferred) noexcept
 {

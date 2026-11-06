@@ -50,7 +50,7 @@ constexpr std::uint32_t      kPaneOwner = 0x3C8;
 constexpr std::uint32_t      kPaneType  = 0x3D0;  // u8: the character whose synergy skills it lists
 
 // A cell's owner: its party list (written for every cell by PartyList360_Bind), whose +0x20 is the command
-// controller. Logged for player 2's cells: slot, look (0 field, 1 battle, 2 battle with the menu open),
+// controller. Logged for the seats' cells: slot, look (0 field, 1 battle, 2 battle with the menu open),
 // leader flag, character type and stacked position.
 constexpr std::uint32_t kCellPartyList  = 0x7B0;
 constexpr std::uint32_t kPartyListOwner = 0x20;

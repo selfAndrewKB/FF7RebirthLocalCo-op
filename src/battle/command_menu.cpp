@@ -61,8 +61,8 @@ constexpr std::uint8_t kSetupBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x20, 0x48, 0x89
 constexpr platform::FunctionFact kSetup{L"FieldCommandCtrl__SetupMenuWidgets", 0x14158B0F4, kSetupBytes};
 // The game's only calls of Setup and ResetAll on its controller (RE-p2-command-menu-levers.md §2): every
 // path (field entry and exit steps, the fade-deferred Setup in MasterHUD_Tick, the Blueprint thunks, the
-// menu-close re-Setup) ends at one of them. Both redirected; each call is made again on player 2's
-// controller (Setup while player 2 plays, ResetAll always). Each call's five bytes lie inside one aligned
+// menu-close re-Setup) ends at one of them. Both redirected; each call is made again on each seat's
+// controller (Setup while the seat plays, ResetAll always). Each call's five bytes lie inside one aligned
 // 16-byte block.
 constexpr std::uintptr_t kSetupCall    = 0x140F52378;  // in SetupFieldCommandOrDefer 0x140F5231C
 constexpr std::uintptr_t kResetAllCall = 0x140F52301;  // in ClearFieldCommandSetupPending 0x140F522DC
@@ -72,8 +72,8 @@ constexpr std::uintptr_t kResetAll     = 0x140F51D00;  // FieldCommandCtrl_Reset
 // the field menu; every later rebuild (field step 9 after a load, party changes, the party menu, scripted
 // battles, the on/off table, Blueprint) goes through EndUI23_RefreshFieldMenu, which tail-jumps here with
 // the game's controller. Its first instruction, `mov [rsp+8], rbx` (5 bytes, no RIP-relative operand, no
-// branch lands inside it), is replaced; the rebuild also reads EndUISystem[23], so player 2's runs in
-// player 2's focus scope.
+// branch lands inside it), is replaced; the rebuild also reads EndUISystem[23], so a seat's rebuild runs
+// in that seat's focus scope.
 constexpr std::uint8_t kRefreshBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00,
                                           0x00, 0xE8, 0xC0, 0x64, 0x4A, 0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xF9};
 constexpr platform::FunctionFact kRefresh{L"FieldCommandCtrl_RefreshFieldMenu", 0x140C08A60, kRefreshBytes};
@@ -86,15 +86,15 @@ constexpr std::uintptr_t kRefreshSetupCall = 0x142A77DF9;  // call, in Setup's c
 // The in-field squad switch (levers §17): LB/RB in the field command menu (PartyList360_CycleSquad_ApplyAndShow)
 // and the squad picked by index (PartyList360_SelectSquad_ApplyAndShow) apply the squad to the party, then
 // lay out the Members panel of the controller that took the key directly, never through the rebuild above.
-// Their one layout call each, LayoutFieldMenuCells(ctrl, 1, 0, 1), is redirected; after it, player 2's
+// Their one layout call each, LayoutFieldMenuCells(ctrl, 1, 0, 1), is redirected; after it, each seat's
 // controller rebuilds its panel from the party (already changed). Each call inside one aligned 16-byte block.
 constexpr std::uintptr_t kLayoutCells = 0x1408057E0;
 constexpr std::array<std::uintptr_t, 2> kSquadLayoutCalls{0x143A49EDB, 0x143A49DC3};  // cycle (LB/RB), by index
 
 constexpr std::size_t kControllerSize = 0x798;
 // The key guide (EndUISystem[53]): the game builds its one with FMemory_Malloc(0x38) and KeyGuide53__Ctor
-// (EndUISystem__Ctor); player 2's is built the same way (RE-p2-command-menu-views.md §10.4). Its widget
-// (FWeakObjectPtr at +4) is created by the game's own ShowMode the first time player 2's controller drives it.
+// (EndUISystem__Ctor); a seat's is built the same way (RE-p2-command-menu-views.md §10.4). Its widget
+// (FWeakObjectPtr at +4) is created by the game's own ShowMode the first time the seat's controller drives it.
 constexpr std::uint8_t kKeyGuideCtorBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xE0,
                                                0x0F, 0x69, 0xFE, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9};
 constexpr platform::FunctionFact kKeyGuideCtor{L"KeyGuide53__Ctor", 0x143A1DF44, kKeyGuideCtorBytes};
@@ -116,7 +116,7 @@ using facts::kCmdLogBytes;
 // UObjectBase: the class and the outer.
 constexpr std::uint32_t kObjectClass = 0x10;
 constexpr std::uint32_t kObjectOuter = 0x20;
-// A refused join Setup (player 2's focus scope could not be entered) is a wait, never a give-up: the
+// A refused join Setup (the seat's focus scope could not be entered) is a wait, never a give-up: the
 // first kSetupTries tries run on consecutive ticks, later ones every kWaitGap ticks, until one runs
 // (menu_rules::JoinTryDue).
 using menu_rules::kSetupTries;
@@ -734,12 +734,12 @@ void* KeyGuide(int seat) noexcept
 namespace {
 
 /// After the join Setup: a seat's command menu gets its UI focus again through the game's own calls, in the
-/// seat's scopes, when the game's controller has battle input on (written for player 2 below). The game's
+/// seat's scopes, when the game's controller has battle input on. The game's
 /// ResumeHudInput(0) as its field starts keeps battle input on, with its menu's focus layer up, through the
-/// field and every battle. Player 2 missed it while out, and its controller outlives the leave with its
+/// field and every battle. A seat missed it while out, and its controller outlives the leave with its
 /// flag and layer byte (+0x783) still set, while the layer itself went with the focus of the player who
 /// left. The battle-input mirror follows only a change, and the game's layer setter returns early while
-/// the byte is set, so player 2's focus would stay off its menu: pad 2's Attack, Unique and Guard would
+/// the byte is set, so the seat's focus would stay off its menu: its pad's Attack, Unique and Guard would
 /// reach nothing (the user's retry tests, v0.28.0). The layer setter's off call, then ResumeHudInput(0)
 /// (command_menu_tick::RefocusMenu). A written exception, as the lock sync: missed game calls made once at
 /// the join.
@@ -784,8 +784,8 @@ void SeatTick(int seat) noexcept
         Watch(seat);
         return;
     }
-    // The join Setup: player 2's controller is built or set up when player 2 plays and it does not follow
-    // the game's current setup (player 2 joined, or was out or refused at the game's Setup). It follows the
+    // The join Setup: the seat's controller is built or set up when the seat plays and it does not follow
+    // the game's current setup (the seat joined, or was out or refused at the game's Setup). It follows the
     // game's controller: only once that one is set up and no Setup of its own is pending or deferred.
     const auto one = ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController);
     if (one == 0 || !menu_rules::GameSetUp(one, ReadAt<std::uint8_t>(one + kCmdSetupDone),

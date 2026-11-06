@@ -1,9 +1,9 @@
 #pragma once
 
-// The tactical-mode tint (UI filter type 0) and the wait-mode sound, shared by both controllers' menus
+// The tactical-mode tint (UI filter type 0) and the wait-mode sound, shared by every controller's menu
 // (RE-p2-command-menu-tint.md). EnableType/DisableType are a latch over a real reference count, so two owners cancel
 // each other; the game's other menus share a filter through the count itself (EndUIFilter_RefInc/RefDec on
-// EndUISystem[41], keeping their own "holds it" byte). Player 2's menu does the same; player 1's keeps the latch.
+// EndUISystem[41], keeping their own "holds it" byte). Each seat's menu does the same; player 1's keeps the latch.
 // The wait sound's off is one mode slot: it is skipped while another menu is still in wait mode. A unit of the
 // command menu tick (battle/command_menu_tick.h), which finds, places and removes it. Game thread.
 // Per seat: each seat's menu holds its own count (by seat; the seat from the pass in flight); the wait sound waits

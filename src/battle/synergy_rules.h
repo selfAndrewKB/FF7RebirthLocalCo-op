@@ -1,9 +1,8 @@
 #pragma once
 
 // The synergy partner's decisions (battle/synergy_partner.h) as pure functions over values read from the
-// game,
-// and the table it keeps, tested on the host (tests/synergy_rules_test.cpp). The module keeps the engine reads, the
-// redirects and the log lines.
+// game, and the table it keeps, tested on the host (tests/synergy_rules_test.cpp). The module keeps the engine
+// reads, the redirects and the log lines.
 
 #include "session/party_lease.h"
 

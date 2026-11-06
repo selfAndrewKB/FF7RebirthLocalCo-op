@@ -1,6 +1,6 @@
 #pragma once
 
-// The machine code that keeps player 2's targeting run out of player 1's target panel, at the one
+// The machine code that keeps a further player's targeting run out of player 1's target panel, at the one
 // panel request whose call site straddles a code block (RE-p2-targeting-scoped-tick.md §2, §4.3).
 //
 // The displayed-target update posts "old target cleared" to the target panel from a cold chunk entered
@@ -8,7 +8,7 @@
 // reference, and calls EndUI4_QueueTargetCleared, which releases that reference at its end; then it
 // goes on at 0x14295F0C3. The call (0x14295F0BE) straddles a 16-byte block, so the chunk is gated at
 // `mov [rsp+0x108], rax` (8 bytes at 0x14295F0A5, one instruction inside one block): the code runs the
-// replaced instruction, and while the gate is set (player 2's run) it counts the skip and jumps to
+// replaced instruction, and while the gate is set (a seat's run) it counts the skip and jumps to
 // 0x14295F0C3, past the added reference and the call together, so the net effect on the reference
 // count is the call's own (none) and the panel gets no request; otherwise the chunk goes on as the
 // game's.

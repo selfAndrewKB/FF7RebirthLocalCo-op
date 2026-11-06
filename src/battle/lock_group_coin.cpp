@@ -258,7 +258,7 @@ bool Install(const platform::GameImage& image) noexcept
         return false;
     }
     g_resolveLeader = reinterpret_cast<ResolveFn>(*resolver);
-    // All five together or none: a pick naming player 2 without the rebalance's answer would let the game release and
+    // All five together or none: a pick naming a seat without the rebalance's answer would let the game release and
     // re-pick the group's locks every frame (RE §18.7.3), and the coin acts only through the two pick calls.
     // on_unreal_init: no battle yet, so no thread can be at the two crossing calls (InstallFromOwnThread's rule; a
     // reload of the mod in the middle of a battle would break it, as for the sibling modules' crossing calls).

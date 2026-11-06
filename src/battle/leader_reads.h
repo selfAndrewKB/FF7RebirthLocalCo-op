@@ -10,7 +10,7 @@
 //   - E4 a boss's timed damage-phase reaction and E5 the damage-phase gate a boss re-runs after a party summon's cut
 //     scene: the leader is the reaction's source; the boss's coin;
 //   - E6 the reaction player-type filter (counters, avoids and guards that only "the player's" attacks provoke, 23
-//     definitions): both humans count, so player 2's attacks provoke them too;
+//     definitions): every human counts, so a further player's attacks provoke them too;
 //   - E7 Reno's mines without a target head for the leader type's character: each mine's own coin;
 //   - E8 Crimson Mare's rocket-punch arms: the boss's coin.
 //
@@ -19,7 +19,7 @@
 // read inside answers a seat's member (or, for E7, that member's type) while that enemy's coin names the seat, else the
 // game's own answer. E6's read answers the causer itself when it is a seat's member (the read is compared only for
 // equality with the causer). Nothing is written to game state; no player-1 pointer is built by hand. Every seat
-// playing a member is treated as player 2 is; the seat comes from the enemy's coin or from the causing character.
+// playing a member is treated the same way; the seat comes from the enemy's coin or from the causing character.
 //
 // Any thread (enemy AI runs on workers too): every context is thread-local. Logged: the install per item (Info), each
 // answer for the once-per-event items, the first answer per item with its thread (Debug), each E8 answer (Trace) and a

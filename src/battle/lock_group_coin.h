@@ -1,18 +1,18 @@
 #pragma once
 
-// Lock groups prefer player 1 or player 2 by each picking enemy's coin (RE-p2-enemy-target-bias.md §18, §20).
+// Lock groups prefer player 1 or a further player by each picking enemy's coin (RE-p2-enemy-target-bias.md §18, §20).
 //
 // A lock group (RegisterTargetLockGroup; in Rebirth only the Temple of the Ancients Stun Ray) spreads its enemies over
 // the party, at most N on each target, and with bPrioritizeUCPC prefers "the player": Pick takes the party leader when
 // the leader holds fewer locks than every other target, and the rebalance releases every lock and picks again,
 // leader first, when no target holds more than one and the leader holds none. Both read the leader pointer, so in
 // co-op the group prefers player 1 only. The user's rule (2026-10-15, "one on a human"): each pick prefers player 1 or
-// player 2 by the picking enemy's coin, and the rebalance respreads only when neither human holds a lock.
+// a further player by the picking enemy's coin, and the rebalance respreads only when no human holds a lock.
 //
 // The levers: Pick's leader read and CountLocks' leader read (whose "is the leader" byte only the rebalance uses)
-// answer a thread-local character while one is held; a pick whose coin names player 2 holds player 2's member for one
-// call of Pick (and if player 2 cannot take it, Pick runs again with the game's own player-1 term); the rebalance
-// holds player 2's member when player 2 holds a lock in that group and player 1 holds none. Pick's two call sites (the
+// answer a thread-local character while one is held; a pick whose coin names a seat holds that seat's member for one
+// call of Pick (and if its player cannot take it, Pick runs again with the game's own player-1 term); the rebalance
+// holds a seat's member when that seat holds a lock in that group and player 1 holds none. Pick's two call sites (the
 // battle tick's re-pick and the Blueprint registration's first pick) are redirected here; each pick is told to the
 // one observer (battle/target_census, a dev tool). Nothing is written to game state.
 //

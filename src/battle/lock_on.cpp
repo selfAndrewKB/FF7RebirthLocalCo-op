@@ -159,11 +159,11 @@ platform::CallRedirect g_markerNameCall;
 // with the image kept for it (platform/deferred_sites.h).
 platform::DeferredSites g_placement;
 bool           g_installed   = false;  // the scope's facts: the TargetScope works
-bool           g_runReady    = false;  // player 2's run and its skipped writes are installed
+bool           g_runReady    = false;  // the seats' run and its skipped writes are installed
 SetLockFn      g_setLock     = nullptr;
 TestFn         g_menuSelect  = nullptr;
 TestFn         g_menuBusy    = nullptr;
-TestFn         g_targetList  = nullptr;  // optional: the log of player 2's target list
+TestFn         g_targetList  = nullptr;  // optional: the log of a seat's target list
 ListImplFn     g_targetListImpl = nullptr;  // the same on 1.005 (the wrapper's body; see kTargetListImpl)
 ReleaseFn      g_release     = nullptr;
 WeakReleaseFn  g_weakRelease = nullptr;
@@ -557,7 +557,7 @@ void Targeting(void* system, float deltaTime) noexcept
     {
         engine(system, deltaTime);
     }
-    // Player 1's own target and lock, on change, beside player 2's in the same log.
+    // Player 1's own target and lock, on change, beside the seats' in the same log.
     static std::uintptr_t loggedTarget = 0;
     static std::uint8_t   loggedLock   = 0;
     if (platform::Enabled(platform::Level::Debug))
@@ -591,7 +591,7 @@ void Targeting(void* system, float deltaTime) noexcept
     }
 }
 
-/// Replaces the tick's request for player 1's target panel (the new target): skipped in player 2's
+/// Replaces the tick's request for player 1's target panel (the new target): skipped in a seat's
 /// run, its weak reference released as the request would release it. (The "old target cleared"
 /// request is gated in its own chunk: battle/panel_gate_code.h.)
 void PanelSet(void* weakPtr, float x, float y) noexcept
@@ -605,7 +605,7 @@ void PanelSet(void* weakPtr, float x, float y) noexcept
 }
 
 /// 1.005: replaces the tick's request for player 1's panel "old target cleared", whose call fits one block there
-/// (1.004 gates its chunk instead, panel_gate_code.h): skipped in player 2's run, its weak reference released as
+/// (1.004 gates its chunk instead, panel_gate_code.h): skipped in a seat's run, its weak reference released as
 /// the request would release it at its end. The same net effect as the gate: no request, no reference left.
 void PanelCleared(void* weakPtr) noexcept
 {
@@ -617,7 +617,7 @@ void PanelCleared(void* weakPtr) noexcept
     platform::CallGuarded(g_weakRelease, weakPtr);
 }
 
-/// Replaces the tick's write of the marker list's target owner name: skipped in player 2's run.
+/// Replaces the tick's write of the marker list's target owner name: skipped in a seat's run.
 void MarkerName(void* owner) noexcept
 {
     if (!g_run)
@@ -670,9 +670,8 @@ bool Redirect(const platform::GameImage& image, platform::CallRedirect& call, st
     return target && live && g_placement.Place(call, *live, *target, replacement);
 }
 
-/// The "old target cleared" request kept from player 1's panel in player 2's run. On 1.005 its call fits one
-/// block and is redirected (PanelCleared); on the research build its chunk is gated
-/// (battle/panel_gate_code.h),
+/// The "old target cleared" request kept from player 1's panel in a seat's run. On 1.005 its call fits one
+/// block and is redirected (PanelCleared); on the research build its chunk is gated (battle/panel_gate_code.h),
 /// once the chunk is the one the research read: its call still names the request, and the gated instruction matches.
 bool InstallPanelGate(const platform::GameImage& image) noexcept
 {
@@ -852,8 +851,8 @@ void Remove() noexcept
 
 namespace {
 
-/// The call sites: both targeting calls (or neither), then the tick's three shared writes skipped in player 2's
-/// run: all of those, or player 2 gets no run (a partial set would leak player 2's targeting into player 1's panel
+/// The call sites: both targeting calls (or neither), then the tick's three shared writes skipped in a seat's
+/// run: all of those, or no seat gets a run (a partial set would leak a seat's targeting into player 1's panel
 /// or markers); the calls alone still keep player 1's targeting on pad 1's stick.
 bool PlaceSites(const platform::GameImage& image) noexcept
 {
@@ -884,7 +883,7 @@ bool PlaceSites(const platform::GameImage& image) noexcept
     ok                 = marker;
     if (!ok)
     {
-        // Player 2's run stays off; the targeting calls, if they installed, keep player 1's on pad 1.
+        // The seats' run stays off; the targeting calls, if they installed, keep player 1's on pad 1.
         if (g_panelClearedGate.IsInstalled())
         {
             g_panelClearedGate.Restore();

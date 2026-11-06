@@ -51,7 +51,7 @@ constexpr platform::FunctionFact kGated{L"BattleComp2_Vt380_OnTakeDamage_Gated",
 // Every vtable entry holding one of them (the only references to the six overrides; the base is otherwise called only
 // by the overrides as their parent, so it runs inside a wrapped call).
 constexpr std::size_t        kSlots      = 10;
-constexpr std::size_t        kPlayerSlot = 2;  // player 2's own component: the one slot where player 2 is the victim
+constexpr std::size_t        kPlayerSlot = 2;  // a member's own component: the battle-player slot, where a human is the victim
 constexpr platform::SlotFact kSlotFacts[kSlots] = {
     {L"the Enemy battle component's damage slot", 0x1457F1040, kEnemy},
     {L"the EnemyEN2228 battle component's damage slot", 0x1466B7678, kEnemy},

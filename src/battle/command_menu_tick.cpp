@@ -34,10 +34,9 @@
 #include <format>
 #include <string>
 
-// The tick itself (battle/command_menu_tick.h): the mirrors, player 2's pass, the shields (the world slow,
-// the
-// command snapshot, the key guide), the trace watch, the placement and removal. Pad 2's presses and releases are
-// battle/menu_input_route, the tint and the wait sound battle/menu_tint; this unit finds, places and
+// The tick itself (battle/command_menu_tick.h): the mirrors, each seat's pass, the shields (the world slow,
+// the command snapshot, the key guide), the trace watch, the placement and removal. A seat's presses and releases
+// are battle/menu_input_route, the tint and the wait sound battle/menu_tint; this unit finds, places and
 // removes them with its own sites.
 
 namespace lss::battle::command_menu_tick {
@@ -95,15 +94,15 @@ constexpr std::uint8_t kSetMenuLayerBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x4
                                                0x01, 0x48, 0x2B, 0xE0, 0x8A, 0x81, 0x83, 0x07, 0x00, 0x00};
 constexpr platform::FunctionFact kSetMenuLayer{L"FieldCommandCtrl_SetMenuFocusLayer783", 0x140C86EA8, kSetMenuLayerBytes};
 // UWidget::Visibility (ESlateVisibility, u8; logged). The command menu is shown and hidden by the game's
-// own calls, mirrored on player 2's controller: ResumeHudInput(ctrl, 0) makes it Visible (once "setup
+// own calls, mirrored on each seat's controller: ResumeHudInput(ctrl, 0) makes it Visible (once "setup
 // done"), SuspendHudInput(0, _) Collapsed (RE-p2-command-menu-levers.md §7).
 constexpr std::uint32_t kVisibility = 0xC3;
 using facts::kCmdMenuWidget;
 using facts::kCmdFieldMenu;
 
-// The UI system's slots: the input object [2], the command controller [23]. Two values player 2's tick
+// The UI system's slots: the input object [2], the command controller [23]. Two values a seat's tick
 // also writes need nothing here: EndUISystem[50]+0x20/+0x2C have no reader in the game, and the input
-// object's +0x64 is per-player state kept in player 2's focus scope (RE-p2-command-menu-levers.md §5).
+// object's +0x64 is per-player state kept in the seat's focus scope (RE-p2-command-menu-levers.md §5).
 using facts::kUICommandController;
 // The party manager's leader type (u8; PM+0x148 is the leader's weak pointer, scopes/leader_scope).
 using facts::kPartyManagerLeaderType;
@@ -242,11 +241,11 @@ std::uintptr_t PartyManager() noexcept
 
 namespace {
 
-/// Before player 2's tick. Pad 2's actions reach player 2's controller through the game's own input
-/// handler (pad 2's presses and releases dispatched in player 2's UI): the press sets the request and
+/// Before a seat's tick. Its pad's actions reach the seat's controller through the game's own input
+/// handler (the pad's presses and releases dispatched in the seat's UI): the press sets the request and
 /// the release clears it, as for player 1; a suspend clears them through the tick's own
 /// ClearOneShotRequests (the mirrored SuspendHudInput turns +0x25C off first). Here only the
-/// leader-switch requests are cleared: a written exception (player 2's d-pad never switches the party
+/// leader-switch requests are cleared: a written exception (a further player's d-pad never switches the party
 /// leader; the game's only switch path, BattleLeader_CycleSwitch, changes player 1's leader and no
 /// per-player switch exists; RE-p2-command-menu-levers.md §15).
 void WriteRequests(std::uintptr_t own) noexcept
@@ -284,9 +283,9 @@ void MirrorHudMode(int seat, std::uintptr_t own, std::uintptr_t one, std::uint8_
         if (mode != 0)
         {
             // A written exception (RE-p2-command-menu-levers.md §4.2, §15): on its first battle frame
-            // player 2's controller still holds player 1's field leader type, and the tick's leader-change
+            // the seat's controller still holds player 1's field leader type, and the tick's leader-change
             // handler would clear the battle system's slot for player 1's type (BattleSys920_ClearTypeSlot
-            // ForType) on a character player 1 is playing. No game path gives it player 2's type earlier.
+            // ForType) on a character player 1 is playing. No game path gives it the seat's type earlier.
             WriteAt(own + kCmdStoredLeaderType, memberType);
         }
         // The game's battle start and end call only this setter (RE-p2-command-menu-lifecycle.md §4.1); a
@@ -360,7 +359,7 @@ struct Snapshot
     std::int32_t                               path = 0;  // the seat's live focus path length (inside the pass)
     bool operator==(const Snapshot&) const = default;
 
-    /// The parts the P1/P2 line shows.
+    /// The parts the comparison line shows (player 1's values beside the seat's).
     bool SameSidesAs(const Snapshot& other) const noexcept
     {
         return compared == other.compared && openPending == other.openPending && menuVisibility == other.menuVisibility &&
@@ -612,7 +611,7 @@ void Slot(std::uint8_t slot, float value) noexcept
     original(slot, value);
 }
 
-/// Replaces the per-type command snapshot write: player 2's pass leaves the game's in place.
+/// Replaces the per-type command snapshot write: a seat's pass leaves the game's in place.
 void CommandSnapshot(void* queue, const std::uint64_t* commands, const std::uint8_t* categories) noexcept
 {
     if (g_pass != 2)
@@ -737,7 +736,7 @@ bool PlaceSites(const platform::GameImage& image) noexcept
     }
     else
     {
-        menu_input_route::Install(image);  // pad 2's presses to player 2's menu in battle; its releases (optional)
+        menu_input_route::Install(image);  // a seat's presses to its menu in battle; its releases (optional)
     }
     platform::Log(L"command menu tick: {}", ok ? L"each further player's command controller ticks in battle and takes "
                                                  L"their attack, guard and dodge; their pads' presses reach their menus in "

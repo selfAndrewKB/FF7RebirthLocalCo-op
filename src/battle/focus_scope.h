@@ -1,19 +1,19 @@
 #pragma once
 
-// Each further player's own UI focus context (RE-p2-command-menu-input.md §2, §3.3, §11, pass S-CMD2). Written for
-// player 2 below; every seat has its own saved context and key guide (indexed by the seat, index 0 unused: player 1's
+// Each further player's own UI focus context (RE-p2-command-menu-input.md §2, §3.3, §11, pass S-CMD2). Every
+// seat has its own saved context and key guide (indexed by the seat, index 0 unused: player 1's
 // context is the game's own, in place outside a scope). One scope at a time, whichever seat's: the seats swap in turn,
 // never one inside another's.
 //
 // UI actions reach one focus path only, kept by Square's input object (EndUISystem[2]) with a stack of
-// focus layers; the game has one such context. Player 2's command menu (a second FieldCommandCtrl)
+// focus layers; the game has one such context. A seat's command menu (another FieldCommandCtrl)
 // calls the same focus functions as player 1's when it is built, opens and closes, so for the length
-// of those calls player 2's context is swapped in: the focus path, the layers, the cause byte, the
+// of those calls the seat's context is swapped in: the focus path, the layers, the cause byte, the
 // capture map (the held actions' capturers: each player's own, as the command menu captures every held
 // Attack, Unique and Guard) and the menu owner byte (+0x64, per-pad input state the member selecter
-// writes) are exchanged with player 2's saved copy (empty at first), the input
-// object's menu-core delegate is unbound (player 2 never runs player 1's cinema handler), and the UI
-// system's command controller slot names player 2's. Weak-pointer counts travel with the bytes, so
+// writes) are exchanged with the seat's saved copy (empty at first), the input
+// object's menu-core delegate is unbound (a further player never runs player 1's cinema handler), and the UI
+// system's command controller slot names the seat's. Weak-pointer counts travel with the bytes, so
 // nothing is added or released. The scope is refused inside another scope or without the input
 // object. One byte context (platform/byte_scope.h) holds it all: the five regions as Exchange
 // ranges, the delegate and the two UI system slots as Set ranges (a slot the game wrote inside the

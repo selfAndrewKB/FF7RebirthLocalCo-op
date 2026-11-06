@@ -1,19 +1,19 @@
 #pragma once
 
-// Player 2's battle camera (RE-p2-battle-camera.md).
+// Each further player's battle camera (RE-p2-battle-camera.md).
 //
 // Each End camera manager owns 13 camera operators (EEndCameraOperatorType); each frame its update
 // renders the lowest-numbered active one, so the Battle operator (11, +0x2CA8) takes over from the
 // Field operator (12) while it is on. The battle state machine switches the Battle operator on at
 // battle start and off at battle end, but through "the primary camera manager": player 1's only. So
-// player 2's camera stayed on the Field operator in battle.
+// a further player's camera stayed on the Field operator in battle.
 //
 // As camera/field_camera does for the Field operator, the Battle operator's Activate and
 // Deactivate (vtable +0x10 / +0x20) are replaced: after the engine's call on player 1's operator, the
-// same call runs on player 2's Battle operator, with player 2 as the primary controller (Activate
+// same call runs on each seat's Battle operator, with that seat as the primary controller (Activate
 // reads the primary camera manager's pose). The Battle operator then switches on its own modules
-// (the battle offset and length) for player 2's character, which player 2's camera already follows.
-// Seed brings player 2's operator to player 1's state when player 2 takes a member mid-battle.
+// (the battle offset and length) for the seat's character, which the seat's camera already follows.
+// Seed brings a seat's operator to player 1's state when its player takes a member mid-battle.
 // Watch logs both camera managers' current operator and both Battle operators' state on change.
 // Game thread only.
 //

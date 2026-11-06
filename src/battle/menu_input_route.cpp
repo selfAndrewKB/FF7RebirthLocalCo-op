@@ -37,8 +37,8 @@ namespace seat_ladder = scopes::seat_ladder;
 namespace {
 
 // The CommandMenu action's key (logged). An action event's key name is at +0x18 (the handler compares
-// it with the FKeys' first eight bytes). Target switching (Prev/NextTarget) goes to player 2's menu
-// like every other action: its handler switches the target fields a TargetScope holds as player 2's
+// it with the FKeys' first eight bytes). Target switching (Prev/NextTarget) goes to the seat's menu
+// like every other action: its handler switches the target fields a TargetScope holds as the seat's
 // (RE-p2-targeting-scoped-tick.md §7).
 constexpr std::uintptr_t kCommandMenuKey = 0x1491E44F0;
 constexpr std::uint32_t  kEventKey       = 0x18;
@@ -106,7 +106,7 @@ std::int32_t g_upPad       = -1;  // the pad of the release being handled (key-u
 std::array<menu_rules::TakenKeys, players::kMaxPlayers> g_taken{};
 
 /// The seat whose pad the source bit belongs to (the seat's pad is its number: input::button_view::PadBits(seat), the same
-/// sources input/pad_buttons routes for player 2), or 0.
+/// sources input/pad_buttons routes for the seat), or 0.
 int SeatOfSource(std::uint32_t sourceBit) noexcept
 {
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
@@ -220,7 +220,7 @@ bool InSeatUi(int seat, Route route, const wchar_t* what, Call&& call) noexcept
         return refuse(L"the player's member could not be read");
     }
     args.leaderType = ReadAt<std::uint8_t>(manager + kPartyManagerLeaderType);
-    // The menu's target-switch handler (a press) writes the target fields: player 2's, or no press. A
+    // The menu's target-switch handler (a press) writes the target fields: the seat's, or no press. A
     // release needs none, and after a battle there are none to hold (the part is optional then).
     seat_ladder::SeatScopes scopes(seat_ladder::Focus | seat_ladder::Primary | seat_ladder::Targets |
                                        seat_ladder::Leader | seat_ladder::LeaderType | seat_ladder::Rules,
@@ -386,7 +386,7 @@ bool Find(const platform::GameImage& image) noexcept
 void Install(const platform::GameImage& image) noexcept
 {
     input::pad_buttons::SetSeatRoute(&RouteSeatPad);  // a seat's presses to its menu in battle
-    // Pad 2's releases: the key-up slot wrapped (the pad of each release noted) and the up route's call redirected.
+    // A seat's releases: the key-up slot wrapped (the pad of each release noted) and the up route's call redirected.
     const auto upRoute = platform::FindFunction(image, kUpRoute);
     const auto entry   = image.Rebase(kKeyUpEntry, sizeof(void*));
     const auto keyUp   = image.Rebase(kKeyUp);
