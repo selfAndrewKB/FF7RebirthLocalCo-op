@@ -6,8 +6,8 @@
 //
 // CharaPop keeps a budget of characters spawned (128 live), ranked by a score whose distance part is measured from one
 // centre: the party leader, or the override centre event scripts set with CharaPop_SetOverrideCenter. Far from that
-// centre a character is despawned (states 9 → 10 → 11), so the townspeople near player 2 vanished while player 1 was
-// far. The game has one centre and no path for a second.
+// centre a character is despawned (states 9 → 10 → 11), so the townspeople near a further player vanished
+// while player 1 was far. The game has one centre and no path for a second.
 //
 // While the split is on screen and a seat's player plays, the mod's replacement of the distance score
 // (CharaPopEntry_EvalSpawnScore_ByCenter, an entry redirect) runs the game's own score as is, then once more per

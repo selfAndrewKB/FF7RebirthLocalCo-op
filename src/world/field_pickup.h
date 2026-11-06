@@ -1,47 +1,47 @@
 #pragma once
 
-// Player 2 picks up collectibles and materials with the game's own field prompts (RE-p2-field-interact.md
+// A further player picks up collectibles and materials with the game's own field prompts (RE-p2-field-interact.md
 // §4.1, §12; plan, "Player 2 triggers field prompts").
 //
 // FieldActionMgr keeps every field prompt as a point and runs one selection per frame around one probe, the
 // party leader, with one slot block: the candidates, the visibility-trace handles, eight button slots with
 // their rows, records and latches. Nothing in it is per player. So right after the game's own update
-// (player 1's; its call in the game mode's tick is redirected here), the same game code runs once more as
-// player 2:
-//   - inside player 2's scopes: pad 2's sticks and buttons, player 2's controller as the primary one, player
-//     2's member as the leader (and its type). Every gate and the probe then resolve to player 2 (§12.7);
-//   - with player 2's copy of the manager's per-player ranges swapped in (§12.9; player 1's put back after),
+// (player 1's; its call in the game mode's tick is redirected here), the same game code runs once more for
+// each seat's player:
+//   - inside the seat's scopes: the seat's pad's sticks and buttons, the seat's controller as the primary one, the
+//     seat's member as the leader (and its type). Every gate and the probe then resolve to the seat's player (§12.7);
+//   - with the seat's copy of the manager's per-player ranges swapped in (§12.9; player 1's put back after),
 //     and of each point's carried target bits (+0x104 bits 1 and 2), kept by point key;
 //   - with the game's own "point disabled" bit (+0x104 bit 4, which the candidate query skips) set on every
 //     point that is neither one of WorldItemMgr's items, one of TreasurePointMgr's chests (§13; the chest listener's
 //     own test), a vending machine (its point preset rpaVendingMachine, §15.5; world/vending) nor a shopkeeper
-//     (the game's data names a shop action for its key; world/shop_talk), and cleared again after: player 2 is
-//     offered collectibles, materials, chests, vending machines and shopkeepers; talk, doors, scripts and menus stay
-//     player 1's. A chest or machine player 2 uses runs the game's own state (treasure, field action) on player 2's
-//     member (the listener asks for the leader, which the scope makes player 2's); a shopkeeper's press fires the NPC's
-//     own state trigger;
+//     (the game's data names a shop action for its key; world/shop_talk), and cleared again after: the seat's player
+//     is offered collectibles, materials, chests, vending machines and shopkeepers; talk, doors, scripts and menus
+//     stay player 1's. A chest or machine the seat's player uses runs the game's own state (treasure, field action) on
+//     the seat's member (the listener asks for the leader, which the scope makes the seat's); a shopkeeper's press
+//     fires the NPC's own state trigger;
 //   - the input step's FieldAction part in the game's order (its gate, the slot poll into the mod's own
 //     buffers, the latch, the press/execute tick), then the selection update;
-//   - with player 2's controller first in the world's controller list for each visibility request the pass
+//   - with the seat's controller first in the world's controller list for each visibility request the pass
 //     makes: the request's screen test projects the point through "the first local player" (§12.13), so the
-//     offer follows player 2's own screen, not player 1's;
-//   - with each point's marker widget (+0x78) swapped too, on every live point, player 2's kept by point key
-//     (§12.15): the game's own marker code makes, drives and sweeps player 2's own widget in the pass, so the
-//     two players no longer write one widget's state in turn. Player 2's widgets the game would not destroy
-//     (point gone between passes, field exit, player 2 leaving) go through its own destroy call.
+//     offer follows the seat's own screen, not player 1's;
+//   - with each point's marker widget (+0x78) swapped too, on every live point, the seat's kept by point key
+//     (§12.15): the game's own marker code makes, drives and sweeps the seat's own widget in the pass, so the
+//     two players no longer write one widget's state in turn. The seat's widgets the game would not destroy
+//     (point gone between passes, field exit, the seat's player leaving) go through its own destroy call.
 // Selection, traces, rows, markers, the look-at, the press and the grant are all the game's. The one global
 // byte the press tick writes (root+0x210 -> +8) is put back after. The game's field enter/exit resets run
-// on player 2's copy too, and its field-exit clear runs on it when player 2 leaves.
+// on each seat's copy too, and its field-exit clear runs on it when the seat's player leaves.
 //
 // Three more hooks carry the pass's edges: the game mode tick's call of the selection update (the pass runs right
-// after it), WorldItemMgr's mark by key (a key player 2's pass marks is noted) and the WorldItem tick's call of the
-// grant (run with player 2's controller as the primary one for a noted key: the item-get rumble's only player read,
+// after it), WorldItemMgr's mark by key (a key a seat's pass marks is noted) and the WorldItem tick's call of the
+// grant (run with that seat's controller as the primary one for a noted key: the item-get rumble's only player read,
 // §12.12 item 5). Each tells the one observer (world/interact_watch, a dev tool) what passed through it.
 //
-// Logged: the scopes or gates that stopped a pass (counted), player 2's slot targets and marker widgets on
+// Logged: the scopes or gates that stopped a pass (counted), each seat's slot targets and marker widgets on
 // change, each widget the mod destroys, a status line once a minute. Game thread only.
 //
-// Per seat (players/seats.h): "player 2" above is each seat. Each seat has its own pickup record (the copy of the five
+// Per seat (players/seats.h): each seat has its own pickup record (the copy of the five
 // ranges, the carried target bits and marker widgets by point key, the WorldItem keys its pass marked, its counts),
 // and the passes run in seat order after the game's own update, one seat's swap closed before the next one's opens.
 // The visibility request puts the seat's controller first in the world's controller list, its entry found by the
@@ -62,7 +62,7 @@ namespace lss::world::field_pickup {
 /// Finds the game's functions (each checked) and installs the field enter/exit redirects and the three hooks. Logged.
 void Install(const platform::GameImage& image) noexcept;
 
-/// Puts the game's code back (at mod uninstall, with player 2 out).
+/// Puts the game's code back (at mod uninstall, with the further players out).
 void Remove() noexcept;
 
 /// The seats' passes, right after the game's own selection update of `mgr` (the update hook calls it).

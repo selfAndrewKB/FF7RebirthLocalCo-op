@@ -544,7 +544,7 @@ void Install(const platform::GameImage& image) noexcept
     {
         g_clearCall.Restore();
     }
-    // The tick-time measure: player 2's appends above call the game's measure directly (its trampoline), not this.
+    // The tick-time measure: the seats' appends above call the game's measure directly (its trampoline), not this.
     bool       tickTime = false;
     const auto diff     = image.Rebase(kCameraDiffDegrees, sizeof(float));
     if (eval && diff)

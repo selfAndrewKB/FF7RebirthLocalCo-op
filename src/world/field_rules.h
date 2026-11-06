@@ -84,7 +84,7 @@ enum class TriggerVerdict
 {
     NotAdmitted,    // its class is not admitted: held back
     PromptZipLine,  // a button-prompt zip line (only auto-start lines are admitted): held back
-    Deliver,        // delivered as player 2
+    Deliver,        // delivered as the seat's player
 };
 
 /// `classIndex` is the admitted class (negative: none); `enterEffectOnly` is that class's rule; `zipEnterEffect` the

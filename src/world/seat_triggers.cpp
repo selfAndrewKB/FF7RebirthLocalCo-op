@@ -82,7 +82,7 @@ constexpr std::uint8_t kFindActorBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 
 constexpr platform::FunctionFact kFindActor{L"EndActorTagRegistry_FindActorByTag", 0x140DD6634, kFindActorBytes};
 using FindActorFn = void* (*)(const std::uint64_t* key);
 
-// The classes admitted for player 2 (research/RE-p2-traversal-classes.md §7): native vtables, which placed Blueprint
+// The classes admitted for the seats (research/RE-p2-traversal-classes.md §7): native vtables, which placed Blueprint
 // actors keep. Each registers on the leader's controller list through the shared trigger enter (checked live at the
 // slot below); its register/unregister reads only the leader, so the same delivery serves all of them. 1.005 vtables
 // through replaced-traversal-classes.json.
@@ -95,11 +95,11 @@ struct AdmittedClass
     bool           enterEffectOnly = false;  // zip lines: only the auto-start kind (bUseEnterEffect +0x770)
     bool           logsUseFields   = false;  // one-shot moves: the register's +0x848 / +0x86C, logged per delivery
     platform::PerBuild<std::uint32_t> unregisterSlot{0x728, 0x730};  // where `unregister` sits in the vtable
-    bool           rides = false;  // chocobo climbs: delivered while player 2 rides their own chocobo too
+    bool           rides = false;  // chocobo climbs: delivered while the seat's player rides their own chocobo too
 };
 // The chocobo climb (RE-p2-chocobo-climb.md §1.1, §3.1): a stored-character class whose unregister override sits one
 // slot past the others'. During a ride both players' members are possessed by their AI, so its register falls back to
-// the primary controller: player 2's inside the delivery's scope. 1.005 vtable through replaced-chocobo-traversal.json.
+// the primary controller: the seat's inside the delivery's scope. 1.005 vtable through replaced-chocobo-traversal.json.
 constexpr AdmittedClass kAdmitted[] = {
     {L"ladder", facts::kLadderVTable},
     {L"climbing wall", facts::kClimbingWallVTable},
@@ -125,8 +125,8 @@ constexpr std::uint64_t kNoWeak = 0x00000000FFFFFFFFull;  // FWeakObjectPtr rese
 
 // The wall-run move state's camera pick (RE §3.13): LeaderActionComp_FindWallRunActorEntered_Flag2A1(lac) returns the
 // first actor on the LeaderActionComp's wall-run list (+0x14F0) whose REAL entered flag is set. Its only call
-// (1.004 0x1434372CA, 1.005 0x14315631A, inside one 16-byte block in both) is taken over: for player 2's
-// LeaderActionComp (*(PC2+0x598)) player 2's flags are swapped in around it.
+// (1.004 0x1434372CA, 1.005 0x14315631A, inside one 16-byte block in both) is taken over: for a seat's
+// LeaderActionComp (*(its controller+0x598)) that seat's flags are swapped in around it.
 constexpr std::uintptr_t kWallRunPickCall = 0x1434372CA;
 constexpr std::uint8_t   kWallRunPickBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
                                                 0x24, 0x10, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
@@ -138,7 +138,7 @@ constexpr std::uint32_t kWallRunList            = 0x14F0;  // TArray<FWeakObject
 constexpr std::int32_t  kWallRunListMax         = 32;
 
 // End2FieldActionActorBase's entered flag: its trigger enter needs 0 and sets 1, its leave needs 1 and sets 0. One per
-// actor, so player 2's is kept aside (the shadow) and swapped in around player 2's deliveries; the field is player 1's.
+// actor, so each seat's is kept aside (the shadow) and swapped in around its deliveries; the field is player 1's.
 constexpr std::uint32_t kEnteredFlag = 0x2A1;
 
 // The game's allocator (stock FMemory), for the overlap array handed to the diff: the diff may empty it (TArray::Empty,
@@ -226,7 +226,7 @@ const void*          g_registryWeak = nullptr;
 CRITICAL_SECTION*    g_overlapLock  = nullptr;
 const std::uint8_t*  g_sweepFlagA   = nullptr;
 const std::uint8_t*  g_sweepFlagB   = nullptr;
-// Null: no class is admitted; every event of player 2's but a switch volume's (seat_switch_volumes, named by the diff's
+// Null: no class is admitted; every event of a seat's but a switch volume's (seat_switch_volumes, named by the diff's
 // own actor) is held back.
 FindActorFn          g_findActor    = nullptr;
 std::uintptr_t       g_classVt[kClassCount] = {};  // live vtables of the admitted classes that passed their checks (0: not)
@@ -346,7 +346,7 @@ const std::byte* Datum(const std::byte* world, std::uint32_t chunks, std::uint32
     return base != nullptr ? base + static_cast<std::size_t>(size) * slot : nullptr;
 }
 
-/// Player 2's tracker's query result, read as FieldTick reads it (RE-p2-trigger-overlap.md §5.1), into `out`.
+/// A seat's tracker's query result, read as FieldTick reads it (RE-p2-trigger-overlap.md §5.1), into `out`.
 Read ReadResult(void* tracker, ResultArray& out) noexcept
 {
     void* registry = players::weak_object::ObjectAt(g_registryWeak);
@@ -879,7 +879,7 @@ void Install(const platform::GameImage& image) noexcept
     g_sweepFlagA   = reinterpret_cast<const std::uint8_t*>(*flagA);
     g_sweepFlagB   = reinterpret_cast<const std::uint8_t*>(*flagB);
     g_enterSite = *enterAt, g_leaveSite = *leaveAt, g_enterTarget = *enter, g_leaveTarget = *leave;
-    // Traversal L1: without the lookup, every event of player 2's but a switch volume's stays held back. A class is
+    // Traversal L1: without the lookup, every event of a seat's but a switch volume's stays held back. A class is
     // admitted only if its live vtable's trigger slot holds the shared enter, and (for the classes that store a
     // character) its unregister slot the expected override.
     const auto findActor = platform::FindFunction(image, kFindActor);
@@ -934,8 +934,8 @@ void Remove() noexcept
     {
         platform::Log(L"seat triggers: the wall-run pick call was changed after us; left in place (it passes through)");
     }
-    // A call crossing two blocks is restored only from the game thread. Elsewhere it stays in place; it holds player 2's
-    // events back only while player 2 is active, and passes everything else through.
+    // A call crossing two blocks is restored only from the game thread. Elsewhere it stays in place; it holds a seat's
+    // events back only while that seat is active, and passes everything else through.
     if (players::generation::OnGameThread())
     {
         if ((g_enterCall.IsInstalled() && !g_enterCall.Restore()) | (g_leaveCall.IsInstalled() && !g_leaveCall.Restore()))

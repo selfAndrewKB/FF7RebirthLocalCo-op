@@ -556,8 +556,8 @@ void Close(Subject& subject, const wchar_t* why) noexcept
 }
 
 /// Points the subject at its characters: `counted`'s answers are counted, `watched`'s strand is watched (the member:
-/// the same; the chocobo: the one player 2 rides, and the one they sit on). A change of the watched one closes its
-/// strand with `why`.
+/// the same; the chocobo: the one the seat's player rides, and the one they sit on). A change of the watched one
+/// closes its strand with `why`.
 void Aim(Subject& subject, const void* counted, const void* watched, const wchar_t* why) noexcept
 {
     subject.root.store(RootOf(counted), std::memory_order_release);
@@ -594,7 +594,7 @@ void Step(Subject& subject, bool splitShown, float seconds) noexcept
     const Counts counts = Take(subject);
     if (subject.pawn == nullptr)
     {
-        return;  // counted, not watched (the chocobo while player 2 gets off)
+        return;  // counted, not watched (the chocobo while the seat's player gets off)
     }
     // A failed check alone may still end in the game's own return-warp to the safe spot (the collision wall,
     // RE-p2-party-leash.md §6b); it strands the character only once the game has parked it.

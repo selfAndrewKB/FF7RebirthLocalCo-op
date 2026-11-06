@@ -80,7 +80,7 @@ constexpr std::uint32_t kGsSlot0B = 0x1A125B0;
 constexpr std::uint8_t  kGameFlagBlocksPoll = 11;
 constexpr std::uint8_t  kModeBlocksPoll     = 2;
 
-// FieldActionMgr (§12.9): the per-player ranges, exchanged with player 2's copy around the pass.
+// FieldActionMgr (§12.9): the per-player ranges, exchanged with the seat's copy around the pass.
 struct Range
 {
     std::uint32_t offset;
@@ -126,7 +126,7 @@ constexpr std::uint8_t  kTargetBits     = 0x06;   // bit 1 slot target, bit 2 ru
 constexpr std::uint8_t  kDisabledBit    = 0x10;   // the game's "point disabled": the candidate query skips it
 constexpr std::uint32_t kPointMarker    = 0x78;   // UFieldTargetWidget*, the point's marker: carried per player (§12.15)
 
-// The two maps whose points player 2's pass admits, both a stock TMap keyed by the point's FName at element +0
+// The two maps whose points a seat's pass admits, both a stock TMap keyed by the point's FName at element +0
 // (platform/tset_find.h): WorldItemMgr's items (§10.5, collectibles and materials) and TreasurePointMgr's chests
 // (§13.1, the chest listener's own test). Where the map sits in its owner, and its element's shape.
 struct MapShape
@@ -184,7 +184,7 @@ constexpr std::uintptr_t kFieldExitCall  = 0x140D9FFD8;
 // The visibility request (§12.13): its point-side preset's screen test projects the point through the world's first
 // local player (the first controller in World->PlayerControllerList at World+0x1F0 whose player is local; RE-p2-hud.md
 // reads it as the PlayerControllerList through GetFirstPlayerController, the field-interact doc names it
-// ControllerList), always player 1's. Inside player 2's pass the request runs with player 2's controller first in that
+// ControllerList), always player 1's. Inside a seat's pass the request runs with that seat's controller first in that
 // list. Entry: mov [rsp+18h],rbx (the 5 bytes replaced), then push rbp/rsi/rdi/r12/r13/r14/r15.
 constexpr std::uint8_t   kRequestBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 0x56, 0x57,
                                             0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57};
@@ -192,8 +192,8 @@ constexpr platform::FunctionFact kRequest{L"the world items' screen-visibility r
 constexpr std::size_t    kRequestFirst   = 5;
 
 // The pass's hooks (§10.A, §12.12): the game mode tick's call of the selection update (the pass runs right after it),
-// WorldItemMgr's mark by key (a key player 2's pass marks is noted; its entry's first instruction, 5 bytes) and the
-// WorldItem tick's call of the grant (run with player 2's controller as the primary one for a noted key).
+// WorldItemMgr's mark by key (a key a seat's pass marks is noted; its entry's first instruction, 5 bytes) and the
+// WorldItem tick's call of the grant (run with that seat's controller as the primary one for a noted key).
 constexpr std::uintptr_t kUpdateCall      = 0x1423EF160;
 constexpr std::uint8_t   kMarkByKeyBytes[] = {0x48, 0x89, 0x54, 0x24, 0x10, 0x53, 0xB8, 0x30, 0x00, 0x00, 0x00};
 // u8(wim, FName key by value)
@@ -235,7 +235,7 @@ constexpr auto kStatusEvery = std::chrono::seconds(60);
 enum Skip : int
 {
     kSkipScopes,  // a scope did not hold
-    kSkipMember,  // player 2's member or its type could not be read
+    kSkipMember,  // the seat's member or its type could not be read
     kSkipCount
 };
 
@@ -1040,8 +1040,8 @@ bool PollGate(const std::uint8_t* root, bool& slot0Only, bool& faulted) noexcept
     {
         return false;
     }
-    // The pause button, in pad 2's view (the button scope is open). The game's own copy: the held test releases
-    // the reference the copy adds.
+    // The pause button, in the seat's pad's view (the button scope is open). The game's own copy: the held test
+    // releases the reference the copy adds.
     alignas(8) std::array<std::byte, 24> key{};
     std::uint8_t held = 0;
     if (!platform::CallGuarded(g_copyKey, static_cast<void*>(key.data()), reinterpret_cast<const void*>(g_pauseKey)) ||
@@ -1365,7 +1365,7 @@ void Install(const platform::GameImage& image) noexcept
                                             reinterpret_cast<std::uintptr_t>(&FieldExit));
         if (!resets)
         {
-            g_enterCall.Restore();  // both or neither: player 2's rows must not outlive a field change
+            g_enterCall.Restore();  // both or neither: a seat's rows must not outlive a field change
         }
     }
     // The three hooks: the pass runs only through the update's; the mark and the grant carry its edges.

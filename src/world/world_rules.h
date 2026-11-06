@@ -83,7 +83,7 @@ constexpr bool ShotShows(const void* target, const void* member, const void* one
     return ShotShows(target, humans, cameraIsSeat ? players::kFirstFurtherSeat : 0, owner);
 }
 
-// ---- location_rows: the camera location volume player 2 is in ----
+// ---- location_rows: the camera location volume a seat's character is in ----
 
 /// A volume the pick considers: one that changes the camera and is not disabled.
 constexpr bool LocationCandidate(std::uint32_t flags, std::uint32_t disabledFlag, std::uint32_t changeCameraFlag) noexcept

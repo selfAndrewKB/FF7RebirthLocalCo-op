@@ -66,15 +66,15 @@ constexpr std::array<std::uintptr_t, 7> kCameraCalls{
 };
 constexpr std::size_t kChadleyCall = 3;  // kCameraCalls' FEndShowChadleyShopMenu_Begin
 using Clock = std::chrono::steady_clock;
-// Player 2's press claims the shop whose camera comes within this many frames (the level script opens it the next frame,
+// A seat's press claims the shop whose camera comes within this many frames (the level script opens it the next frame,
 // §15.1) and names the pressed machine (the camera's target is the machine's Tags[0], which the pressed point's key
 // contains, e.g. VendingMachine_..._obl2250_VendingBook_NearDrawbridge_PressVolume). Any other shop stays player 1's.
 constexpr std::uint64_t kPressFrames = 60;
 constexpr auto          kPressWindow = std::chrono::seconds(5);  // a press older than this is logged as having opened no shop
 // A shopkeeper's shop opens after its greeting, if any (a voiced line of about 2 s and more; RE-p2-shopkeeper-talk.md
-// §4.1): player 2's press of a shopkeeper claims the first shop camera within this time that names the pressed NPC.
+// §4.1): a seat's press of a shopkeeper claims the first shop camera within this time that names the pressed NPC.
 constexpr auto          kShopkeeperWindow = std::chrono::seconds(15);
-// A shop up holds a pending press's window (player 2's shop may be queued behind it) for at most this long, in case its
+// A shop up holds a pending press's window (a seat's shop may be queued behind it) for at most this long, in case its
 // close is never seen (a map change mid-shop).
 constexpr auto          kHoldAtMost = std::chrono::seconds(120);
 
@@ -83,7 +83,7 @@ using Fn = std::uint64_t (*)(std::uint64_t, std::uint64_t, std::uint64_t, std::u
 
 platform::EntryRedirect g_end2Key, g_camera, g_cameraOff;
 // The shop camera's caller in FEndShowChadleyShopMenu_Begin (its return address, this build): Chadley's shop keeps its
-// camera for player 2, since coming back from a VR battle activates the shop camera again outside the hooked function with
+// camera for a seat, since coming back from a VR battle activates the shop camera again outside the hooked function with
 // the target and preset saved at the VR start (RE-p2-shop-camera-skip.md §7).
 std::uintptr_t g_chadleyReturn = 0;
 std::array<platform::CallRedirect, kCameraCalls.size()> g_cameraCalls;  // 1.005: the camera's callers
@@ -397,7 +397,7 @@ bool Entry(const platform::GameImage& image, platform::EntryRedirect& redirect, 
                                   reinterpret_cast<std::uintptr_t>(replacement));
 }
 
-/// 1.005: the shop camera's activation at its seven callers (all or none: a shop path left out would open player 2's
+/// 1.005: the shop camera's activation at its seven callers (all or none: a shop path left out would open a seat's
 /// shop as player 1's).
 bool CameraCalls(const platform::GameImage& image) noexcept
 {

@@ -1,7 +1,7 @@
 #pragma once
 
-// Logs when player 2's character is stranded off the loaded navmesh and asks the game's follow warp to bring it back
-// (RE-p2-party-leash.md, RE-p2-party-warp.md; the ridden chocobo: RE-p2-chocobo-warp.md §1, §4).
+// Logs when a further player's character is stranded off the loaded navmesh and asks the game's follow warp to bring
+// it back (RE-p2-party-leash.md, RE-p2-party-warp.md; the ridden chocobo: RE-p2-chocobo-warp.md §1, §4).
 //
 // Field characters may walk only on navmesh, and the navmesh is streamed in a 3x3 block of 120 m cells
 // around the party leader. When the character stands where the block has unloaded, each move it asks for
@@ -17,19 +17,18 @@
 // ready" counts only while the game's park bit (stop reason 5) is set, since short of the park the game
 // return-warps the character to its safe spot itself.
 //
-// Two characters are watched, each its own subject with the same step: player 2's member on foot, and the
-// chocobo player 2 rides (its moves go through the same three calls). StrandWatch (world/strand_watch.h)
+// Two characters are watched, each its own subject with the same step: a further player's member on foot, and the
+// chocobo that player rides (its moves go through the same three calls). StrandWatch (world/strand_watch.h)
 // turns a subject's refusals into began / warp / ended; at "warp" its own follow warp brings it back
-// (world/party_warp.h; the chocobo's, with player 2 seated). The game moves characters on worker threads
+// (world/party_warp.h; the chocobo's, with that player seated). The game moves characters on worker threads
 // as well as the game thread, so the redirects only count (atomics) and Tick, on the game thread, turns the
-// counts into events. Inert unless player 2 is in. The lines carry both players' positions and the leader's
+// counts into events. Inert unless a further player is in. The lines carry both players' positions and the leader's
 // nav cell; the AI probes and the once-a-second status line are dev tools.
 //
 // Per seat (players/seats.h): each seat has its two subjects (its member and its chocobo), their counts, strands and
 // tick clock; the redirects find the subject by its root among every seat's, and Tick steps the seats in order. One
 // warp at a time (party_warp.h): a seat whose strand reaches "warp" while another seat's warp runs waits (logged) and
-// asks once that warp is over, if its strand still holds. The chocobos come from chocobo_ride, which answers for
-// player 2 only until it is per seat.
+// asks once that warp is over, if its strand still holds. The chocobos come from chocobo_ride, by seat.
 
 namespace lss::platform {
 class GameImage;

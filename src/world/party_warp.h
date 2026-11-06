@@ -1,21 +1,21 @@
 #pragma once
 
-// Brings player 2 back to the party through the game's own follow warp (RE-p2-party-warp.md §1, §3, §9;
+// Brings a further player back to the party through the game's own follow warp (RE-p2-party-warp.md §1, §3, §9;
 // RE-p2-chocobo-warp.md §2 and §4 for the ridden chocobo).
 //
 // An AI follower's follow state (EEndAIState FOLLOW) holds the game's party warp: a forced request (vtable +0x270)
 // followed by the teleport update (+0x298), which runs the follow EQS for a spot near the leader, fades the follower
-// out, warps it there and fades it back in. While player 2 drives the member, her AI controller is kept (character
+// out, warps it there and fades it back in. While a seat's player drives the member, its AI controller stays (character
 // +0x588) with its follow state (the PLAYER variant), but its tick is gated off, so nothing calls the update. While
-// player 2 rides their own chocobo, the same holds for the chocobo's AI and its follow state (a chocobo variant, the
+// that player rides their own chocobo, the same holds for the chocobo's AI and its follow state (a chocobo variant, the
 // same force / query / finish-now functions): the game brings a far member chocobo back this way, its rider seated and
 // carried by attachment. This module makes the forced request and calls the query and the update each tick until the
 // game clears the request, exactly the calls the gated AI tick would make; the spot, fade, facing, warp and cooldown
 // are all the game's. If the request has not finished within kFinishAfterSeconds, the game's own "finish now" (+0x278)
-// completes it at the follow target, as the game does after a fast travel's wait. Game thread, outside every player-2
+// completes it at the follow target, as the game does after a fast travel's wait. Game thread, outside every seat's
 // scope (a follow state run as the party leader clears its leader; a chocobo's would follow itself).
 //
-// Per seat (players/seats.h): any seat's member or ridden chocobo is a subject ("player 2" above). One warp is driven
+// Per seat (players/seats.h): any seat's member or ridden chocobo is a subject. One warp is driven
 // at a time and owned by the seat that started it: another seat's Start is refused (logged) while it runs; nav_strand
 // holds that seat's request until the warp is over. This keeps two players' calls exactly as before; whether the game
 // takes two forced follow warps at once is an open question.

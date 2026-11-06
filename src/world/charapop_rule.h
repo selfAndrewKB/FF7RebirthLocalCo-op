@@ -1,7 +1,7 @@
 #pragma once
 
 // CharaPop's Light/Middle rule, as its evaluators apply it to one camera (RE-p2-charapop-per-view.md §1.3:
-// CharaPopEntry_EvalLOD_Light 0x1408B4644, _Middle 0x1408B3B84), for the entries player 2's camera needs
+// CharaPopEntry_EvalLOD_Light 0x1408B4644, _Middle 0x1408B3B84), for the entries a seat's camera needs
 // (world/charapop_near.h). Pure, host-tested.
 //
 //   paused  when distance > should-tick and (in the FOV cone ? distance > in-camera : distance > out-of-camera)
@@ -11,7 +11,7 @@
 // `extraDegrees` the cone (1 and 0 for the game's own rule; more to keep an entry already raised, less to
 // ask whether player 1's camera keeps it with room to spare).
 //
-// Each seat's camera is judged on its own against player 1's ("player 2" below is any seat's view); an entry is
+// Each seat's camera is judged on its own against player 1's; an entry is
 // raised when any seat's view needs it and kept while any does (SeatHolds, the union over the seats).
 
 #include <cstdint>
@@ -62,19 +62,19 @@ constexpr bool KeepsAwakeOrShown(const LodDistances& lod, const EntryView& view,
     return keeps.awake || keeps.shown;
 }
 
-/// True when player 1's camera already gives the entry everything player 2's camera asks for, so the game
-/// alone keeps it as player 2 needs and raising it would add only cost.
+/// True when player 1's camera already gives the entry everything the seat's camera asks for, so the game
+/// alone keeps it as the seat needs and raising it would add only cost.
 constexpr bool Covers(const Keeps& one, const Keeps& forSeat) noexcept
 {
     return (!forSeat.awake || one.awake) && (!forSeat.shown || one.shown);
 }
 
 // The margins that keep an entry from toggling on the edge: a raised entry stays raised until it is this far
-// past player 2's distances, or this far inside player 1's.
+// past the seat's distances, or this far inside player 1's.
 inline constexpr float kKeepScale   = 1.1f;
 inline constexpr float kKeepDegrees = 5.0f;
 
-/// Whether to raise an entry not raised yet: player 2's view, at `reach` times the game's distances, keeps
+/// Whether to raise an entry not raised yet: the seat's view, at `reach` times the game's distances, keeps
 /// it, and player 1's camera (when read) does not already.
 constexpr bool ShouldRaise(const LodDistances& lod, const EntryView& seatView, const EntryView* one,
                            float reach) noexcept
@@ -90,7 +90,7 @@ constexpr bool ShouldRaise(const LodDistances& lod, const EntryView& seatView, c
 enum class Hold
 {
     Keep,             // still needed
-    OutOfReach,       // past player 2's distances (with the margin)
+    OutOfReach,       // past the seat's distances (with the margin)
     PlayerOneCovers,  // player 1's camera keeps it (with the margin)
 };
 

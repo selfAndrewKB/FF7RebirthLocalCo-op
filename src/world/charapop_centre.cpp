@@ -82,7 +82,7 @@ constexpr std::uint32_t  kEntryFlags     = 0x118;   // u32: bit 0 externally man
 constexpr std::uint32_t  kEntryHidden    = 0x1A2;   // u8: spawn hidden (over the visible budget)
 constexpr std::int32_t   kExcluded       = -999999;
 
-constexpr std::uint32_t kEvery        = 10;  // ticks between the player-2 location reads
+constexpr std::uint32_t kEvery        = 10;  // ticks between the seats' location reads
 constexpr auto          kSummaryEvery = std::chrono::seconds(10);
 constexpr float         kRings[]      = {3000.0f, 6000.0f, 10000.0f};  // 30 / 60 / 100 m
 
