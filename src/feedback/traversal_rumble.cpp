@@ -144,11 +144,11 @@ int SeatOfChocobo(const void* chocobo) noexcept
 /// The reasons a seat's list drop logs at its leave (literals, by seat).
 const wchar_t* OutText(int seat) noexcept
 {
-    return seat == players::kFirstFurtherSeat ? L"player 2 is out" : L"player 3 is out";
+    return seat == players::kFirstSeat ? L"player 2 is out" : L"player 3 is out";
 }
 const wchar_t* LeavesText(int seat) noexcept
 {
-    return seat == players::kFirstFurtherSeat ? L"player 2 leaves" : L"player 3 leaves";
+    return seat == players::kFirstSeat ? L"player 2 leaves" : L"player 3 leaves";
 }
 
 }  // namespace
@@ -216,9 +216,9 @@ void PlayNamed(std::uint64_t key, const void* params, std::uint8_t flag) noexcep
     const int  owner    = t_ownerSeat;
     const bool game     = owner == 0 && players::generation::OnGameThread();
     const int  seat     = traversal_rumble_rules::SeatOfAdd(owner, game, game ? PrimarySeat() : 0);
-    const bool further  = seat >= 1;
-    const bool added    = further && AddToSeat(seat, key, params, flag);
-    const auto route    = traversal_rumble_rules::AddRouteOf(further, added, AnyCopy());
+    const bool isSeat   = seat >= 1;
+    const bool added    = isSeat && AddToSeat(seat, key, params, flag);
+    const auto route    = traversal_rumble_rules::AddRouteOf(isSeat, added, AnyCopy());
     if (route != traversal_rumble_rules::Route::Seat)
     {
         g_counts[0].addsOne.fetch_add(1, std::memory_order_relaxed);
@@ -361,10 +361,10 @@ void StopNamed(std::uint64_t key) noexcept
     const int  owner    = t_ownerSeat;
     const bool game     = players::generation::OnGameThread();
     const int  seat     = traversal_rumble_rules::SeatOfAdd(owner, game, owner == 0 && game ? PrimarySeat() : 0);
-    const bool further  = seat >= 1;
-    const bool hasList  = further && g_seatList[seat].load(std::memory_order_acquire) != nullptr;
-    const bool stopped  = further && game && StopOnSeat(seat, original, key);
-    const auto route    = traversal_rumble_rules::StopRouteOf(owner != 0, game, hasList, further, stopped, AnyCopy());
+    const bool isSeat   = seat >= 1;
+    const bool hasList  = isSeat && g_seatList[seat].load(std::memory_order_acquire) != nullptr;
+    const bool stopped  = isSeat && game && StopOnSeat(seat, original, key);
+    const auto route    = traversal_rumble_rules::StopRouteOf(owner != 0, game, hasList, isSeat, stopped, AnyCopy());
     if (route == traversal_rumble_rules::Route::LeftOnWorker)
     {
         // A source of a seat's stopping on a worker: the owner's list can be named only on the game thread, and no
@@ -699,8 +699,8 @@ void Install(const platform::GameImage& image) noexcept
                               : L"UNCHANGED, the game's one list plays on the primary player's pad (a function or call "
                                 L"is not what the research read)",
                   !g_installed ? L""
-                  : feet       ? L"; a further player's chocobo's footsteps run in that player's scope"
-                               : L"; the chocobo's footstep slot is not what the research read: the further players' footsteps stay "
+                  : feet       ? L"; player 2's or 3's chocobo's footsteps run in that player's scope"
+                               : L"; the chocobo's footstep slot is not what the research read: players 2 and 3's footsteps stay "
                                  L"on the primary player's pad",
                   sources.empty() ? L"" : L"; ", sources);
 }

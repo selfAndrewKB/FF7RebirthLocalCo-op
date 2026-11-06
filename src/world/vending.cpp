@@ -530,9 +530,9 @@ void Install(const platform::GameImage& image) noexcept
     const bool closes  = Entry(image, g_cameraOff, kCameraOff, &CameraOff);
     const bool ready   = g_vendingPreset != nullptr && presses && cameras && closes;
     platform::Log(L"vending: {} (presses {}, the shop camera's activation {}, its deactivation {}; Chadley's camera call {})",
-                  ready ? L"ready (a further player uses vending machines through the game's own field action and shop; the pad of "
-                          L"whoever opened the shop drives it; a further player's shops open without the shop camera)"
-                        : L"UNAVAILABLE for the further players (a check failed; machines stay player 1's)",
+                  ready ? L"ready (player 2 or 3 uses vending machines through the game's own field action and shop; the pad of "
+                          L"whoever opened the shop drives it; player 2's or 3's shops open without the shop camera)"
+                        : L"UNAVAILABLE for players 2 and 3 (a check failed; machines stay player 1's)",
                   presses ? L"watched" : L"NOT watched", cameras ? L"watched" : L"NOT watched",
                   closes ? L"watched" : L"NOT watched", g_chadleyReturn != 0 ? L"found" : L"NOT found (its camera is skipped too)");
     if (!ready)

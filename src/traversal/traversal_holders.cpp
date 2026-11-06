@@ -633,7 +633,7 @@ std::wstring PlaceMove(const platform::GameImage& image)
                        gate ? L"" : L" (its per-frame rotation stays player 1's only)",
                        !live.beginPlaced || live.validatePlaced ? L""
                                                                 : L" (the holder check differs: the game removes it "
-                                                                  L"one tick after a further player's install)");
+                                                                  L"one tick after player 2's or 3's install)");
 }
 
 template <std::size_t... I>
@@ -759,7 +759,7 @@ void Tick(int seat, bool active) noexcept
         for (SeatHolder& holder : g_seatHolders[seat])
         {
             ReleaseSeatHolder(seat, holder,
-                              seat == players::kFirstFurtherSeat ? L"player 2 is out" : L"player 3 is out");
+                              seat == players::kFirstSeat ? L"player 2 is out" : L"player 3 is out");
         }
         return;
     }

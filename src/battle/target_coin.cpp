@@ -157,7 +157,7 @@ const wchar_t* NoLongerCandidate(int seat) noexcept
 {
     constexpr const wchar_t* kTexts[players::kMaxPlayers] = {L"", L"player 2 no longer a candidate",
                                                              L"player 3 no longer a candidate"};
-    return players::SeatIndex(seat) ? kTexts[seat] : L"a further player no longer a candidate";
+    return players::SeatIndex(seat) ? kTexts[seat] : L"player 2 or 3 no longer a candidate";
 }
 static_assert(players::kMaxPlayers == 3, "NoLongerCandidate names every seat");
 
@@ -587,7 +587,7 @@ void Tick() noexcept
             platform::LogDebug(L"target coin (60 s): tosses {}; coin answers {}; damage or reaction answers {}; re-tossed "
                                L"{} ({} no longer a candidate)",
                                TallyText(tosses), TallyText(answers), TallyText(reactions), again,
-                               players::kSeatsBuilt == 1 ? L"player 2" : L"a further player");
+                               players::kSeatsBuilt == 1 ? L"player 2" : L"player 2 or 3");
         }
         catch (...)
         {

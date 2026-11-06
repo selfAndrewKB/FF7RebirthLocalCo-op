@@ -35,13 +35,13 @@ class GameImage;
 
 namespace lss::hud {
 
-bool InstallSecondImage(const platform::GameImage& image) noexcept;
-void RemoveSecondImage() noexcept;
-bool SecondImageInstalled() noexcept;
+bool InstallColumnHudImages(const platform::GameImage& image) noexcept;
+void RemoveColumnHudImages() noexcept;
+bool ColumnHudImagesInstalled() noexcept;
 
 /// The `hud-image` switch: the further players' HUD images on or off (on from a successful install).
-void SetSecondImage(bool on) noexcept;
-bool SecondImageOn() noexcept;
+void SetColumnHudImages(bool on) noexcept;
+bool ColumnHudImagesOn() noexcept;
 
 /// The frame's steps, game thread, from the overlay render call (hud/passes/root_overlay_render.cpp) in this order:
 /// the slot's frame begins, unheld.
@@ -54,7 +54,7 @@ bool ImageReady(int seat, bool shown) noexcept;
 
 /// A further pass begins, for the seat ImageReady last answered for: the frame held (HoldFrame) for its render, the
 /// slot taking part. Returns the frame's DeltaTime (for the updates run in the pass).
-double BeginFurtherPass() noexcept;
+double BeginColumnImage() noexcept;
 
 /// The engine's DeltaTime held at 0 and GFrameNumber one back, as for a further pass, without the slot: for player 1's
 /// re-run outside a pass (hud/passes/seat_hud_content.h SettleSeats). Returns the frame's DeltaTime. ReleaseFrame
@@ -64,10 +64,10 @@ void   ReleaseFrame() noexcept;
 
 /// The game's overlay render for the pass's entry (SEndRootOverlay__RenderToCompositeLayer). False on a fault,
 /// which refuses the images for good.
-bool RenderFurther() noexcept;
+bool RenderColumnImage() noexcept;
 
 /// The further pass ends: DeltaTime and the frame number back.
-void EndFurtherPass() noexcept;
+void EndColumnImage() noexcept;
 
 /// The game's own call follows: marks whose entries were rendered (the render thread reads it).
 void BeginPlayerOnePass() noexcept;
@@ -86,7 +86,7 @@ std::uintptr_t EntryNameForPass(const void* slot, std::uintptr_t stockName) noex
 bool SubmitInThisPass(const void* slot) noexcept;
 #if LSS_DEV
 /// The `hud-image` command and reading. May throw (out of memory).
-void RegisterSecondImageCommands();
+void RegisterColumnHudImagesCommands();
 #endif
 
 }  // namespace lss::hud

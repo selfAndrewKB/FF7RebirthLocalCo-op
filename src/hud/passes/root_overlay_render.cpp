@@ -12,10 +12,10 @@
 #include "hud/minimap/minimap.h"
 #include "hud/minimap/minimap_once.h"
 #include "hud/minimap/seat_area_icons.h"
+#include "hud/passes/column_hud_images.h"
 #include "hud/passes/overlay_pass.h"
 #include "hud/passes/pass_opacity.h"
 #include "hud/passes/seat_hud_content.h"
-#include "hud/passes/second_image.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
@@ -57,7 +57,7 @@ bool                   g_installed = false;
 
 // Render cost, logged every kRenderTimingFrames frames while a further player's image is on.
 constexpr std::uint32_t kRenderTimingFrames = 240;
-double        g_furtherSeconds     = 0.0;
+double        g_seatSeconds        = 0.0;
 double        g_playerOneSeconds   = 0.0;
 double        g_playerOneStart     = 0.0;
 std::uint32_t g_renderTimedFrames  = 0;
@@ -68,7 +68,7 @@ using platform::frame_watch::Now;
 /// image's buffer check: a pass planned but not run is put back by SettleSeats after the loop).
 bool AnotherPassBelow(int seat, bool splitShown) noexcept
 {
-    if (!splitShown || !SecondImageOn() || !SeatHudContentOn())
+    if (!splitShown || !ColumnHudImagesOn() || !SeatHudContentOn())
     {
         return false;
     }
@@ -84,10 +84,10 @@ bool AnotherPassBelow(int seat, bool splitShown) noexcept
 
 /// A further seat's pass of the overlay render: its levers and updates, its own render into the entry named for it,
 /// everything put back for the next pass (the roots' contexts and player 1's re-run only after the last further pass,
-/// `another` false). Its image is ready (second_image's ImageReady).
-void FurtherPass(int seat, bool another) noexcept
+/// `another` false). Its image is ready (column_hud_images's ImageReady).
+void SeatPass(int seat, bool another) noexcept
 {
-    const double deltaTime = BeginFurtherPass();  // the engine's DeltaTime 0 for the render; the slot taking part
+    const double deltaTime = BeginColumnImage();  // the engine's DeltaTime 0 for the render; the slot taking part
     overlay_pass::Set(seat);
     // the seat's rows, markers, pins and command menu only (hud/passes/pass_opacity.h)
     pass_opacity::ShowOnly(seat);
@@ -102,10 +102,10 @@ void FurtherPass(int seat, bool another) noexcept
     // The seat's minimap (hud/minimap/minimap.h); without it, player 1's pass alone renders the minimap's map
     // (hud/minimap/minimap_once.h).
     BeginMinimapSeatPass(minimap::BeginPaint(seat));
-    RenderFurther();  // on a fault the minimap's target field and held slot are still put back below
+    RenderColumnImage();  // on a fault the minimap's target field and held slot are still put back below
     EndMinimapSeatPass();
     minimap::EndPaint();
-    g_furtherSeconds += Now() - start;
+    g_seatSeconds += Now() - start;
     enemy_gauges::EndSeatPass();  // each gauge's size back to player 1's before player 1's updates
     target_views::BeforePass(0);  // the seat's, collapsed before player 1's updates (put back after the render)
     if (content)
@@ -114,7 +114,7 @@ void FurtherPass(int seat, bool another) noexcept
     }
     seat_area_icons::ShowOnly(0);
     pass_opacity::ShowOnly(0);  // player 1's rows, markers, pins and command menu for player 1's pass
-    EndFurtherPass();  // DeltaTime back
+    EndColumnImage();  // DeltaTime back
 }
 
 /// Replaces the call (entered from the game's code through a bare jump: nothing here may throw).
@@ -160,9 +160,9 @@ void RenderRootOverlay(void* application) noexcept
             }
         }
         FollowHudPlacementBeforeRender();  // after the rows' layout, which can set a row's point
-        // The further seats' passes first, highest seat first, each whose image is on (hud/passes/second_image.h
+        // The further seats' passes first, highest seat first, each whose image is on (hud/passes/column_hud_images.h
         // holds the slot and renders; the levers and the per-pass opacities around each render are the modules' own
-        // calls, in FurtherPass's order). A seat whose column shows player 1's camera (views/column_source.h
+        // calls, in SeatPass's order). A seat whose column shows player 1's camera (views/column_source.h
         // Source::PlayerOne: a held column while the game takes the whole screen, a shared ride, every further player
         // waiting or single-view on; or a lone waiting player) gets no pass: its view then draws player 1's HUD, as a
         // mirror's.
@@ -174,7 +174,7 @@ void RenderRootOverlay(void* application) noexcept
         {
             if (players::generation::Active(seat) && ImageReady(seat, splitShown && !views::OnPlayerOne(seat)))
             {
-                FurtherPass(seat, AnotherPassBelow(seat, splitShown));
+                SeatPass(seat, AnotherPassBelow(seat, splitShown));
             }
         }
         if (PlayerOneDue())  // a pass planned after the last one that ran did not run: player 1's put back here,
@@ -209,11 +209,11 @@ void RenderRootOverlay(void* application) noexcept
                 {
                     const platform::frame_watch::Job job(L"HUD image timing log");
                     const double perFrame = 1000.0 / g_renderTimedFrames;
-                    platform::Log(L"HUD image: overlay render ms per frame over {} frames: the further players' passes "
+                    platform::Log(L"HUD image: overlay render ms per frame over {} frames: players 2 and 3's passes "
                                   L"{:.3f}, player 1's pass {:.3f}",
-                                  g_renderTimedFrames, g_furtherSeconds * perFrame, g_playerOneSeconds * perFrame);
+                                  g_renderTimedFrames, g_seatSeconds * perFrame, g_playerOneSeconds * perFrame);
                 }
-                g_furtherSeconds    = 0.0;
+                g_seatSeconds       = 0.0;
                 g_playerOneSeconds  = 0.0;
                 g_renderTimedFrames = 0;
             }

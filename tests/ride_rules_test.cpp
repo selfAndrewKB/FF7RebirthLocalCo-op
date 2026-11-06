@@ -131,7 +131,7 @@ void TestEndTextPerSeat()
     for (const auto reason : {EndReason::None, EndReason::Gone, EndReason::Dismounted, EndReason::Battle,
                               EndReason::ManagerEnded, EndReason::Detached, EndReason::LostPossession})
     {
-        EXPECT(Describe(reason, lss::players::kFirstFurtherSeat) == Describe(reason));  // the same literal for player 2
+        EXPECT(Describe(reason, lss::players::kFirstSeat) == Describe(reason));  // the same literal for player 2
         if (reason != EndReason::LostPossession)
         {
             EXPECT(Describe(reason, 2) == Describe(reason));

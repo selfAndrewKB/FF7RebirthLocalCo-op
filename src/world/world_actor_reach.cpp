@@ -130,7 +130,7 @@ struct Seats
 };
 
 /// "around player 2" with one seat; the seats' wording otherwise.
-constexpr const wchar_t* kAroundSeats = players::kSeatsBuilt == 1 ? L"player 2" : L"the further players";
+constexpr const wchar_t* kAroundSeats = players::kSeatsBuilt == 1 ? L"player 2" : L"players 2 and 3";
 
 const std::byte* Manager() noexcept
 {
@@ -375,7 +375,7 @@ std::size_t Apply(const std::byte* manager, const float (&one)[3], const Seats& 
             g_items.erase(key);
             LogItem(logKey,
                     players::kSeatsBuilt == 1 ? L"player 2 left it: the game's values back"
-                                              : L"the further players left it: the game's values back",
+                                              : L"players 2 and 3 left it: the game's values back",
                     baseRadius, baseExtent, charapop::Distance(at, one), seats, &at);
         }
     }
@@ -474,7 +474,7 @@ bool Install(const platform::GameImage& image) noexcept
     g_octreeVtable    = vtable && slots ? *vtable : 0;
     g_itemVtable      = items ? *items : 0;
     g_installed       = g_rootGlobal != 0 && g_octreeVtable != 0 && g_itemVtable != 0;
-    platform::Log(L"world actor reach: {}", g_installed ? L"installed (world actors such as chests pop around the further players too, "
+    platform::Log(L"world actor reach: {}", g_installed ? L"installed (world actors such as chests pop around players 2 and 3 too, "
                                                           L"with the NPC centre's switch)"
                                                         : L"UNAVAILABLE (a check failed; world actors pop around player 1 only)");
     return g_installed;
@@ -497,7 +497,7 @@ void Tick(const std::array<bool, players::kMaxPlayers>& plays) noexcept
     if (!anyPlays || !enabled)
     {
         Stop(!enabled ? L"switched off"
-                      : (players::kSeatsBuilt == 1 ? L"player 2 stopped playing" : L"no further player plays"));
+                      : (players::kSeatsBuilt == 1 ? L"player 2 stopped playing" : L"no other player plays"));
         return;
     }
     if (++g_ticks % kEvery == 0)

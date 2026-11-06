@@ -22,9 +22,9 @@ void TestNumbering()
 {
     std::puts("seats: player 1 is no seat; the built seats fit the records");
     static_assert(kSeatsBuilt >= 1, "at least player 2");
-    static_assert(kFirstFurtherSeat == 1, "player 2 is seat 1");
+    static_assert(kFirstSeat == 1, "player 2 is seat 1");
     EXPECT(!SeatBuilt(0));  // player 1 is the game's, never a seat
-    EXPECT(SeatBuilt(kFirstFurtherSeat));
+    EXPECT(SeatBuilt(kFirstSeat));
     EXPECT(!SeatBuilt(kSeatsBuilt + 1));
     EXPECT(!SeatBuilt(-1));
     EXPECT(!SeatIndex(0));

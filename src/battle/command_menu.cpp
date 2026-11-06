@@ -197,7 +197,7 @@ SeatMenu& SeatOf(int seat) noexcept
     if (!warned)
     {
         warned = true;
-        platform::Log(L"command menu: WARNING: a record was asked for seat {}, which does not exist; a scratch "
+        platform::Log(L"command menu: WARNING: a record was asked for player index {} (player 1 is 0), which does not exist; a scratch "
                       L"record answered",
                       seat);
     }
@@ -635,8 +635,8 @@ bool PlaceSites(const platform::GameImage& image) noexcept
     {
         shortcut_follow::Place(image, g_placement);
     }
-    platform::Log(L"command menu: {}", g_installed ? L"each further player's command controller is built once they "
-                                                         L"play and follows the game's Setup, ResetAll and Members panel "
+    platform::Log(L"command menu: {}", g_installed ? L"player 2's and 3's command controllers are each built once they "
+                                                         L"play and follow the game's Setup, ResetAll and Members panel "
                                                          L"rebuild (logged)"
                                                        : kUnavailable);
     return g_installed;

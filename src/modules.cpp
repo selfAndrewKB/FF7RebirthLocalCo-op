@@ -41,9 +41,9 @@
 #include "hud/minimap/minimap.h"
 #include "hud/minimap/minimap_once.h"
 #include "hud/minimap/seat_area_icons.h"
+#include "hud/passes/column_hud_images.h"
 #include "hud/passes/root_overlay_render.h"
 #include "hud/passes/seat_hud_content.h"
-#include "hud/passes/second_image.h"
 #include "hud/user_widgets.h"
 #include "input/approach_own_camera.h"
 #include "input/climb_context.h"
@@ -223,7 +223,7 @@ constexpr std::array kModules{
     // HUD widgets as the engine constructs them
     Module{Call<&hud::user_widgets::Install>, &hud::user_widgets::Remove},
     // each seat's HUD image, on (the hud-image command switches it)
-    Module{Call<&hud::InstallSecondImage>, &hud::RemoveSecondImage},
+    Module{Call<&hud::InstallColumnHudImages>, &hud::RemoveColumnHudImages},
     // the minimap's map rendered by player 1's pass only
     Module{Call<&hud::InstallMinimapOnce>, &hud::RemoveMinimapOnce},
     // each seat's minimap in the seat's view
@@ -587,13 +587,13 @@ Result SetOwnCamera(const session::Session& session, bool on) noexcept
     }
     if (!session.AnyIn())
     {
-        return {false, L"no further player is in (Ctrl+F7 adds one)"};
+        return {false, L"no other player is in (Ctrl+F7 adds one)"};
     }
     if (views::ShowsOwnCamera() != on)
     {
         views::ToggleOwnCamera();
     }
-    return {true, views::ShowsOwnCamera() ? L"the further players' own cameras" : L"player 1's camera"};
+    return {true, views::ShowsOwnCamera() ? L"players 2 and 3's own cameras" : L"player 1's camera"};
 }
 
 Result SetFill(bool on) noexcept
@@ -645,7 +645,7 @@ Result SetWindowSpan(const session::Session& session, bool on, const wchar_t* wh
     }
     if (!session.AnyIn())
     {
-        return {false, L"no further player is in (Ctrl+F7 first)"};
+        return {false, L"no other player is in (Ctrl+F7 first)"};
     }
     // The columns the frame shows (the last columns' tick): one per player in, more while columns are held.
     const auto columns = std::max(g_lastWanted, 2);
@@ -676,8 +676,8 @@ void RegisterOwnCommands(session::Session& session)
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
         const std::wstring name   = players::SeatName(seat);
-        const std::wstring prefix = seat == players::kFirstFurtherSeat ? L"p2" : std::format(L"p{}", seat + 1);
-        Register({.name = seat == players::kFirstFurtherSeat ? std::wstring(L"leave") : prefix + L".leave",
+        const std::wstring prefix = seat == players::kFirstSeat ? L"p2" : std::format(L"p{}", seat + 1);
+        Register({.name = seat == players::kFirstSeat ? std::wstring(L"leave") : prefix + L".leave",
                   .help = std::format(L"remove {} (Ctrl+F8 removes the last player in); `wait-until {}.in == off` "
                                       L"confirms it",
                                       name, prefix),
@@ -692,7 +692,7 @@ void RegisterOwnCommands(session::Session& session)
                   }});
     }
     Register({.name = L"own-camera", .shape = Shape::OnOff,
-              .help = L"the further players' views show their own cameras (on), or player 1's",
+              .help = L"players 2 and 3's views show their own cameras (on), or player 1's",
               .set  = [&session](const Value& v) { return From(SetOwnCamera(session, std::get<bool>(v))); },
               .get  = [] { return Value{views::ShowsOwnCamera()}; }});
     Register({.name = L"bars", .shape = Shape::OnOff, .help = L"split views keep 16:9 with bars, or fill their halves",
@@ -725,7 +725,7 @@ void RegisterOwnCommands(session::Session& session)
               .get  = [] { return Value{views::window_span::Reading()}; }});
     Register({.name = L"window-span", .shape = Shape::OnOff,
               .help = L"the game window across its row of equal monitors, one column per local player, through the "
-                      L"engine's own window reshape; needs a further player in",
+                      L"engine's own window reshape; needs player 2 or 3 in",
               .set  = [&session](const Value& v) {
                   return From(SetWindowSpan(session, std::get<bool>(v), L"the window-span command"));
               },
@@ -760,7 +760,7 @@ void RegisterCommands(session::Session& session, players::SplitLayout& layout,
         views::RegisterViewPointCommands();
         views::RegisterStreamCommands();
         hud::RegisterOverlayLayoutCommands();
-        hud::RegisterSecondImageCommands();
+        hud::RegisterColumnHudImagesCommands();
         hud::RegisterSeatHudContentCommands();
         hud::seat_area_icons::RegisterCommands();
         hud::RegisterMinimapOnceCommands();

@@ -81,7 +81,7 @@ struct Sites
 Sites                   g_sites;
 platform::DeferredSites g_placement;  // 1.005: the calls placed from the game thread (platform/deferred_sites.h)
 constexpr const wchar_t* kUnavailable =
-    L"UNAVAILABLE (a check failed): a further player's command menu keeps the values of its last join";
+    L"UNAVAILABLE (a check failed): player 2's or 3's command menu keeps the values of its last join";
 
 // Game thread.
 
@@ -119,7 +119,7 @@ std::uintptr_t FollowingController(int seat, const wchar_t* what) noexcept
     if (one == 0 || command_menu::SeatOfController(reinterpret_cast<const void*>(one)) >= 1)
     {
         Line(std::format(L"{} made while the UI system's slot names {}: NOT followed", what,
-                         one == 0 ? L"no controller" : L"a further player's controller (inside their scope)"));
+                         one == 0 ? L"no controller" : L"player 2's or 3's controller (inside their scope)"));
         return 0;
     }
     return own;
@@ -248,8 +248,8 @@ bool PlaceSites(const platform::GameImage&) noexcept
         Remove();
     }
     platform::Log(L"command locks: {}",
-                  g_installed ? L"the battle's command locks, category locks and on/off-table bytes reach each further "
-                                L"player's controller through the game's setters (logged)"
+                  g_installed ? L"the battle's command locks, category locks and on/off-table bytes reach player 2's "
+                                L"and 3's controllers through the game's setters (logged)"
                               : kUnavailable);
     return g_installed;
 }

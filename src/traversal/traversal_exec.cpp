@@ -613,8 +613,8 @@ std::uintptr_t OneShotLeave(void* actor, void* character) noexcept
                            players::generation::OnGameThread() ? L"game" : L"animation",
                            character == nullptr ? L", the actor's EndPlay" : L"",
                            !was  ? L"its camera flag was already off (no camera, or ended before)"
-                           : ran ? L"the game's leave ran on the seat's own camera; player 1's untouched"
-                                 : L"the seat's camera manager is gone: the flag cleared, player 1's camera untouched");
+                           : ran ? L"the game's leave ran on the player's own camera; player 1's untouched"
+                                 : L"the player's camera manager is gone: the flag cleared, player 1's camera untouched");
     }
     catch (...)
     {
@@ -631,7 +631,7 @@ std::wstring PlaceExec(const platform::GameImage& image)
     ExecLive&        live = g_exec[Index];
     if (cls.handleSize > kMaxHandle || cls.handleSize % 8 != 0)
     {
-        return std::format(L"{} NO (its camera handle does not fit the seats' copy)", cls.name);
+        return std::format(L"{} NO (its camera handle does not fit players 2 and 3's copy)", cls.name);
     }
     live.actorVt          = Live(image, cls.actorVt, 0x740);
     if (cls.start.slot != 0)

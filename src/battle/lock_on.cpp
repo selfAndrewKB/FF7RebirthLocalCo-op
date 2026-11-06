@@ -209,7 +209,7 @@ SeatTargets& SeatOf(int seat) noexcept
     if (!warned)
     {
         warned = true;
-        platform::Log(L"lock-on: WARNING: target fields were asked for seat {}, which does not exist; a scratch record "
+        platform::Log(L"lock-on: WARNING: target fields were asked for player index {} (player 1 is 0), which does not exist; a scratch record "
                       L"answered",
                       seat);
     }
@@ -240,7 +240,7 @@ bool PowerOfTen(std::uint64_t count) noexcept
 void Fail(const wchar_t* what) noexcept
 {
     g_failed = true;
-    platform::Log(L"lock-on: {} raised an exception; the further players' targeting is off this session", what);
+    platform::Log(L"lock-on: {} raised an exception; players 2 and 3's targeting is off this session", what);
 }
 
 Pair PairAt(std::uintptr_t address) noexcept
@@ -499,7 +499,7 @@ void SeatTargeting(int seat, TickFn engine, void* system, float deltaTime) noexc
     {
         // What it holds may be mid-change: leaked, never put back.
         scopes.Get<seat_ladder::FocusPart>()->scope.Abandon();
-        Fail(L"a further player's targeting tick");
+        Fail(L"player 2's or 3's targeting tick");
     }
     // The log: the seat's target list, read with the seat's controller still in the slot.
     std::uint8_t open = 0;
@@ -539,7 +539,7 @@ void Targeting(void* system, float deltaTime) noexcept
     }
     if (g_held)
     {
-        Note(L"WARNING: the targeting tick ran inside a further player's target scope; their run skipped");
+        Note(L"WARNING: the targeting tick ran inside player 2's or 3's target scope; their run skipped");
         return engine(system, deltaTime);
     }
     if (input::pad_sticks::Enabled() && input::pad_sticks::PartActs(input::pad_sticks::kPartPlayerOneMove))
@@ -814,7 +814,7 @@ bool Install(const platform::GameImage& image) noexcept
                   system;
     if (!g_installed)
     {
-        platform::Log(L"lock-on: UNAVAILABLE (a check failed); the further players have no targeting of their own");
+        platform::Log(L"lock-on: UNAVAILABLE (a check failed); players 2 and 3 have no targeting of their own");
         return false;
     }
     // Both targeting calls and the "set" call cross a 16-byte block in 1.005: every site is placed from the game
@@ -825,7 +825,7 @@ bool Install(const platform::GameImage& image) noexcept
         platform::Log(L"lock-on: {}",
                       placed ? L"the targeting calls are placed from the game thread (1.005: they cross a 16-byte "
                                L"block)"
-                             : L"the further players' targeting run UNAVAILABLE (no room to place its calls from the game "
+                             : L"players 2 and 3's targeting run UNAVAILABLE (no room to place its calls from the game "
                                L"thread)");
     }
     return placed;
@@ -893,8 +893,8 @@ bool PlaceSites(const platform::GameImage& image) noexcept
         RestoreCall(g_markerNameCall);
     }
     g_runReady = ok;
-    platform::Log(L"lock-on: {}", ok ? L"the further players' targeting is the game's own tick, run again in each one's scopes (logged)"
-                                     : L"the further players' targeting run UNAVAILABLE (a check failed); they have no lock-on");
+    platform::Log(L"lock-on: {}", ok ? L"players 2 and 3's targeting is the game's own tick, run again in each one's scopes (logged)"
+                                     : L"players 2 and 3's targeting run UNAVAILABLE (a check failed); they have no lock-on");
     if (!ok)
     {
         platform::Log(L"lock-on: checks: targeting calls {}, panel 'cleared' {} {}, panel 'set' call {}, marker name call {}",
@@ -925,7 +925,7 @@ void AfterBattle(int seat) noexcept
 void SetEnabled(bool on) noexcept
 {
     g_enabled = on;
-    platform::Log(L"lock-on: the further players' targeting run {}", on ? L"on" : L"off");
+    platform::Log(L"lock-on: players 2 and 3's targeting run {}", on ? L"on" : L"off");
 }
 
 bool Enabled() noexcept
@@ -982,7 +982,7 @@ void RegisterCommands()
     control::Register({.name  = L"battle-mask",
                        .shape = control::Shape::Integer,
                        .max   = 511,
-                       .help  = L"diagnosis: bit 8 runs the further players' targeting (the game's targeting tick for each of "
+                       .help  = L"diagnosis: bit 8 runs players 2 and 3's targeting (the game's targeting tick for each of "
                                 L"them); the other bits are retired and ignored; on at start",
                        .set   = [](const Value& v) {
                            // Bit 8 is player 2's targeting run. The other bits (1, 2, 4, 16: the direct actions;

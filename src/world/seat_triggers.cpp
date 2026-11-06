@@ -452,7 +452,7 @@ void SeatPass(int seat, void* context, void* keys, void* set) noexcept
         if (!g_skipLogged)
         {
             g_skipLogged = true;
-            platform::Log(L"seat triggers: {}'s pass skipped: the field tick's scratch structures are in a state the game "
+            platform::Log(L"triggers: {}'s pass skipped: the field tick's scratch structures are in a state the game "
                           L"resets by reallocating (logged once)",
                           players::SeatName(seat));
         }
@@ -476,7 +476,7 @@ void SeatPass(int seat, void* context, void* keys, void* set) noexcept
     if (count != g_lastCount[seat])
     {
         g_lastCount[seat] = count;
-        platform::LogDebug(L"seat triggers: {}'s trigger reads {} overlap(s) ({} result)", players::SeatName(seat), count,
+        platform::LogDebug(L"triggers: {}'s trigger reads {} overlap(s) ({} result)", players::SeatName(seat), count,
                            read == Read::Sweep ? L"sweep" : L"overlap");
     }
 }
@@ -562,7 +562,7 @@ void LogEvent(int seat, bool enter, const void* actor, const void* passed, std::
         kind          = cls >= 0 ? std::wstring(kAdmitted[cls].name)
                                  : std::format(L"vt 0x{:X}", g_image ? g_image->ResearchAddress(VTableOf(actor)) : 0);
     }
-    platform::LogDebug(L"seat triggers: {}'s trigger {} {} ({}; {}): {}", players::SeatName(seat),
+    platform::LogDebug(L"triggers: {}'s trigger {} {} ({}; {}): {}", players::SeatName(seat),
                        enter ? L"enters" : L"leaves",
                        actor != nullptr ? players::NameOf(actor) : std::wstring(L"(not in the tag registry)"), kind, match,
                        outcome);
@@ -623,7 +623,7 @@ std::uintptr_t Deliver(int seat, bool enter, FilterFn original, void* manager, s
         ++counts.refused;
         LogEvent(seat, enter, actor, passed,
                  std::format(L"held back: inside another delivery of {}'s (the filter re-entered)",
-                             players::kSeatsBuilt == 1 ? who : L"a further player"));
+                             players::kSeatsBuilt == 1 ? who : L"player 2 or 3"));
         return 0;
     }
     // The seat's own state in place of player 1's for the call: the entered flag, and the stored character for the
@@ -797,7 +797,7 @@ void* WallRunPick(void* leaderActionComp) noexcept
         g_wallRunCapLogged = true;
         try
         {
-            platform::LogDebug(L"seat triggers: {}'s wall-run list holds {} actors; past the first {} they keep player 1's "
+            platform::LogDebug(L"triggers: {}'s wall-run list holds {} actors; past the first {} they keep player 1's "
                                L"entered flags for the camera pick (logged once)",
                                players::SeatName(seat), listed, kWallRunListMax);
         }
@@ -834,7 +834,7 @@ void* WallRunPick(void* leaderActionComp) noexcept
         g_wallRunPicked[seat] = picked;
         try
         {
-            platform::LogDebug(L"seat triggers: {}'s wall-run camera pick: {} (of {} wall-run actor(s) near {})",
+            platform::LogDebug(L"triggers: {}'s wall-run camera pick: {} (of {} wall-run actor(s) near {})",
                                players::SeatName(seat), picked != nullptr ? players::NameOf(picked) : std::wstring(L"none"),
                                count, players::SeatName(seat));
         }
@@ -867,7 +867,7 @@ void Install(const platform::GameImage& image) noexcept
                        players::weak_object::Known() && registry && lock && flagA && flagB;
     if (!found)
     {
-        platform::Log(L"seat triggers: UNAVAILABLE (a function or datum of the field tick's trigger pass differs); the further players' "
+        platform::Log(L"triggers: UNAVAILABLE (a function or datum of the field tick's trigger pass differs); players 2 and 3's "
                       L"triggers stay unread, as in the game");
         return;
     }
@@ -906,7 +906,7 @@ void Install(const platform::GameImage& image) noexcept
     const auto pick     = platform::FindFunction(image, kWallRunPick);
     const bool wallRunPick =
         pickSite && pick && g_wallRunCall.Install(*pickSite, *pick, reinterpret_cast<std::uintptr_t>(&WallRunPick));
-    platform::Log(L"seat triggers: classes delivered as a further player: {}{}{}; wall-run camera pick {}",
+    platform::Log(L"triggers: classes delivered as player 2 or 3: {}{}{}; wall-run camera pick {}",
                   g_findActor != nullptr ? (admitted.empty() ? L"none" : admitted.c_str()) : L"none (the tag lookup differs)",
                   refused.empty() ? L"" : L"; NOT admitted (a slot differs): ", refused,
                   wallRunPick ? L"follows that player's own flags" : L"NOT placed (it follows player 1's flags)");
@@ -914,11 +914,11 @@ void Install(const platform::GameImage& image) noexcept
     if (!g_dispatchCall.Install(*site, *dispatch, reinterpret_cast<std::uintptr_t>(&Dispatch)))
     {
         g_ready = false;
-        platform::Log(L"seat triggers: UNAVAILABLE (the field tick's dispatch call differs); the further players' triggers stay unread");
+        platform::Log(L"triggers: UNAVAILABLE (the field tick's dispatch call differs); players 2 and 3's triggers stay unread");
         return;
     }
     g_filtersPending = true;
-    platform::Log(L"seat triggers: installed (each further player's trigger is read right after player 1's, in the same frame; the "
+    platform::Log(L"triggers: installed (player 2's and 3's triggers are each read right after player 1's, in the same frame; the "
                   L"admitted classes go to the game as that player, every other event is held back; each event logged at "
                   L"Debug; the diff's filter calls follow on the game thread)");
 }
@@ -928,11 +928,11 @@ void Remove() noexcept
     g_filtersPending = false;
     if (g_dispatchCall.IsInstalled() && !g_dispatchCall.Restore())
     {
-        platform::Log(L"seat triggers: the dispatch call was changed after us; left in place (it passes through)");
+        platform::Log(L"triggers: the dispatch call was changed after us; left in place (it passes through)");
     }
     if (g_wallRunCall.IsInstalled() && !g_wallRunCall.Restore())
     {
-        platform::Log(L"seat triggers: the wall-run pick call was changed after us; left in place (it passes through)");
+        platform::Log(L"triggers: the wall-run pick call was changed after us; left in place (it passes through)");
     }
     // A call crossing two blocks is restored only from the game thread. Elsewhere it stays in place; it holds a seat's
     // events back only while that seat is active, and passes everything else through.
@@ -940,7 +940,7 @@ void Remove() noexcept
     {
         if ((g_enterCall.IsInstalled() && !g_enterCall.Restore()) | (g_leaveCall.IsInstalled() && !g_leaveCall.Restore()))
         {
-            platform::Log(L"seat triggers: a filter call was changed after us; left in place (it passes through)");
+            platform::Log(L"triggers: a filter call was changed after us; left in place (it passes through)");
         }
         g_filtersPlaced = false;
     }
@@ -965,8 +965,8 @@ void Tick() noexcept
             g_enterCall.Restore();
         }
         g_filtersPlaced = enter && leave;
-        platform::Log(L"seat triggers: {}", g_filtersPlaced ? L"the diff's filter calls placed; the further players' passes run"
-                                                          : L"the diff's filter calls differ; the further players' passes stay off");
+        platform::Log(L"triggers: {}", g_filtersPlaced ? L"the diff's filter calls placed; players 2 and 3's passes run"
+                                                          : L"the diff's filter calls differ; players 2 and 3's passes stay off");
     }
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
@@ -991,7 +991,7 @@ void Tick() noexcept
         const auto    who = players::SeatName(seat);
         if (!first && players::generation::Active(seat))
         {
-            platform::LogDebug(L"seat triggers (10 s): {}'s passes {} (overlap results {}, sweep {}, none last frame {}, "
+            platform::LogDebug(L"triggers (10 s): {}'s passes {} (overlap results {}, sweep {}, none last frame {}, "
                                L"skipped {}); events: enters {}, leaves {}; delivered as {}: enters {}, leaves {}; "
                                L"refused by a scope or the member's controller {}; {}'s entered flags held {}",
                                who, c.passes, c.overlapReads, c.sweepReads, c.noResult, c.skipped, c.enters, c.leaves,

@@ -65,7 +65,7 @@ void WatchCollision(int player, const void* cameraManager)
     // holders unit installs it) and player 2's ladder's (any other slot-15 module, a ride framing or a cutscene, is left to its own watch).
     const bool traversal =
         module != nullptr &&
-        (vt == g_climbingModuleVt || (player == 1 && module == g_ladderModule[players::kFirstFurtherSeat]));
+        (vt == g_climbingModuleVt || (player == 1 && module == g_ladderModule[players::kFirstSeat]));
     if (module != w.module && w.module != nullptr && w.after == 0)
     {
         w.after = 1;  // the traversal camera left: watch the hand-over

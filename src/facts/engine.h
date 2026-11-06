@@ -42,7 +42,7 @@ inline constexpr std::uintptr_t kBeginRenderingViewFamily = 0x140BEE184;
 inline constexpr std::uintptr_t kBeginRenderingViewFamilyEntry = 0x14698B4D0;
 
 /// GFrameNumber (data, uint32): stepped once per frame by PostRenderAllViewports. Read by the HUD trace's frame line
-/// and held one back for the further HUD passes (hud/passes/second_image, RE-damage-numbers-per-view.md §5). Its
+/// and held one back for the further HUD passes (hud/passes/column_hud_images, RE-damage-numbers-per-view.md §5). Its
 /// 1.005 twin is 0x146DDD224, carried by the hand-found table: the generated data range around FApp::DeltaTime
 /// would put it 0x1C bytes off (S-DMGNUM, 2026-10-26).
 inline constexpr std::uintptr_t kFrameNumber = 0x146FAA370;

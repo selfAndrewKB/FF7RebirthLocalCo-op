@@ -1279,14 +1279,14 @@ std::uint8_t MarkByKey(void* items, std::uint64_t key) noexcept
     const auto caller  = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
     const auto taken   = reinterpret_cast<MarkByKeyFn>(g_markByKey.Original())(items, key);
     const int  seat    = taken != 0 && players::generation::OnGameThread() ? PassSeat() : -1;
-    const bool further = seat >= 1;
-    if (further)
+    const bool isSeat  = seat >= 1;
+    if (isSeat)
     {
         NoteMarked(seat, key);
     }
     if (g_observer.marked != nullptr)
     {
-        g_observer.marked(key, taken, caller, further);
+        g_observer.marked(key, taken, caller, isSeat);
     }
     return taken;
 }
@@ -1298,20 +1298,20 @@ void Acquire(void* items, void* entry) noexcept
     const auto key =
         ReadField<std::uint64_t>(static_cast<const std::uint8_t*>(entry) - kFieldActionEntryKeyBack, 0);
     const int  seat    = players::generation::OnGameThread() ? TakeMarked(key) : -1;
-    const bool further = seat >= 1;
+    const bool isSeat  = seat >= 1;
     if (g_observer.granting != nullptr)
     {
-        g_observer.granting(key, further);
+        g_observer.granting(key, isSeat);
     }
     std::optional<scopes::primary_controller::Scope> primary;
-    if (further)
+    if (isSeat)
     {
         primary.emplace(seat);
     }
     reinterpret_cast<AcquireFn>(g_acquireCall.Original())(items, entry);
     if (g_observer.granted != nullptr)
     {
-        g_observer.granted(key, further);  // inside the scope: the observer may read who the rumble went to
+        g_observer.granted(key, isSeat);  // inside the scope: the observer may read who the rumble went to
     }
 }
 
@@ -1393,14 +1393,14 @@ void Install(const platform::GameImage& image) noexcept
                                    reinterpret_cast<std::uintptr_t>(&RequestVisibility));
     }
     platform::Log(L"field pickup: {}; the screen test {}; marker widgets {}",
-                  g_ready ? L"ready (a further player picks up collectibles and materials, opens chests, uses vending machines and shopkeepers "
+                  g_ready ? L"ready (player 2 or 3 picks up collectibles and materials, opens chests, uses vending machines and shopkeepers "
                             L"through the game's own field prompts, a second pass of its selection and press)"
                   : resets ? L"UNAVAILABLE (a hook is not what the research read: the update's call, the mark's entry or the grant's call)"
                            : L"UNAVAILABLE (a check failed: the root, the UI system, a function or a field reset's call site)",
-                  screen ? L"sees a further player's view in that player's pass"
-                         : L"is NOT redirected (the request's entry is not what the research read): the further players' offers follow "
+                  screen ? L"sees player 2's or 3's view in that player's pass"
+                         : L"is NOT redirected (the request's entry is not what the research read): players 2 and 3's offers follow "
                            L"player 1's screen",
-                  g_destroy != nullptr ? L"per player (each point's widget swapped too; a further player's destroyed by the game's own call)"
+                  g_destroy != nullptr ? L"per player (each point's widget swapped too; player 2's or 3's destroyed by the game's own call)"
                                        : L"SHARED (the game's destroy is not what the research read): every player writes one "
                                          L"widget per point");
 }

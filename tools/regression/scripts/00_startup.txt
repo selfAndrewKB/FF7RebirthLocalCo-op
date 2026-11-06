@@ -8,6 +8,6 @@
 # expect-not: standing aside: nothing installed
 # expect-not: not what the research read(?!\): none)
 #   "(the code is not what the research read): none" is the interact watch's all-clear; a site named after the colon is
-#   a failure. The install lines that mention the further players standing aside while player 1 rides are descriptions,
+#   a failure. The install lines that mention players 2 and 3 standing aside while player 1 rides are descriptions,
 #   not failures.
 note regression: startup checked

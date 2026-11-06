@@ -142,7 +142,7 @@ void TestSharedSlot()
 {
     std::puts("shared slot: the first further pass holds its acquire, later ones take it, player 1's takes it back");
     using lss::hud::overlay_pass::AcquireAction;
-    using lss::hud::overlay_pass::FurtherEntry;
+    using lss::hud::overlay_pass::IsSeatEntry;
     using lss::hud::overlay_pass::SlotAction;
     // A further pass (seat 2, then seat 1): the first acquire of an active slot is held; a later further pass takes the
     // held slot; a second acquire in one pass, or a slot that takes no part (the minimap not painting for the seat), is
@@ -162,18 +162,18 @@ void TestSharedSlot()
     EXPECT(AcquireAction(lss::hud::overlay_pass::kNone, true, false, false) == SlotAction::Acquire);
     // The entry added to the held slot in a further pass is the seat's, its submit left to player 1's pass; any other
     // slot or pass is the game's.
-    EXPECT(FurtherEntry(1, true));
-    EXPECT(FurtherEntry(2, true));
-    EXPECT(!FurtherEntry(1, false));
-    EXPECT(!FurtherEntry(0, true));
-    EXPECT(!FurtherEntry(lss::hud::overlay_pass::kNone, true));
+    EXPECT(IsSeatEntry(1, true));
+    EXPECT(IsSeatEntry(2, true));
+    EXPECT(!IsSeatEntry(1, false));
+    EXPECT(!IsSeatEntry(0, true));
+    EXPECT(!IsSeatEntry(lss::hud::overlay_pass::kNone, true));
     // The pass state itself: one setter, one reader; anything negative is outside the render.
     lss::hud::overlay_pass::Set(2);
-    EXPECT(lss::hud::overlay_pass::Seat() == 2 && lss::hud::overlay_pass::Further());
+    EXPECT(lss::hud::overlay_pass::Seat() == 2 && lss::hud::overlay_pass::IsSeatPass());
     lss::hud::overlay_pass::Set(0);
-    EXPECT(lss::hud::overlay_pass::Seat() == 0 && !lss::hud::overlay_pass::Further());
+    EXPECT(lss::hud::overlay_pass::Seat() == 0 && !lss::hud::overlay_pass::IsSeatPass());
     lss::hud::overlay_pass::Set(-5);
-    EXPECT(lss::hud::overlay_pass::Seat() == lss::hud::overlay_pass::kNone && !lss::hud::overlay_pass::Further());
+    EXPECT(lss::hud::overlay_pass::Seat() == lss::hud::overlay_pass::kNone && !lss::hud::overlay_pass::IsSeatPass());
 }
 int main()
 {

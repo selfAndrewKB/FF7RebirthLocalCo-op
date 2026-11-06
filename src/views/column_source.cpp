@@ -57,7 +57,7 @@ void RegisterCommands(Override& choice)
     control::Register({.name  = L"single-view",
                        .shape = control::Shape::Word,
                        .words = {L"auto", L"on", L"off"},
-                       .help  = L"player 1's picture in every further player's view (one monitor: player 1's single "
+                       .help  = L"player 1's picture in every other player's view (one monitor: player 1's single "
                                 L"view) for the game's whole-screen states (auto, the default), always, or never",
                        .set   = [&choice](const Value& v) {
                            const std::wstring& mode = std::get<std::wstring>(v);
@@ -65,7 +65,7 @@ void RegisterCommands(Override& choice)
                            if (mode == L"on")
                            {
                                choice = Override::Single;
-                               return Outcome{true, L"player 1's picture while a further player is in"};
+                               return Outcome{true, L"player 1's picture while player 2 or 3 is in"};
                            }
                            if (mode == L"off")
                            {

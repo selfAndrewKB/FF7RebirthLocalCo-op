@@ -61,7 +61,7 @@ const wchar_t* NameOf(StreamViewsMode mode) noexcept
     switch (mode)
     {
         case StreamViewsMode::Off: return L"off";
-        case StreamViewsMode::Seat: return L"the further players' cameras";
+        case StreamViewsMode::Seat: return L"players 2 and 3's cameras";
         case StreamViewsMode::Both: return L"every player's camera";
     }
     return L"?";
@@ -205,7 +205,7 @@ void RegisterStreamCommands()
                                                : StreamViewsMode::Both;
              SetStreamViewsMode(mode);  // applied at the next tick, which logs it
              return Outcome{true, word == L"off"  ? L"no streaming views (the game's own only)"
-                                  : word == L"p2" ? L"the further players' cameras"
+                                  : word == L"p2" ? L"players 2 and 3's cameras"
                                                   : L"every player's camera"};
          },
          .get = [] {

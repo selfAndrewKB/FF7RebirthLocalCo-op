@@ -155,7 +155,7 @@ struct Targets
 };
 Targets                            g_targets;
 platform::DeferredSites g_placement;  // 1.005: the calls placed from the game thread (platform/deferred_sites.h)
-constexpr const wchar_t* kUnavailable = L"UNAVAILABLE (a check failed): the further players have no attack, guard or dodge";
+constexpr const wchar_t* kUnavailable = L"UNAVAILABLE (a check failed): players 2 and 3 have no attack, guard or dodge";
 
 bool PlaceSites(const platform::GameImage& image) noexcept;
 HudModeFn      g_hudMode   = nullptr;
@@ -541,7 +541,7 @@ void SeatPass(int seat, float deltaTime) noexcept
             scopes.Get<seat_ladder::FocusPart>()->scope.Abandon();
             menu_tint::Release(seat, L"released: the tick faulted");
             g_installed = false;
-            Line(std::format(L"FAILED: {}'s controller's tick faulted; the further players' command controllers stop, "
+            Line(std::format(L"FAILED: {}'s controller's tick faulted; players 2 and 3's command controllers stop, "
                              L"and with them their attack, guard and dodge",
                              players::SeatName(seat)));
         }
@@ -738,7 +738,7 @@ bool PlaceSites(const platform::GameImage& image) noexcept
     {
         menu_input_route::Install(image);  // a seat's presses to its menu in battle; its releases (optional)
     }
-    platform::Log(L"command menu tick: {}", ok ? L"each further player's command controller ticks in battle and takes "
+    platform::Log(L"command menu tick: {}", ok ? L"player 2's and 3's command controllers tick in battle and take "
                                                  L"their attack, guard and dodge; their pads' presses reach their menus in "
                                                  L"battle (logged)"
                                                : kUnavailable);

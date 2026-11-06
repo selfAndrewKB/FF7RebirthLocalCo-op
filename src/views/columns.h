@@ -16,7 +16,7 @@
 // monitor).
 //
 // A mirror's controller id is never a seat's: since step 4 a view draws the HUD of the seat its controller id names
-// (FSceneView::PlayerIndex, hud/passes/second_image.h), so a mirror at a seat's id would draw that seat's HUD. The
+// (FSceneView::PlayerIndex, hud/passes/column_hud_images.h), so a mirror at a seat's id would draw that seat's HUD. The
 // mirrors take ids past the seats' and past XInput's four users (players::kFirstMirrorId on: 4 and 5), so no pad
 // ever drives them (the engine routes XInput user N to controller id N).
 

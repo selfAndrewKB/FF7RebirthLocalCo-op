@@ -43,7 +43,7 @@ enum Which : unsigned
 /// What the parts open with. A part not chosen needs nothing.
 struct Args
 {
-    int           seat       = players::kFirstFurtherSeat;  // whose ladder: Primary and FillMember's pad
+    int           seat       = players::kFirstSeat;  // whose ladder: Primary and FillMember's pad
     void*         controller = nullptr;  // Focus: the seat's command controller
     std::int32_t  padId      = -1;       // Sticks: the pad (input::pad_sticks::ControllerIdOf)
     std::uint64_t withoutKey = 0;        // Buttons: an action the seat's view shows as not held (0 none)

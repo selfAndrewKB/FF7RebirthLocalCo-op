@@ -114,7 +114,7 @@ bool InstallMinimapOnce(const platform::GameImage& image) noexcept
     g_on        = g_installed;
     if (g_installed)
     {
-        platform::Log(L"minimap once: installed (circle {}, octagon {}); the further players' HUD passes skip the minimap's own map "
+        platform::Log(L"minimap once: installed (circle {}, octagon {}); players 2 and 3's HUD passes skip the minimap's own map "
                       L"render, player 1's pass renders it once per frame",
                       circle ? L"yes" : L"no", octagon ? L"yes" : L"no");
     }
@@ -191,7 +191,7 @@ void PollMinimapOnce() noexcept
     if (platform::Enabled(platform::Level::Debug))
     {
         platform::LogDebug(L"minimap once ({}): in the last period the circle's map rendered {} and skipped {} times, the "
-                           L"octagon's rendered {} and skipped {}; the further players' HUD passes {}",
+                           L"octagon's rendered {} and skipped {}; players 2 and 3's HUD passes {}",
                            g_on ? L"on" : L"off", counts[0] - g_logged[0], counts[1] - g_logged[1],
                            counts[2] - g_logged[2], counts[3] - g_logged[3], counts[4] - g_logged[4]);
     }
@@ -210,7 +210,7 @@ void RegisterMinimapOnceCommands()
     control::Register({.name  = L"minimap-once",
                        .shape = control::Shape::OnOff,
                        .help  = L"the minimap's map is rendered once per frame, by player 1's HUD pass (on, at start), "
-                                L"or again in each further player's",
+                                L"or again in player 2's and 3's",
                        .set   = [](const Value& v) {
                            if (!MinimapOnceInstalled())
                            {

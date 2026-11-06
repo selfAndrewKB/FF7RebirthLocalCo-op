@@ -446,22 +446,22 @@ const wchar_t* Describe(Seeded seeded) noexcept
 
 unsigned TakeNotMirrored(int seat) noexcept
 {
-    return platform::Take(g_notMirrored[players::SeatBuilt(seat) ? Index(seat) : players::kFirstFurtherSeat]);
+    return platform::Take(g_notMirrored[players::SeatBuilt(seat) ? Index(seat) : players::kFirstSeat]);
 }
 
 players::StageCounters& SettingsCounters(int seat) noexcept
 {
-    return g_settingsCounters[players::SeatBuilt(seat) ? Index(seat) : players::kFirstFurtherSeat];
+    return g_settingsCounters[players::SeatBuilt(seat) ? Index(seat) : players::kFirstSeat];
 }
 
 players::StageCounters& UpdateCounters(int seat) noexcept
 {
-    return g_updateCounters[players::SeatBuilt(seat) ? Index(seat) : players::kFirstFurtherSeat];
+    return g_updateCounters[players::SeatBuilt(seat) ? Index(seat) : players::kFirstSeat];
 }
 
 unsigned TakeMismatches(int seat) noexcept
 {
-    return platform::Take(g_mismatches[players::SeatBuilt(seat) ? Index(seat) : players::kFirstFurtherSeat]);
+    return platform::Take(g_mismatches[players::SeatBuilt(seat) ? Index(seat) : players::kFirstSeat]);
 }
 
 }  // namespace lss::camera::field_camera

@@ -654,7 +654,7 @@ bool Install(const platform::GameImage& image) noexcept
         !g_readyCall.Install(*site, *readyAt, reinterpret_cast<std::uintptr_t>(&ReadyAt)))
     {
         platform::Log(L"nav strand: UNAVAILABLE (a check failed); {} member being stranded off the navmesh is not logged",
-                      players::kSeatsBuilt == 1 ? L"player 2's" : L"a further player's");
+                      players::kSeatsBuilt == 1 ? L"player 2's" : L"player 2's or 3's");
         return false;
     }
     g_navStreamManager = *manager;
@@ -688,7 +688,7 @@ bool Install(const platform::GameImage& image) noexcept
                   L"(a strand held {:.1f} s warps it back)",
                   falls ? L", falls" : L" (NOT falls: a check failed; a character frozen in the air stays there)",
                   parks ? L" and parks" : L" (NOT parks: a check failed; a character the game parks stays there)",
-                  players::kSeatsBuilt == 1 ? L"player 2's" : L"each further player's", kHoldSeconds);
+                  players::kSeatsBuilt == 1 ? L"player 2's" : L"player 2's or 3's", kHoldSeconds);
     return true;
 }
 
@@ -760,7 +760,7 @@ void Tick(bool splitShown) noexcept
     {
         g_loggedOffThread = true;
         platform::Log(L"nav strand: the game answers for {}'s characters' moves on a worker thread too (counted)",
-                      players::kSeatsBuilt == 1 ? L"player 2" : L"the further players");
+                      players::kSeatsBuilt == 1 ? L"player 2" : L"players 2 and 3");
     }
 #if LSS_DEV
     if (const auto ready = g_readyNoNavmesh.load(std::memory_order_relaxed);
@@ -768,7 +768,7 @@ void Tick(bool splitShown) noexcept
     {
         g_loggedReadyNoNavmesh = ready;  // advanced only by a written line
         Line(L"{} of {}'s characters' moves found no navmesh where the world was ready (not refused so far); {}", ready,
-             players::kSeatsBuilt == 1 ? L"player 2" : L"the further players", Places(players::kFirstFurtherSeat));
+             players::kSeatsBuilt == 1 ? L"player 2" : L"players 2 and 3", Places(players::kFirstSeat));
     }
 #endif
 }

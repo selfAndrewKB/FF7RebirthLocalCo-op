@@ -121,7 +121,7 @@ bool Execute(const wchar_t* command) noexcept
 
 #if LSS_DEV
 
-void RegisterCommands(std::function<bool()> furtherPlayerIn)
+void RegisterCommands(std::function<bool()> anySeatIn)
 {
     using control::Outcome;
     using control::Value;
@@ -136,11 +136,11 @@ void RegisterCommands(std::function<bool()> furtherPlayerIn)
                        }});
     control::Register(
         {.name = L"quit",
-         .help = L"quit the game through the engine (every further player must be out)",
-         .set  = [furtherPlayerIn = std::move(furtherPlayerIn)](const Value&) {
-             if (furtherPlayerIn())
+         .help = L"quit the game through the engine (every other player must be out)",
+         .set  = [anySeatIn = std::move(anySeatIn)](const Value&) {
+             if (anySeatIn())
              {
-                 return Outcome{false, L"a further player is still in ('leave', 'p3.leave' and their 'wait-until' first)"};
+                 return Outcome{false, L"player 2 or 3 is still in ('leave', 'p3.leave' and their 'wait-until' first)"};
              }
              platform::Log(L"control: quitting the game through the engine's quit command");
              return Execute(L"quit") ? Outcome{} : Outcome{false, L"the quit command could not be called"};

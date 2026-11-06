@@ -27,7 +27,7 @@
 #include "scopes/primary_controller.h"
 
 #if LSS_DEV
-#include "hud/passes/second_image.h"
+#include "hud/passes/column_hud_images.h"
 #include "platform/command_registry.h"
 #endif
 
@@ -78,7 +78,7 @@ enum Part : std::size_t
     kScan,
     kParts,
 };
-constexpr const wchar_t* kPartNames[kParts] = {L"contexts to the further players", L"updates for the further players",
+constexpr const wchar_t* kPartNames[kParts] = {L"contexts to players 2 and 3", L"updates for players 2 and 3",
                                                L"contexts to player 1", L"updates for player 1", L"root scan"};
 
 enum Lever : unsigned
@@ -154,14 +154,14 @@ void Refuse(const wchar_t* why)
 {
     g_refused = true;
     g_on.store(false, std::memory_order_relaxed);
-    platform::Log(L"HUD levers: {}; the further players' content stays off", why);
+    platform::Log(L"HUD levers: {}; players 2 and 3's content stays off", why);
 }
 
 /// The updates for the view whose levers are set (`seat` 0 player 1's); a further seat's run gives the arrows their own
 /// timers.
 bool RunUpdates(int seat) noexcept
 {
-    const bool further = seat != 0;
+    const bool isSeat = seat != 0;
     // The gauges first: the enemy attack names in the +0x180 list read each gauge's placed point
     // (RE-p2-battle-popups.md §1), so they must see this view's.
     if (Acts(kLeverGauges))
@@ -174,7 +174,7 @@ bool RunUpdates(int seat) noexcept
     }
     const hud_updates::OwnArrowTimers arrows{g_timeStep, g_savedTimeStep, seat};
     const bool ran = hud_updates::Run(Acts(kLeverUpdates), Acts(kLeverCompass),
-                                      further && Acts(kLeverArrows) && g_timeStep != nullptr ? &arrows : nullptr);
+                                      isSeat && Acts(kLeverArrows) && g_timeStep != nullptr ? &arrows : nullptr);
     minimap::RunHolder(seat);  // the minimap's content for this view, while the seat's minimap is on
     return ran;
 }
@@ -389,7 +389,7 @@ void LogFieldTargets()
     }
     g_fieldTargetsLogged = now;
     platform::LogDebug(L"HUD levers: field-target markers: {} in the list, {} of them roots; {} collapsed root(s) given "
-                       L"a further player's context (shown again if that player's camera sees them)",
+                       L"player 2's or 3's context (shown again if that player's camera sees them)",
                        now.entries, now.roots, now.hiddenSwapped);
 }
 
@@ -408,7 +408,7 @@ bool ContextsToSeat(int seat)
     g_primary.reset();
     Refuse(reverted ? L"SetPlayerContext raised an exception"
                     : L"SetPlayerContext raised an exception, and again putting player 1's back (some roots may keep "
-                      L"a further player's context until the next join)");
+                      L"player 2's or 3's context until the next join)");
     return false;
 }
 
@@ -425,7 +425,7 @@ bool InstallSeatHudContent(const platform::GameImage& image) noexcept
     const auto resume  = image.Rebase(kFirstGamePlayerResume);
     if (!parts || !mode || !overlay || !entry || !resume)
     {
-        platform::Log(L"HUD levers: the HUD's update code is not what the research read; the further players' content "
+        platform::Log(L"HUD levers: the HUD's update code is not what the research read; players 2 and 3's content "
                       L"unavailable");
         return false;
     }
@@ -438,7 +438,7 @@ bool InstallSeatHudContent(const platform::GameImage& image) noexcept
     const auto code = FirstPlayerCode(g_firstPlayerAnswer);
     if (!platform::PinThisModule() || !g_firstPlayerCode.Install(*entry, kFirstPlayerEntryBytes, code, *resume))
     {
-        platform::Log(L"HUD levers: the first-player function's entry could not be redirected; the further players' "
+        platform::Log(L"HUD levers: the first-player function's entry could not be redirected; players 2 and 3's "
                       L"content unavailable");
         return false;
     }
@@ -472,7 +472,7 @@ void SetSeatHudContent(bool on) noexcept
     g_framesToScan = 0;
     g_seatRectKnown.fill(false);
     g_loggedEnter.fill(false);
-    platform::Log(L"HUD levers: the further players' content {}",
+    platform::Log(L"HUD levers: players 2 and 3's content {}",
                   SeatHudContentOn() ? L"on" : on ? L"unavailable" : L"off");
 }
 
@@ -520,8 +520,8 @@ void RefuseWayBack(bool contexts, bool ticks) noexcept
     {
         if (!contexts || !ticks)
         {
-            Refuse(!contexts ? L"SetPlayerContext raised an exception restoring player 1 (some roots may keep a "
-                               L"further player's context until the next join)"
+            Refuse(!contexts ? L"SetPlayerContext raised an exception restoring player 1 (some roots may keep "
+                               L"player 2's or 3's context until the next join)"
                              : L"a HUD update raised an exception in player 1's run");
         }
     }
@@ -564,7 +564,7 @@ bool EnterSeatLevers(int seat) noexcept
         Charge(kTicksSeat, start);
         if (!runs)
         {
-            Refuse(L"a HUD update raised an exception in a further player's run");
+            Refuse(L"a HUD update raised an exception in player 2's or 3's run");
         }
         if (!g_loggedEnter[s])
         {
@@ -673,7 +673,7 @@ void RegisterSeatHudContentCommands()
     control::Register(
         {.name  = L"hud-levers",
          .shape = control::Shape::OnOff,
-         .help  = L"each further player's image shows their own content: the game's player levers switched around "
+         .help  = L"player 2's and 3's images show their own content: the game's player levers switched around "
                   L"their pass",
          .set   = [](const Value& v) {
              if (!SeatHudContentInstalled())
@@ -686,9 +686,9 @@ void RegisterSeatHudContentCommands()
              {
                  return Outcome{false, L"the HUD levers refused a check (see the log)"};
              }
-             return Outcome{true, !on              ? L"the further players' content off"
-                                  : SecondImageOn() ? L"the further players' content on"
-                                                    : L"the further players' content on (needs hud-image on)"};
+             return Outcome{true, !on                  ? L"players 2 and 3's content off"
+                                  : ColumnHudImagesOn() ? L"players 2 and 3's content on"
+                                                        : L"players 2 and 3's content on (needs hud-image on)"};
          },
          .get = [] { return Value{SeatHudContentOn()}; }});
     control::Register(
@@ -706,7 +706,7 @@ void RegisterSeatHudContentCommands()
     control::Register(
         {.name  = L"hud-context-skip",
          .shape = control::Shape::OnOff,
-         .help  = L"the command menu and the party status stay on player 1's context in the further players' passes "
+         .help  = L"the command menu and the party status stay on player 1's context in players 2 and 3's passes "
                   L"(they never read it); off switches them like the others, for a comparison in the census",
          .set   = [](const Value& v) {
              const bool on = std::get<bool>(v);

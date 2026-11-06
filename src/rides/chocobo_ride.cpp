@@ -169,7 +169,7 @@ SeatRide* RideOf(int seat) noexcept
 /// A text kept by pointer (an end's reason, a log prefix) naming the seat: player 2's or player 3's literal.
 constexpr const wchar_t* BySeat(int seat, const wchar_t* two, const wchar_t* three) noexcept
 {
-    return seat == players::kFirstFurtherSeat ? two : three;
+    return seat == players::kFirstSeat ? two : three;
 }
 
 const void* RootOf(void* actor) noexcept
@@ -379,7 +379,7 @@ void End(SeatRide& s, const wchar_t* why, bool force) noexcept
                       L"boarding is left as it was",
                       players::SeatName(ride.seat), CoordState(ride.coordinator));
         Finish(s, ride, why,
-               ride.seat == players::kFirstFurtherSeat
+               ride.seat == players::kFirstSeat
                    ? L"player 2's coordinator was not riding, the game's end skipped; rides stopped for this session"
                    : L"player 3's coordinator was not riding, the game's end skipped; rides stopped for this session");
         return;
@@ -479,9 +479,9 @@ void Begin(SeatRide& s, int seat, void* controller, void* member, void* chocobo)
     s.ride.component = owned ? InputComponentOf(chocobo) : nullptr;
     if (!owned || s.ride.component == nullptr)
     {
-        LogLine(!call.ok                             ? L"the boarding FAULTED; ending it"
-                : seat == players::kFirstFurtherSeat ? L"the boarding did not hand the chocobo to player 2; ending it"
-                                                     : L"the boarding did not hand the chocobo to player 3; ending it",
+        LogLine(!call.ok                      ? L"the boarding FAULTED; ending it"
+                : seat == players::kFirstSeat ? L"the boarding did not hand the chocobo to player 2; ending it"
+                                              : L"the boarding did not hand the chocobo to player 3; ending it",
                 s.ride);
         s.stopped = true;  // no new ride; this one ends with the game's end once the coordinator rides (Ending)
         platform::Log(L"chocobo ride STOPPED for this session: {} stays a passenger", players::SeatName(seat));
@@ -611,8 +611,8 @@ bool Install(const platform::GameImage& image) noexcept
                   g_fn.switchAi != nullptr && g_fn.chocoboFor != nullptr && facts::InBattleKnown() && g_gameRoot != 0 &&
                   g_vehicleKey != nullptr && g_coordVt != 0 && g_moveVt != 0 && g_componentVt != 0 && g_moduleVt != 0 &&
                   scopes::leader_scope::Installed();
-    platform::Log(L"chocobo ride: {}", g_installed ? L"installed (a further player rides their own chocobo with their own coordinator)"
-                                                   : L"UNAVAILABLE (a check failed; the further players stay passengers)");
+    platform::Log(L"chocobo ride: {}", g_installed ? L"installed (player 2 or 3 rides their own chocobo with their own coordinator)"
+                                                   : L"UNAVAILABLE (a check failed; players 2 and 3 stay passengers)");
     return g_installed;
 }
 

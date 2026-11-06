@@ -270,11 +270,11 @@ void Refresh() noexcept
     }
     try
     {
-        std::array<std::uint8_t, kComponentRows> bytes{}, firstFurtherBytes{};
+        std::array<std::uint8_t, kComponentRows> bytes{}, firstSeatBytes{};
         for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
         {
             ReadSeatNames(seat, g_names[static_cast<std::size_t>(seat)], bytes);
-            firstFurtherBytes = seat == players::kFirstFurtherSeat ? bytes : firstFurtherBytes;
+            firstSeatBytes = seat == players::kFirstSeat ? bytes : firstSeatBytes;
         }
 
         g_rows.clear();
@@ -316,7 +316,7 @@ void Refresh() noexcept
         }
         g_seatWidgets.swap(g_stillSeat);
         LayOutPerPlayer();
-        LogIfChanged(firstFurtherBytes);
+        LogIfChanged(firstSeatBytes);
     }
     catch (...)
     {

@@ -244,11 +244,11 @@ void LogSummary(const charapop::Camera& one, const SeatCameras& seats, const Pas
                                  ? charapop::Distance(one.location, seats.camera[seat].location) / 100.0f
                                  : -1.0f);
     }
-    Line(L"{}: {} raised now (cameras {} m apart); this pass {} view needed {}, player 1's camera already keeps {} of "
+    Line(L"{}: {} raised now (cameras {} m apart); this pass {} needed {}, player 1's camera already keeps {} of "
          L"them; so far {} raised, {} cleared ({} out of reach, {} kept by player 1, {} left the evaluated states), {} "
          L"taken over by the game",
          DetailName(detail), g_raisedCount, apart,
-         players::kSeatsBuilt == 1 ? L"player 2's" : L"the further players'", counts.needed, counts.covered,
+         players::kSeatsBuilt == 1 ? L"player 2's view" : L"players 2 and 3's views", counts.needed, counts.covered,
          g_raisedTotal, g_outOfReachTotal + g_coveredTotal + g_goneTotal, g_outOfReachTotal, g_coveredTotal, g_goneTotal,
          g_takenBack);
 }
@@ -340,7 +340,7 @@ void HandleRaised(int index, const Sighting& s, float reach, PassCounts& counts)
     {
         Line(L"cleared {} ({}; {}, player 1: {})", NameOf(s.actor),
              covered ? L"player 1's camera keeps it"
-                     : (players::kSeatsBuilt == 1 ? L"out of player 2's reach" : L"out of every further player's reach"),
+                     : (players::kSeatsBuilt == 1 ? L"out of player 2's reach" : L"out of every other player's reach"),
              SeatsWhere(s), Where(s.fromOne));
     }
     if (Clear(index))
@@ -393,7 +393,7 @@ void HandleCandidate(const Sighting& s, float reach, Detail detail, PassCounts& 
             g_fullLogged = true;
             platform::Log(L"charapop near: {} entries raised, the most kept: further entries near {} are left as the "
                           L"game has them",
-                          kMaxRaised, players::kSeatsBuilt == 1 ? L"player 2" : L"the further players");
+                          kMaxRaised, players::kSeatsBuilt == 1 ? L"player 2" : L"players 2 and 3");
         }
         return;
     }
@@ -526,7 +526,7 @@ bool Install(const platform::GameImage& image) noexcept
     g_gameRoot        = root ? *root : 0;
     g_setMinLevel     = setter ? reinterpret_cast<SetMinLevelFn>(*setter) : nullptr;
     g_installed       = scopes::leader_scope::Installed() && g_gameRoot != 0 && g_setMinLevel != nullptr;
-    platform::Log(L"charapop near: {}", g_installed ? L"installed (characters near a further player keep the detail that player's camera "
+    platform::Log(L"charapop near: {}", g_installed ? L"installed (characters near player 2 or 3 keep the detail that player's camera "
                                                       L"gives them, through the game's minimum level; logged)"
                                                     : L"UNAVAILABLE (a check failed)");
     return g_installed;
@@ -554,7 +554,7 @@ void Tick(bool splitShown, const std::array<bool, players::kMaxPlayers>& plays) 
     if (!splitShown || !anyPlays)
     {
         ClearAll(players::kSeatsBuilt == 1 ? L"the split closed or player 2 stopped playing"
-                                           : L"the split closed or no further player plays");
+                                           : L"the split closed or no other player plays");
         return;
     }
     if (++g_ticks % kEvery != 0)
@@ -576,7 +576,7 @@ void SetDetail(Detail detail) noexcept
     const wchar_t* what = detail == Detail::Full    ? L"keep the detail that player's camera gives them, where player 1's does not"
                           : detail == Detail::Reduced ? L"keep it within half the game's distances from that player's camera"
                                                       : L"get only what player 1's camera gives them";
-    platform::Log(L"charapop near: detail {} (characters near a further player {})", DetailName(detail), what);
+    platform::Log(L"charapop near: detail {} (characters near player 2 or 3 {})", DetailName(detail), what);
 }
 
 Detail CurrentDetail() noexcept
@@ -619,7 +619,7 @@ void RegisterCommands()
     control::Register({.name  = L"npc-detail",
                        .shape = control::Shape::Word,
                        .words = {L"full", L"reduced", L"off", L"on"},
-                       .help  = L"characters near a further player that player 1's camera does not keep get full detail "
+                       .help  = L"characters near player 2 or 3 that player 1's camera does not keep get full detail "
                                 L"within the game's distances from that player's camera (full, at start; on means "
                                 L"full), within half of them (reduced), or only what player 1's camera gives them "
                                 L"(off)",
@@ -635,12 +635,12 @@ void RegisterCommands()
                                                                            : Detail::Full;
                            SetDetail(detail);  // logs the new state
                            return Outcome{true, detail == Detail::Full
-                                                    ? L"characters near a further player keep full detail where player 1's "
+                                                    ? L"characters near player 2 or 3 keep full detail where player 1's "
                                                       L"camera does not (the default)"
                                                 : detail == Detail::Reduced
-                                                    ? L"characters near a further player keep full detail within half the "
+                                                    ? L"characters near player 2 or 3 keep full detail within half the "
                                                       L"game's distances"
-                                                    : L"characters near a further player get only what player 1's camera "
+                                                    : L"characters near player 2 or 3 get only what player 1's camera "
                                                       L"gives them"};
                        },
                        .get = [] {

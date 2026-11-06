@@ -84,7 +84,7 @@ int SeatOf(const void* localPlayer) noexcept
 }
 
 /// A further player is in (their local player followed).
-bool AnyFurther() noexcept
+bool AnySeat() noexcept
 {
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
@@ -314,13 +314,13 @@ void RestoreAxisRules(std::span<const void* const> removedPlayers) noexcept
 void GetViewPointShaped(void* localPlayer, std::byte* viewInfo, std::int32_t stereoPass, int seat)
 {
     const void* playerOne = g_playerOne.load(std::memory_order_relaxed);
-    const bool  further   = seat >= 1;
-    const bool  ownCamera = further && g_ownCamera[static_cast<std::size_t>(seat)].load(std::memory_order_relaxed) &&
+    const bool  isSeat    = seat >= 1;
+    const bool  ownCamera = isSeat && g_ownCamera[static_cast<std::size_t>(seat)].load(std::memory_order_relaxed) &&
                            !g_onPlayerOne[static_cast<std::size_t>(seat)].load(std::memory_order_relaxed);
 
     // Until a further player's own camera is chosen, and while their column shows player 1's picture
     // (views/column_source.h), the further player's view shows player 1's camera.
-    void* source = further && !ownCamera && playerOne != nullptr ? const_cast<void*>(playerOne) : localPlayer;
+    void* source = isSeat && !ownCamera && playerOne != nullptr ? const_cast<void*>(playerOne) : localPlayer;
     g_engineGetViewPoint(source, viewInfo, stereoPass);
     if (seat < 0)
     {
@@ -331,7 +331,7 @@ void GetViewPointShaped(void* localPlayer, std::byte* viewInfo, std::int32_t ste
 
     const int slot = seat;
     LogShapeOnChange(slot, viewInfo);
-    if (!AnyFurther() || !g_splitShown.load(std::memory_order_relaxed))
+    if (!AnySeat() || !g_splitShown.load(std::memory_order_relaxed))
     {
         return;  // one player, or player 1's single view: exactly the engine's result
     }
@@ -339,7 +339,7 @@ void GetViewPointShaped(void* localPlayer, std::byte* viewInfo, std::int32_t ste
     {
         ShapeSplitView(localPlayer, viewInfo, slot);
     }
-    if (further && g_describePending[static_cast<std::size_t>(seat)].exchange(false, std::memory_order_relaxed))
+    if (isSeat && g_describePending[static_cast<std::size_t>(seat)].exchange(false, std::memory_order_relaxed))
     {
         DescribeViewPoint(seat, viewInfo, ownCamera);
     }
@@ -354,7 +354,7 @@ void GetViewPoint(void* localPlayer, std::byte* viewInfo, std::int32_t stereoPas
 {
     const int seat = SeatOf(localPlayer);
     GetViewPointShaped(localPlayer, viewInfo, stereoPass, seat);
-    if (seat >= 0 && AnyFurther())
+    if (seat >= 0 && AnySeat())
     {
         g_rendered[static_cast<std::size_t>(seat)] = CameraOf(viewInfo);
     }
@@ -446,7 +446,7 @@ void FollowPlayers(const SplitFrame& frame) noexcept
     }
     g_followedSeat  = frame.seats;
     g_followedJoins = frame.joins;
-    const bool any  = AnyFurther();
+    const bool any  = AnySeat();
     g_playerOne.store(any ? frame.playerOne : nullptr, std::memory_order_relaxed);
     for (auto& rendered : g_rendered)
     {

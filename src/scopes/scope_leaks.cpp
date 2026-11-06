@@ -158,7 +158,7 @@ bool Install(const platform::GameImage& image) noexcept
                         g_summonCall.Install(*site, *target, reinterpret_cast<std::uintptr_t>(&SummonBody));
     platform::Log(L"scope leaks: clock {}, leader transform {}, field summons {}",
                   g_frames != nullptr ? L"put back" : L"UNAVAILABLE (bytes differ)",
-                  g_leader != nullptr ? L"put back" : L"UNAVAILABLE", summon ? L"skipped for the further players" : L"UNAVAILABLE");
+                  g_leader != nullptr ? L"put back" : L"UNAVAILABLE", summon ? L"skipped for players 2 and 3" : L"UNAVAILABLE");
     return g_frames != nullptr || g_leader != nullptr || summon;
 }
 
@@ -182,10 +182,10 @@ unsigned Mask() noexcept
     return g_mask.load(std::memory_order_relaxed);
 }
 
-InputScope::InputScope(bool furtherPlayer) noexcept
+InputScope::InputScope(bool isSeat) noexcept
 {
     // With the fix off (diagnosis) the block is left as a further player's input writes it, as without this scope.
-    if (!furtherPlayer || g_leader == nullptr || g_inputOpen || !InSeatScope() || !Acts(kFixLeaderTransform) ||
+    if (!isSeat || g_leader == nullptr || g_inputOpen || !InSeatScope() || !Acts(kFixLeaderTransform) ||
         !g_leaderBlock.Open())
     {
         return;  // (an open scope already holds the block: this one leaves it to it)
@@ -295,7 +295,7 @@ void LogStatus() noexcept
 {
     const Counts counts = g_counts;
     g_counts            = {};
-    platform::Log(L"  scope leaks (mask {}{}): the further players' members' ticks advanced the clock {} time(s), put back {} ({} "
+    platform::Log(L"  scope leaks (mask {}{}): players 2 and 3's members' ticks advanced the clock {} time(s), put back {} ({} "
                   L"inexact, {} advanced past the guard); their input rewrote the leader transform {} time(s), put "
                   L"back {}; field summons skipped {} time(s)",
                   g_mask.load(std::memory_order_relaxed), Unavailable(), counts.clockAdvanced, counts.clockPutBack,
@@ -311,7 +311,7 @@ void RegisterCommands()
     control::Register({.name  = L"leak-fixes",
                        .shape = control::Shape::Integer,
                        .max   = 7,
-                       .help  = L"diagnosis: which put-backs of the further players' scope leaks act (1 the input clock, 2 the "
+                       .help  = L"diagnosis: which put-backs of players 2 and 3's scope leaks act (1 the input clock, 2 the "
                                 L"leader transform, 4 field summons skipped); all at start",
                        .set   = [](const Value& v) {
                            SetMask(static_cast<unsigned>(std::get<std::int64_t>(v)));

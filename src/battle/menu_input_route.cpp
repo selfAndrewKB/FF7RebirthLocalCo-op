@@ -236,7 +236,7 @@ bool InSeatUi(int seat, Route route, const wchar_t* what, Call&& call) noexcept
     {
         scopes.Get<seat_ladder::FocusPart>()->scope.Abandon();
         g_routeFailed = true;
-        Line(std::format(L"FAILED: pad {}'s {} faulted in {}'s menu; the further players' pads stay out of the menus",
+        Line(std::format(L"FAILED: pad {}'s {} faulted in {}'s menu; players 2 and 3's pads stay out of the menus",
                          seat + 1, what, players::SeatName(seat)));
     }
     return true;
@@ -398,7 +398,7 @@ void Install(const platform::GameImage& image) noexcept
     {
         g_keyUpSlot.Restore();
     }
-    platform::Log(L"command menu tick: the further players' pads' releases {}",
+    platform::Log(L"command menu tick: players 2 and 3's pads' releases {}",
                   ok ? L"reach their menus in battle" : L"UNAVAILABLE (a check failed): they keep player 1's up route");
 }
 

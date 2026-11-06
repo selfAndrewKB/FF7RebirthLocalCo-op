@@ -1,7 +1,7 @@
 #pragma once
 
 // Each further seat's layer entry beside the game's own in one menu-renderer slot: the root overlay's pool 2
-// (hud/passes/second_image.h) and the navimap circle's pool 0 (hud/minimap/minimap.h), one instance each. The engine
+// (hud/passes/column_hud_images.h) and the navimap circle's pool 0 (hud/minimap/minimap.h), one instance each. The engine
 // keeps one image per slot, so the mod reuses the slot across the passes of the overlay render (hud/passes/
 // overlay_pass.h, which holds the rule):
 //   - the first further pass the slot takes part in acquires it and holds it; each later further pass takes the held
@@ -109,16 +109,16 @@ private:
 
     // Read by the render-thread code through their addresses.
     EntryFilterFields fields_;
-    MenuBufferSet     buffers_[kFurtherEntries];  // seat s at [s - 1]
+    MenuBufferSet     buffers_[kSeatEntries];  // seat s at [s - 1]
 
     std::uintptr_t      vertexVtable_ = 0;
     std::uintptr_t      indexVtable_  = 0;
     BeginInitResourceFn beginInit_    = nullptr;
     SubmitLayerSlotFn   submit_       = nullptr;
 
-    std::uint64_t seatNames_[kFurtherEntries] = {};
-    bool          namesReady_                 = false;
-    bool          buffersQueued_[kFurtherEntries] = {};
+    std::uint64_t seatNames_[kSeatEntries]     = {};
+    bool          namesReady_                  = false;
+    bool          buffersQueued_[kSeatEntries] = {};
     bool          wrongKind_     = false;
     bool          active_        = false;
     void*         renderer_      = nullptr;  // from any acquire; the renderer is a long-lived singleton

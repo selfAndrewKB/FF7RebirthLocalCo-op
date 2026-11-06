@@ -455,7 +455,7 @@ void Install(const platform::GameImage& image) noexcept
         g_redPlaced   = platform::ReplaceSlot(image, kRedDoorEnd, reinterpret_cast<std::uintptr_t>(&RedDoorEnd),
                                               g_redDoorEnd);
     }
-    platform::Log(L"walk cap: the further players' walk step {}, chain door {} (their walk cap ends on their own controller, as "
+    platform::Log(L"walk cap: players 2 and 3's walk step {}, chain door {} (their walk cap ends on their own controller, as "
                   L"player 1's does); layer-2 write log {}",
                   g_phasePlaced ? L"yes" : L"NO", g_redPlaced ? L"yes" : L"NO", InstallWriteLog(image));
 }

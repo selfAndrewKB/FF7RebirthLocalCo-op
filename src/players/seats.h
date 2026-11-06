@@ -17,9 +17,9 @@ inline constexpr int kMaxPlayers = 3;
 inline constexpr int kSeatsBuilt = 2;
 static_assert(kSeatsBuilt >= 1 && kSeatsBuilt < kMaxPlayers, "the seats are numbered within the players");
 
-/// The first further player's seat: player 2's. A module not yet per seat names it, so every place still fixed to
-/// player 2 is found by this name (plan/seats.md step 3).
-inline constexpr int kFirstFurtherSeat = 1;
+/// The first seat: player 2's (seat 0 is player 1, who has no seat). A module not yet per seat names it, so every
+/// place still fixed to player 2 is found by this name (plan/seats.md step 3).
+inline constexpr int kFirstSeat = 1;
 
 /// "player 2" for seat 1: the name a seat's log lines use, so three players read apart in the log.
 constexpr const wchar_t* SeatName(int seat) noexcept
@@ -42,7 +42,7 @@ constexpr bool SeatBuilt(int seat) noexcept
 
 /// The mirror views' controller ids (views/mirror_player.h: a local player of the mod's that shows player 1's camera
 /// in a column no player has), at most one per column beside player 1's. Never a seat's id: a view draws the HUD of
-/// the seat its controller id names (hud/passes/second_image.h). And past XInput's four users (0 to 3): the engine
+/// the seat its controller id names (hud/passes/column_hud_images.h). And past XInput's four users (0 to 3): the engine
 /// routes pad N to controller id N, so no pad ever reaches a mirror's controller.
 inline constexpr int kXInputUsers   = 4;
 inline constexpr int kFirstMirrorId = kXInputUsers;

@@ -251,17 +251,17 @@ void Enter(void* executer) noexcept
     }
     const void* chocobo = scopes::leader_scope::ObjectAt(static_cast<const std::byte*>(executer) + kExecuterChocobo);
     const int   seat    = rides::chocobo_ride::SeatRiding(chocobo);  // the seat from the climbing chocobo, or -1
-    const bool  further = seat >= 1;
+    const bool  isSeat  = seat >= 1;
     const void* module  = chocobo != nullptr ? ModuleOf(chocobo) : nullptr;
     const int   state   = StateAt(module, kModuleCurrent);
     const int   pending = StateAt(module, kModulePending);
     EnterCall   call{seat, original, executer};
-    const bool  scoped = further && rides::chocobo_ride::RunAsRider(chocobo, &RunEnter, &call);
+    const bool  scoped = isSeat && rides::chocobo_ride::RunAsRider(chocobo, &RunEnter, &call);
     if (!scoped)
     {
         original(executer);
     }
-    ++(further ? (scoped ? g_counts[seat].enterScoped : g_counts[seat].enterRefused) : g_counts[0].enterOthers);
+    ++(isSeat ? (scoped ? g_counts[seat].enterScoped : g_counts[seat].enterRefused) : g_counts[0].enterOthers);
     try
     {
         // The module is read again: the setup reads the chocobo's handle, it does not replace it [ASSUMPTION; logged].
@@ -270,14 +270,14 @@ void Enter(void* executer) noexcept
                                         L"down)",
                                         after, StateText(state), StateText(pending), StateText(StateAt(after, kModuleCurrent)),
                                         StateText(StateAt(after, kModulePending)));
-        if (further && !scoped)
+        if (isSeat && !scoped)
         {
             platform::Log(L"WARNING: chocobo climb: {}'s chocobo's climb camera setup ran outside {}'s scope (a "
                           L"scope was refused); no climb framing, as the game gives any rider but the leader; {}",
                           players::SeatName(seat), players::SeatName(seat), text);
         }
 #if LSS_DEV
-        else if (further)
+        else if (isSeat)
         {
             platform::LogDebug(L"chocobo climb: {}'s chocobo climbs; the camera setup ran in {}'s scope ({}'s member as "
                                L"the leader: {}); {}",
@@ -357,9 +357,9 @@ void Install(const platform::GameImage& image) noexcept
         g_enterSlot.Restore();
     }
     platform::Log(L"chocobo climb: {}; logging {}",
-                  start ? L"a further player's chocobo starts its climbs and its climb camera in that player's scope (the spot's "
+                  start ? L"player 2's or 3's chocobo starts its climbs and its climb camera in that player's scope (the spot's "
                           L"start check and the climb executer's camera setup)"
-                        : L"NOT placed (a slot differs); a further player's chocobo cannot climb, as before",
+                        : L"NOT placed (a slot differs); player 2's or 3's chocobo cannot climb, as before",
                   logging);
 }
 

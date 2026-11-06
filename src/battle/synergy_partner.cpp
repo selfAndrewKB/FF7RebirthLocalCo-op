@@ -909,7 +909,7 @@ void TakeNotes() noexcept
             if (Line())
             {
                 // The game's queued give-back may not have run yet: "now" is this tick's holder.
-                const wchar_t* const what = note.heldBack ? L"no give-back (a further player's member is given back "
+                const wchar_t* const what = note.heldBack ? L"no give-back (player 2's or 3's member is given back "
                                                             L"only on the game thread)"
                                             : note.gameGave ? L"the game queued its own give-back"
                                                             : L"no give-back (the game's own test failed)";

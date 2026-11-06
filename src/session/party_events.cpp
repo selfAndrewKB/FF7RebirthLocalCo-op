@@ -158,7 +158,7 @@ bool Install(const platform::GameImage& image, const Listener& listener) noexcep
     const auto appliedAt = image.Rebase(kAppliedCall, 5);
     const bool heard     = applied && appliedAt &&
                        g_appliedCall.Install(*appliedAt, *applied, reinterpret_cast<std::uintptr_t>(&PartyApplied));
-    platform::Log(L"party events: the further players hear the game's leader changes and party status changes{}",
+    platform::Log(L"party events: players 2 and 3 hear the game's leader changes and party status changes{}",
                   heard ? L", and each party data apply (squad and formation changes)"
                         : L"; NOT the party data applies (a check failed: squad changes are found by the slow check)");
     return true;

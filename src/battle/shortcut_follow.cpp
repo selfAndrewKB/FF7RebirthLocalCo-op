@@ -278,7 +278,7 @@ void Place(const platform::GameImage& image, platform::DeferredSites& placement)
     const Sites& s = g_sites;
     if (g_ctrlShortcuts == nullptr || s.rebuildShortcuts == 0)
     {
-        platform::Log(L"command menu: the further players' shortcut tables do NOT follow the game's rebuilds (a "
+        platform::Log(L"command menu: players 2 and 3's shortcut tables do NOT follow the game's rebuilds (a "
                       L"check failed); they change at the next Members panel rebuild");
         return;
     }

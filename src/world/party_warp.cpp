@@ -254,7 +254,7 @@ bool Install(const platform::GameImage& image) noexcept
     if (g_variants[0].vtable == 0 || !partyIdle || !inBattle)
     {
         platform::Log(L"party warp: UNAVAILABLE (a check failed); a stranded {} is not brought back",
-                      players::kSeatsBuilt == 1 ? L"player 2" : L"further player");
+                      players::kSeatsBuilt == 1 ? L"player 2" : L"player 2 or 3");
         return false;
     }
     g_partyIdle = reinterpret_cast<TestFn>(*partyIdle);
@@ -263,7 +263,7 @@ bool Install(const platform::GameImage& image) noexcept
     g_installed = true;
     platform::Log(L"party warp: a stranded {} is brought back by the game's follow warp (on foot; riding: {} of 3 "
                   L"chocobo follow variants checked)",
-                  players::kSeatsBuilt == 1 ? L"player 2" : L"further player", chocoboVariants);
+                  players::kSeatsBuilt == 1 ? L"player 2" : L"player 2 or 3", chocoboVariants);
     return true;
 }
 

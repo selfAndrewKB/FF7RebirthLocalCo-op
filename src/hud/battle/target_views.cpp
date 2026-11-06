@@ -486,7 +486,7 @@ bool InstallSites(const platform::GameImage& image) noexcept
         }
         g_unionOn = false;
     }
-    platform::Log(L"target views: {}; the further players' enemy gauges {}; red ability labels {}",
+    platform::Log(L"target views: {}; players 2 and 3's enemy gauges {}; red ability labels {}",
                   g_installed ? L"per-view marks ready" : L"UNAVAILABLE",
                   g_unionOn ? L"collected with player 1's" : L"NOT collected (a check failed)",
                   labels ? L"make way for each player's own locked-on gauge" : L"follow player 1's lock-on (a check failed)");
@@ -573,7 +573,7 @@ void BeforePass(int seat) noexcept
             Note(platform::Level::Trace,
                  std::format(L"{}'s pass takes out {} other player's cursor(s) (its own {:#x}) and {} of {} gauge(s){}",
                              players::SeatName(seat), hides.cursors, hides.ownCursor, hides.gauges, hides.entries,
-                             hides.list ? L" | a further player's target list open" : L""));
+                             hides.list ? L" | player 2's or 3's target list open" : L""));
         }
     }
     catch (...)

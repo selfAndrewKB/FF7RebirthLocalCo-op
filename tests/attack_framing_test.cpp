@@ -23,7 +23,7 @@ void TestLatchKeyKeepsTwoPlayerValue()
     std::puts("attack framing: player 1's key is the weak value, player 2's has bit 63 flipped (as before)");
     constexpr std::uint64_t key = 0x0000123400000056ull;
     static_assert(LatchKey(key, 0) == key, "player 1's camera: the weak value");
-    EXPECT(LatchKey(key, players::kFirstFurtherSeat) == (key ^ 0x8000000000000000ull));
+    EXPECT(LatchKey(key, players::kFirstSeat) == (key ^ 0x8000000000000000ull));
 }
 
 void TestLatchKeysApart()

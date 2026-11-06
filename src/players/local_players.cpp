@@ -199,7 +199,7 @@ LocalPlayers::PlayerOne LocalPlayers::FirstPlayer(bool log) const noexcept
     {
         if (log)
         {
-            platform::Log(L"join refused: a local player with controller id {} is listed, no built seat's", stranger);
+            platform::Log(L"join refused: a local player with controller id {} is listed, not player 2's or 3's", stranger);
         }
         return {};
     }

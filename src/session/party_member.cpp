@@ -207,7 +207,7 @@ namespace {
 /// "2nd" for player 2's slot of the party order, "3rd" for player 3's (the log's name for it).
 const wchar_t* SlotName(int seat) noexcept
 {
-    return seat == 1 ? L"2nd" : seat == 2 ? L"3rd" : L"seat's";
+    return seat == 1 ? L"2nd" : seat == 2 ? L"3rd" : L"player's";
 }
 
 /// What ChooseSlot reads from the game (plain values, so the read can run inside an SEH guard).

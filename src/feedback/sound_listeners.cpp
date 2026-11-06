@@ -1143,7 +1143,7 @@ std::wstring Summary()
     }
     if (const unsigned failures = platform::Take(g_counts.setFailures); failures != 0)
     {
-        text += std::format(L"; the game's setter refused a further player's listener {} time(s)", failures);
+        text += std::format(L"; the game's setter refused player 2's or 3's listener {} time(s)", failures);
     }
     if (const unsigned full = platform::Take(g_counts.tableFull); full != 0)
     {

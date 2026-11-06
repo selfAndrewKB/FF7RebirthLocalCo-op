@@ -204,7 +204,7 @@ public:
         lss::views::display_align::Restore();
         if (session_ && (session_->AnyIn() || lss::views::mirror_player::Count() > 0))
         {
-            Log(L"unloading with a further player or a mirror view still in: the per-player rendering and the stages "
+            Log(L"unloading with player 2, player 3 or a mirror view still in: the per-player rendering and the stages "
                 L"stay installed");
             return;
         }
@@ -359,7 +359,7 @@ public:
         lss::engine_tick::Start([](void* self) { static_cast<LocalSplitScreenMod*>(self)->OnEngineTick(); }, this);
 
         Log(L"ready: every engine check passed. Ctrl+F7 adds a player (2, then 3), Ctrl+F8 removes the last one in, Ctrl+F5 switches "
-            L"top/bottom and side by side, Ctrl+F4 switches filled halves and 16:9 halves with bars. Each further player starts on "
+            L"top/bottom and side by side, Ctrl+F4 switches filled halves and 16:9 halves with bars. Players 2 and 3 start on "
             L"their own camera and pad; for testing, Ctrl+F6 switches their views to player 1's camera and Ctrl+F9 "
             L"merges the pads. Ctrl+F2 spans the window across the monitor row, one monitor per player; Ctrl+F3 "
             L"switches the three-player monitor mode (three monitors, player 1's picture in the empty columns)");
@@ -424,11 +424,11 @@ private:
         LogSingleViewChange(singleView_.Update(false));
         if (left)
         {
-            Log(L"{}: the further players left (and join again once the field is ready)", why);
+            Log(L"{}: players 2 and 3 left (and join again once the field is ready)", why);
         }
         else
         {
-            Log(L"WARNING: {} and a further player could not be removed; a new world would log them in, and their "
+            Log(L"WARNING: {} and player 2 or 3 could not be removed; a new world would log them in, and their "
                 L"camera managers' spawns are expected to collide with player 1's",
                 why);
         }
@@ -530,15 +530,15 @@ private:
         moment.sharedRide  = shared;
         moment.choice      = singleViewChoice_;
         moment.map         = columns.map;
-        bool furtherPlayerIn = false;
+        bool anySeatIn = false;
         for (int seat = 1; seat <= lss::players::kSeatsBuilt; ++seat)
         {
             const auto state = session_->State(seat);
             moment.seats[static_cast<std::size_t>(seat)] = state;
-            furtherPlayerIn = furtherPlayerIn || lss::players::InGame(state);
+            anySeatIn = anySeatIn || lss::players::InGame(state);
         }
         // Read only when it can matter (the read logs each change of reason).
-        moment.wholeScreen = furtherPlayerIn && moment.choice == lss::views::column_source::Override::Auto &&
+        moment.wholeScreen = anySeatIn && moment.choice == lss::views::column_source::Override::Auto &&
                              lss::views::WholeScreenShown();
         lss::views::column_source::Shown shown = lss::views::column_source::Decide(moment);
         LogSingleViewChange(singleView_.Update(shown.Single()));

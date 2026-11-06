@@ -250,7 +250,7 @@ bool LocalPlayers(LocalPlayerSet& bySeat)
     if (bySeat[0] == nullptr && list != nullptr && list->Num() > 0 && !s_said)
     {
         s_said = true;
-        platform::Log(L"HUD roots: no listed local player has controller id 0 (player 1's); the further players' HUD "
+        platform::Log(L"HUD roots: no listed local player has controller id 0 (player 1's); players 2 and 3's HUD "
                       L"content stays off while that holds (logged once)");
     }
     return bySeat[0] != nullptr;
@@ -416,8 +416,8 @@ std::wstring TakeCensus(std::uint32_t frames)
     const std::size_t     shown  = std::min(costliest.size(), kShown);
     std::partial_sort(costliest.begin(), costliest.begin() + static_cast<std::ptrdiff_t>(shown), costliest.end(),
                       [](const ClassCost* a, const ClassCost* b) { return a->seconds > b->seconds; });
-    std::wstring line = std::format(L"{} root(s), {} root class(es) seen; per frame {:.1f} call(s) toward the further "
-                                    L"players, {:.1f} back to player 1, {:.1f} needed but already that player's, {:.1f} "
+    std::wstring line = std::format(L"{} root(s), {} root class(es) seen; per frame {:.1f} call(s) toward players 2 "
+                                    L"and 3, {:.1f} back to player 1, {:.1f} needed but already that player's, {:.1f} "
                                     L"shown but left on player 1's (the command menu and party status, skip {}); the "
                                     L"setter {:.3f} ms per frame; the costliest:",
                                     g_roots.size(), g_costs.size(), g_setsToSeats * perFrame, g_setsToOne * perFrame,

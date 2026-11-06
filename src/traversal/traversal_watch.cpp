@@ -745,7 +745,7 @@ void Install(const platform::GameImage& image) noexcept
                          g_resolveCall.Install(*resolveSite, *weakGet, reinterpret_cast<std::uintptr_t>(&TriggerResolve));
     platform::Log(L"traversal watch (logging only, Debug): trigger enters {}, leaves {}; notify passes {}; ladder offers {}; "
                   L"ladder climbs {}; chocobo glide {}, water jet {}; the field tick's trigger key {} (its tracker passes come "
-                  L"from seat triggers); "
+                  L"from the triggers module); "
                   L"both controllers' lists and trigger trackers on change; actor names: ladder {}, door {}, chocobo "
                   L"climb {}, launch pad {}",
                   Outcome(enter), Outcome(leave), Outcome(notify), Outcome(ladder), Outcome(climb), Outcome(glide),

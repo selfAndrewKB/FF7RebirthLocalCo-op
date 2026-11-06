@@ -488,12 +488,12 @@ void Install(const platform::GameImage& image) noexcept
                                  : L"NOT placed (the NPC looks at player 1's character)";
     g_admitting        = walk && presses;
     platform::Log(L"shop talk: {} (the data walk {}{}, presses {}, the shop's AI event {}, the greeting's LEADER_ {})",
-                  g_admitting ? L"ready (a further player uses shopkeepers through the game's own field prompt and shop)"
-                              : L"UNAVAILABLE for the further players (a check failed; shopkeepers stay player 1's)",
+                  g_admitting ? L"ready (player 2 or 3 uses shopkeepers through the game's own field prompt and shop)"
+                              : L"UNAVAILABLE for players 2 and 3 (a check failed; shopkeepers stay player 1's)",
                   walk ? L"found" : L"NOT found",
                   g_groupRow != nullptr ? L"" : L" (action groups NOT found: names read as actions only)",
                   presses ? L"watched" : L"NOT watched",
-                  events ? L"for a further player's shop" : L"NOT placed (the NPC reacts to player 1's character)", leaders);
+                  events ? L"for player 2's or 3's shop" : L"NOT placed (the NPC reacts to player 1's character)", leaders);
 }
 
 bool Admits(std::uint64_t key) noexcept

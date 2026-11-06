@@ -183,7 +183,7 @@ void InstallShadowSkip(const platform::GameImage& image) noexcept
         !platform::CopyGuarded(before, reinterpret_cast<const void*>(*site - sizeof(before)), sizeof(before)) ||
         !std::equal(compare.begin(), compare.end(), before))
     {
-        platform::Log(L"stream feedback: the shadow pass's streaming writes are not what the research read; the further players' "
+        platform::Log(L"stream feedback: the shadow pass's streaming writes are not what the research read; players 2 and 3's "
                       L"families still record them");
         return;
     }
@@ -191,7 +191,7 @@ void InstallShadowSkip(const platform::GameImage& image) noexcept
     const bool installed =
         v1005 ? g_shadowCode.Install(*site, kShadowFeedbackSiteBytes, ShadowFeedbackCode1005(g_shadowFields, *skipTo, *empty), *resume)
               : g_shadowCode.Install(*site, kShadowFeedbackSiteBytes, ShadowFeedbackCode(g_shadowFields, *skipTo, *empty), *resume);
-    platform::Log(L"stream feedback: the further players' families {} the shadow pass's streaming-feedback writes",
+    platform::Log(L"stream feedback: players 2 and 3's families {} the shadow pass's streaming-feedback writes",
                   installed ? L"skip" : L"still record (the site could not be redirected)");
 }
 
@@ -223,8 +223,8 @@ void InstallOnRenderThread() noexcept
     const bool copy = g_copyCall.InstallFromOwnThread(g_copySite, g_copyTarget, reinterpret_cast<std::uintptr_t>(&Copy));
     platform::Log(L"stream feedback: from the render thread, the readback processing call {} and the main pass's copy "
                   L"call {}",
-                  process ? L"installed" : L"FAILED (the further players' families still process readbacks)",
-                  copy ? L"installed" : L"FAILED (the further players' families still copy their feedback)");
+                  process ? L"installed" : L"FAILED (players 2 and 3's families still process readbacks)",
+                  copy ? L"installed" : L"FAILED (players 2 and 3's families still copy their feedback)");
 }
 
 /// Replaces the scene renderer's Render (vtable slot): marks an additional family for its length.
@@ -370,9 +370,9 @@ bool Install1005(const platform::GameImage& image, std::uintptr_t entry, std::ui
     g_on.store(true, std::memory_order_relaxed);
     InstallShadowSkip(image);
     g_installed.store(true, std::memory_order_release);
-    platform::Log(L"stream feedback: installed; the further players' families skip the readback processing, the main pass's copy, "
+    platform::Log(L"stream feedback: installed; players 2 and 3's families skip the readback processing, the main pass's copy, "
                   L"the hidden-component pass and phase 8's mip-request dispatches, so player 1's family alone hands in "
-                  L"scenery requests (the further players' "
+                  L"scenery requests (players 2 and 3's "
                   L"come through their streaming views); the first two calls follow on the render thread");
     return true;
 }
@@ -419,9 +419,9 @@ bool InstallMeFeedbackOnce(const platform::GameImage& image) noexcept
     g_on.store(true, std::memory_order_relaxed);
     InstallShadowSkip(image);
     g_installed.store(true, std::memory_order_release);
-    platform::Log(L"stream feedback: installed; the further players' families skip the readback processing, the main pass's copy, "
+    platform::Log(L"stream feedback: installed; players 2 and 3's families skip the readback processing, the main pass's copy, "
                   L"the hidden-component pass and phase 8's mip-request dispatches, so player 1's family alone hands in "
-                  L"scenery requests (the further players' "
+                  L"scenery requests (players 2 and 3's "
                   L"come through their streaming views)");
     return true;
 }
@@ -456,7 +456,7 @@ void SetMeFeedbackMask(std::uint32_t mask) noexcept
 {
     g_mask.store(mask & 0x1F, std::memory_order_relaxed);
     UpdateShadowSwitch();
-    platform::Log(L"stream feedback: under p1, the further players' families skip: readback processing {}, main-pass copy {}, "
+    platform::Log(L"stream feedback: under p1, players 2 and 3's families skip: readback processing {}, main-pass copy {}, "
                   L"hidden-component pass {}, phase 8 mip requests {}, shadow streaming writes {}",
                   (mask & 1) ? L"yes" : L"no", (mask & 2) ? L"yes" : L"no", (mask & 4) ? L"yes" : L"no",
                   (mask & 8) ? L"yes" : L"no", (mask & 16) ? L"yes" : L"no");
@@ -509,7 +509,7 @@ void PollMeFeedbackOnce() noexcept
     const auto shadowLine = std::format(L"{} / {} passed / {} skipped", shadow[1] - g_shadowLogged[1],
                                         shadow[2] - g_shadowLogged[2], shadow[0] - g_shadowLogged[0]);
     std::copy(std::begin(shadow), std::end(shadow), g_shadowLogged);
-    platform::LogDebug(L"stream feedback ({}, mask {}): in the last period, player 1's family / the further players': renders {}; "
+    platform::LogDebug(L"stream feedback ({}, mask {}): in the last period, player 1's family / players 2 and 3's: renders {}; "
                   L"readback processing {}; main-pass copies {}; hidden-component passes {}; phase 8 chunk calls {}; "
                   L"shadow batches' streaming writes {}{}; budget state {}",
                   MeFeedbackOnceOn() ? L"p1" : L"each", g_mask.load(std::memory_order_relaxed), line(Renders),
@@ -544,7 +544,7 @@ void RegisterMeFeedbackCommands()
     control::Register({.name  = L"feedback-mask",
                        .shape = control::Shape::Integer,
                        .max   = 31,
-                       .help  = L"diagnosis: which of the further players' skips under stream-feedback p1 act (1 the readback "
+                       .help  = L"diagnosis: which of players 2 and 3's skips under stream-feedback p1 act (1 the readback "
                                 L"processing, 2 the main pass's copy, 4 the hidden-component pass, 8 the phase 8 "
                                 L"mip-request dispatches, 16 the shadow pass's streaming writes)",
                        .set   = [](const Value& v) {

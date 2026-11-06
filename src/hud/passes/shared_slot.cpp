@@ -32,7 +32,7 @@ bool SharedLayerSlot::MakeNames(std::uint64_t stockName) noexcept
         {
             return false;
         }
-        std::uint64_t names[kFurtherEntries] = {};
+        std::uint64_t names[kSeatEntries] = {};
         for (int seat = 1; seat < players::kMaxPlayers; ++seat)
         {
             const std::uint64_t name = EngineNameValue(setup_.seatNames[seat], RC::Unreal::FNAME_Add);
@@ -43,7 +43,7 @@ bool SharedLayerSlot::MakeNames(std::uint64_t stockName) noexcept
             names[seat - 1] = name;
         }
         fields_.stockName = stockName;  // before any family name can be set from it
-        for (int i = 0; i < kFurtherEntries; ++i)
+        for (int i = 0; i < kSeatEntries; ++i)
         {
             seatNames_[i] = names[i];
         }
@@ -148,7 +148,7 @@ void* SharedLayerSlot::Acquire(void* renderer, std::uintptr_t pool, AcquireLayer
 std::uintptr_t SharedLayerSlot::NameFor(const void* slot, std::uintptr_t stockName) noexcept
 {
     const int seat = overlay_pass::Seat();
-    if (!overlay_pass::FurtherEntry(seat, slot != nullptr && slot == held_) || !players::SeatIndex(seat))
+    if (!overlay_pass::IsSeatEntry(seat, slot != nullptr && slot == held_) || !players::SeatIndex(seat))
     {
         return stockName;
     }
@@ -160,7 +160,7 @@ std::uintptr_t SharedLayerSlot::NameFor(const void* slot, std::uintptr_t stockNa
 bool SharedLayerSlot::SkipSubmit(const void* slot) noexcept
 {
     const int seat = overlay_pass::Seat();
-    if (!overlay_pass::FurtherEntry(seat, slot != nullptr && slot == held_) || !players::SeatIndex(seat))
+    if (!overlay_pass::IsSeatEntry(seat, slot != nullptr && slot == held_) || !players::SeatIndex(seat))
     {
         return false;
     }

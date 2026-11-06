@@ -80,7 +80,7 @@ constexpr bool ShotShows(const void* target, const void* member, const void* one
                          const void* owner) noexcept
 {
     const void* const humans[players::kMaxPlayers] = {one, member, nullptr};
-    return ShotShows(target, humans, cameraIsSeat ? players::kFirstFurtherSeat : 0, owner);
+    return ShotShows(target, humans, cameraIsSeat ? players::kFirstSeat : 0, owner);
 }
 
 // ---- location_rows: the camera location volume a seat's character is in ----

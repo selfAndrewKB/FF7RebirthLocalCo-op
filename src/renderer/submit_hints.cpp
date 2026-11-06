@@ -90,7 +90,7 @@ void InstallSubmitHintSkip(const platform::GameImage& image) noexcept
     g_site = Locate(image);
     if (g_site)
     {
-        platform::Log(L"GPU submissions: the parallel passes' submit hint found; skipped while a further player is in");
+        platform::Log(L"GPU submissions: the parallel passes' submit hint found; skipped while player 2 or 3 is in");
     }
     else
     {
@@ -162,7 +162,7 @@ void RegisterSubmitHintCommands()
                        .shape = control::Shape::Word,
                        .words = {L"skip", L"stock"},
                        .help  = L"parallel passes without their own GPU submission (skip), or the game's; skip while "
-                                L"a further player is in, set again at the next join or leave",
+                                L"player 2 or 3 is in, set again at the next join or leave",
                        .set   = [](const Value& v) {
                            const bool skip = std::get<std::wstring>(v) == L"skip";
                            if (!SubmitHintSkipInstalled())

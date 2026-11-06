@@ -440,12 +440,12 @@ void MakeTarget(int seat, const void* slate) noexcept
     void* target = nullptr;
     if (outer == nullptr || !platform::CallGuarded(g_newTarget, target, outer) || target == nullptr)
     {
-        Refuse(L"a further player's render target could not be made");
+        Refuse(L"player 2's or 3's render target could not be made");
         return;
     }
     if (!RootGuarded(target))
     {
-        Refuse(L"a further player's render target could not be rooted");
+        Refuse(L"player 2's or 3's render target could not be rooted");
         return;
     }
     auto*                  bytes = static_cast<std::byte*>(target);
@@ -460,7 +460,7 @@ void MakeTarget(int seat, const void* slate) noexcept
     if (!platform::CallGuarded(g_initFormat, target, sizeX, sizeY, kFormatB8G8R8A8, static_cast<std::uint8_t>(1)) ||
         !platform::CallGuarded(g_updateNow, target, static_cast<std::uint8_t>(1)))
     {
-        Refuse(L"a further player's render target could not be initialised");
+        Refuse(L"player 2's or 3's render target could not be initialised");
         return;
     }
     g_target[seat] = target;
@@ -560,8 +560,8 @@ void LogCounts() noexcept
     g_loggedSlot   = slot;
     // The steady hand-over is a periodic status line (Debug); a safety submit or an acquire off the game thread is Info.
     LineAt(urgent ? platform::Level::Info : platform::Level::Debug,
-           L"since the last line: holder runs {} for the further players, {} for player 1; slots held {}, taken by a "
-           L"later pass {}, taken back by player 1's pass {}, submitted alone {}; the further players' entries named {}, "
+           L"since the last line: holder runs {} for players 2 and 3, {} for player 1; slots held {}, taken by a "
+           L"later pass {}, taken back by player 1's pass {}, submitted alone {}; players 2 and 3's entries named {}, "
            L"submits left to player 1 {}; acquires off the game thread {}",
            d.runsSeats, d.runsOne, s.held, s.takenHeld, s.takenBack, s.safetySubmits, s.named, s.submitSkipped,
            offThread);
@@ -747,13 +747,13 @@ void Tick(bool splitShown) noexcept
 
 void RunHolder(int seat) noexcept
 {
-    const bool further = players::SeatIndex(seat);
-    if (!further)
+    const bool isSeat = players::SeatIndex(seat);
+    if (!isSeat)
     {
         minimap_labels::SwapBack();  // normally done after the seat's paint already (EndPaint)
     }
     void* holder = Holder();
-    if (further)
+    if (isSeat)
     {
         g_ranFor[seat] = false;
         if (!g_seatOn[seat] || holder == nullptr)
@@ -777,7 +777,7 @@ void RunHolder(int seat) noexcept
         ++g_counts.runsSeats;
         if (!g_ranFor[seat])
         {
-            Refuse(L"the navimap holder update raised an exception in a further player's run");
+            Refuse(L"the navimap holder update raised an exception in player 2's or 3's run");
             return;
         }
         CentreOf(CircleSlate(), g_centre[seat]);

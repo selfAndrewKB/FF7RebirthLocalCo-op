@@ -9,7 +9,7 @@
 # expect: three columns: ThreePlayerSplitscreenLayout \d+ -> 2 until the leave
 # expect: HUD image: player 3's view draws player 3's HUD
 # expect-not: HUD image: player 3's view draws player [12]'s HUD
-# Player 1 refuses both further players' members: the 2nd and 3rd party slots (menu ordinals 0x6), whatever their types:
+# Player 1 refuses players 2 and 3's members: the 2nd and 3rd party slots (menu ordinals 0x6), whatever their types:
 # expect: command rules: player 1 may not command member types 0x[0-9a-f]+ \(menu ordinals 0x6\)
 # expect: leave: player 2 left; \d+ leftover actor
 # With player 2 gone, player 3 keeps a split view of their own (two views, top and bottom in the regression's layout).

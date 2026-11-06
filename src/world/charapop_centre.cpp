@@ -405,11 +405,11 @@ void Tick(bool splitShown, const std::array<bool, players::kMaxPlayers>& plays) 
         SetActive(false, !g_enabled.load(std::memory_order_relaxed)
                              ? L"switched off"
                              : (players::kSeatsBuilt == 1 ? L"the split closed or player 2 stopped playing"
-                                                          : L"the split closed or no further player plays"));
+                                                          : L"the split closed or no other player plays"));
         g_eventCentre = false;
         return;
     }
-    SetActive(true, players::kSeatsBuilt == 1 ? L"split, player 2 plays" : L"split, a further player plays");
+    SetActive(true, players::kSeatsBuilt == 1 ? L"split, player 2 plays" : L"split, player 2 or 3 plays");
     if (++g_ticks % kEvery == 0 || unread)
     {
         Pass();

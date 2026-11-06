@@ -616,8 +616,8 @@ void PlaceOwnTargets() noexcept
         g_scaleStep = reinterpret_cast<ScaleStepFn>(pending.scaleStep);
         g_apply     = reinterpret_cast<ApplyFn>(pending.apply);
     }
-    platform::Log(L"enemy gauges: each further player's view {}, sizes {}",
-                  g_ownTargets ? L"marks their own target" : L"marks player 1's target (a check failed)",
+    platform::Log(L"enemy gauges: player 2's and 3's views {}, sizes {}",
+                  g_ownTargets ? L"mark their own targets" : L"mark player 1's target (a check failed)",
                   g_scaleStep != nullptr ? L"from their own distance" : L"from player 1's distance (a check failed)");
 }
 
@@ -672,7 +672,7 @@ bool Install(const platform::GameImage& image) noexcept
         g_pending = {*forcedSite, *forced, *yStep, sizes ? *scaleStep : 0, sizes ? *apply : 0};
         if (platform::game_thread_sites::Queue(&PlaceOwnTargets))
         {
-            platform::Log(L"enemy gauges: ready (each gauge placed again in each player's view; the seats' own targets follow "
+            platform::Log(L"enemy gauges: ready (each gauge placed again in each player's view; players 2 and 3's own targets follow "
                           L"once the game thread places their call (1.005: it crosses a 16-byte block))");
             return true;
         }
@@ -688,8 +688,8 @@ bool Install(const platform::GameImage& image) noexcept
         g_scaleStep = reinterpret_cast<ScaleStepFn>(*scaleStep);
         g_apply     = reinterpret_cast<ApplyFn>(*apply);
     }
-    platform::Log(L"enemy gauges: ready (each gauge placed again in each player's view; each further player's view {}, sizes {})",
-                  g_ownTargets ? L"marks their own target" : L"marks player 1's target (a check failed)",
+    platform::Log(L"enemy gauges: ready (each gauge placed again in each player's view; player 2's and 3's views {}, sizes {})",
+                  g_ownTargets ? L"mark their own targets" : L"mark player 1's target (a check failed)",
                   g_scaleStep != nullptr ? L"from their own distance" : L"from player 1's distance (a check failed)");
     return true;
 }
@@ -754,8 +754,8 @@ void Replay(int seat) noexcept
     std::uint8_t   gate    = 0;
     const bool     read    = Read(g_endUISystem + facts::kUIEnemyStatus, manager) && manager != 0 &&
                              Read(manager + kGate, gate);
-    const bool     further = players::SeatIndex(seat);
-    if (further && g_installed && !g_failed && (!read || gate == 0 || g_record.count == 0))
+    const bool     isSeat  = players::SeatIndex(seat);
+    if (isSeat && g_installed && !g_failed && (!read || gate == 0 || g_record.count == 0))
     {
         LogSeatPass(seat, {gate, static_cast<std::int32_t>(g_record.count), 0, 0, battle::lock_on::TargetListOpen(seat)});
     }
@@ -769,8 +769,8 @@ void Replay(int seat) noexcept
         const Replaying<GaugeRecord> replaying(g_record);  // the mod's own placements are not recorded
         try
         {
-            ok = further && g_ownTargets ? ReplaySeat(seat, manager, replayed, targeted)
-                                         : ReplayPlayerOne(manager, replayed, targeted);
+            ok = isSeat && g_ownTargets ? ReplaySeat(seat, manager, replayed, targeted)
+                                        : ReplayPlayerOne(manager, replayed, targeted);
         }
         catch (...)
         {
@@ -782,7 +782,7 @@ void Replay(int seat) noexcept
         platform::Log(L"enemy gauges: a placement raised an exception; gauges are no longer placed per view");
         return;
     }
-    if (further)
+    if (isSeat)
     {
         LogSeatPass(seat, {gate, static_cast<std::int32_t>(g_record.count), replayed, targeted,
                            battle::lock_on::TargetListOpen(seat)});
@@ -790,7 +790,7 @@ void Replay(int seat) noexcept
     if (replayed > 0 && platform::Enabled(platform::Level::Trace))  // every HUD pass: Trace (platform/log.h)
     {
         platform::LogTrace(L"enemy gauges: {} placed again for {}'s view ({} targeted) of {} recorded", replayed,
-                           players::SeatName(further ? seat : 0), targeted, g_record.count);
+                           players::SeatName(isSeat ? seat : 0), targeted, g_record.count);
     }
 }
 

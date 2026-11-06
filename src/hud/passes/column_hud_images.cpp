@@ -1,4 +1,4 @@
-#include "hud/passes/second_image.h"
+#include "hud/passes/column_hud_images.h"
 
 #include "facts/engine.h"
 #include "facts/hud.h"
@@ -122,7 +122,7 @@ void Refuse(const wchar_t* why)
 {
     g_refused = true;
     g_on.store(false, std::memory_order_relaxed);
-    platform::Log(L"HUD image: {}; the further players' HUD image stays off", why);
+    platform::Log(L"HUD image: {}; players 2 and 3's HUD images stay off", why);
 }
 
 /// Replaces the overlay's call to AcquireLayerSlot.
@@ -193,7 +193,7 @@ bool Patch(const platform::GameImage& image, platform::CodeRedirect& redirect, s
 
 }  // namespace
 
-bool InstallSecondImage(const platform::GameImage& image) noexcept
+bool InstallColumnHudImages(const platform::GameImage& image) noexcept
 {
     const auto render    = platform::FindFunction(image, kRenderToCompositeLayer);
     const auto passes    = platform::FindFunction(image, kAddCompositePasses);
@@ -207,8 +207,8 @@ bool InstallSecondImage(const platform::GameImage& image) noexcept
     const auto ibVtable  = image.Rebase(facts::kIndexBufferVtable, sizeof(void*));
     if (!render || !passes || !acquire || !init || !submit || !overlay || !delta || !frame || !vbVtable || !ibVtable)
     {
-        platform::Log(L"HUD image: the overlay's render code is not what the research read; no image for the further "
-                      L"players");
+        platform::Log(L"HUD image: the overlay's render code is not what the research read; no image for players 2 "
+                      L"and 3");
         return false;
     }
     g_renderToLayer    = reinterpret_cast<RenderToCompositeLayerFn>(*render);
@@ -240,16 +240,16 @@ bool InstallSecondImage(const platform::GameImage& image) noexcept
                                       reinterpret_cast<std::uintptr_t>(&AcquireLayerSlot));
     if (!installed)
     {
-        RemoveSecondImage();
-        platform::Log(L"HUD image: a site is not what the research read; no image for the further players");
+        RemoveColumnHudImages();
+        platform::Log(L"HUD image: a site is not what the research read; no image for players 2 and 3");
         return false;
     }
     // The render-thread code reads the slot's fields, which live in this DLL: it must never unload while that
     // code can run. (The call redirects above pin it too; this does not rely on that.)
     if (!platform::PinThisModule())
     {
-        RemoveSecondImage();
-        platform::Log(L"HUD image: this DLL could not be pinned; no image for the further players");
+        RemoveColumnHudImages();
+        platform::Log(L"HUD image: this DLL could not be pinned; no image for players 2 and 3");
         return false;
     }
     g_installed = true;
@@ -257,7 +257,7 @@ bool InstallSecondImage(const platform::GameImage& image) noexcept
     return true;
 }
 
-void RemoveSecondImage() noexcept
+void RemoveColumnHudImages() noexcept
 {
     g_on.store(false, std::memory_order_relaxed);
     g_imageSeats.store(0, std::memory_order_relaxed);
@@ -279,20 +279,20 @@ void RemoveSecondImage() noexcept
     g_installed = false;
 }
 
-bool SecondImageInstalled() noexcept
+bool ColumnHudImagesInstalled() noexcept
 {
     return g_installed;
 }
 
-void SetSecondImage(bool on) noexcept
+void SetColumnHudImages(bool on) noexcept
 {
     g_on.store(on && g_installed && !g_refused, std::memory_order_relaxed);
     g_familyLogLines.store(0, std::memory_order_relaxed);
-    platform::Log(L"HUD image: the further players' images {}",
-                  SecondImageOn() ? L"on" : on ? L"unavailable" : L"off");
+    platform::Log(L"HUD image: players 2 and 3's images {}",
+                  ColumnHudImagesOn() ? L"on" : on ? L"unavailable" : L"off");
 }
 
-bool SecondImageOn() noexcept
+bool ColumnHudImagesOn() noexcept
 {
     return g_on.load(std::memory_order_relaxed);
 }
@@ -305,7 +305,7 @@ void BeginFrame() noexcept
 
 bool ImageReady(int seat, bool shown) noexcept
 {
-    bool image = shown && SecondImageOn() && g_stockName.load(std::memory_order_relaxed) != 0;
+    bool image = shown && ColumnHudImagesOn() && g_stockName.load(std::memory_order_relaxed) != 0;
     if (image)
     {
         const auto buffers = g_slot.BuffersUsable(seat);
@@ -352,26 +352,26 @@ void ReleaseFrame() noexcept
     std::memcpy(reinterpret_cast<void*>(g_frameNumber), &g_frameNumberSaved, sizeof(g_frameNumberSaved));
 }
 
-double BeginFurtherPass() noexcept
+double BeginColumnImage() noexcept
 {
     const double deltaTime = HoldFrame();
     g_slot.SetActive(true);
     return deltaTime;
 }
 
-bool RenderFurther() noexcept
+bool RenderColumnImage() noexcept
 {
     // Guarded like every other engine call the mod makes: on a fault the minimap's target field and held slot
     // are still put back by the driver (a held pool-0 slot would hang its next acquire), and the images stop.
     const bool rendered = platform::CallGuarded(g_renderToLayer, reinterpret_cast<void*>(g_overlayThisFrame));
     if (!rendered)
     {
-        Refuse(L"a further player's overlay render raised an exception");
+        Refuse(L"player 2's or 3's overlay render raised an exception");
     }
     return rendered;
 }
 
-void EndFurtherPass() noexcept
+void EndColumnImage() noexcept
 {
     ReleaseFrame();
     g_slot.SetActive(false);
@@ -396,7 +396,7 @@ void EndFrame() noexcept
         // after: a state that lasts (a cutscene) would repeat it per frame.
         static bool s_said = false;
         platform::LogAt(s_said ? platform::Level::Debug : platform::Level::Info,
-                        L"HUD image: player 1's pass did not render this frame; the further players' slot submitted on "
+                        L"HUD image: player 1's pass did not render this frame; players 2 and 3's slot submitted on "
                         L"its own");
         s_said = true;
     }
@@ -424,29 +424,29 @@ bool SubmitInThisPass(const void* slot) noexcept
 
 #if LSS_DEV
 
-void RegisterSecondImageCommands()
+void RegisterColumnHudImagesCommands()
 {
     using control::Outcome;
     using control::Value;
     control::Register(
         {.name  = L"hud-image",
          .shape = control::Shape::OnOff,
-         .help  = L"the further players' HUD images: the overlay rendered once more per further player and drawn "
+         .help  = L"players 2 and 3's HUD images: the overlay rendered once more for each of them and drawn "
                   L"only in that player's view",
          .set   = [](const Value& v) {
-             if (!SecondImageInstalled() || !RootOverlayRenderInstalled())
+             if (!ColumnHudImagesInstalled() || !RootOverlayRenderInstalled())
              {
-                 return Outcome{false, L"the further players' HUD images are not installed (see the startup log)"};
+                 return Outcome{false, L"players 2 and 3's HUD images are not installed (see the startup log)"};
              }
              const bool on = std::get<bool>(v);
-             SetSecondImage(on);
-             if (on && !SecondImageOn())
+             SetColumnHudImages(on);
+             if (on && !ColumnHudImagesOn())
              {
-                 return Outcome{false, L"the further players' HUD images refused a check (see the log)"};
+                 return Outcome{false, L"players 2 and 3's HUD images refused a check (see the log)"};
              }
-             return Outcome{true, on ? L"the further players' HUD images on" : L"the further players' HUD images off"};
+             return Outcome{true, on ? L"players 2 and 3's HUD images on" : L"players 2 and 3's HUD images off"};
          },
-         .get = [] { return Value{SecondImageOn()}; }});
+         .get = [] { return Value{ColumnHudImagesOn()}; }});
 }
 
 #endif

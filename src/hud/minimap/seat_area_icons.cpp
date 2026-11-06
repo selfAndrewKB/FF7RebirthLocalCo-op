@@ -374,7 +374,7 @@ void FollowEvent(Event event, char flag) noexcept
         if (!g_offThreadLogged)
         {
             g_offThreadLogged = true;
-            platform::Log(L"area icons: a map-icon event ran off the game thread; not followed for the further players "
+            platform::Log(L"area icons: a map-icon event ran off the game thread; not followed for players 2 and 3 "
                           L"(logged once)");
         }
         return;
@@ -405,7 +405,7 @@ void FollowEvent(Event event, char flag) noexcept
     ++g_replays;
     if (platform::Enabled(platform::Level::Debug))
     {
-        platform::LogDebug(L"area icons: the game's {} followed on the further players' icon managers ({} so far)",
+        platform::LogDebug(L"area icons: the game's {} followed on players 2 and 3's icon managers ({} so far)",
                       event == Event::Enable         ? L"Enable"
                       : event == Event::HideAndClear ? L"HideAndClear"
                                                      : (flag != 0 ? L"SetFlagD1(1)" : L"SetFlagD1(0)"),
@@ -537,8 +537,8 @@ bool Install(const platform::GameImage& image) noexcept
     if (!instance || !allocate || !ctor || !update || !clear || !visibility || !site || !first ||
         !g_firstControllerCall.Install(*site, *first, reinterpret_cast<std::uintptr_t>(&FirstController)))
     {
-        platform::Log(L"area icons: the icon manager's code is not what the research read; no icons of the further "
-                      L"players' own");
+        platform::Log(L"area icons: the icon manager's code is not what the research read; no icons of players 2 "
+                      L"and 3's own");
         return false;
     }
     const auto leaderSite = image.Rebase(kLeaderCall, 5);
@@ -546,7 +546,7 @@ bool Install(const platform::GameImage& image) noexcept
     if (!leaderSite || !leader ||
         !g_leaderCall.Install(*leaderSite, *leader, reinterpret_cast<std::uintptr_t>(&Leader)))
     {
-        platform::Log(L"area icons: the range-origin call is not what the research read; the further players' icons "
+        platform::Log(L"area icons: the range-origin call is not what the research read; players 2 and 3's icons "
                       L"range from player 1's character");
     }
     g_instanceOne   = *instance;
@@ -557,10 +557,10 @@ bool Install(const platform::GameImage& image) noexcept
     g_setVisibility = reinterpret_cast<SetVisibilityFn>(*visibility);
     g_installed     = true;
     g_eventsFollowed = FollowEvents(image);
-    platform::Log(L"area icons: ready (each further player's icon manager is made when they first play); the game's "
+    platform::Log(L"area icons: ready (player 2's and 3's icon managers are each made when they first play); the game's "
                   L"map-icon events {}",
                   g_eventsFollowed ? L"are followed at their seven call sites"
-                                   : L"are NOT followed (each further player's manager keeps the state it started with)");
+                                   : L"are NOT followed (player 2's and 3's managers keep the state they started with)");
     return true;
 }
 
@@ -688,8 +688,8 @@ void SetMask(unsigned mask) noexcept
         }
     }
     g_mask  = mask;
-    platform::Log(L"area icons: mask {} (ticked {}, first controller the seat's {}, canvases per pass {}, ranged from "
-                  L"the seat's member {})",
+    platform::Log(L"area icons: mask {} (ticked {}, first controller the player's own {}, canvases per pass {}, ranged from "
+                  L"the player's member {})",
                   mask, Acts(kPartTick), Acts(kPartController), Acts(kPartCanvases), Acts(kPartLeader));
 }
 
@@ -707,7 +707,7 @@ void RegisterCommands()
     control::Register({.name  = L"icons-mask",
                        .shape = control::Shape::Integer,
                        .max   = 15,
-                       .help  = L"diagnosis: which parts of each further player's own map icons act (1 their icon "
+                       .help  = L"diagnosis: which parts of player 2's and 3's own map icons act (1 their icon "
                                 L"manager ticked, 2 its first controller theirs, 4 each view shows its own canvases, 8 "
                                 L"ranged from their member)",
                        .set   = [](const Value& v) {

@@ -389,7 +389,7 @@ void Install(const platform::GameImage& image) noexcept
         g_sharesKey = reinterpret_cast<SharesKeyFn>(*shares);
         steal = g_stealSlot.Replace(image, kStealBeginSlot, kStealBegin, reinterpret_cast<std::uintptr_t>(&StealBegin));
     }
-    platform::Log(L"camera effects: a further player's member's guard effect {}; its camera-shake notifies {}; chain-move camera "
+    platform::Log(L"camera effects: player 2's or 3's member's guard effect {}; its camera-shake notifies {}; chain-move camera "
                   L"pulls (StealCamera) {}",
                   guard ? L"on that player's camera" : L"UNCHANGED (slot not what the research read)",
                   shakes ? L"on that player's camera" : L"UNCHANGED (a slot is not what the research read)",

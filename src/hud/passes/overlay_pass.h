@@ -1,14 +1,14 @@
 #pragma once
 
 // Which pass of the overlay render is running, by the seat whose view it draws (plan/seats.md step 4): first one extra
-// render per further seat with an image this frame, highest seat first (the mod's, hud/passes/second_image.h), then
+// render per further seat with an image this frame, highest seat first (the mod's, hud/passes/column_hud_images.h), then
 // the game's own, player 1's (seat 0), last; kNone outside the render. Set by root_overlay_render, the one driver of
 // the passes; read by everything that paints into a menu-renderer slot during them (hud/passes/shared_slot.h,
 // hud/layout/overlay_layout.cpp). The rules the slot follows across the passes are pure functions here
 // (tests/hud_rules_test.cpp). Game thread only.
 //
 // Keyed by seat, not by column: each further pass draws one seat's content into an entry named for that seat, and the
-// render thread finds each view's seat from the view itself (hud/passes/second_image.cpp), so the HUD needs no map
+// render thread finds each view's seat from the view itself (hud/passes/column_hud_images.cpp), so the HUD needs no map
 // of columns. A column with no seat (a mirror view, views/mirror_player.h) draws player 1's entry.
 
 namespace lss::hud::overlay_pass {
@@ -32,7 +32,7 @@ inline int Seat() noexcept
 }
 
 /// A further seat's pass runs: the mod's extra render.
-inline bool Further() noexcept
+inline bool IsSeatPass() noexcept
 {
     return detail::g_seat >= 1;
 }
@@ -66,7 +66,7 @@ constexpr SlotAction AcquireAction(int seat, bool active, bool held, bool takenT
 
 /// The entry a further pass adds to the held slot is its seat's: it gets the seat's name, and its submit is left to
 /// player 1's pass (which submits the slot with every entry).
-constexpr bool FurtherEntry(int seat, bool heldSlot) noexcept
+constexpr bool IsSeatEntry(int seat, bool heldSlot) noexcept
 {
     return seat >= 1 && heldSlot;
 }

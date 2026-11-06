@@ -132,7 +132,7 @@ Scope::~Scope()
 {
     if (!window_.Close())
     {
-        players::generation::Fault(L"the party manager's primary controller changed while it named a further player");
+        players::generation::Fault(L"the party manager's primary controller changed while it named player 2 or 3");
     }
 }
 
@@ -141,10 +141,10 @@ const wchar_t* Describe(Scope::Refusal refusal) noexcept
     switch (refusal)
     {
         case Scope::Refusal::None: return L"held";
-        case Scope::Refusal::NotBound: return L"not bound to the seat";
+        case Scope::Refusal::NotBound: return L"not bound to the player";
         case Scope::Refusal::NoPartyManager: return L"no party manager";
-        case Scope::Refusal::SeatStale: return L"the seat's controller is gone";
-        case Scope::Refusal::NotPlayerOne: return L"the primary controller is neither player 1's nor the seat's";
+        case Scope::Refusal::SeatStale: return L"the player's controller is gone";
+        case Scope::Refusal::NotPlayerOne: return L"the primary controller is neither player 1's nor that player's";
         case Scope::Refusal::Changed: return L"the primary controller changed at the swap";
         case Scope::Refusal::Misaligned: return L"the primary-controller field is misaligned";
     }

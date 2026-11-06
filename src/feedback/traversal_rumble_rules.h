@@ -87,30 +87,30 @@ constexpr int SeatOfAdd(int ownerSeat, bool gameThread, int primarySeat) noexcep
 
 /// An add: that seat's list when the add is a seat's and the list took it; else the game's, copied during a shared ride
 /// unless it was a seat's.
-constexpr Route AddRouteOf(bool further, bool added, bool copyOne) noexcept
+constexpr Route AddRouteOf(bool isSeat, bool added, bool copyOne) noexcept
 {
-    if (further && added)
+    if (isSeat && added)
     {
         return Route::Seat;
     }
-    return !further && copyOne ? Route::GameAndCopy : Route::Game;
+    return !isSeat && copyOne ? Route::GameAndCopy : Route::Game;
 }
 
 /// A stop: left when a seat's source stops on a worker while the seat has a list; the seat's list when it is a
 /// seat's, on the game thread, and the list stopped it; else the game's, copied during a shared ride unless it was
 /// a seat's.
-constexpr Route StopRouteOf(bool owner, bool gameThread, bool hasList, bool further, bool stopped,
+constexpr Route StopRouteOf(bool owner, bool gameThread, bool hasList, bool isSeat, bool stopped,
                             bool copyOne) noexcept
 {
     if (owner && !gameThread && hasList)
     {
         return Route::LeftOnWorker;
     }
-    if (further && gameThread && stopped)
+    if (isSeat && gameThread && stopped)
     {
         return Route::Seat;
     }
-    return !further && copyOne ? Route::GameAndCopy : Route::Game;
+    return !isSeat && copyOne ? Route::GameAndCopy : Route::Game;
 }
 
 // ---- the component's list tick ----

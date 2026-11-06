@@ -154,8 +154,8 @@ JoinScope::JoinScope(void* playerOneController, int seat) noexcept
     if (seat != kNoSeat && !players::SeatBuilt(seat))
     {
         // It would get a mirror view's treatment: no camera module of its own, the game's force-feedback manager.
-        platform::LogWarning(L"own controller: a join names seat {}, which is not built; its player gets nothing of a "
-                             L"seat's", seat);
+        platform::LogWarning(L"own controller: a join names player index {} (player 1 is 0), which is not built; its player gets "
+                             L"nothing of player 2's or 3's", seat);
     }
     g_report = {};
     g_joiningSeat.store(seat, std::memory_order_relaxed);

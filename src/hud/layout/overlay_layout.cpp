@@ -4,8 +4,8 @@
 #include "hud/layout/arrow_edge_code.h"
 #include "hud/layout/centered_frame_code.h"
 #include "hud/layout/overlay_band.h"
+#include "hud/passes/column_hud_images.h"
 #include "hud/passes/overlay_pass.h"
-#include "hud/passes/second_image.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/code_redirect.h"
@@ -158,7 +158,7 @@ void InstallArrowEdge(const platform::GameImage& image) noexcept
 void LogOnChange(const IntRect& image, float viewW, float viewH, const IntRect& band, float host, bool enabled,
                  bool applied) noexcept
 {
-    g_loggedPass         = overlay_pass::Further() && overlay_pass::Seat() < players::kMaxPlayers ? overlay_pass::Seat() : 0;
+    g_loggedPass         = overlay_pass::IsSeatPass() && overlay_pass::Seat() < players::kMaxPlayers ? overlay_pass::Seat() : 0;
     LoggedLayout& logged = g_logged[g_loggedPass];
     if (image == logged.image && viewW == logged.viewW && viewH == logged.viewH && band == logged.band &&
         static_cast<int>(applied) == logged.applied)
@@ -216,7 +216,7 @@ IntRect* OverlayLayoutRect(IntRect* out)
 /// arguments; the fourth is passed through unread).
 void* OverlayLayerEntry(void* slot, std::uintptr_t name, IntRect* rect, std::uintptr_t unused)
 {
-    // A further seat's pass of the overlay render names its own entry (hud/passes/second_image.h).
+    // A further seat's pass of the overlay render names its own entry (hud/passes/column_hud_images.h).
     void* entry = reinterpret_cast<FindOrAddEntryFn>(g_entryCall.Original())(slot, EntryNameForPass(slot, name), rect,
                                                                                unused);
     if (!g_pending.active || g_pending.thread != GetCurrentThreadId() || entry == nullptr)
@@ -299,7 +299,7 @@ void OverlaySubmit(void* renderer, std::uintptr_t pool, void* slot, std::uintptr
     }
     if (!SubmitInThisPass(slot))
     {
-        return;  // a further pass: player 1's pass submits the slot with every entry (hud/passes/second_image.h)
+        return;  // a further pass: player 1's pass submits the slot with every entry (hud/passes/column_hud_images.h)
     }
     reinterpret_cast<SubmitLayerSlotFn>(g_submitCall.Original())(renderer, pool, slot, unused);
 }

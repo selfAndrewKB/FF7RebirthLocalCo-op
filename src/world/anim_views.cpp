@@ -528,7 +528,7 @@ void Install(const platform::GameImage& image) noexcept
         g_items.capacity() < 4096)
     {
         platform::Log(L"anim views: NOT installed (a function, global or the game's grow call differs); characters "
-                      L"near a further player keep player 1's camera's animation rate");
+                      L"near player 2 or 3 keep player 1's camera's animation rate");
         return;
     }
     g_worldGlobal = *world;
@@ -563,8 +563,8 @@ void Install(const platform::GameImage& image) noexcept
         }
     }
     platform::Log(L"anim views: {}; at tick time, {}",
-                  eval ? L"characters near a further player animate by the nearest camera (the game's own pair list)"
-                       : L"NOT installed (a call differs); characters near a further player keep player 1's camera's rate",
+                  eval ? L"characters near player 2 or 3 animate by the nearest camera (the game's own pair list)"
+                       : L"NOT installed (a call differs); characters near player 2 or 3 keep player 1's camera's rate",
                   tickTime ? L"meshes refresh their bones and bone physics by the nearer camera too"
                            : L"bone refresh and bone physics STILL follow player 1's camera (the measure differs)");
 }
@@ -628,7 +628,7 @@ void Tick(bool splitShown) noexcept
         LARGE_INTEGER rate{};
         QueryPerformanceFrequency(&rate);
         const double ms = rate.QuadPart > 0 ? 1000.0 * double(ticks) / double(rate.QuadPart) : 0.0;
-        const wchar_t* const who = players::kSeatsBuilt == 1 ? L"player 2" : L"the further players";
+        const wchar_t* const who = players::kSeatsBuilt == 1 ? L"player 2" : L"players 2 and 3";
         platform::LogDebug(L"anim tick time ({} s): {} measures from player 1's snapshot also from {}'s camera ({} on "
                            L"workers), {} of them nearer for {}; {:.3f} ms of thread time per frame on average; {} left "
                            L"player 1's ({}'s camera was being written)",
@@ -639,7 +639,7 @@ void Tick(bool splitShown) noexcept
     if (g_counts.frames != 0 || g_counts.skipped != 0)
     {
         const double frames = g_counts.frames != 0 ? g_counts.frames : 1;
-        const wchar_t* const who = players::kSeatsBuilt == 1 ? L"player 2" : L"the further players";
+        const wchar_t* const who = players::kSeatsBuilt == 1 ? L"player 2" : L"players 2 and 3";
         platform::LogDebug(L"anim views ({} s): {} frame(s) with {}'s pairs ({} skipped; {} evaluation(s), {} "
                            L"refill(s) of the game's lists, the refill's frame lagging {:.2f} on average); per frame {:.0f} "
                            L"registered actor(s), {:.0f} near {}'s camera, {:.0f} pair(s) added; {:.3f} ms per frame "

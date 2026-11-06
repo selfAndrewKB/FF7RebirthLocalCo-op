@@ -143,8 +143,8 @@ public:
         type_.reset();
         if (held_ && slots_.Close() != 0)
         {
-            platform::LogDebug(L"widget owner: the game wrote a UI system slot inside a widget tick in a further "
-                               L"player's view; the game's value kept");
+            platform::LogDebug(L"widget owner: the game wrote a UI system slot inside a widget tick in player 2's "
+                               L"or 3's view; the game's value kept");
         }
     }
     OwnerView(const OwnerView&)            = delete;
@@ -274,14 +274,14 @@ void CellTick(void* cell, const void* geometry, float deltaTime) noexcept
     {
         return original(cell, geometry, deltaTime);
     }
-    if (!TickInOwnerView(seat, original, cell, geometry, deltaTime, owner, L"a cell of a further player's party list",
+    if (!TickInOwnerView(seat, original, cell, geometry, deltaTime, owner, L"a cell of player 2's or 3's party list",
                          g_cellsOn))
     {
         return;
     }
     if (PowerOfTen(++g_cellTicks) && DebugOn())
     {
-        Line(std::format(L"{} tick(s) of the further players' party-list cells in their own views", g_cellTicks),
+        Line(std::format(L"{} tick(s) of players 2 and 3's party-list cells in their own views", g_cellTicks),
              platform::Level::Debug);
     }
     WatchCell(seat, reinterpret_cast<std::uintptr_t>(cell), owner);
@@ -301,7 +301,7 @@ void PaneTick(void* pane, const void* geometry, float deltaTime) noexcept
     {
         return original(pane, geometry, deltaTime);
     }
-    if (!TickInOwnerView(seat, original, pane, geometry, deltaTime, owner, L"a further player's synergy pane",
+    if (!TickInOwnerView(seat, original, pane, geometry, deltaTime, owner, L"player 2's or 3's synergy pane",
                          g_panesOn))
     {
         return;
@@ -372,7 +372,7 @@ void SeatGuideTick(int seat, GuideTickFn original, std::uintptr_t one) noexcept
         const OwnerView view(own, guide);
         if (!view.Held())
         {
-            return Refused(L"a further player's key guide");
+            return Refused(L"player 2's or 3's key guide");
         }
         if (view.TypeRefused())
         {
@@ -381,7 +381,7 @@ void SeatGuideTick(int seat, GuideTickFn original, std::uintptr_t one) noexcept
         if (!platform::CallGuarded(original, reinterpret_cast<void*>(guide)))
         {
             g_guidesOn = false;
-            Line(std::format(L"FAILED: {}'s key guide faulted in its tick; the further players' key guides are not "
+            Line(std::format(L"FAILED: {}'s key guide faulted in its tick; players 2 and 3's key guides are not "
                              L"ticked from now on",
                              players::SeatName(seat)));
             return;
@@ -389,7 +389,7 @@ void SeatGuideTick(int seat, GuideTickFn original, std::uintptr_t one) noexcept
     }
     if (PowerOfTen(++g_guideTicks) && DebugOn())
     {
-        Line(std::format(L"{} tick(s) of the further players' key guides", g_guideTicks), platform::Level::Debug);
+        Line(std::format(L"{} tick(s) of players 2 and 3's key guides", g_guideTicks), platform::Level::Debug);
     }
     WatchGuides(seat, one, guide);
 }
@@ -415,14 +415,14 @@ bool Install(const platform::GameImage& image) noexcept
     const auto site    = image.Rebase(kGuideTickCall, 5);
     if (!system)
     {
-        platform::Log(L"widget owner: UNAVAILABLE (a check failed): the further players' widgets tick in the shared view");
+        platform::Log(L"widget owner: UNAVAILABLE (a check failed): players 2 and 3's widgets tick in the shared view");
         return false;
     }
     g_endUISystem = *system;
     g_cellsOn     = platform::ReplaceSlot(image, kCellTick, reinterpret_cast<std::uintptr_t>(&CellTick), g_cellSlot);
     g_guidesOn    = guide && site && g_guideCall.Install(*site, *guide, reinterpret_cast<std::uintptr_t>(&GuideTick));
     g_panesOn     = platform::ReplaceSlot(image, kPaneTick, reinterpret_cast<std::uintptr_t>(&PaneTick), g_paneSlot);
-    platform::Log(L"widget owner: the further players' party-list cells {}; their key guides {}; their synergy panes {}",
+    platform::Log(L"widget owner: players 2 and 3's party-list cells {}; their key guides {}; their synergy panes {}",
                   g_cellsOn ? L"tick in their own views" : L"UNAVAILABLE (a check failed; they tick in the shared view)",
                   g_guidesOn ? L"are ticked in their own views" : L"UNAVAILABLE (a check failed; they are not ticked)",
                   g_panesOn ? L"tick in their own views" : L"UNAVAILABLE (a check failed; they tick in the shared view)");

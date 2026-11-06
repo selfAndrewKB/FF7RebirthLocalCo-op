@@ -75,7 +75,7 @@ std::wstring Describe(SingleViewChange change)
     {
         case SingleViewChange::None: return {};
         case SingleViewChange::Single:
-            return L"single view: player 1's view alone (SetForceDisableSplitscreen(true)); the further players stay in";
+            return L"single view: player 1's view alone (SetForceDisableSplitscreen(true)); players 2 and 3 stay in";
         case SingleViewChange::AlreadySingle:
             return L"single view: the split was already force-disabled by someone else; used, and not cleared by the mod";
         case SingleViewChange::SingleFailed:

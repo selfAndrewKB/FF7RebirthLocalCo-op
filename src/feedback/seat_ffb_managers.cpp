@@ -211,14 +211,14 @@ void* MakeInConstructor(int seat)
     void* const          manager = memory != nullptr ? g_ctor(memory) : nullptr;
     if (manager == nullptr)
     {
-        platform::Log(L"WARNING: seat ffb managers: {}'s force-feedback manager could not be made; every pad keeps "
+        platform::Log(L"WARNING: ffb managers: {}'s force-feedback manager could not be made; every pad keeps "
                       L"the game's one manager",
                       name);
         return nullptr;
     }
     g_buildTracks(manager);
     const bool built = Count(manager, kTracks) == kTrackCount;
-    platform::Log(L"seat ffb managers: {}'s force-feedback manager made at 0x{:X} inside {}'s controller's "
+    platform::Log(L"ffb managers: {}'s force-feedback manager made at 0x{:X} inside {}'s controller's "
                   L"constructor ({} us): {} effects (the game's {}), {} tracks, PS5 haptic mode {}{}",
                   name, reinterpret_cast<std::uintptr_t>(manager), name,
                   Microseconds(std::chrono::steady_clock::now() - start), Count(manager, kEffects),
@@ -236,11 +236,11 @@ void Settle(int seat, void* manager)
     const bool asked      = g_request(static_cast<std::byte*>(manager) + kMachine, kLoadState);
     g_tick(manager, 0.0f);  // enters state 1 and runs its tick, which requests state 2
     g_tick(manager, 0.0f);  // enters state 2, where the game's manager rests
-    platform::Log(L"seat ffb managers: {}'s manager ran the game's state 1 ({} us): asked {}, state {}, ready {}, "
+    platform::Log(L"ffb managers: {}'s manager ran the game's state 1 ({} us): asked {}, state {}, ready {}, "
                   L"{} tracks",
                   players::SeatName(seat), Microseconds(std::chrono::steady_clock::now() - start), asked,
                   StateOf(manager), ReadField<std::uint8_t>(manager, kReady), Count(manager, kTracks));
-    platform::LogDebug(L"seat ffb managers: {}'s tracks: {}", players::SeatName(seat), TrackNames(manager));
+    platform::LogDebug(L"ffb managers: {}'s tracks: {}", players::SeatName(seat), TrackNames(manager));
 }
 
 /// The component constructor, inside the AEndPlayerController constructor. For the controller a join's CreatePlayer
@@ -275,7 +275,7 @@ void* CompCtor(void* component, void* owner) noexcept
             record.manager.store(manager, std::memory_order_release);
         }
         WriteField<void*>(component, kManager, manager);  // the field the constructor just set to the game's manager
-        platform::LogDebug(L"seat ffb managers: {}'s controller 0x{:X} is constructed: its component takes {}'s manager",
+        platform::LogDebug(L"ffb managers: {}'s controller 0x{:X} is constructed: its component takes {}'s manager",
                            players::SeatName(seat), reinterpret_cast<std::uintptr_t>(owner), players::SeatName(seat));
     }
     catch (...)
@@ -302,7 +302,7 @@ void Attach(int seat, void* controller)
             return;  // BeginPlay has not run yet
         }
         record.attached = controller;
-        platform::Log(L"seat ffb managers: {}'s component plays through {}'s own manager (components: the "
+        platform::Log(L"ffb managers: {}'s component plays through {}'s own manager (components: the "
                       L"game's {}, {}'s {}; Vibration {})",
                       name, name, Count(global, kRegistry), name, Count(manager, kRegistry),
                       ReadField<std::uint8_t>(manager, kEnabled));
@@ -313,7 +313,7 @@ void Attach(int seat, void* controller)
         if (!record.noneLogged)
         {
             record.noneLogged = true;
-            platform::Log(L"seat ffb managers: {}'s controller was not constructed by a join here; it shares the "
+            platform::Log(L"ffb managers: {}'s controller was not constructed by a join here; it shares the "
                           L"game's manager (no shared-ride copy)",
                           name);
         }
@@ -324,7 +324,7 @@ void Attach(int seat, void* controller)
         if (!record.strangeLogged)
         {
             record.strangeLogged = true;
-            platform::Log(L"seat ffb managers: {}'s component names manager 0x{:X}, not the game's (0x{:X}); left "
+            platform::Log(L"ffb managers: {}'s component names manager 0x{:X}, not the game's (0x{:X}); left "
                           L"alone",
                           name, reinterpret_cast<std::uintptr_t>(current), reinterpret_cast<std::uintptr_t>(global));
         }
@@ -336,7 +336,7 @@ void Attach(int seat, void* controller)
         if (!record.waitLogged)
         {
             record.waitLogged = true;
-            platform::LogDebug(L"seat ffb managers: waiting for {}'s controller's BeginPlay (the game's manager "
+            platform::LogDebug(L"ffb managers: waiting for {}'s controller's BeginPlay (the game's manager "
                                L"has {} tracks, {} components)",
                                name, Count(global, kTracks), Count(global, kRegistry));
         }
@@ -348,7 +348,7 @@ void Attach(int seat, void* controller)
     SetEnabled()(manager, ReadField<std::uint8_t>(global, kEnabled));  // as BeginPlay sets it: resets the seat's
                                                                        // component
     record.attached = controller;
-    platform::Log(L"seat ffb managers: {}'s component moved onto {}'s own manager (components: the game's "
+    platform::Log(L"ffb managers: {}'s component moved onto {}'s own manager (components: the game's "
                   L"{}, {}'s {}; Vibration {})",
                   name, name, Count(global, kRegistry), name, Count(manager, kRegistry),
                   ReadField<std::uint8_t>(manager, kEnabled));
@@ -370,7 +370,7 @@ void Detach(int seat, const wchar_t* why)
     {
         // The controller cannot be shown to be live: its component, if it is ever destroyed, leaves the seat's
         // manager by its own destructor; if it lives on, the next join finds it attached.
-        platform::Log(L"seat ffb managers: {}: {}'s controller is no longer the generation's; its component is "
+        platform::Log(L"ffb managers: {}: {}'s controller is no longer the generation's; its component is "
                       L"left on {}'s manager",
                       why, name, name);
         return;
@@ -384,7 +384,7 @@ void Detach(int seat, const wchar_t* why)
     RemoveFrom(manager, component);
     WriteField<void*>(component, kManager, global);
     AddUnique(global, component);
-    platform::Log(L"seat ffb managers: {}: {}'s component is back on the game's manager (components: the game's {}, "
+    platform::Log(L"ffb managers: {}: {}'s component is back on the game's manager (components: the game's {}, "
                   L"{}'s {}; option mirrors {}, stop-all mirrors {})",
                   why, name, Count(global, kRegistry), name, Count(manager, kRegistry), g_optionMirrors, g_muteMirrors);
 }
@@ -413,7 +413,7 @@ void SetEnabledHook(void* manager, std::uint8_t on) noexcept
         if (!g_offThreadLogged)
         {
             g_offThreadLogged = true;
-            platform::Log(L"seat ffb managers: the Vibration option was set off the game thread; not repeated on {}'s "
+            platform::Log(L"ffb managers: the Vibration option was set off the game thread; not repeated on {}'s "
                           L"manager{}",
                           players::SeatName(first), count > 1 ? L" (nor the other players')" : L"");
         }
@@ -428,7 +428,7 @@ void SetEnabledHook(void* manager, std::uint8_t on) noexcept
         }
         SetEnabled()(theirs, on);
         ++g_optionMirrors;
-        platform::LogDebug(L"seat ffb managers: Vibration {} on the game's manager, repeated on {}'s", on,
+        platform::LogDebug(L"ffb managers: Vibration {} on the game's manager, repeated on {}'s", on,
                            players::SeatName(seat));
     }
 }
@@ -458,7 +458,7 @@ void MuteAllHook(void* manager, std::uint8_t mute) noexcept
         }
         MuteAll()(theirs, mute);
         ++g_muteMirrors;
-        platform::LogDebug(L"seat ffb managers: stop-all ({}) repeated on {}'s controller", mute ? L"mute" : L"unmute",
+        platform::LogDebug(L"ffb managers: stop-all ({}) repeated on {}'s controller", mute ? L"mute" : L"unmute",
                            players::SeatName(seat));
     }
 }
@@ -521,9 +521,9 @@ void Install(const platform::GameImage& image) noexcept
     {
         RemoveEntries();
     }
-    platform::Log(L"seat ffb managers: {}",
-                  g_installed ? L"each further player's controller gets its own force-feedback manager at join (the Vibration option "
-                                L"and the stop-all repeated on it)"
+    platform::Log(L"ffb managers: {}",
+                  g_installed ? L"player 2's and 3's controllers each get their own force-feedback manager at join (the Vibration option "
+                                L"and the stop-all repeated on them)"
                               : L"UNCHANGED, every controller shares the game's force-feedback manager (a function is not "
                                 L"what the research read)");
 }
@@ -544,7 +544,7 @@ void Remove() noexcept
         }
         else if (g_installed && g_seats[seat].attached != nullptr)
         {
-            platform::Log(L"WARNING: seat ffb managers: removed off the game thread; {}'s component stays on {}'s "
+            platform::Log(L"WARNING: ffb managers: removed off the game thread; {}'s component stays on {}'s "
                           L"manager (the Vibration option and the stop-all no longer reach it)",
                           players::SeatName(seat), players::SeatName(seat));
         }
@@ -593,7 +593,7 @@ void SeatOut(int seat) noexcept
     {
         try
         {
-            Detach(seat, seat == players::kFirstFurtherSeat ? L"player 2 leaves" : L"player 3 leaves");
+            Detach(seat, seat == players::kFirstSeat ? L"player 2 leaves" : L"player 3 leaves");
         }
         catch (...)
         {

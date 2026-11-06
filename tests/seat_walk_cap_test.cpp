@@ -17,7 +17,7 @@ void TestTwoPlayerNumbersUnchanged()
 {
     std::puts("walk cap: player 1 is number 1 and player 2 number 2, their bits 1 << 1 and 1 << 2 as before");
     static_assert(PlayerNumber(0) == 1, "player 1");
-    static_assert(PlayerNumber(players::kFirstFurtherSeat) == 2, "player 2");
+    static_assert(PlayerNumber(players::kFirstSeat) == 2, "player 2");
     EXPECT(ClearBit(1) == (1 << 1));
     EXPECT(ClearBit(2) == (1 << 2));
 }

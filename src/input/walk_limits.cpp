@@ -437,7 +437,7 @@ bool Install(const platform::GameImage& image) noexcept
         g_setLayer7 = reinterpret_cast<SetLayer7Fn>(*set);
         g_listener  = *listener;
     }
-    platform::Log(L"walk limits: a further player's nav-area component by the game's creation {}; that player's location walk "
+    platform::Log(L"walk limits: player 2's or 3's nav-area component by the game's creation {}; that player's location walk "
                   L"limit from their own position {}",
                   g_createNavArea != nullptr ? L"yes" : L"NO (a check failed)",
                   g_setLayer7 != nullptr ? L"yes" : L"NO (a check failed)");

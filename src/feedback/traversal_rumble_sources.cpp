@@ -295,7 +295,7 @@ private:
     void*                       outer_  = nullptr;  // nested: the outer landing's list in the slot
     bool                        nested_ = false;
 };
-static_assert(traversal_rumble_code::kJumpSlots == players::kMaxPlayers - 1, "one route slot per further player");
+static_assert(traversal_rumble_code::kJumpSlots == players::kMaxPlayers - 1, "one route slot each for players 2 and 3");
 
 /// The jump box's OnEnded (the jump action's finish or abort): a seat's chocobo's landing rumble is the seat's.
 void JumpEnded(void* payload) noexcept
@@ -474,7 +474,7 @@ std::wstring Install(const platform::GameImage& image) noexcept
     auto part = [](bool placed) { return placed ? L"on" : L"OFF (not what the research read)"; };
     try
     {
-        return std::format(L"the further players' sources outside their scopes: scooter {}, glide {}, jump box {}{}, drift {}, "
+        return std::format(L"players 2 and 3's sources outside their scopes: scooter {}, glide {}, jump box {}{}, drift {}, "
                            L"brake {}",
                            part(on[kScooterAt]), part(on[kGlideAt]), part(jump),
                            research && jump ? L" (1.004: its inline add's list load)" : L"", part(on[kDriftAt]),

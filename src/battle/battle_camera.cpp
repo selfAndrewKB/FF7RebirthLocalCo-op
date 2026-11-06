@@ -195,7 +195,7 @@ bool Install(const platform::GameImage& image) noexcept
     const auto deactivate = platform::FindFunction(image, kDeactivate.target);
     if (!activate || !deactivate || !camera::camera_access::Install(image) || !scopes::primary_controller::Installed())
     {
-        platform::Log(L"battle camera: the Battle operator is not what the research read; the further players' cameras stay on "
+        platform::Log(L"battle camera: the Battle operator is not what the research read; players 2 and 3's cameras stay on "
                       L"the Field operator in battle");
         return false;
     }
@@ -209,7 +209,7 @@ bool Install(const platform::GameImage& image) noexcept
         g_activateSlot.Restore();  // both or neither: an activation with no deactivation would never end
         g_deactivateSlot.Restore();
     }
-    platform::Log(L"battle camera: {}", installed ? L"each further player's Battle operator follows player 1's switches"
+    platform::Log(L"battle camera: {}", installed ? L"player 2's and 3's Battle operators follow player 1's switches"
                                                   : L"the slots could not be replaced; not installed");
     return installed;
 }
@@ -254,12 +254,12 @@ void Watch() noexcept
 #if LSS_DEV
     // A dev tool: player 2's camera manager beside player 1's (it stays two-player).
     if (!platform::Enabled(platform::Level::Debug) || !players::generation::OnGameThread() ||
-        !players::generation::Active(players::kFirstFurtherSeat))
+        !players::generation::Active(players::kFirstSeat))
     {
         return;
     }
     const std::array<CameraState, 2> now{StateOf(CameraManagerOf(players::generation::PlayerOneController())),
-                                         StateOf(CameraManagerOf(players::generation::ControllerOf(players::kFirstFurtherSeat)))};
+                                         StateOf(CameraManagerOf(players::generation::ControllerOf(players::kFirstSeat)))};
     if (now == g_logged)
     {
         return;

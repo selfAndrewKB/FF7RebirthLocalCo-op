@@ -6,7 +6,7 @@
 // (SEndNaviMapCircle) renders the map into its own render target through the menu renderer's pool 0,
 // which runs a 3-slot ring; a slot's batch arrays go back to their free lists only in a later RHI-thread
 // command, while the game thread may reuse the slot before that command runs, and every array of that
-// frame is then stranded for good. Each further player's HUD image (hud/passes/second_image.h) paints the overlay
+// frame is then stranded for good. Each further player's HUD image (hud/passes/column_hud_images.h) paints the overlay
 // once more each frame, so the ring turns that much faster and the 32 KB pool fills in minutes (confirmed live:
 // hud-image off stops the climb, on brings it back).
 //

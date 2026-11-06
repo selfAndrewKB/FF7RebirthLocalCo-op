@@ -170,7 +170,7 @@ bool Install(const platform::GameImage& image) noexcept
     g_installed = ok;
     platform::Log(L"command rules: {}",
                   ok ? L"no player commands another player's member (ally mode, the command test)"
-                     : L"UNAVAILABLE (a check failed): player 1 can command the further players' members");
+                     : L"UNAVAILABLE (a check failed): player 1 can command players 2 and 3's members");
     return ok;
 }
 

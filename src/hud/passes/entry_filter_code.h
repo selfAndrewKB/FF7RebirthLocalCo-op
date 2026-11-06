@@ -40,7 +40,7 @@
 namespace lss::hud {
 
 /// The further seats with a table entry: seats 1..kMaxPlayers-1, built or not (an unbuilt seat's entry stays unset).
-inline constexpr int kFurtherEntries = players::kMaxPlayers - 1;
+inline constexpr int kSeatEntries = players::kMaxPlayers - 1;
 
 /// The fields the code reads. Each is an aligned 8-byte value (atomic on x64); a zero name means
 /// "not set".
@@ -53,7 +53,7 @@ struct EntryFilterFields
         alignas(8) std::uint64_t indexBuffer  = 0;
         alignas(8) std::uint64_t srmSlot      = 0;
     };
-    SeatEntry seats[kFurtherEntries];          // seat s at [s - 1]
+    SeatEntry seats[kSeatEntries];             // seat s at [s - 1]
     alignas(8) std::uint64_t familyName = 0;  // the entry this family draws; 0 draws every entry
     alignas(8) std::uint64_t stockName  = 0;  // player 1's (the game's) overlay entry FName
 
@@ -74,18 +74,18 @@ inline constexpr std::uint8_t kDrawGateBytes[]         = {0x41, 0x83, 0x79, 0x08
 inline constexpr std::uint8_t kStoreVertexBufferArgBytes1005[] = {0x48, 0x89, 0x44, 0x24, 0x20};  // mov [rsp+20h],rax
 
 // One seat's test and loads, the same length in both buffer builders (74 bytes), then the replaced instruction.
-inline constexpr std::size_t kEntryBuffersCodeSize          = 74 * kFurtherEntries + sizeof(kLoadVertexBufferBytes);
+inline constexpr std::size_t kEntryBuffersCodeSize          = 74 * kSeatEntries + sizeof(kLoadVertexBufferBytes);
 inline constexpr std::size_t kEntryBuffersStoreCodeSize1005 =
-    74 * kFurtherEntries + sizeof(kStoreVertexBufferArgBytes1005);
+    74 * kSeatEntries + sizeof(kStoreVertexBufferArgBytes1005);
 // The family test (23 bytes), one name test per overlay entry (23 bytes each: the seats', then player 1's), the
 // skip's tail (6 bytes), then the replaced instruction.
-inline constexpr std::size_t kEntryDrawGateCodeSize = 23 + 23 * (kFurtherEntries + 1) + 6 + sizeof(kDrawGateBytes);
+inline constexpr std::size_t kEntryDrawGateCodeSize = 23 + 23 * (kSeatEntries + 1) + 6 + sizeof(kDrawGateBytes);
 
 // Every jump is a short one (rel8, at most 127 bytes forward): the longest are the first seat's jump past the other
 // seats to the end, and the gate's first jump past every name test to the replaced instruction.
-static_assert(74 * (kFurtherEntries - 1) + sizeof(kLoadVertexBufferBytes) <= 127, "a buffers jump needs rel32");
-static_assert(74 * (kFurtherEntries - 1) <= 127, "a 1.005 store jump needs rel32");
-static_assert(5 + 23 * (kFurtherEntries + 1) + 6 <= 127, "a draw gate jump needs rel32");
+static_assert(74 * (kSeatEntries - 1) + sizeof(kLoadVertexBufferBytes) <= 127, "a buffers jump needs rel32");
+static_assert(74 * (kSeatEntries - 1) <= 127, "a 1.005 store jump needs rel32");
+static_assert(5 + 23 * (kSeatEntries + 1) + 6 <= 127, "a draw gate jump needs rel32");
 
 namespace detail {
 
@@ -159,8 +159,8 @@ inline std::array<std::uint8_t, kEntryBuffersCodeSize> EntryBuffersCode(
 {
     std::array<std::uint8_t, kEntryBuffersCodeSize> code{};
     detail::Emitter emit(code);
-    std::size_t     toDone[kFurtherEntries] = {};
-    for (int i = 0; i < kFurtherEntries; ++i)
+    std::size_t     toDone[kSeatEntries] = {};
+    for (int i = 0; i < kSeatEntries; ++i)
     {
         const auto& entry = fields.seats[i];
         emit.LoadField(&entry.name);              // mov rax, &name ; mov rax, [rax]
@@ -194,8 +194,8 @@ inline std::array<std::uint8_t, kEntryBuffersStoreCodeSize1005> EntryBuffersStor
 {
     std::array<std::uint8_t, kEntryBuffersStoreCodeSize1005> code{};
     detail::Emitter emit(code);
-    std::size_t     toStore[kFurtherEntries] = {};
-    for (int i = 0; i < kFurtherEntries; ++i)
+    std::size_t     toStore[kSeatEntries] = {};
+    for (int i = 0; i < kSeatEntries; ++i)
     {
         const auto& entry = fields.seats[i];
         emit.LoadField(&entry.name, true);        // mov r10, &name ; mov r10, [r10]
@@ -230,10 +230,10 @@ inline std::array<std::uint8_t, kEntryDrawGateCodeSize> EntryDrawGateCode(const 
     const auto noFilter = emit.Jump(0x74);        // jz   stock             no filter: draw as the game does
     emit.Bytes({0x48, 0x3B, 0x03});               // cmp  rax, [rbx]        this entry's FName
     const auto own = emit.Jump(0x74);             // je   stock             this family's entry
-    std::size_t toSkip[kFurtherEntries + 1] = {};
-    for (int i = 0; i <= kFurtherEntries; ++i)    // every seat's entry name, then player 1's
+    std::size_t toSkip[kSeatEntries + 1] = {};
+    for (int i = 0; i <= kSeatEntries; ++i)       // every seat's entry name, then player 1's
     {
-        emit.LoadField(i < kFurtherEntries ? &fields.seats[i].name : &fields.stockName);
+        emit.LoadField(i < kSeatEntries ? &fields.seats[i].name : &fields.stockName);
         emit.Bytes({0x48, 0x85, 0xC0});           // test rax, rax          no such entry
         const auto unset = emit.Jump(0x74);       // jz   next
         emit.Bytes({0x48, 0x3B, 0x03});           // cmp  rax, [rbx]

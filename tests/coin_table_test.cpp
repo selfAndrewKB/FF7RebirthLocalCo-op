@@ -118,7 +118,7 @@ void TestPlayerThree()
 {
     std::puts("coin table: player 3's number fits beside the key; the fall-back turns any seat's player into player 1, "
               "as before for player 2");
-    static_assert(PlayerNumber(0) == 1 && PlayerNumber(lss::players::kFirstFurtherSeat) == 2 && PlayerNumber(2) == 3);
+    static_assert(PlayerNumber(0) == 1 && PlayerNumber(lss::players::kFirstSeat) == 2 && PlayerNumber(2) == 3);
     static_assert(SeatOfNumber(PlayerNumber(2)) == 2);
     CoinTable table;
     table.Set(0x4000, 3, 1);

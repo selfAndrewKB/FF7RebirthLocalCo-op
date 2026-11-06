@@ -170,10 +170,10 @@ bool PlaceSites(const platform::GameImage&) noexcept
         }
     }
     platform::Log(L"party switch: {}; the switch widget {}",
-                  switching ? L"player 1's switch skips every further player's member"
-                            : L"UNAVAILABLE (a check failed): player 1 can switch onto a further player's member",
-                  widget ? L"greys a further player's member"
-                         : L"shows a further player's member as switchable (a check failed)");
+                  switching ? L"player 1's switch skips every other player's member"
+                            : L"UNAVAILABLE (a check failed): player 1 can switch onto player 2's or 3's member",
+                  widget ? L"greys player 2's or 3's member"
+                         : L"shows player 2's or 3's member as switchable (a check failed)");
     return switching;
 }
 

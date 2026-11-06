@@ -76,9 +76,9 @@ void AfterUpdate(void* mgr, float dt) noexcept;
 struct HookObserver
 {
     void (*afterUpdate)(void* mgr) noexcept                                                               = nullptr;
-    void (*marked)(std::uint64_t key, std::uint8_t taken, std::uintptr_t caller, bool further) noexcept = nullptr;
-    void (*granting)(std::uint64_t key, bool further) noexcept                                           = nullptr;
-    void (*granted)(std::uint64_t key, bool further) noexcept                                            = nullptr;
+    void (*marked)(std::uint64_t key, std::uint8_t taken, std::uintptr_t caller, bool isSeat) noexcept = nullptr;
+    void (*granting)(std::uint64_t key, bool isSeat) noexcept                                           = nullptr;
+    void (*granted)(std::uint64_t key, bool isSeat) noexcept                                            = nullptr;
 };
 
 /// The one observer (a copy is kept). Set before any field exists, cleared at unload.

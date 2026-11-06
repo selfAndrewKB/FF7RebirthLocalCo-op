@@ -231,7 +231,7 @@ bool Install(const platform::GameImage& image) noexcept
     const auto battle  = platform::FindFunction(image, facts::kIsInBattle);
     g_partyManager     = manager ? *manager : 0;
     g_inBattle         = battle ? reinterpret_cast<GlobalTestFn>(*battle) : nullptr;
-    platform::Log(L"shared ride: buggy {}, bronco {} (while player 1 rides one, the further players stand aside: player 1's view alone, "
+    platform::Log(L"shared ride: buggy {}, bronco {} (while player 1 rides one, players 2 and 3 stand aside: player 1's view alone, "
                   L"every pad drives)",
                   g_vt[0] != 0 ? L"installed" : L"UNAVAILABLE", g_vt[1] != 0 ? L"installed" : L"UNAVAILABLE");
     return any;

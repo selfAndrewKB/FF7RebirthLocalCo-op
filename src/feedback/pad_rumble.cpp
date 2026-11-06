@@ -227,9 +227,9 @@ void Install(const platform::GameImage& image) noexcept
                       L"ordered again");
     }
     platform::Log(L"pad rumble: tick order {}; player 1's last device {}",
-                  g_addPrerequisite != nullptr ? L"ready (each further player's controller after player 1's, the engine's prerequisite)"
+                  g_addPrerequisite != nullptr ? L"ready (player 2's and 3's controllers after player 1's, the engine's prerequisite)"
                                                : L"UNAVAILABLE (no AddTickPrerequisiteActor)",
-                  device ? L"kept from the further players' pads (the game's note skipped for them)"
+                  device ? L"kept from players 2 and 3's pads (the game's note skipped for them)"
                          : L"NOT kept (the note's entry is not what the research read)");
 }
 

@@ -311,9 +311,9 @@ bool Install(const platform::GameImage& image) noexcept
                                                 g_navTick);
     // The seats' own rows check the volume walk's two facts only (the gate above is a separate lever).
     g_volumes = location_volumes::Install(image);
-    platform::Log(L"location rows: a further player's camera takes location rows from that player's own character {}",
+    platform::Log(L"location rows: player 2's or 3's camera takes location rows from that player's own character {}",
                   g_volumes ? L"yes" : L"NO (a check failed)");
-    platform::Log(L"location rows: player 1's location rows withheld from the further players' cameras {}; each one's indoor "
+    platform::Log(L"location rows: player 1's location rows withheld from players 2 and 3's cameras {}; each one's indoor "
                   L"areas pushed to its own camera {}",
                   listener ? L"yes" : L"NO (a check failed)", nav ? L"yes" : L"NO (a check failed)");
     return listener || nav;

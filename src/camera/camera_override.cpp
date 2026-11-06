@@ -298,7 +298,7 @@ struct Snapshot
 
 Snapshot Take(void* member) noexcept
 {
-    Snapshot   now{g_global->object, g_seatModule[players::kFirstFurtherSeat].object};
+    Snapshot   now{g_global->object, g_seatModule[players::kFirstSeat].object};
     void*      controllers[2] = {players::generation::PlayerOneController(), players::generation::PlayerTwoController()};
     const auto characters     = std::array<std::uintptr_t, 2>{
         reinterpret_cast<std::uintptr_t>(ReadPointer(controllers[0], facts::kControllerPawn)), reinterpret_cast<std::uintptr_t>(member)};
@@ -347,7 +347,7 @@ void Log(void* member)
     void*      playerOne = players::generation::PlayerOneController();
     const auto oneChar   = reinterpret_cast<std::uintptr_t>(ReadPointer(playerOne, facts::kControllerPawn));
     platform::LogDebug(L"camera override: global {:#x} P2's {:#x} | P1 camera{} | P2 camera{} | P1 {} | P2 {}", g_global->object,
-                  g_seatModule[players::kFirstFurtherSeat].object, DescribeCamera(playerOne),
+                  g_seatModule[players::kFirstSeat].object, DescribeCamera(playerOne),
                   DescribeCamera(players::generation::PlayerTwoController()),
                   DescribeCharacter(oneChar), DescribeCharacter(reinterpret_cast<std::uintptr_t>(member)));
 }
@@ -373,7 +373,7 @@ bool Install(const platform::GameImage& image) noexcept
         g_engineRemoved = reinterpret_cast<RemovedFn>(*removed);
         g_releaseWeak   = reinterpret_cast<ReleaseFn>(*release);
     }
-    platform::Log(L"camera override: {}", g_installed ? L"ready (each further player's camera gets its own NotifyOverride module)"
+    platform::Log(L"camera override: {}", g_installed ? L"ready (player 2's and 3's cameras each get their own NotifyOverride module)"
                                                      : L"UNAVAILABLE (a check failed); the players' cameras share one");
     return g_installed;
 }
@@ -418,7 +418,7 @@ void BeginPlayWithOwnModule(int seat, void (*engineBeginPlay)(void*), void* came
     }
     if (!seated)
     {
-        platform::LogDebug(L"camera override: a camera of no seat's (the mirror view) built NotifyOverride module {:#x} "
+        platform::LogDebug(L"camera override: a camera of no player's (the mirror view) built NotifyOverride module {:#x} "
                            L"({}); the mod keeps no reference to it, player 1's {:#x} is the global again",
                            built.object, own ? L"the module's own class" : L"not the module's class", saved.object);
         return;
@@ -454,7 +454,7 @@ void Tick(int seat, void* member) noexcept
             g_member[Index(seat)] = member;
         }
     }
-    if (seat != players::kFirstFurtherSeat)
+    if (seat != players::kFirstSeat)
     {
         return;  // the snapshot is a dev tool, player 2's
     }

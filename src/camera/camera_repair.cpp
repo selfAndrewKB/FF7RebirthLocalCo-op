@@ -384,7 +384,7 @@ void Install(const platform::GameImage& image) noexcept
     const auto vt    = image.Rebase(kChocoboCameraModuleVTable);
     g_chocoboModuleVt = vt ? *vt : 0;
     platform::Log(L"camera repair: {}", g_reset != nullptr
-                                            ? L"installed (a non-finite pose on a further player's camera gets the game's camera reset)"
+                                            ? L"installed (a non-finite pose on player 2's or 3's camera gets the game's camera reset)"
                                             : L"UNAVAILABLE (the reset's bytes differ; a lost camera needs Ctrl+F8, Ctrl+F7)");
 }
 

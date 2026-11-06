@@ -236,12 +236,12 @@ void InstallChocoboHandles(const platform::GameImage& image) noexcept
                                                              g_chocoboHandlesSlot);
     if (replaced)
     {
-        platform::Log(L"chocobo ride: a further player's chocobo's own slot 1 runs in that player's scope (the game's anim sync leaves "
+        platform::Log(L"chocobo ride: player 2's or 3's chocobo's own slot 1 runs in that player's scope (the game's anim sync leaves "
                       L"its gait to that player's input)");
     }
     else
     {
-        platform::Log(L"chocobo ride: the chocobo move state's slot 1 differs; a further player's chocobo's gait follows its "
+        platform::Log(L"chocobo ride: the chocobo move state's slot 1 differs; player 2's or 3's chocobo's gait follows its "
                       L"animation (no sprint, run-on after a sprint attempt)");
     }
 }

@@ -682,7 +682,7 @@ void Install(const platform::GameImage& image) noexcept
     {
         g_cameraEntry.Restore();
         platform::Log(L"climb context: NOT installed (the input owner, the camera manager getter or the key-value getter "
-                      L"differs); a further player climbs the NPC way, toward player 1");
+                      L"differs); player 2 or 3 climbs the NPC way, toward player 1");
         return;
     }
     const auto pressedGlobal = platform::FindFunction(image, kPressedGlobal);
@@ -707,9 +707,9 @@ void Install(const platform::GameImage& image) noexcept
     g_installed           = true;
     try
     {
-        platform::Log(L"climb context: {}; a further player's hold-select presses {}",
+        platform::Log(L"climb context: {}; player 2's or 3's hold-select presses {}",
                       PlaceMoves(image, holdSelect, std::make_index_sequence<kMoveCount>{}),
-                      g_buttons ? L"from that player's pad" : L"NOT read (a further player's hold-select keeps the NPC answer)");
+                      g_buttons ? L"from that player's pad" : L"NOT read (player 2's or 3's hold-select keeps the NPC answer)");
     }
     catch (...)
     {

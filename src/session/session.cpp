@@ -267,7 +267,7 @@ void Seat::Settle() noexcept
         phase_  = Phase::Playing;
         return;
     }
-    handover_watch::PartyOrder(L"choosing a further player's member", nullptr);
+    handover_watch::PartyOrder(L"choosing player 2's or 3's member", nullptr);
     const auto choice = party_member::ChooseSlot(seat_, playerOneController_);
     member_           = choice.member;
     if (choice.wait == party_member::SlotWait::NoSlot)
@@ -504,7 +504,7 @@ void Seat::OnLeaderChanging(void* controller, void* character) noexcept
         if (action == LeaderEventAction::Warn)
         {
             Log(L"WARNING: party event: the game makes {} the leader of {}'s controller (was {}); a game leader "
-                L"change ran inside a further player's scope. Not acted on",
+                L"change ran inside player 2's or 3's scope. Not acted on",
                 players::NameOf(character), Name(), players::NameOf(before));
             return;
         }
@@ -1286,7 +1286,7 @@ players::SeatState Session::State(int seat) const noexcept
 std::wstring Session::MemberReading(int seat) const
 {
     const Seat* s = At(seat);
-    return s != nullptr ? s->MemberReading() : std::wstring(L"none: the seat is not built");
+    return s != nullptr ? s->MemberReading() : std::wstring(L"none: that player is not built");
 }
 
 bool Session::PlaysMember(int seat) const noexcept
@@ -1390,15 +1390,15 @@ void RegisterCommands(Session& session)
     using control::Value;
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        RegisterSeatCommands(session, seat, seat == players::kFirstFurtherSeat ? L"p2" : L"p3",
-                             seat == players::kFirstFurtherSeat ? L"join" : L"p3.join");
+        RegisterSeatCommands(session, seat, seat == players::kFirstSeat ? L"p2" : L"p3",
+                             seat == players::kFirstSeat ? L"join" : L"p3.join");
     }
-    Register({.name = L"p2.log-status", .help = L"write every further player's status lines to the log",
+    Register({.name = L"p2.log-status", .help = L"write every other player's status lines to the log",
               .set  = [&session](const Value&) {
                   if (!session.AnyIn())
                   {
-                      platform::Log(L"control: status: no further player is in");
-                      return Outcome{true, L"no further player is in"};
+                      platform::Log(L"control: status: no other player is in");
+                      return Outcome{true, L"no other player is in"};
                   }
                   session.LogStatus();
                   return Outcome{};

@@ -11,13 +11,13 @@ Split-screen for up to three players for FINAL FANTASY VII REBIRTH, as a UE4SS C
 ## What it does
 
 Press **Ctrl+F7** to add a player (player 2, then player 3, on pads 2 and 3) and **Ctrl+F8** to remove the last
-one in. When a further local player exists, the engine splits the screen by itself (two halves, or three equal
+one in. When another local player exists, the engine splits the screen by itself (two halves, or three equal
 columns with three players). This mod makes the split correct: each player's
 view is rendered by the engine as its own view family, so the game's meshlet renderer never has
 two views in one pass. With one player, the mod changes nothing except the D3D12 residency manager
 (see Performance).
 
-Each further player starts on their own camera and their own pad (sticks and movement) and plays their slot of the
+Players 2 and 3 each start on their own camera and their own pad (sticks and movement) and play their slot of the
 party order (player 2 the 2nd, player 3 the 3rd), and the HUD is laid out in each view as it is in single player, with
 each player's view showing their own HUD. None of this needs a key.
 
@@ -25,10 +25,10 @@ each player's view showing their own HUD. None of this needs a key.
 |------|--------|
 | Ctrl+F5 | Top/bottom or side by side |
 | Ctrl+F4 | Halves filled, or 16:9 halves with bars |
-| Ctrl+F6 | For testing: the further players' views show player 1's camera |
+| Ctrl+F6 | For testing: players 2 and 3's views show player 1's camera |
 | Ctrl+F9 | For testing: every pad drives every player's sticks (the game's merge) |
 | Ctrl+F10 | For comparison: the NPC population follows the leader alone instead of every player |
-| Ctrl+F11 | For comparison: characters near a further player take their detail from player 1's camera alone |
+| Ctrl+F11 | For comparison: characters near player 2 or 3 take their detail from player 1's camera alone |
 | Ctrl+F3 | The three-player monitor mode on and off: the window across a row of three monitors, player 1's picture in every column no player has |
 | Ctrl+F2 | The game window across its row of monitors, and back |
 
@@ -46,9 +46,9 @@ A file in the mod's folder keeps the game's behaviour:
 | Change | When | Keep the game's way |
 |--------|------|---------------------|
 | D3D12 residency manager off (one GPU wait per submission less) | whole session | `residency_on.txt` |
-| GPU frame-time gap recorder off (timing method 1 for dynamic resolution) | a further player in | — |
-| Parallel passes without their own GPU submission | a further player in | `submit_hints_on.txt` |
-| The further players' duplicate scenery-streaming work skipped | a further player in | `stream-feedback each` (control) |
+| GPU frame-time gap recorder off (timing method 1 for dynamic resolution) | player 2 or 3 in | — |
+| Parallel passes without their own GPU submission | player 2 or 3 in | `submit_hints_on.txt` |
+| Players 2 and 3's duplicate scenery-streaming work skipped | player 2 or 3 in | `stream-feedback each` (control) |
 | D3D12 async compute (measured slower; off) | opt-in | `async_compute_on.txt` turns it on |
 
 `watch_only.txt` runs the game unmodified for comparisons. `perf_log.txt` turns the perf log on from launch, and
@@ -65,17 +65,17 @@ src/
   players/       the engine's own paths: local players, reflection calls, console and settings access, a widget's
                  opacity; the held setting, the split layout and the single view over them; each player's member
                  generation, the log descriptions and the field reads every module shares
-  session/       the further players' join, party member and leave
-  scopes/        one game call made as a further player
+  session/       players 2 and 3's join, party member and leave
+  scopes/        one game call made as player 2 or 3
   camera/        each player's cameras
   input/         pads, sticks and movement
   feedback/      rumble and sound
-  battle/        the further players' battle: menus, targets, the enemies' coin, synergies
+  battle/        players 2 and 3's battle: menus, targets, the enemies' coin, synergies
   traversal/     climbing, vaulting and the rest of traversal
   world/         the world around each player: crowds, triggers, pickups, shops
   rides/         chocobos, the wheelie and the shared rides
   views/         the view points, the whole-screen states, the streaming views, the columns and mirror views, the window span
-  hud/           the HUD in each view, by system: passes/ (the further players' HUD images), layout/ (the band),
+  hud/           the HUD in each view, by system: passes/ (players 2 and 3's HUD images), layout/ (the band),
                  minimap/, field/ (prompt rows, markers, pins), battle/ (targets, gauges, popups); the roots, the
                  live widgets, the pure rules and the dev dumps at the root
   renderer/      one view family per player, and the renderer's performance levers

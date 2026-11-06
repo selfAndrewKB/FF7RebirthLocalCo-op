@@ -132,10 +132,10 @@ bool PlaceSites(const platform::GameImage&) noexcept
                      g_placement.Place(g_battleFinishCall, s.endSite, s.place,
                                        reinterpret_cast<std::uintptr_t>(&BattleFinishPlace));
     platform::Log(L"battle warp: battle start {}; battle end {}",
-                  start ? L"leaves the further players' members where they are"
-                        : L"UNAVAILABLE (a check failed): warps the further players' members in",
-                  end ? L"leaves the further players' members where they are"
-                      : L"UNAVAILABLE (a check failed): may warp the further players' members back");
+                  start ? L"leaves players 2 and 3's members where they are"
+                        : L"UNAVAILABLE (a check failed): warps players 2 and 3's members in",
+                  end ? L"leaves players 2 and 3's members where they are"
+                      : L"UNAVAILABLE (a check failed): may warp players 2 and 3's members back");
     return start || end;
 }
 

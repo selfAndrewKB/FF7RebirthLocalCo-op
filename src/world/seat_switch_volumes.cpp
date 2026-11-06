@@ -281,7 +281,7 @@ void Install(const platform::GameImage& image) noexcept
     g_ready    = true;
     platform::Log(L"switch volume: installed ({} inside a CharaPop switch volume with a show list counts as inside, "
                   L"the union of {}; volumes with a hide list stay player 1's)",
-                  players::kSeatsBuilt == 1 ? L"player 2" : L"a further player",
+                  players::kSeatsBuilt == 1 ? L"player 2" : L"player 2 or 3",
                   players::kSeatsBuilt == 1 ? L"both players" : L"every player");
 }
 
@@ -503,7 +503,7 @@ void Tick() noexcept
         return;
     }
     const auto inside = std::count_if(g_held.begin(), g_held.end(), [](const Held& held) { return held.volume != nullptr; });
-    const wchar_t* const who = players::kSeatsBuilt == 1 ? L"player 2" : L"the further players";
+    const wchar_t* const who = players::kSeatsBuilt == 1 ? L"player 2" : L"players 2 and 3";
     platform::LogDebug(L"switch volume (10 s): {}'s enters {}, leaves {}, leaves kept for player 1 {}, enters again "
                        L"after player 1's leave {}, held back (no show list or a hide list) {}, skipped by the game's "
                        L"on/off {}; {} inside {} now",

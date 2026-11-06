@@ -146,7 +146,7 @@ void Session::InstallStages(const platform::GameImage& image) noexcept
     LogStage(L"member movement (with per-pad sticks)", installed_.memberMovement);
     LogStage(L"move-state ticks (the game's recorded; player 1's on pad 1)", installed_.moveTicks);
     LogStage(L"scope leaks put back", scopeLeaks);
-    LogStage(L"per-pad buttons (the split views; the further pads kept from the menus)", padButtons);
+    LogStage(L"per-pad buttons (the split views; pads 2 and 3 kept from the menus)", padButtons);
     LogStage(L"party events (the game's leader and status changes)", installed_.partyEvents);
 }
 
@@ -220,7 +220,7 @@ void Seat::Join() noexcept
     // follow the players'. They come back on this tick, after the session's (modules.cpp).
     if (installed_.clearMirrors != nullptr && !installed_.clearMirrors())
     {
-        Log(L"join refused: a mirror view could not be taken out of the engine's list (the seat would land after it); "
+        Log(L"join refused: a mirror view could not be taken out of the engine's list (the player would land after it); "
             L"tried again with the next join");
         return;
     }
@@ -275,7 +275,7 @@ void Seat::AimOwnCamera() noexcept
     void* before = camera::view_target::Current(controller_);
     const bool aimed = camera::view_target::Aim(controller_);
     Log(L"{}'s camera manager viewed {}; after aiming it at its camera actor it views {} ({}); auto-managed "
-        L"view target: player 1 {}, the seat {}",
+        L"view target: player 1 {}, the joining player {}",
         Name(), players::NameOf(before), players::NameOf(camera::view_target::Current(controller_)), aimed ? L"its own camera" : L"NOT its camera",
         static_cast<unsigned>(ReadField<std::uint8_t>(playerOneController_, facts::kControllerAutoManageCamera)),
         static_cast<unsigned>(ReadField<std::uint8_t>(controller_, facts::kControllerAutoManageCamera)));
@@ -286,7 +286,7 @@ void Seat::StartGeneration() noexcept
     players::generation::Begin(seat_, playerOneController_, controller_);
     if (installed_.primary && !scopes::primary_controller::Bind(seat_, playerOneController_, controller_))
     {
-        players::generation::Fault(seat_, L"the seat's controller could not be named as a weak pointer");
+        players::generation::Fault(seat_, L"the player's controller could not be named as a weak pointer");
     }
     phase_            = Phase::SettlingPlayerOne;
     ticks_            = 0;

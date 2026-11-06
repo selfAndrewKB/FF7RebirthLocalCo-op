@@ -317,7 +317,7 @@ int ActiveSeatWhere(Pick&& pick) noexcept
 /// A text kept by pointer (an end's reason) naming the seat: player 2's or player 3's literal.
 constexpr const wchar_t* BySeat(int seat, const wchar_t* two, const wchar_t* three) noexcept
 {
-    return seat == players::kFirstFurtherSeat ? two : three;
+    return seat == players::kFirstSeat ? two : three;
 }
 
 std::int32_t CoordState(const void* coordinator) noexcept
@@ -794,7 +794,7 @@ void* NotifyLeader(std::uint8_t selector)
 
 struct DetachCall
 {
-    int   seat   = players::kFirstFurtherSeat;  // whose member's notify
+    int   seat   = players::kFirstSeat;  // whose member's notify
     void* notify = nullptr;
     void* mesh   = nullptr;
     void* a3     = nullptr;
@@ -920,9 +920,9 @@ bool Install(const platform::GameImage& image) noexcept
         (void)g_swapBackSlot.Restore();  // nothing uses them without a ride (they pass everything through anyway)
         (void)g_detachSlot.Restore();
     }
-    platform::Log(L"wheelie ride: {}", g_installed ? L"installed (a further player boards a Wheelie by walking into player 1's marked "
+    platform::Log(L"wheelie ride: {}", g_installed ? L"installed (player 2 or 3 boards a Wheelie by walking into player 1's marked "
                                                      L"scooter, with their own coordinator)"
-                                                   : L"UNAVAILABLE (a check failed; the further players cannot board, as before)");
+                                                   : L"UNAVAILABLE (a check failed; players 2 and 3 cannot board, as before)");
     return g_installed;
 }
 
@@ -1164,7 +1164,7 @@ void InstallSites() noexcept
     }
     const bool own = g_ownSite != 0 && g_ownCall.InstallFromOwnThread(g_ownSite, reinterpret_cast<std::uintptr_t>(g_fn.getOffPrimary),
                                                                       reinterpret_cast<std::uintptr_t>(&OwnGetOff));
-    platform::Log(L"wheelie ride: the game's forced getoffs followed for the further players at {} of {} callers; their getoff "
+    platform::Log(L"wheelie ride: the game's forced getoffs followed for players 2 and 3 at {} of {} callers; their getoff "
                   L"button {}",
                   forced, kForcedSites.size(),
                   own ? L"made instant when player 1 is more than 50 m away (the rental-return warp)"
@@ -1173,10 +1173,10 @@ void InstallSites() noexcept
     const bool leader = g_detachLeaderSite != 0 &&
                         g_detachLeaderCall.InstallFromOwnThread(g_detachLeaderSite, reinterpret_cast<std::uintptr_t>(g_resolveLeader),
                                                                 reinterpret_cast<std::uintptr_t>(&NotifyLeader));
-    platform::Log(L"wheelie ride: a further player's animated getoff: the getoff motion's End DetachFromSBScooter notify runs in "
+    platform::Log(L"wheelie ride: player 2's or 3's animated getoff: the getoff motion's End DetachFromSBScooter notify runs in "
                   L"that player's scope, its field-leader test {}",
                   leader ? L"answers that player's member for her own notify"
-                         : L"UNCHANGED (a further player's animated getoff will not swap back: the mod's fallback gives her back)");
+                         : L"UNCHANGED (player 2's or 3's animated getoff will not swap back: the mod's fallback gives her back)");
 }
 
 void LogSummary(SeatRide& s) noexcept

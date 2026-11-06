@@ -165,7 +165,7 @@ const wchar_t* WhyNotAddable(const players::LocalPlayers::PlayerOne& one) noexce
 {
     if (one.controller == nullptr)
     {
-        return L"the engine's list has no room, player 1 has no controller, or the id is a seat's";
+        return L"the engine's list has no room, player 1 has no controller, or the id is a player's";
     }
     if (!session::own_controller::Ready())
     {

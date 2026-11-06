@@ -167,7 +167,7 @@ FocusScope::FocusScope(int seat, void* controller) noexcept : seat_(seat)
     std::uintptr_t input = 0;
     if (!players::SeatIndex(seat))
     {
-        refusal_ = L"not a seat";
+        refusal_ = L"not player 2 or 3";
     }
     else if (g_inside || !players::generation::OnGameThread())
     {
@@ -179,7 +179,7 @@ FocusScope::FocusScope(int seat, void* controller) noexcept : seat_(seat)
     }
     else if (g_layout == 0 && (g_layout = CaptureLayoutHolds(input) ? 1 : -1) < 0)
     {
-        platform::Log(L"focus scope: player 1's capture map does not have the TSet layout the further players' copies "
+        platform::Log(L"focus scope: player 1's capture map does not have the TSet layout players 2 and 3's copies "
                       L"assume; their UI stays off");
     }
     if (refusal_ == nullptr && g_layout < 0)
@@ -207,7 +207,7 @@ FocusScope::FocusScope(int seat, void* controller) noexcept : seat_(seat)
     }
     if (!context_.Define(std::span<const Range>(ranges.data(), count)))
     {
-        refusal_ = L"the seat's context could not be laid out";
+        refusal_ = L"the player's context could not be laid out";
         return;
     }
     CopyBetween(seat, context_, true);
@@ -218,7 +218,7 @@ FocusScope::FocusScope(int seat, void* controller) noexcept : seat_(seat)
     }
     if (!context_.Open())
     {
-        refusal_ = L"player 1's context could not be read, or the seat's not written (player 1's is in place)";
+        refusal_ = L"player 1's context could not be read, or the other player's not written (player 1's is in place)";
         return;
     }
     entered_ = true;

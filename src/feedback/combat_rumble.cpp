@@ -684,7 +684,7 @@ void Install(const platform::GameImage& image) noexcept
     }
 
     platform::Log(L"combat rumble: battle hits {}; montage notifies wrapped {} of {}{}; plays {}",
-                  hits          ? L"per player (a further player's member's hits ask the game's gate with that player as the leader)"
+                  hits          ? L"per player (player 2's or 3's member's hits ask the game's gate with that player as the leader)"
                   : g_hitsPending ? L"from the game thread's first tick (a call crosses a block; logged then)"
                                   : L"UNCHANGED (a call site is not what the research read)",
                   g_notifiesWrapped, kNotifies.size(),
@@ -716,7 +716,7 @@ void BeforeTick() noexcept
             }
         }
         platform::Log(L"combat rumble: battle hits {}",
-                      all ? L"per player (a further player's member's hits ask the game's gate with that player as the leader; "
+                      all ? L"per player (player 2's or 3's member's hits ask the game's gate with that player as the leader; "
                             L"installed from the game thread)"
                           : L"UNCHANGED (a call site is not what the research read)");
     }
@@ -732,7 +732,7 @@ void BeforeTick() noexcept
                          ? 1
                          : 0;
         }
-        platform::Log(L"combat rumble: {} of {} notify first-controller calls answer a further player's controller for that player's "
+        platform::Log(L"combat rumble: {} of {} notify first-controller calls answer player 2's or 3's controller for that player's "
                       L"mesh",
                       sites, g_notifiesWrapped);
     }
