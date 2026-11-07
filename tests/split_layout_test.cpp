@@ -247,10 +247,47 @@ void TestWords()
     EXPECT(layout.Update(false).kind == Kind::Restored && g_setting.value == kSideBySide);
 }
 
+void TestSpanSideBySide()
+{
+    std::puts("layout: a span of monitors is side by side whatever the choice; the choice comes back with one window");
+    // Top/bottom chosen, two players in, then the window spans: side by side at once; the game's value still the one
+    // to put back.
+    auto layout = Fresh(kSideBySide);
+    EXPECT(layout.Choose(kTopBottom).kind == Kind::Chosen);
+    EXPECT(layout.Update(true).kind == Kind::Applied && g_setting.value == kTopBottom);
+    const auto spanned = layout.Update(true, true);
+    EXPECT(spanned.kind == Kind::Applied && spanned.held == kSideBySide && g_setting.value == kSideBySide);
+    EXPECT(layout.Current() == kSideBySide && layout.Chosen() == kTopBottom);
+    EXPECT(layout.Update(true, true).kind == Kind::None);  // steady
+    // A choice made on the span waits for the one window.
+    EXPECT(layout.Choose(kTopBottom).kind == Kind::Chosen && g_setting.value == kSideBySide);
+    // The span ends with two players still in: the choice is back.
+    const auto window = layout.Update(true, false);
+    EXPECT(window.kind == Kind::Applied && window.held == kTopBottom && g_setting.value == kTopBottom);
+    // The leave puts the game's own value back.
+    EXPECT(layout.Update(false, false).kind == Kind::Restored && g_setting.value == kSideBySide);
+
+    // Nothing chosen: the span holds side by side, the one window returns the game's own layout.
+    layout = Fresh(kTopBottom);
+    EXPECT(layout.Update(true, true).kind == Kind::Applied && g_setting.value == kSideBySide);
+    EXPECT(layout.Update(true, false).kind == Kind::Restored && g_setting.value == kTopBottom);
+    EXPECT(layout.Update(false, false).kind == Kind::None);
+
+    // The span begins before the second player: applied at the join.
+    layout = Fresh(kTopBottom);
+    EXPECT(layout.Update(false, true).kind == Kind::None && g_setting.writes == 0);
+    EXPECT(layout.Update(true, true).kind == Kind::Applied && g_setting.value == kSideBySide);
+    EXPECT(layout.Update(false, true).kind == Kind::Restored && g_setting.value == kTopBottom);
+    // The game already side by side: nothing written on the span.
+    layout = Fresh(kSideBySide);
+    EXPECT(layout.Update(true, true).kind == Kind::AlreadySet && g_setting.writes == 0);
+}
+
 }  // namespace
 
 int main()
 {
+    TestSpanSideBySide();
     TestGameLayoutUntilChosen();
     TestChoiceAppliedAtJoinAndRestored();
     TestSwitchWithPlayerTwoIn();

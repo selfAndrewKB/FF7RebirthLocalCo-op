@@ -35,6 +35,7 @@ IDENTICAL = [
     "src/views/span_desktop.cpp",
     "src/views/span_desktop.h",
     "src/views/display_align.h",
+    "src/views/split_fov_rules.h",
     "setup/app.ico",
     "setup/app.manifest",
     "setup/app.rc",
@@ -58,6 +59,13 @@ ADAPTED = {
     "src/views/game_window.cpp": "the same",
     "src/views/window_span.h": "Rebirth's span: the columns follow the players, the monitor mode is Ctrl+F3",
     "src/views/window_span.cpp": "the same",
+    "src/views/column_rules.h": "the engine has the three-column entry: the stock records are the equal thirds; the column "
+                                "order and the one-window layouts are not taken yet",
+    "src/views/column_layout.h": "the three-player setting held through players/held_setting; the two-player layout stays "
+                                 "players/split_layout's; no column order yet",
+    "src/views/column_layout.cpp": "the same",
+    "tests/column_rules_test.cpp": "the test harness; the records' rows only; Rebirth's rows for the stock thirds",
+    "tests/split_fov_rules_test.cpp": "the test harness; no vertical split weight option here",
     "setup/app.h": "kOrderOption: the screen-order option waits for the column layout",
     "setup/app.cpp": "the screen-order cell is drawn and stepped only with an option to show",
     "setup/main.cpp": "the settings file read through ReadSettings",

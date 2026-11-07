@@ -67,6 +67,7 @@ struct Frame
     std::array<Seat, players::kMaxPlayers> seats{};  // by seat (players/seats.h); index 0, player 1's, unused
     views::column_source::Shown shown;  // what each column shows this tick (views/column_source.h)
     bool splitShown = false;  // shown.SplitShown(): a seat in and its own view on screen
+    bool viewsSplit = false;  // shown.ViewsSplit(): more than one view on screen (the mirror views' columns too)
     int  columns    = 1;      // local players listed, one view each while the screen splits (views/columns.h)
 };
 
@@ -74,6 +75,7 @@ struct Frame
 struct Columns
 {
     views::columns::Map map;            // the engine's list as columns, after the mirror views' tick
+    const void*         firstPlayer = nullptr;  // the first local player the engine lists (player 1's), null before it exists
     int                 playersIn = 1;  // player 1 and the seats listed
     int                 wanted    = 1;  // the columns the frame shows
     bool                held      = false;  // columns held beyond the players: the monitor mode or `view-columns`

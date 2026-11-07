@@ -215,6 +215,7 @@ add_library(LocalSplitScreen SHARED
     src/views/record_file.cpp
     src/views/span_desktop.cpp
     src/views/view_shape.cpp
+    src/views/column_layout.cpp
     src/views/window_span.cpp
     src/views/whole_screen.cpp
     src/views/screen_widgets.cpp
@@ -349,6 +350,8 @@ target_include_directories(setup_rules_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}
 lss_test(single_view src/players/single_view.cpp)
 lss_test(whole_screen src/views/whole_screen_reason.cpp)
 lss_test(column_source src/views/column_source.cpp)
+lss_test(column_rules)
+lss_test(split_fov_rules)
 lss_test(stream_view_math src/views/stream_view_math.cpp)
 lss_test(pool_bits src/platform/pool_bits.cpp)
 lss_test(strand_watch src/world/strand_watch.cpp)

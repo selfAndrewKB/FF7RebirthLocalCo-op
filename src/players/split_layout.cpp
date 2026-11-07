@@ -22,9 +22,19 @@ std::uint8_t Other(std::uint8_t layout) noexcept
 
 }  // namespace
 
-HeldChange SplitLayout::Update(bool twoColumns) noexcept
+HeldChange SplitLayout::Update(bool twoColumns, bool span) noexcept
 {
-    return held_.Update(twoColumns, chosen_);  // nothing chosen: the game's layout stays
+    if (span != span_)
+    {
+        span_ = span;
+        if (held_.In() && twoColumns)
+        {
+            // The span came or went with two columns on screen: the layout follows now. Back to the game's own when
+            // nothing is chosen.
+            return Wanted() ? held_.Hold(*Wanted()) : held_.Release();
+        }
+    }
+    return held_.Update(twoColumns, Wanted());  // nothing wanted: the game's layout stays
 }
 
 HeldChange SplitLayout::Toggle() noexcept
@@ -49,6 +59,10 @@ HeldChange SplitLayout::Toggle() noexcept
 HeldChange SplitLayout::Choose(std::uint8_t value) noexcept
 {
     chosen_ = value;
+    if (span_)
+    {
+        return {HeldChange::Kind::Chosen, 0, value};  // kept for the one window: the span stays side by side
+    }
     return held_.In() ? held_.Hold(value) : HeldChange{HeldChange::Kind::Chosen, 0, value};
 }
 

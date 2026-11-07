@@ -161,9 +161,8 @@ void UpdateStreamViews(bool splitShown) noexcept
     {
         return;
     }
-    // Each player's camera as last drawn, the seats' cameras first (player 1's, the game's own view, last). A mirror
-    // view shows player 1's camera, which player 1's registration covers.
-    const float aspect = HalfAspect();
+    // Each player's camera as last drawn, the seats' cameras first (player 1's, the game's own view, last), each at
+    // its own view's shape. A mirror view shows player 1's camera, which player 1's registration covers.
     for (int seat = players::kSeatsBuilt; seat >= 0; --seat)
     {
         if (seat == 0 && g_mode != StreamViewsMode::Both)
@@ -171,7 +170,7 @@ void UpdateStreamViews(bool splitShown) noexcept
             continue;
         }
         const auto camera = RenderedCamera(seat);
-        if (camera && !Register(*camera, aspect, seat != 0 ? 0.0f : g_playerOneFov))
+        if (camera && !Register(*camera, ViewAspect(seat), seat != 0 ? 0.0f : g_playerOneFov))
         {
             g_failed = true;
             g_active = false;

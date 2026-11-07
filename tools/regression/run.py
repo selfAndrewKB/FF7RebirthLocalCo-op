@@ -8,7 +8,7 @@ each one's `# expect:` / `# expect-not:` lines against the slice of UE4SS.log it
 
 Every script in tools/regression/scripts/ is a control script (src/control/script.h) with checks in comments:
     # expect: <regex>        at least one line of the script's log slice matches (Python re.search); `{vw}`, `{vh}`,
-                            `{vw/2}`, `{vh/2}` stand for the run's own viewport (the mod's "split halves" line),
+                            `{vw/2}`, `{vh/2}` stand for the run's own viewport (the mod's "split views: viewport" line),
                             `{half16:9}` for the width of a 16:9 view as high as a half
     # expect-dev: <regex>    the same, checked on the dev build only (a line of the dev tools)
     # expect-not: <regex>    no line matches
@@ -322,13 +322,13 @@ class Result:
         return self.ran_ok is not False and not self.missing and not self.present
 
 
-VIEWPORT = re.compile(r"split halves: viewport (\d+)x(\d+)")
+VIEWPORT = re.compile(r"split (?:halves|views): viewport (\d+)x(\d+)")
 
 
 def viewport_sizes(lines: list[str]) -> dict[str, str]:
-    """The run's own viewport, from the mod's last "split halves" line, for the size placeholders an expectation may
-    carry: the half sizes follow the monitor the game runs on (2560x1440 in the baselines, 3440x1440 on an ultrawide
-    primary, 3840x2160 from 2026-10-22), which the mod only reads."""
+    """The run's own viewport, from the mod's last "split views: viewport" line (the baselines' "split halves"), for
+    the size placeholders an expectation may carry: the half sizes follow the monitor the game runs on (2560x1440 in
+    the baselines, 3440x1440 on an ultrawide primary, 3840x2160 from 2026-10-22), which the mod only reads."""
     for line in reversed(lines):
         m = VIEWPORT.search(line)
         if m:

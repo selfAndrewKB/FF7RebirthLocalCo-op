@@ -69,6 +69,8 @@ std::int32_t  g_mostColumns = 0;      // the most columns the row can give: the 
 std::int32_t  g_rowMonitors = 0;
 std::vector<std::int32_t> g_widths;   // the span's monitors' widths, left to right (one per column), while in
 std::vector<std::int32_t> g_heights;  // their heights, the same way; the window is as tall as the tallest
+std::optional<game_window::SizeLimit> g_limitBefore;  // the engine's limit on the window's size before the span raised it
+void*                                 g_limitWindow = nullptr;  // the SWindow it was raised on: another one keeps its own
 std::uint32_t g_ticks       = 0;
 std::uint32_t g_stepTicks   = 0;
 std::uint32_t g_reapplies   = 0;
@@ -89,6 +91,8 @@ void Forget() noexcept
     g_rowMonitors = 0;
     g_widths.clear();
     g_heights.clear();
+    g_limitBefore.reset();
+    g_limitWindow = nullptr;
     g_ticks     = 0;
     g_stepTicks = 0;
     g_reapplies = 0;
@@ -111,9 +115,35 @@ try
     std::vector<std::int32_t> widths  = choice.widths;  // before anything changes: a failed allocation leaves the state as it was
     std::vector<std::int32_t> heights = choice.heights;
     const Rect seen = ClientRect(window.hwnd);
+    // The engine's own limit on the window's size (set at a start in the Windowed mode from the desktop then): raised
+    // to the row first, or the OS would cut the window to that desktop's width.
+    std::optional<game_window::SizeLimit> limitBefore;
+    if (!game_window::RaiseSizeLimit(window, choice.span.Width(), choice.span.Height(), limitBefore))
+    {
+        platform::LogWarning(L"window span: {}: the engine's limit on the window's size could not be read or raised; a row wider "
+                             L"than the desktop at the game's start may be cut to it",
+                             why);
+    }
+    else if (limitBefore)
+    {
+        platform::Log(L"window span: {}: the engine's limit on the window's size raised from {:.0f}x{:.0f} (the desktop's size at "
+                      L"the game's start in the windowed mode) to the row's {}x{}; put back at the leave",
+                      why, limitBefore->width, limitBefore->height, choice.span.Width(), choice.span.Height());
+        if (!g_limitBefore)
+        {
+            g_limitBefore = limitBefore;  // the first raise's value is the one to put back
+            g_limitWindow = window.swindow;
+        }
+    }
     if (!Reshape(window.object, choice.span))
     {
         platform::Log(L"window span: {}: ReshapeWindow faulted; the window stays at {}", why, RectText(seen));
+        if (g_step != Step::In && g_limitBefore && g_limitWindow == window.swindow)
+        {
+            (void)game_window::RestoreSizeLimit(window, *g_limitBefore);  // nothing spanned: the limit as it was
+            g_limitBefore.reset();
+            g_limitWindow = nullptr;
+        }
         return false;
     }
     const Rect after = ClientRect(window.hwnd);
@@ -271,6 +301,15 @@ try
                   why, back ? L"put back to" : L"could NOT be put back to", RectText(g_before),
                   window ? std::format(L", now {}", RectText(after)) : std::format(L" ({})", reason), g_reapplies,
                   g_reshapes);
+    if (g_limitBefore && window)
+    {
+        // Another SWindow than the one raised (the engine made a new window meanwhile) keeps its own limits.
+        platform::Log(L"window span: the engine's limit on the window's size {} to {:.0f}x{:.0f}",
+                      window->swindow != g_limitWindow                       ? L"is another window's now; left as it is, not"
+                      : game_window::RestoreSizeLimit(*window, *g_limitBefore) ? L"put back"
+                                                                               : L"could NOT be put back",
+                      g_limitBefore->width, g_limitBefore->height);
+    }
     Forget();
 }
 catch (...)

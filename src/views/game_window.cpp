@@ -14,6 +14,8 @@
 #endif
 #include <Windows.h>
 
+#include <algorithm>
+#include <cmath>
 #include <format>
 
 namespace lss::views::game_window {
@@ -110,8 +112,9 @@ std::optional<Window> Find(const wchar_t** why) noexcept
         return std::nullopt;
     }
     Window window;
-    window.object = reinterpret_cast<void*>(*native);
-    void* handle  = nullptr;
+    window.object  = reinterpret_cast<void*>(*native);
+    window.swindow = reinterpret_cast<void*>(*swindow);
+    void* handle   = nullptr;
     if (!platform::CallGuarded(Slot<GetOSWindowHandleFn>(facts::kWindowsWindowSlotGetOSWindowHandle), handle, window.object))
     {
         *why = L"GetOSWindowHandle faulted";
@@ -146,6 +149,80 @@ bool Reshape(void* window, const Rect& rect) noexcept
 {
     return platform::CallGuarded(Slot<ReshapeWindowFn>(facts::kWindowsWindowSlotReshapeWindow), window, rect.left, rect.top,
                                  rect.Width(), rect.Height());
+}
+
+namespace {
+
+/// One of the limit's TOptional<float>s as the engine keeps it: the value and its IsSet byte.
+struct Optional
+{
+    float        value = 0.0f;
+    std::uint8_t set   = 0;
+};
+
+/// The limit a window could have: an IsSet byte of 0 or 1, a set value finite and within a desktop's reach.
+bool Plausible(const Optional& o) noexcept
+{
+    constexpr float kWidest = 65536.0f;
+    return o.set <= 1 && (o.set == 0 || (std::isfinite(o.value) && o.value > 0.0f && o.value < kWidest));
+}
+
+std::uint8_t* LimitField(const Window& window, std::uint32_t which) noexcept
+{
+    return static_cast<std::uint8_t*>(window.swindow) + facts::kSWindowSizeLimitsOffset + which;
+}
+
+bool ReadOptional(const Window& window, std::uint32_t which, Optional& out) noexcept
+{
+    return platform::Read(LimitField(window, which), out.value) &&
+           platform::Read(LimitField(window, which + facts::kOptionalIsSet), out.set) && Plausible(out);
+}
+
+bool WriteOptional(const Window& window, std::uint32_t which, const Optional& value) noexcept
+{
+    return platform::WriteGuarded(LimitField(window, which), &value.value, sizeof(value.value)) &&
+           platform::WriteGuarded(LimitField(window, which + facts::kOptionalIsSet), &value.set, sizeof(value.set));
+}
+
+}  // namespace
+
+bool RaiseSizeLimit(const Window& window, std::int32_t width, std::int32_t height, std::optional<SizeLimit>& before) noexcept
+{
+    before.reset();
+    Optional maxWidth, maxHeight;
+    if (window.swindow == nullptr || !ReadOptional(window, facts::kSizeLimitsMaxWidth, maxWidth) ||
+        !ReadOptional(window, facts::kSizeLimitsMaxHeight, maxHeight))
+    {
+        return false;
+    }
+    if (maxWidth.set != maxHeight.set)
+    {
+        return false;  // the engine sets both or neither
+    }
+    if (maxWidth.set == 0 || (maxWidth.value >= static_cast<float>(width) && maxHeight.value >= static_cast<float>(height)))
+    {
+        return true;  // no limit, or one the row fits under
+    }
+    const Optional newWidth{std::max(maxWidth.value, static_cast<float>(width)), 1};
+    const Optional newHeight{std::max(maxHeight.value, static_cast<float>(height)), 1};
+    if (!WriteOptional(window, facts::kSizeLimitsMaxWidth, newWidth) || !WriteOptional(window, facts::kSizeLimitsMaxHeight, newHeight))
+    {
+        // A half-raised limit is put back at once (the write that faulted is the one tried again; a second fault leaves
+        // the limit as it is, which only ever widens the window's allowance).
+        (void)WriteOptional(window, facts::kSizeLimitsMaxWidth, maxWidth);
+        (void)WriteOptional(window, facts::kSizeLimitsMaxHeight, maxHeight);
+        return false;
+    }
+    before = SizeLimit{true, maxWidth.value, maxHeight.value};
+    return true;
+}
+
+bool RestoreSizeLimit(const Window& window, const SizeLimit& before) noexcept
+{
+    const Optional width{before.width, before.set ? std::uint8_t{1} : std::uint8_t{0}};
+    const Optional height{before.height, before.set ? std::uint8_t{1} : std::uint8_t{0}};
+    return window.swindow != nullptr && WriteOptional(window, facts::kSizeLimitsMaxWidth, width) &&
+           WriteOptional(window, facts::kSizeLimitsMaxHeight, height);
 }
 
 std::wstring RectText(const Rect& r)

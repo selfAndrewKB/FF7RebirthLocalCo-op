@@ -172,6 +172,35 @@ inline constexpr std::uint32_t kThreePlayerSplitscreenLayoutOffset = 0x52;
 inline constexpr std::uint32_t kAspectRatioAxisConstraintOffset = 0x94;
 
 // ---------------------------------------------------------------------------------------------
+// The engine's layout table (RE-splitscreen-layout-table.md; views/column_layout.h)
+// ---------------------------------------------------------------------------------------------
+//
+// Stock UE 4.26 in both builds, no Square Enix override: UGameViewportClient::SplitscreenInfo is a TArray of ten
+// FSplitscreenData (one per ESplitScreenType, in the enum's order), each a TArray of FPerPlayerSplitscreenData
+// records {SizeX, SizeY, OriginX, OriginY}, filled once by the viewport client's constructor and read every redraw
+// by LayoutPlayers (record i to the local player at place i), with nothing cached in between. The GameViewport
+// pointer is where RedrawViewports reads it.
+
+/// UGameEngine::GameViewport (UGameViewportClient*).
+inline constexpr std::uint32_t kEngineGameViewport = 0x7E0;
+
+/// UGameViewportClient::SplitscreenInfo: the TArray's data pointer (its Num follows at +kTArrayNum).
+inline constexpr std::uint32_t kViewportClientSplitscreenInfo = 0x60;
+inline constexpr std::uint32_t kTArrayNum                     = 0x08;
+
+/// The constructor's ten entries; an entry (FSplitscreenData) and a record (FPerPlayerSplitscreenData) are 16 bytes
+/// each.
+inline constexpr std::int32_t  kSplitscreenTypes     = 10;
+inline constexpr std::uint32_t kSplitscreenDataBytes = 0x10;
+inline constexpr std::uint32_t kPerPlayerSplitBytes  = 0x10;
+
+/// The entries the mod writes: ESplitScreenType TwoPlayer_Horizontal (top and bottom), TwoPlayer_Vertical (side by
+/// side) and ThreePlayer_Vertical (three columns: the layout kThreePlayerSplitscreenLayoutOffset's byte names as 2).
+inline constexpr std::uint32_t kSplitTypeTwoPlayerHorizontal = 1;
+inline constexpr std::uint32_t kSplitTypeTwoPlayerVertical   = 2;
+inline constexpr std::uint32_t kSplitTypeThreePlayerVertical = 5;
+
+// ---------------------------------------------------------------------------------------------
 // The game window (RE-game-window-reshape.md; views/window_span.h, the multi-monitor branch)
 // ---------------------------------------------------------------------------------------------
 //
@@ -194,6 +223,15 @@ inline constexpr std::uint32_t kGameViewportWindowOffset = 0xE58;
 
 /// SWindow::NativeWindow: the FGenericWindow pointer (its reference controller follows at +0x930).
 inline constexpr std::uint32_t kSWindowNativeWindowOffset = 0x928;
+
+/// SWindow::SizeLimits (FWindowSizeLimits: four TOptional<float>, a float then its IsSet byte), read by the WM_GETMINMAXINFO
+/// handler for the OS's limit on the window's size; the game window's MaxWidth and MaxHeight are set once, by
+/// UGameEngine::CreateGameWindow, from the desktop's size when the game starts in the Windowed mode, and never again
+/// (RE-window-size-limits.md).
+inline constexpr std::uint32_t kSWindowSizeLimitsOffset = 0x904;
+inline constexpr std::uint32_t kSizeLimitsMaxWidth      = 0x10;
+inline constexpr std::uint32_t kSizeLimitsMaxHeight     = 0x18;
+inline constexpr std::uint32_t kOptionalIsSet           = 0x04;  // the IsSet byte after a TOptional<float>'s value
 
 /// The FWindowsWindow vtable (data) and the slots the mod calls, with the functions they must hold:
 /// ReshapeWindow (WindowsWindow.cpp:411), GetWindowMode (`mov eax,[rcx+38h]; ret`) and GetOSWindowHandle
@@ -229,6 +267,10 @@ inline constexpr std::uint32_t kPawnController = 0x260;  // APawn::Controller
 inline constexpr std::uint32_t kSceneComponentAttachParent = 0xC0;  // AttachParent (UE4SS's header dump)
 // ULocalPlayer
 inline constexpr std::uint32_t kLocalPlayerViewportClient = 0x70;
+/// Origin and Size (two FVector2D: the view's fractions of the viewport), as LayoutPlayers writes them from the
+/// layout table and GetProjectionData reads them (RE-splitscreen-layout-table.md): the view's shape for the split FOV.
+inline constexpr std::uint32_t kLocalPlayerOrigin       = 0x78;
+inline constexpr std::uint32_t kLocalPlayerSize         = 0x80;
 inline constexpr std::uint32_t kLocalPlayerControllerId   = 0xB8;
 // UGameViewportClient: the four input-mode bytes (+0x361..+0x364) the controller's BeginPlay sets
 // through SetInputMode on the one viewport all local players share.

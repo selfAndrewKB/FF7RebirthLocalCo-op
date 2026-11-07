@@ -5,11 +5,13 @@
 // none of them and keeps the engine's result.
 //
 // The mod replaces the ULocalPlayer vtable entry for GetViewPoint (facts/engine.h) and calls
-// the engine's function. With one player the result is exactly the engine's. While a seat is in:
-//   - every player's view fills its half: the game's 16:9 constraint is cleared and the FOV rule
-//     becomes MaintainXFOV with the split FOV written in (views/view_shape.h, SplitFov), or the
-//     stock MajorAxisFOV when the split FOV is switched off; Ctrl+F4 switches the fill off to
-//     compare with bars.
+// the engine's function. With one view on screen the result is exactly the engine's. While several views show (a
+// seat's own view, or the columns the mirror views fill):
+//   - every view fills its column: the game's 16:9 constraint is cleared and the FOV rule becomes MaintainXFOV with
+//     the view's own FOV written in (views/split_fov_rules.h, from the view's own shape: its fractions of the
+//     viewport, so a column of a wider monitor keeps the camera's vertical FOV and a narrow column the single-player
+//     scale), or the stock MajorAxisFOV when the split FOV is switched off; Ctrl+F4 switches the fill off to compare
+//     with bars. A mirror view's rule is written without a record (the mod's own player).
 //     Each player's own FOV rule is put back when a seat's player leaves. A scene's camera cut writes the
 //     game's rule over the mod's and may not put the mod's back; the rule is written again when the split
 //     returns after player 1's single view (views/axis_records.h RetakeAll).
@@ -66,9 +68,9 @@ struct SplitFrame
 /// (players/split_settings_access.h; until then the split views fill without changing the FOV rule), the FOV rule
 /// of every remaining player the mod changed put back, the new player started on their own camera with their next
 /// view point described in the log, and each local player's vtable logged (a subclass would bypass the camera
-/// choice). The split's shown state: while it is not shown, player 1's view point is exactly the engine's (the
-/// camera choice for a seat's own view still applies). The halves' shape (views::HalfOf): read twice a
-/// second while the split is shown with two columns; the split FOV is applied only once it is known.
+/// choice). The split's shown state: while one view is on screen, player 1's view point is exactly the engine's (the
+/// camera choice for a seat's own view still applies). The viewport's size (views::ViewportSizeWatch): read twice a
+/// second while several views show; the split FOV is applied only once it is known.
 void Follow(const SplitFrame& frame) noexcept;
 
 /// Switches every seat's view between player 1's camera and its own, together; returns true when they
@@ -83,8 +85,9 @@ bool ShowsOwnCamera() noexcept;
 /// the first split frame, after a change of players, or if the view info was unusable).
 std::optional<StreamCamera> RenderedCamera(int seat) noexcept;
 
-/// The split halves' width/height (views::HalfOf), or 0 until known.
-float HalfAspect() noexcept;
+/// `seat`'s view's width over its height (0 player 1's) as last shaped, or 0 until known (one view on screen, the
+/// viewport's size unread). Any thread.
+float ViewAspect(int seat) noexcept;
 
 /// Whether a seat's own view is on screen, as last followed: the one place it is kept (the overlay render
 /// reads it here for the seats' HUD passes). Any thread.
@@ -107,9 +110,9 @@ bool ToggleFill() noexcept;
 /// entry (nothing shapes the halves then; the main cameras keep their constraint).
 bool FillsHalves() noexcept;
 
-/// The FOV of filled halves (views/view_shape.h, SplitFov): the weight from 0 (keep the
-/// single-player framing) to 1 (keep the single-player scale); kDefaultSplitFovWeight at start.
-/// Anything outside 0..1 selects the stock MajorAxisFOV rule instead.
+/// The FOV of a filled view wider than the camera's image (views/split_fov_rules.h, SplitFov): the weight from 0
+/// (keep the single-player framing) to 1 (keep the single-player scale); the rule's default at start. Anything
+/// outside 0..1 selects the stock MajorAxisFOV rule instead.
 void SetSplitFovWeight(float weight) noexcept;
 
 /// The weight in use, or a negative value for the MajorAxisFOV rule.

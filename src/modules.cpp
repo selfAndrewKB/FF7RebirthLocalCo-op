@@ -70,6 +70,7 @@
 #include "traversal/chocobo_climb.h"
 #include "traversal/traversal_camera.h"
 #include "traversal/traversal_watch.h"
+#include "views/column_layout.h"
 #include "views/columns.h"
 #include "views/mirror_player.h"
 #include "views/player_view_point.h"
@@ -184,6 +185,8 @@ constexpr std::array kModules{
     Module{Call<&views::mirror_player::Install>, nullptr},
     // the game window across its row of monitors (the engine's reshape)
     Module{Call<&views::window_span::Install>, nullptr},
+    // each column its monitor's width on a span of unequal monitors (the engine's layout table)
+    Module{Call<&views::column_layout::Install>, &views::column_layout::Remove},
 
     // The seats' players in the world: strands, cameras, traversals.
     // the game's follow warp, for a seat's stranded player
@@ -467,10 +470,12 @@ void TickAfterSession(const Frame& frame) noexcept
     world::world_actor_reach::Tick(plays);
     hud::minimap::Tick(frame.splitShown);  // outside the overlay render, before it
     views::UpdateStreamViews(frame.splitShown);  // nothing until whole_screen's game-state check passed
-    // Filled halves: each main camera's own 16:9 constraint, cleared once by the game's setter. FillsHalves is
-    // false without the view-point entry (nothing shapes the halves then), so the cameras keep their constraint.
-    camera::main_camera_shape::Update(players::generation::AnyActive() && frame.splitShown &&
-                                          views::FillsHalves());
+    // Filled views: each main camera's own 16:9 constraint, cleared once by the game's setter, while several views
+    // show (a seat's own, or the columns the mirror views fill: a mirror's column on a wider monitor would otherwise
+    // keep the game's bars). FillsHalves is false without the view-point entry (nothing shapes the views then), so
+    // the cameras keep their constraint.
+    camera::main_camera_shape::Update(((players::generation::AnyActive() && frame.splitShown) || frame.viewsSplit) &&
+                                      views::FillsHalves());
     renderer::FollowViews(frame.columns > 1);  // the submit hints skipped while several views render
 }
 
@@ -528,6 +533,8 @@ Columns TickColumns() noexcept
     columns.wanted    = views::columns::Wanted(columns.playersIn, held);
     views::mirror_player::Tick(columns.wanted - columns.playersIn, &MirrorHold);
     columns.map   = ListedColumns();  // with this tick's mirror added or removed
+    auto* listed  = players::unreal::LocalPlayers(players::unreal::GameInstance());
+    columns.firstPlayer = listed != nullptr && listed->Num() > 0 ? (*listed)[0] : nullptr;
     g_lastColumns = columns.map;
     g_lastWanted  = columns.wanted;
     views::window_span::Tick(columns.wanted);
@@ -770,6 +777,7 @@ void RegisterCommands(session::Session& session, players::SplitLayout& layout,
         world::charapop_near::RegisterCommands();
         views::RegisterViewPointCommands();
         views::RegisterStreamCommands();
+        views::column_layout::RegisterCommands();
         hud::RegisterOverlayLayoutCommands();
         hud::RegisterColumnHudImagesCommands();
         hud::RegisterSeatHudContentCommands();

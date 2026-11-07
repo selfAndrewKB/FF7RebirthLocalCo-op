@@ -51,6 +51,7 @@
 #include "rides/shared_ride.h"
 #include "session/field_exit.h"
 #include "session/session.h"
+#include "views/column_layout.h"
 #include "views/column_source.h"
 #include "views/display_align.h"
 #include "views/mirror_player.h"
@@ -80,7 +81,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.104.1";  // built against the Nexus UE4SS (c0a8d4c)
+constexpr const wchar_t* kVersion = L"0.105.0";  // built against the Nexus UE4SS (c0a8d4c)
 
 /// How often the seats' status lines are written while a seat is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -145,20 +146,6 @@ std::optional<std::uint8_t> ReadTwoPlayerLayout(const wchar_t*) noexcept
 bool WriteTwoPlayerLayout(const wchar_t*, std::uint8_t value) noexcept
 {
     return lss::players::split_settings::SetTwoPlayerLayout(value);
-}
-
-// The three-player layout, held at three equal columns while three local players are listed (views/columns.h).
-constexpr std::uint8_t   kThreeColumns     = 2;  // EThreePlayerSplitScreenType::Vertical
-constexpr const wchar_t* kThreeLayoutName  = L"ThreePlayerSplitscreenLayout";
-
-std::optional<std::uint8_t> ReadThreePlayerLayout(const wchar_t*) noexcept
-{
-    return lss::players::split_settings::ThreePlayerLayout();
-}
-
-bool WriteThreePlayerLayout(const wchar_t*, std::uint8_t value) noexcept
-{
-    return lss::players::split_settings::SetThreePlayerLayout(value);
 }
 
 class LocalSplitScreenMod;
@@ -526,6 +513,7 @@ private:
         const lss::modules::Columns columns = lss::modules::TickColumns();
         columnsListed_                      = columns.map.count;
         columnsHeld_                        = columns.held;
+        firstPlayer_                        = columns.firstPlayer;
         lss::dev::TickAfterSession();
         // Where each column's view comes from this tick (views/column_source.h decides; this is the one place that
         // applies it): the engine's single view through its switch (players/single_view.h), a seat's view on
@@ -561,6 +549,7 @@ private:
         lss::modules::Frame frame;
         frame.shown      = shown;
         frame.splitShown = splitShown;
+        frame.viewsSplit = viewsSplit;
         frame.columns    = columns.map.count;
         for (int seat = 1; seat <= lss::players::kSeatsBuilt; ++seat)
         {
@@ -571,15 +560,19 @@ private:
         // The settings several views need, while more than one view family renders (a seat's view or a mirror view).
         settings_.Update(columns.map.count > 1, [](const std::wstring& line) { Log(L"{}", line); });
         // The layout by column count: the player's two-player choice with two local players (a seat's player, or a
-        // mirror beside player 1), the three equal columns with three.
-        LogLayoutChange(layout_.Update(columns.map.count == 2));
-        if (const auto text = lss::players::Describe(threeLayout_.Update(columns.map.count == 3, kThreeColumns),
-                                                      L"three columns", kThreeLayoutName);
-            !text.empty())
+        // mirror beside player 1), side by side whatever the choice while the window spans monitors; the three
+        // columns with three, and on a span each column its monitor's width (views/column_layout.h).
+        const bool span = lss::views::window_span::In();
+        if (span != spanWas_)
         {
-            Log(L"{}", text);
+            spanWas_ = span;
+            Log(L"split layout: {}", span ? L"the window spans monitors: two players side by side, one per monitor"
+                                           : L"one window again: two players as chosen");
         }
-        // After the layout: the halves' shape reads it; the one place "the split is shown" is kept (views::SplitShown,
+        LogLayoutChange(layout_.Update(columns.map.count == 2, span));
+        lss::views::column_layout::Tick(columns.map.count, lss::views::window_span::ColumnWidths(),
+                                        lss::views::window_span::ColumnHeights());
+        // After the layout: the views' shapes read it; the one place "the split is shown" is kept (views::SplitShown,
         // views::ViewsSplit).
         lss::views::Follow(SplitFrameNow(splitShown, viewsSplit));
         lss::hud::UpdateHudPlacement(viewsSplit && lss::hud::BandEnabled());
@@ -620,11 +613,12 @@ private:
     }
 
     /// What the view points follow (views/player_view_point.h): the session's players and join counts, and what is
-    /// on screen (each column's source as last decided).
+    /// on screen (each column's source as last decided). Player 1's local player: the session's while a seat is in,
+    /// else the first the engine lists (the mirror views' columns shape player 1's view with no seat in).
     lss::views::SplitFrame SplitFrameNow(bool splitShown, bool viewsSplit) const noexcept
     {
         lss::views::SplitFrame frame;
-        frame.playerOne = session_->PlayerOne();
+        frame.playerOne = session_->PlayerOne() != nullptr ? session_->PlayerOne() : firstPlayer_;
         for (int seat = 1; seat <= lss::players::kSeatsBuilt; ++seat)
         {
             const auto at = static_cast<std::size_t>(seat);
@@ -670,8 +664,8 @@ private:
     lss::players::SingleView                  singleView_{{&ReadSplitSwitch, &WriteSplitSwitch}};
     lss::views::column_source::Override       singleViewChoice_ = lss::views::column_source::Override::Auto;
     lss::views::column_source::Shown          shown_;  // each column's source, as last decided (FollowShown)
-    lss::players::HeldSetting<std::uint8_t>   threeLayout_{{&ReadThreePlayerLayout, &WriteThreePlayerLayout},
-                                                           kThreeLayoutName};
+    bool                                      spanWas_            = false;  // the window spanned monitors at the last tick
+    const void*                               firstPlayer_        = nullptr;  // the first local player listed at the last columns' tick
     int                                       columnsListed_      = 1;  // as the last columns' tick read them
     bool                                      columnsHeld_        = false;  // ... and whether they are held beyond the players
     bool                                      tickSeen_           = false;

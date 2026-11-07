@@ -4,11 +4,13 @@
 //
 // The engine decides it every frame from one stock setting, UGameMapsSettings::
 // TwoPlayerSplitscreenLayout (0 top/bottom, 1 side by side), and uses it only while there are
-// exactly two local players (engine_addresses.h). So the mod does not lay anything
+// exactly two local players (facts/engine.h). So the mod does not lay anything
 // out itself: it holds that setting while there are two local players, at the layout the player chose,
 // and puts the game's value back when that ends (players::HeldSetting). The choice itself is this module's: the
 // settings file's word at start (platform/settings.h kTwoPlayerSplit, applied by ChooseFromSettings), then Ctrl+F5 or
-// the console for the session; it is remembered across leaves and applied at each join.
+// the console for the session; it is remembered across leaves and applied at each join. While the game window spans
+// monitors (views/window_span.h) two players are side by side whatever the choice, one per monitor; the choice comes
+// back with the one window.
 
 #include "platform/dev_switch.h"
 #include "players/held_setting.h"
@@ -43,8 +45,9 @@ public:
 
     explicit SplitLayout(SettingAccess<std::uint8_t> access) noexcept : held_(access, kName) {}
 
-    /// Call on the game thread every tick with whether two columns are listed. Acts only when that changes.
-    HeldChange Update(bool twoColumns) noexcept;
+    /// Call on the game thread every tick with whether two columns are listed and whether the window spans monitors
+    /// (side by side then, whatever the choice). Acts only when either changes.
+    HeldChange Update(bool twoColumns, bool span = false) noexcept;
 
     /// Switches to the other layout: now if two columns are listed, otherwise at the next join.
     HeldChange Toggle() noexcept;
@@ -55,12 +58,20 @@ public:
     /// The player's choice (a SplitLayoutKind value), or empty while the game's own layout is used.
     std::optional<std::uint8_t> Chosen() const noexcept { return chosen_; }
 
-    /// The layout in force: the choice, else the game's setting as read now (empty if it cannot be read).
-    std::optional<std::uint8_t> Current() const noexcept { return chosen_ ? chosen_ : held_.Read(); }
+    /// The layout in force: side by side on a span, else the choice, else the game's setting as read now (empty if it
+    /// cannot be read).
+    std::optional<std::uint8_t> Current() const noexcept { return Wanted() ? Wanted() : held_.Read(); }
 
 private:
+    /// The layout to hold: side by side while the window spans monitors, else the choice (empty: the game's own).
+    std::optional<std::uint8_t> Wanted() const noexcept
+    {
+        return span_ ? std::optional<std::uint8_t>(static_cast<std::uint8_t>(SplitLayoutKind::SideBySide)) : chosen_;
+    }
+
     HeldSetting<std::uint8_t>   held_;
-    std::optional<std::uint8_t> chosen_;  // the player's choice; empty = the game's own
+    std::optional<std::uint8_t> chosen_;        // the player's choice; empty = the game's own
+    bool                        span_ = false;  // the window spans monitors: side by side
 };
 
 /// The change for the log (empty for None).

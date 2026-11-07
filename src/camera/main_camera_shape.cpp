@@ -192,6 +192,31 @@ void ShapeMainCamera(void* controller, const wchar_t* who) noexcept
                   original);
 }
 
+/// Player 1's controller: the one a seat's join recorded, or, with no seat in (the mirror views alone fill the
+/// columns), the first local player's controller as the engine lists it, looked up by name once and kept while it
+/// is a live object. Null when neither is there.
+void* PlayerOneController() noexcept
+{
+    if (void* recorded = players::generation::PlayerOneController(); recorded != nullptr)
+    {
+        return recorded;
+    }
+    static UObject* kept = nullptr;
+    if (kept != nullptr && players::IsLiveObject(kept))
+    {
+        return kept;
+    }
+    kept         = nullptr;
+    auto* listed = players::unreal::LocalPlayers(players::unreal::GameInstance());
+    if (listed == nullptr || listed->Num() < 1)
+    {
+        return nullptr;
+    }
+    UObject** field = players::unreal::ControllerField((*listed)[0]);
+    kept            = field != nullptr ? *field : nullptr;
+    return kept;
+}
+
 void RestoreAll() noexcept
 {
     int restored = 0;
@@ -245,7 +270,7 @@ void Update(bool fill) noexcept
         {
             return;
         }
-        ShapeMainCamera(players::generation::PlayerOneController(), players::SeatName(0));
+        ShapeMainCamera(PlayerOneController(), players::SeatName(0));
         for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
         {
             if (players::generation::Active(seat))
