@@ -27,6 +27,9 @@ UClass*                 g_userWidgetClass = nullptr;
 // UE4SS c0a8d4c keeps a construction callback for the session (it has no unregister), so it is registered once and
 // made inert by Remove; the DLL is pinned, so its code stays.
 bool                    g_registered = false;  // game thread
+// Entries UE4SS's construction-callback lists are sized for before the first registration (Install): this mod's
+// and UE4SS's own Lua relay are the known registrants; the rest is room for other mods.
+constexpr std::size_t   kCallbackRoom = 8;
 std::atomic<bool>       g_active{false};       // read on the constructing thread
 std::mutex              g_lock;
 std::vector<Widget>     g_constructed;  // under g_lock
@@ -68,6 +71,25 @@ bool Install() noexcept
         }
         if (!g_registered)
         {
+            // UE4SS installs its construction hook at the first registration and keeps the callbacks in plain
+            // vectors that the hook walks on the constructing thread without a lock. A later registration that
+            // grows a vector moves its entries out under that walk, and the walker calls an empty std::function
+            // (seen live at start-up: UE4SS's own Lua relay registers right after this mod, the list grew from
+            // one entry to two, and the game thread threw std::bad_function_call). Room for every registrant,
+            // taken while no hook walks the lists yet, so no registration grows them.
+            if (!Hook::StaticStorage::StaticConstructObjectDetour)
+            {
+                Hook::StaticStorage::StaticConstructObjectPreCallbacks.reserve(kCallbackRoom);
+                Hook::StaticStorage::StaticConstructObjectPostCallbacks.reserve(kCallbackRoom);
+                platform::Log(L"user widgets: room for {} construction callbacks taken before the first registration",
+                              kCallbackRoom);
+            }
+            else
+            {
+                platform::LogWarning(L"user widgets: the construction hook is already live with {} callbacks; this "
+                                     L"registration may grow the list under the hook",
+                                     Hook::StaticStorage::StaticConstructObjectPostCallbacks.size());
+            }
             Hook::RegisterStaticConstructObjectPostCallback(
                 [](const RC::Unreal::FStaticConstructObjectParameters&, UObject* constructed) -> UObject* {
                     if (g_active.load(std::memory_order_acquire) && constructed != nullptr &&
