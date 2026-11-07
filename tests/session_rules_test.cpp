@@ -47,7 +47,7 @@ void TestLeaderEvents()
     EXPECT(DecideLeaderEvent(out) == LeaderEventAction::None);
     out.awaitingMember = true;
     EXPECT(DecideLeaderEvent(out) == LeaderEventAction::ArmLook);
-    out.controllerIsSeat = true;  // out: no controller is player 2's, whatever the flags say
+    out.controllerIsSeat = true;  // out: no controller is a seat's, whatever the flags say
     EXPECT(DecideLeaderEvent(out) == LeaderEventAction::ArmLook);
 
     LeaderEvent in;

@@ -56,8 +56,7 @@ constexpr std::uint32_t kPcmFlags      = 0x2C10;  // bit 0x400: the stock bGameC
 constexpr std::uint32_t kCameraCutBit  = 0x400;
 
 // The ride framing (RE-p2-chocobo-warp-camera.md §3, §6): while a player rides, slot 15 holds the chocobo camera
-// module the boarding installed; the repair lines describe it (the former ride_framing_watch's describer; its
-// redirects answered their question, 2026-10-07).
+// module the boarding installed; the repair lines describe it.
 using facts::kChocoboCameraModuleVTable;
 constexpr std::uint32_t  kModuleOwner       = 0x50;         // the operator SetModuleSlot15 wrote
 constexpr std::uint32_t  kChocoboModuleBody = 0x540;        // FWeakObjectPtr: the ride body it follows
@@ -164,7 +163,7 @@ std::wstring ResetInputs(const void* cameraManager, const void* op)
 }
 
 /// "pose finite yes (pitch … yaw … roll …)", and which floats of the block are not finite and what they hold: the
-/// rotation printed finite while the pose was called non-finite (the 2026-10-21 play check: the base point's lane,
+/// rotation printed finite while the pose was called non-finite (seen in play: the base point's lane,
 /// stack residue, which is named but does not count).
 std::wstring PoseText(const Pose& pose)
 {

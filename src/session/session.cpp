@@ -585,7 +585,7 @@ void Seat::FollowSlot(const wchar_t* when, bool log) noexcept
     }
     // Logged from the party-apply caller only: the party order after the game's apply is the one Info line a field
     // report needs for a hand-over question (the handover watch, which listed the whole order, is a dev tool now).
-    // The slow slot check asks every kSlotCheckTicks and stays quiet (the v0.83.0 play check: a line per poll).
+    // The slow slot check asks every kSlotCheckTicks and stays quiet (a line per poll spammed the log in play).
     const auto choice = party_member::ChooseSlot(seat_, playerOneController_, log);
     const auto held   = party_member::PlayerTypeOf(member_);
     if (choice.wait == party_member::SlotWait::NoSlot || !held || choice.type == *held)
@@ -806,7 +806,7 @@ std::chrono::milliseconds Seat::WaitedForSlot() const noexcept
 
 /// On one monitor a player whose member the game holds leaves the game once the wait has lasted the grace, with two
 /// players in or three, and waits outside for the member by the same slot test (OutsideTick, the first test on the
-/// next tick): their view leaves the screen and the others' fill it (the user, 2026-10-27). With columns held their
+/// next tick): their view leaves the screen and the others' fill it (the user's rule). With columns held their
 /// column stays on player 1's picture (views/column_source.h). The grace counts only the time on one monitor and off a
 /// shared ride: the timer restarts while either holds.
 void Seat::LeaveToWaitOutside() noexcept
@@ -1337,7 +1337,7 @@ const void* Session::PlayerOne() const noexcept
 namespace {
 
 /// One seat's join and readings, named with `prefix` (`p2`, `p3`); `join` is the join command's name. Taken from
-/// Remake's RegisterSeatCommands (mod.cpp, 2026-10-24); its leave stays the module table's (modules.h).
+/// Remake's RegisterSeatCommands (mod.cpp); its leave stays the module table's (modules.h).
 void RegisterSeatCommands(Session& session, int seat, const wchar_t* prefix, const wchar_t* join)
 {
     using control::Outcome;

@@ -1,10 +1,10 @@
 #pragma once
 
 // The characters a seat's player is near keep the detail the game would give them from that player's own camera
-// (plan §3 item 7, the user's choice of 2026-10-02; RE-p2-charapop-per-view.md §1.5, §1.8 lever 2).
+// (plan §3 item 7, the user's choice; RE-p2-charapop-per-view.md §1.5, §1.8 lever 2).
 //
-// The game's character LOD (CharaPop) judges every entry from player 1's camera only and has no path for a
-// second view; running its evaluation again for a seat's view would flip each entry between the two results.
+// The game's character LOD (CharaPop) judges every entry from player 1's camera only and has no path for another
+// view; running its evaluation again for a seat's view would flip each entry between the views' results.
 // Its own per-entry lever is the minimum level: CharaPop_SetEntryMinLODLevel_ByKey, which event and
 // cutscene scripts call with 3 to keep a character awake and shown and 0 to clear it. While the split is on
 // screen the mod calls it the same way for the entries a seat's view needs.

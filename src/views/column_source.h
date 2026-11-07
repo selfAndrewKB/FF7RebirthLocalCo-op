@@ -1,7 +1,7 @@
 #pragma once
 
-// Where each column's view comes from, decided in one place each tick (plan/seats.md step 6a, the user's word of
-// 2026-10-26: the one-monitor and multi-monitor code laid out logically). Pure rules over this tick's facts,
+// Where each column's view comes from, decided in one place each tick (plan/seats.md step 6a; the user's word:
+// the one-monitor and multi-monitor code laid out logically). Pure rules over this tick's facts,
 // host-tested (tests/column_source_test.cpp); the entry point (mod.cpp) applies the result and nothing else decides.
 //
 // A column (views/columns.h) shows one of three things, one mechanism each:
@@ -12,7 +12,7 @@
 //     runs for them;
 //   - Screen: no column at all; the whole screen is the engine's single view, player 1's (players/single_view.h: the
 //     engine's split switch), and the mod does nothing per seat. One monitor only: a held column is never black (the
-//     user's columns rule, 2026-10-23), so under the three-player monitor mode or the console's `view-columns` the
+//     user's columns rule), so under the three-player monitor mode or the console's `view-columns` the
 //     same moments keep the columns and give them PlayerOne instead.
 //
 // The moments that take a seat's view away from its player, each a game state the mod reads, never a guess:
@@ -21,9 +21,9 @@
 //   - player 1 rides a vehicle the whole party shares (rides/shared_ride.h) — every seat's;
 //   - a seat's player is in without their member while the game has it (players/seat_state.h Handed: waiting for a
 //     party member, or standing aside for the ride) — that player's column alone; while every seat in the game is
-//     handed, nobody but player 1 plays, so one monitor shows the engine's single view (the user's decision,
-//     2026-10-01). On one monitor a player waiting for their member leaves the game after a short grace and waits
-//     outside (session/session_rules.h WaitOutside; the user's decision, 2026-10-27), so their column goes
+//     handed, nobody but player 1 plays, so one monitor shows the engine's single view (the user's
+//     decision). On one monitor a player waiting for their member leaves the game after a short grace and waits
+//     outside (session/session_rules.h WaitOutside; the user's decision), so their column goes
 //     with them and the others' views fill the screen; with columns held they stay, their column on player 1's picture;
 //   - the console's `single-view on` (always player 1's) and `single-view off` (never: the development overrides).
 // A column no seat fills (a mirror, a local player the mod does not know) shows player 1's by its nature.

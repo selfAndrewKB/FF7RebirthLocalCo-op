@@ -5,7 +5,7 @@
 // loopback address only, so nothing off this machine can reach it. Bytes in and out are UTF-8; a line ends with '\n'
 // (a '\r' before it is dropped).
 //
-// Taken from Remake's control/server (2026-10-23). Changed: a client that leaves kMaxPending bytes of replies unread
+// Taken from Remake's control/server. Changed: a client that leaves kMaxPending bytes of replies unread
 // is closed (Remake's buffer grew without bound); a failed send closes its client at once; Close sends the replies
 // queued before it once, then shuts each client's sending side (Remake's thread stopped before its last replies);
 // a client accepted during a pass is first selected on the next.

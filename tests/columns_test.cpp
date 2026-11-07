@@ -17,7 +17,7 @@ void TestWanted()
 {
     std::puts("columns: the players in, or the columns held");
     EXPECT(Wanted(1, 0) == 1);  // player 1 alone, nothing held
-    EXPECT(Wanted(2, 0) == 2);  // player 2 in: two columns, as before step 5
+    EXPECT(Wanted(2, 0) == 2);  // player 2 in: two columns
     EXPECT(Wanted(1, 3) == 3);  // the monitor mode with player 1 alone: two mirrors
     EXPECT(Wanted(2, 3) == 3);  // ... with player 2 in: one mirror
     EXPECT(Wanted(3, 3) == 3);

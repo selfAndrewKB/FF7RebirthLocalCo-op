@@ -2,10 +2,11 @@
 
 // A seat's own copy of each minimap label's text and layout, one book per seat (RE-p2-minimap-cost.md §7).
 //
-// A minimap icon's distance label is one Square Enix text block (SEndTextBlock) shared by both views. The game sets its
+// A minimap icon's distance label is one Square Enix text block (SEndTextBlock) shared by every view. The game sets its
 // text through SetText, which compares the new text with the block's current text and lays the text out again only when
-// it differs. With one block and two players' distances, every pass changed the text: two relayouts a frame (~0.95 ms
-// each: the measurer copies the font's whole glyph table per line). Here the block keeps one state per player instead:
+// it differs. With one block and each player's own distance, every pass changed the text: a relayout per pass each
+// frame (~0.95 ms each: the measurer copies the font's whole glyph table per line). Here the block keeps one state per
+// player instead:
 // - in the seat's holder run, just before the game's SetText on a block, the seat's last state is swapped into it
 //   (player 1's is set aside). The game's own compare then finds the seat's text and skips the relayout, or, when
 //   the seat's value changed, the game's relayout writes the seat's new state;

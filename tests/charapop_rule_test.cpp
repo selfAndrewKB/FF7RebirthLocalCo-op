@@ -1,6 +1,6 @@
 // Host-side tests for charapop::KeepsAwakeOrShown, ShouldRaise and HoldOf, run without the game.
 //
-// The live Middle parameters (log of 2026-10-02): FOV 75, draw 10000, in 6000, out 3000, should-tick 1000.
+// The live Middle parameters (from a play log): FOV 75, draw 10000, in 6000, out 3000, should-tick 1000.
 
 #include "world/charapop_rule.h"
 
@@ -61,7 +61,7 @@ void TestRaiseOnlyWhatPlayerOneLacks()
 {
     std::puts("raise: only what player 2's view keeps and player 1's camera does not");
     const EntryView near{2000.0f, 10.0f};
-    EXPECT(ShouldRaise(kMiddle, near, nullptr, 1.0f));               // player 1's camera unread: as before
+    EXPECT(ShouldRaise(kMiddle, near, nullptr, 1.0f));               // player 1's camera unread: the seat's need alone
     const EntryView oneFar{20000.0f, 10.0f};
     EXPECT(ShouldRaise(kMiddle, near, &oneFar, 1.0f));               // apart
     const EntryView oneNear{2500.0f, 20.0f};

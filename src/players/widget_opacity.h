@@ -6,7 +6,7 @@
 //
 // Used to take a widget out of one half's image while keeping it painted, so UMG still ticks it
 // (its animations and fades advance): a widget that is Hidden or Collapsed in player 1's pass is
-// never ticked with the real frame time, since a seat's pass runs with DeltaTime 0 (plan, v0.12.3).
+// never ticked with the real frame time, since a seat's pass runs with DeltaTime 0.
 // An engine path shared by the HUD modules and the seats' menu views (players/, below both). Game thread only.
 
 namespace lss::platform {

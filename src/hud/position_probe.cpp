@@ -23,7 +23,7 @@ namespace lss::hud {
 
 namespace {
 
-// UUserWidget::execSetPositionInViewport's call to SetPositionInViewport (bytes read 2026-09-25):
+// UUserWidget::execSetPositionInViewport's call to SetPositionInViewport (bytes read from the running game):
 //   call UUserWidget__SetPositionInViewport at 0x144CED910 (the start of its 16-byte block).
 constexpr std::uintptr_t kBlueprintSetPositionCall = 0x144CED910;
 

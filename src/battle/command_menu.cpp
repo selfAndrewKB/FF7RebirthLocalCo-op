@@ -740,7 +740,7 @@ namespace {
 /// flag and layer byte (+0x783) still set, while the layer itself went with the focus of the player who
 /// left. The battle-input mirror follows only a change, and the game's layer setter returns early while
 /// the byte is set, so the seat's focus would stay off its menu: its pad's Attack, Unique and Guard would
-/// reach nothing (the user's retry tests, v0.28.0). The layer setter's off call, then ResumeHudInput(0)
+/// reach nothing (seen in play). The layer setter's off call, then ResumeHudInput(0)
 /// (command_menu_tick::RefocusMenu). A written exception, as the lock sync: missed game calls made once at
 /// the join.
 void RefocusAtJoin(int seat, std::uintptr_t one) noexcept

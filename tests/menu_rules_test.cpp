@@ -85,7 +85,7 @@ void TestSharedState()
     EXPECT(!SkipOfTwo(0, 1, 1));
 }
 
-/// The two-player rules as they stood at v0.91.0, verbatim: the references for the rules over every menu.
+/// The two-player rules as they stood before the seats, verbatim: the references for the rules over every menu.
 constexpr float OldSlowWritten(bool playerOnesThisFrame, float playerOnes, float playerTwos) noexcept
 {
     return playerOnesThisFrame ? std::min(playerOnes, playerTwos) : playerTwos;
@@ -176,14 +176,14 @@ void TestCanFollow()
     std::puts("can follow: built, on the game thread, the game's own controller named by the UI system; a call that "
               "needs the member only while player 2 plays");
     EXPECT(CanFollow(true, false, true, true, false, false, true, false, true));
-    EXPECT(!CanFollow(true, false, true, true, true, false, true, false, true));  // needs the member: player 2 out
+    EXPECT(!CanFollow(true, false, true, true, true, false, true, false, true));  // needs the member: the player is out
     EXPECT(CanFollow(true, false, true, true, true, true, true, false, true));
     EXPECT(!CanFollow(false, false, true, true, false, true, true, false, true));
     EXPECT(!CanFollow(true, true, true, true, false, true, true, false, true));
     EXPECT(!CanFollow(true, false, false, true, false, true, true, false, true));
     EXPECT(!CanFollow(true, false, true, false, false, true, true, false, true));
     EXPECT(!CanFollow(true, false, true, true, false, true, false, false, true));
-    EXPECT(!CanFollow(true, false, true, true, false, true, true, true, true));  // the call was on player 2's own
+    EXPECT(!CanFollow(true, false, true, true, false, true, true, true, true));  // the call was on a seat's own
     EXPECT(!CanFollow(true, false, true, true, false, true, true, false, false));
 }
 

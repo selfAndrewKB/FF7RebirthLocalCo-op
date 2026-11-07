@@ -3,7 +3,7 @@
 // The sound listeners' decisions as pure functions (feedback/sound_listeners.h), tested on the host
 // (tests/listener_rules_test.cpp). The module keeps the threads, the engine reads and the redirects.
 //
-// Taken from Remake's audio/listener_rules.h (2026-10-27), which grew out of this game's listener_choice.h: the
+// Taken from Remake's audio/listener_rules.h, which grew out of this game's listener_choice.h: the
 // nearest-of-N choice whose hold lasts only while the held listener is within the sound's range (listener_choice's
 // ChooseNearer held a listener out of range: a sound near another player could stay silent), and the frame-stamped
 // choice table with a probe (one entry per slot let two colliding sounds trade choices between test and update).

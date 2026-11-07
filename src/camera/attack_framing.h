@@ -1,6 +1,6 @@
 #pragma once
 
-// Which player an enemy's attack camera shows, decided by the user (2026-10-15; research/RE-p2-attack-cameras.md §10,
+// Which player an enemy's attack camera shows, decided by the user (research/RE-p2-attack-cameras.md §10,
 // S-ATKCAMLEADER):
 //
 //   - D1, "only the target's half": a battle camera sequence that frames its target and plays on every camera

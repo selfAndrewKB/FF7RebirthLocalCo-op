@@ -3,8 +3,8 @@
 // Submits a multi-view family to the renderer as one family per view.
 //
 // Why: the FF7R "ME" meshlet renderer was written for one view per family. When a family holds
-// two views, the second view's work is not bounded to its own rectangle (its tile builder
-// scans the first view's rows, which can crash the GPU), and the views share scratch state
+// more than one view, a later view's work is not bounded to its own rectangle (its tile builder
+// scans an earlier view's rows, which can crash the GPU), and the views share scratch state
 // inside one render pass. With one view per family the engine places every view at the origin
 // of the scene targets and renders it alone, so all of that is correct in stock code.
 //

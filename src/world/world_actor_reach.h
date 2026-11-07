@@ -19,7 +19,7 @@
 // distance from player 1. All values are put back when no seat plays or the switch turns it off; a value the game rewrote
 // (a re-registration) is taken as the game's.
 // Logged: start and stop (Info), each chest widened or put back (Info; other items Debug), each chest's state within
-// 150 m of either player as the game's tick moves it (Debug), a summary every 60 s (Debug).
+// 150 m of any player as the game's tick moves it (Debug), a summary every 60 s (Debug).
 // Game thread.
 //
 // Per seat (players/seats.h): an item is near when it is near any playing seat's

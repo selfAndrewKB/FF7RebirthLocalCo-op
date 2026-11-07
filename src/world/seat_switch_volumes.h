@@ -14,14 +14,14 @@
 // (enter skipped while DisableTriggerBox 18 or DisableTriggerBox_InOut 110 is on, leave while 110 is). Only volumes
 // with a show list and no hide list: a hide list despawns its entries everywhere, near player 1 too.
 //
-// "Inside" is the union of both players:
-//   - a volume with extra shapes counts entries per key (+0x270), and both triggers share the key, so the game's own
+// "Inside" is the union of every player:
+//   - a volume with extra shapes counts entries per key (+0x270), and every trigger shares the key, so the game's own
 //     count decides;
-//   - a brush-only volume counts nothing (the weapon shop's), so either player's leave would clear it. There the mod
-//     decides, a documented recreation (plan topics/world.md): a seat's leave is called only while player 1 is not
-//     inside, and after player 1's leave the enter is called again for the seat while the seat is inside. Player 1 is
-//     inside if the byte was already set at the seat's enter (only player 1's trigger sets it otherwise), or after player
-//     1's own enter since.
+//   - a brush-only volume counts nothing (the weapon shop's), so any one player's leave would clear it. There the mod
+//     decides, a documented recreation (plan topics/world.md): a seat's leave is called only while no other player is
+//     inside, and after player 1's leave the enter is called again for a seat while that seat is inside. Player 1 is
+//     inside if the byte was already set at the first seat's enter (only player 1's trigger sets it otherwise), or
+//     after player 1's own enter since.
 // A seat's volumes are left (counted volumes always, brush-only ones unless player 1 is inside) when its player leaves
 // the session or its trigger changes. Game thread only.
 //

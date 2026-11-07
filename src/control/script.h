@@ -21,7 +21,7 @@
 //
 // Parsing is pure and tested on the host (tests/control_script_test.cpp).
 //
-// Taken from Remake's control/script (2026-10-23). Changed: two players for `hold` (Rebirth's seats), the numbers
+// Taken from Remake's control/script. Changed: `hold` names its player (the seats), the numbers
 // read with from_chars as the registry reads them.
 
 #include "platform/command_registry.h"

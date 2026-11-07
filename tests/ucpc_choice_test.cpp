@@ -69,7 +69,7 @@ static_assert(TwoWay(true, true, true, true).ucpc == Ucpc::Seat);
 
 // ---- the per-seat rule against the two-way coin it replaced ----
 
-/// The two-way rule as it stood at v0.91.0, verbatim, as the reference the per-seat rule must reproduce for two
+/// The two-way rule as it stood before the seats, verbatim, as the reference the per-seat rule must reproduce for two
 /// players: `coin` true picks player 2.
 constexpr Choice OldChoose(bool playerTwoIn, bool oneEligible, bool twoEligible, bool coin) noexcept
 {

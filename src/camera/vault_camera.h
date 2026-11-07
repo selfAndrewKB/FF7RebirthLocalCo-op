@@ -9,13 +9,13 @@
 // ridden chocobo the game's own answer is no (player 1's chocobo never gets a vault camera). A seat's chocobo said
 // yes only because the mod's ride tick answers the leader test yes for that chocobo's input component: so the vault
 // camera replaced the seat's own ride module, and the End, outside every scope, deactivated player 1's ride module
-// on PCM1 (live 2026-10-07 18:26).
+// on PCM1 (seen live).
 //
 // The vault Begin's call of IsUCPC_Core runs the game's test with that component answer held off
 // (input::member_movement::WithoutChocoboAnswer): a seat's chocobo answers no, as player 1's does, so no vault camera is
 // installed and the End finds its flag clear. Everything else in the ride tick keeps the answer. Each vault by a seat's
 // chocobo or member is logged (Info) with the test's answer; on foot the member keeps the game's yes inside the
-// member's tick, so the vault camera goes on the seat's camera (live 2026-10-07 22:20), as player 1's goes on his.
+// member's tick, so the vault camera goes on the seat's camera (seen live), as player 1's goes on his.
 //
 // Lever L2: the End's `call PrimaryPCM_FieldOp_DeactivateModule(15)` goes through a stub that passes the action (rbx).
 // When the action's character (its weak value, compared, never resolved off the game thread) is a seat's member or

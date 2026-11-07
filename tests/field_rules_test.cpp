@@ -44,8 +44,7 @@ void TestTriggers()
 {
     std::puts("triggers: player 2's own, player 1's inside a switch volume, else the game's; the verdict");
     // By seat: the owner's seat routes the event, and names the seat. For two players (player 2's trigger = seat 1)
-    // every answer is the one before the seats (v0.91.0: player 2's own, then player 1's while watching, else the
-    // game's).
+    // every answer is the one before the seats (player 2's own, then player 1's while watching, else the game's).
     for (const bool two : {false, true})
     {
         for (const bool one : {false, true})

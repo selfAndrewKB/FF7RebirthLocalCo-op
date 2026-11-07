@@ -9,7 +9,7 @@
 // one; it touches no OS and no engine, so it is unit-tested on the host (tests/monitor_row_test.cpp).
 //
 // Rebirth's first version took only the row around the game's monitor, with exact edges. Taken back from Remake's
-// (plan/seats.md step 5, 2026-10-24; Remake's views/monitor_row and tests, unchanged):
+// (plan/seats.md step 5; Remake's views/monitor_row and tests, unchanged):
 // - The row need not contain the game's monitor: the engine's reshape (views/window_span) places the window on any
 //   row, so a row of equal monitors anywhere on the desktop qualifies. The game's own row is preferred when it
 //   qualifies; otherwise the longest qualifying row. Within the row the span takes `columns` monitors starting at the
@@ -18,11 +18,11 @@
 // - A monitor whose top is within kAlignTolerance of the row's is in the row, read as if it sat at the row's top; the
 //   choice lists the moves that make that true, and the span makes them in Windows before placing the window
 //   (views/display_align). Windows snaps a dragged monitor to its neighbours' edges, so a pair beside a monitor of
-//   another size lands a few pixels off every time (Remake's user: 2 px, then 15 px, 2026-10-21).
+//   another size lands a few pixels off every time (the user's pair: 2 px, then 15 px).
 // - The row's top: the top of a row monitor attached to the rest of the desktop (its bottom on another monitor's top,
 //   or its top on another's bottom, with a horizontal overlap), the leftmost's otherwise. With the leftmost's (a
 //   floating monitor's) as the reference, Remake moved the attached monitor off the primary and Windows dropped the
-//   other one to keep the pair on it, so the desktop never read as the row (2026-10-22, its span's desktop log).
+//   other one to keep the pair on it, so the desktop never read as the row (its span's desktop log).
 
 #include <cstdint>
 #include <span>

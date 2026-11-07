@@ -58,7 +58,7 @@ constexpr std::uintptr_t kListTickCall  = 0x14125D558;  // ... its call of the l
 constexpr std::uintptr_t kZipGateCall   = 0x1433251E2;  // Zipline phase 3: the rumble block's player test (rcx = move)
 constexpr std::uintptr_t kZipGate       = 0x141635DE8;  // FieldActionMove_IsPlayerChar_Ex_UCPCOrVehicleOrLeaderTag
 constexpr std::uintptr_t kZipAddCall    = 0x1433252C6;  // ... the keep-alive add (call PlayNamed)
-// RE-p2-rumble-owner-chocobo.md (read from both exes, 2026-10-12).
+// RE-p2-rumble-owner-chocobo.md (read from both exes).
 constexpr std::uint8_t   kStopNamedBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08,  // mov [rsp+8],rbx
                                               0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
 // VibrationList3B0_StopNamed(key): flags the global list's entries
@@ -69,7 +69,7 @@ constexpr std::uintptr_t kFootSlot      = 0x1457F3ED0;  // EndChocoboCharacter v
 constexpr std::uintptr_t kFootImpact    = 0x1418BA510;  // ... its function: GetMoveState, then FFB_Chocobo_1/2
 
 // The list object's size, as the global owner's creator allocates it (1.004 `mov ecx,178h` at 0x1436F4AF2, 1.005
-// `mov ecx,1B0h` at 0x143429CAA; read from both exes, 2026-10-11).
+// `mov ecx,1B0h` at 0x143429CAA; read from both exes).
 constexpr platform::PerBuild<std::size_t> kListSize{0x178, 0x1B0};
 
 constexpr std::uint32_t kComponentOwner = 0xA0;   // the leader-action component's controller
@@ -686,12 +686,12 @@ void Install(const platform::GameImage& image) noexcept
     {
         RemoveRedirects();  // all or none: an add into a seat's list needs the tick that plays it and the stop
     }
-    // The chocobo's footsteps (optional: without it, a seat's footsteps play on the primary player's pad as before).
+    // The chocobo's footsteps (optional: without it, a seat's footsteps play on the primary player's pad).
     const auto footSlot = image.Rebase(kFootSlot, sizeof(void*));
     const auto foot     = image.Rebase(kFootImpact);
     const bool feet     = g_installed && footSlot && foot &&
                       g_footSlot.Replace(*footSlot, *foot, reinterpret_cast<std::uintptr_t>(&FootImpact));
-    // The sources outside the seats' scopes (each optional: without one, its rumble plays on pad 1 as before).
+    // The sources outside the seats' scopes (each optional: without one, its rumble plays on pad 1).
     const std::wstring sources = g_installed ? sources::Install(image) : std::wstring{};
     platform::Log(L"rumble list: {}{}{}{}",
                   g_installed ? L"each player's traversal rumble (zip line, chocobo, ropes, gimmicks) plays and stops on "

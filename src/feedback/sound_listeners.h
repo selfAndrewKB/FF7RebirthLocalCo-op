@@ -24,7 +24,7 @@
 //     range measure (gate C: the point the measure reads), through AutoSe's own converter;
 //   - the footstep detection's LOD (gate B, only for characters with a LOD setting): the game's level is computed again
 //     from each seat's PC listener, and the lowest level is kept. Only when asked on the game thread (it
-//     reads the seats' controllers): AutoSe ran on other threads live (2026-10-27), so a level asked there is counted
+//     reads the seats' controllers): AutoSe runs on other threads (seen live), so a level asked there is counted
 //     ("off the game thread") and kept as the game's; no LOD has been asked in play so far.
 // Unchanged: area sounds (polygon, sector: their test measures a shape's point nearest the listener; counted only),
 // ambient and direction sounds (no place to be near), listener-relative moving sounds, the obstruction pass (player

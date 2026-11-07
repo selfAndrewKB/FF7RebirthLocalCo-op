@@ -101,10 +101,10 @@ bool Matches(const FieldPair& pair) noexcept
 }
 
 /// Player 1's Field operator is the top operator of player 1's camera manager, or the Battle operator is (the field
-/// camera's commands reach it under the battle as before). Under a cutscene or special camera the cut's own tick
-/// pushes its rotation into player 1's Field command every frame (RE-p2-shop-camera-skip.md section 12); those
+/// camera's commands still reach it under the battle). Under a cutscene or special camera the cut's own
+/// tick pushes its rotation into player 1's Field command every frame (RE-p2-shop-camera-skip.md section 12); those
 /// commands are the cut's, not the field's, so they are not mirrored: mirrored, they pinned the seat's camera to the
-/// cut's rotation, and the copy at the cut's end turned it to player 1's angle (the user's report 2026-10-27). Read once
+/// cut's rotation, and the copy at the cut's end turned it to player 1's angle (seen in play). Read once
 /// per engine call, after CurrentPair found player 1's camera manager (game thread). Logged on change.
 bool PlayerOneFieldCommanded() noexcept
 {

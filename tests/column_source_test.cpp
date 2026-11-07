@@ -188,7 +188,7 @@ void TestWaiting()
     std::puts("column source: player 2 or 3 waiting for a member: their column shows player 1's; everyone "
               "waiting: the screen on one monitor");
     {
-        // Two players, player 2 waits: nobody but player 1 plays: the engine's single view (as before step 6a).
+        // Two players, player 2 waits: nobody but player 1 plays: the engine's single view.
         const Shown s = Decide(At(kTwoPlayers, SeatState::Handed, SeatState::Out));
         EXPECT(s.Single() && s.seats[1] == kScreenHanded);
     }

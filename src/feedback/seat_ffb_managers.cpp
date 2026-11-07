@@ -26,7 +26,7 @@ namespace lss::feedback::seat_ffb_managers {
 
 namespace {
 
-// 1.004 addresses; 1.005 through replaced-ffb-manager.json (every fact read from both exes, 2026-10-12).
+// 1.004 addresses; 1.005 through replaced-ffb-manager.json (every fact read from both exes).
 constexpr std::uintptr_t kGlobal       = 0x1490FEE18;  // g_EndFFBMgr: the singleton EndFFBMgr_Get makes and returns
 constexpr std::uint8_t   kCtorBytes[]  = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
 constexpr platform::FunctionFact kCtor{L"EndFFBMgr_Ctor", 0x1437DBAE0, kCtorBytes};  // EndFFBMgr_Ctor(memory) -> memory

@@ -73,7 +73,7 @@ void TestTheStockRule()
     std::puts("load action: clear only for the first view of a main family");
     const ExecutableHarness harness;
     EXPECT(harness.Run(true, false) == kLoadActionClear);   // one player, or player 1's family
-    EXPECT(harness.Run(true, true) == kLoadActionLoad);     // player 2's family keeps player 1's half
+    EXPECT(harness.Run(true, true) == kLoadActionLoad);     // a seat's family keeps the earlier families' columns
     EXPECT(harness.Run(false, false) == kLoadActionLoad);   // a later view of a multi-view family
     EXPECT(harness.Run(false, true) == kLoadActionLoad);
 }

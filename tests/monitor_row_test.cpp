@@ -1,6 +1,6 @@
 // Host-side tests for views::monitor_row::Choose, run without the game.
 //
-// The cases: the user's desktop of 2026-10-21 (an ultrawide primary above, holding the game; two equal 1440p
+// The cases: the user's desktop (an ultrawide primary above, holding the game; two equal 1440p
 // monitors below it: the row is not the game's; the pair 2 px apart, later above the ultrawide 15 px apart: the
 // off monitor is listed as a move to the row's top); Rebirth's three-monitor row (the game in it; a two-column span
 // starting at the game's monitor and shifted left at the row's end; moves only for the span's columns); the row
@@ -38,7 +38,7 @@ Monitor At(std::int32_t left, std::int32_t top, std::int32_t width = 2560, std::
     return {{left, top, left + width, top + height}, dpi};
 }
 
-/// The user's monitors on 2026-10-21 with the pair aligned: the ultrawide primary above (the game on it), the two
+/// The user's monitors with the pair aligned: the ultrawide primary above (the game on it), the two
 /// 1440p monitors in a row below.
 std::vector<Monitor> UsersDesktop()
 {
@@ -72,7 +72,7 @@ void TestUsersPairTwoPixelsOff()
     EXPECT(c.moves.size() == 1);
     EXPECT((c.moves.size() == 1 && c.moves[0] == Move{{3433, 1442, 5993, 2882}, 1440}));
 
-    // As the game's process sees that desktop (2026-10-21 22:23): the scaled TV also touches the pair's left monitor.
+    // As the game's process sees that desktop: the scaled TV also touches the pair's left monitor.
     std::printf("  with the scaled TV touching the pair's left: the same row and move\n");
     monitors.push_back(At(-2967, 1442, 3840, 2160, 168));
     c = Choose(monitors, 0, 2);
@@ -82,7 +82,7 @@ void TestUsersPairTwoPixelsOff()
 
 void TestUsersPairAboveTheUltrawide()
 {
-    // Seen live 2026-10-22: the right monitor sits on the ultrawide, the left one floats 15 px higher. The row's top
+    // Seen live: the right monitor sits on the ultrawide, the left one floats 15 px higher. The row's top
     // is the attached monitor's, so the floating one moves down to it (moving the attached one up instead made
     // Windows drop the other by 15 px, and the pair swapped).
     std::printf("the user's pair above the ultrawide (22:41): the left one 15 px higher and floating; it moves down to the right one\n");

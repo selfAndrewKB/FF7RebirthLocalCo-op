@@ -57,7 +57,7 @@ void TestRoutes()
     std::puts("routes: player 2's list when its own and taken; else the game's, copied during a shared ride; a stop of "
               "player 2's on a worker is left");
     EXPECT(AddRouteOf(true, true, true) == Route::Seat);
-    EXPECT(AddRouteOf(true, false, true) == Route::Game);  // player 2's, but the list did not take it: never copied
+    EXPECT(AddRouteOf(true, false, true) == Route::Game);  // the seat's, but the list did not take it: never copied
     EXPECT(AddRouteOf(false, false, false) == Route::Game);
     EXPECT(AddRouteOf(false, false, true) == Route::GameAndCopy);
 
@@ -65,7 +65,7 @@ void TestRoutes()
     EXPECT(StopRouteOf(true, false, false, true, false, true) == Route::Game);  // no list: the game's
     EXPECT(StopRouteOf(false, false, true, false, false, true) == Route::GameAndCopy);
     EXPECT(StopRouteOf(true, true, true, true, true, true) == Route::Seat);
-    EXPECT(StopRouteOf(false, true, true, true, true, false) == Route::Seat);  // player 2 the primary player
+    EXPECT(StopRouteOf(false, true, true, true, true, false) == Route::Seat);  // the seat's player the primary player
     EXPECT(StopRouteOf(false, true, true, true, false, true) == Route::Game);  // not stopped there: never copied
     EXPECT(StopRouteOf(false, true, true, false, false, false) == Route::Game);
 }

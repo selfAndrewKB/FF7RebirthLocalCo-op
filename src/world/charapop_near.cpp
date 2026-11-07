@@ -372,7 +372,7 @@ void HandleCandidate(const Sighting& s, float reach, Detail detail, PassCounts& 
     if (raising == 0)
     {
         ++counts.covered;
-        // Each entry once (the same few were logged several times a second, live 2026-10-03).
+        // Each entry once (unthrottled, the same few were logged several times a second).
         if (platform::Enabled(platform::Level::Debug) && logged == g_leftLogged.end() && g_skipSamples < kSkipSamples)
         {
             ++g_skipSamples;

@@ -18,8 +18,8 @@
 // controller alive (RE-p2-controller-after-leave.md, S-PC2LEAK2): APlayerController::Destroyed only
 // nulls the field, while the key-map cache of every level script's input component (stock UE4) still
 // names it, and its outer is the controller. Destroy marks it PendingKill, as DestroyActor marks the
-// controller's own components (the user's OK, 2026-10-13); the collector then nulls the cache entries,
-// the input components drop them, and the controller and the PlayerInput are freed.
+// controller's own components; the collector then nulls the cache entries, the input components drop
+// them, and the controller and the PlayerInput are freed.
 
 namespace lss::session::leftover_actors {
 

@@ -10,7 +10,7 @@
 //   - the smoothing (+0x70 previous focus point, +0x80 previous camera location, +0x48 the last active priority): a
 //     camera with no active entry writes its own pose there each frame, and a camera with one lerps from there toward
 //     the shot. With every camera on the one copy, a seat's grab shot started from player 1's camera every frame and
-//     held that seat's view near player 1's (the Titan report of 2026-10-15);
+//     held that seat's view near player 1's (seen in a Titan fight);
 //   - each entry's active byte (+0x14), which code outside the updates reads (a stop by id, the leader change, the Menu
 //     operator): after the updates it held the last seat's view.
 // A SeatUpdate around a seat's update (players/seats.h) puts that seat's own copy of the smoothing and of the

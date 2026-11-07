@@ -13,8 +13,8 @@
 // to a seat's list when it is the seat's: on the game thread while the seat is the primary player (the seat's
 // scopes), or on a worker inside the seat's zip-line rumble block. The add itself is the game's, under the game's lock.
 // The list tick of a seat's component builds and plays the seat's list with the game's own two functions, with the
-// seat as the primary player; player 1's component ticks the global list as before (never inside a seat's primary
-// scope). The zip line's rumble gate answers yes for a seat's member, as it does for player 1's character.
+// seat as the primary player; player 1's component ticks the global list as the game does (never inside a seat's
+// primary scope). The zip line's rumble gate answers yes for a seat's member, as it does for player 1's character.
 //
 // The game's stop by name follows the add (RE-p2-rumble-owner-chocobo.md §3.2): on the game thread while a seat is the
 // primary player, the list's owner names the seat's list for the length of the game's stop, under the game's lock. The

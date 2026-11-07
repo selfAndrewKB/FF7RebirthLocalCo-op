@@ -94,7 +94,7 @@ constexpr Players Candidates(Players in, Players eligible) noexcept
 }
 
 /// Whether Choose reads its coin for these sets: a seat is in and two or more are eligible. A caller draws the coin
-/// only then, so the coin stream advances exactly as often as before.
+/// only then, so the coin stream advances only when a coin decides.
 constexpr bool NeedsCoin(Players in, Players eligible) noexcept
 {
     return (in & ~Bit(0)) != 0 && Count(Candidates(in, eligible)) >= 2;

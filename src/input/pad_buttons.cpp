@@ -647,7 +647,7 @@ char ActionDown(void* owner, void* unused, std::uint32_t sourceBit, void* event,
 }
 
 /// The extra-key calls: the same as the main loop's (ActionDown), with each key logged by name (the
-/// first few, both pads), since which keys come this way is not otherwise known.
+/// first few, every pad), since which keys come this way is not otherwise known.
 char ExtraKeyDown(void* owner, void* unused, std::uint32_t sourceBit, void* event, std::uint8_t alreadyHandled)
 {
     // The call sites were changed on the understanding that only the game thread runs them; a call from

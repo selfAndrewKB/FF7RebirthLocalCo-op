@@ -98,7 +98,7 @@ struct AdmittedClass
     bool           rides = false;  // chocobo climbs: delivered while the seat's player rides their own chocobo too
 };
 // The chocobo climb (RE-p2-chocobo-climb.md §1.1, §3.1): a stored-character class whose unregister override sits one
-// slot past the others'. During a ride both players' members are possessed by their AI, so its register falls back to
+// slot past the others'. During a ride every player's member is possessed by its AI, so its register falls back to
 // the primary controller: the seat's inside the delivery's scope. 1.005 vtable through replaced-chocobo-traversal.json.
 constexpr AdmittedClass kAdmitted[] = {
     {L"ladder", facts::kLadderVTable},
@@ -293,7 +293,7 @@ int SeatOfTracker(const void* tracker) noexcept
     return -1;
 }
 
-/// Whose trigger `owner` is: an active seat's (1..), player 1's (0), or none (-1). The seats first, as before.
+/// Whose trigger `owner` is: an active seat's (1..), player 1's (0), or none (-1). The seats first.
 int OwnerSeat(const void* owner) noexcept
 {
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
@@ -736,8 +736,8 @@ std::uintptr_t Filter(bool enter, void* manager, std::uint64_t key, void* owner,
             LogEvent(seat, enter, actor != nullptr ? actor : passed, passed, L"held back, its class is not admitted");
             return 0;
         }
-        // A prompt zip line would put its FieldActionMgr point and press flag under both players' notifies (player 1's
-        // press could be lost), and the seat has no prompt there: held back.
+        // A prompt zip line would put its FieldActionMgr point and press flag under more than one player's notify
+        // (player 1's press could be lost), and the seat has no prompt there: held back.
         if (verdict == field_rules::TriggerVerdict::PromptZipLine)
         {
             LogEvent(seat, enter, actor, passed, L"held back: a button-prompt zip line (only auto-start lines are admitted)");

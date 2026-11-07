@@ -1,8 +1,7 @@
 #pragma once
 
-// The game's NPC population follows every player: each NPC is scored from the nearest player (the user's choice of
-// 2026-10-18, "approach B", replacing the midpoint of 2026-10-02; RE-p2-charapop-two-centres.md,
-// RE-p2-charapop-spawn-gate.md §2).
+// The game's NPC population follows every player: each NPC is scored from the nearest player (the user's choice,
+// over one midpoint between the players; RE-p2-charapop-two-centres.md, RE-p2-charapop-spawn-gate.md §2).
 //
 // CharaPop keeps a budget of characters spawned (128 live), ranked by a score whose distance part is measured from one
 // centre: the party leader, or the override centre event scripts set with CharaPop_SetOverrideCenter. Far from that

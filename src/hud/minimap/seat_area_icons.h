@@ -19,7 +19,7 @@
 //     (RE-p2-hud-targets.md §1, R1; the tick writes no shared state keyed on it);
 //   - player 1's instance is written only by three game events (Enable, HideAndClear, SetFlagD1;
 //     RE-p2-hud-view-levers.md §6, S-HUD31), from seven call sites. Each site is redirected to call
-//     the event as before, then apply the event's instance effect to each seat's instance: +0xD0 = 1,
+//     the event itself, then apply the event's instance effect to each seat's instance: +0xD0 = 1,
 //     the game's own ClearAllAndDisable, +0xD1 = the flag. The events are not run twice (two of them
 //     also animate one shared widget). A seat's instance takes player 1's state once per join;
 //     the countdown at +0xDC has no positive writer, so it is left to the seat's own tick;

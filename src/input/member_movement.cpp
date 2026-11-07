@@ -247,7 +247,7 @@ void Tick(int seat, void* controller, void* member) noexcept
         return;  // the seat's player rides a Wheelie: its move state was ticked instead of the member's
     }
     // While player 1 rides a scooter, the field ticker runs only its ride body (no on-foot state is counted): that ride
-    // tick is the frame's tick for the seat's member too (live 2026-10-06: she stood still while player 1 rode).
+    // tick is the frame's tick for the seat's member too (seen live: the member stood still while player 1 rode).
     if ((engine.count == 0 && !engine.rideTicked) || engine.memberTicked)
     {
         counters.Pass();  // the game's field ticker is idle (a menu, an event), or ran the member itself

@@ -9,7 +9,7 @@
 // while both cameras faced within about 45 degrees of each other. At each notify's call of the check, the check runs
 // for a seat's member (the seat from the character the check is given) with the seat's pad's stick and the seat's
 // player as the primary player (the camera manager getter answers the seat's, the input lock is the seat's), and for
-// player 1's character with pad 1's stick only. The engage itself runs as before. Per seat: the last answer logged.
+// player 1's character with pad 1's stick only. The engage itself is the game's. Per seat: the last answer logged.
 // Game thread; logged.
 
 namespace lss::platform {

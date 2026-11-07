@@ -3,9 +3,10 @@
 // Logging only: what becomes of a seat's controller after a leave (RE-p2-controller-after-leave.md, S-PC2LEAK,
 // "Logging step").
 //
-// The game's force-feedback registry grows by one per leave, so the seats' old controllers are never freed. The leave
-// destroys each one by the engine's own path (RemoveLocalPlayer, stock UE 4.26), and the garbage collector should
-// then free it; something reachable must hold it. This watch names what, read-only:
+// The leave destroys a seat's controller by the engine's own path (RemoveLocalPlayer, stock UE 4.26), and the garbage
+// collector should then free it; whatever still holds it keeps it alive (the game's force-feedback registry grew by
+// one per leave while the controller's PlayerInput held it; leftover_actors releases that one). This watch names
+// every holder, read-only, so a new one shows in the log:
 //   A. around RemoveLocalPlayer, in the leave's own step: the local player still names the controller, its role, and
 //      afterwards whether Destroy ran, the PendingKill flag, and whether it left its level's actor list;
 //   B. after the leave, each second for 2 minutes and then every 10 s: whether the controller, its PlayerInput and

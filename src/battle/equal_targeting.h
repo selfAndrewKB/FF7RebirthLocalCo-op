@@ -1,6 +1,6 @@
 #pragma once
 
-// Condition enemies favour both players equally (RE-p2-enemy-target-bias.md §5.1, §9, §10).
+// Condition enemies favour every player equally (RE-p2-enemy-target-bias.md §5.1, §9, §10).
 //
 // The story bosses, summon fights and VR Sephiroth choose targets with the Condition selector, whose lists weight "the
 // UCPC" (the user-controlled player character) 2:1 to 8:2 over the AI members. The game's UCPC is the party leader's

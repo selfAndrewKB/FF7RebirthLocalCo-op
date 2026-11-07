@@ -36,7 +36,7 @@ namespace lss::feedback::traversal_rumble {
 namespace {
 
 // The rumble sources that run outside the seats' scopes (RE-p2-rumble-owner-chocobo.md §9; slots and code read from
-// both exes, 2026-10-12). Each names a seat as the owner of its adds while it runs for the seat's scooter or chocobo.
+// both exes). Each names a seat as the owner of its adds while it runs for the seat's scooter or chocobo.
 constexpr std::uintptr_t kScooterTickSlot = 0x1466B9D90;  // SBScooterMoveState slot 1: hit and loop rumble (actor tick)
 constexpr std::uintptr_t kScooterTick     = 0x14344F38C;
 constexpr std::uintptr_t kScooterOffSlot  = 0x1466B9DC8;  // ... slot 8, Deactivate: stops the loop

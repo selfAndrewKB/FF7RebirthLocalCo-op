@@ -61,7 +61,7 @@ int SeatPlaying(const void* character) noexcept
 }
 
 /// The seat whose member the exclusion test's element names, while that seat plays, on the game thread; else 0. The
-/// element is read only on the game thread and while a seat plays a member (as before: only with player 2's member).
+/// element is read only on the game thread and while a seat plays a member.
 int SeatOfElement(void* const* element) noexcept
 {
     if (element == nullptr || !players::generation::OnGameThread())

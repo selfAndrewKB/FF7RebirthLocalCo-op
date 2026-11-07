@@ -37,8 +37,9 @@ namespace {
 // everything that shows or fires a shortcut reads the copy. The menus rebuild it right after each change through
 // EndUI23_RebuildShortcutTables, which rebuilds EndUISystem[23]'s only (FieldCommandCtrl_RebuildShortcutTables:
 // the rebuild, then +0x280 = -1, a repaint on the controller's next tick). Its entry, `mov eax, 28h` (5 bytes, inside
-// one block on both builds), is redirected and the game's rebuild made again on the other controller. 1.004 also
-// inlines it once (the status menu's member lambda, a call of the table builder); 1.005 calls the wrapper there.
+// one block on both builds), is redirected and the game's rebuild made again on every other player's controller.
+// 1.004 also inlines it once (the status menu's member lambda, a call of the table builder); 1.005 calls the wrapper
+// there.
 // Item use rebuilds the executing controller's only (FieldCommandCtrl_ExecuteCommandRecord); its call is followed
 // both ways (the inventory is shared). Each call inside one aligned 16-byte block.
 constexpr std::uint8_t kRebuildShortcutsBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x86, 0xEC, 0x6D, 0xFE, 0x48, 0x2B, 0xE0,

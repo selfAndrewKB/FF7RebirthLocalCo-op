@@ -10,7 +10,7 @@
 // A seat's component gets a manager of its own, made the way the game's getter makes one (its allocator and
 // constructor), and made where the game makes its own: inside a player controller's constructor. The manager's
 // constructor finds its effects with FObjectFinder, which only a constructor may use (called from the engine tick, it
-// ended the game with a fatal error, 2026-10-12). So the component constructor's call in the AEndPlayerController
+// ends the game with a fatal error), so the component constructor's call in the AEndPlayerController
 // constructor is redirected: for the controller a join's CreatePlayer constructs (a seat's), the manager is made there
 // the first time, its 16 tracks built at once by the game's builder (names only; a play writes a track without a bounds
 // check), and the component names it before BeginPlay. BeginPlay then registers the component there and sets its

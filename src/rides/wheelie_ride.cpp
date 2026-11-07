@@ -1041,7 +1041,7 @@ void AfterMemberTick(void* controller, void* member) noexcept
             return;
         }
     }
-    // A scooter a getoff left half-swapped (still on a player's controller) cannot be boarded again (live, v0.60.0).
+    // A scooter a getoff left half-swapped (still on a player's controller) cannot be boarded again (seen live).
     const void* holder     = ReadPointer(scooter, facts::kCharacterEffectiveController);
     const int   holderSeat = holder != nullptr ? players::generation::SeatOfController(holder) : -1;  // 0 player 1's
     if (holderSeat >= 0)

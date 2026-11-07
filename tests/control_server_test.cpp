@@ -1,5 +1,5 @@
 // Host-side tests for control::Server, the console's socket, over real loopback connections (port kTestPort).
-// New with the port of Remake's server (2026-10-23; Remake has no test of it): lines split and joined across sends,
+// New with the port of Remake's server (Remake has no test of it): lines split and joined across sends,
 // replies out, a long line and a leaving client reported closed, the replies queued before Close sent, a client
 // that stops reading closed, the client limit, a taken port, Close.
 

@@ -349,7 +349,7 @@ constexpr Repair RepairVerdict(bool finite, bool following, bool opCurrent, bool
 /// location (+0x00), pivot (+0x20) and base point (+0x30) are three floats each, stored with one 16-byte move whose
 /// fourth lane is whatever the stack held (UpdateModules, 1.005 0x140D4FC94); the game reads the three floats back.
 /// A NaN in a lane is no lost camera: the base point's read -nan for a whole join after a buggy exit while the camera
-/// was right, and the game's reset cut the view every half second for nothing (the 2026-10-21 play check).
+/// was right, and the game's reset cut the view every half second for nothing (seen in play).
 constexpr std::uint32_t kPoseLanes = (1u << 3) | (1u << 11) | (1u << 15);
 
 /// Whether a pose is finite where it counts: `nonFinite` (bit i: the float at pose offset 4 * i is not finite)
@@ -375,7 +375,7 @@ constexpr bool LadderExitWaits(bool requestStands, bool blending, bool off, unsi
 
 // ---- camera_distance and shoulder_scale ----
 
-/// The field camera's distance level for both players: the Options level plus the layout's offset, clamped.
+/// The field camera's distance level, one for every player: the Options level plus the layout's offset, clamped.
 constexpr std::int32_t DistanceLevel(std::int32_t field, std::int32_t offset, std::int32_t min, std::int32_t max) noexcept
 {
     return std::clamp(field + offset, min, max);

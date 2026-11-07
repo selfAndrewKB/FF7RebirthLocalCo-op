@@ -94,7 +94,7 @@ constexpr platform::FunctionFact kTargetListImpl{L"EndUI23_IsCommandTargetEntryA
 constexpr platform::FunctionFact kModuleOn{L"PrimaryPCM_Op2CA8_SlotFlag44", 0x141203880, kModuleOnBytes};
 
 // The targeting tick's two calls in BattleSystem_Tick (time stopped with the menu's target select;
-// in battle), and the tick's three writes with one copy for both players: the two requests for
+// in battle), and the tick's three writes with one copy shared by every player: the two requests for
 // player 1's target panel (each call takes a weak reference made for it and releases it at its end)
 // and the marker list's target owner name.
 constexpr std::uintptr_t kTickTargetingCalls[] = {0x140C91AA2, 0x140C91CC0};

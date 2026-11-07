@@ -1,7 +1,7 @@
 #pragma once
 
-// Split screen without the per-parallel-pass GPU submissions (RE-perf-submission-path.md §6 option C; measured live
-// 2026-10-09: -0.14 ms per frame in split, faster in 4 of 4 pairs).
+// Split screen without the per-parallel-pass GPU submissions (RE-perf-submission-path.md §6 option C; measured
+// live: -0.14 ms per frame in split, faster in 4 of 4 pairs).
 //
 // Each parallel pass the engine dispatches puts an FRHICommandSubmitCommandsHint node into the RHI command list. When
 // the RHI thread walks it, the direct context closes its command list and submits it: one ExecuteCommandLists, and each

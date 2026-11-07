@@ -4,8 +4,8 @@
 // A dev tool: dev/dev_tools.h installs it; the minimap modules mark the scopes and tick it through the stubs below
 // in a player's build.
 //
-// The 2026-10-04 capture found two text relayouts every frame in player 2's HUD pass (5.7 ms a frame on the game
-// thread): one in player 2's minimap holder run, through the game's SetText, and one in player 2's overlay paint. This
+// A capture found two text relayouts every frame in a seat's HUD pass (5.7 ms a frame on the game thread): one in
+// the seat's minimap holder run, through the game's SetText, and one in the seat's overlay paint. This
 // module watches both ways a Square Enix text block (SEndTextBlock) is laid out again, without changing either:
 // - SetText (RE-p2-minimap-cost.md §7.1): the game stores the new text and relayouts unless the text is the same (and
 //   short). minimap_labels' SetText redirect reports each call; the stored text pointer tells whether it relayouted;

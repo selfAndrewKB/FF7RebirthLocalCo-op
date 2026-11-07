@@ -187,7 +187,7 @@ void TestJoinThatChangesTheWait()
     EXPECT(wait.Current() == Mode::Await);
     for (int i = 0; i < 10; ++i)
     {
-        // Ten joins that did not add player 2, each after the wait was replaced: never a give-up.
+        // Ten joins that did not add the seat's player, each after the wait was replaced: never a give-up.
         wait.BeginAwait();
         EXPECT(Is(wait.AfterJoin(Mode::Rejoin, false), Action::None));
     }

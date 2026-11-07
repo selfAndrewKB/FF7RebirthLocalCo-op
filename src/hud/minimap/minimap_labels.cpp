@@ -113,7 +113,7 @@ platform::DeferredSites g_placement;
 std::uintptr_t         g_callSite       = 0;
 std::uintptr_t         g_callTarget     = 0;
 bool                   g_installed      = false;
-bool                   g_refused        = false;  // a swap faulted: the labels as before until restart
+bool                   g_refused        = false;  // a swap faulted: no swaps until restart
 int                    g_runSeat        = 0;      // the seat whose holder run is inside (0: none)
 std::uintptr_t         g_textBlockVTable  = 0;
 std::uintptr_t         g_paintVTable      = 0;

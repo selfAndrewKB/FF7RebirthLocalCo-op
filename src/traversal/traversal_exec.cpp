@@ -736,8 +736,9 @@ std::uintptr_t LadderInput(LadderInputFn original, void* executer, float dt) noe
         return result;
     }
     // RE-p2-traversal-worker-gates.md W4: the input step sets the ladder module's slide flag (+0x434, a wider FOV while
-    // sliding) through the handle on the ladder. Window B already holds the seat's scopes (traversal_watch opens
-    // player 2's); only the seat's handle is put in, so the write reaches its camera and leaves player 1's flag alone.
+    // sliding) through the handle on the ladder. Window B (the seat's member's move-state tick, input/member_movement)
+    // already holds the seat's scopes; only the seat's handle is put in, so the write reaches its camera and leaves
+    // player 1's flag alone.
     const ExecClass& cls     = kExecClasses[kLadder];
     HandleMap&       handles = g_handles[seat];
     void*            actor   = ObjectIn(executer, cls.actorLater);

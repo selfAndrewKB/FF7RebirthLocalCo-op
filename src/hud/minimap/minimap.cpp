@@ -153,7 +153,7 @@ platform::CallRedirect g_acquireCall;
 platform::CallRedirect g_findCall;
 platform::CallRedirect g_submitCall;
 platform::CallRedirect g_leaderCall;
-platform::CallRedirect g_unloadCall;  // optional: without it, the pieces thrash as before
+platform::CallRedirect g_unloadCall;  // optional: without it, the pieces thrash
 platform::CodeRedirect g_consumeCode;
 bool                   g_installed          = false;
 std::uintptr_t         g_system             = 0;

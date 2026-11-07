@@ -22,8 +22,8 @@
 // turns a subject's refusals into began / warp / ended; at "warp" its own follow warp brings it back
 // (world/party_warp.h; the chocobo's, with that player seated). The game moves characters on worker threads
 // as well as the game thread, so the redirects only count (atomics) and Tick, on the game thread, turns the
-// counts into events. Inert unless a seat is in. The lines carry both players' positions and the leader's
-// nav cell; the AI probes and the once-a-second status line are dev tools.
+// counts into events. Inert unless a seat is in. The lines carry the subject's player's and player 1's positions and
+// the leader's nav cell; the AI probes and the once-a-second status line are dev tools.
 //
 // Per seat (players/seats.h): each seat has its two subjects (its member and its chocobo), their counts, strands and
 // tick clock; the redirects find the subject by its root among every seat's, and Tick steps the seats in order. One

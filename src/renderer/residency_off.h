@@ -7,7 +7,7 @@
 // real ExecuteCommandLists. Split screen doubles the submissions, and the RHI thread binds the frame. The
 // engine's switch, D3D12.ResidencyManagement, is read once, when the D3D12 device is created: if it is 0, the
 // device clears the gate byte that every residency call tests. This game ignores the setting in the user's
-// Engine.ini (tested live 2026-10-08), so the mod clears the gate itself, from its constructor, while the
+// Engine.ini (tested live), so the mod clears the gate itself, from its constructor, while the
 // exe's delay-import slot for D3D12CreateDevice is still unresolved: the game has created no device, so no
 // resource is tracked yet. (d3d12.dll itself is already loaded by then, by something else; seen live.) The
 // device only ever clears the gate, so a 0 written early stays 0. Performance work, authorized as a change

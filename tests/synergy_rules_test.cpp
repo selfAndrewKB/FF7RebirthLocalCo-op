@@ -83,7 +83,7 @@ void TestGiveBack()
     EXPECT(back.to == GiveBackTo::Player && back.player == 0);
 }
 
-/// The give-back as it stood at v0.91.0, verbatim: the reference for the per-seat rule.
+/// The give-back as it stood before the seats, verbatim: the reference for the per-seat rule.
 constexpr GiveBack OldDecideGiveBack(bool offThread, int endPlayer, bool originalIsPlayerTwos, bool hasPlayerOne,
                                      bool playerTwosMember) noexcept
 {

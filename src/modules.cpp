@@ -482,8 +482,8 @@ int  g_lastWanted  = 1;  // the columns the last columns' tick wanted
 #if LSS_DEV
 /// The `field.ready` reading, the scripts' readiness: the field running (the entry steps done), the game's battle
 /// system and option data built, player 1's camera manager ready for a join; and nothing over the field (a menu, a
-/// scene, the title: its scene is a field with a one-member party, which the first three tests accept; a run of
-/// 2026-10-21 ran every script at the title that way). Here because it reads player 2's modules and the views both.
+/// scene, the title: its scene is a field with a one-member party, which the first three tests accept, and every
+/// script then ran at the title). Here because it reads the seats' modules and the views both.
 bool FieldReady() noexcept
 {
     return session::field_exit::FieldReady() && session::party_member::GameReady() &&

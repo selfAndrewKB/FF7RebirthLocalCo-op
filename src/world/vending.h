@@ -8,11 +8,11 @@
 // scope makes the seat's member, for the game's FieldActionCommon state: the member turns to the machine and the machine
 // posts its ShopActionID to the level script, which opens the one whole-screen shop on its next tick (FEndShowShopMenu).
 // That shop runs outside the pass. Its script passes the machine's own name as the camera's target (the machine's Tags[0];
-// the live log, 2026-10-04), so the camera already aims at the machine used. For a shop a seat's press opened (the shop
+// seen in the live log), so the camera already aims at the machine used. For a shop a seat's press opened (the shop
 // camera activated within 60 frames of the press, naming the pressed machine), this module, at the shop camera's entry
 // (every shop path: FEndShowShopMenu's and the others, such as the book vendor's):
-//   - skips the activation (the user, 2026-10-18: "When P2 initiates them, just disable the entire scripted camera zoom
-//     action on P1's view"; RE-p2-shop-camera-skip.md): on player 1's camera manager, the one the whole-screen view
+//   - skips the activation (the user's rule: no scripted camera zoom on player 1's view for a seat's shop;
+//     RE-p2-shop-camera-skip.md): on player 1's camera manager, the one the whole-screen view
 //     renders, it framed player 1's character and left player 1's camera at the shop's angle on close. Nothing in the
 //     shop waits on it; the deactivation at the close still runs and does nothing. Chadley's shop keeps it (its VR return
 //     activates the camera again outside the hook), run in the leader-type scope (the default preset by the seat's

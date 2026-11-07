@@ -7,7 +7,8 @@
 //   Ctrl+F6  the seats' views: their own cameras (at join) <-> player 1's camera (testing)
 //   Ctrl+F9  each pad drives only its own player's sticks (on at start; off merges them, for testing)
 //   Ctrl+F10 the NPC population follows every player (on at start; off follows the leader, to compare)
-//   Ctrl+F11 characters near a seat's player keep full detail (on at start; off: player 1's camera alone, to compare)
+//   Ctrl+F11 detail near a seat's player: full (at start), reduced, off (player 1's camera alone, to compare); each
+//            press moves on one
 //   Ctrl+F3  the three-player monitor mode on and off (three monitors, player 1's picture in the empty columns;
 //            views/window_span.h)
 //   Ctrl+F2  the game window across its row of monitors and back (views/window_span.h)

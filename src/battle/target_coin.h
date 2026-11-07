@@ -5,7 +5,7 @@
 // Enemy blueprints name "the player" with a few native functions: GetPartyLeader (the summons' signature lock-ons,
 // distances and angles to the leader, lists that drop the leader), IsUCPC / IsAIPC (is this character the player, an
 // AI member) and GetPartyLeaderType. In co-op these all name player 1, so every such move goes to player 1. The user's
-// rule (2026-10-14): each enemy tosses a coin when it decides its next action and counts that player as "the player"
+// rule: each enemy tosses a coin when it decides its next action and counts that player as "the player"
 // until its next decision, so a whole attack follows one player and checks made every frame do not flicker. Inside a
 // damage or reaction call the player it is about answers instead (a counter aims at the player who hit it;
 // battle/player_hits records which).

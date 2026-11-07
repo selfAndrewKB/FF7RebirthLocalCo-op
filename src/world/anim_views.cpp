@@ -106,8 +106,8 @@ std::uintptr_t         g_classGlobal    = 0;
 std::atomic<std::uint32_t> g_frame{0};    // engine ticks (game thread writes)
 std::atomic<std::uint32_t> g_refilled{0};  // the frame the game last refilled the pair lists (any thread writes)
 std::atomic<std::uint32_t> g_refills{0};   // refills seen (any thread), for the summary
-// Set at the end of each refill, taken by the next evaluation: one set of the seats' pairs per refill. (Live
-// 2026-10-10: the evaluation runs before the refill within a frame, so it reads the lists the previous frame's refill
+// Set at the end of each refill, taken by the next evaluation: one set of the seats' pairs per refill. (Seen
+// live: the evaluation runs before the refill within a frame, so it reads the lists the previous frame's refill
 // left; a "same frame" test never matched.)
 std::atomic<bool> g_fresh{false};
 bool                       g_split = false;  // game thread
@@ -135,8 +135,8 @@ const float*            g_cameraDiff = nullptr;  // the game's cvar, degrees
 
 // A seat's camera for the tick-time measures (last frame's pose, as player 1's snapshot), with the seat's character
 // and mount for the log; one per seat (g_seatCameras, by seat; index 0, player 1's, unused: player 1's is the game's
-// snapshot). Written by the game thread once per engine tick, read by the workers that tick the meshes (live
-// 2026-10-11: every measure from player 1's snapshot runs on a worker). A seqlock per seat: the version is odd while
+// snapshot). Written by the game thread once per engine tick, read by the workers that tick the meshes (seen
+// live: every measure from player 1's snapshot runs on a worker). A seqlock per seat: the version is odd while
 // the game thread writes, and a reader that sees it odd or changed keeps the answer without that seat.
 struct SeatCamera
 {
@@ -290,8 +290,8 @@ void MeasureEveryView(void* mesh, const float* location, const float* forward) n
         return;
     }
     // Both of the game's callers (the budgeted mesh tick and 1.004 0x140AFD2B8 / 1.005 0x141983790) pass stack copies
-    // of player 1's snapshot (W+0x8C0, W+0x8E0), so every call here is a measure from player 1's camera (live
-    // 2026-10-11: a test for W+0x8C0's own address never matched). The mod's own measures call the original directly.
+    // of player 1's snapshot (W+0x8C0, W+0x8E0), so every call here is a measure from player 1's camera (seen
+    // live: a test for W+0x8C0's own address never matched). The mod's own measures call the original directly.
     CameraCopy   cameras[players::kMaxPlayers];
     std::uint8_t read = 0;
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)

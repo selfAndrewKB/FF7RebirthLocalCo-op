@@ -11,7 +11,7 @@
 // defaults). When a seat's player takes a party member, Seed brings that seat's operator to player 1's
 // current state once, since no area load follows.
 //
-// Not under a cutscene or special camera (2026-10-27, research/RE-p2-shop-camera-skip.md section 12):
+// Not under a cutscene or special camera (research/RE-p2-shop-camera-skip.md section 12):
 // while another operator than the Field (or the Battle) sits on top of player 1's camera manager, the
 // cut's own tick pushes its rotation into player 1's Field command every frame through the same
 // slot; mirrored, those pinned the seat's camera to the cut's rotation, and the copy at the cut's end

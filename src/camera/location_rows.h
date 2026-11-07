@@ -1,7 +1,7 @@
 #pragma once
 
-// Each player's camera takes location camera rows from its own character only (RE-p2-framing.md, "Live finding
-// 2026-10-01: the indoor row reaches both cameras").
+// Each player's camera takes location camera rows from its own character only (RE-p2-framing.md: unscoped, the
+// indoor row reaches every camera).
 //
 // Location volumes (towns, shops) change the camera through one global location manager. It tests the party
 // leader's position, player 1's character, and sends the volume's camera row to every listener; every camera

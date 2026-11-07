@@ -8,10 +8,10 @@
 // The decision already takes the minimum over a per-actor list of extra {distance, angle} pairs (linked actors share one
 // level through it), which the game clears and refills every frame. After the game's refill and before its parallel
 // evaluation, each registered actor gets one more pair: its distance and angle to a seat's camera, measured
-// by the game's own function. The game's evaluation then runs unchanged on the nearer or better of the two cameras.
+// by the game's own function. The game's evaluation then runs unchanged on the nearest or best of the players' cameras.
 // Game thread, while the split is shown; the timing and counts are logged.
 //
-// The same two cameras at tick time (research/RE-p2-detail-drop-p1-facing.md §2): each budgeted mesh's own tick first
+// The same cameras at tick time (research/RE-p2-detail-drop-p1-facing.md §2): each budgeted mesh's own tick first
 // re-measures its distance and angle from player 1's snapshot alone, and SE's ShouldUpdateTransform (mode 1, set by the
 // evaluation) then reads that angle to decide whether the mesh refreshes its bones and its KBD component (KineDriver and
 // Bonamik bone physics) runs; the KBD tick reads it again later. A seat's chocobo and its rider lost that

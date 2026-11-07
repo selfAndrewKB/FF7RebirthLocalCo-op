@@ -1,7 +1,7 @@
 #pragma once
 
 // The game's own native reads of "the party leader" made for an enemy follow that enemy's coin
-// (RE-p2-leader-native-reads.md: S-LEADEREDGE, S-LEADERLEVERS and the user's decisions of 2026-10-15).
+// (RE-p2-leader-native-reads.md: S-LEADEREDGE, S-LEADERLEVERS; the user's decisions).
 //
 // Enemy blueprints ask "who is the player" through natives that battle/target_coin answers; this covers the places
 // where the game's C++ reads the leader pointer itself, each for one enemy (player 1 everywhere in co-op until now):

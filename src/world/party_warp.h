@@ -17,8 +17,8 @@
 //
 // Per seat (players/seats.h): any seat's member or ridden chocobo is a subject. One warp is driven
 // at a time and owned by the seat that started it: another seat's Start is refused (logged) while it runs; nav_strand
-// holds that seat's request until the warp is over. This keeps two players' calls exactly as before; whether the game
-// takes two forced follow warps at once is an open question.
+// holds that seat's request until the warp is over. Whether the game takes two forced follow warps at once is an
+// open question.
 
 #include "players/seats.h"
 

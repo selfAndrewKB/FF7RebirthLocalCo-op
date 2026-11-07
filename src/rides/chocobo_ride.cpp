@@ -64,7 +64,7 @@ struct CharacterArray  // TArray<AEndCharacter*>, which EndRide fills with the r
 };
 // The game's 16-byte get-off parameters EndRide reads (byte 1 to coord+0x145, passed to the rider's AI ride-end; byte 2
 // to coord+0x146). The game's forced end passes its own, all zero unless its cutscene clip is flagged
-// (RE-p2-chocobo-ride-end-fault.md). A null pointer here faults four instructions in (the v0.45.0 end fault).
+// (RE-p2-chocobo-ride-end-fault.md). A null pointer here faults four instructions in (an end fault seen in play).
 struct alignas(8) GetOffParams
 {
     std::uint8_t bytes[16] = {};

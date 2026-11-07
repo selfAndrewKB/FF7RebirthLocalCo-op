@@ -1,7 +1,7 @@
 // Host-side tests for players::SplitLayout, run without the game.
 //
 // The setting is a fake byte. The cases: the game's layout untouched until a layout is chosen; a
-// choice made without player 2 applied at the join; a switch with player 2 in applied at once;
+// choice made with no other player in applied at the join; a switch with one in applied at once;
 // the game's value put back on leave; switching back to the game's own leaves nothing to restore;
 // a value someone else set left alone; failures reported rather than assumed. The hold itself is
 // players::HeldSetting's (held_setting_test.cpp); here, the choice over it.
@@ -70,7 +70,7 @@ void TestChoiceAppliedAtJoinAndRestored()
     auto layout = Fresh(kTopBottom);
     const auto chosen = layout.Toggle();
     EXPECT(chosen.kind == Kind::Chosen && chosen.held == kSideBySide);
-    EXPECT(g_setting.writes == 0);  // no player 2: nothing written yet
+    EXPECT(g_setting.writes == 0);  // no other player: nothing written yet
 
     const auto joined = layout.Update(true);
     EXPECT(joined.kind == Kind::Applied && joined.held == kSideBySide && joined.value == kTopBottom);
@@ -99,7 +99,7 @@ void TestSwitchWithPlayerTwoIn()
     EXPECT(layout.Update(false).kind == Kind::None);  // the game's value is already in place
     EXPECT(g_setting.writes == writes);
 
-    // Side, top, side, leave: the game's layout comes back (the regression's own sequence; missed on 2026-10-22).
+    // Side, top, side, leave: the game's layout comes back (the regression's own sequence).
     layout.Update(true);
     EXPECT(layout.Toggle().kind == Kind::Applied);
     EXPECT(layout.Toggle().kind == Kind::Applied);
@@ -177,7 +177,7 @@ void TestFailuresReported()
     EXPECT(left.kind == Kind::RestoreFailed && left.value == kTopBottom);
     EXPECT(g_setting.value == kSideBySide);  // unknown: not overwritten
     g_setting.readWorks = true;
-    layout.Update(true);  // player 2 back: the chosen layout is still in place
+    layout.Update(true);  // a player back: the chosen layout is still in place
     EXPECT(layout.Update(false).kind == Kind::Restored);  // retried at the next leave
     EXPECT(g_setting.value == kTopBottom);
 

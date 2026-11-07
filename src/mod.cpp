@@ -370,7 +370,7 @@ public:
 
 private:
     /// The two renderer changes, both or neither. The output rule goes first: with it alone, one
-    /// player renders exactly as before (the game's single family is never marked additional), so
+    /// player renders exactly as the game renders (the game's single family is never marked additional), so
     /// there is never a moment when families are split but a later one still clears the screen.
     bool InstallRenderer(const lss::platform::GameImage& image) noexcept
     {

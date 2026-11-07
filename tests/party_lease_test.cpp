@@ -335,7 +335,7 @@ void TestTakeAndSwapOutcomes()
     EXPECT(SwapOutcomeOf(false, lease, &playerOne, 0, 120) == SwapOutcome::PlayerOnes);
     EXPECT(SwapOutcomeOf(true, lease, &playerOne, 0, 120) == SwapOutcome::Released);  // released first
     EXPECT(SwapOutcomeOf(false, lease, &playerOne, 500, 120) == SwapOutcome::PlayerOnes);  // before the timeout
-    lease.seatPawn = &g_member;  // player 2's controller still holds it: not yet
+    lease.seatPawn = &g_member;  // the seat's controller still holds it: not yet
     EXPECT(SwapOutcomeOf(false, lease, &playerOne, 0, 120) == SwapOutcome::Wait);
     lease.seatPawn   = nullptr;
     lease.seatLeader = &g_member;

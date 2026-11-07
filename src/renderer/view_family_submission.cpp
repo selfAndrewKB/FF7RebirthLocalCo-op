@@ -105,7 +105,7 @@ void LogFamilyOnChange(const std::byte* viewFamily) noexcept
 
 // The movie texture each view carries (renderer/scene_view_family.h view::kCompositeTexture): logged on change,
 // per view, so a movie shows whether the mirror views get the same texture as player 1's (RE-movie-view.md §6
-// check 1). Seen 2026-10-26: null in every view through the title and the field in both builds; the black columns
+// check 1). Seen live: null in every view through the title and the field in both builds; the black columns
 // on the row were empty columns (no mirror view can exist before the field), not this texture (§10).
 const void*  g_loggedTextures[kRectLoggedViews]{};
 std::int32_t g_loggedTextureViews = 0;  // how many views the last line covered (a view that comes back is logged again)
@@ -188,7 +188,7 @@ void ReportFrameTime(std::uint32_t frames, double seconds, bool log) noexcept
 // The vtable replacement
 // ---------------------------------------------------------------------------------------------
 
-// Diagnosis only (family-split off): the game viewport's family goes to the engine as it is, both views in one family,
+// Diagnosis only (family-split off): the game viewport's family goes to the engine as it is, every view in one family,
 // to measure what one family per view costs. The renderer then breaks the three multi-view rules
 // (SPLITSCREEN-REBUILD-PHILOSOPHY.md §3): the bottom view's ME is wrong and, with the cameras apart, the GPU can crash
 // (A04B). Use with own-camera off.

@@ -155,7 +155,7 @@ void LogShapeOnChange(int slot, const std::byte* viewInfo) noexcept
 // writer, the level-sequence camera cut, saves the value before it writes its own and puts that
 // value back when the cut returns to the previous view target (RE-p2-hud-view-levers.md §4). A
 // value the game holds meanwhile is logged, not overwritten. A scene that ends without that
-// return leaves the game's rule in place (seen 2026-10-27: a skippable field scene left player 1's
+// return leaves the game's rule in place (seen live: a skippable field scene left player 1's
 // column on MaintainXFOV, the picture zoomed out), so when the split comes back after player 1's
 // single view (every scene takes it) the rule is written again where the game left another value,
 // once, logged. The same when the fill is switched on again.
@@ -410,7 +410,7 @@ const void* SetSeat(int seat, const void* localPlayer) noexcept
     return previous;
 }
 
-// The frame's follow (mod.cpp's until 2026-10-22). Game thread.
+// The frame's follow. Game thread.
 HalfShapeWatch                                   g_halfShape;
 std::array<const void*, kSeats>                  g_followedSeat{};  // the players as last followed
 std::array<std::uint32_t, kSeats>                g_followedJoins{};

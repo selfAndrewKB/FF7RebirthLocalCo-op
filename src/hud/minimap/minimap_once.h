@@ -13,10 +13,11 @@
 // Every pass paints the same widget into the same render target, the seat passes first, and the overlay is
 // drawn only after player 1's pass, so a seat's map render is overwritten before anything shows it.
 // In a seat's pass this skips that render (see the .cpp for the exact sites); that seat's minimap shows
-// the map player 1's pass rendered, as it already did. The minimap stays a copy of player 1's.
+// the map player 1's pass rendered, as it already did. While a seat's pass paints the seat's own minimap
+// (hud/minimap/minimap.h: the widget aimed at the seat's own target), nothing is skipped: that render is the
+// seat's map, and it is shown.
 //
-// Logged (Debug, once a minute while a minimap is up): each widget's map renders and skips per period. The reading
-// of pool 0's batch arrays that watched the leak was retired once the fix was confirmed (2026-10-21).
+// Logged (Debug, once a minute while a minimap is up): each widget's map renders and skips per period.
 // The switch (`minimap-once on|off`) is on from install.
 
 #include "platform/dev_switch.h"

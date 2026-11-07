@@ -19,8 +19,8 @@
 // Two ways in:
 // - Ctrl+F2 / `window-span on` with a seat in: one monitor per column shown, the window following the
 //   columns (two with player 2, three under `view-columns 3`), and left when one column is left (every seat out).
-// - The three-player monitor mode, Ctrl+F3 / `monitor-mode on` (plan/seats.md step 5; the user's columns rule,
-//   2026-10-23): the span held over a row of three monitors whatever the players, so the mirror views
+// - The three-player monitor mode, Ctrl+F3 / `monitor-mode on` (plan/seats.md step 5; the user's columns
+//   rule): the span held over a row of three monitors whatever the players, so the mirror views
 //   (views/mirror_player.h) fill the columns no player has. Needs a row of three; left by the same key.
 // A row monitor a few pixels off the row's top (at most monitor_row::kAlignTolerance) is lined up first, for this
 // Windows session only, and put back at the leave (views/display_align, taken from Remake). Left by the command,

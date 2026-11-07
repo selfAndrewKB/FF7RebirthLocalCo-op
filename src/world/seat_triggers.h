@@ -1,6 +1,6 @@
 #pragma once
 
-// The seats' trigger pass (research/RE-p2-trigger-overlap.md §5 Lever 2; the plan's "Design for player 2's trigger").
+// The seats' trigger pass (research/RE-p2-trigger-overlap.md §5 Lever 2; plan/topics/traversal.md, the trigger pass).
 //
 // Trigger events come from each AEndPlayerTrigger's own tracker (+0x230): it queries the capsule's overlaps every tick
 // and adds the key PlayerTrigger to the trigger registry's pending set. The field tick resolves that key to the PRIMARY

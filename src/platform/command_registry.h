@@ -23,7 +23,7 @@
 // (modules::RegisterCommands, the module table's file), before the console opens. An owner's function is not
 // noexcept (building an entry allocates); the list catches, so a failure leaves the table short and logged.
 //
-// Taken from Remake's control/registry (2026-10-23). Changed: an Integer argument may be negative (Rebirth's
+// Taken from Remake's control/registry. Changed: an Integer argument may be negative (Rebirth's
 // framing offsets go below zero); the numbers are read with std::from_chars on an ASCII copy, so no locale, '+',
 // leading space or non-ASCII digit of the C library's conversions slips through; Add also refuses NaN float bounds
 // and a Hex floor (the parser checks a Hex mask against its maximum only); an Integer or Float may also take named

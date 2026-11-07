@@ -1,7 +1,7 @@
 #pragma once
 
 // A seat's player uses a shopkeeper's shop with the game's own field prompt and shop (RE-p2-shopkeeper-talk.md;
-// the user, 2026-10-18: "extend shop keeper interaction to P2 as well, similar to the vending machine").
+// the user's ask: shopkeepers serve a seat's player as the vending machines do).
 //
 // A shopkeeper is a CharaPop ObjectActor NPC with an ordinary field-action point (key = the CharaPop key, e.g.
 // oba2100_ShopWeapon01). Pressed, the game's DispatchKey fires the NPC's state trigger (StateTrigger_Request, no leader
@@ -21,7 +21,7 @@
 //     member as the leader (LeaderScope) for the seat's shop, as it does with the leader in single player.
 //   - The greeting (§3 row 5): the NPC's look-at and the member's turn to face it are a PlannerEvent line whose
 //     `LEADER_` the game resolves through ResolveNamedPoint_LEADER_BATTLELEADER, twice a frame from the press until
-//     the shop is up (the 2026-10-25 log: 821 reads in two visits, all player 1's character while player 3 talked).
+//     the shop is up (seen in a log: 821 reads in two visits, all player 1's character while player 3 talked).
 //     The resolver runs with the pressing seat's member as the leader (LeaderScope) while that seat's press is
 //     pending and while its shop is up, so the shopkeeper looks at, and is faced by, the player who talks to it.
 //     Logged once per window at Debug (the first read, with its caller), each read at Trace, the count at its end.

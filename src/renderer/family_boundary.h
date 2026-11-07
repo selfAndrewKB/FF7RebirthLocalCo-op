@@ -1,13 +1,13 @@
 #pragma once
 
-// Between two players' view families, the game's own end-of-frame state reset, in RHI stream order
+// Between the players' view families, the game's own end-of-frame state reset, in RHI stream order
 // (RE-p2-main-menu-crash.md: S-CRASH2 cause, S-CRASH3 route, "Live run" confirmation).
 //
 // Why: the D3D12 state cache's SRV-array records (SE code) only grow, and only
 // FD3D12CommandContext::ClearState empties them, once per frame in RHIEndFrame. Each scene render
-// drains the pending-delete list, so with two families the second drain can destroy a texture the
-// first family bound; the second family's next flush of that slot then copies the destroyed view
-// (handle 0) and the driver reads address 0. Solo the end-of-frame reset always comes first.
+// drains the pending-delete list, so with more than one family a later family's drain can destroy a
+// texture an earlier family bound; that later family's next flush of the slot then copies the destroyed
+// view (handle 0) and the driver reads address 0. Solo the end-of-frame reset always comes first.
 //
 // What: between submission k and k+1 the family boundary runs exactly what RHIEndFrame runs
 // between frames on the default direct context: ClearState, then RHISubmitCommandsHint (ClearState
@@ -16,7 +16,7 @@
 // state the first family of a frame starts from.
 //
 // How, all through the game's own functions and objects:
-//   1. game thread, between the two submissions: a render-thread task queued with the game's
+//   1. game thread, between two submissions: a render-thread task queued with the game's
 //      TGraphTask SetupPrereqs/QueueTask (0x1420B8090), the same queue BeginRenderingViewFamily
 //      puts its own render commands on, so it runs after family k's and before family k+1's;
 //   2. render thread: a 16-byte node appended to the immediate RHI command list, exactly as the game

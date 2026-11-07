@@ -4,7 +4,7 @@
 // settings itself uses), for this Windows session only, and put back at the leave.
 //
 // Windows snaps a dragged monitor to the edges of its neighbours, so a pair placed beside a monitor of another size
-// lands a few pixels off (the user's pair: 2 px, then 15 px, 2026-10-21), and the span needs the tops level or one
+// lands a few pixels off (the user's pair: 2 px, then 15 px), and the span needs the tops level or one
 // column loses rows. The entry moves such a monitor itself (at most monitor_row::kAlignTolerance px): the active
 // paths are queried, the source's position changed, the configuration applied with SetDisplayConfig without
 // SDC_SAVE_TO_DATABASE, so the desktop changes for the session and Windows' saved arrangement does not. The leave
@@ -12,7 +12,7 @@
 // a source's position. Game thread only; each move and each restore logged at Info, a refusal at Warning.
 //
 // Positions are in the desktop coordinates a DPI-aware process sees (the game's exe is per-monitor DPI aware), the
-// same ones EnumDisplayMonitors gives the span [CONFIRMED live 2026-10-21: the TV read 3840x2160 in the mod's log].
+// same ones EnumDisplayMonitors gives the span [CONFIRMED live: the TV read 3840x2160 in the mod's log].
 
 #include <cstdint>
 #include <span>

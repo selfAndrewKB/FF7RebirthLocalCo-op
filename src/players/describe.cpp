@@ -20,7 +20,7 @@ namespace {
 /// Whether `object` is a live UObject: the GUObjectArray slot its index field names holds this very address,
 /// reachable (an unreachable one, waiting for the collector's purge, counts as gone; a pending-kill one is still
 /// named). A pointer read out of a game field may name an object freed since (the buggy body's controller field
-/// right after a save reload named freed memory, and its name read faulted, 2026-10-21); the index is read under a
+/// right after a save reload named freed memory, and its name read faulted); the index is read under a
 /// guard since the memory may be unmapped by now.
 bool Live(const void* object) noexcept
 {

@@ -59,17 +59,17 @@ void TestTimerSwap()
               "gone keys are dropped");
     TimerSwap swap;
     swap.BeginIn();
-    EXPECT(swap.In(1, 5.0f) == 0.0f);  // never seen by player 2's run
+    EXPECT(swap.In(1, 5.0f) == 0.0f);  // never seen by the seat's run
     EXPECT(swap.In(2, 6.0f) == 0.0f);
     swap.BeginOut();
     EXPECT(swap.Out(1, 0.5f) == std::optional<float>(5.0f));
     EXPECT(swap.Out(2, 0.7f) == std::optional<float>(6.0f));
-    EXPECT(!swap.Out(3, 0.9f).has_value());  // new in player 2's run: keeps what it has
+    EXPECT(!swap.Out(3, 0.9f).has_value());  // new in the seat's run: keeps what it has
     swap.EndOut();
     EXPECT(swap.SeatTimerCount() == 3);
 
     swap.BeginIn();
-    EXPECT(swap.In(1, 5.1f) == 0.5f);  // player 2's own timer
+    EXPECT(swap.In(1, 5.1f) == 0.5f);  // the seat's own timer
     EXPECT(swap.In(3, 1.0f) == 0.9f);
     EXPECT(swap.In(4, 2.0f) == 0.0f);
     swap.BeginOut();

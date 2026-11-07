@@ -162,7 +162,7 @@ void TestChoiceAfterFailedRestoreIsWhatComesBack()
     g_setting.readWorks = false;
     EXPECT(setting.Update(false, kHeld).kind == Kind::RestoreFailed);  // 0 still owed
     g_setting.readWorks = true;
-    g_setting.value     = 1;                                          // their choice, with player 2 out
+    g_setting.value     = 1;                                          // their choice, with no other player in
     EXPECT(setting.Update(true, kHeld).kind == Kind::Applied);         // 1 -> 2: 1 is not the mod's write
     const auto left = setting.Update(false, kHeld);
     EXPECT(left.kind == Kind::Restored && left.value == 1);
@@ -261,8 +261,8 @@ void TestOwnWritesKeepTheFirstValue()
     EXPECT(setting.Release().kind == Kind::None);
     EXPECT(g_setting.value == 0);
 
-    // A hold after the write back starts afresh: the game's own value is remembered again (the regression run of
-    // 2026-10-22 found a layout toggled side, top, side left side by side at the leave).
+    // A hold after the write back starts afresh: the game's own value is remembered again (a regression run
+    // found a layout toggled side, top, side left side by side at the leave).
     EXPECT(setting.Hold(1).kind == Kind::Applied);
     const auto third = setting.Release();
     EXPECT(third.kind == Kind::Restored && third.value == 0);

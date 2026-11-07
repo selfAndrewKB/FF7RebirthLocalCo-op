@@ -127,7 +127,7 @@ std::uintptr_t PlayerUpdateInput(void* state, float deltaTime)
 
 /// Player 1's ridden chocobo or scooter: the field tick runs its move state for player 1 (PC1 possesses it,
 /// RE-p2-chocobo-ride.md §1.2, RE-p2-wheelie-ride.md §14.5); unscoped it read the merged stick, so any pad steered it
-/// (live 2026-10-02, the chocobo). Not counted as an engine tick; recorded as the ride tick (for every seat), which a
+/// (seen live on the chocobo). Not counted as an engine tick; recorded as the ride tick (for every seat), which a
 /// seat's member tick and own ride run on. A follower's chocobo (its own AI controller) and a seat's own ride pass
 /// through.
 std::uintptr_t ChocoboFor(TickFn engine, void* state, float deltaTime, bool outer) noexcept

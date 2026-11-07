@@ -32,7 +32,7 @@ struct HalfShape
 HalfShape HalfOf(std::int32_t width, std::int32_t height, bool sideBySide) noexcept;
 
 /// The weight the split FOV gives to keeping the characters' on-screen size over keeping the
-/// single-player framing (SplitFov); 0.5 is the geometric middle, chosen by eye on 2026-09-25.
+/// single-player framing (SplitFov); 0.5 is the geometric middle, chosen by eye.
 inline constexpr float kDefaultSplitFovWeight = 0.5f;
 
 /// The horizontal FOV (degrees) for a split half, from the camera's single-player view

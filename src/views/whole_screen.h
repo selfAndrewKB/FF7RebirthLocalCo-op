@@ -26,7 +26,7 @@
 //   - the VR and colosseum menus and result screens (Chadley's combat simulator, the Gold Saucer colosseum):
 //     the session's on/off 153 with the minigame bit, outside a battle (the game sets the bit in the session's
 //     menu, intro and result states and clears it for the fight; the intro is already a battle);
-//   - a minigame (the user's rule, 2026-10-15/16: single, except the field uses where the party stays with player 1:
+//   - a minigame (the user's rule: single, except the field uses where the party stays with player 1:
 //     the chicken lure and the chocobo capture's chase; the Temple's gravity rooms and the desert buggy course go
 //     single). The game's own switch is
 //     on/off 36 MiniGamePlaying: the event runner holds it from before an action's opening fade to after its closing
@@ -68,7 +68,7 @@ ScreenSignals ReadScreenSignals() noexcept;
 bool GameStatePresent() noexcept;
 
 /// Game thread: why the engine would refuse a new local player now, or null. One case is known: while the
-/// pause-family menu owns the screen (EndGameState 8) CreatePlayer returned no player (seen 2026-10-22 for a seat's
+/// pause-family menu owns the screen (EndGameState 8) CreatePlayer returned no player (seen live for a seat's
 /// join). The creation chain is stock engine code that reads no game state (research/RE-mirror-anytime.md §2), so
 /// the state is the observed gate, not the reader; the likely cause is the game instance's world under the menu,
 /// which has no game mode [ASSUMPTION, §4 lists the log that would settle it]. The same gate for a seat's join and

@@ -67,7 +67,7 @@ void TestShot()
     EXPECT(ShotShowsOfTwo(&g_one, &g_member, &g_one, false, &g_member));
 }
 
-/// ShotShows as it was before the seats (v0.91.0), the reference the per-seat form must match for two players.
+/// ShotShows as it was before the seats, the reference the per-seat form must match for two players.
 constexpr bool ShotShowsTwoPlayer(const void* target, const void* member, const void* one, bool insidePlayerTwo,
                                   const void* owner) noexcept
 {
@@ -266,9 +266,9 @@ void TestRepair()
 
     // The vectors' fourth lanes (+0x0C, +0x2C, +0x3C of the pose) are stack residue: not a camera value.
     EXPECT(PoseFinite(0));
-    EXPECT(PoseFinite(1u << 15));             // the base point's lane alone (the buggy exit, 2026-10-21)
+    EXPECT(PoseFinite(1u << 15));             // the base point's lane alone (the buggy exit)
     EXPECT(PoseFinite(kPoseLanes));
-    EXPECT(!PoseFinite(1u << 4));             // pitch (the chocobo warp, 2026-10-07)
+    EXPECT(!PoseFinite(1u << 4));             // pitch (the chocobo warp)
     EXPECT(!PoseFinite((1u << 15) | (1u << 4)));
     EXPECT(!PoseFinite(1u << 16));            // distance
 }

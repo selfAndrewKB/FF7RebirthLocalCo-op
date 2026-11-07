@@ -708,7 +708,7 @@ std::uint64_t Measure(void* record, void* analysis, void* third, void* fourth) n
     return result;
 }
 
-/// A gate's read, on whichever thread AutoSe runs (live 2026-10-27: not the game thread, and more than one): the
+/// A gate's read, on whichever thread AutoSe runs (seen live: not the game thread, and more than one): the
 /// nearest player's listener to the frame's point at `offset` (player 1's, the game's answer in `out`, unless a seat's
 /// is nearer). The seats' places come from the game thread's check of this tick (g_checked; NaN while
 /// off) and go through AutoSe's own converter, as the getter sends the singleton's. Returns the listener answered.
@@ -796,7 +796,7 @@ std::uint8_t ReadPosition(void* out) noexcept
     g_counts.readHeld.fetch_add(1, std::memory_order_relaxed);
     if (!t_answer.held)
     {
-        return read(out);  // no clean answer yet on this thread: the game's read, as before this feature
+        return read(out);  // no clean answer yet on this thread: the game's read
     }
     if (t_answer.result != 0)
     {

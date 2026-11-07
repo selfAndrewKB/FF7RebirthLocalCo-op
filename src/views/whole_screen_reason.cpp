@@ -11,7 +11,7 @@ namespace {
 // scene (RE-p2-minigames-stage2.md, S-STAGEMG2's list of all 409), so only these two native flows are field uses. The
 // Temple's gravity rooms (their console floats the whole party until player 1 chooses) and the desert buggy course
 // (act2360_MiniGame_Buggy, a looped course with a hard mode and a shooting game; not the field vehicle, which sets no 36)
-// go single (the user's calls, 2026-10-16).
+// go single (the user's calls).
 constexpr std::array<std::wstring_view, 2> kFieldFlows{L"FEndChickenLureMiniGameFlow", L"EndChocoboCaptureManager"};
 
 }  // namespace

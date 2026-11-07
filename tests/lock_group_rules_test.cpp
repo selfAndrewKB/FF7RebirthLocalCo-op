@@ -12,7 +12,7 @@ namespace {
 
 using namespace lss::battle::lock_group_rules;
 
-/// The two-player rule as it stood at v0.91.0, verbatim: the reference for the per-seat rule.
+/// The two-player rule as it stood before the seats, verbatim: the reference for the per-seat rule.
 constexpr bool OldRebalanceHoldsPlayerTwo(bool playerTwoHoldsLock, bool playerOneHoldsLock) noexcept
 {
     return playerTwoHoldsLock && !playerOneHoldsLock;

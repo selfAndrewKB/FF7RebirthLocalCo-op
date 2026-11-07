@@ -12,7 +12,7 @@
 namespace lss::hud::layout_scale_code {
 
 // In SEndRootOverlay__RenderToCompositeLayer, after `sub edx, r9d` (edx = rect height) and
-// `sub ecx, r8d` (ecx = rect width), read from the running game on 2026-09-25:
+// `sub ecx, r8d` (ecx = rect width), read from the running game:
 //   0x140C95FBE  vxorps    xmm7, xmm7, xmm7
 //   0x140C95FC2  vcvtsi2ss xmm7, xmm7, edx               ; H
 //   0x140C95FC6  vmulss    xmm0, xmm7, [1/1080]          ; s = H/1080     <- redirected

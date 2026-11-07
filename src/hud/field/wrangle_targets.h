@@ -1,7 +1,7 @@
 #pragma once
 
-// The chocobo wrangle's targets in each view: placed from that view's camera (RE-chocobo-wrangle-targets.md; the
-// user's picture, 2026-10-26: the "..." bubbles at player 1's screen spots in every column of the row).
+// The chocobo wrangle's targets in each view: placed from that view's camera (RE-chocobo-wrangle-targets.md; seen
+// in play: the "..." bubbles at player 1's screen spots in every column of the row).
 //
 // The capture controller (g_EndChocoboCaptureManager+0x18) keeps one entry per chocobo (392 bytes: the chocobo, a
 // state byte, the Status_00 bubble, its small form and the arrow) and the throw reticle (Target_C) over the current

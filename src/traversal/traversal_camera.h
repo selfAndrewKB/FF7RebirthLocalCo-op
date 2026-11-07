@@ -34,8 +34,9 @@
 // Per seat (players/seats.h): what is described above is kept for each seat (the camera handle copies by
 // seat and actor, a holder pool per seat, the ladder exit, the installed move); the seat is the one whose member the
 // executer's or move's character is, or climb_context's climber on the anim worker. The one-shot actor's leave ends
-// the camera of the seat it names (climb_context's WithSeatCamera). Still player 2's: the ladder's UpdateInput window,
-// whose scopes traversal_watch opens for player 2. The collision watch is a dev tool and stays two-player.
+// the camera of the seat it names (climb_context's WithSeatCamera). The ladder's UpdateInput runs inside the seat's
+// member's move-state tick, so the seat's scopes are already open there (input/member_movement's TickInScopes);
+// traversal_watch only counts those calls.
 
 #include <cstdint>
 

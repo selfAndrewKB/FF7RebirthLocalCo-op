@@ -139,7 +139,7 @@ Answer AnswerFor(void* selector) noexcept
     {
         return answer;  // untouched: the game's own answers
     }
-    // Player 1 first, then the seats in seat order: the game's rule asked in the order it was before.
+    // Player 1 first, then the seats in seat order.
     ucpc_choice::Players in       = ucpc_choice::Bit(0);
     ucpc_choice::Players eligible = Eligible(selector, TypeByte(types, 0), nullptr) ? ucpc_choice::Bit(0) : 0;
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
@@ -299,7 +299,7 @@ void Tick() noexcept
                               sizeof(leader)))
     {
         // A seat's member counts only with a type of its own: not the leader's, nor an earlier seat's. Each member's type
-        // is read whatever the leader type (as before); a leader type that is no party type then counts no seat.
+        // is read whatever the leader type; a leader type that is no party type then counts no seat.
         std::uint32_t built = leader;
         bool          any   = false;
         for (int seat = 1; seat < players::kMaxPlayers; ++seat)

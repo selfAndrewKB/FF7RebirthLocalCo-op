@@ -2,8 +2,8 @@
 
 // The engine's single view: the whole screen player 1's view alone while the seats' players are in (their controllers,
 // characters and pads untouched). The one monitor outcome for the moments views/column_source.h decides (a full-screen
-// menu, the map screen, a cutscene, a shared ride, every seat's player waiting for a member; the user's decision,
-// 2026-09-28); this class only holds the engine's switch to what it is told.
+// menu, the map screen, a cutscene, a shared ride, every seat's player waiting for a member; the user's
+// decision); this class only holds the engine's switch to what it is told.
 //
 // The engine lays the local players out from one stock switch, UGameViewportClient::
 // bDisableSplitScreenOverride: while it is set the split type is None whatever the player count

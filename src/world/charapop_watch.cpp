@@ -421,7 +421,7 @@ void Remember(Sample& sample)
     }
     sample.steady.drawn  = sample.steady.meshRead && slot->undrawn < kUndrawnSamples;
     // A change is logged once it has held for kSettleSamples samples: the mesh's pause level and the pause
-    // request flip every sample on some entries, and logging each flip spent the line budget (live 2026-10-02).
+    // request flip every sample on some entries, and logging each flip spent the line budget (seen live).
     if (slot->steady == sample.steady)
     {
         slot->pendingSeen = 0;
@@ -570,7 +570,7 @@ void SampleNow()
             continue;
         }
         // Far from player 1, or near but outside player 1's anim cone (the anim optimisation's out-of-camera case:
-        // live 2026-10-07, NPCs in a seat's view froze when player 1 turned their back).
+        // seen live, NPCs in a seat's view froze when player 1 turned their back).
         const float a1 = AngleOff(one, at);
         if (d1 <= kFarFromOneCm && a1 <= kAnimConeDegrees)
         {

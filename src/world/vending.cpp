@@ -247,8 +247,8 @@ std::uint64_t End2Key(std::uint64_t mgr, std::uint64_t key, std::uint64_t r8, st
 }
 
 /// The shop camera's activation (every shop path; the shop UI and OnOff 148 are already up): whose shop this is.
-/// A seat's shop opens without it (the user, 2026-10-18: "When P2 initiates them, just disable the entire scripted
-/// camera zoom action on P1's view"): the camera would run on player 1's camera manager, framing player 1's character
+/// A seat's shop opens without it (the user's rule: no scripted camera zoom on player 1's view for a seat's
+/// shop): the camera would run on player 1's camera manager, framing player 1's character
 /// and leaving player 1's camera at the shop's angle on close (RE-p2-shop-camera-skip.md). Nothing in the shop waits on
 /// it and no caller reads its result (§2, §3); its deactivation at the close still runs and does nothing (§4). The
 /// seats' pending presses are matched in seat order: machines first, then shopkeepers.

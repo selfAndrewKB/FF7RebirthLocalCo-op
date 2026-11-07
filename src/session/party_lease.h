@@ -66,7 +66,7 @@ constexpr std::int32_t OrdinalAfter(std::int32_t anchor, std::int32_t step, std:
 
 /// The ordinal seat `seat` plays: of the rows below `anchor` (wrapping, the anchor's own last), those `skipped`
 /// does not step past (an empty row, player 1's character), the `seat`-th. Player 2 (seat 1) plays the first, the
-/// 2nd slot of the order; player 3 (seat 2) the second, the 3rd slot (the user, 2026-10-23; plan/seats.md). A seat's
+/// 2nd slot of the order; player 3 (seat 2) the second, the 3rd slot (the user's rule; plan/seats.md). A seat's
 /// slot is its place in the order, whoever holds the rows before it. -1 if the party has no such row. `skipped` is
 /// asked once per row, in order, and last of the chosen row (ChooseSlot keeps what it read there).
 template <class Skipped>

@@ -107,7 +107,7 @@ void TestClearAndFallBack()
     EXPECT(!table.FallBack(0x2000));
 }
 
-/// The fall-back as it stood at v0.91.0, verbatim but for the table it reads: player 2 becomes player 1.
+/// The fall-back as it stood before the seats, verbatim but for the table it reads: player 2 becomes player 1.
 bool OldFallBack(std::atomic<std::uintptr_t>& coin, std::uintptr_t key)
 {
     std::uintptr_t held = coin.load(std::memory_order_relaxed);

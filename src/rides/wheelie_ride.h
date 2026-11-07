@@ -45,7 +45,7 @@ class GameImage;
 namespace lss::rides::wheelie_ride {
 
 /// Finds the game's functions and replaces the coordinator's swap-back slot; logged either way. False if a check
-/// failed (a seat's player then cannot board, as before).
+/// failed (a seat's player then cannot board).
 bool Install(const platform::GameImage& image) noexcept;
 
 /// Puts the swap-back slot and the getoff call redirects back.

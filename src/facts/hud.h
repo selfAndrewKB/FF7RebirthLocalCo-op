@@ -9,8 +9,7 @@
 //
 // Research: Rebirth/Documentation/research/RE-p2-hud.md (passes 1-3, 5, 7; P6.1), RE-p2-hud-view-levers.md §1, §2,
 // RE-p2-field-prompts.md §1.2, §4, RE-p2-field-interact.md §12.14, RE-p2-command-menu-input.md §2, §10,
-// RE-p2-enemy-markers.md §7, RE-p2-own-minimap.md §8.1. The layer facts' bytes were read from the running game on
-// 2026-09-25.
+// RE-p2-enemy-markers.md §7, RE-p2-own-minimap.md §8.1. The layer facts' bytes were read from the running game.
 
 #include "platform/build_value.h"
 #include "platform/verified_code.h"

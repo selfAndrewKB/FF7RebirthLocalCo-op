@@ -139,7 +139,7 @@ void TestMinigames()
     using lss::views::kExclusionSecond;
     std::puts("whole screen: a minigame's on/off 36 holds single for the whole game; the field uses stay split");
 
-    // Frog jumping, Run Wild, the piano, the shooting gallery (live 2026-10-16): 36 is held while the bits flash.
+    // Frog jumping, Run Wild, the piano, the shooting gallery (seen live): 36 is held while the bits flash.
     auto play            = Readable();
     play.minigamePlaying = true;
     for (const std::uint32_t mask : {0u, 1u, kExclusionSecond, kExclusionMiniGame | 1u, kExclusionMiniGame})

@@ -3,7 +3,7 @@
 // A seat's camera with a non-finite pose gets the game's own player-warp camera reset (RE-p2-chocobo-warp-camera.md
 // §5; RE-p2-party-warp.md §11.4).
 //
-// After a follow warp the Field operator's pose pitch can become NaN (2026-09-30 on foot, 2026-10-07 riding). The stick
+// After a follow warp the Field operator's pose pitch can become NaN (on foot and riding). The stick
 // rotation adds to last frame's pitch and its clamp keeps a NaN, so the camera never recovers: it stays at the old
 // spot and the seat's player is lost. When the game warps the player on purpose it calls ResetCameraToField(cut), which
 // re-arms the Reset module; that module writes a fresh pitch and yaw straight into the pose. The follow warp never

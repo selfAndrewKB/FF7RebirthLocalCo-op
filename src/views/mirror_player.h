@@ -1,10 +1,10 @@
 #pragma once
 
 // The mirror views: a local player of the mod's in every column no player has, showing player 1's picture, so the
-// held columns are never black (plan/seats.md step 5; the user's columns rule of 2026-10-23: a third column only
+// held columns are never black (plan/seats.md step 5; the user's columns rule: a third column only
 // while the three-player monitor mode is on, and then player 1's picture in an empty one).
 //
-// The engine's own levers, as views/third_view (the multi-monitor measurement, 2026-10-20) proved them: a local
+// The engine's own levers, as views/third_view (the multi-monitor measurement) proved them: a local
 // player through UGameplayStatics::CreatePlayer (players/local_players.h), inside a seat's join scope
 // (session/own_controller.h makes its End camera manager's BeginPlay safe, naming no seat: nothing a join
 // builds for a player goes to a mirror), whose camera manager is aimed at player 1's view target with the game's own
@@ -20,7 +20,7 @@
 // the caller names a hold; and again if the engine drops it. The mirrors stay in through a field exit inside the
 // world (a save load from the title or the menu, a retry, chapter select: the loading screen is then drawn in every
 // column, as Remake's is) and leave only before a real map load (a map load would spawn their controllers again
-// outside a join; research/RE-mirror-loads.md). The user's ask of 2026-10-26: the title, the loading screens and the
+// outside a join; research/RE-mirror-loads.md). The user's ask: the title, the loading screens and the
 // movies in every column, as Remake does it or better.
 // Changed from Remake's views/mirror_player: the camera by SetViewTarget (Rebirth's camera manager honours it), the
 // mirrors kept through the field exits (Remake refills a column on the leave's tick), the controller ids after the

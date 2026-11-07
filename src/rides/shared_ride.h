@@ -1,14 +1,13 @@
 #pragma once
 
 // The buggy and the Tiny Bronco are each one vehicle for the whole party: while player 1 rides one, the players take
-// turns at it (the user, 2026-10-02 for the buggy: "split screen is disabled for that anyway, because two mirror images
-// would be weird"; 2026-10-04: the same rule for the bronco, player 2 sits out the crossing; plan, "Buggy: single view"
-// and "Airboat").
+// turns at it (the user's rule: one picture for a shared vehicle, no mirror images; the same for the bronco, whose
+// crossing the other players sit out; plan, "Buggy: single view" and "Airboat").
 //
 // The signal is the game's own: player 1's AEndPlayerController::ActiveVehicleCoordinator (`PC+0x5B8`) is the buggy's
 // or the bronco's coordinator (by its vtable) in a state other than idle (0):
 //   - the buggy's state id `*[+0x1E8]`: 1 before boarding, 3 boarding, 4 riding, 5 getting off, then `0x5B8` is null
-//     (RE-p2-control-mode-object.md, confirmed live 2026-10-04);
+//     (RE-p2-control-mode-object.md, confirmed live);
 //   - the bronco's `*[+0x70]`: 2 registered (0-1 tick), 3 riding, 4 getting off (one tick, or none when immediate); an
 //     end request in state 2 leaves `0x5B8` naming an idle (0) coordinator, which must not hold the seats aside
 //     (RE-p2-tiny-bronco.md).

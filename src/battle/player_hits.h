@@ -27,7 +27,7 @@
 //
 // Each damage or reaction call also records which human it is about (the attacker, or the character hit), the
 // reaction context: battle/target_coin answers an enemy's "who is the leader" with that player there (the user's
-// rule, 2026-10-14: a counter aims at the player who hit it), and with the enemy's coin everywhere else.
+// rule: a counter aims at the player who hit it), and with the enemy's coin everywhere else.
 // Logged: each call that held the answer and each summon-gauge answer (Debug), the install (Info).
 
 #include <cstdint>

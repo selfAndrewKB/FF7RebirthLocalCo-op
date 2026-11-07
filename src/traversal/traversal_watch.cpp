@@ -133,7 +133,7 @@ struct Climb
 };
 
 // A controller's trigger actor, as the router needs it: Tags[0] must be the trigger tag, and its capsule must overlap
-// the field-action actor (live 2026-10-07: player 2's member at a climbing wall reached no router call; Cloud's did).
+// the field-action actor (seen live: a seat's member at a climbing wall reached no router call; player 1's did).
 constexpr std::uint32_t kActorRoot          = 0x138;  // an actor's root component
 constexpr std::uint32_t kComponentParent    = 0xC0;   // USceneComponent::AttachParent
 constexpr std::uint32_t kComponentOwner     = 0xA0;   // a component's owning actor

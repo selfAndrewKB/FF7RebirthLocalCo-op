@@ -23,8 +23,9 @@
 // overlay's cached view rect, so a seat's run sees the seat's rect as its previous frame's pass computed it, and
 // player 1's rect is put back after.
 //
-// Not covered here: the compass's quest icons and the area icons (AreaMapIcon_FrameUpdate cannot run
-// twice; a seat gets its own icon manager in step B3), and a seat's command menu.
+// Not covered here: the area icons and the quest and party markers (AreaMapIcon_FrameUpdate cannot run twice; each
+// seat has an icon manager of its own, hud/minimap/seat_area_icons.h), and a seat's command menu
+// (battle/command_menu.h).
 
 #include "platform/dev_switch.h"
 

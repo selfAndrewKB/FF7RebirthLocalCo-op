@@ -15,7 +15,7 @@
 //   run's render loop hides it with its own range test (same radius, same centre), which is not touched.
 // Nothing is decided by the mod: "keep" is the game's answer for the other players, remembered for one run, as the map
 // pieces' unload test (hud/minimap/minimap.cpp) asks for the other players' centres. Only while a seat's minimap is
-// on; otherwise both calls go straight to the game's. Optional: if a check fails, icons churn as before (logged). Logs
+// on; otherwise both calls go straight to the game's. Optional: if a check fails, icons churn (logged). Logs
 // the counts every two minutes (Debug), the first kept icon (Debug), and any kept icon this run shows (Info). Game
 // thread.
 

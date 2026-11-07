@@ -5,8 +5,8 @@
 // The one call that sets an icon label's text, SEndMapIcon::SetLabelText → SEndTextBlock SetText (0x14098EBB1), is
 // redirected. Inside the mod's holder run for a seat only, the seat's last state is swapped into the text block first;
 // after the seat's paint it is swapped out again. Each seat keeps its own states (plan/seats.md step 4). Anywhere else
-// the call goes straight to the game's. Optional: if a check fails, the labels work as before (two relayouts a frame
-// per seat while its minimap is on). Game thread.
+// the call goes straight to the game's. Optional: if a check fails, the labels are not swapped (a relayout per pass
+// each frame while a seat's minimap is on). Game thread.
 
 namespace lss::platform {
 class GameImage;

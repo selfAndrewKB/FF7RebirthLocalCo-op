@@ -11,7 +11,7 @@
 // screen the game already uses, so 2 costs no memory there; it is still only set while several views
 // render, so one-player play keeps the game's own value. If it cannot be set, rendering stays correct but slower.
 //
-// D3D12.EnableGapRecorder 0 (performance, RE-perf-submission-path.md; measured 2026-10-08: -0.31 ms per frame in split):
+// D3D12.EnableGapRecorder 0 (performance, RE-perf-submission-path.md; measured: -0.31 ms per frame in split):
 // the gap recorder's per-command-list timestamps, resolves and two extra submissions per frame only feed
 // GGPUFrameTime, which only stock dynamic resolution (when its timing method is 0), `stat unit` and the FPS charts read
 // (RE-perf-me-shadows.md Phase 4). So r.DynamicRes.GPUTimingMeasureMethod is set to 1 (timestamp queries) first,

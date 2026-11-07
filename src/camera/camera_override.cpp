@@ -142,7 +142,7 @@ public:
         }
         if (held_ && g_globalSeat == 0)
         {
-            g_globalSeat = seat;  // the outermost scope owns it (the same seat's re-entry passes as before)
+            g_globalSeat = seat;  // the outermost scope owns it (the same seat's re-entry passes through)
             owner_       = true;
         }
     }

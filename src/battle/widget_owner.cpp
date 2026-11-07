@@ -267,7 +267,7 @@ bool TickInOwnerView(int seat, CellTickFn original, void* widget, const void* ge
 void CellTick(void* cell, const void* geometry, float deltaTime) noexcept
 {
     const auto original = reinterpret_cast<CellTickFn>(g_cellSlot.Original());
-    // The owner is read only on the game thread while a seat plays (as before: only while player 2 played).
+    // The owner is read only on the game thread while a seat plays.
     const auto owner = g_cellsOn && players::generation::OnGameThread() && players::generation::AnyActive() ? OwnerOf(cell) : 0;
     const int  seat     = SeatOwning(owner);
     if (seat == 0)

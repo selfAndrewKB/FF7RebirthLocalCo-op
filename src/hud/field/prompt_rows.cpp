@@ -88,7 +88,7 @@ constexpr std::uint32_t kRowStillFrames = 30;
 platform::SettledLog<RowsSteady, RowRemoves> g_rowLog(kRowStillFrames);
 std::array<std::vector<const UObject*>, players::kMaxPlayers> g_seatWidgets;  // each seat's until they leave the list
 std::vector<std::pair<const UObject*, int>> g_laidOut;  // the list as last laid out per player (widget, owner)
-HiddenSet                                 g_hidden;  // the other player's rows, transparent for a pass
+HiddenSet                                 g_hidden;  // the other players' rows, transparent for a pass
 bool                                      g_layOutAgain = false;  // LayOutAgain: rows outside the layout placed at once
 float                                     g_againWidth  = 0.0f;
 float                                     g_againHeight = 0.0f;
@@ -370,7 +370,7 @@ void ShowOnly(int seat) noexcept
     {
         if (row.owner != seat)
         {
-            g_hidden.Hide(Resolve(row.weak), row.weak);  // the other player's: transparent for this pass
+            g_hidden.Hide(Resolve(row.weak), row.weak);  // another player's: transparent for this pass
         }
     }
 }

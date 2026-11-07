@@ -604,8 +604,7 @@ std::uint8_t PartnerLeaderType(std::uint8_t original) noexcept
         // A parry-window skill's stance (W): its partner is asked for only when the counter animation opens the window,
         // by the AI request (T2), which then hands it over; a failed parry never asks. Until then its player keeps it.
         // A game's own yes (the leader type is the partner's) waits for T2 as well. The counter repeats the start (by
-        // type) just before its AI request: the same stance, still kept. (The stance's outcome was followed for the log
-        // until the counter's keep-until-counter was confirmed live, v0.74.7; the follow-up is retired.)
+        // type) just before its AI request: the same stance, still kept.
         ++g_counts.kept;
         if (Line())
         {
@@ -1129,7 +1128,7 @@ void Install(const platform::GameImage& image) noexcept
     g_sites.endTest     = at(kEndLeaderTest, 5);
     g_sites.endPrimary  = at(kEndPrimary, 5);
     g_sites.primary     = at(kGetPrimaryEndPlayerController);
-    // Optional: without it a parry-window skill's human partner is handed over at the stance, as before.
+    // Optional: without it a parry-window skill's human partner is handed over at the stance.
     g_sites.abilityHandle = at(kAbilityHandleVtable, sizeof(void*));
     const auto typeOf   = platform::FindFunction(image, kPlayerTypeFromComponent);
     g_typeOf            = typeOf ? reinterpret_cast<TypeFn>(*typeOf) : nullptr;

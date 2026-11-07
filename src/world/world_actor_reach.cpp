@@ -64,7 +64,7 @@ constexpr float          kStepCm          = 1000.0f;  // the widening moves in 1
 constexpr float          kCentreSlackCm   = 500.0f;   // the leader's bounding-box centre is not its root
 constexpr float          kLeaveSlackCm    = 500.0f;   // a seat leaves an item 5 m past its radius
 constexpr std::uint32_t  kEvery           = 10;       // ticks between passes
-constexpr float          kChestLogCm      = 15000.0f; // Debug: chests within 150 m of either player log their state
+constexpr float          kChestLogCm      = 15000.0f; // Debug: chests within 150 m of any player log their state
 constexpr auto           kSummaryEvery    = std::chrono::seconds(60);
 
 using OctreeFn = void (*)(void* octree, void* item);

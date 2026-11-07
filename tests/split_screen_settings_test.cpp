@@ -68,7 +68,7 @@ void TestJoinHoldsInOrder()
     EXPECT(g_console.values[L"D3D12.EnableGapRecorder"] == 0);
     EXPECT(g_lines.size() == 3);
     EXPECT(g_lines[0].find(L"split screen: r.SceneRenderTargetResizeMethod 7 -> 2") == 0);
-    settings.Update(true, &Log);  // nothing more while player 2 stays in
+    settings.Update(true, &Log);  // nothing more while a player stays in
     EXPECT(g_console.writes.size() == 3);
     EXPECT(g_lines.size() == 3);
 }
@@ -91,7 +91,7 @@ void TestLeaveRestoresInReverse()
     }
     EXPECT(g_lines.size() == 3);
     EXPECT(g_lines[1].find(L"split screen: D3D12.EnableGapRecorder restored to 7") == 0);
-    settings.Update(false, &Log);  // nothing more while player 2 stays out
+    settings.Update(false, &Log);  // nothing more while no other player comes in
     EXPECT(g_console.writes.size() == 3);
 }
 
