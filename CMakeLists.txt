@@ -75,6 +75,7 @@ add_library(LocalSplitScreen SHARED
     src/platform/build_translation.cpp
     src/platform/pool_bits.cpp
     src/platform/module_folder.cpp
+    src/platform/settings.cpp
     src/platform/module_pin.cpp
     src/platform/code_memory.cpp
     src/platform/verified_code.cpp
@@ -280,7 +281,8 @@ lss_test(one_family_per_view src/renderer/one_family_per_view.cpp)
 lss_test(output_load_action src/platform/code_redirect.cpp src/platform/block_patch.cpp src/platform/code_memory.cpp tests/log_console.cpp)
 lss_test(held_setting src/players/held_setting.cpp)
 lss_test(view_shape src/views/view_shape.cpp)
-lss_test(split_layout src/players/split_layout.cpp src/players/held_setting.cpp)
+lss_test(split_layout src/players/split_layout.cpp src/players/held_setting.cpp src/platform/settings.cpp
+         src/platform/module_folder.cpp tests/log_console.cpp)
 lss_test(split_screen_settings src/players/split_screen_settings.cpp src/players/held_setting.cpp)
 lss_test(monitor_row src/views/monitor_row.cpp)
 lss_test(single_view src/players/single_view.cpp)
@@ -293,6 +295,8 @@ lss_test(swap_window src/scopes/swap_window.cpp)
 lss_test(party_lease src/session/party_lease.cpp)
 lss_test(leave_sequence src/session/leave_sequence.cpp)
 lss_test(leader_answer)
+lss_test(settings)
+lss_test(window_span_rules)
 lss_test(control_registry src/platform/command_registry.cpp)
 lss_test(control_script src/control/script.cpp src/platform/command_registry.cpp)
 lss_test(control_runner src/control/runner.cpp src/control/script.cpp src/platform/command_registry.cpp)

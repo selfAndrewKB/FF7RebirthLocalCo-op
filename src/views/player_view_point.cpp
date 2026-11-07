@@ -4,6 +4,7 @@
 #include "platform/frame_watch.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/settings.h"
 #include "platform/settled_log.h"
 #include "platform/vtable_entry.h"
 #include "players/split_layout.h"
@@ -377,8 +378,19 @@ bool InstallPlayerViewPoint(const platform::GameImage& image) noexcept
     {
         platform::Log(L"ULocalPlayer::GetViewPoint's entry does not hold the engine's function; filled halves and the "
                       L"camera choice are unavailable");
+        return false;
     }
-    return g_installed;
+    // The settings file's weight (one of the table's words, so it maps), as the console sets it later.
+    namespace settings = platform::settings;
+    SetSplitFovWeight(SplitFovWeightOf(settings::Of(settings::kHorizontalFov).word));
+    platform::Log(L"split FOV: horizontal split weight {} ({})", settings::Of(settings::kHorizontalFov).word,
+                  settings::Why(settings::kHorizontalFov));
+    return true;
+}
+
+std::wstring SplitFovWord()
+{
+    return SplitFovWordOf(SplitFovWeight());
 }
 
 bool ViewPointInstalled() noexcept
@@ -646,31 +658,45 @@ bool UsesEngineViewPoint(const void* localPlayer) noexcept
 void RegisterViewPointCommands()
 {
     using control::Outcome;
-    using control::Value;
-    control::Register({.name     = L"split-fov",
-                       .shape    = control::Shape::Float,
-                       .minFloat = 0.0,
-                       .maxFloat = 1.0,
-                       .words    = {L"native"},
-                       .help     = L"filled halves' FOV: 0 keeps the single-player framing, 1 its on-screen scale (0.5 "
-                                   L"at start; views/view_shape.h); native = the stock MajorAxisFOV rule",
-                       .set      = [](const Value& v) {
+    // The option's command from its row (the words 0.00 to 1.00); the resulting FOV is logged when a filled split
+    // view first uses the weight.
+    control::RegisterOption(
+        platform::settings::kHorizontalFov,
+        [](const std::wstring& word) {
+            if (!ViewPointInstalled())
+            {
+                return Outcome{false, L"the view-point entry is not installed"};
+            }
+            SetSplitFovWeight(SplitFovWeightOf(word));
+            platform::Log(L"split FOV: horizontal split weight {} (the console)", word);
+            return Outcome{true, L"weight set; applies to filled halves"};
+        },
+        [] { return SplitFovWord(); });
+    // The stock rule for a comparison: on puts the weight aside, off brings it back.
+    static float aside = kDefaultSplitFovWeight;
+    control::Register({.name  = L"split-fov.native",
+                       .shape = control::Shape::OnOff,
+                       .help  = L"the stock MajorAxisFOV rule in place of the split-fov.horizontal weight, for a "
+                                L"comparison; off brings the weight back",
+                       .set   = [](const control::Value& v) {
                            if (!ViewPointInstalled())
                            {
                                return Outcome{false, L"the view-point entry is not installed"};
                            }
-                           const bool  native = std::holds_alternative<std::wstring>(v);
-                           const float blend  = native ? -1.0f : static_cast<float>(std::get<double>(v));
-                           SetSplitFovWeight(blend);
-                           // The resulting FOV is logged here when a filled split view first uses it.
-                           return Outcome{true, native ? L"stock MajorAxisFOV rule"
-                                                       : L"weight set; applies to filled halves"};
-                       },
-                       .get = [] {
+                           const bool  on     = std::get<bool>(v);
                            const float weight = SplitFovWeight();
-                           return weight < 0.0f ? Value{std::wstring(L"native")}
-                                                : Value{control::FloatReading(weight)};
-                       }});
+                           if (on && weight >= 0.0f)
+                           {
+                               aside = weight;
+                               SetSplitFovWeight(-1.0f);
+                           }
+                           else if (!on && weight < 0.0f)
+                           {
+                               SetSplitFovWeight(aside);
+                           }
+                           return Outcome{true, on ? L"stock MajorAxisFOV rule" : L"the split-fov.horizontal weight applies"};
+                       },
+                       .get = [] { return control::Value{SplitFovWeight() < 0.0f}; }});
 }
 
 #endif

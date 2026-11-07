@@ -9,8 +9,12 @@
 // then follows ULocalPlayer::AspectRatioAxisConstraint, which the mod sets (MajorAxisFOV, or
 // MaintainXFOV with the split FOV below). RE-vertical-split-and-fill.md.
 
+#include "platform/settings.h"
+
 #include <cstddef>
 #include <cstdint>
+#include <string>
+#include <string_view>
 
 namespace lss::views {
 
@@ -34,6 +38,27 @@ HalfShape HalfOf(std::int32_t width, std::int32_t height, bool sideBySide) noexc
 /// The weight the split FOV gives to keeping the characters' on-screen size over keeping the
 /// single-player framing (SplitFov); 0.5 is the geometric middle, chosen by eye.
 inline constexpr float kDefaultSplitFovWeight = 0.5f;
+
+/// The weight a settings word stands for ("0.35": platform/settings.h kHorizontalFov's words, steps of 0.05), by the
+/// word's place in the table, so no locale's decimal mark is read; kDefaultSplitFovWeight for any other text.
+inline float SplitFovWeightOf(std::wstring_view word) noexcept
+{
+    const auto step = platform::settings::WordIndex(platform::settings::kHorizontalFov, word);
+    return step ? static_cast<float>(*step * 5) / 100.0f : kDefaultSplitFovWeight;
+}
+
+/// The option's word for a weight from 0 to 1 (the nearest step: "0.50"); empty for a weight outside that (the
+/// MajorAxisFOV rule), which is no word of the option's.
+inline std::wstring SplitFovWordOf(float weight)
+{
+    if (!(weight >= 0.0f && weight <= 1.0f))
+    {
+        return {};
+    }
+    const auto step = static_cast<std::size_t>(weight * 20.0f + 0.5f);
+    return platform::settings::kFovWeightWords[step < platform::settings::kFovWeightSteps ? step
+                                                                                          : platform::settings::kFovWeightSteps - 1];
+}
 
 /// The horizontal FOV (degrees) for a split half, from the camera's single-player view
 /// (`fovDegrees` wide at `cameraAspect`, the 16:9 the game's cameras ask for). A split view can

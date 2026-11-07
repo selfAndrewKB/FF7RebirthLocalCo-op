@@ -2,6 +2,7 @@
 // and the values written back, run without the game.
 
 #include "platform/command_registry.h"
+#include "platform/settings.h"
 
 #include "expect.h"
 
@@ -235,6 +236,52 @@ void TestFormatEmpty()
     EXPECT(Format(Action(L"join"), Value{}).empty());
 }
 
+void TestRegisterOption()
+{
+    std::puts("registry: an option's row becomes a command: on|off an OnOff, other words a Word, the default in the help");
+    using lss::platform::settings::kMultiMonitor;
+    using lss::platform::settings::kTwoPlayerSplit;
+    std::wstring held = L"off";
+    lss::control::RegisterOption(
+        kMultiMonitor,
+        [&held](const std::wstring& word) {
+            held = word;
+            return Outcome{};
+        },
+        [&held] { return held; });
+    const Entry* monitors = lss::control::Global().Find(L"multi-monitor");
+    EXPECT(monitors != nullptr);
+    if (monitors != nullptr)
+    {
+        EXPECT(monitors->shape == Shape::OnOff && monitors->words.empty());
+        EXPECT(monitors->help.ends_with(L"(default: off)"));
+        EXPECT(monitors->set(Value{true}).ok && held == L"on");
+        EXPECT(std::get<bool>(monitors->get()));
+        EXPECT(monitors->set(Value{false}).ok && held == L"off");
+        EXPECT(!std::get<bool>(monitors->get()));
+    }
+    std::wstring split = L"horizontal";
+    lss::control::RegisterOption(
+        kTwoPlayerSplit,
+        [&split](const std::wstring& word) {
+            split = word;
+            return Outcome{true, word};
+        },
+        [&split] { return split; });
+    const Entry* layout = lss::control::Global().Find(L"two-player-split");
+    EXPECT(layout != nullptr);
+    if (layout != nullptr)
+    {
+        EXPECT(layout->shape == Shape::Word && layout->words.size() == 2);
+        EXPECT(layout->words[0] == L"vertical" && layout->words[1] == L"horizontal");
+        EXPECT(layout->help.ends_with(L"(default: horizontal)"));
+        EXPECT(RoundTrip(*layout, L"vertical") == L"vertical");
+        EXPECT(Refused(*layout, L"sideways") && Refused(*layout, L"Vertical"));
+        EXPECT(layout->set(Value{std::wstring(L"vertical")}).ok && split == L"vertical");
+        EXPECT(std::get<std::wstring>(layout->get()) == L"vertical");
+    }
+}
+
 }  // namespace
 
 int main()
@@ -247,6 +294,7 @@ int main()
     TestWordFloatText();
     TestNamedValues();
     TestFormatEmpty();
+    TestRegisterOption();
 
     return lss::test::Report();
 }

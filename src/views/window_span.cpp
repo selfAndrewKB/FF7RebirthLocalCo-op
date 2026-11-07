@@ -3,11 +3,13 @@
 #include "facts/engine.h"
 #include "platform/guarded.h"
 #include "platform/log.h"
+#include "platform/settings.h"
 #include "platform/verified_code.h"
 #include "players/unreal_access.h"
 #include "views/columns.h"
 #include "views/display_align.h"
 #include "views/monitor_row.h"
+#include "views/window_span_rules.h"
 
 #define RC_UNREAL_DISABLE_PROPERTY_DEPRECATION_WARNINGS
 #define RC_UNREAL_DISABLE_CLASS_DEPRECATION_WARNINGS
@@ -41,6 +43,7 @@ constexpr std::int32_t  kModeWindowed           = 2;
 constexpr std::uint32_t kHoldTicks              = 30;   // the rect check, twice a second at 60
 constexpr std::uint32_t kStatusTicks            = 300;
 constexpr std::uint32_t kLineUpTicks            = 120;  // the desktop read as the row after a move (Remake: 2 ms was too soon)
+constexpr std::uint32_t kPresetGiveUpTicks      = 1800;  // the file's preset waits this long for a steady window
 constexpr std::int32_t  kModeColumns            = columns::kMaxColumns;  // the monitor mode: one monitor per column
 
 enum class Step
@@ -67,6 +70,11 @@ std::uint32_t g_ticks     = 0;
 std::uint32_t g_stepTicks = 0;
 std::uint32_t g_reapplies = 0;
 std::uint32_t g_reshapes  = 0;         // re-shapes for a change of columns while in
+
+// The file's preset (multi-monitor = on): the monitor mode's one try, once the window has stood still for kHoldTicks
+// (the wait itself is the pure rule in views/window_span_rules.h).
+bool       g_presetPending = false;
+PresetWait g_presetWait;
 
 /// The game's native window: GEngine -> GameViewportWindow (TWeakPtr<SWindow>: the object pointer first) ->
 /// SWindow::NativeWindow (TSharedPtr: the object pointer first). Every read guarded; the vtable must be the one
@@ -269,6 +277,7 @@ void Forget() noexcept
     g_stepTicks = 0;
     g_reapplies = 0;
     g_reshapes  = 0;
+    g_presetPending = false;
 }
 
 /// The window over the row `choice` names for `count` columns, now (the desktop reads as the row). `why` names the
@@ -385,6 +394,32 @@ void LineUpTick() noexcept
     }
 }
 
+/// The file's preset: once the game window reads the same rect for kHoldTicks ticks (the engine has sized it to the
+/// saved resolution), the one try of the monitor mode; given up, logged, if no steady window comes.
+void PresetTick() noexcept
+{
+    const wchar_t* reason = L"";
+    const auto     window = FindNativeWindow(&reason);
+    const auto     seen   = window ? std::optional(WindowRect(window->hwnd)) : std::nullopt;
+    switch (g_presetWait.Next(seen, kHoldTicks, kPresetGiveUpTicks))
+    {
+        case PresetWait::Step::Wait: return;
+        case PresetWait::Step::Try:
+            g_presetPending = false;
+            platform::Log(L"window span: multi-monitor = on: the game window is steady at {} after {} tick(s); the "
+                          L"three-player monitor mode is tried now",
+                          RectText(g_presetWait.rect), g_presetWait.ticks);
+            Hold(true);  // logs its outcome; a row that does not qualify leaves the mode off
+            return;
+        case PresetWait::Step::GiveUp:
+            g_presetPending = false;
+            platform::LogWarning(L"window span: multi-monitor = on: no steady game window within {} ticks ({}); the "
+                                 L"three-player monitor mode stays off (Ctrl+F3 or 'multi-monitor on' tries it)",
+                                 g_presetWait.ticks, window ? L"the window kept moving" : reason);
+            return;
+    }
+}
+
 /// Twice a second while in: the window put back over the row if anything moved it.
 void HoldRect() noexcept
 {
@@ -438,9 +473,11 @@ bool Install(const platform::GameImage& image) noexcept
     g_nativeWindowOffset   = facts::kSWindowNativeWindowOffset;
     g_installed            = true;
     platform::Log(L"window span: ready (Ctrl+F2 or 'window-span on' while player 2 or 3 is in: one monitor per column; "
-                  L"Ctrl+F3 or 'monitor-mode on': the three-player monitor mode, three monitors whatever the players; "
+                  L"Ctrl+F3 or 'multi-monitor on': the three-player monitor mode, three monitors whatever the players; "
                   L"the engine's own window reshape; GameViewportWindow at +{:#x}, NativeWindow at +{:#x})",
                   g_viewportWindowOffset, g_nativeWindowOffset);
+    SetPreset(platform::settings::Of(platform::settings::kMultiMonitor).word,
+              platform::settings::Why(platform::settings::kMultiMonitor).c_str());
     return true;
 }
 
@@ -502,6 +539,7 @@ void Leave(const wchar_t* why) noexcept
 
 bool Hold(bool on) noexcept
 {
+    g_presetPending = false;  // either way the file's try is answered: off beats it, on is it
     if (!on)
     {
         if (g_held)
@@ -545,8 +583,53 @@ std::int32_t HeldColumns() noexcept
     return g_held ? kModeColumns : 0;
 }
 
+void SetPreset(const std::wstring& word, const wchar_t* why) noexcept
+{
+    if (word == L"on")
+    {
+        if (!g_installed)
+        {
+            platform::Log(L"window span: multi-monitor = on ({}): the window span is not installed, so the three-player "
+                          L"monitor mode stays off",
+                          why);
+            return;
+        }
+        if (In())
+        {
+            platform::Log(L"window span: multi-monitor = on ({}): the three-player monitor mode now", why);
+            Hold(true);
+            return;
+        }
+        g_presetPending = true;
+        g_presetWait    = PresetWait{};
+        platform::Log(L"window span: multi-monitor = on ({}): the three-player monitor mode from the game's first steady "
+                      L"frame, whatever the players; player 1's picture fills every column no player has",
+                      why);
+    }
+    else if (word == L"off")
+    {
+        platform::Log(L"window span: multi-monitor = off ({}): no span until window-span on or Ctrl+F2 with a player in, "
+                      L"or Ctrl+F3",
+                      why);
+        Hold(false);
+    }
+    else
+    {
+        platform::LogWarning(L"window span: multi-monitor = '{}' ({}) is not a word of the table; nothing changes", word, why);
+    }
+}
+
+std::wstring Preset()
+{
+    return g_held || g_presetPending ? L"on" : L"off";
+}
+
 void Tick(std::int32_t wanted) noexcept
 {
+    if (g_presetPending)
+    {
+        PresetTick();
+    }
     if (!In())
     {
         return;

@@ -151,6 +151,27 @@ void TestRatiosAndWatch()
     EXPECT(watch.AspectChanged(0.0f));  // the reset forgets the logged aspect
 }
 
+void TestSplitFovWords()
+{
+    std::puts("split FOV: every settings word maps to its weight and back; other text is the default; no word for the stock rule");
+    using lss::views::SplitFovWeightOf;
+    using lss::views::SplitFovWordOf;
+    using lss::platform::settings::kFovWeightWords;
+    for (std::size_t step = 0; step < kFovWeightWords.size(); ++step)
+    {
+        const float weight = SplitFovWeightOf(kFovWeightWords[step]);
+        EXPECT(std::fabs(weight - static_cast<float>(step) * 0.05f) < 1e-6f);
+        EXPECT(SplitFovWordOf(weight) == kFovWeightWords[step]);
+    }
+    EXPECT(SplitFovWeightOf(L"0.50") == 0.5f && SplitFovWeightOf(L"1.00") == 1.0f && SplitFovWeightOf(L"0.00") == 0.0f);
+    EXPECT(SplitFovWeightOf(L"0.5") == lss::views::kDefaultSplitFovWeight);
+    EXPECT(SplitFovWeightOf(L"") == lss::views::kDefaultSplitFovWeight);
+    EXPECT(SplitFovWordOf(-1.0f).empty());
+    EXPECT(SplitFovWordOf(1.5f).empty());
+    EXPECT(SplitFovWordOf(std::numeric_limits<float>::quiet_NaN()).empty());
+    EXPECT(SplitFovWordOf(0.51f) == L"0.50" && SplitFovWordOf(0.526f) == L"0.55");  // the nearest step
+}
+
 }  // namespace
 
 int main()
@@ -162,6 +183,7 @@ int main()
     TestSplitFovDefault();
     TestSplitFovRefusesBadInputs();
     TestRatiosAndWatch();
+    TestSplitFovWords();
 
     return lss::test::Report();
 }

@@ -29,6 +29,8 @@
 
 #include <array>
 #include <cstdint>
+#include <string>
+#include <string_view>
 
 namespace lss::platform {
 class GameImage;
@@ -113,8 +115,13 @@ void SetSplitFovWeight(float weight) noexcept;
 /// The weight in use, or a negative value for the MajorAxisFOV rule.
 float SplitFovWeight() noexcept;
 
+/// The weight in use as the option's word ("0.50", views/view_shape.h SplitFovWordOf); empty under the MajorAxisFOV
+/// rule (no word of the option's).
+std::wstring SplitFovWord();
+
 #if LSS_DEV
-/// The `split-fov` command and reading (a weight from 0 to 1, or native). May throw (out of memory).
+/// The `split-fov.horizontal` command and reading, from the option's row (platform/settings.h), and
+/// `split-fov.native`, the stock MajorAxisFOV rule in its place for a comparison. May throw (out of memory).
 void RegisterViewPointCommands();
 #endif
 

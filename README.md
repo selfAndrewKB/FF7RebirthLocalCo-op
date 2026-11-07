@@ -32,10 +32,17 @@ each player's view showing their own HUD. None of this needs a key.
 | Ctrl+F3 | The three-player monitor mode on and off: the window across a row of three monitors, player 1's picture in every column no player has |
 | Ctrl+F2 | The game window across its row of monitors, and back |
 
+**Settings file:** the mod writes `Mods/LocalSplitScreen/LocalSplitScreen.ini` at every start from its own list of
+options, each with its words, its default and a line of help, and reads it once at the next start: change a value after
+an `=` to make it the default (`multi-monitor = on` holds the three-player monitor mode from the first steady frame;
+`two-player-split = vertical` puts two players side by side from the first join; `split-fov.horizontal` sets the filled
+halves' FOV weight). The keys above change an option for the session only. The repository ships no copy: the file is
+the code's own.
+
 With the development tools built in, control commands switch the rest for diagnosis, e.g. `hud-band off`,
-`hud-image off`, `hud-levers off`, `leak-fixes 0` (`help` lists them all, each with its reading): typed in the console
-(`python tools/remote.py shell`, 127.0.0.1:4419) or sent with `-c` or `run <file>` (`src/control/script.h` has the
-language).
+`hud-image off`, `hud-levers off`, `leak-fixes 0` (`help` lists them all, each with its reading; every option of the
+settings file is a command of the same name): typed in the console (`python tools/remote.py shell`, 127.0.0.1:4419)
+or sent with `-c` or `run <file>` (`src/control/script.h` has the language).
 
 ## Performance
 

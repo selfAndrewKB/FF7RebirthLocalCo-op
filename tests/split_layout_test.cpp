@@ -221,6 +221,32 @@ void TestDescribe()
     EXPECT(LayoutText(1) == L"1 (side by side)");
 }
 
+void TestWords()
+{
+    std::puts("layout: the settings file's words are the engine's, and round-trip; any other text is top/bottom");
+    using lss::players::LayoutOfWord;
+    using lss::players::SplitLayoutKind;
+    using lss::players::WordOfLayout;
+    EXPECT(LayoutOfWord(L"vertical") == SplitLayoutKind::SideBySide);
+    EXPECT(LayoutOfWord(L"horizontal") == SplitLayoutKind::TopBottom);
+    EXPECT(LayoutOfWord(L"") == SplitLayoutKind::TopBottom && LayoutOfWord(L"sideways") == SplitLayoutKind::TopBottom);
+    EXPECT(std::wstring(WordOfLayout(kSideBySide)) == L"vertical");
+    EXPECT(std::wstring(WordOfLayout(kTopBottom)) == L"horizontal");
+    EXPECT(std::wstring(WordOfLayout(7)) == L"horizontal");  // not a value the mod writes: read as the default
+    for (const wchar_t* word : {L"vertical", L"horizontal"})
+    {
+        EXPECT(std::wstring(WordOfLayout(static_cast<std::uint8_t>(LayoutOfWord(word)))) == word);
+    }
+
+    std::puts("layout: the choice from the settings file waits for the first join (no file: the default, top/bottom)");
+    auto layout = Fresh(kSideBySide);
+    lss::players::ChooseFromSettings(layout);  // the test has no file: the default
+    EXPECT(layout.Chosen().has_value() && *layout.Chosen() == kTopBottom);
+    EXPECT(g_setting.writes == 0);
+    EXPECT(layout.Update(true).kind == Kind::Applied && g_setting.value == kTopBottom);
+    EXPECT(layout.Update(false).kind == Kind::Restored && g_setting.value == kSideBySide);
+}
+
 }  // namespace
 
 int main()
@@ -233,6 +259,7 @@ int main()
     TestSomeoneElseChangedIt();
     TestFailuresReported();
     TestDescribe();
+    TestWords();
 
     return lss::test::Report();
 }

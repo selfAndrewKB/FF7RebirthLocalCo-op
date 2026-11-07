@@ -19,9 +19,10 @@
 // Two ways in:
 // - Ctrl+F2 / `window-span on` with a seat in: one monitor per column shown, the window following the
 //   columns (two with player 2, three under `view-columns 3`), and left when one column is left (every seat out).
-// - The three-player monitor mode, Ctrl+F3 / `monitor-mode on` (plan/seats.md step 5; the user's columns
+// - The three-player monitor mode, Ctrl+F3 / `multi-monitor on` (plan/seats.md step 5; the user's columns
 //   rule): the span held over a row of three monitors whatever the players, so the mirror views
-//   (views/mirror_player.h) fill the columns no player has. Needs a row of three; left by the same key.
+//   (views/mirror_player.h) fill the columns no player has. Needs a row of three; left by the same key. The settings
+//   file's `multi-monitor = on` (platform/settings.h) holds it from the game's first steady frame.
 // A row monitor a few pixels off the row's top (at most monitor_row::kAlignTolerance) is lined up first, for this
 // Windows session only, and put back at the leave (views/display_align, taken from Remake). Left by the command,
 // the key, and at the mod's end: the window goes back to the rect it had. While in, the rect is checked twice a
@@ -54,6 +55,16 @@ bool Hold(bool on) noexcept;
 
 /// The monitor mode is on.
 bool Held() noexcept;
+
+/// The settings file's multi-monitor word applied (platform/settings.h kMultiMonitor; `why` names the source for the
+/// log): on = the three-player monitor mode held from the game's first steady frame (the window unchanged for half a
+/// second, read from the tick), as Ctrl+F3 does, or now if the span is already in; off = nothing, and the mode left if
+/// it is on. Any other word is refused with a warning.
+void SetPreset(const std::wstring& word, const wchar_t* why) noexcept;
+
+/// The multi-monitor option's word as the live state reads: on while the three-player monitor mode is held or its
+/// try from the file is pending, else off.
+std::wstring Preset();
 
 /// The columns the mode holds (views/columns.h Wanted's `held`): three while on, else 0.
 std::int32_t HeldColumns() noexcept;

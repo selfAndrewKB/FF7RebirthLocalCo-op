@@ -30,6 +30,7 @@
 #include "platform/log.h"
 #include "platform/memory_watch.h"
 #include "platform/module_folder.h"
+#include "platform/settings.h"
 #include "platform/thread_times.h"
 #include "platform/verified_code.h"
 #include "players/console_access.h"
@@ -79,7 +80,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.101.1";  // built against the Nexus UE4SS (c0a8d4c)
+constexpr const wchar_t* kVersion = L"0.102.0";  // built against the Nexus UE4SS (c0a8d4c)
 
 /// How often the seats' status lines are written while a seat is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -239,6 +240,9 @@ public:
                 Log(L"log level {} (log-level.txt)", lss::platform::LevelWord(*parsed));
             }
         }
+        // The settings file (platform/settings.h), read once and written back from the table before any owner
+        // installs: each owner applies its option at its install.
+        lss::platform::settings::Load();
         // Recognises the game build (and so every PerBuild value) before any thread of ours can read one; the later
         // Locate calls find the same build.
         const auto image = lss::platform::GameImage::Locate();
@@ -319,6 +323,7 @@ public:
         // A seat's join takes the mirror views out right before its CreatePlayer (views/mirror_player.h).
         session_->SetClearMirrors([]() noexcept { return lss::views::mirror_player::Clear(L"a player joins"); });
         lss::modules::Install(*image);  // every other module, in table order (modules.cpp); each logs its own line
+        lss::players::ChooseFromSettings(layout_);  // the two-player layout the file names, for the first join
 
         // The dev tools (built with LSS_DEV_TOOLS only): the console, the HUD trace and probe, and the watches
         // that only log (dev/dev_tools.h names them); a player's build has none of them. Every control command is

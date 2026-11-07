@@ -96,6 +96,7 @@
 #include "input/pad_sticks.h"
 #include "platform/command_registry.h"
 #include "platform/frame_watch.h"
+#include "platform/settings.h"
 #include "players/console_access.h"
 #include "players/split_layout.h"
 #include "renderer/submission_census.h"
@@ -615,11 +616,17 @@ Result SetMonitorMode(bool on) noexcept
     {
         return {false, L"the window span is not installed (see the startup log)"};
     }
-    if (on == views::window_span::Held())
+    if (!on)
     {
-        return {true, on ? L"the three-player monitor mode is already on" : L"the three-player monitor mode is off"};
+        // Off also cancels a try the settings file left waiting for the window (so Held() alone is not the test).
+        views::window_span::Hold(false);
+        return {true, L"the three-player monitor mode is off"};
     }
-    if (!views::window_span::Hold(on))
+    if (views::window_span::Held())
+    {
+        return {true, L"the three-player monitor mode is already on"};
+    }
+    if (!views::window_span::Hold(true))
     {
         return {false, L"the three-player monitor mode could not be switched on (the log says why)"};
     }
@@ -698,11 +705,12 @@ void RegisterOwnCommands(session::Session& session)
     Register({.name = L"bars", .shape = Shape::OnOff, .help = L"split views keep 16:9 with bars, or fill their halves",
               .set  = [](const Value& v) { return From(SetFill(!std::get<bool>(v))); },  // bars on: no fill
               .get  = [] { return Value{!views::FillsHalves()}; }});
-    Register({.name = L"monitor-mode", .shape = Shape::OnOff,
-              .help = L"the three-player monitor mode (as Ctrl+F3): the window over a row of three monitors whatever "
-                      L"the players, player 1's picture in every column no player has",
-              .set  = [](const Value& v) { return From(SetMonitorMode(std::get<bool>(v))); },
-              .get  = [] { return Value{views::window_span::Held()}; }});
+    // The three-player monitor mode's command from its option's row (the settings file's multi-monitor): as Ctrl+F3.
+    control::RegisterOption(
+        platform::settings::kMultiMonitor, [](const std::wstring& word) { return From(SetMonitorMode(word == L"on")); },
+        [] { return views::window_span::Preset(); });
+    Register({.name = platform::settings::kMonitors.key, .shape = Shape::Text, .help = platform::settings::kMonitors.help,
+              .get  = [] { return Value{platform::settings::Of(platform::settings::kMonitors).word}; }});
     Register({.name = L"view-columns", .shape = Shape::Integer, .min = 0, .max = views::columns::kMaxColumns,
               .help = L"columns held without the span, for the checks on one monitor: 2 or 3 (the mirror views fill "
                       L"the ones no player has); 0 for none",

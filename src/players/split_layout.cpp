@@ -1,5 +1,8 @@
 #include "players/split_layout.h"
 
+#include "platform/log.h"
+#include "platform/settings.h"
+
 #if LSS_DEV
 #include "platform/command_registry.h"
 #endif
@@ -57,44 +60,61 @@ std::wstring LayoutText(std::int32_t value)
     return std::format(L"{} ({})", value, name);
 }
 
+SplitLayoutKind LayoutOfWord(std::wstring_view word) noexcept
+{
+    return word == L"vertical" ? SplitLayoutKind::SideBySide : SplitLayoutKind::TopBottom;
+}
+
+const wchar_t* WordOfLayout(std::uint8_t value) noexcept
+{
+    return value == static_cast<std::uint8_t>(SplitLayoutKind::SideBySide) ? L"vertical" : L"horizontal";
+}
+
+void ChooseFromSettings(SplitLayout& layout) noexcept
+{
+    namespace settings = platform::settings;
+    const std::wstring& word = settings::Of(settings::kTwoPlayerSplit).word;
+    const auto          kind = LayoutOfWord(word);
+    (void)layout.Choose(static_cast<std::uint8_t>(kind));  // nothing is in at start: the choice waits for the first join
+    try
+    {
+        platform::Log(L"split layout: two players in one window: {} ({}; {})", word,
+                      kind == SplitLayoutKind::SideBySide ? L"side by side" : L"top/bottom",
+                      settings::Why(settings::kTwoPlayerSplit));
+    }
+    catch (...)
+    {
+        // Out of memory building the line: the choice is made, the log line is not.
+    }
+}
+
 #if LSS_DEV
 
 void RegisterCommands(SplitLayout& layout)
 {
     using control::Outcome;
-    using control::Value;
-    control::Register(
-        {.name  = L"layout",
-         .shape = control::Shape::Word,
-         .words = {L"top-bottom", L"side-by-side"},
-         .help  = L"how the screen is split (now, or from the next join); reads the layout in force, chosen or the "
-                  L"game's",
-         .set   = [&layout](const Value& v) {
-             using Kind            = HeldChange::Kind;
-             const bool sideBySide = std::get<std::wstring>(v) == L"side-by-side";
-             const auto change     = layout.Choose(static_cast<std::uint8_t>(sideBySide ? SplitLayoutKind::SideBySide
-                                                                                        : SplitLayoutKind::TopBottom));
-             const wchar_t* name   = sideBySide ? L"side by side" : L"top/bottom";
-             switch (change.kind)
-             {
-                 case Kind::Applied:
-                 case Kind::AlreadySet: return Outcome{true, name};
-                 case Kind::Chosen: return Outcome{true, std::wstring(name) + L" from the next join"};
-                 case Kind::ApplyFailed: return Outcome{false, L"TwoPlayerSplitscreenLayout could not be read or set"};
-                 default: return Outcome{false, L"unexpected layout outcome"};
-             }
-         },
-         .get = [&layout] {
-             // Always one of the entry's words, so `wait-until layout == ...` compares; empty only when unreadable.
-             const auto current = layout.Current();
-             if (!current)
-             {
-                 return Value{};
-             }
-             return Value{std::wstring(*current == static_cast<std::uint8_t>(SplitLayoutKind::SideBySide)
-                                           ? L"side-by-side"
-                                           : L"top-bottom")};
-         }});
+    control::RegisterOption(
+        platform::settings::kTwoPlayerSplit,
+        [&layout](const std::wstring& word) {
+            using Kind          = HeldChange::Kind;
+            const auto kind     = LayoutOfWord(word);
+            const auto change   = layout.Choose(static_cast<std::uint8_t>(kind));
+            const wchar_t* name = kind == SplitLayoutKind::SideBySide ? L"side by side" : L"top/bottom";
+            switch (change.kind)
+            {
+                case Kind::Applied:
+                case Kind::AlreadySet: return Outcome{true, name};
+                case Kind::Chosen: return Outcome{true, std::wstring(name) + L" from the next join"};
+                case Kind::ApplyFailed: return Outcome{false, L"TwoPlayerSplitscreenLayout could not be read or set"};
+                default: return Outcome{false, L"unexpected layout outcome"};
+            }
+        },
+        [&layout] {
+            // Always one of the option's words, so `wait-until two-player-split == ...` compares; empty only when
+            // the game's setting cannot be read.
+            const auto current = layout.Current();
+            return current ? std::wstring(WordOfLayout(*current)) : std::wstring();
+        });
 }
 
 #endif

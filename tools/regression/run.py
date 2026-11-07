@@ -161,16 +161,17 @@ class Control:
         return code == 0, out
 
 
-# The mod's switches: the key, and the state the switch starts in at launch (players/join_keys.h). A `layout`, `bars`,
-# `own-camera`, `sticks` or `monitor-mode` command presses the key only when the state it asks for is not the one held.
-# The chosen layout, the bars, the sticks and the monitor mode persist across a leave; player 2's own camera is the
-# start of every join (views/player_view_point.h).
+# The mod's switches: the key, and the state the switch starts in at launch (players/join_keys.h; the settings file's
+# options at their defaults, platform/settings.h). A `two-player-split`, `bars`, `own-camera`, `sticks` or
+# `multi-monitor` command presses the key only when the state it asks for is not the one held. The chosen layout, the
+# bars, the sticks and the monitor mode persist across a leave; player 2's own camera is the start of every join
+# (views/player_view_point.h).
 KEY_SWITCHES = {
-    "layout": ("Ctrl+F5", "top-bottom"),
+    "two-player-split": ("Ctrl+F5", "horizontal"),
     "bars": ("Ctrl+F4", "off"),
     "own-camera": ("Ctrl+F6", "on"),
     "sticks": ("Ctrl+F9", "per-pad"),
-    "monitor-mode": ("Ctrl+F3", "off"),
+    "multi-monitor": ("Ctrl+F3", "off"),
 }
 RESET_AT_JOIN = {"own-camera": "on"}
 RESET_AT_LEAVE: dict[str, str] = {}

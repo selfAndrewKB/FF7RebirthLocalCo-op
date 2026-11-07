@@ -6,8 +6,9 @@
 // TwoPlayerSplitscreenLayout (0 top/bottom, 1 side by side), and uses it only while there are
 // exactly two local players (engine_addresses.h). So the mod does not lay anything
 // out itself: it holds that setting while there are two local players, at the layout the player chose,
-// and puts the game's value back when that ends (players::HeldSetting). Until a layout is chosen, the game's own is
-// used. The choice itself is this module's: it is remembered across leaves and applied at each join.
+// and puts the game's value back when that ends (players::HeldSetting). The choice itself is this module's: the
+// settings file's word at start (platform/settings.h kTwoPlayerSplit, applied by ChooseFromSettings), then Ctrl+F5 or
+// the console for the session; it is remembered across leaves and applied at each join.
 
 #include "platform/dev_switch.h"
 #include "players/held_setting.h"
@@ -15,6 +16,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 
 namespace lss::players {
 
@@ -26,6 +28,13 @@ enum class SplitLayoutKind : std::uint8_t
 
 /// A layout value's text for the log: "1 (side by side)".
 std::wstring LayoutText(std::int32_t value);
+
+/// The layout the option's word names (the engine's own words: vertical = side by side, horizontal = top/bottom);
+/// top/bottom for any other text.
+SplitLayoutKind LayoutOfWord(std::wstring_view word) noexcept;
+
+/// The option's word for a layout value: "vertical" or "horizontal".
+const wchar_t* WordOfLayout(std::uint8_t value) noexcept;
 
 class SplitLayout
 {
@@ -60,9 +69,13 @@ inline std::wstring Describe(const SplitLayout&, const HeldChange& change)
     return Describe(change, L"split layout", SplitLayout::kName, &LayoutText);
 }
 
+/// Chooses the layout the settings file reads (after settings::Load, before any join) and logs it with its source.
+void ChooseFromSettings(SplitLayout& layout) noexcept;
+
 #if LSS_DEV
-/// The `layout` command and reading (top-bottom, side-by-side: the layout in force, chosen or the game's; empty if the
-/// game's setting cannot be read). May throw (out of memory); modules::RegisterCommands catches.
+/// The `two-player-split` command and reading from the option's row (vertical, horizontal: the layout in force, chosen
+/// or the game's; empty if the game's setting cannot be read). May throw (out of memory); modules::RegisterCommands
+/// catches.
 void RegisterCommands(SplitLayout& layout);
 #endif
 

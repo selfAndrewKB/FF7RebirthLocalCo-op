@@ -1,5 +1,7 @@
 #include "platform/command_registry.h"
 
+#include "platform/settings.h"
+
 #include <charconv>
 #include <cmath>
 #include <format>
@@ -222,6 +224,35 @@ Registry& Global() noexcept
 {
     static Registry registry;
     return registry;
+}
+
+void RegisterOption(const platform::settings::Option& option, std::function<Outcome(const std::wstring& word)> set,
+                    std::function<std::wstring()> get)
+{
+    if (option.words.empty())
+    {
+        Global().Add(Entry{.name = option.key});  // refused and remembered: the console logs it as a rejected name
+        return;
+    }
+    // In either order: the page lists an option's words as the table does.
+    const bool onOff = option.words.size() == 2 &&
+                       ((std::wstring_view(option.words[0]) == L"on" && std::wstring_view(option.words[1]) == L"off") ||
+                        (std::wstring_view(option.words[0]) == L"off" && std::wstring_view(option.words[1]) == L"on"));
+    Entry entry{.name  = option.key,
+                .shape = onOff ? Shape::OnOff : Shape::Word,
+                .help  = std::wstring(option.help) + L" (default: " + option.fallback + L")"};
+    if (!onOff)
+    {
+        entry.words.assign(option.words.begin(), option.words.end());
+    }
+    entry.set = [set = std::move(set), onOff](const Value& v) {
+        return set(onOff ? std::wstring(std::get<bool>(v) ? L"on" : L"off") : std::get<std::wstring>(v));
+    };
+    entry.get = [get = std::move(get), onOff]() -> Value {
+        const std::wstring word = get();
+        return onOff ? Value{word == L"on"} : Value{word};
+    };
+    Register(std::move(entry));
 }
 
 }  // namespace lss::control

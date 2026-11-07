@@ -1,18 +1,20 @@
 # The layout switch and the held settings: the engine settings set at the join and restored at the leave; side by side
 # (the half readback and the HUD's pass show the tall half), back to top/bottom, side by side again, then a leave that
-# restores the game's own layout; top/bottom chosen again while out so the later scripts join on the game's layout.
-# The console logs each switch's reply (expect-dev); the key route presses Ctrl+F5, which logs
-# "split layout: ..." instead. Both show in the engine's readbacks (the half aspect, the HUD's pass, the restore).
+# restores the game's own layout; top/bottom chosen again while out so the later scripts join on the default layout.
+# The layout command is the settings file's option (two-player-split: vertical = side by side, horizontal = top/bottom,
+# the engine's words); the option reads back as the word in force. The console logs each switch's reply (expect-dev);
+# the key route presses Ctrl+F5, which logs "split layout: ..." instead. Both show in the engine's readbacks (the half
+# aspect, the HUD's pass, the restore).
 # expect: split screen: r\.SceneRenderTargetResizeMethod \d+ -> 2 until the leave
 # expect: split screen: r\.DynamicRes\.GPUTimingMeasureMethod \d+ -> 1 until the leave
 # expect: split screen: D3D12\.EnableGapRecorder \d+ -> 0 until the leave
-# expect-dev: ok \d+ layout side-by-side -- side by side
+# expect-dev: ok \d+ two-player-split vertical -- side by side
 # expect: split halves: viewport \d+x\d+, layout 1, half aspect
 # expect: HUD layout \(player 2's pass\): UI image \d+x\d+, view {vw/2}x{vh}
-# expect-dev: ok \d+ layout top-bottom -- top/bottom(?! from)
+# expect-dev: ok \d+ two-player-split horizontal -- top/bottom(?! from)
 # expect: split halves: viewport \d+x\d+, layout 0, half aspect
 # expect: split layout: TwoPlayerSplitscreenLayout restored to 0 \(top/bottom\)
-# expect-dev: ok \d+ layout top-bottom -- top/bottom from the next join
+# expect-dev: ok \d+ two-player-split horizontal -- top/bottom from the next join
 # expect: split screen: r\.SceneRenderTargetResizeMethod restored to
 # expect: split screen: D3D12\.EnableGapRecorder restored to
 # expect-not: could not set TwoPlayerSplitscreenLayout
@@ -20,13 +22,15 @@
 note regression: layout/settings start
 join
 wait-until p2.state == playing 1800
-layout side-by-side
+two-player-split vertical
+wait-until two-player-split == vertical 60
 wait 90
-layout top-bottom
+two-player-split horizontal
+wait-until two-player-split == horizontal 60
 wait 90
-layout side-by-side
+two-player-split vertical
 wait 90
 leave
 wait-until p2.in == off 900
-layout top-bottom
+two-player-split horizontal
 note regression: layout/settings done
