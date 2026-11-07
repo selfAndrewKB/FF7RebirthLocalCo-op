@@ -175,6 +175,39 @@ void TestSharedSlot()
     lss::hud::overlay_pass::Set(-5);
     EXPECT(lss::hud::overlay_pass::Seat() == lss::hud::overlay_pass::kNone && !lss::hud::overlay_pass::IsSeatPass());
 }
+
+void TestPassKinds()
+{
+    std::puts("passes: a seat's own view gets its own pass; its column on player 1's picture gets one of player 1's HUD "
+              "only on a monitor of another shape");
+    using lss::hud::overlay_pass::OtherShape;
+    using lss::hud::overlay_pass::PassKindOf;
+    using lss::hud::overlay_pass::SeatPassKind;
+    constexpr float kSixteenNine = 2560.0f / 1440.0f;
+    constexpr float kUltrawide   = 3440.0f / 1440.0f;
+    constexpr float kHalf        = 960.0f / 1080.0f;
+    // The shape test: 1 % apart either way; unknown shapes never differ.
+    EXPECT(!OtherShape(kSixteenNine, 1920.0f / 1080.0f));
+    EXPECT(OtherShape(kUltrawide, kSixteenNine) && OtherShape(kSixteenNine, kUltrawide));
+    EXPECT(!OtherShape(kSixteenNine * 1.005f, kSixteenNine) && OtherShape(kSixteenNine * 1.02f, kSixteenNine));
+    EXPECT(!OtherShape(0.0f, kSixteenNine) && !OtherShape(kUltrawide, 0.0f));
+    // Field play: the seat's own view, whatever its shape.
+    EXPECT(PassKindOf(true, true, false, true, kUltrawide, kSixteenNine) == SeatPassKind::Own);
+    EXPECT(PassKindOf(true, true, false, true, kHalf, kHalf) == SeatPassKind::Own);
+    // Out of the game: none.
+    EXPECT(PassKindOf(false, true, false, true, kHalf, kHalf) == SeatPassKind::None);
+    // A menu on a row: the seat's column on player 1's picture; the wide monitor gets player 1's HUD laid out for it,
+    // a monitor of player 1's shape samples player 1's image.
+    EXPECT(PassKindOf(true, false, true, true, kUltrawide, kSixteenNine) == SeatPassKind::PlayerOnes);
+    EXPECT(PassKindOf(true, false, true, true, 1920.0f / 1080.0f, kSixteenNine) == SeatPassKind::None);
+    // A lone waiting player beside another's own view: the waiting one on player 1's picture.
+    EXPECT(PassKindOf(true, true, true, true, kUltrawide, kSixteenNine) == SeatPassKind::PlayerOnes);
+    EXPECT(PassKindOf(true, true, true, true, kSixteenNine, kSixteenNine) == SeatPassKind::None);
+    // The engine's single view (one window): no column, no pass; the shape not yet known: none.
+    EXPECT(PassKindOf(true, false, true, false, kUltrawide, kSixteenNine) == SeatPassKind::None);
+    EXPECT(PassKindOf(true, false, true, true, 0.0f, kSixteenNine) == SeatPassKind::None);
+}
+
 int main()
 {
     TestPlacement();
@@ -183,6 +216,7 @@ int main()
     TestUnloadAndGauges();
     TestGaugeClass();
     TestSharedSlot();
+    TestPassKinds();
 
     return lss::test::Report();
 }

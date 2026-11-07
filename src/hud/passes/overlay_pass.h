@@ -71,4 +71,42 @@ constexpr bool IsSeatEntry(int seat, bool heldSlot) noexcept
     return seat >= 1 && heldSlot;
 }
 
+/// Whether a view of width over height `aspect` has another shape than player 1's `aspectOne`: more than 1 % apart. The
+/// game's composite cover-fits a HUD image to the view it is drawn in, so player 1's image in a wider view shows
+/// enlarged with its top and bottom cut, in a narrower one inset. False while either is unknown (0).
+constexpr bool OtherShape(float aspect, float aspectOne) noexcept
+{
+    if (!(aspect > 0.0f) || !(aspectOne > 0.0f))
+    {
+        return false;
+    }
+    const float ratio = aspect / aspectOne;
+    return ratio > 1.01f || ratio < 1.0f / 1.01f;
+}
+
+/// What a seat's pass of the overlay render draws this frame.
+enum class SeatPassKind
+{
+    None,       // no pass: the seat's view draws player 1's image (or the seat is out, or one view shows)
+    Own,        // the seat's own HUD in its own view
+    PlayerOnes, // player 1's HUD laid out for the seat's view: its column shows player 1's picture on a monitor of
+                // another shape than player 1's, where player 1's image would be cut or inset
+};
+
+/// The kind for a seat: `active` the seat in the game; `ownShown` its own view on screen; `onPlayerOne` its column on
+/// player 1's picture; `viewsSplit` several views on screen; `aspect` and `aspectOne` its view's and player 1's shapes.
+constexpr SeatPassKind PassKindOf(bool active, bool ownShown, bool onPlayerOne, bool viewsSplit, float aspect,
+                                  float aspectOne) noexcept
+{
+    if (!active)
+    {
+        return SeatPassKind::None;
+    }
+    if (ownShown && !onPlayerOne)
+    {
+        return SeatPassKind::Own;
+    }
+    return viewsSplit && onPlayerOne && OtherShape(aspect, aspectOne) ? SeatPassKind::PlayerOnes : SeatPassKind::None;
+}
+
 }  // namespace lss::hud::overlay_pass
