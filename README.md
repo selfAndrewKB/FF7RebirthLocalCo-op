@@ -40,8 +40,9 @@ each player's view showing their own HUD. None of this needs a key.
 3. Set **Multiple Monitors** to On and press **Save**.
 4. Start the game as always, in windowed fullscreen (borderless) or windowed mode. The app need not stay open.
 
-The monitors need not stand side by side in Windows, and they may differ in size and scaling. While the game runs they
-are moved into a row, and they go back when it ends, even after a crash. Windows' own arrangement is never changed, so
+The monitors need not stand side by side in Windows, and they may differ in size and scaling: each view fills its own
+monitor edge to edge, a wider monitor showing more to the sides at the same scale and a shorter one its own height.
+While the game runs they are moved into a row, and they go back when it ends, even after a crash. Windows' own arrangement is never changed, so
 a restart of the PC always returns your layout. If a game ever ends without putting them back, the app shows a
 **Restore Monitors** button. A monitor you picked that is not connected is waited for, not replaced: with two of three
 connected the game uses those two, with fewer it stays in one window. A virtual monitor made by a streaming program
