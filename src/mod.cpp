@@ -50,6 +50,7 @@
 #include "renderer/view_family_submission.h"
 #include "rides/shared_ride.h"
 #include "session/field_exit.h"
+#include "session/player_window.h"
 #include "session/session.h"
 #include "views/column_layout.h"
 #include "views/column_source.h"
@@ -81,7 +82,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.107.0";  // built against the Nexus UE4SS (c0a8d4c)
+constexpr const wchar_t* kVersion = L"0.108.0";  // built against the Nexus UE4SS (c0a8d4c)
 
 /// How often the seats' status lines are written while a seat is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -310,6 +311,7 @@ public:
         // A seat's join takes the mirror views out right before its CreatePlayer (views/mirror_player.h).
         session_->SetClearMirrors([]() noexcept { return lss::views::mirror_player::Clear(L"a player joins"); });
         lss::modules::Install(*image);  // every other module, in table order (modules.cpp); each logs its own line
+        lss::session::player_window::SetSession(&*session_);  // the windows' joins and leaves go through the session
         lss::players::ChooseFromSettings(layout_);  // the two-player layout the file names, for the first join
 
         // The dev tools (built with LSS_DEV_TOOLS only): the console, the HUD trace and probe, and the watches
@@ -508,6 +510,7 @@ private:
         session_->SetColumnsHeld(columnsHeld_);  // as the last columns' tick read it (the columns follow the session)
         lss::input::pad_sticks::SetStoodDown(shared);
         lss::input::climb_context::Tick();  // this frame's input copies for the climbs on the anim worker (W5)
+        lss::session::player_window::RunRequests();  // the pads' joins and leaves, before the session's tick (as the keys')
         session_->Tick();
         // The columns right after the session: the mirror views toward them, the window span to them.
         const lss::modules::Columns columns = lss::modules::TickColumns();
@@ -556,6 +559,15 @@ private:
             frame.seats[static_cast<std::size_t>(seat)].state = moment.seats[static_cast<std::size_t>(seat)];
         }
         lss::modules::TickAfterSession(frame);
+        // The players' windows (session/player_window.h): the pads' presses this tick, each window in its own view.
+        lss::session::player_window::Frame windows;
+        windows.screens = columns.map.count;
+        windows.single  = singleView_.Single();
+        for (int seat = 1; seat <= lss::players::kSeatsBuilt; ++seat)
+        {
+            windows.seatIds |= moment.seats[static_cast<std::size_t>(seat)] != lss::players::SeatState::Out ? 1u << seat : 0u;
+        }
+        lss::session::player_window::Tick(windows);
         lss::dev::TickWatches(splitShown);  // the dev watches, after the levers they observe
         // The settings several views need, while more than one view family renders (a seat's view or a mirror view).
         settings_.Update(columns.map.count > 1, [](const std::wstring& line) { Log(L"{}", line); });

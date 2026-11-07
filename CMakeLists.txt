@@ -54,6 +54,7 @@ add_library(LocalSplitScreen SHARED
     src/hud/field/marker_timers.cpp
     src/hud/battle/popups.cpp
     src/hud/user_widgets.cpp
+    src/hud/view_prompt.cpp
     src/hud/layout/overlay_band.cpp
     src/hud/layout/overlay_layout.cpp
     src/hud/layout/viewport_placement.cpp
@@ -161,6 +162,7 @@ add_library(LocalSplitScreen SHARED
     src/session/own_controller.cpp
     src/session/party_events.cpp
     src/session/party_lease.cpp
+    src/session/player_window.cpp
     src/facts/in_battle.cpp
     src/players/weak_object.cpp
     src/session/party_member.cpp
@@ -426,6 +428,7 @@ lss_test(traversal_rumble_rules)
 lss_test(ride_rules)
 lss_test(hud_rules)
 lss_test(pad_rules)
+lss_test(player_window)
 lss_test(world_rules)
 lss_test(platform_rules)
 lss_test(axis_records)

@@ -363,6 +363,26 @@ inline constexpr std::uint32_t kXInputStateConnected       = 0xE2;
 inline constexpr std::uint32_t kXInputStateLastLarge       = 0xFC;   // float
 inline constexpr std::uint32_t kXInputStateLastSmall       = 0x100;  // float
 
+// ---------------------------------------------------------------------------------------------
+// The engine's per-player HUD pass (stock AHUD; RE-view-text.md, both builds)
+// ---------------------------------------------------------------------------------------------
+
+/// AHUD::PostRender: UGameViewportClient::Draw calls it through the AHUD vtable for each player's view, with the HUD's
+/// canvas already set to that view's rect (1.005: 0x1415C97FC). Every controller's HUD is the plain AHUD (one table).
+inline constexpr std::uint8_t   kHudPostRenderBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55,
+                                                         0x41, 0x56, 0x41, 0x57, 0x48, 0x8B, 0xEC, 0xB8, 0x80, 0x00, 0x00, 0x00};
+inline constexpr FunctionFact   kHudPostRender{L"AHUD::PostRender", 0x14151C2A0, kHudPostRenderBytes};
+/// Its vtable slot, vtbl_AHUD (0x146BACFD8) + 0x6C8 (1.005: 0x146A051F8 + 0x6D0: every 1.005 UObject vtable is one
+/// slot longer).
+inline constexpr platform::SlotFact kHudPostRenderSlot{L"AHUD vtable: PostRender", 0x146BAD6A0, kHudPostRender};
+/// AHUD: PlayerOwner (the controller), Canvas (set only during PostRender); UCanvas: ClipX, ClipY (the view's size).
+inline constexpr std::uint32_t kHudOwner         = 0x228;
+inline constexpr std::uint32_t kHudCanvas        = 0x278;
+inline constexpr std::uint32_t kCanvasClipX      = 0x30;
+inline constexpr std::uint32_t kCanvasClipY      = 0x34;
+/// UEngine::MediumFont (Roboto), read through GEngine.
+inline constexpr std::uint32_t kEngineMediumFont = 0x70;
+
 /// The PlayStation pad reader's device vtable (the SonyController plugin, scePad; 1.005: 0x146432E10): not XInput, so
 /// the pad table does not move its pads.
 inline constexpr std::uintptr_t kSonyControllerDeviceVTable = 0x1465A8AE0;

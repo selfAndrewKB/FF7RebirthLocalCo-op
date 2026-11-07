@@ -20,8 +20,13 @@
 //   - after its idle or a change, a pad stays idle to the game until it lets go of what it was holding then, so the
 //     press that ended it never reaches the game as an attack or a talk (pad_rules LetGo: a resting trigger or a stuck
 //     button never holds a pad for good);
+//   - the opener, View held for a second (pad_rules::Gate): a shorter View press reaches the game at its let-go, so a
+//     tap still opens the map (a tap's length late) and the hold never does;
 //   - Start only on a slot a player holds (pad_rules::StartGate; slot 0 always): a pad that plays no one never pauses
-//     the game; the rest of such a pad still reaches the game as before.
+//     the game, and its Start, heard by the listener, joins (session/player_window); the rest of such a pad still
+//     reaches the game as before;
+//   - B, told to the listener as a tap (let go within a second) or a hold (a second down; pad_rules::Hold): a
+//     window's close and its leave. B itself is not held back.
 // A PlayStation pad the game reads through its own scePad device is not XInput and is not moved (logged at install).
 // Console: `pad-table` (the pads of players 1-3 and the spare slot, e.g. `pad-table 2 1 3 4`), `pads-idle`; reading
 // `players.pad-table`.
@@ -49,6 +54,13 @@ bool Set(const pad_rules::PadTable& table, const wchar_t* why) noexcept;
 /// The physical pads that read idle to the game (bit N: XInput user N); a pad leaving the set waits for its let-go.
 /// Game thread.
 void SetIdleUsers(std::uint32_t users, const wchar_t* why) noexcept;
+
+/// Each physical pad's new presses (the buttons down on this poll and up on its last), the opener, and B's tap (at its
+/// let-go) and hold, as the game's poll reads them, idle or not, Start included: the player windows' input
+/// (session/player_window). Called inside the engine's poll, so the listener only notes them (a table change there
+/// would lose its re-check: the poll clears the byte at its end). Game thread.
+using Listener = void (*)(int user, std::uint16_t pressed, bool open, bool bTap, bool bHeld) noexcept;
+void Listen(Listener listener) noexcept;
 
 /// The slots a player holds (bit N: slot N, the controller id seat N plays; bit 0 always): the others' Start is held
 /// back from the game. Once per engine tick from the session's seats. Game thread.

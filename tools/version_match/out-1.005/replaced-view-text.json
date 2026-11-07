@@ -1,0 +1,26 @@
+{
+ "build": "1.005",
+ "research_build": "1.004",
+ "date": "2026-11-07",
+ "doc": "Rebirth/Documentation/research/RE-view-text.md",
+ "facts": [
+  {
+   "name": "AHUD__PostRender",
+   "old": "0x14151C2A0",
+   "new": "0x1415C97FC",
+   "bytes": "48895C24185556574154415541564157488BECB880000000",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "The IDA pass [VIEWTEXT] on both databases (RE-view-text.md section 2.2); the entry bytes read from both exes by the main session (2026-11-07), identical."
+  },
+  {
+   "name": "vtbl_AHUD PostRender slot (vtable +0x6C8 in 1.004, +0x6D0 in 1.005)",
+   "old": "0x146BAD6A0",
+   "new": "0x146A058C8",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "RE-view-text.md section 2.2: the slot UGameViewportClient::Draw calls for each player's HUD (call [rax+6C8h] / [rax+6D0h]); read from both exes by the main session: each holds its build's AHUD__PostRender."
+  }
+ ]
+}

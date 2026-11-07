@@ -39,7 +39,10 @@ static_assert(kSlots == players::kXInputUsers, "the table answers exactly XInput
 /// One physical pad, as the game's poll last read it. Game thread (the poll and the console both run there).
 struct Pad
 {
-    rules::LetGo letGo;  // idle to the game until it lets go of what it held at a change or its idle's end
+    rules::OpenHold hold;      // View: held back from the game; a second down opens the player's window
+    rules::Held     leave;     // B: a window's close (a tap) or its leave (a hold)
+    rules::LetGo    letGo;     // idle to the game until it lets go of what it held at a change or its idle's end
+    std::uint16_t   last = 0;  // the buttons on its last poll (the listener's presses)
 };
 
 platform::VTableEntry g_getEntry;
@@ -51,12 +54,13 @@ std::uintptr_t        g_sonyVTable = 0;
 bool                  g_installed  = false;
 
 std::array<std::atomic<int>, kSlots> g_table{0, 1, 2, 3};
+std::atomic<Listener>                g_listener{nullptr};
 std::atomic<std::uint32_t>           g_idleUsers{0};  // bit N: XInput user N reads idle to the game
 std::atomic<std::uint32_t>           g_playing{1};    // the slots a player holds (SetPlaying)
 
 // Game thread.
 std::array<Pad, kSlots> g_pads{};
-std::uint32_t           g_waited = 0, g_rechecks = 0, g_changes = 0, g_startsHeld = 0;
+std::uint32_t           g_opens = 0, g_waited = 0, g_rechecks = 0, g_changes = 0, g_startsHeld = 0;
 std::uint32_t           g_unseenSlots    = 0;  // the slots whose pad answered while the engine counted them empty (bit N)
 std::uint32_t           g_unseenRechecks = 0;  // the re-checks set for them
 bool                    g_recheckFailing = false;  // the last re-check write failed (its warning said)
@@ -138,27 +142,57 @@ DWORD WINAPI GetStateFor(DWORD slot, XINPUT_STATE* state) noexcept
     }
     const int   user   = g_table[slot].load(std::memory_order_relaxed);
     const DWORD result = g_get(static_cast<DWORD>(user), state);
+    // The listener, the opener, the let-go and the Start gate follow the stock poll, on the game thread; Square's
+    // pad-type rescan and its last-active-pad check read through the same slot for the result alone and get the
+    // assigned pad as it is (idle or not).
+    const bool gameThread = players::generation::OnGameThread();
+    Pad&       pad        = g_pads[static_cast<std::size_t>(user)];
     if (result != ERROR_SUCCESS)
     {
         *state = XINPUT_STATE{};  // the engine reads the buffer as left after a failure (RE-pad-slots.md)
+        if (gameThread)
+        {
+            pad.hold  = {};  // a View held back as it dropped out is not a tap on its return
+            pad.leave = {};
+            pad.last  = 0;
+        }
         return result;
+    }
+    const auto         raw = state->Gamepad.wButtons;
+    const std::int64_t now = NowMs();
+    rules::Gated       gated{raw, false};
+    std::uint16_t      pressed = 0;  // the buttons down on this poll and up on the last
+    if (gameThread)
+    {
+        // Every pad's new presses, the opener and B's tap or hold go to the listener, an idle pad's too (its window's
+        // keys); the listener only notes them (a table change inside the poll would lose its re-check).
+        gated                     = rules::Gate(pad.hold, raw, now);
+        pressed                   = static_cast<std::uint16_t>(raw & ~pad.last);
+        const rules::Long b       = rules::Hold(pad.leave, (raw & rules::kB) != 0, now, rules::kLeaveHoldMs);
+        pad.last                  = raw;
+        if (const Listener listener = g_listener.load(std::memory_order_relaxed);
+            listener != nullptr && (pressed != 0 || gated.open || b != rules::Long::None))
+        {
+            listener(user, pressed, gated.open, b == rules::Long::Tap, b == rules::Long::Hold);
+        }
+        if (gated.open)
+        {
+            ++g_opens;
+            platform::Log(L"pads: View held 1 s on pad {} (player {}'s slot)", user + 1, slot + 1);
+        }
     }
     if ((g_idleUsers.load(std::memory_order_relaxed) >> user & 1u) != 0)
     {
         Idle(*state);
         return result;
     }
-    // The let-go and the Start gate follow the stock poll, on the game thread; Square's pad-type rescan and its
-    // last-active-pad check read through the same slot for the result alone and get the assigned pad as it is.
-    if (!players::generation::OnGameThread())
+    if (!gameThread)
     {
         return result;
     }
-    Pad&               pad   = g_pads[static_cast<std::size_t>(user)];
-    const auto         raw   = state->Gamepad.wButtons;
     const std::uint8_t left  = state->Gamepad.bLeftTrigger;
     const std::uint8_t right = state->Gamepad.bRightTrigger;
-    const rules::Wait  wait  = rules::Poll(pad.letGo, raw, left, right, NowMs());
+    const rules::Wait  wait  = rules::Poll(pad.letGo, raw, left, right, now);
     if (wait != rules::Wait::None)
     {
         Idle(*state);  // idle on the poll that ends the wait too
@@ -180,13 +214,14 @@ DWORD WINAPI GetStateFor(DWORD slot, XINPUT_STATE* state) noexcept
         }
         return result;
     }
-    // A pad that plays no one never pauses the game.
-    const std::uint16_t shown = rules::StartGate(raw, static_cast<int>(slot), g_playing.load(std::memory_order_relaxed));
-    if ((raw & rules::kStart) != 0 && (shown & rules::kStart) == 0)
+    // A pad that plays no one never pauses the game: its Start, heard by the listener, joins (session/player_window).
+    // View reaches the game only as a tap at its let-go (the opener holds it back).
+    const std::uint16_t shown = rules::StartGate(gated.buttons, static_cast<int>(slot), g_playing.load(std::memory_order_relaxed));
+    if ((pressed & rules::kStart) != 0 && (shown & rules::kStart) == 0)
     {
         ++g_startsHeld;
-        platform::LogDebug(L"pads: pad {}'s Start held back from the game (player {}'s slot, no player there)", user + 1,
-                           slot + 1);
+        platform::LogDebug(L"pads: pad {}'s Start held back from the game (player {}'s slot, no player there): a join",
+                           user + 1, slot + 1);
     }
     state->Gamepad.wButtons = shown;
     return result;
@@ -281,11 +316,11 @@ std::wstring IdleText(std::uint32_t users)
 std::wstring Reading()
 {
     const std::uint32_t idle = g_idleUsers.load();
-    return std::format(L"{}{}; {}; slots with a player {:#x}; Starts held back {}, waits for a let-go {}, re-checks {} "
+    return std::format(L"{}{}; {}; slots with a player {:#x}; View held {}, Starts held back {}, waits for a let-go {}, re-checks {} "
                        L"({} for a pad the engine had not seen; such slots now {:#x}), changes {}; last: {}",
                        g_installed ? L"on" : L"not installed",
                        idle != 0 ? std::format(L" (idle to the game: {})", IdleText(idle)) : std::wstring(),
-                       TableText(Table()), g_playing.load(), g_startsHeld, g_waited, g_rechecks, g_unseenRechecks,
+                       TableText(Table()), g_playing.load(), g_opens, g_startsHeld, g_waited, g_rechecks, g_unseenRechecks,
                        g_unseenSlots, g_changes, g_last);
 }
 #endif
@@ -363,6 +398,11 @@ try
 }
 catch (...)
 {
+}
+
+void Listen(Listener listener) noexcept
+{
+    g_listener.store(listener, std::memory_order_relaxed);
 }
 
 void SetPlaying(std::uint32_t slots) noexcept
@@ -474,6 +514,7 @@ bool Install(const platform::GameImage& image) noexcept
 
 void Remove() noexcept
 {
+    g_listener.store(nullptr);
     g_idleUsers.store(0);
     g_playing.store(~0u);  // every Start through, should a slot stay ours (a replace not put back)
     g_setEntry.Restore();

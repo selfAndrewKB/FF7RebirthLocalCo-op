@@ -49,6 +49,8 @@
 #include "input/climb_context.h"
 #include "input/pad_presence.h"
 #include "input/pad_table.h"
+#include "hud/view_prompt.h"
+#include "session/player_window.h"
 #include "input/seat_walk_cap.h"
 #include "input/walk_limits.h"
 #include "platform/log.h"
@@ -316,6 +318,10 @@ constexpr std::array kModules{
     Module{Call<&hud::action_icon_base::Install>, nullptr},
     // each seat's own map icons and markers
     Module{Call<&hud::seat_area_icons::Install>, &hud::seat_area_icons::Remove},
+    // a few lines in one player's own view, in the engine's font (the player windows)
+    Module{Call<&hud::view_prompt::Install>, &hud::view_prompt::Remove},
+    // each player's own window by pad: Start on a spare pad joins, View held opens it, B held leaves
+    Module{Call<&session::player_window::Install>, &session::player_window::Remove},
     // each half's cursor and enemy gauges follow its player's target
     Module{Call<&hud::target_views::Install>, &hud::target_views::Remove},
 };
@@ -368,6 +374,9 @@ static_assert(Ordered<&views::InstallPlayerViewPoint, &views::InstallStreamViews
               "the view point before the streaming views: they read whether it is installed");
 static_assert(Ordered<&hud::InstallOverlayLayout, &hud::InstallLayoutScale>(),
               "the overlay layout before the layout scale: the contain rule needs the layout");
+static_assert(Ordered<&input::pad_table::Install, &session::player_window::Install>() &&
+                  Ordered<&hud::view_prompt::Install, &session::player_window::Install>(),
+              "the pad table and the prompt before the player windows: the windows listen to the one, draw through the other");
 static_assert(Ordered<&players::widget_opacity::Install, &hud::prompt_rows::Install>() &&
                   Ordered<&players::widget_opacity::Install, &hud::field_markers::Install>() &&
                   Ordered<&players::widget_opacity::Install, &hud::search_pins::Install>() &&
@@ -778,6 +787,8 @@ void RegisterCommands(session::Session& session, players::SplitLayout& layout,
         session::RegisterCommands(session);
         input::pad_table::RegisterCommands();
         input::pad_presence::RegisterCommands();
+        session::player_window::RegisterCommands();
+        hud::view_prompt::RegisterCommands();
         input::pad_sticks::RegisterCommands();
         scopes::scope_leaks::RegisterCommands();
         input::pad_buttons::RegisterCommands();
