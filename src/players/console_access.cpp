@@ -27,30 +27,6 @@ StaticCall FindKismet(const wchar_t* path) noexcept
     return unreal::FindStatic(unreal::kKismetSystemLibrary, path);
 }
 
-/// Calls `call` with a zeroed parameter frame in which `text` is placed as an FString at
-/// `stringOffset` and `fill` writes the other inputs; `read` then sees the frame before the
-/// string is released.
-template <class Fill, class Read>
-bool CallWithString(const StaticCall& call, std::int32_t stringOffset, const wchar_t* text, Fill&& fill,
-                    Read&& read) noexcept
-{
-    constexpr std::int32_t kMaxFrame = 64;
-    if (call.defaultObject == nullptr || call.function->GetParmsSize() > kMaxFrame)
-    {
-        return false;
-    }
-    alignas(16) std::uint8_t frame[kMaxFrame]{};
-    auto* string = new (frame + stringOffset) RC::Unreal::FString(text);
-    fill(frame);
-    const bool called = unreal::GuardedProcessEvent(call.defaultObject, call.function, frame);
-    if (called)
-    {
-        read(frame);
-    }
-    string->~FString();
-    return called;
-}
-
 void NoInputs(std::uint8_t*) noexcept {}
 void NoOutputs(const std::uint8_t*) noexcept {}
 
@@ -71,7 +47,7 @@ std::optional<T> Variable(const wchar_t* getter, const wchar_t* variable) noexce
         return std::nullopt;
     }
     std::optional<T> value;
-    CallWithString(call, *name, variable, NoInputs, [&](const std::uint8_t* frame) {
+    unreal::CallWithString(call.defaultObject, call.function, *name, variable, NoInputs, [&](const std::uint8_t* frame) {
         value = *reinterpret_cast<const T*>(frame + *result);
     });
     return value;
@@ -114,8 +90,8 @@ bool Execute(const wchar_t* command) noexcept
         return false;
     }
     // SpecificPlayer stays null: the engine then uses player 1's controller, as the console does.
-    return CallWithString(
-        call, *text, command,
+    return unreal::CallWithString(
+        call.defaultObject, call.function, *text, command,
         [&](std::uint8_t* frame) { *reinterpret_cast<UObject**>(frame + *context) = world; }, NoOutputs);
 }
 

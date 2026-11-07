@@ -13,15 +13,14 @@
 #define RC_UNREAL_DISABLE_PROPERTY_DEPRECATION_WARNINGS
 #define RC_UNREAL_DISABLE_CLASS_DEPRECATION_WARNINGS
 #include <Unreal/Core/Containers/Array.hpp>
+#include <Unreal/Core/Containers/FString.hpp>
+#include <Unreal/UFunction.hpp>
 #include <Unreal/UObject.hpp>
 
 #include <cstdint>
+#include <new>
 #include <optional>
 #include <string>
-
-namespace RC::Unreal {
-class UFunction;
-}
 
 namespace lss::players::unreal {
 
@@ -35,6 +34,31 @@ bool GuardedProcessEvent(UObject* target, RC::Unreal::UFunction* function, void*
 /// where an input is written, or a result read, around GuardedProcessEvent.
 std::optional<std::int32_t> ParamOffset(RC::Unreal::UFunction* function, const wchar_t* name,
                                         std::int32_t size) noexcept;
+
+/// Calls `function` on `target` with a zeroed parameter frame in which `text` is placed as an FString at `stringOffset`
+/// and `fill` writes the other inputs; `read` then sees the frame before the string is released. False if the frame is
+/// larger than kMaxStringFrame bytes or the call raised an exception.
+inline constexpr std::int32_t kMaxStringFrame = 64;
+template <class Fill, class Read>
+bool CallWithString(UObject* target, RC::Unreal::UFunction* function, std::int32_t stringOffset, const wchar_t* text,
+                    Fill&& fill, Read&& read) noexcept
+{
+    if (target == nullptr || function == nullptr || function->GetParmsSize() > kMaxStringFrame || stringOffset < 0 ||
+        stringOffset + static_cast<std::int32_t>(sizeof(RC::Unreal::FString)) > kMaxStringFrame)
+    {
+        return false;
+    }
+    alignas(16) std::uint8_t frame[kMaxStringFrame]{};
+    auto* string = new (frame + stringOffset) RC::Unreal::FString(text);
+    fill(frame);
+    const bool called = GuardedProcessEvent(target, function, frame);
+    if (called)
+    {
+        read(frame);
+    }
+    string->~FString();
+    return called;
+}
 
 /// The running game instance (FF7R's UEndGameInstance), or null before the game has one.
 UObject* GameInstance() noexcept;
