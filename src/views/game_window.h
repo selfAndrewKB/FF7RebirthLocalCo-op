@@ -48,8 +48,9 @@ struct Window
 /// The game's native window, or nothing with the reason in `why`: its handle must name a top-level window of this process.
 std::optional<Window> Find(const wchar_t** why) noexcept;
 
-/// The window's rect in screen coordinates (the OS border included where the window has one).
-Rect WindowRect(HWND__* hwnd) noexcept;
+/// The window's client area in screen coordinates: what ReshapeWindow takes (it adds the OS border itself), so a
+/// reshape reads back as the rect asked for in every window mode.
+Rect ClientRect(HWND__* hwnd) noexcept;
 
 /// The engine's own reshape of its window to `rect`. False if the call faulted.
 bool Reshape(void* window, const Rect& rect) noexcept;

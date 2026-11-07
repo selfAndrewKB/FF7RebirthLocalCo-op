@@ -133,11 +133,13 @@ std::optional<Window> Find(const wchar_t** why) noexcept
     return window;
 }
 
-Rect WindowRect(HWND hwnd) noexcept
+Rect ClientRect(HWND hwnd) noexcept
 {
-    RECT rect{};
-    GetWindowRect(hwnd, &rect);
-    return {rect.left, rect.top, rect.right, rect.bottom};
+    RECT  client{};
+    POINT origin{};
+    GetClientRect(hwnd, &client);
+    ClientToScreen(hwnd, &origin);
+    return {origin.x, origin.y, origin.x + client.right, origin.y + client.bottom};
 }
 
 bool Reshape(void* window, const Rect& rect) noexcept

@@ -29,12 +29,12 @@ namespace lss::views::window_span {
 
 namespace {
 
+using game_window::ClientRect;
 using game_window::kModeFullscreen;
 using game_window::kModeWindowed;
 using game_window::ModeName;
 using game_window::RectText;
 using game_window::Reshape;
-using game_window::WindowRect;
 using monitor_row::Rect;
 
 constexpr std::uint32_t kHoldTicks         = 30;    // the rect and desktop check, twice a second at 60
@@ -61,8 +61,8 @@ std::uint64_t g_rowShape    = 0;      // the desktop's shape the row stands on
 std::uint32_t g_outTicks    = 0;
 bool          g_rowLost     = false;  // the last leave was the desktop's doing: the next entry keeps the window's place from before
 HWND          g_hwnd        = nullptr;
-std::int32_t  g_mode        = -1;     // the window's mode at the entry: Windowed keeps the OS border, so its rect is not the row's
-Rect          g_before;               // the window rect before the span
+std::int32_t  g_mode        = -1;     // the window's mode at the entry, for the log
+Rect          g_before;               // the window's client area before the span
 Rect          g_target;
 std::int32_t  g_columns     = 0;
 std::int32_t  g_mostColumns = 0;      // the most columns the row can give: the connected picks, or the desktop's row
@@ -110,13 +110,13 @@ try
 {
     std::vector<std::int32_t> widths  = choice.widths;  // before anything changes: a failed allocation leaves the state as it was
     std::vector<std::int32_t> heights = choice.heights;
-    const Rect seen = WindowRect(window.hwnd);
+    const Rect seen = ClientRect(window.hwnd);
     if (!Reshape(window.object, choice.span))
     {
         platform::Log(L"window span: {}: ReshapeWindow faulted; the window stays at {}", why, RectText(seen));
         return false;
     }
-    const Rect after = WindowRect(window.hwnd);
+    const Rect after = ClientRect(window.hwnd);
     g_columns     = count;
     g_mostColumns = MostColumns(desktop, choice);
     g_hwnd        = window.hwnd;
@@ -135,14 +135,14 @@ try
         sizes += std::format(L"{}{}x{}", sizes.empty() ? L"" : L" | ", g_widths[i], g_heights[i]);
     }
     platform::Log(L"window span: {}: {} columns over {}row of {} monitor(s) ({}){}{} ({} mode{}); the engine's "
-                  L"ReshapeWindow{}; the window was {}, is now {}{}",
+                  L"ReshapeWindow{}; the window's client area was {}, is now {}{}",
                   why, g_columns, desktop.picks.named > 0 ? L"the settings file's " : choice.gamesRow ? L"the game's " : L"a ",
                   choice.rowMonitors, sizes, L"",
                   display_align::Moved() ? std::format(L" (moved for this Windows session: {})", display_align::Reading())
                                          : std::wstring(),
-                  ModeName(window.mode), window.mode == kModeWindowed ? L", so the OS border stays around the client area" : L"",
+                  ModeName(window.mode), window.mode == kModeWindowed ? L", so the OS border stays around it" : L"",
                   RectText(choice.span), RectText(seen), RectText(after),
-                  after == choice.span || window.mode == kModeWindowed ? L"" : L" (NOT the row yet; held from the tick)");
+                  after == choice.span ? L"" : L" (NOT the row yet; held from the tick)");
     if (std::adjacent_find(g_widths.begin(), g_widths.end(), std::not_equal_to<>()) != g_widths.end())
     {
         platform::Log(L"window span: the row's monitors differ in width; the engine's equal columns do not end at the "
@@ -201,7 +201,7 @@ try
     {
         // A row lost and regained is one stretch of play: Windows may have shifted the window in between, and the place
         // to return to is still the one from before the first entry.
-        g_before = g_rowLost ? g_before : WindowRect(window->hwnd);
+        g_before = g_rowLost ? g_before : ClientRect(window->hwnd);
     }
     if (!choice.moves.empty())
     {
@@ -217,6 +217,7 @@ try
         g_columns     = count;  // the move's target; the window follows once the desktop reads as the row
         g_mostColumns = MostColumns(desktop, choice);
         g_hwnd        = window->hwnd;
+        g_mode        = window->mode;
         g_step        = Step::LiningUp;
         g_stepTicks   = 0;
         platform::Log(L"window span: {}: moving monitors to make the row ({}); the window follows once the desktop reads "
@@ -264,9 +265,9 @@ try
     const wchar_t* reason = L"";
     const auto     window = game_window::Find(&reason);
     const bool     back   = window && Reshape(window->object, g_before);
-    const Rect     after  = window ? WindowRect(window->hwnd) : Rect{};
-    platform::Log(L"window span: {}: the window {} {}{}; re-applied {} time(s), re-shaped for other columns {} time(s) "
-                  L"while in",
+    const Rect     after  = window ? ClientRect(window->hwnd) : Rect{};
+    platform::Log(L"window span: {}: the window's client area {} {}{}; re-applied {} time(s), re-shaped for other columns "
+                  L"{} time(s) while in",
                   why, back ? L"put back to" : L"could NOT be put back to", RectText(g_before),
                   window ? std::format(L", now {}", RectText(after)) : std::format(L" ({})", reason), g_reapplies,
                   g_reshapes);
@@ -340,7 +341,7 @@ try
 {
     const wchar_t* reason = L"";
     const auto     window = game_window::Find(&reason);
-    const auto     seen   = window ? std::optional(WindowRect(window->hwnd)) : std::nullopt;
+    const auto     seen   = window ? std::optional(ClientRect(window->hwnd)) : std::nullopt;
     switch (g_presetWait.Next(seen, kHoldTicks, kPresetGiveUpTicks))
     {
         case PresetWait::Step::Wait: return;
@@ -410,8 +411,8 @@ try
         CheckTheDesktop();
         return;
     }
-    const Rect seen = WindowRect(g_hwnd);
-    if (seen == g_target || g_mode == kModeWindowed)  // a Windowed window's rect holds the OS border: not the row's
+    const Rect seen = ClientRect(g_hwnd);
+    if (seen == g_target)
     {
         return;
     }
@@ -419,7 +420,7 @@ try
     const auto     window = game_window::Find(&why);
     const bool     done   = window && Reshape(window->object, g_target);
     ++g_reapplies;
-    platform::Log(L"window span: the window was at {}, not the row; {} (re-apply {})", RectText(seen),
+    platform::Log(L"window span: the window's client area was at {}, not the row; {} (re-apply {})", RectText(seen),
                   done ? L"put back through ReshapeWindow" : L"could NOT be put back", g_reapplies);
 }
 catch (...)
@@ -681,11 +682,11 @@ std::wstring Reading()
     {
         return g_held ? L"out; the three-player monitor mode waits for its row" : L"out";
     }
-    return std::format(L"{}{}: {} columns (the row gives {} at most), the row has {} monitor(s), the window {} (the row {}), "
-                       L"re-applies {}, re-shapes {}{}",
+    return std::format(L"{}{}: {} columns (the row gives {} at most), the row has {} monitor(s), the window's client area {} "
+                       L"(the row {}; {} mode), re-applies {}, re-shapes {}{}",
                        g_step == Step::LiningUp ? L"moving monitors" : L"in", g_held ? L" (the three-player monitor mode)" : L"",
-                       g_columns, g_mostColumns, g_rowMonitors, IsWindow(g_hwnd) ? RectText(WindowRect(g_hwnd)) : std::wstring(L"?"),
-                       RectText(g_target), g_reapplies, g_reshapes,
+                       g_columns, g_mostColumns, g_rowMonitors, IsWindow(g_hwnd) ? RectText(ClientRect(g_hwnd)) : std::wstring(L"?"),
+                       RectText(g_target), ModeName(g_mode), g_reapplies, g_reshapes,
                        display_align::Moved() ? std::format(L"; monitors moved: {}", display_align::Reading()) : std::wstring());
 }
 
