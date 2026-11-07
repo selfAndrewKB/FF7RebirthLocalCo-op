@@ -16,6 +16,9 @@
 
 namespace lss::platform {
 
+/// The game's executable, as the process list names it.
+inline constexpr const wchar_t* kGameExe = L"ff7rebirth_.exe";
+
 class GameImage
 {
 public:

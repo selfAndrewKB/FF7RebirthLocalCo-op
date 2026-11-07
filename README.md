@@ -29,8 +29,26 @@ each player's view showing their own HUD. None of this needs a key.
 | Ctrl+F9 | For testing: every pad drives every player's sticks (the game's merge) |
 | Ctrl+F10 | For comparison: the NPC population follows the leader alone instead of every player |
 | Ctrl+F11 | For comparison: characters near player 2 or 3 take their detail from player 1's camera alone |
-| Ctrl+F3 | The three-player monitor mode on and off: the window across a row of three monitors, player 1's picture in every column no player has |
+| Ctrl+F3 | The three-player monitor mode on and off: the window across the row of monitors, player 1's picture in every column no player has |
 | Ctrl+F2 | The game window across its row of monitors, and back |
+
+**Several monitors:** one full view per player, each on its own monitor.
+
+1. With the game closed, run **Multi Monitor Setup** (`MultiMonitorSetup.exe` in the mod's folder,
+   `Mods/LocalSplitScreen`).
+2. Click two or three monitors in the order you want them, left to right. Each is marked with the player it will show.
+3. Set **Multiple Monitors** to On and press **Save**.
+4. Start the game as always, in windowed fullscreen (borderless) or windowed mode. The app need not stay open.
+
+The monitors need not stand side by side in Windows, and they may differ in size and scaling. While the game runs they
+are moved into a row, and they go back when it ends, even after a crash. Windows' own arrangement is never changed, so
+a restart of the PC always returns your layout. If a game ever ends without putting them back, the app shows a
+**Restore Monitors** button. A monitor you picked that is not connected is waited for, not replaced: with two of three
+connected the game uses those two, with fewer it stays in one window. A virtual monitor made by a streaming program
+(Apollo, Vibepollo) works like any other and is recognised by its name, so give each device you stream to a name of its
+own. With no monitors picked, the game takes the longest row of monitors of one height it finds. Leave
+`MultiMonitorSetup.exe` where it is and under that name: the mod starts it in the background to put your monitors back
+if the game dies.
 
 **Settings file:** the mod writes `Mods/LocalSplitScreen/LocalSplitScreen.ini` at every start from its own list of
 options, each with its words, its default and a line of help, and reads it once at the next start: change a value after
@@ -153,7 +171,12 @@ cmake --build build-release --config Game__Shipping__Win64 --target LocalSplitSc
 Copy `build/Game__Shipping__Win64/LocalSplitScreen.dll` to
 `<game>/End/Binaries/Win64/ue4ss/Mods/LocalSplitScreen/dlls/main.dll`, and in `Mods/mods.txt`
 enable `LocalSplitScreen : 1`. Enable only one split-screen mod at a time. Close the game first:
-it holds the DLL open while running.
+it holds the DLL open while running. Copy `build/Game__Shipping__Win64/MultiMonitorSetup.exe` (the setup app, built
+with the mod; also the guard that puts moved monitors back) to `Mods/LocalSplitScreen/`, beside the settings file.
+`tools/relaunch.ps1 -Deploy -Label <name>` does both and sets an open copy of the app aside.
+
+The monitor row, the record of moved monitors and the setup app are shared with the FF7 Remake mod: `tools/remake_drift.py`
+lists the files kept identical and the adapted ones, and says which have drifted from Remake's.
 
 Do not deploy the `UE4SS.dll` this build produces; the game keeps its installed UE4SS, which is the Nexus Mods
 "UE4SS-Rebirth_FFVII_ReMenu (1.005 Compatible)" upload with its own `UE4SS_Signatures` (`tools/ue4ss_nexus/README.md`:

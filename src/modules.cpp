@@ -622,16 +622,18 @@ Result SetMonitorMode(bool on) noexcept
         views::window_span::Hold(false);
         return {true, L"the three-player monitor mode is off"};
     }
-    if (views::window_span::Held())
+    if (views::window_span::Held() && views::window_span::In())
     {
         return {true, L"the three-player monitor mode is already on"};
     }
     if (!views::window_span::Hold(true))
     {
-        return {false, L"the three-player monitor mode could not be switched on (the log says why)"};
+        // The mode stands: with no row now it waits for one (a picked monitor not connected, no row on the desktop).
+        return {views::window_span::Held(),
+                views::window_span::Held() ? L"the three-player monitor mode is on and waits for its row of monitors (the log says what is missing)"
+                                           : L"the three-player monitor mode could not be switched on (the log says why)"};
     }
-    return {true, on ? L"three monitors, player 1's picture in every column no player has"
-                     : L"the three-player monitor mode is off; the window put back"};
+    return {true, L"the row of monitors, player 1's picture in every column no player has"};
 }
 
 Result SetWindowSpan(const session::Session& session, bool on, const wchar_t* why) noexcept
@@ -732,8 +734,9 @@ void RegisterOwnCommands(session::Session& session)
               .help = L"the window span: out, lining up or in, its columns, the row, the window",
               .get  = [] { return Value{views::window_span::Reading()}; }});
     Register({.name = L"window-span", .shape = Shape::OnOff,
-              .help = L"the game window across its row of equal monitors, one column per local player, through the "
-                      L"engine's own window reshape; needs player 2 or 3 in",
+              .help = L"the game window across its row of monitors (the settings file's, moved into a row, or one the "
+                      L"desktop has), one column per local player, through the engine's own window reshape; needs "
+                      L"player 2 or 3 in",
               .set  = [&session](const Value& v) {
                   return From(SetWindowSpan(session, std::get<bool>(v), L"the window-span command"));
               },

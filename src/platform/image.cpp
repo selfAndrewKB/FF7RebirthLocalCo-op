@@ -15,7 +15,6 @@ namespace lss::platform {
 namespace {
 
 constexpr std::uintptr_t kIdaImageBase = 0x140000000;
-constexpr wchar_t        kGameModule[] = L"ff7rebirth_.exe";
 
 /// True if every byte of [address, address + length) is committed and readable. Lying inside the
 /// image is not enough: a page can still be inaccessible, and reading it would crash the game
@@ -42,7 +41,7 @@ bool IsReadable(std::uintptr_t address, std::size_t length) noexcept
 
 std::optional<GameImage> GameImage::Locate() noexcept
 {
-    const HMODULE module = GetModuleHandleW(kGameModule);
+    const HMODULE module = GetModuleHandleW(kGameExe);
     if (module == nullptr)
     {
         return std::nullopt;

@@ -55,13 +55,15 @@ inline constexpr std::array<const wchar_t*, 2> kOnOffLabels{L"On", L"Off"};
 
 inline constexpr Option kMultiMonitor{  // views/window_span
     L"Views", L"multi-monitor", kOnOffWords, L"off",
-    L"the game window across a row of three equal monitors, one full view per column, whatever the players: on (held "
-    L"from the game's first steady frame, as Ctrl+F3 does; a column no player fills shows player 1's picture), off (no "
-    L"span until window-span on or Ctrl+F2 with a player in, or Ctrl+F3; from the console: leaves now)",
+    L"the game window across a row of monitors (the ones picked in the setup app, moved into a row while the game holds "
+    L"it, else a row the desktop has), one full view per column, whatever the players: on (held from the game's first "
+    L"steady frame, as Ctrl+F3 does; a column no player fills shows player 1's picture; a picked monitor not connected "
+    L"is waited for), off (no span until window-span on or Ctrl+F2 with a player in, or Ctrl+F3; from the console: "
+    L"leaves now)",
     false, L"Multiple Monitors", kOnOffLabels,
     L"One full view per player across a row of monitors, each fitted to its monitor. On: always. Off: "
     L"every view in one window."};
-inline constexpr Option kMonitors{  // views/window_span (read by the monitor row once it picks monitors by name)
+inline constexpr Option kMonitors{  // views/window_span, views/monitor_picks FindPicks
     L"Views", L"monitors", {}, L"",
     L"(read only) the monitors of the row, left to right, as the setup app wrote them; empty: any row the desktop has",
     false, L"Monitors in the Row", {},

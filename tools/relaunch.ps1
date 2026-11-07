@@ -6,7 +6,9 @@
     1. If the game is running: player 2 leaves (if in), then the mod's `quit` command, and the game
        is waited on until it exits by itself. It is never killed.
     2. With -Deploy: the installed main.dll is kept as main.dll.bak-<Label> and the build is copied
-       in; both hashes are printed and must match.
+       in; both hashes are printed and must match. The setup app built beside the DLL goes next to the
+       settings file (the mod starts it as the guard that puts moved monitors back); an open copy is set
+       aside by renaming, since Windows will not overwrite a running exe.
     3. The last session's UE4SS.log is kept under ue4ss\logs (the newest ten), since each launch
        starts a new one.
     4. The game is launched through Steam (or, with -Direct, its exe is started directly: the 1.004
@@ -65,6 +67,26 @@ if ($Deploy) {
     $built     = (Get-FileHash $Build).Hash
     "installed $installed (backup main.dll.bak-$Label)"
     if ($installed -ne $built) { throw "the installed DLL does not match the build ($built)" }
+    # The setup app, named by the mod's own line (the build names the exe from the same one).
+    $nameLine = Select-String -Path "$PSScriptRoot\..\src\views\display_move.h" -Pattern 'kSetupExe = L"([^"]+)"'
+    $setup    = if ($nameLine) { Join-Path (Split-Path $Build -Parent) $nameLine.Matches[0].Groups[1].Value } else { '' }
+    if ($setup -and (Test-Path $setup)) {
+        $target = Join-Path $modDir (Split-Path $setup -Leaf)
+        foreach ($stale in Get-ChildItem $modDir -Filter "$(Split-Path $setup -Leaf).in-use-*" -ErrorAction SilentlyContinue) {
+            try { [IO.File]::Delete($stale.FullName) } catch { }  # an earlier deploy's set-aside copy, once that app has closed
+        }
+        try {
+            Copy-Item $setup $target -ErrorAction Stop
+            "installed $(Split-Path $setup -Leaf)"
+        } catch {
+            $aside = "$target.in-use-$Label"
+            [IO.File]::Move($target, $aside)
+            Copy-Item $setup $target
+            "installed $(Split-Path $setup -Leaf) (the app was open: its old file is set aside as $(Split-Path $aside -Leaf))"
+        }
+    } else {
+        'the setup app is not built: the mod has no guard to put moved monitors back after a crash'
+    }
 }
 
 # UE4SS starts a new log on every launch: the last session's is kept first (the newest ten).

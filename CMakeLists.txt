@@ -205,8 +205,15 @@ add_library(LocalSplitScreen SHARED
     src/views/stream_view_math.cpp
     src/views/stream_views.cpp
     src/views/display_align.cpp
+    src/views/display_config.cpp
+    src/views/display_move.cpp
+    src/views/game_window.cpp
     src/views/mirror_player.cpp
+    src/views/monitor_list.cpp
+    src/views/monitor_picks.cpp
     src/views/monitor_row.cpp
+    src/views/record_file.cpp
+    src/views/span_desktop.cpp
     src/views/view_shape.cpp
     src/views/window_span.cpp
     src/views/whole_screen.cpp
@@ -261,6 +268,56 @@ else()
 endif()
 
 # ------------------------------------------------------------------------------------------------
+# The setup app: picks the monitors and writes LocalSplitScreen.ini; shares the mod's row rules and settings table
+# ------------------------------------------------------------------------------------------------
+enable_language(RC)
+
+# The app's version is the mod's: read from the one version string, and read again whenever that file changes.
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS src/mod.cpp)
+file(STRINGS src/mod.cpp LSS_VERSION_LINE REGEX "kVersion = L\"" LIMIT_COUNT 1)
+# Plain numbers, none starting with a zero: the resource compiler reads a leading zero as octal.
+if(NOT LSS_VERSION_LINE MATCHES "L\"((0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)[^\"]*)\"")
+    message(FATAL_ERROR "src/mod.cpp: kVersion not found as L\"major.minor.patch...\"")
+endif()
+set(LSS_VERSION "${CMAKE_MATCH_1}")
+set(LSS_VERSION_MAJOR "${CMAKE_MATCH_2}")
+set(LSS_VERSION_MINOR "${CMAKE_MATCH_3}")
+set(LSS_VERSION_PATCH "${CMAKE_MATCH_4}")
+
+# The app's file name is the one the mod starts its guard by: read from that line, and read again whenever its file changes.
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS src/views/display_move.h)
+file(STRINGS src/views/display_move.h LSS_SETUP_LINE REGEX "kSetupExe = L\"" LIMIT_COUNT 1)
+if(NOT LSS_SETUP_LINE MATCHES "L\"([A-Za-z0-9_]+)\\.exe\"")
+    message(FATAL_ERROR "src/views/display_move.h: kSetupExe not found as L\"Name.exe\"")
+endif()
+set(LSS_SETUP_NAME "${CMAKE_MATCH_1}")
+configure_file(setup/setup_version.h.in "${CMAKE_CURRENT_BINARY_DIR}/generated/setup_version.h" @ONLY)
+
+add_executable(SetupApp WIN32
+    setup/main.cpp
+    setup/app.cpp
+    setup/guard.cpp
+    setup/tips.cpp
+    setup/view.cpp
+    setup/app.rc
+    setup/app.manifest
+    src/views/display_config.cpp
+    src/views/display_move.cpp
+    src/views/monitor_list.cpp
+    src/views/monitor_picks.cpp
+    src/views/monitor_row.cpp
+    src/views/record_file.cpp
+)
+set_property(TARGET SetupApp PROPERTY OUTPUT_NAME "${LSS_SETUP_NAME}")
+target_include_directories(SetupApp PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src" "${CMAKE_CURRENT_SOURCE_DIR}"
+                                            "${CMAKE_CURRENT_BINARY_DIR}/generated")
+target_compile_features(SetupApp PRIVATE cxx_std_20)
+target_compile_definitions(SetupApp PRIVATE NOMINMAX)
+target_link_libraries(SetupApp PRIVATE user32 gdi32 msimg32 comctl32 shell32 dwmapi uxtheme)
+set_source_files_properties(setup/app.rc PROPERTIES OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/setup/app.ico")  # a new icon rebuilds it
+set_property(TARGET SetupApp PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded")  # one file: no runtime to install
+
+# ------------------------------------------------------------------------------------------------
 # Host-side tests: the logic that needs neither the game nor UE4SS
 # ------------------------------------------------------------------------------------------------
 enable_testing()
@@ -287,6 +344,8 @@ lss_test(split_screen_settings src/players/split_screen_settings.cpp src/players
 lss_test(monitor_row src/views/monitor_row.cpp)
 lss_test(monitor_picks src/views/monitor_picks.cpp src/views/monitor_row.cpp)
 lss_test(row_journal)
+lss_test(setup_rules src/views/monitor_picks.cpp src/views/monitor_row.cpp)
+target_include_directories(setup_rules_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")  # the app's own folder (setup/)
 lss_test(single_view src/players/single_view.cpp)
 lss_test(whole_screen src/views/whole_screen_reason.cpp)
 lss_test(column_source src/views/column_source.cpp)
