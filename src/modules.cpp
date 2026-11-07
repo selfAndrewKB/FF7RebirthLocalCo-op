@@ -47,6 +47,8 @@
 #include "hud/user_widgets.h"
 #include "input/approach_own_camera.h"
 #include "input/climb_context.h"
+#include "input/pad_presence.h"
+#include "input/pad_table.h"
 #include "input/seat_walk_cap.h"
 #include "input/walk_limits.h"
 #include "platform/log.h"
@@ -143,6 +145,8 @@ constexpr std::array kModules{
     // The party leader answering a seat's member for one of the game's calls: first, so the modules that check it
     // at their own install come after it; every other holder takes a scope at tick time (an unheld scope refuses).
     Module{Call<&scopes::leader_scope::Install>, nullptr},
+    // which physical pad answers each player's slot (identity until changed); a pad no player holds never pauses
+    Module{Call<&input::pad_table::Install>, &input::pad_table::Remove},
 
     // The seats' stages that are not the session's own, next to their siblings.
     // each seat's Battle operator follows player 1's
@@ -407,7 +411,8 @@ void TickBeforeSession() noexcept
         chocobos[seat] = rides::chocobo_ride::DrivenChocobo(seat);
     }
     players::generation::BeginTick(chocobos);
-    feedback::pad_rumble::BeforeTick();    // before the world tick: each seat's controller ordered after player 1's
+    input::pad_presence::Tick();  // which XInput users answer, once a second; the pad table's re-check from it
+    feedback::pad_rumble::BeforeTick();   // before the world tick: each seat's controller ordered after player 1's
     feedback::combat_rumble::BeforeTick();  // outside every notify: their call sites; the status line
     feedback::traversal_rumble::Tick();      // each seat's list made at join (dropped if it left another way)
     battle::equal_targeting::Tick();      // every player's types for the Condition selects (no leader scope held)
@@ -439,12 +444,16 @@ void TickAfterSession(const Frame& frame) noexcept
     {
         g_ownColumns[static_cast<std::size_t>(seat)] = frame.shown.OwnColumn(seat);
     }
-    // By seat, whether the seat's player plays a member (index 0 unused): the world modules' per-seat passes.
+    // By seat, whether the seat's player plays a member (index 0 unused): the world modules' per-seat passes. And the
+    // pad slots a player holds (a seat's controller id is its seat), whose Start reaches the game.
     std::array<bool, players::kMaxPlayers> plays{};
+    std::uint32_t                          playing = 1;
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
         plays[seat] = frame.seats[seat].PlaysMember();
+        playing |= frame.seats[seat].state != players::SeatState::Out ? 1u << seat : 0u;
     }
+    input::pad_table::SetPlaying(playing);
     input::walk_limits::Tick();  // after the session's tick: a take's copy is overwritten this frame
     world::nav_strand::Tick(frame.splitShown);  // a stranded player is warped back to the party
     camera::camera_repair::Tick();
@@ -767,6 +776,8 @@ void RegisterCommands(session::Session& session, players::SplitLayout& layout,
         players::RegisterCommands(layout);
         views::column_source::RegisterCommands(choice);
         session::RegisterCommands(session);
+        input::pad_table::RegisterCommands();
+        input::pad_presence::RegisterCommands();
         input::pad_sticks::RegisterCommands();
         scopes::scope_leaks::RegisterCommands();
         input::pad_buttons::RegisterCommands();

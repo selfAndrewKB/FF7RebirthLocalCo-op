@@ -1,0 +1,70 @@
+#pragma once
+
+// Which physical pad answers each of the game's pad slots (plan/remake-alignment.md step 4; research/RE-pad-slots.md).
+//
+// The game reads pads in one place for every reader, xinput1_3's XInputGetState import slot (Unreal's stock
+// XInputInterface::SendControllerEvents, Square's pad-type rescan and its last-active-pad check), and sends rumble
+// through the XInputSetState slot. The mod points those slots at its own two functions, which ask XInput for the
+// physical pad the table assigns to the slot the game asked about: the game's controller id N, and with it player N's
+// buttons, sticks, menus and rumble, follow the pad assigned to N. The game's reader, its events and its per-slot
+// state are its own; only which device answers a slot changes, as Steam Input itself does. After every change the
+// interface's own re-check byte is set (the field its WM_DEVICECHANGE handling writes), so a pad moved onto a slot the
+// engine counted empty is polled, and every slot's "last rumble sent" pair is cleared, since the game sends rumble
+// only when a slot's values change: its next send then reaches the pad that now has the slot. Identity until changed,
+// so normal play sees no change. The keyboard stays player 1's. The mirror views' controller ids come after XInput's
+// four users (players/seats.h), so no pad ever answers for one.
+//
+// Also here, on the same poll:
+//   - idle, per pad: an idle pad reads "nothing pressed" to the game (an absent one stays absent) and its rumble is
+//     off;
+//   - after its idle or a change, a pad stays idle to the game until it lets go of what it was holding then, so the
+//     press that ended it never reaches the game as an attack or a talk (pad_rules LetGo: a resting trigger or a stuck
+//     button never holds a pad for good);
+//   - Start only on a slot a player holds (pad_rules::StartGate; slot 0 always): a pad that plays no one never pauses
+//     the game; the rest of such a pad still reaches the game as before.
+// A PlayStation pad the game reads through its own scePad device is not XInput and is not moved (logged at install).
+// Console: `pad-table` (the pads of players 1-3 and the spare slot, e.g. `pad-table 2 1 3 4`), `pads-idle`; reading
+// `players.pad-table`.
+
+#include "input/pad_rules.h"
+#include "platform/dev_switch.h"
+
+#include <cstdint>
+
+namespace lss::platform {
+class GameImage;
+}
+
+namespace lss::input::pad_table {
+
+bool Install(const platform::GameImage& image) noexcept;
+void Remove() noexcept;
+
+/// The table now: slot N's physical XInput user.
+pad_rules::PadTable Table() noexcept;
+
+/// Sets the table (a permutation of 0..3, else refused) and has the engine poll every slot again. Game thread.
+bool Set(const pad_rules::PadTable& table, const wchar_t* why) noexcept;
+
+/// The physical pads that read idle to the game (bit N: XInput user N); a pad leaving the set waits for its let-go.
+/// Game thread.
+void SetIdleUsers(std::uint32_t users, const wchar_t* why) noexcept;
+
+/// The slots a player holds (bit N: slot N, the controller id seat N plays; bit 0 always): the others' Start is held
+/// back from the game. Once per engine tick from the session's seats. Game thread.
+void SetPlaying(std::uint32_t slots) noexcept;
+
+/// The engine polls a slot it counts empty only after a device change it heard (research/RE-pad-slots.md). A pad that
+/// comes back, or moves to another XInput number (Steam Input renumbers its pads when one turns off or on), can land
+/// on such a slot between those messages and stay dead to the game until the next device change. Given the XInput
+/// users that answer (bit N: user N, input/pad_presence's poll, once a second), every slot whose pad answers while
+/// the engine counts the slot empty gets the engine's own re-check. Logged when the set of such slots changes. Game
+/// thread.
+void RecheckAnswering(std::uint32_t answeringUsers) noexcept;
+
+#if LSS_DEV
+/// The `pad-table` and `pads-idle` commands and the `players.pad-table` reading. May throw (out of memory).
+void RegisterCommands();
+#endif
+
+}  // namespace lss::input::pad_table

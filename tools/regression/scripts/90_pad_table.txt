@@ -1,0 +1,22 @@
+# The pad table (plan/remake-alignment.md step 4b): the console moves pads between the players' slots and back; the
+# engine's re-check is set at each change and every slot's last rumble forgotten; every pad idle and back; the pads
+# reading answers from the once-a-second poll.
+# needs: control
+# expect: pads: player 1 pad 2, player 2 pad 1, player 3 pad 3, spare pad 4 \(was player 1 pad 1, player 2 pad 2, player 3 pad 3, spare pad 4\): the console
+# expect: pads: idle to the game: pad 1, pad 2, pad 3, pad 4: the console
+# expect: pads: idle to the game: none: the console
+# expect: pads: player 1 pad 1, player 2 pad 2, player 3 pad 3, spare pad 4 \(was player 1 pad 2, player 2 pad 1, player 3 pad 3, spare pad 4\): the console
+# expect-not: pads: the engine's pad re-check could not be set
+note regression: pad table start
+pad-table 2 1 3 4
+wait 60
+get players.pad-table
+pads-idle on
+wait 60
+pads-idle off
+wait 60
+pad-table 1 2 3 4
+wait 60
+get players.pad-table
+get pads
+note regression: pad table done

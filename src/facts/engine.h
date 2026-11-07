@@ -338,6 +338,36 @@ inline constexpr std::uintptr_t kSubmitCommandsHintVTable  = 0x146602920;
 inline constexpr std::uintptr_t kSubmitCommandsHintExecute = 0x140D00988;
 
 // ---------------------------------------------------------------------------------------------
+// The pads: XInput's import slots and the engine's XInput device (stock UE4; RE-pad-slots.md, both builds)
+// ---------------------------------------------------------------------------------------------
+
+/// The exe's import slots for xinput1_3's XInputGetState and XInputSetState (.idata, read-only): every pad read of
+/// the game (the stock poll, Square's pad-type rescan and its last-active-pad check) and its one rumble send go
+/// through them (1.005: 0x145569800, 0x1455697F8).
+inline constexpr std::uintptr_t kXInputGetStateImport = 0x145714810;
+inline constexpr std::uintptr_t kXInputSetStateImport = 0x145714808;
+
+/// GWindowsApplication, the FWindowsApplication pointer (1.005: 0x1491D8608); its XInputDevice at +0xD8, the external
+/// input devices' array at +0xE8 (data, then Num at +0xF0).
+inline constexpr std::uintptr_t kWindowsApplicationGlobal = 0x14939BDD0;
+inline constexpr std::uint32_t  kAppXInputInterface       = 0xD8;
+inline constexpr std::uint32_t  kAppInputDevices          = 0xE8;
+
+/// XInputDevice: the re-check byte (bNeedsControllerStateUpdate: the window procedure's WM_DEVICECHANGE sets it, the
+/// poll clears it at its end; a slot the engine counts empty is polled only while it is set), the four slot records
+/// (stride 0x108), each with its connected byte and the last motor values sent (rumble is sent when they change).
+inline constexpr std::uint32_t kXInputNeedsStateUpdate     = 0x08;
+inline constexpr std::uint32_t kXInputControllerStates     = 0x28;
+inline constexpr std::uint32_t kXInputControllerStateBytes = 0x108;
+inline constexpr std::uint32_t kXInputStateConnected       = 0xE2;
+inline constexpr std::uint32_t kXInputStateLastLarge       = 0xFC;   // float
+inline constexpr std::uint32_t kXInputStateLastSmall       = 0x100;  // float
+
+/// The PlayStation pad reader's device vtable (the SonyController plugin, scePad; 1.005: 0x146432E10): not XInput, so
+/// the pad table does not move its pads.
+inline constexpr std::uintptr_t kSonyControllerDeviceVTable = 0x1465A8AE0;
+
+// ---------------------------------------------------------------------------------------------
 // The startup check list
 // ---------------------------------------------------------------------------------------------
 

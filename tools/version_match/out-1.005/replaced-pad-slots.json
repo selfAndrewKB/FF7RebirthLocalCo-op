@@ -1,0 +1,44 @@
+{
+ "build": "1.005",
+ "research_build": "1.004",
+ "date": "2026-11-07",
+ "doc": "Rebirth/Documentation/research/RE-pad-slots.md",
+ "facts": [
+  {
+   "name": "IAT XInputGetState (xinput1_3)",
+   "old": "0x145714810",
+   "new": "0x145569800",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "The IDA pass [PADSLOTS] on both databases (RE-pad-slots.md section 2.1): the only XInputGetState import slot, read by all four callers."
+  },
+  {
+   "name": "IAT XInputSetState (xinput1_3)",
+   "old": "0x145714808",
+   "new": "0x1455697F8",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "RE-pad-slots.md section 2.1: the only XInputSetState import slot, its one caller the stock rumble send."
+  },
+  {
+   "name": "GWindowsApplication (the FWindowsApplication pointer)",
+   "old": "0x14939BDD0",
+   "new": "0x1491D8608",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "RE-pad-slots.md section 2.3: written by CreateWindowsApplication; the XInputDevice at +0xD8 in both builds."
+  },
+  {
+   "name": "SonyControllerDevice vtable",
+   "old": "0x1465A8AE0",
+   "new": "0x146432E10",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "RE-pad-slots.md section 2.7: written by the device constructor; compared against the engine's external input devices for the install line."
+  }
+ ]
+}

@@ -409,7 +409,7 @@ inline constexpr std::uint8_t kBytes_008876AC[] = {
     0x41, 0xB8, 0x40, 0x00, 0x00, 0x00, 0x99, 0x41, 0xF7, 0xF8, 0x4C, 0x63, 0xC0, 0x41, 0x8D, 0x41,
     0x01, 0x4C, 0x63, 0xD2, 0x41, 0xB9, 0x02, 0x00, 0x00, 0x00, 0x99, 0x41, 0xF7, 0xF9, 0x48, 0x63,
 };
-// 0x140887AE0 -> 0x1409772F8 (replaced-hud_renderer.json, CONFIRMED): TWeakPtrTS__Release. Skeleton identical. Two arrays use this address: battle/lock_on.cpp kWeakRe
+// 0x140887AE0 -> 0x1409772F8 (replaced-hud_renderer.json, CONFIRMED): TWeakPtrTS__Release. Skeleton identical. Two arrays use this address: battle/lock_on.cpp kWeakReleas
 inline constexpr std::uint8_t kBytes_00887AE0[] = {
     0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x7E, 0x48, 0x7F, 0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x49,
     0x08, 0x48, 0x85, 0xC9, 0x74, 0x05, 0xE8, 0xD9, 0x11, 0xFE, 0x00, 0x48, 0x83, 0xC4, 0x28, 0xC3,
@@ -6306,7 +6306,7 @@ inline constexpr std::uint8_t kBytes_05301990[] = {
     0xC7, 0x48, 0x01, 0x7B, 0x20, 0xE8, 0x46, 0xF3, 0xCA, 0xFF, 0x48, 0x8D, 0x4C, 0x24, 0x20, 0xE8,
 };
 
-inline constexpr std::array<ReplacedAddress, 745> kReplaced{{
+inline constexpr std::array<ReplacedAddress, 749> kReplaced{{
     {0x0073F16C, 0x00857590, kBytes_0073F16C, 5},
     {0x0076B370, 0x00743B50, kBytes_0076B370, 0},
     {0x00786200, 0x00A6A1C8, kBytes_00786200, 3},
@@ -6879,6 +6879,8 @@ inline constexpr std::array<ReplacedAddress, 745> kReplaced{{
     {0x04FD5330, 0x04DEB75C, kBytes_04FD5330, 5},
     {0x051B96CC, 0x04FEEEFC, kBytes_051B96CC, 5},
     {0x05301990, 0x0513C39C, kBytes_05301990, 5},
+    {0x05714808, 0x055697F8, {}},  // 0x145714808 -> 0x1455697F8 (replaced-pad-slots.json, CONFIRMED): RE-pad-slots.md section 2.1: the only XInputSetState import slot, its one caller the stock rumble se
+    {0x05714810, 0x05569800, {}},  // 0x145714810 -> 0x145569800 (replaced-pad-slots.json, CONFIRMED): The IDA pass [PADSLOTS] on both databases (RE-pad-slots.md section 2.1): the only XInputGetState imp
     {0x05793088, 0x055F0EB0, {}},  // 0x145793088 -> 0x1455F0EB0 (replaced-synergy-partner.json, CONFIRMED): BattleAbility handle vtable (LinkPartner_Start's 7th argument, the initiator's ability handle; the p
     {0x057953F0, 0x05647EC0, {}},  // 0x1457953F0 -> 0x145647EC0 (replaced-chocobo-traversal.json, CONFIRMED): (split 2026-10-07 from a combined row) Unique 128-byte patterns (sizes 0xADB / 0x3A0 both builds); t
     {0x05795408, 0x05647ED8, {}},  // 0x145795408 -> 0x145647ED8 (replaced-chocobo-traversal.json, CONFIRMED): Added 2026-10-07 for traversal_watch (v0.62.0): the slot holds the function in both exes (read from 
@@ -6969,6 +6971,7 @@ inline constexpr std::array<ReplacedAddress, 745> kReplaced{{
     {0x05CE5C48, 0x06545DD0, {}},  // 0x145CE5C48 -> 0x146545DD0 (replaced-rumble-gaps.json, CONFIRMED): Read from both exes by the main session (scratchpad gaps_json.py, 2026-10-12) after the IDA agent's 
     {0x05D700C8, 0x05BCF3F8, {}},  // 0x145D700C8 -> 0x145BCF3F8 (replaced-player_two.json, [CONFIRMED]): kCameraUpdate slot: camera-manager vtable 0x145BCED58 (matched) +0x6A0, i.e. slot 212 (was 211, UObj
     {0x05D72670, 0x05BD2720, {}},  // 0x145D72670 -> 0x145BD2720 (replaced-audio-listener.json, CONFIRMED): Read from both exes by the main session (scratchpad audio_fix_facts.py, 2026-10-12) for the listener
+    {0x065A8AE0, 0x06432E10, {}},  // 0x1465A8AE0 -> 0x146432E10 (replaced-pad-slots.json, CONFIRMED): RE-pad-slots.md section 2.7: written by the device constructor; compared against the engine's extern
     {0x065E4738, 0x0646F880, {}},  // 0x1465E4738 -> 0x14646F880 (replaced-audio-listener.json, CONFIRMED): Read from both exes by the main session (scratchpad audio_facts.py, 2026-10-12) after the IDA agent'
     {0x065E6058, 0x064711E8, {}},  // 0x1465E6058 -> 0x1464711E8 (replaced-audio-listener.json, CONFIRMED): Read from both exes by the main session (scratchpad audio_facts.py, 2026-10-12) after the IDA agent'
     {0x06602920, 0x05AD4AB0, {}},  // 0x146602920 -> 0x145AD4AB0 (replaced-perf.json, CONFIRMED): slot 0 = FRHICommandSubmitCommandsHint_Execute; slot at +8 = nullsub (c2 00 00). Option C (RE-perf-s
@@ -7049,6 +7052,7 @@ inline constexpr std::array<ReplacedAddress, 745> kReplaced{{
     {0x0939BC90, 0x091D84B0, {}},  // 0x14939BC90 -> 0x1491D84B0 (replaced-rumble-list.json, CONFIRMED): Read from both exes by the main session (scratchpad foot_facts.py, 2026-10-12) after the IDA agent's
     {0x0939BCC0, 0x091D84E8, {}},  // 0x14939BCC0 -> 0x1491D84E8 (replaced-minigames.json, CONFIRMED): S-MINIGAME (RE-p2-minigames.md section 7); 1.005 address confirmed by the main session from both exe
     {0x0939BCE0, 0x091D8510, {}},  // 0x14939BCE0 -> 0x1491D8510 (replaced-p2-trigger.json, CONFIRMED): Read at 1.005 0x140935BA9, just before the primary-only resolve.
+    {0x0939BDD0, 0x091D8608, {}},  // 0x14939BDD0 -> 0x1491D8608 (replaced-pad-slots.json, CONFIRMED): RE-pad-slots.md section 2.3: written by CreateWindowsApplication; the XInputDevice at +0xD8 in both 
     {0x0939C2F8, 0x091873A8, {}},  // 0x14939C2F8 -> 0x1491873A8 (replaced-hud_renderer.json, CONFIRMED): kStockNameStatic: FName 'SEndNaviMapCircle' static read by the circle's FindOrAdd (mov rdx,[0x149187
     {0x093BE6D9, 0x091FAA70, {}},  // 0x1493BE6D9 -> 0x1491FAA70 (replaced-p2-trigger.json, CONFIRMED): The second flag FieldTick tests.
     {0x093BE6DA, 0x091FAA71, {}},  // 0x1493BE6DA -> 0x1491FAA71 (replaced-p2-trigger.json, CONFIRMED): The first flag FieldTick tests before reading the result.
