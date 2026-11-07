@@ -285,6 +285,8 @@ lss_test(split_layout src/players/split_layout.cpp src/players/held_setting.cpp 
          src/platform/module_folder.cpp tests/log_console.cpp)
 lss_test(split_screen_settings src/players/split_screen_settings.cpp src/players/held_setting.cpp)
 lss_test(monitor_row src/views/monitor_row.cpp)
+lss_test(monitor_picks src/views/monitor_picks.cpp src/views/monitor_row.cpp)
+lss_test(row_journal)
 lss_test(single_view src/players/single_view.cpp)
 lss_test(whole_screen src/views/whole_screen_reason.cpp)
 lss_test(column_source src/views/column_source.cpp)
