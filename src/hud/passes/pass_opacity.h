@@ -1,11 +1,11 @@
 #pragma once
 
 // Widgets taken out of one overlay pass's image: the other players' prompt rows (hud/field/prompt_rows.h), point
-// markers (hud/field/field_markers.h), search pins (hud/field/search_pins.h), target marks (hud/battle/target_views.h)
-// and command menu (battle/command_menu_view.h) are made transparent through the game's own setter
-// (players/widget_opacity.h) and given their own opacity back after the pass. Not Hidden: a UMG widget is ticked only
-// while it is painted, and a seat's pass runs with DeltaTime 0, so a row hidden in player 1's pass would never
-// advance its timers (seen in play). Each module keeps what it hid in a HiddenSet and decides whose each widget is;
+// markers (hud/field/field_markers.h), search pins (hud/field/search_pins.h), target marks (hud/battle/target_views.h),
+// command menu (battle/command_menu_view.h) and windows (hud/view_window.h) are made transparent through the game's
+// own setter (players/widget_opacity.h) and given their own opacity back after the pass. Not Hidden: a UMG widget is
+// ticked only while it is painted, and a seat's pass runs with DeltaTime 0, so a row hidden in player 1's pass would
+// never advance its timers (seen in play). Each module keeps what it hid in a HiddenSet and decides whose each widget is;
 // the participants' ShowOnly and Restore run from the one pass driver (hud/passes/root_overlay_render.cpp) through the
 // two functions here, in one order. Game thread.
 
@@ -47,10 +47,10 @@ private:
 
 namespace pass_opacity {
 
-/// Before an overlay pass: only the seat's rows, markers, pins and command menu (0 player 1's) stay shown.
+/// Before an overlay pass: only the seat's rows, markers, pins, command menu and window (0 player 1's) stay shown.
 void ShowOnly(int seat) noexcept;
 
-/// After the passes: every widget the four made transparent gets its own opacity back.
+/// After the passes: every widget the participants made transparent gets its own opacity back.
 void RestoreAll() noexcept;
 
 }  // namespace pass_opacity

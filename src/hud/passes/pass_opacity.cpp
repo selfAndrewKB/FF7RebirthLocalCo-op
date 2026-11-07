@@ -4,6 +4,7 @@
 #include "hud/field/field_markers.h"
 #include "hud/field/prompt_rows.h"
 #include "hud/field/search_pins.h"
+#include "hud/view_window.h"
 #include "players/weak_object.h"
 #include "players/widget_opacity.h"
 
@@ -77,6 +78,7 @@ void ShowOnly(int seat) noexcept
     field_markers::ShowOnly(seat);
     search_pins::ShowOnly(seat);
     battle::command_menu_view::ShowOnly(seat);
+    view_window::ShowOnly(seat);
 }
 
 void RestoreAll() noexcept
@@ -85,6 +87,7 @@ void RestoreAll() noexcept
     field_markers::Restore();
     search_pins::Restore();
     battle::command_menu_view::Restore();
+    view_window::RestoreAll();
 }
 
 }  // namespace pass_opacity

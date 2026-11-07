@@ -2,6 +2,7 @@
 
 #include "facts/controller.h"
 #include "hud/view_prompt.h"
+#include "hud/view_window.h"
 #include "input/pad_rules.h"
 #include "input/pad_table.h"
 #include "modules.h"
@@ -84,6 +85,7 @@ bool                          g_redraw         = false;
 std::uint32_t                 g_playing        = 1;  // the slots a player holds, as of the last tick
 std::uint32_t                 g_idleUsers      = 0;  // the pads read idle now (the open windows' pads)
 int                           g_lastScreens    = 0;  // the views as last shown
+unsigned long long            g_gameClosedSeen = 0;  // view_window's count of windows the game closed
 std::uint32_t                 g_opens = 0, g_joinsAsked = 0, g_leavesAsked = 0, g_titlePresses = 0;
 std::array<const void*, kSeats> g_drawnCharacters{};  // by seat: the character its window names (another redraws it)
 
@@ -168,7 +170,8 @@ void Close(int seat, const wchar_t* why)
     platform::Log(L"player window: {}'s closes ({})", players::SeatName(seat), why);
 }
 
-/// Every window and note in each player's own view; the rest cleared.
+/// Every window and note in each player's own view (the game's message window, hud/view_window; else the engine-font
+/// prompt, hud/view_prompt); the rest closed.
 void ShowWindows()
 {
     hud::view_prompt::ClearAll();
@@ -177,6 +180,15 @@ void ShowWindows()
         const SeatNote& note = g_notes[static_cast<std::size_t>(seat)];
         if (!Plays(seat) || (!g_open[static_cast<std::size_t>(seat)] && note.note == text::Note::None))
         {
+            hud::view_window::Close(seat);
+            continue;
+        }
+        if (CharacterOf(seat) == nullptr)
+        {
+            // A player just in, before their member is taken: shown once named (the character's arrival redraws), so
+            // the game's window does not open and reopen for the name.
+            g_drawnCharacters[static_cast<std::size_t>(seat)] = nullptr;
+            hud::view_window::Close(seat);
             continue;
         }
         text::Window w;
@@ -187,10 +199,14 @@ void ShowWindows()
         w.startJoins = seat == 0 && FreeSeat() >= 0;
         w.note       = note.note;
         w.about      = note.about;
-        hud::view_prompt::Prompt p;
-        p.lines     = text::TextFor(w).plain;
-        p.highlight = 0;
-        hud::view_prompt::Show(seat, p);
+        const text::ScreenText t = text::TextFor(w);
+        if (!hud::view_window::Show(seat, t.markup))
+        {
+            hud::view_prompt::Prompt p;
+            p.lines     = t.plain;
+            p.highlight = 0;
+            hud::view_prompt::Show(seat, p);
+        }
     }
 }
 
@@ -418,6 +434,7 @@ void Remove() noexcept
     input::pad_table::Listen(nullptr);
     input::pad_table::SetIdleUsers(0, L"the mod's end");
     hud::view_prompt::ClearAll();
+    hud::view_window::CloseAll();
     g_open           = {};
     g_notes          = {};
     g_joins          = {};
@@ -550,6 +567,12 @@ try
         const bool shown = g_open[static_cast<std::size_t>(seat)] || g_notes[static_cast<std::size_t>(seat)].note != text::Note::None;
         g_redraw = shown && Plays(seat) && CharacterOf(seat) != g_drawnCharacters[static_cast<std::size_t>(seat)];
     }
+    // The game closed a window under a player's (its field-start reset): shown again.
+    if (hud::view_window::ClosedByGame() != g_gameClosedSeen)
+    {
+        g_gameClosedSeen = hud::view_window::ClosedByGame();
+        g_redraw         = true;
+    }
     // Notes run out.
     const std::int64_t now = NowMs();
     for (SeatNote& n : g_notes)
@@ -571,6 +594,7 @@ catch (...)
     platform::Log(L"player window: an exception; every window closes");
     g_open  = {};
     g_notes = {};
+    hud::view_window::CloseAll();
     hud::view_prompt::ClearAll();
     input::pad_table::SetIdleUsers(0, L"the player windows' exception");
     g_idleUsers = 0;

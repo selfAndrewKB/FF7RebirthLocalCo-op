@@ -50,6 +50,7 @@
 #include "input/pad_presence.h"
 #include "input/pad_table.h"
 #include "hud/view_prompt.h"
+#include "hud/view_window.h"
 #include "session/player_window.h"
 #include "input/seat_walk_cap.h"
 #include "input/walk_limits.h"
@@ -789,6 +790,7 @@ void RegisterCommands(session::Session& session, players::SplitLayout& layout,
         input::pad_presence::RegisterCommands();
         session::player_window::RegisterCommands();
         hud::view_prompt::RegisterCommands();
+        hud::view_window::RegisterCommands();
         input::pad_sticks::RegisterCommands();
         scopes::scope_leaks::RegisterCommands();
         input::pad_buttons::RegisterCommands();

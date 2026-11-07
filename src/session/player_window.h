@@ -9,9 +9,10 @@
 // with the pad moved onto the new player's slot; the new player's window opens. During a menu or a scene the Start is
 // remembered and joins once the field shows again. A join whose member is busy waits as Ctrl+F7's does; both are said
 // on player 1's window for a while.
-// View held a second on a player's pad opens that player's window, in their own view only (hud/view_prompt, the
-// engine's font). Only that pad then reads idle to the game; everyone else plays on. In it: A, Start, a B tap or View
-// held again close it; B held a second takes player 2 or 3 out of the game (player 1 is refused, said on its window).
+// View held a second on a player's pad opens that player's window, in their own view only (the game's own message
+// window, hud/view_window; the engine's font, hud/view_prompt, where none can be shown). Only that pad then reads idle
+// to the game; everyone else plays on. In it: A, Start, a B tap or View held again close it; B held a second takes
+// player 2 or 3 out of the game (player 1 is refused, said on its window).
 // The views becoming one (a scene, a menu) close every window.
 // On the title screen a pad that presses a button becomes player 1's (its pad moved onto slot 0), so the person who
 // starts the game plays player 1 on their own pad.

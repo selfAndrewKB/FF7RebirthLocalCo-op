@@ -10,8 +10,13 @@ Split-screen for up to three players for FINAL FANTASY VII REBIRTH, as a UE4SS C
 
 ## What it does
 
-Press **Ctrl+F7** to add a player (player 2, then player 3, on pads 2 and 3) and **Ctrl+F8** to remove the last
-one in. When another local player exists, the engine splits the screen by itself (two halves, or three equal
+**Joining with a controller:** press **Start** on a controller that plays no one to join on it (player 2, then player
+3). Hold **View** (Back) for a second to open your own window in your view: **A** closes it, holding **B** for a second
+leaves the game (player 1 stays). On the title screen, the controller that presses a button plays player 1. A
+controller that plays no one never pauses the game. Change characters through the game's own Party menu.
+
+Press **Ctrl+F7** to add a player from the keyboard (player 2, then player 3, on pads 2 and 3) and **Ctrl+F8** to remove
+the last one in. When another local player exists, the engine splits the screen by itself (two halves, or three equal
 columns with three players). This mod makes the split correct: each player's
 view is rendered by the engine as its own view family, so the game's meshlet renderer never has
 two views in one pass. With one player, the mod changes nothing except the D3D12 residency manager

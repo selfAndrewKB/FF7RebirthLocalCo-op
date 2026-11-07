@@ -179,4 +179,12 @@ inline constexpr std::uint8_t kSortAndLayoutBytes[] = {0x48, 0x89, 0x5C, 0x24, 0
                                                        0x20, 0x00};
 inline constexpr FunctionFact kSortAndLayout{L"FieldActionIconList::SortAndLayout", 0x1414A9B14, kSortAndLayoutBytes};
 
+// ---------------------------------------------------------------------------------------------
+// The game's message window (UEndMessageWindow; RE-message-window.md, both builds)
+// ---------------------------------------------------------------------------------------------
+
+/// Set before the game's close: the window's tick takes it off the overlay when its Out animation ends (the member
+/// layout is the same in both builds).
+inline constexpr std::uint32_t kMessageWindowRemoveAfterOut = 0x3D1;
+
 }  // namespace lss::facts
