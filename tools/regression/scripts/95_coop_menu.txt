@@ -1,0 +1,8 @@
+# The Co-op row (plan/remake-alignment.md step 6): placed on the first tick (its install line: 00_startup), its page's
+# parts checked. Opening the page needs a pad in the pause menu, which the console does not drive: checked live.
+# needs: control
+# expect: value menu.coop row placed; page closed
+# expect-not: Co-op menu: the row's opener or tables could not be placed
+note regression: coop menu start
+get menu.coop
+note regression: coop menu done

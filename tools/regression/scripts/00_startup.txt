@@ -7,6 +7,8 @@
 # expect: pads: the game's pad read and rumble go through the pad table \(player 1 pad 1, player 2 pad 2, player 3 pad 3, spare pad 4;
 # expect: pads: XInput users connected: 
 # expect: buttons: every pad's Start, map and enemy-intel presses reach the game's pause poll and menus
+# expect: Co-op menu: a Co-op row in the main menu before System
+# expect-not: Co-op menu: an engine check failed
 # expect-not: standing aside: nothing installed
 # expect-not: not what the research read(?!\): none)
 #   "(the code is not what the research read): none" is the interact watch's all-clear; a site named after the colon is

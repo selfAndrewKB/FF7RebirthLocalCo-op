@@ -87,6 +87,7 @@
 #include "world/charapop_near.h"
 #include "world/field_pickup.h"
 #include "world/nav_strand.h"
+#include "menu/coop_menu.h"
 #include "world/party_warp.h"
 #include "world/seat_switch_volumes.h"
 #include "world/seat_triggers.h"
@@ -194,6 +195,8 @@ constexpr std::array kModules{
     Module{Call<&views::window_span::Install>, nullptr},
     // each column its monitor's width on a span of unequal monitors (the engine's layout table)
     Module{Call<&views::column_layout::Install>, &views::column_layout::Remove},
+    // a Co-op row in the pause menu opening the game's Options screen with the settings table's options
+    Module{Call<&menu::coop_menu::Install>, &menu::coop_menu::Remove},
 
     // The seats' players in the world: strands, cameras, traversals.
     // the game's follow warp, for a seat's stranded player
@@ -422,6 +425,7 @@ void TickBeforeSession() noexcept
     }
     players::generation::BeginTick(chocobos);
     input::pad_presence::Tick();  // which XInput users answer, once a second; the pad table's re-check from it
+    menu::coop_menu::Tick();      // the Co-op row placed on the first tick; the page's changes; its close watched
     feedback::pad_rumble::BeforeTick();   // before the world tick: each seat's controller ordered after player 1's
     feedback::combat_rumble::BeforeTick();  // outside every notify: their call sites; the status line
     feedback::traversal_rumble::Tick();      // each seat's list made at join (dropped if it left another way)
@@ -795,6 +799,7 @@ void RegisterCommands(session::Session& session, players::SplitLayout& layout,
         scopes::scope_leaks::RegisterCommands();
         input::pad_buttons::RegisterCommands();
         world::nav_strand::RegisterCommands();
+        menu::coop_menu::RegisterCommands();
         battle::lock_on::RegisterCommands();
         camera::shoulder_scale::RegisterCommands();
         camera::camera_distance::RegisterCommands();

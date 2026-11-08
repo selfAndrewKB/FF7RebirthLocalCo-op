@@ -161,8 +161,7 @@ constexpr std::uintptr_t kOverlapLock  = 0x1491DE5D8;  // CRITICAL_SECTION held 
 constexpr std::uintptr_t kSweepFlagA   = 0x1493BE6DA;  // either set: FieldTick reads sweep results instead
 constexpr std::uintptr_t kSweepFlagB   = 0x1493BE6D9;
 
-// The registry's world getter (AActor/UObject virtual; 1.005 moved it 8 bytes, RE-p2-trigger-overlap.md §6).
-inline constexpr platform::PerBuild<std::uint32_t> kGetWorldSlot{0x160, 0x168};
+// The registry's world getter: facts::kObjectGetWorldSlot.
 using GetWorldFn = void* (*)(void* object);
 
 // Stock UE 4.26 UWorld async trace data (the same in both builds): the frame counter and two double-buffered
@@ -354,7 +353,7 @@ Read ReadResult(void* tracker, ResultArray& out) noexcept
     {
         return Read::NoResult;
     }
-    const auto getWorld = reinterpret_cast<GetWorldFn>(ReadPointer(ReadPointer(registry, 0), kGetWorldSlot));
+    const auto getWorld = reinterpret_cast<GetWorldFn>(ReadPointer(ReadPointer(registry, 0), facts::kObjectGetWorldSlot));
     const auto* world   = getWorld != nullptr ? static_cast<const std::byte*>(getWorld(registry)) : nullptr;
     if (world == nullptr)
     {

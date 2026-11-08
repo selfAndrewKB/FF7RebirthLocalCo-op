@@ -1,0 +1,278 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-11-07",
+  "doc": "Rebirth/Documentation/research/RE-coop-page-facts.md, RE-coop-rows-facts.md",
+  "facts": [
+    {
+      "name": "vtbl_UEndMainMenuTopWindow",
+      "old": "0x1457B1918",
+      "new": "0x145671F28",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPPAGE on both databases (RE-coop-rows-facts.md 1.1)."
+    },
+    {
+      "name": "EndUI28_MainMenu_OpenWindowByKind",
+      "old": "0x1414CB7A4",
+      "new": "0x140F0FDC0",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPPAGE on both databases (RE-coop-rows-facts.md 1.1; first instruction mov [rsp+10h],rbx in both)."
+    },
+    {
+      "name": "g_MainMenuTopWindow_ItemTextIds[13] slot",
+      "old": "0x14615BD48",
+      "new": "0x145FC3438",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPPAGE on both databases (RE-coop-rows-facts.md 1.2)."
+    },
+    {
+      "name": "$menu_TrialVersion_MainMenu_BuyNow (text 13 as shipped)",
+      "old": "0x14615B910",
+      "new": "0x145FC3220",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPPAGE on both databases (RE-coop-rows-facts.md 1.2)."
+    },
+    {
+      "name": "g_MainMenuTopWindow_ItemHelpIds[13] slot",
+      "old": "0x14615BCD8",
+      "new": "0x145FC33C8",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPPAGE on both databases (RE-coop-rows-facts.md 1.2)."
+    },
+    {
+      "name": "$menu_TrialVersion_MainMenu_BuyNow_help (help 13 as shipped)",
+      "old": "0x14615BBD0",
+      "new": "0x145FC3030",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPPAGE on both databases (RE-coop-rows-facts.md 1.2)."
+    },
+    {
+      "name": "g_MainMenuTopWindow_ItemOrder word (bytes 8..13)",
+      "old": "0x145D20860",
+      "new": "0x145672960",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPPAGE on both databases (RE-coop-rows-facts.md 1.1; same value in both)."
+    },
+    {
+      "name": "EndUI28_MainMenu_ShowTopWindow",
+      "old": "0x1414CC430",
+      "new": "0x140F10DAC",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPPAGE on both databases (RE-coop-rows-facts.md 1.2)."
+    },
+    {
+      "name": "UEndMainOptionsMenu_Create",
+      "old": "0x140BE20B8",
+      "new": "0x140F0F934",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPPAGE on both databases (RE-coop-page-facts.md 1.2)."
+    },
+    {
+      "name": "UEndMainOptionsMenu_Open",
+      "old": "0x141808144",
+      "new": "0x1414A3EC4",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPPAGE on both databases (RE-coop-page-facts.md 1.2)."
+    },
+    {
+      "name": "UEndUserWidget__AddToRootOverlay_SetZOrder",
+      "old": "0x140E68B64",
+      "new": "0x141106A6C",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPPAGE on both databases (RE-coop-page-facts.md 1.2)."
+    },
+    {
+      "name": "UEndUserWidget_IsInRootOverlay",
+      "old": "0x1410E5A9C",
+      "new": "0x141131294",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPPAGE on both databases (RE-coop-page-facts.md 1.2)."
+    },
+    {
+      "name": "OptionsMenu_FillValueArray (the value read)",
+      "old": "0x140BE4838",
+      "new": "0x14159B69C",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPPAGE on both databases (RE-coop-page-facts.md 1.2; 1.005 entry mov rax,rsp then mov [rax+8],rbx: redirected at its second chunk)."
+    },
+    {
+      "name": "OptionsMenu_SetOptionValue_CopyApplyCommit",
+      "old": "0x141808A00",
+      "new": "0x1410B9C38",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPPAGE on both databases (RE-coop-page-facts.md 1.2)."
+    },
+    {
+      "name": "FString_AssignCopy_S",
+      "old": "0x141081984",
+      "new": "0x140E8CAA0",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPPAGE on both databases (RE-coop-page-facts.md 2)."
+    },
+    {
+      "name": "OptionItemsMap_FindOrAdd_S",
+      "old": "0x14126B4BC",
+      "new": "0x14159A78C",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPPAGE on both databases (RE-coop-page-facts.md 2)."
+    },
+    {
+      "name": "FOptionInfo_DefaultCtor_S",
+      "old": "0x1415BD460",
+      "new": "0x14159D308",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPPAGE on both databases (RE-coop-page-facts.md 2)."
+    },
+    {
+      "name": "FOptionInfo_Dtor_S",
+      "old": "0x1415BD494",
+      "new": "0x14159D33C",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPPAGE on both databases (RE-coop-page-facts.md 2)."
+    },
+    {
+      "name": "FOptionInfo_MoveCtor_S",
+      "old": "0x1415BD314",
+      "new": "0x14159D1B8",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPPAGE on both databases (RE-coop-page-facts.md 2)."
+    },
+    {
+      "name": "TArrayFOptionInfo_ResizeGrow_S",
+      "old": "0x141009F1C",
+      "new": "0x14140C64C",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPPAGE on both databases (RE-coop-page-facts.md 2)."
+    },
+    {
+      "name": "TArray16_ResizeGrow_FString_S",
+      "old": "0x1407E2988",
+      "new": "0x1407B3514",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPPAGE on both databases (RE-coop-page-facts.md 2)."
+    },
+    {
+      "name": "TArrayFOptionInfo_MoveAssign_S",
+      "old": "0x14126B430",
+      "new": "0x1415997D4",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPPAGE on both databases (RE-coop-page-facts.md 2)."
+    },
+    {
+      "name": "UEndVirtualScrollBox_SetItemCount",
+      "old": "0x1410EA154",
+      "new": "0x1409703C4",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPPAGE on both databases (RE-coop-page-facts.md 2)."
+    },
+    {
+      "name": "UEndVirtualScrollBox_RefreshItems",
+      "old": "0x1410E5A10",
+      "new": "0x1409703F0",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPPAGE on both databases (RE-coop-page-facts.md 2)."
+    },
+    {
+      "name": "g_OptionsMenu_CategoryHeadingIds (7 entries in 1.004, 8 in 1.005)",
+      "old": "0x14615DE98",
+      "new": "0x145F0A5A0",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPPAGE on both databases (RE-coop-page-facts.md 1.1)."
+    },
+    {
+      "name": "MainMenu_OptionsTop2_C vtable: the key handler slot (+0x3A8 / +0x3B0)",
+      "old": "0x14590CB00",
+      "new": "0x14574EF88",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPPAGE on both databases (RE-coop-page-facts.md 1.2: vtable 0x14590C758 / 0x14574EBD8)."
+    },
+    {
+      "name": "UEndMainOptionsMenu key handler (pass 2)",
+      "old": "0x141808C00",
+      "new": "0x140FE4C80",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPPAGE on both databases (RE-coop-page-facts.md 1.2)."
+    },
+    {
+      "name": "UEndUserWidget__RemoveFromParent",
+      "old": "0x140F5C0E8",
+      "new": "0x14083D62C",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA pass S-COOPCLOSE on both databases (RE-coop-page-facts.md section 5)."
+    },
+    {
+      "name": "UWidget__TakeWidget",
+      "old": "0x140E6827C",
+      "new": "0x14110708C",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA pass S-COOPCLOSE on both databases (RE-coop-page-facts.md section 5)."
+    },
+    {
+      "name": "EndUISystem_PopFocusLayer",
+      "old": "0x140C88828",
+      "new": "0x14083BF30",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA pass S-COOPCLOSE on both databases (RE-coop-page-facts.md section 5)."
+    }
+  ]
+}

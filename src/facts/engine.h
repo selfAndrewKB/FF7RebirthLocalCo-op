@@ -134,6 +134,9 @@ inline constexpr std::uint8_t kRemoveLocalPlayerPrologue[] = {
 inline constexpr FunctionFact kRemoveLocalPlayer{L"UGameInstance::RemoveLocalPlayer", 0x144F561F0,
                                                  kRemoveLocalPlayerPrologue};
 inline constexpr platform::PerBuild<std::uint32_t> kRemoveLocalPlayerVTableOffset = {0x2E8, 0x2F0};
+/// UObject's GetWorld virtual (1.005's UObject vtables are one slot longer; RE-p2-trigger-overlap.md §6,
+/// RE-coop-rows-facts.md).
+inline constexpr platform::PerBuild<std::uint32_t> kObjectGetWorldSlot = {0x160, 0x168};
 
 /// Right after the probe call: `sub rsp,rax; mov rsi,rcx; mov [rsp+20h],rdx;
 /// mov rcx,[rdx+30h]; mov rbx,rdx; test rcx,rcx; jz` (the jz is at 0x144F56217). It reads the

@@ -17,6 +17,10 @@ screen, the controller that presses a button plays player 1. A controller that p
 Change characters through the game's own Party menu. Players 2 and 3: click **L3** twice to be brought back beside
 player 1 in the field (the game's own catch-up warp; not in a menu, a scene, a battle, or when already beside).
 
+**Co-op settings in the game:** the pause menu has a **Co-op** row above System. It opens the game's own Options screen
+with the mod's settings (monitors, screen order, layouts); a change applies at once and is saved to
+`LocalSplitScreen.ini`.
+
 Press **Ctrl+F7** to add a player from the keyboard (player 2, then player 3, on pads 2 and 3) and **Ctrl+F8** to remove
 the last one in. When another local player exists, the engine splits the screen by itself (two halves; with three
 players one large view and two, the layout a setting). This mod makes the split correct: each player's
