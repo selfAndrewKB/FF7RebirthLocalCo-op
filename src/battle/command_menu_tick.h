@@ -20,8 +20,12 @@
 //     pending command on the game's controller); the key guide is the seat's own inside the scope;
 //   - the leader-switch requests: cleared before each tick (a written exception: a seat's d-pad
 //     never switches player 1's leader);
-//   - the battle HUD mode, battle input and party-list input follow player 1's through the game's
-//     own setters on the seat's controller, never the global ones;
+//   - the battle HUD mode: the game's own call on its controller (its setter's entry redirected, as Remake)
+//     is made again on each seat's controller at once, inside that seat's focus and leader scopes; a seat
+//     that could not take it (its player out) is caught up at its next pass;
+//   - battle input, party-list input and the menu's focus layer, which the game sets with no call to
+//     repeat, are copied from the game's controller at each seat's pass through the game's own setters on
+//     the seat's controller, never the global ones;
 //   - the command rules are turned around for the pass: a seat's player may not command player 1's leader.
 // A seat's pad's presses reach that seat's menu in battle; a release follows its press (the capture map's rule).
 // Game thread only.

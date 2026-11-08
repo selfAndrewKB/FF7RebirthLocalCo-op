@@ -13,6 +13,7 @@
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/deferred_sites.h"
+#include "platform/entry_redirect.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -68,6 +69,10 @@ constexpr std::uintptr_t         kGuideMode8Call = 0x140A64E1B;
 constexpr std::uint8_t kHudModeBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x57,
                                           0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x3B, 0x6E, 0x00, 0x01};
 constexpr platform::FunctionFact kSetHudMode{L"FieldCommandCtrl_SetBattleHudMode540", 0x1410A80E0, kHudModeBytes};
+// Its entry (`mov [rsp+8], rbx`, inside one block in both builds) is redirected: the game's one caller,
+// EndUI_SetBattleHudMode, sets it on the game's controller at a battle's start and end, a field exit and the menu API's
+// in-battle switch (RE-p2-command-menu-lifecycle.md §11).
+constexpr std::size_t kSetHudModeFirst = 5;
 // The party list's input flag (ctrl+0x4A0 = party list +0x140): while 0 its show timer collapses the field
 // menu every tick. The game sets it through EndUI23_ResumeHudInput(1) / SuspendHudInput(1), which act on
 // its own controller only (RE-p2-command-menu-lifecycle.md §1).
@@ -146,7 +151,8 @@ using LeaderFn         = void* (*)();
 using SetMenuLayerFn = void (*)(void* controller, std::uint8_t on);
 
 // Set once at install.
-platform::CallRedirect g_tickCall, g_slotCall, g_snapshotCall, g_guideShowCall, g_guideMode8Call;
+platform::CallRedirect  g_tickCall, g_slotCall, g_snapshotCall, g_guideShowCall, g_guideMode8Call;
+platform::EntryRedirect g_hudModeEntry;  // the battle HUD mode's setter, repeated on each seat's controller
 
 /// The calls' targets as Install found them, for the redirects (placed at once, or on 1.005 from the game thread).
 struct Targets
@@ -181,6 +187,8 @@ bool         g_passed    = false;  // the last seat's controller ticked this fra
 unsigned     g_refusals  = 0, g_guideSkips = 0;
 std::array<unsigned, players::kMaxPlayers> g_snapshotEntries{};  // each seat's last logged count; index 0 unused
 std::uint64_t g_passes     = 0;  // the seats' passes run
+// The battle HUD mode each seat's controller last refused (not set up yet), so the refusal is logged once; -1 none.
+std::array<int, players::kMaxPlayers> g_hudModeRefused{-1, -1, -1};
 static_assert(players::kMaxPlayers == 3, "g_seatSlots' initialiser names every player");
 
 void WatchLine(const std::wstring& text) noexcept
@@ -248,10 +256,10 @@ namespace {
 /// leader-switch requests are cleared: a written exception (a seat's d-pad never switches the party
 /// leader; the game's only switch path, BattleLeader_CycleSwitch, changes player 1's leader and no
 /// per-player switch exists; RE-p2-command-menu-levers.md §15).
-void WriteRequests(std::uintptr_t own) noexcept
+void WriteRequests(std::uintptr_t ctrl) noexcept
 {
-    SetRequest(own, kPrevMember, 0);
-    SetRequest(own, kNextMember, 0);
+    SetRequest(ctrl, kPrevMember, 0);
+    SetRequest(ctrl, kNextMember, 0);
 }
 
 /// Battle input live (+0x25C = the member selecter's input flag, ctrl+0xF0+0x16C): the game turns it on and
@@ -259,42 +267,123 @@ void WriteRequests(std::uintptr_t own) noexcept
 /// made for a seat's (the suspend inside the seat's UI, where the UI system's controller slot names the seat's).
 /// Without it the input handler drops Attack, Unique and Guard, and the tick clears every request
 /// (RE-p2-command-menu-actions.md; RE-p2-command-menu-lifecycle.md §3.3).
-void MirrorBattleInput(int seat, std::uintptr_t own, std::uintptr_t one) noexcept
+void CopyBattleInput(int seat, std::uintptr_t ctrl, std::uintptr_t ctrl1) noexcept
 {
-    const auto want = ReadAt<std::uint8_t>(one + kCmdBattleInput);
-    const auto have = ReadAt<std::uint8_t>(own + kCmdBattleInput);
+    const auto want = ReadAt<std::uint8_t>(ctrl1 + kCmdBattleInput);
+    const auto have = ReadAt<std::uint8_t>(ctrl + kCmdBattleInput);
     if (want == have)
     {
         return;
     }
-    const bool set = want != 0 ? platform::CallGuarded(g_resumeHudInput, reinterpret_cast<void*>(own), std::uint8_t{0})
+    const bool set = want != 0 ? platform::CallGuarded(g_resumeHudInput, reinterpret_cast<void*>(ctrl), std::uint8_t{0})
                                : platform::CallGuarded(g_suspendHudInput, std::uint8_t{0}, std::uint8_t{0});
-    Line(std::format(L"{}'s battle input {} -> {} ({}){}: now {}", players::SeatName(seat), have, want,
-                     want != 0 ? L"ResumeHudInput(0)" : L"SuspendHudInput(0, 0)", set ? L"" : L" FAULTED",
-                     ReadAt<std::uint8_t>(own + kCmdBattleInput)));
+    Line(std::format(L"{}'s battle input {} -> {} ({}, copied from the game's){}: now {}", players::SeatName(seat), have,
+                     want, want != 0 ? L"ResumeHudInput(0)" : L"SuspendHudInput(0, 0)", set ? L"" : L" FAULTED",
+                     ReadAt<std::uint8_t>(ctrl + kCmdBattleInput)));
 }
 
-/// A seat's controller follows the game's battle HUD mode through its own setter (§4.2, §7).
-void MirrorHudMode(int seat, std::uintptr_t own, std::uintptr_t one, std::uint8_t memberType) noexcept
+/// The battle HUD mode's setter as the game's own (the redirect's trampoline once placed).
+HudModeFn HudModeSetter() noexcept
 {
-    const auto mode = ReadAt<std::uint8_t>(one + kCmdHudMode);
-    if (ReadAt<std::uint8_t>(own + kCmdHudMode) != mode)
+    return g_hudModeEntry.IsInstalled() ? reinterpret_cast<HudModeFn>(g_hudModeEntry.Original()) : g_hudMode;
+}
+
+/// The game's battle HUD mode set on a seat's controller through the game's setter (§4.2, §7; the setter's other
+/// effects ride along: its menus and members reset, its requests cleared at a start).
+bool SetSeatHudMode(int seat, std::uintptr_t ctrl, std::uint8_t mode, std::uint8_t memberType,
+                    const wchar_t* why) noexcept
+{
+    if (mode != 0)
     {
-        if (mode != 0)
-        {
-            // A written exception (RE-p2-command-menu-levers.md §4.2, §15): on its first battle frame
-            // the seat's controller still holds player 1's field leader type, and the tick's leader-change
-            // handler would clear the battle system's slot for player 1's type (BattleSys920_ClearTypeSlot
-            // ForType) on a character player 1 is playing. No game path gives it the seat's type earlier.
-            WriteAt(own + kCmdStoredLeaderType, memberType);
-        }
-        // The game's battle start and end call only this setter (RE-p2-command-menu-lifecycle.md §4.1); a
-        // full reset would also clear "setup done" (+0x777), which only Setup puts back.
-        const bool set = platform::CallGuarded(g_hudMode, reinterpret_cast<void*>(own), mode);
-        Line(std::format(L"{}'s controller battle HUD mode -> {}{}", players::SeatName(seat), mode,
-                         set ? L"" : L" (the setter FAULTED)"));
+        // A written exception (RE-p2-command-menu-levers.md §4.2, §15): on its first battle frame the seat's
+        // controller still holds player 1's field leader type, and the tick's leader-change handler would clear the
+        // battle system's slot for player 1's type (BattleSys920_ClearTypeSlotForType) on a character player 1 is
+        // playing. No game path gives it the seat's type earlier.
+        WriteAt(ctrl + kCmdStoredLeaderType, memberType);
     }
-    MirrorBattleInput(seat, own, one);
+    const bool set   = platform::CallGuarded(HudModeSetter(), reinterpret_cast<void*>(ctrl), mode);
+    const bool taken = set && ReadAt<std::uint8_t>(ctrl + kCmdHudMode) == mode;
+    auto&      tried = g_hudModeRefused[static_cast<std::size_t>(seat)];
+    if (taken || !set)
+    {
+        tried = -1;
+        Line(std::format(L"{}'s controller battle HUD mode -> {} ({}){}", players::SeatName(seat), mode, why,
+                         set ? L"" : L"; the setter FAULTED"));
+    }
+    else if (tried != mode)
+    {
+        // The setter does nothing on a controller not yet set up: tried again each pass, logged once.
+        tried = mode;
+        Line(std::format(L"{}'s controller did not take battle HUD mode {} ({}): not set up yet; tried again at its "
+                         L"passes",
+                         players::SeatName(seat), mode, why),
+             platform::Level::Debug);
+    }
+    return taken;
+}
+
+/// The mode the game set while the seat's controller could not take it (its player out, no member): caught up in the
+/// seat's pass, inside its scopes.
+void CatchUpHudMode(int seat, std::uintptr_t ctrl, std::uintptr_t ctrl1, std::uint8_t memberType) noexcept
+{
+    const auto mode = ReadAt<std::uint8_t>(ctrl1 + kCmdHudMode);
+    if (ReadAt<std::uint8_t>(ctrl + kCmdHudMode) != mode)
+    {
+        SetSeatHudMode(seat, ctrl, mode, memberType, L"caught up");
+    }
+    CopyBattleInput(seat, ctrl, ctrl1);
+}
+
+/// Replaces the battle HUD mode's setter: the game's call, then, for the game's controller, the same call on each
+/// seat's whose player plays a member, inside that seat's focus and leader scopes (the setter pops focus layers and
+/// reads the party leader's type). A seat it cannot reach now is caught up at its next pass.
+void SetHudMode(void* controller, std::uint8_t mode) noexcept
+{
+    HudModeSetter()(controller, mode);
+    // Inside a seat's pass or press the UI system's controller slot names the seat's controller: no repeat there (the
+    // pass's catch-up covers the seats).
+    const auto ctrl1 = ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController);
+    if (!g_installed || g_pass >= 2 || controller == nullptr || reinterpret_cast<std::uintptr_t>(controller) != ctrl1 ||
+        !players::generation::OnGameThread())
+    {
+        return;
+    }
+    const auto manager = ReadAt<std::uintptr_t>(g_partyManager);
+    const auto party   = [manager] {
+        return std::array<std::uint64_t, 3>{ReadAt<std::uint64_t>(manager + kPartyManagerPrimaryController),
+                                            ReadAt<std::uint64_t>(manager + kPartyManagerLeader),
+                                            ReadAt<std::uint8_t>(manager + kPartyManagerLeaderType)};
+    };
+    const auto before = manager != 0 ? party() : std::array<std::uint64_t, 3>{};
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        const auto ctrl   = reinterpret_cast<std::uintptr_t>(command_menu::Controller(seat));
+        void*      member = players::generation::MemberOf(seat);
+        if (!players::generation::Active(seat) || ctrl == 0 || ctrl == ctrl1 || member == nullptr)
+        {
+            continue;
+        }
+        seat_ladder::Args args;
+        args.seat       = seat;
+        args.controller = reinterpret_cast<void*>(ctrl);
+        if (!seat_ladder::FillMember(args, member))
+        {
+            continue;
+        }
+        // The setter's focus-layer pops and leader-type read only (no Rules part: args.leaderType unused).
+        seat_ladder::SeatScopes scopes(seat_ladder::Focus | seat_ladder::Leader | seat_ladder::LeaderType, 0u, args);
+        if (!scopes.Held())
+        {
+            Line(std::format(L"{}'s battle HUD mode {} waits for its pass: {}", players::SeatName(seat), mode,
+                             scopes.Refusal()));
+            continue;
+        }
+        SetSeatHudMode(seat, ctrl, mode, args.memberType, L"the game's call");
+    }
+    if (manager != 0 && party() != before)
+    {
+        Line(L"WARNING: the primary controller or the party leader differs after the battle HUD mode's repeats");
+    }
 }
 
 /// A controller's widget (its FWeakObjectPtr at `offset`), or null.
@@ -311,33 +400,34 @@ std::uint8_t VisibilityOf(std::uintptr_t controller, std::uint32_t offset) noexc
 }
 
 /// A seat's party list input flag follows player 1's, through the game's own calls (§10.2 R1).
-void MirrorPartyListInput(int seat, std::uintptr_t own, std::uintptr_t one) noexcept
+void CopyPartyListInput(int seat, std::uintptr_t ctrl, std::uintptr_t ctrl1) noexcept
 {
-    const auto want = ReadAt<std::uint8_t>(one + kPartyListInput);
-    const auto have = ReadAt<std::uint8_t>(own + kPartyListInput);
+    const auto want = ReadAt<std::uint8_t>(ctrl1 + kPartyListInput);
+    const auto have = ReadAt<std::uint8_t>(ctrl + kPartyListInput);
     if (want == have)
     {
         return;
     }
-    const bool set = want != 0 ? platform::CallGuarded(g_resumeHudInput, reinterpret_cast<void*>(own), std::uint8_t{1})
-                               : platform::CallGuarded(g_partyListInput, reinterpret_cast<void*>(own + kPartyList),
+    const bool set = want != 0 ? platform::CallGuarded(g_resumeHudInput, reinterpret_cast<void*>(ctrl), std::uint8_t{1})
+                               : platform::CallGuarded(g_partyListInput, reinterpret_cast<void*>(ctrl + kPartyList),
                                                        std::uint8_t{0}, std::uint8_t{1});
-    Line(std::format(L"{}'s party list input {} -> {} ({}){}", players::SeatName(seat), have, want,
-                     want != 0 ? L"ResumeHudInput(1)" : L"SetInputEnabled(0)", set ? L"" : L" FAULTED"));
+    Line(std::format(L"{}'s party list input {} -> {} ({}, copied from the game's){}", players::SeatName(seat), have,
+                     want, want != 0 ? L"ResumeHudInput(1)" : L"SetInputEnabled(0)", set ? L"" : L" FAULTED"));
 }
 
 /// A seat's menu keeps the same bottom focus layer as player 1's (a battle event or help menu pops
-/// player 1's: the seat's follows), through the controller's own setter. The mirrored Resume/Suspend
-/// (MirrorBattleInput) already keep it in step, so this acts only on a change they did not carry.
-void MirrorMenuLayer(int seat, std::uintptr_t own, std::uintptr_t one) noexcept
+/// player 1's: the seat's follows), through the controller's own setter. The copied Resume/Suspend
+/// (CopyBattleInput) already keep it in step, so this acts only on a change they did not carry.
+void CopyMenuLayer(int seat, std::uintptr_t ctrl, std::uintptr_t ctrl1) noexcept
 {
-    const auto want = ReadAt<std::uint8_t>(one + kCmdMenuLayer);
-    if (want == ReadAt<std::uint8_t>(own + kCmdMenuLayer))
+    const auto want = ReadAt<std::uint8_t>(ctrl1 + kCmdMenuLayer);
+    if (want == ReadAt<std::uint8_t>(ctrl + kCmdMenuLayer))
     {
         return;
     }
-    const bool set = platform::CallGuarded(g_setMenuLayer, reinterpret_cast<void*>(own), want);
-    Line(std::format(L"{}'s menu focus layer -> {}{}", players::SeatName(seat), want, set ? L"" : L" (FAULTED)"));
+    const bool set = platform::CallGuarded(g_setMenuLayer, reinterpret_cast<void*>(ctrl), want);
+    Line(std::format(L"{}'s menu focus layer -> {} (copied from the game's){}", players::SeatName(seat), want,
+                     set ? L"" : L" (FAULTED)"));
 }
 
 /// What the log shows of a seat's controller, as raw values.
@@ -385,7 +475,7 @@ std::array<platform::SettledLog<Snapshot, Requests>, players::kMaxPlayers> g_wat
 std::array<Snapshot, players::kMaxPlayers> g_logged{};
 std::array<bool, players::kMaxPlayers>     g_loggedOnce{};
 
-void Watch(int seat, std::uintptr_t own, std::uintptr_t one) noexcept
+void Watch(int seat, std::uintptr_t ctrl, std::uintptr_t ctrl1) noexcept
 {
     const auto index    = static_cast<std::size_t>(seat);
     auto&      watchLog = g_watchLogs[index];
@@ -399,38 +489,38 @@ void Watch(int seat, std::uintptr_t own, std::uintptr_t one) noexcept
                                                      kCmdSwitchingLayer, kCmdReady, kPartyListInput, kCmdSetupPending};
     for (std::size_t side = 0; side < 2; ++side)
     {
-        const auto ctrl = side == 0 ? one : own;
+        const auto sideCtrl = side == 0 ? ctrl1 : ctrl;
         for (std::size_t i = 0; i < kCompared.size(); ++i)
         {
-            now.compared[side][i] = ReadAt<std::uint8_t>(ctrl + kCompared[i]);
+            now.compared[side][i] = ReadAt<std::uint8_t>(sideCtrl + kCompared[i]);
         }
-        now.openPending[side] = ReadAt<std::int32_t>(ctrl + kCmdOpenPending);
+        now.openPending[side] = ReadAt<std::int32_t>(sideCtrl + kCmdOpenPending);
     }
     now.path                = focus_scope::LivePathCount();
-    now.menuVisibility      = {VisibilityOf(one, kCmdMenuWidget), VisibilityOf(own, kCmdMenuWidget)};
-    now.fieldMenuVisibility = VisibilityOf(own, kCmdFieldMenu);
+    now.menuVisibility      = {VisibilityOf(ctrl1, kCmdMenuWidget), VisibilityOf(ctrl, kCmdMenuWidget)};
+    now.fieldMenuVisibility = VisibilityOf(ctrl, kCmdFieldMenu);
     void* leader = nullptr;
     now.leaderIsMember =
         platform::CallGuarded(g_resolveLeader, leader) && leader != nullptr && leader == players::generation::MemberOf(seat);
     for (std::size_t i = 0; i < kLoggedRequests.size(); ++i)
     {
-        now.requests[i] = RequestOf(own, kLoggedRequests[i]);
+        now.requests[i] = RequestOf(ctrl, kLoggedRequests[i]);
     }
     constexpr std::array<std::uint32_t, 7> kBytes{kCmdHudMode,     kCmdBlocked,        kCmdReady,    kCmdReadyB,
                                                   kCmdBattleInput, kCmdSwitchingLayer, kHudSoundMode};
     for (std::size_t i = 0; i < kBytes.size(); ++i)
     {
-        now.bytes[i] = ReadAt<std::uint8_t>(own + kBytes[i]);
+        now.bytes[i] = ReadAt<std::uint8_t>(ctrl + kBytes[i]);
     }
     for (std::size_t i = 0; i < kLoggedGates.size(); ++i)
     {
-        now.gates[i] = ReadAt<std::uint8_t>(own + kLoggedGates[i]);
+        now.gates[i] = ReadAt<std::uint8_t>(ctrl + kLoggedGates[i]);
     }
-    now.guardLatch = ReadAt<std::int32_t>(own + kCmdGuardLatch);
-    now.waitFilter = ReadAt<std::int32_t>(own + kCmdWaitFilter);
-    now.storedType = ReadAt<std::uint8_t>(own + kCmdStoredLeaderType);
-    now.pinch      = ReadAt<std::uint8_t>(own + kPinch);
-    now.members    = {ReadAt<std::int32_t>(own + kCmdMembers), ReadAt<std::int32_t>(own + kCmdMembers + 4)};
+    now.guardLatch = ReadAt<std::int32_t>(ctrl + kCmdGuardLatch);
+    now.waitFilter = ReadAt<std::int32_t>(ctrl + kCmdWaitFilter);
+    now.storedType = ReadAt<std::uint8_t>(ctrl + kCmdStoredLeaderType);
+    now.pinch      = ReadAt<std::uint8_t>(ctrl + kPinch);
+    now.members    = {ReadAt<std::int32_t>(ctrl + kCmdMembers), ReadAt<std::int32_t>(ctrl + kCmdMembers + 4)};
     Snapshot steady = now;
     steady.requests = {};
     if (!watchLog.Offer(steady, now.requests))
@@ -487,18 +577,18 @@ void Refused(int seat, const wchar_t* why) noexcept
 /// A seat's controller's tick, inside the seat's scopes (§13.2).
 void SeatPass(int seat, float deltaTime) noexcept
 {
-    const auto own    = reinterpret_cast<std::uintptr_t>(command_menu::Controller(seat));
-    const auto one    = ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController);
+    const auto ctrl   = reinterpret_cast<std::uintptr_t>(command_menu::Controller(seat));
+    const auto ctrl1  = ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController);
     void*      member = players::generation::MemberOf(seat);
-    if (own == 0 || one == 0 || one == own || member == nullptr ||
-        (ReadAt<std::uint8_t>(one + kCmdHudMode) == 0 && ReadAt<std::uint8_t>(own + kCmdHudMode) == 0))
+    if (ctrl == 0 || ctrl1 == 0 || ctrl1 == ctrl || member == nullptr ||
+        (ReadAt<std::uint8_t>(ctrl1 + kCmdHudMode) == 0 && ReadAt<std::uint8_t>(ctrl + kCmdHudMode) == 0))
     {
         menu_tint::Release(seat, L"released: the menu is not ticked (out of battle)");
         return;  // out of battle: the seat's controller has nothing to do yet
     }
     seat_ladder::Args args;
     args.seat          = seat;
-    args.controller    = reinterpret_cast<void*>(own);
+    args.controller    = reinterpret_cast<void*>(ctrl);
     const auto manager = ReadAt<std::uintptr_t>(g_partyManager);
     if (!seat_ladder::FillMember(args, member) || manager == 0)
     {
@@ -520,19 +610,19 @@ void SeatPass(int seat, float deltaTime) noexcept
         }
         SetPass(2, seat);
         ++g_passes;
-        MirrorHudMode(seat, own, one, args.memberType);
-        MirrorPartyListInput(seat, own, one);
-        MirrorMenuLayer(seat, own, one);
-        WriteRequests(own);
+        CatchUpHudMode(seat, ctrl, ctrl1, args.memberType);
+        CopyPartyListInput(seat, ctrl, ctrl1);
+        CopyMenuLayer(seat, ctrl, ctrl1);
+        WriteRequests(ctrl);
         // A written exception (RE-p2-command-menu-levers.md §4.1, §15): the battle-HUD sound is one global
         // cue per edge, played by the first controller whose +0x774 differs from its HUD mode; a seat's
         // is pre-seeded with the value its own tick writes one line after the sound, so the cue plays once.
-        WriteAt(own + kHudSoundMode, ReadAt<std::uint8_t>(own + kCmdHudMode));
+        WriteAt(ctrl + kHudSoundMode, ReadAt<std::uint8_t>(ctrl + kCmdHudMode));
         const bool ticked = platform::CallGuarded(reinterpret_cast<TickFn>(g_tickCall.Original()),
-                                                  reinterpret_cast<void*>(own), deltaTime);
+                                                  reinterpret_cast<void*>(ctrl), deltaTime);
         SetPass(0, 0);
         g_passed = ticked;
-        if (menu_tint::Holds(seat) && ReadAt<std::int32_t>(own + kCmdWaitFilter) == 0)
+        if (menu_tint::Holds(seat) && ReadAt<std::int32_t>(ctrl + kCmdWaitFilter) == 0)
         {
             menu_tint::Release(seat, L"WARNING: the menu is idle but held a count; released");
         }
@@ -545,7 +635,7 @@ void SeatPass(int seat, float deltaTime) noexcept
                              L"and with them their attack, guard and dodge",
                              players::SeatName(seat)));
         }
-        Watch(seat, own, one);
+        Watch(seat, ctrl, ctrl1);
     }
     const auto after = std::array<std::uint64_t, 3>{ReadAt<std::uint64_t>(manager + kPartyManagerPrimaryController),
                                                     ReadAt<std::uint64_t>(manager + kPartyManagerLeader),
@@ -724,6 +814,9 @@ bool PlaceSites(const platform::GameImage& image) noexcept
         return live && g_placement.Place(call, *live, target, reinterpret_cast<std::uintptr_t>(with));
     };
     ok = ok && menu_tint::Place(image, g_placement);
+    const auto hudFirst = image.EntryInstruction(kSetHudMode.address, kSetHudMode.entryBytes.first(kSetHudModeFirst));
+    ok = ok && g_hudModeEntry.Install(reinterpret_cast<std::uintptr_t>(g_hudMode), hudFirst,
+                                      reinterpret_cast<std::uintptr_t>(&SetHudMode));
     ok = ok && redirect(g_slotCall, kSlotCall, t.slot, &Slot) &&
          redirect(g_snapshotCall, kSnapshotCall, t.snapshot, &CommandSnapshot) &&
          redirect(g_guideShowCall, kGuideShowCall, t.show, &GuideShow) &&
@@ -779,6 +872,11 @@ void Remove() noexcept
         {
             platform::Log(L"command menu tick: a call was changed after us; left in place (it passes through)");
         }
+    }
+    if (g_hudModeEntry.IsInstalled() && !g_hudModeEntry.Restore())
+    {
+        platform::Log(L"command menu tick: the battle HUD mode's setter was changed after us; left in place (it passes "
+                      L"through)");
     }
 }
 
