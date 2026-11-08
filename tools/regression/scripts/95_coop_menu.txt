@@ -1,7 +1,8 @@
-# The Co-op row (plan/remake-alignment.md step 6): placed on the first tick (its install line: 00_startup), its page's
-# parts checked. Opening the page needs a pad in the pause menu, which the console does not drive: checked live.
+# The Co-op rows (plan/remake-alignment.md step 6): the pause menu's and the title menu's placed on the first tick (their
+# install lines: 00_startup), the page's parts checked. Opening the page needs a pad in a menu, which the console does
+# not drive: checked live.
 # needs: control
-# expect: value menu.coop row placed; page closed
+# expect: value menu.coop row placed; page closed; opened \d+, values set \d+; title row placed
 # expect-not: Co-op menu: the row's opener or tables could not be placed
 note regression: coop menu start
 get menu.coop

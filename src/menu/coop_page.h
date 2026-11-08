@@ -42,8 +42,13 @@ void Unplace() noexcept;
 const std::vector<coop_menu_rules::Category>& Categories() noexcept;
 
 /// The mod's page, made if needed (from `host`'s world, with the game's `inGame`: 1 from the main menu, 0 from the
-/// title), in the root overlay at `z` and holding the mod's data; null (logged) if it could not be made, added or
-/// written. A page made for the other kind of host is forgotten and a new one made.
+/// title), not yet added or written; `inRoot` says whether it is in the overlay already. Null (logged) if it could not
+/// be made, or while it still plays its close. A page made for the other kind of host is forgotten and a new one made.
+void* Prepare(void* host, std::uint8_t inGame, bool& inRoot) noexcept;
+/// The mod's data written into `page` (after its construct ran: once in the overlay) and its title set. False
+/// (logged, the row failed until the next start) if writing failed: the caller takes the page down.
+bool Fill(void* page) noexcept;
+/// Prepare, the page added to the root overlay at `z` if it is not in it, then Fill: the page ready to open, or null.
 void* Ready(void* host, std::int32_t z, std::uint8_t inGame) noexcept;
 /// The page taken out of the overlay the way its own no-animation Back does (state 0), its data forgotten: after a
 /// failed open, or with its focus layer already popped (menu/coop_page_open's close with the main menu).

@@ -96,6 +96,7 @@ add_library(LocalSplitScreen SHARED
     src/menu/coop_page.cpp
     src/menu/coop_page_open.cpp
     src/menu/coop_menu.cpp
+    src/menu/title_row.cpp
     src/camera/camera_repair.cpp
     src/input/climb_context.cpp
     src/camera/near_fade.cpp
@@ -437,6 +438,7 @@ lss_test(player_window)
 lss_test(world_rules)
 lss_test(party_warp_rules)
 lss_test(coop_menu_rules)
+lss_test(title_row_rules)
 lss_test(platform_rules)
 lss_test(axis_records)
 lss_test(join_keys)

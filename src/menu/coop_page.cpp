@@ -506,7 +506,7 @@ const std::vector<coop_menu_rules::Category>& Categories() noexcept
     return g_page;
 }
 
-void* Ready(void* host, std::int32_t z, std::uint8_t inGame) noexcept
+void* Prepare(void* host, std::uint8_t inGame, bool& inRoot) noexcept
 {
     void*        page    = PageNow();
     std::uint8_t madeFor = inGame;
@@ -543,7 +543,7 @@ void* Ready(void* host, std::int32_t z, std::uint8_t inGame) noexcept
         }
         platform::Log(L"Co-op page: made the mod's own Options screen (not the one the System window keeps)");
     }
-    bool inRoot = false;
+    inRoot = false;
     if (!platform::CallGuarded(g.inRoot, inRoot, page))
     {
         return nullptr;
@@ -557,24 +557,44 @@ void* Ready(void* host, std::int32_t z, std::uint8_t inGame) noexcept
     }
     if (!inRoot)
     {
-        g_filled   = false;  // its construct runs now, over the game's data
-        bool added = false;
-        if (!platform::CallGuarded(g.addToRoot, added, page, z))  // writes the page's order itself
-        {
-            platform::LogWarning(L"Co-op page: adding the page to the screen faulted; the row opens nothing");
-            Abandon(page);
-            return nullptr;
-        }
+        g_filled = false;  // its construct runs when it is added, over the game's data
     }
+    return page;
+}
+
+bool Fill(void* page) noexcept
+{
     if (const wchar_t* failed = FillPage(page))
     {
         g_failed = true;
         platform::LogWarning(L"Co-op page: writing the page failed ({}); the row opens nothing until the game restarts", failed);
-        Abandon(page);
-        return nullptr;
+        return false;
     }
     g_filled = true;
     SetTitle(page);
+    return true;
+}
+
+void* Ready(void* host, std::int32_t z, std::uint8_t inGame) noexcept
+{
+    bool        inRoot = false;
+    void* const page   = Prepare(host, inGame, inRoot);
+    if (page == nullptr)
+    {
+        return nullptr;
+    }
+    bool added = false;
+    if (!inRoot && !platform::CallGuarded(g.addToRoot, added, page, z))  // writes the page's order itself
+    {
+        platform::LogWarning(L"Co-op page: adding the page to the screen faulted; the row opens nothing");
+        Abandon(page);
+        return nullptr;
+    }
+    if (!Fill(page))
+    {
+        Abandon(page);
+        return nullptr;
+    }
     return page;
 }
 

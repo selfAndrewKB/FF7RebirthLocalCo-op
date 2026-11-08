@@ -8,6 +8,7 @@
 # expect: pads: XInput users connected: 
 # expect: buttons: every pad's Start, map and enemy-intel presses reach the game's pause poll and menus
 # expect: Co-op menu: a Co-op row in the main menu before System
+# expect: Co-op menu: a Co-op row in the title menu below Options
 # expect-not: Co-op menu: an engine check failed
 # expect-not: standing aside: nothing installed
 # expect-not: not what the research read(?!\): none)

@@ -83,6 +83,66 @@ inline constexpr std::uintptr_t kTopRowDemoCall = 0x1414A605F;        // 1.005 o
 inline constexpr std::uintptr_t kTopRowDemoTest = 0x1414A51C4;        // 1.005 only: its target
 inline constexpr std::uint8_t   kTopRowDemoCallBytes[] = {0xE8, 0x60, 0xF1, 0xFF, 0xFF, 0x84, 0xC0, 0x74, 0xB4};
 
+// --- The title menu's row: the demo's "Buy Now", kind 9 (research/RE-coop-rows-facts.md §1.1, §1.2) ---------------
+
+/// UEndStartMenu's construct (vtable 0x1467579B8 +0x320; 1.005 +0x328): it builds the rows' kinds, then the list.
+inline constexpr std::uint8_t kStartMenuConstructBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C,
+                                                            0x24, 0x18, 0x56, 0x57, 0x41, 0x57, 0xB8, 0x30};
+inline constexpr SlotFact kStartMenuConstruct{L"the title menu's construct", 0x146757CD8,
+                                              {L"UEndStartMenu_NativeConstruct", 0x14395D98C, kStartMenuConstructBytes}};
+inline constexpr std::uint32_t kWidgetSlot           = 0x28;   // UWidget::Slot (stock 4.26)
+inline constexpr std::uint32_t kStartMenuKinds       = 0x438;  // TArray<int32>
+inline constexpr std::int32_t  kStartMenuKindOptions = 3;
+inline constexpr std::int32_t  kStartMenuKindCoop    = 9;      // built only under the demo check
+inline constexpr std::uint32_t kStartMenuAction      = 0x400;  // i32: a flow of its own runs (0 idle)
+inline constexpr std::uint32_t kStartMenuPage        = 0x4A8;  // the game's Options page (the open reads it from here)
+inline constexpr std::uint32_t kStartMenuListWidth   = 0x478;  // float: the list slot's width
+inline constexpr std::uint32_t kStartMenuListBase    = 0x47C;  // float: its height at the base row count
+inline constexpr std::int32_t  kStartMenuBaseRows    = 4;
+inline constexpr float         kStartMenuRowHeight   = 62.0f;
+inline constexpr std::int32_t  kTitleOptionsZ        = 1990;
+inline constexpr std::uintptr_t kStartMenuRowTextSlot = 0x146757F28;  // g_StartMenu_RowTextIds[9]
+inline constexpr std::uintptr_t kStartMenuRowTextWas  = 0x146756D48;  // $demo_titlemenu_BuyNow
+/// Kind 9's handler, void(start), and its one call, in the row press's switch: the call redirected for good (1.005's
+/// handler entry crosses a block; the call fits one in both builds).
+inline constexpr std::uint8_t kStartMenuKindCoopBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
+                                                           0x24, 0x10, 0x48, 0x89, 0x7C, 0x24, 0x18, 0x41};
+inline constexpr FunctionFact   kStartMenuKindCoopPress{L"UEndStartMenu_Kind9_BuyNowTrial", 0x143960498,
+                                                        kStartMenuKindCoopBytes};
+inline constexpr std::uintptr_t kStartMenuKindCoopCall = 0x1439645C8;
+/// The list: UUserWidget's find by name (on the start menu itself) with the game's own FName global, then the game's
+/// class tests (the Cast_* functions answer a bool in al, read live 2026-11-07: the low byte 1, the rest of rax left over).
+inline constexpr std::uint8_t kFindWidgetBytes[] = {0xB8, 0x48, 0x00, 0x00, 0x00, 0xE8, 0x3A, 0xFB,
+                                                    0xE7, 0x00, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x89};
+inline constexpr FunctionFact   kFindWidget{L"UUserWidget_FindWidgetByName", 0x14122F3EC, kFindWidgetBytes};
+inline constexpr std::uintptr_t kNameListMenu = 0x1491C5D70;  // g_FName_List_Menu
+inline constexpr std::uint8_t kCastScrollBoxBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8,
+                                                       0x94, 0xA5, 0x97, 0x00, 0x48, 0x2B, 0xE0, 0x48};
+inline constexpr FunctionFact kCastScrollBox{L"Cast_UEndVirtualScrollBox", 0x141734990, kCastScrollBoxBytes};
+// The list's height: the canvas slot's stock SetSize, reflected (menu/title_row; the 1.005 pairing of the native setter
+// and of the slot's class test read live as other functions).
+/// TArray<int32>'s growth after Num is raised.
+inline constexpr std::uint8_t kIntArrayGrowBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x4C,
+                                                      0x24, 0x08, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41};
+inline constexpr FunctionFact kIntArrayGrow{L"TArrayInt32_ResizeGrow", 0x1420FCA7C, kIntArrayGrowBytes};
+/// UEndStartMenu::OnOptions(start): the frame and a second widget made and added, then the page read from +0x4A8 (its
+/// close delegate bound, added at 1990 if not in the overlay, opened).
+inline constexpr std::uint8_t kStartMenuOpenOptionsBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x48, 0x89, 0x74,
+                                                              0x24, 0x20, 0x55, 0x57, 0x41, 0x56, 0x48, 0x8B};
+inline constexpr FunctionFact kStartMenuOpenOptions{L"UEndStartMenu__OnOptions_OpenOptionsPage", 0x1439666E4,
+                                                    kStartMenuOpenOptionsBytes};
+/// The page's close function OnOptions binds, void(const capture*: {start, its weak}): the frame taken down, the
+/// filters and the stick mode let go, the start menu's focus back.
+inline constexpr std::uint8_t kStartMenuOptionsClosedBytes[] = {0x40, 0x56, 0xB8, 0xD0, 0x00, 0x00, 0x00, 0xE8,
+                                                                0x14, 0x94, 0xD6, 0xFF, 0x48, 0x2B, 0xE0, 0x48};
+inline constexpr FunctionFact kStartMenuOptionsClosed{L"UEndStartMenu_OnOptionsClosed_Lambda", 0x142345B10,
+                                                      kStartMenuOptionsClosedBytes};
+/// SquareInput_SetStickDPadRequestBit1(input, u8 on): the stick as the d-pad, request bit 1 (the title's open sets it).
+inline constexpr std::uint8_t kSetStickDPadModeBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x0E, 0x07,
+                                                          0x57, 0xFF, 0x48, 0x2B, 0xE0, 0x44, 0x8A, 0xC2};
+inline constexpr FunctionFact kSetStickDPadMode{L"SquareInput_SetStickDPadRequestBit1", 0x142B3E818,
+                                                kSetStickDPadModeBytes};
+
 // --- The Options screen as the mod's page ---------------------------------------------------------------------------
 
 inline constexpr const wchar_t* kOptionsClassPath =

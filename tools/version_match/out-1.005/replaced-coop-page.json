@@ -273,6 +273,123 @@
       "same_semantics": true,
       "confidence": "CONFIRMED",
       "note": "The IDA pass S-COOPCLOSE on both databases (RE-coop-page-facts.md section 5)."
+    },
+    {
+      "name": "vtbl_UEndStartMenu construct slot (+0x320 / +0x328)",
+      "old": "0x146757CD8",
+      "new": "0x1465E1AB8",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPCLOSE on both databases (RE-coop-rows-facts.md 1.1, 1.2; RE-coop-page-facts.md 5)."
+    },
+    {
+      "name": "UEndStartMenu construct",
+      "old": "0x14395D98C",
+      "new": "0x143697C90",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPCLOSE on both databases (RE-coop-rows-facts.md 1.1, 1.2; RE-coop-page-facts.md 5)."
+    },
+    {
+      "name": "g_StartMenu_RowTextIds[9] slot",
+      "old": "0x146757F28",
+      "new": "0x1465E1D08",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPCLOSE on both databases (RE-coop-rows-facts.md 1.1, 1.2; RE-coop-page-facts.md 5)."
+    },
+    {
+      "name": "$demo_titlemenu_BuyNow (text 9 as shipped)",
+      "old": "0x146756D48",
+      "new": "0x1465E0D38",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPCLOSE on both databases (RE-coop-rows-facts.md 1.1, 1.2; RE-coop-page-facts.md 5)."
+    },
+    {
+      "name": "UEndStartMenu_Kind9_BuyNowTrial",
+      "old": "0x143960498",
+      "new": "0x14369A86C",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPCLOSE on both databases (RE-coop-rows-facts.md 1.1, 1.2; RE-coop-page-facts.md 5)."
+    },
+    {
+      "name": "UUserWidget_FindWidgetByName",
+      "old": "0x14122F3EC",
+      "new": "0x140804BDC",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPCLOSE on both databases (RE-coop-rows-facts.md 1.1, 1.2; RE-coop-page-facts.md 5)."
+    },
+    {
+      "name": "g_FName_List_Menu",
+      "old": "0x1491C5D70",
+      "new": "0x148FFDDF0",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPCLOSE on both databases (RE-coop-rows-facts.md 1.1, 1.2; RE-coop-page-facts.md 5)."
+    },
+    {
+      "name": "Cast_UEndVirtualScrollBox",
+      "old": "0x141734990",
+      "new": "0x1417C998C",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPCLOSE on both databases (RE-coop-rows-facts.md 1.1, 1.2; RE-coop-page-facts.md 5)."
+    },
+    {
+      "name": "TArrayInt32_ResizeGrow",
+      "old": "0x1420FCA7C",
+      "new": "0x14219AECC",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPCLOSE on both databases (RE-coop-rows-facts.md 1.1, 1.2; RE-coop-page-facts.md 5)."
+    },
+    {
+      "name": "UEndStartMenu__OnOptions_OpenOptionsPage",
+      "old": "0x1439666E4",
+      "new": "0x1436A0A58",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPCLOSE on both databases (RE-coop-rows-facts.md 1.1, 1.2; RE-coop-page-facts.md 5)."
+    },
+    {
+      "name": "UEndStartMenu_OnOptionsClosed_Lambda",
+      "old": "0x142345B10",
+      "new": "0x143691A0C",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPCLOSE on both databases (RE-coop-rows-facts.md 1.1, 1.2; RE-coop-page-facts.md 5)."
+    },
+    {
+      "name": "SquareInput_SetStickDPadRequestBit1",
+      "old": "0x142B3E818",
+      "new": "0x1427C60F8",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes S-COOPROWS / S-COOPCLOSE on both databases (RE-coop-rows-facts.md 1.1, 1.2; RE-coop-page-facts.md 5)."
+    },
+    {
+      "name": "UEndStartMenu press switch: call of kind 9's handler",
+      "old": "0x1439645C8",
+      "new": "0x14369E985",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "RE-coop-rows-facts.md 1.1 (the handler's only code caller); E8 to the handler read from both exes, inside one block in both."
     }
   ]
 }

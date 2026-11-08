@@ -58,9 +58,33 @@ platform::VTableEntry g_keyDown;
 std::array<platform::VTableEntry, rules::kCategoryKeys.size()> g_headings;
 std::array<bool, rules::kCategoryKeys.size()>                  g_headingSet{};  // game thread: the entry holds the label
 
+using TitleCallFn = void (*)(void* start);  // the start menu's Options open
+using ClosedFn    = void (*)(const void* capture);
+using SetStickFn  = void (*)(void* input, std::uint8_t on);
+
+/// The title's functions, found at install (menu/title_row).
+struct TitleGame
+{
+    TitleCallFn openOptions = nullptr;
+    ClosedFn    closed      = nullptr;
+    SetStickFn  setStick    = nullptr;
+};
+
+/// What the game's close function for the title holds: the start menu and a weak pointer to it.
+struct TitleCapture
+{
+    void*         start = nullptr;
+    std::uint64_t weak  = 0;
+};
+static_assert(sizeof(TitleCapture) == 16 && offsetof(TitleCapture, weak) == 8, "read raw by the game's close function");
+
+TitleGame g_title;
+
 // Game thread.
 void*         g_mgr     = nullptr;  // the main menu manager while open
 std::uint64_t g_topWeak = 0;        // the hidden first page (a weak value)
+bool          g_atTitle   = false;  // the page is open over the title menu, not the main menu
+std::uint64_t g_titleHost = 0;      // the start menu it opened over (a weak value)
 std::wstring  g_savedTitle, g_savedGuide;
 std::uint64_t g_opens = 0;
 
@@ -114,9 +138,56 @@ void RestoreTop() noexcept
     }
 }
 
+bool PageClosing(const void* page) noexcept;
+
+/// The mod's state at a close over the title menu; the game's close function has run with the page's Back.
+void ClosedAtTitle(const wchar_t* how) noexcept
+{
+    coop_page::SetOpen(false);
+    SwapHeadings(false);
+    g_atTitle   = false;
+    g_titleHost = 0;
+    platform::Log(L"Co-op page: closed over the title menu ({})", how);
+}
+
+/// The page gone or taken down over the title menu, so its Back never ran: what that Back's close function undoes,
+/// undone. With the start menu gone too, only the stick's mode is left to put back.
+void LeftAtTitle(void* page, const wchar_t* why) noexcept
+{
+    coop_page::SetOpen(false);
+    SwapHeadings(false);
+    if (page != nullptr)
+    {
+        alignas(16) std::uint8_t taken[16]{};
+        void*                    ref = nullptr;
+        if (!PageClosing(page) && platform::CallGuarded(g.takeWidget, ref, page, static_cast<void*>(taken)) && ref != nullptr)
+        {
+            platform::CallGuarded(g.popLayer, game_ui::System(), ref);
+        }
+        coop_page::Abandon(page);
+    }
+    if (void* const start = g_titleHost != 0 ? weak::ObjectOf(g_titleHost) : nullptr)
+    {
+        const TitleCapture capture{start, g_titleHost};
+        platform::CallGuarded(g_title.closed, static_cast<const void*>(&capture));
+    }
+    else
+    {
+        platform::CallGuarded(g_title.setStick, game_ui::Manager(facts::kUiInputSlot), std::uint8_t{0});
+    }
+    g_atTitle   = false;
+    g_titleHost = 0;
+    platform::LogWarning(L"Co-op page: left over the title menu ({})", why);
+}
+
 /// The page closed (by its own Back, or gone): the first page back, as after any of the game's windows.
 void Closed(const wchar_t* how) noexcept
 {
+    if (g_atTitle)
+    {
+        ClosedAtTitle(how);
+        return;
+    }
     coop_page::SetOpen(false);
     SwapHeadings(false);
     RestoreTop();
@@ -126,8 +197,6 @@ void Closed(const wchar_t* how) noexcept
                   ok ? L"the main menu is back" : L"the main menu could not be shown again (it closed)");
     g_mgr = nullptr;
 }
-
-bool PageClosing(const void* page) noexcept;
 
 /// The page taken down the way its own no-animation Back does (its focus layer popped, out of the overlay), for a main
 /// menu closed under it.
@@ -226,6 +295,76 @@ void Remove() noexcept
         coop_page::SetOpen(false);
         platform::Log(L"Co-op page: the mod unloads with the page open; the page is left to the game");
     }
+    g_atTitle   = false;
+    g_titleHost = 0;
+}
+
+bool InstallTitle(const platform::GameImage& image) noexcept
+{
+    const auto openOptions = platform::FindFunction(image, facts::kStartMenuOpenOptions);
+    const auto closed      = platform::FindFunction(image, facts::kStartMenuOptionsClosed);
+    const auto setStick    = platform::FindFunction(image, facts::kSetStickDPadMode);
+    if (!openOptions || !closed || !setStick)
+    {
+        return false;
+    }
+    g_title.openOptions = reinterpret_cast<TitleCallFn>(*openOptions);
+    g_title.closed      = reinterpret_cast<ClosedFn>(*closed);
+    g_title.setStick    = reinterpret_cast<SetStickFn>(*setStick);
+    return true;
+}
+
+void OpenAtTitle(void* start) noexcept
+try
+{
+    if (coop_page::IsOpen() || coop_page::Failed() || g_title.openOptions == nullptr)
+    {
+        return;
+    }
+    const std::uint64_t host = weak::WeakOf(start);
+    bool                inRoot = false;
+    void* const         page   = host != 0 ? coop_page::Prepare(start, std::uint8_t{0}, inRoot) : nullptr;
+    if (page == nullptr)
+    {
+        if (host == 0)
+        {
+            platform::LogWarning(L"Co-op page: the title menu has no weak pointer; not opened");
+        }
+        return;
+    }
+    g_atTitle   = true;
+    g_titleHost = host;
+    // The game's open makes and adds its frame, then reads its page from one field (no parameter for it): adds it at its
+    // order if it is not in the overlay (its construct runs then, over the game's data), binds its close function and
+    // opens it. The field is the game's again before any other code can read it.
+    void* const gamesPage = platform::ReadPointer(start, facts::kStartMenuPage);
+    bool        opened    = platform::WriteGuarded(At(start, facts::kStartMenuPage), &page, sizeof(page));
+    opened                = opened && platform::CallGuarded(g_title.openOptions, start);
+    if (!platform::WriteGuarded(At(start, facts::kStartMenuPage), &gamesPage, sizeof(gamesPage)))
+    {
+        platform::LogWarning(L"Co-op page: the title menu's Options page could not be put back");
+    }
+    if (!opened)
+    {
+        LeftAtTitle(page, L"its opening faulted");
+        return;
+    }
+    if (!coop_page::Fill(page))  // the page's construct has run: the mod's data over the game's
+    {
+        LeftAtTitle(page, L"writing it failed");
+        return;
+    }
+    SwapHeadings(true);
+    coop_page::SetOpen(true);
+    ++g_opens;
+    platform::Log(L"Co-op page: opened over the title menu ({} categories)", coop_page::Categories().size());
+}
+catch (...)
+{
+    if (g_atTitle)
+    {
+        LeftAtTitle(coop_page::Page(), L"an exception while opening");
+    }
 }
 
 void Open(void* mgr, OpenWindowFn openWindow) noexcept
@@ -302,6 +441,23 @@ void Tick() noexcept
 {
     if (!coop_page::IsOpen())
     {
+        return;
+    }
+    if (g_atTitle)
+    {
+        void* const titlePage = coop_page::Page();
+        if (titlePage == nullptr)
+        {
+            LeftAtTitle(nullptr, L"the page is gone");
+        }
+        else if (weak::ObjectOf(g_titleHost) == nullptr)
+        {
+            LeftAtTitle(titlePage, L"the title menu is gone");
+        }
+        else if (PageClosing(titlePage))
+        {
+            ClosedAtTitle(L"seen by the tick");
+        }
         return;
     }
     // A main menu closed under the page: take it down.

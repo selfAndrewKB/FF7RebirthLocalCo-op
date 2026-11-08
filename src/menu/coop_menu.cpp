@@ -5,6 +5,7 @@
 #include "menu/coop_page.h"
 #include "menu/coop_page_open.h"
 #include "menu/game_ui.h"
+#include "menu/title_row.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/command_registry.h"
@@ -50,6 +51,7 @@ platform::CallRedirect  g_demoCall;
 bool                    g_installed = false;
 bool                    g_pending   = false;  // the first tick places everything
 bool                    g_placed    = false;  // the row shows and opens the page
+bool                    g_titleFound = false;  // the title menu can have its row
 
 /// The game's window opener: the Co-op row's kind opens the page; every other kind is the game's.
 void OpenWindow(void* mgr, std::uint8_t kind)
@@ -91,6 +93,11 @@ bool Place(const platform::GameImage& image) noexcept
     {
         return false;
     }
+    // The title's row is its own: without it the title stays as it was (logged by title_row).
+    if (g_titleFound)
+    {
+        title_row::Place(image);
+    }
     return g_text.Replace(g.textSlot, g.textWas, reinterpret_cast<std::uintptr_t>(rules::kRowLabel)) &&
            g_help.Replace(g.helpSlot, g.helpWas, reinterpret_cast<std::uintptr_t>(rules::kRowHelp)) &&
            g_order.Replace(g.orderWord, facts::kTopRowOrderWas, facts::kTopRowOrderCoop) && PlaceGate();
@@ -111,6 +118,7 @@ void Unplace() noexcept
         }
         g_demoCall.Restore();
     }
+    title_row::Unplace();
     g_demoName.Restore();
     g_order.Restore();
     g_help.Restore();
@@ -126,6 +134,7 @@ std::wstring Reading()
                                     coop_page::IsOpen() ? L"open" : L"closed",
                                     coop_page::Failed() ? L" (failed: opens nothing)" : L"", coop_page_open::Opens(),
                                     coop_page::Commits());
+    text += title_row::Reading();
     void* const         mgr = game_ui::Manager(facts::kUiMainMenuSlot);
     void* const         top = mgr != nullptr ? game_ui::WeakAt(mgr, facts::kMainMenuMgrCurrent) : nullptr;
     platform::GameArray rows;
@@ -190,6 +199,7 @@ try
     g.helpSlot     = *helpSlot;
     g.helpWas      = *helpWas;
     g.orderWord    = *orderWord;
+    g_titleFound   = title_row::Install(image);
     g_installed    = true;
     g_pending      = true;  // placed by the first tick, on the game thread the redirected functions run on
     return true;
