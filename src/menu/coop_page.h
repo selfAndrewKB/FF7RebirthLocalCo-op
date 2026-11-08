@@ -10,7 +10,8 @@
 // and destructor, the arrays' growth and emptying, the scroll box's count and refresh), each element counted only once
 // built. A fault while writing marks the page failed: the row opens nothing until the game restarts. The game's value
 // read and commit are redirected for the mod's rows only (their category bytes from 0x80, which the game never makes):
-// a read answers the option's current word's place, a commit while the page is open is queued and the next tick runs
+// a read answers the option's current word's place (its default's while the game's Reset All runs on the page: 1.005,
+// whose Reset All entry can be followed), a commit while the page is open is queued and the next tick runs
 // the option's console command and saves it to the settings file, so it applies at once and at the next start. Each
 // made page and each change logged at Info, each commit at Debug, each value read at Trace. Game thread.
 //

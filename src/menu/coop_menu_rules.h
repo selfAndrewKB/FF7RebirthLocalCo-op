@@ -178,6 +178,19 @@ inline int FirstVisible(int marker, int first, int cells, int window) noexcept
     return first < 0 ? 0 : (first > last ? last : first);
 }
 
+/// The value Reset All gives a row: its option's default word's place (0 if the default is none of its words).
+inline int DefaultValue(const settings::Option& option) noexcept
+{
+    for (std::size_t i = 0; i < option.words.size(); ++i)
+    {
+        if (option.fallback != nullptr && std::wcscmp(option.words[i], option.fallback) == 0)
+        {
+            return static_cast<int>(i);
+        }
+    }
+    return 0;
+}
+
 /// The value the page shows for a word: its place in the option's words; none if the word is none of them.
 inline std::optional<int> ValueOf(const settings::Option& option, const std::wstring& word) noexcept
 {

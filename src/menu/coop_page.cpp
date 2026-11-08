@@ -80,7 +80,7 @@ struct Game
 
 // Set at install and on the first tick, then only read.
 Game                         g;
-platform::EntryRedirect      g_getValue, g_setValue;
+platform::EntryRedirect      g_getValue, g_setValue, g_reset;
 std::vector<rules::Category> g_page;  // the page's categories and rows
 
 // Game thread.
@@ -95,7 +95,8 @@ std::uint64_t g_commits = 0;
 std::array<std::optional<int>, settings::kOptions.size()> g_queued{};
 /// The value the page last showed per option (a commit equal to it changes nothing when the current word is unknown).
 std::array<int, settings::kOptions.size()> g_shown{};
-bool g_sliders = false;  // the long rows are the game's slider rows (menu/coop_slider placed)
+bool g_sliders   = false;  // the long rows are the game's slider rows (menu/coop_slider placed)
+bool g_resetting = false;  // the game's Reset All runs on the mod's page: the value read answers the defaults
 /// The option and value the page's value read last answered, for a slider row's text (menu/coop_slider), taken once.
 struct Answered
 {
@@ -148,9 +149,14 @@ std::int32_t GetValue(void* page, std::uint8_t key, std::int32_t row)
                 const auto              i     = static_cast<std::size_t>(*option);
                 const settings::Option& shown = *settings::kOptions[i];
                 const auto              word  = CurrentWord(*option);
-                const int value = g_queued[i] ? *g_queued[i] : (word ? rules::ValueOf(shown, *word).value_or(0) : 0);
-                g_shown[i]      = value;
-                g_answered      = Answered{*option, value};
+                const int value = g_resetting ? rules::DefaultValue(shown)
+                                  : g_queued[i] ? *g_queued[i]
+                                                : (word ? rules::ValueOf(shown, *word).value_or(0) : 0);
+                if (!g_resetting)
+                {
+                    g_shown[i] = value;  // a reset's default is not yet shown: its commit must not read as unchanged
+                }
+                g_answered = Answered{*option, value};
                 if (platform::Enabled(platform::Level::Trace))
                 {
                     platform::LogTrace(L"Co-op page: {} shows {} (the option reads {})", shown.key, value,
@@ -168,7 +174,7 @@ std::int32_t GetValue(void* page, std::uint8_t key, std::int32_t row)
 }
 
 /// The game's value commit: a mod row's value is queued for its option's command, run by the next tick (an unchanged
-/// value does nothing: the game re-commits current values at its construct and its Reset All).
+/// value does nothing: the game re-commits current values at its construct).
 void* SetValue(void* page, std::uint8_t category, std::int32_t value)
 {
     const auto option = rules::OptionOf(category);
@@ -205,6 +211,35 @@ void* SetValue(void* page, std::uint8_t category, std::int32_t value)
         platform::LogWarning(L"Co-op page: a commit raised an exception; nothing changed");
     }
     return page;
+}
+
+using ResetFn = std::uint64_t (*)(void* page, std::uint64_t a2, std::uint64_t a3);
+
+/// The game's Reset All after its Yes: on the mod's page the game's own row loop runs with the value read answering each
+/// option's default, so its commits carry the defaults into the mod's (queued, run and saved as any change); then the
+/// rows are drawn again (the reset writes a slider's label as a plain number). Elsewhere the game's alone.
+std::uint64_t ResetConfirm(void* page, std::uint64_t a2, std::uint64_t a3)
+{
+    const auto original = reinterpret_cast<ResetFn>(g_reset.Original());
+    if (!g_open || !g_filled || !IsPage(page))
+    {
+        return original(page, a2, a3);
+    }
+    struct Resetting
+    {
+        Resetting() { g_resetting = true; }
+        ~Resetting() { g_resetting = false; }
+    };
+    std::uint64_t result = 0;
+    {
+        const Resetting resetting;
+        result = original(page, a2, a3);
+    }
+    void* const rows = platform::ReadPointer(page, facts::kOptionsRowList);
+    const bool  drawn = rows != nullptr && platform::CallGuarded(g.refresh, rows);
+    platform::Log(L"Co-op page: Reset All: each option of the category back to its default{}",
+                  drawn ? L"" : L" (the rows could not be drawn again)");
+    return result;
 }
 
 /// The queued commits, each through its option's console command (as the console and the keys run them), then saved.
@@ -513,11 +548,31 @@ bool Place(const platform::GameImage& image) noexcept
                                                                  facts::kOptionsGetValueSecond1005,
                                                                  reinterpret_cast<std::uintptr_t>(&GetValue))
                          : g_getValue.Install(g.getValueAt, getFirst, reinterpret_cast<std::uintptr_t>(&GetValue));
-    return get && g_setValue.Install(g.setValueAt, setFirst, reinterpret_cast<std::uintptr_t>(&SetValue));
+    const bool placed = get && g_setValue.Install(g.setValueAt, setFirst, reinterpret_cast<std::uintptr_t>(&SetValue));
+    // Reset All: 1.005 only (1.004's entry crosses a block and its second instruction is too short to take the jump; there
+    // Reset All keeps every value of the page).
+    if (placed && platform::RunningBuild() == platform::BuildIndex::V1005)
+    {
+        const auto reset    = platform::FindFunction(image, facts::kOptionsResetConfirm);
+        bool       followed = false;
+        if (reset)
+        {
+            const auto first = image.EntryInstruction(
+                facts::kOptionsResetConfirm.address,
+                facts::kOptionsResetConfirm.entryBytes.first(facts::kOptionsResetConfirmFirst));
+            followed = g_reset.Install(*reset, first, reinterpret_cast<std::uintptr_t>(&ResetConfirm));
+        }
+        if (!followed)
+        {
+            platform::LogWarning(L"Co-op page: Reset All could not be followed; on the page it keeps every value");
+        }
+    }
+    return placed;
 }
 
 void Unplace() noexcept
 {
+    g_reset.Restore();
     g_setValue.Restore();
     g_getValue.Restore();
     g_answered.reset();  // no read answers any more: a slider's value text redirect left in place finds none

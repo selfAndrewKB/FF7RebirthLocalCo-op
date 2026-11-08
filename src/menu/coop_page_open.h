@@ -6,7 +6,8 @@
 //
 // An open runs the game's window opener's prelude (its tutorial and flag), then hides the main menu's first page the
 // game's way and opens the page over it; the manager's current window stays the first page, so its title, Back and
-// re-open paths stay the game's. While open the first page's title reads "Co-op" and its guide the page's keys, and the
+// re-open paths stay the game's. While open the first page's title reads "Co-op" and its guide getter is the one every
+// other window uses (the focused row's guide, hidden over an open gauge or list, as over the game's own page), and the
 // game's heading table (keyed by category, keys the page shares with the game's first ones) names the page's
 // categories. The hidden first page is held from the garbage collector while the page is open (the engine's root set,
 // as AddToRoot), since its Hide takes it out of the overlay and the main menu's tick blanks the title, help and guide

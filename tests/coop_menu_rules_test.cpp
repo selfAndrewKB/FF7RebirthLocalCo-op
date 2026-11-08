@@ -133,6 +133,22 @@ void SlidersAreTheLongRows()
     EXPECT(sliders == 2);
 }
 
+/// Reset All gives each row its option's default word.
+void ResetGivesDefaults()
+{
+    std::puts("coop menu: Reset All gives each row its default");
+    for (const settings::Option* option : settings::kOptions)
+    {
+        if (option->words.empty())
+        {
+            continue;
+        }
+        const int value = DefaultValue(*option);
+        EXPECT(value >= 0 && value < static_cast<int>(option->words.size()));
+        EXPECT(std::wcscmp(option->words[static_cast<std::size_t>(value)], option->fallback) == 0);
+    }
+}
+
 /// A slider's arrows move right by its longest word's characters past the game's two digits; short words move nothing.
 void LabelRoom()
 {
@@ -180,6 +196,7 @@ int main()
 {
     SlidersAreTheLongRows();
     LabelRoom();
+    ResetGivesDefaults();
     SliderWindow();
     EveryOptionHasMenuText();
     PageFromTheTable();

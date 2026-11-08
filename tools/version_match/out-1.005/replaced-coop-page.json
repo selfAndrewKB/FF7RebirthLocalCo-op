@@ -480,6 +480,42 @@
       "same_semantics": true,
       "confidence": "CONFIRMED",
       "note": "The IDA pass S-COOPPAGE (RE-coop-page-facts.md 1.2); call sites read from both exes as E8 to the paired functions."
+    },
+    {
+      "name": "vtbl_UEndMainMenuTopWindow: the guide getter slot (+0x4E0 / +0x4E8)",
+      "old": "0x1457B1DF8",
+      "new": "0x145672410",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA pass S-COOPGUIDE on both databases (RE-coop-page-guide.md 6); slot contents and the functions' first bytes checked in both exes 2026-11-07."
+    },
+    {
+      "name": "UEndMainMenuTopWindow_GetGuideText_Field488",
+      "old": "0x1418EF9A0",
+      "new": "0x14197D490",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA pass S-COOPGUIDE on both databases (RE-coop-page-guide.md 6); slot contents and the functions' first bytes checked in both exes 2026-11-07."
+    },
+    {
+      "name": "UEndMainMenuWindow_GetGuideText_FocusedMeta",
+      "old": "0x140BE3ED8",
+      "new": "0x141167C18",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA pass S-COOPGUIDE on both databases (RE-coop-page-guide.md 6); slot contents and the functions' first bytes checked in both exes 2026-11-07."
+    },
+    {
+      "name": "OptionsMenu_ResetCategoryToDefaults_OnConfirm",
+      "old": "0x1438E66BC",
+      "new": "0x143615884",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA pass S-COOPGUIDE on both databases (RE-coop-page-guide.md 6); slot contents and the functions' first bytes checked in both exes 2026-11-07."
     }
   ]
 }

@@ -38,9 +38,6 @@ using TakeWidgetFn = void* (*)(void* widget, void* out);
 using PopLayerFn   = void (*)(void* ui, void* taken);
 using ObjectFn     = void* (*)(void* object);  // a window's Hide
 
-// The guide while the page is open: the page's own keys (the first page's guide shows whatever has focus).
-constexpr const wchar_t* kGuide = L"<button=decide> Choose  <button=cancel> Back";
-
 /// The game's functions, found at install.
 struct Game
 {
@@ -50,11 +47,15 @@ struct Game
     PopLayerFn     popLayer     = nullptr;
     std::uintptr_t headings     = 0;  // the heading table (live)
     std::uint32_t  headingCount = 0;
+    // The first page's guide getter slot, the function it holds and the base window's getter (live; 0 if not found:
+    // the page then shows the first page's own guide).
+    std::uintptr_t guideSlot = 0, topGuide = 0, windowGuide = 0;
 };
 
 // Set at install and on the first tick, then only read.
 Game                  g;
 platform::VTableEntry g_keyDown;
+platform::VTableEntry g_guide;  // game thread: the first page's guide getter while the page is open
 /// The page's categories' entries of the game's heading table, swapped for their labels while the page is open (the
 /// game's own Options page reads the same table).
 std::array<platform::VTableEntry, rules::kCategoryKeys.size()> g_headings;
@@ -89,7 +90,7 @@ std::uint64_t g_topWeak = 0;        // the hidden first page (a weak value)
 void*         g_heldTop = nullptr;  // the hidden first page while the mod holds it from the garbage collector
 bool          g_atTitle   = false;  // the page is open over the title menu, not the main menu
 std::uint64_t g_titleHost = 0;      // the start menu it opened over (a weak value)
-std::wstring  g_savedTitle, g_savedGuide;
+std::wstring  g_savedTitle;
 std::uint64_t g_opens = 0;
 
 /// The heading table's entries for the page's categories: their labels while the page is open, the game's after.
@@ -188,18 +189,35 @@ void ReleaseTop() noexcept
     g_heldTop = nullptr;
 }
 
-/// The first page's title and guide back as they were.
+/// The first page's guide getter while the page is open: the base window's, which every other window of the main menu
+/// uses, so the guide is the focused row's (hidden over an open gauge or list, back at a cancel), as over the game's own
+/// Options page. The first page's own getter back at every close.
+void SwapGuide(bool focused) noexcept
+{
+    if (!focused)
+    {
+        g_guide.Restore();
+        return;
+    }
+    if (g.guideSlot != 0 && !g_guide.Replace(g.guideSlot, g.topGuide, g.windowGuide))
+    {
+        platform::LogWarning(L"Co-op page: the first page's guide getter is not the expected one; the page shows the main "
+                             L"menu's guide");
+    }
+}
+
+/// The first page's guide getter and title back as they were.
 void RestoreTop() noexcept
 {
+    SwapGuide(false);
     void* const top = g_topWeak != 0 ? weak::ObjectOf(g_topWeak) : nullptr;
     if (top == nullptr)
     {
         return;
     }
-    if (!game_ui::AssignString(At(top, facts::kWindowTitle), g_savedTitle) ||
-        !game_ui::AssignString(At(top, facts::kTopGuide), g_savedGuide))
+    if (!game_ui::AssignString(At(top, facts::kWindowTitle), g_savedTitle))
     {
-        platform::LogWarning(L"Co-op page: the main menu's title or guide could not be put back");
+        platform::LogWarning(L"Co-op page: the main menu's title could not be put back");
     }
 }
 
@@ -357,6 +375,20 @@ try
     g.headingCount = count;
     g_acceptKey    = image.Rebase(f::kKeyAccept, 8).value_or(0);  // without it a slider's Accept commits nothing (logged
                                                                   // by menu/coop_slider)
+    // Without them the page shows the first page's own guide (logged): the page still works.
+    const auto guideSlot   = image.Rebase(f::kTopGuideSlot.slot, 8);
+    const auto topGuide    = platform::FindFunction(image, f::kTopGuideSlot.target);
+    const auto windowGuide = platform::FindFunction(image, f::kWindowGuideGetter);
+    if (guideSlot && topGuide && windowGuide)
+    {
+        g.guideSlot   = *guideSlot;
+        g.topGuide    = *topGuide;
+        g.windowGuide = *windowGuide;
+    }
+    else
+    {
+        platform::LogWarning(L"Co-op page: the guide getters were not found; the page shows the main menu's guide");
+    }
     return true;
 }
 catch (...)
@@ -372,6 +404,7 @@ bool Place(const platform::GameImage& image) noexcept
 void Unplace() noexcept
 {
     SwapHeadings(false);
+    SwapGuide(false);  // also off the game thread at an unload: one atomic pointer write
     g_keyDown.Restore();
     ReleaseTop();
 }
@@ -498,9 +531,8 @@ try
     g_topWeak = topWeak;
     HoldTop(top);
     g_savedTitle = game_ui::ReadString(At(top, facts::kWindowTitle));
-    g_savedGuide = game_ui::ReadString(At(top, facts::kTopGuide));
     game_ui::AssignString(At(top, facts::kWindowTitle), rules::kTitle);
-    game_ui::AssignString(At(top, facts::kTopGuide), kGuide);
+    SwapGuide(true);
     SwapHeadings(true);
     g_mgr = mgr;
     coop_page::SetOpen(true);
@@ -527,6 +559,7 @@ catch (...)
     platform::LogWarning(L"Co-op page: opening raised an exception");
     if (!coop_page::IsOpen())
     {
+        SwapGuide(false);
         ReleaseTop();  // thrown after the hold, before the page opened: nothing else would let it go
     }
 }
@@ -575,7 +608,8 @@ void Tick() noexcept
             RestoreTop();
             ReleaseTop();
             g_mgr = nullptr;
-            platform::Log(L"Co-op page: the page is gone with the main menu closing; its title and guide put back");
+            platform::Log(L"Co-op page: the page is gone with the main menu closing; the first page's title and guide "
+                          L"put back");
         }
         return;
     }

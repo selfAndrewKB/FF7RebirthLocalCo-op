@@ -48,9 +48,19 @@ inline constexpr PerBuild<std::uint32_t> kWindowHideSlot = {0x4B8, 0x4C0};  // U
 // GetWorld: facts/engine.h kObjectGetWorldSlot.
 inline constexpr std::uint32_t kWindowVisible = 0x408;  // u8
 inline constexpr std::uint32_t kWindowTitle   = 0x3F8;  // FString the manager's tick shows as the title
-inline constexpr std::uint32_t kTopGuide      = 0x488;  // FString: the first page's key guide
 inline constexpr std::uint32_t kWindowZOrder  = 0x2A8;  // i32: the order the widget was added to the overlay at
 inline constexpr std::uint32_t kTopRows       = 0x4A0;  // TArray<u8>: the kinds the first page built
+
+/// The key guide the main menu's tick shows comes from the current window's guide getter (a vtable slot): the first
+/// page's answers its own text field, every other window's (the base window's) the focused widget's guide, so their
+/// guide hides over an open gauge or list and comes back at a cancel (research/RE-coop-page-guide.md §2.3, §4).
+inline constexpr std::uint8_t kTopGuideGetterBytes[] = {0x48, 0x8D, 0x81, 0x88, 0x04, 0x00, 0x00, 0xC3};
+inline constexpr SlotFact     kTopGuideSlot{L"the first page's guide getter", 0x1457B1DF8,
+                                        {L"UEndMainMenuTopWindow_GetGuideText_Field488", 0x1418EF9A0, kTopGuideGetterBytes}};
+inline constexpr std::uint8_t kWindowGuideGetterBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57,
+                                                           0xB8, 0x40, 0x00, 0x00, 0x00};
+inline constexpr FunctionFact kWindowGuideGetter{L"UEndMainMenuWindow_GetGuideText_FocusedMeta", 0x140BE3ED8,
+                                                 kWindowGuideGetterBytes};
 
 /// EndUI28_MainMenu_OpenWindowByKind(mgr, u8 kind): its prelude (the tutorial, a flag), then the kind's window.
 inline constexpr std::uint8_t kOpenWindowByKindBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74,
@@ -152,6 +162,7 @@ inline constexpr std::uint32_t kOptionsState          = 0x3C8;  // u8
 inline constexpr std::uint8_t  kOptionsStateClosing   = 8;
 inline constexpr std::uint8_t  kOptionsStateRangeEdit = 5;
 inline constexpr std::uint32_t kOptionsCategoryList   = 0x3D0;  // UEndVirtualScrollBox*
+inline constexpr std::uint32_t kOptionsRowList        = 0x3D8;  // UEndVirtualScrollBox*: the category's rows
 inline constexpr std::uint32_t kOptionsCategoryIndex  = 0x410;  // i32
 inline constexpr std::uint32_t kOptionsRowIndex       = 0x414;  // i32
 inline constexpr std::uint32_t kOptionsEditValue      = 0x418;  // i32: a Range row's pending value
@@ -208,6 +219,15 @@ inline constexpr std::uint8_t kOptionsSetValueBytes[] = {0x48, 0x89, 0x5C, 0x24,
 inline constexpr FunctionFact kOptionsSetValue{L"OptionsMenu_SetOptionValue_CopyApplyCommit", 0x141808A00,
                                                kOptionsSetValueBytes};
 inline constexpr std::size_t  kOptionsSetValueFirst = 5;
+/// Reset All's Yes, (page, …): for the current category (keys 0..4) a copy of the option block reset from the default
+/// profile (bytes to 0x54 only), committed, then each row read through the value read and set through the value commit
+/// (research/RE-coop-page-guide.md, Reset All). 1.005's first instruction (`mov [rsp+8], rcx`) lies in one block;
+/// 1.004's crosses one and its second (`push rbp`) is too short to take the jump, so 1.004 keeps no Reset All.
+inline constexpr std::uint8_t kOptionsResetConfirmBytes[] = {0x48, 0x89, 0x4C, 0x24, 0x08, 0x55, 0x53, 0x56,
+                                                             0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41};
+inline constexpr FunctionFact kOptionsResetConfirm{L"OptionsMenu_ResetCategoryToDefaults_OnConfirm", 0x1438E66BC,
+                                                   kOptionsResetConfirmBytes};
+inline constexpr std::size_t  kOptionsResetConfirmFirst = 5;
 
 /// The page's key handler (pass 2: Back, Accept, the options button), a slot of MainMenu_OptionsTop2_C's vtable
 /// (0x14590C758 +0x3A8; 1.005 +0x3B0).
