@@ -1,74 +1,99 @@
 #pragma once
 
-// Which pass of the overlay render is running, by the seat whose view it draws (plan/seats.md step 4): first one extra
-// render per seat with an image this frame, highest seat first (the mod's, hud/passes/column_hud_images.h), then
-// the game's own, player 1's (seat 0), last; kNone outside the render. Set by root_overlay_render, the one driver of
-// the passes; read by everything that paints into a menu-renderer slot during them (hud/passes/shared_slot.h,
-// hud/layout/overlay_layout.cpp). The rules the slot follows across the passes are pure functions here
-// (tests/hud_rules_test.cpp). Game thread only.
+// Which pass of the overlay render is running, by the column whose view it draws (as Remake's hud/overlay_pass): first
+// one extra render per further column with an image this frame, highest column first (the mod's,
+// hud/passes/column_hud_images.h), then the game's own, column 0 (player 1's), last; kNone outside the render. A column
+// is a view's place in the engine's list (views/columns.h): a seat's view, or a mirror's (views/mirror_player.h).
+// Set by root_overlay_render, the one driver of the passes; read by everything that paints into a menu-renderer slot
+// during them (hud/passes/shared_slot.h, hud/layout/overlay_layout.cpp). The rules the slot follows across the passes
+// are pure functions here (tests/hud_rules_test.cpp). Game thread only.
 //
-// Keyed by seat, not by column: each seat's pass draws its seat's content into an entry named for that seat, and the
-// render thread finds each view's seat from the view itself (hud/passes/column_hud_images.cpp), so the HUD needs no map
-// of columns. A column with no seat (a mirror view, views/mirror_player.h) draws player 1's entry.
+// Each further column's pass draws into an entry named for that column, and the render thread finds each view's column
+// from the view's player (hud/passes/column_hud_images.cpp). What a column's pass shows is its player's HUD, or player
+// 1's laid out for the column's view (a copy of player 1's picture on a monitor of another shape).
+
+#include "views/columns.h"
 
 namespace lss::hud::overlay_pass {
+
+/// Player 1's column and the further ones.
+inline constexpr int kMaxColumns = views::columns::kMaxColumns;
 
 /// Outside the overlay render.
 inline constexpr int kNone = -1;
 
 namespace detail {
-inline int g_seat = kNone;
+inline int                 g_column = kNone;
+inline views::columns::Map g_map;  // the engine's list as columns this tick (SetMap)
+}  // namespace detail
+
+/// The columns map this tick, set once a tick before the HUD's tick and the frame's passes (modules.cpp TickColumns).
+inline void SetMap(const views::columns::Map& map) noexcept
+{
+    detail::g_map = map;
 }
 
-/// The seat whose pass runs: 0 the game's own render (player 1's), 1.. a seat's, kNone outside the render.
-inline void Set(int seat) noexcept
+inline const views::columns::Map& Map() noexcept
 {
-    detail::g_seat = seat >= 0 ? seat : kNone;
+    return detail::g_map;
 }
 
-inline int Seat() noexcept
+/// The seat in `column` (0 player 1's), or views::columns::kMirror / kUnknown.
+inline int SeatAt(int column) noexcept
 {
-    return detail::g_seat;
+    return column >= 0 && column < kMaxColumns ? detail::g_map.seatAt[static_cast<std::size_t>(column)]
+                                               : views::columns::kUnknown;
 }
 
-/// A seat's pass runs: the mod's extra render.
-inline bool IsSeatPass() noexcept
+/// The column whose pass runs: 0 the game's own render (player 1's), 1.. a further column's, kNone outside the render.
+inline void Set(int column) noexcept
 {
-    return detail::g_seat >= 1;
+    detail::g_column = column >= 0 && column < kMaxColumns ? column : kNone;
+}
+
+inline int Column() noexcept
+{
+    return detail::g_column;
+}
+
+/// A further column's pass runs: the mod's extra render.
+inline bool IsFurtherPass() noexcept
+{
+    return detail::g_column >= 1;
 }
 
 /// What a widget's acquire of a ring slot does in a pass, for a slot that carries every pass's entry and is submitted
-/// once a frame (pool 2's overlay slot, pool 0's navimap circle): the first seat pass acquires the slot and
-/// holds it, each later seat's pass takes the held slot, and player 1's pass, the last, takes it back and submits it
+/// once a frame (pool 2's overlay slot, pool 0's navimap circle): the first further pass acquires the slot and
+/// holds it, each later further pass takes the held slot, and column 0's pass, the last, takes it back and submits it
 /// with every entry. A slot left acquired and unsubmitted would hang the ring when it comes round again.
 enum class SlotAction
 {
     Acquire,         // the game's own acquire
-    AcquireAndHold,  // the first seat pass the slot takes part in
-    TakeHeld,        // a later seat's pass: the same slot, still held
-    TakeBack,        // player 1's pass: the held slot, no longer held once its submit sends it
+    AcquireAndHold,  // the first further pass the slot takes part in
+    TakeHeld,        // a later further pass: the same slot, still held
+    TakeBack,        // column 0's pass: the held slot, no longer held once its submit sends it
 };
 
-/// `active`: the slot takes part in this seat's pass (its widget paints for the pass's seat). `held`: a seat's pass
-/// holds the slot. `takenThisPass`: this pass already has it, so a second acquire in one pass is the game's own.
-constexpr SlotAction AcquireAction(int seat, bool active, bool held, bool takenThisPass) noexcept
+/// `active`: the slot takes part in this column's pass (its widget paints for the pass). `held`: a further pass holds
+/// the slot. `takenThisPass`: this pass already has it, so a second acquire in one pass is the game's own.
+constexpr SlotAction AcquireAction(int column, bool active, bool held, bool takenThisPass) noexcept
 {
-    if (seat == 0)
+    if (column == 0)
     {
         return held ? SlotAction::TakeBack : SlotAction::Acquire;
     }
-    if (seat < 0 || !active || takenThisPass)
+    if (column < 0 || !active || takenThisPass)
     {
         return SlotAction::Acquire;
     }
     return held ? SlotAction::TakeHeld : SlotAction::AcquireAndHold;
 }
 
-/// The entry a seat's pass adds to the held slot is its seat's: it gets the seat's name, and its submit is left to
-/// player 1's pass (which submits the slot with every entry).
-constexpr bool IsSeatEntry(int seat, bool heldSlot) noexcept
+/// The entry a further column's pass adds to the held slot is its column's: it gets the column's name, and its submit is
+/// left to column 0's pass (which submits the slot with every entry).
+constexpr bool IsColumnEntry(int column, bool heldSlot) noexcept
 {
-    return seat >= 1 && heldSlot;
+    return column >= 1 && column < kMaxColumns && heldSlot;
 }
 
 /// Whether a view of width over height `aspect` has another shape than player 1's `aspectOne`: more than 1 % apart. The

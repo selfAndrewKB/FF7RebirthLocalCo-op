@@ -1,16 +1,16 @@
 # Join and leave: player 2 joins with its own controller, takes the 2nd slot's member, and leaves clean.
-# The first join of a launch also brings the HUD's once-per-launch lines (player 2's image buffers, player 2's first
+# The first join of a launch also brings the HUD's once-per-launch lines (column 2's image buffers, player 2's first
 # pass with its root count, player 2's first layout pass); they are checked here because this script runs first.
 # expect: player 2 joined with its own controller
 # expect: player 2 took .+ after \d+ tick
 # expect: player 2's Field camera brought to player 1's settings: matches
-# expect: HUD image: player 2's buffers are initialised
+# expect: HUD image: column 2's buffers are initialised
 # expect: HUD levers: player 2's pass with \d+ HUD root
 # expect: HUD image: player 1's view draws player 1's HUD
 # expect: HUD image: player 2's view draws player 2's HUD
 # expect-not: HUD image: player 1's view draws player [23]'s HUD
 # expect-not: HUD image: player 2's view draws player [13]'s HUD
-# expect: HUD layout \(player 2's pass\): UI image \d+x\d+, view \d+x\d+
+# expect: HUD layout \(column 2's pass\): UI image \d+x\d+, view \d+x\d+
 # expect: leave: player 2 left; \d+ leftover actor
 # expect-not: JOIN FAILED
 # expect-not: could not be given back

@@ -10,7 +10,7 @@
 # expect: split screen: D3D12\.EnableGapRecorder \d+ -> 0 until the leave
 # expect-dev: ok \d+ two-player-split vertical -- side by side
 # expect: split FOV: player 2's {vw/2}x{vh} view of a {vw}x{vh} window takes the narrow view's FOV
-# expect: HUD layout \(player 2's pass\): UI image \d+x\d+, view {vw/2}x{vh}
+# expect: HUD layout \(column 2's pass\): UI image \d+x\d+, view {vw/2}x{vh}
 # expect-dev: ok \d+ two-player-split horizontal -- top/bottom(?! from)
 # expect: split FOV: player 2's {vw}x{vh/2} view of a {vw}x{vh} window takes the split FOV
 # expect: split layout: TwoPlayerSplitscreenLayout restored to 0 \(top/bottom\)

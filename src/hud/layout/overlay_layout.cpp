@@ -109,8 +109,8 @@ struct LoggedLayout
     int     applied = -1;
     bool    entry   = false;
 };
-LoggedLayout g_logged[players::kMaxPlayers];
-int          g_loggedPass = 0;  // the pass the rect call logged for, for the entry call that follows
+LoggedLayout g_logged[overlay_pass::kMaxColumns];
+int          g_loggedPass = 0;  // the column whose pass the rect call logged for, for the entry call that follows
 
 float ReadFloat(std::uintptr_t address) noexcept
 {
@@ -158,7 +158,7 @@ void InstallArrowEdge(const platform::GameImage& image) noexcept
 void LogOnChange(const IntRect& image, float viewW, float viewH, const IntRect& band, float host, bool enabled,
                  bool applied) noexcept
 {
-    g_loggedPass         = overlay_pass::IsSeatPass() && overlay_pass::Seat() < players::kMaxPlayers ? overlay_pass::Seat() : 0;
+    g_loggedPass         = overlay_pass::IsFurtherPass() ? overlay_pass::Column() : 0;
     LoggedLayout& logged = g_logged[g_loggedPass];
     if (image == logged.image && viewW == logged.viewW && viewH == logged.viewH && band == logged.band &&
         static_cast<int>(applied) == logged.applied)
@@ -166,9 +166,9 @@ void LogOnChange(const IntRect& image, float viewW, float viewH, const IntRect& 
         return;
     }
     logged = {image, band, viewW, viewH, applied ? 1 : 0, false};
-    platform::Log(L"HUD layout ({}'s pass): UI image {}x{}, view {:.0f}x{:.0f}; visible band ({},{})-({},{}), marker "
-                  L"host scale {:.4f}: {}",
-                  players::SeatName(g_loggedPass), image.Width(), image.Height(), viewW, viewH, band.minX,
+    platform::Log(L"HUD layout (column {}'s pass): UI image {}x{}, view {:.0f}x{:.0f}; visible band ({},{})-({},{}), "
+                  L"marker host scale {:.4f}: {}",
+                  g_loggedPass + 1, image.Width(), image.Height(), viewW, viewH, band.minX,
                   band.minY, band.maxX, band.maxY, host,
                   applied   ? L"applied"
                   : enabled ? L"NOT applied (unusable band or scale)"

@@ -13,6 +13,7 @@
 #include "hud/minimap/minimap_labels.h"
 #include "hud/passes/entry_filter_code.h"
 #include "hud/passes/menu_buffers.h"
+#include "hud/passes/overlay_pass.h"
 #include "hud/passes/shared_slot.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
@@ -170,7 +171,7 @@ UpdateNowFn            g_updateNow          = nullptr;
 
 // The seats' entries in the circle's pool-0 slot (hud/passes/shared_slot.h): the hold, the names, the buffers.
 SharedLayerSlot g_slot{{L"minimap", 0, kPoolZeroVertexBuffer, kPoolZeroIndexBuffer, L"SEndNaviMapCircle",
-                        {nullptr, L"SEndNaviMapCircle_P2", L"SEndNaviMapCircle_P3"}}};
+                        {L"SEndNaviMapCircle_Column2", L"SEndNaviMapCircle_Column3"}}};
 
 // Game thread.
 platform::DeferredSites g_acquire;  // crosses a block on both builds: placed from the game thread, off the paint
@@ -467,10 +468,13 @@ bool TargetReady(int seat) noexcept
            ReadPointer(resource, kResourceTexture) != nullptr;
 }
 
-/// The seat's buffers, built and initialised (hud/passes/shared_slot.h); a wrong buffer kind refuses once.
+/// The buffers of the column the seat's pass draws (its own in the engine's list), built and initialised
+/// (hud/passes/shared_slot.h); a wrong buffer kind refuses once.
 bool BuffersUsable(int seat) noexcept
 {
-    const auto buffers = g_slot.BuffersUsable(seat);
+    const auto& columnOf = overlay_pass::Map().columnOf;
+    const int   column   = seat >= 0 && seat < static_cast<int>(columnOf.size()) ? columnOf[static_cast<std::size_t>(seat)] : -1;
+    const auto  buffers  = g_slot.BuffersUsable(column);
     if (buffers == SharedLayerSlot::Buffers::WrongKind && !g_refused)
     {
         Refuse(L"pool 0's buffers are not the renderer's buffer kind the research read");

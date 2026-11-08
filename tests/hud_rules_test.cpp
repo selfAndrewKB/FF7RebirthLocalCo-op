@@ -140,40 +140,44 @@ void TestGaugeClass()
 
 void TestSharedSlot()
 {
-    std::puts("shared slot: the first of players 2 and 3's passes holds its acquire, later ones take it, player 1's takes it back");
+    std::puts("shared slot: the first further column's pass holds its acquire, later ones take it, column 0's takes it back");
     using lss::hud::overlay_pass::AcquireAction;
-    using lss::hud::overlay_pass::IsSeatEntry;
+    using lss::hud::overlay_pass::IsColumnEntry;
     using lss::hud::overlay_pass::SlotAction;
-    // A seat's pass (seat 2, then seat 1): the first acquire of an active slot is held; a later seat's pass takes the
-    // held slot; a second acquire in one pass, or a slot that takes no part (the minimap not painting for the seat), is
-    // the game's own.
+    // A further column's pass (column 2, then column 1): the first acquire of an active slot is held; a later pass takes
+    // the held slot; a second acquire in one pass, or a slot that takes no part (the minimap not painting for the
+    // pass), is the game's own.
     EXPECT(AcquireAction(2, true, false, false) == SlotAction::AcquireAndHold);
     EXPECT(AcquireAction(1, true, true, false) == SlotAction::TakeHeld);
     EXPECT(AcquireAction(1, true, false, false) == SlotAction::AcquireAndHold);
     EXPECT(AcquireAction(1, true, true, true) == SlotAction::Acquire);
     EXPECT(AcquireAction(1, false, false, false) == SlotAction::Acquire);
     EXPECT(AcquireAction(1, false, true, false) == SlotAction::Acquire);
-    // Player 1's pass: the held slot comes back; nothing held (no seat's pass ran) is a plain acquire.
+    // Column 0's pass: the held slot comes back; nothing held (no further pass ran) is a plain acquire.
     EXPECT(AcquireAction(0, true, true, false) == SlotAction::TakeBack);
     EXPECT(AcquireAction(0, false, true, true) == SlotAction::TakeBack);
     EXPECT(AcquireAction(0, true, false, false) == SlotAction::Acquire);
     // Outside the render: always the game's own, even with a slot left held.
     EXPECT(AcquireAction(lss::hud::overlay_pass::kNone, true, true, false) == SlotAction::Acquire);
     EXPECT(AcquireAction(lss::hud::overlay_pass::kNone, true, false, false) == SlotAction::Acquire);
-    // The entry added to the held slot in a seat's pass is the seat's, its submit left to player 1's pass; any other
-    // slot or pass is the game's.
-    EXPECT(IsSeatEntry(1, true));
-    EXPECT(IsSeatEntry(2, true));
-    EXPECT(!IsSeatEntry(1, false));
-    EXPECT(!IsSeatEntry(0, true));
-    EXPECT(!IsSeatEntry(lss::hud::overlay_pass::kNone, true));
-    // The pass state itself: one setter, one reader; anything negative is outside the render.
+    // The entry added to the held slot in a further column's pass is the column's, its submit left to column 0's pass;
+    // any other slot or pass, or a column past the last, is the game's.
+    EXPECT(IsColumnEntry(1, true));
+    EXPECT(IsColumnEntry(2, true));
+    EXPECT(!IsColumnEntry(1, false));
+    EXPECT(!IsColumnEntry(0, true));
+    EXPECT(!IsColumnEntry(lss::hud::overlay_pass::kMaxColumns, true));
+    EXPECT(!IsColumnEntry(lss::hud::overlay_pass::kNone, true));
+    // The pass state itself: one setter, one reader; anything negative or past the last column is outside the render.
     lss::hud::overlay_pass::Set(2);
-    EXPECT(lss::hud::overlay_pass::Seat() == 2 && lss::hud::overlay_pass::IsSeatPass());
+    EXPECT(lss::hud::overlay_pass::Column() == 2 && lss::hud::overlay_pass::IsFurtherPass());
     lss::hud::overlay_pass::Set(0);
-    EXPECT(lss::hud::overlay_pass::Seat() == 0 && !lss::hud::overlay_pass::IsSeatPass());
+    EXPECT(lss::hud::overlay_pass::Column() == 0 && !lss::hud::overlay_pass::IsFurtherPass());
     lss::hud::overlay_pass::Set(-5);
-    EXPECT(lss::hud::overlay_pass::Seat() == lss::hud::overlay_pass::kNone && !lss::hud::overlay_pass::IsSeatPass());
+    EXPECT(lss::hud::overlay_pass::Column() == lss::hud::overlay_pass::kNone &&
+           !lss::hud::overlay_pass::IsFurtherPass());
+    lss::hud::overlay_pass::Set(lss::hud::overlay_pass::kMaxColumns);
+    EXPECT(lss::hud::overlay_pass::Column() == lss::hud::overlay_pass::kNone);
 }
 
 void TestPassKinds()

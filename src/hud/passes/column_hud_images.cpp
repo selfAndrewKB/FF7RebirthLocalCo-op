@@ -3,6 +3,7 @@
 #include "facts/engine.h"
 #include "facts/hud.h"
 #include "hud/passes/entry_filter_code.h"
+#include "hud/passes/overlay_pass.h"
 #include "hud/passes/shared_slot.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
@@ -22,6 +23,8 @@
 #include <array>
 #include <atomic>
 #include <cstring>
+#include <format>
+#include <string>
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -58,8 +61,9 @@ constexpr std::uint8_t   kAddCompositePassesPrologue[] = {0x48, 0x89, 0x5C, 0x24
 constexpr platform::FunctionFact kAddCompositePasses{L"SceneRenderer_AddCompositePasses", 0x140D1791C,
                                                      kAddCompositePassesPrologue};
 constexpr std::uint32_t  kViewUnscaledViewRect = 0x238;  // FIntRect in FSceneView (FViewInfo is a copy)
-// FSceneView::PlayerIndex, an int32: the local player's controller id, which is the seat (players/seats.h); the view's
-// player whatever its place on screen (RE-scene-view-player-index.md).
+// FSceneView::PlayerIndex, an int32: the local player's controller id (a seat's, or a mirror's after the seats'); the
+// view's player whatever its place on screen (RE-scene-view-player-index.md). Its column comes from the columns map
+// this frame published (g_viewColumns).
 constexpr std::uint32_t  kViewPlayerIndex      = 0x228;
 // Game version 1.005 (RE-1005-hud-2.md): the call (0x140C1481D there) crosses a 16-byte block on the render thread, so
 // the function's entry is redirected instead; Render_Main's call is its only caller, so every call is still that one.
@@ -94,34 +98,70 @@ platform::CodeRedirect g_gateCode;
 bool                   g_installed          = false;
 std::uintptr_t         g_overlaySingleton   = 0;
 std::uintptr_t         g_deltaTime          = 0;
-std::uintptr_t         g_frameNumber        = 0;  // GFrameNumber (facts::kFrameNumber), held one back in a seat's pass
+std::uintptr_t         g_frameNumber        = 0;  // GFrameNumber (facts::kFrameNumber), held one back in a further pass
 RenderToCompositeLayerFn g_renderToLayer    = nullptr;
 
-// Each seat's entry in the overlay's pool-2 slot (hud/passes/shared_slot.h).
+// Each further column's entry in the overlay's pool-2 slot (hud/passes/shared_slot.h).
 SharedLayerSlot g_slot{{L"HUD image", kPoolTwo, kPoolTwoVertexBuffer, kPoolTwoIndexBuffer, L"SEndRootOverlay",
-                        {nullptr, L"SEndRootOverlay_P2", L"SEndRootOverlay_P3"}}};
+                        {L"SEndRootOverlay_Column2", L"SEndRootOverlay_Column3"}}};
 
 // Game thread.
 std::atomic<bool> g_on{false};
-// The render thread's read of this frame's entries, one value so both halves are of one frame: bit `seat`, the seat's
-// entry was rendered; bit kPlayerOnesShift + `seat`, that entry is player 1's HUD laid out for the seat's view.
-std::atomic<unsigned> g_imageSeats{0};
-constexpr unsigned    kPlayerOnesShift    = 8;
-constexpr unsigned    kEntrySeatsMask     = (1u << kPlayerOnesShift) - 1;
-unsigned              g_playerOnesThisFrame = 0;  // game thread: the PlayerOnes seats, as the passes are planned
+// The render thread's read of this frame, one 64-bit value so every part is of one frame:
+//   bits 0..23   the view-to-column table: for controller id `id` (a seat's or a mirror's), 4 bits at 4 * id holding
+//                its column + 1 (0: not listed);
+//   bits 24..35  whose HUD each column's entry shows: 4 bits at 24 + 4 * column holding the seat + 1;
+//   bits 40..47  bit 40 + `column`: the column's entry was rendered;
+//   bits 48..55  bit 48 + `column`: that entry is player 1's HUD laid out for the column's view.
+constexpr int kViewIds = players::kFirstMirrorId + players::kMirrorIds;  // the ids a list can hold (players/seats.h)
+static_assert(4 * kViewIds <= 24, "the view-to-column table fits its 24 bits");
+static_assert(4 * views::columns::kMaxColumns <= 12 && views::columns::kMaxColumns <= 8, "the other parts fit theirs");
+constexpr unsigned           kShowsShift   = 24;
+constexpr unsigned           kEntriesShift = 40;
+constexpr unsigned           kOnesShift    = 48;
+std::atomic<std::uint64_t>   g_frameRead{0};
+unsigned                     g_playerOnesThisFrame = 0;  // game thread: the further columns showing player 1's HUD
+std::uint64_t                g_showsThisFrame      = 0;  // game thread, as the passes are planned (shifted already)
+
+/// The rendered further columns' bits (bit `column`) of a frame's read.
+unsigned EntryColumns(std::uint64_t read) noexcept
+{
+    return static_cast<unsigned>((read >> kEntriesShift) & 0xFF);
+}
+
+/// The column of the view whose player is `id`, by a frame's read; -1 when not listed.
+int ViewColumn(std::uint64_t read, std::int32_t id) noexcept
+{
+    if (id < 0 || id >= kViewIds)
+    {
+        return -1;
+    }
+    return static_cast<int>((read >> (4 * id)) & 0xF) - 1;
+}
+
+/// A view's player for the log: a seat's name, the mirror view in its column, or an id the list does not hold.
+std::wstring ViewName(std::int32_t id, int column)
+{
+    if (id >= 0 && id < players::kMaxPlayers)
+    {
+        return players::SeatName(id);
+    }
+    return column >= 0 ? std::format(L"the mirror view in column {}", column + 1)
+                       : std::format(L"an unlisted view (controller id {})", id);
+}
 std::atomic<std::uint64_t> g_stockName{0};  // as the game passes it; read by the render thread
 bool              g_refused       = false;    // a check failed: the image stays off until restart
 std::uintptr_t    g_overlayThisFrame = 0;     // the overlay with a window, found by ImageReady (0: none)
-double            g_deltaTimeSaved   = 0.0;   // the engine's DeltaTime while a seat's pass holds it at 0
-std::uint32_t     g_frameNumberSaved = 0;     // GFrameNumber while a seat's pass holds it one back
+double            g_deltaTimeSaved   = 0.0;   // the engine's DeltaTime while a further pass holds it at 0
+std::uint32_t     g_frameNumberSaved = 0;     // GFrameNumber while a further pass holds it one back
 
 std::atomic<int> g_familyLogLines{0};
 
-// Render thread: whose entry each player's view drew last (0 none, else the seat whose entry + 1, or kDrawsPlayerOnes),
-// so each change is logged once at Info: the regression checks that each view draws its own player's HUD. Reset while
-// no seat has one.
-std::array<int, players::kMaxPlayers> g_viewDraws{};
-constexpr int kDrawsPlayerOnes = players::kMaxPlayers + 1;  // the seat's entry, holding player 1's HUD laid out for it
+// Render thread: what each view drew last, by its player's id (0 none, else the seat whose HUD + 1, or
+// kDrawsPlayerOnes), so each change is logged once at Info: the regression checks that each view draws its own
+// player's HUD. Reset while no further column has an entry.
+std::array<int, kViewIds> g_viewDraws{};
+constexpr int kDrawsPlayerOnes = players::kMaxPlayers + 1;  // the column's entry, holding player 1's HUD laid out for it
 
 using platform::CopyGuarded;
 
@@ -139,20 +179,20 @@ void* AcquireLayerSlot(void* renderer, std::uintptr_t pool) noexcept
 }
 
 /// Replaces the scene renderer's call that adds a family's composite passes (render thread):
-/// decides which entry this family draws, from its view's player: a seat with an entry this frame draws its own, every
-/// other view (player 1's, a view with no seat) player 1's.
+/// decides which entry this family draws, from its view's column: a further column with an entry this frame draws its
+/// own, every other view (column 0's, a column with no entry) column 0's.
 void* AddCompositePasses(void* module, void* builder, const void* views, void* texture, void* context) noexcept
 {
     EntryFilterFields&  fields    = g_slot.Fields();
     std::uint64_t       family    = 0;
     const std::uint64_t stockName = g_stockName.load(std::memory_order_acquire);
-    const unsigned      entries   = g_imageSeats.load(std::memory_order_relaxed);
-    const unsigned      seats     = entries & kEntrySeatsMask;
-    if (seats == 0)
+    const std::uint64_t read      = g_frameRead.load(std::memory_order_relaxed);  // every part of one frame
+    const unsigned      columns   = EntryColumns(read);
+    if (columns == 0)
     {
         g_viewDraws = {};  // the next image's views are logged afresh
     }
-    if (seats != 0 && stockName != 0 && views != nullptr)
+    if (columns != 0 && stockName != 0 && views != nullptr)
     {
         struct ViewArray
         {
@@ -164,24 +204,32 @@ void* AddCompositePasses(void* module, void* builder, const void* views, void* t
         if (CopyGuarded(&array, views, sizeof(array)) && array.num == 1 && array.data != nullptr &&
             CopyGuarded(&player, array.data + kViewPlayerIndex, sizeof(player)))
         {
-            const bool own        = players::SeatIndex(player) && (seats & (1u << player)) != 0;
-            const bool playerOnes = own && (entries & (1u << (kPlayerOnesShift + player))) != 0;
-            family                = own ? fields.Seat(player).name : stockName;
-            if (player >= 0 && player < players::kMaxPlayers)
+            const int  column     = ViewColumn(read, player);
+            const bool own        = column >= 1 && column <= kFurtherColumns && (columns & (1u << column)) != 0;
+            const bool playerOnes = own && ((read >> (kOnesShift + column)) & 1) != 0;
+            const int  shows      = own ? static_cast<int>((read >> (kShowsShift + 4 * column)) & 0xF) - 1 : 0;
+            family                = own ? fields.Column(column).name : stockName;
+            if (player >= 0 && player < kViewIds)
             {
-                const int draws = playerOnes ? kDrawsPlayerOnes : (own ? player : 0) + 1;
+                const int draws = playerOnes ? kDrawsPlayerOnes : (shows >= 0 ? shows : 0) + 1;
                 if (g_viewDraws[static_cast<std::size_t>(player)] != draws)
                 {
                     g_viewDraws[static_cast<std::size_t>(player)] = draws;
-                    if (playerOnes)
+                    try
                     {
-                        platform::Log(L"HUD image: {}'s view draws player 1's HUD laid out for its own shape",
-                                      players::SeatName(player));
+                        if (playerOnes)
+                        {
+                            platform::Log(L"HUD image: {}'s view draws player 1's HUD laid out for its own shape",
+                                          ViewName(player, column));
+                        }
+                        else
+                        {
+                            platform::Log(L"HUD image: {}'s view draws {}'s HUD", ViewName(player, column),
+                                          players::SeatName(draws - 1));
+                        }
                     }
-                    else
+                    catch (...)
                     {
-                        platform::Log(L"HUD image: {}'s view draws {}'s HUD", players::SeatName(player),
-                                      players::SeatName(draws - 1));
                     }
                 }
             }
@@ -189,8 +237,9 @@ void* AddCompositePasses(void* module, void* builder, const void* views, void* t
                 g_familyLogLines.fetch_add(1, std::memory_order_relaxed) < kFamilyLogLines &&
                 CopyGuarded(rect, array.data + kViewUnscaledViewRect, sizeof(rect)))
             {
-                platform::LogDebug(L"HUD image: a family with view ({},{})-({},{}), player index {}, draws {}'s entry",
-                                   rect[0], rect[1], rect[2], rect[3], player, players::SeatName(own ? player : 0));
+                platform::LogDebug(L"HUD image: a family with view ({},{})-({},{}), player index {}, column {}, draws "
+                                   L"column {}'s entry",
+                                   rect[0], rect[1], rect[2], rect[3], player, column + 1, own ? column + 1 : 1);
             }
         }
     }
@@ -277,7 +326,7 @@ bool InstallColumnHudImages(const platform::GameImage& image) noexcept
 void RemoveColumnHudImages() noexcept
 {
     g_on.store(false, std::memory_order_relaxed);
-    g_imageSeats.store(0, std::memory_order_relaxed);
+    g_frameRead.store(0, std::memory_order_relaxed);
     g_slot.Unpublish();
     bool all = true;
     for (platform::CallRedirect* call : {&g_acquireCall, &g_familyCall})
@@ -319,18 +368,25 @@ void BeginFrame() noexcept
     g_slot.BeginFrame();
     g_overlayThisFrame    = 0;
     g_playerOnesThisFrame = 0;
+    g_showsThisFrame      = 0;
 }
 
-bool ImageReady(int seat, bool shown, bool playerOnes) noexcept
+bool ImageReady(int column, bool shown, int shownSeat) noexcept
 {
-    if (shown && playerOnes && players::SeatIndex(seat))
+    const bool further = column >= 1 && column <= kFurtherColumns;
+    if (shown && further && shownSeat >= 0 && shownSeat < players::kMaxPlayers)
     {
-        g_playerOnesThisFrame |= 1u << seat;  // only read for a seat whose entry renders (g_imageSeats)
+        // Only read for a column whose entry renders.
+        g_showsThisFrame |= static_cast<std::uint64_t>(shownSeat + 1) << (kShowsShift + 4 * column);
+        if (shownSeat == 0)
+        {
+            g_playerOnesThisFrame |= 1u << column;
+        }
     }
-    bool image = shown && ColumnHudImagesOn() && g_stockName.load(std::memory_order_relaxed) != 0;
+    bool image = shown && further && ColumnHudImagesOn() && g_stockName.load(std::memory_order_relaxed) != 0;
     if (image)
     {
-        const auto buffers = g_slot.BuffersUsable(seat);
+        const auto buffers = g_slot.BuffersUsable(column);
         if (buffers == SharedLayerSlot::Buffers::WrongKind)
         {
             Refuse(L"pool 2's buffers are not the renderer's buffer kind the research read");
@@ -401,13 +457,28 @@ void EndColumnImage() noexcept
 
 void BeginPlayerOnePass() noexcept
 {
-    const unsigned seats = g_slot.Held() ? g_slot.EntrySeats() & kEntrySeatsMask : 0u;
-    g_imageSeats.store(seats | ((g_playerOnesThisFrame & seats) << kPlayerOnesShift), std::memory_order_relaxed);
+    // The frame's read in one value: the view-to-column table (an id listed twice keeps its first column, as the map
+    // keeps a seat's), whose HUD each column shows, the rendered columns and which of them show player 1's.
+    const views::columns::Map& map  = overlay_pass::Map();
+    std::uint64_t              read = 0;
+    for (int column = 0; column < map.count && column < views::columns::kMaxColumns; ++column)
+    {
+        const std::int32_t id = map.idAt[static_cast<std::size_t>(column)];
+        if (id >= 0 && id < kViewIds && ViewColumn(read, id) < 0)
+        {
+            read |= static_cast<std::uint64_t>(column + 1) << (4 * id);
+        }
+    }
+    const unsigned columns = g_slot.Held() ? g_slot.EntryColumns() & 0xFFu : 0u;
+    read |= g_showsThisFrame;
+    read |= static_cast<std::uint64_t>(columns) << kEntriesShift;
+    read |= static_cast<std::uint64_t>(g_playerOnesThisFrame & columns) << kOnesShift;
+    g_frameRead.store(read, std::memory_order_relaxed);
 }
 
 bool ImageThisFrame() noexcept
 {
-    return g_imageSeats.load(std::memory_order_relaxed) != 0;
+    return EntryColumns(g_frameRead.load(std::memory_order_relaxed)) != 0;
 }
 
 void EndFrame() noexcept

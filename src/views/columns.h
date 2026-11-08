@@ -56,6 +56,7 @@ struct Map
 {
     int                                count = 0;  // local players listed, one column each while the screen splits
     std::array<int, kMaxColumns>       seatAt{kUnknown, kUnknown, kUnknown};
+    std::array<std::int32_t, kMaxColumns> idAt{-1, -1, -1};  // each column's controller id as listed (-1 unread)
     std::array<int, players::kMaxPlayers> columnOf{-1, -1, -1};  // -1: the seat is not listed
     int                                mirrors = 0;
 
@@ -83,6 +84,7 @@ constexpr Map MapOf(std::span<const std::int32_t> ids) noexcept
     for (int column = 0; column < map.count; ++column)
     {
         const std::int32_t id = ids[static_cast<std::size_t>(column)];
+        map.idAt[static_cast<std::size_t>(column)] = id;
         if (IsMirrorId(id))
         {
             map.seatAt[static_cast<std::size_t>(column)] = kMirror;

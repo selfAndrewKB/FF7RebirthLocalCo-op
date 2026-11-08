@@ -10,10 +10,10 @@
 //   - the HUD placement places again any widget the game moved in this frame's world tick
 //     (hud/layout/hud_placement.h), so the frame draws it placed rather than at its single-player point;
 //   - the HUD trace notes the render (hud/hud_trace.h), and after it logs the frame;
-//   - each seat's pass runs first, highest seat first, when its image is on: the levers and per-pass
-//     opacities of the HUD modules around the game's overlay render into the seat's slot entry
+//   - each further column's pass runs first, highest column first, when its image is on: the levers and per-pass
+//     opacities of the HUD modules around the game's overlay render into the column's slot entry
 //     (hud/passes/column_hud_images.h holds the slot and renders; hud/passes/overlay_pass.h names the pass); the game's
-//     own call is player 1's pass, last. This file is the one driver of the passes.
+//     own call is column 0's pass, player 1's, last. This file is the one driver of the passes.
 // The call itself goes through unchanged.
 
 namespace lss::platform {

@@ -42,6 +42,7 @@
 #include "hud/minimap/minimap_once.h"
 #include "hud/minimap/seat_area_icons.h"
 #include "hud/passes/column_hud_images.h"
+#include "hud/passes/overlay_pass.h"
 #include "hud/passes/root_overlay_render.h"
 #include "hud/passes/seat_hud_content.h"
 #include "hud/user_widgets.h"
@@ -560,6 +561,7 @@ Columns TickColumns() noexcept
     columns.firstPlayer = listed != nullptr && listed->Num() > 0 ? (*listed)[0] : nullptr;
     g_lastColumns = columns.map;
     g_lastWanted  = columns.wanted;
+    hud::overlay_pass::SetMap(columns.map);  // the HUD's passes by column, before the HUD's tick and the frame's render
     views::window_span::Tick(columns.wanted);
     return columns;
 }
