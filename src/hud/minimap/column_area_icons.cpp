@@ -1,4 +1,4 @@
-#include "hud/minimap/seat_area_icons.h"
+#include "hud/minimap/column_area_icons.h"
 
 #include "facts/engine.h"
 #include "platform/call_redirect.h"
@@ -7,7 +7,6 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "players/generation.h"
-#include "players/seats.h"
 
 #if LSS_DEV
 #include "platform/command_registry.h"
@@ -22,7 +21,7 @@
 #endif
 #include <Windows.h>
 
-namespace lss::hud::seat_area_icons {
+namespace lss::hud::column_area_icons {
 
 namespace {
 
@@ -56,7 +55,7 @@ constexpr platform::FunctionFact kLeader{L"Party_GetLeaderCharacterByLeaderType"
 
 // The three game events that write player 1's instance, and their seven call sites
 // (RE-p2-hud-view-levers.md §6 and S-HUD31). None takes the instance: each reads EndUISystem+0x1A0.
-// Each site keeps calling the event, then the event's instance effect is applied to each seat's
+// Each site keeps calling the event, then the event's instance effect is applied to each column's
 // instance directly. The events themselves are not run again: Enable and HideAndClear also play
 // the in/out animation of one shared widget (EndUISystem+0x60), which a second run would restart.
 constexpr std::uint8_t   kEnablePrologue[]    = {0xB8, 0x28, 0x00, 0x00, 0x00};
@@ -117,7 +116,7 @@ enum Part : unsigned
     kPartTick       = 1,
     kPartController = 2,
     kPartCanvases   = 4,
-    kPartLeader     = 8,  // a seat's icons ranged from the seat's member
+    kPartLeader     = 8,  // a column's icons ranged from the shown player's member
 };
 
 struct VisibilityAttribute  // TAttribute<EVisibility> as the game passes it: unbound
@@ -131,7 +130,7 @@ struct VisibilityAttribute  // TAttribute<EVisibility> as the game passes it: un
 };
 static_assert(sizeof(VisibilityAttribute) == 24);
 
-struct ShownCanvas  // a canvas of player 1's hidden for a seat's pass, and its own visibility
+struct ShownCanvas  // a canvas of player 1's hidden for a further column's pass, and its own visibility
 {
     std::uintptr_t canvas = 0;
     std::uint8_t   visibility = 0;
@@ -163,20 +162,27 @@ SetFlagFn              g_setFlagD1      = nullptr;
 std::array<platform::CallRedirect, std::size(kEventSites)> g_eventCalls;
 bool                   g_eventsFollowed = false;
 
-constexpr int kPlayers = players::kMaxPlayers;
+constexpr int kColumns = views::columns::kMaxColumns;
 
-// Game thread. By seat ([0] unused): each seat's own instance, made with the game's constructor and kept.
-std::uintptr_t               g_instance[kPlayers]     = {};
-bool                         g_createFailed[kPlayers] = {};
-bool                         g_tickFailed[kPlayers]   = {};
-bool                         g_seeded[kPlayers]       = {};  // the seat's instance has player 1's event state
-std::array<std::uint64_t, 7> g_logged[kPlayers]       = {};
-void*                        g_seatController = nullptr;  // answered while a seat's tick runs
-void*                        g_seatMember     = nullptr;  // answered as the range origin while it runs
+// Game thread. By column ([0] unused: player 1's is the game's): each further column's own instance, made with the
+// game's constructor and kept.
+std::uintptr_t               g_instance[kColumns]     = {};
+bool                         g_createFailed[kColumns] = {};
+bool                         g_tickFailed[kColumns]   = {};
+bool                         g_seeded[kColumns]       = {};  // the column's instance has player 1's event state
+// The controller id each column's instance was last placed for (-1: none yet; 0 would be player 1's).
+std::array<std::int32_t, kColumns> g_ownerId = [] {
+    std::array<std::int32_t, kColumns> ids{};
+    ids.fill(-1);
+    return ids;
+}();
+std::array<std::uint64_t, 7> g_logged[kColumns]       = {};
+void*                        g_columnController = nullptr;  // answered while a column's tick runs
+void*                        g_columnMember     = nullptr;  // answered as the range origin while it runs
 unsigned                     g_mask   = kPartTick | kPartController | kPartCanvases | kPartLeader;
 std::array<ShownCanvas, 2>   g_hiddenOne{};
-std::uint32_t                g_answered = 0;  // first-controller calls answered with a seat's
-std::uint32_t                g_leaderAnswers = 0;  // range-origin calls answered with a seat's member
+std::uint32_t                g_answered = 0;  // first-controller calls answered with a column's
+std::uint32_t                g_leaderAnswers = 0;  // range-origin calls answered with a shown player's member
 bool                         g_boundLogged = false;
 bool                         g_offThreadLogged = false;
 std::uint32_t                g_replays     = 0;
@@ -191,21 +197,21 @@ using platform::Read;  // the guarded reads: platform/guarded.h
 /// Replaces the frame function's call for the first player controller.
 void* FirstController(void* world) noexcept
 {
-    if (g_seatController != nullptr)
+    if (g_columnController != nullptr)
     {
         ++g_answered;
-        return g_seatController;
+        return g_columnController;
     }
     return reinterpret_cast<FirstControllerFn>(g_firstControllerCall.Original())(world);
 }
 
-/// Replaces the frame function's call for the range origin: the seat's member in the seat's tick.
+/// Replaces the frame function's call for the range origin: the shown player's member in a column's tick.
 void* Leader() noexcept
 {
-    if (g_seatMember != nullptr)
+    if (g_columnMember != nullptr)
     {
         ++g_leaderAnswers;
-        return g_seatMember;
+        return g_columnMember;
     }
     return reinterpret_cast<LeaderFn>(g_leaderCall.Original())();
 }
@@ -325,24 +331,40 @@ void SetCanvas(std::uintptr_t canvas, std::uint8_t value) noexcept
     }
 }
 
-bool EnsureInstance(int seat) noexcept
+bool EnsureInstance(int column) noexcept
 {
-    if (g_instance[seat] != 0 || g_createFailed[seat])
+    if (g_instance[column] != 0 || g_createFailed[column])
     {
-        return g_instance[seat] != 0;
+        return g_instance[column] != 0;
     }
-    g_instance[seat]     = CreateGuarded();
-    g_createFailed[seat] = g_instance[seat] == 0;
-    platform::Log(L"area icons: {}'s icon manager {}", players::SeatName(seat),
-                  g_createFailed[seat] ? L"could not be created; they have none" : L"created with the game's constructor");
-    return g_instance[seat] != 0;
+    g_instance[column]     = CreateGuarded();
+    g_createFailed[column] = g_instance[column] == 0;
+    platform::Log(L"area icons: column {}'s icon manager {}", column + 1,
+                  g_createFailed[column] ? L"could not be created; it has none" : L"created with the game's constructor");
+    return g_instance[column] != 0;
 }
 
-/// Player 1's event state given to the seat's instance once, when the seat's ticks begin (at each
-/// join): events from before are not replayed. From then on the replays keep it (FollowEvent).
-void SeedEventState(int seat, std::uintptr_t one) noexcept
+/// The column's instance cleared with the game's own clear, its canvases hidden; the next tick seeds it again.
+void ClearColumn(int column) noexcept
 {
-    const std::uintptr_t mine       = g_instance[seat];
+    const std::uintptr_t mine = g_instance[column];
+    g_seeded[column]          = false;
+    if (mine == 0)
+    {
+        return;
+    }
+    ClearAllGuarded(mine);
+    for (const std::uint32_t offset : kCanvases)
+    {
+        SetCanvas(Canvas(mine, offset), kHidden);
+    }
+}
+
+/// Player 1's event state given to the column's instance once, when its ticks begin (each time the column changes
+/// hands): events from before are not replayed. From then on the replays keep it (FollowEvent).
+void SeedEventState(int column, std::uintptr_t one) noexcept
+{
+    const std::uintptr_t mine       = g_instance[column];
     std::uint8_t         enabledOne = 0, enabledMine = 0, flag = 0;
     if (!Read(one + kEnabled, enabledOne) || !Read(mine + kEnabled, enabledMine) || !Read(one + kFlagD1, flag))
     {
@@ -358,14 +380,14 @@ void SeedEventState(int seat, std::uintptr_t one) noexcept
     {
         ClearAllGuarded(mine);
     }
-    g_seeded[seat] = true;
-    platform::Log(L"area icons: {}'s icon manager starts with player 1's event state (enabled {}, flag {}); the "
+    g_seeded[column] = true;
+    platform::Log(L"area icons: column {}'s icon manager starts with player 1's event state (enabled {}, flag {}); the "
                   L"game's events are followed from here{}",
-                  players::SeatName(seat), enabledOne, flag,
+                  column + 1, enabledOne, flag,
                   g_eventsFollowed ? L"" : L" (NOT: their call sites are not redirected)");
 }
 
-/// After the game ran `event` on player 1's instance: its instance effect on each seat's, with the
+/// After the game ran `event` on player 1's instance: its instance effect on each column's, with the
 /// game's own clear for a hide. Game thread only (the clear's counts are not atomic).
 void FollowEvent(Event event, char flag) noexcept
 {
@@ -374,18 +396,18 @@ void FollowEvent(Event event, char flag) noexcept
         if (!g_offThreadLogged)
         {
             g_offThreadLogged = true;
-            platform::Log(L"area icons: a map-icon event ran off the game thread; not followed for players 2 and 3 "
+            platform::Log(L"area icons: a map-icon event ran off the game thread; not followed for the further columns "
                           L"(logged once)");
         }
         return;
     }
     bool followed = false;
-    for (int seat = 1; seat < kPlayers; ++seat)
+    for (int column = 1; column < kColumns; ++column)
     {
-        const std::uintptr_t mine = g_instance[seat];
+        const std::uintptr_t mine = g_instance[column];
         if (mine == 0)
         {
-            continue;  // made at the seat's first tick, then seeded from player 1's
+            continue;  // made at the column's first tick, then seeded from player 1's
         }
         const std::uint8_t on = 1;
         switch (event)
@@ -405,7 +427,7 @@ void FollowEvent(Event event, char flag) noexcept
     ++g_replays;
     if (platform::Enabled(platform::Level::Debug))
     {
-        platform::LogDebug(L"area icons: the game's {} followed on players 2 and 3's icon managers ({} so far)",
+        platform::LogDebug(L"area icons: the game's {} followed on the further columns' icon managers ({} so far)",
                       event == Event::Enable         ? L"Enable"
                       : event == Event::HideAndClear ? L"HideAndClear"
                                                      : (flag != 0 ? L"SetFlagD1(1)" : L"SetFlagD1(0)"),
@@ -481,8 +503,8 @@ bool FollowEvents(const platform::GameImage& image) noexcept
     }
     return true;
 }
-/// One line whenever player 1's or the seat's instance's enable flag, canvases or map sizes change.
-void LogIfChanged(int seat, std::uintptr_t one) noexcept
+/// One line whenever player 1's or the column's instance's enable flag, canvases or map sizes change.
+void LogIfChanged(int column, std::uintptr_t one) noexcept
 {
     if (!platform::Enabled(platform::Level::Debug))
     {
@@ -492,7 +514,7 @@ void LogIfChanged(int seat, std::uintptr_t one) noexcept
     std::uint8_t  enabled[2]{};
     std::int32_t  slots[2][2]{};
     std::uintptr_t canvases[2][2]{};
-    const std::uintptr_t instances[2] = {one, g_instance[seat]};
+    const std::uintptr_t instances[2] = {one, g_instance[column]};
     for (int i = 0; i < 2; ++i)
     {
         Read(instances[i] + kEnabled, enabled[i]);
@@ -505,16 +527,16 @@ void LogIfChanged(int seat, std::uintptr_t one) noexcept
     now = {enabled[0] | (std::uint64_t{enabled[1]} << 8), static_cast<std::uint32_t>(slots[0][0]),
            static_cast<std::uint32_t>(slots[0][1]), static_cast<std::uint32_t>(slots[1][0]),
            static_cast<std::uint32_t>(slots[1][1]), canvases[1][0], canvases[1][1]};
-    if (now == g_logged[seat])
+    if (now == g_logged[column])
     {
         return;
     }
-    g_logged[seat] = now;
+    g_logged[column] = now;
     try
     {
-        platform::LogDebug(L"area icons: player 1's enabled {} icons/markers slots {}/{}; {}'s enabled {} slots {}/{} "
-                      L"canvases {:#x}/{:#x}; first-controller answers {}, range-origin answers {}",
-                      enabled[0], slots[0][0], slots[0][1], players::SeatName(seat), enabled[1], slots[1][0],
+        platform::LogDebug(L"area icons: player 1's enabled {} icons/markers slots {}/{}; column {}'s enabled {} slots "
+                      L"{}/{} canvases {:#x}/{:#x}; first-controller answers {}, range-origin answers {}",
+                      enabled[0], slots[0][0], slots[0][1], column + 1, enabled[1], slots[1][0],
                       slots[1][1], canvases[1][0], canvases[1][1], g_answered, g_leaderAnswers);
     }
     catch (...)
@@ -537,8 +559,8 @@ bool Install(const platform::GameImage& image) noexcept
     if (!instance || !allocate || !ctor || !update || !clear || !visibility || !site || !first ||
         !g_firstControllerCall.Install(*site, *first, reinterpret_cast<std::uintptr_t>(&FirstController)))
     {
-        platform::Log(L"area icons: the icon manager's code is not what the research read; no icons of players 2 "
-                      L"and 3's own");
+        platform::Log(L"area icons: the icon manager's code is not what the research read; the further columns have "
+                      L"no icons of their own");
         return false;
     }
     const auto leaderSite = image.Rebase(kLeaderCall, 5);
@@ -546,7 +568,7 @@ bool Install(const platform::GameImage& image) noexcept
     if (!leaderSite || !leader ||
         !g_leaderCall.Install(*leaderSite, *leader, reinterpret_cast<std::uintptr_t>(&Leader)))
     {
-        platform::Log(L"area icons: the range-origin call is not what the research read; players 2 and 3's icons "
+        platform::Log(L"area icons: the range-origin call is not what the research read; the further columns' icons "
                       L"range from player 1's character");
     }
     g_instanceOne   = *instance;
@@ -557,18 +579,18 @@ bool Install(const platform::GameImage& image) noexcept
     g_setVisibility = reinterpret_cast<SetVisibilityFn>(*visibility);
     g_installed     = true;
     g_eventsFollowed = FollowEvents(image);
-    platform::Log(L"area icons: ready (player 2's and 3's icon managers are each made when they first play); the game's "
+    platform::Log(L"area icons: ready (each further column's icon manager is made at its first pass); the game's "
                   L"map-icon events {}",
                   g_eventsFollowed ? L"are followed at their seven call sites"
-                                   : L"are NOT followed (player 2's and 3's managers keep the state they started with)");
+                                   : L"are NOT followed (the columns' managers keep the state they started with)");
     return true;
 }
 
 void Remove() noexcept
 {
-    g_hiddenOne      = {};  // no Slate calls here: this may run off the game thread (AllOut restored them)
-    g_seatController = nullptr;
-    g_seatMember     = nullptr;
+    g_hiddenOne        = {};  // no Slate calls here: this may run off the game thread (AllOut restored them)
+    g_columnController = nullptr;
+    g_columnMember     = nullptr;
     RestoreEventSites();
     if (g_leaderCall.IsInstalled() && !g_leaderCall.Restore())
     {
@@ -581,35 +603,54 @@ void Remove() noexcept
     g_installed = false;
 }
 
-void Tick(int seat, float deltaTime) noexcept
+void FollowColumns(const views::columns::Map& map) noexcept
 {
-    const std::uintptr_t one = g_installed && Acts(kPartTick) && players::SeatIndex(seat) && !g_tickFailed[seat]
-                                   ? InstanceOne()
-                                   : 0;
-    if (one == 0 || !EnsureInstance(seat))
+    for (int column = 1; column < kColumns; ++column)
     {
-        return;
+        const auto         c  = static_cast<std::size_t>(column);
+        const std::int32_t id = map.idAt[c];
+        if (id == g_ownerId[c])
+        {
+            continue;
+        }
+        const bool had = g_instance[column] != 0 && g_seeded[column];
+        g_ownerId[c]   = id;
+        ClearColumn(column);
+        if (had)
+        {
+            platform::Log(L"area icons: column {} {}; its icon manager cleared ({} game events followed)", column + 1,
+                          id < 0 ? L"is gone" : L"changed hands", g_replays);
+        }
     }
-    if (!g_seeded[seat])
-    {
-        SeedEventState(seat, one);
-    }
-    g_seatController  = Acts(kPartController) ? players::generation::ControllerOf(seat) : nullptr;
-    g_seatMember      = Acts(kPartLeader) ? players::generation::MemberOf(seat) : nullptr;
-    const bool ticked = FrameUpdateGuarded(g_instance[seat], deltaTime);
-    g_seatController  = nullptr;
-    g_seatMember      = nullptr;
-    if (!ticked)
-    {
-        g_tickFailed[seat] = true;
-        platform::Log(L"area icons: {}'s icon manager raised an exception; it is no longer ticked",
-                      players::SeatName(seat));
-        return;
-    }
-    LogIfChanged(seat, one);
 }
 
-void ShowOnly(int seat) noexcept
+void Tick(int column, void* controller, void* member, float deltaTime) noexcept
+{
+    const bool           further = column >= 1 && column < kColumns;
+    const std::uintptr_t one     = g_installed && Acts(kPartTick) && further && !g_tickFailed[column] ? InstanceOne() : 0;
+    if (one == 0 || !EnsureInstance(column))
+    {
+        return;
+    }
+    if (!g_seeded[column])
+    {
+        SeedEventState(column, one);
+    }
+    g_columnController = Acts(kPartController) ? controller : nullptr;
+    g_columnMember     = Acts(kPartLeader) ? member : nullptr;
+    const bool ticked  = FrameUpdateGuarded(g_instance[column], deltaTime);
+    g_columnController = nullptr;
+    g_columnMember     = nullptr;
+    if (!ticked)
+    {
+        g_tickFailed[column] = true;
+        platform::Log(L"area icons: column {}'s icon manager raised an exception; it is no longer ticked", column + 1);
+        return;
+    }
+    LogIfChanged(column, one);
+}
+
+void ShowOnly(int column) noexcept
 {
     if (!g_installed || !Acts(kPartCanvases))
     {
@@ -625,14 +666,14 @@ void ShowOnly(int seat) noexcept
             SetCanvas(g_hiddenOne[k].canvas, g_hiddenOne[k].visibility);
         }
         g_hiddenOne[k] = {};
-        for (int other = 1; other < kPlayers; ++other)
+        for (int other = 1; other < kColumns; ++other)
         {
-            if (other != seat)
+            if (other != column)
             {
-                SetCanvas(Canvas(g_instance[other], kCanvases[k]), kHidden);  // every other seat's
+                SetCanvas(Canvas(g_instance[other], kCanvases[k]), kHidden);  // every other column's
             }
         }
-        if (seat == 0)
+        if (column <= 0 || column >= kColumns)
         {
             continue;
         }
@@ -643,53 +684,31 @@ void ShowOnly(int seat) noexcept
             g_hiddenOne[k] = {canvas, own};
             SetCanvas(canvas, kHidden);
         }
-        if (players::SeatIndex(seat))
-        {
-            SetCanvas(Canvas(g_instance[seat], kCanvases[k]), kSelfHitTestInvisible);
-        }
+        SetCanvas(Canvas(g_instance[column], kCanvases[k]), kSelfHitTestInvisible);
     }
-}
-
-void SeatOut(int seat) noexcept
-{
-    if (!players::SeatIndex(seat) || g_instance[seat] == 0)
-    {
-        return;
-    }
-    ClearAllGuarded(g_instance[seat]);
-    g_seeded[seat] = false;  // the next join starts from player 1's state again
-    for (const std::uint32_t offset : kCanvases)
-    {
-        SetCanvas(Canvas(g_instance[seat], offset), kHidden);
-    }
-    platform::Log(L"area icons: {} is out; their icon manager cleared ({} game events followed)",
-                  players::SeatName(seat), g_replays);
 }
 
 void AllOut() noexcept
 {
     ShowOnly(0);
-    for (int seat = 1; seat < kPlayers; ++seat)
-    {
-        SeatOut(seat);
-    }
 }
+
 void SetMask(unsigned mask) noexcept
 {
     if (Acts(kPartCanvases) && (mask & kPartCanvases) == 0)
     {
         ShowOnly(0);  // player 1's canvases shown, as the game has them
-        for (int seat = 1; seat < kPlayers; ++seat)
+        for (int column = 1; column < kColumns; ++column)
         {
             for (const std::uint32_t offset : kCanvases)
             {
-                SetCanvas(Canvas(g_instance[seat], offset), kSelfHitTestInvisible);  // and each seat's, in every view
+                SetCanvas(Canvas(g_instance[column], offset), kSelfHitTestInvisible);  // and each column's, in every view
             }
         }
     }
     g_mask  = mask;
-    platform::Log(L"area icons: mask {} (ticked {}, first controller the player's own {}, canvases per pass {}, ranged from "
-                  L"the player's member {})",
+    platform::Log(L"area icons: mask {} (ticked {}, first controller the column's {}, canvases per pass {}, ranged from "
+                  L"the shown player's member {})",
                   mask, Acts(kPartTick), Acts(kPartController), Acts(kPartCanvases), Acts(kPartLeader));
 }
 
@@ -707,9 +726,9 @@ void RegisterCommands()
     control::Register({.name  = L"icons-mask",
                        .shape = control::Shape::Integer,
                        .max   = 15,
-                       .help  = L"diagnosis: which parts of player 2's and 3's own map icons act (1 their icon "
-                                L"manager ticked, 2 its first controller theirs, 4 each view shows its own canvases, 8 "
-                                L"ranged from their member)",
+                       .help  = L"diagnosis: which parts of the further columns' own map icons act (1 each column's "
+                                L"icon manager ticked, 2 its first controller the column's, 4 each view shows its own "
+                                L"canvases, 8 ranged from the shown player's member)",
                        .set   = [](const Value& v) {
                            SetMask(static_cast<unsigned>(std::get<std::int64_t>(v)));
                            return Outcome{true, L"icons mask set (see the log)"};
@@ -719,4 +738,4 @@ void RegisterCommands()
 
 #endif
 
-}  // namespace lss::hud::seat_area_icons
+}  // namespace lss::hud::column_area_icons

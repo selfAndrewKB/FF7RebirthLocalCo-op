@@ -12,7 +12,7 @@
 #include "hud/layout/overlay_layout.h"
 #include "hud/minimap/minimap.h"
 #include "hud/minimap/minimap_once.h"
-#include "hud/minimap/seat_area_icons.h"
+#include "hud/minimap/column_area_icons.h"
 #include "hud/passes/column_hud_images.h"
 #include "hud/passes/overlay_pass.h"
 #include "hud/passes/pass_opacity.h"
@@ -170,9 +170,8 @@ void NoteMirrorKind(int column, SeatPassKind kind) noexcept
 /// into the entry named for the column, everything put back for the next pass (the roots' contexts and player 1's re-run
 /// only after the last further pass, `another` false). Its image is ready (column_hud_images's ImageReady). `kind`
 /// PlayerOnes, a copy: the layout and the projections follow the column's view, which shows player 1's camera; the rows,
-/// markers, pins, command menu, cursors and the minimap's map are player 1's, and no player's window shows. A seat's
-/// copy keeps the seat's own area-icon instance, ticked under its view (only that instance is placed for this view); a
-/// mirror has none, so its copy shows player 1's, placed for player 1's view.
+/// markers, pins, command menu, cursors, gauges, minimap content and the area icons' range are player 1's, and no
+/// player's window shows. The area icons are the column's own instance, placed for this view.
 void ColumnPass(int column, int seat, bool another, SeatPassKind kind) noexcept
 {
     const double deltaTime = BeginColumnImage();  // the engine's DeltaTime 0 for the render; the slot taking part
@@ -182,13 +181,17 @@ void ColumnPass(int column, int seat, bool another, SeatPassKind kind) noexcept
     // that player's rows, markers, pins and command menu only, and in a copy no player's window
     // (hud/passes/pass_opacity.h)
     pass_opacity::ShowOnly(shown, copy);
-    target_views::BeforePass(shown);  // the other players' cursors and gauges collapsed before the seat's updates
-    const bool content = EnterSeat(column, seat);  // the column's levers, the seat's updates (seat_hud_content.h)
-    if (content && seat != 0)
+    target_views::BeforePass(shown);  // the other players' cursors and gauges collapsed before the column's updates
+    const bool content = EnterSeat(column, seat, copy);  // the column's levers and updates (seat_hud_content.h)
+    if (content)
     {
-        seat_area_icons::Tick(seat, static_cast<float>(deltaTime));  // under the seat's view rect
+        // Under the column's view rect: placed through the column's controller, ranged from the shown player's
+        // character (player 1's: the game's own answer).
+        column_area_icons::Tick(column, ColumnController(),
+                                shown != 0 ? players::generation::MemberOf(shown) : nullptr,
+                                static_cast<float>(deltaTime));
     }
-    seat_area_icons::ShowOnly(seat);  // a mirror's (seat 0): player 1's icons
+    column_area_icons::ShowOnly(content ? column : 0);  // the levers refused: player 1's content, their icons too
     const double start = Now();
     // The seat's minimap (hud/minimap/minimap.h); without it (and for player 1's HUD), player 1's pass alone renders
     // the minimap's map (hud/minimap/minimap_once.h).
@@ -203,7 +206,7 @@ void ColumnPass(int column, int seat, bool another, SeatPassKind kind) noexcept
     {
         LeaveSeat(column, seat, another);
     }
-    seat_area_icons::ShowOnly(0);
+    column_area_icons::ShowOnly(0);
     pass_opacity::ShowOnly(0);  // player 1's rows, markers, pins and command menu for player 1's pass
     EndColumnImage();  // DeltaTime back
 }
@@ -232,7 +235,6 @@ void RenderRootOverlay(void* application) noexcept
                 if (g_seatIn[seat] && !in)  // a seat out while another is in: its own HUD state forgotten
                 {
                     prompt_rows::Forget(seat);
-                    seat_area_icons::SeatOut(seat);
                     marker_timers::Forget(seat);
                     enemy_gauges::SeatOut(seat);
                 }
@@ -242,7 +244,7 @@ void RenderRootOverlay(void* application) noexcept
         else if (promptRowsKnown)
         {
             prompt_rows::Forget();
-            seat_area_icons::AllOut();
+            column_area_icons::AllOut();
             marker_timers::Forget();
             promptRowsKnown = false;
             for (bool& in : g_seatIn)
@@ -250,6 +252,7 @@ void RenderRootOverlay(void* application) noexcept
                 in = false;
             }
         }
+        column_area_icons::FollowColumns(overlay_pass::Map());  // a column that changed hands starts its icons again
         FollowHudPlacementBeforeRender();  // after the rows' layout, which can set a row's point
         // The further columns' passes first, highest column first, each whose image is on (hud/passes/
         // column_hud_images.h holds the slot and renders; the levers and the per-pass opacities around each render are
@@ -298,7 +301,7 @@ void RenderRootOverlay(void* application) noexcept
             // pass shows only player 1's own rows, marks, icons and command menu, as after a seat's pass. The
             // seats' rows stay painted (transparent), so their timers keep running.
             target_views::BeforePass(0);
-            seat_area_icons::ShowOnly(0);
+            column_area_icons::ShowOnly(0);
             pass_opacity::ShowOnly(0);  // the rows, markers, pins and the command menu (hud/passes/pass_opacity.h)
         }
     }
@@ -329,6 +332,7 @@ void RenderRootOverlay(void* application) noexcept
         overlay_pass::Set(overlay_pass::kNone);
         enemy_gauges::EndFrame();  // the gauges' record, emptied for the next tick
         popups::EndFrame();
+        marker_timers::EndFrame();  // a mirror's arrow timers forgotten where no mirror pass ran
         pass_opacity::RestoreAll();  // every row, marker, pin and the command menu back to their own
         target_views::AfterPass();   // every mark hidden for player 1's pass back
         TraceAfterRender();

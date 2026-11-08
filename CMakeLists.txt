@@ -48,7 +48,7 @@ add_library(LocalSplitScreen SHARED
     src/hud/field/search_pins.cpp
     src/hud/field/wrangle_targets.cpp
     src/hud/field/action_icon_base.cpp
-    src/hud/minimap/seat_area_icons.cpp
+    src/hud/minimap/column_area_icons.cpp
     src/hud/battle/target_views.cpp
     src/hud/battle/enemy_gauges.cpp
     src/hud/field/marker_timers.cpp

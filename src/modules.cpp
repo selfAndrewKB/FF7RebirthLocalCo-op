@@ -40,7 +40,7 @@
 #include "hud/layout/overlay_layout.h"
 #include "hud/minimap/minimap.h"
 #include "hud/minimap/minimap_once.h"
-#include "hud/minimap/seat_area_icons.h"
+#include "hud/minimap/column_area_icons.h"
 #include "hud/passes/column_hud_images.h"
 #include "hud/passes/overlay_pass.h"
 #include "hud/passes/root_overlay_render.h"
@@ -321,8 +321,8 @@ constexpr std::array kModules{
     Module{Call<&hud::wrangle_targets::Install>, nullptr},
     // the prompt rows keep their corner by their own base
     Module{Call<&hud::action_icon_base::Install>, nullptr},
-    // each seat's own map icons and markers
-    Module{Call<&hud::seat_area_icons::Install>, &hud::seat_area_icons::Remove},
+    // each further column's own map icons and markers
+    Module{Call<&hud::column_area_icons::Install>, &hud::column_area_icons::Remove},
     // a few lines in one player's own view, in the engine's font (the player windows)
     Module{Call<&hud::view_prompt::Install>, &hud::view_prompt::Remove},
     // each player's own window by pad: Start on a spare pad joins, View held opens it, B held leaves
@@ -813,7 +813,7 @@ void RegisterCommands(session::Session& session, players::SplitLayout& layout,
         hud::RegisterOverlayLayoutCommands();
         hud::RegisterColumnHudImagesCommands();
         hud::RegisterSeatHudContentCommands();
-        hud::seat_area_icons::RegisterCommands();
+        hud::column_area_icons::RegisterCommands();
         hud::RegisterMinimapOnceCommands();
         hud::RegisterHudTraceCommands();
         hud::RegisterPositionProbeCommands();

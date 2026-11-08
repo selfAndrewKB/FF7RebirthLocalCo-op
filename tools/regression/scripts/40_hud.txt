@@ -1,5 +1,5 @@
 # Player 2's HUD across a join: the minimap, the field-action icons moved for the split layout and back, player 2's
-# area-icon manager, the placements set back at the leave. The once-per-launch lines of the first join are checked in
+# column's area-icon manager, the placements set back at the leave. The once-per-launch lines of the first join are checked in
 # 10_join_leave. The two passes' timing lines are the perf log's (perf_log.txt in the mod folder), not checked here.
 # expect: minimap: on
 # expect: HUD image: player 1's view draws player 1's HUD
@@ -7,10 +7,10 @@
 # expect-not: HUD image: player 1's view draws player [23]'s HUD
 # expect-not: HUD image: player 2's view draws player [13]'s HUD
 # expect: field-action icons: layout 1920x1080 -> \d+x1080
-# expect: area icons: player 2's icon manager starts with player 1's event state
+# expect: area icons: column 2's icon manager starts with player 1's event state
 # expect: HUD placement: \d+ widget\(s\) set back
 # expect: field-action icons: layout \d+x1080 -> 1920x1080
-# expect: area icons: player 2 is out
+# expect: area icons: column 2 is gone; its icon manager cleared
 # expect: minimap: no split view, or the player is not playing \(player 2\)
 # expect-not: stays off
 # expect-not: safety submit

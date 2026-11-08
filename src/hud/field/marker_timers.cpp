@@ -7,10 +7,12 @@
 #include "platform/log.h"
 #include "platform/sparse_array.h"
 #include "players/seats.h"
+#include "views/columns.h"
 
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <format>
 #include <vector>
 
 namespace lss::hud::marker_timers {
@@ -29,6 +31,23 @@ constexpr std::uint32_t  kTimer       = 0x14;
 std::uintptr_t       g_endUISystem = 0;
 // By seat ([0] unused): player 1's set aside during the seat's run; the seat's own between frames.
 std::array<hud_rules::TimerSwap, players::kMaxPlayers> g_timers;
+// By column ([0] unused): a mirror's column's own, while a mirror pass runs there each frame.
+std::array<hud_rules::TimerSwap, views::columns::kMaxColumns> g_mirrorTimers;
+std::array<bool, views::columns::kMaxColumns>                 g_mirrorRan{};
+
+/// The set for a run: the seat's, or (seat 0) the mirror's column's; null for player 1's own run.
+hud_rules::TimerSwap* SetFor(int seat, int column) noexcept
+{
+    if (players::SeatIndex(seat))
+    {
+        return &g_timers[static_cast<std::size_t>(seat)];
+    }
+    if (seat == 0 && column >= 1 && column < views::columns::kMaxColumns)
+    {
+        return &g_mirrorTimers[static_cast<std::size_t>(column)];
+    }
+    return nullptr;
+}
 
 using platform::Read;  // the guarded reads: platform/guarded.h
 
@@ -65,13 +84,18 @@ bool Install(const platform::GameImage& image) noexcept
     return g_endUISystem != 0;
 }
 
-void SwapIn(int seat) noexcept
+void SwapIn(int seat, int column) noexcept
 {
-    if (!players::SeatIndex(seat))
+    hud_rules::TimerSwap* set = SetFor(seat, column);
+    if (set == nullptr)
     {
         return;
     }
-    hud_rules::TimerSwap& timers = g_timers[static_cast<std::size_t>(seat)];
+    if (seat == 0)
+    {
+        g_mirrorRan[static_cast<std::size_t>(column)] = true;  // its set is kept at this frame's EndFrame
+    }
+    hud_rules::TimerSwap& timers = *set;
     try
     {
         timers.BeginIn();
@@ -87,13 +111,14 @@ void SwapIn(int seat) noexcept
     }
 }
 
-void SwapOut(int seat) noexcept
+void SwapOut(int seat, int column) noexcept
 {
-    if (!players::SeatIndex(seat))
+    hud_rules::TimerSwap* set = SetFor(seat, column);
+    if (set == nullptr)
     {
         return;
     }
-    hud_rules::TimerSwap& timers = g_timers[static_cast<std::size_t>(seat)];
+    hud_rules::TimerSwap& timers = *set;
     try
     {
         timers.BeginOut();
@@ -103,15 +128,17 @@ void SwapOut(int seat) noexcept
             Read(element + kTimer, theirs);
             if (const auto mine = timers.Out(key, theirs); mine)
             {
-                Write(element, *mine);  // an element new in the seat's run keeps what it has
+                Write(element, *mine);  // an element new in the column's run keeps what it has
                 pinned += theirs != *mine;
             }
         });
-        timers.EndOut();  // the seat's own; arrows no longer in the list are dropped
+        timers.EndOut();  // the set's own; arrows no longer in the list are dropped
         if (pinned > 0 && platform::Enabled(platform::Level::Trace))  // every HUD pass: Trace (platform/log.h)
         {
-            platform::LogTrace(L"marker timers: {} of {} arrows have their own timer in {}'s view", pinned,
-                               timers.SeatTimerCount(), players::SeatName(seat));
+            platform::LogTrace(L"marker timers: {} of {} arrows have their own timer in {}", pinned,
+                               timers.SeatTimerCount(),
+                               seat != 0 ? std::format(L"{}'s view", players::SeatName(seat))
+                                         : std::format(L"the mirror view in column {}", column + 1));
         }
     }
     catch (...)
@@ -125,6 +152,18 @@ void Forget() noexcept
     for (hud_rules::TimerSwap& timers : g_timers)
     {
         timers.Forget();
+    }
+}
+
+void EndFrame() noexcept
+{
+    for (std::size_t column = 1; column < g_mirrorRan.size(); ++column)
+    {
+        if (!g_mirrorRan[column])
+        {
+            g_mirrorTimers[column].Forget();  // no mirror pass in that column this frame: its arrows start again at 0
+        }
+        g_mirrorRan[column] = false;
     }
 }
 

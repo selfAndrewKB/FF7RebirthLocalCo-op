@@ -23,7 +23,7 @@
 // player 1's rect is put back after.
 //
 // Not covered here: the area icons and the quest and party markers (AreaMapIcon_FrameUpdate cannot run twice; each
-// seat has an icon manager of its own, hud/minimap/seat_area_icons.h), and a seat's command menu
+// further column has an icon manager of its own, hud/minimap/column_area_icons.h), and a seat's command menu
 // (battle/command_menu.h).
 
 #include "platform/dev_switch.h"
@@ -52,13 +52,17 @@ unsigned SeatLeversMask() noexcept;
 void BeginPasses() noexcept;
 
 /// Game thread, just before a further column's overlay render for the seat in it. The roots' contexts, the first
-/// player and the view rect follow the column's local player; the primary controller and the updates the seat. `seat` 0
-/// is a copy of player 1's content in a mirror's column: the primary controller stays player 1's (the mirror's is held
-/// only around the chocobo wrangle's placement, which projects through it), the popups project with the mirror's
-/// controller. True if
-/// the levers are now the column's (then LeaveSeat must follow the render). False: player 1's levers and re-run
-/// (SettleSeats), so the pass renders player 1's content.
-bool EnterSeat(int column, int seat) noexcept;
+/// player and the view rect follow the column's local player; the primary controller, the popups' projection and the
+/// arrows' timers the seat. `copy`: the pass shows player 1's content (the enemy gauges and the minimap's content
+/// player 1's). `seat` 0 is a mirror's column, always a copy: the primary controller stays player 1's (the mirror's is
+/// held only around the chocobo wrangle's placement, which projects through it), the popups project with the
+/// mirror's controller, the arrows keep the column's own timers. True if the levers are now the column's (then
+/// LeaveSeat must follow the render). False: player 1's levers and re-run (SettleSeats), so the pass renders player
+/// 1's content.
+bool EnterSeat(int column, int seat, bool copy) noexcept;
+
+/// The controller of the column whose levers are set (between EnterSeat and LeaveSeat), else null.
+void* ColumnController() noexcept;
 
 /// Game thread, just after the column's overlay render: levers back to player 1, player 1's re-run. With `another`
 /// (another further pass follows in this frame) the HUD roots keep the column's contexts and player 1's re-run waits:

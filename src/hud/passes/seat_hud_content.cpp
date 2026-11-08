@@ -24,6 +24,7 @@
 #include "platform/log.h"
 #include "platform/module_pin.h"
 #include "platform/sparse_array.h"
+#include "players/generation.h"
 #include "players/seats.h"
 #include "players/unreal_access.h"
 #include "scopes/primary_controller.h"
@@ -115,6 +116,8 @@ std::uint32_t                                        g_framesToScan = 0;
 bool                                                 g_rootsChecked = false;  // this frame's root scan check ran
 bool                                                 g_passedThisFrame = false;  // a seat's pass ran this frame
 std::optional<scopes::primary_controller::Scope> g_primary;
+void* g_columnController = nullptr;  // the controller of the column whose levers are set (EnterSeat to LeaveSeat)
+int   g_holderShown      = 0;        // whose map the minimap's holder last ran for (0 player 1's)
 int g_mirrorPrimaryHeld = -1;  // a mirror's copy held its controller as the primary last time: 1, 0, -1 not yet
 float                                                g_savedTimeStep = 0.0f;
 float*                                               g_timeStep      = nullptr;  // saved in Enter, restored in Leave
@@ -161,26 +164,35 @@ void Refuse(const wchar_t* why)
     platform::Log(L"HUD levers: {}; players 2 and 3's content stays off", why);
 }
 
-/// The updates for the view whose levers are set (`seat` 0 player 1's content); a seat's run gives the arrows their
-/// own timers. `controller`: the view's controller when it is not the seat's (a mirror's column, showing player 1's
-/// content), for the popups' projection.
-bool RunUpdates(int seat, void* controller = nullptr) noexcept
+/// Who a pass's updates are for: the column (0 player 1's re-run), its player (`seat`, 0 a mirror's: whose view the
+/// popups project into and whose arrow timers run, `controller` then the mirror's) and whose content shows (`shown`,
+/// 0 player 1's: a copy).
+struct UpdatesFor
 {
-    const bool isSeat = seat != 0;
+    int   column     = 0;
+    int   seat       = 0;
+    int   shown      = 0;
+    void* controller = nullptr;
+};
+
+/// The updates for the view whose levers are set; a further column's run gives the arrows their own timers.
+bool RunUpdates(const UpdatesFor& pass) noexcept
+{
     // The gauges first: the enemy attack names in the +0x180 list read each gauge's placed point
-    // (RE-p2-battle-popups.md §1), so they must see this view's.
+    // (RE-p2-battle-popups.md §1), so they must see this view's. Classified and sized by the shown player's target.
     if (Acts(kLeverGauges))
     {
-        enemy_gauges::Replay(seat);
+        enemy_gauges::Replay(pass.shown);
     }
     if (Acts(kLeverPopups))
     {
-        popups::Replay(seat, controller);
+        popups::Replay(pass.seat, pass.seat == 0 ? pass.controller : nullptr);
     }
-    const hud_updates::OwnArrowTimers arrows{g_timeStep, g_savedTimeStep, seat};
+    const hud_updates::OwnArrowTimers arrows{g_timeStep, g_savedTimeStep, pass.seat, pass.column};
     const bool ran = hud_updates::Run(Acts(kLeverUpdates), Acts(kLeverCompass),
-                                      isSeat && Acts(kLeverArrows) && g_timeStep != nullptr ? &arrows : nullptr);
-    minimap::RunHolder(seat);  // the minimap's content for this view, while the seat's minimap is on
+                                      pass.column >= 1 && Acts(kLeverArrows) && g_timeStep != nullptr ? &arrows : nullptr);
+    minimap::RunHolder(pass.shown);  // the minimap's content for the shown player (player 1's: back to theirs if changed)
+    g_holderShown = pass.shown;
     return ran;
 }
 
@@ -548,7 +560,7 @@ void RefuseWayBack(bool contexts, bool ticks) noexcept
     }
 }
 
-bool EnterSeatLevers(int column, int seat) noexcept
+bool EnterSeatLevers(int column, int seat, bool copy) noexcept
 {
     try
     {
@@ -563,18 +575,15 @@ bool EnterSeatLevers(int column, int seat) noexcept
         {
             return false;
         }
-        const auto c = static_cast<std::size_t>(column);
-        void*      copyController = nullptr;
-        void*      playerOne      = nullptr;
-        if (seat == 0)
+        const auto c          = static_cast<std::size_t>(column);
+        void*      controller = seat != 0 ? players::generation::ControllerOf(seat)
+                                          : players::unreal::LocalPlayerController(byColumn[c]);
+        void*      playerOne  = seat == 0 ? players::unreal::LocalPlayerController(byColumn[0]) : nullptr;
+        if (seat == 0 && (controller == nullptr || playerOne == nullptr))
         {
-            copyController = players::unreal::LocalPlayerController(byColumn[c]);
-            playerOne      = players::unreal::LocalPlayerController(byColumn[0]);
-            if (copyController == nullptr || playerOne == nullptr)
-            {
-                return false;
-            }
+            return false;
         }
+        g_columnController = controller;
         g_firstPlayerAnswer = Acts(kLeverFirstPlayer) ? reinterpret_cast<std::uint64_t>(byColumn[c]) : 0;  // L2
         AdoptAbilityNames();
         AdoptFieldTargets();
@@ -591,7 +600,7 @@ bool EnterSeatLevers(int column, int seat) noexcept
             WriteRect(g_columnRect[c]);  // what the column's render computed last frame (via L2)
         }
         const double start = Now();
-        const bool   runs  = RunUpdates(seat, copyController);
+        const bool   runs  = RunUpdates({column, seat, copy ? 0 : seat, controller});
         search_pins::Place();  // the search pins through the roots' contexts (L1: the column's; hud/field/search_pins.h)
         {
             // The chocobo wrangle's targets project through the primary controller (hud/field/wrangle_targets.h): a
@@ -599,7 +608,7 @@ bool EnterSeatLevers(int column, int seat) noexcept
             std::optional<scopes::primary_controller::Scope> mirror;
             if (seat == 0 && Acts(kLeverPrimary))
             {
-                mirror.emplace(playerOne, copyController);
+                mirror.emplace(playerOne, controller);
                 if (const bool held = mirror->Held(); static_cast<int>(held) != g_mirrorPrimaryHeld)
                 {
                     g_mirrorPrimaryHeld = static_cast<int>(held);
@@ -624,6 +633,7 @@ bool EnterSeatLevers(int column, int seat) noexcept
             g_loggedEnter[c] = true;
             platform::Log(L"HUD levers: {} in column {} with {} HUD root(s); the column's view rect {}",
                           seat == 0 ? std::wstring(L"a copy of player 1's HUD")
+                          : copy    ? std::format(L"{}'s pass with a copy of player 1's HUD", players::SeatName(seat))
                                     : std::format(L"{}'s pass", players::SeatName(seat)),
                           column + 1, hud_roots::Count(),
                           g_columnRectKnown[c] ? L"from the last frame" : L"not known yet (first frame)");
@@ -641,11 +651,17 @@ bool EnterSeatLevers(int column, int seat) noexcept
 
 }  // namespace
 
-bool EnterSeat(int column, int seat) noexcept
+void* ColumnController() noexcept
 {
-    const bool entered = EnterSeatLevers(column, seat);
+    return g_columnController;
+}
+
+bool EnterSeat(int column, int seat, bool copy) noexcept
+{
+    const bool entered = EnterSeatLevers(column, seat, copy || seat == 0);
     if (!entered)
     {
+        g_columnController = nullptr;
         SettleSeats();  // the pass renders player 1's content: an earlier pass's contexts and positions put back
     }
     return entered;
@@ -663,8 +679,9 @@ void LeaveSeat(int column, int seat, bool another) noexcept
         const auto c         = static_cast<std::size_t>(column);
         g_columnRectKnown[c] = ReadRect(g_columnRect[c]);  // computed by the column's render through L2
     }
-    static_cast<void>(seat);  // the pass's seat: EnterSeat's pair (0 for a pass that shows player 1's)
+    static_cast<void>(seat);  // the pass's seat: EnterSeat's pair (0 for a mirror's)
     g_firstPlayerAnswer = 0;
+    g_columnController  = nullptr;
     double mark         = Now();
     bool   contexts     = true;
     if (!another)
@@ -678,14 +695,14 @@ void LeaveSeat(int column, int seat, bool another) noexcept
     mark       = Now();
     if (!another)
     {
-        ticks = RunUpdates(0);      // player 1's positions again, before player 1's render
+        ticks = RunUpdates({});     // player 1's positions again, before player 1's render
         search_pins::Place();       // and the search pins'
         wrangle_targets::Place(0);  // and the chocobo wrangle's targets'
     }
-    else
+    else if (g_holderShown != 0)
     {
         // The minimap's holder back to player 1's: the next seat's run skips it while that seat's minimap is off
-        // (just after a join), and its pass would paint this seat's map.
+        // (just after a join), and its pass would paint this seat's map. A copy's run left player 1's already.
         minimap::RunHolder(0);
     }
     Charge(kTicksOne, mark);
@@ -707,7 +724,7 @@ void SettleSeats() noexcept
     double     mark     = Now();
     const bool contexts = !Acts(kLeverContexts) || hud_roots::SetContexts(0);
     mark                = Charge(kContextsOne, mark);
-    const bool ticks    = RunUpdates(0);
+    const bool ticks    = RunUpdates({});
     search_pins::Place();
     wrangle_targets::Place(0);
     Charge(kTicksOne, mark);
