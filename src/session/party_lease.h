@@ -90,12 +90,8 @@ constexpr std::int32_t SeatSlotOrdinal(std::int32_t anchor, std::int32_t count, 
 
 // ---- the member's AI at the hand-over (RE-p2-member-handover.md §3) ----
 
-inline constexpr std::uint8_t kAiStateBattle = 3;
-inline constexpr std::uint8_t kAiStateLead   = 6;
-inline constexpr std::uint8_t kAiStateFollow = 7;
-
 /// A member's AI as the hand-over needs it: its active brain (0 is the base brain; a story script
-/// pushes others) and that brain's state (EEndAIState).
+/// pushes others) and that brain's state (EEndAIState, facts::AiState).
 struct AiSnapshot
 {
     bool         read       = false;

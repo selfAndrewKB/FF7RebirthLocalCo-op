@@ -5,6 +5,7 @@
 
 #include "session/party_lease.h"
 
+#include "facts/party.h"
 #include "expect.h"
 
 #include <cstdio>
@@ -13,6 +14,9 @@
 namespace {
 
 using namespace lss::session;
+using lss::facts::kAiStateBattle;
+using lss::facts::kAiStateFollow;
+using lss::facts::kAiStateLead;
 
 int g_member;
 int g_ai;

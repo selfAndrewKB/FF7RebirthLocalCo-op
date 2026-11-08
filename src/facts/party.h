@@ -131,8 +131,28 @@ inline constexpr std::uint32_t kAiActiveBrain = 0x518;
 inline constexpr std::uint32_t kBrainIndex    = 0x19;  // u8; 0 is the base brain
 inline constexpr std::uint32_t kBrainState    = 0x20;
 inline constexpr std::uint32_t kAiStateType   = 0x18;  // u8, EEndAIState
-inline constexpr std::uint8_t  kAiStateFollow = 7;     // EEndAIState FOLLOW, the party follow state
 inline constexpr std::uint32_t kAiPauseMask   = 0x460; // u32 (RE-p2-party-warp.md §1, the sampler table)
+/// EEndAIState, the state's type byte (the reflected enum, FF7R2UProj/Source/EndGame/Public/EEndAIState.h).
+enum AiState : std::uint8_t
+{
+    kAiStateEmpty            = 0,
+    kAiStateDoNothing        = 1,  // the scene parks' state, among others
+    kAiStateConnectEncount   = 2,
+    kAiStateBattle           = 3,
+    kAiStateStay             = 4,
+    kAiStateMoveTo           = 5,  // a run to a mark; fires its arrival trigger
+    kAiStateLead             = 6,  // fires its arrival trigger
+    kAiStateFollow           = 7,  // the party follow, the base brain's default
+    kAiStateWandering        = 8,
+    kAiStateAnimation        = 9,
+    kAiStateSingleAnimation  = 10,
+    kAiStateUnique           = 11,
+    kAiStateInterest         = 12,
+    kAiStateWildAnimal       = 13,
+    kAiStateBattleEvacuation = 14,
+    kAiStateHintAnimal       = 15,
+    kAiStateFieldAction      = 16,
+};
 /// Its bit for pause reason 13, the animation budget's: a mesh the budget throttles to every other frame is told
 /// "tick / don't tick" on alternate frames and this bit follows it (RE-ai-pause-bit.md); no AI decision reads it on
 /// a possessed member. The probes read the mask without it.

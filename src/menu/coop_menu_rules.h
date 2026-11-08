@@ -29,7 +29,7 @@ namespace settings = platform::settings;
 
 /// The pause menu's row, in the place of the trial's "Buy Now" row (kind 13, which the full game never shows).
 inline constexpr const wchar_t* kRowLabel = L"Co-op";
-inline constexpr const wchar_t* kRowHelp  = L"Split-screen co-op settings: the players' screens.";
+inline constexpr const wchar_t* kRowHelp  = L"Split-screen co-op settings: the players' screens and battles.";
 inline constexpr const wchar_t* kTitle    = L"Co-op";
 
 /// The first category byte of the mod's rows; the game's own end at 0x54.

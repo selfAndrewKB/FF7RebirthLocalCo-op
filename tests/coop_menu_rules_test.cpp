@@ -41,7 +41,7 @@ void PageFromTheTable()
 {
     std::puts("coop menu: one category per section, every option on one row");
     const auto page = BuildPage();
-    EXPECT(page.size() == 1);
+    EXPECT(page.size() == 2);  // Screens, Battle
     EXPECT(page.size() <= kCategoryKeys.size());
     std::set<int>          rows;
     std::set<std::uint8_t> keys;

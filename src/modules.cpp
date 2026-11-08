@@ -1,7 +1,7 @@
 #include "modules.h"
 
 #include "battle/battle_camera.h"
-#include "battle/battle_warp_skip.h"
+#include "battle/battle_warps.h"
 #include "battle/command_locks.h"
 #include "battle/command_menu.h"
 #include "battle/command_menu_tick.h"
@@ -166,8 +166,8 @@ constexpr std::array kModules{
     Module{Call<&session::party_switch::Install>, &session::party_switch::Remove},
     // player 1 cannot command a seat's member
     Module{Call<&battle::command_rules::Install>, &battle::command_rules::Remove},
-    // battles leave a seat's member where it is
-    Module{Call<&battle::battle_warp_skip::Install>, &battle::battle_warp_skip::Remove},
+    // who a battle warps at its start and end, by the setting
+    Module{Call<&battle::battle_warps::Install>, &battle::battle_warps::Remove},
     // each seat's command controller: built, follows the game's
     Module{Call<&battle::command_menu::Install>, &battle::command_menu::Remove},
     // the battle's command locks reach it by the game's setters

@@ -149,7 +149,7 @@ add_library(LocalSplitScreen SHARED
     src/camera/camera_distance.cpp
     src/camera/main_camera_shape.cpp
     src/battle/command_locks.cpp
-    src/battle/battle_warp_skip.cpp
+    src/battle/battle_warps.cpp
     src/battle/equal_targeting.cpp
     src/battle/player_hits.cpp
     src/battle/leader_reads.cpp
@@ -368,6 +368,8 @@ lss_test(pool_bits src/platform/pool_bits.cpp)
 lss_test(strand_watch src/world/strand_watch.cpp)
 lss_test(swap_window src/scopes/swap_window.cpp)
 lss_test(party_lease src/session/party_lease.cpp)
+lss_test(field_hold)
+lss_test(battle_warps_rules)
 lss_test(leave_sequence src/session/leave_sequence.cpp)
 lss_test(leader_answer)
 lss_test(settings)

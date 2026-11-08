@@ -1,8 +1,14 @@
 #include "session/party_lease.h"
 
+#include "facts/party.h"
+
 #include <iterator>
 
 namespace lss::session {
+
+using facts::kAiStateBattle;
+using facts::kAiStateFollow;
+using facts::kAiStateLead;
 
 Eligibility Assess(const MemberSnapshot& member) noexcept
 {

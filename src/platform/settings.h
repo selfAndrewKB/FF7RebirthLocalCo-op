@@ -57,6 +57,8 @@ inline constexpr std::array<const wchar_t*, 4> kThreePlayerSplitLabels{L"One on 
                                                                        L"One on Left, Two on Right", L"One on Right, Two on Left"};
 inline constexpr std::array<const wchar_t*, 2> kOnOffWords{L"on", L"off"};
 inline constexpr std::array<const wchar_t*, 2> kOnOffLabels{L"On", L"Off"};
+inline constexpr std::array<const wchar_t*, 3> kBattleWarpsWords{L"players-stay", L"off", L"game"};
+inline constexpr std::array<const wchar_t*, 3> kBattleWarpsLabels{L"Players Stay", L"Nobody", L"Whole Party"};
 
 inline constexpr Option kMultiMonitor{  // views/window_span
     L"Views", L"multi-monitor", kOnOffWords, L"off",
@@ -143,10 +145,17 @@ inline constexpr Option kVerticalFov{  // views/player_view_point
     false, L"Vertical Split-Screen FOV", kFovWeightWords,
     L"For full-height views narrower than the game's picture. Low: more of the scene, everything smaller. High: characters at "
     L"their usual size, the sides cropped."};
+inline constexpr Option kBattleWarps{  // battle/battle_warps
+    L"Battle", L"battle-warps", kBattleWarpsWords, L"players-stay",
+    L"who the game warps at a battle's start and end: players-stay (every player's own character stays where it is), "
+    L"off (nobody is warped), game (the whole party)",
+    false, L"Moves at a Battle's Start and End", kBattleWarpsLabels,
+    L"Who the game moves into place when a battle starts and ends. Players Stay: every player's character stays where "
+    L"it is. Nobody: no one is moved. Whole Party: everyone, as in single player."};
 /// Every option, in the order the settings file lists them.
 inline constexpr std::array kOptions{&kMultiMonitor,     &kMonitors,      &kColumnOrder,
                                      &kTwoPlayerSplit,  &kThreePlayerSplit, &kHorizontalFov,
-                                     &kVerticalFov};
+                                     &kVerticalFov,     &kBattleWarps};
 
 /// The option is a row of the table (Of and Why answer by the row).
 consteval bool Listed(const Option& option)
@@ -158,7 +167,7 @@ consteval bool Listed(const Option& option)
     return false;
 }
 static_assert(Listed(kMultiMonitor) && Listed(kMonitors) && Listed(kColumnOrder) && Listed(kTwoPlayerSplit) &&
-                  Listed(kThreePlayerSplit) && Listed(kHorizontalFov) && Listed(kVerticalFov),
+                  Listed(kThreePlayerSplit) && Listed(kHorizontalFov) && Listed(kVerticalFov) && Listed(kBattleWarps),
               "every option is a row of kOptions");
 
 /// Where an option's word came from.
