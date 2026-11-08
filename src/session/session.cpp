@@ -115,6 +115,8 @@ constexpr std::uint32_t kHeldAiTicks    = 6;
 constexpr std::uint32_t kSlotCheckTicks = 60;
 /// While riding along: ticks between the ride's lines (about a second).
 constexpr std::uint32_t kRideLogTicks = 60;
+/// Failed returns of a freed ride member (each kHeldAiTicks apart, about a second in all) before it is given back.
+constexpr std::uint32_t kRideReturnTries = 10;
 
 }  // namespace
 
@@ -292,7 +294,6 @@ void Seat::Settle() noexcept
     slotWaitLogged_ = 0;
     slotWaitSince_.reset();
     slotWaitReason_ = party_member::SlotWait::None;
-    EndRideAlong(member_ == rideMember_ ? L"its member is taken back" : L"another member is taken");
     playerOneBytes_ = party_member::ReadPlayerOneBytes(playerOneController_);
     LogTagCounts(L"before the take");
     handover_watch::Snapshot(L"before the take", member_);
@@ -359,6 +360,7 @@ bool Seat::MemberDestroyed() noexcept
     Log(L"{}'s member was destroyed under them (the party was rebuilt without a field exit being seen); they let "
         L"go of it and join again",
         Name());
+    EndRideAlong(L"the member was destroyed");
     players::generation::SetMember(seat_, nullptr);  // the seat's member movement and scopes stop at once
     // Riding, the seat's controller possessed the member's chocobo: its pawn field names that instead.
     const auto forgotten = rides::own_ride::Forget(seat_);
@@ -466,6 +468,7 @@ void Seat::SetSharedRide(bool on) noexcept
 /// The seat gives its member back through the game's release and chooses again once it is released.
 void Seat::Yield(const wchar_t* why) noexcept
 {
+    EndRideAlong(L"the member is given back");  // a party change while riding along: the give-back clears the leader too
     rides::own_ride::Release(seat_, L"the player gives the member back");  // while the seat's scopes still hold
     Log(L"{}'s {} is {}: giving it back to choose again among the deployed party", Name(), players::NameOf(member_), why);
     handover_watch::Snapshot(L"the give-back", member_);
@@ -614,10 +617,6 @@ void Seat::WaitForSlot(const party_member::SlotChoice& choice) noexcept
     }
     waitingForSlot_  = true;
     slotWaitReason_  = choice.wait;
-    if (rideAlong_ && party_member::PlayerTypeOf(rideMember_) != std::optional<std::uint8_t>(choice.type))
-    {
-        EndRideAlong(L"the slot names another member");
-    }
     const auto key   = static_cast<std::uint32_t>(choice.type) | static_cast<std::uint32_t>(choice.wait) << 8 |
                      static_cast<std::uint32_t>(choice.verdict) << 12 | static_cast<std::uint32_t>(choice.ai.state) << 16 |
                      static_cast<std::uint32_t>(choice.ai.brainIndex) << 24;
@@ -647,13 +646,15 @@ void Seat::WaitForSlot(const party_member::SlotChoice& choice) noexcept
 }
 
 /// A script that needs the seat's member (a level's walk or lead, an event's walk, an animation: session/field_hold.h)
-/// gets it back: those run only under its AI. The player rides along: in, the view kept on the member, until it follows
-/// the party again and the seat takes it back.
+/// gets it: the game's own hand to its AI (party_member::HandToAi), the member kept as the seat's and the controller's
+/// leader, so the player rides along with their own camera following it and their stick turning it. The member returns
+/// to the player's controller when the hold ends (RideAlongTick). Without the hand (its call unavailable, the AI not
+/// valid) the member is given back and the seat waits for it.
 void Seat::CheckHeldAi() noexcept
 {
     // While the seat's player rides their chocobo or a Wheelie the member is her AI's for the ride
     // (rides/chocobo_ride.h, rides/wheelie_ride.h).
-    if (rides::own_ride::Riding(seat_) || ticks_ % kHeldAiTicks != 0)
+    if (rideAlong_ || rides::own_ride::Riding(seat_) || ticks_ % kHeldAiTicks != 0)
     {
         return;
     }
@@ -666,21 +667,29 @@ void Seat::CheckHeldAi() noexcept
     const wchar_t* what = hold == field_hold::Hold::Arrival   ? L"a walk or lead of the level's"
                           : hold == field_hold::Hold::Script  ? L"a walk of an event's"
                                                               : L"a scripted animation";
-    rideAlong_  = true;
-    rideMember_ = member_;
-    rideWeak_   = scopes::leader_scope::WeakOf(member_);
-    rideTicks_  = 0;
-    try
+    // The seat's per-tick modules stop on the generation's member at once; the camera's update keeps running as the
+    // player's through the ride member (camera/field_camera ActsFor).
+    players::generation::SetMember(seat_, nullptr);
+    players::generation::SetRideMember(seat_, member_);
+    if (!party_member::HandToAi(member_))
     {
-        Yield(std::format(L"taken by {} (AI state {} on brain {}): handed to its AI so the script runs; the player rides "
-                          L"along, their view on it, and takes it back when it follows the party again",
-                          what, ai.state, ai.brainIndex)
-                  .c_str());
+        players::generation::SetRideMember(seat_, nullptr);
+        players::generation::SetMember(seat_, member_);  // as it was; Yield takes it out again
+        Yield(L"taken by a script (the game's hand to its AI is unavailable: given back, the player waits for it)");
+        return;
     }
-    catch (...)
+    rideAlong_       = true;
+    rideMember_      = member_;
+    rideTicks_       = 0;
+    rideAims_        = 0;
+    rideReturnFails_ = 0;
+    if (installed_.viewTarget && !camera::view_target::OnOwnCamera(controller_))
     {
-        Yield(L"taken by a script: handed to its AI; the player rides along");
+        camera::view_target::Aim(controller_);  // the hand's unpossess pointed the view at the controller: no frame of it
     }
+    Log(L"{}'s {} is taken by {} (AI state {} on brain {}): handed to its AI with the game's own hand; {} rides along, "
+        L"their camera on it, and plays it again when it follows the party",
+        Name(), players::NameOf(member_), what, ai.state, ai.brainIndex, Name());
 }
 
 void Seat::EndRideAlong(const wchar_t* why) noexcept
@@ -691,32 +700,56 @@ void Seat::EndRideAlong(const wchar_t* why) noexcept
     }
     Log(L"{} no longer rides along with {} ({} ticks; the view put back on their camera {} time(s)): {}", Name(),
         players::NameOf(rideMember_), rideTicks_, rideAims_, why);
-    rideAlong_  = false;
-    rideMember_ = nullptr;
-    rideWeak_   = 0;
-    rideTicks_  = 0;
-    rideAims_   = 0;
+    rideAlong_       = false;
+    rideMember_      = nullptr;
+    rideTicks_       = 0;
+    rideAims_        = 0;
+    rideReturnFails_ = 0;
+    players::generation::SetRideMember(seat_, nullptr);
 }
 
-/// While riding along: the member still there (else the ride ends), the seat's view on its camera actor (the game's own
-/// aim again if something moved it), and the lines live check 5 reads (RE-held-member-scripts.md §6): what the camera
-/// manager views, where its camera actor is against the member, once a second (the first at Info).
+/// While riding along: the member back to the player's controller once its hold has ended (its AI in the base brain's
+/// FOLLOW again, the state the game hands players), the seat's view kept on its camera actor (the hand's unpossess
+/// points the view at the controller), and a line once a second (the first at Info) with the camera's distance from
+/// the member.
 void Seat::RideAlongTick() noexcept
 {
     if (!rideAlong_ || phase_ != Phase::Playing)
     {
-        return;  // the retake's settle and take decide (the take ends the ride, a busy member keeps it)
+        return;
     }
-    if (member_ != nullptr || !waitingForSlot_)
+    if (member_ != rideMember_)
     {
-        EndRideAlong(L"the wait ended");
+        EndRideAlong(L"the seat's member changed");
         return;
     }
     ++rideTicks_;
-    if (rideWeak_ != 0 && players::weak_object::ObjectOf(rideWeak_) != rideMember_)
+    if (rideTicks_ % kHeldAiTicks == 0)
     {
-        EndRideAlong(L"the member was destroyed");
-        return;
+        const AiSnapshot ai = party_member::ReadAi(member_);
+        if (HoldOf(ai) == field_hold::Hold::Free && AssessAi(ai) == AiReadiness::Ready)
+        {
+            // The game's possession runs at once on the game thread: the lease shows it now, as after a take.
+            const bool returned = party_member::ReturnTo(seat_, member_, controller_) &&
+                                  Acquired(party_member::ReadLease(member_, controller_), member_, controller_);
+            if (returned)
+            {
+                players::generation::SetMember(seat_, member_);  // the seat's modules act on it again
+                EndRideAlong(L"its hold ended: back on the player's controller");
+                return;
+            }
+            ++rideReturnFails_;
+            if (rideReturnFails_ == 1 || rideReturnFails_ >= kRideReturnTries)
+            {
+                Log(L"{}'s {} is free again but did not return to {}'s controller ({} time(s))", Name(),
+                    players::NameOf(member_), Name(), rideReturnFails_);
+            }
+            if (rideReturnFails_ >= kRideReturnTries)
+            {
+                Yield(L"free again after a script, but its return to the player's controller kept failing (given back)");
+                return;
+            }
+        }
     }
     if (installed_.viewTarget && rideTicks_ % kHeldAiTicks == 0 && !camera::view_target::OnOwnCamera(controller_))
     {
@@ -736,15 +769,15 @@ void Seat::RideAlongTick() noexcept
     void* const camera = camera::view_target::Current(controller_);
     float       at[3]{}, member[3]{};
     const bool  read = camera != nullptr && players::unreal::ActorLocation(camera, at) &&
-                      players::unreal::ActorLocation(rideMember_, member);
+                      players::unreal::ActorLocation(member_, member);
     const float dx = at[0] - member[0], dy = at[1] - member[1], dz = at[2] - member[2];
-    const auto  ai = party_member::ReadAi(rideMember_);
+    const auto  ai = party_member::ReadAi(member_);
     try
     {
         const std::wstring line = std::format(
             L"{} rides along: the view {} ({}); its camera {:.1f} m from {}{}; the member's AI state {} on brain {}", Name(),
             players::NameOf(camera), camera::view_target::OnOwnCamera(controller_) ? L"its camera actor" : L"NOT its camera actor",
-            read ? std::sqrt(dx * dx + dy * dy + dz * dz) / 100.0f : -1.0f, players::NameOf(rideMember_),
+            read ? std::sqrt(dx * dx + dy * dy + dz * dz) / 100.0f : -1.0f, players::NameOf(member_),
             read ? std::format(L" (camera at {:.0f}, {:.0f}, {:.0f})", at[0], at[1], at[2]) : std::wstring(L" (unread)"),
             ai.state, ai.brainIndex);
         if (rideTicks_ == 1)
@@ -918,15 +951,15 @@ std::chrono::milliseconds Seat::WaitedForSlot() const noexcept
 /// On one monitor a player whose member the game holds leaves the game once the wait has lasted the grace, with two
 /// players in or three, and waits outside for the member by the same slot test (OutsideTick, the first test on the
 /// next tick): their view leaves the screen and the others' fill it (the user's rule). With columns held their
-/// column stays on player 1's picture (views/column_source.h). The grace counts only the time on one monitor, off a
-/// shared ride and not riding along with a member a script took: the timer restarts while any of them holds.
+/// column stays on player 1's picture (views/column_source.h). The grace counts only the time on one monitor and off a
+/// shared ride: the timer restarts while either holds.
 void Seat::LeaveToWaitOutside() noexcept
 {
     if (phase_ != Phase::Playing)
     {
         return;  // the retake just found the member free (SettlingPlayerOne): the wait is over
     }
-    if (waitingForSlot_ && (installed_.columnsHeld || sharedRide_ || rideAlong_))
+    if (waitingForSlot_ && (installed_.columnsHeld || sharedRide_))
     {
         slotWaitSince_ = std::chrono::steady_clock::now();
         return;
@@ -936,7 +969,6 @@ void Seat::LeaveToWaitOutside() noexcept
                                              players::generation::Active(seat_)),
         .columnsHeld = installed_.columnsHeld,
         .waited      = WaitedForSlot(),
-        .ridesAlong  = RidesAlong(),
     };
     if (!session_rules::WaitOutside(facts, kWaitOutsideGrace))
     {
@@ -1137,8 +1169,9 @@ void Seat::NoteState() noexcept
     const players::SeatState now = State();
     if (now != loggedState_)
     {
-        Log(L"{} is {} (state {}, was {})", players::SeatName(seat_), players::StateMeaning(now),
-            players::StateName(now), players::StateName(loggedState_));
+        Log(L"{} is {}{} (state {}, was {})", players::SeatName(seat_), players::StateMeaning(now),
+            RidesAlong() ? L", riding along while a script has their member" : L"", players::StateName(now),
+            players::StateName(loggedState_));
         loggedState_ = now;
     }
 }
@@ -1163,6 +1196,11 @@ std::wstring Seat::MemberReading() const
     if (StandsAside())
     {
         return L"none: stands aside while player 1 rides a vehicle the whole party shares";
+    }
+    if (RidesAlong())
+    {
+        return std::format(L"{} (slot {} of the party order), with its AI for a script: the player rides along", players::NameOf(member_),
+                           slot);
     }
     if (WaitsForMember())
     {
@@ -1235,10 +1273,12 @@ void Seat::LogStatus() noexcept
     const auto     input    = input::pad_sticks::InputCounters().Take();
     const auto     move     = input::pad_sticks::MoveCounters().Take();
     const wchar_t* fault    = players::generation::FaultReason(seat_);
-    Log(L"{}: member {}, generation {}{}; field settings mirrored {} passed {} mismatched {} (not mirrored under a "
+    Log(L"{}: member {}{}, generation {}{}; field settings mirrored {} passed {} mismatched {} (not mirrored under a "
         L"cutscene camera {}); camera update as primary {} passed {} refused {}; per-pad sticks {} (input acted {} "
         L"refused {}, movement acted {} refused {})",
-        Name(), players::NameOf(players::generation::MemberOf(seat_)), players::generation::Active(seat_) ? L"active" : L"withdrawn",
+        Name(), players::NameOf(players::generation::CameraMemberOf(seat_)),
+        RidesAlong() ? L" (with its AI for a script: riding along)" : L"",
+        players::generation::Active(seat_) ? L"active" : L"withdrawn",
         fault ? L" (fault: " + std::wstring(fault) + L")" : std::wstring(), settings.acted, settings.passed,
         camera::field_camera::TakeMismatches(seat_), camera::field_camera::TakeNotMirrored(seat_), update.acted, update.passed,
         update.refused, input::pad_sticks::Enabled() ? L"on" : L"off", input.acted, input.refused, move.acted, move.refused);
@@ -1413,12 +1453,6 @@ bool Session::WaitsForMember(int seat) const noexcept
 {
     const Seat* s = At(seat);
     return s != nullptr && s->WaitsForMember();
-}
-
-bool Session::RidesAlong(int seat) const noexcept
-{
-    const Seat* s = At(seat);
-    return s != nullptr && s->RidesAlong();
 }
 
 bool Session::StandsAside(int seat) const noexcept

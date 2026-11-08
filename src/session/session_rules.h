@@ -15,7 +15,8 @@ enum class Hold
 {
     Withdrawn,   // the seat's stages were withdrawn (a fault): nothing is taken or checked
     Member,      // plays its member (the generation names it)
-    Faulted,     // a member is recorded but the generation does not name it (a take that timed out)
+    Faulted,     // a member is recorded but the generation does not name it (a take that timed out, or a script's hand
+                 // while the player rides along: nothing acts on the member then)
     StandAside,  // no member: player 1 rides a vehicle the whole party shares
     SlotWait,    // no member: waits on its slot's (a story script holds it, or it is not free yet)
     Orphaned,    // no member: its give-back timed out, or the take failed; takes one as soon as one is free
@@ -50,9 +51,7 @@ struct WaitOutsideFacts
 {
     Hold                      hold        = Hold::Withdrawn;
     bool                      columnsHeld = false;  // the monitor row, or the console's `view-columns`
-    std::chrono::milliseconds waited{0};            // how long the slot wait has lasted on one monitor, off a
-                                                    // shared ride and not riding along
-    bool                      ridesAlong  = false;  // the player watches the member a script took (Seat::RidesAlong)
+    std::chrono::milliseconds waited{0};            // how long the slot wait has lasted on one monitor, not riding
 };
 
 /// A player in without their member while the game holds it (the slot wait, whatever its reason) leaves the game on
@@ -61,12 +60,11 @@ struct WaitOutsideFacts
 /// player's view goes until their character is back), once the wait has lasted `grace`: a party swap that resolves
 /// within a second keeps the player in. With columns held (the monitor row, the console's `view-columns`) the player
 /// stays in and their column shows player 1's picture on their own monitor (views/column_source.h). Standing aside for
-/// a shared ride never leaves: every seat's player stands aside together, and player 1's single view follows. Nor does
-/// a player riding along with the member a script took (the user's decision for the scripts: ride along, the view
-/// kept): their own view stays on it.
+/// a shared ride never leaves: every seat's player stands aside together, and player 1's single view follows. (A player
+/// whose member a script took rides along with it and does not wait at all: session's RidesAlong.)
 constexpr bool WaitOutside(const WaitOutsideFacts& facts, std::chrono::milliseconds grace) noexcept
 {
-    return facts.hold == Hold::SlotWait && !facts.columnsHeld && !facts.ridesAlong && facts.waited >= grace;
+    return facts.hold == Hold::SlotWait && !facts.columnsHeld && facts.waited >= grace;
 }
 
 /// The game is about to make a character the leader of a controller (session/party_events.h), as the session

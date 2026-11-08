@@ -116,7 +116,7 @@ int SeatOfOperator(const void* op) noexcept
 std::optional<OperatorPair> CurrentPair(int seat, OperatorOf operatorOf) noexcept
 {
     if (!players::SeatBuilt(seat) || !players::generation::OnGameThread() || !players::generation::Active(seat) ||
-        players::generation::MemberOf(seat) == nullptr)
+        players::generation::CameraMemberOf(seat) == nullptr)
     {
         return std::nullopt;
     }

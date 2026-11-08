@@ -25,7 +25,9 @@
 // so it reads the seat's input and its own operators. It acts only once the seat's Field operator is
 // active and the camera manager's current operator index names an existing operator, since helpers
 // inside the update use both without checking. In battle, a seat's update also runs in that seat's UI
-// context and target fields (command_menu, lock_on).
+// context and target fields (command_menu, lock_on). A seat riding along with the member a script took
+// (players::generation::RideMemberOf) is updated as the seat's too: its controller keeps that member as its leader, so
+// the camera follows it and the player's stick turns it.
 //
 // Per seat: the counters, the mismatch count and the count of commands not mirrored under a cut. Game thread.
 
@@ -73,5 +75,4 @@ players::StageCounters& UpdateCounters(int seat) noexcept;
 
 /// `seat`'s calls where the mirrored command or active state did not match player 1's afterwards.
 unsigned TakeMismatches(int seat) noexcept;
-
 }  // namespace lss::camera::field_camera

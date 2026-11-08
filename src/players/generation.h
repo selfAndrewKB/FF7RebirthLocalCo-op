@@ -43,6 +43,15 @@ void Begin(int seat, void* playerOneController, void* controller) noexcept;
 /// The party member `seat`'s player now drives (null once released).
 void SetMember(int seat, void* member) noexcept;
 
+/// The member `seat`'s player rides along with (a script took it to its AI; the player's view follows it: the
+/// session's RidesAlong), or null. The seat's camera update still runs as that player's while it is set.
+void SetRideMember(int seat, void* member) noexcept;
+void* RideMemberOf(int seat) noexcept;
+
+/// The member `seat`'s camera follows: the member the player drives, else the one they ride along with (null: none).
+/// The camera's update and its settings mirror act for the seat while it is set (camera/field_camera.h).
+void* CameraMemberOf(int seat) noexcept;
+
 /// Ends `seat`'s generation: from now on every wrapper passes through for it.
 void Withdraw(int seat) noexcept;
 

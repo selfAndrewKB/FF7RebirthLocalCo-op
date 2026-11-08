@@ -20,8 +20,8 @@
 //     a cutscene, a minigame that holds player 1, the title) — every seat's column;
 //   - player 1 rides a vehicle the whole party shares (rides/shared_ride.h) — every seat's;
 //   - a seat's player is in without their member while the game has it (players/seat_state.h Handed: waiting for a
-//     party member, or standing aside for the ride) — that player's column alone, unless they ride along with the
-//     member a script took (their own view stays on it, the user's decision for the scripts); while every seat in the game is
+//     party member, or standing aside for the ride) — that player's column alone (a player whose member a script
+//     took rides along: they keep their member and their view, session's RidesAlong); while every seat in the game is
 //     handed, nobody but player 1 plays, so one monitor shows the engine's single view (the user's
 //     decision). On one monitor a player waiting for their member leaves the game after a short grace and waits
 //     outside (session/session_rules.h WaitOutside; the user's decision), so their column goes
@@ -79,8 +79,6 @@ struct Moment
     Override      choice      = Override::Auto;  // the console's `single-view`
     columns::Map  map;                  // the engine's list as columns, after the mirror views' tick
     std::array<players::SeatState, players::kMaxPlayers> seats{};  // each seat's word (index 0, player 1's, unused)
-    /// Each handed seat riding along with the member a script took (session's RidesAlong): its own view stays.
-    std::array<bool, players::kMaxPlayers> ridesAlong{};
 };
 
 /// One column's source, with its reason.
@@ -175,7 +173,7 @@ constexpr Shown Decide(const Moment& moment) noexcept
         if (in)
         {
             anySeatIn = true;
-            allHanded = allHanded && moment.seats[at] == players::SeatState::Handed && !moment.ridesAlong[at];
+            allHanded = allHanded && moment.seats[at] == players::SeatState::Handed;
         }
     }
     // Every seat's column, or the whole screen: the console's word, else the game's whole-screen state,
@@ -212,7 +210,7 @@ constexpr Shown Decide(const Moment& moment) noexcept
         {
             shown.seats[at] = {everyColumn, all};
         }
-        else if (automatic && moment.seats[at] == players::SeatState::Handed && !moment.ridesAlong[at])
+        else if (automatic && moment.seats[at] == players::SeatState::Handed)
         {
             shown.seats[at] = {Source::PlayerOne, Why::Handed};  // this player alone: the others keep their views
         }

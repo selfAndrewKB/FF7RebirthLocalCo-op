@@ -255,7 +255,9 @@ int ActsFor(void* cameraManager) noexcept
         return 0;
     }
     const int seat = camera_access::SeatOfCameraManager(cameraManager);  // active seats only
-    if (!players::SeatBuilt(seat) || players::generation::MemberOf(seat) == nullptr ||
+    // A seat with a member, or riding along with the member a script took (its controller keeps it as its leader, so the
+    // camera follows it and the player's stick turns it).
+    if (!players::SeatBuilt(seat) || players::generation::CameraMemberOf(seat) == nullptr ||
         cameraManager != CameraManagerOf(players::generation::ControllerOf(seat)))
     {
         return 0;

@@ -94,6 +94,16 @@ bool Take(int seat, void* controller, void* member) noexcept;
 /// Hands `seat`'s party member back to its AI. The trigger actor must still exist.
 bool GiveBack(int seat, void* controller) noexcept;
 
+/// For a script that needs `member` (a level's walk or lead, an event's walk, an animation): the game's own hand to
+/// its AI, as its events hand player 1's leader. The player's controller keeps it as its leader, so the player's camera
+/// keeps following it and their stick keeps turning it; no leader change is broadcast (research/RE-held-member-scripts.md).
+/// False (nothing changed) when the call is unavailable or the member's AI is not valid. Game thread.
+bool HandToAi(void* member) noexcept;
+
+/// The game's possession of `member` by `seat`'s `controller` again, after a hand (HandToAi), inside the seat's
+/// primary scope. False when the scope or the call is refused (logged). Game thread.
+bool ReturnTo(int seat, void* member, void* controller) noexcept;
+
 /// The lease fields for `member` and the seat's controller.
 LeaseState ReadLease(const void* member, const void* seatController) noexcept;
 

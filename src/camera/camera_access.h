@@ -71,7 +71,8 @@ struct OperatorPair
 using OperatorOf = void* (*)(const void* cameraManager) noexcept;
 
 /// Player 1's and `seat`'s operators (`operatorOf`: FieldOperatorOf or BattleOperatorOf), while the seat's generation
-/// is active, its player holds a party member and the two are distinct; empty otherwise (a mirror then leaves the
+/// is active, its camera follows a member (players::generation::CameraMemberOf: its own, or the one it rides along
+/// with) and the two are distinct; empty otherwise (a mirror then leaves the
 /// engine's call alone for that seat). Game thread.
 std::optional<OperatorPair> CurrentPair(int seat, OperatorOf operatorOf) noexcept;
 

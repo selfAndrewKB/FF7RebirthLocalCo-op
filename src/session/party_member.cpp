@@ -36,11 +36,13 @@ using ObjectToObjectFn  = void* (*)(const void* object);
 using GlobalObjectFn    = void* (*)();
 using TypeFn            = std::uint8_t (*)();                           // al only
 using TypeTestFn        = std::uint8_t (*)(std::uint8_t playerType);    // al only
+using SwitchAiFn        = void (*)(void* character, std::uint8_t toPlayer, void* controller);
 
 struct Functions
 {
     EnsureTriggerFn   ensureTrigger       = nullptr;
     SwitchLeaderFn    switchLeader        = nullptr;
+    SwitchAiFn        switchAi            = nullptr;  // optional: without it a script's hand is the give-back
     RosterCountFn     rosterCount         = nullptr;
     RosterTypeFn      rosterType          = nullptr;
     CharacterByTypeFn characterByType     = nullptr;
@@ -164,6 +166,12 @@ bool Install(const platform::GameImage& image) noexcept
     found      = Find(image, facts::kDefaultBattleLeaderType, g_fn.defaultBattleLeader) && found;
     found      = Find(image, facts::kIsBattleMember, g_fn.isBattleMember) && found;
     found      = facts::InBattleKnown() && found;  // the game's in-battle test, found at startup (in_battle.h)
+    if (!Find(image, facts::kSwitchAiControlAsync, g_fn.switchAi))  // optional (HandToAi)
+    {
+        g_fn.switchAi = nullptr;
+        platform::Log(L"party member: the game's hand to the AI is not available (optional): a script that takes a "
+                      L"player's member gives it back and the player waits for it");
+    }
     const auto optionHolder = image.Rebase(facts::kOptionHolderGlobal, sizeof(void*));
     const auto battleState  = image.Rebase(facts::kBattleStateGlobal, sizeof(void*));
     if (!optionHolder || !battleState)
@@ -594,6 +602,45 @@ bool GiveBack(int seat, void* controller) noexcept
     if (!GuardedSwitchLeader(controller, nullptr))
     {
         platform::Log(L"give-back failed: the switch raised an exception");
+        return false;
+    }
+    return true;
+}
+
+bool HandToAi(void* member) noexcept
+{
+    // The game's own hand of a character to its AI (its events hand player 1's leader so): the AI must be valid, or the
+    // call unpossesses the player's controller and possesses nothing (research/RE-held-member-scripts.md).
+    if (!g_installed || g_fn.switchAi == nullptr || member == nullptr ||
+        g_fn.validateAiController(g_fn.aiControllerOf(member)) == nullptr)
+    {
+        return false;
+    }
+    if (!platform::CallGuarded(g_fn.switchAi, member, std::uint8_t{1}, static_cast<void*>(nullptr)))
+    {
+        platform::Log(L"hand to the AI failed: the game's call raised an exception");
+        return false;
+    }
+    return true;
+}
+
+bool ReturnTo(int seat, void* member, void* controller) noexcept
+{
+    if (!g_installed || g_fn.switchAi == nullptr || member == nullptr || controller == nullptr)
+    {
+        return false;
+    }
+    // In the seat's primary scope: the possession's leader-action reset reads "the" primary controller's component.
+    const scopes::primary_controller::Scope scope(seat);
+    if (!scope.Held())
+    {
+        platform::LogDebug(L"the return to {} waits: the primary controller could not be scoped ({})",
+                           players::SeatName(seat), scopes::primary_controller::Describe(scope.Why()));
+        return false;
+    }
+    if (!platform::CallGuarded(g_fn.switchAi, member, std::uint8_t{1}, controller))
+    {
+        platform::LogDebug(L"the return to {} failed: the game's call raised an exception", players::SeatName(seat));
         return false;
     }
     return true;

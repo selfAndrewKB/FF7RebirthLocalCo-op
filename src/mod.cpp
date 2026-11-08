@@ -82,7 +82,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.121.0";  // built against the Nexus UE4SS (c0a8d4c)
+constexpr const wchar_t* kVersion = L"0.121.1";  // built against the Nexus UE4SS (c0a8d4c)
 
 /// How often the seats' status lines are written while a seat is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -530,8 +530,7 @@ private:
         for (int seat = 1; seat <= lss::players::kSeatsBuilt; ++seat)
         {
             const auto state = session_->State(seat);
-            moment.seats[static_cast<std::size_t>(seat)]      = state;
-            moment.ridesAlong[static_cast<std::size_t>(seat)] = session_->RidesAlong(seat);
+            moment.seats[static_cast<std::size_t>(seat)] = state;
             anySeatIn = anySeatIn || lss::players::InGame(state);
         }
         // Read only when it can matter (the read logs each change of reason).

@@ -24,6 +24,7 @@ struct SeatRecord
     std::atomic<bool>           active{false};
     std::atomic<void*>          controller{nullptr};
     std::atomic<void*>          member{nullptr};
+    std::atomic<void*>          rideMember{nullptr};  // SetRideMember
     std::atomic<const wchar_t*> fault{nullptr};
 
     // The tick's identities (BeginTick), for the wrappers on any thread.
@@ -70,6 +71,7 @@ void Begin(int seat, void* playerOneController, void* controller) noexcept
     g_seats[0].controller.store(playerOneController);
     state.controller.store(controller);
     state.member.store(nullptr);
+    state.rideMember.store(nullptr);
     state.fault.store(nullptr);
     state.ClearIdentities();
     state.active.store(playerOneController != nullptr && controller != nullptr);
@@ -84,6 +86,25 @@ void SetMember(int seat, void* member) noexcept
     SeatRecord& state = g_seats[seat];
     state.member.store(member);
     state.memberWeak.store(member != nullptr && state.active.load() ? weak_object::WeakOf(member) : 0);
+}
+
+void SetRideMember(int seat, void* member) noexcept
+{
+    if (SeatIndex(seat))
+    {
+        g_seats[seat].rideMember.store(member);
+    }
+}
+
+void* RideMemberOf(int seat) noexcept
+{
+    return SeatIndex(seat) ? g_seats[seat].rideMember.load() : nullptr;
+}
+
+void* CameraMemberOf(int seat) noexcept
+{
+    void* const member = MemberOf(seat);
+    return member != nullptr ? member : RideMemberOf(seat);
 }
 
 void Withdraw(int seat) noexcept
@@ -104,6 +125,7 @@ void End(int seat) noexcept
     WithdrawSeat(g_seats[seat]);
     g_seats[seat].controller.store(nullptr);
     g_seats[seat].member.store(nullptr);
+    g_seats[seat].rideMember.store(nullptr);
     ClearPlayerOneUnlessActive();
 }
 

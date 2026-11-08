@@ -11,7 +11,9 @@
 //            and success is read from the lease fields over the following ticks. While that member is not free (a
 //            story script holds its AI, or it is not following the party), the seat stays in and waits on it; on
 //            one monitor, after a short grace, it leaves and waits outside (session_rules::WaitOutside). A menu
-//            reorder changes the slot. A script putting the seat's member into LEAD gets it back.
+//            reorder changes the slot. A script that needs the seat's member (a walk, a lead, an animation) gets it
+//            through the game's own hand to its AI; the player rides along with their camera on it and plays it again
+//            when it follows the party (RidesAlong).
 //   camera   right after the join, the seat's camera manager is pointed at its own camera actor
 //            (camera/view_target.h), as the game's own spawn aimed it; a later move is logged,
 //            never re-aimed (no game code moves it). When the member is taken, the seat's
@@ -144,16 +146,16 @@ public:
     bool PlaysMember() const noexcept;
 
     /// In without a member, waiting on its slot's (a story script holds it, or it is not free yet). Only player 1
-    /// plays meanwhile: the player's column shows player 1's picture, unless they ride along (RidesAlong).
+    /// plays meanwhile: the player's column shows player 1's picture.
     bool WaitsForMember() const noexcept
     {
         return In() && phase_ == Phase::Playing && member_ == nullptr && waitingForSlot_;
     }
 
-    /// Waiting on a member a script took (a level's walk or lead, an event's walk, an animation: session/field_hold.h)
-    /// with the player's own view kept on it: the player rides along until the member follows the party again and the
-    /// seat takes it back. Their column stays their own (views/column_source.h), and they do not leave to wait outside.
-    bool RidesAlong() const noexcept { return WaitsForMember() && rideAlong_; }
+    /// A script took the seat's member (a level's walk or lead, an event's walk, an animation: session/field_hold.h) to
+    /// its AI with the game's own hand: the member stays the seat's and its controller's leader, the player rides along
+    /// with their own camera on it, and plays it again when it follows the party.
+    bool RidesAlong() const noexcept { return In() && rideAlong_; }
 
     /// Player 1 rides a vehicle the whole party shares (the buggy or the bronco, rides/shared_ride.h), each
     /// tick. While it holds, the seat gives the member back through the game's release and stays in without one, as
@@ -245,11 +247,11 @@ private:
     std::optional<std::chrono::steady_clock::time_point> slotWaitSince_;  // when the slot wait began (on one monitor)
     party_member::SlotWait slotWaitReason_ = party_member::SlotWait::None;  // the wait's reason as last chosen
     bool                  sharedRide_       = false;    // player 1 rides a shared vehicle: the seat takes no member
-    bool                  rideAlong_        = false;    // the member a script took is watched, the view kept (RidesAlong)
-    void*                 rideMember_       = nullptr;  // that member
-    std::uint64_t         rideWeak_         = 0;        // its FWeakObjectPtr, to see it destroyed
+    bool                  rideAlong_        = false;    // a script has the seat's member, the player rides along (RidesAlong)
+    void*                 rideMember_       = nullptr;  // that member (the seat's member_ while the ride lasts)
     std::uint32_t         rideTicks_        = 0;        // ticks riding along
     std::uint32_t         rideAims_         = 0;        // times the view was put back on the seat's camera actor
+    std::uint32_t         rideReturnFails_  = 0;        // the freed member's returns that did not land
     players::SeatState    loggedState_      = players::SeatState::Out;  // as NoteState last logged it
 
     party_member::PlayerOneBytes playerOneBytes_{};
@@ -302,7 +304,6 @@ public:
     bool          RejoinPending(int seat) const noexcept;
     bool          PlaysMember(int seat) const noexcept;
     bool          WaitsForMember(int seat) const noexcept;
-    bool          RidesAlong(int seat) const noexcept;  // Seat::RidesAlong
     bool          StandsAside(int seat) const noexcept;
     const void*   LocalPlayer(int seat) const noexcept;  // null while out
     std::uint32_t JoinCount(int seat) const noexcept;
