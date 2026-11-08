@@ -1,6 +1,9 @@
 #include "world/party_warp.h"
 
+#include "facts/controller.h"
 #include "facts/party.h"
+#include "facts/world.h"
+#include "platform/build_value.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -8,6 +11,7 @@
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
+#include "views/whole_screen.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -53,6 +57,22 @@ constexpr std::uint8_t kPartyIdleBytes[] = {0x48, 0x8B, 0x05, 0x99, 0x11, 0x88, 
                                             0x80, 0x38, 0x00, 0x0F, 0x94, 0xC0, 0xC3, 0xB0, 0x01, 0xC3, 0xCC, 0xCC};
 constexpr platform::FunctionFact kPartyIdle{L"PartyManager_IsIdle", 0x140B1AB40, kPartyIdleBytes};
 
+// The follow update's own gates a forced request skips (RE-warp-gates.md §1-2):
+//   G1: the character's field controller state, its virtual check (ladder, squeeze, crawl, climbing wall, grappling
+//       hook, jump spot and the rest): the game asks it of the leader and the follow target; the mod of both player 1's
+//       character and the one it brings back (a held member keeps a FOLLOW state while its player steers it). The slot
+//       of EndPlayerCharacter's vtable is checked at install; a character answers only through that function or the
+//       one it calls (the two the research found in every party member's vtable).
+//   G2: the field-exclusion mask (a scene, a dialog, a minigame holds the field), read by views/whole_screen.
+//   G4: the field step (13 once the field is up); a forced request waits on it, the mod's finish-now would not.
+constexpr platform::PerBuild<std::uint32_t> kFieldStateSlot = {0x930, 0x938};
+constexpr std::uintptr_t kEndPlayerCharacterVTable = 0x145840A90;
+constexpr std::uintptr_t kFieldStateCheck          = 0x140A5F5AC;  // the slot's function
+constexpr std::uint8_t   kFieldStateBytes[]        = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00};
+constexpr platform::FunctionFact kFieldState{L"EndCharacter_IsInFieldControllerState", 0x140A5FA84, kFieldStateBytes};
+using facts::kEndGameRoot;
+constexpr std::uint32_t kFieldStep        = 0x70;  // EEndFieldStep
+constexpr std::uint8_t  kFieldStepUp      = 13;
 constexpr std::uint32_t kAiSkipsUpdate    = 0xAD8;  // the PLAYER update returns at once while set
 constexpr std::uint32_t kCharacterWarping = 0xB59;  // a warp request is queued on the character
 // The AI's active brain, its state and the follow state's forced request: facts/party.h.
@@ -85,6 +105,7 @@ static_assert(offsetof(FollowTeleportParams, rotation) == 0x10);
 static_assert(offsetof(FollowTeleportParams, fade) == 0x40);
 static_assert(sizeof(FollowTeleportParams) == 0x50);
 
+using FieldStateFn = bool (*)(const void* character);
 using ForceFn  = void (*)(void* state, const FollowTeleportParams* params);
 using UpdateFn = void (*)(void* state, float seconds);  // also the query slot's type
 using FinishFn = void (*)(void* state);
@@ -104,6 +125,9 @@ struct Variant
 Variant        g_variants[kVariantCount];
 TestFn         g_partyIdle = nullptr;
 TestFn         g_inBattle  = nullptr;
+std::uintptr_t g_fieldStateCheck = 0;  // G1's two live functions (0: not checked, the gate refuses every warp)
+std::uintptr_t g_fieldState      = 0;
+std::uintptr_t g_gameRoot        = 0;  // the address holding the game root
 std::optional<platform::GameImage> g_image;  // for research IDA addresses in the log
 bool           g_installed = false;
 
@@ -188,6 +212,46 @@ bool Test(TestFn fn, bool& out) noexcept
     return platform::CallGuarded(fn, out);
 }
 
+// Each gate below is skipped when its install check failed (a warning at install): the warp then works as before the
+// gate. A gate whose check runs but cannot answer refuses.
+
+/// G1 on `pawn`: true when it is a party character in a field action or another field controller state, or when its
+/// check faults. A pawn whose slot holds neither checked function is no party character (a mount, a vehicle: the game
+/// asks the character, never its ride) and answers false.
+bool InFieldAction(const void* pawn) noexcept
+{
+    std::uintptr_t vtable = 0, slot = 0;
+    if (pawn == nullptr || g_fieldStateCheck == 0 || !Read(pawn, 0, vtable) ||
+        !Read(reinterpret_cast<const void*>(vtable), static_cast<std::uint32_t>(kFieldStateSlot), slot) ||
+        (slot != g_fieldStateCheck && slot != g_fieldState))
+    {
+        return false;
+    }
+    bool busy = true;
+    return !platform::CallGuarded(reinterpret_cast<FieldStateFn>(slot), busy, pawn) || busy;
+}
+
+/// G4: the field is up (its step has reached 13).
+bool FieldUp() noexcept
+{
+    const void*  root = nullptr;
+    std::uint8_t step = 0;
+    return g_gameRoot == 0 || (Read(reinterpret_cast<const void*>(g_gameRoot), root) && root != nullptr &&
+                               Read(root, kFieldStep, step) && step >= kFieldStepUp);
+}
+
+/// G2: a scene, a dialog or a minigame holds the field (its exclusion mask, as views/whole_screen reads it), or the
+/// game state cannot be read now.
+bool FieldHeld() noexcept
+{
+    if (!views::WholeScreenInstalled())
+    {
+        return false;
+    }
+    const views::ScreenSignals signals = views::ReadScreenSignals();
+    return !signals.readable || signals.exclusion != 0;
+}
+
 void Stop() noexcept
 {
     g_state   = nullptr;
@@ -259,11 +323,31 @@ bool Install(const platform::GameImage& image) noexcept
     }
     g_partyIdle = reinterpret_cast<TestFn>(*partyIdle);
     g_inBattle  = reinterpret_cast<TestFn>(*inBattle);
+    // G1: the base character vtable's slot holds the checked function; the function it calls is the other answer.
+    const auto characterVTable = image.Rebase(kEndPlayerCharacterVTable, sizeof(void*));
+    const auto fieldState      = platform::FindFunction(image, kFieldState);
+    std::uintptr_t slot        = 0;
+    if (characterVTable && fieldState &&
+        Read(reinterpret_cast<const void*>(*characterVTable), static_cast<std::uint32_t>(kFieldStateSlot), slot) &&
+        is(std::optional<std::uintptr_t>{slot}, kFieldStateCheck))
+    {
+        g_fieldStateCheck = slot;
+        g_fieldState      = *fieldState;
+    }
+    const auto gameRoot = image.Rebase(kEndGameRoot, sizeof(void*));
+    g_gameRoot          = gameRoot ? *gameRoot : 0;
     g_image = image;
     g_installed = true;
     platform::Log(L"party warp: a stranded {} is brought back by the game's follow warp (on foot; riding: {} of 3 "
                   L"chocobo follow variants checked)",
                   players::kSeatsBuilt == 1 ? L"player 2" : L"player 2 or 3", chocoboVariants);
+    if (g_fieldStateCheck == 0 || g_gameRoot == 0 || !views::WholeScreenInstalled())
+    {
+        platform::LogWarning(L"party warp: a check of the follow warp's own gates failed (the field action {}, the field "
+                             L"step {}, the scene mask {}); the warp runs without that gate",
+                             g_fieldStateCheck != 0 ? L"ok" : L"FAILED", g_gameRoot != 0 ? L"ok" : L"FAILED",
+                             views::WholeScreenInstalled() ? L"ok" : L"FAILED");
+    }
     return true;
 }
 
@@ -314,6 +398,11 @@ bool Start(int seat, void* pawn, Subject subject, bool attached, bool splitShown
 {
     if (!g_installed || pawn == nullptr || !players::SeatBuilt(seat) || !players::generation::OnGameThread())
     {
+        if (!g_installed && players::SeatBuilt(seat))
+        {
+            platform::Log(L"party warp: {} not started (the warp is not installed, see the startup log)",
+                          Who(seat, subject));
+        }
         return false;
     }
     if (g_state != nullptr)
@@ -329,7 +418,14 @@ bool Start(int seat, void* pawn, Subject subject, bool attached, bool splitShown
     // A forced request skips the state's own can-teleport checks, so the game's other conditions for a party
     // warp are checked here. Riding: the game warps a rider's ride body, not the rider (RE-p2-party-warp.md §4), so a
     // member on a ride is refused and her chocobo is warped instead.
+    // The follow update's own gates first (RE-warp-gates.md), then the forced request's. G1 asks player 1's pawn (no
+    // answer from a mount or vehicle) and the member on foot; a chocobo's warp carries its seated rider.
+    const void*    leader  = ReadPointer(players::generation::PlayerOneController(), facts::kControllerPawn);
     const wchar_t* refused = !splitShown                                      ? L"the split is not on screen"
+                             : !FieldUp()                                     ? L"the field is not up"
+                             : FieldHeld()                                    ? L"a scene, a talk or an event holds the field"
+                             : InFieldAction(leader)                          ? L"player 1's character is in a field action"
+                             : subject == Subject::Member && InFieldAction(pawn) ? L"it is in a field action"
                              : subject == Subject::Member && attached         ? L"she is attached to something (riding?)"
                              : state == nullptr                               ? L"its AI is not in a checked follow state"
                              : ByteAt(state, kFollowStateForced) != 0         ? L"a forced warp is already pending"

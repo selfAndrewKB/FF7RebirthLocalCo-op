@@ -10,8 +10,10 @@
 #include <Unreal/CoreUObject/UObject/UnrealType.hpp>
 #include <Unreal/UObject.hpp>
 
+#include "input/pad_buttons.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
+#include "platform/command_registry.h"
 #include "platform/entry_redirect.h"
 #include "platform/every.h"
 #include "platform/guarded.h"
@@ -24,6 +26,7 @@
 #include "players/seats.h"
 #include "rides/chocobo_ride.h"
 #include "world/party_warp.h"
+#include "world/party_warp_rules.h"
 #include "world/strand_watch.h"
 
 #include <algorithm>
@@ -125,6 +128,9 @@ constexpr float kMaxTickSeconds = 0.25f;  // a hitch counts as this much, so one
 // character is not loaded, and a player running in place should not wait; 0.3 s only rides out a cell that is
 // still loading. The cooldown is the game's; the grace is StrandWatch's default (spans refused-fall bursts).
 constexpr float kHoldSeconds = 0.3f;
+// A strand warp the warp refused (a scene holding the field, player 1 on a ladder) is asked again this often while the
+// strand holds, as the game's follower keeps trying its own.
+constexpr float kRetrySeconds = 2.0f;
 
 using ReadyAtFn = bool (*)(void* reason, const float* location, bool flag);
 
@@ -135,7 +141,13 @@ platform::CallRedirect  g_parkCall;
 platform::EntryRedirect g_readyEntry;              // 1.005: the falls, heard at the entry
 std::uintptr_t          g_fallReturn       = 0;    // 1.005: live return address of the falling step's call
 std::uintptr_t          g_navStreamManager = 0;    // live address of the global
-bool                    g_installed        = false;
+bool                    g_installed        = false;  // the strands are watched (the asks need only the warp)
+
+// A player's ask (game thread), by seat: the L3 double click; the console's ask, made at the next tick; an ask waiting
+// for another seat's warp to finish (how it was asked; null: none).
+party_warp_rules::DoubleClick g_clicks[players::kMaxPlayers];
+bool                          g_consoleAsk[players::kMaxPlayers] = {};
+const wchar_t*                g_askWaiting[players::kMaxPlayers] = {};
 
 /// What a strand in progress has gathered.
 struct Strand
@@ -176,6 +188,7 @@ struct Subject
     Strand      strand;
     const void* pawn        = nullptr;  // the character whose strand is watched; null: none (the counts are dropped)
     bool        warpWaiting = false;    // its warp waits for another seat's warp to finish (one at a time)
+    float       retryIn     = 0.0f;     // seconds until a refused strand warp is asked again (0: none)
 #if LSS_DEV
     platform::Every status{std::chrono::seconds(1)};  // the once-a-second status line (dev tools)
     Counts          second;                            // its counts
@@ -548,6 +561,7 @@ void Close(Subject& subject, const wchar_t* why) noexcept
     subject.strand      = {};
     subject.pawn        = nullptr;
     subject.warpWaiting = false;
+    subject.retryIn     = 0.0f;
 #if LSS_DEV
     subject.second = {};
     subject.quiet  = true;
@@ -570,22 +584,62 @@ void Aim(Subject& subject, const void* counted, const void* watched, const wchar
 
 /// Asks the game's follow warp to bring the subject back (party_warp logs its own outcome). While another seat's warp
 /// is being driven the request waits (logged) and is made once that warp is over, if the strand still holds; with one
-/// seat it never waits.
-void RequestWarp(Subject& subject, bool splitShown) noexcept
+/// seat it never waits. False when the warp refused it (logged by party_warp).
+bool RequestWarp(Subject& subject, bool splitShown) noexcept
 {
     const int busy = party_warp::BusySeat();
-    if (players::SeatBuilt(busy) && busy != subject.seat)
+    if (busy == subject.seat)
+    {
+        subject.warpWaiting = false;
+        return true;  // the seat's warp is already being driven (its player's ask, or its other character's strand)
+    }
+    if (players::SeatBuilt(busy))
     {
         if (!subject.warpWaiting)
         {
             subject.warpWaiting = true;
             platform::Log(L"nav strand: {}'s warp waits for {}'s warp to finish", subject.who, players::SeatName(busy));
         }
-        return;
+        return true;
     }
     subject.warpWaiting = false;
-    party_warp::Start(subject.seat, const_cast<void*>(subject.pawn), subject.kind,
-                      ReadPointer(RootOf(subject.pawn), kSceneComponentAttachParent) != nullptr, splitShown);
+    return party_warp::Start(subject.seat, const_cast<void*>(subject.pawn), subject.kind,
+                             ReadPointer(RootOf(subject.pawn), kSceneComponentAttachParent) != nullptr, splitShown);
+}
+
+/// The seat's player asked to be brought back (`how`: L3 twice, the console): the follow warp of the chocobo they ride,
+/// else of their member, unless it already stands beside player 1's character (player 1's pawn: their character, or
+/// the mount they ride, at the same spot). While another seat's warp is being driven the ask waits and is asked again,
+/// "beside" included, once that warp is over. party_warp logs the rest of the answer.
+void Ask(int seat, const wchar_t* how, bool splitShown) noexcept
+{
+    g_askWaiting[seat] = nullptr;
+    Subject& subject   = g_chocobos[seat].pawn != nullptr ? g_chocobos[seat] : g_members[seat];
+    if (subject.pawn == nullptr)
+    {
+        platform::Log(L"party warp: {} asked to be brought back ({}); not done: no character", players::SeatName(seat), how);
+        return;
+    }
+    float       one[3]{}, at[3]{};
+    const void* leader = ReadPointer(players::generation::PlayerOneController(), facts::kControllerPawn);
+    if (LocationOf(leader, one) && LocationOf(subject.pawn, at) &&
+        party_warp_rules::Beside(std::hypot(at[0] - one[0], at[1] - one[1]), at[2] - one[2]))
+    {
+        platform::Log(L"party warp: {} asked to be brought back ({}); not done: it already stands beside player 1's "
+                      L"character; {}",
+                      subject.who, how, Places(seat));
+        return;
+    }
+    const int busy = party_warp::BusySeat();
+    if (players::SeatBuilt(busy) && busy != seat)
+    {
+        g_askWaiting[seat] = how;
+        platform::Log(L"party warp: {} asked to be brought back ({}); waits for {}'s warp to finish", subject.who, how,
+                      players::SeatName(busy));
+        return;
+    }
+    platform::Log(L"party warp: {} asked to be brought back ({}); {}", subject.who, how, Places(seat));
+    RequestWarp(subject, splitShown);
 }
 
 /// One tick of a subject's strand: the game's answers since the last tick become began / warp / ended.
@@ -622,10 +676,11 @@ void Step(Subject& subject, bool splitShown, float seconds) noexcept
                           std::max(subject.strand.longestMove, counts.longest), MovedSinceStart(subject),
                           Places(subject.seat));
             Probe(subject, L"at the warp", true);
-            RequestWarp(subject, splitShown);
+            subject.retryIn = RequestWarp(subject, splitShown) ? 0.0f : kRetrySeconds;
             break;
         case StrandEvent::Ended:
             subject.warpWaiting = false;
+            subject.retryIn     = 0.0f;
             LogEnd(subject, L"no refusal for a moment: stick let go, the world is back, or it was brought back");
             break;
         case StrandEvent::None:
@@ -633,6 +688,10 @@ void Step(Subject& subject, bool splitShown, float seconds) noexcept
             if (subject.warpWaiting && party_warp::BusySeat() < 0)
             {
                 RequestWarp(subject, splitShown);  // the other seat's warp is over and the strand still holds
+            }
+            else if (subject.retryIn > 0.0f && subject.watch.Stranded() && (subject.retryIn -= seconds) <= 0.0f)
+            {
+                subject.retryIn = RequestWarp(subject, splitShown) ? 0.0f : kRetrySeconds;  // refused: asked again
             }
             break;
     }
@@ -653,7 +712,8 @@ bool Install(const platform::GameImage& image) noexcept
     if (!readyAt || !site || !manager || !frame ||
         !g_readyCall.Install(*site, *readyAt, reinterpret_cast<std::uintptr_t>(&ReadyAt)))
     {
-        platform::Log(L"nav strand: UNAVAILABLE (a check failed); {} member being stranded off the navmesh is not logged",
+        platform::Log(L"nav strand: UNAVAILABLE (a check failed); {} member being stranded off the navmesh is not logged "
+                      L"or warped back (a player's own ask still is)",
                       players::kSeatsBuilt == 1 ? L"player 2's" : L"player 2's or 3's");
         return false;
     }
@@ -716,17 +776,21 @@ void Remove() noexcept
     {
         Close(g_members[seat], L"the mod is leaving");
         Close(g_chocobos[seat], L"the mod is leaving");
-        g_ticked[seat] = false;
+        g_ticked[seat]     = false;
+        g_clicks[seat]     = {};
+        g_consoleAsk[seat] = false;
+        g_askWaiting[seat] = nullptr;
     }
 }
 
 void Tick(bool splitShown) noexcept
 {
-    if (!g_installed)
+    if (!players::generation::OnGameThread())
     {
         return;
     }
-    // Each seat in order: its member and its chocobo aimed and stepped; then the one warp driven (party_warp's seat).
+    // Each seat in order: its member and its chocobo aimed, its player's ask heard, its strands stepped (when watched);
+    // then the one warp driven (party_warp's seat).
     party_warp::SeatPawns members{}, ridden{};
     float                 seconds[players::kMaxPlayers] = {};
     const auto            now = std::chrono::steady_clock::now();
@@ -749,8 +813,29 @@ void Tick(bool splitShown) noexcept
                             : 0.0f;
         g_lastTick[seat] = now;
         g_ticked[seat]   = member != nullptr;
-        Step(memberSubject, splitShown, seconds[seat]);
-        Step(g_chocobos[seat], splitShown, seconds[seat]);
+        const bool pressed = input::pad_buttons::TakeLeftThumbPress(seat);  // taken every tick: none carried over
+        if (member == nullptr || taken)
+        {
+            g_clicks[seat]     = {};  // a new player or member starts afresh
+            g_askWaiting[seat] = nullptr;
+        }
+        const bool clicked = member != nullptr && pressed &&
+                             g_clicks[seat].Press(static_cast<std::uint64_t>(
+                                 std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count()));
+        const bool asked = std::exchange(g_consoleAsk[seat], false);
+        if (clicked || asked)
+        {
+            Ask(seat, clicked ? L"L3 twice" : L"the console", splitShown);
+        }
+        else if (g_askWaiting[seat] != nullptr && party_warp::BusySeat() < 0)
+        {
+            Ask(seat, g_askWaiting[seat], splitShown);  // the other seat's warp is over: asked again, "beside" too
+        }
+        if (g_installed)
+        {
+            Step(memberSubject, splitShown, seconds[seat]);
+            Step(g_chocobos[seat], splitShown, seconds[seat]);
+        }
     }
     // With no member for its seat, lets a warp in progress go.
     const int warping = party_warp::BusySeat();
@@ -780,5 +865,31 @@ void Tick(bool splitShown) noexcept
     }
 #endif
 }
+
+#if LSS_DEV
+
+void RegisterCommands()
+{
+    using control::Outcome;
+    using control::Value;
+    control::Register({.name  = L"party-warp",
+                       .shape = control::Shape::Integer,
+                       .min   = 2,
+                       .max   = players::kSeatsBuilt + 1,
+                       .help  = L"asks the game's follow warp to bring player 2's or 3's character back beside player "
+                                L"1's, as L3 clicked twice on that player's pad does (made at the next tick; the answer "
+                                L"in the log)",
+                       .set   = [](const Value& value) {
+                           const int seat = static_cast<int>(std::get<std::int64_t>(value)) - 1;
+                           if (!players::generation::Active(seat))
+                           {
+                               return Outcome{false, L"that player is not in"};
+                           }
+                           g_consoleAsk[seat] = true;
+                           return Outcome{};
+                       }});
+}
+
+#endif
 
 }  // namespace lss::world::nav_strand

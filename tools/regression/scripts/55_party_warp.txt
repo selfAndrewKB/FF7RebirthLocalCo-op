@@ -1,0 +1,21 @@
+# A player's ask to be brought back (plan/remake-alignment.md step 7): player 2 walks away on their own pad, then asks
+# (the console, as L3 clicked twice does); the game's follow warp brings their member back beside player 1's, so a
+# second ask finds it beside and moves nothing.
+# needs: control
+# expect: party warp: player 2's member asked to be brought back \(the console\); P2
+# expect: party warp: forced follow warp requested for player 2's member
+# expect: party warp: player 2's member done after
+# expect: party warp: player 2's member asked to be brought back \(the console\); not done: it already stands beside
+# expect-not: party warp: player 2's member's forced request FAULTED
+note regression: party warp start
+join
+wait-until p2.state == playing 1800
+hold 2 stick 0 1 0 0 300
+wait 360
+party-warp 2
+wait 600
+party-warp 2
+wait 60
+leave
+wait-until p2.in == off 900
+note regression: party warp done

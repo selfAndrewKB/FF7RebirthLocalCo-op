@@ -29,6 +29,18 @@
 // tick clock; the redirects find the subject by its root among every seat's, and Tick steps the seats in order. One
 // warp at a time (party_warp.h): a seat whose strand reaches "warp" while another seat's warp runs waits (logged) and
 // asks once that warp is over, if its strand still holds. The chocobos come from chocobo_ride, by seat.
+//
+// A player asks too: L3 clicked twice within 0.4 s on player 2's or 3's own pad (the engine key's own element in the
+// game's action tables, read through that seat's view, input/pad_buttons TakeLeftThumbPress; the rule in
+// world/party_warp_rules.h, Remake's) asks the same follow warp for the chocobo that player rides, else their member,
+// as a strand's "warp" does; behind another seat's warp it waits and is asked again once that warp is over. Not when
+// the character already stands beside player 1's (within 5 m on the same level, wider than where the warp itself lands
+// a follower: a stray double click moves nothing);
+// every other refusal is party_warp's (the split not on screen, a ride, a battle, no follow state, the party busy),
+// logged. Player 1's double click does nothing: theirs is the character the others are brought to. The asks need only
+// the warp, not the three redirects. Logged at Info: each ask and its answer.
+
+#include "platform/dev_switch.h"
 
 namespace lss::platform {
 class GameImage;
@@ -36,11 +48,17 @@ class GameImage;
 
 namespace lss::world::nav_strand {
 
-/// Redirects the three calls (the walking one required); logged either way. False if a check failed (nothing installed).
+/// Redirects the three calls (the walking one required); logged either way. False if a check failed (nothing installed:
+/// the strands are not watched; a player's ask still is heard).
 bool Install(const platform::GameImage& image) noexcept;
 void Remove() noexcept;
 
 /// Each engine tick, after the session's. `splitShown`: the split is on screen (a warp needs it).
 void Tick(bool splitShown) noexcept;
+
+#if LSS_DEV
+/// The `party-warp <player>` command (asks as the double click does). May throw (out of memory).
+void RegisterCommands();
+#endif
 
 }  // namespace lss::world::nav_strand

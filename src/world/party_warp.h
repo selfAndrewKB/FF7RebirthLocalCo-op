@@ -47,7 +47,9 @@ using SeatPawns = std::array<const void*, players::kMaxPlayers>;
 bool Install(const platform::GameImage& image) noexcept;
 
 /// Starts `seat`'s forced warp for `pawn` (the member, or the chocobo she rides) if every guard holds and no warp is
-/// being driven (logs which one did not). `attached`: the member's root component is attached to something (a ride;
+/// being driven (logs which one did not). The guards begin with the follow update's own that a forced request skips
+/// (RE-warp-gates.md): the field up, no scene, talk or event holding it, neither player 1's character nor the seat's
+/// member in a field action (a ladder, a climb, a crawl, the grappling hook). `attached`: the member's root component is attached to something (a ride;
 /// refused for Member only). `splitShown`: the split is on screen (no menu, map or cutscene owns it). Game thread.
 bool Start(int seat, void* pawn, Subject subject, bool attached, bool splitShown) noexcept;
 

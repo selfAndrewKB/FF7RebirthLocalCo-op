@@ -80,6 +80,12 @@ private:
     bool held_ = false;
 };
 
+/// Takes `seat`'s L3 press: true once for each press of L3 on that player's own pad since the last take (the engine
+/// key Gamepad_LeftThumbstick's own element in the raw table, the seat's view going from not held to held, noted at
+/// each input tick, RE-pad-slots.md §2.9), whatever action the key assignment binds to L3; the game's own action still
+/// runs as for any press. False while the views are not split (no seat's player in, per-pad input off). Game thread.
+bool TakeLeftThumbPress(int seat) noexcept;
+
 /// The game's action-down dispatcher: (owner, unused, source bit, the action event, alreadyHandled),
 /// 1 when the UI consumed the action.
 using ActionDownFn = char (*)(void* owner, void* unused, std::uint32_t sourceBit, void* event, std::uint8_t alreadyHandled);

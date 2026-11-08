@@ -30,6 +30,7 @@
 #include <cstdint>
 #include <format>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace lss::input::pad_buttons {
@@ -170,6 +171,12 @@ std::array<const std::uint64_t*, kOpenerKeyNames.size()> g_openerKeys{};  // liv
 std::array<std::uint64_t, kOpenerKeyNames.size()>        g_openers{};     // the FNames, once read
 bool     g_openersRead   = false;  // all three read non-zero
 unsigned g_openerFrames  = 0;      // input ticks spent reading them
+// L3 (TakeLeftThumbPress): the engine key's FKey global (live address; null: none), its FName once read, and each
+// seat's press noted at the input tick until taken.
+const std::uint64_t*                     g_leftThumbKey = nullptr;
+std::uint64_t                            g_leftThumb    = 0;
+unsigned                                 g_leftThumbFrames = 0;  // input ticks spent reading it
+std::array<bool, players::kMaxPlayers>   g_leftThumbPressed{};
 std::atomic<unsigned> g_mask{kPartViews | kPartEvents};  // SetMask
 
 /// What each built seat sees, for a change or trace line: ", player 2 sees 1" per seat.
@@ -376,6 +383,18 @@ bool Opener(std::uint64_t key) noexcept
 /// a warning once if not after kOpenerReadFrames input ticks (a seat's pad's Start then opens nothing).
 void ReadOpeners() noexcept
 {
+    // The L3 key the same way (the engine's own key, filled by its start-up): one guarded read a tick until set.
+    if (std::uint64_t key = 0; g_leftThumb == 0 && g_leftThumbKey != nullptr &&
+                               platform::CopyGuarded(&key, g_leftThumbKey, sizeof(key)) && key != 0)
+    {
+        g_leftThumb = key;
+    }
+    else if (g_leftThumb == 0 && g_leftThumbKey != nullptr && ++g_leftThumbFrames == kOpenerReadFrames)
+    {
+        platform::LogWarning(L"buttons: the L3 key's name was not read after {} input ticks; players 2 and 3 cannot ask "
+                             L"to be brought back with L3 until it is",
+                             kOpenerReadFrames);
+    }
     if (g_openersRead || g_openerFrames > kOpenerReadFrames)
     {
         return;
@@ -459,6 +478,16 @@ void SplitTable(const std::byte* owner, std::size_t which, unsigned seats)
             table.views[i] = {};
         }
         table.views[i].Advance(element.held, element.sources, seats);
+        if (which == 0 && g_leftThumb != 0 && element.name == g_leftThumb)
+        {
+            for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+            {
+                if (table.views[i].now[seat] && !table.views[i].previous[seat])
+                {
+                    g_leftThumbPressed[static_cast<std::size_t>(seat)] = true;  // until TakeLeftThumbPress
+                }
+            }
+        }
         Trace(which, element, table.views[i]);
         if (table.views[i].gameHeld != table.loggedHeld[i] || element.sources != table.loggedSources[i])
         {
@@ -499,8 +528,9 @@ void GiveBack() noexcept
             ++g_writeFaults;
         }
     }
-    g_tables     = {};
-    g_menuPlayer = 0;  // the game's merge: the one pad again
+    g_tables           = {};
+    g_leftThumbPressed = {};
+    g_menuPlayer       = 0;  // the game's merge: the one pad again
     g_menuTime   = false;
 }
 
@@ -758,6 +788,15 @@ void SetSeatRoute(SeatRouteFn route) noexcept
     g_seatRoute = route;
 }
 
+bool TakeLeftThumbPress(int seat) noexcept
+{
+    if (!players::SeatBuilt(seat) || !players::generation::OnGameThread())
+    {
+        return false;
+    }
+    return std::exchange(g_leftThumbPressed[static_cast<std::size_t>(seat)], false) && g_active;
+}
+
 bool Install(const platform::GameImage& image) noexcept
 {
     const auto owner  = image.Rebase(facts::kSquareInputGlobal, sizeof(void*));
@@ -798,6 +837,13 @@ bool Install(const platform::GameImage& image) noexcept
     {
         const auto key  = image.Rebase(kOpenerKeyNames[i], sizeof(std::uint64_t));
         g_openerKeys[i] = key ? reinterpret_cast<const std::uint64_t*>(*key) : nullptr;
+    }
+    const auto leftThumb = image.Rebase(facts::kLeftThumbstickKey, sizeof(std::uint64_t));
+    g_leftThumbKey       = leftThumb ? reinterpret_cast<const std::uint64_t*>(*leftThumb) : nullptr;
+    if (g_leftThumbKey == nullptr)
+    {
+        platform::LogWarning(L"buttons: the L3 key's FKey global is not what the research read; players 2 and 3 cannot "
+                             L"ask to be brought back with L3");
     }
     if (std::any_of(g_openerKeys.begin(), g_openerKeys.end(), [](const std::uint64_t* key) { return key == nullptr; }))
     {

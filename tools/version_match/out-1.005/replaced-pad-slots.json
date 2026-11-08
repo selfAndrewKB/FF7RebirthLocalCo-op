@@ -39,6 +39,42 @@
    "same_semantics": true,
    "confidence": "CONFIRMED",
    "note": "RE-pad-slots.md section 2.7: written by the device constructor; compared against the engine's external input devices for the install line."
+  },
+  {
+   "name": "g_InputKey_Gamepad_LeftThumbstick (the FKey L3 sends)",
+   "old": "0x149245C08",
+   "new": "0x14907DF88",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "RE-pad-slots.md section 2.9: the engine key global SquareInput__GamepadKeyToButtonId maps to 0xD1 in both builds; its FName keys the raw-table element a seat's L3 press is read from."
+  },
+  {
+   "name": "vtbl_EndPlayerCharacter",
+   "old": "0x145840A90",
+   "new": "0x1456B3198",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "The IDA pass [S-WARPGATE] (RE-warp-gates.md section 2.1): found from the class registration through EndPlayerCharacter_Ctor in both builds; its slot +0x930 (1.004) / +0x938 (1.005) is the field controller state check."
+  },
+  {
+   "name": "vtbl_EndPlayerCharacter slot: the field controller state check (wrapper)",
+   "old": "0x140A5F5AC",
+   "new": "0x1409A5A84",
+   "bytes": "B828000000E8",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "RE-warp-gates.md section 2.1: the value of the character vtable's slot in both exes (read by the main session 2026-11-07); the follow update calls it on the leader and the follow target."
+  },
+  {
+   "name": "EndCharacter_IsInFieldControllerState",
+   "old": "0x140A5FA84",
+   "new": "0x141985068",
+   "bytes": "4053B820000000E8",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "RE-warp-gates.md section 2.1: the check the slot's wrapper calls; some party members' vtables hold it directly. Entry bytes read from both exes, identical up to the call."
   }
  ]
 }

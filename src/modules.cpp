@@ -794,6 +794,7 @@ void RegisterCommands(session::Session& session, players::SplitLayout& layout,
         input::pad_sticks::RegisterCommands();
         scopes::scope_leaks::RegisterCommands();
         input::pad_buttons::RegisterCommands();
+        world::nav_strand::RegisterCommands();
         battle::lock_on::RegisterCommands();
         camera::shoulder_scale::RegisterCommands();
         camera::camera_distance::RegisterCommands();
