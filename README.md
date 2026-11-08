@@ -19,8 +19,8 @@ player 1 in the field (the game's own catch-up warp; not in a menu, a scene, a b
 
 **Co-op settings in the game:** the pause menu has a **Co-op** row above System, and the title menu one below Options.
 It opens the game's own Options screen
-with the mod's settings (monitors, screen order, layouts); a change applies at once and is saved to
-`LocalSplitScreen.ini`.
+with the mod's settings (monitors, screen order, layouts, and the two split-screen FOV weights as the game's sliders);
+a change applies at once and is saved to `LocalSplitScreen.ini`.
 
 Press **Ctrl+F7** to add a player from the keyboard (player 2, then player 3, on pads 2 and 3) and **Ctrl+F8** to remove
 the last one in. When another local player exists, the engine splits the screen by itself (two halves; with three

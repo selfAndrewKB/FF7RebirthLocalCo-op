@@ -95,6 +95,14 @@ std::uint64_t g_commits = 0;
 std::array<std::optional<int>, settings::kOptions.size()> g_queued{};
 /// The value the page last showed per option (a commit equal to it changes nothing when the current word is unknown).
 std::array<int, settings::kOptions.size()> g_shown{};
+bool g_sliders = false;  // the long rows are the game's slider rows (menu/coop_slider placed)
+/// The option and value the page's value read last answered, for a slider row's text (menu/coop_slider), taken once.
+struct Answered
+{
+    int          option = -1;
+    std::int32_t value  = 0;
+};
+std::optional<Answered> g_answered;
 
 void* PageNow() noexcept
 {
@@ -130,6 +138,7 @@ std::optional<int> OptionAt(std::uint8_t key, std::int32_t row) noexcept
 /// The game's value read: the mod's rows answer their option's word's place (a commit not yet run: its value).
 std::int32_t GetValue(void* page, std::uint8_t key, std::int32_t row)
 {
+    g_answered.reset();  // every read, any page: an answer belongs only to the read just made
     if (g_filled && IsPage(page))
     {
         try
@@ -141,6 +150,7 @@ std::int32_t GetValue(void* page, std::uint8_t key, std::int32_t row)
                 const auto              word  = CurrentWord(*option);
                 const int value = g_queued[i] ? *g_queued[i] : (word ? rules::ValueOf(shown, *word).value_or(0) : 0);
                 g_shown[i]      = value;
+                g_answered      = Answered{*option, value};
                 if (platform::Enabled(platform::Level::Trace))
                 {
                     platform::LogTrace(L"Co-op page: {} shows {} (the option reads {})", shown.key, value,
@@ -279,9 +289,16 @@ const wchar_t* AppendRow(GameArray* rows, int option)
     const settings::Option&  row = *settings::kOptions[static_cast<std::size_t>(option)];
     alignas(16) std::uint8_t info[facts::kOptionInfoSize]{};
     g.infoCtor(info);
-    info[facts::kOptionInfoKind]     = facts::kOptionKindList;
+    // A row longer than the game's longest list is the game's slider over its values' places (menu/coop_slider).
+    const bool slider                = rules::IsSlider(row) && g_sliders;
+    info[facts::kOptionInfoKind]     = slider ? facts::kOptionKindRange : facts::kOptionKindList;
     info[facts::kOptionInfoCategory] = rules::RowByte(option);
     std::memset(info + facts::kOptionInfoMin, 0, 8);  // Min, Max (the constructor leaves them)
+    if (slider)
+    {
+        const auto last = static_cast<std::int32_t>(row.wordLabels.size()) - 1;
+        std::memcpy(info + facts::kOptionInfoMax, &last, sizeof last);
+    }
     const GameArray text = SourceString(row.label);
     const GameArray help = SourceString(row.menuHelp);
     g.assign(info + facts::kOptionInfoText, &text);
@@ -414,11 +431,15 @@ catch (...)
 {
 }
 
-/// The page's categories: the table's, without the rows longer than the game's longest list (they need the slider row,
-/// menu/coop_slider) and without a category left empty by that.
-std::vector<rules::Category> PageWithLists()
+/// The page's categories: the table's; without the slider rows, the rows longer than the game's longest list are left
+/// out (its value list cannot scroll), and a category left empty by that.
+std::vector<rules::Category> PageOf(bool sliders)
 {
     std::vector<rules::Category> page = rules::BuildPage();
+    if (sliders)
+    {
+        return page;
+    }
     for (rules::Category& category : page)
     {
         std::erase_if(category.options, [](int option) {
@@ -450,7 +471,7 @@ try
     const auto setCount   = platform::FindFunction(image, f::kScrollBoxSetCount);
     const auto refresh    = platform::FindFunction(image, f::kScrollBoxRefresh);
     const auto remove     = platform::FindFunction(image, f::kRemoveFromParent);
-    g_page                = PageWithLists();
+    g_page                = PageOf(false);  // the slider rows join once menu/coop_slider is placed (UseSliders)
     // game_ui is installed first (menu/coop_menu): the page writes its strings with the game's copy.
     if (!getValue || !setValue || !create || !addToRoot || !inRoot || !findOrAdd || !infoCtor || !infoDtor || !infoMove ||
         !growInfos || !growTexts || !emptyInfos || !setCount || !refresh || !remove || game_ui::Assign() == nullptr ||
@@ -499,6 +520,7 @@ void Unplace() noexcept
 {
     g_setValue.Restore();
     g_getValue.Restore();
+    g_answered.reset();  // no read answers any more: a slider's value text redirect left in place finds none
 }
 
 const std::vector<coop_menu_rules::Category>& Categories() noexcept
@@ -596,6 +618,42 @@ void* Ready(void* host, std::int32_t z, std::uint8_t inGame) noexcept
         return nullptr;
     }
     return page;
+}
+
+void UseSliders(bool sliders) noexcept
+try
+{
+    g_sliders = sliders;
+    g_page    = PageOf(sliders);
+    g_filled  = false;  // the next open writes the page anew
+}
+catch (...)
+{
+}
+
+std::optional<int> TakeAnswered(std::int32_t value) noexcept
+{
+    const auto answered = g_answered;
+    g_answered.reset();
+    return answered && answered->value == value ? std::optional<int>(answered->option) : std::nullopt;
+}
+
+void CommitEdit(void* page) noexcept
+{
+    std::int32_t category = -1, row = -1, value = 0;
+    GameArray    order;
+    std::uint8_t key = 0;
+    if (!IsPage(page) || !platform::Read(At(page, facts::kOptionsCategoryIndex), category) ||
+        !platform::Read(At(page, facts::kOptionsRowIndex), row) || !platform::Read(At(page, facts::kOptionsEditValue), value) ||
+        !platform::Read(At(page, facts::kOptionsOrder), order) || category < 0 || category >= order.num || order.data == nullptr ||
+        !platform::Read(static_cast<const std::uint8_t*>(order.data) + category, key))
+    {
+        return;
+    }
+    if (const auto option = OptionAt(key, row))
+    {
+        SetValue(page, rules::RowByte(*option), value);  // queued, as a list's commit is
+    }
 }
 
 void Abandon(void* page) noexcept

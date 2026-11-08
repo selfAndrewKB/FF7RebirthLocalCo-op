@@ -25,6 +25,7 @@
 #include "platform/verified_code.h"
 #include "players/generation.h"
 #include "players/seats.h"
+#include "players/unreal_access.h"
 #include "session/party_member.h"
 
 #include <atomic>
@@ -408,19 +409,6 @@ void Submit(void* renderer, std::uintptr_t pool, void* slot, std::uintptr_t unus
 
 // --- Each seat's target and buffers ---
 
-bool RootGuarded(void* object) noexcept
-{
-    __try
-    {
-        static_cast<RC::Unreal::UObject*>(object)->SetRootSet();
-        return true;
-    }
-    __except (platform::GuardFilter(GetExceptionCode()))
-    {
-        return false;
-    }
-}
-
 /// The seat's target, made with the widget's own recipe at the live target's size.
 void MakeTarget(int seat, const void* slate) noexcept
 {
@@ -444,7 +432,7 @@ void MakeTarget(int seat, const void* slate) noexcept
                                L"player 3's render target could not be made"));
         return;
     }
-    if (!RootGuarded(target))
+    if (!players::unreal::SetRootFlag(target, true))
     {
         Refuse(players::BySeat(seat, L"player 2's render target could not be rooted",
                                L"player 3's render target could not be rooted"));

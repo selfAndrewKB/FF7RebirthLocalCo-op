@@ -133,6 +133,23 @@ void SlidersAreTheLongRows()
     EXPECT(sliders == 2);
 }
 
+/// A slider's arrows move right by its longest word's characters past the game's two digits; short words move nothing.
+void LabelRoom()
+{
+    std::puts("coop menu: a slider's arrows make room for its words");
+    for (const settings::Option* option : settings::kOptions)
+    {
+        if (IsSlider(*option))
+        {
+            EXPECT(LabelShift(*option) == 2 * kGaugeCharWidth);  // the weights' words: "0.00" to "1.00"
+        }
+    }
+    constexpr const wchar_t* kShort[] = {L"1", L"10"};
+    settings::Option         two{};
+    two.wordLabels = kShort;
+    EXPECT(LabelShift(two) == 0.0f);
+}
+
 /// The window follows the marker with a cell of context, stays inside the gauge, and is 0 when everything fits.
 void SliderWindow()
 {
@@ -162,6 +179,7 @@ void SliderWindow()
 int main()
 {
     SlidersAreTheLongRows();
+    LabelRoom();
     SliderWindow();
     EveryOptionHasMenuText();
     PageFromTheTable();

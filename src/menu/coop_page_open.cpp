@@ -12,6 +12,8 @@
 #include "platform/settings.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
+#include "players/generation.h"
+#include "players/unreal_access.h"
 #include "players/weak_object.h"
 
 #include <algorithm>
@@ -78,11 +80,13 @@ struct TitleCapture
 };
 static_assert(sizeof(TitleCapture) == 16 && offsetof(TitleCapture, weak) == 8, "read raw by the game's close function");
 
-TitleGame g_title;
+TitleGame      g_title;
+std::uintptr_t g_acceptKey = 0;  // the Accept key's FKey global (live; its FName first)
 
 // Game thread.
 void*         g_mgr     = nullptr;  // the main menu manager while open
 std::uint64_t g_topWeak = 0;        // the hidden first page (a weak value)
+void*         g_heldTop = nullptr;  // the hidden first page while the mod holds it from the garbage collector
 bool          g_atTitle   = false;  // the page is open over the title menu, not the main menu
 std::uint64_t g_titleHost = 0;      // the start menu it opened over (a weak value)
 std::wstring  g_savedTitle, g_savedGuide;
@@ -121,6 +125,67 @@ void SwapHeadings(bool labels) noexcept
             platform::LogWarning(L"Co-op page: the heading of {} could not be set; it shows the game's", page[i].text.label);
         }
     }
+}
+
+void ReleaseTop() noexcept;
+
+/// The hidden first page kept from the garbage collector while the page is open (research/RE-coop-page-guide.md): its
+/// Hide takes it out of the overlay and nothing else holds it, yet the main menu keeps it the current window, whose
+/// tick empties the title, help and guide every frame once it is collected. Held as AddToRoot holds, and only if no one
+/// else rooted it.
+void HoldTop(void* top) noexcept
+{
+    if (g_heldTop != nullptr && g_heldTop != top)
+    {
+        ReleaseTop();  // an older hold is let go, never lost by an overwrite
+    }
+    bool rooted = false;
+    if (!players::unreal::ReadRootFlag(top, rooted))
+    {
+        platform::LogWarning(L"Co-op page: the main menu's first page could not be read in the object array; its title, "
+                             L"help and guide may go blank at the next garbage collection");
+        return;
+    }
+    if (rooted)
+    {
+        return;  // someone else's hold: left as found
+    }
+    if (!players::unreal::SetRootFlag(top, true))
+    {
+        platform::LogWarning(L"Co-op page: the main menu's first page could not be held; its title, help and guide may "
+                             L"go blank at the next garbage collection");
+        return;
+    }
+    g_heldTop = top;
+    platform::LogDebug(L"Co-op page: the main menu's hidden first page held from the garbage collection while the page "
+                       L"is open");
+}
+
+/// The hold let go (the page closed, gone, or the mod unloading): the first page is the game's to keep again. Only on the
+/// game thread (the flag shares its word with the collector's own); off it (an unload) the hold is forgotten and the page
+/// stays held until the game ends.
+void ReleaseTop() noexcept
+{
+    if (g_heldTop == nullptr)
+    {
+        return;
+    }
+    if (!players::generation::OnGameThread())
+    {
+        g_heldTop = nullptr;
+        platform::LogDebug(L"Co-op page: the main menu's first page left held: the unload runs off the game thread");
+        return;
+    }
+    if (!players::unreal::SetRootFlag(g_heldTop, false))
+    {
+        platform::LogWarning(L"Co-op page: the hold on the main menu's first page could not be let go; it stays until the "
+                             L"game ends");
+    }
+    else
+    {
+        platform::LogDebug(L"Co-op page: the main menu's first page let go");
+    }
+    g_heldTop = nullptr;
 }
 
 /// The first page's title and guide back as they were.
@@ -193,6 +258,7 @@ void Closed(const wchar_t* how) noexcept
     RestoreTop();
     void*      shown = nullptr;
     const bool ok    = g_mgr != nullptr && platform::CallGuarded(g.showTop, shown, g_mgr, true) && shown != nullptr;
+    ReleaseTop();  // after the show: it finds the first page alive, as the game does when no collection fell in between
     platform::Log(L"Co-op page: closed ({}); {}", how,
                   ok ? L"the main menu is back" : L"the main menu could not be shown again (it closed)");
     g_mgr = nullptr;
@@ -216,6 +282,7 @@ void ForceClose(void* page, const wchar_t* why) noexcept
         coop_page::Abandon(page);
     }
     RestoreTop();
+    ReleaseTop();
     g_mgr = nullptr;
     platform::Log(L"Co-op page: closed with the main menu ({}); its layer popped and the page taken out", why);
 }
@@ -228,10 +295,28 @@ bool PageClosing(const void* page) noexcept
            (state == facts::kOptionsStateClosing || state == 0);
 }
 
-/// The page's key handler (vtable slot): the game's, then the first page back if Back closed the mod's page.
-std::uintptr_t KeyDown(void* page, void* a, void* b, void* c)
+/// Accept (not a repeat) on the mod's page while one of its Range rows is open.
+bool RangeAccept(void* page, const void* event) noexcept
 {
-    const std::uintptr_t reply = reinterpret_cast<KeyDownFn>(g_keyDown.Original())(page, a, b, c);
+    std::uint8_t  state = 0, repeat = 1;
+    std::uint64_t key = 0, accept = 0;
+    return g_acceptKey != 0 && event != nullptr && coop_page::IsOpen() && coop_page::IsPage(page) &&
+           platform::Read(At(page, facts::kOptionsState), state) && state == facts::kOptionsStateRangeEdit &&
+           platform::Read(static_cast<const std::uint8_t*>(event) + facts::kActionEventRepeat, repeat) && repeat == 0 &&
+           platform::Read(static_cast<const std::uint8_t*>(event) + facts::kActionEventKey, key) &&
+           platform::Read(g_acceptKey, accept) && accept != 0 && key == accept;
+}
+
+/// The page's key handler (vtable slot): a Range row's Accept queued first (the game's handler sets the value inline,
+/// never through the commit the mod redirects; the row's refresh inside it then reads the new value), then the game's,
+/// then the first page back if Back closed the mod's page.
+std::uintptr_t KeyDown(void* page, void* a, void* b, void* event)
+{
+    if (RangeAccept(page, event))
+    {
+        coop_page::CommitEdit(page);
+    }
+    const std::uintptr_t reply = reinterpret_cast<KeyDownFn>(g_keyDown.Original())(page, a, b, event);
     if (coop_page::IsOpen() && coop_page::IsPage(page) && PageClosing(page))
     {
         Closed(L"Back");
@@ -270,6 +355,8 @@ try
     g.popLayer     = reinterpret_cast<PopLayerFn>(*popLayer);
     g.headings     = *headings;
     g.headingCount = count;
+    g_acceptKey    = image.Rebase(f::kKeyAccept, 8).value_or(0);  // without it a slider's Accept commits nothing (logged
+                                                                  // by menu/coop_slider)
     return true;
 }
 catch (...)
@@ -286,6 +373,7 @@ void Unplace() noexcept
 {
     SwapHeadings(false);
     g_keyDown.Restore();
+    ReleaseTop();
 }
 
 void Remove() noexcept
@@ -297,6 +385,7 @@ void Remove() noexcept
     }
     g_atTitle   = false;
     g_titleHost = 0;
+    ReleaseTop();  // a flag in the object array: no UI call
 }
 
 bool InstallTitle(const platform::GameImage& image) noexcept
@@ -406,7 +495,8 @@ try
     }
     const std::uint8_t hidden = 0;
     platform::WriteGuarded(At(top, facts::kWindowVisible), &hidden, 1);
-    g_topWeak    = topWeak;
+    g_topWeak = topWeak;
+    HoldTop(top);
     g_savedTitle = game_ui::ReadString(At(top, facts::kWindowTitle));
     g_savedGuide = game_ui::ReadString(At(top, facts::kTopGuide));
     game_ui::AssignString(At(top, facts::kWindowTitle), rules::kTitle);
@@ -435,6 +525,10 @@ try
 catch (...)
 {
     platform::LogWarning(L"Co-op page: opening raised an exception");
+    if (!coop_page::IsOpen())
+    {
+        ReleaseTop();  // thrown after the hold, before the page opened: nothing else would let it go
+    }
 }
 
 void Tick() noexcept
@@ -479,6 +573,7 @@ void Tick() noexcept
             coop_page::SetOpen(false);
             SwapHeadings(false);
             RestoreTop();
+            ReleaseTop();
             g_mgr = nullptr;
             platform::Log(L"Co-op page: the page is gone with the main menu closing; its title and guide put back");
         }

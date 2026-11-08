@@ -139,6 +139,23 @@ inline bool IsSlider(const settings::Option& option) noexcept
     return option.wordLabels.size() > kListLongest;
 }
 
+/// The game writes its gauge's label as a whole number of at most two digits, left-aligned in a box just wide enough for
+/// them, its left arrow right after. A slider's words are longer, so the arrows, the strip and the marker move right by
+/// the extra characters' width, into the room the gauge's frame leaves on their right; 0 when every word fits.
+/// [CONFIRMED live: a four-character word ends at the left arrow unmoved; 12 per character its measured width.]
+inline constexpr std::size_t kGaugeLabelDigits = 2;
+inline constexpr float       kGaugeCharWidth   = 12.0f;
+inline float LabelShift(const settings::Option& option) noexcept
+{
+    std::size_t longest = 0;
+    for (const wchar_t* word : option.wordLabels)
+    {
+        const std::size_t length = word != nullptr ? std::wcslen(word) : 0;
+        longest                  = length > longest ? length : longest;
+    }
+    return longest > kGaugeLabelDigits ? static_cast<float>(longest - kGaugeLabelDigits) * kGaugeCharWidth : 0.0f;
+}
+
 /// The first cell a slider's window shows. `marker` is the marker's place (the value's place: the edge between the
 /// filled cells and the rest), `first` the window's first cell so far, `cells` the gauge's cells (count - 1). The window
 /// moves only when the marker comes within one cell of its edge (a cell of context kept on either side, as the game's

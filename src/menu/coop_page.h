@@ -16,9 +16,10 @@
 //
 // Taken from Remake's menu/coop_page. Changed: a category's rows are emptied by the game's move-assign from an empty
 // array (this game has no ranged remove); the overlay add writes the page's order itself; 1.005's value read is entered
-// through its second instructions (its first crosses a block); a commit is saved to the settings file. Rows with more
-// values than the game's longest list need the game's slider row (menu/coop_slider), which this page does not build
-// yet: they stay on the console and in the settings file.
+// through its second instructions (its first crosses a block); a commit is saved to the settings file; a slider row's
+// Accept is committed by the page's key handler (this game's handler sets the value inline, never through the commit).
+// Rows with more values than the game's longest list are the game's slider rows (menu/coop_slider); without the slider
+// they stay off the page (the value list cannot scroll), on the console and in the settings file.
 
 #include "menu/coop_menu_rules.h"
 
@@ -40,6 +41,18 @@ void Unplace() noexcept;
 
 /// The page's categories and rows, in order.
 const std::vector<coop_menu_rules::Category>& Categories() noexcept;
+
+/// The slider rows placed (menu/coop_slider): the long rows join the page as the game's Range rows; without them they
+/// stay off the page. First tick, before any open.
+void UseSliders(bool sliders) noexcept;
+
+/// The option whose row the page's value read last answered, if it answered `value`; taken once (a slider row's text is
+/// made right after its value read, menu/coop_slider).
+std::optional<int> TakeAnswered(std::int32_t value) noexcept;
+
+/// A Range row's Accept (the page's key handler, before the game's: its own setter does not reach the commit for the
+/// mod's rows): the row's pending value queued for its option, as a list's commit is.
+void CommitEdit(void* page) noexcept;
 
 /// The mod's page, made if needed (from `host`'s world, with the game's `inGame`: 1 from the main menu, 0 from the
 /// title), not yet added or written; `inRoot` says whether it is in the overlay already. Null (logged) if it could not

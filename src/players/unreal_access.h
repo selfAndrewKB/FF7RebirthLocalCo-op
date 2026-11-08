@@ -30,6 +30,12 @@ using RC::Unreal::UObject;
 /// engine raised an exception.
 bool GuardedProcessEvent(UObject* target, RC::Unreal::UFunction* function, void* params) noexcept;
 
+/// The engine's root-set flag on `object` (UObject::AddToRoot's: kept from the garbage collector), set or cleared
+/// through UE4SS's object array; read by ReadRootFlag. False if the object array faulted. Game thread: the flag shares
+/// its word with the collector's own flags.
+bool SetRootFlag(void* object, bool set) noexcept;
+bool ReadRootFlag(void* object, bool& rooted) noexcept;
+
 /// The offset of the parameter `name` in `function`'s frame, if it exists with this size and fits the frame:
 /// where an input is written, or a result read, around GuardedProcessEvent.
 std::optional<std::int32_t> ParamOffset(RC::Unreal::UFunction* function, const wchar_t* name,

@@ -390,6 +390,96 @@
       "same_semantics": true,
       "confidence": "CONFIRMED",
       "note": "RE-coop-rows-facts.md 1.1 (the handler's only code caller); E8 to the handler read from both exes, inside one block in both."
+    },
+    {
+      "name": "OptionsMenu_UpdateGaugeMarker",
+      "old": "0x1417C71CC",
+      "new": "0x14142BB58",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA pass S-COOPPAGE (RE-coop-page-facts.md 1.2); call sites read from both exes as E8 to the paired functions."
+    },
+    {
+      "name": "its call in the Range row press",
+      "old": "0x14148F39F",
+      "new": "0x14142C6E0",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA pass S-COOPPAGE (RE-coop-page-facts.md 1.2); call sites read from both exes as E8 to the paired functions."
+    },
+    {
+      "name": "its call in StepEditValue",
+      "old": "0x1438E5F1D",
+      "new": "0x143614E99",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA pass S-COOPPAGE (RE-coop-page-facts.md 1.2); call sites read from both exes as E8 to the paired functions."
+    },
+    {
+      "name": "FString_AppendInt",
+      "old": "0x140A38D24",
+      "new": "0x140CFB538",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA pass S-COOPPAGE (RE-coop-page-facts.md 1.2); call sites read from both exes as E8 to the paired functions."
+    },
+    {
+      "name": "its call in OnOptionListSetupItem (the row value text)",
+      "old": "0x140BE6C25",
+      "new": "0x1411263A6",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA pass S-COOPPAGE (RE-coop-page-facts.md 1.2); call sites read from both exes as E8 to the paired functions."
+    },
+    {
+      "name": "MainMenu_OptionsTop2_C vtable: the action handler slot (+0x3A0 / +0x3A8)",
+      "old": "0x14590CAF8",
+      "new": "0x14574EF80",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA pass S-COOPPAGE (RE-coop-page-facts.md 1.2); call sites read from both exes as E8 to the paired functions."
+    },
+    {
+      "name": "UEndMainOptionsMenu action handler (pass 1)",
+      "old": "0x1413FB608",
+      "new": "0x140FE4BE0",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA pass S-COOPPAGE (RE-coop-page-facts.md 1.2); call sites read from both exes as E8 to the paired functions."
+    },
+    {
+      "name": "EKeys::Gamepad_DPad_Left",
+      "old": "0x149245DA0",
+      "new": "0x14907E120",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA pass S-COOPPAGE (RE-coop-page-facts.md 1.2); call sites read from both exes as E8 to the paired functions."
+    },
+    {
+      "name": "EKeys::Gamepad_DPad_Right",
+      "old": "0x149245D88",
+      "new": "0x14907E108",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA pass S-COOPPAGE (RE-coop-page-facts.md 1.2); call sites read from both exes as E8 to the paired functions."
+    },
+    {
+      "name": "EKeys::Virtual_Accept",
+      "old": "0x149247148",
+      "new": "0x14907F4C8",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA pass S-COOPPAGE (RE-coop-page-facts.md 1.2); call sites read from both exes as E8 to the paired functions."
     }
   ]
 }

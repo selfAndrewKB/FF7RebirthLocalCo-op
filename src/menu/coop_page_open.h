@@ -8,14 +8,16 @@
 // game's way and opens the page over it; the manager's current window stays the first page, so its title, Back and
 // re-open paths stay the game's. While open the first page's title reads "Co-op" and its guide the page's keys, and the
 // game's heading table (keyed by category, keys the page shares with the game's first ones) names the page's
-// categories. Back on the page's categories closes it in the same input event (the page's key handler, a vtable slot)
-// and the first page comes back as after any game window; a close the handler did not see is caught by the tick. A main
-// menu closed under the page (the Blueprint's HidePauseMenu does, whatever has focus) takes it down the way the page's
-// own no-animation Back does: its focus layer popped, out of the overlay. Each open and close logged at Info. Game
-// thread.
+// categories. The hidden first page is held from the garbage collector while the page is open (the engine's root set,
+// as AddToRoot), since its Hide takes it out of the overlay and the main menu's tick blanks the title, help and guide
+// once it is collected (research/RE-coop-page-guide.md). Back on the page's categories closes it in the same input
+// event (the page's key handler, a vtable slot) and the first page comes back as after any game window; a close the
+// handler did not see is caught by the tick. A main menu closed under the page (the Blueprint's HidePauseMenu does,
+// whatever has focus) takes it down the way the page's own no-animation Back does: its focus layer popped, out of the
+// overlay. Each open and close logged at Info. Game thread.
 //
-// Taken from Remake's menu/coop_page_open. Changed: no hold of the hidden first page from the garbage collector (this
-// game's Hide keeps it in the overlay); the tutorial's busy states are a set; the page opens with no start category.
+// Taken from Remake's menu/coop_page_open. Changed: the tutorial's busy states are a set; the page opens with no start
+// category.
 
 #include <cstdint>
 #include <string>

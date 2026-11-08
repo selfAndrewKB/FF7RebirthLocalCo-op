@@ -38,6 +38,33 @@ bool GuardedProcessEvent(UObject* target, UFunction* function, void* params) noe
     }
 }
 
+bool SetRootFlag(void* object, bool set) noexcept
+{
+    __try
+    {
+        auto* const o = static_cast<UObject*>(object);
+        set ? o->SetRootSet() : o->ClearRootSet();
+        return true;
+    }
+    __except (platform::GuardFilter(GetExceptionCode()))
+    {
+        return false;
+    }
+}
+
+bool ReadRootFlag(void* object, bool& rooted) noexcept
+{
+    __try
+    {
+        rooted = static_cast<UObject*>(object)->HasAnyInternalFlags(RC::Unreal::EInternalObjectFlags::RootSet);
+        return true;
+    }
+    __except (platform::GuardFilter(GetExceptionCode()))
+    {
+        return false;
+    }
+}
+
 StaticCall FindStatic(const wchar_t* classPath, const wchar_t* functionPath) noexcept
 {
     auto*    function = UObjectGlobals::StaticFindObject<UFunction*>(nullptr, nullptr, functionPath);

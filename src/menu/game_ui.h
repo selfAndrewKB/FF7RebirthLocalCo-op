@@ -44,5 +44,19 @@ std::wstring ReadString(const void* at) noexcept;
 
 /// The game's copy of `text` into the FString at `to`. False if it faulted.
 bool AssignString(void* to, const std::wstring& text) noexcept;
+/// The same for a zero-terminated text that outlives the call (no allocation of the mod's).
+bool AssignText(void* to, const wchar_t* text) noexcept;
+
+/// A widget's place or size in Square's canvas panel (EndCanvasPanelSlot, which the game's menus use; not a stock
+/// CanvasPanelSlot), set through its reflected setter, as the game's own code sets it.
+enum class SlotVector
+{
+    Position,
+    Size,
+};
+/// Whether `slot` (a widget's Slot) is Square's canvas slot. False when it is another or cannot be read (guarded).
+bool IsCanvasSlot(void* slot) noexcept;
+/// `slot` (checked by IsCanvasSlot first) given (x, y) through SetPosition or SetSize. False if the call could not run.
+bool SetSlotVector(void* slot, SlotVector which, float x, float y) noexcept;
 
 }  // namespace lss::menu::game_ui

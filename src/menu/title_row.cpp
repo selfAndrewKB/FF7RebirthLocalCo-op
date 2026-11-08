@@ -13,19 +13,11 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
-#include "players/unreal_access.h"
-
-#define RC_UNREAL_DISABLE_PROPERTY_DEPRECATION_WARNINGS
-#define RC_UNREAL_DISABLE_CLASS_DEPRECATION_WARNINGS
-#include <Unreal/CoreUObject/UObject/Class.hpp>
-#include <Unreal/UObject.hpp>
-#include <Unreal/UObjectGlobals.hpp>
 
 #include <array>
 #include <cstdint>
 #include <cstring>
 #include <format>
-#include <optional>
 #include <span>
 #include <string>
 
@@ -115,47 +107,6 @@ void RemoveGuarded(GameArray* kinds, std::size_t place) noexcept
     }
 }
 
-/// `object` is of `cls` (UE4SS's class walk, under a guard: the object is a raw pointer read from the game).
-bool IsAGuarded(RC::Unreal::UObject* object, RC::Unreal::UClass* cls, bool& is) noexcept
-{
-    __try
-    {
-        is = object->IsA(cls);
-        return true;
-    }
-    __except (platform::GuardFilter(GetExceptionCode()))
-    {
-        return false;
-    }
-}
-
-// The canvas slot's class and its reflected SetSize (stock UMG), found at the first use (game thread).
-RC::Unreal::UClass*         g_canvasSlotClass = nullptr;
-RC::Unreal::UFunction*      g_setSize         = nullptr;
-std::optional<std::int32_t> g_setSizeAt;  // InSize's place in the call's parameters
-
-bool SetSizeReady() noexcept
-try
-{
-    if (g_canvasSlotClass == nullptr)
-    {
-        g_canvasSlotClass =
-            RC::Unreal::UObjectGlobals::StaticFindObject<RC::Unreal::UClass*>(nullptr, nullptr, L"/Script/UMG.CanvasPanelSlot");
-    }
-    if (g_setSize == nullptr || !g_setSizeAt)
-    {
-        g_setSize = RC::Unreal::UObjectGlobals::StaticFindObject<RC::Unreal::UFunction*>(
-            nullptr, nullptr, L"/Script/UMG.CanvasPanelSlot:SetSize");
-        g_setSizeAt = g_setSize != nullptr ? players::unreal::ParamOffset(g_setSize, L"InSize", 8) : std::nullopt;
-    }
-    return g_canvasSlotClass != nullptr && g_setSize != nullptr && g_setSizeAt && *g_setSizeAt + 8 <= 24 &&
-           g_setSize->GetParmsSize() <= 32;
-}
-catch (...)
-{
-    return false;
-}
-
 /// The list told of its new length, as the construct's last steps do. Each step guarded; `counted` says whether the list
 /// took the new count (until then the row can be taken out again).
 const wchar_t* ShowInList(void* start, std::int32_t rows, bool& counted) noexcept
@@ -181,30 +132,22 @@ const wchar_t* ShowInList(void* start, std::int32_t rows, bool& counted) noexcep
                              platform::DescribeFault(platform::LastFault()).text);
         return L"its list could not be refreshed";
     }
-    // The height, as the construct sets it: the canvas slot's stock SetSize, reflected (the slot's class checked first).
+    // The height, as the construct sets it in its canvas slot (Square's): in any other slot its panel sizes the list.
     float       width = 0.0f, base = 0.0f;
-    auto* const slot  = static_cast<RC::Unreal::UObject*>(platform::ReadPointer(list, facts::kWidgetSlot));
+    void* const slot  = platform::ReadPointer(list, facts::kWidgetSlot);
     if (slot == nullptr || !platform::Read(At(start, facts::kStartMenuListWidth), width) ||
-        !platform::Read(At(start, facts::kStartMenuListBase), base) || !SetSizeReady())
+        !platform::Read(At(start, facts::kStartMenuListBase), base))
     {
         return L"its list's height could not be read";
     }
-    bool canvas = false;
-    if (!IsAGuarded(slot, g_canvasSlotClass, canvas))
+    if (!game_ui::IsCanvasSlot(slot))
     {
-        return L"its list's slot could not be read";
-    }
-    if (!canvas)
-    {
-        // The construct sizes the list only in a canvas slot: in any other its panel sizes it.
         platform::LogDebug(L"Co-op menu: the title list's slot is no canvas slot; no height to set, as the game sets none");
         return nullptr;
     }
     const float height = static_cast<float>(rows - facts::kStartMenuBaseRows) * facts::kStartMenuRowHeight + base;
-    alignas(16) std::uint8_t frame[32]{};
-    std::memcpy(frame + *g_setSizeAt, &width, sizeof width);
-    std::memcpy(frame + *g_setSizeAt + sizeof width, &height, sizeof height);
-    return players::unreal::GuardedProcessEvent(slot, g_setSize, frame) ? nullptr : L"its list's height could not be set";
+    return game_ui::SetSlotVector(slot, game_ui::SlotVector::Size, width, height) ? nullptr
+                                                                                   : L"its list's height could not be set";
 }
 
 /// The Co-op row below Options in a list the construct just built.

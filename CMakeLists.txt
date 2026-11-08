@@ -97,6 +97,7 @@ add_library(LocalSplitScreen SHARED
     src/menu/coop_page_open.cpp
     src/menu/coop_menu.cpp
     src/menu/title_row.cpp
+    src/menu/coop_slider.cpp
     src/camera/camera_repair.cpp
     src/input/climb_context.cpp
     src/camera/near_fade.cpp

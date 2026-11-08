@@ -216,6 +216,47 @@ inline constexpr std::uint8_t kOptionsKeyDownBytes[] = {0x40, 0x55, 0x53, 0x56, 
 inline constexpr SlotFact kOptionsKeyDown{L"the Options page's key handler", 0x14590CB00,
                                           {L"UEndMainOptionsMenu_KeyDown", 0x141808C00, kOptionsKeyDownBytes}};
 
+// --- The page's slider rows (research/RE-coop-page-facts.md §1.2, §1.3, §3) -----------------------------------------
+
+/// OptionsMenu_UpdateGaugeMarker(page, gauge, const FOptionInfo*): placed after at its two calls, the Range row's press
+/// and each Left/Right step (1.004's both cross a block: changed from the game thread).
+inline constexpr std::uint8_t kGaugeMarkerBytes[] = {0x48, 0x85, 0xD2, 0x0F, 0x84, 0xB7, 0x01, 0x00,
+                                                     0x00, 0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89};
+inline constexpr FunctionFact   kGaugeMarker{L"OptionsMenu_UpdateGaugeMarker", 0x1417C71CC, kGaugeMarkerBytes};
+inline constexpr std::uintptr_t kGaugeMarkerOpenCall = 0x14148F39F;
+inline constexpr std::uintptr_t kGaugeMarkerStepCall = 0x1438E5F1D;
+/// FString::AppendInt(FString* out, i32): the row's value text, appended into a zeroed FString, at its one call in the
+/// row setup (right after the value read).
+inline constexpr std::uint8_t   kAppendIntBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C,
+                                                     0x24, 0x18, 0x56, 0x57, 0x41, 0x56, 0xB8, 0x50};
+inline constexpr FunctionFact   kAppendInt{L"FString_AppendInt", 0x140A38D24, kAppendIntBytes};
+inline constexpr std::uintptr_t kRowValueTextCall = 0x140BE6C25;
+/// The page's action handler (pass 1: the d-pad; state 5 Left/Right steps unless the event repeats), a slot of
+/// MainMenu_OptionsTop2_C's vtable (+0x3A0; 1.005 +0x3A8).
+inline constexpr std::uint8_t kOptionsActionDownBytes[] = {0x40, 0x55, 0x53, 0x56, 0x57, 0x41, 0x54, 0x41,
+                                                           0x55, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8D, 0x6C};
+inline constexpr SlotFact kOptionsActionDown{L"the Options page's action handler", 0x14590CAF8,
+                                             {L"UEndMainOptionsMenu_ActionDown", 0x1413FB608, kOptionsActionDownBytes}};
+/// The key event both handlers take (an FKeyEvent): its repeat byte and its key's FName.
+inline constexpr std::uint32_t  kActionEventRepeat = 0x0A;
+inline constexpr std::uint32_t  kActionEventKey    = 0x18;
+/// The keys the handlers compare with (EKeys FKey globals: the FName first).
+inline constexpr std::uintptr_t kKeyDPadLeft  = 0x149245DA0;
+inline constexpr std::uintptr_t kKeyDPadRight = 0x149245D88;
+inline constexpr std::uintptr_t kKeyAccept    = 0x149247148;  // Virtual_Accept
+/// The gauge: on the page, the gauge widget and its strip (a scroll box); on the gauge, the left arrow (in one
+/// horizontal box with the strip and the right arrow), the marker image and the label.
+inline constexpr std::uint32_t kOptionsGauge      = 0x3F0;
+inline constexpr std::uint32_t kOptionsGaugeStrip = 0x400;
+inline constexpr std::uint32_t kGaugeArrowLeft    = 0x3D0;  // Arrow_Left
+inline constexpr std::uint32_t kGaugeHead         = 0x3F0;  // Img_Gauge_Head
+inline constexpr std::uint32_t kGaugeText         = 0x400;  // Txt_Setting
+inline constexpr float         kGaugePitch        = 28.0f;  // a cell's width
+inline constexpr float         kGaugeHeadX        = 80.5f;  // the marker's x at cell 0
+inline constexpr std::uint32_t kPanelSlotParent   = 0x28;   // UPanelSlot::Parent (stock 4.26)
+inline constexpr std::uint32_t kCanvasSlotLeft    = 0x38;   // Square's canvas slot: LayoutData.Offsets.Left
+inline constexpr std::uint32_t kCanvasSlotTop     = 0x3C;   // and .Top
+
 // --- Taking the page down the way its own no-animation Back does (research/RE-coop-page-facts.md §5) ---------------
 
 /// UEndUserWidget::RemoveFromParent (the overlay add's counterpart).
