@@ -48,8 +48,13 @@ struct Option
 };
 
 // The table. An option's owner (the module named beside it) applies the reading at its install.
+inline constexpr std::array<const wchar_t*, 6> kColumnOrderWords{L"123", L"132", L"213", L"231", L"312", L"321"};
+inline constexpr std::array<const wchar_t*, 6> kColumnOrderLabels{L"1 2 3", L"1 3 2", L"2 1 3", L"2 3 1", L"3 1 2", L"3 2 1"};
 inline constexpr std::array<const wchar_t*, 2> kTwoPlayerSplitWords{L"vertical", L"horizontal"};
 inline constexpr std::array<const wchar_t*, 2> kTwoPlayerSplitLabels{L"Vertical", L"Horizontal"};
+inline constexpr std::array<const wchar_t*, 4> kThreePlayerSplitWords{L"top", L"bottom", L"left", L"right"};
+inline constexpr std::array<const wchar_t*, 4> kThreePlayerSplitLabels{L"One on Top, Two on Bottom", L"One on Bottom, Two on Top",
+                                                                       L"One on Left, Two on Right", L"One on Right, Two on Left"};
 inline constexpr std::array<const wchar_t*, 2> kOnOffWords{L"on", L"off"};
 inline constexpr std::array<const wchar_t*, 2> kOnOffLabels{L"On", L"Off"};
 
@@ -69,13 +74,28 @@ inline constexpr Option kMonitors{  // views/window_span, views/monitor_picks Fi
     false, L"Monitors in the Row", {},
     L"The monitors of the row, left to right, chosen in the Multi Monitor Setup app; they are moved into a row while the game holds it and back afterwards. Empty: the longest row the desktop has.",
     true};
+inline constexpr Option kColumnOrder{  // views/column_layout
+    L"Views", L"column-order", kColumnOrderWords, L"123",
+    L"which screen each player takes: the players left to right (in one window, three players: the large view, then the "
+    L"other two, top or left first; two players: top then bottom, or left then right), by player number whatever the "
+    L"order they joined in, the player not in skipped: 123 players 1, 2, 3, 132 player 2 on the right and player 3 in the "
+    L"middle, 213 player 2 first and player 1 second",
+    false, L"Screen Order", kColumnOrderLabels,
+    L"Which screen each player takes, left to right. In one window with three players the first takes the large view. "
+    L"With two players the one not playing is skipped."};
 inline constexpr Option kTwoPlayerSplit{  // players/split_layout
     L"Views", L"two-player-split", kTwoPlayerSplitWords, L"horizontal",
     L"two players in one window: vertical (side by side) or horizontal (top and bottom); a span of monitors is always side "
     L"by side (Ctrl+F5 switches it for the session)",
     false, L"2-Player Split-Screen Layout", kTwoPlayerSplitLabels,
     L"Vertical: side by side. Horizontal: one above the other."};
-
+inline constexpr Option kThreePlayerSplit{  // views/column_layout
+    L"Views", L"three-player-split", kThreePlayerSplitWords, L"top",
+    L"three players in one window: top (one across the top, two below), bottom (two above, one across the bottom), left "
+    L"(one down the left, two stacked on the right) or right (two stacked on the left, one down the right); the screen "
+    L"order's first player takes the large view; a span of monitors is always columns",
+    false, L"3-Player Split-Screen Layout", kThreePlayerSplitLabels,
+    L"How three players share one screen. The first player in the screen order takes the large view."};
 // The split FOV's weight (views/view_shape.h SplitFov): 0 to 1 in steps of 0.05, written "0.35".
 inline constexpr std::size_t kFovWeightSteps = 21;
 using FovWeightText = std::array<std::array<wchar_t, 5>, kFovWeightSteps>;
@@ -115,8 +135,18 @@ inline constexpr Option kHorizontalFov{  // views/player_view_point
     L"For views wider than the game's picture. Low: more of the scene, everything smaller. High: characters at their usual size, cut off "
     L"lower down. 0.50: the middle."};
 
+inline constexpr Option kVerticalFov{  // views/player_view_point
+    L"Views", L"split-fov.vertical", kFovWeightWords, L"1.00",
+    L"how a full-height view narrower than the game's image shares the difference (two players side by side, the large view of "
+    L"three with one on the left or on the right): 0.00 keeps the single-player width (the whole picture's width shown: "
+    L"everything smaller), 1.00 the single-player size (as tall as in single player, the sides cropped); steps of 0.05",
+    false, L"Vertical Split-Screen FOV", kFovWeightWords,
+    L"For full-height views narrower than the game's picture. Low: more of the scene, everything smaller. High: characters at "
+    L"their usual size, the sides cropped."};
 /// Every option, in the order the settings file lists them.
-inline constexpr std::array kOptions{&kMultiMonitor, &kMonitors, &kTwoPlayerSplit, &kHorizontalFov};
+inline constexpr std::array kOptions{&kMultiMonitor,     &kMonitors,      &kColumnOrder,
+                                     &kTwoPlayerSplit,  &kThreePlayerSplit, &kHorizontalFov,
+                                     &kVerticalFov};
 
 /// The option is a row of the table (Of and Why answer by the row).
 consteval bool Listed(const Option& option)
@@ -127,7 +157,8 @@ consteval bool Listed(const Option& option)
     }
     return false;
 }
-static_assert(Listed(kMultiMonitor) && Listed(kMonitors) && Listed(kTwoPlayerSplit) && Listed(kHorizontalFov),
+static_assert(Listed(kMultiMonitor) && Listed(kMonitors) && Listed(kColumnOrder) && Listed(kTwoPlayerSplit) &&
+                  Listed(kThreePlayerSplit) && Listed(kHorizontalFov) && Listed(kVerticalFov),
               "every option is a row of kOptions");
 
 /// Where an option's word came from.

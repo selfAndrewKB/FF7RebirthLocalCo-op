@@ -60,6 +60,7 @@ struct Window
     int          seat       = 0;      // 0 player 1's
     std::wstring name;                // the character in capitals ("TIFA")
     bool         open       = false;  // the player's window is open: its keys show (else only a note does)
+    bool         canMove    = false;  // more than one screen: LB/RB move the view
     bool         startJoins = false;  // a seat is free: Start on another pad adds a player (said on player 1's)
     Note         note       = Note::None;
     int          about      = 0;      // the note's player
@@ -114,6 +115,10 @@ inline ScreenText TextFor(const Window& w)
     }
     else if (w.open)
     {
+        if (w.canMove)
+        {
+            lines.push_back({icon(L"L1") + L" " + icon(L"R1") + L" Move my view", L"LB/RB: move my view"});
+        }
         lines.push_back({icon(L"cross") + L" Done", L"A: done"});
         if (w.seat >= 1)
         {

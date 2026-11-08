@@ -11,8 +11,9 @@
 // on player 1's window for a while.
 // View held a second on a player's pad opens that player's window, in their own view only (the game's own message
 // window, hud/view_window; the engine's font, hud/view_prompt, where none can be shown). Only that pad then reads idle
-// to the game; everyone else plays on. In it: A, Start, a B tap or View held again close it; B held a second takes
-// player 2 or 3 out of the game (player 1 is refused, said on its window).
+// to the game; everyone else plays on. In it: LB/RB move the view one screen left or right, swapped with what is there
+// (the screen order changed and saved: the setting column-order); A, Start, a B tap or View held again close it; B held
+// a second takes player 2 or 3 out of the game (player 1 is refused, said on its window).
 // The views becoming one (a scene, a menu) close every window.
 // On the title screen a pad that presses a button becomes player 1's (its pad moved onto slot 0), so the person who
 // starts the game plays player 1 on their own pad.

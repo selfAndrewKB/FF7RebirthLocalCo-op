@@ -36,9 +36,11 @@ std::vector<std::wstring> LinesOf(const std::wstring& markup)
     return lines;
 }
 
-/// A and Start close an open window; any other press does nothing (B's tap and hold come by OnB).
+/// LB/RB move the view, A and Start close an open window; any other press does nothing (B's tap and hold come by OnB).
 void TheKeys()
 {
+    EXPECT(OnPress(kLB) == (Action{Act::Move, -1}));
+    EXPECT(OnPress(kRB) == (Action{Act::Move, +1}));
     EXPECT(OnPress(pad::kA).act == Act::Close);
     EXPECT(OnPress(pad::kStart).act == Act::Close);
     EXPECT(OnPress(pad::kB).act == Act::Nothing);
@@ -54,6 +56,21 @@ void TheB()
     EXPECT(OnB(0, false, true).act == Act::Refused);
     EXPECT(OnB(1, false, false).act == Act::Nothing);
 }
+/// A view moves one screen, swapped with what is there (a player or a copy); never past the row's edge.
+void TheViewMoves()
+{
+    const auto right = Moved({0, 1, -1}, 3, 0, +1);
+    EXPECT(right && (*right == std::array<int, kSeats>{1, 0, -1}));
+    const auto ontoCopy = Moved({0, 1, -1}, 3, 1, +1);
+    EXPECT(ontoCopy && (*ontoCopy == std::array<int, kSeats>{0, -1, 1}));
+    EXPECT(!Moved({0, 1, -1}, 3, 0, -1));   // the left edge
+    EXPECT(!Moved({0, 1, 2}, 3, 2, +1));    // the right edge
+    EXPECT(!Moved({0, -1, -1}, 1, 0, +1));  // one screen
+    EXPECT(!Moved({0, 1, -1}, 2, 2, -1));   // a seat on no screen
+    const auto two = Moved({1, 0, -1}, 2, 0, -1);
+    EXPECT(two && (*two == std::array<int, kSeats>{0, 1, -1}));
+    EXPECT(OrderWord({2, 1, 3}) == L"213");
+}
 /// The title screen's press takes player 1's slot; a join's pad takes the new player's; a pad's seat is its slot's.
 void PadsAndSeats()
 {
@@ -68,21 +85,23 @@ void PadsAndSeats()
     EXPECT(SeatOf({1, 0, 2, 3}, 0b1, 1) == 0);
 }
 
-/// Player 2's open window: the character, done, leave; one key a line.
+/// Player 2's open window: the character, move, done, leave; one key a line.
 void PlayerTwosWindow()
 {
-    Window w{.seat = 1, .name = L"BARRET", .open = true};
+    Window w{.seat = 1, .name = L"BARRET", .open = true, .canMove = true};
     const ScreenText t = TextFor(w);
     const std::vector<std::wstring> lines{
         L"PLAYER 2    <color=yellow>BARRET</color>",
+        L"<button=L1,pad> <button=R1,pad> Move my view",
         L"<button=cross,pad> Done",
         L"Hold <button=circle,pad> to leave the game",
     };
     EXPECT(LinesOf(t.markup) == lines);
     EXPECT(t.plain[0] == L"PLAYER 2    BARRET");
-    EXPECT(t.plain[1] == L"A: done");
-    EXPECT(t.plain[2] == L"Hold B to leave the game");
-    EXPECT(t.plain[3].empty());
+    EXPECT(t.plain[1] == L"LB/RB: move my view");
+    EXPECT(t.plain[2] == L"A: done");
+    EXPECT(t.plain[3] == L"Hold B to leave the game");
+    EXPECT(t.plain[4].empty());
 }
 /// Player 1's: no leave; the Start hint while a player can still join.
 void PlayerOnesWindow()
@@ -132,6 +151,7 @@ int main()
 {
     TheKeys();
     TheB();
+    TheViewMoves();
     PadsAndSeats();
     PlayerTwosWindow();
     PlayerOnesWindow();

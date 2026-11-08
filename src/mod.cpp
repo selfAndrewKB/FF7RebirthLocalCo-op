@@ -82,7 +82,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.109.0";  // built against the Nexus UE4SS (c0a8d4c)
+constexpr const wchar_t* kVersion = L"0.110.0";  // built against the Nexus UE4SS (c0a8d4c)
 
 /// How often the seats' status lines are written while a seat is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -582,8 +582,15 @@ private:
                                            : L"one window again: two players as chosen");
         }
         LogLayoutChange(layout_.Update(columns.map.count == 2, span));
+        // Each place of the engine's list as the screen order sees it: the seat whose view it is, -1 for a mirror's.
+        lss::views::column_rules::ListSeats seats{-1, -1, -1};
+        for (int place = 0; place < static_cast<int>(seats.size()) && place < columns.map.count; ++place)
+        {
+            const int seat = columns.map.seatAt[static_cast<std::size_t>(place)];
+            seats[static_cast<std::size_t>(place)] = seat >= 0 && seat < lss::players::kMaxPlayers ? seat : -1;
+        }
         lss::views::column_layout::Tick(columns.map.count, lss::views::window_span::ColumnWidths(),
-                                        lss::views::window_span::ColumnHeights());
+                                        lss::views::window_span::ColumnHeights(), seats, columns.held);
         // After the layout: the views' shapes read it; the one place "the split is shown" is kept (views::SplitShown,
         // views::ViewsSplit).
         lss::views::Follow(SplitFrameNow(splitShown, viewsSplit));

@@ -28,11 +28,11 @@ inline constexpr std::uint8_t kMajorAxisFov = 2;
 inline constexpr std::uint8_t kMaintainXFov = 1;
 
 /// The weight a settings word stands for ("0.35": platform/settings.h kHorizontalFov's words, steps of 0.05), by the
-/// word's place in the table, so no locale's decimal mark is read; the rule's default for any other text.
-inline float SplitFovWeightOf(std::wstring_view word) noexcept
+/// word's place in the table, so no locale's decimal mark is read; `fallback` (the option's default) for any other text.
+inline float SplitFovWeightOf(std::wstring_view word, float fallback = split_fov_rules::kDefaultWeight) noexcept
 {
     const auto step = platform::settings::WordIndex(platform::settings::kHorizontalFov, word);
-    return step ? static_cast<float>(*step * 5) / 100.0f : split_fov_rules::kDefaultWeight;
+    return step ? static_cast<float>(*step * 5) / 100.0f : fallback;
 }
 
 /// The option's word for a weight from 0 to 1 (the nearest step: "0.50"); empty for a weight outside that (the

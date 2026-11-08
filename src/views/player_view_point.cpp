@@ -60,6 +60,7 @@ std::atomic<bool>          g_splitShown{false};  // a seat in and its own view o
 std::atomic<bool>          g_viewsSplit{false};  // more than one view on screen (the HUD per column)
 std::atomic<std::uint32_t> g_axisOffset{0};  // 0 until reflection has confirmed it
 std::atomic<float>         g_fovWeight{split_fov_rules::kDefaultWeight};  // 0..1; negative: the MajorAxisFOV rule
+std::atomic<float>         g_narrowWeight{split_fov_rules::kDefaultNarrowWeight};  // 0..1: a narrower full-height view's
 std::atomic<std::int32_t>  g_viewportWidth{0};   // the whole game viewport in pixels (every view's part together); 0 until known
 std::atomic<std::int32_t>  g_viewportHeight{0};
 
@@ -298,6 +299,7 @@ struct Seen
     int           height   = 0;
     int           windowW  = 0;
     int           windowH  = 0;
+    float         weight   = -1.0f;  // the weight the rule took (a new one logs again)
     bool          applies  = false;
 };
 constexpr std::size_t kSeenRecords = 4;  // one per local player the engine allows
@@ -343,8 +345,10 @@ void NoteShape(const void* localPlayer, int slot, const split_fov_rules::Shape& 
     }
     const int width = static_cast<int>(shape.viewWidth), height = static_cast<int>(shape.viewHeight);
     const int windowW = static_cast<int>(shape.windowWidth), windowH = static_cast<int>(shape.windowHeight);
+    const float weight = narrow ? g_narrowWeight.load(std::memory_order_relaxed) : g_fovWeight.load(std::memory_order_relaxed);
     if (seen->applies == applies &&
-        (!applies || (seen->width == width && seen->height == height && seen->windowW == windowW && seen->windowH == windowH)))
+        (!applies || (seen->width == width && seen->height == height && seen->windowW == windowW && seen->windowH == windowH &&
+                      seen->weight == weight)))
     {
         return;
     }
@@ -352,8 +356,9 @@ void NoteShape(const void* localPlayer, int slot, const split_fov_rules::Shape& 
     if (narrow)
     {
         platform::Log(L"split FOV: {}'s {}x{} view of a {}x{} window takes the narrow view's FOV (width {:.2f} of the single-player "
-                      L"picture): the camera's {:.1f} deg at {:.3f} becomes {:.1f} deg wide",
-                      who, width, height, windowW, windowH, split_fov_rules::WidthRatio(shape, aspect), fov, aspect, split);
+                      L"picture, weight {:.2f}): the camera's {:.1f} deg at {:.3f} becomes {:.1f} deg wide",
+                      who, width, height, windowW, windowH, split_fov_rules::WidthRatio(shape, aspect),
+                      g_narrowWeight.load(std::memory_order_relaxed), fov, aspect, split);
     }
     else if (wide)
     {
@@ -372,12 +377,14 @@ void NoteShape(const void* localPlayer, int slot, const split_fov_rules::Shape& 
     seen->height  = height;
     seen->windowW = windowW;
     seen->windowH = windowH;
+    seen->weight  = weight;
 }
 
 /// With a weight chosen and the view's shape known, writes the MaintainXFOV rule and the view's FOV
 /// (views/split_fov_rules.h): a view wider than the camera's image takes the split FOV, which on a full-height column
 /// of a wider monitor keeps the camera's vertical FOV; a full-height view narrower than the image takes the narrow
-/// view's FOV at the weight that keeps the single-player scale; a view of the image's shape keeps the camera's FOV.
+/// view's FOV at the split-fov.vertical weight (1.00 keeps the single-player scale); a view of the image's shape keeps the
+/// camera's FOV.
 /// Otherwise the MajorAxisFOV rule. `slot`: the seat (0 for player 1), or -1 for a mirror view.
 void ApplySplitFov(void* localPlayer, std::byte* viewInfo, int slot) noexcept
 {
@@ -408,7 +415,7 @@ void ApplySplitFov(void* localPlayer, std::byte* viewInfo, int slot) noexcept
     const bool  wide   = split_fov_rules::Applies(shape, cameraRatio);
     const bool  narrow = split_fov_rules::AppliesNarrow(shape, cameraRatio);
     const float split  = wide     ? split_fov_rules::SplitFov(fov, cameraRatio, shape, weight)
-                         : narrow ? split_fov_rules::NarrowFov(fov, cameraRatio, shape, split_fov_rules::kDefaultNarrowWeight)
+                         : narrow ? split_fov_rules::NarrowFov(fov, cameraRatio, shape, g_narrowWeight.load(std::memory_order_relaxed))
                                   : fov;
     std::memcpy(viewInfo + view_info::kFov, &split, sizeof(split));
     NoteShape(localPlayer, slot, shape, wide, narrow, cameraRatio, fov, split);
@@ -550,6 +557,9 @@ bool InstallPlayerViewPoint(const platform::GameImage& image) noexcept
     // The settings file's weight (one of the table's words, so it maps), as the console sets it later.
     namespace settings = platform::settings;
     SetSplitFovWeight(SplitFovWeightOf(settings::Of(settings::kHorizontalFov).word));
+    g_narrowWeight.store(SplitFovWeightOf(settings::Of(settings::kVerticalFov).word, split_fov_rules::kDefaultNarrowWeight), std::memory_order_relaxed);
+    platform::Log(L"split FOV: vertical split weight {} ({})", settings::Of(settings::kVerticalFov).word,
+                  settings::Why(settings::kVerticalFov));
     platform::Log(L"split FOV: horizontal split weight {} ({})", settings::Of(settings::kHorizontalFov).word,
                   settings::Why(settings::kHorizontalFov));
     return true;
@@ -863,6 +873,19 @@ void RegisterViewPointCommands()
             return Outcome{true, L"weight set; applies to filled halves"};
         },
         [] { return SplitFovWord(); });
+    control::RegisterOption(
+        platform::settings::kVerticalFov,
+        [](const std::wstring& word) {
+            const float weight = SplitFovWeightOf(word, split_fov_rules::kDefaultNarrowWeight);
+            if (!(weight >= 0.0f && weight <= 1.0f))
+            {
+                return Outcome{false, L"a weight 0.00 to 1.00"};  // the shape checks the words
+            }
+            g_narrowWeight.store(weight, std::memory_order_relaxed);
+            platform::Log(L"split FOV: vertical split weight {} (the console)", word);
+            return Outcome{true, L"weight set; applies to full-height views narrower than the game's image"};
+        },
+        [] { return SplitFovWordOf(g_narrowWeight.load(std::memory_order_relaxed)); });
     // The stock rule for a comparison: on puts the weight aside, off brings it back.
     static float aside = split_fov_rules::kDefaultWeight;
     control::Register({.name  = L"split-fov.native",

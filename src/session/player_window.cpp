@@ -8,12 +8,14 @@
 #include "modules.h"
 #include "platform/guarded_read.h"
 #include "platform/log.h"
+#include "platform/settings.h"
 #include "players/describe.h"
 #include "players/generation.h"
 #include "players/seats.h"
 #include "session/player_window_rules.h"
 #include "session/player_window_text.h"
 #include "session/session.h"
+#include "views/column_layout.h"
 #include "views/whole_screen.h"
 
 #if LSS_DEV
@@ -196,6 +198,7 @@ void ShowWindows()
         w.name       = NameOf(seat);
         g_drawnCharacters[static_cast<std::size_t>(seat)] = CharacterOf(seat);
         w.open       = g_open[static_cast<std::size_t>(seat)];
+        w.canMove    = g_lastScreens >= 2;
         w.startJoins = seat == 0 && FreeSeat() >= 0;
         w.note       = note.note;
         w.about      = note.about;
@@ -326,6 +329,43 @@ void TitlePress(int user)
     input::pad_table::Set(rules::WithPlayerOne(table, user), L"a pad pressed on the title screen: it plays player 1");
 }
 
+/// Each screen's seat now (-1 for a copy's): the engine's list placed by the screen order, as the layout places it.
+std::array<int, kSeats> SeatOnScreens()
+{
+    std::array<int, kSeats> seatOn{-1, -1, -1};
+    const int  screens = std::clamp(views::column_layout::Views(), 1, kSeats);
+    const auto seats   = views::column_layout::Seats();
+    const auto slots   = views::column_rules::ScreenSlots(screens, views::column_layout::CurrentOrder(), seats);
+    for (int place = 0; place < screens; ++place)
+    {
+        const int slot = slots[static_cast<std::size_t>(place)];
+        if (slot >= 0 && slot < kSeats)
+        {
+            seatOn[static_cast<std::size_t>(slot)] = seats[static_cast<std::size_t>(place)];
+        }
+    }
+    return seatOn;
+}
+
+/// `seat`'s view one screen `dir`: swapped with what is there, the screen order changed and saved.
+void MoveView(int seat, int dir)
+{
+    const int  screens = std::clamp(views::column_layout::Views(), 1, kSeats);
+    const auto moved   = rules::Moved(SeatOnScreens(), screens, seat, dir);
+    const auto order   = moved ? views::column_rules::OrderShowing(*moved) : std::nullopt;
+    if (!order)
+    {
+        platform::LogDebug(L"player window: {}'s view cannot move {} (the row's edge, or one screen)", players::SeatName(seat),
+                           dir < 0 ? L"left" : L"right");
+        return;
+    }
+    views::column_layout::ChangeOrder(*order, L"a player moved their view");
+    platform::settings::Save(platform::settings::kColumnOrder, rules::OrderWord(order->player));
+    g_redraw = true;
+    platform::Log(L"player window: {}'s view moves {}; the screen order is now {} {} {}", players::SeatName(seat),
+                  dir < 0 ? L"left" : L"right", order->player[0], order->player[1], order->player[2]);
+}
+
 /// One pad's input while its player's window is open.
 void WindowInput(const Event& e, int seat)
 {
@@ -334,10 +374,18 @@ void WindowInput(const Event& e, int seat)
     {
         g_bSeen[at] = true;
     }
-    for (const std::uint16_t button : {pad::kA, pad::kStart})
+    for (const std::uint16_t button : {rules::kLB, rules::kRB, pad::kA, pad::kStart})
     {
-        if ((e.pressed & button) != 0 && g_open[static_cast<std::size_t>(seat)] &&
-            rules::OnPress(button).act == rules::Act::Close)
+        if ((e.pressed & button) == 0 || !g_open[static_cast<std::size_t>(seat)])
+        {
+            continue;
+        }
+        const rules::Action a = rules::OnPress(button);
+        if (a.act == rules::Act::Move)
+        {
+            MoveView(seat, a.dir);
+        }
+        else if (a.act == rules::Act::Close)
         {
             Close(seat, L"done");
         }

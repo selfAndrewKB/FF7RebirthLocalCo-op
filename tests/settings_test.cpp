@@ -56,7 +56,12 @@ void TableConsistent()
             open = option->section;
         }
     }
-    EXPECT(kOptions.size() == 4);
+    EXPECT(kOptions.size() == 7);
+    EXPECT(kVerticalFov.words.size() == kFovWeightSteps && std::wcscmp(kVerticalFov.fallback, L"1.00") == 0);
+    // The screen order's six words, by player number, the default 123; the three-player layouts in one window (no
+    // columns: three equal columns are the span's only).
+    EXPECT(kColumnOrder.words.size() == 6 && std::wcscmp(kColumnOrder.fallback, L"123") == 0);
+    EXPECT(kThreePlayerSplit.words.size() == 4 && std::wcscmp(kThreePlayerSplit.fallback, L"top") == 0);
     // The two-player layout's words are the engine's: vertical = side by side, horizontal = top/bottom, the default.
     EXPECT(std::wcscmp(kTwoPlayerSplit.words[0], L"vertical") == 0 && std::wcscmp(kTwoPlayerSplit.wordLabels[0], L"Vertical") == 0);
     EXPECT(std::wcscmp(kTwoPlayerSplit.fallback, L"horizontal") == 0);

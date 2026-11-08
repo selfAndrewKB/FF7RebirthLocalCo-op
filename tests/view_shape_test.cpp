@@ -103,6 +103,8 @@ void TestSplitFovWords()
         EXPECT(SplitFovWordOf(weight) == kFovWeightWords[step]);
     }
     EXPECT(SplitFovWeightOf(L"0.50") == 0.5f && SplitFovWeightOf(L"1.00") == 1.0f && SplitFovWeightOf(L"0.00") == 0.0f);
+    // Another word: the option's own default (the vertical weight's is 1.00, the horizontal's 0.50).
+    EXPECT(SplitFovWeightOf(L"x", 1.0f) == 1.0f && SplitFovWeightOf(L"x") == 0.5f);
     EXPECT(SplitFovWeightOf(L"0.5") == kDefaultWeight);
     EXPECT(SplitFovWeightOf(L"") == kDefaultWeight);
     EXPECT(SplitFovWordOf(-1.0f).empty());
