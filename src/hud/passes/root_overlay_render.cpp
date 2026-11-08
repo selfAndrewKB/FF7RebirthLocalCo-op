@@ -185,7 +185,7 @@ void ColumnPass(int column, int seat, bool another, SeatPassKind kind) noexcept
     const bool content = EnterSeat(column, seat, copy);  // the column's levers and updates (seat_hud_content.h)
     if (content)
     {
-        // Under the column's view rect: placed through the column's controller, ranged from the shown player's
+        // Under the column's marker host set: placed through the column's controller, ranged from the shown player's
         // character (player 1's: the game's own answer).
         column_area_icons::Tick(column, ColumnController(),
                                 shown != 0 ? players::generation::MemberOf(shown) : nullptr,
@@ -205,6 +205,10 @@ void ColumnPass(int column, int seat, bool another, SeatPassKind kind) noexcept
     if (content)
     {
         LeaveSeat(column, seat, another);
+    }
+    else
+    {
+        PutBackPlayerOneHostSet();  // the render wrote its own set; the passes after it and player 1's read player 1's
     }
     column_area_icons::ShowOnly(0);
     pass_opacity::ShowOnly(0);  // player 1's rows, markers, pins and command menu for player 1's pass

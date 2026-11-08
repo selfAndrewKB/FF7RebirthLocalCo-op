@@ -9,7 +9,7 @@
 // wrappers are pure apart from the popup's canvas slot offset and visibility. So:
 //   - capture: while the game runs, each placement call is recorded with the arguments the game
 //     passed (a few bytes at each wrapper's entry, hud/battle/popups_code.h);
-//   - replay: in a seat's overlay pass (the seat's view rect set) each live popup is placed again by
+//   - replay: in a seat's overlay pass (the column's marker host set) each live popup is placed again by
 //     the same wrapper with the seat's controller, and in player 1's re-run with the controller the
 //     popup stored, which reproduces the game's own placement (the last pass of the frame is player
 //     1's, as the next tick reads the UMG popups' visibility).

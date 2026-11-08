@@ -145,13 +145,16 @@ inline constexpr std::uint8_t kContainScaleBytes[] = {
     0xC5, 0xFA, 0x10, 0x54, 0x24, 0x10};             // vmovss xmm2, [rsp+10h]
 inline constexpr FunctionFact kContainScale{L"EndUI::ContainScaleFor1920x1080", 0x1409F52B0, kContainScaleBytes};
 
-// The overlay singleton (SEndRootOverlay__GetOrCreate 0x1410EAB8C): the player-0 view size it
-// caches before asking for the rect (written at 0x140C95F3C), and the host scale the marker
-// helpers read (EndUI__ProjectWorldToRootOverlay and its twin are its only readers found).
+// The overlay singleton (SEndRootOverlay__GetOrCreate 0x1410EAB8C) and its marker host set: the block each overlay render
+// writes for the view it renders, and the marker projection reads (EndUI__ProjectWorldToRootOverlay and its twin are its
+// only readers found; RE-p2-hud.md P2.5, the projection's formula). Same offsets in 1.005 (RE-1005-offsets-A.md).
 inline constexpr std::uintptr_t kRootOverlaySingleton = 0x1491D1948;
-inline constexpr std::uint32_t  kOverlayViewWidth     = 0x328;
-inline constexpr std::uint32_t  kOverlayViewHeight    = 0x32C;
-inline constexpr std::uint32_t  kOverlayHostScale     = 0x330;
+inline constexpr std::uint32_t  kOverlayLayoutMin     = 0x310;  // float x, y: the UI rect's Min (stored, not read)
+inline constexpr std::uint32_t  kOverlayViewOrigin    = 0x318;  // float x, y: player 0's view rect's Min (0x140C95F2C)
+inline constexpr std::uint32_t  kOverlayUiSize        = 0x320;  // float w, h: the UI rect's size (the band in a split)
+inline constexpr std::uint32_t  kOverlayViewWidth     = 0x328;  // float: player 0's view size, cached before the rect
+inline constexpr std::uint32_t  kOverlayViewHeight    = 0x32C;  // call (written at 0x140C95F3C)
+inline constexpr std::uint32_t  kOverlayHostScale     = 0x330;  // float: the host scale (the mod's in a band)
 
 // ---------------------------------------------------------------------------------------------
 // The user widget (UUserWidget)

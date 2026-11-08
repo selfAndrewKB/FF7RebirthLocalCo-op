@@ -36,6 +36,7 @@
 
 #include <array>
 #include <atomic>
+#include <cstddef>
 #include <cstring>
 #include <format>
 #include <optional>
@@ -64,8 +65,20 @@ constexpr std::uint32_t  kAbilityNameWidget = 0x8;
 // elements; weak widgets at +0x00 (projected), +0x28 (placed at the point), +0x30 (animated).
 constexpr std::uint32_t  kFieldTargetWidgets[] = {0x00, 0x28, 0x30};
 
-// The overlay's cached player view rect (RE-p2-hud.md P2.5): min x/y and size, floats.
-constexpr std::array<std::uint32_t, 4> kOverlayRectFields{0x318, 0x31C, 0x328, 0x32C};
+/// The overlay's marker host set (facts/hud.h) as it lies, read and written in one guarded copy. Each render writes it for
+/// the view it renders, and a column's updates run before that column's render, so they would read the set the render
+/// before them left: another view's, wrong wherever the views differ in shape (three players: player 1's wide band and
+/// two narrow views). Each pass's updates get their column's set, as its render last wrote it, and player 1's comes back
+/// for player 1's re-run.
+struct HostValues
+{
+    float min[2] = {}, origin[2] = {}, ui[2] = {}, size[2] = {}, scale = 0.0f;
+};
+static_assert(sizeof(HostValues) == facts::kOverlayHostScale + sizeof(float) - facts::kOverlayLayoutMin);
+static_assert(offsetof(HostValues, origin) == facts::kOverlayViewOrigin - facts::kOverlayLayoutMin);
+static_assert(offsetof(HostValues, ui) == facts::kOverlayUiSize - facts::kOverlayLayoutMin);
+static_assert(offsetof(HostValues, size) == facts::kOverlayViewWidth - facts::kOverlayLayoutMin);
+static_assert(offsetof(HostValues, scale) == facts::kOverlayHostScale - facts::kOverlayLayoutMin);
 
 // New roots (markers the game adds) get the seats' contexts within this many frames.
 constexpr std::uint32_t kRootScanFrames = 30;
@@ -89,7 +102,7 @@ enum Lever : unsigned
     kLeverContexts    = 1,
     kLeverFirstPlayer = 2,
     kLeverPrimary     = 4,
-    kLeverRect        = 8,
+    kLeverHostSet     = 8,    // each column's marker host set for its updates (HostValues)
     kLeverUpdates     = 16,
     kLeverCompass     = 32,
     kLeverArrows      = 64,   // the off-screen arrows' own timers in each seat's view (hud/field/marker_timers.h)
@@ -108,9 +121,7 @@ std::uintptr_t         g_endUISystem = 0;
 alignas(8) std::uint64_t g_firstPlayerAnswer = 0;
 
 // Game thread.
-using Rect = std::array<float, 4>;
-
-std::atomic<bool>                                    g_on{false};
+std::atomic<bool>                                   g_on{false};
 bool                                                 g_refused      = false;
 std::uint32_t                                        g_framesToScan = 0;
 bool                                                 g_rootsChecked = false;  // this frame's root scan check ran
@@ -121,10 +132,17 @@ int   g_holderShown      = 0;        // whose map the minimap's holder last ran 
 int g_mirrorPrimaryHeld = -1;  // a mirror's copy held its controller as the primary last time: 1, 0, -1 not yet
 float                                                g_savedTimeStep = 0.0f;
 float*                                               g_timeStep      = nullptr;  // saved in Enter, restored in Leave
-Rect                                                 g_playerOneRect{};
-// By column ([0] unused): each further column's view rect as its last render computed it, and whether it is known yet.
-std::array<Rect, overlay_pass::kMaxColumns>          g_columnRect{};
-std::array<bool, overlay_pass::kMaxColumns>          g_columnRectKnown{};
+// Player 1's set, saved once a frame before the passes (player 1's render wrote it last) and put back after each
+// further column's render, whether its levers held or not, so no later pass or re-run reads a column's.
+HostValues                                           g_playerOneHostSet{};
+bool                                                 g_playerOneHostSetSaved = false;
+// By column ([0] unused): each further column's host set as its last render wrote it; known only while that column
+// rendered with its levers every frame since and the columns kept their hands (a skipped frame or a join, leave or
+// mirror change forgets it: the first pass after one runs with player 1's set, as before any pass).
+std::array<HostValues, overlay_pass::kMaxColumns>    g_columnHostSet{};
+std::array<bool, overlay_pass::kMaxColumns>          g_columnHostSetKnown{};
+std::array<bool, overlay_pass::kMaxColumns>          g_columnHostSetRead{};  // read back this frame
+views::columns::Map                                  g_hostSetMap;  // the columns the sets were read for
 std::array<bool, overlay_pass::kMaxColumns>          g_loggedEnter{};
 views::columns::Map                                  g_scannedMap;  // the columns the roots' contexts were built for
 struct FieldTargets
@@ -245,25 +263,18 @@ std::uintptr_t Overlay() noexcept
     return overlay;
 }
 
-bool ReadRect(Rect& rect) noexcept
+bool ReadHostSet(HostValues& set) noexcept
 {
     const std::uintptr_t overlay = Overlay();
-    for (std::size_t i = 0; overlay != 0 && i < rect.size(); ++i)
-    {
-        if (!platform::CopyGuarded(&rect[i], reinterpret_cast<const void*>(overlay + kOverlayRectFields[i]), sizeof(float)))
-        {
-            return false;
-        }
-    }
-    return overlay != 0;
+    return overlay != 0 &&
+           platform::CopyGuarded(&set, reinterpret_cast<const void*>(overlay + facts::kOverlayLayoutMin), sizeof(set));
 }
 
-void WriteRect(const Rect& rect) noexcept
+void WriteHostSet(const HostValues& set) noexcept
 {
-    const std::uintptr_t overlay = Overlay();
-    for (std::size_t i = 0; overlay != 0 && i < rect.size(); ++i)
+    if (const std::uintptr_t overlay = Overlay(); overlay != 0)
     {
-        platform::WriteGuarded(reinterpret_cast<void*>(overlay + kOverlayRectFields[i]), &rect[i], sizeof(float));
+        platform::WriteGuarded(reinterpret_cast<void*>(overlay + facts::kOverlayLayoutMin), &set, sizeof(set));
     }
 }
 
@@ -499,7 +510,7 @@ void SetSeatHudContent(bool on) noexcept
 {
     g_on.store(on && g_installed && !g_refused, std::memory_order_relaxed);
     g_framesToScan = 0;
-    g_columnRectKnown.fill(false);
+    g_columnHostSetKnown.fill(false);
     g_loggedEnter.fill(false);
     platform::Log(L"HUD levers: players 2 and 3's content {}",
                   SeatHudContentOn() ? L"on" : on ? L"unavailable" : L"off");
@@ -508,9 +519,9 @@ void SetSeatHudContent(bool on) noexcept
 void SetSeatLeversMask(unsigned mask) noexcept
 {
     g_mask = mask;
-    platform::Log(L"HUD levers: mask {} (contexts {}, first player {}, primary {}, rect {}, updates {}, compass {}, arrows {}, "
+    platform::Log(L"HUD levers: mask {} (contexts {}, first player {}, primary {}, host set {}, updates {}, compass {}, arrows {}, "
                   L"gauges {}, popups {})",
-                  mask, Acts(kLeverContexts), Acts(kLeverFirstPlayer), Acts(kLeverPrimary), Acts(kLeverRect),
+                  mask, Acts(kLeverContexts), Acts(kLeverFirstPlayer), Acts(kLeverPrimary), Acts(kLeverHostSet),
                   Acts(kLeverUpdates), Acts(kLeverCompass), Acts(kLeverArrows), Acts(kLeverGauges), Acts(kLeverPopups));
 }
 
@@ -538,9 +549,29 @@ void BeginPasses() noexcept
     }
     g_rootsChecked    = false;
     g_passedThisFrame = false;
+    // A column that did not render with its levers last frame, or any column after the columns changed, has no set.
+    const bool sameColumns = overlay_pass::Map() == g_hostSetMap;
+    g_hostSetMap           = overlay_pass::Map();
+    for (std::size_t c = 0; c < g_columnHostSetKnown.size(); ++c)
+    {
+        g_columnHostSetKnown[c] = sameColumns && g_columnHostSetKnown[c] && g_columnHostSetRead[c];
+    }
+    g_columnHostSetRead.fill(false);
+    g_playerOneHostSetSaved = ReadHostSet(g_playerOneHostSet);
+}
+
+void PutBackPlayerOneHostSet() noexcept
+{
+    if (g_playerOneHostSetSaved)
+    {
+        WriteHostSet(g_playerOneHostSet);
+    }
 }
 
 namespace {
+
+/// LeaveSeat's way back; `rendered` false (a throw before the render) leaves the column's set unread.
+void LeaveLevers(int column, bool another, bool rendered) noexcept;
 
 /// The refusal for a failed way back to player 1 (LeaveSeat, SettleSeats). Allocates only for the log line.
 void RefuseWayBack(bool contexts, bool ticks) noexcept
@@ -594,10 +625,9 @@ bool EnterSeatLevers(int column, int seat, bool copy) noexcept
         }
         LogFieldTargets();
         HoldTimeStep();  // L6
-        ReadRect(g_playerOneRect);
-        if (g_columnRectKnown[c] && Acts(kLeverRect))
+        if (g_playerOneHostSetSaved && g_columnHostSetKnown[c] && Acts(kLeverHostSet))
         {
-            WriteRect(g_columnRect[c]);  // what the column's render computed last frame (via L2)
+            WriteHostSet(g_columnHostSet[c]);  // what the column's render wrote last frame (its view through L2, its band)
         }
         const double start = Now();
         const bool   runs  = RunUpdates({column, seat, copy ? 0 : seat, controller});
@@ -631,19 +661,20 @@ bool EnterSeatLevers(int column, int seat, bool copy) noexcept
         if (!g_loggedEnter[c])
         {
             g_loggedEnter[c] = true;
-            platform::Log(L"HUD levers: {} in column {} with {} HUD root(s); the column's view rect {}",
+            platform::Log(L"HUD levers: {} in column {} with {} HUD root(s); the column's marker host set {}",
                           seat == 0 ? std::wstring(L"a copy of player 1's HUD")
                           : copy    ? std::format(L"{}'s pass with a copy of player 1's HUD", players::SeatName(seat))
                                     : std::format(L"{}'s pass", players::SeatName(seat)),
                           column + 1, hud_roots::Count(),
-                          g_columnRectKnown[c] ? L"from the last frame" : L"not known yet (first frame)");
+                          g_columnHostSetKnown[c] ? L"from the last frame" : L"not known yet (first frame)");
         }
         return true;
     }
     catch (...)
     {
-        // Only the log lines allocate; whatever was switched before the throw is put back.
-        LeaveSeat(column, seat, false);
+        // Only the log lines allocate; whatever was switched before the throw is put back (no render ran: the
+        // column's set is not read back).
+        LeaveLevers(column, false, false);
         g_on.store(false, std::memory_order_relaxed);
         return false;
     }
@@ -669,17 +700,25 @@ bool EnterSeat(int column, int seat, bool copy) noexcept
 
 void LeaveSeat(int column, int seat, bool another) noexcept
 {
+    static_cast<void>(seat);  // the pass's seat: EnterSeat's pair (0 for a mirror's)
+    LeaveLevers(column, another, true);
+}
+
+namespace {
+
+void LeaveLevers(int column, bool another, bool rendered) noexcept
+{
     // Every lever is put back whatever happens to the others: each step is guarded on its own
     // (the engine calls by SEH inside the helpers), and nothing here allocates except the log.
     // With another further pass to come, the roots' contexts and player 1's re-run wait for the
     // last pass: the next pass's own contexts and updates replace this one's, and the roots go
     // back to player 1 once (hud/context_owners.h).
-    if (column >= 1 && column < overlay_pass::kMaxColumns)
+    if (rendered && column >= 1 && column < overlay_pass::kMaxColumns)
     {
-        const auto c         = static_cast<std::size_t>(column);
-        g_columnRectKnown[c] = ReadRect(g_columnRect[c]);  // computed by the column's render through L2
+        const auto c            = static_cast<std::size_t>(column);
+        g_columnHostSetRead[c]  = ReadHostSet(g_columnHostSet[c]);  // written by the column's render
+        g_columnHostSetKnown[c] = g_columnHostSetRead[c];
     }
-    static_cast<void>(seat);  // the pass's seat: EnterSeat's pair (0 for a mirror's)
     g_firstPlayerAnswer = 0;
     g_columnController  = nullptr;
     double mark         = Now();
@@ -690,7 +729,7 @@ void LeaveSeat(int column, int seat, bool another) noexcept
         mark     = Charge(kContextsOne, mark);
     }
     g_primary.reset();  // SwapWindow's close: a no-op unless it opened
-    WriteRect(g_playerOneRect);
+    PutBackPlayerOneHostSet();
     bool ticks = true;
     mark       = Now();
     if (!another)
@@ -712,6 +751,8 @@ void LeaveSeat(int column, int seat, bool another) noexcept
     RefuseWayBack(contexts, ticks);
 }
 
+}  // namespace
+
 void SettleSeats() noexcept
 {
     if (!g_playerOneDue)
@@ -720,6 +761,7 @@ void SettleSeats() noexcept
     }
     g_playerOneDue = false;
     ++g_settledLate;
+    PutBackPlayerOneHostSet();  // player 1's re-run reads player 1's set
     HoldTimeStep();  // L6 for player 1's re-run, as inside a pass
     double     mark     = Now();
     const bool contexts = !Acts(kLeverContexts) || hud_roots::SetContexts(0);
@@ -768,7 +810,7 @@ void RegisterSeatHudContentCommands()
         {.name  = L"hud-levers-mask",
          .shape = control::Shape::Integer,
          .max   = 511,
-         .help  = L"diagnosis: which levers act (1 contexts, 2 first player, 4 primary controller, 8 view rect, 16 "
+         .help  = L"diagnosis: which levers act (1 contexts, 2 first player, 4 primary controller, 8 the marker host set, 16 "
                   L"updates, 32 compass, 64 the arrows' own timers, 128 the enemy gauges per view, 256 the battle "
                   L"popups per view)",
          .set   = [](const Value& v) {

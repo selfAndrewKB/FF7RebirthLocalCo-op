@@ -16,7 +16,7 @@
 //     recorded arguments, then given the tick's final y-offset position for the gauges the tick
 //     applies it to (the offset's ease is not advanced). It has every input of the tick, so it
 //     reproduces the tick's placement;
-//   - a seat's replay (the seat's context and view rect set): each gauge classified as targeted by
+//   - a seat's replay (the seat's context and the column's marker host set): each gauge classified as targeted by
 //     the seat's own displayed target (or its main target), or by the view-independent cases the
 //     tick recorded, and placed by the matching function; the targeted one inside a LeaderScope, as
 //     its clamp keeps the gauge clear of the leader. The "targeted" ease (a y offset toward -60 that
