@@ -12,7 +12,7 @@
 // Roots come and go (the game adds markers as it needs them), so the list is rescanned from
 // hud/user_widgets.h, which needs no walk of every UObject. Game thread only.
 
-#include "players/seats.h"
+#include "views/columns.h"
 
 #include <array>
 #include <cstddef>
@@ -32,18 +32,18 @@ namespace lss::hud::hud_roots {
 /// Checks SetPlayerContext's prologue. False (logged by the caller) if it differs.
 bool Install(const platform::GameImage& image) noexcept;
 
-/// Each seat's local player ([0] player 1's), null for a seat with none listed.
-using LocalPlayerSet = std::array<RC::Unreal::UObject*, players::kMaxPlayers>;
+/// Each column's local player ([0] player 1's; a seat's or a mirror's in the others), null for a column not listed.
+using LocalPlayerSet = std::array<RC::Unreal::UObject*, views::columns::kMaxColumns>;
 
-/// The game instance's local players by seat (their controller id; the list's order is the views', not the seats'),
-/// or false without player 1's. The game instance is found once and then only checked for liveness.
-bool LocalPlayers(LocalPlayerSet& bySeat);
+/// The game instance's local players by column (the list's order is the columns', views/columns.h), or false without
+/// player 1's first. The game instance is found once and then only checked for liveness.
+bool LocalPlayers(LocalPlayerSet& byColumn);
 
-/// Refreshes the root list and every listed player's context. False if player 1's cannot be built yet.
-bool Scan(const LocalPlayerSet& bySeat);
+/// Refreshes the root list and every listed column's context. False if player 1's cannot be built yet.
+bool Scan(const LocalPlayerSet& byColumn);
 
-/// The last scan built the seat's context.
-bool HasContext(int seat) noexcept;
+/// The last scan built the column's context.
+bool HasContext(int column) noexcept;
 
 /// Adds widget to the root list at once if it is a root not listed yet (a root the game made since
 /// the last scan and that is known now, e.g. an enemy's ability-name label), so this frame's context
@@ -57,12 +57,12 @@ void Adopt(RC::Unreal::UObject* widget);
 /// (RE-p2-field-interact.md §12.14). True if it is a root. Game thread, before a seat's SetContexts.
 bool AdoptSelfPlacing(RC::Unreal::UObject* widget);
 
-/// Gives a seat's context to every live root shown in its pass and to the self-placing ones that do not
-/// carry it already (hud/context_owners.h), or player 1's (seat 0) back to every root a seat's reached (and clears
-/// the self-placing marks). A root a pass does not need keeps an earlier pass's context until the way back; a root of
-/// a context-free class keeps player 1's while the skip is on (SetSkipContextFree).
-/// False if the engine raised an exception inside SetPlayerContext, or the seat has no context.
-bool SetContexts(int seat) noexcept;
+/// Gives a further column's context to every live root shown in its pass and to the self-placing ones that do not
+/// carry it already (hud/context_owners.h), or player 1's (column 0) back to every root a further column's reached
+/// (and clears the self-placing marks). A root a pass does not need keeps an earlier pass's context until the way back;
+/// a root of a context-free class keeps player 1's while the skip is on (SetSkipContextFree).
+/// False if the engine raised an exception inside SetPlayerContext, or the column has no context.
+bool SetContexts(int column) noexcept;
 
 /// The census since the last call, for the perf log: the setter's calls per frame each way, its time, and the
 /// costliest root classes. Counts start afresh. May throw (out of memory).

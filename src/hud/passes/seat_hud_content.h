@@ -52,15 +52,16 @@ unsigned SeatLeversMask() noexcept;
 /// Game thread, once a frame before the seats' passes: the roots' rescan is checked by the frame's first pass.
 void BeginPasses() noexcept;
 
-/// Game thread, just before a seat's overlay render. True if the levers are now the seat's
-/// (then LeaveSeat must follow the render). False: player 1's levers and re-run (SettleSeats), so the pass
-/// renders player 1's content.
-bool EnterSeat(int seat) noexcept;
+/// Game thread, just before a further column's overlay render for the seat in it. The roots' contexts, the first
+/// player and the view rect follow the column's local player; the primary controller and the updates the seat. True if
+/// the levers are now the column's (then LeaveSeat must follow the render). False: player 1's levers and re-run
+/// (SettleSeats), so the pass renders player 1's content.
+bool EnterSeat(int column, int seat) noexcept;
 
-/// Game thread, just after the seat's overlay render: levers back to player 1, player 1's re-run. With `another`
-/// (another seat's pass follows in this frame) the HUD roots keep the seat's contexts and player 1's re-run waits:
+/// Game thread, just after the column's overlay render: levers back to player 1, player 1's re-run. With `another`
+/// (another further pass follows in this frame) the HUD roots keep the column's contexts and player 1's re-run waits:
 /// the next pass sets its own and does the way back.
-void LeaveSeat(int seat, bool another) noexcept;
+void LeaveSeat(int column, int seat, bool another) noexcept;
 
 /// Game thread: player 1's contexts and re-run, if a pass left them for the next one (PlayerOneDue). From EnterSeat
 /// when the levers fail, and after the seats' passes when a planned pass did not run (its image not ready;

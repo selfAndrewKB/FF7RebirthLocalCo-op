@@ -149,7 +149,7 @@ void ColumnPass(int column, int seat, bool another, SeatPassKind kind) noexcept
     // that player's rows, markers, pins and command menu only (hud/passes/pass_opacity.h)
     pass_opacity::ShowOnly(shown);
     target_views::BeforePass(shown);  // the other players' cursors and gauges collapsed before the seat's updates
-    const bool content = EnterSeat(seat);  // the seat's levers and updates (hud/passes/seat_hud_content.h)
+    const bool content = EnterSeat(column, seat);  // the column's levers, the seat's updates (seat_hud_content.h)
     if (content)
     {
         seat_area_icons::Tick(seat, static_cast<float>(deltaTime));  // under the seat's view rect
@@ -167,7 +167,7 @@ void ColumnPass(int column, int seat, bool another, SeatPassKind kind) noexcept
     target_views::BeforePass(0);  // the seat's, collapsed before player 1's updates (put back after the render)
     if (content)
     {
-        LeaveSeat(seat, another);
+        LeaveSeat(column, seat, another);
     }
     seat_area_icons::ShowOnly(0);
     pass_opacity::ShowOnly(0);  // player 1's rows, markers, pins and command menu for player 1's pass

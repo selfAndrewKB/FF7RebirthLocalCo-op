@@ -15,6 +15,7 @@
 #include "hud/hud_updates.h"
 #include "hud/minimap/minimap.h"
 #include "hud/passes/first_player_code.h"
+#include "hud/passes/overlay_pass.h"
 #include "hud/user_widgets.h"
 #include "platform/code_redirect.h"
 #include "platform/frame_watch.h"
@@ -116,10 +117,11 @@ std::optional<scopes::primary_controller::Scope> g_primary;
 float                                                g_savedTimeStep = 0.0f;
 float*                                               g_timeStep      = nullptr;  // saved in Enter, restored in Leave
 Rect                                                 g_playerOneRect{};
-// By seat ([0] unused): each seat's view rect as its last render computed it, and whether it is known yet.
-std::array<Rect, players::kMaxPlayers>               g_seatRect{};
-std::array<bool, players::kMaxPlayers>               g_seatRectKnown{};
-std::array<bool, players::kMaxPlayers>               g_loggedEnter{};
+// By column ([0] unused): each further column's view rect as its last render computed it, and whether it is known yet.
+std::array<Rect, overlay_pass::kMaxColumns>          g_columnRect{};
+std::array<bool, overlay_pass::kMaxColumns>          g_columnRectKnown{};
+std::array<bool, overlay_pass::kMaxColumns>          g_loggedEnter{};
+views::columns::Map                                  g_scannedMap;  // the columns the roots' contexts were built for
 struct FieldTargets
 {
     std::size_t entries = 0, roots = 0, hiddenSwapped = 0;
@@ -275,30 +277,37 @@ void RestoreTimeStep() noexcept
     }
 }
 
-/// Rescans the HUD roots every kRootScanFrames frames, checked once a frame (the first seat pass). False if a scan
-/// failed (tried again by the next pass, this frame's or the next's) or the seat has no context (rescanned next frame).
-bool KeepRootsCurrent(const hud_roots::LocalPlayerSet& bySeat, int seat)
+/// Rescans the HUD roots every kRootScanFrames frames, and at once when the columns changed (a join, a leave, a mirror
+/// in or out: a column's context would name its former player), checked once a frame (the first further pass). False
+/// if a scan failed (tried again by the next pass, this frame's or the next's) or the column has no context (rescanned
+/// next frame).
+bool KeepRootsCurrent(const hud_roots::LocalPlayerSet& byColumn, int column)
 {
     if (!g_rootsChecked)
     {
+        if (overlay_pass::Map() != g_scannedMap)
+        {
+            g_framesToScan = 0;
+        }
         if (g_framesToScan == 0)
         {
             const platform::frame_watch::Job job(L"HUD root scan");
             const double start   = Now();
-            const bool   scanned = hud_roots::Scan(bySeat);
+            const bool   scanned = hud_roots::Scan(byColumn);
             Charge(kScan, start);
             if (!scanned)
             {
                 return false;
             }
             g_framesToScan = kRootScanFrames;
+            g_scannedMap   = overlay_pass::Map();
         }
         --g_framesToScan;
         g_rootsChecked = true;
     }
-    if (!hud_roots::HasContext(seat))
+    if (!hud_roots::HasContext(column))
     {
-        g_framesToScan = 0;  // the seat's context was not built: the next frame scans again
+        g_framesToScan = 0;  // the column's context was not built: the next frame scans again
         return false;
     }
     return true;
@@ -393,11 +402,11 @@ void LogFieldTargets()
                        now.entries, now.roots, now.hiddenSwapped);
 }
 
-/// L1 to the seat; on failure, puts player 1's contexts back and refuses.
-bool ContextsToSeat(int seat)
+/// L1 to the column's player (the seat's, `seat`, for the log); on failure, puts player 1's contexts back and refuses.
+bool ContextsToSeat(int column, int seat)
 {
     const double start    = Now();
-    const bool   contexts = !Acts(kLeverContexts) || hud_roots::SetContexts(seat);
+    const bool   contexts = !Acts(kLeverContexts) || hud_roots::SetContexts(column);
     Charge(kContextsSeat, start);
     if (contexts)
     {
@@ -473,7 +482,7 @@ void SetSeatHudContent(bool on) noexcept
 {
     g_on.store(on && g_installed && !g_refused, std::memory_order_relaxed);
     g_framesToScan = 0;
-    g_seatRectKnown.fill(false);
+    g_columnRectKnown.fill(false);
     g_loggedEnter.fill(false);
     platform::Log(L"HUD levers: players 2 and 3's content {}",
                   SeatHudContentOn() ? L"on" : on ? L"unavailable" : L"off");
@@ -534,31 +543,32 @@ void RefuseWayBack(bool contexts, bool ticks) noexcept
     }
 }
 
-bool EnterSeatLevers(int seat) noexcept
+bool EnterSeatLevers(int column, int seat) noexcept
 {
     try
     {
-        hud_roots::LocalPlayerSet bySeat{};
-        if (!SeatHudContentOn() || !players::SeatIndex(seat) || !hud_roots::LocalPlayers(bySeat) ||
-            bySeat[static_cast<std::size_t>(seat)] == nullptr || !KeepRootsCurrent(bySeat, seat) || !HoldPrimary(seat))
+        hud_roots::LocalPlayerSet byColumn{};
+        if (!SeatHudContentOn() || !players::SeatIndex(seat) || column < 1 || column >= overlay_pass::kMaxColumns ||
+            !hud_roots::LocalPlayers(byColumn) || byColumn[static_cast<std::size_t>(column)] == nullptr ||
+            !KeepRootsCurrent(byColumn, column) || !HoldPrimary(seat))
         {
             return false;
         }
-        const auto s = static_cast<std::size_t>(seat);
-        g_firstPlayerAnswer = Acts(kLeverFirstPlayer) ? reinterpret_cast<std::uint64_t>(bySeat[s]) : 0;  // L2
+        const auto c = static_cast<std::size_t>(column);
+        g_firstPlayerAnswer = Acts(kLeverFirstPlayer) ? reinterpret_cast<std::uint64_t>(byColumn[c]) : 0;  // L2
         AdoptAbilityNames();
         AdoptFieldTargets();
         search_pins::Adopt();
-        if (!ContextsToSeat(seat))                                                                       // L1
+        if (!ContextsToSeat(column, seat))                                                                 // L1
         {
             return false;
         }
         LogFieldTargets();
         HoldTimeStep();  // L6
         ReadRect(g_playerOneRect);
-        if (g_seatRectKnown[s] && Acts(kLeverRect))
+        if (g_columnRectKnown[c] && Acts(kLeverRect))
         {
-            WriteRect(g_seatRect[s]);  // what the seat's render computed last frame (via L2)
+            WriteRect(g_columnRect[c]);  // what the column's render computed last frame (via L2)
         }
         const double start = Now();
         const bool   runs  = RunUpdates(seat);
@@ -570,19 +580,19 @@ bool EnterSeatLevers(int seat) noexcept
             Refuse(players::BySeat(seat, L"a HUD update raised an exception in player 2's run",
                                    L"a HUD update raised an exception in player 3's run"));
         }
-        if (!g_loggedEnter[s])
+        if (!g_loggedEnter[c])
         {
-            g_loggedEnter[s] = true;
-            platform::Log(L"HUD levers: {}'s pass with {} HUD root(s); {}'s view rect {}", players::SeatName(seat),
-                          hud_roots::Count(), players::SeatName(seat),
-                          g_seatRectKnown[s] ? L"from the last frame" : L"not known yet (first frame)");
+            g_loggedEnter[c] = true;
+            platform::Log(L"HUD levers: {}'s pass in column {} with {} HUD root(s); the column's view rect {}",
+                          players::SeatName(seat), column + 1, hud_roots::Count(),
+                          g_columnRectKnown[c] ? L"from the last frame" : L"not known yet (first frame)");
         }
         return true;
     }
     catch (...)
     {
         // Only the log lines allocate; whatever was switched before the throw is put back.
-        LeaveSeat(seat, false);
+        LeaveSeat(column, seat, false);
         g_on.store(false, std::memory_order_relaxed);
         return false;
     }
@@ -590,9 +600,9 @@ bool EnterSeatLevers(int seat) noexcept
 
 }  // namespace
 
-bool EnterSeat(int seat) noexcept
+bool EnterSeat(int column, int seat) noexcept
 {
-    const bool entered = EnterSeatLevers(seat);
+    const bool entered = EnterSeatLevers(column, seat);
     if (!entered)
     {
         SettleSeats();  // the pass renders player 1's content: an earlier pass's contexts and positions put back
@@ -600,18 +610,19 @@ bool EnterSeat(int seat) noexcept
     return entered;
 }
 
-void LeaveSeat(int seat, bool another) noexcept
+void LeaveSeat(int column, int seat, bool another) noexcept
 {
     // Every lever is put back whatever happens to the others: each step is guarded on its own
     // (the engine calls by SEH inside the helpers), and nothing here allocates except the log.
-    // With another seat's pass to come, the roots' contexts and player 1's re-run wait for the
-    // last pass: the next seat's own contexts and updates replace this one's, and the roots go
+    // With another further pass to come, the roots' contexts and player 1's re-run wait for the
+    // last pass: the next pass's own contexts and updates replace this one's, and the roots go
     // back to player 1 once (hud/context_owners.h).
-    if (players::SeatIndex(seat))
+    if (column >= 1 && column < overlay_pass::kMaxColumns)
     {
-        const auto s      = static_cast<std::size_t>(seat);
-        g_seatRectKnown[s] = ReadRect(g_seatRect[s]);  // computed by the seat's render through L2
+        const auto c         = static_cast<std::size_t>(column);
+        g_columnRectKnown[c] = ReadRect(g_columnRect[c]);  // computed by the column's render through L2
     }
+    static_cast<void>(seat);  // the pass's seat: EnterSeat's pair (0 for a pass that shows player 1's)
     g_firstPlayerAnswer = 0;
     double mark         = Now();
     bool   contexts     = true;

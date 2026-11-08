@@ -1,12 +1,13 @@
 #pragma once
 
 // Whose player context each HUD root carries (hud/hud_roots.h), so a switch calls the game's setter only on the roots
-// whose player changes. The seats' passes run highest seat first, then player 1's (hud/passes/
-// root_overlay_render.cpp), and the roots go back to player 1 only once, after the last seat pass: with three
-// players a root shown in both seats' passes goes player 1's -> player 3's -> player 2's -> player 1's, three calls
+// whose player changes. The further columns' passes run highest column first, then player 1's (hud/passes/
+// root_overlay_render.cpp), and the roots go back to player 1 only once, after the last further pass: with three
+// columns a root shown in both further passes goes column 1's -> column 3's -> column 2's -> column 1's, three calls
 // a frame instead of four. Each call walks the root's whole tree of user widgets (UUserWidget::SetPlayerContext,
 // stock UE4), which is what the HUD's switch costs; the roots whose trees never read the context are not switched at
-// all. Pure: host-tested (tests/context_owners_test.cpp).
+// all. The `seat` arguments below are the owner index: the column whose context (hud/hud_roots.h). Pure: host-tested
+// (tests/context_owners_test.cpp).
 
 #include <array>
 #include <cstdint>
@@ -14,7 +15,7 @@
 
 namespace lss::hud::context_owners {
 
-/// The seat whose context a root carries; 0 is player 1's (every root's between frames).
+/// The column whose context a root carries; 0 is player 1's (every root's between frames).
 using Owner = std::int8_t;
 
 /// Root classes whose whole tree never reads the player context while it ticks or paints: the battle command menu and

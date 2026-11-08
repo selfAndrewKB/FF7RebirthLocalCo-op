@@ -71,18 +71,18 @@ struct ClassCost
 
 // Game thread.
 std::vector<Root>          g_roots;
-std::vector<Owner>         g_owner;  // per root: the seat whose context it carries (hud/context_owners.h)
+std::vector<Owner>         g_owner;  // per root: the column whose context it carries (hud/context_owners.h)
 std::vector<char>          g_selfPlacing;  // per root: shows or collapses itself in each run (marked per frame)
 std::vector<std::uint16_t> g_costOf;  // per root: its class's entry in g_costs
 std::vector<ClassCost>     g_costs;  // by class, in the order first seen; kept across scans
 std::unordered_map<const void*, std::uint16_t> g_costIndex;  // class -> entry in g_costs
-std::uint64_t              g_setsToSeats     = 0;  // since the last census: setter calls toward a seat
+std::uint64_t              g_setsToSeats     = 0;  // since the last census: setter calls toward a further column
 std::uint64_t              g_setsToOne       = 0;  // and back to player 1
-std::uint64_t              g_alreadyOwned    = 0;  // a pass needed the root, which carried that seat's context already
-std::uint64_t              g_contextFreeKept = 0;  // a shown context-free root left on player 1's in a seat's pass
+std::uint64_t              g_alreadyOwned    = 0;  // a pass needed the root, which carried that column's context already
+std::uint64_t              g_contextFreeKept = 0;  // a shown context-free root left on player 1's in a further pass
 bool                       g_skipContextFree = true;  // the hud-context-skip switch
-std::size_t       g_hiddenSwapped = 0;  // self-placing roots given a seat's context while collapsed, last pass
-PlayerContext     g_contexts[players::kMaxPlayers];  // by seat; a seat with no local player has none
+std::size_t       g_hiddenSwapped = 0;  // self-placing roots given a further column's context while collapsed, last pass
+PlayerContext     g_contexts[views::columns::kMaxColumns];  // by column; a column not listed has none
 Root              g_gameInstance;  // found once: FindFirstOf walks every UObject
 std::int32_t      g_slotOffset       = kNoOffset;  // UWidget::Slot and UWidget::Visibility, found once
 std::int32_t      g_visibilityOffset = kNoOffset;
@@ -226,9 +226,9 @@ bool Install(const platform::GameImage& image) noexcept
     return true;
 }
 
-bool LocalPlayers(LocalPlayerSet& bySeat)
+bool LocalPlayers(LocalPlayerSet& byColumn)
 {
-    bySeat = {};
+    byColumn = {};
     if (g_gameInstance.object == nullptr || !user_widgets::Alive(g_gameInstance))
     {
         UObject* instance = players::unreal::GameInstance();
@@ -237,26 +237,23 @@ bool LocalPlayers(LocalPlayerSet& bySeat)
                                                        instance->GetClassPrivate()};
     }
     auto* list = g_gameInstance.object == nullptr ? nullptr : players::unreal::LocalPlayers(g_gameInstance.object);
-    for (std::int32_t i = 0; list != nullptr && i < list->Num(); ++i)
+    // By the list's order, which is the columns' (a seat's or a mirror's local player in each further one).
+    for (std::int32_t i = 0; list != nullptr && i < list->Num() && i < views::columns::kMaxColumns; ++i)
     {
-        // By the controller id, which is the seat: the list's order is the views' on screen, not the seats'.
-        const std::int32_t id = players::LocalPlayerControllerId((*list)[i]);
-        if (id >= 0 && id < players::kMaxPlayers && bySeat[static_cast<std::size_t>(id)] == nullptr)
-        {
-            bySeat[static_cast<std::size_t>(id)] = (*list)[i];
-        }
+        byColumn[static_cast<std::size_t>(i)] = (*list)[i];
     }
+    const bool playerOneFirst = byColumn[0] != nullptr && players::LocalPlayerControllerId(byColumn[0]) == 0;
     static bool s_said = false;
-    if (bySeat[0] == nullptr && list != nullptr && list->Num() > 0 && !s_said)
+    if (!playerOneFirst && list != nullptr && list->Num() > 0 && !s_said)
     {
         s_said = true;
-        platform::Log(L"HUD roots: no listed local player has controller id 0 (player 1's); players 2 and 3's HUD "
-                      L"content stays off while that holds (logged once)");
+        platform::Log(L"HUD roots: the first listed local player is not player 1's (controller id 0); players 2 and "
+                      L"3's HUD content stays off while that holds (logged once)");
     }
-    return bySeat[0] != nullptr;
+    return playerOneFirst;
 }
 
-bool Scan(const LocalPlayerSet& bySeat)
+bool Scan(const LocalPlayerSet& byColumn)
 {
     // Every root is back to player 1's context between frames, and a scan runs before the frame's first switch, so
     // no root carries a seat's here. Defensive: one that did is put back before the list is forgotten (the
@@ -293,17 +290,18 @@ bool Scan(const LocalPlayerSet& bySeat)
     }
     g_owner.assign(g_roots.size(), 0);
     g_selfPlacing.assign(g_roots.size(), 0);
-    for (std::size_t seat = 0; seat < bySeat.size(); ++seat)
+    for (std::size_t column = 0; column < byColumn.size(); ++column)
     {
-        const std::uint64_t weak = bySeat[seat] == nullptr ? 0 : scopes::primary_controller::WeakValueOf(bySeat[seat]);
-        g_contexts[seat]         = weak == 0 ? PlayerContext{} : PlayerContext{weak, world};
+        const std::uint64_t weak =
+            byColumn[column] == nullptr ? 0 : scopes::primary_controller::WeakValueOf(byColumn[column]);
+        g_contexts[column] = weak == 0 ? PlayerContext{} : PlayerContext{weak, world};
     }
     return world != 0 && g_contexts[0].localPlayer != 0;
 }
 
-bool HasContext(int seat) noexcept
+bool HasContext(int column) noexcept
 {
-    return seat >= 0 && seat < players::kMaxPlayers && g_contexts[seat].localPlayer != 0;
+    return column >= 0 && column < views::columns::kMaxColumns && g_contexts[column].localPlayer != 0;
 }
 
 void Adopt(UObject* widget)
@@ -340,19 +338,20 @@ bool AdoptSelfPlacing(UObject* widget)
     return false;
 }
 
-bool SetContexts(int seat) noexcept
+bool SetContexts(int column) noexcept
 {
-    // A seat's context goes only to roots that are shown in its pass (a hidden root is neither
+    // A further column's context goes only to roots that are shown in its pass (a hidden root is neither
     // ticked nor painted), and to the self-placing ones whatever their visibility (their run shows
-    // or collapses them from the context's own projection), each only if it does not carry the seat's
+    // or collapses them from the context's own projection), each only if it does not carry the column's
     // already, and never to a context-free root while the skip is on; player 1's goes back to every
-    // root a seat's reached (hud/context_owners.h).
-    const bool toSeat = seat != 0;  // toward a seat
-    if (!HasContext(seat))
+    // root a further column's reached (hud/context_owners.h).
+    const int  seat   = column;  // the owner index (context_owners speaks of seats: here a column's)
+    const bool toSeat = column != 0;  // toward a further column
+    if (!HasContext(column))
     {
         return false;
     }
-    const PlayerContext& context = g_contexts[seat];
+    const PlayerContext& context = g_contexts[column];
     bool                 all     = true;
     if (toSeat)
     {
