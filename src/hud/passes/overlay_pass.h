@@ -109,13 +109,13 @@ constexpr bool OtherShape(float aspect, float aspectOne) noexcept
     return ratio > 1.01f || ratio < 1.0f / 1.01f;
 }
 
-/// What a seat's pass of the overlay render draws this frame.
+/// What a further column's pass of the overlay render draws this frame (a seat's column or a mirror's).
 enum class SeatPassKind
 {
-    None,       // no pass: the seat's view draws player 1's image (or the seat is out, or one view shows)
+    None,       // no pass: the column's view draws player 1's image (or its seat is out, or one view shows)
     Own,        // the seat's own HUD in its own view
-    PlayerOnes, // player 1's HUD laid out for the seat's view: its column shows player 1's picture on a monitor of
-                // another shape than player 1's, where player 1's image would be cut or inset
+    PlayerOnes, // a copy: player 1's HUD laid out for the column's view, which shows player 1's picture on a monitor
+                // of another shape than player 1's, where player 1's image would be cut or inset
 };
 
 /// The kind for a seat: `active` the seat in the game; `ownShown` its own view on screen; `onPlayerOne` its column on
@@ -132,6 +132,13 @@ constexpr SeatPassKind PassKindOf(bool active, bool ownShown, bool onPlayerOne, 
         return SeatPassKind::Own;
     }
     return viewsSplit && onPlayerOne && OtherShape(aspect, aspectOne) ? SeatPassKind::PlayerOnes : SeatPassKind::None;
+}
+
+/// The kind for a mirror's column (a copy of player 1's picture, views/mirror_player.h): player 1's HUD laid out for
+/// its view when several views show and its shape differs from player 1's; none otherwise (player 1's image fits).
+constexpr SeatPassKind MirrorPassKind(bool viewsSplit, float aspect, float aspectOne) noexcept
+{
+    return viewsSplit && OtherShape(aspect, aspectOne) ? SeatPassKind::PlayerOnes : SeatPassKind::None;
 }
 
 }  // namespace lss::hud::overlay_pass

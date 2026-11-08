@@ -210,6 +210,13 @@ void TestPassKinds()
     // The engine's single view (one window): no column, no pass; the shape not yet known: none.
     EXPECT(PassKindOf(true, false, true, false, kUltrawide, kSixteenNine) == SeatPassKind::None);
     EXPECT(PassKindOf(true, false, true, true, 0.0f, kSixteenNine) == SeatPassKind::None);
+    // A mirror's column: player 1's HUD laid out for it only when its shape differs (the LG beside 16:9 monitors);
+    // of player 1's shape it samples player 1's image; one view, or a shape not yet known: none.
+    using lss::hud::overlay_pass::MirrorPassKind;
+    EXPECT(MirrorPassKind(true, kUltrawide, kSixteenNine) == SeatPassKind::PlayerOnes);
+    EXPECT(MirrorPassKind(true, kSixteenNine, kSixteenNine) == SeatPassKind::None);
+    EXPECT(MirrorPassKind(false, kUltrawide, kSixteenNine) == SeatPassKind::None);
+    EXPECT(MirrorPassKind(true, 0.0f, kSixteenNine) == SeatPassKind::None);
 }
 
 int main()

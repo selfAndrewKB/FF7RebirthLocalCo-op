@@ -24,9 +24,10 @@ namespace lss::hud::popups {
 bool Install(const platform::GameImage& image) noexcept;
 void Remove() noexcept;
 
-/// With the view's levers set: every popup the game placed this frame placed again, with the seat's controller, or
-/// for player 1 (`seat` 0) with its own.
-void Replay(int seat) noexcept;
+/// With the view's levers set: every popup the game placed this frame placed again, with `controller` (the view's: a
+/// mirror view's for a copy of player 1's HUD), else the seat's, or for player 1 (`seat` 0, no controller) with its
+/// own.
+void Replay(int seat, void* controller = nullptr) noexcept;
 
 /// After the overlay render: the record emptied for the next tick.
 void EndFrame() noexcept;

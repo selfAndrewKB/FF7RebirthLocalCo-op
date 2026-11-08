@@ -27,8 +27,8 @@ namespace lss::hud::wrangle_targets {
 /// Finds the capture manager, the placer, the projection helper and the render-transform apply. Logged.
 void Install(const platform::GameImage& image) noexcept;
 
-/// Every bubble and the reticle placed again through the primary controller the pass holds (`seat` 0: player 1's,
-/// after a seat's pass). Nothing while no wrangle is up.
+/// Every bubble and the reticle placed again through the primary controller the pass holds (`seat` 0: player 1's
+/// after a seat's pass, or a mirror's held around this call in its copy). Nothing while no wrangle is up.
 void Place(int seat) noexcept;
 
 }  // namespace lss::hud::wrangle_targets

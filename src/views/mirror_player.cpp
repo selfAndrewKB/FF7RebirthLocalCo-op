@@ -91,8 +91,7 @@ void* PlayerOneController() noexcept
     {
         return nullptr;
     }
-    UObject** field = players::unreal::ControllerField((*listed)[0]);
-    return field == nullptr ? nullptr : *field;
+    return players::unreal::LocalPlayerController((*listed)[0]);
 }
 
 /// Aims the mirror's camera manager at player 1's view target when it views another; logged at Debug.
@@ -148,8 +147,7 @@ void FollowList() noexcept
             m.reaims     = 0;
             continue;
         }
-        UObject** field      = players::unreal::ControllerField(m.list->Player());
-        void*     controller = field == nullptr ? nullptr : *field;
+        void* controller = players::unreal::LocalPlayerController(m.list->Player());
         if (controller != m.controller)
         {
             platform::Log(L"mirror view: the mirror with controller id {} has a new controller {:#x}; followed",

@@ -163,6 +163,12 @@ UObject** ControllerField(UObject* localPlayer) noexcept
     return field != nullptr && offset == facts::kLocalPlayerControllerOffset ? field : nullptr;
 }
 
+UObject* LocalPlayerController(UObject* localPlayer) noexcept
+{
+    UObject** field = ControllerField(localPlayer);
+    return field != nullptr ? *field : nullptr;
+}
+
 std::optional<std::int32_t> ParamOffset(UFunction* function, const wchar_t* name, std::int32_t size) noexcept
 {
     auto* property = function->FindProperty(RC::Unreal::FName(name, RC::Unreal::FNAME_Find));

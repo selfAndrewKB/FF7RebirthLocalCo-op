@@ -184,9 +184,9 @@ void Remove() noexcept
     }
 }
 
-void Replay(int seat) noexcept
+void Replay(int seat, void* viewController) noexcept
 {
-    const bool isSeat = players::SeatIndex(seat);
+    const bool isSeat = players::SeatIndex(seat) || viewController != nullptr;  // a view other than player 1's
     std::uintptr_t manager = 0;
     std::uintptr_t canvas[2]{};  // the manager's TSharedPtr, copied: the wrappers read only its object
     if (!g_installed || g_failed || g_record.count == 0 || !Read(g_endUISystem + kManager, manager) || manager == 0 ||
@@ -194,7 +194,9 @@ void Replay(int seat) noexcept
     {
         return;
     }
-    void* controller = isSeat ? players::generation::ControllerOf(seat) : nullptr;
+    void* controller = viewController != nullptr ? viewController
+                       : isSeat                  ? players::generation::ControllerOf(seat)
+                                                 : nullptr;
     if (isSeat && controller == nullptr)
     {
         return;
@@ -216,7 +218,8 @@ void Replay(int seat) noexcept
              platform::Enabled(platform::Level::Trace))  // every HUD pass: Trace (platform/log.h)
     {
         platform::LogTrace(L"popups: placed again in {}'s view: {} numbers, {} texts, {} UMG ({} recorded)",
-                           players::SeatName(seat), counts[0], counts[1], counts[2], g_record.count);
+                           viewController != nullptr ? L"a copy of player 1's" : players::SeatName(seat), counts[0],
+                           counts[1], counts[2], g_record.count);
     }
 }
 

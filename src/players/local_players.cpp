@@ -251,8 +251,7 @@ LocalPlayers::Added LocalPlayers::Add(unreal::UObject* playerOneController) noex
     gameInstance_ = gameInstance;
     ++joins_;
 
-    unreal::UObject** field = unreal::ControllerField(player_);
-    added.controller        = field == nullptr ? nullptr : *field;
+    added.controller = unreal::LocalPlayerController(player_);
     if (created.called && created.controller != added.controller)
     {
         platform::Log(L"WARNING: CreatePlayer returned a controller other than the one {} lists", Name());

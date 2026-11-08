@@ -119,7 +119,35 @@ Scope::Scope(int seat) noexcept
         refusal_ = Refusal::NotPlayerOne;
         return;
     }
-    switch (window_.Open(field, current, bound.weak))
+    Swap(field, current, bound.weak);
+}
+
+Scope::Scope(void* playerOne, void* controller) noexcept
+{
+    const std::uint64_t weak =
+        Installed() && playerOne != nullptr && controller != nullptr ? players::weak_object::WeakOf(controller) : 0;
+    if (weak == 0)
+    {
+        return;  // refusal_ stays NotBound
+    }
+    std::uint64_t* field = PrimaryField();
+    if (field == nullptr)
+    {
+        refusal_ = Refusal::NoPartyManager;
+        return;
+    }
+    const std::uint64_t current = std::atomic_ref<std::uint64_t>(*field).load();
+    if (players::weak_object::ObjectAt(field) != playerOne)
+    {
+        refusal_ = Refusal::NotPlayerOne;
+        return;
+    }
+    Swap(field, current, weak);
+}
+
+void Scope::Swap(std::uint64_t* field, std::uint64_t current, std::uint64_t replacement) noexcept
+{
+    switch (window_.Open(field, current, replacement))
     {
         case SwapWindow::Opened::Swapped:
         case SwapWindow::Opened::AlreadyHeld: refusal_ = Refusal::None; break;
@@ -132,7 +160,8 @@ Scope::~Scope()
 {
     if (!window_.Close())
     {
-        players::generation::Fault(L"the party manager's primary controller changed while it named player 2 or 3");
+        players::generation::Fault(L"the party manager's primary controller changed while it named another player than "
+                                   L"player 1");
     }
 }
 

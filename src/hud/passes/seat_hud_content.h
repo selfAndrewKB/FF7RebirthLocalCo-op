@@ -1,11 +1,10 @@
 #pragma once
 
-// Each seat's content in its HUD image (Stage B2; per seat since plan/seats.md step 4): around the seat's
-// overlay pass (hud/passes/column_hud_images.h), the game's own answers to "which player" are switched to the seat, and
-// the game's own view-dependent HUD updates are run again for it (RE-p2-hud.md P8.6, pass 9 and pass 12). After the
-// pass everything is switched back and the same updates run again for player 1, whose render follows in the same frame;
-// between two seats' passes the roots' contexts and player 1's re-run are left to the last one (hud/
-// context_owners.h). Each seat keeps its own view rect between frames.
+// Each seat's content in its HUD image: around the seat's overlay pass (hud/passes/column_hud_images.h), the game's
+// own answers to "which player" are switched to the seat, and the game's own view-dependent HUD updates are run again
+// for it (RE-p2-hud.md P8.6, pass 9 and pass 12). After the pass everything is switched back and the same updates run
+// again for player 1, whose render follows in the same frame; between two seats' passes the roots' contexts and player
+// 1's re-run are left to the last one (hud/context_owners.h). Each seat keeps its own view rect between frames.
 //
 // The levers, each the game's own:
 //   L1  each HUD root's owning player: UUserWidget::SetPlayerContext, which the marker list and
@@ -53,7 +52,10 @@ unsigned SeatLeversMask() noexcept;
 void BeginPasses() noexcept;
 
 /// Game thread, just before a further column's overlay render for the seat in it. The roots' contexts, the first
-/// player and the view rect follow the column's local player; the primary controller and the updates the seat. True if
+/// player and the view rect follow the column's local player; the primary controller and the updates the seat. `seat` 0
+/// is a copy of player 1's content in a mirror's column: the primary controller stays player 1's (the mirror's is held
+/// only around the chocobo wrangle's placement, which projects through it), the popups project with the mirror's
+/// controller. True if
 /// the levers are now the column's (then LeaveSeat must follow the render). False: player 1's levers and re-run
 /// (SettleSeats), so the pass renders player 1's content.
 bool EnterSeat(int column, int seat) noexcept;

@@ -6,6 +6,7 @@
 #include "hud/field/action_icon_base.h"
 #include "hud/field/marker_timers.h"
 #include "hud/field/prompt_rows.h"
+#include "hud/hud_roots.h"
 #include "hud/hud_trace.h"
 #include "hud/layout/hud_placement.h"
 #include "hud/layout/overlay_layout.h"
@@ -75,20 +76,34 @@ int SeatIn(int column) noexcept
     return players::SeatIndex(seat) ? seat : 0;
 }
 
+/// A mirror's column (views/mirror_player.h): a copy of player 1's picture with no seat.
+bool MirrorIn(int column) noexcept
+{
+    return overlay_pass::SeatAt(column) == views::columns::kMirror;
+}
+
 /// What each further column's pass draws this frame (overlay_pass::PassKindOf over this frame's views, by the seat in
-/// the column), decided once before the passes: the loop and AnotherPassBelow read the same answer. `splitShown`: a
-/// seat's own view on screen.
+/// the column; MirrorPassKind for a mirror's, by its own view's shape), decided once before the passes: the loop and
+/// AnotherPassBelow read the same answer. `splitShown`: a seat's own view on screen.
 PassKinds PassKindsNow(bool splitShown) noexcept
 {
     PassKinds   kinds{};
     const bool  viewsSplit = views::ViewsSplit();
     const float aspectOne  = views::ViewAspect(0);
+    hud_roots::LocalPlayerSet byColumn{};
+    const bool                listed = overlay_pass::Map().mirrors > 0 && hud_roots::LocalPlayers(byColumn);
     for (int column = 1; column < overlay_pass::kMaxColumns; ++column)
     {
         const int seat = SeatIn(column);
         if (seat == 0)
         {
-            continue;  // a mirror's column: player 1's image
+            kinds[static_cast<std::size_t>(column)] =
+                listed && MirrorIn(column)
+                    ? overlay_pass::MirrorPassKind(viewsSplit,
+                                                   views::ViewAspectOf(byColumn[static_cast<std::size_t>(column)]),
+                                                   aspectOne)
+                    : SeatPassKind::None;
+            continue;
         }
         kinds[static_cast<std::size_t>(column)] =
             overlay_pass::PassKindOf(players::generation::Active(seat), splitShown, views::OnPlayerOne(seat), viewsSplit,
@@ -134,27 +149,46 @@ void NoteKind(int seat, SeatPassKind kind) noexcept
                       : L"no longer has a pass of player 1's HUD");
 }
 
-/// A further column's pass of the overlay render, for the seat in it: its levers and updates, its render into the entry
-/// named for the column, everything put back for the next pass (the roots' contexts and player 1's re-run only after
-/// the last further pass, `another` false). Its image is ready (column_hud_images's ImageReady). `kind` PlayerOnes: the
-/// levers are the seat's (the layout and the projections follow its view, which shows player 1's camera); the rows,
-/// markers, pins, command menu, cursors and the minimap's map are player 1's. The area icons stay the seat's own
-/// instance, ticked under its view: they are the same quest and party markers, and only that instance is placed for
-/// this view.
+/// The Info line when a mirror's column starts or stops having a pass of player 1's HUD (by column; game thread).
+SeatPassKind g_loggedMirrorKind[overlay_pass::kMaxColumns] = {};
+
+void NoteMirrorKind(int column, SeatPassKind kind) noexcept
+{
+    SeatPassKind& logged = g_loggedMirrorKind[column];
+    if (kind == logged)
+    {
+        return;
+    }
+    logged = kind;
+    platform::Log(L"HUD: the mirror view in column {} {}", column + 1,
+                  kind == SeatPassKind::PlayerOnes
+                      ? L"is on a monitor of another shape than player 1's: its pass draws player 1's HUD laid out for it"
+                      : L"has no pass of its own (player 1's image fits it, or one view shows)");
+}
+
+/// A further column's pass of the overlay render, for the seat in it (0: a mirror's): its levers and updates, its render
+/// into the entry named for the column, everything put back for the next pass (the roots' contexts and player 1's re-run
+/// only after the last further pass, `another` false). Its image is ready (column_hud_images's ImageReady). `kind`
+/// PlayerOnes, a copy: the layout and the projections follow the column's view, which shows player 1's camera; the rows,
+/// markers, pins, command menu, cursors and the minimap's map are player 1's, and no player's window shows. A seat's
+/// copy keeps the seat's own area-icon instance, ticked under its view (only that instance is placed for this view); a
+/// mirror has none, so its copy shows player 1's, placed for player 1's view.
 void ColumnPass(int column, int seat, bool another, SeatPassKind kind) noexcept
 {
     const double deltaTime = BeginColumnImage();  // the engine's DeltaTime 0 for the render; the slot taking part
     overlay_pass::Set(column);
-    const int shown = kind == SeatPassKind::PlayerOnes ? 0 : seat;  // whose HUD the pass shows
-    // that player's rows, markers, pins and command menu only (hud/passes/pass_opacity.h)
-    pass_opacity::ShowOnly(shown);
+    const bool copy  = kind == SeatPassKind::PlayerOnes;  // a copy of player 1's picture
+    const int  shown = copy ? 0 : seat;                    // whose HUD the pass shows
+    // that player's rows, markers, pins and command menu only, and in a copy no player's window
+    // (hud/passes/pass_opacity.h)
+    pass_opacity::ShowOnly(shown, copy);
     target_views::BeforePass(shown);  // the other players' cursors and gauges collapsed before the seat's updates
     const bool content = EnterSeat(column, seat);  // the column's levers, the seat's updates (seat_hud_content.h)
-    if (content)
+    if (content && seat != 0)
     {
         seat_area_icons::Tick(seat, static_cast<float>(deltaTime));  // under the seat's view rect
     }
-    seat_area_icons::ShowOnly(seat);
+    seat_area_icons::ShowOnly(seat);  // a mirror's (seat 0): player 1's icons
     const double start = Now();
     // The seat's minimap (hud/minimap/minimap.h); without it (and for player 1's HUD), player 1's pass alone renders
     // the minimap's map (hud/minimap/minimap_once.h).
@@ -221,9 +255,9 @@ void RenderRootOverlay(void* application) noexcept
         // column_hud_images.h holds the slot and renders; the levers and the per-pass opacities around each render are
         // the modules' own calls, in ColumnPass's order). A seat whose column shows player 1's camera (views/column_source.h
         // Source::PlayerOne: a held column while the game takes the whole screen, a shared ride, every seat's player
-        // waiting or single-view on; or a lone waiting player) gets no pass while its view has player 1's shape: it
-        // draws player 1's image, as a mirror's. On a monitor of another shape its pass draws player 1's HUD laid out
-        // for it, so a menu or a subtitle shows whole there.
+        // waiting or single-view on; or a lone waiting player) and a mirror's column get no pass while their view has
+        // player 1's shape: they draw player 1's image. On a monitor of another shape their pass draws player 1's HUD
+        // laid out for it, so a menu or a subtitle shows whole there.
         overlay_pass::Set(overlay_pass::kNone);
         BeginFrame();
         minimap::BeginOverlayRender();
@@ -231,14 +265,20 @@ void RenderRootOverlay(void* application) noexcept
         const PassKinds kinds = PassKindsNow(splitShown);
         for (int column = overlay_pass::kMaxColumns - 1; column >= 1; --column)
         {
-            const int          seat = SeatIn(column);
-            const SeatPassKind kind = kinds[static_cast<std::size_t>(column)];
+            const int          seat   = SeatIn(column);
+            const bool         mirror = MirrorIn(column);
+            const SeatPassKind kind   = kinds[static_cast<std::size_t>(column)];
             if (seat != 0)
             {
                 NoteKind(seat, kind);
+                g_loggedMirrorKind[column] = SeatPassKind::None;  // a mirror back in this column is noted again
+            }
+            else if (mirror)
+            {
+                NoteMirrorKind(column, kind);
             }
             const int shown = kind == SeatPassKind::PlayerOnes ? 0 : seat;  // whose HUD the pass shows
-            if (seat != 0 && ImageReady(column, kind != SeatPassKind::None, shown))
+            if ((seat != 0 || mirror) && ImageReady(column, kind != SeatPassKind::None, shown))
             {
                 ColumnPass(column, seat, AnotherPassBelow(column, kinds), kind);
             }

@@ -34,7 +34,11 @@ void CloseAll() noexcept;
 /// How many windows the game closed under the mod (a script's or the field start's reset): a change asks for a redraw.
 unsigned long long ClosedByGame() noexcept;
 
-/// Before an overlay pass: only `seat`'s window stays visible (0 player 1's). After the passes: every window back.
+/// No player's view: every window hidden in the pass (a copy of player 1's picture).
+inline constexpr int kNoView = -2;
+
+/// Before an overlay pass: only `seat`'s window stays visible (0 player 1's; kNoView none). After the passes: every
+/// window back.
 void ShowOnly(int seat) noexcept;
 void RestoreAll() noexcept;
 

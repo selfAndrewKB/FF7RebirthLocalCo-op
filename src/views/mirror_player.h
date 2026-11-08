@@ -10,8 +10,9 @@
 // builds for a player goes to a mirror), whose camera manager is aimed at player 1's view target with the game's own
 // SetViewTarget (camera/view_target.h) and re-aimed whenever player 1's changes (cutscenes). The engine lays
 // the columns out and renders the mirror's view as a player's (its own view family). A mirror has no pad (its
-// controller id is after the seats', players::IsMirrorId: no seat's HUD, no seat's pad), no member, no HUD pass of its
-// own: its view draws player 1's HUD (hud/passes/column_hud_images.h).
+// controller id is after the seats', players::IsMirrorId: no seat's HUD, no seat's pad), no member; its view draws
+// player 1's HUD, from a pass of its own only on a monitor of another shape than player 1's
+// (hud/passes/root_overlay_render.cpp).
 //
 // The mirrors follow the players: a seat's join takes every mirror out right before its CreatePlayer (the session's
 // clearMirrors) and they come back after it on the same tick, so the seat's column comes before theirs. A mirror

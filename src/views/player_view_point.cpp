@@ -796,6 +796,14 @@ bool ToggleFill() noexcept
     return on;
 }
 
+float ViewAspectOf(const void* localPlayer) noexcept
+{
+    split_fov_rules::Shape shape;
+    return localPlayer != nullptr && ReadShape(localPlayer, shape) && shape.viewHeight > 0.0f
+               ? shape.viewWidth / shape.viewHeight
+               : 0.0f;
+}
+
 float ViewAspect(int seat) noexcept
 {
     return seat >= 0 && seat < players::kMaxPlayers ? g_viewAspect[static_cast<std::size_t>(seat)].load(std::memory_order_relaxed)

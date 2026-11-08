@@ -212,8 +212,7 @@ void* PlayerOneController() noexcept
     {
         return nullptr;
     }
-    UObject** field = players::unreal::ControllerField((*listed)[0]);
-    kept            = field != nullptr ? *field : nullptr;
+    kept = players::unreal::LocalPlayerController((*listed)[0]);
     return kept;
 }
 

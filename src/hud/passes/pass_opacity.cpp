@@ -72,13 +72,13 @@ void HiddenSet::Forget() noexcept
 
 namespace pass_opacity {
 
-void ShowOnly(int seat) noexcept
+void ShowOnly(int seat, bool copy) noexcept
 {
     prompt_rows::ShowOnly(seat);
     field_markers::ShowOnly(seat);
     search_pins::ShowOnly(seat);
     battle::command_menu_view::ShowOnly(seat);
-    view_window::ShowOnly(seat);
+    view_window::ShowOnly(copy ? view_window::kNoView : seat);
 }
 
 void RestoreAll() noexcept

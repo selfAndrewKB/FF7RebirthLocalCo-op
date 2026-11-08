@@ -88,6 +88,9 @@ std::optional<StreamCamera> RenderedCamera(int seat) noexcept;
 /// `seat`'s view's width over its height (0 player 1's) as last shaped, or 0 until known (one view on screen, the
 /// viewport's size unread). Any thread.
 float ViewAspect(int seat) noexcept;
+/// The width over the height of `localPlayer`'s view (any listed local player: a mirror view's too), measured now as
+/// the views are shaped; 0 if unknown. Game thread.
+float ViewAspectOf(const void* localPlayer) noexcept;
 
 /// Whether a seat's own view is on screen, as last followed: the one place it is kept (the overlay render
 /// reads it here for the seats' HUD passes). Any thread.

@@ -80,6 +80,9 @@ RC::Unreal::TArray<UObject*>* LocalPlayers(UObject* gameInstance) noexcept;
 /// it or finds it anywhere other than facts::kLocalPlayerControllerOffset.
 UObject** ControllerField(UObject* localPlayer) noexcept;
 
+/// A local player's controller through ControllerField; null if the field is not found or holds none.
+UObject* LocalPlayerController(UObject* localPlayer) noexcept;
+
 /// A reflected static function (its path "/Script/Engine.<Class>:<Function>") and the class default object of
 /// `classPath` to call it on; empty when either is missing (callers test `function`).
 struct StaticCall

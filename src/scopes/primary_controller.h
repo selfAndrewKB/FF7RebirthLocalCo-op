@@ -14,7 +14,8 @@
 // still names the seat's when it ends; if the engine wrote the field in between, that newer value is
 // kept and every seat's generation is faulted, because the mod no longer knows who the primary player
 // is. Seats swap in turn, never one inside another's: a scope for one seat inside another seat's is
-// refused (NotPlayerOne).
+// refused (NotPlayerOne). A mirror's player (views/mirror_player.h) can be held the same way, from player 1's only, so
+// a placement that projects through "the" player places player 1's widgets from the mirror's own camera.
 
 #include "players/seats.h"
 #include "scopes/swap_window.h"
@@ -64,6 +65,9 @@ public:
 
     /// `seat`'s player as the primary player.
     explicit Scope(int seat) noexcept;
+    /// A mirror's `controller` as the primary player, if the field names player 1's `playerOne` (never inside a
+    /// seat's scope, nor inside another of its own: both refused NotPlayerOne).
+    Scope(void* playerOne, void* controller) noexcept;
     ~Scope();
     Scope(const Scope&)            = delete;
     Scope& operator=(const Scope&) = delete;
@@ -73,6 +77,9 @@ public:
     Refusal Why() const noexcept { return refusal_; }
 
 private:
+    /// The field from `current` to `replacement`; the refusal from the window's answer.
+    void Swap(std::uint64_t* field, std::uint64_t current, std::uint64_t replacement) noexcept;
+
     SwapWindow window_;
     Refusal    refusal_ = Refusal::NotBound;
 };

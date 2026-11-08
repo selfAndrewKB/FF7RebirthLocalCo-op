@@ -25,6 +25,7 @@
 #include "platform/module_pin.h"
 #include "platform/sparse_array.h"
 #include "players/seats.h"
+#include "players/unreal_access.h"
 #include "scopes/primary_controller.h"
 
 #if LSS_DEV
@@ -114,6 +115,7 @@ std::uint32_t                                        g_framesToScan = 0;
 bool                                                 g_rootsChecked = false;  // this frame's root scan check ran
 bool                                                 g_passedThisFrame = false;  // a seat's pass ran this frame
 std::optional<scopes::primary_controller::Scope> g_primary;
+int g_mirrorPrimaryHeld = -1;  // a mirror's copy held its controller as the primary last time: 1, 0, -1 not yet
 float                                                g_savedTimeStep = 0.0f;
 float*                                               g_timeStep      = nullptr;  // saved in Enter, restored in Leave
 Rect                                                 g_playerOneRect{};
@@ -159,9 +161,10 @@ void Refuse(const wchar_t* why)
     platform::Log(L"HUD levers: {}; players 2 and 3's content stays off", why);
 }
 
-/// The updates for the view whose levers are set (`seat` 0 player 1's); a seat's run gives the arrows their own
-/// timers.
-bool RunUpdates(int seat) noexcept
+/// The updates for the view whose levers are set (`seat` 0 player 1's content); a seat's run gives the arrows their
+/// own timers. `controller`: the view's controller when it is not the seat's (a mirror's column, showing player 1's
+/// content), for the popups' projection.
+bool RunUpdates(int seat, void* controller = nullptr) noexcept
 {
     const bool isSeat = seat != 0;
     // The gauges first: the enemy attack names in the +0x180 list read each gauge's placed point
@@ -172,7 +175,7 @@ bool RunUpdates(int seat) noexcept
     }
     if (Acts(kLeverPopups))
     {
-        popups::Replay(seat);
+        popups::Replay(seat, controller);
     }
     const hud_updates::OwnArrowTimers arrows{g_timeStep, g_savedTimeStep, seat};
     const bool ran = hud_updates::Run(Acts(kLeverUpdates), Acts(kLeverCompass),
@@ -415,8 +418,10 @@ bool ContextsToSeat(int column, int seat)
     g_firstPlayerAnswer = 0;
     const bool reverted = hud_roots::SetContexts(0);
     g_primary.reset();
-    Refuse(reverted ? L"SetPlayerContext raised an exception"
-                    : players::BySeat(seat,
+    Refuse(reverted    ? L"SetPlayerContext raised an exception"
+           : seat == 0 ? L"SetPlayerContext raised an exception, and again putting player 1's back (some roots may keep "
+                         L"a mirror view's context until the next join)"
+                       : players::BySeat(seat,
                                       L"SetPlayerContext raised an exception, and again putting player 1's back (some "
                                       L"roots may keep player 2's context until the next join)",
                                       L"SetPlayerContext raised an exception, and again putting player 1's back (some "
@@ -547,14 +552,29 @@ bool EnterSeatLevers(int column, int seat) noexcept
 {
     try
     {
+        // `seat` 0: a copy of player 1's content in a column no seat has (a mirror's): the primary controller stays
+        // player 1's through the updates; the popups project with the column's own controller, and the chocobo
+        // wrangle's placement, which projects through the primary controller, runs with the mirror's held for it alone.
         hud_roots::LocalPlayerSet byColumn{};
-        if (!SeatHudContentOn() || !players::SeatIndex(seat) || column < 1 || column >= overlay_pass::kMaxColumns ||
-            !hud_roots::LocalPlayers(byColumn) || byColumn[static_cast<std::size_t>(column)] == nullptr ||
-            !KeepRootsCurrent(byColumn, column) || !HoldPrimary(seat))
+        if (!SeatHudContentOn() || (seat != 0 && !players::SeatIndex(seat)) || column < 1 ||
+            column >= overlay_pass::kMaxColumns || !hud_roots::LocalPlayers(byColumn) ||
+            byColumn[static_cast<std::size_t>(column)] == nullptr || !KeepRootsCurrent(byColumn, column) ||
+            (seat != 0 && !HoldPrimary(seat)))
         {
             return false;
         }
         const auto c = static_cast<std::size_t>(column);
+        void*      copyController = nullptr;
+        void*      playerOne      = nullptr;
+        if (seat == 0)
+        {
+            copyController = players::unreal::LocalPlayerController(byColumn[c]);
+            playerOne      = players::unreal::LocalPlayerController(byColumn[0]);
+            if (copyController == nullptr || playerOne == nullptr)
+            {
+                return false;
+            }
+        }
         g_firstPlayerAnswer = Acts(kLeverFirstPlayer) ? reinterpret_cast<std::uint64_t>(byColumn[c]) : 0;  // L2
         AdoptAbilityNames();
         AdoptFieldTargets();
@@ -571,20 +591,41 @@ bool EnterSeatLevers(int column, int seat) noexcept
             WriteRect(g_columnRect[c]);  // what the column's render computed last frame (via L2)
         }
         const double start = Now();
-        const bool   runs  = RunUpdates(seat);
-        search_pins::Place();         // the search pins from the seat's camera (hud/field/search_pins.h)
-        wrangle_targets::Place(seat);  // and the chocobo wrangle's targets (hud/field/wrangle_targets.h)
+        const bool   runs  = RunUpdates(seat, copyController);
+        search_pins::Place();  // the search pins through the roots' contexts (L1: the column's; hud/field/search_pins.h)
+        {
+            // The chocobo wrangle's targets project through the primary controller (hud/field/wrangle_targets.h): a
+            // copy holds the mirror's for this call alone.
+            std::optional<scopes::primary_controller::Scope> mirror;
+            if (seat == 0 && Acts(kLeverPrimary))
+            {
+                mirror.emplace(playerOne, copyController);
+                if (const bool held = mirror->Held(); static_cast<int>(held) != g_mirrorPrimaryHeld)
+                {
+                    g_mirrorPrimaryHeld = static_cast<int>(held);
+                    platform::Log(L"HUD levers: a mirror view's copy {}",
+                                  held ? std::wstring(L"places the chocobo wrangle's targets from its own camera")
+                                       : std::format(L"cannot hold the primary controller ({}): the chocobo wrangle's "
+                                                     L"targets keep player 1's places there",
+                                                     scopes::primary_controller::Describe(mirror->Why())));
+                }
+            }
+            wrangle_targets::Place(seat);
+        }
         Charge(kTicksSeat, start);
         if (!runs)
         {
-            Refuse(players::BySeat(seat, L"a HUD update raised an exception in player 2's run",
-                                   L"a HUD update raised an exception in player 3's run"));
+            Refuse(seat == 0 ? L"a HUD update raised an exception in a mirror view's run"
+                             : players::BySeat(seat, L"a HUD update raised an exception in player 2's run",
+                                               L"a HUD update raised an exception in player 3's run"));
         }
         if (!g_loggedEnter[c])
         {
             g_loggedEnter[c] = true;
-            platform::Log(L"HUD levers: {}'s pass in column {} with {} HUD root(s); the column's view rect {}",
-                          players::SeatName(seat), column + 1, hud_roots::Count(),
+            platform::Log(L"HUD levers: {} in column {} with {} HUD root(s); the column's view rect {}",
+                          seat == 0 ? std::wstring(L"a copy of player 1's HUD")
+                                    : std::format(L"{}'s pass", players::SeatName(seat)),
+                          column + 1, hud_roots::Count(),
                           g_columnRectKnown[c] ? L"from the last frame" : L"not known yet (first frame)");
         }
         return true;

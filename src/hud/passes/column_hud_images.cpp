@@ -139,12 +139,12 @@ int ViewColumn(std::uint64_t read, std::int32_t id) noexcept
     return static_cast<int>((read >> (4 * id)) & 0xF) - 1;
 }
 
-/// A view's player for the log: a seat's name, the mirror view in its column, or an id the list does not hold.
+/// A view for the log: a player's ("player 2's view"), the mirror view in its column, or a view the list does not hold.
 std::wstring ViewName(std::int32_t id, int column)
 {
     if (id >= 0 && id < players::kMaxPlayers)
     {
-        return players::SeatName(id);
+        return std::format(L"{}'s view", players::SeatName(id));
     }
     return column >= 0 ? std::format(L"the mirror view in column {}", column + 1)
                        : std::format(L"an unlisted view (controller id {})", id);
@@ -219,12 +219,12 @@ void* AddCompositePasses(void* module, void* builder, const void* views, void* t
                     {
                         if (playerOnes)
                         {
-                            platform::Log(L"HUD image: {}'s view draws player 1's HUD laid out for its own shape",
+                            platform::Log(L"HUD image: {} draws player 1's HUD laid out for its own shape",
                                           ViewName(player, column));
                         }
                         else
                         {
-                            platform::Log(L"HUD image: {}'s view draws {}'s HUD", ViewName(player, column),
+                            platform::Log(L"HUD image: {} draws {}'s HUD", ViewName(player, column),
                                           players::SeatName(draws - 1));
                         }
                     }
