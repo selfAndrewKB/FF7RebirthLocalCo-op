@@ -3,7 +3,7 @@
     Quits the game through the mod, optionally deploys a new build, and launches the game again.
 
 .DESCRIPTION
-    1. If the game is running: player 2 leaves (if in), then the mod's `quit` command, and the game
+    1. If the game is running: players 2 and 3 leave (each if in), then the mod's `quit` command, and the game
        is waited on until it exits by itself. It is never killed.
     2. With -Deploy: the installed main.dll is kept as main.dll.bak-<Label> and the build is copied
        in; both hashes are printed and must match. The setup app built beside the DLL goes next to the
@@ -40,16 +40,19 @@ $remote  = "$PSScriptRoot\remote.py"
 
 $game = Get-Process ff7rebirth_ -ErrorAction SilentlyContinue
 if ($game) {
-    $status = python $remote --timeout 20 -c 'get p2.in'
+    $status = python $remote --timeout 20 -c 'get p2.in' -c 'get p3.in'
     if ($LASTEXITCODE -eq 2) {
         # No console answers (a release build): closed by its window, as a player's close. Never a kill.
         'no console (a release build?): closing the game by its window'
         [void]$game.CloseMainWindow()
     } else {
-        if ($status -match 'value p2\.in off') {
-            'player 2 is out'
-        } else {
-            python $remote --timeout 60 -c 'leave' -c 'wait-until p2.in == off 900' | Select-Object -Last 1
+        # The mod's quit refuses while a player is in: each leaves first (player 2 by `leave`, player 3 by `p3.leave`).
+        foreach ($p in @(@{ seat = 'p2'; verb = 'leave'; name = 'player 2' }, @{ seat = 'p3'; verb = 'p3.leave'; name = 'player 3' })) {
+            if ($status -match "value $($p.seat)\.in off") {
+                "$($p.name) is out"
+            } else {
+                python $remote --timeout 60 -c $p.verb -c "wait-until $($p.seat).in == off 900" | Select-Object -Last 1
+            }
         }
         python $remote --timeout 30 -c 'quit' | Select-Object -Last 1
     }
