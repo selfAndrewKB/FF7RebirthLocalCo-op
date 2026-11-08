@@ -17,7 +17,8 @@ screen, the controller that presses a button plays player 1. A controller that p
 Change characters through the game's own Party menu. Players 2 and 3: click **L3** twice to be brought back beside
 player 1 in the field (the game's own catch-up warp; not in a menu, a scene, a battle, or when already beside).
 
-**Co-op settings in the game:** the pause menu has a **Co-op** row above System. It opens the game's own Options screen
+**Co-op settings in the game:** the pause menu has a **Co-op** row above System, and the title menu one below Options.
+It opens the game's own Options screen
 with the mod's settings (monitors, screen order, layouts); a change applies at once and is saved to
 `LocalSplitScreen.ini`.
 
