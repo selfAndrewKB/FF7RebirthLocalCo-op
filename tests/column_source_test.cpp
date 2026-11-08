@@ -227,6 +227,28 @@ void TestWaiting()
         EXPECT(s.Single() && s.seats[1] == kScreenHanded && s.seats[2] == kScreenHanded);
     }
     {
+        // Player 2 rides along with the member a script took, alone with player 1: the split stays, player 2's own
+        // view on it (no single view).
+        Moment m = At(kTwoPlayers, SeatState::Handed, SeatState::Out);
+        m.ridesAlong[1] = true;
+        const Shown s = Decide(m);
+        EXPECT(!s.Single() && s.seats[1] == kSelf && s.columns[1] == kSelf && s.OwnColumn(1) == 1);
+    }
+    {
+        // Both wait, player 2 riding along, player 3 not: player 2 keeps their view, player 3's column on player 1's.
+        Moment m = At(kThreePlayers, SeatState::Handed, SeatState::Handed);
+        m.ridesAlong[1] = true;
+        const Shown s = Decide(m);
+        EXPECT(!s.Single() && s.seats[1] == kSelf && s.seats[2] == kColumnHanded);
+    }
+    {
+        // Riding along gives way to the whole screen (a cutscene) as every view does.
+        Moment m = At(kTwoPlayers, SeatState::Handed, SeatState::Out, false, true);
+        m.ridesAlong[1] = true;
+        const Shown s = Decide(m);
+        EXPECT(s.Single() && s.seats[1].why == Why::WholeScreen);
+    }
+    {
         // Both wait, columns held: the columns stay on player 1's.
         const Shown s = Decide(At(kThreePlayers, SeatState::Handed, SeatState::Handed, kHeld));
         EXPECT(!s.Single() && s.OnPlayerOne(1) && s.OnPlayerOne(2) && !s.SplitShown() && s.ViewsSplit());

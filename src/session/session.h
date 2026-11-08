@@ -144,11 +144,16 @@ public:
     bool PlaysMember() const noexcept;
 
     /// In without a member, waiting on its slot's (a story script holds it, or it is not free yet). Only player 1
-    /// plays meanwhile, so the screen shows player 1's single view.
+    /// plays meanwhile: the player's column shows player 1's picture, unless they ride along (RidesAlong).
     bool WaitsForMember() const noexcept
     {
         return In() && phase_ == Phase::Playing && member_ == nullptr && waitingForSlot_;
     }
+
+    /// Waiting on a member a script took (a level's walk or lead, an event's walk, an animation: session/field_hold.h)
+    /// with the player's own view kept on it: the player rides along until the member follows the party again and the
+    /// seat takes it back. Their column stays their own (views/column_source.h), and they do not leave to wait outside.
+    bool RidesAlong() const noexcept { return WaitsForMember() && rideAlong_; }
 
     /// Player 1 rides a vehicle the whole party shares (the buggy or the bronco, rides/shared_ride.h), each
     /// tick. While it holds, the seat gives the member back through the game's release and stays in without one, as
@@ -214,6 +219,8 @@ private:
     void FollowSlot(const wchar_t* when, bool log) noexcept;  // log: the slot's verdict as an Info line
     void WaitForSlot(const party_member::SlotChoice& choice) noexcept;
     void CheckHeldAi() noexcept;
+    void RideAlongTick() noexcept;  // the view on the member while riding along, and the lines the checks read
+    void EndRideAlong(const wchar_t* why) noexcept;
 
     const int             seat_;
     players::LocalPlayers players_;
@@ -238,6 +245,11 @@ private:
     std::optional<std::chrono::steady_clock::time_point> slotWaitSince_;  // when the slot wait began (on one monitor)
     party_member::SlotWait slotWaitReason_ = party_member::SlotWait::None;  // the wait's reason as last chosen
     bool                  sharedRide_       = false;    // player 1 rides a shared vehicle: the seat takes no member
+    bool                  rideAlong_        = false;    // the member a script took is watched, the view kept (RidesAlong)
+    void*                 rideMember_       = nullptr;  // that member
+    std::uint64_t         rideWeak_         = 0;        // its FWeakObjectPtr, to see it destroyed
+    std::uint32_t         rideTicks_        = 0;        // ticks riding along
+    std::uint32_t         rideAims_         = 0;        // times the view was put back on the seat's camera actor
     players::SeatState    loggedState_      = players::SeatState::Out;  // as NoteState last logged it
 
     party_member::PlayerOneBytes playerOneBytes_{};
@@ -290,6 +302,7 @@ public:
     bool          RejoinPending(int seat) const noexcept;
     bool          PlaysMember(int seat) const noexcept;
     bool          WaitsForMember(int seat) const noexcept;
+    bool          RidesAlong(int seat) const noexcept;  // Seat::RidesAlong
     bool          StandsAside(int seat) const noexcept;
     const void*   LocalPlayer(int seat) const noexcept;  // null while out
     std::uint32_t JoinCount(int seat) const noexcept;

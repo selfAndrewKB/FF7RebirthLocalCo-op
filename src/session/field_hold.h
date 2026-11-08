@@ -54,9 +54,8 @@ constexpr bool SignalsArrival(std::uint8_t state) noexcept
     return state == facts::kAiStateMoveTo || state == facts::kAiStateLead;
 }
 
-/// The hold of a request on a member's AI: the brain it is written on and its state's type, as the request funnel
-/// passes them. Not the active brain: a request below a scene's park enters as a stacked state and would surface only
-/// at the park's pop.
+/// The hold of a request on a member's AI: a brain and its state's type (the session reads the active brain each few
+/// ticks; a request written beneath a scene's park enters as a stacked state and is seen when the park pops).
 constexpr Hold Of(std::uint8_t brain, std::uint8_t state) noexcept
 {
     if (brain == kBrainBase)

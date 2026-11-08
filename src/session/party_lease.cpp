@@ -8,7 +8,6 @@ namespace lss::session {
 
 using facts::kAiStateBattle;
 using facts::kAiStateFollow;
-using facts::kAiStateLead;
 
 Eligibility Assess(const MemberSnapshot& member) noexcept
 {
@@ -111,9 +110,9 @@ const wchar_t* Describe(AiReadiness readiness) noexcept
     return L"unknown";
 }
 
-bool AiTakesBack(const AiSnapshot& ai) noexcept
+field_hold::Hold HoldOf(const AiSnapshot& ai) noexcept
 {
-    return ai.read && ai.state == kAiStateLead;
+    return ai.read ? field_hold::Of(ai.brainIndex, ai.state) : field_hold::Hold::Free;
 }
 
 bool Acquired(const LeaseState& state, const void* member, const void* seatController) noexcept

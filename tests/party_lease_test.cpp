@@ -211,7 +211,7 @@ void TestSeatSlots()
 
 void TestAiReadiness()
 {
-    std::puts("ai: only the base brain's FOLLOW (or BATTLE) is taken; LEAD is given back");
+    std::puts("ai: only the base brain's FOLLOW (or BATTLE) is taken; a script's walk, lead or animation is given back");
     EXPECT(AssessAi({true, 0, kAiStateFollow}) == AiReadiness::Ready);
     EXPECT(AssessAi({true, 0, kAiStateBattle}) == AiReadiness::Ready);
     EXPECT(AssessAi({true, 2, kAiStateBattle}) == AiReadiness::Ready);
@@ -219,11 +219,15 @@ void TestAiReadiness()
     EXPECT(AssessAi({true, 3, kAiStateFollow}) == AiReadiness::ScriptBrain);  // a script's FollowActor
     EXPECT(AssessAi({true, 0, kAiStateLead}) == AiReadiness::NotFollow);
     EXPECT(AssessAi({}) == AiReadiness::Unread);
-    EXPECT(AiTakesBack({true, 4, kAiStateLead}));
-    EXPECT(AiTakesBack({true, 0, kAiStateLead}));
-    EXPECT(!AiTakesBack({true, 10, 1}));  // a scene's park is not acted on
-    EXPECT(!AiTakesBack({true, 0, kAiStateFollow}));
-    EXPECT(!AiTakesBack({}));
+    using lss::session::field_hold::Hold;
+    EXPECT(HoldOf({true, 2, kAiStateLead}) == Hold::Arrival);  // the level's lead (Corel, live)
+    EXPECT(HoldOf({true, 2, lss::facts::kAiStateMoveTo}) == Hold::Arrival);
+    EXPECT(HoldOf({true, 16, lss::facts::kAiStateMoveTo}) == Hold::Script);  // an event's walk to a mark
+    EXPECT(HoldOf({true, 2, lss::facts::kAiStateAnimation}) == Hold::Animation);
+    EXPECT(HoldOf({true, 17, 1}) == Hold::Free);  // a scene's park is not acted on
+    EXPECT(HoldOf({true, 0, kAiStateFollow}) == Hold::Free);
+    EXPECT(HoldOf({true, 0, kAiStateLead}) == Hold::Free);  // the base brain is the follow's: the level writes on 2 or 8
+    EXPECT(HoldOf({}) == Hold::Free);
     for (const auto readiness :
          {AiReadiness::Ready, AiReadiness::Unread, AiReadiness::ScriptBrain, AiReadiness::NotFollow})
     {

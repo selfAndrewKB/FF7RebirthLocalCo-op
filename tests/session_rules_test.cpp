@@ -100,6 +100,10 @@ void TestWaitOutside()
     f             = leaves;
     f.columnsHeld = true;  // the row: the column stays
     EXPECT(!WaitOutside(f, grace));
+    f            = leaves;
+    f.ridesAlong = true;  // riding along with the member a script took: the view stays on it
+    f.waited     = milliseconds{60000};
+    EXPECT(!WaitOutside(f, grace));
     for (const auto hold : {Hold::StandAside, Hold::Orphaned, Hold::Member, Hold::Faulted, Hold::Withdrawn})
     {
         f      = leaves;

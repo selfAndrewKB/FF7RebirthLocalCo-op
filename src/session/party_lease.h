@@ -13,6 +13,8 @@
 // (AEndPlayerController::SwitchLeaderInternal) moves +0x578/+0x580/+0x260 to the seat's
 // controller and back; a character is only offered to it while every field says "AI-owned".
 
+#include "session/field_hold.h"
+
 #include <cstdint>
 
 namespace lss::session {
@@ -113,9 +115,11 @@ AiReadiness AssessAi(const AiSnapshot& ai) noexcept;
 
 const wchar_t* Describe(AiReadiness readiness) noexcept;
 
-/// A held member whose AI a story script puts into LEAD is given back: LEAD walks a route the story
-/// waits on, and does not run while a player holds the member.
-bool AiTakesBack(const AiSnapshot& ai) noexcept;
+/// What a held member's AI says about its player's hold (session/field_hold.h, by the active brain and its state):
+/// Free while it may stay; otherwise the script that needs it (a level's walk or lead, an event's walk, an
+/// animation), which runs only under its AI. Free when unread, and on the base brain (the follow's: the level's
+/// settings are written on brain 2 or 8, research/RE-held-member-scripts.md §2.2).
+field_hold::Hold HoldOf(const AiSnapshot& ai) noexcept;
 
 /// The fields that show whether the seat's controller holds the member.
 struct LeaseState

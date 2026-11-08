@@ -50,7 +50,9 @@ struct WaitOutsideFacts
 {
     Hold                      hold        = Hold::Withdrawn;
     bool                      columnsHeld = false;  // the monitor row, or the console's `view-columns`
-    std::chrono::milliseconds waited{0};            // how long the slot wait has lasted on one monitor, not riding
+    std::chrono::milliseconds waited{0};            // how long the slot wait has lasted on one monitor, off a
+                                                    // shared ride and not riding along
+    bool                      ridesAlong  = false;  // the player watches the member a script took (Seat::RidesAlong)
 };
 
 /// A player in without their member while the game holds it (the slot wait, whatever its reason) leaves the game on
@@ -59,10 +61,12 @@ struct WaitOutsideFacts
 /// player's view goes until their character is back), once the wait has lasted `grace`: a party swap that resolves
 /// within a second keeps the player in. With columns held (the monitor row, the console's `view-columns`) the player
 /// stays in and their column shows player 1's picture on their own monitor (views/column_source.h). Standing aside for
-/// a shared ride never leaves: every seat's player stands aside together, and player 1's single view follows.
+/// a shared ride never leaves: every seat's player stands aside together, and player 1's single view follows. Nor does
+/// a player riding along with the member a script took (the user's decision for the scripts: ride along, the view
+/// kept): their own view stays on it.
 constexpr bool WaitOutside(const WaitOutsideFacts& facts, std::chrono::milliseconds grace) noexcept
 {
-    return facts.hold == Hold::SlotWait && !facts.columnsHeld && facts.waited >= grace;
+    return facts.hold == Hold::SlotWait && !facts.columnsHeld && !facts.ridesAlong && facts.waited >= grace;
 }
 
 /// The game is about to make a character the leader of a controller (session/party_events.h), as the session
