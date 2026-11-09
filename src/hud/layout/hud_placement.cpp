@@ -258,17 +258,30 @@ void LeaveAlone(Placed& placed, const std::optional<ViewportLayout>& now) noexce
 
 using platform::WriteGuarded;
 
-/// A design point of the 1920x1080 frame, with some slack (finite, near the frame, and set: a zero point is an unbuilt
-/// widget or other data).
-bool PlausibleDesignPoint(const LayoutPoint& point) noexcept
+/// A design point of the 1920x1080 frame, with some slack (finite and near the frame).
+bool NearFrame(const LayoutPoint& point) noexcept
 {
     return std::isfinite(point.x) && std::isfinite(point.y) && point.x > -400.0f && point.x < 2400.0f && point.y > -400.0f &&
-           point.y < 1500.0f && (point.x != 0.0f || point.y != 0.0f);
+           point.y < 1500.0f;
 }
 
+bool Zero(const LayoutPoint& point) noexcept
+{
+    return point.x == 0.0f && point.y == 0.0f;
+}
+
+/// The head's and the aura's points are set by the class (a zero one is an unbuilt widget or other data); the head's
+/// starting point is zero until the game writes it (seen live: (1546,657) (1680,650) (0,0) at the first placement).
 bool PlausibleGlow(const GlowPoints& points) noexcept
 {
-    return PlausibleDesignPoint(points.head) && PlausibleDesignPoint(points.back) && PlausibleDesignPoint(points.start);
+    return NearFrame(points.head) && !Zero(points.head) && NearFrame(points.back) && !Zero(points.back) &&
+           NearFrame(points.start);
+}
+
+/// `point` moved as the bar was; a zero point (not written yet) stays zero.
+LayoutPoint Shifted(const LayoutPoint& point, const LayoutPoint& anchor, const LayoutSize& layout) noexcept
+{
+    return Zero(point) ? point : KeepDistanceFromAnchor(point, anchor, layout.width, layout.height);
 }
 
 /// The widget's class holds the three points (the research build's layout; a class of another size is not written).
@@ -297,9 +310,9 @@ bool WriteGlow(UObject* widget, const GlowPoints& points) noexcept
 /// The gauge's glow design points moved as its bar was: each keeps its distance from the bar's corner in the current
 /// layout (the tick converts them with the layout's size, so the glow lands on the bar; one particle per effect, so a
 /// layout of another shape in another view is off there, the known limit). The game's own values are kept the first
-/// time, and again whenever the points read are not the ones last written (the game set them again: a construct run
-/// once more, a widget made anew in the same slot), and set back when the split ends. Quiet while the layout and the
-/// points stand as last written.
+/// time, each point again whenever it is not as last written (the game set it since: a construct run once more, the
+/// head's starting point written at the gauges' link), and set back when the split ends. Quiet while the layout and
+/// the points stand as last written.
 void PlaceGlow(Placed& placed) noexcept
 {
     const LayoutSize layout = LastLayoutSize();
@@ -312,13 +325,9 @@ void PlaceGlow(Placed& placed) noexcept
     {
         return;
     }
-    if (placed.glow && layout == placed.glowLayout && now == placed.glowMoved)
+    if (!placed.glow)
     {
-        return;  // in place
-    }
-    if (!placed.glow || now != placed.glowMoved)
-    {
-        // The game's own values (the first read, or its own write since): kept, and the shift starts from them.
+        // The game's own values, kept: the shift starts from them.
         if (!ClassHoldsGlow(placed.widget) || !PlausibleGlow(now))
         {
             if (!placed.glowRefusedLogged)
@@ -330,12 +339,27 @@ void PlaceGlow(Placed& placed) noexcept
             }
             return;  // tried again at the next tick: the widget may not be built yet
         }
-        placed.glow = now;
+        placed.glow      = now;
+        placed.glowMoved = now;
+    }
+    else
+    {
+        // A point not as it was last written is the game's own write since (a construct run again, the head's starting
+        // point copied from the other gauge at their link): that point's new original; the others stay as moved.
+        // A wild value (not near the frame) is not adopted: the point keeps its original.
+        GlowPoints& original = *placed.glow;
+        original.head        = now.head != placed.glowMoved.head && NearFrame(now.head) ? now.head : original.head;
+        original.back        = now.back != placed.glowMoved.back && NearFrame(now.back) ? now.back : original.back;
+        original.start       = now.start != placed.glowMoved.start && NearFrame(now.start) ? now.start : original.start;
     }
     const LayoutPoint anchor{placed.placement->anchorX, placed.placement->anchorY};
-    const GlowPoints  moved{KeepDistanceFromAnchor(placed.glow->head, anchor, layout.width, layout.height),
-                           KeepDistanceFromAnchor(placed.glow->back, anchor, layout.width, layout.height),
-                           KeepDistanceFromAnchor(placed.glow->start, anchor, layout.width, layout.height)};
+    const GlowPoints  moved{Shifted(placed.glow->head, anchor, layout), Shifted(placed.glow->back, anchor, layout),
+                           Shifted(placed.glow->start, anchor, layout)};
+    if (moved == now && layout == placed.glowLayout)
+    {
+        placed.glowMoved = moved;  // in place (an adopted point under a zero shift: as written)
+        return;
+    }
     if (!WriteGlow(placed.widget, moved))
     {
         if (!placed.glowRefusedLogged)
