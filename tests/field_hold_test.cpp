@@ -32,6 +32,24 @@ void TestHoldOf()
     EXPECT(Of(kBrainBase, kAiStateAnimation) == Hold::Free);  // the base brain is the follow's: never a script's
 }
 
+void TestLevelReleased()
+{
+    std::puts("release: a member handed for a level's walk comes back on the base brain, a stand, a follow group or a battle");
+    EXPECT(!LevelReleased(kBrainLevel, kAiStateStay));       // the stay after the arrival: the level's steps go on
+    EXPECT(Of(kBrainLevel, kAiStateStay) == Hold::Free);     // ... though nothing holds the member in it
+    EXPECT(!LevelReleased(kBrainLevel, kAiStateAnimation));  // the peer-in
+    EXPECT(!LevelReleased(kBrainLevelGroup, kAiStateLead));
+    EXPECT(!LevelReleased(kBrainLevel, kAiStateConnectEncount));
+    EXPECT(!LevelReleased(16, kAiStateMoveTo));
+    EXPECT(LevelReleased(kBrainLevel, kAiStateDoNothing));   // the Stable setting: the member stands again
+    EXPECT(LevelReleased(kBrainBase, kAiStateFollow));       // the release row popped the level's brains
+    EXPECT(LevelReleased(kBrainBase, kAiStateStay));
+    EXPECT(LevelReleased(kBrainBase, kAiStateAnimation));    // the base brain releases whatever its state
+    EXPECT(LevelReleased(kBrainLevel, kAiStateFollow));      // a follow group
+    EXPECT(LevelReleased(kBrainLevel, kAiStateBattle));
+    EXPECT(LevelReleased(16, kAiStateBattle));
+}
+
 void TestMoveSettingAndPathEnd()
 {
     std::puts("settings: the moving Status words without case, a group when it moves; the path's end");
@@ -89,6 +107,7 @@ void TestSameIgnoringCase()
 int main()
 {
     TestHoldOf();
+    TestLevelReleased();
     TestMoveSettingAndPathEnd();
     TestGroups();
     TestSameIgnoringCase();

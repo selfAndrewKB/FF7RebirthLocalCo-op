@@ -10,7 +10,8 @@
 //   - the player keeps the member and is shown the move's point (that player's view only);
 //   - within kHandRadius of the point (2D) the member goes to its AI, which resumes the move from where it stands,
 //     walks the last steps and signals the arrival;
-//   - it stays on its AI until the level writes its next setting, then comes back.
+//   - it stays on its AI through the level's steps at the stop, until the level releases it (session/field_hold.h
+//     LevelReleased), then comes back.
 // A move whose point cannot be marked is a guide, as is every needed move under `lead-holder guide`.
 //
 // Pure (host-tested in tests/lead_keep_rules_test.cpp).
@@ -24,7 +25,7 @@ enum class Verdict : std::uint8_t
     Staging,  // nothing needs the move finished: the player's, no marker
     Guide,    // to its AI until the setting ends (no point to mark, or `lead-holder guide`)
     Keep,     // the player's, the point marked
-    AtMark,   // brought to the point: to its AI until the setting ends
+    AtMark,   // brought to the point: to its AI until the level releases the member
 };
 
 /// How near the point (cm, 2D) the member goes to its AI: the AI then walks the last steps (a run arrives at once
@@ -88,7 +89,7 @@ constexpr const wchar_t* Name(Verdict verdict) noexcept
     case Verdict::Keep:
         return L"KEEP (the player's; its point marked in that player's view)";
     case Verdict::AtMark:
-        return L"AT THE MARK (to its AI: it finishes the arrival, then back to the player at the level's next setting)";
+        return L"AT THE MARK (to its AI: it finishes the arrival, then back to the player when the level releases it)";
     }
     return L"?";
 }

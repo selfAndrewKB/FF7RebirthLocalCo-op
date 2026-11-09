@@ -854,7 +854,7 @@ try
     if (last.verdict == Verdict::AtMark && was != Verdict::AtMark)
     {
         platform::Log(L"lead gate: {}'s character brought within {:.1f} m of its point (the hand radius {:.0f} m): to its AI, which "
-                      L"walks the last steps and signals the arrival; back to its player at the level's next setting",
+                      L"walks the last steps and signals the arrival; back to its player when the level releases the character",
                       players::SeatName(seat), away / 100, lead_keep_rules::kHandRadius / 100);
     }
     if (!same || census || last.marker != wasMarker || last.verdict != was)

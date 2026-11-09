@@ -120,6 +120,11 @@ constexpr std::uint32_t kSlotCheckTicks = 60;
 constexpr std::uint32_t kRideLogTicks = 60;
 /// Failed returns of a freed ride member (each kHeldAiTicks apart, about a second in all) before it is given back.
 constexpr std::uint32_t kRideReturnTries = 10;
+/// A ride that lasts until the level releases the member ends after this many ticks (a multiple of kHeldAiTicks; about
+/// two minutes at the field's rate, less while a load runs uncapped) whatever the level says: a level that never
+/// releases, or an AI that cannot be read, must not lock a player out for good (logged as a warning: the level's data
+/// then needs reading).
+constexpr std::uint32_t kRideToReleaseCapTicks = 7200;
 
 }  // namespace
 
@@ -749,6 +754,9 @@ void Seat::CheckHeldAi() noexcept
         return;
     }
     rideAlong_       = true;
+    // A level's walk the member must finish: the level's steps at the stop (a stay, an animation, a command) run on
+    // with the member, so the ride lasts until the level releases it, not until the first step that holds nothing.
+    rideToRelease_   = hold == field_hold::Hold::Arrival;
     rideMember_      = member_;
     rideTicks_       = 0;
     rideAims_        = 0;
@@ -758,8 +766,9 @@ void Seat::CheckHeldAi() noexcept
         camera::view_target::Aim(controller_);  // the hand's unpossess pointed the view at the controller: no frame of it
     }
     Log(L"{}'s {} is taken by {} (AI state {} on brain {}): handed to its AI with the game's own hand; {} rides along, "
-        L"their camera on it, and plays it again when it follows the party",
-        Name(), players::NameOf(member_), what, ai.state, ai.brainIndex, Name());
+        L"their camera on it, and plays it again when {}",
+        Name(), players::NameOf(member_), what, ai.state, ai.brainIndex, Name(),
+        rideToRelease_ ? L"the level releases it (its steps at the stop done)" : L"it follows the party");
 }
 
 void Seat::EndRideAlong(const wchar_t* why) noexcept
@@ -771,6 +780,7 @@ void Seat::EndRideAlong(const wchar_t* why) noexcept
     Log(L"{} no longer rides along with {} ({} ticks; the view put back on their camera {} time(s)): {}", Name(),
         players::NameOf(rideMember_), rideTicks_, rideAims_, why);
     rideAlong_       = false;
+    rideToRelease_   = false;
     rideMember_      = nullptr;
     rideTicks_       = 0;
     rideAims_        = 0;
@@ -778,10 +788,11 @@ void Seat::EndRideAlong(const wchar_t* why) noexcept
     players::generation::SetRideMember(seat_, nullptr);
 }
 
-/// While riding along: the member back to the player's controller as soon as no script needs it (a stay after the
-/// walk, a stand, the follow: nothing waits on those, so the player keeps the member through them), the seat's view
-/// kept on its camera actor (the hand's unpossess points the view at the controller), and a line once a second (the
-/// first at Info) with the camera's distance from the member.
+/// While riding along: the member back to the player's controller as soon as no script needs it (a stand, a scene's
+/// park, the follow), or, after a level's walk it had to finish, when the level releases it (its steps at the stop run
+/// on with the member: field_hold::LevelReleased); the seat's view kept on its camera actor (the hand's unpossess
+/// points the view at the controller), and a line once a second (the first at Info) with the camera's distance from
+/// the member.
 void Seat::RideAlongTick() noexcept
 {
     if (!rideAlong_ || phase_ != Phase::Playing)
@@ -796,9 +807,21 @@ void Seat::RideAlongTick() noexcept
     ++rideTicks_;
     if (rideTicks_ % kHeldAiTicks == 0)
     {
-        const AiSnapshot ai = party_member::ReadAi(member_);
-        if (ai.read && !ScriptNeedsMember(ai))
+        const AiSnapshot ai     = party_member::ReadAi(member_);
+        const bool       capped = rideToRelease_ && rideTicks_ >= kRideToReleaseCapTicks;
+        const bool       over   = rideToRelease_ ? field_hold::LevelReleased(ai.brainIndex, ai.state) : !ScriptNeedsMember(ai);
+        if (capped && rideTicks_ == kRideToReleaseCapTicks)
         {
+            Log(L"WARNING: {}'s {} has been with its AI for {} ticks after a walk of the level's and the level has not released "
+                L"it (AI state {} on brain {}); the player gets it back now",
+                Name(), players::NameOf(member_), rideTicks_, ai.state, ai.brainIndex);
+        }
+        if ((ai.read && over) || capped)
+        {
+            if (rideToRelease_)
+            {
+                lead_gate::Forget(seat_);  // the walk's judgment goes with its setting
+            }
             // The game's possession runs at once on the game thread: the lease shows it now, as after a take.
             const bool returned = party_member::ReturnTo(seat_, member_, controller_) &&
                                   Acquired(party_member::ReadLease(member_, controller_), member_, controller_);

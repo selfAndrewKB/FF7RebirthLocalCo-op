@@ -158,7 +158,8 @@ public:
 
     /// A script took the seat's member (a level's walk or lead, an event's walk, an animation: session/field_hold.h) to
     /// its AI with the game's own hand: the member stays the seat's and its controller's leader, the player rides along
-    /// with their own camera on it, and plays it again when it follows the party.
+    /// with their own camera on it, and plays it again when nothing holds it; after a level's walk it must finish, when
+    /// the level releases it (field_hold::LevelReleased).
     bool RidesAlong() const noexcept { return In() && rideAlong_; }
 
     /// Player 1 rides a vehicle the whole party shares (the buggy or the bronco, rides/shared_ride.h), each
@@ -257,6 +258,9 @@ private:
                                                            // game's leader change took its member, until the game's
                                                            // leader goes home or the seat is out (party_lease.h StandInFor)
     bool                  rideAlong_        = false;    // a script has the seat's member, the player rides along (RidesAlong)
+    bool                  rideToRelease_    = false;    // the ride is for a level's walk the member must finish: it lasts until
+                                                        // the level releases the member (field_hold::LevelReleased), not until
+                                                        // nothing holds it (the level's steps at the stop would be cut)
     void*                 rideMember_       = nullptr;  // that member (the seat's member_ while the ride lasts)
     std::uint32_t         rideTicks_        = 0;        // ticks riding along
     std::uint32_t         rideAims_         = 0;        // times the view was put back on the seat's camera actor

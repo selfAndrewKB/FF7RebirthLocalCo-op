@@ -73,6 +73,18 @@ constexpr Hold Of(std::uint8_t brain, std::uint8_t state) noexcept
     return Hold::Free;
 }
 
+/// A member handed to its AI for a level's walk it must finish (Arrival) stays with it past the arrival: the level's
+/// steps carry on with the member (a stay, an animation, a command: the peer-in at a storage door, an elevator call),
+/// and a player's input would cut them. The level releases the member when its brains are popped (the base brain
+/// again: the setting with no Status), when it stands again (the Stable setting: DO_NOTHING on the level's brain,
+/// while a group's stay between steps is STAY), when a follow group runs on them, or in a battle. Not the complement
+/// of Of() == Free: a STAY on the level's brain is Free (the player keeps a member in one) and not a release.
+constexpr bool LevelReleased(std::uint8_t brain, std::uint8_t state) noexcept
+{
+    return brain == kBrainBase || state == facts::kAiStateDoNothing || state == facts::kAiStateFollow ||
+           state == facts::kAiStateBattle;
+}
+
 /// ASCII letters compared without case, as the game's setting parser compares a row's Status.
 constexpr bool SameIgnoringCase(std::wstring_view a, std::wstring_view b) noexcept
 {
