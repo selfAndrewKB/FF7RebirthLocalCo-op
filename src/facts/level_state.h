@@ -2,10 +2,11 @@
 
 // The level's state manager as the lead gate reads it: the state-change and state-trigger rows, the active slots, the
 // AI system's setting groups, the field icons the story shows, and the AI states a level's walk or lead enters on a
-// member. 1.004 addresses (1.005 through replaced-walk-gate.json); every offset is the same on both builds.
+// member, and the field's named points. 1.004 addresses (1.005 through replaced-walk-gate.json and
+// replaced-lead-relay.json); every offset is the same on both builds.
 //
 // Research: Rebirth/Documentation/research/RE-walk-gate.md, RE-held-member-scripts.md, RE-statechange-row-layout.md,
-// RE-walk-keep.md.
+// RE-walk-keep.md, RE-lead-relay-point.md.
 
 #include "platform/verified_code.h"
 
@@ -125,16 +126,32 @@ inline constexpr std::uint32_t kGroupRowRepIndex   = 0x100;  // StringArgumentRe
 inline constexpr std::int32_t  kGroupStatesRead    = 16;
 
 // ---- The AI states a level's walk or lead enters (the brain's state, facts/party.h kBrainState) ----
-// The setting's level object, row and arrival trigger (FNames), and its point (world cm), filled at the state's
-// creation, before its Enter, held or not.
-inline constexpr std::uint32_t kMoveToObject  = 0x20C;
-inline constexpr std::uint32_t kMoveToRow     = 0x214;
-inline constexpr std::uint32_t kMoveToTrigger = 0x21C;  // 0 for a plain MoveToTarget row: its string argument 2
-inline constexpr std::uint32_t kMoveToPoint   = 0x360;
-inline constexpr std::uint32_t kLeadObject    = 0x1BC;
-inline constexpr std::uint32_t kLeadRow       = 0x1C4;
-inline constexpr std::uint32_t kLeadTrigger   = 0x1CC;
-inline constexpr std::uint32_t kLeadPoint     = 0x318;
+// The setting's level object, row and arrival trigger (FNames), filled at the state's creation, before its Enter, held
+// or not. Its point (world cm) is the walk's end once the move has entered (the entered byte set; its only writer), or
+// when the row names a destination; a relay row names none, only a route of points, whose last the walk ends at, and
+// the point stays unwritten until the AI ticks (RE-lead-relay-point.md).
+inline constexpr std::uint32_t kMoveToObject      = 0x20C;
+inline constexpr std::uint32_t kMoveToRow         = 0x214;
+inline constexpr std::uint32_t kMoveToTrigger     = 0x21C;  // 0 for a plain MoveToTarget row: its string argument 2
+inline constexpr std::uint32_t kMoveToPoint       = 0x360;
+inline constexpr std::uint32_t kMoveToDestination = 0x36C;  // FName: the row's destination point (0: none); read on
+                                                             // 1.005, 1.004 by the same desc copy
+inline constexpr std::uint32_t kMoveToRoute       = 0x390;  // TArray<FName>: the route's point names
+inline constexpr std::uint32_t kMoveToMoveEntered = 0x3E1;  // u8
+inline constexpr std::uint32_t kLeadObject        = 0x1BC;
+inline constexpr std::uint32_t kLeadRow           = 0x1C4;
+inline constexpr std::uint32_t kLeadTrigger       = 0x1CC;
+inline constexpr std::uint32_t kLeadPoint         = 0x318;
+inline constexpr std::uint32_t kLeadDestination   = 0x324;  // FName
+inline constexpr std::uint32_t kLeadRoute         = 0x338;  // TArray<FName>
+inline constexpr std::uint32_t kLeadMoveEntered   = 0x3C2;  // u8
+inline constexpr std::int32_t  kRoutePointsMax    = 256;    // far above any route row's expansion
+
+// ---- The field's named points (FieldPoint_FindByNameGlobal(const FName*): the registry in the manager at
+// kRootTriggerManager, read inside without a null check; an FTransform* or null for a point not loaded) ----
+inline constexpr std::uint8_t  kFieldPointFindBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x8B, 0x05};
+inline constexpr FunctionFact  kFieldPointFind{L"FieldPoint_FindByNameGlobal", 0x140EEB718, kFieldPointFindBytes};
+inline constexpr std::uint32_t kFieldPointLocation = 0x10;  // the transform's translation
 
 // ---- The field icons (g_FieldIconSystem, a pointer; its +0x500 the icon manager) ----
 inline constexpr std::uintptr_t kFieldIconSystem   = 0x14939BC78;

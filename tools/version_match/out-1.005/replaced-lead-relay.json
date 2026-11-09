@@ -1,0 +1,9 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-11-09",
+  "doc": "Rebirth/Documentation/research/RE-lead-relay-point.md (sections 2.4 and 3)",
+  "facts": [
+    {"name": "FieldPoint_FindByNameGlobal", "old": "0x140EEB718", "new": "0x140F50EBC", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "FTransform*(const FName*): the field point registry at [[g_EndGameRoot]+0x178], read without a null check; the AI's route resolve calls it per leg name. Entry 48 89 5C 24 08 48 8B 05 in both (the g_EndGameRoot load's displacement differs). The IDA pass LEADRELAY on both databases."}
+  ]
+}

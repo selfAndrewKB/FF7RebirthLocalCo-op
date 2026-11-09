@@ -10,6 +10,7 @@
 #include "platform/settings.h"
 #include "platform/sparse_array.h"
 #include "platform/verified_code.h"
+#include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
 #include "players/unreal_access.h"
@@ -51,6 +52,7 @@ using CollectFn   = void* (*)(void* out);
 using SlotFn      = void* (*)(void* stateManager, std::int32_t key);
 using AiSystemFn  = void* (*)();
 using FreeArrayFn = void (*)(void* array);
+using PointFindFn = const std::uint8_t* (*)(const void* name);
 
 // The hold check calls every 6 ticks: a staging move's waiters are read again every 30 calls (about 3 s; each census
 // makes the game's slot collector reserve 1 MB), the marker every call.
@@ -67,6 +69,7 @@ CollectFn             g_collect    = nullptr;
 SlotFn                g_slot       = nullptr;
 AiSystemFn            g_aiSystem   = nullptr;
 FreeArrayFn           g_freeArray  = nullptr;
+PointFindFn           g_fieldPointFind = nullptr;
 CRITICAL_SECTION*     g_lock       = nullptr;
 const std::uintptr_t* g_root       = nullptr;
 const std::uintptr_t* g_icons      = nullptr;
@@ -74,15 +77,27 @@ bool                  g_installed  = false;
 bool                  g_keeps      = false;  // `lead-holder keeps` (experimental); guide: every needed move to its AI
 bool                  g_marking    = false;  // hud/lead_mark installed: a kept move's point can be shown
 
+/// Where a move's point came from.
+enum class PointFrom : std::uint8_t
+{
+    None,         // not known: no source, or the route's last point not loaded yet
+    Entered,      // the move entered: the state's point is its end
+    Destination,  // the row names a destination point, written into the state with it
+    RouteLast,    // a relay row: the last point of its route, looked up by name
+};
+
 /// A level's walk or lead on a member, as its AI state holds it.
 struct Move
 {
-    std::uint8_t  state   = 0;
-    std::uint64_t object  = 0;  // the setting's level object
-    std::uint64_t row     = 0;  // its state row
-    std::uint64_t trigger = 0;  // its arrival trigger (0: the row's string argument 2)
-    float         point[3] = {};  // where it goes (world cm)
-    bool          pointRead = false;
+    std::uint8_t  state      = 0;
+    std::uint64_t object     = 0;  // the setting's level object
+    std::uint64_t row        = 0;  // its state row
+    std::uint64_t trigger    = 0;  // its arrival trigger (0: the row's string argument 2)
+    float         point[3]   = {};  // where it ends (world cm), when `from` names a source
+    PointFrom     from       = PointFrom::None;
+    std::int32_t  routeCount = 0;  // the route's points (0: none)
+    std::uint64_t routeLast  = 0;  // the route's last point's name, when read
+    bool          notLoaded  = false;  // the route's last point was looked up and is not loaded
 };
 
 /// A walk or lead judged, and the verdict that holds for it. The default verdict is the AI's: a judgment interrupted
@@ -99,6 +114,7 @@ struct Judgment
     bool          reached    = false;  // a kept move's member came within the hand radius of its point (this setting)
     std::uint32_t censusCall = 0;
     std::uint32_t calls      = 0;
+    std::uint32_t pointWaits = 0;      // judgments that waited for the route's last point to load
     std::uint32_t touched    = 0;      // the clock at the last call (the least recently used slot is reused)
 };
 /// One judgment per level object; four covers players 2 and 3 with room to spare.
@@ -131,6 +147,53 @@ std::wstring Name(std::uint64_t name)
     return name == 0 ? std::wstring(L"None") : NameText(name);
 }
 
+/// A named field point's location, the game's own lookup (the one the AI makes when it resolves a route); false when
+/// the point is not loaded. Game thread only.
+bool FieldPointAt(std::uint64_t name, float out[3]) noexcept
+{
+    std::uintptr_t root = 0;
+    if (g_fieldPointFind == nullptr || name == 0 || !players::generation::OnGameThread() || g_root == nullptr ||
+        !platform::CopyGuarded(&root, g_root, sizeof(root)) || root == 0 ||
+        ReadPointer(reinterpret_cast<const void*>(root), facts::kRootTriggerManager) == nullptr)
+    {
+        return false;  // the find reads the registry without a null check
+    }
+    const std::uint8_t* transform = nullptr;
+    return platform::CallGuarded(g_fieldPointFind, transform, static_cast<const void*>(&name)) && transform != nullptr &&
+           platform::CopyGuarded(out, transform + facts::kFieldPointLocation, 3 * sizeof(float));  // copied at once
+}
+
+/// Where the move ends, from the state at `state` (RE-lead-relay-point.md): the point field once the move has
+/// entered, or when the row names a destination; else, on a relay row, the last point of its route, looked up by name;
+/// else unknown. Read again at every check: the field takes over with the same place once the AI runs.
+void ReadPoint(const std::uint8_t* state, std::uint32_t pointAt, std::uint32_t enteredAt, std::uint32_t destinationAt,
+               std::uint32_t routeAt, Move& out) noexcept
+{
+    const bool entered     = ReadField<std::uint8_t>(state, enteredAt) != 0;
+    const auto destination = ReadField<std::uint64_t>(state, destinationAt);
+    const auto* names      = static_cast<const std::uint64_t*>(ReadPointer(state, routeAt));
+    out.routeCount         = ReadField<std::int32_t>(state, routeAt + sizeof(void*));
+    if (entered || (out.routeCount <= 0 && destination != 0))
+    {
+        out.from = platform::CopyGuarded(out.point, state + pointAt, sizeof(out.point))
+                       ? (entered ? PointFrom::Entered : PointFrom::Destination)
+                       : PointFrom::None;
+        return;
+    }
+    if (out.routeCount > 0 && out.routeCount <= facts::kRoutePointsMax && names != nullptr &&
+        platform::CopyGuarded(&out.routeLast, names + (out.routeCount - 1), sizeof(out.routeLast)) && out.routeLast != 0)
+    {
+        if (FieldPointAt(out.routeLast, out.point))
+        {
+            out.from = PointFrom::RouteLast;
+        }
+        else
+        {
+            out.notLoaded = players::generation::OnGameThread();  // off the game thread the lookup is not made
+        }
+    }
+}
+
 /// The member's walk or lead on the level's brains, from its active AI state.
 bool MoveOf(const void* member, Move& out) noexcept
 {
@@ -140,31 +203,54 @@ bool MoveOf(const void* member, Move& out) noexcept
     {
         return false;
     }
-    out.state = ReadField<std::uint8_t>(state, facts::kAiStateType);
+    const auto* bytes = static_cast<const std::uint8_t*>(state);
+    out.state         = ReadField<std::uint8_t>(state, facts::kAiStateType);
     if (out.state == facts::kAiStateMoveTo)
     {
         out.object  = ReadField<std::uint64_t>(state, facts::kMoveToObject);
         out.row     = ReadField<std::uint64_t>(state, facts::kMoveToRow);
-        out.trigger   = ReadField<std::uint64_t>(state, facts::kMoveToTrigger);
-        out.pointRead = platform::CopyGuarded(out.point, static_cast<const std::uint8_t*>(state) + facts::kMoveToPoint, sizeof(out.point));
+        out.trigger = ReadField<std::uint64_t>(state, facts::kMoveToTrigger);
+        ReadPoint(bytes, facts::kMoveToPoint, facts::kMoveToMoveEntered, facts::kMoveToDestination, facts::kMoveToRoute, out);
         return true;
     }
     if (out.state == facts::kAiStateLead)
     {
-        out.object    = ReadField<std::uint64_t>(state, facts::kLeadObject);
-        out.row       = ReadField<std::uint64_t>(state, facts::kLeadRow);
-        out.trigger   = ReadField<std::uint64_t>(state, facts::kLeadTrigger);
-        out.pointRead = platform::CopyGuarded(out.point, static_cast<const std::uint8_t*>(state) + facts::kLeadPoint, sizeof(out.point));
+        out.object  = ReadField<std::uint64_t>(state, facts::kLeadObject);
+        out.row     = ReadField<std::uint64_t>(state, facts::kLeadRow);
+        out.trigger = ReadField<std::uint64_t>(state, facts::kLeadTrigger);
+        ReadPoint(bytes, facts::kLeadPoint, facts::kLeadMoveEntered, facts::kLeadDestination, facts::kLeadRoute, out);
         return true;
     }
     return false;
 }
 
-/// The move's point was read and is a place (finite, not the origin a state that names none leaves).
+/// The move's point came from a source the game itself wrote or names (finite as a last check).
 bool PointKnown(const Move& move) noexcept
 {
-    return move.pointRead && std::isfinite(move.point[0]) && std::isfinite(move.point[1]) && std::isfinite(move.point[2]) &&
-           (move.point[0] != 0.0f || move.point[1] != 0.0f || move.point[2] != 0.0f);
+    return move.from != PointFrom::None && std::isfinite(move.point[0]) && std::isfinite(move.point[1]) &&
+           std::isfinite(move.point[2]);
+}
+
+/// Where the move's point came from, for the log.
+std::wstring PointSource(const Move& move)
+{
+    switch (move.from)
+    {
+    case PointFrom::Entered:
+        return L"the walk's own end point";
+    case PointFrom::Destination:
+        return std::format(L"the row's destination point{}", move.routeCount > 0 ? L"" : L" (no route)");
+    case PointFrom::RouteLast:
+        return std::format(L"the last of the route's {} points, {}", move.routeCount, Name(move.routeLast));
+    case PointFrom::None:
+        break;
+    }
+    if (move.notLoaded)
+    {
+        return std::format(L"unknown (the route's last of {} points, {}, not loaded)", move.routeCount, Name(move.routeLast));
+    }
+    return move.routeCount > 0 ? std::format(L"unknown (the route of {} points could not be read)", move.routeCount)
+                               : std::wstring(L"unknown (no destination named)");
 }
 
 void* StateManager() noexcept
@@ -613,10 +699,11 @@ bool InstallChecked(const platform::GameImage& image)
     const auto slot       = platform::FindFunction(image, facts::kObjectSlotByKey);
     const auto aiSystem   = platform::FindFunction(image, facts::kAiSystem);
     const auto freeArray  = platform::FindFunction(image, facts::kFreeArrayData);
+    const auto pointFind  = platform::FindFunction(image, facts::kFieldPointFind);
     const auto lock       = image.Rebase(facts::kStateTriggerLock, sizeof(CRITICAL_SECTION));
     const auto root       = image.Rebase(facts::kEndGameRoot, sizeof(std::uintptr_t));
     const auto icons      = image.Rebase(facts::kFieldIconSystem, sizeof(std::uintptr_t));
-    if (!stateRow || !triggerRow || !collect || !slot || !aiSystem || !freeArray || !lock || !root || !icons ||
+    if (!stateRow || !triggerRow || !collect || !slot || !aiSystem || !freeArray || !pointFind || !lock || !root || !icons ||
         !LooksLikeCriticalSection(reinterpret_cast<const CRITICAL_SECTION*>(*lock)))
     {
         platform::Log(L"lead gate: an engine check failed; every walk or lead a level writes on player 2's or 3's character "
@@ -629,6 +716,7 @@ bool InstallChecked(const platform::GameImage& image)
     g_slot       = reinterpret_cast<SlotFn>(*slot);
     g_aiSystem   = reinterpret_cast<AiSystemFn>(*aiSystem);
     g_freeArray  = reinterpret_cast<FreeArrayFn>(*freeArray);
+    g_fieldPointFind = reinterpret_cast<PointFindFn>(*pointFind);
     g_lock       = reinterpret_cast<CRITICAL_SECTION*>(*lock);
     g_root       = reinterpret_cast<const std::uintptr_t*>(*root);
     g_icons      = reinterpret_cast<const std::uintptr_t*>(*icons);
@@ -747,6 +835,10 @@ try
     // whole that signals an arrival can be handed at its point: any other stays its AI's (it would have no way out).
     const bool keeps      = g_keeps && g_marking && last.read && last.signals;
     const bool pointKnown = PointKnown(move);
+    // A route's last point not loaded yet: wait for it a while rather than hand the member over for the whole setting.
+    const bool pending = !pointKnown && move.from == PointFrom::None && move.notLoaded &&
+                         last.pointWaits < lead_keep_rules::kPointWaitCalls;
+    last.pointWaits += pending ? 1u : 0u;
     float      away       = -1.0f;
     if (needed && keeps && pointKnown && last.signals && !last.reached)
     {
@@ -758,7 +850,7 @@ try
             last.reached   = lead_keep_rules::Reached(dx, dy);
         }
     }
-    last.verdict = lead_keep_rules::Decide(needed, keeps, pointKnown, last.signals, last.reached, last.ownBox != 0);
+    last.verdict = lead_keep_rules::Decide(needed, keeps, pointKnown, last.signals, last.reached, last.ownBox != 0, pending);
     if (last.verdict == Verdict::AtMark && was != Verdict::AtMark)
     {
         platform::Log(L"lead gate: {}'s character brought within {:.1f} m of its point (the hand radius {:.0f} m): to its AI, which "
@@ -768,10 +860,10 @@ try
     if (!same || census || last.marker != wasMarker || last.verdict != was)
     {
         marker    = Markers(move.object, true);
-        g_reading = std::format(L"{}'s {} on object {} state {}: {}; marker {}: {}; verdict {}", players::SeatName(seat),
-                                move.state == facts::kAiStateLead ? L"LEAD" : L"MOVE_TO", Name(move.object), Name(move.row),
-                                census ? waiters.text : std::wstring(L"waiters as before"),
-                                last.marker ? L"on the character" : L"elsewhere", marker.text,
+        g_reading = std::format(L"{}'s {} on object {} state {}: {}; marker {}: {}; its point: {}; verdict {}",
+                                players::SeatName(seat), move.state == facts::kAiStateLead ? L"LEAD" : L"MOVE_TO",
+                                Name(move.object), Name(move.row), census ? waiters.text : std::wstring(L"waiters as before"),
+                                last.marker ? L"on the character" : L"elsewhere", marker.text, PointSource(move),
                                 lead_keep_rules::Name(last.verdict));
         if (!same || last.verdict != was)
         {
@@ -847,7 +939,7 @@ bool OwnBoxRun(const void* member, float point[3], std::uint64_t& box) noexcept
 try
 {
     Move move;
-    if (!g_installed || member == nullptr || !MoveOf(member, move) || move.object == 0 || !move.pointRead)
+    if (!g_installed || member == nullptr || !MoveOf(member, move) || move.object == 0 || !PointKnown(move))
     {
         return false;
     }

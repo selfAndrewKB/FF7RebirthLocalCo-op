@@ -42,8 +42,11 @@ constexpr bool Reached(float dx, float dy) noexcept
 /// an arrival trigger. `reached`: the member is (or was, this setting) within kHandRadius of the point.
 /// `intoOwnBox`: the step moves on at the member's own armed story box, which the walk carries it into on the level's
 /// clock (session/lead_gate OwnBoxAhead): a guide whatever the switch and whether or not anything else needs it, since
-/// a player walking it there may come too late.
-constexpr Verdict Decide(bool needed, bool keeps, bool pointKnown, bool signals, bool reached, bool intoOwnBox = false) noexcept
+/// a player walking it there may come too late. `pointPending`: the point is not known yet but may still come (a route
+/// whose last point is not loaded, within the wait kPointWaitCalls): the player keeps the member meanwhile, unmarked,
+/// rather than lose it to a guide that holds until the setting ends.
+constexpr Verdict Decide(bool needed, bool keeps, bool pointKnown, bool signals, bool reached, bool intoOwnBox = false,
+                         bool pointPending = false) noexcept
 {
     if (intoOwnBox)
     {
@@ -53,12 +56,20 @@ constexpr Verdict Decide(bool needed, bool keeps, bool pointKnown, bool signals,
     {
         return Verdict::Staging;
     }
-    if (!keeps || !pointKnown)
+    if (!keeps)
     {
         return Verdict::Guide;
     }
+    if (!pointKnown)
+    {
+        return pointPending ? Verdict::Keep : Verdict::Guide;
+    }
     return signals && reached ? Verdict::AtMark : Verdict::Keep;
 }
+
+/// How many judgments a move whose route's last point is not loaded waits for it (the judgments run every few ticks:
+/// about ten seconds) before it goes to the member's AI.
+inline constexpr std::uint32_t kPointWaitCalls = 100;
 
 /// The verdicts that hand the member to its AI; each holds until the move's setting ends.
 constexpr bool ToAi(Verdict verdict) noexcept

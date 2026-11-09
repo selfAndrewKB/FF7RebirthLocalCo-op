@@ -31,6 +31,10 @@ void TestAMoveWithNoPointIsAGuide()
     std::puts("a needed move with no point to mark: a guide");
     EXPECT(Decide(true, true, false, true, false) == Verdict::Guide);
     EXPECT(Decide(true, true, false, true, true) == Verdict::Guide);
+    // A route's last point not loaded yet: the player keeps it, unmarked, while the wait lasts; never under guide.
+    EXPECT(Decide(true, true, false, true, false, false, true) == Verdict::Keep);
+    EXPECT(Decide(true, false, false, true, false, false, true) == Verdict::Guide);
+    EXPECT(Decide(true, true, false, true, false, true, true) == Verdict::Guide);  // into its own box: a guide still
 }
 
 void TestTheGuideSwitchBringsBackTheGuide()
