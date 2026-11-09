@@ -14,6 +14,7 @@
 #include "platform/vtable_entry.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
+#include "players/unreal_access.h"
 #include "scopes/leader_scope.h"
 #include "session/party_member.h"
 
@@ -41,6 +42,7 @@ constexpr std::uint8_t kClimbFinishBytes[]   = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x
 constexpr std::uint8_t kBarsFinishBytes[]    = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00};
 constexpr std::uint8_t kSpiderFinishBytes[]  = {0xB8, 0x28, 0x00, 0x00, 0x00};
 constexpr std::uint8_t kEdgeStopTickBytes[]  = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00};
+constexpr std::uint8_t kDodgeTickBytes[]     = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x50, 0x00, 0x00, 0x00};
 constexpr std::uint8_t kCameraGetterBytes[]  = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C,
                                                 0x24, 0x10, 0x57, 0xB8, 0x80, 0x00, 0x00, 0x00};
 constexpr std::uint8_t kKeyValueBytes[]      = {0xB8, 0x38, 0x00, 0x00, 0x00};
@@ -77,31 +79,39 @@ constexpr unsigned      kLeanEnd        = 2;
 constexpr auto          kStutterWindow  = std::chrono::seconds(2);
 constexpr unsigned      kStutterStarts  = 3;
 
+/// What a move's Tick runs under.
+enum class Kind : std::uint8_t
+{
+    Climb,     // the player's identity (leader test, buttons), stick and camera; the climb camera's holder
+    EdgeStop,  // the player's stick and camera only; the identity stays the game's
+    Steered,   // the player's identity, stick and camera, not a climb: an action that turns toward the player's stick
+};
+
 struct MoveClass
 {
     const wchar_t*     name;
     platform::SlotFact tick;
     platform::SlotFact finish;
     bool               holdSelect;  // its Tick calls the hold-select (its redirect is required)
-    bool               climb;       // a climb: a seat's identity (leader test, buttons) and the climb camera's holder
+    Kind               kind;
 };
 const MoveClass kMoves[] = {
     {L"climbing wall",
      {L"ClimbingMove's Tick slot (+0x10)", 0x145833778, {L"ClimbingMove_Tick_Vt10_CamRot", 0x141636878, kTickBytes}},
      {L"ClimbingMove's Finish slot (+0xA8)", 0x145833810,
       {L"EndBehaviorAction_Finish_CallsEndVt120", 0x1416E9604, kClimbFinishBytes}},
-     true, true},
+     true, Kind::Climb},
     {L"monkey bars",
      {L"MonkeyBarsMove's Tick slot (+0x10)", 0x146695A18,
       {L"MonkeyBarsMove_Tick_Vt10_CamRotIfPlayer", 0x1432FABC0, kTickBytes}},
      {L"MonkeyBarsMove's Finish slot (+0xA8)", 0x146695AB0, {L"MonkeyBarsMove_Finish_VtA8", 0x1432E91B8, kBarsFinishBytes}},
-     false, true},
+     false, Kind::Climb},
     {L"spider wall",
      {L"SpiderMoveMove's Tick slot (+0x10)", 0x146696CF8,
       {L"SpiderMoveMove_Tick_Vt10_CamRotIfPlayer", 0x143312EDC, kTickBytes}},
      {L"SpiderMoveMove's Finish slot (+0xA8)", 0x146696D90,
       {L"EndBehaviorAction_VtA8_Thunk_Finish", 0x1416E95EC, kSpiderFinishBytes}},
-     false, true},
+     false, Kind::Climb},
     // Not a climb: the ledge lean, the step after an edge stop and the walk step (one action class). Only its stick and
     // camera basis become the player's; the identity stays the game's (phases 7-10 not read).
     {L"edge stop (ledge lean)",
@@ -109,10 +119,20 @@ const MoveClass kMoves[] = {
       {L"FieldActMove58DFA88_Tick_Vt10", 0x141860338, kEdgeStopTickBytes}},
      {L"FieldActMove58DFA88's Finish slot (+0xA8)", 0x1458DFB30,
       {L"EndBehaviorAction_Finish_CallsEndVt120", 0x1416E9604, kClimbFinishBytes}},
-     false, false},
+     false, Kind::EdgeStop},
+    // The field dodge (research/RE-dodge-steer.md): each phase turns the character toward the player's stick in the
+    // player's camera, gated by the leader test. Its Tick body is shared with another class: the slot is replaced.
+    {L"field dodge",
+     {L"FieldDodgeMove's Tick slot (+0x10)", 0x145CCB490, {L"FieldDodgeMove_Tick_Vt10", 0x14328EA5C, kDodgeTickBytes}},
+     {L"FieldDodgeMove's Finish slot (+0xA8)", 0x145CCB528,
+      {L"FieldDodgeMove_Finish_VtA8", 0x1432959EC, kClimbFinishBytes}},
+     false, Kind::Steered},
 };
 constexpr std::size_t kMoveCount  = std::size(kMoves);
 constexpr std::size_t kClimbCount = 3;  // the first three entries
+static_assert(kMoves[0].kind == Kind::Climb && kMoves[1].kind == Kind::Climb && kMoves[2].kind == Kind::Climb &&
+                  kMoves[3].kind != Kind::Climb,
+              "kClimbCount counts the climbs at the table's start");
 
 using TickFn           = std::uintptr_t (*)(void* move, void* arg);
 using FinishFn         = std::uintptr_t (*)(void* move);
@@ -214,8 +234,18 @@ struct Counts
     std::atomic<unsigned> finishOff[kPlayers]{};    // finishes run without the seat's identity
     std::atomic<unsigned> staleCopies{0};           // a context found no fresh copy (the merged value read instead)
     std::atomic<unsigned> edgeTicks[kPlayers]{};    // edge-stop action ticks
+    std::atomic<unsigned> steeredTicks[kPlayers]{}; // steered action ticks (the field dodge)
 };
 Counts g_counts;
+
+// Each player's steered action (written by that player's Ticks, one at a time): the move and the facing it started at.
+struct SteeredSeen
+{
+    std::atomic<const void*> move{nullptr};
+    std::atomic<float>       startYaw{0.0f};
+};
+std::array<SteeredSeen, kPlayers> g_steered;  // by seat (player number - 1)
+std::atomic<bool>                 g_rootKnown{false};  // an actor's root component was read on the game thread
 
 // The edge-stop action as each player's Tick last left it (written by that player's Ticks, one at a time).
 struct EdgeSeen
@@ -366,6 +396,40 @@ std::uintptr_t EdgeStopTick(void* move, void* arg, int player) noexcept
     return result;
 }
 
+/// The character's yaw (degrees) of a move, -1000 when unreadable or before a game-thread read has found the root
+/// component's offset (its one reflection lookup is made there, never on a worker).
+float MoveYaw(const void* move) noexcept
+{
+    if (!g_rootKnown.load(std::memory_order_acquire))
+    {
+        return -1000.0f;
+    }
+    const std::uint64_t weak  = ReadField<std::uint64_t>(move, kMoveCharacter);
+    const void*         actor = weak != 0 ? scopes::leader_scope::ObjectAt(&weak) : nullptr;
+    float               yaw   = 0.0f;
+    return actor != nullptr && players::unreal::ActorYaw(actor, yaw) ? yaw * platform::kDegreesPerRadian : -1000.0f;
+}
+
+/// A steered action's Tick: the player's identity, stick and camera basis (a seat's leader test answers its member's
+/// type; player 1's reads pad 1 only). Debug at each action's start, with the character's facing.
+template <std::size_t Index>
+std::uintptr_t SteeredTick(void* move, void* arg, int player) noexcept
+{
+    const auto original = reinterpret_cast<TickFn>(g_moves[Index].tick.Original());
+    const auto index    = IndexOfPlayer(player);
+    g_counts.steeredTicks[index].fetch_add(1, std::memory_order_relaxed);
+    if (g_steered[index].move.exchange(move, std::memory_order_relaxed) != move)
+    {
+        const float yaw = MoveYaw(move);
+        g_steered[index].startYaw.store(yaw, std::memory_order_relaxed);
+        platform::LogDebug(L"climb context: player {}'s {} starts facing {:.0f} deg, in player {}'s context ({})", player,
+                           kMoves[Index].name, yaw, player,
+                           players::generation::OnGameThread() ? L"the game thread" : L"a worker thread");
+    }
+    const InContext context(player, false);
+    return original(move, arg);
+}
+
 template <std::size_t Index>
 std::uintptr_t MoveTick(void* move, void* arg) noexcept
 {
@@ -375,9 +439,13 @@ std::uintptr_t MoveTick(void* move, void* arg) noexcept
     {
         return original(move, arg);
     }
-    if (!kMoves[Index].climb)
+    if (kMoves[Index].kind == Kind::EdgeStop)
     {
         return EdgeStopTick<Index>(move, arg, player);
+    }
+    if (kMoves[Index].kind == Kind::Steered)
+    {
+        return SteeredTick<Index>(move, arg, player);
     }
     const auto frame = g_frame.load(std::memory_order_relaxed);
     if (player >= 2)
@@ -395,7 +463,24 @@ template <std::size_t Index>
 std::uintptr_t MoveFinish(void* move) noexcept
 {
     const auto original = reinterpret_cast<FinishFn>(g_moves[Index].finish.Original());
-    const int  seat     = SeatHere();
+    if (const int player = kMoves[Index].kind == Kind::Steered ? PlayerOf(move) : 0; player != 0)
+    {
+        // Cleared in or out of its context (an interrupted action finishes from elsewhere), so the next start logs.
+        const auto index = IndexOfPlayer(player);
+        g_steered[index].move.store(nullptr, std::memory_order_relaxed);
+        if (t_climb.player == player)
+        {
+            const float start = g_steered[index].startYaw.load(std::memory_order_relaxed);
+            const float yaw   = MoveYaw(move);
+            const std::wstring turned =
+                yaw > -999.0f && start > -999.0f
+                    ? std::format(L"facing {:.0f} deg, turned {:.0f} deg since its start", yaw, std::remainder(yaw - start, 360.0f))
+                    : std::wstring(L"facing unknown");
+            platform::LogDebug(L"climb context: player {}'s {} ends {} (pad {}'s stick; player {}'s camera read {} time(s))",
+                               player, kMoves[Index].name, turned, player, player, t_climb.seatCameras);
+        }
+    }
+    const int seat = SeatHere();
     if (seat == 0)
     {
         return original(move);
@@ -587,19 +672,20 @@ void LogChanges() noexcept
         return;
     }
     // Each seat's counts, and player 1's; the line as the two-player mod wrote it, a part per seat.
-    std::array<unsigned, kPlayers> ticks{}, edges{}, asks{}, cams{}, keys{}, presses{}, holds{}, finishes{};
+    std::array<unsigned, kPlayers> ticks{}, edges{}, steered{}, asks{}, cams{}, keys{}, presses{}, holds{}, finishes{};
     unsigned                       any = 0;
     for (std::size_t s = 0; s < kPlayers; ++s)
     {
         ticks[s]    = platform::Take(g_counts.ticks[s]);
         edges[s]    = platform::Take(g_counts.edgeTicks[s]);
+        steered[s]  = platform::Take(g_counts.steeredTicks[s]);
         keys[s]     = platform::Take(g_counts.keys[s]);
         asks[s]     = platform::Take(g_counts.leaderAsks[s]);
         cams[s]     = platform::Take(g_counts.seatCameras[s]);
         presses[s]  = platform::Take(g_counts.buttons[s]);
         holds[s]    = platform::Take(g_counts.holdOff[s]);
         finishes[s] = platform::Take(g_counts.finishOff[s]);
-        any += ticks[s] + edges[s];
+        any += ticks[s] + edges[s] + steered[s];
     }
     const auto old = platform::Take(g_counts.staleCopies);
     if (any == 0)
@@ -608,22 +694,24 @@ void LogChanges() noexcept
     }
     try
     {
-        std::wstring climbs, edgeTicks, inside;
+        std::wstring climbs, edgeTicks, steeredTicks, inside;
         for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
         {
             const auto     s    = static_cast<std::size_t>(seat);
             const wchar_t* name = players::SeatName(seat);
             climbs += std::format(L"{}'s climb ticks {}, ", name, ticks[s]);
             edgeTicks += std::format(L"{} {}, ", name, edges[s]);
+            steeredTicks += std::format(L"{} {}, ", name, steered[s]);
             inside += std::format(L"inside {}'s: leader tests asked {}, {}'s camera manager {}, keys from pad {} {}, "
                                   L"hold-select presses {}, hold-selects without {}'s identity {}, finishes without it "
                                   L"{}; ",
                                   name, asks[s], name, cams[s], seat + 1, keys[s], presses[s], name, holds[s],
                                   finishes[s]);
         }
-        platform::LogDebug(L"climb context ({} s): {}player 1's {}; edge-stop ticks {}player 1 {}; {}keys from pad 1 in "
-                           L"player 1's {}; no fresh copy {}",
-                           kSummaryEvery.count(), climbs, ticks[0], edgeTicks, edges[0], inside, keys[0], old);
+        platform::LogDebug(L"climb context ({} s): {}player 1's {}; edge-stop ticks {}player 1 {}; field dodge ticks {}player "
+                           L"1 {}; {}keys from pad 1 in player 1's {}; no fresh copy {}",
+                           kSummaryEvery.count(), climbs, ticks[0], edgeTicks, edges[0], steeredTicks, steered[0], inside,
+                           keys[0], old);
     }
     catch (...)
     {
@@ -648,7 +736,7 @@ std::wstring PlaceMove(const platform::GameImage& image, bool holdSelect)
     {
         live.finish.Restore();
     }
-    g_ticksPlaced += tick && cls.climb ? 1u : 0u;
+    g_ticksPlaced += tick && cls.kind == Kind::Climb ? 1u : 0u;
     return std::wstring(cls.name) + (tick ? L" yes" : L" NO");
 }
 
@@ -781,6 +869,11 @@ void Tick() noexcept
         {
             ClearSeat(s);
             continue;
+        }
+        if (!g_rootKnown.load(std::memory_order_relaxed) &&
+            players::unreal::RootOf(players::generation::MemberOf(seat)) != nullptr)
+        {
+            g_rootKnown.store(true, std::memory_order_release);  // the offset is cached now, for the workers' reads
         }
         const auto type = session::party_member::PlayerTypeOf(players::generation::MemberOf(seat));
         g_cameraWeak[s].store(scopes::leader_scope::WeakOf(ReadPointer(players::generation::ControllerOf(seat),

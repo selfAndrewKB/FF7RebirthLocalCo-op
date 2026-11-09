@@ -29,6 +29,12 @@
 // answer (a seat: its pad and its camera; player 1: pad 1). It is not a climb (PlayerHere and TicksPlaced leave it
 // out). Logged: Debug per action change, Trace per Tick, and Info when a lean restarts 3 times within 2 s.
 //
+// The field dodge (research/RE-dodge-steer.md) turns the character toward the stick on every update of its three
+// phases, gated by the leader test (outside a context: no turn for a seat's member, and the merged stick of every pad).
+// Its Tick runs in the player's full context, as a climb's (a seat: identity, pad, camera; player 1: pad 1), but it is
+// not a climb. Its Tick tree records nothing into another player's controller; its Finish does, and is suspended as
+// the climbs' is. Logged: Debug at each dodge's start and end with the character's facing, so a turned dodge shows.
+//
 // The copies are taken in the engine-tick pre-callback (Tick below), after the game's merge and before the world tick:
 // the worker reads the same frame's values. Every answer outside a context, and on every other thread, is the game's.
 // Per seat: the input copies, presses, camera manager, member type, climb frames and counts.
@@ -43,8 +49,8 @@ class GameImage;
 
 namespace lss::input::climb_context {
 
-/// Replaces the three climbs' and the edge-stop action's Tick and Finish slots, the hold-select call and the three
-/// getters (each checked; a failed check leaves that part to the game, logged).
+/// Replaces the three climbs', the edge-stop action's and the field dodge's Tick and Finish slots, the hold-select call
+/// and the three getters (each checked; a failed check leaves that part to the game, logged).
 void Install(const platform::GameImage& image) noexcept;
 
 void Remove() noexcept;

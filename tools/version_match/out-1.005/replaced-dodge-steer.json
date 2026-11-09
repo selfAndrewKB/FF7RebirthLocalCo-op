@@ -1,0 +1,12 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-11-09",
+  "doc": "Rebirth/Documentation/research/RE-dodge-steer.md (section 4.1)",
+  "facts": [
+    {"name": "slot: FieldDodgeMove Tick +0x10", "old": "0x145CCB490", "new": "0x145B36218", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "vt_FEndBehaviorFieldDodgeExtraAction (1.004 0x145CCB480) +0x10; both slots read in IDA by the main session after the pass DODGEPIVOT."},
+    {"name": "FieldDodgeMove Tick +0x10 fn", "old": "0x14328EA5C", "new": "0x14105FFC4", "bytes": "48895C2408488974241048897C242055", "same_semantics": true, "confidence": "CONFIRMED", "note": "The body is shared with the chocobo brake move's vtable (1.004 0x146692168, 1.005 0x146B3A934): the dodge's slot is replaced, never the function. The prologues differ between builds (1.004 48 89 5C 24 08 57 B8 50 00 00 00 E8)."},
+    {"name": "slot: FieldDodgeMove Finish +0xA8", "old": "0x145CCB528", "new": "0x145B362B0", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "Read in IDA in both builds."},
+    {"name": "FieldDodgeMove Finish +0xA8 fn", "old": "0x1432959EC", "new": "0x14192AA5C", "bytes": "48895C240857B820000000", "same_semantics": true, "confidence": "CONFIRMED", "note": "Same 11 entry bytes in both builds (the climbs' Finish prologue)."}
+  ]
+}
