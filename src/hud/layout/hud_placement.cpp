@@ -56,6 +56,10 @@ constexpr Placement kPlacements[] = {
     {L"Command_C", 0.0f, 1.0f},           // bottom left: command menu and its prompt
     {L"BasicGuide_C", 0.0f, 1.0f},        // bottom left: button prompts
     {L"Status_C", 1.0f, 1.0f},            // bottom right: the Members panel
+    // Bottom right, above the Members panel: the summon gauges (their own offset puts them at 1508,620 of the area;
+    // research/RE-summon-gauge.md).
+    {L"SummonChantGauge_C", 1.0f, 1.0f},  // the "SUMMON" bar that fills during a fight
+    {L"SummonTimeGauge_C", 1.0f, 1.0f},   // the summon's name and its time left
 };
 constexpr std::uint32_t kScanTicks = 30;
 
